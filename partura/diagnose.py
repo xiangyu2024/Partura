@@ -32,7 +32,7 @@ ensure_alphacube_on_path()
 
 import numpy as np  # noqa: E402
 
-from alphacube.metrics import (apply_turnover_cap, cs_pearson, long_short_weights,  # noqa: E402
+from alphacube.metrics import (apply_turnover_cap, cs_pearson, ema_rows, long_short_weights,  # noqa: E402
                                nanmean_quiet, portfolio_returns, rank_rows)
 
 COST_PER_SIDE = 0.0015          # 15 bp, AlphaCube's production assumption
@@ -244,6 +244,28 @@ def extreme_day_dependence(panel: np.ndarray, target: np.ndarray, *, sign: float
     return rows
 
 
+def smoothing_sweep(panel: np.ndarray, target: np.ndarray, *, sign: float = 1.0,
+                    halflives: Sequence[float] = (1, 2, 3, 5, 10, 20),
+                    cost: float = COST_PER_SIDE, cap: Optional[float] = TURNOVER_CAP,
+                    top_frac: float = TOP_FRAC, target_ranks: Optional[np.ndarray] = None
+                    ) -> List[Dict[str, float]]:
+    """Trade a per-stock EMA of the factor instead of the factor itself.
+
+    This is AlphaCube's own turnover remedy (``--smooth-halflives``, applied
+    after combination); here it is applied to a single factor, because the
+    question "is this thing tradable" is mostly a question about turnover.  The
+    half-life must be chosen on train and then held fixed, so the sweep is
+    reported in full rather than as its best row.
+    """
+    rows = [{"halflife": 0.0, **metric_row(panel, target, sign=sign, cost=cost, cap=cap,
+                                           top_frac=top_frac, target_ranks=target_ranks)}]
+    for h in halflives:
+        sm = ema_rows(np.asarray(panel, dtype=np.float64), float(h))
+        rows.append({"halflife": float(h), **metric_row(sm, target, sign=sign, cost=cost, cap=cap,
+                                                        top_frac=top_frac, target_ranks=target_ranks)})
+    return rows
+
+
 # ---------------------------------------------------------------- similarity
 def pair_rank_corr(a: np.ndarray, b: np.ndarray) -> float:
     """Mean daily Spearman correlation -- AlphaCube's own family-identity metric."""
@@ -265,5 +287,5 @@ def rank_corr_matrix(panels: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float
 
 
 __all__ = ["COST_PER_SIDE", "TURNOVER_CAP", "TOP_FRAC", "ic_series", "rank_ic_series", "sign_from",
-           "metric_row", "neutralise", "conditional_ic", "decay", "by_year",
+           "metric_row", "neutralise", "conditional_ic", "decay", "by_year", "smoothing_sweep",
            "extreme_day_dependence", "pair_rank_corr", "rank_corr_matrix"]

@@ -92,6 +92,12 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
     from alphacube.metrics import rank_rows
     tgt_ranks = {s: rank_rows(tgt[sl[s]]) for s in splits}      # ranked once, reused everywhere
 
+    def _say(msg: str) -> None:
+        # The diagnostics phase used to be silent for ten minutes, which is
+        # indistinguishable from a hang over ssh.
+        print(f"[runner] {time.strftime('%H:%M:%S')} {msg}", flush=True)
+
+    _say(f"metrics: {len(variants)} variants x {len(splits)} splits")
     results: Dict[str, dict] = {}
     for vid, v in variants.items():
         p = panels.get(vid)
@@ -128,10 +134,12 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
         diag: Dict[str, object] = {}
         tr = sl["train"]
 
+        _say("diagnostics: decay")
         want_decay = diag_cfg.get("decay", list(ok)[:1])
         diag["decay"] = {vid: dg.decay(ok[vid][tr], {h: targets[h][tr] for h in horizons},
                                        sign=results[vid]["sign"]) for vid in want_decay if vid in ok}
 
+        _say("diagnostics: by_year")
         want_year = diag_cfg.get("by_year", list(ok)[:1])
         scope_ranks = rank_rows(tgt[scope])
         diag["by_year_scope"] = [ps.dates[scope.start], ps.dates[scope.stop - 1]]
@@ -140,11 +148,20 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
                                            target_ranks=scope_ranks)
                            for vid in want_year if vid in ok}
 
+        _say("diagnostics: smoothing")
+        hl = [float(x) for x in cfg.get("smooth_halflives", [1, 2, 3, 5, 10, 20])]
+        diag["smoothing"] = {vid: dg.smoothing_sweep(ok[vid][tr], tgt[tr], sign=results[vid]["sign"],
+                                                     halflives=hl, cost=cost, cap=cap, top_frac=top,
+                                                     target_ranks=tgt_ranks["train"])
+                             for vid in diag_cfg.get("smoothing", []) if vid in ok}
+
+        _say("diagnostics: extreme_days")
         want_ext = diag_cfg.get("extreme_days", list(ok)[:1])
         diag["extreme_days"] = {vid: dg.extreme_day_dependence(ok[vid][tr], tgt[tr], sign=results[vid]["sign"],
                                                                cost=cost, top_frac=top)
                                 for vid in want_ext if vid in ok}
 
+        _say("diagnostics: neutralise")
         ctl_panels = {k: panels[k] for k in controls if k in panels}
         ctl_z = {k: dg._zrank(c[tr]) for k, c in ctl_panels.items()}      # rank the controls once
         neut: Dict[str, object] = {}
@@ -167,6 +184,7 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
             neut[vid] = entry
         diag["neutralise"] = neut
 
+        _say("diagnostics: conditional IC")
         cond: Dict[str, object] = {}
         for pair in diag_cfg.get("conditional", []):
             a, g = pair["factor"], pair["gate"]
@@ -182,7 +200,12 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
                                              target_ranks=tgt_ranks["train"])
                             for k in list(controls) + list(gates) if k in panels}
 
-        diag["rank_corr_train"] = dg.rank_corr_matrix({vid: ok[vid][tr] for vid in ok})
+        # The matrix is quadratic in panels and each pair correlates a 1000 x 5000
+        # float64 panel, so 47 variants is ~1100 pairs and the single slowest
+        # thing in a run. `corr_ids` keeps it to the variants the report shows.
+        corr_ids = [v for v in (cfg.get("corr_ids") or list(ok)) if v in ok]
+        _say(f"diagnostics: rank correlation matrix ({len(corr_ids)} panels)")
+        diag["rank_corr_train"] = dg.rank_corr_matrix({vid: ok[vid][tr] for vid in corr_ids})
         report["diagnostics"] = diag
 
     for s in splits:
