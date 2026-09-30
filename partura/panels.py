@@ -153,12 +153,34 @@ class PanelSet:
                   f"{self.view.n_days - self.trim}d x {self.view.n_symbols}s "
                   f"(+{self.trim} warm-up), device={self.device}", flush=True)
         res = engine.evaluate(exprs, tolerant=True)
+        panels_out = list(res.panels)
+        errs = dict(res.errors)
+        if errs and not str(self.device).startswith("cpu"):
+            # A CUDA OOM under a memory-fraction cap is swallowed per node and
+            # surfaces as a failed expression, not a crash (AlphaCube HANDOFF
+            # section 3.4). Whatever did not fit on the accelerator is retried on
+            # the CPU, exactly as AlphaCube's own eval_checkpoint_costs.py does --
+            # so a failure in the final report means the expression is wrong, not
+            # that the GPU was busy.
+            idx = sorted(errs)
+            if not self.quiet:
+                print(f"[panels] {len(idx)} failed on {self.device}; retrying on CPU: "
+                      f"{', '.join(names[i] for i in idx)}", flush=True)
+            r2 = CubeEngine(self.view, device="cpu",
+                            **{k: v for k, v in kw.items() if k not in ("chunk_symbols", "chunk_days")}
+                            ).evaluate([exprs[i] for i in idx], tolerant=True)
+            for j, i in enumerate(idx):
+                if r2.errors.get(j) is None and r2.panels[j] is not None:
+                    panels_out[i] = r2.panels[j]
+                    errs.pop(i, None)
+                else:
+                    errs[i] = f"{errs[i]} | cpu retry: {r2.errors.get(j)}"
         for i, name in enumerate(names):
-            err = res.errors.get(i)
-            if err or res.panels[i] is None:
+            err = errs.get(i)
+            if err or panels_out[i] is None:
                 self.errors[name] = f"evaluate: {err}"
                 continue
-            arr = np.asarray(res.panels[i][self.trim:], dtype=np.float32)
+            arr = np.asarray(panels_out[i][self.trim:], dtype=np.float32)
             self._mem[keys[name]] = arr
             out[name] = arr
             p = self._cache_path(keys[name])

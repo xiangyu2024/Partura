@@ -117,6 +117,7 @@ def _diag_tables(runs: Dict[str, dict]) -> Dict[str, str]:
                 d.setdefault(k, {}).update(v)
             else:
                 d[k] = v
+    out["by_year_scope"] = d.get("by_year_scope")
 
     if d.get("decay"):
         lines = ["| 变体 | " + " | ".join(f"h={r['horizon']}" for r in next(iter(d["decay"].values()))) + " |"]
@@ -228,7 +229,10 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
     base_id = cfg.get("baseline_id", "v_base")
     L += [_split_table(results, base_id, any_run.get("splits_used", ["train", "valid", "full"])), ""]
     if "by_year::" + base_id in diag:
-        L += ["**逐年(全样本,方向按训练段固定)**", "", diag["by_year::" + base_id], ""]
+        sc = diag.get("by_year_scope")
+        rng = f"{sc[0]}–{sc[1]}" if sc else "训练+验证段"
+        L += [f"**逐年({rng},方向按训练段固定;不含留出段除非本次读了它)**", "",
+              diag["by_year::" + base_id], ""]
     if "decay" in diag:
         L += ["**不同预测期(训练段)**", "", diag["decay"], ""]
     if "extreme_days" in diag:

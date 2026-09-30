@@ -45,8 +45,16 @@ def ic_series(panel: np.ndarray, target: np.ndarray) -> np.ndarray:
     return cs_pearson(np.asarray(panel, dtype=np.float64), target)
 
 
-def rank_ic_series(panel: np.ndarray, target: np.ndarray) -> np.ndarray:
-    return cs_pearson(rank_rows(np.asarray(panel, dtype=np.float64)), rank_rows(target))
+def rank_ic_series(panel: np.ndarray, target: np.ndarray, *, panel_ranks: Optional[np.ndarray] = None,
+                   target_ranks: Optional[np.ndarray] = None) -> np.ndarray:
+    """``rank_rows`` is pandas' ``rank(axis=1)`` -- correct (ties averaged, inf
+    skipped) but slow on a 1000 x 5000 panel, and this is the single hottest
+    call in a run.  Pre-computed ranks may be passed in; a correlation is
+    invariant to an affine map, so a flipped factor can reuse the unflipped
+    ranks with a sign."""
+    pr = rank_rows(np.asarray(panel, dtype=np.float64)) if panel_ranks is None else panel_ranks
+    tr = rank_rows(target) if target_ranks is None else target_ranks
+    return cs_pearson(pr, tr)
 
 
 def _ir(x: np.ndarray) -> float:
@@ -59,18 +67,23 @@ def _tstat(x: np.ndarray) -> float:
     return float(f.mean() / f.std() * np.sqrt(f.size)) if f.size > 1 and f.std() > 0 else float("nan")
 
 
-def sign_from(panel: np.ndarray, target: np.ndarray, use: str = "rank_ic") -> float:
-    s = rank_ic_series(panel, target) if use == "rank_ic" else ic_series(panel, target)
+def sign_from(panel: np.ndarray, target: np.ndarray, use: str = "rank_ic",
+              target_ranks: Optional[np.ndarray] = None) -> float:
+    s = (rank_ic_series(panel, target, target_ranks=target_ranks) if use == "rank_ic"
+         else ic_series(panel, target))
     m = nanmean_quiet(s)
     return -1.0 if (np.isfinite(m) and m < 0) else 1.0
 
 
 def metric_row(panel: np.ndarray, target: np.ndarray, *, sign: float = 1.0,
                cost: float = COST_PER_SIDE, cap: Optional[float] = TURNOVER_CAP,
-               top_frac: float = TOP_FRAC, periods: int = 252) -> Dict[str, float]:
+               top_frac: float = TOP_FRAC, periods: int = 252,
+               target_ranks: Optional[np.ndarray] = None) -> Dict[str, float]:
     """One uniform row of prediction + portfolio metrics, after cost."""
     p = sign * np.asarray(panel, dtype=np.float64)
-    ic, ric = ic_series(p, target), rank_ic_series(p, target)
+    ic = ic_series(p, target)
+    ric = rank_ic_series(p, target, panel_ranks=sign * rank_rows(np.asarray(panel, dtype=np.float64)),
+                         target_ranks=target_ranks)
     w = long_short_weights(p, top_frac)
     net, gross, turn = portfolio_returns(w, target, cost)
     c_net, _, c_turn = portfolio_returns(apply_turnover_cap(w, cap), target, cost) if cap else (net, gross, turn)
@@ -110,9 +123,15 @@ def _zrank(x: np.ndarray) -> np.ndarray:
     return u
 
 
-def neutralise(panel: np.ndarray, controls: Dict[str, np.ndarray], space: str = "rank"
+def neutralise(panel: np.ndarray, controls: Dict[str, np.ndarray], space: str = "rank",
+               *, panel_ready: bool = False, controls_ready: bool = False
                ) -> Tuple[np.ndarray, Dict[str, float]]:
     """Daily cross-sectional OLS residual of the factor on the controls.
+
+    ``panel_ready`` / ``controls_ready`` say the inputs are already in the
+    regression space, so a caller that reuses the same controls across many
+    factors pays for ranking them once instead of once per call (ranking a
+    1000 x 5000 panel is the expensive part).
 
     ``space="rank"`` regresses the factor's within-day ranks on the controls'
     within-day ranks -- the right space when the headline metric is rank IC and
@@ -121,8 +140,10 @@ def neutralise(panel: np.ndarray, controls: Dict[str, np.ndarray], space: str = 
     span).
     """
     y_raw = np.asarray(panel, dtype=np.float64)
-    y = _zrank(y_raw) if space == "rank" else y_raw
-    xs = [(_zrank(c) if space == "rank" else np.asarray(c, dtype=np.float64)) for c in controls.values()]
+    y = y_raw if panel_ready else (_zrank(y_raw) if space == "rank" else y_raw)
+    xs = [(np.asarray(c, dtype=np.float64) if controls_ready
+           else (_zrank(c) if space == "rank" else np.asarray(c, dtype=np.float64)))
+          for c in controls.values()]
     out = np.full_like(y, np.nan)
     r2 = np.full(y.shape[0], np.nan)
     for t in range(y.shape[0]):
@@ -186,11 +207,12 @@ def decay(panel: np.ndarray, targets: Dict[int, np.ndarray], sign: float = 1.0) 
 
 
 def by_year(panel: np.ndarray, target: np.ndarray, years: np.ndarray, *, sign: float = 1.0,
-            cost: float = COST_PER_SIDE, top_frac: float = TOP_FRAC) -> List[Dict[str, float]]:
+            cost: float = COST_PER_SIDE, top_frac: float = TOP_FRAC,
+            target_ranks: Optional[np.ndarray] = None) -> List[Dict[str, float]]:
     p = sign * np.asarray(panel, dtype=np.float64)
     w = long_short_weights(p, top_frac)
     net, gross, turn = portfolio_returns(w, target, cost)
-    ric = rank_ic_series(p, target)
+    ric = rank_ic_series(p, target, target_ranks=target_ranks)
     rows = []
     for y in sorted(set(years.tolist())):
         m = years == y

@@ -93,3 +93,17 @@ def test_ledger_warns_once_the_holdout_is_reused(tmp_path):
     led.record("holdout", 5, "second look")
     assert "不是干净的测试集" in led.warning()
     assert Ledger(tmp_path / "ledger.json").summary()["holdout"]["expressions"] == 8
+
+
+def test_metric_row_agrees_with_alphacubes_own_backtester():
+    """Partura must not quietly compute a different Sharpe from AlphaCube's.
+    Same panel, same cost, same book -> same numbers."""
+    from alphacube.metrics import backtest_metrics, cs_pearson
+    from partura.diagnose import COST_PER_SIDE, TOP_FRAC, TURNOVER_CAP
+    sig, fwd = _fake_panel(5)
+    mine = metric_row(sig, fwd, sign=1.0)
+    theirs = backtest_metrics(cs_pearson(sig, fwd), sig, fwd, top_frac=TOP_FRAC,
+                              cost_per_side=COST_PER_SIDE, turnover_cap=TURNOVER_CAP)
+    for a, b in (("ic", "ic_mean"), ("icir", "icir"), ("turnover", "turnover"),
+                 ("sharpe", "sharpe"), ("sharpe_net", "sharpe_net"), ("sharpe_capped", "sharpe_capped")):
+        assert mine[a] == pytest.approx(theirs[b], rel=1e-9, abs=1e-12), a

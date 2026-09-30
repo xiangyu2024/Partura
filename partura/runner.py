@@ -83,8 +83,14 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
     cap = None if cap in (None, 0) else float(cap)
     top = float(cfg.get("top_frac", dg.TOP_FRAC))
 
-    splits = ["train", "valid"] + (["holdout"] if use_holdout else []) + ["full"]
+    # "full" spans the holdout, so it is NOT computed on a normal run: quoting a
+    # full-period number while choosing between variants is the same leak as
+    # quoting the holdout itself.
+    splits = ["train", "valid"] + (["holdout", "full"] if use_holdout else [])
     sl = {s: ps.split_slice(s) for s in splits}
+    scope = slice(sl["train"].start, (sl["full"] if use_holdout else sl["valid"]).stop)
+    from alphacube.metrics import rank_rows
+    tgt_ranks = {s: rank_rows(tgt[sl[s]]) for s in splits}      # ranked once, reused everywhere
 
     results: Dict[str, dict] = {}
     for vid, v in variants.items():
@@ -93,11 +99,12 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
             results[vid] = {"error": ps.errors.get(vid, "missing panel"), **{k: v[k] for k in ("stage", "why") if k in v}}
             continue
         tr = sl["train"]
-        sign = dg.sign_from(p[tr], tgt[tr])
+        sign = dg.sign_from(p[tr], tgt[tr], target_ranks=tgt_ranks["train"])
         row = {"expr": v["expr"], "stage": v["stage"], "why": v.get("why", ""),
                "group": v.get("group", ""), "sign": sign, "splits": {}}
         for s in splits:
-            row["splits"][s] = dg.metric_row(p[sl[s]], tgt[sl[s]], sign=sign, cost=cost, cap=cap, top_frac=top)
+            row["splits"][s] = dg.metric_row(p[sl[s]], tgt[sl[s]], sign=sign, cost=cost, cap=cap,
+                                             top_frac=top, target_ranks=tgt_ranks[s])
         results[vid] = row
 
     ok = {vid: panels[vid] for vid in variants if vid in panels}
@@ -126,8 +133,12 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
                                        sign=results[vid]["sign"]) for vid in want_decay if vid in ok}
 
         want_year = diag_cfg.get("by_year", list(ok)[:1])
-        diag["by_year"] = {vid: dg.by_year(ok[vid], tgt, ps.years, sign=results[vid]["sign"],
-                                           cost=cost, top_frac=top) for vid in want_year if vid in ok}
+        scope_ranks = rank_rows(tgt[scope])
+        diag["by_year_scope"] = [ps.dates[scope.start], ps.dates[scope.stop - 1]]
+        diag["by_year"] = {vid: dg.by_year(ok[vid][scope], tgt[scope], ps.years[scope],
+                                           sign=results[vid]["sign"], cost=cost, top_frac=top,
+                                           target_ranks=scope_ranks)
+                           for vid in want_year if vid in ok}
 
         want_ext = diag_cfg.get("extreme_days", list(ok)[:1])
         diag["extreme_days"] = {vid: dg.extreme_day_dependence(ok[vid][tr], tgt[tr], sign=results[vid]["sign"],
@@ -135,20 +146,24 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
                                 for vid in want_ext if vid in ok}
 
         ctl_panels = {k: panels[k] for k in controls if k in panels}
+        ctl_z = {k: dg._zrank(c[tr]) for k, c in ctl_panels.items()}      # rank the controls once
         neut: Dict[str, object] = {}
         for vid in diag_cfg.get("neutralise", []):
             if vid not in ok or not ctl_panels:
                 continue
             entry: Dict[str, object] = {}
-            resid, info = dg.neutralise(ok[vid][tr], {k: c[tr] for k, c in ctl_panels.items()})
+            y_z = dg._zrank(ok[vid][tr])
+            resid, info = dg.neutralise(y_z, ctl_z, panel_ready=True, controls_ready=True)
             entry["all_controls"] = {"r2": info["mean_r2"],
                                      "metrics": dg.metric_row(resid, tgt[tr], sign=results[vid]["sign"],
-                                                              cost=cost, cap=cap, top_frac=top)}
-            for k, c in ctl_panels.items():          # leave-one-in: which control does the damage
-                r1, i1 = dg.neutralise(ok[vid][tr], {k: c[tr]})
+                                                              cost=cost, cap=cap, top_frac=top,
+                                                              target_ranks=tgt_ranks["train"])}
+            for k in ctl_panels:                     # leave-one-in: which control does the damage
+                r1, i1 = dg.neutralise(y_z, {k: ctl_z[k]}, panel_ready=True, controls_ready=True)
                 entry[k] = {"r2": i1["mean_r2"],
                             "metrics": dg.metric_row(r1, tgt[tr], sign=results[vid]["sign"],
-                                                     cost=cost, cap=cap, top_frac=top)}
+                                                     cost=cost, cap=cap, top_frac=top,
+                                                     target_ranks=tgt_ranks["train"])}
             neut[vid] = entry
         diag["neutralise"] = neut
 
@@ -161,8 +176,10 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
         diag["conditional"] = cond
 
         diag["controls"] = {k: dg.metric_row(panels[k][tr], tgt[tr],
-                                             sign=dg.sign_from(panels[k][tr], tgt[tr]),
-                                             cost=cost, cap=cap, top_frac=top)
+                                             sign=dg.sign_from(panels[k][tr], tgt[tr],
+                                                               target_ranks=tgt_ranks["train"]),
+                                             cost=cost, cap=cap, top_frac=top,
+                                             target_ranks=tgt_ranks["train"])
                             for k in list(controls) + list(gates) if k in panels}
 
         diag["rank_corr_train"] = dg.rank_corr_matrix({vid: ok[vid][tr] for vid in ok})

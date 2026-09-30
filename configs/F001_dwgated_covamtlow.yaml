@@ -25,7 +25,9 @@ controls:
   ctl_range:  "div(sub(day_max(High), day_min(Low)), day_last(Close))"           # 日内振幅
   ctl_rev1:   "sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)"       # 短期反转
   ctl_mom20:  "sub(div(day_last(Close), ts_delay(day_last(Close), 20)), 1)"      # 20 日动量
-  ctl_dvol20: "ts_stddev(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20)"   # 日频波动
+  # 用毛收益比而不是净收益:sub(x, 1) 里的常数是"铺满分钟轴的退化值",喂给 ND 面的 ts_* 会在引擎里报错;
+  # 比值与净收益是单调同序的,秩空间中性化用的就是序。
+  ctl_dvol20: "ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)"   # 日频波动
 
 gates:
   gate_dw:  "day_durbin_watson(Open)"
