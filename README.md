@@ -69,3 +69,22 @@ runs/<fid>/  每个阶段的 JSON、面板缓存、数据段台账
 research/alpha_distillation/<fid>.md   最终报告
 scripts/     服务器上的启动脚本
 ```
+
+## 已完成的研究
+
+| 因子 | 结论 | 报告 |
+|---|---|---|
+| `F001_dwgated_covamtlow`<br>`cross_max(mul(cross_max(day_cov(Amt,Low),9), pow_3(day_durbin_watson(Open))),5)` | 它 = **流动性水平 × 日内波动 × 极值记忆**,是已知的换手/低波动异象。`day_durbin_watson` 作用在价格水平上时其实是日内已实现方差(与 `day_var(Ret)` rank 相关 0.979);预测力由 `cross_max` 造出来(裸协方差 rank IC 只有 0.0128)。蒸馏成 2 个算子的 `cross_max(day_std(Amt), 9)` 后,扣 15bp 夏普 训练 +3.17 / 验证 +4.52 / **留出 +2.00**,原式是 +1.78 / +2.69 / **+1.01**,换手还低了 40%。 | [报告](research/alpha_distillation/F001_dwgated_covamtlow.md) |
+
+复现:
+
+```bash
+export ALPHACUBE_ROOT=~/Desktop/AlphaCube
+python -m partura.cli run configs/F001_dwgated_covamtlow.yaml --store <cube> \
+    --stages S1_components S2_scale S3_gate S4_memory S5_fields S6_distil --device cuda --gpu-fraction 0.045
+python -m partura.cli run configs/F001_dwgated_covamtlow.yaml --store <cube> --stages S7_distil2 ...
+python -m partura.cli run configs/F001_dwgated_covamtlow.yaml --store <cube> --stages S8_final --holdout ...
+python scripts/corr_all.py && python -m partura.cli report configs/F001_dwgated_covamtlow.yaml
+```
+
+服务器上直接用 `scripts/run_server.sh <stage...>`(`EXTRA=--holdout` 才读留出段)。
