@@ -239,8 +239,17 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
 
     L += [f"## {SECTIONS[0][1]}", "", "```", cfg["expression"], "```", "", note("01_expression"), ""]
     L += [f"## {SECTIONS[1][1]}", "",
-          "> 以下每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。", "",
-          render_dossiers(dec.dossiers), ""]
+          "> 以下每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。"
+          "探针集合是按**这棵树**挑的:不适用的探针会写明,本研究新增的探针会单独标出。", "",
+          render_dossiers(dec.dossiers, show_questions=True), ""]
+    try:
+        from .lab import Lab
+        from .panels import parse_research
+        lab = Lab()
+        hits = lab.recall(parse_research(cfg["expression"]), exclude_study=fid)
+        L += ["### 既往研究留下的先验", "", lab.render_markdown(hits), ""]
+    except Exception as exc:                       # the notebook must never break a report
+        L += [f"_(实验室笔记本未能加载:{exc})_", ""]
     L += [f"## {SECTIONS[2][1]}", "", dec.render_markdown(), "", note("03_decomposition"), ""]
     L += [f"## {SECTIONS[3][1]}", "", note("04_grammar"), ""]
     L += [f"## {SECTIONS[4][1]}", "", note("05_hypotheses"), ""]

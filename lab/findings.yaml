@@ -1,0 +1,57 @@
+findings:
+- id: dw-on-price-level-is-realized-variance
+  claim: day_durbin_watson 作用在**价格水平**序列上时不是自相关检验,而 ≈ 日内已实现方差(分母是 Σx² 不是方差)
+  evidence: 与 day_var(Ret) 的日截面 rank 相关 0.979;把整树里的 DW(Open) 换成 day_var(Ret) 后与原式相关 0.992
+  study: F001_dwgated_covamtlow
+  date: '2026-09-30'
+  operators:
+  - day_durbin_watson
+  operand_kind: price
+  confidence: high
+  recheck: 喂给它的是收益序列(如 Ret)时语义完全不同:DW(Ret) 是分钟收益一阶自相关,方向都反
+- id: cross-max-on-signed-scaled-quantity-is-magnitude
+  claim: cross_max 作用在一个正负混杂、带尺度的量上时等价于取幅度,因此把该量变成一个缓慢变化的水平型状态变量
+  evidence: 裸 day_cov(Amt,Low) rank IC 0.0128;cross_max(·,9) 后 0.0434;换成 cross_mean 塌回 0.0128;外面套 abs_
+    几乎不变(0.0442)但 Pearson IC 从 0.0111 掉到 0.0006
+  study: F001_dwgated_covamtlow
+  date: '2026-09-30'
+  operators:
+  - cross_max
+  confidence: high
+  recheck: 操作数如果本身恒正或已经是水平型,取极值就只是低通,这条不成立
+- id: extreme-memory-fixes-turnover
+  claim: 给一个逐日抖动的日内统计量套上日轴极值记忆,换手能降到四分之一,且 rank IC 往往不降反升
+  evidence: day_var(Ret) 裸用 rank IC 0.0416/换手 45.8%/扣费 −2.07;cross_max(·,9) 后 0.0480/11.2%/+0.79
+  study: F001_dwgated_covamtlow
+  date: '2026-09-30'
+  operators:
+  - cross_max
+  - cross_min
+  - cross_quantile_q75
+  confidence: medium
+  recheck: 只在换手是瓶颈的成本口径下成立(15bp 单边);成本更低时未必划算
+- id: amt-level-family-evades-rank-ban
+  claim: 成交额水平家族可以通过 day_cov(Amt, 价格) 这类未封结构绕过 AlphaCube 的结构封禁与 0.95 rank 相关封禁
+  evidence: cross_max(day_cov(Amt,Low),9) 与 cross_max(day_sum(Amt),9) 的 rank 相关只有 0.809(低于闸),但对 log 成交额中性化后
+    rank IC 掉 56%(R² 0.579)
+  study: F001_dwgated_covamtlow
+  date: '2026-09-30'
+  operators:
+  - day_cov
+  pattern: O:day_cov(F:Amt
+  confidence: high
+  recheck: 封禁列表变了要重查;建议改用对已封族中性化后的掉幅做判据
+- id: rank-preserving-outer-map-is-a-noop
+  claim: 保序的外层一元变换(pow_3、cs_rank、sigmoid…)单独作用时对 rank IC 与十分位多空书毫无影响,只能在乘法里改变权重
+  evidence: v_C 与 v_D(= pow_3(v_C))每一个指标逐位相同;d_rank_amt 与 d_logamt_mean 同样逐位相同
+  study: F001_dwgated_covamtlow
+  date: '2026-09-30'
+  operators:
+  - pow_3
+  - pow_2
+  - pow_1_5
+  - pow_2_5
+  - cs_rank
+  - sigmoid
+  confidence: high
+  recheck: 一旦因子进入线性组合或做数值回归,保序变换就不再是 no-op

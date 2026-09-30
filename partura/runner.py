@@ -50,6 +50,11 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
         workdir: Optional[str] = None, out_root: Optional[str] = None,
         use_holdout: bool = False, diagnostics: bool = True) -> dict:
     cfg = load_config(config_path)
+    from .probes import load_study_probes
+    for pf in (cfg.get("probes") or []):        # questions this study adds for its own operators
+        added = load_study_probes(pf)
+        if added:
+            print(f"[probes] {pf}: +{', '.join(added)}")
     for k, v in (cfg.get("splits") or {}).items():      # smoke runs use a shorter calendar
         SPLITS[k] = (str(v[0]), str(v[1]))
     fid = cfg["factor_id"]

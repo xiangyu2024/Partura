@@ -1,0 +1,64 @@
+factor_id: F002_crosscov_highvar
+title: "跨日量价-波动协方差的 5 日上分位"
+expression: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 15), 5)"
+
+label: {kind: open_vwap15, horizon: 1}
+cost_per_side: 0.0015
+turnover_cap: 0.30
+top_frac: 0.10
+horizons: [1, 2, 3, 5, 10, 20]
+warmup: 60
+
+# 控制变量按这棵树的嫌疑来挑,不要照抄别的因子的清单。
+controls: {}
+gates: {}
+diagnostics: {}
+
+# ↓↓↓ 以下全部是 propose 生成的**候选**,不是计划。删掉没有信息量的,
+#     补上只有读了这棵树才想得到的,并把 why 写成一句可证伪的话。
+stages:
+  - id: S_isolate
+    question: "(这一组在回答什么问题?)"
+    variants:
+      - {id: iso_C, group: isolate, expr: "cross_cov(day_max(High), day_var(Ret), 15)", why: "单独跑 C = cross_cov(...):预测力是不是已经在这一层"}
+      - {id: iso_A, group: isolate, expr: "day_max(High)", why: "单独跑 A = day_max(...):预测力是不是已经在这一层"}
+      - {id: iso_B, group: isolate, expr: "day_var(Ret)", why: "单独跑 B = day_var(...):预测力是不是已经在这一层"}
+  - id: S_ablate
+    question: "(这一组在回答什么问题?)"
+    variants:
+      - {id: abl_C, group: ablate, expr: "ts_quantile_q75(day_max(High), 5)", why: "删掉 C = cross_cov,其余不变:这个节点贡献了什么"}
+  - id: S_substitute
+    question: "(这一组在回答什么问题?)"
+    variants:
+      - {id: sub_D_ts_decay_linear, group: substitute, expr: "ts_decay_linear(cross_cov(day_max(High), day_var(Ret), 15), 5)", why: "ts_quantile_q75 → ts_decay_linear:实测只差 sign_sensitivity"}
+      - {id: sub_D_ts_delay, group: substitute, expr: "ts_delay(cross_cov(day_max(High), day_var(Ret), 15), 5)", why: "ts_quantile_q75 → ts_delay:实测只差 sign_sensitivity"}
+      - {id: sub_D_ts_max, group: substitute, expr: "ts_max(cross_cov(day_max(High), day_var(Ret), 15), 5)", why: "ts_quantile_q75 → ts_max:实测只差 monotone_in_window"}
+      - {id: nosc_D_ts_argmax, group: substitute, expr: "ts_argmax(cross_cov(day_max(High), day_var(Ret), 15), 5)", why: "ts_quantile_q75(齐次度 1.0) → ts_argmax(齐次度 0):尺度是不是必需的"}
+      - {id: nosc_D_ts_argmin, group: substitute, expr: "ts_argmin(cross_cov(day_max(High), day_var(Ret), 15), 5)", why: "ts_quantile_q75(齐次度 1.0) → ts_argmin(齐次度 0):尺度是不是必需的"}
+      - {id: sub_C_cross_corr, group: substitute, expr: "ts_quantile_q75(cross_corr(day_max(High), day_var(Ret), 15), 5)", why: "cross_cov → cross_corr:实测只差 homogeneity_degree"}
+      - {id: sub_C_cross_reg_fvalue, group: substitute, expr: "ts_quantile_q75(cross_reg_fvalue(day_max(High), day_var(Ret), 15), 5)", why: "cross_cov → cross_reg_fvalue:实测只差 homogeneity_degree"}
+      - {id: sub_C_cross_reg_tvalue, group: substitute, expr: "ts_quantile_q75(cross_reg_tvalue(day_max(High), day_var(Ret), 15), 5)", why: "cross_cov → cross_reg_tvalue:实测只差 homogeneity_degree"}
+      - {id: sub_A_day_mean, group: substitute, expr: "ts_quantile_q75(cross_cov(day_mean(High), day_var(Ret), 15), 5)", why: "day_max → day_mean:实测只差 sign_sensitivity"}
+      - {id: sub_A_day_quantile, group: substitute, expr: "ts_quantile_q75(cross_cov(day_quantile(High), day_var(Ret), 15), 5)", why: "day_max → day_quantile:实测只差 sign_sensitivity"}
+      - {id: sub_A_day_sum, group: substitute, expr: "ts_quantile_q75(cross_cov(day_sum(High), day_var(Ret), 15), 5)", why: "day_max → day_sum:实测只差 sign_sensitivity"}
+      - {id: nosc_A_day_argmax, group: substitute, expr: "ts_quantile_q75(cross_cov(day_argmax(High), day_var(Ret), 15), 5)", why: "day_max(齐次度 1.0) → day_argmax(齐次度 0):尺度是不是必需的"}
+      - {id: nosc_A_day_argmin, group: substitute, expr: "ts_quantile_q75(cross_cov(day_argmin(High), day_var(Ret), 15), 5)", why: "day_max(齐次度 1.0) → day_argmin(齐次度 0):尺度是不是必需的"}
+      - {id: sub_B_day_kurt, group: substitute, expr: "ts_quantile_q75(cross_cov(day_max(High), day_kurt(Ret), 15), 5)", why: "day_var → day_kurt:实测只差 homogeneity_degree"}
+      - {id: sub_B_day_std, group: substitute, expr: "ts_quantile_q75(cross_cov(day_max(High), day_std(Ret), 15), 5)", why: "day_var → day_std:实测只差 homogeneity_degree"}
+      - {id: sub_B_day_ar1_coefficient, group: substitute, expr: "ts_quantile_q75(cross_cov(day_max(High), day_ar1_coefficient(Ret), 15), 5)", why: "day_var → day_ar1_coefficient:实测只差 order_dependent_on_minutes, homogeneity_degree"}
+  - id: S_window
+    question: "(这一组在回答什么问题?)"
+    variants:
+      - {id: win_D_1, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 15), 1)", why: "D 的窗口 5 → 1:真效应应该有邻域"}
+      - {id: win_D_10, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 15), 10)", why: "D 的窗口 5 → 10:真效应应该有邻域"}
+      - {id: win_D_20, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 15), 20)", why: "D 的窗口 5 → 20:真效应应该有邻域"}
+      - {id: win_C_10, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 10), 5)", why: "C 的窗口 15 → 10:真效应应该有邻域"}
+      - {id: win_C_60, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 60), 5)", why: "C 的窗口 15 → 60:真效应应该有邻域"}
+      - {id: win_C_5, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 5), 5)", why: "C 的窗口 15 → 5:真效应应该有邻域"}
+      - {id: win_C_30, group: window, expr: "ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 30), 5)", why: "C 的窗口 15 → 30:真效应应该有邻域"}
+  - id: S_field
+    question: "(这一组在回答什么问题?)"
+    variants:
+      - {id: fld_High_Open, group: field, expr: "ts_quantile_q75(cross_cov(day_max(Open), day_var(Ret), 15), 5)", why: "字段 High → Open(同为 price):这条 alpha 依不依赖这个字段的身份"}
+      - {id: fld_High_Low, group: field, expr: "ts_quantile_q75(cross_cov(day_max(Low), day_var(Ret), 15), 5)", why: "字段 High → Low(同为 price):这条 alpha 依不依赖这个字段的身份"}
+      - {id: fld_High_Close, group: field, expr: "ts_quantile_q75(cross_cov(day_max(Close), day_var(Ret), 15), 5)", why: "字段 High → Close(同为 price):这条 alpha 依不依赖这个字段的身份"}

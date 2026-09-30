@@ -17,28 +17,31 @@ cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 
 
 ## 2. 算子的真实语义
 
-> 以下每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。
+> 以下每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。探针集合是按**这棵树**挑的:不适用的探针会写明,本研究新增的探针会单独标出。
 
 ### `day_cov`
 
 - **实现**: `operators/dt_day.py:212` (kernel `dt_day.day_cov`)
 - **声明**: face `dt` / family `day` / category `binary`, arity 2, 计算轴 `M`, 无窗口, 折叠分钟轴 (M→1)
 - **标志**: 无
-- **实测探针**: 分钟顺序依赖 = False; 平移不变 = True; 齐次度 k = 2.0; 10% 缺失后有限值占比 = 1.0
+- **实测探针**: 分钟顺序依赖 = False; 平移不变 = True; 齐次度 k = 2.0; nan_behaviour = finite_frac_with_10pct_missing=1.0, all_nan_input_gives_all_nan=True; 取负后 = even
+- <sub>不适用的探针: causal_on_day_axis, rank_preserving, monotone_in_window, effective_memory</sub>
 
 ### `cross_max`
 
 - **实现**: `operators/dt_cross.py:232` (kernel `dt_cross.cross_max`)
-- **声明**: face `dt` / family `cross` / category `rolling`, arity 1, 计算轴 `D`, 需要窗口
+- **声明**: face `dt` / family `cross` / category `rolling`, arity 1, 计算轴 `D`, 窗口 9
 - **标志**: 无
-- **实测探针**: 日轴因果性 = True; 平移不变 = False; 齐次度 k = 1.0; 10% 缺失后有限值占比 = 0.9948
+- **实测探针**: 日轴因果性 = True; 平移不变 = False; 齐次度 k = 1.0; nan_behaviour = finite_frac_with_10pct_missing=0.9948, all_nan_input_gives_all_nan=True; 取负后 = neither; 窗口变长 = non_decreasing; 脉冲记忆天数 = 9
+- <sub>不适用的探针: order_dependent_on_minutes, rank_preserving</sub>
 
 ### `day_durbin_watson`
 
 - **实现**: `operators/dt_day.py:272` (kernel `dt_day.day_durbin_watson`)
 - **声明**: face `dt` / family `day` / category `unary`, arity 1, 计算轴 `M`, 无窗口, 折叠分钟轴 (M→1)
 - **标志**: 无
-- **实测探针**: 分钟顺序依赖 = True; 平移不变 = False; 齐次度 k = 0.0; 10% 缺失后有限值占比 = 1.0
+- **实测探针**: 分钟顺序依赖 = True; 平移不变 = False; 齐次度 k = 0.0; nan_behaviour = finite_frac_with_10pct_missing=1.0, all_nan_input_gives_all_nan=True; 取负后 = even
+- <sub>不适用的探针: causal_on_day_axis, rank_preserving, monotone_in_window, effective_memory</sub>
 - **docstring**: Per-row Durbin-Watson statistic; NaN if <2 valid points or the row
 
 ### `pow_3`
@@ -46,15 +49,35 @@ cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 
 - **实现**: `catalog.py:148` (kernel `common.pow_`)
 - **声明**: face `shared` / family `elementwise` / category `unary`, arity 1, 计算轴 `None`, 无窗口
 - **标志**: 无
-- **实测探针**: 平移不变 = False; 齐次度 k = 3.0; 保序 = True; 10% 缺失后有限值占比 = 0.8917
+- **实测探针**: 平移不变 = False; 齐次度 k = 3.0; 保序 = True; nan_behaviour = finite_frac_with_10pct_missing=0.8917, all_nan_input_gives_all_nan=True; 取负后 = odd
+- <sub>不适用的探针: causal_on_day_axis, order_dependent_on_minutes, monotone_in_window, effective_memory</sub>
 
 ### `mul`
 
 - **实现**: `operators/common.py:158` (kernel `common.mul`)
 - **声明**: face `shared` / family `elementwise` / category `binary`, arity 2, 计算轴 `None`, 无窗口
 - **标志**: 无
-- **实测探针**: 平移不变 = False; 齐次度 k = 2.0; 10% 缺失后有限值占比 = 0.8917
+- **实测探针**: 平移不变 = False; 齐次度 k = 2.0; nan_behaviour = finite_frac_with_10pct_missing=0.8917, all_nan_input_gives_all_nan=True; 取负后 = even
+- <sub>不适用的探针: causal_on_day_axis, order_dependent_on_minutes, rank_preserving, monotone_in_window, effective_memory</sub>
 
+<details><summary>每个探针在问什么</summary>
+
+- `causal_on_day_axis` — 输出的某一行会不会被后面的行改变?(读未来)
+- `effective_memory` — 脉冲输入之后,输出还在多少天里记得它?
+- `homogeneity_degree` — f(c·x) = c^k·f(x) 里的 k 是多少?(带不带尺度)
+- `monotone_in_window` — 窗口变长时输出怎么动?(极值型单调,均值型不单调)
+- `nan_behaviour` — 10% 缺失下还剩多少有限值?整行缺失会怎样?
+- `order_dependent_on_minutes` — 打乱分钟顺序会不会改变输出?(路径统计量 vs 分布统计量)
+- `rank_preserving` — f 会不会改变输入的顺序?(保序的外层变换对排名型指标无效)
+- `shift_invariant` — f(x + c) 是否等于 f(x)?(是否只看相对位置)
+- `sign_sensitivity` — 把输入整体取负,输出是跟着变号、不变,还是别的?
+
+</details>
+
+
+### 既往研究留下的先验
+
+_(实验室里没有与这棵树相关的、来自**其他**研究的既往结论 —— 本研究自己的结论不算先验。)_
 
 ## 3. 数学分解
 

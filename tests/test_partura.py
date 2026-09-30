@@ -121,3 +121,69 @@ def test_rank_corr_matrix_is_filled_on_both_sides():
             assert np.isfinite(m[a][b]), (a, b)
             assert m[a][b] == pytest.approx(m[b][a])
         assert m[a][a] == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------- probes / propose / lab
+def test_probe_registry_marks_inapplicable_instead_of_guessing():
+    from partura.probes import run_probes
+    from partura.bridge import ensure_alphacube_on_path
+    ensure_alphacube_on_path()
+    from alphacube.catalog import default_registry
+    res = run_probes(default_registry().get("day_cov"))
+    # a day-collapser has no day-axis window, so the causality probe must not invent an answer
+    assert res["causal_on_day_axis"]["applicable"] is False
+    assert "value" not in res["causal_on_day_axis"]
+    assert res["homogeneity_degree"]["value"] == 2.0
+
+
+def test_effective_quantile_probe_self_checks():
+    """A probe is only usable on unknown operators once it reproduces known ones."""
+    from partura.probes import load_study_probes, run_probes, values
+    from partura.bridge import PARTURA_ROOT, ensure_alphacube_on_path
+    ensure_alphacube_on_path()
+    from alphacube.catalog import default_registry
+    load_study_probes(PARTURA_ROOT / "studies" / "F002_crosscov_highvar" / "probes.py")
+    reg = default_registry()
+    assert values(run_probes(reg.get("ts_quantile_q75"), 5))["effective_quantile"] == pytest.approx(0.75)
+    assert values(run_probes(reg.get("cross_max"), 9))["effective_quantile"] == pytest.approx(1.0)
+    assert values(run_probes(reg.get("cross_min"), 9))["effective_quantile"] == pytest.approx(0.0)
+
+
+def test_study_probes_are_tagged_with_their_file():
+    from partura.probes import PROBES, load_study_probes
+    from partura.bridge import PARTURA_ROOT
+    load_study_probes(PARTURA_ROOT / "studies" / "F002_crosscov_highvar" / "probes.py")
+    assert PROBES["cross_lag_response"].origin.endswith("probes.py")
+    assert PROBES["homogeneity_degree"].origin == "builtin"
+
+
+def test_proposals_differ_between_structurally_different_trees():
+    """The whole point: the plan is a property of the expression."""
+    from partura.propose import propose
+    a = propose("cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 5)")
+    b = propose("ts_quantile_q75(cross_cov(day_max(High), day_var(Ret), 15), 5)")
+    ka, kb = {c.kind for c in a}, {c.kind for c in b}
+    assert "interaction" in ka and "interaction" not in kb      # only A has a binary elementwise node
+    assert not ({c.expr for c in a} & {c.expr for c in b})
+    # substitutes are chosen by measured neighbourhood, so cov gets its scale-free twin
+    assert any("cross_corr" in c.expr for c in b)
+
+
+def test_proposals_never_include_the_original_or_a_rewrite_of_it():
+    from partura.propose import propose
+    src = "cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 5)"
+    from partura.panels import parse_research
+    base = parse_research(src).key()
+    for c in propose(src):
+        assert parse_research(c.expr).key() != base, c.id
+
+
+def test_lab_recall_is_operator_scoped(tmp_path):
+    from partura.lab import Finding, Lab
+    from partura.panels import parse_research
+    lab = Lab(tmp_path / "f.yaml")
+    lab.record(Finding(id="x", claim="c", evidence="e", study="s", operators=["day_durbin_watson"]))
+    lab.record(Finding(id="y", claim="c2", evidence="e2", study="s", pattern="O:day_cov(F:Amt"))
+    assert {f.id for f in lab.recall(parse_research("day_durbin_watson(Open)"))} == {"x"}
+    assert {f.id for f in lab.recall(parse_research("cross_max(day_cov(Amt, Low), 9)"))} == {"y"}
+    assert lab.recall(parse_research("day_sum(Amt)")) == []

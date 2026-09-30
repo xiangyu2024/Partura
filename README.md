@@ -22,19 +22,33 @@ export ALPHACUBE_ROOT=~/Desktop/AlphaCube        # 不设则自动找同级目�
 
 依赖与 AlphaCube 相同(torch / numpy / pandas / pyyaml),不额外装东西。
 
-## 三个命令
+## 最重要的一条
+
+**每条表达式都是一次新的研究。** 实验计划是从这棵树推出来的,探针集合也是;
+上一条因子的配置**不能**改个表达式就拿来跑。唯一跨研究复用的是 `lab/findings.yaml` 里的结论,
+而且它是**先验**,不是证据 —— 报告里依赖它就得在本研究里重新测一次。
+详见 [`docs/method.md`](docs/method.md)。
+
+## 五个命令
 
 ```bash
-# 1. 看清楚这棵树在算什么(注册表 + 源码 + 实跑探针)
-python -m partura.cli decompose "cross_max(day_cov(Amt, Low), 9)"
+# 1. 这棵树在算什么(注册表 + 内核源码 + 实跑探针 + 实验室里的相关先验)
+python -m partura.cli decompose "cross_max(day_cov(Amt, Low), 9)" \
+    [--probes studies/<fid>/probes.py]
 
-# 2. 跑一个实验阶段(一次引擎调用,变体之间共享子树)
-python -m partura.cli run configs/F001_dwgated_covamtlow.yaml \
+# 2. 从树结构 + 探针签名派生**候选**实验 —— 这是草稿,不是计划,要逐条删改
+python -m partura.cli propose "<expr>" --factor-id <fid> --out configs/<fid>.draft.yaml
+
+# 3. 跑一个实验阶段(一次引擎调用,变体之间共享子树)
+python -m partura.cli run configs/<fid>.yaml \
     --store <cube> --stages S1_components --device cuda --gpu-fraction 0.045
 
-# 3. 把所有阶段的 JSON 拼成研究报告
-python -m partura.cli report configs/F001_dwgated_covamtlow.yaml
-# -> research/alpha_distillation/<factor_id>.md
+# 4. 拼报告(生成段 = 表格,手写段 = notes/<fid>/*.md)
+python -m partura.cli report configs/<fid>.yaml    # -> research/alpha_distillation/<fid>.md
+
+# 5. 实验室笔记本:跨研究唯一复用的东西
+python -m partura.cli lab                  # 全部结论
+python -m partura.cli lab "<expr>"         # 只看与这棵树相关的
 ```
 
 ## 组成
@@ -42,7 +56,10 @@ python -m partura.cli report configs/F001_dwgated_covamtlow.yaml
 | 模块 | 干什么 |
 |---|---|
 | `bridge.py` | 找到并导入 AlphaCube;记录 commit / 版本 / store,让报告里的每个数字可追溯 |
-| `semantics.py` | **算子档案**:注册表声明 + 内核源码 + 六类实测探针(日轴因果性、分钟顺序依赖、平移不变、齐次度、保序、缺失行为) |
+| `probes.py` | **可扩展的探针注册表**。内置探针只覆盖最普遍的问题(日轴因果性、分钟顺序、平移不变、齐次度、保序、缺失、取负、窗口单调、脉冲记忆);**本研究特有的问题写在 `studies/<fid>/probes.py`**,自动加载并在报告里单独标出。不适用就明说,跑不动就报错 —— 不猜 |
+| `semantics.py` | **算子档案**:注册表声明 + 内核源码 + 所有适用探针的实测值 + 没跑的探针 |
+| `propose.py` | **从树派生候选实验**:isolate / ablate / substitute(按探针签名找"只差一条性质"的兄弟)/ window / field,以及只在探针说相关时才出现的 magnitude / interaction。它提议,不决定 |
+| `lab.py` | **实验室笔记本**:跨研究唯一复用的东西。每条结论带证据、出处、置信、**失效条件** |
 | `decompose.py` | 表达式 → SSA 形式的可读程序 + 每个节点的结构角色 + 沿路径累计的真实回看天数 |
 | `splits.py` | train / valid / holdout 三段 + **台账**:留出段被读过几次、打过多少条分,报告里必须写出来 |
 | `panels.py` | 一次引擎调用算完整批表达式(CSE 共享子树),面板按内容寻址缓存到磁盘 |
