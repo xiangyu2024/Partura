@@ -56,9 +56,14 @@ def _fmt(v, nd: int = 4) -> str:
 def _load_runs(out_dir: Path) -> Dict[str, dict]:
     runs = {}
     for p in sorted(out_dir.glob("*.json")):
-        if p.name == "ledger.json":
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
             continue
-        runs[p.stem] = json.loads(p.read_text(encoding="utf-8"))
+        # The run directory also holds the ledger and side artefacts such as
+        # rank_corr_all.json; a run is a file that carries scored results.
+        if isinstance(data, dict) and "results" in data and "view" in data:
+            runs[p.stem] = data
     return runs
 
 
@@ -230,7 +235,7 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
               f"({v['first']}–{v['last']},另加 {v['warmup_rows']} 行预热) · "
               f"标签 `{any_run['label']['kind']}` h={any_run['label']['horizon']} · "
               f"成本 {any_run['cost_per_side']*1e4:.0f} bp/边 · 十分位多空 · "
-              f"AlphaCube `{pv.get('alphacube_commit')}`", ""]
+              f"AlphaCube `{pv.get('alphacube_commit') or cfg.get('alphacube_commit_verified', '见附录 B')}`", ""]
 
     L += [f"## {SECTIONS[0][1]}", "", "```", cfg["expression"], "```", "", note("01_expression"), ""]
     L += [f"## {SECTIONS[1][1]}", "",
@@ -270,10 +275,19 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
         L += ["### 条件 IC(训练段)", "", diag["conditional"], "", note("07_conditional"), ""]
     if "controls" in diag:
         L += ["### 控制变量自身的表现(训练段)", "", diag["controls"], ""]
+    dev = note("07_device")
+    if dev:
+        L += [dev, ""]
 
     L += [f"## {SECTIONS[7][1]}", "", _metric_table(results, sorted(results), "train"), ""]
+    # A matrix rebuilt across runs (scripts/corr_all.py) beats the per-run ones,
+    # which only cover the variants that happened to be in the same batch.
+    all_corr = out_dir / "rank_corr_all.json"
+    if all_corr.is_file():
+        diag["rank_corr"] = json.loads(all_corr.read_text(encoding="utf-8"))
     if "rank_corr" in diag:
-        ids = cfg.get("corr_ids") or sorted(results)[:14]
+        ids = [i for i in (cfg.get("corr_ids") or sorted(results)[:14]) if i in diag["rank_corr"]] \
+              or list(diag["rank_corr"])
         L += ["**变体之间的日截面 rank 相关(训练段)** — ≥0.95 在 AlphaCube 里算同一因子族", "",
               rank_corr_table(diag["rank_corr"], ids), ""]
     L += [note("08_variants"), ""]
@@ -289,6 +303,8 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
         L.append(f"# {name}: {r['seconds']}s, stages {r['stages']}")
     L += [f"python -m partura.cli run {config_path} --store <cube> --stages <stage> --device cuda",
           f"python -m partura.cli report {config_path}", "```", ""]
+    if cfg.get("provenance_note"):
+        L += [f"> {cfg['provenance_note']}", ""]
     if any_run:
         L += ["```json", json.dumps(any_run["provenance"], ensure_ascii=False, indent=1), "```", ""]
 

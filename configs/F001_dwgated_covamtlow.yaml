@@ -11,6 +11,11 @@ title: "13 日极值记忆 × 日内量价协方差 × 日内波动门控"
 expression: "cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 5)"
 # 第 6 节用哪个 id 做基线表:f_orig 与 v_base 是同一条表达式,但它是唯一读过留出段的那次
 baseline_id: f_orig
+# 本次三轮运行的 JSON 里 alphacube_commit 记成了 null(服务器上的 AlphaCube 属于另一个 uid,
+# git 以 dubious ownership 拒绝执行;已在 bridge 里改为直接读 .git 文件)。事后核对,
+# 产出这些数字的服务器版本是:
+alphacube_commit_verified: "1698296"
+provenance_note: "服务器 AlphaCube HEAD = 1698296(事后用 .git 直读核对;运行时的 JSON 里记为 null,原因见 bridge._head_from_files 的注释)"
 
 label: {kind: open_vwap15, horizon: 1}
 cost_per_side: 0.0015        # 15 bp 单边,AlphaCube 生产口径
@@ -36,9 +41,9 @@ gates:
   gate_cov: "cross_max(day_cov(Amt, Low), 9)"
 
 # 报告里那张 rank 相关矩阵只列这些(47x47 没法读):看原式被哪一支带着走
-corr_ids: [v_base, v_B, v_D, v_A, v_C, v_E, v_B13, v_corr_base, v_amt_level,
-           v_logamt, v_dw_proxy, v_gate_ivol, d_logamt_mem,
-           d7_amt_13, d7_ivol_13, d7_add_13, d7_absc_9, d7_stdamt_9]
+corr_ids: [v_base, v_B, v_C, v_A, v_E, v_B13, v_corr_base, v_amt_level, v_logamt,
+           v_dw_proxy, v_gate_ivol, v_mem_mean, d_logamt_mem,
+           d7_amt_13, d7_ivol_13, d7_add_13, d7_absc_9, d7_stdamt_9, d7_mul_13]
 
 diagnostics:
   decay:        [v_base, v_B, v_D, f_orig, f_stdamt, f_mul13]

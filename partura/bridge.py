@@ -62,6 +62,35 @@ def _git(root: Path, *args: str) -> Optional[str]:
         return None
 
 
+def _head_from_files(root: Path) -> Optional[str]:
+    """Read the checked-out commit straight from .git, no git process.
+
+    `git -c safe.directory=...` is not honoured by every git version, and on
+    the server the AlphaCube checkout is owned by another uid -- which is how
+    `alphacube_commit` became null in the first reports. The files are readable
+    even when the binary refuses.
+    """
+    g = root / ".git"
+    try:
+        if g.is_file():                                   # worktree: "gitdir: <path>"
+            g = Path(g.read_text().split(":", 1)[1].strip())
+        head = (g / "HEAD").read_text().strip()
+        if not head.startswith("ref:"):
+            return head[:7]
+        ref = head.split(":", 1)[1].strip()
+        p = g / ref
+        if p.is_file():
+            return p.read_text().strip()[:7]
+        packed = g / "packed-refs"
+        if packed.is_file():
+            for line in packed.read_text().splitlines():
+                if line.endswith(" " + ref):
+                    return line.split()[0][:7]
+    except (OSError, IndexError, ValueError):
+        return None
+    return None
+
+
 def code_fingerprint(pkg_dir: Optional[Path] = None) -> str:
     """sha1 over the Partura sources actually imported -- the identity of the
     code when there is no git checkout to ask."""
@@ -77,14 +106,14 @@ def provenance(store_path: Optional[str] = None) -> Dict[str, object]:
     root = ensure_alphacube_on_path()
     import numpy
     import torch
-    ac_commit = _git(root, "rev-parse", "--short", "HEAD")
+    ac_commit = _git(root, "rev-parse", "--short", "HEAD") or _head_from_files(root)
     ac_dirty = bool(_git(root, "status", "--porcelain"))
     return {
         "alphacube_root": str(root),
         "alphacube_commit": ac_commit,
         "alphacube_dirty": ac_dirty,
         "partura_root": str(PARTURA_ROOT),
-        "partura_commit": _git(PARTURA_ROOT, "rev-parse", "--short", "HEAD"),
+        "partura_commit": _git(PARTURA_ROOT, "rev-parse", "--short", "HEAD") or _head_from_files(PARTURA_ROOT),
         "partura_code_sha": code_fingerprint(),
         "store": store_path,
         "python": sys.version.split()[0],
