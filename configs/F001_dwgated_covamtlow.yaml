@@ -9,6 +9,8 @@
 factor_id: F001_dwgated_covamtlow
 title: "13 日极值记忆 × 日内量价协方差 × 日内波动门控"
 expression: "cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 5)"
+# 第 6 节用哪个 id 做基线表:f_orig 与 v_base 是同一条表达式,但它是唯一读过留出段的那次
+baseline_id: f_orig
 
 label: {kind: open_vwap15, horizon: 1}
 cost_per_side: 0.0015        # 15 bp 单边,AlphaCube 生产口径
@@ -34,14 +36,16 @@ gates:
   gate_cov: "cross_max(day_cov(Amt, Low), 9)"
 
 # 报告里那张 rank 相关矩阵只列这些(47x47 没法读):看原式被哪一支带着走
-corr_ids: [v_base, v_B, v_D, v_A, v_C, v_E, v_B13, v_corr_base, v_corr_B, v_amt_level,
-           v_logamt, v_dw_proxy, v_gate_ivol, d_logamt_mean]
+corr_ids: [v_base, v_B, v_D, v_A, v_C, v_E, v_B13, v_corr_base, v_amt_level,
+           v_logamt, v_dw_proxy, v_gate_ivol, d_logamt_mem,
+           d7_amt_13, d7_ivol_13, d7_add_13, d7_absc_9, d7_stdamt_9]
 
 diagnostics:
-  decay:        [v_base, v_B, v_D]
-  by_year:      [v_base, v_B]
-  extreme_days: [v_base, v_B]
+  decay:        [v_base, v_B, v_D, f_orig, f_stdamt, f_mul13]
+  by_year:      [v_base, v_B, f_orig, f_amt9, f_stdamt, f_mul13, f_add13]
+  extreme_days: [v_base, v_B, f_orig, f_stdamt, f_mul13]
   neutralise:   [v_base, v_B]
+  smoothing:    [v_base, v_amt_level, d7_amt_13, d7_add_13, f_orig, f_stdamt, f_mul13]
   conditional:
     - {factor: v_B, gate: gate_dw,  buckets: 5}     # 波动是不是在给量价协方差开关门?
     - {factor: v_D, gate: gate_cov, buckets: 5}     # 反过来呢?
@@ -118,3 +122,42 @@ stages:
       - {id: d_amt_x_ivol,   group: distil, expr: "mul(cs_rank(cross_mean(log(add(day_sum(Amt), 1)), 13)), cs_rank(cross_mean(day_var(Ret), 13)))", why: "规模 × 波动,两支都排名化"}
       - {id: d_amt_p_ivol,   group: distil, expr: "add(cs_rank(cross_mean(log(add(day_sum(Amt), 1)), 13)), cs_rank(cross_mean(day_var(Ret), 13)))", why: "规模 + 波动(相加)"}
       - {id: d_ivol_only,    group: distil, expr: "cs_rank(cross_mean(day_var(Ret), 13))", why: "只有波动"}
+
+  # ---------------------------------------------------------------- S7
+  # 第一轮之后才想得到的问题(S1~S6 的结论见报告第 9 节):
+  #   (a) 波动支的换手 46% 是它唯一的问题 —— 给它套上同样的极值记忆能不能救?
+  #   (b) 救活之后,"规模 + 波动"的低换手组合能不能打赢单独的规模?
+  #   (c) cross_max 是不是只是在对一个带尺度的量取绝对幅度?
+  #   (d) 蒸馏候选的窗口有没有邻域?
+  - id: S7_distil2
+    question: "把极值记忆装到波动支上,再和规模支组合 —— 能不能在扣费后打赢单独的成交额水平?"
+    variants:
+      - {id: d7_ivol_max9,  group: vol,    expr: "cross_max(day_var(Ret), 9)", why: "(a) 波动支 + 9 日极值记忆:换手能不能从 46% 降下来"}
+      - {id: d7_ivol_13,    group: vol,    expr: "cross_max(day_var(Ret), 13)", why: "(a) 同上,13 日"}
+      - {id: d7_ivol_mean13, group: vol,   expr: "cross_mean(day_var(Ret), 13)", why: "(a) 波动支用均值而不是极值"}
+      - {id: d7_amt_5,      group: window, expr: "cross_max(day_sum(Amt), 5)", why: "(d) 蒸馏候选的窗口邻域"}
+      - {id: d7_amt_13,     group: window, expr: "cross_max(day_sum(Amt), 13)", why: "(d) 同上"}
+      - {id: d7_amt_20,     group: window, expr: "cross_max(day_sum(Amt), 20)", why: "(d) 同上"}
+      - {id: d7_amt_30,     group: window, expr: "cross_max(day_sum(Amt), 30)", why: "(d) 同上"}
+      - {id: d7_add_13,     group: combo,  expr: "add(cs_rank(cross_max(day_sum(Amt), 13)), cs_rank(cross_max(day_var(Ret), 13)))", why: "(b) 两支都低换手化后相加"}
+      - {id: d7_mul_13,     group: combo,  expr: "mul(cross_max(day_sum(Amt), 13), cross_max(day_var(Ret), 13))", why: "(b) 原树的乘法,但记忆放在乘法之前"}
+      - {id: d7_mulrank_13, group: combo,  expr: "mul(cs_rank(cross_max(day_sum(Amt), 13)), cs_rank(cross_max(day_var(Ret), 13)))", why: "(b) 排名化后相乘:乘法本身有没有额外信息"}
+      - {id: d7_absc_9,     group: magn,   expr: "cross_max(abs_(day_cov(Amt, Low)), 9)", why: "(c) 若 cross_max 只是在取幅度,加 abs 应该几乎不变"}
+      - {id: d7_stdamt_9,   group: magn,   expr: "cross_max(day_std(Amt), 9)", why: "(c) 把协方差换成 Amt 自身的日内离散度"}
+      - {id: d7_meanamt_9,  group: magn,   expr: "cross_max(day_mean(Amt), 9)", why: "(c) 换成日内均值成交额"}
+      - {id: d7_volsum_9,   group: magn,   expr: "cross_max(day_sum(Volume), 9)", why: "(c) 成交额换成成交量:是钱还是股数"}
+      - {id: d_amt_x_ivol,  group: combo,  expr: "mul(cs_rank(cross_mean(log(add(day_sum(Amt), 1)), 13)), cs_rank(cross_mean(day_var(Ret), 13)))", why: "第一轮显存不足未算成:规模 × 波动"}
+      - {id: d_amt_p_ivol,  group: combo,  expr: "add(cs_rank(cross_mean(log(add(day_sum(Amt), 1)), 13)), cs_rank(cross_mean(day_var(Ret), 13)))", why: "第一轮未算成:规模 + 波动"}
+      - {id: d_ivol_only,   group: vol,    expr: "cs_rank(cross_mean(day_var(Ret), 13))", why: "第一轮未算成:只有波动"}
+
+  # ---------------------------------------------------------------- S8
+  # **留出段只读这一次。** 只放最终候选,故意用新的 id,让台账里这一笔清清楚楚。
+  # 方向仍然只在训练段定,原样用到验证段与留出段。
+  - id: S8_final
+    question: "最终候选在 2024–2025 这段从未被看过的数据上还成立吗?"
+    variants:
+      - {id: f_orig,   group: final, expr: "cross_max(mul(cross_max(day_cov(Amt, Low), 9), pow_3(day_durbin_watson(Open))), 5)", why: "原始表达式(6 个算子)"}
+      - {id: f_amt9,   group: final, expr: "cross_max(day_sum(Amt), 9)", why: "最朴素的流动性基准(2 个算子)"}
+      - {id: f_stdamt, group: final, expr: "cross_max(day_std(Amt), 9)", why: "训练+验证段扣费夏普最高的 2 算子结构"}
+      - {id: f_mul13,  group: final, expr: "mul(cross_max(day_sum(Amt), 13), cross_max(day_var(Ret), 13))", why: "蒸馏出的两支组合:流动性 x 日内波动,记忆放在乘法之前"}
+      - {id: f_add13,  group: final, expr: "add(cs_rank(cross_max(day_sum(Amt), 13)), cs_rank(cross_max(day_var(Ret), 13)))", why: "同两支,改为排名相加"}

@@ -277,12 +277,15 @@ def rank_corr_matrix(panels: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float
     names = list(panels)
     ranks = {n: rank_rows(np.asarray(panels[n], dtype=np.float64)) for n in names}
     out: Dict[str, Dict[str, float]] = {}
+    # `out[a] = {}` used to reset a row that earlier pairs had already written
+    # into, so the lower triangle came back empty (and half the report's table
+    # read NaN). Build every row first, then fill both triangles.
+    out = {n: {} for n in names}
     for i, a in enumerate(names):
-        out[a] = {}
         for b in names[i:]:
             v = nanmean_quiet(cs_pearson(ranks[a], ranks[b]))
             out[a][b] = v
-            out.setdefault(b, {})[a] = v
+            out[b][a] = v
     return out
 
 

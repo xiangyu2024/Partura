@@ -107,3 +107,17 @@ def test_metric_row_agrees_with_alphacubes_own_backtester():
     for a, b in (("ic", "ic_mean"), ("icir", "icir"), ("turnover", "turnover"),
                  ("sharpe", "sharpe"), ("sharpe_net", "sharpe_net"), ("sharpe_capped", "sharpe_capped")):
         assert mine[a] == pytest.approx(theirs[b], rel=1e-9, abs=1e-12), a
+
+
+def test_rank_corr_matrix_is_filled_on_both_sides():
+    """The row for a later name used to be reset after earlier pairs wrote into
+    it, so half the published table was NaN."""
+    from partura.diagnose import rank_corr_matrix
+    rng = np.random.default_rng(11)
+    panels = {n: rng.normal(size=(50, 40)) for n in ("a", "b", "c")}
+    m = rank_corr_matrix(panels)
+    for a in panels:
+        for b in panels:
+            assert np.isfinite(m[a][b]), (a, b)
+            assert m[a][b] == pytest.approx(m[b][a])
+        assert m[a][a] == pytest.approx(1.0)

@@ -175,10 +175,18 @@ def _diag_tables(runs: Dict[str, dict]) -> Dict[str, str]:
 
 
 def rank_corr_table(matrix: Dict[str, Dict[str, float]], ids: Sequence[str]) -> str:
+    def cell(a: str, b: str):
+        """The matrix is symmetric; runs written before the lower-triangle fix
+        only stored one side, so fall back to the mirror entry."""
+        v = matrix.get(a, {}).get(b)
+        if v is None or (isinstance(v, float) and v != v):
+            v = matrix.get(b, {}).get(a)
+        return v
+
     ids = [i for i in ids if i in matrix]
     lines = ["| | " + " | ".join(f"`{i}`" for i in ids) + " |", "|---" * (len(ids) + 1) + "|"]
     for a in ids:
-        lines.append(f"| `{a}` | " + " | ".join(_fmt(matrix[a].get(b), 2) for b in ids) + " |")
+        lines.append(f"| `{a}` | " + " | ".join(_fmt(cell(a, b), 2) for b in ids) + " |")
     return "\n".join(lines)
 
 
@@ -192,7 +200,11 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
     out_dir = Path(out_root or (PARTURA_ROOT / "runs")) / fid
     runs = _load_runs(out_dir)
     results = _merged_results(runs)
-    any_run = next(iter(runs.values()), {})
+    # Prefer the run that scored the most splits: it is the one that read the
+    # holdout, and its split list is what the baseline table should show.
+    any_run = max(runs.values(), key=lambda r: len(r.get("splits_used", [])), default={})
+    all_splits = [s for s in ("train", "valid", "holdout", "full")
+                  if any(s in r.get("splits_used", []) for r in runs.values())]
     notes = Path(notes_dir or (PARTURA_ROOT / "notes")) / fid
     dec = decompose(cfg["expression"])
     diag = _diag_tables(runs)
@@ -202,10 +214,13 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
         p = notes / f"{name}.md"
         return p.read_text(encoding="utf-8").strip() if p.is_file() else fallback
 
-    by_stage: Dict[str, List[str]] = {}
+    # Stages are reported in the order the config declares them, not in the
+    # order the JSON files happen to sort in.
+    questions = {s["id"]: s.get("question", "") for s in cfg["stages"]}
+    by_stage: Dict[str, List[str]] = {s["id"]: [] for s in cfg["stages"]}
     for vid, r in results.items():
         by_stage.setdefault(r.get("stage", "?"), []).append(vid)
-    questions = {s["id"]: s.get("question", "") for s in cfg["stages"]}
+    by_stage = {k: v for k, v in by_stage.items() if v}
 
     L: List[str] = [f"# Alpha 研究报告 — {fid}", "", f"> {cfg.get('title','')}", ""]
     if any_run:
@@ -227,12 +242,13 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
 
     L += [f"## {SECTIONS[5][1]}", ""]
     base_id = cfg.get("baseline_id", "v_base")
-    L += [_split_table(results, base_id, any_run.get("splits_used", ["train", "valid", "full"])), ""]
+    L += [_split_table(results, base_id, all_splits), ""]
     if "by_year::" + base_id in diag:
-        sc = diag.get("by_year_scope")
-        rng = f"{sc[0]}–{sc[1]}" if sc else "训练+验证段"
-        L += [f"**逐年({rng},方向按训练段固定;不含留出段除非本次读了它)**", "",
-              diag["by_year::" + base_id], ""]
+        rows_y = [r for rr in runs.values()
+                  for v, rr2 in (rr.get("diagnostics", {}).get("by_year") or {}).items()
+                  if v == base_id for r in rr2]
+        rng = f"{rows_y[0]['year']}–{rows_y[-1]['year']}" if rows_y else "训练+验证段"
+        L += [f"**逐年({rng},方向按训练段固定)**", "", diag["by_year::" + base_id], ""]
     if "decay" in diag:
         L += ["**不同预测期(训练段)**", "", diag["decay"], ""]
     if "extreme_days" in diag:
