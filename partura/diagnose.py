@@ -32,8 +32,43 @@ ensure_alphacube_on_path()
 
 import numpy as np  # noqa: E402
 
+import os  # noqa: E402
+
 from alphacube.metrics import (apply_turnover_cap, cs_pearson, ema_rows, long_short_weights,  # noqa: E402
-                               nanmean_quiet, portfolio_returns, rank_rows)
+                               nanmean_quiet, portfolio_returns)
+from alphacube.metrics import rank_rows as _rank_rows_pandas  # noqa: E402
+
+
+def _rank_rows_torch(x: np.ndarray, device: str, rows: int = 512) -> np.ndarray:
+    """``rank_rows`` on an accelerator: per-row average ranks (ties averaged) of
+    the finite cells, NaN elsewhere -- the same answer as the pandas version
+    (locked by tests/test_partura.py), without the CPU.  The server's CPU quota
+    is usually taken by a neighbouring job while its GPU sits idle, and ranking
+    a 1400 x 5200 panel is the single hottest call in a study."""
+    import torch
+    x = np.asarray(x, dtype=np.float64)
+    out = np.empty(x.shape, dtype=np.float64)
+    for a in range(0, x.shape[0], rows):
+        t = torch.as_tensor(x[a:a + rows], device=device)
+        fin = torch.isfinite(t)
+        s, order = torch.sort(torch.where(fin, t, torch.full_like(t, float("inf"))), dim=1, stable=True)
+        lo = torch.searchsorted(s, s, right=False)
+        hi = torch.searchsorted(s, s, right=True)
+        avg = (lo + hi + 1).to(torch.float64) / 2.0
+        r = torch.empty_like(t).scatter_(1, order, avg)
+        r[~fin] = float("nan")
+        out[a:a + rows] = r.cpu().numpy()
+    return out
+
+
+def rank_rows(x: np.ndarray) -> np.ndarray:
+    dev = os.environ.get("PARTURA_RANK_DEVICE", "")
+    if dev:
+        try:
+            return _rank_rows_torch(x, dev)
+        except Exception as exc:                         # never let the fast path decide the answer
+            print(f"[diagnose] rank on {dev} failed ({type(exc).__name__}: {exc}); using pandas", flush=True)
+    return _rank_rows_pandas(x)
 
 COST_PER_SIDE = 0.0015          # 15 bp, AlphaCube's production assumption
 TURNOVER_CAP = 0.30
@@ -73,6 +108,42 @@ def sign_from(panel: np.ndarray, target: np.ndarray, use: str = "rank_ic",
          else ic_series(panel, target))
     m = nanmean_quiet(s)
     return -1.0 if (np.isfinite(m) and m < 0) else 1.0
+
+
+def ic_row(panel: np.ndarray, target: np.ndarray, *, sign: float = 1.0,
+           target_ranks: Optional[np.ndarray] = None) -> Dict[str, float]:
+    """Prediction metrics only (no book): what a stage needs for every variant
+    when the money side is reported by ``partura.books``."""
+    raw = np.asarray(panel, dtype=np.float64)
+    p = sign * raw
+    ic = ic_series(p, target)
+    ric = rank_ic_series(p, target, panel_ranks=sign * rank_rows(raw), target_ranks=target_ranks)
+    lab = np.isfinite(target)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return {
+            "sign": float(sign),
+            "ic": nanmean_quiet(ic), "icir": _ir(ic), "ic_t": _tstat(ic),
+            "rank_ic": nanmean_quiet(ric), "rank_icir": _ir(ric), "rank_ic_t": _tstat(ric),
+            "ic_pos": float((ic[np.isfinite(ic)] > 0).mean()) if np.isfinite(ic).any() else float("nan"),
+            "coverage": float(np.isfinite(raw).mean()),
+            # the gate the user's single-factor ranking applies: of the cells that HAVE a label
+            "coverage_labelled": float((np.isfinite(raw) & lab).sum() / max(int(lab.sum()), 1)),
+            "n_days": int(np.isfinite(ic).sum()),
+        }
+
+
+def distinct_fraction(panel: np.ndarray, step: int = 5, min_names: int = 30) -> float:
+    """Median over sampled days of (distinct values / names with a value).  A
+    factor with a handful of levels makes a decile book whose membership is
+    decided by tie-breaking, i.e. by symbol order."""
+    out = []
+    for t in range(0, panel.shape[0], step):
+        row = panel[t]
+        row = row[np.isfinite(row)]
+        if row.size >= min_names:
+            out.append(np.unique(row).size / row.size)
+    return float(np.median(out)) if out else 0.0
 
 
 def metric_row(panel: np.ndarray, target: np.ndarray, *, sign: float = 1.0,
@@ -290,5 +361,6 @@ def rank_corr_matrix(panels: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float
 
 
 __all__ = ["COST_PER_SIDE", "TURNOVER_CAP", "TOP_FRAC", "ic_series", "rank_ic_series", "sign_from",
+           "rank_rows", "ic_row", "distinct_fraction",
            "metric_row", "neutralise", "conditional_ic", "decay", "by_year", "smoothing_sweep",
            "extreme_day_dependence", "pair_rank_corr", "rank_corr_matrix"]

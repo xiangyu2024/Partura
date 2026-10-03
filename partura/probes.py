@@ -53,12 +53,25 @@ class ProbeContext:
     spec: object                      # alphacube.axes.OpSpec
     window: Optional[int]
     shape: Tuple[int, int]            # the (rows, cols) 2-D view the face sees
+    # Hand-written factors use library functions outside the four-category
+    # grammar (``in_slice(x, 2, 237)``, ``day_quantile(x, 0.95)``,
+    # ``select_where(cond, a, b)``).  What such a node does depends on its
+    # literal arguments, so the probe calls it exactly as the tree does:
+    # ``caller`` takes the tensor operands and fills the literals in.
+    caller: Optional[Callable[[Sequence[torch.Tensor]], torch.Tensor]] = None
+    n_operands: Optional[int] = None
+
+    @property
+    def arity(self) -> int:
+        return int(self.n_operands if self.n_operands is not None else self.spec.arity)
 
     def call(self, args: Sequence[torch.Tensor], window: Optional[int] = None) -> torch.Tensor:
-        w = self.window if window is None else window
-        if self.spec.requires_window:
-            return self.spec.fn(*args, w)
-        return self.spec.fn(*args)
+        if self.caller is not None:
+            out = self.caller(list(args))
+        else:
+            w = self.window if window is None else window
+            out = self.spec.fn(*args, w) if self.spec.requires_window else self.spec.fn(*args)
+        return out.to(torch.float64) if out.dtype == torch.bool else out
 
     def sample(self, seed: int = 0, positive: bool = True,
                shape: Optional[Tuple[int, int]] = None) -> torch.Tensor:
@@ -67,7 +80,7 @@ class ProbeContext:
         return x.abs() + 1.0 if positive else x
 
     def operands(self, seed: int = 0, positive: bool = True) -> List[torch.Tensor]:
-        return [self.sample(seed + i, positive) for i in range(self.spec.arity)]
+        return [self.sample(seed + i, positive) for i in range(self.arity)]
 
     @staticmethod
     def close(a: torch.Tensor, b: torch.Tensor, tol: float = TOL) -> bool:
@@ -142,10 +155,12 @@ def load_study_probes(path) -> List[str]:
 
 
 def run_probes(spec, window: Optional[int] = None, shape: Tuple[int, int] = (40, 24),
-               only: Optional[Sequence[str]] = None) -> Dict[str, dict]:
+               only: Optional[Sequence[str]] = None, caller=None, n_operands: Optional[int] = None
+               ) -> Dict[str, dict]:
     """Every applicable probe, plus a record of which ones were skipped and why."""
     w = window if window is not None else (spec.windows[0] if spec.requires_window and spec.windows else 5)
-    ctx = ProbeContext(spec=spec, window=w if spec.requires_window else None, shape=shape)
+    ctx = ProbeContext(spec=spec, window=w if spec.requires_window else None, shape=shape,
+                       caller=caller, n_operands=n_operands)
     out: Dict[str, dict] = {}
     for name, pr in PROBES.items():
         if only is not None and name not in only:

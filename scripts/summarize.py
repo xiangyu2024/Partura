@@ -1,65 +1,113 @@
-"""Console digest of a Partura run: the few numbers a decision actually turns on.
+"""Console digest of Partura run JSON(s): the numbers a decision actually turns on.
 
-    python scripts/summarize.py runs/<factor_id>/batch.json [baseline_id]
+    python scripts/summarize.py runs/<factor_id>/<stage>.json [more.json ...] [--base v_base]
+
+Money is in the user's convention (partura.books): decile L/S Sharpe after 15 bp
+at the half-life fitted on the fit split, and the long leg as a pure long book
+vs the equal-weight universe (gross = the column the user's table publishes;
+net = after 15 bp per unit turnover).
 """
 import json
 import sys
 from pathlib import Path
 
-path = Path(sys.argv[1])
-base = sys.argv[2] if len(sys.argv) > 2 else "v_base"
-d = json.loads(path.read_text(encoding="utf-8"))
-res, diag = d["results"], d.get("diagnostics", {})
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+base = "v_base"
+if "--base" in sys.argv:
+    base = sys.argv[sys.argv.index("--base") + 1]
+    args = [a for a in args if a != base]
 
-v = d["view"]
-print(f"{d['factor_id']}  {v['days']}d x {v['symbols']}s  {v['first']}..{v['last']}  "
-      f"cost {d['cost_per_side']*1e4:.0f}bp  splits {d['splits_used']}")
-if d.get("errors"):
-    print("errors:", d["errors"])
 
-hdr = f"{'variant':<18}{'stage':<16}{'sgn':>4}{'rIC(tr)':>9}{'rICIR':>7}{'IC(tr)':>9}{'TO':>7}{'shN(tr)':>9}{'rIC(va)':>9}{'shN(va)':>9}"
-print("\n" + hdr)
-print("-" * len(hdr))
-rows = [(k, r) for k, r in res.items() if "error" not in r]
-rows.sort(key=lambda kr: -(kr[1]["splits"]["train"]["rank_ic"] or 0))
-for k, r in rows:
-    t, va = r["splits"]["train"], r["splits"].get("valid", {})
-    print(f"{k:<18}{r['stage'][:15]:<16}{'+' if r['sign']>0 else '-':>4}"
-          f"{t['rank_ic']:>9.4f}{t['rank_icir']:>7.3f}{t['ic']:>9.4f}{t['turnover']:>7.3f}"
-          f"{t['sharpe_net']:>9.2f}{va.get('rank_ic', float('nan')):>9.4f}{va.get('sharpe_net', float('nan')):>9.2f}")
+def f(v, nd=2, pct=False):
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return "   —  "
+    if x != x:
+        return "  NaN "
+    return f"{x:+.1%}" if pct else f"{x:+.{nd}f}"
 
-if diag.get("rank_corr_train"):
-    m = diag["rank_corr_train"]
-    if base in m:
-        print(f"\n与 {base} 的日截面 rank 相关(训练段,|.|>=0.95 = 同一因子族):")
-        for k, val in sorted(m[base].items(), key=lambda kv: -abs(kv[1]))[:16]:
-            if k != base:
-                print(f"  {k:<20}{val:+.3f}")
 
-for vid, entry in (diag.get("neutralise") or {}).items():
-    print(f"\n中性化 {vid}(训练段):")
-    b = res[vid]["splits"]["train"]
-    print(f"  {'(未中性化)':<16}{'R2 —':>10}  rIC {b['rank_ic']:+.4f}  shN {b['sharpe_net']:+.2f}  TO {b['turnover']:.3f}")
-    for ctl, rec in entry.items():
-        m2 = rec["metrics"]
-        print(f"  {ctl:<16}R2 {rec['r2']:>7.3f}  rIC {m2['rank_ic']:+.4f}  shN {m2['sharpe_net']:+.2f}  TO {m2['turnover']:.3f}")
+for path in args:
+    d = json.loads(Path(path).read_text(encoding="utf-8"))
+    res, diag = d["results"], d.get("diagnostics", {})
+    v = d["view"]
+    print(f"\n===== {d['factor_id']}  [{Path(path).name}]  {v['days']}d x {v['symbols']}s  "
+          f"splits {d['splits_used']}  fit={d.get('fit_split')}  {d.get('seconds')}s  "
+          f"peak anon {d.get('peak_anon_gb')}G =====")
+    if d.get("errors"):
+        for k, e in d["errors"].items():
+            print(f"  ERROR {k}: {str(e)[:160]}")
 
-for key, rowsc in (diag.get("conditional") or {}).items():
-    print(f"\n条件 IC  {key}:  " + "  ".join(f"Q{r['bucket']+1} {r['rank_ic']:+.4f}" for r in rowsc))
+    print(f"\n{'variant':<20}{'sgn':>4}{'rIC tr':>9}{'rIC va':>9}{'hl':>4}{'LS tr':>7}{'LS va':>7}"
+          f"{'Lgross tr':>10}{'Lgross va':>10}{'Lnet tr':>9}{'Lnet va':>9}{'Lshr':>6}{'TO':>6}{'cov':>6}{'dist':>6}")
+    for vid, r in res.items():
+        if "error" in r:
+            print(f"{vid:<20} ERROR {str(r['error'])[:110]}")
+            continue
+        s, b = r["splits"], r["books"]["splits"]
+        tr, va = b.get("train", {}), b.get("valid", {})
+        print(f"{vid:<20}{'+' if r['sign'] > 0 else '-':>4}{f(s['train']['rank_ic'], 4):>9}"
+              f"{f(s.get('valid', {}).get('rank_ic'), 4):>9}{r['books']['hl_used']:>4g}"
+              f"{f(tr.get('ls_sharpe')):>7}{f(va.get('ls_sharpe')):>7}"
+              f"{f(tr.get('long_gross_ann'), pct=True):>10}{f(va.get('long_gross_ann'), pct=True):>10}"
+              f"{f(tr.get('long_ann'), pct=True):>9}{f(va.get('long_ann'), pct=True):>9}"
+              f"{tr.get('long_share', float('nan')):>6.0%}{tr.get('ls_turnover', float('nan')):>6.1%}"
+              f"{s['train'].get('coverage_labelled', float('nan')):>6.2f}{r.get('distinct', float('nan')):>6.2f}")
+    print("  (LS = 扣费多空夏普; Lgross/Lnet = 多头腿毛/净年化超额; Lshr = 多头腿占毛价差的比例; "
+          "cov = 有标签格子里有值的比例,用户门槛 0.95; dist = 取值离散度,用户门槛 0.5)")
 
-if diag.get("controls"):
-    print("\n控制变量自身(训练段):")
-    for k, m2 in diag["controls"].items():
-        print(f"  {k:<14}{'+' if m2['sign']>0 else '-'}  rIC {m2['rank_ic']:+.4f}  shN {m2['sharpe_net']:+.2f}  TO {m2['turnover']:.3f}")
+    users = {k: r for k, r in res.items() if "books_user" in r}
+    if users:
+        us = d.get("user_split", "utrain")
+        print(f"\n与用户表同口径(方向/半衰期在 {us} 上定; holdout = 用户的测试段):")
+        print(f"{'variant':<20}{'sgn':>4}{'hl':>4}{'LS utr':>8}{'LS ho':>8}{'Lgross utr':>11}{'Lgross ho':>10}"
+              f"{'Lnet utr':>10}{'Lnet ho':>9}{'Lsharpe utr':>12}{'Lsharpe ho':>11}{'short utr':>10}")
+        for vid, r in users.items():
+            bu = r["books_user"]
+            a, h = bu["splits"].get(us, {}), bu["splits"].get("holdout", {})
+            print(f"{vid:<20}{'+' if r.get('sign_user', 1) > 0 else '-':>4}{bu['hl_used']:>4g}"
+                  f"{f(a.get('ls_sharpe')):>8}{f(h.get('ls_sharpe')):>8}"
+                  f"{f(a.get('long_gross_ann'), pct=True):>11}{f(h.get('long_gross_ann'), pct=True):>10}"
+                  f"{f(a.get('long_ann'), pct=True):>10}{f(h.get('long_ann'), pct=True):>9}"
+                  f"{f(a.get('long_sharpe')):>12}{f(h.get('long_sharpe')):>11}"
+                  f"{f(a.get('short_gross_ann'), pct=True):>10}")
 
-for vid, rowsy in (diag.get("by_year") or {}).items():
-    sc = diag.get("by_year_scope")
-    print(f"\n逐年 {vid} ({sc[0] if sc else ''}..{sc[1] if sc else ''}):")
-    for r in rowsy:
-        print(f"  {r['year']}  rIC {r['rank_ic']:+.4f}  net {r['net_pnl']:+.3f}  shN {r['sharpe_net']:+.2f}  TO {r['turnover']:.3f}")
+    b0 = res.get(base)
+    if b0 and "books" in b0:
+        print(f"\n半衰期扫描 {base}(fit 段): " + "  ".join(
+            f"hl{s['halflife']:g}: LS {f(s['ls_sharpe'])} L {f(s['long_sharpe'])} TO {s['ls_turnover']:.0%}"
+            for s in b0["books"]["sweep"]))
+    for vid, r in res.items():
+        if r.get("profile"):
+            for sname, rows in r["profile"].items():
+                print(f"分位超额 {vid} [{sname}] Q1..Q{len(rows)}: " +
+                      " ".join(f(x['excess_ann'], pct=True) for x in rows))
 
-for vid, rowsd in (diag.get("decay") or {}).items():
-    print(f"\n衰减 {vid}: " + "  ".join(f"h{r['horizon']} {r['rank_ic']:+.4f}" for r in rowsd))
-
-for vid, rowse in (diag.get("extreme_days") or {}).items():
-    print(f"\n极端日 {vid}: " + "  ".join(f"drop{r['dropped_frac']:.0%} shN {r['sharpe_net']:+.2f}" for r in rowse))
+    for vid, entry in (diag.get("neutralise") or {}).items():
+        r0 = res[vid]
+        print(f"\n中性化 {vid}(fit 段; 未中性化: rIC {f(r0['splits']['train']['rank_ic'], 4)}, "
+              f"LS {f(r0['books']['splits']['train']['ls_sharpe'])}, "
+              f"Lgross {f(r0['books']['splits']['train']['long_gross_ann'], pct=True)}):")
+        for ctl, rec in entry.items():
+            print(f"  {ctl:<14} R2 {rec['r2']:.3f}  残差 rIC {f(rec['rank_ic'], 4)}  LS {f(rec['ls_sharpe'])}  "
+                  f"Lgross {f(rec['long_gross_ann'], pct=True)}  TO {rec['ls_turnover']:.1%}")
+    for key, rows in (diag.get("conditional") or {}).items():
+        print(f"条件 IC {key}: " + "  ".join(f"Q{r['bucket'] + 1} {f(r['rank_ic'], 4)}" for r in rows))
+    if diag.get("controls"):
+        print("\n控制变量 / 已知家族自己当因子(同口径):")
+        for k, m in diag["controls"].items():
+            print(f"  {k:<18}{'+' if m['sign'] > 0 else '-'} rIC {f(m['rank_ic'], 4)} hl {m['hl']:g}  "
+                  f"LS {f(m.get('train_ls_sharpe'))}/{f(m.get('valid_ls_sharpe'))}  "
+                  f"Lgross {f(m.get('train_long_gross_ann'), pct=True)}/{f(m.get('valid_long_gross_ann'), pct=True)}  "
+                  f"TO {m.get('train_ls_turnover', float('nan')):.1%}")
+    m = diag.get("rank_corr_train")
+    if m and base in m:
+        print(f"\n与 {base} 的日截面 rank 相关(fit 段; |.|>=0.95 = 同一因子族): " +
+              "  ".join(f"{k} {val:+.2f}" for k, val in sorted(m[base].items(), key=lambda kv: -abs(kv[1]))
+                        if k != base))
+    for vid, rows in (diag.get("by_year") or {}).items():
+        print(f"\n逐年 {vid}: " + "  ".join(
+            f"{r['year']} LS {f(r['ls_sharpe'])} Lg {f(r['long_gross_ann'], pct=True)}" for r in rows))
+    for vid, rows in (diag.get("decay") or {}).items():
+        print(f"衰减 {vid} rank IC: " + "  ".join(f"h{r['horizon']} {f(r['rank_ic'], 4)}" for r in rows))

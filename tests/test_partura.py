@@ -187,3 +187,34 @@ def test_lab_recall_is_operator_scoped(tmp_path):
     assert {f.id for f in lab.recall(parse_research("day_durbin_watson(Open)"))} == {"x"}
     assert {f.id for f in lab.recall(parse_research("cross_max(day_cov(Amt, Low), 9)"))} == {"y"}
     assert lab.recall(parse_research("day_sum(Amt)")) == []
+
+
+def test_torch_rank_rows_equals_pandas_with_ties_nans_and_infs():
+    """The accelerated ranking must give pandas' answer, or every rank IC in a
+    study silently depends on which device ranked it."""
+    from partura.diagnose import _rank_rows_pandas, _rank_rows_torch
+    rng = np.random.default_rng(21)
+    x = np.round(rng.normal(size=(37, 211)), 1)            # rounding -> many ties
+    x[rng.random(x.shape) < 0.15] = np.nan
+    x[3, 5], x[9, 100] = np.inf, -np.inf
+    x[11] = np.nan                                          # an all-missing day
+    a, b = _rank_rows_pandas(x), _rank_rows_torch(x, "cpu", rows=10)
+    assert np.array_equal(np.isnan(a), np.isnan(b))
+    assert np.nanmax(np.abs(a - b)) == 0.0
+
+
+def test_books_match_the_definitions_they_were_vendored_from():
+    """long excess = long basket - equal-weight universe; spread = long + short legs."""
+    from partura.books import book_row, long_book, short_leg_excess
+    from alphacube.metrics import long_short_weights, portfolio_returns
+    sig, fwd = _fake_panel(31)
+    fwd[::7, ::5] = np.nan                                  # unlabelled cells earn 0 and leave the benchmark
+    w = long_short_weights(sig, 0.1)
+    net, gross, turn = long_book(w, sig, fwd, 0.0015)
+    short = short_leg_excess(w, sig, fwd)
+    ls_gross = portfolio_returns(w, fwd, 0.0)[1]
+    # a gross-1 decile book earns half the long excess plus half the short excess
+    assert np.nanmax(np.abs(ls_gross - 0.5 * (gross + short))) < 1e-12
+    row = book_row(sig, fwd, slice(0, sig.shape[0]))
+    assert row["long_gross_ann"] == pytest.approx(float(np.nanmean(gross) * 252))
+    assert 0.0 < row["long_share"] < 1.0

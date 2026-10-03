@@ -74,14 +74,91 @@ def dossier(name: str, window: Optional[int] = None, shape: Tuple[int, int] = (4
     )
 
 
+def usage_name(node) -> str:
+    """How a node is USED: a registry operator is its name; a general call
+    carries its literals (``in_slice(·, 2, 237)``), because the literals are
+    part of what it does."""
+    from alphacube.expression import Expression, GeneralCall
+    if not isinstance(node, GeneralCall):
+        return node.spec.name
+    parts = []
+    for a in node.args:
+        if isinstance(a, tuple):
+            parts.append("[" + ", ".join("·" for _ in a) + "]")
+        elif isinstance(a, Expression):
+            parts.append("·")
+        else:
+            parts.append(repr(a))
+    return f"{node.spec.name}({', '.join(parts)})"
+
+
+def dossier_for_node(node, shape: Optional[Tuple[int, int]] = None,
+                     only: Optional[Sequence[str]] = None) -> Dossier:
+    """Dossier of one tree node, called the way the tree calls it."""
+    from alphacube.expression import Expression, GeneralCall
+    spec = node.spec
+    if not isinstance(node, GeneralCall):
+        return dossier(spec.name, window=node.window, shape=shape or (40, 24), only=only)
+
+    def caller(tensors):
+        it = iter(tensors)
+        args = []
+        for a in node.args:
+            if isinstance(a, tuple):
+                args.append([next(it) for _ in a])
+            elif isinstance(a, Expression):
+                args.append(next(it))
+            else:
+                args.append(a)
+        return spec.fn(*args)
+
+    fn = inspect.unwrap(spec.fn)
+    try:
+        src_file, src_line = inspect.getsourcefile(fn) or "", inspect.getsourcelines(fn)[1]
+        src = inspect.getsource(fn)
+    except (OSError, TypeError):
+        src_file, src_line, src = "", 0, ""
+    n_ops = len(node.operands)
+    # literal minute indices (in_slice(x, 2, 237)) need a full-width row to mean anything
+    shp = shape or ((16, 241) if spec.face in ("dt", "nt") else (40, 24))
+    return Dossier(
+        name=usage_name(node),
+        declared={
+            "face": spec.face, "family": spec.family, "category": spec.category, "arity": n_ops,
+            "requires_window": False, "compute_axis": spec.compute_axis,
+            "reduces_m": spec.reduces_m, "restores_m": spec.restores_m, "kernel_id": spec.kernel_id,
+            "lookahead_flag": spec.lookahead, "boolean_output": spec.boolean_output,
+            "trivial_boolean": spec.trivial_boolean, "resource_risk": spec.resource_risk,
+            "coarse_output": spec.coarse_output, "windows": [], "window_probed": None,
+            "general_call": True,
+        },
+        probes=P.run_probes(spec, window=None, shape=shp, only=only, caller=caller, n_operands=n_ops),
+        source_file=src_file, source_line=src_line, doc=inspect.getdoc(fn) or "", source=src,
+    )
+
+
 def dossiers_for(expr, **kw) -> Dict[str, Dossier]:
-    """Every operator used in a parsed expression, probed at the window it is
-    used at (a rolling operator behaves differently at 3 days and at 60)."""
+    """Every operator USAGE in a parsed expression: a registry operator is
+    probed at the window it is used at (a rolling operator behaves differently
+    at 3 days and at 60), a general call with its literal arguments."""
     out: Dict[str, Dossier] = {}
     for n in expr.nodes():
-        if n.spec is None or n.spec.name in out:
+        if n.spec is None:
             continue
-        out[n.spec.name] = dossier(n.spec.name, window=n.window, **kw)
+        key = usage_name(n)
+        if key in out:
+            continue
+        try:
+            out[key] = dossier_for_node(n, **kw)
+        except Exception as exc:                      # a dossier must never stop a study
+            out[key] = Dossier(name=key, declared={"face": n.spec.face, "family": n.spec.family,
+                                                   "category": n.spec.category, "arity": len(n.operands),
+                                                   "requires_window": n.spec.requires_window,
+                                                   "compute_axis": n.spec.compute_axis,
+                                                   "reduces_m": n.spec.reduces_m, "kernel_id": n.spec.kernel_id,
+                                                   "window_probed": n.window},
+                               probes={"_dossier": {"applicable": True, "error": f"{type(exc).__name__}: {exc}",
+                                                    "question": "", "origin": "builtin"}})
     return out
 
 
@@ -105,12 +182,13 @@ def render_markdown(ds: Dict[str, Dossier], show_questions: bool = False) -> str
         dc = d.declared
         loc = f"{d.source_file.split('alphacube/')[-1]}:{d.source_line}" if d.source_file else "?"
         lines.append(f"### `{name}`\n")
-        lines.append(f"- **实现**: `{loc}` (kernel `{dc['kernel_id']}`)")
+        lines.append(f"- **实现**: `{loc}` (kernel `{dc.get('kernel_id')}`)")
         w = dc.get("window_probed")
         lines.append(f"- **声明**: face `{dc['face']}` / family `{dc['family']}` / category `{dc['category']}`, "
                      f"arity {dc['arity']}, 计算轴 `{dc['compute_axis']}`, "
-                     f"{f'窗口 {w}' if dc['requires_window'] else '无窗口'}"
-                     f"{', 折叠分钟轴 (M→1)' if dc['reduces_m'] else ''}")
+                     f"{f'窗口 {w}' if dc.get('requires_window') else '无窗口'}"
+                     f"{', 折叠分钟轴 (M→1)' if dc.get('reduces_m') else ''}"
+                     f"{', **搜索语法之外的通用调用**(带字面量参数)' if dc.get('general_call') else ''}")
         flags = [k for k in ("lookahead_flag", "boolean_output", "trivial_boolean", "resource_risk",
                              "coarse_output") if dc.get(k)]
         lines.append(f"- **标志**: {', '.join(flags) if flags else '无'}")
@@ -152,4 +230,4 @@ def render_markdown(ds: Dict[str, Dossier], show_questions: bool = False) -> str
     return "\n".join(lines)
 
 
-__all__ = ["Dossier", "dossier", "dossiers_for", "render_markdown"]
+__all__ = ["Dossier", "dossier", "dossier_for_node", "dossiers_for", "usage_name", "render_markdown"]

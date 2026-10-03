@@ -1,13 +1,16 @@
 """Assemble the research report from run artefacts.
 
-The report has two kinds of section.  **Generated** sections (operator
-dossiers, decomposition, every metric table, the split ledger, provenance)
-are built from the JSON a run wrote, so no number in the report is typed by
-hand.  **Written** sections (hypotheses, interpretation, diagnosis, risks,
-next experiments) come from markdown fragments under ``notes/<factor_id>/``.
+Two kinds of section.  **Generated** sections (operator dossiers,
+decomposition, every metric table, the split ledger, provenance) are built
+from the JSON a run wrote, so no number in the report is typed by hand.
+**Written** sections (hypotheses, interpretation, diagnosis, risks, next
+experiments) come from markdown fragments under ``notes/<factor_id>/``.
 
-Keeping the two apart is the point: if a claim is in a written section, a
-reader can check it against the generated table right above it.
+Money is shown in the user's convention (``partura.books``): decile long/short
+Sharpe after 15 bp, and the long leg as a pure long book against the
+equal-weight universe -- gross (what the user's table calls 多头腿年化超额), net,
+and as a share of the spread.  In A-shares only the long leg is holdable, so
+every table carries it next to the Sharpe.
 """
 
 from __future__ import annotations
@@ -21,36 +24,27 @@ from .decompose import decompose
 from .semantics import render_markdown as render_dossiers
 from .splits import SPLITS, Ledger
 
-SECTIONS = [
-    ("01_expression", "1. 原始表达式"),
-    ("02_operators", "2. 算子的真实语义"),
-    ("03_decomposition", "3. 数学分解"),
-    ("04_grammar", "4. 结构语法"),
-    ("05_hypotheses", "5. 竞争性假设"),
-    ("06_baseline", "6. 基线指标"),
-    ("07_ablations", "7. 消融实验"),
-    ("08_variants", "8. 语义变体"),
-    ("09_diagnosis", "9. 机制诊断"),
-    ("10_distilled", "10. 蒸馏后的候选"),
-    ("11_risks", "11. 失效模式与风险"),
-    ("12_next", "12. 下一步实验"),
-]
-
-_COLS = [("rank_ic", "rank IC"), ("rank_icir", "rank ICIR"), ("ic", "IC"), ("icir", "ICIR"),
-         ("turnover", "日换手"), ("sharpe", "夏普(无成本)"), ("sharpe_net", "夏普(扣15bp)"),
-         ("fitness", "GP 适应度"), ("coverage", "覆盖率")]
+SECTIONS = ["1. 原始表达式", "2. 算子的真实语义", "3. 数学分解", "4. 结构语法", "5. 竞争性假设",
+            "6. 基线指标", "7. 消融实验", "8. 语义变体", "9. 机制诊断", "10. 蒸馏 / 升华后的候选",
+            "11. 失效模式与风险", "12. 下一步实验"]
 
 
-def _fmt(v, nd: int = 4) -> str:
+def _f(v, nd: int = 2, pct: bool = False, plus: bool = True) -> str:
     if v is None:
         return "—"
     try:
-        f = float(v)
+        x = float(v)
     except (TypeError, ValueError):
         return str(v)
-    if f != f:
+    if x != x:
         return "NaN"
-    return f"{f:+.{nd}f}" if abs(f) < 1000 else f"{f:+.1f}"
+    if pct:
+        return f"{x:+.1%}" if plus else f"{x:.1%}"
+    return f"{x:+.{nd}f}" if plus else f"{x:.{nd}f}"
+
+
+def _pair(a, b, **kw) -> str:
+    return f"{_f(a, **kw)} / {_f(b, **kw)}"
 
 
 def _load_runs(out_dir: Path) -> Dict[str, dict]:
@@ -60,138 +54,129 @@ def _load_runs(out_dir: Path) -> Dict[str, dict]:
             data = json.loads(p.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
-        # The run directory also holds the ledger and side artefacts such as
-        # rank_corr_all.json; a run is a file that carries scored results.
         if isinstance(data, dict) and "results" in data and "view" in data:
             runs[p.stem] = data
     return runs
 
 
-def _merged_results(runs: Dict[str, dict]) -> Dict[str, dict]:
+def _merged(runs: Dict[str, dict]) -> Dict[str, dict]:
+    """Later files win, except that a row which read the holdout is never
+    replaced by one that did not."""
     out: Dict[str, dict] = {}
     for r in runs.values():
-        out.update(r.get("results", {}))
+        for vid, row in r.get("results", {}).items():
+            old = out.get(vid)
+            if old and "holdout" in (old.get("books_user") or {}).get("splits", {}) and \
+                    "holdout" not in (row.get("books_user") or {}).get("splits", {}):
+                keep = dict(row)
+                for k in ("books_user", "sign_user", "ic_user", "ic_holdout"):
+                    if k in old:
+                        keep[k] = old[k]
+                out[vid] = keep
+            else:
+                out[vid] = row
     return out
 
 
-def _metric_table(results: Dict[str, dict], ids: Sequence[str], split: str = "train",
-                  cols: Sequence = _COLS) -> str:
-    head = "| 变体 | 表达式 | 方向 | " + " | ".join(c[1] for c in cols) + " |"
-    sep = "|---" * (len(cols) + 3) + "|"
-    lines = [head, sep]
+def _short(expr: str, n: int = 70) -> str:
+    return expr if len(expr) <= n else expr[:n - 3] + "..."
+
+
+def stage_table(results: Dict[str, dict], ids: Sequence[str], a: str = "train", b: str = "valid") -> str:
+    head = ("| 变体 | 表达式 | 方向 | rank IC " + f"{a}/{b}" + " | 半衰期 | 扣费多空夏普 " + f"{a}/{b}"
+            + " | 多头腿毛超额 " + f"{a}/{b}" + " | 多头腿净超额 " + f"{a}/{b}" + " | 多头占比 | 多空日换手 | 取值离散度 |")
+    lines = [head, "|---" * 11 + "|"]
     for vid in ids:
         r = results.get(vid)
         if not r:
             continue
         if "error" in r:
-            lines.append(f"| `{vid}` | — | — |" + " — |" * len(cols) + f"  <!-- {r['error']} -->")
+            lines.append(f"| `{vid}` | `{_short(r.get('expr',''), 50)}` | — | 求值失败 | | | | | | | |")
             continue
-        m = r["splits"].get(split, {})
-        expr = r["expr"]
-        expr = expr if len(expr) <= 74 else expr[:71] + "..."
-        lines.append(f"| `{vid}` | `{expr}` | {'+' if r['sign'] > 0 else '−'} | "
-                     + " | ".join(_fmt(m.get(c[0])) for c in cols) + " |")
+        sa, sb = r["splits"].get(a, {}), r["splits"].get(b, {})
+        ba, bb = r["books"]["splits"].get(a, {}), r["books"]["splits"].get(b, {})
+        lines.append(
+            f"| `{vid}` | `{_short(r['expr'])}` | {'+' if r['sign'] > 0 else '−'} "
+            f"| {_pair(sa.get('rank_ic'), sb.get('rank_ic'), nd=4)} | {r['books']['hl_used']:g} "
+            f"| **{_pair(ba.get('ls_sharpe'), bb.get('ls_sharpe'))}** "
+            f"| {_pair(ba.get('long_gross_ann'), bb.get('long_gross_ann'), pct=True)} "
+            f"| {_pair(ba.get('long_ann'), bb.get('long_ann'), pct=True)} "
+            f"| {_f(ba.get('long_share'), pct=True, plus=False)} | {_f(ba.get('ls_turnover'), pct=True, plus=False)} "
+            f"| {_f(r.get('distinct'), nd=2, plus=False)} |")
     return "\n".join(lines)
 
 
-def _split_table(results: Dict[str, dict], vid: str, splits: Sequence[str]) -> str:
-    r = results.get(vid)
-    if not r or "error" in r:
-        return "_(无数据)_"
-    lines = ["| 数据段 | 区间 | 天数 | " + " | ".join(c[1] for c in _COLS) + " |",
-             "|---" * (len(_COLS) + 3) + "|"]
-    for s in splits:
-        m = r["splits"].get(s)
-        if not m:
+def user_table(results: Dict[str, dict], ids: Sequence[str], user: str, published: Optional[dict] = None,
+               base_id: Optional[str] = None) -> str:
+    """The table that is comparable with the user's own: sign and half-life from
+    THEIR training period, their test period only if this study read it."""
+    head = ("| 结构 | 方向 | 半衰期 | 扣费多空夏普 训练/测试 | 多头腿毛超额 训练/测试 | 多头腿净超额 训练/测试 "
+            "| 纯多头夏普 训练/测试 | 空头腿毛超额 训练/测试 | 多头占比(训练) | 多空日换手 |")
+    lines = [head, "|---" * 10 + "|"]
+    if published and base_id:
+        lines.append(f"| _用户表里公布的原式_ | {'+' if published.get('sign', 0) > 0 else '−'} | {published.get('hl')} "
+                     f"| {_pair(*published['ls'])} | {_pair(*published['long'], pct=True)} | — | — | — | — | — |")
+    for vid in ids:
+        r = results.get(vid)
+        if not r or "books_user" not in r:
             continue
-        a, b = SPLITS.get(s, ("", ""))
-        lines.append(f"| {s} | {a}–{b} | {m.get('n_days')} | "
-                     + " | ".join(_fmt(m.get(c[0])) for c in _COLS) + " |")
+        bu = r["books_user"]
+        tr, te = bu["splits"].get(user, {}), bu["splits"].get("holdout", {})
+        lines.append(
+            f"| `{vid}` `{_short(r['expr'], 60)}` | {'+' if r.get('sign_user', r['sign']) > 0 else '−'} "
+            f"| {bu['hl_used']:g} | **{_pair(tr.get('ls_sharpe'), te.get('ls_sharpe'))}** "
+            f"| {_pair(tr.get('long_gross_ann'), te.get('long_gross_ann'), pct=True)} "
+            f"| {_pair(tr.get('long_ann'), te.get('long_ann'), pct=True)} "
+            f"| {_pair(tr.get('long_sharpe'), te.get('long_sharpe'))} "
+            f"| {_pair(tr.get('short_gross_ann'), te.get('short_gross_ann'), pct=True)} "
+            f"| {_f(tr.get('long_share'), pct=True, plus=False)} | {_f(tr.get('ls_turnover'), pct=True, plus=False)} |")
     return "\n".join(lines)
 
 
-def _diag_tables(runs: Dict[str, dict]) -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    diags = [r.get("diagnostics", {}) for r in runs.values() if r.get("diagnostics")]
-    if not diags:
-        return out
-    d = {}
-    for x in diags:
-        for k, v in x.items():
+def sweep_table(r: dict) -> str:
+    lines = ["| 半衰期 | 扣费多空夏普 | 多空日换手 | 纯多头夏普 | 多头腿净超额 | 多头日换手 |", "|---|---|---|---|---|---|"]
+    for s in r["books"]["sweep"]:
+        mark = " ◀" if s["halflife"] == r["books"]["hl_used"] else ""
+        lines.append(f"| {s['halflife']:g}{mark} | {_f(s['ls_sharpe'])} | {_f(s['ls_turnover'], pct=True, plus=False)} "
+                     f"| {_f(s['long_sharpe'])} | {_f(s['long_ann'], pct=True)} "
+                     f"| {_f(s['long_turnover'], pct=True, plus=False)} |")
+    return "\n".join(lines)
+
+
+def profile_table(r: dict) -> str:
+    prof = r.get("profile") or {}
+    if not prof:
+        return ""
+    names = list(prof)
+    n = len(next(iter(prof.values())))
+    lines = ["| 信号分位(1=最低) | " + " | ".join(f"年化超额 {s}" for s in names) + " |",
+             "|---" * (len(names) + 1) + "|"]
+    for k in range(n):
+        lines.append(f"| Q{k + 1} | " + " | ".join(_f(prof[s][k]["excess_ann"], pct=True) for s in names) + " |")
+    return "\n".join(lines)
+
+
+def _diag(runs: Dict[str, dict]) -> Dict[str, object]:
+    d: Dict[str, object] = {}
+    for r in runs.values():
+        for k, v in (r.get("diagnostics") or {}).items():
             if isinstance(v, dict):
                 d.setdefault(k, {}).update(v)
             else:
                 d[k] = v
-    out["by_year_scope"] = d.get("by_year_scope")
-
-    if d.get("decay"):
-        lines = ["| 变体 | " + " | ".join(f"h={r['horizon']}" for r in next(iter(d["decay"].values()))) + " |"]
-        lines.append("|---" * (len(next(iter(d["decay"].values()))) + 1) + "|")
-        for vid, rows in d["decay"].items():
-            lines.append(f"| `{vid}` rank IC | " + " | ".join(_fmt(r["rank_ic"]) for r in rows) + " |")
-        out["decay"] = "\n".join(lines)
-
-    if d.get("by_year"):
-        for vid, rows in d["by_year"].items():
-            lines = ["| 年份 | 天数 | rank IC | 无成本盈亏 | 扣费盈亏 | 扣费夏普 | 日换手 |",
-                     "|---|---|---|---|---|---|---|"]
-            for r in rows:
-                lines.append(f"| {r['year']} | {r['days']} | {_fmt(r['rank_ic'])} | {_fmt(r['gross_pnl'],3)} "
-                             f"| {_fmt(r['net_pnl'],3)} | {_fmt(r['sharpe_net'],2)} | {_fmt(r['turnover'],3)} |")
-            out[f"by_year::{vid}"] = "\n".join(lines)
-
-    if d.get("extreme_days"):
-        lines = ["| 变体 | 剔除比例 | 剔除天数 | 扣费夏普 | 扣费累计盈亏 |", "|---|---|---|---|---|"]
-        for vid, rows in d["extreme_days"].items():
-            for r in rows:
-                lines.append(f"| `{vid}` | {r['dropped_frac']:.0%} | {r['dropped_days']} | "
-                             f"{_fmt(r['sharpe_net'],2)} | {_fmt(r['net_pnl'],3)} |")
-        out["extreme_days"] = "\n".join(lines)
-
-    if d.get("neutralise"):
-        lines = ["| 变体 | 中性化对象 | 截面 R² | 残差 rank IC | 残差扣费夏普 | 残差日换手 |",
-                 "|---|---|---|---|---|---|"]
-        for vid, entry in d["neutralise"].items():
-            for ctl, rec in entry.items():
-                m = rec["metrics"]
-                lines.append(f"| `{vid}` | {ctl} | {_fmt(rec['r2'],3)} | {_fmt(m['rank_ic'])} | "
-                             f"{_fmt(m['sharpe_net'],2)} | {_fmt(m['turnover'],3)} |")
-        out["neutralise"] = "\n".join(lines)
-
-    if d.get("conditional"):
-        lines = ["| 因子 \\| 门控 | 桶 | 桶内 rank IC | 桶内 rank ICIR | 桶内平均股票数 |",
-                 "|---|---|---|---|---|"]
-        for key, rows in d["conditional"].items():
-            for r in rows:
-                lines.append(f"| {key} | Q{r['bucket']+1} | {_fmt(r['rank_ic'])} | {_fmt(r['rank_icir'],2)} "
-                             f"| {r['mean_names']:.0f} |")
-        out["conditional"] = "\n".join(lines)
-
-    if d.get("controls"):
-        lines = ["| 控制变量 | 方向 | rank IC | 扣费夏普 | 日换手 |", "|---|---|---|---|---|"]
-        for k, m in d["controls"].items():
-            lines.append(f"| `{k}` | {'+' if m['sign'] > 0 else '−'} | {_fmt(m['rank_ic'])} | "
-                         f"{_fmt(m['sharpe_net'],2)} | {_fmt(m['turnover'],3)} |")
-        out["controls"] = "\n".join(lines)
-
-    if d.get("rank_corr_train"):
-        out["rank_corr"] = d["rank_corr_train"]
-    return out
+    return d
 
 
 def rank_corr_table(matrix: Dict[str, Dict[str, float]], ids: Sequence[str]) -> str:
-    def cell(a: str, b: str):
-        """The matrix is symmetric; runs written before the lower-triangle fix
-        only stored one side, so fall back to the mirror entry."""
+    def cell(a, b):
         v = matrix.get(a, {}).get(b)
         if v is None or (isinstance(v, float) and v != v):
             v = matrix.get(b, {}).get(a)
         return v
-
     ids = [i for i in ids if i in matrix]
     lines = ["| | " + " | ".join(f"`{i}`" for i in ids) + " |", "|---" * (len(ids) + 1) + "|"]
     for a in ids:
-        lines.append(f"| `{a}` | " + " | ".join(_fmt(cell(a, b), 2) for b in ids) + " |")
+        lines.append(f"| `{a}` | " + " | ".join(_f(cell(a, b), 2) for b in ids) + " |")
     return "\n".join(lines)
 
 
@@ -204,116 +189,161 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
     fid = cfg["factor_id"]
     out_dir = Path(out_root or (PARTURA_ROOT / "runs")) / fid
     runs = _load_runs(out_dir)
-    results = _merged_results(runs)
-    # Prefer the run that scored the most splits: it is the one that read the
-    # holdout, and its split list is what the baseline table should show.
+    if runs and not any("fit_split" in r for r in runs.values()):       # a study from before the book convention
+        from .report_legacy import build as legacy_build
+        return legacy_build(config_path, out_root=out_root, notes_dir=notes_dir, research_dir=research_dir)
+    from .probes import load_study_probes
+    for pf in (cfg.get("probes") or []):
+        load_study_probes(pf if Path(pf).is_absolute() else PARTURA_ROOT / pf)
+
+    results = _merged(runs)
     any_run = max(runs.values(), key=lambda r: len(r.get("splits_used", [])), default={})
-    all_splits = [s for s in ("train", "valid", "holdout", "full")
-                  if any(s in r.get("splits_used", []) for r in runs.values())]
+    user = any_run.get("user_split") or cfg.get("user_split", "utrain")
     notes = Path(notes_dir or (PARTURA_ROOT / "notes")) / fid
     dec = decompose(cfg["expression"])
-    diag = _diag_tables(runs)
+    diag = _diag(runs)
     ledger = Ledger(out_dir / "ledger.json")
+    base_id = cfg.get("baseline_id", "v_base")
+    pub = cfg.get("published")
 
-    def note(name: str, fallback: str = "") -> str:
+    def note(name: str) -> str:
         p = notes / f"{name}.md"
-        return p.read_text(encoding="utf-8").strip() if p.is_file() else fallback
+        return p.read_text(encoding="utf-8").strip() if p.is_file() else ""
 
-    # Stages are reported in the order the config declares them, not in the
-    # order the JSON files happen to sort in.
     questions = {s["id"]: s.get("question", "") for s in cfg["stages"]}
     by_stage: Dict[str, List[str]] = {s["id"]: [] for s in cfg["stages"]}
     for vid, r in results.items():
         by_stage.setdefault(r.get("stage", "?"), []).append(vid)
     by_stage = {k: v for k, v in by_stage.items() if v}
 
-    L: List[str] = [f"# Alpha 研究报告 — {fid}", "", f"> {cfg.get('title','')}", ""]
+    L: List[str] = [f"# Alpha 研究报告 — {fid}", "", f"> {cfg.get('title', '')}", ""]
     if any_run:
-        v = any_run["view"]
-        pv = any_run["provenance"]
-        L += [f"**数据**: {v['days']} 个交易日 × {v['symbols']} 只股票 "
-              f"({v['first']}–{v['last']},另加 {v['warmup_rows']} 行预热) · "
-              f"标签 `{any_run['label']['kind']}` h={any_run['label']['horizon']} · "
-              f"成本 {any_run['cost_per_side']*1e4:.0f} bp/边 · 十分位多空 · "
-              f"AlphaCube `{pv.get('alphacube_commit') or cfg.get('alphacube_commit_verified', '见附录 B')}`", ""]
+        v, pv, sd = any_run["view"], any_run["provenance"], any_run.get("split_dates", {})
+        lab = any_run["label"]
+        L += [f"**数据**: {v['days']} 个交易日 × {v['symbols']} 只股票 ({v['first']}–{v['last']}) · "
+              f"标签 `{lab['kind']}` h={lab['horizon']}{'(可买入:剔除次日开盘封涨停)' if lab.get('buyable') else ''} · "
+              f"成本 {any_run['cost_per_side'] * 1e4:.0f} bp/单位换手 · 前/后 10% · "
+              f"AlphaCube `{pv.get('alphacube_commit')}` · Partura `{pv.get('partura_code_sha')}`", "",
+              "**数据段**: " + " · ".join(f"{k} {a}–{b}" for k, (a, b) in sd.items()), "",
+              f"> 决策用的数字:方向与 EMA 半衰期在 **{any_run.get('fit_split')}** 上定,在 valid 上确认。"
+              f"与用户表可比的数字:方向与半衰期在 **{user}**(用户的训练段)上定;holdout = 用户的测试段,只在最后读。", ""]
 
-    L += [f"## {SECTIONS[0][1]}", "", "```", cfg["expression"], "```", "", note("01_expression"), ""]
-    L += [f"## {SECTIONS[1][1]}", "",
-          "> 以下每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。"
-          "探针集合是按**这棵树**挑的:不适用的探针会写明,本研究新增的探针会单独标出。", "",
+    L += [f"## {SECTIONS[0]}", "", "```", cfg["expression"], "```", "", note("01_expression"), ""]
+    L += [f"## {SECTIONS[1]}", "",
+          "> 每一条都来自注册表与内核源码,加上在张量上实跑的探针;没有一条是从算子名字推断的。"
+          "探针集合按**这棵树**挑:不适用的写明,本研究新增的单独标出。", "",
           render_dossiers(dec.dossiers, show_questions=True), ""]
     try:
         from .lab import Lab
         from .panels import parse_research
-        lab = Lab()
-        hits = lab.recall(parse_research(cfg["expression"]), exclude_study=fid)
-        L += ["### 既往研究留下的先验", "", lab.render_markdown(hits), ""]
-    except Exception as exc:                       # the notebook must never break a report
+        lab_ = Lab()
+        L += ["### 既往研究留下的先验", "",
+              lab_.render_markdown(lab_.recall(parse_research(cfg["expression"]), exclude_study=fid)), ""]
+    except Exception as exc:
         L += [f"_(实验室笔记本未能加载:{exc})_", ""]
-    L += [f"## {SECTIONS[2][1]}", "", dec.render_markdown(), "", note("03_decomposition"), ""]
-    L += [f"## {SECTIONS[3][1]}", "", note("04_grammar"), ""]
-    L += [f"## {SECTIONS[4][1]}", "", note("05_hypotheses"), ""]
+    L += [note("02_operators"), ""]
+    L += [f"## {SECTIONS[2]}", "", dec.render_markdown(), "", note("03_decomposition"), ""]
+    L += [f"## {SECTIONS[3]}", "", note("04_grammar"), ""]
+    L += [f"## {SECTIONS[4]}", "", note("05_hypotheses"), ""]
 
-    L += [f"## {SECTIONS[5][1]}", ""]
-    base_id = cfg.get("baseline_id", "v_base")
-    L += [_split_table(results, base_id, all_splits), ""]
-    if "by_year::" + base_id in diag:
-        rows_y = [r for rr in runs.values()
-                  for v, rr2 in (rr.get("diagnostics", {}).get("by_year") or {}).items()
-                  if v == base_id for r in rr2]
-        rng = f"{rows_y[0]['year']}–{rows_y[-1]['year']}" if rows_y else "训练+验证段"
-        L += [f"**逐年({rng},方向按训练段固定)**", "", diag["by_year::" + base_id], ""]
-    if "decay" in diag:
-        L += ["**不同预测期(训练段)**", "", diag["decay"], ""]
-    if "extreme_days" in diag:
-        L += ["**极端日依赖(训练段)**", "", diag["extreme_days"], ""]
+    # ---- 6 baseline
+    L += [f"## {SECTIONS[5]}", ""]
+    base = results.get(base_id)
+    if base and "books" in base:
+        if "books_user" in base:
+            L += ["**与用户表同口径**(方向、半衰期在用户训练段上定)", "",
+                  user_table(results, [base_id], user, pub, base_id), ""]
+        L += ["**决策口径**(方向、半衰期在 train 上定;valid 是它没见过的)", "", stage_table(results, [base_id]), "",
+              "**半衰期扫描(fit 段)** — ◀ 是被选中的", "", sweep_table(base), ""]
+        pt = profile_table(base)
+        if pt:
+            L += ["**信号分位的次日超额**(相对当天有信号有标签的票的等权;十分位书默认「越强越好」,这张表检验它)",
+                  "", pt, ""]
+    if isinstance(diag.get("by_year"), dict) and base_id in diag["by_year"]:
+        L += ["**逐年**", "", "| 年份 | 天数 | 扣费多空夏普 | 多头腿毛超额 | 多头腿净超额 | 空头腿毛超额 | 多空日换手 |",
+              "|---|---|---|---|---|---|---|"]
+        for r in diag["by_year"][base_id]:
+            L.append(f"| {r['year']} | {r['days']} | {_f(r['ls_sharpe'])} | {_f(r['long_gross_ann'], pct=True)} "
+                     f"| {_f(r['long_ann'], pct=True)} | {_f(r['short_gross_ann'], pct=True)} "
+                     f"| {_f(r['ls_turnover'], pct=True, plus=False)} |")
+        L.append("")
+    if isinstance(diag.get("decay"), dict) and diag["decay"]:
+        first = next(iter(diag["decay"].values()))
+        L += ["**不同预测期的 rank IC(fit 段)**", "", "| 变体 | " + " | ".join(f"h={r['horizon']}" for r in first) + " |",
+              "|---" * (len(first) + 1) + "|"]
+        for vid, rows in diag["decay"].items():
+            L.append(f"| `{vid}` | " + " | ".join(_f(r["rank_ic"], 4) for r in rows) + " |")
+        L.append("")
     L += [note("06_baseline"), ""]
 
-    L += [f"## {SECTIONS[6][1]}", ""]
-    for stage_id, ids in by_stage.items():
-        L += [f"### {stage_id}", "", f"**问题**: {questions.get(stage_id,'')}", "",
-              _metric_table(results, sorted(ids), "train"), ""]
-        whys = [f"- `{i}` — {results[i].get('why','')}" for i in sorted(ids) if results[i].get("why")]
-        L += ["<details><summary>每个变体为什么存在</summary>", "", *whys, "", "</details>", ""]
-        L += [note(f"07_{stage_id}"), ""]
-    if "neutralise" in diag:
-        L += ["### 中性化(训练段)", "",
-              "> 对控制变量做逐日截面回归后的残差;R² 是控制变量能张成的部分。", "",
-              diag["neutralise"], "", note("07_neutralise"), ""]
-    if "conditional" in diag:
-        L += ["### 条件 IC(训练段)", "", diag["conditional"], "", note("07_conditional"), ""]
-    if "controls" in diag:
-        L += ["### 控制变量自身的表现(训练段)", "", diag["controls"], ""]
-    dev = note("07_device")
-    if dev:
-        L += [dev, ""]
+    # ---- 7 ablations
+    L += [f"## {SECTIONS[6]}", ""]
+    for sid, ids in by_stage.items():
+        L += [f"### {sid}", "", f"**问题**: {questions.get(sid, '')}", "", stage_table(results, ids), ""]
+        whys = [f"- `{i}` — {results[i].get('why', '')}" for i in ids if results[i].get("why")]
+        if whys:
+            L += ["<details><summary>每个变体为什么存在</summary>", "", *whys, "", "</details>", ""]
+        L += [note(f"07_{sid}"), ""]
+    if isinstance(diag.get("neutralise"), dict) and diag["neutralise"]:
+        L += ["### 中性化(fit 段,秩空间逐日截面回归的残差)", "",
+              "| 变体 | 对谁中性化 | 截面 R² | 残差 rank IC | 残差扣费多空夏普 | 残差多头腿毛超额 | 残差多空换手 |",
+              "|---|---|---|---|---|---|---|"]
+        for vid, entry in diag["neutralise"].items():
+            b0 = results.get(vid, {})
+            if b0.get("books"):
+                t0 = b0["books"]["splits"].get(any_run.get("fit_split", "train"), {})
+                s0 = b0["splits"].get(any_run.get("fit_split", "train"), {})
+                L.append(f"| `{vid}` | _(未中性化)_ | — | {_f(s0.get('rank_ic'), 4)} | {_f(t0.get('ls_sharpe'))} "
+                         f"| {_f(t0.get('long_gross_ann'), pct=True)} | {_f(t0.get('ls_turnover'), pct=True, plus=False)} |")
+            for ctl, rec in entry.items():
+                L.append(f"| `{vid}` | {ctl} | {_f(rec['r2'], 3, plus=False)} | {_f(rec['rank_ic'], 4)} "
+                         f"| {_f(rec['ls_sharpe'])} | {_f(rec['long_gross_ann'], pct=True)} "
+                         f"| {_f(rec['ls_turnover'], pct=True, plus=False)} |")
+        L += ["", note("07_neutralise"), ""]
+    if isinstance(diag.get("conditional"), dict) and diag["conditional"]:
+        L += ["### 条件 IC(fit 段)", "", "| 因子 \\| 分桶变量 | " + " | ".join(f"Q{i}" for i in range(1, 6)) + " |",
+              "|---|---|---|---|---|---|"]
+        for key, rows in diag["conditional"].items():
+            L.append(f"| {key} | " + " | ".join(_f(r["rank_ic"], 4) for r in rows) + " |")
+        L += ["", note("07_conditional"), ""]
+    if isinstance(diag.get("controls"), dict) and diag["controls"]:
+        L += ["### 控制变量自己当因子(同口径)", "",
+              "| 控制变量 | 方向 | rank IC(fit) | 半衰期 | 扣费多空夏普 train/valid | 多头腿毛超额 train/valid | 多空换手 |",
+              "|---|---|---|---|---|---|---|"]
+        for k, m in diag["controls"].items():
+            L.append(f"| `{k}` | {'+' if m['sign'] > 0 else '−'} | {_f(m['rank_ic'], 4)} | {m['hl']:g} "
+                     f"| {_pair(m.get('train_ls_sharpe'), m.get('valid_ls_sharpe'))} "
+                     f"| {_pair(m.get('train_long_gross_ann'), m.get('valid_long_gross_ann'), pct=True)} "
+                     f"| {_f(m.get('train_ls_turnover'), pct=True, plus=False)} |")
+        L += ["", note("07_controls"), ""]
+    for extra in sorted(notes.glob("07x_*.md")) if notes.is_dir() else []:     # bespoke analyses of this study
+        L += [extra.read_text(encoding="utf-8").strip(), ""]
 
-    L += [f"## {SECTIONS[7][1]}", "", _metric_table(results, sorted(results), "train"), ""]
-    # A matrix rebuilt across runs (scripts/corr_all.py) beats the per-run ones,
-    # which only cover the variants that happened to be in the same batch.
+    # ---- 8 variants
+    L += [f"## {SECTIONS[7]}", "", stage_table(results, list(results)), ""]
     all_corr = out_dir / "rank_corr_all.json"
-    if all_corr.is_file():
-        diag["rank_corr"] = json.loads(all_corr.read_text(encoding="utf-8"))
-    if "rank_corr" in diag:
-        ids = [i for i in (cfg.get("corr_ids") or sorted(results)[:14]) if i in diag["rank_corr"]] \
-              or list(diag["rank_corr"])
-        L += ["**变体之间的日截面 rank 相关(训练段)** — ≥0.95 在 AlphaCube 里算同一因子族", "",
-              rank_corr_table(diag["rank_corr"], ids), ""]
+    rc = json.loads(all_corr.read_text(encoding="utf-8")) if all_corr.is_file() else diag.get("rank_corr_train")
+    if isinstance(rc, dict) and rc:
+        ids = [i for i in (cfg.get("corr_ids") or []) + (cfg.get("corr_with") or []) if i in rc] or list(rc)[:16]
+        L += ["**变体之间(以及与控制变量)的日截面 rank 相关(fit 段)** — ≥0.95 在 AlphaCube 里算同一因子族", "",
+              rank_corr_table(rc, ids), ""]
     L += [note("08_variants"), ""]
 
-    L += [f"## {SECTIONS[8][1]}", "", note("09_diagnosis"), ""]
-    L += [f"## {SECTIONS[9][1]}", "", note("10_distilled"), ""]
-    L += [f"## {SECTIONS[10][1]}", "", note("11_risks"), ""]
-    L += [f"## {SECTIONS[11][1]}", "", note("12_next"), ""]
+    L += [f"## {SECTIONS[8]}", "", note("09_diagnosis"), ""]
+    L += [f"## {SECTIONS[9]}", ""]
+    finals = [vid for vid, r in results.items() if "holdout" in (r.get("books_user") or {}).get("splits", {})]
+    if finals:
+        L += ["**最终对比,与用户表同口径**(留出段 = 用户的测试段)", "", user_table(results, finals, user, pub, base_id), ""]
+    L += [note("10_distilled"), ""]
+    L += [f"## {SECTIONS[10]}", "", note("11_risks"), ""]
+    L += [f"## {SECTIONS[11]}", "", note("12_next"), ""]
 
     L += ["## 附录 A — 数据段使用台账", "", ledger.render_markdown(), ""]
     L += ["## 附录 B — 复现", "", "```bash"]
     for name, r in runs.items():
-        L.append(f"# {name}: {r['seconds']}s, stages {r['stages']}")
-    L += [f"python -m partura.cli run {config_path} --store <cube> --stages <stage> --device cuda",
+        L.append(f"# {name}: {r.get('seconds')}s, 峰值 anon {r.get('peak_anon_gb')} GiB, stages {r['stages']}")
+    L += [f"scripts/run_server.sh {config_path} <stage...>          # EXTRA=--holdout 才读留出段",
           f"python -m partura.cli report {config_path}", "```", ""]
-    if cfg.get("provenance_note"):
-        L += [f"> {cfg['provenance_note']}", ""]
     if any_run:
         L += ["```json", json.dumps(any_run["provenance"], ensure_ascii=False, indent=1), "```", ""]
 
@@ -323,4 +353,4 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
     return dest
 
 
-__all__ = ["build", "SECTIONS"]
+__all__ = ["build", "SECTIONS", "stage_table", "user_table"]

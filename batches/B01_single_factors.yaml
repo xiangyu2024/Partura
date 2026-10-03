@@ -1,0 +1,34 @@
+# 2026-10-04 用户给的 15 条单因子(pick_single_factors 的输出,只在训练段挑、测试段只汇报)。
+# user_table: 方向 / EMA 半衰期 / 扣费多空夏普 训练,测试 / 多头腿年化超额 训练,测试
+split_index: 1359            # 训练段 20180102..20230807,测试段 20230808..20251231
+factors:
+  - {id: F101_day_shine_retstd, lib: 手写, name: day_shine_retstd, sign: -1, hl: 10, ls: [3.93, 3.70], long: [0.136, 0.120],
+     expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))"}
+  - {id: F102_kurt_autocorr, lib: 挖掘, name: "#3961", sign: -1, hl: 1, ls: [3.71, 2.57], long: [0.128, 0.083],
+     expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)"}
+  - {id: F103_amt_dw_decay, lib: 挖掘, name: "#820", sign: -1, hl: 2, ls: [3.53, 3.18], long: [0.128, 0.124],
+     expr: "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)"}
+  - {id: F104_kurt_masktop_amt, lib: 挖掘, name: "#4190", sign: -1, hl: 20, ls: [3.20, 1.89], long: [0.073, 0.040],
+     expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))"}
+  - {id: F105_std_fangzheng_covamt, lib: 挖掘, name: "#25", sign: -1, hl: 3, ls: [3.03, 2.24], long: [0.168, 0.143],
+     expr: "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)"}
+  - {id: F106_erm_mag_gap_1m, lib: 手写, name: erm_mag_gap_1m, sign: -1, hl: 20, ls: [2.91, 3.11], long: [-0.042, -0.014],
+     expr: "sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))"}
+  - {id: F107_abs_demean_skew_low, lib: 挖掘, name: "#613", sign: -1, hl: 20, ls: [2.89, 2.45], long: [0.099, 0.105],
+     expr: "abs_(cs_demean(day_skew(Low)))"}
+  - {id: F108_max_ntkurt_close, lib: 挖掘, name: "#3264", sign: -1, hl: 10, ls: [2.82, 2.04], long: [0.056, 0.028],
+     expr: "day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))"}
+  - {id: F109_erm_mag_gap_5m_tsm20, lib: 手写, name: erm_mag_gap_5m_tsm20, sign: -1, hl: 1, ls: [2.77, 2.28], long: [-0.001, 0.002],
+     expr: "ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)"}
+  - {id: F110_ret_fair_log, lib: 手写, name: ret_fair_log, sign: -1, hl: 20, ls: [2.76, 2.08], long: [0.078, 0.070],
+     expr: "mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))"}
+  - {id: F111_spearman_qclose, lib: 挖掘, name: "#953", sign: 1, hl: 10, ls: [2.62, 1.10], long: [0.164, 0.075],
+     expr: "ts_spearman(day_quantile(Close), 10)"}
+  - {id: F112_scale_spow_masktop, lib: 挖掘, name: "#574", sign: -1, hl: 20, ls: [2.58, 2.64], long: [0.089, 0.125],
+     expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)"}
+  - {id: F113_nested_tsmax_demean, lib: 挖掘, name: "#1375", sign: -1, hl: 1, ls: [2.54, 1.09], long: [0.037, 0.024],
+     expr: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))"}
+  - {id: F114_q25_closeret, lib: 挖掘, name: "#1421", sign: -1, hl: 20, ls: [2.36, 0.91], long: [0.059, 0.023],
+     expr: "cross_quantile_q25(day_close(Ret), 15)"}
+  - {id: F115_all_tide_mean_30, lib: 手写, name: all_tide_mean_30, sign: -1, hl: 2, ls: [2.29, 1.65], long: [0.080, 0.084],
+     expr: "cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20)"}

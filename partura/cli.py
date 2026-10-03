@@ -87,11 +87,15 @@ def _lab(a) -> int:
 
 
 def _run(a) -> int:
+    from . import guard
+    guard.limit_threads(a.torch_threads or 2)          # before numpy/torch build their pools
     from .runner import run
-    run(a.config, a.stages, store=a.store, device=a.device, chunk_symbols=a.chunk_symbols,
-        chunk_days=a.chunk_days, gpu_fraction=a.gpu_fraction, mirror_root=a.mirror_root,
-        max_symbols=a.max_symbols, torch_threads=a.torch_threads, workdir=a.workdir,
-        out_root=a.out_root, use_holdout=a.holdout, diagnostics=not a.no_diagnostics)
+    with guard.slot():                                 # at most PARTURA_SLOTS studies run at once
+        run(a.config, a.stages, store=a.store, device=a.device, chunk_symbols=a.chunk_symbols,
+            chunk_days=a.chunk_days, gpu_fraction=a.gpu_fraction, mirror_root=a.mirror_root,
+            max_symbols=a.max_symbols, torch_threads=a.torch_threads, workdir=a.workdir,
+            out_root=a.out_root, use_holdout=a.holdout, diagnostics=not a.no_diagnostics,
+            batch=a.batch, cpu_fallback=a.cpu_fallback, cache_dir=a.cache_dir, tag=a.tag)
     return 0
 
 
@@ -141,6 +145,11 @@ def main(argv=None) -> int:
     r.add_argument("--out-root", default=None)
     r.add_argument("--holdout", action="store_true", help="also score the final holdout split (ledgered)")
     r.add_argument("--no-diagnostics", action="store_true")
+    r.add_argument("--batch", type=int, default=4, help="expressions per engine call")
+    r.add_argument("--cpu-fallback", action="store_true",
+                   help="retry GPU failures on the CPU engine (a hand-written factor can take ~40 GB there)")
+    r.add_argument("--cache-dir", default=None)
+    r.add_argument("--tag", default=None, help="output file stem (default: the stage ids)")
     r.add_argument("--probes", nargs="*", default=[])
     r.set_defaults(fn=_run)
 
