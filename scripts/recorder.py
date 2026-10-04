@@ -317,8 +317,14 @@ def state_md(fid: str, st: dict, info: dict) -> str:
                  f"**不许再读**。候选在留出段上的数全在 `runs/{fid}/final.json`(`./scripts/study.sh digest {fid} final`)。")
     else:
         L.append("- 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。")
-    for a in st["agents"][-6:]:
+    for a in st["agents"][-8:]:
         zs = {"returned": "已返回结果", "failed": "失败", "running": "还在跑", "cut-off": "中断"}[a["status"]]
+        if a["status"] == "running":      # very likely the reader itself: no pointer, or it reads its own log
+            L.append(f"- agent `{a['label']}`({a['run']}):还在跑(如果这就是你自己,不用看它的流水)")
+            continue
+        if a["size"] < 400_000 and a["status"] != "returned":     # died before doing anything worth reading
+            L.append(f"- agent `{a['label']}`({a['run']}):{zs},几乎没做事(不用看)")
+            continue
         L.append(f"- agent `{a['label']}`({a['run']}):{zs},最后动作 {local(a['mtime'])} → "
                  f"`handoff/{fid}/agents/{a['phase']}_{('R' + a['round'] + '_') if a.get('round') else ''}{a['agent']}.md`")
     L += ["", "**接手的人该做什么:** " + NEXT[st["phase"]].format(fid=fid, n=st["n_serious"]), ""]

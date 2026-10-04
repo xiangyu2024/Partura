@@ -1,7 +1,8 @@
 # Partura study F106_erm_mag_gap_1m  (手写 / erm_mag_gap_1m)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F106_erm_mag_gap_1m
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "分钟收益右尾 ES/VaR 减左尾 ES/VaR;分母 +1e-6 在「上涨(下跌)分钟不足 5%」的日子塌掉,截面两端由这些日子决定"
+probes: [studies/F106_erm_mag_gap_1m/probes.py]
 expression: "sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))"
 baseline_id: v_base
 
@@ -45,14 +46,18 @@ gates:
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
+  # ---- 这棵树的嫌疑(x1 之后加的;放在 gates 里,不进 all_controls,S0 的 R² 仍然可比)
+  g_max30:     "cross_max(div(day_last(Close), cross_delay(day_last(Close), 1)), 30)"      # 过去 30 日最大单日涨幅(MAX / 彩票效应;涨停过的股票在最高档)
+  g_limitup30: "cross_sum(mul(sub(create_like(day_last(Close), 1.0), less(day_last(Close), day_max(High))), greater(div(day_last(Close), cross_delay(day_last(Close), 1)), create_like(day_last(Close), 1.095))), 30)"      # 过去 30 日涨停收盘的天数(日线标记:收在最高价且涨幅 ≥ 9.5%)
+corr_ids:  [a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_rankfirst, a_lockshare, a_limitup]
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
-            known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
+            known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30, g_max30, g_limitup30]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  decay:      [v_base, a_abs, a_limitup]
+  by_year:    [v_base, a_abs, a_sum, a_limitup]
+  neutralise: [v_base, a_abs, a_regular]
+  profile:    [v_base, a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_lockshare, a_limitup]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -62,3 +67,29 @@ stages:
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))", why: "原始表达式"}
+
+  # ---- S1(x1 之后写的):x1 说 99.4% 的股票-日在常规区间,截面两端是 0.6% 的塌缩日,其中 78%~86% 是涨停收盘。
+  #      这一阶段用引擎和两本书回答:公布的多空夏普是哪一部分做出来的。
+  - id: S1_regime
+    question: "公布的多空夏普(和空头腿)是「塌缩日 = 封板事件」做出来的,还是「尾部形状不对称」做出来的?差的符号有没有信息?"
+    variants:
+      - {id: a_right, group: isolate, expr: "div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06)))",
+         why: "只留右侧(上涨尾部的 ES/VaR)。H8:如果两侧互为镜像,右侧的方向应为 −、左侧应为 +;x1 里两侧的日频 rank IC 同号(都是「越大越差」),这里用两本书坐实。若同号,「右减左」就是在让两个同向的信号互相抵消"}
+      - {id: a_left, group: isolate, expr: "div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))",
+         why: "只留左侧(下跌尾部的 ES/VaR)。与 a_right 成对读:方向相同 → 差的符号不携带信息"}
+      - {id: a_sum, group: substitute, expr: "add(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))",
+         why: "把减号换成加号:不带符号的「塌缩事件 + 尾部尖」强度。H1/H3 预测它不输原式(事件不分正负都是封板日);若明显更差,说明差的符号(上跳比下跳尖)才是信号"}
+      - {id: a_abs, group: substitute, expr: "abs_(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))))",
+         why: "丢掉差的符号、保留量级。和 a_sum 的区别:两侧同时塌缩时 a_sum 是两者之和、a_abs 是两者之差的绝对值。预测:分位剖面从倒 U 变成单调(只有一端是事件股)"}
+      - {id: a_regular, group: ablate, expr: "mul(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), mul(is_gt0(day_quantile(Ret, 0.95)), is_lt0(day_quantile(Ret, 0.05))))",
+         why: "H2 的判决实验:只保留两个分位数都没塌缩的日子(其余置 0)。H2(尾部形状不对称才是信号)预测它保住原式的多空夏普;H1 预测塌掉。x1 的 numpy 版已经塌了(−1.45/−2.11),这里用引擎坐实"}
+      - {id: a_eps3, group: substitute, expr: "sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 0.001))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 0.001))))",
+         why: "把两个分位数分母上的 1e-6 换成 1e-3:塌缩日的读数从 ES×10⁶ 降到 ES×10³(比常规日大 10~100 倍而不是 10⁴~10⁵ 倍),EMA 里记住一个事件的时间从约一年缩到约四个月。若表现不变,说明需要的只是「比常规日大」,不需要那六个数量级"}
+      - {id: a_flag, group: substitute, expr: "add(less(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06)), less(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))",
+         why: "只留「塌了几侧」(0/1/2),不要任何幅度。注意它把全天不动的日子(一字板)也算进来了,而原式在那些日子读 0。预测:多空夏普不低于原式(x1 的 numpy 版 +3.40/+2.66)。取值只有三档,dist 门槛过不了 —— 它是诊断变体,不是候选"}
+      - {id: a_rankfirst, group: substitute, expr: "cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))))",
+         why: "先截面排序再平滑:量级被抹掉,塌缩日在 EMA 里只相当于一个普通的极端排名。H1 预测塌掉(x1 numpy 版 −0.93/−1.40);若不塌,说明排序本身(而不是量级造成的长记忆)携带信号"}
+      - {id: a_lockshare, group: substitute, expr: "day_mean(eq(Close, day_max(High)))",
+         why: "朴素等价物之一:价格钉在当日最高价的分钟占比(封涨停的日子接近 1)。H3 预测它与 a_abs 的秩相关高、空头腿同样大;若无关,塌缩日就不只是「封板」"}
+      - {id: a_limitup, group: substitute, expr: "mul(sub(create_like(day_last(Close), 1.0), less(day_last(Close), day_max(High))), greater(div(day_last(Close), cross_delay(day_last(Close), 1)), create_like(day_last(Close), 1.095)))",
+         why: "朴素等价物之二:日线涨停标记(收盘 = 最高价且日涨幅 ≥ 9.5%;ST 的 5% 板不算)。x1 里 86% 的右侧塌缩日是涨停收盘,而未塌缩的涨停日事后同样跑输。预测:多空夏普不低于原式 → 这棵树就是「近期涨停」的一种带噪声的写法。取值只有两档,过不了 dist,是诊断变体"}

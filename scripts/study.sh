@@ -45,6 +45,7 @@ notice() {  # a standing notice from the coordinator to whoever is working on th
             # it stops appearing for a study once that study's notes/<fid>/state.md is newer than the notice
   local f="handoff/NOTICE.md" s="notes/${1:-}/state.md"
   [ -n "${1:-}" ] && [ -f "$f" ] || return 0
+  [ -f handoff/NOTICE.fids ] && ! grep -qx "$1" handoff/NOTICE.fids && return 0   # addressed to listed studies only
   [ -f "$s" ] && [ "$s" -nt "$f" ] && return 0
   echo; sed "s/<fid>/$1/g" "$f"
 }
