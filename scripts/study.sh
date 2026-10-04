@@ -22,7 +22,7 @@ HOST=root@connect.westd.seetacloud.com
 SSH="ssh -o BatchMode=yes -o ControlPath=none -o ConnectTimeout=30 -p 29982"
 RS="rsync -a --exclude __pycache__ -e"
 R=/root/autodl-tmp/Partura
-ENV="cd $R && export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:$R ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=\${PARTURA_SLOTS:-3}"
+ENV="cd $R && export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:$R ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=\${PARTURA_SLOTS:-2}"
 RPY=/root/miniconda3/envs/quant/bin/python
 cmd=${1:-}; shift || true
 
@@ -57,7 +57,7 @@ case "$cmd" in
     fid=$1; tag=$2; shift 2
     push "$fid" || exit 1
     extra=""; [ "$cmd" = final ] && extra="--holdout"
-    $SSH $HOST "$ENV && mkdir -p logs && rm -f logs/${fid}_${tag}.log && screen -dmS pt_${fid:0:4}_${tag} bash -c 'EXTRA=\"$extra --tag $tag\" PARTURA_SLOTS=\${PARTURA_SLOTS:-3} ./scripts/run_server.sh configs/$fid.yaml $* > logs/${fid}_${tag}.log 2>&1' && echo 'started $fid/$tag: stages $* $extra'"
+    $SSH $HOST "$ENV && mkdir -p logs && rm -f logs/${fid}_${tag}.log && screen -dmS pt_${fid:0:4}_${tag} bash -c 'EXTRA=\"$extra --tag $tag\" PARTURA_SLOTS=\${PARTURA_SLOTS:-2} ./scripts/run_server.sh configs/$fid.yaml $* > logs/${fid}_${tag}.log 2>&1' && echo 'started $fid/$tag: stages $* $extra'"
     ;;
   exec)
     fid=$1; tag=$2; script=$3; shift 3

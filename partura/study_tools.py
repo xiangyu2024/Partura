@@ -42,7 +42,7 @@ MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 
 
 class Study:
-    def __init__(self, factor_id: str, device: str = "cuda", gpu_fraction: float = 0.45) -> None:
+    def __init__(self, factor_id: str, device: str = "cuda", gpu_fraction: float = 0.0) -> None:
         self.fid = factor_id
         self.cfg = yaml.safe_load((PARTURA_ROOT / "configs" / f"{factor_id}.yaml").read_text(encoding="utf-8"))
         for k, v in (self.cfg.get("splits") or {}).items():

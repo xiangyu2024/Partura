@@ -135,7 +135,8 @@ def main(argv=None) -> int:
     r.add_argument("--store", required=True)
     r.add_argument("--stages", nargs="*", default=[])
     r.add_argument("--device", default="cpu")
-    r.add_argument("--gpu-fraction", type=float, default=None)
+    r.add_argument("--gpu-fraction", type=float, default=None,
+                   help="share of the GPU this run may take; 0 / omitted = follow what is free (leave 4 GiB)")
     r.add_argument("--chunk-symbols", type=int, default=None)
     r.add_argument("--chunk-days", type=int, default=None)
     r.add_argument("--mirror-root", default=None)

@@ -40,7 +40,7 @@ for k, v in first["splits"].items():
 with slot():
     mem = MemoryGuard().start()
     ps = PanelSet("/root/autodl-tmp/qmt_daily_data/fast_factor_compute", SPLITS["full"][0], SPLITS["full"][1],
-                  warmup=60, device="cuda", gpu_fraction=0.45, cache_dir=str(SHARED_CACHE),
+                  warmup=60, device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE),
                   mirror_root="/root/autodl-tmp/AlphaCube/mirror", workdir=str(PARTURA_ROOT / "tmp"),
                   label_kind="open_vwap15", label_buyable=True, batch=2)
     exprs = {f["id"]: f["expr"] for f in batch["factors"]}

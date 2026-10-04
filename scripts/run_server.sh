@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run Partura stages on the AutoDL server, as a good neighbour:
-#   - one engine evaluation on the GPU at a time (file lock), capped at GPU_FRAC of the card
+#   - one engine evaluation on the GPU at a time (file lock); its share of the card follows what is
+#     free at that moment and always leaves 4 GiB for the neighbours (GPU_FRAC=0 = auto)
 #   - at most PARTURA_SLOTS Partura processes at once (default 2), two threads each
 #   - ranks on the GPU (the CPU quota is usually taken by another job)
 #   - the process exits by itself before memory becomes somebody else's problem
@@ -20,7 +21,7 @@ STORE=/root/autodl-tmp/qmt_daily_data/fast_factor_compute
 MIRROR=/root/autodl-tmp/AlphaCube/mirror
 CFG=$1; shift
 nice -n 5 /root/miniconda3/envs/quant/bin/python -u -m partura.cli run "$CFG" \
-  --store "$STORE" --mirror-root "$MIRROR" --device "${DEV:-cuda}" --gpu-fraction "${GPU_FRAC:-0.45}" \
+  --store "$STORE" --mirror-root "$MIRROR" --device "${DEV:-cuda}" --gpu-fraction "${GPU_FRAC:-0}" \
   --batch "${BATCH:-3}" --torch-threads 2 \
   --workdir /root/autodl-tmp/Partura/tmp --out-root /root/autodl-tmp/Partura/runs \
   --stages "$@" ${EXTRA:-}

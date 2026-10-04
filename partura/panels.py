@@ -74,6 +74,25 @@ def _atomic_save(path: Path, arr: np.ndarray) -> None:
     os.replace(tmp, path)
 
 
+def auto_gpu_fraction(reserve_gb: Optional[float] = None, hi: Optional[float] = None, lo: float = 0.03) -> float:
+    """How much of the card this process may take RIGHT NOW.
+
+    A fixed share is wrong on a shared GPU: 45% was fine while the card was
+    empty and would have been an out-of-memory in the neighbour's mining run
+    the moment that run took 23 GB.  (A CUDA OOM inside an AlphaCube job is
+    swallowed per node and silently fails trees -- the neighbour would not even
+    see an error.)  So the cap is recomputed from what is actually free,
+    always leaving ``reserve_gb`` for whoever else is on the card, and is
+    re-evaluated every time this process takes the GPU lock.
+    """
+    reserve = float(os.environ.get("PARTURA_GPU_RESERVE_GB", 4.0) if reserve_gb is None else reserve_gb)
+    hi = float(os.environ.get("PARTURA_GPU_MAX_FRAC", 0.45) if hi is None else hi)
+    free, total = torch.cuda.mem_get_info()
+    mine = torch.cuda.memory_reserved()
+    frac = (free + mine - reserve * (1 << 30)) / total
+    return float(min(hi, max(lo, frac)))
+
+
 def _is_oom(msg: Optional[str]) -> bool:
     return bool(msg) and ("out of memory" in msg.lower() or "outofmemory" in msg.lower())
 
@@ -87,9 +106,14 @@ class PanelSet:
                  label_kind: str = "open_vwap15", label_buyable: bool = False,
                  batch: int = 4, cpu_fallback: bool = False, chunk_bytes: Optional[int] = None,
                  quiet: bool = False) -> None:
-        self.gpu_fraction = gpu_fraction
-        if gpu_fraction and device.startswith("cuda"):
-            torch.cuda.set_per_process_memory_fraction(float(gpu_fraction))
+        # gpu_fraction None / 0 / "auto" = follow what is free on the card (the default on the server)
+        self.auto_fraction = device.startswith("cuda") and (gpu_fraction in (None, 0, 0.0, "auto"))
+        self.gpu_fraction = None if self.auto_fraction else gpu_fraction
+        self._user_chunk_bytes = chunk_bytes
+        if device.startswith("cuda"):
+            f = auto_gpu_fraction() if self.auto_fraction else float(gpu_fraction)
+            torch.cuda.set_per_process_memory_fraction(f)
+            self.gpu_fraction = f
         self.store_path = store_path
         self.store = open_cube_store(store_path, mirror_root=mirror_root)
         self.view, self.trim = warmed_view(self.store, start, end, warmup, max_symbols=max_symbols)
@@ -98,9 +122,8 @@ class PanelSet:
         self.torch_threads, self.workdir = torch_threads, workdir
         self.label_kind, self.label_buyable = label_kind, bool(label_buyable)
         self.batch, self.cpu_fallback = max(1, int(batch)), bool(cpu_fallback)
-        if chunk_bytes is None and gpu_fraction and device.startswith("cuda"):
-            total = torch.cuda.get_device_properties(0).total_memory
-            chunk_bytes = int(max(128 << 20, min(2 << 30, total * float(gpu_fraction) / 12)))
+        if chunk_bytes is None and device.startswith("cuda"):
+            chunk_bytes = self._chunk_for(self.gpu_fraction)
         self.chunk_bytes = chunk_bytes
         self.quiet = quiet
         self.dates: List[str] = list(self.view.dates[self.trim:])
@@ -115,6 +138,26 @@ class PanelSet:
         self._locks: Optional[np.ndarray] = None
         self.errors: Dict[str, str] = {}
         self.timings: List[dict] = []
+
+    @staticmethod
+    def _chunk_for(fraction: float) -> int:
+        total = torch.cuda.get_device_properties(0).total_memory
+        return int(max(96 << 20, min(2 << 30, total * float(fraction) / 12)))
+
+    def _refresh_gpu_cap(self) -> None:
+        """Called with the GPU lock held, before every engine batch."""
+        if not self.auto_fraction:
+            return
+        f = auto_gpu_fraction()
+        torch.cuda.set_per_process_memory_fraction(f)
+        self.gpu_fraction = f
+        if self._user_chunk_bytes is None:
+            self.chunk_bytes = self._chunk_for(f)
+        if not self.quiet:
+            free, total = torch.cuda.mem_get_info()
+            print(f"[panels] GPU: {free / (1 << 30):.1f} GiB free of {total / (1 << 30):.1f}; "
+                  f"this run capped at {f:.0%} ({f * total / (1 << 30):.1f} GiB), chunk {self.chunk_bytes >> 20} MiB",
+                  flush=True)
 
     # -- identity ---------------------------------------------------------
     @property
@@ -275,6 +318,8 @@ class PanelSet:
                         still.append(n)
                 if not still:
                     continue
+                if str(self.device).startswith("cuda"):
+                    self._refresh_gpu_cap()
                 panels, errs = self._evaluate([todo[n] for n in still], still)
             for i, n in enumerate(still):
                 if errs.get(i) or panels[i] is None:
