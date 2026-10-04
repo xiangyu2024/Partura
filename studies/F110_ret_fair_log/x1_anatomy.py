@@ -19,6 +19,7 @@ half-life, which is the only clean way to separate "structure" from "smoothing":
 
 Only train / valid are read.
 """
+import gc
 import sys
 import time
 import warnings
@@ -169,6 +170,7 @@ with Study(FID) as st:
             say(f"last 4 bars cut off: share M<Q {np.mean(Rc[tr][okc] < 0):.4f} (uncut {np.mean(R[tr][okc] < 0):.4f}); "
                 f"rank corr |Rc|~S {dg.pair_rank_corr(np.abs(Rc)[tr], S[tr]):+.3f}; Mc/M median {np.nanmedian((f64(P['Mc']) / M)[tr]):.3f}; "
                 f"rank corr Mc~M {dg.pair_rank_corr(f64(P['Mc'])[tr], M[tr]):+.3f}")
+    del P   # R1 fix C2: nothing after section B reads P (T/D/M/Q are already independent f64 copies); ~400MB back
 
     # ================================================================== C what is T: one half-life, swap the parts
     say(f"\n== C structure at ONE half-life ({HL:.0f}); sign fitted on train by the rank IC of the smoothed signal; corr = rank corr with the base traded signal (train)")
@@ -202,20 +204,23 @@ with Study(FID) as st:
         "c20 D/sigma": lambda: np.where(sigma > 0, D / sg_ok, np.where(np.isfinite(D), 0.0, np.nan)),
     }
     KEEP = {"c1", "c2", "c6", "c8", "c14", "c15"}            # the signals later sections need
+    NEED_SIG = bool(SECTIONS & set("EGHI"))                  # R1 fix C1: only these sections read SIG
     SIG = {}
     for name, mk in cands.items():
         key = name.split()[0]
-        if "C" not in SECTIONS and key not in KEEP:
+        if "C" not in SECTIONS and (not NEED_SIG or key not in KEEP):
             continue
         e = ema(mk())
         sgn = -1.0 if np.nanmean(dg.rank_ic_series(e[tr], tgt[tr])) < 0 else 1.0
         sm = sgn * e
         del e
         if key in KEEP:
-            SIG[key] = sm
+            SIG[key] = sm.astype(np.float32)
         if "C" in SECTIONS:
             say(f"  {name:<20} sgn {sgn:+.0f} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
                 + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        del sm
+        gc.collect()
 
     # the identity EMA(D*S) = EMA(D)*EMA(S) + Cov_EMA(D, S): which piece carries it?
     if "C" in SECTIONS:

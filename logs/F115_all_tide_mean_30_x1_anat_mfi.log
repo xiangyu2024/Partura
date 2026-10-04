@@ -1,0 +1,59 @@
+[self-check a] 通过:自己拼的 cross_mean(N,20) 与 configs 的 expression 逐字符相同
+[self-check b] 通过:pctline / thresh_shares / decile_by 在手算答案上都对
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[panels] 6 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 30.8 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   3/6 (10s)
+[panels] GPU: 30.8 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   6/6 (29s)
+[panels] done in 29s
+
+== 1 自检(c)与面板概况
+  st.ic(O,'train')['rank_ic'] = +0.0374  (对照 S0_baseline rIC tr +0.0374;完整返回 = {'sign': -1.0, 'ic': 0.02191113417063281, 'icir': 0.26861081329386777, 'ic_t': 8.37876311008352, 'rank_ic': 0.03735984512146503, 'rank_icir': 0.48047914837441746, 'rank_ic_t': 14.987561052352552, 'ic_pos': 0.6258992805755396, 'coverage': 0.6910973684106901, 'coverage_labelled': 0.99920783881081, 'n_days': 973})
+  面板 shape(全长) = (1942, 5220)
+  D: train 段 NaN 占比 = 0.3089  (finite n=3510125)
+  I: train 段 NaN 占比 = 0.3089  (finite n=3510125)
+  F: train 段 NaN 占比 = 0.3089  (finite n=3510125)
+  M: train 段 NaN 占比 = 0.3089  (finite n=3510125)
+  L: train 段 NaN 占比 = 0.3089  (finite n=3510125)
+  N: train 段 NaN 占比 = 0.3089  (finite n=3510123)
+
+== 2 M 的分布(train)
+  M: n=3510125 p1=+24.000 p5=+40.000 p10=+50.000 p25=+70.000 p50=+95.000 p75=+123.000 p90=+148.000 p95=+161.000 p99=+177.000 mean=+96.669
+  M 有效格子 n=3510125  M==0 占比 0.0000  M<=2 占比 0.0000  M<=5 占比 0.0000  M<=10 占比 0.0005  M<=20 占比 0.0061
+  N 的 NaN 占比(train,全体)= 0.3089
+  额外交叉检验(M==0 -> N 是否为 NaN):M==0 的格子里 N 是 NaN 的占比 = 1.0000  (M==0 的格子数 = 2)
+
+== 3 D / I / F 的分布(train;下标范围应落在 [0,180] 内,180 = in_slice(·,31,211) 的宽度)
+  D: n=3510125 p1=+0.000 p5=+0.000 p10=+0.000 p25=+12.000 p50=+51.000 p75=+124.000 p90=+164.000 p95=+177.000 p99=+180.000 mean=+69.011
+  I: n=3510125 p1=+0.000 p5=+0.000 p10=+0.000 p25=+1.000 p50=+22.000 p75=+66.000 p90=+95.000 p95=+112.000 p99=+145.000 mean=+36.750
+  F: n=3510125 p1=+42.000 p5=+64.000 p10=+75.000 p25=+100.000 p50=+143.000 p75=+170.000 p90=+180.000 p95=+180.000 p99=+180.000 mean=+133.420
+
+== 4 L / N / |N| 的分布(train)
+  L    : n=3510125 p1=-0.037 p5=-0.020 p10=-0.014 p25=-0.006 p50=+0.000 p75=+0.007 p90=+0.017 p95=+0.027 p99=+0.055 mean=+0.001
+  N    : n=3510123 p1=-0.000 p5=-0.000 p10=-0.000 p25=-0.000 p50=+0.000 p75=+0.000 p90=+0.000 p95=+0.000 p99=+0.001 mean=+0.000
+  |N|  : n=3510123 p1=+0.000 p5=+0.000 p10=+0.000 p25=+0.000 p50=+0.000 p75=+0.000 p90=+0.000 p95=+0.000 p99=+0.001 mean=+0.000
+
+== 5 H3 检验:按 O 的截面十分位分桶(逐日算 rank,再把同一桶的样本跨天汇总后取一个中位数 -- playbook 允许的两种口径里用的是这一种),Q1=空头端 Q10=多头端
+  Q1(dec=0): n=351434  median(M)=94.000  median(|N|)=0.00008
+  Q5(dec=4): n=350859  median(M)=95.000  median(|N|)=0.00007
+  Q10(dec=9): n=350569  median(M)=94.000  median(|N|)=0.00012
+
+== 6 rank 相关(train)
+-- 原始日频面板(未平滑)--
+  N ~ L          +0.9582
+  N ~ M          +0.0081
+  |N| ~ M        -0.1909
+  O ~ cross_mean(M,20)   +0.0096
+  O ~ known_stdamt_mean30   +0.1705
+  O ~ ctl_ivol              +0.2377
+  O ~ ctl_mom20             +0.4397
+-- 再用实际交易的信号重做最后三项(sign x O,按多头口径半衰期平滑;sign/hl 都在 train 上拟合)--
+  (核对:sign=-1  hl_long=10.0  hl_ls=10.0  -- 应与 v_base/S0_baseline 的 hlL=10、hlS=10、sgn=- 一致)
+  sig ~ known_stdamt_mean30   -0.2596
+  sig ~ ctl_ivol              -0.2098
+  sig ~ ctl_mom20             -0.2223
+
+done
+[partura exit 0 2026-10-05_05:19:10]

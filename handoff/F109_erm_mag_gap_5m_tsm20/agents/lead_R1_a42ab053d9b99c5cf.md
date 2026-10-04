@@ -1,6 +1,6 @@
 # lead:F109_erm_mag_gap_5m_tsm20#1 — agent a42ab053d9b99c5cf(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 13:38,最后一次动作 10-04 13:41;工具调用 18 次
+- 状态:**已返回结果**;开始 10-04 13:38,最后一次动作 10-04 13:55;工具调用 32 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F109_erm_mag_gap_5m_tsm20/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -938,6 +938,312 @@ cd /Users/wxy/Desktop/Partura && sed -n '150,232p' partura/runner.py
             targets = {h: ps.target(h) for h in horizons}
             diag["decay"] = {vid: dg.decay(traded[vid], {h: targets[h][tr] for h in horizons}, sign=1.0)
                              for vid in want}
+```
+
+**10-04 13:44 · agent 的话**
+
+The log overturns the previous round's diagnosis: all 14 panels completed and are now cached; the abort was neighbor crowding (our process held 3.9 of a 14 GiB limit), not batch size. Let me check a couple more facts before writing.
+
+**10-04 13:44 · Bash** — Check order line count, journal tail, conditional filter
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -l notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md && echo "=== journal tail ===" && tail -12 notes/F109_erm_mag_gap_5m_tsm20/journal.md && echo "=== conditional filter in runner ===" && sed -n '290,300p' partura/runner.py
+```
+
+```
+     143 notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md
+=== journal tail ===
+符号都不稳,问题在剖面本身不可交易);不去修买不进标签(平台口径,只在报告里打折扣)。
+
+R2 的判据事先写下了:a_sum 在 hl 20 下 train 多头腿 ≥ +5% 且 Q10 不再为负 → 进 S3 提纯;
+train 多头腿 < +3% 或与 ctl_price 相关 ≥ 0.5 → 直接进读留出段,结论写分辨。
+
+### 2026-10-04 13:25 [执行] 本轮因用户额度紧急中止,R1 未展开
+
+响应用户直接指令「快写 state.md,马上就要没有额度了」,这一轮执行只读了 state.md 与工单 `R1.md`,
+**没有**按 R1 收 `S1_S2`、也没有写/跑 `x2_incremental`。在 state.md 末尾加了一条附注说明此事,
+state.md 第 1~7 节(主研本轮原文)未改动一字。`results/` 仍为空,R1 原样待办,下一位执行从 A/B 两步开始即可。
+
+### 2026-10-04 13:41 [auto] S1_S2 跑完(exit 97);重看结果:logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log
+=== conditional filter in runner ===
+            diag["neutralise"] = neut
+
+        pairs = [pr for pr in (diag_cfg.get("conditional") or [])
+                 if pr.get("factor") in traded and pr.get("gate") in panels]
+        if pairs:
+            _say("diagnostics: conditional IC (of the traded signal; positive = works)")
+            diag["conditional"] = {f"{pr['factor']}|{pr['gate']}": dg.conditional_ic(
+                traded[pr["factor"]], tgt[tr], panels[pr["gate"]][tr], buckets=int(pr.get("buckets", 5)))
+                for pr in pairs}
+
+        ctl_all = [k for k in list(controls) + list(ext_controls) + list(gates) if k in panels]
+```
+
+10-04 13:44 · 读 `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md`
+
+**10-04 13:45 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md`
+
+```
+- - 别动 `scripts/`、`partura/`、`workflows/`、`handoff/`、`lab/`、`docs/`,也别动别的因子的文件。
++ - 别动 `scripts/`、`partura/`、`workflows/`、`handoff/`、`lab/`、`docs/`,也别动别的因子的文件。
+
+---
+---
+
+# 修订 A′(主研第 3 轮追加,2026-10-04;上面的 A 组作废,B 组原样有效)
+
+**执行:请从这一节开始读。** 上面 A 组的前提(「`S1_S2` 已经在服务器上跑着,只收不重跑」)**是错的**,
+照它做会卡死。B 组(`x2_incremental`)**一个字都没变,照上面做**。
+(第 2 轮主研说过要追加这一节,但那一轮被打断、没写成,文件里一直没有;这一节是第 3 轮主研补的,
+而且诊断结论和第 2 轮猜的**不一样** —— 见下。)
+
+## A′-0 事实:`S1_S2` 为什么失败,以及它留下了什么
+
+… (105 行略) …
+- 结果卡仍写 `notes/F109_erm_mag_gap_5m_tsm20/results/R1.md`(两组写一张),**只写事实与异常,不替主研下结论**。
+  B 组如果因为 A 组排队而来不及,**先把 A 组的结果卡写完并交回**,在结果卡开头写明「B 组未做」——
+  有一半事实比没有事实有用得多。
+- 顺手在 `configs/` 里加完 `S2_level` 之后,`notes/F109_erm_mag_gap_5m_tsm20/` 下**不用**替主研写 `07_*.md` 的解读。
+```
+
+**10-04 13:46 · agent 的话**
+
+Now the full state.md rewrite — this is what the next 主研 will see.
+
+**10-04 13:49 · 写文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`(18851 字符)
+
+10-04 13:49 · 读 `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+**10-04 13:53 · 写文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`(18882 字符)
+
+**10-04 13:53 · agent 的话**
+
+Now a small refinement to the hypothesis file (the H11 decision band is a falsification-design detail that belongs there), then the journal.
+
+**10-04 13:53 · Bash** — Read hypotheses file tail
+
+```bash
+cd /Users/wxy/Desktop/Partura && tail -18 notes/F109_erm_mag_gap_5m_tsm20/05_hypotheses.md
+```
+
+```
+**机制已确立、修正效果未验证(1 条,这是本因子的关键路径):**
+
+- **H11** —— 两种爆炸之后都大幅跑输(正爆炸 −55.6% / −49.0%,负爆炸 −35.1% / −33.1%),上、下两侧单独的方向**相同**(都是 −),
+  而原式的 `sub` 做了两件对多头腿不利的事:丢掉两侧共同的水平(规则日 `up+dn` +3.6% / +11.7% vs 差值 −0.7% / +3.5%),
+  并把负爆炸的票送到多头端(Q10 里 15.6%,按 −35.1% 估算拖掉约 **5.5 个点**,正是 Q10 −3.6% 与 Q9 +5.0% 差距的大半)。
+  **`a_sum`(只把 `sub` 换成 `add`)是整条因子唯一可能走到「提纯」结论的路径。**
+  判据(工单 R1 已写明,按**同一半衰期 hl 20** 比,避免把平滑算成结构):
+  train 多头腿净超额 **≥ +5%** 且 Q10 不再为负 → H11 成立且可交易,进 S3;**< +3%** → 改写为「机制对、但修不出钱」,进读留出段。
+
+**未验证(2 条):**
+
+- **H7** —— 待 S1 `a_1m`(分子换 1 分钟)与 `a_q5`(阈值/分母换 5 分钟自身分位数)。先验:同批 F106 与它 rank 相关 0.44。
+- **H9 / H14** —— 这是选拔口径下的**决定性问题**,x1 只给了第一眼:家族 `cross_mean(day_std(Amt),30)` 自己 +12.6% / +22.3%(1.78 / 3.46);
+  加 0.3 份原式 **+10.6% / +20.0%**(拖累)、加 0.3 份规则版 +10.8% / +19.9%(拖累)、加 0.3 份「只留爆炸日」**+13.7% / +23.1%**(+1.1 点)。
+  旁证:条件 IC 按成交额单调上升(最不活跃 0.0056 → 最活跃 0.0398),而家族的多头端在**最不活跃**那一组。
+  **缺的是配对差、标准误、残差多头腿** —— 那 +1 个点是信号还是噪声现在说不清。工单 R1 的 x2 就是为这条设计的:
+  配对差 |t| < 2 → H14 成立(增量在噪声内);t ≥ 2 且增量 ≥ +2 点且 train/valid 同向 → 「排除事件票」这个用法是真的,带进留出段。
+```
+
+10-04 13:53 · 读 `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/05_hypotheses.md`
+
+**10-04 13:53 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/05_hypotheses.md`
+
+```
+-   **缺的是配对差、标准误、残差多头腿** —— 那 +1 个点是信号还是噪声现在说不清。工单 R1 的 x2 就是为这条设计的:
+  配对差 |t| < 2 → H14 成立(增量在噪声内);t ≥ 2 且增量 ≥ +2 点且 train/valid 同向 → 「排除事件票」这个用法是真的,带进留出段。
++   **缺的是配对差、标准误、残差多头腿** —— 那 +1 个点是信号还是噪声现在说不清。工单 R1 的 x2 就是为这条设计的:
+  配对差 |t| < 2 → H14 成立(增量在噪声内);t ≥ 2 且增量 ≥ +2 点且 train/valid 同向 → 「排除事件票」这个用法是真的,带进留出段。
+
+---
+
+## 判据的两处收紧(主研第 3 轮,2026-10-04;假设本身没改)
+
+读结果之前先把「夹缝怎么判」写死,免得看到数字再找理由(playbook §6.4 的毛病):
+
+1. **H11 的夹缝**:`a_sum` 在 hl 20 下 train 多头腿净超额落在 **+3% ~ +5%** 之间时,**不算 H11 成功**。
+   为什么事先就要写:x1 的近亲(「规则日 up+dn」+3.6%、「无爆炸组」次日年化 +3.9%)预示 `a_sum` 很可能正好落在这里 ——
+   也就是说,最可能的结果是「机制对、钱不够」。那时按两条旁证定:与 `ctl_price` 的 \|rank 相关\| ≥ 0.5,
+   或对家族 `known_stdamt_mean30` 的残差多头腿 ≤ +3% → 判它只是已知暴露 / 没有增量,直接进读留出段。
+2. **H13 的实验提前**:原计划把 `b_lvl`/`b_lvlq` 推到 R2 的 `S2_family`;第 3 轮改成在 R1 的 `S1_lvl` 里一起跑
+   (新阶段 `S2_level`)。理由不是假设变了,而是**证据的口径**:结论里最关键的那一族(x1 里多头腿最好看的)
+   不能只有 numpy 证据,必须有引擎口径的两本书 + 对 `ctl_price` 的中性化。判据照旧:
+   \|rank 相关\| ≥ 0.5 且残差多头腿毛超额 ≤ +1% → H13 成立,水平这条路关掉;
+   相关 < 0.3 且残差多头腿 ≥ +3% → H13 被否定,水平是独立的东西,进候选池。
+3. **H12 的实验降级**:`b_skew1`/`b_skew5`/`b_max20`/`b_sig60` 不再单独花一次服务器运行 ——
+   它们作为 `corr_ids` 的 ref 会在 `S1_lvl` 里白送 rank 相关行(`partura/runner.py` 的 refs 逻辑)。
+   相关 ≥ 0.5 → H12 成立;落在 0.3~0.5 的说不清区间、且叙述确实要靠它,才考虑补一次运行。
+```
+
+**10-04 13:54 · Bash** — Write journal entry for this round
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F109_erm_mag_gap_5m_tsm20 "[主研] 第 3 轮(新工作流第 1 轮):S1_S2 的 exit 97 查清是邻居挤的、面板已全部进缓存;把丢失的「修订 A′」真正写进 R1,并把 b_lvl/b_lvlq 提前到这一次 run" <<'EOF'
+我是第 3 轮主研(新工作流下的第 1 轮)。最新工单 R1 还没有结果卡,按分工规矩**不另开工单** ——
+这一轮我只做了三件事:核实 R1 还能不能执行、把它改到能执行、重写 state.md。没有新的研究数字。
+
+看到了什么(都带出处):
+1. **R1 的「修订 A′」根本不在文件里。** 第 2 轮主研的 state.md 说它在 `orders/R1.md` 末尾追加了这一节,
+   但 `grep 修订 orders/R1.md` 什么也没有(文件 143 行,结尾还是「别动 scripts/…」那句)。
+   那一轮大概写完 state.md 就被打断了。→ 如果执行照原样的 R1 做,它会去 wait 一个不存在的 JSON,然后卡死。
+2. **S1_S2 失败的真正原因和第 2 轮猜的不一样。** 我把服务器日志读回来了
+   (`study.sh wait F109… S1_S2 20`,日志在 `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`):
+   - `[guard] ABORT: this process anon 3.9 GiB (limit 14.0), container anon 37.2 GiB (limit 34.0)`
+     → 我们这个进程只占 3.9 GiB,离 14 GiB 的自限很远。触发的是 `guard.py` 的 `crowd` 分支,
+     也就是**邻居**把容器撑到 37.2 GiB,我们主动让路。**不是「14 个变体的批次太大」。**
+   - `[panels] 14/14 (281s) … done in 281s` → **14 个面板全算完了,已经进共享缓存**;它死在后面的
+     `diagnostics: decay`,而 JSON 最后才写,所以什么都没留下。
+   - `[guard] got run slot 0 after 1374s` → 排队 23 分钟才拿到 slot。我核 `study.sh status` 时容器 anon 还是 38.3 GiB、
+     四个邻居在跑(F107_x2、F107_S12、F114_S1_shape、F106_x2)。
+3. **读了 `partura/runner.py`**:只有本次 run 阶段里的变体进 `ok`,decay/by_year/neutralise 只对 `ok` 做;
+   但 `corr_ids` 里属于别的阶段的变体会当 ref 载入(面板是缓存读)、照样进 **rank 相关矩阵**。
+
+判断:
+- 第 2 轮开的药方(把 S1_nodes 拆成两个 4 变体阶段)**对症不对因**,拆了不解决邻居的问题,只白花一次运行预算
+  (全研究 ≤ 8 次,已花 2 次)。这条我在 state.md §8 里明确作废了。
+- 反过来,「面板已在缓存」+「ref 白送相关行」这两件事让一次 run 能装更多有用的东西。
+  原计划里 `S2_family` 的 6 条有 4 条(b_skew1/b_skew5/b_max20/b_sig60)**只需要相关系数**,而相关系数是白送的;
+  真正需要两本书的只有 `b_lvl`/`b_lvlq` —— 它们是 x1 里多头腿最好看的一族(+3.6%/+11.7%),
+  而 `ctl_price` 自己就是 +3.9%/+11.3%。要把「这条因子没有可用多头腿」写成结论,这一族**必须有引擎口径的数字**,
+  不能只拿 numpy 说话。
+
+决定做什么:
+- 在 `orders/R1.md` 末尾补写「修订 A′(主研第 3 轮追加)」(原文一字未删,B 组 x2_incremental 不变):
+  执行先把 `b_lvl`/`b_lvlq` 整行移进新阶段 `S2_level`(`S2_family` 留 4 条),然后**一次 run**:
+  `study.sh run F109… S1_lvl S1_nodes S2_level` = **10 变体**(12 的上限内),tag `S1_lvl`。
+  工单里写清了会回来什么、不会回来什么(v_base 的 decay/逐年/中性化不会回来,S0 里有;b_skew* 的相关行会回来),
+  以及再遇到 exit 97 怎么办(看 ABORT 行的两个 anon 数字;邻居造成的就等几分钟原样重跑,这种重试不算实验预算;两次就停下照实写)。
+- 判据收紧写进 `05_hypotheses.md`:`a_sum` 在 hl 20 下 train 多头腿落在 **+3%~+5%** 的夹缝**不算 H11 成功**
+  (x1 的近亲预示它很可能正好落在这里),那时按「与 ctl_price 的相关」「对家族的残差多头腿」定,证据不足就直接读留出段。
+- 覆盖重写 state.md(8 节),§2.4 换成读日志得到的事实,§3.9/§3.10 写了为什么这么改,§8 把过期的建议作废。
+
+决定不做什么:
+- 不另开 R2(最新工单还没有结果卡)。
+- 不把 S1_nodes 拆小、不减变体、不改表达式。
+- 不为 `b_skew*`/`b_max20`/`b_sig60` 的两本书单独花一次运行,除非相关落在 0.3~0.5 说不清的区间。
+- 不深挖空头腿(用户纯多头做不了,且一半是买不进的假象)。
+EOF
+```
+
+```
+已记入 notes/F109_erm_mag_gap_5m_tsm20/journal.md(5 条)
+```
+
+**10-04 13:54 · Bash** — Verify written files
+
+```bash
+cd /Users/wxy/Desktop/Partura && echo "=== R1.md now ===" && grep -n "^# \|^## \|^### " notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md && wc -l notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md; echo; echo "=== state.md sections ===" && grep -n "^## " notes/F109_erm_mag_gap_5m_tsm20/state.md; echo; echo "=== git-free sanity: config untouched? ===" && ls -la configs/F109_erm_mag_gap_5m_tsm20.yaml && grep -c "S2_level" configs/F109_erm_mag_gap_5m_tsm20.yaml
+```
+
+```
+=== R1.md now ===
+1:# 工单 R1(kind: experiment)
+9:## 想回答的问题(对应哪条假设;看到哪种结果意味着什么)
+11:### A 组(S1_S2,已在跑):把 numpy 口径的结论在**引擎官方口径**上复核
+46:### B 组(x2_incremental,新脚本):对只能做多的用户,这条因子相对已知家族有没有增量?(H9 / H14)
+57:## 要做的事(逐条)
+59:### A. 收 `S1_S2` 并写结果卡(不新建阶段、不重跑)
+67:### B. 自写脚本 `studies/F109_erm_mag_gap_5m_tsm20/x2_incremental.py`,tag `x2_incremental`
+104:## 要带回来的数字(逐项)
+106:### A 组:`S1_S2` 的 14 个变体(`v_base` 的 S0 数字我已有,作为对照抄一行即可)
+125:### B 组:`x2_incremental`
+134:## 约束
+148:# 修订 A′(主研第 3 轮追加,2026-10-04;上面的 A 组作废,B 组原样有效)
+155:## A′-0 事实:`S1_S2` 为什么失败,以及它留下了什么
+184:## A′-1 先把 `S2_family` 拆开(只改 `configs/F109_erm_mag_gap_5m_tsm20.yaml`)
+207:## A′-2 跑一次:阶段 `S1_nodes` + `S2_level`,tag `S1_lvl`(10 变体,1 次服务器运行)
+228:## A′-3 这一次会回来什么、不会回来什么(我读过 `partura/runner.py`,别当成出错)
+242:## A′-4 要带回来的数字
+258:## A′-5 约束的改动(其余照上面「约束」那一节)
+     265 notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md
+
+=== state.md sections ===
+11:## 1. 一句话现状
+28:## 2. 中间结果(已经量到的事实,每条带数字和出处)
+138:## 3. 研究过程与逻辑(做了什么、按什么顺序、为什么这么走)
+177:## 4. 假设表(完整表与证伪设计在 `05_hypotheses.md`;这里只记**状态**与证据)
+201:## 5. 当前的候选(提纯 / 升华)
+222:## 6. 后面的研究思路(按顺序;明确决定不做的事也写了)
+263:## 7. 留出段
+272:## 8. 给接手者的提醒
+
+=== git-free sanity: config untouched? ===
+-rw-r--r--@ 1 wxy  staff  18074 Oct  4 12:47 configs/F109_erm_mag_gap_5m_tsm20.yaml
+0
+```
+
+**10-04 13:54 · agent 的话**
+
+One handoff risk remains: an 执行 reading R1 top-down would hit the stale "don't rerun" instruction before reaching the revision. Adding a banner at the top.
+
+**10-04 13:54 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md`
+
+```
+- # 工单 R1(kind: experiment)
+
+写给执行:这张工单**不要新建任何配置阶段、不要重跑 S1_S2**。
++ # 工单 R1(kind: experiment)
+
+> ⚠ **执行请先翻到文件最后的「修订 A′(主研第 3 轮追加)」那一节,从那里开始做。**
+> 下面这段原文里的 A 组(「S1_S2 已经在跑,只收不重跑」)**前提是错的、已作废** ——
+> `S1_S2` 已经结束并失败(exit 97,没有 JSON),照原文做会去 wait 一个不存在的结果然后卡死。
+> **B 组(`x2_incremental`)完全有效,照原文做。** 原文保留是为了留下「当初为什么那么计划」的记录。
+
+写给执行:这张工单**不要新建任何配置阶段、不要重跑 S1_S2**。
+```
+
+**10-04 13:54 · Bash** — Confirm brief reflects the new state
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh brief F109_erm_mag_gap_5m_tsm20 2>&1 | sed -n '/## 现在到哪一步/,/^$/p' | head -8; echo "---- state.md 头两行 ----"; ./scripts/study.sh brief F109_erm_mag_gap_5m_tsm20 2>&1 | grep -A2 "研究现状(\`notes" | head -4; echo "---- 工单/结果卡 ----"; ./scripts/study.sh brief F109_erm_mag_gap_5m_tsm20 2>&1 | grep -A3 "^## 工单与结果卡"
+```
+
+```
+## 现在到哪一步
+
+---- state.md 头两行 ----
+## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-04 13:53 更新)—— **先读这个文件**
+
+# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 3 轮重写,2026-10-04)
+---- 工单/结果卡 ----
+## 工单与结果卡(`notes/F109_erm_mag_gap_5m_tsm20/orders/`、`notes/F109_erm_mag_gap_5m_tsm20/results/`)
+
+- R1:工单 有,结果卡 **还没有(待执行)**
+```
+
+**10-04 13:55 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "R1 仍然没有结果卡,所以不另开工单 —— 但我先把它改到「能执行」:第 2 轮主研声明要追加的「修订 A′」其实从没写进 notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md(grep 确认),而且我把服务器日志读出来后发现它的诊断也是错的:S1_S2 的 exit 97 是**邻居**把容器 anon 撑到 37.2 GiB、守卫让路(本进程只占 3.9 GiB / 自限 14),而且 14 个面板全算完并已进共享缓存,死在后面的 diagnostics。所以不拆成 4+4(白花预算),改成:把 b_lvl/b_lvlq 整行移进新阶段 S2_level,一次 run 跑 S1_nodes + S2_level = 10 变体(tag S1_lvl),一次性裁决 H11(a_sum 能不能救出多头腿)和 H13(最好看的「水平」一族是不是就是 ctl_price 的引擎口径证据);读 partura/runner.py 确认 corr_ids 里别的阶段的变体会当 ref 白送 rank 相关行,因此剩下的 S2_family 四条很可能一次运行都不用花。B 组 x2_incremental 原样有效。另外把判据收紧写进 05_hypotheses.md(a_sum 在 hl 20 下 train 多头腿落在 +3%~+5% 的夹缝不算 H11 成功),并在 R1 顶部加了「先翻到修订 A′」的警示。state.md 已按 8 节覆盖重写(主研第 3 轮),journal 已记一条 [主研]。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
+## 它写过 / 改过的文件
+
+- `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md`
+- `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+- `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/05_hypotheses.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "R1 仍然没有结果卡,所以不另开工单 —— 但我先把它改到「能执行」:第 2 轮主研声明要追加的「修订 A′」其实从没写进 notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md(grep 确认),而且我把服务器日志读出来后发现它的诊断也是错的:S1_S2 的 exit 97 是**邻居**把容器 anon 撑到 37.2 GiB、守卫让路(本进程只占 3.9 GiB / 自限 14),而且 14 个面板全算完并已进共享缓存,死在后面的 diagnostics。所以不拆成 4+4(白花预算),改成:把 b_lvl/b_lvlq 整行移进新阶段 S2_level,一次 run 跑 S1_nodes + S2_level = 10 变体(tag S1_lvl),一次性裁决 H11(a_sum 能不能救出多头腿)和 H13(最好看的「水平」一族是不是就是 ctl_price 的引擎口径证据);读 partura/runner.py 确认 corr_ids 里别的阶段的变体会当 ref 白送 rank 相关行,因此剩下的 S2_family 四条很可能一次运行都不用花。B 组 x2_incremental 原样有效。另外把判据收紧写进 05_hypotheses.md(a_sum 在 hl 20 下 train 多头腿落在 +3%~+5% 的夹缝不算 H11 成功),并在 R1 顶部加了「先翻到修订 A′」的警示。state.md 已按 8 节覆盖重写(主研第 3 轮),journal 已记一条 [主研]。",
+ "state_written": true
+}
 ```
 
 ## 它拿到的任务书

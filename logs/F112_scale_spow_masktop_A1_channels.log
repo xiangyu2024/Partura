@@ -1,0 +1,68 @@
+[a1_channels] 脚本启动,先自检
+[self-check] 全部断言通过(rolling_nansum_causal / EPS 保护 / mask_replace_lowest / 随机数组形状)
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[panels] 3 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 30.9 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   3/3 (20s)
+[panels] done in 20s
+
+=== §1 重建 + 自检(是 §2 §5 的前置闸门) ===
+EPS=1e-12: spearman(F_rec,F) train 均值=1.00000  最小值=0.99997  相对误差中位数=4.144e-08  99分位=1.852e-07
+自检通过
+
+=== §2 公布值的出入(H9,优先级最低) ===
+  F_rec(ceil,§1 重建): utrain LS=+2.59  Lgross=+9.1%
+  R(round 版): utrain LS=+2.58  Lgross=+9.0%
+  W(前29天置NaN版): utrain LS=+1.72  Lgross=+6.8%
+  对照:Partura v_base utrain LS +2.59/Lgross +9.1%;用户公布 LS 2.58/Lgross 0.089
+  ceil 与 round 取值不同的交易日占比(train)=45.9%;不同时平均相差 0.46 只股票
+
+=== §3 封板票与质点(H5 + H4) ===
+/root/autodl-tmp/Partura/studies/F112_scale_spow_masktop/a1_channels.py:283: RuntimeWarning: Mean of empty slice
+  g_mean = np.nanmean(grp, axis=1)
+  [tgt(buyable=True,官方标签)] 多头十分位: ①组内等权=+17.8%  ②超额(减全市场有信号有标签等权)=+8.6%
+  [tgt(buyable=True,官方标签)] 空头十分位: ①组内等权=-19.9%  ②超额(减全市场有信号有标签等权)=-29.1%
+  [raw(buyable=False,不剔除封板)] 多头十分位: ①组内等权=+19.0%  ②超额(减全市场有信号有标签等权)=+7.8%
+  [raw(buyable=False,不剔除封板)] 空头十分位: ①组内等权=-10.1%  ②超额(减全市场有信号有标签等权)=-21.3%
+  tgt 为 NaN 的格子占比(train):全市场 31.90%  多头十分位内 1.10%  空头十分位内 5.12%(其中「买不进」即 raw 有值但 tgt 为 NaN 的全市场占比 0.18%)
+  质点①每天被替换的股票数/占比(train 均值):360.2 只 / 10.01%
+  质点②「过去 30 个交易日每天都被替换」的股票数(train 日均):83.75 只;train 期间**出现过**这种情况的不同股票数(去重):445 只
+  质点②这群股票当天 F 的横截面百分位:均值=0.581  四分位=[0.546, 0.585, 0.622]  (0=当天最低,1=当天最高,n=81489)
+  每天 F 完全相同的最大并列组(train):均值=91.38  最大值=3038  (n_days=973)
+
+=== §4 通道分解(H1 / H2 / H2b / H6)——最重要 ===
+spearman(F,termP)=+0.531  spearman(F,termK)=+0.366  spearman(F,termP+termK)=+0.650  spearman(F,e)=+0.650
+幅度(train 中位数):std(termP)=0.07164  std(termK)=0.2726  比值 P/K=0.26
+按滞后一日 mean30A 分 5 桶(train 均值;桶0=滞后价位最低):
+/root/miniconda3/envs/quant/lib/python3.12/site-packages/numpy/lib/_nanfunctions_impl.py:2015: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+  桶0: spearman(F,termP)=-0.083  spearman(F,termK)=-0.108  std(termP)=0.05694  std(termK)=0.4762
+  桶1: spearman(F,termP)=+0.497  spearman(F,termK)=+0.761  std(termP)=0.06897  std(termK)=0.2698
+  桶2: spearman(F,termP)=+0.653  spearman(F,termK)=+0.612  std(termP)=0.07238  std(termK)=0.1506
+  桶3: spearman(F,termP)=+0.788  spearman(F,termK)=+0.433  std(termP)=0.0763  std(termK)=0.07896
+  桶4: spearman(F,termP)=+0.928  spearman(F,termK)=+0.195  std(termP)=0.07443  std(termK)=0.02498
+e 的横截面偏度(train):均值=+18.191  中位数=+17.855;e 分位(train 池化)1/5/50/95/99=-0.379/-0.199/-0.020/0.212/0.567
+排除被替换格子(D==C 的等价判据:用 §1 的 replaced 掩码取反,而不是逐位浮点比较)后:spearman(F,termP)=+0.602  spearman(F,termK)=+0.519
+
+=== §5 signedpower 的二阶项(H3) ===
+spearman(F,Fn)=+0.9714  (H3 的直接判据,阈值 0.9)
+spearman(Δ, e²−m2)=+0.6881  (Δ=F−2·Fn,代数上应接近 (1/30)(e²−m2)−1/30 这个折叠通道)
+rank_corr(sig, disp)=-0.176  rank_corr(sig, known_stdamt_mean30)=-0.254
+
+=== 附:S1_minimal 10 变体 与 v_base / 5 个参照的原始日频面板口径 rank 相关 ===
+variant        |               v_base |            ctl_mom20 |            ctl_price |  known_stdamt_mean30 |    known_stdamt_max9 |       known_amt_max9
+s1_noK         |               +0.622 |               +0.781 |               +0.052 |               +0.077 |               +0.231 |               +0.200
+s1_noP         |               +0.231 |               +0.039 |               +0.009 |               +0.002 |               +0.035 |               +0.020
+s1_noMask      |               +0.687 |               +0.554 |               +0.257 |               +0.086 |               +0.198 |               +0.196
+s1_noSpow      |               +0.971 |               +0.510 |               +0.067 |               +0.074 |               +0.174 |               +0.158
+s1_plain30     |               +0.546 |               +0.898 |               +0.092 |               +0.102 |               +0.280 |               +0.246
+s1_w10         |               +0.770 |               +0.230 |               +0.061 |               +0.023 |               +0.055 |               +0.055
+s1_x30         |               +1.000 |               +0.489 |               +0.105 |               +0.060 |               +0.157 |               +0.148
+s1_x60         |               +0.865 |               +0.443 |               +0.145 |               +0.143 |               +0.203 |               +0.199
+s1_x241        |               +0.613 |               +0.269 |               +0.230 |               +0.262 |               +0.264 |               +0.275
+s1_plain60     |               +0.433 |               +0.731 |               +0.131 |               +0.237 |               +0.330 |               +0.311
+(原始日频面板,未平滑,两侧都没有乘方向;与前面主表里「交易信号口径」的矩阵是两套不同的数字,不要混用)
+
+[a1_channels] 全部小节跑完
+[partura exit 0 2026-10-05_05:21:34]

@@ -1,0 +1,107 @@
+==============================================================================
+SELF-CHECK (synthetic random data; no real panel touched)
+==============================================================================
+(i) expect rank_var == 8.25 exactly (complete window); got min=8.25000000 max=8.25000000  -> PASS
+(ii) no-NaN: brute-force-mean-pairwise-spearman vs proj, daily rank-corr mean=0.999857 min=0.998496 over 21 days (tol 1e-3 around 1.0) -> PASS
+(ii, 10% NaN) same comparison with 10% of cells knocked out: mean=0.943860 min=0.866165 over 21 days (expected to drop vs the no-NaN case -- this is H1's boundary, not a pass/fail)
+
+==============================================================================
+LOADING PANELS (real server data)
+==============================================================================
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+a.shape=(1942, 5220) f.shape=(1942, 5220) target.shape=(1942, 5220)
+train=slice(0, 973, None) valid=slice(973, 1359, None) utrain=slice(0, 1359, None)
+/root/autodl-tmp/Partura/studies/F111_spearman_qclose/x1_identity.py:75: RuntimeWarning: Mean of empty slice
+  rc = ranks - np.nanmean(ranks, axis=1, keepdims=True)
+windowed pass: 1359 rows in (0 lookback + 1359 utrain), chunk=200 -> utrain-aligned outputs shape (1359, 5220)
+local_train=slice(0, 973, None) local_valid=slice(973, 1359, None) of n_u=1359 (sanity: should tile start=0 with no gap/overlap)
+
+==============================================================================
+BLOCK (a) -- H1: does the identity hold on real data
+==============================================================================
+window-complete fraction of labelled cells: utrain=0.9870 train=0.9832 valid=0.9946
+  proj vs f, ALL cells (daily spearman, utrain): n=1350 mean=+0.9974 median=+0.9983 p05=+0.9925 p95=+0.9998
+  proj vs f, WINDOW-COMPLETE cells only (daily spearman, utrain): n=1350 mean=+1.0000 median=+1.0000 p05=+0.9999 p95=+1.0000
+st.rank_corr(sig, st.signal(proj)), train = +0.9930
+sign(proj, train)=+1
+  [proj] hlL=20 Lnet +10.95%/+17.09%  Lshp +1.88/+3.09  Lgross +14.02%/+20.07%  LTO 4.02%/3.94%  |  hlS=10 LS +2.68/+3.49  short +32.35%/+32.74%
+
+==============================================================================
+BLOCK (b) -- H2 vs H11: market-direction conditioning
+==============================================================================
+c(t) distribution (utrain): mean=-0.0426 frac_c_gt0=0.4770 median|c|=0.5623 n=1350
+  f vs rho_time, ALL days: n=1350 mean=-0.0885 median=-0.1780 p05=-0.9035 p95=+0.8669
+  f vs rho_time, c>0 days: mean=+0.4712 (n_days=644)
+  f vs rho_time, c<0 days: mean=-0.5991 (n_days=706)
+  f vs c*rho_time, ALL days: n=1350 mean=+0.5381 median=+0.5907 p05=+0.0054 p95=+0.9306
+sign(rho_time, train)=-1
+  [rho_time] hlL=20 Lnet -5.60%/-0.71%  Lshp -0.78/-0.08  Lgross -0.54%/+4.38%  LTO 6.64%/6.74%  |  hlS=20 LS +0.01/+0.79  short +11.18%/+21.28%
+sign(c*rho_time, train)=+1
+  [c*rho_time] hlL=20 Lnet +9.23%/+18.62%  Lshp +1.57/+2.99  Lgross +14.47%/+23.75%  LTO 6.86%/6.78%  |  hlS=20 LS +1.85/+3.03  short +22.68%/+28.74%
+
+==============================================================================
+BLOCK (c) -- H4: increment over known families (most important)
+==============================================================================
+
+--- known family: known_stdamt_mean30 ---
+  [1 tradable residual] rank-space R2(mean daily, utrain)=0.0684 days=1350 sign=+1
+  [resid#1 tradable] hlL=20 Lnet +5.16%/+7.79%  Lshp +0.94/+1.48  Lgross +9.04%/+11.65%  LTO 5.09%/5.11%  |  hlS=20 LS +1.31/+1.60  short +13.61%/+14.15%
+    rank_ic: train=+0.0265 valid=+0.0247
+  [2 S0-Sec7-comparable residual, train] R2=0.1871 rank_ic=+0.0169 Lnet=-0.95% Lgross=+2.80% Lshp=-0.16 LTO=4.92% LS=+0.14 short=+6.24%
+  [2 S0-Sec7-comparable residual, valid] R2=0.2273 rank_ic=+0.0206 Lnet=+1.22% Lgross=+5.08% Lshp=+0.20 LTO=5.10% LS=+0.09 short=+3.79%
+  [combo w=0] hlL=0 Lnet +13.26%/+22.18%  Lshp +1.86/+3.44  Lgross +15.75%/+24.30%  LTO 3.26%/2.80%  |  hlS=0 LS +1.91/+3.62  short +21.33%/+32.77%  sign=+1
+  [combo w=0.25] hlL=3 Lnet +13.21%/+21.35%  Lshp +1.96/+3.41  Lgross +17.22%/+25.15%  LTO 5.25%/5.02%  |  hlS=2 LS +1.92/+3.44  short +24.49%/+33.78%  sign=+1
+  [combo w=0.5] hlL=5 Lnet +11.95%/+20.03%  Lshp +1.82/+3.35  Lgross +16.64%/+24.61%  LTO 6.13%/6.06%  |  hlS=3 LS +1.92/+3.57  short +26.60%/+36.83%  sign=+1
+  [combo w=0.75] hlL=10 Lnet +10.57%/+18.15%  Lshp +1.67/+3.11  Lgross +14.77%/+22.26%  LTO 5.50%/5.43%  |  hlS=3 LS +1.96/+3.46  short +30.17%/+38.22%  sign=+1
+  [combo w=1] hlL=20 Lnet +9.35%/+14.68%  Lshp +1.61/+2.68  Lgross +12.91%/+18.11%  LTO 4.67%/4.53%  |  hlS=5 LS +1.93/+3.11  short +28.17%/+32.94%  sign=+1
+
+--- known family: known_stdamt_max9 ---
+  [1 tradable residual] rank-space R2(mean daily, utrain)=0.1093 days=1350 sign=+1
+  [resid#1 tradable] hlL=20 Lnet +3.66%/+6.40%  Lshp +0.66/+1.16  Lgross +7.48%/+10.21%  LTO 5.01%/5.05%  |  hlS=20 LS +1.03/+1.07  short +11.51%/+10.05%
+    rank_ic: train=+0.0218 valid=+0.0191
+  [2 S0-Sec7-comparable residual, train] R2=0.1442 rank_ic=+0.0145 Lnet=-7.42% Lgross=-0.97% Lshp=-1.30 LTO=8.45% LS=-0.55 short=+6.93%
+  [2 S0-Sec7-comparable residual, valid] R2=0.1774 rank_ic=+0.0195 Lnet=-2.77% Lgross=+3.90% Lshp=-0.46 LTO=8.82% LS=-0.17 short=+6.53%
+  [combo w=0] hlL=5 Lnet +13.37%/+21.82%  Lshp +1.95/+3.51  Lgross +16.87%/+24.87%  LTO 4.58%/4.03%  |  hlS=0 LS +2.54/+4.38  short +38.35%/+47.60%  sign=+1
+  [combo w=0.25] hlL=5 Lnet +14.81%/+21.66%  Lshp +2.21/+3.55  Lgross +18.99%/+25.47%  LTO 5.49%/5.03%  |  hlS=0 LS +2.35/+3.90  short +41.08%/+48.39%  sign=+1
+  [combo w=0.5] hlL=10 Lnet +12.92%/+20.12%  Lshp +1.97/+3.31  Lgross +16.54%/+23.51%  LTO 4.74%/4.48%  |  hlS=2 LS +2.22/+3.78  short +33.42%/+42.19%  sign=+1
+  [combo w=0.75] hlL=10 Lnet +11.42%/+19.10%  Lshp +1.81/+3.32  Lgross +15.82%/+23.33%  LTO 5.76%/5.60%  |  hlS=5 LS +2.12/+3.86  short +29.56%/+40.38%  sign=+1
+  [combo w=1] hlL=20 Lnet +9.35%/+14.68%  Lshp +1.61/+2.68  Lgross +12.91%/+18.11%  LTO 4.67%/4.53%  |  hlS=5 LS +1.93/+3.11  short +28.17%/+32.94%  sign=+1
+
+--- known family: known_amt_max9 ---
+  [1 tradable residual] rank-space R2(mean daily, utrain)=0.1012 days=1350 sign=+1
+  [resid#1 tradable] hlL=20 Lnet +4.77%/+6.33%  Lshp +0.85/+1.13  Lgross +8.55%/+10.19%  LTO 4.96%/5.10%  |  hlS=20 LS +1.24/+1.03  short +12.67%/+9.57%
+    rank_ic: train=+0.0242 valid=+0.0199
+  [2 S0-Sec7-comparable residual, train] R2=0.1562 rank_ic=+0.0161 Lnet=-2.99% Lgross=+2.71% Lshp=-0.51 LTO=7.47% LS=+0.06 short=+8.58%
+  [2 S0-Sec7-comparable residual, valid] R2=0.1927 rank_ic=+0.0191 Lnet=-1.45% Lgross=+4.52% Lshp=-0.23 LTO=7.89% LS=-0.10 short=+5.70%
+  [combo w=0] hlL=5 Lnet +10.56%/+21.72%  Lshp +1.45/+3.37  Lgross +13.50%/+24.34%  LTO 3.86%/3.47%  |  hlS=0 LS +1.62/+3.69  short +24.49%/+38.34%  sign=+1
+  [combo w=0.25] hlL=10 Lnet +12.64%/+22.12%  Lshp +1.81/+3.46  Lgross +15.30%/+24.53%  LTO 3.48%/3.19%  |  hlS=1 LS +1.78/+3.49  short +27.47%/+38.76%  sign=+1
+  [combo w=0.5] hlL=10 Lnet +12.13%/+20.77%  Lshp +1.81/+3.37  Lgross +15.62%/+24.11%  LTO 4.58%/4.41%  |  hlS=3 LS +1.89/+3.64  short +28.38%/+39.46%  sign=+1
+  [combo w=0.75] hlL=10 Lnet +10.89%/+19.00%  Lshp +1.71/+3.26  Lgross +15.22%/+23.23%  LTO 5.67%/5.60%  |  hlS=5 LS +1.93/+3.82  short +27.53%/+39.88%  sign=+1
+  [combo w=1] hlL=20 Lnet +9.35%/+14.68%  Lshp +1.61/+2.68  Lgross +12.91%/+18.11%  LTO 4.67%/4.53%  |  hlS=5 LS +1.93/+3.11  short +28.17%/+32.94%  sign=+1
+
+==============================================================================
+BLOCK (c4) -- H11: |rank_corr(f, known)| vs half-life (train)
+==============================================================================
+hl         known_stdamt_mean30       known_stdamt_max9          known_amt_max9
+0.0                    -0.2323                 -0.3088                 -0.2953
+1                      -0.2513                 -0.3295                 -0.3152
+2                      -0.2731                 -0.3489                 -0.3346
+3                      -0.2905                 -0.3614                 -0.3475
+5                      -0.3156                 -0.3752                 -0.3623
+10                     -0.3481                 -0.3863                 -0.3760
+20                     -0.3704                 -0.3869                 -0.3802
+(H11 predicts |value| rising monotonically down this table; sign of each cell is incidental)
+
+==============================================================================
+BLOCK (d) -- H3: tied values
+==============================================================================
+tie fraction of labelled cells: utrain=0.4401 train=0.4519 valid=0.4169
+tie rate by f-decile (Q1=short end .. Q10=long end):
+  Q1=0.3590  Q2=0.4116  Q3=0.4317  Q4=0.4365  Q5=0.4357  Q6=0.4420  Q7=0.4521  Q8=0.4661  Q9=0.4823  Q10=0.5111
+mean f-percentile: tie=True 0.5241 (n=2292559)   tie=False 0.4810 (n=2916227)
+sign(de-tied f, train)=+1  coverage_labelled: train=0.5391 valid=0.5824
+  [de-tied f] hlL=5 Lnet -3.58%/+2.52%  Lshp -0.52/+0.44  Lgross +14.31%/+19.07%  LTO 23.44%/21.89%  |  hlS=5 LS +1.09/+1.84  short +32.88%/+32.76%
+
+DONE.
+[partura exit 0 2026-10-05_05:23:46]

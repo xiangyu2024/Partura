@@ -47,12 +47,13 @@ gates:
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
+corr_ids: [v_base, m_mktcorr, s_pearson, l_mean, l_last, l_amt, t_tsrank]   # R1
 
 diagnostics:
   decay:      [v_base]
   by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  neutralise: [v_base, m_mktcorr, t_tsrank]   # R1: 追加 m_mktcorr, t_tsrank
+  profile:    [v_base, m_mktcorr, t_tsrank]   # R1: 追加 m_mktcorr, t_tsrank
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -62,3 +63,25 @@ stages:
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "ts_spearman(day_quantile(Close), 10)", why: "原始表达式"}
+
+  - id: S1_whatis
+    question: "ts_spearman 的全市场两两配对平均,等价于什么更简单的东西?预测力的载体是价格路径、活跃度,还是实现细节?"
+    variants:
+      - {id: m_mktcorr, group: substitute,
+         expr: "ts_corr(day_quantile(Close), cs_mean(day_quantile(Close)), 10)",
+         why: "H1:把 O(N²) 两两配对换成「和一条市场路径做相关」。恒等式说截面序应该高度一致;若 rank 相关高且多头腿相当,配对结构就是多余的(提纯)"}
+      - {id: s_pearson, group: substitute,
+         expr: "ts_pearson(day_quantile(Close), 10)",
+         why: "H6:同样的全市场配对结构,去掉窗口内的秩变换。秩让每只股票在市场路径上等权,Pearson 则让 10 天内价格波动大的股票主导;若 Pearson 同样好,秩就只是个实现选择"}
+      - {id: l_mean, group: field,
+         expr: "ts_spearman(day_mean(Close), 10)",
+         why: "H3:分钟均价几乎不可能出现跨日完全并列,而日内中位价落在 tick 网格上会并列、并列按日期顺序发秩=人工上升斜坡。若与原式差异明显,原式有一部分预测力来自这个实现瑕疵"}
+      - {id: l_last, group: ablate,
+         expr: "ts_spearman(day_last(Close), 10)",
+         why: "H7:删掉日内折叠这一步,直接用当天收盘价。若相当,日内中位价是多余的(更简单的等价写法)"}
+      - {id: l_amt, group: field,
+         expr: "ts_spearman(day_quantile(Amt), 10)",
+         why: "H10:把共动的载体从价格换成成交额。若同样好或更好,这条因子其实是活跃度共动,更靠近已知的成交额家族"}
+      - {id: t_tsrank, group: substitute,
+         expr: "ts_rank(day_quantile(Close), 10)",
+         why: "H2:纯粹的 10 日秩位置动量,没有「乘市场趋势方向」这个条件化。原式明显优于它=条件化有用;相当=这条因子就是个 10 日动量的写法"}

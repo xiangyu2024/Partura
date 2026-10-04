@@ -1,7 +1,7 @@
 # Partura study F112_scale_spow_masktop  (挖掘 / #574)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F112_scale_spow_masktop
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "「当天价位 + 当天 High 分钟级尖峰度」这个混合量,相对它自己过去 30 个交易日的水平偏离了多少;反向交易"
 expression: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)"
 baseline_id: v_base
 
@@ -49,16 +49,32 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  decay:      [v_base, s1_x60, s1_plain60]
+  by_year:    [v_base, s1_x60, s1_plain60]
+  neutralise: [v_base, s1_noK, s1_x60, s1_plain60]
+  profile:    [v_base, s1_noK, s1_x60, s1_plain60]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: v_base, gate: ctl_price, buckets: 5}
+  corr_ids: [s1_noK, s1_noP, s1_noMask, s1_noSpow, s1_plain30, s1_w10, s1_x30, s1_x60, s1_x241, s1_plain60]
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)", why: "原始表达式"}
+
+  - id: S1_minimal
+    question: "这棵树的最小充分结构是什么:删掉每个节点、把唯一的跨日窗口换档,多头腿和与原式的 rank 相关怎么变?"
+    variants:
+      - {id: s1_noK, group: ablate, expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(day_quantile(Close))), 30)", why: "删掉峰度通道:如果预测力主要来自「30 日自身相对价位」(H1),这个应该基本不掉;掉 ≥3pp 就说明峰度通道不可删(H2)"}
+      - {id: s1_noP, group: ablate, expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(day_kurt(High))), 30)", why: "只留峰度通道:看它能不能单独撑起一本书。注意这不是干净隔离(B 会变号,ΣE 可能在 0 附近抵消触发 ts_scale 的 EPS 分母保护),只当粗读,不用来做归因"}
+      - {id: s1_noMask, group: ablate, expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30)", why: "删掉横截面截尾:截尾只截下尾,而 sign=-1 下下尾正是多头端的原料。如果多头腿变好,截尾在帮倒忙(H4)"}
+      - {id: s1_noSpow, group: ablate, expr: "ts_scale(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))), 30)", why: "删掉带符号平方:一阶上它只把偏离放大一倍、不改序,预计与原式 rank 相关 ≥0.9(H3)。若 <0.8 说明平方是一个真的折叠通道"}
+      - {id: s1_plain30, group: simplify, expr: "ts_scale(day_quantile(Close), 30)", why: "最朴素的两节点等价物 = 纯粹的「30 日自身相对价位」= 1 月反转。如果它就够了,整棵树的其余部分都是装饰(H1 强形式)"}
+      - {id: s1_w10, group: window, expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 10)", why: "窗口缩到 10:基线的衰减表显示 IC 随预测期一路升到 h=20,短窗口应该明显更差(H7 的反向检查)"}
+      - {id: s1_x30, group: window, expr: "cross_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)", why: "一致性检查:cross_scale 的源码与 ts_scale 逐字同公式(同样调 rolling_windows + scale_last_ratio),只是 DT 面按股票分块。它必须与 v_base 数字几乎相同;不相同的话 x60/x241 这条阶梯就不能用"}
+      - {id: s1_x60, group: window, expr: "cross_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 60)", why: "窗口拉到 60(ts_scale 的窗口池只到 50,所以用同内核的 cross_scale):hl 网格上限 20 处多头腿还在单调上升,真实视野可能比 30 天长(H7)"}
+      - {id: s1_x241, group: window, expr: "cross_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 241)", why: "窗口拉到约 1 年:H7 的极端档,看慢分量到哪里见顶"}
+      - {id: s1_plain60, group: simplify, expr: "cross_scale(day_quantile(Close), 60)", why: "「最简结构 × 最佳视野」的组合候选:如果 H1+H7 都成立,这个两节点式子就是升华候选的第一人选"}

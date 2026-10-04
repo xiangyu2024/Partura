@@ -1,6 +1,6 @@
 # lead:F113_nested_tsmax_demean#1 — agent ab3e4a48f7f8404ad(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 13:38,最后一次动作 10-04 13:43;工具调用 19 次
+- 状态:**已返回结果**;开始 10-04 13:38,最后一次动作 10-04 13:47;工具调用 25 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F113_nested_tsmax_demean/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -724,10 +724,185 @@ Now let me read the existing state.md so my rewrite preserves what's still valid
 
 The existing state.md is solid. Let me rewrite it to reflect this round's verification work and H11.
 
+**10-04 13:46 · 写文件** `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/state.md`(15782 字符)
+
+**10-04 13:46 · agent 的话**
+
+Now the journal entry.
+
+**10-04 13:46 · Bash** — Write journal entry for this round
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F113_nested_tsmax_demean "[主研] 第 1 轮(第二次尝试):R1 无结果卡→交回执行;复核算子语义后新增 H11(cs_rank 按股票代码打破并列=板块暴露)与区块 1b" <<'EOF'
+看到了什么:
+- brief 显示上一轮主研(lead#1)写完 04_grammar.md / 05_hypotheses.md / orders/R1.md 后 failed(额度中断)。
+- study.sh list 确认服务器上只有 S0_baseline:R1 的两个 tag(S1_chain / x1_ties)一次都没跑过。
+- orders/R1.md 完整(19.7KB,结尾的「约束」一节齐全),不是写了一半。
+
+判断与决定:
+1) 按规矩不另开工单 —— 最新工单没有结果卡,交回执行(status:'order', R1, experiment)。
+2) 但工单只写一次、执行只照纸做,所以这一轮全部花在复核上。核对了 c8/c9/c10 依赖的三个
+   「本批次第一次用」的算子内核:
+   - pow_1_5:内核 where(e<=1, sign(x)*|x|^e, x^e),e=1.5 走不保号分支 → 负数输入 NaN。
+     确认工单让 c8 删外层 pow_2 时「必须同时删 pow_1_5」是对的;c9/c10 的 pow_1_5 输入恒非负,安全。
+   - cs_median:末尾 expand_as,返回广播后的截面中位数 → c10 的 sub(G, cs_median(G)) 确实是去中位数。
+   - cs_rank:pct=True → (0,1];并列用 argsort(stable=True) 打破,即按列序 = 股票代码顺序。
+   另复核了上一轮三条代数(mul(G,5) 精确冗余 / 外层四算子除第二次 cs_demean 对排序无贡献 /
+   pow_1_5 在非负输入上不改当天排序),全部成立 → 工单里 c6、c5 两个审计点是可信的红线。
+3) 发现工单漏掉一个会产生假阳性的机制 → 新增 H11,并在工单末尾追加「主研补注」:
+   cs_rank 的 stable 并列把股票代码序写进因子值,所以 c9_rankfold 的 dist 会接近 1 —— 但那是
+   「假的修好」,退化只是被改写成代码序。而 A 股代码前缀就是上市板块(600/000/300/688),
+   板块对应规模、上市年龄、涨跌幅限制(创业板/科创板 ±20% vs 主板 ±10%)。于是「并列噪声」不是
+   会被平均掉的随机噪声,而是逐日稳定、看起来可交易、却毫无逻辑的暴露;它还正好躲过所有现成诊断
+   (秩空间线性中性化与 rank 相关都看不见,playbook §6.5),这与 S0「联合 R² 只有 0.058、
+   与所有控制变量 rank 相关 ≤0.15」完全自洽。c9 是本工单唯一的升华候选,如果它多头腿好看而
+   来源是代码序,那是整个研究最容易骗过人的假阳性。
+4) 对应测量 = 区块 1b,不额外花服务器运行:用 st.symbols()(API 已确认存在)对 v_base 和 c9 各量
+   三项 —— 多头腿的列序位置分位 vs 0.50;板块占比 vs 全市场;切割点上「进了的」与「被切掉的」
+   列下标中位数之差。c9 的面板在 (A) 跑完后已进共享缓存,所以工单强调 (A) 先跑、(B) 后跑。
+
+决定不做的事:
+- 不改变体清单、不改 tag、不加第 3 次服务器运行(规矩是交回执行,不是重新设计)。
+- 不重跑 S0(known_stdamt_mean30 缺失是时序问题,R1 会免费修好)。
+- H10(warmup 前 82 天)仍然不测:占 train 不到 9%,valid/holdout 不受影响,改不了选拔结论。
+
+下一步:执行跑 S1_chain + x1_ties,写 results/R1.md。下一轮主研先看区块 1+2+1b(H1 与 H11),
+再看 c9/c10 的多头腿 —— 且 c9 的好数字必须先过 H11 这道闸才算候选。
+EOF
+```
+
+```
+已记入 notes/F113_nested_tsmax_demean/journal.md(2 条)
+```
+
+**10-04 13:46 · agent 的话**
+
+Let me verify I only touched permitted files and that everything landed.
+
+**10-04 13:46 · Bash** — Verify only permitted files changed
+
+```bash
+cd /Users/wxy/Desktop/Partura && git status --porcelain 2>&1 | head -20; echo "=== 文件 ==="; ls -la notes/F113_nested_tsmax_demean/ | tail -12
+```
+
+```
+ M handoff/F106_erm_mag_gap_1m/STATE.md
+ M handoff/F106_erm_mag_gap_1m/agents/lead_R1_a069d7be57c2c2603.md
+ M handoff/F108_max_ntkurt_close/agents/lead_R1_a689456224514d95b.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/agents/lead_R1_a42ab053d9b99c5cf.md
+ M handoff/F110_ret_fair_log/agents/lead_R1_a89c0f5c96d88858c.md
+ M handoff/F111_spearman_qclose/STATE.md
+ M handoff/F111_spearman_qclose/agents/lead_R1_a36c37b71e6d128ea.md
+ M handoff/F112_scale_spow_masktop/STATE.md
+ M handoff/F112_scale_spow_masktop/agents/lead_R1_a7d46ff92abd6c517.md
+ M handoff/F113_nested_tsmax_demean/STATE.md
+ M handoff/F113_nested_tsmax_demean/agents/lead_R1_ab3e4a48f7f8404ad.md
+ M handoff/F114_q25_closeret/STATE.md
+ M handoff/STATUS.md
+ M notes/F106_erm_mag_gap_1m/orders/R1.md
+ M notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md
+ M notes/F111_spearman_qclose/05_hypotheses.md
+ M notes/F112_scale_spow_masktop/journal.md
+ M notes/F113_nested_tsmax_demean/journal.md
+ M notes/F113_nested_tsmax_demean/state.md
+?? handoff/F114_q25_closeret/agents/lead_R1_aa3920568f579da79.md
+=== 文件 ===
+drwxr-xr-x@ 12 wxy  staff    384 Oct  4 13:46 .
+drwxr-xr-x@ 19 wxy  staff    608 Oct  4 13:07 ..
+-rw-r--r--@  1 wxy  staff   4248 Oct  4 13:07 01_expression.md
+-rw-r--r--@  1 wxy  staff  10430 Oct  4 13:08 02_operators.md
+-rw-r--r--@  1 wxy  staff   7986 Oct  4 13:09 03_decomposition.md
+-rw-r--r--@  1 wxy  staff   8997 Oct  4 13:23 04_grammar.md
+-rw-r--r--@  1 wxy  staff  11082 Oct  4 13:43 05_hypotheses.md
+-rw-r--r--@  1 wxy  staff  14224 Oct  4 13:11 06_baseline.md
+-rw-r--r--@  1 wxy  staff   6480 Oct  4 13:46 journal.md
+drwxr-xr-x@  3 wxy  staff     96 Oct  4 13:42 orders
+drwxr-xr-x@  3 wxy  staff     96 Oct  4 13:11 results
+-rw-r--r--@  1 wxy  staff  27298 Oct  4 13:46 state.md
+```
+
+**10-04 13:46 · Bash** — Verify F113 file changes landed
+
+```bash
+cd /Users/wxy/Desktop/Partura && git status --porcelain -- notes/F113_nested_tsmax_demean/ 2>&1; echo "=== 补注核对 ==="; grep -c "主研补注" notes/F113_nested_tsmax_demean/orders/R1.md; grep -c "H11" notes/F113_nested_tsmax_demean/05_hypotheses.md notes/F113_nested_tsmax_demean/state.md
+```
+
+```
+ M notes/F113_nested_tsmax_demean/journal.md
+ M notes/F113_nested_tsmax_demean/state.md
+=== 补注核对 ===
+1
+notes/F113_nested_tsmax_demean/05_hypotheses.md:3
+notes/F113_nested_tsmax_demean/state.md:15
+```
+
+**10-04 13:47 · Bash** — Check gitignore status and R1 tail
+
+```bash
+cd /Users/wxy/Desktop/Partura && git check-ignore -v notes/F113_nested_tsmax_demean/orders/R1.md notes/F113_nested_tsmax_demean/05_hypotheses.md 2>&1 | head -5; echo "=== R1 结尾 ==="; tail -6 notes/F113_nested_tsmax_demean/orders/R1.md
+```
+
+```
+=== R1 结尾 ===
+
+## D. 这一节不改变的东西
+
+变体还是那 10 个(不要加 c11)、tag 还是 `S1_chain` / `x1_ties`、服务器运行还是 2 次、
+仍然只用 train/valid。B 节只是在 (B) 那个已经要写的脚本里多三张小表。
+区块 1 的 `dist` 自检(复现 S0 的 0.5847)仍然是整个脚本的已知答案自检,照旧必须打印。
+```
+
+**10-04 13:47 · agent 的话**
+
+Everything landed. The amendment is complete and the order still fits its 2-run / 10-variant budget.
+
+**This round's work:** R1 had no result card (previous 主研 ran out of quota right after writing it, zero server runs happened), so per the relay rule I handed it back rather than opening a new order — but spent the round verifying it, since 执行 only sees that one sheet.
+
+The load-bearing find: I read the kernels for the three operators this factor had never used before, and `cs_rank` breaks ties with `argsort(stable=True)` — i.e. **by column order = stock code order**. That matters because `c9_rankfold` is the order's only sublimation candidate, and the order predicted its `dist` would go to ~1 without noting that this is a *cosmetic* fix: the degeneracy isn't solved, it's rewritten into stock-code order and then baked into the factor value through four more layers. In A-shares the code prefix *is* the listing board (600/000/300/688), which proxies size, listing age and price-limit band (±20% vs ±10%). So the "tie noise" would be a day-to-day-stable, apparently-tradeable, economically meaningless exposure — and one that slips past every stock diagnostic (rank correlation and rank-space linear neutralisation can't see it), which is consistent with S0's oddly low joint R² of 0.058 and all |rank corr| ≤ 0.15.
+
+I also re-derived the previous 主研's three algebra claims independently (all hold), which is what makes the `c6 == v_base` and `c5` hl=0 audit points trustworthy red lines rather than approximations.
+
+Two other semantics confirmed as the order assumed: `pow_1_5` goes through the non-sign-preserving `x^e` branch (negatives → NaN, so dropping `pow_1_5` alongside the outer `pow_2` in `c8` is required), and `cs_median` broadcasts via `expand_as` (so `c10`'s de-median is correctly written).
+
+Files touched (all within this factor's own notes):
+- `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/orders/R1.md` — appended a 主研补注 with the verified semantics, the new block 1b measurement, added decision rows, and an explicit "nothing else changes" clause
+- `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/05_hypotheses.md` — added H11, raised it to co-top priority with H1
+- `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/state.md` — full 8-section rewrite
+- `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/journal.md` — appended
+
+**10-04 13:47 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "最新工单 R1 没有结果卡(上一轮主研写完就额度中断,study.sh list 确认两个 tag 一次都没跑),按规矩交回执行而不另开工单。这一轮全部花在复核上:核对了 c8/c9/c10 依赖的三个新算子内核(pow_1_5 对负数确实返回 NaN、cs_median 确实广播中位数,工单写法正确),并独立复核了上一轮的三条代数推导(全部成立,所以 c6/c5 两个审计点是可信红线)。关键发现:cs_rank 用 argsort(stable=True) 按股票代码序打破并列,所以唯一的升华候选 c9_rankfold 的 dist≈1 是「假的修好」——退化被改写成了代码序并写进因子值,而 A 股代码前缀就是上市板块(规模/年龄/涨跌幅限制),这会变成逐日稳定、看似可交易却毫无逻辑、且躲过 rank 相关与中性化的暴露(与 S0 联合 R² 仅 0.058 自洽)。因此新增假设 H11 并在工单末尾追加「主研补注」:用 st.symbols() 加一个区块 1b(列序分位/板块占比/切割点两侧列下标之差),不额外花服务器运行,变体、tag、2 次运行预算一律不动。state.md 已覆盖重写。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
 ## 它写过 / 改过的文件
 
 - `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/orders/R1.md`
 - `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/05_hypotheses.md`
+- `/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/state.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "最新工单 R1 没有结果卡(上一轮主研写完就额度中断,study.sh list 确认两个 tag 一次都没跑),按规矩交回执行而不另开工单。这一轮全部花在复核上:核对了 c8/c9/c10 依赖的三个新算子内核(pow_1_5 对负数确实返回 NaN、cs_median 确实广播中位数,工单写法正确),并独立复核了上一轮的三条代数推导(全部成立,所以 c6/c5 两个审计点是可信红线)。关键发现:cs_rank 用 argsort(stable=True) 按股票代码序打破并列,所以唯一的升华候选 c9_rankfold 的 dist≈1 是「假的修好」——退化被改写成了代码序并写进因子值,而 A 股代码前缀就是上市板块(规模/年龄/涨跌幅限制),这会变成逐日稳定、看似可交易却毫无逻辑、且躲过 rank 相关与中性化的暴露(与 S0 联合 R² 仅 0.058 自洽)。因此新增假设 H11 并在工单末尾追加「主研补注」:用 st.symbols() 加一个区块 1b(列序分位/板块占比/切割点两侧列下标之差),不额外花服务器运行,变体、tag、2 次运行预算一律不动。state.md 已覆盖重写。",
+ "state_written": true
+}
+```
 
 ## 它拿到的任务书
 

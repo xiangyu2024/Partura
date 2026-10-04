@@ -50,3 +50,57 @@ train 多头腿 < +3% 或与 ctl_price 相关 ≥ 0.5 → 直接进读留出段,
 state.md 第 1~7 节(主研本轮原文)未改动一字。`results/` 仍为空,R1 原样待办,下一位执行从 A/B 两步开始即可。
 
 ### 2026-10-04 13:41 [auto] S1_S2 跑完(exit 97);重看结果:logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log
+
+### 2026-10-04 13:54 [主研] 第 3 轮(新工作流第 1 轮):S1_S2 的 exit 97 查清是邻居挤的、面板已全部进缓存;把丢失的「修订 A′」真正写进 R1,并把 b_lvl/b_lvlq 提前到这一次 run
+
+我是第 3 轮主研(新工作流下的第 1 轮)。最新工单 R1 还没有结果卡,按分工规矩**不另开工单** ——
+这一轮我只做了三件事:核实 R1 还能不能执行、把它改到能执行、重写 state.md。没有新的研究数字。
+
+看到了什么(都带出处):
+1. **R1 的「修订 A′」根本不在文件里。** 第 2 轮主研的 state.md 说它在 `orders/R1.md` 末尾追加了这一节,
+   但 `grep 修订 orders/R1.md` 什么也没有(文件 143 行,结尾还是「别动 scripts/…」那句)。
+   那一轮大概写完 state.md 就被打断了。→ 如果执行照原样的 R1 做,它会去 wait 一个不存在的 JSON,然后卡死。
+2. **S1_S2 失败的真正原因和第 2 轮猜的不一样。** 我把服务器日志读回来了
+   (`study.sh wait F109… S1_S2 20`,日志在 `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`):
+   - `[guard] ABORT: this process anon 3.9 GiB (limit 14.0), container anon 37.2 GiB (limit 34.0)`
+     → 我们这个进程只占 3.9 GiB,离 14 GiB 的自限很远。触发的是 `guard.py` 的 `crowd` 分支,
+     也就是**邻居**把容器撑到 37.2 GiB,我们主动让路。**不是「14 个变体的批次太大」。**
+   - `[panels] 14/14 (281s) … done in 281s` → **14 个面板全算完了,已经进共享缓存**;它死在后面的
+     `diagnostics: decay`,而 JSON 最后才写,所以什么都没留下。
+   - `[guard] got run slot 0 after 1374s` → 排队 23 分钟才拿到 slot。我核 `study.sh status` 时容器 anon 还是 38.3 GiB、
+     四个邻居在跑(F107_x2、F107_S12、F114_S1_shape、F106_x2)。
+3. **读了 `partura/runner.py`**:只有本次 run 阶段里的变体进 `ok`,decay/by_year/neutralise 只对 `ok` 做;
+   但 `corr_ids` 里属于别的阶段的变体会当 ref 载入(面板是缓存读)、照样进 **rank 相关矩阵**。
+
+判断:
+- 第 2 轮开的药方(把 S1_nodes 拆成两个 4 变体阶段)**对症不对因**,拆了不解决邻居的问题,只白花一次运行预算
+  (全研究 ≤ 8 次,已花 2 次)。这条我在 state.md §8 里明确作废了。
+- 反过来,「面板已在缓存」+「ref 白送相关行」这两件事让一次 run 能装更多有用的东西。
+  原计划里 `S2_family` 的 6 条有 4 条(b_skew1/b_skew5/b_max20/b_sig60)**只需要相关系数**,而相关系数是白送的;
+  真正需要两本书的只有 `b_lvl`/`b_lvlq` —— 它们是 x1 里多头腿最好看的一族(+3.6%/+11.7%),
+  而 `ctl_price` 自己就是 +3.9%/+11.3%。要把「这条因子没有可用多头腿」写成结论,这一族**必须有引擎口径的数字**,
+  不能只拿 numpy 说话。
+
+决定做什么:
+- 在 `orders/R1.md` 末尾补写「修订 A′(主研第 3 轮追加)」(原文一字未删,B 组 x2_incremental 不变):
+  执行先把 `b_lvl`/`b_lvlq` 整行移进新阶段 `S2_level`(`S2_family` 留 4 条),然后**一次 run**:
+  `study.sh run F109… S1_lvl S1_nodes S2_level` = **10 变体**(12 的上限内),tag `S1_lvl`。
+  工单里写清了会回来什么、不会回来什么(v_base 的 decay/逐年/中性化不会回来,S0 里有;b_skew* 的相关行会回来),
+  以及再遇到 exit 97 怎么办(看 ABORT 行的两个 anon 数字;邻居造成的就等几分钟原样重跑,这种重试不算实验预算;两次就停下照实写)。
+- 判据收紧写进 `05_hypotheses.md`:`a_sum` 在 hl 20 下 train 多头腿落在 **+3%~+5%** 的夹缝**不算 H11 成功**
+  (x1 的近亲预示它很可能正好落在这里),那时按「与 ctl_price 的相关」「对家族的残差多头腿」定,证据不足就直接读留出段。
+- 覆盖重写 state.md(8 节),§2.4 换成读日志得到的事实,§3.9/§3.10 写了为什么这么改,§8 把过期的建议作废。
+
+决定不做什么:
+- 不另开 R2(最新工单还没有结果卡)。
+- 不把 S1_nodes 拆小、不减变体、不改表达式。
+- 不为 `b_skew*`/`b_max20`/`b_sig60` 的两本书单独花一次运行,除非相关落在 0.3~0.5 说不清的区间。
+- 不深挖空头腿(用户纯多头做不了,且一半是买不进的假象)。
+
+### 2026-10-04 14:01 [auto] 启动 run S1_lvl:阶段 S1_nodes S2_level
+
+### 2026-10-04 14:07 [auto] S1_lvl 跑完(exit 0);重看结果:./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 S1_lvl
+
+### 2026-10-04 14:20 [auto] 启动 exec x2_incremental:studies/F109_erm_mag_gap_5m_tsm20/x2_incremental.py 
+
+### 2026-10-04 14:23 [auto] x2_incremental 跑完(exit 0);重看结果:logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log

@@ -43,3 +43,75 @@ state.md 已整页覆盖重写(8 节),05_hypotheses.md 末尾追加了「第 1 �
 ### 2026-10-04 13:29 [auto] 启动 run S12:阶段 S1_parts S2_memory
 
 ### 2026-10-04 13:29 [auto] 启动 exec x2:studies/F107_abs_demean_skew_low/x2_elevate.py 
+
+### 2026-10-04 13:52 [主研] 第 1 轮(第二次上岗):R1 没有结果卡、S12+x2 都还在服务器上跑,原样交回执行;等待期间核对算子源码,排掉一个假 bug、给面板不一致立了 H15
+
+**情况。** 上一次我下完 R1,执行把 S12 和 x2 都启动了(服务器作业 `635384.pt_F107_S12`、`635516.pt_F107_x2`,
+10-05 04:29 服务器时间),然后被额度中断,**一张结果卡都没写**。`study.sh list` 显示两个作业此刻都还在跑(Detached)。
+
+**决定(主线)。** 按接力规矩,**最新工单还没有结果卡就不另开工单**。R1 的三件事(收 S12、收 x2、留一份 propose 草稿)
+一条都没废,所以我**原样把 R1 交回执行**,返回 `{status: order, order: R1, kind: experiment}`。
+本轮仍算第 1 轮;下一个主研看到 `results/R1.md` 存在时才是真正的第 2 轮。
+
+**决定(顺手做的)。** 等待不是空等 —— 我用这段时间做了一件只有主研该做的事:**把载荷算子的源码核对了一遍**
+(`study.sh src`:`cross_mean`、`nanmean_last`、`cross_delay`、`ts_delay`、`cs_demean`,外加 `x1_anatomy.py:104` 的 `roll_mean`)。
+三条收获,全部写进了 state.md §2.2:
+
+1. **排掉一个假 bug,而且是关键的那一个。** config 里 `ctl_rev1` 用 `ts_delay`,而 `r_absret` / `m20_absret` /
+   `m60_absret` / `g_absidio20` 用 `cross_delay` —— 看着像不一致。源码里两者在 `d > 0` 时**逐行等价**
+   (都是 `res[d:] = x[:-d]`、其余 NaN、axis=D)。**所以 H14 的对手变体是忠实的**,确实是「日频 |特质收益| + 同样记忆」。
+   这条很要紧:H14 是全局最要紧的一条假设,要是对手变体算错了,下一轮的裁决全是垃圾。
+   反过来也要紧 —— **执行千万不要去「统一」这两个写法**,改了就和 x1 的数字不可比;我在 R1 末尾的附录里专门写了这条。
+   副作用记一笔:`cross_delay` 是**裸位移,不是「上一个有效观测」**,所以复牌日 `r_absret` 是 NaN 而不是大跳 ——
+   `r_absret` 的覆盖面比原式窄,但 `m20_absret` 过了 `cross_mean` 之后基本补上了,**H14 的主比较(m20 vs m20_absret)不受影响**。
+
+2. **把「引擎 cross_mean ≠ 滚动 nanmean」逼到了第三条解释,并立为 H15。**
+   引擎 `cross_mean` = `rolling_reduce(x, d, nanmean_last, axis=0)`,窗口左侧 NaN 补齐、`nanmean` 跳 NaN、
+   **`min_periods` 等于 1**(第 1 天就出值);x1 的 `roll_mean` 是 float64 cumsum 版的**同一个语义**(`k2 > 0.5` 才出值)。
+   **所以不是 min_periods 的差别,也不可能是浮点误差**(float64 对 `|B| ≤ 15.4` 不会差到 12.6)——
+   而 x2 §a 里写好的两个候选解释(「日历行」vs「去掉缺口」)**可能两个都对不上**。
+   剩下的解释:`cross_mean(原式, …)` 里的原式是**引擎自己重算的**,被滚动的却是**缓存面板**;
+   若引擎在表达式内部给 `cs_demean` 传了 universe/停牌 mask 而缓存面板没有,引擎那侧的 60 日窗口里可能**只剩 1 个有限值**
+   (于是 cross_mean = 那一个值,可以是 12 以上)。这条同时解释了三个观测:Spearman 0.9989(主体一致)、
+   0.27% 的**有限性**不一致、最大差 12.6(单观测窗口)。
+   **判它的数 x2 §a 已经在印了**:8 个最大差格子的 `finite days in window`、`base today`,以及 `|diff|>0.05` 那段的
+   `mean finite-days-in-window`(对比 all cells)、`share whose base is NaN today`。
+   **个位数 → H15 成立**:不一致是上市/复牌边界伪影,只涉 0.27% 格子,**x1 的时间尺度表(= 候选名单所依赖的那张表)排序可信**;
+   **几十天 → H15 被否定**:两个面板真是两个东西,2.3d 和候选名单都要用引擎数字重建。
+   **这决定了下一轮先读哪张表**,所以我把它写成了 §6 的第一个分叉:先读 §a/H15,再读 H14。
+
+3. `cs_demean` 的语义核对无误(减当天所有有限值的截面均值),证实 `02_operators.md`。
+
+**决定不做的事。** 不新开工单、不新建阶段、不加变体、不改 config(尤其不去统一 `cross_delay`/`ts_delay`)、
+不重跑 S12/x2(正在跑)、不去「修」面板不一致(那是取证对象 H15,不是 bug)、不碰别的因子的文件。
+没有任何旧假设的状态因本轮而改变 —— 本轮没有新的实验结果,只有源码事实。
+
+**落盘。** state.md 整页覆盖重写(8 节,新增 H15、把源码核对写进 §2.2 和 §3.4、把 §6 的读表顺序改成「先 §a 再 H14」);
+R1 末尾追加「附录」一段:三条「别踩」(别统一 cross_delay、别修面板不一致、别替主研判断哪个面板是真的)
++ 一句「S12/x2 已在跑,直接 wait,不要重跑」—— **没有改 R1 要做的事**。
+
+### 2026-10-04 13:59 [auto] S12 跑完(exit 0);重看结果:./scripts/study.sh digest F107_abs_demean_skew_low S12
+
+### 2026-10-04 14:01 [auto] x2 跑完(exit 0);重看结果:logs/F107_abs_demean_skew_low_x2.log
+
+### 2026-10-04 14:17 [执行] R1:S12(22变体)+x2(a-f六节)已收,均exit 0;结果卡写好,B/C两项数字有结构性缺口
+
+做了什么:接手时 S12、x2 已在服务器跑(上一轮额度中断前起的),本轮未新起任何运行,只 wait+digest 收尾,
+跑了一次 propose 草稿。写了结果卡 notes/F107_abs_demean_skew_low/results/R1.md 与三份事实类 notes
+(07_S1_parts.md、07_S2_memory.md、07x_2_elevate.md)。
+
+关键数字(全部在结果卡里逐项列出,这里只摘最关键的几个):
+- H14(m20/m60 vs 对应的 absret 版本,净超额 tr/va):m20 +4.8%/+7.3% vs m20_absret +4.9%/+13.8%;
+  m60 +5.6%/+6.5% vs m60_absret +6.2%/+14.8%。g_absidio20 的表达式与 m20_absret 逐字相同。
+- H11 固定半衰期(hl20,train,净超额):v_base +1.1%,m10 +4.6%,m20 +4.8%,m30 +3.9%,m60 +3.3%,m120 +1.0%。
+  但**这次引擎输出里没有 valid 侧的半衰期扫描、也没有跨变体同半衰期的"毛"超额**(JSON 的 sweep 只在 train、只有
+  long_ann 没有 long_gross_ann)——工单 B 项要的"train 与 valid 都要"的毛/净/换手对照表,valid 那半、毛超额那列拿不到,
+  已在结果卡 B 节写清楚,没有新起运行去补。
+- C 项同理:g_absidio20/g_kurtlow20/known_stdamt_mean30 不在标准 diagnostics.neutralise 里(gates 本来就不自动进这张表),
+  用 x1/x2 的替代数字顶上了(v_base 对 g_absidio20 残差多头毛 +2.9%;m20/m60 对 kurtLow 残差多头毛 +11.3%/+9.2%)。
+- H15(x2 §a 取证):cross_mean 面板差集中在"窗口内仅 1 个有限观测"的边界格子,0.27% 的格子 |diff|>0.05,涉及 798 只股票;
+  但 m10~m120 的 book 级 Lnet,x1 numpy 与引擎的差全部 ≤0.6pp(在 ±3pp 噪声带以内)。两套数字都抄进了结果卡,没有替主研判哪个面板对。
+- H13(x2 §b):mean20(|B|+λB) train 选 λ=+0.6(+7.8%),这个 λ 在 valid 只有 +1.4%;valid 自己在同一网格里最好是 λ=−0.3(+6.7%),
+  方向相反。mean60 的版本没有这个问题。
+- x1 vs 引擎:p_signed/p_close/r_kurtret/r_kurtlow/r_mktcorr 逐位对齐;p_nodemean/p_rank 的空头腿、多空夏普差 1.4pp/0.06~0.23,
+  差异来源不明;m10~m120 差 ≤0.6pp。

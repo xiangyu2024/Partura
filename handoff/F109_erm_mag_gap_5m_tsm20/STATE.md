@@ -1,6 +1,6 @@
 # F109_erm_mag_gap_5m_tsm20 — 交接状态
 
-_自动生成于 2026-10-04 13:41(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 14:24(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_5m_tsm20(批次 B01_single_factors)
 - 表达式:`ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)`
@@ -9,24 +9,26 @@ _自动生成于 2026-10-04 13:41(`python scripts/recorder.py --brief F109_erm_m
 
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
-- agent `study:F109_erm_mag_gap_5m_tsm20#2`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
 - agent `study:F109_erm_mag_gap_5m_tsm20#3`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
 - agent `study:F109_erm_mag_gap_5m_tsm20`(wf_08351f46-81b):中断,最后动作 10-04 13:10 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/study_aac3edb482327d547.md`
 - agent `lead:F109_erm_mag_gap_5m_tsm20#1`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:22 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/lead_R1_af3d7357655388cba.md`
 - agent `work:F109_erm_mag_gap_5m_tsm20#1`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:27 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/work_R1_a4c38d50d9b987bf4.md`
 - agent `lead:F109_erm_mag_gap_5m_tsm20#2`(wf_3cafb924-05e):失败,几乎没做事(不用看)
 - agent `lead:F109_erm_mag_gap_5m_tsm20#2`(wf_3cafb924-05e):失败,几乎没做事(不用看)
-- agent `lead:F109_erm_mag_gap_5m_tsm20#1`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
+- agent `lead:F109_erm_mag_gap_5m_tsm20#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 13:55 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/lead_R1_a42ab053d9b99c5cf.md`
+- agent `work:F109_erm_mag_gap_5m_tsm20#1`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F109_erm_mag_gap_5m_tsm20` 看服务器上的 tag,`./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 <tag>` 重看结果)。
 
-## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-04 13:31 更新)—— **先读这个文件**
+## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-04 13:53 更新)—— **先读这个文件**
 
-# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 2 轮重写,2026-10-04)
+# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 3 轮重写,2026-10-04)
 
-> 这一页由**主研**整个覆盖重写(第 2 轮)。第 1 轮主研写的判断我全部核对后保留下来(事实与出处都没变),
-> 这一轮新增的是**一条把上一张工单的前提推翻了的运行事实**:`S1_S2` 没跑成(exit 97)。
-> 下一位主研只看得到文件 —— 这页写的是判断,事实的出处都标了。
+> 这一页由**主研**整个覆盖重写(第 3 轮;新工作流下的第 1 轮)。第 1 轮主研的判断、第 2 轮主研核对过的事实,
+> 我逐条核对后保留(数字与出处都没变)。这一轮**新增的全部是运行层面的事实**,而且其中一条
+> **推翻了第 2 轮主研的诊断**:`S1_S2` 的 exit 97 不是「批次太大」,是邻居把容器内存撑满、我们主动让路,
+> 而且 **14 个面板其实全算完了、已经进共享缓存**。
+> 下一位主研只看得到文件 —— 这页写的是判断,事实都标了出处。
 
 ---
 
@@ -34,20 +36,22 @@ _自动生成于 2026-10-04 13:41(`python scripts/recorder.py --brief F109_erm_m
 
 读树与基线已经做完(S0 + 自写探针 x1),**这棵树的钱全在空头腿、多头腿在 train 上是负的(−4.6%,多头最优半衰期 hl 20)**,
 而且空头腿有一半是「次日买不进」撑出来的。
-**这一轮(第 2 轮)查出来的关键事实:上一位研究员启动的 `S1_S2`(8+6=14 变体)已经结束,但是 `exit 97`(内存守卫让路)——
-没有 JSON、没有本地日志,14 个变体一个都没算出来。** 工单 R1 的 A 组前提(「已经在跑,只收不重跑」)因此失效。
-我没有另开工单(按分工规矩:最新工单还没有结果卡就不另开),而是在 `orders/R1.md` 末尾加了一节
-**「修订 A′(主研第 2 轮)」**:A 组改成**重跑 `S1_nodes` 单独一个阶段(8 变体,新 tag `S1_nodes`)**,
-`S2_family` 推到 R2;B 组(自写脚本 `x2_incremental`)原样不变。
-**下一步 = 执行按修订后的 R1 做两件事:重跑 `S1_nodes` + 跑 `x2_incremental`,写结果卡 `results/R1.md`。**
-我的倾向性判断仍然是结论会落在**分辨**(多头腿不可用 + 对已知家族无增量),但还缺两块坐实的证据:
-S1 的引擎口径复核(numpy 重构说的事要在官方口径上确认)与 x2 的配对差(增量是否超噪声)。
+**这一轮(第 3 轮)干的事**:① 把 `S1_S2` 失败的服务器日志读了出来 —— 它**不是**批次太大撑爆内存
+(本进程只占 3.9 GiB / 自限 14 GiB),是**邻居**把容器撑到 37.2 GiB、守卫让路;而且 **14 个面板已经算完并进了共享缓存**,
+死在后面的 `diagnostics: decay`(§2.4)。② 第 2 轮主研说要追加、但实际没写进文件的「修订 A′」,我补写进了
+`orders/R1.md`(**现在文件里真的有了**),并且按新诊断改了做法:**不拆成 4+4**(没用,白花预算),而是把
+`S2_family` 里最值钱的 `b_lvl`/`b_lvlq` 挪到新阶段 `S2_level`,**一次 run 跑 `S1_nodes` + `S2_level` = 10 变体**(§3.9)。
+③ 读了 `partura/runner.py`,把「这一次会回来什么、不会回来什么」写进工单(§3.10)—— `corr_ids` 里别的阶段的变体
+会作为 ref 白送 rank 相关行,所以剩下的 `S2_family` 四条很可能**根本不需要再跑一次**。
+**下一步 = 执行按 `orders/R1.md` 的「修订 A′」做两件事:跑 `S1_lvl`(阶段 `S1_nodes` + `S2_level`)+ 跑 `x2_incremental`,写 `results/R1.md`。**
+我的倾向性判断仍然是结论会落在**分辨**(多头腿不可用 + 对已知家族无增量),但还缺三块坐实的证据:
+`a_sum` 能不能救出多头腿(H11)、`b_lvl` 是不是就是 `ctl_price`(H13,引擎口径)、相对已知家族的增量是否超噪声(H14,x2 的配对差)。
 
 ---
 
-(…全文 16368 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
+(…全文 18881 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
 
-## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:4 条,其中研究员自己写的 2 条)
+## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:9 条,其中研究员自己写的 3 条)
 
 最近的 12 条(完整的看文件):
 
@@ -99,6 +103,60 @@ state.md 第 1~7 节(主研本轮原文)未改动一字。`results/` 仍为空,R
 
 ### 2026-10-04 13:41 [auto] S1_S2 跑完(exit 97);重看结果:logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log
 
+### 2026-10-04 13:54 [主研] 第 3 轮(新工作流第 1 轮):S1_S2 的 exit 97 查清是邻居挤的、面板已全部进缓存;把丢失的「修订 A′」真正写进 R1,并把 b_lvl/b_lvlq 提前到这一次 run
+
+我是第 3 轮主研(新工作流下的第 1 轮)。最新工单 R1 还没有结果卡,按分工规矩**不另开工单** ——
+这一轮我只做了三件事:核实 R1 还能不能执行、把它改到能执行、重写 state.md。没有新的研究数字。
+
+看到了什么(都带出处):
+1. **R1 的「修订 A′」根本不在文件里。** 第 2 轮主研的 state.md 说它在 `orders/R1.md` 末尾追加了这一节,
+   但 `grep 修订 orders/R1.md` 什么也没有(文件 143 行,结尾还是「别动 scripts/…」那句)。
+   那一轮大概写完 state.md 就被打断了。→ 如果执行照原样的 R1 做,它会去 wait 一个不存在的 JSON,然后卡死。
+2. **S1_S2 失败的真正原因和第 2 轮猜的不一样。** 我把服务器日志读回来了
+   (`study.sh wait F109… S1_S2 20`,日志在 `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`):
+   - `[guard] ABORT: this process anon 3.9 GiB (limit 14.0), container anon 37.2 GiB (limit 34.0)`
+     → 我们这个进程只占 3.9 GiB,离 14 GiB 的自限很远。触发的是 `guard.py` 的 `crowd` 分支,
+     也就是**邻居**把容器撑到 37.2 GiB,我们主动让路。**不是「14 个变体的批次太大」。**
+   - `[panels] 14/14 (281s) … done in 281s` → **14 个面板全算完了,已经进共享缓存**;它死在后面的
+     `diagnostics: decay`,而 JSON 最后才写,所以什么都没留下。
+   - `[guard] got run slot 0 after 1374s` → 排队 23 分钟才拿到 slot。我核 `study.sh status` 时容器 anon 还是 38.3 GiB、
+     四个邻居在跑(F107_x2、F107_S12、F114_S1_shape、F106_x2)。
+3. **读了 `partura/runner.py`**:只有本次 run 阶段里的变体进 `ok`,decay/by_year/neutralise 只对 `ok` 做;
+   但 `corr_ids` 里属于别的阶段的变体会当 ref 载入(面板是缓存读)、照样进 **rank 相关矩阵**。
+
+判断:
+- 第 2 轮开的药方(把 S1_nodes 拆成两个 4 变体阶段)**对症不对因**,拆了不解决邻居的问题,只白花一次运行预算
+  (全研究 ≤ 8 次,已花 2 次)。这条我在 state.md §8 里明确作废了。
+- 反过来,「面板已在缓存」+「ref 白送相关行」这两件事让一次 run 能装更多有用的东西。
+  原计划里 `S2_family` 的 6 条有 4 条(b_skew1/b_skew5/b_max20/b_sig60)**只需要相关系数**,而相关系数是白送的;
+  真正需要两本书的只有 `b_lvl`/`b_lvlq` —— 它们是 x1 里多头腿最好看的一族(+3.6%/+11.7%),
+  而 `ctl_price` 自己就是 +3.9%/+11.3%。要把「这条因子没有可用多头腿」写成结论,这一族**必须有引擎口径的数字**,
+  不能只拿 numpy 说话。
+
+决定做什么:
+- 在 `orders/R1.md` 末尾补写「修订 A′(主研第 3 轮追加)」(原文一字未删,B 组 x2_incremental 不变):
+  执行先把 `b_lvl`/`b_lvlq` 整行移进新阶段 `S2_level`(`S2_family` 留 4 条),然后**一次 run**:
+  `study.sh run F109… S1_lvl S1_nodes S2_level` = **10 变体**(12 的上限内),tag `S1_lvl`。
+  工单里写清了会回来什么、不会回来什么(v_base 的 decay/逐年/中性化不会回来,S0 里有;b_skew* 的相关行会回来),
+  以及再遇到 exit 97 怎么办(看 ABORT 行的两个 anon 数字;邻居造成的就等几分钟原样重跑,这种重试不算实验预算;两次就停下照实写)。
+- 判据收紧写进 `05_hypotheses.md`:`a_sum` 在 hl 20 下 train 多头腿落在 **+3%~+5%** 的夹缝**不算 H11 成功**
+  (x1 的近亲预示它很可能正好落在这里),那时按「与 ctl_price 的相关」「对家族的残差多头腿」定,证据不足就直接读留出段。
+- 覆盖重写 state.md(8 节),§2.4 换成读日志得到的事实,§3.9/§3.10 写了为什么这么改,§8 把过期的建议作废。
+
+决定不做什么:
+- 不另开 R2(最新工单还没有结果卡)。
+- 不把 S1_nodes 拆小、不减变体、不改表达式。
+- 不为 `b_skew*`/`b_max20`/`b_sig60` 的两本书单独花一次运行,除非相关落在 0.3~0.5 说不清的区间。
+- 不深挖空头腿(用户纯多头做不了,且一半是买不进的假象)。
+
+### 2026-10-04 14:01 [auto] 启动 run S1_lvl:阶段 S1_nodes S2_level
+
+### 2026-10-04 14:07 [auto] S1_lvl 跑完(exit 0);重看结果:./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 S1_lvl
+
+### 2026-10-04 14:20 [auto] 启动 exec x2_incremental:studies/F109_erm_mag_gap_5m_tsm20/x2_incremental.py
+
+### 2026-10-04 14:23 [auto] x2_incremental 跑完(exit 0);重看结果:logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log
+
 ## 工单与结果卡(`notes/F109_erm_mag_gap_5m_tsm20/orders/`、`notes/F109_erm_mag_gap_5m_tsm20/results/`)
 
 - R1:工单 有,结果卡 **还没有(待执行)**
@@ -110,29 +168,34 @@ state.md 第 1~7 节(主研本轮原文)未改动一字。`results/` 仍为空,R
   v_base
 - **S1_nodes**(8 个变体):两本书各自由哪个节点决定:分母上的 ε(封板日的爆炸)、减法、上侧还是下侧、5 分钟对 1 分钟的尺度?
   a_eps3、a_sum、a_up、a_dn、a_1m、a_q5、a_evt、a_sig
-- **S2_family**(6 个变体):规则区间是不是「偏度 / 彩票 / 低价」的另一种写法?多头腿在两侧的水平里还是在两侧的差里?
-  b_skew1、b_skew5、b_max20、b_lvl、b_lvlq、b_sig60
+- **S2_family**(4 个变体):规则区间是不是「偏度 / 彩票 / 低价」的另一种写法?多头腿在两侧的水平里还是在两侧的差里?
+  b_skew1、b_skew5、b_max20、b_sig60
+- **S2_level**(2 个变体):「水平」(上下两侧超阈均值之和)的多头腿是不是就是低价股效应?
+  b_lvl、b_lvlq
 
 ## 已经跑过的服务器运行(本地已拉回的;服务器上可能还有没拉回的:`./scripts/study.sh list F109_erm_mag_gap_5m_tsm20`)
 
 - `S0_baseline`  10-04 11:54  1 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 S0_baseline`
+- `S1_lvl`  10-04 14:06  10 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 S1_lvl`
 - `x1_anatomy`(自写脚本的输出)  10-04 12:36  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x1_anatomy.log`
 - `S1_S2`(自写脚本的输出)  10-04 13:19  exit 97  → `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`
+- `x2_incremental`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log`
 
 ## 已写的 notes(`notes/F109_erm_mag_gap_5m_tsm20/`)
 
 - `02_operators.md`  2800 字节  10-04 13:01
 - `03_decomposition.md`  2451 字节  10-04 13:01
 - `04_grammar.md`  1821 字节  10-04 13:01
-- `05_hypotheses.md`  15885 字节  10-04 13:21
+- `05_hypotheses.md`  17555 字节  10-04 13:53
 - `06_baseline.md`  3350 字节  10-04 13:01
 - `07x_1_anatomy.md`  10490 字节  10-04 12:46
-- `journal.md`  4821 字节  10-04 13:41
-- `state.md`  28898 字节  10-04 13:31
+- `journal.md`  9544 字节  10-04 14:23
+- `state.md`  32881 字节  10-04 13:53
 
 ## 自写的探针与分析脚本(`studies/F109_erm_mag_gap_5m_tsm20/`)
 
 - `x1_anatomy.py`  10-04 12:17  F109 x1: what the tree is really ranking -- the epsilon blow-up anatomy.
+- `x2_incremental.py`  10-04 14:19  F109 x2: for a long-only user, does this tree add anything to the known amount-
 
 ## 结构化结果(`handoff/F109_erm_mag_gap_5m_tsm20/results/`)
 

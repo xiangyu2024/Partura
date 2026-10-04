@@ -1,7 +1,7 @@
 # Partura study F113_nested_tsmax_demean  (挖掘 / #1375)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F113_nested_tsmax_demean
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "两层嵌套的「日轴 MAX 记忆 → 截面去均值 → 平方折叠」(只用 Ret):最终排序的是「近 54 日极端收益幅度离当日截面均值的距离」,sign=-1 即做多「极端程度最接近截面典型值、且 30 日内没偏离过」的股票"
 expression: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))"
 baseline_id: v_base
 
@@ -47,12 +47,14 @@ gates:
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
+corr_ids: [c1_b_max5, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c5_nopow15, c6_nomul_nosub,
+           c7_nofold_in, c8_nofold_out, c9_rankfold, c10_medfold]
 
 diagnostics:
   decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  by_year:    [v_base, c3_g_fold1, c9_rankfold]
+  neutralise: [v_base, c3_g_fold1, c9_rankfold]
+  profile:    [v_base, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c8_nofold_out, c9_rankfold]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -62,3 +64,17 @@ stages:
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))", why: "原始表达式"}
+
+  - id: S1_chain
+    question: "沿这条不分支的链逐节点消融 + 把外层折叠的中心挪到中位数/秩空间:多头腿是差还是没有意义?哪些节点是多余的?"
+    variants:
+      - {id: c1_b_max5, group: isolate, expr: "ts_max(day_mean(Ret), 5)", why: "H4:最内层,无去均值无折叠 —— 近 5 日最好的一天。经典 MAX/lottery 因子的直写。它的多头腿直接回答「做多低 MAX」能不能当纯多头"}
+      - {id: c2_e_rel34, group: isolate, expr: "ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)", why: "H4:节点 E = 34 日相对 MAX。与 c1 比单独检验第一次 cs_demean(相对化)是否 load-bearing;若 c2 拿到 v_base 多空夏普(2.59)的大部分,整棵树的差价就是 MAX 效应"}
+      - {id: c3_g_fold1, group: isolate, expr: "ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)", why: "H4:节点 G = 加上第一次平方折叠 + 20 日 max。G 是整棵树最后一个单调的幅度量。与 c2 比:折叠(把「连最好的一天都远低于截面」的弱股折进极端端)是加信息还是毁信息"}
+      - {id: c4_nodemean_out, group: ablate, expr: "ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 30)", why: "H5:这在代数上就是「把第二次 cs_demean 删掉的原式」—— 去掉它之后外层 mul/pow_2/ts_max30/pow_1_5 全作用在恒非负的 G 上、全是单调递增变换、且与 ts_max 可交换,整块塌成 ts_max(G,30) 的单调函数(秩完全相同,推导见 04_grammar.md §5)。所以这一条检验:外层四个算子除了通过第二次 cs_demean,对排序有没有贡献"}
+      - {id: c5_nopow15, group: ablate, expr: "ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30)", why: "H8:只删最外层 pow_1_5,sub/mul 原样保留。pow_1_5 在恒非负输入上严格单调递增 → hl=0 时当天截面排序与 v_base 完全相同,只能通过「先 EMA 后排序」影响交易信号。固定半衰期表的 hl=0 行必须等于 v_base;hl=1 行的差就是「6 次齐次的极端尺度在 EMA 里造成的那部分」"}
+      - {id: c6_nomul_nosub, group: ablate, expr: "pow_1_5(ts_max(pow_2(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20))), 30))", why: "H9 代数审计:删掉 sub(.,-5) 与 mul(.,5) 两个常量节点。预测与 v_base 逐项相同、rank 相关 = 1.000(sub 的常数被 cs_demean 精确抵消;mul 的正常数只留 125x 正尺度,EMA 线性、十分位排序对正尺度不变)。不相同就说明引擎对裸常量的处理与源码读出来的不一样。这一条同时是 c7~c10 的参照基准"}
+      - {id: c7_nofold_in, group: ablate, expr: "pow_1_5(ts_max(pow_2(cs_demean(ts_max(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30), 20))), 30))", why: "在 c6 基础上只删内层 pow_2。两层 ts_max 因此相邻、代数上合并成 ts_max(D,49)(写成嵌套形式是因为 49 不在 ts_max 的窗口池 [1,5,10,20,30,40,50] 里)。只剩一次折叠,检验「两次折叠是不是都需要」"}
+      - {id: c8_nofold_out, group: ablate, expr: "ts_max(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)), 30)", why: "H2/H3:在 c6 基础上删外层 pow_2,并且**必须同时删 pow_1_5** —— cs_demean 的输出可正可负,而 pow_1_5 的内核对 e>1 走不保号分支,负数输入会静默变成 NaN(02_operators.md 的坑在这里会被触发)。这把外层单调化,因子变成「30 日内 G 相对截面均值的最大带符号偏离」。若多头腿在这里明显变好,说明外层折叠就是毁掉多头腿的那一步"}
+      - {id: c9_rankfold, group: sublimate, expr: "pow_1_5(ts_max(pow_2(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), 30))", why: "H2/H8 升华候选:在 c6 的外层 cs_demean 之前插入 cs_rank。原式折叠的中心是 mean_cs(G),而 G 右偏极重(平方后再取两次 max),均值被右尾拖到远高于中位数的位置,所以「离均值近」不是「在分布中间」而是「在一条偏高分位的窄带上」。秩空间折叠把中心移到中位数,同时把 6 次齐次的极端尺度压进 [0,1]。若 valid 分位剖面 Q3 峰值(+11.5%)代表的「中间最赚钱」是真的,这一条的多头腿应明显好于原式"}
+      - {id: c10_medfold, group: sublimate, expr: "pow_1_5(ts_max(pow_2(sub(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), cs_median(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), 30))", why: "H2 的另一半:只把折叠中心从均值挪到中位数,不压尺度。cs_median 的内核返回「当天截面中位数广播成全形状」(expand_as),所以 sub(G, cs_median(G)) 就是去中位数。c9 与 c10 一起把「中心错位」和「尺度过大/EMA」两个嫌疑分开:两条都变好 → 是中心错位;只有 c9 变好 → 是尺度"}

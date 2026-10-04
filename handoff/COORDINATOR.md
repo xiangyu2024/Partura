@@ -24,6 +24,10 @@ _更新:2026-10-04 13:45 PDT(用户重置额度之后)。_
    Partura 的内存守卫要求 < 30 GiB 才开工(实际上限约 40 GiB,超了会 OOM 连带杀掉邻居),所以任务都在排队。
    这是对的,**不要绕过守卫、不要动邻居的进程**;排队等待上限已从 45 分钟调到 3 小时(`PARTURA_MEM_WAIT_S`),超时退出码 97,执行会重跑。
 
+3. **14:30 起服务器全部归 Partura**(用户说另一个会话的任务已停;实测 GPU 0 MiB、容器 anon 0.5 GiB、没有别的 screen)。
+   并发槽从 3 调到 6(`scripts/study.sh` 里的 `PARTURA_SLOTS`);引擎求值仍然一次一个(GPU 锁),诊断可以并行。
+   如果以后又有邻居任务:把槽调回 3,其余守卫逻辑不用动。
+
 **如果一切都停了**(额度耗尽、Mac 睡眠):什么都不会丢。按 `handoff/README.md`「接着跑」一节:
 `python scripts/recorder.py --state batches/B01_single_factors.yaml` → 去掉 done 的 → 起 `workflows/partura_tiered.js`。
 

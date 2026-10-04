@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-04 13:38(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 14:29(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -9,41 +9,49 @@ _自动生成于 2026-10-04 13:38(`python scripts/recorder.py --brief F110_ret_f
 
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
-- agent `study:F110_ret_fair_log#3`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `study:F110_ret_fair_log`(wf_08351f46-81b):中断,最后动作 10-04 13:10 → `handoff/F110_ret_fair_log/agents/study_ab25579f64bc33601.md`
 - agent `lead:F110_ret_fair_log#1`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:19 → `handoff/F110_ret_fair_log/agents/lead_R1_a59818aeb306ac374.md`
 - agent `work:F110_ret_fair_log#1`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:24 → `handoff/F110_ret_fair_log/agents/work_R1_a837b621766f386da.md`
 - agent `lead:F110_ret_fair_log#2`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:28 → `handoff/F110_ret_fair_log/agents/lead_R2_af37c713ede82119d.md`
 - agent `work:F110_ret_fair_log#2`(wf_3cafb924-05e):失败,几乎没做事(不用看)
 - agent `work:F110_ret_fair_log#2`(wf_3cafb924-05e):失败,几乎没做事(不用看)
-- agent `lead:F110_ret_fair_log#1`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
+- agent `lead:F110_ret_fair_log#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 13:52 → `handoff/F110_ret_fair_log/agents/lead_R1_a89c0f5c96d88858c.md`
+- agent `work:F110_ret_fair_log#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 14:20 → `handoff/F110_ret_fair_log/agents/work_R1_aa36e98ed8291d0cb.md`
+- agent `lead:F110_ret_fair_log#2`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F110_ret_fair_log` 看服务器上的 tag,`./scripts/study.sh digest F110_ret_fair_log <tag>` 重看结果)。
 
-## 研究现状(`notes/F110_ret_fair_log/state.md`,10-04 13:27 更新)—— **先读这个文件**
+## 研究现状(`notes/F110_ret_fair_log/state.md`,10-04 13:50 更新)—— **先读这个文件**
 
-# F110_ret_fair_log — 研究现状(主研第 2 轮重写,2026-10-04)
+# F110_ret_fair_log — 研究现状(主研第 3 轮重写,2026-10-04)
 
+> 轮次说明:日志里主研已经写过「第 1 轮」「第 2 轮」;本轮是**第 3 轮主研**(工作流重启后它自己数的是「第 1 轮」,
+> 别被工作流的计数搞混 —— 以 `journal.md` 的条数为准)。
 > 事实类 notes(`01_expression.md`、`02_operators.md`、`03_decomposition.md`、`04_grammar.md`、`06_baseline.md`)仍然有效,照用、不要重写
 > (但 02/03 里「成交量脉冲处的价格冲击」那个读法已被实测修正,见本页 2.3)。假设表全文在 `05_hypotheses.md`。
-> **第 2 轮没有新的实验结果可读** —— 第 1 轮下的工单 R1 一次服务器运行都没跑成(上一位执行的会话因用户额度耗尽空转)。
-> 所以这一页的科学内容 = 第 1 轮的内容,原样有效;改动只在第 1、3、8 节(把「R1 未执行」这件事写清楚)。
+> **第 3 轮仍然没有新的实验结果可读** —— 工单 R1 到现在一次服务器运行都没跑成(前两次执行的会话都因用户额度耗尽空转)。
+> 所以这一页**关于因子本身**的科学内容 = 第 1 轮的内容,原样有效,假设表一个字没动(没有证据就不动裁决)。
+> 本轮的新增内容全部是**关于 `x1_anatomy.py` 这个脚本的读码事实**(第 2.5 节、第 3 节第 9 条、第 8 节)——
+> 它们决定 R1 能不能跑成,不改变任何关于因子的判断。
 
 ## 1. 一句话现状
 
-**研究卡在「等 R1 的结果」这一步,不是卡在思路上。** 已经读过并裁决的只有 x1 的 0 段(自检)和 B 段前半
-(「S 到底是什么」):**这棵树名字上像事件研究,实测是「两个几乎同一件事的日内波动估计之差」,
-而且其中约四分之一到三分之一是收盘集合竞价的 241 网格版式伪影,权重还随年份翻倍**。
-结构替换(C)、半衰期延长(D)、分位剖面(E)**仍然全部没有结果**:x1 被内存守卫在 B 段中途打断(exit 97),
-而第 1 轮为此下的工单 **R1 的两次 exec 预算一次都没用掉**(服务器上至今只有 `S0_baseline`、`x1`,无 `x1c`/`x1d`,无正在跑的任务;
-本轮第一条命令 `study.sh list` 已再次确认)。
-**下一步:原样执行 R1**(`notes/F110_ret_fair_log/orders/R1.md`,kind: experiment,两次 exec = `x1c: B D`、`x1d: C E`)。
-这张工单第 2 轮**没有改动、没有作废、没有被新工单取代** —— 它问的问题一个都还没被回答,其中 **D 段(半衰期 10~120)
-是对用户口径最值钱的一问**(多头腿净超额在半衰期 20 处还在单调改善,而 20 只是口径网格的上限)。
+**研究卡在「等 R1 的结果」这一步,不是卡在思路上;本轮(第 3 轮)做的是把 R1 变成「执行照着做就一定能跑成」。**
+已经读过并裁决的只有 x1 的 0 段(自检)和 B 段前半(「S 到底是什么」):**这棵树名字上像事件研究,
+实测是「两个几乎同一件事的日内波动估计之差」,而且其中约四分之一到三分之一是收盘集合竞价的 241 网格版式伪影,
+权重还随年份翻倍**。结构替换(C)、半衰期延长(D)、分位剖面(E)**仍然全部没有结果**:
+x1 被内存守卫在 B 段中途打断(exit 97),而 R1 的两次 exec 预算**到现在一次都没用掉**
+(服务器上至今只有 `S0_baseline`、`x1`,无 `x1c`/`x1d`,无正在跑的任务;本轮第一条 `study.sh list` 已再次确认)。
 
-(…全文 13201 字符,读 `notes/F110_ret_fair_log/state.md`)
+**下一步:执行 R1(kind: experiment,两次 exec = `x1c: 0 B D`、`x1d: C E`)。**
+R1 的主体第 3 轮**没有改动、没有作废、没有被新工单取代**(tag / section / 变体 / 半衰期网格 / 口径 / 判据 / 2 次运行上限
+一个字都没改),它问的 Q1~Q4 一个都还没被回答,其中 **D 段(半衰期 5~120)是对用户口径最值钱的一问**
+(多头腿净超额在半衰期 20 处还在单调改善,而 20 只是口径网格的上限)。
+本轮**只在 R1 末尾追加了一节「第 3 轮主研补注」**:把 R1 原文让执行自己读码确认的两个问题替它确认完了,
+并堵掉三个会白烧一次运行的坑(详见 2.5 与第 3 节第 9 条)。**用户已重置额度,这一轮执行应当真的能跑起来。**
 
-## 研究日志(`notes/F110_ret_fair_log/journal.md`:4 条,其中研究员自己写的 3 条)
+(…全文 17252 字符,读 `notes/F110_ret_fair_log/state.md`)
+
+## 研究日志(`notes/F110_ret_fair_log/journal.md`:10 条,其中研究员自己写的 5 条)
 
 最近的 12 条(完整的看文件):
 
@@ -118,9 +126,67 @@ B 段前半已读,`S` 被判为「两个几乎同一件事的日内波动估计�
 流程规定第 7 轮还没读留出段就必须进入读留出段那一步 —— 如果 R2 的「表达式化 + G/H」拿不到服务器时间,
 就要考虑直接拿现有 train/valid 证据定候选、提前进入 (b)。已写进 state.md 第 7 节。
 
+### 2026-10-04 13:51 [主研] 第 3 轮:R1 仍无结果卡(额度已重置),不另开工单;读码替执行确认 `0 B D` 并堵掉三个会白烧一次运行的坑
+
+**看到了什么。** `brief` + `./scripts/study.sh list F110_ret_fair_log` 第三次确认:服务器上仍然只有 `S0_baseline`(exit 0)和
+`x1`(exit 97),没有 `x1c`/`x1d`,没有正在跑的任务;`notes/F110_ret_fair_log/results/` 为空。
+**R1 的两次 exec 预算到现在一次都没用掉** —— 第 1、2 轮的执行都因用户额度耗尽空转。用户这次已重置额度。
+
+**判断。** 本轮同样**没有新的实验读数**,所以假设表一条都不动(没有证据就不改裁决)。关于因子的现状仍是第 1 轮的结论:
+`S` = 「两个几乎同一件事的日内波动估计之差(两侧只差 ~11%)+ 一块收盘集合竞价的 241 网格版式伪影(触发占比 0.450,
+2018H1 0.242 → valid 0.600)」;H3 被否定、H1 加强、H13 升级为头号嫌疑;C/D/E 全部无结果。
+
+**决定做什么。** 按接力规矩(最新工单还没有结果卡 ⇒ 不另开工单),**不下新工单、不改 R1 主体**,把 R1 交回执行
+(status: order / R1 / experiment)。但**没有重复第 2 轮那种「原样交回」** —— R1 已经连续两轮没跑成,所以本轮去读了
+`x1_anatomy.py` 和 `scripts/study.sh` 的源码,把 R1「要做的事」第 1 步**委托给执行自己判断的两个问题替它判完**,
+并发现三个会白烧一次运行预算的坑。全部写进 state.md 新增的 2.5 节,并作为「第 3 轮主研补注」追加到 `orders/R1.md` 末尾:
+
+- **(A)`SECTIONS` 是集合、section 顺序由源码写死**,且 0 段有自己的 `if "0" in SECTIONS`(第 133 行)⇒
+  **传 `B D` 会把 canary 整段跳过**。第 1 次运行必须传 **`0 B D`**。这个风险是实的:R1 第 2 步写的是
+  「canary 对不上就停下来」,而照字面跑 `B D` 时 canary 根本不打印,很可能被误判成失败而白烧一次运行。
+- **(B)D 段不依赖 `SIG`**(只用 `T`/`D`/`sigma`;`SIG` 的消费者只有 E/G/H)⇒ `0 B D` 不会 KeyError。这一问已确认,不用再查。
+- **(C1)候选循环(206~218 行)不在 `if "C" in SECTIONS` 里**:`0 B D` 仍会**静默**算满 6 个 KEEP 候选
+  (各一次全量 `ema()` + `rank_ic_series`)并把 6 个面板一直留在 `SIG` 里,而这一轮没有任何段用得到;
+  而且它**正好夹在 B 和 D 之间**,正是上一轮 x1 被守卫打断的地带 —— 再在这里被打断,最值钱的 D 段又拿不到。
+  给了两行 `NEED_SIG = bool(SECTIONS & set("EGHI"))` 的改法(不重排缩进,因为第 307 行 G 段直接用了 `Dcc`/`Don`)。
+- **(C2)`P` 在 B 段之后彻底没人用**(T/D/M/Q 已 `f64()` 复制成独立数组,`fU/fL/fAdj/uLast`、`Mc/Qc` 都在 B 段内)
+  ⇒ B 段后 `del P` 白送约 400 MB。
+- **(C3)脚本没有 `import gc`**,而 R1 第 8 条让执行加 `gc.collect()` ⇒ 照抄会 `NameError` 把整次运行打掉。要加就同时加 import。
+- **(D)第 192 行 C 的表头无条件打印** ⇒ `0 B D` 的日志里会出现一个空的 `== C structure …` 段,是预期行为,别当报错。
+
+这些都是**关于脚本的事实、不是关于因子的证据**,所以假设表没动;本轮的产出 = 把「下一次执行能不能跑成」的概率提上去,
+外加 2.5 这节读码事实(下一个人不必再读一遍源码)。
+
+**决定不做什么。** (a)不另开工单、不改 R1 的 tag / section / 变体 / 半衰期网格 / 口径 / 判据 / 2 次运行上限;
+(b)不自己去改脚本(主研不写实现代码,三处改法写进工单由执行落地,并要求在结果卡里写明改了哪一行);
+(c)不把 C 的表头和候选块整块重排缩进(G 段直接用 `Dcc`/`Don`,容易改坏);
+(d)不动 G/H 两段的排期 —— 中性化(H8)和已知家族增量(H11)仍留给 R2,但**必须在读留出段之前做完**。
+
+**进度风险(已写进 state.md 第 7 节)。** 三轮主研里有两轮没拿到任何新读数。若 R1 这次跑成,R2 必须一次把
+「表达式化 + G + H」打完;若又没跑成或只跑成第一次,就直接拿现有 train/valid 证据定候选、提前进入读留出段那一步,
+并优先考虑把 R1 缩小成只跑 `0 B D` 一次运行,让它一定能跑完。
+
+### 2026-10-04 14:01 [auto] 启动 exec x1c:studies/F110_ret_fair_log/x1_anatomy.py 0 B D
+
+### 2026-10-04 14:06 [auto] x1c 跑完(exit 0);重看结果:logs/F110_ret_fair_log_x1c.log
+
+### 2026-10-04 14:07 [auto] 启动 exec x1d:studies/F110_ret_fair_log/x1_anatomy.py C E
+
+### 2026-10-04 14:09 [auto] x1d 跑完(exit 0);重看结果:logs/F110_ret_fair_log_x1d.log
+
+### 2026-10-04 14:18 [执行] R1:两次 exec(x1c=0 B D、x1d=C E)都 exit 0,canary 对上;结果卡已写
+
+关键数字(详见 notes/F110_ret_fair_log/results/R1.md):
+- canary 对上:0 段 rank corr 1.00000,train rIC+0.0444 LS+2.77 Lg+8.0% Ln-0.0%,valid rIC+0.0571 LS+2.74 Lg+7.4% Ln-0.6%,与 state.md §2.2 一致。
+- H9(D 段半衰期,字面核对工单判据「hl40/60 的 Ln 两段都>+3%」):c0(原式结构+更长半衰期)train 侧 Ln 全程未超 +3%(最高 +1.2%@hl30);c1(D 单独)同样未超(最高 +1.8%@hl40);只有 c2=D*sigma 在 hl40(tr+3.9%/va+3.6%)和 hl60(tr+3.4%/va+3.0%)同时过线。
+- B 段补项:rank corr(S, day_std(Ret)) = S~sigma = +0.422(工单 Q2 门槛是 >0.7,未达到;但 M~sigma+0.870、Q~sigma+0.823 单独都高)。Mc/Qc 切格后:M<Q 占比 0.1669→0.1500,|Rc|~S corr +0.963,Mc/M 中位 1.005,Mc~M corr +0.997。脚本没有算切格后 (M-Q)/mean 的分位数表、也没有构造切格版交易信号去比两本书——这两小项工单要但脚本没写,没做成。
+- C 段 21 个候选 + p1/p2 分解 + C2 lag profile(4 序列×11 lag)+ E 段 8 信号×20 分位,全部跑完,全文已贴进结果卡。c16/c17/c18/c14 这几个「剥掉 D」的候选 train/valid 符号相反、落差 8~13 点,超出噪声带,已在结果卡标注。
+- 脚本改了 3 处(studies/F110_ret_fair_log/x1_anatomy.py):NEED_SIG 跳过候选循环(C1)、B 段后 del P(C2)、import gc + 循环内 gc.collect() + SIG 存 float32(C3,两者都做了)。两次都没被守卫打断,但无法区分是改动起效还是这次服务器更空(x1c 只等 run slot 129s,x1d 完全没排队)。
+- 没跑 F/G/H/I(按工单要求,留给下一张工单)。服务器运行预算本工单用满 2 次。
+
 ## 工单与结果卡(`notes/F110_ret_fair_log/orders/`、`notes/F110_ret_fair_log/results/`)
 
-- R1:工单 有,结果卡 **还没有(待执行)**
+- R1:工单 有,结果卡 有
 
 ## 配置里的实验计划(`configs/F110_ret_fair_log.yaml`)
 
@@ -132,6 +198,8 @@ B 段前半已读,`S` 被判为「两个几乎同一件事的日内波动估计�
 
 - `S0_baseline`  10-04 11:53  1 个变体  → `./scripts/study.sh digest F110_ret_fair_log S0_baseline`
 - `x1`(自写脚本的输出)  10-04 13:07  exit 97  → `logs/F110_ret_fair_log_x1.log`
+- `x1c`(自写脚本的输出)  10-04 14:05  exit 0  → `logs/F110_ret_fair_log_x1c.log`
+- `x1d`(自写脚本的输出)  10-04 14:09  exit 0  → `logs/F110_ret_fair_log_x1d.log`
 
 ## 已写的 notes(`notes/F110_ret_fair_log/`)
 
@@ -141,13 +209,13 @@ B 段前半已读,`S` 被判为「两个几乎同一件事的日内波动估计�
 - `04_grammar.md`  2104 字节  10-04 12:17
 - `05_hypotheses.md`  11687 字节  10-04 13:18
 - `06_baseline.md`  4460 字节  10-04 12:25
-- `journal.md`  7443 字节  10-04 13:27
-- `state.md`  23323 字节  10-04 13:27
+- `journal.md`  13787 字节  10-04 14:18
+- `state.md`  30903 字节  10-04 13:50
 
 ## 自写的探针与分析脚本(`studies/F110_ret_fair_log/`)
 
 - `probes.py`  10-04 12:14  Probes this tree needs:  D * | M - Q |
-- `x1_anatomy.py`  10-04 13:10  F110 X1: anatomy of  T = D * |M - Q|  and of the signal that is actually traded, -EMA20(T).
+- `x1_anatomy.py`  10-04 13:59  F110 X1: anatomy of  T = D * |M - Q|  and of the signal that is actually traded, -EMA20(T).
 
 ## 结构化结果(`handoff/F110_ret_fair_log/results/`)
 

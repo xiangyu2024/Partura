@@ -73,3 +73,74 @@ H10(零值占比)、H15(Ret 定义)推迟到 R2 的一个自写脚本里一次�
 现在还不知道最终结构是谁,给一个马上要被替换的结构量增量是浪费一次运行。
 
 ### 2026-10-04 13:27 [auto] 启动 run S1_shape:阶段 S1_shape
+
+### 2026-10-04 13:53 [主研] 第 1 轮(第二次接手):R1 在飞行中,按任务书第 2 条不另开工单,原样交回执行;顺手把 propose 草稿审完
+
+看到了什么(没跑任何实验):
+1. 最新工单 orders/R1.md 没有对应的结果卡 → 任务书第 2 条:不另开工单,把 R1 原样交回执行。
+2. 读执行的流水 handoff/.../work_R1_ac7d2be29a60e99e6.md,确认它**不是出错**:填 title ✓ → propose ✓ →
+   三个阶段写进配置 ✓ → check 24/24 OK ✓ → run S1_shape 启动成功 ✓ → **wait 这一步的工具调用被拒**,
+   agent 在 13:37 停住(就是用户说的那批"停止的、error 的")。
+3. ./scripts/study.sh list 显示 S1_shape **还在服务器上跑**(634794.pt_F114_S1_shape,没有退出行),
+   本地还没有 logs/F114_q25_closeret_S1_shape.log —— 这是正常的(日志随运行结束拉回),不是丢了。
+
+判断:
+- **S1_shape 不能重启**。它活着,重 run 一次等于白烧一次服务器额度(R1 的上限就是 2 次),而且会把同一个 tag 覆盖掉。
+  执行接手的第一条命令应该是 list 确认、然后 wait。只有 list 显示 exit 97(内存守卫让路)才需要重跑。
+- **check 24/24 全过是一个实质读数,不只是流程记录**:它意味着 add / sub / cross_quantile_q75 / cross_quantile_q50 /
+  cross_stddev / cross_min 以及 S2/S3 全部表达式都合法 → R1 工单里那条「兜底」条款(add/sub 不合法时改用 cross_mean)
+  **不会触发**,恒等式那一对 s1_loc / s1_scl 能真的跑出来,升华主线没被语言限制挡住。已写进 state.md §2 末。
+- **替执行把 propose 的 16 条草稿审了**(工单第 0 步第 2 项要的就是主研核对有没有漏兄弟算子):R1 的变体表**不改**。
+  其中一条要点出来 —— propose 推荐的 sub_B_cross_max **是错的尾巴**:q25 是分布的下四分位,它的极值兄弟是
+  cross_min 而不是 cross_max(max 对应 q75 那一侧),所以 R1 选 s1_min 是对的,后面的人不要照 propose 换成 max。
+  其余:day_mean/day_sum/win_5/30/60 R1 已有;win_10 故意跳过(离 15 太近);durbin_watson/ar1 与"位置还是尺度"无关。
+- propose 另外提醒到两条值得进 R2 候选池的**诊断**(不是候选结构,已写进 state.md §6):
+  (a) iso_A = day_close(Ret) 单独跑 —— "15 日记忆层挣不挣钱"最干净的探针,看毛超额/rIC 而不是净值(它换手必然极高);
+  (b) cross_argmin(day_close(Ret),15)(齐次度 0)—— 问"哪天坏"而不是"坏到什么程度",天然不带波动暴露,与 H10 同向。
+
+决定做什么:只落盘、不下新工单。覆盖重写 state.md(新增 §8.1 一张"R1 每一步做到哪、从哪接"的表,
+把"别重填 title、别重写配置、别重启 S1_shape、propose 输出在哪"四件事钉死),返回 status=order / order=R1 / kind=experiment。
+
+决定不做什么:(a) 不新开工单、不改 R1 的任何一条变体(结果还没出来,改了就是凭空换设计);
+(b) 不自己去 wait / digest / 跑任何命令 —— 那是执行的分工,主研只读不跑;(c) 不动 configs(执行正在用它跑第 2 次运行);
+(d) 不碰 scripts/ partura/ workflows/ handoff/ lab/ docs/ 和别的因子。
+
+### 2026-10-04 14:01 [执行] R1:S1_shape 已在服务器跑完(exit 0),读数完成,未重跑
+
+list 显示 S1_shape exit 0、JSON 已拉回,未重新 run(上一个执行只是 wait 被中止,进程本身跑成功了)。
+digest 读数(train/valid 多头口径 Lnet,v_base 对照 +1.8%/+8.1%):
+s1_q75 sign=+(尺度驱动读数) -1.4%/+2.8%;s1_loc -0.7%/+5.9%;s1_scl +0.6%/+8.0%;s1_q50 +0.9%/+6.0%;s1_std -1.1%/+2.2%;s1_min +2.0%/+0.0%。
+六个新变体 train+valid 都没有同时超过 v_base。异常:s1_q50 的 dist=0.16,跌破用户 0.5 门槛(其余 5 个变体 dist 0.63~1.00 都过);
+s1_min 的 hlS=10,是本阶段唯一没顶到半衰期网格上限20的(其余 hlL/hlS 全部=20)。errors={}。
+下一步:按 R1 把 corr_ids/profile 改成第2次运行版本,run S2_aperture(S2_where+S3_window),然后写 results/R1.md。
+
+### 2026-10-04 14:02 [auto] 启动 run S2_aperture:阶段 S2_where S3_window
+
+### 2026-10-04 14:08 [auto] S2_aperture 跑完(exit 0);重看结果:./scripts/study.sh digest F114_q25_closeret S2_aperture
+
+### 2026-10-04 14:15 [执行] R1:S2_aperture 跑完(exit 0),S2_where+S3_window 读数完成
+
+S2_where:s2_daysum 与 s2_daymean 的全部数字逐位相同(Lnet/Lshp/rIC/profile/sweep 全部一致,与v_base的rank相关都是+0.00),
+两者 train/valid Lnet 都远低于v_base(-19.1%/-7.9% vs +1.8%/+8.1%),与v_base rank相关≈0,H6(等价于日收益15日下四分位数)
+没有被支持。s2_dayopen 严重异常:dist=0.0003(远低于0.5门槛)、train/valid 的 rIC/rank_ic_t/rICtraded 全部是NaN(不是展示留空,
+JSON里原始就是NaN),固定半衰期表5档数字完全相同(信号几乎退化为常数),与v_base的rank相关也是NaN。
+S3_window:s3_w5 dist=0.4076,跌破0.5门槛(三个门槛失败变体现在是 s1_q50 dist0.16、s2_dayopen dist0.0003、s3_w5 dist0.41)。
+s3_w30(hlL=20,train Lnet+2.6%/valid+8.3%/Lshp+0.47/+1.66)与s3_w60(hlL=3,train+3.5%/valid+8.6%/Lshp+0.60/+1.59)
+train上Lnet都高于v_base(+1.8%),且在固定半衰期表同一列hl20上也都高于v_base的hl20(+1.8%/+0.33)——不是半衰期挑选的功劳;
+valid的Lshp两者都略低于v_base(+1.78)。s3_w5两档都低于v_base。与v_base rank相关:s3_w30+0.92、s3_w60+0.76、s3_w5+0.91,
+s1_loc+0.70、s1_scl+0.69(与S1轮一致,缓存值未变)。errors={}。results/R1.md 正在写。
+
+### 2026-10-04 14:18 [执行] R1:两次服务器运行(S1_shape、S2_aperture)都已读完,results/R1.md 写完
+
+R1 工单的 2 次运行、12 个变体全部跑完(exit 0,errors={}),没有触发工单的兜底条款,没有改表达式。
+结果卡 notes/F114_q25_closeret/results/R1.md 已写完,覆盖工单要的全部7节数字(主表/固定半衰期表/rank相关/
+分位剖面/逐年/中性化/异常元信息)。最关键的几个数字:
+- s1_q75 引擎自选 sign=+1(尺度驱动读数)。6个新变体(S1)train+valid都没有同时超过v_base(+1.8%/+8.1%)。
+- 门槛失败3个:s1_q50 dist=0.16、s2_dayopen dist=0.0003(且rIC全NaN,不是展示问题)、s3_w5 dist=0.41。
+- s2_daysum与s2_daymean输出逐位相同;两者与v_base的rank相关都是+0.00,H6(=日收益15日下四分位数)缺乏支持。
+- s3_w30(train+2.6%/valid+8.3%)与s3_w60(train+3.5%/valid+8.6%)是12个新变体里唯一在train+valid的Lnet
+  都超过v_base的两个,且在固定半衰期表同一列hl20上也都超过v_base(+1.8%/+0.33),不是半衰期挑选的功劳。
+- s1_loc的逐年long_share在2019/2020被放大到+289%/+829%(分母long_gross+short_gross接近零导致比率不稳,
+  两条腿绝对数字本身正常),已在结果卡里拆开分子分母说明。
+- 没有写07_*.md(工单只说"可以"贴,不是必须;留给主研或下一轮)。没有碰state.md(主研的职责)。
+下一步不是我该定的:留给主研裁决H1~H8并决定R2怎么下。

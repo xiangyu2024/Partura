@@ -1,6 +1,6 @@
 # lead:F112_scale_spow_masktop#1 — agent a7d46ff92abd6c517(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 13:38,最后一次动作 10-04 13:42;工具调用 12 次
+- 状态:**已返回结果**;开始 10-04 13:38,最后一次动作 10-04 13:45;工具调用 16 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F112_scale_spow_masktop/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -508,10 +508,162 @@ Now the full state.md rewrite.
 
 10-04 13:42 · 读 `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/state.md`
 
+**10-04 13:44 · 写文件** `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/state.md`(12069 字符)
+
+**10-04 13:44 · agent 的话**
+
+Now the journal entry.
+
+**10-04 13:45 · Bash** — Append lead journal entry for this round
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F112_scale_spow_masktop "[主研] 第 1 轮(第 2 个 agent):R1 工单仍无结果卡,按规矩不另开工单,核对前提后原样重派,只补了「中断恢复」执行顺序" <<'EOF'
+看到了什么(本轮没跑任何实验,一次服务器运行都没花):
+- brief 显示 orders/R1.md 已下但 results/R1.md 不存在,而且有两条 `work:F112_scale_spow_masktop#1 失败,几乎没做事`
+  —— 执行侧被额度打断了两次(用户已重置额度)。
+- 核对了 R1 的三个前提,全部确认「全新开工,没有半成品要清理」:
+  ① configs/F112_scale_spow_masktop.yaml 还只有 S0_baseline 一个阶段、title 仍是占位符;
+  ② studies/F112_scale_spow_masktop/ 目录不存在(a1_channels.py 还没写);
+  ③ study.sh list 只有 S0_baseline [exit 0],没有正在跑的任务。
+- 重新核对窗口池(整条 H7 窗口阶梯押在 cross_scale 上):ts_scale win [1,5,10,20,30,40,50]、
+  cross_scale win [3,5,10,15,30,60,241] —— R1 用到的 10/30/60/241 全部合法。
+  但发现两者**内核族标注不同**:ts_scale 是 nd/ts/rolling,cross_scale 是 dt/cross/rolling。
+  上一个 agent 核对的是「源码逐字同公式」,这是另一回事 —— 所以 cross_scale 那 4 条有可能在 check 阶段就解析不过。
+
+判断:
+- 工单本身没有问题,失败是额度造成的,不是设计造成的。按 playbook 与任务书的规矩,
+  **最新工单没有结果卡时不另开工单** —— 重写工单只会把已经推好的计划洗掉一遍,而且会再花一轮。
+- 唯一值得改的是**执行顺序**:连续两次打断说明「攒到最后一起写结果卡」会把整轮工作清零。
+
+决定做什么:
+- 给 orders/R1.md 加一段「第 0 件:中断恢复」,**科学内容一个字没改**,只规定:
+  开工先 list(已有 exit 0 的 tag 不要重跑,直接 digest)、两次运行分开提交、**先 S1_minimal**
+  (工单要带回的数字 1~6 项全靠它)、拿到 digest 立刻把主表+固定半衰期表写进结果卡并记 note、
+  被打断就交半张卡并在首行写明缺什么;cross_scale 解析不过就照原规定报错原文+删那几条,不要自己改写表达式。
+- 把 cross_scale 的两个坏分支的**退路**写进 state 第 6 节(两种情况退路相同:H7 改用 ts_scale 池内 40/50,
+  再加一条显式长平滑;归因里写明「视野上限受算子池限制」;并到 R2 那次运行里做,不单独开一轮)。
+- 覆盖重写 state.md(标明本轮是这一轮的第 2 个 agent;假设表状态一条没动,因为没有新证据)。
+
+决定不做什么:
+- 不重做计划、不改假设表、不动 S0_baseline、不读 holdout、不花任何服务器运行。
+- 不去追 _kurt 源码和条件 IC 符号(已在 R1 里交给执行顺带确认)。
+
+返回:{status:'order', order:'R1', kind:'experiment'} —— 让执行接着把 R1 做完。
+EOF
+```
+
+```
+已记入 notes/F112_scale_spow_masktop/journal.md(3 条)
+```
+
+**10-04 13:45 · Bash** — Verify order and state files are intact
+
+```bash
+cd /Users/wxy/Desktop/Partura && echo "--- R1 头部 40 行 ---" && head -40 notes/F112_scale_spow_masktop/orders/R1.md && echo "" && echo "--- 文件完整性 ---" && wc -c notes/F112_scale_spow_masktop/orders/R1.md notes/F112_scale_spow_masktop/state.md notes/F112_scale_spow_masktop/journal.md && grep -c "^## " notes/F112_scale_spow_masktop/orders/R1.md && grep -n "^## " notes/F112_scale_spow_masktop/state.md
+```
+
+```
+--- R1 头部 40 行 ---
+# 工单 R1(kind: experiment)
+
+> 主研(Opus 5)第 1 轮下单。背景读 `04_grammar.md`(结构语法与一阶展开)和 `05_hypotheses.md`(假设 H1~H9)。
+> 这张工单要做 **2 次服务器运行**:配置阶段 `S1_minimal`(10 个变体,无 `nt_*`)+ 分析脚本 `A1_channels`。
+> **只用 train/valid,绝对不要碰 holdout**(`st.slice("holdout")` 会直接报错,别想办法绕)。
+
+---
+
+## 第 0 件:先做这个(主研 10-04 下午补写)
+
+这张工单**原样有效,科学内容一个字没改** —— 下面只是执行顺序的交代。
+上一个执行 agent 被额度打断了**两次**,一件事都没做成(`brief` 里那两条 `work:…#1 失败,几乎没做事`)。
+主研本轮已核对:`configs/F112_scale_spow_masktop.yaml` 还是干净的(只有 `S0_baseline` 阶段)、
+`studies/F112_scale_spow_masktop/` 还不存在、服务器上只有 `S0_baseline` 一个 tag。**所以这张工单是全新开工,没有半成品要清理。**
+
+1. 开工第一条命令:`./scripts/study.sh list F112_scale_spow_masktop`。如果 `S1_minimal` 或 `A1_channels`
+   已经有 `exit 0` 的记录(说明又一次被打断、但运行其实跑完了),**不要重跑**,直接 `digest` 读数写卡。
+2. **两次运行分开提交、分开记账,先 `S1_minimal`**(工单「要带回来的数字」1~6 项全靠它,`A1_channels` 只占第 7 项)。
+   拿到 `S1_minimal` 的 `digest` 之后,**立刻把主表 + 固定半衰期表写进 `results/R1.md` 并记一条 `note`**,
+   然后才去做 `A1_channels`。不要攒到最后一起写。
+3. **被打断不要紧,半张卡比没有卡有用得多**:中途写卡时在最前面写一行
+   `本卡未完成:已做 ___,未做 ___`。下一轮接手的人照着做完就行。**不要为了让卡看起来完整而删掉已有的数字。**
+4. 窗口合法性主研本轮**又核对了一次**(`./scripts/study.sh ops`):
+   `ts_scale win [1,5,10,20,30,40,50]`、`cross_scale win [3,5,10,15,30,60,241]` —— 表里用到的 10/30/60/241 全部在池内。
+   但注意两者的内核族标注**不同**(`ts_scale` 是 `nd/ts/rolling`,`cross_scale` 是 `dt/cross/rolling`),
+   所以 `check` 阶段 `cross_scale` 那 4 条有可能根本解析不过。**解析不过就按工单原有规定办**:
+   报错原文抄进结果卡,删掉解析不过的那几条,其余照跑 —— 不要自己改写表达式去迁就。
+
+---
+… (6 行略) …
+
+```
+F_t − 1/30 ≈ (2/30)·[ (A_t − Ā) + (B_t − B̄) ] / C̄ ,  A=day_quantile(Close),B=day_kurt(High),sign=−1
+             └ 价格通道 ┘   └ 峰度通道 ┘
+```
+
+--- 文件完整性 ---
+   16176 notes/F112_scale_spow_masktop/orders/R1.md
+   20304 notes/F112_scale_spow_masktop/state.md
+    8728 notes/F112_scale_spow_masktop/journal.md
+   45208 total
+5
+9:## 1. 一句话现状
+20:## 2. 中间结果(已经量到的事实,每条带出处)
+71:## 3. 研究过程与逻辑(做了什么、为什么这么走)
+115:## 4. 假设表(详表见 `05_hypotheses.md`,这里是状态摘要)
+138:## 5. 当前的候选(提纯 / 升华)
+157:## 6. 后面的研究思路(按顺序)
+198:## 7. 留出段
+206:## 8. 给接手者的提醒
+```
+
+**10-04 13:45 · agent 的话**
+
+All in order. Everything is on disk: state.md rewritten with all 8 sections, journal appended, R1 amended with an interruption-recovery preamble (science untouched).
+
+**This round's judgment:** R1 was never executed at all — the previous executor was killed twice by the quota before doing anything. I verified that directly rather than assuming: the config still has only `S0_baseline` with a placeholder `title`, `studies/F112_scale_spow_masktop/` doesn't exist, and the server has exactly one tag (`S0_baseline [exit 0]`) with nothing queued. So the order is sound; the failure was quota, not design. Per the rules, I re-issue R1 rather than opening a new order — rewriting it would wash out an already-derived plan and burn another round.
+
+Two things I added as 主研, both cheap and both aimed at the failure mode we actually observed:
+
+1. **R1 "第 0 件:中断恢复"** — submit the two runs separately, `S1_minimal` **first** (items 1–6 of the required numbers all come from it; `A1_channels` is only item 7), write the main table into the result card and log a `note` the moment the digest lands, and hand in a half card with `本卡未完成:已做 ___,未做 ___` if interrupted. Attempt three should not be able to zero out a whole round again.
+
+2. **A real risk in the H7 window ladder.** The whole long-horizon test rides on `cross_scale` standing in for `ts_scale` beyond window 50. The previous lead verified the *source formulas* match word-for-word; I checked the operator registry and found the **kernel families differ** — `ts_scale` is `nd/ts/rolling`, `cross_scale` is `dt/cross/rolling`. Windows are all legal (10/30/60/241 are in-pool), but those four variants may fail at the `check` stage outright. I wrote the fallback into both R1 and state §6: either bad branch (parse failure, or `s1_x30` disagreeing with `v_base`) leads to the same retreat — test H7 with `ts_scale` 40/50 plus one explicit extra smoothing layer, note in the attribution that the horizon ceiling is operator-pool-limited, and fold it into R2's run rather than spending a round on it.
+
+Key files: `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/state.md`, `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/orders/R1.md`, `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/journal.md`.
+
+I deliberately spent zero server runs this round and left the hypothesis table untouched — no new evidence came in, so nothing in H1–H9 could honestly move.
+
+**10-04 13:45 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "R1 工单已下但至今没有结果卡,而且我核对确认它从未被执行过:配置还只有 S0_baseline 阶段、studies/ 目录不存在、服务器上只有 S0_baseline 一个 tag —— 上一个执行 agent 被额度打断两次,什么都没留下。工单设计没问题,所以按规矩不另开工单,原样重派 R1,本轮没花任何服务器运行、假设表一条没动(没有新证据)。只做了两处加固:① 给 R1 补一段「中断恢复」执行顺序(先 list 看有没有已跑完的 tag;两次运行分开提交、先 S1_minimal;拿到 digest 立刻写卡记 note;被打断就交半张卡),科学内容一个字没改;② 发现 H7 窗口阶梯的一个真实风险 —— cross_scale 与 ts_scale 窗口合法但内核族标注不同(dt/cross/rolling vs nd/ts/rolling),那 4 条可能在 check 阶段就解析不过,已把退路(改用 ts_scale 40/50 + 显式长平滑,并到 R2 做)写进 R1 和 state 第 6 节。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
 ## 它写过 / 改过的文件
 
 - `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/orders/R1.md`
 - `/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/state.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R1",
+ "kind": "experiment",
+ "summary": "R1 工单已下但至今没有结果卡,而且我核对确认它从未被执行过:配置还只有 S0_baseline 阶段、studies/ 目录不存在、服务器上只有 S0_baseline 一个 tag —— 上一个执行 agent 被额度打断两次,什么都没留下。工单设计没问题,所以按规矩不另开工单,原样重派 R1,本轮没花任何服务器运行、假设表一条没动(没有新证据)。只做了两处加固:① 给 R1 补一段「中断恢复」执行顺序(先 list 看有没有已跑完的 tag;两次运行分开提交、先 S1_minimal;拿到 digest 立刻写卡记 note;被打断就交半张卡),科学内容一个字没改;② 发现 H7 窗口阶梯的一个真实风险 —— cross_scale 与 ts_scale 窗口合法但内核族标注不同(dt/cross/rolling vs nd/ts/rolling),那 4 条可能在 check 阶段就解析不过,已把退路(改用 ts_scale 40/50 + 显式长平滑,并到 R2 做)写进 R1 和 state 第 6 节。",
+ "state_written": true
+}
+```
 
 ## 它拿到的任务书
 
