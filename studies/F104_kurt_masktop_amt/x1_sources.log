@@ -1,0 +1,93 @@
+
+======== 0. helper sources on the SERVER (the `src` tool only shows registered operators) ========
+# common._kurt
+def _kurt(x: torch.Tensor) -> torch.Tensor:
+    x_demeaned = x - x.nanmean(dim=-1, keepdim=True)
+    x_var = torch.nanmean(torch.pow(x_demeaned, 2), dim=-1, keepdim=True)
+    x_4 = torch.pow(x_demeaned, 4)
+    return div(_mean(x_4), torch.pow(_mean(x_var), 2)) - 3
+
+# common.rank
+@op("nd", "cs", arity=1)
+def rank(x: torch.Tensor, valid_mask: Optional[torch.Tensor] = None, pct: bool = True) -> torch.Tensor:
+    """Rank along the last dim (ascending), NaN-safe. `valid_mask` defaults
+    to `isfinite(x)` — the old code's crash-prone reliance on a mutable
+    module-level `tensor_mask` global has been removed.
+    """
+    if valid_mask is None:
+        valid_mask = torch.isfinite(x)
+    x_rank = x.clone()
+    # Invalid entries are pushed ABOVE every valid value (not below) so they
+    # land at the end of the sort and don't shift valid entries' ranks.
+    x_rank[~valid_mask] = torch.finfo(x.dtype).max
+    # stable=True: ties keep index order, which is the only tie-break every torch
+    # backend agrees on. Without it CPU and GPU hand tied values each other's ranks
+    # (a 1/n difference, not an ULP one) and minute data ties constantly -- prices
+    # sit on a tick grid, volumes repeat, suspended minutes are zero.
+    ranks = (torch.argsort(torch.argsort(x_rank, dim=-1, descending=False, stable=True),
+                           dim=-1, stable=True) + 1).to(x.dtype)
+    if pct:
+        valid_count = valid_mask.sum(dim=-1, keepdim=True).to(x.dtype)
+        ranks = torch.where(valid_count > 0, ranks / valid_count, torch.full_like(ranks, float("nan")))
+    ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float("nan")))
+    return ranks
+
+# nd_cs._valid
+def _valid(x: torch.Tensor, valid_mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Resolve the effective valid mask: `isfinite(x)`, ANDed with the
+    caller's `valid_mask` if one was given. Replaces the old crash-prone
+    `if valid_mask is None: valid_mask = tensor_mask` (`tensor_mask` was a
+    module-level global hardcoded to `None` in the original file, so
+    ~11 functions there raised on the very first call unless a caller
+    happened to pass an explicit mask).
+    """
+    finite = torch.isfinite(x)
+    return finite if valid_mask is None else (finite & valid_mask)
+
+# nd_cs._mean
+def _mean(x: torch.Tensor) -> torch.Tensor:
+    return x.nanmean(dim=-1)
+
+# common._mean
+def _mean(x: torch.Tensor) -> torch.Tensor:
+    return x.nanmean(dim=-1)
+
+# common.div
+@op("shared", "elementwise", arity=2)
+def div(x, y) -> torch.Tensor:
+    if isinstance(x, (int, float)) and isinstance(y, torch.Tensor):
+        x = create_like(y, x)
+    elif isinstance(y, (int, float)) and isinstance(x, torch.Tensor):
+        y = create_like(x, y)
+    return torch.divide(x, y)
+
+# engine.kernels.apply_cube, NT-face branch
+    if spec.face == "nt":
+        if mode != MODE_D:
+            raise RuntimeError(f"{spec.name} (NT face) must run in D-mode, got {mode}")
+        args = _align_widths(vals, exempt)
+        outs = []
+        for c in range(B):                                            # one (M, S) face per day
+            face = [a[:, c, :].transpose(0, 1).contiguous() if isinstance(a, torch.Tensor) else a for a in args]
+            outs.append(_as_float(_call(expr, face, window)).transpose(0, 1))
+        return torch.stack(outs, dim=1).contiguous()                  # (S, B, M)
+
+======== 0b. probe self-checks with the SERVER kernels ========
+[selfcheck] tie_break_replaced_set     on cs_mask_top_replace_mean       PASS  {'tie_free_changes_exactly_the_extreme_decile': True, 'replacement_is_row_mean_incl_replaced_cells': True}
+            value: {'tied_frac_0.05': {'n_tied': 10, 'n_changed': 20, 'n_changed_expected_ceil(0.1n)': 20, 'changed_among_tied': 10, 'which': 'all tied cells'}, 'tied_frac_0.3': {'n_tied': 60, 'n_changed': 20, 'n_changed_expected_ceil(0.1n)': 20, 'changed_among_tied': 20, 'which': 'HIGHEST column index among the tied'}}
+[selfcheck] replacement_vs_own_level   on cs_mask_top_replace_mean       PASS  {'lognormal_sigma1.5_expected_ratio': 0.261, 'within_10pct': True, 'changed_frac_is_0.1': True}
+            value: {'sigma_1.0': {'changed_frac': 0.1, 'median_new_over_old': 0.319, 'p10_new_over_old': 0.162}, 'sigma_1.5': {'changed_frac': 0.1, 'median_new_over_old': 0.26, 'p10_new_over_old': 0.094}, 'sigma_2.0': {'changed_frac': 0.1, 'median_new_over_old': 0.272, 'p10_new_over_old': 0.07}}
+[selfcheck] composite_by_liquidity     on cs_mask_top_replace_mean       PASS  {'untouched_stocks_read_plain_kurt_exactly': True, 'total_overwritten_frac': 0.1}
+            value: {'liq_decile_1': {'minutes_overwritten': 0.0, 'tree_kurt_median': 11.14, 'plain_kurt_median': 11.14}, 'liq_decile_2': {'minutes_overwritten': 0.0, 'tree_kurt_median': 9.11, 'plain_kurt_median': 9.11}, 'liq_decile_3': {'minutes_overwritten': 0.0, 'tree_kurt_median': 10.04, 'plain_kurt_median': 10.04}, 'liq_decile_4': {'minutes_overwritten': 0.1, 'tree_kurt_median': 9.71, 'plain_kurt_median': 10.24}, 'liq_decile_5': {'minutes_overwritten': 0.5, 'tree_kurt_median': 7.2, 'plain_kurt_median': 11.11}, 'liq_decile_6': {'minutes_overwritten': 1.7, 'tree_kurt_median': 3.89, 'plain_kurt_median': 9.63}, 'liq_decile_7': {'minutes_overwritten': 5.6, 'tree_kurt_median': 1.54, 'plain_kurt_median': 10.43}, 'liq_decile_8': {'minutes_overwritten': 18.0, 'tree_kurt_median': 0.08, 'plain_kurt_median': 9.97}, 'liq_decile_9': {'minutes_overwritten': 56.4, 'tree_kurt_median': -0.15, 'plain_kurt_median': 10.29}, 'liq_decile_10': {'minutes_overwritten': 158.7, 'tree_kurt_median': 1.78, 'plain_kurt_median': 10.0}, 'spearman(tree, plain) over all stocks': 0.261, 'spearman(tree, liquidity level)': -0.73, 'spearman(plain, liquidity level)': -0.015}
+[selfcheck] tie_break_replaced_set     on cs_mask_top_replace_mean_neg   PASS  {'tie_free_changes_exactly_the_extreme_decile': True, 'replacement_is_row_mean_incl_replaced_cells': True}
+            value: {'tied_frac_0.05': {'n_tied': 10, 'n_changed': 20, 'n_changed_expected_ceil(0.1n)': 20, 'changed_among_tied': 10, 'which': 'all tied cells'}, 'tied_frac_0.3': {'n_tied': 60, 'n_changed': 20, 'n_changed_expected_ceil(0.1n)': 20, 'changed_among_tied': 20, 'which': 'HIGHEST column index among the tied'}}
+[selfcheck] replacement_vs_own_level   on cs_mask_top_replace_mean_neg   PASS  {'lognormal_sigma1.5_expected_ratio': 36.325, 'within_10pct': True, 'changed_frac_is_0.1': True}
+            value: {'sigma_1.0': {'changed_frac': 0.1, 'median_new_over_old': 8.455, 'p10_new_over_old': 6.278}, 'sigma_1.5': {'changed_frac': 0.1, 'median_new_over_old': 35.661, 'p10_new_over_old': 22.796}, 'sigma_2.0': {'changed_frac': 0.1, 'median_new_over_old': 192.066, 'p10_new_over_old': 104.572}}
+[selfcheck] composite_by_liquidity     on cs_mask_top_replace_mean_neg   PASS  {'untouched_stocks_read_plain_kurt_exactly': True, 'total_overwritten_frac': 0.1}
+            value: {'liq_decile_1': {'minutes_overwritten': 159.3, 'tree_kurt_median': -1.51, 'plain_kurt_median': 11.14}, 'liq_decile_2': {'minutes_overwritten': 55.9, 'tree_kurt_median': -0.29, 'plain_kurt_median': 9.11}, 'liq_decile_3': {'minutes_overwritten': 18.0, 'tree_kurt_median': 6.1, 'plain_kurt_median': 10.04}, 'liq_decile_4': {'minutes_overwritten': 5.8, 'tree_kurt_median': 7.94, 'plain_kurt_median': 10.24}, 'liq_decile_5': {'minutes_overwritten': 1.6, 'tree_kurt_median': 10.04, 'plain_kurt_median': 11.11}, 'liq_decile_6': {'minutes_overwritten': 0.4, 'tree_kurt_median': 9.55, 'plain_kurt_median': 9.63}, 'liq_decile_7': {'minutes_overwritten': 0.1, 'tree_kurt_median': 10.43, 'plain_kurt_median': 10.43}, 'liq_decile_8': {'minutes_overwritten': 0.0, 'tree_kurt_median': 9.97, 'plain_kurt_median': 9.97}, 'liq_decile_9': {'minutes_overwritten': 0.0, 'tree_kurt_median': 10.29, 'plain_kurt_median': 10.29}, 'liq_decile_10': {'minutes_overwritten': 0.0, 'tree_kurt_median': 10.0, 'plain_kurt_median': 10.0}, 'spearman(tree, plain) over all stocks': 0.542, 'spearman(tree, liquidity level)': 0.538, 'spearman(plain, liquidity level)': -0.015}
+[selfcheck] spike_count_response       on day_kurt                       PASS  {'day_kurt_matches_1/(w(1-w))-6': True, 'day_mean_matches_1+w(R-1)': True}
+            value: {'R=10,own_noise_sigma=0.8': {0: 9.45, 1: 25.1, 2: 25.61, 5: 19.24, 12: 9.88, 24: 3.83, 60: -0.78, 120: -1.96, 180: -0.59, 217: 5.43, 236: 43.87, 240: 236.0}, 'R=50,own_noise_sigma=0.8': {0: 9.45, 1: 199.93, 2: 106.09, 5: 41.7, 12: 14.89, 24: 5.1, 60: -0.66, 120: -2.0, 180: -0.71, 217: 5.16, 236: 43.24, 240: 236.0}, 'pure_two_point(R=50,no_noise)': {1: 236.004, 2: 115.508, 5: 43.221, 12: 15.136, 24: 5.152, 60: -0.652, 120: -2.0, 180: -0.71, 217: 5.152, 236: 43.221, 240: 236.004}}
+[selfcheck] spike_count_response       on day_mean                       PASS  {'day_kurt_matches_1/(w(1-w))-6': True, 'day_mean_matches_1+w(R-1)': True}
+            value: {'R=10,own_noise_sigma=0.8': {0: 1.38, 1: 1.43, 2: 1.48, 5: 1.64, 12: 2.0, 24: 2.61, 60: 4.47, 120: 7.54, 180: 10.63, 217: 12.53, 236: 13.51, 240: 13.72}, 'R=50,own_noise_sigma=0.8': {0: 1.38, 1: 1.66, 2: 1.94, 5: 2.78, 12: 4.74, 24: 8.09, 60: 18.18, 120: 34.97, 180: 51.77, 217: 62.13, 236: 67.45, 240: 68.58}, 'pure_two_point(R=50,no_noise)': {1: 1.203, 2: 1.407, 5: 2.017, 12: 3.44, 24: 5.88, 60: 13.199, 120: 25.398, 180: 37.598, 217: 45.12, 236: 48.983, 240: 49.797}}
+[guard] container anon is already 31.0 GiB (limit 34.0); not starting a Partura run on top of it
+[partura exit 1 2026-10-04_09:41:03]
