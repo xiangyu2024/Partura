@@ -131,12 +131,32 @@ class MemoryGuard:
         self._stop = threading.Event()
         self._t = threading.Thread(target=self._run, daemon=True)
 
-    def start(self) -> "MemoryGuard":
-        me, cg = self_anon_gb(), cgroup_anon_gb()
-        if cg == cg and cg > self.cgroup_limit - 4.0:
-            raise SystemExit(f"[guard] container anon is already {cg:.1f} GiB (limit {self.cgroup_limit}); "
-                             f"not starting a Partura run on top of it")
-        if me == me:                                   # /proc exists: we are on Linux
+    def start(self, max_wait: Optional[float] = None) -> "MemoryGuard":
+        """Wait for headroom rather than refuse.  A neighbour's scoring job with
+        twenty workers fills the container for ten or twenty minutes and then
+        leaves; exiting at once made every Partura run in that window fail
+        (exit 97) and the studies burn their run budgets on retries.  Queueing
+        is the polite AND the useful thing to do.  Only after ``max_wait``
+        (default 45 min, ``PARTURA_MEM_WAIT_S``) does the run give up."""
+        max_wait = float(os.environ.get("PARTURA_MEM_WAIT_S", 2700)) if max_wait is None else max_wait
+        head = self.cgroup_limit - 4.0
+        waited, said = 0.0, 0.0
+        while True:
+            cg = cgroup_anon_gb()
+            if not (cg == cg and cg > head):
+                break
+            if waited >= max_wait:
+                raise SystemExit(f"[guard] container anon is still {cg:.1f} GiB after waiting {waited:.0f}s "
+                                 f"(need < {head:.0f}); not starting a Partura run on top of it")
+            if waited == 0 or waited - said >= 120:
+                print(f"[guard] container anon is {cg:.1f} GiB (need < {head:.0f} to start); "
+                      f"waiting for the neighbours to finish ... ({waited:.0f}s so far)", flush=True)
+                said = waited
+            time.sleep(20)
+            waited += 20
+        if waited:
+            print(f"[guard] memory headroom is back after {waited:.0f}s; starting", flush=True)
+        if self_anon_gb() == self_anon_gb():           # /proc exists: we are on Linux
             self._t.start()
         return self
 

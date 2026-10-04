@@ -74,6 +74,45 @@ def _atomic_save(path: Path, arr: np.ndarray) -> None:
     os.replace(tmp, path)
 
 
+CPU_CHUNK_BYTES = 256 << 20
+
+
+def gpu_free_gib() -> Optional[float]:
+    """Free memory on GPU 0, asked of nvidia-smi so that asking costs nothing.
+    (Touching torch.cuda creates a ~0.9 GiB context -- on a card with 1.5 GiB
+    left, two Partura processes merely *looking* would take the lot.)"""
+    import subprocess
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20)
+        return float(out.stdout.strip().splitlines()[0]) / 1024.0
+    except Exception:
+        return None
+
+
+def choose_device(requested: str, quiet: bool = False) -> str:
+    """``cuda`` unless the card is too full to use without crowding whoever is on it.
+
+    When a neighbour holds 30 of 32 GiB there is no polite way onto the GPU:
+    the choice is between failing every expression on memory, squeezing into
+    the neighbour's last gigabyte (and silently failing THEIR trees), or
+    computing on the CPU.  A CPU evaluation with small chunks was measured at
+    24 s for a hand-written factor, 12 s for a plain one and ~4 min for an
+    NT-face one, at under 1 GiB of memory -- slower, but it is the only one of
+    the three that harms nobody.
+    """
+    if not str(requested).startswith("cuda"):
+        return requested
+    free = gpu_free_gib()
+    need = float(os.environ.get("PARTURA_GPU_RESERVE_GB", 4.0)) + float(os.environ.get("PARTURA_GPU_MIN_GB", 2.0))
+    if free is not None and free < need:
+        if not quiet:
+            print(f"[panels] GPU has {free:.1f} GiB free (< {need:.1f} needed to stay out of the neighbours' way): "
+                  f"this run computes on the CPU with {CPU_CHUNK_BYTES >> 20} MiB chunks", flush=True)
+        return "cpu"
+    return requested
+
+
 def auto_gpu_fraction(reserve_gb: Optional[float] = None, hi: Optional[float] = None, lo: float = 0.03) -> float:
     """How much of the card this process may take RIGHT NOW.
 
@@ -106,6 +145,10 @@ class PanelSet:
                  label_kind: str = "open_vwap15", label_buyable: bool = False,
                  batch: int = 4, cpu_fallback: bool = False, chunk_bytes: Optional[int] = None,
                  quiet: bool = False) -> None:
+        requested = device
+        device = choose_device(device, quiet=quiet)
+        if requested.startswith("cuda") and device == "cpu":
+            os.environ["PARTURA_RANK_DEVICE"] = ""          # ranks on the CPU too: no CUDA context at all
         # gpu_fraction None / 0 / "auto" = follow what is free on the card (the default on the server)
         self.auto_fraction = device.startswith("cuda") and (gpu_fraction in (None, 0, 0.0, "auto"))
         self.gpu_fraction = None if self.auto_fraction else gpu_fraction
@@ -144,20 +187,28 @@ class PanelSet:
         total = torch.cuda.get_device_properties(0).total_memory
         return int(max(96 << 20, min(2 << 30, total * float(fraction) / 12)))
 
-    def _refresh_gpu_cap(self) -> None:
-        """Called with the GPU lock held, before every engine batch."""
+    def _refresh_gpu_cap(self) -> bool:
+        """Called with the GPU lock held, before every engine batch.  Returns
+        False when the card has filled up since this process started -- the
+        batch then goes to the bounded CPU engine instead."""
         if not self.auto_fraction:
-            return
+            return True
+        free, total = torch.cuda.mem_get_info()
+        usable = free + torch.cuda.memory_reserved() - float(os.environ.get("PARTURA_GPU_RESERVE_GB", 4.0)) * (1 << 30)
+        if usable < float(os.environ.get("PARTURA_GPU_MIN_GB", 2.0)) * (1 << 30) * 0.6:
+            if not self.quiet:
+                print(f"[panels] GPU: only {free / (1 << 30):.1f} GiB free now; this batch goes to the CPU", flush=True)
+            return False
         f = auto_gpu_fraction()
         torch.cuda.set_per_process_memory_fraction(f)
         self.gpu_fraction = f
         if self._user_chunk_bytes is None:
             self.chunk_bytes = self._chunk_for(f)
         if not self.quiet:
-            free, total = torch.cuda.mem_get_info()
             print(f"[panels] GPU: {free / (1 << 30):.1f} GiB free of {total / (1 << 30):.1f}; "
                   f"this run capped at {f:.0%} ({f * total / (1 << 30):.1f} GiB), chunk {self.chunk_bytes >> 20} MiB",
                   flush=True)
+        return True
 
     # -- identity ---------------------------------------------------------
     @property
@@ -221,20 +272,28 @@ class PanelSet:
             cb = chunk_bytes or self.chunk_bytes
             if cb:
                 kw["chunk_bytes"] = int(cb)
-        if self.torch_threads:
+        else:
+            # CPU: small chunks keep memory under 1 GiB (the default 2 GiB chunk is what
+            # once took 40 GB on a hand-written factor), and a few more threads than the
+            # diagnostics use, because here the CPU is doing the GPU's job.
+            kw["chunk_bytes"] = int(chunk_bytes or CPU_CHUNK_BYTES)
+            kw["torch_threads"] = int(os.environ.get("PARTURA_CPU_THREADS", 10))
+        if self.torch_threads and "torch_threads" not in kw:
             kw["torch_threads"] = self.torch_threads
         if self.workdir:
             kw["workdir"] = self.workdir
         return CubeEngine(self.view, device=device, **kw)
 
-    def _evaluate(self, exprs: List[object], names: List[str]) -> Tuple[List[Optional[np.ndarray]], Dict[int, str]]:
-        """One batch on the configured device, with the retry ladder for memory."""
+    def _evaluate(self, exprs: List[object], names: List[str], device: Optional[str] = None
+                  ) -> Tuple[List[Optional[np.ndarray]], Dict[int, str]]:
+        """One batch on ``device`` (default: the configured one), with the retry ladder for memory."""
+        dev = device or self.device
         t0 = time.perf_counter()
-        res = self._engine(self.device).evaluate(exprs, tolerant=True)
+        res = self._engine(dev).evaluate(exprs, tolerant=True)
         panels, errs = list(res.panels), dict(res.errors)
-        self.timings.append({"names": list(names), "seconds": round(time.perf_counter() - t0, 1)})
+        self.timings.append({"names": list(names), "device": str(dev), "seconds": round(time.perf_counter() - t0, 1)})
         retry = [i for i in sorted(errs) if _is_oom(errs[i])]
-        if retry and str(self.device).startswith("cuda"):
+        if retry and str(dev).startswith("cuda"):
             for i in retry:                           # alone, with a quarter of the chunk
                 torch.cuda.empty_cache()
                 small = max(64 << 20, int((self.chunk_bytes or (2 << 30)) // 4))
@@ -247,20 +306,23 @@ class PanelSet:
                     errs.pop(i, None)
                 else:
                     errs[i] = f"{errs[i]} | retry alone: {r1.errors.get(0)}"
-        left = sorted(errs)
-        if left and self.cpu_fallback and not str(self.device).startswith("cpu"):
-            if not self.quiet:
-                print(f"[panels] CPU fallback for: {', '.join(names[i] for i in left)}", flush=True)
-            r2 = CubeEngine(self.view, device="cpu",
-                            **({"workdir": self.workdir} if self.workdir else {})
-                            ).evaluate([exprs[i] for i in left], tolerant=True)
-            for j, i in enumerate(left):
-                if r2.errors.get(j) is None and r2.panels[j] is not None:
-                    panels[i] = r2.panels[j]
+        # Last rung: what the GPU could not hold even alone goes to the BOUNDED CPU engine,
+        # one expression at a time.  (ND-face ts_* operators take the whole panel at once and
+        # cannot be chunked on the GPU; on the CPU that is just RAM.)
+        left = [i for i in sorted(errs) if _is_oom(errs[i])]
+        if left and str(dev).startswith("cuda"):
+            torch.cuda.empty_cache()
+            for i in left:
+                if not self.quiet:
+                    print(f"[panels] {names[i]}: does not fit on the GPU right now; computing it on the CPU",
+                          flush=True)
+                r2 = self._engine("cpu").evaluate([exprs[i]], tolerant=True)
+                if r2.errors.get(0) is None and r2.panels[0] is not None:
+                    panels[i] = r2.panels[0]
                     errs.pop(i, None)
                 else:
-                    errs[i] = f"{errs[i]} | cpu: {r2.errors.get(j)}"
-        if str(self.device).startswith("cuda"):
+                    errs[i] = f"{errs[i]} | cpu: {r2.errors.get(0)}"
+        if str(dev).startswith("cuda"):
             torch.cuda.empty_cache()
         return panels, errs
 
@@ -318,9 +380,10 @@ class PanelSet:
                         still.append(n)
                 if not still:
                     continue
-                if str(self.device).startswith("cuda"):
-                    self._refresh_gpu_cap()
-                panels, errs = self._evaluate([todo[n] for n in still], still)
+                dev = self.device
+                if str(self.device).startswith("cuda") and not self._refresh_gpu_cap():
+                    dev = "cpu"
+                panels, errs = self._evaluate([todo[n] for n in still], still, device=dev)
             for i, n in enumerate(still):
                 if errs.get(i) or panels[i] is None:
                     for alias in by_key[keys[n]]:

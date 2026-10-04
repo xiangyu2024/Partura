@@ -56,6 +56,18 @@ for path in args:
               f"{s['train'].get('coverage_labelled', float('nan')):>6.2f}{r.get('distinct', float('nan')):>6.2f}")
     print("  (LS = 扣费多空夏普; Lgross/Lnet = 多头腿毛/净年化超额; Lshr = 多头腿占毛价差的比例; "
           "cov = 有标签格子里有值的比例,用户门槛 0.95; dist = 取值离散度,用户门槛 0.5)")
+    # Each variant is scored at ITS OWN fitted half-life, so two variants can differ in turnover (and
+    # therefore in net long-leg excess) only because one fitted 10 and the other 20.  The same numbers at
+    # fixed half-lives separate "different structure" from "different smoothing".
+    rows = [(vid, r) for vid, r in res.items() if "books" in r and r["books"].get("sweep")]
+    if len(rows) > 1:
+        print(f"\n固定半衰期下的 train 表现(各变体自己选的半衰期不同,先看这张再比结构):")
+        print(f"{'variant':<20}" + "".join(f"{'hl' + format(h, 'g') + ' LS':>9}{'Lnet':>8}{'TO':>6}" for h in (5, 10, 20)))
+        for vid, r in rows:
+            sw = {x["halflife"]: x for x in r["books"]["sweep"]}
+            print(f"{vid:<20}" + "".join(
+                f"{f(sw[h]['ls_sharpe']):>9}{f(sw[h]['long_ann'], pct=True):>8}{sw[h]['ls_turnover']:>6.0%}"
+                if h in sw else f"{'—':>23}" for h in (5.0, 10.0, 20.0)))
 
     users = {k: r for k, r in res.items() if "books_user" in r}
     if users:
@@ -75,8 +87,8 @@ for path in args:
 
     b0 = res.get(base)
     if b0 and "books" in b0:
-        print(f"\n半衰期扫描 {base}(fit 段): " + "  ".join(
-            f"hl{s['halflife']:g}: LS {f(s['ls_sharpe'])} L {f(s['long_sharpe'])} TO {s['ls_turnover']:.0%}"
+        print(f"\n半衰期扫描 {base}(fit 段; LS = 扣费多空夏普, Lshp = 纯多头夏普): " + "  ".join(
+            f"hl{s['halflife']:g}: LS {f(s['ls_sharpe'])} Lshp {f(s['long_sharpe'])} TO {s['ls_turnover']:.0%}"
             for s in b0["books"]["sweep"]))
     for vid, r in res.items():
         if r.get("profile"):
