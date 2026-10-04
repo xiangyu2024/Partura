@@ -27,6 +27,13 @@ _更新:2026-10-04 13:45 PDT(用户重置额度之后)。_
 **如果一切都停了**(额度耗尽、Mac 睡眠):什么都不会丢。按 `handoff/README.md`「接着跑」一节:
 `python scripts/recorder.py --state batches/B01_single_factors.yaml` → 去掉 done 的 → 起 `workflows/partura_tiered.js`。
 
+## 仓库
+
+GitHub 私有仓库 **https://github.com/xiangyu2024/Partura**(2026-10-04 建;分支 `main`;只有用户本人是协作者,别人要看由用户邀请)。
+本机 `~/Desktop/Partura` 的 `origin`;用 HTTPS + macOS 钥匙串里的凭据推(和 AlphaCube 一样)。**每个里程碑**:
+`git add -A . && git commit -m "…" && git push`(`runs/*.json`、`logs/`、`handoff/` 都在版本库里;面板缓存 `runs/_panels/`、`*.npy` 不进)。
+仓库里有服务器的 SSH 地址(`scripts/study.sh`),没有任何密码或密钥。
+
 ## 已经完成的(读过留出段、有结论)
 
 | 因子 | 结论(多头口径:多头腿净超额 训练/测试) |
