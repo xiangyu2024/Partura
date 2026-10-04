@@ -1,0 +1,68 @@
+{
+ "factor_id": "F102_kurt_autocorr",
+ "lens": "数字与流程",
+ "issues": [
+  {
+   "severity": "major",
+   "where": "/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/10_distilled.md「读留出段之后」第 2 条;09_diagnosis.md「未决」第 2 条;11_risks.md「选择偏差」;报告 §9 / §10 / §11 同文",
+   "what": "notes 说「原式 + hl=5 在留出段上是多少我不知道」「留出段没有可比的行」,但同一次留出段读取的 final.json 里就有这一行(books_user.splits_at_hl_long:半衰期按纯多头夏普在 utrain 上选,原样用到 holdout)。这些数改变了两句话在留出段上的读法:「升华的大头是慢」不成立,「30 → 60 多头腿净超额继续升」只在按多空夏普选半衰期时成立。推荐式本身的结论没有被推翻,反而更强。",
+   "evidence": "final.json,用户口径 fit=utrain。f_orig 的 hl_long=5:utrain 多头腿净 +8.93%,holdout +2.46%(纯多头夏普 +0.45,多头腿毛 +6.99%)。f_orig 用户口径 hl=1:holdout −0.72%。f_max60 用户口径 hl=0:holdout +7.44%;hl_long=2:+6.95%(纯多头夏普 +1.45)。所以留出段上 8.16 个点的差里,「慢」只占 3.2 个点,结构(60 日极值)占约 5.0 个点。其余候选在各自 hl_long 下的 holdout 多头腿净:f_mean_abs15(hl10)+3.81%,f_max15(hl5)+4.44%,f_max30(hl5)+7.57%(纯多头夏普 +1.51),即 f_max30 不低于 f_max60。",
+   "fix": "在 10_distilled / 07_S_final 加一张表,列出五个候选在 hl_long 下的 utrain / holdout 多头腿净超额与纯多头夏普,标明「半衰期按纯多头夏普在 utrain 上选,非用户口径,取自同一次读取」。把「我不知道」「没有可比的行」「大头是慢」三处改写成实测结果,并写明 30 对 60 的排序取决于半衰期怎么选。推荐式是读之前定的,不改候选、不再跑 final。"
+  },
+  {
+   "severity": "minor",
+   "where": "07_S2_windows.md 结论 1;07_S3_aggregate.md 结论 3(「120 不塌」「60 不是尖点」);09_diagnosis.md 第 7 条;10_distilled.md / 11_risks.md / 12_next.md 里的「+5.7% / +8.8%」",
+   "what": "比较结构时用的是各变体自己拟合的半衰期,没有按 playbook 要求先看「固定半衰期下的表现」,也没有标注半衰期不同。固定半衰期下「多头腿净超额随窗口单调上升」和「120 不塌」都不成立。干净股票池里的 +5.7% / +8.8% 是重新拟合出 hl=10 的信号,却和 hl=0 的 +11.3% / +10.1% 并排比较。研究员在 x2 / x3 / 10 里已经承认大头是慢,但这几处原句没有带上这个限定。",
+   "evidence": "s12 digest,train 固定半衰期的多头腿净,cross_sum 窗口 5/10/15/30/60:hl5 = +6.1/+8.0/+8.5/+7.3/+8.3%;hl20 = +10.2/+9.9/+8.1/+6.8/+5.9%(随窗口下降)。cross_max 窗口 15/30/60/120:hl5 = +8.9/+10.0/+11.0/+8.3%;hl10 = +9.1/+10.7/+10.8/+7.0%(120 比 60 低 2.7~3.8 个点)。x2 log,valid 固定 hl5:max15/30/60 = +9.5/+10.7/+9.5%。x3 log:「cross_max(K^2,60) inside clean universe sgn -1 hl 10 … Ln +5.7/+8.8」。",
+   "fix": "S2 结论 1 与 S3 结论 3 各补一句固定半衰期下的读法:窗口效应主要是总平滑量,等平滑下 15 → 60 在 train 只多约 2 个点、valid 持平,120 回落。「120 不塌 / 邻域站着」限定为「按多空夏普选半衰期(hl=0)时」。干净池那组数标明 hl=10。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F102_kurt_autocorr/01_expression.md「主体」一条(报告 §1 第 23 行)",
+   "what": "「K 在 95% 的股票-日上是负的」写错了。95% 是 Z > 0.6 的格子占比,被当成了 K < 0 的占比;同一份报告的 x1 §1 写的是 84.7%。",
+   "evidence": "logs/F102_kurt_autocorr_x1.log §1:「K<0 share 0.847」,p95 = +0.2818(95 分位已经是正的)。§2 按 Z 分桶:Z ≥ 0.6 的格子合计 94.8%。",
+   "fix": "改成「K 在 85% 的股票-日上是负的(中位数 −0.35)」。"
+  },
+  {
+   "severity": "minor",
+   "where": "04_grammar.md 与 11_risks.md(「折叠点移 0.3 多头腿就没了」);09_diagnosis.md 第 8 条与 07x_3_longleg.md §3(「十分位剖面仍单调」);07_S3_aggregate.md 结论 3、configs 里 f_max30 的 why、10_distilled 候选表(「每一项都不低于原式」「0.3~0.5 的多空夏普」);07_S1_layers.md 手写表",
+   "what": "几处措辞比数字强,另有手写表该有数却留空。",
+   "evidence": "(1) x2 log:折叠点 c=−0.30 时多头腿毛 +10.7% / +10.3%、净 +3.6% / +2.9%(c=0 是 +5.4% / +5.5%);「没了」对应的是 c=−0.45(+0.2% / −1.1%)。09 第 2 条自己写的是 +3.6% / +2.9%。(2) x3 log,干净池内 valid 十分位:−7.6 −0.1 −5.6 −0.5 −3.0 −2.2 −0.7 +4.1 +4.6 +11.0,不单调。(3) s3.json:u_max30 valid 多头腿毛 12.78% < v_base 12.94%,空头腿毛 34.2% / 27.9% < 38.8% / 31.9%;u_max60 的多空夏普差是 0.31 / 0.56,不是 0.3~0.5。(4) 07_S1 表空头腿列 4 个「—」在 s12.json 里有数:l_nofold_lin +26.2% / +20.8%,l_k2_today +28.4% / +21.2%,l_noac +37.7% / +17.4%,l_ac15 +31.2% / +21.7%。",
+   "fix": "「移 0.3 就没了」改成「移到 −0.30 净超额掉约 2 个点,移到 −0.45 归零」。「仍单调」改成「大体递增(valid 中段不单调)」。「每一项都不低于」限定为多空夏普 / 多头腿净 / 纯多头夏普三项。「0.3~0.5」改成「0.3~0.6」。补上 S1 表的空头腿数字。"
+  },
+  {
+   "severity": "minor",
+   "where": "09_diagnosis.md 第 2 条(「凸性无关」,证据引 l_fold_lin);07_S1_layers.md 结论 1",
+   "what": "「凸性无关」引的证据是 l_fold_lin 的 rank 相关 0.99,但同一行的多头腿明显变差。真正支持这句话的是均值聚合下的 a_mean_abs15 对 a_mean_sq15。",
+   "evidence": "s12.json:l_fold_lin 多头腿毛 +10.0% / +11.7%、净 +1.9% / +2.8%;v_base 是 +12.7% / +12.9%、+4.9% / +4.5%,净超额掉 3.0 / 1.7 个点。x2 log 的 cross_sum(|K|,15) 同样只有 +1.0% / +2.5%。s3.json:a_mean_abs15 净 +5.4% / +5.4%,a_mean_sq15 +6.3% / +5.2%,多空夏普 +4.01 / +4.28 对 +3.84 / +4.30。",
+   "fix": "写成「在跳过缺失日的聚合(cross_mean)下凸性无关;在 cross_sum 下去掉凸性多头腿净超额掉 2~3 个点,与缺失日当 0 的缺陷有交互」,证据改引 a_mean_abs15 对 a_mean_sq15。"
+  },
+  {
+   "severity": "minor",
+   "where": "/Users/wxy/Desktop/Partura 下 git status --short partura scripts lab docs",
+   "what": "docs/ 与 scripts/ 有未提交改动,归属无法确定。证据更像维护者的批量更新而不是 F102 研究员所为;F102 的数字不受影响(我直接从 JSON 核对,没有依赖 summarize.py 的打印)。partura/ 与 lab/ 干净。",
+   "evidence": "M docs/study_playbook.md(+6 行:ts_* OOM、固定半衰期提示);M scripts/study.sh(exec 日志 tail 60 → 200);M scripts/summarize.py(新增固定半衰期表)。三个文件 mtime 同为 23:20:15,是一次性程序化写入。F101 的 notes 在 23:04 就引用了「固定半衰期」表,说明内容改动更早。F102 的 notes 没有提到改工具。但 23:20:15 落在 F102 研究员写 notes 的时段内(23:19:23 批量改 13 个文件,23:20:18 写 08_variants)。",
+   "fix": "请维护者确认这三处改动是自己做的并提交。若不是,需要追查是哪个研究改了共享工具。"
+  }
+ ],
+ "checked": [
+  "已读 CLAUDE.md、docs/method.md、docs/study_playbook.md;读完最终报告全文(1275 行)、全部 24 个 notes、配置、4 个 run JSON、ledger.json、x1 / x2 / x3 与 final 的日志、三个分析脚本的切片与书调用",
+  "研究员自报的 original / recommended 共 26 个数全部对上 final.json:原式 utrain / holdout 的多空夏普 3.7116 / 2.5648、多头腿毛 12.80% / 8.25%、净 4.80% / −0.72%、纯多头夏普 1.2136 / −0.1551、换手 7.73%;f_max60 为 3.3539 / 2.3960、13.85% / 10.20%、11.02% / 7.44%、2.8031 / 1.6000、2.98%;coverage 0.999,distinct 0.9804,与原式 rank 相关 0.583",
+  "07_S_final 手写表 5 行 × 6 列(含空头腿、训练 / 测试换手)逐格对上 final.json 的 books_user;逐年 f_orig 2024 / 2025 多头腿净 −2.61% / +0.80%、f_max60 +6.43% / +6.16% 对上 by_year",
+  "10_distilled 读前候选表 15 个 train / valid 数、读后对比表 12 个数,以及派生数(多头书单边换手 10.57% → 3.75%、留出段 11.87% → 3.65%;毛减净 8.0 / 9.0 与 2.8 / 2.8;多空夏普差 0.36 / 0.17;毛超额衰减 24%~42%)全部对上",
+  "09_diagnosis 8 条「已确立」的数字逐条核对:x1 的 66.9% / 60.5%、83% / 96%、+2.08 / +1.26;l_nofold_lin −10.4% / −1.4%;x2 折叠点 −0.30 的 +3.6% / +2.9%;中性化 R² 0.219、空头腿 +38.8% → +11.0%、u_max60 +23.7% → +2.3%;自相关窗口 valid 多空夏普 3.88 / 2.03 / 0.82 / 1.67;r_ar1 R² 0.504、与 l_nofold_lin rank 相关 −0.001;−44.7% / −57.8%;a_level15 与 a_disp15 rank 相关 −0.015;逐年 rank IC 0.0294 → 0.0008、0.0161 → 0.0376;双重排序 +31.8% / +33.3%;干净池 +5.7% / +8.8%。数字都对,措辞问题见 issues",
+  "07_S1 / S2 / S3 三张手写表(9 + 9 + 12 行)逐格对上 s12.json / s3.json,包括 rank 相关、半衰期、纯多头夏普、空头腿、换手;06_baseline、07_neutralise、07_conditional、07_controls、08_variants(含 final 候选 5×5 相关表)、11_risks、12_next 里的数字全部对上;「与 F103 rank 相关 0.29」用本机 scripts/overview_for.py 复现",
+  "07x_1 / 07x_2 / 07x_3 的数字对照三份 exec 日志逐项核对,唯一的数字错误是 01_expression 的「95%」",
+  "留出段纪律:ledger holdout reads = 1(5 条表达式);S_final 5 个候选含 f_orig,全部 final: true;final.json mtime 23:15:25,是最后一次运行(s3 22:53、x3 日志 23:04、s12 19:50、S0 17:40),之后没有新的阶段或 exec 运行;final.json 里的 expr / why 与现配置一致,读后没改候选",
+  "读前理由:final.json(运行时写入)里 f_max60 的 why 就是「读留出段之前选定的推荐式…多头腿净 +11.3% / +10.1%、纯多头夏普 +2.70 / +3.20」,只用 train / valid 的数,可证明推荐在读之前定死。10_distilled「读之前」一节的文件 mtime 是 23:21(晚于 final),5 条预测的写作时间无法独立验证",
+  "分析脚本没有碰留出段:x1 / x2 / x3 全部用 st.slice('train' / 'valid'),逐年 IC 截到 va.stop;study_tools 对 holdout / full 抛 PermissionError",
+  "口径:决策口径半衰期 = train 上扣费多空夏普的 argmax;用户口径 hl_used = utrain sweep 的 argmax(五个候选逐一验证为 1 / 1 / 1 / 0 / 0),方向都是 −1;报告的 holdout 数字取自 splits(hl_used)而不是 splits_at_hl_long;没有发现把 utrain 列当样本外叙述的地方",
+  "基线复现:S0_baseline 用户口径方向 −1、半衰期 1、多空夏普 3.7116(公布 3.71)、多头腿毛 0.12796(公布 0.128),都在容差内;留出段 2.5648 对 2.57、0.0825 对 0.083 也在容差内;配置的 published 行、标签、成本、切分与 git HEAD 骨架一致",
+  "门槛:u_max60 / f_max60 在 train 上 coverage_labelled 0.9990、distinct 0.9804;holdout 上 coverage_labelled 0.9997",
+  "报告本身:四个 run 的 errors 都是空,没有求值失败的变体被引用;24 个 notes 全部原文出现在报告里;07_S1_layers / S2_windows / S3_aggregate / S_final 与配置 stage id 一致;生成表里的「—」只出现在跨运行的 rank 相关对和 v_base 的测试列,属预期并已说明",
+  "运行次数:服务器运行 6 次(s12、s3、final、x1、x2、x3),不超过 8;S1 与 S2 合在一次运行里,S2 不是看完 S1 才设计的,属轻微偏离,未列为问题",
+  "越界:partura/ 与 lab/ 干净;docs/ 与 scripts/ 有 3 个文件未提交改动,见 issues 最后一条"
+ ],
+ "overall": "没有 critical 问题:流程合规,主要数字全部对得上,但有 1 处 major 需要改写。\n\n- **流程**:留出段只读 1 次,5 个候选含原式;final 是最后一次运行,读后没改候选。推荐式在读之前定死,可由 final.json 里冻结的 why 佐证。分析脚本没有碰留出段。基线复现和两道门槛都过。\n- **数字**:核对约 150 个数,研究员自报的 26 个结论数和所有手写表逐格对上 JSON 与日志。唯一的数字错误是 01_expression 的「95% 为负」,实际是 84.7%。\n- **major**:notes 说「原式 + 慢半衰期」在留出段没有可比的行,但 final.json 里就有。原式在 hl=5 下留出段多头腿净超额是 +2.46%,f_max60 是 +7.44%。所以留出段上「慢」只解释 8.2 个点里的 3.2 个点,「升华的大头是慢」要改写;同时 f_max30 在 hl=5 下是 +7.57%,不低于 f_max60,30 对 60 的排序取决于半衰期怎么选。标题结论(−0.7% → +7.4%)本身成立。\n- **minor**:\n  - 几处结构比较没按 playbook 先看固定半衰期表(固定半衰期下 120 回落、cross_sum 窗口效应消失;干净池的数是 hl=10)。\n  - 几处措辞比数字强(「折叠点移 0.3 就没了」「仍单调」「每一项都不低于」)。\n  - 「凸性无关」引错了证据变体。\n  - docs/ 与 scripts/ 有 3 个未提交改动,归属不明,更像维护者所为,不影响本研究数字。",
+ "refutation_attempt": "我试了四条路去推翻「60 日极值把留出段多头腿净超额从 −0.7% 拉到 +7.4%」,都没推翻,只是收窄了它的读法。\n\n1. 直接从 final.json 重算用户口径:半衰期确实是 utrain 上的 argmax(原式 1、f_max60 0),holdout 数字取自 hl_used 而不是事后更好看的 hl_long,数字成立。\n2. 看是不是某一年撑的:2024 / 2025 年 f_max60 是 +6.4% / +6.2%,原式是 −2.6% / +0.8%,两年同向。\n3. 看是不是只是「慢」(原式配长半衰期就能做到):final.json 的 splits_at_hl_long 显示原式在 hl=5 下 holdout 只有 +2.46%,f_max60 仍多约 5 个点,结论反而更强。但同一组数里 f_max30 在 hl=5 下是 +7.57%,不低于 f_max60,所以「60 优于 30」不稳健。\n4. 看候选是否读后调换:f_* 的 train / valid 数字与 S1 / S3 的同一棵树逐位相同,final.json 里的 why 已写明推荐式,没有调换。\n\n没能检验的是基准水分:相对剔除事件票和短历史票的等权,留出段还剩多少没有算,研究员已如实说明。"
+}

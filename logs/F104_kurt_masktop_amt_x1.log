@@ -1,0 +1,122 @@
+[guard] all 2 run slots busy, waiting ...
+[guard] got run slot 0 after 327s
+[panels] 11 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 7.6 GiB free of 31.4; this run capped at 11% (3.6 GiB), chunk 306 MiB
+[panels]   3/11 (20s)
+[panels] GPU: 8.4 GiB free of 31.4; this run capped at 14% (4.4 GiB), chunk 371 MiB
+[panels]   6/11 (38s)
+[panels] GPU: 8.4 GiB free of 31.4; this run capped at 14% (4.4 GiB), chunk 371 MiB
+[panels]   9/11 (46s)
+[panels] GPU: 8.4 GiB free of 31.4; this run capped at 14% (4.4 GiB), chunk 371 MiB
+[panels]   11/11 (50s)
+[panels] done in 50s
+
+======== 1. is abs_ a no-op? ========
+finite pattern equal: True;  max |base - noabs| = 0.00029;  cells exactly equal = 0.480376
+
+======== 2. the tree as a function of k = minutes overwritten by the mask node (utrain) ========
+symbols[0:3]=[np.str_('000001.SZ'), np.str_('000002.SZ'), np.str_('000006.SZ')]  symbols[-3:]=[np.str_('688835.SH'), np.str_('688836.SH'), np.str_('688837.SH')]  n=5220
+        k   share  base med  base p10  base p90  nat med  2pt 1/(w(1-w))-6 rank(base) rank(Amt)  next-day excess ann
+        0   0.336     11.12      4.54     34.36    11.12               nan      0.508     0.799               -10.4%
+        1   0.068     11.49      4.67     35.67    11.48            236.00      0.522     0.649                -1.1%
+        2   0.038     11.96      4.86     37.17    11.99            115.51      0.536     0.581                 2.0%
+      3-5   0.070     12.21      4.92     37.85    12.37             55.27      0.542     0.527                 3.1%
+     6-12   0.091     12.24      4.86     37.99    12.93             25.16      0.542     0.452                 6.0%
+    13-30   0.127     11.64      4.45     37.00    13.82              7.14      0.523     0.349                 8.2%
+    31-60   0.119      9.99      3.63     35.59    15.17              0.82      0.474     0.232                 9.1%
+   61-120   0.116      8.57      2.65     28.91    17.81             -1.57      0.419     0.118                 9.7%
+  121-180   0.031      9.62      2.47     22.76    23.26             -1.90      0.414     0.040                -2.7%
+  181-241   0.003     10.59      3.20     23.98    43.31              0.37      0.454     0.016              -136.6%
+k=0 cells: base vs plain kurt  max rel diff 2.47e-06, share within 1e-3: 1.0000
+daily Spearman:  (base, plain kurt) all cells            0.630  [1359 days]
+                 (base, plain kurt) cells with k>0       0.470
+                 (base, 2-point formula of k) k>0        0.157
+                 (base, k) cells with k>=12              -0.176
+                 (base, log Amt) all                     0.110
+                 (plain kurt, log Amt) all               -0.174
+   k in [1,1]: median (own+injected)/own daily turnover = 1.00
+   k in [2,5]: median (own+injected)/own daily turnover = 1.02
+   k in [6,30]: median (own+injected)/own daily turnover = 1.21
+   k in [31,241]: median (own+injected)/own daily turnover = 3.62
+by year: share of stock-days with k>0 / k>=12 / k>=60, and share of zero-trade minutes:
+   2018: k>0 0.724  k>=12 0.436  k>=60 0.149  zero-minute share 0.0691
+   2019: k>0 0.696  k>=12 0.427  k>=60 0.150  zero-minute share 0.0529
+   2020: k>0 0.634  k>=12 0.384  k>=60 0.156  zero-minute share 0.0456
+   2021: k>0 0.619  k>=12 0.386  k>=60 0.159  zero-minute share 0.0503
+   2022: k>0 0.654  k>=12 0.399  k>=60 0.152  zero-minute share 0.0405
+   2023: k>0 0.680  k>=12 0.420  k>=60 0.152  zero-minute share 0.0382
+
+======== 3. tie-break by column index: does stock order leak into k? ========
+universal zero bars per day (min over stocks), median: 1.0
+  own zero minutes     cells  k | low-index third      mid  high-index third
+               0-0   1496931                  1.4      1.1               1.1
+               1-4   1931072                  7.6      8.0               7.2
+              5-19    978851                 34.8     34.4              33.9
+             20-59    666214                 70.6     72.5              70.9
+            60-149    228884                118.5    124.5             122.8
+           150-241     10850                182.4    196.6             192.4
+daily Spearman (k, column index) over cells with >=20 own zero minutes: -0.074 [1359 days]
+daily Spearman (base, column index) all cells: -0.031
+   low-index third: first=000001.SZ last=300266.SZ  mean k 21.01  mean own zero minutes 9.11
+   mid third: first=300267.SZ last=600774.SH  mean k 22.89  mean own zero minutes 9.99
+   high-index third: first=600775.SH last=688837.SH  mean k 29.66  mean own zero minutes 14.47
+
+======== 4. what drives the plain kurtosis of Amt (cells with k=0, utrain) ========
+   daily Spearman (plain kurt, maxsh  ) = 0.932
+   daily Spearman (plain kurt, firstsh) = 0.191
+   daily Spearman (plain kurt, lastsh ) = -0.015
+   daily Spearman (plain kurt, cv     ) = 0.672
+   daily Spearman (plain kurt, skew   ) = 0.986
+   argmax(Amt) range [0, 240]
+   biggest minute is the first bar: 0.003 of stock-days
+   biggest minute is the bars 2-6: 0.294 of stock-days
+   biggest minute is the last bar: 0.037 of stock-days
+   median maxsh = 0.0324  (1/241 = 0.0041)
+   median firstsh = 0.0048  (1/241 = 0.0041)
+   median lastsh = 0.0111  (1/241 = 0.0041)
+   median plain kurt = 11.12, p90 = 34.36, p99 = 94.48
+
+sign fitted on train: -1
+
+======== 5. deciles of the TRADED signal (EMA-20 of sign x base) -- train; D1 = short end, D10 = long end ========
+  D  excess ann   EMA k  k<0.5  k>=20  rk Amt  rk cap  rk turn  rk ivol  rk mom20  rk EMA plain kurt
+  1      -33.5%    14.7   0.13   0.25    0.62    0.53     0.59     0.63      0.55               0.83
+  2       -8.9%    14.9   0.12   0.27    0.55    0.51     0.54     0.54      0.52               0.66
+  3       -1.8%    16.1   0.14   0.30    0.52    0.51     0.52     0.51      0.51               0.57
+  4        3.3%    17.2   0.16   0.32    0.51    0.51     0.51     0.49      0.50               0.50
+  5        4.4%    18.8   0.17   0.35    0.50    0.50     0.50     0.48      0.49               0.45
+  6        5.9%    20.8   0.19   0.38    0.49    0.50     0.50     0.47      0.49               0.41
+  7        6.6%    23.3   0.20   0.40    0.49    0.50     0.49     0.47      0.49               0.38
+  8        6.2%    27.1   0.23   0.44    0.48    0.50     0.48     0.46      0.48               0.36
+  9        7.4%    34.9   0.25   0.49    0.46    0.49     0.46     0.47      0.48               0.37
+ 10       10.6%    57.7   0.23   0.61    0.38    0.46     0.39     0.49      0.49               0.48
+
+======== 6. where the rank IC lives -- train; regimes by EMA-20 of k ========
+regime                            share  excess ann  IC traded  IC EMA plain kurt  long-decile share  short-decile share  excess | long dec  excess | short dec
+U0 never masked (EMA k<0.5)       0.181       -2.0%     0.0154             0.0154              0.226               0.128               5.2%              -29.4%
+U1 borderline (0.5<=EMA k<20)     0.438       -1.9%     0.0208             0.0187              0.165               0.626               9.7%              -24.4%
+U2 deep illiquid (EMA k>=20)      0.381        3.1%     0.0341             0.0228              0.609               0.246              12.9%              -59.0%
+whole universe: IC traded 0.0272   IC EMA-20 plain kurt 0.0115   Spearman(traded, EMA plain kurt) 0.411
+
+======== 5. deciles of the TRADED signal (EMA-20 of sign x base) -- valid; D1 = short end, D10 = long end ========
+  D  excess ann   EMA k  k<0.5  k>=20  rk Amt  rk cap  rk turn  rk ivol  rk mom20  rk EMA plain kurt
+  1      -24.3%    15.3   0.12   0.28    0.60    0.47     0.63     0.61      0.55               0.85
+  2       -2.2%    18.3   0.11   0.34    0.50    0.47     0.54     0.50      0.51               0.68
+  3        3.4%    20.0   0.13   0.36    0.48    0.48     0.51     0.48      0.51               0.60
+  4        5.1%    21.5   0.15   0.38    0.48    0.49     0.50     0.47      0.51               0.54
+  5        4.5%    22.7   0.17   0.38    0.48    0.49     0.48     0.47      0.50               0.49
+  6        0.3%    24.5   0.19   0.38    0.48    0.50     0.47     0.47      0.50               0.44
+  7        6.2%    26.7   0.21   0.39    0.48    0.51     0.47     0.48      0.49               0.41
+  8        4.3%    29.0   0.24   0.39    0.48    0.51     0.47     0.49      0.49               0.37
+  9        2.6%    30.4   0.27   0.40    0.49    0.52     0.47     0.50      0.48               0.33
+ 10        0.6%    30.8   0.34   0.40    0.53    0.56     0.46     0.53      0.47               0.29
+
+======== 6. where the rank IC lives -- valid; regimes by EMA-20 of k ========
+regime                            share  excess ann  IC traded  IC EMA plain kurt  long-decile share  short-decile share  excess | long dec  excess | short dec
+U0 never masked (EMA k<0.5)       0.192      -14.4%    -0.0123            -0.0123              0.343               0.116             -20.6%              -17.2%
+U1 borderline (0.5<=EMA k<20)     0.438       -4.2%     0.0069             0.0024              0.260               0.605              -5.3%              -22.5%
+U2 deep illiquid (EMA k>=20)      0.371       13.2%     0.0344            -0.0008              0.397               0.279              24.0%              -31.4%
+whole universe: IC traded 0.0134   IC EMA-20 plain kurt -0.0150   Spearman(traded, EMA plain kurt) 0.550
+
+[x1 done]
+[partura exit 0 2026-10-04_10:33:47]

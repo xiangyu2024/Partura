@@ -1,0 +1,236 @@
+{
+ "factor_id": "F103_amt_dw_decay",
+ "one_line": "成交额水平 ×(最近 30 天平均日内成交额曲线的粗糙度/集中度)³:成交活跃、且成交长期挤在少数几分钟(主要是 9:31 那一根)的股票之后跑输;钱主要在空头腿。",
+ "mechanism": "原式 = cross_max(A·C³, 5),A = day_close(Amt) 是收盘集合竞价那一根的成交额(带成交额尺度),C = day_durbin_watson(cross_decay_linear(Amt,30)) 是\"先把 241 根分钟成交额逐分钟做 30 日平均、再量这条平均曲线的粗糙度\"(尺度无关)。读源码+拆解后:(1) ts_min(·,1) 是恒等、cross_max(·,5) 只是低通(书对原始数值做 EMA,重尾正数的 EMA 本身就是带衰减的峰值记忆)、收盘竞价那一根换成全天成交额更好——三个节点多余;(2) 骨架是「成交额水平 × 集中度^k」,两条腿缺一不可,且\"先平均再折叠\"不可交换;(3) C³ 把 A 的成交额尺度约掉一半多(log C 对 log 成交额斜率 −0.174,×3),所以原式与 ctl_amt 相关只有 0.28、全部控制变量 R² 只有 0.227,这是抵消不是新颖;(4) 交互是真的且单边:集中度只在成交活跃的票里有预测力,两段都稳定的只有\"成交最活跃 × 曲线最集中\"的 4% 股票(次日超额年化 −75%/−64%~−79%),空头十分位五分之一是近 5 日打过板的票;成交额低的那几行里集中度方向 train/valid 相反,对多头腿没有稳定贡献;(5) 两条腿在时间上轮动:集中度 2018–2020 与 2024–2025 强,成交额水平 2021–2023 强(valid 恰是成交额水平的大年)。指数 k 是两条腿的配比旋钮(同时决定尾部多重):k=3 押集中度,多空夏普不差但多头腿弱;k=2 两腿各半,多头腿净超额翻倍。",
+ "family": "成交额水平 × 30 日平均日内成交曲线的集中度:水平腿与 F001 同族(成交额水平 + 峰值记忆),集中度腿不在已知家族里(留出段上给 F001 蒸馏结果加了 0.59 个多空夏普),但它只在活跃票的空头端稳定。",
+ "original": {
+  "expr": "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)",
+  "ls_train": 3.533,
+  "ls_test": 3.18,
+  "long_gross_train": 0.1275,
+  "long_gross_test": 0.1241,
+  "long_net_train": 0.0557,
+  "long_net_test": 0.0547,
+  "long_sharpe_train": 1.108,
+  "long_sharpe_test": 1.044,
+  "sign": -1,
+  "halflife": 2,
+  "turnover": 0.0843,
+  "coverage": 0.9993,
+  "distinct": 1,
+  "n_operators": 7,
+  "rank_corr_with_original": 1
+ },
+ "recommended": {
+  "expr": "mul(day_sum(Amt), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30))))",
+  "ls_train": 3.446,
+  "ls_test": 3.099,
+  "long_gross_train": 0.1574,
+  "long_gross_test": 0.1558,
+  "long_net_train": 0.123,
+  "long_net_test": 0.1264,
+  "long_sharpe_train": 2.179,
+  "long_sharpe_test": 2.071,
+  "sign": -1,
+  "halflife": 10,
+  "turnover": 0.0389,
+  "coverage": 0.9993,
+  "distinct": 1,
+  "n_operators": 5,
+  "rank_corr_with_original": 0.745
+ },
+ "recommended_kind": "distilled",
+ "other_finalists": [
+  {
+   "expr": "mul(day_sum(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))))",
+   "ls_train": 3.64,
+   "ls_test": 3.518,
+   "long_gross_train": 0.1176,
+   "long_gross_test": 0.1232,
+   "long_net_train": 0.0843,
+   "long_net_test": 0.0923,
+   "long_sharpe_train": 1.658,
+   "long_sharpe_test": 1.765,
+   "sign": -1,
+   "halflife": 10,
+   "turnover": 0.0386,
+   "coverage": 0.9993,
+   "distinct": 1,
+   "n_operators": 5,
+   "rank_corr_with_original": 0.861
+  },
+  {
+   "expr": "mul(cross_max(day_std(Amt), 9), day_durbin_watson(cross_decay_linear(Amt, 30)))",
+   "ls_train": 3.58,
+   "ls_test": 3.142,
+   "long_gross_train": 0.191,
+   "long_gross_test": 0.1693,
+   "long_net_train": 0.1329,
+   "long_net_test": 0.1164,
+   "long_sharpe_train": 2.274,
+   "long_sharpe_test": 1.547,
+   "sign": -1,
+   "halflife": 2,
+   "turnover": 0.0691,
+   "coverage": 0.9993,
+   "distinct": 1,
+   "n_operators": 5,
+   "rank_corr_with_original": 0.647
+  },
+  {
+   "expr": "cross_max(day_std(Amt), 9)",
+   "ls_train": 2.943,
+   "ls_test": 2.551,
+   "long_gross_train": 0.1916,
+   "long_gross_test": 0.1517,
+   "long_net_train": 0.119,
+   "long_net_test": 0.0819,
+   "long_sharpe_train": 1.817,
+   "long_sharpe_test": 0.89,
+   "sign": -1,
+   "halflife": 0,
+   "turnover": 0.0827,
+   "coverage": 0.9993,
+   "distinct": 1,
+   "n_operators": 2,
+   "rank_corr_with_original": 0.412
+  }
+ ],
+ "known_exposure_r2": 0.227,
+ "verdict": "提纯成功,升华有限。推荐 mul(day_sum(Amt), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30))))(5 个算子,原式 7 个):用户口径 训练/测试 多头腿净超额 +5.6%/+5.5% → +12.3%/+12.6%,纯多头夏普 +1.11/+1.04 → +2.18/+2.07,多空夏普 +3.53/+3.18 → +3.45/+3.10(低 0.08,噪声以内),换手 8.4% → 3.9%;2018–2025 每一年多空夏普 ≥ +2.2、多头腿净超额 ≥ +6%。事前写下的三条判据在留出段都过了:纯删节点版(k=3)多空夏普 +3.52 对原式 +3.18;事前推荐的升华版 f_std9_k1 多头腿 +11.6%/+1.55 高于原式、多空夏普 +3.14;它比已知家族基准(F001 蒸馏,+2.55)高 0.59。必须说明的三点:(1) 最终推荐是读完留出段之后在五个事前定死的候选里改选的——事前首选是 f_std9_k1(依据是 valid 上的优势),留出段没有重现该优势(多空夏普打平,纯多头夏普 1.55 对 2.07),改选 f_sum_k2 的理由有三条是事前已知的(换手低一半、多头腿不依赖近乎掷硬币的半衰期、与 F001 蒸馏结果相关 0.74 而非 0.93),一条来自留出段,所以它的留出段数字带轻微选择偏差;(2) 多头腿的改善拆开是两步:删节点降换手(+5.5% → +9.2%,毛超额不变)和把指数从 3 降到 2、把权重还给成交额水平(+9.2% → +12.6%)——第二步增加的是已知暴露(ctl_amt 单独的 R² 从 0.081 升到 0.462),多头十分位市值百分位 0.29/0.21,train/valid 上市值中性后只剩约 +2%;(3) 这棵树特有的集中度腿对多头腿没有稳定贡献,它的价值在空头端(那 4% 活跃且集中的票)。若只看多空夏普,k=3 的纯删节点版(留出段 +3.52)更合适。",
+ "established": [
+  "七个算子里三个多余:ts_min(·,1) 恒等(探针 + S1 a_no_tsmin 逐位相同);cross_max(·,5) 只是低通(S1:删掉 +4.35/+2.41、换均值 +4.26/+2.49,原式 +4.14/+2.22);收盘竞价额换成全天成交额多头腿两段更好(S1 f_sum)。三个一起删(f_sum_k3)留出段多空夏普 +3.52 对原式 +3.18,多头腿净超额 +9.2% 对 +5.5%(S_final)。",
+  "骨架是「成交额水平 × 30 日平均曲线集中度^k」,两条腿缺一不可、尺度不能约掉、平均必须在折叠之前:只留 A +1.81/+3.69,只留 C +1.79/−1.75,A 换成尾盘占比 valid −1.96,排名相乘 valid −0.08(S1);先逐日 DW 再平均代入整树 +1.00/+1.14(X1-6);当日 DW 方向都反 −1.38/−2.77(X2-e);窗口 10~60 是平台。",
+  "原式被全部控制变量张成的 R² 只有 0.227,是因为 C³ 把 A 的成交额尺度约掉一半多(log C 对 log 成交额斜率 −0.174,X1-4),不是因为它新;中性化后 rank IC 0.0358 → 0.0172,空头腿 +42.8% → +9.1%,多头腿毛超额 +13.5% → +11.4%(S0 中性化表)。各版本中性化后的残差 rank IC 都在 0.012~0.019(S2 中性化表)。",
+  "集中度是单边的避雷变量:C 的条件 rank IC 按成交额五分桶 −0.0028 → −0.0611(S1);5×5 依次分组两段都稳定的只有「成交最活跃 × 最集中」的 4%(次日超额年化 −75%/−64%,用峰值占比 −75%/−79%),低成交额行方向 train/valid 相反(X2-b、X3-F)。空头十分位 20.68% 近 5 日打过板,标签缺失率不高于全市场(X1-8)。",
+  "两条腿轮动:成交额水平 2020 年多空夏普 +0.19、2022 年 +4.07;集中度单独 2020 年 +4.94、2023 上半年 −0.28(X3-C);留出段 2024/2025 年 F001 蒸馏结果 +2.21/+2.11,k=3 版 +3.59/+3.08(S_final 逐年)。valid 是成交额水平的大年(各成交额类控制变量多空夏普是 train 的 1.8~3.4 倍)。",
+  "指数 3 → 2(f_sum_k2)把多头腿净超额从 +5.6%/+5.5% 提到 +12.3%/+12.6%、纯多头夏普 +1.11/+1.04 → +2.18/+2.07,多空夏普 +3.45/+3.10(S2、S_final);留出段上集中度腿给 F001 蒸馏结果加了 +0.59 多空夏普(f_std9_k1 +3.14 对 f_stdamt9 +2.55,S_final)。"
+ ],
+ "unresolved": [
+  "指数对多空夏普没有稳定的最优值:k=3 对 k=2 是 train +3.93/+3.33、valid +2.88/+3.78、留出段 +3.52/+3.10——S1/X1 当时\"k=3 是 train 局部最优\"的读法在留出段的多空夏普上不成立;只有多头腿三段都是 k=2 好或打平。",
+  "多头腿是不是 alpha:对市值做秩中性化后 train/valid 多头腿净超额只剩约 +2%(X3-E);留出段没有读市值中性版本。",
+  "集中度腿在 2021–2023 年上半年\"成交额中性后 rank IC 接近零\"(X3-D),留出段却给已知家族加了 0.59——是轮动还是偶然,没有直接量过留出段的成交额中性 rank IC(不能再读)。",
+  "最终推荐是读完留出段后在五个候选里改选的(事前首选 f_std9_k1),带轻微选择偏差;f_sum_k2 与 f_std9_k1 留出段多空夏普打平,差别在噪声量级。",
+  "DW 还是「开盘第一分钟成交占比」(峰值占比九成是 9:31 那一根):train/valid 分不出高下,留出段没有放峰值占比候选。",
+  "空头端那 4% 的角作为多头组合的剔除名单值多少,没有测(十分位口径回答不了)。"
+ ],
+ "lab_findings": [
+  {
+   "id": "F103-L1",
+   "claim": "「保序的外层一元变换是 no-op」只在 EMA 半衰期 = 0 时成立。用户口径是先对原始数值做 EMA 再排名:重尾正数直接做 EMA ≈ 带衰减的峰值记忆;先取 log 或截面排名再做 EMA 就成了普通均值平滑,换手更高、表现更差。指数 k 因此既定配比也定尾部多重。",
+   "evidence": "X3-H:同一面板逐日排名相同、rank IC 逐位相同(0.0464/0.0491),day_sum·C² 原值 +3.33/+3.78、多头腿净 +11.4%/+14.5%;log 版 +2.60/+3.42、+6.3%/+13.7%;rank 版 +2.27/+3.08、+7.4%/+13.8%。day_sum、day_sum·C、day_sum·p_peak² 同向(train 差 0.4~1.1 夏普)。",
+   "operators": [
+    "pow_3",
+    "pow_2",
+    "log",
+    "cs_rank",
+    "sigmoid"
+   ],
+   "confidence": "high",
+   "recheck": "半衰期选中 0 时退化为 no-op;操作数本身有界或已是排名时差别小;如果建书流程改成先截面标准化/排名再平滑,这条不适用。playbook 里「别把保序变换当成变体来试」需要加这个限定。"
+  },
+  {
+   "id": "F103-L2",
+   "claim": "对恒正、重尾的水平量,外层 cross_max(·, d) 是多余的:EMA 作用在原始数值上已经在做「峰值记忆」。删掉或换成 cross_mean 不掉表现,换手更低。",
+   "evidence": "S1:原式 +4.14/+2.22;删 cross_max(·,5) +4.35/+2.41;换 cross_mean +4.26/+2.49。留出段:删三个节点的 f_sum_k3 +3.52 对原式 +3.18,换手 8.2% → 3.7%。",
+   "operators": [
+    "cross_max",
+    "cross_mean"
+   ],
+   "confidence": "high",
+   "recheck": "操作数正负混杂时不成立(F001:极值 = 取幅度);半衰期被选成 0 时极值记忆仍有降换手的作用;只在 15bp 成本、EMA 口径下测过。"
+  },
+  {
+   "id": "F103-L3",
+   "claim": "窗口为 1 的日轴滚动算子(ts_min(x,1)、ts_max(x,1) 等)是逐位恒等,只是 GP 用来把 dt 面的量「过」到 nd 面的换面节点,可以直接删。",
+   "evidence": "探针 window_one_is_identity(自检:ts_max(x,1) 恒等、ts_delay(x,1) 不是);S1 a_no_tsmin 与原式 rank 相关 1.000000、NaN 位置一致、所有指标逐位相同。",
+   "operators": [
+    "ts_min",
+    "ts_max",
+    "cross_max",
+    "cross_decay_linear"
+   ],
+   "confidence": "high",
+   "recheck": "ts_delay 等带位移的算子窗口 1 不是恒等;窗口 1 的 stddev/corr 类会给 NaN,需单独看。"
+  },
+  {
+   "id": "F103-L4",
+   "claim": "day_durbin_watson 喂非负的成交额/成交量曲线时量的是曲线的粗糙度/尖峰度(Σ(Δx)²/Σx²,孤立尖峰在中间的响应是末端的 2 倍),既不是自相关也不是已实现方差。喂当日曲线时它主要是流动性差的代理(块状噪声);只有先跨日平均再喂进去才留下持久的日内形状。",
+   "evidence": "探针 isolated_spike_response(= (h−1)²/(M−1+h²),中间 ×2)、noise_averaging_exponent(DW ∝ N^−0.985)。X1:当日 DW(Amt) 与成交额水平 rank 相关 −0.67;X2-e:day_sum × 当日 DW 方向都反(−1.38/−2.77),30 日平均后的版本 +3.93/+2.88。",
+   "operators": [
+    "day_durbin_watson",
+    "cross_decay_linear",
+    "cross_mean"
+   ],
+   "confidence": "high",
+   "recheck": "操作数是价格水平(≈ 已实现方差,F001)或收益序列(≈ 一阶自相关)时语义完全不同;曲线含负值时不适用。"
+  },
+  {
+   "id": "F103-L5",
+   "claim": "「cross_*(分钟级操作数) → day_* 非线性折叠」与「day_* 折叠 → 日轴平均」不可交换:前者先把逐日独立的分钟噪声压掉(有效样本 (Σw)²/Σw²,decay_linear 30 ≈ 22.9 天),量的是平均曲线的形状;后者是每天统计量的平均。遇到 cross_* 套在分钟级字段外面时,不要把它读成「日频量的记忆」。",
+   "evidence": "探针 impulse_footprint(cross_decay_linear 逐分钟槽位各滚各的,有效样本 22.87)。X1-6:DW(decay30(Amt)) 与 decay30(DW(Amt)) rank 相关 0.709,后者与成交额水平 −0.76;代入整树 +1.00/+1.14 对 +4.14/+2.22。",
+   "operators": [
+    "cross_decay_linear",
+    "cross_mean",
+    "day_durbin_watson",
+    "day_std",
+    "day_max"
+   ],
+   "confidence": "high",
+   "recheck": "折叠是线性的(day_sum、day_mean)时两种顺序等价;平均窗口很短(≤5)时噪声压得不够,两者会接近。"
+  },
+  {
+   "id": "F103-L6",
+   "claim": "带尺度的腿 × 与该尺度负相关的无尺度腿^k 会把尺度约掉:整树与已知暴露的相关/R² 很低不代表新颖。判断办法是量 log 空间的斜率并把两支分开中性化;各版本中性化后的残差 rank IC 才可比。",
+   "evidence": "X1-4:log C 对 log 成交额斜率 −0.174(×3 = −0.52),原式与 ctl_amt 相关 0.28、all_controls R² 0.227;A 支单独 R² 0.807、C 支单独中性化后 rank IC 反而从 0.0045 升到 0.0162。骨架各版本 R² 0.55~0.83,但残差 rank IC 都在 0.012~0.019。",
+   "operators": [
+    "mul",
+    "pow_3",
+    "pow_2"
+   ],
+   "confidence": "medium",
+   "recheck": "两支在截面上不相关或正相关时不发生抵消;只在成交额尺度上测过。"
+  },
+  {
+   "id": "F103-L7",
+   "claim": "本批数据段的制度特征:valid(2022-01~2023-08)是成交额水平/小市值的大年,只看 valid 挑变体会系统性挑到成交额水平占比最高的那个;留出段(2023-08~2025)里成交额水平腿的多头端明显变差。挑候选要 train 和 valid 一起看,并固定半衰期比较多头腿。",
+   "evidence": "控制变量自己当因子:ctl_amt +1.03 → +3.47,known_stdamt_max9 +2.47 → +4.44。F103 里 k 越小 valid 越好,但留出段 F001 蒸馏结果多空夏普 +2.94 → +2.55、纯多头夏普 +1.82 → +0.89、多头腿最大回撤 −15.4%,2024 年多头腿净超额只有 +3.0%。事前按 valid 优势选的 f_std9_k1 在留出段多头腿不如 f_sum_k2。",
+   "operators": [
+    "day_sum",
+    "day_std",
+    "cross_max"
+   ],
+   "confidence": "medium",
+   "recheck": "只有一段留出段的证据;换标签或换股票池需要重测。多空夏普在半衰期上是平的时候,按多空夏普选半衰期会让多头腿净超额摆动 5 个点(x_std9_k1:半衰期 0~3 多空 +3.28~+3.32,多头腿净 +6.8%~+11.7%)。"
+  },
+  {
+   "id": "F103-L8",
+   "claim": "「成交活跃 × 30 日平均日内成交曲线高度集中」是稳定的空头端/剔除信号,对多头端没有稳定贡献:集中度(DW、峰值分钟占比、CV)只在高成交额的票里有预测力。",
+   "evidence": "X2-b / X3-F:成交额最高 1/5 × 集中度最高 1/5(约 4% 股票)次日超额年化 −75%/−64%(DW)、−75%/−79%(峰值占比);成交额低的三行 C5−C1 在 train 为 −10~−27、valid 为 +3~+14。集中度单独:train 多空 +4.3、valid +1.1 且多头腿为负。峰值分钟 68%~87% 是 9:31 那一根。",
+   "operators": [
+    "day_durbin_watson",
+    "day_max",
+    "day_std",
+    "cross_decay_linear"
+   ],
+   "confidence": "medium",
+   "recheck": "那个角在留出段没有直接量;成交额中性的集中度在 2021–2023H1 rank IC 接近零,存在与成交额水平轮动的迹象;竞价制度改变(如 2018-08-20 沪市引入收盘集合竞价)会改变截面分布。"
+  }
+ ],
+ "holdout_reads": 1,
+ "server_runs": 7,
+ "variants_tested": 24,
+ "report_path": "/Users/wxy/Desktop/Partura/research/alpha_distillation/F103_amt_dw_decay.md",
+ "tooling_problems": [
+  "这是一次接续的研究:S0/S1/X1/X2 及对应 notes 是上一次会话留下的,我核对后接着做了 X3、S2、S_final。配置里已写好但没跑过的 S2_distil 被我按 X3 的结果重写(去掉 X2 已用数值重建回答的 k=0.5/1.5、c_inner、c_swap、e_cv,换成 F001 蒸馏基准、混合水平腿、day_std(B) 等);diagnostics 列表在 S1 之后被改过,和 S1 的 JSON 不再一一对应(无害,runner 只算当前阶段里有的 id)。",
+  "服务器排队:X3 等运行槽等了 756 秒(同时有 F102/F104/F105 在跑),study.sh wait 两次返回 STILL RUNNING,重调即可;全程没有用 --cpu-fallback,也没有动别人的进程。",
+  "study.sh wait 对 exec 任务只打印日志最后 60 行,X3 的输出有 170 多行,前半部分要自己去读 logs/F103_amt_dw_decay_x3.log。",
+  "report 的逐年表只渲染 base_id(v_base,来自 S0),final 那次运行里五个候选含留出段年份的逐年结果不会进报告;我从 final.json 手工抄进了 notes/07_S_final.md。",
+  "「固定半衰期下的 train 表现」那张表只在 final 的摘要里打印,S2 的摘要里没有;比较结构时需要的各半衰期多头腿数字,我是用临时 python 从 JSON 的 sweep 里抽的。按多空夏普选半衰期(rank_by: ls)在多空夏普对半衰期是平的时候会让多头腿净超额摆动 5 个点,建议摘要里常驻固定半衰期对照。",
+  "summarize.py 的中性化行固定写「原始日频面板上的 R2 只有 X」,即使原始面板的 R² 更高(如 d_sum_k2:交易信号 0.554、原始面板 0.639),措辞会误导。",
+  "实验室先验和 playbook 里「保序外层变换是 no-op,别当成变体来试」在当前口径(先 EMA 后排名、半衰期 > 0)下不成立(X3-H),建议修订 lab/findings.yaml 那一条的失效条件和 playbook §3 的提示;我没有改这两个文件。",
+  "想把 F001 蒸馏结果当作控制变量做中性化,但往 controls 里加一项会改变 all_controls 的 R²、与 S0 的基线行不可比,所以没有改 controls,改在 exec 脚本(x3_family.py)里用 dg.neutralise 自己做;残差只能在原始日频面板上算,口径与报告里的中性化表(交易信号)略有不同,notes 里已注明。",
+  "check 在 diagnostics 列表里出现尚未定义的阶段 id 时会打印 note(无害);final 阶段的变体与 S2 里同一棵树被正确识别为只求值一次。",
+  "读留出段之前写的 notes/10_distilled.md 前半段里有一处小的不准确(对 e_peak_k2 多头腿的描述),按「读后不改」的约定保留原文,在同一文件末尾加了勘误;几份上一次会话写的 notes 里与留出段结果不符的读法,我没有改原文,只加了标明「后记」的一行。"
+ ]
+}

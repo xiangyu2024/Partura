@@ -1,0 +1,407 @@
+
+======== 0. helper sources on the SERVER (the `src` tool does not unfold C._skew) ========  [0s]
+# common._skew
+def _skew(x: torch.Tensor) -> torch.Tensor:
+    x_demeaned = x - x.nanmean(dim=-1, keepdim=True)
+    x_std = torch.sqrt(torch.nanmean(torch.pow(x_demeaned, 2), dim=-1, keepdim=True))
+    zscore = torch.pow(div(x_demeaned, x_std), 3)
+    return _mean(zscore)
+
+# common._mean
+def _mean(x: torch.Tensor) -> torch.Tensor:
+    return x.nanmean(dim=-1)
+
+# common._stddev
+def _stddev(x: torch.Tensor) -> torch.Tensor:
+    x_demean = x - x.nanmean(dim=-1, keepdim=True)
+    return torch.sqrt(torch.nanmean(torch.pow(x_demean, 2), dim=-1))
+
+# common.div
+@op("shared", "elementwise", arity=2)
+def div(x, y) -> torch.Tensor:
+    if isinstance(x, (int, float)) and isinstance(y, torch.Tensor):
+        x = create_like(y, x)
+    elif isinstance(y, (int, float)) and isinstance(x, torch.Tensor):
+        y = create_like(x, y)
+    return torch.divide(x, y)
+
+# common.EPS = 1e-09
+[panels] GPU has 2.5 GiB free (< 6.0 needed to stay out of the neighbours' way): this run computes on the CPU with 256 MiB chunks
+[panels] 12 new expression(s) on 1942d x 5220s (+0 warm-up), device=cpu, batches of 3
+[panels]   3/12 (30s)
+[panels]   6/12 (65s)
+[panels]   9/12 (73s)
+[panels]   12/12 (105s)
+[panels] done in 105s
+
+======== 0b. self-checks of this script against the engine ========  [115s]
+numpy |A - rowmean(A)| vs engine panel: finite pattern equal = True; max abs diff = 8.61e-07; Spearman = 1.00000
+numpy roll_mean(base, 30) vs engine cross_mean(base, 30): max abs diff after row 60 = 12.6; finite-pattern mismatch share = 0.00266; Spearman = 0.99886
+sign fitted on train for the base panel: -1; hlL = 20.0, hlS = 20.0
+variant                            sgn | hlL  Lnet tr  Lnet va Lshp tr Lshp va  Lgro tr  Lgro va    LTO | hlS  LS tr  LS va short tr | rho(base)
+base (st.books; must match S0)      -  |  20    +1.1%    +3.0%   +0.24   +0.69    +9.4%   +11.4%  10.9% |  20  +2.81  +3.16   +32.5% |     +1.00
+
+======== 1. day_skew(Low) on real data (utrain rows) ========  [120s]
+cells with a label: 5208786; of those, A finite: 0.9979
+quantiles of A (signed skew):   q0.001=-9.68  q0.01=-2.57  q0.05=-1.50  q0.25=-0.53  q0.5=-0.01  q0.75=+0.48  q0.95=+1.35  q0.99=+2.20  q0.999=+4.61
+quantiles of |B| = |A - mean|:  q0.1=0.08  q0.25=0.21  q0.5=0.46  q0.75=0.84  q0.9=1.34  q0.95=1.72  q0.99=2.90  q0.999=10.72
+share of finite cells with |B| >= 0.5 / 1 / 1.5 / 2 / 3 / 5:  0.4629  0.1857  0.0741  0.0315  0.0091  0.0035
+share of finite cells with |A| within 1e-3 of exactly 1 (constant-path float garbage): 0.00156
+share of the cross-sectional SUM of |B| carried by cells with |B| >= 1 / 2 / 3:  0.492  0.165  0.082
+per-day cross-sectional mean of A:  q0.05=-0.584  q0.25=-0.221  q0.5=-0.031  q0.75=+0.148  q0.95=+0.394
+per-day cross-sectional sd of A:    q0.05=0.748  q0.25=0.884  q0.5=0.975  q0.75=1.079  q0.95=1.221
+per-day |mean| / sd:                q0.25=0.094  q0.5=0.190  q0.75=0.327  q0.9=0.514  q0.99=0.899   share of days > 0.25: 0.370, > 0.5: 0.113
+daily Spearman(|A - mean|, |A|): mean 0.786
+daily Spearman(EMA20 |A - mean|, EMA20 |A|) on train: 0.903
+prices raw? share of day_last(Close) within 1e-3 of a 0.01 grid: 0.2442  (median price 35.27)
+ tick steps spanned by Low   share  mean |A| median |A| A NaN share  mean |B|
+                         0  0.0020     1.000      1.000       0.735     1.321
+                         1  0.0001     3.447      1.836       0.000     3.363
+                         2  0.0007     1.494      0.480       0.000     1.505
+                       3-4  0.0031     0.689      0.354       0.000     0.697
+                       5-9  0.0144     0.550      0.377       0.000     0.538
+                     10-19  0.0475     0.542      0.397       0.000     0.515
+                     20-49  0.1835     0.590      0.442       0.000     0.545
+                     50-99  0.2286     0.652      0.490       0.000     0.595
+                     >=100  0.5201     0.738      0.551       0.000     0.689
+
+path type (utrain, labelled)                   share   mean A  mean |B|  |B|>=2  ret>9%  ret<-9%
+constant all day (max == min)                 0.0020    -0.02      1.32   0.032   0.353    0.373
+pinned high (median == max, not const)        0.0079    -4.28      4.18   0.677   0.838    0.000
+pinned low (median == min, not const)         0.0033    +3.46      3.33   0.472   0.000    0.350
+everything else                               0.9861    -0.02      0.59   0.024   0.008    0.006
+of the cells with |B| >= 2 (0.0310 of labelled cells): pinned high 0.172, pinned low 0.051, constant 0.002; day return > 9%: 0.168, < -9%: 0.044; mean sign of B: -0.13
+by year: mean |B|, share |B|>=2, share pinned(high/low/const), share <=2 tick steps
+   2018: mean|B| 0.553  |B|>=2 0.0193  pinned 0.0108  ticks<=2 0.0026
+   2019: mean|B| 0.577  |B|>=2 0.0228  pinned 0.0124  ticks<=2 0.0023
+   2020: mean|B| 0.614  |B|>=2 0.0294  pinned 0.0176  ticks<=2 0.0053
+   2021: mean|B| 0.710  |B|>=2 0.0411  pinned 0.0148  ticks<=2 0.0025
+   2022: mean|B| 0.646  |B|>=2 0.0343  pinned 0.0127  ticks<=2 0.0020
+   2023: mean|B| 0.671  |B|>=2 0.0367  pinned 0.0093  ticks<=2 0.0020
+
+======== 2. EVENT level (no smoothing): next-day excess by SIGNED B bucket (annualised %, vs equal-weight of scored names) ========  [127s]
+-- train:            B in   share   excess rk dvol20  rk amt              label NaN share
+                (-inf, -2]  0.0161  -113.6%      0.63    0.61                       0.0474
+                  (-2, -1]  0.0716    -0.1%      0.53    0.55                       0.0165
+                (-1, -0.5]  0.1288    +7.6%      0.50    0.50                       0.0148
+             (-0.5, -0.25]  0.1159    +8.9%      0.49    0.47                       0.0128
+                (-0.25, 0]  0.1490    +6.8%      0.48    0.47                       0.0126
+                 (0, 0.25]  0.1547    +5.4%      0.48    0.48                       0.0122
+               (0.25, 0.5]  0.1277    +1.6%      0.49    0.49                       0.0126
+                  (0.5, 1]  0.1471    -5.4%      0.50    0.52                       0.0146
+                    (1, 2]  0.0763   -12.5%      0.53    0.55                       0.0179
+                  (2, inf]  0.0129   -37.0%      0.56    0.58                       0.0165
+                  constant  0.0007  -508.4%
+               pinned high  0.0082  -288.6%
+                pinned low  0.0035  -103.6%
+             other, |B|>=1  0.1668    -3.7%
+              other, |B|<1  0.8209    +4.5%
+-- valid:            B in   share   excess rk dvol20  rk amt              label NaN share
+                (-inf, -2]  0.0203   -61.8%      0.61    0.62                       0.0343
+                  (-2, -1]  0.0814    -1.6%      0.53    0.55                       0.0275
+                (-1, -0.5]  0.1290    +3.1%      0.49    0.50                       0.0282
+             (-0.5, -0.25]  0.1103    +7.5%      0.47    0.47                       0.0283
+                (-0.25, 0]  0.1394    +2.8%      0.47    0.47                       0.0277
+                 (0, 0.25]  0.1466    +3.1%      0.48    0.47                       0.0285
+               (0.25, 0.5]  0.1235    +1.1%      0.49    0.49                       0.0299
+                  (0.5, 1]  0.1504    -1.2%      0.52    0.51                       0.0316
+                    (1, 2]  0.0841    -3.5%      0.55    0.55                       0.0333
+                  (2, inf]  0.0149   -22.6%      0.58    0.60                       0.0284
+                  constant  0.0003  -450.0%
+               pinned high  0.0074  -224.4%
+                pinned low  0.0031   -34.7%
+             other, |B|>=1  0.1920    -2.1%
+              other, |B|<1  0.7973    +2.9%
+
+======== 3. PERSISTENT level: decile profiles (annualised excess %, D1..D10) ========  [131s]
+-- train: traded signal EMA20(-|B|), D1 = short end:   -32.7   -6.3   -0.8   +1.9   +1.5   +4.8   +5.5   +7.8   +8.8   +9.6
+-- train: EMA20 of SIGNED B, D1 = most negative:       -22.3   +7.3   +6.2   +6.7   +5.3   +3.9   +5.0   +1.2   -1.8  -11.4
+   train: cells by EMA20|B| rank x sign of EMA20 signed B:  (share, excess)
+      EMA|B| rank in [0.9, 1.0):  signed<0: 0.067,  -37.7%   signed>=0: 0.032,  -22.2%
+      EMA|B| rank in [0.7, 0.9):  signed<0: 0.099,   -4.1%   signed>=0: 0.102,   -3.2%
+      EMA|B| rank in [0.3, 0.7):  signed<0: 0.184,   +6.1%   signed>=0: 0.217,   +0.9%
+      EMA|B| rank in [0.0, 0.3):  signed<0: 0.138,  +13.7%   signed>=0: 0.162,   +4.7%
+-- valid: traded signal EMA20(-|B|), D1 = short end:   -31.0   -8.7   -3.6   -0.4   +3.7   +5.9   +6.0   +6.1  +10.2  +11.8
+-- valid: EMA20 of SIGNED B, D1 = most negative:       -27.6   +0.1   +4.2   +3.9   +5.3   +3.3   +2.3   +3.1   +4.1   +1.3
+   valid: cells by EMA20|B| rank x sign of EMA20 signed B:  (share, excess)
+      EMA|B| rank in [0.9, 1.0):  signed<0: 0.065,  -40.9%   signed>=0: 0.036,  -12.3%
+      EMA|B| rank in [0.7, 0.9):  signed<0: 0.094,  -10.1%   signed>=0: 0.106,   -2.7%
+      EMA|B| rank in [0.3, 0.7):  signed<0: 0.182,   +2.5%   signed>=0: 0.216,   +5.1%
+      EMA|B| rank in [0.0, 0.3):  signed<0: 0.145,  +11.6%   signed>=0: 0.155,   +7.2%
+
+======== 4. fold / tail / statistic variants as books (sign + half-life fitted on train; rho = rank corr of traded signals with base, train) ========  [135s]
+variant                            sgn | hlL  Lnet tr  Lnet va Lshp tr Lshp va  Lgro tr  Lgro va    LTO | hlS  LS tr  LS va short tr | rho(base)
+base |B| (engine panel)             -  |  20    +1.1%    +3.0%   +0.24   +0.69    +9.4%   +11.4%  10.9% |  20  +2.81  +3.16   +32.5% |     +1.00
+|A| (no cs_demean)                  -  |  20    -5.7%    -5.1%   -1.17   -0.89    +3.4%    +3.7%  12.1% |  20  +1.96  +1.56   +31.4% |     +0.90
+signed B                            -  |  20   -30.1%   -36.6%   -3.88   -5.36   -22.1%   -27.1%  10.5% |  20  -2.31  -4.02   +11.1% |     -0.10
+B+ = max(B, 0)                      -  |  20    -2.0%    -6.1%   -0.40   -1.08    +7.8%    +3.3%  13.0% |  20  +0.33  -0.96   +13.1% |     +0.56
+B- = max(-B, 0)                     +  |  20   -34.6%   -39.4%   -4.39   -5.60   -28.4%   -32.0%   8.2% |  20  -3.01  -5.04    +6.8% |     -0.63
+B^2                                 -  |  20    +1.8%    +3.5%   +0.39   +0.89    +8.5%   +10.2%   8.8% |  10  +2.87  +2.54   +34.5% |     +0.92
+sqrt|B|                             -  |  20    +0.9%    +2.8%   +0.20   +0.64   +10.1%   +12.2%  12.1% |  20  +2.26  +2.83   +28.1% |     +0.97
+min(|B|, 1.0)                       -  |  20    -0.7%    +1.6%   -0.15   +0.38    +9.2%   +11.9%  13.1% |  20  +0.72  +1.56   +17.5% |     +0.87
+min(|B|, 0.6)                       -  |  20    -2.5%    -0.7%   -0.57   -0.18    +8.8%   +10.9%  14.9% |  20  +0.37  +1.02   +16.8% |     +0.79
+cs pct-rank of |B|                  -  |  20    -0.4%    +1.9%   -0.08   +0.44    +9.8%   +12.3%  13.4% |  20  +0.89  +1.51   +18.2% |     +0.88
+1{|B| > 1}                          -  |  20    -0.4%    +1.7%   -0.08   +0.46    +6.8%    +9.5%   9.5% |  20  +0.73  +1.67   +17.0% |     +0.83
+1{|B| > 2}                          -  |  20    +1.5%    +1.2%   +0.39   +0.44    +3.2%    +3.3%   2.2% |  10  +2.81  +2.89   +33.5% |     +0.69
+|B|, pinned/const days -> cs median  -  |  20    -2.9%    +0.8%   -0.61   +0.17    +5.9%    +9.5%  11.6% |  20  -0.38  +0.83    +7.8% |     +0.84
+|B| on pinned/const days, else 0    -  |   0    +1.3%    +1.8%   +0.20   +0.18    +2.2%    +2.2%   1.2% |   1  +3.05  +2.30   +44.1% |     +0.11
+1{pinned or const}                  -  |   0    +2.1%    +2.1%   +0.32   +0.21    +3.0%    +2.5%   1.2% |   2  +3.74  +2.49   +52.5% |     +0.11
+|dm (max+min-2med)/(max-min)|       -  |  20    -1.1%    -1.5%   -0.29   -0.41    +9.5%    +9.2%  14.1% |  20  +1.71  +2.05   +24.1% |     +0.78
+|dm (mean-min)/(max-min)|           -  |  20    -1.8%    -4.9%   -0.44   -1.42    +8.3%    +5.2%  13.3% |  20  +1.54  +1.50   +23.2% |     +0.82
+|dm day_skew(Close)|                -  |  20    +0.6%    +5.0%   +0.11   +0.90    +8.0%   +12.1%   9.7% |  10  +2.61  +2.42   +39.7% |     +0.95
+|dm day_skew(High)|                 -  |  20    +1.2%    +1.6%   +0.24   +0.39    +9.5%   +10.3%  11.0% |  20  +2.87  +2.72   +33.0% |     +0.93
+|dm day_skew(Ret)|                  -  |  20    -0.1%    +8.7%   -0.01   +1.03    +4.3%   +11.9%   5.8% |  10  +2.45  +1.85   +40.7% |     +0.49
+day_kurt(Low)                       -  |  20    -7.3%    -9.4%   -1.62   -1.72    +0.5%    -1.9%  10.3% |  20  +2.02  +0.98   +29.1% |     +0.78
+day_kurt(Ret)                       -  |  20    +0.8%   +10.8%   +0.09   +1.12    +2.9%   +12.5%   2.8% |  10  +2.59  +2.07   +37.8% |     +0.47
+day_corr(Ret, mkt Ret)              +  |  20    +3.8%    +6.1%   +0.36   +0.69    +6.2%    +9.2%   3.1% |  20  +0.94  +0.87   +15.2% |     +0.13
+-- the ones that did not choose hl 20, AT hl 20 (same smoothing as base):
+|B| on pinned/const days, else 0   Lnet   +0.1% /   -1.4%   Lshp +0.01 / -0.17   Lgross   +0.6% /   -1.0%   LTO  0.7%   LS +2.52 / +1.91   short  +34.4% /  +26.8%   rho(base) +0.39
+1{pinned or const}                 Lnet   +1.0% /   -1.7%   Lshp +0.13 / -0.21   Lgross   +1.5% /   -1.4%   LTO  0.6%   LS +3.05 / +2.32   short  +41.8% /  +33.6%   rho(base) +0.35
+
+======== 5. time scale: rolling nanmean over N days (= cross_mean(., N)), half-life grid on top; then EMA beyond the grid ========  [357s]
+variant                            sgn | hlL  Lnet tr  Lnet va Lshp tr Lshp va  Lgro tr  Lgro va    LTO | hlS  LS tr  LS va short tr | rho(base)
+mean10(|B|)                         -  |  20    +4.9%    +6.9%   +1.01   +1.59    +7.8%    +9.9%   3.8% |   5  +3.02  +3.19   +29.2% |     +0.96
+mean20(|B|)                         -  |  20    +5.0%    +7.5%   +1.01   +1.74    +7.1%    +9.6%   2.7% |   2  +3.19  +2.96   +30.1% |     +0.92
+mean30(|B|)                         -  |   5    +4.9%    +6.9%   +1.05   +1.64    +8.2%   +10.3%   4.4% |   1  +3.00  +2.93   +29.5% |     +0.88
+mean60(|B|)                         -  |   3    +6.0%    +6.6%   +1.17   +1.54    +8.5%    +9.2%   3.4% |   1  +2.88  +3.12   +24.8% |     +0.87
+mean120(|B|)                        -  |   3    +4.6%    +9.7%   +0.88   +2.15    +6.2%   +11.3%   2.2% |   1  +2.48  +3.67   +20.8% |     +0.78
+mean241(|B|)                        -  |   2    +2.3%    +9.8%   +0.43   +1.98    +3.6%   +11.1%   1.7% |   0  +2.22  +3.02   +20.3% |     +0.69
+mean10(pct-rank|B|)                 -  |  20    +4.1%    +7.5%   +0.86   +1.73    +7.1%   +10.7%   4.0% |  10  +1.95  +2.83   +17.9% |     +0.85
+mean20(pct-rank|B|)                 -  |  10    +3.7%    +7.4%   +0.79   +1.76    +6.8%   +10.7%   4.2% |  10  +1.95  +2.94   +16.6% |     +0.80
+mean30(pct-rank|B|)                 -  |   5    +3.6%    +7.1%   +0.78   +1.73    +6.9%   +10.6%   4.5% |   3  +1.94  +2.66   +17.8% |     +0.77
+mean60(pct-rank|B|)                 -  |   5    +5.0%    +7.2%   +1.02   +1.64    +7.1%    +9.4%   2.8% |   5  +1.94  +2.59   +14.9% |     +0.75
+mean120(pct-rank|B|)                -  |   5    +3.1%   +10.8%   +0.61   +2.27    +4.5%   +12.2%   1.8% |   5  +1.36  +3.10   +11.4% |     +0.69
+mean241(pct-rank|B|)                -  |   5    +2.9%    +9.7%   +0.56   +1.85    +3.8%   +10.6%   1.3% |  20  +1.28  +2.19   +10.3% |     +0.61
+mean10(min(|B|,1))                  -  |  20    +3.0%    +6.9%   +0.62   +1.56    +6.1%   +10.1%   4.0% |  10  +1.75  +2.78   +17.5% |     +0.84
+mean20(min(|B|,1))                  -  |  10    +3.4%    +7.3%   +0.72   +1.71    +6.5%   +10.5%   4.2% |   5  +1.83  +2.84   +17.1% |     +0.79
+mean30(min(|B|,1))                  -  |   5    +3.5%    +7.3%   +0.75   +1.75    +6.8%   +10.7%   4.4% |   5  +1.96  +2.78   +17.1% |     +0.77
+mean60(min(|B|,1))                  -  |   3    +4.5%    +5.5%   +0.90   +1.25    +7.1%    +8.1%   3.5% |   5  +1.81  +2.19   +14.6% |     +0.76
+mean120(min(|B|,1))                 -  |   3    +3.0%    +9.9%   +0.58   +2.06    +4.7%   +11.6%   2.3% |   3  +1.36  +3.05   +12.1% |     +0.69
+mean241(min(|B|,1))                 -  |   5    +2.7%    +9.7%   +0.52   +1.86    +3.7%   +10.7%   1.3% |   5  +1.29  +2.60   +11.4% |     +0.61
+-- EMA with a half-life outside the grid (sign from base; no further smoothing):
+EMA20(|B|)                         Lnet   +1.1% /   +3.0%   Lshp +0.24 / +0.69   Lgross   +9.4% /  +11.4%   LTO 10.9%   LS +2.81 / +3.16   short  +32.5% /  +30.3%   rho(base) +1.00
+EMA40(|B|)                         Lnet   +3.3% /   +5.5%   Lshp +0.67 / +1.25   Lgross   +8.1% /  +10.5%   LTO  6.3%   LS +2.55 / +3.73   short  +24.4% /  +26.8%   rho(base) +0.92
+EMA60(|B|)                         Lnet   +3.2% /   +7.1%   Lshp +0.64 / +1.58   Lgross   +6.5% /  +10.6%   LTO  4.5%   LS +2.24 / +3.77   short  +19.4% /  +21.8%   rho(base) +0.82
+EMA120(|B|)                        Lnet   +1.8% /   +7.7%   Lshp +0.42 / +1.76   Lgross   +3.7% /   +9.6%   LTO  2.5%   LS +1.56 / +3.09   short  +11.1% /  +11.7%   rho(base) +0.62
+EMA20(pct-rank|B|)                 Lnet   -0.4% /   +1.9%   Lshp -0.08 / +0.44   Lgross   +9.8% /  +12.3%   LTO 13.4%   LS +0.89 / +1.51   short  +18.2% /  +22.2%   rho(base) +0.88
+EMA40(pct-rank|B|)                 Lnet   +0.9% /   +5.5%   Lshp +0.18 / +1.23   Lgross   +6.8% /  +11.9%   LTO  7.8%   LS +0.90 / +2.24   short  +12.9% /  +20.7%   rho(base) +0.83
+EMA60(pct-rank|B|)                 Lnet   +0.9% /   +5.7%   Lshp +0.19 / +1.25   Lgross   +5.1% /  +10.3%   LTO  5.5%   LS +0.97 / +2.29   short  +11.6% /  +18.3%   rho(base) +0.74
+EMA120(pct-rank|B|)                Lnet   +1.3% /   +6.8%   Lshp +0.31 / +1.63   Lgross   +3.5% /   +9.3%   LTO  2.9%   LS +1.26 / +2.83   short  +10.9% /  +16.1%   rho(base) +0.54
+-- rolling means AT fixed half-lives 0 / 20 (structure vs smoothing):
+mean30(|B|) @hl0                   Lnet   -0.5% /   +2.2%   Lshp -0.11 / +0.52   Lgross   +9.7% /  +12.4%   LTO 13.5%   LS +2.98 / +2.54   short  +34.2% /  +27.1%   rho(base) +0.87
+mean30(|B|) @hl20                  Lnet   +4.5% /   +7.8%   Lshp +0.91 / +1.81   Lgross   +6.2% /   +9.6%   LTO  2.2%   LS +2.22 / +3.02   short  +17.9% /  +17.9%   rho(base) +0.88
+mean60(|B|) @hl0                   Lnet   +3.2% /   +3.6%   Lshp +0.64 / +0.84   Lgross   +9.6% /  +10.0%   LTO  8.4%   LS +2.84 / +2.94   short  +28.1% /  +25.3%   rho(base) +0.89
+mean60(|B|) @hl20                  Lnet   +3.9% /   +7.8%   Lshp +0.76 / +1.76   Lgross   +5.0% /   +9.0%   LTO  1.5%   LS +1.98 / +3.13   short  +15.5% /  +17.3%   rho(base) +0.80
+mean120(|B|) @hl0                  Lnet   +3.3% /   +8.9%   Lshp +0.63 / +2.01   Lgross   +7.2% /  +12.9%   LTO  5.3%   LS +2.46 / +3.58   short  +22.5% /  +21.5%   rho(base) +0.81
+mean120(|B|) @hl20                 Lnet   +1.8% /   +8.9%   Lshp +0.36 / +1.89   Lgross   +2.6% /   +9.8%   LTO  1.1%   LS +1.56 / +3.07   short  +12.7% /  +14.5%   rho(base) +0.70
+
+======== 6. who sits in each decile (D1 = short end, D10 = long end); mean within-day pct-rank of each characteristic ========  [592s]
+-- base, EMA20 / train
+  D   excess       cap       amt  turnrate    dvol20      ivol     price     mom20      rev1 k_stdamt_  kurt(Ret)    mktcorr      ticks |B|>=2 in 20d pinned in 20d
+  1   -32.7%      0.41      0.60      0.67      0.72      0.65      0.48      0.55      0.49      0.64       0.80       0.33       0.55         0.799         0.559
+  2    -6.3%      0.51      0.57      0.56      0.61      0.56      0.54      0.53      0.49      0.58       0.63       0.46       0.57         0.681         0.261
+  3    -1.0%      0.52      0.55      0.53      0.57      0.53      0.55      0.52      0.50      0.56       0.57       0.50       0.56         0.565         0.176
+  4    +1.4%      0.52      0.54      0.52      0.54      0.51      0.54      0.51      0.50      0.54       0.53       0.53       0.55         0.474         0.139
+  5    +1.5%      0.52      0.52      0.51      0.52      0.49      0.53      0.50      0.50      0.51       0.50       0.54       0.53         0.396         0.117
+  6    +4.9%      0.51      0.50      0.49      0.49      0.48      0.51      0.49      0.50      0.49       0.47       0.55       0.51         0.327         0.101
+  7    +5.4%      0.51      0.48      0.48      0.46      0.46      0.50      0.49      0.50      0.47       0.45       0.56       0.48         0.265         0.087
+  8    +8.1%      0.51      0.46      0.45      0.42      0.45      0.48      0.48      0.50      0.45       0.41       0.55       0.46         0.202         0.078
+  9    +9.1%      0.50      0.43      0.43      0.38      0.44      0.46      0.47      0.51      0.41       0.36       0.54       0.43         0.137         0.072
+ 10    +9.5%      0.49      0.36      0.36      0.30      0.45      0.42      0.46      0.51      0.35       0.27       0.46       0.36         0.068         0.077
+-- base, EMA20 / valid
+  D   excess       cap       amt  turnrate    dvol20      ivol     price     mom20      rev1 k_stdamt_  kurt(Ret)    mktcorr      ticks |B|>=2 in 20d pinned in 20d
+  1   -30.8%      0.46      0.64      0.69      0.74      0.66      0.47      0.56      0.48      0.69       0.75       0.32       0.54         0.868         0.531
+  2    -8.9%      0.51      0.58      0.58      0.63      0.57      0.54      0.51      0.49      0.60       0.60       0.45       0.58         0.766         0.212
+  3    -3.6%      0.51      0.55      0.54      0.58      0.54      0.54      0.51      0.49      0.56       0.56       0.49       0.56         0.655         0.135
+  4    -0.5%      0.51      0.53      0.52      0.55      0.52      0.53      0.51      0.50      0.53       0.53       0.51       0.55         0.563         0.098
+  5    +4.2%      0.50      0.50      0.50      0.52      0.50      0.52      0.50      0.50      0.50       0.51       0.53       0.53         0.485         0.077
+  6    +6.1%      0.50      0.49      0.49      0.49      0.48      0.51      0.49      0.50      0.48       0.49       0.55       0.51         0.411         0.065
+  7    +5.7%      0.50      0.47      0.47      0.45      0.46      0.50      0.49      0.50      0.45       0.46       0.55       0.49         0.339         0.054
+  8    +5.8%      0.50      0.44      0.44      0.41      0.44      0.48      0.48      0.51      0.43       0.43       0.56       0.46         0.269         0.048
+  9   +10.5%      0.50      0.41      0.41      0.36      0.42      0.46      0.48      0.51      0.40       0.38       0.55       0.42         0.199         0.043
+ 10   +11.7%      0.51      0.38      0.36      0.28      0.42      0.43      0.47      0.52      0.37       0.29       0.49       0.37         0.105         0.052
+-- mean60(|B|) at its own hl / train
+  D   excess       cap       amt  turnrate    dvol20      ivol     price     mom20      rev1 k_stdamt_  kurt(Ret)    mktcorr      ticks |B|>=2 in 20d pinned in 20d
+  1   -21.2%      0.43      0.57      0.63      0.68      0.63      0.47      0.51      0.49      0.63       0.77       0.34       0.55         0.705         0.473
+  2    -5.0%      0.51      0.55      0.54      0.59      0.54      0.54      0.51      0.49      0.57       0.63       0.46       0.57         0.591         0.239
+  3    -1.4%      0.52      0.55      0.53      0.56      0.52      0.55      0.51      0.50      0.56       0.57       0.50       0.57         0.512         0.182
+  4    -1.2%      0.52      0.54      0.52      0.54      0.50      0.54      0.50      0.50      0.54       0.53       0.52       0.55         0.454         0.151
+  5    +1.5%      0.51      0.52      0.51      0.52      0.49      0.53      0.50      0.50      0.52       0.51       0.54       0.53         0.398         0.132
+  6    +2.9%      0.51      0.51      0.50      0.50      0.48      0.51      0.50      0.50      0.50       0.48       0.55       0.51         0.353         0.119
+  7    +3.9%      0.50      0.48      0.49      0.47      0.47      0.50      0.49      0.50      0.47       0.46       0.55       0.49         0.305         0.106
+  8    +4.2%      0.50      0.47      0.47      0.44      0.46      0.48      0.49      0.50      0.45       0.42       0.55       0.46         0.260         0.099
+  9    +7.3%      0.50      0.44      0.44      0.40      0.45      0.46      0.49      0.51      0.42       0.37       0.54       0.43         0.203         0.091
+ 10    +8.7%      0.49      0.37      0.38      0.32      0.46      0.41      0.49      0.51      0.35       0.28       0.45       0.35         0.125         0.096
+-- mean60(|B|) at its own hl / valid
+  D   excess       cap       amt  turnrate    dvol20      ivol     price     mom20      rev1 k_stdamt_  kurt(Ret)    mktcorr      ticks |B|>=2 in 20d pinned in 20d
+  1   -20.6%      0.47      0.60      0.64      0.68      0.62      0.47      0.50      0.48      0.67       0.72       0.34       0.53         0.754         0.429
+  2    -9.1%      0.52      0.57      0.56      0.61      0.55      0.55      0.50      0.49      0.60       0.60       0.45       0.58         0.661         0.197
+  3    -2.1%      0.52      0.55      0.54      0.58      0.53      0.55      0.50      0.49      0.56       0.56       0.49       0.57         0.592         0.142
+  4    -0.6%      0.51      0.53      0.52      0.55      0.52      0.53      0.50      0.50      0.53       0.53       0.51       0.55         0.534         0.110
+  5    +1.3%      0.50      0.51      0.51      0.52      0.50      0.53      0.50      0.50      0.50       0.51       0.53       0.53         0.480         0.095
+  6    +2.0%      0.50      0.49      0.50      0.49      0.48      0.51      0.50      0.50      0.48       0.49       0.55       0.51         0.437         0.084
+  7    +6.0%      0.49      0.47      0.48      0.46      0.47      0.50      0.50      0.50      0.46       0.47       0.55       0.49         0.389         0.073
+  8    +5.8%      0.49      0.45      0.46      0.43      0.45      0.48      0.50      0.51      0.43       0.44       0.55       0.46         0.341         0.066
+  9    +8.0%      0.49      0.43      0.43      0.38      0.43      0.46      0.50      0.51      0.40       0.39       0.54       0.42         0.286         0.064
+ 10    +9.4%      0.51      0.40      0.37      0.30      0.43      0.43      0.50      0.52      0.37       0.29       0.49       0.36         0.188         0.064
+
+======== 7. known exposure of the traded signal EMA20(-|B|) on train: fold-matched and tree-specific controls ========  [618s]
+daily Spearman of the traded signal (long = small |B|) with:
+   EMA20 |dm rev1| (fold-matched)       -0.544
+   EMA20 |dm mom20| (fold-matched)      -0.454
+   EMA20 |dm log amt| (fold-matched)    -0.075
+   EMA20 1{|B|>=2}                      -0.661
+   EMA20 day_kurt(Ret)                  -0.468
+   EMA20 day_kurt(Low)                  -0.784
+   EMA20 mktcorr                        +0.133
+   EMA20 traded-minute share            -0.016
+   EMA20 |dm day_skew(Ret)|             -0.485
+   EMA20 1{pinned or const}             -0.346
+   EMA20 log(1 + tick steps)            -0.181
+   EMA20 1{|ret| > 9%}                  -0.331
+   ctl_amt                              -0.227
+   ctl_price                            -0.095
+   ctl_ivol                             -0.199
+   ctl_range                            -0.279
+   ctl_rev1                             +0.023
+   ctl_mom20                            -0.091
+   ctl_dvol20                           -0.384
+   ctl_cap                              +0.037
+   ctl_turnrate                         -0.259
+   known_stdamt_mean30                  -0.277
+   known_stdamt_max9                    -0.279
+   known_amt_max9                       -0.255
+   known_ivol_max9                      -0.312
+rank-space daily regressions of the traded signal (train):
+   (a) the 9 shared controls [S0 says R2 0.214]               R2 0.214   resid rIC +0.0143   resid Lgross  +8.2%   resid short  +4.6%   resid LTO 22.7%
+   (b) (a) + the square of each (non-monotone dependence)     R2 0.254   resid rIC +0.0120   resid Lgross  +4.5%   resid short  +0.9%   resid LTO 25.1%
+   (c) (a) + all tree-specific / fold-matched candidates      R2 0.784   resid rIC -0.0003   resid Lgross  +3.5%   resid short  -2.5%   resid LTO 17.5%
+   (d) tree-specific / fold-matched candidates only           R2 0.767   resid rIC +0.0027   resid Lgross  +6.4%   resid short  +1.3%   resid LTO 15.3%
+       only EMA20 |dm rev1| (fold-matched)                    R2 0.307   resid rIC +0.0091   resid Lgross  +2.9%   resid short  +3.3%   resid LTO 12.5%
+       only EMA20 |dm mom20| (fold-matched)                   R2 0.212   resid rIC +0.0216   resid Lgross  +8.4%   resid short +14.8%   resid LTO 12.0%
+       only EMA20 |dm log amt| (fold-matched)                 R2 0.008   resid rIC +0.0337   resid Lgross  +9.4%   resid short +31.1%   resid LTO 10.7%
+       only EMA20 1{|B|>=2}                                   R2 0.426   resid rIC +0.0242   resid Lgross  +8.6%   resid short  +6.5%   resid LTO 12.6%
+       only EMA20 day_kurt(Ret)                               R2 0.224   resid rIC +0.0236   resid Lgross  +7.6%   resid short  +1.5%   resid LTO 11.7%
+       only EMA20 day_kurt(Low)                               R2 0.617   resid rIC +0.0245   resid Lgross +13.2%   resid short  +3.4%   resid LTO 13.0%
+       only EMA20 mktcorr                                     R2 0.026   resid rIC +0.0333   resid Lgross  +9.4%   resid short +27.8%   resid LTO 10.1%
+       only EMA20 traded-minute share                         R2 0.008   resid rIC +0.0337   resid Lgross +10.1%   resid short +31.7%   resid LTO 11.0%
+       only EMA20 |dm day_skew(Ret)|                          R2 0.241   resid rIC +0.0211   resid Lgross  +6.2%   resid short  +1.1%   resid LTO 12.4%
+       only EMA20 1{pinned or const}                          R2 0.125   resid rIC +0.0249   resid Lgross  +9.0%   resid short  +5.0%   resid LTO 10.6%
+       only EMA20 log(1 + tick steps)                         R2 0.035   resid rIC +0.0321   resid Lgross  +9.1%   resid short +31.0%   resid LTO 11.4%
+       only EMA20 1{|ret| > 9%}                               R2 0.116   resid rIC +0.0211   resid Lgross  +5.8%   resid short  +1.6%   resid LTO 11.7%
+   (e) known_stdamt_mean30 only                               R2 0.080   resid rIC +0.0258   resid Lgross  +3.9%   resid short +17.6%   resid LTO 11.2%
+   (f) ctl_dvol20 + known_stdamt_mean30                       R2 0.167   resid rIC +0.0167   resid Lgross  +5.5%   resid short  +5.1%   resid LTO 13.3%
+
+======== 8. what a LONG-ONLY user gets on top of the known Amt-level family ========  [722s]
+variant                            sgn | hlL  Lnet tr  Lnet va Lshp tr Lshp va  Lgro tr  Lgro va    LTO | hlS  LS tr  LS va short tr | rho(base)
+known_stdamt_mean30                 -  |   0   +12.6%   +22.3%   +1.78   +3.46   +15.2%   +24.4%   3.4% |   0  +1.87  +3.70   +21.1% |     +0.28
+known_stdamt_max9                   -  |   5   +13.7%   +22.2%   +1.99   +3.59   +17.1%   +25.1%   4.5% |   0  +2.47  +4.44   +37.7% |     +0.30
+
+-- train: K = known_stdamt_mean30 traded signal (its own sign / half-life from train)
+   F = base EMA20: Spearman(F, K) +0.277; top-decile overlap 0.197; R2(F ~ K) 0.080
+      F alone                          Lnet   +1.1%  Lshp +0.24  Lgross   +9.4%  LTO 10.9%  LS +2.81  short  +32.5%  Lmdd  -10.4%
+      K alone (same cells)             Lnet  +13.4%  Lshp +1.89  Lgross  +16.1%  LTO  3.6%  LS +1.91  short  +21.2%  Lmdd   -9.6%
+      F resid on K (not re-smoothed)   Lnet   -4.6%  Lshp -0.99  Lgross   +3.9%  LTO 11.2%  LS +0.77  short  +17.6%  Lmdd  -19.6%
+      rank F + rank K                  Lnet  +10.3%  Lshp +1.55  Lgross  +15.9%  LTO  7.4%  LS +2.47  short  +31.3%  Lmdd   -8.9%
+      0.5 rank F + rank K              Lnet  +12.1%  Lshp +1.81  Lgross  +17.0%  LTO  6.4%  LS +2.33  short  +28.5%  Lmdd   -8.4%
+      inside K top 10%: excess by F tercile (low F -> high F):  +12.2%  +18.9%  +19.8%   (all:  +17.0%)
+      inside K top 20%: excess by F tercile (low F -> high F):   +8.9%  +16.0%  +17.7%   (all:  +14.2%)
+      inside K top 30%: excess by F tercile (low F -> high F):   +7.1%  +14.0%  +15.9%   (all:  +12.3%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.046, excess   -4.7%  vs the rest  +18.0%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.169, excess   +7.6%  vs the rest  +18.9%
+      inside F top 10%: excess by K tercile (low K -> high K):   -0.6%  +11.6%  +17.4%   (all:   +9.5%)
+   F = mean60(|B|): Spearman(F, K) +0.264; top-decile overlap 0.194; R2(F ~ K) 0.073
+      F alone                          Lnet   +5.6%  Lshp +1.10  Lgross   +8.2%  LTO  3.4%  LS +2.49  short  +20.2%  Lmdd   -6.5%
+      K alone (same cells)             Lnet  +13.0%  Lshp +1.83  Lgross  +15.5%  LTO  3.4%  LS +1.90  short  +21.2%  Lmdd   -9.2%
+      F resid on K (not re-smoothed)   Lnet   -0.9%  Lshp -0.19  Lgross   +2.0%  LTO  3.8%  LS +0.30  short   +5.7%  Lmdd   -8.8%
+      rank F + rank K                  Lnet  +12.7%  Lshp +1.93  Lgross  +15.1%  LTO  3.1%  LS +2.51  short  +26.3%  Lmdd   -8.1%
+      0.5 rank F + rank K              Lnet  +13.4%  Lshp +2.01  Lgross  +15.8%  LTO  3.2%  LS +2.33  short  +24.8%  Lmdd   -8.1%
+      inside K top 10%: excess by F tercile (low F -> high F):   +9.6%  +20.4%  +18.4%   (all:  +16.1%)
+      inside K top 20%: excess by F tercile (low F -> high F):   +9.9%  +15.7%  +15.8%   (all:  +13.8%)
+      inside K top 30%: excess by F tercile (low F -> high F):   +8.9%  +13.0%  +14.2%   (all:  +12.1%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.051, excess  -11.4%  vs the rest  +17.6%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.178, excess   +4.5%  vs the rest  +18.7%
+      inside F top 10%: excess by K tercile (low K -> high K):   +0.1%   +9.7%  +15.7%   (all:   +8.5%)
+   F = mean120(|B|): Spearman(F, K) +0.232; top-decile overlap 0.184; R2(F ~ K) 0.057
+      F alone                          Lnet   +4.2%  Lshp +0.81  Lgross   +5.9%  LTO  2.2%  LS +2.26  short  +18.5%  Lmdd   -6.2%
+      K alone (same cells)             Lnet  +12.8%  Lshp +1.80  Lgross  +15.3%  LTO  3.4%  LS +1.88  short  +21.1%  Lmdd   -9.2%
+      F resid on K (not re-smoothed)   Lnet   -2.0%  Lshp -0.45  Lgross   +0.0%  LTO  2.7%  LS +0.33  short   +6.4%  Lmdd  -12.6%
+      rank F + rank K                  Lnet  +12.1%  Lshp +1.80  Lgross  +14.0%  LTO  2.6%  LS +2.40  short  +25.2%  Lmdd   -8.3%
+      0.5 rank F + rank K              Lnet  +13.3%  Lshp +1.97  Lgross  +15.5%  LTO  2.8%  LS +2.35  short  +25.0%  Lmdd   -8.6%
+      inside K top 10%: excess by F tercile (low F -> high F):  +11.7%  +18.9%  +17.3%   (all:  +16.0%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +11.4%  +14.4%  +15.2%   (all:  +13.7%)
+      inside K top 30%: excess by F tercile (low F -> high F):  +10.4%  +12.0%  +13.5%   (all:  +12.0%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.062, excess   -6.0%  vs the rest  +17.4%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.198, excess   +6.4%  vs the rest  +18.3%
+      inside F top 10%: excess by K tercile (low K -> high K):   -3.9%   +7.9%  +14.0%   (all:   +6.0%)
+   F = mean60(pct-rank|B|): Spearman(F, K) +0.258; top-decile overlap 0.188; R2(F ~ K) 0.070
+      F alone                          Lnet   +4.7%  Lshp +0.96  Lgross   +6.9%  LTO  2.8%  LS +1.89  short  +14.9%  Lmdd   -6.6%
+      K alone (same cells)             Lnet  +13.0%  Lshp +1.83  Lgross  +15.5%  LTO  3.4%  LS +1.90  short  +21.2%  Lmdd   -9.2%
+      F resid on K (not re-smoothed)   Lnet   -4.1%  Lshp -0.93  Lgross   -1.6%  LTO  3.3%  LS -0.14  short   +5.3%  Lmdd  -17.8%
+      rank F + rank K                  Lnet  +12.2%  Lshp +1.86  Lgross  +14.4%  LTO  2.9%  LS +2.19  short  +20.9%  Lmdd   -8.3%
+      0.5 rank F + rank K              Lnet  +13.3%  Lshp +1.99  Lgross  +15.6%  LTO  3.0%  LS +2.17  short  +21.4%  Lmdd   -8.6%
+      inside K top 10%: excess by F tercile (low F -> high F):  +11.3%  +17.6%  +19.6%   (all:  +16.1%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +10.7%  +14.2%  +16.4%   (all:  +13.8%)
+      inside K top 30%: excess by F tercile (low F -> high F):   +9.8%  +12.3%  +14.1%   (all:  +12.1%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.049, excess  -16.3%  vs the rest  +17.8%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.175, excess   +4.5%  vs the rest  +18.6%
+      inside F top 10%: excess by K tercile (low K -> high K):   -4.5%   +8.9%  +16.8%   (all:   +7.0%)
+
+-- valid: K = known_stdamt_mean30 traded signal (its own sign / half-life from train)
+   F = base EMA20: Spearman(F, K) +0.312; top-decile overlap 0.175; R2(F ~ K) 0.102
+      F alone                          Lnet   +3.0%  Lshp +0.69  Lgross  +11.4%  LTO 11.2%  LS +3.16  short  +30.3%  Lmdd   -4.7%
+      K alone (same cells)             Lnet  +22.2%  Lshp +3.43  Lgross  +24.3%  LTO  2.8%  LS +3.67  short  +33.6%  Lmdd   -4.5%
+      F resid on K (not re-smoothed)   Lnet   -6.9%  Lshp -1.42  Lgross   +1.4%  LTO 10.9%  LS -0.89  short   +6.9%  Lmdd  -12.8%
+      rank F + rank K                  Lnet  +17.3%  Lshp +3.09  Lgross  +23.5%  LTO  8.1%  LS +4.39  short  +38.4%  Lmdd   -4.1%
+      0.5 rank F + rank K              Lnet  +19.3%  Lshp +3.29  Lgross  +24.4%  LTO  6.6%  LS +4.30  short  +38.2%  Lmdd   -4.3%
+      inside K top 10%: excess by F tercile (low F -> high F):  +26.0%  +27.4%  +25.9%   (all:  +26.4%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +22.0%  +22.6%  +26.3%   (all:  +23.6%)
+      inside K top 30%: excess by F tercile (low F -> high F):  +19.6%  +19.5%  +23.3%   (all:  +20.8%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.024, excess  +21.4%  vs the rest  +26.6%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.134, excess  +22.1%  vs the rest  +27.1%
+      inside F top 10%: excess by K tercile (low K -> high K):   -4.7%  +14.5%  +25.2%   (all:  +11.7%)
+   F = mean60(|B|): Spearman(F, K) +0.302; top-decile overlap 0.172; R2(F ~ K) 0.095
+      F alone                          Lnet   +6.5%  Lshp +1.52  Lgross   +9.1%  LTO  3.5%  LS +2.94  short  +19.9%  Lmdd   -3.8%
+      K alone (same cells)             Lnet  +22.3%  Lshp +3.46  Lgross  +24.4%  LTO  2.8%  LS +3.70  short  +33.8%  Lmdd   -4.5%
+      F resid on K (not re-smoothed)   Lnet   -5.9%  Lshp -1.27  Lgross   -3.1%  LTO  3.7%  LS -1.62  short   -4.6%  Lmdd  -11.9%
+      rank F + rank K                  Lnet  +20.2%  Lshp +3.57  Lgross  +22.6%  LTO  3.2%  LS +4.55  short  +34.5%  Lmdd   -3.8%
+      0.5 rank F + rank K              Lnet  +21.2%  Lshp +3.55  Lgross  +23.6%  LTO  3.1%  LS +4.41  short  +35.5%  Lmdd   -4.1%
+      inside K top 10%: excess by F tercile (low F -> high F):  +27.6%  +27.0%  +25.1%   (all:  +26.6%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +24.0%  +21.7%  +25.6%   (all:  +23.8%)
+      inside K top 30%: excess by F tercile (low F -> high F):  +20.8%  +19.6%  +22.3%   (all:  +20.9%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.033, excess  +27.7%  vs the rest  +26.5%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.143, excess  +26.4%  vs the rest  +26.6%
+      inside F top 10%: excess by K tercile (low K -> high K):   -7.2%  +11.7%  +23.2%   (all:   +9.3%)
+   F = mean120(|B|): Spearman(F, K) +0.264; top-decile overlap 0.160; R2(F ~ K) 0.073
+      F alone                          Lnet   +9.5%  Lshp +2.12  Lgross  +11.2%  LTO  2.2%  LS +3.44  short  +18.6%  Lmdd   -3.5%
+      K alone (same cells)             Lnet  +22.3%  Lshp +3.46  Lgross  +24.4%  LTO  2.8%  LS +3.70  short  +33.8%  Lmdd   -4.5%
+      F resid on K (not re-smoothed)   Lnet   -0.3%  Lshp -0.06  Lgross   +1.6%  LTO  2.5%  LS -0.41  short   -1.3%  Lmdd   -5.6%
+      rank F + rank K                  Lnet  +20.1%  Lshp +3.52  Lgross  +21.9%  LTO  2.5%  LS +4.74  short  +34.4%  Lmdd   -3.9%
+      0.5 rank F + rank K              Lnet  +21.5%  Lshp +3.63  Lgross  +23.4%  LTO  2.6%  LS +4.68  short  +37.0%  Lmdd   -4.0%
+      inside K top 10%: excess by F tercile (low F -> high F):  +26.9%  +28.0%  +24.8%   (all:  +26.6%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +22.6%  +24.6%  +24.1%   (all:  +23.8%)
+      inside K top 30%: excess by F tercile (low F -> high F):  +19.0%  +21.8%  +21.8%   (all:  +20.9%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.044, excess  +29.1%  vs the rest  +26.5%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.165, excess  +26.4%  vs the rest  +26.6%
+      inside F top 10%: excess by K tercile (low K -> high K):   -4.6%  +12.3%  +26.7%   (all:  +11.5%)
+   F = mean60(pct-rank|B|): Spearman(F, K) +0.291; top-decile overlap 0.173; R2(F ~ K) 0.089
+      F alone                          Lnet   +7.0%  Lshp +1.60  Lgross   +9.3%  LTO  3.0%  LS +2.55  short  +17.2%  Lmdd   -4.2%
+      K alone (same cells)             Lnet  +22.3%  Lshp +3.46  Lgross  +24.4%  LTO  2.8%  LS +3.70  short  +33.8%  Lmdd   -4.5%
+      F resid on K (not re-smoothed)   Lnet   -6.1%  Lshp -1.38  Lgross   -3.6%  LTO  3.3%  LS -1.30  short   -2.1%  Lmdd  -12.6%
+      rank F + rank K                  Lnet  +20.9%  Lshp +3.61  Lgross  +23.1%  LTO  2.9%  LS +4.35  short  +32.0%  Lmdd   -3.9%
+      0.5 rank F + rank K              Lnet  +21.9%  Lshp +3.65  Lgross  +24.1%  LTO  2.9%  LS +4.15  short  +32.4%  Lmdd   -4.1%
+      inside K top 10%: excess by F tercile (low F -> high F):  +27.9%  +24.9%  +26.9%   (all:  +26.6%)
+      inside K top 20%: excess by F tercile (low F -> high F):  +23.8%  +21.4%  +26.2%   (all:  +23.8%)
+      inside K top 30%: excess by F tercile (low F -> high F):  +20.8%  +18.4%  +23.4%   (all:  +20.9%)
+      exclusion: K-top-decile names that are in F's bottom 10%: share 0.026, excess  +36.3%  vs the rest  +26.3%
+      exclusion: K-top-decile names that are in F's bottom 30%: share 0.141, excess  +24.3%  vs the rest  +27.0%
+      inside F top 10%: excess by K tercile (low K -> high K):   -7.8%  +12.3%  +23.7%   (all:   +9.4%)
+
+======== 9. the short leg with and without the 'opened locked at limit-up, could not be bought' filter (base, EMA20) ========  [791s]
+-- train: unbuyable share in the short decile 0.0076, in the long decile 0.0008, universe 0.0016
+      short-leg gross excess: buyable label  +32.5%  raw label  +24.1%;   L/S net Sharpe: buyable +2.81  raw +1.83;   long-leg gross excess: buyable   +9.4%  raw   +8.1%
+-- valid: unbuyable share in the short decile 0.0040, in the long decile 0.0005, universe 0.0008
+      short-leg gross excess: buyable label  +30.3%  raw label  +26.9%;   L/S net Sharpe: buyable +3.16  raw +2.69;   long-leg gross excess: buyable  +11.4%  raw  +11.0%
+
+[x1 done in 793s]
+[partura exit 0 2026-10-05_03:31:54]

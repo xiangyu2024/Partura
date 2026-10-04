@@ -1,0 +1,234 @@
+{
+ "factor_id": "F105_std_fangzheng_covamt",
+ "one_line": "原式是「成交额水平 × 近期放量事件」的一个绕远路、带三个伪影的写法,信息被已知家族 cross_max(day_std(Amt), d) 完全包含;换成 d=30 的成员后多头腿净超额在用户训练/测试段从 11.8%/8.9% 升到 16.1%/12.5%,多空夏普打平。",
+ "mechanism": "根节点 ts_stddev(C,5) 读的是一年硬窗口水平量 C(≈一年里日内成交额方差的最大值)最近 5 天的变化量(与 |ΔC| 的 rank 相关 0.994),截面排序 = 水平 × 相对变化,两半几乎不相关(0.019)。水平那一半 100% 是成交额水平(对 ctl_amt 中性化后残差 rank IC −0.0007);事件那一半是只在大成交额股票里起作用的空头信号(分位剖面只有 Q1 深,按已知家族分桶 IC 从 −0.007 到 −0.044),方向无信息。硬窗口 + 不分方向的 std 带来周年回声,nan-aware 扩张窗口带来次新股机械放大,ts_std 对单个观测给 0 带来上市首日伪影。空头腿的钱是「高换手率的大成交额股票刚放过量」,多头腿的钱是「小市值里成交清淡、近一两个月没放过量」的股票;多头腿要的信息变化慢,所以族内更慢的窗口(15~60 天)净超额更高。",
+ "family": "成交额水平 + 近期放量的极值记忆,与 F001 蒸馏出的 cross_max(day_std(Amt), 9) 同族(原式对它回归后残差无成本多空夏普 −0.55,反向 +2.34);不是新家族。",
+ "original": {
+  "expr": "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+  "sign": -1,
+  "halflife": 3,
+  "ls_train": 3.03,
+  "ls_test": 2.24,
+  "long_gross_train": 0.168,
+  "long_gross_test": 0.143,
+  "long_net_train": 0.118,
+  "long_net_test": 0.089,
+  "long_sharpe_train": 1.96,
+  "long_sharpe_test": 1.04,
+  "turnover": 0.061,
+  "coverage": 0.999,
+  "distinct": 0.999,
+  "n_operators": 4,
+  "rank_corr_with_original": 1
+ },
+ "recommended": {
+  "expr": "cross_max(day_std(Amt), 30)",
+  "sign": -1,
+  "halflife": 0,
+  "ls_train": 2.8,
+  "ls_test": 2.39,
+  "long_gross_train": 0.196,
+  "long_gross_test": 0.157,
+  "long_net_train": 0.161,
+  "long_net_test": 0.125,
+  "long_sharpe_train": 2.46,
+  "long_sharpe_test": 1.37,
+  "turnover": 0.038,
+  "coverage": 0.999,
+  "distinct": 1,
+  "n_operators": 2,
+  "rank_corr_with_original": 0.643
+ },
+ "recommended_kind": "elevated",
+ "other_finalists": [
+  {
+   "expr": "cross_stddev(cross_stddev(day_cov(Amt, Amt), 241), 5)",
+   "sign": -1,
+   "halflife": 3,
+   "ls_train": 3.3,
+   "ls_test": 2.72,
+   "long_gross_train": 0.175,
+   "long_gross_test": 0.163,
+   "long_net_train": 0.13,
+   "long_net_test": 0.115,
+   "long_sharpe_train": 2.18,
+   "long_sharpe_test": 1.33,
+   "turnover": 0.061,
+   "coverage": 0.999,
+   "distinct": 0.999,
+   "n_operators": 3,
+   "rank_corr_with_original": 0.937
+  },
+  {
+   "expr": "cross_max(day_std(Amt), 15)",
+   "sign": -1,
+   "halflife": 0,
+   "ls_train": 3.08,
+   "ls_test": 2.7,
+   "long_gross_train": 0.203,
+   "long_gross_test": 0.17,
+   "long_net_train": 0.149,
+   "long_net_test": 0.12,
+   "long_sharpe_train": 2.26,
+   "long_sharpe_test": 1.28,
+   "turnover": 0.06,
+   "coverage": 0.999,
+   "distinct": 1,
+   "n_operators": 2,
+   "rank_corr_with_original": 0.665
+  },
+  {
+   "expr": "cross_max(day_std(Amt), 60)",
+   "sign": -1,
+   "halflife": 0,
+   "ls_train": 2.52,
+   "ls_test": 2.39,
+   "long_gross_train": 0.177,
+   "long_gross_test": 0.166,
+   "long_net_train": 0.155,
+   "long_net_test": 0.147,
+   "long_sharpe_train": 2.34,
+   "long_sharpe_test": 1.74,
+   "turnover": 0.024,
+   "coverage": 0.999,
+   "distinct": 1,
+   "n_operators": 2,
+   "rank_corr_with_original": 0.627
+  }
+ ],
+ "known_exposure_r2": 0.5,
+ "verdict": "升华成立但幅度有限,且不是新因子。读留出段之前定下的推荐 cross_max(day_std(Amt), 30) 在用户测试段上多头腿净超额 +12.5% 对原式 +8.9%、纯多头夏普 1.37 对 1.04、多空夏普 2.39 对 2.24(在 ±0.3 噪声内,算打平)、换手 3.8% 对 6.1%;逐年看 8 年里 7 年多头腿净超额高于原式 3.4~5.9 个点。四个候选在测试段的多空夏普、多头腿毛/净超额、纯多头夏普上全部不低于原式,说明原式只是这个家族里一个更吵的成员。需要如实说明的三点:(1) 它就是 F001 已蒸馏出的成交额水平家族换了更慢的窗口(与 d=9 的 rank 相关 0.85、与 log 成交额 0.80,全部控制变量张成 R² 0.740),对因子池的边际贡献没有测;(2) 留出段上多头腿最好的是慢端的 d=60(净超额 14.7%、纯多头夏普 1.74),不是事先选的 d=30,推荐没有因此改动,只能说 d=30~60 都合理;(3) 整个家族在测试段弱了一截(纯多头夏普从 2.0~2.5 掉到 1.0~1.7,2024 年最差),多头腿的钱集中在小市值里(只留市值大的一半时训练段多头腿净超额只剩 1.8%)。如果要留在原式结构里,用 3 算子的提纯版 cross_stddev(cross_stddev(day_cov(Amt, Amt), 241), 5)(测试段多空 2.72、多头腿净超额 11.5%)。",
+ "established": [
+  "原式 = 水平 × 事件:D 与 |C 的 5 日变化| rank 相关 0.994,与水平 C、相对变化 D/C 各 0.67,两半之间 0.019(studies/events.py 第 2 节);水平那一半对 ctl_amt 中性化后残差 rank IC −0.0007(S1 中性化表)",
+  "事件那一半是只在大成交额股票里起作用的空头信号,方向无信息:s1_relchg 训练段 Q1 −28.7% 其余九档近乎平、多头腿净超额 4.6%;按已知家族分五桶桶内 IC −0.007→−0.044;带符号的 s1_signed 多头腿毛超额 −6.8%/−11.9%;写干净的 s4_pos 多头腿净超额同样只有 4.6%/12.8%(S1、S1b、S4、条件 IC 表)",
+  "原式被已知家族包含:对 cross_max(day_std(Amt),9) 回归后残差 rank IC 0.0090、无成本多空夏普 −0.55,反向还剩 0.0322/+2.34;对 d=30 成员回归后 +0.02,反向 +1.56;删掉一年窗口(s1_recent)与已知家族 rank 相关 0.94 且 rank IC 更高(events.py 第 6 节、longleg.py 第 1 节、S1b)",
+  "cross_max(·,3) 与 fangzheng 里 mean/std 的区分都多余:s2_no_max3 rank 相关 0.967、s2_mid_mean 0.983、s2_mid_std 0.965,3 算子的 s2_min3 在 train/valid 上多空 2.84/4.80 对原式 2.54/4.62,留出段 2.72 对 2.24(S2、S_final)",
+  "三个伪影都量到:次新股占截面 7% 却占空头十分位 25%/17%;上市首日因子值为 0 每天把约 3 只次新股排进多头腿,拉低多头腿毛超额 2.3/1.9 个点(换成 |差分| 后训练段 +2.6 个点);空头十分位里回声驱动的股票日占 23%/48% 而超额只有 −5.1%/−13.2%,新事件驱动的是 −38.6%/−62.4%(events.py 第 3~5 节、S2 s2_absdelta)",
+  "已知家族的多头腿净超额在 d=15~60 上是平台(训练 12.3%~13.6%、验证 20.4%~22.2%、留出 12.0%/12.5%/14.7%),多空夏普随 d 单调下降;多头腿需要「没放过量」而不只是「平时成交少」(60 日中位数的多头腿毛超额 7.0%/19.5% 对 60 日最大值 15.9%/22.3%);日内成交额离散度优于日成交额(S3、S4、S_final)"
+ ],
+ "unresolved": [
+  "周年回声是不是纯稀释:分组和剔除实验支持,但替换实验 s1_noecho(线性衰减均值)没有变好、验证段更差;那个替换同时改变了背景漂移,不是干净对照,表达式语言里没有只去掉回声的写法",
+  "多头腿在大市值里还有没有:只留流通市值大的一半时,训练段这一族多头腿净超额只剩 1.8%(原式 5.1%),验证段却有 18.6%,两段不一致;容量和冲击成本没有建模",
+  "2024 年整个家族多头腿明显变弱(d=30 成员净超额 9.1%、纯多头夏普 0.80,留出段最大回撤 −15.1%),是小市值/低流动性溢价的结构性变化还是一次性冲击,分不出来",
+  "相对因子池里已有的成交额水平结构,cross_max(day_std(Amt), 30) 的边际贡献没有测;对 d=9 成员回归后残差 rank IC 只有 0.0037,很可能只是「把已有成员的窗口放慢」",
+  "平台内部的最优窗口不稳定:样本内 d=30 最好,留出段 d=60 最好;长窗口上 max 与 mean 对多头腿孰优也没有定论(d=20、60 两处都是训练段 max 好、验证段 mean 好)",
+  "d=30 成员的多头十分位在验证段有 7.7% 是上市不满 247 天的次新股(原式只有 0.7%,被未满窗口放大挡在外面),这些股票对多头腿业绩的贡献没有单独量过"
+ ],
+ "lab_findings": [
+  {
+   "id": "short-std-on-long-hard-window-is-event-detector-with-anniversary-echo",
+   "claim": "短窗滚动 std(或 |差分|)套在长硬窗口水平统计量外面,读到的是该水平量的近期变化量(事件探测器),不分升降;硬窗口让每个尖峰在 d 天后滑出时产生一个与进入时等幅的回声,因子值上无法与新事件区分",
+   "evidence": "探针 chain_impulse_profile:脉冲后第 0~5 天和第 241~246 天各响一次,echo_over_entry=1.0,对数正态噪声背景下 10.5 倍对 10.9 倍;真实数据里 ts_stddev(C,5) 与 |C_t−C_{t−4}| 的 rank 相关 0.994;空头十分位里回声驱动的股票日占 23%/48%,超额 −5.1%/−13.2%,新事件驱动的是 −38.6%/−62.4%",
+   "operators": [
+    "ts_stddev",
+    "ts_std",
+    "cross_stddev",
+    "cross_delta",
+    "cross_fangzheng",
+    "cross_mean",
+    "cross_max"
+   ],
+   "confidence": "high",
+   "recheck": "中间层换成 cross_decay_linear 时回声只剩 0.015,但背景会变成与水平成正比的匀速漂移(不是干净的去回声);外层换成带符号的差分时进入与滑出反号,方向本身在本例里没有信息(多头腿为负)"
+  },
+  {
+   "id": "fangzheng-is-mean-plus-std-and-indistinguishable-under-differencing",
+   "claim": "cross_fangzheng(x,d) = cross_mean(x,d) + cross_stddev(x,d);在重尾正值输入上它是极值统计量(跟窗口最大值走),但只要外层读的是它的变化量,mean 项、std 项、两者之和给出的截面排序几乎相同,区分它们没有意义",
+   "evidence": "源码一行;探针 tail_dominance(对数正态 σ=1.5 时与窗口最大值秩相关 0.91、与中位数 0.18);真实数据去尺度后 C 与一年最大值 rank 相关 0.984;外层套 5 日 std 后,只留 mean 项与原式 rank 相关 0.983、只留 std 项 0.965,指标都在噪声内",
+   "operators": [
+    "cross_fangzheng",
+    "cross_mean",
+    "cross_stddev"
+   ],
+   "confidence": "high",
+   "recheck": "直接把 fangzheng 当水平量用(外层不取差分/std)时 mean 与 std 项不等价;输入不是重尾正值(log σ 明显小于 1)时它更接近均值而不是极值"
+  },
+  {
+   "id": "low-rank-corr-is-not-a-different-factor-use-two-way-neutralisation",
+   "claim": "与已知家族的 rank 相关远低于 0.95 不代表是不同因子:相关低可能只是因为掺了一半不挣钱的成分。判包含关系要做双向中性化,看残差的 rank IC 和无成本多空夏普",
+   "evidence": "原式与 cross_max(day_std(Amt),9) 的 rank 相关只有 0.68(R² 0.49),但原式对它回归后残差 rank IC 0.0090、无成本多空夏普 −0.55,反向残差 0.0322/+2.34;控制变量张成原式 R² 0.500 而张成更好用的 d=30 成员 0.740 ——「更独特」的那一半是噪声",
+   "operators": [],
+   "confidence": "high",
+   "recheck": "残差没有再平滑,只能读 rank IC 与无成本夏普;被比较的两个信号半衰期差别很大时,R² 会被平滑程度左右,要在各自实际交易的信号上做"
+  },
+  {
+   "id": "nan-aware-rolling-ops-inflate-young-stocks-and-zero-on-first-obs",
+   "claim": "nan-aware 的滚动算子在窗口未满时用逐日变长的扩张窗口,次新股(以及没有预热行的样本头一年)的任何「变化量」型统计被机械放大;滚动 std 对单个观测给 0,上市首日会得到全截面最小值",
+   "evidence": "次新股占截面 7%,却占原式空头十分位的 25%/17%;上市首日因子值为 0 每天把约 3 只次新股排进多头腿,组内年化超额 −360%/−290%,拉低多头腿毛超额 2.3/1.9 个点;把外层 std 换成 abs_(cross_delta(·,5))(首日为 NaN)后训练段多头腿毛超额 +2.6 个点",
+   "operators": [
+    "ts_stddev",
+    "ts_std",
+    "cross_stddev",
+    "cross_mean",
+    "cross_fangzheng"
+   ],
+   "confidence": "high",
+   "recheck": "视图有足够预热行、或截面按上市天数过滤时不成立;水平型因子(如 cross_max(day_std(Amt), d))没有这个放大,反而会让成交清淡的次新股进入最小端"
+  },
+  {
+   "id": "amt-level-family-long-leg-plateau-at-slower-windows",
+   "claim": "成交额水平家族 cross_max(day_std(Amt), d) 里,rank IC 与多空夏普随 d 单调下降(近期放量信息值钱的地方在空头腿),而多头腿净超额在 d=15~60 上是平台、明显高于 d=9 与 d=241;对纯多头用户该用比多空最优更慢的窗口",
+   "evidence": "d=9/15/20/30/60/120/241 的多头腿净超额训练段 9.3/12.3/12.6/13.6/13.5/11.6/9.0%、验证段 18.5/21.3/20.9/22.2/20.4/19.9/18.6%;留出段 d=15/30/60 为 12.0/12.5/14.7%;族内嵌套:d=30 对 d=9 回归后残差 rank IC 0.0037,反向 0.0283 但换手 15.4%",
+   "operators": [
+    "cross_max",
+    "day_std"
+   ],
+   "confidence": "medium",
+   "recheck": "只在 15bp 单边成本口径下成立,成本更低时短窗口重新占优;多头腿的钱集中在小市值(只留市值大的一半时训练段净超额 1.8%);2024 年明显变弱"
+  },
+  {
+   "id": "amt-family-short-leg-is-turnover-long-leg-is-small-cap-side",
+   "claim": "成交额家族的两条腿跟着成交额的两个不同成分走:对换手率中性化后空头腿毛超额掉到三分之一左右或更低、多头腿变大;对流通市值中性化后已知家族成员的多头腿掉一半、空头腿变大。多头腿还需要「近期没放过量」:只看平时成交水平(中位数)多头腿只剩一半",
+   "evidence": "原式/d=9/d=30/d=60 四个因子同一形状(训练段,多头/空头毛超额):d=30 未中性化 17.4%/27.0%,对 ctl_cap 8.4%/41.6%,对 ctl_turnrate 23.3%/7.6%;cross_med(day_std(Amt),60) 多头腿毛超额 7.0%/19.5% 对 cross_max 同窗口 15.9%/22.3%;换手率、波动类控制变量自己当因子在训练段多头腿毛超额为负",
+   "operators": [
+    "cross_max",
+    "cross_med",
+    "day_std",
+    "day_sum"
+   ],
+   "confidence": "medium",
+   "recheck": "中性化只在训练段(2018–2021)做过;残差未平滑只读毛超额;市值和换手率是外部面板,换数据源要重查"
+  },
+  {
+   "id": "scale-free-volume-event-is-short-only-and-gated-by-amount",
+   "claim": "无尺度的「相对自身历史放量」信号(近期峰值/一年峰值,或一年水平量的相对变化)是纯空头信号:只有最高一档深度跑输,其余九档近乎平,多头腿净超额很低;而且它的 IC 集中在成交额最大的那一桶",
+   "evidence": "div(cross_max(day_std(Amt),5), cross_max(day_std(Amt),241)) 训练/验证 Q1 −35.0%/−39.7%,Q2 只有 −3.3%,多头腿净超额 4.6%/12.8%;D/C 版本 Q1 −28.7%、多头腿净超额 4.6%/14.7%;按 ctl_amt 分五桶桶内 IC −0.010→−0.041,按已知家族分桶 −0.007→−0.044",
+   "operators": [
+    "div",
+    "cross_max",
+    "day_std"
+   ],
+   "confidence": "medium",
+   "recheck": "作为多头组合的排除条件(剔掉最高一档)是否有用没有测;与 20 日动量 rank 相关 0.37,对动量中性化后无成本多空夏普从 3.28 掉到 1.59"
+  },
+  {
+   "id": "dt-face-rewrite-of-nd-rolling-ops-is-bit-identical",
+   "claim": "nd 面的 ts_stddev / ts_delta 与 dt 面的 cross_stddev / cross_delta 是同一内核,作用在「每股票-日一个值」的面板上结果逐位相同;nd 面不分块求值,显卡被邻居占满时会 OOM,改写成 dt 面即可",
+   "evidence": "ts_stddev(C,5) 与 cross_stddev(C,5) rank 相关 1.000、全部指标逐位相同(s2_dtface_check);abs_(ts_delta(C,5)) 与 abs_(cross_delta(C,5)) 在两次独立运行里指标逐位相同;S1 第一次运行 3 个含新 ts_stddev 的表达式在只剩约 0.3 GiB 空闲显存时 OOM",
+   "operators": [
+    "ts_stddev",
+    "ts_std",
+    "cross_stddev",
+    "ts_delta",
+    "cross_delta"
+   ],
+   "confidence": "high",
+   "recheck": "只在 AlphaCube commit 1698296 上核对过;两个面的窗口池不同(ts_* 是 1/5/10/20/…,cross_* 是 3/5/10/15/30/60/241),进搜索语法时要注意"
+  }
+ ],
+ "holdout_reads": 1,
+ "server_runs": 8,
+ "variants_tested": 28,
+ "report_path": "/Users/wxy/Desktop/Partura/research/alpha_distillation/F105_std_fangzheng_covamt.md",
+ "tooling_problems": [
+  "重复了一次服务器运行(我的失误 + 工具缺口):中断前的研究员已经用 tag S1b_S2_S3 把 S1 的 3 个 OOM 变体和 S2、S3 一起跑完(21 个变体),但 JSON 和台账只留在服务器上没拉回本地;study.sh status 只列正在跑的任务,没有命令能列服务器上已完成的结果。我用 wait 探了几个猜的 tag 没猜中,于是把同样的阶段又跑了一遍(S2S3_nodes_family)。后来 wait 完成时 rsync 把旧文件一起拉回才发现;两次运行的指标逐位相同,结论不受影响,但全研究因此用满了 8 次(S0_baseline、S1_what、x1_events、S1b_S2_S3、S2S3_nodes_family、S4_longleg、x2_longleg、final)。建议加一个 study.sh pull <fid>;接手时可先对任何已完成的 tag 调一次 wait 来触发 rsync",
+  "nd 面的 ts_stddev 在 GPU 上不分块,邻居把显卡占满时 OOM(S1 第一次运行挂了 3 个变体)。绕过:外层 std 改写成 dt 面的 cross_stddev(同一内核),用 s2_dtface_check 证明与原式逐位相同;ts_delta 同理换成 cross_delta",
+  "台账里 S0_baseline 被记了 3 次(骨架生成阶段重跑过),所以 train/valid 的读取次数是 8 而不是研究里实际的阶段数;server_runs 里 S0 只算了一次",
+  "内置探针的样本只有 40 行,对 241 日窗口是瞎的(cross_fangzheng 的「脉冲记忆天数 = 27」只是 40−13)。绕过:studies 下的四个探针都用 ≥3 倍窗口的样本,并带解析解自检",
+  "条件 IC 的 gate 只能是控制变量/gates 或同一次运行里的变体,跨运行的变体会被静默跳过。绕过:在 gates 里加了一个 g_level(与 s1_level 同一表达式,走缓存)",
+  "rank 相关矩阵只覆盖同一次运行里的面板,报告第 8 节在没设 corr_ids 时只印控制变量之间的矩阵。绕过:把 corr_ids 设成五个最终候选;其余变体与原式/已知家族的相关用临时脚本从各次运行的 JSON 里读出来写进 notes",
+  "study.sh digest 不打印纯多头夏普、hl_long 口径、与原式的 rank 相关(非基线阶段),报告的逐年表也只印基线 id。这些数字都在 JSON 里,我用临时 python 读出来,并在 notes 里注明了出处(例如 final.json 的 diagnostics.by_year)",
+  "report 合并多次运行时按文件名字典序「后者覆盖前者」,诊断表按 key 合并:旧运行 S1b_S2_S3 里的两行条件 IC(s1_relchg|s1_level、s1_level|s1_relchg)因此留在了报告的条件 IC 表里,已在 07_conditional 里说明",
+  "分析脚本里按「当天成交额分位」过滤截面会让贴着边界的多头十分位每天进出截面,日换手被抬到 13%~19%,净值不可读;那一组只读了毛超额,并在 notes 里写明"
+ ]
+}

@@ -1,0 +1,235 @@
+{
+ "factor_id": "F101_day_shine_retstd",
+ "one_line": "方正「适度冒险」的日频零件:|放量分钟起 5 分钟收益 std 的日均值 − 当天截面均值|,方向为负;实质是「日内波动水平的 V 形截面折叠 + 折叠后平滑」。样本外保留原式,没有找到更好用的版本。",
+ "mechanism": "折叠前的量 J 与 day_std(Ret) 的日截面 rank 相关 0.90,就是日内波动;放量掩码(ΔVolume > 当天均值+1σ,每只票每天约 20 次触发,不带成交额尺度)只是把统计量向放量爆发加权、让右尾更重。收益对波动水平不是单调的也不是「峰在均值」,而是一块平台加两道悬崖:最高 5%~10% 是深渊(年化 −59%~−83%),最低一端在 2018–2021 也差。abs_(cs_demean(·)) 把两道悬崖放进空头、把多头挪到平台上;口径里的 EMA 作用在折叠之后,EMA|K| = |EMA K| + 相对位置的不稳定度,两项各自单调,多头腿 = 「波动水平适中且相对位置稳定」的票,空头腿 94%~97% 是持续高波动、高换手的热门票(换手率/波动因子的地盘)。放量掩码独有的内容是「爆发比」(放量时刻波动 ÷ 背景波动)这个单调空头信号,它给原式多出约一半空头腿和 0.3~0.7 的多空夏普,对多头腿没有贡献。",
+ "family": "「活跃度 / 日内波动水平的截面均值折叠」族:对 9 个线性控制 R² 仅 0.154,但对「折叠并平滑过的 day_std(Ret)」R² 0.749;与 F001 的成交额水平 / 极值记忆族无关(rank 相关 ±0.05 以内)。",
+ "original": {
+  "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+  "sign": -1,
+  "halflife": 10,
+  "ls_train": 3.93,
+  "ls_test": 3.7,
+  "long_gross_train": 0.1356,
+  "long_gross_test": 0.1196,
+  "long_net_train": 0.0602,
+  "long_net_test": 0.0596,
+  "long_sharpe_train": 1.33,
+  "long_sharpe_test": 1.32,
+  "turnover": 0.0813,
+  "coverage": 0.9991,
+  "distinct": 0.996,
+  "n_operators": 12,
+  "rank_corr_with_original": 1
+ },
+ "recommended": {
+  "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+  "sign": -1,
+  "halflife": 10,
+  "ls_train": 3.93,
+  "ls_test": 3.7,
+  "long_gross_train": 0.1356,
+  "long_gross_test": 0.1196,
+  "long_net_train": 0.0602,
+  "long_net_test": 0.0596,
+  "long_sharpe_train": 1.33,
+  "long_sharpe_test": 1.32,
+  "turnover": 0.0813,
+  "coverage": 0.9991,
+  "distinct": 0.996,
+  "n_operators": 12,
+  "rank_corr_with_original": 1
+ },
+ "recommended_kind": "original_kept",
+ "other_finalists": [
+  {
+   "expr": "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))",
+   "sign": -1,
+   "halflife": 10,
+   "ls_train": 3.24,
+   "ls_test": 2.97,
+   "long_gross_train": 0.1412,
+   "long_gross_test": 0.1154,
+   "long_net_train": 0.0758,
+   "long_net_test": 0.0662,
+   "long_sharpe_train": 2.11,
+   "long_sharpe_test": 1.41,
+   "turnover": 0.0642,
+   "coverage": 0.9992,
+   "distinct": 0.996,
+   "n_operators": 5,
+   "rank_corr_with_original": 0.625
+  },
+  {
+   "expr": "abs_(cs_demean(cs_rank(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))",
+   "sign": -1,
+   "halflife": 20,
+   "ls_train": 3.19,
+   "ls_test": 1.63,
+   "long_gross_train": 0.126,
+   "long_gross_test": 0.0904,
+   "long_net_train": 0.0828,
+   "long_net_test": 0.0571,
+   "long_sharpe_train": 2.11,
+   "long_sharpe_test": 1.3,
+   "turnover": 0.0419,
+   "coverage": 0.9992,
+   "distinct": 0.87,
+   "n_operators": 6,
+   "rank_corr_with_original": 0.57
+  },
+  {
+   "expr": "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))",
+   "sign": -1,
+   "halflife": 10,
+   "ls_train": 3.47,
+   "ls_test": 3.42,
+   "long_gross_train": 0.1342,
+   "long_gross_test": 0.1178,
+   "long_net_train": 0.0701,
+   "long_net_test": 0.066,
+   "long_sharpe_train": 1.89,
+   "long_sharpe_test": 1.43,
+   "turnover": 0.0663,
+   "coverage": 0.9992,
+   "distinct": 0.996,
+   "n_operators": 4,
+   "rank_corr_with_original": 0.758
+  },
+  {
+   "expr": "abs_(cs_demean(cs_rank(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)))))",
+   "sign": -1,
+   "halflife": 20,
+   "ls_train": 3.6,
+   "ls_test": 2.33,
+   "long_gross_train": 0.1279,
+   "long_gross_test": 0.091,
+   "long_net_train": 0.073,
+   "long_net_test": 0.0505,
+   "long_sharpe_train": 1.78,
+   "long_sharpe_test": 1.04,
+   "turnover": 0.0566,
+   "coverage": 0.9991,
+   "distinct": 0.872,
+   "n_operators": 13,
+   "rank_corr_with_original": 0.837
+  }
+ ],
+ "known_exposure_r2": 0.154,
+ "verdict": "保留原式(original_kept)。原式样本外很稳:用户口径多空夏普 3.93 / 3.70,多头腿净超额 +6.0% / +6.0%,纯多头夏普 1.33 / 1.32。读留出段之前我的事前推荐是 5 个算子的「背景波动折叠」(train 多头腿持平、valid 高 12 个点、2021–2023 每年都更好、换手减半),但测试段它的多头腿只有 +6.6% / 夏普 1.41,与原式的差(0.6 个点、0.09)远在噪声内,而多空夏普低 0.73 —— 升华没有被样本外支持;原式多头腿的失效只发生在 2021–2023,2024–2025 恢复到 +8.9% / +5.0%。提纯只成立一半:4 个算子的 abs_(cs_demean(day_std(Ret))) 在测试段三项指标上与原式不可区分(多空 3.42、多头净 +6.6%、纯多头夏普 1.43),可以当作「更小」的等价物,但不是「更好」—— 原式多出来的 8 个节点买到的是空头腿(测试段 +52.2% 对 +41.3%)。两个排名折叠版样本外最差(多空 1.63 / 2.33),不要用。注意 known_exposure_r2 = 0.154 对这条因子是低估:V 形折叠使它与任何单调控制在秩空间近似不相关,对「折叠并平滑的日内波动」R² 是 0.749。",
+ "established": [
+  "折叠之前它就是日内波动:J 与 day_std(Ret) 日截面 rank 相关 +0.90(look.py C);原式交易信号对 9 个线性控制 R² 0.154,对单个「EMA10(fold(day_std(Ret)))」R² 0.749(look2.py A)。",
+  "整棵树里只有「截面折叠 + 折叠后平滑」不能拿掉:不折叠 rank IC 更高(+0.0389/+0.0571)但多空 1.34/2.35、多头净 −9.0%/+0.2%(S1 s1_nofold、S2 s2_roll5_nofold);先平滑后折叠多头净 −9.5%/−10.2%(look.py F);双重排序里「离中心远近」和「相对位置稳不稳」各自单调且两段一致(look3.py H)。窗口 3/5/15 等价、切片多余(S1 s1_win3/s1_win15、S2 s2_roll5_noslice)。",
+  "放量掩码只贡献空头腿:固定半衰期 20 时 J / 全天 std / 背景波动的均值折叠 train 多头净 +9.4% / +9.5% / +9.1%(look3.py A);它独有的内容「爆发比」是单调空头信号,rank IC +0.0285/+0.0415、最差一档 −46.6%/−40.3%(S2 s2_burst_ratio);测试段原式多空 3.70 对 4 算子 f_ivol 的 3.42 和 f_roll5 的 2.97,空头腿 +52.2% 对 +41.3% / +31.3%(S_final)。",
+  "钱在空头腿且空头腿是已知暴露:多头腿只占毛价差 24%;空头十分位 94%~97% 来自高侧、平均在换手率第 80 百分位、标签缺失只占 3.0%(look.py D/G);对线性控制中性化后空头腿 +53.7% → +19.7%,多头腿 +16.9% → +17.3%(S0 中性化表)。",
+  "升华没有被样本外支持:f_roll5 在 valid 上多头净 +10.4% 对原式 −1.6%,测试段只有 +6.6% 对 +6.0%、纯多头夏普 1.41 对 1.32;原式多头腿 2021–2023 为 +3.7% / −1.7% / −0.7%,2024–2025 回到 +8.9% / +5.0%(S_final 及其逐年)。",
+  "均值折叠样本外好于排名折叠:测试段多空 3.70 / 2.97(均值)对 2.33 / 1.63(排名);排名折叠把最低波动的 5% 也放进空头,2024 年两个排名折叠版空头腿只有 −5.3% / +3.7%、多空夏普 −0.07 / +0.82(S_final 逐年)。"
+ ],
+ "unresolved": [
+  "原式多头腿为什么在 2021–2023 三年是空的、2024–2025 又恢复:只确认了它与折叠中心偏高(J 的截面均值在第 66 百分位)和那几年收益剖面向低波动倾斜同时出现,没有行业数据去拆。",
+  "行业 / 板块暴露无法检验(立方体里没有行业数据),不能排除空头腿集中在题材板块。",
+  "多头腿的增量价值与容量:只在 train 上对线性控制量过(多头腿毛超额不降);没有对「折叠版控制」单独量多头腿、也没有样本外量。背景版多头十分位里市值偏大的一半毛超额只有 +8.5% / +3.4%,最大市值一档条件 IC −0.0061。",
+  "爆发比 div(J, roll5) 作为独立空头因子的样本外表现没有读(它是原式相对 4 算子朴素版的全部增量)。",
+  "为什么日频的活跃度折叠(20 日波动、换手率、振幅)在 2022–2023 多头腿归零(+0.0% / +1.4% / +1.3%)而分钟级波动的折叠没有。"
+ ],
+ "lab_findings": [
+  {
+   "id": "trigger-ops-make-builtin-probes-vacuous",
+   "claim": "in_sustain_* 是「触发型」算子:第一个操作数是 0/1 掩码,只在 mask==1 的分钟写值。内置探针给它喂随机浮点数,永不触发,所有读数(有限值占比 0、齐次度 None、与分钟顺序无关)都是空读数;注册表给它的 boolean_output/trivial_boolean 标志是错的。真实语义:窗口 = 触发分钟自己 + 之后 d−1 分钟(朝后看、含触发分钟),总体 std,跑出行尾就截短(最后一分钟触发得 0),整行无触发 → NaN。",
+   "evidence": "studies/F101_day_shine_retstd/probes.py:minute_offsets_read=[0,1,2,3,4](自检 in_delay→[-1]);ramp_window_readout 1.4142 / 1.118 / 0.8165 / 0.5 / 0.0(自检 in_stddev_full 在 5 宽斜坡上 1.4142);trigger_semantics 只有 1.0 触发;is_gt 遇 NaN 与相等都给 0。",
+   "operators": [
+    "in_sustain_stddev",
+    "is_gt",
+    "in_mean_full",
+    "in_stddev_full",
+    "in_delay"
+   ],
+   "confidence": "high",
+   "recheck": "其他 in_sustain_* 内核(start_offset / num 参数不同)要重跑这组探针;内核改动后失效。"
+  },
+  {
+   "id": "own-day-sigma-volume-mask-is-scale-free",
+   "claim": "「ΔVolume > 当天自己的均值 + 1σ」这种掩码对每只票每天触发次数差不多(p1=5、中位 20、p99=32),不带成交额尺度;挂在它上面的统计量 ≈ 同一统计量向放量爆发加权的版本(与无条件版 rank 相关 0.85~0.90)。它独有的信息是「有条件 ÷ 无条件」的比值,在这里是单调的空头信号,对多头腿没有贡献。",
+   "evidence": "look.py B/C;S2 s2_burst_ratio rank IC +0.0285/+0.0415、Q1 −46.6%/−40.3%、多头占比 8%;look3.py A(hl 20 时三种统计量 train 多头净 +9.4%/+9.5%/+9.1%);S_final 测试段多空 3.70(带掩码)对 3.42(day_std)。",
+   "operators": [
+    "is_gt",
+    "in_mean_full",
+    "in_stddev_full",
+    "in_sustain_stddev",
+    "day_mean"
+   ],
+   "confidence": "medium",
+   "recheck": "阈值更高(如 3σ)时触发次数会少到出现小样本问题;被统计的字段不是收益时比值的含义要重测;比值本身的留出段没有读。"
+  },
+  {
+   "id": "cs-fold-hides-exposure-from-linear-neutralisation",
+   "claim": "外层是不保序的截面折叠 abs_(cs_demean(x)) 时,因子与任何单调控制在秩空间近似不相关,线性中性化的 R² 会严重低估已知暴露;必须对「同样折叠、同样平滑」的控制变量中性化。同理,rank IC 不能用来给折叠型变体排序(不折叠版 rank IC 更高但书是空的)。",
+   "evidence": "原式:9 个线性控制 R² 0.154,对 EMA10(fold(day_std(Ret))) 一个变量 R² 0.749(look2.py A);背景版:0.090 对 0.796,残差 rank IC +0.0018(look3.py D);s1_nofold rank IC +0.0389/+0.0571 而多空 1.34/2.35、多头净 −9.0%。",
+   "operators": [
+    "abs_",
+    "cs_demean"
+   ],
+   "confidence": "high",
+   "recheck": "若被折叠的量收益剖面本来单调,折叠会毁掉信号,这条不适用;折叠中心不是截面均值/中位数时要重算折叠版控制。"
+  },
+  {
+   "id": "fold-then-smooth-is-part-of-the-factor",
+   "claim": "最外层是非线性节点(abs)时,口径里的 EMA 不是中性的平滑:EMA|K| = |EMA K| + 相对位置的不稳定度,两项各自带单调信息,多头腿只在「先折叠后平滑」时存在。换成 20/40 日均值、20 日最大值、均值+标准差(cross_fangzheng)、均方根,在噪声内是同一个东西;半衰期拉到 40/60 多头腿不变、多空夏普下降。",
+   "evidence": "look.py F(多头净 +9.0% 对先平滑后折叠 −9.5%);look2.py F(+9.1% 对 −4.7%);look3.py H 双重排序两段一致;look3.py C/F 各种聚合 train 多头净 8.0%~9.2%、valid 7.2%~10.4%。",
+   "operators": [
+    "abs_",
+    "cs_demean",
+    "cross_mean",
+    "cross_max",
+    "cross_fangzheng"
+   ],
+   "confidence": "high",
+   "recheck": "K 的符号长期不变(不稳定度≈0)的因子上两种顺序等价;时间聚合的比较只在 train/valid 上做过,没有读留出段。"
+  },
+  {
+   "id": "moderate-activity-fold-is-generic-benchmark-first",
+   "claim": "把任何「活跃度 / 波动」类变量做截面均值折叠再平滑(日内波动、20 日波动、换手率、振幅),在 2018–2021 都得到多空夏普 3.0~3.6、多头净 +8.4%~+9.7% 的书;规模、价格、成交额水平折叠后没有。所以遇到 abs_(cs_demean(X))、X 是活跃度类的因子,先拿 4 个算子的 abs_(cs_demean(day_std(Ret))) 当基准比。",
+   "evidence": "look3.py D;S_final:f_ivol 测试段多空 3.42、多头净 +6.6%、纯多头夏普 1.43,与 12 个中间量的原式(3.70 / +6.0% / 1.32)在噪声内不可区分。",
+   "operators": [
+    "abs_",
+    "cs_demean",
+    "day_std"
+   ],
+   "confidence": "medium",
+   "recheck": "日频的那几个折叠在 2022–2023 多头腿归零,留出段只读过 day_std 版;组合里已有波动/换手率因子时空头腿基本重复。"
+  },
+  {
+   "id": "mean-fold-vs-rank-fold-on-right-skewed-input",
+   "claim": "对右偏的波动类输入,均值折叠的中心落在第 59~66 百分位、空头十分位几乎全在高侧;对称的排名折叠 abs_(cs_demean(cs_rank(x))) 把最低的 5% 也放进空头。后者在 train/valid 上看起来更「稳」(多头腿两段一致),样本外反而最差:低波动一端大涨的年份空头腿归零。",
+   "evidence": "look.py B/D、look2.py C(中心位置与空头构成);S_final 用户口径多空:均值折叠 3.93→3.70、3.24→2.97,排名折叠 3.60→2.33、3.19→1.63;2024 年排名折叠空头腿 −5.3% / +3.7%。",
+   "operators": [
+    "cs_rank",
+    "abs_",
+    "cs_demean"
+   ],
+   "confidence": "medium",
+   "recheck": "只有 2024 一个年份的证据;低尾确实差的制度(2018–2021 最低波动一档 −15%)里排名折叠不吃亏。"
+  },
+  {
+   "id": "valid-only-long-leg-gain-and-halflife-confound",
+   "claim": "方法上的教训两条:(1) 变体按各自拟合的半衰期比较会把成本差算到结构头上 —— 半衰期 10→20 光靠省换手就给多头腿净超额加 0.4~3 个点,要用 books.sweep 在同一半衰期下比;(2) 在同一半衰期下 train 持平、只在 386 天的 valid 上领先的多头腿改进是在押一段行情,即使连续三个自然年都领先。",
+   "evidence": "look3.py A/Y;S_final:f_roll5 相对原式 valid 多头净 +12 个点、2021–2023 每年领先,测试段只剩 +0.6 个点;f_roll5 相对 f_ivol 的 valid 优势(+10.4% 对 +3.7%)在测试段为 0。",
+   "operators": [],
+   "confidence": "medium",
+   "recheck": "改进在 train 的固定半衰期比较里也成立时,这条警告不适用。"
+  }
+ ],
+ "holdout_reads": 1,
+ "server_runs": 7,
+ "variants_tested": 18,
+ "report_path": "/Users/wxy/Desktop/Partura/research/alpha_distillation/F101_day_shine_retstd.md",
+ "tooling_problems": [
+  "这次研究是接手的(之前的会话因网络中断停在 S2 跑完、07_S2 的 note 还没写的位置)。我没有重跑任何已有阶段,靠 runs/*.json、logs/ 和 config 里的注释还原,然后补了 look3.py 和 S_final。服务器运行按 7 次计:S0、S1、S2、look、look2、look3、final;ledger 里 S0_baseline 被记了 3 次,是骨架/批处理阶段的重跑,不是本研究起的。",
+  "内置探针对触发型算子 in_sustain_stddev 全是空读数(喂随机浮点数当 mask,永不触发),注册表还把它标成 boolean_output/trivial_boolean,decompose 的结构角色栏因此误标为「事件判定(0/1 掩码)」。绕过:studies/F101_day_shine_retstd/probes.py 里写了 4 个探针(都先在已知答案的算子上自检)。",
+  "ts_stddev 在 GPU 被邻居占满时报 CUDA OOM,s1_fold_dvol20 没算出来(S2 再试仍失败后从阶段里拿掉),报告总表里留着一行「求值失败」。绕过:在 exec 脚本里用已缓存的 ctl_dvol20 面板在 numpy 里做同样的折叠。",
+  "digest 和报告只给基线打印半衰期扫描;各变体按自己拟合的半衰期(10 或 20)进表,换手差一倍,多头腿净超额因此差 1~3 个点,很容易读成结构差异(之前的 S1 note 就这样读了)。绕过:手工读 runs/*.json 里每个变体的 books.sweep,并在 look3.py 里按固定半衰期重算。建议 digest 给每个变体加 hl=10/20 两列多头净超额。",
+  "exec 脚本的数字进不了报告的表,只能写在 07x_*.md 里并引用 logs/;最终候选的留出段逐年表也一样(报告只打印 baseline_id 的逐年),我把它从 final.json 手抄进了 07_S_final.md。所以「notes 里每个数字都能在表里找到」对这两部分做不到,只能对到日志和 JSON。",
+  "study.sh wait 对 exec 任务只回显日志最后 60 行,look3 的前半段输出要自己去读 logs/F101_day_shine_retstd_look3.log。",
+  "没有把 baseline_id 改成 f_orig(F001 的做法):那样第 6 节的逐年表会混入留出段年份,与读留出段之前写的 06_baseline.md 对不上。代价是第 6 节用户口径表里 v_base 的测试列是「—」,测试段数字只在第 10 节的最终对比表里。",
+  "digest 的半衰期扫描那一行里的 L 是纯多头夏普,没有标注,容易和多头腿净超额混淆(报告里的 sweep 表是清楚的)。"
+ ]
+}

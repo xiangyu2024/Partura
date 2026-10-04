@@ -1,0 +1,187 @@
+====================================================================================================
+§0  kernel sources not reachable through `study.sh src`, and probe self-checks
+def _kurt(x: torch.Tensor) -> torch.Tensor:
+    x_demeaned = x - x.nanmean(dim=-1, keepdim=True)
+    x_var = torch.nanmean(torch.pow(x_demeaned, 2), dim=-1, keepdim=True)
+    x_4 = torch.pow(x_demeaned, 4)
+    return div(_mean(x_4), torch.pow(_mean(x_var), 2)) - 3
+
+EPS = 1e-09
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[selfcheck] constant_input_value   on day_mean     expect 0.0  got 0.0  -> PASS
+[selfcheck] constant_input_value   on day_kurt     expect nan  got nan  -> PASS
+[selfcheck] impulse_in_zeros       on nt_ts_mean   expect {'+0': 0.3333, '+1': 0.3333, '+2': 0.3333, '+3': 0.0, '+4': 0.0}  got {'+0': 0.3333, '+1': 0.3333, '+2': 0.3333, '+3': 0.0, '+4': 0.0}  -> PASS
+[selfcheck] two_point_response     on day_mean     expect {'k=1': 0.004, 'k=2': 0.008, 'k=6': 0.025, 'k=24': 0.1, 'k=60': 0.25, 'k=120': 0.5}  got {'k=1': 0.004, 'k=2': 0.008, 'k=6': 0.025, 'k=24': 0.1, 'k=60': 0.25, 'k=120': 0.5}  -> PASS
+[selfcheck] two_point_response     on day_kurt     expect {'k=1': 235.004, 'k=2': 115.008, 'k=6': 35.026, 'k=24': 5.111, 'k=60': -0.667, 'k=120': -2.0}  got {'k=1': 235.004, 'k=2': 115.008, 'k=6': 35.026, 'k=24': 5.111, 'k=60': -0.667, 'k=120': -2.0}  -> PASS
+[selfcheck] eps_shrink_at_scale    on nt_ts_rank   expect {'0.001': 1.0, '0.0003': 1.0, '0.0001': 1.0, '3e-05': 1.0}  got {'0.001': 1.0, '0.0003': 1.0, '0.0001': 1.0, '3e-05': 1.0}  -> PASS
+[selfcheck] iid_null_location      on nt_ts_autocorr_s1(w=60) expect mean≈-1/60, few |r|>0.9  got {'mean': -0.013, 'median': -0.012, 'frac_abs_gt_0.9': 0.0}  -> PASS
+[probe] nt_ts_autocorr_s1 w=3: {'constant_input_value': 0.0, 'impulse_in_zeros': {'+0': 0.0, '+1': -0.5, '+2': -0.5, '+3': 0.0, '+4': 0.0}, 'iid_null_location': {'mean': -0.295, 'median': -0.461, 'frac_abs_gt_0.9': 0.187}, 'eps_shrink_at_scale': {'0.001': 0.998, '0.0003': 0.974, '0.0001': 0.809, '3e-05': 0.276}}
+[probe] nt_ts_autocorr_s1 w=15: {'constant_input_value': 0.0, 'impulse_in_zeros': {'+0': 0.0, '+1': -0.0714, '+2': -0.0714, '+3': -0.0714, '+4': -0.0714, '+5': -0.0714, '+6': -0.0714, '+7': -0.0714, '+8': -0.0714, '+9': -0.0714, '+10': -0.0714, '+11': -0.0714, '+12': -0.0714, '+13': -0.0714, '+14': -0.0714, '+15': 0.0, '+16': 0.0}, 'iid_null_location': {'mean': -0.064, 'median': -0.064, 'frac_abs_gt_0.9': 0.0}, 'eps_shrink_at_scale': {'0.001': 0.999, '0.0003': 0.988, '0.0001': 0.899, '3e-05': 0.444}}
+[probe] nt_ts_autocorr_s1 w=60: {'constant_input_value': 0.0, 'impulse_in_zeros': {'+0': 0.0, '+1': -0.05, '+2': -0.0476, '+3': -0.0455, '+4': -0.0435, '+5': -0.0417, '+6': -0.04, '+7': -0.0385, '+8': -0.037, '+9': -0.0357, '+10': -0.0345, '+11': -0.0333, '+12': -0.0323, '+13': -0.0312, '+14': -0.0303, '+15': -0.0294, '+16': -0.0286, '+17': -0.0278, '+18': -0.027, '+19': -0.0263}, 'iid_null_location': {'mean': -0.013, 'median': -0.012, 'frac_abs_gt_0.9': 0.0}, 'eps_shrink_at_scale': {'0.001': 0.999, '0.0003': 0.989, '0.0001': 0.907, '3e-05': 0.467}}
+[guard] all 2 run slots busy, waiting ...
+[guard] got run slot 0 after 69s
+[panels] 7 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 21.4 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   3/7 (17s)
+[panels] GPU: 21.3 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   6/7 (65s)
+[panels] GPU: 20.7 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   7/7 (75s)
+[panels] done in 75s
+
+panels ready at 146s; shape (1942, 5220); train rows slice(0, 973, None), valid rows slice(973, 1359, None)
+
+====================================================================================================
+§1  K = day_kurt(A), train, labelled cells
+  quantiles: p1=-1.161  p5=-0.9481  p25=-0.5801  p50=-0.3514  p75=-0.1266  p95=0.2818  p99=1.094
+  NaN share 0.0033;  K<0 share 0.847;  |K|<0.5 share 0.648;  K>10 share 0.0039;  K>50 share 0.0013
+  K^2: mean 19.24 median 0.145;  top 1% of stock-days carry 98.7% of the total
+  day_first(Ret) quantiles (is the first bar an overnight return?): p1=0  p5=0  p25=0  p50=0  p75=0  p95=0  p99=0
+
+====================================================================================================
+§2  is K a sparsity meter?  (mean daily Spearman, train)
+  K ~ Z (share of minutes with A != 0): -0.048
+  K ~ W (share of minutes with Ret != 0): -0.062
+  Z ~ W: +0.973
+  Z quantiles: p1=0.3029  p5=0.5892  p25=0.7842  p50=0.9004  p75=0.971  p95=0.9917  p99=0.9917
+  W quantiles: p1=0.1992  p5=0.3651  p25=0.5145  p50=0.6515  p75=0.8008  p95=0.9295  p99=0.9627
+  by Z bucket:   share of cells | median K | K p25..p75 | median (K+3)*Z  [constant if K = c/Z - 3]
+    Z in [0.00,0.05)    0.2% |   +63.00 |   +39.00 ..  +106.17 | 1.387
+    Z in [0.05,0.10)    0.1% |   +17.52 |   +14.21 ..   +21.81 | 1.526
+    Z in [0.10,0.20)    0.2% |    +7.31 |    +5.71 ..    +9.45 | 1.531
+    Z in [0.20,0.30)    0.2% |    +2.78 |    +2.07 ..    +3.66 | 1.483
+    Z in [0.30,0.40)    0.4% |    +0.95 |    +0.47 ..    +1.47 | 1.413
+    Z in [0.40,0.50)    1.1% |    +0.06 |    -0.30 ..    +0.47 | 1.402
+    Z in [0.50,0.60)    3.0% |    -0.39 |    -0.71 ..    -0.04 | 1.455
+    Z in [0.60,0.70)    7.4% |    -0.55 |    -0.83 ..    -0.27 | 1.609
+    Z in [0.70,0.80)   14.8% |    -0.45 |    -0.66 ..    -0.25 | 1.928
+    Z in [0.80,0.90)   22.3% |    -0.27 |    -0.43 ..    -0.11 | 2.320
+    Z in [0.90,1.00)   50.3% |    -0.36 |    -0.60 ..    -0.11 | 2.523
+
+====================================================================================================
+§3  does the +EPS matter at the scale of minute returns?  K from Ret vs K from 1000*Ret (train)
+  mean daily Spearman(K, K_1000x): +0.9824
+  K_1000x - K quantiles: p1=-0.139  p5=-0.0785  p25=-0.01434  p50=7.105e-05  p75=0.01687  p95=0.1119  p99=0.2276
+  sign flips: 0.0218
+    price pct [0.0,0.2): median K -0.374  median K_1000x -0.347  median |diff| 0.0113
+    price pct [0.2,0.4): median K -0.340  median K_1000x -0.326  median |diff| 0.0172
+    price pct [0.4,0.6): median K -0.348  median K_1000x -0.337  median |diff| 0.0172
+    price pct [0.6,0.8): median K -0.348  median K_1000x -0.341  median |diff| 0.0166
+    price pct [0.8,1.0): median K -0.347  median K_1000x -0.349  median |diff| 0.0145
+  15-day factor rebuilt from K_1000x vs the original: Spearman +0.9802
+  F (orig)                       sgn -1 hl 1    LS +3.68/+3.88  Lgross +12.7%/+12.9%  Lnet +4.9%/+4.5%  Lsharpe +1.14/+1.51  short +38.8%/+31.9%  TO 7.7%
+  F from 1000*Ret                sgn -1 hl 1    LS +3.63/+4.20  Lgross +11.6%/+12.9%  Lnet +3.7%/+4.6%  Lsharpe +0.82/+1.59  short +39.2%/+32.7%  TO 7.7%
+
+====================================================================================================
+§4  the 15-day sum of K^2: is it a max in disguise?  what ranks stocks the same way?  (train)
+  my numpy rebuild of the factor vs the engine's: Spearman +1.00000; median rel diff 2.17e-07, p99 1.40e-06;  NaN mismatch 0.00201
+  share of the 15-day sum carried by its largest day: p1=0.1074  p5=0.1299  p25=0.1762  p50=0.2208  p75=0.2905  p95=0.93  p99=0.9994
+  Spearman(F, cross_max(K^2,15)                       ) = +0.909
+  Spearman(F, cross_max(K,15)  [no fold]              ) = -0.124
+  Spearman(F, cross_mean(K,15)  [no fold, linear]     ) = -0.458
+  Spearman(F, cross_mean(|K|,15) [fold, linear]       ) = +0.982
+  Spearman(F, cross_sum((K+3)^2,15) [no fold, convex] ) = -0.419
+  Spearman(F, -cross_min(Z,15)                        ) = +0.250
+  Spearman(F, -cross_mean(Z,15)                       ) = +0.103
+  Spearman(F, -cross_min(W,15)                        ) = +0.224
+  Spearman(F, -cross_mean(W,15)                       ) = +0.021
+  Spearman(F, K^2 today                               ) = +0.475
+  Spearman(F, K today                                 ) = -0.414
+
+====================================================================================================
+§5  next-day excess (annualised %, vs equal-weight universe) by decile, ASCENDING in the quantity; no smoothing
+ [train]                              D1 (lowest) ... D10 (highest)
+  F (the factor)                     +12.9  +13.0  +10.5   +9.5   +6.0   +5.8   +0.7   -3.9  -12.5  -42.1
+  cross_mean(K,15)  signed           -17.3   -1.3   +1.4   +4.6   +5.0   +8.4   +9.1  +12.7   +9.9  -32.4
+  cross_max(K,15)   signed           -10.9   +0.0   +4.0   +7.6   +7.0   +7.1   +8.7   +7.7   +6.2  -37.4
+  cross_mean(Z,15)  activity         -16.0   -2.7   +3.2   +0.6   +2.7   +0.6   +2.9   +4.2   +5.1   -0.6
+  cross_min(Z,15)   stalest day      -48.8   -0.5   +9.7  +11.1   +7.5   +7.7   +7.1   +3.7   +2.9   -0.3
+  cross_mean(W,15)                    -9.1   +0.5   +3.3   +3.9   +2.3   -2.5   +2.0   +1.8   -0.6   -1.7
+  K today  signed                    -21.5   -4.2   +1.5   +3.0   +5.4   +7.7   +9.8   +9.5   +9.2  -20.5
+  Z today                            -35.7   +7.8   +8.4   +7.9   +6.9   +5.3   +2.9   +2.2   -1.7   -4.1
+ [valid]                              D1 (lowest) ... D10 (highest)
+  F (the factor)                     +14.7  +10.8   +8.2   +5.3   +2.3   +2.2   -1.5   -1.5   -6.7  -33.8
+  cross_mean(K,15)  signed            -7.7   +1.7   -2.5   -0.2   +3.4   +7.2   +9.5   +7.1   +9.3  -27.9
+  cross_max(K,15)   signed            -0.9   +4.0   +4.5   +5.2   +2.0   +5.4   +3.9   +4.5   +4.4  -32.9
+  cross_mean(Z,15)  activity          +0.7  +10.3   +9.1   +6.2   +5.5   +2.6   -0.9   -2.8   -8.6  -22.2
+  cross_min(Z,15)   stalest day      -35.1   +9.7  +14.6  +13.7  +12.6   +8.6   +5.0   +0.6   -8.8  -21.1
+  cross_mean(W,15)                    +7.6  +13.6   +9.2   +7.2   +6.2   +3.0   -2.5   -7.3  -12.0  -25.0
+  K today  signed                    -19.5   -2.0   +4.2   +3.8   +4.5   +4.8   +4.4   +8.9   +5.8  -14.9
+  Z today                            -11.0  +16.4  +15.8  +11.3   +8.3   +5.1   -2.4   -4.5  -15.1  -24.0
+ [train] 20 buckets of cross_mean(K,15), to see where the hump (if any) is:
+    -24.7   -9.9   -2.7   +0.0   +0.5   +2.4   +4.1   +5.0   +4.5   +5.6   +7.8   +9.0   +8.9   +9.2  +13.4  +12.1   +8.6  +11.1   -4.6  -60.3
+   median cross_mean(K,15) per bucket: -0.86 -0.70 -0.60 -0.53 -0.47 -0.43 -0.39 -0.36 -0.34 -0.31 -0.29 -0.27 -0.24 -0.22 -0.19 -0.16 -0.12 -0.05 +0.10 +2.51
+   median F per bucket:               11.9 8.34 6.5 5.31 4.46 3.82 3.34 2.97 2.67 2.42 2.22 2.04 1.89 1.75 1.63 1.54 1.48 1.55 3.34 1.38e+03
+
+====================================================================================================
+§6  who sits in each decile of F (train; D1 = lowest F = the LONG leg, D10 = highest F = the SHORT leg)
+  lock-day proxy: up-lock 0.0116 of stock-days, down-lock 0.0039
+  K on up-lock days: NaN share 0.096; p5=-0.2905  p25=0.3468  p50=2.785  p75=14.7  p95=94.25
+  Z on up-lock days: p5=0  p25=0.05394  p50=0.2199  p75=0.473  p95=0.6598
+  K on down-lock days: NaN share 0.322; p5=-0.4848  p25=-0.08692  p50=0.7387  p75=6.109  p95=84.12
+  Z on down-lock days: p5=0  p25=0  p50=0.1743  p75=0.5062  p95=0.6846
+  dec | up-lock15 dn-lock15 | price% amt% turn% cap% ivol% (median pct-rank) | med Zmean15 med Zmin15 med Kmean15 | share K<0 today | excess ann
+  D1  |     2.3%     2.6% |  0.48 0.36 0.38 0.48 0.37 |   0.878   0.780   -0.14 |   0.73 | +12.7%
+  D2  |     2.9%     2.5% |  0.49 0.42 0.42 0.51 0.39 |   0.883   0.784   -0.20 |   0.78 | +13.0%
+  D3  |     3.6%     2.5% |  0.50 0.45 0.45 0.51 0.41 |   0.885   0.784   -0.25 |   0.81 | +10.4%
+  D4  |     4.3%     2.6% |  0.51 0.47 0.48 0.51 0.43 |   0.890   0.784   -0.28 |   0.83 | +9.5%
+  D5  |     5.2%     2.6% |  0.52 0.50 0.50 0.51 0.45 |   0.898   0.784   -0.33 |   0.85 | +6.0%
+  D6  |     6.3%     2.9% |  0.53 0.52 0.53 0.51 0.47 |   0.910   0.780   -0.37 |   0.87 | +5.5%
+  D7  |     7.5%     3.1% |  0.53 0.54 0.55 0.51 0.50 |   0.920   0.759   -0.44 |   0.90 | +0.6%
+  D8  |     8.9%     3.7% |  0.51 0.55 0.55 0.51 0.54 |   0.912   0.693   -0.53 |   0.93 | -4.2%
+  D9  |    11.9%     4.6% |  0.49 0.57 0.51 0.54 0.63 |   0.776   0.627   -0.69 |   0.95 | -12.6%
+  D10 |    66.9%    16.6% |  0.43 0.68 0.77 0.45 0.82 |   0.792   0.112   +0.47 |   0.82 | -41.0%
+  signal-decile D1: share of names whose label is NaN (cannot be bought at t+1 open) = 0.0246
+  signal-decile D5: share of names whose label is NaN (cannot be bought at t+1 open) = 0.0144
+  signal-decile D10: share of names whose label is NaN (cannot be bought at t+1 open) = 0.0247
+  whole universe with a signal: 0.0152
+
+====================================================================================================
+§7  the two extreme deciles split by 'had a lock day in the last 15 days'
+  [train] D10 short leg: mean excess -41.0%/yr over 345097 name-days
+       up-lock in 15d   share  66.9%  excess   -51.0%/yr  -> contributes  -34.1 pts
+       down-lock only   share   6.3%  excess   -37.5%/yr  -> contributes   -2.4 pts
+       no lock          share  26.9%  excess   -17.1%/yr  -> contributes   -4.6 pts
+       no lock & Kmean15>0 (stale side)   share   2.7%  excess   -20.0%/yr
+       no lock & Kmean15<=0 (active side) share  24.2%  excess   -16.8%/yr
+  [train] D1 long leg: mean excess +12.7%/yr over 345990 name-days
+       up-lock in 15d   share   2.3%  excess   -23.8%/yr  -> contributes   -0.6 pts
+       down-lock only   share   2.4%  excess   -32.6%/yr  -> contributes   -0.8 pts
+       no lock          share  95.3%  excess   +14.7%/yr  -> contributes  +14.0 pts
+       no lock & Kmean15>0 (stale side)   share   6.1%  excess    +5.0%/yr
+       no lock & Kmean15<=0 (active side) share  89.2%  excess   +15.4%/yr
+  [valid] D10 short leg: mean excess -33.6%/yr over 174734 name-days
+       up-lock in 15d   share  60.5%  excess   -53.5%/yr  -> contributes  -32.3 pts
+       down-lock only   share   3.1%  excess    +4.8%/yr  -> contributes   +0.2 pts
+       no lock          share  36.4%  excess    -3.8%/yr  -> contributes   -1.4 pts
+       no lock & Kmean15>0 (stale side)   share   1.3%  excess   -26.9%/yr
+       no lock & Kmean15<=0 (active side) share  35.1%  excess    -3.0%/yr
+  [valid] D1 long leg: mean excess +14.7%/yr over 175069 name-days
+       up-lock in 15d   share   2.1%  excess   +13.6%/yr  -> contributes   +0.3 pts
+       down-lock only   share   0.5%  excess   -40.8%/yr  -> contributes   -0.2 pts
+       no lock          share  97.5%  excess   +15.0%/yr  -> contributes  +14.6 pts
+       no lock & Kmean15>0 (stale side)   share   7.4%  excess   +14.0%/yr
+       no lock & Kmean15<=0 (active side) share  90.0%  excess   +15.0%/yr
+  books (same convention as the tables; sign and half-life fitted on train):
+  F                              sgn -1 hl 1    LS +3.68/+3.88  Lgross +12.7%/+12.9%  Lnet +4.9%/+4.5%  Lsharpe +1.14/+1.51  short +38.8%/+31.9%  TO 7.7%
+  F, lock names removed          sgn -1 hl 5    LS +2.08/+1.26  Lgross +7.2%/+10.9%  Lnet +2.2%/+6.0%  Lsharpe +0.52/+1.86  short +16.4%/+5.9%  TO 5.4%
+  F, only lock names             sgn -1 hl 1    LS +2.86/+3.93  Lgross +21.4%/+28.2%  Lnet +9.2%/+16.3%  Lsharpe +0.92/+2.04  short +47.8%/+52.8%  TO 13.5%
+  lock time in 15d (naive)       sgn -1 hl 0    LS +0.94/+2.54  Lgross -5.5%/+2.7%  Lnet -5.6%/+2.5%  Lsharpe -0.26/+0.23  short +32.6%/+35.7%  TO 2.8%
+  -cross_mean(Z,15)              sgn +1 hl 20   LS -0.82/+1.31  Lgross -6.9%/+7.2%  Lnet -7.8%/+6.3%  Lsharpe -1.01/+0.71  short -4.7%/+17.5%  TO 1.2%
+  -cross_min(Z,15)               sgn -1 hl 0    LS +2.73/+0.35  Lgross +0.1%/-20.7%  Lnet -4.0%/-24.5%  Lsharpe -0.35/-2.21  short +47.7%/+34.4%  TO 5.9%
+  cross_mean(K,15) signed        sgn -1 hl 5    LS +0.99/+1.31  Lgross -13.1%/-4.7%  Lnet -15.3%/-6.5%  Lsharpe -2.79/-1.05  short +26.8%/+21.3%  TO 3.3%
+  cross_max(K,15) signed         sgn -1 hl 2    LS +1.93/+2.54  Lgross -8.5%/+0.1%  Lnet -13.0%/-3.5%  Lsharpe -2.56/-0.59  short +35.3%/+30.9%  TO 5.2%
+  cross_max(K^2,15)              sgn -1 hl 1    LS +3.72/+4.42  Lgross +13.3%/+13.6%  Lnet +6.1%/+6.2%  Lsharpe +1.47/+2.24  short +37.6%/+34.3%  TO 7.1%
+  cross_sum((K+3)^2,15)          sgn -1 hl 3    LS +1.03/+1.70  Lgross -15.6%/-5.6%  Lnet -18.5%/-7.9%  Lsharpe -3.47/-1.29  short +30.6%/+26.1%  TO 3.7%
+  cross_mean(|K|,15)             sgn -1 hl 1    LS +4.06/+4.31  Lgross +13.3%/+14.3%  Lnet +5.4%/+5.5%  Lsharpe +1.20/+1.85  short +41.8%/+33.2%  TO 8.0%
+
+====================================================================================================
+§8  rank IC of F (raw sign) inside quintiles of activity and of price (train)
+  gate cross_mean(Z,15)   Q1 -0.0337  Q2 -0.0347  Q3 -0.0414  Q4 -0.0363  Q5 -0.0344
+  gate ctl_price          Q1 -0.0217  Q2 -0.0348  Q3 -0.0362  Q4 -0.0376  Q5 -0.0205
+  gate ctl_turnrate       Q1 +0.0037  Q2 -0.0084  Q3 -0.0190  Q4 -0.0284  Q5 -0.0455
+  signed cross_mean(K,15) | gate Zmean15  Q1 -0.0423  Q2 -0.0194  Q3 +0.0037  Q4 +0.0267  Q5 +0.0370
+
+done in 334s
+[partura exit 0 2026-10-04_10:32:28]

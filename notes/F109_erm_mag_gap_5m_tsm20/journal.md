@@ -48,3 +48,5 @@ train 多头腿 < +3% 或与 ctl_price 相关 ≥ 0.5 → 直接进读留出段,
 响应用户直接指令「快写 state.md,马上就要没有额度了」,这一轮执行只读了 state.md 与工单 `R1.md`,
 **没有**按 R1 收 `S1_S2`、也没有写/跑 `x2_incremental`。在 state.md 末尾加了一条附注说明此事,
 state.md 第 1~7 节(主研本轮原文)未改动一字。`results/` 仍为空,R1 原样待办,下一位执行从 A/B 两步开始即可。
+
+### 2026-10-04 13:41 [auto] S1_S2 跑完(exit 97);重看结果:logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log

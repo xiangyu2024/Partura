@@ -1,0 +1,112 @@
+[guard] all 2 run slots busy, waiting ...
+[guard] got run slot 1 after 93s
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[panels] 6 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 1.3 GiB free of 31.4; this run capped at 3% (0.9 GiB), chunk 96 MiB
+[panels]   3/6 (24s)
+[panels] GPU: 0.9 GiB free of 31.4; this run capped at 3% (0.9 GiB), chunk 96 MiB
+[panels]   6/6 (53s)
+[panels] done in 53s
+missing panels: []
+panels ready at 148s
+
+==============================================================================================================
+§1  missing days inside the 15-day window (cross_sum counts them as 0)
+ [train] share of labelled names with < 15 valid days in the window: 0.0518   (of them: with a no-data day 0.25, with a price-never-moved day 0.59)
+   decile:       D1     D2     D3     D4     D5     D6     D7     D8     D9     D10   
+   share <15d:    0.050  0.040  0.040  0.040  0.040  0.041  0.041  0.039  0.037  0.149
+   excess, all:   +12.7  +13.0  +10.4   +9.5   +6.0   +5.5   +0.6   -4.2  -12.6  -41.0
+   excess,=15d:   +15.7  +14.0  +11.6  +10.0   +6.4   +6.4   +1.4   -2.6  -11.8  -31.4
+   excess,<15d:   -44.7   -9.9  -20.8   -4.2   -2.0  -15.8  -17.5  -43.4  -32.5  -95.7
+ [valid] share of labelled names with < 15 valid days in the window: 0.0191   (of them: with a no-data day 0.41, with a price-never-moved day 0.66)
+   decile:       D1     D2     D3     D4     D5     D6     D7     D8     D9     D10   
+   share <15d:    0.013  0.008  0.008  0.009  0.010  0.010  0.013  0.015  0.019  0.087
+   excess, all:   +14.7  +10.7   +8.2   +5.3   +2.3   +2.2   -1.6   -1.6   -6.6  -33.6
+   excess,=15d:   +15.6  +11.5   +8.8   +5.7   +2.6   +3.0   -0.7   -0.5   -5.6  -26.1
+   excess,<15d:   -57.8  -86.6  -69.6  -36.5  -38.1  -80.4  -68.7  -71.8  -57.4 -112.6
+ books (sum = the engine's convention, missing day = 0; mean = missing day skipped):
+  cross_sum(K^2,15)  [= original]    sgn -1 hl 1   LS +3.62/+3.88 Lg +12.1/+12.8 Ln  +4.3/ +4.4 Lsh +0.95/+1.46 sh +38.7/+32.0 TO  7.6% | hl5: LS +3.07/+3.45 Ln  +8.0/ +9.8 Lsh +1.69/+2.77
+  cross_mean(K^2,15)                 sgn -1 hl 1   LS +3.87/+4.33 Lg +13.7/+13.6 Ln  +6.1/ +5.3 Lsh +1.38/+1.78 sh +39.9/+34.7 TO  7.5% | hl5: LS +3.30/+3.62 Ln +10.0/+10.3 Lsh +2.10/+2.99
+  cross_sum(|K|,15)                  sgn -1 hl 1   LS +3.45/+3.52 Lg  +9.1/+11.4 Ln  +1.0/ +2.5 Lsh +0.21/+0.82 sh +39.3/+30.1 TO  8.1% | hl5: LS +2.95/+3.23 Ln  +4.8/ +5.9 Lsh +1.00/+1.69
+  cross_mean(|K|,15)                 sgn -1 hl 1   LS +4.06/+4.31 Lg +13.3/+14.3 Ln  +5.4/ +5.5 Lsh +1.20/+1.85 sh +41.8/+33.2 TO  8.0% | hl5: LS +3.50/+4.02 Ln  +9.1/ +9.4 Lsh +1.94/+2.80
+  cross_max(K^2,15)                  sgn -1 hl 1   LS +3.72/+4.42 Lg +13.3/+13.6 Ln  +6.1/ +6.2 Lsh +1.47/+2.24 sh +37.6/+34.3 TO  7.1% | hl5: LS +3.24/+3.53 Ln  +9.0/ +9.5 Lsh +2.04/+2.94
+  original, names with <15d removed  sgn -1 hl 1   LS +2.94/+3.17 Lg +12.2/+12.1 Ln  +4.4/ +3.7 Lsh +1.05/+1.27 sh +29.6/+24.9 TO  8.0% | hl5: LS +2.27/+2.77 Ln  +7.9/ +9.1 Lsh +1.70/+2.60
+  Spearman(sum K^2, mean K^2) = +0.9944;  (sum |K|, mean |K|) = +0.9875
+
+==============================================================================================================
+§2  what does the 15-day mean of K line up with, away from the lock events?  (train)
+  bulk cells (no lock day in 15d, min Z >= 0.5, 15 valid days): 0.781 of labelled cells
+  single-day Spearman of K (all cells): mA -0.352  sA +0.518  sdA -0.204  p1 +0.033  sgac -0.131  ar1 -0.068
+  15-day means, bulk cells only -- Spearman with mean K:
+     mA     -0.365
+     sA     +0.571
+     sdA    -0.028
+     p1     +0.190
+     sgac   -0.084
+     ar1    -0.097
+     Z      +0.067
+     W      +0.065
+     ctl_ivol     -0.145
+     ctl_dvol20   -0.077
+     ctl_turnrate -0.153
+     ctl_amt      -0.097
+     ctl_price    +0.082
+     ctl_cap      +0.048
+  rank-R2 of bulk mean-K on the 3-pair distribution's own moments (mA, sA, sdA, p1, Z): 0.748;  rank IC of the residual +0.0011
+  rank-R2 of bulk mean-K on full-day dependence (sgac, ar1): 0.081;  rank IC of the residual +0.0136
+  rank-R2 of bulk mean-K on activity (W, Z): 0.063;  rank IC of the residual +0.0174
+  rank-R2 of bulk mean-K on six shared controls: 0.107;  rank IC of the residual +0.0093
+  rank IC of bulk mean-K itself (raw sign; + = higher K, higher return): train +0.0173  valid +0.0000
+  decile profile of mean K inside the bulk (ascending; annualised excess vs the bulk's own equal weight):
+    [train]  -22.4   -6.5   -5.0   +0.7   -0.4   +3.3   +5.7   +6.7   +8.8   +9.2
+    [valid]  -10.6   -2.2   -5.4   -4.7   -0.7   +2.8   +4.1   +6.1   +5.5   +5.1
+  the descriptors as factors on the whole universe (15-day mean):
+  cross_mean(mA,15)                  sgn -1 hl 1   LS +2.62/+4.06 Lg  +7.3/+12.1 Ln  +2.3/ +5.3 Lsh +0.32/+0.87 sh +39.6/+41.9 TO  5.8%
+  cross_mean(sA,15)                  sgn +1 hl 0   LS +1.69/-0.66 Lg +16.1/ -3.1 Ln  +9.5/-11.4 Lsh +1.12/-1.38 sh +17.4/ +4.9 TO  6.9%
+  cross_mean(p1,15)                  sgn -1 hl 20  LS -0.96/+0.03 Lg  -4.3/ +1.9 Ln  -5.4/ +0.9 Lsh -0.80/+0.15 sh  -0.9/ +1.4 TO  2.0%
+  cross_mean(sgac,15)                sgn -1 hl 1   LS +1.22/+2.81 Lg  +4.4/+14.0 Ln  +2.2/+12.0 Lsh +0.23/+1.25 sh +24.1/+36.6 TO  3.9%
+  cross_mean(ar1,15)                 sgn -1 hl 1   LS +1.24/+2.29 Lg  +3.9/+14.3 Ln  +1.5/+12.3 Lsh +0.16/+1.28 sh +24.4/+27.6 TO  4.8%
+
+==============================================================================================================
+§3  the aggregation layer, same book functions as the tables (train/valid; half-life fitted on train by L/S Sharpe;
+    after the bar: the same signal at a fixed half-life of 5 days)
+ -- aggregator (window 15)
+  cross_sum(K^2,15)  [= original]    sgn -1 hl 1   LS +3.62/+3.88 Lg +12.1/+12.8 Ln  +4.3/ +4.4 Lsh +0.95/+1.46 sh +38.7/+32.0 TO  7.6% | hl5: LS +3.07/+3.45 Ln  +8.0/ +9.8 Lsh +1.69/+2.77
+  cross_mean(K^2,15)                 sgn -1 hl 1   LS +3.87/+4.33 Lg +13.7/+13.6 Ln  +6.1/ +5.3 Lsh +1.38/+1.78 sh +39.9/+34.7 TO  7.5% | hl5: LS +3.30/+3.62 Ln +10.0/+10.3 Lsh +2.10/+2.99
+  cross_mean(|K|,15)                 sgn -1 hl 1   LS +4.06/+4.31 Lg +13.3/+14.3 Ln  +5.4/ +5.5 Lsh +1.20/+1.85 sh +41.8/+33.2 TO  8.0% | hl5: LS +3.50/+4.02 Ln  +9.1/ +9.4 Lsh +1.94/+2.80
+  cross_max(K^2,15)                  sgn -1 hl 1   LS +3.72/+4.42 Lg +13.3/+13.6 Ln  +6.1/ +6.2 Lsh +1.47/+2.24 sh +37.6/+34.3 TO  7.1% | hl5: LS +3.24/+3.53 Ln  +9.0/ +9.5 Lsh +2.04/+2.94
+/root/autodl-tmp/Partura/studies/F102_kurt_autocorr/x2_refine.py:60: RuntimeWarning: All-NaN slice encountered
+  out[a:a + w.shape[0]] = np.nanmedian(w, axis=-1)
+  cross_med(|K|,15)                  sgn -1 hl 5   LS +3.02/+2.58 Lg +10.3/+12.6 Ln  +5.7/ +7.4 Lsh +1.27/+2.59 sh +24.7/+12.9 TO  4.6% | hl5: LS +3.02/+2.58 Ln  +5.7/ +7.4 Lsh +1.27/+2.59
+ -- window
+  cross_max(K^2,10)                  sgn -1 hl 0   LS +3.70/+3.43 Lg +11.9/+10.2 Ln  -0.6/ -2.9 Lsh -0.16/-1.22 sh +45.0/+36.7 TO 12.9% | hl5: LS +3.17/+3.60 Ln  +7.3/ +8.4 Lsh +1.64/+2.64
+  cross_max(K^2,20)                  sgn -1 hl 0   LS +3.89/+4.35 Lg +13.5/+12.8 Ln  +6.6/ +5.9 Lsh +1.59/+2.20 sh +38.8/+34.3 TO  7.1% | hl5: LS +3.12/+3.52 Ln  +8.6/+10.2 Lsh +1.95/+3.14
+  cross_max(K^2,30)                  sgn -1 hl 0   LS +3.75/+4.01 Lg +13.3/+12.9 Ln  +8.4/ +8.2 Lsh +1.98/+2.93 sh +34.2/+28.0 TO  5.1% | hl5: LS +3.07/+3.34 Ln +10.2/+10.7 Lsh +2.32/+3.24
+  cross_max(K^2,60)                  sgn -1 hl 0   LS +3.39/+3.38 Lg +14.5/+12.7 Ln +11.5/+10.1 Lsh +2.59/+3.20 sh +23.8/+19.6 TO  3.0% | hl5: LS +2.84/+3.00 Ln +11.1/ +9.5 Lsh +2.49/+2.82
+  cross_mean(|K|,10)                 sgn -1 hl 2   LS +4.09/+4.16 Lg +13.3/+14.2 Ln  +5.3/ +5.5 Lsh +1.22/+1.90 sh +42.5/+32.5 TO  8.2% | hl5: LS +3.60/+4.00 Ln  +8.2/ +8.4 Lsh +1.78/+2.47
+  cross_mean(|K|,20)                 sgn -1 hl 1   LS +4.08/+4.58 Lg +14.1/+16.0 Ln  +7.7/ +8.8 Lsh +1.69/+2.77 sh +39.3/+31.4 TO  6.5% | hl5: LS +3.36/+3.88 Ln  +9.7/+10.3 Lsh +2.03/+2.99
+  cross_mean(|K|,30)                 sgn -1 hl 0   LS +3.58/+3.71 Lg +13.2/+14.1 Ln  +5.5/ +5.3 Lsh +1.15/+1.63 sh +36.6/+27.7 TO  7.1% | hl5: LS +3.03/+3.70 Ln  +9.6/+11.8 Lsh +1.95/+3.27
+  cross_mean(|K|,60)                 sgn -1 hl 0   LS +3.14/+3.33 Lg +13.5/+14.0 Ln  +9.0/ +8.9 Lsh +1.73/+2.28 sh +27.8/+21.8 TO  4.1% | hl5: LS +2.58/+3.15 Ln +11.7/+12.4 Lsh +2.23/+3.06
+  cross_mean(K^2,30)                 sgn -1 hl 0   LS +3.53/+3.82 Lg +13.7/+14.6 Ln  +6.6/ +6.7 Lsh +1.39/+2.03 sh +35.2/+28.9 TO  6.6% | hl5: LS +2.96/+3.33 Ln +10.5/+11.4 Lsh +2.11/+3.11
+  cross_mean(K^2,60)                 sgn -1 hl 0   LS +3.06/+3.17 Lg +14.2/+14.3 Ln +10.0/ +9.8 Lsh +1.94/+2.56 sh +24.6/+19.7 TO  3.9% | hl5: LS +2.80/+3.11 Ln +12.0/+11.4 Lsh +2.31/+2.87
+ -- smoothing built into the expression (so the L/S-optimal half-life no longer decides the long leg)
+  cross_mean(cross_max(K^2,15),5)    sgn -1 hl 0   LS +3.71/+4.32 Lg +12.8/+13.4 Ln  +5.8/ +6.2 Lsh +1.42/+2.26 sh +37.3/+33.6 TO  7.3% | hl5: LS +2.86/+3.48 Ln  +8.6/+10.9 Lsh +1.95/+3.40
+  cross_mean(cross_mean(|K|,15),5)   sgn -1 hl 0   LS +3.82/+4.42 Lg +12.8/+14.8 Ln  +6.3/ +7.6 Lsh +1.43/+2.55 sh +37.3/+31.2 TO  6.9% | hl5: LS +2.93/+3.51 Ln  +8.9/ +9.1 Lsh +1.90/+2.67
+  cross_mean(cross_max(K^2,15),10)   sgn -1 hl 0   LS +3.67/+4.25 Lg +13.2/+13.6 Ln  +7.5/ +7.7 Lsh +1.80/+2.67 sh +34.8/+31.2 TO  5.9% | hl5: LS +2.72/+3.17 Ln  +8.4/+10.0 Lsh +1.91/+3.04
+  cross_mean(cross_mean(|K|,15),10)  sgn -1 hl 0   LS +3.71/+4.36 Lg +12.9/+15.1 Ln  +8.0/ +9.8 Lsh +1.77/+3.15 sh +34.0/+28.0 TO  5.5% | hl5: LS +2.65/+3.28 Ln  +8.5/ +9.9 Lsh +1.80/+2.89
+ -- where the fold sits: |K - c| (the original folds at c = 0)
+  cross_mean(|K - (-0.45)|,15)       sgn -1 hl 2   LS +3.40/+3.30 Lg  +7.7/ +5.9 Ln  +0.2/ -1.1 Lsh +0.06/-0.40 sh +35.1/+30.2 TO  7.4% | hl5: LS +3.26/+3.07 Ln  +2.6/ +1.5 Lsh +0.70/+0.49
+  cross_mean(|K - (-0.30)|,15)       sgn -1 hl 2   LS +3.87/+3.93 Lg +10.7/+10.3 Ln  +3.6/ +2.9 Lsh +0.86/+1.01 sh +38.3/+31.0 TO  7.1% | hl5: LS +3.46/+3.78 Ln  +6.8/ +5.7 Lsh +1.56/+1.80
+  cross_mean(|K - (-0.15)|,15)       sgn -1 hl 1   LS +4.11/+4.56 Lg +13.5/+14.9 Ln  +4.6/ +5.5 Lsh +1.12/+1.96 sh +41.3/+33.5 TO  8.6% | hl5: LS +3.60/+4.33 Ln  +8.8/+10.3 Lsh +2.02/+3.22
+  cross_mean(|K - (+0.00)|,15)       sgn -1 hl 1   LS +4.06/+4.31 Lg +13.3/+14.3 Ln  +5.4/ +5.5 Lsh +1.20/+1.85 sh +41.8/+33.2 TO  8.0% | hl5: LS +3.50/+4.02 Ln  +9.1/ +9.4 Lsh +1.94/+2.80
+  cross_mean(|K - (+0.15)|,15)       sgn -1 hl 1   LS +4.01/+3.84 Lg +12.9/+11.7 Ln  +5.9/ +3.6 Lsh +1.23/+1.08 sh +41.6/+33.3 TO  7.4% | hl5: LS +3.45/+3.61 Ln  +9.4/ +7.8 Lsh +1.87/+2.06
+  cross_mean(|K - (+0.30)|,15)       sgn -1 hl 1   LS +4.01/+3.62 Lg +12.9/+10.9 Ln  +6.5/ +3.3 Lsh +1.29/+0.91 sh +41.5/+32.7 TO  7.0% | hl5: LS +3.41/+3.24 Ln  +9.7/ +5.7 Lsh +1.84/+1.40
+ -- capping the event magnitude
+  cross_mean(min(|K|,1),15)          sgn -1 hl 3   LS +3.07/+2.71 Lg +11.6/+15.0 Ln  +6.5/ +9.3 Lsh +1.44/+2.99 sh +24.7/+12.2 TO  5.2% | hl5: LS +3.07/+2.59 Ln  +7.2/ +9.2 Lsh +1.55/+2.86
+  cross_mean(min(|K|,3),15)          sgn -1 hl 3   LS +3.45/+3.60 Lg +12.9/+15.3 Ln  +7.8/ +9.7 Lsh +1.71/+3.04 sh +30.2/+20.4 TO  5.4% | hl5: LS +3.37/+3.31 Ln  +8.4/ +9.0 Lsh +1.79/+2.75
+
+  Spearman with the original: mean|K|15 +0.981  max15 +0.909  max30 +0.750  mean5(max15) +0.879  max15~mean|K|15 +0.857
+
+done in 618s
+[partura exit 0 2026-10-04_11:05:40]

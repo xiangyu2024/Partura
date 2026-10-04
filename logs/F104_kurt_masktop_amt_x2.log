@@ -1,0 +1,137 @@
+[panels] 5 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 7.9 GiB free of 31.4; this run capped at 12% (3.9 GiB), chunk 334 MiB
+[panels]   3/5 (19s)
+[panels] GPU: 7.8 GiB free of 31.4; this run capped at 12% (3.8 GiB), chunk 327 MiB
+[panels]   5/5 (47s)
+[panels] done in 47s
+
+======== 1. neighbourhood of l_excl (train/valid; sign and half-life fitted on train) ========
+self-check -- the stage tables say: bk (= r_ref30) hl 1 LS +3.75/+1.91 Lnet +5.4%/+0.3%;  excl (= l_excl) hl 0 LS +3.52/+3.96 Lnet +13.1%/+16.7%
+bk         sgn -1 hl   1  LS +3.75/+1.91  Lgross +10.5%/+5.6%  Lnet +5.4%/+0.3%  Lsharpe +1.08/+0.06  short +33.7%/+23.3%  TO 6.1%  dist 1.00
+excl       sgn -1 hl   0  LS +3.52/+3.96  Lgross +18.4%/+22.2%  Lnet +13.1%/+16.7%  Lsharpe +2.20/+3.11  short +34.9%/+30.0%  TO 6.8%  dist 1.00
+excl_p2    sgn -1 hl   0  LS +3.38/+3.73  Lgross +18.0%/+20.1%  Lnet +12.2%/+14.0%  Lsharpe +2.14/+2.79  short +34.2%/+30.5%  TO 7.2%  dist 1.00
+excl_p6    sgn -1 hl   0  LS +3.54/+4.32  Lgross +17.6%/+25.3%  Lnet +13.5%/+20.9%  Lsharpe +2.07/+3.49  short +35.3%/+30.0%  TO 6.2%  dist 1.00
+excl_cv    sgn -1 hl   0  LS +3.94/+4.44  Lgross +19.1%/+23.0%  Lnet +15.0%/+19.1%  Lsharpe +2.50/+3.55  short +40.2%/+34.5%  TO 5.2%  dist 1.00
+excl_std   sgn -1 hl   0  LS +3.88/+3.99  Lgross +18.6%/+21.8%  Lnet +13.4%/+16.2%  Lsharpe +2.27/+3.08  short +38.2%/+30.3%  TO 6.8%  dist 1.00
+excl_60    sgn -1 hl   0  LS +3.37/+3.72  Lgross +16.9%/+19.6%  Lnet +13.5%/+16.3%  Lsharpe +2.33/+2.92  short +29.8%/+26.4%  TO 4.4%  dist 1.00
+
+======== 2. rank correlation of the TRADED signals (sign x panel, EMA at the fitted half-life) ========
+[train]     base      bk      bc    excl   addcv   std30    f001   amt30
+    base     1.00    0.52    0.31    0.46    0.37    0.26    0.27    0.20
+      bk     0.52    1.00    0.78    0.55    0.53    0.08    0.12   -0.05
+      bc     0.31    0.78    1.00    0.38    0.64    0.04    0.09   -0.12
+    excl     0.46    0.55    0.38    1.00    0.86    0.83    0.75    0.76
+   addcv     0.37    0.53    0.64    0.86    1.00    0.77    0.71    0.67
+   std30     0.26    0.08    0.04    0.83    0.77    1.00    0.87    0.98
+    f001     0.27    0.12    0.09    0.75    0.71    0.87    1.00    0.84
+   amt30     0.20   -0.05   -0.12    0.76    0.67    0.98    0.84    1.00
+[valid]     base      bk      bc    excl   addcv   std30    f001   amt30
+    base     1.00    0.58    0.34    0.36    0.26    0.11    0.13    0.04
+      bk     0.58    1.00    0.69    0.55    0.45    0.06    0.10   -0.05
+      bc     0.34    0.69    1.00    0.32    0.64    0.03    0.08   -0.11
+    excl     0.36    0.55    0.32    1.00    0.82    0.82    0.75    0.76
+   addcv     0.26    0.45    0.64    0.82    1.00    0.77    0.70    0.67
+   std30     0.11    0.06    0.03    0.82    0.77    1.00    0.88    0.98
+    f001     0.13    0.10    0.08    0.75    0.70    0.88    1.00    0.84
+   amt30     0.04   -0.05   -0.11    0.76    0.67    0.98    0.84    1.00
+
+======== 3. liquidity x concentration double sort (next-day excess vs the equal-weight universe, annualised %) ========
+
+[train] reader = bk; rows = amt30 quintile (L1 = least active); columns = concentration quintile WITHIN the row (B1 = least concentrated)
+                 B1       B2       B3       B4       B5      row    B1-B5
+        L1     21.0     17.0     12.9      9.0     -6.8     10.6     27.9
+        L2     15.3     10.6     10.7      4.7     -9.9      6.3     25.2
+        L3     10.9      6.4      5.7     -0.1    -18.4      0.9     29.3
+        L4      4.3      4.3      1.2     -6.3    -30.0     -5.3     34.3
+        L5      2.5     -1.4     -5.1    -13.7    -44.7    -12.5     47.1
+  bottom decile by amt30: all +11.0%; by UNIVERSE-wide concentration quintile B1 +27.1% (8%) B2 +22.2% (12%) B3 +15.5% (23%) B4 +11.3% (41%) B5 -18.5% (16%); dropping B5 -> +16.1%
+  bottom decile by std30: all +15.8%; by UNIVERSE-wide concentration quintile B1 +25.3% (14%) B2 +21.5% (16%) B3 +17.7% (25%) B4 +13.5% (36%) B5 -14.5% (9%); dropping B5 -> +18.3%
+
+[valid] reader = bk; rows = amt30 quintile (L1 = least active); columns = concentration quintile WITHIN the row (B1 = least concentrated)
+                 B1       B2       B3       B4       B5      row    B1-B5
+        L1     24.4     24.6     25.3     22.1     22.0     23.7      2.4
+        L2      8.8     11.3     15.6     11.9      5.5     10.6      3.4
+        L3      5.3      5.6      3.4      4.0     -5.6      2.5     11.0
+        L4     -8.4     -7.9     -9.5     -5.4    -23.2    -10.9     14.8
+        L5    -23.9    -25.4    -17.8    -19.4    -43.4    -26.0     19.6
+  bottom decile by amt30: all +26.0%; by UNIVERSE-wide concentration quintile B1 +30.0% (8%) B2 +24.0% (12%) B3 +28.8% (23%) B4 +23.8% (40%) B5 +26.3% (17%); dropping B5 -> +25.8%
+  bottom decile by std30: all +26.7%; by UNIVERSE-wide concentration quintile B1 +30.4% (12%) B2 +22.4% (14%) B3 +29.1% (23%) B4 +24.9% (37%) B5 +27.1% (13%); dropping B5 -> +26.4%
+
+[train] reader = bc; rows = amt30 quintile (L1 = least active); columns = concentration quintile WITHIN the row (B1 = least concentrated)
+                 B1       B2       B3       B4       B5      row    B1-B5
+        L1     20.1     17.2     15.3      8.7     -8.2     10.6     28.3
+        L2     14.3     10.5     11.0      8.4    -12.7      6.3     26.9
+        L3      9.2      8.9      6.5      0.1    -20.3      0.9     29.5
+        L4      4.4      6.3      3.3     -6.9    -33.8     -5.3     38.2
+        L5      5.2      1.5     -3.1    -18.6    -47.6    -12.5     52.8
+  bottom decile by amt30: all +11.0%; by UNIVERSE-wide concentration quintile B1 +24.1% (3%) B2 +21.0% (8%) B3 +21.0% (25%) B4 +9.8% (54%) B5 -20.8% (10%); dropping B5 -> +14.7%
+  bottom decile by std30: all +15.8%; by UNIVERSE-wide concentration quintile B1 +20.2% (9%) B2 +22.4% (13%) B3 +21.1% (28%) B4 +12.4% (48%) B5 -33.9% (3%); dropping B5 -> +17.3%
+
+[valid] reader = bc; rows = amt30 quintile (L1 = least active); columns = concentration quintile WITHIN the row (B1 = least concentrated)
+                 B1       B2       B3       B4       B5      row    B1-B5
+        L1     25.1     25.8     24.9     24.7     17.8     23.7      7.4
+        L2     11.4     13.7     12.2     11.7      4.1     10.6      7.3
+        L3      2.1      9.2      5.0      5.0     -8.7      2.5     10.8
+        L4     -2.6     -5.4    -10.0    -10.7    -25.8    -10.9     23.2
+        L5    -16.2    -14.9    -19.4    -31.1    -48.3    -26.0     32.0
+  bottom decile by amt30: all +26.0%; by UNIVERSE-wide concentration quintile B1 +24.7% (4%) B2 +33.9% (9%) B3 +28.3% (24%) B4 +25.0% (51%) B5 +22.5% (11%); dropping B5 -> +26.5%
+  bottom decile by std30: all +26.7%; by UNIVERSE-wide concentration quintile B1 +25.1% (9%) B2 +32.9% (12%) B3 +28.1% (26%) B4 +25.4% (47%) B5 +2.3% (6%); dropping B5 -> +26.9%
+
+by year -- bottom decile by amt30 (reader bk, UNIVERSE-wide concentration quintile):
+   2018: all  +11.6%   B1-B4  +21.5%   B5 only  -49.9%   B1 only  +41.5%   share of B5 15%
+   2019: all   +9.6%   B1-B4  +12.7%   B5 only   -4.2%   B1 only  +26.1%   share of B5 18%
+   2020: all   +4.0%   B1-B4   +9.0%   B5 only  -25.0%   B1 only  +20.0%   share of B5 16%
+   2021: all  +18.8%   B1-B4  +21.1%   B5 only   +5.0%   B1 only  +20.8%   share of B5 14%
+   2022: all  +27.4%   B1-B4  +26.9%   B5 only  +29.2%   B1 only  +32.4%   share of B5 18%
+   2023: all  +23.6%   B1-B4  +23.9%   B5 only  +21.6%   B1 only  +26.0%   share of B5 15%
+
+======== 4. conditional rank IC of the concentration residual (bk): by amt30 vs by kshare30 ========
+[train] gate = amt30 (Q1 = lowest value of the gate)
+   Q1: IC(bk) -0.0185   Spearman(bk, amt30) -0.155   IC(amt30) -0.0140   IC(bk | amt30) -0.0210
+   Q2: IC(bk) -0.0155   Spearman(bk, amt30) -0.010   IC(amt30) -0.0092   IC(bk | amt30) -0.0157
+   Q3: IC(bk) -0.0181   Spearman(bk, amt30) +0.005   IC(amt30) -0.0034   IC(bk | amt30) -0.0179
+   Q4: IC(bk) -0.0255   Spearman(bk, amt30) +0.024   IC(amt30) -0.0047   IC(bk | amt30) -0.0255
+   Q5: IC(bk) -0.0370   Spearman(bk, amt30) +0.037   IC(amt30) +0.0015   IC(bk | amt30) -0.0374
+[train] gate = kshare30 (Q1 = lowest value of the gate)
+   Q1: IC(bk) -0.0146   Spearman(bk, amt30) +0.072   IC(amt30) -0.0060   IC(bk | amt30) -0.0138
+   Q2: IC(bk) -0.0212   Spearman(bk, amt30) +0.208   IC(amt30) -0.0332   IC(bk | amt30) -0.0143
+   Q3: IC(bk) -0.0273   Spearman(bk, amt30) +0.328   IC(amt30) -0.0406   IC(bk | amt30) -0.0142
+   Q4: IC(bk) -0.0338   Spearman(bk, amt30) +0.358   IC(amt30) -0.0449   IC(bk | amt30) -0.0184
+   Q5: IC(bk) -0.0325   Spearman(bk, amt30) +0.151   IC(amt30) -0.0373   IC(bk | amt30) -0.0270
+[valid] gate = amt30 (Q1 = lowest value of the gate)
+   Q1: IC(bk) -0.0009   Spearman(bk, amt30) -0.207   IC(amt30) -0.0229   IC(bk | amt30) -0.0056
+   Q2: IC(bk) -0.0036   Spearman(bk, amt30) -0.001   IC(amt30) -0.0123   IC(bk | amt30) -0.0035
+   Q3: IC(bk) -0.0058   Spearman(bk, amt30) +0.016   IC(amt30) -0.0091   IC(bk | amt30) -0.0057
+   Q4: IC(bk) -0.0076   Spearman(bk, amt30) +0.021   IC(amt30) -0.0091   IC(bk | amt30) -0.0073
+   Q5: IC(bk) -0.0143   Spearman(bk, amt30) +0.034   IC(amt30) -0.0074   IC(bk | amt30) -0.0143
+[valid] gate = kshare30 (Q1 = lowest value of the gate)
+   Q1: IC(bk) +0.0039   Spearman(bk, amt30) +0.111   IC(amt30) -0.0275   IC(bk | amt30) +0.0066
+   Q2: IC(bk) -0.0101   Spearman(bk, amt30) +0.203   IC(amt30) -0.0504   IC(bk | amt30) -0.0004
+   Q3: IC(bk) -0.0183   Spearman(bk, amt30) +0.278   IC(amt30) -0.0573   IC(bk | amt30) -0.0029
+   Q4: IC(bk) -0.0175   Spearman(bk, amt30) +0.273   IC(amt30) -0.0541   IC(bk | amt30) -0.0030
+   Q5: IC(bk) -0.0114   Spearman(bk, amt30) +0.007   IC(amt30) -0.0465   IC(bk | amt30) -0.0110
+
+======== 5. who is in the long decile (traded signal; decile book membership as in partura.books) ========
+[train] universe median daily Amt = 6.203e+07 (raw units)
+          rk amt30  rk cap  med Amt / universe med  in amt30 long  in f001 long  in std30 long  gross excess
+    base      0.37    0.46                   0.405           0.42          0.30           0.38         10.6%
+      bk      0.45    0.36                   0.810           0.04          0.11           0.08         11.3%
+      bc      0.49    0.49                   0.971           0.01          0.06           0.04          9.4%
+    excl      0.12    0.26                   0.258           0.42          0.48           0.52         18.9%
+   addcv      0.24    0.31                   0.411           0.16          0.27           0.26         16.9%
+   std30      0.06    0.26                   0.179           0.86          0.66           1.00         15.8%
+    f001      0.10    0.26                   0.182           0.61          1.00           0.66         17.6%
+   amt30      0.05    0.27                   0.175           1.00          0.61           0.86         10.9%
+[valid] universe median daily Amt = 7.443e+07 (raw units)
+          rk amt30  rk cap  med Amt / universe med  in amt30 long  in f001 long  in std30 long  gross excess
+    base      0.53    0.56                   1.295           0.19          0.15           0.17          0.6%
+      bk      0.45    0.42                   0.819           0.04          0.10           0.07          6.1%
+      bc      0.48    0.57                   0.942           0.02          0.07           0.04          4.6%
+    excl      0.12    0.24                   0.274           0.40          0.46           0.47         23.7%
+   addcv      0.23    0.36                   0.422           0.16          0.27           0.24         16.9%
+   std30      0.05    0.20                   0.185           0.89          0.69           1.00         27.0%
+    f001      0.09    0.21                   0.188           0.65          1.00           0.69         27.3%
+   amt30      0.05    0.20                   0.183           1.00          0.65           0.89         25.6%
+
+[x2 done]
+[partura exit 0 2026-10-04_14:20:57]

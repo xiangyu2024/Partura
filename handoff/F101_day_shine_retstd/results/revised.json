@@ -1,0 +1,267 @@
+{
+ "factor_id": "F101_day_shine_retstd",
+ "one_line": "方正「适度冒险」的日频零件:|放量分钟起 5 分钟收益 std 的日均值 − 当天截面均值|,方向为负;实质是「日内波动水平的 V 形截面折叠 + 折叠后平滑」,F001「日内波动 + 极值记忆」族的近亲;放量掩码换成不含 Volume 的 |Ret| 激增事件,书不变。样本外保留原式,没有找到更好用的版本。",
+ "mechanism": "折叠前的量 J 与 day_std(Ret) 的日截面 rank 相关 0.90,就是日内波动。放量掩码(ΔVolume > 当天均值+1σ,每票每天约 20 次触发,不带成交额尺度)的作用是把统计量压到大波动分钟附近;把它换成不含 Volume 的「|Ret| > 当天均值+1σ」事件,同一批格子上的书逐年分不开(多空 3.78/3.06 对 3.66/3.05,空头腿都是 +48%)—— Volume 字段不贡献可交易的独有内容。收益对波动水平不是单调的:最高 5% 是悬崖(年化 −59%~−84%),低侧在剔除一字板日之后只是浅坡(当天 J 最低 5%:train −41%→−9%、valid −13%→−1%),中间是平台。abs_(cs_demean(·)) 把高侧悬崖和一字板日(J==0 的票 |K| = 截面均值)送进空头、把多头放到平台上;口径里的 EMA 作用在折叠之后,「先折叠后平滑」与「先平滑后折叠」是两个不同的因子(多头净 +9.0%/−1.6% 对 −9.5%/−10.2%)。空头腿人头 94%~97% 是持续高波动、高换手的热门票,但按收益有 13%~26%(train)/ 6%~15%(valid)来自一字板附近的票,次新股给了 18%/12%。事件条件化的局部波动比全天 std 的折叠多 8~13 个点空头腿;所谓「爆发比」是日内波动集中在少数分钟里的程度,J÷roll5、Jret÷roll5、全天 std÷roll5 三种写法是同样强的单调空头信号,对多头腿没有贡献。多头腿「波动适中且相对位置稳定」的机制只在背景波动(roll5)版上两段成立,在原式上只到 2021 年:2022–2023 年原式的多头十分位不比「波动水平第 10~80 百分位的全部股票等权」(每年毛超额 +5.5%~+8.0%)好。",
+ "family": "「活跃度 / 日内波动水平的截面均值折叠」族:对 9 个线性控制 R² 仅 0.154,但对「折叠并平滑过的 day_std(Ret)」R² 0.749 / 0.764。与 F001 的成交额水平族(known_amt_max9、known_stdamt_max9)在 V 形意义上无关(折叠版对交易信号的 R² ≤ 0.04,fold(成交额) 无信号;空头十分位与它们的单调书重叠 23%~35%,是「热门票同时成交额大」的共同暴露)。与 F001 的「日内波动 + 极值记忆」族(known_ivol_max9 = cross_max(day_var(Ret), 9))是近亲:空头十分位重叠 70%/72%,其折叠版张成原式 R² 0.42/0.49(取对数再折叠 0.57/0.64),折叠后自己在 train 上就有多空 3.83、多头净 +7.8%;原式是这一族里更好的选股者(中性化后残差 rank IC +0.038/+0.035),但不是新的一族。",
+ "original": {
+  "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+  "sign": -1,
+  "halflife": 10,
+  "ls_train": 3.93,
+  "ls_test": 3.7,
+  "long_gross_train": 0.1356,
+  "long_gross_test": 0.1196,
+  "long_net_train": 0.0602,
+  "long_net_test": 0.0596,
+  "long_sharpe_train": 1.33,
+  "long_sharpe_test": 1.32,
+  "turnover": 0.0813,
+  "coverage": 0.9991,
+  "distinct": 0.996,
+  "n_operators": 12,
+  "rank_corr_with_original": 1
+ },
+ "recommended": {
+  "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+  "sign": -1,
+  "halflife": 10,
+  "ls_train": 3.93,
+  "ls_test": 3.7,
+  "long_gross_train": 0.1356,
+  "long_gross_test": 0.1196,
+  "long_net_train": 0.0602,
+  "long_net_test": 0.0596,
+  "long_sharpe_train": 1.33,
+  "long_sharpe_test": 1.32,
+  "turnover": 0.0813,
+  "coverage": 0.9991,
+  "distinct": 0.996,
+  "n_operators": 12,
+  "rank_corr_with_original": 1
+ },
+ "recommended_kind": "original_kept",
+ "other_finalists": [
+  {
+   "expr": "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))",
+   "sign": -1,
+   "halflife": 10,
+   "ls_train": 3.24,
+   "ls_test": 2.97,
+   "long_gross_train": 0.1412,
+   "long_gross_test": 0.1154,
+   "long_net_train": 0.0758,
+   "long_net_test": 0.0662,
+   "long_sharpe_train": 2.11,
+   "long_sharpe_test": 1.41,
+   "turnover": 0.0642,
+   "coverage": 0.9992,
+   "distinct": 0.996,
+   "n_operators": 5,
+   "rank_corr_with_original": 0.625
+  },
+  {
+   "expr": "abs_(cs_demean(cs_rank(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))",
+   "sign": -1,
+   "halflife": 20,
+   "ls_train": 3.19,
+   "ls_test": 1.63,
+   "long_gross_train": 0.126,
+   "long_gross_test": 0.0904,
+   "long_net_train": 0.0828,
+   "long_net_test": 0.0571,
+   "long_sharpe_train": 2.11,
+   "long_sharpe_test": 1.3,
+   "turnover": 0.0419,
+   "coverage": 0.9992,
+   "distinct": 0.87,
+   "n_operators": 6,
+   "rank_corr_with_original": 0.57
+  },
+  {
+   "expr": "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))",
+   "sign": -1,
+   "halflife": 10,
+   "ls_train": 3.47,
+   "ls_test": 3.42,
+   "long_gross_train": 0.1342,
+   "long_gross_test": 0.1178,
+   "long_net_train": 0.0701,
+   "long_net_test": 0.066,
+   "long_sharpe_train": 1.89,
+   "long_sharpe_test": 1.43,
+   "turnover": 0.0663,
+   "coverage": 0.9992,
+   "distinct": 0.996,
+   "n_operators": 4,
+   "rank_corr_with_original": 0.758
+  },
+  {
+   "expr": "abs_(cs_demean(cs_rank(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)))))",
+   "sign": -1,
+   "halflife": 20,
+   "ls_train": 3.6,
+   "ls_test": 2.33,
+   "long_gross_train": 0.1279,
+   "long_gross_test": 0.091,
+   "long_net_train": 0.073,
+   "long_net_test": 0.0505,
+   "long_sharpe_train": 1.78,
+   "long_sharpe_test": 1.04,
+   "turnover": 0.0566,
+   "coverage": 0.9991,
+   "distinct": 0.872,
+   "n_operators": 13,
+   "rank_corr_with_original": 0.837
+  }
+ ],
+ "known_exposure_r2": 0.154,
+ "verdict": "保留原式(original_kept),推荐不变;修订改的是对它的解释和三处说过头的话。原式样本外很稳:用户口径多空夏普 3.93 / 3.70,多头腿净超额 +6.0% / +6.0%,纯多头夏普 1.33 / 1.32。事前推荐的 5 算子背景波动折叠在测试段没有超出原式(多头净 +6.6% 对 +6.0%、纯多头夏普 1.41 对 1.32,在噪声内;多空低 0.73),升华没有被样本外支持。提纯成立一半:4 算子 abs_(cs_demean(day_std(Ret))) 在测试段三项指标上与原式不可区分(多空 3.42、多头净 +6.6%、纯多头夏普 1.43;多空差 0.28 在事前写的 ±0.3 噪声内),只做纯多头又在意简单的使用者可以拿它当等价物(它 8 年多头腿净超额全为正,原式 2022、2023 年为负),但它是「更小」不是「更好」。原式多出来的 8 个节点买到的是空头腿(测试段 +52.2% 对 +41.3%),这段空头腿来自「大波动分钟附近的局部波动」而不是 Volume:train/valid 上把掩码换成 |Ret| 激增事件,书不变(该版本没有读留出段,不进推荐)。读原式的数字时要带上三点:(1) 公布的多空夏普里约 0.2~0.55 来自一字板附近的票(去掉 J==0 格子,train/valid 4.21→3.65、3.21→3.04);(2) 原式的多头十分位在 2022–2023 年不比「避开最高 20% 和最低 10% 波动」的平台等权好,测试段 +6.0% 的净超额里有多少是挑选出来的没有量(未决);(3) 两个排名折叠版测试段多空最低(1.63 / 2.33)只因为 2024 一年空头腿归零,对多头腿两种折叠不可区分(差 1 个点)—— 这是一次观测的尾部风险,不构成「均值折叠更好」的规律。known_exposure_r2 = 0.154 对这条因子是低估(V 形折叠与任何单调控制在秩空间近似不相关),对「折叠并平滑的日内波动」R² 是 0.749。留出段只读过一次,修订没有再读。",
+ "established": [
+  "折叠之前它就是日内波动:J 与 day_std(Ret) 日截面 rank 相关 +0.90(look.py C);原式交易信号对 9 个线性控制 R² 0.154,对单个「EMA10(fold(day_std(Ret)))」R² 0.749 / 0.764(look2.py A、audit_1.py A)。",
+  "整棵树里只有「截面折叠 + 折叠后平滑」不能拿掉:不折叠 rank IC 更高(+0.0389/+0.0571)但多空 1.34/2.35、多头净 −9.0%/+0.2%(S1 s1_nofold、S2 s2_roll5_nofold);先平滑后折叠多头净 −9.5%/−10.2%(J)、−4.7%/−6.4%(roll5)(look.py F、look2.py F)。窗口 3/5/15 等价、切片多余(s1_win3/s1_win15、s2_roll5_noslice)。",
+  "原式相对全天 std 折叠多出来的是空头腿,而且不需要 Volume 字段:同一批格子上放量掩码版与 |Ret| 激增掩码版多空 3.66/3.05 对 3.78/3.06、空头腿都是 +48%,比全天 std 折叠多 13/8 个点,2018–2023 逐年分不开(SR_rivals 的 sr_fold_jret / sr_orig_nz、rev_look.py E);不用触发机器的尾部分位数做不到(sr_fold_q90:空头 +40.2%/+41.1%)。「爆发比」放量版 / 不用 Volume 版 / 完全不用掩码版 rank IC +0.0285/+0.0272/+0.0282(train)、+0.0415/+0.0359/+0.0459(valid);Volume 特有的 J÷Jret rank IC +0.005/+0.011、扣费多空 −0.62/+0.20(SR_rivals)。测试段原式空头腿 +52.2% 对 f_ivol +41.3%(S_final)。",
+  "钱在空头腿;空头腿 = 已知暴露 + 一字板附近的票:多头腿只占毛价差 24%;空头十分位人头 94%~97% 在高侧、平均在换手率第 80 百分位(look.py D/G);对线性控制中性化后空头腿 +53.7% → +19.7%,多头腿 +16.9% → +17.3%(S0 中性化表)。按收益贡献:当天 J==0 的票人头 2.2%/1.0% 给了空头腿 13%/6%,5 日内有过一字板的票(人头 6.9%/4.1%)给了 26%/15%,上市 60 日内的次新股给了 18%/12%(audit_1.py C、rev_look.py B);去掉 J==0 格子多空夏普 4.21→3.65、3.21→3.04(sr_orig_nz)。标签缺失的票只贡献 +0.2 个点。",
+  "它是 F001「日内波动 + 极值记忆」族的近亲,与成交额水平族无关:交易信号对 EMA10(fold(known_ivol_max9)) R² 0.42/0.49(取对数 0.57/0.64),空头十分位与该族单调书重叠 70%/72%,该族折叠后 train 多空 +3.83、多头净 +7.8%(valid +2.13/−4.5%)(audit_1.py D、sr_fold_kivmax9、rev_look.py D);对 known_amt_max9 / known_stdamt_max9 折叠版的 R² ≤ 0.04(rev_look.py D)。",
+  "升华没有被样本外支持:f_roll5 在 valid 上多头净 +10.4% 对原式 −1.6%,测试段只有 +6.6% 对 +6.0%、纯多头夏普 1.41 对 1.32;4 算子 f_ivol 测试段多空 3.42、多头净 +6.6%、纯多头夏普 1.43,与原式不可区分(S_final)。",
+  "原式的多头腿在 2021–2023 年是空的(净 +3.7%/−1.7%/−0.7%),2018–2020 与 2024–2025 不是(+7.5%/+10.8%/+13.6%;+8.9%/+5.0%)(S_final 逐年);2022、2023 年它的多头十分位不比「波动水平第 10~80 百分位的全部股票等权」好(−1.8/+0.7 个点;2018–2020 是 +9~+14)(rev_look.py C)。不用 Volume 的版本同样(rev_look.py E)。",
+  "收益对波动水平的剖面是「高侧悬崖 + 低侧浅坡」,不是两道悬崖:最高 5% 年化 −59%~−84%;当天 J 最低 5% 剔除一字板日后 train −41% → −9%、valid −13% → −1%(look.py E、rev_look.py B)。"
+ ],
+ "unresolved": [
+  "(合理但未坐实)多头腿 =「波动水平适中且相对位置稳定」:双重排序和平台对照在 roll5 版上两段都成立(look3.py H、rev_look.py C),在被推荐的原式上只有 train(到 2021 年)成立;valid 上原式多头十分位 +5.7% 对平台等权 +6.6%(audit_1.py B)。原式测试段 +6.0% 的多头净超额里有多少来自挑选、多少只是避开高波动端,没有量,留出段也不能再读。",
+  "(合理但未坐实)排名折叠与均值折叠孰优:两个排名折叠版 2024 年空头腿 −5.3%/+3.7%、多空 −0.07/+0.82,其余年份不差,测试段多空的差全部来自这一年(n=1);多头腿两种折叠在测试段不可区分(净差 0.9/1.0 个点,小于事前写的 ±3 个点)。「2024 年低波动端大涨」是推断:train/valid 上只量到排名折叠空头十分位 42%~57% 人头在低侧、其贡献从 2018 年 +10~+11 个点缩到 2023 年 0~+1(rev_look.py A),2024 年在留出段里没有拆过。",
+  "(合理但未坐实)事件条件化的局部波动为什么比全天 std 多出空头腿:无掩码的集中度比值同样强,但原式对「全天 std 折叠 + 无掩码集中度」的残差 train 上无成本多空 +2.44、valid 上 −0.06(rev_look.py F),多出来的东西没有被一个简单的量说尽。",
+  "原式多头腿为什么在 2021–2023 三年是空的、2024–2025 又恢复:只确认了它与折叠中心偏高(J 的截面均值在第 66 百分位)和那几年收益剖面向低波动倾斜同时出现,没有行业数据去拆。",
+  "行业 / 板块暴露无法检验(立方体里没有行业数据),不能排除空头腿集中在题材板块。",
+  "一字板附近的票和次新股在样本外给了空头腿和多空夏普多少(只在 train/valid 上量过)。",
+  "多头腿的容量:背景版多头十分位里市值偏大的一半毛超额只有 +8.5% / +3.4%,最大市值一档条件 IC −0.0061;原式的多头腿没有单独量。",
+  "不用 Volume 的折叠(sr_fold_jret)和三个「波动集中度」比值(J÷roll5、Jret÷roll5、全天 std÷roll5)的样本外表现没有读。",
+  "为什么日频的活跃度折叠(20 日波动、换手率、振幅、F001 的 9 日极值记忆)在 2022–2023 多头腿归零,而当天的分钟级波动折叠没有。"
+ ],
+ "lab_findings": [
+  {
+   "id": "trigger-ops-make-builtin-probes-vacuous",
+   "claim": "in_sustain_* 是「触发型」算子:第一个操作数是 0/1 掩码,只在 mask==1 的分钟写值。内置探针给它喂随机浮点数,永不触发,所有读数(有限值占比 0、齐次度 None、与分钟顺序无关)都是空读数;注册表给它的 boolean_output/trivial_boolean 标志是错的。真实语义:窗口 = 触发分钟自己 + 之后 d−1 分钟(朝后看、含触发分钟),总体 std,跑出行尾就截短(最后一分钟触发得 0),整行无触发 → NaN。",
+   "evidence": "studies/F101_day_shine_retstd/probes.py:minute_offsets_read=[0,1,2,3,4](自检 in_delay→[-1]);ramp_window_readout 1.4142 / 1.118 / 0.8165 / 0.5 / 0.0(自检 in_stddev_full 在 5 宽斜坡上 1.4142);trigger_semantics 只有 1.0 触发;is_gt 遇 NaN 与相等都给 0。",
+   "operators": [
+    "in_sustain_stddev",
+    "is_gt",
+    "in_mean_full",
+    "in_stddev_full",
+    "in_delay"
+   ],
+   "confidence": "high",
+   "recheck": "其他 in_sustain_* 内核(start_offset / num 参数不同)要重跑这组探针;内核改动后失效。"
+  },
+  {
+   "id": "volume-surge-mask-is-a-proxy-for-large-move-minutes",
+   "claim": "「ΔVolume > 当天自己的均值 + 1σ」这种掩码不带成交额尺度(每票每天约 20 次触发,p1=5、p99=32),挂在它上面的统计量 ≈ 同一统计量向大波动分钟加权的版本(与无条件版 rank 相关 0.85~0.90)。把掩码换成不含 Volume 的「|Ret| > 当天均值 + 1σ」,折叠后的书在同一批格子上逐年分不开;「有条件 ÷ 无条件」的比值是单调空头信号,但完全不用掩码的「全天 std ÷ 滚动 std 均值」同样强,Volume 特有的部分(两种掩码的统计量之比)没有信号。遇到「量触发、价统计」的结构,先拿「价触发」和「无触发的集中度」当对照,再谈事件的含义;只把掩码换成「全部分钟 / 取反」不足以说明事件定义有内容。",
+   "evidence": "SR_rivals(正式口径):sr_fold_jret 多空 +3.87/+3.12、空头 +49.1%/+48.9% 对 sr_orig_nz +3.65/+3.04、+47.8%/+48.3%;sr_ratio_jret / sr_ratio_ivol / s2_burst_ratio rank IC +0.0272/+0.0282/+0.0285(train)、+0.0359/+0.0459/+0.0415(valid);sr_ratio_j_jret rank IC +0.005/+0.011、扣费多空 −0.62/+0.20。rev_look.py E(同格子、逐年):J 3.66/3.05 对 Jret 3.78/3.06。audit_1.py A:原式对 EMA10 fold(Jret) R² 0.792/0.848,残差空头腿 −0.5%/−5.3%。",
+   "operators": [
+    "is_gt",
+    "in_mean_full",
+    "in_stddev_full",
+    "in_sustain_stddev",
+    "day_mean",
+    "div"
+   ],
+   "confidence": "medium",
+   "recheck": "阈值更高(如 3σ)时触发次数少,量事件与价事件可能分开;被统计的字段不是收益时要重测;不用 Volume 的版本和三个比值都没有读留出段。"
+  },
+  {
+   "id": "cs-fold-hides-exposure-from-linear-neutralisation",
+   "claim": "外层是不保序的截面折叠 abs_(cs_demean(x)) 时,因子与任何单调控制在秩空间近似不相关,线性中性化的 R² 会严重低估已知暴露;必须对「同样折叠、同样平滑」的控制变量中性化。同理,「折叠面板与已知家族的 rank 相关接近 0」不是无关的证据:要量交易信号对家族折叠版的 R²、比空头十分位的重叠。rank IC 也不能用来给折叠型变体排序(不折叠版 rank IC 更高但书是空的)。",
+   "evidence": "原式:9 个线性控制 R² 0.154,对 EMA10(fold(day_std(Ret))) 一个变量 R² 0.749/0.764(look2.py A、audit_1.py A);对 known_ivol_max9:原始折叠面板 rank 相关 −0.036,交易信号对其折叠版 R² 0.418/0.489(取对数 0.569/0.644),空头十分位重叠 70%/72%(audit_1.py D、rev_look.py D);背景版:0.090 对 0.796(look3.py D);s1_nofold rank IC +0.0389/+0.0571 而多空 1.34/2.35、多头净 −9.0%。",
+   "operators": [
+    "abs_",
+    "cs_demean"
+   ],
+   "confidence": "high",
+   "recheck": "若被折叠的量收益剖面本来单调,折叠会毁掉信号,这条不适用;折叠中心不是截面均值/中位数时要重算折叠版控制。"
+  },
+  {
+   "id": "fold-then-smooth-is-part-of-the-factor",
+   "claim": "最外层是非线性节点(abs)时,口径里的 EMA 不是中性的平滑:先折叠后平滑与先平滑后折叠是两个不同的因子,多头腿只在前者存在。换成 20/40 日均值、20 日最大值、均值+标准差(cross_fangzheng)、均方根在噪声内是同一个东西。EMA|K| = |EMA K| + 不稳定度 是恒等式,但「两项各自单调」只在背景波动(roll5)版上两段成立,在放量版 J 上 valid 没有梯度 —— 不要把一个统计量上做的双重排序套到另一个统计量头上。",
+   "evidence": "look.py F(J:多头净 +9.0%/−1.6% 对先平滑后折叠 −9.5%/−10.2%);look2.py F(roll5:+9.1%/+10.4% 对 −4.7%/−6.4%);look3.py H(roll5 双重排序两段一致);audit_1.py B(J、半衰期 10:valid 最近三分位里按不稳定度五分位 +6.2/+2.9/+2.2/+7.0/−0.4);look3.py C/F 各种聚合 train 多头净 8.0%~9.2%。",
+   "operators": [
+    "abs_",
+    "cs_demean",
+    "cross_mean",
+    "cross_max",
+    "cross_fangzheng"
+   ],
+   "confidence": "medium",
+   "recheck": "K 的符号长期不变(不稳定度≈0)的因子上两种顺序等价;时间聚合的比较只在 train/valid 上做过,没有读留出段。"
+  },
+  {
+   "id": "moderate-activity-fold-is-generic-benchmark-first",
+   "claim": "把任何「活跃度 / 波动」类变量做截面均值折叠再平滑(日内波动、20 日波动、换手率、振幅、F001 的 9 日极值记忆),在 2018–2021 都得到多空夏普 3.0~3.8、多头净 +7.8%~+9.7% 的书;规模、价格、成交额水平折叠后没有。遇到 abs_(cs_demean(X))、X 是活跃度类的因子,先比两个基准:4 个算子的 abs_(cs_demean(day_std(Ret))),以及「X 的水平在第 10~80 百分位的全部股票等权」这个平台 —— 多头十分位比不过平台,它就只是一个避开极端的过滤器,不是选股信号。",
+   "evidence": "look3.py D;sr_fold_kivmax9 train 多空 +3.83、多头净 +7.8%(valid +2.13/−4.5%);S_final:f_ivol 测试段多空 3.42、多头净 +6.6%、纯多头夏普 1.43,与 12 个中间量的原式(3.70 / +6.0% / 1.32)在噪声内不可区分;rev_look.py C:平台等权每年毛超额 +5.5%~+8.0%,原式多头十分位减平台 2018–2021 年 +5.8~+14.1、2022–2023 年 −1.8/+0.7。",
+   "operators": [
+    "abs_",
+    "cs_demean",
+    "day_std"
+   ],
+   "confidence": "medium",
+   "recheck": "日频的那几个折叠在 2022–2023 多头腿归零;留出段只读过 day_std 版;平台对照在留出段没有量;组合里已有波动/换手率因子时空头腿基本重复。"
+  },
+  {
+   "id": "rank-fold-short-leg-is-half-low-side",
+   "claim": "(只是构成事实,不是孰优的结论)对右偏的波动类输入,均值折叠的中心落在第 59~66 百分位,空头十分位人头 84%~97% 在高侧;对称的排名折叠 abs_(cs_demean(cs_rank(x))) 的空头十分位有 42%~57% 人头在低侧(水平在第 4~10 百分位)。低侧那一半的贡献不稳定:2018 年 +10~+11 个点,到 2023 年缩到 0~+1。两种折叠孰优没有结论:样本外多空夏普的差别只来自 2024 一年(排名折叠空头腿 −5.3%/+3.7%,样本量 1 年,且那一年没有按侧拆分过),多头腿上两者在测试段不可区分。",
+   "evidence": "rev_look.py A(2018–2023 逐年低侧 / 高侧拆分,J 与 roll5 两个统计量);look.py D;S_final 逐年(final.json):f_j_rank 在 2020、2022、2023 年多空高于原式,f_roll5_rank 在 2020、2021、2023、2025 年高于 f_roll5。",
+   "operators": [
+    "cs_rank",
+    "abs_",
+    "cs_demean"
+   ],
+   "confidence": "low",
+   "recheck": "2024 年的低侧 / 高侧拆分没有做(在留出段里);需要新的样本外年份才能判断低侧转负是不是会重复的尾部。不要据此在两种折叠之间做选择。"
+  },
+  {
+   "id": "head-count-is-not-return-contribution",
+   "claim": "判断「某条腿是不是来自特殊的票」(一字板、次新、标签缺失)要按收益贡献,不能按人头。任何「日内收益类统计量 == 0」的格子都是一字板日;截面均值折叠后它的 |K| = 截面均值,被送进空头十分位,次日相对等权约 −2%/天。这里人头 2.2% 的当天一字板票给了空头腿的 13%、多空夏普的 0.56;5 日内有过一字板的票(人头 6.9%)给了 26%,20 日内的 39%,上市 60 日内的次新股 18%(train)。同一类折叠因子之间的比较不受影响(各掉 0.5~0.7 的多空夏普),受影响的是公布的多空夏普的绝对水平和多头腿毛超额(等权基准里含这些票)。表达式里可以用 replace_small_with_nan(x) 把零值格子置 NaN 来量。",
+   "evidence": "audit_1.py C;SR_rivals sr_orig_nz(多空 4.21→3.65、3.21→3.04,多头腿毛超额 16.9%→15.6%、5.1%→4.5%);rev_look.py B(当天 J 最低 5% 的超额 train −41% → 剔除 J==0 后 −9%;fold(ivol)、fold(roll5) 去零值格子后多空 3.63→3.13、3.15→2.48)。",
+   "operators": [
+    "abs_",
+    "cs_demean",
+    "day_std",
+    "day_mean",
+    "in_sustain_stddev",
+    "replace_small_with_nan"
+   ],
+   "confidence": "high",
+   "recheck": "不折叠的单调因子里零值排在一端而不是被折叠送进空头,要重量;标签口径(可买入版)变了要重量;样本外的占比没有量。"
+  },
+  {
+   "id": "valid-only-long-leg-gain-and-halflife-confound",
+   "claim": "方法上的教训三条:(1) 变体按各自拟合的半衰期比较会把成本差算到结构头上 —— 半衰期 10→20 光靠省换手就给多头腿净超额加 0.4~3 个点,要用 books.sweep 在同一半衰期下比;(2) 在同一半衰期下 train 持平、只在 386 天的 valid 上领先的多头腿改进是在押一段行情,即使连续三个自然年都领先;(3) 读完留出段之后做的事后解释同样会过拟合:只靠样本外一个年份的差别(这里是 2024 年排名折叠的空头腿)不能升格成结论,事前写下的噪声带(多头净 ±3 个点、多空 ±0.3)对事后解读同样有约束力。",
+   "evidence": "look3.py A/Y;S_final:f_roll5 相对原式 valid 多头净 +12 个点、2021–2023 每年领先,测试段只剩 +0.6 个点;f_roll5 相对 f_ivol 的 valid 优势(+10.4% 对 +3.7%)在测试段为 0;审查指出原报告把 2024 一年的差别写成了「均值折叠样本外更好」,并把 1 个点的多头净差别当佐证。",
+   "operators": [],
+   "confidence": "medium",
+   "recheck": "改进在 train 的固定半衰期比较里也成立时,第 (2) 条警告不适用。"
+  }
+ ],
+ "holdout_reads": 1,
+ "server_runs": 10,
+ "variants_tested": 25,
+ "report_path": "/Users/wxy/Desktop/Partura/research/alpha_distillation/F101_day_shine_retstd.md",
+ "tooling_problems": [
+  "【审查意见 1(数字与流程):「均值折叠样本外好于排名折叠」写成已确立】已改 + 已补实验。降到「合理但没有坐实」,只写事实(两个排名折叠版 2024 年空头腿 −5.3%/+3.7%、多空 −0.07/+0.82,其余年份不差,n=1);删掉「多头净也低于各自的均值折叠版」;「低波动端大涨」标成推断;「不要把均值折叠换成排名折叠」改成「排名折叠有单年空头腿归零的尾部风险(只对做多空的人)」。审查建议放进 12_next 的 train/valid 检验我直接做了(rev_look.py A):排名折叠空头十分位 42%~57% 人头在低侧,低侧贡献 2018→2023 从 +10~+11 个点缩到 0~+1,但在 train/valid 任何一年都没有为负 —— 所以 2024 年的机制既没被证实也没被否定。lab finding 改成只写构成事实、confidence low、注明样本量 1 年且不下孰优结论。",
+  "【审查意见 2(机制):「爆发比是放量掩码独有」】已改 + 已补实验,结论比审查说的还强。SR_rivals 正式阶段逐位复现了审查员的三条折叠(sr_fold_jret 3.87/3.12、sr_orig_nz 3.65/3.04、sr_fold_q90 3.40/3.24);另外量到完全不用掩码的「切片后全天 std ÷ roll5」作为单调空头信号与 J÷roll5 一样强(rank IC +0.0282/+0.0459 对 +0.0285/+0.0415)。「放量掩码独有」「放量时价格被推得特别远」的措辞已从正文删掉(只在修订记录里作为被撤回的说法出现)。一处细化:审查写「多出约 8 个点空头腿」,那是 Jret(已剔一字板日)对 ivol(未剔)的比法,是 6~8 个点;在同一批格子上比是 13(train)/ 8(valid)个点。",
+  "【审查意见 3(机制):多头腿「适中且稳定」只在 roll5 上验证】已改 + 已补实验。降到「合理但没有坐实」并写清适用范围;「原式测试段 +6.0% 有多少来自挑选」写进 09 未决和 11_risks。补了逐年的平台对照(rev_look.py C):原式多头十分位减平台 2018–2021 年 +5.8~+14.1,2022–2023 年 −1.8/+0.7。一处小出入(不影响结论):审查写「valid 三列里有两列离中心近不如中等距离」,按审查员自己的日志是一列(中间那列 +4.1 对 +9.1;另两列 +14.2 对 +11.5、+2.9 对 +0.9),已在 07x_review1_audit.md 里照实写。",
+  "【审查意见 4(机制):H5 按人头否掉】已改 + 已补实验。H5 改为「部分成立」;11_risks 的「影响很小」换成按收益的数字。审查说 raw J 最低 5% 的 −41%「是推算不是实测」—— 已实测(rev_look.py B):剔除 J==0 后 train −9%、valid −1%,推算成立,「两道悬崖」改成「高侧悬崖 + 低侧浅坡」。另外量到审查没提的两点:20 日内有过一字板的票给了空头腿 39%/27%,上市 60 日内的次新股占空头人头 15%/12%、给了 18%/12%。",
+  "【审查意见 5(机制):「与 F001 的族无关(±0.05)」】已改 + 已补实验。family 与 07_controls.md 按审查建议改写;审查引的 −0.22/−0.19/−0.13 被 rev_look.py D 复现;sr_fold_kivmax9 进了正式表(3.83/2.13)。补充:对成交额水平两族按折叠版量了 R²(≤0.04,确实无关),但空头十分位与它们的单调书重叠 23%~35%(随机 10%),已写明这是热门票的共同暴露。",
+  "【审查意见 6(机制):同第 1 条】已改,处理同第 1 条;不作为「均值折叠更好」的可迁移结论写回 lab。",
+  "审查员的反驳实验是 exec 脚本(audit_1.py,tag audit1),不是配置里的 SA_audit 阶段,也没有 audit1.json。报告生成器只收录有阶段结果的 07_<stage>.md 和 07x_*.md,所以按指示建的 07_SA_audit.md 进不了报告;我把它写成指针文件,正文放在 07x_review1_audit.md(进报告)。",
+  "服务器运行共 10 次:原研究 7 次(S0、S1、S2、look、look2、look3、final)+ 审查员的 audit1 + 修订的 rev1(SR_rivals 正式阶段)和 rev2(rev_look.py),超过手册的 8 次上限,其中 2 次是修订指示允许的。留出段读取次数仍是 1(ledger 已核对);修订没有新建任何带 final 的阶段。",
+  "新阶段的变体进不了报告第 8 节的 rank 相关矩阵:矩阵按 corr_ids(五个最终候选)在各自那次运行里算,新运行里这些 id 不存在;若把 corr_ids 改成新变体,五个候选与新变体之间会出现空格。绕过:相关数从 audit_1.py / rev_look.py 的日志里引。建议报告支持 rank_corr_all.json 或跨运行补算。",
+  "digest 和报告的阶段表没有空头腿毛超额、纯多头夏普两列,而这条因子的结论恰恰靠这两列;只能从 runs/*.json 的 books.splits 手抄进 notes(07_SR_rivals.md 已注明出处)。",
+  "notes 的 Markdown 表格里写 `|Ret|`、`EMA(|K|)` 会把列切开,要写成 \\| ;生成器不做检查(原研究 05_hypotheses.md 的表里也有未转义的 `|K|`,我没有动那份读实验之前写的文件)。",
+  "这次研究是接手的(原会话因网络中断停在 S2 跑完的位置);原研究没有重跑任何已有阶段。ledger 里 S0_baseline 被记了 3 次,是骨架/批处理阶段的重跑。",
+  "内置探针对触发型算子 in_sustain_stddev 全是空读数(喂随机浮点数当 mask,永不触发),注册表还把它标成 boolean_output/trivial_boolean,decompose 的结构角色栏因此误标。绕过:studies/F101_day_shine_retstd/probes.py 里写了 4 个探针(都先在已知答案的算子上自检)。",
+  "ts_stddev 在 GPU 被邻居占满时报 CUDA OOM,s1_fold_dvol20 没算出来,报告总表里留着一行「求值失败」。绕过:在 exec 脚本里用已缓存的 ctl_dvol20 面板在 numpy 里做同样的折叠。",
+  "exec 脚本的数字进不了报告的表,只能写在 07x_*.md 里并引用 logs/;最终候选的留出段逐年表也一样(报告只打印 baseline_id 的逐年),从 final.json 手抄进了 07_S_final.md(修订时又补抄了 2018–2020 年和逐年空头腿,没有新的读取)。",
+  "study.sh wait 对 exec 任务只回显日志尾部,前半段输出要自己去读 logs/<fid>_<tag>.log;digest 的半衰期扫描行里的 L 是纯多头夏普,没有标注。",
+  "没有把 baseline_id 改成 f_orig:那样第 6 节的逐年表会混入留出段年份,与读留出段之前写的 06_baseline.md 对不上;代价是第 6 节用户口径表里 v_base 的测试列是「—」。",
+  "09_diagnosis.md 原来声明「读之前写的三段保留原样」;为了让降级后的三档清单不与旧文字打架,我把这一节重写成修订后的状态,并在节末的「修订记录」里逐条列出原来的说法、改动和依据,以及被留出段否定的三条事前判断。10_distilled.md 里「读留出段之前」那一段逐字未动(已 diff 核对),修订只加了开头的说明并改了读之后写的部分。"
+ ]
+}

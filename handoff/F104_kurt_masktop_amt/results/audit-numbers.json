@@ -1,0 +1,60 @@
+{
+ "factor_id": "F104_kurt_masktop_amt",
+ "lens": "数字与流程",
+ "issues": [
+  {
+   "severity": "major",
+   "where": "研究员结论 JSON 的 recommended_kind=\"elevated\";/Users/wxy/Desktop/Partura/notes/F104_kurt_masktop_amt/10_distilled.md「留出段」一节的推荐;01_expression.md 末段",
+   "what": "推荐式 f_exclcv 被标成 elevated,但在用户的首要口径(纯多头:多头腿净超额、纯多头夏普)上,它在 valid 和 holdout 都不如 2 个算子的已知家族基准 f_std30 = cross_mean(day_std(Amt),30)。它相对已知家族多出来的只有多空夏普(空头腿),而笔记自己写明纯多头使用者拿不到这部分。「相对原式升华」成立,「相对用户已有的 F001 家族升华」不成立;elevated 这个标签进批次汇总会把一条流动性因子记成新的升华因子。数字本身和事前规则都没有问题,问题在标签强度。",
+   "evidence": "final.json 用户口径 holdout:f_exclcv 多头腿净超额 12.25% 对 f_std30 14.10%(低 1.85 点),纯多头夏普 1.256 对 1.509(低 0.25),多头腿回撤 -18.5% 对 -14.6%,多空日换手 5.1% 对 2.7%,12 个算子对 2 个。决策口径 valid:净超额 19.1% 对 22.3%(低 3.2 点),纯多头夏普 3.55 对 3.46。final 的 by_year(用户口径)多头腿净超额 2021~2025 每一年都低于 f_std30:11.2/21.5/18.2/7.9/12.0 对 16.0/24.6/21.2/9.2/14.3;只有 2018~2020 更高(23.7/14.9/9.9 对 17.3/10.2/6.6)。f_exclcv 对全部控制变量 R² 0.774,与 f_std30 原始面板秩相关 0.84。事前规则是「纯多头夏普低 0.3 以上 **并且** 净超额低 3 点以上」才不推荐,实际差 0.25 和 1.85,两项都更差但都没过线。10_distilled 自己写了「库里已有 F001 家族,纯多头用它们就够了,f_exclcv 不会让多头腿更好」。",
+   "fix": "把 recommended_kind 改成 distilled(推荐 f_kurt30,结论是「空头腿/排除型因子,没有超出已知家族的升华空间」),f_exclcv 降为附带观察;或者保留 f_exclcv 但在结论 JSON 和 01/10 两段里明确写「elevated 仅相对原式成立,多头腿相对 F001 家族 2021 年起每年都更低」,批次汇总里不要把它记成独立的升华因子。"
+  },
+  {
+   "severity": "minor",
+   "where": "/Users/wxy/Desktop/Partura/notes/F104_kurt_masktop_amt/09_diagnosis.md 已确立的证据第 9 条(报告第 9 节)",
+   "what": "标题写「样本外它还在」,列的证据是 2021~2025 五个年度的多空夏普(final 逐年表,用户口径)。其中 2021 属于 train、2022 和 2023 年 8 月 7 日之前属于 valid/utrain:既是用户口径下方向和半衰期的 fit 段,也是挑出这个结构时看过的数据。真正的样本外只有 2023-08-08 之后。这是把用户口径训练段的数字当样本外叙述;结论本身靠留出段数字仍然成立。",
+   "evidence": "final.json by_year(scope 20180102–20251231,f_kurt30 换手 8.5%~9.3%,即 utrain 上选的 hl=0):2021 1.62、2022 1.83、2023 2.14(整年,混合)、2024 2.21、2025 2.12。split_dates:utrain 到 20230807,holdout 从 20230808 起。留出段整体 f_kurt30 多空 2.134 对原式 1.891。",
+   "fix": "改写成「留出段多空 2.13(原式 1.89),2024 / 2025 分年 2.21 / 2.12」;2021~2023 的分年数字另起一句,标明是样本内(fit 段)的逐年稳定性,不算样本外证据。"
+  },
+  {
+   "severity": "minor",
+   "where": "研究员结论 JSON:recommended.rank_corr_with_original = 0.37;08_variants.md 末段",
+   "what": "0.37 不是推荐式与原式的秩相关,而是 f_exclcv 与 g_base_m30(原式的 30 日均值替身)的原始面板秩相关。与原式本身的原始面板秩相关是 0.10;可交易信号口径(x2 §2)没有量过 f_exclcv,只量了同胞 l_excl 和 l_addcv。字段名会让人以为是和原式直接比。",
+   "evidence": "final.json rank_corr_train:f_exclcv~g_base_m30 = 0.37,f_exclcv~f_orig = 0.10。logs/F104_kurt_masktop_amt_x2.log §2 与原式(EMA-20)的可交易信号秩相关:excl 0.46/0.36,addcv 0.37/0.26,没有 excl_cv 这一行。",
+   "fix": "在结论里注明 0.37 是对 g_base_m30 的秩相关(与原式原始面板 0.10);要报可交易信号口径就写「未单独量,同胞 l_excl 为 0.46/0.36」。不必为此补跑。"
+  },
+  {
+   "severity": "minor",
+   "where": "/Users/wxy/Desktop/Partura/notes/F104_kurt_masktop_amt/08_variants.md 提醒第 3 点(05_hypotheses.md H8 判决、10_distilled.md 事前判断第 2 条引用同一区间);11_risks.md「过拟合」一条",
+   "what": "两处笔误级的数字。(a) 08 说 C 组多头腿净超额是 train +3%~+6.5%、valid −2.7%~+2.3%,但同一张表列进 C 组的方向拆分和近亲成员在区间外。(b) 11_risks 写「x2 里的 4 个邻域写法」,同一段后面又写「x2 的 5 个邻居」,实际是 5 条新表达式。都不改变结论(多头腿弱这一点反而更强)。",
+   "evidence": "(a) S3_reader.json:r_up30 多头腿净超额 −2.3% / −1.0%,r_dn30 −0.6% / +0.5%;S4_long.json:l_stdres30 +4.3% / −4.4%;S2:q_nat_rk30 +5.8% / −1.6%。实际范围 train −2.3%~+6.5%、valid −4.4%~+2.3%。(b) logs/F104_kurt_masktop_amt_x2.log 首行「5 new expression(s)」(excl_p2、excl_p6、excl_cv、excl_std、excl_60)。",
+   "fix": "(a) 把区间限定为「不含方向拆分与近亲的主成员」,或改成实际范围。(b) 改成「41 个阶段变体和 x2 里的 5 个邻域写法」。"
+  },
+  {
+   "severity": "minor",
+   "where": "git status --short partura scripts lab docs(/Users/wxy/Desktop/Partura)",
+   "what": "受保护目录里有 3 个文件是脏的:docs/study_playbook.md、scripts/study.sh、scripts/summarize.py。无法归因到 F104 的研究员,更像是共享工具的统一更新,但按检查项照实报告,请编排方确认是不是自己改的。partura/ 和 lab/findings.yaml 没有改动。",
+   "evidence": "三个文件 mtime 同为 2026-10-03 23:20:15(同一秒)。diff 内容是通用工具改动:study.sh 的 exec 输出从 tail -60 改成 tail -200;summarize.py 新增「固定半衰期下的 train 表现」表;playbook 新增 ts_* OOM 和「各变体半衰期各自拟合」两条(例子是 ts_stddev,不是 F104 用的 ts_mean)。当时 F104 的 x2 正在跑(23:20:57 结束),同一时段 F101/F102/F105 有 audit1 日志(23:21~23:33)。F104 的 notes 没有提到改过工具。",
+   "fix": "编排方确认这次改动的来源;如果是某个研究员改的,按 playbook §4.1 处理并在其汇报里补记。F104 的数字不受影响(JSON 里的数字与工具打印的一致)。"
+  }
+ ],
+ "checked": [
+  "读完 CLAUDE.md、docs/method.md、docs/study_playbook.md;读完 notes/F104_kurt_masktop_amt/ 全部 22 个文件、configs/F104_kurt_masktop_amt.yaml、ledger.json、6 个运行 JSON、logs 下 F104 的 7 个日志、最终报告的第 1/2/6/7(S_final、条件 IC)/8/10 节和附录",
+  "数字核对(远超 15 个,全部直接读 JSON 或日志):结论 JSON 的 original 与 recommended 全部字段与 final.json 的 books_user 一致(原式 3.197/1.891、毛 0.0734/0.0404、净 0.0181/−0.0214、纯多头夏普 0.38/−0.39、换手 0.072;f_exclcv 4.062/3.163、毛 0.2022/0.1579、净 0.1621/0.1225、2.77/1.26、换手 0.0513、cov 0.9993、dist 1.0)",
+  "10_distilled:事前表五行的 train/valid 数字、留出段对照表(f_kurt30 2.13/+1.4%/0.28,f_cv30 2.16/−1.8%,f_std30 1.94/+14.1%/1.51)、回撤 −18.5%/−14.6%/−9.0%、2024/2025 多头腿毛超额 11.5/15.7 对 11.3/16.6、R² 0.774/0.567、逐年最低 2.59 对 0.66、hl_long=2 时留出段 +3.9%/0.79(final.json 的 splits_at_hl_long 确实存在,半衰期在 utrain 上按纯多头夏普选)—— 全部对上",
+  "09_diagnosis:9 条已确立证据里的数字(S3 3.69~3.77/1.91~2.37、p_nat 1.72/−1.19、秩相关 0.61 与 0.52、R² 0.125/0.175/0.319、63% 与 85%、条件 IC −0.037、42%/19%、0.91、分年 1.62/1.83/2.14/2.21/2.12 与 2.27/1.63/1.45/2.53/1.22)全部对上",
+  "07_S1/S2/S3/S4 四张阶段表逐格核对(扣费多空、rank IC、多头腿净超额、空头腿毛超额、纯多头夏普、换手、半衰期、秩相关列),07_neutralise 的 H15 表、07_conditional 的五组条件 IC、07_controls 的控制变量当因子、06_baseline 的半衰期扫描/分位剖面/逐年/Pearson 与 rank IC —— 没有发现差一位小数以上或张冠李戴",
+  "07x_anatomy 与 07x_longleg 对 logs/F104_kurt_masktop_amt_x1.log、_x2.log 逐表核对(k 分层表、U0/U1/U2、两端十分位画像、邻域表、可交易信号秩相关、双重排序、逐年剔除增益、kshare/amt30 条件 IC、多头十分位画像)—— 全部对上;02_operators 的探针数字(8.5/35.7/192 倍、spike 表、−1.51/−0.29)与报告第 2 节的探针输出一致",
+  "留出段纪律:ledger.json holdout reads=1、5 条表达式;S_final 5 个候选含原式;final.json(23:33:49)是 runs/ 下最后一个文件,x2(23:20)在它之前,之后没有任何阶段或 exec 运行",
+  "候选事前选定:10_distilled 前半段只用 train/valid 数字。文件 mtime(23:39)晚于 final,单凭 mtime 证明不了「读之前写的」;但 final.json 里冻结的 S_final 各变体 why 已含同样的预测和「0.3 夏普且 3 个点」规则,且与当前配置逐字一致(41 个变体的 expr/why/stage 全部与运行 JSON 相同),足以佐证规则是读之前定的",
+  "口径:最终对比表的 holdout 数字用的是 utrain 上定的方向与半衰期(f_kurt30 在 utrain 上选 hl=0、train 上选 1,笔记已说明);x1/x2 脚本的方向与半衰期都在 train 上定,只切 train/valid/utrain,没有读 holdout;搜了全部 notes 里的「样本外」,只有 09 第 9 条有问题",
+  "基线复现:S0_baseline 用户口径 sign −1、hl 20、多空 3.1965(公布 3.2,差 0.0035)、多头腿毛超额 0.0734(公布 0.073,差 0.0004),都在容差内;留出段 1.891/0.0404 对公布 1.89/0.04",
+  "门槛:f_exclcv 在 train 上 coverage_labelled 0.9992、distinct 1.0,过线;p_kfrac 的 dist 0.05 不过线,笔记已注明且只当诊断用",
+  "报告本身:没有求值失败的变体;S1 有两个控制变量(ctl_amt20、ctl_kshare20)OOM 失败,笔记已说明且没有当证据引用;扫了全部表格,没有该有数却为空的(第 6 节用户口径表 v_base 的测试列是「—」,因为 S0 不读留出段,第 10 节 f_orig 有完整数字);notes 的 07_S1_mask/S2_resid/S3_reader/S4_long/S_final 与配置 stage id 一一对应,都出现在报告里",
+  "服务器运行次数:S1~S4、final 共 5 次阶段运行,x1、x2 两次 exec,另有一次 x1 被内存守卫拒绝(未计算),合计 8,与汇报一致;S0 的 3 次在研究目录建立之前",
+  "越界:git status 显示 docs/study_playbook.md、scripts/study.sh、scripts/summarize.py 被改(见 issues 最后一条);partura/、lab/ 干净",
+  "本地跑了 ./scripts/study.sh digest F104_kurt_masktop_amt final f_orig,输出与上面读 JSON 得到的数字一致"
+ ],
+ "overall": "数字和流程是干净的:核对了一百多个数字,没有发现差一位小数以上或张冠李戴;留出段只读 1 次、5 个候选含原式、final 是最后一次运行;事前预测和推荐规则冻结在 final.json 的 why 里;基线复现在容差内;推荐式过 cov/dist 门槛。没有 critical 问题。\n\n唯一需要改写的是结论的标签:f_exclcv 被标成 elevated,但它的多头腿(用户的首要口径)在 valid、holdout 以及 2021~2025 每一个年度都低于 2 个算子的已知家族基准 f_std30,换手还高一倍。它相对已知家族多出来的只有空头腿带来的多空夏普。事前规则用「两项同时过线才不推荐」的写法让它刚好过关(差 0.25 夏普、1.85 点)。建议改成 distilled(f_kurt30),或明确写「仅相对原式升华、不超出 F001 家族」。\n\n其余是三条笔误级问题(09 第 9 条把 2021~2023 的训练段分年数字放在「样本外」标题下;rank_corr_with_original 0.37 实为对 g_base_m30 的相关;两处区间/计数不严)和一条无法归因的受保护目录改动(三个文件同一秒修改,内容是通用工具更新,请编排方确认)。",
+ "refutation_attempt": "试了四条路去推翻研究员的结论。(1) 找数字错误:把 09、10、各阶段表、x1/x2 的数字逐个对 JSON 和日志,没有找到一处不符。(2) 找留出段违规:比对 ledger、文件修改时间、final.json 里冻结的 why 与当前配置,没有发现读后改候选、二次 final 或 final 之后的运行;x1/x2 脚本只切 train/valid/utrain。(3) 找口径混用:holdout 数字都用 utrain 上定的方向和半衰期;只找到 09 第 9 条一处把训练段年份放在「样本外」标题下,去掉后结论仍由留出段 2.13 和 2024/2025 的 2.21/2.12 支撑。(4) 检验「升华」是否成立:把 f_exclcv 与 f_std30 逐段、逐年比多头腿。这一条推翻成功了一半:相对原式的改善是真的(留出段净超额 +12.3% 对 −2.1%),但相对已知家族,多头腿净超额 2021~2025 每年都更低,elevated 的说法只在相对原式时成立。研究员的文字结论(「没有超过只用已知家族的 f_std30」)本身是如实的,不成立的是 elevated 这个标签。"
+}

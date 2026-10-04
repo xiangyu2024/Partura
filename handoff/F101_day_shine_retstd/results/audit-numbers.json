@@ -1,0 +1,83 @@
+{
+ "factor_id": "F101_day_shine_retstd",
+ "lens": "数字与流程",
+ "issues": [
+  {
+   "severity": "major",
+   "where": "/Users/wxy/Desktop/Partura/notes/F101_day_shine_retstd/09_diagnosis.md「读完留出段之后的修正」第 3 条;10_distilled.md 留出段结果第 5 条与「不要做的事」;报告 research/alpha_distillation/F101_day_shine_retstd.md 行 1007–1008、1093–1096、1104",
+   "what": "读完留出段后把「均值折叠样本外好于排名折叠」写成「新增一条已确立」,并给了因果(排名折叠把最低波动一端放进空头,而那一端在 2024 年大涨)。这个机制没有任何实验支撑,差别完全来自 2024 一年(样本量 1,正是研究员自己批评「制度切换」的理由);多头腿的差小于事前写下的噪声带,却被写成「也低于」当佐证。",
+   "evidence": "final.json diagnostics.by_year(用户口径)多空夏普:f_roll5_rank 对 f_roll5 = 2023 3.81 对 3.09、2024 −0.07 对 2.62、2025 3.37 对 2.87;f_j_rank 对 f_orig = 2023 3.04 对 2.81、2024 0.82 对 3.68、2025 3.78 对 3.80。除 2024 外排名折叠不差。留出段多头净 5.7% 对 6.6%、5.0% 对 6.0%,差 0.9 / 1.0 个点,小于事前段写的 ±3 个点(「小于这个幅度的排序不读」)。「低波动端 2024 大涨」没有任何低侧/高侧拆分的数字;引用的 look.py D(94%~97% 来自高侧)是原式 hl10 在 train/valid 上的,不是 roll5 版也不是留出段。",
+   "fix": "降到「合理但没有坐实」。事实只写:两个排名折叠版 2024 年空头腿 −5.3% / +3.7%、多空 −0.07 / +0.82,其余年份不差,留出段多空差来自这一年(n=1)。删掉「多头净也低于各自的均值折叠版」。「低波动端大涨」标成推断,并在 12_next 加一条只用 train/valid 的检验(排名折叠空头十分位按低侧/高侧拆开逐年看)。「不要把均值折叠换成排名折叠」改成「排名折叠有单年空头腿归零的尾部风险」。这条不要作为可迁移结论写进 lab/findings.yaml。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/10_distilled.md 留出段结果第 3 条与「最终结论」第 1 条(报告行 1088–1089、1100)",
+   "what": "「放量掩码带来的单调空头信号(爆发比)样本外仍然有效」是间接推断,爆发比本身没有在留出段上打过分。另外对 f_ivol 的多空领先 0.28 在自定噪声内,同一文件第 4 条说「在噪声内」,最终结论却写「高 0.3~0.7」当作保留原式的理由。",
+   "evidence": "final.json results 只有 f_orig / f_roll5 / f_roll5_rank / f_ivol / f_j_rank,没有 s2_burst_ratio;12_next 第 3 条自己写「本研究没有读它的留出段」。依据只是留出段空头腿 +52.2% 对 +31.3%(f_roll5)、+41.3%(f_ivol)。多空夏普 3.702 对 3.419 = 0.28,小于事前写的 ±0.3。",
+   "fix": "改成「与爆发比仍然有效的读法一致(间接证据:原式空头腿比背景版高 21 个点)」;最终结论里注明对 f_ivol 的 0.28 在噪声内,真正超出噪声的只有对 f_roll5 的 0.73。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/06_baseline.md 第 9 行、第 14 行(报告行 353、358)",
+   "what": "两处数字与 S0 对不上:「半衰期 3 才转正」是错的;「rank 相关都在 ±0.26 以内」在 S0 里找不到出处。",
+   "evidence": "S0_baseline.json books.sweep 扣费多空夏普:hl0 −3.14、hl1 +1.29、hl2 +2.80、hl3 +3.42,半衰期 1 就已转正;多头腿净超额 hl3 −1.8%、hl5 +4.8%,到 5 才转正。S0 的 rank_corr_train 里绝对值最大的是 ctl_ivol −0.14;0.26 是 look.py C 段平滑后交易信号与 −换手率的相关(+0.261),不是基线表的口径。",
+   "fix": "改为「半衰期 1 就转正(+1.29),多头腿净超额到半衰期 5 才转正」;「原始面板 rank 相关都在 ±0.14 以内(平滑后的交易信号与 −换手率 0.26,见 look.py C)」。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/07_S1_parts.md 第 15 行(报告行 429);报告 §7 / §8 表里的 s1_fold_dvol20 行",
+   "what": "写着「放到 S2 重跑」,实际 S2 里没有这个变体;报告里这一行始终是「求值失败」的空行。失败变体本身没有被当成证据引用。",
+   "evidence": "S1_parts.json errors 有 s1_fold_dvol20(ts_stddev CUDA OOM);S2_background.json 的 10 个变体里没有 dvol20,配置第 99–100 行注释写明「从本阶段拿掉」。H6 的实际证据是 look.py F(hl10:多空 +2.96 / +1.68、多头净 +6.7% / −2.0%)和 look3.py D(hl20:3.08 / 1.70、+8.5% / +0.0%),两处都与日志一致。",
+   "fix": "把那句改成「S2 里再次 OOM,已拿掉;H6 由 look.py F 与 look3.py D 的 fold(dvol20) 回答」。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/07_S_final.md 第 7 行表头「留出段逐年」(报告行 563–571)",
+   "what": "表头叫「留出段逐年」,但五列里只有 2024、2025 是样本外。",
+   "evidence": "runner 在 --holdout 时 by_year 用 sign_user 和 books_user.hl_used(fit = utrain,到 20230807),by_year_scope = 20180102–20251231。所以 2021、2022 整年在 fit 段内,2023 行 242 天里 144 天在 fit 段内。正文引用留出段时只用了 2024 / 2025,没有把前三列当样本外叙述。",
+   "fix": "表头改成「逐年(用户口径;2021–2022 在 fit 段内,2023 跨界,2024–2025 才是留出段)」。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/07_S1_parts.md 后记;09_diagnosis.md「合理但没有坐实」第 3 条及其留出段修正;07x_look3.md A 段",
+   "what": "「全天 std」指了两条不同的表达式,数字被混着用。",
+   "evidence": "studies/F101_day_shine_retstd/look3.py 第 103 行 ivol = ctl_ivol = day_std(Ret),不切片;候选 f_ivol / s1_fold_ivol 是 day_std(in_slice(Ret, 2, 237))。look3 A:hl10 多空 3.63 / 3.32、多头净 +8.6% / +3.8%,hl20 train +9.5%;S1_parts.json s1_fold_ivol:hl10 3.50 / 3.38、+8.3% / +3.7%,sweep 里 hl20 train +10.1%。09 里「背景版比全天 std 折叠好(valid +10.4% 对 +6.4%)」用的是前者,「被否定(测试段 +6.6% 对 +6.6%)」用的是后者。",
+   "fix": "在 look3 A / D / Y 的 ivol 行注明是 fold(ctl_ivol),不是候选 f_ivol;S1 后记的「+9.4% / +9.5% / +9.1%」同样标注。"
+  },
+  {
+   "severity": "minor",
+   "where": "notes/F101_day_shine_retstd/10_distilled.md 事前段第 13–14 行(报告行 1051–1052)",
+   "what": "说「对数空间折叠…全部在 07x_look3.md」,但 07x_look3.md 和报告里没有这一行,也没有中位数中心的水平折叠。",
+   "evidence": "07x_look3.md 里搜不到「对数」「log」。结果只在 logs/F101_day_shine_retstd_look3.log B 段:log-level fold 多空 2.89 / 3.42、多头净 +7.3% / +9.3%;median-centre level fold 2.62 / 2.81、+7.9% / +10.2%。",
+   "fix": "把这两行补进 07x_look3.md B 段的表;不要改 10_distilled 的事前段文字。"
+  },
+  {
+   "severity": "minor",
+   "where": "研究员汇报的 server_runs = 7;configs/F101_day_shine_retstd.yaml 的 S2_background",
+   "what": "运行次数少报了失败的三次,notes 里也没有交代;S2 阶段的变体数超过了重算子阶段的上限。不影响任何数字。",
+   "evidence": "研究员会话记录里实际发起 9 次:look ×2(第一次被内存守卫拒绝)、S1_parts ×2(第一次 CUDA 初始化崩溃,exit 1)、S2_background ×2(第一次算完 11 个变体的指标后在容器 34.1 GiB 处被守卫中止,exit 97,没写 JSON 和台账)、look2、look3、final。成功 6 次加骨架 S0 才是 7。S2 有 10 个变体(首次 11 个),其中 9 条是新的 in_* 表达式,playbook 写「重算子不超过 8 个」。",
+   "fix": "在汇报和 notes 里写清楚这三次失败及原因(playbook §4.1 要求工具问题写进汇报);以后重算子阶段拆成两段。"
+  }
+ ],
+ "checked": [
+  "1 数字:核对了 90 个以上。10_distilled 事前候选表 5 行(半衰期、多空、多头净、纯多头夏普、换手)与 final.json 决策口径一致;留出段第 1–5 条、最终结论、旁证(splits_at_hl_long:+7.1%/1.40、+8.0%/1.66、+7.0%/1.40)与 final.json books_user 一致",
+  "1 数字:报告 §10「最终对比」表 5 行的全部列与 final.json 一致(f_orig 3.927/3.702、0.1356/0.1196、0.0602/0.0596、1.329/1.318、0.5269/0.5217、换手 0.0813)",
+  "1 数字:07_S_final 逐年表 25 格和 6 个 rank 相关与 final.json 一致",
+  "1 数字:07_S1_parts 表 7 行(含纯多头夏普、空头腿、与原式 rank 相关)和 07_S2_background 表 10 行、解读 1–7 条(条件 IC、十分位、逐年毛超额、sweep 里 hl=20 的 +8.7/+9.1/+8.9/+8.4/+8.7)与 S1_parts.json / S2_background.json 一致",
+  "1 数字:09_diagnosis 已确立 1–8 条和未决里的数字、07x_look / look2 / look3 各表逐行对 logs/F101_day_shine_retstd_look*.log,全部一致",
+  "1 数字:06_baseline 的分位剖面、逐年、衰减、中性化、条件 IC 与 S0_baseline.json 一致,只有两处例外(见 issues)",
+  "2 留出段:ledger.json holdout reads = 1(5 条表达式);S_final 5 个候选、含原式 f_orig、全部 final: true",
+  "2 留出段:final.json(23:00:31)是 runs/ 下最新的 JSON,logs/ 里没有更晚的运行;配置最后修改 22:54:20,在 final 之前",
+  "2 留出段:从研究员会话记录还原了时间线(UTC):10_distilled.md 事前段 05:54:05 写入,study.sh final 05:54:57 发起,final.json 06:00:31,留出段解读 06:03:02 追加。现文件的事前段与 05:54:05 那次写入逐字符相同(1982 字符);09_diagnosis 的事前三段同样逐字符相同",
+  "2 留出段:事前理由只用了 train/valid 的数字(决策口径表和 look3 Y 段到 2023-08 的逐年);look.py / look2.py / look3.py 只取 train、valid 切片,逐年循环截到 va.stop,Study.slice('holdout') 会直接报错",
+  "3 口径:valid 的数字都是 fit=train 的方向和半衰期;留出段的数字都是 fit=utrain 的 sign_user 和 hl_used(读了 partura/runner.py 确认 by_year 在 --holdout 时用用户口径);f_roll5 决策口径 hl20、用户口径 hl10 的差别在 07_S_final 里已注明;用户口径训练列一律写成「训练段」,没有当成样本外",
+  "4 基线复现:S0 utrain 方向 −、半衰期 10、多空 3.9265(公布 3.93,差 0.004)、多头腿毛超额 0.13563(公布 0.136,差 0.0004);留出段 3.702 / 0.1196 对公布的 3.7 / 0.12",
+  "5 门槛:推荐的原式 train coverage_labelled 0.9991、distinct 0.9961;其余四个候选 cov ≥ 0.9991、dist 0.87~1.00",
+  "6 报告:唯一的求值失败变体 s1_fold_dvol20 没有被当成证据;§10 最终表无空格,§6 基线表测试列为「—」是因为 S0 不读留出段;07_S1_parts / 07_S2_background / 07_S_final 与配置的 stage id 对得上,且都出现在报告里;报告生成于 23:05:18,晚于 notes 最后一次修改 23:04:58",
+  "7 越界:git status --short partura scripts lab docs 为空;研究员的写入只落在 configs/F101_day_shine_retstd.yaml、studies/F101_day_shine_retstd/、notes/F101_day_shine_retstd/ 和 scratchpad;lab/findings.yaml 没有 F101 条目",
+  "7 越界(补充):研究员有 6 次直接 ssh,都是只读的状态查看(ps、screen -ls、nvidia-smi、tail 邻居日志),没有跑计算、没有杀进程,不算违规",
+  "其他:S0 的 partura_code_sha 是 733b05b9d3cc,S1 / S2 / final 是 36543cfd8cc8;f_orig 在新代码下与 v_base 逐位相同,对数字无影响"
+ ],
+ "overall": "没有 critical 问题,主结论「保留原式」成立,有一处 major 需要改写。\n\n- **数字**:核对的 90 多个数字里,只有 06_baseline 的两处对不上(「半衰期 3 才转正」实为半衰期 1;「±0.26」在 S0 里是 0.14),其余与 runs/*.json 和 look 日志一致。\n- **留出段纪律**:干净。只读了一次,候选 5 个且含原式,final 是最后一次运行。事前理由确实写在读之前(会话记录:写入 05:54:05Z,final 发起 05:54:57Z),之后一字未改。\n- **口径、基线、门槛、越界**:全部通过。基线复现 3.9265 / 0.1356 对公布的 3.93 / 0.136;原式 cov 0.9991、dist 0.996;partura、scripts、lab、docs 没有改动。\n- **major**:读完留出段后追加的「均值折叠样本外好于排名折叠」被标成「已确立」并附了因果。它只靠 2024 一年(2025 年排名折叠并不差),机制没有实验,多头腿的差在自定噪声带内。应降级改写,不影响推荐。\n- **minor**:7 条,都是措辞、标注和流程记录层面的(爆发比样本外有效是间接推断、S1 里「放到 S2 重跑」没发生、逐年表头把 fit 段年份叫留出段、两个「全天 std」表达式混用、对数折叠结果没进 notes、失败的三次运行没交代)。",
+ "refutation_attempt": "试了三条路去推翻「保留原式」和留出段纪律,都没成功。\n\n1. **事前段是不是事后补的**。10_distilled.md 的修改时间(23:04:58)晚于 final.json(23:00:31),单看这个有嫌疑。从研究员会话记录取出读留出段之前那次写入的原文,与现文件的事前段逐字符相同;23:04:58 那次批量修改只动了事后段的一句话,并给另外几个文件追加了后记。纪律成立。\n\n2. **是不是该推荐 f_ivol**。它只有 4 个算子,纯多头夏普在用户训练段(1.89 对 1.33)和测试段(1.43 对 1.32)都更高,多头净也更高(7.0% 对 6.0%;6.6% 对 6.0%),换手更低。但测试段的差都在事前写下的噪声内,训练段多空夏普低 0.46(决策口径 train 低 0.71,不算「保住」)。它也不是事前推荐的候选,读完留出段再改推它就是用留出段挑变体。所以「原式保留、f_ivol 作为更小的等价物」是守纪律的写法。\n\n3. **事前判据是否被曲解**。字面上「f_orig 不低于 f_roll5」没有满足(5.96% 对 6.62%,1.32 对 1.41)。但事前段同时写了「小于 ±3 个点的排序不读」,报告也明说了差 0.6 个点和 0.09。按同一半衰期 20 比是 7.1% / 1.40 对 7.0% / 1.40,打平。结论方向是保守的,成立。"
+}

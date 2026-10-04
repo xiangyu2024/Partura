@@ -1,0 +1,64 @@
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[panels] 3 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 3
+[panels] GPU: 22.7 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   3/3 (24s)
+[panels] done in 24s
+== A  reconstruction |J - nanmean_cs(J)| vs panel
+finite cells: mine 0.8144 base 0.8144 both 0.8144; max|diff| 6.649e-09; median base 6.046e-04; rank corr 1.0000
+== B  cross-section of J (train, per-day stats then averaged)
+names/day 3607; J finite among labelled 0.9991; share J==0 0.0047; mean 2.106e-03 median 1.794e-03 mean/median inf; percentile of the cs mean 0.656 (min 0.585 max 0.719)
+J / cs_mean at pct p1=0.33 p5=0.47 p10=0.53 p25=0.66 p50=0.85 p75=1.13 p90=1.56 p95=2.00 p99=3.54
+triggers per stock-day: p1=5 p5=9 p25=16 p50=20 p75=24 p95=28 p99=32; share <=2: 0.0010; share ==0: 0.0001
+== C  daily cross-sectional rank corr (train)
+J~ivol +0.902  J~roll5 +0.850  J~dvol20 +0.453  J~turnrate +0.464  J~cap -0.048  J~amt +0.344  J~ntrig -0.251  roll5~ivol +0.926  base~fold(ivol) +0.738  base~fold(roll5) +0.625  base~fold(dvol20) +0.174  base~ntrig -0.088  base~J -0.178
+traded signal: sig~-ema|fold ivol| +0.865  sig~-ema|fold roll5| +0.731  sig~-ema(J) +0.197  sig~-ema(ivol) +0.101  sig~-|ema(K)| +0.699  sig~-turnrate +0.261  sig~cap +0.200
+== D  top decile of the fold: share of names from the LOW side (J < cs mean)
+  raw daily |K|    train: low-side share 0.132
+  raw daily |K|    valid: low-side share 0.100
+  traded EMA10|K|  train: low-side share 0.056
+  traded EMA10|K|  valid: low-side share 0.028
+== E  annualised excess (%) by 20 quantiles, lowest -> highest
+J raw           train: -41 -1 -1 +5 +4 +10 +9 +10 +6 +8 +10 +10 +11 +10 +9 +7 +11 +4 -8 -74
+EMA10(J)        train: -9 -1 +4 +6 +8 +8 +7 +8 +9 +10 +9 +8 +9 +5 +6 +1 -2 -8 -19 -59
+EMA10(|K|)      train: +17 +17 +18 +14 +14 +14 +10 +10 +11 +6 +7 +4 +3 -1 -4 -7 -9 -16 -34 -75
+EMA10(ivol)     train: -8 -0 +3 +2 +8 +5 +7 +8 +9 +7 +8 +7 +2 +6 +2 +0 +1 -6 -13 -49
+J raw           valid: -13 +8 +8 +6 +12 +9 +9 +11 +8 +10 +10 +6 +5 +7 +3 +2 +1 -4 -12 -83
+EMA10(J)        valid: +1 +8 +12 +14 +9 +11 +12 +10 +8 +6 +5 +3 +6 +4 -5 -2 -1 -9 -21 -70
+EMA10(|K|)      valid: +7 +5 +4 +11 +5 +10 +10 +9 +8 +9 +9 +8 +11 +6 +5 +2 -2 -12 -25 -77
+EMA10(ivol)     valid: -0 +6 +9 +11 +9 +12 +10 +8 +10 +6 +5 +2 +1 +1 -0 -5 -6 -9 -17 -56
+== F  books at hl=10, sign fixed (long = low value of the folded/level quantity)
+base -EMA|K|           | train: rIC +0.0393 LS +4.21 Lg +16.9% Ln  +9.0% Lshp +1.96 short +53.7% TO  8.4% | valid: rIC +0.0319 LS +3.21 Lg  +5.1% Ln  -1.6% Lshp -0.38 short +50.1% TO  7.4%
+smooth-then-fold       | train: rIC +0.0165 LS +2.45 Lg  +7.8% Ln  -9.5% Lshp -3.81 short +40.9% TO 14.5% | valid: rIC +0.0108 LS +2.63 Lg  +4.3% Ln -10.2% Lshp -5.02 short +44.9% TO 12.3%
+instability only       | train: rIC +0.0273 LS +1.80 Lg  -0.8% Ln  -4.3% Lshp -0.63 short +30.7% TO  9.2% | valid: rIC +0.0316 LS +0.41 Lg  -0.3% Ln  -3.1% Lshp -0.59 short +15.8% TO  8.1%
+no fold -EMA(J)        | train: rIC +0.0470 LS +1.34 Lg  -4.9% Ln  -9.0% Lshp -1.07 short +38.8% TO  5.5% | valid: rIC +0.0645 LS +2.35 Lg  +4.1% Ln  +0.2% Lshp +0.03 short +44.9% TO  5.2%
+rank fold q=.5         | train: rIC +0.0274 LS +3.39 Lg +14.8% Ln  +4.8% Lshp +1.23 short +29.6% TO 10.1% | valid: rIC +0.0221 LS +3.29 Lg +11.9% Ln  +3.4% Lshp +0.97 short +29.0% TO  8.9%
+hi side only           | train: rIC +0.0530 LS +2.10 Lg  +3.8% Ln  +0.5% Lshp +0.06 short +43.8% TO  5.1% | valid: rIC +0.0661 LS +2.82 Lg  +8.0% Ln  +5.2% Lshp +0.71 short +47.2% TO  4.5%
+lo side only           | train: rIC -0.0299 LS -0.38 Lg  -6.6% Ln -11.1% Lshp -1.13 short  +9.1% TO  5.8% | valid: rIC -0.0508 LS -1.67 Lg -15.2% Ln -18.6% Lshp -1.99 short  -2.6% TO  4.9%
+fold(ivol)             | train: rIC +0.0327 LS +3.63 Lg +15.4% Ln  +8.6% Lshp +2.26 short +41.4% TO  7.0% | valid: rIC +0.0282 LS +3.32 Lg  +9.7% Ln  +3.8% Lshp +1.12 short +41.6% TO  6.2%
+fold(roll5)            | train: rIC +0.0280 LS +3.15 Lg +14.4% Ln  +7.5% Lshp +2.02 short +33.9% TO  6.8% | valid: rIC +0.0248 LS +3.48 Lg +13.3% Ln  +7.8% Lshp +2.34 short +35.2% TO  5.6%
+no fold -EMA(ivol)     | train: rIC +0.0423 LS +1.07 Lg  -4.2% Ln  -7.4% Lshp -0.88 short +30.5% TO  4.4% | valid: rIC +0.0586 LS +1.85 Lg  +3.2% Ln  +0.1% Lshp +0.02 short +35.3% TO  4.0%
+fold(dvol20)           | train: rIC +0.0153 LS +2.96 Lg +11.5% Ln  +6.7% Lshp +2.05 short +28.3% TO  4.9% | valid: rIC +0.0101 LS +1.68 Lg  +2.5% Ln  -2.0% Lshp -0.57 short +26.2% TO  4.6%
+== G  composition of the legs of the traded signal (train)
+  short decile label-NaN share 0.0297  J==0 today 0.0219  EMA K<0 0.056  pct J 0.77 pct EMA10 J 0.90 pct ivol 0.78 pct turnrate 0.80 pct cap 0.40 pct amt 0.70 pct dvol20 0.82 ntrig 18.24
+  long decile  label-NaN share 0.0103  J==0 today 0.0007  EMA K<0 0.683  pct J 0.57 pct EMA10 J 0.53 pct ivol 0.60 pct turnrate 0.41 pct cap 0.64 pct amt 0.54 pct dvol20 0.45 ntrig 20.03
+  all scored   label-NaN share 0.0154  J==0 today 0.0047  EMA K<0 0.595  pct J 0.50 pct EMA10 J 0.50 pct ivol 0.50 pct turnrate 0.50 pct cap 0.50 pct amt 0.50 pct dvol20 0.50 ntrig 19.62
+== H  fold centre scan: -EMA10(|pct(J) - q|)
+q=0.2                  | train: rIC +0.0423 LS +0.67 Lg  +3.4% Ln  -2.9% Lshp -0.38 short +19.3% TO  7.0% | valid: rIC +0.0605 LS +1.75 Lg +10.5% Ln  +4.0% Lshp +0.65 short +27.9% TO  6.6%
+q=0.3                  | train: rIC +0.0457 LS +1.02 Lg  +8.3% Ln  -0.5% Lshp -0.08 short +21.8% TO  8.6% | valid: rIC +0.0613 LS +2.17 Lg +14.7% Ln  +6.2% Lshp +1.33 short +30.2% TO  8.0%
+q=0.4                  | train: rIC +0.0435 LS +1.85 Lg +12.5% Ln  +2.5% Lshp +0.54 short +30.2% TO  9.5% | valid: rIC +0.0512 LS +2.50 Lg +14.7% Ln  +5.8% Lshp +1.50 short +34.0% TO  8.4%
+q=0.5                  | train: rIC +0.0274 LS +3.39 Lg +14.8% Ln  +4.8% Lshp +1.23 short +29.6% TO 10.1% | valid: rIC +0.0221 LS +3.29 Lg +11.9% Ln  +3.4% Lshp +0.97 short +29.0% TO  8.9%
+q=0.6                  | train: rIC +0.0020 LS +1.45 Lg +16.1% Ln  +7.1% Lshp +1.66 short +11.5% TO  9.0% | valid: rIC -0.0134 LS -0.46 Lg  +8.0% Ln  +0.3% Lshp +0.07 short  +0.8% TO  8.1%
+q=0.7                  | train: rIC -0.0184 LS +0.73 Lg +13.8% Ln  +6.5% Lshp +1.13 short  +6.9% TO  7.8% | valid: rIC -0.0370 LS -1.13 Lg  +3.5% Ln  -2.9% Lshp -0.61 short  -3.4% TO  7.1%
+q=0.8                  | train: rIC -0.0299 LS -0.09 Lg  +2.8% Ln  -2.5% Lshp -0.30 short  +5.5% TO  6.4% | valid: rIC -0.0490 LS -1.35 Lg  -4.1% Ln  -8.6% Lshp -1.17 short  -4.4% TO  5.8%
+   smooth first, then rank-fold: -|pct(EMA10 J) - q|
+sm-first q=0.3         | train: rIC +0.0433 LS +1.73 Lg  +7.5% Ln  -8.0% Lshp -2.08 short +38.8% TO 13.1% | valid: rIC +0.0545 LS +2.56 Lg +11.1% Ln  -2.8% Lshp -0.83 short +44.9% TO 11.8%
+sm-first q=0.5         | train: rIC +0.0182 LS +2.57 Lg  +9.3% Ln  -8.5% Lshp -3.36 short +33.6% TO 15.0% | valid: rIC +0.0124 LS +2.26 Lg  +4.9% Ln -10.5% Lshp -4.55 short +33.5% TO 13.1%
+sm-first q=0.7         | train: rIC -0.0243 LS -0.86 Lg  +5.4% Ln -10.0% Lshp -3.08 short  +4.9% TO 12.9% | valid: rIC -0.0402 LS -2.56 Lg  -2.0% Ln -15.1% Lshp -5.58 short  -4.1% TO 11.2%
+== I  rank IC of the traded signal inside terciles of the trigger count (train / valid)
+  ntrig pct [0.00,0.33): train +0.0543 valid +0.0524  mean ntrig 13.3
+  ntrig pct [0.33,0.67): train +0.0314 valid +0.0249  mean ntrig 19.9
+  ntrig pct [0.67,1.01): train +0.0295 valid +0.0169  mean ntrig 25.6
+ntrig itself (+)       | train: rIC +0.0165 LS +1.66 Lg  +8.2% Ln  -1.7% Lshp -0.23 short +30.7% TO 11.4% | valid: rIC +0.0020 LS -0.15 Lg  -1.9% Ln -12.3% Lshp -1.82 short +18.2% TO 12.0%
+ntrig itself (-)       | train: rIC -0.0165 LS -4.29 Lg -30.7% Ln -38.0% Lshp -5.41 short  -8.2% TO 11.4% | valid: rIC -0.0020 LS -2.88 Lg -18.2% Ln -25.9% Lshp -3.97 short  +1.9% TO 12.0%
+[partura exit 0 2026-10-04_10:28:02]

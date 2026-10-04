@@ -1,0 +1,148 @@
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+panels ready 3s; train slice(0, 973, None), valid slice(973, 1359, None); symbols 5220
+  selfcheck [train] orig@3  LS +2.54  Lgross +13.1%  Lnet +8.2%  Lshp +1.32  short +29.9%  TO 6.0%
+  selfcheck [train] max30@0 LS +2.37  Lgross +17.4%  Lnet +13.6%  Lshp +2.03  short +27.0%  TO 4.0%
+  selfcheck [valid] orig@3  LS +4.62  Lgross +26.0%  Lnet +20.7%  Lshp +3.82  short +34.2%  TO 6.6%
+  selfcheck [valid] max30@0 LS +4.12  Lgross +25.3%  Lnet +22.2%  Lshp +3.69  short +36.5%  TO 3.5%
+
+== 0 semantics ==
+--- server source: nanstd_last
+def nanstd_last(w: torch.Tensor) -> torch.Tensor:
+    mean = w.nanmean(dim=-1, keepdim=True)
+    sq = torch.where(torch.isnan(w), torch.zeros_like(w), (w - mean) ** 2)
+    count = nan_count(w).clamp(min=1).to(w.dtype)
+    return torch.sqrt(sq.sum(dim=-1) / count)
+
+--- server source: nanmax_last
+def nanmax_last(w: torch.Tensor) -> torch.Tensor:
+    filled = torch.where(torch.isnan(w), torch.full_like(w, float("-inf")), w)
+    out = filled.max(dim=-1).values
+    return torch.where(torch.isnan(w).all(dim=-1), torch.full_like(out, float("nan")), out)
+
+--- server source: nanmean_last
+def nanmean_last(w: torch.Tensor) -> torch.Tensor:
+    return w.nanmean(dim=-1)
+
+--- server source: rolling_windows
+def rolling_windows(x: torch.Tensor, d: int, axis: int = 0) -> torch.Tensor:
+    """Causal rolling windows of length `d` along `axis`, left-padded with
+    NaN so every original position (including the first `d-1`) gets a
+    window. Output shape = `x.shape` with a new trailing window-dim of
+    size `d` appended (the `axis` dim's length is unchanged).
+    """
+    d = int(d)
+    pad_shape = list(x.shape)
+    pad_shape[axis] = d - 1
+    pad = torch.full(pad_shape, float("nan"), dtype=x.dtype, device=x.device)
+    x_padded = torch.cat([pad, x], dim=axis)
+    return x_padded.unfold(axis, d, 1)
+
+--- server source: _stddev
+def _stddev(x: torch.Tensor) -> torch.Tensor:
+    x_demean = x - x.nanmean(dim=-1, keepdim=True)
+    return torch.sqrt(torch.nanmean(torch.pow(x_demean, 2), dim=-1))
+
+  cells (train+valid): total 7093980; D finite 5312803; D finite where the stock has never had a finite day_cov 0; D == 0 exactly 10983 (of which labelled 9466); D finite & day_cov NaN today 0
+  max30 finite 5312803; max30 finite & day_cov NaN today 0; max30 == 0 exactly 0
+  [train] orig   long decile: names/day 360; share with NO label 1.91%; share with day_cov NaN today 0.00%; young share 23.38% | short decile: no label 2.55%, young 44.43%
+  [train] max30  long decile: names/day 360; share with NO label 3.38%; share with day_cov NaN today 0.00%; young share 26.74% | short decile: no label 0.80%, young 30.97%
+  [valid] orig   long decile: names/day 467; share with NO label 6.02%; share with day_cov NaN today 0.00%; young share 0.78% | short decile: no label 1.75%, young 17.89%
+  [valid] max30  long decile: names/day 467; share with NO label 7.43%; share with day_cov NaN today 0.00%; young share 8.82% | short decile: no label 0.46%, young 5.77%
+
+== 1 every factor at a FIXED half-life (sign -1), train and valid ==
+  orig   hl    0      [train] LS +1.83  Lgross +12.1%  Lnet -0.5%  Lshp -0.09  short +32.2%  TO 13.3%   [valid] LS +3.64  Lgross +21.7%  Lnet +8.3%  Lshp +1.60  short +38.8%  TO 14.8%
+  orig   hl    3 *fit [train] LS +2.54  Lgross +13.1%  Lnet +8.2%  Lshp +1.32  short +29.9%  TO 6.0%   [valid] LS +4.62  Lgross +26.0%  Lnet +20.7%  Lshp +3.82  short +34.2%  TO 6.6%
+  orig   hl    5      [train] LS +2.43  Lgross +12.6%  Lnet +8.7%  Lshp +1.40  short +26.9%  TO 4.6%   [valid] LS +4.33  Lgross +23.6%  Lnet +19.7%  Lshp +3.56  short +31.4%  TO 5.0%
+  orig   hl   10      [train] LS +2.32  Lgross +12.1%  Lnet +9.3%  Lshp +1.49  short +23.6%  TO 3.2%   [valid] LS +4.08  Lgross +20.8%  Lnet +18.2%  Lshp +3.30  short +28.5%  TO 3.3%
+  min3   hl    0      [train] LS +2.13  Lgross +13.6%  Lnet +1.6%  Lshp +0.26  short +35.7%  TO 13.7%   [valid] LS +3.52  Lgross +23.1%  Lnet +10.0%  Lshp +1.78  short +37.5%  TO 15.7%
+  min3   hl    3 *fit [train] LS +2.84  Lgross +14.3%  Lnet +9.9%  Lshp +1.62  short +32.9%  TO 5.9%   [valid] LS +4.80  Lgross +25.5%  Lnet +20.9%  Lshp +3.75  short +36.6%  TO 6.5%
+  min3   hl    5      [train] LS +2.78  Lgross +13.7%  Lnet +10.2%  Lshp +1.68  short +30.6%  TO 4.6%   [valid] LS +4.65  Lgross +24.0%  Lnet +20.4%  Lshp +3.68  short +34.4%  TO 5.0%
+  min3   hl   10      [train] LS +2.62  Lgross +13.8%  Lnet +11.1%  Lshp +1.84  short +26.0%  TO 3.3%   [valid] LS +4.35  Lgross +21.6%  Lnet +19.1%  Lshp +3.56  short +30.0%  TO 3.4%
+  known9 hl    0 *fit [train] LS +2.47  Lgross +16.9%  Lnet +9.3%  Lshp +1.37  short +37.7%  TO 8.5%   [valid] LS +4.44  Lgross +24.9%  Lnet +18.5%  Lshp +3.09  short +48.1%  TO 7.7%
+  known9 hl    3      [train] LS +2.26  Lgross +17.0%  Lnet +12.7%  Lshp +1.86  short +28.5%  TO 5.2%   [valid] LS +4.23  Lgross +25.6%  Lnet +22.0%  Lshp +3.59  short +42.0%  TO 4.8%
+  known9 hl    5      [train] LS +2.17  Lgross +17.1%  Lnet +13.7%  Lshp +1.99  short +25.5%  TO 4.2%   [valid] LS +4.10  Lgross +25.1%  Lnet +22.2%  Lshp +3.59  short +39.5%  TO 3.9%
+  known9 hl   10      [train] LS +1.99  Lgross +15.6%  Lnet +13.1%  Lshp +1.89  short +21.8%  TO 2.9%   [valid] LS +3.72  Lgross +24.2%  Lnet +22.1%  Lshp +3.50  short +33.2%  TO 2.7%
+  max15  hl    0 *fit [train] LS +2.61  Lgross +18.0%  Lnet +12.3%  Lshp +1.81  short +34.9%  TO 6.2%   [valid] LS +4.52  Lgross +26.1%  Lnet +21.3%  Lshp +3.56  short +45.2%  TO 5.5%
+  max15  hl    3      [train] LS +2.29  Lgross +17.4%  Lnet +13.9%  Lshp +2.04  short +26.6%  TO 4.1%   [valid] LS +4.04  Lgross +25.1%  Lnet +22.1%  Lshp +3.61  short +37.5%  TO 3.8%
+  max15  hl    5      [train] LS +2.13  Lgross +16.5%  Lnet +13.5%  Lshp +1.97  short +23.8%  TO 3.5%   [valid] LS +3.78  Lgross +24.2%  Lnet +21.6%  Lshp +3.51  short +34.3%  TO 3.3%
+  max15  hl   10      [train] LS +1.89  Lgross +14.5%  Lnet +12.4%  Lshp +1.80  short +20.2%  TO 2.7%   [valid] LS +3.53  Lgross +24.0%  Lnet +22.1%  Lshp +3.47  short +29.8%  TO 2.5%
+  max30  hl    0 *fit [train] LS +2.37  Lgross +17.4%  Lnet +13.6%  Lshp +2.03  short +27.0%  TO 4.0%   [valid] LS +4.12  Lgross +25.3%  Lnet +22.2%  Lshp +3.69  short +36.5%  TO 3.5%
+  max30  hl    3      [train] LS +2.10  Lgross +16.5%  Lnet +13.9%  Lshp +2.04  short +21.5%  TO 3.0%   [valid] LS +3.59  Lgross +23.7%  Lnet +21.4%  Lshp +3.44  short +30.0%  TO 2.7%
+  max30  hl    5      [train] LS +1.96  Lgross +15.6%  Lnet +13.3%  Lshp +1.96  short +19.5%  TO 2.6%   [valid] LS +3.39  Lgross +22.6%  Lnet +20.6%  Lshp +3.29  short +28.2%  TO 2.4%
+  max30  hl   10      [train] LS +1.70  Lgross +13.4%  Lnet +11.6%  Lshp +1.70  short +16.4%  TO 2.1%   [valid] LS +3.20  Lgross +22.4%  Lnet +20.9%  Lshp +3.31  short +24.8%  TO 2.0%
+  max60  hl    0 *fit [train] LS +2.14  Lgross +15.9%  Lnet +13.5%  Lshp +1.98  short +21.0%  TO 2.6%   [valid] LS +3.64  Lgross +22.3%  Lnet +20.4%  Lshp +3.38  short +28.8%  TO 2.0%
+  max60  hl    3      [train] LS +1.80  Lgross +14.2%  Lnet +12.3%  Lshp +1.81  short +16.2%  TO 2.0%   [valid] LS +3.45  Lgross +23.2%  Lnet +21.7%  Lshp +3.52  short +25.2%  TO 1.7%
+  max60  hl    5      [train] LS +1.73  Lgross +13.6%  Lnet +11.9%  Lshp +1.75  short +15.2%  TO 1.9%   [valid] LS +3.36  Lgross +22.9%  Lnet +21.5%  Lshp +3.49  short +24.1%  TO 1.6%
+  max60  hl   10      [train] LS +1.51  Lgross +11.9%  Lnet +10.5%  Lshp +1.55  short +12.9%  TO 1.6%   [valid] LS +3.21  Lgross +22.0%  Lnet +20.8%  Lshp +3.40  short +22.1%  TO 1.4%
+
+== 2 drop names with < 247 observations from the universe, then rebuild the books ==
+  mature only  orig   hl    3  [train] LS +1.71  Lgross +12.4%  Lnet +7.0%  Lshp +1.14  short +25.8%  TO 5.2%   [valid] LS +4.55  Lgross +27.2%  Lnet +22.0%  Lshp +4.07  short +35.5%  TO 6.9%
+  mature only  orig   hl   10  [train] LS +1.70  Lgross +11.5%  Lnet +8.9%  Lshp +1.44  short +20.7%  TO 2.6%   [valid] LS +4.01  Lgross +22.3%  Lnet +19.8%  Lshp +3.58  short +28.8%  TO 3.3%
+  mature only  min3   hl    3  [train] LS +1.94  Lgross +12.7%  Lnet +8.0%  Lshp +1.34  short +28.7%  TO 5.2%   [valid] LS +4.57  Lgross +26.1%  Lnet +21.6%  Lshp +3.88  short +36.3%  TO 6.8%
+  mature only  known9 hl    0  [train] LS +1.56  Lgross +12.6%  Lnet +5.4%  Lshp +0.78  short +31.6%  TO 6.1%   [valid] LS +4.27  Lgross +25.6%  Lnet +19.2%  Lshp +3.22  short +46.3%  TO 7.7%
+  mature only  known9 hl    5  [train] LS +1.38  Lgross +13.4%  Lnet +10.2%  Lshp +1.46  short +20.4%  TO 3.0%   [valid] LS +3.94  Lgross +25.2%  Lnet +22.3%  Lshp +3.60  short +38.3%  TO 3.8%
+  mature only  max15  hl    0  [train] LS +1.66  Lgross +13.9%  Lnet +8.5%  Lshp +1.23  short +28.7%  TO 4.4%   [valid] LS +4.36  Lgross +26.5%  Lnet +21.7%  Lshp +3.64  short +43.8%  TO 5.5%
+  mature only  max30  hl    0  [train] LS +1.61  Lgross +14.8%  Lnet +11.2%  Lshp +1.65  short +22.4%  TO 2.9%   [valid] LS +4.02  Lgross +25.4%  Lnet +22.3%  Lshp +3.70  short +36.2%  TO 3.5%
+  mature only  max60  hl    0  [train] LS +1.49  Lgross +14.5%  Lnet +12.2%  Lshp +1.79  short +16.9%  TO 1.8%   [valid] LS +3.60  Lgross +22.4%  Lnet +20.5%  Lshp +3.41  short +29.5%  TO 2.1%
+  -- what the young names inside each long decile earn (excess vs equal-weight of scored+labelled names)
+  [train] orig   young: share 23.4%, names/day 84.2, mean excess -122.2%/yr, contribution to the long leg +2.75%/yr, amt pctile 0.20, cap pctile 0.38 | mature: share 76.6%, names/day 276.1, mean excess +14.0%/yr, contribution to the long leg +10.31%/yr, amt pctile 0.16, cap pctile 0.32
+  [train] max30  young: share 26.7%, names/day 96.4, mean excess -5.2%/yr, contribution to the long leg +5.42%/yr, amt pctile 0.13, cap pctile 0.29 | mature: share 73.3%, names/day 263.9, mean excess +17.1%/yr, contribution to the long leg +12.02%/yr, amt pctile 0.11, cap pctile 0.28
+  [train] max60  young: share 26.3%, names/day 94.9, mean excess -6.2%/yr, contribution to the long leg +4.77%/yr, amt pctile 0.15, cap pctile 0.32 | mature: share 73.7%, names/day 265.4, mean excess +16.1%/yr, contribution to the long leg +11.25%/yr, amt pctile 0.13, cap pctile 0.30
+  [valid] orig   young: share 0.8%, names/day 3.6, mean excess -226.4%/yr, contribution to the long leg -1.84%/yr, amt pctile 0.80, cap pctile 0.15 | mature: share 99.2%, names/day 462.9, mean excess +28.3%/yr, contribution to the long leg +28.09%/yr, amt pctile 0.16, cap pctile 0.30
+  [valid] max30  young: share 8.8%, names/day 41.2, mean excess +12.9%/yr, contribution to the long leg +1.26%/yr, amt pctile 0.09, cap pctile 0.04 | mature: share 91.2%, names/day 425.4, mean excess +26.9%/yr, contribution to the long leg +24.28%/yr, amt pctile 0.10, cap pctile 0.25
+  [valid] max60  young: share 7.8%, names/day 36.6, mean excess +8.4%/yr, contribution to the long leg +0.70%/yr, amt pctile 0.10, cap pctile 0.04 | mature: share 92.2%, names/day 430.0, mean excess +24.1%/yr, contribution to the long leg +21.97%/yr, amt pctile 0.12, cap pctile 0.27
+  symbols sample: ['000001.SZ', '000002.SZ', '000006.SZ'] ... ['688835.SH', '688836.SH', '688837.SH']
+  [train] labelled universe by board: ChiNext 21.9%  SH 39.5%  STAR 2.2%  SZ 36.5%
+  [train] orig   long decile by board: ChiNext 15.8%  SH 48.4%  STAR 1.3%  SZ 34.5%
+  [train] max30  long decile by board: ChiNext 15.2%  SH 47.5%  STAR 3.4%  SZ 33.9%
+  [train] max60  long decile by board: ChiNext 14.9%  SH 48.0%  STAR 3.5%  SZ 33.5%
+  [valid] labelled universe by board: ChiNext 25.8%  SH 35.4%  STAR 7.4%  SZ 31.4%
+  [valid] orig   long decile by board: ChiNext 21.8%  SH 39.9%  STAR 14.9%  SZ 23.4%
+  [valid] max30  long decile by board: ChiNext 27.2%  SH 37.3%  STAR 17.6%  SZ 17.9%
+  [valid] max60  long decile by board: ChiNext 26.5%  SH 37.1%  STAR 19.9%  SZ 16.6%
+  -- the two halves of the cap distribution (universe restricted; compare within a block)
+  [cap pctile < 0.5 ] orig   hl    3  [train] LS +2.90  Lgross +12.0%  Lnet +6.0%  Lshp +0.93  short +41.4%  TO 7.0%   [valid] LS +4.63  Lgross +16.1%  Lnet +10.0%  Lshp +1.83  short +41.4%  TO 7.4%
+  [cap pctile < 0.5 ] orig   hl   10  [train] LS +2.51  Lgross +10.5%  Lnet +7.0%  Lshp +1.04  short +32.8%  TO 4.3%   [valid] LS +4.50  Lgross +15.3%  Lnet +12.1%  Lshp +2.19  short +34.3%  TO 4.3%
+  [cap pctile < 0.5 ] max30  hl    0  [train] LS +3.64  Lgross +18.1%  Lnet +13.4%  Lshp +1.97  short +52.0%  TO 5.7%   [valid] LS +4.21  Lgross +17.0%  Lnet +13.2%  Lshp +2.24  short +45.8%  TO 5.0%
+  [cap pctile < 0.5 ] max60  hl    0  [train] LS +3.02  Lgross +18.6%  Lnet +15.4%  Lshp +2.19  short +36.6%  TO 4.0%   [valid] LS +3.76  Lgross +16.7%  Lnet +14.4%  Lshp +2.35  short +34.6%  TO 3.3%
+  [cap pctile >= 0.5] orig   hl    3  [train] LS +1.35  Lgross +10.7%  Lnet +5.1%  Lshp +0.72  short +19.5%  TO 6.8%   [valid] LS +2.97  Lgross +21.4%  Lnet +15.4%  Lshp +2.53  short +26.2%  TO 7.5%
+  [cap pctile >= 0.5] orig   hl   10  [train] LS +1.36  Lgross +8.8%  Lnet +5.5%  Lshp +0.75  short +16.9%  TO 3.9%   [valid] LS +3.11  Lgross +21.5%  Lnet +18.2%  Lshp +2.92  short +21.9%  TO 4.0%
+  [cap pctile >= 0.5] max30  hl    0  [train] LS +0.86  Lgross +6.0%  Lnet +1.8%  Lshp +0.22  short +15.6%  TO 4.5%   [valid] LS +3.05  Lgross +22.4%  Lnet +18.6%  Lshp +2.92  short +28.5%  TO 4.2%
+  [cap pctile >= 0.5] max60  hl    0  [train] LS +0.84  Lgross +5.4%  Lnet +2.4%  Lshp +0.29  short +13.2%  TO 3.2%   [valid] LS +2.81  Lgross +19.2%  Lnet +16.4%  Lshp +2.59  short +23.9%  TO 2.9%
+
+== 3 does the DIRECTION of the event carry information?  scale-free relative change, mature names only ==
+  [train] rank IC: unsigned D/C -0.0268   signed sign(dC)*D/C -0.0323   D/C inside C-rising names -0.0405   D/C inside C-falling names -0.0135
+      [train] top decile of |D/C|  C rising: names/day  131.7  excess -46.7%/yr  amt pctile 0.76   |   C falling: names/day  120.1  excess  +5.2%/yr  amt pctile 0.42
+      [train] 9th decile           C rising: names/day  134.1  excess -11.0%/yr  amt pctile 0.72   |   C falling: names/day  118.5  excess  +7.0%/yr  amt pctile 0.44
+      [train] deciles 6-8          C rising: names/day  416.5  excess  -3.2%/yr  amt pctile 0.65   |   C falling: names/day  341.9  excess  +4.9%/yr  amt pctile 0.42
+      [train] bottom half          C rising: names/day  719.7  excess  +6.6%/yr  amt pctile 0.49   |   C falling: names/day  544.1  excess  +9.8%/yr  amt pctile 0.35
+  [valid] rank IC: unsigned D/C -0.0363   signed sign(dC)*D/C -0.0362   D/C inside C-rising names -0.0624   D/C inside C-falling names -0.0196
+      [valid] top decile of |D/C|  C rising: names/day  176.7  excess -61.3%/yr  amt pctile 0.79   |   C falling: names/day  240.8  excess  +2.7%/yr  amt pctile 0.46
+      [valid] 9th decile           C rising: names/day  172.2  excess -23.2%/yr  amt pctile 0.73   |   C falling: names/day  246.2  excess  +1.8%/yr  amt pctile 0.49
+      [valid] deciles 6-8          C rising: names/day  547.7  excess -11.8%/yr  amt pctile 0.66   |   C falling: names/day  708.2  excess  -0.1%/yr  amt pctile 0.48
+      [valid] bottom half          C rising: names/day 1108.6  excess +10.3%/yr  amt pctile 0.50   |   C falling: names/day  984.4  excess +11.0%/yr  amt pctile 0.40
+  -- quantile profile of the signed relative change (sign -1: Q1 = C rose most, Q10 = C fell most), hl 0 and hl 5
+  hl 0 [train] -30.8% -3.3% -1.7% +4.5% +5.3% +6.7% +6.4% +5.9% +4.2% +2.8%   | book: LS +0.62  Lgross +2.8%  Lnet -8.5%  Lshp -2.03  short +30.5%  TO 11.3%
+  hl 0 [valid] -38.8% -10.7% +3.1% +11.7% +14.7% +14.8% +7.4% -1.3% -2.1% +1.2%   | book: LS +1.34  Lgross +0.5%  Lnet -10.7%  Lshp -2.32  short +38.1%  TO 14.7%
+  hl 5 [train] -25.5% -4.7% +0.8% +3.0% +6.1% +6.5% +5.7% +4.8% +1.1% +2.2%   | book: LS +1.17  Lgross +2.1%  Lnet -2.1%  Lshp -0.50  short +25.2%  TO 4.4%
+  hl 5 [valid] -31.9% -9.3% -0.8% +8.8% +14.4% +11.7% +4.2% +2.0% +0.9% -0.1%   | book: LS +1.80  Lgross -0.5%  Lnet -4.9%  Lshp -1.06  short +31.6%  TO 5.7%
+  unsigned D/C, mature only, hl 5 [train] -20.2% -7.2% -2.8% +1.7% +0.0% +2.2% +3.7% +4.4% +6.6% +11.7%   | book: LS +2.07  Lgross +11.8%  Lnet +7.7%  Lshp +1.61  short +20.1%  TO 4.8%
+  unsigned D/C, mature only, hl 5 [valid] -17.9% -7.9% -6.7% -2.9% -3.9% +0.1% +0.0% +7.7% +11.0% +20.4%   | book: LS +2.76  Lgross +20.2%  Lnet +16.2%  Lshp +2.88  short +17.7%  TO 6.3%
+
+== 4 subsumption regressions (rank space, traded signals) on TRAIN and on VALID ==
+  [train] orig   | known9 R2 0.486  resid rank IC +0.0090 (t +4.3)  LSgross -0.55  long gross +1.1%  short -5.1%  TO 15.6%
+  [train] orig   | max30  R2 0.528  resid rank IC +0.0157 (t +8.9)  LSgross +0.02  long gross +4.3%  short -4.1%  TO 10.5%
+  [train] min3   | max30  R2 0.491  resid rank IC +0.0171 (t +10.0)  LSgross +0.41  long gross +6.1%  short -3.7%  TO 9.7%
+  [train] known9 | orig   R2 0.485  resid rank IC +0.0322 (t +10.3)  LSgross +2.34  long gross +10.4%  short +13.2%  TO 17.0%
+  [train] max30  | orig   R2 0.527  resid rank IC +0.0207 (t +7.2)  LSgross +1.56  long gross +9.7%  short +3.6%  TO 9.9%
+  [train] max30  | known9 R2 0.719  resid rank IC +0.0037 (t +1.5)  LSgross +0.37  long gross +6.0%  short -3.3%  TO 14.5%
+  [valid] orig   | known9 R2 0.423  resid rank IC +0.0135 (t +4.5)  LSgross -0.02  long gross +9.5%  short -9.6%  TO 15.0%
+  [valid] orig   | max30  R2 0.430  resid rank IC +0.0209 (t +6.5)  LSgross +0.46  long gross +10.6%  short -7.6%  TO 10.0%
+  [valid] min3   | max30  R2 0.379  resid rank IC +0.0223 (t +7.0)  LSgross +0.69  long gross +12.2%  short -7.8%  TO 9.3%
+  [valid] known9 | orig   R2 0.423  resid rank IC +0.0480 (t +10.4)  LSgross +2.77  long gross +15.4%  short +7.8%  TO 15.4%
+  [valid] max30  | orig   R2 0.430  resid rank IC +0.0361 (t +7.6)  LSgross +2.01  long gross +13.9%  short +3.6%  TO 9.0%
+  [valid] max30  | known9 R2 0.732  resid rank IC +0.0078 (t +2.0)  LSgross +0.32  long gross +9.2%  short -7.0%  TO 13.9%
+
+done 80s
+[partura exit 0 2026-10-04_14:29:54]
