@@ -159,6 +159,14 @@ def run_probes(spec, window: Optional[int] = None, shape: Tuple[int, int] = (40,
                ) -> Dict[str, dict]:
     """Every applicable probe, plus a record of which ones were skipped and why."""
     w = window if window is not None else (spec.windows[0] if spec.requires_window and spec.windows else 5)
+    if spec.requires_window and w:
+        # A 40-row sample is blind to a 241-day window ("impulse memory = 27 days" was 40 - 13).
+        # Rolling along rows (day axis) or along columns (minute axis): give that axis 3 windows.
+        need = 3 * int(w) + 8
+        if spec.compute_axis == "D":
+            shape = (max(shape[0], need), shape[1])
+        elif spec.compute_axis == "M":
+            shape = (shape[0], max(shape[1], need))
     ctx = ProbeContext(spec=spec, window=w if spec.requires_window else None, shape=shape,
                        caller=caller, n_operands=n_operands)
     out: Dict[str, dict] = {}

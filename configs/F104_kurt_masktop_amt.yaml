@@ -1,9 +1,10 @@
 # Partura study F104_kurt_masktop_amt  (挖掘 / #4190)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F104_kurt_masktop_amt
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "成交额的日内脉冲集中度(峰度),但先把不活跃股票的安静分钟垫到全市场均值水平"
 expression: "day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))"
 baseline_id: v_base
+probes: [studies/F104_kurt_masktop_amt/probes.py]
 
 # 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
 published: {sign: -1, hl: 20, ls: [3.2, 1.89], long: [0.073, 0.04], lib: "挖掘", name: "#4190"}
@@ -35,6 +36,16 @@ controls:
   ctl_rev1:   "div(day_last(Close), ts_delay(day_last(Close), 1))"         # 当日收益(毛比值,秩等价)
   ctl_mom20:  "div(day_last(Close), ts_delay(day_last(Close), 20))"        # 20 日动量
   ctl_dvol20: "ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)"   # 20 日日频波动
+  # ---- 这棵树特有的嫌疑(x1 之后加的):可交易信号是 20 日平滑的慢变量,而 mask 节点只改不活跃股票,
+  #      所以要用**同样慢**的流动性读数去控制,而不是只用当天的成交额
+  # (S1 那次用的是 ts_mean(.,20):ND 面一次要 1.5 GiB 显存,邻居占满显卡时 CUDA OOM,两个控制变量都没算出来;
+  #  改成 DT 面的 cross_mean(.,30) —— 按股票分块求值,不会一次要一大块)
+  ctl_amt30:    "log(cross_mean(day_sum(Amt), 30))"                              # 30 日平均成交额水平
+  ctl_kshare30: "cross_mean(day_mean(is_gt0(sub(nt_cs_mask_top_replace_mean_neg(Amt), Amt))), 30)"   # 30 日平均「被 mask 替换的分钟占比」
+  # ---- S3 之前加的三条嫌疑:成交脉冲是不是「彩票股 / 涨停板 / 量价同向」的另一种写法(全部写成 DT 面,避免 ND 面的显存问题)
+  ctl_max30:     "cross_max(div(day_last(Close), cross_delay(day_last(Close), 1)), 30)"   # 过去 30 日最大单日涨幅(MAX / 彩票效应;涨停过的股票在最高档)
+  ctl_pvcorr30:  "cross_mean(day_corr(Amt, Ret), 30)"                                     # 30 日平均「分钟成交额与分钟收益的相关」(量价同向:放量的那几分钟是不是在涨)
+  ctl_retkurt30: "cross_mean(day_kurt(Ret), 30)"                                          # 30 日平均分钟收益峰度(价格跳跃)
 external_controls:
   ctl_cap:      /root/autodl-tmp/Partura/shared/log_float_cap.npy        # log 流通市值 —— 把"规模"和"成交活跃"分开
   ctl_turnrate: /root/autodl-tmp/Partura/shared/log_turnover_rate.npy    # log(成交额 / 流通市值)
@@ -44,20 +55,150 @@ gates:
   known_amt_max9:    "cross_max(day_sum(Amt), 9)"          # F001:成交额水平 + 极值记忆
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
-corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
-            known_amt_max9, known_stdamt_max9, known_ivol_max9]
+  g_burst30:         "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))"   # S2 的提纯结果:30 日平均峰度(秩)对 30 日平均成交额(秩)的截面残差
+  g_cv30:            "cs_regres(cs_rank(cross_mean(div(day_std(Amt), day_mean(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))"   # S3 的 r_cv30:同一骨架,读数换成变异系数
+  g_base_m30:        "cross_mean(day_kurt(nt_cs_mask_top_replace_mean_neg(Amt)), 30)"   # S3 的 r_base_m30:原式在 30 日时间尺度上的替身(用来和慢变体算秩相关)
+# 各次运行(S3 / S4 / final)用的是完整的 19 个:
+#   [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20, ctl_amt30, ctl_kshare30, ctl_max30, ctl_pvcorr30,
+#    ctl_retkurt30, known_amt_max9, known_stdamt_max9, known_ivol_max9, g_burst30, g_cv30, g_base_m30]
+# 全部运行结束之后,为了让报告第 8 节的相关矩阵读得动,只留下面这些(纯展示;完整矩阵在各次运行的 JSON 里):
+corr_ids:  [f_orig, f_kurt30, f_cv30, f_exclcv, f_std30]
+corr_with: [g_base_m30, ctl_amt, ctl_amt30, ctl_cap, ctl_turnrate, ctl_ivol, ctl_mom20, ctl_max30, ctl_pvcorr30, known_amt_max9, known_stdamt_max9]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  # p_noabs / q_ref 与 v_base 数值相同(x1 §1:最大差 2.9e-4,float32 分块舍入),后面的阶段用它们当原式的替身做诊断
+  score_controls: true
+  decay:      [v_base, p_noabs, p_nat, q_nat_ramt30, r_ref30, r_base_m30, r_kurt60, l_amt30, l_f001, l_add, l_addcv, f_cv30, f_exclcv]
+  by_year:    [v_base, p_noabs, p_nat, f_floormed, q_ref, q_nat_ramt30, q_base_ramt30, r_ref30, r_base_m30, r_addmed_ramt30, r_maxsh30,
+               r_up30, r_dn30, r_kurt60, l_amt30, l_std30, l_f001, l_add, l_addcv, l_gate, l_excl,
+               f_orig, f_kurt30, f_cv30, f_exclcv, f_std30]
+  neutralise: [v_base, p_noabs, p_nat, f_floormed, q_ref, q_nat_ramt30, q_base_ramt30, r_ref30, r_base_m30, l_add, l_addcv, f_orig, f_exclcv]
+  profile:    [v_base, p_noabs, p_nat, p_kfrac, f_floormed, f_addmean, q_ref, q_nat_ramt, q_nat_ramt30, q_base_ramt30, q_nat_m30, q_nat_rk30,
+               r_ref30, r_base_m30, r_addmed_ramt30, r_maxsh30, r_cv30, r_kurt_max30, r_rankavg30, r_kurt15, r_kurt60, r_kurt_noopen30,
+               r_up30, r_dn30, l_amt30, l_std30, l_f001, l_stdres30, l_add, l_add2, l_addcv, l_gate, l_excl]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: q_ref, gate: ctl_kshare30, buckets: 5}
+    - {factor: q_nat_m30, gate: ctl_kshare30, buckets: 5}
+    - {factor: q_nat_ramt30, gate: ctl_kshare30, buckets: 5}
+    - {factor: q_nat_ramt30, gate: ctl_cap, buckets: 5}
+    - {factor: l_amt30, gate: g_burst30, buckets: 5}
+    - {factor: r_maxsh30, gate: ctl_amt30, buckets: 5}
+    - {factor: r_ref30, gate: ctl_max30, buckets: 5}
+    - {factor: r_ref30, gate: ctl_amt30, buckets: 5}
+    - {factor: r_ref30, gate: ctl_pvcorr30, buckets: 5}
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "原始表达式"}
+
+  # ---- S1(x1 之后改写):mask 节点是旁观者(H1)、k 计数器(H2),还是「把安静分钟垫到市场水平」的地板(H10)?
+  - id: S1_mask
+    question: "nt_cs_mask_top_replace_mean_neg 在这棵树里做的是什么:旁观者、被替换分钟数的计数器,还是一个把不活跃股票的安静分钟垫到市场水平的地板?"
+    variants:
+      - {id: p_noabs,  group: ablate,     expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(Amt))",
+         why: "H9:Amt >= 0,abs_ 应该是空操作。指标若与原式有差别,说明数据里有负成交额;没有差别就从树里删掉,并在后面的诊断里当原式的替身"}
+      - {id: p_nat,    group: ablate,     expr: "day_kurt(Amt)",
+         why: "H1 的判决实验:删掉 mask。H1(信号在自身成交额的峰度里,mask 是旁观者)预测不降;x1 §6 已经看到它在 valid 上 IC 反号,这里用两本书坐实"}
+      - {id: p_kfrac,  group: isolate,    expr: "day_mean(is_gt0(sub(nt_cs_mask_top_replace_mean_neg(Amt), Amt)))",
+         why: "H2 的判决实验:只留「今天有多少比例的分钟被替换」。H2 预测它(按原式的方向,即 k 大 → 峰度低 → 做多)能复现原式;如果它只是一个成交额水平代理,它与原式的秩相关会很低、而与 ctl_amt 很高"}
+      - {id: p_mirror, group: substitute, expr: "day_kurt(nt_cs_mask_top_replace_mean(Amt))",
+         why: "镜像:改成把每分钟成交额最高的 10% 换成截面均值(被改的是最活跃的股票,不活跃股票保持自身峰度)。如果 mask 的价值在于处理不活跃股票(H10),镜像应该和 p_nat 一样差"}
+      - {id: f_addmean, group: substitute, expr: "day_kurt(add(Amt, nt_cs_mean(Amt)))",
+         why: "H10 的直接检验:不用排名阈值,给每一分钟都加上截面均值(对所有股票一视同仁的地板)。H10 预测它保住原式的大部分;如果塌掉,说明「恰好是最低 10% 被替换」这个排名结构本身是必需的"}
+      - {id: f_addmed,  group: substitute, expr: "day_kurt(add(Amt, nt_cs_median(Amt)))",
+         why: "同上,但地板换成截面中位数(只有中位数股票的量级,不被大盘股拉高)。和 f_addmean 一起看地板的高度重不重要"}
+      - {id: f_floormed, group: substitute, expr: "day_kurt(pairwise_max(Amt, nt_cs_median(Amt)))",
+         why: "最干净的地板:每一分钟取 max(自身成交额, 截面中位数)。活跃股票完全不变,不活跃股票只有「比中位数股票还大」的脉冲能露头。没有排名、没有并列、没有 k 的非单调。H10 预测它 >= 原式"}
+
+  # ---- S2:S1 说 mask 既不是旁观者也不是计数器;它翻转了峰度与流动性的关系。那它是不是只是一个粗糙的「对流动性水平做条件化」?
+  - id: S2_resid
+    question: "mask 节点做的事,是不是等价于「把自身成交额峰度对流动性水平做截面残差」?如果是,干净的写法(不要 NT 面、不要排名阈值)在 train 和 valid 上应该都不输原式。"
+    variants:
+      - {id: q_ref,        group: baseline,   expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(Amt))",
+         why: "原式(去掉空操作 abs_)在本阶段的参照;同时让它对新增的两个慢流动性控制变量(ctl_amt30 / ctl_kshare30)做一次中性化"}
+      - {id: q_nat_ramt,   group: substitute, expr: "cs_regres(cs_rank(day_kurt(Amt)), cs_rank(day_sum(Amt)))",
+         why: "逐日版本:自身峰度的截面秩,对当天成交额的截面秩取残差。S1 的中性化表显示 p_nat 对 ctl_amt 取残差后无成本夏普从 2.86 升到 4.79(train);如果 mask 的贡献只是切断峰度与流动性的联系,这个写法在 valid 上也应该翻正"}
+      - {id: q_nat_m30,    group: ablate,     expr: "cross_mean(day_kurt(Amt), 30)",
+         why: "对照:只加 30 日记忆、不做条件化。它和 q_nat_ramt30 的差就是「条件化」本身的贡献(而不是记忆的贡献)"}
+      - {id: q_nat_ramt30, group: substitute, expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "慢版本:30 日平均峰度的秩,对 30 日平均成交额的秩取残差 —— 可交易信号本来就是 20 日平滑的慢变量,条件化应该在同一个时间尺度上做。预测:train 和 valid 都 >= 原式"}
+      - {id: q_base_ramt30, group: substitute, expr: "cs_regres(cs_rank(cross_mean(day_kurt(nt_cs_mask_top_replace_mean_neg(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "原式也做同样的条件化(mask 把峰度与成交额的相关从 -0.17 矫枉过正到 +0.11)。如果它与 q_nat_ramt30 表现相同、秩相关很高,mask 在条件化之外就没有别的信息;如果它明显更好,mask 里还有残差抓不到的东西(比如市场尺度的地板)"}
+      - {id: q_nat_rk30,   group: substitute, expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_mean(is_gt0(sub(nt_cs_mask_top_replace_mean_neg(Amt), Amt))), 30)))",
+         why: "条件化的对象换成 mask 自己的流动性读数(被替换分钟占比的 30 日均值)。和 q_nat_ramt30 比:起作用的是日成交额水平,还是「分钟级别落在全市场底部的频率」"}
+      - {id: q_addmed_m30, group: substitute, expr: "cross_mean(day_kurt(add(Amt, nt_cs_median(Amt))), 30)",
+         why: "S1 里最好的地板写法(每分钟加截面中位数,LS 4.42/1.52)加上同样的 30 日记忆,与残差写法在同一时间尺度上比较:地板和残差是不是同一件事的两种写法(看两者的秩相关和各列)"}
+
+  # ---- S3:S2 定下了骨架「30 日平均峰度(秩)对 30 日平均成交额(秩)取残差」。骨架里哪些零件是必需的?
+  #      (接手后改过:加 r_ref30 作阶段内参照,以便对新增的三个嫌疑控制变量做中性化、并在同一时间尺度上算秩相关;
+  #       r_skew30 删掉 —— x1 里峰度与偏度的日截面秩相关 0.986,几乎是同一块面板,信息量低;
+  #       换成只有读了这棵树才会问的一对:day_kurt 作用在无符号的 Amt 上,丢掉了「这根脉冲是在涨还是在跌」)
+  - id: S3_reader
+    question: "条件化之后,读数的哪些性质是必需的:统计量(峰度 / 最大一分钟占比 / 变异系数)、记忆(原值均值 / 极值 / 秩均值)、窗口、时段(开盘 / 盘中)、方向(上涨分钟的脉冲 / 下跌分钟的脉冲)?"
+    variants:
+      - {id: r_ref30,         group: baseline,   expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "S2 的提纯骨架(= q_nat_ramt30,面板已缓存)在本阶段的参照。同时对新增的 ctl_max30 / ctl_pvcorr30 / ctl_retkurt30 做中性化:如果「同等流动性下成交更集中」只是彩票股、涨停板或量价同向的另一种写法,残差的 rank IC 和无成本夏普应该塌掉"}
+      - {id: r_base_m30,      group: baseline,   expr: "cross_mean(day_kurt(nt_cs_mask_top_replace_mean_neg(Amt)), 30)",
+         why: "原式把记忆写进树里(30 日均值)。两个用处:(1) 它应该与原式 + 外置 EMA20 表现相当,否则「记忆在树外」这件事本身有讲究;(2) 让原式和各个慢写法在同一时间尺度上算秩相关(S2 的相关矩阵是逐日面板对 30 日面板,不可比)"}
+      - {id: r_maxsh30,       group: substitute, expr: "cs_regres(cs_rank(cross_mean(div(day_max(Amt), day_sum(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "H4:信号是「单根脉冲」。最大一分钟占全天成交额的比例(与峰度秩相关 0.93)是最朴素的写法,而且有界、不重尾。预测与峰度版相当;若明显更差,说明要的是整个尾部的形状而不只是最大那一根"}
+      - {id: r_cv30,          group: substitute, expr: "cs_regres(cs_rank(cross_mean(div(day_std(Amt), day_mean(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "反向对照:变异系数是二阶矩,读的是「成交整体不均匀」而不是「尖峰」(与峰度秩相关只有 0.67)。如果它和峰度一样好,H4 的「事件」读法就不需要了"}
+      - {id: r_kurt_max30,    group: substitute, expr: "cs_regres(cs_rank(cross_max(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "S2:先逐日取秩再平滑(q_nat_ramt,1.71/-0.27)远不如先对原值求 30 日均值再取秩(3.75/1.91)—— 重尾量的均值被最大的那几天主导。如果值钱的就是「最近有没有出现过极端的一天」,极值记忆应该不输均值记忆"}
+      - {id: r_rankavg30,     group: substitute, expr: "cs_regres(cs_rank(ts_mean(cs_rank(day_kurt(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "同一窗口、同一条件化,只把「原值的均值」换成「逐日截面秩的均值」。它和 r_ref30 的差,就是「幅度加权」的贡献(把时间尺度的差别排除掉)"}
+      - {id: r_kurt15,        group: window,     expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 15)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "窗口邻域:15 日。若 30 是搜出来的幸运参数,这里会塌"}
+      - {id: r_kurt60,        group: window,     expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 60)), cs_rank(cross_mean(day_sum(Amt), 60)))",
+         why: "窗口邻域:60 日(两边都换成 60)。S2 的衰减曲线 h1 0.021 -> h20 0.040 单调上升,更长的记忆可能更好,也可能只是更慢"}
+      - {id: r_kurt_noopen30, group: field,      expr: "cs_regres(cs_rank(cross_mean(day_kurt(in_slice(Amt, 6, 236)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "H5 的残余:x1 里 29% 的股票日最大的一分钟落在开盘后第 2~6 根。去掉前 6 根和收盘集合竞价的 4 根之后,如果预测力不变或更好,脉冲是盘中的;如果塌掉,读的是开盘抢筹"}
+      - {id: r_addmed_ramt30, group: substitute, expr: "cs_regres(cs_rank(cross_mean(day_kurt(add(Amt, nt_cs_median(Amt))), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "地板写法(S1/S2 里 train 最好)也做同样的条件化。它与 r_ref30 的差 = 地板在「流动性倾斜」之外是否还带来更好的脉冲读数"}
+      - {id: r_up30,          group: field,      expr: "cs_regres(cs_rank(cross_mean(div(day_max(mul(Amt, sign(Ret))), day_sum(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "方向:只读**上涨分钟**里最大的一根占全天成交额的比例(Amt x sign(Ret) 的日内最大值)。H4 说空头腿是「拉升 / 打板」的买入脉冲 —— 那么上涨脉冲应该保住 r_maxsh30 的大部分,而下跌脉冲(r_dn30)应该明显更弱或反号"}
+      - {id: r_dn30,          group: field,      expr: "cs_regres(cs_rank(cross_mean(div(neg(day_min(mul(Amt, sign(Ret)))), day_sum(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "方向的另一半:**下跌分钟**里最大的一根的占比(Amt x sign(Ret) 的日内最小值取负)。如果它与 r_up30 同号同强,脉冲的方向无关紧要,信号是「成交集中」本身(注意力 / 流动性冲击);如果拟合出来的方向相反,下跌脉冲之后是反弹,那就可以做出一条有符号的因子"}
+
+  # ---- S4:多头腿。提纯后的因子多头腿净超额 +5.4% / +0.3%,钱仍在空头腿。把它和它被条件化掉的那个东西(流动性水平)显式地合起来,多头腿能不能做出来?
+  #      (S3 之后改写:S3 说变异系数和峰度一样好 —— 而 day_std(Amt) = day_mean(Amt) x 变异系数,所以「流动性水平 + 成交集中度」的合成
+  #       在结构上就是 F001 蒸馏出来的 cross_max(day_std(Amt), 9) 那一族。于是合成版的对手不只是成交额水平,还有 F001 的蒸馏因子本身)
+  - id: S4_long
+    question: "「同等流动性下成交不集中」这个条件,能不能改善一本低流动性多头书 —— 而且是超出已知的 F001 家族(成交额水平、成交额的日内标准差)已经给出的那部分?"
+    variants:
+      - {id: l_amt30, group: baseline, expr: "cross_mean(day_sum(Amt), 30)",
+         why: "基准一:同一时间尺度的成交额水平(已知家族)。合成版的多头腿至少要在 train 和 valid 上都超过它,才说明成交集中度有增量"}
+      - {id: l_f001,  group: baseline, expr: "cross_max(day_std(Amt), 9)",
+         why: "基准二:F001 的蒸馏因子原样(已知家族,控制变量表里 LS +2.47/+4.44、多头毛超额 +16.9%/+24.9%)。它 = 水平 x 变异系数 + 9 日极值记忆。合成版如果赢不了它,「升华」就只是走回 F001"}
+      - {id: l_std30, group: substitute, expr: "cross_mean(day_std(Amt), 30)",
+         why: "同一个量(成交额的日内标准差 = 水平 x 变异系数)写在本研究的时间尺度上。H16 预测它的各列落在 l_amt30 与 l_addcv 之间:std 隐含地给了变异系数一个很小的权重"}
+      - {id: l_stdres30, group: substitute, expr: "cs_regres(cs_rank(cross_mean(day_std(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "H16 的桥:把 F001 家族的 std 对成交额水平取残差。若 F104 提纯后的东西就是「F001 里 std 相对于 sum 多出来的那部分」,它应该与 g_cv30 秩相关很高(>= 0.9)、各列相同;若相关很低,两条因子就不是同一个东西的两半"}
+      - {id: l_add,   group: interaction, expr: "add(cs_rank(cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "等权秩相加(峰度读数):做多「不活跃且成交不集中」,做空「活跃且成交集中」。H13 预测多头腿在 train 和 valid 上同时超过提纯版和 l_amt30"}
+      - {id: l_add2,  group: interaction, expr: "add(add(cs_rank(cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))), cs_rank(cross_mean(day_sum(Amt), 30))), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "邻域:流动性的权重加倍。如果 l_add 的结果依赖于恰好 1:1,这里会明显不同;同时它在「l_add -> l_std30 -> l_amt30」这条线上多给一个点"}
+      - {id: l_addcv, group: interaction, expr: "add(cs_rank(cs_regres(cs_rank(cross_mean(div(day_std(Amt), day_mean(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))), cs_rank(cross_mean(day_sum(Amt), 30)))",
+         why: "等权秩相加(变异系数读数,S3 里 rank IC 最高的读数)。与 l_add 的差 = 读数的选择对合成版多头腿有没有影响;与 l_std30 的差 = 给集中度的权重从「std 隐含的那一点」提到 1:1 值不值"}
+      - {id: l_gate,  group: interaction, expr: "mul(cs_demean(cs_rank(cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30))))), cs_rank(neg(cross_mean(day_sum(Amt), 30))))",
+         why: "乘法门控:两端都由不活跃股票占据,多头腿 =「不活跃 + 不集中」,空头腿 =「不活跃 + 集中」。S3 的条件 IC(按 ctl_amt30 分组)说集中度信号在**活跃**股票里更强(-0.037 对 -0.019),与 H13 当初依据的 kshare 分组相反 —— 所以预测它的多空明显弱于相加版;要看的是多头腿"}
+      - {id: l_excl,  group: interaction, expr: "add(cs_rank(cross_mean(day_sum(Amt), 30)), pow_3(cs_rank(cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30))))))",
+         why: "排除式:分位剖面说集中度的信息几乎全在最集中的那 10%~20%(Q1 -34%,其余近似平)。把集中度的秩取三次方再加到流动性秩上 —— 只有最集中的那批被明显罚分,其余股票按流动性排。若「避开最集中的一批」才是它对多头书的全部用处,它的多头腿应该不输 l_add"}
+
+  # ---------------------------------------------------------------- S_final
+  # 读留出段的那一次。五个候选只凭 train / valid 选定,理由与事前预测写在 notes/F104_kurt_masktop_amt/10_distilled.md 的前半段(读之前写的)。
+  # 三行的关系:f_std30 = 只有水平(已知家族),f_cv30 = 只有集中度,f_exclcv = 两者的排除式合成。
+  - id: S_final
+    question: "样本外(用户的测试段 20230808–20251231):(1) 把 mask 换成显式条件化的提纯式站不站得住;(2) 读数换成变异系数有没有差别;(3) 排除式合成的多头腿是不是好于原式;(4) 它有没有超出已知的流动性家族?"
+    variants:
+      - {id: f_orig,   group: final, final: true, profile: true, expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "原式(3 个算子,外加 20 日半衰期的外置平滑)"}
+      - {id: f_kurt30, group: final, final: true, profile: true, expr: "cs_regres(cs_rank(cross_mean(day_kurt(Amt), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))", why: "提纯(峰度读数,原式的直系):预测留出段多空夏普不比原式低 0.3 以上、多头腿净超额不低于原式;两条都不成立则提纯只在样本内成立"}
+      - {id: f_cv30,   group: final, final: true, profile: true, expr: "cs_regres(cs_rank(cross_mean(div(day_std(Amt), day_mean(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30)))", why: "提纯(变异系数读数):预测与 f_kurt30 在 ±0.3 以内 —— 读数不是这条因子的本质;它同时是 f_exclcv 里「只有集中度」的那一半"}
+      - {id: f_exclcv, group: final, final: true, profile: true, expr: "add(cs_rank(cross_mean(day_sum(Amt), 30)), pow_3(cs_rank(cs_regres(cs_rank(cross_mean(div(day_std(Amt), day_mean(Amt)), 30)), cs_rank(cross_mean(day_sum(Amt), 30))))))", why: "事前推荐的升华候选(纯多头用):流动性水平的秩 + 集中度秩的三次方(只罚最集中的一批)。预测留出段多头腿净超额与纯多头夏普都高于原式;两项都不高于原式则升华失败"}
+      - {id: f_std30,  group: final, final: true, profile: true, expr: "cross_mean(day_std(Amt), 30)", why: "已知家族基准(F001 的量写在同一时间尺度上,2 个算子):train / valid 上多头腿净超额最高。f_exclcv 相对它若纯多头夏普低 0.3 以上且多头腿净超额低 3 个点以上,集中度在样本外没有给多头腿加东西"}
+

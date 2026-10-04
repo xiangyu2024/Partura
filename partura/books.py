@@ -127,20 +127,43 @@ def book_row(sm: np.ndarray, target: np.ndarray, days: slice, cost: float = COST
 
 
 def books(sig: np.ndarray, target: np.ndarray, fit: slice, evals: Dict[str, slice], *,
-          cost: float = COST, top_frac: float = TOP_FRAC, rank_by: str = "ls") -> Dict[str, object]:
-    """``sig`` is already sign-aligned.  Half-lives are fitted on ``fit``; every
-    split in ``evals`` is then scored at the half-life of ``rank_by`` -- one
-    smoothed signal for both books, which is how the user's table is built
-    (one "EMA 半衰期" column, an L/S Sharpe and a long-leg excess beside it)."""
+          cost: float = COST, top_frac: float = TOP_FRAC, rank_by: str = "long") -> Dict[str, object]:
+    """``sig`` is already sign-aligned.  Two half-lives are fitted on ``fit``:
+
+    * ``long`` -- by the pure long book's after-cost excess Sharpe.  This is the
+      selection convention (and the default of the user's own
+      ``pick_single_factors --rank long``): in A-shares only the long leg can be
+      held, so the half-life that matters is the one that is best FOR that book.
+      A longer half-life that turns a 5% net long-leg excess into 8% is a real,
+      tradable improvement, not an artefact to be controlled away.
+    * ``ls`` -- by the decile long/short book's after-cost Sharpe; the convention
+      of the table the user first published, kept so every number stays
+      comparable with it.
+
+    Every split in ``evals`` is scored under BOTH (``by_rank``); ``splits`` /
+    ``hl_used`` are the view named by ``rank_by``.
+    """
     fitd = fit_halflives(sig, target, fit, cost, top_frac)
-    hl = fitd["hl_ls"] if rank_by == "ls" else fitd["hl_long"]
-    sm = smoothed(sig, hl)
-    out = {"hl_ls": fitd["hl_ls"], "hl_long": fitd["hl_long"], "hl_used": hl, "rank_by": rank_by,
-           "sweep": fitd["sweep"], "splits": {k: book_row(sm, target, d, cost, top_frac) for k, d in evals.items()}}
-    if fitd["hl_long"] != hl:                      # also what the long-only ranking would have reported
-        sml = smoothed(sig, fitd["hl_long"])
-        out["splits_at_hl_long"] = {k: book_row(sml, target, d, cost, top_frac) for k, d in evals.items()}
+    views: Dict[str, dict] = {}
+    for name, hl in (("ls", fitd["hl_ls"]), ("long", fitd["hl_long"])):
+        if name == "long" and hl == fitd["hl_ls"]:
+            views[name] = {"hl": hl, "splits": views["ls"]["splits"]}
+            continue
+        sm = smoothed(sig, hl)
+        views[name] = {"hl": hl, "splits": {k: book_row(sm, target, d, cost, top_frac) for k, d in evals.items()}}
+    out = {"hl_ls": fitd["hl_ls"], "hl_long": fitd["hl_long"], "hl_used": views[rank_by]["hl"],
+           "rank_by": rank_by, "sweep": fitd["sweep"], "splits": views[rank_by]["splits"], "by_rank": views}
     return out
+
+
+def views_of(b: Dict[str, object]) -> Dict[str, dict]:
+    """{"ls": {hl, splits}, "long": {hl, splits}} for a ``books`` result of ANY vintage.
+    Runs from before ``by_rank`` scored at the L/S half-life and kept the long
+    view under ``splits_at_hl_long`` only when the two half-lives differed."""
+    if "by_rank" in b:
+        return b["by_rank"]
+    return {"ls": {"hl": b["hl_ls"], "splits": b["splits"]},
+            "long": {"hl": b["hl_long"], "splits": b.get("splits_at_hl_long") or b["splits"]}}
 
 
 def quantile_profile(sm: np.ndarray, target: np.ndarray, days: slice, n: int = 10) -> List[Dict[str, float]]:
@@ -172,4 +195,4 @@ def quantile_profile(sm: np.ndarray, target: np.ndarray, days: slice, n: int = 1
 
 
 __all__ = ["HALFLIVES", "TOP_FRAC", "COST", "stats", "long_book", "short_leg_excess", "smoothed",
-           "fit_halflives", "book_row", "books", "quantile_profile"]
+           "fit_halflives", "book_row", "books", "views_of", "quantile_profile"]

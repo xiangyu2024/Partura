@@ -1,9 +1,10 @@
 # Partura study F102_kurt_autocorr  (挖掘 / #3961)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F102_kurt_autocorr
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "3 对分钟收益相关的日内峰度,平方后 15 日求和:主体是 4 分钟局部形态分布的形状(水平 + 日间离散),尾部是近 15 日的涨停封板事件;两条腿要的速度不同。留出段多头腿净超额:原式 hl=1 −0.7% / 原式 hl=5 +2.5% / 记忆拉到 60 日 +7.4%(修订:60 日版本对期限匹配的控制 R² 0.45,多头腿约四成是避开近 60 日封板票)"
 expression: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)"
 baseline_id: v_base
+probes: [studies/F102_kurt_autocorr/probes.py]
 
 # 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
 published: {sign: -1, hl: 1, ls: [3.71, 2.57], long: [0.128, 0.083], lib: "挖掘", name: "#3961"}
@@ -35,6 +36,17 @@ controls:
   ctl_rev1:   "div(day_last(Close), ts_delay(day_last(Close), 1))"         # 当日收益(毛比值,秩等价)
   ctl_mom20:  "div(day_last(Close), ts_delay(day_last(Close), 20))"        # 20 日动量
   ctl_dvol20: "ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)"   # 20 日日频波动
+  # ---- 修订时加的(审查意见 3):上面七个加两个外部控制全在 1 日 / 20 日期限上,而推荐式是 60 日极值 —— 期限不匹配。
+  #      下面是与推荐式同期限的朴素量。60 日平均换手率在表达式语言里写不出来(流通市值是外部面板),
+  #      用 ctl_amt60 代替:秩回归里它和 ctl_cap 一起近似张成 60 日换手率;r1_revision.py 另用 numpy 的 turn60 核对。
+  #      注意:这些控制只进 SR_horizon 及之后的运行;s12 / s3 的中性化行(v_base、u_max30、u_max60、r_ar1)用的是原来九个。
+  ctl_athi60:      "cross_max(day_mean(eq(Close, in_max(High))), 60)"                           # 近 60 日"收在当日最高价的分钟占比"的最大值:封板的朴素代理
+  ctl_ivol60:      "cross_mean(day_std(Ret), 60)"                                                # 60 日平均日内波动
+  ctl_amt60:       "cross_mean(log(add(day_sum(Amt), 1)), 60)"                                   # 60 日平均成交额
+  ctl_maxrange60:  "cross_max(div(sub(day_max(High), day_min(Low)), day_last(Close)), 60)"      # 60 日最大日内振幅
+  ctl_dvol60:      "cross_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 60)"       # 60 日日频波动
+  ctl_maxret60:    "cross_max(div(day_last(Close), ts_delay(day_last(Close), 1)), 60)"          # 60 日最大日收益(MAX 效应)
+  ctl_maxabsret60: "cross_max(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), 60)"   # 60 日最大绝对日收益
 external_controls:
   ctl_cap:      /root/autodl-tmp/Partura/shared/log_float_cap.npy        # log 流通市值 —— 把"规模"和"成交活跃"分开
   ctl_turnrate: /root/autodl-tmp/Partura/shared/log_turnover_rate.npy    # log(成交额 / 流通市值)
@@ -44,20 +56,94 @@ gates:
   known_amt_max9:    "cross_max(day_sum(Amt), 9)"          # F001:成交额水平 + 极值记忆
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
+  evt_athi15:        "cross_max(day_mean(eq(Close, in_max(High))), 15)"   # 本研究:近 15 日"收在当日最高价的分钟占比"的最大值 —— 涨停封板的朴素代理(x1 §6)
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
-            known_amt_max9, known_stdamt_max9, known_ivol_max9]
+            known_amt_max9, known_stdamt_max9, known_ivol_max9, evt_athi15]
+user_books: [u_max30, u_max60, a_mean_abs15]
+# 报告第 8 节的 rank 相关表里列哪些变体(只影响展示;跨两次运行的变体对没有算过相关,表里是 —)
+corr_ids: [v_base, a_mean_abs15, l_max, u_max30, u_max60, a_level15, a_disp15, l_med, r_meanA15, r_ar1]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  decay:      [v_base, l_med, r_ar1, u_max60]
+  by_year:    [v_base, u_max30, u_max60, f_orig, f_mean_abs15, f_max15, f_max30, f_max60]
+  neutralise: [v_base, r_ar1, u_max30, u_max60, h_orig, h_max30, h_max60]   # h_* = 修订:同一棵树、新 id,对「九个 + 七个 60 日控制」中性化
+  score_controls: true      # 修订:新加的 60 日控制自己当因子的那张表(SR_horizon 不含 baseline,不开这个就不算)
+  profile:    [v_base, l_nofold_lin, l_med, r_ar1, a_level15, a_disp15, u_max30, u_max60, u_med60, r_meanA15]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: v_base, gate: ctl_turnrate, buckets: 5}     # x1 §8:IC 只在高换手的票里
+    - {factor: v_base, gate: ctl_price, buckets: 5}        # H6:是不是低价股 / tick 效应
+    - {factor: u_max60, gate: ctl_turnrate, buckets: 5}    # 长记忆版本是不是还只在高换手的票里
+    - {factor: u_max60, gate: ctl_cap, buckets: 5}
+    - {factor: h_max60, gate: ctl_athi60, buckets: 5}     # 修订:推荐式在 60 日封板代理的每个五分位内部还有没有预测力
+    - {factor: h_orig,  gate: ctl_athi60, buckets: 5}
+    - {factor: h_max60, gate: ctl_ivol60, buckets: 5}
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "原始表达式"}
+
+  # x1_anatomy.py(studies/ 下,结果见 notes/07x_anatomy.md)先回答了"K 是什么":D1–D9 按 K 的 15 日均值(都是负的)排,
+  # D10 是近 15 日有过封板日的票。S1 把这棵树的每一层在同一口径下拆开,并检验"主体 = 分钟收益一阶自相关"这个读法。
+  - id: S1_layers
+    question: "预测力在这棵树的哪一层?pow_2 的折叠、平方的凸性、15 日求和各贡献什么;D1–D9 的排序是不是分钟收益一阶自相关的另一种写法?"
+    variants:
+      - {id: l_k2_today, group: isolate, expr: "pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3)))", why: "去掉 15 日记忆:如果预测力就在当天的 K² 里,rank IC 应保住;如果单日 K 主要是 240 个点的采样噪声(本机模拟 sd≈0.26,与截面离散同量级),它会塌、换手会爆"}
+      - {id: l_nofold_lin, group: ablate, expr: "cross_sum(day_kurt(nt_ts_autocorr_s1(Ret, 3)), 15)", why: "去掉 pow_2(不折叠):如果收益对带符号的 K 单调,这个不该比原式差;x1 §5 的驼峰剖面预测它的多头腿会变成负的(最高一档混进封板票)"}
+      - {id: l_fold_lin, group: substitute, expr: "cross_sum(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "只留折叠、去掉平方的凸性:如果 pow_2 的作用只是折叠,这个与原式同族(rank 相关 >= 0.95)且不差;如果凸性(让单个极端日压倒其余 14 天)是必需的,它会掉"}
+      - {id: l_max, group: substitute, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "H8:15 日求和是不是 15 日极值。x1 §4:最大一天占和的中位数只有 0.22,rank 相关 0.909 —— 预测它不是同一个因子;看它丢的是哪条腿"}
+      - {id: l_med, group: substitute, expr: "cross_med(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "取 15 日中位数:封板日这种一次性事件进不了中位数。如果空头腿是事件、多头腿是状态,这个应丢掉大半空头腿而保住多头腿"}
+      - {id: l_noac, group: ablate, expr: "cross_sum(pow_2(day_kurt(Ret)), 15)", why: "去掉自相关层:如果因子只是在量分钟收益分布的尾部(或零收益占比),直接对 Ret 取峰度应该复现;如果信息在收益的**时序依赖**里,它应该是另一个东西"}
+      - {id: l_ac15, group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 15))), 15)", why: "H1(按名字读):15 对的滚动自相关才是一个像样的估计量。探针 ar1_response 说 3 对时 phi 是通过分布的偏态进入峰度的;窗口一长这个通道应该变弱 —— 预测 D1–D9 的排序力下降,只剩封板事件"}
+      - {id: r_ar1, group: replace, expr: "cross_mean(day_ar1_coefficient(Ret), 15)", why: "朴素替身:全天 240 个分钟收益的 AR(1) 系数(比'3 对相关的峰度'直接得多)。如果 D1–D9 的排序就是一阶自相关的水平,它与 l_nofold_lin 的 rank 相关应强负、自己就有可比的多头腿;如果两者无关,这个读法就死了"}
+
+  - id: S2_windows
+    question: "15 和 3 是不是搜出来的幸运参数?(H9:真效应应该有邻域)"
+    variants:
+      - {id: w_d5,  group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 5)",  why: "记忆 15 -> 5:噪声平均得少、封板记忆短;预测 rank IC 降、换手升,但不变号"}
+      - {id: w_d10, group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 10)", why: "记忆 15 -> 10:邻域"}
+      - {id: w_d30, group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "记忆 15 -> 30:H11 —— 更长的记忆应把逐日采样噪声平均得更干净、换手更低;预测多头腿净超额上升(基线半衰期扫描里 hl=5 的纯多头夏普 1.84 高于 hl=1 的 1.14)"}
+      - {id: w_d60, group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "记忆 15 -> 60:再长一档,看是不是还在涨;封板事件被记 60 天,空头腿应被稀释"}
+      - {id: w_a5,  group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 5))), 15)",  why: "自相关窗口 3 -> 5 对:邻域"}
+      - {id: w_a10, group: window, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 10))), 15)", why: "自相关窗口 3 -> 10 对:邻域(与 l_ac15 连起来看一条曲线)"}
+
+  # x2_refine.py(结果见 notes/07x_refine.md)用 numpy 筛过聚合层;S3 把筛出来的东西放回引擎口径,并回答第二轮假设 H12–H17。
+  - id: S3_aggregate
+    question: "15 日求和这一层到底在做什么(水平 / 离散 / 缺失日),以及两条腿要的速度是不是不一样:把记忆拉长,多头腿净超额能不能在 train 和 valid 上都站住?"
+    variants:
+      - {id: a_mean_sq15,  group: substitute, expr: "cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "只改缺失日的处理(求和把缺失日当 0,均值跳过):x2 §1 说窗口里有效天数不足的票被求和推向多头腿、而它们大幅跑输。预测多头腿净超额上升 1~2 个点、其余不变;如果没变,x2 的读法就错了"}
+      - {id: a_mean_abs15, group: substitute, expr: "cross_mean(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "提纯候选:折叠用绝对值(凸性已被 S1 证明无关)+ 均值(缺失日跳过)。预测不差于原式;如果比 a_mean_sq15 差,凸性在均值口径下又有用了"}
+      - {id: a_level15,    group: ablate,     expr: "abs_(cross_mean(day_kurt(nt_ts_autocorr_s1(Ret, 3)), 15))", why: "H12:先平均再折叠 = 只留 K 的水平。预测多头腿变差(15 日均值刚过 0 的票是被单日事件拉上来的);如果和原式一样好,逐日折叠是多余的"}
+      - {id: a_disp15,     group: ablate,     expr: "cross_stddev(day_kurt(nt_ts_autocorr_s1(Ret, 3)), 15)", why: "H13:只留 K 的 15 日离散。预测空头腿接近原式(事件日让标准差爆掉)、多头腿变差;如果多头腿也保住,因子是'K 稳不稳'而不是'K 在哪'"}
+      - {id: u_max30,      group: window,     expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "H14:极值记忆 15 -> 30。预测多头腿净超额、纯多头夏普在 train 和 valid 上都高于原式,多空夏普不低于原式"}
+      - {id: u_max60,      group: window,     expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "H14:极值记忆 -> 60。预测多头腿净超额继续升、空头腿毛超额和多空夏普下降(事件被记 60 天,早就反应完了)"}
+      - {id: u_max120,     group: window,     expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 120)", why: "H14 的边界:再长一档。如果多头腿净超额在 120 塌掉,60 就是搜出来的甜点;如果持平或续升,它量的是一个很慢的股票属性(这时要看它是不是已知暴露)"}
+      - {id: u_mean_abs60, group: substitute, expr: "cross_mean(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "H16:长窗口上均值对极值。预测多头腿净超额低于 u_max60;如果持平,极值聚合没有额外信息"}
+      - {id: u_med60,      group: substitute, expr: "cross_med(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "H15:60 日中位数,单日事件完全进不来 = 纯状态。预测多头腿净超额接近 u_max60(多头腿是状态);如果明显低,多头腿靠的是'60 天里一天都没出格'"}
+      - {id: u_max15_sm10, group: substitute, expr: "cross_mean(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), 10)", why: "H14 的另一种做法:保留 15 日事件记忆,再在表达式里加 10 日平滑。如果它的多头腿净超额追上 u_max30 而多空夏普更高,要的只是平滑而不是更长的事件记忆"}
+      - {id: r_meanA15,    group: replace,    expr: "cross_mean(day_mean(nt_ts_autocorr_s1(Ret, 3)), 15)", why: "H17:把'峰度 + 折叠'换成 3 对相关的日内均值(不需要折叠:封板日均值≈0、'顺'的票均值偏高,都在高的一头)。预测与原式 rank 相关高、剖面单调;train 上明显弱就说明峰度看到了一阶矩看不到的东西"}
+
+  # **留出段只读这一次。** 候选在读之前、只凭 train/valid 选定,理由和预测写在 notes/10_distilled.md 的"读留出段之前"一节。
+  # 故意用新的 id,让台账里这一笔清清楚楚。方向与半衰期在 utrain 上定,原样用到留出段。
+  - id: S_final
+    question: "原式、同速度的提纯式、以及极值记忆 15 / 30 / 60 这条'速度'曲线,在 2023-08 之后从未看过的数据上还成立吗?多头腿净超额是不是仍然随记忆变长而上升?"
+    variants:
+      - {id: f_orig,       group: final, final: true, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "原始表达式"}
+      - {id: f_mean_abs15, group: final, final: true, expr: "cross_mean(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "同速度的提纯式:缺失日跳过、折叠用绝对值。train/valid 上多空夏普最高(+4.01/+4.28),与原式 rank 相关 0.98"}
+      - {id: f_max15,      group: final, final: true, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "速度曲线的起点:只把求和换成极值(S1 的 l_max:+3.74/+4.40,多头腿净 +6.6%/+6.2%)"}
+      - {id: f_max30,      group: final, final: true, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "速度曲线的中点:train/valid 上每一项都不低于原式(+3.74/+3.97,多头腿净 +8.5%/+8.0%)"}
+      - {id: f_max60,      group: final, final: true, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "读留出段之前选定的推荐式(纯多头用):多头腿净 +11.3%/+10.1%、纯多头夏普 +2.70/+3.20,代价是多空夏普 +3.37/+3.32"}
+
+  # ---- 修订阶段(两路审查之后加的;只用 train / valid,不读留出段,不改最终候选)。
+  # 审查意见 3:原来的九个控制变量全在 1 日 / 20 日期限上,推荐式是 60 日极值,"多头腿不是已知暴露"的定量证据期限不匹配。
+  # 审查实验 audit_1.py(numpy 口径)已经给出:加八个 60 日朴素量后 R² 0.186 -> 0.454,残差多头腿毛超额 +11.1% -> +4.3%。
+  # 这个阶段在引擎口径下把同一件事重做一遍(valid 一侧和多头腿的归因分解在 r1_revision.py 里)。
+  - id: SR_horizon
+    question: "把与因子同期限的朴素控制(60 日封板代理 / 日内波动 / 成交额 / 最大振幅 / 日频波动 / 最大日收益 / 最大绝对日收益)加进来之后,控制变量张成多少、残差的多头腿还剩多少?"
+    variants:
+      - {id: h_orig,  group: recheck, expr: "cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "原式(同一棵树换一个 id,让新的中性化行不被旧运行的行覆盖)。原结论是九个控制变量 R² 0.219、残差多头腿毛超额 +7.6%;如果加上 60 日朴素控制后 R² 仍在 0.25 以下、残差多头腿仍在 +7% 上下,原结论站得住。审查实验给的是 0.320、+5.4%"}
+      - {id: h_max30, group: recheck, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "30 日极值版(折中候选),同一个检验"}
+      - {id: h_max60, group: recheck, expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "推荐式。原结论是 R² 0.186、残差多头腿毛超额 +11.1%、'多头腿不是已知暴露';如果同期限的控制把 R² 推到 0.4 以上、残差多头腿掉到 +5% 以下,这句话必须降级。审查实验给的是 0.454、+4.3%"}

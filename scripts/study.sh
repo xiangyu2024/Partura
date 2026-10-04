@@ -14,6 +14,7 @@
 #   study.sh wait <fid> <tag> [seconds]    wait (default 540 s) for that job; on completion pull + print the digest
 #   study.sh digest <fid> <tag> [base_id]  re-print the digest of a finished run
 #   study.sh report <fid>                  push notes, build the report on the server, pull the .md back
+#   study.sh list <fid>                    what has ALREADY run for this study on the server (tags, exit codes)
 #   study.sh status                        what Partura jobs are on the server right now
 set -u
 cd "$(dirname "$0")/.."
@@ -22,7 +23,7 @@ HOST=root@connect.westd.seetacloud.com
 SSH="ssh -o BatchMode=yes -o ControlPath=none -o ConnectTimeout=30 -p 29982"
 RS="rsync -a --exclude __pycache__ -e"
 R=/root/autodl-tmp/Partura
-ENV="cd $R && export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:$R ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=\${PARTURA_SLOTS:-2}"
+ENV="cd $R && export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:$R ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=\${PARTURA_SLOTS:-3}"
 RPY=/root/miniconda3/envs/quant/bin/python
 cmd=${1:-}; shift || true
 
@@ -57,15 +58,24 @@ case "$cmd" in
     fid=$1; tag=$2; shift 2
     push "$fid" || exit 1
     extra=""; [ "$cmd" = final ] && extra="--holdout"
-    $SSH $HOST "$ENV && mkdir -p logs && rm -f logs/${fid}_${tag}.log && screen -dmS pt_${fid:0:4}_${tag} bash -c 'EXTRA=\"$extra --tag $tag\" PARTURA_SLOTS=\${PARTURA_SLOTS:-2} ./scripts/run_server.sh configs/$fid.yaml $* > logs/${fid}_${tag}.log 2>&1' && echo 'started $fid/$tag: stages $* $extra'"
+    $SSH $HOST "$ENV && mkdir -p logs && rm -f logs/${fid}_${tag}.log && screen -dmS pt_${fid:0:4}_${tag} bash -c 'EXTRA=\"$extra --tag $tag\" PARTURA_SLOTS=\${PARTURA_SLOTS:-3} ./scripts/run_server.sh configs/$fid.yaml $* > logs/${fid}_${tag}.log 2>&1' && echo 'started $fid/$tag: stages $* $extra'"
     ;;
   exec)
     fid=$1; tag=$2; script=$3; shift 3
     push "$fid" || exit 1
     $SSH $HOST "$ENV && mkdir -p logs && rm -f logs/${fid}_${tag}.log && screen -dmS pt_${fid:0:4}_${tag} bash -c '$ENV; nice -n 5 $RPY -u studies/$fid/$script $* > logs/${fid}_${tag}.log 2>&1; echo \"[partura exit \$? \$(date +%F_%T)]\" >> logs/${fid}_${tag}.log' && echo 'started $fid/$tag: $script'"
     ;;
+  list)
+    fid=$1
+    $SSH $HOST "cd $R; echo '# 已有的运行(tag = 日志名去掉前缀;exit 0 = 成功,97 = 内存守卫让路,其他 = 出错):'; for f in logs/${fid}_*.log; do [ -f \"\$f\" ] || continue; t=\$(basename \$f .log); t=\${t#${fid}_}; e=\$(grep -a 'partura exit' \$f | tail -1); j=''; [ -f runs/$fid/\$t.json ] && j='  [有 JSON]'; printf '  %-22s %s%s\n' \"\$t\" \"\${e:-(还在跑 / 没有退出行)}\" \"\$j\"; done; echo '# 正在跑的:'; screen -ls | grep 'pt_${fid:0:4}_' || echo '  (无)'"
+    mkdir -p "runs/$fid"
+    $RS "$SSH" --include='*.json' --exclude='*' "$HOST:$R/runs/$fid/" "runs/$fid/" 2>/dev/null && echo "# 已把服务器上的 runs/$fid/*.json 拉回本地"
+    ;;
   wait)
     fid=$1; tag=$2; secs=${3:-540}
+    if ! $SSH $HOST "[ -f $R/logs/${fid}_${tag}.log ]" 2>/dev/null; then
+      echo "没有这个任务:服务器上不存在 logs/${fid}_${tag}.log(tag 写错了,或者还没 run)。用 'study.sh list $fid' 看已有的运行。"; exit 4
+    fi
     end=$(( $(date +%s) + secs ))
     while :; do
       st=$($SSH $HOST "grep -ac 'partura exit' $R/logs/${fid}_${tag}.log 2>/dev/null; grep -av 'FutureWarning\|vmap(single_row)\|UserWarning' $R/logs/${fid}_${tag}.log 2>/dev/null | tail -4" 2>/dev/null)

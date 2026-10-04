@@ -111,8 +111,13 @@ def _role(e: Expression, d: Optional[Dossier]) -> str:
     dc, mc = d.declared, d.measured
     hom = mc.get("homogeneity_degree")
     face, fam = dc.get("face"), dc.get("family")
-    if dc.get("boolean_output") or e.spec.name in ("is_gt", "is_lt", "eq", "greater", "less"):
+    # The registry's boolean flag comes from a probe on generic inputs and is wrong for the
+    # trigger operators (in_sustain_*: "at each mask==1, a statistic of the next d minutes").
+    if e.spec.name in ("is_gt", "is_lt", "eq", "greater", "less") or \
+            (dc.get("boolean_output") and not e.window and len(e.operands) <= 2 and fam != "in"):
         return "事件判定(0/1 掩码)"
+    if face == "dt" and fam == "in" and len(e.operands) == 2 and e.window:
+        return f"日内成对/触发统计(窗口 {e.window} 分钟;第一个操作数可能是触发掩码 —— 看源码)"
     if dc.get("reduces_m"):
         path = mc.get("order_dependent_on_minutes")
         kind = "日内路径统计量" if path else ("日内分布统计量" if path is False else "日内折叠")

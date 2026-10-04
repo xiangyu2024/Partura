@@ -87,8 +87,32 @@ class Study:
         src = {**(cfg.get("controls") or {}), **(cfg.get("gates") or {})}[name]
         return self.panels({name: src})[name]
 
-    def target(self, horizon: int = 1) -> np.ndarray:
-        return self.ps.target(horizon)
+    def target(self, horizon: int = 1, buyable: Optional[bool] = None) -> np.ndarray:
+        """The label.  ``buyable=False`` gives the label WITHOUT the "opened locked at
+        limit-up, could not be bought" filter -- the way to measure how much of a short
+        leg is made of names that score 0 only because they were unbuyable."""
+        if buyable is None or bool(buyable) == self.ps.label_buyable:
+            return self.ps.target(horizon)
+        keep, cache = self.ps.label_buyable, dict(self.ps._targets)
+        try:
+            self.ps.label_buyable = bool(buyable)
+            self.ps._targets = {}
+            return self.ps.target(horizon)
+        finally:
+            self.ps.label_buyable, self.ps._targets = keep, cache
+
+    def signal(self, panel: np.ndarray, fit: str = "train", sign: Optional[float] = None,
+               halflife: Optional[float] = None) -> np.ndarray:
+        """What would be traded: sign x panel, EMA-smoothed at the half-life fitted for the
+        long book on ``fit`` (or at ``halflife``).  Full length; slice it yourself."""
+        p = np.asarray(panel, dtype=np.float64)
+        sg = self.sign(panel, fit) if sign is None else sign
+        if halflife is None:
+            halflife = bk.fit_halflives(sg * p, self.target(), self.slice(fit),
+                                        float(self.cfg.get("cost_per_side", bk.COST)),
+                                        float(self.cfg.get("top_frac", bk.TOP_FRAC)))[
+                "hl_long" if self.cfg.get("rank_by", "long") == "long" else "hl_ls"]
+        return bk.smoothed(sg * p, halflife)
 
     def slice(self, split: str) -> slice:
         if split in ("holdout", "full"):
@@ -121,7 +145,7 @@ class Study:
                         {e: self.slice(e) for e in evals},
                         cost=float(self.cfg.get("cost_per_side", bk.COST)),
                         top_frac=float(self.cfg.get("top_frac", bk.TOP_FRAC)),
-                        rank_by=self.cfg.get("rank_by", "ls"))
+                        rank_by=self.cfg.get("rank_by", "long"))
 
     def rank_corr(self, a: np.ndarray, b: np.ndarray, split: str = "train") -> float:
         s = self.slice(split)

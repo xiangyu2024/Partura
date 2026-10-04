@@ -65,7 +65,47 @@ def src(names) -> int:
             print("".join(lines))
         except (OSError, TypeError) as exc:
             print(f"### {name}: {spec.kernel_id}: source unavailable ({exc})")
+            lines = []
+        # A baked variant (nt_ts_autocorr_s1, pow_3, cross_quantile_q25) or an nt_ twin is a
+        # one-line wrapper: what it DOES is in the kernel the registry names, and in the
+        # module-level helpers that kernel calls.
+        _show_kernel(spec, name, shown="".join(lines))
     return 0
+
+
+def _show_kernel(spec, name: str, shown: str = "", depth: int = 2) -> None:
+    import importlib
+    mod_name, _, fn_name = str(spec.kernel_id).partition(".")
+    try:
+        mod = importlib.import_module(f"alphacube.operators.{mod_name}")
+    except ImportError:
+        return
+    seen = set()
+
+    def emit(obj, why: str, level: int) -> None:
+        if not inspect.isfunction(obj) or obj in seen:
+            return
+        seen.add(obj)
+        try:
+            src = inspect.getsource(inspect.unwrap(obj))
+        except (OSError, TypeError):
+            return
+        if src.strip() and src.strip() not in shown:
+            print(f"# --- {why}: {obj.__module__.split('.')[-1]}.{obj.__name__}")
+            print(src)
+        if level <= 0:
+            return
+        g = getattr(inspect.unwrap(obj), "__globals__", {})
+        for called in sorted(set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\(", src))):
+            h = g.get(called)
+            if called in ("op", "deco"):                 # the registration decorator, not part of the maths
+                continue
+            if inspect.isfunction(h) and h.__module__.startswith("alphacube.operators") and h is not obj:
+                emit(h, f"{obj.__name__} 调用的", level - 1)
+
+    base = getattr(mod, fn_name, None)
+    if base is not None:
+        emit(base, f"{name} 背后的内核", depth)
 
 
 def _config(fid: str) -> dict:

@@ -1,9 +1,10 @@
 # Partura study F105_std_fangzheng_covamt  (挖掘 / #25)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F105_std_fangzheng_covamt
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "分钟成交额方差的一年期 mean+std 水平在最近 5 天的变化量 —— 带成交额平方尺度的「放量事件进入/滑出一年窗口」探测器"
 expression: "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)"
 baseline_id: v_base
+probes: [studies/F105_std_fangzheng_covamt/probes.py]
 
 # 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
 published: {sign: -1, hl: 3, ls: [3.03, 2.24], long: [0.168, 0.143], lib: "挖掘", name: "#25"}
@@ -44,20 +45,133 @@ gates:
   known_amt_max9:    "cross_max(day_sum(Amt), 9)"          # F001:成交额水平 + 极值记忆
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
-corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
+  # 原式本身,只为了让每个阶段的 rank 相关矩阵里都有它这一列(不用为此重跑 S0_baseline)
+  ref_orig:          "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)"
+  # 一年水平 C(= s1_level 的面板,已缓存),只用来给条件 IC 当分桶变量
+  g_level:           "cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241)"
+# 第 8 节的 rank 相关矩阵只印这几个(同一次运行里算的,没有空格子);别的变体与原式/控制变量的相关在各阶段的 notes 里
+corr_ids: [f_orig, f_min3, f_max15, f_max30, f_max60]
+corr_with: [ref_orig, ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  decay:      [v_base, s1_relchg, s1_known_stdamt9, s3_max60, s4_max30]
+  by_year:    [v_base, f_orig, f_min3, f_max15, f_max30, f_max60]
+  neutralise: [v_base, s1_level, s1_relchg, s1_known_stdamt9, s2_mid_mean, s3_max60, s4_max30, s4_pos]
+  profile:    [v_base, s1_level, s1_relchg, s1_noecho, s1_recent, s1_known_stdamt9, s2_mid_mean, s2_absdelta, s3_max20, s3_max60, s3_max120, s3_max241, s3_mean60, s4_max15, s4_max30, s4_mean20, s4_med60, s4_summax30, s4_pos]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: s1_relchg, gate: ctl_amt, buckets: 5}
+    - {factor: s1_relchg, gate: g_level, buckets: 5}
+    - {factor: s1_relchg, gate: known_stdamt_max9, buckets: 5}
+    - {factor: s4_max30, gate: ctl_cap, buckets: 5}
+    - {factor: s4_max30, gate: ctl_turnrate, buckets: 5}
+    - {factor: s4_pos, gate: ctl_amt, buckets: 5}
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)", why: "原始表达式"}
+
+  # C := cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241) —— 一年窗口的 mean+std 水平;原式 = ts_stddev(C, 5)
+  # S1 第一次运行时 3 个变体(s1_relchg / s1_noecho / s1_recent)因为邻居占满显卡在 nd 面 ts_stddev 上 OOM;
+  # 已经跑出来的 3 个留在 S1_what(不重跑),没跑出来的 3 个改用 dt 面的 cross_stddev 写法,挪到 S1b_events。
+  # 运行记录:中断前这 3 个变体其实已经和 S2、S3 一起跑完(runs/.../S1b_S2_S3.json,当时没拉回本地);接手后又跑了一遍
+  # (S2S3_nodes_family.json),两次的指标逐位相同。报告合并时后一次覆盖前一次。
+  - id: S1_what
+    question: "原式的预测力在哪一样东西里:成交额尺度(水平)、还是事件的方向?它和已知家族 cross_max(day_std(Amt),9) 比怎么样?"
+    variants:
+      - {id: s1_level, group: isolate, expr: "cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241)",
+         why: "删掉外层 ts_stddev,只留一年水平 C。H1 预测它不输原式;如果它明显差,说明「最近 5 天动了多少」带来了水平之外的信息"}
+      - {id: s1_signed, group: substitute, expr: "ts_delta(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+         why: "外层 std 换成带符号的 5 日差分:进入(C 上升)排最高、滑出(C 下降)排最低。H2+H3 预测它不比原式差;如果它塌掉,说明滑出事件和进入事件是同向的信号(H3′),方向不是信息"}
+      - {id: s1_known_stdamt9, group: known_family, expr: "cross_max(day_std(Amt), 9)",
+         why: "F001 蒸馏出的已知家族,2 个算子。H1 预测原式的业绩它都有;把它放进同一张表,看多头腿、换手、剖面谁更好"}
+
+  - id: S1b_events
+    question: "把成交额尺度除掉之后,「事件」这一半自己还剩多少?硬窗口的周年回声、一年窗口本身,是在挣钱还是在稀释?"
+    variants:
+      - {id: s1_relchg, group: scale, expr: "div(cross_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241))",
+         why: "D/C:把成交额尺度除掉,只留相对变化(纯事件)。H1 预测它塌掉;H2 预测它保住同向的 rank IC。两条不能同时成立"}
+      - {id: s1_noecho, group: substitute, expr: "cross_stddev(cross_decay_linear(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+         why: "中间层换成线性衰减均值(探针:回声只剩 0.0152)。H3 预测去掉周年回声后不变差;如果明显变差,回声(或 std 项)本身在挣钱。配对对照是 s2_mid_mean(同样只有 mean 项,但硬窗口、有回声)"}
+      - {id: s1_recent, group: ablate, expr: "cross_stddev(cross_max(day_cov(Amt, Amt), 3), 5)",
+         why: "删掉一年窗口:只剩「最近一周日内成交额方差的离散度」(原始金额单位)。如果它和原式同族且业绩相同,241 日窗口根本没参与,原式只是在量最近的放量幅度"}
+
+  # 工具绕行:nd 面的 ts_stddev 在 GPU 上不分块(一次要 3 x 388 MiB),邻居把显卡占满时会 OOM(S1 第一次跑挂了 3 个)。
+  # dt 面的 cross_stddev 是同一个内核(rolling_reduce + nanstd_last,源码逐字相同)但分块求值。所以 S1 里没跑出来的 3 个
+  # 和 S2 的变体,外层 std 都写成 cross_stddev;s2_dtface_check 用来证明这个替换对原式是逐位等价的。
+  - id: S2_nodes
+    question: "树里哪些节点是多余的:3 日极值、fangzheng 的 mean 项 / std 项、日内方差这个字段、241 和 5 这两个窗口?把外层 std 换成 |5 日差分| 能不能去掉上市首日的伪影?"
+    variants:
+      - {id: s2_dtface_check, group: tooling, expr: "cross_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+         why: "原式的外层 ts_stddev 换成同一内核的 dt 面写法 cross_stddev。必须与原式 rank 相关 1.000、指标逐位相同;否则本阶段用 cross_stddev 写的变体都不能和原式直接比"}
+      - {id: s2_no_max3, group: ablate, expr: "cross_stddev(cross_fangzheng(day_cov(Amt, Amt), 241), 5)",
+         why: "删掉 cross_max(·,3)。H5 预测与原式 rank 相关 >= 0.95、指标不变;否则 3 日极值在做别的事"}
+      - {id: s2_mid_std, group: substitute, expr: "cross_stddev(cross_stddev(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+         why: "fangzheng 只留 std 项。H4 预测与原式同族(探针:跳变里 std 项是 mean 项的 15.5 倍;07x:Cstd/C 中位数 0.73)"}
+      - {id: s2_mid_mean, group: substitute, expr: "cross_stddev(cross_mean(cross_max(day_cov(Amt, Amt), 3), 241), 5)",
+         why: "fangzheng 只留 mean 项:滚动均值的 5 日变化只取决于进出窗口的原始值大小,与「相对历史大不大」无关。预测它离已知家族更近、离原式更远;如果它反而更好,说明原式里「相对历史」那一层(std 项)是负担"}
+      - {id: s2_min3, group: distil, expr: "cross_stddev(cross_stddev(day_cov(Amt, Amt), 241), 5)",
+         why: "H4 + H5 同时成立时树内最小的结构(3 个算子)。预测与原式 rank 相关 >= 0.95"}
+      - {id: s2_field_std, group: field, expr: "cross_stddev(cross_fangzheng(cross_max(day_std(Amt), 3), 241), 5)",
+         why: "叶子从方差换成标准差(开平方,尖峰被压扁,log σ 减半)。如果预测力依赖「重尾 -> fangzheng 变成极值统计量」,这个应该明显不同"}
+      - {id: s2_field_sum, group: field, expr: "cross_stddev(cross_fangzheng(cross_max(day_sum(Amt), 3), 241), 5)",
+         why: "叶子换成日成交额(不含日内离散度)。H10 预测指标不变;如果变差,日内集中度有独立贡献"}
+      - {id: s2_w60, group: window, expr: "cross_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 60), 5)",
+         why: "一年窗口 -> 一个季度(回声移到 60 天后、窗口未满期缩到 60 天)。H9 预测塌掉;如果不塌甚至更好,241 只是窗口池里最大的那个"}
+      - {id: s2_out20, group: window, expr: "cross_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 20)",
+         why: "外层 5 -> 20:事件记 20 天而不是 5 天。H9 预测塌掉;如果多头腿变好,说明多头腿要的是「更久没有事件」"}
+      - {id: s2_absdelta, group: substitute, expr: "abs_(cross_delta(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5))",
+         why: "外层 std -> |5 日差分|(07x:两者 rank 相关 0.994)。差别只在上市头 5 天:std 给首日 D=0(排进多头),差分给 NaN。07x 预测多头腿毛超额因此高 2 个点左右(IPO 组在多头腿的贡献是 -2.3% / -1.9%)"}
+
+  - id: S3_family
+    question: "原式的水平部分 C 近似一年最大值(07x:scale-free rank 相关 0.984),已知家族是 9 日最大值:cross_max(day_std(Amt), d) 这一族里,多头腿净超额在哪个 d 上最好?长窗口下 max 还比 mean 好吗?"
+    variants:
+      - {id: s3_max241, group: naive_equiv, expr: "cross_max(day_std(Amt), 241)",
+         why: "C 的朴素等价物。预测与 s1_level 的 rank 相关 >= 0.95、指标相同;成立的话原式的水平部分就是已知家族的 d=241 成员"}
+      - {id: s3_max20, group: window, expr: "cross_max(day_std(Amt), 20)",
+         why: "d=20。已知家族 d=9 多头腿毛 16.9% 但换手吃掉 7.6 个点;d=241 毛 10.6% 只吃 1.1 个点。预测中间窗口的净超额更高"}
+      - {id: s3_max60, group: window, expr: "cross_max(day_std(Amt), 60)", why: "d=60,同上"}
+      - {id: s3_max120, group: window, expr: "cross_max(day_std(Amt), 120)", why: "d=120,同上"}
+      - {id: s3_mean60, group: substitute, expr: "cross_mean(day_std(Amt), 60)",
+         why: "长窗口下把极值换成均值:如果多头腿要的是「长期平均成交少」而不是「很久没爆过量」,均值应该不输极值"}
+      - {id: s3_mean241, group: substitute, expr: "cross_mean(day_std(Amt), 241)",
+         why: "同上,在一年窗口上再对一次(与 s3_max241 配对):两个窗口上极值/均值的优劣如果相反,「极值更好」就不是这一族的性质"}
+
+  # S3 的结果:cross_max(day_std(Amt), d) 的多头腿净超额在 d=20~60 上是一个驼峰(train 12.6% / 13.5%,d=9 是 9.3%,d=241 是 9.0%)。
+  # S4 问这个驼峰是不是平台:窗口再补两档(搜索语法窗口池里的 15 和 30)、聚合方式换一档、字段换一档;
+  # 另外把原式「事件」那一半(S1b 的 s1_relchg)写成不带回声和未满窗口伪影的干净形式,看它是不是一个独立的多头信号。
+  - id: S4_longleg
+    question: "已知家族 cross_max(day_std(Amt), d) 的多头腿在 d=20~60 上是稳定的平台,还是两个点的运气?多头腿要的是「没爆过量」(极值)还是「平时成交少」(中位数/均值)?原式的「事件」那一半写干净之后有没有多头腿?"
+    variants:
+      - {id: s4_max15, group: window, expr: "cross_max(day_std(Amt), 15)",
+         why: "d=15(窗口池内)。平台假设预测它的多头腿净超额落在 d=9 的 9.3% 和 d=20 的 12.6% 之间(train);如果它跳出这个区间,S3 的驼峰就是噪声"}
+      - {id: s4_max30, group: window, expr: "cross_max(day_std(Amt), 30)",
+         why: "d=30(窗口池内,夹在 20 和 60 之间)。平台假设预测多头腿净超额 >= 12.6%(train)且 valid 不低于 20%、多空夏普落在 2.14~2.54 之间;否则 20 和 60 只是碰巧"}
+      - {id: s4_mean20, group: substitute, expr: "cross_mean(day_std(Amt), 20)",
+         why: "d=20 上极值换均值(与 s3_max20 配对;d=60 上 max 在 train 好、mean 在 valid 好,没有定论)。如果均值在 train 和 valid 上都不输,「极值记忆」对多头腿就不是必需的"}
+      - {id: s4_med60, group: substitute, expr: "cross_med(day_std(Amt), 60)",
+         why: "60 日中位数:完全不看放量日,只看平时的成交水平。H6(多头腿 = 低成交额 ∩ 没有事件)预测它的多头腿明显差于 s3_max60;如果一样好,多头腿只是「平时成交少」,和事件无关"}
+      - {id: s4_summax30, group: field, expr: "cross_max(day_sum(Amt), 30)",
+         why: "字段换成日成交额(与 s4_max30 配对)。S2 里原式的字段换成 day_sum 后变差;如果在已知家族里也变差,日内成交额离散度对多头腿有独立贡献"}
+      - {id: s4_pos, group: scale, expr: "div(cross_max(day_std(Amt), 5), cross_max(day_std(Amt), 241))",
+         why: "原式「事件」那一半的干净写法:最近 5 天的峰值相对一年峰值的位置(无尺度、无周年回声的等幅重响、上市首日不为 0)。s1_relchg 的多头腿净超额只有 4.6%(train);如果干净写法的多头腿也弱,「相对自身历史没放量」本身就不是多头信号,升华只能在水平这一半里找"}
+
+  # ---- 留出段只读这一次。五个候选在读之前、只凭 train/valid 选定(理由见 notes/07_S_final.md);新 id 只是为了让台账里这一笔独立可查。
+  - id: S_final
+    question: "只凭 train/valid 选出来的结论 ——「原式 = 已知家族的一个更吵的写法;换成 cross_max(day_std(Amt), 30) 多头腿更好」—— 在用户的测试段(20230808–20251231)上站不站得住?"
+    variants:
+      - {id: f_orig,  group: final, final: true, expr: "ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)", why: "原始表达式(4 个算子)"}
+      - {id: f_min3,  group: final, final: true, expr: "cross_stddev(cross_stddev(day_cov(Amt, Amt), 241), 5)", why: "树内提纯:删掉 3 日极值和 fangzheng 的 mean 项(3 个算子)。预测留出段上与原式不可区分;如果它明显差,S2 的「多余节点」结论只在样本内成立"}
+      - {id: f_max15, group: final, final: true, expr: "cross_max(day_std(Amt), 15)", why: "已知家族里多空夏普与原式打平的成员(2 个算子)。预测留出段多空夏普不低于原式、多头腿净超额更高"}
+      - {id: f_max30, group: final, final: true, expr: "cross_max(day_std(Amt), 30)", why: "读留出段之前定下的推荐:平台中央、train/valid 多头腿净超额和纯多头夏普最高。预测留出段多头腿净超额与纯多头夏普高于原式;两项都低于原式就算升华失败"}
+      - {id: f_max60, group: final, final: true, expr: "cross_max(day_std(Amt), 60)", why: "平台的慢端(换手 2.6%)。预测多头腿净超额与 f_max30 相近;如果 15/30/60 在留出段上次序乱掉,平台只是样本内的"}
+
+# ---- 审查与修订(2026-10-04;都不是阶段、都是 study.sh exec、都只用 train / valid,没有读留出段)
+#   audit1  审查员写的 studies/F105_std_fangzheng_covamt/audit_1.py          -> notes/07x_review_audit.md
+#   rev1    studies/F105_std_fangzheng_covamt/rev1.py:半衰期网格、残差平滑扣费、秩平均、方向的水平配对、事前水平分桶  -> notes/07x_revision.md
+#   rev2    studies/F105_std_fangzheng_covamt/rev2.py:不带可买入过滤的标签;跑到第 2 节被内存守卫中止(邻居占满容器内存),按规矩没有重跑
+# S_final 各变体的 why 是读留出段之前写下的,修订时一字未动。

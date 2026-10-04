@@ -1,9 +1,10 @@
 # Partura study F103_amt_dw_decay  (挖掘 / #820)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F103_amt_dw_decay
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "收盘集合竞价成交额 × (30 日平均日内成交曲线的粗糙度)³,套 5 日极值记忆"
 expression: "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)"
 baseline_id: v_base
+probes: [studies/F103_amt_dw_decay/probes.py]   # 本研究新增的探针(每个都带已知答案的自检)
 
 # 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
 published: {sign: -1, hl: 2, ls: [3.53, 3.18], long: [0.128, 0.124], lib: "挖掘", name: "#820"}
@@ -44,20 +45,88 @@ gates:
   known_amt_max9:    "cross_max(day_sum(Amt), 9)"          # F001:成交额水平 + 极值记忆
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
+  # ---- 本研究加的参照面板:原式本身和它的两支(每个阶段都拿来算 rank 相关 / 做条件 IC 的分桶)
+  ref_base: "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)"
+  ref_A5:   "cross_max(day_close(Amt), 5)"                              # 收盘竞价额支(5 日峰值)
+  ref_C:    "day_durbin_watson(cross_decay_linear(Amt, 30))"            # 平均曲线粗糙度支
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
-            known_amt_max9, known_stdamt_max9, known_ivol_max9]
+            known_amt_max9, known_stdamt_max9, known_ivol_max9, ref_base, ref_A5, ref_C]
+
+# 这些变体在读留出段之前就要有用户口径(utrain)的两本书,好和原式那一行直接比
+corr_ids: [f_orig, f_sum_k3, f_sum_k2, f_std9_k1, f_stdamt9]     # 报告第 8 节的相关矩阵:五个最终候选(final 那次运行里算的)
+
+user_books: [d_sum_k3, d_sum_k2, d_sum_k1, d_amt, b_stdamt9, x_std9_k1, x_std9_k2, e_peak_k2, x_std9_pk2, g_stdB]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  decay:      [v_base, a_C, a_A5, d_sum_k2, x_std9_k1]
+  by_year:    [v_base, a_C, a_A5, d_sum_k3, d_sum_k2, d_sum_k1, d_amt, b_stdamt9, x_std9_k1, x_std9_k2, e_peak_k2, x_std9_pk2, g_stdB,
+               f_orig, f_sum_k3, f_sum_k2, f_std9_k1, f_stdamt9]
+  neutralise: [v_base, a_C, a_A5, d_sum_k2, x_std9_k1, e_peak_k2, b_stdamt9]
+  profile:    [v_base, a_C, a_A5, e_pow1, d_sum_k3, d_sum_k2, d_sum_k1, d_amt, b_stdamt9, x_std9_k1, e_peak_k2, x_std9_pk2, g_stdB]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: a_C,  gate: ref_A5,  buckets: 5}     # 粗糙度支的预测力随收盘竞价额怎么变(乘法是不是门控)
+    - {factor: a_A5, gate: ref_C,   buckets: 5}     # 反过来
+    - {factor: a_C,  gate: ctl_amt, buckets: 5}
+    - {factor: d_sum_k2, gate: ctl_amt, buckets: 5}
+    - {factor: d_sum_k2, gate: ctl_cap, buckets: 5}
+    - {factor: x_std9_k1, gate: ctl_amt, buckets: 5}
+    - {factor: x_std9_k1, gate: ctl_cap, buckets: 5}
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)", why: "原始表达式"}
+
+  # ---------------------------------------------------------------- S1
+  # 节点级的拆解:两支各值多少、三次方是不是定权、5 日极值是记忆还是低通、收盘竞价这根分钟是不是特殊的。
+  - id: S1_structure
+    question: "预测力在收盘竞价额支、粗糙度支,还是两者的乘积里?ts_min / pow_3 / cross_max 这三个节点各自是不是多余的?"
+    variants:
+      - {id: a_no_tsmin, group: ablate, expr: "cross_max(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "探针实测 ts_min(.,1) 是恒等:如果它与原式不是逐位相同,我对这个节点的读法就是错的"}
+      - {id: a_A5, group: isolate, expr: "cross_max(day_close(Amt), 5)", why: "H1:只留收盘竞价额支。若整棵树是成交额水平,它应拿走大部分表现且与 known_amt_max9 同族"}
+      - {id: a_C, group: isolate, expr: "day_durbin_watson(cross_decay_linear(Amt, 30))", why: "只留粗糙度支(三次方单独作用是 no-op;对 30 日慢变量再取 5 日极值近似 no-op,这里直接去掉)。若它塌掉,粗糙度只是给成交额定权的陪衬"}
+      - {id: e_pow1, group: exponent, expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_decay_linear(Amt, 30))), 5)", why: "H5:三次方只是定权。log 空间权重从 1:3 改成 1:1,若表现不变或更好,pow_3 不是机制"}
+      - {id: e_pow2, group: exponent, expr: "cross_max(mul(day_close(Amt), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "H5:指数的邻域。k=2 与 k=3 应接近;若只有 k=3 好就是搜出来的尖峰"}
+      - {id: m_none, group: memory, expr: "mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "H7:删掉 5 日极值,只靠 EMA 半衰期做平滑。若扣费表现不掉,cross_max 只是低通"}
+      - {id: m_mean5, group: memory, expr: "cross_mean(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "H7:极值换成均值。若 max 明显好于 mean,5 日峰值才是事件记忆;否则只是平滑"}
+      - {id: f_sum, group: field, expr: "cross_max(mul(day_sum(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "H1/H6:把收盘竞价那一根换成全天成交额。若不变,'收盘竞价'不特殊,A 支只是成交额水平"}
+      - {id: f_share, group: field, expr: "cross_max(mul(div(day_close(Amt), day_sum(Amt)), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "H6:把 A 换成尺度无关的尾盘占比。若仍然有效甚至更好,A 支带的成交额尺度是多余的"}
+      - {id: i_rankmul, group: interaction, expr: "cross_max(mul(cs_rank(day_close(Amt)), cs_rank(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)", why: "H6:两支各自截面排名后再乘,抹掉数值尺度。若塌掉,原式靠的是 C^3 的重尾在原始尺度上取极值"}
+      - {id: i_addrank, group: interaction, expr: "add(cs_rank(cross_max(day_close(Amt), 5)), cs_rank(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "乘法是不是必须:两支排名等权相加。若与原式同样好,乘法没有带来交互"}
+
+  # ---------------------------------------------------------------- S2
+  # S1 + X1 + X2 + X3 的结论:ts_min 恒等、5 日极值只是低通、收盘竞价那一根不特殊、指数 3 是 train 的局部最优;
+  # 骨架是「成交额水平 x 30 日平均曲线的集中度^k」。X3 进一步说:(1) 集中度(DW / 峰值占比 / CV)单独在 valid 上不赚钱,
+  # 对成交额+市值+换手率中性化后 2022 年起 rank IC 只剩 -0.004~-0.011;(2) 两条腿在时间上互补(成交额水平 2020 年最弱、集中度 2020 年最强);
+  # (3) 水平腿换成 F001 的蒸馏结果 cross_max(day_std(Amt), 9) 之后再乘 C,train 更好、valid 不差。
+  # 这一阶段把这些数值重建的结论放回引擎里确认(X2/X3 是 numpy 重建),并给最终候选出中性化、分位剖面、逐年、用户口径的两本书。
+  - id: S2_distil
+    question: "把树收成 水平腿 x 集中度^k 之后:哪个配比在 train 和 valid 上都站得住(尤其是多头腿)?水平腿用全天成交额还是 F001 的蒸馏结果?它比已知家族多了什么?"
+    variants:
+      - {id: d_sum_k3,  group: distil, expr: "mul(day_sum(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "纯删节点:保留原式的指数,只删 ts_min/cross_max、把收盘竞价额换成全天成交额。若两段都不输原式,这三处确实多余"}
+      - {id: d_sum_k2,  group: distil, expr: "mul(day_sum(Amt), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "提纯候选:指数降一档(成交额水平与集中度大约各占一半)。若引擎求值下不是'每一年多空夏普都 > 2、多头腿净超额都为正'(X3-C 的数值重建),'k=2 两段都站得住'这个读法就不成立"}
+      - {id: d_sum_k1,  group: distil, expr: "mul(day_sum(Amt), day_durbin_watson(cross_decay_linear(Amt, 30)))", why: "指数再降一档。X3-A 说它与 ctl_amt 的 rank 相关 0.94:若引擎里也是这样,它就是成交额水平家族的重写,不能当成这棵树的升华"}
+      - {id: d_amt,     group: benchmark, expr: "day_sum(Amt)", why: "k=0 的基准 = 纯成交额水平(已知家族)。所有 k>0 的候选都要回答:比它多了什么"}
+      - {id: b_stdamt9, group: benchmark, expr: "cross_max(day_std(Amt), 9)", why: "F001 的蒸馏结果(已知家族里最强的一个)。升华候选若在 train 和 valid 上都不比它好,结论就是'用 F001 的就行'"}
+      - {id: x_std9_k1, group: elevate, expr: "mul(cross_max(day_std(Amt), 9), day_durbin_watson(cross_decay_linear(Amt, 30)))", why: "H13 的反面:把水平腿换成 F001 的蒸馏结果再乘 C。若 train 上不比 b_stdamt9 好(X3 数值重建:+3.32 对 +2.47),C 对已知家族没有增量"}
+      - {id: x_std9_k2, group: elevate, expr: "mul(cross_max(day_std(Amt), 9), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "上一条的指数邻域:应落在'train 更高、valid 更低'的同一条曲线上;若 k=2 两段都更差,k=1 是孤立的好点"}
+      - {id: e_peak_k2, group: substitute, expr: "mul(day_sum(Amt), pow_2(div(day_max(cross_decay_linear(Amt, 30)), day_sum(cross_decay_linear(Amt, 30)))))", why: "H14:把 DW 换成与成交额无关的集中度(平均曲线上峰值分钟的占比,九成是 9:31 或 15:00 那一根)。若同样好,树里要的是'集中度'而不是 DW 这个路径统计量"}
+      - {id: x_std9_pk2, group: elevate, expr: "mul(cross_max(day_std(Amt), 9), pow_2(div(day_max(cross_decay_linear(Amt, 30)), day_sum(cross_decay_linear(Amt, 30)))))", why: "两处替换叠加(水平腿 = F001 蒸馏,集中度 = 峰值占比)。X3 里它的两段最小多空夏普最高(+3.73);若引擎里不成立,或多头腿不比 x_std9_k1 好,就不值得多出来的 4 个节点"}
+      - {id: g_stdB,    group: substitute, expr: "day_std(cross_decay_linear(Amt, 30))", why: "最朴素的等价物(2 个算子):平均曲线的标准差 = 30 日平均成交额水平 x 平均曲线的 CV。若它与 b_stdamt9 同族(rank 相关 > 0.9)且多头腿不输所有候选,那么对纯多头来说这棵树没有超出 F001 家族的东西"}
+      - {id: x_std9_k1_w15, group: window, expr: "mul(cross_max(day_std(Amt), 9), day_durbin_watson(cross_decay_linear(Amt, 15)))", why: "H10:x_std9_k1 的平均窗口 30 -> 15,真效应应该有邻域"}
+      - {id: x_std9_k1_w60, group: window, expr: "mul(cross_max(day_std(Amt), 9), day_durbin_watson(cross_decay_linear(Amt, 60)))", why: "H10:平均窗口 30 -> 60"}
+
+  # ---------------------------------------------------------------- S_final
+  # 读留出段的那一次。候选只凭 train / valid 选定,理由写在 notes/F103_amt_dw_decay/10_distilled.md 的前半段(读之前写的)。
+  # 一条链:原式 -> 纯删节点(k=3) -> 改配比(k=2) -> 换水平腿(F001 蒸馏 x C),外加已知家族基准。面板都已缓存。
+  - id: S_final
+    question: "样本外(用户的测试段):删节点、改配比、换水平腿,这三步各自还成立吗?这棵树在留出段上有没有给已知家族(F001 的蒸馏结果)加东西?"
+    variants:
+      - {id: f_orig,    group: final, final: true, profile: true, expr: "cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)", why: "原式(7 个算子)"}
+      - {id: f_sum_k3,  group: final, final: true, profile: true, expr: "mul(day_sum(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "纯删节点(5 个算子):若留出段多空夏普比原式低 0.3 以上,ts_min / cross_max / day_close 里至少有一个不是多余的"}
+      - {id: f_sum_k2,  group: final, final: true, profile: true, expr: "mul(day_sum(Amt), pow_2(day_durbin_watson(cross_decay_linear(Amt, 30))))", why: "提纯:指数降到 2。若留出段上它不如 f_sum_k3,'指数 3 是 train 的局部最优'这个读法在样本外不成立(集中度那条腿又回来了)"}
+      - {id: f_std9_k1, group: final, final: true, profile: true, expr: "mul(cross_max(day_std(Amt), 9), day_durbin_watson(cross_decay_linear(Amt, 30)))", why: "事前推荐的升华版:水平腿换成 F001 的蒸馏结果。若留出段多头腿净超额与纯多头夏普不高于原式,升华不成立"}
+      - {id: f_stdamt9, group: final, final: true, profile: true, expr: "cross_max(day_std(Amt), 9)", why: "已知家族基准(2 个算子)。f_std9_k1 的留出段多空夏普若不比它高 0.3 以上,这棵树在样本外没有给已知家族加东西"}

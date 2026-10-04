@@ -361,6 +361,6 @@ def rank_corr_matrix(panels: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float
 
 
 __all__ = ["COST_PER_SIDE", "TURNOVER_CAP", "TOP_FRAC", "ic_series", "rank_ic_series", "sign_from",
-           "rank_rows", "ic_row", "distinct_fraction",
+           "rank_rows", "ic_row", "distinct_fraction", "nanmean_quiet",
            "metric_row", "neutralise", "conditional_ic", "decay", "by_year", "smoothing_sweep",
            "extreme_day_dependence", "pair_rank_corr", "rank_corr_matrix"]

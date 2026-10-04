@@ -1,9 +1,10 @@
 # Partura study F101_day_shine_retstd  (手写 / day_shine_retstd)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F101_day_shine_retstd
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "方正「适度冒险」的日频零件:成交量激增分钟之后 5 分钟收益波动(耀眼波动率)的日均值,对截面均值取绝对偏离"
 expression: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))"
 baseline_id: v_base
+probes: [studies/F101_day_shine_retstd/probes.py]
 
 # 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
 published: {sign: -1, hl: 10, ls: [3.93, 3.7], long: [0.136, 0.12], lib: "手写", name: "day_shine_retstd"}
@@ -44,20 +45,84 @@ gates:
   known_amt_max9:    "cross_max(day_sum(Amt), 9)"          # F001:成交额水平 + 极值记忆
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
+  orig:              "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))"   # 原式本身:让每个阶段的 rank 相关矩阵里都有它(面板已缓存,不花钱)
+corr_ids: [f_orig, f_roll5, f_roll5_rank, f_ivol, f_j_rank]     # 报告第 8 节的相关矩阵:五个最终候选(同一次运行里算的)
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
-            known_amt_max9, known_stdamt_max9, known_ivol_max9]
+            known_amt_max9, known_stdamt_max9, known_ivol_max9, orig]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
+  decay:      [v_base, s2_roll5_diag]
+  by_year:    [v_base, s2_roll5_diag, s2_roll5_rankfold, s2_absret, f_orig, f_roll5, f_roll5_rank, f_ivol, f_j_rank, sr_fold_jret, sr_orig_nz, sr_fold_kivmax9]
+  neutralise: [v_base, s2_roll5_diag]
   profile:    [v_base]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+    - {factor: s2_roll5_diag, gate: ctl_price, buckets: 5}
+    - {factor: s2_roll5_diag, gate: ctl_cap, buckets: 5}
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))", why: "原始表达式"}
+
+  # ---------------------------------------------------------------- S1
+  # 这棵树 = fold(day_mean(stat_at(mask, Ret))):三个可独立替换的零件 —— 掩码、短窗统计量、折叠。一次拆一个。
+  - id: S1_parts
+    question: "预测力在三个零件(放量掩码 / 5 分钟窗口 std / 截面折叠)的哪一个里?哪一个可以拿掉或换成朴素等价物?"
+    variants:
+      - {id: s1_nofold, group: ablate, profile: true, expr: "day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))", why: "去掉折叠(H2 对 H3):如果收益对 J 是驼峰,不折叠的 J 多头腿应明显更差、十分位剖面两头低;如果只是「高波动差」,它的多空夏普不会低于原式"}
+      - {id: s1_rankfold, group: substitute, profile: true, expr: "abs_(cs_demean(cs_rank(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)))))", why: "折叠中心从截面均值换成中位数、距离从水平换成排名:如果原式的空头腿只是 J 右尾的那批票,对称的排名折叠(两端各取 5%)应明显变差"}
+      - {id: s1_fold_ivol, group: substitute, profile: true, expr: "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))", why: "拿掉整个事件机器(H1):同一段分钟收益的全天 std 做同样的折叠。如果放量掩码和 5 分钟窗口有内容,这个应明显更差"}
+      - {id: s1_fold_roll5, group: substitute, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))", why: "保留 5 分钟窗口 std、把掩码换成全部分钟:把「掩码」和「短窗统计量」分开。它和原式一样好 = 掩码多余"}
+      - {id: s1_mask_quiet, group: substitute, profile: true, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)))), sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_slice(Ret, 2, 237), 5))))", why: "掩码取反(ΔVolume 低于阈值的分钟,约占九成):如果「耀眼时刻」是特殊的,非耀眼时刻的同一统计量应更差"}
+      - {id: s1_win3, group: window, profile: true, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 3))))", why: "窗口 5 → 3:真效应应该有邻域(H8)"}
+      - {id: s1_win15, group: window, profile: true, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 15))))", why: "窗口 5 → 15:同上;窗口越长越接近全天波动"}
+      - {id: s1_fold_dvol20, group: substitute, profile: true, expr: "abs_(cs_demean(ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)))", why: "完全不用分钟数据(H6):20 日日频收益波动做同样的折叠。它能复现 = 这条因子是「折叠过的波动水平」,与日内无关"}
+
+  # ---------------------------------------------------------------- S2
+  # S1 的结果:去掉放量掩码(全部分钟 / 非放量分钟的同一个 5 分钟 std)之后空头腿少一半,多头腿在 train 持平、valid 从 −1.6% 变成 +10%。
+  # 事件版窗口 3 → 5 → 15 → 全天 std → 全部分钟 roll5,valid 多头腿净超额单调变好。这一阶段把阶梯补全,并检验价格水平嫌疑。
+  - id: S2_background
+    question: "多头腿的稳健性是不是「背景波动」(不被放量爆发主导的那部分波动)的性质?它是不是价格水平 / 报价单位的另一种写法?"
+    variants:
+      - {id: s2_roll5_diag, group: baseline, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))", why: "与 s1_fold_roll5 同一条表达式(面板已缓存),换个 id 只为了给它做中性化 / 逐年 / 衰减 / 条件 IC:它的多头腿是不是价格水平或市值的另一种写法"}
+      - {id: s2_roll3, group: window, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 3))))", why: "「背景波动」阶梯:全部分钟、窗口 3。若多头腿的稳健性来自「不被放量爆发主导」,窗口越短越该保住;塌了就说明 5 是幸运参数"}
+      - {id: s2_roll15, group: window, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 15))))", why: "阶梯:窗口 15"}
+      - {id: s2_roll60, group: window, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 60))))", why: "阶梯:窗口 60,已接近全天 std(s1_fold_ivol)。预测:valid 多头腿净超额从 roll5 的水平向 fold_ivol 的 +3.7% 退化"}
+      - {id: s2_absret, group: substitute, profile: true, expr: "abs_(cs_demean(day_mean(abs_(in_slice(Ret, 2, 237)))))", why: "阶梯的尽头(窗口 1):分钟收益绝对值的日均值,不用任何滚动算子。它和 roll5 一样好 = 5 分钟窗口 std 也是多余的,核心只是「典型的一分钟波动有多大」"}
+      - {id: s2_roll5_noslice, group: ablate, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(Ret, 5))))", why: "去掉 in_slice:开盘头两格和收盘集合竞价三格放回去。不变 = 切片多余"}
+      - {id: s2_roll5_rankfold, group: substitute, profile: true, expr: "abs_(cs_demean(cs_rank(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))", why: "在背景波动上把均值折叠换成排名折叠(中心 = 中位数,两端对称):S1 里对事件版 J 这样做,多头腿更稳而空头腿减半;看这是不是折叠方式的一般性质"}
+      - {id: s2_roll5_nofold, group: ablate, profile: true, expr: "day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))", why: "背景波动不折叠:十分位剖面是驼峰还是单调?(事件版 J 不折叠时最低一档 train −39%)"}
+      - {id: s2_fold_logprice, group: substitute, profile: true, expr: "abs_(cs_demean(log(day_last(Close))))", why: "价格水平 / 最小报价单位嫌疑:低价股一跳就是几十 bp,背景波动天然高。若 roll5 折叠的多头腿只是「价格不高不低」,同样折叠 log 价格应能复现并与它高相关"}
+      # s2_fold_dvol20(20 日日频波动的同样折叠)两次都因 GPU 被邻居占满、ts_stddev 报 CUDA OOM 而失败,从本阶段拿掉;
+      # 这个问题(H6)已由 look.py 用缓存的 ctl_dvol20 面板直接回答(半衰期 10:多空 +2.96 / +1.68),见 07x_look.md。
+      - {id: s2_burst_ratio, group: isolate, profile: true, expr: "div(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)), day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))", why: "放量掩码独有的内容:放量时刻的 5 分钟波动 ÷ 全部分钟的 5 分钟波动(无量纲)。原式比 roll5 折叠多出来的空头腿若来自这里,这个比值自己应有明显的 rank IC"}
+
+  # ---------------------------------------------------------------- S_final
+  # 读留出段的那一次。候选只凭 train / valid 选定,理由写在 notes/F101_day_shine_retstd/10_distilled.md 的前半段(读之前写的)。
+  # 五个候选 = {J, roll5} x {均值折叠, 排名折叠} + 朴素基准(全天 std 的均值折叠)。面板都已缓存。
+  - id: S_final
+    question: "样本外(用户的测试段):背景波动折叠的多头腿是不是仍然好于原式?差别来自折叠方式还是统计量?"
+    variants:
+      - {id: f_orig, group: final, final: true, profile: true, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))", why: "原式(12 个中间量)"}
+      - {id: f_roll5, group: final, final: true, profile: true, expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))", why: "事前推荐:背景波动(全部分钟的 5 分钟滚动 std)的均值折叠,5 个算子。若留出段多头腿净超额与纯多头夏普不高于原式,升华不成立"}
+      - {id: f_roll5_rank, group: final, final: true, profile: true, expr: "abs_(cs_demean(cs_rank(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))", why: "背景波动的排名折叠:折叠中心固定在中位数。它与 f_roll5 的差 = 均值折叠中心位置的价值"}
+      - {id: f_ivol, group: final, final: true, profile: true, expr: "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))", why: "最朴素的等价物:全天分钟收益 std 的均值折叠,4 个算子。f_roll5 相对它的 valid 优势若是运气,留出段里两者应持平"}
+      - {id: f_j_rank, group: final, final: true, profile: true, expr: "abs_(cs_demean(cs_rank(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)))))", why: "对原式的最小修补:保留放量掩码,只把均值折叠换成排名折叠。它好于 f_orig 而不差于 f_roll5_rank = 原式多头腿的问题在折叠不在统计量"}
+
+  # ---------------------------------------------------------------- SR_rivals(修订阶段,在 S_final 之后跑的;只读 train / valid,留出段没有再读)
+  # 审查指出原研究有三个竞争解释没有排除。每个用正式口径做一次直接替换(审查员的 audit_1.py 已按固定半衰期 10 量过,这里是独立复核):
+  #   (a) 「放量掩码独有的内容」—— 掩码从没换成不含 Volume 的事件定义;  (b) H5 是按人头否掉的,没有按收益贡献;
+  #   (c) 「与 F001 的族无关」只看了折叠面板对单调变量的 rank 相关。
+  - id: SR_rivals
+    question: "原式相对朴素的日内波动折叠多出来的东西,是 Volume 字段的内容、一字板日的贡献,还是 F001 的日内波动 + 极值记忆族折叠之后就有的?"
+    variants:
+      - {id: sr_fold_jret, group: substitute, profile: true, expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(abs_(in_slice(Ret, 2, 237)), add(in_mean_full(abs_(in_slice(Ret, 2, 237))), in_stddev_full(abs_(in_slice(Ret, 2, 237))))), in_slice(Ret, 2, 237), 5))))", why: "掩码换成不含 Volume 的事件(|Ret| > 当天 |Ret| 的均值 + 1σ),其余不动:如果 Volume 字段贡献可交易的独有内容,这个版本的空头腿和多空夏普应明显低于原式;不低于 = 放量只是大 |Ret| 分钟的代理"}
+      - {id: sr_fold_q90, group: substitute, profile: true, expr: "abs_(cs_demean(day_quantile(in_stddev_rolling(in_slice(Ret, 2, 237), 5), 0.9)))", why: "不用任何触发机器,只取 5 分钟滚动 std 的日内第 90 百分位再折叠:如果「尾部加权」本身就够,它的空头腿应到原式的水平;只到全天 std 折叠的水平 = 增量来自「大波动分钟附近的局部波动」而不是分位数"}
+      - {id: sr_orig_nz, group: ablate, profile: true, expr: "abs_(cs_demean(replace_small_with_nan(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)))))", why: "原式里 J == 0(当天触发窗口内分钟收益全为 0 的一字板日)的格子置 NaN:如果空头腿不依赖一字板附近的票(H5 死),多空夏普与空头腿应不变;下降多少就是它们给了多少"}
+      - {id: sr_ratio_jret, group: isolate, profile: true, expr: "div(day_mean(in_sustain_stddev(is_gt(abs_(in_slice(Ret, 2, 237)), add(in_mean_full(abs_(in_slice(Ret, 2, 237))), in_stddev_full(abs_(in_slice(Ret, 2, 237))))), in_slice(Ret, 2, 237), 5)), day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))", why: "不含 Volume 的「爆发比」(|Ret| 激增时刻的 5 分钟波动 ÷ 背景波动):如果 s2_burst_ratio 的空头信号是放量事件独有的,这个比值的 rank IC 和最差一档应明显更弱"}
+      - {id: sr_ratio_ivol, group: isolate, profile: true, expr: "div(day_std(in_slice(Ret, 2, 237)), day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))", why: "完全不用掩码的集中度(全天 std ÷ 5 分钟滚动 std 的日均值):它也有单调空头信号 = 「爆发比」只是日内波动集中在少数分钟里的程度"}
+      - {id: sr_ratio_j_jret, group: isolate, profile: true, expr: "div(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5)), day_mean(in_sustain_stddev(is_gt(abs_(in_slice(Ret, 2, 237)), add(in_mean_full(abs_(in_slice(Ret, 2, 237))), in_stddev_full(abs_(in_slice(Ret, 2, 237))))), in_slice(Ret, 2, 237), 5)))", why: "直接量 Volume 特有的部分:放量掩码的统计量 ÷ |Ret| 掩码的统计量。Volume 有独有内容的话它自己应有 rank IC 和扣费后为正的书"}
+      - {id: sr_fold_kivmax9, group: substitute, profile: true, expr: "abs_(cs_demean(cross_max(day_var(Ret), 9)))", why: "F001 的「日内波动 + 极值记忆」族(known_ivol_max9)做同样的折叠:如果原式与这一族无关,折叠后应没有信号(像 fold(成交额) 那样);有接近原式的书 = 近亲"}
