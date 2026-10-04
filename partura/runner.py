@@ -220,24 +220,38 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
         ctl_names = [k for k in list(controls) + list(ext_controls) if k in panels]
         want = [v for v in (diag_cfg.get("neutralise") or []) if v in ok]
         if want and ctl_names:
-            _say(f"diagnostics: neutralise ({len(want)} variants x {len(ctl_names)} controls)")
+            # What gets neutralised is the signal that is TRADED -- sign x panel, EMA-smoothed at the
+            # fitted half-life -- not the raw daily panel.  For a factor whose value only appears
+            # after smoothing (raw decile turnover 88%, Sharpe -14; smoothed over 20 days, +2.8) the
+            # raw panel is mostly day-to-day noise, so the controls span 7% of it while spanning far
+            # more of the slow component that actually earns the money.  The raw R^2 is kept beside
+            # it for exactly that comparison.
+            _say(f"diagnostics: neutralise ({len(want)} variants x {len(ctl_names)} controls, on the traded signal)")
             ctl_z = {k: dg._zrank(np.asarray(panels[k][tr], dtype=np.float64)) for k in ctl_names}
             neut: Dict[str, object] = {}
             for vid in want:
                 r = results[vid]
-                y_z = dg._zrank(np.asarray(ok[vid][tr], dtype=np.float64))
                 hl = r["books"]["hl_used"]
+                sig = bk.smoothed(r["sign"] * np.asarray(ok[vid], dtype=np.float64), hl)[tr]
+                y_z = dg._zrank(sig)
 
                 def _resid_row(resid, info):
-                    icr = dg.ic_row(resid, tgt[tr], sign=r["sign"], target_ranks=tgt_ranks[fit_name])
-                    sm = bk.smoothed(r["sign"] * resid, hl)
-                    br = bk.book_row(sm, tgt[tr], slice(0, sm.shape[0]), cost, top)
+                    icr = dg.ic_row(resid, tgt[tr], sign=1.0, target_ranks=tgt_ranks[fit_name])
+                    br = bk.book_row(resid, tgt[tr], slice(0, resid.shape[0]), cost, top)
                     return {"r2": info["mean_r2"], "rank_ic": icr["rank_ic"], "rank_icir": icr["rank_icir"],
                             "ls_sharpe": br["ls_sharpe"], "long_gross_ann": br["long_gross_ann"],
                             "long_ann": br["long_ann"], "ls_turnover": br["ls_turnover"]}
 
-                entry = {"all_controls": _resid_row(*dg.neutralise(y_z, ctl_z, panel_ready=True,
+                base_ic = dg.ic_row(sig, tgt[tr], sign=1.0, target_ranks=tgt_ranks[fit_name])
+                entry = {"_traded_signal": {"r2": 0.0, "rank_ic": base_ic["rank_ic"],
+                                            "rank_icir": base_ic["rank_icir"],
+                                            **{k: r["books"]["splits"][fit_name][k]
+                                               for k in ("ls_sharpe", "long_gross_ann", "long_ann", "ls_turnover")}},
+                         "all_controls": _resid_row(*dg.neutralise(y_z, ctl_z, panel_ready=True,
                                                                    controls_ready=True))}
+                raw_z = dg._zrank(np.asarray(ok[vid][tr], dtype=np.float64))
+                entry["all_controls"]["r2_raw_panel"] = dg.neutralise(
+                    raw_z, ctl_z, panel_ready=True, controls_ready=True)[1]["mean_r2"]
                 for k in ctl_names:
                     entry[k] = _resid_row(*dg.neutralise(y_z, {k: ctl_z[k]}, panel_ready=True,
                                                          controls_ready=True))

@@ -285,19 +285,19 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
             L += ["<details><summary>每个变体为什么存在</summary>", "", *whys, "", "</details>", ""]
         L += [note(f"07_{sid}"), ""]
     if isinstance(diag.get("neutralise"), dict) and diag["neutralise"]:
-        L += ["### 中性化(fit 段,秩空间逐日截面回归的残差)", "",
-              "| 变体 | 对谁中性化 | 截面 R² | 残差 rank IC | 残差扣费多空夏普 | 残差多头腿毛超额 | 残差多空换手 |",
-              "|---|---|---|---|---|---|---|"]
+        L += ["### 中性化(fit 段)", "",
+              "> 被中性化的是**实际交易的信号**(方向 × 面板、按选定的半衰期平滑),对控制变量做秩空间逐日截面回归;"
+              "残差不再平滑,直接建书。R² 是控制变量张成的部分。", "",
+              "| 变体 | 对谁中性化 | 截面 R² | rank IC | 扣费多空夏普 | 多头腿毛超额 | 多头腿净超额 | 多空日换手 |",
+              "|---|---|---|---|---|---|---|---|"]
         for vid, entry in diag["neutralise"].items():
-            b0 = results.get(vid, {})
-            if b0.get("books"):
-                t0 = b0["books"]["splits"].get(any_run.get("fit_split", "train"), {})
-                s0 = b0["splits"].get(any_run.get("fit_split", "train"), {})
-                L.append(f"| `{vid}` | _(未中性化)_ | — | {_f(s0.get('rank_ic'), 4)} | {_f(t0.get('ls_sharpe'))} "
-                         f"| {_f(t0.get('long_gross_ann'), pct=True)} | {_f(t0.get('ls_turnover'), pct=True, plus=False)} |")
             for ctl, rec in entry.items():
-                L.append(f"| `{vid}` | {ctl} | {_f(rec['r2'], 3, plus=False)} | {_f(rec['rank_ic'], 4)} "
-                         f"| {_f(rec['ls_sharpe'])} | {_f(rec['long_gross_ann'], pct=True)} "
+                name = "_(未中性化的交易信号)_" if ctl == "_traded_signal" else ctl
+                r2 = "—" if ctl == "_traded_signal" else _f(rec["r2"], 3, plus=False)
+                if "r2_raw_panel" in rec:
+                    r2 += f"(原始日频面板上 {_f(rec['r2_raw_panel'], 3, plus=False)})"
+                L.append(f"| `{vid}` | {name} | {r2} | {_f(rec['rank_ic'], 4)} | {_f(rec['ls_sharpe'])} "
+                         f"| {_f(rec['long_gross_ann'], pct=True)} | {_f(rec.get('long_ann'), pct=True)} "
                          f"| {_f(rec['ls_turnover'], pct=True, plus=False)} |")
         L += ["", note("07_neutralise"), ""]
     if isinstance(diag.get("conditional"), dict) and diag["conditional"]:

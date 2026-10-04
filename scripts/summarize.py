@@ -85,13 +85,18 @@ for path in args:
                       " ".join(f(x['excess_ann'], pct=True) for x in rows))
 
     for vid, entry in (diag.get("neutralise") or {}).items():
-        r0 = res[vid]
-        print(f"\n中性化 {vid}(fit 段; 未中性化: rIC {f(r0['splits']['train']['rank_ic'], 4)}, "
-              f"LS {f(r0['books']['splits']['train']['ls_sharpe'])}, "
-              f"Lgross {f(r0['books']['splits']['train']['long_gross_ann'], pct=True)}):")
+        b = entry.get("_traded_signal", {})
+        print(f"\n中性化 {vid}(fit 段;对象是**实际交易的信号** = 方向 x 面板、按半衰期平滑;残差不再平滑):")
+        print(f"  {'(未中性化)':<14} R2   —    rIC {f(b.get('rank_ic'), 4)}  LS {f(b.get('ls_sharpe'))}  "
+              f"Lgross {f(b.get('long_gross_ann'), pct=True)}  Lnet {f(b.get('long_ann'), pct=True)}  "
+              f"TO {b.get('ls_turnover', float('nan')):.1%}")
         for ctl, rec in entry.items():
+            if ctl == "_traded_signal":
+                continue
+            extra = f"  (原始日频面板上的 R2 只有 {rec['r2_raw_panel']:.3f})" if "r2_raw_panel" in rec else ""
             print(f"  {ctl:<14} R2 {rec['r2']:.3f}  残差 rIC {f(rec['rank_ic'], 4)}  LS {f(rec['ls_sharpe'])}  "
-                  f"Lgross {f(rec['long_gross_ann'], pct=True)}  TO {rec['ls_turnover']:.1%}")
+                  f"Lgross {f(rec['long_gross_ann'], pct=True)}  Lnet {f(rec['long_ann'], pct=True)}  "
+                  f"TO {rec['ls_turnover']:.1%}{extra}")
     for key, rows in (diag.get("conditional") or {}).items():
         print(f"条件 IC {key}: " + "  ".join(f"Q{r['bucket'] + 1} {f(r['rank_ic'], 4)}" for r in rows))
     if diag.get("controls"):
