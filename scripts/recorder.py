@@ -331,8 +331,11 @@ def state_md(fid: str, st: dict, info: dict) -> str:
 
     sp = ROOT / "notes" / fid / "state.md"
     if sp.is_file():
-        L += [f"## 研究员自己写的现状(`notes/{fid}/state.md`,{local(sp.stat().st_mtime)} 更新)—— **先读这个**", "",
-              sp.read_text(encoding="utf-8").strip(), ""]
+        txt = sp.read_text(encoding="utf-8").strip()
+        if len(txt) > 6000:            # long: quote the opening only, the reader opens the file itself (once)
+            cut = re.search(r"(?m)^## 2", txt)
+            txt = txt[:cut.start() if cut else 3000].strip() + f"\n\n(…全文 {len(txt)} 字符,读 `notes/{fid}/state.md`)"
+        L += [f"## 研究现状(`notes/{fid}/state.md`,{local(sp.stat().st_mtime)} 更新)—— **先读这个文件**", "", txt, ""]
     else:
         L += [f"## 研究员自己写的现状(`notes/{fid}/state.md`)", "",
               "(**没有**。上一个研究员没有留下现状说明 —— 假设、逻辑和后面的思路只能从 notes、研究日志和动作流水里重建。)", ""]
