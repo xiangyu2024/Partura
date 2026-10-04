@@ -25,3 +25,10 @@
 
 硬规矩:方向只在训练段定一次;所有钱的数字扣 15 bp 并给换手;留出段有台账;
 原始结果不覆盖;判据一律实测,不写死名单。
+
+## 接手一个做到一半的研究(或一整个批次)
+
+**先读 `handoff/README.md`**。研究是接力做的:总领(Opus 5.5)/ 主研(Opus 5)/ 执行(Sonnet 5),彼此只靠文件传话;
+agent 的推理不落盘,所以每一步都要写进 `notes/<fid>/state.md`(现状)和 `notes/<fid>/journal.md`(日志)。
+`cat handoff/STATUS.md` 看全局,`./scripts/study.sh brief <fid>` 看一条因子,`docs/study_playbook.md` 是操作手册
+(§0 选拔口径 = 多头腿净超额;§7 研究日志与交接)。

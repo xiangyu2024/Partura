@@ -52,13 +52,24 @@ with slot():
                   warmup=60, device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE),
                   mirror_root="/root/autodl-tmp/AlphaCube/mirror", workdir=str(PARTURA_ROOT / "tmp"),
                   label_kind="open_vwap15", label_buyable=True, batch=2)
+    def resolve(fid, p):
+        """(expr, sign) of a pick: written out in the picks file, or looked up by id in the study's run."""
+        if p.get("expr"):
+            return p["expr"], float(p["sign"])
+        if not p.get("id"):
+            return None
+        d = json.loads((PARTURA_ROOT / "runs" / fid / f"{p.get('run', 'final')}.json").read_text(encoding="utf-8"))
+        r = d["results"][p["id"]]
+        return r["expr"], float(r.get("sign_user", r.get("sign")))
+
     spec = {}                                   # key -> (expr, sign, label)
     for f in batch["factors"]:
         short = f["id"].split("_")[0]
         spec[f"{short}.orig"] = (f["expr"], float(f["sign"]), f["name"])
         p = picks["picks"].get(f["id"])
-        if p and p.get("expr") and p["expr"].replace(" ", "") != f["expr"].replace(" ", ""):
-            spec[f"{short}.pick"] = (p["expr"], float(p["sign"]), p.get("kind", ""))
+        got = resolve(f["id"], p) if p else None
+        if got and got[0].replace(" ", "") != f["expr"].replace(" ", ""):
+            spec[f"{short}.pick"] = (got[0], got[1], p.get("kind", ""))
     for k, b in picks.get("benchmarks", {}).items():
         spec[k] = (b["expr"], float(b["sign"]), "benchmark")
     panels = ps.compute({k: v[0] for k, v in spec.items()})
