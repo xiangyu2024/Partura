@@ -238,15 +238,21 @@ def run(config_path: str, stages: Sequence[str] = (), *, store: str, device: str
                 def _resid_row(resid, info):
                     icr = dg.ic_row(resid, tgt[tr], sign=1.0, target_ranks=tgt_ranks[fit_name])
                     br = bk.book_row(resid, tgt[tr], slice(0, resid.shape[0]), cost, top)
+                    # The residual is not re-smoothed, so it turns over more than the signal it came
+                    # from: its AFTER-cost Sharpe can collapse on cost alone.  The gross Sharpe and
+                    # the rank IC say whether the alpha is gone; the net Sharpe says whether what is
+                    # left can be traded as it stands.
                     return {"r2": info["mean_r2"], "rank_ic": icr["rank_ic"], "rank_icir": icr["rank_icir"],
-                            "ls_sharpe": br["ls_sharpe"], "long_gross_ann": br["long_gross_ann"],
+                            "ls_sharpe": br["ls_sharpe"], "ls_gross_sharpe": br["ls_gross_sharpe"],
+                            "long_gross_ann": br["long_gross_ann"], "short_gross_ann": br["short_gross_ann"],
                             "long_ann": br["long_ann"], "ls_turnover": br["ls_turnover"]}
 
                 base_ic = dg.ic_row(sig, tgt[tr], sign=1.0, target_ranks=tgt_ranks[fit_name])
                 entry = {"_traded_signal": {"r2": 0.0, "rank_ic": base_ic["rank_ic"],
                                             "rank_icir": base_ic["rank_icir"],
                                             **{k: r["books"]["splits"][fit_name][k]
-                                               for k in ("ls_sharpe", "long_gross_ann", "long_ann", "ls_turnover")}},
+                                               for k in ("ls_sharpe", "ls_gross_sharpe", "long_gross_ann",
+                                                         "short_gross_ann", "long_ann", "ls_turnover")}},
                          "all_controls": _resid_row(*dg.neutralise(y_z, ctl_z, panel_ready=True,
                                                                    controls_ready=True))}
                 raw_z = dg._zrank(np.asarray(ok[vid][tr], dtype=np.float64))

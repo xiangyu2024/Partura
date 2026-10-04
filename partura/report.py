@@ -287,17 +287,19 @@ def build(config_path: str, out_root: Optional[str] = None, notes_dir: Optional[
     if isinstance(diag.get("neutralise"), dict) and diag["neutralise"]:
         L += ["### 中性化(fit 段)", "",
               "> 被中性化的是**实际交易的信号**(方向 × 面板、按选定的半衰期平滑),对控制变量做秩空间逐日截面回归;"
-              "残差不再平滑,直接建书。R² 是控制变量张成的部分。", "",
-              "| 变体 | 对谁中性化 | 截面 R² | rank IC | 扣费多空夏普 | 多头腿毛超额 | 多头腿净超额 | 多空日换手 |",
-              "|---|---|---|---|---|---|---|---|"]
+              "残差不再平滑,直接建书 —— 所以残差的换手更高,**扣费夏普塌掉可能只是成本**;alpha 还在不在看 rank IC 与无成本夏普。"
+              "R² 是控制变量张成的部分。", "",
+              "| 变体 | 对谁中性化 | 截面 R² | rank IC | 无成本多空夏普 | 扣费多空夏普 | 多头腿毛超额 | 空头腿毛超额 | 多空日换手 |",
+              "|---|---|---|---|---|---|---|---|---|"]
         for vid, entry in diag["neutralise"].items():
             for ctl, rec in entry.items():
                 name = "_(未中性化的交易信号)_" if ctl == "_traded_signal" else ctl
                 r2 = "—" if ctl == "_traded_signal" else _f(rec["r2"], 3, plus=False)
                 if "r2_raw_panel" in rec:
                     r2 += f"(原始日频面板上 {_f(rec['r2_raw_panel'], 3, plus=False)})"
-                L.append(f"| `{vid}` | {name} | {r2} | {_f(rec['rank_ic'], 4)} | {_f(rec['ls_sharpe'])} "
-                         f"| {_f(rec['long_gross_ann'], pct=True)} | {_f(rec.get('long_ann'), pct=True)} "
+                L.append(f"| `{vid}` | {name} | {r2} | {_f(rec['rank_ic'], 4)} | {_f(rec.get('ls_gross_sharpe'))} "
+                         f"| {_f(rec['ls_sharpe'])} | {_f(rec['long_gross_ann'], pct=True)} "
+                         f"| {_f(rec.get('short_gross_ann'), pct=True)} "
                          f"| {_f(rec['ls_turnover'], pct=True, plus=False)} |")
         L += ["", note("07_neutralise"), ""]
     if isinstance(diag.get("conditional"), dict) and diag["conditional"]:
