@@ -4,20 +4,28 @@ _最后更新:2026-10-04 13:15 PDT,Opus 5.5 主会话(用户额度将尽时写�
 
 ## 现在在跑什么
 
+_更新:2026-10-04 13:45 PDT(用户重置额度之后)。_
+
 | 工作流(任务号 / run id) | 内容 | 模型 |
 |---|---|---|
-| `wj5ko0nm4` / `wf_c8c98127-70d` | F111–F115:建档 → 主研/执行轮转 → 结论 → 审查 → 修订 | 主研 Opus 5,执行 Sonnet 5 |
-| `wn8cwv4l7` / `wf_3cafb924-05e` | F106–F110:接着被换下的 Opus 5.5 研究员做(从 `notes/<fid>/state.md` 起) | 同上 |
+| `wo746drvd` / `wf_48864a04-f0a` | **F106–F115 全部 10 条**,从磁盘状态接着做(13:40 启动;chunk 10) | 主研 Opus 5,执行 Sonnet 5 |
 | 后台记录器 `scripts/recorder.py --loop 150` | 写 `handoff/`(状态板、交接页、结构化结果、动作流水) | 无(普通进程) |
 
-旧的 Opus 5.5 工作流(`wf_08351f46-81b`)已在 13:10 停掉:F104 的修订已完成并返回(none_robust);
-F106–F110 的研究做到三四成,现状已写进各自的 `state.md`(F108 是研究员自己写的;F106/F107/F109/F110 是
-`scripts/autostate.py` 从磁盘汇编的 —— 研究员没来得及写)。它们在服务器上启动的任务
-(F106 `S1_regime`、F107 `S12`、F108 `x1_anatomy`、F109 `S1_S2`、F110 `x1`)会自己跑完,接手的主研/执行用 `study.sh wait` 拉回。
+经过:12:47 / 13:10 起的两个分层工作流(`wf_c8c98127-70d`、`wf_3cafb924-05e`)在 13:29 前后因用户额度耗尽全部报错;
+第一轮主研(Opus 5)都已做完并下了工单 R1(判断写在各自的 `state.md` / `journal.md` 里),执行(Sonnet 5)大多没来得及做。
+用户重置额度后,13:40 用同一个脚本、按磁盘状态重启(不需要 resumeFromRunId)。脚本:仓库 `workflows/partura_tiered.js`
+= 本会话的 `…/workflows/scripts/partura-tiered-studies-wf_c8c98127-70d.js`。
+
+**两个坑(已处理,接手的人要知道)**
+1. 工作流会把**启动那一刻用户最近的一句话**原样转给这次运行里的每个 agent,并声明它高于脚本文本。13:10 那次启动时用户最近的话是
+   「快写 state.md,我马上就要没有额度了」→ F109、F110 的执行因此**放下工单去写 state.md**。现在每个 prompt 开头的
+   「你在整件事里的位置」明确写了:那句话是说给总领听的、已被处理,不得因此跳过或缩减任务。**启动工作流之前,留意用户最后一句话是什么。**
+2. **服务器内存被邻居占满**:13:30 起另一个会话的 GP/RL 挖掘(`gp_hit_2`、`rl_hit_2`)+ 6 个 `long_report.py` 把容器 anon 顶到 37–38 GiB;
+   Partura 的内存守卫要求 < 30 GiB 才开工(实际上限约 40 GiB,超了会 OOM 连带杀掉邻居),所以任务都在排队。
+   这是对的,**不要绕过守卫、不要动邻居的进程**;排队等待上限已从 45 分钟调到 3 小时(`PARTURA_MEM_WAIT_S`),超时退出码 97,执行会重跑。
 
 **如果一切都停了**(额度耗尽、Mac 睡眠):什么都不会丢。按 `handoff/README.md`「接着跑」一节:
 `python scripts/recorder.py --state batches/B01_single_factors.yaml` → 去掉 done 的 → 起 `workflows/partura_tiered.js`。
-不需要 resumeFromRunId。
 
 ## 已经完成的(读过留出段、有结论)
 

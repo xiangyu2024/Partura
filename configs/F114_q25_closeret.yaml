@@ -1,7 +1,7 @@
 # Partura study F114_q25_closeret  (挖掘 / #1421)
 # 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
 factor_id: F114_q25_closeret
-title: "(读完这棵树之后,用一句话写它是什么)"
+title: "单只股票近 15 日「尾盘最后一个有效分钟那一笔分钟收益」分布的下四分位数;取负后精确等于该分布的四分位距减四分位中点(权重 1:1),把尾盘分钟波动与尾盘卖压反转绑在一起的慢变特征量"
 expression: "cross_quantile_q25(day_close(Ret), 15)"
 baseline_id: v_base
 
@@ -50,15 +50,61 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
 
 diagnostics:
   decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base]
+  by_year:    [v_base, s1_loc, s1_scl]
+  neutralise: [v_base, s1_loc, s1_scl]
+  profile:    [v_base, s1_q75, s1_loc, s1_scl, s1_q50, s1_std, s1_min]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
+corr_ids: [s1_q75, s1_loc, s1_scl, s1_q50, s1_std, s1_min]
 
 stages:
   - id: S0_baseline
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "cross_quantile_q25(day_close(Ret), 15)", why: "原始表达式"}
+
+  - id: S1_shape
+    question: "原式读出的 0.25 分位数,读的是分布的位置、尺度,还是两者的 1:1 混合?"
+    variants:
+      - {id: s1_q75, group: substitute,
+         expr: "cross_quantile_q75(day_close(Ret), 15)",
+         why: "q75 = (loc+scl)/2,对尺度的载荷符号与 q25 相反、对位置的载荷同号。引擎自选 sign=+1 则驱动是尺度(H1),sign=-1 则是位置(H2)。这是本阶段最锋利的一个比特"}
+      - {id: s1_loc, group: decompose,
+         expr: "add(cross_quantile_q75(day_close(Ret), 15), cross_quantile_q25(day_close(Ret), 15))",
+         why: "= 2x 四分位中点,精确去掉尺度、只留位置。若它高于原式 → H3 成立(因子带的波动暴露是净拖累,剥掉更好),这是升华主线"}
+      - {id: s1_scl, group: decompose,
+         expr: "sub(cross_quantile_q75(day_close(Ret), 15), cross_quantile_q25(day_close(Ret), 15))",
+         why: "= 四分位距 IQR,精确去掉位置、只留尺度。若它高于原式 → H1 成立,因子本质是尾盘分钟波动;与 s1_loc 合起来穷尽原式"}
+      - {id: s1_q50, group: substitute,
+         expr: "cross_quantile_q50(day_close(Ret), 15)",
+         why: "同族单算子替换的纯位置版(中位数),比 add() 更简单。若它打平原式 → 提纯答案就是它(H2),而且是最省的一个结构"}
+      - {id: s1_std, group: substitute,
+         expr: "cross_stddev(day_close(Ret), 15)",
+         why: "非稳健的尺度版。与 s1_scl(稳健)比,量的是'尺度读数要不要吃极端日';若 std 远好于 IQR,说明信息在尾部极值而不在离散度本身"}
+      - {id: s1_min, group: substitute,
+         expr: "cross_min(day_close(Ret), 15)",
+         why: "被单日完全决定的极值版。q25 对单日的响应有界(约一个顺序统计量间距),min 没有。若 min 打平或更好 → 这是单日事件因子,H7 被杀死,整套'慢变特征量'读法要推翻"}
+
+  - id: S2_where
+    question: "「当天最后一个有效分钟」这个取值位置是必要的,还是换成当日收益/全天平均/开盘第一分钟都一样?"
+    variants:
+      - {id: s2_daysum, group: aperture,
+         expr: "cross_quantile_q25(day_sum(Ret), 15)",
+         why: "day_sum(Ret) = 当日所有分钟收益之和 ~= 当日(对数)收益。这一条把因子变成'日收益的 15 日下四分位数'——一个已知的 downside-risk/反转家族。若它与原式 rank 相关 >0.8 且表现不低 → H6 成立,原式不是尾盘因子"}
+      - {id: s2_daymean, group: aperture,
+         expr: "cross_quantile_q25(day_mean(Ret), 15)",
+         why: "全天平均分钟收益 = day_sum/有效分钟数。它与 s2_daysum 只差分母,两者之差单独量出'停牌/低流动性导致的有效分钟数差异'对因子的污染"}
+      - {id: s2_dayopen, group: aperture,
+         expr: "cross_quantile_q25(day_open(Ret), 15)",
+         why: "day_open = day_first 的别名(源码确认),取当天第一个有效分钟。开盘与收盘是两个对称的集合竞价位置;若开盘版也行 → 是'集合竞价价格压力'这一类,不是尾盘特有。注意:它可能等于隔夜跳空,解读留给主研"}
+
+  - id: S3_window
+    question: "15 天的记忆够不够?(hlL=hlS=20 已顶到 EMA 网格上限、衰减表到 h20 还在升 —— 加长记忆只能靠改窗口)"
+    variants:
+      - {id: s3_w5,  group: window, expr: "cross_quantile_q25(day_close(Ret), 5)",
+         why: "缩短到 5 天。n=5 时 q25 的插值位置是第 2 小,统计量性质也变了;若明显更差 → 记忆方向确认向长"}
+      - {id: s3_w30, group: window, expr: "cross_quantile_q25(day_close(Ret), 30)",
+         why: "加长到 30 天。若在固定半衰期表的同一列上也高于原式 → 结构改进(不是平滑的功劳),这是最便宜的升华候选"}
+      - {id: s3_w60, group: window, expr: "cross_quantile_q25(day_close(Ret), 60)",
+         why: "加长到 60 天。和 w30 一起给出 5/15/30/60 四点曲线,看是单调还是有内点最优(邻域稳定性)"}
