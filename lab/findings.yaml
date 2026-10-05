@@ -11,8 +11,8 @@ findings:
   recheck: 喂给它的是收益序列(如 Ret)时语义完全不同:DW(Ret) 是分钟收益一阶自相关,方向都反
 - id: cross-max-on-signed-scaled-quantity-is-magnitude
   claim: cross_max 作用在一个正负混杂、带尺度的量上时等价于取幅度,因此把该量变成一个缓慢变化的水平型状态变量
-  evidence: 裸 day_cov(Amt,Low) rank IC 0.0128;cross_max(·,9) 后 0.0434;换成 cross_mean 塌回 0.0128;外面套 abs_
-    几乎不变(0.0442)但 Pearson IC 从 0.0111 掉到 0.0006
+  evidence: 裸 day_cov(Amt,Low) rank IC 0.0128;cross_max(·,9) 后 0.0434;换成 cross_mean 塌回 0.0128;外面套 abs_ 几乎不变(0.0442)但
+    Pearson IC 从 0.0111 掉到 0.0006
   study: F001_dwgated_covamtlow
   date: '2026-09-30'
   operators:
@@ -32,8 +32,8 @@ findings:
   recheck: 只在换手是瓶颈的成本口径下成立(15bp 单边);成本更低时未必划算
 - id: amt-level-family-evades-rank-ban
   claim: 成交额水平家族可以通过 day_cov(Amt, 价格) 这类未封结构绕过 AlphaCube 的结构封禁与 0.95 rank 相关封禁
-  evidence: cross_max(day_cov(Amt,Low),9) 与 cross_max(day_sum(Amt),9) 的 rank 相关只有 0.809(低于闸),但对 log 成交额中性化后
-    rank IC 掉 56%(R² 0.579)
+  evidence: cross_max(day_cov(Amt,Low),9) 与 cross_max(day_sum(Amt),9) 的 rank 相关只有 0.809(低于闸),但对 log 成交额中性化后 rank
+    IC 掉 56%(R² 0.579)
   study: F001_dwgated_covamtlow
   date: '2026-09-30'
   operators:
@@ -55,3 +55,672 @@ findings:
   - sigmoid
   confidence: high
   recheck: 只在「不平滑、直接对当天面板排序」时成立。一旦先做 EMA 再排序(半衰期 > 0,这是现在的默认口径),保序变换会改变各天之间的权重,就不再是 no-op(F103 的 X3-H 实测);进入线性组合或数值回归时同样不是
+    【B01 修正】这条只在两个条件同时成立时才对:(1) 操作数恒正 —— 偶数次幂作用在有正有负的量上是折叠,不是保序(f102-l1);(2) 下游没有 EMA(半衰期 0)—— 用户口径先对原始数值做 EMA 再排名,重尾正数直接
+    EMA ≈ 带衰减的峰值记忆,先取 log / 排名再 EMA 是另一个因子(f103-l1)。
+- id: trigger-ops-make-builtin-probes-vacuous
+  claim: in_sustain_* 是「触发型」算子:第一个操作数是 0/1 掩码,只在 mask==1 的分钟写值。内置探针给它喂随机浮点数,永不触发,所有读数(有限值占比 0、齐次度 None、与分钟顺序无关)都是空读数;注册表给它的
+    boolean_output/trivial_boolean 标志是错的。真实语义:窗口 = 触发分钟自己 + 之后 d−1 分钟(朝后看、含触发分钟),总体 std,跑出行尾就截短(最后一分钟触发得 0),整行无触发
+    → NaN。
+  evidence: studies/F101_day_shine_retstd/probes.py:minute_offsets_read=[0,1,2,3,4](自检 in_delay→[-1]);ramp_window_readout
+    1.4142 / 1.118 / 0.8165 / 0.5 / 0.0(自检 in_stddev_full 在 5 宽斜坡上 1.4142);trigger_semantics 只有 1.0 触发;is_gt 遇 NaN
+    与相等都给 0。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - in_sustain_stddev
+  - is_gt
+  - in_mean_full
+  - in_stddev_full
+  - in_delay
+  confidence: high
+  recheck: 其他 in_sustain_* 内核(start_offset / num 参数不同)要重跑这组探针;内核改动后失效。
+- id: volume-surge-mask-is-a-proxy-for-large-move-minutes
+  claim: 「ΔVolume > 当天自己的均值 + 1σ」这种掩码不带成交额尺度(每票每天约 20 次触发,p1=5、p99=32),挂在它上面的统计量 ≈ 同一统计量向大波动分钟加权的版本(与无条件版 rank 相关
+    0.85~0.90)。把掩码换成不含 Volume 的「|Ret| > 当天均值 + 1σ」,折叠后的书在同一批格子上逐年分不开;「有条件 ÷ 无条件」的比值是单调空头信号,但完全不用掩码的「全天 std ÷ 滚动
+    std 均值」同样强,Volume 特有的部分(两种掩码的统计量之比)没有信号。遇到「量触发、价统计」的结构,先拿「价触发」和「无触发的集中度」当对照,再谈事件的含义;只把掩码换成「全部分钟 / 取反」不足以说明事件定义有内容。
+  evidence: SR_rivals(正式口径):sr_fold_jret 多空 +3.87/+3.12、空头 +49.1%/+48.9% 对 sr_orig_nz +3.65/+3.04、+47.8%/+48.3%;sr_ratio_jret
+    / sr_ratio_ivol / s2_burst_ratio rank IC +0.0272/+0.0282/+0.0285(train)、+0.0359/+0.0459/+0.0415(valid);sr_ratio_j_jret
+    rank IC +0.005/+0.011、扣费多空 −0.62/+0.20。rev_look.py E(同格子、逐年):J 3.66/3.05 对 Jret 3.78/3.06。audit_1.py A:原式对 EMA10
+    fold(Jret) R² 0.792/0.848,残差空头腿 −0.5%/−5.3%。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - is_gt
+  - in_mean_full
+  - in_stddev_full
+  - in_sustain_stddev
+  - day_mean
+  - div
+  confidence: medium
+  recheck: 阈值更高(如 3σ)时触发次数少,量事件与价事件可能分开;被统计的字段不是收益时要重测;不用 Volume 的版本和三个比值都没有读留出段。
+- id: cs-fold-hides-exposure-from-linear-neutralisation
+  claim: 外层是不保序的截面折叠 abs_(cs_demean(x)) 时,因子与任何单调控制在秩空间近似不相关,线性中性化的 R² 会严重低估已知暴露;必须对「同样折叠、同样平滑」的控制变量中性化。同理,「折叠面板与已知家族的
+    rank 相关接近 0」不是无关的证据:要量交易信号对家族折叠版的 R²、比空头十分位的重叠。rank IC 也不能用来给折叠型变体排序(不折叠版 rank IC 更高但书是空的)。
+  evidence: 原式:9 个线性控制 R² 0.154,对 EMA10(fold(day_std(Ret))) 一个变量 R² 0.749/0.764(look2.py A、audit_1.py A);对 known_ivol_max9:原始折叠面板
+    rank 相关 −0.036,交易信号对其折叠版 R² 0.418/0.489(取对数 0.569/0.644),空头十分位重叠 70%/72%(audit_1.py D、rev_look.py D);背景版:0.090
+    对 0.796(look3.py D);s1_nofold rank IC +0.0389/+0.0571 而多空 1.34/2.35、多头净 −9.0%。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - abs_
+  - cs_demean
+  confidence: high
+  recheck: 若被折叠的量收益剖面本来单调,折叠会毁掉信号,这条不适用;折叠中心不是截面均值/中位数时要重算折叠版控制。
+- id: fold-then-smooth-is-part-of-the-factor
+  claim: 最外层是非线性节点(abs)时,口径里的 EMA 不是中性的平滑:先折叠后平滑与先平滑后折叠是两个不同的因子,多头腿只在前者存在。换成 20/40 日均值、20 日最大值、均值+标准差(cross_fangzheng)、均方根在噪声内是同一个东西。EMA|K|
+    = |EMA K| + 不稳定度 是恒等式,但「两项各自单调」只在背景波动(roll5)版上两段成立,在放量版 J 上 valid 没有梯度 —— 不要把一个统计量上做的双重排序套到另一个统计量头上。
+  evidence: look.py F(J:多头净 +9.0%/−1.6% 对先平滑后折叠 −9.5%/−10.2%);look2.py F(roll5:+9.1%/+10.4% 对 −4.7%/−6.4%);look3.py
+    H(roll5 双重排序两段一致);audit_1.py B(J、半衰期 10:valid 最近三分位里按不稳定度五分位 +6.2/+2.9/+2.2/+7.0/−0.4);look3.py C/F 各种聚合 train
+    多头净 8.0%~9.2%。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - abs_
+  - cs_demean
+  - cross_mean
+  - cross_max
+  - cross_fangzheng
+  confidence: medium
+  recheck: K 的符号长期不变(不稳定度≈0)的因子上两种顺序等价;时间聚合的比较只在 train/valid 上做过,没有读留出段。
+- id: moderate-activity-fold-is-generic-benchmark-first
+  claim: 把任何「活跃度 / 波动」类变量做截面均值折叠再平滑(日内波动、20 日波动、换手率、振幅、F001 的 9 日极值记忆),在 2018–2021 都得到多空夏普 3.0~3.8、多头净 +7.8%~+9.7%
+    的书;规模、价格、成交额水平折叠后没有。遇到 abs_(cs_demean(X))、X 是活跃度类的因子,先比两个基准:4 个算子的 abs_(cs_demean(day_std(Ret))),以及「X 的水平在第
+    10~80 百分位的全部股票等权」这个平台 —— 多头十分位比不过平台,它就只是一个避开极端的过滤器,不是选股信号。
+  evidence: look3.py D;sr_fold_kivmax9 train 多空 +3.83、多头净 +7.8%(valid +2.13/−4.5%);S_final:f_ivol 测试段多空 3.42、多头净
+    +6.6%、纯多头夏普 1.43,与 12 个中间量的原式(3.70 / +6.0% / 1.32)在噪声内不可区分;rev_look.py C:平台等权每年毛超额 +5.5%~+8.0%,原式多头十分位减平台 2018–2021
+    年 +5.8~+14.1、2022–2023 年 −1.8/+0.7。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - abs_
+  - cs_demean
+  - day_std
+  confidence: medium
+  recheck: 日频的那几个折叠在 2022–2023 多头腿归零;留出段只读过 day_std 版;平台对照在留出段没有量;组合里已有波动/换手率因子时空头腿基本重复。
+- id: rank-fold-short-leg-is-half-low-side
+  claim: (只是构成事实,不是孰优的结论)对右偏的波动类输入,均值折叠的中心落在第 59~66 百分位,空头十分位人头 84%~97% 在高侧;对称的排名折叠 abs_(cs_demean(cs_rank(x)))
+    的空头十分位有 42%~57% 人头在低侧(水平在第 4~10 百分位)。低侧那一半的贡献不稳定:2018 年 +10~+11 个点,到 2023 年缩到 0~+1。两种折叠孰优没有结论:样本外多空夏普的差别只来自
+    2024 一年(排名折叠空头腿 −5.3%/+3.7%,样本量 1 年,且那一年没有按侧拆分过),多头腿上两者在测试段不可区分。
+  evidence: rev_look.py A(2018–2023 逐年低侧 / 高侧拆分,J 与 roll5 两个统计量);look.py D;S_final 逐年(final.json):f_j_rank 在 2020、2022、2023
+    年多空高于原式,f_roll5_rank 在 2020、2021、2023、2025 年高于 f_roll5。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - cs_rank
+  - abs_
+  - cs_demean
+  confidence: low
+  recheck: 2024 年的低侧 / 高侧拆分没有做(在留出段里);需要新的样本外年份才能判断低侧转负是不是会重复的尾部。不要据此在两种折叠之间做选择。
+- id: head-count-is-not-return-contribution
+  claim: 判断「某条腿是不是来自特殊的票」(一字板、次新、标签缺失)要按收益贡献,不能按人头。任何「日内收益类统计量 == 0」的格子都是一字板日;截面均值折叠后它的 |K| = 截面均值,被送进空头十分位,次日相对等权约
+    −2%/天。这里人头 2.2% 的当天一字板票给了空头腿的 13%、多空夏普的 0.56;5 日内有过一字板的票(人头 6.9%)给了 26%,20 日内的 39%,上市 60 日内的次新股 18%(train)。同一类折叠因子之间的比较不受影响(各掉
+    0.5~0.7 的多空夏普),受影响的是公布的多空夏普的绝对水平和多头腿毛超额(等权基准里含这些票)。表达式里可以用 replace_small_with_nan(x) 把零值格子置 NaN 来量。
+  evidence: audit_1.py C;SR_rivals sr_orig_nz(多空 4.21→3.65、3.21→3.04,多头腿毛超额 16.9%→15.6%、5.1%→4.5%);rev_look.py B(当天
+    J 最低 5% 的超额 train −41% → 剔除 J==0 后 −9%;fold(ivol)、fold(roll5) 去零值格子后多空 3.63→3.13、3.15→2.48)。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators:
+  - abs_
+  - cs_demean
+  - day_std
+  - day_mean
+  - in_sustain_stddev
+  - replace_small_with_nan
+  confidence: high
+  recheck: 不折叠的单调因子里零值排在一端而不是被折叠送进空头,要重量;标签口径(可买入版)变了要重量;样本外的占比没有量。
+- id: valid-only-long-leg-gain-and-halflife-confound
+  claim: 方法上的教训三条:(1) 变体按各自拟合的半衰期比较会把成本差算到结构头上 —— 半衰期 10→20 光靠省换手就给多头腿净超额加 0.4~3 个点,要用 books.sweep 在同一半衰期下比;(2)
+    在同一半衰期下 train 持平、只在 386 天的 valid 上领先的多头腿改进是在押一段行情,即使连续三个自然年都领先;(3) 读完留出段之后做的事后解释同样会过拟合:只靠样本外一个年份的差别(这里是 2024
+    年排名折叠的空头腿)不能升格成结论,事前写下的噪声带(多头净 ±3 个点、多空 ±0.3)对事后解读同样有约束力。
+  evidence: look3.py A/Y;S_final:f_roll5 相对原式 valid 多头净 +12 个点、2021–2023 每年领先,测试段只剩 +0.6 个点;f_roll5 相对 f_ivol 的
+    valid 优势(+10.4% 对 +3.7%)在测试段为 0;审查指出原报告把 2024 一年的差别写成了「均值折叠样本外更好」,并把 1 个点的多头净差别当佐证。
+  study: F101_day_shine_retstd
+  date: '2026-10-04'
+  operators: []
+  confidence: medium
+  recheck: 改进在 train 的固定半衰期比较里也成立时,第 (2) 条警告不适用。
+- id: f102-l1
+  claim: 偶数次幂(pow_2)作用在有正有负的操作数上是折叠,不是保序变换;实验室里"保序外层一元变换是 no-op"那条先验必须加上"操作数恒正"这个条件。折叠可以是因子成立的必要条件,而凸性(平方对绝对值)可以完全无关。
+  evidence: F102:K=day_kurt(...) 84.7% 为负、尾部≫0。去掉 pow_2(l_nofold_lin)多头腿毛超额 +12.7%/+12.9% → −10.4%/−1.4%,与原式 rank
+    相关 −0.46;换成 abs_(l_fold_lin)rank 相关 0.99。探针 rank_preserving=False、sign_sensitivity=even。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - pow_2
+  - abs_
+  - pow_2_5
+  - signedpower
+  confidence: high
+  recheck: 操作数恒正(成交额、方差、极差等)时平方确实是 no-op;先看 rank_preserving 探针和操作数的符号分布。操作数的两侧若含义相同(同一种"坏"),折叠就不是必需的。
+- id: f102-l2
+  claim: cross_sum 用 nansum:窗口里的缺失日(停牌、一字板导致日内统计量为 NaN、新上市)被当成 0 加进去,把这些票推向低值一端;cross_mean / cross_max / cross_med
+    跳过缺失日。对非负的日频量求和时,这会把一批大幅跑输的票送进"低值"那条腿。
+  evidence: F102:只把 cross_sum 换成 cross_mean(a_mean_sq15),rank 相关 1.00,多空夏普 +3.68/+3.88 → +3.84/+4.30,多头腿净超额 +4.9%/+4.5%
+    → +6.3%/+5.2%;窗口内有效天数不足的票占 5.2%/1.9%,在多头档里年化 −44.7%/−57.8%(x2 §1)。探针 constant_input_value / nan_behaviour。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - cross_sum
+  - cross_mean
+  - cross_max
+  - cross_med
+  confidence: high
+  recheck: 操作数几乎没有缺失日时无差别;如果 0 本身就是"当天无事"的自然取值(比如事件计数),求和是对的。因子方向若是"值高 = 多头",受害的是空头腿而不是多头腿。
+- id: f102-l3
+  claim: 极小窗口的滚动 Pearson(nt_ts_autocorr_s1(x,3)、同类的 3 对 corr)不是相关/自相关的估计量:分母带 +EPS,窗口内任一侧不动时恰好返回 0 而不是 NaN;在贴着最小报价单位跳的分钟收益上它是局部形态分类器。对它取
+    day_kurt,在价格大半天不动的日子上变成稀疏度计(K≈κ/Z−3≫0),于是整条链会"意外地"检测涨停封板日;全天一字板反而是 NaN、看不见。这个事件检测不只影响空头腿:F102 的多头腿有三分之一靠它把封过板的票挡在外面。
+  evidence: 探针:constant_input_value=0.0、impulse_in_zeros 给出两个 −0.5、iid 零分布均值 −0.295 且 18.7% 的 |r|>0.9;two_point_response
+    与伯努利峰度解析式逐位相同。数据:Z<0.5 的格子上 (K+3)·Z 稳定在 1.4~1.5;涨停封板日 K 中位数 +2.8、p95 +94,9.6% 的封板日 K=NaN(x1 §2、§6)。窗口放到 5/10/15
+    对,valid 多空夏普 +3.88 → +2.03/+0.82/+1.67。把封板日从 K 里拿掉后 60 日极值的多头腿净超额 +11.3%/+10.1% → +6.8%/+6.7%(r1 §3)。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - nt_ts_autocorr_s1
+  - day_kurt
+  - day_skew
+  confidence: high
+  recheck: 内核若改成零方差返回 NaN,事件日会直接消失;输入若是连续取值的量(成交额、VWAP 比值)而不是 tick 离散的收益,"形态分类器"的读法不成立;窗口 ≥10 对时退化为普通的噪声自相关。
+- id: f102-l4
+  claim: 当一条因子的空头腿是事件(衰减快)、多头腿慢时,按多空夏普选半衰期会系统性地选到对多头腿偏快的速度。对纯多头公平的基线是"原式 + 按纯多头夏普选的半衰期"(books 里的 hl_long / splits_at_hl_long
+    那一行),任何"升华"都要先和它比,而不是和按多空夏普选的那一行比。把更长的记忆写进表达式的实际好处是对半衰期选法不敏感;它在"放慢"之上多出来的部分可能只是更长的事件记忆,要单独验证。
+  evidence: F102:多空夏普最优 hl=1,纯多头夏普最优 hl=5。原式 hl=1→5 的多头腿净超额 train/valid +4.9%/+4.5% → +8.5%/+9.8%(逐日配对 t=3.8/4.3),留出段
+    −0.7% → +2.5%。60 日极值(hl=0)相对原式@hl5:train +2.8(t 2.3)、valid +0.3(t 0.2)、留出段 +5.0(1.6σ~2.6σ)。两种半衰期选法下留出段:60 日极值
+    +7.4%/+7.0%,30 日 +4.9%/+7.6%,原式 −0.7%/+2.5%。把封板日从 K 里拿掉的 60 日极值(+6.8%/+6.7%)比原式@hl5 还低;干净池内部 60 日极值相对原式@hl5
+    的增量 +2.0(t 1.1)/−1.2。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - cross_sum
+  - cross_mean
+  confidence: medium
+  recheck: 多头腿本身是快信号(反转类)时不成立;两条腿对称、没有事件成分的因子不需要。"放慢"与"结构"的比例在三段数据里不稳定(train 3.6+2.8、valid 5.3+0.3、留出段 3.2+5.0),不要从一段外推。长窗口极值会产生并列值(dist
+    0.98@60、0.96@120)。只在一条因子上验证过。
+- id: f102-l5
+  claim: '"先逐日折叠/平方再滚动求和"的结构可以拆成 窗口·(均值² + 方差),即水平与离散两个成分;应当分别用 abs_(cross_mean(x,d)) 和 cross_stddev(x,d) 各测一次。两者可以几乎独立,而且哪一个值钱会随时期互换
+    —— 合在一起的式子看起来稳,只是因为它同时装着两个此消彼长的成分。'
+  evidence: F102:水平(a_level15)与离散(a_disp15)rank 相关 −0.02;水平 train 多空 +4.23、valid 多头腿净 +0.3%;离散 train 多头腿毛 +1.3%、valid
+    +10.5%、rank IC 0.0341。逐年 rank IC:水平 0.0197/0.0294/0.0278/0.0106/0.0125/0.0008,离散 0.0161/0.0271/0.0214/0.0274/0.0324/0.0376(2018–2023,x3
+    §4)。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - cross_sum
+  - pow_2
+  - cross_mean
+  - cross_stddev
+  - abs_
+  confidence: medium
+  recheck: 操作数恒正且离散远小于水平时,拆分没有信息(只剩水平)。结论依赖 2018–2023 这段时期;"会互换"是在一条因子上看到的现象,不是规律。
+- id: f102-l6
+  claim: 在合成输入上自检通过的探针,只说明算子对那类输入的响应,不能直接当成真实数据上的读法。每一条由探针得出的"它在量 X"都要配一个朴素替身实验(直接用 X 做因子,看 rank 相关和书)才能算数。
+  evidence: F102:ar1_response 探针(自检通过)显示 3 对相关的日内峰度是 AR(1) 系数 φ 的单调递减函数,斜率约 −2.7;但真实数据里全天 AR(1) 系数的 15 日均值(r_ar1)与带符号的
+    15 日 K 的 rank 相关是 0.00,而且 r_ar1 自己被控制变量张成 R² 0.504。前一位研究者据此写的"主体 = 分钟收益一阶自相关"被否。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - nt_ts_autocorr_s1
+  - day_kurt
+  - day_ar1_coefficient
+  confidence: high
+  recheck: 真实输入的分布接近探针的合成输入时(连续取值、近高斯),探针读法可以直接用。day_ar1_coefficient(Ret) 是换手率/波动暴露这一点只在 15 日均值口径下测过。
+- id: f102-l7
+  claim: 用户口径的多头腿超额以"当天有信号有标签的全部票的等权"为基准,基准里含着近期封板、复牌、短历史的票,它们年化跑输 15~40 个点。光是避开近 60 日有封板日的票和短历史票,等权就比全市场等权高 +7.7%/+5.2%/年。读任何一条因子的多头腿毛/净超额时,要分清"避开垃圾票"和"在干净池里排序"各占多少;在子股票池里重算时,半衰期必须用实际交易的那个,不能在池内另选。
+  evidence: F102:干净股票池(近 60 日无封板日、满 60 天有效、无僵尸日)占有标签格子的 49.6%/64.1%,其等权高于全市场等权 +7.7%/+5.2%。60 日极值版按实际 hl=0 在干净池内部的多头腿净超额是
+    +3.3%/+5.5%(毛 +6.9%/+8.6%),全市场基准下是 +11.3%/+10.1%;在池内按多空夏普另选半衰期(hl=10)会得到 +5.7%/+8.8%——原报告引的就是这个不可比的数。实际多头十分位的恒等分解:配置(在不在封板桶)+4.9%/+4.0%,选股
+    +9.6%/+9.4%(x3 §3、r1 §2–§3)。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators: []
+  confidence: medium
+  recheck: 封板日用的是代理定义(≥30% 的分钟收在当日最高价且涨幅 ≥4.5%);只在 2018–2023 上量过,留出段没算。标签口径改变(比如不剔除次日买不进的票)时数值会变。对不偏向"安静票"的因子,这部分水分可能很小甚至为负。
+- id: f102-l8
+  claim: 中性化用的控制变量必须和因子同期限,并且要包含"因子自己检测到的事件"的朴素代理;只用 1 日/20 日的共享控制去中性化一个 60 日滚动量,会系统性低估被张成的比例,从而错误地得出"不是已知暴露"。中性化要在
+    fit 段和验证段都报。
+  evidence: F102:cross_max(K²,60) 对九个 1 日/20 日控制 R² 0.186、残差多头腿毛超额 +11.1%(train,原报告据此写"多头腿不是已知暴露");加上七/八个 60 日朴素量后
+    R² 0.453/0.461、残差多头腿 +4.2%/+3.9%、残差 rank IC +0.0063/+0.0038。其中 60 日封板代理(收在当日最高价的分钟占比的 60 日极值)单独 R² 0.349,七个常规风格量只把
+    R² 推到 0.29。valid 上只用九个控制,残差 rank IC 已从 +0.0221 掉到 +0.0051(原报告没报 valid)。原式放慢到 hl=5 后对 60 日控制同样 R² 0.41。引擎口径(rev1)与
+    numpy 口径(audit_1、r1)一致。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - cross_sum
+  - cross_mean
+  - cross_stddev
+  confidence: high
+  recheck: 因子没有日轴滚动(当日量)时短期限控制够用。秩空间残差口径偏严(残差的多头档已不是原来那批票),应配合持仓归因(F102-L9)一起读。事件代理与因子机械相关时(这里封板日 K≫0),高 R² 说明的是"因子含这个事件",不等于"因子没有别的东西"。
+- id: f102-l9
+  claim: 判断"多头腿有多少是避开某类票"时,把实际持有的多头十分位的超额恒等拆成 配置(所在桶等权 − 全市场等权)+ 选股(个股 − 所在桶等权),比双重排序和残差都直接。双重排序的"五桶等权平均"会被极端桶抬高,残差口径会偏低;三种口径应一起报。另一个直接的反事实是把事件日从输入里拿掉再算因子。
+  evidence: F102(cross_max(K²,60),train/valid):合计 +14.6%/+13.4%;按 60 日封板代理五分位:配置 +6.4%/+5.3%、选股 +8.1%/+8.1%;按 60
+    日日频波动五分位:配置 +5.8%/+5.3%,而同一变量的双重排序桶内平均是 +12.1%/+12.9%(看起来几乎不降);残差口径(十六七个控制)只剩 +4.3%/+3.9%。把封板日从 K 里拿掉:多头腿毛 +14.3%/+12.7%
+    → +9.8%/+9.2%(逐日配对 t=4.9/3.2)。
+  study: F102_kurt_autocorr
+  date: '2026-10-04'
+  operators: []
+  confidence: medium
+  recheck: 分桶变量与因子机械相关时,配置份额是偏大的读法;桶数太多(>25)时桶内等权噪声大。封板桶与日频波动桶在数据里分不开(配置 +6.4% 对 +5.8%)。只在一条因子、2018–2023 上做过。
+- id: f103-l1
+  claim: 「保序的外层一元变换是 no-op」只在 EMA 半衰期 = 0 时成立。用户口径是先对原始数值做 EMA 再排名:重尾正数直接做 EMA ≈ 带衰减的峰值记忆;先取 log 或截面排名再做 EMA 就成了普通均值平滑,换手更高、表现更差。指数
+    k 因此既定配比也定尾部多重。
+  evidence: X3-H:同一面板逐日排名相同、rank IC 逐位相同(0.0464/0.0491),day_sum·C² 原值 +3.33/+3.78、多头腿净 +11.4%/+14.5%;log 版 +2.60/+3.42、+6.3%/+13.7%;rank
+    版 +2.27/+3.08、+7.4%/+13.8%。day_sum、day_sum·C、day_sum·p_peak² 同向(train 差 0.4~1.1 夏普)。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - pow_3
+  - pow_2
+  - log
+  - cs_rank
+  - sigmoid
+  confidence: high
+  recheck: 半衰期选中 0 时退化为 no-op;操作数本身有界或已是排名时差别小;如果建书流程改成先截面标准化/排名再平滑,这条不适用。playbook 里「别把保序变换当成变体来试」需要加这个限定。
+- id: f103-l2
+  claim: 对恒正、重尾的水平量,外层 cross_max(·, d) 在下游有半衰期 ≥ 5 的 EMA 时是多余的:EMA 作用在原始数值上已经在做「峰值记忆」,删掉或换成 cross_mean 多空不掉。没有 EMA
+    或半衰期 ≤ 2 时它不是多余的。
+  evidence: S1:原式 +4.14/+2.22;删 cross_max(·,5) +4.35/+2.41(选中半衰期 5);换 cross_mean +4.26/+2.49。同半衰期 10 下删三个节点的 day_sum·C³
+    对原式的多空配对差 +3.8%/年(utrain,t +3.7),留出段 +3.52 对 +3.18。反例(X4-A):半衰期 0 时 utrain 多空夏普 原式 +2.79、删掉 cross_max 的 A·C³
+    −1.45;半衰期 2 时 +3.53 对 +3.20。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - cross_mean
+  confidence: high
+  recheck: 操作数正负混杂时不成立(F001:极值 = 取幅度);换手的差别必须在同一个半衰期下比(本研究第一版把半衰期 2→10 的换手下降记到了删节点头上,同半衰期下 3.6% 对 3.9%);只在 15bp
+    成本、EMA 口径下测过。
+- id: f103-l3
+  claim: 窗口为 1 的日轴滚动算子(ts_min(x,1)、ts_max(x,1) 等)是逐位恒等,只是 GP 用来把 dt 面的量「过」到 nd 面的换面节点,可以直接删。
+  evidence: 探针 window_one_is_identity(自检:ts_max(x,1) 恒等、ts_delay(x,1) 不是);S1 a_no_tsmin 与原式 rank 相关 1.000000、NaN
+    位置一致、所有指标逐位相同。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - ts_min
+  - ts_max
+  - cross_max
+  - cross_decay_linear
+  confidence: high
+  recheck: ts_delay 等带位移的算子窗口 1 不是恒等;窗口 1 的 stddev/corr 类会给 NaN,需单独看。
+- id: f103-l4
+  claim: day_durbin_watson 喂非负的成交额/成交量曲线时量的是曲线的粗糙度/尖峰度(Σ(Δx)²/Σx²,孤立尖峰在中间的响应是末端的 2 倍),既不是自相关也不是已实现方差。喂当日曲线时它主要是流动性差的代理(块状噪声);只有先跨日平均再喂进去才留下持久的日内形状。
+  evidence: 探针 isolated_spike_response(= (h−1)²/(M−1+h²),中间 ×2)、noise_averaging_exponent(DW ∝ N^−0.985)。X1:当日 DW(Amt)
+    与成交额水平 rank 相关 −0.67;X2-e:day_sum × 当日 DW 方向都反(−1.38/−2.77),30 日平均后的版本 +3.93/+2.88。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - day_durbin_watson
+  - cross_decay_linear
+  - cross_mean
+  confidence: high
+  recheck: 操作数是价格水平(≈ 已实现方差,F001)或收益序列(≈ 一阶自相关)时语义完全不同;曲线含负值时不适用。
+- id: f103-l5
+  claim: 「cross_*(分钟级操作数) → day_* 非线性折叠」与「day_* 折叠 → 日轴平均」不可交换:前者先把逐日独立的分钟噪声压掉(有效样本 (Σw)²/Σw²,decay_linear 30 ≈
+    22.9 天),量的是平均曲线的形状;后者是每天统计量的平均。遇到 cross_* 套在分钟级字段外面时,不要把它读成「日频量的记忆」。
+  evidence: 探针 impulse_footprint(cross_decay_linear 逐分钟槽位各滚各的,有效样本 22.87)。X1-6:DW(decay30(Amt)) 与 decay30(DW(Amt))
+    rank 相关 0.709,后者与成交额水平 −0.76;代入整树 +1.00/+1.14 对 +4.14/+2.22。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - cross_decay_linear
+  - cross_mean
+  - day_durbin_watson
+  - day_std
+  - day_max
+  confidence: high
+  recheck: 折叠是线性的(day_sum、day_mean)时两种顺序等价;平均窗口很短(≤5)时噪声压得不够,两者会接近。
+- id: f103-l6
+  claim: 带尺度的腿 × 与该尺度负相关的无尺度腿^k 会把尺度约掉:整树与已知暴露的相关/R² 很低不代表新颖。判断办法是量 log 空间的斜率并把两支分开中性化;各版本中性化后的残差才可比,而且 R² 低的版本残差未必更大。
+  evidence: X1-4:log C 对 log 成交额斜率 −0.174(×3 = −0.52),原式与 ctl_amt 相关 0.28、all_controls R² 0.227;A 支单独 R² 0.807、C
+    支单独中性化后 rank IC 反而从 0.0045 升到 0.0162。骨架各版本 R² 0.55~0.83,残差 rank IC 0.012~0.019:R² 最高的 F001 蒸馏(0.834)残差反而最大(0.0193、无成本夏普
+    +5.03),day_sum·C²(0.554)最小(0.0123、+1.81)。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - mul
+  - pow_3
+  - pow_2
+  confidence: medium
+  recheck: 两支在截面上不相关或正相关时不发生抵消;只在成交额尺度上测过。
+- id: f103-l7
+  claim: 本批数据段的制度特征:valid(2022-01~2023-08)是成交额水平/小市值的大年,只看 valid 挑变体会系统性挑到成交额水平占比最高的那个;留出段(2023-08~2025)里成交额水平腿多头端的波动和回撤明显放大。挑候选要
+    train 和 valid 一起看,并固定半衰期比较多头腿。
+  evidence: 控制变量自己当因子:ctl_amt +1.03 → +3.47,known_stdamt_max9 +2.47 → +4.44;F103 里 k 越小 valid 越好。留出段 F001 蒸馏结果:多空夏普
+    +2.94 → +2.55,纯多头夏普 +1.82 → +0.89(半衰期 0)/+2.41 → +1.40(半衰期 5),多头腿年化波动 6.6% → 9.2%、最大回撤 −15.4%,2024 年多头腿净超额只有
+    +3.0%;多头腿净超额本身掉得不多(半衰期 5:+16.1% → +13.2%)。事前按 valid 优势选的 f_std9_k1 纯多头夏普 +2.27 → +1.55(@2)/+2.61 → +1.92(@10)。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - day_sum
+  - day_std
+  - cross_max
+  confidence: medium
+  recheck: 只有一段留出段的证据;变差的主要是波动不是均值;换标签或换股票池需要重测。
+- id: f103-l8
+  claim: 「成交活跃 × 30 日平均日内成交曲线高度集中」的角落很深,但不是集中度特有的:它是已知的「活跃 × 热门」效应(换手率、日内波动、动量、近期涨停)的代理,集中度在这些之外的成分只在 2018–2020
+    年存在。一般教训:5×5 角落很深不等于第二排序变量特有——要在同一行里把它换成已知代理比,并看剔掉已知集合之后还剩什么;全截面上「残差与事件变量 rank 相关低」排除不了角落里的替代解释。
+  evidence: X2-b:成交额最高 1/5 × C 最高 1/5(4%)次日超额年化 −75.4%/−63.6%。X4-C:同一行换成换手率 −74.9%/−94.6%、日内波动 −72.0%/−91.2%、20
+    日动量 −64.3%/−90.3%;角落里 46%/44% 近 5 日涨停过;C 对全部已知暴露做组内残差后 rank IC −0.0230/+0.0057(逐年 −0.023/−0.030/−0.028/−0.011/−0.002/+0.018)。X5-D:角落里不属于「换手率角落
+    ∪ 近 5 日涨停票」的那 1.5% 是 −23.8%/−2.1%;当剔除名单的增量 +0.45%/+0.09% 每年。而全截面上 eps_C 被四个事件变量张成的 R² 只有 0.174(X2-f),当时据此误判为「不是涨停/极端收益的另一种写法」。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - day_durbin_watson
+  - day_max
+  - day_std
+  - cross_decay_linear
+  confidence: medium
+  recheck: 2018–2020 年 C 在已知暴露之外确有成分(残差 rank IC −0.023~−0.030),不能说它从来没有;留出段没有直接量;竞价制度改变会改变截面分布。
+- id: f103-l9
+  claim: 各变体各自按多空夏普拟合半衰期时,多头腿净超额和换手的差别首先是半衰期的差别,不是结构的差别。多空夏普对半衰期是平的时候(差 0.05~0.15),选中的半衰期可以从 2 跳到 10,多头腿净超额差 2.5~5
+    个点,足以让结构比较的符号反过来。比较结构必须先固定半衰期并用日度配对差;「降换手」先归因给半衰期。
+  evidence: 原式 @2 → @10:utrain 多头腿净超额 +5.6% → +8.1%(配对差 +2.5%,t +2.4),留出段 +5.5% → +7.2%,换手 8.4% → 3.6%,多空夏普只差 0.14。删三个节点
+    @10 对原式 @10 的多头腿配对差 +0.4%(t +0.3),而各自拟合半衰期时看上去是 +8.4% 对 +5.6%。F001 蒸馏×C @2 对 F001 蒸馏 @0 多头腿 +1.4%/年,同为 @2 是
+    −1.9%(t −2.1):符号相反(X4-A/B、X5-A/B)。final.json 里 books_user.splits_at_hl_long 已经存了按纯多头夏普选半衰期的那一行(含留出段),但摘要和报告都不打印。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - day_sum
+  - day_std
+  - mul
+  confidence: high
+  recheck: 多空夏普对半衰期有清楚的峰时影响小;rank_by 改成按纯多头夏普选半衰期后需要重看;只在 {0,1,2,3,5,10,20} 这组半衰期和 15bp 成本下测过。
+- id: f103-l10
+  claim: 已知的水平腿 × 与它负相关的无尺度腿:乘上去之后十分位书的波动稳定地低一成到三成(等于对冲掉一部分水平腿收益,指数越高对冲越多),夏普因此 +0.3~+0.8——这不是均值上的增量。判断「给已知家族加了东西」要看同半衰期日度配对差的均值和对水平腿收益回归后的
+    alpha,不要看两个夏普之差;事前判据也应该这样写。
+  evidence: X5-C:F001 蒸馏×C 对 F001 蒸馏(同半衰期 2)beta −0.15,年化波动 train 8.4% → 7.5%、valid 7.1% → 6.5%,只换波动的夏普 +0.28/+0.38,均值部分
+    +0.67/−0.30;多头腿同样(波动 6.8% → 6.0%,均值部分为负)。day_sum·C²/C³ 对 day_sum:beta −0.30/−0.61,波动 8.3% → 6.9%/5.9%。留出段(已读过的
+    final.json 数字,未重读):多空年化 +24.5% → +25.7%、波动 9.62% → 8.19%,夏普差 +0.59 里 +0.44 是波动、+0.15 是均值。本研究事前写的判据「多空夏普高出 0.3
+    以上」因此按字面过了,却没有证明 alpha。
+  study: F103_amt_dw_decay
+  date: '2026-10-04'
+  operators:
+  - mul
+  - pow_2
+  - pow_3
+  - day_durbin_watson
+  confidence: medium
+  recheck: 两条腿不相关或正相关时不发生;只在成交额水平这条腿上测过;波动降低在行业/市值中性的组合构造下未必保留;留出段只有一段。
+- id: mask-bottom-replace-mean-on-flow-flips-liquidity-relation
+  claim: nt_cs_mask_top_replace_mean_neg 作用在分钟成交额上时改的是每分钟截面的底部 10%(不是顶部),替换值是含被替换者的截面均值;它不是缩尾,而是给不活跃股票注入一段全市场共同的日内成交曲线,后接齐次度
+    0 的日内统计量(day_kurt)时把该统计量与流动性水平的秩相关翻号。它在十分位书的空头腿上等价于「集中度对流动性取截面残差」,但在 rank IC 上不等价 —— 不要把它读成「= 流动性条件化」(这条取代原来的
+    mask-bottom-replace-mean-on-flow-is-liquidity-conditioning)
+  evidence: F104:自身峰度与 log 成交额日截面 Spearman −0.174,过 mask 后 +0.110;删掉 mask valid 多空反号(1.72 / −1.19);原式对 f_kurt30
+    + 流动性取残差后空头腿 33.9% → 3.6% / 24.3% → −4.9%(被张成),但 rank IC 仍保留 54%~61% / 59%~84%(线性或 amt30 × kshare30 网格);原式与「被改写分钟数的两点公式」Spearman
+    只有 0.157
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - nt_cs_mask_top_replace_mean_neg
+  - nt_cs_mask_top_replace_mean
+  - day_kurt
+  confidence: medium
+  recheck: 操作数不是非负的流量字段时不成立;零成交分钟占比超过 10% 时并列按股票代码顺序破平局会咬到(F104 数据里 3.8%~6.9%);镜像算子(改顶部)没有这个效果;原式里未被张成的那块 rank IC
+    是什么没有查清
+- id: intraday-amt-dispersion-needs-slow-liquidity-residual
+  claim: 成交额的日内离散度统计量(day_kurt / 最大一分钟占比 / day_std÷day_mean)与流动性水平负相关,裸用时带一段方向错了的流动性暴露;对成交额水平取截面秩残差之后才有多空信号,而且条件化必须在与信号同样慢的时间尺度上做。但这个残差是空头侧信号、不是流动性尾部中性的,多头腿做不出来
+  evidence: F104:cross_mean(day_kurt(Amt),30) 与 30 日成交额秩相关 −0.46,裸用多空 1.52 / −1.19;慢残差 3.75 / 1.91,逐日残差 + EMA20
+    只有 1.71 / −0.27;三个读数 train 3.69~3.77、valid 1.91~2.37。多头口径:慢残差多头腿净超额 +6.0% / +0.1%(train/valid),留出段 +3.9%;桶内取秩后多空
+    3.13 / 0.59、多头腿 +5.4% / −3.6%
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - day_kurt
+  - cs_regres
+  - cs_rank
+  - cross_mean
+  confidence: medium
+  recheck: 流动性溢价不存在或反向的时期裸用与残差的差别会缩小;多空数字是可买入标签下的(空头按原始标签要减 0.5~0.7);信号本身是日频快变量时慢残差不适用
+- id: intraday-amt-dispersion-adds-no-long-leg-to-liquidity-family-after-2020
+  claim: 对只能做多的使用者:成交额日内集中度(对流动性取残差或分桶中性)叠加到成交额水平家族(cross_mean / cross_max(day_std(Amt), ·))的多头书上 —— 合成、秩相加、剔除、双重排序
+    —— 只在 2018~2020 年有 +2~+6 个点的增量,2021 年起没有;它标记的「别买谁」是活跃股票,本来就不在流动性多头书里
+  evidence: F104:f_exclcv 相对 cross_mean(day_std(Amt),30) 的多头腿日度配对差 train +2.4 点(t 1.3)、valid −3.2 点(t −1.4)、留出段
+    −2.0 点,逐年 2018~2020 为 +3~+6、2021~2025 每年为负;在基准多头十分位里剔除最集中的 10%~20%(扣成本)train +1.1~+1.6 点(t 3~4.7)、valid −0.8~+0.2;原式最差的
+    20% 只占基准多头十分位的 4%;流动性桶内取秩后 valid 多头腿 −1.3%~−6.5%
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - day_kurt
+  - day_std
+  - day_mean
+  - cs_regres
+  - cross_mean
+  - cross_max
+  confidence: medium
+  recheck: 流动性溢价消失的时期(如 2018~2020)增量可能回来;在持有活跃股票的多头书上当黑名单没有实测;留出段只有一次读数
+- id: day-std-amt-is-level-times-cv
+  claim: day_std(Amt) = day_mean(Amt) × 变异系数:F001 家族的 std 因子是「成交额水平 + 一点点日内集中度」,这一点点已经是集中度能给多头腿的全部;把集中度再显式加回水平(1:1
+    秩相加、三次方罚分)多头腿并不比 std 自己更好
+  evidence: F104:cross_mean(day_std(Amt),30) 与 30 日成交额秩相关 0.98;它对成交额取秩残差后与变异系数残差秩相关 0.91;std30 相对纯水平的多头腿日度配对差 train
+    +4.1 点(t 6.1)、valid +1.0 点(t 1.3),逐年递减到 2023 年 +0.2;合成版 valid 多头腿 +11.3%~+19.1% 对 std30 的 +22.3%;留出段 f_exclcv
+    +12.1% 对 std30 +14.1%
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - day_std
+  - day_mean
+  - day_sum
+  - cross_mean
+  - cross_max
+  confidence: medium
+  recheck: std 残差与变异系数残差虽然秩相关 0.91,valid 的十分位书不同(多空 0.76 对 2.37);cross_max(·,9) 记忆下没有直接测过残差的对应关系
+- id: cubed-rank-penalty-is-a-double-sort-not-an-exclusion
+  claim: add(cs_rank(水平), pow_3(cs_rank(信号))) 不是「只罚信号最差的一小批」:cs_rank 是 (0,1] 的百分位,三次方在多头十分位入选线附近并不小(秩 0.6 的罚分 0.216
+    已经用完整条入选线),实际是「水平靠前 且 信号低于约六成分位」的双重排序,会换掉水平因子多头书的一半。它抬高多空夏普,不保证改善多头腿(这条取代原来的 tail-concentrated-signal-combine-as-exclusion)
+  evidence: F104:f_exclcv 的多头十分位与水平因子的只重合 46%~49%,集中度秩 > 0.6 的成员不到 3%(水平因子多头书里占 52%~54%);解析上 U + V³ 的 10% 分位要求 V
+    < 0.60;多头腿相对水平因子 train +2.4 点、valid −3.2 点、留出段 −2.0 点;真正的剔除式(只去掉最差 10%~20%)train +1.1~+1.6 点、valid ≤ +0.2 点
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - pow_3
+  - pow_2
+  - cs_rank
+  - add
+  confidence: medium
+  recheck: 想做真正的排除要用阈值式的写法(或在脚本里直接剔除);信号的分位剖面如果是单调排序而不是尾部事件,线性相加可能更合适
+- id: conditional-ic-gate-must-not-contain-the-factor
+  claim: 条件 IC 的分桶变量如果自己混着被检验的因子和另一个强暴露,桶内 IC 会被那个暴露污染,结论可以整个读反;用它设计出来的乘法门控会失败。判据:量桶内因子与已知暴露的 Spearman 和偏 IC
+  evidence: F104:按「被改写分钟占比」kshare30 分组,集中度信号看上去在不活跃股票里强一倍(−0.015 → −0.033);按 30 日成交额分组相反(最活跃一组 −0.037,其余 −0.016~−0.026)。kshare
+    桶内集中度残差与成交额的 Spearman 最高 +0.36,扣掉成交额后 Q1~Q4 变平;据此设计的「不活跃 × 集中度」乘法门控 valid 多空 −1.40
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - nt_cs_mask_top_replace_mean_neg
+  - mul
+  confidence: medium
+  recheck: 分桶变量与因子在构造上无关(流通市值、纯成交额)时条件 IC 可以照字面读;偏 IC 之后最不活跃一组仍偏强(−0.027),混淆不是全部解释
+- id: rank-corr-090-does-not-pin-the-decile-book
+  claim: 对尾部型的慢信号,截面秩相关 0.90~0.97 的两个写法,十分位书可以差 1 以上的夏普;「秩相关高」不能当作「书相同」的证据,提纯时每删改一个节点都要看两端的书
+  evidence: F104:与提纯骨架秩相关 0.90 的地板版 valid 多空 −0.53(骨架 1.91)、0.97 的 kshare 条件化版 1.20、与变异系数版 0.91 的 std 残差版 0.76(对
+    2.37);可交易信号秩相关 0.97 的线性残差版与桶内取秩版,valid 多空 1.91 对 0.59,空头按原始标签 3.13 / 1.44 对 1.16 / −0.08
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - cs_regres
+  - cs_rank
+  confidence: medium
+  recheck: 分位剖面从头到尾单调的因子上这个脆弱性应当小得多;只在 train/valid 上观察到
+- id: linear-rank-residual-is-not-tail-neutral
+  claim: cs_regres(cs_rank(y), cs_rank(x)) 的残差只在线性秩意义上与 x 正交:秩有界,x 低的股票如果 y 的预测秩高,残差上方就没有空间,于是残差最大的十分位机械地由 x 高的股票组成。用它做「对
+    x 中性」的十分位书,尾部仍带 x 的暴露;秩空间的线性中性化表也看不见这件事。要尾部中性得在 x 的分桶内取秩(对分桶哑变量取残差也不行)
+  evidence: F104:f_kurt30 对 amt30 的线性 R² 0.002,但空头十分位 amt30 平均分位 0.67 / 0.68(34%~35% 在最活跃五分位,1%~2% 在最不活跃五分位),valid
+    空头腿 23.3 点里 10.5 点是流动性位置;对 20 个分桶哑变量取残差后空头十分位仍在 0.64 / 0.66;桶内取秩后 0.50,valid 多空 1.91 → 0.59
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - cs_regres
+  - cs_rank
+  confidence: high
+  recheck: y 与 x 的秩相关接近 0 时尾部偏移很小(F104 是 −0.46);只看 IC 不建十分位书时影响小
+- id: buyable-label-inflates-short-leg-of-concentration-factors
+  claim: 可买入标签把次日开盘封涨停的票记成 NaN,在空头书里等于收益 0;成交集中 / 峰度类因子的空头十分位里这类票占比是全市场的 2~5 倍,多空夏普因此虚高 0.5~0.7(流动性桶内取秩的写法可达 2),流动性水平类因子不到
+    0.1。多头腿不受影响 —— 这是选拔看多头腿的又一个理由
+  evidence: F104(train/valid):有信号的格子里封板占 0.24% / 0.11%,空头十分位 原式 0.49% / 0.46%、f_kurt30 0.49% / 0.40%、桶内取秩版 1.09%
+    / 0.51%、f_std30 0.12% / 0.09%;空头按原始标签的扣费多空:原式 3.91 → 3.22 / 1.47 → 0.85,f_kurt30 3.75 → 3.13 / 1.91 → 1.44,桶内取秩版
+    3.13 → 1.16 / 0.59 → −0.08,f_std30 1.87 → 1.79 / 3.70 → 3.62
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - day_kurt
+  - nt_cs_mask_top_replace_mean_neg
+  - cs_regres
+  confidence: high
+  recheck: 用 st.target(buyable=False) 给空头腿单独计原始标签;标签规则改变(封板票剔除而不是记 0)时幅度不同;留出段上没有量过
+- id: longer-halflife-saves-cost-only-check-gross-first
+  claim: 延长半衰期给多头腿带来的是成本的节省:多头书的毛超额在样本外接近 0 时,任何半衰期都做不出正的净超额。多头最优半衰期落在网格上界时,要把半衰期放到网格外扫一遍并同时看毛超额,再下「是否只是平滑不够」的结论;对自带长窗口的慢信号再加平滑会伤害毛超额;对逐日更新的水平型因子(9
+    日极值)则是实打实的几个点
+  evidence: F104:原式 train 多头腿净超额 hl 0 / 20 / 40 / 120 = −55.1% / +4.8% / +5.8% / +3.9%,valid = −58.5% / −5.8% /
+    −2.8% / −1.1%,valid 毛超额在 hl ≥ 20 时只有 −0.1%~+0.9%;f_kurt30(自带 30 日窗口)valid 毛超额 hl 2 / 20 = +4.4% / −3.4%;cross_max(day_std(Amt),9)
+    从 hl 0 到 hl 5,多头腿净超额 +9.3% → +13.7%(train)、+18.5% → +22.2%(valid)
+  study: F104_kurt_masktop_amt
+  date: '2026-10-04'
+  operators:
+  - day_kurt
+  - cross_mean
+  - cross_max
+  - day_std
+  confidence: medium
+  recheck: 网格外的半衰期没有读过留出段,只是诊断;换手很低的因子上这根杠杆几乎不起作用
+- id: short-std-on-long-hard-window-is-event-detector-with-anniversary-echo
+  claim: 短窗滚动 std(或 |差分|)套在长硬窗口水平统计量外面,读到的是该水平量的近期变化量(事件探测器),不分升降;硬窗口让每个尖峰在 d 天后滑出时产生一个与进入时等幅的回声,因子值上无法与新事件区分。信息只在「进入」方向,回声是纯稀释
+  evidence: 探针 chain_impulse_profile:脉冲后第 0~5 天和第 241~246 天各响一次,echo_over_entry=1.0;真实数据里 ts_stddev(C,5) 与 |C_t−C_{t−4}|
+    的 rank 相关 0.994;去尺度后同一个 |D/C| 最高十分位里进入的股票超额 −46.7%/−61.3%、滑出的 +5.2%/+2.7%;原式空头十分位里滑出驱动的股票日占 23%/48%,超额 −4.8%/−13.0%,对当天成交额配对后
+    +2.3%/+6.2%,进入驱动 −38.7%/−62.5%,配对后 −18.7%/−24.4%
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - ts_stddev
+  - ts_std
+  - cross_stddev
+  - cross_delta
+  - cross_fangzheng
+  - cross_mean
+  - cross_max
+  confidence: high
+  recheck: 中间层换成 cross_decay_linear 时回声只剩 0.015,但背景会变成与水平成正比的匀速漂移(不是干净的去回声);带符号的差分如果不先去尺度,大成交额股票被同时推到两端,多头腿为负是尺度效应,不能据此说方向没有信息
+    —— 要去尺度后在同一强度档位里按方向分开看,并对水平配对
+- id: fangzheng-is-mean-plus-std-and-indistinguishable-under-differencing
+  claim: cross_fangzheng(x,d) = cross_mean(x,d) + cross_stddev(x,d);在重尾正值输入上它是极值统计量(跟窗口最大值走),但只要外层读的是它的变化量,mean
+    项、std 项、两者之和给出的截面排序几乎相同,区分它们没有意义
+  evidence: 源码一行;探针 tail_dominance(对数正态 σ=1.5 时与窗口最大值秩相关 0.91、与中位数 0.18);真实数据去尺度后 C 与一年最大值 rank 相关 0.984;外层套 5 日
+    std 后,只留 mean 项与原式 rank 相关 0.983、只留 std 项 0.965,指标都在噪声内
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - cross_fangzheng
+  - cross_mean
+  - cross_stddev
+  confidence: high
+  recheck: 直接把 fangzheng 当水平量用(外层不取差分/std)时 mean 与 std 项不等价;输入不是重尾正值(log σ 明显小于 1)时它更接近均值而不是极值
+- id: low-rank-corr-is-not-a-different-factor-use-two-way-neutralisation
+  claim: 与已知家族的 rank 相关远低于 0.95 不代表是不同因子,判包含关系要做双向中性化;但残差要分两条腿读、两段都做、平滑扣费后再读:残差无成本多空夏普 ≈ 0 可能只是多头侧为正、空头侧为负相抵,不等于残差是噪声
+  evidence: 原式与 cross_max(day_std(Amt),9) rank 相关 0.68;原式对它回归后残差无成本多空夏普 −0.55/−0.02、反向 +2.34/+2.77(多空价差确实被包含),但残差
+    rank IC 0.0090(t 4.3)/0.0135(t 4.5)、残差多头腿毛超额 +1.1%/+9.5%、空头 −5.1%/−9.6%;对 d=30 成员的残差 rank IC 0.0157(t 8.9)/0.0209(t
+    6.5)、多头 +4.3%/+10.6%。把残差 EMA 平滑并扣费后多头腿净超额训练段 −1.5%~+1.8%、验证段 +0.5%~+10%;与家族成员秩平均训练段低 1.0~2.1 个点
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators: []
+  confidence: high
+  recheck: 只在一个数据段上做会漏掉两段不一致;被比较的两个信号半衰期差别很大时 R² 与残差都被平滑程度左右,要在同换手的信号上再做一遍;「信息上不被包含」与「扣费后有钱」是两个问题
+- id: nan-aware-rolling-ops-inflate-young-stocks-and-zero-on-first-obs
+  claim: nan-aware 的滚动算子在窗口未满时用逐日变长的扩张窗口,次新股(以及没有预热行的样本头一年)的任何「变化量」型统计被机械放大;滚动 std 对单个观测给 0,上市首日会得到全截面最小值
+  evidence: 次新股占截面 7%,却占原式空头十分位的 25%/17%;上市首日因子值为 0(全样本 10,983 个格子)每天把约 3 只次新股排进多头腿,组内年化超额 −360%/−290%,拉低多头腿毛超额
+    2.3/1.9 个点;把外层 std 换成 abs_(cross_delta(·,5))(首日为 NaN)后训练段多头腿毛超额 +2.6 个点;去掉次新股和 2018 年后训练段所有因子的多空夏普掉三分之一(原式 2.54→1.71)
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - ts_stddev
+  - ts_std
+  - cross_stddev
+  - cross_mean
+  - cross_fangzheng
+  confidence: high
+  recheck: 视图有足够预热行、或截面按上市天数过滤时不成立;水平型因子(如 cross_max(day_std(Amt), d))没有这个放大,反而会让成交清淡的次新股进入最小端(验证段多头十分位 8.8%,组内超额低于成熟股票但为正)
+- id: amt-level-family-long-leg-net-is-a-function-of-turnover-not-window
+  claim: 成交额水平家族 cross_max(day_std(Amt), d) 的多头腿净超额取决于多空日换手,不取决于窗口 d:d=9~60 任一成员只要用更长的窗口或 EMA 把换手压到 2.3%~5.2%,多头腿净超额都一样;d=9
+    加 hl=5 的 EMA 与 d=30 是同一个因子。rank IC 与多空夏普随 d 下降(近期放量信息值钱的地方在空头腿)。(取代原来的「d=15~60 慢窗口平台」)
+  evidence: 半衰期按纯多头夏普定时 d=9/15/20/30/60 的多头腿净超额训练 13.7/13.9/13.6/14.5/13.5%、验证 22.2/22.1/21.6/22.3/20.4%;35 个(d,hl)组合里训练段换手
+    2.3%~5.2% 的 21 个全部在 12.3%~14.5% / 20.4%~22.4%,换手 >5.5% 的 9.3%~12.6%,<2.2% 的 9.2%~12.8%;known9@hl5 与 max30@hl0
+    rank 相关 0.948/0.952、多头十分位重合 79%/80%,两者秩平均不比单独好;留出段 d=15/30/60(hl 0)12.0/12.5/14.7%,换手最低的最好
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - day_std
+  confidence: high
+  recheck: 只在 15bp 单边成本口径下成立,成本更低时最优换手更高;多头腿的钱集中在小市值(只留市值大的一半时训练段净超额 1.8%);2024 年明显变弱;留出段只有三个 hl 0 成员和三个纯多头规则半衰期的读数
+- id: halflife-picked-by-ls-sharpe-confounds-long-leg-comparisons
+  claim: 半衰期按多空夏普选出来之后拿去比多头腿,会把换手差当成结构差:多空规则给干净的快因子选 hl 0、给吵的因子选 hl 3,多头腿净超额能因此差 3~5 个点。对纯多头用户,结构比较(包括留出段上的对比)要在同换手、或「按纯多头夏普定半衰期」(每次运行
+    JSON 里的 books.splits_at_hl_long)下做
+  evidence: cross_max(day_std(Amt),9):hl 0(多空规则)多头腿净 9.3%/18.5%,hl 5(纯多头规则)13.7%/22.2%;留出段 f_max30 对原式 +3.6 个点里成本占
+    2.2;f_min3 在 hl 3 时留出段多头腿净 11.5%、纯多头夏普 1.33,hl 10 时 13.5%、1.74,与读前推荐的家族成员打平;s4_pos:hl 1 是 4.6%/12.8%,hl 10 是
+    8.0%/17.4%
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators: []
+  confidence: high
+  recheck: 多空用户不适用;半衰期网格很粗(0,1,2,3,5,10,20),并列时取第一个最大值(原式在用户训练段 hl 3/5/10 的纯多头夏普 1.964/1.958/1.959,规则取了 3,所以它没有
+    splits_at_hl_long)
+- id: amt-family-short-leg-is-turnover-long-leg-is-small-cap-side
+  claim: 成交额家族的两条腿跟着成交额的两个不同成分走:对换手率中性化后空头腿毛超额掉到三分之一左右或更低、多头腿变大;对流通市值中性化后已知家族成员的多头腿掉一半、空头腿变大。多头腿还需要「近期没放过量」:只看平时成交水平(中位数)多头腿只剩一半
+  evidence: 原式/d=9/d=30/d=60 四个因子同一形状(训练段,多头/空头毛超额):d=30 未中性化 17.4%/27.0%,对 ctl_cap 8.4%/41.6%,对 ctl_turnrate 23.3%/7.6%;cross_med(day_std(Amt),60)
+    多头腿毛超额 7.0%/19.5% 对 cross_max 同窗口 15.9%/22.3%;没有放量事件的股票相对同一事前水平桶的同伴多挣 +0.8%~+8.3% / +8.3%~+10.1%;换手率、波动类控制变量自己当因子在训练段多头腿毛超额为负
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - cross_max
+  - cross_med
+  - day_std
+  - day_sum
+  confidence: medium
+  recheck: 中性化只在训练段(2018–2021)做过;残差未平滑只读毛超额;市值和换手率是外部面板,换数据源要重查
+- id: volume-entry-event-is-short-signal-strongest-in-pre-event-small-names
+  claim: 无尺度的放量事件(近期峰值/一年峰值,或一年水平量的相对变化)是「进入」方向的空头信号,在每个事前成交额水平上都有效、在事前成交清淡/小市值的股票里最强;没有事件的股票相对同水平同伴多挣几个点。它单独当因子的多头腿在同换手下与原式相当、低于成交额水平家族(家族已含「近
+    d 天没有放量」)。(取代原来的「只有最高一档深、只在大成交额股票里有用」)
+  evidence: D/C 按滞后 10 天的 60 日成交额中位数分五桶的桶内 rank IC 训练 −0.0344→−0.0169、验证 −0.0459→−0.0250(只看 C 上升的成熟股票 −0.0631→−0.0097
+    / −0.0789→−0.0365;s4_pos −0.0540→−0.0027 / −0.0558→−0.0330),按流通市值同向;进入事件的股票相对同桶同伴 −95.6%→+0.1%(训练)、−90.0%→−20.7%(验证),不带可买入过滤的标签
+    −85.1%→+1.7% / −81.3%→−18.2%;s4_pos 在 hl 10 时多头腿净 8.0%/17.4%、hl 5 剖面顶端三档 +6.6/+9.0/+11.4% 与 +7.4/+14.2/+21.2%
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - div
+  - cross_max
+  - day_std
+  confidence: medium
+  recheck: 空头深度被可买入标签抬高 2~11 个点;桶内 IC 的双标签对照只有训练段;作为多头组合的排除条件是否有用没有测;与 20 日动量 rank 相关 0.37,对动量中性化后无成本多空夏普从 3.28
+    掉到 1.59;与 max30 秩平均对多头腿的增量两段方向相反
+- id: conditional-ic-gate-must-be-measured-before-the-event
+  claim: 条件 IC 的分桶变量如果含有被检验的事件本身(当天成交额、近期峰值、家族成员的取值),事件会把股票搬进最高一桶,桶内 IC 的梯度是机械的,甚至与真实梯度方向相反;要用事件窗口之前的量(滞后的中位数)或与事件无关的量(流通市值)分桶
+  evidence: 同一个 D/C:按当天成交额分桶 −0.010→−0.041、按 9 日峰值 −0.007→−0.044(看上去只在大成交额股票里有用);按滞后 10 天的 60 日成交额中位数 −0.034→−0.017、按流通市值
+    −0.037→−0.011(梯度相反),验证段同样;成熟股票里 |D/C| 最高十分位的进入事件 56%/58% 落在当天成交额最高的五分之一,按事前水平五个桶各占约 20%;同一 |D/C| 档位里进入的股票当天成交额分位
+    0.76、滑出的 0.42
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators: []
+  confidence: high
+  recheck: 事前变量与当天变量 rank 相关仍有 0.80,不是独立的;滞后要长于事件窗口;按家族成员取值分桶仍然有用,但它回答的是「对家族做了条件之后还剩什么」,不是「事件在哪类股票里有效」
+- id: buyable-label-filter-deepens-short-side-of-volume-spike-groups
+  claim: 可买入标签(次日开盘封涨停的格子置 NaN,空头篮子里记 0)过滤掉的格子很少但次日收益很高,而且集中在刚放量的小股票里,会把这类分组的空头深度抬高;做空头端的机制判断时要用不带过滤的标签对一遍
+  evidence: 被过滤的格子占有标签格子的 0.26%/0.12%(每天 9/6 只),次日收益平均 +5.5%/+4.7%;进入事件组里占 0.2%~1.3%,把该组相对同水平同伴的超额从 −95.6% 抬到 −85.1%(训练最清淡一桶)、−90.0%→−81.3%(验证),各桶
+    2~11 个点,梯度不变;按当天成交额分桶的最低一桶(每天 3.6 只、4.5% 被过滤)从 −82% 变成 −22%
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators: []
+  confidence: medium
+  recheck: 各候选整条空头腿和多空夏普被抬高多少没有量到(那次运行被中止);多头腿的数字不受影响(买不进就是买不进)
+- id: dt-face-rewrite-of-nd-rolling-ops-is-bit-identical
+  claim: nd 面的 ts_stddev / ts_delta 与 dt 面的 cross_stddev / cross_delta 是同一内核,作用在「每股票-日一个值」的面板上结果逐位相同;nd 面不分块求值,显卡被邻居占满时会
+    OOM,改写成 dt 面即可
+  evidence: ts_stddev(C,5) 与 cross_stddev(C,5) rank 相关 1.000、全部指标逐位相同(s2_dtface_check);abs_(ts_delta(C,5)) 与 abs_(cross_delta(C,5))
+    在两次独立运行里指标逐位相同;S1 第一次运行 3 个含新 ts_stddev 的表达式在只剩约 0.3 GiB 空闲显存时 OOM
+  study: F105_std_fangzheng_covamt
+  date: '2026-10-04'
+  operators:
+  - ts_stddev
+  - ts_std
+  - cross_stddev
+  - ts_delta
+  - cross_delta
+  confidence: high
+  recheck: 只在 AlphaCube commit 1698296 上核对过;两个面的窗口池不同(ts_* 是 1/5/10/20/…,cross_* 是 3/5/10/15/30/60/241),进搜索语法时要注意
