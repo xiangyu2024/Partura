@@ -16,6 +16,8 @@
 #   study.sh report <fid>                  push notes, build the report on the server, pull the .md back
 #   study.sh list <fid>                    what has ALREADY run for this study on the server (tags, exit codes)
 #   study.sh status                        what Partura jobs are on the server right now
+#   study.sh table <fid> [tag]             the BATCH SWEEP table (hundreds of variants side by side) + the market anatomy
+#   study.sh hypo <fid>                    check that studies/<fid>/hypo.yaml (hypotheses for the next sweep) parses
 #   study.sh brief <fid>                   the HANDOFF briefing: where this study stands, its journal, what exists -- read it first
 #   study.sh note <fid> "<title>" [<<EOF]  append an entry to the research journal notes/<fid>/journal.md (body on stdin)
 #
@@ -26,7 +28,7 @@ set -u
 cd "$(dirname "$0")/.."
 PY=${PY:-$HOME/.venvs/alphacube/bin/python}
 HOST=root@connect.westd.seetacloud.com
-SSH="ssh -o BatchMode=yes -o ControlPath=none -o ConnectTimeout=30 -p 29982"
+SSH="ssh -o BatchMode=yes -o ControlPath=none -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -p 29982"
 RS="rsync -a --exclude __pycache__ -e"
 R=/root/autodl-tmp/Partura
 ENV="cd $R && export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:$R ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=\${PARTURA_SLOTS:-6} PARTURA_MEM_WAIT_S=\${PARTURA_MEM_WAIT_S:-10800}"
@@ -139,6 +141,16 @@ case "$cmd" in
     mkdir -p research/alpha_distillation
     $RS "$SSH" "$HOST:$R/research/alpha_distillation/$fid.md" research/alpha_distillation/ && wc -l "research/alpha_distillation/$fid.md"
     ;;
+  hypo)      # do the hypotheses in studies/<fid>/hypo.yaml parse?  (they go into the next batch sweep)
+    fid=$1; push "$fid" || exit 1
+    $SSH $HOST "$ENV && $RPY scripts/check_hypo.py studies/$fid/hypo.yaml 2>&1 | grep -v 'FutureWarning\|vmap(single_row)\|UserWarning'"
+    ;;
+  table)     # the batch-sweep backtest table and the market anatomy of this factor (tag defaults to s1)
+    fid=$1; tag=${2:-s1}
+    $RS "$SSH" "$HOST:$R/logs/${fid}_sweep_${tag}.log" logs/ 2>/dev/null
+    $RS "$SSH" --include='*.json' --exclude='*' "$HOST:$R/runs/$fid/" "runs/$fid/" 2>/dev/null
+    grep -av 'FutureWarning\|vmap(single_row)\|UserWarning\|RuntimeWarning\|nanvar\|np.nanmean\|^\[panels\]\|^\[guard\]' "logs/${fid}_sweep_${tag}.log"
+    ;;
   brief)
     fid=$1
     "$PY" scripts/recorder.py --brief "$fid"
@@ -155,5 +167,5 @@ case "$cmd" in
   status)
     $SSH $HOST "screen -ls | grep pt_ ; echo; nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader; awk '/^anon /{printf \"container anon %.1f GiB\n\", \$2/1073741824}' /sys/fs/cgroup/memory.stat; ls $R/tmp/locks 2>/dev/null | tr '\n' ' '"
     ;;
-  *) sed -n '2,22p' "$0"; exit 2 ;;
+  *) sed -n '2,24p' "$0"; exit 2 ;;
 esac

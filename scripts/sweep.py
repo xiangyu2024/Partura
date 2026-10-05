@@ -68,12 +68,6 @@ def variants() -> dict:
         if i not in V:
             V[i] = (e, kind, why)
 
-    try:
-        for c in propose(SRC, max_substitutes=8, max_fields=8, max_nodes=40):
-            add(c.id, c.expr, c.kind, c.why)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[sweep] propose failed: {type(exc).__name__}: {exc}", flush=True)
-
     # the smallest sub-structures: a minute return and a minute volume change are the same kind of object
     leaf = {"Ret": [("volchg", "in_pct(Volume, 1)"), ("amtchg", "in_pct(Amt, 1)"), ("ret5", "in_pct(Close, 5)"),
                     ("vwapchg", "in_pct(Vwap, 1)"), ("logvol", "in_logchg(Volume, 1)")],
@@ -112,6 +106,13 @@ def variants() -> dict:
     if extra and Path(extra).is_file():
         for i, v in (yaml.safe_load(Path(extra).read_text(encoding="utf-8")) or {}).items():
             add(str(i), v["expr"] if isinstance(v, dict) else str(v), "hypo", (v.get("why", "") if isinstance(v, dict) else ""))
+    # the tree's own structure last: on a 40-node hand-written tree it would otherwise eat the whole budget
+    big = len(re.findall(r"[a-z_0-9]+\(", SRC)) > 14
+    try:
+        for c in propose(SRC, max_substitutes=3 if big else 8, max_fields=4 if big else 8, max_nodes=40):
+            add(c.id, c.expr, c.kind, c.why)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[sweep] propose failed: {type(exc).__name__}: {exc}", flush=True)
     return V
 
 
@@ -166,7 +167,8 @@ with slot():
     ps = PanelSet("/root/autodl-tmp/qmt_daily_data/fast_factor_compute", SPLITS["full"][0], SPLITS["full"][1],
                   warmup=int(cfg.get("warmup", 60)), device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE),
                   mirror_root="/root/autodl-tmp/AlphaCube/mirror", workdir=str(PARTURA_ROOT / "tmp"),
-                  label_kind=lab.get("kind", "open_vwap15"), label_buyable=bool(lab.get("buyable", True)), batch=8)
+                  label_kind=lab.get("kind", "open_vwap15"), label_buyable=bool(lab.get("buyable", True)),
+                  batch=int(os.environ.get("PARTURA_SWEEP_BATCH", 32)))   # variants share most of their tree: big batches reuse it
     panels = ps.compute({i: v[0] for i, v in V.items()})
     print(f"[sweep] panels: {len(panels)}/{len(V)} in {time.time() - t0:.0f}s; failed: {sorted(set(V) - set(panels))[:12]}", flush=True)
     tgt = ps.target(1)

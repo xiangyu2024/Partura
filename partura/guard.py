@@ -45,15 +45,23 @@ def lock_dir() -> Path:
 @contextlib.contextmanager
 def exclusive(name: str, poll: float = 2.0, announce: bool = True) -> Iterator[None]:
     """Block until this process holds ``name``; release on exit."""
-    path = lock_dir() / f"{name}.lock"
-    fh = open(path, "a+")
+    # PARTURA_<NAME>_WAYS=n turns the lock into n interchangeable ones (e.g. two engine evaluations
+    # side by side when the GPU is ours alone); the default 1 keeps it strictly exclusive.
+    ways = max(1, int(os.environ.get(f"PARTURA_{name.upper()}_WAYS", "1")))
+    paths = [lock_dir() / (f"{name}.lock" if i == 0 else f"{name}{i + 1}.lock") for i in range(ways)]
+    fh = None
     waited, said = 0.0, False
     try:
-        while True:
-            try:
-                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
+        while fh is None:
+            for path in paths:
+                cand = open(path, "a+")
+                try:
+                    fcntl.flock(cand, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fh = cand
+                    break
+                except BlockingIOError:
+                    cand.close()
+            if fh is None:
                 if announce and not said:
                     print(f"[guard] waiting for lock '{name}' ...", flush=True)
                     said = True
