@@ -1,6 +1,6 @@
 # F109_erm_mag_gap_5m_tsm20 — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 15:06(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_5m_tsm20(批次 B01_single_factors)
 - 表达式:`ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F109_erm_m
 - **阶段:全部完成**
 - **留出段已经读过 2 次**(10-04 15:19, 10-05 12:20)—— **不许再读**。候选在留出段上的数全在 `runs/F109_erm_mag_gap_5m_tsm20/final.json`(`./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `study:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 00:00 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/study_aa16cdd06605b6095.md`
   - `audit-numbers:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 00:14 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/audit-numbers_ae5d6ae4559cdb8a5.md`
   - `synth:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 11:32 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/synth_aa3609845243aa6a4.md`
+  - `verdict:F109_erm_mag_gap_5m_tsm20`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F109_erm_mag_gap_5m_tsm20/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 

@@ -1,6 +1,22 @@
 # 总领(协调者)的现状 —— B01 批次(15 条单因子)
 
-_最后更新:2026-10-04 13:15 PDT,Opus 5.5 主会话(用户额度将尽时写的)。每到一个里程碑更新这一页。_
+_最后更新:2026-10-05 13:45 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
+
+## ▶ 2026-10-05 14:55 PDT:用户说「继续」,已恢复(13:53–14:55 曾全部暂停)
+
+用户恢复时加了两件事,**都已交付**(15:20):
+1. 「先打印一份我能看懂的回测结果,各个你觉得改进好的升级版的」→ `research/alpha_distillation/B01_upgrades_and_fusion.md`
+   (`scripts/readable_report.py batches/B01_single_factors.yaml --tag s2`,本机跑;表 1 = 9 个独立升级版,表 2 = 已知族的升级版,带大白话说明和完整表达式)。
+2. 「简单融合和平滑一下大家,让我看看样本内外的结果」→ 服务器 `scripts/batch_fuse.py batches/B01_single_factors.yaml --tag s2`
+   (成员按规则只看样本内选;融合 = 成员截面 z-rank 等权均值;测试段**已读,记账**在 `runs/_batch_B01/ledger.json`)→ `runs/_batch_B01/fuse_s2.json`,曲线 `B01_fusion_curves.svg/.png`。
+   多头净超额 样本内 / 样本外(纯多头夏普):已知族单独 +15.4 / +14.1(2.22 / 1.51);**原式 15 条等权 +15.8 / +11.1(3.26 / 1.63)**;
+   升级版 15 条等权 +20.2 / +16.0(3.65 / 1.63);**独立 9 个等权 +20.1 / +17.3(3.95 / 1.93)**,8 年都在 +15~+22%;
+   已知族簇首单独 +18.1 / +16.8(3.16 / 1.74);独立 9 + 已知族簇首(10 个等权)+20.3 / +17.7(3.91 / 1.87);一半已知族簇首 + 一半独立 9 个 +20.2 / +18.3(3.62 / 1.82)。
+   平滑:成员各自平滑后再融合,融合后再平滑不加收益(换手 3.0% → 1.3%,样本外夏普不变 ~1.9,回撤 −14.1% → −10.5%);不先各自平滑直接融合明显更差。
+   风险:样本外最大回撤都在 2024-01-16~02-06(微盘股踩踏),升级版融合 −13~−17%,原式融合只有 −5%。
+- 对账轮工作流已用 `resumeFromRunId: "wf_4811c95a-915"` 续上(task `w35xy9gym`);recorder 与 caffeinate 已重启。
+- 跨因子聚类 `scripts/batch_cluster.py … --tag s2`(只用训练段)已跑完:24 个簇,`runs/_batch_B01/cluster_s2.json`;总表 `B01_batch_summary.md` 已带「0.5 跨因子」一节。
+- `scripts/sweep_final.py` 改了一处:候选按**被选中时的方向**读测试段(第二轮 120 个读数里只有 F106.abl_M 一个弱候选受影响,已在第三轮自然被覆盖)。
 
 ## 现在在跑什么(2026-10-05 起:方法改了,先读这一节)
 
@@ -23,8 +39,28 @@ _最后更新:2026-10-04 13:15 PDT,Opus 5.5 主会话(用户额度将尽时写�
 - 看一条因子的表:`./scripts/study.sh table <fid> s1`;一键全跑:服务器上 `tmp/run_all_sweeps.sh`(`TAG=s2 EXTRA=…`)。
 - 服务器独占时:`PARTURA_SLOTS=6 PARTURA_GPU_WAYS=2`(两条引擎线并行)。有邻居时去掉 `PARTURA_GPU_WAYS`、槽调回 3。
 
-**进度**:2026-10-05 10:20 PDT 15 条的 s1 扫描 + 解剖在服务器上排队跑(F114 已完成并在做综合的试点,工作流 `wf_2b8259ae-98e`)。
-旧的分层逐轮工作流(`partura_tiered.js`)已停用;它留下的 state.md / 工单 / 结果卡 / 5 条因子的测试段读数仍然有效,综合时可参考。
+**进度(2026-10-05 13:45 PDT)**
+- 第一轮(tag `s1`):15 条的扫描 + 解剖 + 综合(`notes/<fid>/synthesis.md`、`studies/<fid>/hypo.yaml`)全部完成。
+- 新算子:`partura/ops_ext.py` 共 45 个(定义与理由见 `docs/new_operators.md`),都用手算答案核过、已部署到服务器。
+  没做的:`cs_bucket_rank2`(要 3 个张量操作数,文法只支持 2 个);**数据层字段**(流通市值 / 流通股本、板块与涨跌幅限制宽度)——
+  6 条因子的综合都要,这要动 AlphaCube 的数据层,**已问用户,等答复,不要自己动**。
+- 第二轮(tag `s2`):15 条的扫描(含第二批假设)+ 解剖 + 按规则读测试段全部完成,`runs/<fid>/{sweep,anatomy,sweepfinal}_s2.json` 已拉回本机;
+  总表 `research/alpha_distillation/B01_batch_summary.md`(`scripts/batch2_summary.py … --tag s2`)已发给用户(commit `6c33dff`)。
+- **正在跑(14:55 续跑)**:对账轮,工作流 run `wf_4811c95a-915`(`partura_batch_synthesis.js`,`round: 2`,15 个 Opus 5 主研,标签 `verdict:<fid>`):
+  读 `./scripts/study.sh table <fid> s2 --all`(只有 train / valid),写哪些假设被证实 / 证伪、最好的版本、`lab_findings`,
+  并用最新 23 个算子写第三批假设 `studies/<fid>/hypo3.yaml`(用 `./scripts/study.sh hypo3 <fid>` 自查)。结果由 recorder 落到 `handoff/<fid>/results/verdict.json`。
+  被额度打断时:`Workflow({scriptPath: 同一个脚本, resumeFromRunId: "wf_4811c95a-915"})`,做完的不会重跑。
+- 已完成:`scripts/batch_cluster.py batches/B01_single_factors.yaml --tag s2` 的试跑(只用训练段),`runs/_batch_B01/cluster_s2.json`。
+
+**接下来(按顺序)**
+1. 对账轮回来后:`for f in studies/*/hypo3.yaml` 都过 `./scripts/study.sh hypo3 <fid>`;把 `studies/` 同步到服务器;
+   服务器上 `tmp/run_round3.sh <15 个 fid>`(tag `s3`,`--extra studies/$fid/hypo.yaml,studies/$fid/hypo3.yaml`,日志 `logs/<fid>_round3.log`,screen `r3_F1xx`)。
+2. 拉回 `runs/<fid>/{sweep,anatomy,sweepfinal}_s3.json`(`./scripts/study.sh table <fid> s3` 会拉)。
+3. 服务器:`scripts/batch_cluster.py batches/B01_single_factors.yaml --tag s3`(只用训练段)→ `scripts/batch_fuse.py batches/B01_single_factors.yaml --tag s3`(融合的测试段读数,记账;第二轮的融合已按用户要求读过一次)。
+4. 本机:`scripts/batch2_summary.py … --tag s3` + `scripts/readable_report.py … --tag s3`(好读的那份,用户要的是这种)→ 发给用户。
+5. 各 `handoff/<fid>/results/verdict.json` 的 `lab_findings` 合并进 `lab/findings.yaml`;更新本页与记忆;commit + push。
+
+旧的分层逐轮工作流(`partura_tiered.js`)已停用;它留下的 state.md / 工单 / 结果卡仍可参考。
 
 ## 仓库
 
@@ -33,30 +69,39 @@ GitHub 私有仓库 **https://github.com/xiangyu2024/Partura**(2026-10-04 建;�
 `git add -A . && git commit -m "…" && git push`(`runs/*.json`、`logs/`、`handoff/` 都在版本库里;面板缓存 `runs/_panels/`、`*.npy` 不进)。
 仓库里有服务器的 SSH 地址(`scripts/study.sh`),没有任何密码或密钥。
 
-## 已经完成的(读过留出段、有结论)
+## 第二轮的结论(多头腿净超额 训练 / 测试,括号纯多头夏普;完整见 `research/alpha_distillation/B01_batch_summary.md`)
 
-| 因子 | 结论(多头口径:多头腿净超额 训练/测试) |
-|---|---|
-| F101 手写 day_shine_retstd | 蒸馏:日内波动水平的 V 形截面折叠。原式@hl20 +7.1%/+7.1%;`abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret,2,237),5))))`@hl20 +9.5%/+7.0%;更简的 `abs_(cs_demean(day_std(in_slice(Ret,2,237))))` +9.1%/+8.0%。与成交额族无关,是真增量 |
-| F102 挖掘 #3961 | 升华:`cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret,3))),60)`@hl2 +11.3%/+7.0%;原式@hl5 +8.9%/+2.5%(@hl1 是 +4.8%/−0.7%)。空头腿是封板事件 |
-| F103 挖掘 #820 | 升华但落在已知成交额族:`mul(cross_max(day_std(Amt),9), day_durbin_watson(cross_decay_linear(Amt,30)))`@hl10 +15.6%/+14.2%;原式@hl10 +8.1%/+7.2% |
-| F104 挖掘 #4190 | **none_robust**:原式多头腿 +1.8%/−2.1%,延长半衰期也没用;两位数的多头腿只来自把流动性放回来 = 已知族(`cross_mean(day_std(Amt),30)` +15.4%/+14.1%) |
-| F105 挖掘 #25 | 归入已知族:`cross_max(day_std(Amt),30)`@hl1 +16.7%/+13.5%;原式@hl3 +11.8%/+8.9% |
+对照:已知族 `cross_mean(day_std(Amt), 30)` +15.4% / +14.1%(2.22 / 1.51);通用筛子 `k_known_xfrozen`(已知族剔掉近 15 日冻结盘口最重的 20%)+18.5% / +14.7%(3.15 / 1.56)。
 
-入选式之间(训练段):F103′ 与 F105′ rank 相关 0.92,与已知族 0.87–0.95 —— 同一个因子;F101′、F102′ 与已知族 0.16–0.26,
-和它五五混合后纯多头夏普 2.22 → 2.8–2.9(`runs/_batch_B01/final_overview.json`,试跑)。
+| 因子 | 原式 | 独立于已知族的最好版本 | 建在已知族上的最好版本 |
+|---|---|---|---|
+| F101 | +7.1 / +7.1 | 一处 `Volume` 差分换 `Amt`:+9.7 / +7.2(2.68 / 1.60),ρk 0.16 | 低流动性 40% 里按 F101 反向选:+16.0 / +15.6(2.67 / 2.03) |
+| F102 | +8.9 / +2.5 | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)`:+11.3 / +7.0(2.85 / 1.45) | 已知族在本因子高 40% 里:+16.3 / +14.0 |
+| F103 | +8.1 / +7.2 | (落在已知族) | 已知族连剔冻结盘口 + 次新:**+18.1 / +16.8(3.16 / 1.74)** |
+| F104 | +1.8 / −2.1 | (无;原式不可用) | `day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` +15.1 / +12.6;筛子 +18.5 / +14.5 |
+| F105 | +11.8 / +8.9 | 原式 + 冻结盘口筛子:+13.3 / +10.2(2.75 / 1.22) | — |
+| F106 | −5.8 / −3.2 | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 30)))`:+12.1 / +15.5(2.08 / 1.70),ρk 0.46 | — |
+| F107 | +1.7 / +1.4 | **`cross_ema(abs_(cs_demean(day_gini(Low))), 30)`:+11.7 / +11.2(2.87 / 2.10)**,8 年全正 | — |
+| F108 | +1.0 / −3.2 | (无) | `day_max(pow_2(nt_ts_std(Amt, 30)))` +16.5 / +13.3;筛子 +17.8 / +14.7 |
+| F109 | −3.2 / +2.9 | (无稳健版本) | — |
+| F110 | −0.2 / −0.8 | `cross_ema(pow_3(sub(div(day_last(Close), day_first(Open)), 1)), 30)`:+8.8 / +12.5(1.79 / 1.11) | — |
+| F111 | +12.3 / +6.0 | 原式 + 冻结盘口筛子:+13.5 / +7.7(2.46 / 1.05) | — |
+| F112 | +4.2 / +6.9 | `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))))`:+8.4 / +7.9(1.85 / 1.53) | — |
+| F113 | +0.7 / −0.6 | (无) | 叠加 0.25:+14.8 / +15.1;低流动性分段 +10.7 / +13.3 |
+| F114 | +3.6 / +0.2 | (无) | 已知族秩 + 0.5 × `cross_mean(day_flat_ratio(Close), 15)` 秩:+15.7 / +15.4(2.80 / 1.68) |
+| F115 | +4.1 / +1.8 | (无稳健版本) | — |
 
-## 收尾还要做的(15 条都 done 之后)
-
-1. 写 `batches/B01_picks.yaml`(草稿 `B01_picks_draft.yaml` 只有第一组;F104 填 `kind: none_robust`,基准 `f_std30`;
-   F106–F115 用各自 `handoff/<fid>/results/` 里最新结论的 `recommended_id`)。
-2. 服务器:`scripts/batch_final.py batches/B01_picks.yaml`(约 10 分钟,只用训练段)→ 拉回 `runs/_batch_B01/final_overview.json`。
-3. 本地:`scripts/batch_summary.py batches/B01_picks.yaml` → `research/alpha_distillation/B01_summary.md`,发给用户。
-4. 各研究 `lab_findings` 合并进 `lab/findings.yaml`;commit;更新记忆。
-5. F104 的报告要重出一次(`./scripts/study.sh report F104_kurt_masktop_amt`)并核对(修订者返回前是否已重出,看报告文件时间)。
+跨因子的共同发现:(1) 选股力集中在约 6.5% 的冻结盘口票(封板 / 停牌),剔掉它们是最通用的一招;(2) `+1e-6` 一类绝对小量分母把因子变成涨跌停探测器;
+(3) 很多书是流动性倾斜、桶内选股为负;(4) 用户说的 Ret ↔ 量变化率互换在 F101 成立,在 F102 / F104 / F114 不成立。
+测试段一共读了约一百个候选(按规则、记账),榜首有向上的选择偏差。
 
 ## 用户定的规矩(不要改)
 
 - 选拔口径:**多头腿净超额 / 纯多头夏普**,半衰期按纯多头书选;延长半衰期带来的净超额是有效的。
-- 分工:总领 Opus 5.5;主研 Opus 5;执行(写代码、跑实验、读结果)Sonnet 5。**研究全程落盘**。
-- 服务器上有别人的任务,不要相互打断;留出段每条因子只读一次。
+- 分工:总领 Opus 5.5;主研 Opus 5;执行(写代码、跑实验、读结果)Sonnet 5。**研究全程落盘**(额度随时会断,换模型要接得上)。
+- 研究方法(2026-10-05):假设成批提、成批看回测;分股票范围 / 分时间段看因子在哪有效并推断原因;可以改最小的子结构;
+  **对算子的理解必须来自函数定义**,不是名字;可以边研究边补算子库。
+- 服务器:2026-10-04 14:30 起用户说"全面归你用";但**不是自己起的进程一律不杀**,`/root/autodl-tmp/AlphaCube` 当只读(新算子放 `partura/ops_ext.py`)。
+- 测试段(留出段)只按写死的规则读、每次记账;不许按测试段的数字挑候选。
+- GitHub 仓库保持私有,只有用户能邀请别人;凭据不打印、不外发。
+- 汇报用中文,结论先行,数字都是扣费后的。

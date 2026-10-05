@@ -1,0 +1,66 @@
+# F101_day_shine_retstd — 第三批假设(主研,批量扫描 s2 对账之后)
+# 口径:多头腿扣 15bp 净超额 + 纯多头夏普。基准 k_known = cross_mean(day_std(Amt), 30)(tr/va/ut +12.6/+22.3/+15.4%,Lshp 1.78/3.46/2.22)
+#       通用筛子基准 k_known_xfrozen(+16.4/+23.2/+18.5%,Lshp 2.81/3.98/3.15)—— 这一轮真正要比过的门槛
+# 本因子最好单体 fld_Volume_Amt(+10.0/+8.9/+9.7%,2.71/2.59/2.68,LTO 5.6%,hl 20,ρk 0.16)
+# 记号:RV5 = day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)) = 全部分钟的 5 分钟滚动收益 std 再全天平均
+#       FOLD(x) = abs_(cs_demean(x)) = 在当天截面均值处的 V 形折叠;GATE = fld_Volume_Amt 的整棵树
+#
+# s2 的六条新事实(本批每条都挂在其中之一上):
+#  (1) 被测量不是「全天收益 std」而是「5 分钟滚动波动的全天平均」:去掩码后窗口斜坡 5 / 15 / 全天 → Lshp(ut) 2.42 / 2.25 / 2.21,
+#      valid 2.78 / 2.47 / 1.66 —— s1 读到的「窗口越长越好」是稀疏掩码被稀释的假象,方向整个反过来。
+#  (2) 折叠不可替代:单调版 h_rv_mono_mean30 = −4.8% / −0.61;两条「低波动 + 排除一字板」的机制替代也塌(−1.1% / −2.8%)。
+#  (3) 换折叠中心(median / log / rankcenter / winsor)全部 train↓ valid↑ 而 ut 不动(2.07~2.20 对 2.21)—— 中心的位置不是杠杆,
+#      但中位数 / 秩中心的 train-valid 一致性明显更好,而它们全都配的是输掉的「全天 std」,从没和 5 分钟窗口组合过。
+#  (4) cs_bucket_rank(FOLD(x), key) 是「先全市场折叠、再桶内排名」,中心仍是全市场均值 ⇒ 四条 bk_* 全部无增量(2.07~2.23 对 2.21)。
+#      s1 真正要的「桶内折叠」直到 cs_bucket_demean / cs_bucket_zscore 才写得出来。
+#  (5) 工具事实:乘一个日标量(cs_stddev_full / cs_state_rank 一类铺满截面的常数)对信号完全无效 —— h_rv_fold_state_weight 的
+#      ρo 与 h_rv_fold 同为 0.83、数字逐位接近。市场状态只能通过 select_where / cs_flip_by_state 进入表达式。
+#  (6) **s2 关于「平滑已用尽 / 融合无增量 / overlay 打平」的三条否定结论,全部是在 day_std(全天)这个已经输掉的核上测的**
+#      (h_rv_fold_ema30 / _mean60 / _rank / _rank_ema30、h_sum_rv_amtchg、h_ov_k_rv_05 / _10 的表达式里都是 day_std(in_slice(Ret,2,237)));
+#      赢的那个核(RV5,valid 2.78 对 1.66)从来没被平滑过、没被融合过、没被叠过,叠在真门槛 k_known_xfrozen 上的更是一条都没有。
+#      ⇒ J 组七条把这三件事在对的核上重做一遍,除此之外一个子结构都不动,与 s2 的对应变体严格可比。
+
+# ---- A. 桶内折叠:s1 最想要、s2 证明 cs_bucket_rank 不是它(新算子 cs_bucket_demean / cs_bucket_zscore)
+h3_bdem_amt241: {expr: "abs_(cs_bucket_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)), cross_mean(day_sum(Amt), 241)))", why: "本批第一优先。折叠中心从全市场均值换成「同规模股票的典型值」(241 日成交额当规模代理,长窗平掉当期炒作)。解剖:小票段内 S+2.96 却 tilt −13.5%(只放 6% 仓位),大票 tilt +18.9% 而段内 S+0.20 —— 整条因子最大的一处落差。要求小票 tilt 由负转正且 Lshp(ut) > 2.68"}
+h3_bdem_amt20: {expr: "abs_(cs_bucket_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)), cross_mean(day_sum(Amt), 20)))", why: "同上换 20 日成交额(换手代理)。解剖里市值桶与 20 日成交额桶给出相反答案(小票段内最强 / 清淡段零分辨力),必须分开试;与 h3_bdem_amt241 的差就是「规模」与「换手」哪一个才是正确的参照系"}
+h3_bzs_amt241: {expr: "abs_(cs_bucket_zscore(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)), cross_mean(day_sum(Amt), 241)))", why: "各桶的日内波动离散度相差数倍,桶内去均值后的「距离」仍不可比 ⇒ 再除桶内 std。与 h3_bdem_amt241 的差单独回答「桶内折叠还需不需要缩放」(s1 测过全市场版:cs_normalize 1.35 ≈ base 1.37,缩放在全市场尺度上无效)"}
+h3_bdem_price: {expr: "abs_(cs_bucket_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)), day_mean(in_slice(Close, 2, 237))))", why: "科创板是唯一的失效区(段内 −19.4% S−1.01 而原式还超配 +2.2%):20% 涨跌幅让板内波动分布整体右移,全市场中心把板内最安静的一批判成「最像市场平均」。价格水平是手上唯一能区分报价制度的代理;h_rv_fold_bk_price 用 bucket_rank 写失败了(2.07),这是正确写法"}
+
+# ---- B. 窗口斜坡在去掩码版上重做:s2 发现 5 分钟 > 15 > 全天,方向与 s1 相反 —— 斜坡还没走完
+h3_roll3_fold: {expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 3))))", why: "h_rv_roll5_fold(2.42 / valid 2.78)比 h_rv_roll15_fold(2.25 / 2.47)和 h_rv_fold(2.21 / 1.66)都好 ⇒ 短端才是对的方向,而 s1 从没在去掩码版上试过 3。若 3 ≥ 5,被测量就不是「波动水平」而是「相邻分钟的跳动幅度」"}
+h3_roll2_fold: {expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 2))))", why: "斜坡的端点:2 分钟滚动 std 退化成 |相邻两分钟收益之差| / 2 的平均 ⇒ 这一条是「被测量其实是分钟级跳动的平均幅度」的极限检验。若它也 ≥ 2.42,整棵树可以压成一个 day_mean(abs_(in_delta(Ret)))"}
+h3_roll5_median: {expr: "abs_(sub(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)), cs_median(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))", why: "s2 换中心的四条全是 train↓ valid↑(median 2.07→2.56、rankcenter 1.76→2.95),但它们配的都是输掉的全天 std;把最好的中心(中位数)和最好的窗口(5 分钟)第一次组合起来。这是本批里最便宜的一条"}
+
+# ---- C. 稳健标准化:分清「想法不对」与「估计量太脆」(新算子 cross_madz)
+h3_madz_own: {expr: "abs_(cs_demean(cross_madz(day_std(in_slice(Ret, 2, 237)), 60)))", why: "h_rv_own_rel_fold(除 60 日均,0.69)与 mem_zscore5/10(−6.23 / −4.17)都塌了,s1 据此断定「信息在持久的截面水平里」。但那两个估计量都被单次波动尖峰拖着走;cross_madz 是稳健版,它能分清「去掉持久水平这个想法不对」和「估计量太脆」。预测仍然塌,若不塌则 s1 那条结论要改写"}
+
+# ---- D. 清淡票的最小变动价位噪声:s1 的推论,s2 用加权均值版否证了一次(新算子 day_wstd / day_distinct_ratio)
+h3_wstd_fold: {expr: "abs_(cs_demean(day_wstd(in_slice(Ret, 2, 237), in_slice(Amt, 2, 237))))", why: "s2 的 h_wmean_absret(成交额加权 |Ret|)退回 base 的样本外毛病(1.55 / −0.68 / 0.97),但它的中心是 0、量纲是均绝对值,不是标准差。day_wstd 才是「资金真正经历的波动」:零成交分钟不再把它稀释。s1 那条可检验推论(清淡段段内夏普只有 +0.15)应该落在这一条上"}
+h3_distinct_screen: {expr: "cs_last_low20(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), day_distinct_ratio(in_slice(Close, 2, 237)))", why: "把「当天只走过几个价位」的票压到书底:清淡票的日内 std 主要是一个 tick 的格子噪声。这比 h_rv_fold_drop_illiq(按成交额剔掉最低 20%,0.75,ρo −0.49 已经变成另一个因子)精确得多 —— 剔的是测不准的票,而不是整段流动性"}
+
+# ---- E. 封在最高 / 最低价是两种事件(新算子 day_at_max_ratio / day_at_min_ratio;s2 已否定 day_flat_ratio 的筛子与分桶)
+h3_atmax_screen: {expr: "cs_last_high20(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), cross_max(day_at_max_ratio(in_slice(Close, 2, 237)), 15))", why: "k_known_xfrozen(Lshp 3.15)靠的就是 cross_max(day_zero_ratio, 15) 这一道筛子;day_flat_ratio 版在本因子上塌了(h_rv_neg_screen_flat −0.15、h_rv_fold_bk_flat 2.12),但 flat_ratio 把封涨停与封跌停混在一起。这一条只剔「近 15 日封在最高价」的票"}
+h3_atmin_screen: {expr: "cs_last_high20(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), cross_max(day_at_min_ratio(in_slice(Close, 2, 237)), 15))", why: "与上一条配对的对照:封跌停侧。折叠的低波动腿实测塞满一字板票,这两条合起来回答「毒在涨停封板还是跌停封板」—— 如果只有一侧有效,通用的 xfrozen 筛子就是在做无用的另一半"}
+
+# ---- F. 市场状态只能从 select_where 进入(s2 证明乘日标量完全无效)
+h3_state_select: {expr: "select_where(is_gt(cs_state_rank(day_sum(Amt), 60), 0.5), neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), mul(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), 0))", why: "稠密族是顺周期的:放量日 +13.6~14.3% 对缩量 +6.0~6.6%,截面离散度高 +13.8% 对低 +5.7%。这里只在「市场成交额处于近 60 日上半区」的日子持有本因子的书,其余日子全截面同值(= 等权、不下注)。它是「只在有投机的时候才有分辨力」这条解读的直接检验,而 h_rv_fold_state_weight 的乘法写法被证明无效"}
+
+# ---- G. 尾部形状:s1 断定「必须是尺度不是形状」,但那是在会被封板日污染的算子上测的(新算子 day_es_ratio_hi)
+h3_es_hi_fold: {expr: "abs_(cs_demean(day_es_ratio_hi(in_slice(Ret, 2, 237))))", why: "s1 用 day_skew / day_gini 得出「被测量必须是尺度」(−0.14 / −0.93);但手写的 erm_* 系列在分母加 1e-6 把每个封板日变成 1e4 量级,形状类算子一直读的是「有没有封板」。day_es_ratio_hi 把那样的日子留作缺失,是「形状」的第一次干净重试"}
+
+# ---- H. 不借已知族的分段键:s2 最大的意外是 lo40 分段(2.51~2.67)但 ρk 0.62~0.78,逐年形状与 k_known 几乎重合
+h3_lo40_age: {expr: "cs_first_low40(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), cross_age(day_last(Close)))", why: "关键检验。h_rv_fold_lo40_amt / _amt241 / seg_lowliq_m(ut 2.51 / 2.62 / 2.67)是本因子最好的读数,但分段键是成交额、ρk 0.62~0.78、逐年形状与 k_known 逐年重合 ⇒ 它们赚的是流动性溢价。换成上市天数这个与成交额无关的键:若提升复现,分段本身是机制;若消失,那三条就只是已知族的 tilt"}
+h3_lo40_distinct: {expr: "cs_first_low40(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), day_distinct_ratio(in_slice(Close, 2, 237)))", why: "同上,键换成价位丰富度(与成交额相关但不是它)。两把不借已知族的键把「分段为什么有用」逼到一个答案上"}
+
+# ---- I. 日内结构:顺序与权重(新算子 day_topw_mean / in_index)
+h3_topw_absret: {expr: "abs_(cs_demean(day_topw_mean(abs_(in_slice(Ret, 2, 237)), in_slice(Amt, 2, 237))))", why: "一个节点替掉整台放量触发机器:成交额最大的 10% 分钟上的平均 |收益|,不用掩码、不用 in_sustain_stddev。与 fld_Volume_Amt(2.68)和 h_gate_dvpos(2.45)对照,直接回答「掩码里到底还剩什么」—— s2 已经证明掩码越稠密越好,这一条反过来把掩码做到最稀疏但写法干净"}
+h3_time_wstd: {expr: "abs_(cs_demean(day_wstd(in_slice(Ret, 2, 237), in_index(in_slice(Ret, 2, 237)))))", why: "时间加权的日内波动(越靠收盘权重越大):顺序信息被 day_std / day_gini 全部丢掉,而收盘前的波动与隔夜 / 次日收益的关系和早盘完全不同。in_index 第一次让「什么时候波动」进入表达式"}
+
+# ---- J. 平滑 / 融合 / 叠加,在对的核(RV5)上重做:s2 的三条否定结论全部建在输掉的 day_std 上(新事实 6)
+h3_roll5_ema30: {expr: "cross_ema(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))), 30)", why: "s2 判「平滑这根杠杆已用尽」的依据是 h_rv_fold_ema30 2.20 / _mean60 2.25 / _rank 2.12 / _rank_ema30 2.15 对 h_rv_fold 2.21 —— 四条都装在全天 std 上。但同一组数字在 valid 上是 1.66 → 1.92 / 1.83 / 1.95 / 2.35,LTO 5.1% → 3.0%:平滑真正买到的是样本外一致性和换手(2.1 个点日换手按 15bp 约值 +0.8 个点净超额/年),不是 ut。装到 RV5(valid 已是 2.78、LTO 5.3%)上重测。判据:LTO < 3.5% 且 ut ≥ 2.42"}
+h3_roll5_rank_ema30: {expr: "cross_ema(cs_rank(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), 30)", why: "错核族里 valid 最好的那一条正是「先取秩再 EMA」(h_rv_fold_rank_ema30 valid 2.35 对 1.66,+0.69;LTO 3.0%,空头腿从 +34% 掉到 +17.5% ⇒ 真的只剩多头腿在出力)。先取秩把折叠后那条右偏分布压平,日轴平均才不会被单日尖峰带走。本批「平滑」里期望最高的一条"}
+h3_sum_roll5_amtchg: {expr: "add(cs_rank(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), cs_rank(abs_(cs_demean(day_std(in_pct(in_slice(Amt, 2, 237), 1))))))", why: "s2 唯一成功的融合 h_sum_rv_amtchg(+10.4/+7.8/+9.7%,2.51/2.29/2.46)价腿用的是 day_std;只把价腿换成 RV5(单体 valid 2.78 对 1.66),量腿一个字不动,与它严格可比。两腿 ρo −0.06 对 +0.70,是全表唯一真正不相关的一对。判据:ut > 2.68 且 ρk 不升过 0.5"}
+h3_mix_roll5_gate: {expr: "add(cs_rank(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), cs_rank(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))))", why: "把本因子两条最好的单体等权秩相加:fld_Volume_Amt(2.71/2.59/2.68,train 更好)与 h_rv_roll5_fold(2.27/2.78/2.42,valid 更好)。两者 ρo 0.72 / 0.70、ρk 同为 0.16,差别只在「掩码按哪条规则选分钟」。若融合把 ut 推过 2.8,说明掩码的选择是独立噪声、平均掉就行;若打平,则两条本来就是同一个东西的两次抽样。这是不借已知族的前提下唯一干净的「融合大家」"}
+h3_ov_k_roll5_10: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))), 1.0))", why: "s2 的三条 overlay 与 k_known 逐位打平(+15.2~15.4% 对 +15.4%,夏普 +0.07~0.19 在噪声内),但叠的也是全天 std。分散化的理由只在 RV5 这个核上成立:稠密族逐年 +4.3/+13.0/+13.4/+9.4/+9.0/+8.8 与 k_known +17.3/+10.4/+6.7/+16.1/+24.7/+18.5 近似反相关,而全天 std 版 ρo 0.83 已经靠回原式。唯一改动是最小子结构 day_std → day_mean(in_stddev_rolling(·,5)),与 h_ov_k_rv_10 严格可比"}
+h3_ov_kx_roll5: {expr: "add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), cs_rank(neg(abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))))", why: "s2 全表 149 条里没有任何一条叠在真门槛 k_known_xfrozen(+18.5%,Lshp 3.15)上 —— overlay 与 screen 全部只叠在 k_known(2.22)上,所以「本因子越不过 3.15」这个结论从没被正面测过。两腿都写成「高 = 做多」(KX 自带 neg,本因子腿补 neg),预期 sg = +1(s2 工具问题 2)。判据:ut > 3.45"}
+h3_scr_kx_xhi: {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5)))))", why: "两道筛子串联。scr_xhi_p(k_known 剔掉本因子 |K| 最高 20%)2.60 对 k_known 2.22 = +0.38(>噪声);xfrozen 那道筛子单独值 +0.93。两道剔的票几乎不重叠(本因子高 |K| 是高日内波动,xfrozen 是冻结盘口,ρ 仅 0.22)。若 +0.38 与 +0.93 可加,串联版该到 3.4~3.5;若串联后不动,本因子的筛子作用只是 xfrozen 的一个代理 —— 这是「只能当筛子」这条定论的最终检验,预期 sg = +1"}

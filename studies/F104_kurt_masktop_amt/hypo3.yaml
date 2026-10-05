@@ -1,0 +1,60 @@
+# F104_kurt_masktop_amt —— 第三批假设(主研,2026-10-05,读完批量扫描 s2 + 市场解剖之后)
+# 对账与数字全在 notes/F104_kurt_masktop_amt/synthesis.md 的「## 第二轮(s2)对账与结论」一节。
+#
+# s2 留下的四个未答问题决定这一批往哪儿打:
+#  (甲) **段溢价 vs 段内选股没有分开**。全表最好的 h_sqrt_std(ut +15.1% / Lshp 2.87)在成交额五档里段内选股是
+#       +0.3 / −1.0 / −5.0 / −5.7 / −12.0%、书 36.6pp 压在最清淡档(该档段等权 +15.1%)⇒ 它的钱几乎全是「买清淡」
+#       这一个暴露;而 sub_C_day_std(13.0 / 2.85,书只 5.9pp 在最清淡档、+3.7pp 在最小市值档)是解剖里段内选股**最平**的一列
+#       (−1.5 / +1.6 / +0.3 / +0.3 / +1.9;最低档 −1.5% 仍为负,别写成「都不为负」)。cs_bucket_rank 过不了 dist(bk_known 0.06 ✗),所以这件事一直没法做;
+#       **cs_bucket_demean 保量纲,是第一次能把「桶内」和「买桶」分开的工具**。
+#  (乙) **冻结段是一锅没拆开的毒**。best_on_known 是通用筛子 h_known_nofrozen(+18.5% / 3.15,与 k_known_xfrozen
+#       数字完全相同),它在那 6.5% 段里段内 −139.4%、低配 −5.7pp(几乎清空)。但「封在涨停」与「封在跌停 / 停牌」
+#       对纯多头是两件相反的事,day_flat_ratio / day_zero_ratio 分不开。day_at_max_ratio / day_at_min_ratio 能。
+#  (丙) **day_kurt 读尖峰读坏了**。h_madz_kurt(把 mask 换成自身历史标准化再读峰度)ut −5.1% ⇒ 峰度读到的就是
+#       mask 插进去的市场级大数 M;而标准化四阶矩本身是把水平除掉的那个动作(原式 +1.8%)。day_es_ratio_hi/lo
+#       是同一件事(尖峰有多尖)的**有界、分母受保护**版本 —— 这是上一轮想写、库里没有的东西。
+#  (丁) **「只在缩量日有效」只验了个股版**。原式缩量 +4.7% / 放量 −1.7%,个股放缩量比做段(h_base_in_quiet)只值
+#       +3.5%。市场级状态在截面里会被除掉,以前写不进表达式;cs_state_rank / cs_flip_by_state 就是为这条加的。
+#
+# 沿用的写法约定:cs_first_* / cs_last_* 的 y 一律写成「高 = 该买」(已知族前面加 neg);
+# 布尔 / 离散输出要先连续化或先平滑,否则 cov / dist 会误杀(s2 新证据:h_q75share dist 0.06 ✗,
+# 加 30 日均值后 h_q75share_m30 dist 0.73 通过)。
+
+# ---- A. 桶内去均值:把「买清淡」这个暴露与「清淡里挑谁」分开(甲;cs_bucket_demean / cs_bucket_zscore) ----
+h3_bdm_sqrt_std: {expr: "cs_bucket_demean(day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt))), cross_mean(day_sum(Amt), 30))", why: "(甲) 最重要的一条:全表第一名 h_sqrt_std 段内五档 +0.3/−1.0/−5.0/−5.7/−12.0% 全是负的,+15.1% 看着像选股、其实像段溢价。在成交额十分位桶内去掉桶均值后若塌到 0 附近,它就只是一张「买最清淡」的门票,不该上报为因子"}
+h3_bdm_std: {expr: "cs_bucket_demean(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), cross_mean(day_sum(Amt), 30))", why: "(甲) 配对检验:sub_C_day_std 是解剖里段内选股最平的一列(−1.5/+1.6/+0.3/+0.3/+1.9,最差档只 −1.5%)。若桶内去均值后它活着、h3_bdm_sqrt_std 死了,那么「谁该上报」的答案就从数字高的那个换成机制干净的那个 —— 这是本批最可能改变结论的一对"}
+h3_bdz_sqrt_std: {expr: "cs_bucket_zscore(day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt))), cross_mean(day_sum(Amt), 30))", why: "(甲) 成交额各桶的 day_std 离散度相差数倍(最清淡档的 masked 序列大半分钟写着市场均值 M,方差天然大),去均值后的距离仍不可比。除以桶内标准差;与 h3_bdm_sqrt_std 的差 = 「量纲」还是「排序」是问题所在"}
+h3_bdm_mean: {expr: "cs_bucket_demean(day_mean(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), cross_mean(day_sum(Amt), 30))", why: "(甲) h_mask_mean(ut +13.7% / Lshp 2.71 / LTO 3.4% / ρo 0.00)是「带下限的日均成交额」的最简陈述。桶内去均值后它读的就是「同样清淡的票里,谁的死分钟更少」—— 这才是 mask 这个子结构的纯净形式"}
+h3_bdm_base: {expr: "cs_bucket_demean(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), cross_mean(day_sum(Amt), 30))", why: "(甲) 原式的驼峰是流动性的非单调函数,书是成交额上的杠铃(超配 +25.1 / −7~−13 / +6.1pp)。桶内去均值应当把杠铃整个抹平:若原式的 +1.8% 归零,就证明它连那点钱都是桶间暴露;若反而变正,说明驼峰里真有桶内信息被两端的段溢价互相抵消了"}
+
+# ---- B. 封涨停 / 封跌停分开:给 best_on_known 的筛子做手术(乙;day_at_max_ratio / day_at_min_ratio) ----
+h3_known_xlimitdown: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_min_ratio(Close), 15))", why: "(乙) 只剔「近 15 日有一天收盘价钉在当日最低」的 20%(封跌停 / 停牌)。纯多头用户真正该怕的是这一半;若它单独就达到 h_known_nofrozen 的 +18.5% / 3.15,那个 −67.4% 段等权的毒就定位清楚了,筛子还能少剔一半的票"}
+h3_known_xlimitup: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))", why: "(乙) 对照:只剔封在当日最高的 20%(一字涨停 / 排队买不到)。一字板次日往往还有动量,剔掉它可能是**损失**。与 h3_known_xlimitdown 的差 = 冻结段里哪一侧是毒;两条都好 = 通用筛子剔的其实是「不能成交」这件事本身,与方向无关"}
+h3_pin_side: {expr: "cross_mean(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 15)", why: "(乙) 把方向本身当因子:钉在高位的时间占比减钉在低位的。s2 里 h_pin_queue_m30(零占比之差,ut −0.6%)和 h_signed_amt_m30(带符号成交额,−4.8%)两条「单边排队」的写法都死了,但两者都靠零 / 符号;这一条用「停在哪一端」来写同一件事,是第一次能分开封顶与封底"}
+
+# ---- C. 带保护的尾部比值:把 day_kurt 想读的东西正确地读出来(丙;day_es_ratio_hi / lo) ----
+h3_es_hi_mask: {expr: "day_es_ratio_hi(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "(丙) day_kurt 是「尖峰有多尖」的标准化四阶矩,代价是把成交额水平整个除掉(原式 +1.8%,而保尺度的 day_std +13.0%)。day_es_ratio_hi = 高于 95% 分位的分钟均值 ÷ 该分位:同样有界、同样读右尾,但不是四阶矩、分母受保护。若它远好于 day_kurt,问题是「四阶矩」;若同样弱,问题是「尺度无关」本身"}
+h3_es_lo_mask: {expr: "day_es_ratio_lo(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "(丙) 读左支:mask 把最低 10% 的分钟抬到 M,所以 masked 序列的 5% 分位是「刚好没被遮的那一档」。h_mask_q25(valid 净超额 +25.4% 全表最高、train 只 +10.5%)说明左支有东西但不稳;这一条是它的尾部形状版。风险:清淡票的分位仍可能近 0 ⇒ 按算子定义该日留作缺失,cov 可能过不了 0.95 —— 那本身就是「这条路走不通」的答案"}
+h3_es_hi_ret_mask: {expr: "day_es_ratio_hi(nt_cs_mask_top_replace_mean_neg(abs_(Ret)))", why: "(丙) h_mask_ret_kurt 是 s2 里**唯一** ρk ≈ 0(−0.02)而多头腿为正(ut +7.6%)的变体 —— 全表唯一真正与成交额族正交的东西,只是太弱。同一叶子换成带保护的尾部比值:若它把 +7.6% 推到 +12% 量级,正交通道就从「有迹象」变成「可用」"}
+
+# ---- D. 市场状态第一次写进表达式(丁;cs_state_rank / cs_flip_by_state) ----
+h3_flip_base: {expr: "cs_flip_by_state(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), day_sum(Amt))", why: "(丁) 原式缩量日 +4.7% / 放量日 −1.7%,解释是 mask 的门槛随市场总量漂移(放量时中等流动性的票也掉进底十分位,标记变噪声)。这是该机制的最小检验:市场量高时 +rank、低时 −rank。若明显优于 +1.8%,漂移是真的;若不优,那个不对称是噪声 —— 否定同样是结论"}
+h3_flip_cand: {expr: "cs_flip_by_state(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), day_sum(Amt))", why: "(丁) 阴性对照 + 算子语义自检:候选 sub_C_day_std 放量 +16.5% / 缩量 +10.2% 是同向的,所以 flip 版必须明显**变差**。如果它反而不差,说明 cs_flip_by_state 读到的不是我理解的那个状态,后面所有用它的结论都要作废"}
+h3_state_mix: {expr: "add(mul(cs_state_rank(day_sum(Amt), 30), cs_rank(neg(cross_mean(day_std(Amt), 30)))), mul(neg(sub(cs_state_rank(day_sum(Amt), 30), 1)), cs_rank(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))))))", why: "(丁) 按市场状态在两条信号之间换人:市场量处在近 30 日高位时用已知族,低位时用原式。这是「原式只在缩量日有效」这条解剖事实能换到钱的唯一写法。若连它都不优于 k_known 单独(15.4% / 2.22),那原式在任何市场状态下都没有用处,结论可以彻底关门"}
+
+# ---- E. 上市天数、稳健时序标准化、日度冻结(cross_age / cross_madz / cross_flat_ratio) ----
+h3_known_xage: {expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), cross_age(day_last(Close)))", why: "h_known_noyoung 用 cross_valid_count(241) 剔次新得 +16.5% / 2.50(对 k_known 的 15.4 / 2.22 只是噪声边缘),但那个量在 241 天就饱和、把「上市 2 年」和「上市 10 年」看成一样。cross_age 不饱和;若差距主要来自 250~500 天那一段,这条会把 h_known_noyoung 的边缘优势变清楚"}
+h3_madz_base60: {expr: "cross_madz(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), 60)", why: "s2 的 mem_zscore 5/10/30/60 全崩(ut −28.6 ~ −10.8%,换手 12~33%),但分不清是「自身历史标准化这个想法不对」还是「均值 / 方差被单根尖峰拖着跑」。cross_madz 是同一个想法的中位数 / MAD 版本(这个算子正是为这个问题要的):若它回到 0 附近而不是 −10%,问题是估计量;若同样崩,重尾日度量就是不能做时序标准化"}
+h3_madz_std60: {expr: "cross_madz(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), 60)", why: "同一个检验放到候选上。候选是水平类的量(ρk 0.85),时序标准化会把水平除掉 ⇒ 预期大幅变差;若它居然还活着,说明候选里除了「流动性水平」还有一层「相对自己最近是否异常清淡」的内容,那是和已知族正交的新东西"}
+h3_known_xflatdays: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_flat_ratio(day_last(Close), 30))", why: "通用冻结筛子用的是**日内**口径(cross_max(day_flat_ratio(Close), 15) / day_zero_ratio(Ret))。cross_flat_ratio 是**日度**口径:近 30 日里收盘价与前一日完全相同的天数占比 = 停牌 + 一字板 + 几乎不交易的壳。两个口径的差 = 这个筛子该按「某一天不能动」还是「长期不动」来定,后者剔的票更少、换手更低"}
+
+# ---- F. 资金加权与放量分钟:处理死分钟的另一条路(day_wstd / day_topw_mean / in_index) ----
+h3_wstd_ret_amt: {expr: "day_wstd(Ret, Amt)", why: "mask 处理死分钟的办法是「把它们换成一个大数」;加权是另一种办法:让没成交的分钟权重为零。h_mask_ret_std(mask + |Ret| + day_std,ut −1.4%)说明 mask 这条路在 Ret 上不通;day_wstd(Ret, Amt) = 资金真正经历的日内波动,是同一意图的正确写法,且与成交额族的相关应当很低"}
+h3_wstd_mask: {expr: "day_wstd(abs_(Ret), nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "把权重换成「带下限的成交额」:死分钟不再是零权重,而是拿到市场平均权重 M。与 h3_wstd_ret_amt 的差正好隔离出 mask 这个子结构在**加权**语境下值多少 —— 上一轮只在「被折叠的对象」语境下量过它"}
+h3_topw_ret: {expr: "day_topw_mean(Ret, Amt)", why: "放量分钟的平均收益,一个节点做完一次事件研究。s2 里两条「净买压」的写法都失败了(day_signed_ratio ut −4.8%、零占比之差 −0.6%),它们都只数符号 / 零;这一条读的是「钱进来的时候价格在往哪走」,是这棵树整个扔掉了的那一维(它从不看 Ret 的符号)"}
+h3_topw_time: {expr: "day_topw_mean(in_index(Amt), Amt)", why: "h_mask_centroid(ut −22.4% / Lshp −2.95,ρk −0.06)是 s2 最极端的一列:成交额加权的日内重心不是零信息,而是在 train 定下的方向上两段都大幅为负。但 centroid 的分母被 mask 插进去的 M 污染了。这一条是它的稳健版(最放量 10% 分钟的平均时点,不受量纲影响),用来判断那 −22.4% 是「日内时点真的指向坏股票」还是「mask 把分母搞坏了」"}
+
+# ---- G. s2 结果直接指向的最小子结构替换 ----
+h3_pow025_std: {expr: "day_std(nt_cs_mask_top_replace_mean_neg(pow_05(pow_05(Amt))))", why: "本批最可能直接提高数字的一条。两个杠杆各自的最优档已经分别定了:压缩在 kurt 上 Amt^0.25(+14.6% / 2.31)优于 sqrt(+14.1% / 2.18)优于 log(+10.0% / 1.68);reader 上 day_std 优于一切。而 sqrt × day_std(h_sqrt_std +15.1% / 2.87)证明两者可叠加(对 sub_C_day_std 的 13.0 加了 2.1 点)。0.25 × day_std 是这个网格上唯一没试过的格点"}
+h3_sqrt_mean: {expr: "day_mean(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))", why: "同一个叠加测试换成最省换手的 reader:h_mask_mean 的 LTO 只有 3.4%(与基准同级)、valid 夏普 4.14 是全表最高,而二阶矩相对它只多 −0.7 点净超额。若压缩对 day_mean 也有 +2 点的加成,best_own 的第一名就该是这条「低换手 + 高夏普」的版本,而不是 day_std 那条"}
+h3_cand_xfrozen: {expr: "cs_last_high20(neg(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), cross_max(day_zero_ratio(Ret), 15))", why: "(b) 本批最该跑的一条,s2 的两个最强结果第一次相乘:把通用筛子基准 k_known_xfrozen(+18.5% / 3.15)里的底信号从 k_known 换成候选 sub_C_day_std —— 只换这一个子结构,筛子定义逐字不动,所以差值就是候选在筛子语境下的净增量。解剖给出两种相反的预期:候选是全解剖唯一在那 6.5% 冻结段仍为正的非原式列(+2.7%,k_known 是 −10.9%),所以它可能**本来就不需要这个筛子**,叠上去只剩 ≈3.15;但它的成交额五档段内是全解剖最平的一列(最差档 −1.5%,k_known 有三档 ≤ −5%)、最清淡档只超配 5.9pp(k_known 80.3pp),两种优势的来源完全不同,叠加后可能到 3.4+。前者会把「本因子在已知族之上没有净增量」这个结论从 overlay / 残差 / 分桶扩展到筛子语境、彻底关门;后者是这两轮唯一可能产出的、真正能交给用户的组合版本"}

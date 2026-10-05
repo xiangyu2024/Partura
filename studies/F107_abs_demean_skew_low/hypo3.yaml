@@ -1,0 +1,103 @@
+# F107_abs_demean_skew_low —— 第三批假设(主研,读完批量扫描 s2 的 124 变体 + 市场解剖之后)
+# 对账与定论全在 notes/F107_abs_demean_skew_low/synthesis.md「## 第二轮(s2)对账与结论」,这里每条只写它在检验哪一条。
+# 只读 train / valid,没读测试段。
+#
+# s2 把上一轮的八组假设裁完,留下四条硬结论,这一批全部由它们派生:
+#  (①) **折叠不是在量「距离」,是在量「异方差」。** 三条互相独立的证据:
+#       - 把中心换成流动性 / 价位条件均值,信号一点没动:h_cc_regres_known ρo **0.99**(+2.0%)、h_cc_regres_price ρo 0.99(+2.2%)
+#         → day_skew(Low) 本身与流动性、价位几乎无截面关系,**中心没有错位**,上一轮 (A) 组的前提是错的;
+#       - 中心换成中位数一样没动:h_fold_median ρo **1.00**(+1.1%)、h_fold_winsor_first ρo 0.96(+1.4%)→ (B) 组前提也是错的;
+#       - 可是**先把异方差抹掉再折叠,距离就什么都不剩**:h_fold_rankfirst −0.2%、h_cc_bucket_pre −3.1%;
+#         而折叠**之后**再中性化同样翻负(bk_known −3.3 / res_known −3.4)。
+#       → |x − 中心| 大的那一类股票,就是 x 的截面方差大的那一类(薄票);方向 −1 把书推到 x 最稳的一类上。
+#         **原式那 +1.7% 是折叠生出来的薄度倾斜,不是「离中心的距离」。** 但秩化把尺度和形状一起抹了,
+#         所以「同类股票内部的距离还有没有信息」这个问题到今天才有算子能问(→ A 组)。
+#  (②) **gini 分支的机制坐实了,而且有了更干净的写法。** h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))
+#       与 sub_A_day_gini 逐位相同(+11.0/+5.4/+9.4 对 +10.0/+5.4/+8.7,LTO 都 9.7%,ρk 0.32 对 0.33)
+#       → `day_gini` 喂正的紧的价格水平 ≈ c·σ/μ,**确证**。不除以价位就死(h_vol_std_low 方向都翻成 +1,−7.5%),
+#       喂有符号字段也死(h_gini_ret +2.5%),所以承重的是「无尺度的相对波动」。
+#       **h_vol_std_ret = abs_(cs_demean(day_std(Ret))) 是这一族最该留下的写法**:+9.5/+6.4/+8.7、Lshp 2.31/1.65/2.13、
+#       LTO **5.2%**、ρk **0.19**,而且是全表唯一「成交额五档段内全正(+2.4/+2.3/+0.5/+7.4/+18.7)且倾斜 ≈ 0
+#       (+2.2/+2.4/−0.3/−2.3/−2.0pp)」的一条 —— 它甚至低配最小市值档 −12.0pp 还赚 +8.7%。
+#       按 (①) 的读法这正说得通:day_std(Ret) 的截面离散度不随流动性变,折叠就不会生出倾斜。
+#  (③) **gini 族相对已知族零增量,与原式同命。** h_res_known_gini 剥掉已知族后 valid **−1.3%**(Lshp −0.26);
+#       h_ov_gini_p05 ρk 0.95、+15.0% 不如家族 +15.4%;h_blend_gini_mem +8.2% 不如 gini 单独。
+#       而 h_cc_regres_gini_known 的 +15.8%(utrain 全表最高)ρk **0.71**、对最低成交额档超配 **+57.9pp** —— 按 (①),
+#       先取残差再折叠会把残差的异方差重新折成一个流动性代理,所以它只是家族的另一种写法。
+#       **gini 分支真正没做过的只剩两件:给它记忆之外的省成本(h_gini_ema30 +11.7%、Lshp 2.87、LTO 4.0%)、
+#       以及把同一套增量检验搬到 h_vol_std_ret 身上(→ F 组)。**
+#  (④) **上一轮 (D) 组六条筛子的方向全被写反了,所以「剔除」这个方向根本没被测到。** `cs_last_high20(y, x)` = 把 x 高的 20% 减 1;
+#       只有当「y 高 = 要买」(方向 +1)时它才是排除筛子 —— 大表的通用行都包了 neg(scr_xhi_p / k_known_xfrozen 都是 sg +1)。
+#       我上一轮写的 y 是「低的好」,train 把 sg 选成 −1,于是多头书变成了**只买被标出的那 20%**:
+#       h_scr_price_mem(本意剔最贵)实际是只买最贵 20% → −1.5%;h_scr_star_mem(本意剔科创板代理)实际是只买它 → −4.0%。
+#       **这两条反过来确证了解剖**(价格最高档段内 −8.1%、科创板 −24.3%),但「剔除修洞」没测过。
+#       同理 h_scr_frozen_mem / h_scr_frozen_gini 实际是「只在最薄的 20% 里按平庸度选」(+7.0 / +7.5,LTO 4.1% / 2.0%),
+#       h_scr_liquid_gini 实际是「只在薄的 60% 里」(+12.5%、两段几乎相同、但 ρk **0.78**,对最薄档超配 +19.8pp)。
+#       → 这一批所有筛子一律照通用行的写法包 neg,让 sg = +1(→ C、F 组)。
+#  还被 s2 否掉、这一批不再碰的:(E) 薄度反证全否(h_thin_zero −7.3、裸薄度 h_thin_rival −1.1 复现不了记忆家族;
+#       h_thin_flatrun +8.1% 但 dist 0.17 ✗)—— **原式不是薄度代理,是异方差代理**;
+#       (F) 顺序信息全否(centroid −1.2、signed −4.7;h_path_pos +6.1 / Lshp 1.63 但 dist 0.03 ✗);
+#       (G) 叶子换成变化率全否(ret_skew train −0.1、inpct −1.4、inlogchg +0.9 —— 三条都只在 valid 有数,train 为 0)
+#       → **day_skew 这个算子在 A 股分钟数据上对纯多头不出活,喂什么字段都一样。**
+
+# ================= (A) 同方差桶内折叠:「离中心的距离」本身到底有没有信息(这是上一轮想问、写不出来的那一问)=================
+# 为什么:(①)。秩化 / 桶内百分位把异方差和距离一起抹掉了,所以 −0.2% / −3.1% 只能说明「两者之一是空的」。
+# cs_bucket_zscore 第一次能把「同一类股票内部、尺度已经可比的距离」单独留下。若它仍 ≈ 0,这条因子的内容就彻底为零,可以结案。
+h3_bz_skew_known: {expr: "abs_(cs_bucket_zscore(day_skew(Low), cross_mean(day_std(Amt), 30)))", why: "(①):同流动性十分位内先 z 化再折叠。零信息 → 距离本身是空的,原式 = 纯倾斜,定论;显著为正 → 倾斜掩盖了一条真信号"}
+h3_bz_skew_age: {expr: "abs_(cs_bucket_zscore(day_skew(Low), cross_age(day_last(Close))))", why: "(①)+解剖:上市不足 250 日段等权超额 −28.7%、原式段内 −3.2%。cross_age 不饱和(cross_valid_count 在 241 日封顶,h_thin_validcnt dist 0.05 ✗ 就是这个原因),同龄桶内折叠是唯一能把「新」和「薄」分开的写法"}
+h3_bz_stdret_known: {expr: "abs_(cs_bucket_zscore(day_std(Ret), cross_mean(day_std(Amt), 30)))", why: "(②):把 s2 最好的那条放进桶内。它的倾斜本来就 ≈ 0,所以这条应该几乎不掉;一旦也掉下来,说明那 +8.7% 同样是倾斜,只是倾斜在另一个轴上"}
+h3_bz_gini_known: {expr: "abs_(cs_bucket_zscore(day_gini(Low), cross_mean(day_std(Amt), 30)))", why: "(①)(③):h_cc_bucket_pre_gini(先桶内百分位再折叠)掉到 +0.8%,但那是秩化的锅还是倾斜的锅分不清;z 化版把这件事判了"}
+
+# ================= (B) 把 s2 的赢家 abs_(cs_demean(day_std(Ret))) 周围的最小子结构换一圈 =================
+# 为什么:(②)。它 +8.7% / Lshp 2.13 / LTO 5.2% / ρk 0.19,段内全正、倾斜 ≈ 0、下跌市 +7.0% 对上涨 +10.3%、
+# 高波动 +8.1 对低波动 +9.2(全表最平的一行)、逐年 +6.2/+12.3/+12.5/+7.1/+7.9/+4.2 无负年、冻结盘口段内 +7.9%(记忆版都是 −23~−40)。
+# 这是整个研究里唯一「不靠倾斜赚钱」的版本,所以值得把它的每个节点各换一次。
+h3_stdret_ema30: {expr: "cross_ema(abs_(cs_demean(day_std(Ret))), 30)", why: "(②):记忆给 gini 白送 +3pp 和 +0.8 夏普(h_gini_ema30 +11.7 / 2.87,LTO 9.7→4.0%),给它还没试过;它 LTO 还有 5.2%。若也只是省成本平台,记忆这件事就在三条腿上都确立了"}
+h3_stdret_wstd: {expr: "abs_(cs_demean(day_wstd(Ret, Amt)))", why: "(②):换成成交额加权的日内波动 —— 没成交的分钟不再把波动稀释。若它明显更好,承重的是「资金经历的波动」而不是「分钟序列的波动」;若一样,说明稀释不是问题(这也顺带解释为什么价格水平的 gini 和 day_std(Ret) 能同分)"}
+h3_stdret_topw: {expr: "abs_(cs_demean(day_topw_mean(Ret, Amt)))", why: "(②):只看成交额最大 10% 分钟的平均收益,折叠后 = 「大单分钟的方向最中性」。把「波动大小」换成「大钱往哪边走」,是同一族里唯一还没试的另一支"}
+h3_stdret_robustz: {expr: "abs_(cs_robust_z(day_std(Ret)))", why: "(①)(②):中位数 / MAD 的稳健标准化。原式上 h_fold_median ρo 1.00 说明均值中心没被尾巴拖走,但 day_std(Ret) 的截面分布右尾比 day_skew 重得多,这条检验同一件事在重尾量上是否成立"}
+h3_stdret_madz30: {expr: "abs_(cross_madz(day_std(Ret), 30))", why: "(②)+算子按定义:原式的 cross_zscore 版灾难性(5/10/30/60 = −28.5/−22.8/−12.7/−9.9%,LTO 升到 35.6%),但那可能是 mean/std 估计量太脆而不是「按自身历史标准化」这个想法错。cross_madz 就是为分清这两件事做的 —— 它若回到正数,整族记忆的结论要改写"}
+h3_stdret_eslo: {expr: "abs_(cs_demean(day_es_ratio_lo(Ret)))", why: "(②):把「波动多大」换成「左尾多厚」,且分位数近零的日子留作缺失(day_kurt 在 s1 是 −2.7%,但 kurt 不分左右尾、又被封板日毒化)。折叠后 = 「下行尾部形状最典型」,这才是原式名字一直在暗示的那个量"}
+
+# ================= (C) 封在最高价和封在最低价是两件事;冻结筛子写得更准 =================
+# 为什么:解剖里冻结盘口段(6.5%,段等权 −67.4%)是原式唯一真选到股的地方(段内 +8.5%),
+# 而 k_known_xfrozen(已知族剔掉近 15 日 day_zero_ratio 最重的 20%)是全表最强的一行(+16.4/+23.2/+18.5,Lshp 2.81/3.98/3.15)。
+# day_zero_ratio / day_flat_ratio 分不开「封在涨停」和「封在跌停」——前者是明天要跑的,后者是明天还要跌的。
+h3_atmax_fold: {expr: "abs_(cs_demean(day_at_max_ratio(Close)))", why: "(④):当天贴在日内最高价的分钟占比,折叠后 = 「封在高点的时间最典型」。原式在冻结段 +8.5% 靠的是 day_skew 在钉住的一天退化成极值 —— 这条把那件事直接量出来"}
+h3_atmin_fold: {expr: "abs_(cs_demean(day_at_min_ratio(Close)))", why: "(④):封在低点的版本。两条一起才能说清冻结段那 +8.5% 来自哪一侧;若只有一侧有效,折叠(对称)就是错的写法,应该用单侧筛子"}
+h3_knownx_atmax: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))", why: "(④):把 k_known_xfrozen 的筛子换成「近 15 日有过封在高点的日子」—— 比 day_zero_ratio 更准地只剔一字板 / 停牌复牌,不连带剔掉正常的薄票。写法照通用行包 neg,保证 sg = +1 时它是排除筛子"}
+h3_knownx_flat: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_flat_ratio(day_last(Close), 20))", why: "(④):同一个洞的日轴写法 —— 近 20 日收盘价与前一日完全相同的占比,直接量「停牌 / 一字板」而不经过分钟零收益占比。和 h3_knownx_atmax、k_known_xfrozen 三条比,挑出最便宜最准的那道筛子"}
+
+# ================= (D) 市场状态:原式是个方向赌注,波动分支反过来 —— 以前写不进表达式 =================
+# 为什么:原式上涨市 +6.2% 对下跌市 **−4.1%**、放量 +5.6 对缩量 −1.5;day_std(Ret) 分支下跌市 +7.0 对上涨 +10.3(两段全正)、
+# 高波动 +8.1 对低波动 +9.2;已知族则上涨 +23.0 对下跌 +6.0。**两条腿的状态暴露明显不同**,而 cs_state_rank / cs_flip_by_state 是第一次能把它写进一个表达式。
+h3_state_select: {expr: "select_where(is_gt(cs_state_rank(day_std(Ret), 60), 0.5), cs_rank(neg(abs_(cs_demean(day_std(Ret))))), cs_rank(neg(cross_mean(day_std(Amt), 30))))", why: "(②):市场自身波动高于近 60 日中位时用「波动中位度」,否则用已知族。两条腿的状态暴露互补(波动分支在高波动 +15~+20,已知族在低波动 +12.4),若切换能同时抬两段,这就是第一条真正的升华"}
+h3_state_weight: {expr: "add(mul(cs_state_rank(day_sum(Amt), 60), cs_rank(neg(abs_(cs_demean(day_std(Ret)))))), cs_rank(neg(cross_mean(day_std(Amt), 30))))", why: "(②)(③):连续权重版 —— 放量时波动分支的权重接近 1、缩量时接近 0,已知族始终满权。原式的 overlay 阶梯是单调下坡(+15.4→12.5),这条问的是「按状态给权重」能不能让叠加第一次抬过家族单独"}
+
+# ================= (E) 价位格子:day_skew 在稀疏分钟路径上到底读到了什么(薄度版已否,格子版没测)=================
+# 为什么:(①)+(E 组否定)。上一轮我推断 day_skew 读的是「今天在几个价位上成交过」,结果用 day_zero_ratio / 裸薄度去测全否了;
+# 但那两个量测的是「有没有成交」,不是「走过几个价位」。day_distinct_ratio 是我当时要这个算子的原话,现在才有。
+h3_distinct_fold: {expr: "abs_(cs_demean(day_distinct_ratio(Low)))", why: "(①):当天不同取值个数 ÷ 有限分钟数,折叠后 = 「价位格子粗细最典型」。它若复现原式的 +1.7% 且 ρo 高,机制推断成立(只是换了个更干净的量);若也是零,原式连格子都没读到,纯粹是异方差"}
+h3_distinct_bz: {expr: "abs_(cs_bucket_zscore(day_distinct_ratio(Low), cross_mean(day_std(Amt), 30)))", why: "(①):格子粗细和流动性天然高度相关,所以必须在同流动性桶内看。与 h3_distinct_fold 成对 —— 差别有多大,就是「格子」里有多少是倾斜"}
+
+# ================= (F) 赢家的增量三件套 + 方向写对的筛子(gini 已在这里倒下,轮到 day_std(Ret))=================
+# 为什么:(③)。gini 的三件套结果是 res_known valid −1.3%、overlay ρk 0.95 不过家族、两腿相加不如单独 → 零增量。
+# h_vol_std_ret 的 ρk 只有 0.19(gini 0.33)、倾斜 ≈ 0,是整个研究里最可能真有增量的一条,但 s2 没对它做过任何一件。
+h3_res_known_stdret: {expr: "cs_regres(cs_rank(abs_(cs_demean(day_std(Ret)))), cs_rank(cross_mean(day_std(Amt), 30)))", why: "(③):最硬的一关 —— 先秩化再取残差(不是先残差再折叠,那样按 (①) 会重新折出一个流动性代理,h_cc_regres_gini_known ρk 0.71 就是前车之鉴)。原式这一行 −3.4%、gini −1.3%;它若还站着,F107 第一次有真增量"}
+h3_ov_stdret_p05: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_std(Ret)))), 0.5))", why: "(③):照通用 overlay 的写法(两条腿都是「低的好」,sg 会是 −1)。原式阶梯 +15.4→13.6→13.1→12.5 单调下坡、gini 版 +15.0 也没过家族;ρk 0.19 的这条是唯一还有机会的"}
+h3_scr_known_by_stdret: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), abs_(cs_demean(day_std(Ret))))", why: "(③)(④):已知族剔掉「日内波动最不中位」的 20%,写法照 scr_xhi_p(sg = +1 才是排除筛子)。原式当筛子只得 +12.7%(家族 +15.4);波动分支在每一档段内都正,它当筛子才有理由"}
+h3_knownx_plus_stdret: {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), abs_(cs_demean(day_std(Ret))))", why: "(③)(④):两道筛子叠在最强那一行上 —— k_known_xfrozen(+18.5 / Lshp 3.15)再剔掉波动最不中位的 20%。这是「F107 作为筛子对已知族有没有增量」唯一还没问过的、也是门槛最高的问法"}
+
+# ================= (G) 融合与平滑:把本因子剩下的两条腿「简单加起来、再抹平」=================
+# 为什么:s2 已经分别量过这两件事,结论是**平滑有用、融合没用**,但两次都缺同一块拼图 ——
+#  · 平滑(cross_ema30)在两条腿上都是**换手平台**:原式 +1.7→+6.6%(Lshp 0.36→1.31,LTO 10.9→2.8%)、
+#    gini +8.7→+11.7%(2.07→2.87,LTO 9.7→4.0%)。代价精确地落在冻结盘口段:gini 那一段 +5.7% → ema30 版 **−8.7%**
+#    (原式的记忆版更惨,−23.7~−40.5%)。平滑买的是成本、卖的是「今天刚被钉住」这条信息。
+#  · 融合到今天为止一次没成功:两条自有腿相加 h_blend_gini_mem +8.2% < gini 单独 +8.7%;
+#    叠到已知族上 ov_p025/p05/p10 = +13.6/+13.1/+12.5、h_ov_gini_p05 +15.0,**全部不过 k_known 的 +15.4%**(阶梯单调下坡)。
+#  → 但**两次融合里都有一条腿是原式(ρk 0.28、全靠倾斜)**,真正值得融的 h_vol_std_ret(ρk **0.19**、倾斜 ≈ 0、
+#    段内全正、六年无负年)从来没被融过,也没被平滑过。这一组就是把「平滑 + 等权融合」这两件便宜事做在对的两条腿上,
+#    并且让 train / valid 两段自己说话(若融合只抬 train、不抬 valid,那就是又一次过拟合,直接否掉)。
+h3_blend_own2: {expr: "add(cs_rank(abs_(cs_demean(day_std(Ret)))), mul(cs_rank(abs_(cs_demean(day_gini(Low)))), 1.0))", why: "(②)(③):两条自有腿等权相加(都是「低的好」,sg 会是 −1)。单独 +8.7 / +8.7、Lshp 2.13 / 2.07,但弱边不同(std_ret valid +6.4 / gini valid +5.4)、LTO 5.2% 对 9.7%。若等权融合把 valid 抬到两条之上,说明两条的噪声独立、融合是真的;若只抬 train,就是 h_blend_gini_mem 的重演(+8.2 < +8.7),整条「融合」路线结案"}
+h3_blend_own2_ema30: {expr: "add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_ema(abs_(cs_demean(day_gini(Low))), 30)), 1.0))", why: "(②):先各自平滑再等权融合 —— 本因子能自己做出来的最好的一版。问三件事:(a) 平滑在 std_ret 上是否也只是换手平台(与 h3_stdret_ema30 成对);(b) 融合能否补回平滑在冻结盘口段的代价(gini ema30 那一段 −8.7%,而未平滑的 std_ret 是 +7.9%);(c) 两段读数是否同向。LTO 预期 4~5%、夏普若过 3.0 才算真的赢了 h_gini_ema30 的 2.87"}
+h3_ov_blend_known_p05: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), cs_rank(cross_ema(abs_(cs_demean(day_gini(Low))), 30)))), 0.5))", why: "(③):把 h3_blend_own2_ema30 以 0.5 权重叠在已知族上 —— overlay 阶梯的第三次问法。前两次叠的腿 ρk 是 0.28 / 0.95(一个全是倾斜、一个就是家族本身),都单调下坡;这次叠的是 ρk 0.19 + 0.35 的平滑融合腿。它若还是过不了 +15.4%(以及剔冻结后的 +18.5%),「F107 这一族对纯多头有没有用」就三条路径全部否完,可以彻底结案"}

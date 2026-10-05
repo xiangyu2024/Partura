@@ -1,0 +1,63 @@
+# F102_kurt_autocorr —— 第三批假设(主研,读完 s2 大表 145 个变体 + 市场解剖之后)
+#
+# s2 把上一轮的叙事推翻了一半,这一批只打两类目标:(a) 上一轮想写但缺算子的;(b) s2 结果直接指向的下一步。
+#
+# s2 的五条硬结论决定了往哪儿打:
+#   (甲) **树 ⊃ 冻结掩码,不是等价。** h_res_zero60(树剥掉 cross_max(day_zero_ratio,60))= +10.1% / 夏普 2.41,
+#        比提纯式 sub_D_cross_mean(2.32)还高;反方向 h_res_tree_on_zero = −5.2% / −0.55 塌光。
+#        而 day_zero_ratio / day_flat_run_max / day_centroid(Amt) / day_gini(Amt) / day_signed_ratio / in_madz
+#        八条「语义替代」全废(utrain 夏普 −2.48~+0.89)。→ 机制叙事对,但**语义原子不能替换这个估计量**。
+#   (乙) **新的自有最佳是 h_max60 = cross_max(pow_2(K), 60)**:+11.8/+9.2/+11.3%、夏普 2.82/2.79/**2.85**、LTO 3.0%。
+#        而且取极值要在**哪一层**取很要紧:直接对日度值取 60 日极大 = 2.85,先 15 日求和再取极大(mem_max60)= 2.25。
+#   (丙) **「更慢更好」是错的,方向取决于形状**:cross_ema 15→30→60 = 2.20→1.94→1.40 单调降,
+#        而 cross_max 15→60 = 2.24→2.85、cross_mean(·,15) 外套 60 日均 = 2.32→2.52。
+#        判据:cross_tail_mean_q75@30 = 2.36 ≫ q25@30 = 1.52 → 信息在**尾部**,是事件型持久标记,不是水平状态。
+#   (丁) **桶内选股全灭**:成交额桶 1.56、价格桶 2.09、个股放量桶 2.21、已知族桶 0.97,只有历史长度桶 2.43 持平;
+#        剔掉最不活跃 40%(h_liq_excl_low40)净超额与夏普双降(+5.5% / 0.72)。预测力的大头就是跨成交额桶的倾斜。
+#        唯一还有改善空间的两件事:**折叠中心**(h_fold_csmean 把折叠点挪到截面均值 → 2.40 且 LTO 5.2%→2.5%)和**历史长度**。
+#   (戊) **通用筛子基准 k_known_xfrozen = +18.5% / 夏普 3.15 把所有「建在已知族上」的用法都吃掉了**:
+#        h_sieve_known 2.65、scr_xhi_p 2.57、ov_p05 2.62 全部低它 0.5 以上。而 cross_max(day_zero_ratio,15) 自己
+#        做因子是废的(−0.33、dist 0.06 ✗)。→ 要在已知族上有增量,只能**叠在 k_known_xfrozen 之上**。
+#
+# 所以:A 把 h_max60 周围的最小子结构再换一圈(含唯一可能赢过 3.15 的双层筛子);B 折叠中心放进桶里(上一轮缺算子);
+# C 把「冻结」拆成涨停 / 跌停 / 日频印记 / 纯计数(上一轮缺算子,也是(甲)的决定性再检验);
+# D 市场状态用正式算子写(上一轮用手写倍数,2.59 没改善);E 新算子对 A / B 槽位的替代(按函数定义选);F 历史长度。
+
+# ---- A. h_max60 周围的最小子结构(检验乙 + 丙 + 戊)
+h3_max30:        {expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "乙的窗口格点:15 = 2.24、60 = 2.85,中间的 30 补上。若 30 已经接近 2.85 说明有平台,若仍在 2.3 说明 60 是刀尖、2.85 可能是运气"}
+h3_max241:       {expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 241)", why: "右边格点:若 241 ≈ 60,『近一年里出现过一次』就够,记忆长度不是杠杆、事件标记永不过期;若明显掉,60 日就是这个事件的真实半衰期"}
+h3_tail75_60:    {expr: "cross_tail_mean_q75(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "丙:极值能不能稳健化。q75@30 = 2.36、max@60 = 2.85;若 q75@60 ≥ 2.85 说明不必依赖单日最大值(更抗数据错),若明显低说明承重的真的是『最冻的那一天』"}
+h3_max60_age:    {expr: "cs_first_low40(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_last(Close)))", why: "把本轮两个最好的改法叠起来:h_max60(2.85)+ 剔掉历史最短的 40%(seg_new_p 2.67)。cross_age 不饱和于窗口、数据起点就有值的票从 10000 起算,比 cross_valid_count 干净"}
+h3_max60_scr20:  {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60))", why: "戊:scr_xhi_p(筛子里用原式)= +16.9% / 2.57;把筛子换成本轮最佳的 h_max60。若夏普到 3 以上,说明当筛子时『60 日极值』也比『15 日求和』标得准"}
+h3_max60_ov05:   {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)), 0.5))", why: "戊:ov_p05 的配角换成 h_max60。h_ov_ema30_p05(更慢的配角)掉到 2.36,但 EMA 本身也掉;用一个夏普 2.85 / LTO 3.0% 的配角才是公平的那一问"}
+h3_xfroz_max60:  {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60))", why: "戊的唯一出路:在 k_known_xfrozen(3.15)之上再剔一道树标出的 20%。甲说树里有冻结掩码抓不到的东西 —— 若这条 > 3.15,那部分就有商业价值;若 ≤ 3.15,这条因子在已知族组合里确定是冗余"}
+
+# ---- B. 折叠中心放进桶里(上一轮想写、缺 cs_bucket_demean / cs_bucket_zscore / cs_robust_z)
+h3_bdm_amt:      {expr: "cross_mean(pow_2(cs_bucket_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 15)", why: "丁:h_fold_csmean 把折叠点从 0 挪到全市场截面均值就到 2.40、LTO 5.2%→2.5%。正确的中心应该是『同成交额十分位内的典型峰度』—— 低成交额票的峰度本来就高,拿全市场均值当中心等于再做一次流动性暴露"}
+h3_bdm_max60:    {expr: "cross_max(pow_2(cs_bucket_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 60)", why: "把 B 组最有希望的那条配上乙的最佳形状。注意 cs_bucket_demean 保留量纲(cs_bucket_rank 不保),所以『桶内偏离』还能被 pow_2 折叠、被 cross_max 取极值 —— 这是 cs_bucket_rank 版本(1.56)做不到的"}
+h3_bz_amt:       {expr: "cross_mean(pow_2(cs_bucket_zscore(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 15)", why: "各成交额桶的峰度离散度相差数倍,去均值后的距离仍不可比;除掉桶内标准差。若 zscore 版本明显好于 demean 版本,说明承重的是『相对同类有多反常』而不是『绝对有多尖』"}
+h3_rz15:         {expr: "cross_mean(pow_2(cs_robust_z(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)", why: "峰度是重尾量,截面均值 / 标准差本身被几个封板票主导。中位数 / 1.4826·MAD 标准化后再折叠,对照 h_winsor_kurt 2.22(缩尾)与 h_fold_csmean 2.40(去均值):分清『极端值要不要留』和『中心与尺度估得稳不稳』"}
+
+# ---- C. 把「冻结」拆开:涨停 / 跌停 / 日频印记 / 纯计数(上一轮缺算子,也是甲的决定性再检验)
+h3_atmax60:      {expr: "cross_max(day_at_max_ratio(Close), 60)", why: "甲:day_zero_ratio 把『封在涨停』和『封在跌停』混成一个数,它自己做因子是废的(−0.33)。分开之后未必 —— 封在最高价的分钟占比,一字板读到近 1、正常日近 1/240,取 60 日极大对齐 h_max60 的形状"}
+h3_atmin60:      {expr: "cross_max(day_at_min_ratio(Close), 60)", why: "必要的对照组:封在最低价。两件事如果是同向的,day_zero_ratio 的失败就不是『混在一起』造成的;如果符号相反,那 day_zero_ratio 的废就是两半互相抵消,而原式的峰度恰好只对其中一半敏感"}
+h3_res_atmax:    {expr: "cs_regres(cs_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)), cs_rank(cross_max(day_at_max_ratio(Close), 60)))", why: "甲的精确版:h_res_zero60(剥掉笼统的冻结掩码)不塌,反而 2.41。换成只剥『涨停封板』这一半 —— 若这次塌了,树的独家内容就是涨停规避;若还不塌,独家内容在冻结之外,下一轮得去别处找"}
+h3_flatratio60:  {expr: "cross_flat_ratio(day_last(Close), 60)", why: "把冻结降到日频:近 60 日收盘价与前一日完全相同的日子占比(停牌 / 一字板的日度印记)。分钟级读数(day_zero_ratio)全废,日频读数换手极低、噪声小得多;这一条区分『分钟结构』和『停牌事实』哪一个在承重"}
+h3_vc_es60:      {expr: "cross_valid_count(day_es_ratio_hi(Ret), 60)", why: "最干净的冻结日**计数器**,不带任何幅度:day_es_ratio_hi 在上尾分位 ≈ 0 的日子(封板 / 无成交)留 NaN,cross_valid_count 于是数出近 60 日有多少天不退化。这正是 cross_sum 的『NaN 当 0』无意中编码的那个量 —— 把它单独量出来"}
+
+# ---- D. 市场状态用正式算子写(上一轮用手写 div 做倍数,h_ov_state 2.59,没改善)
+h3_ov_state50:   {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)), cs_state_rank(day_sum(Amt), 50)))", why: "h_ov_state 用『全市场成交额 / 其 60 日均』当权重 = 一个无界倍数,会被一两天的极端放量主导。cs_state_rank 是同一件事的**分位**版(有界 (0,1]、全市场同一个数),配上 h_max60 做配角;解剖里放量 +16.1% vs 缩量 +7.4% 是最强的时间切分"}
+h3_flip_amt:     {expr: "cs_flip_by_state(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), day_sum(Amt))", why: "一条明知会变差的证伪:放量 / 缩量两段 h_max60 都是正的(+16.1% / +7.4%),所以翻符号应当明显更坏。如果它反而不坏,说明缩量段的 +7.4% 是别的东西(流动性倾斜)顶上来的、树本身在缩量市里是反的(涨跌状态版本让位给 G 组的融合两条,下一轮再补)"}
+
+# ---- G. 自有版本之间的融合与平滑(本轮用户要的那一问;s2 里只有「与已知族融合」,没有「自己人融合」)
+h3_fuse_own2:    {expr: "add(cs_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)), cs_rank(cross_mean(pow_2(cs_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)))", why: "s2 的两条自有改良走的是**两个互相正交的轴**:h_max60 改聚合器形状(2.85 / LTO 3.1% / ρo 0.80 / ρk 0.23),h_fold_csmean 改折叠中心(2.40 / LTO 2.4% / ρo 0.75 / ρk 0.19)。等权 rank 相加,量清楚两者是不是同一份信息:若 ≥ 2.95 就有分散价值、该当一条两腿因子交付;若 ≈ 2.6(落在两者之间)说明只是加权平均、融合没有信息增量,交付单腿 h_max60 即可"}
+h3_fuse_smooth5: {expr: "cross_mean(add(cs_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)), cs_rank(cross_mean(pow_2(cs_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15))), 5)", why: "把上一条的**融合后分数**再做 5 日平滑。值域层面的平滑已经饱和(h_meanmean60 LTO 2.4%、夏普 2.52;再慢的 cross_ema 单调变差),但 rank 层面的平滑是另一件事 —— 它平掉的是截面名次的抖动而不是事件标记的幅度,所以不违反丙(『指数衰减与事件型机制对着干』)。判据:LTO 掉到 2% 以下且夏普不低于融合版 0.1 以内,就是免费的换手"}
+
+# ---- E. 新算子对 A / B 槽位的替代(按函数定义选,不按名字)
+h3_wstd60:       {expr: "cross_max(day_wstd(nt_ts_autocorr_s1(Ret, 3), Amt), 60)", why: "sub_B_day_std(等权标准差)是 −6.0%、ρo −0.08 —— 符号是反的,因为没成交的分钟把它稀释了。day_wstd 用 |Amt| 加权:封板日 sum|w| 极小、权重全压在开盘那几分钟,离散度读数可能整个翻过来。B 槽位唯一还没试过的方向"}
+h3_topw60:       {expr: "cross_max(pow_2(day_topw_mean(nt_ts_autocorr_s1(Ret, 3), Amt)), 60)", why: "一个节点完成事件研究:成交额最大 10% 的分钟上,3 点自相关的均值。封板票的成交几乎全在开盘(h_centroid_amt 想问这件事但用重心问,失败了);这里直接在那些分钟上读承重的那个统计量,不用触发掩码"}
+h3_izse60:       {expr: "cross_max(pow_2(day_kurt(in_zscore_expand(Ret))), 60)", why: "甲的日内因果版:封板日前半天纹丝不动 → 扩张窗口的分母趋 0 → 后面几根跳变成巨值,这是『var = 0 退化出口』的另一种实现。in_madz 失败且 cov 只有 0.78/0.81(相对 EPS 造出大量 NaN);扩张窗口 z 不靠 EPS,是这条机制唯一还没被证伪的稳健写法"}
+h3_eshi_max60:   {expr: "cross_max(day_es_ratio_hi(Ret), 60)", why: "带形状的尾部读数:超过 95% 分位的分钟均值 ÷ 该分位,分位近 0 时留 NaN(手写 erm_* 在分母加 1e-6,把每个封板日变成 1e4 量级 —— 读到的其实是『有没有封板』)。与 h3_vc_es60 配对:一条只数日子、一条量形状,分辨因子要的是哪一个"}
+
+# ---- F. 历史长度 / 价格格子(丁里唯一没全灭的两处)
+h3_age_bucket:   {expr: "cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_last(Close)))", why: "丁:所有分桶都变差,只有历史长度桶(h_vc_bucket 2.43、valid 夏普 3.69)持平。换成不饱和的 cross_age + 本轮最佳形状,量清楚『同样上市年限的票里比』是真有残留选股力,还是只是把 cross_sum 的缺口补上了"}

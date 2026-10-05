@@ -1,6 +1,6 @@
 # F102_kurt_autocorr — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3961(批次 B01_single_factors)
 - 表达式:`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)`
@@ -10,116 +10,33 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F102_kurt_
 - **阶段:全部完成**
 - **留出段已经读过 2 次**(10-03 23:15, 10-05 12:16)—— **不许再读**。候选在留出段上的数全在 `runs/F102_kurt_autocorr/final.json`(`./scripts/study.sh digest F102_kurt_autocorr final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `audit-mechanism:F102_kurt_autocorr`:已返回结果,最后动作 10-03 23:38 → `handoff/F102_kurt_autocorr/agents/audit-mechanism_a2d310a359bfeff69.md`
-  - `revise:F102_kurt_autocorr`:已返回结果,最后动作 10-04 00:24 → `handoff/F102_kurt_autocorr/agents/revise_a39c89bd8b2569636.md`
   - `synth:F102_kurt_autocorr`:已返回结果,最后动作 10-05 11:30 → `handoff/F102_kurt_autocorr/agents/synth_a93191635af758ebb.md`
+  - `verdict:F102_kurt_autocorr`:中断,最后动作 10-05 13:53 → `handoff/F102_kurt_autocorr/agents/verdict_a628b4b5a6f89b3d1.md`
+  - `verdict:F102_kurt_autocorr`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F102_kurt_autocorr/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F102_kurt_autocorr/state.md`,10-05 11:27 更新)—— **先读这个文件**
+## 研究现状(`notes/F102_kurt_autocorr/state.md`,10-05 15:16 更新)—— **先读这个文件**
 
-# F102_kurt_autocorr —— 研究现状(主研,批量扫描 s1 之后重写)
+# F102_kurt_autocorr —— 研究现状(主研,批量扫描 s2 对账之后重写)
 
 `cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` · sg = −1(多头 = 低值) · 挖掘库 #3961
-选拔口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 个点 / ±0.3 夏普。
+选拔口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 个点 / ±0.3 夏普。门槛 cov ≥ 0.95、dist ≥ 0.5。
 
 ## 1. 现状
 
-一轮批量扫描(94 个变体)+ 市场解剖已读完,综合在 `notes/F102_kurt_autocorr/synthesis.md`,
-第二批 40 条假设在 `studies/F102_kurt_autocorr/hypo.yaml`(`study.sh hypo` 40/40 通过),等下一轮扫描。
-**留出段已经被上一轮研究员读过一次(`07_S_final`,台账里记着),这一轮没有再读,以后也不能再读。**
+两轮批量扫描都读完(s1 94 变体、s2 145 变体)+ 市场解剖两份;综合与**第二轮对账在 `synthesis.md` 末节**。
+第三批 25 条假设在 `studies/F102_kurt_autocorr/hypo3.yaml`(`study.sh hypo3` **25/25 通过**),等下一轮扫描。
+**留出段已被第一轮研究员读过一次(`07_S_final`,台账记着),s1 / s2 都没再读,以后也不能再读。**
 
-当前判断:**它不是一条可以独立上的纯多头因子**(utrain 多头净超额 +8.9% / 夏普 2.05,已知成交额族
-`cross_mean(day_std(Amt), 30)` 是 +15.4% / 2.22),但它**不是已知族的重写**(ρk = +0.26),
-作为小权重配角能把已知族的夏普从 2.22 抬到 2.5~2.6 而净超额不降。价值约 +0.3 夏普,在噪声沿。
+**定论(提纯成功、升华失败)**:聚合器从 `cross_sum(…,15)` 换成 `cross_max(…,60)` 后,它是一条
+**夏普 2.85 / 换手 3.1% / ρk 0.23 的独立低换手小因子**(原式 2.05 / 5.4%),夏普已超 `k_known` 的 2.22,净超额
++11.3% 仍低 4 点。**在已知族之上冗余**:所有筛子 / 叠加用法(2.57~2.65)都低于 `k_known_xfrozen`(+18.5% / **3.15**)
+至少 0.5 夏普。它**没有桶内选股力**,收益 = 流动性倾斜 + 冻结规避。
 
-## 2. 中间结果(数字全部来自 `study.sh table F102_kurt_autocorr s1 --all`)
+(…全文 7279 字符,读 `notes/F102_kurt_autocorr/state.md`)
 
-| 变体 | Lnet tr/va/ut | Lshp ut | LTO | ρo | ρk | 说明 |
-|---|---|---|---|---|---|---|
-| `v_base` | +8.5 / +9.8 / +8.9% | 2.05 | 5.4% | 1.00 | 0.26 | 原式,hl 5 |
-| `k_known` | +12.6 / +22.3 / +15.4% | 2.22 | 3.4% | 0.26 | 1.00 | 基准 |
-| `sub_D_cross_mean` | +10.1 / +10.3 / +10.2% | **2.32** | 5.2% | 0.99 | 0.27 | 提纯:不再把缺失日记 0 |
-| `sub_D_cross_decay_linear` | +11.0 / +10.6 / +10.9% | 2.21 | **2.4%** | 0.79 | 0.18 | 换手减半 |
-| `sub_D_cross_ema` | +11.1 / +10.0 / +10.8% | 2.20 | **2.1%** | 0.81 | 0.20 | 换手最低 |
-| `mem_mean60` | +10.6 / +11.5 / +10.8% | **2.31** | 2.7% | 0.88 | 0.25 | 全表最佳单因子 |
-| `ov_p05` | +13.6 / +19.6 / +15.3% | **2.62** | 4.7% | 0.53 | 0.92 | 叠在已知族上,权重 0.5 |
-| `iso_C` | +8.7 / +6.1 / +8.0% | 1.61 | 6.2% | 0.80 | 0.18 | 整个 D 层删掉,只靠书的 hl 20 |
-| `abl_C`(无 pow_2) | −6.3 / +1.8 / −4.0% | −0.71 | 1.6% | **0.00** | 0.00 | 折叠承重的证据 |
-| `win_A_5` / `win_A_10` | +1.5% / −3.1%(ut) | 0.42 / −0.63 | — | 0.74 / 0.54 | — | 3 分钟孔径没有平台 |
-
-解剖的关键数(全市场多头书,utrain):
-- 成交额 20 日五分位 **段内**净超额 = −2.9 / −4.3 / −0.3 / +6.1 / **+12.4%**(单调上升),书对最低桶**超配 +21.1 个点**。
-- 「超配 × 段等权超额」点乘:**原式 +5.5 个点来自跨成交额桶倾斜**(占 +8.9% 的六成),`k_known` **+14.7 个点**(占 95%)。
-- 冻结盘口段(6.5%、段等权 −67.4%):原式低配 −5.0 → **+3.6 个点**;`k_known` 低配 −2.9 → +2.1 个点。无冻结池内原式只 +5.5%、已知族 +14.1%。
-- 科创板(4.0%、段等权 +4.1%):原式**段内 −28.5%** 且**超配 +8.3 个点**(书里 12.3% 仓位);换 `cross_mean` → **+3.0%**。
-- 上市不足 250 日(7.1%、段等权 −28.7%):原式 +7.1% → `cross_mean` **+23.5%** / `cross_decay_linear` +25.5%。
-- 年度 2018→2023:+8.1 / +11.1 / +9.3 / +5.6 / +10.3 / +9.3%(**无衰减**)。放量 +13.3% vs 缩量 +5.4%;上涨 +13.2% vs 下跌 +3.8%。
-
-## 3. 过程与逻辑(为什么这么读)
-
-1. 算子定义先读代码:`nankurt_last = m4/(var²+EPS) − 3` → `day_kurt` 是**超额**峰度,下界 −2;
-   `sub_C_pow_1_5`(`x**1.5`,负数 → NaN)cov 掉到 **0.75** → **25% 的股票-日峰度为负**,这是「可以为负」的直接量测。
-2. `pow_2 = pow_(x,2)`,`e>1` 走 `x**e` 分支,**不是**带符号幂 → 它是一个**折叠**。因为超额峰度 ≥ −2,平方把薄尾侧硬顶在 ≤ 4、
-   把尖峰侧放大到无穷,实质是 `max(kurt,0)` 的凸版本。所以 `abs_` 能保住 ρo 0.96 而保号的全部归零。
-3. `ts_corr` 的分母是 `sqrt(var_x·var_y) + EPS`:窗口内分钟收益全相等(封板 / 停牌 / 无成交)时 var = 0,
-   相关**恰好 = 0**。d = 3 时这个退化出口最容易被走到 —— 这解释了为什么孔径 3→5→10 会塌(+8.9 → +1.5 → −3.1%),
-   以及为什么整棵树读到的是「冻结盘口」而不是任何自相关。
-4. `cross_sum` 用 `nansum_last`(NaN 当 0),`cross_mean` 用 `nanmean_last`(跳过 NaN)。sg = −1 下低 = 买,
-   所以 `cross_sum` 系统性**买进**历史不全的票 —— 解剖里科创板 / 次新两段的证据与这条机制完全对上。
-5. 「总平滑量守恒」:`iso_C` hl 20、原式 hl 5、`mem_mean60` hl 0,净超额都落在 +8~+11% → 外层 cross 层主要在做平滑,
-   信息在单日的 `pow_2(day_kurt(·))` 里。真杠杆是**换手**:同窗口换聚合器就能把 LTO 从 5.4% 压到 2.1%,约 2 个点净超额。
-
-## 4. 假设表(第二批,`studies/F102_kurt_autocorr/hypo.yaml`,40 条)
-
-| 组 | 条数 | 在问什么 |
-|---|---|---|
-| A 证伪自己 | 7 | 整棵树是不是就等于 `day_zero_ratio(Ret)` / `day_flat_run_max(Close)`;两个方向的 `cs_regres` 残差都跑 |
-| B 修缺失日 + 慢化 | 7 | `cross_ema 30/60`、`cross_decay_linear 60`、`cross_max 60`(上一轮推荐式,本表缺)、内层换 mean 的 `mem_mean60`、`cross_tail_mean_q25/q75` |
-| C 停牌 / 次新写进表达式 | 2 | `cross_valid_count` 做剔除器 / 分桶,量出科创板那 −28.5% 有多少是 NaN 当 0 |
-| D 换掉 3 分钟孔径 | 5 | `in_autocorr_s1`(严格日内,不跨日)、`in_madz`(相对 EPS)、`nt_ts_corr(Ret, Amt, 3)` |
-| E 折叠 vs 凸性 | 5 | `abs_` / `sigmoid` / `cs_winsor` / 四次方 / 折叠点挪到截面均值 |
-| F 桶内选股 | 4 | 成交额桶、个股放量倍数桶、价格桶;`cs_first_low40` 剔掉最不活跃 40% |
-| G 当配角 / 筛子 | 5 | 提纯式 / 低换手式 / 桶内式分别叠在已知族上;`cs_first_high40` 当筛子;用全市场放量倍数调权重 |
-| H 新结构 | 5 | `day_centroid(Amt)`、`day_gini`、`day_signed_ratio(Ret, Amt)` —— 不含峰度的封板计 |
-
-## 5. 候选(只凭 train / valid;不许再读留出段)
-
-1. `cross_mean(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), 60)`(= `h_meanmean60`)—— 预期最佳:
-   把全表最佳 `mem_mean60`(+10.8% / 2.31)的内层缺陷修掉。
-2. `cross_ema(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)`(`h_ema30`)—— 换手最低的一支,窗口 15 已有 +10.8% / LTO 2.1%。
-3. `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(…, cross_mean(day_std(Amt), 30)), 0.5))`(`h_ov_bucket_p05`)
-   —— 只把与已知族正交的那一半叠上去;**这是最符合口径的用法**。
-4. 上一轮的推荐式 `cross_max(pow_2(K), 60)`(`h_max60`)—— 必须有这一行才能把两轮对齐。
-
-## 6. 后面的思路
-
-- 若 A 组的残差塌(`h_res_zero60` 掉到 0 附近):结论定为「已知族 + 一个封板掩码」,**这棵树可以退休**,
-  把 `cross_max(day_zero_ratio(Ret), 60)` 作为更便宜、更可解释的替代交出去。
-- 若 D 组的 `in_madz` / `in_autocorr_s1` 出现窗口平台:说明机制真实、原式只是用了一个脆的估计量,
-  下一轮应围绕稳健写法重建,而不是继续修原式。
-- 若 F 组的桶内排名保住 ≥ +5% 且夏普 ≥ 1.5:那部分就是真正的增量,直接走 G 组的叠加路线。
-- 没做的:多空腿(空头腿毛超额 +28.0% / +23.3%,钱大量在空头腿,但用户只做纯多头,不追)。
-
-## 7. 留出段
-
-- 用户训练段 = 20180102–20230807(train 2018–2021 + valid 20220101–20230807)。本轮**没有读留出段**。
-- 上一轮研究员已用掉那一次读取(`07_S_final`,5 个候选 × 2 行半衰期 = 10 个数)。**台账已记,不得再读。**
-- 本轮所有结论、候选排序、判据都只用 train / valid。
-
-## 8. 给接手者的提醒
-
-- **先读 `notes/F102_kurt_autocorr/synthesis.md`**,再看本文件第 2 节的表。`10_distilled.md` 是上一轮的报告,
-  它的「候选 / 推荐 `f_max60`」仍然可参考,但那是小样本逐轮实验的结论;**以这次的 94 变体大表为准**。
-- 三个最容易踩的误解:(a)`day_kurt` 是**超额**峰度、可以为负;(b)`pow_2` 在这里是**折叠**不是放大;
-  (c)这棵树与「自相关」无关,`nt_ts_autocorr_s1(Ret, 3)` 在 var = 0 时靠分母的 EPS 吐出恰好的 0,整棵树是封板 / 停牌探测器。
-- `cross_sum` vs `cross_mean` 的差别**不是风格问题**,是「缺失日当 0 + sg=−1 → 买历史不全的票」这个实打实的缺陷,
-  科创板和次新两段的数字就是它的指纹。任何新变体都应该用 `cross_mean` 系的聚合器写。
-- 表里 `cs_bucket_rank` 的两行(`bk_liq` / `bk_known`)dist = 0.20 ✗,是并列导致的离散度误杀;
-  `docs/new_operators.md` 说该算子已加全局秩 ×1e-4 打破并列,**第二批里的 `cs_bucket_rank` 行应当不再被误杀**;若仍 ✗,先去查算子版本。
-- 不要去追多空夏普(原式 +3.68 / +3.88,很漂亮),用户口径只看多头腿扣费净超额与纯多头夏普。
-
-## 研究日志(`notes/F102_kurt_autocorr/journal.md`:1 条,其中研究员自己写的 1 条)
+## 研究日志(`notes/F102_kurt_autocorr/journal.md`:3 条,其中研究员自己写的 3 条)
 
 最近的 5 条(更早的和全文看文件):
 
@@ -131,6 +48,22 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F102_kurt_
 - cross_sum 把缺失日算成 0 + sg=−1 → 系统性买历史不全的票:科创板段内 −28.5%(书里压 12.3% 仓位)换 cross_mean → +3.0%;次新段 +7.1% → +23.5%。这是全表最便宜的修复。
 - 「超配 × 段等权超额」点乘:原式 +5.5 个点来自跨成交额桶的倾斜(占 +8.9% 的六成),k_known +14.7(占 95%);冻结盘口段原式 +3.6、k_known +2.1。段内预测力随成交额单调上升(−2.9/−4.3/−0.3/+6.1/+12.4%)。年度极稳(5.6–11.1%,无衰减),放量 +13.3% vs 缩量 +5.4%。
 - 相对已知族:ρk=0.26,但 res_known +3.7%、bk_known +4.0% → 独立上不行(8.9 vs 15.4)。小权重叠加 0.25/0.5/1.0 夏普 2.51/2.62/2.57 对 2.22,反号变坏 → 符号对、量在噪声沿。定性结论:**不是独立纯多头因子,是已知族的减波动配角(约 +0.3 夏普),最可能来源是那 1.5
+…(这条日志还有后文,读 journal.md)
+
+### 2026-10-05 13:50 [主研] 批量扫描 s2 对账与结论
+
+对账:A 组否定「树=已知族+封板掩码」—— 双向残差显示树严格包含掩码(h_res_zero60 +10.1%/夏普 2.41 不塌,h_res_tree_on_zero −5.2%/−0.55 塌光),而八条语义替代(zero_ratio / flat_run / centroid / gini / signed_ratio / in_madz×2 / 合成封板计)utrain 夏普 −2.48~+0.89 全废。B 组否定「更慢更好」:cross_ema 15→30→60 = 2.20→1.94→1.40 单调降,cross_max 15→60 = 2.24→2.85;q75@30 2.36 ≫ q25@30 1.52,信息在尾部、是事件标记。D 组否定跨日渗漏(h_inac3 与 sub_D_cross_mean 数字逐位相同,ρo 0.99)并确认孔径 3 是刀尖(日内版 3→5 也塌)。E 组把凸性从「1.5~2 个点」下修到 0.06 夏普(abs 2.26 vs 平方 2.32,四次方 2.17)。F / G / H 三组共 14 条基本全否定:所有桶内变体不如全市场排名,四条叠加改良全部变差。
+定论:best_own = cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret,3))), 60),+11.3% / 夏普 2.85 / LTO 3.0% / ρk 0.23(原式 2.05 / 5.4%)—— 提纯成立,夏普已超 k_known 的 2.22。best_on_known = scr_xhi_p(+16.9%/2.57)与 h_sieve_known(+16.3%/2.65),比 k_known 好一点,但比通用筛子基准 k_known_xfrozen(+18.5%/3.15)低 0.5 以上夏普 —— 升华失败、在已知族之上冗余。
+下一轮:hypo3.yaml 25 条(25/25 解析通过),重点是 h_max60 周围的窗口 / 筛子 / 配角一圈,桶内折叠中心(cs_bucket_demean/zscore),把冻结拆成涨停 vs 跌停(day_at_max_ratio/at_min_ratio)+ 纯计数版冻结日计数器(cross_valid_count(day_es_ratio_hi(Ret),60)),以及唯一可能赢过 3.15 的 h3_xfroz_max60(在 k_known_xfrozen 之上
+…(这条日志还有后文,读 journal.md)
+
+### 2026-10-05 15:12 [主研] 可读回测台账 + 补上「自己人融合与平滑」两条
+
+本轮是上一条(s2 对账与结论)的续:对账 / 定论 / 落盘都已完成,这一次只补两件事,**没有起服务器计算、没有读测试段**。
+(1) 把 s2 大表整理成一张能直接给用户看的「升级阶梯」:原式 1.84/2.79(train/valid 夏普)、LTO 5.4% → 修 NaN(cross_mean)2.15/2.99 → 折叠中心挪到截面均值 2.40/2.42、LTO 2.4% → 双层均 2.36/3.06、LTO 2.4% → 剔次新 2.57/2.97 → **cross_max@60 = 2.82/2.79、LTO 3.1%**。关键的样本内外事实:**本因子的自有改良 train ≈ valid(2.82 vs 2.79、+11.8% vs +9.2%),而已知族 k_known 是 1.78 → 3.46 / +12.6% → +22.3%** —— 已知族的「样本外更好」是 2022–2023 这段行情给的,不是稳定性;两者摆在一起看才不会被 valid 的高夏普骗。
+(3) 与已知族融合的那一组(ov_p025/p05/p10 = 2.51/2.62/2.57、h_sieve_known 2.65、scr_xhi_p 2.57)全部在 k_known_xfrozen 的 3.15 之下 —— 结论不变。但看分段可知:融合把 k_known 的 **train** 夏普 1.78 抬到 2.30、valid 的 3.46 几乎没动(3.44),净超额还掉了 2.7 个点。**融合买到的是样本内稳定性,不是样本外收益**,这一条以后别反过来讲。
+(3) s2 从没测过「自己人融合」—— ov_* 测的都是「与已知族融合」。补进 hypo3 的 G 组两条:h3_fuse_own2(h_max60 与 h_fold_csmean 等权 rank 相加;两条分别改聚合器形状与折叠中心,ρo 0.80/0.75、ρk 0.23/0.19,是正交轴)和 h3_fuse_smooth5(对融合后的分数再做 5 日平滑 —— rank 层平滑平的是名次抖动、不是事件幅度,所以不违反 B 组「指数衰减与事件型机制对着干」)。判据都写在 yaml 里。
+为腾出位置,删掉 h3_flip_ret(与 h3_flip_amt 重复的证伪)和 h3_distinct_min60(价格桶方向已被否定);hypo3 仍是 25 条,study.sh hypo3 **
 …(这条日志还有后文,读 journal.md)
 
 ## 配置里的实验计划(`configs/F102_kurt_autocorr.yaml`)
@@ -169,7 +102,7 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F102_kurt_
 
 ## 已写的 notes(`notes/F102_kurt_autocorr/`)
 
-`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(2K)、`state.md`(8K)、`synthesis.md`(11K)
+`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(5K)、`state.md`(10K)、`synthesis.md`(20K)
 
 ## 自写的探针与分析脚本(`studies/F102_kurt_autocorr/`)
 

@@ -10,8 +10,11 @@ From ``runs/<fid>/sweep_<tag>.json`` (train / valid only) it picks, mechanically
   it) -- reported apart, because they are the known family plus a tilt or minus a screen;
 * ``k_known_xfrozen``, the generic screen (known family, never the frozen-quote names), as their benchmark.
 
-Only these are scored on the holdout (the user's test period), in the user's convention: sign and
-half-life fitted on the user's training period, pure long book net of 15 bp.  The read is ledgered.
+Only these are scored on the holdout (the user's test period), in the user's convention: half-life fitted on
+the user's training period, pure long book net of 15 bp.  The sign of the original and of the benchmarks is the
+sign of their rank IC on the user's training period (the user's rule); a picked candidate keeps the sign it was
+picked under (``sign_flip`` marks the rare weak signal whose rank IC changes sign once valid is added).  The read
+is ledgered.
 
     python scripts/sweep_final.py <factor_id> [--sweep s1] [--per-kind 1] [--kinds 3] [--ids a,b]
 """
@@ -98,7 +101,12 @@ with slot():
     for k in ids:
         raw = np.asarray(P[k], dtype=np.float64)
         ic = dg.ic_row(P[k][us], tgt[us], target_ranks=us_ranks)
-        sign = 1.0 if not np.isfinite(ic["rank_ic"]) or ic["rank_ic"] >= 0 else -1.0
+        sign_ic = 1.0 if not np.isfinite(ic["rank_ic"]) or ic["rank_ic"] >= 0 else -1.0
+        # The original and the benchmarks are read in the user's convention (sign of the rank IC on their training
+        # period).  A picked candidate is read with the sign it was PICKED under (the sweep's, fitted on train): a weak
+        # signal's rank IC can change sign between train and train+valid, and the book that was selected is the one
+        # whose test period must be read -- not its mirror image.
+        sign = sign_ic if R[k]["kind"] in ("base", "bench") else float(R[k]["sign"])
         b = bk.books(sign * raw, tgt, us, {"utrain": us, "holdout": ho})
         sm = bk.smoothed(sign * raw, b["hl_long"])
         from alphacube.metrics import long_short_weights
@@ -110,6 +118,7 @@ with slot():
             net = bk.long_book(w, sm[sl], tgt[sl])[0]
             by[str(y)] = float(np.nanmean(net) * 252)
         out["results"][k] = {"expr": R[k]["expr"], "kind": R[k]["kind"], "why": R[k]["why"], "sign_user": sign,
+                             "sign_ic_utrain": sign_ic, "sign_flip": bool(sign != sign_ic),
                              "corr_orig": R[k].get("corr_orig"), "corr_known": R[k].get("corr_known"),
                              "books_user": b, "by_year_long_net": by}
     mem.stop()

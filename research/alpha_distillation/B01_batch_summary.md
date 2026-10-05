@@ -50,6 +50,63 @@
 | F102 #3961 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), …` | 1 | **+15.3% / +12.6%** | +2.62 / +1.49 | 4.7% | -13.1% | +0.92 | +20% +13% +9% +12% +20% +19% +9% +13% |
 | F101 day_shine_retstd | `cs_first_low40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 241))` | 20 | **+13.6% / +11.9%** | +2.62 / +1.54 | 3.8% | -12.5% | +0.62 | +17% +11% +7% +14% +22% +14% +6% +14% |
 
+## 0.5 跨因子:这些候选是几个东西(只用用户训练段)
+
+把 15 条因子按规则选出的 77 个候选放在一起。**同簇** = 逐日截面秩相关 ≥ 0.7 或多头书(前 10%)重合 ≥ 50%;簇按训练段纯多头夏普排,簇首是簇里夏普最高的。筛子把两成股票压到最底,秩相关会掉很多而持有的书几乎不变,所以要同时看重合度。
+
+| 簇 | 类 | 簇首来自 | 簇首表达式 | 半衰期 | 多头净超额 训练 / 验证 | 纯多头夏普(训练段) | ρ已知族 / 多头书重合 | 成员 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 已知族 | F103 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)…` | 2 | +16.0% / +23.4% | +3.16 | +0.40 / 42% | 7 个:F102 F103 F104 F108 基准 |
+| 2 | **独立** | F107 | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | 2 | +13.2% / +7.8% | +2.87 | +0.35 / 15% | 3 个:F107 |
+| 3 | **独立** | F102 | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | 2 | +11.7% / +10.2% | +2.85 | +0.24 / 22% | 2 个:F102 |
+| 4 | 已知族 | F104 | `day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | 20 | +12.0% / +15.5% | +2.85 | +0.85 / 6% | 24 个:F102 F103 F104 F105 F106 F107 F108 F109 F110 F111 F112 F113 F114 基准 |
+| 5 | 已知族 | F105 | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(…` | 5 | +11.3% / +18.4% | +2.75 | +0.37 / 27% | 1 个:F105 |
+| 6 | **独立** | F101 | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume…` | 20 | +10.0% / +8.9% | +2.68 | +0.16 / 9% | 1 个:F101 |
+| 7 | 已知族 | F101 | `cs_first_low40(neg(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in…` | 20 | +14.2% / +20.4% | +2.67 | +0.77 / 32% | 15 个:F101 F103 F104 F106 F107 F108 F109 F110 F112 F113 F114 F115 |
+| 8 | **独立** | F102 | `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(day_las…` | 10 | +11.4% / +11.1% | +2.67 | +0.21 / 26% | 1 个:F102 |
+| 9 | 已知族 | F114 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_mean(day_flat_ratio(Close), 15))…` | 0 | +14.7% / +13.3% | +2.60 | +0.52 / 24% | 2 个:F106 F114 |
+| 10 | 已知族 | F105 | `add(ts_autocorr_s1(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), mul(cs_rank(neg(day_c…` | 5 | +11.7% / +13.9% | +2.48 | +0.72 / 35% | 1 个:F105 |
+| 11 | **独立** | F111 | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | 20 | +12.7% / +15.5% | +2.46 | +0.14 / 19% | 1 个:F111 |
+| 12 | 已知族 | F109 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_mean(sub(div(div(day_sum(select_where(is_gt(su…` | 2 | +12.9% / +22.4% | +2.37 | +0.76 / 80% | 2 个:F109 F115 |
+| 13 | **独立** | F111 | `ts_pearson(day_last(Close), 20)` | 10 | +11.2% / +18.2% | +2.37 | +0.39 / 30% | 2 个:F111 |
+| 14 | **独立** | F103 | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30))), 1)), 5)` | 10 | +9.9% / +19.4% | +2.24 | +0.67 / 38% | 1 个:F103 |
+| 15 | 已知族 | F115 | `add(mul(cs_rank(cross_mean(sub(cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_…` | 2 | +11.8% / +14.4% | +2.23 | +0.79 / 49% | 1 个:F115 |
+| 16 | **独立** | F113 | `cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | 20 | +8.4% / +7.1% | +2.00 | +0.04 / 9% | 1 个:F113 |
+| 17 | **独立** | F112 | `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))))` | 10 | +6.3% / +13.7% | +1.85 | +0.41 / 22% | 2 个:F112 |
+| 18 | **独立** | F110 | `cross_ema(pow_3(sub(div(day_last(Close), day_first(Open)), 1)), 30)` | 5 | +9.0% / +8.0% | +1.79 | +0.38 / 17% | 1 个:F110 |
+| 19 | **独立** | F115 | `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mea…` | 10 | +7.2% / +5.3% | +1.72 | +0.20 / 19% | 2 个:F115 |
+| 20 | **独立** | F113 | `pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_gini(Ret), 5), -5))…` | 5 | +5.4% / +8.5% | +1.44 | +0.23 / 32% | 1 个:F113 |
+| 21 | **独立** | F114 | `mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_rank(div(cross_mean(day_sum(…` | 10 | +4.3% / +12.2% | +1.17 | +0.28 / 16% | 2 个:F114 |
+| 22 | **独立** | F108 | `day_max(pow_1_5(pow_2(nt_ts_var(Close, 30))))` | 10 | +5.5% / +14.8% | +1.01 | +0.52 / 27% | 2 个:F108 F109 |
+| 23 | **独立** | F110 | `cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is…` | 5 | +3.9% / +9.0% | +0.92 | +0.38 / 20% | 1 个:F110 |
+| 24 | **独立** | F106 | `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), a…` | 5 | -16.6% / -6.3% | -2.41 | -0.16 / 7% | 1 个:F106 |
+
+原式各自落在哪:F101 → 簇首 `F101.fld_Volume_Amt`;F102 → 簇首 `F102.h_max60`;F103 → 不属于任何簇(最近 `F103.nosc_B_cross_semistd_neg` ρ +0.52);F104 → 不属于任何簇(最近 `F109.scr_xhi_p` ρ +0.28);F105 → 簇首 `F105.h_ac_tiebreak`;F106 → 不属于任何簇(最近 `F113.nosc_A_day_gini` ρ +0.30);F107 → 不属于任何簇(最近 `F111.h_pe_last20` ρ +0.39);F108 → 不属于任何簇(最近 `F113.h_g6_gini_bk_amt` ρ +0.48);F109 → 不属于任何簇(最近 `F113.nosc_A_day_gini` ρ +0.36);F110 → 簇首 `F110.mem_ema30`;F111 → 簇首 `F111.h_pe_last20`;F112 → 不属于任何簇(最近 `F103.h_K_ex_both` ρ +0.32);F113 → 不属于任何簇(最近 `F101.fld_Volume_Amt` ρ +0.23);F114 → 不属于任何簇(最近 `F114.h_amtexp_mul` ρ +0.56);F115 → 不属于任何簇(最近 `F115.h_rawvol_divM_only` ρ +0.69)。
+
+### 组合书(规则在看结果前写死:成员 z-rank 的等权均值;半衰期在用户训练段上再定)
+
+`known_head` = 已知族里最好的簇首单独持有;`indep_eq` = 所有训练段夏普 ≥ 2 的独立簇首等权;`indep_top3` = 其中最好的三个;`all_eq` = 独立簇首 + 已知族簇首等权;`half_half` = 一半已知族簇首、一半独立簇首的均值。**测试段还没读**(等第三轮的候选定下来后只读一次)。
+
+| 组合 | 成员 | 半衰期 | 多头净超额 训练 | 纯多头夏普 训练 | 日换手 | 最大回撤 训练 | 逐年 |
+|---|---|---|---|---|---|---|---|
+| `known_head` | 1 个:`F103.h_K_ex_both` | 0 | **+18.1%** | +3.16 | 3.4% | -7.8% | +22% +15% +10% +16% +26% +19% |
+| `indep_eq` | 7 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` | 0 | **+20.1%** | +3.81 | 3.5% | -5.8% | +18% +21% +19% +21% +19% +22% |
+| `indep_top3` | 3 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` | 1 | **+15.8%** | +4.35 | 3.3% | -2.6% | +13% +21% +21% +14% +10% +14% |
+| `all_eq` | 8 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` `F103.h_K_ex_both` | 0 | **+20.1%** | +3.80 | 3.4% | -6.2% | +19% +21% +19% +22% +19% +21% |
+| `half_half` | 8 个:`F103.h_K_ex_both` `F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` | 0 | **+20.3%** | +3.68 | 3.1% | -7.3% | +22% +19% +16% +20% +23% +21% |
+
+`indep_eq` 里每个独立簇首带了多少(训练段;去掉它之后组合掉多少):
+
+| 去掉的簇首 | 表达式 | 去掉后 净超额 / 夏普 | 它的贡献 净超额 / 夏普 | 与已知族簇首五五混合(训练段)净超额 / 夏普 |
+|---|---|---|---|---|
+| `F107.h_gini_ema30` | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | +20.0% / +3.93 | +0.1% / -0.12 | +18.1% / +3.48 |
+| `F102.h_max60` | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | +20.2% / +3.66 | -0.1% / +0.15 | +15.3% / +3.16 |
+| `F101.fld_Volume_Amt` | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_sl…` | +18.2% / +3.49 | +1.9% / +0.32 | +16.3% / +3.65 |
+| `F102.seg_new_p` | `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_cou…` | +20.3% / +3.74 | -0.1% / +0.07 | +15.5% / +3.11 |
+| `F111.seg_xfrozen_p` | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | +20.2% / +4.00 | -0.1% / -0.19 | +18.2% / +3.31 |
+| `F111.h_pe_last20` | `ts_pearson(day_last(Close), 20)` | +19.3% / +4.08 | +0.8% / -0.27 | +19.7% / +3.43 |
+| `F103.nosc_B_cross_semistd_neg` | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30)))…` | +19.8% / +3.76 | +0.3% / +0.05 | +16.0% / +2.97 |
+
 ## 1. 一张表(多头腿净超额 训练 / 测试;括号里是纯多头夏普)
 
 | # | 因子 | 原式 | 本因子最好的版本 | 它的数字 | ρ原式 / ρ已知族 | 建在已知族上的最好版本 | 它的数字 |

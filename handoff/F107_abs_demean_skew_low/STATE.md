@@ -1,6 +1,6 @@
 # F107_abs_demean_skew_low — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #613(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_skew(Low)))`
@@ -10,35 +10,34 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F107_abs_d
 - **阶段:研究完成,待审查**
 - **留出段已经读过 2 次**(10-04 15:05, 10-05 12:12)—— **不许再读**。候选在留出段上的数全在 `runs/F107_abs_demean_skew_low/final.json`(`./scripts/study.sh digest F107_abs_demean_skew_low final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `study:F107_abs_demean_skew_low`:已返回结果,最后动作 10-05 00:10 → `handoff/F107_abs_demean_skew_low/agents/study_a8f81191021f7ad76.md`
-  - `audit-numbers:F107_abs_demean_skew_low`:中断,最后动作 10-05 00:20 → `handoff/F107_abs_demean_skew_low/agents/audit-numbers_af741730e118097dc.md`
   - `synth:F107_abs_demean_skew_low`:已返回结果,最后动作 10-05 11:21 → `handoff/F107_abs_demean_skew_low/agents/synth_abe597cc35a36fd73.md`
+  - `verdict:F107_abs_demean_skew_low`:中断,最后动作 10-05 13:53 → `handoff/F107_abs_demean_skew_low/agents/verdict_ae84c8276e91e2356.md`
+  - `verdict:F107_abs_demean_skew_low`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 研究已完成,结构化结论在 `handoff/F107_abs_demean_skew_low/results/study.json`。下一步是独立审查(审查员不要用研究员的口吻替它说话)。
 
-## 研究现状(`notes/F107_abs_demean_skew_low/state.md`,10-05 11:19 更新)—— **先读这个文件**
+## 研究现状(`notes/F107_abs_demean_skew_low/state.md`,10-05 15:16 更新)—— **先读这个文件**
 
 # F107_abs_demean_skew_low — 研究现状
 
-> 主研**第 6 轮(批量扫描综合轮)**写(Opus 5,2026-10-05),整页覆盖重写。
+> 主研**第 7 轮(批量扫描 s2 对账轮)**写(Opus 5,2026-10-05),整页覆盖重写。
 > `abs_(cs_demean(day_skew(Low)))`,挖掘 #613。记 `A = day_skew(Low)`、`B = cs_demean(A)`,信号 `abs(B)`,方向 **−1**。
-> **留出段已读(tag `FINAL`,1 次),额度用完,不许再读。** 本轮只读 `study.sh table F107_abs_demean_skew_low s1 --all`
-> 的 73 变体大表 + 市场解剖,**没跑任何计算、没碰任何已定稿的 notes**。
+> **留出段已读(tag `FINAL`,1 次),额度用完,不许再读**;本轮没打开 `runs/*/sweepfinal_*.json`。
+> 本轮只读 `study.sh table F107_abs_demean_skew_low s2 --all`(124 变体 + 市场解剖)+ 算子源码,**没起服务器计算**(只跑 hypo3 解析检查)。
 
 ## 1. 现状
 
-**原式的否定结论已由第二条独立路径复现、可当定论用**:对纯多头用户,F107 相对已知成交额族 `k_known` **零增量**,
-原式本身不可用(utrain 多头净超额 **+1.7%**、Lshp **+0.36**,对家族 +15.4% / +2.22)。推荐仍是上一轮定死的
-`recommended_id = f_m20`、`recommended_kind = known_family`,**不改判、不换人**。
+**结案。** 对纯多头用户,F107 原式相对已知成交额族 `k_known` **零增量、多头腿不可用** —— 这是第 **3** 条独立路径得到同一结论
+(留出段判据 −6.12pp → s1 的成交额段内分解 → s2 的「折叠 = 异方差」机制)。推荐仍是 `recommended_id = f_m20`、`recommended_kind = known_family`,**不改判**。
 
-**本轮唯一的新东西是一条线索**:大表里唯一换掉了对象的变体 `sub_A_day_gini = abs_(cs_demean(day_gini(Low)))`
-(+10.0 / +5.4 / **+8.7%**,Lshp +2.39 / +1.26 / **+2.07**,ρo 只 0.27、ρk 0.33,cov 1.00 / dist 0.96 过门槛)。
-读代码后判定:**`day_gini` 喂给价格水平时 ≈ c·σ/μ,是无尺度的日内相对波动,不是集中度** —— 它是**另一条因子穿着同一件外套**。
-它 train→valid 夏普 2.39 → 1.26(超出 ±0.3 带)、valid 净超额比家族低 17pp,所以**是线索不是候选**。
+本轮的实质进展是机制说清了,而且剥出一条别的因子:
+(a) `abs_(cs_demean(x))` 这个结构量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 因此必然是薄度倾斜;
+(b) s1 的 gini 线索确证为「无尺度的日内相对波动」,更干净的写法是 `abs_(cs_demean(day_std(Ret)))`(**全表唯一段内全正、流动性倾斜 ≈ 0 的一条**),
+但它相对已知族同样零增量,**应另立研究,不算 F107 的提纯**。
 
-本轮产出:`notes/<fid>/synthesis.md`(117 行,完整论证)、`studies/<fid>/hypo.yaml`(**40 条,40/40 parse**)、journal 第 17 条。
+产出:`synthesis.md` 追加「第二轮(s2)对账与结论」(76 行)+「第二轮补记:人话版回测表 + 融合与平滑」(26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
 
-(…全文 6098 字符,读 `notes/F107_abs_demean_skew_low/state.md`)
+(…全文 7511 字符,读 `notes/F107_abs_demean_skew_low/state.md`)
 
 ## 研究日志(`notes/F107_abs_demean_skew_low/journal.md`:17 条,其中研究员自己写的 10 条)
 
@@ -157,7 +156,7 @@ B1(x1 §6 的 R² 0.307 / 残差 +2.9%)、`11_risks.md` §2(同一个 0.307)。
 
 ## 已写的 notes(`notes/F107_abs_demean_skew_low/`)
 
-`01_expression.md`(1K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(2K)、`05_hypotheses.md`(19K)、`06_baseline.md`(3K)、`07_S0_baseline.md`(1K)、`07_S1_parts.md`(12K)、`07_S2_memory.md`(12K)、`07_S_final.md`(10K)、`07_conditional.md`(1K)、`07_controls.md`(2K)、`07_neutralise.md`(1K)、`07x_1_anatomy.md`(10K)、`07x_2_elevate.md`(22K)、`08_variants.md`(6K)、`09_diagnosis.md`(11K)、`10_distilled.md`(17K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(32K)、`state.md`(9K)、`synthesis.md`(11K)
+`01_expression.md`(1K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(2K)、`05_hypotheses.md`(19K)、`06_baseline.md`(3K)、`07_S0_baseline.md`(1K)、`07_S1_parts.md`(12K)、`07_S2_memory.md`(12K)、`07_S_final.md`(10K)、`07_conditional.md`(1K)、`07_controls.md`(2K)、`07_neutralise.md`(1K)、`07x_1_anatomy.md`(10K)、`07x_2_elevate.md`(22K)、`08_variants.md`(6K)、`09_diagnosis.md`(11K)、`10_distilled.md`(17K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(32K)、`state.md`(11K)、`synthesis.md`(24K)
 
 ## 自写的探针与分析脚本(`studies/F107_abs_demean_skew_low/`)
 

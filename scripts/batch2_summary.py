@@ -5,6 +5,8 @@ Reads only local files (pull them first: ``./scripts/study.sh table <fid> s2`` p
     runs/<fid>/sweepfinal_<tag>.json     the rule-based test-period read
     runs/<fid>/sweep_<tag>.json          the sweep (train / valid)
     handoff/<fid>/results/synthesis.json the lead's one-pass synthesis (what it is, where / when / why)
+    handoff/<fid>/results/verdict.json   the lead's reconciliation of the second batch (confirmed / refuted), when there is one
+    runs/_batch_<B>/cluster_<tag>.json   scripts/batch_cluster.py: clusters of the picks and the combination books, when there is one
 
     python scripts/batch2_summary.py batches/B01_single_factors.yaml [--tag s2] [--out research/alpha_distillation/B01_batch_summary.md]
 """
@@ -139,8 +141,63 @@ T += top(indep, "A. 与已知成交额族相关低于 0.5 的(独立的新东西
          "这些可以和已知族并列持有。测试段上单个数字有 ±3 个点 / ±0.3 夏普的噪声,而且一共读了约一百个候选,榜首的数字有向上的选择偏差 —— 看逐年是否稳定比看单个数字可靠。")
 T += top(onkn, "B. 建在已知族上的、或实质落在这一族里的(已知族的升级版)",
          "筛子 = 已知族剔掉某类票;分段 = 只在低流动性 40% 里按本因子选;叠加 = 已知族的秩加上本因子的秩。它们和已知族高度相关,是替换而不是并列。")
+
+
+def cluster_section():
+    cp = root / "runs" / f"_batch_{Path(argv[0]).stem.split('_')[0]}" / f"cluster_{TAG}.json"
+    if not cp.is_file():
+        return []
+    K = json.loads(cp.read_text(encoding="utf-8"))
+    I, C, O = K["info"], K["corr"], K["overlap"]
+    th = K["thresholds"]
+
+    def src(k):
+        fid = I[k].get("fid") or ""
+        also = I[k].get("also") or []
+        return (fid.split("_")[0] if fid else "基准") + (f"(另 {len(also)} 条因子也选到)" if also else "")
+
+    def b(k, sp, m):
+        return I[k]["books"][sp][m]
+
+    S = ["", "## 0.5 跨因子:这些候选是几个东西(只用用户训练段)", "",
+         f"把 15 条因子按规则选出的 {sum(1 for v in I.values() if v['role'] != 'orig')} 个候选放在一起。**同簇** = 逐日截面秩相关 ≥ {th['rho']:g} 或多头书(前 10%)重合 ≥ {th['overlap']:.0%};"
+         "簇按训练段纯多头夏普排,簇首是簇里夏普最高的。筛子把两成股票压到最底,秩相关会掉很多而持有的书几乎不变,所以要同时看重合度。", "",
+         "| 簇 | 类 | 簇首来自 | 簇首表达式 | 半衰期 | 多头净超额 训练 / 验证 | 纯多头夏普(训练段) | ρ已知族 / 多头书重合 | 成员 |", "|---|---|---|---|---|---|---|---|---|"]
+    for i, c in enumerate(K["clusters"], 1):
+        h = c["head"]
+        mem = sorted({(I[k].get("fid") or "基准").split("_")[0] for k in c["members"]})
+        kc = f"{C[h]['known']:+.2f} / {O[h]['known']:.0%}" if "known" in C[h] else "—"
+        S.append(f"| {i} | {'已知族' if c['known_family'] else '**独立**'} | {src(h)} | `{short(I[h]['expr'], 100)}` | {I[h]['hl']:g} | {pc(b(h, 'train', 'long_ann'))} / {pc(b(h, 'valid', 'long_ann'))} "
+                 f"| {sh(b(h, 'utrain', 'long_sharpe'))} | {kc} | {len(c['members'])} 个:{' '.join(mem)} |")
+    orig = [k for k in K["names"] if I[k]["role"] == "orig"]
+    if orig:
+        S += ["", "原式各自落在哪:" + ";".join(
+            f"{k.split('.')[0]} → " + (f"簇首 `{I[k]['in_cluster']}`" if I[k].get("in_cluster") else f"不属于任何簇(最近 `{I[k]['nearest_head']}` ρ {C[k][I[k]['nearest_head']]:+.2f})")
+            for k in orig) + "。"]
+    if K["combos"]:
+        ho = K.get("holdout_read")
+        S += ["", "### 组合书(规则在看结果前写死:成员 z-rank 的等权均值;半衰期在用户训练段上再定)", "",
+              "`known_head` = 已知族里最好的簇首单独持有;`indep_eq` = 所有训练段夏普 ≥ " + f"{th['min_sharpe']:g}" + " 的独立簇首等权;`indep_top3` = 其中最好的三个;"
+              "`all_eq` = 独立簇首 + 已知族簇首等权;`half_half` = 一半已知族簇首、一半独立簇首的均值。"
+              + ("测试段**只读了这一次**(记账在 `runs/_batch_B01/ledger.json`)。" if ho else "**测试段还没读**(等第三轮的候选定下来后只读一次)。"), "",
+              "| 组合 | 成员 | 半衰期 | 多头净超额 训练" + (" / 测试" if ho else "") + " | 纯多头夏普 训练" + (" / 测试" if ho else "") + " | 日换手 | 最大回撤 训练" + (" / 测试" if ho else "") + " | 逐年 |", "|---|---|---|---|---|---|---|---|"]
+        for name, c in K["combos"].items():
+            a, t = c["splits"]["utrain"], c["splits"].get("holdout")
+            S.append(f"| `{name}` | {len(c['members'])} 个:{' '.join('`' + m + '`' for m in c['members'])} | {c['hl']:g} | **{pc(a['long_ann'])}" + (f" / {pc(t['long_ann'])}" if t else "") + "** "
+                     f"| {sh(a['long_sharpe'])}" + (f" / {sh(t['long_sharpe'])}" if t else "") + f" | {a['long_turnover']:.1%} | {pc(a['long_mdd'])}" + (f" / {pc(t['long_mdd'])}" if t else "")
+                     + " | " + " ".join(f"{x:+.0%}" for x in c["by_year_long_net"].values()) + " |")
+    if K.get("leave_one_out"):
+        S += ["", "`indep_eq` 里每个独立簇首带了多少(训练段;去掉它之后组合掉多少):", "",
+              "| 去掉的簇首 | 表达式 | 去掉后 净超额 / 夏普 | 它的贡献 净超额 / 夏普 | 与已知族簇首五五混合(训练段)净超额 / 夏普 |", "|---|---|---|---|---|"]
+        for h, r in K["leave_one_out"].items():
+            pr = K.get("pair_with_known_head", {}).get(h)
+            S.append(f"| `{h}` | `{short(I[h]['expr'], 90)}` | {pc(r['without_long_ann'])} / {sh(r['without_long_sharpe'])} | {r['d_long_ann']:+.1%} / {r['d_long_sharpe']:+.2f} | "
+                     + (f"{pc(pr['long_ann'])} / {sh(pr['long_sharpe'])}" if pr else "—") + " |")
+    return S
+
+
 i0 = L.index("## 1. 一张表(多头腿净超额 训练 / 测试;括号里是纯多头夏普)")
-L[i0:i0] = T + [""]
+L[i0:i0] = T + cluster_section() + [""]
 L += ["", "## 2. 逐条", ""] + detail
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(L), encoding="utf-8")

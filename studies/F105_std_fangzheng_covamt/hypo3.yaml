@@ -1,0 +1,62 @@
+# F105_std_fangzheng_covamt —— 第三批假设(主研,读完 s2 大表 132 个变体 + 市场解剖之后)
+# 对账与数字全在 notes/F105_std_fangzheng_covamt/synthesis.md §「第二轮(s2)对账与结论」。
+#
+# s2 的五条硬结论决定这一批往哪儿打:
+#  (甲) 原子被钉死:h_atom_var_m30 ρk 0.99 / h_atom_std_max3 ρk 0.99 / h_atom_log_m30 ρk 0.99
+#       —— day_cov(Amt,Amt) ≡ day_var(Amt),平方/开方/取 log 都是同一条因子。"covamt" 这个名字正式作废。
+#  (乙) **s1 的"无尺度一律死"被部分否掉**:h_leaf_logchg_var(day_var(in_logchg(Amt,1)))+10.3% / ρk 0.82 / sg 翻成 +1
+#       —— 是 in_pct 这个算子不好,不是"去尺度"不行。无尺度的日内粗糙度能重建出大半个已知族。
+#  (丙) **三条门控假设全是方向写法 bug,不是机制被否**:cs_last_high20 的源码是"把 x 的高 20% 压到 y 排序的最后",
+#       所以 y 必须写成"越大越想买"(套 neg())并取 sg=+1。h_gate_newlist(+1.1%)、h_gate_frozen=seg_xfrozen_p(+1.7%)、
+#       h_gate_both_atom(−4.4%)都漏了 neg() → 多头书专门去买被筛掉的票。正确写法 seg_xfrozen_m = +13.3% / 2.75。
+#       外加 cross_valid_count(·,241) 在 93% 的票上卡在 241(h_count241_alone dist 0.05 ✗)—— 筛子本身是退化的。
+#       **这一批用 cross_age 把这组实验重做一遍,这是上一轮唯一预先登记却从未真正跑过的实验。**
+#  (丁) 机制本身在解剖里被证实:次新段内 iso_A +6.1% vs v_base −23.2% = **29.3pp**,与预言的 ~30pp 一致。
+#  (戊) 全表唯一真赚钱的东西是**通用冻结盘口筛子**:k_known 2.22 → k_known_xfrozen 3.15(+3.1 点 / +0.93 夏普),
+#       而它用的 day_zero_ratio(Ret) 分不开涨停 / 跌停 / 停滞,筛子宽度(20%)也从没扫过。这一批去拆它。
+#
+# 不做的:市场状态门控(cs_state_rank / cs_flip_by_state 的市场级用法)—— s1 已证明年份/涨跌/波动/离散/放量
+#   五组分布与 k_known 形状完全相同,s2 的十列解剖再次复现;状态属于小盘溢价不属于这条因子。花在这里是凑数。
+# 不做的:日内形状再来一轮 —— E 组四条桶内排名(+2.6 / −7.9 / −7.8 / +4.1,dist 已修好,不是被门槛误杀)
+#   加 G 组五条(−2.7 ~ +4.1)已经结算完;只保留(乙)指出的那一条无尺度线索的最小邻域。
+# 不做的:再扫窗口 —— win_D 3/5/10/20 = 12.4 / 11.8 / 11.6 / 12.0,根确认为自由参数。
+
+# ---------- A. 上市时间门:用 cross_age 把(丙)那组实验按正确写法重做(5) ----------
+h3_age_gate_own: {expr: "cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), neg(cross_age(day_last(Close))))", why: "(丙)+(丁):把最年轻的 20% 剔出多头书,y 套 neg() 让筛子按源码语义生效,筛子换成不饱和的 cross_age。次新占 7.1%、段内落差 29.3pp → 预期 +1.5~+2.5 点(v_base +11.8 → +13~+14);若 < +1 点,'根的抖动读法在短历史上被估计 churn 污染'这个机制就真的错了,而不再是写法问题"}
+h3_age_gate_known: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_age(day_last(Close))))", why: "上一条的**对照组**(k_known_xfrozen 的孪生):同一个年龄门加在已知族上。解剖说 k_known 在次新段内 +8.6%、本来不受伤,所以它应当几乎不涨。若两条涨得一样多,年龄门只是又一个通用筛子(像冻结盘口那样),对 F105 的机制一句话都说不了"}
+h3_age_alone: {expr: "cross_age(day_last(Close))", why: "(丙):把筛子变量本身当因子跑。cross_valid_count 版 dist 只有 0.05(93% 卡在 241),cross_age 不饱和 → 这次应当过 dist。次新段等权超额 −28.7%,'上市满多久'本身可能就值钱;需要它来扣掉 h3_age_gate_* 的增益里属于筛子的那一部分"}
+h3_age_young_churn: {expr: "cs_first_low20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_age(day_last(Close)))", why: "(丁)的直接检验,上半:只在最年轻的 20% 里建书、按低抖动排。cs_first_low40 的两条(seg_new_p / h_newlist_tilt_atom)因为 valid_count 并列 93% 根本没切出次新段(两条的次新持仓都是 0);换成 cross_age 才真的进得去这一段"}
+h3_age_young_level: {expr: "cs_first_low20(neg(day_cov(Amt, Amt)), cross_age(day_last(Close)))", why: "(丁)的直接检验,下半:同一段里按**水平**排。与上一条配对就是方向反转的决定性实验,解剖预言差距 ≈ 29pp(iso_A +6.1 vs v_base −23.2)。这一对是整个研究里机制故事的成败所在"}
+
+# ---------- B. 桶内去均值 / 去尺度:"段倾斜"终于有了正确的剥离工具(4) ----------
+# 立方体没有流通市值,**价格是唯一不由 Amt 构成的规模代理**(解剖:价格最低 20% 超配 +13.6pp、段等权超额 +7.0%)。
+h3_bz_price_own: {expr: "cs_bucket_zscore(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), day_last(Close))", why: "§3 的核心命题是'同规模内选低换手值 +3~+9%/年',而 res_liq / bk_liq / res_known / bk_known 四条中性化全是 +2.3~+3.8% —— 上一轮判为'中性化错了对象(该中性化市值而不是成交额)'。价格十分桶内 z 分数是现在能写出的最接近'同规模'的东西,桶内离散度差数倍所以必须用 zscore 而不是 demean"}
+h3_bdm_price_own: {expr: "cs_bucket_demean(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), day_last(Close))", why: "上一条保量纲的版本。两条配对能分开'桶内中心不对'和'桶内距离不可比'这两件事:若 demean 死而 zscore 活,塌掉的是尺度;若两条都死,价格桶内没有东西,§3 的命题要改写成'靠的是跨规模倾斜'"}
+h3_bz_price_atom: {expr: "cs_bucket_zscore(day_cov(Amt, Amt), day_last(Close))", why: "(甲):原子(全表最强的 iso_A +17.8/2.59)的同一处理。iso_A 与 v_base 的差别只是四层包装;若桶内只有原子活下来,结论就是'包装在段内也只扣分',而且会给出一条真正与已知族去相关的写法"}
+h3_bz_price_known: {expr: "cs_bucket_zscore(cross_mean(day_std(Amt), 30), day_last(Close))", why: "上三条的**对照组**:同一处理加在 k_known 上。ρk 0.72~0.99 说这几条本质同源,所以只有'F105 的桶内残差 > 已知族的桶内残差'才算增量;这一条是那个减数,少了它前三条读不出任何结论"}
+
+# ---------- C. 把"冻结盘口"这个唯一真赚钱的筛子拆开、并扫一次宽度(5) ----------
+h3_scr_atmax_known: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))", why: "(戊):day_zero_ratio(Ret) 把涨停和跌停混在一起。day_at_max_ratio 只抓'钉在当日最高价'(一字涨停 / 封板),近 15 日取最大。若 k_known_xfrozen 的 +0.93 夏普大部分来自这一半,筛子的真实含义是'别买刚被炒封的票',而不是'别买流动性冻结的票'"}
+h3_scr_atmin_known: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_min_ratio(Close), 15))", why: "(戊)的另一半:钉在当日最低价(跌停 / 一字跌板 / 退市整理)。与上一条配对把 6.5% 的冻结段拆成两种完全不同的事件;两条都涨 = 筛子抓的是'任何被钉住的票',只有一条涨 = 抓的是那一种事件,这决定筛子该怎么写进生产"}
+h3_scr_flat_known: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_flat_ratio(day_last(Close), 15))", why: "(戊)的第三种写法:近 15 日收盘价与前一日完全相同的占比 —— 停牌与长期无成交的最干净探测器,不经过 Ret 也不经过分钟轴。三条筛子里哪条最强,就说明 −67.4% 的段等权超额到底由哪种微观状态承载"}
+h3_scr_atmax_own: {expr: "cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(day_at_max_ratio(Close), 15))", why: "(戊)在本因子上的版本(seg_xfrozen_m 的升级)。seg_xfrozen_m 是 s2 里本因子自己最好的一行(+13.3/2.75、ρk 只 0.37);若换成更锐的封板探测器后仍然追不上 k_known_xfrozen(+18.5/3.15),'F105 连当筛子的宿主都不配'这条否定结论就钉死了"}
+h3_xfrozen40_known: {expr: "cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "(戊):全表最值钱的一个数字(筛子值 +3.1 点 / +0.93 夏普)用的是 20% 宽度,**从来没人扫过宽度**。冻结段只占 6.5%,20% 已经在多切 13pp 的健康票;40% 若还涨,筛掉的其实是'低价 + 薄盘'一大片而不是冻结事件,整个解释要改"}
+
+# ---------- D. 根的符号拆分:机制故事最后一个判别性实验(2) ----------
+h3_semi_pos: {expr: "cross_semistd_pos(cross_max(day_cov(Amt, Amt), 3), 5)", why: "机制说'抖动大在次新/封板段里恰恰是正在被炒的标志'。cross_semistd_pos 只量日成交额方差**向上**跳的那一半(放量)—— 若损伤集中在这一半,机制说法得到最强支持;ts_stddev 把两个方向混在一起,这是第一次能分开"}
+h3_semi_neg: {expr: "cross_semistd_neg(cross_max(day_cov(Amt, Amt), 3), 5)", why: "另一半:只量向下跳(缩量冷却)。按机制它应当无害甚至更好(缩量 = 真的凉了 = 低流动性溢价的正宗来源)。两条若一样,根就只是个幅度算子、符号无关,s1 的'根必须是幅度型归约'升级成'根只能是幅度型归约'"}
+
+# ---------- E. 稳健标准化:分清"去水平这个想法不对"和"估计量太脆"(2) ----------
+h3_madz30: {expr: "cross_madz(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 30)", why: "§2:mem_zscore 5/10/30/60 = −4.5 / −3.0 / −2.1 / −0.1 全死,但 cross_zscore 的分母在这种重尾正数上被单日尖峰主导,'去水平'与'估计量脆'分不开。cross_madz 用中位数/MAD 做同一件事;若还是死,去水平正式被否(这是 s1 最承重的结论之一,值得一次独立确认)"}
+h3_madz_atom60: {expr: "cross_madz(day_cov(Amt, Amt), 60)", why: "同一问题打在原子上、窗口放到 60(iso_A 是全表最强的一行,信噪比最好)。若原子的稳健 z 分数活下来而树的死了,说明毁掉去水平版本的是上面四层包装的 churn,不是去水平本身"}
+
+# ---------- F. (乙)那条意外的无尺度线索的最小邻域(3) ----------
+h3_logchg_std30: {expr: "cross_mean(day_std(in_logchg(Amt, 1)), 30)", why: "(乙):h_leaf_logchg_var = cross_max(day_var(in_logchg(Amt,1)),3) 给了 +10.3% / ρk 0.82 / sg +1 —— 一条**无尺度**的日内粗糙度重建出了大半个已知族。把它搬进 k_known 一模一样的槽位(开方 + 30 日均值)看它能不能追到 +15.4;这是本轮唯一可能长出与已知族不同写法的方向"}
+h3_distinct30: {expr: "cross_mean(day_distinct_ratio(Amt), 30)", why: "(乙)的机制检验:我猜 logchg 的方差其实在量'一天里分钟成交额走过多少个不同的格子'(薄盘票大量零/重复分钟 → 对数变化暴跳)。day_distinct_ratio 直接量这件事,无尺度、有界。若它复现 +10 量级,这条线索的真名是**报价粗糙度 = 流动性代理**,与成交额水平同源(ρk 应当也在 0.8 左右),线索到此封口"}
+h3_eshi_amt30: {expr: "cross_mean(day_es_ratio_hi(Amt), 30)", why: "(乙)+ §2:h_band_over_floor(两条日尾巴的比值)死得干干净净(+0.9%),但那是**日轴**;分钟轴的尾部比值从没试过,而 day_es_ratio_hi 带 NaN 保护(不会像手写 erm_* 那样把封板日变成 1e4)。若日轴死、分钟轴活,'无尺度的尖锐度'这件事只存在于日内"}
+
+# ---------- G. 便宜的重写 + 机制的直接实现(4) ----------
+h3_tail75_30: {expr: "cross_tail_mean_q75(day_cov(Amt, Amt), 30)", why: "s2 的性价比之王:h_root_tail75_241 = +12.5% / 1.97 而 LTO 只 1.5%(原式 3.6%、k_known 3.4%),且 cross_tail_mean_q* 明显比 cross_quantile_q* 稳(q75 槽:12.5 vs 9.8;q50 直接塌到 +3.9)。窗口换成 win_C 梯子里最好的 30 —— 若 ≥ +15% 而 LTO 仍 ~1.5%,这是全研究唯一有实用价值的产物:k_known 的半换手替身"}
+h3_xfrozen_tail75: {expr: "cs_last_high20(neg(cross_tail_mean_q75(day_cov(Amt, Amt), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "把上一条和(戊)的筛子叠起来 —— s2 里最好的两样东西的乘积。k_known_xfrozen = +18.5/3.15 是现在的标尺;这一条是本因子血统里唯一还有机会越过那条线的写法(低换手 + 通用筛子)"}
+h3_flip_young: {expr: "select_where(is_gt0(sub(cross_age(day_last(Close)), 250.0)), neg(cs_demean(cs_rank(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)))), cs_demean(cs_rank(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5))))", why: "(丁)的直接实现,上一轮写不出来:上市满 250 日的票按**低**抖动买、不满的票按**高**抖动买(机制说这一段里抖动 = 正在被炒,方向相反)。两边都用 cs_demean(cs_rank(·)) 保证量纲可比。若它明显超过 v_base 的 +11.8,这不只是一条修补 —— 是把'结构缺陷'改写成了一条分段规则;若不超过,反转效应虽真但太小(7.1% 的票),整条因子就该按已知族否掉"}
+h3_wstd_ret30: {expr: "cross_mean(day_wstd(Ret, Amt), 30)", why: "§2 的最后一个空位:h_leaf_ret_var_m30(day_var(Ret))= −1.3% 死掉,但等权的日内波动被没有成交的分钟稀释;day_wstd 是**资金真正经历的**波动。幅度型(这棵树里唯一活过的归约类型)+ 成交额加权,是'低波动能不能替代低流动性'这个替代解释的最后一次检验。有号的那一族(day_signed_ratio −7.8、day_wmean(Ret,Amt) +2.5)已经判死,所以只留幅度这一条"}

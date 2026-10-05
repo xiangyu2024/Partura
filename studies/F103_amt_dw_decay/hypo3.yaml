@@ -1,0 +1,66 @@
+# F103_amt_dw_decay —— 第三批假设(主研,2026-10-05,读完批量扫描 s2 之后;只用 train/valid,没有读测试段)
+# 对账与定论在 notes/F103_amt_dw_decay/synthesis.md「第二轮(s2)对账与结论」。
+# 记号(数字 = tr/va/ut Lnet | ut Lshp):
+#   K      = cross_mean(day_std(Amt), 30)                        +12.6/+22.3/+15.4% | 2.22   (已知族)
+#   KX     = cs_last_high20(neg(K), cross_max(day_zero_ratio(Ret),15))  +16.4/+23.2/+18.5% | 3.15  (通用冻结筛子基准)
+#   RELSTD = cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt,30),1))), 5)
+#                                                                +11.9/+20.7/+14.4% | 2.37   (s2 里本因子自家最好,ρk 0.83)
+#   v_base +9.4/+4.5/+8.1% | 1.49;abl_D(pow_1)+10.8/+17.7/+12.8% | 2.11;iso_A = day_close(Amt) +10.5/+20.8/+13.4% | 1.90
+#
+# s2 的六条硬结论决定这一批往哪儿打:
+#  (甲) C 这一层换成「真正的相对抖动」day_std(in_pct(·,1)) 是全表自家最好的一跳(1.49 → 2.37,净超额 +8.1 → +14.4%),
+#       而 log 版更差(2.08)、cross_zscore 版崩掉(−11.3% / −1.78)⇒ C 的价值是持久的截面水平,不是「相对自己异常」。
+#  (乙) h_C_leaf_vol(只把 C 腿的 Amt 换成 Volume)与 abl_D 逐列相同(+12.8% / 2.11 / ρo 0.66 / ρk 0.84)
+#       ⇒ C 腿对价格完全不敏感;s1 里 Amt→Volume 的死亡全部来自 A 腿。价格只从 A 槽进来。
+#  (丙) 冻结筛子是全局最大的一块钱(K 2.22 → KX 3.15,+0.93 夏普 / +3.1 点),而 day_zero_ratio 与 day_flat_run_max
+#       给出一模一样的数(3.15 / 3.10)⇒ 两种读法选的是同一批票,现在分不出 −67.4% 是涨停、跌停还是停牌,也不知道 20% 的剂量对不对。
+#  (丁) 次新剔除单独也是正的(h_K_ex_new 2.51 / +16.7%),但叠在冻结筛子之上完全不加(h_K_ex_both 3.16 对 KX 3.15)⇒ 两段重叠。
+#       h_age_only 自己 dist 0.05 ✗,h_base_bk_age 比 h_abl_bk_age 差(1.62 对 2.02)⇒ pow_3 不是伪装的次新押注,只是更差的单调变换。
+#  (戊) 「流动半边 + 缩量」那一组七条全负(h_contract20 −5.1%、h_contract_z20 −6.2%、h_liq40_* −1.0~−6.5%、h_bk_liq_* +4.5/−5.3%)
+#       ⇒ 解剖里成交额最高两档的段内 +9.6/+17.2% 不是可交易信号。而 cs_bucket_rank 一律把 K 赖以为生的重尾量级压成秩(rank_F 的教训),
+#       桶内中性化这件事还没用保留量纲的算子试过。
+#  (己) 已知族自身:上尾 ≫ 下尾(h_K_tail_q75 2.42 / +16.4% 对 h_K_tail_q25 1.16 / +7.6%)⇒ K 的钱在「忙的日子」;
+#       cs_winsor + cross_ema 也小赚(2.34、换手 3.4% → 2.1%)。而两条低相关候选(day_wmean / day_signed_ratio)全死(0.42 / −0.87)。
+
+# ---- A. (甲) 的下一跳:RELSTD 周围的最小子结构再换一圈
+h3_relstd_wstd: {expr: "cross_max(mul(day_close(Amt), day_wstd(in_pct(cross_decay_linear(Amt, 30), 1), cross_decay_linear(Amt, 30))), 5)", why: "RELSTD 的 day_std 是等权的:没有成交的分钟和大单分钟一样重。day_wstd 用成交额加权 ⇒ 读的是「资金实际经历的日内不稳」。若明显更好,这一层的名字应该叫「加权相对抖动」;若打平,等权就够,说明分钟权重不是信息"}
+h3_relstd_estail: {expr: "cross_max(mul(day_close(Amt), day_es_ratio_hi(cross_decay_linear(Amt, 30))), 5)", why: "h_C_peakshare(day_max/day_mean)拿到 2.20,但分母 day_mean 被尖峰自己污染、分子只有一根线。day_es_ratio_hi = 前 5% 分钟均值 ÷ 95% 分位,且分位近 0 的日子留 NaN ⇒ 带保护的峰值占比。它对 RELSTD 是最硬的对手假设:一个读抖动、一个读尾部厚度"}
+h3_relstd_leafvol: {expr: "cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Volume, 30), 1))), 5)", why: "(乙)已经证明 C 腿价格盲(leaf_vol 与 abl_D 逐列相同)。同一道检验加在 RELSTD 上:若又逐列相同,则「乘数层只用成交形状、价格只从 A 槽进来」升级为这棵树的结构事实,而不是一个变体的巧合"}
+h3_A_inzs: {expr: "cross_max(mul(day_close(in_zscore_expand(Amt)), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5)", why: "A 槽 close ↔ mean ↔ sum ↔ median 全一样(s1)⇒ 要的是水平、不是哪一分钟。这一条把水平彻底拿掉,只留「收盘那分钟相对今天到此为止有多异常」(日内因果)。若塌,A 槽 = 纯水平这件事就钉死了,整棵树的分辨力来源再没有别的可能"}
+
+# ---- B. (己) 的日内对应:水平该不该只读「忙的分钟」
+h3_A_topw_amt: {expr: "cross_max(mul(day_topw_mean(Amt, Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5)", why: "已知族的钱在忙的日子(q75 2.42 ≫ q25 1.16)。日内同一个问题:A 槽换成「当日成交额最大的 10% 分钟上的平均成交额」。它比 day_close(Amt) 稳(10% 的分钟而不是 1 分钟)又比 day_sum 更偏尾部"}
+h3_A_topw_late: {expr: "cross_max(mul(day_topw_mean(Amt, in_index(Amt)), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5)", why: "用 in_index 当权重 ⇒ 取一天中位置最靠后的 10% 分钟 = 尾盘成交额均值。day_close(Amt) 碰巧是最后一分钟,这一条问「尾盘水平」是不是 A 槽真正想要的东西(并把单分钟噪声平掉);与 h3_A_topw_amt 并排可分开「尾盘」与「放量」两种解释"}
+
+# ---- C. (甲) 的反面:cross_zscore 崩掉到底是「想法不对」还是「估计量太脆」
+h3_C_madz60: {expr: "cross_max(mul(day_close(Amt), cross_madz(day_durbin_watson(cross_decay_linear(Amt, 30)), 60)), 5)", why: "h_C_zs60 是 s2 第二差(ut −11.3% / −1.78)。C 是重尾正值量,一根尖峰就能把 60 日均值/标准差拖走。cross_madz 的本来用途就是分清这两件事:若 madz 版仍然大负,「去持久水平」这个想法确认错误(= C 的价值就是持久截面标签);若回到 2.0 附近,错的只是估计量"}
+
+# ---- D. s2 的第二个意外:B 槽换 cross_semistd_* 既好又与已知族最不相关(ρk 0.65 / 0.59,全表最低)
+h3_semistdneg_pow1: {expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_semistd_neg(Amt, 30))), 5)", why: "nosc_B_cross_semistd_neg 还带着 pow_3 就有 ut 2.24 / +12.6% / ρk 0.65。按指数阶梯(pow_3 是 train 上的拟合),去掉 pow_3 应当再涨一截。ρk 0.65 是全表好变体里最低的 ⇒ 这是本批唯一有机会产生真增量(而不是已知族换装)的结构"}
+h3_semistdpos_pow1: {expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_semistd_pos(Amt, 30))), 5)", why: "pos 版 ρk 更低(0.59),带 pow_3 时 valid 反而最高(+20.3%)。两条并排回答:B 槽承重的是「这个分钟槽的成交额往下崩得多猛」还是「往上冲得多猛」—— 这是 30 日平滑(abl_B 一删就 −3.3%)之外第一次真正问清 B 槽在平滑什么"}
+h3_relstd_semistdB: {expr: "cross_max(mul(day_close(Amt), day_std(in_pct(cross_semistd_neg(Amt, 30), 1))), 5)", why: "把 s2 的两个意外叠起来:最好的读数(RELSTD,2.37)× 最不相关的 B 槽(semistd_neg,ρk 0.65)。若 ρk 掉到 0.7 以下而 ut Lshp 还在 2.3 以上,这条因子第一次有了「不是已知族」的候选;若 ρk 又回到 0.83,说明低相关性来自 pow_3 而不是 B 槽"}
+
+# ---- E. (丙) 冻结筛子:把 −67.4% 拆开,并定剂量(本因子之外,但这是全局最大的一块钱,值得钉死)
+h3_K_ex_frz40: {expr: "cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "冻结段只占 6.5%,而 KX 的筛子剔掉 20% ⇒ 现在不知道 +0.93 夏普来自那 6.5% 的真冻结票还是外面一圈「准冻结」的薄盘票。40% 档给出剂量曲线:若 40% ≈ 20%,筛掉的是一小撮极端票;若继续涨,这其实是一道流动性下限"}
+h3_K_ex_limitup: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))", why: "day_zero_ratio 与 day_flat_run_max 给出一模一样的数(3.15 / 3.10)⇒ 分不开。day_at_max_ratio(Close) = 封在当日最高价的分钟占比,只认涨停封板。若它单独就能复制 +0.9 夏普,这段钱是「别追封板」"}
+h3_K_ex_limitdn: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_min_ratio(Close), 15))", why: "上一条的另一半:封在当日最低价 = 跌停 / 一字跌板。与 h3_K_ex_limitup 并排把 −67.4% 拆成涨停侧和跌停侧 —— 这是用户要的「哪类股票、什么时段」,也直接决定实盘该监控哪个状态量"}
+h3_K_ex_halt_daily: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_flat_ratio(day_last(Close), 15))", why: "日级别的「收盘价与前一日完全相同」= 停牌 / 一字板,不需要分钟数据。若它与分钟级版打平,这道价值 +0.93 夏普的筛子可以用日线实现(实盘成本差一个数量级);若明显更差,信息确实在分钟里"}
+h3_K_ex_coarse: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_mean(day_distinct_ratio(Close), 15)))", why: "第三种解释:不是封板事件,而是「这票一天只走过几个价位」(低价票的最小变动价位格子太粗 / 根本没人交易)。day_distinct_ratio 把它直接量出来。三条筛子(封板 / 停牌 / 价位粗)里哪一条足够,决定这块钱的归因"}
+
+# ---- F. (丙)+(定论) 本因子作为筛子,在通用冻结筛子之上还剩什么 —— best_on_known 唯一没验证的方向
+h3_K_scr_relstd: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5))", why: "scr_xhi_p(用原式当筛子叠在 K 上)是本因子对已知族唯一的正增量(2.49 / +16.0%,比 K 高 +0.27 / +0.6 点),但用的是最差的自家版本。换成 RELSTD(2.37)⇒ 本因子当筛子的上限"}
+h3_xfrz_then_relstd: {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5))", why: "决定性的一条:scr_xhi_p 的 +0.27 夏普与冻结筛子的 +0.93 是不是同一件事。(丁)已经证明次新筛子叠在冻结筛子上完全不加(3.16 对 3.15)。若这一条也 ≈ KX,本因子连「筛子」这个位置都没有,定论闭合"}
+
+# ---- G. (戊) 桶内中性化:换成保留量纲的算子再问一次(cs_bucket_rank 把重尾量级压成秩,那是它失败的可能原因)
+h3_K_ex_age_cont: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_age(day_last(Close))))", why: "h_K_ex_new 用 cross_valid_count(·,241),在 241 处饱和、老票全部并列。cross_age 不饱和 ⇒ 若不饱和版更好,「躲次新」其实是一条连续的「买老票」倾斜(可以再加剂量);若打平,真的只是前 250 日那一段特殊"}
+h3_K_bkdemean_age: {expr: "cs_bucket_demean(cross_mean(day_std(Amt), 30), cross_age(day_last(Close)))", why: "h_K_bk_age(cs_bucket_rank 版)与 K 打平(2.24 对 2.22),但 bucket_rank 把 K 赖以为生的重尾量级压成秩(rank_F ut −0.1% 的教训)。cs_bucket_demean 保留量纲 ⇒ 这才是「年龄桶内中性化有没有用」的干净判据"}
+h3_relstd_bkz_age: {expr: "cs_bucket_zscore(cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5), cross_age(day_last(Close)))", why: "同一道工序用在自家最好的版本上。各年龄桶的成交额离散度相差数倍,去均值后距离仍不可比 ⇒ zscore 版才是可比的桶内中性化。若 RELSTD 的分数在年龄中性后保住,它读的就不是「新票投机指纹」而是一个真结构"}
+
+# ---- H. (e 节) 状态互补:上一轮写不出来,现在有 cs_state_rank / cs_flip_by_state / select_where
+h3_state_switch: {expr: "select_where(is_gt0(sub(cs_state_rank(day_last(Close), 50), 0.5)), cs_rank(neg(cross_mean(day_std(Amt), 30))), cs_rank(neg(cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5))))", why: "逐年表近乎反相(原式跌市 +10.4% / 涨市 +6.4%;K +6.0% / +23.0%)。h_K_plus_C(固定低权重叠加)失败,但那是水平混合而不是切日子。这一条:大盘均价在近 50 日分位高(涨市)用 K,低(跌市)用自家 RELSTD。两条信号都用纯秩,所以差别只来自切换"}
+h3_state_flip_K: {expr: "cs_flip_by_state(cross_mean(day_std(Amt), 30), day_last(Close))", why: "最小原语,只问 K 自己:它在跌市里是「失效」还是「反转」。按算子文档,若只是失效,翻转版会明显比 K 差 —— 这本身就是判据。结果决定 h3_state_switch 里那一半到底该换信号还是该空仓"}
+
+# ---- I. (己) 已知族自身的升级:把 s2 的两个小赢家合起来、并换叶子
+h3_K_q75_winsor: {expr: "cross_tail_mean_q75(cs_winsor(day_std(Amt)), 30)", why: "h_K_tail_q75(+16.4% / 2.42)与 h_K_winsor_ema30(+16.3% / 2.34、换手 3.4%→2.1%)各自比 K 小赚,机制不冲突:缩尾治的是截面估计噪声,上尾选的是「忙的日子」。合起来若到 2.5 以上,已知族自己就有一个免费升级(而且与本因子无关 —— 要在结论里说清)"}
+h3_K_q75_wstd_ret: {expr: "cross_tail_mean_q75(day_wstd(Ret, Amt), 30)", why: "把 q75 这条赢家的叶子换掉:day_std(Amt)(成交额的日内离散)→ day_wstd(Ret, Amt)(资金实际经历的收益波动)。h_K_wmean_ret 死了(0.42),但那是一阶量;二阶量是另一回事,而且它是本批里唯一一条不以成交额水平为主的已知族候选"}
+h3_K_semistd_neg: {expr: "cross_semistd_neg(day_std(Amt), 30)", why: "K 的记忆算子从 30 日均值换成「日内波动水平往下崩得多猛」的下行半标准差。s2 里 B 槽两条 semistd 都意外地好且 ρk 全表最低 ⇒ 这个算子在成交额类量上像是读到了别的东西,值得在已知族本体上单独试一次"}
