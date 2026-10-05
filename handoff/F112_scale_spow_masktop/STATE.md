@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F112_scale
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 1 次**(10-04 23:28)—— **不许再读**。候选在留出段上的数全在 `runs/F112_scale_spow_masktop/final.json`(`./scripts/study.sh digest F112_scale_spow_masktop final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F112_scale_spow_masktop#1`:已返回结果,最后动作 10-04 23:40 → `handoff/F112_scale_spow_masktop/agents/work_R1_a2e9337773dd9fbc1.md`
   - `lead:F112_scale_spow_masktop#2`:已返回结果,最后动作 10-05 00:04 → `handoff/F112_scale_spow_masktop/agents/lead_R2_aa3f59c581b7d0b47.md`
   - `work:F112_scale_spow_masktop#2`:中断,最后动作 10-05 00:20 → `handoff/F112_scale_spow_masktop/agents/work_R2_a61c6ea7258b8d7a8.md`
+  - `synth:F112_scale_spow_masktop`:已返回结果,最后动作 10-05 11:12 → `handoff/F112_scale_spow_masktop/agents/synth_a694b71713f4efd0c.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F112_scale_spow_masktop` 看服务器上的 tag,`./scripts/study.sh digest F112_scale_spow_masktop <tag>` 重看结果)。
 
@@ -135,4 +135,4 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 
 ## 结构化结果(`handoff/F112_scale_spow_masktop/results/`)
 
-(还没有)
+- `synthesis.json`

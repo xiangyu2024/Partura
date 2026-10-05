@@ -1,6 +1,6 @@
 # F103_amt_dw_decay — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F103_amt_dw_decay` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:26(`python scripts/recorder.py --brief F103_amt_dw_decay` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #820(批次 B01_single_factors)
 - 表达式:`cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F103_amt_d
 - **阶段:全部完成**
 - **留出段已经读过 1 次**(10-03 23:26)—— **不许再读**。候选在留出段上的数全在 `runs/F103_amt_dw_decay/final.json`(`./scripts/study.sh digest F103_amt_dw_decay final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `audit-numbers:F103_amt_dw_decay`:已返回结果,最后动作 10-03 23:52 → `handoff/F103_amt_dw_decay/agents/audit-numbers_a8da7cfad8e5f22d5.md`
   - `audit-mechanism:F103_amt_dw_decay`:已返回结果,最后动作 10-04 00:01 → `handoff/F103_amt_dw_decay/agents/audit-mechanism_a4b7f0588d11e04ba.md`
   - `revise:F103_amt_dw_decay`:已返回结果,最后动作 10-04 00:29 → `handoff/F103_amt_dw_decay/agents/revise_ae84c8cd59be0697d.md`
+  - `synth:F103_amt_dw_decay`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F103_amt_dw_decay/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
@@ -42,6 +42,8 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F103_amt_d
 - `S1_structure`  10-03 19:34  11 个变体  → `./scripts/study.sh digest F103_amt_dw_decay S1_structure`
 - `S2_distil`  10-03 23:19  12 个变体  → `./scripts/study.sh digest F103_amt_dw_decay S2_distil`
 - `final`  10-03 23:26  5 个变体  → `./scripts/study.sh digest F103_amt_dw_decay final`
+- `sweep_s1`  10-05 11:02  126 个变体  → `./scripts/study.sh digest F103_amt_dw_decay sweep_s1`
+- `anatomy_s1`  10-05 11:06  0 个变体  → `./scripts/study.sh digest F103_amt_dw_decay anatomy_s1`
 - `x1`(自写脚本的输出)  10-03 19:40  exit 0  → `logs/F103_amt_dw_decay_x1.log`
 - `x2`(自写脚本的输出)  10-03 19:56  exit 0  → `logs/F103_amt_dw_decay_x2.log`
 - `x3`(自写脚本的输出)  10-03 23:04  exit 0  → `logs/F103_amt_dw_decay_x3.log`
@@ -50,7 +52,7 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F103_amt_d
 
 ## 已写的 notes(`notes/F103_amt_dw_decay/`)
 
-`01_expression.md`(3K)、`02_operators.md`(2K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(10K)、`06_baseline.md`(3K)、`07_S1_structure.md`(4K)、`07_S2_distil.md`(5K)、`07_SA_audit.md`(1K)、`07_S_final.md`(2K)、`07_conditional.md`(1K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_x1_anatomy.md`(5K)、`07x_x2_interaction.md`(8K)、`07x_x3_family.md`(14K)、`07x_x4_audit.md`(7K)、`07x_x5_rev1.md`(10K)、`08_variants.md`(2K)、`09_diagnosis.md`(14K)、`10_distilled.md`(22K)、`11_risks.md`(4K)、`12_next.md`(2K)
+`01_expression.md`(3K)、`02_operators.md`(2K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(10K)、`06_baseline.md`(3K)、`07_S1_structure.md`(4K)、`07_S2_distil.md`(5K)、`07_SA_audit.md`(1K)、`07_S_final.md`(2K)、`07_conditional.md`(1K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_x1_anatomy.md`(5K)、`07x_x2_interaction.md`(8K)、`07x_x3_family.md`(14K)、`07x_x4_audit.md`(7K)、`07x_x5_rev1.md`(10K)、`08_variants.md`(2K)、`09_diagnosis.md`(14K)、`10_distilled.md`(22K)、`11_risks.md`(4K)、`12_next.md`(2K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F103_amt_dw_decay/`)
 

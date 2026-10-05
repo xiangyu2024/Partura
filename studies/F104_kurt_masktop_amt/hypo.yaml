@@ -1,0 +1,69 @@
+# F104_kurt_masktop_amt —— 第二批假设(主研,2026-10-05,读完 s1 大表 + 市场解剖之后)
+# 判断与数字全在 notes/F104_kurt_masktop_amt/synthesis.md,这里每条只写它在检验哪一节。
+#
+# 大表的四条硬结论决定这一批往哪儿打:
+#  (甲) mask 是「带巨型旗标的指示函数」:每(日,分钟)沿股票轴把最低 10% 换成**市场级**截面均值 M[d,m]
+#       (比被遮票自身大 10~100 倍)。abl_B 删掉它 ut −5.0%、ρk 从 +0.26 翻到 −0.35;四个替代算子全部 ≤ −5%。
+#  (乙) day_kurt 把成交额水平除掉了,而多头腿的钱**全在那个水平里**:换成保尺度 / 持续性 reader
+#       (day_std ut +13.0% / Lshp 2.85;ar1 +11.2%;autocorr +11.1%)是原式(+1.8% / 0.38)的 3~7 倍,
+#       而它们的 ρo 只有 +0.12 / +0.04 / +0.04 —— 不是同一条因子,是已知族换了衣服(ρk 0.60~0.85)。
+#       同理前置凹变换:Amt +1.8% → sqrt +14.1% → log +10.0%,凸的 pow_1_5 −50.6%(cov 0.23 ✗)。
+#  (丙) 原式的选股力只剩两处:6.5% 冻结盘口段(段内 +12.1%,无冻结的 93.5% 段 −0.3%)与成交额最高档(+7.4%,
+#       该段段等权 −17.8%);它超配的清淡档(+25.1pp,段等权 +15.1%)段内是 −4.0%。缩量日 +4.7% / 放量日 −1.7%。
+#  (丁) 六条 overlay 全部严格差于已知族单独(ut 13.1 / 12.4 / 11.5 / 10.8 / 9.0 / 3.7 对 15.4),
+#       res_known −0.4%、bk_known −2.0% ✗ ⇒ **正交部分在多头腿上没有价值;表里没有任何筛子形态**。
+#
+# 写法约定:要用 cs_first_* / cs_last_* 的,y 一律写成「高 = 该买」(所以已知族前面加 neg),
+# 否则 train 的 rank IC 为负、sg 取 −1,会把「哪一段在书顶」整个翻掉(F112 踩过)。
+
+# ---- A. 把「底十分位标记」写成连续、无漂移的量(§1 第 2 层 / §3 推论 c) ----
+h_rank_mean: {expr: "day_mean(nt_cs_rank(abs_(Amt)))", why: "§1:mask 真正想说的是「这只票在当分钟全市场成交额分布里有多深」。nt_cs_rank 是它的有界、无尖峰、不随市场总量漂移的版本;若 (甲) 成立,这条应该复现 mask 的符号(ρk > 0)而不需要任何尖峰"}
+h_rank_mean_m30: {expr: "cross_mean(day_mean(nt_cs_rank(abs_(Amt))), 30)", why: "同上配基准那一模一样的 30 日均值,与 k_known(+15.4% / 2.22)正面对比:差距就是「水平」与「截面位置」的差别"}
+h_rank_q25: {expr: "day_quantile_q25(nt_cs_rank(abs_(Amt)))", why: "§1 第 3 层:mask 只在一天最安静的那些分钟触发。取当日截面分位的下四分位 = 直接读那一端,检验驼峰的左支是不是信息所在"}
+h_rank_min_m15: {expr: "cross_mean(day_min(nt_cs_rank(abs_(Amt))), 15)", why: "最接近 mask 触发条件的写法(全天最深的一分钟);与 h_rank_q25 的差 = 「一根线」对「一整条尾巴」,顺带检验 mem_min 一族(唯一 valid 为正)靠的是不是单根极值"}
+h_q75share: {expr: "day_pos_ratio(nt_cs_quantile_q75(abs_(Amt)))", why: "§2:sub_B_nt_cs_quantile_q75 的想法(ut +7.9% / Lshp 1.73)被伯努利峰度的离散取值误杀(cov 0.79 / dist 0.15 ✗)。day_pos_ratio 把它还原成占比本身(241 个取值),是「不在市场最低 25% 的分钟占比」的连续版"}
+h_q75share_m30: {expr: "cross_mean(day_pos_ratio(nt_cs_quantile_q75(abs_(Amt))), 30)", why: "同上加 30 日平均:若这个占比是状态量(像 §3 说的流动性水平)而不是事件量,平滑应当提高夏普、压低换手"}
+
+# ---- B. 死分钟直读:把相对门槛换成绝对口径(§3 推论 a / d) ----
+h_zero_amt_m30: {expr: "cross_mean(day_zero_ratio(Amt), 30)", why: "§3:mask 的门槛随市场总量漂移(缩量日 +4.7% / 放量日 −1.7%)。成交额为零的分钟占比是同一件事的绝对口径,定义不漂移;若机制成立,它应当至少持平原式而年份曲线不在 2022 之后转负"}
+h_zero_amt_max15: {expr: "cross_max(day_zero_ratio(Amt), 15)", why: "§3:解剖的「近15日有冻结盘口」段(6.5%、段等权 −67.4%、原式段内 +12.1%)就是按这个口径切的;把段定义本身当因子,看那 +12.1% 是不是它而不是峰度的功劳"}
+h_flat_amt_m30: {expr: "cross_mean(day_flat_ratio(Amt), 30)", why: "day_zero_ratio 只数「没成交」,day_flat_ratio 还把「与上一分钟成交额相同」算进去(挂单机器人/薄盘);两条之差就是这一档的大小"}
+h_flatrun_amt_m15: {expr: "cross_mean(day_flat_run_max(Amt), 15)", why: "F108 的教训:一字板(连续钉住)与零散不动的薄盘票 flat_ratio 可以相同、最长连续段不同。原式的峰度读的正是「n 根不动 + 几根跳」,这条把连续性单独量出来"}
+h_pin_queue_m30: {expr: "cross_mean(sub(day_zero_ratio(Ret), day_zero_ratio(Amt)), 30)", why: "§3 的机制分裂:价格钉住但成交额还在变 = 封板排队(有人想买进不去),两者都冻 = 停牌/无成交。6.5% 段里原式的 +12.1% 应只来自前者"}
+
+# ---- C. 保留 mask、换掉尺度无关的 reader(§2 乙) ----
+h_mask_mean: {expr: "day_mean(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "§2 乙最干净的陈述:被遮分钟写 M、其余写自己 ⇒ 日均值 = 自身成交额与「死分钟数 × 市场水平」的混合,就是「带下限的流动性」。它与 sub_C_day_std(+13.0% / 2.85)的差 = 二阶矩是不是多余的"}
+h_mask_q25: {expr: "day_quantile_q25(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "当天最安静那一档被抬到 M 的程度:只读驼峰的左支而不碰活跃分钟,检验「下限」是不是全部内容"}
+h_mask_centroid: {expr: "day_centroid(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))", why: "§3 推论 e:M[d,m] 是全市场共用的分钟序列,所以这棵树里混着「死分钟与市场繁忙分钟对不对齐」。day_centroid 是唯一能把这条读出来的算子(与顺序有关);若它为零信息,§1 第 4 点就可以划掉"}
+h_mask_std_m30: {expr: "cross_mean(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), 30)", why: "把候选 sub_C_day_std 配上基准一模一样的 30 日均值:分开「流动性下限」与「一天 vs 一个月」两件事;它对 k_known 的差才是下限的净贡献"}
+h_mask_std_tail25: {expr: "cross_tail_mean_q25(day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), 30)", why: "§2:记忆族里只有 cross_min 一族 valid 为正(+4.2~+9.3%),但 min 是单个顺序统计量。低尾条件均值是它的去噪版;若 min 的优势是真的,这条应当持平或更好"}
+h_mirror_std: {expr: "day_std(nt_cs_mask_top_replace_mean(abs_(Amt)))", why: "镜像对照:改遮**最高** 10%。若候选的增量真来自底部的流动性下限,这一条应当没有增益(甚至削掉活跃端的区分度),而不是同样好"}
+
+# ---- D. 前置压缩这个最大杠杆:平台在哪、能不能与 reader 叠加(§2) ----
+h_pow025_kurt: {expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(pow_05(pow_05(Amt))))", why: "Amt^0.25 落在 sqrt(0.5,+14.1%)与 log(→0,+10.0%)之间:检验压缩是一个平台还是有最优压缩比。平台 ⇒ 机制是「拉近 A 与 M」;单峰 ⇒ 是某个特定的尺度匹配"}
+h_sqrt_std: {expr: "day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))", why: "全表两个最大的杠杆(sqrt 与 day_std)从未同时转。若两者是同一件事(都在把水平放回来),这条不应优于 sub_C_day_std;若能叠加,说明是两条独立的机制"}
+h_sqrt_ar1: {expr: "day_ar1_coefficient(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))", why: "同样的叠加测试,换成持续性 reader(ar1 原本 +11.2%、ρo 只 +0.04);若 sqrt 对它也有同样的加成,说明压缩的收益与 reader 无关"}
+h_log_std: {expr: "day_std(nt_cs_mask_top_replace_mean_neg(log(Amt)))", why: "压到对数后再取 std ≈ 日内成交额的变异系数(重新变成尺度无关)。若它回落到原式量级,就证明 §2 乙:有效的是尺度本身,而不是「压缩」这个动作"}
+
+# ---- E. 表里没试过的叶子(§2 叶子不自由) ----
+h_mask_ret_kurt: {expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Ret)))", why: "把叶子换成 |Ret|:底十分位变成「市场在动而它几乎不动的分钟」= 价格冻结探测器,且 abs_ 在这里不再是空操作。若 §3 的封板通道是真的,这条应当把 6.5% 段的 +12.1% 单独做出来"}
+h_mask_ret_std: {expr: "day_std(nt_cs_mask_top_replace_mean_neg(abs_(Ret)))", why: "同一叶子换保尺度 reader:在 Ret 上「尺度」= 日内波动率,这是与成交额族最不相关的一条;检验 (乙) 的「保尺度就赢」是成交额特有的,还是任何叶子都成立"}
+h_sqrt_vol_kurt: {expr: "day_kurt(nt_cs_mask_top_replace_mean_neg(sqrt(Volume)))", why: "leaf_Amt_vol(股数,ut −2.4%、ρo 0.72)差在价格混淆还是差在尺度?sqrt 若把 Volume 也救到 +10% 量级,说明 (乙) 的压缩杠杆与叶子无关;若救不动,说明 Amt 的元单位本身重要"}
+h_mask_amtchg5_std: {expr: "day_std(nt_cs_mask_top_replace_mean_neg(abs_(in_pct(Amt, 5))))", why: "leaf_Amt_amtchg 只在 kurt 上试过(方向翻转、ut −0.5%)。换成 5 分钟变化率(1 分钟量变化率几乎是噪声)+ 保尺度 reader:检验「变化率叶子不可用」是叶子的问题还是 reader 的问题"}
+
+# ---- F. 把解剖的分段直接写进表达式(§3) ----
+h_known_nofloor: {expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_sum(Amt), 30))", why: "§4 的核心检验:候选的夏普优势(2.85 对 2.22)是不是就等于「别买成交额最低 20%」。基准书 80.3pp 压在最低档,候选只有 5.9pp;这一条把下限显式化,若追平候选,mask 就只是一个流动性下限"}
+h_known_nodead: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_zero_ratio(Amt), 30))", why: "同一个下限,但用死分钟而不是成交额排名来定义。两条的差 = 「清淡」与「真的没有盘口」是不是同一回事(前者是水平,后者是状态)"}
+h_known_nofrozen: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Close), 15))", why: "§3:近15日有冻结盘口的 6.5% 段段等权 −67.4%,是全解剖最大的负拖累,而已知族在那一段段内也是 −10.9%。纯多头用户最该要的是一个剔除器,不是一条排序"}
+h_known_noyoung: {expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), cross_valid_count(day_last(Close), 241))", why: "§3:上市不足 250 日的 7.1% 段段等权 −28.7%,原式在那里 −9.7%。cross_valid_count 是立方体里唯一能写出「次新 / 刚复牌」的办法,这条量它值多少"}
+h_base_in_liquid: {expr: "cs_first_high40(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), cross_mean(day_sum(Amt), 30))", why: "§3:原式唯一为正的段是成交额最高档(段内 +7.4%),但该段段等权 −17.8%。把它关进最活跃 40% 里做:预期段拖累吃掉选股力 —— 否定同样是结论,而且是「段溢价 vs 段内选择」这条分解的直接证据"}
+h_base_in_illiq: {expr: "cs_first_low40(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), cross_mean(day_sum(Amt), 30))", why: "对照组:关进最清淡 40%(段等权 +15.1%、原式段内 −4.0%)。若它反而更好,说明原式的 +1.8% 全部来自杠铃书误打误撞吃到的段溢价,与排序无关"}
+
+# ---- G. 状态变量与新算子 ----
+h_base_in_quiet: {expr: "cs_first_low40(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))", why: "§3:原式只在缩量日有效(+4.7% vs −1.7%)。市场级状态在截面里会被除掉、写不进表达式,这里换成个股自己的放缩量比,检验「清淡时底十分位才是真死盘口」这个机制的个股版"}
+h_known_nosurge: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))", why: "已知族 + 剔除「刚刚放量」的 20%(游资/事件进场)。若 §3 的漂移机制成立,被放量污染的正是家族最容易买错的一批"}
+h_madz_q25_m30: {expr: "cross_mean(day_quantile_q25(in_madz(Amt, 30)), 30)", why: "§3 推论 c 的另一条路:把截面门槛换成**自身历史**门槛(相对 EPS、尺度不变)。日内最安静那一档相对自己近 30 分钟中位数有多低 —— 与 h_rank_q25 配对,区分「相对市场死」和「相对自己死」"}
+h_madz_kurt: {expr: "day_kurt(in_madz(Amt, 30))", why: "§2:原式的峰度到底读到了什么?把 mask 换成自身历史标准化之后再读峰度,若仍保留原式的分段特征(主板 / 封板段),说明峰度读的是「孤立尖峰」;若全塌,说明读的是 mask 插进去的 M"}
+h_gini_amt_m30: {expr: "cross_mean(day_gini(abs_(Amt)), 30)", why: "sub_C_day_gini 只在 masked 序列上试过(ut −1.0%)。纯 Amt 的基尼是有界、无尺度、不被单根线主导的集中度:检验「日内成交集中度」本身在多头腿上到底有没有东西,把它与 mask 的功劳分开"}
+h_signed_amt_m30: {expr: "cross_mean(day_signed_ratio(Ret, Amt), 30)", why: "大胆的新结构:这棵树把「哪些分钟是上涨分钟」整个扔了。若 §3 的封板通道本质是单边排队,带符号的成交额占比(净买入压力代理)应当比任何无符号的形态统计量更直接地抓到它"}
+h_base_tail25: {expr: "cross_tail_mean_q25(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt))), 30)", why: "§2 窗口:mem_min 一族是唯一 valid 为正的记忆(+4.2~+9.3%),mem_mean/ema 全负。低尾条件均值把「有没有过一个完全安静的日子」和「估得吵不吵」分开;若它追平 mem_min30(+6.5% / valid +9.2%),min 的优势就不是单日运气"}

@@ -1,0 +1,72 @@
+# F102_kurt_autocorr —— 第二批假设(主研,读完 s1 大表 94 个变体 + 市场解剖之后)
+#
+# 大表 + 解剖的四条硬结论决定了这一批往哪儿打:
+#   (甲) 承重的不是「自相关」而是「分钟收益在 0 上的点质量」:3 点相关在 var=0 时因为分母的 EPS 恰好吐出 0,
+#        day_kurt(超额峰度)于是在「长段不动 + 几根孤立跳」的日子爆表;pow_2 是一个折叠(去掉它 ρo=0.00、
+#        −4.0%),孔径从 3 放到 5 / 10 就塌到 +1.5% / −3.1%(win_A_5 / win_A_10),没有平台。
+#   (乙) cross_sum 把缺失日算成 0,而 sg=−1 下低=买 → 系统性买进历史不全的票。科创板段内 −28.5%(书里压了
+#        12.3% 的仓),换成 cross_mean 变 +3.0%;次新段 +7.1% → +23.5%。这是全表最便宜的一处修复。
+#   (丙) 段内预测力随成交额单调上升(−2.9/−4.3/−0.3/+6.1/+12.4%),而多头书对最低成交额桶超配 +21.1 个点。
+#        「超配 × 段等权超额」点乘:原式 +5.5 个点来自跨成交额桶的倾斜(占 +8.9% 的六成),已知族 +14.7(占 95%)。
+#   (丁) 唯一独家价值:近15日有冻结盘口段(6.5%、段等权 −67.4%)原式低配 −5.0 个点 → +3.6 个点,已知族只 −2.9 → +2.1。
+#        ρk 只有 +0.26,叠加 0.25/0.5/1.0 三个权重夏普都从 2.22 升到 2.51/2.62/2.57,反号叠加变坏 → 符号对,量在噪声沿。
+#
+# 所以这一批:A 先证伪自己(树 = 冻结状态?);B 修(乙)并把已经证明有效的慢化做到底;C 把停牌/次新写进表达式;
+# D 换掉(甲)里最脆的 3 分钟孔径;E 拆开折叠与凸性;F 在桶内问(丙)有没有残留选股力;
+# G 把它当已知族的配角 / 筛子;H 用新算子写几条与原式低相关、但来自同一机制推断的新结构。
+
+# ---- A. 先证伪自己:整棵树是不是就等于「冻结盘口」状态?(检验甲)
+h_zero_mean15:      {expr: "cross_mean(day_zero_ratio(Ret), 15)", why: "甲的正面检验:直接量「近15日分钟收益恰好为 0 的比例」,窗口与原式相同;复现得了就说明整棵峰度树只是这个原子的噪声读数"}
+h_zero_max60:       {expr: "cross_max(day_zero_ratio(Ret), 60)", why: "甲+丁:按前一轮已知最优的『60日极值记忆』形状读同一个原子,对标 mem_max60 的 +10.3%"}
+h_zero_ema30:       {expr: "cross_ema(day_zero_ratio(Ret), 30)", why: "甲:冻结是持续状态而不是事件,用大表里换手最低的慢化方式(cross_ema LTO 2.1%)读它"}
+h_flatrun_mean15:   {expr: "cross_mean(day_flat_run_max(Close), 15)", why: "分辨两种冻结:一字板(连续钉住,run_max 大)vs 薄盘零散不动(zero_ratio 大 run_max 小);解剖说坑在不活跃票,应该是后者"}
+h_flatrun_ema30:    {expr: "cross_ema(day_flat_run_max(Close), 30)", why: "同上换慢化形状;若 run_max 版本比 zero_ratio 版本强,说明承重的是『连续性』而不是『零的比例』"}
+h_res_zero60:       {expr: "cs_regres(cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), cs_rank(cross_max(day_zero_ratio(Ret), 60)))", why: "决定性检验:剥掉 60 日冻结记忆之后这棵树还剩什么;塌了就等于『已知族 + 一个封板掩码』,这棵树可以退休"}
+h_res_tree_on_zero: {expr: "cs_regres(cs_rank(cross_max(day_zero_ratio(Ret), 60)), cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)))", why: "反方向残差:冻结原子里有没有这棵树抓不到的部分;两条残差一起才能定谁包含谁"}
+
+# ---- B. 修掉 cross_sum 的缺失日当 0,并把已经证明有效的慢化做到底(检验乙 + 换手杠杆)
+h_ema30:            {expr: "cross_ema(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "大表只跑了 cross_ema 窗口 15(+10.8% / LTO 2.1%);半衰期是这批研究里最大的杠杆,30 是它右边第一个格点"}
+h_ema60:            {expr: "cross_ema(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "同上再慢一档;若 15→30→60 单调改善,说明净超额的增量全部来自省下来的费而不是新信息"}
+h_decay60:          {expr: "cross_decay_linear(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "cross_decay_linear 在窗口 15 是全表最好的单层改法(+10.9%);线性衰减与 EMA 的尾部权重不同,拉到 60 才分得开"}
+h_max60:            {expr: "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)", why: "上一轮研究员的推荐式,但这张表里没有(表里只有 cross_max 窗口 15 和 mem_max60);必须有这一行才能把两轮对齐"}
+h_meanmean60:       {expr: "cross_mean(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), 60)", why: "mem_mean60 是全表最佳(+10.8% / 夏普 2.31)但内层仍是有缺陷的 cross_sum;把内层换成 cross_mean,量出(乙)值多少"}
+h_tail75_30:        {expr: "cross_tail_mean_q75(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "稳健的极值:近30日最冻的那四分之一天的平均。若它≈cross_max 说明信息在尾部,若≈cross_mean 说明极值只是噪声"}
+h_tail25_30:        {expr: "cross_tail_mean_q25(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)", why: "对照:只看最平静的四分之一天。这一条是『水平』读数;它若也站得住,说明因子不是事件型而是状态型"}
+
+# ---- C. 把停牌 / 次新显式写进表达式(检验乙的因果:是缺失日本身,还是次新票的别的性质)
+h_susp_excl:        {expr: "cs_first_low40(cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), cross_valid_count(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60))", why: "近60日有缺失日(停牌/次新)的票整体排到最前 → sg=−1 下永不进多头书;量出多头腿有多少钱是在买历史不全的票"}
+h_vc_bucket:        {expr: "cs_bucket_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 241))", why: "在同样历史长度的票里排名:次新段 cross_mean 的 +23.5% 是真选股力,还是只是把 cross_sum 的缺口补上了"}
+
+# ---- D. 换掉最脆的 3 分钟孔径(甲:win_A 没有平台 = 刀尖,换稳健写法看有没有平台)
+h_inac3:            {expr: "cross_mean(pow_2(day_kurt(in_autocorr_s1(Ret, 3))), 15)", why: "纯度检验:nt_ts_* 沿连续分钟轴滚动、窗口会跨日边界吃进上一日尾盘;in_* 严格日内。差多少 = 跨日渗漏值多少"}
+h_inac5:            {expr: "cross_mean(pow_2(day_kurt(in_autocorr_s1(Ret, 5))), 15)", why: "同一孔径扫到 5:nt 版本 3→5 就塌(+8.9%→+1.5%);日内版本若不塌,说明塌的是跨日渗漏而不是孔径本身"}
+h_madz3:            {expr: "cross_mean(pow_2(day_kurt(in_madz(Ret, 3))), 15)", why: "同一机制的稳健写法:in_madz 用相对 EPS 量「这一分钟有多孤立」,不靠 var=0→0 这个退化出口;若能复现,原式的刀尖只是估计噪声"}
+h_madz10:           {expr: "cross_mean(pow_2(day_kurt(in_madz(Ret, 10))), 15)", why: "madz 版本有没有原式缺的窗口平台;有平台 = 这条机制真实,只是原式用了一个脆的估计量"}
+h_corr_ret_amt:     {expr: "cross_mean(pow_2(day_kurt(nt_ts_corr(Ret, Amt, 3))), 15)", why: "换一个 3 分钟配对统计量:收益与成交额的耦合。封板时两者同时冻结,这里也会出现退化 0;与原式相关应低但机制相同"}
+
+# ---- E. 把「折叠」和「凸性」拆开(甲:abs_ ρo=0.96 但低 2 个点,log/sqrt/保号幂全不同)
+h_abs_mean15:       {expr: "cross_mean(abs_(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "上一轮的提纯式配上修好的聚合器:只保折叠不保凸性,外层不再把缺失日记 0。两处缺陷分别值多少"}
+h_sigmoid:          {expr: "cross_mean(sigmoid(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)", why: "证伪凸性:单调有界、既不折叠也不放大。若它也站得住,『折叠 + 凸』这套解释就错了"}
+h_winsor_kurt:      {expr: "cross_mean(pow_2(cs_winsor(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)", why: "先按日截面 1%/99% 缩尾再平方:信息在最极端那 1% 的封板日,还是在分布的 body"}
+h_kurt4:            {expr: "cross_mean(pow_2(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)", why: "把凸性加倍(四次方)。若 abs<平方<四次方 单调,聚合就只是在找『近15日最极端的一天』,直接用极值更干净"}
+h_fold_csmean:      {expr: "cross_mean(pow_2(cs_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)", why: "把折叠点从 0 挪到当日截面均值。折叠点若无所谓,两者应接近;差很大则说明 0 这个点本身有含义(= 超额峰度的物理零点)"}
+
+# ---- F. 桶内选股:保住流动性溢价,只在有信息的地方用它(检验丙)
+h_bk_amt:           {expr: "cs_bucket_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_mean(day_sum(Amt), 30))", why: "丙:bk_liq 用的是有缺陷的 cross_sum 内层且 dist 被并列误杀;换成 cross_mean 内层重跑,量桶内残留选股力"}
+h_liq_excl_low40:   {expr: "cs_first_low40(cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), cross_mean(day_sum(Amt), 30))", why: "丙:把段内净超额为负的最不活跃 40% 整体排到最前(sg=−1 下永不买)。预期净超额下降(丢了 +15.1% 的段等权溢价)但夏普上升 —— 这个取舍要量出来"}
+h_bk_expand:        {expr: "cs_bucket_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))", why: "解剖:放量日 +13.3% vs 缩量 +5.4%。把市场级的放量状态换成个股自己的放量倍数做分桶,检验这条状态依赖在个股层面也成立"}
+h_bk_price:         {expr: "cs_bucket_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_mean(day_last(Close), 30))", why: "解剖:价格最高 20% 段内只有 +3.7%,其余 +6~+10%。价格是 tick 粒度的代理 —— 低价票的分钟收益离散本来就更粗;桶内排名应当把这层假信号去掉"}
+
+# ---- G. 当已知族的配角 / 筛子(检验丁:唯一的独家价值是封板规避)
+h_ov_mean_p05:      {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), 0.5))", why: "ov_p05 用的是原式;换成提纯式(cross_mean 内层)。若夏普从 2.62 再升,说明叠加的增益也被缺失日缺陷拖着"}
+h_ov_ema30_p05:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 30)), 0.5))", why: "把最省换手的版本叠上去:混合书的换手是实际成本来源,低换手配角应当比原式配角净超额更高"}
+h_ov_bucket_p05:    {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_mean(day_std(Amt), 30)), 0.5))", why: "丁:只把与已知族正交的那一半(桶内排名)叠上去。若夏普仍升而净超额不降,增量就确实不是重复的流动性暴露"}
+h_sieve_known:      {expr: "cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15))", why: "当筛子不当因子:把树标出的最「冻」40% 从已知族的多头书里剔掉,其余顺序不动。这是第 3 节(丁)指向的唯一独家用法"}
+h_ov_state:         {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), div(cs_mean(day_sum(Amt)), cross_mean(cs_mean(day_sum(Amt)), 60))))", why: "最大胆的一条:用全市场成交额 / 其 60 日均值(当日已知、跨股票为常数)当状态开关,放量时加大树的权重。解剖里放量 +13.3% vs 缩量 +5.4% 是全表最强的时间切分"}
+
+# ---- H. 来自同一机制推断的新结构(允许与原式低相关)
+h_centroid_amt:     {expr: "cross_mean(day_centroid(Amt), 15)", why: "封板票的成交几乎全在开盘那几分钟 → 日内重心靠近 0。这是顺序信息,峰度/基尼/标准差全都丢掉了;与原式应低相关但指向同一事件"}
+h_gini_amt:         {expr: "cross_ema(day_gini(Amt), 30)", why: "无尺度、有界的集中度:不会像峰度那样被一根线主导,也不会在清淡日爆掉。若它能替代原式,说明承重的是『成交集中』而不是『收益尖峰』"}
+h_signed_max:       {expr: "cross_max(day_signed_ratio(Ret, Amt), 15)", why: "封板日的资金加权方向比 ≈ +1;取近15日极大值 = 「最近有没有一天是一边倒的」。不用峰度就能标出涨停,检验 3 节(d)的『躲涨停』机制"}
+h_zero_plus_centroid: {expr: "add(cs_rank(cross_mean(day_zero_ratio(Ret), 15)), cs_rank(cross_mean(day_centroid(Amt), 15)))", why: "把『不动的分钟多』和『成交堆在开盘』两个独立读数等权相加,做成一台不含峰度的封板计;它是上面所有替代式的合成上界"}
+h_madz_gini:        {expr: "cross_mean(day_gini(in_madz(Ret, 10)), 15)", why: "两个新算子叠起来:先用相对 EPS 量每分钟的孤立度,再用有界的基尼量这些孤立度集中在多少根分钟上 —— 原式『峰度压在脆相关上』的尺度不变替代品"}

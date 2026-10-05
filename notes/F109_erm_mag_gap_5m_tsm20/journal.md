@@ -322,3 +322,15 @@ research/alpha_distillation/ 下,别被那行路径误导。
 runs/F109_erm_mag_gap_5m_tsm20/{S0_baseline,S1_lvl,S_final}.json 的原始字段(books/books_user 的 splits 与
 by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、logs/*_x2_incremental.log 逐一核对,
 并手算 f_orig/f_fam30/f_sig/f_sum/f_lvl 的八年算术均值复核笔记里的汇总数。
+
+### 2026-10-05 11:27 [主研] 批量扫描 s1 的综合
+
+- 节点记号本地重建(后序 SSA,A..AC),与 R1_propose_draft.txt 对齐:承重 = D/H(5分钟收益+掩码,abl_D -17.4%)与 N 上的 1e-6(sub_N_sub -19.1%);
+  惰性 = L/W 的 1e-6(sub_L_sub/sub_W_sub 与原式逐位同分 ρo 1.00)。名字骗人四处:5m 只在被测量、mag 只在下侧、两个 ε 不同质、ts_mean 是记忆不是平滑(窗口 5→40 全平)。
+- 全表最大的一次结构收益 = 去掉上侧计数归一化:only_L_R / sub_J_day_first +5.1%(valid +14.0%)、sub_L_mul +4.9%、sub_W_div +4.5%(原式 -3.2%);
+  整条下侧分支是损害(abl_AA/only_AA_R/sub_AA_* 五条同为 +2.6~2.7%);sub_Y_log +4.9% 之所以赚是 log 把 q05=0 的爆炸日变 NaN 丢掉。
+- 解剖:原式只在「近15日有冻结盘口」(6.5%、段等权 -67.4%)+14.3% 与「上市不足250日」(7.1%)+5.0% 为正,其余所有段为负,且超配冻结段 +2.3pp —— 这就是 -3.2% 的来源。
+- 去掉爆炸后的变体换了一片市场:创业板 +9~11.6%、小市值 +9.8~12.0%、成交额最高20% +10.8%(最低20% -6.2%),低波 +9.4% vs 高波 +0.4%,市场上涨 +8.2~13.1% vs 下跌 -4.6~0.4%;
+  已知族恰好相反(持仓 +80.3pp 压在成交额最低20%、高波更强)。机制推断 = 活跃小盘的「日内被资金推着走 → 回吐」反转。
+- 增量仍然没有:res_known -0.3%、bk_known/bk_liq +0.4%(且 dist 0.20 ✗)、overlay 六档全部低于家族 +15.4%。但 overlay 叠的全是多头腿为负的原式,对结构变体不公平 → 第二批补。
+- 落盘:notes/synthesis.md(140 行)、studies/hypo.yaml 40 条全部 parse 通过(A 去归一化 / B 冻结状态 / C 错配 / D 拉升机制 / E 桶内与分段 / F 市场状态 / G 当筛子 / H 低相关新结构)。

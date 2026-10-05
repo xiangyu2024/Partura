@@ -1,6 +1,6 @@
 # F101_day_shine_retstd — 交接状态
 
-_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:18(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 day_shine_retstd(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F101_day_s
 - **阶段:全部完成**
 - **留出段已经读过 1 次**(10-03 23:00)—— **不许再读**。候选在留出段上的数全在 `runs/F101_day_shine_retstd/final.json`(`./scripts/study.sh digest F101_day_shine_retstd final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `audit-numbers:F101_day_shine_retstd`:已返回结果,最后动作 10-03 23:19 → `handoff/F101_day_shine_retstd/agents/audit-numbers_a8b3d9dbf8b49904e.md`
   - `audit-mechanism:F101_day_shine_retstd`:已返回结果,最后动作 10-03 23:28 → `handoff/F101_day_shine_retstd/agents/audit-mechanism_a44fe5af2ad163716.md`
   - `revise:F101_day_shine_retstd`:已返回结果,最后动作 10-04 00:02 → `handoff/F101_day_shine_retstd/agents/revise_a7c1f89ef939ebc23.md`
+  - `synth:F101_day_shine_retstd`:已返回结果,最后动作 10-05 11:16 → `handoff/F101_day_shine_retstd/agents/synth_ae7cc08a1070145ff.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F101_day_shine_retstd/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
@@ -170,5 +170,6 @@ E 被测量互换(5)· F 规范化掩码(2)· G 冻结盘口(2)· H 大胆机制
 - `audit-numbers.json`
 - `revised.json`
 - `study.json`
+- `synthesis.json`
 
 报告:`research/alpha_distillation/F101_day_shine_retstd.md`(10-04 12:07 生成)

@@ -1,0 +1,52 @@
+# F111_spearman_qclose 第二批假设(主研,2026-10-05,批量扫描 s1 之后)
+# 依据:notes/F111_spearman_qclose/synthesis.md。
+# 身份:f_i ∝ corr(自己 10 日价格路径的时间秩, 全市场等权共识秩路径)
+#      ≈ (自己 10 日路径的单调趋势) × (市场 10 日路径的方向)。
+# 窗口只用注册表里的池子:ts_* [1,5,10,20,30,40,50]、cross_*/in_* [3,5,10,15,30,60,241]。
+# ts_spearman 在 d=50 上 OOM(上一轮 exit 97),这里不超过 30;长窗口一律走 ts_pearson(分块、峰值有预算上界)。
+
+# ---- A. 把表里最好的结构选择合起来 / 换成便宜的内核 ----
+h_sp_last20:   {expr: "ts_spearman(day_last(Close), 20)",                   why: "表里两个各自最好的改动(day_last +13.2%、win20 +12.7%)合在一起,表里没有这一格"}
+h_sp_last30:   {expr: "ts_spearman(day_last(Close), 30)",                   why: "窗口平台的长端配上更干净的载体:若 20 是真的峰,30 应只掉一点而不是塌"}
+h_pe_qc10:     {expr: "ts_pearson(day_quantile(Close), 10)",                why: "Pearson 兄弟:检验「秩」本身是否承重(上一轮量到 0.978,但没进这张大表)"}
+h_pe_last20:   {expr: "ts_pearson(day_last(Close), 20)",                    why: "便宜内核 + 最好载体 + 最好窗口;若与 h_sp_last20 同档,整族就脱离 O(N²) 的秩排序成本"}
+h_pe_last40:   {expr: "ts_pearson(day_last(Close), 40)",                    why: "ts_spearman 在 d≥50 OOM,只有 ts_pearson 的峰值工作集有上界,是唯一能看到窗口平台另一头的写法"}
+
+# ---- B. 并列伪影(「平」≡「完美上升」)与冻结盘口 ----
+h_wmean_carrier: {expr: "ts_spearman(day_wmean(Close, Amt), 10)",           why: "成交额加权均价几乎不会日间精确并列,直接消掉 stable 排序把常数路径打成满分的伪影"}
+h_mean_carrier20: {expr: "ts_spearman(day_mean(Close), 20)",                why: "日内均价同样少并列;与 h_sp_last20 比可分离「少并列」和「用收盘价」两件事"}
+h_excl_flat:   {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_mean(day_flat_ratio(Close), 15))", why: "永不买冻结盘口最重的 20%:该段段内 −38.7%,是伪影预测的失效点"}
+h_excl_zero:   {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_mean(day_zero_ratio(Ret), 15))",   why: "同一个剔除器换成 Ret 在 0 上的点质量(不混淆「两分钟涨幅相同」),看结论是否只依赖代理的写法"}
+h_bk_flat:     {expr: "cs_bucket_rank(ts_spearman(day_quantile(Close), 10), cross_mean(day_flat_ratio(Close), 15))", why: "把冻结程度做成桶:去掉伪影带来的持仓倾斜但保留桶内排序,区分「伪影给了钱」和「伪影只给了低换手」"}
+h_excl_young:  {expr: "cs_last_low20(ts_spearman(day_quantile(Close), 10), cross_valid_count(day_last(Close), 241))", why: "次新段等权 −28.7%(整段是陷阱)而书仍有持仓;剔除它看净超额是升是降"}
+
+# ---- C. 机制:f ≡ 市场方向 c(t) × 自己的路径趋势 ----
+h_relpath:     {expr: "ts_spearman(cs_rank(day_last(Close)), 10)",          why: "喂截面秩路径=抽掉市场共同成分:若 alpha 是「自己趋势 × 市场趋势」的交互,这条必须塌(很可能翻成反转)"}
+h_norm_path:   {expr: "ts_spearman(cs_normalize(day_last(Close)), 10)",     why: "同一个抽离做法换成标准化而不是秩,排除「秩变换本身」的解释"}
+h_mkt_undo:    {expr: "mul(cs_rank(ts_spearman(day_quantile(Close), 10)), sub(cs_median(cross_delta(log(day_last(Close)), 10)), cross_mean(cs_median(cross_delta(log(day_last(Close)), 10)), 241)))", why: "再乘一次市场方向:若 f ≡ c(t)·ρ^time,这一步把条件化抵消掉,应退回上一轮量到的 −5.6% 无条件反转"}
+h_mkt_explicit: {expr: "mul(cs_rank(cross_delta(log(day_last(Close)), 10)), sub(cs_median(cross_delta(log(day_last(Close)), 10)), cross_mean(cs_median(cross_delta(log(day_last(Close)), 10)), 241)))", why: "机制的显式 O(N) 写法:自己 10 日对数收益的秩 × 居中后的市场 10 日收益;复现则整条因子有了便宜等价物"}
+h_eff_ratio:   {expr: "div(abs_(cross_delta(log(day_last(Close)), 10)), cross_sum(abs_(cross_delta(log(day_last(Close)), 1)), 10))", why: "路径效率比(单调性、不含方向)= 秩路径相关里除净涨跌之外的那一半;预测弱正且与已知族相关高"}
+h_mkt_eff:     {expr: "mul(mul(cs_rank(cross_delta(log(day_last(Close)), 10)), cs_rank(div(abs_(cross_delta(log(day_last(Close)), 10)), cross_sum(abs_(cross_delta(log(day_last(Close)), 1)), 10)))), sub(cs_median(cross_delta(log(day_last(Close)), 10)), cross_mean(cs_median(cross_delta(log(day_last(Close)), 10)), 241)))", why: "三件拼全:方向 × 单调性 × 市场方向;与 h_mkt_explicit 比可知单调性那一项值不值"}
+h_f_minus_eff: {expr: "cs_regres(cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(div(abs_(cross_delta(log(day_last(Close)), 10)), cross_sum(abs_(cross_delta(log(day_last(Close)), 1)), 10))))", why: "把路径单调性从 f 里线性剥掉:剩下的若仍可用,说明承重的是方向交互而不是「安静」"}
+
+# ---- D. 换载体:Ret 与成交额变化率是同一类东西 ----
+h_ret_path:    {expr: "ts_spearman(day_sum(Ret), 10)",                      why: "喂日收益路径:收益的时间秩没有趋势持续性,这条退化成纯「秩 beta」,一次性区分共动与条件动量"}
+h_ret_path20:  {expr: "ts_spearman(day_sum(Ret), 20)",                      why: "同上换窗口:若 beta 解释成立,窗口越长估得越稳、不该像原式那样在 5 日塌掉"}
+h_ret_amt:     {expr: "ts_spearman(day_wmean(Ret, Amt), 10)",               why: "载体换成资金实际经历的收益(成交额加权分钟收益),等权分钟与放量分钟的差别是否进入共动"}
+h_amtchg_path: {expr: "ts_spearman(day_mean(in_logchg(Amt, 5)), 10)",       why: "用户提示的互换:把收益换成成交额的变化率,看共动是价格独有还是整个「活动」共有"}
+h_signed_path: {expr: "ts_spearman(day_signed_ratio(Ret, Amt), 10)",        why: "载体换成上涨分钟成交额占比(净买入代理)的路径共动:资金方向的共动是否也带同样的信息"}
+h_range_path:  {expr: "ts_spearman(div(day_max(Close), day_min(Close)), 10)", why: "载体换成日内振幅:若共动本身(而非价格水平路径)是信息,波动路径的共动也该有效"}
+
+# ---- E. 把解剖写进表达式:流动性 / 活跃度 ----
+h_f_in_liquid: {expr: "cs_first_high40(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 30))", why: "只在成交额前 40% 里建书:段内选股力最高桶 +9.5%、最低桶 −0.1%,但该段等权 −17.8%,看净效果"}
+h_f_excl_illiq: {expr: "cs_last_low20(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 30))", why: "剔除最不活跃的 20%:书有 +30.3% 的权重压在那里而那里没有选股力,这一格直接计价「倾斜 vs 技能」"}
+h_bk_amt241:   {expr: "cs_bucket_rank(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 241))", why: "分桶变量换成一年成交额水平(更外生、不被因子自己 10 日窗口污染),检验 bk_liq 的 +6.3% 是不是内生分桶的产物"}
+h_act_bucket:  {expr: "cs_bucket_rank(ts_spearman(day_quantile(Close), 10), div(cross_mean(day_sum(Amt), 10), cross_mean(day_sum(Amt), 241)))", why: "按相对活跃度(无尺度、不是市值代理)分桶:检验市场层面「放量 +17.4% / 缩量 +8.3%」在个股层面是否也成立"}
+h_act_mul:     {expr: "mul(cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(div(cross_mean(day_sum(Amt), 10), cross_mean(day_sum(Amt), 241))))", why: "在放量的票上放大 f:若活跃度是 f 生效的条件,乘积应优于两者各自"}
+h_act_add:     {expr: "add(cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(div(cross_mean(day_sum(Amt), 10), cross_mean(day_sum(Amt), 241))))", why: "同样两件东西改成相加:区分「条件(乘)」与「两条独立的 alpha(加)」"}
+h_ov_bk:       {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 241)), -0.25))", why: "已知族定流动性倾斜 + f 只做桶内排序:把两者重复计价的那一半切掉,是全表唯一没量过的增量口径"}
+h_ov_bk05:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 241)), -0.5))", why: "同上加大权重:ov_m025→ov_m05→ov_m10 是单调变差,桶内版本若反而更能吃权重,说明切对了地方"}
+
+# ---- F. 叠加最好的几个独立改动 ----
+h_stack_liq:   {expr: "cs_last_low20(ts_spearman(day_last(Close), 20), cross_mean(day_sum(Amt), 30))", why: "最好的载体+窗口,再剔除没有选股力的最不活跃段:三个独立改动能否相加"}
+h_stack_flat:  {expr: "cs_last_high20(ts_spearman(day_last(Close), 20), cross_mean(day_flat_ratio(Close), 15))", why: "最好的载体+窗口,再剔除冻结盘口:若伪影只影响换手不影响毛收益,这条的净超额应该靠换手上升而被吃掉"}

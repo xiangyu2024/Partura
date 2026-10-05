@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -10,31 +10,30 @@ _自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F110_ret_f
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 1 次**(10-04 23:28)—— **不许再读**。候选在留出段上的数全在 `runs/F110_ret_fair_log/final.json`(`./scripts/study.sh digest F110_ret_fair_log final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F110_ret_fair_log#1`:已返回结果,最后动作 10-04 23:40 → `handoff/F110_ret_fair_log/agents/work_R1_a19055ac0f98830d9.md`
   - `lead:F110_ret_fair_log#2`:已返回结果,最后动作 10-05 00:14 → `handoff/F110_ret_fair_log/agents/lead_R2_a6887d8909433a81f.md`
   - `work:F110_ret_fair_log#2`:中断,几乎没做事
+  - `synth:F110_ret_fair_log`:已返回结果,最后动作 10-05 11:21 → `handoff/F110_ret_fair_log/agents/synth_a4f321cb016b5ff04.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F110_ret_fair_log` 看服务器上的 tag,`./scripts/study.sh digest F110_ret_fair_log <tag>` 重看结果)。
 
-## 研究现状(`notes/F110_ret_fair_log/state.md`,10-05 11:09 更新)—— **先读这个文件**
+## 研究现状(`notes/F110_ret_fair_log/state.md`,10-05 11:18 更新)—— **先读这个文件**
 
 # F110_ret_fair_log — 研究现状(主研第 7 轮重写,2026-10-06;基于批量扫描 s1)
 
 > 本轮工单:读完 161 条变体的批量扫描表 + 市场解剖,成文并提出第二批假设。**没跑任何新实验。**
-> 本轮产出:`notes/F110_ret_fair_log/synthesis.md`(综合,129 行)+ `studies/F110_ret_fair_log/hypo.yaml`(36 条,hypo 检查 36/36 通过)。
-> `01`/`02`/`03`/`04`/`06` 仍可照用,但 `02` 对 `in_forward_valid_part` 的读法本轮按源码纠正(第 8 节)。
-> 第 6 轮的 `05`~`12` 与 `orders/R4.md` 原样保留;本页只换「现状」口径。
+> 产出:`synthesis.md`(129 行)+ `studies/F110_ret_fair_log/hypo.yaml`(36 条,hypo 检查 36/36 通过)。
+> `01`~`04`/`06` 照用,但 `02` 对 `in_forward_valid_part` 的读法按源码纠正(第 8 节);第 6 轮其余 notes 原样保留。
 
 ## 1. 现状
 
 **原式对纯多头是零,结论不变**(`v_base` −0.0 / −0.6 / −0.2%,`Lshp` −0.03):毛超额 +7.8% 被 10.5% 换手
 (≈ 8.0%/年成本)吃光,钱在空头腿(`LS` +2.76、底腿 −43.3%)。
-大表把上一轮三条判断**加强**了:① 成交量机器惰性 —— 不只是「权重比不乘还差」,是**整棵子树删了不掉**;
-② 平滑是唯一真实的杠杆且 **100% 是省成本**(`mem_ema30` 毛 +7.9% ≈ base +7.8%);③ 相对已知族无增量(叠加行两向单调变差)。
-大表还给出两条**上一轮没有的**:④ 此因子与已知族**工作方式不同**(它是流动段内选股,已知族是段位倾斜);
-⑤ 冻结盘口段(6.5%)段内 **+19.2%** 而已知族 **−10.9%**,且书对该段几乎不超配 ⇒ **未被利用的信息**。
+大表**加强**上一轮三条:① 成交量机器惰性 —— 不只是「权重比不乘还差」,是**整棵子树删了不掉**;
+② 平滑是唯一真实的杠杆且 **100% 是省成本**;③ 相对已知族无增量。
+另给两条**新的**:④ 它与已知族**工作方式不同**(它是流动段内选股,已知族是段位倾斜);
+⑤ 冻结盘口段(6.5%)段内 **+19.2%** 而已知族 **−10.9%**,书对该段几乎不超配 ⇒ **未被利用的信息**。
 
-(…全文 7804 字符,读 `notes/F110_ret_fair_log/state.md`)
+(…全文 6243 字符,读 `notes/F110_ret_fair_log/state.md`)
 
 ## 研究日志(`notes/F110_ret_fair_log/journal.md`:23 条,其中研究员自己写的 12 条)
 
@@ -139,7 +138,7 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 
 ## 已写的 notes(`notes/F110_ret_fair_log/`)
 
-`01_expression.md`(1K)、`02_operators.md`(4K)、`03_decomposition.md`(3K)、`04_grammar.md`(2K)、`05_hypotheses.md`(24K)、`06_baseline.md`(4K)、`07_S1_long.md`(8K)、`07x_01_x1_anatomy.md`(14K)、`07x_02_x2_GHI.md`(8K)、`08_variants.md`(5K)、`09_diagnosis.md`(12K)、`10_distilled.md`(19K)、`11_risks.md`(7K)、`12_next.md`(6K)、`journal.md`(38K)、`state.md`(12K)、`synthesis.md`(12K)
+`01_expression.md`(1K)、`02_operators.md`(4K)、`03_decomposition.md`(3K)、`04_grammar.md`(2K)、`05_hypotheses.md`(24K)、`06_baseline.md`(4K)、`07_S1_long.md`(8K)、`07x_01_x1_anatomy.md`(14K)、`07x_02_x2_GHI.md`(8K)、`08_variants.md`(5K)、`09_diagnosis.md`(12K)、`10_distilled.md`(19K)、`11_risks.md`(7K)、`12_next.md`(6K)、`journal.md`(38K)、`state.md`(9K)、`synthesis.md`(12K)
 
 ## 自写的探针与分析脚本(`studies/F110_ret_fair_log/`)
 
@@ -148,4 +147,4 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 
 ## 结构化结果(`handoff/F110_ret_fair_log/results/`)
 
-(还没有)
+- `synthesis.json`

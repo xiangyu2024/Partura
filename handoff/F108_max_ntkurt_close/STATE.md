@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-05 10:58(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-05 10:58(`python scripts/recorder.py --brief F108_max_n
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F108_max_ntkurt_close#1`:已返回结果,最后动作 10-04 23:21 → `handoff/F108_max_ntkurt_close/agents/lead_R1_ade0d96923df1e821.md`
   - `work:F108_max_ntkurt_close#1`:已返回结果,最后动作 10-05 00:02 → `handoff/F108_max_ntkurt_close/agents/work_R1_af1297d4e49a82489.md`
   - `lead:F108_max_ntkurt_close#2`:中断,最后动作 10-05 00:20 → `handoff/F108_max_ntkurt_close/agents/lead_R2_a7c78c9c449a0151b.md`
+  - `synth:F108_max_ntkurt_close`:已返回结果,最后动作 10-05 11:00 → `handoff/F108_max_ntkurt_close/agents/synth_a3d74598652f5a146.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F108_max_ntkurt_close` 看服务器上的 tag,`./scripts/study.sh digest F108_max_ntkurt_close <tag>` 重看结果)。
 
@@ -220,4 +220,4 @@ R2 的三个疑点现在都有数字了:
 
 ## 结构化结果(`handoff/F108_max_ntkurt_close/results/`)
 
-(还没有)
+- `synthesis.json`

@@ -1,0 +1,60 @@
+# F103_amt_dw_decay —— 第二批假设(主研,2026-10-05,读完批量扫描 s1 大表 + 市场解剖之后)
+# 判断与数字全在 notes/F103_amt_dw_decay/synthesis.md,这里每条只写它在检验哪一节。
+# 记号:A = day_close(Amt)(当日最后一分钟成交额);C = day_durbin_watson(cross_decay_linear(Amt, 30));
+#       K = cross_mean(day_std(Amt), 30)(已知族,tr/va/ut +12.6/+22.3/+15.4%,Lshp 1.78/3.46/2.22);
+#       LIQ = cross_mean(day_sum(Amt), 30);AGE = cross_valid_count(day_last(Close), 241);FRZ = cross_max(day_zero_ratio(Ret), 15)
+#
+# 大表的四条硬结论决定这一批往哪儿打:
+#  (甲) ts_min(.,1) 是恒等式(abl_E 与 v_base 逐列相同);树里真正做事的只有 A × C^3,外层 cross_max(.,5) 也近似恒等(iso_F ut +8.5% 对 base +8.1%)。
+#  (乙) 指数阶梯与 ρk 单调同向:pow_05(ρk .90)ut +13.7% → pow_1(.84)+12.8% → pow_1.5(.73)+11.4% → pow_2(.59)+10.0% → pow_2.5(.46)+8.8% → pow_3(.34)+8.1%。
+#       「留下多少已知成交额族」= 表现。res_known(对 K 取残差)valid −2.1% / Lshp −0.27 ⇒ 正交部分样本外一文不值。
+#  (丙) C 这条腿单独跑是死的(iso_E / only_F_R:valid −18.6% / −17.8%,ut Lshp +0.05 / +0.04);全部的钱在 day_close(Amt) 这个叶子上(iso_A ut +13.4%)。
+#  (丁) 解剖里 C 唯一真正发力的地方是「上市不足 250 日」段:段内 pow_05 −2.7% < pow_1 +4.1% < pow_1.5 +15.0% < pow_2 +19.1% < pow_3 +25.3%(与指数单调同向,
+#       方向与全市场完全相反),而该段只占 7.1%、段等权超额 −28.7%,所以进不了全市场的书。另外两块没被任何变体用上的大钱:
+#       「近 15 日有冻结盘口」段等权 −67.4%(占 6.5%),以及原式在成交额最高两档的段内 +9.6% / +17.2%(K 在那里只有 −5.2% / +2.5%)。
+
+# ---- A. C 读的到底是什么:按定义换成「正确」的读数(C 的分母是 Σx² 不是 Σ(x−x̄)²,它不是 DW,是尖峰占比)
+h_C_relstd: {expr: "cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5)", why: "C ≈ var(Δx)/(mean²+var) 是「相对抖动」的粗糙写法;这一条把它换成真正的逐分钟相对变化率的 std。若打平,C 的名字可以彻底扔掉;若更好,树里那一层只是写错了的相对抖动"}
+h_C_rellog: {expr: "cross_max(mul(day_close(Amt), day_std(in_logchg(cross_decay_linear(Amt, 30), 1))), 5)", why: "同上的对数版:成交额成倍跳,in_pct 右尾无界。若 log 版明显好于 h_C_relstd,说明 C 的预测力里有一部分只是右尾未被压住"}
+h_C_peakshare: {expr: "cross_max(mul(day_close(Amt), div(day_max(cross_decay_linear(Amt, 30)), day_mean(cross_decay_linear(Amt, 30)))), 5)", why: "前期研究说 C 九成是「开盘第一分钟成交占比」。峰值 ÷ 均值是最直接的尖峰占比读数,只有 2 个算子。若它 ≥ abl_D(ut +12.8% / 2.11),C 那一层整个可以换掉"}
+h_C_gini1: {expr: "cross_max(mul(day_close(Amt), day_gini(cross_decay_linear(Amt, 30))), 5)", why: "表里 sub_C_day_gini 是带 pow_3 的(ut +12.2% / 1.98),一次方没测过。gini 有界、不被一根线主导,是 C 的无尺度对手假设"}
+h_C_centroid: {expr: "cross_max(mul(day_close(Amt), day_centroid(cross_decay_linear(Amt, 30))), 5)", why: "C / gini / kurt 都与分钟顺序无关。day_centroid 读「成交发生在一天的什么位置」,是这棵树里完全没有过的那一维信息(开盘堆量 vs 尾盘堆量)"}
+h_C_zs60: {expr: "cross_max(mul(day_close(Amt), cross_zscore(day_durbin_watson(cross_decay_linear(Amt, 30)), 60)), 5)", why: "C 有很强的持久截面水平(永远尖的票 vs 永远平的票)。换成「这只票今天比自己近 60 日异常多少」:若乘数的价值是截面水平,这一条塌;若是异常,这一条赢"}
+h_C_leaf_ret: {expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_decay_linear(Ret, 30))), 5)", why: "最小子结构互换(用户提示):C 的叶子 Amt 换成 Ret,读 30 日平均分钟收益曲线的抖动。C 若是「成交形状」而非「波动形状」,这一条应该和 abl_D 很不一样"}
+h_C_leaf_vol: {expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_decay_linear(Volume, 30))), 5)", why: "表里 leaf_Amt_vol 两条腿一起换(valid −7.4%)、fld_Amt_Volume 只换 A 腿(valid −7.2%);只换 C 腿没测过。分离「价格水平进了哪条腿」"}
+h_C_ema10: {expr: "cross_max(mul(day_close(Amt), day_durbin_watson(cross_ema(Amt, 10))), 5)", why: "B 槽只测过 decay_linear(30/60)与 cross_max(30)。EMA 没有硬窗口、旧尖峰淡出而不是突然掉出;abl_B(完全不平滑)ut −3.3% 说明这一槽承重,平滑方式值得单独扫一次"}
+h_C_nosmooth_gini: {expr: "cross_max(mul(day_close(Amt), cross_mean(day_gini(Amt), 30)), 5)", why: "顺序对调:先逐日读形状、再按日平滑(现在是先按日平滑分钟曲线、再读形状)。abl_B 删的是整个平滑,这两种顺序从来没有并排比过 —— 它决定 C 读的是「典型形状」还是「形状的稳定性」"}
+
+# ---- B. C 的信息是不是只在次新(丁:段内随指数单调 −2.7% → +25.3%,是全表最强的分段效应)
+h_age_only: {expr: "cross_valid_count(day_last(Close), 241)", why: "定价这一段值多少的基准:上市不足 250 日的段等权超额 −28.7%,占 7.1%。单独做成因子(做多老票)应当 ut 为正;若它就有 +4~6%,后面所有「剔除次新」的叠加都要扣掉它"}
+h_base_bk_age: {expr: "cs_bucket_rank(cross_max(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5), cross_valid_count(day_last(Close), 241))", why: "上市年龄桶内中性化原式。若(丁)成立 —— 原式相对 abl_D 的那点东西全在次新段 —— 这一条应当掉到 abl_D 的桶内版(h_abl_bk_age)附近甚至之下"}
+h_abl_bk_age: {expr: "cs_bucket_rank(cross_max(mul(day_close(Amt), day_durbin_watson(cross_decay_linear(Amt, 30))), 5), cross_valid_count(day_last(Close), 241))", why: "上一条的对照组(指数 1)。两条之差 = 「pow_3 买到的次新分辨力」在年龄中性之后还剩多少,这是(丁)唯一干净的判据"}
+h_K_bk_age: {expr: "cs_bucket_rank(cross_mean(day_std(Amt), 30), cross_valid_count(day_last(Close), 241))", why: "已知族的年龄中性版。K 的书在次新段只低配 0.9pp 而该段 −28.7%,所以 K 很可能在这一维上白白漏钱;若中性版 ≥ K,这是 K 的一个免费升级"}
+h_K_ex_new: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_valid_count(day_last(Close), 241)))", why: "比中性化更直接:K 的排序不动,只把上市最晚的 20% 压到书底永不买入。y 已用 neg 定向(高 = 想买)。检验「躲开次新」是不是一个比任何形状算子都便宜的增量"}
+h_base_ex_new: {expr: "cs_last_high20(neg(cross_max(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)), neg(cross_valid_count(day_last(Close), 241)))", why: "同一道剔除加在原式上。若原式的 C 腿本来就在做这件事,这一条相对原式的提升应当远小于 h_K_ex_new 相对 K 的提升 —— 这是(丁)的第二个判据"}
+
+# ---- C. 冻结盘口(解剖里最大的一块钱:6.5% 的段、段等权 −67.4%,原式是全表低配最多的变体 −4.5pp,但没有任何变体显式写出它)
+h_frz_only: {expr: "neg(cross_max(day_zero_ratio(Ret), 15))", why: "基准:单纯「近 15 日有没有零收益分钟」值多少。day_zero_ratio(Ret) 直接量封板 / 停牌 / 无成交的分钟,比 flat_ratio 干净(不会把「两分钟涨幅相同」算进去)"}
+h_frzrun_only: {expr: "neg(cross_mean(day_flat_run_max(Ret), 15))", why: "同一段的另一种读法:最长连续不动段(一字板)而不是占比(薄盘票零散不动)。两条之差告诉我们 −67.4% 是封板带来的还是流动性枯竭带来的"}
+h_K_ex_frz: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "已知族 + 冻结盘口剔除器。K 在该段只低配 2.9pp;把这 6.5% 完全剔掉在粗算上值 +4%/年 —— 这是本批最可能直接超过 K 的一条"}
+h_K_ex_frzrun: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_flat_run_max(Ret), 15))", why: "上一条换筛子。两条并排 = 「用哪个状态量当剔除名单」的对照;若 run_max 明显更好,剔的是一字板而不是清淡票"}
+h_base_ex_frz: {expr: "cs_last_high20(neg(cross_max(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)), cross_max(day_zero_ratio(Ret), 15))", why: "原式在冻结段是唯一段内不亏的变体(+0.5%,K 是 −10.9%)。若把筛子显式写出来之后原式不再比 abl_D / iso_A 好,C 腿做的就只是「躲冻结票」这一件事"}
+h_C_as_frz: {expr: "cross_max(mul(day_close(Amt), cross_mean(day_zero_ratio(Ret), 30)), 5)", why: "把 C 整条换成冻结度:同样的树形、同样的 A 腿,乘数改成「近 30 日零收益分钟占比」。若它复制出原式在次新段 / 冻结段的行为,C 读的就是这个状态而不是成交形状"}
+h_K_ex_both: {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cross_valid_count(day_last(Close), 241)))", why: "两道剔除叠加(冻结 + 次新)。两段是解剖里段等权超额最低的两段(−67.4% / −28.7%)且几乎不重叠;检验增量是否可加"}
+
+# ---- D. 「流动的一半里按成交额收缩选股」—— 解剖里原式唯一真正的增量(成交额最高两档段内 +9.6% / +17.2%,K 只有 −5.2% / +2.5%)
+h_contract20: {expr: "div(day_sum(Amt), cross_mean(day_sum(Amt), 20))", why: "对上述段内效应的机制猜测:成交额桶是按 20 日均分的,桶内挑「当前成交额最低」= 挑近期缩量的票。把这个机制直接写出来,看它离开原式还在不在"}
+h_contract_z20: {expr: "cross_zscore(day_sum(Amt), 20)", why: "同一机制的 z 分数写法(除以自身波动而不是只除水平)。两条之差 = 「缩量幅度」该不该按这只票平时的成交波动标准化"}
+h_liq40_base: {expr: "cs_first_high40(neg(cross_max(mul(day_close(Amt), pow_3(day_durbin_watson(cross_decay_linear(Amt, 30)))), 5)), cross_mean(day_sum(Amt), 30))", why: "把「只在流动性最高 40% 里建书」写进表达式。解剖说原式的选股力在那里(+17.2%),亏钱在清淡档(−6.4%);但该段段等权 −17.8%,所以这一条是在问「分辨力值不值得放弃流动性溢价」"}
+h_liq40_amt: {expr: "cs_first_high40(neg(day_sum(Amt)), cross_mean(day_sum(Amt), 30))", why: "上一条的对照:同样只在流动 40% 里做,但把 C 腿全删掉。若两条打平,流动半边的那点分辨力也不是 C 贡献的,是成交额水平本身"}
+h_liq40_contract: {expr: "cs_first_high40(neg(cross_zscore(day_sum(Amt), 20)), cross_mean(day_sum(Amt), 30))", why: "缩量信号 + 流动半边。解剖说它在清淡档是负的(那里的日成交额多半是最小变动价位噪声),所以机制若成立,限定到流动半边应当比 h_contract_z20 全市场版明显好"}
+h_bk_liq_abl: {expr: "cs_bucket_rank(cross_max(mul(day_close(Amt), day_durbin_watson(cross_decay_linear(Amt, 30))), 5), cross_mean(day_sum(Amt), 30))", why: "表里 bk_liq 只测过带 pow_3 的版本(valid −1.4%,dist 0.20 ✗ 直接出局);指数阶梯说 pow_1 才是好的那一档,流动性桶内版没测过"}
+h_bk_liq_contract: {expr: "cs_bucket_rank(cross_zscore(day_sum(Amt), 20), cross_mean(day_sum(Amt), 30))", why: "缩量信号的流动性桶内版:保留 K 的流动性倾斜(由它自己提供),只把缩量当桶内精选器。这是「原式的增量 + 已知族的倾斜」最干净的组合写法"}
+
+# ---- E. 已知族自己的升级(新算子让它能做原来做不了的事;ρk 阶梯说这才是能提高净超额的方向)
+h_K_winsor_ema30: {expr: "cross_ema(cs_winsor(day_std(Amt)), 30)", why: "new_operators.md 里 F103 的教训:重尾量直接平滑是「峰值记忆」,缩尾后才是「水平」。K 用的是硬窗 30 日均;缩尾 + EMA 两处都改,检验 K 的记忆口径还有没有免费的分"}
+h_K_tail_q25: {expr: "cross_tail_mean_q25(day_std(Amt), 30)", why: "把 K 的均值换成「这只票安静的日子有多安静」。若 K 的预测力来自常态水平,这一条应当 ≥ K;若来自偶尔的放量日,应当塌"}
+h_K_tail_q75: {expr: "cross_tail_mean_q75(day_std(Amt), 30)", why: "上一条的另一条尾巴(忙的日子)。两条并排把「用哪条尾巴」和「估得吵不吵」分开 —— 这是 cross_tail_mean 系列加进算子库的本来用途"}
+h_K_wmean_ret: {expr: "cross_mean(day_wmean(Ret, Amt), 30)", why: "大胆的一条:与成交额水平族机制完全不同的量 —— 资金实际经历的日内收益(day_mean 把没成交的分钟和放量的分钟等权)。年份表说原式与 K 的好年份几乎反相,需要一个真正低相关的候选来占那个位置"}
+h_K_signed: {expr: "cross_mean(day_signed_ratio(Ret, Amt), 30)", why: "同上:上涨分钟成交额占比 − 下跌分钟占比的 30 日均,不需要逐笔数据的净买入代理。它与 Amt 的水平正交(有界 [−1,1]),是本批里唯一一条不含成交额水平的候选"}
+h_K_plus_C: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(neg(day_durbin_watson(cross_decay_linear(Amt, 30)))), 0.1))", why: "表里的 overlay 叠的是整条原式(含 A 腿,与 K 高度重合,ρk 0.83~0.98,净超额反而降 3 点)。这一条只叠 C 腿本身(ρk −0.46):若年份反相是真的,低权重叠加才是正确的用法"}

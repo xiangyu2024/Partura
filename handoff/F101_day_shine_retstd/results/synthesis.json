@@ -1,0 +1,106 @@
+{
+ "factor_id": "F101_day_shine_retstd",
+ "what_it_is": "逐层:A=in_slice(Volume,2,237)(两端都含,241格取236,去掉开盘2格+收盘集合竞价3格);Δ_j=v_j−v_{j−1}(in_delay第一格NaN⇒j=0永不触发);阈值θ=mean_全天(Δ)+std_全天(Δ),而mean(Δ)=(v_235−v_0)/235≈0⇒θ实际就是1σ(Δ);掩码G=1{Δ_j>θ};in_sustain_stddev在每个G==1.0的分钟写出σ_j=总体std(r_j…r_{j+4})(窗口含触发分钟自己、朝后看、跑出行尾截短,其余分钟NaN);J=对触发点的nanmean(等权,与触发次数无关,T空则NaN);K=J−当天全市场J的均值;因子=|K|,sg=−1(多头=|K|最小)。名字骗人三处:(1)sustain不是\"持续\"而是\"从触发点往后取一段\",注册表给in_sustain_stddev打的boolean_output标签是错的(它输出连续std,真掩码是第一个操作数);(2)\"放量\"指相邻两分钟的增量超过当天自己的1σ,不是\"这分钟量大\",阈值按每票自己的σ定⇒掩码不带成交额尺度,每票每天约触发20次;(3)abs_单独是no-op(J是std≥0),abl_K(只去cs_demean)与iso_J(两个都去)逐位相同(−6.8%/+2.1%,Lshp−0.81/+0.28),abs_唯一作用是与cs_demean配成\"在当天截面均值处的V形折叠\";折叠中心也不是\"中间\",截面均值落在J的第65.6百分位。另:abl_G(删is_gt)的掩码实为\"Δ恰好等于1\"(内核只认mask==1.0),是个近乎任意的分钟采样器。",
+ "load_bearing": [
+  "截面V形折叠abs_(cs_demean(·))必须成对:abl_K≡iso_J逐位相同证明abs_单独无效;单调版iso_K/iso_J/sub_L_neg的Lshp(ut)全在−0.49~−0.52、Lnet(tr)−6.5~−6.8%",
+  "被测量必须是日内收益的离散度:换in_corr/in_cov/in_r2→Lshp(ut)−1.07/−0.19/−1.14;abl_I(删in_sustain_stddev,根变0/1掩码)dist 0.01✗、−1.43",
+  "day_mean必须是全天平均的水平:换day_first/day_last/day_close→−0.12~−0.16;换day_skew/day_gini→−0.14/−0.93(必须是尺度不是形状)",
+  "折叠中心必须是当天截面均值:cs_demean→cs_normalize仍1.35(只改缩放),→cs_mean/cs_stddev_full/cs_quantile_q25全部dist 0.00退化",
+  "持久的截面水平:cross_zscore去掉水平后是全表最差(mem_zscore5/10 = −6.23/−4.17),信息不在日间变化里",
+  "长半衰期:稠密族一律选到网格上限hl=20(边界解),LTO从base的10.4%降到5.2%;rk(先cs_rank再EMA)单独值+0.47 Lshp"
+ ],
+ "redundant": [
+  "整台放量触发机器(B in_delay/C sub/D in_mean_full/E in_stddev_full/F add/G is_gt):不只多余,它就是样本外失效的那部分。阈值退化成≈0或掩码放稠密后valid从−1.6%跳到+8.9~+11.6%、Lshp(ut)1.37→2.4~2.7、LTO 10.4%→5.2%、最优hl 10→20(abl_F/sub_F_div/sub_F_sub/sub_E_in_kurt_full/nosc_E_in_skew_full/sub_C_mul/fld_Volume_Amt/abl_G八条互相逐位接近)",
+  "阈值里的μ+σ结构:任何量纲不匹配的小正数都等价(in_kurt_full/in_skew_full代入→2.45/2.42,比base的1.37好),因为它们相对Δ的尺度≈0",
+  "5分钟这个窗口:win_I 3/5/10/15→Lshp(ut)1.20/1.37/1.85/2.03单调上升无峰,15分钟重叠窗口已接近全天收益std",
+  "Volume字段的身份:leaf_Volume_amt(触发字段换Amt)=1.40≈base 1.37;前研究也证实不用Volume的版本分不开",
+  "in_slice切片(前研究s2_roll5_noslice)、cs_winsor(win=1.43≈base,折叠后的量本来不重尾)",
+  "给稀疏base加日轴记忆:mem_mean/ema/decay_linear把train推到2.4~2.8但valid全在0.4~1.3——在日轴上平均一个坏的日内估计量救不回来"
+ ],
+ "swappable_leaves": [
+  "触发字段 Volume ↔ Amt:完全等价(leaf_Volume_amt 1.40 ≈ base 1.37)",
+  "被测字段 Ret ↔ in_pct(Volume,1) / in_pct(Amt,1):仍有效且valid更好(leaf_Ret_volchg/amtchg valid +8.0%/+8.0%、Lshp 1.47/1.57,base是−0.38)——用户'分钟收益与量的变化率是同一类东西'的提示在这棵树上成立",
+  "不能换的被测字段:in_pct(Close,5)(−0.16)、in_pct(Vwap,1)(+0.25)、in_logchg(Volume,1)(−0.01)都回到base的样本外毛病",
+  "阈值项 in_stddev_full ↔ in_kurt_full ↔ in_skew_full(都退化成≈0的阈值);in_delay(V,1) ↔ in_delta/in_pct/in_logchg(sub(V,in_delta(V,1))其实就是上一分钟的量)",
+  "窗口 5 ↔ 10 ↔ 15:越宽越好,不是互换而是单调改善"
+ ],
+ "where_it_works": [
+  "按流通市值:小票里最强却几乎不买——最低20%(段等权+6.4%)段内+16.9% S+2.96(v_base)/+16.5% S+2.74(fld_Volume_Amt),但tilt −13.5/−11.4(只放了书的6%);最高20%段内+1.2% S+0.20而tilt +18.9。k_known正相反(最低市值段tilt +30.8%)",
+  "按20日成交额:只在活跃的一头有分辨力——最低20%(段等权+15.1%)段内仅+0.7% S+0.15,却占了书的16%仓位;最高20%(段等权−17.8%)段内+20.5% S+2.00/+18.0% S+2.15",
+  "按板块:科创板是唯一失效区,段内−19.4% S−1.01(v_base还超配+2.2%)、稠密族−4.8~−15.8%;沪深主板+创业板段内+7.6~+12.2%",
+  "按价格:中间三档最好(+9.3~+12.9%),最低价档只有+2.3~+5.0%(最小变动价位把低价票的分钟收益量化了)",
+  "次新(上市不足250日,7.1%人头,段等权−28.7%):段内+13.8~+17.5%且tilt −5.7~−6.4,既躲开又能选,不用动",
+  "冻结盘口(近15日有封板/停牌,6.5%人头,段等权−67.4%):所有变体只放1.5%仓位;但段内只有v_base行(+27.5% S+2.07),稠密族是−6.5~+8.4%——这是触发机器唯一有用的地方,对多头腿贡献≈0"
+ ],
+ "when_it_works": [
+  "逐年:失效是base独有的,不是因子的。v_base 2018–2023 = +8.1/+12.4/+15.4/+1.6/+1.0/+2.0%;fld_Volume_Amt = +4.3/+13.0/+13.4/+9.4/+9.0/+8.8%;abl_F = +4.2/+11.2/+11.3/+10.4/+12.4/+7.8%。2021年之后只有稀疏触发版塌了",
+  "稠密族顺周期:放量日+13.6~+14.5% vs 缩量+5.9~+6.6%;截面离散度高+13.8~+14.3% vs 低+5.7%;市场近20日上涨+12.9~+14.1% vs 下跌+5.1~+5.9%",
+  "v_base反而逆周期(上涨+4.9%、下跌+10.2%),与稠密族正好相反——两者可以互补,但base那一侧的钱太少",
+  "市场波动高/低几乎无差(稠密族+9.8%/+9.8~9.3%),所以起作用的是截面离散度和成交量,不是市场波动本身"
+ ],
+ "why": "机制推断:折叠后的量=“这只票的日内收益离散度离当天全市场典型值有多远”,多头腿买“最典型”的那批。右尾(被躲开的)是投机性注意力集中的票——前研究实测空头十分位94~97%来自高侧、平均在换手率第80/20日波动第82百分位;左尾(也被躲开)几乎全是一字板/准停牌(J==0占0.47%,剔除后低侧只是浅坡)。所以它本质是**投机溢价的反向暴露 + 冻结盘口的排除**,不是“中庸”。这解释了三件事:(a) 为什么只在有投机的时段赚钱(放量日、截面离散度高的日子是缩量/低离散的两倍以上);(b) 为什么在20日成交额最高段段内+20.5%而该段等权−17.8%(那里才有投机溢价可躲),在最低段段内+0.15夏普(清淡票的日内std主要是最小变动价位噪声和零成交分钟,不是信息);(c) 为什么书被推进大票——折叠中心是全市场均值,而小票的日内波动系统性高于大票,“离全市场均值最近”就等于“选大票”,科创板因20%涨跌幅使板内分布整体右移而被整体错判(段内−19.4%)。2021年后稀疏版失效的推断:VWAP/TWAP切单与量化成交占比上升,分钟量的“跳升”越来越多来自算法切片而非事件,Δ>1σ选出的分钟从信息时刻退化成噪声子样本;稠密版测的是全天波动水平,不受影响。可检验推论已写进第二批:成交额加权的|Ret|(h_wmean_absret)应修好最低成交额段的零分辨力;按价格/成交额分桶做折叠(h_rv_fold_bk_price/bk_amt241)应让科创板段内由负转正、把书放回小票;每票每天的触发数及其截面离散度在2021后应有结构变化。",
+ "adds_over_known_family": "相关性上是两回事(整族ρk只有+0.14~+0.18;res_known仍有+10.2%/+3.4%、Lshp 2.37/0.81),结构上也互补:k_known几乎没有段内分辨力(20日成交额五段段内−4.1/−5.3/−8.2/−5.2/+2.5%),它靠的是tilt(最低成交额段+80.3%、最低市值段+30.8%),是个纯粹的规模/流动性溢价收割器;F101族相反,tilt温和但在每个市值桶、每个价格桶里都有分辨力(S+0.8~+2.8)。**但增量没有被坐实**:ov_p10/p05/p025的utrain净超额+15.4/+15.5/+15.4%对已知族的+15.4%完全打平,夏普2.42/2.33/2.27对2.22(+0.20在±0.3噪声内),valid净超额反而被拖低(18.5/20.9/20.7对22.3);负权重更差(ov_m10=0.18)。关键空白:这三条overlay叠的是已经失效的v_base,不是稠密族。当前最诚实的结论——按净超额任何单体都打不过已知族(最好9.7%对15.4%),按纯多头夏普fld_Volume_Amt 2.68>2.22(差0.46>噪声),即“更稳但更小”;**作为独立因子对用户没有增量**,唯一还活着的用法是“桶内选股器叠在已知族的tilt上”,第二批D组(h_ov_k_rv_05/10、h_ov_k_fldamt_05、h_res_k_rv、h_bk_k_rv)就是去判这一条。",
+ "best_variants": [
+  {
+   "id": "fld_Volume_Amt",
+   "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+   "note": "表内最好单体:Lnet +10.0/+8.9/+9.7%,Lshp 2.71/2.59/2.68(base 1.96/−0.38/1.37),LTO 5.6%,hl 20,ρo 0.72、ρk 0.16,逐年2019后都≥+7.8%。它的掩码其实是混单位比较(Amt减上一分钟的股数),效果等于'这一分钟有成交额'——机制上应写成h_gate_amt_above_mean或干脆h_rv_fold"
+  },
+  {
+   "id": "sub_C_mul",
+   "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(mul(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))",
+   "note": "valid最好:+11.6%、Lshp 3.10;掩码v_t·v_{t−1}>θ≈'全部有成交的分钟'。与abl_F一族(阈值退化成0)在误差内不可分,说明掩码的具体写法无关紧要"
+  },
+  {
+   "id": "abl_F",
+   "expr": "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)))), in_slice(Ret, 2, 237), 5))))",
+   "note": "稠密族最干净的写法(阈值=mean(Δ)≈0⇒Δ>0,约一半分钟):+9.3/+10.6/+9.7%、Lshp 2.29/2.83/2.44。逐年2021-2023 = +10.4/+12.4/+7.8%,正是base塌掉的那三年"
+  },
+  {
+   "id": "ov_p10",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))), 1.0))",
+   "note": "叠在已知族上:+14.1/+18.5/+15.4%、Lshp 2.16/3.15/2.42。utrain净超额与已知族完全打平、夏普+0.20在噪声内 ⇒ 现有证据下不算增量;但它叠的是失效的v_base,第二批用稠密核重做才是真检验"
+  },
+  {
+   "id": "h_rv_fold(提案,未回测)",
+   "expr": "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))",
+   "note": "按s1三条结论推出的最小结构:3个算子。判据=Lshp(ut)≥2.68且valid≥+8%。必须同时跑单调对手h_rv_mono_mean30 = cross_mean(day_std(in_slice(Ret,2,237)),30)——若对手一样好,这条因子就只是'已知的波动暴露',研究应收口"
+  }
+ ],
+ "hypotheses_written": 40,
+ "new_operator_requests": [
+  {
+   "name": "cs_bucket_demean(y, x)",
+   "definition": "截面轴S,逐日:按x的秩分十桶(bx = ceil(pct_rank(x)*10),同cs_bucket_rank);输出 y − (该桶内y的nanmean)。y或x缺失处NaN;桶内有限样本<2时输出NaN。",
+   "why": "**直接要用**。整条因子的承重件是'离截面均值的距离',而解剖证明这个中心取的是全市场均值,正是书被推进大票(小票段内S+2.96却只放6%仓位)和科创板整体错判(段内−19.4%)的原因。桶内折叠 abs_(cs_bucket_demean(RV, 成交额代理)) 是修这一条的最自然写法。现在只能用cs_bucket_rank近似,但它把幅度信息全扔掉,而且必然撞dist门槛。"
+  },
+  {
+   "name": "cs_bucket_zscore(y, x)",
+   "definition": "同cs_bucket_demean,但再除以桶内的总体std + EPS:(y − mean_bucket(y)) / (std_bucket(y) + 1e-12)。",
+   "why": "**缺了可惜**。各流动性/规模桶的日内波动水平相差2~3倍,桶内去均值后距离的量纲仍不可比,折叠出来的|距离|会被高波动桶主导。有了它,abs_(cs_bucket_zscore(RV, proxy))才是真正'每个桶里同样口径'的典型性度量。"
+  },
+  {
+   "name": "day_wstd(x, w)",
+   "definition": "分钟轴M:m = Σ|w|x/Σ|w|;输出 sqrt(Σ|w|(x−m)²/Σ|w|)。x与w都有限的分钟才计入;Σ|w|=0时NaN。即已有day_wmean的二阶版本。",
+   "why": "**直接要用**。这条因子测的就是一个日内离散度,而day_std把零成交分钟和放量分钟等权——这正是'20日成交额最低20%段内夏普只有+0.15'的怀疑原因(清淡票的std是最小变动价位噪声)。day_wstd(Ret, Amt)=资金真正经历的波动,是本批最关键的机制检验,现在只能用day_wmean(abs_(Ret), Amt)这个一阶近似代替。"
+  },
+  {
+   "name": "day_trimmed_std(x, q)",
+   "definition": "分钟轴M:先按|x|排序剔除最大的q比例分钟(q为字面量,如0.05),对剩下的分钟算总体std;有效分钟<3时NaN。",
+   "why": "**能算出很不一样的东西**。前研究实测收益对J的剖面是'一块平台加高侧悬崖',而悬崖由极少数分钟驱动。截尾离散度能把'这只票持续地抖'与'某一分钟炸了'分开——两者的持有期含义完全不同(前者是投机属性,后者是一次性事件)。现有算子只有day_quantile/day_max,没有任何截尾矩。"
+  },
+  {
+   "name": "day_flat_run_max(x)",
+   "definition": "分钟轴M:当天'与上一分钟相等'的最长连续段长度,归一到[0,1](除以当天有限分钟数)。首分钟不计;全NaN行NaN。",
+   "why": "**能算出很不一样的东西**。day_flat_ratio只给占比,区分不了'一字板(一段很长的冻结)'和'清淡票(零散的平盘分钟)',而这两类在标签上完全相反(冻结盘口段等权−67.4%,清淡段等权+15.1%)。折叠的低波动侧现在把它们混在一起;有了游程长度就能把一字板单独筛掉(配cs_last_high20),这正是第二批B组'用机制替掉折叠'要做的事。"
+  }
+ ],
+ "tooling_problems": [
+  "cs_bucket_rank在根上必然触发dist≥0.5门槛(bk_liq/bk_known都是dist 0.20✗被作废):distinct_fraction数的是取值个数,而十个桶各自输出(0,1]的百分位,跨桶大量重合⇒机械低。建议把distinct_fraction改成按日排名后的离散度;第二批里只能用'加0.001·cs_rank打破并列'(h_rv_fold_bk_amt20_tie)绕过去。",
+  "ablate类变体在触发型算子上会产生语义意外,扫描表没有标出来:abl_G删掉is_gt后掩码变成'Δ恰好等于1'(内核只认mask==1.0)——它不是'没有掩码',而是任意采样;abl_I删掉in_sustain_stddev后根直接变成0/1掩码(dist 0.01);abl_A/abl_H因分钟轴宽度236 vs 241直接报错失败。前两条很容易被读成'删节点有用'。",
+  "半衰期网格{0,1,2,3,5,10,20}的上限20对这一族是边界解(所有稠密变体都选到20),所以'再长会不会更好'在表里无法回答,只能靠在表达式里写cross_ema/cross_mean绕开。",
+  "sweep表的expr列被截断(约120字符),同一族的变体在表里看起来一模一样;必须去runs/<fid>/sweep_s1.json里取完整表达式才能读懂改了什么——建议表里打印diff而不是前缀。",
+  "内置探针对触发型算子(in_sustain_*)是空读数(喂随机浮点数时mask==1永不成立),注册表还给它打了错误的boolean_output/trivial_boolean标签;decompose的结构角色栏因此把它标成'事件判定(0/1掩码)'。",
+  "表达式里没有市值字段(只有Open/High/Low/Close/Vwap/Volume/Amt/Ret),而解剖里最大的落差恰好在流通市值轴上(小票段内S+2.96、tilt−13.5)。成交额是个坏代理:20日成交额最低段与流通市值最低段给出相反的答案。建议补一个流通市值/流通股本字段,否则'按规模分桶'只能用241日平均成交额硬凑。"
+ ]
+}

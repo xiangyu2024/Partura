@@ -391,11 +391,335 @@ def in_madz(x: torch.Tensor, d: int) -> torch.Tensor:
     return torch.where(full & (mad > 0) & torch.isfinite(x), z, torch.full_like(x, NAN))
 
 
+# ----------------------------------------------------------------------------- third batch: asked for by several studies
+
+def _buckets(x: torch.Tensor, ok: torch.Tensor) -> torch.Tensor:
+    return torch.ceil(_pct_rank(x, ok) * 10.0).clamp(1, 10)
+
+
+@op("nd", "cs", arity=2)
+def cs_bucket_demean(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """``y`` minus the mean of ``y`` over the stocks in the same decile of ``x`` that day.
+    Keeps y's units and magnitude (``cs_bucket_rank`` throws them away), so a fold
+    ``abs_(cs_bucket_demean(y, x))`` measures 'distance from what is typical FOR ITS OWN
+    x-bucket' instead of from the whole-market mean.  NaN where either is missing or the
+    bucket has fewer than 2 names.  (Requested by F101, F107, F110.)"""
+    y, x = _f(y), _f(x)
+    ok = torch.isfinite(y) & torch.isfinite(x)
+    bx = _buckets(x, ok)
+    out = torch.full_like(y, NAN)
+    for b in range(1, 11):
+        m = ok & (bx == b)
+        n = m.sum(-1, keepdim=True)
+        mu = torch.where(m, y, torch.zeros_like(y)).sum(-1, keepdim=True) / n.clamp(min=1).to(y.dtype)
+        out = torch.where(m & (n >= 2), y - mu, out)
+    return out
+
+
+@op("nd", "cs", arity=2)
+def cs_bucket_zscore(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_bucket_demean`` but divided by the bucket's own population std (+EPS):
+    comparable across buckets whose dispersion differs severalfold.  (F101, F106.)"""
+    y, x = _f(y), _f(x)
+    ok = torch.isfinite(y) & torch.isfinite(x)
+    bx = _buckets(x, ok)
+    out = torch.full_like(y, NAN)
+    for b in range(1, 11):
+        m = ok & (bx == b)
+        n = m.sum(-1, keepdim=True)
+        nf = n.clamp(min=1).to(y.dtype)
+        mu = torch.where(m, y, torch.zeros_like(y)).sum(-1, keepdim=True) / nf
+        var = torch.where(m, (y - mu) ** 2, torch.zeros_like(y)).sum(-1, keepdim=True) / nf
+        out = torch.where(m & (n >= 2), (y - mu) / (torch.sqrt(var) + EPS), out)
+    return out
+
+
+@op("nd", "cs", arity=1)
+def cs_robust_z(x: torch.Tensor) -> torch.Tensor:
+    """Cross-sectional robust z-score: ``(x - median) / (1.4826 * MAD + EPS)`` per day."""
+    x = _f(x)
+    med = torch.nanmedian(x, dim=-1, keepdim=True).values
+    mad = torch.nanmedian((x - med).abs(), dim=-1, keepdim=True).values
+    return (x - med) / (1.4826 * mad + EPS)
+
+
+@op("nd", "cs", arity=2)
+def cs_first_low20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_first_low40`` with the lowest 20% of ``x`` first."""
+    return _lexi(y, x, -1.0, 0.2, 1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_first_high20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_first_high40`` with the highest 20% of ``x`` first."""
+    return _lexi(y, x, 0.8, 1.0, 1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_high40(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_high20`` with the highest 40% of ``x`` pushed to the bottom."""
+    return _lexi(y, x, 0.6, 1.0, -1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_low40(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_low20`` with the lowest 40% of ``x`` pushed to the bottom."""
+    return _lexi(y, x, -1.0, 0.4, -1.0)
+
+
+def _market_series(g: torch.Tensor) -> torch.Tensor:
+    """(days,) cross-sectional mean of a (days, stocks) panel."""
+    return torch.nanmean(_f(g), dim=-1)
+
+
+def _trailing_rank(m: torch.Tensor, d: int) -> torch.Tensor:
+    """Percentile of m[t] among the finite values of m[t-d+1..t], in (0, 1]; NaN where m[t] is."""
+    w = rolling_windows(m.unsqueeze(-1), int(d), 0).squeeze(1)           # (days, d)
+    ok = torch.isfinite(w)
+    n = ok.sum(-1)
+    le = (ok & (w <= m.unsqueeze(-1))).sum(-1)
+    return torch.where(torch.isfinite(m) & (n > 0), le.to(m.dtype) / n.clamp(min=1).to(m.dtype), torch.full_like(m, NAN))
+
+
+@op("nd", "ts", arity=1, requires_window=True)
+def cs_state_rank(x: torch.Tensor, d: int) -> torch.Tensor:
+    """A MARKET state, the same number for every stock on a day: take the day's
+    cross-sectional mean of ``x``, then its percentile within its own last ``d`` days
+    (in (0, 1]).  ``cs_state_rank(day_sum(Amt), 60)`` near 1 = the whole market is
+    trading heavily relative to the last quarter.
+
+    A per-day constant does nothing to a cross-sectional rank on its own; it becomes
+    useful as a weight between two signals, e.g. ``add(mul(s, a), mul(sub(1, s), b))``,
+    or as the condition of ``select_where``.  (F107, F112, F115 asked for a way to write
+    'only in this kind of market'.)"""
+    r = _trailing_rank(_market_series(x), d)
+    return r.unsqueeze(-1).expand_as(x).clone()
+
+
+@op("nd", "cs", arity=2)
+def cs_flip_by_state(y: torch.Tensor, g: torch.Tensor) -> torch.Tensor:
+    """``+rank(y)`` on days when the market-level state is HIGH and ``-rank(y)`` when it is
+    low: state = the day's cross-sectional mean of ``g`` compared with the median of that
+    series over the last 241 days; rank(y) is centred on 0 (percentile - 0.5).
+
+    The minimal way to say 'y works in one kind of market and reverses in the other'
+    inside an expression.  If y simply stops working in the other state, the flipped
+    version will be clearly WORSE than y -- which is itself the test.  (F104.)"""
+    y = _f(y)
+    m = _market_series(g)
+    hi = _trailing_rank(m, 241) > 0.5
+    ok = torch.isfinite(y)
+    r = _pct_rank(y, ok) - 0.5
+    sgn = torch.where(hi, torch.ones_like(m), -torch.ones_like(m)).unsqueeze(-1)
+    return torch.where(ok, r * sgn, torch.full_like(y, NAN))
+
+
+@op("dt", "day", arity=1)
+def day_at_max_ratio(x: torch.Tensor) -> torch.Tensor:
+    """Share of the day's finite minutes whose value equals the day's maximum.
+    On Close / High: time spent pinned at the day's high -- a limit-up lock reads near 1,
+    a normal day near 1/240.  (F106, F110: 'locked at the top' vs 'locked at the bottom'
+    are different events and ``day_flat_ratio`` cannot tell them apart.)"""
+    x = _f(x)
+    ok = torch.isfinite(x)
+    n = ok.sum(-1)
+    mx = torch.where(ok, x, torch.full_like(x, float("-inf"))).max(dim=-1, keepdim=True).values
+    r = ((x == mx) & ok).sum(-1).to(x.dtype) / n.clamp(min=1).to(x.dtype)
+    return _day(r, n > 1)
+
+
+@op("dt", "day", arity=1)
+def day_at_min_ratio(x: torch.Tensor) -> torch.Tensor:
+    """Share of the day's finite minutes whose value equals the day's minimum."""
+    x = _f(x)
+    ok = torch.isfinite(x)
+    n = ok.sum(-1)
+    mn = torch.where(ok, x, torch.full_like(x, float("inf"))).min(dim=-1, keepdim=True).values
+    r = ((x == mn) & ok).sum(-1).to(x.dtype) / n.clamp(min=1).to(x.dtype)
+    return _day(r, n > 1)
+
+
+@op("dt", "day", arity=1)
+def day_distinct_ratio(x: torch.Tensor) -> torch.Tensor:
+    """Number of DISTINCT values among the day's finite minutes, divided by their count:
+    1/n = one price all day, 1 = every minute different.  On a price: how many price
+    levels the day visited -- coarse for low-priced stocks on a one-tick grid.  (F107.)"""
+    x = _f(x)
+    ok = torch.isfinite(x)
+    n = ok.sum(-1)
+    v, _ = torch.sort(torch.where(ok, x, torch.full_like(x, float("inf"))), dim=-1)
+    new = (v[..., 1:] != v[..., :-1]) & torch.isfinite(v[..., 1:])
+    k = new.sum(-1) + (n > 0).to(new.sum(-1).dtype)
+    return _day(k.to(x.dtype) / n.clamp(min=1).to(x.dtype), n > 1)
+
+
+@op("dt", "day", arity=2)
+def day_wstd(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
+    """Weighted population std over the day's minutes: ``sqrt(sum(|w| (x - m)^2) / sum(|w|))``,
+    ``m = day_wmean(x, w)``.  ``day_wstd(Ret, Amt)``: volatility as the traded money saw
+    it; dead minutes (zero turnover, zero return) no longer dilute it.  (F101.)"""
+    x, w = _f(x), _f(w).abs()
+    ok = torch.isfinite(x) & torch.isfinite(w)
+    w0 = torch.where(ok, w, torch.zeros_like(w))
+    sw = w0.sum(-1)
+    m = (torch.where(ok, x, torch.zeros_like(x)) * w0).sum(-1) / sw.clamp(min=1e-30)
+    var = (w0 * torch.where(ok, (x - m.unsqueeze(-1)) ** 2, torch.zeros_like(x))).sum(-1) / sw.clamp(min=1e-30)
+    return _day(torch.sqrt(var), sw > 0)
+
+
+@op("dt", "day", arity=2)
+def day_topw_mean(y: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
+    """Mean of ``y`` over the 10% of the day's minutes with the largest ``|w|`` (ties
+    included): ``day_topw_mean(Ret, Volume)`` = the average return of the heaviest
+    minutes.  An event study in one node, without a trigger mask.  (F115.)"""
+    y, w = _f(y), _f(w).abs()
+    ok = torch.isfinite(y) & torch.isfinite(w)
+    thr = torch.nanquantile(torch.where(ok, w, torch.full_like(w, NAN)), 0.9, dim=-1, keepdim=True)
+    sel = ok & (w >= thr)
+    k = sel.sum(-1)
+    return _day(torch.where(sel, y, torch.zeros_like(y)).sum(-1) / k.clamp(min=1).to(y.dtype), k > 0)
+
+
+def _es_ratio(x: torch.Tensor, q: float, hi: bool) -> torch.Tensor:
+    x = _f(x)
+    ok = torch.isfinite(x)
+    v = torch.nanquantile(torch.where(ok, x, torch.full_like(x, NAN)), q, dim=-1, keepdim=True)
+    sel = ok & ((x > v) if hi else (x < v))
+    k = sel.sum(-1)
+    es = torch.where(sel, x, torch.zeros_like(x)).sum(-1) / k.clamp(min=1).to(x.dtype)
+    v = v.squeeze(-1)
+    good = (k > 0) & (v.abs() > 1e-8)
+    return _day(es / torch.where(good, v, torch.ones_like(v)), good)
+
+
+@op("dt", "day", arity=1)
+def day_es_ratio_hi(x: torch.Tensor) -> torch.Tensor:
+    """Right-tail shape: mean of the minutes ABOVE the day's 95% quantile, divided by that
+    quantile; **NaN** when the quantile is (near) zero or no minute exceeds it.
+    The hand-written ``erm_*`` factors compute this with ``+1e-6`` in the denominator,
+    which turns every locked / dead day (quantile = 0) into a value near 1e4 -- the
+    factor then reads 'was there a locked day', not tail shape.  This is the same
+    quantity with that day left missing.  (F106, F109.)"""
+    return _es_ratio(x, 0.95, True)
+
+
+@op("dt", "day", arity=1)
+def day_es_ratio_lo(x: torch.Tensor) -> torch.Tensor:
+    """Left-tail shape: mean of the minutes BELOW the day's 5% quantile, divided by that
+    quantile (so it is >= 1 for a negative quantile); NaN when the quantile is (near)
+    zero or no minute is below it."""
+    return _es_ratio(x, 0.05, False)
+
+
+@op("dt", "in", arity=1)
+def in_index(x: torch.Tensor) -> torch.Tensor:
+    """The minute's position in the day, ``t / (T - 1)`` in [0, 1], wherever ``x`` is finite
+    (NaN elsewhere).  Lets a tree weight or compare by time of day, e.g.
+    ``day_corr(in_index(Volume), Volume)`` = is volume back-loaded.  (F115.)"""
+    x = _f(x)
+    T = x.shape[-1]
+    t = torch.arange(T, device=x.device, dtype=x.dtype) / max(T - 1, 1)
+    return torch.where(torch.isfinite(x), t.expand_as(x), torch.full_like(x, NAN))
+
+
+@op("dt", "in", arity=1)
+def in_zscore_expand(x: torch.Tensor) -> torch.Tensor:
+    """Expanding-window z-score along the minute axis: ``(x[t] - mean(x[0..t])) /
+    (std(x[0..t]) + EPS)`` over the finite minutes so far; NaN until 5 are available.
+    'Unusual relative to today so far' -- causal within the day, unlike a full-day
+    z-score, which knows the close at the open.  (F110.)"""
+    x = _f(x)
+    ok = torch.isfinite(x)
+    v = torch.where(ok, x, torch.zeros_like(x))
+    n = torch.cumsum(ok.to(x.dtype), -1)
+    s1, s2 = torch.cumsum(v, -1), torch.cumsum(v * v, -1)
+    mu = s1 / n.clamp(min=1)
+    var = (s2 / n.clamp(min=1) - mu * mu).clamp(min=0)
+    return torch.where(ok & (n >= 5), (x - mu) / (torch.sqrt(var) + EPS), torch.full_like(x, NAN))
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_madz(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Robust version of ``cross_zscore``: ``(x[t] - median_d) / (1.4826 * MAD_d + 1e-6 *
+    |median_d|)`` over the last ``d`` days; NaN with fewer than d/2 finite days or MAD = 0.
+    A heavy-tailed daily statistic drags a mean / std z-score around with one spike;
+    this tells 'standardising is the wrong idea' from 'the estimator was fragile'.  (F104.)"""
+    x = _f(x)
+    w = rolling_windows(x, int(d), 0)
+    n = torch.isfinite(w).sum(-1)
+    med = torch.nanmedian(w, dim=-1).values
+    mad = torch.nanmedian((w - med.unsqueeze(-1)).abs(), dim=-1).values
+    z = (x - med) / (1.4826 * mad + 1e-6 * med.abs())
+    return torch.where((n * 2 >= int(d)) & (mad > 0) & torch.isfinite(x), z, torch.full_like(x, NAN))
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_flat_ratio(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Share of the last ``d`` days on which ``x`` equals the previous day's value exactly
+    (over day pairs where both are finite); NaN with fewer than 2 such pairs.  On a daily
+    price: how often the stock did not move day to day.  (F111.)"""
+    x = _f(x)
+    prev = torch.cat([torch.full_like(x[:1], NAN), x[:-1]], dim=0)
+    pair = torch.isfinite(x) & torch.isfinite(prev)
+    same = torch.where(pair, (x == prev).to(x.dtype), torch.full_like(x, NAN))
+    w = rolling_windows(same, int(d), 0)
+    ok = torch.isfinite(w)
+    n = ok.sum(-1)
+    r = torch.where(ok, w, torch.zeros_like(w)).sum(-1) / n.clamp(min=1).to(x.dtype)
+    return torch.where(n >= 2, r, torch.full_like(r, NAN))
+
+
+def _semistd(x: torch.Tensor, d: int, neg: bool) -> torch.Tensor:
+    x = _f(x)
+    prev = torch.cat([torch.full_like(x[:1], NAN), x[:-1]], dim=0)
+    ok = (x > 0) & (prev > 0)
+    g = torch.where(ok, torch.log(x.clamp(min=1e-30) / prev.clamp(min=1e-30)), torch.full_like(x, NAN))
+    part = torch.where(torch.isfinite(g), (g.clamp(max=0) if neg else g.clamp(min=0)) ** 2, torch.full_like(g, NAN))
+    w = rolling_windows(part, int(d), 0)
+    okw = torch.isfinite(w)
+    n = okw.sum(-1)
+    v = torch.where(okw, w, torch.zeros_like(w)).sum(-1) / n.clamp(min=1).to(x.dtype)
+    return torch.where(n >= 3, torch.sqrt(v), torch.full_like(v, NAN))
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_semistd_neg(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Downside semi-deviation of the daily log change of a positive ``x`` over the last
+    ``d`` days: ``sqrt(mean(min(log(x[t]/x[t-1]), 0)^2))``; NaN with fewer than 3 days.
+    Splits a volatility into the half that hurts.  (F112.)"""
+    return _semistd(x, d, True)
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_semistd_pos(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Upside semi-deviation of the daily log change of a positive ``x`` over ``d`` days."""
+    return _semistd(x, d, False)
+
+
+@op("dt", "cross", arity=1)
+def cross_age(x: torch.Tensor) -> torch.Tensor:
+    """Trading days since ``x`` first had a finite value: 0 on that day, +1 every trading
+    day after (suspensions included); NaN before.  A stock that is already finite on the
+    first day of the data is treated as old (its age starts at 10000), because the data
+    cannot say when it listed.  Unlike ``cross_valid_count`` it does not saturate at the
+    window.  (F105.)"""
+    x = _f(x)
+    seen = torch.cummax(torch.isfinite(x).to(x.dtype), dim=0).values
+    age = torch.cumsum(seen, dim=0) - 1.0
+    old = torch.isfinite(x[:1]).to(x.dtype) * 10000.0
+    return torch.where(seen > 0, age + old, torch.full_like(x, NAN))
+
+
 NEW_OPERATORS = ("in_pct", "in_logchg", "day_flat_ratio", "day_pos_ratio", "day_wmean", "day_signed_ratio",
                  "day_gini", "day_centroid", "cross_ema", "cross_zscore", "cs_bucket_rank", "cs_winsor",
                  "day_zero_ratio", "cross_valid_count", "cross_tail_mean_q25", "cross_tail_mean_q75",
                  "cs_first_low40", "cs_first_high40", "cs_last_high20", "cs_last_low20",
-                 "day_flat_run_max", "in_madz")
+                 "day_flat_run_max", "in_madz",
+                 "cs_bucket_demean", "cs_bucket_zscore", "cs_robust_z", "cs_first_low20", "cs_first_high20",
+                 "cs_last_high40", "cs_last_low40", "cs_state_rank", "cs_flip_by_state", "day_at_max_ratio",
+                 "day_at_min_ratio", "day_distinct_ratio", "day_wstd", "day_topw_mean", "day_es_ratio_hi",
+                 "day_es_ratio_lo", "in_index", "in_zscore_expand", "cross_madz", "cross_flat_ratio",
+                 "cross_semistd_neg", "cross_semistd_pos", "cross_age")
 
 
 def install() -> None:

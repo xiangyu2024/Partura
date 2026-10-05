@@ -1,6 +1,6 @@
 # F114_q25_closeret — 交接状态
 
-_自动生成于 2026-10-05 10:46(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1421(批次 B01_single_factors)
 - 表达式:`cross_quantile_q25(day_close(Ret), 15)`
@@ -8,11 +8,11 @@ _自动生成于 2026-10-05 10:46(`python scripts/recorder.py --brief F114_q25_c
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-04 23:56)—— **不许再读**。候选在留出段上的数全在 `runs/F114_q25_closeret/final.json`(`./scripts/study.sh digest F114_q25_closeret final`)。
+- **留出段已经读过 2 次**(10-04 23:56, 10-05 11:08)—— **不许再读**。候选在留出段上的数全在 `runs/F114_q25_closeret/final.json`(`./scripts/study.sh digest F114_q25_closeret final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F114_q25_closeret#1`:已返回结果,最后动作 10-04 23:47 → `handoff/F114_q25_closeret/agents/lead_R1_aabcc661842828a07.md`
   - `work:F114_q25_closeret#1`:已返回结果,最后动作 10-05 00:12 → `handoff/F114_q25_closeret/agents/work_R1_a2af85fe053c7b981.md`
   - `lead:F114_q25_closeret#2`:中断,最后动作 10-05 00:20 → `handoff/F114_q25_closeret/agents/lead_R2_a9262d78a60d3e050.md`
+  - `synth:F114_q25_closeret`:已返回结果,最后动作 10-05 10:47 → `handoff/F114_q25_closeret/agents/synth_a0afe0974e2c8e717.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F114_q25_closeret` 看服务器上的 tag,`./scripts/study.sh digest F114_q25_closeret <tag>` 重看结果)。
 
@@ -124,6 +124,9 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 - `S6_final`  10-04 23:56  5 个变体  → `./scripts/study.sh digest F114_q25_closeret S6_final`
 - `sweep_s1`  10-05 00:52  73 个变体  → `./scripts/study.sh digest F114_q25_closeret sweep_s1`
 - `anatomy_s1`  10-05 10:19  0 个变体  → `./scripts/study.sh digest F114_q25_closeret anatomy_s1`
+- `sweep_s2`  10-05 11:04  122 个变体  → `./scripts/study.sh digest F114_q25_closeret sweep_s2`
+- `anatomy_s2`  10-05 11:08  0 个变体  → `./scripts/study.sh digest F114_q25_closeret anatomy_s2`
+- `sweepfinal_s2`  10-05 11:09  6 个变体  → `./scripts/study.sh digest F114_q25_closeret sweepfinal_s2`
 
 ## 已写的 notes(`notes/F114_q25_closeret/`)
 
@@ -134,4 +137,4 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 
 ## 结构化结果(`handoff/F114_q25_closeret/results/`)
 
-(还没有)
+- `synthesis.json`

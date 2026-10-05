@@ -37,9 +37,10 @@ ROOT = Path(__file__).resolve().parents[1]
 HAND = ROOT / "handoff"
 WF_GLOB = os.environ.get("PARTURA_WF_GLOB", str(Path.home() / ".claude/projects/*/*/subagents/workflows/wf_*"))
 # study / audit* / revise return the structured results; lead / work are the rounds of the tiered workflow
-LABEL = re.compile(r"^(study|audit|audit-numbers|audit-mechanism|revise|lead|work|revise-lead|revise-work)[:：]\s*(F\d+\w*)(?:#(\d+))?")
+LABEL = re.compile(r"^(study|audit|audit-numbers|audit-mechanism|revise|lead|work|revise-lead|revise-work|synth)[:：]\s*(F\d+\w*)(?:#(\d+))?")
 RESULT_FILE = {"study": "study.json", "audit": "audit.json", "audit-numbers": "audit-numbers.json",
-               "audit-mechanism": "audit-mechanism.json", "revise": "revised.json"}
+               "audit-mechanism": "audit-mechanism.json", "revise": "revised.json",
+               "synth": "synthesis.json"}        # the one-pass synthesis of a batch sweep (workflows/partura_batch_synthesis.js)
 STALE_S = 20 * 60          # an agent with no result and no activity for this long is presumed cut off
 FULL_OUTPUT = re.compile(r"study\.sh\s+(wait|digest|final|run|exec|list|brief|note|check)\b")
 

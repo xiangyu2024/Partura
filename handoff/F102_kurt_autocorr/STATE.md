@@ -1,6 +1,6 @@
 # F102_kurt_autocorr — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:26(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3961(批次 B01_single_factors)
 - 表达式:`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F102_kurt_
 - **阶段:全部完成**
 - **留出段已经读过 1 次**(10-03 23:15)—— **不许再读**。候选在留出段上的数全在 `runs/F102_kurt_autocorr/final.json`(`./scripts/study.sh digest F102_kurt_autocorr final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `audit-numbers:F102_kurt_autocorr`:已返回结果,最后动作 10-03 23:34 → `handoff/F102_kurt_autocorr/agents/audit-numbers_ac4128e6a76e56808.md`
   - `audit-mechanism:F102_kurt_autocorr`:已返回结果,最后动作 10-03 23:38 → `handoff/F102_kurt_autocorr/agents/audit-mechanism_a2d310a359bfeff69.md`
   - `revise:F102_kurt_autocorr`:已返回结果,最后动作 10-04 00:24 → `handoff/F102_kurt_autocorr/agents/revise_a39c89bd8b2569636.md`
+  - `synth:F102_kurt_autocorr`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F102_kurt_autocorr/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
@@ -47,6 +47,8 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F102_kurt_
 - `s3`  10-03 22:53  12 个变体  → `./scripts/study.sh digest F102_kurt_autocorr s3`
 - `final`  10-03 23:15  5 个变体  → `./scripts/study.sh digest F102_kurt_autocorr final`
 - `rev1`  10-03 23:54  3 个变体  → `./scripts/study.sh digest F102_kurt_autocorr rev1`
+- `sweep_s1`  10-05 11:01  95 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweep_s1`
+- `anatomy_s1`  10-05 11:05  0 个变体  → `./scripts/study.sh digest F102_kurt_autocorr anatomy_s1`
 - `x1`(自写脚本的输出)  10-03 19:32  exit 0  → `logs/F102_kurt_autocorr_x1.log`
 - `x2`(自写脚本的输出)  10-03 20:05  exit 0  → `logs/F102_kurt_autocorr_x2.log`
 - `x3`(自写脚本的输出)  10-03 23:04  exit 0  → `logs/F102_kurt_autocorr_x3.log`
@@ -55,7 +57,7 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F102_kurt_
 
 ## 已写的 notes(`notes/F102_kurt_autocorr/`)
 
-`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)
+`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F102_kurt_autocorr/`)
 

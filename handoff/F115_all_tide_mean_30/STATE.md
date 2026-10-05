@@ -1,6 +1,6 @@
 # F115_all_tide_mean_30 — 交接状态
 
-_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 all_tide_mean_30(批次 B01_single_factors)
 - 表达式:`cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20)`
@@ -10,13 +10,13 @@ _自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F115_all_t
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 1 次**(10-05 00:11)—— **不许再读**。候选在留出段上的数全在 `runs/F115_all_tide_mean_30/final.json`(`./scripts/study.sh digest F115_all_tide_mean_30 final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F115_all_tide_mean_30#3`:失败,几乎没做事
   - `lead:F115_all_tide_mean_30#1`:已返回结果,最后动作 10-04 23:49 → `handoff/F115_all_tide_mean_30/agents/lead_R1_a191df6528a633604.md`
   - `work:F115_all_tide_mean_30#1`:中断,最后动作 10-05 00:20 → `handoff/F115_all_tide_mean_30/agents/work_R1_a5f7381bf31230aef.md`
+  - `synth:F115_all_tide_mean_30`:已返回结果,最后动作 10-05 11:14 → `handoff/F115_all_tide_mean_30/agents/synth_a552a99162afbe363.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F115_all_tide_mean_30` 看服务器上的 tag,`./scripts/study.sh digest F115_all_tide_mean_30 <tag>` 重看结果)。
 
-## 研究现状(`notes/F115_all_tide_mean_30/state.md`,10-05 11:10 更新)—— **先读这个文件**
+## 研究现状(`notes/F115_all_tide_mean_30/state.md`,10-05 11:11 更新)—— **先读这个文件**
 
 # 研究现状 — F115_all_tide_mean_30
 
@@ -37,7 +37,7 @@ _主研每轮**覆盖重写**。2026-10-05,**第 4 轮**(Opus 5,批量扫描口�
    失败的机制是**倾斜方向相反**(§2 第 4 条),不是信息重合 —— 这给出了一格没试过的构造。
 4. **121 个变体里有两条真改进**(毛超额也好、逐年也稳):`abl_C`、`rank_K`,见 §5。
 
-(…全文 6554 字符,读 `notes/F115_all_tide_mean_30/state.md`)
+(…全文 6480 字符,读 `notes/F115_all_tide_mean_30/state.md`)
 
 ## 研究日志(`notes/F115_all_tide_mean_30/journal.md`:18 条,其中研究员自己写的 8 条)
 
@@ -144,7 +144,7 @@ R2 的 5 变体 + increment.py 都 exit 0,四条判读全部命中或落在工�
 
 ## 已写的 notes(`notes/F115_all_tide_mean_30/`)
 
-`01_expression.md`(3K)、`02_operators.md`(12K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(24K)、`06_baseline.md`(11K)、`07_S1_anatomy.md`(15K)、`07_S2_increment.md`(11K)、`07x_1_anat_mfi.md`(9K)、`07x_2_increment.md`(15K)、`10_distilled.md`(8K)、`journal.md`(25K)、`state.md`(10K)、`synthesis.md`(11K)
+`01_expression.md`(3K)、`02_operators.md`(12K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(24K)、`06_baseline.md`(11K)、`07_S1_anatomy.md`(15K)、`07_S2_increment.md`(11K)、`07x_1_anat_mfi.md`(9K)、`07x_2_increment.md`(15K)、`10_distilled.md`(8K)、`journal.md`(25K)、`state.md`(9K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F115_all_tide_mean_30/`)
 
@@ -153,4 +153,4 @@ R2 的 5 变体 + increment.py 都 exit 0,四条判读全部命中或落在工�
 
 ## 结构化结果(`handoff/F115_all_tide_mean_30/results/`)
 
-(还没有)
+- `synthesis.json`

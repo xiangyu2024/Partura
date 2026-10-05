@@ -1,0 +1,97 @@
+# F107_abs_demean_skew_low —— 第二批假设(主研,读完 s1 大表 73 变体 + 市场解剖之后)
+# 判断与数字全在 notes/F107_abs_demean_skew_low/synthesis.md,这里每条只写它在检验哪一节。
+#
+# 大表的五条硬结论决定这一批往哪儿打:
+#  (甲) 原式 = |今日这只票的分钟最低价路径偏度 − 今日全市场平均偏度|,方向 −1 → **多头腿买「路径形状最平庸」的票**。
+#       外层单调变换全是同一件事(abs_ / pow_2 / sqrt 逐个 +1.7 / +2.3 / +1.5%,ρo 0.92~0.97)—— 这三行是噪声标尺,不是三个发现。
+#       承重的只有「折叠」+「折叠的中心」:去 abs_ → iso_B −31.9%;去 cs_demean → abl_B −5.4%(比什么都不做更差);折两次 → fold_* −1.4~−7.9%。
+#  (乙) 叶子完全可换、而且都接近零:Low +1.7 / Close +1.9 / Open +2.1 / High +0.8 / Vwap −0.5%(ρo 0.93~0.95)。
+#       「Low」没有任何专属信息,它读的是路径,不是最低价。
+#  (丙) **多头腿的全部净超额来自流动性倾斜,不是选股**:成交额五档段内 −8.1 / −6.4 / −3.7 / −1.6 / −2.4%(**每一档都是负的**),
+#       而书对最低档超配 +16.5pp、该档段等权超额 +15.1%。所以 bk_liq −2.5 / res_liq −2.7 / bk_known −3.3 / res_known −3.4% 全翻负。
+#       已知族自己就是更极端、更便宜的同一个倾斜(对最低成交额档超配 +80.3pp,LTO 3.4% 对 10.9%)。
+#       overlay 阶梯从家族单独开始单调下坡:+15.4 → 13.6 → 13.1 → 12.5(权重 0.25/0.5/1.0)→ **零增量**。
+#  (丁) 记忆家族(+5.0~+6.6%,窗口 5/10/30/60 全平)是**换手平台不是视界平台**:LTO 10.9% → 2.8%,毛的那侧基本没变。
+#       代价是:原式在 6.5% 的冻结盘口段段内 **+8.5%**(少数真选到股的地方),记忆版在那一段 **−23.7~−40.5%**。
+#       大表里**一个筛子形态都没有** → (D) 组。
+#  (戊) **唯一换了对象的替换是 day_gini**:+10.0 / +5.4 / +8.7%,Lshp +2.39 / +1.26 / **+2.07**,ρo 只 +0.27、ρk +0.33。
+#       但按代码 day_gini(x) = 当天各分钟 |x| 的基尼;喂给**正的、紧的价格水平**时它 ≈ c·(σ/μ) = **无尺度的日内相对波动**,
+#       不是集中度(近似高斯时 Gini = σ/(μ√π);完全钉住的一天恰好得 0)。所以它把「路径不对称」换成了「相对波动」——
+#       这解释了它和原式相反的全部表现:成交额五档段内 **全正且随流动性上升**(+5.9/+0.6/+0.7/+3.0/+10.7),
+#       下跌市 +7.7%(全表唯一不塌的)、高波动 +14.7% 对低波动 +2.8%、次新段 +14.8%(全表最好)。
+#       **注意**:train→valid 衰减 10.0 → 5.4%、夏普 2.39 → 1.26,夏普那侧超出 ±0.3 噪声带 → 它是线索不是候选;
+#       valid 净超额比已知族低 17pp。它值钱的地方只在 ρk = 0.33(可能的去相关腿)→ (H) 组专测这件事。
+#  路径形状家族里别的替换全废:day_kurt −2.7 / day_hurst −5.0 / day_autocorr_n1 −4.9 / day_ar1 −5.7 /
+#       day_argmax −3.4(dist 0.06 ✗)/ day_argmin −5.2(dist 0.06 ✗)。**能用的那个恰好是不再做路径形状的那个。**
+
+# ================= (A) 条件中心:不要绕全市场均值折叠,绕「同流动性 / 同价位的均值」折叠 =================
+# 为什么:解剖里原式在流通市值和价格上都是倒 U(市值 +1.4/+3.3/+5.3/−3.3/−6.5;价格 −3.6/+1.9/+1.8/+1.9/−8.1),
+# 科创板段内 −24.3%(4.0% 的市场、20% 涨跌幅、票大多又新又贵)。全局 cs_demean 的中心由 96% 的 10% 涨跌幅票定,
+# 所以「坐在全市场平均偏度上」的科创板票其实是一只不典型的科创板票。大表只在**折叠之后**做中性化(bk_/res_),没人试过换中心。
+h_cc_regres_known: {expr: "abs_(cs_regres(day_skew(Low), cs_rank(cross_mean(day_std(Amt), 30))))", why: "(甲)(丙):把中心换成流动性条件均值再折叠。若倒 U 和科创板的塌陷来自中心错位,这条应该同时抬段内并杀掉倾斜"}
+h_cc_regres_price: {expr: "abs_(cs_regres(day_skew(Low), cs_rank(day_mean(Close))))", why: "(丙):价位条件中心。价格最高档段内 −8.1%、最低档 −3.6%,两头都坏 → 中心随价位移动"}
+h_cc_bucket_pre: {expr: "abs_(cs_demean(cs_bucket_rank(day_skew(Low), cross_mean(day_std(Amt), 30))))", why: "(丙):先在流动性十分位内取百分位、再折叠 = 绕桶内中位数折叠。和表里 bk_known(先折后分桶)是两件事"}
+h_cc_bucket_pre_gini: {expr: "abs_(cs_demean(cs_bucket_rank(day_gini(Low), cross_mean(day_std(Amt), 30))))", why: "(戊):同一个修法装到唯一有效的原子上;gini 段内已全正,桶内折叠应该把倾斜去干净而保住段内"}
+h_cc_regres_gini_known: {expr: "abs_(cs_regres(day_gini(Low), cs_rank(cross_mean(day_std(Amt), 30))))", why: "(戊):gini 的流动性条件中心版;和 h_res_known_gini 一起判「gini 是不是又一个倾斜」"}
+
+# ================= (B) 换折叠方式:中心该用中位数 / 秩,而不是被偏度自己的尾巴拖动的均值 =================
+# 为什么:day_skew 的截面分布本身是偏的,cs_mean 被尾巴拖走,于是「离中心最近」选到的不是中位票。
+h_fold_rankfirst: {expr: "abs_(cs_demean(cs_rank(day_skew(Low))))", why: "(甲):先排名再折叠 = 绕中位数折叠、尾巴拖不动中心。表里 rk 是折完再排名、fold_rank 是折-排-折,都不是这个"}
+h_fold_rankfirst_gini: {expr: "abs_(cs_demean(cs_rank(day_gini(Low))))", why: "(戊):同上装在 gini 上;gini 有界 [0,1] 但右尾仍重(停牌票堆在 0)"}
+h_fold_median: {expr: "abs_(sub(day_skew(Low), cs_median(day_skew(Low))))", why: "(甲):直接把中心从截面均值换成截面中位数,只改一个节点"}
+h_fold_winsor_first: {expr: "abs_(cs_demean(cs_winsor(day_skew(Low))))", why: "(甲):先缩尾再定中心(F103 的教训)。表里有 abs_(cs_winsor(A))(没 demean,−6.5%)和 cs_winsor(|B|)(+1.6%),没有这个顺序"}
+
+# ================= (C) 追 day_gini:它究竟是「相对波动」还是「集中度」=================
+# 为什么:(戊)。按代码它在价格水平上 ≈ CV。这组把这个读法做成可证伪的:
+# 如果 gini ≈ 相对波动,h_vol_cv_low / h_vol_std_ret 应该复现 +8.7%,而真正的集中度版(喂 Ret / Amt)应该是另一回事。
+h_gini_iso: {expr: "day_gini(Low)", why: "(戊):gini 分支的 iso。若它就是低波动异象,不折叠也该行;若折叠才行,承重的是「平庸」不是「低」"}
+h_gini_iso_demean: {expr: "cs_demean(day_gini(Low))", why: "(戊):gini 分支的有符号版,配 h_gini_iso 判 U 型在不在"}
+h_vol_cv_low: {expr: "abs_(cs_demean(div(day_std(Low), day_mean(Low))))", why: "(戊):把 day_gini≈c·σ/μ 这个读法写成显式 CV。两者接近 → gini 的名字是误导,真机制是相对波动"}
+h_vol_std_low: {expr: "abs_(cs_demean(day_std(Low)))", why: "(戊)的对照:不除以价位的日内波动(单位是元)。若它也行,无尺度那一步不重要;若塌,说明承重的正是「相对」"}
+h_vol_std_ret: {expr: "abs_(cs_demean(day_std(Ret)))", why: "(戊)最该去的地方:分钟收益的日内已实现波动,折叠后 = 「波动最中位」的票。比价格水平的 gini 干净,且与价位、股价无关"}
+h_vol_range: {expr: "abs_(cs_demean(div(sub(day_max(High), day_min(Low)), day_mean(Vwap))))", why: "(戊):相对日内振幅,最粗的同一类量。三条(gini / CV / 振幅)一致 → 机制确立"}
+h_gini_close: {expr: "abs_(cs_demean(day_gini(Close)))", why: "(乙)(戊):gini 分支的字段互换。原式的字段全可换,gini 若也全可换,说明两者都在读路径的尺度不是字段"}
+h_gini_ret: {expr: "abs_(cs_demean(day_gini(Ret)))", why: "(戊):喂有符号、均值≈0 的 Ret,gini 才是真的集中度(当天的动静集中在几分钟)。和 h_vol_std_ret 对照可把「集中度」和「波动」分开"}
+h_gini_amt: {expr: "abs_(cs_demean(day_gini(Amt)))", why: "(戊):成交在一天里的集中度,折叠后 = 「成交节奏最正常」。真集中度的第二支,且与价格路径无关"}
+h_gini_ema10: {expr: "cross_ema(abs_(cs_demean(day_gini(Low))), 10)", why: "(丁)(戊):gini 的 LTO 是 9.7%,记忆给原式白送了 +4~5pp 的省成本;gini 身上还没人试过"}
+h_gini_ema30: {expr: "cross_ema(abs_(cs_demean(day_gini(Low))), 30)", why: "(丁):同上长半衰期。若 gini 也出现 5/10/30/60 平台,它的改进同样只是省成本"}
+
+# ================= (D) 筛子:保住记忆家族的省成本,删掉它唯一爆掉的那一段(大表里没有任何筛子)=================
+# 为什么:(丁)。记忆版在近 15 日有冻结盘口的 6.5% 段里 −23.7~−40.5%(该段等权超额 −67.4%),原式在那一段 +8.5%:
+# EMA 拿着一只现在已经钉住的票的「过去很平庸」评分继续持有。把这一段直接从多头书里剔除,是一次性修掉最大的漏。
+h_scr_frozen_mem: {expr: "cs_last_high20(cross_ema(abs_(cs_demean(day_skew(Low))), 30), cross_mean(day_zero_ratio(Ret), 15))", why: "(丁):EMA 平滑的平庸度,但近 15 日零收益分钟占比最高的 20% 永不进多头书。直接针对 −40.5% 那一段"}
+h_scr_frozen_gini: {expr: "cs_last_high20(abs_(cs_demean(day_gini(Low))), cross_mean(day_zero_ratio(Ret), 15))", why: "(戊):同一个筛子装在 gini 上;gini 把钉住的票读成 0(极值)已经排掉一部分,看筛子还有没有增量"}
+h_scr_price_mem: {expr: "cs_last_high20(cross_ema(abs_(cs_demean(day_skew(Low))), 30), day_mean(Close))", why: "(丙):价格最高档段内 −8.1%、市值最高档 −6.5%,剔除最贵的 20% = 同时去掉大盘股和大部分科创板"}
+h_scr_star_mem: {expr: "cs_last_high20(cross_ema(abs_(cs_demean(day_skew(Low))), 30), sub(cs_rank(day_mean(Close)), cs_rank(cross_valid_count(day_last(Close), 241))))", why: "(丙):科创板代理 = 又贵又新(高价秩 − 有效天数秩)。段内 −24.3% 是全表最差的一段,立方体里没有板块字段,这是唯一写法"}
+h_scr_newlist_gini: {expr: "cs_first_low40(abs_(cs_demean(day_gini(Low))), cross_valid_count(day_last(Close), 241))", why: "(戊):gini 在上市不足 250 日段内 +14.8%(全表最好、原式 −3.2%),反过来**倾向**次新而不是剔除"}
+h_scr_liquid_gini: {expr: "cs_first_high40(abs_(cs_demean(day_gini(Low))), cross_mean(day_sum(Amt), 30))", why: "(戊):gini 段内随流动性单调上升、最高档 +10.7%。限定在流动的一半 = 既顺着解剖、又让它装得下钱"}
+
+# ================= (E) 机制的反证:原式会不会只是一个「薄不薄」的代理 =================
+# 为什么:(丙)。day_skew 作用在稀疏的分钟价格路径上,主要读的是「今天在几个价位上成交过」。
+# 如果这个推断成立,直接量薄度的原子按同样方式折叠,应该复现甚至超过原式;而一条裸的薄度水平应该能复现记忆家族。
+h_thin_zero: {expr: "abs_(cs_demean(cross_mean(day_zero_ratio(Ret), 15)))", why: "(丙)的可检验推论:把「薄」直接量出来再同样折叠。≈ 原式 → 原式只是噪声更大的薄度代理"}
+h_thin_flatrun: {expr: "abs_(cs_demean(cross_mean(day_flat_run_max(Close), 15)))", why: "(丙):最长连续不动段,区分一字板和零散不动的薄票;与 h_thin_zero 一起分出「钉住」和「没成交」"}
+h_thin_validcnt: {expr: "abs_(cs_demean(cross_valid_count(day_last(Close), 241)))", why: "(丙):近一年有数据的天数,折叠后 = 「上市时长最典型」。解剖里上市时长是最大的分段效应之一"}
+h_thin_rival: {expr: "cross_mean(day_zero_ratio(Ret), 30)", why: "(丙)(丁):裸的薄度水平,不折叠。若它就到记忆家族的 +5~6%,整条因子连折叠都不需要,它只是在给薄度排序"}
+
+# ================= (F) day_skew 想做而没做到的路径形状:带顺序信息的统计量 =================
+# 为什么:(甲)(乙)。day_skew / kurt / gini / std 都与分钟的先后无关,整条路径形状信息被丢掉了;
+# 路径形状家族里能用的那个恰好不是路径形状(戊)。真要测「路径形状」这个机制,得用带顺序的原子。
+h_path_centroid: {expr: "abs_(cs_demean(day_centroid(Amt)))", why: "(甲):成交发生在一天的什么位置,折叠后 = 「成交节奏最正常」。day_skew 丢掉的正是这条轴"}
+h_path_signed: {expr: "abs_(cs_demean(day_signed_ratio(Ret, Amt)))", why: "(甲):上涨分钟成交额占比 − 下跌分钟占比,折叠后 = 「买卖最均衡」。不需要逐笔的净买入代理"}
+h_path_pos: {expr: "abs_(cs_demean(day_pos_ratio(Ret)))", why: "(甲):只看方向不看幅度的上涨分钟占比,折叠后 = 「涨跌分钟最五五开」。和 h_path_signed 分出「次数」与「金额」"}
+
+# ================= (G) 最小的叶子互换:把价格水平换成变化率(用户的提示)=================
+# 为什么:(乙) 五个价格水平叶子全可换、全接近零 —— 说明「水平的路径偏度」本身是空的。
+# 换成收益率 / 量的变化率是同一类东西里真正不同的那一支:day_skew(Ret) 才是教科书意义上的收益偏度。
+h_leaf_ret_skew: {expr: "abs_(cs_demean(day_skew(Ret)))", why: "(乙):分钟**收益**的偏度而不是价格水平的偏度 —— 名字一直在暗示、树里从来没有的那个量"}
+h_leaf_inpct_close: {expr: "abs_(cs_demean(day_skew(in_pct(Close, 5))))", why: "(乙):5 分钟收益的偏度,换掉一分钟噪声。和 h_leaf_ret_skew 一起看采样频率有没有平台"}
+h_leaf_inlogchg_amt: {expr: "abs_(cs_demean(day_skew(in_logchg(Amt, 5))))", why: "(乙)+用户提示:成交额的对数变化率是分钟收益的同类孪生。若两条数字接近,承重的是「变化率的不对称」而不是价量"}
+h_leaf_gini_inpct: {expr: "abs_(cs_demean(day_gini(in_pct(Close, 5))))", why: "(戊):把 gini 喂给有符号的 5 分钟收益 = 真集中度,且与价位无关;是 h_gini_ret 的低频对照"}
+
+# ================= (H) 增量:gini 这条腿相对已知成交额族有没有东西(原式已确认没有)=================
+# 为什么:(丙)(戊)。原式的 overlay 阶梯单调下坡、res_known 翻负 → 零增量,已经定了。
+# gini 的 ρk 只有 0.33 而 utrain 夏普 +2.07(家族 +2.22),所以值得对它单独做同一套三件检验。
+h_ov_gini_p05: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_gini(Low)))), 0.5))", why: "(戊):gini 的 overlay。原式这条阶梯从家族单独开始单调下坡;gini 若能抬到家族之上,增量就成立"}
+h_res_known_gini: {expr: "cs_regres(cs_rank(abs_(cs_demean(day_gini(Low)))), cs_rank(cross_mean(day_std(Amt), 30)))", why: "(戊):剥掉已知族之后 gini 还剩什么。原式这一行是 −3.4%(翻负);这是 gini 最硬的一道关"}
+h_blend_gini_mem: {expr: "add(cs_rank(abs_(cs_demean(day_gini(Low)))), mul(cs_rank(cross_ema(abs_(cs_demean(day_skew(Low))), 30)), 0.5))", why: "(丁)(戊):两条 ρo 只 0.27 的腿相加 —— gini 吃下跌市和高波动、记忆版吃上涨市,时段互补能不能变成一条稳的"}

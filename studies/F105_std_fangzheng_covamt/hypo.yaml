@@ -1,0 +1,62 @@
+# F105_std_fangzheng_covamt —— 第二批假设(主研,读完 s1 大表 89 个变体 + 市场解剖之后)
+# 判断与数字全在 notes/F105_std_fangzheng_covamt/synthesis.md,这里每条只写它在检验哪一节。
+#
+# 大表的四条硬结论决定这一批往哪儿打:
+#  (甲) 整棵树是一条绕了四层的**成交额水平**读数;isolate 阶梯单调下坡(iso_A +17.8/2.59 → iso_B +17.2 →
+#       iso_C +12.3 → v_base +11.8),上面每一层都在扣分,abl_B / abl_C 删掉节点反而 +1.4 / +2.1。
+#  (乙) 增量 = 0:ρk 0.72,res_known +2.3%、bk_known +2.4%,三条正权重 overlay 全部 ≤ k_known 单独的 +15.4/2.22。
+#  (丙) 钱全在"买低成交额这一段"的段倾斜(最低桶超配 +55.2pp、段等权超额 +15.1%),
+#       **段内净超额是 −4.7 / −2.9 / −0.0 / +4.2 / +1.2** —— 段内排序是负贡献。
+#  (丁) 含 ts_stddev(·,5) 的变体在次新(−23.2% vs iso_A +6.1%)、科创板(−15.7% vs +4.9%)、
+#       封板/停牌(−11.5% vs +10.4%)上全崩,不含的全不崩(7 比 7 / 3 比 3)。罪魁是根这个"抖动"读法。
+#
+# 不做的:市场状态门控 —— k_known 的年份/涨跌/波动/放量分布与原式一模一样,择时属于小盘溢价不属于这条因子。
+# 不做的:再扫窗口 —— 三个窗口梯子全部落在 ±1 的噪声里,没有平台可找。
+
+# ---------- A. 先把原子钉死:名字是假协方差,水平 vs 尖峰记忆 ----------
+h_atom_var_m30: {expr: "cross_mean(day_var(Amt), 30)", why: "§1:day_cov(Amt,Amt) 按定义就是 day_var(Amt);这条 = k_known 把开方去掉(k_known 是 cross_mean(day_std(Amt),30))。同一平滑下比较平方与开方,若 ρo 与 iso_A 近 1 且与 k_known 近 1,'covamt' 这个名字就正式被证伪"}
+h_atom_std_max3: {expr: "cross_max(day_std(Amt), 3)", why: "§2:iso_B(+17.2/2.52)的开方版。平方把重尾再放大一倍,若开方版不差,说明承重的是秩而不是幅度,后续一律可以用更稳的 day_std"}
+h_atom_log_m30: {expr: "cross_mean(log(day_var(Amt)), 30)", why: "§2:平滑前 log 保序,平滑后变成几何平均 —— 把尖峰日的权重压掉。若它 ≈ h_atom_var_m30,因子读的是水平;若明显掉,读的是'一个月里最大的那几天'(尖峰记忆,F103 的教训)"}
+h_atom_cv_m30: {expr: "cross_mean(div(day_std(Amt), day_mean(Amt)), 30)", why: "§2:原子的无尺度孪生(日内成交额变异系数)。rel60(+5.3)与 mem_zscore(全 ≤ −0.1)预言它会塌;若不塌,水平之下还藏着形状信号"}
+
+# ---------- B. 最小修补:根的窗口下沿 + 把"方正"换成意图更直白、估计更稳的上轨 ----------
+h_root_cstd3: {expr: "cross_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 3)", why: "§2:ts_* 窗口池最小是 5,cross_stddev 是同一个内核(playbook)且有 3。补完 win_D 梯子的下沿:3/5/10/20 若全在 +11.6~+12.0,根被确认为自由参数"}
+h_root_q75_241: {expr: "cross_quantile_q75(cross_max(day_cov(Amt, Amt), 3), 241)", why: "§1:把 mean+std 换成年度 75 分位 —— 同样是'上轨'但不被单日尖峰拉走。sub_C_cross_quantile_q50 塌了(dist 0.70、+3.9%),q75 居中,能定位秩到底由分布的哪一段承载"}
+h_root_tail75_241: {expr: "cross_tail_mean_q75(cross_max(day_cov(Amt, Amt), 3), 241)", why: "§3 机制:方正的意图(均值+离散 ≈ 年内大日子)直说成'年内最吵的那一刻度的均值',而 cross_stddev 在短历史上是估计 churn 的来源。若次新段的 −23.2% 明显收窄,机制说法得到支持"}
+h_root_tail25_241: {expr: "cross_tail_mean_q25(cross_max(day_cov(Amt, Amt), 3), 241)", why: "§2:相反的那条尾巴(年内最清淡的四分之一)。若与 q75 排得一样好,任何分位都行 = 纯水平;若更好,承载的是'流动性地板',对纯多头书更稳"}
+h_band_over_floor: {expr: "div(cross_tail_mean_q75(day_cov(Amt, Amt), 241), cross_tail_mean_q25(day_cov(Amt, Amt), 241))", why: "§2:两条尾巴的比值 = 无尺度的'这只票一年里有多尖'。这是方正真正想表达的东西。rel60/mem_zscore 预言它死;若不死,这是这棵树里第一处非水平的内容"}
+
+# ---------- C. 承重的否定测试:叶子真的不可换吗 ----------
+h_leaf_logchg_var: {expr: "cross_max(day_var(in_logchg(Amt, 1)), 3)", why: "§2:leaf_Amt_amtchg(in_pct)死得干干净净(−0.1%、sg 翻号)。new_operators.md 说 in_pct 右尾无界、左尾止于 −1;换成对称的 in_logchg,若还是死,'无尺度'才是死因,叶子正式不可换"}
+h_leaf_ret_var_m30: {expr: "cross_mean(day_var(Ret), 30)", why: "§2+§3:用户提示的 Ret↔量变化率互换,放在 k_known 的槽位和平滑上。这是经典的特质波动因子,用来量'F105 的多头腿里有多少其实是低波动而不是低流动性'"}
+h_leaf_close_var_m30: {expr: "cross_mean(day_var(Close), 30)", why: "§2:Amt = 价 × 量,leaf_Amt_vol(+6.9/valid 仅 +3.8)与 fld_Amt_Volume(+9.9)说价这一维值约一半。day_var(Close) ∝ 价² × 日内振幅,把价那一维单独拎出来看它值多少"}
+
+# ---------- D. 补 §3 的洞:次新 / 冻结盘口(含对照组) ----------
+h_gate_newlist: {expr: "cs_last_high20(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), neg(cross_valid_count(day_last(Close), 241)))", why: "§3 推论(a):把近一年有效日最少的 20% 剔出多头书。次新占 7.1%、段内落差 30pp → 预期 +1.5~+2.5 点;若一点不涨,'抖动在短历史上被估计 churn 污染'这个机制就错了"}
+h_gate_frozen: {expr: "cs_last_high20(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), cross_max(day_zero_ratio(Ret), 15))", why: "§3 推论(b):用解剖自己的段定义(近 15 日有冻结盘口)当剔除器。该段占 6.5%、落差 22pp → 预期 +1.0~+1.5 点"}
+h_gate_both_atom: {expr: "cs_last_high20(cs_last_high20(day_cov(Amt, Amt), neg(cross_valid_count(day_last(Close), 241))), cross_max(day_zero_ratio(Ret), 15))", why: "§3 推论(a)的**对照组**:同样两个剔除器加在 iso_A 上。iso_A 在这两段并不受伤(+6.1 / +10.4),所以应当几乎不涨;若涨得一样多,剔除器只是个小盘筛子,机制故事不成立"}
+h_count241_alone: {expr: "cross_valid_count(day_last(Close), 241)", why: "§3:把剔除变量本身当因子跑。次新段等权超额 −28.7%、冻结段 −67.4%,'有满一年历史'本身可能就值钱;需要它来扣掉 h_gate_* 的增益里属于筛子的那部分。dist 很可能因为绝大多数票都卡在 241 而不过门槛 —— 那个结果本身就是答案(它是筛子不是因子)"}
+h_newlist_tilt_atom: {expr: "cs_first_low40(day_cov(Amt, Amt), cross_valid_count(day_last(Close), 241))", why: "§3 推论(c):只在短历史的 40% 里按**水平**建书。解剖说 iso_A 在次新段内 +6.1%,这条把它单独跑出来"}
+h_newlist_tilt_churn: {expr: "cs_first_low40(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), cross_valid_count(day_last(Close), 241))", why: "§3 推论(c)的另一半:同一段里按**抖动树**建书(段内 −23.2%)。与上一条配对 = 方向反转的直接检验,差距应 ≈ 30pp"}
+
+# ---------- E. 段内到底有没有东西(所有钱都在段倾斜,段内是负的) ----------
+h_bk_gini: {expr: "cs_bucket_rank(cross_mean(day_gini(Amt), 30), cross_mean(day_sum(Amt), 30))", why: "§3 丙:成交额十分桶内按日内成交额集中度排。day_gini 有界无尺度(定义),不可能是水平代理 —— 段内能力的第一个候选,原式在那里是 −4.7/−2.9/−0.0"}
+h_bk_centroid: {expr: "cs_bucket_rank(cross_mean(day_centroid(Amt), 30), cross_mean(day_sum(Amt), 30))", why: "§3 丙:桶内按'钱在一天的什么时候成交'排。按定义 day_centroid 是唯一带顺序信息的日内统计量,方差/峰度/基尼全都丢掉了它"}
+h_bk_signed: {expr: "cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 30), cross_mean(day_sum(Amt), 30))", why: "§3 丙:桶内按净买入代理(上涨分钟成交额占比 − 下跌分钟占比)排。检验'成交额中性之后剩下的是流量因子而不是水平因子'"}
+h_bk_flatrun: {expr: "cs_bucket_rank(cross_mean(day_flat_run_max(Close), 30), cross_mean(day_sum(Amt), 30))", why: "§3 丙 + 丁:同等成交额下区分一字板(连续钉住)与薄盘票(零散不动)。若段内信号在这里,解剖里封板段的 22pp 落差就有了可写进表达式的抓手"}
+h_tilt_gini: {expr: "cs_first_low40(cross_mean(day_gini(Amt), 30), cross_mean(day_sum(Amt), 30))", why: "§3 丙:保留倾斜(钱在那儿)但段内换成按集中度排。也是 h_bk_gini 的孪生 —— bk_liq / bk_known 的 dist 都只有 0.20,cs_bucket_rank 一族可能整体被门槛误杀,这条不受影响"}
+h_tilt_lowvol: {expr: "cs_first_low40(neg(cross_mean(day_std(Ret), 30)), cross_mean(day_sum(Amt), 30))", why: "§3:倾斜进低成交额,段内按低日内波动排。最干净的'低流动性 × 低波动'写法,直接检验 §3 里'同市值内 +3~+9%' 那部分到底是不是低波效应"}
+
+# ---------- F. 救活 ts_autocorr 这条线索(全表唯一钱不在空头腿的一行) ----------
+h_ac_atom5: {expr: "ts_autocorr_s1(cross_max(day_cov(Amt, Amt), 3), 5)", why: "§4:原行 Lshp 2.46、空头腿只 +11.7/+13.2,但 dist 0.46 ✗ —— 因为 241 上轨太平滑,自相关堆在 +1。内层换成没平滑过的 3 日最大值,离散度应当恢复;若 Lshp 与小空头腿都还在,线索是真的"}
+h_ac_atom10: {expr: "ts_autocorr_s1(cross_max(day_cov(Amt, Amt), 3), 10)", why: "§4:同一条换 10 日窗(点更多,5 点自相关的堆积伪影更少)。5 与 10 成平台 = 真的在量持续性,不是 5 个点的算术巧合"}
+h_ac_tiebreak: {expr: "add(ts_autocorr_s1(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), mul(cs_rank(neg(day_cov(Amt, Amt))), 0.05))", why: "§4:原行原样,只加一个小权重的水平 tie-break 把并列打散(overlay 行证明这个写法引擎吃得下)。若 dist 过了而 Lnet/Lshp 保住,它就成了候选;若收益往原式靠、空头腿涨回 +23%,说明钱其实来自 tie-break"}
+h_ac_logamt: {expr: "ts_autocorr_s1(cross_mean(log(day_sum(Amt)), 3), 5)", why: "§4:把'这只票的成交额走在不在一条平滑的路上'这个读法剥到最干净 —— 没有方差、没有上轨。若它复现 Lshp 2.4 量级,这条线索与原树毫无关系,是一条独立因子"}
+h_ac_retvol: {expr: "ts_autocorr_s1(cross_mean(day_std(Ret), 3), 5)", why: "§4:同一个持续性读法搬到日内波动上。两条都成立 = 线索是'任何状态量在平滑地走',这比成交额族里的任何东西都新"}
+
+# ---------- G. 大胆:换日内原子,直接挑战已知族 ----------
+h_gini_m30: {expr: "cross_mean(day_gini(Amt), 30)", why: "§2:原子的无尺度兄弟放在 k_known 的平滑上,全市场。rel60/mem_zscore 预言它死(≤ +5%)—— 这是'日内成交额的形状里到底有没有信息'最便宜的决定性检验,死了也是结论"}
+h_centroid_m30: {expr: "cross_mean(day_centroid(Amt), 30)", why: "§2+§3:一个月里钱平均在一天的什么时候成交。偏尾盘 = 收盘集合竞价/指数化资金 = 机构票,偏早盘 = 散户追涨 —— 整个成交额族对这条区分完全是瞎的"}
+h_flat_minus_zero_m30: {expr: "cross_mean(sub(day_flat_ratio(Amt), day_zero_ratio(Ret)), 30)", why: "§3 丁:成交额重复但价格确实动了(薄盘、同一笔小单反复)vs 价格根本没动(封板/停牌)。把冻结盘口这个状态拆成两种微观结构,不需要任何水平"}
+h_wret_m30: {expr: "cross_mean(day_wmean(Ret, Amt), 30)", why: "§2:大表里 day_wmean 只作为 day_cov 的替代出现过(sub_A_day_wmean = day_wmean(Amt,Amt),还是个水平)。按定义正确地用成是'资金实际经历的日内收益',一个月平均 —— 完全不同的对象"}
+h_madz_m30: {expr: "cross_mean(day_mean(abs_(in_madz(Amt, 30))), 30)", why: "§2:day_var(Amt) 的尺度不变替身 —— 每分钟成交额相对近 30 分钟中位数有多孤立(稳健、相对 EPS,低价薄票不会被压成常数)。leaf_Amt_amtchg 用 in_pct 做这件事失败了,这条检验失败是因为无尺度还是因为 in_pct 本身不好"}

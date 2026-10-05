@@ -1,0 +1,77 @@
+# F109_erm_mag_gap_5m_tsm20 —— 第二批假设(主研 Opus 5,2026-10-05,读完批量扫描 s1 的大表 + 市场解剖之后)
+#
+# SSA 节点记号(本地重跑 partura/decompose.py 的后序编号得到,与 R1_propose_draft.txt 的 why 字段对得上):
+#   A=in_delay(Close,5) B=div(Close,A) C=1 D=r5 E=q95 F=is_gt(D,E) G=0 H=select_where(F,D,G) I=day_sum(H)
+#   J=day_sum(F) K=1e-6 L=add(J,K) M=div(I,L) N=add(E,K) O=div(M,N) P=q05 Q=is_lt(D,P) R=abs_(D)
+#   S=select_where(Q,R,G) T=day_sum(S) U=day_sum(Q) V=1e-6 W=add(U,V) X=div(T,W) Y=abs_(P) Z=add(Y,V)
+#   AA=div(X,Z) AB=sub(O,AA) AC=ts_mean(AB,20)
+#
+# 这一批围绕大表 + 解剖的五条结论:
+#  (甲) 上侧计数归一化 L 是纯损害:只要让 L 退化成常数(only_L_R / sub_J_day_first +5.1%、sub_L_mul +4.9%、sub_W_div +4.5%),
+#       utrain 多头腿从 -3.2% 翻到 +4.5~5.1%;整条下侧分支也是损害(abl_AA / only_AA_R / sub_AA_* 一律 +2.6~2.7%)。
+#  (乙) 1e-6 只在**分位数**那两个分母上承重(N、Z),在计数分母上完全惰性(sub_L_sub / sub_W_sub 与原式逐位同分、ρo 1.00)。
+#       sub_Y_log(把 |q05| 换成 log|q05|,q05=0 时返回 NaN → 爆炸日被 nanmean 丢掉)+4.9%,是「爆炸纯属损害」最干净的一条证据。
+#  (丙) 外层窗口 5/10/20/30/40 全平(-3.7~-2.8%),所有 mem_mean/ema/decay 与原式 ρo 0.92~1.00 —— 一天的爆炸吃掉整个窗口。
+#  (丁) 解剖:原式只在「近 15 日有冻结盘口」(6.5%,段等权 -67.4%)+14.3%、「上市不足 250 日」(7.1%,-28.7%)+5.0%,
+#       其余所有板块 / 市值 / 成交额 / 价格段一律为负,而且它超配冻结段 +2.3pp。已知族在冻结段 -10.9% 并低配 -2.9pp。
+#  (戊) 去掉爆炸后的结构变体换了一片市场:创业板 +9.0~11.6%、流通市值最低 20% +9.8~12.0%、成交额最高 20% +10.8%,
+#       大市值 ≈ 0、成交额最低 20% -6.2%;时间上只在低波(+9.4% vs +0.4%)、市场上涨(+8.2~13.1% vs -4.6~0.4%)时有效 —— 与已知族相反。
+#
+# 记号:SPINE = cross_mean(div(UPSUM, q95+1e-6), 20),即「上尾 5 分钟收益之和 ÷ q95」的 20 日均值(= only_L_R 去掉死掉的下侧分支)。
+
+
+# ---- A. 去掉计数归一化 / 去掉除法:把(甲)(乙)做成最小形
+h_a_spine20: {expr: "cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)", why: "表里最大的一次结构收益:去掉上侧计数归一化(only_L_R / sub_J_day_first +5.1%、sub_L_mul +4.9%)+ 去掉整条下侧分支(abl_AA +2.7%)。这是把这两条合成的最小形,检验原式真正有用的那一半是不是就是「上尾 5 分钟收益之和 ÷ q95」"}
+h_a_spine_inpct: {expr: "cross_mean(div(day_sum(select_where(is_gt(in_pct(Close, 5), day_quantile(Ret, 0.95)), in_pct(Close, 5), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)", why: "h_a_spine 的 in_pct 改写(定义上同为 x[t]/x[t-5]-1,只在基数为 0 时 NaN 不同):若两条同分,以后这棵树的叶子都可以用 in_pct 写,少三个节点"}
+h_a_upsum20: {expr: "cross_mean(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), 20)", why: "连 /q95 一起去掉:1e-6 的爆炸只能从 q95=0 进来,这条结构上不可能爆炸。若它 ≈ h_a_spine,说明除以分位数全程只是损害"}
+h_a_upsum_vol20: {expr: "cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(cross_mean(day_std(Ret), 20), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)", why: "保留「5 分钟幅度 ÷ 1 分钟尺度」的错配(leaf_Ret_ret5 把口径改自洽后 -6.3%,说明错配承重),但把当天 q95 换成 20 日平均日内波动 —— 同样的量纲、分母几乎不会恰为 0"}
+h_a_upcnt20: {expr: "cross_mean(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), 20)", why: "iso_J(单日超阈分钟数)dist 0.02 被门槛杀掉,但 only_L_R 的收益正是来自「不再除以这个计数」。20 日平滑后离散度应恢复,直接检验「载重的是个数而不是幅度」"}
+h_a_upcnt_ema30: {expr: "cross_ema(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), 30)", why: "同上但按 mem_ema 一族最优的慢化读;原式的外层窗口 5→40 完全是平的(-3.7%~-2.8%),去掉爆炸后窗口是否恢复出坡度"}
+h_a_cntgap20: {expr: "cross_mean(sub(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)))), 20)", why: "上下尾超阈分钟数之差 —— 原式「gap」的语义,但整条表达式没有一次除法。sub_AB_add(+3.4%)说明上下两支相减这件事本身只值 ~1 点,这条把它放在无爆炸的量上重问"}
+h_a_tailnet20: {expr: "cross_mean(add(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0)))), 20)", why: "两条尾部的带符号净漂移(abl_R 把下侧的 abs_ 去掉就 +3.4%,说明幅度化是损害):无分位数除法、无 abs_"}
+
+# ---- B. 把 1e-6 真正读到的状态直接写出来(检验丁:冻结盘口 / 次新)
+h_b_zero20: {expr: "cross_mean(day_zero_ratio(Ret), 20)", why: "解剖:原式唯一为正的段是「近 15 日有冻结盘口」(段内 +14.3%,已知族 -10.9%)。1e-6 爆炸的触发条件正是 q95 或 q05 恰为 0 = 分钟收益的 0 原子。这条直接量它,窗口与原式相同"}
+h_b_zero_max60: {expr: "cross_max(day_zero_ratio(Ret), 60)", why: "mem_max30/60 是全部 memory 变体里唯一为正的(+2.2% / +3.0%),说明有用的是「最近有没有发生过」而不是平均水平。这条把它写在干净的状态变量上"}
+h_b_flatrun20: {expr: "cross_mean(day_flat_run_max(Close), 20)", why: "分辨一字板(连续钉住)与零散不动的薄盘票:day_zero_ratio 对两者相同,最长连续段不同。原式的爆炸日既有「秒封」也有「一路爬升到涨停」"}
+h_b_zero_signed20: {expr: "cross_mean(mul(day_zero_ratio(Ret), sign(day_sum(Ret))), 20)", why: "原式的爆炸是带符号的(涨停 vs 跌停方向不同);这条把「冻结比例」乘上当日方向,检验那个符号是不是真的携带信息"}
+h_b_age250: {expr: "cross_valid_count(day_last(Close), 250)", why: "解剖:上市不足 250 日段(7.1%,段等权 -28.7%)是原式另一个为正的段(+5.0%)。立方体没有上市日期,这条用有效天数把它写出来,单独看它值多少"}
+
+# ---- C. 「5 分钟 vs 1 分钟」错配到底需要什么(检验 leaf_Ret_ret5 -6.3% 的来源)
+h_c_std_thresh20: {expr: "cross_mean(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_std(Ret))), 20)", why: "错配承重(leaf_Ret_ret5 口径自洽后 -6.3%),但到底需要的是「分位数」还是只要一个 1 分钟尺度?把阈值换成当天 1 分钟收益的标准差,错配保留、分位数去掉"}
+h_c_q75_thresh20: {expr: "cross_mean(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile_q75(Ret))), 20)", why: "阈值从 95% 放宽到 75%:触发率从约 15% 升到约 40%。若信息是尾部特有的,这条应明显弱于 h_a_upcnt20;若不变,说明读的是整条分布的形状"}
+h_c_r1_tail20: {expr: "cross_mean(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)", why: "把 5 分钟孔径换成 1 分钟(与阈值同口径),其余一字不改:leaf_Ret_ret5 是把阈值改成 5 分钟,这条是把被测量改成 1 分钟 —— 两个方向都塌才叫「错配是必需品」"}
+h_c_pos_r5_20: {expr: "cross_mean(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), 20)", why: "只留「5 分钟窗口」这一半:5 分钟收益为正的分钟占比,没有阈值、没有分位数、没有除法"}
+h_c_madz_cnt20: {expr: "cross_mean(day_sum(is_gt(in_madz(Close, 30), create_like(Close, 2))), 20)", why: "用稳健的「这一分钟有多孤立」(相对近 30 分钟中位数的 MAD z 分)代替「5 分钟收益 vs 1 分钟分位」。若原式读的是跳跃,这条应接得上"}
+
+# ---- D. 机制推断的正面检验:日内拉升 = 资金方向 / 成交位置 / 正持续性
+h_d_signed20: {expr: "cross_mean(day_signed_ratio(Ret, Amt), 20)", why: "机制推断的正面检验:结构变体的多头超额全在创业板(+9.0%)/ 小市值(+9.8%)/ 高成交额(+10.8%)—— 典型的资金日内拉升场。这条是不需要逐笔的净买压代理,直接读「拉升」"}
+h_d_signed_r5_20: {expr: "cross_mean(day_signed_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), Amt), 20)", why: "同上但方向用 5 分钟收益:若 5 分钟孔径真的重要(而不是分位数),这条应强于 h_d_signed20 —— 这是用户说的「最小子结构互换」在这棵树上的正确形式"}
+h_d_wmean20: {expr: "cross_mean(day_wmean(Ret, Amt), 20)", why: "资金实际经历的分钟收益:原式对 236 根 5 分钟收益等权,把没成交的分钟和放量的分钟一视同仁。若塌的原因是等权死分钟,这条应比 h_d_signed20 更干净"}
+h_d_pos_gap20: {expr: "cross_mean(sub(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), day_pos_ratio(Ret)), 20)", why: "03_decomposition 给出比值偏高的三个来源(1 分钟正自相关 / 跳跃 / 零收益多)。5 分钟为正的占比减 1 分钟为正的占比是第一个来源的直接读数,其余两个被抵消"}
+h_d_centroid20: {expr: "cross_mean(day_centroid(Amt), 20)", why: "成交发生在一天的什么位置:尾盘拉升与开盘秒封在原式里都只是一个爆炸,顺序信息全丢了。这条单独量它"}
+h_d_gini_amt20: {expr: "cross_mean(day_gini(Amt), 20)", why: "日内成交集中度(有界、无尺度):nosc_J_day_gini 把上侧计数换成 gini 就从 -3.2% 到 +3.9%,提示 gini 在这棵树上有信息;这条把它放到它自然的字段上"}
+
+# ---- E. 解剖落地:活跃度桶内排名、只做某一段、剔除某一段
+h_e_spine_bk_liq: {expr: "cs_bucket_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_mean(day_sum(Amt), 20))", why: "解剖最硬的一条:结构变体在成交额最高 20% 段内 +10.8%、最低 20% 段内 -6.2%,而全市场多头书却超配最低段 +10.9pp。桶内排名把活跃度倾斜抽掉,检验还剩不剩选股力(原式上 bk_liq 只剩 +0.4%)"}
+h_e_spine_bk_known: {expr: "cs_bucket_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_mean(day_std(Amt), 30))", why: "同上但桶用已知成交额族本身:表里 bk_known 做的是原式(+0.4%),没人对结构变体做过"}
+h_e_spine_high40: {expr: "cs_first_high40(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_mean(day_sum(Amt), 20))", why: "把「只在高成交额段里做」写进表达式:解剖说这棵树的信息只在活跃段。若段内数字是真的,这条应接近段内的 +10.8% 而不是全市场的 +4.9%"}
+h_e_spine_nofrozen: {expr: "cs_last_high20(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_mean(day_zero_ratio(Ret), 15))", why: "剔除近 15 日有冻结盘口的票:那一段段等权 -67.4%,结构变体在里面 -11.0%,却因为爆炸被超配。剔掉它应该是净收益"}
+h_e_spine_nonew: {expr: "cs_last_low20(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_valid_count(day_last(Close), 250))", why: "剔除次新(有效天数最低 20%):次新段段等权 -28.7%;only_L_R 在里面 -8.4%(而 sub_L_mul +20.7%)—— 两条结构变体在这一段上不一致,值得单独钉死"}
+
+# ---- F. 把时段结论写成表达式里的日频市场状态(最大胆的一类)
+h_f_blend_fix025: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), create_like(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), 0.25)))", why: "表里的 overlay 全是把**原式**叠在已知族上(ov_p025 +13.9% < 家族 +15.4%,纯稀释)。原式多头腿是负的,叠它当然亏;这条把 spine 叠上去,给增量一次公平的机会"}
+h_f_blend_calm: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), sigmoid(neg(cs_mean(cross_zscore(day_std(Ret), 60))))))", why: "解剖的时段切分:结构变体在低波时段 +9.4%、高波 +0.4%,已知族相反(+12.4 / +18.5)。cs_mean(cross_zscore(day_std(Ret),60)) 是当天全市场的波动异常度(截面常数),sigmoid(neg(·)) 让 spine 只在平静日拿到权重"}
+h_f_blend_disp: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), mul(cs_stddev_full(day_sum(Ret)), create_like(day_sum(Ret), 20))))", why: "同样的做法换一个状态变量:截面离散度高的日子结构变体 +6.4%~+9.1%、低的日子 +1.3%~+3.5%。两条状态变量哪一个真的调得动权重,这里一次问清"}
+
+# ---- G. 对已知族的增量:当筛子而不是当混合
+h_g_res_spine: {expr: "cs_regres(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), cs_rank(cross_mean(day_std(Amt), 30)))", why: "spine 对已知族的截面秩残差(表里 res_known 做的是原式,-0.3%)。ρk 只 0.07,若残差还能剩下 +3% 以上,增量就不是零"}
+h_g_fam_nofrozen: {expr: "cs_last_high20(cross_mean(day_std(Amt), 30), cross_mean(day_zero_ratio(Ret), 15))", why: "本因子对用户唯一可能的贡献形式 —— 当筛子而不是混合:已知族在冻结盘口段 -10.9%,原式在那一段 +14.3%。用冻结度把那批票从家族的多头书里剔出去"}
+h_g_fam_norun: {expr: "cs_last_high20(cross_mean(day_std(Amt), 30), cross_mean(day_flat_run_max(Close), 15))", why: "同上但用一字板(最长连续不动段)做剔除键:分辨「被剔掉的是封板票」还是「薄盘不成交票」"}
+h_g_fam_nonew: {expr: "cs_last_low20(cross_mean(day_std(Amt), 30), cross_valid_count(day_last(Close), 250))", why: "同上但剔次新:次新段等权 -28.7%、已知族在里面 +8.6%(低于它全市场的 +15.3%)。三条剔除器一起跑才知道哪一类票是真的拖累"}
+
+# ---- H. 与原式相关很低的新结构(来自机制推断,允许低 rho_o)
+h_h_persist20: {expr: "cross_mean(div(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), add(day_pos_ratio(Ret), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)", why: "大胆:把机制推断写成一个纯比率 —— 5 分钟为正的占比 ÷ 1 分钟为正的占比,就是 1 分钟收益的正持续性,有界、无尾部、不可能爆炸。与原式相关应很低,但如果机制推断对,它该是同一条信息的干净版"}
+h_h_wmean_gap20: {expr: "cross_mean(sub(day_wmean(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), Amt), day_wmean(Ret, Amt)), 20)", why: "大胆:同一个「5 分钟 vs 1 分钟」错配,但用资金加权读、完全没有分位数和掩码。若错配真的是信息源而不是爆炸的入口,这条应该有方向一致的多头腿"}
+h_h_tailmean_q75: {expr: "cross_tail_mean_q75(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 60)", why: "mem_max 一族是唯一为正的记忆(+3.0%),但 max 只读一个点、噪声大。近 60 日里 spine 日值上尾四分之一的均值 = 「最激烈的那几天有多激烈」,同一句话的稳健版"}
+h_h_spine_bk_age: {expr: "cs_bucket_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20), cross_valid_count(day_last(Close), 250))", why: "大胆的否定检验:上市时长桶内排名。若 spine 在桶内塌光,它就只是一个上市时长 / 停牌史分类器,整条线可以收掉"}
