@@ -1,6 +1,6 @@
 # F111_spearman_qclose — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:03(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #953(批次 B01_single_factors)
 - 表达式:`ts_spearman(day_quantile(Close), 10)`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F111_spear
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F111_spearman_qclose#2`:已返回结果,最后动作 10-04 15:24 → `handoff/F111_spearman_qclose/agents/lead_R2_af0c892fdf47993a9.md`
   - `work:F111_spearman_qclose#2`:失败,最后动作 10-04 15:41 → `handoff/F111_spearman_qclose/agents/work_R2_ad160550f51aa21dd.md`
   - `work:F111_spearman_qclose#2`:失败,几乎没做事
+  - `lead:F111_spearman_qclose#1`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F111_spearman_qclose` 看服务器上的 tag,`./scripts/study.sh digest F111_spearman_qclose <tag>` 重看结果)。
 

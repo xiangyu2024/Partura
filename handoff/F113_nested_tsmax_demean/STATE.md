@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:03(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F113_neste
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F113_nested_tsmax_demean#2`:已返回结果,最后动作 10-04 15:01 → `handoff/F113_nested_tsmax_demean/agents/lead_R2_aa404b933ea64d85e.md`
   - `work:F113_nested_tsmax_demean#2`:失败,最后动作 10-04 15:43 → `handoff/F113_nested_tsmax_demean/agents/work_R2_a6d503c89ebbaf6ab.md`
   - `work:F113_nested_tsmax_demean#2`:失败,几乎没做事
+  - `lead:F113_nested_tsmax_demean#1`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F113_nested_tsmax_demean` 看服务器上的 tag,`./scripts/study.sh digest F113_nested_tsmax_demean <tag>` 重看结果)。
 

@@ -1,6 +1,6 @@
 # F107_abs_demean_skew_low — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:03(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #613(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_skew(Low)))`
@@ -10,9 +10,9 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F107_abs_d
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 1 次**(10-04 15:05)—— **不许再读**。候选在留出段上的数全在 `runs/F107_abs_demean_skew_low/final.json`(`./scripts/study.sh digest F107_abs_demean_skew_low final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F107_abs_demean_skew_low#2`:已返回结果,最后动作 10-04 15:18 → `handoff/F107_abs_demean_skew_low/agents/work_R2_a2bc8edd28b214230.md`
   - `lead:F107_abs_demean_skew_low#3`:失败,最后动作 10-04 15:44 → `handoff/F107_abs_demean_skew_low/agents/lead_R3_a50b4c32e518f76fd.md`
   - `lead:F107_abs_demean_skew_low#3`:失败,几乎没做事
+  - `lead:F107_abs_demean_skew_low#1`:还在跑(多半就是你自己)
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F107_abs_demean_skew_low` 看服务器上的 tag,`./scripts/study.sh digest F107_abs_demean_skew_low <tag>` 重看结果)。
 
