@@ -1,6 +1,6 @@
 # F114_q25_closeret — 交接状态
 
-_自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:46(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1421(批次 B01_single_factors)
 - 表达式:`cross_quantile_q25(day_close(Ret), 15)`
@@ -16,46 +16,26 @@ _自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F114_q25_c
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F114_q25_closeret` 看服务器上的 tag,`./scripts/study.sh digest F114_q25_closeret <tag>` 重看结果)。
 
-## 研究现状(`notes/F114_q25_closeret/state.md`,10-04 23:46 更新)—— **先读这个文件**
+## 研究现状(`notes/F114_q25_closeret/state.md`,10-05 10:44 更新)—— **先读这个文件**
 
 # F114_q25_closeret — 研究现状(主研每轮覆盖重写)
 
-第 3 轮主研(Opus 5,2026-10-04)。`cross_quantile_q25(day_close(Ret), 15)`,来源 挖掘 #1421。
-**长表和推导不在这里**:各阶段看 `07_S1_shape.md`/`07_S2_where.md`/`07_S3_window.md`/`07_S4_long.md`/`07_S5_known.md`;
-假设的正本是 `05_hypotheses.md` 末节;候选与判据是 `10_distilled.md`。
+第 4 轮主研(Opus 5,2026-10-05)。`cross_quantile_q25(day_close(Ret), 15)`,来源 挖掘 #1421。
+本轮**只读**预先跑好的 `runs/.../sweep_s1.json`(73 变体)+ `anatomy_s1.json`,落成 `synthesis.md` 和
+第二批 39 条假设,**没有起任何计算**。正本:`synthesis.md`、`10_distilled.md`、`05_hypotheses.md`、`07_S1~S5`。
 
 ## 1. 一句话现状
 
-实验全做完(24 变体 / 4 次运行),**结论已成形且是否定的**:对只能做多的用户,这条因子相对已知成交额家族
-**没有可用的增量**(H12 被支持)。**本轮已裁决完 R2、把候选和判据写死在 `10_distilled.md`,并下了 `orders/R3.md`
-(kind: final)。下一步(执行):跑那唯一一次 `study.sh final`。** 留出段**仍未读**。
+**结论已定且是否定的,留出段也已读完**:对纯多头用户这棵树的多头腿不可用(最好 +5.1%,只有已知成交额族
+的 1/3),它的多头腿超额是一个**被已知族做得更好的流动性倾斜**;叠到已知族上是**严格稀释**(不只是 wash)。
+**本轮新增的唯一活口**:它读到的「冻结盘口」状态,在已知族亏钱的那 6.5% 股票里有效。
+**下一步(执行):跑 `studies/<fid>/hypo.yaml` 的 39 条,train/valid 口径,不碰留出段。**
 
-(…全文 6172 字符,读 `notes/F114_q25_closeret/state.md`)
+(…全文 6275 字符,读 `notes/F114_q25_closeret/state.md`)
 
-## 研究日志(`notes/F114_q25_closeret/journal.md`:22 条,其中研究员自己写的 13 条)
+## 研究日志(`notes/F114_q25_closeret/journal.md`:23 条,其中研究员自己写的 14 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:46 [主研] 第 3 轮:裁决 R2,证据已足够下否定结论,直接进留出段(工单 R3 = final,候选与判据已写死)
-
-**看到了什么(R2 的 12 个变体)**
-1. H16 被支持:窗口在 60 单峰。固定 hl20 的 train 多头腿净超额 w5 +1.5 / w15 +1.8 / w30 +2.6 / w60 +3.1 / w241 +1.1 ——
-   w241 连原式都不如;它的 rIC 只 +0.0045(t 2.72)、train 剖面最高档在 Q6、2019/2020 多头腿**毛**超额为负(−2.9%/−2.0%)。
-   **陷阱**:w241 的 valid +9.5% 是全研究最高,只看 valid 就会选它。上一轮事先写下的「valid 整段落在小盘/高波动制度里」
-   在这里救了一次。w241 排除。
-2. H17 被否定:`mean(…,60)` 只 +1.3%/+2.8%、固定 hl20 列 +0.9%(低于原式)→ 读「下四分位」在长窗口下仍必要。mean60 排除。
-3. 新的已确立事实:`s4_iso`(= `day_close(Ret)` 自己,零记忆)原始 rIC **+0.0107(t 12.29,全研究最高)**、毛超额 +5.6%,
-   但换手 10.4% → 净 −2.3%。滚动 q25 在毛超额几乎不掉(+5.6%→+5.8%)的前提下把换手压到 1/3.4,滚动均值也降频
-   但把毛超额一起平掉(+3.0%)。→ **这棵树唯一真实的结构贡献是「用顺序统计量做保尾低通滤波」,买到的是换手而不是新信息。**
-   归因在固定 hl20 列上成立,不是把平滑的功劳写成结构的。
-4. H12 被支持(= 本研究的结论):① 家族 +12.6%/+22.3% 压过最好版本 3.5~5 倍,且家族 train 长端**严格单调**
-   (Q8 +8.6 < Q9 +11.4 < Q10 +15.8),这棵树没有一个版本做到;② 残差腿 train 只 +0.4%~+0.7%,**没过我上一轮事先写的
-   +1pp 判据**,逐年 2018/2019/2020 三年全负、正收益全在 2021 之后 —— 残差的「增量」和原式本身的病是同一个病(H11);
-   ③ 等权组合 +12.0%/+21.4% vs 家族单独 +12.6%/+22.3%,**连毛超额的增量 +1.3pp/+0.9pp 都在 ±3pp 噪声带内**。
-
-**判断**
-- 「它不是已知暴露
-…(这条日志还有后文,读 journal.md)
 
 ### 2026-10-04 23:51 [执行] R3:开始,准备读留出段
 
@@ -87,6 +67,26 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 
 异常(已读partura/runner.py源码确认机制,不是猜测):
 1) 工单要求确认sign/hlL/hlS是否为fit段那套(应为f_w60 −1/3/5)——四个变体对上了,**f_w60的hlL
+…(这条日志还有后文,读 journal.md)
+
+### 2026-10-05 10:36 [主研] 批量扫描 s1 的综合
+
+73 变体大表 + 市场解剖读完,写进 `notes/F114_q25_closeret/synthesis.md`;第二批 39 条假设在
+`studies/F114_q25_closeret/hypo.yaml`(39/39 parse)。
+
+1. **载重的不是 q25,是输入在 0 上的点质量**:同槽位 q50 → dist 0.16、底腿 +19.0%→+0.2%、LS +2.36→−0.02;
+   日内中位数 dist 0.02、LTO 0.004。孔径放宽到 5 分钟(leaf_Ret_ret5)净超额 +3.6%→+0.1%。
+   这个 0 原子 = 封板/停牌/无收盘成交的「冻结盘口」,与 F108 的发现同源。**日内分钟量侧叶子全退化**
+   (volchg/amtchg dist 0.00)→ 用户「Ret↔量变化率可互换」在这棵树上不成立,因为量没有符号。
+2. **多头腿的超额全部是跨成交额桶的倾斜**:成交额五分位段内多头书 −0.7/−2.7/−6.5/−4.2/−5.1 **全负**,
+   全市场 +3.6% 来自对最低桶超配 +10.7%。res_known/res_liq 只 +1.8%(train +0.4%)。
+3. **慢化只值换手**:w5→w60 单调上坡(+2.9→+5.1),w60 的 hlL 自动掉到 3;mem_ema30 +5.0%/Lshp 0.93 最好。
+   毛超额不随慢化上升 → +1.4pp 全是换手。cross_zscore / rel60 全塌 → 载重的是持久截面水平,不是时序事件。
+4. **相对已知族是严格稀释**,不只是 wash:6 个 overlay 权重**全部**低于家族单独(+15.4%),|w| 单调向下
+   (ov_p025 +12.9 / p05 +12.5 / p10 +11.5 / m05 +7.3)。两分段同向。留出段 f_add +10.6% vs f_fam +14.1% 再次印证。
+5. **唯一活口**:近 15 日有冻结盘口段(占 6.5%、段等权 −67.4%)这棵树 +7.7%(mem_min60 +21.6%)而**家族 −10.9%**;
+   次新段(7.1%、−28.7%)这棵树 +18.1%。→ 增量只可能以**单尾筛子**存在(G 组 pow_3 / 软 AND),不是线性混合。
+6. **制度**:2018–2020 三年 ≈0 或负,2021
 …(这条日志还有后文,读 journal.md)
 
 ## 工单与结果卡(`notes/F114_q25_closeret/orders/`、`notes/F114_q25_closeret/results/`)
@@ -122,14 +122,15 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 - `S4_horizon`  10-04 15:08  6 个变体  → `./scripts/study.sh digest F114_q25_closeret S4_horizon`
 - `S5_known`  10-04 15:16  6 个变体  → `./scripts/study.sh digest F114_q25_closeret S5_known`
 - `S6_final`  10-04 23:56  5 个变体  → `./scripts/study.sh digest F114_q25_closeret S6_final`
+- `sweep_s1`  10-05 00:52  73 个变体  → `./scripts/study.sh digest F114_q25_closeret sweep_s1`
+- `anatomy_s1`  10-05 10:19  0 个变体  → `./scripts/study.sh digest F114_q25_closeret anatomy_s1`
 
 ## 已写的 notes(`notes/F114_q25_closeret/`)
 
-`01_expression.md`(3K)、`02_operators.md`(8K)、`03_decomposition.md`(2K)、`04_grammar.md`(6K)、`05_hypotheses.md`(26K)、`06_baseline.md`(14K)、`07_S1_shape.md`(7K)、`07_S2_where.md`(5K)、`07_S3_window.md`(7K)、`07_S4_long.md`(8K)、`07_S5_known.md`(7K)、`10_distilled.md`(16K)、`journal.md`(34K)、`state.md`(9K)
+`01_expression.md`(3K)、`02_operators.md`(8K)、`03_decomposition.md`(2K)、`04_grammar.md`(6K)、`05_hypotheses.md`(26K)、`06_baseline.md`(14K)、`07_S1_shape.md`(7K)、`07_S2_where.md`(5K)、`07_S3_window.md`(7K)、`07_S4_long.md`(8K)、`07_S5_known.md`(7K)、`10_distilled.md`(16K)、`journal.md`(37K)、`state.md`(9K)、`synthesis.md`(10K)
 
 ## 自写的探针与分析脚本(`studies/F114_q25_closeret/`)
 
-(无)
 
 ## 结构化结果(`handoff/F114_q25_closeret/results/`)
 

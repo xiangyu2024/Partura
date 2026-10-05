@@ -1,0 +1,185 @@
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[sweep] F106_erm_mag_gap_1m: 155 variants (base 1, bench 1, leaf 5, memory 28, shape 6, neutral 4, overlay 6, substitute 53, interaction 19, ablate 17, isolate 15)
+[panels] 143 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 32
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 76s
+[panels] GPU: 28.0 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   32/143 (155s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 40s
+[panels] GPU: 27.4 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   64/143 (214s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 34s
+[panels] GPU: 26.8 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   96/143 (268s)
+[panels] GPU: 27.1 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   128/143 (292s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 318s
+[panels] GPU: 25.5 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   143/143 (635s)
+[panels] done in 635s
+[sweep] panels: 155/155 in 637s; failed: []
+[sweep] scored 155 variants in 530s
+
+== F106_erm_mag_gap_1m  批量扫描 s1:152 个变体(只用 train / valid;半衰期按纯多头书在 train 上选)==
+多头腿净超额 Lnet 与纯多头夏普 Lshp:train | valid(train 上定方向和半衰期)| utrain(用户训练段);ρo / ρk = 与原式 / 已知族的交易信号 rank 相关
+底腿 = 最低十分位相对等权的毛超额(为正说明把方向反过来,多头腿是它);方向 sg 按 train 的 rank IC 定
+id                     kind     sg hlL | Lnet tr     va     ut   | Lshp tr    va    ut  | LTO   | LS tr   va  | 底腿 tr    va   |  ρo    ρk  | cov  dist | expr
+v_base                 base     -1  20 |  -6.9%  -3.2%  -5.8% | -2.15 -1.23 -1.91 |  2.4% | +2.82 +3.24 | -27.9% -22.4% | +1.00 +0.01 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | +0.01 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+------------------------------------------------------------ 按 utrain 纯多头夏普排序的前 45 个
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | +0.01 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+ov_p025                overlay  -1  10 |  +9.8% +19.4% +12.6% | +1.40 +2.94 +1.82 |  2.9% | +1.34 +3.04 | -13.3% -25.6% | +0.01 +0.96 | 1.00 0.92 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_p05                 overlay  -1  10 |  +9.2% +17.5% +11.6% | +1.33 +2.68 +1.70 |  4.7% | +1.25 +2.87 | -13.4% -25.6% | +0.04 +0.95 | 1.00 0.86 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_m025                overlay  -1   5 |  +7.2% +19.5% +10.7% | +1.03 +2.93 +1.56 |  5.0% | +1.03 +2.92 | -13.1% -27.1% | -0.03 +0.98 | 1.00 0.94 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_p10                 overlay  -1  20 |  +7.7% +16.7% +10.3% | +1.12 +2.63 +1.52 |  4.3% | +1.12 +2.86 | -11.4% -23.2% | +0.07 +0.91 | 1.00 0.79 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_m05                 overlay  -1  20 |  +4.9% +19.2%  +9.0% | +0.72 +2.88 +1.33 |  2.8% | +0.68 +2.61 |  -7.3% -20.4% | -0.07 +0.91 | 1.00 0.91 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_m10                 overlay  -1  20 |  +2.1% +16.6%  +6.2% | +0.32 +2.52 +0.94 |  4.8% | +0.40 +2.29 |  -6.7% -19.6% | -0.12 +0.89 | 1.00 0.87 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+abl_M                  ablate   +1  20 |  +3.1%  +4.3%  +3.4% | +0.57 +0.62 +0.59 |  2.4% | +2.26 +1.43 | -17.1% -10.2% | +0.34 +0.06 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+leaf_Ret_amtchg        leaf     +1  20 |  -1.7%  +9.4%  +1.5% | -0.24 +1.24 +0.20 |  4.2% | +0.11 +2.18 |  -5.4% -23.4% | -0.10 +0.69 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(in_pct(Amt, 1), day_quantile(in_pct(Amt, 1), 0.95)), in_pct(Amt, 1), create_like(
+sub_F_day_close        substitu -1  20 |  -2.3% +10.8%  +1.5% | -0.28 +1.38 +0.18 |  3.1% | +1.90 +3.45 | -30.1% -26.6% | +0.57 +0.07 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_close(is_gt(Re
+sub_F_day_last         substitu -1  20 |  -2.3% +10.8%  +1.5% | -0.28 +1.38 +0.18 |  3.1% | +1.90 +3.45 | -30.1% -26.6% | +0.57 +0.07 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_last(is_gt(Ret
+only_H_R               interact -1  20 |  -2.1% +10.4%  +1.5% | -0.25 +1.23 +0.18 |  2.5% | +1.95 +3.13 | -30.2% -26.7% | +0.58 -0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), create_like(day_quanti
+sub_F_day_first        substitu -1  20 |  -2.1% +10.4%  +1.5% | -0.25 +1.23 +0.18 |  2.5% | +1.95 +3.13 | -30.2% -26.7% | +0.58 -0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_first(is_gt(Re
+sub_I_mul              substitu -1  20 |  -2.6% +10.7%  +1.2% | -0.33 +1.28 +0.15 |  2.1% | +1.86 +3.22 | -27.1% -24.3% | +0.57 +0.04 | 1.00 0.99 | sub(div(mul(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+leaf_Ret_volchg        leaf     +1  20 |  -2.2%  +9.1%  +1.1% | -0.29 +1.18 +0.14 |  4.5% | +0.09 +2.15 |  -5.6% -23.5% | -0.11 +0.69 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(in_pct(Volume, 1), day_quantile(in_pct(Volume, 1), 0.95)), in_pct(Volume, 1), cre
+sub_Q_day_close        substitu +1  20 |  -3.0%  +9.9%  +0.7% | -0.37 +1.14 +0.09 |  2.7% | +1.60 +2.88 | -25.3% -22.5% | +0.15 +0.08 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+sub_Q_day_last         substitu +1  20 |  -3.0%  +9.9%  +0.7% | -0.37 +1.14 +0.09 |  2.7% | +1.60 +2.88 | -25.3% -22.5% | +0.15 +0.08 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+only_S_R               interact +1  20 |  -3.4%  +9.4%  +0.3% | -0.42 +1.06 +0.03 |  2.2% | +1.59 +2.80 | -25.5% -22.3% | +0.15 +0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+sub_Q_day_first        substitu +1  20 |  -3.4%  +9.4%  +0.3% | -0.42 +1.06 +0.03 |  2.2% | +1.59 +2.80 | -25.5% -22.3% | +0.15 +0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+abl_I                  ablate   -1  20 |  -3.7%  +6.6%  -0.7% | -0.66 +1.13 -0.13 |  1.8% | +2.20 +3.74 | -29.2% -26.0% | +0.68 -0.01 | 1.00 0.99 | sub(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_quantile(Ret, 0.95
+mem_stddev60           memory   -1   3 |  +2.6% -12.6%  -1.7% | +0.26 -1.25 -0.17 |  2.6% | +1.82 +0.45 | -19.7% -17.7% | +0.36 -0.08 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+iso_E                  isolate  -1  20 |  -5.2%  +7.2%  -1.7% | -0.52 +0.75 -0.17 |  3.0% | +1.11 +2.04 | -29.0% -35.1% | +0.18 +0.35 | 1.00 0.99 | day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0)))
+sub_J_div              substitu +1  20 |  -2.4%  +2.3%  -1.1% | -0.43 +0.38 -0.19 |  3.9% | +0.53 +1.22 |  -8.7%  -7.7% | -0.07 -0.19 | 0.99 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+mem_stddev30           memory   -1   3 |  +2.3% -13.7%  -2.2% | +0.23 -1.50 -0.23 |  4.1% | +2.31 +0.50 | -26.7% -22.4% | +0.31 -0.08 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_max60              memory   -1   2 |  +1.5% -11.4%  -2.1% | +0.17 -1.28 -0.24 |  2.7% | +1.95 +0.67 | -20.6% -18.7% | +0.52 -0.10 | 1.00 1.00 | cross_max(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+rank_I                 interact -1  20 |  +0.3%  -8.4%  -2.1% | +0.04 -1.00 -0.27 |  2.2% | +2.82 +1.00 | -31.9% -22.8% | +0.54 +0.01 | 1.00 1.00 | sub(div(div(cs_rank(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0)))), cs_rank(add(d
+nosc_F_day_gini        substitu -1  20 |  -4.1%  +4.5%  -1.6% | -0.70 +0.77 -0.28 |  5.3% | +1.91 +3.19 | -28.1% -24.1% | +0.67 +0.00 | 0.99 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_gini(is_gt(Ret
+rank_H                 interact -1  20 |  -2.5%  +0.0%  -1.8% | -0.52 +0.01 -0.31 |  2.1% | +2.68 +1.87 | -29.4% -23.0% | +0.58 +0.05 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(cs_rank(day_sum(is
+rank_T                 interact +1  20 |  -0.3%  -7.8%  -2.4% | -0.04 -0.97 -0.32 |  2.2% | +3.17 +1.75 | -36.2% -27.4% | +0.33 +0.04 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+sub_V_div              substitu -1  20 |  -3.2%  +2.0%  -1.7% | -0.61 +0.36 -0.32 |  3.9% | +0.53 +0.27 | -11.6%  -4.9% | +0.28 -0.21 | 0.99 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+mem_stddev10           memory   -1  20 |  +0.9% -13.1%  -3.1% | +0.09 -1.37 -0.32 |  2.6% | +2.33 +0.55 | -22.1% -18.9% | +0.46 -0.05 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_max30              memory   -1  10 |  +0.3% -11.9%  -3.1% | +0.04 -1.34 -0.34 |  2.5% | +2.53 +0.55 | -18.8% -17.4% | +0.65 -0.08 | 1.00 1.00 | cross_max(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+iso_I                  isolate  -1  20 |  -6.1%  +3.3%  -3.4% | -0.67 +0.40 -0.38 |  2.8% | +1.34 +2.17 | -31.9% -37.5% | +0.24 +0.29 | 1.00 0.99 | div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_qua
+mem_stddev5            memory   -1  20 |  +0.1% -13.0%  -3.6% | +0.01 -1.37 -0.38 |  3.5% | +2.06 +0.53 | -25.6% -22.3% | +0.46 -0.05 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+only_J_R               interact -1  20 |  -6.5%  +3.0%  -3.8% | -0.71 +0.36 -0.42 |  2.9% | +1.15 +2.09 | -29.9% -37.2% | +0.24 +0.29 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+abl_B                  ablate   -1  20 |  -6.6%  +5.6%  -3.1% | -1.09 +0.67 -0.46 |  1.6% | +1.65 +2.38 | -20.8% -15.0% | +0.41 +0.11 | 1.00 1.00 | sub(div(div(day_sum(select_where(Ret, Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), crea
+abl_C                  ablate   -1  20 |  -6.6%  +5.6%  -3.1% | -1.09 +0.67 -0.46 |  1.6% | +1.65 +2.38 | -20.8% -15.0% | +0.41 +0.11 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, Ret)), add(day_sum(is_gt(Ret, day_quantile(Re
+mem_max10              memory   -1  20 |  -1.3% -12.1%  -4.4% | -0.14 -1.30 -0.47 |  2.6% | +2.10 -0.26 | -20.4% -19.1% | +0.72 -0.08 | 1.00 1.00 | cross_max(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+sub_U_log              substitu -1  20 |  -4.6%  +0.6%  -3.1% | -0.70 +0.09 -0.47 |  5.8% | +0.24 +0.11 | -11.8%  -5.7% | +0.31 -0.23 | 0.99 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+iso_H                  isolate  -1  20 |  -8.2%  +5.5%  -4.3% | -0.98 +0.58 -0.49 |  2.5% | -0.98 +0.99 |  +6.4% -13.7% | -0.15 +0.23 | 1.00 0.00 ✗门槛 | add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))
+iso_F                  isolate  -1  20 |  -8.2%  +5.5%  -4.3% | -0.98 +0.58 -0.49 |  2.5% | -0.98 +0.99 |  +6.4% -13.7% | -0.15 +0.23 | 1.00 0.00 ✗门槛 | day_sum(is_gt(Ret, day_quantile(Ret, 0.95)))
+iso_S                  isolate  -1  20 |  -8.2%  +5.5%  -4.3% | -0.98 +0.57 -0.49 |  2.5% | -0.94 +0.98 |  +5.6% -13.9% | -0.15 +0.22 | 1.00 0.00 ✗门槛 | add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))
+iso_Q                  isolate  -1  20 |  -8.2%  +5.5%  -4.3% | -0.98 +0.57 -0.49 |  2.5% | -0.94 +0.98 |  +5.6% -13.9% | -0.15 +0.22 | 1.00 0.00 ✗门槛 | day_sum(is_lt(Ret, day_quantile(Ret, 0.05)))
+rel60                  shape    -1  20 |  -2.4%  +0.2%  -1.6% | -0.71 +0.05 -0.49 |  5.5% | -1.20 -3.45 |  +1.1%  +2.1% | +0.08 +0.03 | 1.00 0.99 | div(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(
+sub_X_add              substitu -1  20 |  -3.2%  -3.3%  -3.2% | -0.51 -0.52 -0.51 |  4.6% | +2.26 +2.01 | -32.6% -27.4% | +0.47 -0.07 | 1.00 0.99 | add(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+------------------------------------------------------------ 每一类里最好的 3 个(按 utrain 纯多头夏普)
+v_base                 base     -1  20 |  -6.9%  -3.2%  -5.8% | -2.15 -1.23 -1.91 |  2.4% | +2.82 +3.24 | -27.9% -22.4% | +1.00 +0.01 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | +0.01 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+rel60                  shape    -1  20 |  -2.4%  +0.2%  -1.6% | -0.71 +0.05 -0.49 |  5.5% | -1.20 -3.45 |  +1.1%  +2.1% | +0.08 +0.03 | 1.00 0.99 | div(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(
+fold_rank              shape    -1  20 |  -3.5% -11.9%  -5.8% | -0.47 -1.53 -0.78 | 10.1% | -0.03 -1.40 | -11.9%  -2.9% | +0.18 -0.19 | 1.00 0.85 | abs_(cs_demean(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))),
+win                    shape    -1  20 |  -9.7%  -9.3%  -9.6% | -1.94 -2.15 -1.99 | 12.7% | +0.22 -0.51 | -19.2% -13.3% | +0.57 +0.02 | 1.00 0.97 | cs_winsor(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+sub_F_day_close        substitu -1  20 |  -2.3% +10.8%  +1.5% | -0.28 +1.38 +0.18 |  3.1% | +1.90 +3.45 | -30.1% -26.6% | +0.57 +0.07 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_close(is_gt(Re
+sub_F_day_last         substitu -1  20 |  -2.3% +10.8%  +1.5% | -0.28 +1.38 +0.18 |  3.1% | +1.90 +3.45 | -30.1% -26.6% | +0.57 +0.07 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_last(is_gt(Ret
+sub_F_day_first        substitu -1  20 |  -2.1% +10.4%  +1.5% | -0.25 +1.23 +0.18 |  2.5% | +1.95 +3.13 | -30.2% -26.7% | +0.58 -0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_first(is_gt(Re
+only_H_R               interact -1  20 |  -2.1% +10.4%  +1.5% | -0.25 +1.23 +0.18 |  2.5% | +1.95 +3.13 | -30.2% -26.7% | +0.58 -0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), create_like(day_quanti
+only_S_R               interact +1  20 |  -3.4%  +9.4%  +0.3% | -0.42 +1.06 +0.03 |  2.2% | +1.59 +2.80 | -25.5% -22.3% | +0.15 +0.00 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+rank_I                 interact -1  20 |  +0.3%  -8.4%  -2.1% | +0.04 -1.00 -0.27 |  2.2% | +2.82 +1.00 | -31.9% -22.8% | +0.54 +0.01 | 1.00 1.00 | sub(div(div(cs_rank(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0)))), cs_rank(add(d
+iso_E                  isolate  -1  20 |  -5.2%  +7.2%  -1.7% | -0.52 +0.75 -0.17 |  3.0% | +1.11 +2.04 | -29.0% -35.1% | +0.18 +0.35 | 1.00 0.99 | day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0)))
+iso_I                  isolate  -1  20 |  -6.1%  +3.3%  -3.4% | -0.67 +0.40 -0.38 |  2.8% | +1.34 +2.17 | -31.9% -37.5% | +0.24 +0.29 | 1.00 0.99 | div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_qua
+iso_H                  isolate  -1  20 |  -8.2%  +5.5%  -4.3% | -0.98 +0.58 -0.49 |  2.5% | -0.98 +0.99 |  +6.4% -13.7% | -0.15 +0.23 | 1.00 0.00 ✗门槛 | add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))
+leaf_Ret_amtchg        leaf     +1  20 |  -1.7%  +9.4%  +1.5% | -0.24 +1.24 +0.20 |  4.2% | +0.11 +2.18 |  -5.4% -23.4% | -0.10 +0.69 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(in_pct(Amt, 1), day_quantile(in_pct(Amt, 1), 0.95)), in_pct(Amt, 1), create_like(
+leaf_Ret_volchg        leaf     +1  20 |  -2.2%  +9.1%  +1.1% | -0.29 +1.18 +0.14 |  4.5% | +0.09 +2.15 |  -5.6% -23.5% | -0.11 +0.69 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(in_pct(Volume, 1), day_quantile(in_pct(Volume, 1), 0.95)), in_pct(Volume, 1), cre
+leaf_Ret_ret5          leaf     -1  20 |  -8.1%  -5.7%  -7.4% | -1.79 -1.80 -1.77 |  1.8% | +2.67 +2.56 | -25.1% -19.2% | +0.57 -0.03 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(in_pct(Close, 5), day_quantile(in_pct(Close, 5), 0.95)), in_pct(Close, 5), create
+mem_stddev60           memory   -1   3 |  +2.6% -12.6%  -1.7% | +0.26 -1.25 -0.17 |  2.6% | +1.82 +0.45 | -19.7% -17.7% | +0.36 -0.08 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_stddev30           memory   -1   3 |  +2.3% -13.7%  -2.2% | +0.23 -1.50 -0.23 |  4.1% | +2.31 +0.50 | -26.7% -22.4% | +0.31 -0.08 | 1.00 1.00 | cross_stddev(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_max60              memory   -1   2 |  +1.5% -11.4%  -2.1% | +0.17 -1.28 -0.24 |  2.7% | +1.95 +0.67 | -20.6% -18.7% | +0.52 -0.10 | 1.00 1.00 | cross_max(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+res_liq                neutral  -1  20 | -11.1% -13.3% -11.7% | -2.11 -2.62 -2.25 | 15.3% | -0.72 -1.46 | -15.5% -10.7% | +0.48 +0.05 | 1.00 1.00 | cs_regres(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(
+res_known              neutral  -1  20 | -11.5% -13.9% -12.2% | -2.13 -2.63 -2.26 | 15.3% | -0.78 -1.57 | -15.2% -10.1% | +0.48 +0.03 | 1.00 1.00 | cs_regres(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(
+bk_known               neutral  -1  20 | -11.4% -14.7% -12.3% | -2.10 -2.69 -2.27 | 15.3% | -0.66 -1.52 | -16.3% -11.2% | +0.47 +0.03 | 1.00 0.20 ✗门槛 | cs_bucket_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day
+ov_p025                overlay  -1  10 |  +9.8% +19.4% +12.6% | +1.40 +2.94 +1.82 |  2.9% | +1.34 +3.04 | -13.3% -25.6% | +0.01 +0.96 | 1.00 0.92 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_p05                 overlay  -1  10 |  +9.2% +17.5% +11.6% | +1.33 +2.68 +1.70 |  4.7% | +1.25 +2.87 | -13.4% -25.6% | +0.04 +0.95 | 1.00 0.86 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+ov_m025                overlay  -1   5 |  +7.2% +19.5% +10.7% | +1.03 +2.93 +1.56 |  5.0% | +1.03 +2.92 | -13.1% -27.1% | -0.03 +0.98 | 1.00 0.94 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.9
+abl_M                  ablate   +1  20 |  +3.1%  +4.3%  +3.4% | +0.57 +0.62 +0.59 |  2.4% | +2.26 +1.43 | -17.1% -10.2% | +0.34 +0.06 | 1.00 1.00 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+abl_I                  ablate   -1  20 |  -3.7%  +6.6%  -0.7% | -0.66 +1.13 -0.13 |  1.8% | +2.20 +3.74 | -29.2% -26.0% | +0.68 -0.01 | 1.00 0.99 | sub(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_quantile(Ret, 0.95
+abl_B                  ablate   -1  20 |  -6.6%  +5.6%  -3.1% | -1.09 +0.67 -0.46 |  1.6% | +1.65 +2.38 | -20.8% -15.0% | +0.41 +0.11 | 1.00 1.00 | sub(div(div(day_sum(select_where(Ret, Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), crea
+------------------------------------------------------------ 垫底的 8 个(方向反过来也是信息)
+sub_I_sub              substitu -1  20 | -30.5% -26.9% -29.4% | -4.22 -4.47 -4.27 |  2.4% | -3.09 -2.93 |  -4.4%  -2.0% | -0.46 +0.02 | 1.00 1.00 | sub(div(sub(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+fold_mean              shape    +1  20 | -34.0% -27.0% -32.0% | -4.46 -4.07 -4.35 |  2.5% | -3.78 -4.25 |  -4.3%  -1.4% | -0.23 -0.06 | 1.00 0.98 | abs_(cs_demean(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day
+sub_J_sub              substitu -1  20 | -34.4% -29.0% -32.9% | -4.41 -4.31 -4.37 |  2.6% | -4.03 -4.71 |  -1.7%  -0.9% | -0.21 -0.07 | 1.00 0.99 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret,
+abl_D                  ablate   +1  20 | -35.2% -29.2% -32.7% | -4.60 -4.45 -4.48 |  2.8% | -3.02 -1.24 |  -3.4%  -7.9% | -0.52 +0.06 | 1.00 0.99 | sub(div(div(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(
+mem_zscore60           memory   -1  20 | -16.6% -15.4% -16.2% | -4.94 -5.72 -5.10 | 15.9% | -1.64 -3.33 | -20.7% -12.5% | +0.10 +0.02 | 1.00 1.00 | cross_zscore(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_zscore30           memory   -1  20 | -20.4% -18.3% -19.8% | -6.24 -7.12 -6.41 | 20.1% | -3.20 -5.12 | -20.4% -11.5% | +0.06 +0.00 | 1.00 1.00 | cross_zscore(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_zscore10           memory   -1  20 | -27.5% -29.0% -27.9% | -8.63 -10.73 -9.13 | 30.3% | -7.18 -10.19 | -18.3%  -9.8% | +0.00 -0.01 | 1.00 1.00 | cross_zscore(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+mem_zscore5            memory   -1  20 | -33.1% -33.7% -33.2% | -10.48 -13.00 -11.06 | 36.4% | -11.65 -14.86 | -11.1%  -7.3% | -0.03 -0.01 | 1.00 1.00 | cross_zscore(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_s
+
+wrote /root/autodl-tmp/Partura/runs/F106_erm_mag_gap_1m/sweep_s1.json  (1183s total)
+[guard] all 6 run slots busy, waiting ...
+[guard] got run slot 3 after 372s
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+/root/autodl-tmp/Partura/scripts/anatomy.py:130: RuntimeWarning: Mean of empty slice
+  mkt = np.nanmean(ret, axis=1)
+/root/miniconda3/envs/quant/lib/python3.12/site-packages/numpy/lib/_nanfunctions_impl.py:2015: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+
+== F106_erm_mag_gap_1m 市场解剖(用户训练段 20180102–20230807;交易信号 = 方向×面板,多头口径半衰期)==
+  [0] v_base               hl  20  全市场多头净超额 -5.8% 夏普 -1.91 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+  [1] k_known              hl   0  全市场多头净超额 +15.4% 夏普 +2.22 | cross_mean(day_std(Amt), 30)
+  [2] abl_M                hl  20  全市场多头净超额 +3.4% 夏普 +0.59 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+  [3] leaf_Ret_amtchg      hl  20  全市场多头净超额 +1.5% 夏普 +0.20 | sub(div(div(day_sum(select_where(is_gt(in_pct(Amt, 1), day_quantile(in_pct(Amt, 1), 0.95)), in_pct(Amt, 1), cr
+  [4] sub_F_day_close      hl  20  全市场多头净超额 +1.5% 夏普 +0.18 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_clos
+  [5] sub_F_day_last       hl  20  全市场多头净超额 +1.5% 夏普 +0.18 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_last
+  [6] only_H_R             hl  20  全市场多头净超额 +1.5% 夏普 +0.18 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), create_like(
+  [7] sub_F_day_first      hl  20  全市场多头净超额 +1.5% 夏普 +0.18 | sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_firs
+  [8] sub_I_mul            hl  20  全市场多头净超额 +1.2% 夏普 +0.15 | sub(div(mul(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(
+  [9] leaf_Ret_volchg      hl  20  全市场多头净超额 +1.1% 夏普 +0.14 | sub(div(div(day_sum(select_where(is_gt(in_pct(Volume, 1), day_quantile(in_pct(Volume, 1), 0.95)), in_pct(Volum
+
+-- 按股票范围:段内自建多头书的净超额(括号 = 全市场多头书在该段的持仓占比 − 该段占全市场的比例)
+段                             占比    段等权超额 |       [0]       |       [1]       |       [2]       |       [3]       |       [4]       |       [5]       |       [6]       |       [7]       |       [8]       |       [9]      
+板块:沪主板                     38.1%    -0.3% | -6.9% (+4.3%) | +14.8% (+6.9%) | +1.0% (-10.8%) | +0.3% (+3.6%) | +1.5% (+16.6%) | +1.5% (+16.6%) | +1.2% (+18.1%) | +1.2% (+18.1%) | -0.3% (+17.5%) | +0.4% (+3.4%)
+板块:深主板                     34.8%    -1.1% | -5.8% (+4.3%) | +20.9% (-6.3%) | -3.4% (-20.4%) | +2.0% (+8.8%) | +2.9% (-1.9%) | +2.9% (-1.9%) | +3.5% (-0.9%) | +3.5% (-0.9%) | +3.5% (+0.2%) | +1.9% (+9.0%)
+板块:创业板                     23.2%    +1.8% | -7.8% (-6.5%) | +18.9% (-4.6%) | +0.8% (+1.7%) | +3.9% (-10.2%) | +4.1% (-13.5%) | +4.1% (-13.5%) | +2.2% (-14.7%) | +2.2% (-14.7%) | +1.2% (-14.5%) | +2.5% (-9.2%)
+板块:科创板                      4.0%    +4.1% | -23.6% (-2.1%) | +1.4% (+3.9%) | -5.7% (+29.5%) | +3.0% (-2.3%) | -6.5% (-1.2%) | -6.5% (-1.2%) | -11.4% (-2.4%) | -11.4% (-2.4%) | -10.6% (-3.3%) | +3.7% (-3.3%)
+流通市值:最低20%                 19.4%    +6.4% | -5.8% (-2.2%) | +9.3% (+30.8%) | -0.6% (+28.2%) | +4.7% (+0.9%) | +7.2% (-14.0%) | +7.2% (-14.0%) | +1.9% (-15.8%) | +1.9% (-15.8%) | +4.3% (-14.6%) | +3.9% (+0.5%)
+流通市值:20-40%                20.0%    +5.0% | -7.4% (+2.8%) | +9.5% (+11.0%) | -3.8% (+1.8%) | -2.2% (+13.0%) | +5.5% (-5.1%) | +5.5% (-5.1%) | +6.2% (-6.2%) | +6.2% (-6.2%) | +4.3% (-4.2%) | -3.4% (+12.7%)
+流通市值:40-60%                20.1%    -3.3% | -13.1% (+2.2%) | +9.2% (-6.1%) | -5.3% (-5.4%) | -3.3% (+9.2%) | +9.3% (+3.7%) | +9.3% (+3.7%) | +9.9% (+3.8%) | +9.9% (+3.8%) | +5.3% (+5.4%) | -4.1% (+9.6%)
+流通市值:60-80%                20.2%    -3.7% | -11.3% (+1.7%) | +3.5% (-15.9%) | -0.9% (-9.6%) | -9.5% (-5.5%) | +0.5% (+5.4%) | +0.5% (+5.4%) | +0.6% (+6.4%) | +0.6% (+6.4%) | +0.5% (+6.0%) | -8.9% (-5.2%)
+流通市值:最高20%                 20.3%    -2.0% | -7.8% (-4.4%) | +0.7% (-19.7%) | +0.3% (-14.9%) | -6.8% (-17.6%) | -1.5% (+10.1%) | -1.5% (+10.1%) | -0.9% (+11.9%) | -0.9% (+11.9%) | -0.7% (+7.4%) | -6.8% (-17.5%)
+成交额(20日):最低20%             19.6%   +15.1% | -5.3% (-1.5%) | -4.1% (+80.3%) | -11.8% (+26.2%) | -7.0% (+29.3%) | -9.8% (+8.7%) | -9.8% (+8.7%) | -8.5% (+6.4%) | -8.5% (+6.4%) | -9.5% (+7.5%) | -6.3% (+27.9%)
+成交额(20日):20-40%            19.9%    +8.9% | -9.5% (-0.7%) | -5.3% (-19.8%) | -8.5% (+5.0%) | -9.8% (+9.6%) | -4.6% (+6.4%) | -4.6% (+6.4%) | -3.9% (+5.5%) | -3.9% (+5.5%) | -5.4% (+6.2%) | -10.2% (+10.3%)
+成交额(20日):40-60%            20.0%    +2.6% | -9.7% (-0.2%) | -8.2% (-20.0%) | -6.3% (-5.0%) | -12.4% (-6.1%) | -4.0% (+0.4%) | -4.0% (+0.4%) | -2.7% (+0.6%) | -2.7% (+0.6%) | -5.4% (+0.5%) | -13.1% (-5.5%)
+成交额(20日):60-80%            20.1%    -6.0% | -12.5% (+0.8%) | -5.2% (-20.1%) | -2.8% (-11.2%) | -29.4% (-14.8%) | -3.4% (-5.6%) | -3.4% (-5.6%) | -1.3% (-4.5%) | -1.3% (-4.5%) | -5.2% (-5.1%) | -30.3% (-14.6%)
+成交额(20日):最高20%             20.3%   -17.8% | -6.9% (+1.7%) | +2.5% (-20.3%) | -5.4% (-14.9%) | -43.5% (-18.0%) | +5.6% (-9.7%) | +5.6% (-9.7%) | +2.3% (-8.0%) | +2.3% (-8.0%) | +4.7% (-9.0%) | -42.5% (-17.9%)
+价格:最低20%                   20.1%    +7.0% | -5.3% (+1.9%) | +10.6% (+19.6%) | +2.2% (-8.7%) | -0.4% (+20.9%) | -5.2% (+18.6%) | -5.2% (+18.6%) | -5.6% (+19.8%) | -5.6% (+19.8%) | -7.0% (+20.7%) | -0.9% (+21.5%)
+价格:20-40%                  20.0%    +4.3% | -10.9% (+1.6%) | +10.4% (+12.1%) | +1.7% (+4.0%) | -5.4% (+4.4%) | -2.1% (-1.9%) | -2.1% (-1.9%) | -2.3% (-2.2%) | -2.3% (-2.2%) | -4.0% (-1.0%) | -4.5% (+4.5%)
+价格:40-60%                  20.0%    +0.5% | -10.6% (-0.6%) | +8.3% (-1.1%) | -2.3% (+4.4%) | -3.9% (-1.7%) | +1.4% (-4.1%) | +1.4% (-4.1%) | +2.9% (-4.5%) | +2.9% (-4.5%) | -0.0% (-4.1%) | -6.1% (-1.9%)
+价格:60-80%                  19.9%    -6.1% | -8.7% (-0.7%) | +9.4% (-12.3%) | +1.5% (+3.7%) | -6.2% (-8.8%) | +1.9% (-5.7%) | +1.9% (-5.7%) | -0.5% (-6.4%) | -0.5% (-6.4%) | -0.2% (-6.5%) | -7.0% (-9.1%)
+价格:最高20%                   19.9%    -3.8% | -8.5% (-2.1%) | +2.1% (-18.2%) | +2.1% (-3.4%) | -8.4% (-14.7%) | -2.6% (-6.7%) | -2.6% (-6.7%) | -3.8% (-6.6%) | -3.8% (-6.6%) | -0.5% (-9.1%) | -8.6% (-14.9%)
+上市:不足250日                   7.1%   -28.7% | -15.0% (-3.2%) | +8.6% (-0.9%) | +1.1% (+16.9%) | +3.8% (-3.5%) | -9.6% (-4.6%) | -9.6% (-4.6%) | -12.7% (-4.9%) | -12.7% (-4.9%) | -14.3% (-5.0%) | -2.5% (-3.8%)
+上市:250日以上                  92.9%    +1.6% | -6.4% (+3.2%) | +15.3% (+0.9%) | +4.4% (-16.9%) | +1.2% (+3.5%) | +1.5% (+4.6%) | +1.5% (+4.6%) | +1.3% (+4.9%) | +1.3% (+4.9%) | +0.8% (+5.0%) | +1.0% (+3.8%)
+近15日有冻结盘口(封板/停牌)            6.5%   -67.4% | +18.2% (+4.6%) | -10.9% (-2.9%) | -24.3% (-3.8%) | +12.0% (+6.0%) | -31.0% (-4.3%) | -31.0% (-4.3%) | -28.4% (-4.2%) | -28.4% (-4.2%) | -17.0% (-2.3%) | +19.3% (+6.2%)
+近15日无冻结盘口                  93.5%    +3.7% | -6.9% (-4.6%) | +14.1% (+2.9%) | +3.5% (+3.8%) | +5.2% (-6.0%) | -0.3% (+4.3%) | -0.3% (+4.3%) | -0.6% (+4.2%) | -0.6% (+4.2%) | -0.4% (+2.3%) | +5.6% (-6.2%)
+
+-- 按时间 / 市场状态:全市场多头书的净超额(年化)
+时段                            天数 |   [0]   |   [1]   |   [2]   |   [3]   |   [4]   |   [5]   |   [6]   |   [7]   |   [8]   |   [9]  
+年:2018                       243 |   -9.2% |  +17.3% |   +1.9% |   -7.0% |   -4.0% |   -4.0% |   -3.6% |   -3.6% |   -4.5% |   -9.5%
+年:2019                       244 |   -6.0% |  +10.4% |   +5.5% |   -7.6% |   -2.6% |   -2.6% |   -1.9% |   -1.9% |   -2.9% |   -5.6%
+年:2020                       243 |   -8.5% |   +6.7% |   +4.1% |   -5.8% |   -5.7% |   -5.7% |   -5.1% |   -5.1% |   -6.1% |   -6.7%
+年:2021                       243 |   -4.0% |  +16.1% |   +0.7% |  +13.6% |   +3.2% |   +3.2% |   +2.3% |   +2.3% |   +3.1% |  +13.2%
+年:2022                       242 |   -0.6% |  +24.7% |   +3.7% |  +15.8% |  +11.8% |  +11.8% |  +11.0% |  +11.0% |  +12.0% |  +15.6%
+年:2023                       144 |   -7.2% |  +18.5% |   +5.6% |   -1.3% |   +9.4% |   +9.4% |   +9.7% |   +9.7% |   +8.8% |   -1.5%
+市场近20日:上涨                    753 |   -7.2% |  +23.0% |   +7.4% |   +8.7% |   +9.1% |   +9.1% |   +9.7% |   +9.7% |   +8.6% |   +8.4%
+市场近20日:下跌                    586 |   -3.7% |   +6.0% |   -0.6% |   -7.0% |   -7.8% |   -7.8% |   -8.7% |   -8.7% |   -7.7% |   -7.5%
+市场波动:高于中位                    679 |   -5.6% |  +18.5% |   +4.4% |   -0.4% |   -2.8% |   -2.8% |   -3.9% |   -3.9% |   -3.3% |   -0.9%
+市场波动:低于中位                    679 |   -6.0% |  +12.4% |   +2.5% |   +3.4% |   +5.8% |   +5.8% |   +6.9% |   +6.9% |   +5.7% |   +3.1%
+截面离散度:高                      679 |   -6.2% |  +18.9% |   +1.5% |   +6.6% |   +4.8% |   +4.8% |   +4.8% |   +4.8% |   +4.4% |   +6.0%
+截面离散度:低                      679 |   -5.3% |  +12.0% |   +5.5% |   -3.6% |   -1.8% |   -1.8% |   -1.8% |   -1.8% |   -2.0% |   -3.8%
+成交:放量(高于60日均)                606 |   -5.4% |  +19.9% |   +2.6% |   +6.4% |   +4.1% |   +4.1% |   +4.1% |   +4.1% |   +4.3% |   +7.2%
+成交:缩量                        753 |   -6.1% |  +11.8% |   +4.1% |   -2.5% |   -0.7% |   -0.7% |   -0.5% |   -0.5% |   -1.3% |   -3.9%
+
+wrote /root/autodl-tmp/Partura/runs/F106_erm_mag_gap_1m/anatomy_s1.json (231s)
+[partura exit 0 2026-10-06_01:45:14]

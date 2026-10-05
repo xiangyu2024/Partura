@@ -1,0 +1,68 @@
+# F108_max_ntkurt_close —— 第二批假设(主研,读完 s1 大表 + 市场解剖之后)
+# 判断与数字全在 notes/F108_max_ntkurt_close/synthesis.md,这里只写每条在检验它的哪一节。
+#
+# 大表的四条硬结论决定这一批往哪儿打:
+#  (甲) 原式 = (max_m |30 分钟 Close 超额峰度|)³,多头腿是零(ut +1.0% / Lshp +0.15),
+#       全部内容在空头端(底腿 −30.6%,LS +2.83)。
+#  (乙) 它是**状态量**不是事件量:cross_zscore 5/10/30/60 全崩(−21.4~−5.0%)、rel60 两段反号,
+#       而 cross_min60 是唯一改变了对象的记忆(ρo 只 +0.26、Lshp +0.95、LTO 2.1%)。
+#  (丙) 选股力只在 6.5% 的冻结盘口段(段内 +37.3%,已知族 −10.9%)和 7.1% 的次新段(mem_min60 +12.8%);
+#       无冻结段(93.5%)段内 −3.1%(负)。六条线性 overlay 全部严格差于家族单独(ut +14.1% 对 +15.4%),
+#       **表里没有任何筛子形态**。
+#  (丁) 规模倾斜是主要缺陷:市值五档段内 +5.3/+5.4/+6.4/+5.7/−0.4,书却超配最大档 +35.8pp;
+#       成交额五档段内 −2.9/−3.5/−2.5/+6.4/+11.4(符号相反)→ 甜点是"小市值 × 高成交额"。
+#       另外 nankurt 分母的 EPS 是绝对值(1e-9),低价票 var²~1e-8 被压扁 → 价格最低档段内 −6.7%。
+#
+# 所以:A 用无 EPS、无饱和的直接状态变量替掉峰度;B 钉死尺度泄漏(sub_A 一族 ρo 只 +0.08 却 ut +8%,
+# 是低价书);C 日内折叠从极值换成频率/集中度/位置;D 补窗口两端(10 翻符号、15 最差 → 没有平台);
+# E 修规模倾斜;F **筛子而不是混合**(本批优先级最高);G 把"低波动市场才有效"写进表达式;H 慢性读数做到底。
+
+# ---- A. 直接量「半冻结盘口」状态(检验乙+丙:若载重的是这个状态,无 EPS 的直接读数应复现甚至超过原式)
+h_flat_min60:     {expr: "cross_min(day_flat_ratio(Close), 60)", why: "乙:mem_min60 是唯一改对象的记忆形状(Lshp +0.95/LTO 2.1%),把同一个「连最干净的一天都冻结」读到无 EPS 的状态变量上"}
+h_flatdiff_m30:   {expr: "cross_mean(sub(day_flat_ratio(Close), day_flat_ratio(Amt)), 30)", why: "丙的机制分辨:价格钉住但成交额还在变 = 封板带排队;两者都冻 = 停牌/无成交。原式的 NaN 规则(整窗不动→NaN)说它读的只能是前者"}
+h_flat_vol_m30:   {expr: "cross_mean(day_flat_ratio(Volume), 30)", why: "丁(i) 的可检验推论:「无成交分钟占比」就是峰度在最低成交额档饱和(段内 −2.9%)的原因,单独读它看是不是同一条信息"}
+h_flat_max10:     {expr: "cross_max(day_flat_ratio(Close), 10)", why: "乙的对照:原式上 cross_max 一族(+0.9~+1.4%)全不如 cross_min;若状态>事件在状态变量上也成立,这条应明显差于 h_flat_min60"}
+
+# ---- B. 钉死尺度泄漏与 EPS 地板(sub_A/abl_A 一族超配最低价格档 +71.6~+79.9pp = 低价书)
+h_kurt_amt30:     {expr: "day_max(pow_2(nt_ts_kurt(Amt, 30)))", why: "丁 + §3e:Amt 的量级远大于 EPS,峰度不被压扁。若价格档的坡(最低档 −6.7%)来自 EPS 地板,这条应该没有那个坡"}
+h_kurt_vol30:     {expr: "day_max(pow_2(nt_ts_kurt(Volume, 30)))", why: "用户提示的最小子结构互换(Ret↔量):「孤立的一笔量」与「孤立的一个价」是同一类事件的两侧读数,表里只换过价格类叶子"}
+h_kurt_high30:    {expr: "day_max(pow_2(nt_ts_kurt(High, 30)))", why: "补齐叶子集合:Low 变差(ut −0.6%/valid −4.5%)而 Open≈Close(ρo +0.96)。涨停钉住的是 High、跌停钉住的是 Low,High/Low 不对称本身就是机制证据"}
+h_std_amt30:      {expr: "day_max(pow_2(nt_ts_std(Amt, 30)))", why: "直接检验 sub_A 的 +8.1% 是不是价格水平:把同一个替换放到 Amt 叶子上,尺度泄漏应该变成成交额水平 → ρk 要明显高于 sub_A_nt_ts_std 的 +0.55"}
+h_dw_close_m30:   {expr: "cross_mean(day_durbin_watson(Close), 30)", why: "DW = Σ(Δ价)²/Σ(价−均价)²,与 max|K| 同义但无尺度、无 EPS、不被一根线主导;冻结分钟让 Δ=0 → DW→0。这是原式最干净的替身"}
+
+# ---- C. 日内折叠:状态/频率 vs 事件/极值(乙;表里只试过 close/last/first/open/quantile 五种折叠)
+h_posratio_kurt:  {expr: "day_pos_ratio(nt_ts_kurt(Close, 30))", why: "乙的正面检验:超额峰度>0 的分钟**占比**(频率读数)替掉 max(极值读数)。若载重的是状态,频率版应不弱于极值版"}
+h_mean_kurt:      {expr: "day_mean(pow_2(nt_ts_kurt(Close, 30)))", why: "频率×幅度的折中:day_quantile(中位)灾难 −19.3%、day_max +1.0%,均值给这条「折叠有多极端」的曲线一个中间点"}
+h_gini_kurt:      {expr: "day_gini(pow_2(nt_ts_kurt(Close, 30)))", why: "孤立性在一天里有多集中:一字板只在开盘孤立一次(gini 高),薄盘票整天零散孤立(gini 低)。有界、无尺度,不会被一根线主导"}
+h_argmax_kurt:    {expr: "day_argmax(pow_2(nt_ts_kurt(Close, 30)))", why: "丙:最孤立的那一分钟发生在一天的什么位置。一字板 = 开盘即钉住 → argmax 落在最早。与幅度完全无关,相关应很低"}
+h_q75_kurt:       {expr: "day_quantile_q75(pow_2(nt_ts_kurt(Close, 30)))", why: "软极值:在 day_max(+1.0%)与 day_quantile 中位(−19.3%)之间取一点,量「要多靠近极值才有信息」"}
+
+# ---- D. 窗口(10 翻符号、15 最差 −2.9%、30 正、60 valid 负 → 没有平台,这是硬伤)
+h_kurt_w5:        {expr: "day_max(pow_2(nt_ts_kurt(Close, 5)))", why: "补最短的一端:5 个点的超额峰度上限只 ≈3,普通波动就饱和。若 10 的符号翻转是「窗口太短」的通病,5 应与 10 同号"}
+h_min_w60_kurt60: {expr: "cross_min(day_max(pow_2(nt_ts_kurt(Close, 60))), 60)", why: "乙:内窗 60 与日轴 min 60 单独都为正(win_A_60 ut +1.0%、mem_min60 +3.2%),慢×慢没组合过;若两者是同一件事的替代品,串联不应有加法"}
+
+# ---- E. 修规模倾斜(丁:段内 +5~6% 的能力被 +35.8pp 的大市值超配花掉了)
+h_bk_price:       {expr: "cs_bucket_rank(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30), day_last(Close))", why: "丁:表达式里没有市值字段,价格是最直接的市值代理。价格桶内排名应保住段内的 +5~6%(与成交额桶内相反,后者桶间符号相反会抹掉)"}
+h_res_price:      {expr: "cs_regres(cs_rank(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30)), cs_rank(log(day_last(Close))))", why: "同一问题的残差写法,作为 h_bk_price 的保险:大表里 bk_* 被 dist 0.20 判掉(疑似工具问题),cs_regres 的 dist 是 1.00"}
+h_bk_amt_slow:    {expr: "cs_bucket_rank(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30), cross_mean(day_sum(Amt), 30))", why: "丁:表里只对**未平滑**的原式做过成交额分桶;慢版才是本树可交易的形态。预言它会变差(桶间符号相反),用来确认分桶方向选对了"}
+h_cell_smallhot:  {expr: "mul(mul(cs_rank(neg(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30))), cs_rank(neg(day_last(Close)))), cs_rank(cross_mean(day_sum(Amt), 30)))", why: "丁:把解剖出来的甜点格子「安静 ∩ 低价 ∩ 高成交额」直接写成三重秩软 AND(没有市值字段时这是最接近高换手率小票的写法)"}
+h_res_price_flat: {expr: "cs_regres(cs_rank(cross_mean(day_flat_ratio(Close), 30)), cs_rank(log(day_last(Close))))", why: "丁+甲:若状态变量(A 组)比峰度干净,它对价格中性化后剩下的应该比 h_res_price 多 —— 这是两条路线的对照"}
+
+# ---- F. 筛子而不是混合(本批优先级最高:六条线性 overlay 全差于家族,表里没有筛子形态)
+h_scr_hard_q25:   {expr: "mul(cs_rank(cross_mean(day_std(Amt), 30)), logical_not(cs_quantile_q25(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30))))", why: "丙:硬剔最差 25%(cs_quantile_q25 标记的是**最高** 25%,名字反的),其余按已知族排序。直打「家族在冻结段 −10.9%、本树 +37.3%」"}
+h_scr_soft_pow3:  {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30))), -1.0))", why: "丙的形状检验:病态段只占 6.5%,线性叠加把倾斜摊到整本书(ut −1.3pp);pow_3 把罚项压缩到最差那一小段。筛子 vs 混合"}
+h_scr_flat_q25:   {expr: "mul(cs_rank(cross_mean(day_std(Amt), 30)), logical_not(cs_quantile_q25(cross_mean(day_flat_ratio(Close), 30))))", why: "同一个筛子换成无 EPS 的状态变量做闸门:分辨「筛子有用」与「峰度这个读数有用」"}
+h_ov_mean30_p025: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.25))", why: "对齐与上一轮的冲突:R2 用 D30=cross_mean(原式,30) 作载体量到 +1.2/+1.4pp 增量,s1 表用未平滑原式作载体得 −1.3pp。s1 表缺这一行,必须补"}
+h_ov_min60_p025:  {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_min(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 60)), 0.25))", why: "丙+乙:用与家族最不像的载体(mem_min60 ρo +0.26、dist 0.54)叠。若增量存在,应该在这条上最大"}
+
+# ---- G. 把时段依赖写进表达式(低波动段 +8.4% vs 高波动 −6.4%,全解剖最大的时间切分)
+h_gate_lowvol:    {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_2(nt_ts_kurt(Close, 30))), 30)), div(cross_mean(cs_mean(day_std(Ret)), 60), cs_mean(day_std(Ret)))))", why: "把「市场 60 日均日内波动 ÷ 当日」当权重:低波动日才给本树权重。日频标量乘秩不改当日排序,所以必须与家族相加才生效"}
+h_gate_lowvol_flat: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), 30)), div(cross_mean(cs_mean(day_std(Ret)), 60), cs_mean(day_std(Ret)))))", why: "同一个门控换成状态变量:若时段依赖来自「高波动期真跳变满地、峰度不再是盘口探测器」,状态变量应该更不需要这个门控"}
+
+# ---- H. 慢性读数做到底(乙:状态>事件,cross_min 是唯一正确的记忆形状)
+h_q25_60:         {expr: "cross_quantile_q25(day_max(pow_2(nt_ts_kurt(Close, 30))), 60)", why: "比硬 min 稳的「长期最干净的日子」:min 只用 60 天里的 1 天,q25 用 15 天。若 mem_min60 的 Lshp +0.95 不是单日噪声,这条应更好"}
+h_min241:         {expr: "cross_min(day_max(pow_2(nt_ts_kurt(Close, 30))), 241)", why: "乙:min 窗口 10/30/60 的 ut 挤在 +2.7~+3.2%(看不出坡),推到一年尺度看慢性读数有没有平台"}
+
+# ---- I. 两条与原式相关应该很低的新结构(来自机制推断,不是扫参数)
+h_queue_and:      {expr: "mul(cs_rank(cross_mean(day_flat_ratio(Close), 30)), cs_rank(cross_mean(day_gini(Amt), 30)))", why: "丙的机制写法:真封板 = 价格钉住(flat 高)∧ 成交挤在几分钟(gini 高);单看任一个都会把清淡票混进来。软 AND 把两者交叉"}
+h_centroid_amt:   {expr: "cross_mean(day_centroid(Amt), 30)", why: "一字板的成交全在开盘 → centroid→0;max|K| 这类与顺序无关的统计量完全丢掉这条信息。和原式的相关应该很低,是独立支线"}

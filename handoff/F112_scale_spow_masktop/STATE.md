@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -126,6 +126,8 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 - `S1_minimal`  10-04 13:59  10 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop S1_minimal`
 - `S2_combo`  10-04 15:08  10 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop S2_combo`
 - `F1_final`  10-04 23:28  5 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop F1_final`
+- `sweep_s1`  10-05 10:38  113 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s1`
+- `anatomy_s1`  10-05 10:45  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s1`
 - `A1_channels`(自写脚本的输出)  10-04 14:21  exit 0  → `logs/F112_scale_spow_masktop_A1_channels.log`
 - `A2_increment`(自写脚本的输出)  10-04 15:37  exit 0  → `logs/F112_scale_spow_masktop_A2_increment.log`
 

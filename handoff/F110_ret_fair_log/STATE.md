@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -121,6 +121,8 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 - `S0_baseline`  10-04 11:53  1 个变体  → `./scripts/study.sh digest F110_ret_fair_log S0_baseline`
 - `S1_long`  10-04 15:08  8 个变体  → `./scripts/study.sh digest F110_ret_fair_log S1_long`
 - `S_final`  10-04 23:28  5 个变体  → `./scripts/study.sh digest F110_ret_fair_log S_final`
+- `sweep_s1`  10-05 10:40  163 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweep_s1`
+- `anatomy_s1`  10-05 10:48  0 个变体  → `./scripts/study.sh digest F110_ret_fair_log anatomy_s1`
 - `x1`(自写脚本的输出)  10-04 13:07  exit 97  → `logs/F110_ret_fair_log_x1.log`
 - `x1c`(自写脚本的输出)  10-04 14:05  exit 0  → `logs/F110_ret_fair_log_x1c.log`
 - `x1d`(自写脚本的输出)  10-04 14:09  exit 0  → `logs/F110_ret_fair_log_x1d.log`

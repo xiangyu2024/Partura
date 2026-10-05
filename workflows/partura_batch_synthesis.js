@@ -67,7 +67,8 @@ train = 2018–2021,valid = 20220101–20230807,utrain = 两者。噪声:净超�
 
 1. ./scripts/study.sh table ${f.id} ${TAG}
    —— 批量回测表 + 市场解剖。回测表每行:方向 sg(train 的 rank IC 定)、多头口径半衰期 hlL、多头腿净超额 Lnet(train / valid / utrain)、
-   纯多头夏普 Lshp、换手 LTO、多空夏普 LS、底腿(最低十分位相对等权的毛超额;为正说明方向反过来多头腿是它)、与原式 / 已知族的相关 ρo / ρk、cov / dist、表达式。
+   纯多头夏普 Lshp、换手 LTO、多空夏普 LS、空头腿(等权 − 最低十分位的毛超额:大 = 钱在空头腿,纯多头用不上;为负 = 最低十分位反而跑赢,值得把方向反过来看)、
+   与原式 / 已知族的相关 ρo / ρk、cov / dist(✗ = 没过门槛)、表达式。默认只打前 45 个 + 每类最好的 3 个 + 垫底 8 个;要看全部加 --all。
    kind 是变体的来历:isolate / ablate / substitute / window / field = 结构(删节点、换成按**实测性质**相近的算子、换窗口、换字段);leaf = 换叶子;
    memory = 外面加日轴记忆;shape = 折叠 / 缩尾 / 排名 / 相对自身;neutral = 分桶中性 / 残差;overlay = 以小权重叠在已知族上。
    解剖表:「段内」= 只在这一段股票里建多头书的净超额;括号 = 全市场多头书在这一段的超配;时间表 = 全市场多头书在各年、各种市场状态下的净超额。
@@ -91,7 +92,9 @@ train = 2018–2021,valid = 20220101–20230807,utrain = 两者。噪声:净超�
 - 改最小的子结构:换一个叶子、换一个算子、换一个窗口、删一个节点 —— 但要是这张表里还没有的。
 - 利用解剖的发现:比如只在小市值 / 低流动性里有效 → 用成交额水平做代理(表达式里没有市值字段),做桶内排名 cs_bucket_rank(X, 代理)、
   或与代理的秩相加 / 相乘;只在某类状态有效 → 找一个能在表达式里写出来的状态变量。
-- 用新算子做原来做不了的事(in_pct、in_logchg、day_flat_ratio、day_pos_ratio、day_wmean、day_signed_ratio、day_gini、day_centroid、cross_ema、cross_zscore、cs_bucket_rank、cs_winsor)。
+- 用新算子做原来做不了的事(定义见 docs/new_operators.md):in_pct、in_logchg、day_flat_ratio、day_zero_ratio、day_pos_ratio、day_wmean、day_signed_ratio、day_gini、day_centroid、
+  cross_ema、cross_zscore、cross_valid_count(近 d 日有数据的天数:次新 / 停牌)、cross_tail_mean_q25 / q75、cs_bucket_rank、cs_winsor,
+  以及把「只在某一段股票里做 / 排除某一段」写进表达式的 cs_first_low40 / cs_first_high40 / cs_last_high20 / cs_last_low20。
 - 大胆一些:允许和原式相关很低的新结构,只要它来自你对机制的推断(写清推断)。不要凑数、不要只扫窗口。
 - 写完**必须**检查能否解析:./scripts/study.sh hypo ${f.id}(FAIL 的改到通过或删掉)。表达式语法的坑:docs/study_playbook.md §3(需要时再翻)。
 - **还缺什么算子?** 现有算子(含新加的)表达不了的想法,写进输出的 new_operator_requests:名字、精确定义(公式、沿哪条轴、NaN 时怎么办)、

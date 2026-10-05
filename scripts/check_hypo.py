@@ -10,7 +10,14 @@ import yaml  # noqa: E402
 
 from partura.panels import parse_research  # noqa: E402
 
-d = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+try:
+    d = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8")) or {}
+except yaml.YAMLError as exc:
+    mark = getattr(exc, "problem_mark", None)
+    where = f"第 {mark.line + 1} 行第 {mark.column + 1} 列附近" if mark else ""
+    print(f"YAML 写法有误 {where}:{getattr(exc, 'problem', exc)}\n"
+          "常见原因:键后面的冒号要跟一个空格(`h_x: {expr: \"…\", why: \"…\"}`);表达式里的引号要成对;why 里有冒号时整句加引号。")
+    sys.exit(2)
 bad = 0
 for i, v in d.items():
     e = v["expr"] if isinstance(v, dict) else str(v)

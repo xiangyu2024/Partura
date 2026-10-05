@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-05 00:22(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -122,6 +122,8 @@ Q2(相对已知家族有没有增量)——干净的否定,三条独立口径一
 - `S1_chain`  10-04 14:03  10 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean S1_chain`
 - `S2_bench`  10-04 15:12  10 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean S2_bench`
 - `S_final`  10-04 23:50  5 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean S_final`
+- `sweep_s1`  10-05 10:44  189 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweep_s1`
+- `anatomy_s1`  10-05 10:49  0 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean anatomy_s1`
 - `x1_ties`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F113_nested_tsmax_demean_x1_ties.log`
 - `x2_increment`(自写脚本的输出)  10-04 15:35  exit 0  → `logs/F113_nested_tsmax_demean_x2_increment.log`
 

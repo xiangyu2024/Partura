@@ -1,0 +1,193 @@
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+[sweep] F113_nested_tsmax_demean: 189 variants (base 1, bench 1, leaf 5, memory 28, shape 6, neutral 4, overlay 6, substitute 98, isolate 11, ablate 10, window 15, interaction 2, magnitude 2)
+[panels] 184 new expression(s) on 1942d x 5220s (+0 warm-up), device=cuda, batches of 32
+[panels] GPU: 28.1 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   32/184 (56s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 124s
+[panels] GPU: 27.4 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   64/184 (197s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 196s
+[panels] GPU: 16.3 GiB free of 31.4; this run capped at 36% (11.2 GiB), chunk 956 MiB
+[panels]   96/184 (405s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 230s
+[panels] GPU: 25.5 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   128/184 (646s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 40s
+[panels] GPU: 25.3 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   160/184 (696s)
+[guard] waiting for lock 'gpu' ...
+[guard] got lock 'gpu' after 172s
+[panels] GPU: 27.5 GiB free of 31.4; this run capped at 45% (14.1 GiB), chunk 1204 MiB
+[panels]   184/184 (892s)
+[panels] done in 892s
+[sweep] panels: 189/189 in 893s; failed: []
+[sweep] scored 189 variants in 830s
+
+== F113_nested_tsmax_demean  批量扫描 s1:184 个变体(只用 train / valid;半衰期按纯多头书在 train 上选)==
+多头腿净超额 Lnet 与纯多头夏普 Lshp:train | valid(train 上定方向和半衰期)| utrain(用户训练段);ρo / ρk = 与原式 / 已知族的交易信号 rank 相关
+底腿 = 最低十分位相对等权的毛超额(为正说明把方向反过来,多头腿是它);方向 sg 按 train 的 rank IC 定
+id                     kind     sg hlL | Lnet tr     va     ut   | Lshp tr    va    ut  | LTO   | LS tr   va  | 底腿 tr    va   |  ρo    ρk  | cov  dist | expr
+v_base                 base     -1   1 |  +1.6%  -1.7%  +0.7% | +0.39 -0.52 +0.17 |  4.1% | +2.59 +2.39 | -25.2% -25.7% | +1.00 -0.02 | 1.00 0.58 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | -0.02 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+------------------------------------------------------------ 按 utrain 纯多头夏普排序的前 45 个
+sub_J_pow_1_5          substitu -1   1 | +13.3% +10.2% +12.4% | +2.53 +2.00 +2.39 |  5.9% | +2.80 +2.49 | -26.5% -21.8% | +0.86 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(pow_1_5(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 
+sub_J_signedpower      substitu -1   1 | +13.7%  +9.4% +12.5% | +2.59 +1.82 +2.38 |  5.8% | +2.86 +2.41 | -27.0% -21.8% | +0.86 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(signedpower(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+abl_J                  ablate   -1   1 | +13.1% +10.5% +12.4% | +2.49 +2.07 +2.38 |  6.1% | +2.78 +2.50 | -26.3% -21.4% | +0.85 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)), 30))
+ov_p025                overlay  -1   0 | +12.0% +21.9% +14.8% | +1.78 +3.69 +2.27 |  4.2% | +2.47 +4.18 | -28.7% -38.3% | +0.20 +0.97 | 1.00 0.92 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+sub_J_pow_05           substitu -1   1 | +12.5%  +9.8% +11.8% | +2.37 +1.96 +2.26 |  6.3% | +2.78 +2.34 | -26.0% -20.8% | +0.85 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(pow_05(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 3
+ov_p05                 overlay  -1   5 | +10.9% +18.2% +13.0% | +1.79 +3.44 +2.24 |  2.9% | +2.68 +4.22 | -22.4% -28.9% | +0.35 +0.90 | 1.00 0.86 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | -0.02 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+ov_p10                 overlay  -1   5 |  +8.9% +15.3% +10.7% | +1.74 +3.52 +2.19 |  3.2% | +2.70 +4.08 | -22.5% -28.5% | +0.62 +0.71 | 1.00 0.79 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+ov_m025                overlay  -1   0 | +11.8% +20.4% +14.3% | +1.70 +3.17 +2.10 |  3.6% | +1.05 +2.91 |  -6.8% -20.7% | -0.25 +0.97 | 1.00 0.94 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+ov_m05                 overlay  -1   0 | +10.6% +19.2% +13.1% | +1.59 +3.10 +1.99 |  3.8% | +0.91 +2.85 |  -6.0% -20.2% | -0.44 +0.90 | 1.00 0.91 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+ov_m10                 overlay  -1   0 |  +8.6% +15.7% +10.8% | +1.39 +2.76 +1.78 |  4.2% | +0.64 +2.57 |  -3.5% -17.8% | -0.70 +0.71 | 1.00 0.86 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+sub_K_ts_product       substitu -1   3 |  +4.8%  +1.3%  +3.9% | +1.82 +0.53 +1.48 |  0.2% | +2.44 +1.16 | -16.7%  -9.9% | +0.08 +0.06 | 1.00 0.00 ✗门槛 | pow_1_5(ts_product(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)))
+sub_J_inv              substitu +1   0 |  +7.9%  +3.0%  +6.5% | +1.76 +0.69 +1.47 |  4.4% | +2.08 +1.40 | -18.1% -13.3% | +0.68 +0.09 | 0.43 0.68 ✗门槛 | pow_1_5(ts_max(inv(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))
+nosc_A_day_gini        substitu -1  10 |  +5.7%  +8.1%  +6.3% | +1.25 +1.81 +1.44 |  2.2% | +2.24 +2.83 |  -8.9%  -9.4% | +0.06 +0.20 | 1.00 0.97 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_gini(Ret), 5), -5)), 30)), 20), 5))), 30
+sub_I_cs_mask_top_repl substitu -1  10 |  +4.4%  +5.4%  +6.5% | +0.89 +1.29 +1.26 |  2.6% | +2.07 +2.78 | -20.7% -19.9% | +0.41 +0.21 | 1.00 0.26 ✗门槛 | pow_1_5(ts_max(pow_2(cs_mask_top_replace_mean_neg(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 
+nosc_I_cs_quantile_q25 substitu -1   0 |  +6.7%  +4.6%  +6.1% | +1.43 +0.81 +1.23 |  1.0% | +2.07 +1.84 | -13.1% -15.7% | +0.30 +0.28 | 1.00 0.00 ✗门槛 | pow_1_5(ts_max(pow_2(cs_quantile_q25(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+abl_I                  ablate   -1   0 |  +6.8% +13.1%  +8.6% | +0.92 +2.05 +1.21 |  3.1% | +2.05 +2.66 | -26.3% -26.8% | +0.14 +0.37 | 1.00 0.28 ✗门槛 | pow_1_5(ts_max(pow_2(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)), 30))
+sub_I_cs_winsor        substitu -1   0 |  +6.8% +13.1%  +8.6% | +0.92 +2.05 +1.21 |  3.1% | +2.05 +2.66 | -26.3% -26.8% | +0.14 +0.37 | 1.00 0.27 ✗门槛 | pow_1_5(ts_max(pow_2(cs_winsor(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+sub_I_cs_mask_top_repl substitu -1   0 |  +6.8% +13.1%  +8.6% | +0.92 +2.05 +1.21 |  3.1% | +1.23 +2.51 | -10.9% -16.3% | -0.02 +0.34 | 1.00 0.20 ✗门槛 | pow_1_5(ts_max(pow_2(cs_mask_top_replace_mean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+iso_F                  isolate  -1   2 |  +7.1%  +7.8%  +7.7% | +1.08 +1.36 +1.18 |  5.4% | +2.40 +2.46 | -29.0% -30.4% | +0.01 +0.46 | 1.00 0.24 ✗门槛 | pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+sub_F_pow_05           substitu -1   5 |  +5.7%  -1.4%  +3.7% | +1.54 -0.39 +1.16 |  3.2% | +1.93 -0.21 | -10.2%  +0.9% | +0.69 -0.05 | 1.00 0.66 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_05(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 3
+sub_G_ts_product       substitu -1  20 |  +3.9%  -0.0%  +2.8% | +1.57 -0.01 +1.16 |  0.3% | +2.50 +1.04 | -17.1%  -7.9% | +0.08 +0.06 | 1.00 0.01 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_product(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)))
+iso_I                  isolate  -1   1 |  +6.9%  +9.6%  +7.7% | +1.01 +1.56 +1.16 |  4.2% | +2.33 +2.39 | -28.5% -27.5% | -0.01 +0.42 | 1.00 0.26 ✗门槛 | cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))
+iso_H                  isolate  -1   1 |  +6.9%  +9.6%  +7.7% | +1.01 +1.56 +1.15 |  4.2% | +2.33 +2.39 | -28.5% -27.5% | -0.01 +0.42 | 1.00 0.26 ✗门槛 | mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+iso_G                  isolate  -1   1 |  +6.9%  +9.6%  +7.7% | +1.01 +1.56 +1.15 |  4.2% | +2.33 +2.39 | -28.5% -27.5% | -0.01 +0.42 | 1.00 0.26 ✗门槛 | ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)
+rank_C                 interact -1   5 |  +5.0%  -2.7%  +3.4% | +1.42 -0.81 +1.06 |  3.2% | +0.23 -1.92 |  +1.4% +10.2% | +0.64 -0.14 | 1.00 0.98 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(cs_rank(ts_max(day_mean(Ret), 5)), cs_rank(-5))), 3
+res_liq                neutral  -1   2 |  +3.7%  +1.6%  +3.1% | +1.10 +0.53 +0.96 |  4.0% | +2.84 +2.89 | -21.9% -25.0% | +0.99 +0.01 | 1.00 1.00 | cs_regres(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 3
+sub_F_pow_1_5          substitu -1   1 |  +4.4%  +0.3%  +3.3% | +1.22 +0.10 +0.94 |  4.1% | +2.77 +2.58 | -24.9% -26.2% | +0.96 -0.01 | 0.97 0.63 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_1_5(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 
+sub_D_cs_winsor        substitu -1   2 |  +5.7%  -3.3%  +3.1% | +1.65 -1.08 +0.94 |  4.2% | +2.49 +1.50 | -18.7% -17.8% | +0.76 +0.03 | 1.00 0.31 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_winsor(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+bk_known               neutral  -1   3 |  +3.0%  +2.0%  +2.8% | +0.96 +0.68 +0.89 |  4.2% | +1.89 +1.48 | -10.2% -11.4% | +0.96 +0.00 | 1.00 0.20 ✗门槛 | cs_bucket_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+bk_liq                 neutral  -1   3 |  +2.8%  +2.0%  +2.7% | +0.90 +0.70 +0.89 |  4.2% | +1.99 +1.53 | -12.1% -12.7% | +0.96 +0.02 | 1.00 0.20 ✗门槛 | cs_bucket_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+sub_F_log              substitu -1   5 |  +4.3%  -2.3%  +2.8% | +1.24 -0.69 +0.87 |  3.3% | +0.22 -2.08 |  +1.1%  +9.5% | +0.68 -0.11 | 1.00 0.63 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(log(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))
+res_known              neutral  -1   5 |  +3.5%  -0.9%  +2.6% | +0.93 -0.28 +0.76 |  3.6% | +2.79 +2.88 | -18.7% -21.1% | +0.96 -0.01 | 1.00 1.00 | cs_regres(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 3
+fold_rank              shape    -1  20 |  +2.2%  +4.9%  +3.0% | +0.52 +1.34 +0.74 |  2.9% | +1.22 +1.97 | -12.8% -16.2% | +0.07 +0.22 | 1.00 0.85 | abs_(cs_demean(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5
+sub_D_cs_mask_top_repl substitu -1   1 |  +5.0%  -4.0%  +2.5% | +1.41 -1.24 +0.72 |  4.5% | +2.53 +1.96 | -22.6% -24.6% | +0.83 +0.01 | 1.00 0.34 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_mask_top_replace_mean_neg(sub(ts_max(day_mean(Ret), 5), -5)), 
+sub_F_sqrt             substitu -1   1 |  +3.5%  -0.9%  +2.3% | +1.08 -0.28 +0.71 |  4.2% | +2.12 +1.51 | -14.4% -14.3% | +0.84 -0.04 | 1.00 0.64 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(sqrt(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30)
+abl_D                  ablate   -1   1 |  +4.9%  -4.1%  +2.4% | +1.40 -1.30 +0.69 |  4.5% | +3.06 +2.03 | -26.3% -24.7% | +0.81 +0.01 | 1.00 0.37 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(sub(ts_max(day_mean(Ret), 5), -5), 30)), 20), 5))), 30))
+rank_H                 interact -1   1 |  +3.0%  -0.0%  +2.2% | +0.95 -0.00 +0.69 |  4.2% | +1.81 +0.35 | -10.5%  -3.9% | +0.81 -0.04 | 1.00 0.98 | pow_1_5(ts_max(pow_2(cs_demean(mul(cs_rank(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)),
+nosc_D_cs_quantile_q25 substitu +1   0 |  +2.7%  +9.2%  +4.6% | +0.39 +1.40 +0.67 |  2.6% | +0.87 +2.12 |  -5.2%  -6.5% | -0.32 +0.25 | 1.00 0.01 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_quantile_q25(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+abl_F                  ablate   -1   0 |  +4.2%  -3.2%  +2.1% | +1.25 -1.01 +0.64 |  4.7% | +3.07 +2.23 | -27.3% -26.9% | +0.86 -0.00 | 1.00 0.66 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30), 20), 5))), 30))
+sub_F_neg              substitu -1  10 |  +4.0%  -2.4%  +2.2% | +1.05 -0.78 +0.61 |  2.8% | +1.82 +0.97 | -15.6% -17.2% | +0.36 +0.12 | 1.00 0.66 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(neg(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))
+sub_E_ts_product       substitu -1  20 |  +2.4%  -1.2%  +1.4% | +1.00 -0.57 +0.61 |  0.4% | +2.33 +1.50 | -16.0%  -7.9% | +0.08 +0.03 | 1.00 0.02 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_product(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)))
+sub_F_inv              substitu +1   2 |  +1.5%  +5.4%  +2.8% | +0.31 +1.12 +0.59 |  2.1% | -0.72 +0.44 |  +4.8%  +5.3% | -0.20 +0.08 | 0.99 0.56 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(inv(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))
+sub_H_add              substitu -1   1 |  +2.8%  +1.6%  +2.5% | +0.60 +0.43 +0.58 |  0.3% | +2.24 +2.57 | -17.3% -21.8% | +0.23 +0.09 | 1.00 0.00 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(add(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+sub_H_sub              substitu -1   1 |  +2.8%  +1.6%  +2.5% | +0.60 +0.43 +0.58 |  0.3% | +2.24 +2.57 | -17.3% -21.8% | +0.23 +0.09 | 1.00 0.00 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(sub(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+------------------------------------------------------------ 每一类里最好的 3 个(按 utrain 纯多头夏普)
+v_base                 base     -1   1 |  +1.6%  -1.7%  +0.7% | +0.39 -0.52 +0.17 |  4.1% | +2.59 +2.39 | -25.2% -25.7% | +1.00 -0.02 | 1.00 0.58 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+k_known                bench    -1   0 | +12.6% +22.3% +15.4% | +1.78 +3.46 +2.22 |  3.4% | +1.87 +3.70 | -21.1% -33.8% | -0.02 +1.00 | 1.00 1.00 | cross_mean(day_std(Amt), 30)
+iso_F                  isolate  -1   2 |  +7.1%  +7.8%  +7.7% | +1.08 +1.36 +1.18 |  5.4% | +2.40 +2.46 | -29.0% -30.4% | +0.01 +0.46 | 1.00 0.24 ✗门槛 | pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+iso_I                  isolate  -1   1 |  +6.9%  +9.6%  +7.7% | +1.01 +1.56 +1.16 |  4.2% | +2.33 +2.39 | -28.5% -27.5% | -0.01 +0.42 | 1.00 0.26 ✗门槛 | cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))
+iso_H                  isolate  -1   1 |  +6.9%  +9.6%  +7.7% | +1.01 +1.56 +1.15 |  4.2% | +2.33 +2.39 | -28.5% -27.5% | -0.01 +0.42 | 1.00 0.26 ✗门槛 | mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+leaf_Ret_logvol        leaf     +1   2 |  +0.0%  +9.5%  +2.8% | +0.01 +1.72 +0.48 |  1.3% | -0.28 +0.82 |  +2.2%  +5.7% | +0.02 -0.05 | 1.00 0.99 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(in_logchg(Volume, 1)), 5), -5)), 30
+leaf_Ret_amtchg        leaf     +1   0 |  +2.0%  +2.8%  +2.3% | +0.41 +0.50 +0.44 |  2.9% | +1.07 -0.45 |  -1.3% +12.4% | +0.04 +0.02 | 1.00 0.99 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(in_pct(Amt, 1)), 5), -5)), 30)), 20
+leaf_Ret_volchg        leaf     +1   5 |  +1.1%  +6.9%  +2.8% | +0.16 +1.05 +0.42 |  1.2% | +0.75 -0.19 |  +0.8%  +8.7% | +0.02 +0.07 | 1.00 1.00 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(in_pct(Volume, 1)), 5), -5)), 30)),
+mem_min60              memory   -1   0 |  +2.6%  -2.4%  +1.2% | +0.89 -0.92 +0.43 |  2.1% | +1.94 +2.15 | -14.3% -17.5% | +0.58 -0.06 | 1.00 0.72 | cross_min(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)
+mem_decay_linear5      memory   -1   1 |  +1.3%  -2.1%  +0.3% | +0.30 -0.62 +0.08 |  4.0% | +2.48 +2.40 | -24.0% -24.5% | +0.99 -0.02 | 1.00 0.69 | cross_decay_linear(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 
+mem_max5               memory   -1   1 |  +0.9%  -1.4%  +0.3% | +0.22 -0.38 +0.08 |  4.1% | +2.52 +2.40 | -25.1% -24.8% | +0.98 -0.02 | 1.00 0.61 | cross_max(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)
+fold_rank              shape    -1  20 |  +2.2%  +4.9%  +3.0% | +0.52 +1.34 +0.74 |  2.9% | +1.22 +1.97 | -12.8% -16.2% | +0.07 +0.22 | 1.00 0.85 | abs_(cs_demean(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5
+rk                     shape    -1   1 |  +2.0%  -1.2%  +1.1% | +0.49 -0.38 +0.29 |  4.1% | +2.57 +2.43 | -23.0% -24.5% | +0.99 -0.03 | 1.00 1.00 | cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 
+win                    shape    -1   1 |  +1.6%  -1.7%  +0.7% | +0.39 -0.51 +0.18 |  4.1% | +2.59 +2.41 | -25.2% -25.8% | +1.00 -0.02 | 1.00 0.57 | cs_winsor(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)
+res_liq                neutral  -1   2 |  +3.7%  +1.6%  +3.1% | +1.10 +0.53 +0.96 |  4.0% | +2.84 +2.89 | -21.9% -25.0% | +0.99 +0.01 | 1.00 1.00 | cs_regres(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 3
+bk_known               neutral  -1   3 |  +3.0%  +2.0%  +2.8% | +0.96 +0.68 +0.89 |  4.2% | +1.89 +1.48 | -10.2% -11.4% | +0.96 +0.00 | 1.00 0.20 ✗门槛 | cs_bucket_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+bk_liq                 neutral  -1   3 |  +2.8%  +2.0%  +2.7% | +0.90 +0.70 +0.89 |  4.2% | +1.99 +1.53 | -12.1% -12.7% | +0.96 +0.02 | 1.00 0.20 ✗门槛 | cs_bucket_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+ov_p025                overlay  -1   0 | +12.0% +21.9% +14.8% | +1.78 +3.69 +2.27 |  4.2% | +2.47 +4.18 | -28.7% -38.3% | +0.20 +0.97 | 1.00 0.92 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+ov_p05                 overlay  -1   5 | +10.9% +18.2% +13.0% | +1.79 +3.44 +2.24 |  2.9% | +2.68 +4.22 | -22.4% -28.9% | +0.35 +0.90 | 1.00 0.86 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+ov_p10                 overlay  -1   5 |  +8.9% +15.3% +10.7% | +1.74 +3.52 +2.19 |  3.2% | +2.70 +4.08 | -22.5% -28.5% | +0.62 +0.71 | 1.00 0.79 | add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(
+sub_J_pow_1_5          substitu -1   1 | +13.3% +10.2% +12.4% | +2.53 +2.00 +2.39 |  5.9% | +2.80 +2.49 | -26.5% -21.8% | +0.86 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(pow_1_5(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 
+sub_J_signedpower      substitu -1   1 | +13.7%  +9.4% +12.5% | +2.59 +1.82 +2.38 |  5.8% | +2.86 +2.41 | -27.0% -21.8% | +0.86 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(signedpower(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)
+sub_J_pow_05           substitu -1   1 | +12.5%  +9.8% +11.8% | +2.37 +1.96 +2.26 |  6.3% | +2.78 +2.34 | -26.0% -20.8% | +0.85 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(pow_05(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 3
+abl_J                  ablate   -1   1 | +13.1% +10.5% +12.4% | +2.49 +2.07 +2.38 |  6.1% | +2.78 +2.50 | -26.3% -21.4% | +0.85 +0.17 | 0.43 0.66 ✗门槛 | pow_1_5(ts_max(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)), 30))
+abl_I                  ablate   -1   0 |  +6.8% +13.1%  +8.6% | +0.92 +2.05 +1.21 |  3.1% | +2.05 +2.66 | -26.3% -26.8% | +0.14 +0.37 | 1.00 0.28 ✗门槛 | pow_1_5(ts_max(pow_2(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)), 30))
+abl_D                  ablate   -1   1 |  +4.9%  -4.1%  +2.4% | +1.40 -1.30 +0.69 |  4.5% | +3.06 +2.03 | -26.3% -24.7% | +0.81 +0.01 | 1.00 0.37 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(sub(ts_max(day_mean(Ret), 5), -5), 30)), 20), 5))), 30))
+win_K_10               window   -1   2 |  +2.7%  +0.4%  +2.1% | +0.70 +0.14 +0.58 |  3.8% | +3.00 +2.56 | -27.4% -25.0% | +0.89 -0.06 | 1.00 0.42 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 10
+win_K_20               window   -1   2 |  +2.4%  -1.5%  +1.4% | +0.60 -0.47 +0.40 |  3.9% | +2.86 +2.45 | -25.7% -25.6% | +0.96 -0.04 | 1.00 0.51 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 20
+win_E_50               window   -1   1 |  +2.7%  -3.6%  +1.1% | +0.73 -1.24 +0.32 |  3.2% | +2.71 +2.08 | -23.9% -21.4% | +0.82 -0.04 | 1.00 0.55 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 50)), 20), 5))), 30
+rank_C                 interact -1   5 |  +5.0%  -2.7%  +3.4% | +1.42 -0.81 +1.06 |  3.2% | +0.23 -1.92 |  +1.4% +10.2% | +0.64 -0.14 | 1.00 0.98 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(cs_rank(ts_max(day_mean(Ret), 5)), cs_rank(-5))), 3
+rank_H                 interact -1   1 |  +3.0%  -0.0%  +2.2% | +0.95 -0.00 +0.69 |  4.2% | +1.81 +0.35 | -10.5%  -3.9% | +0.81 -0.04 | 1.00 0.98 | pow_1_5(ts_max(pow_2(cs_demean(mul(cs_rank(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)),
+mag_E                  magnitud -1   0 |  +0.3%  -2.1%  -0.4% | +0.07 -0.64 -0.10 |  4.5% | +2.50 +2.50 | -25.1% -26.6% | +0.83 +0.01 | 1.00 0.52 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(abs_(cs_demean(sub(ts_max(day_mean(Ret), 5), -5))), 30)), 20), 5)
+mag_B                  magnitud -1  10 |  -0.5%  -6.5%  -1.2% | -0.10 -1.45 -0.29 |  3.1% | +2.26 +2.22 | -18.0% -19.4% | +0.68 +0.00 | 1.00 0.57 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(abs_(day_mean(Ret)), 5), -5)), 30)), 20), 5)
+------------------------------------------------------------ 垫底的 8 个(方向反过来也是信息)
+fold_sq                shape    +1   0 |  -7.8% -11.4%  -9.9% | -1.66 -2.59 -1.86 |  4.5% | +1.47 +1.62 | -20.6% -23.0% | +0.88 -0.08 | 1.00 0.57 | pow_2(cs_demean(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)
+fold_mean              shape    +1   0 |  -7.8% -11.4%  -8.8% | -1.66 -2.59 -1.90 |  4.5% | +1.47 +1.62 | -20.6% -23.0% | +0.88 -0.08 | 1.00 0.57 | abs_(cs_demean(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30))
+sub_K_ts_quantile_q25  substitu +1  20 | -16.1% -14.6% -15.7% | -1.98 -1.99 -1.98 |  1.2% | -2.37 -1.00 |  +3.8%  -7.6% | -0.67 +0.05 | 1.00 0.75 | pow_1_5(ts_quantile_q25(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20),
+sub_K_ts_min           substitu +1  20 | -16.3% -15.6% -16.1% | -2.03 -2.14 -2.05 |  1.3% | -2.45 -1.15 |  +3.6%  -7.5% | -0.62 +0.08 | 1.00 0.55 | pow_1_5(ts_min(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30
+nosc_E_ts_argmax       substitu -1  10 | -10.8%  -9.5% -10.5% | -2.19 -2.18 -2.16 |  4.6% | -1.33 -1.55 |  -3.3%  +0.7% | -0.11 +0.08 | 1.00 0.10 ✗门槛 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_argmax(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))),
+nosc_K_ts_argmin       substitu +1  10 | -10.1% -13.6% -11.0% | -1.93 -3.59 -2.28 |  7.0% | -1.87 -2.57 |  +0.6%  -1.0% | -0.18 +0.04 | 1.00 0.02 ✗门槛 | pow_1_5(ts_argmin(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))),
+iso_J                  isolate  +1  20 | -21.3% -20.2% -21.0% | -2.40 -2.39 -2.39 |  1.3% | -2.65 -2.10 |  +3.3%  -2.6% | -0.85 +0.04 | 1.00 0.26 ✗门槛 | pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5)))
+abl_K                  ablate   +1  20 | -21.4% -19.0% -20.7% | -2.44 -2.33 -2.40 |  1.2% | -2.60 -1.78 |  +3.1%  -4.3% | -0.82 +0.04 | 1.00 0.26 ✗门槛 | pow_1_5(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))))
+
+wrote /root/autodl-tmp/Partura/runs/F113_nested_tsmax_demean/sweep_s1.json  (1748s total)
+[guard] all 6 run slots busy, waiting ...
+[guard] got run slot 5 after 45s
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+/root/autodl-tmp/Partura/scripts/anatomy.py:130: RuntimeWarning: Mean of empty slice
+  mkt = np.nanmean(ret, axis=1)
+/root/miniconda3/envs/quant/lib/python3.12/site-packages/numpy/lib/_nanfunctions_impl.py:2015: RuntimeWarning: Degrees of freedom <= 0 for slice.
+  var = nanvar(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+
+== F113_nested_tsmax_demean 市场解剖(用户训练段 20180102–20230807;交易信号 = 方向×面板,多头口径半衰期)==
+  [0] v_base               hl   1  全市场多头净超额 +0.7% 夏普 +0.17 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20)
+  [1] k_known              hl   0  全市场多头净超额 +15.4% 夏普 +2.22 | cross_mean(day_std(Amt), 30)
+  [2] nosc_A_day_gini      hl   5  全市场多头净超额 +6.3% 夏普 +1.44 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_gini(Ret), 5), -5)), 30)), 20)
+  [3] sub_F_pow_05         hl   0  全市场多头净超额 +3.7% 夏普 +1.16 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_05(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20
+  [4] rank_C               hl   0  全市场多头净超额 +3.4% 夏普 +1.06 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(cs_rank(ts_max(day_mean(Ret), 5)), cs_ran
+  [5] res_liq              hl   2  全市场多头净超额 +3.1% 夏普 +0.96 | cs_regres(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5
+  [6] sub_F_pow_1_5        hl   1  全市场多头净超额 +3.3% 夏普 +0.94 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_1_5(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 2
+  [7] sub_F_log            hl   1  全市场多头净超额 +2.8% 夏普 +0.87 | pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(log(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 
+  [8] res_known            hl   2  全市场多头净超额 +2.6% 夏普 +0.76 | cs_regres(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5
+  [9] fold_rank            hl  20  全市场多头净超额 +3.0% 夏普 +0.74 | abs_(cs_demean(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Re
+
+-- 按股票范围:段内自建多头书的净超额(括号 = 全市场多头书在该段的持仓占比 − 该段占全市场的比例)
+段                             占比    段等权超额 |       [0]       |       [1]       |       [2]       |       [3]       |       [4]       |       [5]       |       [6]       |       [7]       |       [8]       |       [9]      
+板块:沪主板                     38.1%    -0.3% | +0.5% (+0.2%) | +14.8% (+6.9%) | +6.1% (+0.7%) | +3.3% (-1.4%) | +1.6% (-0.7%) | +1.9% (-0.3%) | +2.8% (-0.0%) | +2.3% (-1.1%) | +1.3% (-0.3%) | +1.3% (+5.0%)
+板块:深主板                     34.8%    -1.1% | +0.1% (+2.0%) | +20.9% (-6.3%) | +6.9% (-7.0%) | +2.5% (-0.3%) | +2.9% (-0.1%) | +2.9% (+1.5%) | +2.8% (+0.9%) | +2.2% (-0.1%) | +2.7% (+1.5%) | +3.9% (+1.9%)
+板块:创业板                     23.2%    +1.8% | -1.5% (-3.2%) | +18.9% (-4.6%) | +3.2% (-3.7%) | +7.4% (+0.5%) | +6.6% (-0.2%) | +2.8% (-2.8%) | +1.4% (-2.2%) | +6.8% (+0.1%) | +1.8% (-2.7%) | +7.2% (-6.1%)
+板块:科创板                      4.0%    +4.1% | -8.8% (+1.1%) | +1.4% (+3.9%) | -7.0% (+10.0%) | -5.2% (+1.2%) | -5.1% (+1.0%) | -6.2% (+1.6%) | -15.0% (+1.4%) | -17.5% (+1.1%) | -5.8% (+1.6%) | -1.7% (-0.8%)
+流通市值:最低20%                 19.4%    +6.4% | +0.7% (-3.5%) | +9.3% (+30.8%) | +5.8% (+14.2%) | +6.2% (-2.3%) | +6.8% (-2.1%) | +2.4% (-1.3%) | +3.6% (-3.8%) | +5.1% (-1.8%) | +2.3% (-1.9%) | +5.5% (-3.3%)
+流通市值:20-40%                20.0%    +5.0% | +0.5% (-1.6%) | +9.5% (+11.0%) | +4.0% (+4.8%) | +2.8% (-2.2%) | +1.8% (-2.0%) | +2.0% (+0.4%) | +2.2% (-2.3%) | +1.1% (-2.3%) | +2.1% (-0.2%) | +3.4% (-1.3%)
+流通市值:40-60%                20.1%    -3.3% | -0.9% (+0.0%) | +9.2% (-6.1%) | +3.9% (-0.2%) | +2.6% (-1.5%) | +3.2% (-1.5%) | +0.0% (+0.6%) | +1.4% (-0.6%) | +1.9% (-1.8%) | -0.1% (+0.4%) | +0.7% (-0.7%)
+流通市值:60-80%                20.2%    -3.7% | +0.6% (+2.0%) | +3.5% (-15.9%) | -1.4% (-7.1%) | +3.0% (+1.0%) | +2.1% (+0.8%) | +1.6% (+0.9%) | +3.8% (+2.3%) | +2.2% (+0.9%) | +1.3% (+1.3%) | +1.6% (+0.5%)
+流通市值:最高20%                 20.3%    -2.0% | -0.8% (+3.1%) | +0.7% (-19.7%) | -1.9% (-11.7%) | -1.8% (+5.0%) | -2.6% (+5.0%) | -0.2% (-0.6%) | -1.3% (+4.4%) | -1.8% (+5.1%) | +0.0% (+0.5%) | -0.3% (+5.0%)
+成交额(20日):最低20%             19.6%   +15.1% | -7.3% (-6.7%) | -4.1% (+80.3%) | -2.3% (+32.8%) | -4.2% (+0.8%) | -4.5% (+2.0%) | -6.6% (-4.0%) | -5.5% (-5.3%) | -9.4% (+1.6%) | -6.6% (-4.9%) | -1.7% (+6.2%)
+成交额(20日):20-40%            19.9%    +8.9% | -2.9% (-1.9%) | -5.3% (-19.8%) | -5.9% (+0.4%) | -4.6% (+0.9%) | -3.0% (+1.2%) | -2.5% (+0.6%) | -1.9% (-1.6%) | -4.9% (+0.9%) | -2.8% (-0.1%) | -7.6% (+2.0%)
+成交额(20日):40-60%            20.0%    +2.6% | -3.3% (+0.7%) | -8.2% (-20.0%) | -8.3% (-8.7%) | -4.2% (+0.5%) | -4.2% (+0.5%) | -2.7% (+1.7%) | -0.5% (+0.6%) | -3.8% (+0.5%) | -3.2% (+1.5%) | -3.1% (-1.2%)
+成交额(20日):60-80%            20.1%    -6.0% | -1.3% (+3.2%) | -5.2% (-20.1%) | -2.7% (-12.2%) | +2.3% (-1.3%) | +2.2% (-1.9%) | -1.8% (+1.7%) | -0.0% (+2.4%) | +3.5% (-1.6%) | -1.4% (+2.2%) | +1.1% (-3.0%)
+成交额(20日):最高20%             20.3%   -17.8% | +8.8% (+4.8%) | +2.5% (-20.3%) | -1.0% (-12.2%) | +11.5% (-0.9%) | +11.5% (-1.8%) | +9.8% (+0.1%) | +10.2% (+4.0%) | +11.1% (-1.4%) | +9.5% (+1.4%) | +7.2% (-3.9%)
+价格:最低20%                   20.1%    +7.0% | -1.1% (-4.9%) | +10.6% (+19.6%) | +1.8% (+5.6%) | +1.3% (-3.0%) | +0.5% (-2.3%) | -0.8% (-3.8%) | +0.9% (-5.0%) | +0.0% (-2.6%) | -0.7% (-4.3%) | -1.6% (+3.6%)
+价格:20-40%                  20.0%    +4.3% | -0.4% (-2.1%) | +10.4% (+12.1%) | +4.6% (+4.5%) | +4.9% (-2.2%) | +3.9% (-1.8%) | -0.3% (-0.8%) | +1.4% (-2.7%) | +3.0% (-2.2%) | -0.5% (-1.2%) | +0.3% (-0.2%)
+价格:40-60%                  20.0%    +0.5% | -2.0% (-0.6%) | +8.3% (-1.1%) | +5.8% (+1.3%) | +0.9% (-0.9%) | +1.4% (-1.2%) | -0.2% (+0.1%) | +2.2% (-0.8%) | +1.4% (-1.2%) | -0.1% (-0.1%) | +0.7% (-1.8%)
+价格:60-80%                  19.9%    -6.1% | +0.3% (+2.2%) | +9.4% (-12.3%) | +0.1% (-3.0%) | +2.2% (+1.0%) | +2.6% (+0.9%) | +1.7% (+1.7%) | +0.9% (+2.4%) | +2.2% (+1.1%) | +1.4% (+1.9%) | +4.5% (-2.0%)
+价格:最高20%                   19.9%    -3.8% | +1.0% (+5.6%) | +2.1% (-18.2%) | -1.3% (-8.4%) | +3.5% (+5.2%) | +1.8% (+4.5%) | +1.5% (+2.8%) | +1.4% (+6.3%) | +2.6% (+4.9%) | +1.6% (+3.8%) | +1.7% (+0.5%)
+上市:不足250日                   7.1%   -28.7% | -2.3% (-1.0%) | +8.6% (-0.9%) | +17.9% (+2.5%) | +13.6% (-2.0%) | +14.3% (-2.2%) | +4.1% (-0.5%) | +7.0% (-1.0%) | +0.1% (-1.8%) | +5.4% (-0.5%) | +12.4% (-3.8%)
+上市:250日以上                  92.9%    +1.6% | +0.5% (+1.0%) | +15.3% (+0.9%) | +6.5% (-2.5%) | +2.6% (+2.0%) | +2.4% (+2.2%) | +2.5% (+0.5%) | +2.7% (+1.0%) | +2.5% (+1.8%) | +2.3% (+0.5%) | +2.1% (+3.8%)
+近15日有冻结盘口(封板/停牌)            6.5%   -67.4% | +11.9% (-0.8%) | -10.9% (-2.9%) | -41.4% (-5.0%) | +25.0% (-2.5%) | +22.2% (-2.4%) | +14.9% (-0.7%) | +28.1% (-1.6%) | +12.7% (-1.9%) | +15.1% (-0.9%) | +7.3% (-0.8%)
+近15日无冻结盘口                  93.5%    +3.7% | -2.3% (+0.8%) | +14.1% (+2.9%) | +3.1% (+5.0%) | +0.5% (+2.5%) | +0.6% (+2.4%) | +0.5% (+0.7%) | -0.5% (+1.6%) | +0.9% (+1.9%) | +0.1% (+0.9%) | +0.6% (+0.8%)
+
+-- 按时间 / 市场状态:全市场多头书的净超额(年化)
+时段                            天数 |   [0]   |   [1]   |   [2]   |   [3]   |   [4]   |   [5]   |   [6]   |   [7]   |   [8]   |   [9]  
+年:2018                       243 |   -3.4% |  +17.3% |  +13.0% |   +1.7% |   +3.9% |   -1.1% |   +2.5% |   -2.6% |   -2.2% |   +6.9%
+年:2019                       244 |   +7.0% |  +10.4% |   +4.5% |   +7.7% |   +6.6% |   +7.6% |   +6.0% |   +6.0% |   +7.2% |   +1.6%
+年:2020                       243 |   +4.5% |   +6.7% |   -3.8% |   +3.6% |   +3.0% |   +5.3% |   +8.9% |   +4.3% |   +4.9% |   -2.9%
+年:2021                       243 |   -1.7% |  +16.1% |   +7.8% |   +4.8% |   +4.2% |   +3.1% |   +0.4% |   +6.1% |   +2.9% |   +3.4%
+年:2022                       242 |   +1.1% |  +24.7% |   +9.6% |   +2.6% |   +1.7% |   +5.6% |   +3.5% |   +2.1% |   +5.1% |   +4.0%
+年:2023                       144 |   -6.3% |  +18.5% |   +7.0% |   +0.3% |   -0.7% |   -4.9% |   -4.8% |   -0.0% |   -5.6% |   +6.6%
+市场近20日:上涨                    753 |   -1.4% |  +23.0% |  +11.2% |   +4.1% |   +3.2% |   +2.4% |   +1.9% |   +3.8% |   +1.6% |   +8.0%
+市场近20日:下跌                    586 |   +3.8% |   +6.0% |   +0.4% |   +3.3% |   +3.4% |   +4.5% |   +5.0% |   +1.5% |   +4.4% |   -3.4%
+市场波动:高于中位                    679 |   +0.5% |  +18.5% |   +8.0% |   +4.0% |   +3.5% |   +2.7% |   +1.9% |   +2.8% |   +2.1% |   +0.8%
+市场波动:低于中位                    679 |   +1.0% |  +12.4% |   +4.7% |   +3.4% |   +3.4% |   +3.7% |   +4.8% |   +2.9% |   +3.3% |   +5.2%
+截面离散度:高                      679 |   +2.2% |  +18.9% |   +8.2% |   +5.3% |   +3.9% |   +4.7% |   +5.6% |   +4.2% |   +4.3% |   +1.9%
+截面离散度:低                      679 |   -0.8% |  +12.0% |   +4.5% |   +2.1% |   +3.0% |   +1.7% |   +1.1% |   +1.4% |   +1.1% |   +4.1%
+成交:放量(高于60日均)                606 |   -0.1% |  +19.9% |   +7.6% |   +7.0% |   +6.7% |   +3.8% |   +3.9% |   +7.3% |   +3.0% |   +4.0%
+成交:缩量                        753 |   +1.3% |  +11.8% |   +5.2% |   +1.0% |   +0.7% |   +2.6% |   +2.8% |   -0.8% |   +2.3% |   +2.2%
+
+wrote /root/autodl-tmp/Partura/runs/F113_nested_tsmax_demean/anatomy_s1.json (238s)
+[partura exit 0 2026-10-06_01:49:16]

@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -95,13 +95,15 @@ R2 的三个疑点现在都有数字了:
 - `S0_baseline`  10-04 11:50  1 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S0_baseline`
 - `S1_nodes`  10-04 14:52  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S1_nodes`
 - `S2_overlay`  10-04 23:32  9 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S2_overlay`
+- `sweep_s1`  10-05 10:30  89 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s1`
+- `anatomy_s1`  10-05 10:41  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s1`
 - `x1_anatomy`(自写脚本的输出)  10-04 13:13  exit 97  → `logs/F108_max_ntkurt_close_x1_anatomy.log`
 - `x2_longonly`(自写脚本的输出)  10-04 14:42  exit 0  → `logs/F108_max_ntkurt_close_x2_longonly.log`
 - `x3_attrib`(自写脚本的输出)  10-04 23:53  exit 0  → `logs/F108_max_ntkurt_close_x3_attrib.log`
 
 ## 已写的 notes(`notes/F108_max_ntkurt_close/`)
 
-`01_expression.md`(1K)、`02_operators.md`(5K)、`03_decomposition.md`(4K)、`04_grammar.md`(2K)、`05_hypotheses.md`(23K)、`06_baseline.md`(9K)、`07_S1_nodes.md`(10K)、`07_S2_overlay.md`(13K)、`07x_1_x1_anatomy.md`(20K)、`07x_2_x2_longonly.md`(14K)、`07x_3_x3_attrib.md`(9K)、`10_distilled.md`(6K)、`journal.md`(22K)、`state.md`(11K)
+`01_expression.md`(1K)、`02_operators.md`(5K)、`03_decomposition.md`(4K)、`04_grammar.md`(2K)、`05_hypotheses.md`(23K)、`06_baseline.md`(9K)、`07_S1_nodes.md`(10K)、`07_S2_overlay.md`(13K)、`07x_1_x1_anatomy.md`(20K)、`07x_2_x2_longonly.md`(14K)、`07x_3_x3_attrib.md`(9K)、`10_distilled.md`(6K)、`journal.md`(22K)、`state.md`(11K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F108_max_ntkurt_close/`)
 

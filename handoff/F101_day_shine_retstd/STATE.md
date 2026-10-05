@@ -1,6 +1,6 @@
 # F101_day_shine_retstd — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 day_shine_retstd(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))`
@@ -45,6 +45,8 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F101_day_s
 - `S2_background`  10-03 20:01  10 个变体  → `./scripts/study.sh digest F101_day_shine_retstd S2_background`
 - `final`  10-03 23:00  5 个变体  → `./scripts/study.sh digest F101_day_shine_retstd final`
 - `rev1`  10-03 23:36  7 个变体  → `./scripts/study.sh digest F101_day_shine_retstd rev1`
+- `sweep_s1`  10-05 10:42  102 个变体  → `./scripts/study.sh digest F101_day_shine_retstd sweep_s1`
+- `anatomy_s1`  10-05 10:49  0 个变体  → `./scripts/study.sh digest F101_day_shine_retstd anatomy_s1`
 - `look`(自写脚本的输出)  10-03 19:28  exit 0  → `logs/F101_day_shine_retstd_look.log`
 - `look2`(自写脚本的输出)  10-03 19:50  exit 0  → `logs/F101_day_shine_retstd_look2.log`
 - `look3`(自写脚本的输出)  10-03 22:45  exit 0  → `logs/F101_day_shine_retstd_look3.log`

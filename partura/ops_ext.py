@@ -254,8 +254,106 @@ def cs_winsor(x: torch.Tensor) -> torch.Tensor:
     return torch.where(torch.isfinite(x), torch.minimum(torch.maximum(x, lo), hi), x)
 
 
+# ----------------------------------------------------------------------------- asked for by the studies
+
+@op("dt", "day", arity=1)
+def day_zero_ratio(x: torch.Tensor) -> torch.Tensor:
+    """Share of the day's finite minutes with ``x == 0`` exactly.
+
+    On Ret: the mass of the point at zero -- minutes in which the price did not move
+    (locked at the limit, suspended, no trade).  ``day_flat_ratio`` on Ret would mix
+    'did not move twice' with 'moved by the same amount twice'; this does not.
+    (Requested by the F114 study: its tree turned out to be reading this atom.)"""
+    x = _f(x)
+    ok = torch.isfinite(x)
+    n = ok.sum(-1)
+    r = ((x == 0) & ok).sum(-1).to(x.dtype) / n.clamp(min=1).to(x.dtype)
+    return _day(r, n > 0)
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_valid_count(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Number of the last ``d`` trading days (today included) on which ``x`` is finite:
+    an integer in 0..d, never NaN.
+
+    The cube has no listing date and no suspension flag; both show up only as NaN
+    patterns.  ``cross_valid_count(day_last(Close), 241) < 241`` = listed (or resumed)
+    within the last year; a small count on a short window = recently suspended.
+    (Requested by F114: the largest segment effect in its anatomy was listing age.)"""
+    x = _f(x)
+    return torch.isfinite(rolling_windows(x, int(d), 0)).sum(-1).to(x.dtype)
+
+
+def _tail_mean(x: torch.Tensor, d: int, q: float, low: bool) -> torch.Tensor:
+    w = rolling_windows(_f(x), int(d), 0)
+    ok = torch.isfinite(w)
+    n = ok.sum(-1)
+    thr = torch.nanquantile(torch.where(ok, w, torch.full_like(w, NAN)), q, dim=-1, keepdim=True)
+    sel = ok & ((w <= thr) if low else (w >= thr))
+    m = torch.where(sel, w, torch.zeros_like(w)).sum(-1) / sel.sum(-1).clamp(min=1).to(w.dtype)
+    return torch.where((n >= 2) & (sel.sum(-1) > 0), m, torch.full_like(m, NAN))
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_tail_mean_q25(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Mean of the values at or below the 25% quantile of the last ``d`` days (the lower
+    tail's conditional mean); NaN with fewer than 2 finite days.  Same tail as
+    ``cross_quantile_q25`` but averaged over the tail instead of read at one order
+    statistic, so 'which tail' and 'how noisily it is estimated' can be told apart."""
+    return _tail_mean(x, d, 0.25, True)
+
+
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_tail_mean_q75(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Mean of the values at or above the 75% quantile of the last ``d`` days (upper-tail
+    conditional mean); NaN with fewer than 2 finite days."""
+    return _tail_mean(x, d, 0.75, False)
+
+
+def _lexi(y: torch.Tensor, x: torch.Tensor, lo: float, hi: float, shift: float) -> torch.Tensor:
+    """rank(y) in (0, 1], shifted by ``shift`` for the stocks whose x-rank is in (lo, hi]."""
+    y, x = _f(y), _f(x)
+    ok = torch.isfinite(y) & torch.isfinite(x)
+    rx, ry = _pct_rank(x, ok), _pct_rank(y, ok)
+    return torch.where(ok, ry + shift * ((rx > lo) & (rx <= hi)).to(y.dtype), torch.full_like(y, NAN))
+
+
+@op("nd", "cs", arity=2)
+def cs_first_low40(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Rank of ``y`` (in (0, 1]) with every stock in the LOWEST 40% of ``x`` placed above
+    every other stock: ``rank(y) + 1`` there, ``rank(y)`` elsewhere.
+
+    'Trade y only where x is low' as an expression: the top of the output is drawn from
+    the low-x segment, ordered by y, while every stock keeps a distinct value (no NaN,
+    no ties), so the book is still measured against the whole market.  Use it when the
+    anatomy says a signal selects only inside one segment (small / illiquid names)."""
+    return _lexi(y, x, -1.0, 0.4, 1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_first_high40(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_first_low40`` but the HIGHEST 40% of ``x`` come first."""
+    return _lexi(y, x, 0.6, 1.0, 1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_high20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Rank of ``y`` with every stock in the HIGHEST 20% of ``x`` placed BELOW every other
+    stock (``rank(y) - 1`` there).  An exclusion screen: those names can never reach the
+    long book, the rest keep their order.  'y, but never the names x flags'."""
+    return _lexi(y, x, 0.8, 1.0, -1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_low20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_high20`` but it is the LOWEST 20% of ``x`` that are pushed to the bottom."""
+    return _lexi(y, x, -1.0, 0.2, -1.0)
+
+
 NEW_OPERATORS = ("in_pct", "in_logchg", "day_flat_ratio", "day_pos_ratio", "day_wmean", "day_signed_ratio",
-                 "day_gini", "day_centroid", "cross_ema", "cross_zscore", "cs_bucket_rank", "cs_winsor")
+                 "day_gini", "day_centroid", "cross_ema", "cross_zscore", "cs_bucket_rank", "cs_winsor",
+                 "day_zero_ratio", "cross_valid_count", "cross_tail_mean_q25", "cross_tail_mean_q75",
+                 "cs_first_low40", "cs_first_high40", "cs_last_high20", "cs_last_low20")
 
 
 def install() -> None:

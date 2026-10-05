@@ -145,11 +145,11 @@ case "$cmd" in
     fid=$1; push "$fid" || exit 1
     $SSH $HOST "$ENV && $RPY scripts/check_hypo.py studies/$fid/hypo.yaml 2>&1 | grep -v 'FutureWarning\|vmap(single_row)\|UserWarning'"
     ;;
-  table)     # the batch-sweep backtest table and the market anatomy of this factor (tag defaults to s1)
+  table)     # the batch-sweep backtest table and the market anatomy of this factor (tag defaults to s1; --all = every variant)
     fid=$1; tag=${2:-s1}
-    $RS "$SSH" "$HOST:$R/logs/${fid}_sweep_${tag}.log" logs/ 2>/dev/null
+    mkdir -p "runs/$fid"
     $RS "$SSH" --include='*.json' --exclude='*' "$HOST:$R/runs/$fid/" "runs/$fid/" 2>/dev/null
-    grep -av 'FutureWarning\|vmap(single_row)\|UserWarning\|RuntimeWarning\|nanvar\|np.nanmean\|^\[panels\]\|^\[guard\]' "logs/${fid}_sweep_${tag}.log"
+    "$PY" scripts/sweep_table.py "$fid" "$tag" ${3:-}
     ;;
   brief)
     fid=$1

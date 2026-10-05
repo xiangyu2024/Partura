@@ -1,0 +1,87 @@
+# F114_q25_closeret —— 第二批假设(主研,读完 s1 大表 + 市场解剖之后)
+#
+# 大表的三条硬结论决定了这一批往哪儿打:
+#   (甲) 载重的不是「q25」而是「day_close(Ret) 在 0 上有一个点质量」:q50 在同一槽位 dist 0.16、底腿
+#        +19.0% → +0.2%(sub_B_cross_quantile_q50),day_median/day_quantile 的 LTO 只 0.004、dist 0.02
+#        → 中位数压在原子上就没有信息;把孔径放宽到 5 分钟(leaf_Ret_ret5)净超额从 +3.6% 掉到 +0.1%。
+#        这个 0 原子 = 封板 / 停牌 / 无收盘成交的「冻结盘口」状态。
+#   (乙) 多头腿的超额**全部**是跨成交额桶的倾斜:成交额五个分桶里段内多头书分别 -0.7/-2.7/-6.5/-4.2/-5.1,
+#        全是负的;全市场 +3.6% 来自对最低成交额桶 +10.7% 的超配。bk_liq +1.6 / bk_known +1.2 / res_known +1.8。
+#   (丙) 唯一打赢已知族的地方是病态段:近15日有冻结盘口段(占 6.5%,段等权 -67.4%)这棵树 +7.7%
+#        (mem_min60 +21.6%),而已知族 -10.9%;次新段(7.1%,段等权 -28.7%)这棵树 +18.1%。
+#
+# 所以这一批不再求「更好的 q25」,而是:A/B/C 用无原子的算子把(甲)的状态和尾盘资金方向直接写出来;
+# D 追 day_durbin_watson 这条比原式还好、相关只 +0.36 的支线;E 把(已证实只值换手的)慢化做到底当参照;
+# F 用 cs_bucket_rank 在成交额 / 价格 / 放量桶内问(乙)有没有残留的选股力;
+# G 把它当「筛子」而不是「混合」叠到已知族上 —— 瞄准(丙)里已知族亏钱的那 6.5%;
+# H 把解剖里最强的时间切分(截面离散度高 +7.3% vs 低 -0.0%、放量 +7.9% vs 缩量 +0.1%)写成表达式里的
+#   日频市场状态,去调 F 相对已知族的权重 —— 这是整批里最大胆的一类。
+
+# ---- A. 把 0 原子 /「冻结盘口」状态直接读出来(检验甲:如果载重的是这个状态,它应该能复现甚至超过原式)
+h_flat_mean15:   {expr: "cross_mean(day_flat_ratio(Close), 15)", why: "甲的正面检验:直接量「近15日分钟报价不动的比例」,窗口与原式相同;复现得了就说明 q25 只是这个状态的噪声读数"}
+h_flat_q25_15:   {expr: "cross_quantile_q25(day_flat_ratio(Close), 15)", why: "甲:换掉叶子保留整个外壳(q25+15),单独检验「冻结比例」替「尾盘分钟收益」够不够"}
+h_flat_ema30:    {expr: "cross_ema(day_flat_ratio(Close), 30)", why: "甲+丙:冻结是一个持续状态而不是事件,按大表 mem_ema30 最优的慢化方式读它"}
+h_flat_tail30:   {expr: "cross_mean(day_flat_ratio(in_slice(Close, 210, 240)), 15)", why: "甲的定位检验:原式只读最后一分钟,如果状态信息集中在尾盘,只看最后 30 分钟应该比全天更强"}
+h_flat_amt15:    {expr: "cross_mean(day_flat_ratio(Amt), 15)", why: "分辨两种病态:价格不动(封板)vs 成交额不动(没成交),哪一种才是信息源"}
+h_flat_w60:      {expr: "cross_mean(day_flat_ratio(Close), 60)", why: "甲+窗口:原式的窗口是 5→60 单调上坡,看状态变量上是否同样有坡"}
+
+# ---- B. 尾盘的资金加权读数(检验机制推断之五:如果它是微观冲击/卖压计,按成交额加权应该更干净)
+h_wmean_q25:     {expr: "cross_quantile_q25(day_wmean(Ret, Amt), 15)", why: "把「最后一分钟」换成「资金实际经历的分钟收益」:day_mean 塌到 -15.9%,如果 wmean 不塌,说明塌的原因是等权了死分钟而不是孔径"}
+h_wmean_tail_ema: {expr: "cross_ema(day_wmean(in_slice(Ret, 210, 240), in_slice(Amt, 210, 240)), 30)", why: "尾盘 30 分钟的资金加权收益:孔径(尾盘)+ 加权(资金)+ 慢化(ema30)三条已知有效的要素一次装齐"}
+h_sgn_q25:       {expr: "cross_quantile_q25(day_signed_ratio(Ret, Amt), 15)", why: "净买压代理替掉收益读数,外壳不变:检验 q25 读到的是「卖压」还是「冲击幅度」"}
+h_sgn_ema30:     {expr: "cross_ema(day_signed_ratio(Ret, Amt), 30)", why: "同上但按最优慢化读;day_signed_ratio 有界 [-1,1],不需要 cs_winsor"}
+h_sgn_tail15:    {expr: "cross_mean(day_signed_ratio(in_slice(Ret, 210, 240), in_slice(Amt, 210, 240)), 15)", why: "尾盘净买压:原式的孔径说明信息在收盘附近,这是同一位置的有符号资金读数"}
+h_pos_q25:       {expr: "cross_quantile_q25(day_pos_ratio(Ret), 15)", why: "只看方向不看幅度。原式 = (尺度 − 位置)/2,这一条把尺度抽掉只留方向,分辨两半谁载重"}
+
+# ---- C. 无原子的尺度 / 顺序读数(大表里 cs_rank 和 cs_winsor 都是 no-op → 载重的是秩,不是幅度)
+h_sd_close15:    {expr: "cross_stddev(day_close(Ret), 15)", why: "尾盘分钟收益的纯尺度(无分位数、无原子):恒等式说 -q25=(尺度−位置)/2,这是尺度那一半的无偏读法"}
+h_sd_close60:    {expr: "cross_stddev(day_close(Ret), 60)", why: "同上放到窗口上坡的顶端 60,看尺度那一半是否也有同样的坡"}
+h_gini_amt15:    {expr: "cross_mean(day_gini(Amt), 15)", why: "日内成交集中度:封板 / 尾盘拉抬的票成交挤在几分钟里。无尺度有界,不会被一根线主导"}
+h_centroid_amt_ema: {expr: "cross_ema(day_centroid(Amt), 30)", why: "成交发生在一天的什么位置。大表里 day_centroid(Ret) 以 ρo 只 +0.32 拿到 +2.6%/valid +10.6% —— 顺序信息是一条独立支线,在 Amt 上才是它的自然读法"}
+h_closeshare_ema: {expr: "cross_ema(div(day_close(Amt), day_sum(Amt)), 30)", why: "最后一分钟占全天成交额的比重:原式说「最后一分钟特殊」,这是同一句话的成交量侧写法(用户提示的 Ret↔量 互换在这里的正确形式)"}
+
+# ---- D. day_durbin_watson 支线(大表 sub_A_day_durbin_watson:+4.9%/valid +11.1%,比原式好,ρo 只 +0.36、dist 1.00)
+h_dw_ema30:      {expr: "cross_ema(day_durbin_watson(Ret), 30)", why: "DW≈2(1−分钟自相关),冻结分钟让 diff=0 → DW→0,所以它同时是「冻结」和「买卖价跳动」的读数。按最优慢化读它"}
+h_dw_w60:        {expr: "cross_quantile_q25(day_durbin_watson(Ret), 60)", why: "DW + 原式的外壳 + 窗口上坡顶端:看这条比原式更好的支线能不能再抬一截"}
+h_dw_tail15:     {expr: "cross_mean(day_durbin_watson(in_slice(Ret, 210, 240)), 15)", why: "DW 限制在尾盘 30 分钟:如果原式的孔径(最后一分钟)不是偶然,DW 也应该在尾盘更强"}
+h_bk_dw_liq:     {expr: "cs_bucket_rank(cross_ema(day_durbin_watson(Ret), 30), cross_mean(day_sum(Amt), 30))", why: "DW 大概也是流动性读数(乙)。成交额桶内中性化后还剩多少,决定它是不是又一条已知族"}
+
+# ---- E. 把「只值换手」的慢化做到底,当这一批的参照线(大表:w60 +5.1%、mem_ema30 +5.0%,两者未组合过)
+h_w60_ema30:     {expr: "cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)", why: "两条低通串联。w60 的 hlL 自动掉到 3、mem_ema30 的掉到 10 → 内窗与外记忆是同一件事的替代品;串联应该没有加法,这条就是来钉死这个判断的"}
+h_w30_ema30:     {expr: "cross_ema(cross_quantile_q25(day_close(Ret), 30), 30)", why: "同上的中间点(w30 是上一轮的第一候选),给串联是否有加法一个两点的斜率"}
+h_w60_mean60:    {expr: "cross_mean(cross_quantile_q25(day_close(Ret), 60), 60)", why: "硬窗口版的串联;与 h_w60_ema30 比较可区分「淡出 vs 掉出窗口」在这棵树上是否有差别"}
+
+# ---- F. 成交额 / 价格 / 放量桶内中性(直打乙:桶内到底有没有选股力。大表的 bk_* 因为输入有 0 原子、dist 只 0.20 不算数)
+h_bk_flat_liq:   {expr: "cs_bucket_rank(cross_mean(day_flat_ratio(Close), 15), cross_mean(day_sum(Amt), 30))", why: "乙 + 甲:用无原子的状态变量重做分桶中性,dist 应该恢复到 1;桶内还为正才说明存在不靠流动性倾斜的选股力"}
+h_bk_sgn_liq:    {expr: "cs_bucket_rank(cross_ema(day_signed_ratio(Ret, Amt), 30), cross_mean(day_sum(Amt), 30))", why: "乙:净买压是有界、无原子的,是检验「桶内有没有信息」最干净的载体"}
+h_bk_slowf_liq:  {expr: "cs_bucket_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30), cross_mean(day_sum(Amt), 30))", why: "乙:大表只把 w15 原式做过分桶,慢版(本树最强)还没做过;慢化是否只是把倾斜做得更稳"}
+h_bk_slowf_price: {expr: "cs_bucket_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30), log(day_last(Close)))", why: "解剖显示多头书超配最低价格组 +14.5%、段内只 +2.7%:价格倾斜与成交额倾斜是不是同一件事"}
+h_bk_slowf_amtexp: {expr: "cs_bucket_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30), div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))", why: "把「放量」写成个股自己的量能扩张比(解剖:放量段 +7.9% vs 缩量 +0.1%),看信息是不是只长在正在放量的那一桶里"}
+
+# ---- G. 叠在已知族上,但做「筛子」而不是「混合」(大表:所有线性权重都严格差于已知族单独 → 只有单尾筛子还没试过)
+h_ov_flat_p05:   {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), 15)), 0.5))", why: "丙:已知族在冻结盘口段 -10.9%、这棵树 +7.7% → 给已知族加一个冻结罚项。相对符号取正(两者多头腿都在低端)"}
+h_ov_flat_p025:  {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), 15)), 0.25))", why: "同上的小权重点,给「权重—增量」曲线两个点;大表里原式的这条曲线是单调向下的"}
+h_ov_flat_pow3:  {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_mean(day_flat_ratio(Close), 15))), 1.0))", why: "丙的关键形状检验:病态段只占 6.5%,线性叠加把倾斜摊到整本书上;pow_3 把罚项压缩到最差那一小段 —— 筛子 vs 混合"}
+h_scr_flat_mul:  {expr: "mul(cs_rank(cross_mean(day_std(Amt), 30)), cs_rank(cross_mean(day_flat_ratio(Close), 15)))", why: "两个秩相乘 = 软 AND,只有「既是已知族喜欢的、又不冻结」才进多头书;这是筛子的另一种写法,与 pow_3 版互为稳健性检查"}
+h_ov_dw_m05:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(day_durbin_watson(Ret), 30)), -0.5))", why: "D 支线的增量检验;DW 的方向是 +1、已知族是 -1,所以相对权重取负才是对齐的"}
+h_ov_slowf_pow3: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cs_winsor(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)))), 1.0))", why: "用原树本身做单尾筛子:如果线性叠加亏(大表已证)而凸权重不亏,说明这棵树只在自己的一个尾巴上有用"}
+
+# ---- H. 把日频市场状态写进表达式,去调原树相对已知族的权重(解剖里最强的时间切分)
+h_gate_disp_mix: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), div(cs_stddev_full(div(day_last(Close), cross_delay(day_last(Close), 1))), cross_mean(cs_stddev_full(div(day_last(Close), cross_delay(day_last(Close), 1))), 60))))", why: "截面离散度高 +7.3% vs 低 -0.0%:把「当日截面离散度 / 它自己 60 日均值」当权重,离散度高的日子才给这棵树权重。日频标量乘秩不改当日排序,所以必须与已知族相加才生效"}
+h_gate_vol_mix:  {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_mean(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))))", why: "放量 +7.9% vs 缩量 +0.1%:把市场整体量能扩张(个股量能比的截面均值)当权重,检验时段依赖能否被表达式自己吸收"}
+h_amtexp_mul:    {expr: "mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_rank(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))))", why: "不借已知族:直接把原树与个股量能扩张做秩乘(软 AND),检验「正在放量的小票」这一个联合条件是不是全部的故事"}
+
+# ---- I. 对照:教科书冲击计(如果机制推断成立,它应该把原树包住)
+h_amihud15:      {expr: "cross_mean(div(day_std(Ret), log(add(day_sum(Amt), 1))), 15)", why: "分钟波动 / log 成交额 = 日内版 Amihud。原树如果本质是微观冲击计,这条应该不弱于它;弱了则说明 0 原子那部分是真的额外信息"}
+
+# ---- 总领补充:用主研要求、刚加进算子库的新算子(day_zero_ratio / cross_valid_count / cross_tail_mean_q25 / cs_first_* / cs_last_*)
+z_zero_mean15: {expr: "cross_mean(day_zero_ratio(Ret), 15)", why: "直接量 0 原子:近 15 日「价格不动的分钟」占比。若机制成立,它应复现原式里原子那一半"}
+z_zero_ema30: {expr: "cross_ema(day_zero_ratio(Ret), 30)", why: "同上,用 EMA 做记忆"}
+z_tail_q25_15: {expr: "cross_tail_mean_q25(day_close(Ret), 15)", why: "下尾条件均值代替单个顺序统计量:那 2pp 是尾部信息还是估计噪声"}
+z_tail_q25_60: {expr: "cross_tail_mean_q25(day_close(Ret), 60)", why: "同上,60 日"}
+z_orig_lowliq: {expr: "cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_mean(day_sum(Amt), 30))", why: "只在成交额最低 40% 里按原式选(解剖:它只在小 / 不活跃的票里有效)"}
+z_orig_newlist: {expr: "cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_valid_count(day_last(Close), 241))", why: "只在次新 / 复牌不久的票里按原式选(解剖:上市不足 250 日段内 +18%)"}
+z_known_excl_zero: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "已知族,但绝不买近 15 日有「冻结盘口」日的票(已知族在这一段 −10.9%)"}
+z_known_excl_orig: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_quantile_q25(day_close(Ret), 15))", why: "已知族,把原式判为最差的 20% 剔掉:把这棵树当单尾筛子用"}
+z_known_lowliq: {expr: "cs_first_low40(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_sum(Amt), 30))", why: "对照:已知族自己只在成交额最低 40% 里做,是不是就已经拿到全部"}
+z_age: {expr: "cross_valid_count(day_last(Close), 241)", why: "上市时间本身当因子:解剖里次新段等权 −28.7%"}
