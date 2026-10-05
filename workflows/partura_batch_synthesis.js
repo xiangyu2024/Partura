@@ -92,7 +92,7 @@ train = 2018–2021,valid = 20220101–20230807,utrain = 两者。噪声:净超�
 - 改最小的子结构:换一个叶子、换一个算子、换一个窗口、删一个节点 —— 但要是这张表里还没有的。
 - 利用解剖的发现:比如只在小市值 / 低流动性里有效 → 用成交额水平做代理(表达式里没有市值字段),做桶内排名 cs_bucket_rank(X, 代理)、
   或与代理的秩相加 / 相乘;只在某类状态有效 → 找一个能在表达式里写出来的状态变量。
-- 用新算子做原来做不了的事(定义见 docs/new_operators.md):in_pct、in_logchg、day_flat_ratio、day_zero_ratio、day_pos_ratio、day_wmean、day_signed_ratio、day_gini、day_centroid、
+- 用新算子做原来做不了的事(定义见 docs/new_operators.md):in_pct、in_logchg、in_madz、day_flat_ratio、day_flat_run_max、day_zero_ratio、day_pos_ratio、day_wmean、day_signed_ratio、day_gini、day_centroid、
   cross_ema、cross_zscore、cross_valid_count(近 d 日有数据的天数:次新 / 停牌)、cross_tail_mean_q25 / q75、cs_bucket_rank、cs_winsor,
   以及把「只在某一段股票里做 / 排除某一段」写进表达式的 cs_first_low40 / cs_first_high40 / cs_last_high20 / cs_last_low20。
 - 大胆一些:允许和原式相关很低的新结构,只要它来自你对机制的推断(写清推断)。不要凑数、不要只扫窗口。

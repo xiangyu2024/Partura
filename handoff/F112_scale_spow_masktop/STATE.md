@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -16,47 +16,31 @@ _自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F112_scale
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F112_scale_spow_masktop` 看服务器上的 tag,`./scripts/study.sh digest F112_scale_spow_masktop <tag>` 重看结果)。
 
-## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-05 00:03 更新)—— **先读这个文件**
+## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-05 11:08 更新)—— **先读这个文件**
 
 # 研究现状 · F112_scale_spow_masktop
 
-> 第 **4** 轮主研(Opus 5)覆盖重写于 2026-10-04 晚。**每轮整个文件覆盖重写。**
-> 读序:本页 → `10_distilled.md`「读完留出段之后」→ `09_diagnosis.md` → `results/R3.md`;长表在 `07_*`、`07x_*`、`results/R1~R3.md`。
+> 第 **5** 轮(主研 Opus 5)覆盖重写于 2026-10-05。**每轮整个文件覆盖重写。**
+> 读序:本页 → `synthesis.md`(本轮综合,最新口径)→ `studies/F112_scale_spow_masktop/hypo.yaml`(第二批 38 条假设)
+> → 旧轮 `10_distilled.md` / `09_diagnosis.md` / `results/R3.md`(留出段结论仍有效)。
 > 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
-> **A 卷** = fit `train`(train/valid);**B 卷** = fit `utrain`(utrain/**holdout**,= 用户表口径)。
+> 本轮证据 = `runs/F112_scale_spow_masktop/sweep_s1.json`(113 变体,train/valid)+ `anatomy_s1.json`(utrain 分段/分时)。
+> 本轮**没读留出段、没自己起服务器计算**,只跑了 `study.sh table / src / ops / hypo / note`。数字全是 train / valid / utrain。
 
-## 1. 一句话现状
+## 1. 现状(一句话)
 
-**留出段已读、判断类 notes 已全部写完,本轮进入成文。** 结论是**否定的**:原式的多头腿可交易
-(holdout `+6.89%` / `Lshp 1.03`),删掉截尾节点并把窗口放长能稳定提到 `+9%~+11%` / `Lshp 1.33`,
-但这条线索落在两个已知暴露之间、相对已知成交额家族拿不出残差增量,而家族同段给 `+13.23%` / `Lshp 1.40` 且换手更低。
-**不建议纳入。** 已下 `orders/R4.md`(kind: **writeup**,零服务器运行)。**下一轮应是 (d) 完成,不要再开实验。**
+**结论不变:不建议纳入 —— 但「为什么」换掉了。** 旧结论是「落在两个已知暴露之间」;本轮大表 + 解剖证明
+这棵树是**两条因子叠在一起**:去掉 `ts_scale` 的那一半是低价 / 微盘 beta(`iso_E` ut +8.4%,但在任何价格桶
+内部都 -9%~-26%),带 `ts_scale` 的那一半是一条**1 个月反转**(`abl_D` ut +7.8%,每个价格桶内都正,信息集中在
+高流动性 / 冻结盘口 / 创业板 / 高波动)。全市场口径对家族仍**无增量**(overlay 六档全低于 `k_known` +15.4%,
+`res_known` ut +0.2%/+0.03)。**唯一活口**:家族自己在成交额桶内几乎没有信息 ⇒ 它是一条流动性 beta,
+而比值族的 alpha 恰在家族不去的那一段。下一步 = 跑第二批 38 条(已 parse 通过),重点是 D 组流动性聚焦。
 
-(…全文 6217 字符,读 `notes/F112_scale_spow_masktop/state.md`)
+(…全文 6040 字符,读 `notes/F112_scale_spow_masktop/state.md`)
 
-## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:22 条,其中研究员自己写的 11 条)
+## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:23 条,其中研究员自己写的 12 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:21 [主研] 第 3 轮:裁决 R2,假设表收口,进入读留出段(已下 R3 = kind:final)
-
-看到了什么(全部来自 results/R2.md,两次运行 exit 0):
-1. 2×2 正交:固定 hl20 同档下,峰度主效应 +0.9pp、平方主效应 −0.5pp、交互 +0.1pp —— 全在 ±3pp 噪声内。
-   这直接关掉了上一轮 state.md 留的唯一「升华」方向(两通道显式等权),它的触发条件是 s2_f30 ≫ s2_n30,
-   实测 +7.1% vs +6.7%、Lshp +1.05 vs +0.83,条件不成立。**不做,是被实验否掉的,不是没来得及做。**
-2. 本轮最重要的发现,是从执行已经带回但没有横向读的那张表里读出来的:R2 §4 的原始面板口径秩相关,
-   随窗口 30→50→60→241 **四列全部单调**:ρ(ctl_mom20) +0.554→+0.540→+0.519→+0.341,
-   ρ(ctl_price) +0.257→+0.399,ρ(K1) +0.086→+0.335,ρ(K2) +0.198→+0.344;ctl_mom20 中性化 R² 同向 0.153→0.068→0.030。
-   ⇒ H1 必须改写成 H1′:这棵树的多头腿是一条**连续谱**上的一点,短窗口那端是 20 日反转、长窗口那端是低价/成交额家族,
-   窗口参数就是谱上的位置旋钮。**两端都是已知暴露 ⇒ 旋钮转到哪里都走不出已知家族,只会换一个家族。**
-   执行把这张表只读成了「两套口径符号相反的再次确认」,没读窗口方向 —— 这是本轮唯一的新增认知,没花服务器运行。
-3. H8(决定性问题)有了答案,是**否定**的,三条独立证据:
-   (a) 独立比:最好的候选 +8%~+9%/Lshp 1.2~1.3 vs 家族 +13.7%/+22.2%、1.99/3.59 —— 家族高一倍;
-   (b) 残差(口径匹配,主证):对 {K1,K2} 取残差后 E1 的 Lgross 从 +12.3%/+14.5% 掉到 +3.1%/+6.2%(只剩 25%/43%),
-       rICtraded 剩 55%/62%,16 格判据全部「无残差增量」;残差换手升到 11%~18%(未中性化 4%~7%)⇒ 残差本身不可交易,
-       而且这套算子语法根本写不出一个逐日回归残差 ⇒ 对用户这是最终的,不是「有待实现」;
-   (c) 合成(旁证):24 格全部「无
-…(这条日志还有后文,读 journal.md)
 
 ### 2026-10-04 23:25 [auto] ⚠ 读留出段:final F1_final,阶段 F1_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
@@ -100,6 +84,15 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
    ⇒ H8 降级为「合理但未坐实」。它现在靠的是 train/valid 的残差检验(Lgross 只剩 25%
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 11:06 [主研] 批量扫描 s1 的综合
+
+1. 树的真身:A=day_quantile(Close) 默认 q=0.5 即中位分钟价(元),B=day_kurt(High) 无量纲 ⇒ add 被 A 压倒(iso_A +5.8% 与 iso_C +6.3% 在噪声内);E 平方把 ts_scale 的分母从算术均值推向幂均值 ⇒ 全式约等于 r²/(1+cv²),即「一个月跌幅 × 月内价格变异」的 1 个月反转。
+2. 承重=A 叶子与 F 比值;rank_C(让峰度与价格等权)ut -10.8%、only_C_R(只留峰度)-4.8%、sub_B_day_q_stat_std -21.9% ⇒ 第二个加数一旦有可比量级整树就塌。D 截尾有害(abl_D +7.8% vs base +4.2%,cs_winsor 同值 ⇒ 不是离群值问题),最好替代 sub_D_cs_rank +8.8%。窗口 20/30/40/50 = +1.0/+4.2/+4.6/+4.9 单调,越过 50 要用 cross_scale。
+3. 发现 ts_scale 的 nansum 分母是未设计的暴露:窗口缺失日越少分母越大 ⇒ 所有含 ts_scale 的变体一律低配次新 -4.9%~-5.5%,不含的 -0.1%~-0.7%。
+4. 解剖把因子劈成两族:无比值的 iso_E 族在任何价格桶内部都 -9%~-26%、持仓 +34.7% 压在最低价 ⇒ 它就是低价/微盘 beta;含比值的 abl_D 族在每个价格桶内都正,且信息集中在成交额最高档(+12.4%)、冻结盘口段(+29.6%)、创业板(+11.0%)、高波动段(+17.8%)。原因=反转要错价能被交易回去。
+5. 相对家族无增量(全市场口径):overlay 六档全低于 k_known +15.4%、res_known ut +0.2%/+0.03 ⇒ 不建议纳入。唯一活口:家族自己在成交额桶内几乎无信息(-4.1/-5.3/-8.2/-5.2/+2.5)却把 +80.3% 持仓压在最低档 ⇒ 它是流动性 beta,而比值族的 alpha 恰在它不去的那一段;overlay 与线性秩残差测不到这种分段互补,cs_first_high40 没试过。
+6. 已落盘 notes/synthesis.md 与 studies/hypo.yaml(38 条,38/38 parse)。
+
 ## 工单与结果卡(`notes/F112_scale_spow_masktop/orders/`、`notes/F112_scale_spow_masktop/results/`)
 
 - R0:工单 —,结果卡 有
@@ -133,7 +126,7 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 
 ## 已写的 notes(`notes/F112_scale_spow_masktop/`)
 
-`01_expression.md`(4K)、`02_operators.md`(15K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(33K)、`06_baseline.md`(11K)、`07_F1_final.md`(5K)、`07_S1_minimal.md`(7K)、`07_S2_combo.md`(7K)、`07x_01_a1_channels.md`(7K)、`07x_02_a2_increment.md`(5K)、`08_variants.md`(5K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(5K)、`12_next.md`(4K)、`journal.md`(36K)、`state.md`(9K)
+`01_expression.md`(4K)、`02_operators.md`(15K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(33K)、`06_baseline.md`(11K)、`07_F1_final.md`(5K)、`07_S1_minimal.md`(7K)、`07_S2_combo.md`(7K)、`07x_01_a1_channels.md`(7K)、`07x_02_a2_increment.md`(5K)、`08_variants.md`(5K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(5K)、`12_next.md`(4K)、`journal.md`(38K)、`state.md`(9K)、`synthesis.md`(12K)
 
 ## 自写的探针与分析脚本(`studies/F112_scale_spow_masktop/`)
 

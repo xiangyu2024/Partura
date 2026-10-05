@@ -1,0 +1,59 @@
+# F112_scale_spow_masktop 第二批假设(主研,2026-10-05,来自 sweep_s1 + anatomy_s1)
+# 记号:FALL30 = div(cross_mean(day_median(Close),30), day_median(Close)) —— 高 = 相对自己一个月均价跌下来,
+# 这样写是为了让 train 的 rank IC 为正、方向 sg 取 +1,cs_first_* / cs_last_* 的「哪一段在书顶」才不会被翻掉。
+
+# ---- A. 已确立的提纯 × 这张表里没试过的旋钮 ----
+h_nomask_w50_ema10: {expr: "cross_ema(ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50), 10)", why: "把三件已确立的事第一次合在一起:删 D(abl_D ut +7.8% vs base +4.2%)、窗口到 ts_* 上限 50(win_F_50 +4.9% 仍单调向上)、cross_ema 平滑(mem_ema 系列是唯一帮忙的记忆)"}
+h_nomask_cs241: {expr: "cross_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 241)", why: "ts_* 窗口池最大只有 50,换成同核的 cross_scale 才能越过去;检验 §2 的窗口单调到 241 还成不成立(state.md 说 50~241 是平台)"}
+h_csrank_w50: {expr: "ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)", why: "最好的 D 替代(sub_D_cs_rank ut +8.8%/1.35)× 最好的窗口(win_F_50);两个旋钮在表里从未同时转"}
+h_csrank_cs241_ema: {expr: "cross_ema(cross_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 241), 10)", why: "上一条的长窗 + 平滑版;若窗口真是平台,它应与 h_csrank_w50 持平而换手更低(sub_D_cs_rank 换手 7.7% 是全表偏高的)"}
+h_winsor_w50_out: {expr: "cs_winsor(ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50))", why: "F103 的教训:重尾量直接 EMA 是峰值记忆。比值的右尾全是连板票,先截面缩尾再进半衰期平滑,检验 mem_ema 的增益是不是被尾巴吃掉了"}
+h_masktop_mirror: {expr: "ts_scale(signedpower(cs_mask_top_replace_mean(add(day_quantile(Close), day_kurt(High)))), 30)", why: "镜像检验 D 有害的原因:遮最高一成(方向 -1 下是空头腿的尾巴)。若损失确实来自『吃掉多头自己的尾巴』,这一条应与 abl_D(+7.8%)持平而不是与 v_base(+4.2%)持平"}
+
+# ---- B. 把比值写对(§1 的 nansum 暴露 + E 其实在改分母) ----
+h_div_mean30: {expr: "div(day_median(Close), cross_mean(day_median(Close), 30))", why: "ts_scale 的分母是 nansum,窗口里缺失日越多取值越大 ⇒ 带 ts_scale 的变体一律低配次新 -4.9%~-5.5%,不带的 -0.1%~-0.7%。换成真均值后这条机械暴露应消失,信号本身(1 个月反转)应保留"}
+h_div_mean241: {expr: "div(day_median(Close), cross_mean(day_median(Close), 241))", why: "同上的长窗端点,检验窗口单调性在去掉 nansum 暴露之后是否还在(若还在,说明窗口不是在调这条暴露)"}
+h_div_med60: {expr: "div(day_median(Close), cross_med(day_median(Close), 60))", why: "分母换成窗口中位数:对窗口内的连板 / 跌停尖峰免疫。若 h_div_mean60 一族的收益靠的是尖峰,这一条会明显变差"}
+h_dd_max60: {expr: "div(day_median(Close), cross_max(day_median(Close), 60))", why: "§1 推出 E(平方)把分母从算术均值推向偏大值的幂均值。把这件事做到极端:相对自己 60 日最高价的回撤。若 E 的作用确实是这个,这一条应该复制并超过 abl_E→v_base 的 +1.4pp"}
+h_dd_tailq75_60: {expr: "div(day_median(Close), cross_tail_mean_q75(day_median(Close), 60))", why: "上一条的稳健版:分母用近 60 日高位四分之一的均值而不是单个最大值,把『读哪条尾巴』和『估得吵不吵』分开(新算子正是为此加的)"}
+h_rev_delay30: {expr: "div(day_median(Close), cross_delay(day_median(Close), 30))", why: "最朴素的 1 个月点对点反转。若 §3 的判读对,它应与 h_div_mean30 同量级且 ρo 高;若它明显更差,说明『对整个窗口取均值』本身在降噪,不只是算涨跌幅"}
+h_vwapish_30: {expr: "div(day_wmean(Close, Amt), cross_mean(day_wmean(Close, Amt), 30))", why: "把价格水平的摘法从『中位分钟价』换成『资金实际成交的价位』(day_wmean 新算子)。A 的字段 / 算子互换在表里全等价(±0.3pp),成交额加权是唯一没试过、且在机制上应该更准的那个"}
+
+# ---- C. 第二个加数:给它正确的量级或换成无尺度的日内形状 ----
+h_kurt_z30: {expr: "cross_zscore(day_kurt(High), 30)", why: "表里峰度只被试过『和价格相加』(被压倒)和『单独 + 截尾 + 比值』(only_C_R ut -4.8%)。去掉自身水平后单独评它一次:若 cross_zscore 版仍无信号,峰度这条腿可以彻底判死"}
+h_gini_own30: {expr: "div(day_gini(Amt), cross_mean(day_gini(Amt), 30))", why: "用有界无尺度的集中度替掉会被一根线主导的峰度(新算子的理由),并套上同一个比值形状。检验『B 没用』是算子选错还是这类信息本身没用"}
+h_flat_own30: {expr: "div(day_flat_ratio(Close), cross_mean(day_flat_ratio(Close), 30))", why: "F108 的结论是峰度类算子读到的其实是冻结盘口。直接量它,并相对自己近 30 日 ⇒『这只票最近突然不动了』。解剖说冻结盘口段内 abl_D 能拿 +29.6%,这是把那一段写进表达式的最直接方式"}
+h_rev_x_cv: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(div(cross_stddev(day_median(Close), 30), cross_mean(day_median(Close), 30))))", why: "把 §1 推导出的 r²/(1+cv²) 显式写成『跌幅秩 × 月内变异系数秩』。若这是 E 的全部作用,它应复制 v_base→abl_E 的 -1.4pp 并与 abl_D 同量级"}
+
+# ---- D. 流动性聚焦:本轮解剖最强的发现(abl_D 成交额最高档 +12.4%,最低两档 -0.1%/-2.1%;家族在高档只有 +2.5% 且低配 -20.3%) ----
+h_liq_first40: {expr: "cs_first_high40(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_mean(day_sum(Amt), 30))", why: "把书整体限制在成交额高的 40%(反转需要错价能被交易回去)。这是 overlay / res_known 都测不到的『分段互补』,也是本轮留下的唯一活口"}
+h_liq_excl20: {expr: "cs_last_low20(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_mean(day_sum(Amt), 30))", why: "只剔掉最不流动的 20%(那一档 v_base -4.4%)。与 h_liq_first40 成对:若剔除就够,说明是『避开不能回头的票』;若必须聚焦才行,说明是『只有高流动性里才有补偿』"}
+h_liq_bk: {expr: "cs_bucket_rank(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_mean(day_sum(Amt), 30))", why: "流动性十分位内中性的反转:把 beta 抽掉之后还剩多少。这是比 res_known(线性秩残差,ut +0.2%)更合口径的增量检验,因为家族本身几乎就是一条流动性 beta"}
+h_liq_mul: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(cross_mean(day_sum(Amt), 30)))", why: "连续版的流动性倾斜(不切段),与 h_liq_first40 / h_liq_bk 三者比较能分出『阈值效应』和『单调效应』"}
+h_liq_first40_abl: {expr: "cs_first_high40(neg(ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50)), cross_mean(day_sum(Amt), 30))", why: "把流动性聚焦直接加在当前最好的结构(abl_D + 窗口 50)上而不是在重写的比值上;neg 是为了让 y 的 IC 为正、书顶留在高流动性那一段"}
+
+# ---- E. 价格 / 上市时间 / 涨跌幅制度:解剖里另外三条大分段效应 ----
+h_px_excl20: {expr: "cs_last_low20(div(cross_mean(day_median(Close), 30), day_median(Close)), day_median(Close))", why: "v_base 在价格最低 20% 是 -12.1%(便宜票的下跌是信息不是噪声:ST、退市、tick 网格)。剔掉这一档应该直接把那块亏损消掉"}
+h_px_bk: {expr: "cs_bucket_rank(div(cross_mean(day_median(Close), 30), day_median(Close)), day_median(Close))", why: "价格十分位内中性:检验比值族『在每个价格桶内都正』(abl_D +2.3~+8.0)是不是真的、而不是桶间加总的错觉"}
+h_age_bk: {expr: "cs_bucket_rank(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_valid_count(day_last(Close), 241))", why: "上市不足 250 日段内书 +11.2%~+17.2%,持仓却 -5.5%(§1 的 nansum 副产品)。按有效日数分桶中性 = 强制书按比例持有次新,看这块被白扔的信息值多少"}
+h_age_first40: {expr: "cs_first_low40(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_valid_count(day_last(Close), 241))", why: "更激进:书只从历史最短的 40% 里选。次新段等权 -28.7% 而段内书 +11.2% ⇒ 段内选股的价差极大,值得单独试一次"}
+h_lim_first40: {expr: "cs_first_high40(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_max(div(day_max(High), day_min(Low)), 241))", why: "立方体里没有板块字段,用『一年里最大的单日 High/Low 比』当涨跌幅制度代理(±20% 的创业板 / 科创板 ≈1.5,主板 ≈1.22,ST ≈1.1)。若『创业板 +9.8% vs 沪主板 +0.6%』真是制度带来的,这一条应该复制它"}
+h_lim_bk: {expr: "cs_bucket_rank(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_max(div(day_max(High), day_min(Low)), 241))", why: "同一代理的中性版:如果制度只是在分段里改变强弱而不是改变方向,中性化应该掉得不多;掉很多就说明板块是主要载体"}
+
+# ---- F. 冻结盘口:段内 +29.6%(abl_D)而家族在那一段是 -10.9% ----
+h_frozen_bk: {expr: "cs_bucket_rank(div(cross_mean(day_median(Close), 30), day_median(Close)), cross_mean(day_zero_ratio(Ret), 15))", why: "按近 15 日『不动的分钟占比』分桶中性(day_zero_ratio 是为这件事加的算子)。书现在对这一段低配 -3.2%,中性化后应该把那 +29.6% 的段内价差拿回来一部分"}
+h_frozen_mul: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(cross_mean(day_zero_ratio(Ret), 15)))", why: "倾斜版:连板 / 停牌之后 r 最极端、cv 最大,正是这棵树读得最准的状态。与 h_frozen_bk 成对,分清『别回避』和『主动超配』"}
+
+# ---- G. 同一个子结构换到成交额上(用户的提示:收益率和量的变化率是同一类东西) ----
+h_amt_ratio30: {expr: "div(day_sum(Amt), cross_mean(day_sum(Amt), 30))", why: "把比值形状从价格搬到成交额:今天的成交额相对自己近 30 日 = 异常换手。若信息真来自『相对自身近期水平的偏离』这个形状而不是价格,它应该也有信号,且与原式相关很低"}
+h_amtstd_ratio30: {expr: "div(day_std(Amt), cross_mean(day_std(Amt), 30))", why: "从另一头检验基准:分子正是 k_known 的被平滑量、分母正是 k_known 本身。若家族的 +15.4% 主要是流动性水平 beta(解剖显示它在成交额桶内几乎无信息:-4.1/-5.3/-8.2/-5.2/+2.5),去掉水平后它应该大幅塌掉"}
+h_inpct_amt_ratio: {expr: "div(day_std(in_pct(Amt, 5)), cross_mean(day_std(in_pct(Amt, 5)), 30))", why: "用 in_pct 把『量的水平』换成『量的变化率』再求日内波动,同样相对自身 30 日。检验成交额一族的信息是水平、还是资金流的抖动"}
+
+# ---- H. 市场状态门(只能靠日轴 EMA 混日生效:日内常数乘子不改当日截面序) ----
+h_state_vol: {expr: "cross_ema(mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_mean(day_std(Ret))), 10)", why: "v_base 在市场高波动段 +13.2%、低波动段 -4.7%。cs_mean(day_std(Ret)) 是全市场当日分钟波动(逐日常数),乘进去再做日轴 EMA ⇒ 平滑后的信号更听高波动日的话。检验『反转的收益就是提供流动性的补偿』"}
+h_state_thin: {expr: "cross_ema(mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), inv(div(cs_mean(day_sum(Amt)), cross_mean(cs_mean(day_sum(Amt)), 60)))), 10)", why: "同样的门换成『缩量』(v_base 缩量 +5.9% vs 放量 +2.0%);inv 让缩量日的权重大。两条状态门若都没用,说明状态效应无法用这个语言写进表达式(见 new_operator_requests)"}
+
+# ---- I. 机制的微观结构版:大胆、与原式相关低,但来自同一条推断 ----
+h_press_ema10: {expr: "cross_ema(day_signed_ratio(Ret, Amt), 10)", why: "反转的因在于下跌时谁在卖。day_signed_ratio(Ret, Amt) = 上涨分钟成交额占比 − 下跌分钟占比(净买入压力代理,新算子)。单独评它一次,作为后面交互的基线"}
+h_press_rev: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(cross_ema(day_signed_ratio(Ret, Amt), 10)))", why: "『跌下来 + 资金已经在买回来』= 反转确认。若比值族的 alpha 真是流动性补偿,带确认的那一半应该明显强于不带的"}
+h_centroid_rev: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(day_centroid(Amt)))", why: "day_centroid(Amt) = 成交发生在一天里的什么位置(新算子,std/kurt/gini 都丢了这条信息)。『跌下来且成交压在尾盘』和『跌下来但抛压在开盘』是两种票,检验日内时点能不能给反转分组"}

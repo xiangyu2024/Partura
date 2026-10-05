@@ -1,0 +1,65 @@
+# F113_nested_tsmax_demean —— 第二批假设(主研 Opus 5,2026-10-05,基于批量扫描 s1 的大表)
+#
+# 节点记号(来自 iso_*/abl_* 的 why 字段):
+#   A=day_mean(Ret)  B=ts_max(A,5)  C=sub(B,-5)  D=cs_demean(C)  E=ts_max(D,30)  F=pow_2(E)
+#   G=ts_max(F,20)   H=mul(G,5)     I=cs_demean(H) J=pow_2(I)    K=ts_max(J,30)  L=pow_1_5(K)
+#
+# 这一批围绕大表里的四条结论:
+#   (1) C 的 +5 在信息上被下一层 cs_demean 精确抵消,但把 float32 的截面分辨率砸掉了
+#       (iso_B dist 1.00 → iso_C dist 0.22;abl_C 收益不变而 dist 回到 1.00)。
+#       → 凡是原式的子树,都重写一遍"去掉 +5"的版本,看 dist 能不能救回来。
+#   (2) 第二层折叠(I+J)是损害:abl_I +8.6%、abl_J +12.4%,但一个爆 dist、一个爆 cov
+#       (pow_1_5 对负数返回 NaN → cov 0.43)。→ 用不会 NaN 的写法把"去掉折叠"重做一遍。
+#   (3) 唯一过门槛且明显赢原式的叶子替换是 day_gini(+6.3% / Lshp 1.44,cov 1.00 dist 0.97);
+#       推断:双层折叠只在**有界、无尺度**的叶子上无害。→ 成批试有界叶子 + 把 gini 化简到最小形。
+#   (4) 解剖:原式只在成交额最高 20%(+8.8%)和近 15 日有冻结盘口(+11.9%)的段内有信息,
+#       在无冻结的 93.5% 里是 −2.3%。→ 直接拿 day_flat_ratio 当叶子,并在活跃度/冻结度桶内做中性。
+
+h_s1_nofold_signed:    {expr: "ts_max(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)), 30)", why: "abl_J 的 +12.4% 是真结构还是 pow_1_5 把 57% 的票 NaN 掉换来的子universe:去掉 +5、去掉外层 pow_1_5,cov 应回到 1.00"}
+h_s2_nofold_abs:       {expr: "abs_(ts_max(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)), 30))", why: "和 h_s1 只差一个 abs_:分离「符号有用」(h_s1 赢)与「universe 筛选有用」(两条都塌)"}
+h_s3_isoG_nosub:       {expr: "ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)", why: "iso_G 的 +7.7% / Lshp 1.16 只因 dist 0.26 作废;去掉 +5 之后 dist 若回到 ~1 就是一条能用的候选"}
+h_s4_isoF_nosub:       {expr: "pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30))", why: "iso_F(+7.7% / 1.18,dist 0.24)去掉 +5:同上,且比 h_s3 少一层 MAX,检验 G 这层是否多余"}
+h_s5_isoE_nosub:       {expr: "ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)", why: "iso_E 的带符号版(+1.7%,dist 0.27):去掉 +5 后它和 h_s4 的差就是 pow_2 折叠本身的净效果"}
+h_s6_isoI_nosub:       {expr: "cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20))", why: "iso_I(+7.7%,dist 0.26)去掉 +5:第二次 cs_demean 是否只是把 h_s3 平移(两条应几乎同分)"}
+h_s7_win50_outer:      {expr: "ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 50)), 20)", why: "win_E_50 是 15 个窗口变体里最好的(+1.1%);在去掉 +5 的干净树上再试一次,看是不是真有平台"}
+
+h_r1_rankdist:         {expr: "abs_(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20))))", why: "fold_rank(+3.0%,hl 20)说明「离截面中位有多远」才是可用的折叠;把它写在干净子树上,彻底避开 pow_2 的量纲爆炸"}
+h_r2_rankdist_mem:     {expr: "ts_max(abs_(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), 30)", why: "原式的全部逻辑(「30 天里没偏离过典型值」)在秩空间重写一遍:若原式的 +0.7% 只是被量纲毁掉的 h_r1,这条应接近 h_r1 或更好"}
+h_r3_rankdist_bk:      {expr: "cs_bucket_rank(abs_(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), cross_mean(day_sum(Amt), 30))", why: "原式段内只在成交额最高 20% 有信息:在成交额十分位内做桶内排名,若 h_r1 的分数全掉光,说明它就是活跃度分类器"}
+
+h_g1_gini_nosub:       {expr: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(ts_max(day_gini(Ret), 5)), 30)), 20), 5))), 30))", why: "nosc_A_day_gini 去掉 +5:白送的清理(dist 0.97→应为 1.00),收益若不变就确认 C 节点纯属精度损失"}
+h_g2_gini_nofold:      {expr: "ts_max(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_gini(Ret), 5)), 30)), 20)), 30)", why: "在能跑的叶子(gini)上做 h_s1 的同一刀:检验「去掉第二层折叠」在 day_mean 和 day_gini 上是不是同方向"}
+h_g3_gini_min:         {expr: "cs_demean(ts_max(day_gini(Ret), 5))", why: "day_gini 的 +6.3% 有多少已经在最小形(5 日最大的日内集中度相对截面)里:若基本相同,后面 6 层全是装饰"}
+h_g4_gini_level:       {expr: "cross_mean(day_gini(Ret), 30)", why: "照已知族 cross_mean(day_std(Amt),30) 的形状写「日内集中度水平」:这是 gini 一族的朴素基准,先立住它再谈结构"}
+h_g5_gini_z:           {expr: "cross_zscore(day_gini(Ret), 30)", why: "把水平量变成「对这只票自己是否异常」:若 h_g4 的钱全来自持久截面水平(=市值/流动性代理),这条应大幅变差"}
+h_g6_gini_bk_amt:      {expr: "cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))", why: "gini 的多头书超配最低成交额分位 +32.8pp:桶内中性之后还剩多少,决定它是不是换了写法的流动性因子"}
+h_g7_gini_stab:        {expr: "cross_stddev(day_gini(Ret), 30)", why: "原式的「30 日最大偏离」想抓的其实是不稳定性;直接量 30 日集中度的波动,比嵌套 MAX 干净得多"}
+
+h_f1_flat_tree:        {expr: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(ts_max(day_flat_ratio(Ret), 5)), 30)), 20), 5))), 30))", why: "原式在有冻结盘口的段内 +11.9%、在无冻结的 93.5% 里 −2.3%:若它本质是「冻结分钟探测器」,把叶子换成状态本身应该复现它(ρo 高)"}
+h_f2_flat_level:       {expr: "cross_mean(day_flat_ratio(Ret), 30)", why: "冻结状态的水平量单独能赚多少:给 h_f1 一个解释基准(F108 的教训:峰度类算子读到的其实是这个)"}
+h_f3_gini_bk_flat:     {expr: "cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_flat_ratio(Ret), 30))", why: "gini 在冻结盘口段内是 −41.4%:在冻结度桶内中性之后它还活着吗(是真的日内结构,还是躲开封板票)"}
+
+h_v1_gini_volchg:      {expr: "cross_mean(day_gini(in_pct(Volume, 1)), 30)", why: "用户提示分钟收益和量的变化率可互换:把集中度搬到量的路径上,若同样赚钱说明抓的是「日内脉冲」而非收益"}
+h_v2_gini_amt:         {expr: "cross_mean(day_gini(Amt), 30)", why: "日内成交额在分钟间的集中度:与已知成交额族同源但有界无尺度,是增量检验的关键对照"}
+h_v3_logvol_burst:     {expr: "ts_max(cs_demean(ts_max(day_gini(in_logchg(Volume, 1)), 5)), 30)", why: "leaf_Ret_logvol 与原式 ρo 只有 +0.02、dist 1.00,是表里最正交的一支;把它和 gini 结构叠起来,搏一条真正的新因子"}
+h_v4_wmean_min:        {expr: "cs_demean(ts_max(day_wmean(Ret, Amt), 5))", why: "day_mean 把没成交的分钟和放量的分钟等权,这正是原式变成状态探测器的入口;换成成交额加权的分钟收益,看 h_g3 式的最小形是否复活"}
+h_v5_signedratio:      {expr: "ts_max(cs_demean(ts_max(day_signed_ratio(Ret, Amt), 5)), 30)", why: "上涨分钟成交额占比 = 不需要逐笔的净买入代理,有界;若「脉冲」真的有方向信息,带符号的这条应强于 gini"}
+
+h_b1_pos_level:        {expr: "cross_mean(day_pos_ratio(Ret), 30)", why: "只看方向不看幅度的有界叶子:和 h_g4 一起判断「有界」是不是 day_gini 能用的真正原因"}
+h_b2_pos_burst:        {expr: "ts_max(cs_demean(ts_max(day_pos_ratio(Ret), 5)), 30)", why: "同一叶子换成原式的 burst 结构:结构 × 叶子的 2×2,用来分清功劳归谁"}
+h_b3_centroid_level:   {expr: "cross_mean(day_centroid(Amt), 30)", why: "成交发生在一天的什么位置(尾盘 vs 早盘),是 std/kurt/gini 全都丢掉的一维;次新与小市值里尾盘成交占比差异大,正对上 gini 的有效段"}
+h_b5_centroid_z:       {expr: "cross_zscore(day_centroid(Amt), 30)", why: "质心相对自身历史的异常:把「这只票今天收盘前突然放量」写出来,和 h_b3 的水平解释对打"}
+
+h_m1_gini_ema:         {expr: "cross_ema(cs_demean(ts_max(day_gini(Ret), 5)), 30)", why: "原式 hl 0~20 全程 +0.5%~+1.6%(没有平滑杠杆);干净的 gini 最小形配表达式内 EMA 记忆,看半衰期这根最大的杠杆是否回来"}
+h_m2_gini_winsor_ema:  {expr: "cross_ema(cs_winsor(cs_demean(ts_max(day_gini(Ret), 5))), 30)", why: "F103 的教训:重尾量直接 EMA 是「峰值记忆」;先缩尾再 EMA 才是水平。和 h_m1 的差就是这条教训在本因子上的大小"}
+h_m3_gini_max_mem:     {expr: "cross_max(cs_demean(ts_max(day_gini(Ret), 5)), 30)", why: "把原式的 MAX 记忆写在 DT 面上(playbook 要求的写法),与 h_m1 的 EMA 记忆同窗口对比:MAX 是装饰还是记忆形式本身重要"}
+
+h_k1_gini_bk_known:    {expr: "cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_std(Amt), 30))", why: "最干净的增量检验:gini 在已知族自己的十分位内还剩多少(原式这条口径只剩 +2.8% / Lshp 0.89)"}
+h_k2_gini_overlay:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_gini(Ret), 30)), 0.25))", why: "原式在 ov_p025 上只是打平已知族(+14.8% vs +15.4%);换成 gini 再叠一次,若能超出噪声带就是本因子族唯一的真增量"}
+h_k3_gini_times_known: {expr: "mul(cs_rank(cross_mean(day_std(Amt), 30)), cs_rank(cross_mean(day_gini(Ret), 30)))", why: "秩相乘而不是相加:等权秩相加已被证明是按比例稀释(10_distilled §7),相乘才是「两条都要好」的交互"}
+
+h_q1_clean_bk_amt:     {expr: "cs_bucket_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), cross_mean(day_sum(Amt), 30))", why: "h_s3 的桶内中性版:原式段内只在成交额最高分位有信息,所以这条应该比 h_s3 明显差;若不差,解剖表的读法要改"}
+h_q2_clean_x_amt:      {expr: "mul(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)), cs_rank(cross_mean(day_sum(Amt), 30)))", why: "反过来利用那条发现:把活跃度当成放大器(只在最活跃里用这条因子),秩相乘应优于 h_s3 本身"}
+h_q3_robust_center:    {expr: "ts_max(div(ts_max(day_gini(Ret), 5), cs_median(ts_max(day_gini(Ret), 5))), 30)", why: "cs_demean 用的是均值,会被当日涨停群拉动;换成对截面中位数取比值(稳健中心),检验「折叠中心错位」是不是量纲之外的第二个毛病"}
+h_q4_state_tilt:       {expr: "mul(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20))), neg(cross_mean(cs_mean(day_mean(Ret)), 20)))", why: "原式在市场近 20 日下跌时 +3.8%、上涨时 −1.4%:用「市场 20 日平均分钟收益」这个全票相同的状态量做逐日符号翻转,把这条择时写进表达式"}
+h_q5_state_tilt_gini:  {expr: "mul(cs_demean(cs_rank(cross_mean(day_gini(Ret), 30))), cross_mean(cs_mean(day_mean(Ret)), 20))", why: "gini 的状态依赖是反的(上涨 +11.2% / 下跌 +0.4%);同一套状态量、相反符号,两条一起才能证明这是状态效应而不是拟合"}

@@ -62,7 +62,10 @@ DT_WINDOWS = (5, 10, 30, 60)
 
 def variants() -> dict:
     """id -> (expr, kind, why).  Everything that does not parse is dropped silently by the caller."""
-    V = {"v_base": (SRC, "base", "原式"), "k_known": (KNOWN, "bench", "已知成交额族基准")}
+    V = {"v_base": (SRC, "base", "原式"), "k_known": (KNOWN, "bench", "已知成交额族基准"),
+         # the generic screen every factor's own screen has to beat: the known family, never the frozen-quote names
+         "k_known_xfrozen": (f"cs_last_high20(neg({KNOWN}), cross_max(day_zero_ratio(Ret), 15))", "bench",
+                             "已知族 + 剔除近 15 日冻结盘口最重的 20%(通用筛子基准)")}
 
     def add(i, e, kind, why):
         if i not in V:
@@ -102,6 +105,15 @@ def variants() -> dict:
         for s, sg in (("p", ""), ("m", "-")):
             add(f"ov_{s}{str(w).replace('.', '')}", f"add(cs_rank({KNOWN}), mul(cs_rank({X}), {sg}{w}))", "overlay",
                 f"叠在已知族上,权重 {sg}{w}")
+    # what the anatomy keeps finding: a signal that selects only inside one segment, or that is worth more as a
+    # screen on the known family than as a ranking.  Both directions, since the sign is only known after scoring.
+    AGE = "cross_valid_count(day_last(Close), 241)"
+    for s_, sg in (("p", X), ("m", f"neg({X})")):
+        add(f"scr_xhi_{s_}", f"cs_last_high20(neg({KNOWN}), {sg})", "screen", "已知族,剔掉本因子读数最高(或最低)的 20%")
+        add(f"seg_lowliq_{s_}", f"cs_first_low40({sg}, {LIQ})", "segment", "只在成交额最低 40% 的股票里按本因子选")
+        add(f"seg_hiliq_{s_}", f"cs_first_high40({sg}, {LIQ})", "segment", "只在成交额最高 40% 的股票里按本因子选")
+        add(f"seg_new_{s_}", f"cs_first_low40({sg}, {AGE})", "segment", "只在上市 / 复牌不久的股票里按本因子选")
+        add(f"seg_xfrozen_{s_}", f"cs_last_high20({sg}, cross_max(day_zero_ratio(Ret), 15))", "segment", "本因子,但剔掉近 15 日冻结盘口最重的 20%")
     extra = opt("--extra")
     if extra and Path(extra).is_file():
         for i, v in (yaml.safe_load(Path(extra).read_text(encoding="utf-8")) or {}).items():
@@ -158,7 +170,7 @@ with slot():
             key = parse_research(e).key()
         except Exception:  # noqa: BLE001 - a wrapper that does not type-check on this tree is simply not a hypothesis
             continue
-        if key not in {v[3] for v in V.values()} or i in ("v_base", "k_known"):
+        if key not in {v[3] for v in V.values()} or i in ("v_base", "k_known", "k_known_xfrozen"):
             V[i] = (e, kind, why, key)
         if len(V) >= MAXV:
             break
@@ -215,7 +227,7 @@ def line(k):
             f"| {v['cov']:.2f} {v['dist']:.2f}{gate} | {v['expr'][:120]}")
 
 
-for k in ("v_base", "k_known"):
+for k in ("v_base", "k_known", "k_known_xfrozen"):
     if k in live:
         print(line(k))
 print("-" * 60 + " 按 utrain 纯多头夏普排序的前 45 个")

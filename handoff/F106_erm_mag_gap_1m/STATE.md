@@ -1,6 +1,6 @@
 # F106_erm_mag_gap_1m — 交接状态
 
-_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_1m(批次 B01_single_factors)
 - 表达式:`sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))`
@@ -103,11 +103,9 @@ C1 原式多头腿仍全负(净/毛/夏普三项,八年全负)**成立** · C2 �
 - 服务器很挤:x2 排了 1480 秒;`S1_regime` 被内存守卫顶掉(**exit 97 = 根本没跑**);`[guard] waiting` 正常,别起第二个 job;`wait` 只打最后 200 行 → 读 `logs/` 全文。
 - **一句话**:三件事都已确立并在用户测试段上按事前判据验过 —— 「它是什么」(封板记忆)、「原样不可用」(holdout 多头腿 −3.19%、八年全负)、「相对已知家族没有增量」(holdout Δ +0.54 pp,天花板可算)。**不要抢救、不要换推荐**,剩下的全是核对数字。
 
-## 研究日志(`notes/F106_erm_mag_gap_1m/journal.md`:13 条,其中研究员自己写的 8 条)
+## 研究日志(`notes/F106_erm_mag_gap_1m/journal.md`:14 条,其中研究员自己写的 9 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 15:29 [auto] ⚠ 读留出段:final S_final,阶段 S_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
 ### 2026-10-04 15:35 [auto] S_final 跑完(exit 0);重看结果:./scripts/study.sh digest F106_erm_mag_gap_1m S_final
 
@@ -165,6 +163,15 @@ C6:5个变体 cov(ic_holdout.coverage)全部 0.9675,dist 全部 ≥0.9933 ——
   写在 09_diagnosis.md B1,10_distilled.md 的降级说明里也指过去;R3 工单让执行在报告里按 B1 写,并把 07_S_final.md §
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 11:09 [主研] 批量扫描 s1 的综合
+
+152 个变体 + 23 段 × 14 时段的解剖读完,结论不变(分辨:多头腿不可用、相对成交额族无增量),但大表给了四条前几轮没有的硬事实:
+1. 承重的是「分位数当分母 + 1e-6」一个节点:abl_G(A+1e-6 → A+A,结构不动只抹平塌缩)把公布的多空夏普 +2.82 变成 +0.06、ρo 变成 −0.26;abl_J/abl_V 把 LS 变成 −1.59/−1.14;abl_R 全 NaN。计数侧的同一个 1e-6 是装饰(abl_H ρo +0.98)。半衰期网格 hl0 [−67.2%, −19.51, −25.67] → hl20 [−6.9%, −2.15, +2.82] 说明 LS 全是线性 EMA 拖出来的,不是任何一天的信号(基准 k_known 的网格单调相反)。
+2. abs_ 可证明是装饰:sub_U_neg / sub_N_neg 与 v_base 逐位相同(ρo +1.00);abl_N ≡ sub_X_add 逐行相同,两腿是严格镜像。计数可以整个删掉(only_H_R / sub_F_day_* ut +1.5%、valid +10.8%,全表非 overlay 最好)。
+3. 解剖:23 个段里 22 个段内为负,唯一正数是 6.5% 的冻结盘口段(段内 +18.2%,该段自身等权 −67.4%/年,书还超配 +4.6pp);干净段 93.5% 段内 −6.9%。市值/成交额/价格五档全负 → 不是规模或流动性因子。科创板 −23.6% 最差。六年全负。
+4. 新增对基准的理解:k_known 的多头腿是段间倾斜而非段内选股 —— 它在成交额五档段内是 −4.1/−5.3/−8.2/−5.2/+2.5,靠超配最低成交额档 +80.3pp 拿到 +15.4%。abl_M(ut +3.4%、六年全正、ρk 只 +0.06)在成交额五档段内五档全负,靠超配最低档 +26.2pp —— 同一个机制的更弱版本,低 ρk 不等于有增量。
+下一步:第二批 37 条假设已写进 studies/F106_erm_mag_gap_1m/hypo.yaml(全部通过 hypo 检查),六个方向见 synthesis.md §5;另报四个工具问题(最要紧的是 dist 门槛算在 EMA 之前,机械判死计数/占比类面板,上一轮的 H11 就死在这里)。
+
 ## 工单与结果卡(`notes/F106_erm_mag_gap_1m/orders/`、`notes/F106_erm_mag_gap_1m/results/`)
 
 - R1:工单 有,结果卡 有
@@ -192,7 +199,7 @@ C6:5个变体 cov(ic_holdout.coverage)全部 0.9675,dist 全部 ≥0.9933 ——
 
 ## 已写的 notes(`notes/F106_erm_mag_gap_1m/`)
 
-`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(21K)、`06_baseline.md`(3K)、`07_S0_baseline.md`(3K)、`07_S_final.md`(13K)、`07x_1_anatomy.md`(10K)、`07x_2_longonly.md`(23K)、`08_variants.md`(5K)、`09_diagnosis.md`(10K)、`10_distilled.md`(13K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(27K)、`state.md`(10K)
+`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(21K)、`06_baseline.md`(3K)、`07_S0_baseline.md`(3K)、`07_S_final.md`(13K)、`07x_1_anatomy.md`(10K)、`07x_2_longonly.md`(23K)、`08_variants.md`(5K)、`09_diagnosis.md`(10K)、`10_distilled.md`(13K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(29K)、`state.md`(10K)、`synthesis.md`(14K)
 
 ## 自写的探针与分析脚本(`studies/F106_erm_mag_gap_1m/`)
 

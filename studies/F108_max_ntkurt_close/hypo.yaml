@@ -66,3 +66,14 @@ h_min241:         {expr: "cross_min(day_max(pow_2(nt_ts_kurt(Close, 30))), 241)"
 # ---- I. 两条与原式相关应该很低的新结构(来自机制推断,不是扫参数)
 h_queue_and:      {expr: "mul(cs_rank(cross_mean(day_flat_ratio(Close), 30)), cs_rank(cross_mean(day_gini(Amt), 30)))", why: "丙的机制写法:真封板 = 价格钉住(flat 高)∧ 成交挤在几分钟(gini 高);单看任一个都会把清淡票混进来。软 AND 把两者交叉"}
 h_centroid_amt:   {expr: "cross_mean(day_centroid(Amt), 30)", why: "一字板的成交全在开盘 → centroid→0;max|K| 这类与顺序无关的统计量完全丢掉这条信息。和原式的相关应该很低,是独立支线"}
+
+# ---- 总领补充:用主研要求、刚加进算子库的 in_madz / day_flat_run_max / cs_last_high20 / cs_first_high40
+z_madz_close30: {expr: "day_max(abs_(in_madz(Close, 30)))", why: "同一个读数换成相对 EPS 的稳健孤立度:低价票被绝对 EPS 压平的伪影应该消失"}
+z_madz_ret30: {expr: "day_max(abs_(in_madz(Ret, 30)))", why: "叶子换成收益:原来的峰度在收益量级上被 EPS 吃掉,写不出来"}
+z_madz_amt30: {expr: "day_max(abs_(in_madz(Amt, 30)))", why: "叶子换成成交额:最孤立的一分钟放量"}
+z_flatrun_mean15: {expr: "cross_mean(day_flat_run_max(Close), 15)", why: "机制的直接读数:近 15 日最长连续不动段的平均"}
+z_flatrun_max15: {expr: "cross_max(day_flat_run_max(Close), 15)", why: "同上,取极值(近 15 日是否有过一字板式的长冻结)"}
+z_known_excl_orig: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))))", why: "筛子用法:已知族,但绝不买原式读数最高的 20%(冻结盘口段原式 +37% 而已知族 −11%)"}
+z_known_excl_flatrun: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Close), 15))", why: "筛子用法:已知族,剔掉近 15 日有长冻结段的票"}
+z_known_excl_mem30: {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30))", why: "筛子用法,用 30 日平均的原式当标记(上一轮 R2 的载体 D30)"}
+z_orig_hot: {expr: "cs_first_high40(neg(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))), cross_mean(day_sum(Amt), 20))", why: "只在成交额最高 40% 里按原式选(解剖:段内 +6.4% / +11.4% 只在高成交额两档)"}

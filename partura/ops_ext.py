@@ -240,7 +240,9 @@ def cs_bucket_rank(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     for b in range(1, 11):
         m = ok & (bx == b)
         out = torch.where(m, _pct_rank(y, m), out)
-    return out
+    # The same within-bucket ranks repeat in all ten buckets, i.e. ten-way ties everywhere; break them by
+    # the overall rank of y (weight 1e-4 << one within-bucket step), so no decile book hangs on symbol order.
+    return out + 1e-4 * _pct_rank(y, ok)
 
 
 @op("nd", "cs", arity=1)
@@ -350,10 +352,50 @@ def cs_last_low20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     return _lexi(y, x, -1.0, 0.2, -1.0)
 
 
+@op("dt", "day", arity=1)
+def day_flat_run_max(x: torch.Tensor) -> torch.Tensor:
+    """Longest RUN of consecutive minutes whose value equals the previous minute's, divided
+    by the number of finite minutes: in [0, 1].
+
+    ``day_flat_ratio`` only counts: a stock locked at the limit for 240 minutes and a thin
+    stock whose quote is still half the time, scattered, can share a ratio; they do not
+    share a longest run.  (Requested by F108: its kurtosis reads '29 still minutes then
+    one print', which is a statement about runs.)"""
+    x = _f(x)
+    a, b = x[..., 1:], x[..., :-1]
+    eq = (a == b) & torch.isfinite(a) & torch.isfinite(b)
+    c = torch.cumsum(eq.to(x.dtype), dim=-1)
+    reset = torch.cummax(torch.where(eq, torch.zeros_like(c), c), dim=-1).values     # count at the last break
+    run = (c - reset).max(dim=-1).values
+    n = torch.isfinite(x).sum(-1)
+    return _day(run / n.clamp(min=1).to(x.dtype), n > 1)
+
+
+@op("dt", "in", arity=1, requires_window=True)
+def in_madz(x: torch.Tensor, d: int) -> torch.Tensor:
+    """Robust 'how isolated is this minute' score along the minute axis:
+    ``(x[t] - median_d) / (1.4826 * MAD_d + 1e-6 * |median_d|)`` over the last ``d`` minutes
+    (t included); NaN until ``d`` finite minutes are available and where the window does
+    not move at all (MAD = 0).
+
+    Scale-free with a RELATIVE epsilon, unlike a rolling kurtosis whose absolute epsilon
+    (1e-9 on var**2) crushes low-priced stocks and any return-sized input to a constant.
+    (Requested by F108.)"""
+    x = _f(x)
+    w = rolling_windows(x, int(d), -1)
+    ok = torch.isfinite(w)
+    full = ok.sum(-1) >= int(d)
+    med = torch.nanmedian(w, dim=-1).values
+    mad = torch.nanmedian((w - med.unsqueeze(-1)).abs(), dim=-1).values
+    z = (x - med) / (1.4826 * mad + 1e-6 * med.abs())
+    return torch.where(full & (mad > 0) & torch.isfinite(x), z, torch.full_like(x, NAN))
+
+
 NEW_OPERATORS = ("in_pct", "in_logchg", "day_flat_ratio", "day_pos_ratio", "day_wmean", "day_signed_ratio",
                  "day_gini", "day_centroid", "cross_ema", "cross_zscore", "cs_bucket_rank", "cs_winsor",
                  "day_zero_ratio", "cross_valid_count", "cross_tail_mean_q25", "cross_tail_mean_q75",
-                 "cs_first_low40", "cs_first_high40", "cs_last_high20", "cs_last_low20")
+                 "cs_first_low40", "cs_first_high40", "cs_last_high20", "cs_last_low20",
+                 "day_flat_run_max", "in_madz")
 
 
 def install() -> None:

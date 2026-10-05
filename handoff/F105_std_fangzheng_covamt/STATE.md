@@ -1,6 +1,6 @@
 # F105_std_fangzheng_covamt — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:06(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #25(批次 B01_single_factors)
 - 表达式:`ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)`
@@ -50,6 +50,8 @@ _自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F105_std_f
 - `S2S3_nodes_family`  10-03 22:45  19 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt S2S3_nodes_family`
 - `S4_longleg`  10-03 22:57  6 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt S4_longleg`
 - `final`  10-03 23:11  5 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt final`
+- `sweep_s1`  10-05 10:47  91 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s1`
+- `anatomy_s1`  10-05 10:52  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s1`
 - `x1_events`(自写脚本的输出)  10-03 19:28  exit 0  → `logs/F105_std_fangzheng_covamt_x1_events.log`
 - `x2_longleg`(自写脚本的输出)  10-03 23:05  exit 0  → `logs/F105_std_fangzheng_covamt_x2_longleg.log`
 - `audit1`(自写脚本的输出)  10-03 23:29  exit 0  → `logs/F105_std_fangzheng_covamt_audit1.log`

@@ -6,7 +6,9 @@ From ``runs/<fid>/sweep_<tag>.json`` (train / valid only) it picks, mechanically
 * the best variant of each of the 3 best KINDS (structure / leaf / memory / shape / neutral /
   hypothesis ...), ranked by pure-long Sharpe on the user's training period, among variants that
   pass the gates (cov >= 0.95, dist >= 0.5) and whose long leg is positive on BOTH train and valid;
-* the best overlay on the known family (reported separately: it is the known family plus a tilt).
+* the two best candidates BUILT ON the known family (overlays, screens, or any hypothesis that contains
+  it) -- reported apart, because they are the known family plus a tilt or minus a screen;
+* ``k_known_xfrozen``, the generic screen (known family, never the frozen-quote names), as their benchmark.
 
 Only these are scored on the holdout (the user's test period), in the user's convention: sign and
 half-life fitted on the user's training period, pure long book net of 15 bp.  The read is ledgered.
@@ -56,18 +58,25 @@ ok = [k for k, v in R.items() if not v.get("dead") and v["cov"] >= 0.95 and v["d
       and v["kind"] not in ("bench", "base")
       and (v["train_long"]["long_ann"] or -1) > 0 and (v["valid_long"]["long_ann"] or -1) > 0]
 ok.sort(key=lambda k: -shp(k))
+ON_KNOWN = ("overlay", "screen")          # these are the known family plus a tilt / minus a screen: reported apart
+
+
+def uses_known(k):
+    return R[k]["kind"] in ON_KNOWN or "day_std(Amt)" in R[k]["expr"]
+
+
 picks, kinds = [], []
 for k in ok:
     kind = R[k]["kind"]
-    if kind == "overlay" or kind in kinds:
+    if uses_known(k) or kind in kinds:
         continue
     picks.append(k)
     kinds.append(kind)
     if len(kinds) >= NK:
         break
-ov = next((k for k in ok if R[k]["kind"] == "overlay"), None)
+ov = [k for k in ok if uses_known(k)][:2]
 extra = [k for k in (opt("--ids") or "").split(",") if k in R]
-ids = [k for k in dict.fromkeys(["v_base", "k_known"] + picks + ([ov] if ov else []) + extra) if k in R and not R[k].get("dead")]
+ids = [k for k in dict.fromkeys(["v_base", "k_known", "k_known_xfrozen"] + picks + ov + extra) if k in R and not R[k].get("dead")]
 print(f"[final] {fid}: rule picks {picks} overlay {ov} extra {extra}", flush=True)
 
 with slot():

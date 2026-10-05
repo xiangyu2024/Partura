@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -16,48 +16,29 @@ _自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F113_neste
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F113_nested_tsmax_demean` 看服务器上的 tag,`./scripts/study.sh digest F113_nested_tsmax_demean <tag>` 重看结果)。
 
-## 研究现状(`notes/F113_nested_tsmax_demean/state.md`,10-05 00:19 更新)—— **先读这个文件**
+## 研究现状(`notes/F113_nested_tsmax_demean/state.md`,10-05 11:10 更新)—— **先读这个文件**
 
 # 研究现状 — F113_nested_tsmax_demean
 
-> 主研每轮**整个覆盖重写**这一页。最近更新:**第 4 轮(主研 Opus 5),2026-10-05**。
+> 主研每轮**整个覆盖重写**这一页。最近更新:**第 5 轮(主研 Opus 5)批量扫描 s1 的综合,2026-10-05**。
 > 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
-> 噪声带:`Lnet`(多头腿净超额,扣 15bp)**±3pp**、`Lshp`(纯多头夏普)**±0.3**。
+> 噪声带:`Lnet`(多头腿净超额,扣 15bp)**±3pp**、`Lshp`(纯多头夏普)**±0.3**;门槛 cov ≥ 0.95、dist ≥ 0.5。
+> 完整论证在 **`notes/<fid>/synthesis.md`(150 行,本轮写的,先读它)**;第 1~4 轮在 `07_S_final.md` / `09_diagnosis.md` / `10_distilled.md`。
 
-## 1. 一句话现状
+## 1. 现状
 
-**研究已经做完,结论是否定的;留出段读过了,判断类 notes 也写完了。本轮下的是成文工单 R4(kind: writeup)。**
-事前判据 **P0~P5 全部未被否定**,推荐就是事前第一推荐:**`f_kf30` = `cross_mean(day_std(Amt), 30)`(已知家族),
-即本因子任何版本都不采用**。
-**下一步:执行按 `orders/R4.md` 核对数字 + 出报告 + 写 `results/R4.md`(0 次服务器运行),然后整个研究结案。**
-服务器运行 **5 / 8**(S1 1 + S2 1 + `x2_increment` 2 次 `exec` + `final` 1;S0 不计),R4 用 0 → 仍是 5/8。
+**对原式的否定结论没有被 189 变体的大表推翻,反而被加强**:原式多头腿 utrain **+0.7% / Lshp 0.17**、6 年里 3 年为负,
+对已知族 `k_known = cross_mean(day_std(Amt), 30)`(**+15.4% / 2.22**)**任何权重的叠加都不优于单跑已知族**。
+本轮新增三条:(a) 一个**精度 bug** 解释了整族"有信息的子树"为何全部爆 dist 门槛;
+(b) `abl_J` 的 +12.4% 是 **cov 0.43 的 universe 假象**,本表无法定案;
+(c) 全表唯一既过门槛又显著赢原式的是**叶子替换 `day_gini`**(+6.3% / 1.44,ρo 0.06)—— 那是新因子,不是本因子的提纯。
+**下一步:执行跑 `studies/F113_nested_tsmax_demean/hypo.yaml` 的 40 条(已 40/40 过 `study.sh hypo`)。**
 
-(…全文 6348 字符,读 `notes/F113_nested_tsmax_demean/state.md`)
+(…全文 6743 字符,读 `notes/F113_nested_tsmax_demean/state.md`)
 
-## 研究日志(`notes/F113_nested_tsmax_demean/journal.md`:22 条,其中研究员自己写的 11 条)
+## 研究日志(`notes/F113_nested_tsmax_demean/journal.md`:23 条,其中研究员自己写的 12 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:26 [主研] 第3轮:裁决R2——不是朴素MAX但MAX语义是装饰、唯一load-bearing的是第一次cs_demean;候选被已知家族两段碾压且三条口径都没增量 → 结论否定,直接进留出段(工单R3,kind:final,5候选)
-
-看到了什么(全部 train/valid,多头口径,扣费;噪声带 Lnet ±3pp / Lshp ±0.3):
-
-Q1(是不是朴素长窗 MAX / 波动)——答案是"都不是,但代价是 MAX 语义自己也是装饰":
-- c4 × n2_max79_plain 的 rank 相关 +0.948 看着像"同一条",但 n2 的 Lnet −0.3%/+8.6%、train Lshp −0.04,
-  比 m1(相对 MAX,+3.2%/+14.8%)两段都差 3.5pp/6.2pp,夏普差 0.47/1.25 → 两段同向出噪声带。
-  同样地 m3(平均绝对相对收益 +2.1%/+13.3%)比 n4(朴素波动 −5.5%/+4.1%)两段好 7.6pp/9.2pp。
-  → **真正 load-bearing 的只有第一次 cs_demean(把当天截面均值减掉)**,这是整条树唯一两段一致有用的算子(新 H13)。
-- 但 m2(abs max)vs m3(abs mean)只差 0.6pp/1.3pp(噪声内,相关 +0.808)→ **极值记忆是装饰**,
-  它卖的是"相对振幅的水平",名字(nested_tsmax)误导人。
-- 族内排序两段翻转:c4 − m1 = train +3.7pp / valid −1.5pp;7 个成员 valid 全在 +12.7~14.8%(跨度 2.1pp)
-  → **嵌套结构没买到可复现的优势**(新 H14)。所以 R1 那句"结构更好"必须改写。
-  选 c4 当族代表的唯一两段站得住的理由:从 S1_chain.json 补出的分位剖面显示 c4 两段的最高档都在 Q10,
-  而 n2/m1 在 train 的 Q10 比 Q8/Q9 低 6.6/3.7pp(顶档塌)。
-
-Q2(相对已知家族有没有增量)——干净的否定,三条独立口径一致:
-- 已知家族被 R1 低估了:kf_mean30 +12.6%/+22.3%(hl=0)、kf_max9 +13.7%/+22.2%(hl=5);06_baseline §8 的
-  +9.3%/+18.5% 正是 kf_max9 的 hl=0 行 → R0 异常①/③结案。c4 比 kf_mean
-…(这条日志还有后文,读 journal.md)
 
 ### 2026-10-04 23:43 [auto] ⚠ 读留出段:final S_final,阶段 S_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
@@ -96,6 +77,25 @@ Q2(相对已知家族有没有增量)——干净的否定,三条独立口径一
 判断是什么:
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 11:06 [主研] 批量扫描 s1 的综合
+
+读完 189 变体的大表 + 市场解剖,写了 notes/synthesis.md(150 行)和第二批 40 条假设 studies/hypo.yaml(40/40 过 hypo 检查)。
+
+1. 最大的新发现是一个精度 bug:`sub(x, -5)` 在信息上被下一层 cs_demean 精确抵消(iso_B 与 iso_C 的 ut、ρk 逐格相同:
+   −2.6% / ρk +0.50),但把 float32 截面分辨率砸掉 78%(dist 1.00 → 0.22);abl_C 删掉它收益不变(+0.6%)而 dist 回 1.00;
+   极端版 sub_H_add(把 5 加在 ~1e-8 的量上)dist 0.00、LTO 0.2%。→ 整个有信息的子树族(iso_D~I dist 0.22–0.26、
+   abl_I 0.28)是被这个常数判了 dist 门槛的死刑,不是没信息。第二批 h_s1~h_s7 / h_g1 就是"去掉 +5 再跑"。
+2. abl_J 的 +12.4% / Lshp 2.38 不能信:J 位置保号的 5 条(abl_J、pow_1_5、pow_05、signedpower、inv)全在 +11.8~+13.7%
+   且 cov 全是 0.43(pow_1_5 对负数返回 NaN,剔掉 57% 的票),折叠的 2 条(abs_、sqrt)全是 +0.8% / cov 1.00 ——
+   与 universe 筛选完全混淆。h_s1(保号不 NaN)对 h_s2(abs 折叠)拆这一对。
+3. 全表唯一既过门槛(cov 1.00 / dist 0.97)又显著赢原式的是叶子替换 nosc_A_day_gini:+6.3% / Lshp 1.44、ρo 0.06、ρk 0.20,
+   逐年 6 年 5 正,次新段内 +17.9%,但封板段内 −41.4%。它其实是一条新因子(日内集中度),第二批重心放在它身上。
+4. 解剖:原式只在成交额最高 20%(段内 +8.8%)和有冻结盘口(+11.9%)里有段内信息,无冻结的 93.5% 是 −2.3%,
+   6 年 3 年为负 → 相当一部分是"伪装成收益因子的冻结分钟探测器"(F108 教训)。窗口 15 条、记忆 28 条全在噪声带内,
+   没有平台、没有半衰期杠杆。
+5. 增量仍然是没有:ov_p025 +14.8% / 2.27 vs 已知族 +15.4% / 2.22(两项
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F113_nested_tsmax_demean/orders/`、`notes/F113_nested_tsmax_demean/results/`)
 
 - R0:工单 —,结果卡 有
@@ -129,7 +129,7 @@ Q2(相对已知家族有没有增量)——干净的否定,三条独立口径一
 
 ## 已写的 notes(`notes/F113_nested_tsmax_demean/`)
 
-`01_expression.md`(4K)、`02_operators.md`(10K)、`03_decomposition.md`(7K)、`04_grammar.md`(8K)、`05_hypotheses.md`(27K)、`06_baseline.md`(13K)、`07_S1_chain.md`(7K)、`07_S2_bench.md`(10K)、`07_S_final.md`(9K)、`07x_1_ties_longbook.md`(5K)、`07x_2_increment.md`(9K)、`08_variants.md`(7K)、`09_diagnosis.md`(10K)、`10_distilled.md`(12K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(35K)、`state.md`(10K)
+`01_expression.md`(4K)、`02_operators.md`(10K)、`03_decomposition.md`(7K)、`04_grammar.md`(8K)、`05_hypotheses.md`(27K)、`06_baseline.md`(13K)、`07_S1_chain.md`(7K)、`07_S2_bench.md`(10K)、`07_S_final.md`(9K)、`07x_1_ties_longbook.md`(5K)、`07x_2_increment.md`(9K)、`08_variants.md`(7K)、`09_diagnosis.md`(10K)、`10_distilled.md`(12K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(37K)、`state.md`(9K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F113_nested_tsmax_demean/`)
 

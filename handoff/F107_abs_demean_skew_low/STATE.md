@@ -1,6 +1,6 @@
 # F107_abs_demean_skew_low — 交接状态
 
-_自动生成于 2026-10-05 00:42(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:06(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #613(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_skew(Low)))`
@@ -152,6 +152,8 @@ B1(x1 §6 的 R² 0.307 / 残差 +2.9%)、`11_risks.md` §2(同一个 0.307)。
 - `S0_baseline`  10-04 11:50  1 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low S0_baseline`
 - `S12`  10-04 13:59  22 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low S12`
 - `FINAL`  10-04 15:05  5 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low FINAL`
+- `sweep_s1`  10-05 10:50  78 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low sweep_s1`
+- `anatomy_s1`  10-05 10:57  0 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low anatomy_s1`
 - `x1`(自写脚本的输出)  10-04 12:31  exit 0  → `logs/F107_abs_demean_skew_low_x1.log`
 - `x2`(自写脚本的输出)  10-04 14:01  exit 0  → `logs/F107_abs_demean_skew_low_x2.log`
 

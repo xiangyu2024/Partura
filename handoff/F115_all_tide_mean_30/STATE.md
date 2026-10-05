@@ -1,6 +1,6 @@
 # F115_all_tide_mean_30 — 交接状态
 
-_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 all_tide_mean_30(批次 B01_single_factors)
 - 表达式:`cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20)`
@@ -16,33 +16,32 @@ _自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F115_all_t
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F115_all_tide_mean_30` 看服务器上的 tag,`./scripts/study.sh digest F115_all_tide_mean_30 <tag>` 重看结果)。
 
-## 研究现状(`notes/F115_all_tide_mean_30/state.md`,10-04 23:48 更新)—— **先读这个文件**
+## 研究现状(`notes/F115_all_tide_mean_30/state.md`,10-05 11:10 更新)—— **先读这个文件**
 
 # 研究现状 — F115_all_tide_mean_30
 
-_主研每轮**覆盖重写**。2026-10-04,**第 3 轮**(Opus 5):裁决 R2、写满 `05_hypotheses.md`「R2 裁决」
-+ 07/07x「解读」、**事前登记 `10_distilled.md`**、下 `orders/R3.md`(kind: final)。没跑实验。
-**本文件只放结论和指针。**_
+_主研每轮**覆盖重写**。2026-10-05,**第 4 轮**(Opus 5,批量扫描口径):读完 s1 大表(121 变体)+ 市场解剖,
+写 `synthesis.md`(133 行)、`studies/F115_all_tide_mean_30/hypo.yaml`(40 条,40/40 parse)、本文件。
+**没跑新实验。** 本文件只放结论和指针;所有带数字的论断在 `synthesis.md` 里都标了变体 id。_
 
-## 1. 一句话现状
+## 1. 现状
 
-**实验做完、结论写死、`R3 = final` 已下 —— 下一步是执行跑那唯一一次留出段运行(`S_final`,1 次)。**
-3 阶段 + 2 脚本全部 exit 0;H1–H10 全有裁决;6 个必答问题全答完(§4 末)。
+**结论没变,但原因换了,而且找到了两条真改进和一格没试过的增量构造。**
 
-**全局判断**:
-1. **对只能做多、扣 15bp 的用户不可用**:valid 多头腿净超额 **+0.2%**(夏普 +0.04),换标签约定
-   (`buyable=False`)翻成 **−0.39%**;已知家族同段 **+22.3%**(夏普 3.46)。
-2. **衰减是它自己的**(非环境/成本/半衰期):`c_pure` 逐年 `Lnet` +7.8/+13.4/+5.2/**−1.3/+0.9/+3.6%**
-   (2018→2023),已知家族同六年全 ≥ +6.6%;valid 是**毛**崩塌(`Lgross` 9.4→4.1%)。
-3. **相对已知家族没有增量**(H6,§2.2)。→ 归宿 = **否定结论 + 一条提纯(删 `÷M`)**,**没有升华版。**
+1. **对只能做多、扣 15bp 的用户,原式不可用**:`v_base` +5.6 / **+0.2** / +4.1%(tr/va/ut),Lshp 0.83;
+   已知族 `k_known` +12.6 / +22.3 / +15.4%,Lshp 2.22。
+2. **本质原因(这一轮新查明)**:半衰期曲线 hl0 = **−6.2%** → hl10 = +5.6%,而**毛**超额在 hl 0→20 走平
+   (+9.8…+7.3%)→ 净超额**全部**是把换手从 ~21% 压到 5% 换来的,毛 ~9% 封顶。
+   **它的信息是日频、薄的;已知族 hl0 就 +12.6%、LTO 3.4%、越平滑越差 —— 慢而厚。** 扣费口径里永远打不过。
+3. **没增量,但不是「就是已知族」**:ρk 只 +0.26,`bk_liq` / `bk_known` 中性化不掉(+5.4/+0.7、+5.2/−0.4 ≈ 原式)。
+   失败的机制是**倾斜方向相反**(§2 第 4 条),不是信息重合 —— 这给出了一格没试过的构造。
+4. **121 个变体里有两条真改进**(毛超额也好、逐年也稳):`abl_C`、`rank_K`,见 §5。
 
-(…全文 6467 字符,读 `notes/F115_all_tide_mean_30/state.md`)
+(…全文 6554 字符,读 `notes/F115_all_tide_mean_30/state.md`)
 
-## 研究日志(`notes/F115_all_tide_mean_30/journal.md`:17 条,其中研究员自己写的 7 条)
+## 研究日志(`notes/F115_all_tide_mean_30/journal.md`:18 条,其中研究员自己写的 8 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 15:27 [auto] x2_increment 跑完(exit 0);重看结果:logs/F115_all_tide_mean_30_x2_increment.log
 
 ### 2026-10-04 15:36 [执行] R2:S2_increment(5变体)+ x2_increment 都跑完(exit 0),结果卡 results/R2.md 已写;权重曲线在 valid 上随 w 增大严格单调下降(两条 X 都是 w=0 最高),残差 Lgross train 正 valid 全负,H9 实测方向与工单预测相反
 
@@ -93,6 +92,26 @@ R2 的 5 变体 + increment.py 都 exit 0,四条判读全部命中或落在工�
 
 ### 2026-10-05 00:12 [auto] S_final 跑完(exit 0);重看结果:./scripts/study.sh digest F115_all_tide_mean_30 S_final
 
+### 2026-10-05 11:08 [主研] 批量扫描 s1 的综合
+
+- 读完 s1 大表(121 变体)+ 市场解剖,写了 notes/F115_all_tide_mean_30/synthesis.md(133 行)与
+  studies/F115_all_tide_mean_30/hypo.yaml(40 条,40/40 parse)。没跑新实验。
+- 结构:载重的只有「峰后那个读数点」F(sub_I_* 不掉 +5.0/+2.2%,对称的 sub_F_* 全塌 −3.6/−12.5%);
+  分母 M 空转(abl_K 与 only_K_R 在算术上都塌成 cross_mean(1/M,20),数字一致);÷J 必需(abl_L +3.8/−4.3 << abl_N +6.4/+2.0);
+  幅度无用(rk ≈ 原式);外层窗口 10–60 有真平台,内层平滑参数是噪声(不平滑最好)。
+- 121 个变体里只有两条真改进,而且是**毛**超额上的改进:abl_C +6.0/+7.4%(毛 +9.5/+10.8)、
+  rank_K +5.3/+9.7%(毛 +8.7/+13.1),逐年六年五正,修掉了原式 2019 之后的衰减。
+- 半衰期曲线揭穿本质:原式 hl0 = −6.2%,毛超额在 hl 0→20 走平 → 净超额全部是换手换来的;毛 ~9% 封顶。
+  已知族 hl0 就 +12.6% 且越平滑越差 → 它的信息慢而厚,F115 的信息快而薄。
+- 没增量,机制已查明:选股力在**活跃**档(成交额段内 −1.1/−4.6/−2.0/+2.7/+7.2%),段溢价在**清淡**档
+  (段等权 +15.1/…/−17.8%),倾斜方向相反 → 固定权重 overlay 必然单调变差(+14.2/+12.9/+11.9 对 +15.4%)。
+  表里没试过的那一格 = 倾斜交给已知族、F115 降级为桶内排序器(h_mix_known_bk*,下一批优先级最高)。
+- 解剖两条可检验推断:(1) 板块段内顺序(沪 +3.8 / 深 +5.0 / 创业 +2.0 / 科创 −22.8%)与日涨跌幅上限一致;
+  (2) 段内最强的两段(次新 +12.4%、冻结盘口 +18.2%)段等权分别 −28.7% / −67.4% → 对纯多头是净亏,
+  这是「段内 alpha ≠ 可投 alpha」的教科书例子,hypo 里一正一反两条用来钉死。
+- 工具:abl_D 因 in_slice_to_end 的 pair 维炸开 CUDA OOM
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F115_all_tide_mean_30/orders/`、`notes/F115_all_tide_mean_30/results/`)
 
 - R0:工单 —,结果卡 有
@@ -125,7 +144,7 @@ R2 的 5 变体 + increment.py 都 exit 0,四条判读全部命中或落在工�
 
 ## 已写的 notes(`notes/F115_all_tide_mean_30/`)
 
-`01_expression.md`(3K)、`02_operators.md`(12K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(24K)、`06_baseline.md`(11K)、`07_S1_anatomy.md`(15K)、`07_S2_increment.md`(11K)、`07x_1_anat_mfi.md`(9K)、`07x_2_increment.md`(15K)、`10_distilled.md`(8K)、`journal.md`(23K)、`state.md`(10K)
+`01_expression.md`(3K)、`02_operators.md`(12K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(24K)、`06_baseline.md`(11K)、`07_S1_anatomy.md`(15K)、`07_S2_increment.md`(11K)、`07x_1_anat_mfi.md`(9K)、`07x_2_increment.md`(15K)、`10_distilled.md`(8K)、`journal.md`(25K)、`state.md`(10K)、`synthesis.md`(11K)
 
 ## 自写的探针与分析脚本(`studies/F115_all_tide_mean_30/`)
 

@@ -1,0 +1,61 @@
+# F101_day_shine_retstd — 第二批假设(主研,批量扫描 s1 + 市场解剖之后)
+# 口径:多头腿扣 15bp 净超额 + 纯多头夏普;基准 k_known = cross_mean(day_std(Amt), 30)(tr/va/ut +12.6/+22.3/+15.4%,Lshp 1.78/3.46/2.22)
+# 要比过的表内最好单体:fld_Volume_Amt(+10.0/+8.9/+9.7%,Lshp 2.71/2.59/2.68,LTO 5.6%,hl 20);原式 v_base(+9.0/-1.6/+7.1%,1.96/-0.38/1.37)
+# 记号:RV = day_std(in_slice(Ret, 2, 237)) = 日内分钟收益的总体 std;FOLD(x) = abs_(cs_demean(x)) = 在当天截面均值处的 V 形折叠
+# s1 的三条主结论:(a) 承重的只有「截面折叠 + 日内收益离散度」;(b) 掩码越稠密越好,稀疏触发版 2021 后失效;(c) 折叠中心是全市场均值 ⇒ 书被推到大票里
+
+# ---- A. 拆掉触发机器:最小结构 + 半衰期(s1:掩码放稠密后 valid 从 -1.6% 到 +8.9~+11.6%;win_I 3->15 单调 1.20->2.03)
+h_rv_fold: {expr: "abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))", why: "s1 的最小结构假设:整台放量触发机器可删。要求 Lshp(ut) >= fld_Volume_Amt 的 2.68 且 valid >= +8%;若明显更差,说明掩码里还有东西而不只是采样噪声"}
+h_rv_fold_rank: {expr: "cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))))", why: "rk 在 base 上把 Lshp(ut) 从 1.37 抬到 1.84(先排名再 EMA = 水平记忆而非峰值记忆);检验这 +0.47 在稠密版上还在不在"}
+h_rv_fold_ema30: {expr: "cross_ema(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), 30)", why: "稠密族全部选到半衰期网格上限 20 = 边界解;在表达式里再加 30 天 EMA,看平滑这根杠杆是否还没用尽"}
+h_rv_fold_mean60: {expr: "cross_mean(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), 60)", why: "同上换成硬窗 60 日均(k_known 本身就是 30 日均且 hl=0);若它接近 k_known 的净超额,说明这条因子的价值主要是「慢」"}
+h_rv_fold_rank_ema30: {expr: "cross_ema(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), 30)", why: "把 rk 的 +0.47 与更长平滑叠起来,作为本批「最可能可交易」的一条;换手应降到 3% 附近"}
+h_rv_mono_mean30: {expr: "cross_mean(day_std(in_slice(Ret, 2, 237)), 30)", why: "对手假设(必须跑):已知族在收益上的孪生兄弟。不折叠的单调日内波动水平。若它 >= 折叠版,F101 就只是「已知的波动暴露」,折叠不是贡献"}
+h_rv_roll5_fold: {expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 5))))", why: "真正干净的「去掉掩码」:全部分钟的 5 分钟滚动 std 再全天平均(abl_I 删节点后根变成 0/1 掩码、dist 0.01,不是这个消融)"}
+h_rv_roll15_fold: {expr: "abs_(cs_demean(day_mean(in_stddev_rolling(in_slice(Ret, 2, 237), 15))))", why: "win_I 的斜坡 3/5/10/15 单调上升到 2.03 没有峰;在无掩码版上把斜坡接着走,看 15 分钟与全天 std(h_rv_fold)之间有没有平台"}
+
+# ---- B. 折叠中心:当前中心在 J 的第 65.6 百分位,是被右尾拖上去的
+h_rv_fold_median: {expr: "abs_(sub(day_std(in_slice(Ret, 2, 237)), cs_median(day_std(in_slice(Ret, 2, 237)))))", why: "把折叠中心从截面均值换成中位数。若更好,说明 abs_(cs_demean) 的价值是「躲高波动悬崖」而不是「选典型股」"}
+h_rv_fold_log: {expr: "abs_(cs_demean(log(day_std(in_slice(Ret, 2, 237)))))", why: "在对数空间折叠 = 中心变成几何均值(更靠中位数),右尾被压扁;前研究发现对数再折叠能张成原式 57~64%(高于线性 42~49%)"}
+h_rv_fold_rankcenter: {expr: "abs_(cs_demean(cs_rank(day_std(in_slice(Ret, 2, 237)))))", why: "秩中心折叠 = |百分位 - 0.5|,中心正好是中位数、两侧等权。前研究在稀疏版上测过(+4.8/+3.4%),稠密版 + hl20 没测过"}
+h_rv_fold_winsor: {expr: "abs_(cs_demean(cs_winsor(day_std(in_slice(Ret, 2, 237)))))", why: "先 1%/99% 缩尾再求均值:只改中心的位置、不改排序形状,把「中心被右尾拖高」这一条单独隔离出来"}
+h_rv_neg_screen_flat: {expr: "cs_last_high20(neg(day_std(in_slice(Ret, 2, 237))), cross_mean(day_flat_ratio(in_slice(Close, 2, 237)), 20))", why: "用机制替掉折叠:低波动侧那道坡实测几乎全是一字板,于是「做多低日内波动 + 把冻结盘口票压到书底」。y 已用 neg 定向(高 = 想买)"}
+h_rv_neg_screen_zero: {expr: "cs_last_high20(neg(day_std(in_slice(Ret, 2, 237))), cross_mean(day_zero_ratio(in_slice(Volume, 2, 237)), 20))", why: "同上但筛子换成零成交分钟占比(清淡票的日内 std 是最小变动价位噪声,不是信息;成交额最低 20% 段内夏普只有 +0.15)"}
+
+# ---- C. 市场分段:小票段内 S+2.96 却只放 6% 仓位(tilt -13.5);成交额最低段零分辨力却占 16% 仓位;科创板段内 -19.4%
+h_rv_fold_bk_amt20: {expr: "cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cross_mean(day_sum(Amt), 30))", why: "按 20 日成交额分桶中性,逼书均匀分布在各流动性桶里。bk_liq 在 base 上就把 Lshp(ut) 1.37->2.03、valid -1.6%->+4.8%;稠密版没试过"}
+h_rv_fold_bk_amt20_tie: {expr: "add(cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cross_mean(day_sum(Amt), 30)), mul(cs_rank(day_std(in_slice(Ret, 2, 237))), 0.001))", why: "同上加一个 0.001 的秩扰动打破跨桶并列 —— 绕开 cs_bucket_rank 必然触发的 dist=0.20 门槛(bk_liq/bk_known 都因此作废)"}
+h_rv_fold_bk_amt241: {expr: "cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cross_mean(day_sum(Amt), 241))", why: "表达式里没有市值字段:用 241 日平均成交额当「规模」代理(长窗平掉了当期炒作换手)。解剖里市值桶与 20 日成交额桶给出相反答案,必须分开试"}
+h_rv_fold_bk_price: {expr: "cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), day_mean(in_slice(Close, 2, 237)))", why: "科创板段内 -19.4%(base 还超配 +2.2%):20% 涨跌幅让板内波动分布整体右移,全市场中心错判。价格水平是手上唯一能区分板块/报价制度的代理"}
+h_rv_fold_hi40_amt: {expr: "cs_first_high40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 30))", why: "只在高换手 40% 里建书:那一段段等权 -17.8% 而段内 +20.5% S+2.00 —— 投机溢价是它唯一真正在躲的东西"}
+h_rv_fold_lo40_amt: {expr: "cs_first_low40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 30))", why: "反向对照:只在低换手 40% 里建书。那一段段等权 +15.1%(k_known 的地盘)但段内只有 +0.7~+1.0% ⇒ 预测这条赚的是 tilt 不是分辨力"}
+h_rv_fold_drop_illiq: {expr: "cs_last_low20(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 30))", why: "把零分辨力的最低换手 20% 直接逐出多头书(现在它占了 16% 仓位、段内 S+0.15)。检验「剔掉测不准的那一段」是净赚还是净亏(它段等权 +15.1%)"}
+h_rv_fold_lo40_amt241: {expr: "cs_first_low40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 241))", why: "把「小票里段内 S+2.96」落实:用长窗成交额当规模代理,只在长期偏小的 40% 里建书,与 h_rv_fold_lo40_amt(换手代理)对照"}
+
+# ---- D. 相对已知成交额族的增量:ρk 只有 0.14~0.18,但表里的 overlay 叠的是失效的 v_base —— 整张表最关键的空白
+h_ov_k_rv_05: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), 0.5))", why: "用稠密核重做 overlay(权重 0.5)。ov_p05 叠 v_base 只打平已知族;稠密核 2019 后逐年都站得住,这才是增量的真正检验"}
+h_ov_k_rv_10: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), 1.0))", why: "同上权重 1.0,对应 ov_p10(净超额 +15.4% / 夏普 2.42 对已知族 15.4% / 2.22);要看能不能把夏普推出 ±0.3 的噪声带"}
+h_ov_k_fldamt_05: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))), 0.5))", why: "直接把表内最好单体 fld_Volume_Amt(Lshp 2.68)叠在已知族上,作为 h_ov_k_rv_05 的上界参照 —— 两者差多少就是「掩码」还剩多少价值"}
+h_res_k_rv: {expr: "cs_regres(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cs_rank(cross_mean(day_std(Amt), 30)))", why: "稠密核对已知族取秩残差(res_known 在 base 上还有 +10.2%/+3.4%)。残差换手高、净值类指标可能只因成本塌掉,看毛超额和 rank IC"}
+h_bk_k_rv: {expr: "cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cross_mean(day_std(Amt), 30))", why: "解剖说 k_known 几乎没有段内分辨力(靠 tilt)、F101 在每个桶里都有 ⇒ 「在已知族的桶内选股」是两者结合的最自然写法"}
+
+# ---- E. 被测量是什么:Ret 与量的变化率可互换(leaf_Ret_volchg/amtchg valid +8.0%,base -1.6%)
+h_amtchg_fold: {expr: "abs_(cs_demean(day_std(in_pct(in_slice(Amt, 2, 237), 1))))", why: "把被测量从分钟收益换成分钟成交额变化率的离散度(用户提示的互换),去掉掩码。若与 h_rv_fold 同量级,证明它测的是「微观结构粗糙度」而非收益波动"}
+h_volchg_fold_ema30: {expr: "cross_ema(abs_(cs_demean(day_std(in_pct(in_slice(Volume, 2, 237), 1)))), 30)", why: "量变化率版 + 长平滑;leaf_Ret_volchg 在 valid 上比 base 好 10 个点,它可能是整族里样本外最稳的被测量"}
+h_sum_rv_amtchg: {expr: "add(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cs_rank(abs_(cs_demean(day_std(in_pct(in_slice(Amt, 2, 237), 1))))))", why: "两种粗糙度(价与量)的折叠秩相加:如果它们测的是同一件事,相加应该只降噪;如果净超额明显上去,说明是两个独立的维度"}
+h_wmean_absret: {expr: "abs_(cs_demean(day_wmean(abs_(in_slice(Ret, 2, 237)), in_slice(Amt, 2, 237))))", why: "成交额加权的 |分钟收益| = 资金真正经历的波动;day_std 把零成交分钟与放量分钟等权,这正是成交额最低段零分辨力的怀疑原因。可检验推论就在这条上"}
+h_posratio_fold: {expr: "abs_(cs_demean(day_pos_ratio(in_slice(Ret, 2, 237))))", why: "只看方向不看幅度(上涨分钟占比)的折叠:s1 说被测量必须是尺度(day_skew/day_gini 都塌),这条给「尺度」这个结论一个独立的反面证据"}
+
+# ---- F. 把歪打正着的掩码写干净
+h_gate_amt_above_mean: {expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(in_slice(Amt, 2, 237), in_mean_full(in_slice(Amt, 2, 237))), in_slice(Ret, 2, 237), 5))))", why: "fld_Volume_Amt 其实是「Amt 减掉上一分钟的股数」这种混单位比较,实际效果等于「这一分钟有成交额」。这里把它写成明确的「成交额高于当天均值的分钟」"}
+h_gate_dvpos: {expr: "abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), 0), in_slice(Ret, 2, 237), 5))))", why: "abl_F/sub_F_div/sub_E_kurt 一族的阈值实际都退化成 0;这里直接写 Delta>0(约一半分钟),作为那一族的规范写法与一致性检查"}
+
+# ---- G. 一字板 / 冻结盘口:触发机器唯一有用的地方(base 段内 +27.5% S+2.07,稠密族 -6.5~+8.4%)
+h_flat_mono: {expr: "cross_mean(day_flat_ratio(in_slice(Close, 2, 237)), 20)", why: "对照控制变量:冻结盘口占比本身能不能单独成一本书。折叠的低波动侧是不是「就是这个」,靠它和 h_rv_fold 的相关与段内数字判定"}
+h_rv_fold_bk_flat: {expr: "cs_bucket_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cross_mean(day_flat_ratio(in_slice(Close, 2, 237)), 20))", why: "在「冻结程度」桶内折叠排名:若稠密族在冻结段的负分辨力(-5.3%)由此转正,说明那一段需要自己的参照系而不是掩码"}
+
+# ---- H. 大胆的新机制(来自「它是投机溢价的反向暴露」这个推断,允许与原式低相关)
+h_centroid_amt: {expr: "cross_mean(day_centroid(in_slice(Amt, 2, 237)), 20)", why: "资金在一天里的位置(0=开盘,1=收盘)。投机性注意力表现为开盘抢筹;这是与波动完全不同的一条投机代理,顺序信息被 std/gini 全丢掉了"}
+h_signed_amt: {expr: "cross_mean(day_signed_ratio(in_slice(Ret, 2, 237), in_slice(Amt, 2, 237)), 20)", why: "上涨分钟成交额占比 - 下跌分钟占比 = 不用逐笔数据的净买入代理;检验「投机注意力」能不能用方向性资金流而不是波动来度量"}
+h_rv_own_rel_fold: {expr: "abs_(cs_demean(div(day_std(in_slice(Ret, 2, 237)), cross_mean(day_std(in_slice(Ret, 2, 237)), 60))))", why: "伪证实验:把水平换成「相对自己 60 日的异常度」。mem_zscore5/10 是全表最差(-6.23/-4.17)⇒ 预测这条塌掉,从而坐实「信息在持久的截面水平里」"}
+h_rv_fold_state_weight: {expr: "mul(abs_(cs_demean(day_std(in_slice(Ret, 2, 237)))), cs_stddev_full(day_std(in_slice(Ret, 2, 237))))", why: "乘上当天的截面离散度(cs_* 会把日标量铺满截面):当日排序不变,但口径里的 EMA 会给高离散度的日子更大权重。检验「离散度高的日子才有分辨力」(+13.8% vs +5.7%)能不能直接写进因子"}

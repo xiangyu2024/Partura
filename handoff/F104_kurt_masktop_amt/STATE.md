@@ -1,6 +1,6 @@
 # F104_kurt_masktop_amt — 交接状态
 
-_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:06(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #4190(批次 B01_single_factors)
 - 表达式:`day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))`
@@ -94,6 +94,8 @@ rev2(exec,只切 train/valid,自检全部对上阶段表与 rev1 日志)量到�
 - `S3_reader`  10-03 22:55  12 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt S3_reader`
 - `S4_long`  10-03 23:12  9 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt S4_long`
 - `final`  10-03 23:33  5 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt final`
+- `sweep_s1`  10-05 10:55  74 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s1`
+- `anatomy_s1`  10-05 11:02  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s1`
 - `x1`(自写脚本的输出)  10-03 19:33  exit 0  → `logs/F104_kurt_masktop_amt_x1.log`
 - `x2`(自写脚本的输出)  10-03 23:20  exit 0  → `logs/F104_kurt_masktop_amt_x2.log`
 - `audit1`(自写脚本的输出)  10-03 23:56  exit 0  → `logs/F104_kurt_masktop_amt_audit1.log`

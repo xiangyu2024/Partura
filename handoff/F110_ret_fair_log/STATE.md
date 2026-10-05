@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 11:11(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -16,30 +16,29 @@ _自动生成于 2026-10-05 10:53(`python scripts/recorder.py --brief F110_ret_f
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F110_ret_fair_log` 看服务器上的 tag,`./scripts/study.sh digest F110_ret_fair_log <tag>` 重看结果)。
 
-## 研究现状(`notes/F110_ret_fair_log/state.md`,10-05 00:13 更新)—— **先读这个文件**
+## 研究现状(`notes/F110_ret_fair_log/state.md`,10-05 11:09 更新)—— **先读这个文件**
 
-# F110_ret_fair_log — 研究现状(主研第 6 轮重写,2026-10-05)
+# F110_ret_fair_log — 研究现状(主研第 7 轮重写,2026-10-06;基于批量扫描 s1)
 
-> 第 **6** 位主研,工单 **R4(writeup)**。**留出段已读(只许一次,已用完)** ⇒ 本轮按规矩成文,判断类 notes 已写完。
-> `01`/`02`/`03`/`04`/`06` 照用;`02`/`03` 里「成交量脉冲处的价格冲击」那个读法**已被实测推翻**。
+> 本轮工单:读完 161 条变体的批量扫描表 + 市场解剖,成文并提出第二批假设。**没跑任何新实验。**
+> 本轮产出:`notes/F110_ret_fair_log/synthesis.md`(综合,129 行)+ `studies/F110_ret_fair_log/hypo.yaml`(36 条,hypo 检查 36/36 通过)。
+> `01`/`02`/`03`/`04`/`06` 仍可照用,但 `02` 对 `in_forward_valid_part` 的读法本轮按源码纠正(第 8 节)。
+> 第 6 轮的 `05`~`12` 与 `orders/R4.md` 原样保留;本页只换「现状」口径。
 
-## 1. 一句话现状
+## 1. 现状
 
-**研究已收口。** `orders/R4.md`(writeup)在等执行:不跑实验,只做补 `07_S_final.md` + 出报告 +
-**逐个核对本轮新算的 16 项派生数字**。执行交回 `results/R4.md` 后即可交付(一般不再回到主研)。
+**原式对纯多头是零,结论不变**(`v_base` −0.0 / −0.6 / −0.2%,`Lshp` −0.03):毛超额 +7.8% 被 10.5% 换手
+(≈ 8.0%/年成本)吃光,钱在空头腿(`LS` +2.76、底腿 −43.3%)。
+大表把上一轮三条判断**加强**了:① 成交量机器惰性 —— 不只是「权重比不乘还差」,是**整棵子树删了不掉**;
+② 平滑是唯一真实的杠杆且 **100% 是省成本**(`mem_ema30` 毛 +7.9% ≈ base +7.8%);③ 相对已知族无增量(叠加行两向单调变差)。
+大表还给出两条**上一轮没有的**:④ 此因子与已知族**工作方式不同**(它是流动段内选股,已知族是段位倾斜);
+⑤ 冻结盘口段(6.5%)段内 **+19.2%** 而已知族 **−10.9%**,且书对该段几乎不超配 ⇒ **未被利用的信息**。
 
-**最终结论**:原式对只能做多的用户是零(四段 −0.0/−0.6/−0.2/−0.8%,八年无一例外)。推荐一条**升华**版
-`cross_mean(mul(D, abs_(D)), 20)`(corr 0.673 < 0.8 ⇒ 换了一条因子),四段 `Ln` +7.9/+8.1/+8.0/**+12.8%**、
-`Lshp` +1.32/+1.38/+1.34/**+1.17** ⇒ **留出段站住了**。**但交易建议仍是「不建议进组合」**,依据收缩为
-「加不出增量」+「中性化后归零」(事前理由「明显输给已知家族」**已被留出段推翻** —— 只输 1.26 点)。
+(…全文 7804 字符,读 `notes/F110_ret_fair_log/state.md`)
 
-(…全文 6492 字符,读 `notes/F110_ret_fair_log/state.md`)
-
-## 研究日志(`notes/F110_ret_fair_log/journal.md`:22 条,其中研究员自己写的 11 条)
+## 研究日志(`notes/F110_ret_fair_log/journal.md`:23 条,其中研究员自己写的 12 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:25 [auto] ⚠ 读留出段:final S_final,阶段 S_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
 ### 2026-10-04 23:28 [auto] S_final 跑完(exit 0);重看结果:./scripts/study.sh digest F110_ret_fair_log S_final
 
@@ -99,6 +98,16 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 `Ln` 差距 utrain 7.44 → holdout 1.26(
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 11:10 [主研] 批量扫描 s1 的综合
+
+- 原式对纯多头仍是零(utrain -0.2%/Lshp -0.03):毛 +7.8% 被 10.5% 换手(~8%/年成本)吃光,钱全在空头腿(LS +2.76、底腿 -43.3%)。
+- 整棵成交量子树是惰性的:abl_E/G/J/K/N/O 全在 -0.3~+0.5%,且 sub_E_abs_/sub_E_pow_2/sub_G_add/sub_G_mul/sub_F_* 三段数字逐位相同 -0.7/+1.1/-0.2% => F/G 的差分是 no-op,掩码只读到「当天成交量最大的分钟」。唯一「一换就塌」的 I=in_stddev_full 是算术抵消退化(abl_I cov 0.19 不过门槛)。
+- 平滑是唯一真实的杠杆、而且 100% 是省成本:mem_ema30 毛 +7.9% ≈ base 毛 +7.8%,换手 10.5%->3.3%,净 -0.2%->+5.4%;纯平滑天花板 +5.4%,不到 k_known(+15.4%)四成。另:base 的低换手是重尾假象 —— 先 cs_rank 再平滑(rk)换手升到 17.3%、净 -7.3%。
+- 增量:叠加行两个方向都单调低于 k_known 单独(+13.4 -> +6.2% vs +15.4%)=> 加不出。残差 -7.7% 这条要带保留:rk 单独就是 -7.3%,所以那 -7% 是「排名删掉幅度」的锅不是中性化的;res_known 的毛额仍 +5.3%,被 17.2% 换手做成负 => 「残差+平滑」是唯一还没测过的干净测法。
+- 解剖两条新发现:(1) 它只在 20 日成交额最高一档里段内有效(mem_ema30 +5.0%、decay60 +6.4%,该档段等权 -17.8%),而 k_known 的 +15.4% 几乎全是「超配最不流动档 +80.3%」的段位倾斜 => 两者工作方式不同;(2) 近 15 日有冻结盘口的 6.5% 股票段内 base +19.2%/mem +19.7~24.2%,而 k_known -10.9%,书对该段只超配 +1.3% => 未被利用。倒贴处是科创板(段内 -10.6% 却超配 +11.4%)。
+- 已落盘:notes/F110_ret_fair_log/synthesis.md(129 行)、studies/F110_ret_fair_log/hypo.yaml(36 条,hypo 36/36 通过)、state.md 覆盖重写。另:in_forward_v
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F110_ret_fair_log/orders/`、`notes/F110_ret_fair_log/results/`)
 
 - R1:工单 有,结果卡 有
@@ -130,7 +139,7 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 
 ## 已写的 notes(`notes/F110_ret_fair_log/`)
 
-`01_expression.md`(1K)、`02_operators.md`(4K)、`03_decomposition.md`(3K)、`04_grammar.md`(2K)、`05_hypotheses.md`(24K)、`06_baseline.md`(4K)、`07_S1_long.md`(8K)、`07x_01_x1_anatomy.md`(14K)、`07x_02_x2_GHI.md`(8K)、`08_variants.md`(5K)、`09_diagnosis.md`(12K)、`10_distilled.md`(19K)、`11_risks.md`(7K)、`12_next.md`(6K)、`journal.md`(36K)、`state.md`(10K)
+`01_expression.md`(1K)、`02_operators.md`(4K)、`03_decomposition.md`(3K)、`04_grammar.md`(2K)、`05_hypotheses.md`(24K)、`06_baseline.md`(4K)、`07_S1_long.md`(8K)、`07x_01_x1_anatomy.md`(14K)、`07x_02_x2_GHI.md`(8K)、`08_variants.md`(5K)、`09_diagnosis.md`(12K)、`10_distilled.md`(19K)、`11_risks.md`(7K)、`12_next.md`(6K)、`journal.md`(38K)、`state.md`(12K)、`synthesis.md`(12K)
 
 ## 自写的探针与分析脚本(`studies/F110_ret_fair_log/`)
 
