@@ -49,13 +49,14 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [f_fam_m30]
-  by_year:    [v_base, h12_res_best_m30, h12_add_best_m30]
-  neutralise: [f_fam_m30, h12_res_best_m30]
-  profile:    [v_base, f_fam_m30, h12_res_base_m30, h12_res_best_m30, h12_add_best_m30, h12_sub_best_m30, h12_res_base_x9]
+  decay:      [f_w30]
+  by_year:    [f_orig, f_w30, f_w60, f_fam, f_add]
+  neutralise: [f_orig, f_w30]
+  profile:    [f_orig, f_w30, f_w60, f_fam, f_add]
   conditional:
-    - {factor: h12_res_best_m30, gate: ctl_cap, buckets: 5}
-corr_ids: [f_fam_m30, h12_res_base_m30, h12_res_best_m30, h12_add_best_m30, h12_sub_best_m30, h12_res_base_x9]
+    - {factor: f_orig, gate: ctl_cap, buckets: 5}
+    - {factor: f_w30, gate: ctl_cap, buckets: 5}
+corr_ids: [f_orig, f_w30, f_w60, f_fam, f_add]
 
 stages:
   - id: S0_baseline
@@ -142,3 +143,22 @@ stages:
       - {id: h12_res_base_x9, group: neutralise,
          expr: "cs_regres(cs_rank(cross_quantile_q25(day_close(Ret), 15)), cs_rank(cross_max(day_std(Amt), 9)))",
          why: "换另一条已知家族基准(cross_max(day_std(Amt),9))再做一次残差,看 H12 的结论对用哪条家族敏不敏感"}
+
+  - id: S6_final
+    question: "事前选定的 5 个最终候选在留出段上的多头腿:原式、提纯版(窗口30)、相近版(窗口60)、已知家族基准、家族+候选等权组合"
+    variants:
+      - {id: f_orig, group: final, final: true,
+         expr: "cross_quantile_q25(day_close(Ret), 15)",
+         why: "原式(必进)。判据 J1:它的留出段多头腿落在 train 那一侧还是 valid 那一侧"}
+      - {id: f_w30, group: final, final: true,
+         expr: "cross_quantile_q25(day_close(Ret), 30)",
+         why: "第一推荐。提纯版(窗口 15→30),rank 相关 +0.92、hlL 与原式同为 20。判据 J2:留出段不更差即算被确认"}
+      - {id: f_w60, group: final, final: true,
+         expr: "cross_quantile_q25(day_close(Ret), 60)",
+         why: "第二。train 上最好(+3.5%)但 rank 相关只 +0.76,算相近的另一条因子。判据 J2 单独判;J3 看它是不是三条里最弱"}
+      - {id: f_fam, group: final, final: true,
+         expr: "cross_mean(day_std(Amt), 30)",
+         why: "已知家族基准(必进)。判据 J5:留出段是否落在用户给的 +13%~+15% / 夏普 1.4~1.9"}
+      - {id: f_add, group: final, final: true,
+         expr: "add(cs_rank(cross_quantile_q25(day_close(Ret), 60)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "家族 + 候选等权秩相加。判据 J4(唯一能翻转总结论的那一条):它减去 f_fam 的差值就是「有没有增量」"}

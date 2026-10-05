@@ -302,3 +302,86 @@ H6/H7/H10:s_pearson(+10.7%/+16.9%)、l_last(+11.1%/+18.4%)和v_base打平甚至�
 ### 2026-10-04 15:39 [auto] S2_window 跑完(exit 97);重看结果:logs/F111_spearman_qclose_S2_window.log
 
 ### 2026-10-04 15:40 [auto] 启动 run S2_window:阶段 S2_window
+
+### 2026-10-04 23:22 [主研] 第 1 轮(接力第 3 轮主研):R2 没有结果卡,查出两次 exit 97 的死因是 w_last_50,加「修订 R2-a」后把 R2 原样交回;state.md 从 34KB 压到 13.5KB
+
+本轮没有新的实验结果可裁决(R2 的两个 tag 都没有结果),所以这一轮全部用在「让 R2 这次能跑成」和落盘上。
+
+看到了什么:
+1. brief 显示 orders/R2.md 有、results/R2.md 没有 ⇒ 按工作流规矩**不另开工单**,R2 原样交回执行。
+2. 但 R2 原样交回会**确定性地再死一次**。查 logs/F111_spearman_qclose_S2_window.log:
+   `S2_window` 被启动过两次(15:35、15:40),两次都是 exit 97,而且**不是** playbook §2 说的
+   「邻居占满内存、排队等」—— 日志里是
+   `[panels] w_last_50: does not fit on the GPU right now; computing it on the CPU`
+   `[guard] ABORT: this process anon 15.3 GiB (limit 14.0), container anon 15.8 GiB (limit 34.0)`
+   即 `ts_spearman(day_last(Close), 50)` 退到 CPU 之后把**我们自己的进程**撑爆,守卫自杀让路。
+   `d=30` 的 ts_spearman 是跑成了的 ⇒ 不是 ts_spearman 的问题,是 d=50 这一个变体。
+   第二次启动日志报「4 new expression(s)」⇒ w_last_5 / w_last_20 / w_last_30 的面板**已经算好并缓存**,
+   删掉 w_last_50 之后重跑只剩 3 个新面板(w_q_30、pl_last_10、p_last_30),很便宜。
+
+判断与决定(都写进了 orders/R2.md 的「修订 R2-a」):
+- **删掉 w_last_50,阶段变成 7 个变体,不补替代变体。** 理由:d 轴的斜率方向在 d=5/10/20/30 上就能读出来,
+  而 d=30 已经进了已知家族的频段(基准本身就是 cross_mean(day_std(Amt), **30**));d=50 只是端点读数,
+  不值得再赌一次 exit 97 —— 预算只剩 1 次余量。**这一段是「因为工具成本放弃测量」,不是「有证据说它不重要」**,
+  已照实写进 05_hypotheses.md 的 H12 和 state.md §2.11-b/§5 已排除项。
+  特别叮嘱执行:corr_ids 里也要删,否则引擎为了算相关矩阵会再去求一次那个面板,又 exit 97(这是最容易漏的一处)。
+- **block 优先级从 A>B 改成 B>A**:block B(双重排序)是这一轮唯一的新信息、也是 H4 的决定项;
+  block A 只是把 R1 已经答过的同一个问题换个形式重做。额度紧的时候要保住的是 B。
+- **F2 改成可选**:F2 = BESTW 依赖第 1 项的 digest,万一第 1 项再挂,执行可以只用 F1 做完第 2 项
+  (这一族等价写法彼此 rank 相关 0.95~0.98,增量的答案不取决于挑哪一条)。
+  这样「S2_window 失败」不会把 H4 的决定性实验一起拖没。
+- **明确禁止为第 1 项起第 3 次运行**(再挂就把剩下那次全给 x2_increment),并给了写脚本的内存纪律
+  (float32 / 用完 del / 自检用随机小面板、不要重演 x1 的全市场暴力双循环)。
+
+决定不做的:不扫 d=40/50(上面的理由);不改 partura/、不动显存参数、不加 --cpu-fallback(工具纪律);
+不因为这次失败就重排研究路线 —— H4 仍然是「被强烈支持、差最后一步(block B)」,下一轮读到 R2 就该收口。
+
+落盘:state.md 整篇覆盖重写并从 33.9 KB 压到 13.5 KB / 156 行(旧版超指导线 3.4 倍;所有长表都在
+06/07/07x 里有,删的是重复的叙述不是数字);H12 在 05_hypotheses.md 里补注了「只测 d∈5/10/20/30」及理由。
+
+### 2026-10-04 23:29 [auto] 启动 run S2_window:阶段 S2_window
+
+### 2026-10-04 23:52 [auto] 启动 exec x2_increment:studies/F111_spearman_qclose/x2_increment.py 
+
+### 2026-10-04 23:58 [auto] x2_increment 跑完(exit 0);重看结果:logs/F111_spearman_qclose_x2_increment.log
+
+### 2026-10-05 00:06 [执行] R2:S2_window(删w_last_50后7个变体)和x2_increment(block A-E)都exit 0,结果卡见results/R2.md
+
+第1项 S2_window:按修订R2-a删掉w_last_50(4处:variants/corr_ids/neutralise/profile)后reran,
+exit 0,290.2s,peak anon 5.36GiB(此前两次exit 97的w_last_50已彻底移除)。BESTW按改动2规则选出
+p_last_30(=ts_pearson(day_last(Close),30)),hlL=3,Lnet train+11.6%,5个候选里最高。
+
+第2项 x2_increment.py(新写):F1=ts_spearman(day_last(Close),10)固定,F2=BESTW=p_last_30。
+block A组合书30行:w=1时3条known家族逐位一致(F1 Lnet_tr+10.38%,F2 Lnet_tr+12.41%,PASS);
+w=0行与R1数字14接近但不逐位相等,差值量级(Lnet -0.57~-0.67pp,Lshp -0.08~-0.09)落在R1自己
+记录的0.3~0.9pp区间内,known_stdamt_max9这条hlL从5变2、LTO差1.6~1.9pp,比另两条家族明显大。
+block B双重排序5本书:30%池覆盖率约0.29~0.30、多头端中位105~140只;10%池覆盖率约0.097、
+中位35~46只,F1在两条known家族上单侧LTO都偏高(14.75%~19.44%)。block C残差(6行,主口径①):
+F1对3条known家族R²=0.066/0.111/0.101(与R1的v_base版0.068/0.109/0.101高度吻合),F2对应R²=
+0.127/0.126/0.129——F2的原始面板R²比F1高,但S2_window的rank_corr_train(平滑交易信号口径)显示
+F1对known家族的|相关|反而比F2高(0.35~0.41 vs 0.30~0.35),两个口径排名相反,已写进结果卡"值得
+注意"。block D:F1多头端(Q10)在ctl_amt/ctl_cap/ctl_ivol/ctl_dvol20/known_stdamt_mean30上全部
+单调降到最低百分位(0.28~0.42),即多头端是"更不活跃更小更低波动"的票。block E:buyable=False
+下F1空头腿毛超额train从+30.34%降到+23.04%(降7.3pp),方向符合playbook§6.6。
+
+实现上改了一处:x1_identity.py/R1的组合公式w*pr_f+(1-w)*pr_k在w=0/1边界有0*NaN=NaN的浮点陷阱,
+会让权重为0那侧自己的缺失值漏进"应该只由另一侧决定"的边界书;改成边界处直接取对应一侧,中间
+3个w值公式不变。self_check()用bk.book_row在hl=0上直接比较(可证明的精确不变量,不经过半衰期
+扫描),--mock本机空跑确认过PASS,已写进结果卡。
+
+partura/books.py核对(只读未改):第61行ok=isfinite(sig)&isfinite(target),sig是平滑后信号;
+配合alphacube/metrics.py的ema_rows文档("missing in the output"),平滑不改变有效/缺失的格子
+范围,block B的掩码覆盖率解释成立。
+
+服务器运行正好2次(S2_window+exec x2_increment),全研究累计6次(含S0/S1/x1_identity/S2_window
+两次失败+这次成功+x2_increment),按修订R2-a"剩4次(含final)"的说法,本轮用掉2次后还剩4次。
+
+### 2026-10-05 00:07 [执行] R2 勘误:上一条日志的服务器运行计数写错了,更正如下
+
+上一条[执行]日志里"全研究累计6次...还剩4次"这句话前后口径不一致,混用了两种计数方式,更正:
+
+playbook §4 原文:"全研究的服务器运行控制在 8 次以内(含 final；不含预先跑好的 S0)"。按这个口径(不算
+S0,S2_window 两次 exit 97 的中断重试按同一个 tag 只算一次,不是三次),已用的是:S1_whatis(1)+
+x1_identity(2)+S2_window(3,本轮跑成)+x2_increment(4)= 4 次,与工单原文"都 exit 0 之后全研究还剩
+4 次(含最后的 final)"的说法一致(8-4=4)。上一条日志里把 S0 和 S2_window 的两次 exit 97 也计入
+"累计6次"是我自己多算的,不是这项研究的计数口径,后面不要沿用那句话里的"6次"。

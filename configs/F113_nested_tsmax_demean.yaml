@@ -50,14 +50,17 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
 corr_ids: [c1_b_max5, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c5_nopow15, c6_nomul_nosub,
            c7_nofold_in, c8_nofold_out, c9_rankfold, c10_medfold,
            n2_max79_plain, n4_dvol50_plain, m1_rel79_max, m2_rel50_absmax, m3_rel50_absmean,
-           w1_c4_62, w2_c4_102, kf_mean30, kf_max9, cb_c4_kf30]
+           w1_c4_62, w2_c4_102, kf_mean30, kf_max9, cb_c4_kf30,
+           f_orig, f_c4, f_m1, f_kf30, f_cb]
 
 diagnostics:
   decay:      [v_base]
-  by_year:    [v_base, c3_g_fold1, c9_rankfold, c4_nodemean_out, kf_mean30, cb_c4_kf30]
+  by_year:    [v_base, c3_g_fold1, c9_rankfold, c4_nodemean_out, kf_mean30, cb_c4_kf30,
+               f_orig, f_c4, f_m1, f_kf30, f_cb]
   neutralise: [v_base, c3_g_fold1, c9_rankfold, c4_nodemean_out, kf_mean30]
   profile:    [v_base, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c8_nofold_out, c9_rankfold,
-               n2_max79_plain, m1_rel79_max, kf_mean30, cb_c4_kf30]
+               n2_max79_plain, m1_rel79_max, kf_mean30, cb_c4_kf30,
+               f_orig, f_c4, f_m1, f_kf30, f_cb]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -95,3 +98,12 @@ stages:
       - {id: kf_mean30, group: known, expr: "cross_mean(day_std(Amt), 30)", why: "已知家族基准之一,**必须进同一张表**:06_baseline.md §8 那张已知家族表的半衰期很可能是用旧的多空口径选的(S0 跑的时候 books.rank_by 还是 'ls',R0 异常③),所以那里的 Lnet 不一定是多头最优半衰期下的数。放进这个阶段用当前 rank_by: long 重算一次,才能和候选公平比较"}
       - {id: kf_max9, group: known, expr: "cross_max(day_std(Amt), 9)", why: "已知家族基准之二(同上)。§8 记的是 hl=0 / Lnet +9.3%/+18.5%,而 R1 区块 5 用多头口径重选得到 hl=5(结果卡异常 1)。这条变体把这个矛盾一次解决"}
       - {id: cb_c4_kf30, group: increment, expr: "add(cs_rank(ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 30)), cs_rank(cross_mean(day_std(Amt), 30)))", why: "Q2 核心(增量的「相加」检验,playbook §6.2 指定的两种检验之一):把 c4 和已知家族各自转成当天截面秩再等权相加。两者的交易方向都是 -1,所以相加在方向上是一致的、不会互相抵消。判据:这条的多头腿两段都要比 kf_mean30 和 kf_max9 各自好 ≳2pp 才算有增量"}
+
+  - id: S_final
+    question: "留出段(holdout, 20230808 起)读一次:原式多头腿不可用/最好子结构(c4,m1)被已知家族碾压/相对已知家族无增量,这三条 train+valid 事前结论是否仍成立(判据 P0~P5,10_distilled.md §3,事前写死)"
+    variants:
+      - {id: f_orig, group: baseline, final: true, expr: "pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))", why: '原式(playbook 要求必含)。判据 P1:它的留出段多头腿若 Lnet ≥ +3% 且 Lshp ≥ +0.3,"原式多头腿不可用"这个结论被否定。'}
+      - {id: f_c4, group: candidate, final: true, expr: "ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 30)", why: "本研究最好的子结构,=「82 日内最大的(34 日相对 MAX)²」,与原式 rank 相关只有 +0.14(是换了一条因子,不是提纯)。选它当族代表的理由是顶档两段都不塌(07_S2_bench.md §7)。判据 P2/P3/P4。"}
+      - {id: f_m1, group: candidate, final: true, expr: "ts_max(ts_max(cs_demean(day_mean(Ret)), 50), 30)", why: "提纯产物,4 节点。十几个算子里两段一致 load-bearing 的只有第一次 cs_demean(H13)。判据 P2/P3/P4。"}
+      - {id: f_kf30, group: known, final: true, expr: "cross_mean(day_std(Amt), 30)", why: "已知家族基准(playbook 要求必含)= cross_mean(day_std(Amt), 30),事前排序里的第一推荐。判据 P0/P5(口径校准 + 基准自身是否稳)。"}
+      - {id: f_cb, group: increment, final: true, expr: "add(cs_rank(ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 30)), cs_rank(cross_mean(day_std(Amt), 30)))", why: '增量检验,c4 与已知家族各自当天截面秩等权相加(两者方向都是 -1,相加不会互相抵消)。判据 P3:若它比 f_kf30 的 Lnet 高 ≥ 3pp 且 Lshp 高 ≥ 0.3,"没有增量"被否定。'}

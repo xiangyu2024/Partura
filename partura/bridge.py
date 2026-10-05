@@ -31,11 +31,21 @@ def alphacube_root() -> Path:
     raise RuntimeError(f"AlphaCube not found; set ALPHACUBE_ROOT (tried {[str(c) for c in cands]})")
 
 
+_EXTENSIONS = {"tried": False}
+
+
 def ensure_alphacube_on_path() -> Path:
     root = alphacube_root()
     src = str(root / "src")
     if src not in sys.path:
         sys.path.insert(0, src)
+    if not _EXTENSIONS["tried"] and not os.environ.get("PARTURA_NO_EXT"):
+        # Partura's own kernels (partura/ops_ext.py) join AlphaCube's registry before anything parses.
+        _EXTENSIONS["tried"] = True
+        try:
+            from . import ops_ext  # noqa: F401
+        except Exception as exc:  # noqa: BLE001 - research must still run on the built-ins
+            print(f"[partura] operator extensions not loaded: {type(exc).__name__}: {exc}", file=sys.stderr)
     return root
 
 

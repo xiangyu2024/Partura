@@ -49,17 +49,12 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [s2_f_x60, s2_f_x241, s2_n_t50]
-  by_year:    [s2_f30, s2_f_x60, s2_n_t50]
-  neutralise: [s2_f30, s2_f_x60, s2_f_x241, s2_n_t50]
-  profile:    [s2_f30, s2_f_x60, s2_n_t50, s2_masktop]
-  conditional:
-    - {factor: v_base,    gate: ctl_price, buckets: 5}
-    - {factor: s2_f30,    gate: ctl_price, buckets: 5}
-    - {factor: s2_f_x60,  gate: ctl_price, buckets: 5}
-    - {factor: s2_masktop, gate: ctl_price, buckets: 5}
-  corr_ids: [s1_noMask, s1_plain30, s1_plain60, s1_noK, s1_x60,
-             s2_f30, s2_k30, s2_p30, s2_n30, s2_f_t50, s2_f_x60, s2_f_x241, s2_n_t50, s2_n_x241, s2_masktop]
+  decay:      [f_t50, f_known]
+  by_year:    [f_orig, f_nomask30, f_t50, f_x241, f_known]
+  neutralise: []
+  profile:    [f_orig, f_t50, f_known]
+  conditional: []
+  corr_ids:   [f_orig, f_nomask30, f_t50, f_x241, f_known]
 
 stages:
   - id: S0_baseline
@@ -94,3 +89,12 @@ stages:
       - {id: s2_n_t50,  group: window,  expr: "ts_scale(day_quantile(Close), 50)", why: "两节点 × 窗口 50:s1_plain60(+7.6%/+6.7%,hl 在 10 见顶)的邻域稳定性检查"}
       - {id: s2_n_x241, group: window,  expr: "cross_scale(day_quantile(Close), 241)", why: "两节点 × 窗口 241:两节点式子的窗口曲线有没有在 60 之后继续升"}
       - {id: s2_masktop, group: control, expr: "ts_scale(signedpower(cs_mask_top_replace_mean(add(day_quantile(Close), day_kurt(High)))), 30)", why: "**控制实验**:把遮最低一成(_neg)换成遮最高一成(cs_mask_top_replace_mean,算子池里存在、同为 nd/cs/unary arity 1)。区分「损害是端特异的(饿掉多头端原料)」还是「任何一成被拉平都伤」。这一条是防止主研过度解读 H4/H10 的"}
+
+  - id: F1_final
+    question: "留出段:去 mask 与长窗口这两条结构结论在用户测试段还在不在;家族是不是仍然明显更好"
+    variants:
+      - {id: f_orig,      group: baseline, expr: "ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)", why: "原式 + 多头最优半衰期 = 第一条基准(playbook §0.2)。必须进"}
+      - {id: f_nomask30,  group: distil,   expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30)", why: "只删 mask、窗口不动:H4 最干净的载体,也是五条里与原式 rank 相关最高的一条(+0.784)"}
+      - {id: f_t50,       group: distil,   expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50)", why: "**事前第一推荐**:去 mask × 窗口 50。固定半衰期五档全部高于原式同档,valid 的 Lnet 与 Lshp 全阶段最高,换手低于原式"}
+      - {id: f_x241,      group: distil,   expr: "cross_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 241)", why: "平台的长端:train 最好、换手最低、ctl_mom20 中性化 R² 最低(0.030),但 ρ(K1) 最高(+0.335)⇒ 「滑进成交额家族」那一端的代表"}
+      - {id: f_known,     group: known,    expr: "cross_max(day_std(Amt), 9)", why: "已知家族基准(= gates 里的 known_stdamt_max9)。必须进 —— 它是最终比较的对手"}

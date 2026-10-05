@@ -48,12 +48,13 @@ gates:
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
+corr_ids: [v_base, m_mean30, k_mean30, k_max10]   # R2:把 S1 那几条拉进 rank 相关矩阵,不重跑它们
 
 diagnostics:
   decay:      [v_base]
-  by_year:    [v_base]
-  neutralise: [v_base]
-  profile:    [v_base, m_mean30, m_mean60, n_pow3]
+  by_year:    [v_base, g_w25, k_mean30]
+  neutralise: [v_base, g_w25]
+  profile:    [v_base, m_mean30, m_mean60, n_pow3, g_w25]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -83,3 +84,34 @@ stages:
          why: "已知家族基准 1(手册要求的第二条基准)。同一条流水线、同一段上和候选比"}
       - {id: k_max10, group: benchmark, expr: "cross_max(day_std(Amt), 10)",
          why: "已知家族基准 2。注意:用户口里的是 cross_max(day_std(Amt), 9),但 9 不在 cross_max 的窗口池 [3,5,10,15,30,60,241] 里,所以用最近的 10 代替——在结果卡里写明这处替换"}
+
+  - id: S2_overlay
+    question: "R1 §A3 那点叠在已知家族(K1=cross_mean(day_std(Amt),30))上的多头增量(+2.5pp)是真的,还是三种廉价解释之一(H18 单点权重尖峰 / H17 任何弱相关第二信号 / 配置里复现不出来)?"
+    variants:
+      - {id: g_w25, group: combine,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.25))",
+         why: "主候选。§A3 在脚本里读到 hlL0 Lnet +15.1%/+23.8%、Lshp +2.30/+3.87。判据:配置里复现到 ±0.5pp;复现不了 → §A3 不可信,H11 回到未决"}
+      - {id: g_w15, group: combine,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.15))",
+         why: "H18 下沿。掉到家族线 +12.6%/+22.3% 以下 → 尖峰"}
+      - {id: g_w40, group: combine,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.40))",
+         why: "H18 上沿。等权(w=1)已知是负的(+11.9%/+19.9%),0.40 还在不在家族线以上决定平台有多宽"}
+      - {id: g_raw, group: combine,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))), 0.25))",
+         why: "疑点⑤:日轴记忆放不放在表达式里面。预期明显更差(整条式子只能有一个半衰期)。它是「m_mean30 这个升华为什么必须」的直接证据"}
+      - {id: g_k2w25, group: combine,
+         expr: "add(cs_rank(cross_max(day_std(Amt), 10)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.25))",
+         why: "换家族成员还成不成立(K2 单独 +13.7%/+22.2%)。两个成员都赢 → 增量不是挑家族挑出来的"}
+      - {id: g_tail, group: combine,
+         expr: "sub(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_quantile_q25(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)), 0.25))",
+         why: "疑点⑥ / H14 的形态:只罚 D30 最高一档,不用完整排名。不差于 g_w25 → 推荐能简化成「避开最差的 25%」。注意:工单原文写的是 cs_quantile_q75,但 study.sh src 查到 cs_quantile_q75(x) 的语义是『标记当天最高的 75%』(x ≥ 当日 25 分位),不是『x 高于 75 分位』;真正标记『最高 25%』(x ≥ 当日 75 分位)的是 cs_quantile_q25,已换成它,意图不变,结果卡里有完整说明"}
+      - {id: p_k2, group: placebo,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_max(day_std(Amt), 10)), 0.25))",
+         why: "安慰剂1:掺入家族第二成员。也抬到 +15% 一带 → g_w25 只是「家族内部分散」,H11 否定"}
+      - {id: p_ivol, group: placebo,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_std(Ret), 30)), 0.25))",
+         why: "安慰剂2:掺入波动水平(D 与 ctl_ivol 秩相关 −0.31,是最像的已知暴露)。一样好 → 任何温和风险类信号都行,H11 否定"}
+      - {id: p_cap, group: placebo,
+         expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(neg(log(day_last(Close)))), 0.25))",
+         why: "安慰剂3,同时是 H9 的判别实验:掺入规模代理(低价≈小市值,neg 之后与 D 的「高 D ↔ 小市值」同向)。它复现 g_w25 → 那份增量是规模倾斜,不是冻结盘口信息"}

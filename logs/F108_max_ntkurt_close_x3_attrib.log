@@ -1,0 +1,95 @@
+[mem] start: process anon ~ 0.33 GiB
+[mem] after panels+target: process anon ~ 0.59 GiB
+sign(K1,train)=-1  sign(D30,train)=-1  (both expected -1, 'high=bad')
+[mem] after setup (K1/D30/BASE/ok1/ok2/okD/rk/rD/combo/held1/held2/r_full): process anon ~ 1.25 GiB
+
+======== SelfCheck -- book1/book2 vs S2_overlay's own engine reading (must match within 0.5pp) ========
+  [train] book1(K1 alone)   Lnet  +12.6% Lgross  +15.1% Lshp +1.77 LTO  3.4% N   361   vs expect Lnet +12.6%  diff -0.02pp  OK
+  [train] book2(g_w25 repl) Lnet  +15.1% Lgross  +19.0% Lshp +2.31 LTO  5.1% N   361   vs expect Lnet +15.1% Lshp +2.31  diff +0.05pp  OK
+  [valid] book1(K1 alone)   Lnet  +22.3% Lgross  +24.4% Lshp +3.45 LTO  2.8% N   467   vs expect Lnet +22.3%  diff -0.03pp  OK
+  [valid] book2(g_w25 repl) Lnet  +23.7% Lgross  +27.2% Lshp +3.87 LTO  4.5% N   467   vs expect Lnet +23.7% Lshp +3.86  diff +0.05pp  OK
+  self-check passed on both splits -- proceeding to A/B/C/D.
+[mem] after SelfCheck: process anon ~ 1.27 GiB
+
+======== A. H16 -- how much of the increment is the can't-buy(NaN label) bookkeeping effect ========
+  [train] NaN-excluded, renormalised: book1' Lnet  +12.4% Lgross  +15.8% Lshp +1.77 LTO  4.4% N   348  book2' Lnet  +14.9% Lgross  +19.2% Lshp +2.28 LTO  5.6% N   356  increment before +2.56pp -> after +2.52pp
+  [train] dropped(book1\book2):   7.5% 标签NaN(买不进) | 次日真实超额(cell_ann,年化%) NaN组 +2005.1%(avgN 2.5)  非NaN组   -0.4%(avgN 103.9)
+  [train] added(book2\book1):     0.7% 标签NaN(买不进) | 次日真实超额(cell_ann,年化%) NaN组 +1371.9%(avgN 0.1)  非NaN组  +11.5%(avgN 111.5)
+  [valid] NaN-excluded, renormalised: book1' Lnet  +22.6% Lgross  +26.9% Lshp +3.47 LTO  5.7% N   433  book2' Lnet  +23.9% Lgross  +28.3% Lshp +3.86 LTO  5.9% N   451  increment before +1.47pp -> after +1.30pp
+  [valid] dropped(book1\book2):  14.3% 标签NaN(买不进) | 次日真实超额(cell_ann,年化%) NaN组 +1568.2%(avgN 0.4)  非NaN组  +22.0%(avgN 121.3)
+  [valid] added(book2\book1):     1.4% 标签NaN(买不进) | 次日真实超额(cell_ann,年化%) NaN组 +1377.7%(avgN 0.1)  非NaN组  +26.7%(avgN 139.7)
+[mem] after A: process anon ~ 1.24 GiB
+
+======== B. where the increment comes from: D30 decile / r=BASE^(1/3) bucket of dropped & added names ========
+
+======== B.decile(D30) [train] ========
+    decile 0 (9=worst D30): dropped share   0.0%   added share  21.1%
+    decile 1 (9=worst D30): dropped share   0.0%   added share  24.4%
+    decile 2 (9=worst D30): dropped share   0.0%   added share  22.9%
+    decile 3 (9=worst D30): dropped share   0.0%   added share  18.0%
+    decile 4 (9=worst D30): dropped share   0.2%   added share  10.7%
+    decile 5 (9=worst D30): dropped share   1.9%   added share   2.8%
+    decile 6 (9=worst D30): dropped share   7.5%   added share   0.0%
+    decile 7 (9=worst D30): dropped share  17.1%   added share   0.0%
+    decile 8 (9=worst D30): dropped share  24.2%   added share   0.0%
+    decile 9 (9=worst D30): dropped share  48.2%   added share   0.0%
+
+======== B.rband(r) [train] ========
+    r in [0,6): dropped share  44.5%   added share  79.1%
+    r in [6,10): dropped share  21.9%   added share  16.3%
+    r in [10,15): dropped share  13.0%   added share   3.9%
+    r in [15,20): dropped share   6.9%   added share   0.5%
+    r in [20,24.9): dropped share   8.2%   added share   0.0%
+    r in [24.9,26): dropped share   2.8%   added share   0.0%
+    book3 (book1 minus only its r>=24.9 names): Lnet  +12.9% Lgross  +16.0% Lshp +1.82 LTO  4.2% N   357  incr_full(book2-book1) +2.56pp   incr_r>=24.9-only +0.27pp   capture +10.5% of total increment
+
+======== B.decile(D30) [valid] ========
+    decile 0 (9=worst D30): dropped share   0.0%   added share  27.7%
+    decile 1 (9=worst D30): dropped share   0.0%   added share  26.1%
+    decile 2 (9=worst D30): dropped share   0.0%   added share  22.1%
+    decile 3 (9=worst D30): dropped share   0.0%   added share  15.9%
+    decile 4 (9=worst D30): dropped share   0.0%   added share   7.4%
+    decile 5 (9=worst D30): dropped share   3.2%   added share   0.8%
+    decile 6 (9=worst D30): dropped share  13.6%   added share   0.0%
+    decile 7 (9=worst D30): dropped share  19.3%   added share   0.0%
+    decile 8 (9=worst D30): dropped share  25.8%   added share   0.0%
+    decile 9 (9=worst D30): dropped share  38.1%   added share   0.0%
+
+======== B.rband(r) [valid] ========
+    r in [0,6): dropped share  49.5%   added share  85.5%
+    r in [6,10): dropped share  23.6%   added share  12.2%
+    r in [10,15): dropped share  13.1%   added share   2.1%
+    r in [15,20): dropped share   6.0%   added share   0.1%
+    r in [20,24.9): dropped share   5.6%   added share   0.0%
+    r in [24.9,26): dropped share   1.8%   added share   0.0%
+    book3 (book1 minus only its r>=24.9 names): Lnet  +22.5% Lgross  +25.0% Lshp +3.49 LTO  3.3% N   464  incr_full(book2-book1) +1.47pp   incr_r>=24.9-only +0.19pp   capture +12.7% of total increment
+[mem] after B: process anon ~ 1.30 GiB
+
+======== C. by calendar year (utrain = train+valid, 2018..2023) -- book1 vs book2, net excess & pure-long sharpe ========
+  2018  book1 Lnet  +17.3% Lgross  +20.6% Lshp +2.82 LTO  4.3% N   316  |  book2 Lnet  +21.5% Lgross  +26.2% Lshp +3.72 LTO  6.1% N   316  |  incr Lnet  +4.2pp Lshp +0.90
+  2019  book1 Lnet  +10.1% Lgross  +12.7% Lshp +1.91 LTO  3.4% N   341  |  book2 Lnet  +11.9% Lgross  +15.7% Lshp +2.61 LTO  5.0% N   341  |  incr Lnet  +1.8pp Lshp +0.70
+  2020  book1 Lnet   +6.6% Lgross   +9.2% Lshp +0.78 LTO  3.4% N   369  |  book2 Lnet   +9.3% Lgross  +13.1% Lshp +1.26 LTO  5.0% N   369  |  incr Lnet  +2.7pp Lshp +0.49
+  2021  book1 Lnet  +15.9% Lgross  +18.1% Lshp +2.00 LTO  2.9% N   417  |  book2 Lnet  +17.4% Lgross  +21.1% Lshp +2.21 LTO  4.8% N   417  |  incr Lnet  +1.6pp Lshp +0.21
+  2022  book1 Lnet  +24.5% Lgross  +26.7% Lshp +3.69 LTO  2.8% N   458  |  book2 Lnet  +26.9% Lgross  +30.4% Lshp +4.34 LTO  4.7% N   458  |  incr Lnet  +2.3pp Lshp +0.65
+  2023  book1 Lnet  +18.2% Lgross  +20.6% Lshp +3.00 LTO  3.1% N   483  |  book2 Lnet  +18.3% Lgross  +21.8% Lshp +3.03 LTO  4.7% N   483  |  incr Lnet  +0.0pp Lshp +0.03
+[mem] after C: process anon ~ 1.31 GiB
+
+======== D. fine weight grid (hl=0 throughout; universe held fixed at ok2 across all w for a clean sweep -- NB even w=0 stays on ok2, not ok1, because 0*NaN=NaN propagates through rk+w*rD; see result card) ========
+  w=0    [train] Lnet  +13.9% Lgross  +16.4% Lshp +1.96 LTO  3.3% N   361
+  w=0    [valid] Lnet  +22.3% Lgross  +24.4% Lshp +3.46 LTO  2.8% N   467
+  w=0.1  [train] Lnet  +13.8% Lgross  +16.8% Lshp +1.99 LTO  4.0% N   361
+  w=0.1  [valid] Lnet  +23.3% Lgross  +25.9% Lshp +3.65 LTO  3.4% N   467
+  w=0.15 [train] Lnet  +13.8% Lgross  +17.1% Lshp +2.03 LTO  4.4% N   361
+  w=0.15 [valid] Lnet  +23.5% Lgross  +26.3% Lshp +3.71 LTO  3.8% N   467
+  w=0.25 [train] Lnet  +15.1% Lgross  +19.0% Lshp +2.31 LTO  5.1% N   361
+  w=0.25 [valid] Lnet  +23.7% Lgross  +27.2% Lshp +3.87 LTO  4.5% N   467
+  w=0.4  [train] Lnet  +14.2% Lgross  +18.5% Lshp +2.23 LTO  5.7% N   361
+  w=0.4  [valid] Lnet  +23.5% Lgross  +27.5% Lshp +4.00 LTO  5.3% N   467
+  w=0.6  [train] Lnet  +13.1% Lgross  +17.7% Lshp +2.08 LTO  6.2% N   361
+  w=0.6  [valid] Lnet  +22.2% Lgross  +26.5% Lshp +3.98 LTO  5.8% N   467
+  w=1    [train] Lnet  +11.1% Lgross  +16.4% Lshp +1.87 LTO  6.9% N   361
+  w=1    [valid] Lnet  +19.2% Lgross  +24.1% Lshp +3.68 LTO  6.5% N   467
+[mem] end: process anon ~ 1.28 GiB
+
+[x3_attrib done]
+[partura exit 0 2026-10-05_14:53:34]

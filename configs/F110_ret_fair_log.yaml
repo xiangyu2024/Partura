@@ -46,19 +46,13 @@ gates:
   known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
   known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
-corr_ids: [v_base, w_cmT20, w_cmD20, w_cmDsig20, w_cvxD20, w_cmD60, w_cmD20lag10, w_cmDcc20, w_known30]
+corr_ids: [v_base, f_orig, f_cmT20, f_cvxD20, f_cmDsig20, f_known30]
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [v_base, w_cmD20]
-  by_year:    [v_base, w_cmD20, w_known30]
-  neutralise: [v_base, w_cmD20]
-  profile:    [v_base, w_cmD20]
-  conditional:
-    - {factor: v_base, gate: ctl_cap, buckets: 5}
-    - {factor: v_base, gate: ctl_amt, buckets: 5}
-    - {factor: w_cmD20, gate: ctl_cap, buckets: 5}
+  by_year:  [f_orig, f_cvxD20, f_cmDsig20, f_cmT20, f_known30]
+  profile:  [f_cvxD20, f_known30]
 
 stages:
   - id: S0_baseline
@@ -77,3 +71,12 @@ stages:
       - {id: w_cmD20lag10, group: lag,     expr: "cross_mean(cross_delay(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 10), 20)", why: "砍掉最近 10 天(H15)。lag profile 显示多头腿毛超额在 lag 0~10 为负、lag 20~40 才转正;若砍掉不变差而换手更低 ⇒ H15 成立,否则盒式平滑的好处纯粹是换手(H16)"}
       - {id: w_cmDcc20,    group: discrim, expr: "cross_mean(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)", why: "日内收益换成收盘到收盘收益(H17)。若与 w_cmD20 的 rank corr > 0.9 且两本书在噪声内,候选就是普通的 20 日反转,是已知暴露"}
       - {id: w_known30,    group: known,   expr: "cross_mean(day_std(Amt), 30)", why: "用户定的已知家族基准,放在同一张表同一套口径里对照(它的同口径数字:train Ln +12.6%/Lshp +1.78,valid +22.3%/+3.46)"}
+
+  - id: S_final
+    question: "5 条最终候选在用户测试段上的纯多头读数(整个研究唯一一次读留出段)"
+    variants:
+      - {id: f_orig, group: final, final: true, profile: true, expr: "mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))", why: "用户定的第一条基准"}
+      - {id: f_cmT20, group: final, final: true, profile: true, expr: "cross_mean(mul(div(sub(day_last(Close), day_first(Open)), day_first(Open)), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5))))), 20)", why: "唯一和原式 corr > 0.8 的候选,按规矩只有它算提纯;是平滑 vs 结构归因的中间锚点"}
+      - {id: f_cvxD20, group: final, final: true, profile: true, expr: "cross_mean(mul(div(sub(day_last(Close), day_first(Open)), day_first(Open)), abs_(div(sub(day_last(Close), day_first(Open)), day_first(Open)))), 20)", why: "全研究多头腿最高且两段最一致(7.9 vs 8.1);只用当天 Open/Close,Volume/Ret 两个字段全删"}
+      - {id: f_cmDsig20, group: final, final: true, profile: true, expr: "cross_mean(mul(div(sub(day_last(Close), day_first(Open)), day_first(Open)), day_std(Ret)), 20)", why: "和第一推荐 corr +0.899,机制的孪生对照;两条都站住才说明机制成立"}
+      - {id: f_known30, group: final, final: true, profile: true, expr: "cross_mean(day_std(Amt), 30)", why: "用户定的第二条基准,同时是留出段的 canary"}
