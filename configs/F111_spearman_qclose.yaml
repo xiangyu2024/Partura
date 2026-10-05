@@ -47,13 +47,14 @@ gates:
   known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
-corr_ids: [v_base, m_mktcorr, s_pearson, l_mean, l_last, l_amt, t_tsrank]   # R1
+corr_ids: [v_base, m_mktcorr, s_pearson, l_mean, l_last, l_amt, t_tsrank,
+           a_last_10, w_last_5, w_last_20, w_last_30, w_last_50, w_q_30, pl_last_10, p_last_30]   # R2
 
 diagnostics:
   decay:      [v_base]
   by_year:    [v_base]
-  neutralise: [v_base, m_mktcorr, t_tsrank]   # R1: 追加 m_mktcorr, t_tsrank
-  profile:    [v_base, m_mktcorr, t_tsrank]   # R1: 追加 m_mktcorr, t_tsrank
+  neutralise: [v_base, m_mktcorr, t_tsrank, w_last_30, w_last_50]   # R1: 追加 m_mktcorr, t_tsrank；R2: 追加 w_last_30, w_last_50
+  profile:    [v_base, m_mktcorr, t_tsrank, a_last_10, w_last_30, w_last_50]   # R1: 追加 m_mktcorr, t_tsrank；R2: 追加 a_last_10, w_last_30, w_last_50
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -85,3 +86,31 @@ stages:
       - {id: t_tsrank, group: substitute,
          expr: "ts_rank(day_quantile(Close), 10)",
          why: "H2:纯粹的 10 日秩位置动量,没有「乘市场趋势方向」这个条件化。原式明显优于它=条件化有用;相当=这条因子就是个 10 日动量的写法"}
+
+  - id: S2_window
+    question: "窗口 d 这根轴上有东西吗?10 天只是任意选择,还是 5~50 里有一个明显更好的频段?"
+    variants:
+      - {id: a_last_10, group: anchor,
+         expr: "ts_spearman(day_last(Close), 10)",
+         why: "锚点:和 S1 的 l_last 是同一条表达式(面板走缓存,几乎不花时间),用来保证这一阶段的固定半衰期表和 rank 相关矩阵自成一体,同时当一次可复现性自检 —— 数字必须复现 S1 的 l_last"}
+      - {id: w_last_5, group: window,
+         expr: "ts_spearman(day_last(Close), 5)",
+         why: "H12:更短的频段。若 5 天明显更好,效应是周内的条件共动,和慢速的 day_std(Amt) 家族无关"}
+      - {id: w_last_20, group: window,
+         expr: "ts_spearman(day_last(Close), 20)",
+         why: "H12:d 翻一倍。和 a_last_10 一起给出 d 轴的斜率方向"}
+      - {id: w_last_30, group: window,
+         expr: "ts_spearman(day_last(Close), 30)",
+         why: "H12:月度级频段。若这里开始变好并且和 known_* 的 rank 相关上升,说明它正在滑进已知家族"}
+      - {id: w_last_50, group: window,
+         expr: "ts_spearman(day_last(Close), 50)",
+         why: "H12:窗口池的上界(ts_* 的池是 [1,5,10,20,30,40,50],没有 60)。季度级秩空间共动 = 一个 beta/质量类特征,是 d 轴的端点读数"}
+      - {id: w_q_30, group: window,
+         expr: "ts_spearman(day_quantile(Close), 30)",
+         why: "交叉检验:把 d=30 放回原来的叶子。若它和 w_last_30 相当,说明 H7(日内折叠多余)在长窗口上照样成立,d 的结论不是叶子换来的"}
+      - {id: pl_last_10, group: substitute,
+         expr: "ts_pearson(day_last(Close), 10)",
+         why: "把 H6(秩不是承重件)和 H7(日内折叠多余)两个已确立的简化叠在一起 = 最大程度提纯的那个写法,而且 ts_pearson 是 chunked matmul 实现、比带 Python 循环的 ts_spearman 快得多。这是提纯交付物的候选"}
+      - {id: p_last_30, group: substitute,
+         expr: "ts_pearson(day_last(Close), 30)",
+         why: "d=10 上 Pearson 与 Spearman 等价(0.978),但长窗口里原始价格水平带趋势、逐股标准化压不住,预期两者开始分叉。若 30 天上 Pearson 也不塌,说明秩在任何频段都不承重(提纯更彻底);若塌了,说明长窗口必须用秩"}

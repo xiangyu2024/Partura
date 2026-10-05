@@ -1,6 +1,6 @@
 # lead:F107_abs_demean_skew_low#2 — agent ad65bac7d918bc9fd(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 14:20,最后一次动作 10-04 14:29;工具调用 18 次
+- 状态:**已返回结果**;开始 10-04 14:20,最后一次动作 10-04 14:43;工具调用 27 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F107_abs_demean_skew_low/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -998,6 +998,246 @@ echo OK2
 
 ```
 OK2
+```
+
+**10-04 14:30 · Bash** — Append interpretation to x2 elevate note
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat >> notes/F107_abs_demean_skew_low/07x_2_elevate.md <<'MDEOF'
+
+---
+
+## 解读(主研,第 2 轮)
+
+x2 是为「**多头腿能不能靠结构、而不只是靠平滑提纯**」而写的,六节各管一件事。结论:**六节里五节是否定的,
+一节(§c)给出了机制解释但指向另一条因子。这一次探针把这棵树上剩下的结构空间清空了。**
+
+### §a — H15 已确立:面板不一致是边界伪影,x1 的候选名单可信
+
+三个观测同时对上「引擎在表达式内部重算原式时带了一层 universe/停牌 mask,而缓存面板没有」这条解释:
+8 个最大差格子**全部**是「窗口内只有 1 个有限观测、当天 base 为 NaN」;`|diff|>0.05` 的 16,724 格(0.31%)
+mean finite-days-in-window **19.4**(全体 58.1);**仅 numpy 有限 24,927 对仅引擎有限 262**(引擎侧少了格子,方向正确)。
+**但真正决定性的不是这些,而是 book 级的对照**:m10~m120 的 Lnet,x1(numpy)与引擎差 **≤0.6pp**,全在 ±3pp 噪声带内。
+→ **x1 §4/§5 的时间尺度表(候选名单所依赖的那张表)在排序上可信,不需要重建。**
+**这条坑的正确处理方式是「知道它存在、绕开它」,不是去修它**:做 book 级判断用引擎数字,
+numpy 探路只用来排序和找方向。(遗留的小疑点:`p_nodemean` / `p_rank` 的空头腿 x1 与引擎差 1.4pp、LS 差 0.06~0.23,
+这两个变体**不含** `cross_mean`,所以不是本条原因,来源不明;只影响空头腿,对结论不关键,**不再投入**。)
+
+### §b — H13 被否定:折叠的不对称是真的,但做不成可交易的结构
+
+x1 §1 发现 `abs_` 把一个「左悬崖、右斜坡、最优点在 −0.375」的形状压成了对称的 V,这是这棵树上**唯一有结构理由的升华线索**。
+x2 把它做成了书,结果是**train 上很漂亮、valid 上作废**:
+
+| | train argmax | 该点在 valid | valid 自己的 argmax |
+|---|---|---|---|
+| mean20\|B−c\| | c=−0.4(**+7.7%**) | **+2.2%** | c=**0**(+7.5%) |
+| mean60\|B−c\| | c=−0.4(**+9.2%**) | **+5.2%** | c=−0.2(+6.9%);c=0 是 +6.6% |
+| mean20(\|B\|+λB) | λ=**+0.6**(+7.8%) | **+1.4%** | λ=**−0.3**(+6.7%)—— **符号翻转** |
+| mean60(\|B\|+λB) | λ=+0.6(+7.4%) | +5.2% | λ=+0.3(+6.3%) |
+
+**两段的最优点不一致,20 日那一族连符号都翻。** 在**固定 hl20**(排掉平滑的干扰)下看得更干净:
+`|B−(−0.4)|` Lnet tr **+5.6%** / va **+2.1%**,对 v_base 的 +1.1% / +3.0% —— **train 升 4.5pp,valid 降 0.9pp,两段反向**;
+毛超额同样(tr +9.4→+14.5,va +11.4→+11.0)。
+→ **c 与 λ 是在 train 上拟合出来的常数,不外推。** 按硬规矩 6(两段不同向的改进不算改进),**H13 被否定**。
+写报告时要写成:「折叠的不对称在样本内是真实的(事件层最优桶在 −0.375),但把它写进表达式之后在 valid 上不复现 ——
+这棵树没有可交易的结构升华空间。」
+
+### §c — H16:`cs_demean` 到底在量什么(机制,两段同向,但指向另一条因子)
+… (58 行略) …
+**这是整份研究里唯一一处混合看起来有用的地方,但它只有一年、而且 2020 是创业板涨跌幅放宽那一年(`03` 记的制度变化),
+按 playbook §6.4,只靠某一年的规律最多算「合理但未坐实」,不能用来翻结论。**
+
+### x2 整体的意义
+
+**这一次探针的作用是「清空」**:它把这棵树上**所有**还没试过的结构方向(移心、倾斜、形状同步性、去掉与峰度共享的部分)
+一次性做成书并在 valid 上检验,**全部不通过**;同时把唯一的方法学疑点(面板不一致,H15)排掉,
+让 x1 的探路结果可以放心引用。**在它之后,这条因子已经没有「再想一个变体」的空间了 —— 该去读留出段了。**
+MDEOF
+echo OK3
+```
+
+```
+OK3
+```
+
+**10-04 14:30 · agent 的话**
+
+Now the pre-registration — candidates and criteria, before the holdout read.
+
+**10-04 14:32 · 写文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/10_distilled.md`(5128 字符)
+
+**10-04 14:32 · agent 的话**
+
+Now the order for the holdout read.
+
+**10-04 14:33 · 写文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/orders/R2.md`(5073 字符)
+
+**10-04 14:33 · agent 的话**
+
+Now the full state rewrite — the handoff page.
+
+**10-04 14:37 · 写文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`(23430 字符)
+
+10-04 14:38 · 读 `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+**10-04 14:42 · 写文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`(24708 字符)
+
+**10-04 14:42 · agent 的话**
+
+Now the journal entry.
+
+**10-04 14:43 · Bash** — Write round-2 journal entry
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F107_abs_demean_skew_low "[主研] 第 2 轮:H14/H13/H15/H4 全部落地,四个升华方向在 valid 上全不通过 → 候选与判据写死,下 R2 读留出段" <<'EOF'
+**看到了什么(引擎数字,全部来自 results/R1.md 与 07x_2_elevate.md)。**
+
+1. **H14 已确立,而且方向是「对手更好」。** m20 +4.8%/+7.3% 对 m20_absret +4.9%/**+13.8%**;
+   m60 +5.6%/+6.5% 对 m60_absret +6.2%/**+14.8%**;r_absret 单独 +5.3%/+14.5%、Lshp 2.27、rIC +0.0449/+0.0493。
+   train 差 ≤0.6pp(噪声内),**valid 上日频替身高 6.5~8.3pp,rIC 近乎翻倍**。第 1 轮定的判据(差 ≤3 点或两段不同向)满足。
+   → **这棵树读的 241 根分钟最低价不只是没有增量,是负贡献**:把同样的「去均值 + 折叠 + 20 日记忆」
+   施加在一个朴素日频收益上就更好。而 m20_absret 与 config 里的 g_absidio20 是**逐字相同的表达式**,
+   与 ctl_dvol20 秩相关 −0.81 → 它就是「低特质波动」这个已知暴露。
+
+2. **H13 被否定。** x2 §b:mean20|B−c| 在 train 上 argmax c=−0.4(+7.7%),该点 valid 只 **+2.2%**,
+   而 valid 自己最好的是 c=0(+7.5%);λ 在 20 日那一族上**符号翻转**(train 选 +0.6、valid 偏 −0.3)。
+   固定 hl20 下更干净:|B−(−0.4)| tr +5.6% / va +2.1% 对原式 +1.1%/+3.0% —— **train 升 4.5pp、valid 降 0.9pp,两段反向**。
+   → 折叠的不对称(x1 §1 的最优桶在 −0.375)是真实的,但 c/λ 是 train 上拟合的常数,**做不成可交易的结构**。
+
+3. **H15 已确立,x1 可以放心引用。** 8 个最大差格子全部是「窗口内仅 1 个有限观测、当天 base 为 NaN」;
+   |diff|>0.05 的 0.31% 格子 mean finite-days 19.4(全体 58.1);仅 numpy 有限 24,927 对仅引擎有限 262(引擎侧多一层 mask)。
+   **决定性的是 book 级:m10~m120 的 Lnet,x1 与引擎差 ≤0.6pp,全在噪声带内。**
+   这条坑的正确处理是「知道它、绕开它」,不是去修它。
+
+4. **H4 已确立 —— 这就是结论。** x2 §e 把八条候选(三条引擎变体 + 五条升华候选,**所有还活着的方向**)对 K 做了三个检验:
+   对 K 取残差的 Lnet **在 valid 上全为负**(−0.3 ~ −9.9);`rank F+rank K` 与 `0.5rankF+rankK`
+   = **十六个组合,valid 上无一超过 K 单独的 +22.3%**;最锋利的是「K 最高十分位内按 F 分三档」——
+   train 上 F 有排序能力(m60 +9.2/+20.6/+18.2),**valid 上翻向**(+27.7/+26.9/+25.1),
+   而「K top 落进 F 底 30%」那批在 valid 上是 **+26.6% 对 +26.6%,一点差别都没有**。
+   → **「用这条因子给已知家族的头部做一道筛」在 train 上看起来值钱,在 valid 上是零。**
+
+5. **归因做干净了,而且没花额外运行。** v_base / m10 / m20 在多头口径下**都选到 hl20**,
+   所以主表的 Lgross 本来就是同一半衰期下的数字:毛超额 +9.4%/+11.4% → **+6.9%/+9.5%(降 2.5/1.9pp)**,
+   换手 10.9% → 2.8%,净超额因此升 3.7/4.3pp。**改进 100% 来自换手。**
+   (R1 工单里要的「固定半衰期毛超额表」引擎这次没产出,但这条替代路径让它变成不必要的,所以没有为它新起运行。)
+
+6. **一个意外(正面的,但指向别处)—— 立为 H16。** x2 §c:只因 cs_demean 才进入多头十分位的那 3.5%/3.6% 名字,
+   次日超额 **+13.4%/+16.2%**,它们的 corr60(A,μ) 百分位 **0.83/0.84**;只在不去均值版入选的那组 −2.7%/−6.0%、百分位 0.40/0.31。
+   → **cs_demean 在偷偷量「我的日内价格水平形状跟不跟当天全市场的形状走」(60 日尺度的形状同步性)。**
+   **这和 H7 不是一回事**(H7 测的是分钟收益的同步性,ρ 仅 0.13,已被否定)—— 这个区分值得记住。
+   但 corr60(A,μ) 单独 ρ(v_base) 只有 0.51(换了一条因子)、对 K 残差 −2.7%/−6.8%,**救不了这条因子**。
+
+**判断。** 假设表上 16 条**没有一条停在「未验证」**;四个结构升华方向(移心/倾斜、形状同步性、去掉与峰度共享的部分、
+换记忆形式)在 valid 上**全部不通过**。结论已经成型且是否定的:
+… (11 行略) …
+槽位给了能回答别的问题的第 4、5 条 —— 这是事前的取舍,代价已写进 10_distilled.md,将来要写进 11_risks.md);
+不把 H16 做成本研究的候选(ρ 0.51,是另一条因子,写进 12_next.md);
+不为补「固定半衰期毛超额表 / gates 版 neutralise 表」新起运行(已有替代路径);
+不去统一 cross_delay/ts_delay、不去修 cross_mean 面板不一致(H15 已确立为边界伪影);不下第二张 final 工单。
+
+**落盘。** state.md 整页覆盖重写(8 节,假设表扩到 16 条);05_hypotheses.md 追加「第 2 轮裁决」+ H16;
+07_S1_parts.md / 07_S2_memory.md / 07x_2_elevate.md 各补「解读(主研,第 2 轮)」一节;
+**新建 10_distilled.md 的「读留出段之前」(候选 + 排序 + 判据 0~4,已写死,不再改)**;新建 orders/R2.md(kind: final)。
+EOF
+echo "--- note written ---"
+```
+
+```
+已记入 notes/F107_abs_demean_skew_low/journal.md(9 条)
+--- note written ---
+```
+
+**10-04 14:43 · Bash** — Verify files written and holdout still unread
+
+```bash
+cd /Users/wxy/Desktop/Partura && ls -la notes/F107_abs_demean_skew_low/ notes/F107_abs_demean_skew_low/orders/ && echo "=== 留出段状态 ===" && ./scripts/study.sh brief F107_abs_demean_skew_low 2>/dev/null | grep -i "留出段\|阶段:" | head -5
+```
+
+```
+notes/F107_abs_demean_skew_low/:
+total 352
+drwxr-xr-x@ 16 wxy  staff    512 Oct  4 14:42 .
+drwxr-xr-x@ 19 wxy  staff    608 Oct  4 13:07 ..
+-rw-r--r--@  1 wxy  staff   3070 Oct  4 12:55 02_operators.md
+-rw-r--r--@  1 wxy  staff   2863 Oct  4 12:55 03_decomposition.md
+-rw-r--r--@  1 wxy  staff   2218 Oct  4 12:28 04_grammar.md
+-rw-r--r--@  1 wxy  staff  16788 Oct  4 14:28 05_hypotheses.md
+-rw-r--r--@  1 wxy  staff   3894 Oct  4 13:05 06_baseline.md
+-rw-r--r--@  1 wxy  staff  12378 Oct  4 14:28 07_S1_parts.md
+-rw-r--r--@  1 wxy  staff  12730 Oct  4 14:29 07_S2_memory.md
+-rw-r--r--@  1 wxy  staff  10794 Oct  4 13:06 07x_1_anatomy.md
+-rw-r--r--@  1 wxy  staff  23491 Oct  4 14:30 07x_2_elevate.md
+-rw-r--r--@  1 wxy  staff   9032 Oct  4 14:32 10_distilled.md
+-rw-r--r--@  1 wxy  staff  17483 Oct  4 14:43 journal.md
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:33 orders
+drwxr-xr-x@  3 wxy  staff     96 Oct  4 14:16 results
+-rw-r--r--@  1 wxy  staff  39872 Oct  4 14:42 state.md
+
+notes/F107_abs_demean_skew_low/orders/:
+total 40
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:33 .
+drwxr-xr-x@ 16 wxy  staff    512 Oct  4 14:42 ..
+-rw-r--r--@  1 wxy  staff  10905 Oct  4 13:42 R1.md
+-rw-r--r--@  1 wxy  staff   8166 Oct  4 14:33 R2.md
+=== 留出段状态 ===
+- **阶段:研究进行中(还没有结构化结论)**
+- 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
+> **`10_distilled.md` 的「读留出段之前」(候选 + 判据,已写死)**、`orders/R2.md`(kind: final)。
+**研究在实证上已经做完,而且结论是否定的;本轮已把候选与判据写死,下了 R2(kind: final)去读留出段。**
+写 `09_diagnosis.md` / `10_distilled.md` 的「读完留出段之后」/ `11_risks.md` / `12_next.md` / `08_variants.md`,
+```
+
+**10-04 14:43 · agent 的话**
+
+All deliverables are on disk, holdout still unread, R2 is a `final` order.
+
+**本轮裁决(第 2 轮)**
+
+R1 的引擎数字把四条关键假设一次全部落地,方向一致且是否定的:
+
+- **H14 已确立,而且是「对手更好」** — `m20` +4.8%/+7.3% 对 `m20_absret` +4.9%/**+13.8%**;`m60` +5.6%/+6.5% 对 `m60_absret` +6.2%/**+14.8%**。train 差 ≤0.6pp,valid 上日频 `|特质收益|` 版高 6.5~8.3pp、rIC 近乎翻倍。241 根分钟最低价是负贡献;而 `m20_absret` 与 `g_absidio20` 逐字同式、与 `ctl_dvol20` 秩相关 −0.81,就是「低特质波动」这个已知暴露。
+- **H13 被否定** — 固定 hl20 下 `|B−(−0.4)|` tr +5.6% / va +2.1% 对原式 +1.1%/+3.0%,两段反向;λ 在 20 日族上符号翻转。折叠不对称是真的,做不成可交易结构。
+- **H4 已确立(这就是结论)** — 八条候选 × 两种权重 = 十六个「与 K 相加」的组合,valid 上**无一超过 K 单独的 +22.3%**;对 K 取残差的 Lnet valid 上全为负;最锋利的是「K 最高十分位内按 F 分三档」在 valid 上翻向,而「K top 落进 F 底 30%」那批 valid 上是 +26.6% 对 +26.6%。
+- **H15 已确立** — 面板不一致是上市/复牌边界伪影,book 级影响 ≤0.6pp，x1 可放心引用。
+- **归因没花额外运行** — `v_base`/`m10`/`m20` 都选到 hl20,主表 `Lgross` 本来就是同半衰期对照:毛超额 +9.4%/+11.4% → **+6.9%/+9.5%(降)**,换手 10.9% → 2.8%。改进 100% 来自平滑。
+- **一个意外,立为 H16** — `cs_demean` 量的是 60 日尺度的**形状**同步性(只因它入选的名字次日超额 +13.4%/+16.2%、`corr60(A,μ)` 百分位 0.83/0.84),**与被否定的 H7(分钟收益同步性,ρ 0.13)不是一回事**;但 ρ(v_base) 仅 0.51,是另一条因子,移交 `12_next.md`。
+
+**决定**:假设表 16 条无一停在「未验证」,四个结构方向全在 valid 上不通过 → 直接进读留出段。候选与判据已写死,`m60` 不占槽位(同族同结论),槽位给了增量检验与 H14 反驳检验。
+
+关键文件:`/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/10_distilled.md`(判据 0~4 + 事前授权替换)、`orders/R2.md`、`state.md`。
+
+**10-04 14:43 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "final",
+ "summary": "第 2 轮裁决:R1 的引擎数字把四条关键假设全部落地,方向一致且否定 —— H14 已确立且「对手更好」(m20 +4.8%/+7.3% 对 m20_absret +4.9%/+13.8%,m60 对 m60_absret +6.2%/+14.8%,train 差 ≤0.6pp 而 valid 高 6.5~8.3pp,241 根分钟最低价是负贡献);H13 被否定(固定 hl20 下移心版 tr +5.6%/va +2.1% 对原式 +1.1%/+3.0%,两段反向,λ 符号翻转);H15 已确立(面板不一致是边界伪影,book 级差 ≤0.6pp);H4 已确立 —— 八条候选 × 两种权重 = 十六个与已知家族 K 相加的组合在 valid 上无一超过 K 单独的 +22.3%,对 K 取残差的 Lnet 全为负,「K 头部内按 F 分三档」在 valid 上翻向。归因没花额外运行就做干净了(v_base/m10/m20 都选到 hl20,毛超额 +9.4%/+11.4% → +6.9%/+9.5% 是降的,换手 10.9% → 2.8%,改进 100% 来自平滑)。顺手立了 H16(cs_demean 量的是 60 日尺度的形状同步性,与被否定的 H7 分钟收益同步性不是一回事;ρ 0.51 是另一条因子,移交 12_next)。决定:假设表 16 条无一停在「未验证」、四个结构升华方向全在 valid 上不通过,直接进读留出段 —— 候选排序与判据 0~4 已写死在 10_distilled.md「读留出段之前」(f_m20 第一推荐、f_orig、f_K、f_m20K 增量检验、f_m20absret 反驳检验,含第 4 条表达式无法解析时的事前授权替换),m60 不占槽位是事前取舍。下 R2(kind: final,tag FINAL,1 次运行 5 个变体)。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
+## 它写过 / 改过的文件
+
+- `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/10_distilled.md`
+- `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/orders/R2.md`
+- `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "final",
+ "summary": "第 2 轮裁决:R1 的引擎数字把四条关键假设全部落地,方向一致且否定 —— H14 已确立且「对手更好」(m20 +4.8%/+7.3% 对 m20_absret +4.9%/+13.8%,m60 对 m60_absret +6.2%/+14.8%,train 差 ≤0.6pp 而 valid 高 6.5~8.3pp,241 根分钟最低价是负贡献);H13 被否定(固定 hl20 下移心版 tr +5.6%/va +2.1% 对原式 +1.1%/+3.0%,两段反向,λ 符号翻转);H15 已确立(面板不一致是边界伪影,book 级差 ≤0.6pp);H4 已确立 —— 八条候选 × 两种权重 = 十六个与已知家族 K 相加的组合在 valid 上无一超过 K 单独的 +22.3%,对 K 取残差的 Lnet 全为负,「K 头部内按 F 分三档」在 valid 上翻向。归因没花额外运行就做干净了(v_base/m10/m20 都选到 hl20,毛超额 +9.4%/+11.4% → +6.9%/+9.5% 是降的,换手 10.9% → 2.8%,改进 100% 来自平滑)。顺手立了 H16(cs_demean 量的是 60 日尺度的形状同步性,与被否定的 H7 分钟收益同步性不是一回事;ρ 0.51 是另一条因子,移交 12_next)。决定:假设表 16 条无一停在「未验证」、四个结构升华方向全在 valid 上不通过,直接进读留出段 —— 候选排序与判据 0~4 已写死在 10_distilled.md「读留出段之前」(f_m20 第一推荐、f_orig、f_K、f_m20K 增量检验、f_m20absret 反驳检验,含第 4 条表达式无法解析时的事前授权替换),m60 不占槽位是事前取舍。下 R2(kind: final,tag FINAL,1 次运行 5 个变体)。",
+ "state_written": true
+}
 ```
 
 ## 它拿到的任务书

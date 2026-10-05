@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-04 14:21(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -9,14 +9,10 @@ _自动生成于 2026-10-04 14:21(`python scripts/recorder.py --brief F108_max_n
 
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
-- agent `study:F108_max_ntkurt_close#2`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `study:F108_max_ntkurt_close#3`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `study:F108_max_ntkurt_close`(wf_08351f46-81b):中断,最后动作 10-04 13:10 → `handoff/F108_max_ntkurt_close/agents/study_a8fce7ad1c5d7e7c7.md`
-- agent `work:F108_max_ntkurt_close#0`(wf_3cafb924-05e):已返回结果,最后动作 10-04 13:27 → `handoff/F108_max_ntkurt_close/agents/work_R0_acc5c7be5b1f0b5d1.md`
-- agent `lead:F108_max_ntkurt_close#1`(wf_3cafb924-05e):失败,几乎没做事(不用看)
-- agent `lead:F108_max_ntkurt_close#1`(wf_3cafb924-05e):失败,几乎没做事(不用看)
-- agent `lead:F108_max_ntkurt_close#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 13:59 → `handoff/F108_max_ntkurt_close/agents/lead_R1_a689456224514d95b.md`
-- agent `work:F108_max_ntkurt_close#1`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
+- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
+  - `work:F108_max_ntkurt_close#1`:已返回结果,最后动作 10-04 15:03 → `handoff/F108_max_ntkurt_close/agents/work_R1_a0819b08292f1d769.md`
+  - `lead:F108_max_ntkurt_close#2`:失败,最后动作 10-04 15:41 → `handoff/F108_max_ntkurt_close/agents/lead_R2_aad285e161be28fc9.md`
+  - `lead:F108_max_ntkurt_close#2`:失败,几乎没做事
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F108_max_ntkurt_close` 看服务器上的 tag,`./scripts/study.sh digest F108_max_ntkurt_close <tag>` 重看结果)。
 
@@ -34,122 +30,88 @@ _自动生成于 2026-10-04 14:21(`python scripts/recorder.py --brief F108_max_n
 
 (…全文 13916 字符,读 `notes/F108_max_ntkurt_close/state.md`)
 
-## 研究日志(`notes/F108_max_ntkurt_close/journal.md`:4 条,其中研究员自己写的 3 条)
+## 研究日志(`notes/F108_max_ntkurt_close/journal.md`:11 条,其中研究员自己写的 6 条)
 
-最近的 12 条(完整的看文件):
+最近的 5 条(更早的和全文看文件):
 
-### 2026-10-04 12:54 读完源码:窗口是日内 30 分钟不是 30 日;峰度核带 EPS;折叠只作用在多头端。假设表定稿,x1 已提交
+### 2026-10-04 14:45 [执行] R1 第1次运行 x2_longonly 跑完(exit 0,全程内存 <1.9 GiB,未触发守卫):H11 核心测量做完,B1 发现一个干净的结果
 
-看到了什么(源码 + 服务器探针,无数据实验):
-- nt_ts_kurt(Close,30) 滚的是当天的分钟轴(NT 面逐日把 分钟×股票 切片递给 ND 内核),不跨日;左侧补 NaN,第 1 分钟两点窗恒读 -2,第 2 分钟恒读 -1.5。
-- 核 = m4/(var^2+EPS)-3,服务器实测 EPS=1e-09;价格水平(元)上不是无量纲:1 tick 毛刺读 -2.7119(无量纲应为 +25.03),1 元毛刺读 +25.03。
-- pow_2 是偶函数、pow_1_5 在它后面才合法:D = max(Kmax, -Kmin)^3;-Kmin < 3 <= 25,所以折叠只在全天 Kmax<3 时起作用 = D 最小的一段 = 多头端。
-- 合成股票(同收益过程、不同价格):2 元 fold-active 99%,200 元 16%。
-判断:H1(按名字读成 30 日)在源码上已否定,待 x1 §0 实测;H2/H8(多头端由伪影排序、按价格分层)成为主线。
-S0 基线:多头口径 hl20 Lnet +0.3%/+2.5%,LS(hl5)+2.83/+2.53,剖面 Q1 -30.9% 其余平、Q10 低于 Q8-Q9。预期:内容主要在空头端。
-下一步:读 x1(真实数据上三段占比、十分位画像、买不进占比、替身、双重排序、剔除式组合预览),再定 S1。
-不做:不为多空夏普优化;不在 valid 上重拟合方向/半衰期。
+看到了什么(全部数字见 results/R1.md,这里摘最关键的):
+- §A2(核心测量,增量=剔除后书-同只数家族书):48 行里多数增量很小且两段不同向;表现最一致的是 K1×D_m30、
+  十分位池、剔30%:增量 train+1.5pp/valid+2.1pp(净),两段同向且过了工单+1.5pt门槛;K2 系多在五分位池上增量
+  为负或两段反向。不是干净的"H11成立"或"H11死",细节留给主研按口径裁决。
+- §A3 自检:(w,p)=(1,1) 对 K1×D_ema20 与 x1 的 add ema20 逐位相同(Lnet+11.1%/+20.3%),公式等价性确认。
+  规律:w越小、p=1(温和线性叠加)系统性地比大w或高次幂更好;K1+0.25*D_m30^1 到 Lnet+15.1%/+23.8%,
+  比 K1 单独(+12.6%/+22.3%)两段都高。
+- §B1(意外的干净结果):D_m30 的"剔除最差x%"(book①)随 x 从3%到20%单调改善,Lshp 到 train+3.81/valid+2.29,
+  换手仅1-2%;而"十分位完整排序"(book②)几乎是零/负(Lnet train-0.3%/valid-0.2%,Lshp≈-0.04)。
+  强烈支持 H14(单边剔除器,不是排序器)。
+- §B2:三个语言可达代理里只有 cross_mean(day_amt,30) 两段都为正且都比不分桶好(train+2.2%/valid+3.5%);
+  ctl_amt、ctl_price 两段方向不一致;ctl_cap(天花板)两段+2.5%/+6.3%最强但语言里拿不到。
+- §0:utrain+固定hl10 读到 Lnet **-0.6%**(不是正的),与发布值+5.6%方向都不一致;Lgross+5.6%凑巧撞数但是毛口径。
+下一步:先出 S1_nodes(固定半衰期表判 H15),再写结果卡。
 
-### 2026-10-04 13:26 [执行] R0 建档完成:核对 01~05(完整未改),新建 06_baseline.md,02/03 各补一小节;发现发布值 Lnet+5.6% 对不上
+### 2026-10-04 14:49 [auto] 启动 run S1_nodes:阶段 S1_nodes
 
-看到了什么:
-- brief/digest(S0_baseline)/overview_for.py/decompose 复核了一遍,01~05 已有内容与服务器实测一致,没有需要重写的地方。
-- 新建 06_baseline.md:S0 头条数字(hlL20 多头腿净超额 train+0.3%/valid+2.5%,hlS5 多空夏普 train+2.83/valid+2.53)、
-  分位剖面(train/valid 两段都不单调,Q10 低于 Q5~Q9)、逐年、衰减、10 个控制变量的中性化表、rank 相关都落了表。
-- 02_operators.md/03_decomposition.md 各补一小节:齐次度(nt_ts_kurt None,pow_2 2.0,pow_1_5 1.5,day_max 1.0)、
-  输出类型(四个都是连续值,没有布尔/档位)、有没有用到未来数据(没有)、恒等节点(没有)、重复子树(没有)。
+### 2026-10-04 14:52 [auto] S1_nodes 跑完(exit 0);重看结果:./scripts/study.sh digest F108_max_ntkurt_close S1_nodes
 
-异常(写进 results/R0.md,没有下结论,留给主研判断):
-- 用户发布值 Lnet(训练)+5.6% 对不上:utrain 口径 hlL=20 读 +1.0%,train 段固定半衰期表 hl=10 读 -0.9%,
-  两个都不是同一半衰期同一数据段的严格对照,没找到"utrain+固定hl10"的直接读数去坐实。LS(2.82)对上了。
-- digest 的"中性化"表实际用的是 hlL=20 信号(不是标题看起来像的多空口径);同一"未中性化"状态下 LTO 读 5.2%,
-  头条数字读 4.7%,两个数字不一致,来源没查。
-- digest(hlL=20 信号)与 overview_for.py(发布半衰期10信号)给出两套不同的 all_controls R²(0.311 vs 0.289)和
-  rank 相关列表,口径不同不能混用,已在 06_baseline.md 分节标注。
+### 2026-10-04 14:54 [执行] R1 第2次运行 S1_nodes 跑完(exit 0,168.8s,全程用GPU,只有6个变体真正算了新面板):n_pow3逐位复现H2改写版,n_nocube/m_mean30数字与x1替身接近但不完全相同
 
-下一步(留给主研):读 x1_anatomy 结果、判断 H1~H13 状态;决定要不要补一次 utrain+固定hl10 的读数去核实发布值差异。
-不做:没有碰 state.md(按分工是主研的文件);没有读 x1_anatomy 结果;没有动 01/04/05 已有内容、没有动 orders/ 之外的任何文件。
+看到了什么(全部数字见 results/R1.md):
+- 固定半衰期表(train)+分位剖面+rank相关全矩阵都拿到了。8个变体 cov 全1.00、dist 0.96~1.00,两道门槛都过,没有变体需要点名。
+- n_pow3 对 v_base 交易信号 rank corr 精确 1.000(逐位同 digest 早前的 +1.00),坐实 H2 改写版(pow_2 删得掉)。
+- n_nocube 实测(rank corr 0.870,train Lnet -2.6%/+2.4%,LTO 6.3%)精确匹配 x1 表里的"Kmax"行,而不是工单 why 文本引用
+  的"r=max|K|"行(0.880,-1.8%,6.6%)——day_max(K) 只取 Kmax 单边,x1 的 r 取 max(Kmax,-Kmin) 双边,fold-active 只占14.46%
+  时两者接近但不等。表达式照抄工单没有改动;H3 结论方向不受影响(实测降幅比预期更大)。
+- m_mean30 实测 hlL2 Lnet+2.3%/+2.1%(x1 替身预测+2.6%/+2.1%);m_mean60 实测选到的半衰期是2(x1替身选的是3),
+  Lnet+1.6%/+5.1%(替身预测+2.0%/+5.2%)——数字接近但非逐位相同,属engine vs numpy替身的预期内小抖动。
+- k_max10 (cross_max(day_std(Amt),10)) 与 x2_longonly 里独立算的 K2=known_stdamt_max9(窗口9)几乎同号同量级,互相印证。
+下一步:写结果卡 R1,交回主研裁决。
 
-### 2026-10-04 13:29 [auto] x1_anatomy 跑完(exit 97);重看结果:logs/F108_max_ntkurt_close_x1_anatomy.log
+### 2026-10-04 15:01 [执行] R1 完成:结果卡 results/R1.md 写完,07_S1_nodes.md / 07x_2_x2_longonly.md 事实部分已补,交主研裁决
 
-### 2026-10-04 13:58 [主研] 第 1 轮:读完 x1 —— 它是单边的「封板/冻结盘口」别买信号;pow_2 是死重、立方是载重;多头腿唯一的路是叠在已知家族上做剔除器,而那一节被内存守卫掐断了
-
-看到了什么(x1_anatomy,exit 97 在 §9b 第二行被内存守卫掐断;解读全部写进 07x_1_x1_anatomy.md):
-- §0 H1 死透:窗口是当天 30 根分钟线(对 in_stddev_rolling 秩相关 0.99997);折叠恒等式 D=max(Kmax,-Kmin)^3 秩相关 1.00000。
-- §1 这是本轮最重要的一张表。按今天 r 分档的次日超额(train|valid):r<6 的 75% 格子是一片 +4~+8 的平地(无序),
-  [6,10) -1.2|-5.1,[10,15) -10.0|-11.5,[15,20) -18.1|-21.5,[20,24.9) -58.5|-36.0,[24.9,26) 占 1.3% 读 -226.1|-169.2。
-  → 它是一个单边的「别买」信号,不是排序器;钱全在最高约 10%,集中在最高 1.3%。
-- r≈25.03 是「30 分钟里 29 根同一个价 + 1 根不同」= 一字板/封板/冻结盘口。峰度算价格水平的四阶矩,
-  真正的跳变(跳完在新水平走)是双峰、峰度低(探针:走 5 分钟只读 1.20)。
-  → 04_grammar.md 里「孤立跳变探测器」这个说法是错的,写报告时要改成「冻结盘口里的一个孤立价」。
-- §6 节点消融(替身建立在已自检的恒等式上,等价于配置里真跑):去掉 pow_2 秩相关 1.000、各列逐位相同(Lnet +0.2%/+2.7%);
-  去掉立方秩相关掉到 0.880、train Lnet +0.3%→-1.8%、LTO 4.7%→6.6%、LS 2.83→2.23。Kmin 单独秩相关 -0.010、空头腿只剩 +1.4%。
-- §6 H6/H7 死:无量纲 z 替身 zabs 秩相关只有 0.476、空头腿从 +48.3% 掉到 +15.5%;zup/zdn 都没有可用多头腿。
-- §2 H8 改写:fold-active 按价格分位是 U 形,合成数据预言的单调(99%→16%)不成立;真 EPS 指标 Kmin<-2.5 单调但只占 2.50%。
-  fold-active 按市值单调(0.088→0.215)—— 那是「大盘股盘中安静」的经济事实,不是伪影。
-- §8a H9 支持:市值层内低 D 十分位比所在层高 +9.3~+13.8(train)/+10.0~+15.9(valid),capQ1~Q4 一致。
-  原式多头腿只有 +3.9% 毛超额是规模配比吃掉的。但语言里没有市值字段,amt 不是好代理(cap 0.383 对 amt 0.140)。
-- §8b H11 的条件剖面支持:已知家族多头五分位内按 F108 分三份 +8.4/+16.2/+17.6(train)、+18.0/+25.3/+27.3(valid),
-  高低差 +9.2/+9.3 两段一致。但 F108 多头十分位有 38% 落在家族的空头五分位 → 两者多头端打对台。
-- §9b(被掐断,只拿到两行)对称秩和 add ema20 的 Lnet +11.1%/+20.3%,反而低于家族单独的 +12.6%/+22.3%
-  → 对称相加被否定,和 §8b 的占比完全一致。非对称剔除式、固定半衰期对照、对家族中性化后的残差多头腿全部没拿到。
-- §9a cross_mean(原式,30) 是唯一两段都稳的变体:hlL 2,Lnet +2.6%/+2.1%,Lshp +0.43/+0.42,换手还更低(4.6% 对 4.7%)。
-  注意它选到的 hlL 只有 2,合起来的平均滞后比「原式+hl20」更短 → 看起来是结构的功劳,但要靠固定半衰期表坐实。
-
-判断(假设裁决全部写进 05_hypotheses.md 末尾):H1/H2(强版本)/H6/H7 被否定;H3/H6'/H9/H11(条件剖面)被支持;
-H5 细化为「空头腿是已知暴露、多头腿不是(但多头腿近似为零)」;H8 改写为「伪影存在但只占 2.5% 格子」;
-H10 量级确定(空头腿约 14% 是封板票,多空夏普虚高 0.5~0.7,对结论无影响)。新提 H14(单边剔除器不是排序器)、
-H15(mean30 的改进是结构还是平滑)。
-
-决定:下工单 R1(2 次运行,顺序硬,不并发)。
-- 先 x2_longonly(exec,全部复用 x1 已算的面板、不引入新 NT 表达式):§A 补齐被掐掉的「叠在已知家族上」——
-  非对称剔除式的书 + 每个剔除后的书配一个「同样只数的家族自己的书」做对照(剔除让书变小本身就抬高超额,
-  这份功劳不能记到 F108 头上,这是整节能不能用的关键)+ 固定半衰期对照 + 两个方向的残差;
-  §B 落地性(H14 单边剔除 vs 完整排序;H9 用 amt/cross_mean(day_amt,30)/price 分桶能不能拿到层内那 +9~+14 点);
-  §C 在同一个尾部上重问「是不是已知暴露」(手册 §6 第 5 条:非单调关系,线性中性化的低 R² 不算证据)。
-- 再 S1_nodes(run,8 个变体,6 个含 nt_*,共用已缓存的 nt_ts_kurt(Close,30) 子树):n_pow3 / n_nocube / n_pow5 /
-  n_mean / m_mean30 / m_mean60 / k_mean30 / k_max10。核心要的是固定半衰期表(判 H15)和 n_mean(判 H4)。
-- 判据写在工单里:§A 的增量 >= +1.5 个点净超额且两段同向 → H11 成立,结论是「有增量,用法是剔除器」;
-  <= +0.5 个点或两段反向 → H11 死,结论是「对只能做多的用户相对已知家族没有增量」—— 那是合格的结论,照实写。
-
-不做,以及为什么:
-- 不跑 w_15/w_60/f_ret/f_vwap(H12/H13):需要新的 NT 面求值(约 4 分钟一条),而且不改变多头腿的结论。等 §A 定了再补。
-- 不重跑 §6 的节点消融当「验证」:恒等式已自检到秩相关 1.00000,替身和配置里真跑是等价的;S1 跑它们只是为了拿固定半衰期表。
-- 不追 rkurt(valid Lnet +10.8% 但 train 只有 +0.8%):按口径只在 train 上选,两段不一致的不要。
-- 不为多空夏普优化;不在 valid 上重拟合方向/半衰期;不去读 partura/ 查 LTO 4.7% vs 5.2% 的来源(硬规矩)。
+两次服务器运行都是 exit 0、一次性跑完,没有需要重跑或补跑的部分。结果卡里标出的几个主研可能要先看的点:
+- H11(§A2 核心测量):结果不干净,只有十分位池、剔30%(尤其K1×D_m30:增量净train+1.5pp/valid+2.1pp)
+  过了≥1.5pt两段同向的门槛;五分位池多数增量小且方向不稳,K2×D_ema20五分位剔30%是唯一两段都负的一行。
+- H14(§B1):干净支持,剔除式随x单调改善(train Lshp到+3.81),十分位完整排序几乎是零/负。
+- H9(§B2):仅cross_mean(day_amt,30)两段都为正且赢不分桶;ctl_amt/ctl_price两段方向不一致。
+- H15(S1_nodes):固定半衰期表只有train(digest工具本身的限制,不是我省略);m_mean30/60在train侧
+  任何固定hl下都赢四个节点消融变体,但要坐实"同一半衰期valid侧也赢"还差一次类似fixed_line的读数。
+- H2改写版:n_pow3对v_base rank corr精确1.000,坐实。H3:n_nocube实测比工单why引用的数字降幅更大
+  (-2.6%而非-1.8%),H3方向不受影响,但原因是n_nocube精确对应x1的"Kmax"行而非"r=max|K|"行,已在
+  07_S1_nodes.md里注明。
+下一步留给主研:裁决H11/H14/H9/H15的最终状态、决定要不要补一次S1固定半衰期的valid侧读数、下R2工单。
 
 ## 工单与结果卡(`notes/F108_max_ntkurt_close/orders/`、`notes/F108_max_ntkurt_close/results/`)
 
 - R0:工单 —,结果卡 有
-- R1:工单 有,结果卡 **还没有(待执行)**
+- R1:工单 有,结果卡 有
+- R2:工单 有,结果卡 **还没有(待执行)**
 
 ## 配置里的实验计划(`configs/F108_max_ntkurt_close.yaml`)
 
 - 标题:(读完这棵树之后,用一句话写它是什么)
 - **S0_baseline**(1 个变体):Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?
   v_base
+- **S1_nodes**(8 个变体):哪些节点是多余的?把软极值记忆显式写进表达式,比口径里的 EMA 好吗?
+  n_pow3、n_nocube、n_pow5、n_mean、m_mean30、m_mean60、k_mean30、k_max10
 
 ## 已经跑过的服务器运行(本地已拉回的;服务器上可能还有没拉回的:`./scripts/study.sh list F108_max_ntkurt_close`)
 
 - `S0_baseline`  10-04 11:50  1 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S0_baseline`
+- `S1_nodes`  10-04 14:52  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S1_nodes`
 - `x1_anatomy`(自写脚本的输出)  10-04 13:13  exit 97  → `logs/F108_max_ntkurt_close_x1_anatomy.log`
+- `x2_longonly`(自写脚本的输出)  10-04 14:42  exit 0  → `logs/F108_max_ntkurt_close_x2_longonly.log`
 
 ## 已写的 notes(`notes/F108_max_ntkurt_close/`)
 
-- `01_expression.md`  1293 字节  10-04 13:04
-- `02_operators.md`  5542 字节  10-04 13:24
-- `03_decomposition.md`  4780 字节  10-04 13:25
-- `04_grammar.md`  2420 字节  10-04 12:34
-- `05_hypotheses.md`  12740 字节  10-04 13:49
-- `06_baseline.md`  9595 字节  10-04 13:24
-- `07x_1_x1_anatomy.md`  21002 字节  10-04 13:48
-- `journal.md`  9034 字节  10-04 13:58
-- `state.md`  23021 字节  10-04 13:58
+`01_expression.md`(1K)、`02_operators.md`(5K)、`03_decomposition.md`(4K)、`04_grammar.md`(2K)、`05_hypotheses.md`(18K)、`06_baseline.md`(9K)、`07_S1_nodes.md`(10K)、`07x_1_x1_anatomy.md`(20K)、`07x_2_x2_longonly.md`(14K)、`journal.md`(13K)、`state.md`(22K)
 
 ## 自写的探针与分析脚本(`studies/F108_max_ntkurt_close/`)
 
 - `probes.py`  10-04 12:16  Probes this tree needs:  day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))).
 - `x1_anatomy.py`  10-04 12:21  x1 -- anatomy of  day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))  on real data.
+- `x2_longonly.py`  10-04 14:37  x2 -- the section x1 lost to the memory guard: does F108 give a pure-long user
 
 ## 结构化结果(`handoff/F108_max_ntkurt_close/results/`)
 

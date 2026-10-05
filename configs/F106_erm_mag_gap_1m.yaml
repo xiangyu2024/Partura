@@ -49,15 +49,16 @@ gates:
   # ---- 这棵树的嫌疑(x1 之后加的;放在 gates 里,不进 all_controls,S0 的 R² 仍然可比)
   g_max30:     "cross_max(div(day_last(Close), cross_delay(day_last(Close), 1)), 30)"      # 过去 30 日最大单日涨幅(MAX / 彩票效应;涨停过的股票在最高档)
   g_limitup30: "cross_sum(mul(sub(create_like(day_last(Close), 1.0), less(day_last(Close), day_max(High))), greater(div(day_last(Close), cross_delay(day_last(Close), 1)), create_like(day_last(Close), 1.095))), 30)"      # 过去 30 日涨停收盘的天数(日线标记:收在最高价且涨幅 ≥ 9.5%)
-corr_ids:  [a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_rankfirst, a_lockshare, a_limitup]
+corr_ids:  [a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_rankfirst, a_lockshare, a_limitup,
+            f_orig, f_known30, f_known30r, f_excl_blown15, f_excl_lu15]
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30, g_max30, g_limitup30]
 
 diagnostics:
   decay:      [v_base, a_abs, a_limitup]
-  by_year:    [v_base, a_abs, a_sum, a_limitup]
+  by_year:    [v_base, a_abs, a_sum, a_limitup, f_orig, f_known30]
   neutralise: [v_base, a_abs, a_regular]
-  profile:    [v_base, a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_lockshare, a_limitup]
+  profile:    [v_base, a_right, a_left, a_sum, a_abs, a_regular, a_eps3, a_flag, a_lockshare, a_limitup, f_orig, f_known30, f_excl_blown15]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -93,3 +94,14 @@ stages:
          why: "朴素等价物之一:价格钉在当日最高价的分钟占比(封涨停的日子接近 1)。H3 预测它与 a_abs 的秩相关高、空头腿同样大;若无关,塌缩日就不只是「封板」"}
       - {id: a_limitup, group: substitute, expr: "mul(sub(create_like(day_last(Close), 1.0), less(day_last(Close), day_max(High))), greater(div(day_last(Close), cross_delay(day_last(Close), 1)), create_like(day_last(Close), 1.095)))",
          why: "朴素等价物之二:日线涨停标记(收盘 = 最高价且日涨幅 ≥ 9.5%;ST 的 5% 板不算)。x1 里 86% 的右侧塌缩日是涨停收盘,而未塌缩的涨停日事后同样跑输。预测:多空夏普不低于原式 → 这棵树就是「近期涨停」的一种带噪声的写法。取值只有两档,过不了 dist,是诊断变体"}
+
+  # ---- S_final(主研第 2 轮下单 R2;事前登记见 notes/F106_erm_mag_gap_1m/10_distilled.md「读留出段之前」)
+  #      留出段只读这一次。5 个候选、排序与判据 C1~C6 已在读之前写死,不得增删候选。
+  - id: S_final
+    question: "读留出段之前写死的结论(原式多头腿全负 / 排除性增量在噪声以下 / 和已知家族相加更差)在用户的测试段(20230808–20251231)上成不成立?"
+    variants:
+      - {id: f_orig, group: baseline, final: true, expr: "sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))", why: "规则要求必含原式。C1/C2:留出段上它的多头腿是不是还是负的 —— 这是整份报告的中心结论。预期:Lnet < 0、Lshp < 0、LS > 0"}
+      - {id: f_known30, group: known, final: true, expr: "cross_mean(day_std(Amt), 30)", why: "规则要求必含一条已知家族基准,也是第一推荐。C5:用户给的参考是测试段多头腿 +13%~+15%、纯多头夏普 1.4~1.9,留出段要确认"}
+      - {id: f_known30r, group: known, final: true, expr: "cs_rank(cross_mean(day_std(Amt), 30))", why: "两条叠加候选的同构基准(它们外层带 cs_rank)。hl 0 下它与 f_known30 应当是同一本书 —— 如果不是,说明 cs_rank 的语义和理解的不同,在结果卡里特别写出来"}
+      - {id: f_excl_blown15, group: overlay, final: true, expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cross_max(mul(greater(abs_(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))), create_like(day_quantile(Ret, 0.95), 5.0)), create_like(day_quantile(Ret, 0.95), 1.0)), 15), create_like(day_quantile(Ret, 0.95), 2.0)))", why: "C3:F106 自己的事件(近 15 日塌缩日)把被标记票推出已知家族多头腿,有没有真增量。cs_rank 取值在 [0,1],加 2.0 保证被标记票排在当天所有未标记票之后(sign = −1 → 它们落到最空头端 = 被剔出多头腿)"}
+      - {id: f_excl_lu15, group: overlay, final: true, expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cross_max(mul(sub(create_like(day_last(Close), 1.0), less(day_last(Close), day_max(High))), greater(div(day_last(Close), cross_delay(day_last(Close), 1)), create_like(day_last(Close), 1.095))), 15), create_like(day_last(Close), 2.0)))", why: "C4:同一个叠加,标记换成朴素日线涨停。H12 的操作版:要这个排除效果,一个日线涨停标记够不够"}

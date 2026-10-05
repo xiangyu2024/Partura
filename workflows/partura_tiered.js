@@ -116,9 +116,21 @@ const AUDIT_SCHEMA = {
 
 const COMMON = `
 工作目录是 ${ROOT}(每条 Bash 命令开头都要 cd 进去,cwd 不会保留)。
-先读 docs/study_playbook.md —— 操作手册:口径、工具(scripts/study.sh)、硬规矩、要交的东西、§6 审查反复抓到的错误、
-§7 研究日志与交接。下面不重复手册里的内容。
-不要使用 Agent / Workflow 工具去派生别的 agent。所有写给人看的文字用中文,英文术语保留。
+**省着用轮次和阅读量(用户的额度很紧)**:不要通读 docs/study_playbook.md —— 下面的「规矩摘要」就是它的要点;
+只在需要查工具用法(§2)、配置与表达式语法(§3)、notes 文件清单(§5)时翻对应那一小节。一条命令里把要看的一起打出来,
+长输出用 head / grep 截,读过的文件不要重读。不要使用 Agent / Workflow 工具去派生别的 agent。写给人看的文字用中文,英文术语保留。
+
+## 规矩摘要
+- 工具只有 ./scripts/study.sh:brief <fid> / list <fid> / check <fid> / run <fid> <tag> <stage…> / wait <fid> <tag>(Bash 的 timeout 设 600000;
+  没完就再 wait)/ digest <fid> <tag> / exec <fid> <tag> <script.py> / final <fid> <tag> <stage> / report <fid> / src <算子…> / note <fid> "…"。
+- 只动这条因子自己的文件:configs/<fid>.yaml、studies/<fid>/、notes/<fid>/。
+- 口径:train 2018–2021(fit 段)、valid 20220101–20230807、utrain = 两者 = 用户训练段、holdout 20230808 起 = 用户测试段。
+  方向与半衰期只在 fit 段定。钱的数字都扣 15bp。多头口径 = 半衰期按纯多头书选(摘要里的 hlL / Lnet / Lshp);多空口径 = hlS / LS。
+  门槛:cov ≥ 0.95、dist ≥ 0.5。噪声:多头腿净超额 ±3 个点、夏普 ±0.3。
+- 留出段整个研究只读一次(study.sh final);读之前候选、排序、判据写进 10_distilled.md;读之后不改候选、不换推荐。
+- 一个阶段回答一个问题;一个阶段 ≤ 12 个变体(含 nt_* 的 ≤ 6);全研究服务器运行 ≤ 8 次(含 final)。
+- 审查反复抓到的错:把平滑(半衰期)的功劳写成结构的;「升华版」其实是已知成交额族;候选与原式 rank 相关 < 0.8 就是换了一条因子;
+  读完留出段改推荐;折叠型因子(abs、平方)要用同样折叠过的控制变量去量;空头腿被「买不进的票」抬高;用内生变量分桶;数字张冠李戴。
 
 **这项研究是接力做的**:「主研」定思路、下工单;「执行」写代码、跑实验、读结果。两者是不同的模型,而且每一轮都是
 一个全新的 agent —— 彼此之间**只靠文件**传递信息,你的对话和推理不会被任何人看到。
@@ -222,7 +234,8 @@ ${files(f)}
 
 // ------------------------------------------------------------------ lead (thinker)
 
-const STATE_SPEC = `state.md 的 8 节(每轮**整个文件覆盖重写**,宁可啰嗦):
+const STATE_SPEC = `state.md 的 8 节(每轮**整个文件覆盖重写**;**控制在 150 行 / 10 KB 以内** —— 下一个人每轮都要读它:
+ 只放结论性的要点和指向 notes / 结果卡的指针,长表和推导放进对应的 07_* / 07x_* notes,过时的内容删掉):
  1. 一句话现状(做到哪一步、下一步是什么)
  2. 中间结果:已经量到的事实,每条带数字和出处(tag / 脚本 / 变体 / 哪一段 / 哪种口径)
  3. 研究过程与逻辑:做了什么、按什么顺序、为什么这么走;源码里和名字不一样的地方
@@ -257,8 +270,8 @@ ${files(f)}
 
 1. **先看全貌**:./scripts/study.sh brief ${f.id}。然后读 notes/${f.id}/state.md、journal.md 最近的条目、
    最新的结果卡 notes/${f.id}/results/R<n>.md;需要核对原始数字时 ./scripts/study.sh digest ${f.id} <tag>。
-   ${study ? `还没有 state.md、或假设表还没写(你是第一个主研)时:另读 docs/method.md(为什么每条表达式都要重新推计划),
-   并读执行建的档:01_expression.md、02_operators.md、03_decomposition.md、06_baseline.md、results/R0.md。
+   ${study ? `还没有 state.md、或假设表还没写(你是第一个主研)时:读执行建的档:01_expression.md、02_operators.md、
+   03_decomposition.md、06_baseline.md、results/R0.md。
    对关键算子的语义有疑问,自己 ./scripts/study.sh src <算子> 核对 —— 语义读错,后面全错。
    之前的研究员(可能是别的模型)留下的 notes、脚本、运行结果都是有效的工作成果:读懂、核对、接着做。`
     : `读审查意见:handoff/${f.id}/results/audit*.json(critical / major 的每一条);读原研究的结论 handoff/${f.id}/results/study.json;
@@ -285,9 +298,12 @@ ${study ? `   (a) 再做实验 → 写工单(kind: experiment)。一个阶段回
    (c) 成文(留出段已读)—— 你写判断类的 notes:09_diagnosis.md(已确立 / 合理但未坐实 / 未决)、10_distilled.md 的
        「读完留出段之后」(每条判据过了还是被否定;推荐就是事前的第一推荐,被否定就写被否定)、11_risks.md、12_next.md、
        08_variants.md;然后写工单(kind: writeup)让执行补齐事实类段落、出报告、逐个核对数字。
-   (d) 完成 —— 报告已出、执行核对过数字、没有遗留问题 → 返回 status:'done'。
-   到第 ${Math.max(2, max - 3)} 轮还没读留出段,就必须进入 (b);最后一轮必须是 (d)。`
-    : `   (a) 需要补实验或需要执行去改数字、重出报告 → 写工单(kind: experiment 或 fix;新阶段 id 用 SR_ 开头,tag 用 rev<n>)。
+   (d) 完成 —— 报告已出、执行核对过数字 → 返回 status:'done'。(成文工单执行完之后会直接进入「整理结论」,一般不会再回到你这里。)
+   **额度很紧:不要为了「再确认一下」多开实验轮。** 现有证据已经足够选定候选(包括否定的结论)时,这一轮就进入 (b)。
+   到第 ${Math.max(2, max - 3)} 轮还没读留出段,就必须进入 (b);留出段已读的,这一轮必须是 (c)。`
+    : `   判断类的文字(结论、措辞降级、归因改写)**你自己直接改 notes**;需要执行做的只有:补实验、改事实类数字、重出报告并核对。
+   (a) 需要执行动手 → 写工单(kind: experiment = 要补实验;fix = 只改数字 / 重出报告。新阶段 id 用 SR_ 开头,tag 用 rev<n>)。
+       fix 工单执行完之后会直接进入「整理结论」,所以下 fix 工单之前把你这边的判断类修改全部做完。
        **绝对不许再读留出段**(不许下 final 工单);final.json 里每个候选在两种口径下的留出段数字都已存着,读它不算再读。
        推荐只能从读过留出段的候选里选;按修订后的证据别的候选更好,就写「X 更值得推荐,但它没有读过留出段」。
    (b) 全部意见处理完、报告已重出、数字已核对 → 返回 status:'done'。最后一轮必须是 (b)。`}
@@ -370,7 +386,9 @@ ${files(f)}
 读:./scripts/study.sh brief ${f.id};notes/${f.id}/state.md、09_diagnosis.md、10_distilled.md、11_risks.md;
 ./scripts/study.sh digest ${f.id} final(「与用户表同口径」表:train = utrain = 用户训练段,test = holdout = 用户测试段)。
 ${mode === 'revise' ? `另读 notes/${f.id}/07x_revision.md(每条审查意见的处理)。` : ''}
-如果文件之间互相矛盾、或关键数字在表里找不到,在 tooling_problems 里如实写明(那说明记录不够好),并以 final 的表为准。
+读留出段那次运行的 tag 不一定叫 final(看 brief 里带「读留出段」的那一行;常见的是 final 或 S_final),digest 用实际的 tag。
+你也是成文之后的最后一道核对:读最新的结果卡(执行通读报告时列出的不一致);结论句与 final 的表对不上的,**直接改 notes 里的那一句**
+并记进 tooling_problems;改过 notes 就再跑一次 ./scripts/study.sh report ${f.id}。以 final 的表为准。
 
 ## 输出
 
@@ -490,6 +508,8 @@ async function rounds(f, mode, max) {
       { label: `${tag}work:${f.id}#${k}`, phase, schema: WORK_SCHEMA, model: WORK }, 2)
     if (!work) return false
     log(`${f.id} ${mode} 第 ${k} 轮(执行):${work.order} ${work.completed ? '完成' : '未完成'} — ${work.summary}`)
+    // the write-up (study) / the fix (revise) is the last piece of work: conclude straight from the files
+    if (work.completed && (lead.kind === 'writeup' || (mode === 'revise' && lead.kind === 'fix'))) return true
   }
   log(`${f.id}: ${mode} 用完了 ${max} 轮,按现有记录下结论`)
   return true
@@ -521,10 +541,13 @@ for (let i = 0; i < factors.length; i += CHUNK) {
       if (f.phase === 'revise' || f.phase === 'done') return { study, fresh: [], complete: true }
       const have = f.have_audits || []
       const todo = []
+      // a negative verdict (nothing robust / it is the known family / keep the original) gets the numbers-and-process audit only
+      const kind = study.from_disk ? (f.study_kind || '') : (study.recommended_kind || '')
+      const positive = !['none_robust', 'known_family', 'original_kept'].includes(kind)
       if (!have.includes('audit-numbers') && !have.includes('audit')) {
         todo.push(() => withRetry(() => auditNumbersPrompt(f), { label: `audit-numbers:${f.id}`, phase: 'Audit', schema: AUDIT_SCHEMA, model: WORK }, 2))
       }
-      if (!have.includes('audit-mechanism') && !have.includes('audit')) {
+      if (positive && !have.includes('audit-mechanism') && !have.includes('audit')) {
         todo.push(() => withRetry(() => auditMechanismPrompt(f), { label: `audit-mechanism:${f.id}`, phase: 'Audit', schema: AUDIT_SCHEMA, model: THINK }, 2))
       }
       const got = await parallel(todo)
@@ -536,7 +559,8 @@ for (let i = 0; i < factors.length; i += CHUNK) {
       if (f.phase === 'done') return { factor: f, final: null, was_revised: false, note: 'already done on disk' }
       if (!a.complete) return { factor: f, final: a.study.from_disk ? null : a.study, was_revised: false, note: '审查没有做完,留给下次续跑' }
       const n = (f.n_serious || 0) + serious(a.fresh).length
-      if (!n) return { factor: f, final: a.study.from_disk ? null : a.study, was_revised: false, audit_issues: 0 }
+      const crit = (f.n_critical || 0) + a.fresh.flatMap(x => x.issues || []).filter(x => x.severity === 'critical').length
+      if (!n || (!crit && n < 2)) return { factor: f, final: a.study.from_disk ? null : a.study, was_revised: false, audit_issues: n }
       if (!(await rounds(f, 'revise', MAX_REVISE_ROUNDS))) return { factor: f, final: null, was_revised: false, note: '修订被打断,留给下次续跑' }
       const revised = await withRetry(() => concludePrompt(f, 'revise'), { label: `revise:${f.id}`, phase: 'Revise', schema: STUDY_SCHEMA, model: THINK }, 2)
       return { factor: f, final: revised, was_revised: !!revised, audit_issues: n }

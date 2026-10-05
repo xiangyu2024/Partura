@@ -112,3 +112,22 @@ stages:
       - {id: m60_nodemean, group: ablate, expr: "cross_mean(abs_(day_skew(Low)), 60)", why: "H6 在慢尺度上:60 日平均之后,当天的截面均值还重不重要?若仍然明显更差,「相对全市场当天的形状」是多头腿的实质"}
       - {id: m20_absret, group: rival, expr: "cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)", why: "H3:朴素的日频 |特质收益| 配上同样的 20 日记忆。它与 m20 的多头腿之差,就是日内路径形状在特质波动之外多给的东西"}
       - {id: m60_absret, group: rival, expr: "cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 60)", why: "同上,60 日"}
+
+  - id: S_final
+    question: "只凭 train/valid 选定的 5 个候选,在留出段上是什么样?这条因子对纯多头用户相对已知家族有没有增量?"
+    variants:
+      - {id: f_orig, group: baseline, final: true,
+         expr: "abs_(cs_demean(day_skew(Low)))",
+         why: "基准 1:原式 + 多头最优半衰期。判据 1:它在测试段应该仍然是「毛超额被换手吃掉」(Lnet +1~+4%、Lshp 0.2~0.8)"}
+      - {id: f_m20, group: distilled, final: true,
+         expr: "cross_mean(abs_(cs_demean(day_skew(Low))), 20)",
+         why: "第一推荐,这条因子的提纯版(ρ(v_base)=0.918)。判据 2:应比 f_orig 高 ≥3pp 净超额、≥0.3 夏普,且毛超额不高于 f_orig"}
+      - {id: f_K, group: known, final: true,
+         expr: "cross_mean(day_std(Amt), 30)",
+         why: "基准 2:已知家族(必含)。判据 0:它自己在测试段应落在 Lnet +13~+15%、Lshp 1.4~1.9;若它塌了,判据 3 作废"}
+      - {id: f_m20K, group: blend, final: true,
+         expr: "add(cs_rank(cross_mean(abs_(cs_demean(day_skew(Low))), 20)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "判据 3(决定性):提纯版与已知家族等权相加。playbook §6.2 指定的增量检验。只有它比 f_K 高 ≥3pp 且 ≥0.3 夏普,才算有增量"}
+      - {id: f_m20absret, group: rival, final: true,
+         expr: "cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)",
+         why: "判据 4(H14):同样的「去均值+折叠+20 日记忆」,但完全不看日内路径。valid 上它比 f_m20 高 6.5pp;测试段若重现,「241 根分钟最低价是负贡献」就确立"}

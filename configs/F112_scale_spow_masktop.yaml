@@ -49,15 +49,17 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [v_base, s1_x60, s1_plain60]
-  by_year:    [v_base, s1_x60, s1_plain60]
-  neutralise: [v_base, s1_noK, s1_x60, s1_plain60]
-  profile:    [v_base, s1_noK, s1_x60, s1_plain60]
+  decay:      [s2_f_x60, s2_f_x241, s2_n_t50]
+  by_year:    [s2_f30, s2_f_x60, s2_n_t50]
+  neutralise: [s2_f30, s2_f_x60, s2_f_x241, s2_n_t50]
+  profile:    [s2_f30, s2_f_x60, s2_n_t50, s2_masktop]
   conditional:
-    - {factor: v_base, gate: ctl_cap, buckets: 5}
-    - {factor: v_base, gate: ctl_amt, buckets: 5}
-    - {factor: v_base, gate: ctl_price, buckets: 5}
-  corr_ids: [s1_noK, s1_noP, s1_noMask, s1_noSpow, s1_plain30, s1_w10, s1_x30, s1_x60, s1_x241, s1_plain60]
+    - {factor: v_base,    gate: ctl_price, buckets: 5}
+    - {factor: s2_f30,    gate: ctl_price, buckets: 5}
+    - {factor: s2_f_x60,  gate: ctl_price, buckets: 5}
+    - {factor: s2_masktop, gate: ctl_price, buckets: 5}
+  corr_ids: [s1_noMask, s1_plain30, s1_plain60, s1_noK, s1_x60,
+             s2_f30, s2_k30, s2_p30, s2_n30, s2_f_t50, s2_f_x60, s2_f_x241, s2_n_t50, s2_n_x241, s2_masktop]
 
 stages:
   - id: S0_baseline
@@ -78,3 +80,17 @@ stages:
       - {id: s1_x60, group: window, expr: "cross_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 60)", why: "窗口拉到 60(ts_scale 的窗口池只到 50,所以用同内核的 cross_scale):hl 网格上限 20 处多头腿还在单调上升,真实视野可能比 30 天长(H7)"}
       - {id: s1_x241, group: window, expr: "cross_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 241)", why: "窗口拉到约 1 年:H7 的极端档,看慢分量到哪里见顶"}
       - {id: s1_plain60, group: simplify, expr: "cross_scale(day_quantile(Close), 60)", why: "「最简结构 × 最佳视野」的组合候选:如果 H1+H7 都成立,这个两节点式子就是升华候选的第一人选"}
+
+  - id: S2_combo
+    question: "mask 去掉之后,剩下的节点和窗口怎么配最好?遮最高一成会不会一样差?"
+    variants:
+      - {id: s2_f30,    group: grid2x2, expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30)", why: "2×2 的 (峰度 on, 平方 on) 格:与 s1_noMask 表达式相同,**故意重跑一遍**——(a) 面板走缓存几乎不花钱,(b) 只有本阶段的变体才能进 profile/neutralise/conditional(R1 已证实跨阶段 id 会被静默丢掉),(c) 数字必须与 s1_noMask 逐位相同,是一次免费的一致性检查"}
+      - {id: s2_k30,    group: grid2x2, expr: "ts_scale(add(day_quantile(Close), day_kurt(High)), 30)", why: "2×2 的 (峰度 on, 平方 off) 格:mask 去掉后,单独删平方掉多少"}
+      - {id: s2_p30,    group: grid2x2, expr: "ts_scale(signedpower(day_quantile(Close)), 30)", why: "2×2 的 (峰度 off, 平方 on) 格:mask 去掉后,单独删峰度通道掉多少"}
+      - {id: s2_n30,    group: grid2x2, expr: "ts_scale(day_quantile(Close), 30)", why: "2×2 的 (峰度 off, 平方 off) 格 = 两节点式子:与 s1_plain30 表达式相同,同样是故意重跑(理由同 s2_f30)"}
+      - {id: s2_f_t50,  group: window,  expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50)", why: "mask 去掉 × 窗口 50(ts_scale 池内最长):60 档的邻域稳定性检查,而且保持与原式同一个内核(nd/ts/rolling)"}
+      - {id: s2_f_x60,  group: window,  expr: "cross_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 60)", why: "**头号候选**:mask 去掉 × 窗口 60。S1 里这两个动作各自都在固定半衰期每一档上赢过原式,但组合从没测过;而且 s1_x60 是全表里 ctl_mom20 中性化 R² 最低(0.040)、残差 Lgross 最高(+2.5%)的那个结构,即最不像已知的 20 日反转"}
+      - {id: s2_f_x241, group: window,  expr: "cross_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 241)", why: "mask 去掉 × 窗口 241:窗口在哪见顶。s1_x241 在 valid 上转弱(+3.3%),预期这一条也会,用来确认最优在 50~60"}
+      - {id: s2_n_t50,  group: window,  expr: "ts_scale(day_quantile(Close), 50)", why: "两节点 × 窗口 50:s1_plain60(+7.6%/+6.7%,hl 在 10 见顶)的邻域稳定性检查"}
+      - {id: s2_n_x241, group: window,  expr: "cross_scale(day_quantile(Close), 241)", why: "两节点 × 窗口 241:两节点式子的窗口曲线有没有在 60 之后继续升"}
+      - {id: s2_masktop, group: control, expr: "ts_scale(signedpower(cs_mask_top_replace_mean(add(day_quantile(Close), day_kurt(High)))), 30)", why: "**控制实验**:把遮最低一成(_neg)换成遮最高一成(cs_mask_top_replace_mean,算子池里存在、同为 nd/cs/unary arity 1)。区分「损害是端特异的(饿掉多头端原料)」还是「任何一成被拉平都伤」。这一条是防止主研过度解读 H4/H10 的"}

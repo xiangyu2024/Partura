@@ -1,6 +1,6 @@
 # lead:F110_ret_fair_log#2 — agent a0b3adcf4345bfb0f(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 14:29,最后一次动作 10-04 14:29;工具调用 6 次
+- 状态:**已返回结果**;开始 10-04 14:29,最后一次动作 10-04 14:55;工具调用 28 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F110_ret_fair_log/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -360,6 +360,827 @@ Preview (first 2KB):
 10-04 14:29 · 读 `/Users/wxy/.claude/projects/-Users-wxy-Desktop-230P-hw2/a975f7b7-25eb-4993-9a81-70b3c9c381f0/tool-results/bxky72h7o.txt`
 
 10-04 14:29 · 读 `/Users/wxy/.claude/projects/-Users-wxy-Desktop-230P-hw2/a975f7b7-25eb-4993-9a81-70b3c9c381f0/tool-results/be975vyco.txt`
+
+**10-04 14:31 · agent 的话**
+
+Now the key files: playbook, hypotheses, and the R1 order.
+
+**10-04 14:31 · Bash** — Read the study playbook
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -l docs/study_playbook.md && cat docs/study_playbook.md
+```
+
+```
+     279 docs/study_playbook.md
+# 一次研究的操作手册(给做研究的 agent)
+
+先读 `CLAUDE.md` 和 `docs/method.md`(为什么每条表达式都要重新推计划)。这份讲**怎么干**:
+口径、工具、规矩、踩过的坑、要交什么。范例是 `research/alpha_distillation/F001_dwgated_covamtlow.md`
+和 `notes/F001_dwgated_covamtlow/` —— 看它的**论证方式**(每个结论后面跟着哪个实验),不要抄它的实验清单。
+(F001 用的是旧口径:普通标签 + 多空夏普;**现在的口径以本文为准**。)
+
+---
+
+## 0. 目标:提纯、分辨、升华
+
+| | 要回答的问题 | 算做到了 |
+|---|---|---|
+| **分辨** | 这东西到底是什么?是不是某个已知暴露(成交额水平、规模、换手率、波动、动量、反转)换了个写法?和这批其他因子、和已知家族是不是同一个? | 有中性化的 R² 和残差表现、有 rank 相关、有"把可疑节点换成它的朴素等价物"的直接替换实验 |
+| **提纯** | 预测力在树的哪一部分?哪些节点、指数、窗口、字段是多余的? | 给出一个**更小**的结构,在 train 和 valid 上保住(或超过)原式;每删一个节点都有实验 |
+| **升华** | 看懂机制之后,能不能写出一个**更好用**的版本? | 见下面的"选拔口径" |
+
+### 选拔口径(用户 2026-10-04 明确定的,不要改)
+
+**用户做的是 A 股纯多头,空头腿做不了。所以选拔只看一件事:多头腿扣费之后能拿到多少。**
+
+1. **第一判据:多头腿净超额(扣 15 bp)与纯多头夏普**,半衰期按**纯多头书**在 fit 段选(`rank_by: long`)。
+2. **半衰期是可以调的杠杆,它带来的多头腿净超额是真的、能交易到的。**
+   第一组五条因子里,原式只是把半衰期从「为多空夏普选的」(常常 1~3)换成「为多头腿选的」(10~20),
+   样本外多头腿净超额就多 1~3 个点。所以:
+   - **「原式 + 多头最优半衰期」永远是候选之一**,它就是表里 `v_base` 在「半衰期(多头)」下的那一行,
+     也是任何结构候选要比过的**第一条基准**;
+   - 一个候选的改进如果全部来自更长的半衰期,它**照样可以被推荐**(更简单、换手更低、净超额更高就是更好用),
+     但**归因要写对**:写「改进来自平滑」,不要写成「删节点的功劳」「新结构的功劳」。
+… (230 行略) …
+4. **三个必须落盘的时点**(各记一条日志):
+   ① 假设表定稿(跑第一个实验之前);
+   ② **读留出段之前** —— 候选、排序、判据写进 `10_distilled.md`,**然后**才 `final`;
+   ③ 读完留出段 —— 每条判据是过了还是被否定,推荐是谁。
+5. **收尾**:返回结构化结果之前,最后记一条「研究完成:推荐 X(半衰期 …),理由 …;未决的是 …」。
+6. **研究现状 `notes/<fid>/state.md`** —— 日志是流水(只追加),这一页是「现在的理解」(每次**整个覆盖重写**),接手的人最先读它。
+   每看完一个结果就更新。固定 8 节,宁可啰嗦:
+   1) 一句话现状;2) 中间结果:量到的事实,每条带数字和出处(tag / 脚本 / 变体 / 哪一段 / 哪种口径);
+   3) 研究过程与逻辑:做了什么、为什么这么走、源码里和名字不一样的地方;
+   4) **假设表**:编号 | 假设 | 状态(未验证 / 被支持 / 被否定 / 已改写)| 证据与出处 | 还差什么才能定;
+   5) 当前的候选(提纯 / 升华):表达式、train/valid 多头口径数字、为什么是它;已排除的候选与原因;
+   6) **后面的研究思路**:按顺序,每步做什么、想回答什么、哪种结果意味着什么;明确决定不做的事和原因;
+   7) 留出段:未读 / 已读(读前登记在哪);8) 给接手者的提醒:工具的坑、还没看结果的任务、写了一半的文件。
+7. **分层接力**(用户定的分工,见 `handoff/README.md`):「主研」(Opus 5)管思路 —— 假设、裁决、设计实验、选候选、下结论,
+   把要做的事写成工单 `notes/<fid>/orders/R<n>.md`;「执行」(Sonnet 5)管实现 —— 写配置和脚本、跑服务器、读结果,
+   写成结果卡 `notes/<fid>/results/R<n>.md`。每一轮都是新的 agent,彼此只靠这些文件传话。工单要写到执行不需要猜
+   (完整表达式、要带回来的每个数字);结果卡只写事实和异常,不替主研下结论。
+8. `handoff/` 不用你管:后台记录器(`scripts/recorder.py`,不依赖任何模型和额度)会把你返回的结构化结果
+   (`handoff/<fid>/results/`)、你的动作流水(`handoff/<fid>/agents/`)和交接页(`handoff/<fid>/STATE.md`)自动存下来。
+   批次的总体进度在 `handoff/STATUS.md`,怎样重启在 `handoff/README.md`。
+```
+
+**10-04 14:31 · Bash** — Read hypotheses file
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat notes/F110_ret_fair_log/05_hypotheses.md
+```
+
+```
+**写在任何实验之前**(此时手里只有 S0 基线、源码和探针读数)。每条写「它预测什么」「哪个实验能杀死它」。
+判据里的噪声尺度按手册:多头腿净超额 ±3 个点、纯多头夏普 ±0.3、多空夏普 ±0.3;「同一半衰期下比」指固定半衰期 20。
+
+基线给的四个事实是这些假设的出发点:(a)多头腿净超额 −0.0% / −0.6%(train / valid),毛超额 +8.0% / +7.4%,全被 10.6% 的日换手吃掉;
+(b)空头腿毛超额 +43.3% / +46.8%,多头腿只占毛价差的 16% / 14%;(c)分位剖面是「Q1 悬崖(−43.5%)+ Q4~Q10 一块平台」,多头端 Q10 不高于 Q7~Q9;
+(d)半衰期扫描从 0 到 20 单调改善,20 是网格上限;rank IC 随持有期一路升到 h20 的 +0.106。
+
+| # | 假设 | 它预测什么 | 哪个实验能杀死它 |
+|---|---|---|---|
+| **H1** | **权重 `S` 只是日内波动水平的含噪代理** | `S` 与 `day_std(Ret)` 的日截面 rank 相关高(> 0.7);把 `S` 换成 `day_std(Ret)`,交易信号与原式 rank 相关 ≥ 0.9,同一半衰期下 rank IC、两本书都不差 | X1-C / S1:`D × day_std(Ret)` 与原式相关 < 0.8,或两段数据上多空夏普都低 0.3 以上、多头腿毛超额都低 3 个点以上 |
+| **H2** | **放量 / 缩量事件机器不携带信息**(F101 的先验:放量掩码对多头腿没有贡献,换成不用 Volume 的版本分不开) | `D×M`、`D×Q`、`D×(全部分钟的 5 分钟滚动 std)` 与原式等价;去掉波动水平之后的「纯不对称」`S/σ` 当权重反而更差 | X1-C:`D×(S/σ)` 好于 `D×σ`(说明 `S` 里超出波动水平的那部分有用);或 `D×M` 明显不同于 `D×S` |
+| **H3** | **`abs_` 是 no-op**:放量侧波动几乎总是大于缩量侧(`M − Q > 0`) | `M < Q` 的股票-日占比 < 5%;`D×(M−Q)` 与原式 rank 相关 > 0.98 | X1-B:`M < Q` 占比 > 15%;X1-C / S1:`D×(M−Q)` 与原式不同 —— 那样 `abs_` 就是一次真的折叠,`S` 量的是「两侧差多少」而不是「放量侧多出多少」 |
+| **H4** | **乘法是带符号的凸化**:`D·S ≈ sign(D)·D²`,大的日内涨跌被放大。因子 ≈ 「过去一两个月最大的几次日内涨跌的带符号和」 | `D×\|D\|` 与原式等价(相关 ≥ 0.9、书相同);不加权的 `D` 弱于它们(凸化有用) | X1-C / S1:`D` 单独不弱于原式(凸化多余,它就是普通的日内反转);或 `D×\|D\|` 明显差于 `D×S`(`S` 带了 `\|D\|` 没有的东西) |
+| **H5** | **起作用的是「日内」这个分量**(A 股 T+1 下的日内 / 隔夜拔河),不是普通的收盘到收盘反转 | 把 `D` 换成收盘到收盘收益,rank IC 和空头腿明显变弱;换成隔夜收益,方向反过来或没有预测力 | X1-C / S1:`收盘到收盘收益 × S` 不弱于原式 —— 那它就是「20 日反转 × 波动」,落在 `ctl_mom20` / `ctl_dvol20` 上 |
+| **H6** | **钱在空头腿 = 近期被日内拉高的高波动票回落;多头腿没有独立的选股信息** | 把 `T` 拆成正部 `T⁺` 和负部 `T⁻`:rank IC 与空头腿几乎全在 `−EMA(T⁺)` 上;多头十分位的毛超额不高于 Q4~Q9 的平均;只用 `T⁻` 排出来的多头腿不比平台好 | X1-C / X1-E:`−EMA(T⁻)` 单独的多头十分位毛超额在 train 和 valid 上都比 Q4~Q9 平台高 3 个点以上,且 20 分位剖面在多头端单调 |
+| **H7** | **空头腿被「买不进的票」抬高**:空头端是日内大涨的票,其中次日开盘封板的标签是 NaN、在空头里记 0 | 换成不带可买入过滤的标签,空头腿毛超额掉 5 个点以上、多空夏普掉 0.5 以上 | X1-F:掉幅 < 2 个点、< 0.2(这只影响多空口径,不影响多头腿) |
+| **H8** | **它是已知暴露(换手率 / 20 日波动 / 动量反转)的平滑、非线性写法** | 基线 9 个线性控制 R² 只有 0.349,但控制变量没有按同样的方式平滑、也没有「带符号 × 波动」这种形状;用**同口径**的对照(`−EMA20(D)`、`−EMA20(D×σ)`、平滑后的波动)去张,R² 升到 0.7 以上,残差 rank IC 与多头腿毛超额归零 | X1-G:同口径对照下 R² 仍 < 0.5,且残差 rank IC > +0.02、残差多头腿毛超额 > +4%(两段都是) |
+| **H9** | **半衰期 20 是网格上限而不是最优;更长的平滑继续抬高多头腿净超额** | 半衰期 30 / 40 / 60 下多头腿净超额在 train 和 valid 上都单调上升(毛超额掉得比换手慢) | X1-D:半衰期 40 或 60 的多头腿净超额在 train 或 valid 上不高于半衰期 20 |
+| **H10** | **多头端不单调(Q10 < Q7~Q9)是因为「高波动的暴跌票」被 `S` 的波动尺度推到了最顶上**;去掉尺度(截面排名后再乘、或 `D` 不加权)能把多头端修平 | 去尺度版本在同一半衰期下多头十分位毛超额更高、20 分位剖面多头端单调 | X1-C / X1-E:去尺度版本的多头腿在两段上都不好于原式 |
+| **H11** | **对只能做多的用户,它相对已知的成交额水平家族没有增量** | 对 `cross_mean(day_std(Amt), 30)` 中性化后的残差多头腿毛超额 ≤ +2%;与它相加之后多头腿净超额不比它单独高出噪声(3 个点 / 0.3 夏普) | X1-H:相加之后的多头腿净超额在 train 和 valid 上都高 3 个点以上,或残差多头腿毛超额两段都 > +5% |
+| **H12** | **幸运参数**:5 分钟窗口、1σ 阈值是调出来的 | 窗口换成 3 / 10 / 15 明显变差 | S1:邻域里各档与原式在噪声内 → H12 死 |
+| **H13** | **收盘集合竞价那一格污染了 `M`**(探针:最后一格触发放量时窗口只剩 1 分钟、std = 0) | 绝大多数股票-日最后一格都触发放量;把最后几格切掉,`M − Q` 的符号分布变了,但因子表现不变 | X1-B / S1:切掉之后表现明显变了 —— 那这条因子的内容就依赖 241 网格的版式(沪市 2018-08-20 之前没有收盘集合竞价),是制度伪影 |
+
+**事前的主猜想**(写下来以便事后对照,不是结论):H4 + H5 + H6 成立 —— 它是「凸化的日内反转」,预测力在空头端的拉升票上,
+`S` 的事件机器可以整个换成 `day_std(Ret)` 甚至 `|D|`(H1、H2),多头腿只是「不在被拉升的那 20% 里」。
+如果是这样,提纯的结果是一个 4~6 个算子的式子;升华的空间主要在平滑(H9)和「对已知家族有没有增量」(H11)上,而不在结构上。
+
+**实验安排**(服务器运行不超过 8 次,含 final):
+
+1. `x1_anatomy.py`(exec):在 numpy 里把 `D`、`M`、`Q`、`σ` 四个基础面板自由组合 —— 一次回答 H1~H11、H13 的大部分(同一半衰期下比结构、延长半衰期、拆正负部、腿的构成、同口径中性化、对已知家族的增量)。
+… (24 行略) …
+| H7 | 未验证,**降为最低优先级** | `[x1-B]` 标签 NaN 占比 buyable 0.3190 vs raw 0.3172 —— 只差 0.002,不像有大块封板被吞掉;而且它只影响多空口径,用户只看多头腿 |
+| H8 | 未验证 | 等 G 段(R2) |
+| **H9** | 未验证 —— **本轮判定为最值钱的一问** | 基线 hl 0→20 单调改善、每翻倍 +6~8 个点、尽头未见顶;rank IC 升到 h20 +0.106。对「只能做多」的用户,这是唯一一条已知的、能把多头腿净超额从零往上抬的路。R1 的 D 段去量 hl 30~120 |
+| H10 | 未验证 | 等 C 段去尺度版本(`c9 zr(D)*pct(S)`、`c20 D/sigma`)与 E 段 20 分位剖面 |
+| H11 | 未验证 | 等 H 段(R2)。基线的 rank 相关只有 −0.35~−0.36,**不同族**,所以「增量」这一问是真问题,不是走过场 |
+| H12 | 未验证,**本轮决定不做** | 若 H1 成立(事件机器整条可换成 `day_std(Ret)`),邻域扫描不值得花服务器时间。等 C 的结果再定 |
+| **H13** | **被支持,升级为头号嫌疑** | 收盘集合竞价那一格触发放量的股票-日占 **0.450**,且有强时间趋势:**2018H1 0.242 → 2021 0.580 → valid 0.600**。机制探针已证(窗口剩 1 分钟 ⇒ 总体 std = 0 ⇒ 往 `M` 里掺硬零)。算术估计:`M` 被压低 ~3%(`1 − 1/33`),而 `M−Q` 中位只有 `0.107×mean` ⇒ 不对称被低估约 **28%** ⇒ `S` 里大约四分之一到三分之一是 **241 网格的版式伪影**,且权重随年份翻倍。制度背景:沪市 2018-08-20 才有收盘集合竞价,正好落在 train 段内 |
+
+### 新增假设
+
+| # | 假设 | 它预测什么 | 哪个实验能杀死它 |
+|---|---|---|---|
+| **H14** | **`S` 的一部分横截面变异来自「这只票收盘竞价是否放量」** —— 那是指数成分 / 机构收盘交易的代理,不是价格行为 | 伪影只落在 45% 的股票-日上,落不落取决于收盘竞价有没有量,而这与市值 / 成交额同序;所以切掉最后 4 格之后,交易信号与原式的 rank corr 明显低于 1,且中性化后的残差更干净 | R1 的 B 段补测:`Mc/Qc` 版信号与原式的 rank corr > 0.97 且两本书在噪声内 ⇒ H14 死(伪影虽在,但不影响排序) |
+
+### 对事前主猜想的中期评价
+
+事前主猜想是「H4 + H5 + H6 成立,`S` 可整条换成 `day_std(Ret)` 甚至 `|D|`,升华空间在平滑(H9)和已知家族增量(H11)上」。
+**B 段的证据往这个方向走**(`M`、`Q` 都是密集采样的日内波动估计,两侧只差 11%),但多了一条事前没写的东西:
+**那 11% 的不对称里还掺着一块会随年份变重的收盘竞价伪影**(H13)。
+所以提纯的终点可能比事前想的更短(`D × day_std(Ret)`,4 个算子),而「原式」本身的一部分内容是制度伪影 —— 这对报告的结论段很重要。
+```
+
+**10-04 14:31 · agent 的话**
+
+Let me read the unrun sections of the analysis script and check operator semantics.
+
+**10-04 14:31 · Bash** — Read script header
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '1,60p' studies/F110_ret_fair_log/x1_anatomy.py
+```
+
+```
+"""F110 X1: anatomy of  T = D * |M - Q|  and of the signal that is actually traded, -EMA20(T).
+
+The tree has no day-axis operator: everything that makes it tradable is the EMA of the convention.  So the
+structural questions can be asked in numpy on four base panels (D, M, Q, sigma = day_std(Ret)), at ONE fixed
+half-life, which is the only clean way to separate "structure" from "smoothing":
+
+  0  self-checks     T == D*|M-Q| ?  does the helper reproduce the S0 table row?
+  B  what is S       sign of M-Q (is abs_ a no-op?), trigger counts, surge->drop adjacency, the closing-auction
+                     bar, rank corr of S with plain intraday vol; does cutting the last bars change S?      (H1 H3 H13)
+  C  what is T       swap each part for its naive equivalent, everything at half-life 20, sign fitted on train:
+                     D alone / D*sigma / D*M / D*Q / D*(M-Q) / D*|D| / sign(D)*S / close-to-close*S / overnight*S /
+                     positive part / negative part / magnitude only / scale-free versions                 (H1 H2 H3 H4 H5 H6 H10)
+  D  half-life       the long book at half-lives 10..120, and cross_mean(T, d) followed by the EMA           (H9)
+  E  profile         20-quantile excess of the traded signal and of its parts                                (H6 H10)
+  F  legs            who is in each decile; how much of the short leg is names that could not be bought      (H6 H7)
+  G  matched neutralisation  the traded signal against controls smoothed the same way                        (H8)
+  H  known family    residual against / sum with cross_mean(day_std(Amt), 30); conditional sort inside it    (H11)
+  I  by year
+
+Only train / valid are read.
+"""
+import gc
+import sys
+import time
+import warnings
+
+import numpy as np
+
+from partura.study_tools import Study, bk, dg
+
+… (8 行略) …
+UP_PREV = f"is_gt(in_delay({G}, 1), add(in_mean_full({G}), in_stddev_full({G})))"
+EXPR = {
+    "D": "div(sub(day_last(Close), day_first(Open)), day_first(Open))",
+    "M": f"day_mean(in_sustain_stddev({UP}, Ret, 5))",
+    "Q": f"day_mean(in_sustain_stddev({DN}, Ret, 5))",
+    "fU": f"day_mean({UP})",                                   # share of the 241 minutes that fire SURGE
+    "fL": f"day_mean({DN})",
+    "fAdj": f"day_mean(mul({DN}, {UP_PREV}))",                  # share of minutes that are a DROP right after a SURGE
+    "uLast": f"day_mean(in_slice({UP}, 240, 240))",            # does the closing-auction bar fire SURGE?
+    "Mc": f"day_mean(in_sustain_stddev(in_slice({UP}, 0, 236), in_slice(Ret, 0, 236), 5))",   # last 4 bars cut off
+    "Qc": f"day_mean(in_sustain_stddev(in_slice({DN}, 0, 236), in_slice(Ret, 0, 236), 5))",
+}
+HL = 20.0
+# sections to run (default: all). A run that the memory guard aborts can be resumed with the remaining letters:
+#   study.sh exec F110_ret_fair_log x1b x1_anatomy.py C D E      (section C is always computed: later ones need its signals)
+SECTIONS = set(a.upper() for a in sys.argv[1:] if a.upper() in set("0BCDEFGHI")) or set("0BCDEFGHI")
+
+
+def say(*a):
+    print(*a, flush=True)
+```
+
+**10-04 14:31 · Bash** — Read F/G/H/I sections of script
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '270,420p' studies/F110_ret_fair_log/x1_anatomy.py
+```
+
+```
+            for hl in (0, 5):
+                sm = ema(x, hl) if hl else x
+                say(f"  {nm:<11} hl {hl} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+                    + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+
+    # ================================================================== E profiles
+    if "E" in SECTIONS:
+        say("\n== E annualised excess (%) by 20 quantiles of the traded signal, short end -> long end")
+        for nm, sm in (("base -EMA20(T)", sig), ("c1 -EMA20(D)", SIG["c1"]), ("c14 T+ only", SIG["c14"]), ("c15 T- only", SIG["c15"]),
+                       ("c2 -EMA20(D*sigma)", SIG["c2"]), ("c8 D*(S/sigma)", SIG["c8"]), ("base hl60", -ema(T, 60)), ("c1 D hl60", -ema(D, 60))):
+            for k, s in SP.items():
+                q = bk.quantile_profile(sm, tgt, s, n=20)
+                say(f"  {nm:<20} {k[:2]}: " + " ".join(f"{r['excess_ann']*100:+.0f}" for r in q))
+
+    # ================================================================== F legs
+    if "F" in SECTIONS:
+        say("\n== F who is in the deciles of the base traded signal")
+        eD, eS, eT = ema(D), ema(S), ema(T)
+        feats = {"cap": pct(ctl["ctl_cap"]), "amt": pct(ctl["ctl_amt"]), "turn": pct(ctl["ctl_turnrate"]), "dvol20": pct(ctl["ctl_dvol20"]),
+                 "ivol": pct(ctl["ctl_ivol"]), "mom20": pct(ctl["ctl_mom20"]), "price": pct(ctl["ctl_price"]),
+                 "stdamt30": pct(known["known_stdamt_mean30"]), "EMA_D": pct(eD), "EMA_S": pct(eS)}
+        for k, s in SP.items():
+            sg = sig[s]
+            r = dg.rank_rows(np.where(np.isfinite(sg) , sg, np.nan))
+            n = np.isfinite(r).sum(1, keepdims=True)
+            dec = np.minimum(np.floor((r - 1.0) / np.maximum(n, 1) * 10), 9)
+            for dname, dsel in (("short Q1", dec == 0), ("Q2", dec == 1), ("Q5-6", (dec == 4) | (dec == 5)), ("Q9", dec == 8), ("long Q10", dec == 9)):
+                desc = " ".join(f"{fk} {np.nanmean(fv[s][dsel]):.2f}" for fk, fv in feats.items())
+                say(f"  [{k[:2]}] {dname:<9} labelNaN {np.mean(~np.isfinite(tgt[s][dsel])):.4f} EMA(T)<0 {np.mean(eT[s][dsel] < 0):.3f} "
+                    f"EMA(D) bp/day {np.nanmean(eD[s][dsel])*1e4:+.1f} | mean pctile: {desc}")
+… (84 行略) …
+            m = pool & ok
+            say(f"  [{k[:2]}] pool {np.nanmean(np.nansum(np.where(m, ex, 0.0), 1) / np.maximum(m.sum(1), 1)) * 252 * 100:+.1f} | terciles of base signal inside the pool: " + " / ".join(row))
+
+    # ================================================================== I by year
+    if "I" in SECTIONS:
+        say("\n== I by year (each year starts from an empty book; signs / half-lives as above)")
+        stop = va.stop
+        rows = {"base hl20": sig, "base hl60": -ema(T, 60), "c1 D hl20": SIG["c1"], "c2 D*sig hl20": SIG["c2"], "known mean30": kn,
+                "known+0.5base": zk + 0.5 * zr(sig)}
+        for y in sorted(set(years[:stop].tolist())):
+            idx = np.nonzero(years[:stop] == y)[0]
+            if idx.size < 20:
+                continue
+            sl = slice(int(idx[0]), int(idx[-1]) + 1)
+            out = []
+            for nm, p in rows.items():
+                b = bk.book_row(p, tgt, sl)
+                out.append(f"{nm}: LS {b['ls_sharpe']:+.2f} Ln {b['long_ann']*100:+.1f}% Lshp {b['long_sharpe']:+.2f}")
+            say(f"  {y} ({idx.size}d) " + " | ".join(out))
+    say(f"\ndone {time.time() - T0:.0f}s")
+```
+
+**10-04 14:32 · Bash** — Read helper functions of script
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '60,135p' studies/F110_ret_fair_log/x1_anatomy.py
+```
+
+```
+def f64(x):
+    return np.asarray(x, dtype=np.float64)
+
+
+def ema(x, hl=HL):
+    return bk.smoothed(f64(x), hl)
+
+
+def zr(x):
+    return dg._zrank(f64(x))                       # uniform [-0.5, 0.5] within the day, NaN kept
+
+
+def pct(x):
+    return zr(x) + 0.5
+
+
+def roll_mean(x, d):
+    """cross_mean(x, d): causal nanmean over the last d days (NaN only if the whole window is NaN)."""
+    fin = np.isfinite(x)
+    cs = np.cumsum(np.where(fin, x, 0.0), axis=0)
+    cn = np.cumsum(fin, axis=0).astype(np.float64)
+    z = np.zeros((d, x.shape[1]))
+    s = cs - np.vstack([z, cs[:-d]])
+    n = cn - np.vstack([z, cn[:-d]])
+    return np.where(n > 0, s / np.maximum(n, 1), np.nan)
+
+
+def roll_max(x, d):
+    out = np.full_like(x, -np.inf)
+    for k in range(d):
+… (25 行略) …
+    T = f64(P["T"]); D = f64(P["D"]); M = f64(P["M"]); Q = f64(P["Q"])
+    sigma = f64(st.control("ctl_ivol"))
+    rev1 = f64(st.control("ctl_rev1"))
+    ctl = {k: f64(st.control(k)) for k in ("ctl_amt", "ctl_price", "ctl_ivol", "ctl_range", "ctl_rev1", "ctl_mom20",
+                                           "ctl_dvol20", "ctl_cap", "ctl_turnrate")}
+    known = {k: f64(st.control(k)) for k in ("known_stdamt_mean30", "known_stdamt_max9", "known_amt_max9", "known_ivol_max9")}
+    tgt = f64(st.target())
+    raw = f64(st.target(buyable=False))
+    tr, va = st.slice("train"), st.slice("valid")
+    SP = {"train": tr, "valid": va}
+    years = np.array([int(str(d)[:4]) for d in st.dates])
+    say(f"train {tr} valid {va}; days {T.shape[0]} names {T.shape[1]}; label NaN share buyable {np.isnan(tgt[tr]).mean():.4f} raw {np.isnan(raw[tr]).mean():.4f}")
+
+    R = M - Q
+    S = np.abs(R)
+    sig = -ema(T)                                    # the traded signal (sign -1, half-life 20: fitted on train in S0)
+
+    # ================================================================== 0 self-checks
+    if "0" in SECTIONS:
+        say("\n== 0 self-checks")
+```
+
+**10-04 14:32 · Bash** — Read D section of script
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '226,272p' studies/F110_ret_fair_log/x1_anatomy.py
+```
+
+```
+    if "C" in SECTIONS:
+        eD0, eS0, eT0 = ema(D), ema(S), ema(T)
+        for name, x in (("p1  EMA(D)*EMA(S)", eD0 * eS0), ("p2  EMA(DS)-EMA(D)EMA(S)", eT0 - eD0 * eS0)):
+            sgn = -1.0 if np.nanmean(dg.rank_ic_series(x[tr], tgt[tr])) < 0 else 1.0
+            sm = sgn * x
+            say(f"  {name:<24} sgn {sgn:+.0f} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+                + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        del eD0, eS0, eT0
+
+        say("\n== C2 lag profile of the RAW daily panels (no smoothing): -x[t-k] against the label; rIC, long-decile gross, short-decile gross (train | valid)")
+        def lagged(x, k):
+            return x if k == 0 else np.vstack([np.full((k, x.shape[1]), np.nan), x[:-k]])
+        for nm, x in (("T", T), ("D", D), ("T-", Tn), ("T+", Tp)):
+            for k_ in (0, 1, 2, 3, 5, 10, 20, 30, 40, 60, 90):
+                sm = -lagged(x, k_)
+                out = []
+                for k, s in SP.items():
+                    b = bk.book_row(sm, tgt, s)
+                    out.append(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} Lg {b['long_gross_ann']*100:+5.1f}% sh {b['short_gross_ann']*100:+5.1f}%")
+                say(f"  -{nm:<3} lag {k_:>2} | " + " | ".join(out))
+
+    # ================================================================== D half-life
+    if "D" in SECTIONS:
+        say("\n== D half-life extension (sign fixed from C); each row: half-life -> train | valid")
+        for key in ("c0", "c1", "c2"):
+            x = {"c0": T, "c1": D, "c2": D * sigma}[key]
+            for hl in (5, 10, 20, 30, 40, 60, 90, 120):
+                sm = -ema(x, hl)
+                say(f"  {key} hl {hl:>3} | " + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        say("   cross_mean(T, d) then EMA (what an in-expression smoother would give; half-life from the grid):")
+        for d in (10, 20, 30, 60):
+            rm = roll_mean(T, d)
+            for hl in (0, 5, 10, 20):
+                sm = -ema(rm, hl) if hl else -rm
+                say(f"  cross_mean(T,{d:>2}) hl {hl:>2} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+                    + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        for d in (20, 60):
+            rm = roll_mean(D, d)
+            for hl in (0, 10, 20):
+                sm = -ema(rm, hl) if hl else -rm
+                say(f"  cross_mean(D,{d:>2}) hl {hl:>2} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+                    + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        say("   20-day rolling max / min of T and of D (the MAX-effect reading), at half-life 0 and 5:")
+        for nm, x in (("-max20(T)", -roll_max(T, 20)), ("-max20(D)", -roll_max(D, 20)), ("+max20(-T)", roll_max(-T, 20)), ("+max20(-D)", roll_max(-D, 20))):
+            for hl in (0, 5):
+                sm = ema(x, hl) if hl else x
+                say(f"  {nm:<11} hl {hl} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+```
+
+**10-04 14:33 · Bash** — Read factor config
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat configs/F110_ret_fair_log.yaml
+```
+
+```
+# Partura study F110_ret_fair_log  (手写 / ret_fair_log)
+# 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
+factor_id: F110_ret_fair_log
+title: "日内收益 × |放量后波动 − 缩量后波动|:按『成交量跳变处的价格冲击』加权的日内收益累积(方向为负 = 加权的月度日内反转)"
+probes: [studies/F110_ret_fair_log/probes.py]   # 本研究新增的探针(每个都带已知答案的自检)
+expression: "mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))"
+baseline_id: v_base
+
+# 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
+published: {sign: -1, hl: 20, ls: [2.76, 2.08], long: [0.078, 0.07], lib: "手写", name: "ret_fair_log"}
+
+label: {kind: open_vwap15, horizon: 1, buyable: true,
+        verify_against: /root/autodl-tmp/AlphaCube/_bench/trainto/allfac_buyable/_target.npy}
+cost_per_side: 0.0015
+top_frac: 0.10
+rank_by: long          # 半衰期按纯多头书选(用户实际能做的那本书);多空口径每个变体也都会算
+horizons: [1, 2, 3, 5, 10, 20]
+warmup: 60
+
+# train + valid = 用户的训练段(utrain);holdout = 用户的测试段,只在最后读一次
+splits:
+  train:   ["20180102", "20211231"]
+  valid:   ["20220101", "20230807"]
+  utrain:  ["20180102", "20230807"]
+  holdout: ["20230808", "20251231"]
+  full:    ["20180102", "20251231"]
+fit_split: train
+user_split: utrain
+
+# ---- 这一批共用的控制变量(都是日频、因果、只用到 t 日收盘)。按这棵树的嫌疑增删。
+… (15 行略) …
+  known_stdamt_max9: "cross_max(day_std(Amt), 9)"          # F001 的蒸馏结果
+  known_ivol_max9:   "cross_max(day_var(Ret), 9)"          # F001:日内波动 + 极值记忆
+  known_stdamt_mean30: "cross_mean(day_std(Amt), 30)"      # B01 第一组里纯多头最好的两算子基准之一
+corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
+            known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
+
+diagnostics:
+  decay:      [v_base]
+  by_year:    [v_base]
+  neutralise: [v_base]
+  profile:    [v_base]
+  conditional:
+    - {factor: v_base, gate: ctl_cap, buckets: 5}
+    - {factor: v_base, gate: ctl_amt, buckets: 5}
+
+stages:
+  - id: S0_baseline
+    question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
+    variants:
+      - {id: v_base, group: baseline, expr: "mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))", why: "原始表达式"}
+```
+
+**10-04 14:33 · Bash** — Check operator names and signatures
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh ops '^(cross_mean|cross_delay|cross_stddev|day_std|day_stddev|day_mean)$' 2>&1 | head -40
+```
+
+```
+Connection timed out during banner exchange
+Connection to 36.103.198.204 port 29982 timed out
+```
+
+**10-04 14:36 · Bash** — Read sections 0/B and derived panels
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '135,226p' studies/F110_ret_fair_log/x1_anatomy.py
+```
+
+```
+        say("\n== 0 self-checks")
+        T2 = D * S
+        both = np.isfinite(T2) & np.isfinite(T)
+        say(f"T vs D*|M-Q|: finite T {np.isfinite(T).mean():.4f} mine {np.isfinite(T2).mean():.4f} both {both.mean():.4f}; "
+            f"max|diff| {np.nanmax(np.abs(T2 - T)[both]):.3e} (median |T| {np.nanmedian(np.abs(T[both])):.3e}); "
+            f"rank corr {dg.pair_rank_corr(T2[tr], T[tr]):.5f}")
+        for k, s in SP.items():
+            say(f"  base hl20 [{k}] rIC {ric(sig, tgt, s):+.4f} {fmt(bk.book_row(sig, tgt, s))}   (S0 table: train LS +2.77 Lg +8.0% Ln -0.0%; valid LS +2.74 Lg +7.4% Ln -0.6%)")
+
+    # ================================================================== B what is S
+    if "B" in SECTIONS:
+        say("\n== B anatomy of S = |M - Q| (train unless said)")
+        fin = np.isfinite(R[tr])
+        lab = np.isfinite(tgt[tr])
+        say(f"S finite among labelled {(np.isfinite(S[tr]) & lab).sum() / lab.sum():.4f}; share S==0 {np.mean(S[tr][fin] == 0):.4f}; "
+            f"share M<Q {np.mean(R[tr][fin] < 0):.4f} (valid {np.mean(R[va][np.isfinite(R[va])] < 0):.4f}); "
+            f"share D>0 {np.mean(D[tr][np.isfinite(D[tr])] > 0):.4f} D==0 {np.mean(D[tr][np.isfinite(D[tr])] == 0):.4f}")
+        rel = (R / (0.5 * (M + Q)))[tr]
+        rel = rel[np.isfinite(rel)]
+        say("(M-Q)/mean(M,Q) percentiles: " + " ".join(f"p{q}={np.percentile(rel, q):+.3f}" for q in (1, 5, 25, 50, 75, 95, 99)))
+        if all(k in P for k in ("fU", "fL", "fAdj", "uLast")):
+            nU, nL, nAdj, uLast = (f64(P[k]) * (241.0 if k != "uLast" else 1.0) for k in ("fU", "fL", "fAdj", "uLast"))
+            a, b, c = nU[tr][fin], nL[tr][fin], nAdj[tr][fin]
+            say("surge triggers / day: " + " ".join(f"p{q}={np.percentile(a, q):.0f}" for q in (1, 5, 25, 50, 75, 95, 99))
+                + "   drop triggers / day: " + " ".join(f"p{q}={np.percentile(b, q):.0f}" for q in (1, 5, 25, 50, 75, 95, 99)))
+            say(f"share of DROP triggers that come right after a SURGE trigger: {c.sum() / b.sum():.3f}; "
+                f"share of stock-days whose closing-auction bar fires SURGE: {np.nanmean(uLast[tr][fin]):.3f} "
+                f"(2018H1 {np.nanmean(uLast[tr][:120]):.3f}, 2021 {np.nanmean(uLast[tr][-240:]):.3f}; valid {np.nanmean(uLast[va]):.3f})")
+        pairs = {"M~Q": (M, Q), "S~sigma": (S, sigma), "M~sigma": (M, sigma), "Q~sigma": (Q, sigma), "S~M": (S, M),
+                 "R~sigma": (R, sigma), "S~|D|": (S, np.abs(D)), "sigma~|D|": (sigma, np.abs(D)), "S/sigma~sigma": (S / np.where(sigma > 0, sigma, np.nan), sigma),
+… (42 行略) …
+    NEED_SIG = bool(SECTIONS & set("EGHI"))                  # R1 fix C1: only these sections read SIG
+    SIG = {}
+    for name, mk in cands.items():
+        key = name.split()[0]
+        if "C" not in SECTIONS and (not NEED_SIG or key not in KEEP):
+            continue
+        e = ema(mk())
+        sgn = -1.0 if np.nanmean(dg.rank_ic_series(e[tr], tgt[tr])) < 0 else 1.0
+        sm = sgn * e
+        del e
+        if key in KEEP:
+            SIG[key] = sm.astype(np.float32)
+        if "C" in SECTIONS:
+            say(f"  {name:<20} sgn {sgn:+.0f} corr {dg.pair_rank_corr(sm[tr], sig[tr]):+.3f} | "
+                + " | ".join(f"{k[:2]}: rIC {ric(sm, tgt, s):+.4f} {fmt(bk.book_row(sm, tgt, s))}" for k, s in SP.items()))
+        del sm
+        gc.collect()
+
+    # the identity EMA(D*S) = EMA(D)*EMA(S) + Cov_EMA(D, S): which piece carries it?
+    if "C" in SECTIONS:
+```
+
+**10-04 14:39 · agent 的话**
+
+Now I have the full picture. Let me record the adjudication, starting with the interpretation of the x1 analysis.
+
+**10-04 14:40 · 写文件** `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/07x_01_x1_anatomy.md`(9210 字符)
+
+**10-04 14:41 · Bash** — Append round-2 adjudication to hypotheses
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat >> notes/F110_ret_fair_log/05_hypotheses.md <<'EOF'
+
+---
+
+## 第 2 轮裁决(主研,2026-10-04;日志里数是第 4 位主研,工单 R2)
+
+新证据:`x1c`(sections `0 B D`,exit 0)+ `x1d`(sections `C E`,exit 0),全文在 `results/R1.md`,
+解读在 `07x_01_x1_anatomy.md`。canary 逐项对上(`T vs D·|M−Q|` rank corr 1.00000;基线与 S0 逐项一致),
+B 段的旧读数逐项复现(`M<Q` 0.1669/0.1353、触发数中位 33/32、缩量紧跟放量 0.307、收盘竞价触发 0.450/0.242/0.580/0.600)。
+
+| # | 状态 | 依据(数字出处:`results/R1.md`) |
+|---|---|---|
+| **H1** | **已改写**(原形式被否定) | `rank corr(S, day_std(Ret)) = +0.422`,事前判据要 > 0.7 ⇒ **`S` 不是日内波动的代理**。但同一行里 `M~σ +0.870`、`Q~σ +0.823`、`M~Q +0.923` ⇒ 改写成:**`M` 与 `Q` 各自是同一个量(当天 5 分钟 std)的两个高度相关的估计,`S = \|M−Q\|` 是两者之差,截面变异主要是估计噪声**(`(M−Q)/mean` p50 只有 +0.107)。换权重的实验(H2)才是决定性的 |
+| **H2** | **被支持** | 杀死判据是「`D·(S/σ)` 好于 `D·σ`」—— 实测更差:`c8` `LS +2.16/+2.32` vs `c2` `+2.94/+2.91`;`c20 D/σ` 塌到 `+0.84/+1.64`。而把 `S` 换成 `\|D\|`(`c6`)**每一项都优于原式**(tr `rIC +0.0465 LS +2.87 Lg +12.5% Ln +4.6%`),换成 `σ`、`σ²` 也不差(`c19` `LS +3.58/+3.38` 全表最高)⇒ **事件机器不带信息,整条可删** |
+| **H3** | 被否定(第 1 轮,本轮无新证据) | `M<Q` 16.69%/13.53%;另:`c5 D·(M−Q)`(去 `abs_`)`Ln −2.2%/−4.4%`、`LS +2.52/+2.24`,比原式差 ⇒ `abs_` 是一次真的、有用的折叠 |
+| **H4** | **被支持** | `c1 D` 单独 `LS +2.06/+2.55` 明显弱于 `c6 D·\|D\|` `+2.87/+3.04`(凸化有用);`c7 sign(D)·S`(丢掉 `\|D\|`)塌到 `+1.79/+2.06`、`Ln −5.4%/−6.5%`(起作用的是 `\|D\|` 的幅度)⇒ `T ≈ sign(D)·D²` |
+| **H5** | **被支持(合理但未坐实)** | `c10 Dcc·S` `LS +2.36/+2.31`(低于原式 0.4,超过 0.3 的噪声带);`c12 Dcc` 单独 `Ln −5.7%/−5.1%` vs `c1 D` 的 `−1.3%/−3.3%`;`c11 Don·S` **方向翻成 +1**、`Ln −14.7%/−15.8%`,`c13 Don` `LS −0.45/−0.19` ⇒ 是日内这一段,隔夜是反方向。差距只有 0.4 夏普,不算铁证 |
+| **H6** | **被支持** | E 段 20 分位:悬崖(−59%/−66%)+ 平台(+3%~+13%),**顶档回落**(base tr +13→+4、va +13→+9→+8;`c14 T⁺` tr 顶档 −6%;`c15 T⁻` tr −11%)。C2 lag profile:`−D` 的多头腿毛超额在 lag 0~10 全为负(valid −5%~−14%),空头腿 lag 0 是 +43.7%/+39.1% ⇒ 多头腿不是空头腿的镜像 |
+| H7 | 未验证,维持最低优先级 | 只影响多空口径(F 段,本轮没跑也不打算跑) |
+| **H8** | 未验证 —— **R2 的 G 段** | 基线 9 控制秩空间 R² 0.349(控制没同口径平滑)。新的紧迫性:`D~ctl_rev1 = +0.870` ⇒ 平滑后几乎一定落在反转家族上 |
+| **H9** | **被否定** | 判据「hl40/60 的 `Ln` 两段都 > 
+… (1047 字符略) …
+在 lag 20~40 天,空头信息住在 lag 0~3 天** —— 两条腿是两个不同持有期的效应 | 显式砍掉最近 10 天(`cross_mean(cross_delay(D,10), 20)`)的多头腿毛超额**不低于**不砍的版本,而换手更低 | R2 的 `w_cmD20lag10`:多头腿毛超额在 train 或 valid 上比 `w_cmD20` 低 3 个点以上 ⇒ H15 死,盒式平滑的好处纯粹是「同样毛超额下换手更低」 |
+| **H16** | **盒式平滑(`cross_mean`)相对长 `EMA` 的优势纯粹是换手** | 在相近的毛超额下 `LTO` 明显更低;而不是毛超额更高 | R2:`w_cmD20` 的 `Lg` 明显高于 `−ema(D,30)` 的 +9.1%(两段都是)⇒ H16 死,盒式平滑带来的是真 alpha |
+| **H17** | **提纯 + 升华的终点 = 20 日(日内)反转,一个已知暴露** | `w_cmDcc20`(收盘到收盘版)与 `w_cmD20` 的 rank corr > 0.9 且两本书在噪声内;`w_cmD20` 与 `ctl_mom20` 的 rank corr > 0.8 | R2:`w_cmDcc20` 的 `Ln` 两段都比 `w_cmD20` 低 3 个点以上 ⇒ 「日内」这一段是真的增量,不是普通中期反转 |
+
+### 对事前主猜想的最终评价
+
+事前主猜想:「H4 + H5 + H6 成立,`S` 可整条换成 `day_std(Ret)` 甚至 `\|D\|`(H1、H2),
+升华空间在平滑(H9)和已知家族增量(H11)上,不在结构上」。
+**除了 H9,全中。** `S` 确实整条可删(甚至换成 `\|D\|` 更好),它确实是「凸化的日内反转」,
+钱确实在空头腿。**唯一猜错的地方是 H9**:延长半衰期救不了多头腿,因为 hl20 已经是最优点。
+事前没想到的两件事:(a)`S` 不是波动代理而是两个波动估计之差(估计噪声);
+(b)两条腿住在不同的持有期上(lag profile)——(b) 才是「多头腿为什么不行」的真正答案。
+EOF
+echo "appended"; wc -c notes/F110_ret_fair_log/05_hypotheses.md
+```
+
+```
+appended
+   18079 notes/F110_ret_fair_log/05_hypotheses.md
+```
+
+**10-04 14:41 · Bash** — Check operator availability on server
+
+```bash
+cd /Users/wxy/Desktop/Partura && timeout=0; ./scripts/study.sh ops '^cross_(mean|delay|max)$' 2>&1 | head -20; echo "---- day ----"; ./scripts/study.sh ops '^day_(std|var|mean)$' 2>&1 | head -20
+```
+
+```
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cross_delay                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_max                          dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_mean                         dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+---- day ----
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  day_mean                           dt/day/unary        arity 1 axis M
+  day_std                            dt/day/unary        arity 1 axis M
+  day_var                            dt/day/unary        arity 1 axis M
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+```
+
+**10-04 14:42 · Bash** — Check ts_ operator windows
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh ops '^(ts_mean|ts_delay|ts_stddev|cross_stddev)$' 2>&1 | head -20
+```
+
+```
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cross_stddev                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  ts_delay                           nd/ts/rolling      arity 1 axis D win [1, 5, 10, 20, 30, 40, 50]
+  ts_mean                            nd/ts/rolling      arity 1 axis D win [1, 5, 10, 20, 30, 40, 50]
+  ts_stddev                          nd/ts/rolling      arity 1 axis D win [1, 5, 10, 20, 30, 40, 50]
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+```
+
+**10-04 14:42 · Bash** — Read cross_mean source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src cross_mean 2>&1 | head -60
+```
+
+```
+### cross_mean  face=dt family=cross category=rolling axis=D reduces_m=False lookahead=False kernel=dt_cross.cross_mean
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_cross.py:222
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_mean(x: torch.Tensor, d: int) -> torch.Tensor:
+    return rolling_reduce(x, int(d), nanmean_last, axis=0)
+
+# --- cross_mean 调用的: common.rolling_reduce
+def rolling_reduce(x: torch.Tensor, d: int, reducer, axis: int = 0) -> torch.Tensor:
+    return reducer(rolling_windows(x, d, axis))
+
+# --- rolling_reduce 调用的: common.rolling_windows
+def rolling_windows(x: torch.Tensor, d: int, axis: int = 0) -> torch.Tensor:
+    """Causal rolling windows of length `d` along `axis`, left-padded with
+    NaN so every original position (including the first `d-1`) gets a
+    window. Output shape = `x.shape` with a new trailing window-dim of
+    size `d` appended (the `axis` dim's length is unchanged).
+    """
+    d = int(d)
+    pad_shape = list(x.shape)
+    pad_shape[axis] = d - 1
+    pad = torch.full(pad_shape, float("nan"), dtype=x.dtype, device=x.device)
+    x_padded = torch.cat([pad, x], dim=axis)
+    return x_padded.unfold(axis, d, 1)
+```
+
+**10-04 14:43 · agent 的话**
+
+Now the order for execution. Writing it precisely since execution is a different model that only sees this page.
+
+**10-04 14:45 · 写文件** `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/orders/R2.md`(10621 字符)
+
+**10-04 14:45 · agent 的话**
+
+Now the full rewrite of state.md — the main handoff document.
+
+**10-04 14:49 · 写文件** `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/state.md`(22742 字符)
+
+10-04 14:49 · 读 `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/state.md`
+
+**10-04 14:53 · 写文件** `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/state.md`(22747 字符)
+
+**10-04 14:53 · agent 的话**
+
+Now the journal entry.
+
+**10-04 14:54 · Bash** — Write journal entry for this round
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F110_ret_fair_log "[主研] 第 4 轮(工作流第 2 轮):R1 终于有结果 —— H9 被否定(hl20 就是最优点)、事件机器整条是死重、两条腿住在不同持有期;下 R2 验表达式化的长平滑 + 已知家族增量" <<'EOF'
+**看到了什么。** R1 的两次 exec 都跑成了(`x1c` = `0 B D` exit 0 / 258s,`x1d` = `C E` exit 0 / 132s),
+canary 逐项对上(`T vs D*|M-Q|` rank corr 1.00000;基线与 S0 一致;B 段旧读数逐项复现)。
+第一次拿到 C/D/E 三段。四条关键读数:
+
+1. **D 段(最值钱的一问):H9 被否定。** 原式 `c0` 在 hl 5~120 整张网格里,train 的多头腿净超额最高只有 +1.2%(hl30),
+   全落在 hl20 的 ±3 点噪声带内;`c1 D` 单独最高 +1.8%。**机制也搞清了**:hl20 之后毛超额从 +8.0% 掉到 +0.6%、
+   日换手从 10.6% 掉到 2.7%,**两者同速** —— 所以基线里「hl 0→20 每翻倍 +6~8 个点」那条曲线 100% 是成本的功劳,
+   hl20 本来就是最优点(这也解释了为什么多头口径和多空口径选到同一个半衰期)。**「原式 + 更长半衰期」这条路彻底关掉。**
+2. **C 段:整条成交量事件机器是死重(H2 被支持)。** 固定 hl20 换权重:换成 `|D|`(`c6`)**每一项都优于原式**
+   (tr `rIC +0.0465 LS +2.87 Lg +12.5% Ln +4.6%`),换成 `σ`/`σ²` 也不差(`c19` 的 `LS +3.58/+3.38` 全表最高);
+   但**把波动尺度从 `S` 里除掉就变差**(`c8 D*(S/σ)` 的 `LS` 2.16/2.32 < `c2 D*σ` 的 2.94/2.91;`c20 D/σ` 塌到 0.84)。
+   这组不对称正是「权重只需要是个波动尺度、事件内容不带信息」的证据。**提纯的终点是 `mul(D, abs_(D))`,6 个算子,
+   `Volume` 和 `Ret` 两个字段完全多余。** 另:H4(带符号凸化)、H5(是日内不是收盘到收盘,隔夜方向相反)被支持;
+   H10(顶档回落是波动尺度造成的)**被否定** —— 去尺度的版本全都更差。
+3. **H1 和 H13 都要改写。** `rank corr(S, day_std(Ret))` 只有 **+0.422**(事前判据要 >0.7),但 `M~σ +0.870`、
+   `Q~σ +0.823`、`M~Q +0.923` ⇒ `M` 与 `Q` 是同一个量的两个高度相关的估计,`S=|M−Q|` 是两者之差,
+   截面变异主要是**估计噪声**。H13(收盘竞价伪影)**幅度被推翻**:实测 `Mc/M` 中位 **1.005**(第 1 轮算的是 1.03)、
+   `M<Q` 0.1669→0.1500、`|Rc|~S` **+0.963** ⇒ 伪影只压低 `M` 0.5%。再加上 H2(整条权重可换),
+   权重内部的版式细节不可能影响排序 ⇒ **H13 从「头号嫌疑」降级,H14 被否定,清伪影候选不占变体位**。
+   代价:逐年飘没有伪影这个解释了,更朴素的解释是**多头腿本来就是噪声**。
+4. **事前没要求、但信息量最大的一段:C2 lag profile。两条腿住在不同的持有期上。**
+   `−D` 的空头腿毛超额 lag 0 是 +43.7%/+39.1%,到 lag 5 只剩 +6.0%(train)—— 空头腿是个 1~3 天的快反转;
+   而多头腿毛超额在 lag 0~10 **全为负**(valid −5%~−14%),只有 lag 20~40 才转正(valid +1.3/+5.0/+6.9,
+   但 train 是 −1~−5,**两段不同向**)。这一条同时解释了「EMA 怎么调都救不了多头腿」(EMA 永远把最大权重压在今天,
+   而今天的多头端是负的)和「20 分位顶档回落」(base tr +13→+4、`c14 T⁺` tr 顶档 −6%)。
+   → 新增 H15(多头信息在 lag 20~40)、H16(盒式平滑胜过长 EMA 纯粹是换手)、H17(终点就是 20 日反转)。
+
+**唯一还活着的多头腿改进来源:把平滑写进表达式。** `cr
+… (434 字符略) …
+同一窗口 20 下四种权重(`S`/无/`σ`/`|D|`)对照 —— 判 H2 在长平滑下是否仍成立;
+  ③ Q3 `w_cmD20lag10` 砍掉最近 10 天 —— 判 H15(毛超额低 3 点以上 ⇒ H15 死,归因写「来自平滑」);
+  ④ Q4 `w_cmDcc20` 收盘到收盘版 + 与 `ctl_mom20` 的 rank 相关 —— 判 H17(是不是就是普通 20 日反转)。
+- `exec x2`(`G H I`,脚本加 5 处 dict 条目):Q5 = 用户口径必答的 H8 同口径中性化 + **H11 已知家族增量**
+  (`known + 0.5×候选` 两段都高 ≥3 点或 `Lshp` ≥0.3 ⇒ 有增量;都在 ±3 点内 ⇒ 没有增量,照实写)。
+  只传 `G H I`:`NEED_SIG` 会自动算出 G/H/I 要的 6 个 KEEP 候选而不重跑 C 的 21 行表。
+
+**决定不做什么。**(a)不重跑 C/D/E(读数完整);(b)不跑 F 段 / 不追 H7(只影响多空口径,用户只看多头腿;
+而且 F 先于 G/H 打印,万一被守卫打断会把最值钱的 H 段挤掉);(c)不做 H12 邻域扫描(事件机器整条可删之后没意义);
+(d)不为清伪影候选花变体位(H13 幅度被推翻);(e)不为「原式 + 更长半衰期」再花变体位(H9 已被整张网格否定);
+(f)不往 `controls:` 里加东西(会让 `all_controls` 的 R² 与 S0 不可比);(g)不追多空夏普的归因(次要信息)。
+
+**落盘。** 新写 `07x_01_x1_anatomy.md`(R1 全部读数的解读,7 节);`05_hypotheses.md` 追加「第 2 轮裁决」
+(17 条假设的状态 + H15/H16/H17);`state.md` 覆盖重写(8 节);`orders/R2.md`。
+下一轮(R3)按计划就是写 `10_distilled.md` 的「读留出段之前」+ 下 kind: final —— R2 的结果只会改变「谁排第一」,
+不会改变候选框架,所以即使 R2 只跑成一半也进得去。服务器运行已用 3 次,R2 用完是 5 次,预算不紧张。
+EOF
+echo "=== note written ==="
+```
+
+```
+已记入 notes/F110_ret_fair_log/journal.md(11 条)
+=== note written ===
+```
+
+**10-04 14:54 · Bash** — Verify deliverables and that only own files were touched
+
+```bash
+cd /Users/wxy/Desktop/Partura && ls -la notes/F110_ret_fair_log/ notes/F110_ret_fair_log/orders/ && echo "=== git-ish check: 只动了自己的文件吗 ===" && find . -newermt '-25 minutes' -type f -not -path './.git/*' -not -path './handoff/*' -not -path './logs/*' 2>/dev/null | sort
+```
+
+```
+notes/F110_ret_fair_log/:
+total 240
+drwxr-xr-x@ 13 wxy  staff    416 Oct  4 14:53 .
+drwxr-xr-x@ 19 wxy  staff    608 Oct  4 13:07 ..
+-rw-r--r--@  1 wxy  staff   1487 Oct  4 12:17 01_expression.md
+-rw-r--r--@  1 wxy  staff   4268 Oct  4 12:17 02_operators.md
+-rw-r--r--@  1 wxy  staff   3538 Oct  4 12:17 03_decomposition.md
+-rw-r--r--@  1 wxy  staff   2104 Oct  4 12:17 04_grammar.md
+-rw-r--r--@  1 wxy  staff  18079 Oct  4 14:41 05_hypotheses.md
+-rw-r--r--@  1 wxy  staff   4460 Oct  4 12:25 06_baseline.md
+-rw-r--r--@  1 wxy  staff  14419 Oct  4 14:40 07x_01_x1_anatomy.md
+-rw-r--r--@  1 wxy  staff  19635 Oct  4 14:54 journal.md
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:45 orders
+drwxr-xr-x@  3 wxy  staff     96 Oct  4 14:17 results
+-rw-r--r--@  1 wxy  staff  35229 Oct  4 14:53 state.md
+
+notes/F110_ret_fair_log/orders/:
+total 64
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:45 .
+drwxr-xr-x@ 13 wxy  staff    416 Oct  4 14:53 ..
+-rw-r--r--@  1 wxy  staff  15073 Oct  4 13:52 R1.md
+-rw-r--r--@  1 wxy  staff  15531 Oct  4 14:45 R2.md
+=== git-ish check: 只动了自己的文件吗 ===
+```
+
+**10-04 14:54 · Bash** — Validate parenthesis balance of order expressions
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+import re
+txt = open("notes/F110_ret_fair_log/orders/R2.md").read()
+# pull out the fenced expression blocks
+blocks = re.findall(r"```\n(cross_mean\(.*?)\n```", txt, re.S)
+print(f"found {len(blocks)} expression blocks")
+for b in blocks:
+    b = b.strip()
+    bal = 0; ok = True
+    for ch in b:
+        if ch == "(": bal += 1
+        elif ch == ")":
+            bal -= 1
+            if bal < 0: ok = False
+    print(f"  balanced={ok and bal==0}  final_depth={bal}  len={len(b)}  head={b[:48]}...")
+# the original expression from the config, for comparison of the volume subtree
+cfg = open("configs/F110_ret_fair_log.yaml").read()
+m = re.search(r'^expression: "(.*)"$', cfg, re.M)
+orig = m.group(1)
+t20 = [b for b in blocks if "in_sustain_stddev" in b][0].strip()
+# extract the abs_ subtree from both and compare literally
+def sub(s):
+    i = s.index("abs_(")
+    bal = 0
+    for j in range(i+4, len(s)):
+        if s[j] == "(": bal += 1
+        elif s[j] == ")":
+            bal -= 1
+            if bal == 0: return s[i:j+1]
+print("abs_ subtree identical to the config's原式:", sub(orig) == sub(t20))
+print("T20 wraps cross_mean(...,20):", t20.startswith("cross_mean(") and t20.endswith(", 20)"))
+PY
+```
+
+```
+found 6 expression blocks
+  balanced=True  final_depth=0  len=75  head=cross_mean(div(sub(day_last(Close), day_first(Op...
+  balanced=True  final_depth=0  len=94  head=cross_mean(mul(div(sub(day_last(Close), day_firs...
+  balanced=True  final_depth=0  len=147  head=cross_mean(mul(div(sub(day_last(Close), day_firs...
+  balanced=True  final_depth=0  len=92  head=cross_mean(cross_delay(div(sub(day_last(Close), ...
+  balanced=True  final_depth=0  len=66  head=cross_mean(div(day_last(Close), ts_delay(day_las...
+  balanced=True  final_depth=0  len=573  head=cross_mean(mul(div(sub(day_last(Close), day_firs...
+abs_ subtree identical to the config's原式: True
+T20 wraps cross_mean(...,20): True
+```
+
+**10-04 14:55 · agent 的话**
+
+All deliverables written and verified. The long `<T20>` expression in the order is parenthesis-balanced and its volume-event subtree is byte-identical to the config's original expression.
+
+**What this round did** (lead round 4 per `journal.md`; R1's two exec runs finally landed, both exit 0):
+
+- **H9 否定** — the headline. The original's long leg is flat across the whole hl 5→120 grid (train max +1.2% at hl30, all inside the ±3pt band) because from hl20 onward gross decays exactly as fast as turnover saves (`Lg` +8.0%→+0.6%, `LTO` 10.6%→2.7%). The baseline's pretty monotone hl0→hl20 curve was 100% cost reduction, not alpha. "原式 + 更长半衰期" is closed.
+- **H2 被支持** — swapping the weight `S` for `|D|` beats the original on every metric (`LS` 2.87/3.04 vs 2.77/2.74, `Ln` +4.6%/+0.7% vs −0.0%/−0.6%), while dividing the vol scale *out* of `S` makes it worse (`c8` 2.16/2.32, `c20` 0.84/1.64). The whole volume-event machine is dead weight; `Volume` and `Ret` are redundant fields.
+- **H1 / H13 改写, H10 / H14 否定** — `S~day_std(Ret)` is only +0.422 (so `S` is the *difference* of two correlated vol estimates, mostly estimation noise); the closing-auction artifact moves `M` by 0.5%, not 3% (`Mc/M` median 1.005, `|Rc|~S` +0.963), so it is demoted and the de-artifact candidate dropped.
+- **New, unplanned, most informative** — the C2 lag profile: the short leg is a 1–3 day reversal (`sh` +43.7% at lag 0 → +6.0% at lag 5) while the long leg is *negative* at lag 0–10 and only turns positive at lag 20–40. That single reading explains both "no EMA can save the long leg" and "the top quantile droops" → new H15/H16/H17.
+- **Only surviving long-leg improvement**: box smoothing written into the expression — `cross_mean(D,20)+EMA20` gives `Ln +4.9%/+7.4%`, still only a third of the known Amt family's same-caliber +12.6%/+22.3%.
+
+Files (absolute paths): `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/07x_01_x1_anatomy.md` (new), `05_hypotheses.md` (round-2 adjudication appended), `state.md` (full rewrite), `orders/R2.md` (new), `journal.md`. Nothing outside `notes/F110_ret_fair_log/` was modified.
+
+**10-04 14:55 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "experiment",
+ "summary": "R1 的两次 exec 终于跑成,本轮把 C/D/E 全部读完并大改假设表:H9 被否定(原式多头腿在 hl 5~120 整张网格都是平的,因为 hl20 之后毛超额与换手同速衰减 —— 基线那条漂亮的单调曲线 100% 是成本的功劳);H2 被支持(权重换成 |D| 每项都更好、换成 σ/σ² 不差,但把波动尺度除掉就变差 ⇒ 整条成交量事件机器是死重,Volume 和 Ret 两个字段多余);H1/H13 改写、H10/H14 否定(S~day_std(Ret) 只有 +0.422;收盘竞价伪影只压低 M 0.5% 而非 3%,清伪影候选不占变体位)。事前没要求的 lag profile 给出本轮最重要的新读法:空头腿是 lag 0~3 的快反转、多头腿在 lag 0~10 为负、只有 lag 20~40 才转正 —— 一条读数同时解释了「EMA 救不了多头腿」和「顶档回落」,并生出 H15/H16/H17。唯一还活着的改进是把盒式平滑写进表达式(cross_mean(D,20)+EMA20 给 Ln +4.9%/+7.4%,但只有已知家族同口径的三分之一)。所以下工单 R2(2 次运行):run S1_long 用 8 个表达式变体验 numpy→引擎的桥 + 同窗口下四种权重对照 + 砍掉最近 10 天(H15)+ 收盘到收盘版(H17);exec x2 跑 G H I 回答用户口径必答的「相对已知家族有没有增量」(H8/H11)。下一轮即可写 10_distilled.md 的事前判据并读留出段。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
+## 它写过 / 改过的文件
+
+- `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/07x_01_x1_anatomy.md`
+- `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/orders/R2.md`
+- `/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/state.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "experiment",
+ "summary": "R1 的两次 exec 终于跑成,本轮把 C/D/E 全部读完并大改假设表:H9 被否定(原式多头腿在 hl 5~120 整张网格都是平的,因为 hl20 之后毛超额与换手同速衰减 —— 基线那条漂亮的单调曲线 100% 是成本的功劳);H2 被支持(权重换成 |D| 每项都更好、换成 σ/σ² 不差,但把波动尺度除掉就变差 ⇒ 整条成交量事件机器是死重,Volume 和 Ret 两个字段多余);H1/H13 改写、H10/H14 否定(S~day_std(Ret) 只有 +0.422;收盘竞价伪影只压低 M 0.5% 而非 3%,清伪影候选不占变体位)。事前没要求的 lag profile 给出本轮最重要的新读法:空头腿是 lag 0~3 的快反转、多头腿在 lag 0~10 为负、只有 lag 20~40 才转正 —— 一条读数同时解释了「EMA 救不了多头腿」和「顶档回落」,并生出 H15/H16/H17。唯一还活着的改进是把盒式平滑写进表达式(cross_mean(D,20)+EMA20 给 Ln +4.9%/+7.4%,但只有已知家族同口径的三分之一)。所以下工单 R2(2 次运行):run S1_long 用 8 个表达式变体验 numpy→引擎的桥 + 同窗口下四种权重对照 + 砍掉最近 10 天(H15)+ 收盘到收盘版(H17);exec x2 跑 G H I 回答用户口径必答的「相对已知家族有没有增量」(H8/H11)。下一轮即可写 10_distilled.md 的事前判据并读留出段。",
+ "state_written": true
+}
+```
 
 ## 它拿到的任务书
 

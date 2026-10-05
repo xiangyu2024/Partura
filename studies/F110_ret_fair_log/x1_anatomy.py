@@ -305,6 +305,12 @@ with Study(FID) as st:
             say(f"  [{k[:2]}] short decile: {nb.sum() / max(short.sum(), 1):.4f} of name-days are unbuyable-next-open; their mean raw label {np.nanmean(raw[s][nb])*1e4:+.1f} bp "
                 f"vs the buyable shorts {np.nanmean(tgt[s][short & np.isfinite(tgt[s])])*1e4:+.1f} bp vs universe {np.nanmean(tgt[s])*1e4:+.1f} bp")
 
+    # R2: the long-only candidates from R1's D section (roll_mean is the numpy twin of cross_mean)
+    CM20 = -ema(roll_mean(D, 20), 20)
+    CMT20 = -ema(roll_mean(T, 20), 20)
+    CM20L = -ema(roll_mean(np.vstack([np.full((10, D.shape[1]), np.nan), D[:-10]]), 20), 20)
+    SIG["cm20"] = CM20.astype(np.float32)
+
     # ================================================================== G matched neutralisation
     if "G" in SECTIONS:
         say("\n== G rank-space neutralisation of the base traded signal (daily cross-sectional OLS; residual is not re-smoothed)")
@@ -313,15 +319,12 @@ with Study(FID) as st:
         sets = {
             "9 controls (S0: R2 0.349)": dict(ctl),
             "EMA20(D)": {"a": matched["mEMA_D"]},
-            "EMA20(D*sigma)": {"a": matched["mEMA_Dsig"]},
             "EMA20(Dcc)": {"a": matched["mEMA_Dcc"]},
-            "EMA20(D), EMA20(Don)": {"a": matched["mEMA_D"], "b": matched["mEMA_Don"]},
-            "EMA20(sigma), EMA20(|T|)": {"a": matched["mEMA_sigma"], "b": matched["mEMA_absT"]},
             "EMA20(D), EMA20(sigma), EMA20(|T|)": {"a": matched["mEMA_D"], "b": matched["mEMA_sigma"], "c": matched["mEMA_absT"]},
             "9 controls + EMA20(D) + EMA20(sigma) + EMA20(|T|)": {**ctl, "a": matched["mEMA_D"], "b": matched["mEMA_sigma"], "c": matched["mEMA_absT"]},
             "known_stdamt_mean30": {"a": known["known_stdamt_mean30"]},
-            "4 known families": dict(known),
-            "9 controls + 4 known": {**ctl, **known},
+            "EMA20(cross_mean(D,20))": {"a": CM20},
+            "ctl_mom20 alone": {"a": ctl["ctl_mom20"]},
         }
         for k, s in SP.items():
             n = s.stop - s.start
@@ -333,7 +336,7 @@ with Study(FID) as st:
                 say(f"  [{k[:2]}] {nm:<52} R2 {info['mean_r2']:.3f} resid rIC {np.nanmean(dg.rank_ic_series(resid, tgt[s])):+.4f} "
                     f"Lg {b['long_gross_ann']*100:+5.1f}% short {b['short_gross_ann']*100:+5.1f}% LSgross {b['ls_gross_sharpe']:+.2f} LTO {b['long_turnover']*100:4.1f}%")
         # who subsumes whom between the base and the two simplest rewrites
-        for nm, key in (("c1 -EMA20(D)", "c1"), ("c2 -EMA20(D*sigma)", "c2"), ("c6 -EMA20(D*|D|)", "c6")):
+        for nm, key in (("c1 -EMA20(D)", "c1"), ("c2 -EMA20(D*sigma)", "c2"), ("c6 -EMA20(D*|D|)", "c6"), ("cm20 cross_mean(D,20)+EMA20", "cm20")):
             for k, s in SP.items():
                 n = s.stop - s.start
                 r1, i1 = dg.neutralise(sig[s], {"a": SIG[key][s]})
@@ -352,7 +355,8 @@ with Study(FID) as st:
             say(f"  [{k[:2]}] known mean30 alone: rIC {ric(kn, tgt, s):+.4f} {fmt(bk.book_row(kn, tgt, s))}   (S0: Ln +12.6% / +22.3%, Lshp +1.78 / +3.46)")
             say(f"  [{k[:2]}] known max9  alone: rIC {ric(kn9, tgt, s):+.4f} {fmt(bk.book_row(kn9, tgt, s))}")
         partners = {"base hl20": sig, "base hl60": -ema(T, 60), "c1 D hl20": SIG["c1"], "c1 D hl60": -ema(D, 60),
-                    "c2 D*sigma hl20": SIG["c2"], "c14 T+ hl20": SIG["c14"], "c15 T- hl20": SIG["c15"]}
+                    "c2 D*sigma hl20": SIG["c2"], "c14 T+ hl20": SIG["c14"], "c15 T- hl20": SIG["c15"],
+                    "cm20 cmD20+EMA20": CM20, "cmT20 cmT20+EMA20": CMT20, "cm20lag10 cmD20lag10+EMA20": CM20L}
         for nm, p in partners.items():
             zp = zr(p)
             say(f"  -- partner {nm}: rank corr with known mean30 {dg.pair_rank_corr(p[tr], kn[tr]):+.3f}")
@@ -389,7 +393,7 @@ with Study(FID) as st:
         say("\n== I by year (each year starts from an empty book; signs / half-lives as above)")
         stop = va.stop
         rows = {"base hl20": sig, "base hl60": -ema(T, 60), "c1 D hl20": SIG["c1"], "c2 D*sig hl20": SIG["c2"], "known mean30": kn,
-                "known+0.5base": zk + 0.5 * zr(sig)}
+                "known+0.5base": zk + 0.5 * zr(sig), "cm20 cmD20+EMA20": CM20, "known+0.5cm20": zk + 0.5 * zr(CM20)}
         for y in sorted(set(years[:stop].tolist())):
             idx = np.nonzero(years[:stop] == y)[0]
             if idx.size < 20:

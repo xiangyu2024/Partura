@@ -262,11 +262,14 @@ def factor_state(fid: str, agents: list) -> dict:
     reads = sorted({e.get("when") for e in holdout})
     audits = {k: v for k, v in res.items() if k.startswith("audit")}
     issues = [dict(x, lens=v.get("lens", k)) for k, v in audits.items() for x in serious(v)]
-    audited = "audit" in res or ("audit-numbers" in res and "audit-mechanism" in res)
+    kind = (res.get("study") or {}).get("recommended_kind") or ""
+    negative = kind in ("none_robust", "known_family", "original_kept")
+    audited = "audit" in res or ("audit-numbers" in res and ("audit-mechanism" in res or negative))
+    n_crit = sum(1 for x in issues if x.get("severity") == "critical")
     if "revised" in res:
         phase = "done"
     elif audited:
-        phase = "revise" if issues else "done"
+        phase = "revise" if (n_crit or len(issues) >= 2) else "done"
     elif "study" in res:
         phase = "audit"
     else:
@@ -275,7 +278,8 @@ def factor_state(fid: str, agents: list) -> dict:
     nd = ROOT / "notes" / fid
     orders = sorted(p.stem for p in (nd / "orders").glob("R*.md")) if (nd / "orders").is_dir() else []
     cards = sorted(p.stem for p in (nd / "results").glob("R*.md")) if (nd / "results").is_dir() else []
-    return {"fid": fid, "phase": phase, "results": sorted(res), "n_serious": len(issues),
+    return {"fid": fid, "phase": phase, "results": sorted(res), "n_serious": len(issues), "n_critical": n_crit,
+            "study_kind": kind,
             "have_audits": sorted(audits), "orders": orders, "cards": cards,
             "pending_orders": [o for o in orders if o not in cards],
             "dossier": (nd / "02_operators.md").is_file() and (nd / "06_baseline.md").is_file(),
@@ -317,15 +321,17 @@ def state_md(fid: str, st: dict, info: dict) -> str:
                  f"**不许再读**。候选在留出段上的数全在 `runs/{fid}/final.json`(`./scripts/study.sh digest {fid} final`)。")
     else:
         L.append("- 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。")
-    for a in st["agents"][-8:]:
+    if st["agents"]:
+        L.append("- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):")
+    for a in st["agents"][-3:]:
         zs = {"returned": "已返回结果", "failed": "失败", "running": "还在跑", "cut-off": "中断"}[a["status"]]
         if a["status"] == "running":      # very likely the reader itself: no pointer, or it reads its own log
-            L.append(f"- agent `{a['label']}`({a['run']}):还在跑(如果这就是你自己,不用看它的流水)")
+            L.append(f"  - `{a['label']}`:还在跑(多半就是你自己)")
             continue
         if a["size"] < 400_000 and a["status"] != "returned":     # died before doing anything worth reading
-            L.append(f"- agent `{a['label']}`({a['run']}):{zs},几乎没做事(不用看)")
+            L.append(f"  - `{a['label']}`:{zs},几乎没做事")
             continue
-        L.append(f"- agent `{a['label']}`({a['run']}):{zs},最后动作 {local(a['mtime'])} → "
+        L.append(f"  - `{a['label']}`:{zs},最后动作 {local(a['mtime'])} → "
                  f"`handoff/{fid}/agents/{a['phase']}_{('R' + a['round'] + '_') if a.get('round') else ''}{a['agent']}.md`")
     L += ["", "**接手的人该做什么:** " + NEXT[st["phase"]].format(fid=fid, n=st["n_serious"]), ""]
 
@@ -343,7 +349,9 @@ def state_md(fid: str, st: dict, info: dict) -> str:
     own = [e for e in ents if "[auto]" not in e.splitlines()[0]]
     L += [f"## 研究日志(`notes/{fid}/journal.md`:{len(ents)} 条,其中研究员自己写的 {len(own)} 条)", ""]
     if ents:
-        L += ["最近的 12 条(完整的看文件):", ""] + [e + "\n" for e in ents[-12:]]
+        def short(e):
+            return e if len(e) <= 1100 else e[:1100].rstrip() + "\n…(这条日志还有后文,读 journal.md)"
+        L += ["最近的 5 条(更早的和全文看文件):", ""] + [short(e) + "\n" for e in ents[-5:]]
     else:
         L += ["(还没有。之前的研究员没有记日志 —— 它的想法只能从 notes 和动作流水里推。)", ""]
 
@@ -362,7 +370,7 @@ def state_md(fid: str, st: dict, info: dict) -> str:
             for s in c.get("stages", []) or []:
                 vs = s.get("variants", []) or []
                 L.append(f"- **{s.get('id')}**({len(vs)} 个变体){'【读留出段】' if s.get('final') else ''}:{s.get('question', '')}")
-                L.append("  " + "、".join(str(v.get("id")) for v in vs[:24]) + (" …" if len(vs) > 24 else ""))
+                L.append("  " + "、".join(str(v.get("id")) for v in vs[:14]) + (" …" if len(vs) > 14 else ""))
             L.append("")
         except Exception as e:
             L += [f"(配置解析失败:{e})", ""]
@@ -396,8 +404,7 @@ def state_md(fid: str, st: dict, info: dict) -> str:
     nd = ROOT / "notes" / fid
     L += [f"## 已写的 notes(`notes/{fid}/`)", ""]
     if nd.is_dir():
-        for p in sorted(nd.glob("*.md")):
-            L.append(f"- `{p.name}`  {p.stat().st_size} 字节  {local(p.stat().st_mtime)}")
+        L.append("、".join(f"`{p.name}`({p.stat().st_size // 1024 or 1}K)" for p in sorted(nd.glob("*.md"))))
     else:
         L.append("(无)")
     sd = ROOT / "studies" / fid
@@ -516,6 +523,7 @@ def main() -> None:
             out.append({"id": fid, "lib": f.get("lib"), "name": f.get("name"), "expr": f["expr"], "phase": st["phase"],
                         **({"note": f["note"]} if f.get("note") else {}),
                         "dossier": st["dossier"], "have_audits": st["have_audits"], "n_serious": st["n_serious"],
+                        "n_critical": st["n_critical"], "study_kind": st["study_kind"],
                         "holdout_reads": st["holdout_reads"], "has_state_md": st["state_md"] is not None,
                         "pending_orders": st["pending_orders"], "running": [a["label"] for a in st["live"]]})
         print(json.dumps(out, ensure_ascii=False, indent=1))

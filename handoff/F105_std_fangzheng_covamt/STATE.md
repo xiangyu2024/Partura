@@ -1,6 +1,6 @@
 # F105_std_fangzheng_covamt — 交接状态
 
-_自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #25(批次 B01_single_factors)
 - 表达式:`ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)`
@@ -9,13 +9,10 @@ _自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F105_std_f
 
 - **阶段:全部完成**
 - **留出段已经读过 1 次**(10-03 23:11)—— **不许再读**。候选在留出段上的数全在 `runs/F105_std_fangzheng_covamt/final.json`(`./scripts/study.sh digest F105_std_fangzheng_covamt final`)。
-- agent `study:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):中断,最后动作 10-03 20:47 → `handoff/F105_std_fangzheng_covamt/agents/study_a3b8cc84648ef1c22.md`
-- agent `study:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):中断,几乎没做事(不用看)
-- agent `study:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):中断,几乎没做事(不用看)
-- agent `study:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:21 → `handoff/F105_std_fangzheng_covamt/agents/study_a77f2d6ff5f146117.md`
-- agent `audit-numbers:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:33 → `handoff/F105_std_fangzheng_covamt/agents/audit-numbers_ace2cc0e601104fb8.md`
-- agent `audit-mechanism:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:34 → `handoff/F105_std_fangzheng_covamt/agents/audit-mechanism_a634d8b8d73e7330b.md`
-- agent `revise:F105_std_fangzheng_covamt`(wf_759ef2d3-03f):已返回结果,最后动作 10-04 00:19 → `handoff/F105_std_fangzheng_covamt/agents/revise_a05e6538df5a93b1b.md`
+- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
+  - `audit-numbers:F105_std_fangzheng_covamt`:已返回结果,最后动作 10-03 23:33 → `handoff/F105_std_fangzheng_covamt/agents/audit-numbers_ace2cc0e601104fb8.md`
+  - `audit-mechanism:F105_std_fangzheng_covamt`:已返回结果,最后动作 10-03 23:34 → `handoff/F105_std_fangzheng_covamt/agents/audit-mechanism_a634d8b8d73e7330b.md`
+  - `revise:F105_std_fangzheng_covamt`:已返回结果,最后动作 10-04 00:19 → `handoff/F105_std_fangzheng_covamt/agents/revise_a05e6538df5a93b1b.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F105_std_fangzheng_covamt/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
@@ -61,30 +58,7 @@ _自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F105_std_f
 
 ## 已写的 notes(`notes/F105_std_fangzheng_covamt/`)
 
-- `01_expression.md`  796 字节  10-03 23:17
-- `02_operators.md`  1856 字节  10-03 18:40
-- `03_decomposition.md`  1821 字节  10-03 18:40
-- `04_grammar.md`  1652 字节  10-03 18:40
-- `05_hypotheses.md`  5573 字节  10-03 23:17
-- `06_baseline.md`  3246 字节  10-03 18:43
-- `07_S1_what.md`  4281 字节  10-04 00:07
-- `07_S1b_events.md`  6424 字节  10-04 00:14
-- `07_S2_nodes.md`  4212 字节  10-03 22:50
-- `07_S3_family.md`  4733 字节  10-04 00:08
-- `07_S4_longleg.md`  6536 字节  10-04 00:14
-- `07_S_final.md`  6215 字节  10-04 00:15
-- `07_conditional.md`  3793 字节  10-04 00:09
-- `07_controls.md`  1068 字节  10-03 23:09
-- `07_neutralise.md`  3047 字节  10-03 23:09
-- `07x_events.md`  8400 字节  10-04 00:15
-- `07x_longleg.md`  5989 字节  10-04 00:09
-- `07x_review_audit.md`  8841 字节  10-04 00:03
-- `07x_revision.md`  20173 字节  10-04 00:06
-- `08_variants.md`  3371 字节  10-04 00:09
-- `09_diagnosis.md`  11941 字节  10-04 00:11
-- `10_distilled.md`  13630 字节  10-04 12:04
-- `11_risks.md`  4522 字节  10-04 00:13
-- `12_next.md`  2974 字节  10-04 00:13
+`01_expression.md`(1K)、`02_operators.md`(1K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(5K)、`06_baseline.md`(3K)、`07_S1_what.md`(4K)、`07_S1b_events.md`(6K)、`07_S2_nodes.md`(4K)、`07_S3_family.md`(4K)、`07_S4_longleg.md`(6K)、`07_S_final.md`(6K)、`07_conditional.md`(3K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_events.md`(8K)、`07x_longleg.md`(5K)、`07x_review_audit.md`(8K)、`07x_revision.md`(19K)、`08_variants.md`(3K)、`09_diagnosis.md`(11K)、`10_distilled.md`(13K)、`11_risks.md`(4K)、`12_next.md`(2K)
 
 ## 自写的探针与分析脚本(`studies/F105_std_fangzheng_covamt/`)
 

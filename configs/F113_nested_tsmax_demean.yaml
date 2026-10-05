@@ -48,13 +48,16 @@ gates:
 corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl_rev1, ctl_mom20,
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 corr_ids: [c1_b_max5, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c5_nopow15, c6_nomul_nosub,
-           c7_nofold_in, c8_nofold_out, c9_rankfold, c10_medfold]
+           c7_nofold_in, c8_nofold_out, c9_rankfold, c10_medfold,
+           n2_max79_plain, n4_dvol50_plain, m1_rel79_max, m2_rel50_absmax, m3_rel50_absmean,
+           w1_c4_62, w2_c4_102, kf_mean30, kf_max9, cb_c4_kf30]
 
 diagnostics:
   decay:      [v_base]
-  by_year:    [v_base, c3_g_fold1, c9_rankfold]
-  neutralise: [v_base, c3_g_fold1, c9_rankfold]
-  profile:    [v_base, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c8_nofold_out, c9_rankfold]
+  by_year:    [v_base, c3_g_fold1, c9_rankfold, c4_nodemean_out, kf_mean30, cb_c4_kf30]
+  neutralise: [v_base, c3_g_fold1, c9_rankfold, c4_nodemean_out, kf_mean30]
+  profile:    [v_base, c2_e_rel34, c3_g_fold1, c4_nodemean_out, c8_nofold_out, c9_rankfold,
+               n2_max79_plain, m1_rel79_max, kf_mean30, cb_c4_kf30]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -78,3 +81,17 @@ stages:
       - {id: c8_nofold_out, group: ablate, expr: "ts_max(cs_demean(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)), 30)", why: "H2/H3:在 c6 基础上删外层 pow_2,并且**必须同时删 pow_1_5** —— cs_demean 的输出可正可负,而 pow_1_5 的内核对 e>1 走不保号分支,负数输入会静默变成 NaN(02_operators.md 的坑在这里会被触发)。这把外层单调化,因子变成「30 日内 G 相对截面均值的最大带符号偏离」。若多头腿在这里明显变好,说明外层折叠就是毁掉多头腿的那一步"}
       - {id: c9_rankfold, group: sublimate, expr: "pow_1_5(ts_max(pow_2(cs_demean(cs_rank(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), 30))", why: "H2/H8 升华候选:在 c6 的外层 cs_demean 之前插入 cs_rank。原式折叠的中心是 mean_cs(G),而 G 右偏极重(平方后再取两次 max),均值被右尾拖到远高于中位数的位置,所以「离均值近」不是「在分布中间」而是「在一条偏高分位的窄带上」。秩空间折叠把中心移到中位数,同时把 6 次齐次的极端尺度压进 [0,1]。若 valid 分位剖面 Q3 峰值(+11.5%)代表的「中间最赚钱」是真的,这一条的多头腿应明显好于原式"}
       - {id: c10_medfold, group: sublimate, expr: "pow_1_5(ts_max(pow_2(sub(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), cs_median(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20)))), 30))", why: "H2 的另一半:只把折叠中心从均值挪到中位数,不压尺度。cs_median 的内核返回「当天截面中位数广播成全形状」(expand_as),所以 sub(G, cs_median(G)) 就是去中位数。c9 与 c10 一起把「中心错位」和「尺度过大/EMA」两个嫌疑分开:两条都变好 → 是中心错位;只有 c9 变好 → 是尺度"}
+
+  - id: S2_bench
+    question: "c4 这一类候选是不是朴素长窗 MAX / 低波动的改写?最小结构能不能保住它的多头腿?它相对已知家族有没有增量?"
+    variants:
+      - {id: n2_max79_plain, group: naive, expr: "ts_max(ts_max(day_mean(Ret), 50), 30)", why: "Q1 核心:79 日朴素 MAX —— 把 c4 的两次 cs_demean 和两次 pow_2 全部拿掉,只留下「过去约 79 天最好的一天有多好」。与 c4(+6.9%/+13.3%)比:如果两段都在 ±2pp 内且 rank 相关 ≳0.8,c4 就是这条朴素 MAX 的改写,整个研究的候选应该换成这条更简单的"}
+      - {id: n4_dvol50_plain, group: naive, expr: "ts_stddev(day_mean(Ret), 50)", why: "Q1 对照:50 日朴素波动。c4 的交易信号与 ctl_dvol20 的交易信号相关 +0.60,但朴素低波动的多头腿是负的(ctl_dvol20 −11.1%/−2.7%)。这条在同一张表、同一窗口量级上复现「相关高但表现相反」,是「c4 不是低波动」的直接替换证据"}
+      - {id: m1_rel79_max, group: distil, expr: "ts_max(ts_max(cs_demean(day_mean(Ret)), 50), 30)", why: "提纯候选:79 日**相对**收益的 MAX。相对 c4 删掉了内层 5 日 max 和两次 pow_2,只剩 cs_demean + 长窗 max(4 个节点)。如果多头腿保住,这就是本研究能给出的最小结构"}
+      - {id: m2_rel50_absmax, group: distil, expr: "ts_max(abs_(cs_demean(day_mean(Ret))), 50)", why: "提纯候选的折叠版:50 日内最大的**绝对**相对收益。与 m1(单侧)比:在最小结构下,「两侧都算」是加分还是减分(外层折叠在原式里是减分,内层折叠 c7 也是减分,这里问最后一次)"}
+      - {id: m3_rel50_absmean, group: distil, expr: "ts_mean(abs_(cs_demean(day_mean(Ret))), 50)", why: "MAX 语义的生死检验:与 m2 同原子同窗口,只把 max 换成 mean(= 50 日平均绝对相对收益)。如果 m3 ≈ m2,这条因子的「极值记忆」是装饰,它其实是一个相对波动因子;如果 m3 明显差,极值记忆是 load-bearing 的"}
+      - {id: w1_c4_62, group: neighbour, expr: "ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 10)", why: "邻域:c4 的外层 ts_max 窗口 30→10,累计回看 82→62 天。R1 的消融阶梯显示回看越长多头腿越好(5日 −5.8%/+5.4% → 34日 −1.1%/+8.5% → 54日 +6.8%/+9.6% → 82日 +6.9%/+13.3%),这条检验这个阶梯在 c4 的结构上是不是平滑的、而不是 82 这个点被挑出来的"}
+      - {id: w2_c4_102, group: neighbour, expr: "ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 50)", why: "邻域的另一侧:外层 ts_max 30→50,累计回看 102 天。和 w1 一起给出 62/82/102 三点;若 82 是局部尖峰而两侧塌,写进风险"}
+      - {id: kf_mean30, group: known, expr: "cross_mean(day_std(Amt), 30)", why: "已知家族基准之一,**必须进同一张表**:06_baseline.md §8 那张已知家族表的半衰期很可能是用旧的多空口径选的(S0 跑的时候 books.rank_by 还是 'ls',R0 异常③),所以那里的 Lnet 不一定是多头最优半衰期下的数。放进这个阶段用当前 rank_by: long 重算一次,才能和候选公平比较"}
+      - {id: kf_max9, group: known, expr: "cross_max(day_std(Amt), 9)", why: "已知家族基准之二(同上)。§8 记的是 hl=0 / Lnet +9.3%/+18.5%,而 R1 区块 5 用多头口径重选得到 hl=5(结果卡异常 1)。这条变体把这个矛盾一次解决"}
+      - {id: cb_c4_kf30, group: increment, expr: "add(cs_rank(ts_max(ts_max(pow_2(ts_max(cs_demean(ts_max(day_mean(Ret), 5)), 30)), 20), 30)), cs_rank(cross_mean(day_std(Amt), 30)))", why: "Q2 核心(增量的「相加」检验,playbook §6.2 指定的两种检验之一):把 c4 和已知家族各自转成当天截面秩再等权相加。两者的交易方向都是 -1,所以相加在方向上是一致的、不会互相抵消。判据:这条的多头腿两段都要比 kf_mean30 和 kf_max9 各自好 ≳2pp 才算有增量"}

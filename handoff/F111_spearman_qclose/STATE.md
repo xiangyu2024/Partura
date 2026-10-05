@@ -1,6 +1,6 @@
 # F111_spearman_qclose — 交接状态
 
-_自动生成于 2026-10-04 14:24(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #953(批次 B01_single_factors)
 - 表达式:`ts_spearman(day_quantile(Close), 10)`
@@ -9,215 +9,99 @@ _自动生成于 2026-10-04 14:24(`python scripts/recorder.py --brief F111_spear
 
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
-- agent `study:F111_spearman_qclose#2`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `study:F111_spearman_qclose#3`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `work:F111_spearman_qclose#0`(wf_c8c98127-70d):已返回结果,最后动作 10-04 13:09 → `handoff/F111_spearman_qclose/agents/work_R0_a067aac26fed39d46.md`
-- agent `lead:F111_spearman_qclose#1`(wf_c8c98127-70d):已返回结果,最后动作 10-04 13:26 → `handoff/F111_spearman_qclose/agents/lead_R1_ab403fe60ef06a414.md`
-- agent `work:F111_spearman_qclose#1`(wf_c8c98127-70d):失败,最后动作 10-04 13:29 → `handoff/F111_spearman_qclose/agents/work_R1_aba23855eadec7a06.md`
-- agent `work:F111_spearman_qclose#1`(wf_c8c98127-70d):失败,几乎没做事(不用看)
-- agent `lead:F111_spearman_qclose#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 13:55 → `handoff/F111_spearman_qclose/agents/lead_R1_a36c37b71e6d128ea.md`
-- agent `work:F111_spearman_qclose#1`(wf_48864a04-f0a):还在跑(如果这就是你自己,不用看它的流水)
+- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
+  - `lead:F111_spearman_qclose#2`:已返回结果,最后动作 10-04 15:24 → `handoff/F111_spearman_qclose/agents/lead_R2_af0c892fdf47993a9.md`
+  - `work:F111_spearman_qclose#2`:失败,最后动作 10-04 15:41 → `handoff/F111_spearman_qclose/agents/work_R2_ad160550f51aa21dd.md`
+  - `work:F111_spearman_qclose#2`:失败,几乎没做事
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F111_spearman_qclose` 看服务器上的 tag,`./scripts/study.sh digest F111_spearman_qclose <tag>` 重看结果)。
 
-## 研究现状(`notes/F111_spearman_qclose/state.md`,10-04 13:54 更新)—— **先读这个文件**
+## 研究现状(`notes/F111_spearman_qclose/state.md`,10-04 15:21 更新)—— **先读这个文件**
 
 # F111_spearman_qclose 研究现状
 
-> 本文件每轮由**主研覆盖重写**。最后更新:**第 1 轮(主研,Opus 5,重启的那一次)**,2026-10-04。
+> 本文件每轮由**主研覆盖重写**。最后更新:**第 2 轮(主研,Opus 5)**,2026-10-04。
 > 表达式:`ts_spearman(day_quantile(Close), 10)`,来源 挖掘库 / #953。
 
 ---
 
 ## 1. 一句话现状
 
-**R1 工单已写好但一个字都还没执行**(上一个执行 agent 在动手前就因对话额度耗尽失败;额度现已重置)。
-我这一轮(第 1 轮的重启)按工作流规矩**没有另开工单**,而是:
-**自己把 R1 的第 1 项做掉了(H5 ⇒ 已确立)**、从同一个恒等式里推出一条和 H2 竞争的新假设 **H11**
-并写进 `05_hypotheses.md`、给 R1 加了一个零成本的判别小项 **(c4)**。
-**下一步仍然是执行去跑 R1**(阶段 `S1_whatis` 6 变体 + 脚本 `x1_identity.py` 的 4 个 block + (c4)),
-回来之后由第 2 轮主研裁决 H1/H2/H3/H4/H6/H7/H10/H11。
+**R1 已经跑完并裁决完了:身份定清了,「它是什么」这一问基本答完。**
+我这一轮读完 `results/R1.md`,写了 `07_S1_whatis.md`、`07x_1_identity.md`,把 H1/H2/H3/H6/H7/H10/H11 全部裁决
+(H1 确立、H3/H6/H10 被否定、H7 成立、H2 被限定、H11 改写),**并发现了一条不在任何原假设里的承重件**
+(见 §2.2)。H4(「对纯多头用户没有增量」)已经**被强烈支持**,但还差最后一步。
+**下一步:执行去跑 R2**(阶段 `S2_window` 8 个变体扫窗口 `d` + 脚本 `x2_increment.py` 的 5 个 block),
+回来之后第 3 轮主研就应该能定 H4,然后**直接进读留出段**(研究已经可以收口了)。
 
 ---
 
-(…全文 15797 字符,读 `notes/F111_spearman_qclose/state.md`)
+(…全文 21014 字符,读 `notes/F111_spearman_qclose/state.md`)
 
-## 研究日志(`notes/F111_spearman_qclose/journal.md`:8 条,其中研究员自己写的 4 条)
+## 研究日志(`notes/F111_spearman_qclose/journal.md`:13 条,其中研究员自己写的 6 条)
 
-最近的 12 条(完整的看文件):
+最近的 5 条(更早的和全文看文件):
 
-### 2026-10-04 12:46 [总领] 分层工作流接手:建档(执行)→ 主研/执行轮转
+### 2026-10-04 14:35 [执行] R1:S1_whatis(6变体)+x1_identity(a/b/c/c4/d)全部跑完,结果卡 results/R1.md
 
-### 2026-10-04 13:06 [执行] R0 建档完成:四份 notes 和结果卡写完,主要发现 ts_spearman 实为跨股票横截面平均相关
+两次服务器运行均 exit 0:run S1_whatis(285s)、exec x1_identity.py(4个block+c4,无一触发except)。
+自检先过(完整窗口rank_var=8.25精确;暴力双循环vs proj逐日rank相关0.9998)。
 
-看到了什么:读完 day_quantile(dt_day.py:150)、ts_spearman(nd_ts.py:483)源码。day_quantile(Close) 省略 q
-参数,落到默认 q=0.5(日内中位价),不是特殊分位点。ts_spearman 声明 arity=1、family=ts,但函数体内有
-for i in range(N) 跨股票循环:对每只股票,算它与全市场其它每只股票同窗口的 Spearman 相关,再取平均
-——不是单变量时间序列统计量,"操作数"是股票轴本身,树结构里看不出来。S0_baseline 精确复现了
-published 行:sign=+1、hl_ls=10、books_user.by_rank.ls.hl10.splits.utrain 的 ls_sharpe=2.616→2.62,
-long_gross_ann=0.16394→0.164,都对上,但 published.long 列是毛超额不是净超额(净超额同口径只有
-11.8%),这是最容易被后续研究张冠李戴的一点。决策口径(train 定,hlL=20):Lnet train+10.4%/valid
-+17.0%;多空口径 hlS=10:LS train 2.41/valid 3.20。多头腿只占 long-short 总收益 37%~39%(long_share)。
-分位剖面 train/valid 都严格单调。rank 相关最高是 known_stdamt_mean30(−0.42),远低于 0.95 的同族门槛。
-cov=0.99、dist=0.85 都过门槛。
+H1(block a):proj与f在窗口完整格子(占98.7%)上逐日Spearman精确=1.0000(全部格子mean=0.9974);
+proj自己当因子Lnet+10.95%/+17.09%几乎复刻v_base(+10.4%/+17.0%)。m_mktcorr(表达式近似版)
+rank相关0.74,在工单先验0.6~0.9内。
 
-记录了什么:写了 01_expression.md、02_operators.md、03_decomposition.md、06_baseline.md 和
-results/R0.md(结果卡列了 12 条异常/待核对点,包括:脉冲记忆天数探针读数=0 与 10 天窗口的直觉不符;
-day_median 的底层 C._median 源码读不到(工具只解析注册算子名);三套 R²〈0.276/0.253/0.287〉和两个
-工具的 rank 相关〈-0.35 对 -0.34〉不是同一口径;逐年/衰减/中性化用的半衰期 hl_used=20 是靠数字反推
-确认的,JSON 没有显式标注;此前 3 次 study agent 都因对话额度耗尽 0 工具调用失败,没留下任何文件)。
-全部是事实陈述,没有下假设或结论。
+H2/H11(block b):f vs rho_time按c(t)符号分组,|0.47|(c>0,644天)/|0.60|(c<0,706天)——
+没有干净落进state.md预先定的<0.5"松"或>0.8"紧"两档(一侧压线、一侧卡在中间),待主研裁决。
+(c4)|rank_corr(f,known)|随hl单调上升(3条家族都是,0.23~0.31→0.37~0.39),支持H11那一步预测。
 
-下一步:主研可以直接基于这四份 notes 和结果卡开始定假设、下第一张工单(R1),不需要重跑 S0_baseline
-或重新读算子源码。决定不做的事:没有去验证 day_quantile(Close) 和 day_median(Close) 在偶数分钟数
-下是否逐位相同(需要读 C._median 或直接跑数,留给需要时再做);没有去对齐三套 R² 的口径差异。
+H3(block d):tie比例44%,按十分位Q1(36%)单调升到Q10(51%);去掉并列格子后Lgross基本不变
+(+14.31/+19.07%)但换手从4%涨到23%(5~6倍),净超额塌到-3.58%/+2.52%。同轮l_mean(几乎无并列
+的叶子替换)整体表现(+10.7%/+16.5%)却和v_base几乎一样——两条证据有张力,留给主研取舍。
 
-### 2026-10-04 13:26 [主研] 第 1 轮:源码推出恒等式——原式的截面序 ≡ 对市场秩路径的投影,即条件动量;下 R1 工单
+H4(block c,最重要):3条known_*家族,主口径残差多头腿净超额还剩+3.7~+5.2%(train)/+6.3~+7.8%
+(valid);S0§7可比口径(残差不重新平滑)在train上三条全转负、valid接近零。组合w=0.25时
+known_stdamt_max9/known_amt_max9两条家族train(+amt_max9的valid)有小幅提升(Lshp最多1.95→2.21),
+known_stdamt_mean30没有看到同样提升。
 
-看到了什么(自己核对源码 + 读 R0 建档):
-1. 自己读了 ts_spearman / ts_pearson / cs_mean / ts_corr 源码,确认 R0 的语义读法,并多读出四件事:
-   (i) 秩是 argsort(argsort(x, stable=True), stable=True) 的序数秩,**相等的值按日期顺序发秩**;
-   (ii) cs_mean 返回 .expand_as(x),输出是 (D,N) 广播面板,可以直接喂 ts_corr;
-   (iii) ts_pearson 已重写成 chunked matmul,比还留着 for i in range(N) 的 ts_spearman 快得多;
-   (iv) 实现瑕疵:cov 除以两只股票**重叠**的有效天数,而 rank_std 各自在**自己**的有效天数上算,
-        缺失模式不同时分母口径不一致,"相关系数"可超出 [-1,1](影响约 1% 的停牌/新股格子)。
-2. 本轮的核心产出:把根节点那个 O(N^2) 的"对全市场其他每只股票求 Spearman 再平均"**精确解掉**
-   (写进 04_grammar.md)。关键一步:窗口完整时窗口内的秩必然是 {0..9} 的排列,所以每只股票的
-   rank_mean=(d-1)/2、rank_var=(d^2-1)/12 都是**同一个常数**,corr=cov/(std_i*std_j) 的分母不区分股票,
-   于是对 j 的平均可以换进求和号:
-     B[t,i] = (N/(N-1)) * (1/(d*sigma^2)) * SUM_k rc_i[t,k]*M[t,k]  -  1/(N-1)
-   M[t,.] 是全市场平均的"窗口内去均值秩路径",在第 t 天对所有股票是同一个 10 维向量;j≠i 的自排除
-   精确等于一个常数项,不影响截面序。又因 ||rc_i|| 对每只股票都相同,内积序=相关序=回归 beta 序。
-   再把 M 一阶近似成直线 c(t)*(k-4.5),得到 B ≈ c(t) * rho_i^time:
-   **(市场 10 日趋势方向) × (自己的 10 日秩动量)= 条件动量**。
+H6/H7/H10:s_pearson(+10.7%/+16.9%)、l_last(+11.1%/+18.4%)和v_base打平甚至略好,ran
+…(这条日志还有后文,读 journal.md)
 
-判断:
-- H1(配对结构多余)、H2(条件动量)是源码推导,**不是证据**,R1 block (a)/(b) 才是实证检验。
-- 推导顺手解释了基线里最别扭的读数:ctl_mom20 的 rank 相关只有 -0.08、R^2 只有 0.056。若它是条件动量,
-  c(t) 时正时负,**无条件**地和动量比相关性本来就该被抵消 —— 低相关不等于"和动量无关"。
-  (记在这里当反例:不要用无条件相关去排除动量。)
-- 新假设 H3:stable 排序对相等值按日期发秩 ⇒ 10 天里日内中位价完全不变的股票秩路径正好是 0..9,
-  一条**完美上升斜坡**,涨市里拿到接近最高的因子值。day_quantile(Close) 落在 tick 网格上,低价股容易
-  并列(复权只是窗口内的常数乘子,不消除并列)。这是瑕疵型泄漏的候选,必须有答案。
-- 把全局优先级定在 H4:**原式的多头腿已经输给已知家族** —— v_base +10.4%/+17.0%(Lshp 1.79/3.07)
-  低于 known_stdamt_mean30 +12.6%/+22.3%(1.78/3.46)和 known_stdamt_max9 +13.7%/+22.2%(1.99/3.59)。
-  所以"这条因子单独好不好"不是问题,"相对已知家族有没有增量"才是。S0 §7 的中性化已有强烈迹象:
-  对 all_controls 中性化后多头腿**毛**超额从 +13.6% 掉到 +0.1%(但那是 9 个 ctl_*,**不是 known_* 家族**)。
-- H5:用成本公式 2*LTO*15bp*~254 反推(在 hl=10/20 两点上吻合到 0.04pp),固定半衰期表的**毛**超额
-  在 hl=0..20 上几乎是平线(≈+14%),也就是说平滑的全部功劳是省成本(换手 29.9%→4.1%),没有改变
-  信号内容。推论:hl=20 已是半衰期池上界,真正的升华杠杆是**更长的窗口 d**;衰减表(rank IC 从 h=1
-  的 0.0298 单调升到 h=20 的 0.0710)指向同一边。**这三行是反推的、不是实测**,R1 第 1 项零成本核实。
+### 2026-10-04 15:23 [主研] 第 2 轮:R1 全部裁决——恒等式精确成立,但承重件是「每只股票等权」而不是「秩」,便宜写法堵死;H4 被强烈支持;下 R2 扫窗口 d + 双重排序
 
-决定做什么:下 R1(kind: experiment),2 次服务器运行 + 1 项不花服务器的 JSON 重读:
-  第 1 项(不花服务器):从本地 S0_baseline.json 读固定半衰期表的 long_gross_ann → 定 H5。
-  第 2 项(run, tag S1_whatis, 6 变体):m_mktcorr=ts_corr(A, cs_mean(A),10) 测 H1;s_pearson 测 H6;
-    l_mean=ts_spearman(day_mean(Close),10) 测 H3(分钟均价几乎不并列);l_last 测 H7;l_amt 测 H10;
-    t_tsrank=ts_rank(A,10) 测 H2(纯动量,没有 c(t) 条件化)。
-  第 3 项(exec, tag x1_identity):(a) numpy 按源码复刻秩路径、算 proj,与原式做逐日 Spearman ——
-    恒等式的实证检验,**不依赖表达式语言能不能写出 m_mktcorr**;(b) 按 c(t) 符号分组的条件相关(H2);
-    (c) **对 3 条 known_* 家族的残差多头腿 + 5 个权重的组合多头腿(H4,最重要)**;(d) 并列占比、
-    按十分位的分布、去掉并列格子后的书(H3)。脚本开头用随机数组做自检:暴力双循环算
-    mean_{j≠i} spearman 与 proj 的 rank 相关应 ≈1.0 —— 不过就说明我的推导错了。
+看到了什么(读 results/R1.md 两次运行的全部数字):
 
-决定不做什么:
-- **不扫窗口 d**。它是最有希望的升华杠杆,但扫法取决于 H1:H1 成立就该在便宜的 ts_corr/cross_corr
-  形式上扫(cross_* 窗口池到 60/241),而不是在带 Python 循环的 ts_spearman 上扫。先定身份,再扫参数。
-- 不做 abs_corr=True / agg="std":取绝对值是**折叠**,会破坏 H1 的线性投影性质,也会让 playbook §6.5
-  ("折叠骗过秩空间线性中性化")开始适用、H4 的检验口径得跟着换。那是另一条因子,不是这条的提纯。
-- 不碰封板票对空头腿的污染(H8)、不确认 H9 的 valid 分段:多头腿不受影响,不动摇选拔结论,放 R2。
-- 不对齐三套 R^2(0.276/0.253/0.287)和两个工具的 rank 相关(-0.35/-0.34):差异 0.01~0.03,无影响。
-- 不验证 day_quantile(.,0.5) 与 day_median 逐位相同;不自己写 probes.py(R0 那个"脉冲记忆=0"的怪读数
-  已被 04_grammar.md 解释掉:对全市场取平均把单只股票的脉冲摊薄了 1/N,不需要新探针)。
+1. **H1 确立,而且是恒等不是近似**:窗口完整的格子(占 98.70%)上 numpy 复算的 proj 与原式面板的
+   逐日 Spearman mean/median/p95 全是 1.0000、p05 0.9999;proj 自己当因子 Lnet +10.95%/+17.09%
+   (原式 +10.4%/+17.0%),好的那 0.5pp 来自它少了源码分母口径不一致那个瑕疵(只影响 1.3% 的格子)。
 
-落盘:新写 04_grammar.md、05_hypotheses.md(H1~H10,每条带预测和杀死它的实验)、orders/R1.md、
-state.md(8 节,覆盖重写)。服务器运行预算:R1 用掉 2 次,全研究还剩 6 次(含 final)。
+2. **本轮最重要的发现,不在任何原假设里:承重件是「每只股票等权」,不是「秩」。**
+   S1 里最有信息量的一对比较不是我事前标的主判别项,而是 m_mktcorr 和 s_pearson 这一对:
+   - s_pearson(ts_pearson,保留"先逐股归一再平均",只把秩换成标准化):rank 相关 0.978,
+     Lnet +10.7%/+16.9%,**完全没塌**;固定半衰期表上中段还更好(hl5 +10.7% vs 原式 +7.44%)。
+   - m_mktcorr(ts_corr(A, cs_mean(A),10),改成"先平均再归一"):rank 相关只有 0.742,
+     valid 多头腿从 +17.0% 塌到 **+4.9%**、夏普 3.07 → **0.74**。
+   cs_mean 平均的是**价格水平**(高价股主导),给不出那条等权共识路径 M。
+   ⇒ **H6 被否定**(秩不承重),而且**提纯的便宜路线被堵死** —— ts_corr(A, cs_mean(A), d) 不能用,
+   也不能拿它去扫窗口 d。能用的只有 ts_pearson(chunked matmul,同一本书的便宜实现)。
+   这条已经写进 04_grammar.md 新加的第 5 步(第 1 步末尾那句"提纯方向立刻确定"是错的,已改写)。
+   顺便:第 1 轮 H1 的预测 (c) 写的是"先验 0.6~0.9、不是 1.0,因为 cs_mean 是价格水平的截面均值"
+   —— 实测 0.742,预言连机制一起命中,这是事前写下判据的好处。
 
-### 2026-10-04 13:54 [主研] 第 1 轮(重启):R1 未执行故原样交回;自己把 H5 做成已确立(毛超额平线、hl=20 最低),并推出新假设 H11
+3. **alpha 在条件化里,不在动量里(三条独立证据,已确立
+…(这条日志还有后文,读 journal.md)
 
-背景:上一轮的执行 agent 两次都在动手之前就因对话额度耗尽失败。我核对过:服务器上只有
-S0_baseline、studies/F111_spearman_qclose/ 不存在、配置里只有 S0_baseline 一个阶段、
-两份 work:R1 动作流水显示它们只读了 playbook 和 brief 就停了。⇒ R1 一个字都没执行。
-按工作流规矩**不另开工单**,把 R1 原样交回执行。本轮没有消耗任何服务器运行,预算不变
-(R1 要用 2 次,全研究还剩 6 次含 final)。
+### 2026-10-04 15:35 [auto] 启动 run S2_window:阶段 S2_window
 
-既然不下新工单,我把这一轮用在**不花服务器运行、但能定事的事情**上,做了四件:
+### 2026-10-04 15:39 [auto] S2_window 跑完(exit 97);重看结果:logs/F111_spearman_qclose_S2_window.log
 
-1. **把 R1 的第 1 项自己做完了 —— H5 从「反推」变成「已确立」,而且结论比上一版更强。**
-   books.sweep 里确实没有 long_gross_ann 字段(上一版猜对了)。但我在 partura/books.py 里读到
-   确切的成本与年化口径:long_book() 里 net_daily = gross_daily − cost_per_side × traded、
-   traded = 2 ×(上报的 turnover),stats() 里 ann = mean × 252(**是 252,不是上一版用的 254**),
-   于是 Lgross = Lnet + 0.756 × LTO 可以精确复原。我**先在两个实测点上验过公式**才敢用
-   (有实测 long_gross_ann 的只有两处:by_rank.long 的 hl=20、by_rank.ls 的 hl=10):
-   复原 13.53% vs 实测 13.558%、复原 14.83% vs 实测 14.869%,误差 ≤0.04pp。
-   train 上 7 个固定半衰期的毛超额:
-     hl=0  +14.07%   (LTO 29.88%, 成本 22.59pp, Lnet −8.52%)
-     hl=1  +14.30%
-     hl=2  +15.20%
-     hl=3  +15.35%   ← 最高
-     hl=5  +14.15%
-     hl=10 +14.83%
-     hl=20 +13.53%   ← **最低**(LTO 4.08%, 成本 3.08pp, Lnet +10.45%)
-   ⇒ 毛超额**没有趋势**(13.5%~15.4%),净超额那 18.9pp 的改善**全部**来自成本。
-   **EMA 平滑一点都没改善信号内容,略微还磨掉了一点。**
-   硬约束(playbook §6.1):这条因子的半衰期轴不携带任何信号改善,任何"候选比原式好"
-   都必须在**同一个半衰期**下比;净超额的改善归因只能写"来自平滑/省成本"。
-
-2. **顺手改写掉上一版一个错的推论(这条很重要,免得 R2 建在错前提上)。**
-   上一版从"毛超额是平线"推出"最优平滑还在更远处 ⇒ 更长的窗口 d 是最有希望的升华杠杆"。
-   站不住:(i) 毛超额在 hl>3 之后是**下降**的,hl=10→20 毛超额掉 1.3pp、成本省 1.5pp、
-   净只多 0.22pp —— 净超额曲线已经走平到最优平台,**半衰期轴是被耗尽了而不是没用够**;
-   (ii) 衰减表(rank IC 随预测期 h 单调上升)讲的是**标签期限**,不是**平滑长度**,
-   两根不同的轴不能互为证据。⇒「更长的窗口 d」降级为一个独立的、未经检验的猜想,
-   R2 要扫它得自己立假设,不许引用 H5。
-
-3. **本轮的主要新理解:新假设 H11 —— 被交易的那个东西不是条件动量。**
-   做法是把上一版的恒等式写成「模长 × 夹角」。因为 ‖rc_i‖ = sqrt(d)·σ 对每只股票是同一个常数:
-     B[t,i] = c₁(t) · corr( rc_i[t,·], M[t,·] ) + 常数,  c₁(t) = (N/(N−1))·‖M[t,·]‖/(sqrt(d)·σ)
-   c₁(t) 是一个模长,**恒为正**。所以 B 的符号只由"自己的秩路径和市场秩路径的吻合度"决定,
-   **跟大盘往哪走无关** —— 涨市里跟着涨的、跌市里跟着跌的,**两种都拿到正的高值**。
-   会随市场变号的是"B 与自己的动量 ρ^time 之间的关系",**不是 B 自己**。
-   上一版第 3 步那个 c(t)·ρ_i^time 在代数上没错,但容易被后面的人读成"因子会翻面",
-   所以我把不变量显式写进 04_grammar.md 的新第 4 步。
-   这件事有可检验的后果,**而且第 1 条已经把它检验了**:如果被交易的信号真的每隔几天整本翻面,
-   20 天 EMA 应该把毛超额平均掉一大块;实际只从 +14.07% 掉到 +13.53%(0.5pp),
-   而换手掉了 86%。⇒ **被平滑掉的高频部分几乎不含 alpha,活下来的是跨市场方向不变的那一部分**,
-   也就是"路径吻合度"= 路径干净、跟得上市场 ⇒ **特质波动低**。
-   H11 还**一次解释了基线里 rank 相关的整个形状**:和低波/低活跃一族 −0.3~−0.42
-   (known_stdamt_mean30 −0.42、ctl_amt −0.35、ctl_dvol20 −0.31),而**和动量几乎正交**(ctl_mom20 −0.08)。
-   上一版用"条件化把无条件相关抵消了"解释了后半句,但**解释不了前半句** —— 为什么偏偏和低波
-   一族有这么大的相关。H11 两句都解释。
-   ⇒ 这给 H4(「对纯多头用户没有增量」)提供了**机制**而不只是相关性:用户的已知家族
-   (day_std(Amt) 一族)本身就是活跃度离散度/低波,和它是**同一个暴露**。H4 的先验因此大幅升高。
-   H11 的状态:**合理但未坐实** —— 预测 1 已被毛超额平线支持,预测 2 是对已有读数的事后解释
-   (不算独立证据),预测 3 等 R1 block (c)。
-
-4. **给 R1 加了一个零成本的判别小项 (c4),并标了优先级。**
-   (c4):f 在 7 个 hl 下平滑后与 3 条 known_* 的 rank 相关(7×3 的表,纯 numpy,面板都已在手,
-   不花额外的服务器运行)。H11 预测这条相关的**绝对值随 hl 单调上升**(平滑越久,剩下的越是那个
-   不变的低波暴露);若随 hl 基本不变,H11 的"平滑把它转化成低波因子"这一步就被否定。
-   同时在工单开头写明:第 1 项我已做完(别重算);**block (a) 区分不了 H2 和 H11**
-   (两者都预测 proj 相关 ≈1),真正能区分的是 block (b) 的三个分组相关和 (c4) ——
-   所以 (a)/(b)/(c4) 一个都不许砍,要砍先砍 block (d) 的十分位细表。
-
-决定不做什么:不另开工单(R1 还没跑);不扫窗口 d(理由见上,已降级);
-不做 abs_corr/agg="std"(折叠会破坏 H1/H11 的线性投影性质,且会让 playbook §6.5 开始适用);
-不碰 H8 的封板票污染(多头腿不受影响);不对齐三套 R² 的口径差异(0.01~0.03,无影响)。
-
-落盘:05_hypotheses.md(H5 改写成已确立 + 新增 H11)、04_grammar.md(新增第 4 步:不变量与措辞规矩)、
-orders/R1.md(开头补注 + 数字核对表加第 18 行)、state.md(8 节,覆盖重写)。
-
-### 2026-10-04 14:00 [auto] 启动 run S1_whatis:阶段 S1_whatis
-
-### 2026-10-04 14:20 [auto] 启动 exec x1_identity:studies/F111_spearman_qclose/x1_identity.py
-
-### 2026-10-04 14:20 [auto] S1_whatis 跑完(exit 0);重看结果:./scripts/study.sh digest F111_spearman_qclose S1_whatis
-
-### 2026-10-04 14:24 [auto] x1_identity 跑完(exit 0);重看结果:logs/F111_spearman_qclose_x1_identity.log
+### 2026-10-04 15:40 [auto] 启动 run S2_window:阶段 S2_window
 
 ## 工单与结果卡(`notes/F111_spearman_qclose/orders/`、`notes/F111_spearman_qclose/results/`)
 
 - R0:工单 —,结果卡 有
-- R1:工单 有,结果卡 **还没有(待执行)**
+- R1:工单 有,结果卡 有
+- R2:工单 有,结果卡 **还没有(待执行)**
 
 ## 配置里的实验计划(`configs/F111_spearman_qclose.yaml`)
 
@@ -226,23 +110,19 @@ orders/R1.md(开头补注 + 数字核对表加第 18 行)、state.md(8 节,覆�
   v_base
 - **S1_whatis**(6 个变体):ts_spearman 的全市场两两配对平均,等价于什么更简单的东西?预测力的载体是价格路径、活跃度,还是实现细节?
   m_mktcorr、s_pearson、l_mean、l_last、l_amt、t_tsrank
+- **S2_window**(8 个变体):窗口 d 这根轴上有东西吗?10 天只是任意选择,还是 5~50 里有一个明显更好的频段?
+  a_last_10、w_last_5、w_last_20、w_last_30、w_last_50、w_q_30、pl_last_10、p_last_30
 
 ## 已经跑过的服务器运行(本地已拉回的;服务器上可能还有没拉回的:`./scripts/study.sh list F111_spearman_qclose`)
 
 - `S0_baseline`  10-04 11:54  1 个变体  → `./scripts/study.sh digest F111_spearman_qclose S0_baseline`
 - `S1_whatis`  10-04 14:05  6 个变体  → `./scripts/study.sh digest F111_spearman_qclose S1_whatis`
 - `x1_identity`(自写脚本的输出)  10-04 14:23  exit 0  → `logs/F111_spearman_qclose_x1_identity.log`
+- `S2_window`(自写脚本的输出)  10-04 15:41  exit 97  → `logs/F111_spearman_qclose_S2_window.log`
 
 ## 已写的 notes(`notes/F111_spearman_qclose/`)
 
-- `01_expression.md`  3302 字节  10-04 13:01
-- `02_operators.md`  9303 字节  10-04 13:02
-- `03_decomposition.md`  4429 字节  10-04 13:02
-- `04_grammar.md`  8921 字节  10-04 13:47
-- `05_hypotheses.md`  18535 字节  10-04 13:55
-- `06_baseline.md`  13257 字节  10-04 13:07
-- `journal.md`  15387 字节  10-04 14:24
-- `state.md`  26293 字节  10-04 13:54
+`01_expression.md`(3K)、`02_operators.md`(9K)、`03_decomposition.md`(4K)、`04_grammar.md`(11K)、`05_hypotheses.md`(33K)、`06_baseline.md`(12K)、`07_S1_whatis.md`(7K)、`07x_1_identity.md`(14K)、`journal.md`(26K)、`state.md`(33K)
 
 ## 自写的探针与分析脚本(`studies/F111_spearman_qclose/`)
 

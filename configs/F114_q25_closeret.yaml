@@ -49,14 +49,13 @@ corr_with: [ctl_amt, ctl_cap, ctl_turnrate, ctl_ivol, ctl_dvol20, ctl_price, ctl
             known_amt_max9, known_stdamt_max9, known_ivol_max9, known_stdamt_mean30]
 
 diagnostics:
-  decay:      [v_base]
-  by_year:    [v_base, s1_loc, s1_scl]
-  neutralise: [v_base, s1_loc, s1_scl]
-  profile:    [v_base, s1_q75, s1_loc, s1_scl, s1_q50, s1_std, s1_min, s2_daysum, s2_daymean, s2_dayopen, s3_w5, s3_w30, s3_w60]
+  decay:      [f_fam_m30]
+  by_year:    [v_base, h12_res_best_m30, h12_add_best_m30]
+  neutralise: [f_fam_m30, h12_res_best_m30]
+  profile:    [v_base, f_fam_m30, h12_res_base_m30, h12_res_best_m30, h12_add_best_m30, h12_sub_best_m30, h12_res_base_x9]
   conditional:
-    - {factor: v_base, gate: ctl_cap, buckets: 5}
-    - {factor: v_base, gate: ctl_amt, buckets: 5}
-corr_ids: [s2_daysum, s2_daymean, s2_dayopen, s3_w5, s3_w30, s3_w60, s1_loc, s1_scl]
+    - {factor: h12_res_best_m30, gate: ctl_cap, buckets: 5}
+corr_ids: [f_fam_m30, h12_res_base_m30, h12_res_best_m30, h12_add_best_m30, h12_sub_best_m30, h12_res_base_x9]
 
 stages:
   - id: S0_baseline
@@ -108,3 +107,38 @@ stages:
          why: "加长到 30 天。若在固定半衰期表的同一列上也高于原式 → 结构改进(不是平滑的功劳),这是最便宜的升华候选"}
       - {id: s3_w60, group: window, expr: "cross_quantile_q25(day_close(Ret), 60)",
          why: "加长到 60 天。和 w30 一起给出 5/15/30/60 四点曲线,看是单调还是有内点最优(邻域稳定性)"}
+
+  - id: S4_long
+    question: "窗口加长在哪里饱和?长窗口下「下四分位数」这个稳健统计量还必要吗?完全不带记忆又如何?"
+    variants:
+      - {id: s4_w241, group: window,
+         expr: "cross_quantile_q25(day_close(Ret), 241)",
+         why: "窗口网格的最后一档(年度级)。R1 已见 5<15<30<60 单调上升,这一档决定饱和点。若它继续明显上升,这条因子就是一个年度级慢变股票特征量,结论的性质要改(H16)"}
+      - {id: s4_mean60, group: substitute,
+         expr: "cross_mean(day_close(Ret), 60)",
+         why: "在赢的那个窗口上把「下四分位数」换成最朴素的均值(= 60 日尾盘累计漂移)。打平则整个稳健分位数装置多余、升华版可以更简单;明显更差则读下四分位是必要的(H17)"}
+      - {id: s4_iso, group: isolate,
+         expr: "day_close(Ret)",
+         why: "完全去掉 15 日记忆层。预期换手极高、净值很差,看的是毛超额和 rIC:若已接近原式,则 q25 只是给一个 1 日信号做平滑,「慢变特征量」的读法要推翻"}
+
+  - id: S5_known
+    question: "对只能做多的用户,这条因子相对已知成交额家族有没有增量?"
+    variants:
+      - {id: f_fam_m30, group: known,
+         expr: "cross_mean(day_std(Amt), 30)",
+         why: "已知家族基准本身,用本研究同一口径跑一遍,拿到它的 sign / hlL / 多头腿 —— 下面四条的判读全部要以它为分母"}
+      - {id: h12_res_base_m30, group: neutralise,
+         expr: "cs_regres(cs_rank(cross_quantile_q25(day_close(Ret), 15)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "原式对已知家族做秩空间横截面中性化后的残差。残差多头腿≈0 → 原式没有独立于已知家族的多头腿(H12 成立)"}
+      - {id: h12_res_best_m30, group: neutralise,
+         expr: "cs_regres(cs_rank(cross_quantile_q25(day_close(Ret), 60)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "同上,但用升华候选。若原式的残差≈0 而候选的残差显著为正,那候选的增量是真的新东西,不只是记得更久"}
+      - {id: h12_add_best_m30, group: combine,
+         expr: "add(cs_rank(cross_quantile_q25(day_close(Ret), 60)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "候选与已知家族的等权秩组合(之一)。与 f_fam_m30 单独比:明显更高 → 当小权重补充有用;打平或更差 → 没有增量"}
+      - {id: h12_sub_best_m30, group: combine,
+         expr: "sub(cs_rank(cross_quantile_q25(day_close(Ret), 60)), cs_rank(cross_mean(day_std(Amt), 30)))",
+         why: "同向组合是 add 还是 sub 取决于两者各自拟合出的方向,事前不知道,所以两个都跑;表现好的那个才是同向组合,另一个是对冲组合(应该明显更差)"}
+      - {id: h12_res_base_x9, group: neutralise,
+         expr: "cs_regres(cs_rank(cross_quantile_q25(day_close(Ret), 15)), cs_rank(cross_max(day_std(Amt), 9)))",
+         why: "换另一条已知家族基准(cross_max(day_std(Amt),9))再做一次残差,看 H12 的结论对用哪条家族敏不敏感"}

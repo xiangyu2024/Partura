@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-04 14:30(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -9,187 +9,80 @@ _自动生成于 2026-10-04 14:30(`python scripts/recorder.py --brief F112_scale
 
 - **阶段:研究进行中(还没有结构化结论)**
 - 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
-- agent `study:F112_scale_spow_masktop#2`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `study:F112_scale_spow_masktop#3`(wf_759ef2d3-03f):失败,几乎没做事(不用看)
-- agent `work:F112_scale_spow_masktop#0`(wf_c8c98127-70d):已返回结果,最后动作 10-04 13:11 → `handoff/F112_scale_spow_masktop/agents/work_R0_af0a6582c37fdb9a7.md`
-- agent `lead:F112_scale_spow_masktop#1`(wf_c8c98127-70d):已返回结果,最后动作 10-04 13:28 → `handoff/F112_scale_spow_masktop/agents/lead_R1_a180641d3dc13020d.md`
-- agent `work:F112_scale_spow_masktop#1`(wf_c8c98127-70d):失败,几乎没做事(不用看)
-- agent `work:F112_scale_spow_masktop#1`(wf_c8c98127-70d):失败,几乎没做事(不用看)
-- agent `lead:F112_scale_spow_masktop#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 13:45 → `handoff/F112_scale_spow_masktop/agents/lead_R1_a7d46ff92abd6c517.md`
-- agent `work:F112_scale_spow_masktop#1`(wf_48864a04-f0a):已返回结果,最后动作 10-04 14:29 → `handoff/F112_scale_spow_masktop/agents/work_R1_a6cffe6798a10bbfd.md`
+- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
+  - `lead:F112_scale_spow_masktop#2`:已返回结果,最后动作 10-04 15:00 → `handoff/F112_scale_spow_masktop/agents/lead_R2_a1c959d6b9f32261b.md`
+  - `work:F112_scale_spow_masktop#2`:失败,最后动作 10-04 15:41 → `handoff/F112_scale_spow_masktop/agents/work_R2_ac365408f6933c951.md`
+  - `work:F112_scale_spow_masktop#2`:失败,几乎没做事
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F112_scale_spow_masktop` 看服务器上的 tag,`./scripts/study.sh digest F112_scale_spow_masktop <tag>` 重看结果)。
 
-## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-04 13:44 更新)—— **先读这个文件**
+## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-04 14:58 更新)—— **先读这个文件**
 
 # 研究现状 · F112_scale_spow_masktop
 
-> 第 1 轮主研(Opus 5,**本轮是这一轮的第 2 个 agent**)重写于 2026-10-04 下午。**每轮整个文件覆盖重写**。
-> 接手的人先读这一页,再读 `journal.md` 的最近条目。
+> 第 **2** 轮主研(Opus 5)重写于 2026-10-04 下午。**每轮整个文件覆盖重写。**
+> 接手的人先读这一页,再读 `journal.md` 最近的条目,再读 `results/R1.md`。
 > 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
 
 ---
 
 ## 1. 一句话现状
 
-建档(R0)完成、假设表(H1~H9)已定稿、**第 1 张实验工单 `orders/R1.md` 已下且仍然有效,但还没有结果卡** ——
-原因不是工单有问题,而是**上一个执行 agent 被额度打断了两次,一件事都没做成**(用户已重置额度)。
-本轮主研按规矩**没有另开工单**,只核对了 R1 的前提(配置干净、窗口池合法、服务器上只有 `S0_baseline`)
-并给 R1 补了一段「中断恢复」的执行顺序,然后把 R1 原样重新派给执行。
-下一步:执行照 R1 跑 `S1_minimal`(10 个节点消融/窗口变体)+ `A1_channels`(5 节分析脚本),
-回来之后主研裁决 H1/H2/H2b/H3/H4/H5/H6/H7,再决定 R2(大概率是 H8「相对已知家族有没有增量」)。
+R1 两次运行(`S1_minimal` 10 变体 + `A1_channels` 6 节)**全部跑完**,主研已裁决:
+**原式的五个节点里有三个对多头腿不是正贡献,唯一的跨日窗口也选短了** ——
+删掉横截面截尾,多头腿在**每一个固定半衰期**上都变好(hl20 `+3.7% → +7.1%`,`Lshp +0.66 → +1.05`,换手不变)。
+但同时发现两件扫冷水的事:① 把它「提纯」到最简形式就变成了**已知的 20 日反转**(`ctl_mom20` 自己就有 `+5.4%/+8.0%`);
+② 已知家族的真实数字比上一版 state 写的高得多(`+12.6%~+13.7%` / `+22.2%~+22.3%`,`Lshp +1.78~1.99/+3.46~3.59`),
+**我们最好的候选只有家族的一半**。
+**下一步**:已下工单 `orders/R2.md`(kind: experiment,两次运行)—— 运行 1 `S2_combo` 测「mask 去掉 × 窗口拉长」
+这个从没测过的组合 + 2×2 正交 + 遮最高一成的控制实验;运行 2 `A2_increment` 做 H8(相对已知家族的残差与合成增量),
+那是本研究的决定性问题。留出段**未读**。
 
 ---
 
-(…全文 12068 字符,读 `notes/F112_scale_spow_masktop/state.md`)
+(…全文 17526 字符,读 `notes/F112_scale_spow_masktop/state.md`)
 
-## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:9 条,其中研究员自己写的 5 条)
+## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:17 条,其中研究员自己写的 8 条)
 
-最近的 12 条(完整的看文件):
+最近的 5 条(更早的和全文看文件):
 
-### 2026-10-04 13:10 [执行] R0 建档完成:四份 notes(01/02/03/06)+ 结果卡写完,6 个算子逐个读源码确认
+### 2026-10-04 15:26 [auto] 启动 exec A2_increment:studies/F112_scale_spow_masktop/a2_increment.py
 
-看到了什么:
-- S0_baseline 复现 sign=-1,多头/多空口径都选 hl=20。决策口径 Lnet train+3.7%/valid+5.3%,Lshp +0.66/+0.91,
-  cov=1.00、dist=0.98 过门槛;空头腿毛超额占长短合计(train)约 77%。与批内因子/控制变量/已知家族(交易信号
-  口径和原始面板口径分别看)rank 相关都 ≤0.49,远低于 0.95 同族门槛。留出段确认未读(ledger.json 只有 9 条
-  train/valid/utrain 记录,无 holdout)。
-- 与用户表出入(特别注意里预告的那个):utrain LS Partura+2.59 vs 公布+2.58,Lgross+9.1% vs 公布+8.9%。
-  源码读出两个候选机制——ts_scale 左补 NaN 的窗口边界、cs_mask_top_replace_mean_neg 用 ceil 取整 + 稳定
-  排序打并列——都只是列出约定,没做逐日数值 diff 去验证。
-- 读源码发现两处"和名字不一样":cs_mask_top_replace_mean_neg 因为 _neg 后缀,实际遮罩当天最低 10%而不是
-  字面"mask_top"的最高;ts_scale 每只股票除以自己的滚动和(不是共享分母),一般不是横截面保序的。
-- 工具缺口:day_kurt 内部 `_kurt` 的源码没读到(study.sh src 解析不了 `C._kurt` 这种模块属性调用,
-  `_common_rank` 这种 import 别名调用能解析),用同库另两处 kurt 实现跨证代替,非源码逐字确认。
-下一步(留给主研):中间节点 A~E 的真实数据经验分布、空头腿是否被封板票抬高(day_kurt 是峰度类算子,
-playbook §6.6 点名的风险)、两个候选机制要不要做数值 diff 验证——都还没做,细节见结果卡
-notes/F112_scale_spow_masktop/results/R0.md。
+### 2026-10-04 15:30 [auto] A2_increment 跑完(exit 0);重看结果:logs/F112_scale_spow_masktop_A2_increment.log
 
-### 2026-10-04 13:27 [主研] 第 1 轮:把全树化成一阶展开(两通道+混合权重∝1/价位),定稿假设 H1~H9,下单 R1(S1_minimal 10 变体 + A1_channels 5 节脚本)
+### 2026-10-04 15:32 [执行] R2:S2_combo(10变体)+ A2_increment(§0~§4)全部跑完,exit 0,没有卡住的地方
 
-看到了什么(全部来自 R0 的 S0_baseline,本轮没跑实验):
-- 最响的一个数:原始日频面板 rank 相关里 ctl_mom20 +0.49 是最高项;ctl_mom20 单变量中性化 R²=0.091(全部控制
-  变量里最高),把多头腿毛超额 +8.6%→+1.8%、空头腿 +28.5%→+5.0%,单个控制变量就拿掉约八成。而 ctl_price
-  (R² 0.010)、ctl_cap(0.010)、ctl_rev1(0.008)几乎不动它。=> 它是一个 20~30 日尺度的「相对自身」量,
-  不是水平量、不是规模、不是 1 日反转。
-- 固定半衰期表:Lnet 从 hl0 的 −30.4% 单调升到 hl20 的 +3.7%,hl=20 就是网格上限,还在升;rank IC 随 h 单调
-  升到 h=20 的 +0.0248 仍未转头。=> 起作用的是慢分量,快分量是反向噪声;真实视野可能比 30 天长。
-- 分位剖面 Q1 −28.6% vs Q10 +8.6%(3.3 倍不对称),空头腿占长短合计毛超额 77%。原式多头腿 +3.7%/+5.3%,
-  而已知家族 known_stdamt_max9 自己是 +9.3%/+18.5% —— 原式只有它的 1/3~1/4。
+看到了什么(全部来自 runs/F112_scale_spow_masktop/S2_combo.json 与 logs/F112_scale_spow_masktop_A2_increment.log,均 exit 0):
+- 一致性检查全部通过:s2_f30 的全部字段(Lnet/Lshp/Lgross/LTO/rIC/rICtraded/cov/dist,train 与 valid)与 s1_noMask
+  精确相等(diff=0.000e+00,不是近似);s2_n30 与 s1_plain30 同样精确相等。A2 §1 里 E0/E1/E2/E3 又分别与
+  v_base/s1_noMask/s2_f_x60/s1_plain60 独立核对一致,K1/K2 与 S0_baseline.json 的 diagnostics.controls 逐位相同。
+- S2_combo 固定半衰期表(hl0/2/5/10/20,train):s2_f30(≡s1_noMask)五档全面优于 v_base;s2_f_x60(头号候选,mask去
+  掉×窗口60)五档也全面优于 v_base,hl20 +7.8%,但不是全表最高——s2_f_x241 hl20 更高(+9.7%)、s2_n_x241 五档
+  反而全面走低。窗口在哪见顶没有单一答案,留给主研读表判断。
+- s2_masktop(遮最高一成的控制实验):固定半衰期表与 s2_f30 很接近(hl20 +7.7% vs +7.1%,其余四档都接近,不像
+  v_base 那么差),条件 IC|ctl_price 的桶1 也从 v_base 的 +0.0037 回升到 +0.0305——"任一成被拉平都伤"比"专门饿
+  多头端原料"更贴近这组数字,具体怎么改写 H10 留给主研。
+- A2 §0 两条硬门槛自检都过:books(E0) 复现 Lnet train+3.66%/valid+5.35%、Lshp+0.66/+0.91、hl=20;手写的多头十分位
+  毛超额函数复现 Lgross train+8.64%(容差内)。
+- A2 §2(残差检验,H8 第一半):E0~E3 对 {K1,K2} 与 {K1,K2,ctl_mom20} 两组回归取残差后,残差 Lgross 与残差 rIC
+  在 train、valid 上全部没有
+…(这条日志还有后文,读 journal.md)
 
-判断(本轮的主要产出是「读懂这棵树」,写进 04_grammar.md 和 05_hypotheses.md):
-- 这棵树没有门控、没有重复子树、没有跨股票滚动,所以「门控 vs 两信号」那套问题在这里不存在。全树唯一的跨日
-  节点 ts_scale 是唯一的信号成形动作:把水平量变成「相对自身 30 日历史的偏离」。
-- 一阶展开 ★:F_t − 1/30 ≈ (2/30)·[(A_t−Ā) + (B_t−B̄)]/C̄。因为 add 把「元」和「无量纲峰度」直接相加、
-  而 ts_scale 的分母 ≈ 价位水平,**峰度通道的有效权重 ∝ 1/价位** —— 低价股上它是峰度因子、高价股上是价格反转。
-  这是这棵树唯一的非平凡结构(H2b),别的因子上不存在,定为头号待测对象。
-- signedpower 的二阶项:F − 2F′ ≈ (1/30)(−1 + e_t² − m2),是一个「今天偏离得异常大(不分方向)」的折叠通道。
-  我本想用它解释「空头腿占 77%」,**用 2 万个模拟窗口自己把这条否掉了**:spearman(F,F′)=0.9945,一阶项压倒
-  折叠项。所以 signedpower 预计在秩层面近似冗余(H3,可删),空头腿的集中要从 H5(封板票)和 H6(C 的偏离
-  分布右偏)去找。这条弯路写进 05 和 state 第 4 节,后面的人别再走。
+### 2026-10-04 15:33 [auto] 启动 exec A2_increment:studies/F112_scale_spow_masktop/a2_increment.py
 
-决定做什么:下工单 R1,两次运行。
-- S1_minimal(10 变体):四个节点消融(noK/noP/noMask/noSpow)+ 最朴素两节点等价物(plain30)+ 窗口阶梯
-  (w10 / x30 / x60 / x241)+ 最简×最长的组合(plain60)。窗口阶梯用 cross_scale 是因为 ts_scale 窗口池只到 50,
-  而 cross_scale 源码与 ts_scale 逐字同公式(都是 rolling_windows + scale_last_ratio);s1_x30 就是这个等价性的
-  一致性检查,**不一致则整条阶梯作废**,已在工单里要求告警。
-- A1_channels(5 节脚本):§1 用 numpy 重建因子并与引擎面板自检(≥0.999 才算过)、§2 搭便车查公布值出入
-  (ceil vs round、29 天热身)、§3 封板票(st.target(buyable=False))+ mask 质点与并列、§4 通道分解与按滞后
-  30 日均价分桶(H2b 的正题)、§5 signedpower 二阶项。授权执行在跑不动时按「先删 §2、再删 §5」砍,保住 §4。
+### 2026-10-04 15:38 [执行] R2 补充:A2_increment 附加节算出了原始面板口径的 rank 相关(工单要带回数字第4项的后一半),再次确认两套口径符号相反这件事在 S2 变体上同样成立
 
-决定不做什么:
-- 不追公布值出入超过 A1_§2 那一次搭便车(0.01 夏普量级,不值得花运行次数)。
-- 不做 nt_* 变体(这棵树没有分钟级截面需求,CPU 上 4 分钟一条)。
-- H8(相对已知家族有没有增量)**本轮不做**,排到 R2:要先知道 R1 选出哪个结构,再对那个结构做增量检验;
-  而且它必须用 exec 脚本做(往 controls 里加东西会改变 all_controls 的 R²,与 S0 那一行不再可比)。
-
-### 2026-10-04 13:45 [主研] 第 1 轮(第 2 个 agent):R1 工单仍无结果卡,按规矩不另开工单,核对前提后原样重派,只补了「中断恢复」执行顺序
-
-看到了什么(本轮没跑任何实验,一次服务器运行都没花):
-- brief 显示 orders/R1.md 已下但 results/R1.md 不存在,而且有两条 `work:F112_scale_spow_masktop#1 失败,几乎没做事`
-  —— 执行侧被额度打断了两次(用户已重置额度)。
-- 核对了 R1 的三个前提,全部确认「全新开工,没有半成品要清理」:
-  ① configs/F112_scale_spow_masktop.yaml 还只有 S0_baseline 一个阶段、title 仍是占位符;
-  ② studies/F112_scale_spow_masktop/ 目录不存在(a1_channels.py 还没写);
-  ③ study.sh list 只有 S0_baseline [exit 0],没有正在跑的任务。
-- 重新核对窗口池(整条 H7 窗口阶梯押在 cross_scale 上):ts_scale win [1,5,10,20,30,40,50]、
-  cross_scale win [3,5,10,15,30,60,241] —— R1 用到的 10/30/60/241 全部合法。
-  但发现两者**内核族标注不同**:ts_scale 是 nd/ts/rolling,cross_scale 是 dt/cross/rolling。
-  上一个 agent 核对的是「源码逐字同公式」,这是另一回事 —— 所以 cross_scale 那 4 条有可能在 check 阶段就解析不过。
-
-判断:
-- 工单本身没有问题,失败是额度造成的,不是设计造成的。按 playbook 与任务书的规矩,
-  **最新工单没有结果卡时不另开工单** —— 重写工单只会把已经推好的计划洗掉一遍,而且会再花一轮。
-- 唯一值得改的是**执行顺序**:连续两次打断说明「攒到最后一起写结果卡」会把整轮工作清零。
-
-决定做什么:
-- 给 orders/R1.md 加一段「第 0 件:中断恢复」,**科学内容一个字没改**,只规定:
-  开工先 list(已有 exit 0 的 tag 不要重跑,直接 digest)、两次运行分开提交、**先 S1_minimal**
-  (工单要带回的数字 1~6 项全靠它)、拿到 digest 立刻把主表+固定半衰期表写进结果卡并记 note、
-  被打断就交半张卡并在首行写明缺什么;cross_scale 解析不过就照原规定报错原文+删那几条,不要自己改写表达式。
-- 把 cross_scale 的两个坏分支的**退路**写进 state 第 6 节(两种情况退路相同:H7 改用 ts_scale 池内 40/50,
-  再加一条显式长平滑;归因里写明「视野上限受算子池限制」;并到 R2 那次运行里做,不单独开一轮)。
-- 覆盖重写 state.md(标明本轮是这一轮的第 2 个 agent;假设表状态一条没动,因为没有新证据)。
-
-决定不做什么:
-- 不重做计划、不改假设表、不动 S0_baseline、不读 holdout、不花任何服务器运行。
-- 不去追 _kurt 源码和条件 IC 符号(已在 R1 里交给执行顺带确认)。
-
-返回:{status:'order', order:'R1', kind:'experiment'} —— 让执行接着把 R1 做完。
-
-### 2026-10-04 13:54 [auto] 启动 run S1_minimal:阶段 S1_minimal
-
-### 2026-10-04 13:59 [auto] S1_minimal 跑完(exit 0);重看结果:./scripts/study.sh digest F112_scale_spow_masktop S1_minimal
-
-### 2026-10-04 14:10 [执行] R1 第一步:S1_minimal(10变体)跑完 exit 0,主表+固定半衰期表+中性化+条件IC+分位/逐年/衰减已读,发现两处 notes 与磁盘不符
-
-看到了什么(全部来自 runs/F112_scale_spow_masktop/S1_minimal.json,exit 0,281.7s,errors:{}):
-- 一致性检查通过:s1_x30 与 v_base 在主表、固定半衰期表(hl0/2/5/10/20)、rIC/rICtraded/cov/dist 上逐位相同,
-  cross_scale(30) ≡ ts_scale(30),x60/x241/plain60 这条窗口阶梯可用,工单预警的"check 阶段解析不过"没有发生(22/22 OK)。
-- 固定半衰期表(同档比较):s1_noK、s1_x60、s1_plain60 在 hl0/2/5/10/20 五档上 Lnet/Lshp 全部高于 v_base 同档;
-  s1_noSpow 在 hl0/2/5/10 四档略低于 v_base,只在 hl20 反超。s1_noP 全程负、s1_w10 全程负,方向都与工单预期一致。
-- rank 相关(交易信号口径,读自 rank_corr_train 全量矩阵):只有 s1_x30(定义上同一个)和 s1_noSpow(+0.97)与 v_base ≥0.95;
-  其余 8 个 <0.95,s1_noP(+0.28)最低。全部变体与全部控制/家族 |相关| ≤0.40。
-- 两处核对结果与现有 notes 不符,已在 results/R1.md 第 8 节详细记录:
-  ① rank_ic_traded 字段:S0_baseline.json 里这个键实际存在且有值(train+0.0242/valid+0.0333,与 decay h=1 自洽),
-     digest 也能正常打印,不是 state.md 说的"读数为空"。
-  ② 条件 IC v_base|ctl_cap/ctl_amt:S0_baseline.json(原始、未重跑)和本轮全新的 S1_minimal.json 里这两组数字都是正数
-     (+0.0398…+0.0074 / +0.0091…+0.0345,两次独立运行逐位相同),06_baseline.md/state.md 里引用的那组负数在磁盘上找不到来源。
-下一步:写 studies/F112_scale_spow_masktop/a1_channels.py(工单的 5 节 + 补一节"原始日频面板口径"rank相关,标准诊断不提供这个),
-exec 跑完后把 results/R1.md 补齐、记第二条 note。
-
-### 2026-10-04 14:19 [auto] 启动 exec A1_channels:studies/F112_scale_spow_masktop/a1_channels.py
-
-### 2026-10-04 14:21 [auto] A1_channels 跑完(exit 0);重看结果:logs/F112_scale_spow_masktop_A1_channels.log
-
-### 2026-10-04 14:27 [执行] R1 完成:A1_channels(§1~§5+附加节)全部跑完,results/R1.md 已写全,关键数字见下
-
-看到了什么(全部来自 logs/F112_scale_spow_masktop_A1_channels.log,exit 0,五节+附加节全部跑完无异常中断):
-- §1 自检一次通过:spearman(F_rec,F) train 均值1.00000/最小值0.99997,EPS=1e-12 没换过,D/replaced/E 可信。
-- §2(H9):round 版 utrain LS=+2.58,与用户公布完全相同(原 ceil 版 +2.59);Lgross 从+9.1%移到+9.0%(仍差公布+8.9% 0.1pp)。
-  29天热身版(W)把两个数字都推得更远(+1.72/+6.8%),不支持热身边界这个机制。ceil/round 45.9%的交易日取值不同。
-- §3(H5+H4):短腿②超额 tgt口径-29.1% vs raw口径-21.3%,①组内等权-19.9%→-10.1%——算回封板票真实收益后空头腿负超额
-  明显收窄但没消失。严格"买不进"全市场占0.18%,空头十分位内5.12%(多头只1.10%)。质点:日均360只(10.01%,与
-  top_ratio吻合)被替换,其中83.75只/天连续30天都被替换(train期间445只不同股票),这群股票当天F的百分位均值0.581
-  (不是极端值)。某天v_base的F有3038只股票完全相同取值(真实引擎输出,不是我重建代码的产物,日期没打出来)。
-- §4(最重要):spearman(F,termP)=+0.531>termK+0.366,但std(termK)是std(termP)的3.8倍。H2b分桶:std(termK)从桶0到桶4
-  单调降19倍(0.476→0.025,支持1/价位缩放机制),但桶0(幅度最大)的相关反而最弱(两个都是负的,-0.08/-0.11)
-  ——"幅度大不等于相关强",这个组合结果主研没预判到。e的横截面偏度均值+18.19但1~99分位不夸张,像是被尾部极端值拉的。
-  排除被替换格子后两个通道相关都升高(termK: 0.366→0.519)。
-- §5(H3):spearman(F,Fn)=+0.9714>0.9门槛,原始面板口径。spearman(Δ,e²-m2)=+0.688,低于主研模拟估的0.85,方向一致但
-  没模拟那么强,与主研自己"真实C上跳更大、模拟可能不保"的预判相符。
-- 附加节(补第3项要带回的数字):10个新变体 vs v_base/5个参照的原始面板rank相关——vs v_base全部同号(幅度更低,预期内);
-  vs 全部5个控制/家族列全部反号(那张表ctl_mom20全负、这张全正),把state.md里只在v_base一个例子上看到的"两套口径
-  符号相反"扩展确认到全部10个新变体,不是偶然。
-- 两处与现有notes不符(已写进results/R1.md第8节,不是我改的,是磁盘数字和notes引用的不一样):rank_ic_traded字段
-  S0_baseline.json里实际存在且有值;条件IC v_base|ctl_cap/ctl_amt 两份独立运行(S0+S1)都是正数,与06_baseline.md/
-  state.md引用的负数对不上。
-R1 到此全部做完,没有卡住的地方,没有删减工单任何一条。
+看到了什么:原始日频面板口径下,10 个 s2_* 变体 vs ctl_mom20 全部是正数(+0.34~+0.90),vs K1/K2 也全部是正数
+(+0.09~+0.37);而 S2_combo 主表(交易信号口径)里同一批变体 vs ctl_mom20 全部是负数(-0.11~-0.42)。这与 R1
+在 S1_minimal 上已经记录的"两套口径符号相反"现象方向一致、幅度相当,不是新发现,是同一现象在 S2 上的再次确认。
+vs v_base 列两套口径同号(原始面板 0.24~0.69,交易信号 0.51~0.78),幅度上原始面板普遍更低,也与 R1 的读数一致。
+下一步:没有,这是补数字,不改变 R2 的任何判断;完整表格见结果卡。
 
 ## 工单与结果卡(`notes/F112_scale_spow_masktop/orders/`、`notes/F112_scale_spow_masktop/results/`)
 
 - R0:工单 —,结果卡 有
 - R1:工单 有,结果卡 有
+- R2:工单 有,结果卡 有
 
 ## 配置里的实验计划(`configs/F112_scale_spow_masktop.yaml`)
 
@@ -198,27 +91,25 @@ R1 到此全部做完,没有卡住的地方,没有删减工单任何一条。
   v_base
 - **S1_minimal**(10 个变体):这棵树的最小充分结构是什么:删掉每个节点、把唯一的跨日窗口换档,多头腿和与原式的 rank 相关怎么变?
   s1_noK、s1_noP、s1_noMask、s1_noSpow、s1_plain30、s1_w10、s1_x30、s1_x60、s1_x241、s1_plain60
+- **S2_combo**(10 个变体):mask 去掉之后,剩下的节点和窗口怎么配最好?遮最高一成会不会一样差?
+  s2_f30、s2_k30、s2_p30、s2_n30、s2_f_t50、s2_f_x60、s2_f_x241、s2_n_t50、s2_n_x241、s2_masktop
 
 ## 已经跑过的服务器运行(本地已拉回的;服务器上可能还有没拉回的:`./scripts/study.sh list F112_scale_spow_masktop`)
 
 - `S0_baseline`  10-04 11:57  1 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop S0_baseline`
 - `S1_minimal`  10-04 13:59  10 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop S1_minimal`
+- `S2_combo`  10-04 15:08  10 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop S2_combo`
 - `A1_channels`(自写脚本的输出)  10-04 14:21  exit 0  → `logs/F112_scale_spow_masktop_A1_channels.log`
+- `A2_increment`(自写脚本的输出)  10-04 15:37  exit 0  → `logs/F112_scale_spow_masktop_A2_increment.log`
 
 ## 已写的 notes(`notes/F112_scale_spow_masktop/`)
 
-- `01_expression.md`  4726 字节  10-04 13:02
-- `02_operators.md`  16004 字节  10-04 13:04
-- `03_decomposition.md`  6529 字节  10-04 13:06
-- `04_grammar.md`  6351 字节  10-04 13:20
-- `05_hypotheses.md`  11710 字节  10-04 13:22
-- `06_baseline.md`  11963 字节  10-04 13:09
-- `journal.md`  13744 字节  10-04 14:27
-- `state.md`  20304 字节  10-04 13:44
+`01_expression.md`(4K)、`02_operators.md`(15K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(24K)、`06_baseline.md`(11K)、`07_S1_minimal.md`(7K)、`07x_01_a1_channels.md`(7K)、`journal.md`(25K)、`state.md`(26K)
 
 ## 自写的探针与分析脚本(`studies/F112_scale_spow_masktop/`)
 
 - `a1_channels.py`  10-04 14:19  A1_channels — R1 工单第 2 件。五个小节(§1~§5)各自 try/except,互不拖累。
+- `a2_increment.py`  10-04 15:33  A2_increment -- R2 工单运行 2。五节(§0 自检 → §1 独立对照 → §2 残差增量 → §3 合成增量 → §4 mask 机制),
 
 ## 结构化结果(`handoff/F112_scale_spow_masktop/results/`)
 

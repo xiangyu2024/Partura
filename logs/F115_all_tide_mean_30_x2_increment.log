@@ -1,0 +1,108 @@
+[self-check a] 通过:O=cross_mean(div(L,M),20)、P=cross_mean(L,20) 与 configs 逐字符相同(P 就是 O 去掉外层 ÷M)
+[self-check b] 通过:rank_pct 的 ties/NaN、以及 w*rpX+(1-w)*rpK 的 NaN 自动传播 == '两腿都有值才参与'
+[self-check b] 通过:by_year_like_engine 在合成数据(2 年 x 20 天)上与直接 bk.book_row(同一切片) 逐字段相同(含最小 20 天/年的门槛,与 partura/runner.py 一致)
+/root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_in.py:785: FutureWarning: We've integrated functorch into PyTorch. As the final step of the integration, `functorch.vmap` is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use `torch.vmap` instead; see the PyTorch 2.0 release notes and/or the `torch.func` migration guide for more details https://pytorch.org/docs/main/func.migrating.html
+  return vmap(single_row)(x).unsqueeze(-1)
+
+== 0 自检与环境确认
+  st.ic(O,'train')['rank_ic'] = +0.0374  (对照 +0.0374,通过)
+  inspect.signature(Study.books)  = (self, panel: 'np.ndarray', fit: 'str' = 'train', evals: 'Sequence[str]' = ('train', 'valid'), sign: 'Optional[float]' = None) -> 'Dict[str, object]'
+  inspect.signature(Study.signal) = (self, panel: 'np.ndarray', fit: 'str' = 'train', sign: 'Optional[float]' = None, halflife: 'Optional[float]' = None) -> 'np.ndarray'
+  [结论] Study.books 签名里没有 halflife/hl 参数 -> 不能直接钉住半衰期;它内部总是调 bk.books()->bk.fit_halflives(),对全部 7 个候选半衰期各跑一次再选最优,**不能**跳过这个 sweep。
+  但可以绕到底层 bk 模块自己钉住:bk.smoothed(sig, 0.0) 在 halflife=0.0(假值)时直接返回原信号、不做任何 EMA;配合 bk.book_row(sm, target, days, cost, top_frac) 直接算一个单一 hl 下的 book,完全跳过 fit_halflives 的 sweep。下面 (1)(2)(4) 的'pin hl=0'都是这么做的,不是通过 Study.books。
+  --- Study.books 源码 ---
+    def books(self, panel: np.ndarray, fit: str = "train", evals: Sequence[str] = ("train", "valid"),
+              sign: Optional[float] = None) -> Dict[str, object]:
+        """Decile L/S and the long leg, in the user's convention (see partura.books)."""
+        sg = self.sign(panel, fit) if sign is None else sign
+        return bk.books(sg * np.asarray(panel, dtype=np.float64), self.target(), self.slice(fit),
+                        {e: self.slice(e) for e in evals},
+                        cost=float(self.cfg.get("cost_per_side", bk.COST)),
+                        top_frac=float(self.cfg.get("top_frac", bk.TOP_FRAC)),
+                        rank_by=self.cfg.get("rank_by", "long"))
+
+  --- Study.signal 源码 ---
+    def signal(self, panel: np.ndarray, fit: str = "train", sign: Optional[float] = None,
+               halflife: Optional[float] = None) -> np.ndarray:
+        """What would be traded: sign x panel, EMA-smoothed at the half-life fitted for the
+        long book on ``fit`` (or at ``halflife``).  Full length; slice it yourself."""
+        p = np.asarray(panel, dtype=np.float64)
+        sg = self.sign(panel, fit) if sign is None else sign
+        if halflife is None:
+            halflife = bk.fit_halflives(sg * p, self.target(), self.slice(fit),
+                                        float(self.cfg.get("cost_per_side", bk.COST)),
+                                        float(self.cfg.get("top_frac", bk.TOP_FRAC)))[
+                "hl_long" if self.cfg.get("rank_by", "long") == "long" else "hl_ls"]
+        return bk.smoothed(sg * p, halflife)
+
+  st.signal 的 sign/hl 在哪个段上定:签名默认 fit='train' -- 两者都只在 train 上拟合一次,然后对全长(含 valid)原样套用,不重新拟合。
+  O: sign=-1  hl_long=10  hl_ls=10  (预期 O: -1/10,P: -1/20,K30: -1/0)
+  P: sign=-1  hl_long=20  hl_ls=20  (预期 O: -1/10,P: -1/20,K30: -1/0)
+  K30: sign=-1  hl_long=0  hl_ls=0  (预期 O: -1/10,P: -1/20,K30: -1/0)
+  K9: sign=-1  hl_long=5  hl_ls=0  (预期 O: -1/10,P: -1/20,K30: -1/0)
+  [免费自检] 现场重算 st.books(O,...) vs 主表 v_base: train Lnet=+5.57% (对照 +5.6%)  valid Lnet=+0.25% (对照 +0.2%)
+  [免费自检] 现场重算 st.books(P,...) vs 主表 a_no_rate: train Lnet=+6.37% (对照 +6.4%)  valid Lnet=+1.96% (对照 +2.0%)
+  [免费自检] 现场重算 st.books(K30,...) vs 主表 k_stdamt_mean30: train Lnet=+12.62% (对照 +12.6%)  valid Lnet=+22.33% (对照 +22.3%)
+
+== 0b by_year 诊断的工具缺口(k_stdamt_mean30),以及补算
+  根因(读 partura/runner.py 确认):diagnostics.by_year 只在 `for vid,v in variants.items()` 这个循环里给 traded_full[vid] 赋值,而 variants 只是**本次 run 传的 stage(S2_increment)自己的变体**;k_stdamt_mean30 属于 S1_anatomy,不在这次的 variants 里,所以即使配置的 by_year: [...] 列了它的 id,也进不了 traded_full,digest 里静默缺这一行(S2_increment.json 的 diagnostics.by_year 只有'c_pure'/'m_blend_pure_k30' 两个 key,没有 'v_base'/'k_stdamt_mean30')。corr_ids/corr_with 不受影响,因为 runner 另有一段专门把 refs(含跨阶段 id)喂给 traded(不是 traded_full)。
+  [补算] k_stdamt_mean30 2018: Lnet=+17.26%  LS=+3.01  days=243
+  [补算] k_stdamt_mean30 2019: Lnet=+10.23%  LS=+1.84  days=244
+  [补算] k_stdamt_mean30 2020: Lnet=+6.60%  LS=+0.66  days=243
+  [补算] k_stdamt_mean30 2021: Lnet=+15.96%  LS=+2.18  days=243
+  [补算] k_stdamt_mean30 2022: Lnet=+24.59%  LS=+4.22  days=242
+  [补算] k_stdamt_mean30 2023: Lnet=+18.27%  LS=+2.88  days=144
+  补算方法与 partura/runner.py 算 by_year 的那段代码逐行一致(同一个 bk.book_row,同样按 years==y 再与 scope 取交集定下标),已经用合成数据自检过(见上面 self-check b);range 限定在 st.slice('utrain') = [20180102, 20230807],没有碰 holdout。
+
+== 4 H7b 直接确认(可选,能做):O 在固定 hl 下的 Lgross/Lnet/LTO(train)
+  能做:st.books 不能钉 hl,但 bk.smoothed(sign*O, hl) + bk.book_row(...) 可以绕过 sweep 直接钉住。
+  hl=   0: Lgross=+9.79%  Lnet=-6.15%  LTO=21.09%  (反推对照 Lgross~=+9.7%)
+  hl=   2: Lgross=+9.04%  Lnet=+1.58%  LTO=9.86%  (反推对照 Lgross~=+9.2%)
+  hl=   5: Lgross=+9.04%  Lnet=+3.86%  LTO=6.85%  (反推对照 Lgross~=+9.2%)
+  hl=  10: Lgross=+9.44%  Lnet=+5.57%  LTO=5.11%  (反推对照 Lgross~=+9.4%)
+  hl=  20: Lgross=+7.31%  Lnet=+4.57%  LTO=3.62%  (反推对照 Lgross~=+7.6%)
+
+== 3 H9:O(=v_base)在 buyable=True / False 两套标签下(train, valid)
+  train buyable=True : long_gross=+9.44%  short_gross=+26.10%  long_share=0.2655  LS=+2.529  long_net=+5.57%
+  train buyable=False: long_gross=+8.05%  short_gross=+27.20%  long_share=0.2283  LS=+2.497  long_net=+4.18%
+  valid buyable=True : long_gross=+4.11%  short_gross=+27.06%  long_share=0.1318  LS=+1.768  long_net=+0.25%
+  valid buyable=False: long_gross=+3.47%  short_gross=+26.97%  long_share=0.1141  LS=+1.710  long_net=-0.39%
+  对账(buyable=True, train): long_share=0.2655(对照~0.265) LS=+2.529(对照~+2.53) short=+26.10%(对照~+26.1%)  -> 通过,下面 buyable=False 的数字可以当结论用
+
+== 2 残差多头腿(秩空间回归,被解释变量 = rank_pct(sig_X))
+  判读提醒:残差不再平滑、换手会更高,看 alpha 还在不在要看 Lgross 和 rIC,不是 Lnet(playbook §1)
+  X=O grp=a(K30): meanR2=0.0725  rIC(tr/va)=+0.0225/+0.0221  sign_resid=+1  hl=10  Lgross(tr/va)=+4.21%/-4.23%  Lnet(tr/va)=+1.80%/-6.70%  Lshp(tr/va)=+0.358/-1.089  LTO=3.18%  rank_corr(resid,K30)=-0.0200
+  X=O grp=b(K30+K9): meanR2=0.0756  rIC(tr/va)=+0.0214/+0.0203  sign_resid=+1  hl=10  Lgross(tr/va)=+4.49%/-4.53%  Lnet(tr/va)=+2.07%/-7.01%  Lshp(tr/va)=+0.416/-1.147  LTO=3.21%  rank_corr(resid,K30)=-0.0200
+  X=O grp=c(K30+K9+mom20+dvol20): meanR2=0.1849  rIC(tr/va)=+0.0149/+0.0076  sign_resid=+1  hl=5  Lgross(tr/va)=+6.90%/-5.03%  Lnet(tr/va)=+3.56%/-8.47%  Lshp(tr/va)=+0.726/-1.619  LTO=4.32%  rank_corr(resid,K30)=-0.0235
+  X=P grp=a(K30): meanR2=0.0894  rIC(tr/va)=+0.0205/+0.0219  sign_resid=+1  hl=20  Lgross(tr/va)=+2.69%/-3.56%  Lnet(tr/va)=+1.29%/-5.03%  Lshp(tr/va)=+0.262/-0.899  LTO=1.86%  rank_corr(resid,K30)=-0.0253
+  X=P grp=b(K30+K9): meanR2=0.0915  rIC(tr/va)=+0.0209/+0.0215  sign_resid=+1  hl=2  Lgross(tr/va)=+4.01%/-4.42%  Lnet(tr/va)=+1.49%/-7.02%  Lshp(tr/va)=+0.277/-1.181  LTO=3.33%  rank_corr(resid,K30)=-0.0255
+  X=P grp=c(K30+K9+mom20+dvol20): meanR2=0.1915  rIC(tr/va)=+0.0149/+0.0088  sign_resid=+1  hl=20  Lgross(tr/va)=+4.32%/-2.16%  Lnet(tr/va)=+2.74%/-3.77%  Lshp(tr/va)=+0.596/-0.738  LTO=2.06%  rank_corr(resid,K30)=-0.0287
+
+== 1 增量权重曲线:blend_w = w*rank_pct(sig_X) + (1-w)*rank_pct(sig_K30)
+  -- X=O  覆盖率(两腿都有值) cov_tr=0.6911 cov_va=0.8947 --
+  w=0.00 sgn_auto=+1 | pin(hl=0)  Lnet +12.62%/+22.33% Lshp +1.779/+3.462 Lgross +15.18%/+24.45% LTO 3.38%/2.80% | auto(hl=0) Lnet +12.62%/+22.33% Lshp +1.779/+3.462 Lgross +15.18%/+24.45% LTO 3.38%/2.80%
+  w=0.10 sgn_auto=+1 | pin(hl=0)  Lnet +12.69%/+22.02% Lshp +1.806/+3.450 Lgross +15.39%/+24.28% LTO 3.57%/2.98% | auto(hl=0) Lnet +12.69%/+22.02% Lshp +1.806/+3.450 Lgross +15.39%/+24.28% LTO 3.57%/2.98%
+  w=0.25 sgn_auto=+1 | pin(hl=0)  Lnet +12.40%/+20.94% Lshp +1.832/+3.458 Lgross +15.39%/+23.67% LTO 3.95%/3.61% | auto(hl=0) Lnet +12.40%/+20.94% Lshp +1.832/+3.458 Lgross +15.39%/+23.67% LTO 3.95%/3.61%
+  w=0.50 sgn_auto=+1 | pin(hl=0)  Lnet +11.32%/+17.68% Lshp +1.824/+3.290 Lgross +14.68%/+20.97% LTO 4.44%/4.35% | auto(hl=0) Lnet +11.32%/+17.68% Lshp +1.824/+3.290 Lgross +14.68%/+20.97% LTO 4.44%/4.35%
+  w=0.75 sgn_auto=+1 | pin(hl=0)  Lnet +10.80%/+12.65% Lshp +2.050/+2.665 Lgross +14.52%/+16.35% LTO 4.92%/4.89% | auto(hl=0) Lnet +10.80%/+12.65% Lshp +2.050/+2.665 Lgross +14.52%/+16.35% LTO 4.92%/4.89%
+  w=1.00 sgn_auto=+1 | pin(hl=0)  Lnet +5.57%/+0.25% Lshp +1.206/+0.044 Lgross +9.44%/+4.11% LTO 5.11%/5.11% | auto(hl=0) Lnet +5.57%/+0.25% Lshp +1.206/+0.044 Lgross +9.44%/+4.11% LTO 5.11%/5.11%
+  -- X=P  覆盖率(两腿都有值) cov_tr=0.6911 cov_va=0.8947 --
+  w=0.00 sgn_auto=+1 | pin(hl=0)  Lnet +12.62%/+22.33% Lshp +1.779/+3.462 Lgross +15.18%/+24.45% LTO 3.38%/2.80% | auto(hl=0) Lnet +12.62%/+22.33% Lshp +1.779/+3.462 Lgross +15.18%/+24.45% LTO 3.38%/2.80%
+  w=0.10 sgn_auto=+1 | pin(hl=0)  Lnet +12.43%/+21.48% Lshp +1.765/+3.344 Lgross +15.03%/+23.60% LTO 3.44%/2.81% | auto(hl=0) Lnet +12.43%/+21.48% Lshp +1.765/+3.344 Lgross +15.03%/+23.60% LTO 3.44%/2.81%
+  w=0.25 sgn_auto=+1 | pin(hl=0)  Lnet +12.83%/+20.39% Lshp +1.884/+3.290 Lgross +15.45%/+22.68% LTO 3.47%/3.03% | auto(hl=0) Lnet +12.83%/+20.39% Lshp +1.884/+3.290 Lgross +15.45%/+22.68% LTO 3.47%/3.03%
+  w=0.50 sgn_auto=+1 | pin(hl=0)  Lnet +12.58%/+17.39% Lshp +2.009/+3.140 Lgross +15.28%/+19.96% LTO 3.58%/3.40% | auto(hl=0) Lnet +12.58%/+17.39% Lshp +2.009/+3.140 Lgross +15.28%/+19.96% LTO 3.58%/3.40%
+  w=0.75 sgn_auto=+1 | pin(hl=0)  Lnet +11.98%/+13.55% Lshp +2.260/+2.747 Lgross +14.78%/+16.34% LTO 3.70%/3.69% | auto(hl=0) Lnet +11.98%/+13.55% Lshp +2.260/+2.747 Lgross +14.78%/+16.34% LTO 3.70%/3.69%
+  w=1.00 sgn_auto=+1 | pin(hl=0)  Lnet +6.37%/+1.96% Lshp +1.371/+0.368 Lgross +9.15%/+4.76% LTO 3.67%/3.70% | auto(hl=0) Lnet +6.37%/+1.96% Lshp +1.371/+0.368 Lgross +9.15%/+4.76% LTO 3.67%/3.70%
+
+  -- 两端自检(偏离量 = 这一端的 blend 数字 - 对应主表参照;就是二次平滑/覆盖率限制的代价)--
+  w=1 X=O train: ref(st.books(O)) Lnet=+5.57% Lshp=+1.206  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=1 X=O valid: ref(st.books(O)) Lnet=+0.25% Lshp=+0.044  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=0 X=O train: ref(st.books(K30)) Lnet=+12.62% Lshp=+1.779  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=0 X=O valid: ref(st.books(K30)) Lnet=+22.33% Lshp=+3.462  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=1 X=P train: ref(st.books(P)) Lnet=+6.37% Lshp=+1.371  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=1 X=P valid: ref(st.books(P)) Lnet=+1.96% Lshp=+0.368  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=0 X=P train: ref(st.books(K30)) Lnet=+12.62% Lshp=+1.779  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+  w=0 X=P valid: ref(st.books(K30)) Lnet=+22.33% Lshp=+3.462  | pin 偏离 dLnet=+0.00pp dLshp=+0.000  | auto 偏离 dLnet=+0.00pp dLshp=+0.000
+
+done
+[partura exit 0 2026-10-05_06:27:28]

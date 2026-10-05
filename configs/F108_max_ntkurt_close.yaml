@@ -53,7 +53,7 @@ diagnostics:
   decay:      [v_base]
   by_year:    [v_base]
   neutralise: [v_base]
-  profile:    [v_base]
+  profile:    [v_base, m_mean30, m_mean60, n_pow3]
   conditional:
     - {factor: v_base, gate: ctl_cap, buckets: 5}
     - {factor: v_base, gate: ctl_amt, buckets: 5}
@@ -63,3 +63,23 @@ stages:
     question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
     variants:
       - {id: v_base, group: baseline, expr: "day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))", why: "原始表达式"}
+
+  - id: S1_nodes
+    question: "哪些节点是多余的?把软极值记忆显式写进表达式,比口径里的 EMA 好吗?"
+    variants:
+      - {id: n_pow3, group: ablate, expr: "day_max(pow_3(nt_ts_kurt(Close, 30)))",
+         why: "pow_2 是死重吗(H2 改写版)。x1 §6 的 numpy 替身 Kmax³ signed 与原式交易信号秩相关 1.000、各列逐位相同;这里在配置里真跑一遍坐实。若逐位相同 → 提纯成立,四节点变三节点"}
+      - {id: n_nocube, group: ablate, expr: "day_max(nt_ts_kurt(Close, 30))",
+         why: "立方是载重节点吗(H3)。替身说去掉立方秩相关掉到 0.880、train Lnet +0.3%→−1.8%、LTO 4.7%→6.6%。若配置里也这样,H3 坐实"}
+      - {id: n_pow5, group: ablate, expr: "day_max(pow_2_5(pow_2(nt_ts_kurt(Close, 30))))",
+         why: "x1 §1 说内容全在 r 的最高约 10%,更强的尾部权重会不会更好(|K|⁵ 对 |K|³)。若明显更好,放大指数是一个可调杠杆;若更差,立方已经到位"}
+      - {id: n_mean, group: ablate, expr: "day_mean(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))",
+         why: "H4:信号在最极端的那一个窗口(事件),还是在全天平均(状态)?x1 完全没测过这个(§9a 做的是日轴均值,不是日内)。若均值版 ≥ 极值版,H4 死,day_max 不是必要的"}
+      - {id: m_mean30, group: candidate, expr: "cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 30)",
+         why: "当前第一候选(x1 §9a:Lshp +0.43/+0.42 对原式 +0.05/+0.46,Lnet +2.6%/+2.1%,换手更低)。把软极值记忆从口径搬进表达式"}
+      - {id: m_mean60, group: candidate, expr: "cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)))), 60)",
+         why: "记忆长度是 30 还是 60 天(替身:+2.0%/+5.2%,hlL 3)。两档都不塌才算邻域稳定"}
+      - {id: k_mean30, group: benchmark, expr: "cross_mean(day_std(Amt), 30)",
+         why: "已知家族基准 1(手册要求的第二条基准)。同一条流水线、同一段上和候选比"}
+      - {id: k_max10, group: benchmark, expr: "cross_max(day_std(Amt), 10)",
+         why: "已知家族基准 2。注意:用户口里的是 cross_max(day_std(Amt), 9),但 9 不在 cross_max 的窗口池 [3,5,10,15,30,60,241] 里,所以用最近的 10 代替——在结果卡里写明这处替换"}

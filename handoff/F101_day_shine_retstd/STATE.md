@@ -1,6 +1,6 @@
 # F101_day_shine_retstd — 交接状态
 
-_自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-04 23:02(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 day_shine_retstd(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))`
@@ -9,14 +9,10 @@ _自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F101_day_s
 
 - **阶段:全部完成**
 - **留出段已经读过 1 次**(10-03 23:00)—— **不许再读**。候选在留出段上的数全在 `runs/F101_day_shine_retstd/final.json`(`./scripts/study.sh digest F101_day_shine_retstd final`)。
-- agent `study:F101_day_shine_retstd`(wf_e1ec46b6-127):中断,最后动作 10-03 18:08 → `handoff/F101_day_shine_retstd/agents/study_a6230c37f941bd416.md`
-- agent `study:F101_day_shine_retstd`(wf_e1ec46b6-127):失败,几乎没做事(不用看)
-- agent `study:F101_day_shine_retstd`(wf_759ef2d3-03f):中断,最后动作 10-03 20:47 → `handoff/F101_day_shine_retstd/agents/study_a600735eb220fa8db.md`
-- agent `study:F101_day_shine_retstd`(wf_759ef2d3-03f):中断,几乎没做事(不用看)
-- agent `study:F101_day_shine_retstd`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:07 → `handoff/F101_day_shine_retstd/agents/study_a2841cf9f99d55d79.md`
-- agent `audit-numbers:F101_day_shine_retstd`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:19 → `handoff/F101_day_shine_retstd/agents/audit-numbers_a8b3d9dbf8b49904e.md`
-- agent `audit-mechanism:F101_day_shine_retstd`(wf_759ef2d3-03f):已返回结果,最后动作 10-03 23:28 → `handoff/F101_day_shine_retstd/agents/audit-mechanism_a44fe5af2ad163716.md`
-- agent `revise:F101_day_shine_retstd`(wf_759ef2d3-03f):已返回结果,最后动作 10-04 00:02 → `handoff/F101_day_shine_retstd/agents/revise_a7c1f89ef939ebc23.md`
+- 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
+  - `audit-numbers:F101_day_shine_retstd`:已返回结果,最后动作 10-03 23:19 → `handoff/F101_day_shine_retstd/agents/audit-numbers_a8b3d9dbf8b49904e.md`
+  - `audit-mechanism:F101_day_shine_retstd`:已返回结果,最后动作 10-03 23:28 → `handoff/F101_day_shine_retstd/agents/audit-mechanism_a44fe5af2ad163716.md`
+  - `revise:F101_day_shine_retstd`:已返回结果,最后动作 10-04 00:02 → `handoff/F101_day_shine_retstd/agents/revise_a7c1f89ef939ebc23.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F101_day_shine_retstd/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
@@ -57,30 +53,7 @@ _自动生成于 2026-10-04 12:50(`python scripts/recorder.py --brief F101_day_s
 
 ## 已写的 notes(`notes/F101_day_shine_retstd/`)
 
-- `01_expression.md`  953 字节  10-03 18:38
-- `02_operators.md`  3000 字节  10-03 18:38
-- `03_decomposition.md`  1890 字节  10-03 18:39
-- `04_grammar.md`  1724 字节  10-03 18:38
-- `05_hypotheses.md`  4398 字节  10-03 18:36
-- `06_baseline.md`  3197 字节  10-03 23:54
-- `07_S1_parts.md`  5268 字节  10-03 23:54
-- `07_S2_background.md`  5216 字节  10-03 23:54
-- `07_SA_audit.md`  1192 字节  10-03 23:49
-- `07_SR_rivals.md`  6784 字节  10-03 23:56
-- `07_S_final.md`  2865 字节  10-03 23:54
-- `07_conditional.md`  959 字节  10-03 22:52
-- `07_controls.md`  1596 字节  10-03 23:54
-- `07_neutralise.md`  2196 字节  10-03 23:54
-- `07x_look.md`  6762 字节  10-03 23:57
-- `07x_look2.md`  4411 字节  10-03 23:54
-- `07x_look3.md`  10394 字节  10-03 23:57
-- `07x_review1_audit.md`  8049 字节  10-03 23:47
-- `07x_review2_rev2.md`  13421 字节  10-03 23:56
-- `08_variants.md`  3321 字节  10-03 23:54
-- `09_diagnosis.md`  13838 字节  10-03 23:58
-- `10_distilled.md`  13457 字节  10-04 12:04
-- `11_risks.md`  4993 字节  10-03 23:55
-- `12_next.md`  3057 字节  10-03 23:55
+`01_expression.md`(1K)、`02_operators.md`(2K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(4K)、`06_baseline.md`(3K)、`07_S1_parts.md`(5K)、`07_S2_background.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_rivals.md`(6K)、`07_S_final.md`(2K)、`07_conditional.md`(1K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_look.md`(6K)、`07x_look2.md`(4K)、`07x_look3.md`(10K)、`07x_review1_audit.md`(7K)、`07x_review2_rev2.md`(13K)、`08_variants.md`(3K)、`09_diagnosis.md`(13K)、`10_distilled.md`(13K)、`11_risks.md`(4K)、`12_next.md`(2K)
 
 ## 自写的探针与分析脚本(`studies/F101_day_shine_retstd/`)
 

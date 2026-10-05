@@ -1,6 +1,6 @@
 # lead:F114_q25_closeret#2 — agent a0f6ca301ff7855f2(工作流 wf_48864a04-f0a)
 
-- 状态:**还在跑**;开始 10-04 14:29,最后一次动作 10-04 14:30;工具调用 6 次
+- 状态:**已返回结果**;开始 10-04 14:29,最后一次动作 10-04 14:57;工具调用 27 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F114_q25_closeret/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -531,6 +531,530 @@ cd /Users/wxy/Desktop/Partura && cat docs/study_playbook.md
 8. `handoff/` 不用你管:后台记录器(`scripts/recorder.py`,不依赖任何模型和额度)会把你返回的结构化结果
    (`handoff/<fid>/results/`)、你的动作流水(`handoff/<fid>/agents/`)和交接页(`handoff/<fid>/STATE.md`)自动存下来。
    批次的总体进度在 `handoff/STATUS.md`,怎样重启在 `handoff/README.md`。
+```
+
+**10-04 14:34 · agent 的话**
+
+读了结果卡。核对几个算子语义,这是下一张工单的前提。
+
+**10-04 14:34 · Bash** — List cross operators
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh ops '^cross_(argmin|argmax|mean|quantile|stddev|min)' 2>&1 | head -40
+```
+
+```
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cross_argmax                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_argmin                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_mean                         dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_min                          dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q25                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q50                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q75                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_stddev                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+  cross_quantile                     dt/cross  axis D reduces_m False
+```
+
+**10-04 14:34 · Bash** — Read day_mean and day_sum source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src day_mean day_sum 2>&1 | head -60
+```
+
+```
+### day_mean  face=dt family=day category=unary axis=M reduces_m=True lookahead=False kernel=dt_day.day_mean
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_day.py:88
+@op("dt", "day", arity=1)
+def day_mean(x: torch.Tensor) -> torch.Tensor:
+    return C._mean(x.float()).unsqueeze(-1)
+
+### day_sum  face=dt family=day category=unary axis=M reduces_m=True lookahead=False kernel=dt_day.day_sum
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_day.py:83
+@op("dt", "day", arity=1)
+def day_sum(x: torch.Tensor) -> torch.Tensor:
+    return C._sum(x).unsqueeze(-1)
+```
+
+**10-04 14:34 · Bash** — Read _mean and _sum helper source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src _mean 2>&1 | head -40; echo "=== _sum ==="; cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src _sum 2>&1 | head -40
+```
+
+```
+### _mean: not found (ambiguous in the full catalog: False)
+=== _sum ===
+### _sum: not found (ambiguous in the full catalog: False)
+```
+
+**10-04 14:35 · Bash** — Read cross_argmin source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src cross_argmin 2>&1 | head -45
+```
+
+```
+### cross_argmin  face=dt family=cross category=rolling axis=D reduces_m=False lookahead=False kernel=dt_cross.cross_argmin
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_cross.py:242
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_argmin(x: torch.Tensor, d: int, pct: bool = True) -> torch.Tensor:
+    return rolling_reduce(x, int(d), lambda w: nanargmin_last(w, pct=pct), axis=0)
+
+# --- cross_argmin 调用的: common.nanargmin_last
+def nanargmin_last(w: torch.Tensor, pct: bool = True) -> torch.Tensor:
+    """Position of the min value within the window, counted from the END
+    (0 = the most recent point), optionally as a fraction of the window's
+    valid-count. NaN if the window has no valid values.
+    """
+    d = w.shape[-1]
+    filled = torch.where(torch.isnan(w), torch.full_like(w, float("inf")), w)
+    idx_from_start = filled.argmin(dim=-1)
+    idx_from_end = (d - 1 - idx_from_start).to(w.dtype)
+    allnan = torch.isnan(w).all(dim=-1)
+    idx_from_end = torch.where(allnan, torch.full_like(idx_from_end, float("nan")), idx_from_end)
+    if pct:
+        count = nan_count(w).to(w.dtype)
+        idx_from_end = torch.where(count > 0, (idx_from_end + 1) / count, torch.full_like(idx_from_end, float("nan")))
+    return idx_from_end
+
+# --- nanargmin_last 调用的: common.nan_count
+def nan_count(w: torch.Tensor) -> torch.Tensor:
+    return (~torch.isnan(w)).sum(dim=-1)
+
+# --- cross_argmin 调用的: common.rolling_reduce
+def rolling_reduce(x: torch.Tensor, d: int, reducer, axis: int = 0) -> torch.Tensor:
+    return reducer(rolling_windows(x, d, axis))
+
+# --- rolling_reduce 调用的: common.rolling_windows
+def rolling_windows(x: torch.Tensor, d: int, axis: int = 0) -> torch.Tensor:
+    """Causal rolling windows of length `d` along `axis`, left-padded with
+    NaN so every original position (including the first `d-1`) gets a
+    window. Output shape = `x.shape` with a new trailing window-dim of
+    size `d` appended (the `axis` dim's length is unchanged).
+    """
+    d = int(d)
+    pad_shape = list(x.shape)
+    pad_shape[axis] = d - 1
+    pad = torch.full(pad_shape, float("nan"), dtype=x.dtype, device=x.device)
+    x_padded = torch.cat([pad, x], dim=axis)
+    return x_padded.unfold(axis, d, 1)
+```
+
+**10-04 14:35 · Bash** — Read factor config head
+
+```bash
+cd /Users/wxy/Desktop/Partura && sed -n '1,80p' configs/F114_q25_closeret.yaml
+```
+
+```
+# Partura study F114_q25_closeret  (挖掘 / #1421)
+# 这份文件只有 S0_baseline 是生成的。后面的阶段、变体、额外控制变量、探针,都要按**这棵树**来写。
+factor_id: F114_q25_closeret
+title: "单只股票近 15 日「尾盘最后一个有效分钟那一笔分钟收益」分布的下四分位数;取负后精确等于该分布的四分位距减四分位中点(权重 1:1),把尾盘分钟波动与尾盘卖压反转绑在一起的慢变特征量"
+expression: "cross_quantile_q25(day_close(Ret), 15)"
+baseline_id: v_base
+
+# 用户表里公布的这一行(pick_single_factors 的口径);S0 要先把它复现出来
+published: {sign: -1, hl: 20, ls: [2.36, 0.91], long: [0.059, 0.023], lib: "挖掘", name: "#1421"}
+
+label: {kind: open_vwap15, horizon: 1, buyable: true,
+        verify_against: /root/autodl-tmp/AlphaCube/_bench/trainto/allfac_buyable/_target.npy}
+cost_per_side: 0.0015
+top_frac: 0.10
+rank_by: long          # 半衰期按纯多头书选(用户实际能做的那本书);多空口径每个变体也都会算
+horizons: [1, 2, 3, 5, 10, 20]
+warmup: 60
+
+# train + valid = 用户的训练段(utrain);holdout = 用户的测试段,只在最后读一次
+splits:
+  train:   ["20180102", "20211231"]
+  valid:   ["20220101", "20230807"]
+  utrain:  ["20180102", "20230807"]
+  holdout: ["20230808", "20251231"]
+  full:    ["20180102", "20251231"]
+fit_split: train
+user_split: utrain
+
+# ---- 这一批共用的控制变量(都是日频、因果、只用到 t 日收盘)。按这棵树的嫌疑增删。
+controls:
+… (30 行略) …
+stages:
+  - id: S0_baseline
+    question: "Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?"
+    variants:
+      - {id: v_base, group: baseline, expr: "cross_quantile_q25(day_close(Ret), 15)", why: "原始表达式"}
+
+  - id: S1_shape
+    question: "原式读出的 0.25 分位数,读的是分布的位置、尺度,还是两者的 1:1 混合?"
+    variants:
+      - {id: s1_q75, group: substitute,
+         expr: "cross_quantile_q75(day_close(Ret), 15)",
+         why: "q75 = (loc+scl)/2,对尺度的载荷符号与 q25 相反、对位置的载荷同号。引擎自选 sign=+1 则驱动是尺度(H1),sign=-1 则是位置(H2)。这是本阶段最锋利的一个比特"}
+      - {id: s1_loc, group: decompose,
+         expr: "add(cross_quantile_q75(day_close(Ret), 15), cross_quantile_q25(day_close(Ret), 15))",
+         why: "= 2x 四分位中点,精确去掉尺度、只留位置。若它高于原式 → H3 成立(因子带的波动暴露是净拖累,剥掉更好),这是升华主线"}
+      - {id: s1_scl, group: decompose,
+         expr: "sub(cross_quantile_q75(day_close(Ret), 15), cross_quantile_q25(day_close(Ret), 15))",
+         why: "= 四分位距 IQR,精确去掉位置、只留尺度。若它高于原式 → H1 成立,因子本质是尾盘分钟波动;与 s1_loc 合起来穷尽原式"}
+      - {id: s1_q50, group: substitute,
+         expr: "cross_quantile_q50(day_close(Ret), 15)",
+```
+
+**10-04 14:38 · Bash** — List cs_ operators
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh ops '^cs_' 2>&1 | head -30
+```
+
+```
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cs_demean                          nd/cs/unary        arity 1 axis S
+  cs_mask_top_replace_mean           nd/cs/unary        arity 1 axis S
+  cs_mask_top_replace_mean_neg       nd/cs/unary        arity 1 axis S
+  cs_mean                            nd/cs/unary        arity 1 axis S
+  cs_median                          nd/cs/unary        arity 1 axis S
+  cs_normalize                       nd/cs/unary        arity 1 axis S
+  cs_quantile_q25                    nd/cs/unary        arity 1 axis S  [boolean_output]
+  cs_quantile_q50                    nd/cs/unary        arity 1 axis S  [boolean_output]
+  cs_quantile_q75                    nd/cs/unary        arity 1 axis S  [boolean_output]
+  cs_rank                            nd/cs/unary        arity 1 axis S
+  cs_regres                          nd/cs/binary       arity 2 axis S
+  cs_scale                           nd/cs/unary        arity 1 axis S
+  cs_stddev_full                     nd/cs/unary        arity 1 axis S
+  cs_sum                             nd/cs/unary        arity 1 axis S
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+  cs_quantile                        nd/cs  axis S reduces_m False
+```
+
+**10-04 14:38 · agent 的话**
+
+`cs_regres` 存在 —— 可能直接就是横截面中性化残差。读源码确认语义。
+
+**10-04 14:39 · Bash** — Read cs_regres and cs_rank source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src cs_regres cs_rank 2>&1 | head -60
+```
+
+```
+### cs_regres  face=nd family=cs category=binary axis=S reduces_m=False lookahead=False kernel=nd_cs.cs_regres
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/nd_cs.py:253
+@op("nd", "cs", arity=2)
+def cs_regres(Y: torch.Tensor, X: torch.Tensor, valid_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    """Cross-sectional (per-row, across stocks) OLS residual of
+    `Y ~ alpha + beta*X`, one independent regression per time step.
+    """
+    mask = torch.isfinite(X) & torch.isfinite(Y)
+    if valid_mask is not None:
+        mask = mask & valid_mask
+
+    X_ = torch.where(mask, X, torch.zeros_like(X))
+    Y_ = torch.where(mask, Y, torch.zeros_like(Y))
+
+    n_valid = mask.sum(dim=-1, keepdim=True).to(X.dtype)
+    x_mean = X_.sum(dim=-1, keepdim=True) / n_valid.clamp(min=1)
+    y_mean = Y_.sum(dim=-1, keepdim=True) / n_valid.clamp(min=1)
+
+    x_centered = torch.where(mask, X_ - x_mean, torch.zeros_like(X))
+    y_centered = torch.where(mask, Y_ - y_mean, torch.zeros_like(Y))
+
+    cov = (x_centered * y_centered).sum(dim=-1, keepdim=True)
+    var = (x_centered * x_centered).sum(dim=-1, keepdim=True)
+    beta = torch.where(var > EPS, cov / var, torch.zeros_like(var))
+
+    y_pred = beta * (X - x_mean) + y_mean
+    residuals = Y - y_pred
+    return torch.where(mask, residuals, torch.full_like(residuals, float("nan")))
+
+### cs_rank  face=nd family=cs category=unary axis=S reduces_m=False lookahead=False kernel=nd_cs.cs_rank
+… (9 行略) …
+    to `isfinite(x)` — the old code's crash-prone reliance on a mutable
+    module-level `tensor_mask` global has been removed.
+    """
+    if valid_mask is None:
+        valid_mask = torch.isfinite(x)
+    x_rank = x.clone()
+    # Invalid entries are pushed ABOVE every valid value (not below) so they
+    # land at the end of the sort and don't shift valid entries' ranks.
+    x_rank[~valid_mask] = torch.finfo(x.dtype).max
+    # stable=True: ties keep index order, which is the only tie-break every torch
+    # backend agrees on. Without it CPU and GPU hand tied values each other's ranks
+    # (a 1/n difference, not an ULP one) and minute data ties constantly -- prices
+    # sit on a tick grid, volumes repeat, suspended minutes are zero.
+    ranks = (torch.argsort(torch.argsort(x_rank, dim=-1, descending=False, stable=True),
+                           dim=-1, stable=True) + 1).to(x.dtype)
+    if pct:
+        valid_count = valid_mask.sum(dim=-1, keepdim=True).to(x.dtype)
+        ranks = torch.where(valid_count > 0, ranks / valid_count, torch.full_like(ranks, float("nan")))
+    ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float("nan")))
+    return ranks
+```
+
+**10-04 14:41 · agent 的话**
+
+理解了全部结果。现在写裁决。先写三个阶段的解读。
+
+**10-04 14:42 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S1_shape.md`(4605 字符)
+
+**10-04 14:42 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S2_where.md`(3226 字符)
+
+**10-04 14:44 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S3_window.md`(4903 字符)
+
+**10-04 14:44 · 改文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/05_hypotheses.md`
+
+```
+- 竞争性假设表。主研(Opus 5)第 1 轮写定,**在跑第一个实验之前**(`docs/study_playbook.md` §7.4 的时点 ①)。
+状态只在有实验结果之后改;每条都写「预测什么」和「哪个实验能杀死它」。
++ 竞争性假设表。主研(Opus 5)第 1 轮写定,**在跑第一个实验之前**(`docs/study_playbook.md` §7.4 的时点 ①)。
+状态只在有实验结果之后改;每条都写「预测什么」和「哪个实验能杀死它」。
+
+> **⚠ 读这份文件的人注意:下面 A~D 各条的「现状」行是第 1 轮(实验之前)写的,已经过期。
+> 每条假设的当前状态以本文件末尾的 [「R1 之后的裁决」](#r1-之后的裁决第-2-轮主研2026-10-04) 一节为准(R1 的 12 个变体已全部跑完)。
+> 上半部分保留原样不改,是为了留下「事前预测」的记录 —— 哪条假设事前预测对了、哪条预测错了,
+> 只有对照未经修改的事前文本才看得出来。**
+```
+
+10-04 14:44 · 读 `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/05_hypotheses.md`
+
+**10-04 14:44 · 改文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/05_hypotheses.md`
+
+```
+- 基线证据的出处统一是 `S0_baseline`(`notes/F114_q25_closeret/06_baseline.md`,`runs/F114_q25_closeret/S0_baseline.json`)。
++ 基线证据的出处统一是 `S0_baseline`(`notes/F114_q25_closeret/06_baseline.md`,`runs/F114_q25_closeret/S0_baseline.json`)。
+
+> **⚠ 读这份文件的人注意:下面 A~D 各条的「现状」行是第 1 轮、在跑任何实验之前写的,已经过期。
+> 每条假设的当前状态以本文件末尾的「R1 之后的裁决(第 2 轮主研)」一节为准 —— R1 的 12 个变体已经全部跑完。
+> 上半部分故意保留原样不改:哪条假设事前预测对了、哪条预测错了,只有对照未经修改的事前文本才看得出来。**
+```
+
+**10-04 14:45 · Bash** — Append R1 adjudication to hypotheses file
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat >> notes/F114_q25_closeret/05_hypotheses.md <<'EOF'
+
+---
+
+# R1 之后的裁决(第 2 轮主研,2026-10-04)
+
+证据出处统一是 `results/R1.md`(tag `S1_shape` + `S2_aperture`,12 个变体,`errors={}`),
+解读写在 `07_S1_shape.md`、`07_S2_where.md`、`07_S3_window.md`。
+口径:决策口径(方向与半衰期只在 `train` 上定一次),多头口径的 `Lnet/Lshp` 读 `hlL` 那本纯多头书。
+对照数:`v_base` train/valid 多头腿净超额 **+1.8% / +8.1%**、纯多头夏普 **+0.33 / +1.78**、固定 hl20 列 **+1.8% / +0.33**。
+
+## 状态总表
+
+| 编号 | 假设 | 状态 | 关键证据 | 还差什么 |
+|---|---|---|---|---|
+| H1 | 信息来自**尺度** `scl` | **被支持** | `s1_q75` 引擎自选 `sign=+1`;`s1_scl` 原始 rIC +0.0087/+0.0174(valid 高于原式 +0.0145)、交易信号 rIC +0.0087 vs 原式 +0.0070;`s1_loc` 交易信号 rIC 只有 +0.0006 | 已够。但见 H3':尺度**不是**提纯方向 |
+| H2 | 信息来自**位置** `−loc` | **弱支持(次要分量)** | `s1_loc` 原始面板 rIC +0.0046/+0.0076(t 4.17/3.79 显著)、valid 多头腿 +5.9%;但平滑之后 rIC 掉到 +0.0006 | 「位置信息是快变的」目前是合理但未坐实的解读 |
+| **H3** | **剥掉尺度暴露只留位置会更好**(原升华主线) | **被否定** | `s1_loc` 多头腿 −0.7%/+5.9%、固定 hl20 列 −0.7%/−0.14,全面低于原式;而它确实是干净的(all_controls R² 0.030、`ctl_ivol` R² 0.005) | — 已定 |
+| **H3'**(改写) | 基线那条「对 `ctl_ivol` 中性化后残差 rIC 翻倍」的增益**寄生在尺度分量内部**,不能靠结构替换兑现 | **被支持** | `s1_scl` 自己也有同样的翻倍(未中性化 +0.0087 → `ctl_ivol` 中性化后 **+0.0171**);而把整个尺度分量减掉(`s1_loc`)把 alpha 一起减掉了 | — 已定 |
+| **H4** | **1:1 等权混比是必要的** | **被支持(强形式)** | 四条纯分量全部弱于原式;把信号写成 `α·scl + β·(−loc)`,实测 `β/α` = −1(−1.4%)、0(+0.6%)、**1 = 原式(+1.8%)**、∞(−0.7%)—— 峰值正好在原式 | — 已定。**推论:`scl − k·loc` 调混比的实验不值得跑**,见 `07_S1_shape.md` §4 |
+| H5 | 「当天最后一个有效分钟」这个位置是必要的 | **被支持(强)** | 三个替换全塌:`day_sum` / `day_mean` −19.1%/−7.9%(rIC t 仅 0.92)、`day_open` 退化(dist 0.0003、rIC 全 NaN) | — 已定 |
+| **H6** | 它等价于**日收益的 15 日下四分位数**(已知 downside-risk 家族) | **被决定性否定** | `s2_daysum` 与 `v_base` 的 rank 相关 = **+0.00**(判据是 >0.8 才成立、<0.5 就杀死);且 `s2_daysum` 自己是噪声(rIC t 0.92,train 剖面 Q10 = −16.6%) | — 已定 |
+| H7 | 读的是「经常坏」不是「曾经最坏」 | **被支持(valid 侧)** | `s1_min` train +2.0%/+0.50 **略高于**原式,但 valid 塌到 +0.0%/+0.00;train/valid 不同向 → 按 playbook §6.6 不是候选 | train 侧不成立,措辞要写「稳健分位点能过样本外,极值过不去」 |
+| **H8** | **记忆太短,窗口加长更好**(现存唯一升华方向) | **被支持(有保留)** | `
+… (1424 字符略) …
+探针 `effective_memory = 0 天` 是正脉冲假象 | 合理但未坐实 | 解析(`04_grammar.md` §3) | **决定不花运行**;轮次不够就在报告里按「合理但未坐实」写 |
+| H15 | `Ret` 的精确定义 | **前进一步** | `s2_dayopen` 退化(dist 0.0003、rIC 全 NaN、固定半衰期五档同值)→ 当天**第一个**有效分钟的 `Ret` 对几乎所有股票-日取同一个值 → **`Ret` 是日内分钟对分钟的收益,不跨夜**(否则第一分钟是隔夜跳空,离散度会很大) | R3 脚本:`day_sum(Ret)` 与 `ctl_rev1` 的 rank 相关(≈1 则 `day_sum(Ret)` 就是当日收益) |
+
+## 新增假设(R1 的意外带出来的)
+
+### H16 窗口加长在 60 天之后饱和(或掉头)
+- **预测**:`s4_w241`(网格最后一档)不再优于 `s3_w60`,最优窗口落在 30~60。
+- **杀死它**:`s4_w241` 的多头腿继续明显上升。那就意味着这条因子本质是一个**年度级的慢变股票特征量**,
+  而不是「近一两个月的尾盘状态」—— 结论的性质要改:慢变特征量更可能是规模/波动的代理,
+  **H12(相对已知家族没有增量)的风险会大幅上升**,而且报告里「它读的是最近的尾盘状态」这句话要删掉。
+… (19 行略) …
+
+## 这一轮之后,假设表上还开着的口子(按对结论的重要性排)
+
+1. **H12** —— 决定「这条因子对用户有没有用」的那一条。R2 第 2 次运行正面量。
+2. **H16 / H17** —— 决定「升华版是谁」。R2 第 1 次运行。
+3. **H11** —— 决定「留出段应该预期什么」,以及 `11_risks.md` 怎么写。R2 的逐年/条件 IC 加上留出段。
+4. **H9 / H10 / H15 / H18** —— 决定「这东西到底是什么」的最后一块(分辨),不改变推荐。R3 一个自写脚本一次量完。
+5. **H14** —— 工具层面,决定不花运行。
+EOF
+echo "appended; size:" && wc -c < notes/F114_q25_closeret/05_hypotheses.md
+```
+
+```
+appended; size:
+   22672
+```
+
+**10-04 14:46 · agent 的话**
+
+现在写工单 R2。
+
+**10-04 14:48 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/orders/R2.md`(12365 字符)
+
+**10-04 14:48 · agent 的话**
+
+工单写好。现在覆盖重写 state.md。
+
+**10-04 14:52 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/state.md`(22063 字符)
+
+10-04 14:52 · 读 `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/state.md`
+
+**10-04 14:56 · 写文件** `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/state.md`(22278 字符)
+
+**10-04 14:57 · Bash** — Write lead journal entry for round 2
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F114_q25_closeret "[主研] 第 2 轮:裁决 R1 —— 两条提纯路都被堵死(原式是 q75/q25 线性族的最优点),H6 被决定性否定,升华只剩窗口;下工单 R2(窗口饱和点 + H12 相对已知家族的增量)" <<'EOF'
+看到了什么(读 results/R1.md 的 12 个变体,没有自己跑实验;另外自己 src 核对了 4 个算子):
+1. **H3(升华主线)被否定**:s1_loc(纯位置)多头腿 -0.7%/+5.9%、固定 hl20 列 -0.7%/-0.14,全面低于原式
+   +1.8%/+8.1%(hl20 +1.8%/+0.33)。它确实是干净的(all_controls R² 0.030、ctl_ivol R² 0.005、与所有控制变量
+   rank 相关都在 ±0.05 内)—— 但干净不等于能挣钱。基线里那条「对 ctl_ivol 中性化后残差 rIC 从 +0.0070 翻到 +0.0136」
+   的线索**不能靠结构替换兑现**:同样的翻倍在 s1_scl 上也出现(+0.0087 → +0.0171),说明那个增益寄生在尺度分量
+   内部,而把整个尺度分量减掉会把 alpha 一起减掉。改写成 H3'。
+2. **H4 被支持,而且是强形式**:把可交易信号写成 α·scl + β·(−loc),这一族只有一个自由参数 β/α,四个已测点是
+   −1(s1_q75,−1.4%)、0(s1_scl,+0.6%)、1(**原式,+1.8%**)、∞(s1_loc,−0.7%)—— **峰值正好落在原式**。
+   由此**裁掉**上一轮计划的「用 mul 配字面量造 scl − k·loc(k=0.5/2)调混比」:代数上 scl − k·loc 除掉 (1+k) 正是
+   β/α = k,k=0.5/2 就是峰值两侧的内插点,预期增益远小于 ±3pp 噪声带;加上常数只能放最外层(check 大概率不过)、
+   「IQR 减 2 倍四分位中点」即便赢了也没法推荐。**q75/q25 线性重组这条路走完了。**
+3. **H6 被决定性否定**(最重要的分辨结论):s2_daysum 与 v_base 的 rank 相关 = **+0.00**,而且它自己就是噪声
+   (原始 rIC t 只有 0.92、train 剖面 Q10 = −16.6%、多头腿 −19.1%)。所以这条因子**不是**「日收益 15 日下四分位数」
+   的迂回写法,与已知的 downside-risk 家族在横截面上正交。H5(尾盘那一分钟必要)同时被强支持(三个替换全塌)。
+4. **H8 被支持但要加保留**:s3_w30 +2.6%/+8.3%、s3_w60 +3.5%/+8.6% 是 12 个变体里唯一 train+valid 都超原式的,
+   **固定 hl20 同列也超**(+2.6%/+0.47、+3.1%/+0.52 vs +1.8%/+0.33)→ 归因到结构站得住。但幅度要诚实:
+   valid Lnet 只 +0.2~+0.5pp(噪声带 ±3pp)、valid 纯多头夏普**反而**从 1.78 降到 1.66/1.59。
+   机制上(新 H8')窗口与 EMA 半衰期是互相替代的平滑:原式/w30 到 hl20 还在爬,w60 在 hl2 就到顶、自选 hlL=3 ——
+   **w60 兑现的就是 EMA 网格(上限 20)给不了的那段记忆**,报告里要这么写,不要写成「60 天是一个更好的结构」。
+5. 一条我自己纠正的过度解读:long_share 从 19% 升到 33.5% **不是对用户的好处**,多头腿毛超额 valid 只从 +10.5%
+   升到 +10.7%,差别几乎全在空头腿(+17.4% → +11.5%)。分母变小对只拿多头腿的人没有价值。已写进 state.md §8.3。
+6. H13 软化(不是否定):w30/w60 在 train 上 Q10 是全局最大(原式不是)、w60 的 Q1 从 −17.8% 收敛到 −10.8%,
+   但**没有任何变体在 train 上做到严格单调 Q8<Q9<Q10**,强信号仍集中在 Q1。
+7. 两个意外:(a) s2_daysum 与 s2_daymean **逐位相同** ⟹ 每股票-日的有效分钟数很可能是常数 ⟹ 锁死日的分钟收益是
+   **精确 0 而不是 NaN**,这正是 H9/H10 机制的必要条件(新记 H18;源码里 _mean/_sum 
+… (602 字符略) …
+本故意不改以便事后对账)、覆盖重写 state.md、
+下工单 R2 = 2 次运行 / 12 个变体:
+  ① S4_horizon(stage S4_long:s4_w241 窗口饱和点 H16、s4_mean60 长窗口下稳健分位数还必不必要 H17、
+    s4_iso=day_close(Ret) 完全无记忆那一端;**外加把旧阶段 S3_window 一起带进运行**,面板走缓存几乎不花钱,
+    这样 by_year / neutralise / 按 ctl_cap 的条件 IC 才能列到 s3_w30/w60 —— 判「长窗口的改进是不是 2021-2022 制度骑乘」);
+  ② S5_known(H12:cs_regres(cs_rank(候选), cs_rank(家族)) 残差腿 + add/sub(cs_rank,cs_rank) 相加腿,
+    f_fam_m30 = cross_mean(day_std(Amt),30) 作分母;同向组合是 add 还是 sub 事前不知道,两个都跑)。
+  第 2 次运行里的窗口数字 WBEST 按工单里写死的确定性规则从第 1 次的结果定,执行不需要判断。
+
+决定不做什么:(a) scl − k·loc 调混比(见上,代数上已被夹死);(b) cross_argmin 不进 R2 ——
+它问的是 H10 那条轴,而 R3 脚本里「直接造 15 日零值占比面板跑书、和原式比 rank 相关」对 H10 是更锋利的检验;
+(c) H9/H10/H15/H18 的 exec 脚本**推到 R3** —— 那四条只影响「这东西是什么」的叙述,不改变推荐谁,先做决定性的;
+(d) 不为 H14(探针假象)花运行;(e) 不往 controls 里加东西(会改变 all_controls 的 R²,和 S0/R1 不可比);
+(f) 不重跑 S0/S1_shape/S2_aperture;(g) 窗口网格到 R2 为止 1/5/15/30/60/241 全测完,之后不再加窗口变体,
+也不做「再试一批相近分位数」的网格搜索;(h) 没碰 scripts/ partura/ workflows/ handoff/ lab/ docs/ 和别的因子。
+EOF
+echo "--- note written ---"
+```
+
+```
+已记入 notes/F114_q25_closeret/journal.md(10 条)
+--- note written ---
+```
+
+**10-04 14:57 · Bash** — Verify files written
+
+```bash
+cd /Users/wxy/Desktop/Partura && ls -la notes/F114_q25_closeret/ notes/F114_q25_closeret/orders/ && echo "--- git status (只看自己的文件) ---" && git status --porcelain 2>/dev/null | head -20
+```
+
+```
+notes/F114_q25_closeret/:
+total 304
+drwxr-xr-x@ 15 wxy  staff    480 Oct  4 14:56 .
+drwxr-xr-x@ 19 wxy  staff    608 Oct  4 13:07 ..
+-rw-r--r--@  1 wxy  staff   3146 Oct  4 12:59 01_expression.md
+-rw-r--r--@  1 wxy  staff   8596 Oct  4 12:59 02_operators.md
+-rw-r--r--@  1 wxy  staff   2856 Oct  4 13:00 03_decomposition.md
+-rw-r--r--@  1 wxy  staff   6826 Oct  4 13:14 04_grammar.md
+-rw-r--r--@  1 wxy  staff  22672 Oct  4 14:45 05_hypotheses.md
+-rw-r--r--@  1 wxy  staff  15131 Oct  4 13:03 06_baseline.md
+-rw-r--r--@  1 wxy  staff   7797 Oct  4 14:42 07_S1_shape.md
+-rw-r--r--@  1 wxy  staff   6018 Oct  4 14:42 07_S2_where.md
+-rw-r--r--@  1 wxy  staff   7770 Oct  4 14:44 07_S3_window.md
+-rw-r--r--@  1 wxy  staff  20640 Oct  4 14:57 journal.md
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:48 orders
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:19 results
+-rw-r--r--@  1 wxy  staff  35921 Oct  4 14:56 state.md
+
+notes/F114_q25_closeret/orders/:
+total 72
+drwxr-xr-x@  4 wxy  staff    128 Oct  4 14:48 .
+drwxr-xr-x@ 15 wxy  staff    480 Oct  4 14:56 ..
+-rw-r--r--@  1 wxy  staff  13845 Oct  4 13:19 R1.md
+-rw-r--r--@  1 wxy  staff  19126 Oct  4 14:48 R2.md
+--- git status (只看自己的文件) ---
+ M configs/F108_max_ntkurt_close.yaml
+ M handoff/F106_erm_mag_gap_1m/STATE.md
+ M handoff/F106_erm_mag_gap_1m/agents/work_R1_ac129951220d665cf.md
+ M handoff/F107_abs_demean_skew_low/STATE.md
+ M handoff/F107_abs_demean_skew_low/agents/lead_R2_ad65bac7d918bc9fd.md
+ M handoff/F108_max_ntkurt_close/STATE.md
+ M handoff/F108_max_ntkurt_close/agents/work_R1_a0819b08292f1d769.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/STATE.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/agents/work_R1_a0dc4328b75db9875.md
+ M handoff/F110_ret_fair_log/STATE.md
+ M handoff/F110_ret_fair_log/agents/lead_R2_a0b3adcf4345bfb0f.md
+ M handoff/F111_spearman_qclose/STATE.md
+ M handoff/F111_spearman_qclose/agents/work_R1_a4f4276b792511fca.md
+ M handoff/F112_scale_spow_masktop/STATE.md
+ M handoff/F113_nested_tsmax_demean/STATE.md
+ M handoff/F113_nested_tsmax_demean/agents/work_R1_a8639308f6e6f4143.md
+ M handoff/F114_q25_closeret/STATE.md
+ M handoff/F114_q25_closeret/agents/lead_R2_a0f6ca301ff7855f2.md
+ M handoff/F115_all_tide_mean_30/STATE.md
+ M handoff/STATUS.md
+```
+
+**10-04 14:57 · agent 的话**
+
+本轮裁决完成,工单 R2 已交。核对一遍:12 个变体 / 2 次运行,未碰配置(那是执行的事),未碰 `scripts/`、`partura/`、`workflows/`、`handoff/`、`lab/`、`docs/` 和别的因子。
+
+落盘的文件(全部在 `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/`):
+- `07_S1_shape.md`、`07_S2_where.md`、`07_S3_window.md` —— 三个阶段的解读(新写)
+- `05_hypotheses.md` —— 末尾新增「R1 之后的裁决」一节(全部假设状态 + 新增 H16/H17/H18);上半部分事前文本故意未改,便于事后对账
+- `state.md` —— 整文件覆盖重写(8 节)
+- `orders/R2.md` —— 工单
+- `journal.md` —— 新增一条 `[主研]`
+
+**10-04 14:57 · StructuredOutput**
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "experiment",
+ "summary": "裁决 R1:两条提纯路都被实验堵死 —— s1_loc(纯位置)多头腿 -0.7%/+5.9%、固定 hl20 列 -0.7%/-0.14 全面低于原式 +1.8%/+8.1%(hl20 +1.8%/+0.33),H3(剥掉波动暴露会更好)被否定;把信号写成 α·scl+β·(−loc) 后实测 β/α = −1/0/1/∞ 的 train Lnet 是 −1.4%/+0.6%/+1.8%/−0.7%,峰值正好在原式,所以 q75/q25 的整个线性族里原式就是最优点(H4 强形式成立),据此裁掉了上一轮计划的「scl − k·loc 调混比」实验。分辨侧有决定性收获:s2_daysum 与原式 rank 相关 +0.00 且自己就是噪声(rIC t 0.92),H6(等价于日收益 15 日下四分位数)被决定性否定;三个日内位置替换全塌,H5 被强支持。升华只剩窗口一条轴:s3_w30 +2.6%/+8.3%、s3_w60 +3.5%/+8.6% 是 12 个变体里唯一 train+valid 都超原式的,固定 hl20 同列也超(+2.6%/+0.47、+3.1%/+0.52),但 valid 只 +0.2~+0.5pp 且 valid 纯多头夏普反降,机制上是「窗口替代了用尽的 EMA 网格」,归因要写成来自更长的记忆。决定下工单 R2(2 次运行/12 变体):① S4_horizon 测窗口饱和点 s4_w241、长窗口下稳健分位数还必不必要 s4_mean60、完全无记忆的 s4_iso,并把旧阶段 S3_window 一起带进运行(面板走缓存)以拿 s3_w30/w60 的逐年与按 ctl_cap 的条件 IC,判长窗口的改进是不是 2021-2022 制度骑乘;② S5_known 正面量 H12 —— 自己核对源码发现 cs_regres(Y,X) 就是逐日横截面 OLS 残差,于是残差腿和 add/sub(cs_rank,cs_rank) 相加腿都能写成普通变体,省掉一次 exec。H9/H10/H15/H18 的脚本推到 R3(只影响叙述,不改变推荐谁)。另外纠正了一处过度解读:long_share 从 19% 升到 33.5% 不是对用户的好处,多头腿毛超额 valid 只从 +10.5% 升到 +10.7%,差别几乎全在空头腿。",
+ "state_written": true
+}
+```
+
+```
+Structured output provided successfully
+```
+
+## 它写过 / 改过的文件
+
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S1_shape.md`
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S2_where.md`
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/07_S3_window.md`
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/05_hypotheses.md`
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/orders/R2.md`
+- `/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/state.md`
+
+## 它返回给工作流的结果
+
+```json
+{
+ "status": "order",
+ "order": "R2",
+ "kind": "experiment",
+ "summary": "裁决 R1:两条提纯路都被实验堵死 —— s1_loc(纯位置)多头腿 -0.7%/+5.9%、固定 hl20 列 -0.7%/-0.14 全面低于原式 +1.8%/+8.1%(hl20 +1.8%/+0.33),H3(剥掉波动暴露会更好)被否定;把信号写成 α·scl+β·(−loc) 后实测 β/α = −1/0/1/∞ 的 train Lnet 是 −1.4%/+0.6%/+1.8%/−0.7%,峰值正好在原式,所以 q75/q25 的整个线性族里原式就是最优点(H4 强形式成立),据此裁掉了上一轮计划的「scl − k·loc 调混比」实验。分辨侧有决定性收获:s2_daysum 与原式 rank 相关 +0.00 且自己就是噪声(rIC t 0.92),H6(等价于日收益 15 日下四分位数)被决定性否定;三个日内位置替换全塌,H5 被强支持。升华只剩窗口一条轴:s3_w30 +2.6%/+8.3%、s3_w60 +3.5%/+8.6% 是 12 个变体里唯一 train+valid 都超原式的,固定 hl20 同列也超(+2.6%/+0.47、+3.1%/+0.52),但 valid 只 +0.2~+0.5pp 且 valid 纯多头夏普反降,机制上是「窗口替代了用尽的 EMA 网格」,归因要写成来自更长的记忆。决定下工单 R2(2 次运行/12 变体):① S4_horizon 测窗口饱和点 s4_w241、长窗口下稳健分位数还必不必要 s4_mean60、完全无记忆的 s4_iso,并把旧阶段 S3_window 一起带进运行(面板走缓存)以拿 s3_w30/w60 的逐年与按 ctl_cap 的条件 IC,判长窗口的改进是不是 2021-2022 制度骑乘;② S5_known 正面量 H12 —— 自己核对源码发现 cs_regres(Y,X) 就是逐日横截面 OLS 残差,于是残差腿和 add/sub(cs_rank,cs_rank) 相加腿都能写成普通变体,省掉一次 exec。H9/H10/H15/H18 的脚本推到 R3(只影响叙述,不改变推荐谁)。另外纠正了一处过度解读:long_share 从 19% 升到 33.5% 不是对用户的好处,多头腿毛超额 valid 只从 +10.5% 升到 +10.7%,差别几乎全在空头腿。",
+ "state_written": true
+}
 ```
 
 ## 它拿到的任务书
