@@ -1,6 +1,6 @@
 # F106_erm_mag_gap_1m — 交接状态
 
-_自动生成于 2026-10-05 11:21(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_1m(批次 B01_single_factors)
 - 表达式:`sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:21(`python scripts/recorder.py --brief F106_erm_m
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-04 15:35)—— **不许再读**。候选在留出段上的数全在 `runs/F106_erm_mag_gap_1m/final.json`(`./scripts/study.sh digest F106_erm_mag_gap_1m final`)。
+- **留出段已经读过 2 次**(10-04 15:35, 10-05 12:15)—— **不许再读**。候选在留出段上的数全在 `runs/F106_erm_mag_gap_1m/final.json`(`./scripts/study.sh digest F106_erm_mag_gap_1m final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `lead:F106_erm_mag_gap_1m#2`:已返回结果,最后动作 10-05 00:02 → `handoff/F106_erm_mag_gap_1m/agents/lead_R2_a6aa6ca02d7daaec3.md`
   - `work:F106_erm_mag_gap_1m#2`:中断,最后动作 10-05 00:20 → `handoff/F106_erm_mag_gap_1m/agents/work_R2_a74e3d138838a6b1a.md`
@@ -170,6 +170,9 @@ C6:5个变体 cov(ic_holdout.coverage)全部 0.9675,dist 全部 ≥0.9933 ——
 - `S_final`  10-04 15:35  5 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m S_final`
 - `sweep_s1`  10-05 10:35  155 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweep_s1`
 - `anatomy_s1`  10-05 10:45  0 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m anatomy_s1`
+- `sweep_s2`  10-05 11:51  203 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweep_s2`
+- `anatomy_s2`  10-05 12:12  0 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m anatomy_s2`
+- `sweepfinal_s2`  10-05 12:17  8 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweepfinal_s2`
 - `x1`(自写脚本的输出)  10-04 12:30  exit 0  → `logs/F106_erm_mag_gap_1m_x1.log`
 - `x2`(自写脚本的输出)  10-04 13:54  exit 0  → `logs/F106_erm_mag_gap_1m_x2.log`
 

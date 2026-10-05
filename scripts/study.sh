@@ -145,6 +145,10 @@ case "$cmd" in
     fid=$1; push "$fid" || exit 1
     $SSH $HOST "$ENV && $RPY scripts/check_hypo.py studies/$fid/hypo.yaml 2>&1 | grep -v 'FutureWarning\|vmap(single_row)\|UserWarning'"
     ;;
+  hypo3)     # same check for the third batch, studies/<fid>/hypo3.yaml
+    fid=$1; push "$fid" || exit 1
+    $SSH $HOST "$ENV && $RPY scripts/check_hypo.py studies/$fid/hypo3.yaml 2>&1 | grep -v 'FutureWarning\|vmap(single_row)\|UserWarning'"
+    ;;
   table)     # the batch-sweep backtest table and the market anatomy of this factor (tag defaults to s1; --all = every variant)
     fid=$1; tag=${2:-s1}
     mkdir -p "runs/$fid"

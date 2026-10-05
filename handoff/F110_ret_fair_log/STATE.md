@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F110_ret_f
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-04 23:28)—— **不许再读**。候选在留出段上的数全在 `runs/F110_ret_fair_log/final.json`(`./scripts/study.sh digest F110_ret_fair_log final`)。
+- **留出段已经读过 2 次**(10-04 23:28, 10-05 12:06)—— **不许再读**。候选在留出段上的数全在 `runs/F110_ret_fair_log/final.json`(`./scripts/study.sh digest F110_ret_fair_log final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `lead:F110_ret_fair_log#2`:已返回结果,最后动作 10-05 00:14 → `handoff/F110_ret_fair_log/agents/lead_R2_a6887d8909433a81f.md`
   - `work:F110_ret_fair_log#2`:中断,几乎没做事
@@ -131,6 +131,9 @@ JSON 里 holdout 的 profile(分位剖面)和 sweep(固定半衰期)都不存在
 - `S_final`  10-04 23:28  5 个变体  → `./scripts/study.sh digest F110_ret_fair_log S_final`
 - `sweep_s1`  10-05 10:40  163 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweep_s1`
 - `anatomy_s1`  10-05 10:48  0 个变体  → `./scripts/study.sh digest F110_ret_fair_log anatomy_s1`
+- `sweep_s2`  10-05 11:57  210 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweep_s2`
+- `anatomy_s2`  10-05 12:04  0 个变体  → `./scripts/study.sh digest F110_ret_fair_log anatomy_s2`
+- `sweepfinal_s2`  10-05 12:08  8 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweepfinal_s2`
 - `x1`(自写脚本的输出)  10-04 13:07  exit 97  → `logs/F110_ret_fair_log_x1.log`
 - `x1c`(自写脚本的输出)  10-04 14:05  exit 0  → `logs/F110_ret_fair_log_x1c.log`
 - `x1d`(自写脚本的输出)  10-04 14:09  exit 0  → `logs/F110_ret_fair_log_x1d.log`

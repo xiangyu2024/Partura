@@ -1,6 +1,6 @@
 # F104_kurt_masktop_amt — 交接状态
 
-_自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #4190(批次 B01_single_factors)
 - 表达式:`day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F104_kurt_
 ## 现在到哪一步
 
 - **阶段:全部完成**
-- **留出段已经读过 1 次**(10-03 23:33)—— **不许再读**。候选在留出段上的数全在 `runs/F104_kurt_masktop_amt/final.json`(`./scripts/study.sh digest F104_kurt_masktop_amt final`)。
+- **留出段已经读过 2 次**(10-03 23:33, 10-05 12:12)—— **不许再读**。候选在留出段上的数全在 `runs/F104_kurt_masktop_amt/final.json`(`./scripts/study.sh digest F104_kurt_masktop_amt final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `revise:F104_kurt_masktop_amt#2`:失败,几乎没做事
   - `revise:F104_kurt_masktop_amt`:已返回结果,最后动作 10-04 13:06 → `handoff/F104_kurt_masktop_amt/agents/revise_a1835fbf9371d0c2b.md`
@@ -184,6 +184,9 @@ rev2(exec,只切 train/valid,自检全部对上阶段表与 rev1 日志)量到�
 - `final`  10-03 23:33  5 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt final`
 - `sweep_s1`  10-05 10:55  74 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s1`
 - `anatomy_s1`  10-05 11:02  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s1`
+- `sweep_s2`  10-05 11:39  121 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s2`
+- `anatomy_s2`  10-05 12:02  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s2`
+- `sweepfinal_s2`  10-05 12:14  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s2`
 - `x1`(自写脚本的输出)  10-03 19:33  exit 0  → `logs/F104_kurt_masktop_amt_x1.log`
 - `x2`(自写脚本的输出)  10-03 23:20  exit 0  → `logs/F104_kurt_masktop_amt_x2.log`
 - `audit1`(自写脚本的输出)  10-03 23:56  exit 0  → `logs/F104_kurt_masktop_amt_audit1.log`

@@ -55,6 +55,7 @@ L = [f"# {batch.get('name', 'B01')} 批量研究总表(批量扫描 → 市场�
      "|---|---|---|---|---|---|---|---|"]
 detail, missing = [], []
 known_row = frozen_row = None
+pool = []            # every candidate read on the test period: (factor, id, record, own?)
 for i, f in enumerate(batch["factors"], 1):
     fid = f["id"]
     fp = root / "runs" / fid / f"sweepfinal_{TAG}.json"
@@ -68,6 +69,7 @@ for i, f in enumerate(batch["factors"], 1):
     frozen_row = frozen_row or (R.get("k_known_xfrozen") and row(R["k_known_xfrozen"]))
     own = [k for k in F["picks"] if k in R]
     onk = [k for k in R if k not in ("v_base", "k_known", "k_known_xfrozen") and k not in own]
+    pool += [(f, k, R[k], k in own) for k in own + onk]
     best = max(own, key=lambda k: row(R[k])[1]["long_sharpe"]) if own else None
     bk = max(onk, key=lambda k: row(R[k])[1]["long_sharpe"]) if onk else None
     cells = [str(i), f"{f['lib']} {f['name']}", f"{pc(ao['long_ann'])} / {pc(to['long_ann'])}({sh(ao['long_sharpe'])} / {sh(to['long_sharpe'])})"]
@@ -109,6 +111,36 @@ if frozen_row:
     L.append(f"| — | _通用筛子:已知族 + 剔除近 15 日冻结盘口最重的 20%_ | {pc(a['long_ann'])} / {pc(t['long_ann'])}({sh(a['long_sharpe'])} / {sh(t['long_sharpe'])}) | | | | | |")
 if missing:
     L += ["", "还没有测试段读数的:" + "、".join(x.split("_")[0] for x in missing)]
+
+
+def top(rows, title, note):
+    out_ = ["", f"### {title}", "", note, "",
+            "| 来自 | 表达式 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 训练 / 测试 | 日换手 | 测试段最大回撤 | ρ已知族 | 逐年 2018…2025 |", "|---|---|---|---|---|---|---|---|---|"]
+    for f, k, r, _ in rows:
+        h, a, t = row(r)
+        out_.append(f"| {f['id'].split('_')[0]} {f['name']} | `{short(r['expr'], 110)}` | {h:g} | **{pc(a['long_ann'])} / {pc(t['long_ann'])}** | {sh(a['long_sharpe'])} / {sh(t['long_sharpe'])} "
+                    f"| {a['long_turnover']:.1%} | {pc(t['long_mdd'])} | {(r.get('corr_known') or 0):+.2f} | " + " ".join(f"{x:+.0%}" for x in r["by_year_long_net"].values()) + " |")
+    return out_
+
+
+def ush(x):
+    return -(row(x[2])[1]["long_sharpe"] or -9)
+
+
+seen = set()
+uniq = [x for x in sorted(pool, key=ush) if not (x[2]["expr"] in seen or seen.add(x[2]["expr"]))]
+indep = [x for x in uniq if abs(x[2].get("corr_known") or 0) < 0.5 and "day_std(Amt)" not in x[2]["expr"]][:12]
+onkn = [x for x in uniq if x not in indep and (abs(x[2].get("corr_known") or 0) >= 0.5 or "day_std(Amt)" in x[2]["expr"])][:14]
+T = ["", "## 0. 最值得看的(两张榜都**按用户训练段的纯多头夏普排序**,没有用测试段挑)", ""]
+if known_row:
+    h, a, t = known_row
+    T.append(f"对照:已知成交额族 `cross_mean(day_std(Amt), 30)` 训练 / 测试 {pc(a['long_ann'])} / {pc(t['long_ann'])},纯多头夏普 {sh(a['long_sharpe'])} / {sh(t['long_sharpe'])},测试段最大回撤 {pc(t['long_mdd'])}。")
+T += top(indep, "A. 与已知成交额族相关低于 0.5 的(独立的新东西)",
+         "这些可以和已知族并列持有。测试段上单个数字有 ±3 个点 / ±0.3 夏普的噪声,而且一共读了约一百个候选,榜首的数字有向上的选择偏差 —— 看逐年是否稳定比看单个数字可靠。")
+T += top(onkn, "B. 建在已知族上的、或实质落在这一族里的(已知族的升级版)",
+         "筛子 = 已知族剔掉某类票;分段 = 只在低流动性 40% 里按本因子选;叠加 = 已知族的秩加上本因子的秩。它们和已知族高度相关,是替换而不是并列。")
+i0 = L.index("## 1. 一张表(多头腿净超额 训练 / 测试;括号里是纯多头夏普)")
+L[i0:i0] = T + [""]
 L += ["", "## 2. 逐条", ""] + detail
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\n".join(L), encoding="utf-8")

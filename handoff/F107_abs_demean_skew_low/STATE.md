@@ -1,6 +1,6 @@
 # F107_abs_demean_skew_low — 交接状态
 
-_自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F107_abs_demean_skew_low` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #613(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_skew(Low)))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F107_abs_d
 ## 现在到哪一步
 
 - **阶段:研究完成,待审查**
-- **留出段已经读过 1 次**(10-04 15:05)—— **不许再读**。候选在留出段上的数全在 `runs/F107_abs_demean_skew_low/final.json`(`./scripts/study.sh digest F107_abs_demean_skew_low final`)。
+- **留出段已经读过 2 次**(10-04 15:05, 10-05 12:12)—— **不许再读**。候选在留出段上的数全在 `runs/F107_abs_demean_skew_low/final.json`(`./scripts/study.sh digest F107_abs_demean_skew_low final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `study:F107_abs_demean_skew_low`:已返回结果,最后动作 10-05 00:10 → `handoff/F107_abs_demean_skew_low/agents/study_a8f81191021f7ad76.md`
   - `audit-numbers:F107_abs_demean_skew_low`:中断,最后动作 10-05 00:20 → `handoff/F107_abs_demean_skew_low/agents/audit-numbers_af741730e118097dc.md`
@@ -149,6 +149,9 @@ B1(x1 §6 的 R² 0.307 / 残差 +2.9%)、`11_risks.md` §2(同一个 0.307)。
 - `FINAL`  10-04 15:05  5 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low FINAL`
 - `sweep_s1`  10-05 10:50  78 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low sweep_s1`
 - `anatomy_s1`  10-05 10:57  0 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low anatomy_s1`
+- `sweep_s2`  10-05 11:58  129 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low sweep_s2`
+- `anatomy_s2`  10-05 12:09  0 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low anatomy_s2`
+- `sweepfinal_s2`  10-05 12:13  8 个变体  → `./scripts/study.sh digest F107_abs_demean_skew_low sweepfinal_s2`
 - `x1`(自写脚本的输出)  10-04 12:31  exit 0  → `logs/F107_abs_demean_skew_low_x1.log`
 - `x2`(自写脚本的输出)  10-04 14:01  exit 0  → `logs/F107_abs_demean_skew_low_x2.log`
 

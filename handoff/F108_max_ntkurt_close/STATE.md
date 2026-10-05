@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F108_max_n
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
+- **留出段已经读过 2 次**(10-05 11:16, 10-05 12:13)—— **不许再读**。候选在留出段上的数全在 `runs/F108_max_ntkurt_close/final.json`(`./scripts/study.sh digest F108_max_ntkurt_close final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `work:F108_max_ntkurt_close#1`:已返回结果,最后动作 10-05 00:02 → `handoff/F108_max_ntkurt_close/agents/work_R1_af1297d4e49a82489.md`
   - `lead:F108_max_ntkurt_close#2`:中断,最后动作 10-05 00:20 → `handoff/F108_max_ntkurt_close/agents/lead_R2_a7c78c9c449a0151b.md`
@@ -203,6 +203,9 @@ R2 的三个疑点现在都有数字了:
 - `S2_overlay`  10-04 23:32  9 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close S2_overlay`
 - `sweep_s1`  10-05 10:30  89 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s1`
 - `anatomy_s1`  10-05 10:41  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s1`
+- `sweep_s2`  10-05 12:04  139 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s2`
+- `anatomy_s2`  10-05 12:10  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s2`
+- `sweepfinal_s2`  10-05 12:15  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweepfinal_s2`
 - `x1_anatomy`(自写脚本的输出)  10-04 13:13  exit 97  → `logs/F108_max_ntkurt_close_x1_anatomy.log`
 - `x2_longonly`(自写脚本的输出)  10-04 14:42  exit 0  → `logs/F108_max_ntkurt_close_x2_longonly.log`
 - `x3_attrib`(自写脚本的输出)  10-04 23:53  exit 0  → `logs/F108_max_ntkurt_close_x3_attrib.log`

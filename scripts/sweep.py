@@ -114,8 +114,7 @@ def variants() -> dict:
         add(f"seg_hiliq_{s_}", f"cs_first_high40({sg}, {LIQ})", "segment", "只在成交额最高 40% 的股票里按本因子选")
         add(f"seg_new_{s_}", f"cs_first_low40({sg}, {AGE})", "segment", "只在上市 / 复牌不久的股票里按本因子选")
         add(f"seg_xfrozen_{s_}", f"cs_last_high20({sg}, cross_max(day_zero_ratio(Ret), 15))", "segment", "本因子,但剔掉近 15 日冻结盘口最重的 20%")
-    extra = opt("--extra")
-    if extra and Path(extra).is_file():
+    for extra in [e for e in (opt("--extra") or "").split(",") if e and Path(e).is_file()]:   # one or several files
         for i, v in (yaml.safe_load(Path(extra).read_text(encoding="utf-8")) or {}).items():
             add(str(i), v["expr"] if isinstance(v, dict) else str(v), "hypo", (v.get("why", "") if isinstance(v, dict) else ""))
     # the tree's own structure last: on a 40-node hand-written tree it would otherwise eat the whole budget

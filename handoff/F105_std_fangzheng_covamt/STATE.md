@@ -1,6 +1,6 @@
 # F105_std_fangzheng_covamt — 交接状态
 
-_自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #25(批次 B01_single_factors)
 - 表达式:`ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:23(`python scripts/recorder.py --brief F105_std_f
 ## 现在到哪一步
 
 - **阶段:全部完成**
-- **留出段已经读过 1 次**(10-03 23:11)—— **不许再读**。候选在留出段上的数全在 `runs/F105_std_fangzheng_covamt/final.json`(`./scripts/study.sh digest F105_std_fangzheng_covamt final`)。
+- **留出段已经读过 2 次**(10-03 23:11, 10-05 11:58)—— **不许再读**。候选在留出段上的数全在 `runs/F105_std_fangzheng_covamt/final.json`(`./scripts/study.sh digest F105_std_fangzheng_covamt final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `audit-mechanism:F105_std_fangzheng_covamt`:已返回结果,最后动作 10-03 23:34 → `handoff/F105_std_fangzheng_covamt/agents/audit-mechanism_a634d8b8d73e7330b.md`
   - `revise:F105_std_fangzheng_covamt`:已返回结果,最后动作 10-04 00:19 → `handoff/F105_std_fangzheng_covamt/agents/revise_a05e6538df5a93b1b.md`
@@ -177,6 +177,9 @@ v_base = +9.3% / +18.2% / +11.8%,Lshp +1.96,在两段、两条腿、两个分段
 - `final`  10-03 23:11  5 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt final`
 - `sweep_s1`  10-05 10:47  91 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s1`
 - `anatomy_s1`  10-05 10:52  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s1`
+- `sweep_s2`  10-05 11:46  134 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s2`
+- `anatomy_s2`  10-05 11:57  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s2`
+- `sweepfinal_s2`  10-05 11:59  8 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweepfinal_s2`
 - `x1_events`(自写脚本的输出)  10-03 19:28  exit 0  → `logs/F105_std_fangzheng_covamt_x1_events.log`
 - `x2_longleg`(自写脚本的输出)  10-03 23:05  exit 0  → `logs/F105_std_fangzheng_covamt_x2_longleg.log`
 - `audit1`(自写脚本的输出)  10-03 23:29  exit 0  → `logs/F105_std_fangzheng_covamt_audit1.log`

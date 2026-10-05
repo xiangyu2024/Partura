@@ -1,6 +1,6 @@
 # F109_erm_mag_gap_5m_tsm20 — 交接状态
 
-_自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_5m_tsm20(批次 B01_single_factors)
 - 表达式:`ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)`
@@ -8,54 +8,37 @@ _自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F109_erm_m
 ## 现在到哪一步
 
 - **阶段:全部完成**
-- **留出段已经读过 1 次**(10-04 15:19)—— **不许再读**。候选在留出段上的数全在 `runs/F109_erm_mag_gap_5m_tsm20/final.json`(`./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 final`)。
+- **留出段已经读过 2 次**(10-04 15:19, 10-05 12:20)—— **不许再读**。候选在留出段上的数全在 `runs/F109_erm_mag_gap_5m_tsm20/final.json`(`./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `study:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 00:00 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/study_aa16cdd06605b6095.md`
   - `audit-numbers:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 00:14 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/audit-numbers_ae5d6ae4559cdb8a5.md`
-  - `synth:F109_erm_mag_gap_5m_tsm20`:还在跑(多半就是你自己)
+  - `synth:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 11:32 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/synth_aa3609845243aa6a4.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F109_erm_mag_gap_5m_tsm20/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-04 23:56 更新)—— **先读这个文件**
+## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-05 11:30 更新)—— **先读这个文件**
 
-# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 6 轮覆盖重写,2026-10-04)
+# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 7 轮覆盖重写,2026-10-05)
 
-> **研究已完成并交出结构化结果。结论:分辨。** 本轮(第 6 轮)无新实验、0 次服务器运行、没有读留出段,
-> 只做三件事:(a) 通读 R3 结果卡,把执行报上来的 2 条数字不一致**直接改在 notes 里**;
-> (b) 重出报告;(c) 填结构化结果。**候选没改、推荐没换**(留出段的规矩)。
+> 本轮 = **批量扫描 s1(190 变体)+ 市场解剖的一次性综合**。0 次服务器计算(只用了 `table` / `src` / `ops` / `hypo` 四个只读命令),
+> 没有读留出段,没有改候选、没有换推荐。产出两件:`notes/.../synthesis.md`(118 行)与 `studies/.../hypo.yaml`(40 条,全部 parse 通过)。
 
-## 1. 一句话现状
+## 1. 现状
 
-**`status: done`。结论 = 分辨;`recommended_kind = known_family`,推荐 = 用户已有的 `cross_mean(day_std(Amt), 30)`(变体 id `f_fam30`),
-本因子没有任何提纯 / 升华产物。** 14 条假设全部有结论,留出段已读(1 次,tag `S_final`),01~12 全部成文,
-报告在 `research/alpha_distillation/F109_erm_mag_gap_5m_tsm20.md`。
-**接手者不需要再做任何事** —— 除了 `12_next.md` 第 1 条(那是**另一条研究**,不挂在 F109 上)。
+`status: done`(上一位研究员已交出结构化结果,结论 = **分辨**;推荐仍是用户已有的 `cross_mean(day_std(Amt), 30)`)。
+本轮**没有推翻这个结论**,但把原因从「它是一条空头腿因子」细化成:
 
-(…全文 7392 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
+**这棵树里有两件被 `1e-6` 焊在一起的东西。**
+(a) 一个「近 20 日有没有封板 / 冻结盘口」的**事件标记**(钱在空头腿、买不进,而且它住在已知族亏钱的那 6.5% 里);
+(b) 一个「日内被资金推着走 → 回吐」的**活跃小盘反转信号**(去掉爆炸后多头腿 +4.5~5.1%、LTO 仅 1.7%,
+但与已知族的活跃度倾斜共线,桶内中性后只剩 +0.4%)。
+第二批 40 条假设就是去分别钉死这两件东西能不能各自站住。**留出段仍然只读过 1 次,绝对不许再读。**
 
-## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:19 条,其中研究员自己写的 11 条)
+(…全文 6128 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
+
+## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:20 条,其中研究员自己写的 12 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:22 [主研] 第 5 轮:裁决判据 A~G,结论维持分辨;发现并修正多空口径标签错误;写完全部判断类 notes,下 writeup 工单 R3
-
-我是第 5 轮主研(新工作流第 3 轮)。留出段已读、R2 有结果卡 → 本轮做 (c) 成文,没有开任何新实验、没有跑服务器。
-
-看到了什么(逐条裁决写进 10_distilled.md「读完留出段之后」):
-1. **七条判据五条过,没有一条触发推翻主结论的否定条件。** 判据 B(可信性锚)f_fam30 holdout +14.10%/1.509,
-   落在事前写的 +10%~+18% / ≥1.1 里,整张表可比。判据 C 压倒性通过:三条结构候选比家族低 16.43 / 11.16 / 15.32 个点,
-   其中 f_sig、f_lvl 在留出段直接翻负(−2.33% / −1.22%)。判据 E 通过(f_lvl −1.22%,valid 的 +12.0% 确是 2022–23 风格)。
-2. **判据 D 干净到极点,把 H11 钉死了**:sub→add 在样本内值 +6.57pp(utrain +3.36% vs −3.21%),
-   在留出段只值 +0.06pp(+2.95% vs +2.88%)。两种写法在留出段收敛到同一个数 —— 「减法是缺陷」只在样本内成立。
-3. **判据 A 保住了主结论,但预测的夏普那一半失手 0.21**(事前写 <0.5,实际 +0.713),而且原式多头腿
-   从 utrain −3.21% 变成 holdout +2.88%,是符号翻转(2024 +4.65%、2025 +3.32%,而 train 六年全负)。
-   我没有事后改口:否定条件(≥+10% 且 ≥1.0)远未触及,+2.88% 在噪声带(±3 点)内与 0 不可区分、比家族低 11.2 个点,
-   所以主张从「多头腿不可用」软化为「多头腿不具备竞争力」,符号翻转本身写进 09_diagnosis.md 的「未决」。
-4. **判据 F 后半在 2024 年被否定**(事前写三条结构候选两年都 <+5%,实际 2024 是 +8.84%/+9.99%/+11.06%,
-   两条还高于家族自己的 +9.17%;2025 年则全部 −1.92%~−12.66%)。按判据 F 原文的要求写进 11_risks.md 第 6 条。
-
-5. **本轮最重要的一条新事实**:原式的空头腿在留出段毫发无损 —— 空头腿毛超额 utrain +32.71%
-…(这条日志还有后文,读 journal.md)
 
 ### 2026-10-04 23:42 [执行] R3:补齐01_expression.md,14组(88条细项)数字核对完成(2条不一致),R2第3节hlL/hlS标签更正已追加,报告重出并通读,0次服务器运行
 
@@ -120,6 +103,18 @@ runs/F109_erm_mag_gap_5m_tsm20/{S0_baseline,S1_lvl,S_final}.json 的原始字段
 by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、logs/*_x2_incremental.log 逐一核对,
 并手算 f_orig/f_fam30/f_sig/f_sum/f_lvl 的八年算术均值复核笔记里的汇总数。
 
+### 2026-10-05 11:27 [主研] 批量扫描 s1 的综合
+
+- 节点记号本地重建(后序 SSA,A..AC),与 R1_propose_draft.txt 对齐:承重 = D/H(5分钟收益+掩码,abl_D -17.4%)与 N 上的 1e-6(sub_N_sub -19.1%);
+  惰性 = L/W 的 1e-6(sub_L_sub/sub_W_sub 与原式逐位同分 ρo 1.00)。名字骗人四处:5m 只在被测量、mag 只在下侧、两个 ε 不同质、ts_mean 是记忆不是平滑(窗口 5→40 全平)。
+- 全表最大的一次结构收益 = 去掉上侧计数归一化:only_L_R / sub_J_day_first +5.1%(valid +14.0%)、sub_L_mul +4.9%、sub_W_div +4.5%(原式 -3.2%);
+  整条下侧分支是损害(abl_AA/only_AA_R/sub_AA_* 五条同为 +2.6~2.7%);sub_Y_log +4.9% 之所以赚是 log 把 q05=0 的爆炸日变 NaN 丢掉。
+- 解剖:原式只在「近15日有冻结盘口」(6.5%、段等权 -67.4%)+14.3% 与「上市不足250日」(7.1%)+5.0% 为正,其余所有段为负,且超配冻结段 +2.3pp —— 这就是 -3.2% 的来源。
+- 去掉爆炸后的变体换了一片市场:创业板 +9~11.6%、小市值 +9.8~12.0%、成交额最高20% +10.8%(最低20% -6.2%),低波 +9.4% vs 高波 +0.4%,市场上涨 +8.2~13.1% vs 下跌 -4.6~0.4%;
+  已知族恰好相反(持仓 +80.3pp 压在成交额最低20%、高波更强)。机制推断 = 活跃小盘的「日内被资金推着走 → 回吐」反转。
+- 增量仍然没有:res_known -0.3%、bk_known/bk_liq +0.4%(且 dist 0.20 ✗)、overlay 六档全部低于家族 +15.4%。但 overlay 叠的全是多头腿为负的原式,对结构变体不公平 → 第二批补。
+- 落盘:notes/synthesis.md(140 行)、studies/hypo.yaml 40 条全部 parse 通过(A 去归一化 / B 冻结状态 / C 错配 / D 拉升机制 / E 桶内与分段 / F 市场状态 / G 当筛子 / H 低相关新结构)。
+
 ## 工单与结果卡(`notes/F109_erm_mag_gap_5m_tsm20/orders/`、`notes/F109_erm_mag_gap_5m_tsm20/results/`)
 
 - R1:工单 有,结果卡 有
@@ -147,13 +142,16 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 - `S_final`  10-04 15:19  5 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 S_final`
 - `sweep_s1`  10-05 11:05  193 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweep_s1`
 - `anatomy_s1`  10-05 11:09  0 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 anatomy_s1`
+- `sweep_s2`  10-05 12:16  243 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweep_s2`
+- `anatomy_s2`  10-05 12:20  0 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 anatomy_s2`
+- `sweepfinal_s2`  10-05 12:22  8 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweepfinal_s2`
 - `x1_anatomy`(自写脚本的输出)  10-04 12:36  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x1_anatomy.log`
 - `S1_S2`(自写脚本的输出)  10-04 13:19  exit 97  → `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`
 - `x2_incremental`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log`
 
 ## 已写的 notes(`notes/F109_erm_mag_gap_5m_tsm20/`)
 
-`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(23K)、`06_baseline.md`(3K)、`07_S1_nodes.md`(7K)、`07_S2_level.md`(5K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(10K)、`07x_2_incremental.md`(6K)、`08_variants.md`(7K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(6K)、`12_next.md`(5K)、`journal.md`(30K)、`state.md`(11K)
+`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(23K)、`06_baseline.md`(3K)、`07_S1_nodes.md`(7K)、`07_S2_level.md`(5K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(10K)、`07x_2_incremental.md`(6K)、`08_variants.md`(7K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(6K)、`12_next.md`(5K)、`journal.md`(32K)、`state.md`(9K)、`synthesis.md`(9K)
 
 ## 自写的探针与分析脚本(`studies/F109_erm_mag_gap_5m_tsm20/`)
 
@@ -164,5 +162,6 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 
 - `audit-numbers.json`
 - `study.json`
+- `synthesis.json`
 
 报告:`research/alpha_distillation/F109_erm_mag_gap_5m_tsm20.md`(10-04 23:56 生成)

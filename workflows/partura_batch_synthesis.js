@@ -110,8 +110,75 @@ train = 2018–2021,valid = 20220101–20230807,utrain = 两者。噪声:净超�
 所有文字用中文,英文术语保留。省着用轮次:一条命令里把要看的一起打出来,读过的不要重读。`
 }
 
-log(`批量综合:${factors.length} 条因子,模型 ${MODEL},扫描 ${TAG}`)
+const VERDICT = {
+  type: 'object',
+  properties: {
+    factor_id: STR,
+    one_line: STR,
+    confirmed: STRS,
+    refuted: STRS,
+    best_own: { type: 'array', items: { type: 'object', properties: { id: STR, expr: STR, note: STR }, required: ['id', 'expr', 'note'] } },
+    best_on_known: { type: 'array', items: { type: 'object', properties: { id: STR, expr: STR, note: STR }, required: ['id', 'expr', 'note'] } },
+    verdict: STR,
+    lab_findings: { type: 'array', items: { type: 'object', properties: { id: STR, claim: STR, evidence: STR, operators: STRS, recheck: STR }, required: ['id', 'claim', 'evidence'] } },
+    hypotheses_written: { type: 'integer' },
+    new_operator_requests: { type: 'array', items: { type: 'object', properties: { name: STR, definition: STR, why: STR }, required: ['name', 'definition', 'why'] } },
+    tooling_problems: STRS,
+  },
+  required: ['factor_id', 'one_line', 'confirmed', 'refuted', 'best_own', 'best_on_known', 'verdict', 'lab_findings', 'hypotheses_written'],
+}
+
+function prompt2(f) {
+  const prev = TAG === 's2' ? 's1' : 's2'
+  return `你是 Partura 的**主研**,负责因子 ${f.id}。上一轮你(或另一位主研)读了批量扫描 ${prev} 并提出了一批假设;它们已经和通用的「筛子 / 分段」变体一起跑完,
+结果在批量扫描 ${TAG} 里。这一轮:**对账、定论、再提一批只有新算子才写得出的假设**。只有这一轮;不要起服务器计算;**不要读测试段**
+(runs/${f.id}/sweepfinal_*.json 是测试段读数,不许打开 —— 你的假设和结论只能建立在 train / valid 上)。
+
+## 你在整件事里的位置(先读这一段)
+
+用户的总任务:对一批 AlphaCube 因子做 Partura 研究(分辨、提纯、升华)。工作流会把**用户最近对总领说的一句话**原样转给你(「用户请求」);
+那句话是说给总领听的、已经处理过了 —— 下面这份任务就是对它的落实,两者不冲突。scripts/、partura/、workflows/、handoff/、lab/、docs/ 和别的因子的文件都不要动。
+用户对方法的要求:假设成批提成批看;研究实际市场(哪类股票、哪些时段有效,推断原因);可以改最小的子结构;**算子按函数定义理解,不按名字**;缺算子就提。
+
+## 因子
+
+- factor_id: ${f.id}(${f.lib}库 / ${f.name})
+- 表达式:
+${f.expr}
+
+## 选拔口径
+
+A 股纯多头:只看多头腿扣费净超额与纯多头夏普(半衰期按纯多头书选)。基准 k_known = cross_mean(day_std(Amt), 30)(train / valid +12.6% / +22.3%,夏普 1.78 / 3.46);
+通用筛子基准 k_known_xfrozen = 已知族剔掉近 15 日冻结盘口最重的 20%。噪声:净超额 ±3 个点、夏普 ±0.3。门槛 cov ≥ 0.95、dist ≥ 0.5。否定结论同样合格。
+
+## 先读(每条命令开头 cd ${ROOT})
+
+1. cat notes/${f.id}/synthesis.md                      —— 上一轮的综合:机制、推论、提了哪些假设、各自想检验什么
+2. ./scripts/study.sh table ${f.id} ${TAG} --all        —— 这一轮的全表(kind = hypo 的是上一轮提的假设;screen = 已知族剔掉本因子标出的票;
+   segment = 只在低 / 高流动性、次新里按本因子选,或本因子剔掉冻结盘口)+ 市场解剖
+3. sed -n '/第四批/,$p' docs/new_operators.md           —— 上一轮各位主研要求、已经加进库的 23 个新算子(定义与理由)。三目选择用现成的 select_where(c, a, b)。
+
+## 要做的
+
+1. **对账**:上一轮综合里的每条推论 / 每组假设,结果是支持还是否定?(写变体 id 和数字;train 与 valid 都看。)
+2. **定论**(只凭 train / valid):这条因子自己最好的 1~3 个版本是谁(best_own;不含已知族成分的);建在已知族上的最好用法是谁(best_on_known:筛子 / 叠加),
+   它比 k_known 和 k_known_xfrozen 强不强;一句话结论(one_line)和完整判断(verdict:是提纯 / 升华 / 只是已知族 / 多头腿不可用 / 只能当筛子…)。
+3. **第三批假设**:studies/${f.id}/hypo3.yaml(≤ 25 条;格式同前:h3_xxx: {expr: "…", why: "…"})。只写两类:
+   (a) 上一轮想写但写不出、现在有了算子的(桶内去均值 cs_bucket_demean / cs_bucket_zscore、封在最高最低价 day_at_max_ratio / day_at_min_ratio、
+       带保护的尾部比值 day_es_ratio_hi / lo、市场状态 cs_state_rank / cs_flip_by_state、上市天数 cross_age、稳健标准化 cross_madz / cs_robust_z、
+       day_wstd、day_topw_mean、in_index、in_zscore_expand、cross_flat_ratio、cross_semistd_*、更多档位的 cs_first_* / cs_last_*…);
+   (b) 这一轮的结果直接指向的下一步(比如某个假设意外地好,就把它周围的最小子结构再换一圈)。
+   写完必须检查能否解析:./scripts/study.sh hypo3 ${f.id}(FAIL 的改到通过或删掉)。
+4. **落盘**:在 notes/${f.id}/synthesis.md 末尾追加一节「## 第二轮(${TAG})对账与结论」(≤ 80 行);覆盖重写 notes/${f.id}/state.md(≤ 10 KB,8 节);
+   ./scripts/study.sh note ${f.id} "[主研] 批量扫描 ${TAG} 对账与结论" <<'EOF'(五六行)EOF
+5. lab_findings:对以后研究**可迁移**的结论(关于算子或结构模式,不是这条因子的业绩),每条带证据和失效条件。
+
+所有文字用中文,英文术语保留。省着用轮次。`
+}
+
+const ROUND = (args && args.round) || 1
+log(`批量综合(第 ${ROUND} 轮):${factors.length} 条因子,模型 ${MODEL},扫描 ${TAG}`)
 const res = await parallel(factors.map(f => () =>
-  agent(prompt(f), { label: `synth:${f.id}`, phase: 'Synthesis', schema: SCHEMA, model: MODEL })
-    .then(r => { log(`${f.id}: ${r ? r.what_it_is.slice(0, 90) + ' | 假设 ' + r.hypotheses_written + ' 条,要求新算子 ' + r.new_operator_requests.length + ' 个' : '没有返回'}`); return r })))
+  agent(ROUND === 1 ? prompt(f) : prompt2(f), { label: `${ROUND === 1 ? 'synth' : 'verdict'}:${f.id}`, phase: 'Synthesis', schema: ROUND === 1 ? SCHEMA : VERDICT, model: MODEL })
+    .then(r => { log(`${f.id}: ${r ? (r.what_it_is || r.one_line || '').slice(0, 100) + ' | 假设 ' + r.hypotheses_written + ' 条' : '没有返回'}`); return r })))
 return res.map((r, i) => r || { factor_id: factors[i].id, failed: true })

@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F113_neste
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-04 23:50)—— **不许再读**。候选在留出段上的数全在 `runs/F113_nested_tsmax_demean/final.json`(`./scripts/study.sh digest F113_nested_tsmax_demean final`)。
+- **留出段已经读过 2 次**(10-04 23:50, 10-05 12:14)—— **不许再读**。候选在留出段上的数全在 `runs/F113_nested_tsmax_demean/final.json`(`./scripts/study.sh digest F113_nested_tsmax_demean final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `work:F113_nested_tsmax_demean#1`:已返回结果,最后动作 10-04 23:59 → `handoff/F113_nested_tsmax_demean/agents/work_R1_a696126293179fc51.md`
   - `lead:F113_nested_tsmax_demean#2`:已返回结果,最后动作 10-05 00:20 → `handoff/F113_nested_tsmax_demean/agents/lead_R2_ad80c965745ae9bd7.md`
@@ -124,6 +124,9 @@ _自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F113_neste
 - `S_final`  10-04 23:50  5 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean S_final`
 - `sweep_s1`  10-05 10:44  189 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweep_s1`
 - `anatomy_s1`  10-05 10:49  0 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean anatomy_s1`
+- `sweep_s2`  10-05 12:02  240 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweep_s2`
+- `anatomy_s2`  10-05 12:14  0 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean anatomy_s2`
+- `sweepfinal_s2`  10-05 12:16  8 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweepfinal_s2`
 - `x1_ties`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F113_nested_tsmax_demean_x1_ties.log`
 - `x2_increment`(自写脚本的输出)  10-04 15:35  exit 0  → `logs/F113_nested_tsmax_demean_x2_increment.log`
 

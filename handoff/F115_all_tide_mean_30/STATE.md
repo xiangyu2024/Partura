@@ -1,6 +1,6 @@
 # F115_all_tide_mean_30 — 交接状态
 
-_自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F115_all_tide_mean_30` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 all_tide_mean_30(批次 B01_single_factors)
 - 表达式:`cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20)`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:15(`python scripts/recorder.py --brief F115_all_t
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-05 00:11)—— **不许再读**。候选在留出段上的数全在 `runs/F115_all_tide_mean_30/final.json`(`./scripts/study.sh digest F115_all_tide_mean_30 final`)。
+- **留出段已经读过 2 次**(10-05 00:11, 10-05 12:18)—— **不许再读**。候选在留出段上的数全在 `runs/F115_all_tide_mean_30/final.json`(`./scripts/study.sh digest F115_all_tide_mean_30 final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `lead:F115_all_tide_mean_30#1`:已返回结果,最后动作 10-04 23:49 → `handoff/F115_all_tide_mean_30/agents/lead_R1_a191df6528a633604.md`
   - `work:F115_all_tide_mean_30#1`:中断,最后动作 10-05 00:20 → `handoff/F115_all_tide_mean_30/agents/work_R1_a5f7381bf31230aef.md`
@@ -139,6 +139,9 @@ R2 的 5 变体 + increment.py 都 exit 0,四条判读全部命中或落在工�
 - `S_final`  10-05 00:11  5 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 S_final`
 - `sweep_s1`  10-05 10:41  121 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 sweep_s1`
 - `anatomy_s1`  10-05 10:46  0 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 anatomy_s1`
+- `sweep_s2`  10-05 12:12  169 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 sweep_s2`
+- `anatomy_s2`  10-05 12:18  0 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 anatomy_s2`
+- `sweepfinal_s2`  10-05 12:20  8 个变体  → `./scripts/study.sh digest F115_all_tide_mean_30 sweepfinal_s2`
 - `x1_anat_mfi`(自写脚本的输出)  10-04 14:19  exit 0  → `logs/F115_all_tide_mean_30_x1_anat_mfi.log`
 - `x2_increment`(自写脚本的输出)  10-04 15:27  exit 0  → `logs/F115_all_tide_mean_30_x2_increment.log`
 

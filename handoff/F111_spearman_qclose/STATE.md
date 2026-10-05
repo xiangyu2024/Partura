@@ -1,6 +1,6 @@
 # F111_spearman_qclose — 交接状态
 
-_自动生成于 2026-10-05 11:21(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #953(批次 B01_single_factors)
 - 表达式:`ts_spearman(day_quantile(Close), 10)`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:21(`python scripts/recorder.py --brief F111_spear
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- 留出段:**还没读过**(只能读一次;读之前要在 `10_distilled.md` 里写下候选排序和判据)。
+- **留出段已经读过 1 次**(10-05 12:04)—— **不许再读**。候选在留出段上的数全在 `runs/F111_spearman_qclose/final.json`(`./scripts/study.sh digest F111_spearman_qclose final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `work:F111_spearman_qclose#1`:已返回结果,最后动作 10-05 00:09 → `handoff/F111_spearman_qclose/agents/work_R1_aae62ed0fb3b82fe7.md`
   - `lead:F111_spearman_qclose#2`:中断,最后动作 10-05 00:20 → `handoff/F111_spearman_qclose/agents/lead_R2_aeedf79bbeec0a00f.md`
@@ -175,6 +175,9 @@ x1_identity(2)+S2_window(3,本轮跑成)+x2_increment(4)= 4 次,与工单原文"
 - `S2_window`  10-04 23:34  7 个变体  → `./scripts/study.sh digest F111_spearman_qclose S2_window`
 - `sweep_s1`  10-05 10:54  73 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweep_s1`
 - `anatomy_s1`  10-05 10:58  0 个变体  → `./scripts/study.sh digest F111_spearman_qclose anatomy_s1`
+- `sweep_s2`  10-05 11:46  117 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweep_s2`
+- `anatomy_s2`  10-05 11:52  0 个变体  → `./scripts/study.sh digest F111_spearman_qclose anatomy_s2`
+- `sweepfinal_s2`  10-05 12:06  8 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweepfinal_s2`
 - `x1_identity`(自写脚本的输出)  10-04 14:23  exit 0  → `logs/F111_spearman_qclose_x1_identity.log`
 - `x2_increment`(自写脚本的输出)  10-04 23:58  exit 0  → `logs/F111_spearman_qclose_x2_increment.log`
 

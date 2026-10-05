@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -8,7 +8,7 @@ _自动生成于 2026-10-05 11:13(`python scripts/recorder.py --brief F112_scale
 ## 现在到哪一步
 
 - **阶段:研究进行中(还没有结构化结论)**
-- **留出段已经读过 1 次**(10-04 23:28)—— **不许再读**。候选在留出段上的数全在 `runs/F112_scale_spow_masktop/final.json`(`./scripts/study.sh digest F112_scale_spow_masktop final`)。
+- **留出段已经读过 2 次**(10-04 23:28, 10-05 12:04)—— **不许再读**。候选在留出段上的数全在 `runs/F112_scale_spow_masktop/final.json`(`./scripts/study.sh digest F112_scale_spow_masktop final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `lead:F112_scale_spow_masktop#2`:已返回结果,最后动作 10-05 00:04 → `handoff/F112_scale_spow_masktop/agents/lead_R2_aa3f59c581b7d0b47.md`
   - `work:F112_scale_spow_masktop#2`:中断,最后动作 10-05 00:20 → `handoff/F112_scale_spow_masktop/agents/work_R2_a61c6ea7258b8d7a8.md`
@@ -121,6 +121,9 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 - `F1_final`  10-04 23:28  5 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop F1_final`
 - `sweep_s1`  10-05 10:38  113 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s1`
 - `anatomy_s1`  10-05 10:45  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s1`
+- `sweep_s2`  10-05 11:47  162 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s2`
+- `anatomy_s2`  10-05 12:01  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s2`
+- `sweepfinal_s2`  10-05 12:06  8 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweepfinal_s2`
 - `A1_channels`(自写脚本的输出)  10-04 14:21  exit 0  → `logs/F112_scale_spow_masktop_A1_channels.log`
 - `A2_increment`(自写脚本的输出)  10-04 15:37  exit 0  → `logs/F112_scale_spow_masktop_A2_increment.log`
 
