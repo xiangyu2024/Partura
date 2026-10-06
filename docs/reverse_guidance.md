@@ -22,7 +22,7 @@ AlphaCube(GP / RL 搜索) ──表达式、轨迹、失败品──▶ Partura(
 
 | 干预 | 写在哪 | 怎么生效 |
 |---|---|---|
-| 奖励函数 | `guidance/<batch>.yaml` → `reward` | `partura/steer.py: reward()`(`long` / `long_tradable` / `long_bucket` / `long_marginal`),运行时作为打分器装进 AlphaCube(`make_scorer`) |
+| 奖励函数 | `guidance/<batch>.yaml` → `reward` | `partura/steer.py: reward()`(`long` / `long_tradable` / `long_bucket` / `long_marginal` / `long_screen`),运行时作为打分器装进 AlphaCube(`make_scorer`);排序在 GPU 上算的同值实现在 `partura/steer_fast.py`(`PARTURA_REWARD_DEVICE=cuda`) |
 | 评估方法 | 同上 → `evaluation` | 门槛先行、方向按多头腿、半衰期按纯多头书、两段取差的那一段,都在同一个 `reward()` 里;同一笔钱检验、解剖在 `scripts/sweep*.py` / `anatomy.py` / `batch_cluster.py` |
 | **动作 / 子结构的先验**(重点) | 同上 → `priors` | `partura/steer.py: Guidance` —— 改写(打分前化简、去重)、封禁、降权、升权。对生成器的作用方式是**接受-拒绝**:任何提议分布 P 经过它就变成 P × 权重,不要求生成器自己支持算子概率 |
 | 交给搜索的想法 | 同上 → `ideas` | `scripts/idea_search.py <idea>`:种子进首代、想法里的算子多采样、候选必须留在想法的邻域里;同预算对照组 |
@@ -51,7 +51,8 @@ root: …                               只匹配最外层(默认匹配树里任
 - {id: C1_window1_identity, action: rewrite, pattern: "{ts_min|ts_max}(_, 1)", to: operand, …}
 ```
 
-`Guidance.canonical(expr)` 做改写;`dedup_key` 再把价格叶子归一(只差价格叶子的算同一个候选);
+`Guidance.canonical(expr)` 做改写;`dedup_key` = 改写后的式子(**只并精确等价的**);
+`family_key` 再把「只差价格字段换名」和「只在最外层多套一个保序函数(`pow_05(X)` 对 `X`)」的认作同族 —— 同族的少采样(0.3),不拒绝;
 `weight(expr)` 是命中的规则权重之积(封禁为 0);`accept(expr, u)` 以 min(1, 权重 / 最大权重) 的概率放行。
 匹配器读的是表达式**字符串**,所以同一套规则能用在 GP 的存档、RL 的轨迹、Partura 自己的扫描表上。
 
@@ -84,9 +85,25 @@ episode.md        假设 / 干预 / 对照 / 证据 / 信念更新(最后一节�
 信念更新之后回到 `guidance/<batch>.yaml`:规则的权重、状态、证据随之改。搜索只看 2018-01 ~ 2023-08-07(train + valid),
 测试段不打开;搜到的候选要进批量扫描和按规则的测试段读数,才算数。
 
-## 不改 AlphaCube 的文件
+### 什么算「发现」,什么算「比基准好」(2026-10-06 定下来的三条)
 
-奖励与采样钩子都在运行时装上(`alphacube.mining.scoring.make_scorer`、`TypedTreeGenerator.acceptable` / `._pick`),
-服务器上的 AlphaCube 目录不动。等干预被几轮对照实验证实之后,值得并进 AlphaCube 本体的改动(见指引报告末尾的清单)
-再由用户决定怎么合:`generator.py:268` 的算子权重、`generator.py:107` 的邻域约束、`scoring.py:510` 的奖励注册表、
-`mutate_window` / `mutate_constant` 绕过封禁的漏洞、按时间的预算。
+1. **发现**只有一个定义:`partura.steer.is_discovery`。水平类奖励 = 分数(两段里较差的纯多头夏普)过线;
+   成对奖励(`long_marginal` / `long_screen`)= 合并段过线,**并且** train、valid 各自 ≥ 0.5 —— 合并段的 5.6 年里 train 占 4 年。
+   数的时候按**族**数(`Guidance.family_key`),换皮不算新发现。
+2. **成对奖励带大小**:`score = IR × min(1, 每年多赚 / 1 个点)`(`partura.steer._sized`)。成对差的信息比没有量纲,
+   每天换掉书里一两只票、换得略好而且很稳,信息比能到 2~3 而账面一年只多 0.2 个点(e3_I1 对照臂的 22 个「发现」全是这一种)。
+3. **比基准好**用同一天相减的逐日净超额之差判(年化差、信息比、测试段 t),不用两个年化数相减(`scripts/sweep_final.py` 的成对表,
+   `scripts/paired_table.py`)。样本内的成对信息比 ≈ 1 在这批数据上对应的样本外 t 不到 1(`studies/K001_known_screens/README.md`)。
+
+每次短搜的证据文件记 `code`(脚本与奖励的文件指纹)、`screen_base`、`reward_device`。服务器端的启动脚本不会同步代码:
+起之前先 `./scripts/study.sh code`。
+
+## 和 AlphaCube 本体的关系
+
+到 2026-10-06 为止,奖励与采样钩子都是运行时装上的(`alphacube.mining.scoring.make_scorer`、`TypedTreeGenerator.acceptable` / `._pick`),
+服务器上的 AlphaCube 目录没有动。
+
+2026-10-05 用户授权(「你的需求我全部满足」「Partura 的权限等级比 AlphaCube 高」)之后,这些钩子正在并进 AlphaCube 本体:
+设计 `docs/alphacube_steering_design.md`(生成器的 `op_weight / accept / daily_fields / leaf_slots`、打分器注册表 `register_scorer`、
+插件加载、日频字段叶子 `DailyFeature`、修 `mutate_window` / `mutate_constant` 绕过封禁的漏洞),实现在 AlphaCube 的 `partura-steering` 分支
+(worktree `~/Desktop/AlphaCube-steering`);不传新参数时行为与随机数流逐位不变。进度看 `handoff/COORDINATOR.md` 顶部。
