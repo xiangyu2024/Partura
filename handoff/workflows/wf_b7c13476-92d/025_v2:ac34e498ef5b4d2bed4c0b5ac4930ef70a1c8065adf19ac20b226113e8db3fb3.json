@@ -1,0 +1,25 @@
+{
+ "type": "result",
+ "key": "v2:ac34e498ef5b4d2bed4c0b5ac4930ef70a1c8065adf19ac20b226113e8db3fb3",
+ "agentId": "a1519c242ba165647",
+ "result": {
+  "checked_and_fine": [
+   "cs_winsor (partura/ops_ext.py:252-260) -- matches its docstring exactly: elementwise-compared against a per-day numpy nanquantile(1%)/nanquantile(99%) clip reference across random / 10-30% NaN / full-row-NaN / full-col-NaN / constant-row / heavy-ties(5 distinct values) / 1e-9..1e16 magnitude / mixed-sign inputs, float32 and float64 (D=51,S=29): 0 mismatches.",
+   "day_zero_ratio (partura/ops_ext.py:265-277) -- matches its docstring exactly: elementwise-compared against a numpy ((x==0)&isfinite(x)).mean(over minutes) reference at M=241 (real minute width), M=5 and M=2, with injected zeros/NaNs and fully-missing / fully-zero day-stock cells, float32 and float64: 0 mismatches. Confirmed no cross-day leakage: changing every OTHER day's minute data leaves the target day's ratio bit-for-bit unchanged.",
+   "cross_valid_count (partura/ops_ext.py:280-290) -- matches its docstring exactly, checked as an EXACT match (integer count, not just within tolerance) against a numpy per-day trailing-window isfinite().sum() reference, D in {5,50,60,300}, d in {5,20,241} (covering both D<d short-history and D>>d), under all NaN/ties/magnitude/sign scenarios, float32+float64: 0 mismatches, output never NaN as promised. Confirmed causal: perturbing every day after t leaves outputs for days<=t bit-for-bit unchanged.",
+   "cross_tail_mean_q25 (partura/ops_ext.py:293-309, via _tail_mean) -- matches its docstring exactly: elementwise-compared against a numpy per-day-per-stock trailing-window quantile(25%) + conditional-tail-mean reference, D in {5,50,60,300}, d in {5,20,241}, under all NaN/ties/magnitude/sign scenarios, float32+float64: 0 mismatches. Confirmed causal: perturbing every day after t leaves outputs for days<=t bit-for-bit unchanged."
+  ],
+  "findings": [
+   {
+    "title": "cs_bucket_rank's docstring omits its own tie-break term and misstates the output's range",
+    "file": "partura/ops_ext.py",
+    "line": 232,
+    "severity": "low",
+    "summary": "The docstring (lines 233-239) defines cs_bucket_rank's output as the within-bucket percentile rank of y and explicitly bounds it to '(0, 1]', but the actual return statement (line 249) unconditionally adds `1e-4 * _pct_rank(y, ok)` (y's OVERALL cross-sectional rank, not just a tie-break for literal ties) to every cell. That extra term -- and the resulting range change -- is explained only in docs/new_operators.md and an inline code comment (lines 247-248), never in the function's own docstring, even though ops_ext.py's module header (line 9) states 'The docstring of each kernel is its definition.'",
+    "failure_scenario": "1 trading day, 10 stocks, x = [10,20,30,40,50,60,70,80,90,100] (strictly increasing, so each of the 10 decile buckets has exactly 1 member), y = [5,4,3,2,1,9,8,7,6,0]. Read literally, the docstring says every stock's output is its percentile rank within its own singleton decile, i.e. exactly 1.0 for all 10 stocks, inside the stated range (0,1]. Calling oe.cs_bucket_rank(torch.tensor([y]), torch.tensor([x])) instead returns [1.0000600, 1.0000499, 1.0000401, 1.0000300, 1.0000200, 1.0001000, 1.0000900, 1.0000800, 1.0000700, 1.0000100] -- every single value exceeds the docstring's documented upper bound of 1.0, and none of them is the literal 1.0 the docstring's wording predicts.",
+    "suggested_fix": "Add the second term to cs_bucket_rank's own docstring, e.g.: '... ties within a bucket are broken by adding 1e-4 x y's OVERALL percentile rank across all valid stocks that day (within-bucket order is unchanged); the true range is (0, 1 + 1e-4], not (0, 1].' This just promotes what docs/new_operators.md and the inline comment at ops_ext.py:247-248 already say into the function's own docstring, which this project treats as the authoritative definition.",
+    "evidence": "Verified with /Users/wxy/Desktop/Partura/tmp/review/audit_2/run_audit.py: a strictly-docstring numpy reference (refs.ref_cs_bucket_rank(tiebreak=False)) disagrees with the kernel on 20-25% of cells in every scenario tried (random/ties/NaN-10%/NaN-30%/full-row-NaN/huge-1e16/tiny-1e-9/mixed-sign, D up to 300, S up to 4999, float32 and float64), each time by an amount consistent with the 1e-4 term. Adding that exact documented-elsewhere term to the reference (tiebreak=True) makes it match the kernel to float rounding precision (rtol 1e-6) in every one of those scenarios plus S in {1,2,3,4,5,7,9,10,20,50,100,241,503,4999} -- confirming the decile-assignment and within-bucket-rank logic itself is correct, and the only gap is the docstring's own completeness/range claim."
+   }
+  ]
+ }
+}

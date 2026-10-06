@@ -1,0 +1,52 @@
+{
+ "type": "result",
+ "key": "v2:41f3425cd1d2ddbfe9eb6ebf5b5bb8354ac17d6a1070e37e5306a6cb0093500c",
+ "agentId": "a61bc270624c47370",
+ "result": {
+  "checked_and_fine": [
+   "day_es_ratio_lo"
+  ],
+  "findings": [
+   {
+    "title": "day_topw_mean's top-10% ranking pool silently depends on y's NaN pattern, not just |w|'s",
+    "file": "partura/ops_ext.py",
+    "line": 580,
+    "severity": "high",
+    "summary": "The 90th-percentile |w| threshold that defines 'the 10% of the day's minutes with the largest |w|' is computed only over minutes where y is ALSO finite, so minutes with large |w| but missing y drop out of the ranking pool instead of just being excluded from the final mean -- contradicting the docstring, which conditions the ranking on |w| alone (unlike sibling ops day_wmean/day_wstd/day_signed_ratio, whose own docstrings explicitly say 'where both are finite').",
+    "failure_scenario": "y=[[nan,2,3,4,5,6,7,8,9,10]], w=[[100,90,80,70,60,50,40,30,20,10]] (shape (1,10), all w finite). Per the docstring, the true top-10%-by-|w| minute is index 0 (w=100); its y is NaN, so the correct answer has no valid y among the selected minutes -> NaN. The kernel instead computes the 90th-percentile threshold only over the 9 minutes where y is finite (indices 1..9), getting thr=82 instead of 91, admitting index 1 (w=90) into the selected set, so day_topw_mean(y,w) returns 2.0 (finite) -- a finiteness-pattern mismatch. Reproduced in tmp/review/audit_7/repro_topw_mean.py. At the realistic scale (M=241, D=S=2, 20%/30% random NaN independently in y and w), the same mechanism produces finite-vs-finite mismatches of 24%-166% relative error (e.g. kernel=-0.0466 vs docstring-literal reference=0.0701; kernel=0.0973 vs reference=0.1273), identical in float32 and float64 -- confirmed in tmp/review/audit_7/harness.py (scenarios nan_20pct/nan_30pct at M=241).",
+    "suggested_fix": "Compute the quantile threshold using only isfinite(w) (torch.where(torch.isfinite(w), w, NAN) instead of torch.where(ok, w, NAN)); keep ok = isfinite(y) & isfinite(w) only for the final selection/averaging step: sel = isfinite(w) & (w >= thr) & isfinite(y). If joint-finiteness for ranking was actually intended (matching day_wmean/day_wstd's convention), fix the docstring instead to say '(where both are finite)' explicitly.",
+    "evidence": "tmp/review/audit_7/repro_topw_mean.py (10-minute minimal case); tmp/review/audit_7/harness.py (M=241 statistical confirmation, both dtypes)."
+   },
+   {
+    "title": "day_es_ratio_hi spuriously admits the tied boundary point at the real M=241 width under float32",
+    "file": "partura/ops_ext.py",
+    "line": 591,
+    "severity": "high",
+    "summary": "At the production minute width M=241, 0.95*(M-1)=228 is an exact integer, so the 95th-percentile quantile lands exactly on a real data point on every fully-populated day. In float32 the value torch.nanquantile returns is not always bit-identical to that same point's own float32 representation, so the strict '> v' comparison can spuriously select that one tied minute, which both the docstring ('ABOVE') and the code's own intent say should be excluded.",
+    "failure_scenario": "numpy.random.default_rng(7); draw 500 independent length-241 standard-normal rows (tmp/review/audit_7/stress_es_ratio_boundary.py). At trial index 105, x cast to float32 gives day_es_ratio_hi(x) = 1.5644932985305786, while the docstring-literal reference (select x_i strictly above np.quantile(x,0.95) computed on the exact same float32 bits, in float64 arithmetic) gives 1.6115342749466688 (2.9% relative error): the kernel's selected set has 13 minutes vs the reference's 12, the extra one being the tied quantile point itself (one diagnostic run showed the kernel including the value 1.9060357 which equals its own computed threshold, while the reference correctly excludes it; see tmp/review/audit_7/diag_es_ratio.py). Not a rare fluke: 278/500 trials (55.6%) exceed the 1e-4 tolerance in float32, versus 0/500 at the control width M=242 (0.95*(M-1)=228.95, not an integer) and 0/500 for day_es_ratio_lo on the identical data, confirmed by directly mirroring trial 105 onto -x with q=0.05: day_es_ratio_lo there reproduces the correct ratio (1.6115342378616333) matching the reference, unlike 'hi' on the original data. Float64 shows no issue (same mechanism, ~1e9x smaller error, under tolerance).",
+    "suggested_fix": "Compute the quantile and the selection comparison in float64 inside _es_ratio regardless of input dtype (cast x to float64 at entry, as cross_ema already does elsewhere in this file for a similar amount-scale precision concern; cast the final ratio back at the end). Cheaper alternative: use a small relative/ULP-scaled tolerance in the '>'/'<' comparison instead of a bare inequality so a value mathematically tied with the quantile isn't admitted or excluded by reconstruction noise.",
+    "evidence": "tmp/review/audit_7/diag_es_ratio.py; tmp/review/audit_7/stress_es_ratio_boundary.py (278/500 at M=241 vs 0/500 at M=242 control); tmp/review/audit_7/check_lo_mirror.py (shows day_es_ratio_lo does NOT reproduce the failure on mirrored data)."
+   },
+   {
+    "title": "in_zscore_expand's two-pass variance formula catastrophically cancels for amount-scale inputs",
+    "file": "partura/ops_ext.py",
+    "line": 641,
+    "severity": "high",
+    "summary": "mean/var are accumulated as cumsum(x) and cumsum(x*x) and combined as E[X^2]-E[X]^2 in the input's own dtype (no upcast); for large-magnitude inputs (the file's own cross_ema comment confirms Amt/Volume-scale inputs of 1e8-1e9+ run in float32 in production) this subtracts two nearly-equal large numbers, destroying precision and producing z-scores wrong by 10%-100%+, occasionally by many orders of magnitude, versus the docstring's exact formula.",
+    "failure_scenario": "Deterministic, no RNG: x[t] = 1e9 + t for t=0..240 (plain increasing ramp). At t=29, in_zscore_expand(x) returns 14500000000.0 even in FLOAT64, while the docstring-literal reference ((x[t]-mean(x[0..t]))/(std(x[0..t])+1e-9), computed directly) gives 1.675246731754682 -- wrong by a factor of ~8.6e9. The same ramp in float32 is wrong by a factor of ~7.4e10 at t=161. On a more realistic 'quiet trading day' shape (mean=1e9, std=1e2, i.e. 1e-5 relative noise), float64 already shows up to 6.5% relative error and float32 is off by factors of thousands. Even with 1% relative noise at 1e16 magnitude (explicitly in the audit's required test matrix), float32 alone exceeds the 1e-4 tolerance (1.5e-3 relative error at t=4). Reproduced in tmp/review/audit_7/repro_zscore_expand.py and reconfirmed with a dtype-consistent methodology in tmp/review/audit_7/harness.py (extreme_big/extreme_huge/extreme_tiny scenarios, M=5/10/241, float32).",
+    "suggested_fix": "Accumulate the running mean/variance in float64 regardless of input dtype (cast x to float64 before the cumsum calls, cast the final z-score back to the input dtype at the end) -- the same fix cross_ema already applies in this file for the identical class of amount-scale inputs. Better: replace the two-pass E[X^2]-E[X]^2 formula with a numerically stable running update (Welford-style), or at minimum center x by a running estimate of its mean before squaring so two O(mean^2) terms are not subtracted to recover an O(var) result.",
+    "evidence": "tmp/review/audit_7/repro_zscore_expand.py (deterministic ramp, fails in both float32 and float64); tmp/review/audit_7/harness.py (extreme_big/extreme_huge/extreme_tiny scenarios)."
+   },
+   {
+    "title": "in_index's docstring formula t/(T-1) is undefined at T=1; the code silently returns 0 instead",
+    "file": "partura/ops_ext.py",
+    "line": 625,
+    "severity": "low",
+    "summary": "The docstring's formula t/(T-1) is mathematically undefined when T=1 (0/0); the implementation sidesteps this via max(T-1,1), silently returning 0.0 for the single minute rather than leaving it undefined or documenting the special case. This is a docstring-ambiguity/implementation-silence issue, not a production-relevant numeric bug, since the real pipeline's M is always 241.",
+    "failure_scenario": "x of shape (...,1) (T=1), x finite: in_index(x) returns 0.0. A strict reading of the docstring's formula (t/(T-1) = 0/0) is undefined, so a literal reference returns NaN there -- a finiteness-pattern mismatch versus the documented formula, reproduced for every scenario tested at M=1 in tmp/review/audit_7/harness.py; no mismatch at any M>=2 (including M=241).",
+    "suggested_fix": "Add a clause to the docstring: 'T=1 is defined as 0 (not 0/0)' -- or, if that guard was not intended, change the implementation to emit NaN at T=1 to match the literal formula.",
+    "evidence": "tmp/review/audit_7/harness.py (M=1 scenarios all flagged; M=2,3,5,10,241 clean)."
+   }
+  ]
+ }
+}

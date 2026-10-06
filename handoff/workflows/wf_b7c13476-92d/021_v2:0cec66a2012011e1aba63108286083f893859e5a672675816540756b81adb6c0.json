@@ -1,0 +1,85 @@
+{
+ "type": "result",
+ "key": "v2:0cec66a2012011e1aba63108286083f893859e5a672675816540756b81adb6c0",
+ "agentId": "aeefb3532f044d129",
+ "result": {
+  "findings": [
+   {
+    "title": "sweep.py 的 sign 锁把手写筛子假设整条镜像反过来,+2.6 夏普的候选被报成 -2.8 并从规则候选里消失",
+    "file": "/Users/wxy/Desktop/Partura/scripts/sweep.py",
+    "line": 142,
+    "severity": "high",
+    "summary": "`locked = re.match(r\"cs_(first|last)_(low|high)\\d+\\(\", expr)` → `sign = 1.0` 对**任何**根为 cs_first_*/cs_last_* 的表达式生效。sweep.py 自己生成的 seg_*/scr_* 是成对的(p 用 y=X、m 用 y=neg(X)),所以两个方向都在网格里;但 `--extra` YAML 里手写的假设只写一条,且这 15 条因子公布的 sign 全是 −1,leads 普遍把 y 写成未取负的原面板,靠 rank IC 去定方向。锁死 +1 之后这些候选的书变成正确那本的镜像。",
+    "failure_scenario": "输入:F102 的 `h_sieve_known` = `cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15))`,y 是已知成交额族且没有 neg()(正确方向是 −1)。锁前(runs/F102_kurt_autocorr/sweep_s2.json)sign=−1 → utrain 纯多头夏普 +2.646、train 多头净超额 +13.97%,并且是 sweep_final 规则选出的 overlay 首位。锁后(sweep_s3.json,表达式字符串完全相同)sign=+1 → utrain 纯多头夏普 **−2.789**、train 多头净超额 **−19.77%**;因为 `train_long.long_ann < 0`,sweep_final 的 `ok` 过滤直接把它删掉,扫描日志里它看起来是一条被证伪的假设。同一机制下 F102 `h_susp_excl` +2.457→−2.820、F102 `seg_new_p` +2.669→−2.803、F109 `h_e_spine_high40` +1.154→−1.613(s2 里它是 F109 三个规则候选之一)、F105 `h_newlist_tilt_atom` +2.401→−2.494、F107 `h_scr_liquid_gini` +2.463→−2.315。s2→s3 共 85 条表达式 sign 改变,其中 19 条从 utrain 夏普 > +1.5 掉到 < 0;重跑写死的规则,F102 丢掉 seg_new_p 与 h_sieve_known、F109 丢掉 h_e_spine_high40,全部只因为这把锁。",
+    "suggested_fix": "锁只在 y 这一支已经方向对齐时才成立。两种改法:(a) 只有当第一个实参语法上是 `neg(...)` 时才锁(generic 的 seg_*_m / scr_xhi_* / k_known_xfrozen 都满足),其余仍由 rank IC 定方向;(b) 保留锁,但对每一条根为 cs_first_*/cs_last_* 且 y 不是 `neg(...)` 的变体(尤其是 --extra 和 propose 产出的)自动再加一条把 y 换成 `neg(y)` 的孪生变体,让两个方向都进网格 —— 这才是 sweep.py 注释里「Both directions, since the sign is only known after scoring」原本的意思。注意 `sign = -1` 作用在算子**输出**上会把「只在这段里选」翻成「永远不碰这段」,所以不能直接退回放开 sign。",
+    "evidence": "复现脚本 /Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk3_signlock_dist.py(只读 runs/*/sweep_s2.json 与 sweep_s3.json)。关键输出:`85 expressions whose sign changed between s2 and s3; 19 went from utrain Sharpe > +1.5 to < 0`;`F102: s2 rule chose ['h_max60','seg_new_p','sub_D_cross_mean','h_sieve_known','ov_p05']; in s3 these are gone ONLY because of the sign lock: ['seg_new_p','h_sieve_known']`;`h_sieve_known: s2 utrain_shp +2.65 -> s3 -2.79   train long_ann +13.97% -> -19.77%`。根因在 /Users/wxy/Desktop/Partura/partura/ops_ext.py:319 `_lexi`:`ry + shift*(...)`,shift 加在 rank(y) 上,所以 neg 只能写进 y 里,写在外面语义就变了。"
+   },
+   {
+    "title": "两份已交付的 B01 报告对同两个候选给出相反结论(「可以和已知族并列持有」vs「只能选一个用,不能叠加」)",
+    "file": "/Users/wxy/Desktop/Partura/scripts/batch2_summary.py",
+    "line": 134,
+    "severity": "medium",
+    "summary": "batch2_summary.py 判「独立」只看 `abs(corr_known) < 0.5`;readable_report.py 的表 2 则把 fuse 的 `upg` 里不在 `indep` 的全部贴上「已知族的升级版」,而 `indep` 用的是 batch_cluster 的 `known_family` 旗标(簇首是否接近 known / known_xfrozen,簇成员继承簇首的标签)。两套口径对同一条候选给出相反答案,而且两份 md 都已经写出去了。",
+    "failure_scenario": "输入:runs/_batch_B01/cluster_s2.json + 各因子 sweepfinal_s2.json。候选 F105 `seg_xfrozen_m`(corr_known +0.371,与已知族的逐日秩相关 +0.369、多头书重合 **0.270**)与 F106 `h_zero_minus_liq`(corr_known +0.458,秩相关 +0.480、重合 **0.152**):research/alpha_distillation/B01_batch_summary.md 第 0 节 A 榜「与已知成交额族相关低于 0.5 的(独立的新东西)/ 这些可以和已知族并列持有」里有这两行(+13.3%/+10.2% 与 +12.1%/+15.5%);research/alpha_distillation/B01_upgrades_and_fusion.md 表 2 用**完全相同的数字**把这两行放在「这些和已知族是同一个东西的不同写法,彼此高度重合,**只能选一个用,不能叠加**」之下。按表 2 的指示操作就会丢掉两条多头书只与已知族重合 15% / 27% 的内容;按 A 榜操作又与表 2 矛盾。这两条同时也是 batch_fuse 把它们从 `indep` 里剔除的原因,所以头条结果「独立的 9 个」本来可以是 11 个。F105.seg_xfrozen_m 被判已知族是因为它与 `known_xfrozen`(通用冻结筛子基准)秩相关 +0.819,不是与已知族本身。",
+    "suggested_fix": "两处统一到同一个判据,并且用多头书重合度而不是只用秩相关(batch_cluster 自己的 docstring 已经解释过为什么:筛子把两成票压到最底会让秩相关大跌而持有的书几乎不变)。具体:batch2_summary.py:134 的 `indep` 加上 `overlap_known < 0.5` 条件(cluster_s2.json 的 `overlap` 表已经在手边);readable_report.py:101 的表 2 说明文字按每行实测的 ρ/重合度分档,不要对整表一句「高度重合、不能叠加」;batch_fuse 的 `known_fam` 改成直接对 `known` 这一个基准判近远,而不是继承簇首标签。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk5_corr_vs_overlap.py 与 chk4_fuse_vs_sweepfinal.py。chk4 输出:`F105.seg_xfrozen_m  known_family=True  rho_known=0.369 overlap_known=0.27`、`F106.h_zero_minus_liq  known_family=True  head=F114.h_ov_flat_pow3  rho_known=0.48 overlap_known=0.152`;`F105.seg_xfrozen_m vs known_xfrozen: rho +0.819 ovl 0.485`。chk5 输出第一段显示这两条同时出现在 batch2_summary 的 table A 列表里。md 原文:`grep -n \"F105\\|F106\" research/alpha_distillation/B01_batch_summary.md` 第 0 节 A 榜与 B01_upgrades_and_fusion.md 表 2 数字一致(+13.3%/+10.2%、+12.1%/+15.5%)。"
+   },
+   {
+    "title": "batch_fuse 记在留出段台账上的 12 条,实际做了 ~130 次留出段读数,report 又引用这个台账说「测试段只读了这一次」",
+    "file": "/Users/wxy/Desktop/Partura/scripts/batch_fuse.py",
+    "line": 184,
+    "severity": "medium",
+    "summary": "`Ledger(...).record(\"holdout\", len(plan) * 2, ...)` = 6×2 = 12。真实读数:每个融合的半衰期网格里每一格都算了 test 书(84 格)、每个成员都算了 test 书(38 个)、所有 by_year 序列都覆盖 2024/2025(成员 38 + 融合 12)、还写出了 15 条跨全期的逐日序列。台账是这个项目唯一的留出段卫生仪表,`Ledger.warning()` / `render_markdown()` 都从它取数。",
+    "failure_scenario": "输入:当前 runs/_batch_B01/ledger.json。它只有一条记录,`n_expressions: 12`、`summary.holdout = {reads: 1, expressions: 12}`。而同一次运行写出的 runs/_batch_B01/fuse_s2.json 里有 84 个带 `test` 书的网格行、38 个带 `test` 书的成员行、50 条跨到 2025 年的 by_year 序列、15 条全期逐日序列 —— 相差约 11 倍。batch2_summary.py:182 据此在 B01_batch_summary.md 里印出「测试段**只读了这一次**(记账在 runs/_batch_B01/ledger.json)」,readable_report.py 的表 4 又把整个半衰期网格的样本外列印了出来。读者据此判断「留出段还干净」,实际上 6 个融合 × 2 种平滑 × 7 个半衰期的样本外读数全部可见,下一轮再按这些数挑半衰期就是直接的样本外调参。",
+    "suggested_fix": "按实际算过 test 书的对象数记账:`len(plan) * 2 * len(bk.HALFLIVES) + sum(1 for v in members.values() if v.get('rows'))`(当前 = 84 + 38 = 122),并在 purpose 里写清「含整条半衰期网格的样本外读数」。更稳的做法是把网格的 test 列默认不算(只算被 train 选中那一格),需要表 4 那张「平滑的作用」表时用一个显式的 `--grid-holdout` 开关,并单独记一条台账。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk4_fuse_vs_sweepfinal.py 最后一节输出:`grid rows with a 'test' book: 84`、`member rows with a 'test' book: 38`、`by_year series covering 2024/2025 (members 38, fusions 12)`、`full-period daily series written out: 15`、`ledger entry says n_expressions = 12`。另外已核实 cluster_s2.json 的 `holdout_read: False`(batch_cluster 这一轮确实没读留出段),所以这 12 条就是整个批次台账的全部内容。"
+   },
+   {
+    "title": "融合 U(「升级版 15 条等权」)的 15 个成员里有 9 个落在 3 个簇里,ρ 0.991 的同一条信号被当两条等权计入",
+    "file": "/Users/wxy/Desktop/Partura/scripts/batch_fuse.py",
+    "line": 89,
+    "severity": "medium",
+    "summary": "`best = max(cand, key=train_sharpe)` 每条因子取一个,之后 `plan[\"U\"]` 直接对这 15 个 z-rank 取等权均值,全程没有按簇去重 —— 尽管 batch_fuse 已经把 cluster_<tag>.json 读进来了(`known_fam` 用的就是它)。融合 A 查过是干净的(9 个成员恰好是 9 个不同簇首),U 不是。",
+    "failure_scenario": "输入:runs/_batch_B01/fuse_s2.json 的 groups.upg + cluster_s2.json。15 个成员里 `F104.sub_C_day_std` 簇占 4 个(F110.ov_p025、F112.ov_p025、F113.h_k2_gini_overlay、F114.h_ov_flat_p05)、`F103.h_K_ex_both` 簇占 3 个、`F109.scr_xhi_p` 簇占 2 个,合计 9/15。其中 F110.ov_p025 与 F112.ov_p025 的逐日截面秩相关 **+0.991**、多头书重合 **0.863**,实质是同一条信号拿了 2/15 的权重;整体约 60% 的权重落在已知族内容上。结果:B01_upgrades_and_fusion.md 表 3 把「原式 15 条等权」(15 条结构互不相同的原式)与「升级版 15 条等权」(实际 ≈6 个独立东西 + 60% 已知族)并排,结论 2 把两者样本外夏普都是 1.63 这件事解释成「升级版偏已知族、波动跟着它走」—— 方向对,但「15 条等权」这个标签和这个对照本身不成立,换成按簇去重的等权(6~7 个成员)数字会不同。",
+    "suggested_fix": "在 `plan` 构造前按 `cluster_key` 对 `groups['upg']` 去重(同簇只留 train 夏普最高的那一个),或者给 `fuse()` 传按簇归一的权重(同簇 n 个成员每个 1/n),并把表 3 里的「成员数」改成「成员数(去重后的簇数)」。至少要在表 3 的说明里写出 U 的 15 个成员只对应几个簇。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk5_corr_vs_overlap.py 之后的内联检查(同一目录下的 chk4/chk5 逻辑)输出:`clusters represented more than once in fusion U: {'F103.h_K_ex_both': 3, 'F109.scr_xhi_p': 2, 'F104.sub_C_day_std': 4}`、`F110.ov_p025 ~ F112.ov_p025 rho +0.991 overlap 0.863`、`F113.h_k2_gini_overlay ~ F115.scr_xhi_p rho +0.809 overlap 0.763`;对照 `clusters represented more than once in fusion A: {}`。"
+   },
+   {
+    "title": "sweep.py 打印的 hlL 是 train 定的半衰期,但表格排序用的 ut 夏普和 dist 门槛都是 utrain 定的半衰期,两者有 782 个变体不一致",
+    "file": "/Users/wxy/Desktop/Partura/scripts/sweep.py",
+    "line": 155,
+    "severity": "low",
+    "summary": "`u = bk.books(sign*raw, tgt, us, {\"utrain\": us})` 在 utrain 上重新定半衰期;`out[\"utrain_long\"]`、`out[\"dist\"]`(= max(dist_raw, distinct_fraction(smoothed at `u[\"hl_long\"]`)))都来自这个拟合。但导出和打印的只有 `hl_long`(train 拟合),表头还写着「半衰期按纯多头书在 train 上选」。sweep_final 的排序键 `utrain_long.long_sharpe` 和门槛 `dist` 用的是 utrain 那一套。",
+    "failure_scenario": "输入:runs/*/sweep_s2.json、sweep_s3.json。782 个变体的 `hl_long != hl_long_u`(全部 2839 个带新字段的变体里 420 个在 s3 一轮里就不一致)。例:F113 `fold_sq` 打印 hlL=0,排序用的是 hl=20 那本书;用存下来的 train 半衰期扫描作代理,这两本书在 train 上的纯多头夏普差 0.37、净超额差最多 4.85 个点(中位数 0.033 / 0.24 个点)。一个 lead 读表看到「这条候选 hl 10、ut 夏普 2.6」,照 hl 10 复现就得到另一本书;同理 `dist` 过了门槛的候选,按打印的 hlL 平滑出来的交易信号可能是退化的(138 个变体的门槛判定就是靠 max() 里的 smoothed 那一项翻过来的)。",
+    "suggested_fix": "表格和 JSON 把两个半衰期都带上:行里加一列 `hlU`(= `hl_long_u`),或者干脆统一到一个拟合段(排序、门槛、打印都用 utrain,因为 sweep_final 和 batch_fuse 后面都用 utrain)。`out[\"dist\"]` 旁边同时存 `dist_hl`,说明这个 dist 是在哪个半衰期上量的。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk6_hl_mismatch.py 输出:`782 variants where the printed hl_long differs from the hl the ranking used (hl_long_u)`、`median |Δ train long_sharpe| = 0.033; 90th pct = 0.128; max = 0.374`、`median |Δ train long_ann| = 0.238%; max = 4.847%`;chk3 输出 `420/2839 variants have hl_long(train) != hl_long_u(utrain)` 与 `(2839 variants carry dist_raw; 138 gate decisions flipped by the max())`。"
+   },
+   {
+    "title": "逐年表每年重开一本空书,每一年都被多扣一次完整建仓费(实测 −0.145 个点/年),与同一张表里的两段数字口径不一致",
+    "file": "/Users/wxy/Desktop/Partura/scripts/batch_fuse.py",
+    "line": 120,
+    "severity": "low",
+    "summary": "`by_year_net` / sweep_final 的逐年循环对每个日历年单独调 `long_short_weights(sm[sl])` + `bk.long_book(w, sm[sl], tgt[sl])`,而 `long_book` 的换手是 `np.diff(wl, prepend=zeros)`,所以每年 1 月第一个交易日按空仓建仓,扣掉 15bp × gross 1。同一份 JSON 里 `daily()` 走的是跨全期一本连续的书,`rows()` 的 train/test 只重开两次 —— 三种口径混在同一张表里。",
+    "failure_scenario": "输入:runs/_batch_B01/fuse_s2.json 的 fusions.A.methods.each。逐年口径给出 2019 +21.845%、2024 +15.076%;用同一份 `daily`(连续一本书)按年切出来是 2019 +21.992%、2024 +15.223% —— 除首年之外每一年都被低估 +0.145~+0.148 个点(= 15bp / ~242 天 × 252)。B01_upgrades_and_fusion.md 表 3 的「逐年超额 2018…2025」整行、以及 B01_batch_summary.md 里每条因子的逐年列全部带这个偏差,而同一行的「样本内/样本外超额」用的是只重开两次的口径,所以逐年数永远和两段数对不上;结论 1 里「8 个年份的超额都在 +15% ~ +22% 之间」的下界也因此偏低。",
+    "suggested_fix": "逐年数字从同一条连续的净超额序列按年切片求均值(`daily()` 已经算好了这条序列),而不是每年重建一本书;即给 `by_year_net` 传入 `net = long_book(long_short_weights(sm), sm, tgt)[0]`,再按 `yrs == y` 取 `np.nanmean(net[mask]) * 252`。这样逐年、两段、曲线三处就是同一本书的三种切法。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/pipeline-holdout/chk4_fuse_vs_sweepfinal.py 最后一节输出:`2019: continuous +21.992%  vs per-year-restart +21.845%   Δ +0.147%`,2020–2025 每年 Δ 都是 +0.144%~+0.148%,2018 为 0.000%(首年本来就是空仓建仓)。同一脚本还显示两段口径的影响:A 组样本外连续 +17.402% vs 重开一次 +17.341%(Δ 6bp)。同一处逻辑出现在 /Users/wxy/Desktop/Partura/scripts/sweep_final.py:113-119 与 /Users/wxy/Desktop/Partura/scripts/batch_cluster.py:108-117。"
+   }
+  ],
+  "checked_and_fine": [
+   "没有发现任何一步用 holdout 的信息去选候选、定方向、定半衰期、定融合成员或权重。逐条核对:sweep.py 从不计算 holdout 切片(只有 tr/va/us);sweep_final.py 的候选全部来自 sweep_<tag>.json(train/valid),半衰期由 `bk.books(..., fit=us, ...)` 在 utrain 上拟合;batch_cluster.py 在没有 --read-holdout 时用 `last = us.stop` 把 tgt 和 Z 直接截断到 20230807,簇成员、簇首、known_head、indep 全在 utrain 上定;batch_fuse.py 的半衰期网格选择键是 `r[\"train\"][\"long_sharpe\"]`(= book_row on utrain);readable_report.py / batch2_summary.py 只读文件不算书。",
+   "EMA 的初始化与跨段衔接没有泄漏:alphacube.metrics.ema_rows 是严格因果的(`state` 只由 t 及之前的行更新,输入 NaN 的格子输出也是 NaN,不会拿陈旧信号持仓),`smoothed()` 对全期面板平滑再切片,所以 holdout 段的 EMA 状态继承的是 utrain 的过去,而不是反过来。books.py 的 `fit_halflives` 用 `smoothed(sig, hl)[fit]`,与 `book_row` 的 `sm[days]` 口径一致。",
+   "所有按天轴滚动的算子都是后视的:alphacube/operators/common.py:426 `rolling_windows` 左侧填 NaN、`unfold(axis, d, 1)`,窗口以 t 结尾;cs_* 系列(_lexi / _pct_rank / cs_bucket_*)都是同日截面;dg._zrank 逐行计算。所以「用全段算的统计量」这条没有命中。",
+   "sweep_final.py 的规则实现与 docstring 一致,且能逐字复现已落盘的结果:我用 sweep_s2.json 重跑 `ok`(cov≥0.95、dist≥0.5、kind∉{bench,base}、train 与 valid 多头净超额都 >0)→ 按 utrain 纯多头夏普排序 → 跳过 uses_known 与已出现过的 kind、取 3 类各 1 个 → ov 取 uses_known 的前 2 个,15 条因子的 `picks` 和 `overlay` 全部与 sweepfinal_s2.json 里存的完全相同,没有一条 MISMATCH,也没有任何经 `--ids` 手工塞进去的候选(脚本 chk2_rule_and_cov.py)。`(x or -1) > 0` 对 NaN/None/0.0 的处理也都给出 False,是对的。",
+   "sweep_final.py 对候选沿用「选它时的那个 sign」而不是 utrain 的 IC sign,这一点与 docstring 一致,而且 B01 里 120 次候选读数中 `sign_flip=True` 的有 0 条,所以这条规则这一轮完全没起作用、不会造成镜像书。",
+   "batch_fuse.py 的融合数学与 docstring 一致:`fuse()` 是可用成员 z-rank 的加权均值(分母 `(fin*w).sum(0)` 只计有值的成员),`np.where(fin.sum(0) >= ceil(len/2), ...)` 实现了「一个名字至少要有一半成员有值」;`each` = 成员各自按自己的半衰期先平滑再 z-rank 再融合再统一平滑一次(Zs),`once` = 原始面板 z-rank 后融合再统一平滑(Zr);`half()` = 0.5×indep 均值 + 0.5×known_head,与 plan D 的描述一致;plan C 的成员集合与 known_head 没有重复计入。",
+   "fuse_s2.json 里每个成员的书与对应 sweepfinal_s2.json 的书**逐位相同**:70 组比较(35 个成员 × train/test),max |Δ long_ann| = 0.000000%、max |Δ sharpe| = 0.000000,半衰期和 sign 也全部一致。15 份 config 的 warmup / label.kind / label.buyable / top_frac / cost_per_side 完全相同,所以 batch_fuse 和 batch_cluster 只读第一份 config 这件事这一轮没有造成口径漂移(脚本 chk4_fuse_vs_sweepfinal.py)。",
+   "B01_upgrades_and_fusion.md 抽查的数字与 fuse_s2.json 一致:「独立的 9 个」样本内 +20.111%/夏普 3.951/回撤 −5.864%/换手 3.291%、样本外 +17.341%/夏普 1.933/回撤 −14.111%(报告写 +20.1%/3.95/−5.9%/3.3%、+17.3%/1.93/−14.1%)✓;已知族单独 +15.403%/2.224/−9.170%/3.185% 与 +14.103%/1.509/−14.630% ✓;O +15.778%/3.262 与 +11.051%/1.627 ✓;U +20.203%/3.653 与 +16.014%/1.634 ✓;B/C/D 的 7 个数全部对上;结论 1 的「8 个年份都在 +15%~+22%」= by_year min +15.1% / max +22.0% ✓;结论 3 的「换手 3.0%→1.3%、回撤 −14.1%→−10.5%、夏普 1.93→1.90」= 网格 hl0 与 hl20 的 test 列 ✓;结论 5 写死的「(3.9)/(1.9)」= 3.951/1.933 ✓;结论 2 的「15 个里有 11 个落在已知族」= `len([k for k in upg if k not in indep])` = 11,且这 11 个的 cluster known_family 全是 True。",
+   "融合 A(头条的「独立的 9 个」)成员确实是 9 个互不相同的簇首,两两之间最大秩相关 +0.507、最大多头书重合 0.270,都低于脚本自己的同簇门槛(ρ≥0.7 或重合≥0.5),不存在同一簇被计入两次的问题。",
+   "task 第 (4) 项(long_book 基准的可比性)实测影响很小:ops_ext.py 的 `_lexi` 只在 y 或 x 非有限时才置 NaN,被压到最底的股票仍然有值,所以筛子/分段类候选的基准仍然是整个市场的等权 —— 这正是 docstring 想要的。唯一的差别来自 x(筛选变量)的 NaN 传播:120 次留出段读数的 cov 区间是 0.9822~0.9992(最低的是 F111 的 h_pe_last20),两条被并排比较的候选最多差 1.7% 的有标签格子,即使被排除的那部分股票日均收益与全市场差 30bp,基准偏移也只有约 0.6 个点/年,远小于报告自己声明的 ±3 个点噪声。",
+   "sweep.py 新加的 `dist = max(dist_raw, distinct_fraction(smoothed))` 本身是对的:hl>0 时 EMA 不会让连续面板变离散,所以 max 实际等于「被交易的那条信号的 distinct 比例」;hl_long_u == 0 时条件 `if u[\"hl_long\"]:` 为假、dist 保持 dist_raw,而此时被交易的信号就是原面板,也是对的。138 个被 max() 救回门槛的变体里典型是计数/占比面板(如 F112 sub_D_cs_quantile_q50 的 0.009→0.733、F113 nosc_K_ts_argmax 的 0.018→0.993),与注释里写的意图吻合;max() 只会放宽、不会误杀。",
+   "batch_cluster.py 的逐日两两统计数学正确:`c = (X@X.T - sx*sx.T/n) / sqrt((sxx - sx²/n)*(sxx - sx²/n).T)` 在每对信号的共同支撑集上就是 Pearson(X 的 NaN 已置 0、mf 做掩码,sx/sxx 都只累加共同支撑),重合度 `both/(0.5*(na_i+na_j))` 是对称的多头书交集比例,`n >= 30` 的最小样本门槛也在。`by_year_net` 在 READ=False 时用 `yrs[:last]` 切年,2023 那一桶只含到 20230807,没有越界到留出段。",
+   "scripts/*.py 里所有会算书的入口(sweep、sweep_final、batch_cluster、batch_fuse、anatomy、batch_final、batch_overview)都在 import 之后用 `cfg[\"splits\"]`/`first[\"splits\"]` 覆盖了 partura/splits.py 里的默认 SPLITS。这一点必须保持:默认值 valid=(20220101, 20231231)、holdout=(20240101, 20251231) 与用户真实口径(valid 到 20230807、holdout 从 20230808)不一致,忘记覆盖的话 valid 会吃掉约 146 个留出段交易日。",
+   "readable_report.py 的曲线与结论 4 的口径是自洽的:`cum` 对逐日净超额直接累加(SVG 标题已写明「各日超额直接相加」),`isplit = 1359`(20230808)把样本内/外切开,`c[isplit-1]` 与 `c[-1]-c[isplit-1]` 分别是两段累计;`crash()` 用同一组 dates/daily 在 20240116~20240206 上求和,没有索引错位(dates 与 daily 都是 1942 长)。"
+  ]
+ }
+}

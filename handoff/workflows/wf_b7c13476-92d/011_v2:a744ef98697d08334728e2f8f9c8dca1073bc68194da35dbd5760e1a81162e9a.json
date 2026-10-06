@@ -1,0 +1,84 @@
+{
+ "type": "result",
+ "key": "v2:a744ef98697d08334728e2f8f9c8dca1073bc68194da35dbd5760e1a81162e9a",
+ "agentId": "a0b933f02c4dd4ca8",
+ "result": {
+  "findings": [
+   {
+    "title": "steer 与 control 在同一 --budget 下实际「付费评估」数差 38%,两个汇报指标朝相反方向偏",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 336,
+    "severity": "high",
+    "summary": "budget 只决定代数,不决定实际评估过的候选数;steer 臂被 acceptable 拒掉的槽位会退化成已评过的树,被 GPMiner._score 的 key 缓存免费接住,于是两臂的分母不同 —— passers 偏向 control,efficiency_per_100 偏向 steer。",
+    "evidence": "episodes/e1_I2_dispersion_fold/evidence.json:budget 192、population 48、seed 0 完全相同,但 steer scored=123、control scored=170(control 多 38.2%);wall 1341s vs 3105s,scoring_seconds 503 vs 618,gate_fail 21 vs 40(所以不是门槛失败造成的)。机制:GPMiner.mine 里 n_gen=ceil(192/48)=4,共 5×48=240 个槽位(gp.py:735,743-751);_next_generation 的 `child = self.generator.crossover(a, b) or a`(gp.py:684)在 crossover 被 acceptable 拒绝时直接把父代当子代,_mutate 五种变异全被拒时落回 generate()(gp.py:668);_score 按 expr.key() 记忆(gp.py:430-435),重复树不进引擎、也不计入 ParturaScorer.n。本机复现脚本 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_hooks.py(同一 registry、同一 hooks、CPU 无数据):steer 240 槽位只有 165 个不同付费 key、crossover 返回 None 19/157;control 192 个、crossover None 5/163。",
+    "failure_scenario": "跑 `idea_search.py I2_dispersion_fold --budget 192 --population 48 --arms steer,control --seed 0`:steer 真正付费评估 123 个候选,control 付费 170 个。若两臂各找到 1 个 head,脚本打印 steer 0.81/100 对 control 0.59/100,得出「steering 效率高 38%」的结论 —— 这 38% 恰好等于 170/123,完全来自重复槽位被缓存吞掉的比例,与干预质量无关。反过来若按 passers 绝对数比较,control 多 38% 的抽样次数,结论又反向。",
+    "suggested_fix": "把预算定在「付费评估数」上而不是代数:在 run_mining 外层循环/回调里监控 sum(s.n for s in SCORERS[n0:]),到 BUDGET 才停(或给每臂单独加代直到两臂 scored 相等),并在 evidence.json 里同时记下 slots(population×(n_gen+1))、scored、实际跑完的代数,让 passers 和 heads 都除以同一个分母。"
+   },
+   {
+    "title": "p_rho_known 用原始面板、rho_pool 用 EMA 平滑后信号,却共用 0.5 阈值;NaN 还会直接放行",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 152,
+    "severity": "high",
+    "summary": "「是不是已知池的重新发现」这道筛子对候选用的是未平滑面板,而选拔口径实际交易的是按 hl 平滑后的信号;平滑后才变成已知因子的候选会被当成独立 head 报出去,而 rho_known 为 NaN 时 `or 0` 返回 NaN、abs(NaN)>=0.5 为 False,也照样放行。",
+    "evidence": "idea_search.py:152 `z = dg._zrank(r[\"sign\"] * np.asarray(panel[:cut:5], np.float64))` 直接用 raw panel;而 idea_search.py:312 `Z[e] = dg._zrank(bk.smoothed(c[\"sign\"] * ..., c[\"hl\"]))[:cut:5]` 用平滑后的;idea_search.py:330 的筛子 `abs(c[\"rho_pool\"]) >= 0.5 or abs(c.get(\"rho_known\") or 0) >= 0.5` 把两者按同一把尺子比。reward 本身打分的对象是平滑后的信号(partura/steer.py:425-439 对每个 hl 先 bk.smoothed 再 book_row)。复现 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_findings.py §4(合成数据,candidate = known + 6×噪声):raw 口径 rho=+0.117(过筛),hl=20 平滑后 rho=+0.567(就是已知因子)。NaN 一项:bool(nan) 为 True,`nan or 0` 返回 nan,abs(nan)>=0.5 为 False —— 见同脚本与 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks 的最后一次检查输出。",
+    "failure_scenario": "候选 `cross_ema(day_gini(Ret), 60)` 这类慢记忆因子:日度面板被噪声主导,p_rho_known=+0.12 过筛;reward 在网格里选中 hl=20,实际交易的平滑信号与 known_amt_dispersion 的 rho=+0.57。脚本把它算进 A[\"heads\"]、A[\"independent_distinct\"] 和 efficiency_per_100,打印成「distinct passers outside the known pool」,实际是已知池的重写。另一条:任一候选的 score_p_rho_known 列为空(CSV 空格 → num() → nan)时,筛子对它整个失效。",
+    "suggested_fix": "p_rho_known 改成在 `bk.smoothed(r[\"sign\"]*panel, r[\"hl\"])` 上算(reward 已经返回 hl,在 score() 里复用那条平滑信号即可),与 rho_pool 同口径;筛子里把 NaN 显式当成「没测出来」处理 —— `rk = c.get(\"rho_known\"); if rk is None or not math.isfinite(rk): 当作不通过(或重算)`,不要用 `or 0`。"
+   },
+   {
+    "title": "steer 臂的 guidance 并非施加在每一棵被提议的树上:mutate_window / mutate_constant 不调 acceptable,generate 重试用尽的回退也不过筛",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 208,
+    "severity": "medium",
+    "summary": "脚本 docstring 声称「every proposed tree passed through the guidance」,但 AlphaCube 的 mutate_window 和 mutate_constant 只检查 is_valid_root、从不调 self.acceptable,generate() 重试 64 次失败后的 _collapse_leaf 回退也绕过 acceptable,因此一部分被付费评估的 steer 候选从未经过 ban / MUST / first_form 去重,stats[\"proposed\"] 也漏计这些树。",
+    "evidence": "generator.py:221-234(mutate_window)和 236-246(mutate_constant)结尾都是 `return child if is_valid_root(child) else None`,源码里没有 self.acceptable;generator.py:116-125 的 generate() 在 `for _ in range(self.max_retries * 4)` 用尽后 `return self._collapse_leaf(self._pick(self._root_ops_of(\"reduce\")))`,这一行不过 acceptable。复现 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_findings.py §3:inspect 确认五个入口里只有 mutate_window / mutate_constant 不含 self.acceptable;把 acceptable 强制改成 always-False 后 generate() 仍返回 `day_quantile_q75(Vwap)`、`day_last(Open)`、`day_pos_ratio(Amt)` —— 三棵都不含任何 MUST 算子。",
+    "failure_scenario": "steer 臂跑 I2:_mutate 打乱五种变异后先命中 \"window\",把 `cross_ema(day_gini(Ret), 30)` 改成 `cross_ema(day_gini(Ret), 1)`。guidance 的 `{ts_min|...}(_, 1) -> operand` 改写规则本来会让它的 dedup_key 落回其操作数、被 first_form 判成 equivalent 拒掉,但 mutate_window 根本不问 acceptable,这棵树照样进种群、照样付费评估。evidence.json 的 sampling 里 proposed=430 因此系统性偏低,「167 accepted」并不是 steer 臂实际评估的那一批树的全集。",
+    "suggested_fix": "不要只替换 acceptable,把过筛放到 GPMiner 真正用树的那一层:在 install() 里额外包装 TypedTreeGenerator.mutate_window / mutate_constant(返回前 `return child if self.acceptable(child) else None`),并包装 generate(),让重试用尽时的 _collapse_leaf 结果也过一遍 acceptable(过不了就直接返回最后一棵合法树并记一个 stats[\"fallback\"] 计数,写进 evidence)。"
+   },
+   {
+    "title": "MUST 只取 grammar.day_ops:B01 五个想法里三个根本没有邻域约束,带括号的 day_ops 会让整条 steer 臂退化成 day_*(Field)",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 76,
+    "severity": "medium",
+    "summary": "`MUST = set(gram.get(\"day_ops\", []))` 只读 day_ops 且不剥括号;IDEA_OPS 在第 71-75 行用 `re.findall(r\"...(?=\\()\")` 剥了。于是 I3/I4/I5 的 MUST 为空、「required to stay inside the idea's neighbourhood」完全失效,而任何把 day_ops 写成 `day_gini(Ret)` 形式的想法会让 MUST 永远匹配不上。",
+    "evidence": "复现 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_findings.py §2:I1 MUST=6、I2 MUST=6,I3_event_memory_shape / I4_intraday_reversal_tail / I5_within_bucket_anything 的 MUST=0(guidance/B01.yaml 里这三个 idea 没有 day_ops 键),它们的 grammar 里 memory_ops / windows / convex 等键 MUST 一概不读;grammar.leaves 和 grammar.windows 在整个脚本里从未被强制。对比 idea_search.py:71-75 对 IDEA_OPS 用了 `re.findall(r\"[A-Za-z_][A-Za-z_0-9]*(?=\\()\", x) or [x]`,第 76 行对 MUST 直接 `set(gram.get(\"day_ops\", []))`。",
+    "failure_scenario": "(a) 跑 `idea_search.py I3_event_memory_shape`:MUST 为空,第 228 行 `if MUST and ...` 整条短路,steer 臂的干预只剩种子+boost+thinning,sampling 里 outside 恒为 0,episode 却按「搜索被约束在想法的邻域里」写进 evidence 和交接。(b) 给某个 idea 写 `day_ops: [\"day_gini(Ret)\", \"day_std(Ret)\"]`:MUST={\"day_gini(Ret)\",...} 与 `re.findall(r\"[A-Za-z_][A-Za-z_0-9]*\", e)` 产出的裸标识符永不相交 → 每棵提议树都记 outside → generate() 64 次重试全失败 → 每个槽位都是未过筛的 _collapse_leaf 回退树,整臂变成 `day_last(Open)` 这类深度 1 的叶子,sampling 里 outside==proposed 是唯一线索,脚本不报错也不退出。",
+    "suggested_fix": "MUST 用和 IDEA_OPS 相同的提取方式(`re.findall(r\"[A-Za-z_][A-Za-z_0-9]*(?=\\()\", x) or [x]`),并把 fold / inner / convex / memory_ops 里的算子也纳入邻域定义(或至少要求「IDEA_OPS 里至少命中一个」);MUST 为空时在启动日志和 evidence.json 里显式写一行 `neighbourhood: none`,别让空约束看起来像生效的约束。"
+   },
+   {
+    "title": "operator_weights() 丢掉 root 作用域,steer 臂的词表被根部禁令全局删掉 5 个算子,control 臂留着",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 199,
+    "severity": "medium",
+    "summary": "`w *= OPW.get(s.name, 1.0)` 里 OPW 来自 Guidance.operator_weights(),后者不检查 Pattern.root,把「只在根部禁用」的规则压成全局 0;w==0 的 spec 在 pick 里被整个踢出 faces,于是 steer 臂在树的任何位置都抽不到这些算子,而 control 臂可以 —— 两臂搜的空间不同,差异被归因为「steering」。",
+    "evidence": "复现 /Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_findings.py §1:OPW 的零值是 ['cross_zscore','cs_max','cs_mean','cs_median','cs_min','cs_stddev_full','cs_sum','ts_product'],其中在搜索词表里的是 cross_zscore / cs_mean / cs_median / cs_stddev_full / cs_sum / ts_product;前 5 个全部来自两条 root-scoped 规则 `root: {cross_zscore|ts_zscore}(_, $w)` 和 `root: {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_max|cs_min}(_)`(脚本输出的 root-scoped=True)。同样来自 root-scoped 规则的全局降权:cross_stddev 0.3、ts_stddev 0.3、cross_min 0.5、ts_min 0.5、cs_rank 0.6。partura/steer.py:324-339 的 operator_weights 过滤了 r.unless 和 r.depth_ge,但没有过滤 r.pattern.root;而 acceptable 里走的 G.banned 路径(steer.py:293-295 经 Pattern.root)对根部作用域是正确的,两条机制互相矛盾。",
+    "failure_scenario": "steer 臂跑 I2:`sub(day_gini(Ret), cs_mean(day_gini(Ret)))` 这种「把想法自己的统计量做横截面去均值」的候选,guidance 本来允许(禁令只在根部,acceptable 里的 G.banned 判定正确),但 cs_mean 在 pick 里权重为 0、从 faces 里被剔除,steer 臂永远提不出它;control 臂能提。两臂 scored/passers/heads 的差异里混进了这 5 个算子的缺席。附带:当某个槽位的全部 spec 都被归零时,第 202 行 `if not faces: return _pick(self, specs)` 回退到原始均匀抽样、从同一批被归零的 spec 里抽,禁令在它最该生效的时候反而失效。",
+    "suggested_fix": "在 install() 里把 OPW 当成「下限截断的倾向」而不是硬删:`w *= max(OPW.get(s.name, 1.0), FLOOR)`(FLOOR 比如 0.05),硬禁令交给 acceptable 里的 G.banned 按作用域判;或者给 Guidance.operator_weights 加参数只收 `not r.pattern.root` 的规则。同时在启动日志里打印被归零/降权的算子名,便于核对两臂词表是否一致。"
+   },
+   {
+    "title": "run_mining 的异常被吞掉,崩掉的臂在 evidence.json 里写成合法的零;旧 checkpoint 不清理,files[-1] 可能读到上一次运行",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 272,
+    "severity": "medium",
+    "summary": "`except Exception as exc: print(...)` 之后照常按 checkpoints 组装这一臂的 evidence,没有任何字段记录这臂是否跑完、跑了几代;ParturaScorer 的网格对齐断言(第 132-133 行)恰好在 GPMiner.__init__ 里抛出,也会被这里吞掉。并且 ep_dir/<arm>/checkpoints 从不清空,`files[-1]` 会挑到上一次运行留下的更高代号 CSV。",
+    "evidence": "idea_search.py:266-273 把整个 run_mining 包在 try/except Exception 里只 print;275-276 `files = sorted((ep_dir / arm / \"checkpoints\").glob(\"archive_gen*.csv\")); rows = ... files[-1] ...`,没有清目录、没有校验代号。evidence.json 的 arms 字段只有 seconds/scored/gate_fail/scoring_seconds/archive/live/passers/sampling/candidates —— 没有 error、没有 generations、没有「预算是否用完」。checkpoint 文件名是 `archive_gen{generation:03d}.csv`(gp.py:873),代号随 budget 变大。脚本 docstring 第 219-221 行提到「episode e1's first run」,即同一 tag/idea 重跑本来就是工作流。",
+    "failure_scenario": "(a) steer 臂在第 2 代 CUDA OOM:异常被 print 吞掉,evidence.json 里 steer 记成 scored≈24、passers 0、efficiency_per_100 0.0,与「steering 什么也没找到」完全无法区分;总领读 evidence.json 做取舍时会把一次崩溃当成一个阴性结论。若对齐断言触发,steer 臂直接是 scored 0 / live 0,同样看不出来。(b) 先用 `--budget 384`(8 代,留下 archive_gen008.csv)跑 I2,再用 `--budget 192`(4 代,archive_gen004.csv)重跑同一 tag:files[-1] 取到旧的 archive_gen008.csv,于是 archive/live/passers/candidates/heads 描述的是 384 预算那次,而 scored=123、gate_fail、sampling 来自这次 192 预算的进程内计数器,efficiency_per_100 用一次运行的 heads 除另一次运行的评估数。",
+    "suggested_fix": "(1) 把异常记进 evidence:`except Exception as exc: evidence[\"arms\"][arm] = {..., \"error\": f\"{type(exc).__name__}: {exc}\"}`,并把 ParturaScorer 的网格断言移到 run_mining 之前单独检查、失败就 sys.exit;同时记录实际跑完的代数和 scored 是否达到 BUDGET。(2) 每臂开跑前 `shutil.rmtree(ep_dir / arm, ignore_errors=True)`,或把 run_id 带上时间戳,并断言 `len(files) == n_gen`。"
+   }
+  ],
+  "checked_and_fine": [
+   "运行时替换 make_scorer 覆盖到了 GPMiner 真正调用的名字:gp.py:47 是 `from .scoring import ... make_scorer`(模块顶层 from-import),脚本第 173 行 `asc.make_scorer = agp.make_scorer = make_scorer` 两个都打了,gp.py:320 的调用走模块全局查找 → 命中补丁。pipeline.py:400 的 `from .mining.scoring import make_scorer` 是函数内局部 import、调用时才查 asc 的属性 → 也命中(且 miner==\"gp\" 时这条分支不走)。没有第三处引用。",
+   "FITNESS_KINDS 的替换有效且必要:gp.py:52 自己定义了一份 FITNESS_KINDS(不是 from-import),脚本第 174-176 行对 asc 和 agp 两个模块都追加了 \"partura\",gp.py:307 的校验是运行时读模块全局 → 通过。`_rich = fitness_kind != \"ic\" or turnover_penalty > 0` 对 \"partura\" 为 True,所以 _scorer 一定会被构造、fitness 走 _score 路径而不是 batched_ic 路径。",
+   "ParturaScorer 满足 GP 对打分器的约定:GPMiner 只读 .target_t64 / .target_ranks_t(gp.py:325-326,脚本第 131 行从内部 PanelScorer 转发)、.columns(gp.py:876 用来拼 score_* 列名)、.score(panel)(gp.py:434)。-inf 的语义一致(PanelScorer 把覆盖率/可算天数不达标当拒绝;脚本在 distinct_fraction<0.5 和 reward score 非有限时同样写 -inf,fitness 里 -inf 不入档也不繁殖)。score_combined 存在且语义正确(gated=False),虽然 GP 路径里没人调它(pool.py 不持有 scorer)。make_scorer 传进来的 cost_per_side / top_frac / signed 被 ParturaScorer 忽略是对的 —— Partura 的 reward 自带 15bp 和 top 10% 书。",
+   "checkpoint CSV 的列名与读取口径对得上:parts = (\"ic\",\"rank_ic\",\"turnover\") + scorer.columns(gp.py:876),写出来是 score_p_score / score_p_train_sharpe / score_p_hl / score_p_sign 等,正是脚本第 284-286 行读的那些键;num() 对空单元格(float(\"\") → ValueError)和 \"nan\" 都能安全落到 nan。",
+   "fit 与 score 单调同向(fit = 0.03 × score,第 159 行),所以 CSV 的 fitness 排序等于 score 排序,`sorted(live, key=-fit)[:80]` 截断掉的是分数最低的那批,不会漏掉 passers —— 除非某臂的 passers 超过 80 个(目前两臂都是 0,未触发;一旦超过,independent_distinct 和 efficiency_per_100 会在 80 处封顶,且两臂封顶的程度不同)。",
+   "「只读最后一个 archive CSV 是否等于全部评估过的候选」—— 在 e1 这次恰好等于「全部评估过且 fit 有限的候选」:steer 123-21=102=archive,control 170-40=130=archive,说明 archive_dedup=0.95 的家族吸收在这次没有删掉任何代表(_archive_update_families 会 `del self._archive[rep]`,被同代家族降级的树也不入档),所以 live 没有漏。但这是本次运行的巧合,不是结构保证:dedup 一旦生效,live < scored-gate_fail,evidence 里没有字段能发现。",
+   "ops_ext 的注册顺序正确:脚本第 43 行先 `from partura import ops_ext`、第 116 行才 `default_registry()`。按这个顺序验证(/Users/wxy/Desktop/Partura/tmp/review/gp-hooks/probe_findings.py 之前的一次检查)registry 有 304 个算子、278 个可搜索,EXT 的 60 个 Partura 算子全部可搜索,I2 的 6 个 MUST 算子(day_gini / day_std / day_es_ratio_hi / day_es_ratio_lo / day_wstd / day_distinct_ratio)全部在词表里。若把 ops_ext 的 import 挪到 default_registry() 之后,可搜索算子掉到 218、6 个 MUST 算子只剩 day_std —— 第 119-120 行那条诊断打印能发现这种情况。",
+   "种子处理正确:canonical 之后再 parse(第 244 行,strict=True / coerce_daily=True / allow_general=True)用的改写规则都是 guidance 里标了 rewrite 的「选拔口径下等价」的那些(窗口 1 恒等、abs_ 作用于非负量、单层幂合并、根部 cs_winsor、day_cov(x,x)→day_var),不改变种子在纯多头口径下的含义;解析失败的种子被打印并丢掉而不是静默吞掉。seeds_repr 用 repr(parsed) 建立,与 GPMiner.__init__(gp.py:262)和 _seeded_population(gp.py:712)两处 acceptable 复查时的 repr(tree) 一致,所以种子不会被 MUST/ban/thinning 误杀。seed_keep=min(len(seeds), POP//4)=3、seed_max_depth=9 都宽于 GPMiner 的过滤条件(合法根、无 lookahead、算子在词表内、非 *_legacy 的 resource-risk 核),三个种子的深度都远小于 9。",
+   "acceptable 里消耗 self._rng 不破坏单臂的可复现性:TypedTreeGenerator 与 GPMiner 共用同一个 random.Random(seed)(gp.py:244),`G.accept(e, u=self._rng.random())` 的抽样是确定的,固定 seed + 固定 guidance 下整条轨迹可重放;control 臂的 acceptable 在 `if arm != \"steer\": return True` 就返回、完全不碰 _rng,所以 control 的随机流是干净的。代价是两臂的 _rng 流必然不同步 —— 这是干预本身带来的,不是额外缺陷;真正的不可比来自付费评估数(见 finding 1),不是 RNG。",
+   "first_form 在两臂之间是干净的:install(arm) 每臂开头 `first_form.clear()` 和 `stats.clear()`,control 臂根本不写它们,evidence 里 control 的 sampling 为 {} 是预期的;SCORERS 用 n0=len(SCORERS) 切片隔离,GPMiner 每臂只建一个 scorer。但 first_form 不登记种子(种子在 `if e in seeds_repr: return True` 处提前返回),所以每个种子的第一个「换一种拼法」会成为该 dedup_key 的 first_form 被接受 —— 复现见 probe_findings.py §5:`cross_ema(abs_(cs_demean(day_gini(Close))), 30)` 与种子的 Low 版同键却被接受,第二个变体(High)才被判 equivalent。每个种子漏 1 个,量不大,但 docstring 声称的「不再在一个种子的重写上花预算」只做到了一半。",
+   "known_z / pool / untradable 与 GP 面板同网格这件事有断言,且断言方式合理:第 132-133 行比较 target 的 shape 和有限掩码(不只是 shape),两条路径都用同一个 STORE / START / END / warmup=60 / label 口径(ps 的 label_kind=\"open_vwap15\"+label_buyable=True 对应 run_mining 的 label=\"open_vwap15_buyable\",horizon=1 对应 ps.target(1)),股票顺序若不同几乎必然改变有限掩码。可以更强的地方:没有比较 target 的数值(np.allclose 几乎零成本),也没有比较 dates 数组本身。known_z(第 102 行)故意不做 EMA —— B01 的 pool[0] 恰好 hl=0,所以当前正确;但脚本硬编码 pool[0] 当 base、pool[-1] 当 pool,且丢掉了 pool[0] 的 hl 字段,往池里加第三个成员或把 pool[0] 的 hl 改成非 0 时,long_screen 口径的 base 会变成未平滑版本而没有任何提示。",
+   "rho 的采样口径本身一致:两处都用 `[:cut:5]`(train 段每 5 天)并用同一个去均值相关公式,所以 rho_pool 与 rho_known 的时间轴可比(问题在平滑口径,见 finding 2)。只用 train 段意味着「在 train 上与已知池不相关、在 valid 上重合」的候选抓不到,但这与选拔口径(hl 按 train 的纯多头夏普选)一致,不算另一个缺陷。",
+   "holdout 没有被打开:START/END = 20180102..20230807,SPLIT=20220101,run_mining 和 PanelSet 用同一对起止日期,脚本里没有任何 20230808 之后的日期。"
+  ]
+ }
+}
