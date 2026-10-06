@@ -63,7 +63,8 @@ for name in names:
                 distinct.append(c)
         top5 = distinct[:5]
         thr = float(E.get("threshold", 1.0))
-        finds = [c for c in distinct if is_discovery(kind, c["score"], c.get("s_train"), c.get("s_valid"), thr)]
+        # a run on the old scale (Sharpe difference, already the worse period) is counted as it was scored
+        finds = [c for c in distinct if is_discovery("long" if old_scale else kind, c["score"], c.get("s_train"), c.get("s_valid"), thr)]
         rows.append({"arm": arm, "scored": A["scored"], "gate": A["gate_fail"], "live": A["live"], "saved": len(cs), "distinct": len(distinct),
                      "levels": [sum(c["score"] >= lv for c in distinct) for lv in levels], "best": distinct[0]["score"] if distinct else float("nan"),
                      "top5": sum(c["score"] for c in top5) / len(top5) if top5 else float("nan"), "heads": A.get("independent_distinct"), "finds": len(finds), "families": len({fkey(c["expr"]) for c in finds}),

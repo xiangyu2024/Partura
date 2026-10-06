@@ -13,6 +13,9 @@ from pathlib import Path
 import yaml
 
 root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root))
+from partura.steer import DISCOVERY_MIN_PERIOD, PAIRED, Guidance, is_discovery  # noqa: E402
+
 argv = sys.argv[1:]
 
 
@@ -154,27 +157,45 @@ eps = sorted((root / "episodes").glob("*/evidence.json")) if (root / "episodes")
 eps = [e for e in eps if not e.parent.name.startswith(("smoke", "e1_"))]          # e1: the reward compared two universes -- void
 if eps:
     L += ["", "### 干预实验(同一个想法的两臂只差「有没有指引」;完整的实验卡在 `episodes/<实验>/episode.md`)", "",
-          "| 实验 | 奖励 | 带指引:评估 / 过线 / 最好 | 对照:评估 / 过线 / 最好 | 结论 |", "|---|---|---|---|---|"]
+          "| 实验 | 奖励 | 带指引:评估 / 发现(族)/ 最好 | 对照:评估 / 发现(族)/ 最好 | 结论 |", "|---|---|---|---|---|"]
+    GD = Guidance.load(root / argv[0])
     for e in eps:
         E = json.loads(e.read_text(encoding="utf-8"))
         thr = float(E.get("threshold", 1.0))
+        # before 2026-10-06 a paired reward's score was a Sharpe DIFFERENCE, already the worse of the two periods:
+        # those runs are counted as they were scored (score >= line), like a level reward
+        kind = E["reward"] if E.get("score_scale") == "paired_ir" or E["reward"] not in PAIRED else "long"
 
         def cell(A):
-            sc = sorted([c["score"] for c in A["candidates"] if c.get("score") == c.get("score")], reverse=True)
-            return f"{A['scored']} / {sum(x >= thr for x in sc)} / {sc[0]:+.2f}" if sc else f"{A['scored']} / 0 / —"
+            # the one definition of a find (partura.steer.is_discovery), counted over candidates that are not a
+            # re-spelling of one another, and again by family (price-field renamings, order-preserving root wrappers)
+            cs = sorted([c for c in A["candidates"] if c.get("score") == c.get("score")], key=lambda c: -c["score"])
+            keys, fams = set(), set()
+            for c in cs:
+                if not is_discovery(kind, c["score"], c.get("s_train"), c.get("s_valid"), thr):
+                    continue
+                try:
+                    k, f = GD.dedup_key(c["expr"]), GD.family_key(c["expr"])
+                except ValueError:
+                    k = f = c["expr"]
+                keys.add(k)
+                fams.add(f)
+            return f"{A['scored']} / {len(keys)}({len(fams)})/ {cs[0]['score']:+.2f}" if cs else f"{A['scored']} / 0 / —"
 
         bf = e.parent / "belief.md"
         head = bf.read_text(encoding="utf-8").strip().split("\n")[0].strip("* ") if bf.is_file() else "(信念更新待写)"
         arms = E["arms"]
         L.append(f"| `{e.parent.name}` | `{E['reward']}`(过线 ≥ {thr:g}) | {cell(arms['steer']) if 'steer' in arms else '—'} | {cell(arms['control']) if 'control' in arms else '—'} | {head} |")
-    L += ["", "「过线」数的是存下来的前 80 个候选里分数达到线的个数。首跑(`e1_*`)作废:那时对池子的边际奖励两边不在同一个股票池里。"]
+    L += ["", f"「发现」数的是存下来的前 80 个候选里、互不等价、分数达到线的个数;成对奖励({' / '.join(PAIRED)},2026-10-06 起是信息比口径)另外要求 train、valid 各自 ≥ {DISCOVERY_MIN_PERIOD:g}"
+          "(规则 E8)。括号里按族数:只差价格字段换名、或只在最外层多套一个保序函数的算一族。首跑(`e1_*`)作废:那时对池子的边际奖励两边不在同一个股票池里。"]
 else:
     L += ["", "(干预实验的结果出来后会列在这里。)"]
 L.append("")
 
 # ---- 5. what would go into AlphaCube proper
-L += ["## 五、值得并进 AlphaCube 本体的改动(等对照实验证实后由你决定)", "",
-      "现在这些都是运行时装上去的,AlphaCube 的文件没有动。", "",
+L += ["## 五、并进 AlphaCube 本体的改动", "",
+      "2026-10-06 你授权之后(「需求全部满足」「Partura 的权限等级比 AlphaCube 高」),这些正在 AlphaCube 的 `partura-steering` 分支上实现"
+      "(设计与工作包:`docs/alphacube_steering_design.md`;默认不带新参数时行为和随机数流逐位不变)。并入之前,下表仍是运行时装上去的。", "",
       "| 改动 | 位置 | 现状 |", "|---|---|---|",
       "| 算子采样权重 | `mining/generator.py:268` `_pick`(现在是按面均匀) | Partura 运行时替换 |",
       "| 候选必须留在某个邻域 / 过指引 | `mining/generator.py:107` `acceptable` | Partura 运行时包一层 |",
