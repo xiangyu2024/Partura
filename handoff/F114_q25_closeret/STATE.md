@@ -1,6 +1,6 @@
 # F114_q25_closeret — 交接状态
 
-_自动生成于 2026-10-05 19:26(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1421(批次 B01_single_factors)
 - 表达式:`cross_quantile_q25(day_close(Ret), 15)`
@@ -133,6 +133,9 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 - `sweep_s3`  10-05 18:02  154 个变体  → `./scripts/study.sh digest F114_q25_closeret sweep_s3`
 - `anatomy_s3`  10-05 18:07  0 个变体  → `./scripts/study.sh digest F114_q25_closeret anatomy_s3`
 - `sweepfinal_s3`  10-05 18:10  8 个变体  → `./scripts/study.sh digest F114_q25_closeret sweepfinal_s3`
+- `sweep_s4`  10-06 11:12  154 个变体  → `./scripts/study.sh digest F114_q25_closeret sweep_s4`
+- `anatomy_s4`  10-06 11:23  0 个变体  → `./scripts/study.sh digest F114_q25_closeret anatomy_s4`
+- `sweepfinal_s4`  10-06 11:28  8 个变体  → `./scripts/study.sh digest F114_q25_closeret sweepfinal_s4`
 
 ## 已写的 notes(`notes/F114_q25_closeret/`)
 

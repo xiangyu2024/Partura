@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -134,6 +134,9 @@ best_on_known = h_ov_mean30_p025 +17.6%/+2.73(叠加)与 z_known_excl_mem30 +17.
 - `sweep_s3`  10-05 18:10  163 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s3`
 - `anatomy_s3`  10-05 18:33  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s3`
 - `sweepfinal_s3`  10-05 18:36  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweepfinal_s3`
+- `sweep_s4`  10-06 10:17  163 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s4`
+- `anatomy_s4`  10-06 10:23  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s4`
+- `sweepfinal_s4`  10-06 10:35  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweepfinal_s4`
 - `x1_anatomy`(自写脚本的输出)  10-04 13:13  exit 97  → `logs/F108_max_ntkurt_close_x1_anatomy.log`
 - `x2_longonly`(自写脚本的输出)  10-04 14:42  exit 0  → `logs/F108_max_ntkurt_close_x2_longonly.log`
 - `x3_attrib`(自写脚本的输出)  10-04 23:53  exit 0  → `logs/F108_max_ntkurt_close_x3_attrib.log`

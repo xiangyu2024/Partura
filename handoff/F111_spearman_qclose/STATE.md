@@ -1,6 +1,6 @@
 # F111_spearman_qclose — 交接状态
 
-_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #953(批次 B01_single_factors)
 - 表达式:`ts_spearman(day_quantile(Close), 10)`
@@ -206,6 +206,9 @@ verdict = 提纯成功、升华失败、对 k_known 口径无增量;诚实缺口
 - `sweep_s3`  10-05 18:00  142 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweep_s3`
 - `anatomy_s3`  10-05 18:30  0 个变体  → `./scripts/study.sh digest F111_spearman_qclose anatomy_s3`
 - `sweepfinal_s3`  10-05 18:37  8 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweepfinal_s3`
+- `sweep_s4`  10-06 10:59  142 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweep_s4`
+- `anatomy_s4`  10-06 11:03  0 个变体  → `./scripts/study.sh digest F111_spearman_qclose anatomy_s4`
+- `sweepfinal_s4`  10-06 11:16  8 个变体  → `./scripts/study.sh digest F111_spearman_qclose sweepfinal_s4`
 - `x1_identity`(自写脚本的输出)  10-04 14:23  exit 0  → `logs/F111_spearman_qclose_x1_identity.log`
 - `x2_increment`(自写脚本的输出)  10-04 23:58  exit 0  → `logs/F111_spearman_qclose_x2_increment.log`
 

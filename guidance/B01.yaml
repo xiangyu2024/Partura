@@ -66,7 +66,7 @@ evaluation:
     why: 计数 / 占比类面板(零收益分钟占比、桶内排名)任一天只有几十个取值,被机械判死,而它们平滑之后是连续的 —— 这批里最有用的几个状态变量都是这一类;方向被翻转的筛子会把「永不持有」测成「只持有」而且不报错
     evidence: ["F106 verdict tooling: bk_liq dist 0.20 判死,外套 cross_mean(·,5) 后 dist 1.00", "F101 verdict LF8", "handoff/TOOLING.md"]
   - id: E2_three_cheap_siblings
-    change: 每个候选连同三个便宜的兄弟一起评、取最好的记分:自身、外面套 cross_ema(·,30)、排掉冻结盘口的筛子版
+    change: 每个候选连同便宜的兄弟一起评、取最好的记分:自身(半衰期网格到 60 日)、排掉冻结盘口的筛子版;外面再套 cross_ema(·,30) 在网格到 60 之后已经多余
     why: 这三样是对几乎所有底座都安全或有益的后处理(EMA / 均值记忆 50~60% 两段都升、只有 3~16% 明显变差);让搜索去重新发现它们是浪费预算
     evidence: [wrappers.mem_ema, wrappers.mem_mean, wrappers.mem_decay_linear, wrappers.seg_xfrozen_m]
   - id: E3_same_money_test
@@ -125,7 +125,7 @@ priors:
   - {id: D16_mean_of_mean, action: weight, w: 0.2, pattern: "cross_mean(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   - {id: D17_decay_of_decay, action: weight, w: 0.2, pattern: "cross_decay_linear(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   # ---- 升权
-  - {id: U1_root_slow_memory, action: weight, w: 2.0, pattern: "root: {cross_ema|cross_mean|cross_decay_linear}(_, {30|60})", why: 对日度统计量做 30~60 日的均值 / 指数记忆是唯一「大多数时候有益、几乎不伤」的外层动作(两段都升 50~60%,明显变差 ≤ 7%;60 日最好), evidence: [memory_by_window.mem_mean60, memory_by_window.mem_decay_linear60, memory_by_window.mem_ema30, extreme-memory-fixes-turnover]}
+  - {id: U1_root_slow_memory_note, action: weight, w: 1.0, pattern: "root: {cross_ema|cross_mean|cross_decay_linear}(_, {30|60})", why: "外层 30~60 日记忆是安全的(明显变差 ≤ 15%),但不值得升权:半衰期网格放到 40 / 60 之后(第四轮),同样的包裹夏普变化中位只有 +0.02~+0.04 —— 之前的 +0.12 是「平滑不够长」,不是结构。2026-10-06 由升权 2.0 改为不加权", evidence: [wrappers.mem_mean, wrappers.mem_ema, memory_by_window.mem_mean60, "guidance/motif_stats_s3.json 对 s4"]}
   - {id: U2_bounded_intraday_dispersion, action: weight, w: 2.0, pattern: "{day_gini|day_flat_ratio|day_zero_ratio|day_flat_run_max|day_es_ratio_hi|day_es_ratio_lo|day_distinct_ratio|day_centroid}({Ret|@price})", why: 有界、无尺度的日内离散度 / 冻结度统计量是这一批里独立新因子的共同来源(F107 基尼、F106 零收益占比、F113 收益基尼), evidence: ["F107 h_gini_ema30 2.87 / 测试 2.10", "F106 h_zero_minus_liq", docs/new_operators.md]}
   - {id: U3_short_window_roughness, action: weight, w: 2.0, pattern: "day_mean(in_stddev_rolling(_, {3|5|10}))", why: 5 分钟滚动波动的全天平均是「日内微观结构有多粗糙」的干净写法,valid 全族最高, evidence: ["F101 h_rv_roll5_fold valid 2.78"]}
   - {id: U4_bucket_relative, action: weight, w: 2.0, pattern: "{cs_bucket_rank|cs_bucket_demean|cs_bucket_zscore}(_, _)", why: 在同类股票内比较是把流动性倾斜拿掉的正确写法(线性秩残差不是尾部中性的), evidence: [linear-rank-residual-is-not-tail-neutral, "F101 verdict LF4"]}
