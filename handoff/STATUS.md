@@ -1,13 +1,13 @@
 # 批次状态板
 
-_自动生成于 2026-10-05 19:26(后台记录器 `scripts/recorder.py`,不依赖任何模型)。_
+_自动生成于 2026-10-06 11:53(后台记录器 `scripts/recorder.py`,不依赖任何模型)。_
 
 | 因子 | 来源 | 阶段 | 留出段 | 已有结果 | 运行数 | 现状说明 state.md | 日志条数(研究员写的) | 当前 agent | 最后动静 |
 |---|---|---|---|---|---|---|---|---|---|
-| [F101_day_shine_retstd](F101_day_shine_retstd/STATE.md) | 手写 day_shine_retstd | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 13 | 10-05 15:20 | 3(3) | verdict(已返回) | 10-05 15:24 |
-| [F102_kurt_autocorr](F102_kurt_autocorr/STATE.md) | 挖掘 #3961 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 13 | 10-05 15:27 | 4(4) | verdict(已返回) | 10-05 15:31 |
-| [F103_amt_dw_decay](F103_amt_dw_decay/STATE.md) | 挖掘 #820 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 12 | 10-05 13:47 | 2(2) | verdict(已返回) | 10-05 13:52 |
-| [F104_kurt_masktop_amt](F104_kurt_masktop_amt/STATE.md) | 挖掘 #4190 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 14 | 10-05 15:19 | 7(6) | verdict(已返回) | 10-05 15:26 |
+| [F101_day_shine_retstd](F101_day_shine_retstd/STATE.md) | 手写 day_shine_retstd | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 16 | 10-05 15:20 | 3(3) | verdict(已返回) | 10-05 15:24 |
+| [F102_kurt_autocorr](F102_kurt_autocorr/STATE.md) | 挖掘 #3961 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 16 | 10-05 15:27 | 4(4) | verdict(已返回) | 10-05 15:31 |
+| [F103_amt_dw_decay](F103_amt_dw_decay/STATE.md) | 挖掘 #820 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 15 | 10-05 13:47 | 2(2) | verdict(已返回) | 10-05 13:52 |
+| [F104_kurt_masktop_amt](F104_kurt_masktop_amt/STATE.md) | 挖掘 #4190 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 17 | 10-05 15:19 | 7(6) | verdict(已返回) | 10-05 15:26 |
 | [F105_std_fangzheng_covamt](F105_std_fangzheng_covamt/STATE.md) | 挖掘 #25 | **完成** | 已读 | audit-mechanism、audit-numbers、revised、study、synthesis、verdict | 14 | 10-05 15:10 | 3(3) | verdict(已返回) | 10-05 15:18 |
 | [F106_erm_mag_gap_1m](F106_erm_mag_gap_1m/STATE.md) | 手写 erm_mag_gap_1m | 研究中 | 已读 | synthesis、verdict | 10 | 10-05 15:12 | 15(10) | verdict(已返回) | 10-05 15:18 |
 | [F107_abs_demean_skew_low](F107_abs_demean_skew_low/STATE.md) | 挖掘 #613 | 待审查 | 已读 | study、synthesis、verdict | 11 | 10-05 15:24 | 18(11) | verdict(已返回) | 10-05 15:29 |

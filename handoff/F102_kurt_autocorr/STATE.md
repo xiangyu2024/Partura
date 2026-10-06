@@ -1,6 +1,6 @@
 # F102_kurt_autocorr — 交接状态
 
-_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:53(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3961(批次 B01_single_factors)
 - 表达式:`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)`
@@ -106,6 +106,9 @@ hypo3 仍 25 条、**25/25 解析通过**;state.md 第 4 节加了 H 组、第 6
 - `sweep_s3`  10-05 17:29  171 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweep_s3`
 - `anatomy_s3`  10-05 18:34  0 个变体  → `./scripts/study.sh digest F102_kurt_autocorr anatomy_s3`
 - `sweepfinal_s3`  10-05 18:37  8 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweepfinal_s3`
+- `sweep_s4`  10-06 10:33  171 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweep_s4`
+- `anatomy_s4`  10-06 11:14  0 个变体  → `./scripts/study.sh digest F102_kurt_autocorr anatomy_s4`
+- `sweepfinal_s4`  10-06 11:25  8 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweepfinal_s4`
 - `x1`(自写脚本的输出)  10-03 19:32  exit 0  → `logs/F102_kurt_autocorr_x1.log`
 - `x2`(自写脚本的输出)  10-03 20:05  exit 0  → `logs/F102_kurt_autocorr_x2.log`
 - `x3`(自写脚本的输出)  10-03 23:04  exit 0  → `logs/F102_kurt_autocorr_x3.log`

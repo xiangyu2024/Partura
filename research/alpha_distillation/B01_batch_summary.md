@@ -16,18 +16,18 @@
 
 | 来自 | 表达式 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 训练 / 测试 | 日换手 | 测试段最大回撤 | ρ已知族 | 逐年 2018…2025 |
 |---|---|---|---|---|---|---|---|---|
-| F107 #613 | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | 2 | **+11.7% / +11.2%** | +2.87 / +2.10 | 3.9% | -7.6% | +0.35 | +11% +17% +16% +8% +4% +11% +8% +15% |
-| F102 #3961 | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | 2 | **+11.3% / +7.0%** | +2.85 / +1.45 | 3.1% | -3.8% | +0.23 | +9% +13% +12% +13% +10% +12% +7% +5% |
-| F105 #25 | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(day_zero_r…` | 5 | **+13.3% / +10.2%** | +2.75 / +1.22 | 6.1% | -14.6% | +0.37 | +16% +11% +6% +12% +22% +16% +5% +11% |
+| F107 #613 | `add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_ema(abs_(cs_demean(day_gini(Low)…` | 1 | **+13.6% / +12.5%** | +3.74 / +2.39 | 4.2% | -8.0% | +0.29 | +14% +20% +20% +9% +8% +10% +7% +17% |
+| F113 #1375 | `cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | 20 | **+11.2% / +6.0%** | +3.21 / +1.26 | 1.8% | -5.1% | +0.06 | +5% +9% +11% +12% +18% +10% +6% +6% |
+| F102 #3961 | `cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_last(Close)))` | 5 | **+10.7% / +5.8%** | +2.93 / +1.24 | 2.7% | -4.3% | +0.24 | +8% +12% +11% +13% +11% +9% +7% +3% |
+| F101 day_shine_retstd | `add(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cs_rank(abs_(cs_demean(day_std(in_pct(in_slice(…` | 60 | **+10.8% / +11.7%** | +2.91 / +2.55 | 2.7% | -3.2% | +0.48 | +10% +15% +8% +13% +7% +10% +10% +14% |
+| F105 #25 | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(day_zero_r…` | 5 | **+13.6% / +10.1%** | +2.77 / +1.20 | 6.1% | -14.6% | +0.38 | +16% +12% +6% +12% +23% +16% +5% +11% |
+| F111 #953 | `cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))` | 10 | **+15.2% / +8.0%** | +2.75 / +1.08 | 4.7% | -10.0% | +0.14 | +21% +14% +7% +15% +16% +14% +8% +8% |
 | F101 day_shine_retstd | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume, 2, 237),…` | 20 | **+9.7% / +7.2%** | +2.68 / +1.60 | 5.2% | -4.7% | +0.16 | +4% +13% +13% +9% +9% +8% +11% +3% |
-| F102 #3961 | `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(day_last(Close), …` | 10 | **+11.4% / +6.4%** | +2.67 / +1.15 | 3.3% | -5.4% | +0.20 | +14% +11% +11% +9% +10% +13% +3% +7% |
-| F111 #953 | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | 20 | **+13.5% / +7.7%** | +2.46 / +1.05 | 4.3% | -9.0% | +0.11 | +16% +14% +4% +16% +13% +13% +12% +5% |
-| F111 #953 | `ts_pearson(day_last(Close), 20)` | 10 | **+13.2% / +5.7%** | +2.37 / +0.81 | 4.4% | -9.1% | +0.38 | +22% +9% +1% +14% +18% +14% +6% +4% |
+| F114 #1421 | `cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_max(day_zero_ratio(Ret), 15))` | 5 | **+9.2% / +3.7%** | +2.44 / +0.68 | 2.5% | -10.2% | +0.03 | +8% +8% +5% +13% +12% +8% +7% -1% |
+| F111 #953 | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | 20 | **+13.3% / +7.8%** | +2.41 / +1.07 | 4.3% | -8.9% | +0.12 | +16% +13% +4% +16% +12% +13% +12% +5% |
 | F102 #3961 | `cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` | 5 | **+10.2% / +3.2%** | +2.32 / +0.59 | 5.3% | -6.5% | +0.27 | +10% +12% +10% +8% +11% +9% +1% +3% |
+| F103 #820 | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30))), 1)), 5)` | 40 | **+12.4% / +10.3%** | +2.29 / +1.41 | 1.5% | -9.1% | +0.58 | +8% +10% +9% +9% +25% +16% +3% +13% |
 | F111 #953 | `ts_spearman(day_close(Close), 10)` | 20 | **+13.2% / +6.8%** | +2.29 / +0.95 | 4.0% | -8.9% | +0.40 | +19% +8% +2% +15% +17% +14% +9% +5% |
-| F106 erm_mag_gap_1m | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 30)))` | 0 | **+12.1% / +15.5%** | +2.08 / +1.70 | 3.1% | -14.5% | +0.46 | +20% +16% +9% +7% +9% +12% +11% +20% |
-| F107 #613 | `abs_(cs_demean(day_gini(Low)))` | 20 | **+8.7% / +8.9%** | +2.07 / +1.55 | 9.7% | -6.6% | +0.33 | +9% +16% +10% +5% +4% +6% +6% +13% |
-| F113 #1375 | `cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | 20 | **+8.1% / +2.3%** | +2.00 / +0.28 | 1.7% | -12.4% | +0.05 | +1% +10% +16% +6% +7% +2% +4% +4% |
 
 ### B. 建在已知族上的、或实质落在这一族里的(已知族的升级版)
 
@@ -35,53 +35,53 @@
 
 | 来自 | 表达式 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 训练 / 测试 | 日换手 | 测试段最大回撤 | ρ已知族 | 逐年 2018…2025 |
 |---|---|---|---|---|---|---|---|---|
-| F103 #820 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cro…` | 2 | **+18.1% / +16.8%** | +3.16 / +1.74 | 3.4% | -15.7% | +0.41 | +22% +15% +10% +16% +26% +21% +14% +16% |
-| F104 #4190 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Close), 15))` | 2 | **+18.5% / +14.5%** | +3.15 / +1.56 | 3.5% | -14.9% | +0.56 | +24% +14% +12% +15% +26% +21% +11% +15% |
-| F103 #820 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_flat_run_max(Ret), 15))` | 2 | **+18.5% / +14.1%** | +3.10 / +1.51 | 3.4% | -15.0% | +0.61 | +23% +14% +12% +16% +26% +21% +11% +14% |
-| F104 #4190 | `day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` | 20 | **+15.1% / +12.6%** | +2.87 / +1.42 | 3.8% | -17.3% | +0.93 | +20% +13% +7% +13% +21% +19% +9% +13% |
-| F104 #4190 | `day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | 20 | **+13.0% / +10.2%** | +2.85 / +1.48 | 3.9% | -12.8% | +0.85 | +19% +14% +6% +9% +17% +14% +8% +10% |
-| F108 #3264 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Close), 15))` | 3 | **+17.8% / +14.7%** | +2.84 / +1.56 | 3.1% | -15.2% | +0.75 | +23% +13% +9% +16% +26% +22% +11% +14% |
-| F114 #1421 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), 15)), 0.5))` | 0 | **+15.7% / +15.4%** | +2.80 / +1.68 | 4.5% | -15.6% | +0.88 | +26% +15% +9% +12% +16% +16% +12% +17% |
-| F108 #3264 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30)…` | 0 | **+17.6% / +11.9%** | +2.73 / +1.26 | 4.9% | -15.7% | +0.97 | +21% +12% +9% +17% +27% +21% +7% +12% |
-| F101 day_shine_retstd | `cs_first_low40(neg(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_…` | 20 | **+16.0% / +15.6%** | +2.67 / +2.03 | 3.9% | -9.0% | +0.78 | +20% +13% +7% +15% +27% +15% +10% +17% |
-| F113 #1375 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_gini(Ret), 30)), 0.25))` | 0 | **+17.2% / +12.9%** | +2.66 / +1.32 | 4.1% | -17.8% | +0.98 | +23% +12% +7% +16% +27% +19% +9% +14% |
-| F102 #3961 | `cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))),…` | 1 | **+16.3% / +14.0%** | +2.65 / +1.56 | 3.5% | -13.7% | +0.67 | +22% +12% +9% +13% +23% +21% +11% +14% |
-| F104 #4190 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_zero_ratio(Amt), 30))` | 1 | **+14.4% / +9.7%** | +2.63 / +1.12 | 4.1% | -15.4% | +0.19 | +14% +12% +7% +14% +24% +16% +5% +10% |
-| F102 #3961 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), …` | 1 | **+15.3% / +12.6%** | +2.62 / +1.49 | 4.7% | -13.1% | +0.92 | +20% +13% +9% +12% +20% +19% +9% +13% |
-| F101 day_shine_retstd | `cs_first_low40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(Amt), 241))` | 20 | **+13.6% / +11.9%** | +2.62 / +1.54 | 3.8% | -12.5% | +0.62 | +17% +11% +7% +14% +22% +14% +6% +14% |
+| F114 #1421 | `sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), pow_3(cs_…` | 2 | **+19.5% / +14.7%** | +3.48 / +1.95 | 3.5% | -11.1% | +0.51 | +21% +17% +13% +20% +27% +21% +12% +14% |
+| F114 #1421 | `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), mul(cs_ra…` | 3 | **+19.3% / +13.7%** | +3.43 / +1.87 | 4.4% | -10.7% | +0.58 | +19% +16% +12% +22% +27% +21% +10% +13% |
+| F107 #613 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), abs_(cs…` | 10 | **+18.4% / +15.0%** | +3.41 / +1.64 | 4.8% | -17.0% | +0.57 | +20% +18% +14% +18% +21% +22% +8% +18% |
+| F107 #613 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 3…` | 0 | **+20.4% / +16.1%** | +3.35 / +1.75 | 4.0% | -16.4% | +0.93 | +26% +17% +13% +22% +24% +23% +8% +20% |
+| F101 day_shine_retstd | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), abs_(cs…` | 10 | **+17.9% / +16.0%** | +3.34 / +1.70 | 4.4% | -17.3% | +0.54 | +19% +16% +13% +17% +23% +21% +10% +18% |
+| F103 #820 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_m…` | 3 | **+19.6% / +15.3%** | +3.34 / +1.63 | 3.3% | -15.0% | +0.72 | +26% +15% +13% +17% +26% +21% +12% +15% |
+| F101 day_shine_retstd | `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), cs_rank(n…` | 20 | **+16.8% / +17.9%** | +3.32 / +1.90 | 3.3% | -15.8% | +0.54 | +19% +15% +14% +16% +22% +19% +11% +21% |
+| F105 #25 | `cs_last_high20(neg(cross_tail_mean_q75(day_cov(Amt, Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | 2 | **+19.0% / +14.6%** | +3.27 / +1.60 | 4.0% | -15.0% | +0.55 | +25% +16% +12% +16% +25% +20% +12% +14% |
+| F113 #1375 | `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cs_bucket_rank(cross_mean(day_gini(…` | 3 | **+18.8% / +14.9%** | +3.26 / +1.56 | 3.3% | -16.2% | +0.55 | +20% +15% +13% +18% +27% +21% +12% +15% |
+| F111 #953 | `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_spearman(day_quantile(Close), 10…` | 3 | **+19.1% / +13.8%** | +3.23 / +1.44 | 4.6% | -16.2% | +0.57 | +26% +16% +12% +16% +26% +20% +10% +15% |
+| F103 #820 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cro…` | 3 | **+18.4% / +15.3%** | +3.21 / +1.63 | 3.1% | -14.9% | +0.46 | +24% +14% +11% +15% +26% +21% +12% +15% |
+| F110 ret_fair_log | `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), mul(cs_ra…` | 3 | **+18.7% / +18.5%** | +3.12 / +1.67 | 3.6% | -17.5% | +0.63 | +26% +18% +10% +17% +23% +19% +20% +16% |
+| F108 #3264 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_m…` | 3 | **+17.7% / +15.1%** | +3.10 / +1.61 | 3.6% | -16.2% | +0.42 | +18% +14% +13% +17% +26% +21% +11% +15% |
+| F104 #4190 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Close), 15))` | 3 | **+18.2% / +14.9%** | +3.08 / +1.62 | 3.1% | -14.8% | +0.57 | +24% +13% +11% +15% +25% +21% +12% +15% |
 
 ## 0.5 跨因子:这些候选是几个东西(只用用户训练段)
 
-把 15 条因子按规则选出的 77 个候选放在一起。**同簇** = 逐日截面秩相关 ≥ 0.7 或多头书(前 10%)重合 ≥ 50%;簇按训练段纯多头夏普排,簇首是簇里夏普最高的。筛子把两成股票压到最底,秩相关会掉很多而持有的书几乎不变,所以要同时看重合度。
+把 15 条因子按规则选出的 74 个候选放在一起。**同簇** = 逐日截面秩相关 ≥ 0.7 或多头书(前 10%)重合 ≥ 50%;簇按训练段纯多头夏普排,簇首是簇里夏普最高的。筛子把两成股票压到最底,秩相关会掉很多而持有的书几乎不变,所以要同时看重合度。
 
 | 簇 | 类 | 簇首来自 | 簇首表达式 | 半衰期 | 多头净超额 训练 / 验证 | 纯多头夏普(训练段) | ρ已知族 / 多头书重合 | 成员 |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 已知族 | F103 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)…` | 2 | +16.0% / +23.4% | +3.16 | +0.40 / 42% | 7 个:F102 F103 F104 F108 基准 |
-| 2 | **独立** | F107 | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | 2 | +13.2% / +7.8% | +2.87 | +0.35 / 15% | 3 个:F107 |
-| 3 | **独立** | F102 | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | 2 | +11.7% / +10.2% | +2.85 | +0.24 / 22% | 2 个:F102 |
-| 4 | 已知族 | F104 | `day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | 20 | +12.0% / +15.5% | +2.85 | +0.85 / 6% | 24 个:F102 F103 F104 F105 F106 F107 F108 F109 F110 F111 F112 F113 F114 基准 |
-| 5 | 已知族 | F105 | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(…` | 5 | +11.3% / +18.4% | +2.75 | +0.37 / 27% | 1 个:F105 |
-| 6 | **独立** | F101 | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_slice(Volume…` | 20 | +10.0% / +8.9% | +2.68 | +0.16 / 9% | 1 个:F101 |
-| 7 | 已知族 | F101 | `cs_first_low40(neg(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in…` | 20 | +14.2% / +20.4% | +2.67 | +0.77 / 32% | 15 个:F101 F103 F104 F106 F107 F108 F109 F110 F112 F113 F114 F115 |
-| 8 | **独立** | F102 | `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(day_las…` | 10 | +11.4% / +11.1% | +2.67 | +0.21 / 26% | 1 个:F102 |
-| 9 | 已知族 | F114 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_mean(day_flat_ratio(Close), 15))…` | 0 | +14.7% / +13.3% | +2.60 | +0.52 / 24% | 2 个:F106 F114 |
-| 10 | 已知族 | F105 | `add(ts_autocorr_s1(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), mul(cs_rank(neg(day_c…` | 5 | +11.7% / +13.9% | +2.48 | +0.72 / 35% | 1 个:F105 |
-| 11 | **独立** | F111 | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | 20 | +12.7% / +15.5% | +2.46 | +0.14 / 19% | 1 个:F111 |
-| 12 | 已知族 | F109 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_mean(sub(div(div(day_sum(select_where(is_gt(su…` | 2 | +12.9% / +22.4% | +2.37 | +0.76 / 80% | 2 个:F109 F115 |
-| 13 | **独立** | F111 | `ts_pearson(day_last(Close), 20)` | 10 | +11.2% / +18.2% | +2.37 | +0.39 / 30% | 2 个:F111 |
-| 14 | **独立** | F103 | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30))), 1)), 5)` | 10 | +9.9% / +19.4% | +2.24 | +0.67 / 38% | 1 个:F103 |
-| 15 | 已知族 | F115 | `add(mul(cs_rank(cross_mean(sub(cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_…` | 2 | +11.8% / +14.4% | +2.23 | +0.79 / 49% | 1 个:F115 |
-| 16 | **独立** | F113 | `cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | 20 | +8.4% / +7.1% | +2.00 | +0.04 / 9% | 1 个:F113 |
-| 17 | **独立** | F112 | `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))))` | 10 | +6.3% / +13.7% | +1.85 | +0.41 / 22% | 2 个:F112 |
-| 18 | **独立** | F110 | `cross_ema(pow_3(sub(div(day_last(Close), day_first(Open)), 1)), 30)` | 5 | +9.0% / +8.0% | +1.79 | +0.38 / 17% | 1 个:F110 |
-| 19 | **独立** | F115 | `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mea…` | 10 | +7.2% / +5.3% | +1.72 | +0.20 / 19% | 2 个:F115 |
-| 20 | **独立** | F113 | `pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_gini(Ret), 5), -5))…` | 5 | +5.4% / +8.5% | +1.44 | +0.23 / 32% | 1 个:F113 |
-| 21 | **独立** | F114 | `mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_rank(div(cross_mean(day_sum(…` | 10 | +4.3% / +12.2% | +1.17 | +0.28 / 16% | 2 个:F114 |
+| 1 | **独立** | F107 | `add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_ema(abs_(cs_demean(day…` | 1 | +15.8% / +7.8% | +3.74 | +0.29 / 14% | 2 个:F101 F107 |
+| 2 | 已知族 | F114 | `sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))),…` | 2 | +17.6% / +24.3% | +3.48 | +0.52 / 36% | 10 个:F102 F103 F105 F107 F108 F111 F114 基准 |
+| 3 | 已知族 | F107 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(add(cs_rank(cross_ema(abs_(cs_demean(day_std…` | 0 | +19.4% / +22.8% | +3.35 | +0.93 / 57% | 22 个:F101 F102 F103 F104 F105 F107 F109 F111 F112 F113 F115 基准 |
+| 4 | 已知族 | F101 | `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))),…` | 20 | +16.1% / +18.5% | +3.32 | +0.55 / 24% | 7 个:F101 F104 F108 F110 F113 |
+| 5 | **独立** | F113 | `cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | 20 | +9.1% / +16.1% | +3.21 | +0.09 / 24% | 1 个:F113 |
+| 6 | **独立** | F102 | `cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_last(Close)…` | 5 | +11.1% / +9.9% | +2.93 | +0.23 / 20% | 2 个:F102 |
+| 7 | 已知族 | F108 | `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Close), 15))` | 2 | +14.5% / +17.8% | +2.82 | +0.42 / 31% | 2 个:F105 F108 |
+| 8 | **独立** | F105 | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), cross_max(…` | 5 | +11.4% / +18.9% | +2.77 | +0.38 / 28% | 1 个:F105 |
+| 9 | **独立** | F111 | `cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))` | 10 | +14.3% / +17.3% | +2.75 | +0.17 / 19% | 3 个:F111 |
+| 10 | **独立** | F103 | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30))), 1)), 5)` | 40 | +9.4% / +20.0% | +2.29 | +0.58 / 36% | 1 个:F103 |
+| 11 | 已知族 | F104 | `day_kurt(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` | 20 | +12.2% / +18.8% | +2.18 | +0.59 / 65% | 1 个:F104 |
+| 12 | **独立** | F106 | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 30)))` | 0 | +13.2% / +9.1% | +2.08 | +0.48 / 15% | 1 个:F106 |
+| 13 | **独立** | F110 | `cs_last_low20(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(div(day_las…` | 5 | +12.1% / +12.1% | +2.03 | +0.29 / 20% | 1 个:F110 |
+| 14 | **独立** | F112 | `ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)` | 60 | +12.4% / +16.2% | +2.02 | +0.25 / 24% | 2 个:F112 |
+| 15 | 已知族 | F114 | `cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_mean(day_sum(Amt), 30))` | 60 | +8.9% / +20.0% | +1.94 | +0.72 / 43% | 7 个:F104 F106 F107 F108 F109 F110 F114 |
+| 16 | **独立** | F112 | `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))))` | 10 | +6.3% / +13.7% | +1.85 | +0.41 / 22% | 1 个:F112 |
+| 17 | **独立** | F115 | `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mea…` | 10 | +7.5% / +5.4% | +1.77 | +0.21 / 20% | 2 个:F115 |
+| 18 | **独立** | F107 | `cross_ema(abs_(cs_demean(day_skew(Low))), 30)` | 5 | +5.8% / +8.3% | +1.31 | +0.28 / 19% | 1 个:F107 |
+| 19 | **独立** | F113 | `pow_1_5(ts_max(pow_2(cs_mask_top_replace_mean_neg(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_…` | 2 | +4.8% / +10.6% | +1.26 | +0.23 / 17% | 1 个:F113 |
+| 20 | **独立** | F114 | `cross_max(cross_quantile_q25(day_close(Ret), 15), 30)` | 20 | +1.9% / +8.6% | +1.15 | +0.08 / 14% | 1 个:F114 |
+| 21 | 已知族 | F109 | `cross_mean(sub(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), day_pos_r…` | 20 | +4.9% / +10.8% | +1.09 | +0.63 / 53% | 1 个:F109 |
 | 22 | **独立** | F108 | `day_max(pow_1_5(pow_2(nt_ts_var(Close, 30))))` | 10 | +5.5% / +14.8% | +1.01 | +0.52 / 27% | 2 个:F108 F109 |
 | 23 | **独立** | F110 | `cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is…` | 5 | +3.9% / +9.0% | +0.92 | +0.38 / 20% | 1 个:F110 |
-| 24 | **独立** | F106 | `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), a…` | 5 | -16.6% / -6.3% | -2.41 | -0.16 / 7% | 1 个:F106 |
+| 24 | **独立** | F106 | `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), a…` | 20 | +3.1% / +4.3% | +0.59 | +0.07 / 27% | 1 个:F106 |
 
-原式各自落在哪:F101 → 簇首 `F101.fld_Volume_Amt`;F102 → 簇首 `F102.h_max60`;F103 → 不属于任何簇(最近 `F103.nosc_B_cross_semistd_neg` ρ +0.52);F104 → 不属于任何簇(最近 `F109.scr_xhi_p` ρ +0.28);F105 → 簇首 `F105.h_ac_tiebreak`;F106 → 不属于任何簇(最近 `F113.nosc_A_day_gini` ρ +0.30);F107 → 不属于任何簇(最近 `F111.h_pe_last20` ρ +0.39);F108 → 不属于任何簇(最近 `F113.h_g6_gini_bk_amt` ρ +0.48);F109 → 不属于任何簇(最近 `F113.nosc_A_day_gini` ρ +0.36);F110 → 簇首 `F110.mem_ema30`;F111 → 簇首 `F111.h_pe_last20`;F112 → 不属于任何簇(最近 `F103.h_K_ex_both` ρ +0.32);F113 → 不属于任何簇(最近 `F101.fld_Volume_Amt` ρ +0.23);F114 → 不属于任何簇(最近 `F114.h_amtexp_mul` ρ +0.56);F115 → 不属于任何簇(最近 `F115.h_rawvol_divM_only` ρ +0.69)。
+原式各自落在哪:F101 → 簇首 `F107.h3_blend_own2_ema30`;F102 → 簇首 `F102.h3_age_bucket`;F103 → 不属于任何簇(最近 `F104.sub_A_sqrt` ρ +0.48);F104 → 簇首 `F104.sub_A_sqrt`;F105 → 簇首 `F105.seg_xfrozen_m`;F106 → 不属于任何簇(最近 `F106.abl_M` ρ +0.44);F107 → 簇首 `F107.mem_ema30`;F108 → 不属于任何簇(最近 `F113.h3_g6_bdemean` ρ +0.50);F109 → 不属于任何簇(最近 `F106.abl_M` ρ +0.48);F110 → 簇首 `F110.mem_ema30`;F111 → 不属于任何簇(最近 `F111.h3_best2` ρ +0.54);F112 → 簇首 `F112.h_csrank_w50`;F113 → 不属于任何簇(最近 `F113.sub_I_cs_mask_top_replace_mean_neg` ρ +0.44);F114 → 不属于任何簇(最近 `F114.mem_max30` ρ +0.57);F115 → 不属于任何簇(最近 `F115.h3_raw_amt` ρ +0.52)。
 
 ### 组合书(规则在看结果前写死:成员 z-rank 的等权均值;半衰期在用户训练段上再定)
 
@@ -89,45 +89,47 @@
 
 | 组合 | 成员 | 半衰期 | 多头净超额 训练 | 纯多头夏普 训练 | 日换手 | 最大回撤 训练 | 逐年 |
 |---|---|---|---|---|---|---|---|
-| `known_head` | 1 个:`F103.h_K_ex_both` | 0 | **+18.1%** | +3.16 | 3.4% | -7.8% | +22% +15% +10% +16% +26% +19% |
-| `indep_eq` | 7 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` | 0 | **+20.1%** | +3.81 | 3.5% | -5.8% | +18% +21% +19% +21% +19% +22% |
-| `indep_top3` | 3 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` | 1 | **+15.8%** | +4.35 | 3.3% | -2.6% | +13% +21% +21% +14% +10% +14% |
-| `all_eq` | 8 个:`F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` `F103.h_K_ex_both` | 0 | **+20.1%** | +3.80 | 3.4% | -6.2% | +19% +21% +19% +22% +19% +21% |
-| `half_half` | 8 个:`F103.h_K_ex_both` `F107.h_gini_ema30` `F102.h_max60` `F101.fld_Volume_Amt` `F102.seg_new_p` `F111.seg_xfrozen_p` `F111.h_pe_last20` `F103.nosc_B_cross_semistd_neg` | 0 | **+20.3%** | +3.68 | 3.1% | -7.3% | +22% +19% +16% +20% +23% +21% |
+| `known_head` | 1 个:`F114.h3_xfr_plus_slowf` | 0 | **+19.5%** | +3.48 | 3.5% | -8.1% | +21% +17% +13% +20% +27% +19% |
+| `indep_eq` | 9 个:`F107.h3_blend_own2_ema30` `F113.h3_g6_bdemean` `F102.h3_age_bucket` `F105.seg_xfrozen_m` `F111.h3_best2` `F103.nosc_B_cross_semistd_neg` `F106.h_zero_minus_liq` `F110.h3_cvx_xage` `F112.h_csrank_w50` | 0 | **+19.6%** | +3.79 | 3.0% | -6.4% | +22% +19% +16% +19% +24% +16% |
+| `indep_top3` | 3 个:`F107.h3_blend_own2_ema30` `F113.h3_g6_bdemean` `F102.h3_age_bucket` | 0 | **+14.2%** | +3.98 | 2.8% | -2.8% | +8% +19% +21% +14% +11% +11% |
+| `all_eq` | 10 个:`F107.h3_blend_own2_ema30` `F113.h3_g6_bdemean` `F102.h3_age_bucket` `F105.seg_xfrozen_m` `F111.h3_best2` `F103.nosc_B_cross_semistd_neg` `F106.h_zero_minus_liq` `F110.h3_cvx_xage` `F112.h_csrank_w50` `F114.h3_xfr_plus_slowf` | 0 | **+19.9%** | +3.78 | 3.0% | -7.0% | +23% +18% +15% +20% +25% +16% |
+| `half_half` | 10 个:`F114.h3_xfr_plus_slowf` `F107.h3_blend_own2_ema30` `F113.h3_g6_bdemean` `F102.h3_age_bucket` `F105.seg_xfrozen_m` `F111.h3_best2` `F103.nosc_B_cross_semistd_neg` `F106.h_zero_minus_liq` `F110.h3_cvx_xage` `F112.h_csrank_w50` | 0 | **+21.1%** | +3.80 | 3.0% | -7.5% | +24% +20% +14% +23% +27% +18% |
 
 `indep_eq` 里每个独立簇首带了多少(训练段;去掉它之后组合掉多少):
 
 | 去掉的簇首 | 表达式 | 去掉后 净超额 / 夏普 | 它的贡献 净超额 / 夏普 | 与已知族簇首五五混合(训练段)净超额 / 夏普 |
 |---|---|---|---|---|
-| `F107.h_gini_ema30` | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | +20.0% / +3.93 | +0.1% / -0.12 | +18.1% / +3.48 |
-| `F102.h_max60` | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | +20.2% / +3.66 | -0.1% / +0.15 | +15.3% / +3.16 |
-| `F101.fld_Volume_Amt` | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_sl…` | +18.2% / +3.49 | +1.9% / +0.32 | +16.3% / +3.65 |
-| `F102.seg_new_p` | `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_cou…` | +20.3% / +3.74 | -0.1% / +0.07 | +15.5% / +3.11 |
-| `F111.seg_xfrozen_p` | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | +20.2% / +4.00 | -0.1% / -0.19 | +18.2% / +3.31 |
-| `F111.h_pe_last20` | `ts_pearson(day_last(Close), 20)` | +19.3% / +4.08 | +0.8% / -0.27 | +19.7% / +3.43 |
-| `F103.nosc_B_cross_semistd_neg` | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30)))…` | +19.8% / +3.76 | +0.3% / +0.05 | +16.0% / +2.97 |
+| `F107.h3_blend_own2_ema30` | `add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_ema(abs_(cs_…` | +18.2% / +3.49 | +1.4% / +0.30 | +20.2% / +4.09 |
+| `F113.h3_g6_bdemean` | `cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | +20.0% / +3.84 | -0.4% / -0.05 | +16.1% / +3.32 |
+| `F102.h3_age_bucket` | `cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_l…` | +20.7% / +3.90 | -1.1% / -0.11 | +15.9% / +3.37 |
+| `F105.seg_xfrozen_m` | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), …` | +19.2% / +3.68 | +0.4% / +0.11 | +18.2% / +3.48 |
+| `F111.h3_best2` | `cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))` | +18.8% / +3.73 | +0.8% / +0.06 | +20.4% / +3.59 |
+| `F103.nosc_B_cross_semistd_neg` | `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30)))…` | +19.2% / +3.68 | +0.4% / +0.11 | +17.9% / +3.47 |
+| `F106.h_zero_minus_liq` | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 3…` | +19.6% / +3.74 | +0.0% / +0.05 | +17.5% / +3.29 |
+| `F110.h3_cvx_xage` | `cs_last_low20(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(d…` | +19.7% / +3.90 | -0.0% / -0.11 | +17.3% / +3.00 |
+| `F112.h_csrank_w50` | `ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)` | +19.3% / +3.96 | +0.3% / -0.17 | +16.7% / +2.70 |
 
 ## 1. 一张表(多头腿净超额 训练 / 测试;括号里是纯多头夏普)
 
 | # | 因子 | 原式 | 本因子最好的版本 | 它的数字 | ρ原式 / ρ已知族 | 建在已知族上的最好版本 | 它的数字 |
 |---|---|---|---|---|---|---|---|
-| 1 | 手写 day_shine_retstd | +7.1% / +7.1%(+1.37 / +1.40) | `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_d…` hl 20 | **+9.7% / +7.2%**(+2.68 / +1.60) | +0.72 / +0.16 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), abs_(cs_demean(day_mean(in_su…` hl 10 | **+16.8% / +15.0%**(+2.60 / +1.57) |
-| 2 | 挖掘 #3961 | +8.9% / +2.5%(+2.05 / +0.45) | `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` hl 2 | **+11.3% / +7.0%**(+2.85 / +1.45) | +0.80 / +0.23 | `cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kur…` hl 1 | **+16.3% / +14.0%**(+2.65 / +1.56) |
-| 3 | 挖掘 #820 | +8.1% / +7.2%(+1.49 / +1.26) | `cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))),…` hl 20 | **+14.4% / +10.6%**(+2.37 / +1.29) | +0.51 / +0.83 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 2 | **+18.1% / +16.8%**(+3.16 / +1.74) |
-| 4 | 挖掘 #4190 | +1.8% / -2.1%(+0.38 / -0.39) | `day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` hl 20 | **+15.1% / +12.6%**(+2.87 / +1.42) | +0.15 / +0.93 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Clos…` hl 2 | **+18.5% / +14.5%**(+3.15 / +1.56) |
-| 5 | 挖掘 #25 | +11.8% / +8.9%(+1.96 / +1.04) | `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 2…` hl 5 | **+13.3% / +10.2%**(+2.75 / +1.22) | +0.57 / +0.37 | `cross_max(day_std(Amt), 3)` hl 10 | **+16.3% / +13.8%**(+2.37 / +1.49) |
-| 6 | 手写 erm_mag_gap_1m | -5.8% / -3.2%(-1.91 / -0.69) | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_s…` hl 0 | **+12.1% / +15.5%**(+2.08 / +1.70) | +0.05 / +0.46 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_signed_ra…` hl 1 | **+12.4% / +12.5%**(+1.90 / +1.49) |
-| 7 | 挖掘 #613 | +1.7% / +1.4%(+0.36 / +0.30) | `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` hl 2 | **+11.7% / +11.2%**(+2.87 / +2.10) | +0.29 / +0.35 | `abs_(cs_regres(day_gini(Low), cs_rank(cross_mean(day_std(Amt), 30))))` hl 20 | **+15.8% / +12.0%**(+2.53 / +1.51) |
-| 8 | 挖掘 #3264 | +1.0% / -3.2%(+0.15 / -0.30) | `day_max(pow_2(nt_ts_std(Amt, 30)))` hl 10 | **+16.5% / +13.3%**(+2.46 / +1.66) | +0.05 / +0.93 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Cl…` hl 3 | **+17.8% / +14.7%**(+2.84 / +1.56) |
-| 9 | 手写 erm_mag_gap_5m_tsm20 | -3.2% / +2.9%(-1.24 / +0.71) | `cs_first_low40(neg(ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close…` hl 20 | **+10.3% / +7.3%**(+1.67 / +0.86) | +0.27 / +0.75 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_mean(sub(div(div(day_sum(s…` hl 2 | **+15.6% / +13.2%**(+2.37 / +1.40) |
-| 10 | 手写 ret_fair_log | -0.2% / -0.8%(-0.03 / -0.07) | `cross_ema(pow_3(sub(div(day_last(Close), day_first(Open)), 1)), 30)` hl 5 | **+8.8% / +12.5%**(+1.79 / +1.11) | +0.63 / +0.38 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(mul(sub(div(day_last(Clo…` hl 10 | **+13.4% / +12.6%**(+1.95 / +1.34) |
-| 11 | 挖掘 #953 | +12.3% / +6.0%(+2.15 / +0.84) | `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(R…` hl 20 | **+13.5% / +7.7%**(+2.46 / +1.05) | +0.53 / +0.11 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(ts_spearman(day_quantile(…` hl 5 | **+15.5% / +12.6%**(+2.35 / +1.31) |
-| 12 | 挖掘 #574 | +4.2% / +6.9%(+0.74 / +1.03) | `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High…` hl 10 | **+8.4% / +7.9%**(+1.85 / +1.53) | +0.17 / +0.41 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_scale(signedpower(cs_…` hl 10 | **+13.5% / +12.9%**(+2.00 / +1.36) |
-| 13 | 挖掘 #1375 | +0.7% / -0.6%(+0.17 / -0.15) | `cs_first_low40(neg(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_de…` hl 10 | **+10.7% / +13.3%**(+2.09 / +1.86) | +0.42 / +0.72 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_gini(Ret)…` hl 0 | **+17.2% / +12.9%**(+2.66 / +1.32) |
-| 14 | 挖掘 #1421 | +3.6% / +0.2%(+0.70 / +0.03) | `cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_mean(day_sum(…` hl 20 | **+10.7% / +8.7%**(+1.77 / +1.28) | +0.55 / +0.75 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_rati…` hl 0 | **+15.7% / +15.4%**(+2.80 / +1.68) |
-| 15 | 手写 all_tide_mean_30 | +4.1% / +1.8%(+0.83 / +0.28) | `cs_first_low40(neg(cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), …` hl 10 | **+11.8% / +8.0%**(+2.01 / +0.93) | +0.62 / +0.78 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(div(div(sub(day_lo…` hl 1 | **+15.2% / +12.6%**(+2.25 / +1.34) |
+| 1 | 手写 day_shine_retstd | +7.1% / +7.1%(+1.37 / +1.40) | `add(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cs_rank(abs_(cs_d…` hl 60 | **+10.8% / +11.7%**(+2.91 / +2.55) | +0.35 / +0.48 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 10 | **+17.9% / +16.0%**(+3.34 / +1.70) |
+| 2 | 挖掘 #3961 | +8.9% / +2.5%(+2.05 / +0.45) | `cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross…` hl 5 | **+10.7% / +5.8%**(+2.93 / +1.24) | +0.79 / +0.24 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 3 | **+17.9% / +14.9%**(+3.08 / +1.62) |
+| 3 | 挖掘 #820 | +8.1% / +7.2%(+1.49 / +1.26) | `cross_max(mul(day_topw_mean(Amt, Amt), day_std(in_pct(cross_decay_linear(Amt, 3…` hl 10 | **+15.6% / +13.5%**(+2.47 / +1.53) | +0.32 / +0.90 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 3 | **+19.6% / +15.3%**(+3.34 / +1.63) |
+| 4 | 挖掘 #4190 | +3.4% / +0.4%(+0.71 / +0.07) | `day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` hl 20 | **+15.1% / +12.6%**(+2.87 / +1.42) | +0.16 / +0.93 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Clos…` hl 3 | **+18.2% / +14.9%**(+3.08 / +1.62) |
+| 5 | 挖掘 #25 | +11.8% / +8.9%(+1.96 / +1.04) | `cs_last_high20(neg(cross_tail_mean_q75(day_cov(Amt, Amt), 30)), cross_max(day_z…` hl 2 | **+19.0% / +14.6%**(+3.27 / +1.60) | +0.45 / +0.55 | `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret)…` hl 2 | **+14.8% / +15.4%**(+2.81 / +1.70) |
+| 6 | 手写 erm_mag_gap_1m | -3.4% / -0.1%(-1.22 / -0.02) | `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_s…` hl 0 | **+12.1% / +15.5%**(+2.08 / +1.70) | -0.00 / +0.46 | `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret)…` hl 2 | **+14.8% / +15.4%**(+2.81 / +1.70) |
+| 7 | 挖掘 #613 | +4.3% / +4.7%(+0.90 / +1.18) | `add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_em…` hl 1 | **+13.6% / +12.5%**(+3.74 / +2.39) | +0.33 / +0.29 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 10 | **+18.4% / +15.0%**(+3.41 / +1.64) |
+| 8 | 挖掘 #3264 | +1.3% / -3.8%(+0.19 / -0.33) | `cs_last_high20(neg(day_max(pow_2(nt_ts_std(Amt, 30)))), cross_max(day_zero_rati…` hl 20 | **+15.2% / +13.3%**(+2.73 / +1.68) | +0.25 / +0.57 | `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_…` hl 3 | **+17.7% / +15.1%**(+3.10 / +1.61) |
+| 9 | 手写 erm_mag_gap_5m_tsm20 | -1.7% / +2.1%(-0.73 / +0.81) | `cs_first_low40(neg(ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close…` hl 40 | **+10.6% / +7.3%**(+1.67 / +0.88) | +0.16 / +0.75 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_tail_mean_q75(div(…` hl 0 | **+17.0% / +12.6%**(+2.50 / +1.42) |
+| 10 | 手写 ret_fair_log | +1.3% / -2.5%(+0.24 / -0.26) | `cs_last_low20(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), …` hl 5 | **+12.1% / +11.4%**(+2.03 / +1.15) | +0.54 / +0.33 | `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zer…` hl 3 | **+18.7% / +18.5%**(+3.12 / +1.67) |
+| 11 | 挖掘 #953 | +12.3% / +6.0%(+2.15 / +0.84) | `cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), …` hl 10 | **+15.2% / +8.0%**(+2.75 / +1.08) | +0.54 / +0.14 | `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_sp…` hl 3 | **+19.1% / +13.8%**(+3.23 / +1.44) |
+| 12 | 挖掘 #574 | +5.6% / +2.3%(+0.98 / +0.33) | `ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)` hl 60 | **+13.5% / +12.8%**(+2.02 / +1.58) | +0.74 / +0.30 | `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(div(day_median(Close), c…` hl 2 | **+15.1% / +15.4%**(+2.21 / +1.45) |
+| 13 | 挖掘 #1375 | +0.7% / -0.6%(+0.17 / -0.15) | `cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` hl 20 | **+11.2% / +6.0%**(+3.21 / +1.26) | +0.09 / +0.06 | `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cs_bu…` hl 3 | **+18.8% / +14.9%**(+3.26 / +1.56) |
+| 14 | 挖掘 #1421 | +4.5% / +0.4%(+0.83 / +0.05) | `cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cros…` hl 5 | **+9.2% / +3.7%**(+2.44 / +0.68) | +0.42 / +0.03 | `sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zer…` hl 2 | **+19.5% / +14.7%**(+3.48 / +1.95) |
+| 15 | 手写 all_tide_mean_30 | +3.9% / +0.6%(+0.88 / +0.09) | `cs_first_low40(neg(cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), …` hl 10 | **+11.8% / +8.0%**(+2.01 / +0.93) | +0.62 / +0.78 | `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(div(div(sub(day_lo…` hl 1 | **+15.2% / +12.6%**(+2.25 / +1.34) |
 | — | _基准:已知成交额族_ `cross_mean(day_std(Amt), 30)` | +15.4% / +14.1%(+2.22 / +1.51) | | | | | |
-| — | _通用筛子:已知族 + 剔除近 15 日冻结盘口最重的 20%_ | +18.5% / +14.7%(+3.15 / +1.56) | | | | | |
+| — | _通用筛子:已知族 + 剔除近 15 日冻结盘口最重的 20%_ | +18.5% / +15.0%(+3.13 / +1.61) | | | | | |
 
 ## 2. 逐条
 
@@ -189,14 +191,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in…` | base | 20 | +7.1% / +7.1% | +1.37 / +1.40 | 5.6% | +3.93 / +3.70 | +8% +12% +15% +1% +1% +3% +9% +6% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h_sum_rv_amtchg` `add(cs_rank(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cs_rank(abs_(cs_demean(day_…` | hypo | 60 | +10.8% / +11.7% | +2.91 / +2.55 | 2.7% | +3.18 / +1.82 | +10% +15% +8% +13% +7% +10% +10% +14% |
 | `fld_Volume_Amt` `abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Amt, 2, 237), in_delay(in_sl…` | field | 20 | +9.7% / +7.2% | +2.68 / +1.60 | 5.2% | +3.65 / +3.26 | +4% +13% +13% +9% +9% +8% +11% +3% |
 | `seg_lowliq_m` `cs_first_low40(neg(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2…` | segment | 20 | +16.0% / +15.6% | +2.67 / +2.03 | 3.9% | +3.52 / +2.08 | +20% +13% +7% +15% +27% +15% +10% +17% |
-| `h_rv_fold_lo40_amt241` `cs_first_low40(neg(abs_(cs_demean(day_std(in_slice(Ret, 2, 237))))), cross_mean(day_sum(A…` | hypo | 20 | +13.6% / +11.9% | +2.62 / +1.54 | 3.8% | +3.25 / +1.90 | +17% +11% +7% +14% +22% +14% +6% +14% |
-| `scr_xhi_p` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), abs_(cs_demean(day_mean(in_sustain_stdd…` | screen | 10 | +16.8% / +15.0% | +2.60 / +1.57 | 5.3% | +3.20 / +2.61 | +20% +11% +10% +17% +25% +21% +9% +16% |
-| `ov_p10` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_mean(in_sustain…` | overlay | 10 | +15.4% / +16.9% | +2.42 / +1.88 | 5.9% | +3.00 / +2.36 | +22% +11% +6% +17% +23% +17% +11% +19% |
+| `h3_scr_kx_xhi` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 10 | +17.9% / +16.0% | +3.34 / +1.70 | 4.4% | +3.50 / +2.19 | +19% +16% +13% +17% +23% +21% +10% +18% |
+| `h3_ov_kx_roll5` `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Re…` | hypo | 20 | +16.8% / +17.9% | +3.32 / +1.90 | 3.3% | +3.55 / +2.08 | +19% +15% +14% +16% +22% +19% +11% +21% |
 
-综合全文:`notes/F101_day_shine_retstd/synthesis.md`;回测表与解剖:`./scripts/study.sh table F101_day_shine_retstd s2`。
+综合全文:`notes/F101_day_shine_retstd/synthesis.md`;回测表与解剖:`./scripts/study.sh table F101_day_shine_retstd s4`。
 
 ### 2. 挖掘 #3961(F102)
 
@@ -251,14 +253,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` | base | 5 | +8.9% / +2.5% | +2.05 / +0.45 | 5.4% | +3.71 / +2.56 | +8% +11% +9% +5% +10% +8% +1% +2% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `h_max60` `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` | hypo | 2 | +11.3% / +7.0% | +2.85 / +1.45 | 3.1% | +3.35 / +2.40 | +9% +13% +12% +13% +10% +12% +7% +5% |
-| `seg_new_p` `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_cou…` | segment | 10 | +11.4% / +6.4% | +2.67 / +1.15 | 3.3% | +3.43 / +1.56 | +14% +11% +11% +9% +10% +13% +3% +7% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_age_bucket` `cs_bucket_rank(cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60), cross_age(day_l…` | hypo | 5 | +10.7% / +5.8% | +2.93 / +1.24 | 2.7% | +3.28 / +2.20 | +8% +12% +11% +13% +11% +9% +7% +3% |
+| `seg_lowliq_m` `cs_first_low40(neg(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), cross_mean…` | segment | 3 | +12.9% / +10.2% | +2.45 / +1.47 | 4.8% | +3.59 / +3.07 | +13% +13% +9% +11% +16% +15% +6% +12% |
 | `sub_D_cross_mean` `cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` | substitute | 5 | +10.2% / +3.2% | +2.32 / +0.59 | 5.3% | +3.93 / +2.74 | +10% +12% +10% +8% +11% +9% +1% +3% |
-| `h_sieve_known` `cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kurt(nt_ts_au…` | hypo | 1 | +16.3% / +14.0% | +2.65 / +1.56 | 3.5% | +2.98 / +2.62 | +22% +12% +9% +13% +23% +21% +11% +14% |
-| `ov_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_sum(pow_2(day_kurt(nt_ts_aut…` | overlay | 1 | +15.3% / +12.6% | +2.62 / +1.49 | 4.7% | +3.09 / +2.74 | +20% +13% +9% +12% +20% +19% +9% +13% |
+| `h3_xfroz_max60` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 3 | +17.9% / +14.9% | +3.08 / +1.62 | 3.2% | +4.17 / +3.75 | +22% +14% +11% +17% +24% +21% +12% +14% |
+| `h3_max60_ov05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_max(pow_2(day_kurt(nt_ts_aut…` | hypo | 0 | +16.4% / +14.9% | +2.81 / +1.78 | 3.2% | +3.08 / +2.92 | +19% +14% +10% +15% +21% +22% +11% +15% |
 
-综合全文:`notes/F102_kurt_autocorr/synthesis.md`;回测表与解剖:`./scripts/study.sh table F102_kurt_autocorr s2`。
+综合全文:`notes/F102_kurt_autocorr/synthesis.md`;回测表与解剖:`./scripts/study.sh table F102_kurt_autocorr s4`。
 
 ### 3. 挖掘 #820(F103)
 
@@ -311,14 +313,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))…` | base | 10 | +8.1% / +7.2% | +1.49 / +1.26 | 4.0% | +3.53 / +3.18 | +4% +16% +15% +2% +8% +3% +3% +11% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `h_C_relstd` `cross_max(mul(day_close(Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), 5)` | hypo | 20 | +14.4% / +10.6% | +2.37 / +1.29 | 2.9% | +2.69 / +2.01 | +18% +11% +7% +11% +23% +19% +3% +13% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_A_topw_amt` `cross_max(mul(day_topw_mean(Amt, Amt), day_std(in_pct(cross_decay_linear(Amt, 30), 1))), …` | hypo | 10 | +15.6% / +13.5% | +2.47 / +1.53 | 3.8% | +2.96 / +2.34 | +21% +12% +7% +12% +24% +21% +10% +12% |
+| `nosc_B_cross_semistd_neg` `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30)))…` | substitute | 40 | +12.4% / +10.3% | +2.29 / +1.41 | 1.5% | +2.73 / +1.73 | +8% +10% +9% +9% +25% +16% +3% +13% |
 | `seg_lowliq_m` `cs_first_low40(neg(cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_dec…` | segment | 10 | +12.0% / +11.0% | +2.25 / +1.90 | 4.0% | +2.87 / +2.59 | +16% +12% +6% +11% +16% +13% +6% +13% |
-| `nosc_B_cross_semistd_neg` `cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_semistd_neg(Amt, 30)))…` | substitute | 10 | +12.6% / +8.8% | +2.24 / +1.15 | 4.1% | +2.73 / +1.73 | +16% +11% +5% +8% +24% +14% +2% +12% |
-| `h_K_ex_both` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 2 | +18.1% / +16.8% | +3.16 / +1.74 | 3.4% | +3.97 / +1.67 | +22% +15% +10% +16% +26% +21% +14% +16% |
-| `h_K_ex_frzrun` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_flat_run_max(Ret), 15))` | hypo | 2 | +18.5% / +14.1% | +3.10 / +1.51 | 3.4% | +4.06 / +3.21 | +23% +14% +12% +16% +26% +21% +11% +14% |
+| `h3_xfrz_then_relstd` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 3 | +19.6% / +15.3% | +3.34 / +1.63 | 3.3% | +3.38 / +2.63 | +26% +15% +13% +17% +26% +21% +12% +15% |
+| `h_K_ex_both` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 3 | +18.4% / +15.3% | +3.21 / +1.63 | 3.1% | +3.99 / +2.73 | +24% +14% +11% +15% +26% +21% +12% +15% |
 
-综合全文:`notes/F103_amt_dw_decay/synthesis.md`;回测表与解剖:`./scripts/study.sh table F103_amt_dw_decay s2`。
+综合全文:`notes/F103_amt_dw_decay/synthesis.md`;回测表与解剖:`./scripts/study.sh table F103_amt_dw_decay s4`。
 
 ### 4. 挖掘 #4190(F104)
 
@@ -370,16 +372,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | base | 20 | +1.8% / -2.1% | +0.38 / -0.39 | 7.3% | +3.20 / +1.89 | +6% +6% +1% +6% -4% -5% +0% -6% |
+| `v_base` `day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | base | 40 | +3.4% / +0.4% | +0.71 / +0.07 | 4.3% | +3.20 / +1.89 | +6% +9% +2% +6% -1% -2% +2% -3% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
 | `h_sqrt_std` `day_std(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` | hypo | 20 | +15.1% / +12.6% | +2.87 / +1.42 | 3.8% | +2.42 / +2.11 | +20% +13% +7% +13% +21% +19% +9% +13% |
-| `sub_C_day_std` `day_std(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))` | substitute | 20 | +13.0% / +10.2% | +2.85 / +1.48 | 3.9% | +2.63 / +2.47 | +19% +14% +6% +9% +17% +14% +8% +10% |
-| `seg_lowliq_m` `cs_first_low40(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), cross_mean(day_…` | segment | 20 | +11.3% / +12.3% | +1.59 / +1.30 | 4.9% | +2.76 / +1.80 | +13% +5% -1% +12% +24% +19% +9% +11% |
-| `h_known_nofrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Close), 15))` | hypo | 2 | +18.5% / +14.5% | +3.15 / +1.56 | 3.5% | +4.43 / +3.32 | +24% +14% +12% +15% +26% +21% +11% +15% |
-| `h_known_nodead` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_zero_ratio(Amt), 30))` | hypo | 1 | +14.4% / +9.7% | +2.63 / +1.12 | 4.1% | +3.15 / +0.82 | +14% +12% +7% +14% +24% +16% +5% +10% |
+| `sub_A_sqrt` `day_kurt(nt_cs_mask_top_replace_mean_neg(sqrt(Amt)))` | substitute | 20 | +14.1% / +10.3% | +2.18 / +1.94 | 4.1% | +4.83 / +4.31 | +20% +9% +2% +17% +20% +20% +9% +6% |
+| `seg_lowliq_m` `cs_first_low40(neg(day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))), cross_mean(day_…` | segment | 20 | +11.3% / +12.3% | +1.59 / +1.30 | 4.9% | +2.79 / +1.50 | +13% +5% -1% +12% +24% +19% +9% +11% |
+| `h_known_nofrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_ratio(Close), 15))` | hypo | 3 | +18.2% / +14.9% | +3.08 / +1.62 | 3.1% | +4.33 / +3.31 | +24% +13% +11% +15% +25% +21% +12% +15% |
+| `h3_known_xlimitup` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))` | hypo | 2 | +17.2% / +14.7% | +2.67 / +1.56 | 2.9% | +3.40 / +3.02 | +22% +13% +9% +16% +25% +21% +11% +15% |
 
-综合全文:`notes/F104_kurt_masktop_amt/synthesis.md`;回测表与解剖:`./scripts/study.sh table F104_kurt_masktop_amt s2`。
+综合全文:`notes/F104_kurt_masktop_amt/synthesis.md`;回测表与解剖:`./scripts/study.sh table F104_kurt_masktop_amt s4`。
 
 ### 5. 挖掘 #25(F105)
 
@@ -435,14 +437,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)` | base | 3 | +11.8% / +8.9% | +1.96 / +1.04 | 6.7% | +3.03 / +2.24 | +14% +6% +3% +10% +26% +16% +5% +8% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `seg_xfrozen_m` `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), …` | segment | 5 | +13.3% / +10.2% | +2.75 / +1.22 | 6.1% | +3.74 / +3.01 | +16% +11% +6% +12% +22% +16% +5% +11% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_xfrozen_tail75` `cs_last_high20(neg(cross_tail_mean_q75(day_cov(Amt, Amt), 30)), cross_max(day_zero_ratio(…` | hypo | 2 | +19.0% / +14.6% | +3.27 / +1.60 | 4.0% | +4.54 / +3.56 | +25% +16% +12% +16% +25% +20% +12% +14% |
+| `seg_xfrozen_m` `cs_last_high20(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), …` | segment | 5 | +13.6% / +10.1% | +2.77 / +1.20 | 6.1% | +3.64 / +3.02 | +16% +12% +6% +12% +23% +16% +5% +11% |
 | `iso_A` `day_cov(Amt, Amt)` | isolate | 10 | +17.8% / +14.0% | +2.59 / +1.54 | 3.5% | +2.97 / +2.71 | +24% +13% +8% +17% +26% +21% +10% +13% |
-| `h_ac_tiebreak` `add(ts_autocorr_s1(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), mul(cs_rank…` | hypo | 5 | +12.4% / +8.0% | +2.48 / +1.17 | 9.8% | +2.01 / +1.39 | +21% +7% +8% +11% +20% +8% +8% +6% |
-| `h_atom_std_max3` `cross_max(day_std(Amt), 3)` | hypo | 10 | +16.3% / +13.8% | +2.37 / +1.49 | 3.5% | +2.72 / +2.48 | +23% +12% +5% +15% +24% +22% +9% +14% |
-| `scr_xhi_p` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_stddev(cross_fangzheng(cross_max(day…` | screen | 0 | +15.2% / +13.5% | +2.21 / +1.45 | 3.6% | +2.58 / +2.13 | +18% +9% +7% +16% +24% +21% +9% +14% |
+| `h3_xfrozen40_known` `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | hypo | 2 | +14.8% / +15.4% | +2.81 / +1.70 | 4.0% | +3.57 / +2.85 | +22% +16% +7% +13% +16% +16% +14% +16% |
+| `h3_scr_atmax_known` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))` | hypo | 2 | +17.2% / +14.7% | +2.67 / +1.56 | 2.9% | +3.40 / +3.02 | +22% +13% +9% +16% +25% +21% +11% +15% |
 
-综合全文:`notes/F105_std_fangzheng_covamt/synthesis.md`;回测表与解剖:`./scripts/study.sh table F105_std_fangzheng_covamt s2`。
+综合全文:`notes/F105_std_fangzheng_covamt/synthesis.md`;回测表与解剖:`./scripts/study.sh table F105_std_fangzheng_covamt s4`。
 
 ### 6. 手写 erm_mag_gap_1m(F106)
 
@@ -498,16 +500,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Re…` | base | 20 | -5.8% / -3.2% | -1.91 / -0.69 | 2.2% | +2.91 / +3.11 | -9% -6% -9% -4% -1% -7% -5% -0% |
+| `v_base` `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Re…` | base | 60 | -3.4% / -0.1% | -1.22 / -0.02 | 1.0% | +2.91 / +3.11 | -6% -2% -10% -1% +1% -3% +1% +0% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
 | `h_zero_minus_liq` `sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 3…` | hypo | 0 | +12.1% / +15.5% | +2.08 / +1.70 | 3.1% | +2.47 / +1.80 | +20% +16% +9% +7% +9% +12% +11% +20% |
-| `seg_lowliq_m` `cs_first_low40(neg(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), …` | segment | 20 | +6.5% / +6.6% | +1.05 / +0.79 | 8.7% | +1.16 / +0.53 | +9% +4% -4% +6% +16% +12% +1% +6% |
-| `abl_M` `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Re…` | ablate | 5 | -13.7% / -11.8% | -2.41 / -1.51 | 2.1% | -2.57 / -1.86 | -16% -20% -22% -10% -5% -9% -10% -15% |
-| `h_ov_posneg_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_signed_ratio(Ret, A…` | hypo | 1 | +12.4% / +12.5% | +1.90 / +1.49 | 4.4% | +1.87 / +1.64 | +19% +7% +4% +12% +17% +18% +10% +11% |
-| `ov_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(sub(div(div(day_sum(select_where(i…` | overlay | 10 | +12.6% / +11.6% | +1.82 / +1.26 | 2.8% | +1.78 / +1.40 | +17% +7% +1% +13% +20% +21% +5% +12% |
+| `seg_lowliq_m` `cs_first_low40(neg(sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), …` | segment | 60 | +10.1% / +9.3% | +1.57 / +1.18 | 2.1% | +1.60 / +0.78 | +8% +4% +0% +12% +23% +18% +2% +11% |
+| `abl_M` `sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Re…` | ablate | 20 | +3.4% / +5.7% | +0.59 / +0.77 | 2.2% | +2.00 / +1.37 | +2% +5% +4% +1% +4% +8% +3% +5% |
+| `h3_xfr_zero40` `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | hypo | 2 | +14.8% / +15.4% | +2.81 / +1.70 | 4.0% | +3.57 / +2.85 | +22% +16% +7% +13% +16% +16% +14% +16% |
+| `h3_xfr_atmax` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))` | hypo | 2 | +17.2% / +14.7% | +2.67 / +1.56 | 2.9% | +3.40 / +3.02 | +22% +13% +9% +16% +25% +21% +11% +15% |
 
-综合全文:`notes/F106_erm_mag_gap_1m/synthesis.md`;回测表与解剖:`./scripts/study.sh table F106_erm_mag_gap_1m s2`。
+综合全文:`notes/F106_erm_mag_gap_1m/synthesis.md`;回测表与解剖:`./scripts/study.sh table F106_erm_mag_gap_1m s4`。
 
 ### 7. 挖掘 #613(F107)
 
@@ -563,16 +565,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `abs_(cs_demean(day_skew(Low)))` | base | 20 | +1.7% / +1.4% | +0.36 / +0.30 | 11.0% | +2.89 / +2.46 | +4% +2% +2% -4% +1% +1% +9% -2% |
+| `v_base` `abs_(cs_demean(day_skew(Low)))` | base | 60 | +4.3% / +4.7% | +0.90 / +1.18 | 4.5% | +2.89 / +2.46 | +6% +4% +3% -0% +3% +6% +11% +2% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `h_gini_ema30` `cross_ema(abs_(cs_demean(day_gini(Low))), 30)` | hypo | 2 | +11.7% / +11.2% | +2.87 / +2.10 | 3.9% | +2.91 / +2.58 | +11% +17% +16% +8% +4% +11% +8% +15% |
-| `sub_A_day_gini` `abs_(cs_demean(day_gini(Low)))` | substitute | 20 | +8.7% / +8.9% | +2.07 / +1.55 | 9.7% | +2.81 / +2.76 | +9% +16% +10% +5% +4% +6% +6% +13% |
-| `seg_lowliq_m` `cs_first_low40(neg(abs_(cs_demean(day_skew(Low)))), cross_mean(day_sum(Amt), 30))` | segment | 20 | +10.3% / +6.3% | +1.58 / +0.81 | 7.5% | +1.14 / +1.15 | +13% +5% +3% +8% +22% +12% +2% +7% |
-| `h_cc_regres_gini_known` `abs_(cs_regres(day_gini(Low), cs_rank(cross_mean(day_std(Amt), 30))))` | hypo | 20 | +15.8% / +12.0% | +2.53 / +1.51 | 5.8% | +3.06 / +2.65 | +17% +12% +10% +15% +22% +22% +6% +13% |
-| `h_ov_gini_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(abs_(cs_demean(day_gini(Low)))), 0…` | hypo | 10 | +15.0% / +14.2% | +2.33 / +1.55 | 4.1% | +2.10 / +1.67 | +22% +9% +6% +15% +20% +23% +6% +17% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_blend_own2_ema30` `add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), mul(cs_rank(cross_ema(abs_(cs_…` | hypo | 1 | +13.6% / +12.5% | +3.74 / +2.39 | 4.2% | +3.70 / +3.19 | +14% +20% +20% +9% +8% +10% +7% +17% |
+| `seg_lowliq_m` `cs_first_low40(neg(abs_(cs_demean(day_skew(Low)))), cross_mean(day_sum(Amt), 30))` | segment | 60 | +11.4% / +8.1% | +1.73 / +1.01 | 2.1% | +1.32 / +1.21 | +11% +5% +3% +11% +23% +19% +0% +10% |
+| `mem_ema30` `cross_ema(abs_(cs_demean(day_skew(Low))), 30)` | memory | 5 | +6.6% / +7.0% | +1.31 / +1.65 | 2.8% | +3.27 / +2.77 | +10% +4% +5% +5% +5% +7% +13% +3% |
+| `h3_knownx_plus_stdret` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 10 | +18.4% / +15.0% | +3.41 / +1.64 | 4.8% | +3.71 / +2.49 | +20% +18% +14% +18% +21% +22% +8% +18% |
+| `h3_ov_blend_known_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(add(cs_rank(cross_ema(abs_(cs_deme…` | hypo | 0 | +20.4% / +16.1% | +3.35 / +1.75 | 4.0% | +3.32 / +2.68 | +26% +17% +13% +22% +24% +23% +8% +20% |
 
-综合全文:`notes/F107_abs_demean_skew_low/synthesis.md`;回测表与解剖:`./scripts/study.sh table F107_abs_demean_skew_low s2`。
+综合全文:`notes/F107_abs_demean_skew_low/synthesis.md`;回测表与解剖:`./scripts/study.sh table F107_abs_demean_skew_low s4`。
 
 ### 8. 挖掘 #3264(F108)
 
@@ -627,16 +629,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))` | base | 20 | +1.0% / -3.2% | +0.15 / -0.30 | 4.7% | +2.82 / +2.04 | -4% +6% +5% -5% -0% +0% +7% -11% |
+| `v_base` `day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))` | base | 40 | +1.3% / -3.8% | +0.19 / -0.33 | 2.8% | +2.82 / +2.04 | -2% +5% +4% -3% -1% +0% +8% -13% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `h_std_amt30` `day_max(pow_2(nt_ts_std(Amt, 30)))` | hypo | 10 | +16.5% / +13.3% | +2.46 / +1.66 | 4.0% | +3.14 / +2.91 | +24% +12% +7% +15% +24% +19% +10% +12% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_stdamt_xfroz` `cs_last_high20(neg(day_max(pow_2(nt_ts_std(Amt, 30)))), cross_max(day_zero_ratio(Ret), 15…` | hypo | 20 | +15.2% / +13.3% | +2.73 / +1.68 | 2.7% | +3.02 / +1.91 | +21% +12% +10% +12% +18% +20% +11% +13% |
 | `seg_lowliq_m` `cs_first_low40(neg(day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))), cross_mean(day_sum(Am…` | segment | 20 | +12.7% / +7.0% | +1.88 / +0.82 | 4.9% | +2.66 / +1.66 | +9% +6% +6% +12% +29% +15% +5% +5% |
 | `sub_A_nt_ts_var` `day_max(pow_1_5(pow_2(nt_ts_var(Close, 30))))` | substitute | 10 | +8.1% / +4.6% | +1.01 / +0.48 | 1.7% | +1.29 / +1.37 | +8% +4% -3% +12% +15% +11% +11% -2% |
-| `z_known_excl_flatrun` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Close), 15))` | hypo | 3 | +17.8% / +14.7% | +2.84 / +1.56 | 3.1% | +3.25 / +3.17 | +23% +13% +9% +16% +26% +22% +11% +14% |
-| `h_ov_mean30_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_max(pow_1_5(pow_2(n…` | hypo | 0 | +17.6% / +11.9% | +2.73 / +1.26 | 4.9% | +3.00 / +2.48 | +21% +12% +9% +17% +27% +21% +7% +12% |
+| `h3_scr_dbl` `cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio…` | hypo | 3 | +17.7% / +15.1% | +3.10 / +1.61 | 3.6% | +4.57 / +3.57 | +18% +14% +13% +17% +26% +21% +11% +15% |
+| `h3_scr_40_flatrun` `cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_flat_run_max(Close), 15))` | hypo | 2 | +15.5% / +14.6% | +2.82 / +1.59 | 4.6% | +2.97 / +2.72 | +20% +15% +11% +12% +19% +17% +12% +15% |
 
-综合全文:`notes/F108_max_ntkurt_close/synthesis.md`;回测表与解剖:`./scripts/study.sh table F108_max_ntkurt_close s2`。
+综合全文:`notes/F108_max_ntkurt_close/synthesis.md`;回测表与解剖:`./scripts/study.sh table F108_max_ntkurt_close s4`。
 
 ### 9. 手写 erm_mag_gap_5m_tsm20(F109)
 
@@ -689,16 +691,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create…` | base | 20 | -3.2% / +2.9% | -1.24 / +0.71 | 1.3% | +2.77 / +2.28 | -7% -4% -6% -2% +0% -1% +5% +3% |
+| `v_base` `ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create…` | base | 60 | -1.7% / +2.1% | -0.73 / +0.81 | 0.7% | +2.77 / +2.28 | -6% +0% -5% -0% +2% -2% +5% +2% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `seg_lowliq_m` `cs_first_low40(neg(ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay…` | segment | 20 | +10.3% / +7.3% | +1.67 / +0.86 | 2.6% | +2.76 / +1.20 | +9% +6% +2% +9% +22% +15% +4% +7% |
-| `h_e_spine_high40` `cs_first_high40(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, …` | hypo | 10 | +9.5% / +5.7% | +1.15 / +0.57 | 1.9% | +2.03 / +1.45 | +6% +4% +1% +13% +23% +8% +14% -3% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `seg_lowliq_m` `cs_first_low40(neg(ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay…` | segment | 40 | +10.6% / +7.3% | +1.67 / +0.88 | 1.7% | +2.76 / +1.20 | +9% +5% +3% +10% +23% +18% +2% +7% |
+| `h_d_pos_gap20` `cross_mean(sub(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))),…` | hypo | 20 | +6.6% / +7.3% | +1.09 / +1.04 | 1.1% | +1.68 / +0.77 | +9% +0% +1% +9% +9% +17% +1% +8% |
 | `sub_B_mul` `ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create…` | substitute | 1 | +5.4% / +4.4% | +0.80 / +0.66 | 1.3% | +2.46 / +3.04 | +4% +2% -5% +11% +13% +6% +10% -1% |
-| `scr_xhi_p` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_mean(sub(div(div(day_sum(select_wher…` | screen | 2 | +15.6% / +13.2% | +2.37 / +1.40 | 3.4% | +3.67 / +2.73 | +20% +10% +7% +15% +24% +21% +9% +13% |
-| `h_f_blend_fix025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(div(day_sum(select_wher…` | hypo | 1 | +16.0% / +11.9% | +2.31 / +1.27 | 3.5% | +2.43 / +1.80 | +16% +11% +7% +18% +26% +21% +8% +10% |
+| `h3_blend_tailq75` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_tail_mean_q75(div(day_sum(se…` | hypo | 0 | +17.0% / +12.6% | +2.50 / +1.42 | 3.5% | +2.55 / +2.15 | +18% +13% +11% +17% +25% +21% +8% +12% |
+| `h3_fam_x_tailq75` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_tail_mean_q75(div(day_sum(select_…` | hypo | 1 | +16.7% / +13.7% | +2.49 / +1.49 | 2.7% | +3.16 / +2.83 | +19% +12% +9% +16% +25% +22% +10% +13% |
 
-综合全文:`notes/F109_erm_mag_gap_5m_tsm20/synthesis.md`;回测表与解剖:`./scripts/study.sh table F109_erm_mag_gap_5m_tsm20 s2`。
+综合全文:`notes/F109_erm_mag_gap_5m_tsm20/synthesis.md`;回测表与解剖:`./scripts/study.sh table F109_erm_mag_gap_5m_tsm20 s4`。
 
 ### 10. 手写 ret_fair_log(F110)
 
@@ -758,16 +760,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is…` | base | 20 | -0.2% / -0.8% | -0.03 / -0.07 | 10.5% | +2.76 / +2.08 | -2% +7% -1% -4% +3% -4% -0% -2% |
+| `v_base` `mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is…` | base | 60 | +1.3% / -2.5% | +0.24 / -0.26 | 4.6% | +2.81 / +1.69 | +2% +7% -5% -2% +4% +1% +4% -9% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `h_cube_ema30` `cross_ema(pow_3(sub(div(day_last(Close), day_first(Open)), 1)), 30)` | hypo | 5 | +8.8% / +12.5% | +1.79 / +1.11 | 3.0% | +3.37 / +2.26 | +15% +14% +3% +4% +12% +1% +15% +15% |
-| `seg_lowliq_m` `cs_first_low40(neg(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(i…` | segment | 20 | +7.1% / +9.1% | +1.15 / +0.97 | 9.8% | +1.03 / +0.88 | +7% +5% -1% +8% +16% +14% +5% +8% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_cvx_xage` `cs_last_low20(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(d…` | hypo | 5 | +12.1% / +11.4% | +2.03 / +1.15 | 3.4% | +2.71 / +0.93 | +19% +16% +2% +10% +17% +2% +18% +9% |
+| `seg_lowliq_m` `cs_first_low40(neg(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(i…` | segment | 60 | +10.9% / +9.9% | +1.70 / +1.19 | 2.1% | +1.26 / +0.87 | +10% +5% +1% +12% +24% +20% +1% +12% |
 | `mem_ema30` `cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain…` | memory | 5 | +5.4% / +3.7% | +0.92 / +0.37 | 3.3% | +2.71 / +1.90 | +4% +11% -2% +2% +13% +3% +11% -4% |
-| `ov_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(mul(sub(div(day_last(Close), day_f…` | overlay | 10 | +13.4% / +12.6% | +1.95 / +1.34 | 2.5% | +1.83 / +1.47 | +16% +8% +3% +15% +21% +22% +6% +13% |
-| `ov_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(mul(sub(div(day_last(Close), day_f…` | overlay | 10 | +12.6% / +11.7% | +1.86 / +1.21 | 3.9% | +1.77 / +1.36 | +15% +7% +3% +14% +21% +21% +5% +12% |
+| `h3_ov_xfroz_cvx` `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Re…` | hypo | 3 | +18.7% / +18.5% | +3.12 / +1.67 | 3.6% | +4.06 / +3.20 | +26% +18% +10% +17% +23% +19% +20% +16% |
+| `h3_ov_xfroz_bkliq` `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Re…` | hypo | 5 | +17.3% / +17.9% | +2.97 / +1.62 | 3.5% | +3.73 / +3.19 | +24% +17% +11% +15% +20% +15% +21% +15% |
 
-综合全文:`notes/F110_ret_fair_log/synthesis.md`;回测表与解剖:`./scripts/study.sh table F110_ret_fair_log s2`。
+综合全文:`notes/F110_ret_fair_log/synthesis.md`;回测表与解剖:`./scripts/study.sh table F110_ret_fair_log s4`。
 
 ### 11. 挖掘 #953(F111)
 
@@ -823,14 +825,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `ts_spearman(day_quantile(Close), 10)` | base | 20 | +12.3% / +6.0% | +2.15 / +0.84 | 4.0% | +2.62 / +1.10 | +17% +8% +1% +16% +16% +12% +9% +4% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `seg_xfrozen_p` `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | segment | 20 | +13.5% / +7.7% | +2.46 / +1.05 | 4.3% | +2.59 / +0.59 | +16% +14% +4% +16% +13% +13% +12% +5% |
-| `h_pe_last20` `ts_pearson(day_last(Close), 20)` | hypo | 10 | +13.2% / +5.7% | +2.37 / +0.81 | 4.4% | +2.57 / +1.24 | +22% +9% +1% +14% +18% +14% +6% +4% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_best2` `cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))` | hypo | 10 | +15.2% / +8.0% | +2.75 / +1.08 | 4.7% | +3.22 / +1.92 | +21% +14% +7% +15% +16% +14% +8% +8% |
+| `seg_xfrozen_p` `cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 15))` | segment | 20 | +13.3% / +7.8% | +2.41 / +1.07 | 4.3% | +2.59 / +0.63 | +16% +13% +4% +16% +12% +13% +12% +5% |
 | `sub_A_day_close` `ts_spearman(day_close(Close), 10)` | substitute | 20 | +13.2% / +6.8% | +2.29 / +0.95 | 4.0% | +2.79 / +1.28 | +19% +8% +2% +15% +17% +14% +9% +5% |
-| `scr_xhi_m` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(ts_spearman(day_quantile(Close), 10…` | screen | 5 | +15.5% / +12.6% | +2.35 / +1.31 | 3.7% | +2.45 / +1.52 | +24% +9% +6% +15% +23% +20% +8% +13% |
-| `h_ov_bk` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(ts_spearman(day_quantile(Cl…` | hypo | 3 | +15.6% / +10.1% | +2.33 / +1.07 | 4.6% | +2.31 / +1.64 | +22% +9% +6% +15% +23% +19% +4% +12% |
+| `h3_xfz_plus_f` `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_spearman(day…` | hypo | 3 | +19.1% / +13.8% | +3.23 / +1.44 | 4.6% | +4.06 / +2.75 | +26% +16% +12% +16% +26% +20% +10% +15% |
+| `scr_xhi_m` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(ts_spearman(day_quantile(Close), 10…` | screen | 5 | +15.5% / +12.6% | +2.35 / +1.31 | 3.7% | +2.45 / +1.52 | +24% +9% +5% +15% +23% +20% +8% +13% |
 
-综合全文:`notes/F111_spearman_qclose/synthesis.md`;回测表与解剖:`./scripts/study.sh table F111_spearman_qclose s2`。
+综合全文:`notes/F111_spearman_qclose/synthesis.md`;回测表与解剖:`./scripts/study.sh table F111_spearman_qclose s4`。
 
 ### 12. 挖掘 #574(F112)
 
@@ -892,16 +894,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)…` | base | 20 | +4.2% / +6.9% | +0.74 / +1.03 | 6.6% | +2.59 / +2.63 | +12% +6% -4% +1% +12% -2% +14% +1% |
+| `v_base` `ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)…` | base | 60 | +5.6% / +2.3% | +0.98 / +0.33 | 4.3% | +2.59 / +2.63 | +12% +8% -2% +6% +11% -10% +17% -7% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h_csrank_w50` `ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)` | hypo | 60 | +13.5% / +12.8% | +2.02 / +1.58 | 3.9% | +2.96 / +2.49 | +20% +9% -0% +21% +21% +5% +26% +3% |
+| `sub_D_cs_rank` `ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 30)` | substitute | 60 | +12.5% / +12.8% | +1.86 / +1.56 | 5.4% | +2.92 / +2.63 | +18% +8% -1% +17% +22% +4% +27% +3% |
 | `iso_E` `signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High))))` | isolate | 10 | +8.4% / +7.9% | +1.85 / +1.53 | 2.2% | +0.99 / +0.95 | +9% +2% +2% +12% +16% +12% +6% +6% |
-| `seg_lowliq_m` `cs_first_low40(neg(ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Clo…` | segment | 20 | +11.2% / +10.9% | +1.84 / +1.15 | 4.0% | +1.38 / +0.92 | +15% +7% -1% +11% +22% +16% +8% +9% |
-| `sub_F_ts_decay_linear` `ts_decay_linear(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kur…` | substitute | 2 | +8.2% / +6.8% | +1.80 / +1.33 | 1.7% | +0.96 / +0.86 | +10% +1% +1% +12% +16% +11% +5% +5% |
-| `ov_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_scale(signedpower(cs_mask_top_r…` | overlay | 10 | +13.5% / +12.9% | +2.00 / +1.36 | 2.6% | +1.90 / +1.54 | +18% +8% +3% +14% +20% +22% +7% +13% |
-| `ov_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_scale(signedpower(cs_mask_top_r…` | overlay | 10 | +12.4% / +12.8% | +1.89 / +1.31 | 3.8% | +1.79 / +1.39 | +18% +7% +3% +12% +19% +20% +8% +13% |
+| `h3_ov_div60` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(div(day_median(Close), cross_med(d…` | hypo | 2 | +15.1% / +15.4% | +2.21 / +1.45 | 3.6% | +2.16 / +1.90 | +20% +11% +5% +16% +21% +21% +13% +13% |
+| `h3_state_w_down` `add(mul(cs_state_rank(neg(day_last(Close)), 20), cs_rank(neg(ts_scale(signedpower(add(day…` | hypo | 10 | +13.6% / +14.1% | +2.12 / +1.55 | 6.3% | +2.09 / +1.46 | +23% +6% +3% +16% +18% +17% +12% +14% |
 
-综合全文:`notes/F112_scale_spow_masktop/synthesis.md`;回测表与解剖:`./scripts/study.sh table F112_scale_spow_masktop s2`。
+综合全文:`notes/F112_scale_spow_masktop/synthesis.md`;回测表与解剖:`./scripts/study.sh table F112_scale_spow_masktop s4`。
 
 ### 13. 挖掘 #1375(F113)
 
@@ -968,14 +970,14 @@
 |---|---|---|---|---|---|---|---|
 | `v_base` `pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret)…` | base | 1 | +0.7% / -0.6% | +0.17 / -0.15 | 4.0% | +2.54 / +1.09 | -3% +7% +4% -2% +1% -5% +1% -2% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_g6_bdemean` `cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | hypo | 20 | +11.2% / +6.0% | +3.21 / +1.26 | 1.8% | +3.33 / +1.62 | +5% +9% +11% +12% +18% +10% +6% +6% |
 | `seg_lowliq_m` `cs_first_low40(neg(pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(t…` | segment | 10 | +10.7% / +13.3% | +2.09 / +1.86 | 2.5% | +2.74 / +2.04 | +8% +8% +0% +17% +18% +15% +10% +13% |
-| `h_g6_gini_bk_amt` `cs_bucket_rank(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))` | hypo | 20 | +8.1% / +2.3% | +2.00 / +0.28 | 1.7% | +2.76 / +1.26 | +1% +10% +16% +6% +7% +2% +4% +4% |
-| `nosc_A_day_gini` `pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_gini(Ret)…` | substitute | 5 | +6.3% / +5.3% | +1.44 / +1.24 | 2.4% | +2.40 / +2.32 | +13% +4% -4% +8% +9% +9% +6% +1% |
-| `h_k2_gini_overlay` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_gini(Ret), 30)), 0.…` | hypo | 0 | +17.2% / +12.9% | +2.66 / +1.32 | 4.1% | +3.20 / +2.79 | +23% +12% +7% +16% +27% +19% +9% +14% |
-| `ov_p025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(pow_1_5(ts_max(pow_2(cs_demean(mul…` | overlay | 0 | +14.8% / +15.1% | +2.27 / +1.69 | 4.0% | +2.92 / +2.48 | +16% +11% +5% +16% +24% +22% +9% +16% |
+| `sub_I_cs_mask_top_replace_mean_neg` `pow_1_5(ts_max(pow_2(cs_mask_top_replace_mean_neg(mul(ts_max(pow_2(ts_max(cs_demean(sub(t…` | substitute | 2 | +6.5% / +3.6% | +1.26 / +0.52 | 3.5% | +2.27 / +0.80 | +5% +8% -0% +7% +13% +5% +6% +2% |
+| `h3_ov_g6_xfrozen` `cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cs_bucket_rank(…` | hypo | 3 | +18.8% / +14.9% | +3.26 / +1.56 | 3.3% | +4.41 / +3.20 | +20% +15% +13% +18% +27% +21% +12% +15% |
+| `h3_ov_g6_025` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cs_bucket_rank(cross_mean(day_gini…` | hypo | 0 | +17.8% / +13.8% | +2.78 / +1.37 | 4.4% | +3.25 / +2.70 | +20% +12% +10% +17% +29% +20% +10% +14% |
 
-综合全文:`notes/F113_nested_tsmax_demean/synthesis.md`;回测表与解剖:`./scripts/study.sh table F113_nested_tsmax_demean s2`。
+综合全文:`notes/F113_nested_tsmax_demean/synthesis.md`;回测表与解剖:`./scripts/study.sh table F113_nested_tsmax_demean s4`。
 
 ### 14. 挖掘 #1421(F114)
 
@@ -1027,16 +1029,16 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `cross_quantile_q25(day_close(Ret), 15)` | base | 20 | +3.6% / +0.2% | +0.70 / +0.03 | 3.1% | +2.36 / +0.91 | +0% -1% -2% +10% +9% +2% +12% -10% |
+| `v_base` `cross_quantile_q25(day_close(Ret), 15)` | base | 40 | +4.5% / +0.4% | +0.83 / +0.05 | 2.0% | +2.36 / +0.91 | +3% -3% -3% +13% +10% +4% +9% -7% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
-| `seg_lowliq_m` `cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_mean(day_sum(Amt), 30))` | segment | 20 | +10.7% / +8.7% | +1.77 / +1.28 | 2.9% | +2.18 / +1.45 | +11% +7% +2% +12% +20% +15% +5% +9% |
-| `h_amtexp_mul` `mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_rank(div(cross_mea…` | hypo | 10 | +6.6% / +2.2% | +1.17 / +0.31 | 2.4% | +1.97 / +1.34 | +4% +1% -3% +15% +15% +5% +9% -4% |
-| `mem_ema30` `cross_ema(cross_quantile_q25(day_close(Ret), 15), 30)` | memory | 10 | +5.0% / +1.5% | +0.93 / +0.18 | 1.5% | +2.47 / +0.82 | +1% -2% -2% +15% +10% +5% +10% -6% |
-| `h_ov_flat_p05` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), …` | hypo | 0 | +15.7% / +15.4% | +2.80 / +1.68 | 4.5% | +3.30 / +2.37 | +26% +15% +9% +12% +16% +16% +12% +17% |
-| `h_ov_flat_pow3` `add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_mean(day_flat_ratio(Cl…` | hypo | 0 | +14.3% / +15.7% | +2.60 / +1.69 | 4.4% | +2.67 / +1.72 | +23% +15% +10% +11% +14% +15% +13% +18% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
+| `h3_xfr_own_slowf` `cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_max(day_…` | hypo | 5 | +9.2% / +3.7% | +2.44 / +0.68 | 2.5% | +4.68 / +2.46 | +8% +8% +5% +13% +12% +8% +7% -1% |
+| `seg_lowliq_m` `cs_first_low40(neg(cross_quantile_q25(day_close(Ret), 15)), cross_mean(day_sum(Amt), 30))` | segment | 60 | +12.1% / +9.8% | +1.94 / +1.35 | 1.3% | +2.18 / +1.45 | +11% +8% +4% +12% +22% +19% +3% +11% |
+| `mem_max30` `cross_max(cross_quantile_q25(day_close(Ret), 15), 30)` | memory | 20 | +3.8% / +1.3% | +1.15 / +0.19 | 2.4% | +1.22 / -0.43 | -3% +3% +1% +6% +7% +6% +8% -5% |
+| `h3_xfr_plus_slowf` `sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Re…` | hypo | 2 | +19.5% / +14.7% | +3.48 / +1.95 | 3.5% | +4.23 / +3.01 | +21% +17% +13% +20% +27% +21% +12% +14% |
+| `h3_xfr_plus_state` `add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Re…` | hypo | 3 | +19.3% / +13.7% | +3.43 / +1.87 | 4.4% | +3.62 / +2.58 | +19% +16% +12% +22% +27% +21% +10% +13% |
 
-综合全文:`notes/F114_q25_closeret/synthesis.md`;回测表与解剖:`./scripts/study.sh table F114_q25_closeret s2`。
+综合全文:`notes/F114_q25_closeret/synthesis.md`;回测表与解剖:`./scripts/study.sh table F114_q25_closeret s4`。
 
 ### 15. 手写 all_tide_mean_30(F115)
 
@@ -1091,13 +1093,13 @@
 
 | 候选 | 类 | 半衰期 | 多头净超额 训练 / 测试 | 纯多头夏普 | 日换手 | 多空夏普 | 逐年多头净超额 2018…2025 |
 |---|---|---|---|---|---|---|---|
-| `v_base` `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in…` | base | 10 | +4.1% / +1.8% | +0.83 / +0.28 | 5.1% | +2.29 / +1.65 | +6% +13% +3% -1% -1% -0% +2% +3% |
+| `v_base` `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in…` | base | 40 | +3.9% / +0.6% | +0.88 / +0.09 | 2.4% | +2.29 / +1.65 | +3% +12% +3% -2% +4% -0% +2% +2% |
 | `k_known` `cross_mean(day_std(Amt), 30)` | bench | 0 | +15.4% / +14.1% | +2.22 / +1.51 | 3.2% | +2.33 / +1.94 | +17% +10% +7% +16% +25% +21% +9% +14% |
-| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 2 | +18.5% / +14.7% | +3.15 / +1.56 | 3.6% | +4.44 / +3.23 | +24% +14% +12% +16% +27% +20% +11% +15% |
+| `k_known_xfrozen` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))` | bench | 3 | +18.5% / +15.0% | +3.13 / +1.61 | 3.2% | +4.34 / +3.26 | +24% +14% +11% +17% +26% +21% +12% +15% |
 | `seg_lowliq_m` `cs_first_low40(neg(cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin…` | segment | 10 | +11.8% / +8.0% | +2.01 / +0.93 | 4.1% | +2.55 / +1.76 | +15% +10% -1% +12% +19% +17% +4% +8% |
-| `h_rawvol_divM_only` `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in…` | hypo | 10 | +6.7% / +2.5% | +1.72 / +0.42 | 4.6% | +2.30 / +1.43 | +11% +8% +4% +6% +4% +5% -1% +7% |
+| `h3_raw_amt` `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in…` | hypo | 10 | +6.9% / +3.8% | +1.77 / +0.62 | 4.6% | +2.31 / +1.55 | +11% +7% +4% +7% +4% +6% +0% +8% |
 | `abl_C` `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in…` | ablate | 10 | +6.5% / +5.9% | +1.49 / +0.85 | 4.5% | +2.32 / +1.48 | +15% +5% -0% +4% +6% +9% +1% +10% |
 | `scr_xhi_p` `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(div(div(sub(day_locate(in_sl…` | screen | 1 | +15.2% / +12.6% | +2.25 / +1.34 | 3.6% | +2.87 / +2.12 | +19% +10% +5% +15% +24% +21% +7% +13% |
 | `h_regime_mix_rk` `add(mul(cs_rank(cross_mean(sub(cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in…` | hypo | 2 | +12.5% / +10.4% | +2.23 / +1.23 | 7.8% | +2.65 / +2.10 | +20% +11% +1% +15% +15% +16% +7% +11% |
 
-综合全文:`notes/F115_all_tide_mean_30/synthesis.md`;回测表与解剖:`./scripts/study.sh table F115_all_tide_mean_30 s2`。
+综合全文:`notes/F115_all_tide_mean_30/synthesis.md`;回测表与解剖:`./scripts/study.sh table F115_all_tide_mean_30 s4`。
