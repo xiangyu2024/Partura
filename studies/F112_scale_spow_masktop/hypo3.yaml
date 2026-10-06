@@ -1,0 +1,60 @@
+# F112_scale_spow_masktop 第三批假设(主研,2026-10-05;来自 sweep_s2 对账 + 第四批新算子)
+# 记号只出现在注释里,表达式一律写全:
+#   CORE   = signedpower(cs_rank(add(day_quantile(Close), day_kurt(High))))      s2 定论的承重核心(cs_rank 替掉截尾 D)
+#   BEST50 = ts_scale(CORE, 50)                                                  h_csrank_w50,ut +10.2%/1.56
+#   BESTR  = cross_ema(cross_scale(CORE, 241), 10)                               h_csrank_cs241_ema,ut +10.1%/1.55、换手 3.2%
+#   ABL30  = ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30) abl_D,ut +7.8%/1.12
+#   FALL30 = div(cross_mean(day_median(Close), 30), day_median(Close))           高 = 相对自己一个月均价跌下来(IC 正)
+#   DIV60  = div(day_median(Close), cross_med(day_median(Close), 60))            h_div_med60,ut +7.3%/0.85、五条轴桶内中性都不掉
+#   KNOWN  = cross_mean(day_std(Amt), 30)                                        k_known,ut +15.4%/2.22
+# 方向约定(state.md §8.6,本轮又被五行坐实):凡用 cs_first_* / cs_last_*,y 一律写成 IC 为正的那一侧(BEST50 的 sg 是 -1,所以写 neg(BEST50));
+# 并且只写「把要剔掉的那一段 push 到书底」的形式(cs_last_*),不写 cs_first_*(s2 的 h_liq_first40 / h_lim_first40 / seg_hiliq_* 五行
+# 因为被偏爱的那一段本身跑输、复合 IC 翻负而 sg = -1,书实际落在补集里,ρk +0.67~+0.80 可证 —— 那五行测的不是它们写的东西)。
+
+# ---- A. 补一个 s2 缺掉的干净对照(没有它,A 组三个旋钮拆不开) ----
+h3_nomask_w50: {expr: "ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 50)", why: "s2 有 abl_D(w30,+7.8%/1.12)、h_nomask_w50_ema10(w50+ema,+7.6%/1.17)、h_winsor_w50_out(w50+外层缩尾,+4.4%/0.74),唯独缺 w50 裸版。缺它就分不清「缩尾吃掉 -3.2pp」还是「ema 本身无用」,也定不出 cs_rank 替代相对纯删 D 的净增量(h_csrank_w50 +10.2 减本条)"}
+
+# ---- B. 把「相对自身近期水平」从比值换成秩:ts_rank / cross_rank 在前两轮 162 个变体里一次没出现 ----
+# 源码事实:ts_rank 与 cross_rank 共用 nanrank_last 内核(只差窗口池),窗口内逐点单调变换不改排序
+#   ⇒ signedpower 包在里面是 no-op,本组表达式一律不写它。这同时是对 E 的最后一次裁决:
+#   若秩版与 BEST50 持平,说明 E 在 ts_scale 里的全部作用(改分母形状)对结果并不必要。
+h3_rank_own50: {expr: "ts_rank(cs_rank(add(day_quantile(Close), day_kurt(High))), 50)", why: "同一个窗口 50、同一个核心,只把「除以窗口和」换成「在窗口里排第几」。ts_scale 的三个毛病(nansum 对缺失日敏感、分母被窗口内尖峰拖走、输出仍带水平量纲)秩版全没有。若与 h_csrank_w50(+10.2%/1.56)持平,这棵树要的只是「相对自身近期的序」;若明显更差,说明 +10.2 里有一部分来自 ts_scale 的分母本身,也就是段 beta"}
+h3_rank_own241: {expr: "cross_rank(cs_rank(add(day_quantile(Close), day_kurt(High))), 241)", why: "上一条的长窗端点,对照 h_csrank_cs241_ema(+10.1%/1.55、换手 3.2%)。s2 把「50~241 是平台」当成反转期长度的性质,但那也可能只是分母越长越稳;秩版没有分母,能把「平台」与「分母稳定性」彻底分开"}
+h3_rank_px241: {expr: "cross_rank(day_median(Close), 241)", why: "最简形式:今天的中位分钟价在自己过去一年里的分位(离 52 周高点多远的反面)。s2 的四条干净比值全在 +5.4~+6.4%/0.7(h_div_mean30/241、h_rev_delay30、h_vwapish_30),若无分母的秩版单独就能到 +8% 以上,说明比值族的天花板来自重尾而不是结构"}
+h3_rank_px_ema: {expr: "cross_ema(cross_rank(day_median(Close), 241), 10)", why: "上一条加本因子唯一有效的记忆(mem_ema 一族)。秩是有界的,EMA 不会退化成峰值记忆 —— h_winsor_w50_out 证明重尾量先缩尾会把增益吃掉 -3.2pp,秩版天然免疫。若换手低于 3% 且 ut 不低于 +9%,这就是最该留档的写法"}
+
+# ---- C. 把段 beta 真正扣掉:本轮做了三条轴的归因,best_own 的 +10.2 里价格轴约 +5.3pp、成交额轴约 +6.9pp(两者重叠),流通市值轴只有 +1.4pp ----
+h3_bkz_px: {expr: "cs_bucket_zscore(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50), day_median(Close))", why: "h_csrank_w50 把 +45.1% 的持仓压在价格最低 20%(该段段等权 +7.0%),归因 +5.3pp。h_px_bk 用的 cs_bucket_rank 把量纲扔掉、桶内重新铺满 (0,1];cs_bucket_zscore 保留「离桶内典型值多少个标准差」,才是「扣掉段 beta 后还剩多少 alpha」的正确问法。段内净超额(价格五档 +0.9/+4.8/+8.4/+6.5/+0.4)预示剩余量级 +1~+8pp"}
+h3_bkz_liq: {expr: "cs_bucket_zscore(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50), cross_mean(day_sum(Amt), 30))", why: "换成成交额桶:持仓 +20.6% 在最低档(段等权 +15.1%)、-14.9% 在最高档(段等权 -17.8%),两头都在赚 beta,归因 +6.9pp。本因子在五个成交额档内的段内超额 +1.8/-4.3/-0.2/+3.5/+7.3 全面优于 k_known 的 -4.1/-5.3/-8.2/-5.2/+2.5 ⇒ 桶内中性版是「它真正会的那件事」能不能独立交易的唯一检验"}
+h3_bkd_liq: {expr: "cs_bucket_demean(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50), cross_mean(day_sum(Amt), 30))", why: "与上一条成对:只减桶内均值、不除桶内标准差。各成交额桶里 ts_scale 输出的离散度差数倍,若 demean 版明显差于 zscore 版,问题在刻度不可比而不是中心错位 —— 这个判别以后所有「桶内中性」写法都能复用"}
+
+# ---- D. 本轮最强的外部事实:通用筛子 k_known_xfrozen(家族剔掉近 15 日冻结盘口最重 20%)+18.5%/3.15 vs k_known +15.4%/2.22;同一个筛子从没加到本因子的好版本上 ----
+h3_best_xfrozen: {expr: "cs_last_high20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_max(day_zero_ratio(Ret), 15))", why: "seg_xfrozen_m 只在原式上试过(+6.3%/0.97 vs v_base +4.2%/0.74,同方向但小)。冻结盘口段段等权 -67.4% 是全市场最大的一块负 beta,而 best_own 在该段只低配 -3.6%(段内 +25.9%,被段等权全额吞掉)。若增益与它给家族的 +3.1pp 同量级,这条筛子就是与因子无关的通用件,应写进所有候选"}
+h3_best_xatmin: {expr: "cs_last_high20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_max(day_at_min_ratio(Close), 15))", why: "day_zero_ratio 分不开「封在跌停」和「封在涨停」(新算子正为此加)。本因子方向 -1 买跌下来的票,按机制它该怕的是跌停一字板。与下一条成对,才能说清要剔的是哪一半"}
+h3_best_xatmax: {expr: "cs_last_high20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_max(day_at_max_ratio(Close), 15))", why: "镜像:剔掉近 15 日曾长时间封在当日最高的票(连板)。s1 把「冻结盘口段内 +29.6%」读成富矿已被更正,但两半的方向仍没分开:若剔涨停侧有效而剔跌停侧无效,书里真正的坑是连板后的追高而不是跌停板;两条都有效则 day_zero_ratio 一个节点就够、不必拆"}
+h3_best_xflat: {expr: "cs_last_high20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_flat_ratio(day_last(Close), 15))", why: "第三个代理,日频:近 15 日收盘价与前一日完全相同的占比(停牌 / 一字板最干净的读数,不受分钟数据缺失影响)。三个代理摆在一起才能分清要剔掉的事件是日内冻结还是日间停牌,也顺便检验分钟级冻结读数有没有被数据缺失污染"}
+
+# ---- E. 第二个加数:s2 判死了峰度一族(h_kurt_z30 -17.1%),但从没试过「让它在封板日把整条表达式变成缺失」 ----
+h3_es_hi_B: {expr: "ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_es_ratio_hi(High)))), 50)", why: "检验的不是 B 而是掩码。源码:day_es_ratio_hi 在「分位接近 0」或「没有分钟超过该分位」时返回 NaN —— 喂价格字段触发的是后一支(一字板 / 死盘的全天同价),价格分位永远远离 0。于是表达式内部自带一个「把封板日留作缺失」的开关,而 B 本身在价格量级前可忽略(abl_C 与 base 只差 0.3pp)。若它明显强于 h3_nomask_w50 / h_csrank_w50,D 组该用的是时点掩码而不是截面筛子"}
+
+# ---- F. 状态:解剖表显示家族在八个状态切分里没有一个负数,本因子唯一胜出的状态是 v_base 在「市场近 20 日下跌」+8.0% vs 家族 +6.0% ----
+h3_flip_vol: {expr: "cs_flip_by_state(ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30), day_std(Ret))", why: "翻转检验要建在真有负状态的版本上:v_base 市场低波动段 -4.7%(abl_D -2.0%)而高波动段 +13.2%(+17.8%);提纯后的 h_csrank_w50 两段都正(+16.1 / +4.5),在它上面做翻转没有信息。若低波动日真是反向(动量),翻转版应明显高于 abl_D 的 +7.8%/1.12;若只是失效,翻转版会明显更差 —— 两种结果都是定论(算子文档写明的用法)"}
+h3_state_w_down: {expr: "add(mul(cs_state_rank(neg(day_last(Close)), 20), cs_rank(neg(ts_scale(signedpower(add(day_quantile(Close), day_kurt(High))), 30)))), mul(cs_state_rank(day_last(Close), 20), cs_rank(neg(cross_mean(day_std(Amt), 30)))))", why: "best_on_known 的最后一次尝试,且只建在唯一有前提的状态上:市场近 20 日下跌时听反转、上涨时听家族(家族上涨段 +23.0% / 下跌段 +6.0%,v_base 反过来 +1.4% / +8.0%)。两条腿都写 neg 让复合 IC 为正、sg 不翻。恒权叠加 ov_* 六档单调减分(+13.5 到 +5.4),状态加权从没试过;若仍过不了 +15.4%/2.22,状态门这条路可以正式关掉"}
+
+# ---- G. 机制的第二条腿:s2 否掉了对称 cv(h_rev_x_cv +3.2%/0.35)和回撤(h_dd_max60 +2.3%),下行半波动是本因子自己要来的算子 ----
+h3_semi_ratio: {expr: "div(cross_semistd_neg(day_median(Close), 30), cross_semistd_pos(day_median(Close), 30))", why: "「跌下来 × 月内波动大」里的波动,用对称 cv 和用 60 日回撤写都失败了。下行与上行半标准差之比是同一件事的无尺度写法,只认跌的那一半、且对均值漂移免疫。单独评一次,确定第二条腿到底存不存在(源码:正值序列日对数变化的半标准差,不足 3 日为 NaN)"}
+h3_fall_x_semi: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(cross_semistd_neg(day_median(Close), 30)))", why: "把 h_rev_x_cv 的第二项从对称 cv 换成下行半波动,其余一字不改 —— 最小子结构替换的标准对照。若明显高于 +3.2%/0.35,机制成立只是算子选错;若还在 +3% 上下,「第二条腿」这个说法可以判死,E 的作用只能记作「把截面分布拉开」"}
+
+# ---- H. s1 两条推断的正确代理(当时没有算子)加一次稳健性裁决 ----
+h3_tick_screen: {expr: "cs_last_low20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_mean(day_distinct_ratio(Close), 15))", why: "s1 推断「价格最低 20% 失效是因为便宜票在 tick 网格上、比值本身最吵」。h_px_excl20(按价格剔)+4.2% vs 基线 +6.4% 没有改善,但价格是网格粗细的坏代理。day_distinct_ratio 直接量「今天走过多少个价位」(1/n = 一整天一个价),剔掉最粗的 20% 才是那条推断的正确检验;best_own 有 45% 持仓在最低价档,这条筛子若有效,受益最大"}
+h3_age_screen: {expr: "cs_last_low20(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_age(day_last(Close)))", why: "次新段等权 -28.7%,h_age_bk(+6.2%)与 h_age_first40(+1.8%)都没拿到东西,而两条用的 cross_valid_count 在 241 日以上一律饱和。cross_age 不饱和(数据起点即有值的票从 10000 起算,用于排序不受影响),先做最保守的一步:把上市最新的 20% 剔掉,看这块负 beta 在 best_own 身上值多少"}
+h3_madz241: {expr: "cross_madz(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 241)", why: "mem_zscore 5/10/30/60 四档全是 -9.7%~-15.1%(符号整个反过来),s1 据此判定「信号要的是截面水平,不是对自身历史是否异常」。但 cross_zscore 的均值与标准差会被一根连板尖峰拖走,且 241 窗从没试过。cross_madz 是中位数 / MAD 的稳健版:仍负 ⇒ 结论成立;转正 ⇒ 当初否掉的是估计量而不是想法。只有新算子能做这个裁决"}
+
+# ---- I. 微观结构:s2 的净买入压力代理太吵(h_press_ema10 -5.1%、h_press_rev train -1.9 / valid +12.4) ----
+h3_topw_ret: {expr: "cross_ema(day_topw_mean(Ret, Amt), 10)", why: "day_signed_ratio 把每分钟压成正负一再求占比、丢掉幅度;day_topw_mean(Ret, Amt) = 最放量 10% 分钟的平均收益,同一件事(大钱在买还是在卖)但保留幅度、一个节点完成、不用触发掩码。单独评一次做基线,顺便给以后所有「把事件研究写成一个节点」的因子一个参照"}
+h3_fall_x_topw: {expr: "mul(cs_rank(div(cross_mean(day_median(Close), 30), day_median(Close))), cs_rank(cross_ema(day_topw_mean(Ret, Amt), 10)))", why: "「跌下来 + 大单分钟已经在涨」= 反转确认。h_press_rev 的 train 与 valid 差 14pp 不能用;若换成这个更干净的代理后两段一致且高于 h_div_mean30 的 +6.4%,说明「反转的收益是提供流动性的补偿」这条机制能被微观结构独立确认 —— 这是本因子唯一还没被证伪的因果故事"}
+
+# ---- J. 本轮对账直接指向的三件事 ----
+h3_liq_excl40: {expr: "cs_last_low40(neg(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)), cross_mean(day_sum(Amt), 30))", why: "s1 的「唯一活口」(把书限制在流动性高的那一半)在 s2 里被判死,但那三行(h_liq_first40 -1.3%、h_liq_first40_abl -1.0%、seg_hiliq_p +8.1%)的 sg 全是 -1、ρk +0.67~+0.80,书其实落在低流动性那一半 —— 测的不是这个假设。用 cs_last_low40 把最不流动的 40% push 到书底、y 写 neg 使 IC 为正,才是不会被翻转的写法。预期为负(h_liq_excl20 已经 -3.5pp、真的高流动性倾斜 h_liq_mul 的 ρk -0.64 给出 -5.4%),但要用一行干净证据正式关掉它"}
+h3_res_div60: {expr: "cs_regres(cs_rank(div(day_median(Close), cross_med(day_median(Close), 60))), cs_rank(cross_mean(day_std(Amt), 30)))", why: "增量检验一直只做在 v_base 上(res_known +0.2%/0.03),而 v_base 的收益本身几乎全是段 beta,残差归零是必然的。干净比值族才是段中性的那一支:h_div_mean30 的五条轴桶内中性版 +6.1/+6.2/+5.7/+5.3/+4.7 对基线 +6.4 几乎不掉 ⇒ 它基本不含段 beta。对它取秩残差是本研究从没做过、却唯一有可能非零的增量检验"}
+h3_ov_div60: {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(div(day_median(Close), cross_med(day_median(Close), 60))), 0.25))", why: "与上一条配套的叠加版,权重照抄 ov_p025(两条腿都是低值买,全局 sg = -1 时方向一致)。ov_p025 用的是 v_base(+13.5% 低于 +15.4%),换成段中性的 DIV60 再试一次:若仍减分,「本因子对已知族零增量」就不是「测错了版本」而是结构性的;若它反超 +15.4%,best_on_known 的答案要改写成干净比值族而不是 ts_scale 族"}

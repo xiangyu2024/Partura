@@ -1,6 +1,6 @@
 # F108_max_ntkurt_close — 交接状态
 
-_自动生成于 2026-10-05 15:14(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F108_max_ntkurt_close` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3264(批次 B01_single_factors)
 - 表达式:`day_max(pow_1_5(pow_2(nt_ts_kurt(Close, 30))))`
@@ -12,7 +12,7 @@ _自动生成于 2026-10-05 15:14(`python scripts/recorder.py --brief F108_max_n
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `synth:F108_max_ntkurt_close`:已返回结果,最后动作 10-05 11:00 → `handoff/F108_max_ntkurt_close/agents/synth_a3d74598652f5a146.md`
   - `verdict:F108_max_ntkurt_close`:中断,最后动作 10-05 13:53 → `handoff/F108_max_ntkurt_close/agents/verdict_a8c9d4ac94d1c29f6.md`
-  - `verdict:F108_max_ntkurt_close`:还在跑(多半就是你自己)
+  - `verdict:F108_max_ntkurt_close`:已返回结果,最后动作 10-05 15:17 → `handoff/F108_max_ntkurt_close/agents/verdict_ae70bca6af3f47ef1.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F108_max_ntkurt_close` 看服务器上的 tag,`./scripts/study.sh digest F108_max_ntkurt_close <tag>` 重看结果)。
 
@@ -131,6 +131,9 @@ best_on_known = h_ov_mean30_p025 +17.6%/+2.73(叠加)与 z_known_excl_mem30 +17.
 - `sweep_s2`  10-05 12:04  139 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s2`
 - `anatomy_s2`  10-05 12:10  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s2`
 - `sweepfinal_s2`  10-05 12:15  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweepfinal_s2`
+- `sweep_s3`  10-05 16:19  163 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweep_s3`
+- `anatomy_s3`  10-05 16:29  0 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close anatomy_s3`
+- `sweepfinal_s3`  10-05 16:32  8 个变体  → `./scripts/study.sh digest F108_max_ntkurt_close sweepfinal_s3`
 - `x1_anatomy`(自写脚本的输出)  10-04 13:13  exit 97  → `logs/F108_max_ntkurt_close_x1_anatomy.log`
 - `x2_longonly`(自写脚本的输出)  10-04 14:42  exit 0  → `logs/F108_max_ntkurt_close_x2_longonly.log`
 - `x3_attrib`(自写脚本的输出)  10-04 23:53  exit 0  → `logs/F108_max_ntkurt_close_x3_attrib.log`
@@ -149,3 +152,4 @@ best_on_known = h_ov_mean30_p025 +17.6%/+2.73(叠加)与 z_known_excl_mem30 +17.
 ## 结构化结果(`handoff/F108_max_ntkurt_close/results/`)
 
 - `synthesis.json`
+- `verdict.json`

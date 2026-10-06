@@ -1,0 +1,82 @@
+# F114_q25_closeret —— 第三批假设(主研,读完 s2 大表 + 市场解剖之后;只用 train/valid)
+#
+# s2 把第二批九组全跑完了。四条新的硬结论决定这一批往哪儿打:
+#
+#   (一) **「冻结盘口」不是信息,是污染。** A 组(day_flat_ratio × 4 档 + day_zero_ratio × 2)单独当因子
+#        **train 全负、valid 全正**(h_flat_mean15 -4.3/+8.6、h_flat_ema30 -3.0/+9.5、z_zero_mean15 -5.2/+8.2),
+#        两段符号相反 → 站不住;反过来**把冻结票剔掉**才涨:seg_xfrozen_m(原式 + 剔掉近15日冻结最重20%)
+#        把本因子从 +1.8/+8.1(夏普 0.33/1.78)抬到 **+5.8/+5.6(1.80/1.50)、ρk -0.02、dist 1.00** ——
+#        train 与 valid 几乎逐位相同,全表最稳。s1 说「原子是一半信息」,**s2 改判为「原子是噪声源」**。
+#        → 这一批的 S 组(day_es_ratio_lo,把分位≈0 的日子留作 NaN)是这条改判的决定性检验。
+#
+#   (二) **增量的位置已经定下来了:已知族自己扎堆的那个桶里的桶内重排。** z_known_lowliq 与 k_known
+#        三段**逐位相同**(+12.6/+22.3/+15.4、1.78/3.46/2.22)→ 已知族的多头书**整本都在成交额最低 40%**;
+#        而它在那个主战场**段内是负的**(成交额最低20%桶段内 **-4.1%**、超配 +80.3%)。叠上本因子/flat 后
+#        那一格由负转正(+1.5 ~ +5.0%)、超配降到 +29~+58%。但 s2 的叠加项全是**全市场秩**,既改桶内排序
+#        也改跨桶倾斜;正确写法是**先 cs_bucket_demean 再叠** —— 上一轮没有这个算子。这是 Q 组。
+#
+#   (三) **「稀释」被修正为「弱增量,但说不清机制」。** 线性叠加**原式**确实稀释(6 个权重点全差);但
+#        先慢化再凸化 / 再按市场状态加权就翻成弱增量:h_gate_vol_mix **+14.0/+24.1(2.08/4.03)**、
+#        h_gate_disp_mix +13.7/+23.9(2.02/3.97)、h_ov_slowf_pow3 +13.4/+23.9(1.99/3.87),对 k_known
+#        净 +1.0~+1.5pp(噪声带内)、夏普 **+0.27~+0.36**(刚出界),两段同向。**但缺一个剂量对照**:
+#        慢化版的**线性 0.5** 从没跑过 → 「凸化/状态加权」可能只是把叠加项的剂量降下来。这是 R 组。
+#        另一条干净事实:**叠加项的凸度与冻结段表现单调** —— k_known 冻结段 -10.9%、flat 线性 p025 -17.1%、
+#        p05 -6.4%、**pow3 +10.2%** → 冻结段里有两类票符号相反,day_flat_ratio 分不开。这是 P 组。
+#
+#   (四) **跨桶倾斜是全部,但「量能扩张」不是倾斜的载体。** 成交额桶内 h_bk_slowf_liq +1.7%、价格桶内
+#        h_bk_slowf_price +1.7%(把慢化版的 +4.8% 砍到 1/3,这次 dist 0.99 干净)——(乙)坐实;
+#        **而放量桶内 h_bk_slowf_amtexp 仍 +4.8%、夏普 0.90,一点没掉**,且 h_amtexp_mul(原树 × 量能扩张
+#        软 AND)+4.3/+12.2(0.76/2.28)、**ρk 只 0.28** → 「量能扩张」这条腿与流动性水平是两件事。V 组。
+#
+# s2 已否掉、这一批不再碰:B 组资金加权/有符号读数(6/6 全负;h_wmean_q25 **-14.4% ≈ day_mean -15.9%**
+# → day_mean 塌陷的原因是「全天聚合」本身,不是等权死分钟);C 组恒等式两半单独读
+# (cross_stddev(day_close(Ret),15) -0.1%、60 日 **-15.6%**;day_pos_ratio dist 0.06)→ **恒等式分解无用**;
+# h_amihud15 **-4.8%** → 「微观冲击计」叙事被否;慢化串联(E 组 +4.4~+4.8,与单独慢化同 → 上限 +5.0%/0.93
+# 钉死);本因子当已知族的筛子(scr_xhi_p +13.5/2.07、scr_xhi_m +11.0/1.75,**两个方向都差于不筛**)
+# → s1 的「唯一活口 = 单尾筛子」**被否**;day_gini / day_centroid(Amt) / 收盘成交额占比(train 与 valid 相反)。
+# 工具坑(别重犯):cross_semistd_* 喂有符号序列 → cov 0.21;cross_madz 喂带 0 原子的序列 → MAD→0、cov 0.70;
+# cross_valid_count(·,241) 饱和 → z_age dist 0.05(本批改用 cross_age)。
+#
+# 对标:k_known +12.6/+22.3/+15.4(2.22);**k_known_xfrozen +16.4/+23.2/+18.5(2.81/3.98/3.15)= 全表最强,
+# 打赢 s2 里我们造出的每一个东西** → W 组问的是唯一真正决定「本因子对用户有没有用」的问题。
+
+# ---- P. 冻结里的两类票:封在最高价 vs 封在最低价(结论三的凸度单调性指向的第一问)
+h3_atmax_ema30:      {expr: "cross_ema(day_at_max_ratio(Close), 30)", why: "涨停/封在当日最高价的时间占比,按 s2 最优慢化读。A 组证明 day_flat_ratio 单独 train/valid 符号相反,怀疑它把两类符号相反的票混在一起;先把涨停这一类单独量出来,看符号是否就稳住"}
+h3_xatmax_known:     {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_max_ratio(Close), 15))", why: "把 k_known_xfrozen(+18.5%/夏普 3.15,全表最强)的筛子变量从 day_zero_ratio 换成「封在最高价」,直接对比:通用筛子剔掉的到底是哪一类票"}
+h3_xatmin_known:     {expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_at_min_ratio(Close), 15))", why: "同上,封在最低价(跌停/流动性枯竭)那一侧。两条里更接近 3.15 的那一条,就定义了「冻结盘口」这个状态真正的经济含义 —— 这是对所有因子都可迁移的一问"}
+h3_ov_atmax_pow3:    {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cross_ema(day_at_max_ratio(Close), 30))), 1.0))", why: "h_ov_flat_pow3(+14.7/+13.3、冻结段 +10.2%)的拆分版:凸罚项只加在涨停封板上。好于 flat 版 → flat 的另一半是噪声,也直接解释 flat overlay 为什么 train 好 valid 差"}
+
+# ---- Q. 桶内 vs 跨桶的恒等式分解(结论二:位置已定,缺的只是写法)
+h3_bdm_slowf_liq:    {expr: "cs_bucket_demean(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_mean(day_sum(Amt), 30))", why: "保量纲的桶内去均值(cs_bucket_rank 版把量纲扔了得 +1.7%)。问的是桶内残差**本身**有没有信息:预测 ≈0,是(乙)的正面确认"}
+h3_btilt_only:       {expr: "sub(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_bucket_demean(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_mean(day_sum(Amt), 30)))", why: "恒等式的另一半 = 只留桶均值(纯跨桶倾斜)。与上一条构成双向检验:若(乙)对,这一条应 ≈ 慢化版全市场 +4.8%、上一条应 ≈0;若反过来,s1/s2 关于「倾斜是全部」的整条叙事就错了"}
+h3_ov_bdm_known:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_demean(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_mean(day_sum(Amt), 30)), 1.0))", why: "本批最想问的一条:叠加项先在成交额桶内去均值,就**不动已知族的跨桶倾斜**,只在它扎堆的那个桶里重排(那一格段内 -4.1%、超配 +80.3%)。权重 1.0 对标 ov_p10(+11.5)与 h_ov_slowf_pow3(+16.4)"}
+h3_ov_bdm_flat:      {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_demean(cs_rank(cross_mean(day_flat_ratio(Close), 15)), cross_mean(day_sum(Amt), 30)), 0.5))", why: "同样的桶内去均值用在 s2 最好的叠加项(h_ov_flat_p05 +15.6/+15.7、2.81/2.77)上,权重取同一剂量 0.5:它的收益有多少是跨桶倾斜、多少是桶内择股"}
+h3_ov_bdz_known:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_zscore(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_mean(day_sum(Amt), 30)), 1.0))", why: "桶内标准化而不是只去均值:各桶的秩离散度相差数倍,去均值后桶间距离仍不可比。与 h3_ov_bdm_known 配对,区分「桶内择股有效」和「只是把权重重新分配到离散度小的桶」"}
+
+# ---- R. 状态加权/凸化到底是机制还是降剂量(结论三缺的那个对照)
+h3_ov_slowf_p05:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), 0.5))", why: "**剂量对照,本批最便宜也最关键的一条**:慢化版的线性 0.5 从没跑过。若它就有 +16% / 夏普 2.5,那 h_ov_slowf_pow3 和两条 gate 版的 +1.0~+1.5pp 全部来自「慢化 + 降剂量」,凸化与状态加权什么也没做"}
+h3_gate_state_amt:   {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_state_rank(day_sum(Amt), 40)))", why: "h_gate_vol_mix(+16.9/2.58,全表最好的叠加)的干净版:市场量能状态用正规算子而不是手搓比值。数字接近 → 那 +1.5pp 是状态加权本身;明显更差 → 是手搓那个比值的形状(即一个被误读为市场状态的个股量能因子)"}
+h3_flip_slowf_amt:   {expr: "cs_flip_by_state(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30), day_sum(Amt))", why: "放量日做多本因子、缩量日反过来。解剖:放量 +7.9% vs 缩量 +0.1%。若缩量日只是无效,flip 版会明显更差;明显更好才说明缩量日真的反向 —— 这决定「状态」该写成权重还是写成翻转"}
+h3_mix_state_amt:    {expr: "add(mul(cs_state_rank(day_sum(Amt), 40), cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30))), mul(sub(1.0, cs_state_rank(day_sum(Amt), 40)), cs_rank(cross_mean(day_std(Amt), 30))))", why: "不是叠加而是**换书**:放量日用本因子排序、缩量日用已知族排序,权重和恒为 1(没有偷偷降剂量)。它检验的是「两条信号在不同市场状态下各自更强」能不能直接换成钱"}
+
+# ---- S. 原子是信息还是污染(结论一的决定性检验;day_es_ratio_lo 把分位≈0 的日子留作 NaN)
+h3_eslo_q25:         {expr: "cross_quantile_q25(day_es_ratio_lo(Ret), 15)", why: "同一外壳(q25 + 15 日),叶子换成「封板/停牌日自动缺失」的左尾形状。s1 说原子是一半信息 → 这条应该死;s2 改判原子是污染 → 这条应该 ≥ 原式(+3.6%/0.70)甚至接近 seg_xfrozen_m(+5.8%/1.71)。两种叙事在这一条上给出相反预测"}
+h3_eslo_ema30:       {expr: "cross_ema(day_es_ratio_lo(Ret), 30)", why: "同一个量按 s2 最优慢化读,避免「死掉只是因为 q25 外壳不匹配」这个混淆;与 mem_ema30(+5.0%/0.93)同口径比较"}
+
+# ---- T. 上市天数(cross_age 不饱和;z_age 用 cross_valid_count 饱和成 dist 0.05,这一问没被干净地提过)
+h3_age_low20_slowf:  {expr: "cs_first_low20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_age(day_last(Close)))", why: "次新段(7.1%、段等权 -28.7%)原式段内 +18.1%、pow3 overlay +33.2%,但 seg_new_p 用饱和的 cross_valid_count 只拿到 +4.4%/1.25。换成不饱和的 cross_age、档位收到最短 20%:分清是「段内真有择股力」还是「分段变量太钝」"}
+h3_ov_age_known:     {expr: "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_age(day_last(Close))), 0.5))", why: "**空检验**:k_known 在次新段只 +8.6%,而我们所有 overlay 在那一段都是 +23~+33%。如果单纯的「次新倾斜」就做得出那 +1.0~+1.5pp,本因子在 overlay 里什么也没贡献"}
+
+# ---- U. 资金加权的正确版本(B 组失败后唯一还值得问的两条)
+h3_topw_tail_q25:    {expr: "cross_quantile_q25(day_topw_mean(in_slice(Ret, 210, 240), in_slice(Amt, 210, 240)), 15)", why: "B 组的 day_wmean 塌到 -14.4% 是因为它是**全天平均**;day_topw_mean 只取最重的 10% 分钟 = 事件读数。限定在尾盘 30 分钟则是原式(只读最后一分钟)的**邻域最小放宽**,而且不经过任何全天平均 —— 「孔径放宽就死」是否真的是孔径的事"}
+h3_wstd_q25:         {expr: "cross_quantile_q25(day_wstd(Ret, Amt), 15)", why: "恒等式里「冲击幅度」那一半的无原子版:资金经历的日内波动,不被没成交的分钟稀释。C 组的 h_sd_close15(-0.1%)是**日间**标准差,不是这个;这条才是尺度那一半的日内读法"}
+
+# ---- V. best_own 周围的最小子结构(结论四:量能扩张这条腿桶内中性不掉、ρk 只 0.28)
+h3_xfr_own_slowf:    {expr: "cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_max(day_zero_ratio(Ret), 15))", why: "把 best_own 的两件好事装在一起:剔掉冻结(seg_xfrozen_m 夏普 0.70→1.71、ρk -0.02)+ 慢化(mem_ema30/w60 把净超额抬到 +5.0%)。seg_xfrozen_m 用的还是 w15 原式,这条才是这一路的上限"}
+h3_xfrozen_amtexp:   {expr: "mul(cs_rank(cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_max(day_zero_ratio(Ret), 15))), cs_rank(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))))", why: "三件好事:剔冻结 × 慢化 × 量能扩张(h_amtexp_mul +4.3/+12.2、ρk 0.28、桶内中性后仍 +4.8%)。若三者独立,这是 best_own 的天花板,也是本因子能给用户的全部"}
+h3_amtexp_mul_raw:   {expr: "mul(cs_rank(cross_quantile_q25(day_close(Ret), 15)), cs_rank(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))))", why: "h_amtexp_mul 去掉慢化:增益来自慢化还是来自「量能扩张」那条腿。若不掉,说明本因子在这个软 AND 里只是配角,真正的东西是量能扩张 —— 那就该向总领报一条新因子,而不是提纯 F114"}
+
+# ---- W. 在通用筛子基准之上还剩什么(唯一真正决定「对用户有没有用」的一组)
+h3_xfr_plus_slowf:   {expr: "sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), pow_3(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30))))", why: "k_known_xfrozen(+18.5%/3.15)之上加 s2 最好的凸罚项(sub + pow_3 复刻 h_ov_slowf_pow3 的单尾罚形状)。打不赢 3.15 → 结论就是「本因子想当的那个筛子已经有通用版了」"}
+h3_xfr_plus_state:   {expr: "add(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), mul(cs_rank(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30))), cs_state_rank(day_sum(Amt), 40)))", why: "同上,但叠加项用 s2 最好的形式(状态加权,h_gate_vol_mix 2.58)。两个基准各自最好的东西合在一起:若 3.15 还被抬高,本因子才算对已知族有真增量"}
+h3_xfr_plus_bdm:     {expr: "sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), cs_bucket_demean(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cross_mean(day_sum(Amt), 30)))", why: "同上,叠加项先桶内去均值(结论二)。筛子已经处理掉冻结那一类票,剩下的增量只能是桶内择股 —— 这三条分别代表凸罚、状态、桶内三种机制,择优即定论"}

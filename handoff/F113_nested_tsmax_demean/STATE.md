@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:15(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -10,37 +10,36 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_neste
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 2 次**(10-04 23:50, 10-05 12:14)—— **不许再读**。候选在留出段上的数全在 `runs/F113_nested_tsmax_demean/final.json`(`./scripts/study.sh digest F113_nested_tsmax_demean final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F113_nested_tsmax_demean#1`:已返回结果,最后动作 10-04 23:59 → `handoff/F113_nested_tsmax_demean/agents/work_R1_a696126293179fc51.md`
-  - `lead:F113_nested_tsmax_demean#2`:已返回结果,最后动作 10-05 00:20 → `handoff/F113_nested_tsmax_demean/agents/lead_R2_ad80c965745ae9bd7.md`
   - `synth:F113_nested_tsmax_demean`:已返回结果,最后动作 10-05 11:15 → `handoff/F113_nested_tsmax_demean/agents/synth_a24c39d4d136d4c36.md`
+  - `verdict:F113_nested_tsmax_demean`:失败,最后动作 10-05 15:34 → `handoff/F113_nested_tsmax_demean/agents/verdict_af3628082ff5e07ad.md`
+  - `verdict:F113_nested_tsmax_demean`:已返回结果,最后动作 10-05 17:15 → `handoff/F113_nested_tsmax_demean/agents/verdict_a2288ebb0f74dbfec.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F113_nested_tsmax_demean` 看服务器上的 tag,`./scripts/study.sh digest F113_nested_tsmax_demean <tag>` 重看结果)。
 
-## 研究现状(`notes/F113_nested_tsmax_demean/state.md`,10-05 11:10 更新)—— **先读这个文件**
+## 研究现状(`notes/F113_nested_tsmax_demean/state.md`,10-05 17:11 更新)—— **先读这个文件**
 
 # 研究现状 — F113_nested_tsmax_demean
 
-> 主研每轮**整个覆盖重写**这一页。最近更新:**第 5 轮(主研 Opus 5)批量扫描 s1 的综合,2026-10-05**。
+> 主研每轮**整个覆盖重写**这一页。最近更新:**第 6 轮(主研 Opus 5)批量扫描 s2 的对账与结论,2026-10-05**。
 > 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
 > 噪声带:`Lnet`(多头腿净超额,扣 15bp)**±3pp**、`Lshp`(纯多头夏普)**±0.3**;门槛 cov ≥ 0.95、dist ≥ 0.5。
-> 完整论证在 **`notes/<fid>/synthesis.md`(150 行,本轮写的,先读它)**;第 1~4 轮在 `07_S_final.md` / `09_diagnosis.md` / `10_distilled.md`。
+> 完整论证在 **`notes/<fid>/synthesis.md`**:§1–5 是 s1 的综合,**§6–8 是本轮的对账与定论(先读 §8)**。
 
 ## 1. 现状
 
-**对原式的否定结论没有被 189 变体的大表推翻,反而被加强**:原式多头腿 utrain **+0.7% / Lshp 0.17**、6 年里 3 年为负,
-对已知族 `k_known = cross_mean(day_std(Amt), 30)`(**+15.4% / 2.22**)**任何权重的叠加都不优于单跑已知族**。
-本轮新增三条:(a) 一个**精度 bug** 解释了整族"有信息的子树"为何全部爆 dist 门槛;
-(b) `abl_J` 的 +12.4% 是 **cov 0.43 的 universe 假象**,本表无法定案;
-(c) 全表唯一既过门槛又显著赢原式的是**叶子替换 `day_gini`**(+6.3% / 1.44,ρo 0.06)—— 那是新因子,不是本因子的提纯。
-**下一步:执行跑 `studies/F113_nested_tsmax_demean/hypo.yaml` 的 40 条(已 40/40 过 `study.sh hypo`)。**
+**结案方向没变,本轮把「为什么」钉死,并找到唯一值得继续的东西。**
+原式多头腿 utrain **+0.7% / Lshp 0.17**、6 年 3 年为负;它「有信息」那段(`h_s4` +8.0% / 1.17)**过得了 dist 门槛但过不了
+成交额桶内中性**(→ `h_q1` +1.8% / 0.25),ρk +0.46 ⇒ **3/4 是已知成交额族的弱复制**;筛子用法与 `k_known` 逐格打平,
+远不及通用筛 `k_known_xfrozen`(**+18.5% / 3.15**)。**产出不在原式身上,在一条新因子**
+`h_g6_gini_bk_amt` = `cs_bucket_rank(cross_mean(day_gini(Ret),30), cross_mean(day_sum(Amt),30))`
++8.1% / **2.00** / LTO 1.8% / **ρk +0.05** / ρo +0.08 / 6 年全正 —— 应独立立案。
+**下一步:执行跑 `studies/<fid>/hypo3.yaml` 的 25 条(已 25/25 过 `study.sh hypo3`)。**
 
-(…全文 6743 字符,读 `notes/F113_nested_tsmax_demean/state.md`)
+(…全文 6604 字符,读 `notes/F113_nested_tsmax_demean/state.md`)
 
-## 研究日志(`notes/F113_nested_tsmax_demean/journal.md`:23 条,其中研究员自己写的 12 条)
+## 研究日志(`notes/F113_nested_tsmax_demean/journal.md`:24 条,其中研究员自己写的 13 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:43 [auto] ⚠ 读留出段:final S_final,阶段 S_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
 ### 2026-10-04 23:50 [auto] S_final 跑完(exit 0);重看结果:./scripts/study.sh digest F113_nested_tsmax_demean S_final
 
@@ -96,6 +95,25 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_neste
 5. 增量仍然是没有:ov_p025 +14.8% / 2.27 vs 已知族 +15.4% / 2.22(两项
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 16:13 [主研] 批量扫描 s2 对账与结论
+
+对账(s1 的推论):支持 5 条、否定 7 条。H16 确认且最干净 —— h_s3~h_s6 删掉 +5 后三段收益与 ρk 逐格不变而 dist 0.22→1.00
+(例外:gini 叶子量级 ~0.5,h_g1 与 nosc_A 完全同格);H17 确认但两份功劳都在 —— 全覆盖保号的 h_s1 只有 +7.6%/1.07,
+abl_J 的 +12.4%/2.38 里 4.8pp 归 NaN 剔掉的 57%,而 h_s1 比折叠版 h_s2(+3.5%,valid −0.6%)高 4.1pp 说明符号也值 ~4pp。
+否定:冻结分钟探测器(h_f1 与原式 ρo 仅 +0.04,而它自己 +5.7% 远好于原式)、「有界叶子⇒双层折叠无害」(pos_ratio/centroid/
+wmean/signed_ratio 全负)、「gini 后 6 层是装饰」(最小形 h_g3 −10.6%)、秩距离(h_r1~r3 valid 全负)、手写择时(≈0 且 LTO 翻倍)、
+记忆杠杆(h_m1~m3 ≤ +0.1%)。
+
+定论:原式多头腿不可用、当筛子也不可用。它「有信息」那段(h_s4 +8.0%/1.17)过得了 dist 门槛但过不了成交额桶内中性
+(h_q1 +1.8%/0.25),ρk +0.46 ⇒ 3/4 是已知成交额族。筛子 scr_xhi_* +15.2%/2.24 与 k_known 逐格打平,远不及新基准
+k_known_xfrozen(+18.5%/3.15);best_on_known 的 h_k2 +17.2%/2.66 赢 k_known 但输 xfrozen 筛 1.3pp/0.49 夏普,且分子单独为负。
+
+意外发现(本轮唯一值得继续的):h_g6_gini_bk_amt = cs_bucket_rank(cross_mean(day_gini(Ret),30), cross_mean(day_sum(Amt),30))
++8.4/+7.1/+8.1%、Lshp 2.00、LTO 1.8%、ρo +0.08、ρk +0.05、cov/dist 双 1.00、6 年全正、状态不敏感 —— 而分子单独是 −1.3%/−0.19。
+同一分子换四种桶(裸用 −1.3 / 成交额桶 +8.1 / 已知族桶 +6.5 但 valid 2.8 / 冻结度桶 −1.3)+ 反向(h_s3 +7.9 → 桶内 +1.8)
+⇒ 新结论 H18:「桶内比较」是会改
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F113_nested_tsmax_demean/orders/`、`notes/F113_nested_tsmax_demean/results/`)
 
 - R0:工单 —,结果卡 有
@@ -132,7 +150,7 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_neste
 
 ## 已写的 notes(`notes/F113_nested_tsmax_demean/`)
 
-`01_expression.md`(4K)、`02_operators.md`(10K)、`03_decomposition.md`(7K)、`04_grammar.md`(8K)、`05_hypotheses.md`(27K)、`06_baseline.md`(13K)、`07_S1_chain.md`(7K)、`07_S2_bench.md`(10K)、`07_S_final.md`(9K)、`07x_1_ties_longbook.md`(5K)、`07x_2_increment.md`(9K)、`08_variants.md`(7K)、`09_diagnosis.md`(10K)、`10_distilled.md`(12K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(37K)、`state.md`(9K)、`synthesis.md`(11K)
+`01_expression.md`(4K)、`02_operators.md`(10K)、`03_decomposition.md`(7K)、`04_grammar.md`(8K)、`05_hypotheses.md`(27K)、`06_baseline.md`(13K)、`07_S1_chain.md`(7K)、`07_S2_bench.md`(10K)、`07_S_final.md`(9K)、`07x_1_ties_longbook.md`(5K)、`07x_2_increment.md`(9K)、`08_variants.md`(7K)、`09_diagnosis.md`(10K)、`10_distilled.md`(12K)、`11_risks.md`(6K)、`12_next.md`(4K)、`journal.md`(39K)、`state.md`(9K)、`synthesis.md`(20K)
 
 ## 自写的探针与分析脚本(`studies/F113_nested_tsmax_demean/`)
 
@@ -142,3 +160,4 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F113_neste
 ## 结构化结果(`handoff/F113_nested_tsmax_demean/results/`)
 
 - `synthesis.json`
+- `verdict.json`

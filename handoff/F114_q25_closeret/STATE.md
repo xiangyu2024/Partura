@@ -1,6 +1,6 @@
 # F114_q25_closeret — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:15(`python scripts/recorder.py --brief F114_q25_closeret` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1421(批次 B01_single_factors)
 - 表达式:`cross_quantile_q25(day_close(Ret), 15)`
@@ -10,39 +10,33 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F114_q25_c
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 3 次**(10-04 23:56, 10-05 11:08, 10-05 12:21)—— **不许再读**。候选在留出段上的数全在 `runs/F114_q25_closeret/final.json`(`./scripts/study.sh digest F114_q25_closeret final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F114_q25_closeret#1`:已返回结果,最后动作 10-05 00:12 → `handoff/F114_q25_closeret/agents/work_R1_a2af85fe053c7b981.md`
-  - `lead:F114_q25_closeret#2`:中断,最后动作 10-05 00:20 → `handoff/F114_q25_closeret/agents/lead_R2_a9262d78a60d3e050.md`
   - `synth:F114_q25_closeret`:已返回结果,最后动作 10-05 10:47 → `handoff/F114_q25_closeret/agents/synth_a0afe0974e2c8e717.md`
+  - `verdict:F114_q25_closeret`:失败,最后动作 10-05 15:35 → `handoff/F114_q25_closeret/agents/verdict_ac75f20cce9734707.md`
+  - `verdict:F114_q25_closeret`:已返回结果,最后动作 10-05 17:15 → `handoff/F114_q25_closeret/agents/verdict_adfbc90eeee4b463a.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F114_q25_closeret` 看服务器上的 tag,`./scripts/study.sh digest F114_q25_closeret <tag>` 重看结果)。
 
-## 研究现状(`notes/F114_q25_closeret/state.md`,10-05 10:44 更新)—— **先读这个文件**
+## 研究现状(`notes/F114_q25_closeret/state.md`,10-05 17:12 更新)—— **先读这个文件**
 
 # F114_q25_closeret — 研究现状(主研每轮覆盖重写)
 
-第 4 轮主研(Opus 5,2026-10-05)。`cross_quantile_q25(day_close(Ret), 15)`,来源 挖掘 #1421。
-本轮**只读**预先跑好的 `runs/.../sweep_s1.json`(73 变体)+ `anatomy_s1.json`,落成 `synthesis.md` 和
-第二批 39 条假设,**没有起任何计算**。正本:`synthesis.md`、`10_distilled.md`、`05_hypotheses.md`、`07_S1~S5`。
+第 5 轮主研(Opus 5,2026-10-05)。`cross_quantile_q25(day_close(Ret), 15)`,来源 挖掘 #1421。
+本轮**只读**预先跑好的批量扫描 **s2**(129 变体 + 市场解剖),**没有起任何计算、没有读测试段**。
+正本 `synthesis.md`(末节 = 本轮对账与结论)、`10_distilled.md`、`05_hypotheses.md`、`07_S1~S5`。
 
 ## 1. 一句话现状
 
-**结论已定且是否定的,留出段也已读完**:对纯多头用户这棵树的多头腿不可用(最好 +5.1%,只有已知成交额族
-的 1/3),它的多头腿超额是一个**被已知族做得更好的流动性倾斜**;叠到已知族上是**严格稀释**(不只是 wash)。
-**本轮新增的唯一活口**:它读到的「冻结盘口」状态,在已知族亏钱的那 6.5% 股票里有效。
-**下一步(执行):跑 `studies/<fid>/hypo.yaml` 的 39 条,train/valid 口径,不碰留出段。**
+**结论已定且是否定的。** 冻结盘口(0 原子)**是污染不是信息** —— 剔掉它把本因子夏普从 0.70 抬到 1.71
+(`seg_xfrozen_m`,ρk −0.02,train/valid 逐位一致),这是全程唯一一次真正的提纯;但剔干净后剩下的只是
+一个**比已知成交额族小一半**、桶内中性后归零的低流动性倾斜。叠到已知族上只有噪声级增量(夏普 +0.3),
+**且一律输给通用筛子 `k_known_xfrozen`(+18.5%、3.15)**。「当筛子」这条 s1 留下的活口已被 s2 否掉。
+**下一步(执行):跑 `hypo3.yaml` 的 25 条,train/valid,优先级 W → Q → R → S。**
 
-(…全文 6275 字符,读 `notes/F114_q25_closeret/state.md`)
+(…全文 6160 字符,读 `notes/F114_q25_closeret/state.md`)
 
-## 研究日志(`notes/F114_q25_closeret/journal.md`:23 条,其中研究员自己写的 14 条)
+## 研究日志(`notes/F114_q25_closeret/journal.md`:24 条,其中研究员自己写的 15 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:51 [执行] R3:开始,准备读留出段
-
-前置检查通过:ledger.json 24 条记录(8 train/8 utrain/8 valid),无 holdout;10_distilled.md 第9行已有「读留出段之前」一节,
-候选(f_orig/f_w30/f_w60/f_fam/f_add)与判据 J1-J7 已写死。list 显示服务器无在跑任务,S6_final 未跑过。
-准备按工单在 configs/F114_q25_closeret.yaml 追加 S6_final 阶段(5 变体,逐字照抄工单表达式)并替换 diagnostics/corr_ids 两块,
-check 通过后跑唯一一次 study.sh final。
 
 ### 2026-10-04 23:53 [auto] ⚠ 读留出段:final S6_final,阶段 S6_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
@@ -89,6 +83,15 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 6. **制度**:2018–2020 三年 ≈0 或负,2021
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 16:12 [主研] 批量扫描 s2 对账与结论
+
+对账:第二批九组全跑完。否定 ⑤(day_flat_ratio 复现原子:A 组 6 条 train 全负 valid 全正)、⑤'(资金加权:B 组 6/6 全负,h_wmean_q25 -14.4 ≈ day_mean -15.9 → 塌陷来自全天聚合本身)、恒等式分解(h_sd_close60 -15.6)、「微观冲击计」(h_amihud15 -4.8)、以及 s1 留下的唯一活口「当已知族的单尾筛子」(scr_xhi_p 2.07、scr_xhi_m 1.75,两个方向都差于不筛 2.22)。支持 E 组(慢化串联无加法,上限 +5.0%/0.93 钉死)、H 组(状态加权是全表最好的叠加)、(乙)跨桶倾斜是全部(桶内 +1.7,dist 0.99 干净)。
+最重要的改判:冻结盘口是污染不是信息。seg_xfrozen_m(原式剔掉近 15 日冻结最重 20%)+5.8/+5.6、夏普 1.80/1.50、ρk -0.02、dist 1.00 —— 夏普比原式(0.70)翻 2.4 倍且 train/valid 逐位一致,全表最稳。s1「0 原子 = 一半信息」作废。
+定论:best_own = seg_xfrozen_m / h_amtexp_mul(+4.3/+12.2、ρk 0.28)/ seg_new_p,全部 ≤ k_known 的一半 → 多头腿仍不可用。best_on_known = h_gate_vol_mix(+16.9/2.58)、h_ov_slowf_pow3(2.49)、h_ov_flat_p025(2.56 但两段相反),对 k_known 只有夏普 +0.3 的噪声级增量,且全部输给通用筛子 k_known_xfrozen(+18.5/3.15)1.6~2.1pp。verdict = 多头腿不可用 + 只是已知族;提纯成功一次但量级只有基准 1/3,升华失败。
+新增三条解剖事实:已知族的多头书整本在成交额最低 40%(z_known_lowliq 与 k_known 逐位相同)而它在最低 20% 桶段内 -4.1%、超配 +80.3% → 增量的位置 = 已知族扎堆桶的桶内重排;叠加项的凸度与冻结段表现单调(p025 -17.1 → p05 -6.4 → pow3 +10.2);flat overlay 的增量落在 2018-2020 和熊市/高波动段,gate 版落在 2021-2022 → 这就是 train/valid 分歧的来源。
+第三
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F114_q25_closeret/orders/`、`notes/F114_q25_closeret/results/`)
 
 - R0:工单 —,结果卡 有
@@ -130,7 +133,7 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 
 ## 已写的 notes(`notes/F114_q25_closeret/`)
 
-`01_expression.md`(3K)、`02_operators.md`(8K)、`03_decomposition.md`(2K)、`04_grammar.md`(6K)、`05_hypotheses.md`(26K)、`06_baseline.md`(14K)、`07_S1_shape.md`(7K)、`07_S2_where.md`(5K)、`07_S3_window.md`(7K)、`07_S4_long.md`(8K)、`07_S5_known.md`(7K)、`10_distilled.md`(16K)、`journal.md`(37K)、`state.md`(9K)、`synthesis.md`(10K)
+`01_expression.md`(3K)、`02_operators.md`(8K)、`03_decomposition.md`(2K)、`04_grammar.md`(6K)、`05_hypotheses.md`(26K)、`06_baseline.md`(14K)、`07_S1_shape.md`(7K)、`07_S2_where.md`(5K)、`07_S3_window.md`(7K)、`07_S4_long.md`(8K)、`07_S5_known.md`(7K)、`10_distilled.md`(16K)、`journal.md`(39K)、`state.md`(10K)、`synthesis.md`(17K)
 
 ## 自写的探针与分析脚本(`studies/F114_q25_closeret/`)
 
@@ -138,3 +141,4 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 ## 结构化结果(`handoff/F114_q25_closeret/results/`)
 
 - `synthesis.json`
+- `verdict.json`

@@ -1,6 +1,6 @@
 # F102_kurt_autocorr — 交接状态
 
-_自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F102_kurt_autocorr` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #3961(批次 B01_single_factors)
 - 表达式:`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)`
@@ -12,20 +12,20 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `synth:F102_kurt_autocorr`:已返回结果,最后动作 10-05 11:30 → `handoff/F102_kurt_autocorr/agents/synth_a93191635af758ebb.md`
   - `verdict:F102_kurt_autocorr`:中断,最后动作 10-05 13:53 → `handoff/F102_kurt_autocorr/agents/verdict_a628b4b5a6f89b3d1.md`
-  - `verdict:F102_kurt_autocorr`:还在跑(多半就是你自己)
+  - `verdict:F102_kurt_autocorr`:已返回结果,最后动作 10-05 15:31 → `handoff/F102_kurt_autocorr/agents/verdict_af1e2cec7e004ff15.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F102_kurt_autocorr/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F102_kurt_autocorr/state.md`,10-05 15:16 更新)—— **先读这个文件**
+## 研究现状(`notes/F102_kurt_autocorr/state.md`,10-05 15:27 更新)—— **先读这个文件**
 
 # F102_kurt_autocorr —— 研究现状(主研,批量扫描 s2 对账之后重写)
 
 `cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` · sg = −1(多头 = 低值) · 挖掘库 #3961
-选拔口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 个点 / ±0.3 夏普。门槛 cov ≥ 0.95、dist ≥ 0.5。
+口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 点 / ±0.3 夏普。门槛 cov ≥ 0.95、dist ≥ 0.5。
 
 ## 1. 现状
 
-两轮批量扫描都读完(s1 94 变体、s2 145 变体)+ 市场解剖两份;综合与**第二轮对账在 `synthesis.md` 末节**。
+两轮扫描都读完(s1 94 变体、s2 145 变体)+ 市场解剖两份;综合与**第二轮对账在 `synthesis.md` 末节**。
 第三批 25 条假设在 `studies/F102_kurt_autocorr/hypo3.yaml`(`study.sh hypo3` **25/25 通过**),等下一轮扫描。
 **留出段已被第一轮研究员读过一次(`07_S_final`,台账记着),s1 / s2 都没再读,以后也不能再读。**
 
@@ -34,9 +34,9 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 +11.3% 仍低 4 点。**在已知族之上冗余**:所有筛子 / 叠加用法(2.57~2.65)都低于 `k_known_xfrozen`(+18.5% / **3.15**)
 至少 0.5 夏普。它**没有桶内选股力**,收益 = 流动性倾斜 + 冻结规避。
 
-(…全文 7279 字符,读 `notes/F102_kurt_autocorr/state.md`)
+(…全文 6693 字符,读 `notes/F102_kurt_autocorr/state.md`)
 
-## 研究日志(`notes/F102_kurt_autocorr/journal.md`:3 条,其中研究员自己写的 3 条)
+## 研究日志(`notes/F102_kurt_autocorr/journal.md`:4 条,其中研究员自己写的 4 条)
 
 最近的 5 条(更早的和全文看文件):
 
@@ -66,6 +66,15 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 为腾出位置,删掉 h3_flip_ret(与 h3_flip_amt 重复的证伪)和 h3_distinct_min60(价格桶方向已被否定);hypo3 仍是 25 条,study.sh hypo3 **
 …(这条日志还有后文,读 journal.md)
 
+### 2026-10-05 15:24 [主研] hypo3 两处换装:加 h3_lagmax60(记忆还是当期)
+
+查算子注册表时发现 **cross_delay 早就有**(定义:`res[d:] = x[:-d]`,今天看到 d 天前的值,窗口 3/5/10/15/30/60/241)—— 上一轮以为写不出来的那一问其实写得出。
+于是加 `h3_lagmax60 = cross_max(cross_delay(pow_2(K), 5), 60)`:**把最近 5 天挖掉**的事件记忆。这是本批最关键的一条,因为 `h_max60` 的 60 日极大**含今天**,
+所以 2.85 可能根本不是「记忆」、只是「现在冻不冻」穿了一件 60 日的外衣 —— 这也正好解释了为什么一个 15 日的**当期**掩码(k_known_xfrozen,3.15)能赢过它 0.3 夏普。
+判据:挖掉近 5 天后夏普仍 ≥ 2.6 → 冻结是**持续的烙印**(事件过后仍被定价),F102 有独立经济内容且对数据时点不敏感;≤ 2 → h_max60 = 当期掩码的一个贵写法,这条因子该退休、直接用掩码。
+两处换装(都是拿低信息量的位置换高信息量的):删 `h3_flip_ret`(与 h3_flip_amt 重复的状态证伪)换 G 组融合两条;删 `h3_rz15`(cs_robust_z 全局稳健 z,与已测的 h_fold_csmean 2.40 / h_winsor_kurt 2.22 高度重叠)换 `h3_lagmax60`。
+hypo3 仍 25 条、**25/25 解析通过**;state.md 第 4 节加了 H 组、第 6 节加了判据,已压到 10,234 字节(8 节)。本轮仍**没起服务器计算、没读测试段**。
+
 ## 配置里的实验计划(`configs/F102_kurt_autocorr.yaml`)
 
 - 标题:3 对分钟收益相关的日内峰度,平方后 15 日求和:主体是 4 分钟局部形态分布的形状(水平 + 日间离散),尾部是近 15 日的涨停封板事件;两条腿要的速度不同。留出段多头腿净超额:原式 hl=1 −0.7% / 原式 hl=5 +2.5% / 记忆拉到 60 日 +7.4%(修订:60 日版本对期限匹配的控制 R² 0.45,多头腿约四成是避开近 60 日封板票)
@@ -94,6 +103,9 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 - `sweep_s2`  10-05 12:12  146 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweep_s2`
 - `anatomy_s2`  10-05 12:16  0 个变体  → `./scripts/study.sh digest F102_kurt_autocorr anatomy_s2`
 - `sweepfinal_s2`  10-05 12:18  8 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweepfinal_s2`
+- `sweep_s3`  10-05 16:26  171 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweep_s3`
+- `anatomy_s3`  10-05 16:34  0 个变体  → `./scripts/study.sh digest F102_kurt_autocorr anatomy_s3`
+- `sweepfinal_s3`  10-05 16:35  8 个变体  → `./scripts/study.sh digest F102_kurt_autocorr sweepfinal_s3`
 - `x1`(自写脚本的输出)  10-03 19:32  exit 0  → `logs/F102_kurt_autocorr_x1.log`
 - `x2`(自写脚本的输出)  10-03 20:05  exit 0  → `logs/F102_kurt_autocorr_x2.log`
 - `x3`(自写脚本的输出)  10-03 23:04  exit 0  → `logs/F102_kurt_autocorr_x3.log`
@@ -102,7 +114,7 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 
 ## 已写的 notes(`notes/F102_kurt_autocorr/`)
 
-`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(5K)、`state.md`(10K)、`synthesis.md`(20K)
+`01_expression.md`(2K)、`02_operators.md`(3K)、`03_decomposition.md`(3K)、`04_grammar.md`(1K)、`05_hypotheses.md`(11K)、`06_baseline.md`(1K)、`07_S1_layers.md`(3K)、`07_S2_windows.md`(2K)、`07_S3_aggregate.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_horizon.md`(4K)、`07_S_final.md`(4K)、`07_conditional.md`(2K)、`07_controls.md`(1K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(8K)、`07x_2_refine.md`(5K)、`07x_3_longleg.md`(8K)、`07x_4_audit.md`(6K)、`07x_5_revision.md`(11K)、`07x_anatomy.md`(1K)、`07x_longleg.md`(1K)、`07x_refine.md`(1K)、`08_variants.md`(3K)、`09_diagnosis.md`(8K)、`10_distilled.md`(12K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(7K)、`state.md`(9K)、`synthesis.md`(20K)
 
 ## 自写的探针与分析脚本(`studies/F102_kurt_autocorr/`)
 
@@ -120,5 +132,6 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F102_kurt_
 - `revised.json`
 - `study.json`
 - `synthesis.json`
+- `verdict.json`
 
 报告:`research/alpha_distillation/F102_kurt_autocorr.md`(10-04 12:07 生成)

@@ -1,6 +1,6 @@
 # F101_day_shine_retstd — 交接状态
 
-_自动生成于 2026-10-05 15:06(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F101_day_shine_retstd` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 day_shine_retstd(批次 B01_single_factors)
 - 表达式:`abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1)), add(in_mean_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))), in_stddev_full(sub(in_slice(Volume, 2, 237), in_delay(in_slice(Volume, 2, 237), 1))))), in_slice(Ret, 2, 237), 5))))`
@@ -12,28 +12,28 @@ _自动生成于 2026-10-05 15:06(`python scripts/recorder.py --brief F101_day_s
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `synth:F101_day_shine_retstd`:已返回结果,最后动作 10-05 11:16 → `handoff/F101_day_shine_retstd/agents/synth_ae7cc08a1070145ff.md`
   - `verdict:F101_day_shine_retstd`:中断,最后动作 10-05 13:53 → `handoff/F101_day_shine_retstd/agents/verdict_a4598521995a689d5.md`
-  - `verdict:F101_day_shine_retstd`:还在跑(多半就是你自己)
+  - `verdict:F101_day_shine_retstd`:已返回结果,最后动作 10-05 15:24 → `handoff/F101_day_shine_retstd/agents/verdict_aba6480b25c40a77e.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F101_day_shine_retstd/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F101_day_shine_retstd/state.md`,10-05 13:51 更新)—— **先读这个文件**
+## 研究现状(`notes/F101_day_shine_retstd/state.md`,10-05 15:20 更新)—— **先读这个文件**
 
 # F101_day_shine_retstd — 现状(主研,2026-10-05 第二轮覆盖重写;以批量扫描 s2 的大表为准)
 
 ## 1. 现状
 
-两轮综合都已做完:s1(102 变体)建机制,s2(149 变体)把 s1 的全部推论对过账,结论已定。
-`notes/F101_day_shine_retstd/synthesis.md` 211 行(末节「## 第二轮(s2)对账与结论」是本轮新增)。
-第三批假设 `studies/F101_day_shine_retstd/hypo3.yaml` 25 条,**25/25 parse**。本轮没有起任何服务器计算,
-**没有读测试段**(`runs/.../sweepfinal_*.json` 未打开)。
+s1(102 变体)建机制,s2(149 变体)把 s1 的全部推论对过账,结论已定。`synthesis.md` 220 行
+(末节「## 第二轮(s2)对账与结论」80 行,含本轮新增的「§4 融合与平滑」补账)。第三批假设
+`studies/F101_day_shine_retstd/hypo3.yaml` **25 条 / 25 parse**(本轮换掉 7 条低信息的、补上 J 组 7 条)。
+没有起任何服务器计算;**没有读测试段**(`runs/.../sweepfinal_*.json` 未打开),所有数字只来自 train / valid。
 
-一句话结论:**它是「5 分钟滚动日内波动的全天平均」在当天截面均值处的 V 形折叠。折叠不可替代、触发机器只能删一半
-(5 分钟窗口要留、μ+σ 阈值要去)。提纯把纯多头夏普从 1.37 抬到 2.68,但净超额只有 +9.7% —— 叠在已知族上逐位打平、
-当筛子不如通用的冻结盘口筛子。按用户的纯多头净超额口径:提纯成功、升华失败、不可用。**
+一句话结论:**它是「5 分钟滚动日内波动的全天平均」在当天截面均值处的 V 形折叠。折叠不可替代;触发机器只能删一半
+(5 分钟窗口要留、μ+σ 阈值要去)。提纯成功 —— 纯多头夏普 1.37 → 2.68;升华失败 —— 净超额只有 +9.7%,
+叠在已知族上逐位打平,当筛子不如通用的冻结盘口筛子。按用户的纯多头净超额口径:不可用。**
 
-(…全文 6224 字符,读 `notes/F101_day_shine_retstd/state.md`)
+(…全文 6092 字符,读 `notes/F101_day_shine_retstd/state.md`)
 
-## 研究日志(`notes/F101_day_shine_retstd/journal.md`:2 条,其中研究员自己写的 2 条)
+## 研究日志(`notes/F101_day_shine_retstd/journal.md`:3 条,其中研究员自己写的 3 条)
 
 最近的 5 条(更早的和全文看文件):
 
@@ -67,6 +67,17 @@ s1 说的「最关键的空白」填上了,答案是没有增量:剥掉已知族
 结论:提纯成功(夏普 1.37→2.68)、升华失败,按纯多头净超额口径不可用。第三批 25 条已落 hypo3.yaml(25/25 parse),
 第一优先 cs_bucket_demean 桶内折叠——解剖里「小票段内 S+2.96 却只放 6% 仓位」这处落差两轮都没被修过。
 
+### 2026-10-05 15:20 [主研] 批量扫描 s2 对账与结论
+
+对账已逐条核回 s2 大表(149 条,只用 train/valid,未开 sweepfinal):折叠不可替代站住(单调对手 h_rv_mono_mean30 ut -4.8%/-0.61);
+s1 的窗口结论方向整个反了——去掩码后 roll5 (2.42/valid 2.78) > roll15 (2.25/2.47) > 全天 std (2.21/valid 1.66),s1 的 win_I 上升斜坡是掩码被稀释的假象;
+s1 读解剖表漏了「段等权超额」,导致「剔清淡段/留热门段」符号全反(lo40 分段 ut 2.51~2.67 但 rho_k 0.62~0.78、逐年形状与 k_known 重合 = 同一笔钱)。
+定论:best_own = fld_Volume_Amt 2.68/+9.7%(rho_k 0.16)、h_sum_rv_amtchg 2.46、h_rv_roll5_fold 2.42(valid 2.78 全族最高);
+best_on_known = scr_xhi_p 2.60/+16.8%、seg_lowliq_m 2.67/+16.0%、h_ov_k_rv_10 2.41(与 k_known 逐位打平);剥掉已知族只剩 h_bk_k_rv +8.4%/2.08。
+本轮新增补账(用户要「融合+平滑看样本内外」直接逼出来的):s2 的平滑 4 条 + 融合 1 条 + overlay 3 条,本因子腿**全部写的是 day_std(全天)**
+——即刚判输的那个核;赢的 RV5 核从没被平滑/融合/叠加过,叠在真门槛 k_known_xfrozen(3.15)上的全表一条都没有。
+所以「平滑已用尽/融合无增量/overlay 打平/越不过 3.15」四句话目前只在错核上成立。hypo3.yaml 因此换掉 7 条低信息假设、补 J 组 7 条(25/25 parse)。
+
 ## 配置里的实验计划(`configs/F101_day_shine_retstd.yaml`)
 
 - 标题:方正「适度冒险」的日频零件:成交量激增分钟之后 5 分钟收益波动(耀眼波动率)的日均值,对截面均值取绝对偏离
@@ -93,6 +104,9 @@ s1 说的「最关键的空白」填上了,答案是没有增量:剥掉已知族
 - `sweep_s2`  10-05 11:47  153 个变体  → `./scripts/study.sh digest F101_day_shine_retstd sweep_s2`
 - `anatomy_s2`  10-05 11:58  0 个变体  → `./scripts/study.sh digest F101_day_shine_retstd anatomy_s2`
 - `sweepfinal_s2`  10-05 12:01  8 个变体  → `./scripts/study.sh digest F101_day_shine_retstd sweepfinal_s2`
+- `sweep_s3`  10-05 16:31  177 个变体  → `./scripts/study.sh digest F101_day_shine_retstd sweep_s3`
+- `anatomy_s3`  10-05 16:36  0 个变体  → `./scripts/study.sh digest F101_day_shine_retstd anatomy_s3`
+- `sweepfinal_s3`  10-05 16:38  8 个变体  → `./scripts/study.sh digest F101_day_shine_retstd sweepfinal_s3`
 - `look`(自写脚本的输出)  10-03 19:28  exit 0  → `logs/F101_day_shine_retstd_look.log`
 - `look2`(自写脚本的输出)  10-03 19:50  exit 0  → `logs/F101_day_shine_retstd_look2.log`
 - `look3`(自写脚本的输出)  10-03 22:45  exit 0  → `logs/F101_day_shine_retstd_look3.log`
@@ -101,7 +115,7 @@ s1 说的「最关键的空白」填上了,答案是没有增量:剥掉已知族
 
 ## 已写的 notes(`notes/F101_day_shine_retstd/`)
 
-`01_expression.md`(1K)、`02_operators.md`(2K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(4K)、`06_baseline.md`(3K)、`07_S1_parts.md`(5K)、`07_S2_background.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_rivals.md`(6K)、`07_S_final.md`(2K)、`07_conditional.md`(1K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_look.md`(6K)、`07x_look2.md`(4K)、`07x_look3.md`(10K)、`07x_review1_audit.md`(7K)、`07x_review2_rev2.md`(13K)、`08_variants.md`(3K)、`09_diagnosis.md`(13K)、`10_distilled.md`(13K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(3K)、`state.md`(9K)、`synthesis.md`(20K)
+`01_expression.md`(1K)、`02_operators.md`(2K)、`03_decomposition.md`(1K)、`04_grammar.md`(1K)、`05_hypotheses.md`(4K)、`06_baseline.md`(3K)、`07_S1_parts.md`(5K)、`07_S2_background.md`(5K)、`07_SA_audit.md`(1K)、`07_SR_rivals.md`(6K)、`07_S_final.md`(2K)、`07_conditional.md`(1K)、`07_controls.md`(1K)、`07_neutralise.md`(2K)、`07x_look.md`(6K)、`07x_look2.md`(4K)、`07x_look3.md`(10K)、`07x_review1_audit.md`(7K)、`07x_review2_rev2.md`(13K)、`08_variants.md`(3K)、`09_diagnosis.md`(13K)、`10_distilled.md`(13K)、`11_risks.md`(4K)、`12_next.md`(2K)、`journal.md`(5K)、`state.md`(9K)、`synthesis.md`(21K)
 
 ## 自写的探针与分析脚本(`studies/F101_day_shine_retstd/`)
 
@@ -119,5 +133,6 @@ s1 说的「最关键的空白」填上了,答案是没有增量:剥掉已知族
 - `revised.json`
 - `study.json`
 - `synthesis.json`
+- `verdict.json`
 
 报告:`research/alpha_distillation/F101_day_shine_retstd.md`(10-04 12:07 生成)

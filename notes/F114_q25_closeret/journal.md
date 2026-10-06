@@ -379,3 +379,12 @@ J6:f_w30 vs f_orig rank相关+0.9220,f_w60 vs f_orig+0.7608,与10_distilled.md�
 
 下一步:跑 hypo.yaml 这 39 条(train/valid,**不能再读留出段**)。重点看 A 组(day_flat_ratio 能否复现原子那一半)、
 F 组(无原子输入重做分桶中性 —— 大表的 bk_* dist 只 0.20,这个问题还没被干净地问过)、G/H 组(筛子与状态门控)。
+
+### 2026-10-05 16:12 [主研] 批量扫描 s2 对账与结论
+
+对账:第二批九组全跑完。否定 ⑤(day_flat_ratio 复现原子:A 组 6 条 train 全负 valid 全正)、⑤'(资金加权:B 组 6/6 全负,h_wmean_q25 -14.4 ≈ day_mean -15.9 → 塌陷来自全天聚合本身)、恒等式分解(h_sd_close60 -15.6)、「微观冲击计」(h_amihud15 -4.8)、以及 s1 留下的唯一活口「当已知族的单尾筛子」(scr_xhi_p 2.07、scr_xhi_m 1.75,两个方向都差于不筛 2.22)。支持 E 组(慢化串联无加法,上限 +5.0%/0.93 钉死)、H 组(状态加权是全表最好的叠加)、(乙)跨桶倾斜是全部(桶内 +1.7,dist 0.99 干净)。
+最重要的改判:冻结盘口是污染不是信息。seg_xfrozen_m(原式剔掉近 15 日冻结最重 20%)+5.8/+5.6、夏普 1.80/1.50、ρk -0.02、dist 1.00 —— 夏普比原式(0.70)翻 2.4 倍且 train/valid 逐位一致,全表最稳。s1「0 原子 = 一半信息」作废。
+定论:best_own = seg_xfrozen_m / h_amtexp_mul(+4.3/+12.2、ρk 0.28)/ seg_new_p,全部 ≤ k_known 的一半 → 多头腿仍不可用。best_on_known = h_gate_vol_mix(+16.9/2.58)、h_ov_slowf_pow3(2.49)、h_ov_flat_p025(2.56 但两段相反),对 k_known 只有夏普 +0.3 的噪声级增量,且全部输给通用筛子 k_known_xfrozen(+18.5/3.15)1.6~2.1pp。verdict = 多头腿不可用 + 只是已知族;提纯成功一次但量级只有基准 1/3,升华失败。
+新增三条解剖事实:已知族的多头书整本在成交额最低 40%(z_known_lowliq 与 k_known 逐位相同)而它在最低 20% 桶段内 -4.1%、超配 +80.3% → 增量的位置 = 已知族扎堆桶的桶内重排;叠加项的凸度与冻结段表现单调(p025 -17.1 → p05 -6.4 → pow3 +10.2);flat overlay 的增量落在 2018-2020 和熊市/高波动段,gate 版落在 2021-2022 → 这就是 train/valid 分歧的来源。
+第三批 25 条写进 studies/F114_q25_closeret/hypo3.yaml(25/25 parse),八组:P 拆冻结两类票(day_at_max/min_ratio)、Q 桶内 vs 跨桶(cs_bucket_demean/_zscore)、R 状态加权是机制还是降剂量(cs_state_rank/cs_flip_by_state + 缺失的线性剂量对照)、S 原子是污染的决定性检验(day_es_ratio_lo)、T 上市天数(cross_age)、U day_topw_mean/day_wstd、V best_own 上限、W 在 k_known_xfrozen 之上还剩什么。优先级 W → Q → R → S。
+本轮零运行、未读测试段;synthesis.md 追加「## 第二轮(s2)对账与结论」(73 行),state.md 覆盖重写为第 5 轮。

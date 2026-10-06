@@ -1,6 +1,6 @@
 # F104_kurt_masktop_amt — 交接状态
 
-_自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #4190(批次 B01_single_factors)
 - 表达式:`day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))`
@@ -12,13 +12,13 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F104_kurt_
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `synth:F104_kurt_masktop_amt`:已返回结果,最后动作 10-05 11:21 → `handoff/F104_kurt_masktop_amt/agents/synth_accae2715d8c6687c.md`
   - `verdict:F104_kurt_masktop_amt`:中断,最后动作 10-05 13:53 → `handoff/F104_kurt_masktop_amt/agents/verdict_a41b25b16372b7086.md`
-  - `verdict:F104_kurt_masktop_amt`:还在跑(多半就是你自己)
+  - `verdict:F104_kurt_masktop_amt`:已返回结果,最后动作 10-05 15:26 → `handoff/F104_kurt_masktop_amt/agents/verdict_a53a8354e270b05d9.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F104_kurt_masktop_amt/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F104_kurt_masktop_amt/state.md`,10-05 15:16 更新)—— **先读这个文件**
+## 研究现状(`notes/F104_kurt_masktop_amt/state.md`,10-05 15:19 更新)—— **先读这个文件**
 
-# F104_kurt_masktop_amt — 研究现状(2026-10-05 第二轮主研重写;接手者先读这一页)
+# F104_kurt_masktop_amt — 研究现状(2026-10-05 第二轮主研;接手者先读这一页)
 
 因子:`day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))`(挖掘库 #4190)。
 口径:A 股纯多头,多头腿扣 15bp 净超额 Lnet / 纯多头夏普 Lshp,半衰期按纯多头书选;train 2018–2021 / valid 20220101–20230807 / utrain 合并。
@@ -34,30 +34,16 @@ _自动生成于 2026-10-05 15:16(`python scripts/recorder.py --brief F104_kurt_
 本页所有数字来自 train / valid。
 
 结论(两轮一致、这一轮在 117 个变体上确认):
-- **原式对纯多头不可用**。ut +1.8% / 0.38,valid **−5.8% / −1.24**;全部多头价值在那 6.5% 冻结盘口段里,剔掉就倒挂到 ut **−2.0%**。
+- **原式对纯多头不可用**。ut +1.8% / 0.38,valid **−5.8% / −1.24**;全部价值在那 6.5% 冻结盘口段,剔掉就倒挂到 **−2.0%**。
 - **树里唯一有价值的子结构是 mask** = 可交易的「流动性下限」。配保尺度 reader 得 ut +13.0~15.1% / Lshp 2.71~2.87,
   但 ρk 0.83~0.93 ⇒ **是已知成交额族里形状更好的成员,不是新因子**(提纯,不是升华)。
 - **建在已知族之上本因子没有净增量**:overlay 六条、本因子当筛子两条、残差、分桶全部严格劣于 k_known。
 
-(…全文 6931 字符,读 `notes/F104_kurt_masktop_amt/state.md`)
+(…全文 6815 字符,读 `notes/F104_kurt_masktop_amt/state.md`)
 
-## 研究日志(`notes/F104_kurt_masktop_amt/journal.md`:6 条,其中研究员自己写的 5 条)
+## 研究日志(`notes/F104_kurt_masktop_amt/journal.md`:7 条,其中研究员自己写的 6 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 12:41 修订接手(第三次):口径改为多头腿;rev2(rev2_long.py)跑完 —— 这条因子对只能做多的人相对已知家族没有增量
-
-接手时的状态:原研究 + 两路审查完成(5 条 major);上一位修订者跑了 rev1(exit 97,但 A/B/D 全、C 大半有结果)并改了 05/06/07_S2/S3/S4/07x_*/08/11,没改 01/09/10/12,也没返回结果。
-用户 2026-10-04 把选拔口径定为「多头腿净超额 + 纯多头夏普,半衰期按纯多头书选」。按这个口径重读 final.json(没有再读留出段),用户口径 训练/测试:
-  原式 hlL 20(=hlS,网格上界):+1.8% / -2.1%,纯多头夏普 0.38 / -0.39
-  f_kurt30 hlL 2:+4.4% / +3.9%,0.89 / 0.79      f_cv30 hlL 1:+3.7% / -1.2%,0.82 / -0.19
-  f_exclcv hlL 1:+16.2% / +12.1%,2.78 / 1.24      f_std30(已知家族基准)hlL 0:+15.4% / +14.1%,2.22 / 1.51
-rev2(exec,只切 train/valid,自检全部对上阶段表与 rev1 日志)量到的:
-  H 半衰期放到网格外:原式 train 净超额在 hl 40 见顶 +5.8%(夏普 1.21),valid 在 hl 20/40/60/120 是 -5.8/-2.8/-2.8/-1.1%,毛超额始终在 0 上下 —— 延长半衰期只省成本,省不出正数。
-    f_kurt30 再平滑 valid 变差(hl 20:-5.0%);已知家族 F001 成员 cross_max(day_std(Amt),9) 在 hl 5 是 +13.7% / +22.2%(hl 0 是 +9.3% / +18.5%)。
-  P 日度配对差:f_exclcv - f_std30 = train +2.4 点(t 1.3)、valid -3.2 点(t -1.4);逐年 2018~2020 为 +6.5/+4.6/+3.3,2021~2023 为 -4.8/-3.1/-3.5。
-  X 排除式叠加(在已知家族多头十分位里剔除本因子最差的 10%/20%,扣换手成本):train +0.2~+1.6 点(t 2~4.7),valid -0.8~+0.2 点;逐年只有 2018、2020 为正。原式的最差 20% 只
-…(这条日志还有后文,读 journal.md)
 
 ### 2026-10-04 12:53 notes 进度:07x_rev2、06/07_* 的多头口径读法、09、10 已写;还差 01/05/08/11/12 与配置注释
 
@@ -98,6 +84,15 @@ best_on_known:没有净增量。最强的 h_known_nofrozen +18.5% / 3.15 与通�
 隐患:h_sqrt_std 的钱几乎全是「买清淡」的段暴露(五档段内 +0.3/−1.0/−5.0/−5.7/−12.0%、书 36.6pp 在最清淡档),而 sub_C_day_std 是全解剖唯一段内都不为负的一列。
 第三批 25 条已写入 studies/F104_kurt_masktop_amt/hypo3.yaml(hypo3 25/25 通过),核心是 cs_bucket_demean 裁决「段溢价 vs 段内选股」、day_at_max/min_ratio 把封顶与封底分开、day_es_ratio_hi/lo 替代 day_kurt、cs_flip_by_state 验「只在缩量日有效」、以及 Amt^0.25 × day_std 这个唯一没试的格点。
 
+### 2026-10-05 15:19 [主研] s2 对账复核:一处更正 + 第三批换一条
+
+复核了 s2 全表与 10 列解剖的每一个引用数字,与 synthesis.md 的 s2 对账节逐项对得上,结论不变(原式不可用;mask + 保尺度 reader 是已知成交额族的改良成员;在已知族之上无净增量)。
+一处更正:sub_C_day_std 的「成交额五档段内都不为负」不成立 —— 实际是 −1.5 / +1.6 / +0.3 / +0.3 / +1.9,最低档仍为负。准确说法是「全解剖最平的一列,最差档只 −1.5%」(次平的是 h_mask_std_m30 −2.0/−1.1/−2.3/−3.1/+3.2)。已改 synthesis.md、state.md、hypo3.yaml 三处。
+顺带把「提纯」的证据从「段内不为负」换成更结实的一条:sub_C_day_std 的书只有 5.9pp 在成交额最清淡档(k_known 80.3pp)、+3.7pp 在市值最低档(k_known +30.8pp)—— 它用 2.4 点净超额换来 +0.63 夏普和一张几乎没有「买清淡 / 买小票」暴露的书,上报时两个数字都要给。
+第三批换了一条:删掉与本因子无关、也不是 s2 结果指向的 h3_semistd_dryup,加入 h3_cand_xfrozen = cs_last_high20(neg(day_std(mask(abs_(Amt)))), cross_max(day_zero_ratio(Ret), 15)) —— 把 s2 两个最强结果相乘、只换底信号这一个子结构,所以差值就是候选在筛子语境下的净增量;≈3.15 则结论彻底关门,≥3.4 则是两轮唯一能交用户的组合版本。hypo3 仍 25/25 通过。
+关于用户问的「融合 / 平滑」:train+valid 已经答完,平滑有害(候选外套 30 日均值 13.0/2.85 → 11.6/2.48)、与已知族加权融合是纯稀释(六个权重 13.1~3.7 全低于 15.4,随 |λ| 单调变差);这条因子上唯一还可能加分的融合形状是筛子型(剔票),不是加权平均。
+没有起服务器计算,没有打开 runs/F104_kurt_masktop_amt/sweepfinal_*.json。
+
 ## 配置里的实验计划(`configs/F104_kurt_masktop_amt.yaml`)
 
 - 标题:成交额的日内脉冲集中度(峰度),但先把不活跃股票的安静分钟垫到全市场均值水平
@@ -127,6 +122,9 @@ best_on_known:没有净增量。最强的 h_known_nofrozen +18.5% / 3.15 与通�
 - `sweep_s2`  10-05 11:39  121 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s2`
 - `anatomy_s2`  10-05 12:02  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s2`
 - `sweepfinal_s2`  10-05 12:14  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s2`
+- `sweep_s3`  10-05 16:13  146 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s3`
+- `anatomy_s3`  10-05 16:35  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s3`
+- `sweepfinal_s3`  10-05 16:37  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s3`
 - `x1`(自写脚本的输出)  10-03 19:33  exit 0  → `logs/F104_kurt_masktop_amt_x1.log`
 - `x2`(自写脚本的输出)  10-03 23:20  exit 0  → `logs/F104_kurt_masktop_amt_x2.log`
 - `audit1`(自写脚本的输出)  10-03 23:56  exit 0  → `logs/F104_kurt_masktop_amt_audit1.log`
@@ -135,7 +133,7 @@ best_on_known:没有净增量。最强的 h_known_nofrozen +18.5% / 3.15 与通�
 
 ## 已写的 notes(`notes/F104_kurt_masktop_amt/`)
 
-`01_expression.md`(3K)、`02_operators.md`(5K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(15K)、`06_baseline.md`(5K)、`07_S1_mask.md`(5K)、`07_S2_resid.md`(6K)、`07_S3_reader.md`(8K)、`07_S4_long.md`(8K)、`07_SA_audit.md`(1K)、`07_S_final.md`(2K)、`07_conditional.md`(2K)、`07_controls.md`(2K)、`07_neutralise.md`(5K)、`07x_anatomy.md`(7K)、`07x_audit.md`(5K)、`07x_longleg.md`(9K)、`07x_rev1.md`(14K)、`07x_rev2.md`(17K)、`08_variants.md`(6K)、`09_diagnosis.md`(10K)、`10_distilled.md`(19K)、`11_risks.md`(5K)、`12_next.md`(3K)、`journal.md`(10K)、`state.md`(10K)、`synthesis.md`(19K)
+`01_expression.md`(3K)、`02_operators.md`(5K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(15K)、`06_baseline.md`(5K)、`07_S1_mask.md`(5K)、`07_S2_resid.md`(6K)、`07_S3_reader.md`(8K)、`07_S4_long.md`(8K)、`07_SA_audit.md`(1K)、`07_S_final.md`(2K)、`07_conditional.md`(2K)、`07_controls.md`(2K)、`07_neutralise.md`(5K)、`07x_anatomy.md`(7K)、`07x_audit.md`(5K)、`07x_longleg.md`(9K)、`07x_rev1.md`(14K)、`07x_rev2.md`(17K)、`08_variants.md`(6K)、`09_diagnosis.md`(10K)、`10_distilled.md`(19K)、`11_risks.md`(5K)、`12_next.md`(3K)、`journal.md`(12K)、`state.md`(9K)、`synthesis.md`(19K)
 
 ## 自写的探针与分析脚本(`studies/F104_kurt_masktop_amt/`)
 
@@ -154,5 +152,6 @@ best_on_known:没有净增量。最强的 h_known_nofrozen +18.5% / 3.15 与通�
 - `revised.json`
 - `study.json`
 - `synthesis.json`
+- `verdict.json`
 
 报告:`research/alpha_distillation/F104_kurt_masktop_amt.md`(10-04 13:03 生成)

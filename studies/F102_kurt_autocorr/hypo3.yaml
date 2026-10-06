@@ -36,7 +36,7 @@ h3_xfroz_max60:  {expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Am
 h3_bdm_amt:      {expr: "cross_mean(pow_2(cs_bucket_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 15)", why: "丁:h_fold_csmean 把折叠点从 0 挪到全市场截面均值就到 2.40、LTO 5.2%→2.5%。正确的中心应该是『同成交额十分位内的典型峰度』—— 低成交额票的峰度本来就高,拿全市场均值当中心等于再做一次流动性暴露"}
 h3_bdm_max60:    {expr: "cross_max(pow_2(cs_bucket_demean(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 60)", why: "把 B 组最有希望的那条配上乙的最佳形状。注意 cs_bucket_demean 保留量纲(cs_bucket_rank 不保),所以『桶内偏离』还能被 pow_2 折叠、被 cross_max 取极值 —— 这是 cs_bucket_rank 版本(1.56)做不到的"}
 h3_bz_amt:       {expr: "cross_mean(pow_2(cs_bucket_zscore(day_kurt(nt_ts_autocorr_s1(Ret, 3)), cross_mean(day_sum(Amt), 30))), 15)", why: "各成交额桶的峰度离散度相差数倍,去均值后的距离仍不可比;除掉桶内标准差。若 zscore 版本明显好于 demean 版本,说明承重的是『相对同类有多反常』而不是『绝对有多尖』"}
-h3_rz15:         {expr: "cross_mean(pow_2(cs_robust_z(day_kurt(nt_ts_autocorr_s1(Ret, 3)))), 15)", why: "峰度是重尾量,截面均值 / 标准差本身被几个封板票主导。中位数 / 1.4826·MAD 标准化后再折叠,对照 h_winsor_kurt 2.22(缩尾)与 h_fold_csmean 2.40(去均值):分清『极端值要不要留』和『中心与尺度估得稳不稳』"}
+h3_lagmax60:     {expr: "cross_max(cross_delay(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 5), 60)", why: "乙 / 戊 的决定性一问,本轮查注册表才发现写得出来(cross_delay = x 向后推 d 天,今天看到的是 d 天前的值)。h_max60 的 60 日极大**含今天**,所以它可能根本不是记忆、只是『现在冻不冻』穿了一件 60 日的外衣 —— 这也解释了为什么一个 15 日的当期掩码(k_known_xfrozen,3.15)能赢过它。这条把最近 5 天挖掉:若夏普仍在 2.6 以上,冻结是一个**持续的烙印**(事件过后仍被定价),这条因子有独立的经济内容、而且对数据时点不敏感;若塌到 2 以下,h_max60 = 当期冻结掩码的一个贵写法,F102 该退休、直接用掩码"}
 
 # ---- C. 把「冻结」拆开:涨停 / 跌停 / 日频印记 / 纯计数(上一轮缺算子,也是甲的决定性再检验)
 h3_atmax60:      {expr: "cross_max(day_at_max_ratio(Close), 60)", why: "甲:day_zero_ratio 把『封在涨停』和『封在跌停』混成一个数,它自己做因子是废的(−0.33)。分开之后未必 —— 封在最高价的分钟占比,一字板读到近 1、正常日近 1/240,取 60 日极大对齐 h_max60 的形状"}

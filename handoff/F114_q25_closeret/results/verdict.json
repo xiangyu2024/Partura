@@ -1,0 +1,157 @@
+{
+ "factor_id": "F114_q25_closeret",
+ "one_line": "冻结盘口是污染不是信息(剔掉它夏普 0.70→1.71),但剔干净之后剩下的只是一个比已知成交额族小一半、且全部输给通用冻结筛子的低流动性倾斜。",
+ "confirmed": [
+  "(乙)多头腿超额全是跨成交额桶倾斜 —— 这次干净地证了:h_bk_slowf_liq 成交额桶内 +1.7%/0.32、h_bk_slowf_price 价格桶内 +1.7%/0.38(dist 0.99),把慢化版的 +4.8% 砍到 1/3",
+  "E 组「慢化串联没有加法」:h_w60_ema30 +4.8/0.84、h_w30_ema30 +4.8/0.87、h_w60_mean60 +4.4 = 单独 w60 +5.1/0.87、mem_ema30 +5.0/0.93 → 内窗与外记忆互为替代品,慢化上限 +5.0%/夏普 0.93 钉死",
+  "推论⑥「把市场状态写进表达式比任何结构改动更有用」:h_gate_vol_mix +14.0/+24.1/+16.9(2.08/4.03/2.58)、h_gate_disp_mix +16.6(2.52)是全表最好的叠加,高于所有纯结构变体(顶 +5.0%/0.93)",
+  "线性叠加原式确实稀释:6 个权重点(ov_p025/p05/p10/m025/m05/m10)全部差于 k_known 单独,|w| 单调向下",
+  "下尾条件均值 ≈ 单个顺序统计量:z_tail_q25_15 +3.2/0.77 ≈ v_base +3.6/0.70、z_tail_q25_60 +4.2/1.03 ≈ win_B_60 +5.1/0.87 → s1「那 2pp 是估计噪声不是尾部信息」成立",
+  "H13「多头腿不可用」:best_own 三条(+5.8 / +4.3~+12.2 / +3.8~+5.9)全部 ≤ k_known 的一半"
+ ],
+ "refuted": [
+  "推论⑤「day_flat_ratio 能复现原子那一半」被否定且方向相反:A 组 6 条冻结状态因子 train 全负 valid 全正(h_flat_mean15 -4.3/+8.6、h_flat_ema30 -3.0/+9.5、h_flat_w60 -3.4/+9.4、z_zero_mean15 -5.2/+8.2、z_zero_ema30 -4.1/+8.9;q25/tail/Amt 三条 dist 0.13/0.18/0.18 ✗)→ 冻结状态本身没有稳定方向",
+  "推论⑤'「day_wmean / day_signed_ratio 的资金加权读数更干净」:B 组 6/6 全负(h_wmean_q25 -14.6/-13.7、h_sgn_ema30 -4.3/-4.3、h_sgn_tail15 -3.2、h_sgn_q25 -2.2、h_wmean_tail_ema -0.6、h_pos_q25 dist 0.06 ✗);h_wmean_q25 ≈ day_mean -15.9 → 塌陷来自「全天聚合」本身,不是等权死分钟",
+  "恒等式 -q25=(scl-loc)/2「两半各载一半」:C 组 h_sd_close15 -0.1%、h_sd_close60 -15.6%(≈ cross_max 的 -16.1)、方向那一半 h_pos_q25 -4.1/dist 0.06 → 两半单独都无效,恒等式分解无用",
+  "「微观冲击计」这条机制叙事:I 组 h_amihud15 -6.0/-2.0/-4.8,日内 Amihud 不仅不包住原树还是负的",
+  "s1 留下的唯一活口「增量只能以单尾筛子形式存在」:scr_xhi_p(已知族剔掉本因子最差 20%)+10.8/+20.0/+13.5、2.07、scr_xhi_m +11.0/1.75 —— 两个方向都差于不筛(2.22),而换成 day_zero_ratio 做同样的筛子就是 3.15",
+  "H19「冻结段是它的优势所在」改写:段内自建书确实 +7.7%(k_known -10.9%),但整体最优是反过来不买冻结票(seg_xfrozen_m 夏普 1.71 vs seg_xfrozen_p -2.50)",
+  "D 支线(day_durbin_watson)有更高天花板:h_dw_ema30 +4.8/0.50、h_dw_w60 +4.7、h_dw_tail15 +3.5 与慢化原式同高;h_bk_dw_liq 桶内中性后只 +1.3 → 它也只是流动性倾斜",
+  "「低流动性分段能把它救出来」:z_known_lowliq(已知族只在成交额最低 40% 里做)与 k_known 三段逐位相同 → 分段是 no-op;seg_lowliq_m 用本因子在同一段里排序只 +10.7/1.77 < +15.4/2.22",
+  "软 AND 形式的筛子:h_scr_flat_mul(两秩相乘)+5.8/-2.1,train 与 valid 符号相反",
+  "C 组的顺序/集中度支线:h_gini_amt15 -5.9/+10.3、h_centroid_amt_ema -5.0/+4.8、h_closeshare_ema +7.1/-7.6 —— 三条 train 与 valid 全部符号相反"
+ ],
+ "best_own": [
+  {
+   "id": "seg_xfrozen_m",
+   "expr": "cs_last_high20(neg(cross_quantile_q25(day_close(Ret), 15)), cross_max(day_zero_ratio(Ret), 15))",
+   "note": "原式方向 + 剔掉近 15 日冻结最重的 20%。train/valid/utrain +5.8/+5.6/+5.8、Lshp 1.80/1.50/1.71、LTO 3.7%、ρk -0.02、dist 1.00。把原式的夏普从 0.70 抬到 1.71,且 train 与 valid 几乎逐位相同 —— 全表唯一这么稳的一行,与已知族完全无关。反向版 seg_xfrozen_p -10.9/-2.50 对称确认。全程唯一一次真正的提纯,但量级只有 k_known 的 1/3。"
+  },
+  {
+   "id": "h_amtexp_mul",
+   "expr": "mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_rank(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))))",
+   "note": "慢化原式 × 个股量能扩张(软 AND)。+4.3/+12.2/+6.6、Lshp 0.76/2.28/1.17、LTO 只 2.5%、ρk 0.28。两段同向为正,且 h_bk_slowf_amtexp 显示「量能扩张」这条腿在放量桶内中性后仍 +4.8%/0.90 没掉 —— 它与成交额水平族是两件事。"
+  },
+  {
+   "id": "seg_new_p",
+   "expr": "cs_first_low40(cross_quantile_q25(day_close(Ret), 15), cross_valid_count(day_last(Close), 241))",
+   "note": "只在上市天数最短 40% 里按原式选。+3.8/+5.9/+4.4、Lshp 1.02/1.89/1.25、ρk 0.13。两段同向、与已知族近乎无关,但分段变量 cross_valid_count 在老票上饱和,所以这一问还没被干净地提过(hypo3 的 h3_age_low20_slowf 用 cross_age 重做)。注:seg_lowliq_m +7.9/+17.6/+10.7、1.77 数字更高,但分段变量就是成交额水平、ρk 0.75,算已知族的改写,不计入 best_own。"
+  }
+ ],
+ "best_on_known": [
+  {
+   "id": "h_gate_vol_mix",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), cs_mean(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))))",
+   "note": "已知族 + 按市场量能状态加权的慢化原式。+14.0/+24.1/+16.9、Lshp 2.08/4.03/2.58。对 k_known(+12.6/+22.3/+15.4、2.22):净 +1.4/+1.8/+1.5pp(在 ±3pp 噪声带内)、夏普 +0.30/+0.57/+0.36(刚出 ±0.3 带),两段同向 → 弱增量,不能宣称。对 k_known_xfrozen(+18.5、3.15):净 -1.6pp、夏普 -0.57,输。"
+  },
+  {
+   "id": "h_ov_slowf_pow3",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(pow_3(cs_rank(cs_winsor(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)))), 1.0))",
+   "note": "已知族 + 慢化原式的凸单尾罚项。+13.4/+23.9/+16.4、Lshp 1.99/3.87/2.49。对 k_known 净 +0.8/+1.6/+1.0pp、夏普 +0.21/+0.41/+0.27;对 k_known_xfrozen 输 2.1pp / 0.66 夏普。与 h_gate_vol_mix 在噪声内无差别 → 「凸化」和「状态加权」可能是同一件事(都在削弱叠加项的平均剂量),这个 confound 缺一个线性 0.5 的剂量对照(hypo3 的 h3_ov_slowf_p05)。"
+  },
+  {
+   "id": "h_ov_flat_p025",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(day_flat_ratio(Close), 15)), 0.25))",
+   "note": "已知族 + 冻结比例罚项(小权重)。+14.2/+20.4/+16.0、Lshp 2.25/3.36/2.56。train 比 k_known 好 +1.6pp/+0.47 夏普但 valid 差 -1.9pp/-0.10 → 不稳;0.5 权重版 h_ov_flat_p05 更极端(train +3.0pp/+1.03 夏普,valid -6.6pp/-0.69)。原因已找到:flat overlay 的增量落在 2018–2020 和熊市/高波动段,gate 版落在 2021–2022。"
+  }
+ ],
+ "verdict": "**多头腿不可用 + 只是已知族。** 提纯成功过一次:seg_xfrozen_m(原式剔掉近 15 日冻结最重 20%)把夏普从 0.70 抬到 1.71、ρk -0.02、train/valid 逐位一致,这是两轮扫描里唯一一条「稳且与已知族无关」的东西 —— 但净超额只有 +5.8%,是 k_known(+15.4%)的 1/3,纯多头腿仍然不可用。升华失败:三条最好的 on-known 版本对 k_known 只有净 +1.0~+1.5pp(噪声带内)、夏普 +0.27~+0.36(刚出界)的弱增量,而对通用筛子基准 k_known_xfrozen(+18.5%、夏普 3.15)**一律输掉 1.6~2.1pp 和 0.57~0.66 夏普** —— 用户已经有的那个筛子比我们在这条因子上造出的任何东西都好。「当筛子」这条 s1 留下的唯一活口被明确否掉(scr_xhi_p 2.07、scr_xhi_m 1.75,两个方向都差于不筛的 2.22)。机制叙事被改写两次:不是微观冲击计(h_amihud15 -4.8%、资金加权 B 组 6/6 全负、恒等式两半单独读 -0.1%/-15.6%),0 原子也不是「一半信息」而是**污染**(冻结状态单独当因子 train/valid 反号,剔掉它才涨)。剩下的是一个「被已知成交额族做得更好的低流动性倾斜」:成交额桶内与价格桶内中性后净超额从 +4.8% 掉到 +1.7%(dist 0.99,干净)。对用户唯一可能的用法是把 seg_xfrozen_m 当低相关小配菜交给组合层,这是组合层面的决定,不是本因子层面的。第三批 25 条里真正能翻盘的只有 W 组(在 k_known_xfrozen 之上还剩什么)和 Q 组(用 cs_bucket_demean 问「已知族扎堆桶里的桶内重排」),其余是机制收尾。",
+ "lab_findings": [
+  {
+   "id": "LF-F114-1",
+   "claim": "「0 原子 / 冻结盘口」(封板、停牌、无成交)直接当因子读会得到 train/valid 符号相反的东西;它的正确用法是**排除筛子**,而且这个筛子对任何依赖小盘/低流动性倾斜的因子都值 +1~+2pp 和 +0.9 夏普。",
+   "evidence": "A 组 6 条冻结状态因子单独当因子:h_flat_mean15 -4.3/+8.6、h_flat_ema30 -3.0/+9.5、h_flat_w60 -3.4/+9.4、z_zero_mean15 -5.2/+8.2、z_zero_ema30 -4.1/+8.9(train 全负 valid 全正)。反过来当筛子:k_known_xfrozen = cs_last_high20(neg(cross_mean(day_std(Amt),30)), cross_max(day_zero_ratio(Ret),15)) 把 k_known 从 +12.6/+22.3(1.78/3.46)抬到 +16.4/+23.2(2.81/3.98);同一个筛子用在本因子上(seg_xfrozen_m)把它从 +1.8/+8.1(0.33/1.78)抬到 +5.8/+5.6(1.80/1.50)、ρk -0.02。两个完全不同的因子上同向、同量级。",
+   "operators": [
+    "day_zero_ratio",
+    "day_flat_ratio",
+    "cs_last_high20",
+    "cross_max"
+   ],
+   "recheck": "① 若基准因子的多头书本来就不碰小盘/低流动性(例如大盘动量),剔掉冻结票应该无效 —— 这一条只在小票倾斜的书上验证过;② 筛子档位只试过 20%,40% 档(cs_last_high40)未试;③ 科创板 ±20% 涨跌幅、无一字板,day_zero_ratio 在那里的语义不同(科创板占比只 4.0%,未单独验证)。"
+  },
+  {
+   "id": "LF-F114-2",
+   "claim": "分钟级叶子一旦经过**全天聚合**就会彻底塌陷(-14~-16%、方向翻转),而 day_last / day_max / day_min 这类顺序统计量不会。塌陷的原因是聚合宽度,不是加权方式 —— 换成资金加权的全天平均同样塌。",
+   "evidence": "同一外壳 cross_quantile_q25(·,15) 换叶子:day_mean/day_sum -19.1/-7.9/-15.9(Lshp -2.11、ρo 0.00、方向翻转)、day_wmean(Ret,Amt) -14.6/-13.7/-14.4(Lshp -2.31)—— 两者几乎相同;而 day_last(原式)+1.8/+8.1/+3.6、day_max -3.6、day_min -4.8。s1 猜「day_mean 塌陷是因为等权了没有成交的死分钟」,day_wmean 这一条把这个解释排除掉。",
+   "operators": [
+    "day_mean",
+    "day_sum",
+    "day_wmean",
+    "day_last",
+    "day_max",
+    "day_min"
+   ],
+   "recheck": "① 只在「喂有符号的分钟收益 Ret」上验证过;喂无符号量(Amt、Volume)时 day_sum 本身就是标准的流动性读数,不适用;② day_topw_mean(只取最重的 10% 分钟)介于两者之间,尚未测(hypo3 的 h3_topw_tail_q25)。"
+  },
+  {
+   "id": "LF-F114-3",
+   "claim": "A 股纯多头口径下,成交额水平族(cross_mean(day_std(Amt),30) 一类)的多头书**整本已经落在成交额最低 40% 之内**,所以再给它加一层「只在低流动性里选」的分段是严格的 no-op;而它在自己扎堆的那个桶**里面**是亏钱的。想在这个家族上拿增量,只有「桶内重排」一条路,叠加项必须先 cs_bucket_demean,否则会同时改掉跨桶倾斜。",
+   "evidence": "z_known_lowliq = cs_first_low40(neg(k_known), cross_mean(day_sum(Amt),30)) 与 k_known 的三段读数**逐位相同**(+12.6/+22.3/+15.4、1.78/3.46/2.22、LTO 3.4%);市场解剖:k_known 在 20 日成交额最低 20% 桶**段内 -4.1%**、持仓超配 +80.3%。叠上 flat / 本因子的 overlay 后那一格由负转正(h_ov_flat_p05 +3.2%、h_gate_vol_mix +5.0%、h_ov_flat_p025 +5.0%),同时超配从 +80.3% 降到 +29~+58%。",
+   "operators": [
+    "cs_first_low40",
+    "cs_bucket_demean",
+    "cs_bucket_rank",
+    "cross_mean",
+    "day_sum",
+    "day_std"
+   ],
+   "recheck": "① 只在 2018–202308、A 股全市场、等权基准、扣 15bp 下验证;② 「桶内重排真的能赚钱」还没有被证实 —— 本轮只证明了 overlay 能把那一格从负转正,而 overlay 同时动了跨桶倾斜,干净版(h3_ov_bdm_known)未跑;③ 桶的定义用的是 20/30 日成交额,换成流通市值可能不同(立方体里没有流通市值字段)。"
+  },
+  {
+   "id": "LF-F114-4",
+   "claim": "叠加项的**形状**(线性 vs 凸)和它的**剂量**是两件事,而且形状能让它在病态段上的符号反过来。所以扫 overlay 必须同时扫 |w| 和形状;只扫权重大小会错过符号翻转,而只扫形状又会把「凸化」与「等效降剂量」混在一起。",
+   "evidence": "同一个叠加项 cross_mean(day_flat_ratio(Close),15) 叠在 k_known 上,在「近 15 日有冻结盘口」段(占 6.5%、段等权 -67.4%)的净超额随凸度单调:k_known 自己 -10.9% → 线性 w=0.25 **-17.1%** → 线性 w=0.5 **-6.4%** → pow_3 w=1.0 **+10.2%**。次新段同样:k_known +8.6% → pow3 版 +33.2%。全市场层面 pow3 版与 gate 版在噪声内无差别(2.60 vs 2.58),而两者都比线性版好 —— 这正是「凸化 ≟ 降剂量」这个 confound 的来源,s2 里缺了慢化版线性 w=0.5 这个对照。",
+   "operators": [
+    "pow_3",
+    "mul",
+    "add",
+    "cs_rank",
+    "cs_state_rank"
+   ],
+   "recheck": "① 只在「叠加项与基准同向、作为单尾罚项」这一种用法上验证;② pow_3 作用在 cs_rank ∈ (0,1] 上才是单尾压缩,作用在去均值/z 分数上含义完全不同;③ 剂量对照(h3_ov_slowf_p05)未跑,所以「凸化本身有贡献」目前**未被证实**。"
+  },
+  {
+   "id": "LF-F114-5",
+   "claim": "按 utrain(train+valid 合并段)排序会把一半 train/valid 符号相反的变体排到表头,所以读批量扫描表必须逐条看 train|valid 两列;「两段同向」应当是候选的硬门槛,而不是看完排序再说。",
+   "evidence": "s2 的 129 行里按 utrain 夏普排序的前列包含 h_ov_flat_p05(train +15.6/2.81,valid +15.7/2.77,但相对 k_known 是 train +3.0pp / valid -6.6pp)、h_scr_flat_mul(+5.8/-2.1)、h_bk_flat_liq(+7.4/-8.3)、h_closeshare_ema(+7.1/-7.6)、h_gini_amt15(-5.9/+10.3)、A 组全部 6 条(train 负 valid 正)。原因可定位:flat 类叠加项的增量落在 2018–2020 与熊市/高波动段,gate 类落在 2021–2022,而 train = 2018–2021、valid = 2022–202308。",
+   "operators": [],
+   "recheck": "① 这是本项目 train=2018–2021 / valid=2022–202308 这一种切分下的现象,换切分点要重新看;② 「两段同向」门槛会连带砍掉真实的制度切换型因子 —— 对这类因子应该改成「在表达式里把制度写成状态权重」再看两段(s2 的 gate 两条就是这么做出来的)。"
+  },
+  {
+   "id": "LF-F114-6",
+   "claim": "内滚动窗口加长和外部记忆(EMA / 均值 / 线性衰减)在这类日轴低通上是**替代品而不是互补品**:串联两者没有任何加法,而且慢化买到的全部是换手下降,不是新信息。",
+   "evidence": "单独:w60 +5.1%/Lshp 0.87(hlL 自动从 20 掉到 3)、mem_ema30 +5.0%/0.93/LTO 1.5%、mem_mean60/ema60/decay60 ≈ +4.9%。串联:h_w60_ema30 +4.8/0.84/LTO 1.2%、h_w30_ema30 +4.8/0.87、h_w60_mean60 +4.4/0.78 —— 全部等于或略低于单独。原式不滚动(iso_A)毛超额最高而净 -2.0%、LTO 10.5%;毛超额不随慢化上升。",
+   "operators": [
+    "cross_ema",
+    "cross_mean",
+    "cross_decay_linear",
+    "cross_quantile_q25"
+   ],
+   "recheck": "① 在「毛超额不随慢化上升」的因子上成立;若一个因子的毛超额本身随慢化上升(真实的慢变量),串联可能确实有加法;② 只测到 w60 / ema60,更长的窗口未测;③ 每个变体都重拟合 hlL,所以这条结论是「在各自最优半衰期下」的比较。"
+  }
+ ],
+ "hypotheses_written": 25,
+ "new_operator_requests": [
+  {
+   "name": "cs_bucket_resid(y, x)",
+   "definition": "把 y 对 x 在当日截面上做一元线性回归(或对 log(x) 回归)后的残差,保留 y 的量纲;与 cs_bucket_demean 的区别是用连续的 x 而不是十分位格子,因此不会在桶边界上丢掉倾斜、也不会被「桶内只剩两只票」弄成 NaN。",
+   "why": "F114 的核心问题是「跨桶倾斜是全部还是桶内也有信息」。现有工具里 cs_bucket_rank 把量纲扔掉(+1.7%)、cs_regres 只能对另一条「因子」回归(res_known/res_liq 走的是秩空间、换手跳 3~8 倍)、cs_bucket_demean 是十分位格子。做 overlay 时需要的是「不动基准的跨桶倾斜、只改桶内排序」的那个分量,而十分位格子在成交额这种重尾变量上边界很粗:最低 20% 桶里 k_known 段内 -4.1%、超配 +80.3%,一个格子里的离散度就已经跨一个量级。"
+  },
+  {
+   "name": "cs_last_high10 / cs_last_high30(或把档位做成参数)",
+   "definition": "与 cs_last_high20 同语义,把被压到最底的比例改成 10% / 30%(理想情况是 cs_last_high(y, x, q))。",
+   "why": "本轮最重要的一条结论就是「冻结盘口要当排除筛子用」,而这个筛子一共只有 20% 和 40% 两个档(cs_last_high20 / cs_last_high40),无法做剂量—响应曲线。冻结段只占 6.5%,20% 这一档很可能剔过了头 —— k_known_xfrozen 已经是全表最强(+18.5%/3.15),它到底是不是这条路的最优点,现在答不出来。"
+  },
+  {
+   "name": "day_limit_lock(x, w)",
+   "definition": "当天「取值等于当日最大(或最小)值、且该分钟成交额为 0」的分钟占比 —— 即把 day_at_max_ratio 的「封在高点」与「封住且没有成交」两个条件做 AND;符号由封在高点(+)还是低点(-)给出。",
+   "why": "s2 发现冻结段里有两类票符号相反(同一个叠加项线性版 -6.4%、凸版 +10.2%),hypo3 的 P 组用 day_at_max_ratio / day_at_min_ratio 去拆。但这两个算子分不开「涨停一字板(封住且无成交)」和「盘中触及日高后正常回落(价格等于日最大值的那一分钟仍有成交)」—— 在 A 股这是两件经济含义完全相反的事,而前者才是真正该被剔掉的那一类。两个条件的 AND 目前写不出来:算子语法支持两个张量操作数,但没有「分钟级 AND 后再求占比」的原语。"
+  }
+ ],
+ "tooling_problems": [
+  "`./scripts/study.sh table <fid> s2 --all` 的输出 37.6KB,超过单次工具返回上限被落盘成临时文件 —— 不是 bug,但主研读表要先 `wc -l` 再分段读,否则只能看到前 2KB 的预览(我这一轮是分三次 sed 读完的)。",
+  "`cross_age(x)` 给「数据起点就有值」的股票从 10000 起算,于是在 2018 年起点的面板上 92.9% 的票共享同一个数值。拿它做 `cs_bucket_rank` / `cs_bucket_demean` 的分桶变量时,这个大并列块会被 `_pct_rank` 的 tie-break 任意切进多个十分位,「老票」那几个桶里的中性化实际上退化成全市场排名的随机子集。文档里没有警告,hypo3 的 T 组因此改用 `cs_first_low20`(只取最短 20%)而不是分桶。",
+  "`cross_semistd_neg/pos` 喂有符号序列(day_close(Ret))→ 内部取对数变化,cov 掉到 0.21;`cross_madz` 喂带 0 点质量的序列 → MAD→0、cov 0.70、净 -6.8%。两个算子的 docstring 都说了「正值序列」/「稳健」,但引擎不报错、只在 cov 列里体现,很容易被当成「这个想法不对」而不是「估计量被喂错了」。建议在 digest 里对 cov < 0.95 的行直接标出触发原因。",
+  "`study.sh table` 只 grep 本地 `logs/<fid>_sweep_<tag>.log`,而解剖那次运行会把 sweep 的日志覆盖掉 —— s1 的回测表现在已经打不出来(上一轮已记录,s2 同样的风险仍然存在)。坑在 `scripts/` 里,按规则我没有改。"
+ ]
+}

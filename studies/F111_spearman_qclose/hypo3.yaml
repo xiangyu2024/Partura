@@ -1,0 +1,59 @@
+# F111_spearman_qclose 第三批假设(主研,2026-10-05,批量扫描 s2 对账之后)
+# 依据:notes/F111_spearman_qclose/synthesis.md「## 第二轮(s2)对账与结论」。
+# 身份:f_i ∝ corr(自己 10 日价格路径的时间秩, 全市场等权共识秩路径) ≈ 自身路径单调性 × 市场路径方向。
+# s2 的三条硬事实,这一批全部建在它们上面:
+#   (1) 自己最好的版本是 seg_xfrozen_p = cs_last_high20(f, cross_max(day_zero_ratio(Ret), 15)) +13.5% / 2.46、ρk 0.11;
+#       同一个想法用 cross_mean 写(h_excl_zero / h_excl_flat)只有 +11.8 / +11.3 ⇒ 聚合算子(max vs mean)是关键。
+#   (2) 建在已知族上的任何用法(h_ov_bk / ov_m025 / scr_xhi_m,+15.5~15.6% / 2.32~2.35)都打不过
+#       k_known_xfrozen(+18.5% / 3.15)⇒ 对已知族没有可量出的增量;但那些用法都只叠在 k_known 上,
+#       「叠在 k_known_xfrozen 上」这一格 s2 根本没量过 ⇒ h3_xfz_plus_f 补这一格,其余权重旋钮不再碰。
+#   (2b) 两条筛子口径的不对称(s2 新事实):已知族剔掉 f 最低 20%(scr_xhi_m)=+15.5% / 2.35,与 k_known 同档;
+#       剔掉 f 最高 20%(scr_xhi_p)塌到 +5.3% / 0.80、LTO 11.5% ⇒ 已知族多头腿本来就压在 f 的高分区里,
+#       而本来就不碰 f 的低分区 ⇒ 「ρk 只 0.42」是被中段和低分区稀释的,多头腿上的重叠远高于 0.42。
+#   (3) 显式 O(N) 机制写法 h_mkt_explicit 失败(−0.9%),因为「市场方向」被我用「截面中位 10 日收益减它的 241 日均值」
+#       代理错了;现在有了 cs_state_rank / cs_flip_by_state / select_where,可以把市场状态直接写进表达式。
+# 窗口池:ts_* / cs_state_rank [1,5,10,20,30,40,50];cross_* / in_* [3,5,10,15,30,60,241]。
+# ts_spearman 在 d=50 OOM(exit 97),长窗口一律走 ts_pearson(s2 已证 h_pe_qc10 与原式 ρo 0.98、同档)。
+
+# ---- A. s2 最好的两件事叠起来,以及筛子的档位 / 窗口(这一轮结果直接指向的下一步)----
+h3_best2:        {expr: "cs_last_high20(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))", why: "s2 自己最好的两件事还没合过:便宜内核+最好载体+最好窗口(h_pe_last20 +13.2% / 2.37)和最好的筛子(seg_xfrozen_p +13.5% / 2.46)。两者 ρo 只 0.86 / 0.53,改的是不同的东西,若可加应该到 +14~15% / 2.6 以上;若不可加,就坐实「提纯只有一条通路」"}
+h3_xfz40:        {expr: "cs_last_high40(ts_pearson(day_last(Close), 20), cross_max(day_zero_ratio(Ret), 15))", why: "筛子档位从 20% 加到 40%:冻结盘口段只占 6.5%,剔 20% 已经把它压到 1.3%,再加一档测的是「剔的是冻结本身还是整片薄盘」—— 若 40% 继续变好,真正该剔的不是冻结事件而是流动性下沿"}
+h3_xfz_w60:      {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_zero_ratio(Ret), 60))", why: "筛子窗口 15 → 60:s1 已证这条因子的承重量是「持久的股票属性」而不是事件,若「经常封板/停牌」也是属性,60 日窗口应不差于 15 日且换手更低"}
+
+# ---- B. 筛子里的「冻结」到底是什么事件(只有新算子才分得开)----
+h3_xfz_flatmax:  {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_flat_ratio(Close), 15))", why: "把 h_excl_flat(+11.3%)里唯一的 cross_mean 换成 cross_max,别的一个字不动:这一格单独回答「s2 里 mean 比 max 差 2.2pp 是聚合错了还是度量错了」,是本批最便宜的定案"}
+h3_xfz_crossflat: {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_flat_ratio(day_quantile(Close), 15))", why: "伪影本身是**日间**并列(10 天中位价不动 ⇒ 秩路径 = 完美上升),而 s1/s2 只能用日内 day_flat_ratio 代理;cross_flat_ratio 是 s1 点名要的算子,直接量日间相同的占比"}
+h3_xfz_atmax:    {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_at_max_ratio(Close), 15))", why: "封在当日最高价(涨停/一字板)是把价格钉住的一种事件;day_zero_ratio(Ret) 把涨停、跌停、停牌混成一团,这条单独剔涨停封板"}
+h3_xfz_atmin:    {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), cross_max(day_at_min_ratio(Close), 15))", why: "同上剔跌停封板。s2 发现剔除冻结盘口会把空头腿从 +31% 打到 −8%(钱全在那 6.5% 里),这两条分开才知道是涨停那一侧还是跌停那一侧"}
+h3_xfz_coarse:   {expr: "cs_last_high20(ts_spearman(day_quantile(Close), 10), neg(cross_min(day_distinct_ratio(Close), 15)))", why: "换一个完全不靠「不动」的度量:近 15 日里走过价位最少的那一天有多粗(低价票在一个 tick 的格子上很粗)。若它也能救回来,真正的失效原因是价格格子太粗而不是封板"}
+
+# ---- C. 并列伪影到底值多少钱(cross_flat_ratio 让它第一次能被单独计价)----
+h3_flat_iso:     {expr: "cross_flat_ratio(day_quantile(Close), 15)", why: "把伪影单独拿出来当因子:若「近 15 日中位价有多少天没动」本身就有净超额,f 的一部分收益就是它;s1 只能用剔除并列格子的自写探针间接量"}
+h3_f_minus_flat: {expr: "cs_regres(cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(cross_flat_ratio(day_quantile(Close), 15)))", why: "把「日间不动占比」从 f 里线性剥掉,和 h3_flat_iso 成对:两条一起把 §1.6 伪影的贡献从「只影响换手」还是「也影响收益」里一次性判掉(h_f_minus_eff 的同款做法掉 2.4pp)"}
+
+# ---- D. 桶内去均值 / 桶内 z 分数:s1 想要的「同类股票的典型值」,之前只有 cs_bucket_rank ----
+h3_bkz_amt241:   {expr: "cs_bucket_zscore(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 241))", why: "h_bk_amt241(bucket_rank)掉到 +8.0% / 1.48。f 有界于 [−1,1] 且在低流动桶里被并列挤在端点,各桶离散度差数倍,bucket_rank 把幅度压平;z 分数保留「相对同类有多突出」。若回到 +11% 以上,损失是压平幅度造成的,不是倾斜"}
+h3_bkd_amt241:   {expr: "cs_bucket_demean(ts_spearman(day_quantile(Close), 10), cross_mean(day_sum(Amt), 241))", why: "同上只去中心、不除桶内标准差:和 h3_bkz_amt241 成对,区分「中心该是同类的典型值」和「尺度要可比」两件事"}
+h3_bkz_act:      {expr: "cs_bucket_zscore(ts_spearman(day_quantile(Close), 10), div(cross_mean(day_sum(Amt), 10), cross_mean(day_sum(Amt), 241)))", why: "h_act_bucket 是 s2 全部桶内写法里最好的(+9.9% / 1.92,ρk 只 0.21 —— 与已知族几乎正交),因为相对活跃度不是市值代理、分桶不会切掉流动性倾斜;换成保留幅度的 z 分数看能不能再上一档"}
+h3_bkz_age:      {expr: "cs_bucket_zscore(ts_spearman(day_quantile(Close), 10), cross_age(day_last(Close)))", why: "解剖里最刺眼的一格:次新段(7.1%)段等权 −28.7% 是陷阱、段内选股力却最强 +16.9%。按上市天数分桶再做桶内 z 分数,正好留下段内排序、切掉段等权陷阱 —— 这个写法 s1 写不出(既没有 age 也没有 bucket_zscore)"}
+
+# ---- E. 上市天数:不饱和的 age 代替被 241 窗口截断的 valid_count ----
+h3_xyoung_age:   {expr: "cs_last_low20(ts_spearman(day_quantile(Close), 10), cross_age(day_last(Close)))", why: "h_excl_young 用 cross_valid_count(·,241) 得 +12.9% / 2.27,但那个量在 241 日就饱和,分不清「上市 300 天」和「上市 10 年」;cross_age 不饱和,若 +12.9% 是真的,这条应该更干净"}
+
+# ---- F. 市场状态写进表达式:h_mkt_explicit 失败处的正确写法 ----
+h3_flip_state:   {expr: "cs_flip_by_state(ts_spearman(day_quantile(Close), 10), day_last(Close))", why: "f ≡ 市场方向 × 自身趋势。cs_flip_by_state 在市场价格水平处于 241 日高位时取 +rank(f)、低位时取 −rank(f):若 f 已经自带一次市场方向,这一步就是再乘一次、应退回无条件反转(h_mkt_undo −9.1% 那一档);若反而更好,说明 f 自带的条件化不完全"}
+h3_sel_dir:      {expr: "select_where(greater(cs_state_rank(day_last(Close), 20), 0.5), cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(cross_mean(day_std(Amt), 30)))", why: "解剖:市场近 20 日上涨时 f +17.4% / 已知族 +23.0%,下跌时 f +5.9% / 已知族 +6.0%。cs_state_rank(day_last(Close),20) 就是「市场是否处在近 20 日高位」,这条按状态在 f 和已知族之间切换 —— s1 想写「只在某种市场状态下用它」时没有算子"}
+h3_sel_amt:      {expr: "select_where(greater(cs_state_rank(day_sum(Amt), 20), 0.5), cs_rank(ts_spearman(day_quantile(Close), 10)), cs_rank(cross_mean(day_std(Amt), 30)))", why: "同上换成放量状态:f 放量 +17.4% / 缩量 +8.3% 是全解剖里最大的时间维度落差,而 h_act_mul / h_act_add 已证这个条件在个股截面上不成立。这条检验它在**市场时间维度**上成不成立"}
+h3_xfz_plus_f:   {expr: "cs_last_high20(neg(add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_spearman(day_quantile(Close), 10)), -0.25))), cross_max(day_zero_ratio(Ret), 15))", why: "**s2 漏掉的那一格、本批最重要的一条**:上一轮只量了「f 叠在 k_known 上」(ov_m025 +15.6% / 2.32 vs k_known +15.4% / 2.22),从没量过「f 叠在 k_known_xfrozen 上」—— 也就是说「无增量」这个结论是对着**错的基准**下的。f 的筛子版(seg_xfrozen_p,ρk 0.42→0.11)和 k_known_xfrozen 剔的是同一批票,所以 f 对 k_known 那 +0.2pp 很可能本来就是冻结筛子的影子、会被正确基准整块吸收。这一格直接判:≈ +18.5% / 3.15 则把无增量钉死在正确基准上;> +19.5% 或夏普 > 3.45 则增量一直是被错基准掩盖的"}
+
+# ---- G. day_last 稳定高 0.9pp 的原因(h_wmean_carrier 已否定「少并列」这条解释)----
+h3_topw_carrier: {expr: "ts_pearson(day_topw_mean(Close, Amt), 20)", why: "放量最大的 10% 分钟的均价 = 资金真正成交的价位。若 day_last 的优势来自「贴近可成交价」,这条应 ≥ day_last;若来自「尾盘信息」,应退回 day_quantile 那一档。一个节点分开两个解释,不用触发掩码"}
+h3_tw_carrier:   {expr: "ts_pearson(day_wmean(Close, in_index(Close)), 20)", why: "in_index 做权重 = 线性时间加权均价(越靠收盘权重越大),正好落在 day_mean 和 day_last 之间。和 h3_topw_carrier 成对:若只有这条兑现,day_last 的优势就是尾盘信息"}
+
+# ---- H. 「标准化是毒药」是想法不对还是估计量太脆 ----
+h3_madz60:       {expr: "cross_madz(ts_spearman(day_quantile(Close), 10), 60)", why: "cross_zscore(f,60) 已经只 −1.0%(5 日版 −14.6%),像是估计量随窗口变脆而不是想法错。cross_madz 是中位数 / MAD 的稳健版,f 的分布被并列堆在 ±1 端点正是 zscore 最怕的形状;仍然负就彻底定案「水平承重、变化是毒药」"}
+h3_robust_path:  {expr: "ts_pearson(cs_robust_z(day_last(Close)), 20)", why: "h_relpath(喂截面秩路径)塌到 +0.9%、h_norm_path 却还有 +8.0%,因为 cs_normalize 的分母被少数高价股支配、没真把共同成分抽掉。cs_robust_z 用中位数 / MAD,若它也塌到 +1% 档,「alpha 全在市场共同成分的交互里」就钉死了"}
+
+# ---- I. 收益路径这条线(s2 里意外地结实)----
+h3_ret_pe40:     {expr: "ts_pearson(day_sum(Ret), 40)", why: "h_ret_path 10 日 +9.2% → 20 日 +11.0% / 2.00(多空夏普 valid 3.89 是全表最高),与「这是秩 beta、窗口越长估得越稳」一致;40 日是这条推论的下一个点,ts_pearson 才跑得动"}
+h3_ret_xfz:      {expr: "cs_last_high20(ts_spearman(day_sum(Ret), 20), cross_max(day_zero_ratio(Ret), 15))", why: "把 s2 唯一真正有效的改动(冻结盘口筛子,ρk 0.11)装到收益路径载体上:若筛子的 +1.2pp / +0.31 夏普在 ρo 只 0.71 的另一个载体上也兑现,它就是一条可迁移的通用提纯件,而不是这条因子的巧合"}

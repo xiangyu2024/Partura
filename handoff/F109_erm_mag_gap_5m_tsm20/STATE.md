@@ -1,6 +1,6 @@
 # F109_erm_mag_gap_5m_tsm20 — 交接状态
 
-_自动生成于 2026-10-05 15:06(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 15:31(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_5m_tsm20(批次 B01_single_factors)
 - 表达式:`ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)`
@@ -12,53 +12,38 @@ _自动生成于 2026-10-05 15:06(`python scripts/recorder.py --brief F109_erm_m
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `audit-numbers:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 00:14 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/audit-numbers_ae5d6ae4559cdb8a5.md`
   - `synth:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 11:32 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/synth_aa3609845243aa6a4.md`
-  - `verdict:F109_erm_mag_gap_5m_tsm20`:还在跑(多半就是你自己)
+  - `verdict:F109_erm_mag_gap_5m_tsm20`:已返回结果,最后动作 10-05 15:31 → `handoff/F109_erm_mag_gap_5m_tsm20/agents/verdict_a83a83140db02b4fe.md`
 
 **接手的人该做什么:** 这条因子做完了。最终结论在 `handoff/F109_erm_mag_gap_5m_tsm20/results/` 里最新的那个(revised.json 优先,否则 study.json)。
 
-## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-05 11:30 更新)—— **先读这个文件**
+## 研究现状(`notes/F109_erm_mag_gap_5m_tsm20/state.md`,10-05 15:25 更新)—— **先读这个文件**
 
-# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 7 轮覆盖重写,2026-10-05)
+# F109_erm_mag_gap_5m_tsm20 — 研究现状(主研第 8 轮覆盖重写,2026-10-05)
 
-> 本轮 = **批量扫描 s1(190 变体)+ 市场解剖的一次性综合**。0 次服务器计算(只用了 `table` / `src` / `ops` / `hypo` 四个只读命令),
-> 没有读留出段,没有改候选、没有换推荐。产出两件:`notes/.../synthesis.md`(118 行)与 `studies/.../hypo.yaml`(40 条,全部 parse 通过)。
+> 本轮 = **批量扫描 s2(233 变体 + 市场解剖)的对账与定论**。0 次服务器计算(只用 `table` / `hypo3` 两个只读命令 + 本地读
+> `sweep_s2.json` 的 expr 与 `ops_ext.py` 的函数定义),**没有读测试段**。产出:`synthesis.md` 新增末节(50 行)、`hypo3.yaml`(25/25 parse)、本文件。
 
 ## 1. 现状
 
-`status: done`(上一位研究员已交出结构化结果,结论 = **分辨**;推荐仍是用户已有的 `cross_mean(day_std(Amt), 30)`)。
-本轮**没有推翻这个结论**,但把原因从「它是一条空头腿因子」细化成:
+`status: done`,结论 **分辨 / 提纯(弱)**;推荐仍是用户已有的 `k_known = cross_mean(day_std(Amt), 30)`,**没换**。
 
-**这棵树里有两件被 `1e-6` 焊在一起的东西。**
-(a) 一个「近 20 日有没有封板 / 冻结盘口」的**事件标记**(钱在空头腿、买不进,而且它住在已知族亏钱的那 6.5% 里);
-(b) 一个「日内被资金推着走 → 回吐」的**活跃小盘反转信号**(去掉爆炸后多头腿 +4.5~5.1%、LTO 仅 1.7%,
-但与已知族的活跃度倾斜共线,桶内中性后只剩 +0.4%)。
-第二批 40 条假设就是去分别钉死这两件东西能不能各自站住。**留出段仍然只读过 1 次,绝对不许再读。**
+本轮把上一轮「两件被 1e-6 焊在一起的东西」这个说法**判了**:
 
-(…全文 6128 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
+- (a)「近 20 日有没有封板」的事件标记 —— **多头腿上一文不值**。B 组五条干净写法全废(`h_b_zero20` −1.2%、`h_b_zero_max60` −3.2% dist 0.06 ✗、
+  `h_b_flatrun20` −1.3% dist 0.21 ✗、`h_b_age250` +3.7% dist 0.05 ✗,只有 `h_b_zero_signed20` +2.7% 勉强)。但它确实是原式亏钱的原因:
+  `seg_xfrozen_m`(剔掉冻结最重 20%)把原式从 −3.2% 抬到 **+2.8%**。
+- (b)「日内被推着走」的活跃小盘信号 —— **提纯成立但很弱、且无增量**。最好的自有版本 `h_h_tailmean_q75` utrain **+7.7%、夏普 0.92、LTO 1.9%、ρk 0.28**
+  (约为已知族 +15.4%/2.22 的一半);成交额桶内塌掉 2/3(`h_e_spine_bk_liq` +1.6%);对家族取残差 `h_g_res_spine` **+0.2%**。
+- 机制推断**被否了一半**:D 组「直接读资金在推」五条全军覆没(`day_signed_ratio` −5.1%、`day_wmean` +1.3%、`day_centroid` −2.6%、`day_gini` −1.1%);
+  唯一成立的 `h_d_pos_gap20`(+6.6%、1.09、LTO 1.2%)**ρo 只 +0.01、ρk 0.65** —— 更像「陈旧价格 / 薄盘」的代理(`h3_distinct20`、`h3_posgap_bdm_liq` 去定)。
 
-## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:20 条,其中研究员自己写的 12 条)
+**留出段仍然只读过 1 次,绝对不许再读。**
+
+(…全文 6625 字符,读 `notes/F109_erm_mag_gap_5m_tsm20/state.md`)
+
+## 研究日志(`notes/F109_erm_mag_gap_5m_tsm20/journal.md`:21 条,其中研究员自己写的 13 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:42 [执行] R3:补齐01_expression.md,14组(88条细项)数字核对完成(2条不一致),R2第3节hlL/hlS标签更正已追加,报告重出并通读,0次服务器运行
-
-结果卡 notes/F109_erm_mag_gap_5m_tsm20/results/R3.md。
-
-核对结论:88条细项里86条一致,2条不一致(均只报告,未改判断类notes):
-1) f_orig 正年数:工单写2/8,diagnostics.by_year读出3/8(2022 +0.38%、2024 +4.65%、2025 +3.32%三年为正)。
-2) f_fam30"固定hl20下+12.6%":sweep表hl=20的真实值是+8.39%/夏普1.209;+12.6%/夏普1.78精确等于hl=0那一行
-   (=f_fam30自己选中的hl_used)。检索过08_variants/09_diagnosis/10_distilled/state/journal里全部出现处,
-   笔记本身从未把+12.6%字面标成hl20,只是本工单第2节的表头把它和a_sig/a_sum/v_base并列在"固定hl20下"造成歧义。
-
-其余14组(含判据C/D差值、hlS权威多空表、八年均值、holdout rIC、固定半衰期表、f_lvl两口径hl、sign、cov/dist门槛、
-rank_corr_train)逐一核对后数字均对得上(JSON原始值与工单一致,或差在0.01~0.04pp的正常舍入内)。
-
-报告:research/alpha_distillation/F109_erm_mag_gap_5m_tsm20.md,1910行/112918字符/46张表。01~12全部进了报告(含
-新建的01_expression.md);S2_family 4条无数据处有完整说明文字,无静默空表格;结论"分辨"5处一致,f_fam30两处
-均标注"不是这条因子的产物"。
-
-新建:01_expression.md(37行,表达式与yaml逐字节校验一致)。追加(未删改原表):results/R2.md 第3节后的
-"更正"小节,把hlL/hlS标签错误列清楚。一次性核对脚本未进Partura仓库。
 
 ### 2026-10-04 23:57 [主研] 研究完成:推荐 f_fam30(= 已知家族 cross_mean(day_std(Amt),30)),结论 分辨;本轮核对改正 2 处笔记数字、重出报告、交结构化结果
 
@@ -115,6 +100,20 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 - 增量仍然没有:res_known -0.3%、bk_known/bk_liq +0.4%(且 dist 0.20 ✗)、overlay 六档全部低于家族 +15.4%。但 overlay 叠的全是多头腿为负的原式,对结构变体不公平 → 第二批补。
 - 落盘:notes/synthesis.md(140 行)、studies/hypo.yaml 40 条全部 parse 通过(A 去归一化 / B 冻结状态 / C 错配 / D 拉升机制 / E 桶内与分段 / F 市场状态 / G 当筛子 / H 低相关新结构)。
 
+### 2026-10-05 15:25 [主研] 批量扫描 s2 对账与结论
+
+- 对账(第二批 40 条,train|valid|utrain):支持 = A 组最小形复现(h_a_spine20 = only_L_R = sub_J_day_first = h_a_spine_inpct 四条逐位同分 +1.6/+14.0/+5.1,ρk 0.35)、
+  D② 正占比之差(h_d_pos_gap20 +4.9/+10.8/+6.6、夏普 1.09、LTO 1.2%、ρo +0.01)、H 组 60 日上尾均值(h_h_tailmean_q75 +5.1/+14.1/+7.7、0.92、ρk 0.28)、
+  E③ 成交额桶内塌 2/3(h_e_spine_bk_liq +1.6%)、冻结段是原式亏钱来源(seg_xfrozen_m 把原式 -3.2% 抬到 +2.8%)。
+- 否定:B 组「封板事件标记」五条干净写法在多头腿上全废(dist ✗ 或 ≈0);D① 直接读资金拉抬五条全军覆没(day_signed_ratio -5.1%、day_wmean +1.3%、day_centroid -2.6%);
+  F 组市场状态加权 ≤ 固定 0.25 常权 ≤ 噪声;G 组残差 +0.2%、筛子 scr_xhi_p +15.6%/2.37 打不过通用筛子 k_known_xfrozen 的 +18.5%/3.15。
+- 两处改判:① 承重的不是「5 分钟 vs 1 分钟错配」而是「阈值必须是 1 分钟分位数」(h_c_r1_tail20 两端自洽 1 分钟 +3.3%、ρk -0.01 通过,leaf_Ret_ret5 两端自洽 5 分钟 -6.3%);
+  ② 分位数分母是承重件不是损害(去掉 h_a_upsum20 +0.5%、换 20 日平均波动 h_a_upsum_vol20 +0.6%,比 spine 低 4.6pp)。否定检验也通过:上市时长桶内 +6.4% > spine +5.1%。
+- 定论:原式多头腿不可用;提纯出的 TQ75 = cross_tail_mean_q75(Σr5·1[r5>q95]/q95, 60) 是真的但只有已知族一半,残差与叠加都是零 —— 提纯成立、升华失败,不改推荐。
+  解剖最锋利的一格:相对家族的全部改善都落在家族持仓 -20.3pp 的高成交额段与 4% 的科创板上,结构性变现不了。
+- 落盘:synthesis.md 末尾「第二轮(s2)对账与结论」50 行、state.md 覆盖重写、studies
+…(这条日志还有后文,读 journal.md)
+
 ## 工单与结果卡(`notes/F109_erm_mag_gap_5m_tsm20/orders/`、`notes/F109_erm_mag_gap_5m_tsm20/results/`)
 
 - R1:工单 有,结果卡 有
@@ -151,7 +150,7 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 
 ## 已写的 notes(`notes/F109_erm_mag_gap_5m_tsm20/`)
 
-`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(23K)、`06_baseline.md`(3K)、`07_S1_nodes.md`(7K)、`07_S2_level.md`(5K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(10K)、`07x_2_incremental.md`(6K)、`08_variants.md`(7K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(6K)、`12_next.md`(5K)、`journal.md`(32K)、`state.md`(9K)、`synthesis.md`(9K)
+`01_expression.md`(2K)、`02_operators.md`(2K)、`03_decomposition.md`(2K)、`04_grammar.md`(1K)、`05_hypotheses.md`(23K)、`06_baseline.md`(3K)、`07_S1_nodes.md`(7K)、`07_S2_level.md`(5K)、`07_neutralise.md`(4K)、`07x_1_anatomy.md`(10K)、`07x_2_incremental.md`(6K)、`08_variants.md`(7K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(6K)、`12_next.md`(5K)、`journal.md`(34K)、`state.md`(10K)、`synthesis.md`(16K)
 
 ## 自写的探针与分析脚本(`studies/F109_erm_mag_gap_5m_tsm20/`)
 
@@ -163,5 +162,6 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 - `audit-numbers.json`
 - `study.json`
 - `synthesis.json`
+- `verdict.json`
 
 报告:`research/alpha_distillation/F109_erm_mag_gap_5m_tsm20.md`(10-04 23:56 生成)

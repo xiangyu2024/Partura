@@ -174,7 +174,11 @@ def cross_ema(x: torch.Tensor, d: int) -> torch.Tensor:
     not treated as 0.  It lets an expression carry its own smoothing instead of leaving
     it to the book's half-life -- and, unlike ``cross_mean``, an old spike fades instead
     of dropping out of a hard window."""
-    x = _f(x)
+    x32 = _f(x)
+    # In float64: inside a block the terms are scaled by q**-k (up to 1e30), and a float32 input of the size of a
+    # traded amount (1e8 and more, 1e16 once squared) overflowed there -- the EMA of any amount-level quantity came
+    # back NaN on most cells (found by the F105 lead: coverage 0.49 at d = 5).  Bounded inputs were never affected.
+    x = x32.to(torch.float64)
     a = 1.0 - 0.5 ** (1.0 / max(float(d), 1e-6))
     q = 1.0 - a
     ok = torch.isfinite(x)
@@ -185,7 +189,7 @@ def cross_ema(x: torch.Tensor, d: int) -> torch.Tensor:
     cd = torch.zeros_like(x[0])
     shape = (-1,) + (1,) * (x.dim() - 1)
     # exact recursion, done block-wise so the engine pays for a handful of Python steps instead of one per day:
-    # a block is as long as q**-(B-1) <= 1e30 allows (float32), i.e. ~100 days at half-life 1, everything at 60
+    # a block is as long as q**-(B-1) <= 1e30 allows, i.e. ~100 days at half-life 1, everything at 60
     B = int(min(x.shape[0], max(8.0, 69.0 / max(-math.log(q), 1e-9))))
     for s0 in range(0, x.shape[0], B):
         vb, mb = v[s0:s0 + B], m[s0:s0 + B]
@@ -195,7 +199,7 @@ def cross_ema(x: torch.Tensor, d: int) -> torch.Tensor:
         d_t = dn * (q * cd + a * torch.cumsum(mb * up, 0))
         out[s0:s0 + B] = torch.where(d_t > 1e-12, n_t / d_t.clamp(min=1e-12), torch.full_like(n_t, NAN))
         cn, cd = n_t[-1], d_t[-1]
-    return out
+    return out.to(x32.dtype)
 
 
 @op("dt", "cross", arity=1, requires_window=True)
@@ -733,6 +737,25 @@ def install() -> None:
             ops.operator_dict_DT[name] = meta["fn"]
         if meta["mode"] in ("nd", "shared"):
             ops.operator_dict_ND[name] = meta["fn"]
+    # The registry's smoke test feeds every kernel random floats and flags an output with one or two distinct
+    # values as a (trivial) boolean: not allowed as a root, not in the search vocabulary.  On random floats a
+    # "share of minutes with zero return" IS a constant -- and on real data it is one of the most informative
+    # things in the batch.  None of the kernels here is boolean, so the flags are cleared after every build.
+    if not getattr(catalog.build_registry, "_partura", False):
+        import dataclasses
+        _build = catalog.build_registry
+
+        def build_registry(*a, **k):
+            reg = _build(*a, **k)
+            for name in NEW_OPERATORS:
+                for n in (name, "nt_" + name):
+                    sp = reg._ops.get(n)
+                    if sp is not None and (sp.boolean_output or sp.trivial_boolean):
+                        reg._ops[n] = dataclasses.replace(sp, boolean_output=False, trivial_boolean=False)
+            return reg
+
+        build_registry._partura = True
+        catalog.build_registry = build_registry
     catalog._DEFAULT = None            # rebuilt, with the extensions, on next use
 
 

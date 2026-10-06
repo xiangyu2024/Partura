@@ -1,0 +1,160 @@
+{
+ "factor_id": "F115_all_tide_mean_30",
+ "one_line": "提纯成功但量级不够:把分母 M 里那两个 day_argmin 改用未平滑 Volume 定位(h_rawvol_divM_only)就把 train/valid 从 +5.6/+0.2%、夏普 1.21/0.04 抬到 +7.2/+5.3%、2.01/1.16,是全表 290 个变体里唯一的真改进;但天花板 Lnet ~+7%/Lshp ~1.7 不到已知族一半,九种混合 + 两种筛子全部打平或变差 —— 一条独立但薄的弱信号,不是增量来源。",
+ "confirmed": [
+  "丙(分母 M 的*值*空转):换成 day_centroid 的 h_M_centroid +4.8/+1.7%(Lshp ut 0.84)、换成 day_gini 的 h_M_gini +6.0/−1.4%(0.75)都 ≈ 原式 +5.6/+0.2%(0.83),与 s1 的 sub→div/mul、sub_I_* 一致",
+  "§2(b) ÷J 必需:h_K_only(÷J 与 ÷M 都不要,只留价差的 20 日均)+4.1/−4.4%、Lshp ut 0.29,按预期退化成低价书(ρk 0.33),是整组里最差的结构性变体",
+  "rank_K 的秩差核能独立成立(部分):h_rankgap +5.0/+3.4%(1.09)、h_rankgap_raw +4.4/+4.1%(1.04)、h_rankgap_w60 +6.0/+2.8%(1.24)、h_rankgap_ema60 +5.4/+6.1%(1.50、LTO 仅 2.2%),都站得住,但都不超过保留 ÷J÷M 的 rank_K +5.3/+9.7%(1.48)",
+  "D 组口径被钉死,但含义被改写:全天 h_aperture_full +3.6/+5.6%(0.73)≈ 原式,只上午 h_aperture_am +0.8/−0.2%(0.11)、只下午 h_aperture_pm +2.9/−6.7%(0.04)全塌 → 需要的是跨两个半场的长窗口,10:00–14:30 这个裁剪本身是中性的",
+  "§2(g) 低价/低流动性慢倾斜的指纹得到大规模复现:iso_G +3.7/+11.4(LTO 1.2%)、sub_K_div +1.6/+10.3、only_K_R −2.4/+7.4、h_gini_vol −2.3/+12.6、seg_lowliq_p +1.7/+13.1、h_posratio −5.5/+7.9,全部 train≈0 / valid 两位数 / LTO<2% / ρk 0.3~0.8",
+  "§1 的「E、H 是结构必需、不携带信息」:abl_E / abl_H / sub_D_*(三条)/ only_M_R / sub_M_mul 在 s2 里仍是 cov 0.00~0.02 的除零行,数字(+388.6%/−335.1% 等)无意义"
+ ],
+ "refuted": [
+  "甲(abl_C 的增益 = 整棵树少加工就好):整棵树去平滑的 h_rawvol_all 只有 +3.6/+3.6%(Lshp ut 0.83)= 原式水平;增益只在分母 M 的下标定位那一处 —— h_rawvol_divM_only +7.2/+5.3%(1.72)",
+  "乙(「去平滑」与「删 ÷M」两份增益可叠加):h_pure_sm(只删 ÷M)+6.4/+2.0%(1.06)、h_pure_raw(两处都改)+4.5/+1.3%(0.76)< 任一单改。÷M 也不是纯污染 —— 换成「宽的、未平滑定位的」M 比删掉它好(1.72 vs 1.06)",
+  "F 组(上一轮优先级最高:倾斜交给已知族、F115 降级为桶内排序器)决定性否定:h_mix_known_bk_rk +11.9/+20.0%(Lshp 1.79/3.28)、h_mix_known_bk025 +10.9/+20.2%(1.60/3.31)、h_mix_known_bk05 +10.2/+18.5%,全部严格低于 k_known +12.6/+22.3%(1.78/3.46),也不优于固定权重 ov_p025 +11.5/+20.2%(1.68/3.31)",
+  "桶内选股力本身不是被倾斜掩盖的强信号:h_bk_amt(与表里 bk_liq 同式、被去重合并)+5.4/+0.7%(0.89)≈ 原式",
+  "B 组(谷底是薄分钟 → 把锚点挪到有成交的分钟)整组否定:h_trough_to_peak +4.1/+6.1%(0.87)、h_open_to_peak +3.7/+4.0%(0.69)、h_peak_to_close −3.6/−2.8%(−0.62)、h_close_vs_vwap +3.7/−11.4%(−0.08)、h_amvol_pmvol +3.3/−10.0%(−0.08)。把「峰后谷」换成「峰」就掉到 0.87 → 载重的是峰后那个谷本身,不只是「一个晚一点的分钟」",
+  "C 组(换成直接的资金方向读数)大体否定:h_signed_ratio −4.2/−6.2%(−0.90)、h_signed_tail −2.8/−3.4%(−0.71)、h_posratio −5.5/+7.9%(dist 0.45 ✗);唯一正的 h_wmean_ret +3.9/+6.4%(0.82、LTO 2.9%、ρo 0.56)只是另一条同级弱信号",
+  "E 组(用连续有界量替整数下标以过 dist 门槛)否定:h_centroid_vol −5.9/+4.9%(−0.47)、h_centroid_amt_full −5.3/+4.2%(−0.41)、h_centroid_gap +5.1/−5.7%(0.32)、h_gini_vol −2.3/+12.6%(0.27)",
+  "戊(板块顺序 = 日涨跌幅上限 → 按上限代理分桶应复现):h_bk_limit +4.9/+0.4%(0.83)、h_sieve_limit +5.0/+1.6%(0.87)都 ≈ 原式 → 上限宽度不是可中性化掉的干扰",
+  "己/庚(次新 / 冻结盘口驱动):h_bk_age +5.5/+0.6%(0.92)、h_bk_flat +6.1/+1.3%(1.06)、h_sieve_flat +3.9/+10.1%(0.92,典型慢倾斜形状)、seg_xfrozen_m +7.9/−1.0%(1.04),中性化改变不了业绩。注:h_bk_age 的代理 cross_valid_count(·,241) 在 241 日饱和,这条否定结论需用 cross_age 重做(h3_bkz_age)",
+  "辛(高波动才有效 → 条件权重凸组合):h_regime_mix_rk +11.8/+14.4%(Lshp ut 2.23)、h_regime_mix_dn +11.2/+12.8%(2.08)、h_regime_mix +10.4/+16.7%(2.05)—— 夏普追平 k_known 的 2.22 却少赚 2.9pp,条件权重只是在坏状态下减仓",
+  "当筛子也零增量:scr_xhi_p(已知族剔掉 F115 最高的 20%)+12.3/+22.5%(1.78/3.53)与 k_known +12.6/+22.3%(1.78/3.46)逐位打平;scr_xhi_m +7.5/+18.7%(1.10/3.01)更差。两条都远低于通用筛子 k_known_xfrozen +16.4/+23.2%(2.81/3.98)"
+ ],
+ "best_own": [
+  {
+   "id": "h_rawvol_divM_only",
+   "expr": "cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_slice(Volume, 31, 211), day_argmax(in_slice(Volume, 31, 211)))), day_argmin(in_slice_from_start(in_slice(Volume, 31, 211), day_argmax(in_slice(Volume, 31, 211)))))), 20)",
+   "note": "第一候选。= 原式,只把分母 M 里那两个 day_argmin 改用未平滑的 in_slice(Volume,31,211) 定位(分子锚点仍用居中 9 分钟平滑)。Lnet train/valid +7.2/+5.3%,Lshp 2.01/1.16,LTO 4.6%,ρo 0.69 / ρk 0.21,hl 10,cov·dist 1.00/1.00。相对原式 +5.6/+0.2%、1.21/0.04,valid 夏普 +1.12 远超 ±0.3 噪声带,净超额 +5.1pp 超过 ±3pp —— 这是本因子唯一一次真提纯。仍低于 k_known 的 1.78/3.46。"
+  },
+  {
+   "id": "abl_C",
+   "expr": "cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_slice(Volume, 31, 211), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20)",
+   "note": "同一处改动的半步版(只把分母里的 F 换成未平滑 Volume 定位,I 保持平滑)。+6.0/+7.4%,Lshp 1.48/1.51,LTO 4.6%,ρk 0.22,cov 0.99。s1 与 s2 两轮数字完全一致,是最稳的一条(两段 Lshp 都 ≈1.5,没有 train/valid 偏移);但 train 与 Lshp ut 被第 1 条超过。"
+  },
+  {
+   "id": "h_rankgap_ema60",
+   "expr": "cross_ema(cross_mean(sub(cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))))), 20), 60)",
+   "note": "低换手版:两个价格锚点各自 cs_rank 后相减(去掉 ÷J÷M),再 20 日均 + 60 日 EMA。+5.4/+6.1%,Lshp 1.46/1.59,LTO 仅 2.2%(原式 5.1%、第 1 条 4.6%),ρk 0.31。因为原式的净超额本来全是压换手换来的(hl0 = −6.2% → hl10 = +5.6%,毛超额在 hl 0→20 走平),这条在一半换手下给出同级夏普最有配置意义;代价是结构里已没有 ÷J(机制解释弱于前两条)。"
+  }
+ ],
+ "best_on_known": [
+  {
+   "id": "scr_xhi_p",
+   "expr": "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), 20))",
+   "note": "已知族当筛子用 F115 剔掉 F115 最高的 20%。+12.3/+22.5%,Lshp 1.78/3.53,LTO 3.6%。相对 k_known +12.6/+22.3%(1.78/3.46):Δ Lnet −0.3/+0.2pp、Δ Lshp +0.00/+0.07 —— 逐位打平,零增量(不是变差)。相对 k_known_xfrozen +16.4/+23.2%(2.81/3.98)差 4.1pp / 1.03 夏普。结论:比 k_known 不强,比 k_known_xfrozen 明显弱。"
+  },
+  {
+   "id": "h_mix_known_bk_rk",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_bucket_rank(cross_mean(sub(cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), cs_rank(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))))), 20), cross_mean(day_sum(Amt), 30)), 0.25))",
+   "note": "上一轮整批优先级最高的一格(倾斜交给已知族、F115 的秩差核降级为 Amt 桶内排序器,w=0.25)。+11.9/+20.0%,Lshp 1.79/3.28,ρk 0.98。严格低于 k_known 的 +12.6/+22.3%(1.78/3.46),且不优于同权重固定混合 ov_p025 +11.5/+20.2%(1.68/3.31)—— 「桶内中性化能修好倾斜打架」这个机制推断被否定。离 k_known_xfrozen 差 4.5pp / 1.02 夏普。"
+  }
+ ],
+ "verdict": "提纯(成功)+ 对已知族无增量 + 不能当筛子。(1) 提纯成立且位置极具体:增益不在「少加工」,而在分母 M 里那两个 day_argmin 用什么量曲线定位 —— h_rawvol_divM_only 把 valid 夏普从 0.04 救到 1.16、Lnet 从 +0.2% 救到 +5.3%(train 同时从 +5.6% 升到 +7.2%),两项都远超噪声带;整棵树去平滑(h_rawvol_all 0.83)或再删 ÷M(h_pure_raw 0.76)都退回原式水平,说明这是一处定点修复而不是「加工越少越好」。(2) 不是「多头腿不可用」:扣 15bp 后 train/valid 净超额都正、纯多头夏普 >1、LTO 4.6%(h_rankgap_ema60 版 2.2%),cov/dist 都过门槛。(3) 但也不是升华:天花板 Lnet ~+7% / Lshp ~1.7,不到 k_known(+12.6/+22.3%、1.78/3.46)的一半,更不到通用筛子 k_known_xfrozen(+16.4/+23.2%、2.81/3.98)的一半;根因是 s1 查明的「信息薄而快」—— 毛超额 ~9% 封顶,净超额全靠把换手从 21% 压到 5%,而已知族 hl0 就 +12.6%、越平滑越差。(4) 对已知族零增量这一条证据已饱和:9 种混合(6 固定权重 ov_*、3 桶内 h_mix_known_bk*、3 状态条件 h_regime_mix*)无一超过 k_known,2 种筛子(scr_xhi_p / scr_xhi_m)最好只是逐位打平;ρk 仅 0.21~0.32 说明它确实是独立信息,但独立 ≠ 可叠加。(5) 唯一还能改变这个判断的是 s2 新发现的「符号随流动性翻转」(活跃 40% 原符号 +8.8/+13.6%、清淡 40% 反符号 +9.4/+16.1%,两段的另一半符号只有 −3.1/+4.7% 和 +1.7/+13.1%)—— 若 hypo3 的 h3_flip_liq 用 select_where 把它写成一条全市场因子后明显超过 +7.2/+5.3%,这条因子就不是一条弱信号而是两条(活跃反转 + 清淡动量),结论要从「提纯」升格;否则 h_rawvol_divM_only 就是终局候选。全部判断只用 train(2018–2021)/ valid(2022–202308),runs/F115_all_tide_mean_30/sweepfinal_*.json 一行没读。",
+ "lab_findings": [
+  {
+   "id": "LF1",
+   "claim": "当一棵树的形状是 div(小量, 两个整数下标之差) 时,整数下标差会在数值上主导整个比值;此时「换掉定位这两个下标的子树」是降污染而不是改信号,而且常常是单点最大的改进。可迁移操作:凡见 div(x, sub(day_argmin/argmax(...), day_argmin/argmax(...))),先比两边量纲,再试「把下标定位子树换成未加工数据」这一个最小改动 —— 但不要直接删掉分母。",
+   "evidence": "F115:L ~ 1e−4 而 1/M ~ 1e−2(s1 的 abl_K 与 only_K_R 在算术上都塌成 cross_mean(1/M,20),两者数字逐位一致 −2.8/+7.2% 与 −2.4/+7.4%,即为 1/M 主导的直接证据)。只把分母里两个 argmin 改用未平滑 Volume 定位的 h_rawvol_divM_only = +7.2/+5.3%、Lshp 2.01/1.16,对原式 +5.6/+0.2%、1.21/0.04 是 +5.1pp / +1.12 夏普;整棵树去平滑 h_rawvol_all 只有 +3.6/+3.6%(0.83),删掉整条分母 h_pure_sm +6.4/+2.0%(1.06),两处都改 h_pure_raw +4.5/+1.3%(0.76)。未平滑的量曲线把极值分钟推到更靠两端 → M 更大更分散 → 1/M 权重下降。",
+   "operators": [
+    "div",
+    "sub",
+    "day_argmin",
+    "day_argmax",
+    "in_local_mean",
+    "in_slice_to_end",
+    "in_slice_from_start"
+   ],
+   "recheck": "只在分子分母量纲差 1~2 个数量级时成立;若分子分母同量纲则无此效应。另外「宽的下标差分母」本身有正贡献(1.72 > 删掉它的 1.06),所以不能推广成「这类分母都该删」。"
+  },
+  {
+   "id": "LF2",
+   "claim": "day_gini 作用在日内量切片上 ≈ 已知成交额族换个写法(不是一条独立的日内结构量)。想用「日内量的集中度」去跟 Amt 族去相关行不通。",
+   "evidence": "h_gini_vol = cross_mean(day_gini(in_slice(Volume,31,211)),20):ρk = +0.77 而 ρo 只 +0.10,LTO 1.7%,train/valid −2.3/+12.6%(典型的流动性慢倾斜形状)。同族的 day_centroid 版本 ρk 低得多(h_centroid_vol 0.40、h_centroid_amt_full 0.57)但业绩全负,所以不是「所有日内形状量都是流动性」。",
+   "operators": [
+    "day_gini",
+    "day_centroid",
+    "in_slice"
+   ],
+   "recheck": "仅验证过 20 日均值形式与 k_known = cross_mean(day_std(Amt),30) 这一个已知族;单日值和其他已知族未测。"
+  },
+  {
+   "id": "LF3",
+   "claim": "「train ≈ 0 / valid +6~+13% / LTO 0.6~1.7% / ρk 0.3~0.8」这个四元组是 A 股 2022–2023 低价低流动性慢倾斜的指纹,不是因子有效性。见此形状先查 LTO 和 ρk,不要读成「因子在 valid 上有效」。",
+   "evidence": "s2 里同一形状出现 6 次以上:iso_G +3.7/+11.4(LTO 1.2%、ρk .42)、iso_J +3.4/+10.8(1.7%、.42)、sub_K_div +1.6/+10.3(1.5%、.44)、only_K_R −2.4/+7.4(3.4%、.38)、h_gini_vol −2.3/+12.6(1.7%、.77)、seg_lowliq_p +1.7/+13.1(3.1%、.67)、h_posratio −5.5/+7.9(1.4%、.54)。这些表达式彼此结构差异很大(单锚点价格、纯价差、日内量 gini、正收益占比),共同点只有「退化成价格/流动性水平」。",
+   "operators": [
+    "day_locate",
+    "cs_rank",
+    "cs_first_low40",
+    "day_gini",
+    "day_pos_ratio"
+   ],
+   "recheck": "换 valid 段(非 2022–2023)后指纹的数值会变;判据应落在「LTO 极低 + ρk 偏高 + train 与 valid 反号」这个组合上,而不是具体的百分点。"
+  },
+  {
+   "id": "LF4",
+   "claim": "ρk ≈ 0.25 量级的弱信号不值得扫与已知族的混合格:固定权重、桶内中性(把倾斜交给已知族)、状态条件凸组合这三类在同一条信号上会一起失败,而且失败方式一致(最好只是打平)。省轮次的做法是只跑 w=+0.25 的固定权重和 w=+0.25 的桶内两格,两格都不超基准即可下「零增量」定论。",
+   "evidence": "F115(ρk 0.26)对 k_known 共试 9 格:固定权重 ov_p025/p05/p10/m025/m05/m10 → ut +14.2/+12.9/+11.9/+10.9/+8.7/−3.6%;桶内 h_mix_known_bk025/bk05/bk_rk → +13.5/+12.7/+14.2%;状态条件 h_regime_mix/_rk/_dn → +12.2/+12.5/+12.6%;k_known 单独 +15.4%。最好的两格(ov_p025 与 h_mix_known_bk_rk,都是 +14.2%)差 −1.2pp,在 ±3pp 噪声带内。上一轮的机制推断「倾斜方向相反所以线性混合打架、改成桶内分工就行」被这 3 格直接否定。",
+   "operators": [
+    "add",
+    "mul",
+    "cs_rank",
+    "cs_bucket_rank",
+    "sigmoid",
+    "cs_regres"
+   ],
+   "recheck": "若弱信号的 ρk < 0.1 且自身 Lshp ≥ 已知族的一半,混合可能仍有用;本结论是在 ρk 0.26 / Lshp 约为已知族 0.4 倍这个点位上得到的。"
+  },
+  {
+   "id": "LF5",
+   "claim": "cs_last_high20 / cs_first_low40 这一族筛子(内核 _lexi)里 neg 的位置决定一切:它把 x 的指定分位段整体平移到 y 排序的另一端,所以复合信号的多头腿永远在「顶部」;当原因子的多头腿是最低十分位(sg = −1)时必须写 cs_last_high20(neg(core), x),否则筛掉的正是想留的那一半。段/筛变体必须 p/m 成对跑,单边跑会把「符号条件化」误读成「这一段无效」。",
+   "evidence": "_lexi(y,x,lo,hi,shift) = pct_rank(y) + shift·1{lo<rank(x)≤hi};k_known_xfrozen 与 scr_xhi_p 都对 known 用了 neg(),拟合出的 sg 都是 +1。成对证据:seg_hiliq_p(原符号)+8.8/+13.6%(Lshp 1.61/2.89)vs seg_hiliq_m(反符号)−3.1/+4.7%(−0.67/+0.97);seg_lowliq_m(反符号)+9.4/+16.1%(1.59/3.21)vs seg_lowliq_p(原符号)+1.7/+13.1%(0.30/2.37)。四格合起来才暴露出「F115 的符号随流动性翻转」这个事实。",
+   "operators": [
+    "cs_last_high20",
+    "cs_last_high40",
+    "cs_first_low20",
+    "cs_first_low40",
+    "neg"
+   ],
+   "recheck": "分位边界(20% vs 40%)不改变这条约定;但「段内」读数是相对该段等权的超额,纯多头实际拿到的是 段内 + 段等权 —— 低流动段 seg_lowliq_m 的 +16.1% 伴随 ρk 0.78,大半是流动性溢价而不是选股。"
+  },
+  {
+   "id": "LF6",
+   "claim": "判断一棵树是否真的用到了 lookahead 算子的未来信息,要看该算子的输出是进入数值还是只进入 argmax/argmin 下标:后者只在「用今天后面的量来挑今天前面的分钟」这一层上泄漏,强度远小于直接读未来价格。这条可以把一批被 lookahead 标记吓退的手写因子救回来评估。",
+   "evidence": "F115 的 in_local_mean(·,5) 元数据是 lookahead=True(居中 9 分钟均值),但整棵树里 Volume 只贡献下标、数值全部来自 Close(leaf_Volume_amt 的 ρo = +0.99 即为证据:换成 Amt 几乎不动)。同时这条因子的业绩水平(Lnet ~+7%、Lshp ~1.7)远低于真泄漏因子的典型量级,与「只有弱泄漏」一致。",
+   "operators": [
+    "in_local_mean",
+    "in_zscore_expand",
+    "day_argmax",
+    "day_argmin",
+    "day_locate"
+   ],
+   "recheck": "尚未定量。本轮已写入 hypo3 的 h3_causal_z(把 in_local_mean 换成因果的 in_zscore_expand,其余不动):若 Lshp 掉得很少,这条结论成立;若掉光,说明「只喂下标」的泄漏也足以造出全部业绩。另:若 lookahead 算子的输出进入 day_locate 的第一个参数(被读数值),则是真泄漏,本结论不适用。"
+  }
+ ],
+ "hypotheses_written": 24,
+ "new_operator_requests": [
+  {
+   "name": "day_locate_mean(y, i, k)",
+   "definition": "以给定分钟下标 i 为中心、半径 k 的窗口内 y 的均值(窗口按日内有限分钟裁到边界;窗口内无有限值时 NaN)。k 用字面量,取 0 时退化成现有的 day_locate。",
+   "why": "s1 的机制推断「两个谷底几乎没有成交,day_locate 读到的是噪声价」上一轮和这一轮都只能间接测 —— 唯一能做的是把锚点整个挪到别的分钟(B 组 h_trough_to_peak 0.87、h_open_to_peak 0.69、h_peak_to_close −0.62、h_close_vs_vwap −0.08、h_amvol_pmvol −0.08,整组否定),而换锚点同时改变了「读哪儿」和「读得准不准」两件事,所以否定结果不能回答原问题。有了 day_locate_mean 就能只改后者:把 day_locate(Close, F) 换成 day_locate_mean(Close, F, 2),表达式其余部分一字不动,直接分离「锚点选错了」和「单分钟读数太噪」。这是本因子最核心的那条机制推断唯一干净的检验方式,而且对所有用 day_locate 读单分钟价格的手写因子(库里不止这一棵)都通用。"
+  },
+  {
+   "name": "day_arg_top_centroid(x)",
+   "definition": "当日 x 处于前 5% 分位的那些分钟的下标的(按 |x| 加权)重心,再除以 T−1 归一到 [0,1];不足 2 个分钟超过该分位时 NaN。即 day_argmax 的稳健连续版 —— 回答「事件大致在什么时候」而不是「哪一分钟恰好最大」。",
+   "why": "整棵树都挂在一个 day_argmax 上,而这个整数下标既过不了 dist 门槛也单独有害:iso_D(argmax 本身)dist 0.05 ✗、Lnet −15.0/−27.1%,iso_F 0.04 ✗、iso_I 0.04 ✗、iso_M 0.05 ✗;想替换它的 sub_D_* 三条全部 cov 0.00 除零,abl_D 两轮都 CUDA OOM(把 day_argmax 换成非 reduces_m 算子会让 in_slice_to_end 的 pair 维炸开)。s1/s2 用 day_centroid(全天重心)和 day_gini 代替也全部失败(−2.8/−2.6/+2.0% 且 h_gini_vol 的 ρk 0.77 基本就是成交额族),因为全天重心不是「峰在哪」。本轮只能用 day_topw_mean(in_index(V), V) 凑出一个近似(h3_topw_time),但那是一个 10% 分位的等权平均、不能喂回 in_slice_to_end/from_start 当分割点。需要的是一个 reduces_m 的、连续有界的、能当下标用的峰位算子 —— 它同时解掉 dist 门槛、除零和 OOM 三个问题。"
+  },
+  {
+   "name": "cs_flip_by_rank(y, x)",
+   "definition": "按个股在 x 上的截面分位切换符号:x 排名在上半时取 +（rank(y) − 0.5),下半时取 −(rank(y) − 0.5);y 或 x 缺失则 NaN。即现有 cs_flip_by_state 的个股截面版(后者用的是全市场同一个数的市场状态)。",
+   "why": "s2 最硬的新事实就是符号随流动性翻转:成交额高 40% 段内用原符号 +8.8/+13.6%(Lshp 1.61/2.89),低 40% 段内必须反符号 +9.4/+16.1%(1.59/3.21),而两段的另一半符号只有 −3.1/+4.7% 和 +1.7/+13.1%。要把它写成一条全市场因子,现在得拼 select_where(is_gt0(cs_demean(cs_rank(x))), cs_demean(cs_rank(y)), neg(cs_demean(cs_rank(y)))) —— 四层嵌套、九个节点(本轮的 h3_flip_liq 就是这么写的,1749 字符)。GP/RL 在这个深度上几乎不可能自己搜到这个结构,而「同一个日内读数在流动票上是反转、在清淡票上是动量」很可能不止 F115 一棵树有。库里已经有市场状态版的 cs_flip_by_state,补上截面版是对称的、一个节点的事。"
+  }
+ ],
+ "tooling_problems": [
+  "abl_D 两轮都跑挂:s1 报 in_slice_to_end CUDA OOM「尝试分配 280 GiB」,s2 报同一算子「40.69 GiB(GPU 总容量 31.36 GiB)」。根因是把 day_argmax 换成非 reduces_m 的算子会让 in_slice_to_end 的 pair 维度炸开。这一格两轮都没有读数,ablate 组实际上缺一条。第三批里没有这种替换。",
+  "h_bk_amt 在 s2 表里根本不存在:它的表达式与 s1 的 bk_liq 逐字相同(cs_bucket_rank(core, cross_mean(day_sum(Amt),30))),被去重合并了,但表里和 errors 字段都没有任何提示 —— 40 条假设实际只读到 39 条,而 bk_liq 顶着 kind=neutral 混在别的组里。建议去重时在表里留一行「h_bk_amt → 同 bk_liq」。",
+  "同一条 bk_liq 的 dist 在 sweep_s1.json 里是 0.20、在 sweep_s2.json 里是 1.00(bk_known 同样 0.20 → 1.00),表达式没变。门槛口径在两轮之间改了,dist 不能跨轮比较;s1 综合 §6 写的「cs_bucket_rank 每桶内均匀分布必然撞 dist ≥ 0.5 门槛」这条判断在 s2 已不成立,接手的人若照着读会把 F 组整组误判。建议表头或 json 里记下门槛版本。",
+  "s2 表仍把 cov = 0.00~0.02 的除零行按 utrain 夏普排在最前面:abl_H(+388.6%/−335.1%/+322.2%,Lshp 3.76)占据全表第一行,同类还有 abl_E、sub_D_day_autocorr_n1 / _hurst / _ar1_coefficient、only_M_R、sub_M_mul 共 7 行。已经打了 ✗,但排序没有降权,两轮都排在最显眼的位置 —— 建议把 cov < 0.95 的行排到表尾或单列一节。"
+ ]
+}

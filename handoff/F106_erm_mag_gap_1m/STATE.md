@@ -1,6 +1,6 @@
 # F106_erm_mag_gap_1m — 交接状态
 
-_自动生成于 2026-10-05 15:14(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F106_erm_mag_gap_1m` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_1m(批次 B01_single_factors)
 - 表达式:`sub(div(div(day_sum(select_where(is_gt(Ret, day_quantile(Ret, 0.95)), Ret, create_like(Ret, 0))), add(day_sum(is_gt(Ret, day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(Ret, day_quantile(Ret, 0.05)), abs_(Ret), create_like(Ret, 0))), add(day_sum(is_lt(Ret, day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06))))`
@@ -12,7 +12,7 @@ _自动生成于 2026-10-05 15:14(`python scripts/recorder.py --brief F106_erm_m
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
   - `synth:F106_erm_mag_gap_1m`:已返回结果,最后动作 10-05 11:20 → `handoff/F106_erm_mag_gap_1m/agents/synth_a2e1488766b481d6b.md`
   - `verdict:F106_erm_mag_gap_1m`:中断,最后动作 10-05 13:53 → `handoff/F106_erm_mag_gap_1m/agents/verdict_a5251c36b37e7743a.md`
-  - `verdict:F106_erm_mag_gap_1m`:还在跑(多半就是你自己)
+  - `verdict:F106_erm_mag_gap_1m`:已返回结果,最后动作 10-05 15:18 → `handoff/F106_erm_mag_gap_1m/agents/verdict_ae0c50256218363f2.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F106_erm_mag_gap_1m` 看服务器上的 tag,`./scripts/study.sh digest F106_erm_mag_gap_1m <tag>` 重看结果)。
 
@@ -132,6 +132,9 @@ R3 被否定且更糟:常规区间不是空的而是反的(h_regular_gate 只留
 - `sweep_s2`  10-05 11:51  203 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweep_s2`
 - `anatomy_s2`  10-05 12:12  0 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m anatomy_s2`
 - `sweepfinal_s2`  10-05 12:17  8 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweepfinal_s2`
+- `sweep_s3`  10-05 16:24  228 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweep_s3`
+- `anatomy_s3`  10-05 16:28  0 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m anatomy_s3`
+- `sweepfinal_s3`  10-05 16:31  8 个变体  → `./scripts/study.sh digest F106_erm_mag_gap_1m sweepfinal_s3`
 - `x1`(自写脚本的输出)  10-04 12:30  exit 0  → `logs/F106_erm_mag_gap_1m_x1.log`
 - `x2`(自写脚本的输出)  10-04 13:54  exit 0  → `logs/F106_erm_mag_gap_1m_x2.log`
 
@@ -148,5 +151,6 @@ R3 被否定且更糟:常规区间不是空的而是反的(h_regular_gate 只留
 ## 结构化结果(`handoff/F106_erm_mag_gap_1m/results/`)
 
 - `synthesis.json`
+- `verdict.json`
 
 报告:`research/alpha_distillation/F106_erm_mag_gap_1m.md`(10-05 00:18 生成)

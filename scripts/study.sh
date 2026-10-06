@@ -168,6 +168,19 @@ case "$cmd" in
     { printf '\n### %s %s\n' "$(date '+%Y-%m-%d %H:%M')" "${title:-(无标题)}"; [ -n "$body" ] && printf '\n%s\n' "$body"; } >> "$(jfile "$fid")"
     echo "已记入 $(jfile "$fid")($(grep -c '^### ' "$(jfile "$fid")") 条)"
     ;;
+  idea)      # hand an idea (guidance/*.yaml -> ideas) to AlphaCube: a short steered GP search plus its control; detached, log logs/_idea_<id>.log
+    id=$1; shift
+    $RS "$SSH" guidance/ "$HOST:$R/guidance/" && $RS "$SSH" partura/steer.py partura/ops_ext.py "$HOST:$R/partura/" && $RS "$SSH" scripts/idea_search.py "$HOST:$R/scripts/" || exit 1
+    $SSH $HOST "$ENV && export PARTURA_GPU_WAYS=\${PARTURA_GPU_WAYS:-2} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 && screen -dmS idea_$id bash -c '$RPY -u scripts/idea_search.py $id $* > logs/_idea_$id.log 2>&1' && echo started idea_$id"
+    ;;
+  idea-log)  # the tail of an idea search's log
+    $SSH $HOST "grep -v 'FutureWarning\|vmap(single_row)\|UserWarning' $R/logs/_idea_$1.log | tail -${2:-25} | cut -c1-320"
+    ;;
+  idea-pull) # the evidence of the idea searches -> episodes/<tag>_<idea>/evidence.json
+    mkdir -p episodes
+    $RS "$SSH" --include='*/' --include='evidence.json' --include='episode.md' --exclude='*' "$HOST:$R/episodes/" episodes/
+    ls episodes/*/evidence.json 2>/dev/null
+    ;;
   status)
     $SSH $HOST "screen -ls | grep pt_ ; echo; nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader; awk '/^anon /{printf \"container anon %.1f GiB\n\", \$2/1073741824}' /sys/fs/cgroup/memory.stat; ls $R/tmp/locks 2>/dev/null | tr '\n' ' '"
     ;;

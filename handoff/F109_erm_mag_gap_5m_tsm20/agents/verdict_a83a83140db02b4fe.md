@@ -1,6 +1,6 @@
 # verdict:F109_erm_mag_gap_5m_tsm20 — agent a83a83140db02b4fe(工作流 wf_4811c95a-915)
 
-- 状态:**还在跑**;开始 10-05 15:06,最后一次动作 10-05 15:16;工具调用 31 次
+- 状态:**已返回结果**;开始 10-05 15:06,最后一次动作 10-05 15:31;工具调用 62 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F109_erm_mag_gap_5m_tsm20/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -1179,6 +1179,674 @@ OK    h3_fam_x_posgap
 OK    h3_blend_tailq75
 25/25 parse
 ```
+
+**10-05 15:19 · Bash** — Append s2 reconciliation section to synthesis
+
+```bash
+cd /Users/wxy/Desktop/Partura && cat >> notes/F109_erm_mag_gap_5m_tsm20/synthesis.md <<'EOF'
+
+---
+
+## 第二轮(s2)对账与结论
+
+主研 Opus 5,2026-10-05。只用 `table ... s2 --all` + `sweep_s2.json` 的 expr + `ops_ext.py` 的函数定义;**0 次服务器计算,没有读测试段**。
+口径不变(多头腿扣 15bp 净超额 / 纯多头夏普,train | valid | utrain)。新基准 `k_known_xfrozen` = `cs_last_high20(neg(k_known), cross_max(day_zero_ratio(Ret),15))`
+= **+16.4% / +23.2% / +18.5%,Lshp 2.81 / 3.98 / 3.15** —— 这是本轮真正的门槛,比 `k_known`(+12.6/+22.3/+15.4,1.78/3.46/2.22)高一整档。
+
+### 1. 逐条对账(支持 ✓ / 否定 ✗ / 噪声内 ≈)
+
+| 上一轮的推论 / 假设组 | 结果 | 判 |
+|---|---|---|
+| A:去掉上侧计数归一化 + 砍掉下侧 = 最小形 | `h_a_spine20` = `h_a_spine_inpct` = `only_L_R` = `sub_J_day_first` **逐位同分** +1.6/+14.0/+5.1,0.17/1.65/0.58,LTO 1.7%,ρo 0.51,ρk 0.35 | ✓ 复现 |
+| A:「除以分位数全程只是损害」 | `h_a_upsum20`(去分母)+0.5%、`h_a_upsum_vol20`(换 20 日平均波动)+0.6% —— 比 spine 低 4.6pp | ✗ **分母承重** |
+| A:「载重的是超阈个数」 | `h_a_upcnt20` −3.5%(dist 0.17 ✗)、`h_a_upcnt_ema30` −2.4%、`h_a_cntgap20` −3.2%(dist 0.11 ✗) | ✗ 个数无用 |
+| A:两侧带符号净漂移 | `h_a_tailnet20` +2.9/+6.1/+3.8,0.47/0.82/**0.58**,ρo 0.26、**ρk 0.27** —— 与 spine 同夏普但相关更低 | ✓ 弱支持 |
+| B:1e-6 读到的是「封板事件标记」,能单独站住 | `h_b_zero20` −1.2%、`h_b_zero_max60` −3.2%(dist 0.06 ✗)、`h_b_flatrun20` −1.3%(dist 0.21 ✗)、`h_b_age250` +3.7%(dist 0.05 ✗);只有带符号的 `h_b_zero_signed20` +2.7%(ρk −0.00)勉强 | ✗ **多头腿不可用**(钱确实只在空头腿) |
+| B:冻结段超配就是原式 −3.2% 的来源 | `seg_xfrozen_m`(原式剔掉冻结最重 20%)**+2.8%**,比原式 +6.0pp | ✓ 钉死 |
+| C:「5 分钟 vs 1 分钟错配」是必需品 | `h_c_r1_tail20`(两端都改 1 分钟、自洽)**+0.0/+10.5/+3.3,ρk −0.01**(全表相关最低的通过项);而 `leaf_Ret_ret5`(两端都 5 分钟、也自洽)−6.3% | ✗ 改判:**不是「错配」,是「阈值必须是 1 分钟分位数」** |
+| C:阈值可以换成标准差 / 放宽到 75% / 换 MAD z | `h_c_std_thresh20` dist 0.19 ✗、`h_c_q75_thresh20` dist 0.23 ✗、`h_c_madz_cnt20` dist 0.18 ✗ | ✗ 阈值档位与形式都承重 |
+| D ①:直接读「资金在推」的量应更干净 | `h_d_signed20` −5.1%、`h_d_signed_r5_20` −1.3%、`h_d_wmean20` +1.3%、`h_d_centroid20` −2.6%、`h_d_gini_amt20` −1.1% | ✗ **全军覆没** |
+| D ②:「5 分钟正占比 − 1 分钟正占比」保留信息 | `h_d_pos_gap20` **+4.9/+10.8/+6.6,0.81/1.76/1.09,LTO 1.2%,ρo +0.01**;比值版 `h_h_persist20` +4.3/+12.6/+6.7(0.61/2.0
+… (1578 字符略) …
+的那一段,所以变现不了。**
+
+### 3. 定论(只凭 train / valid)
+
+**best_own(不含已知族成分)**:① `h_h_tailmean_q75` = `cross_tail_mean_q75(SPINE_D, 60)` +5.1/+14.1(utrain +7.7%、Lshp 0.92、LTO 1.9%、ρk 0.28);
+② `h_d_pos_gap20` +4.9/+10.8(+6.6%、1.09、LTO 1.2%,但 ρk 0.65、ρo 0.01 —— 另一条因子);③ `h_a_spine20` +1.6/+14.0(+5.1%、0.58、ρo 0.51,是原式的最小提纯形)。
+**best_on_known**:`h_f_blend_fix025` +13.2/+23.1(+16.0%、2.31),比 `k_known` 只多 +0.6pp / +0.09 夏普(**噪声内**),比 `k_known_xfrozen` 少 **2.5pp / 0.84 夏普** → **不要用**。
+`scr_xhi_p` 同理(+15.6%/2.37 < +18.5%/3.15)。
+
+**one_line**:原式的多头腿不可用(−3.2%、Lshp −1.24),剥掉 1e-6 爆炸后确实提纯出一条干净的弱信号(`cross_tail_mean_q75(Σr5·1[r5>q95]/q95, 60)`,utrain +7.7%、夏普 0.92、换手 1.9%),
+但它只有已知成交额族的一半、在成交额桶内塌掉 2/3、对家族的残差和叠加都是零 —— **提纯成立,升华失败;既不是候选也不是筛子。**
+
+**verdict**:`分辨 / 提纯(弱)`。不改推荐。三件事可以当定论写进档案:(a) 承重的是「**当天自己的 1 分钟收益 95% 分位**」这个顺序统计量,换成标准差、20 日平均波动、或去掉分母都塌;
+(b) 1e-6 爆炸读到的「封板事件」**在多头腿上一文不值**(B 组五条全废),它的价值全在空头腿与「别买」上;(c) 这条因子唯一的增量落在家族持仓 −20.3pp 的活跃段与 4% 的科创板上,结构性地变现不了。
+EOF
+wc -l notes/F109_erm_mag_gap_5m_tsm20/synthesis.md
+```
+
+```
+     168 notes/F109_erm_mag_gap_5m_tsm20/synthesis.md
+```
+
+**10-05 15:19 · Bash** — Verify appended section length
+
+```bash
+cd /Users/wxy/Desktop/Partura && grep -n "## 第二轮(s2)对账与结论" notes/F109_erm_mag_gap_5m_tsm20/synthesis.md && echo "appended lines:" && python3 -c "
+import io
+ls=open('/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/synthesis.md').read().split('\n')
+i=[j for j,l in enumerate(ls) if l.startswith('## 第二轮')][0]
+print(len(ls)-i+2)"
+```
+
+```
+122:## 第二轮(s2)对账与结论
+appended lines:
+50
+```
+
+**10-05 15:19 · agent 的话**
+
+Now the state.md rewrite.
+
+**10-05 15:20 · 写文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`(7489 字符)
+
+10-05 15:20 · 读 `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+**10-05 15:22 · 写文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`(7480 字符)
+
+**10-05 15:22 · Bash** — Check state.md size and section count
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md && grep -c "^## " notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   11440 notes/F109_erm_mag_gap_5m_tsm20/state.md
+8
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- ## 3. 过程与逻辑
+
+1. `table ... s2 --all`(233 行 + 解剖)→ 2. 用 awk 砍掉 expr 列把表压到可读(表把 expr 截在 ~300 字符,节点字母表仍不随表输出)→
+3. 需要完整 expr 时读 `runs/.../sweep_s2.json` 的 `results[id]['expr']`(13 条 cov=0.00/dist=0.00 的退化件只在 JSON 里,表会过滤)→
+4. 按上一轮 synthesis §5 的 A~H 八组逐条对账,每条写「支持 / 否定 / 噪声内」+ id + 数字 →
+5. 读 `ops_ext.py` 第四批 23 个新算子的 docstring,挑出「上一轮想写而写不出」的 →
+6. 落 synthesis 新节 + `hypo3.yaml` 25 条(`./scripts/study.sh hypo3` **25/25 parse**)+ 本文件 + journal。
++ ## 3. 过程与逻辑
+
+1. `table ... s2 --all`(233 行 + 解剖)→ 2. awk 砍掉 expr 列把表压到可读 → 3. 需要完整 expr 时读 `sweep_s2.json` 的 `results[id]['expr']` →
+4. 按上一轮 synthesis §5 的 A~H 八组逐条对账(「支持 / 否定 / 噪声内」+ id + 数字)→ 5. 读 `ops_ext.py` 第四批 23 个新算子的 docstring,
+挑「上一轮想写而写不出」的 → 6. 落 synthesis 新节 + `hypo3.yaml` 25 条(`./scripts/study.sh hypo3` **25/25 parse**)+ 本文件 + journal。
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+-   (a) 新算子才写得出的 20 条 —— 带保护的尾部比值(`h3_es_hi_r1/r5`、`h3_es_gap`)、封顶/封底占比(`h3_atmax20`、`h3_atmax_gap`)、
+  桶内去均值 / z(`h3_spine_bdm_liq`、`h3_tailq75_bdm_liq`、`h3_tailq75_bz_liq`、`h3_posgap_bdm_liq`)、价位格子(`h3_distinct20`)、
+  放量分钟均值(`h3_topw_mean20`)、资金加权波动当分母(`h3_spine_wstd`)、日内因果阈值(`h3_spine_izexp`)、稳健日轴壳(`h3_spine_madz`)、
+  市场状态翻转与切换(`h
+… (122 字符略) …
+_spine`);
+  (b) 本轮结果直接指向的 5 条 —— 拆开「窗口 60」与「取上尾」(`h3_tailq25`、`h3_tailq75_20`),
+  把筛子 / 叠加从原式换成 TQ75 与 POSGAP(`h3_fam_x_tailq75`、`h3_fam_x_posgap`、`h3_blend_tailq75`)。
++   (a) 新算子才写得出的 20 条 —— 带保护的尾部比值(`h3_es_hi_r1/r5`、`h3_es_gap`)、封顶/封底占比(`h3_atmax20`、`h3_atmax_gap`)、
+  桶内去均值 / z(`h3_spine_bdm_liq`、`h3_tailq75_bdm_liq`、`h3_tailq75_bz_liq`、`h3_posgap_bdm_liq`)、价位格子(`h3_distinct20`)、
+  放量分钟均值(`h3_topw_mean20`)、资金加权波动当分母(`h3_spine_wstd`)、日内因果阈值(`h3_spine_izexp`)、稳健日轴壳(`h3_spine_madz`)、
+  状态翻转与切换(`h3_spine_flip_vol`、`h3_switch_calm`)、不饱和上市天数(`h3_age_bdm`、`h3_age_first_low`)、
+  日间不动(`h3_flat_daily20`)、上行半标准差(`h3_semistd_spine`);(b) 本轮结果直接指向的 5 条 —— 拆开「窗口 60」与「取上尾」
+  (`h3_tailq25`、`h3_tailq75_20`),把筛子 / 叠加从原式换成 TQ75 与 POSGAP(`h3_fam_x_tailq75`、`h3_fam_x_posgap`、`h3_blend_tailq75`)。
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - **先读 `notes/.../synthesis.md`**:§1~§5 是第一轮(机制 + 节点字母表 A..AC),末节是第二轮的对账表与定论。本文件只是索引。
+- **比结构一定要同时看 ρo 与 ρk**:`h_d_pos_gap20` 数字好(+6.6%/1.09)但 **ρo +0.01** —— 它不是这条因子的提纯;
+  `h_e_spine_high40` +9.5% 但 **ρk 0.82**(`cs_first_high40` 的键是 Amt,本身就含已知族成分),不能算 best_own。
+  老坑仍成立:`sub_B_mul`、`abl_C`、`abl_G` 是常数被删后的退化件,不是结构发现。
+- **「段内超额」≠「只做这一段的收益」**:成交额最高 20% 段内 +10.8%,但那一段**段等权 −17.8%**;写成表达式后(`h_e_spine_high40`)全市场只剩 +9.5%。
+  表头写了「段内 + 段等权 ≈ 只做这一段」,读段表时容易忘。
++ - **先读 `notes/.../synthesis.md`**:§1~§5 是第一轮(机制 + 节点字母表 A..AC),末节是第二轮的对账表与定论。本文件只是索引。
+- **比结构一定要同时看 ρo 与 ρk**:`h_d_pos_gap20` 数字好(+6.6%/1.09)但 **ρo +0.01** —— 它不是这条因子的提纯;
+  `h_e_spine_high40` +9.5% 但 **ρk 0.82**(`cs_first_high40` 的键是 Amt,本身含已知族成分),不能算 best_own。
+  老坑仍成立:`sub_B_mul`、`abl_C`、`abl_G` 是常数被删后的退化件,不是结构发现。
+- **「段内超额」≠「只做这一段的收益」**:成交额最高 20% 段内 +10.8%,但那一段**段等权 −17.8%**;写成表达式后全市场只剩 +9.5%。
+```
+
+**10-05 15:23 · Bash** — Check state.md size again
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   11168 notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - (a)「近 20 日有没有封板」的事件标记 —— **多头腿上一文不值**。B 组五条干净写法全废
+  (`h_b_zero20` −1.2%、`h_b_zero_max60` −3.2% dist 0.06 ✗、`h_b_flatrun20` −1.3% dist 0.21 ✗、`h_b_age250` +3.7% dist 0.05 ✗,
+  只有 `h_b_zero_signed20` +2.7% 勉强)。但它确实是原式亏钱的原因:`seg_xfrozen_m`(剔掉冻结最重 20%)把原式从 −3.2% 抬到 **+2.8%**。
+- (b)「日内被推着走」的活跃小盘信号 —— **提纯成立但很弱、且无增量**。最好的自有版本 `h_h_tail
+… (248 字符略) …
+、`day_gini` −1.1%);
+  唯一成立的 `h_d_pos_gap20`(+6.6%、夏普 1.09、LTO 1.2%)**ρo 只 +0.01、ρk 0.65** —— 它不是这棵树的提纯,更像「陈旧价格 / 薄盘」的代理
+  (第三批 `h3_distinct20`、`h3_posgap_bdm_liq` 去定)。
++ - (a)「近 20 日有没有封板」的事件标记 —— **多头腿上一文不值**。B 组五条干净写法全废(`h_b_zero20` −1.2%、`h_b_zero_max60` −3.2% dist 0.06 ✗、
+  `h_b_flatrun20` −1.3% dist 0.21 ✗、`h_b_age250` +3.7% dist 0.05 ✗,只有 `h_b_zero_signed20` +2.7% 勉强)。但它确实是原式亏钱的原因:
+  `seg_xfrozen_m`(剔掉冻结最重 20%)把原式从 −3.2% 抬到 **+2.8%**。
+- (b)「日内被推着走」的活跃小盘信号 —— **提纯成立但很弱、且无增量**。最好的自有版本 `h_h_tailmean_q75` utrain **+7.7%、夏普 0.92、LTO 1.9%、ρk 0.28**
+  (约为已知族 +15.4%/2.22 的一半);成交额桶内塌掉 2/3(`h_e_spine_bk_liq` +1.6%);对家族取残差 `h_g_res_spine` **+0.2%**。
+- 机制推断**被否了一半**:D 组「直接读资金在推」五条全军覆没(`day_signed_ratio` −5.1%、`day_wmean` +1.3%、`day_centroid` −2.6%、`day_gini` −1.1%);
+  唯一成立的 `h_d_pos_gap20`(+6.6%、1.09、LTO 1.2%)**ρo 只 +0.01、ρk 0.65** —— 更像「陈旧价格 / 薄盘」的代理(`h3_distinct20`、`h3_posgap_bdm_liq` 去定)。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - **best_on_known**:`h_f_blend_fix025`(家族秩 + 0.25×spine 秩)+13.2 / +23.1 / **+16.0%**,1.85 / 3.59 / 2.31 —— 比 `k_known` 多 +0.6pp / +0.09 夏普(**噪声内**),
+  比 `k_known_xfrozen` 少 **2.5pp / 0.84 夏普**;`scr_xhi_p`(家族剔掉原式最高 20%)+15.6% / 2.37,同样打不过。**结论:别用。**
+- **分母是承重件,不是损害**:`h_a_upsum20`(去掉 /q95)+0.5%、`h_a_upsum_vol20`(换 20 日平均波动)+0.6%,比 s
+… (672 字符略) …
+0.3pp**);科创板 +1.4% → **+10.9 / +15.7 / +14.7 / +14.5%**(只占 4.0%)。代价在冻结段 −10.9% → **−34.9 ~ −56.8%**。
+  两边抵消 → 全市场 +15.4% → +15.1~16.0%。**信息真实存在,但住在已知族结构性不碰的那一段,变现不了。**
++ - **best_on_known**:`h_f_blend_fix025`(家族秩 + 0.25×spine 秩)+13.2 / +23.1 / **+16.0%**,1.85 / 3.59 / 2.31 —— 比 `k_known` 多 +0.6pp / +0.09 夏普
+  (**噪声内**),比 `k_known_xfrozen` 少 **2.5pp / 0.84 夏普**;`scr_xhi_p`(家族剔掉原式最高 20%)+15.6% / 2.37,同样打不过。**结论:别用。**
+- **分母是承重件,不是损害**:`h_a_upsum20`(去掉 /q95)+0.5%、`h_a_upsum_vol20`(换 20 日平均波动)+0.6%,比 spine 低 4.6pp。承重的是
+  「**当天自己的 1 分钟收益 95% 分位**」这个顺序统计量;换成标准差 / 75% 档 / MAD z 全部 dist ✗。
+- **「错配」改判**:`h_c_r1_tail20`(两端都 1 分钟、自洽)+3.3% 过门槛,而 `leaf_Ret_ret5`(两端都 5 分钟、也自洽)−6.3%
+  → **不是「错配」承重,是「阈值必须是 1 分钟分位数」**;被测量的孔径 5 分钟略优于 1 分钟(+5.1 vs +3.3)。
+- **两个否定检验通过**:`h_h_spine_bk_age`(上市时长桶内秩)**+6.4% > spine +5.1%** → 不是上市时长 / 停牌史分类器;
+  `h_e_spine_nonew`(剔次新)**+0.5%**(−4.6pp) → 次新段在贡献,不是拖累(与原式解剖相反)。
+- **状态加权问不出东西**:`h_f_blend_calm` +15.1%/2.12、`h_f_blend_disp` +15.5%/2.17 ≤ 固定 0.25 常权的 +16.0%/2.31。
+- **解剖最锋利的一格**:`scr_xhi_p` / 三条 blend 相对家族的改善全在**家族不持仓的地方** —— 成交额最高 20% 段内 +2.5% → **+8.0 / +7.6 / +5.1 / +6.7%**
+  (家族在那里持仓 **−20.3pp**);科创板 +1.4% → **+10.9 ~ +15.7%**(只占 4.0%)。代价在冻结段 −10.9% → **−34.9 ~ −56.8%**。
+  两边抵消 → 全市场 +15.4% → +15.1~16.0%。**信息真实存在,但住在已知族结构性不碰的那一段,变现不了。**
+```
+
+**10-05 15:23 · Bash** — Check state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   11035 notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - **第三批 25 条**在 `studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml`,**25/25 parse**。两类:
+  (a) 新算子才写得出的 20 条 —— 带保护的尾部比值(`h3_es_hi_r1/r5`、`h3_es_gap`)、封顶/封底占比(`h3_atmax20`、`h3_atmax_gap`)、
+  桶内去均值 / z(`h3_spine_bdm_liq`、`h3_tailq75_bdm_liq`、`h3_tailq75_bz_liq`、`h3_posgap_bdm_liq`)、价位格子(`h3_distinct20`)、
+  放量分钟均值(`h3_topw_mean20`)、资金加权波动当
+… (278 字符略) …
+0`),把筛子 / 叠加从原式换成 TQ75 与 POSGAP(`h3_fam_x_tailq75`、`h3_fam_x_posgap`、`h3_blend_tailq75`)。
+- 文件头写清了 R5 / SPINE_D / SPINE / TQ75 / POSGAP / KNOWN / LIQ 六个记号,下一轮读表前先看那几行。
++ - **第三批 25 条**在 `studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml`,**25/25 parse**(每条的 why 写了它在判什么、门槛是多少)。两类:
+  (a) 新算子才写得出的 20 条 —— 带保护的尾部比值、封顶/封底占比、桶内去均值 / z(对 spine、TQ75、POSGAP 各一遍)、价位格子、
+  放量分钟均值、资金加权波动当分母、日内因果阈值(`in_zscore_expand`)、稳健日轴壳、状态翻转与切换、不饱和上市天数、日间不动、上行半标准差;
+  (b) 本轮结果指向的 5 条 —— 拆开「窗口 60」与「取上尾」,把筛子 / 叠加从原式换成 TQ75 与 POSGAP。
+- 文件头写清了 R5 / SPINE_D / SPINE / TQ75 / POSGAP / KNOWN / LIQ 六个记号,下一轮读表前先看那几行。
+```
+
+**10-05 15:24 · Bash** — Check state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   10688 notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- ## 5. 当前的候选
+
+**没有新候选,推荐没换。** 仍是 `f_fam30 = cross_mean(day_std(Amt), 30)`、hlL = 0、sign = −1(留出段 +14.10% / 1.509)。
+本轮唯一够得上「以后可能成为候选」的是 `TQ75 = cross_tail_mean_q75(div(Σ r5·1[r5>q95], q95+1e-6), 60)`
+—— utrain +7.7% / 0.92 / LTO 1.9% / ρk 0.28,**但它只有家族的一半、残差为零、桶内未验**;必须先过 hypo3 的 `h3_tailq75_bdm_liq` / `h3_tailq75_bz_liq`,
+**它不是候选。** 另外 `k_known_xfrozen`(+18.5% / 3.15)比用户现有推荐高一整档,但它**不属于 F109**,是通用筛子,要另开账记。
++ ## 5. 当前的候选
+
+**没有新候选,推荐没换。** 仍是 `f_fam30 = cross_mean(day_std(Amt), 30)`、hlL = 0、sign = −1(留出段 +14.10% / 1.509)。
+唯一够得上「以后可能成为候选」的是 `TQ75 = cross_tail_mean_q75(div(Σ r5·1[r5>q95], q95+1e-6), 60)`(utrain +7.7% / 0.92 / LTO 1.9% / ρk 0.28),
+**但它只有家族的一半、残差为零、桶内未验**,必须先过 `h3_tailq75_bdm_liq` / `h3_tailq75_bz_liq` —— **它不是候选**。
+另外 `k_known_xfrozen`(+18.5% / 3.15)比用户现有推荐高一整档,但它**不属于 F109**,是通用筛子,要另开账记。
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - **工具坑**:① 表把 expr 截在 ~300 字符、不打印节点字母表 → 查完整 expr 去 `sweep_s2.json`;
+  ② s2 有 13 条在 JSON 里但不在表里(cov=0.00/dist=0.00 的完全退化件:`abl_V`、`iso_K/V`、`nosc_AC_cs_state_rank`、6 条 `nosc_*_day_es_ratio_*`)——
+  表里没有一行字说明「不在表里 = 退化」,别读成「没跑」;
+  ③ **筛子必须写 `cs_last_high20(neg(y), key)`**:`h_g_fam_nofrozen/norun/nonew` 三条漏了 `neg()`,y = k_known 而家族的多
+… (745 字符略) …
+s/.../hypo3.yaml`、追加 `journal.md` 一条、覆盖本文件。
+  其余 notes(01~12、R1 草稿、`results/`、`orders/`、`hypo.yaml`)**一个字没动**;`scripts/partura/workflows/handoff/lab/docs` 与别的因子**没碰**。
++ - **工具坑**:① 表把 expr 截在 ~300 字符、不打印节点字母表 → 查完整 expr 去 `sweep_s2.json`;② s2 有 13 条在 JSON 里但不在表里
+  (cov=0.00/dist=0.00 的退化件:`abl_V`、`iso_K/V`、`nosc_AC_cs_state_rank`、6 条 `nosc_*_day_es_ratio_*`),表里没写「不在表里 = 退化」,别读成「没跑」;
+  ③ **筛子必须写 `cs_last_high20(neg(y), key)`**:`h_g_fam_nofrozen/norun/nonew` 漏了 `neg()`,家族的多头端在低值 → sg −1 后被 −1 平移的那 20%
+  反而成了多头书,测成「只买被标记的票」(+9.9 / +0.5 / +3.3%),三条作废;④ **`cs_bucket_rank` 的 dist 问题在 s2 已消失**(s1 双双 0.20 ✗,s2 为 0.99/1.00)
+  —— 可以放心用桶内秩中性化;⑤ `day_es_ratio_hi/lo` **不能套在 `select_where(c, x, 0)` 这种零填充序列上**(它用序列自己的分位数,零填充的 5% 分位恒为 0
+  → 整片 NaN,6/8 条 `nosc_*` 就这么退化的);⑥ `cs_state_rank` 单独当信号必退化(每天一个常数,dist 0.0003),只能当条件或权重,而**权重**问不出东西。
+- **多头腿与多空腿方向相反**:原式多空 LS +2.55 / +3.46(全场最高一档)而多头腿 −3.2%;选拔只看多头腿。
+- 老口径陷阱:(a) 多空数字有 hlL / hlS 两套,引用前读 `08_variants.md` 第 5 条;(b) 家族的 +12.6% / 1.78 是它自己的 hl 0,固定 hl 20 上只有 +8.4% / 1.21。
+- **本轮改过的文件**:追加 `synthesis.md` 一节、新增 `studies/.../hypo3.yaml`、追加 `journal.md` 一条、覆盖本文件。其余 notes(01~12、R1 草稿、
+  `results/`、`orders/`、`hypo.yaml`)**一个字没动**;`scripts/partura/workflows/handoff/lab/docs` 与别的因子**没碰**。
+```
+
+**10-05 15:24 · Bash** — Check state.md size and sections
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md && grep -c "^## " notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   10384 notes/F109_erm_mag_gap_5m_tsm20/state.md
+8
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- ## 7. 留出段
+
+**已读 1 次(2026-10-04 15:19,tag `S_final`),绝对不许再读。** 本轮没碰;`runs/.../sweepfinal_s2.json` 本轮**没有打开**。
+预算仍是已花 5 次(`S0_baseline`、`x1_anatomy`、`S1_lvl`、`x2_incremental`、`S_final`),上限 8;本轮 0 次。作废 tag:`S1_S2`(exit 97,无 JSON)。
++ ## 7. 留出段
+
+**已读 1 次(2026-10-04 15:19,tag `S_final`),绝对不许再读。** 本轮没碰,`runs/.../sweepfinal_s2.json` **没有打开**。
+预算已花 5 次(`S0_baseline`、`x1_anatomy`、`S1_lvl`、`x2_incremental`、`S_final`),上限 8;本轮 0 次。作废 tag:`S1_S2`(exit 97,无 JSON)。
+```
+
+**10-05 15:24 · Bash** — Check state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+```
+   10372 notes/F109_erm_mag_gap_5m_tsm20/state.md
+```
+
+**10-05 15:25 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- > 本轮 = **批量扫描 s2(233 变体 + 市场解剖)的对账与定论**。0 次服务器计算(只用了 `table` / `hypo3` 两个只读命令 +
+> 本地读 `runs/.../sweep_s2.json` 的 expr 与 `partura/ops_ext.py` 的函数定义),**没有读测试段**。
+> 产出三件:`synthesis.md` 末尾新增「## 第二轮(s2)对账与结论」(50 行)、`studies/.../hypo3.yaml`(25 条,25/25 parse)、本文件。
++ > 本轮 = **批量扫描 s2(233 变体 + 市场解剖)的对账与定论**。0 次服务器计算(只用 `table` / `hypo3` 两个只读命令 + 本地读
+> `sweep_s2.json` 的 expr 与 `ops_ext.py` 的函数定义),**没有读测试段**。产出:`synthesis.md` 新增末节(50 行)、`hypo3.yaml`(25/25 parse)、本文件。
+```
+
+**10-05 15:25 · Bash** — Append research note to journal
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md && ./scripts/study.sh note F109_erm_mag_gap_5m_tsm20 "[主研] 批量扫描 s2 对账与结论" <<'EOF'
+- 对账(第二批 40 条,train|valid|utrain):支持 = A 组最小形复现(h_a_spine20 = only_L_R = sub_J_day_first = h_a_spine_inpct 四条逐位同分 +1.6/+14.0/+5.1,ρk 0.35)、
+  D② 正占比之差(h_d_pos_gap20 +4.9/+10.8/+6.6、夏普 1.09、LTO 1.2%、ρo +0.01)、H 组 60 日上尾均值(h_h_tailmean_q75 +5.1/+14.1/+7.7、0.92、ρk 0.28)、
+  E③ 成交额桶内塌 2/3(h_e_spine_bk_liq +1.6%)、冻结段是原式亏钱来源(seg_xfrozen_m 把原式 -3.2% 抬到 +2.8%)。
+- 否定:B 组「封板事件标记」五条干净写法在多头腿上全废(dist ✗ 或 ≈0);D① 直接读资金拉抬五条全军覆没(day_signed_ratio -5.1%、day_wmean +1.3%、day_centroid -2.6%);
+  F 组市场状态加权 ≤ 固定 0.25 常权 ≤ 噪声;G 组残差 +0.2%、筛子 scr_xhi_p +15.6%/2.37 打不过通用筛子 k_known_xfrozen 的 +18.5%/3.15。
+- 两处改判:① 承重的不是「5 分钟 vs 1 分钟错配」而是「阈值必须是 1 分钟分位数」(h_c_r1_tail20 两端自洽 1 分钟 +3.3%、ρk -0.01 通过,leaf_Ret_ret5 两端自洽 5 分钟 -6.3%);
+  ② 分位数分母是承重件不是损害(去掉 h_a_upsum20 +0.5%、换 20 日平均波动 h_a_upsum_vol20 +0.6%,比 spine 低 4.6pp)。否定检验也通过:上市时长桶内 +6.4% > spine +5.1%。
+- 定论:原式多头腿不可用;提纯出的 TQ75 = cross_tail_mean_q75(Σr5·1[r5>q95]/q95, 60) 是真的但只有已知族一半,残差与叠加都是零 —— 提纯成立、升华失败,不改推荐。
+  解剖最锋利的一格:相对家族的全部改善都落在家族持仓 -20.3pp 的高成交额段与 4% 的科创板上,结构性变现不了。
+- 落盘:synthesis.md 末尾「第二轮(s2)对账与结论」50 行、state.md 覆盖重写、studies/.../hypo3.yaml 25 条 25/25 parse(新算子类 20 条 + 本轮指向 5 条)。0 次服务器计算,没读测试段。
+EOF
+```
+
+```
+   10287 notes/F109_erm_mag_gap_5m_tsm20/state.md
+已记入 notes/F109_erm_mag_gap_5m_tsm20/journal.md(21 条)
+```
+
+**10-05 15:25 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- - **多头腿与多空腿方向相反**:原式多空 LS +2.55 / +3.46(全场最高一档)而多头腿 −3.2%;选拔只看多头腿。
++ - **多头腿与多空腿方向相反**:原式多空 LS +2.55 / +3.46(全场最高)而多头腿 −3.2%;选拔只看多头腿。
+```
+
+**10-05 15:25 · 改文件** `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+```
+- ⑤ **明确不做**:不再扫窗口、不再修 1e-6、不深挖空头腿、不碰别的因子与 `scripts/partura/workflows/handoff/lab/docs`、不读测试段。
++ ⑤ **明确不做**:不扫窗口、不修 1e-6、不挖空头腿、不碰别的因子与 `scripts/partura/workflows/handoff/lab/docs`、不读测试段。
+```
+
+**10-05 15:25 · Bash** — Verify state.md size and git status
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F109_erm_mag_gap_5m_tsm20/state.md && git status --short 2>/dev/null | head -20
+```
+
+```
+   10272 notes/F109_erm_mag_gap_5m_tsm20/state.md
+ M handoff/F101_day_shine_retstd/STATE.md
+ M handoff/F101_day_shine_retstd/agents/verdict_aba6480b25c40a77e.md
+ M handoff/F102_kurt_autocorr/STATE.md
+ M handoff/F102_kurt_autocorr/agents/verdict_af1e2cec7e004ff15.md
+ M handoff/F104_kurt_masktop_amt/STATE.md
+ M handoff/F104_kurt_masktop_amt/agents/verdict_a53a8354e270b05d9.md
+ M handoff/F105_std_fangzheng_covamt/STATE.md
+ M handoff/F105_std_fangzheng_covamt/agents/verdict_abf3a5599890322c7.md
+ M handoff/F106_erm_mag_gap_1m/STATE.md
+ M handoff/F106_erm_mag_gap_1m/agents/verdict_ae0c50256218363f2.md
+ M handoff/F107_abs_demean_skew_low/STATE.md
+ M handoff/F107_abs_demean_skew_low/agents/verdict_ad87e3df3f1628871.md
+ M handoff/F108_max_ntkurt_close/STATE.md
+ M handoff/F108_max_ntkurt_close/agents/verdict_ae70bca6af3f47ef1.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/STATE.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/agents/verdict_a83a83140db02b4fe.md
+ M handoff/F110_ret_fair_log/STATE.md
+ M handoff/F111_spearman_qclose/STATE.md
+ M handoff/F112_scale_spow_masktop/STATE.md
+ M handoff/STATUS.md
+```
+
+**10-05 15:25 · Bash** — Check git status for my scoped dirs
+
+```bash
+cd /Users/wxy/Desktop/Partura && git status --short -- notes studies scripts partura workflows lab docs 2>/dev/null
+```
+
+```
+ M notes/F101_day_shine_retstd/journal.md
+ M notes/F101_day_shine_retstd/state.md
+ M notes/F102_kurt_autocorr/journal.md
+ M notes/F102_kurt_autocorr/state.md
+ M notes/F104_kurt_masktop_amt/journal.md
+ M notes/F104_kurt_masktop_amt/state.md
+ M notes/F107_abs_demean_skew_low/journal.md
+ M notes/F107_abs_demean_skew_low/state.md
+ M notes/F109_erm_mag_gap_5m_tsm20/journal.md
+ M notes/F109_erm_mag_gap_5m_tsm20/state.md
+ M notes/F109_erm_mag_gap_5m_tsm20/synthesis.md
+ M studies/F102_kurt_autocorr/hypo3.yaml
+```
+
+**10-05 15:25 · Bash** — Confirm hypo3.yaml exists locally
+
+```bash
+cd /Users/wxy/Desktop/Partura && ls -l studies/F109_erm_mag_gap_5m_tsm20/ && git status --short --untracked-files=all -- studies/F109_erm_mag_gap_5m_tsm20 notes/F109_erm_mag_gap_5m_tsm20
+```
+
+```
+total 176
+-rw-r--r--@ 1 wxy  staff  19373 Oct  5 11:25 hypo.yaml
+-rw-r--r--@ 1 wxy  staff  12718 Oct  5 15:16 hypo3.yaml
+-rw-r--r--@ 1 wxy  staff  30480 Oct  4 12:17 x1_anatomy.py
+-rw-r--r--@ 1 wxy  staff  17883 Oct  4 14:19 x2_incremental.py
+ M notes/F109_erm_mag_gap_5m_tsm20/journal.md
+ M notes/F109_erm_mag_gap_5m_tsm20/state.md
+ M notes/F109_erm_mag_gap_5m_tsm20/synthesis.md
+```
+
+**10-05 15:26 · Bash** — Check whether hypo3.yaml is gitignored
+
+```bash
+cd /Users/wxy/Desktop/Partura && git check-ignore -v studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml; echo "exit=$?"; git ls-files studies/F109_erm_mag_gap_5m_tsm20/
+```
+
+```
+exit=1
+studies/F109_erm_mag_gap_5m_tsm20/hypo.yaml
+studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml
+studies/F109_erm_mag_gap_5m_tsm20/x1_anatomy.py
+studies/F109_erm_mag_gap_5m_tsm20/x2_incremental.py
+```
+
+**10-05 15:26 · Bash** — Final verification of deliverables
+
+```bash
+cd /Users/wxy/Desktop/Partura && head -14 studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml | cut -c1-180 && echo "..." && grep -c "^h3_" studies/F109_erm_mag_gap_5m_tsm20/hypo3.yaml && tail -12 notes/F109_erm_mag_gap_5m_tsm20/journal.md | head -4
+```
+
+```
+# F109_erm_mag_gap_5m_tsm20 —— 第三批假设(主研,2026-10-05;只凭 train/valid,未读测试段)
+# 记号:R5 = in_pct(Close,5)(已由 h_a_spine_inpct 与 h_a_spine20 逐位同分证明等价于 Close/Close[t-5]-1)
+#       SPINE_D = Σ r5·1[r5>q95] / (q95+1e-6)(逐日);SPINE = cross_mean(SPINE_D,20)(= only_L_R 的最小形,utrain +5.1%)
+#       TQ75 = cross_tail_mean_q75(SPINE_D,60)(= h_h_tailmean_q75,本轮最好的自有版本 utrain +7.7%/0.92/ρk 0.28)
+#       POSGAP = cross_mean(day_pos_ratio(R5) - day_pos_ratio(Ret), 20)(= h_d_pos_gap20,utrain +6.6%/1.09/ρk 0.65)
+#       KNOWN = cross_mean(day_std(Amt),30);LIQ = cross_mean(day_sum(Amt),20)
+
+h3_es_hi_r1: {expr: "cross_mean(day_es_ratio_hi(Ret), 20)", why: "带保护的上尾比值,1 分钟自洽口径:h_c_r1_tail20(同一个量但分母上挂 1e-6)+3.3%/ρk -0.01 是�
+h3_es_hi_r5: {expr: "cross_mean(day_es_ratio_hi(in_pct(Close, 5)), 20)", why: "同上但 5 分钟自洽(被测量与阈值都是 5 分钟):leaf_Ret_ret5(5 分钟自洽 + 1e-6)-6.3%
+h3_es_gap: {expr: "cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)", why: "原式 gap 的带保护版。s1 判「整条下侧分支是损害」(abl_AA/only_AA_R/sub
+h3_atmax20: {expr: "cross_mean(day_at_max_ratio(Close), 20)", why: "封在当日最高价的分钟占比。h_b_zero20(日内冻结比例)多头腿 -1.2%、h_b_zero_signed20 +2.7%(�
+h3_atmax_gap: {expr: "cross_mean(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 20)", why: "封顶占比减封底占比 = 原式 1e-6 爆炸的带符号干净写法(爆炸�
+h3_spine_bdm_liq: {expr: "cs_bucket_demean(cross_mean(div(day_sum(select_where(is_gt(in_pct(Close, 5), day_quantile(Ret, 0.95)), in_pct(Close, 5), create_like(Close, 0))), add(day_
+h3_tailq75_bdm_liq: {expr: "cs_bucket_demean(cross_tail_mean_q75(div(day_sum(select_where(is_gt(in_pct(Close, 5), day_quantile(Ret, 0.95)), in_pct(Close, 5), create_like(Close, 0))
+...
+25
+### 2026-10-05 15:25 [主研] 批量扫描 s2 对账与结论
+
+- 对账(第二批 40 条,train|valid|utrain):支持 = A 组最小形复现(h_a_spine20 = only_L_R = sub_J_day_first = h_a_spine_inpct 四条逐位同分 +1.6/+14.0/+5.1,ρk 0.35)、
+  D② 正占比之差(h_d_pos_gap20 +4.9/+10.8/+6.6、夏普 1.09、LTO 1.2%、ρo +0.01)、H 组 60 日上尾均值(h_h_tailmean_q75 +5.1/+14.1/+7.7、0.92、ρk 0.28)、
+```
+
+**10-05 15:26 · agent 的话**
+
+All four deliverables are in place. Returning the structured result.
+
+**10-05 15:29 · StructuredOutput**
+
+```json
+{
+ "input": "{\"factor_id\": \"F109_erm_mag_gap_5m_tsm20\", \"one_line\": \"原式多头腿不可用(utrain −3.2%、夏普 −1.24);剥掉 1e-6 爆炸后确实提纯出一条干净的弱信号 TQ75 = cross_tail_mean_q75(Σ r5·1[r5>q95]/(q95+1e-6), 60)(utrain +7.7%、夏普 0.92、LTO 1.9%、ρk 0.28),但它只有已知成交额族的一半、在成交额桶内塌掉 2/3、对家族的残差与叠加都是零 —— 提纯成立、升华失败,既不是候选也不是筛子。\", \"confirmed\": [\"A 组最小形复现:h_a_spine20 = h_a_spine_inpct = only_L_R = sub_J_day_first 四条逐位同分 +1.6% / +14.0% / utrain +5.1%,Lshp 0.17/1.65/0.58,LTO 1.7%,ρo 0.51,ρk 0.35 —— s1 的「去掉上侧计数归一化 + 砍掉整条下侧分支」是真的结构收益\", \"冻结段超配就是原式亏钱的来源:seg_xfrozen_m(原式剔掉近 15 日冻结最重 20%)+3.6% / +0.8% / utrain +2.8%,比原式 +6.0pp\", \"D② 「5 分钟正占比 − 1 分钟正占比」保留信息:h_d_pos_gap20 +4.9% / +10.8% / utrain +6.6%,Lshp 0.81/1.76/1.09,LTO 仅 1.2%;比值版 h_h_persist20 +4.3% / +12.6% / +6.7%(0.61/2.00/0.97)。但两条 ρo ≈ 0(+0.01 / −0.01)、ρk 0.65 / 0.72 —— 成立的是「另一条信号」,不是本因子的提纯\", \"H 组「60 日上尾均值 = mem_max 的稳健版」:h_h_tailmean_q75 +5.1% / +14.1% / utrain +7.7%,Lshp 0.59/1.81/0.92,LTO 1.9%,ρk 0.28 —— 比 spine 的 20 日均值多 +2.6pp 且相关更低,是本轮最好的自有版本\", \"E③ 「若只是活跃度倾斜,成交额桶内应全塌」:h_e_spine_bk_liq utrain +1.6%、h_e_spine_bk_known +2.0%(spine +5.1% → 塌掉约 2/3;两条 dist 都 1.00,s1 的 dist 0.20 工具问题已消失)\", \"E④ 「只在高成交额 40% 里做」:h_e_spine_high40 +6.0% / +18.1% / utrain +9.5% —— s1 的段内 +10.8% 读数是真的,但该段段等权 −17.8%,全市场只剩 +9.5% < 家族 +15.4%,且 ρk 0.82(键是 Amt,本身含已知族成分)\", \"两个否定检验通过:h_h_spine_bk_age(上市时长桶内秩)utrain +6.4% > spine +5.1% → 它不是上市时长 / 停牌史分类器;A 组两侧带符号净漂移 h_a_tailnet20 utrain +3.8%(Lshp 0.58 与 spine 同、ρk 仅 0.27)\"], \"refuted\": [\"B 组整组:「1e-6 读到的封板事件标记能单独站住」在多头腿上全废 —— h_b_zero20 utrain −1.2%(dist 0.68)、h_b_zero_max60 −3.2%(dist 0.06 ✗)、h_b_flatrun20 −1.3%(dist 0.21 ✗)、h_b_age250 +3.7%(dist 0.05 ✗);只有 h_b_zero_signed20 +2.7%(ρk −0.00)勉强在噪声边缘\", \"A 组「除以分位数全程只是损害」:h_a_upsum20(去掉 /q95)utrain +0.5%、h_a_upsum_vol20(换 20 日平均日内波动)+0.6%,都比 spine 低 4.6pp → 分位数分母是承重件\", \"A 组「载重的是超阈个数而不是幅度」:h_a_upcnt20 −3.5%(dist 0.17 ✗)、h_a_upcnt_ema30 −2.4%、h_a_cntgap20 −3.2%(dist 0.11 ✗)\", \"C 组「5 分钟 vs 1 分钟错配是必需品」改判:h_c_r1_tail20(两端都改 1 分钟、口径自洽)+0.0% / +10.5% / utrain +3.3%、ρk −0.01 通过门槛,而 leaf_Ret_ret5(两端都 5 分钟、同样自洽)−6.3% → 承重的不是「错配」,而是「阈值必须是 1 分钟收益的 95% 分位」;被测量的孔径 5 分钟略优于 1 分钟\", \"C 组阈值的其它写法全部退化:h_c_std_thresh20(标准差)dist 0.19 ✗、h_c_q75_thresh20(放宽到 75%)dist 0.23 ✗、h_c_madz_cnt20(MAD z)dist 0.18 ✗、h_c_pos_r5_20 dist 0.47 ✗\", \"D① 「直接读资金在推的量应同向且更干净」全军覆没:h_d_signed20(day_signed_ratio)utrain −5.1%、h_d_signed_r5_20 −1.3%、h_d_wmean20 +1.3%、h_d_centroid20 −2.6%、h_d_gini_amt20 −1.1%、h_h_wmean_gap20 +1.7%\", \"F 组「用日频市场状态调权重能救」:h_f_blend_calm(sigmoid 波动状态)utrain +15.1%/2.12、h_f_blend_disp +15.5%/2.17,都不如固定 0.25 常权的 h_f_blend_fix025 +16.0%/2.31;三条全部低于 k_known_xfrozen 的 +18.5%/3.15 → 状态权重 ≤ 常权 ≤ 噪声\", \"G 组增量仍为零:h_g_res_spine(spine 对家族的截面秩残差)utrain +0.2%;筛子 scr_xhi_p +15.6%/2.37、scr_xhi_m +12.4%/1.92,都打不过通用筛子 k_known_xfrozen 的 +18.5%/3.15\", \"E 组「剔次新是净收益」反了:h_e_spine_nonew utrain +0.5%(比 spine 低 4.6pp)→ 次新段在贡献而不是拖累(与原式的解剖结论相反);h_e_spine_nofrozen +5.9%(+0.8pp)在噪声内\"], \"best_own\": [{\"id\": \"h_h_tailmean_q75\", \"expr\": \"cross_tail_mean_q75(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 60)\", \"note\": \"本轮最好的自有版本(不含任何 Amt 叶子):Lnet +5.1% / +14.1% / utrain +7.7%,Lshp 0.59 / 1.81 / 0.92,LTO 1.9%,ρo 0.48,ρk 0.28,cov 1.00 dist 1.00。= spine 的逐日值换一个外壳:20 日均值 → 60 日上尾四分之一均值(「最激烈的那几天有多激烈」),比 cross_mean 多 +2.6pp 且 ρk 从 0.35 降到 0.28。仍只有已知族 +15.4%/2.22 的一半,且从没做过桶内中性(hypo3 的 h3_tailq75_bdm_liq / h3_tailq75_bz_liq 去判)\"}, {\"id\": \"h_d_pos_gap20\", \"expr\": \"cross_mean(sub(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), day_pos_ratio(Ret)), 20)\", \"note\": \"Lnet +4.9% / +10.8% / utrain +6.6%,Lshp 0.81 / 1.76 / 1.09(自有项里最高),LTO 仅 1.2%,ρo +0.01,ρk +0.65。⚠ ρo ≈ 0 说明它不是本因子的提纯而是另一条信号;ρk 0.65 很可能来自「陈旧价格 / 薄盘」(薄盘票 1 分钟收益大量为 0 → 1 分钟正占比低,5 分钟正占比不受影响 → 差值高),hypo3 的 h3_distinct20 / h3_posgap_bdm_liq 专门去定这件事\"}, {\"id\": \"h_a_spine20\", \"expr\": \"cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)\", \"note\": \"原式真正的最小提纯形(ρo 0.51 是三条里唯一还认得出原式的):Lnet +1.6% / +14.0% / utrain +5.1%,Lshp 0.17 / 1.65 / 0.58,LTO 1.7%,ρk 0.35。与 only_L_R / sub_J_day_first / h_a_spine_inpct 逐位同分。= 「超阈 5 分钟收益之和 ÷ 当天 1 分钟收益 q95」,去掉了上侧计数归一化与整条下侧分支。train 的 +1.6% 在噪声内,成交额桶内只剩 +1.6%\"}], \"best_on_known\": [{\"id\": \"h_f_blend_fix025\", \"expr\": \"add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), create_like(cs_rank(cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)), 0.25)))\", \"note\": \"家族秩 + 0.25 × spine 秩:+13.2% / +23.1% / utrain +16.0%,Lshp 1.85 / 3.59 / 2.31,LTO 3.6%,ρk 0.98,dist 0.93。比 k_known(+12.6/+22.3/+15.4,1.78/3.46/2.22)只多 +0.6pp / +0.8pp / +0.09 夏普 —— **完全在噪声内(±3 点 / ±0.3)**;比通用筛子 k_known_xfrozen(+16.4/+23.2/+18.5,2.81/3.98/3.15)少 2.5pp / 0.84 夏普。**结论:不要用。**\"}, {\"id\": \"scr_xhi_p\", \"expr\": \"cs_last_high20(neg(cross_mean(day_std(Amt), 30)), <原式 v_base>)\", \"note\": \"家族剔掉本因子读数最高的 20%:+12.9% / +22.4% / utrain +15.6%,Lshp 1.93 / 3.55 / 2.37,ρk 0.75。相对 k_known 的全部改善都落在**家族不持仓的地方** —— 成交额最高 20% 段内 +2.5% → +8.0%(家族在那里持仓 −20.3pp)、科创板 +1.4% → +10.9%(只占 4.0%);代价在冻结段 −10.9% → −34.9%。两边抵消 → 全市场几乎不动,且打不过 k_known_xfrozen 的 +18.5%/3.15。**当筛子也不成立。**\"}], \"verdict\": \"**分辨 / 提纯(弱);不改推荐。** (1) 原式作为纯多头因子不可用:utrain −3.2%、Lshp −1.24,它唯一独有的信息住在「近 15 日有冻结盘口」那 6.5%(段等权 −67.4%)的病态段里,而且超配该段 +2.3pp —— 剔掉它就从 −3.2% 变 +2.8%(seg_xfrozen_m)。(2) 1e-6 爆炸读到的「封板事件标记」在多头腿上一文不值:B 组五条干净写法(day_zero_ratio / day_flat_run_max / cross_valid_count / 带符号版)全部 dist ✗ 或 ≈ 0,钱确实只在空头腿和「别买」上。(3) 提纯**成立**:去掉上侧计数归一化与整条下侧分支后得到 spine(utrain +5.1%),再把外壳换成 60 日上尾均值得到 TQ75(utrain +7.7%、夏普 0.92、换手 1.9%、ρk 0.28)—— 这是一条真实的、低换手的弱信号,承重件已钉死为「**当天自己的 1 分钟收益 95% 分位**」这个顺序统计量(去掉分母 +0.5%、换 20 日平均波动 +0.6%、换标准差/75%档/MAD z 全部退化)。(4) 升华**失败**:它只有已知成交额族的一半,成交额十分位桶内塌掉 2/3(+1.6%),对家族取残差 +0.2%,叠加(三档状态权重 + 固定常权)与筛子(两个方向)**全部落在 k_known 的噪声带内、且一律低于通用筛子 k_known_xfrozen 的 +18.5%/3.15**。(5) 根本原因是结构性的,不是调参能救的:这条因子的增量存在于成交额最高 20%(家族持仓 −20.3pp)与科创板(占 4.0%)——**家族结构性不碰的地方**,所以无法变现。(6) 机制推断被否了一半:不是「资金日内拉抬」(D 组五条直接读数全败),唯一成立的 h_d_pos_gap20 ρo ≈ 0、ρk 0.65,更像「陈旧价格 / 薄盘」的代理,若 hypo3 的 h3_distinct20 证实,它应另开 fid 记账,不算 F109 的产物。**下一轮的收线条件**:若 h3_tailq75_bdm_liq / h3_tailq75_bz_liq 也塌到 +2% 级,整条线收掉,结论定为「分辨」,不再提假设。\", \"lab_findings\": [{\"id\": \"LF1\", \"claim\": \"`in_pct(x, d)` 与 `sub(div(x, in_delay(x,d)), create_like(x,1))` 在分钟价面板上**完全等价**,可以无条件用来省三个节点。\", \"evidence\": \"h_a_spine20(写成 div/in_delay/create_like)与 h_a_spine_inpct(写成 in_pct)在 s2 表里**逐位同分**:Lnet +1.6%/+14.0%/+5.1%、Lshp 0.17/1.65/0.58、LTO 1.7%、ρo 0.51、ρk 0.35、cov 1.00、dist 1.00,sg 与 hlL 也相同。\", \"operators\": [\"in_pct\", \"in_delay\", \"div\", \"create_like\"], \"recheck\": \"只在基数(x[t−d])不会恰为 0 的字段上成立 —— 分钟价永远为正,所以安全;换到 Volume / Amt 这种会出现 0 的字段上,除法给 ±inf、in_pct 给 NaN,两条会分道扬镳。\"}, {\"id\": \"LF2\", \"claim\": \"`day_es_ratio_hi` / `day_es_ratio_lo` **不能套在 `select_where(c, x, 0)` 这类零填充序列上** —— 会整片 NaN、cov 与 dist 双双归零。\", \"evidence\": \"s2 里 8 条 `nosc_*_day_es_ratio_*` 有 6 条回来 cov=0.00 / dist=0.00(nosc_I/J/T/U 的 _lo 版与 nosc_J/U 的 _hi 版),只有套在还有足够非零分钟的 I、T 两个节点上的 _hi 版活着(cov 0.9988 / 0.9988,但 Lnet −8.6% / −5.5%)。原因在函数定义:它用**同一条序列自己**的 95%/5% 分位数,零填充序列的 5% 分位恒为 0 → `good = (k>0) & (|v|>1e-8)` 为假 → NaN。\", \"operators\": [\"day_es_ratio_hi\", \"day_es_ratio_lo\", \"select_where\"], \"recheck\": \"只要被包的序列里零的占比超过 5%(_lo)或 95%(_hi)就会退化;套在原始分钟序列(Ret、in_pct(Close,5))上没有这个问题 —— 那才是这两个算子的正确用法。\"}, {\"id\": \"LF3\", \"claim\": \"`cs_state_rank(x, d)` 单独当信号**必然退化**(它每天只是一个全市场常数),只能当 `select_where` 的条件;而作为两条信号之间的**权重**,在实测上问不出任何东西 —— 一个固定常权就能打平甚至打赢任何状态权重。\", \"evidence\": \"nosc_AC_cs_state_rank 在 s2 里 cov 0.9992 但 **dist 0.0003**(被表过滤掉)。F 组三条:固定 0.25 常权 h_f_blend_fix025 utrain +16.0%/2.31 ≥ 截面离散度权重 h_f_blend_disp +15.5%/2.17 ≥ 波动状态权重 h_f_blend_calm +15.1%/2.12,而三条都在 k_known(+15.4%/2.22)的噪声带内。\", \"operators\": [\"cs_state_rank\", \"cs_mean\", \"cross_zscore\", \"sigmoid\", \"select_where\"], \"recheck\": \"本条的证据来自「叠加本身的增量就是零」的场景 —— 零上面加权重只能加噪声。若某条信号对家族**本来就有**正增量,状态权重还值得再问一次;要问就用 `select_where(cs_state_rank(...), A, B)` 做整日切换(每天截面只来自一个面板,干净),而不是 sigmoid 加权。\"}, {\"id\": \"LF4\", \"claim\": \"**「段内超额」不能当「只做这一段的收益」来读** —— 必须加上该段的段等权超额。段表里一个漂亮的段内数字,写成表达式后可以缩水一大半。\", \"evidence\": \"s1 读到结构变体在「成交额最高 20%」段内 +10.8%,据此把「只在高成交额 40% 里选」写成 h_e_spine_high40,预期 ≈ +10.8%;实测 utrain **+9.5%**,因为那一段的**段等权超额是 −17.8%**。反向的例子同样成立:原式在「近 15 日有冻结盘口」段内 +14.3%,但该段段等权 −67.4%,所以它是原式全市场 −3.2% 的来源而不是亮点。\", \"operators\": [\"cs_first_high40\", \"cs_first_low40\"], \"recheck\": \"两者只在段等权超额接近 0 时可以互换。表头其实写了「段内净超额 + 段等权超额 ≈ 只做这一段相对全市场的超额」,但读到一个大号段内数字时非常容易忘。\"}, {\"id\": \"LF5\", \"claim\": \"写**筛子**(把一批票从多头书里剔出去)必须保证被排序的 y 的**多头端在高值**,即 `cs_last_high20(neg(k), key)` 而不是 `cs_last_high20(k, key)`;否则方向拟合会把「被剔除的那 20%」整段选成多头书,测出来的是「只买被标记的票」。\", \"evidence\": \"s2 里 h_g_fam_nofrozen / h_g_fam_norun / h_g_fam_nonew 三条都写成 `cs_last_high20(cross_mean(day_std(Amt),30), key)`(漏了 neg),而家族的多头端在**低**值 → train 上拟合出 sg = −1 → 被 −1 平移的那 20% 占据了面板底部、恰好成了多头书。结果 +9.9% / +0.5% / +3.3%,三条全部测反,作废。正确写法的对照组 k_known_xfrozen = `cs_last_high20(neg(cross_mean(day_std(Amt),30)), cross_max(day_zero_ratio(Ret),15))`,sg +1,+18.5%/3.15。\", \"operators\": [\"cs_last_high20\", \"cs_last_low20\", \"neg\"], \"recheck\": \"普适:凡是靠 `_lexi` 做 ±1 平移的 cs_first_* / cs_last_* 四族都有这个陷阱,而且方向拟合**不会报错**,只会给出一个看似合理的数字。写完先问一句「我的 y 的多头端在高值吗」。\"}, {\"id\": \"LF6\", \"claim\": \"「尺度不变的比值 + ε」这个手写模式里,承重的既不是「比值」也不是「ε 的爆炸」,而是「**分母是当天自己的那个顺序统计量**」。把分母换成任何不会为 0 的同量纲量都会塌。\", \"evidence\": \"spine(÷ 当天 q95 + 1e-6)utrain +5.1%;去掉分母 h_a_upsum20 **+0.5%**;分母换成 20 日平均日内波动 h_a_upsum_vol20 **+0.6%**;分母换成当天 1 分钟收益标准差 h_c_std_thresh20 dist 0.19 ✗;分位档位从 95% 放宽到 75% h_c_q75_thresh20 dist 0.23 ✗。另一端:把分位数分母上的 ε 符号翻过来 sub_N_sub **−19.1%**,用 log 把 q05=0 的日子整日变 NaN 丢掉 sub_Y_log +4.9%。\", \"operators\": [\"day_quantile\", \"day_std\", \"add\", \"div\", \"log\"], \"recheck\": \"本条建立在一个会出现「分位数恰为 0」的市场上(A 股涨跌停 + 停牌)。在没有涨跌停的市场里 ε 永远惰性,这套对立就不存在;那时「÷ 当天分位数」是否仍然优于「÷ 滚动波动」需要重新测。\"}, {\"id\": \"LF7\", \"claim\": \"重尾日值序列的**外层记忆**首选「滚动上尾分位均值」`cross_tail_mean_q75(·, 60)`,次选 `cross_max`,**绝不要用滚动 z 分数**。\", \"evidence\": \"同一个逐日 spine 上:cross_tail_mean_q75(·,60) utrain **+7.7%**、Lshp 0.92、LTO 1.9%、ρk 0.28;cross_mean(·,20) +5.1%、0.58、ρk 0.35;cross_max(·,60) +3.0%、cross_max(·,30) +2.2%(是 max 一族里唯一为正的两档);而 mem_zscore5/10/30/60 是全表最差的一簇(−13.2% / −10.3% / −4.9% / −4.5%,Lshp 低到 −3.70)且 **LTO 飙到 8~14%**(其余变体 1~5%)。ts_quantile_q25 +2.9%、ts_med +0.8% 也在「有界 / 稳健外壳小赚」的同一方向上。\", \"operators\": [\"cross_tail_mean_q75\", \"cross_tail_mean_q25\", \"cross_max\", \"cross_mean\", \"cross_zscore\"], \"recheck\": \"成立的条件是日值本身重尾(本例每隔若干天就有一个 1e3~1e5 量级的爆炸)。日值接近高斯时三者会趋同,z 分数的换手劣势仍在但幅度会小得多。\"}, {\"id\": \"LF8\", \"claim\": \"`cs_bucket_rank` 在 s1 里让候选过不了 dist 门槛的问题**已经修好了**,现在可以放心用桶内秩做中性化。\", \"evidence\": \"s1:bk_liq 与 bk_known 双双 **dist 0.20 ✗**(两条都被门槛杀掉,E 组三条假设当时是带着风险写的)。s2:bk_liq dist 0.99、bk_known dist 1.00、h_e_spine_bk_liq 1.00、h_e_spine_bk_known 1.00、h_h_spine_bk_age 1.00 —— `docs/new_operators.md` 记载的「全局秩 ×1e-4 打破十路并列」这次生效了。\", \"operators\": [\"cs_bucket_rank\", \"cs_bucket_demean\", \"cs_bucket_zscore\"], \"recheck\": \"每轮拿到结果仍然先看 dist 那一列:并列打破依赖 `_pct_rank` 的 stable argsort,如果桶键本身有大量并列(例如整数化的上市天数、封顶到 250 的 cross_valid_count),桶的划分会退化成少数几个大桶,dist 不一定塌但中性化的意义会变。\"}], \"hypotheses_written\": 25, \"new_operator_requests\": [{\"name\": \"day_quantile_expand(x, q)\", \"definition\": \"日内**扩张窗口**分位数:对每一分钟 t,取当天第 0..t 分钟里有限值的 q 分位(与 `in_zscore_expand` 同样的因果口径;前若干根不足时给 NaN)。输出形状与 `x` 同为分钟级。\", \"why\": \"整棵 F109 树的触发阈值 `day_quantile(Ret, 0.95)` 是**全日**顺序统计量 —— 开盘第一分钟的掩码就用到了当天收盘的信息。这不是看未来(因子是日频、T 日收盘后才使用),但它让「日内被推着走」这个语义不成立,也让任何逐分钟实时版本写不出来。本轮我只能用 `in_zscore_expand(Ret) > 2` 做代理(hypo3 的 h3_spine_izexp),但 z 分数和分位数不是同一个量 —— 而「阈值必须是分位数、换成标准差就退化(h_c_std_thresh20 dist 0.19 ✗)」恰恰是本因子最硬的一条结论。有了这个算子才能分开「承重的是当天分位数这个水平」和「承重的是分位数的全日性」。F106 的 erm 一族同样需要。\"}, {\"name\": \"day_tail_ratio(x, q)\", \"definition\": \"`day_es_ratio_hi` 的参数化版:超过当天 q 分位的分钟上 x 的均值 ÷ 该分位;分位近 0 或没有分钟超过它时 **NaN**。q < 0.5 时自动取下尾(低于 q 分位的分钟均值 ÷ 该分位),等价于 `day_es_ratio_lo`。\", \"why\": \"C 组证明**阈值档位是承重件**:95% → 75% 直接退化(h_c_q75_thresh20 dist 0.23 ✗)。但现在 `day_es_ratio_hi/lo` 把 0.95 / 0.05 写死,无法在「带 NaN 保护」的量上扫档位 —— 而带保护的版本正是 hypo3 要判的主线(h3_es_hi_r1)。要知道「尾部有多窄才算尾部」(90% / 99% / 99.5%)只能靠手写 `div(day_sum(select_where(...)), add(day_quantile(...), eps))`,那就又把 1e-6 带回来了,两个变量混在一起。\"}, {\"name\": \"cross_tail_mean(x, d, q)\", \"definition\": \"现有 `cross_tail_mean_q25` / `cross_tail_mean_q75` 的参数化版:近 d 日里 x 高于(q ≥ 0.5)或低于(q < 0.5)其自身 q 分位的那些日子上 x 的均值。\", \"why\": \"本轮最好的自有版本就是 `cross_tail_mean_q75(SPINE_D, 60)`(比 20 日均值多 +2.6pp、ρk 从 0.35 降到 0.28、LTO 只 1.9%),而且它是整张表里「外壳换一下就赚」这条规律的最佳落点。但现在只有 q25 / q75 两档,判不出「读的是最激烈的那几天」还是「只是一个更长的稳健窗口」—— hypo3 里我只能用 q25 + 窗口 20/60 四个格子去逼近。要把 q90 / q95 与窗口 20/40/60/120 扫成一张小表,就需要 q 可配。这是跨因子的(F106、F108 的重尾日值同样适用)。\"}], \"tooling_problems\": [\"`./scripts/study.sh table <fid> s2 --all` 的输出里 expr 列被截在约 300 字符、且**不打印 SSA 节点字母表** —— 要知道某个 abl_*/sub_* 到底改了哪个节点,只能回去读 `runs/<fid>/sweep_s2.json` 的 `results[id]['expr']`(这条上一轮已记,仍然如此)。另外整行长达 ~700 字符,直接 `head` 会被输出上限截断,本轮要先用 awk 按 `|` 砍掉第 9 个字段才读得动 233 行。\", \"s2 的 `sweep_s2.json` 里有 243 条结果,表里只有 233 行:被过滤掉的 13 条是 cov=0.00 / dist=0.00 的完全退化件(`abl_V`、`iso_K`、`iso_V`、`nosc_AC_cs_state_rank`,以及 6 条 `nosc_*_day_es_ratio_*`)。过滤本身合理,但**表里没有任何一行字说明「不在表里 = 已跑且退化」** —— 很容易被下一位读成「这几条没跑」,从而在下一批里重复提同样的假设。建议表尾加一行「另有 N 条 cov/dist 归零的退化件,见 JSON」。\", \"`cs_last_high20` / `cs_last_low20` / `cs_first_high40` / `cs_first_low40` 四族的 docstring 没有点明「y 的多头端必须在高值,否则方向拟合会把被平移的那一段选成多头书」。我上一轮写的三条筛子假设(h_g_fam_nofrozen / norun / nonew)就因为 y 漏了 `neg()` 而全部测反了方向,而且**不报错、数字看起来还挺合理**(+9.9% / +0.5% / +3.3%)。建议在 docs/new_operators.md 的这四行里加一句话。\"]}"
+}
+```
+
+```
+Output does not match required schema: root: must have required property 'factor_id', root: must have required property 'one_line', root: must have required property 'confirmed', root: must have required property 'refuted', root: must have required property 'best_own', root: must have required property 'best_on_known', root: must have required property 'verdict', root: must have required property 'lab_findings', root: must have required property 'hypotheses_written'
+```
+
+**10-05 15:31 · StructuredOutput**
+
+```json
+{
+ "factor_id": "F109_erm_mag_gap_5m_tsm20",
+ "one_line": "原式多头腿不可用(utrain −3.2%、夏普 −1.24);剥掉 1e-6 爆炸后确实提纯出一条干净的弱信号 TQ75 = cross_tail_mean_q75(Σ r5·1[r5>q95]/(q95+1e-6), 60)(utrain +7.7%、夏普 0.92、LTO 1.9%、ρk 0.28),但它只有已知成交额族的一半、在成交额桶内塌掉 2/3、对家族的残差与叠加都是零 —— 提纯成立、升华失败,既不是候选也不是筛子。",
+ "confirmed": [
+  "A 组最小形复现:h_a_spine20 = h_a_spine_inpct = only_L_R = sub_J_day_first 四条逐位同分 +1.6% / +14.0% / utrain +5.1%,Lshp 0.17/1.65/0.58,LTO 1.7%,ρo 0.51,ρk 0.35 —— s1 的「去掉上侧计数归一化 + 砍掉整条下侧分支」是真的结构收益",
+  "冻结段超配就是原式亏钱的来源:seg_xfrozen_m(原式剔掉近 15 日冻结最重 20%)+3.6% / +0.8% / utrain +2.8%,比原式 +6.0pp",
+  "D② 「5 分钟正占比 − 1 分钟正占比」保留信息:h_d_pos_gap20 +4.9% / +10.8% / utrain +6.6%,Lshp 0.81/1.76/1.09,LTO 仅 1.2%;比值版 h_h_persist20 +4.3% / +12.6% / +6.7%(0.61/2.00/0.97)。但两条 ρo ≈ 0(+0.01 / −0.01)、ρk 0.65 / 0.72 —— 成立的是「另一条信号」,不是本因子的提纯",
+  "H 组「60 日上尾均值 = mem_max 的稳健版」:h_h_tailmean_q75 +5.1% / +14.1% / utrain +7.7%,Lshp 0.59/1.81/0.92,LTO 1.9%,ρk 0.28 —— 比 spine 的 20 日均值多 +2.6pp 且相关更低,是本轮最好的自有版本",
+  "E③ 「若只是活跃度倾斜,成交额桶内应全塌」:h_e_spine_bk_liq utrain +1.6%、h_e_spine_bk_known +2.0%(spine +5.1% → 塌掉约 2/3;两条 dist 都 1.00,s1 的 dist 0.20 工具问题已消失)",
+  "E④ 「只在高成交额 40% 里做」:h_e_spine_high40 +6.0% / +18.1% / utrain +9.5% —— s1 的段内 +10.8% 读数是真的,但该段段等权 −17.8%,全市场只剩 +9.5% < 家族 +15.4%,且 ρk 0.82(键是 Amt,本身含已知族成分)",
+  "两个否定检验通过:h_h_spine_bk_age(上市时长桶内秩)utrain +6.4% > spine +5.1% → 它不是上市时长 / 停牌史分类器;A 组两侧带符号净漂移 h_a_tailnet20 utrain +3.8%(Lshp 0.58 与 spine 同、ρk 仅 0.27)"
+ ],
+ "refuted": [
+  "B 组整组:「1e-6 读到的封板事件标记能单独站住」在多头腿上全废 —— h_b_zero20 utrain −1.2%(dist 0.68)、h_b_zero_max60 −3.2%(dist 0.06 ✗)、h_b_flatrun20 −1.3%(dist 0.21 ✗)、h_b_age250 +3.7%(dist 0.05 ✗);只有 h_b_zero_signed20 +2.7%(ρk −0.00)勉强在噪声边缘",
+  "A 组「除以分位数全程只是损害」:h_a_upsum20(去掉 /q95)utrain +0.5%、h_a_upsum_vol20(换 20 日平均日内波动)+0.6%,都比 spine 低 4.6pp → 分位数分母是承重件",
+  "A 组「载重的是超阈个数而不是幅度」:h_a_upcnt20 −3.5%(dist 0.17 ✗)、h_a_upcnt_ema30 −2.4%、h_a_cntgap20 −3.2%(dist 0.11 ✗)",
+  "C 组「5 分钟 vs 1 分钟错配是必需品」改判:h_c_r1_tail20(两端都改 1 分钟、口径自洽)+0.0% / +10.5% / utrain +3.3%、ρk −0.01 通过门槛,而 leaf_Ret_ret5(两端都 5 分钟、同样自洽)−6.3% → 承重的不是「错配」,而是「阈值必须是 1 分钟收益的 95% 分位」;被测量的孔径 5 分钟略优于 1 分钟",
+  "C 组阈值的其它写法全部退化:h_c_std_thresh20(标准差)dist 0.19 ✗、h_c_q75_thresh20(放宽到 75%)dist 0.23 ✗、h_c_madz_cnt20(MAD z)dist 0.18 ✗、h_c_pos_r5_20 dist 0.47 ✗",
+  "D① 「直接读资金在推的量应同向且更干净」全军覆没:h_d_signed20(day_signed_ratio)utrain −5.1%、h_d_signed_r5_20 −1.3%、h_d_wmean20 +1.3%、h_d_centroid20 −2.6%、h_d_gini_amt20 −1.1%、h_h_wmean_gap20 +1.7%",
+  "F 组「用日频市场状态调权重能救」:h_f_blend_calm(sigmoid 波动状态)utrain +15.1%/2.12、h_f_blend_disp +15.5%/2.17,都不如固定 0.25 常权的 h_f_blend_fix025 +16.0%/2.31;三条全部低于 k_known_xfrozen 的 +18.5%/3.15 → 状态权重 ≤ 常权 ≤ 噪声",
+  "G 组增量仍为零:h_g_res_spine(spine 对家族的截面秩残差)utrain +0.2%;筛子 scr_xhi_p +15.6%/2.37、scr_xhi_m +12.4%/1.92,都打不过通用筛子 k_known_xfrozen 的 +18.5%/3.15",
+  "E 组「剔次新是净收益」反了:h_e_spine_nonew utrain +0.5%(比 spine 低 4.6pp)→ 次新段在贡献而不是拖累(与原式的解剖结论相反);h_e_spine_nofrozen +5.9%(+0.8pp)在噪声内"
+ ],
+ "best_own": [
+  {
+   "id": "h_h_tailmean_q75",
+   "expr": "cross_tail_mean_q75(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 60)",
+   "note": "本轮最好的自有版本(不含任何 Amt 叶子):Lnet +5.1% / +14.1% / utrain +7.7%,Lshp 0.59 / 1.81 / 0.92,LTO 1.9%,ρo 0.48,ρk 0.28,cov 1.00 dist 1.00。= spine 的逐日值换一个外壳:20 日均值 → 60 日上尾四分之一均值(「最激烈的那几天有多激烈」),比 cross_mean 多 +2.6pp 且 ρk 从 0.35 降到 0.28。仍只有已知族 +15.4%/2.22 的一半,且从没做过桶内中性(hypo3 的 h3_tailq75_bdm_liq / h3_tailq75_bz_liq 去判)"
+  },
+  {
+   "id": "h_d_pos_gap20",
+   "expr": "cross_mean(sub(day_pos_ratio(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), day_pos_ratio(Ret)), 20)",
+   "note": "Lnet +4.9% / +10.8% / utrain +6.6%,Lshp 0.81 / 1.76 / 1.09(自有项里最高),LTO 仅 1.2%,ρo +0.01,ρk +0.65。⚠ ρo ≈ 0 说明它不是本因子的提纯而是另一条信号;ρk 0.65 很可能来自「陈旧价格 / 薄盘」(薄盘票 1 分钟收益大量为 0 → 1 分钟正占比低,5 分钟正占比不受影响 → 差值高),hypo3 的 h3_distinct20 / h3_posgap_bdm_liq 专门去定这件事"
+  },
+  {
+   "id": "h_a_spine20",
+   "expr": "cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)",
+   "note": "原式真正的最小提纯形(ρo 0.51 是三条里唯一还认得出原式的):Lnet +1.6% / +14.0% / utrain +5.1%,Lshp 0.17 / 1.65 / 0.58,LTO 1.7%,ρk 0.35。与 only_L_R / sub_J_day_first / h_a_spine_inpct 逐位同分。= 「超阈 5 分钟收益之和 ÷ 当天 1 分钟收益 q95」,去掉了上侧计数归一化与整条下侧分支。train 的 +1.6% 在噪声内,成交额桶内只剩 +1.6%"
+  }
+ ],
+ "best_on_known": [
+  {
+   "id": "h_f_blend_fix025",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(SPINE), create_like(cs_rank(SPINE), 0.25)))  其中 SPINE = cross_mean(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), 20)",
+   "note": "家族秩 + 0.25 × spine 秩:+13.2% / +23.1% / utrain +16.0%,Lshp 1.85 / 3.59 / 2.31,LTO 3.6%,ρk 0.98,dist 0.93。比 k_known(+12.6/+22.3/+15.4,1.78/3.46/2.22)只多 +0.6pp / +0.8pp / +0.09 夏普 —— 完全在噪声内(±3 点 / ±0.3);比通用筛子 k_known_xfrozen(+16.4/+23.2/+18.5,2.81/3.98/3.15)少 2.5pp / 0.84 夏普。结论:不要用。"
+  },
+  {
+   "id": "scr_xhi_p",
+   "expr": "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), <原式 v_base 全树>)",
+   "note": "家族剔掉本因子读数最高的 20%:+12.9% / +22.4% / utrain +15.6%,Lshp 1.93 / 3.55 / 2.37,ρk 0.75。相对 k_known 的全部改善都落在家族不持仓的地方 —— 成交额最高 20% 段内 +2.5% → +8.0%(家族在那里持仓 −20.3pp)、科创板 +1.4% → +10.9%(只占 4.0%);代价在冻结段 −10.9% → −34.9%。两边抵消 → 全市场几乎不动,且打不过 k_known_xfrozen 的 +18.5%/3.15。当筛子也不成立。"
+  }
+ ],
+ "verdict": "分辨 / 提纯(弱);不改推荐。(1) 原式作为纯多头因子不可用:utrain −3.2%、Lshp −1.24,它唯一独有的信息住在「近 15 日有冻结盘口」那 6.5%(段等权 −67.4%)的病态段里,而且超配该段 +2.3pp —— 剔掉它就从 −3.2% 变 +2.8%(seg_xfrozen_m)。(2) 1e-6 爆炸读到的「封板事件标记」在多头腿上一文不值:B 组五条干净写法(day_zero_ratio / day_flat_run_max / cross_valid_count / 带符号版)全部 dist ✗ 或 ≈ 0,钱确实只在空头腿和「别买」上。(3) 提纯成立:去掉上侧计数归一化与整条下侧分支后得到 spine(utrain +5.1%),再把外壳换成 60 日上尾均值得到 TQ75(utrain +7.7%、夏普 0.92、换手 1.9%、ρk 0.28)—— 这是一条真实的、低换手的弱信号;承重件已钉死为「当天自己的 1 分钟收益 95% 分位」这个顺序统计量(去掉分母 +0.5%、换 20 日平均波动 +0.6%、换标准差 / 75% 档 / MAD z 全部退化)。(4) 升华失败:它只有已知成交额族的一半,成交额十分位桶内塌掉 2/3(+1.6%),对家族取残差 +0.2%,叠加(三档状态权重 + 固定常权)与筛子(两个方向)全部落在 k_known 的噪声带内、且一律低于通用筛子 k_known_xfrozen 的 +18.5%/3.15。(5) 根本原因是结构性的,不是调参能救的:这条因子的增量存在于成交额最高 20%(家族持仓 −20.3pp)与科创板(占 4.0%)—— 家族结构性不碰的地方,所以无法变现。(6) 机制推断被否了一半:不是「资金日内拉抬」(D 组五条直接读数全败),唯一成立的 h_d_pos_gap20 ρo ≈ 0、ρk 0.65,更像「陈旧价格 / 薄盘」的代理,若 hypo3 的 h3_distinct20 证实,它应另开 fid 记账,不算 F109 的产物。下一轮的收线条件:若 h3_tailq75_bdm_liq / h3_tailq75_bz_liq 也塌到 +2% 级,整条线收掉,结论定为「分辨」,不再提假设。",
+ "lab_findings": [
+  {
+   "id": "LF1",
+   "claim": "in_pct(x, d) 与 sub(div(x, in_delay(x,d)), create_like(x,1)) 在分钟价面板上完全等价,可以无条件用来省三个节点。",
+   "evidence": "h_a_spine20(写成 div/in_delay/create_like)与 h_a_spine_inpct(写成 in_pct)在 s2 表里逐位同分:Lnet +1.6%/+14.0%/+5.1%、Lshp 0.17/1.65/0.58、LTO 1.7%、ρo 0.51、ρk 0.35、cov 1.00、dist 1.00,sg 与 hlL 也相同。",
+   "operators": [
+    "in_pct",
+    "in_delay",
+    "div",
+    "create_like"
+   ],
+   "recheck": "只在基数(x[t−d])不会恰为 0 的字段上成立 —— 分钟价永远为正,所以安全;换到 Volume / Amt 这种会出现 0 的字段上,除法给 ±inf、in_pct 给 NaN,两条会分道扬镳。"
+  },
+  {
+   "id": "LF2",
+   "claim": "day_es_ratio_hi / day_es_ratio_lo 不能套在 select_where(c, x, 0) 这类零填充序列上 —— 会整片 NaN、cov 与 dist 双双归零。",
+   "evidence": "s2 里 8 条 nosc_*_day_es_ratio_* 有 6 条回来 cov=0.00 / dist=0.00(nosc_I/J/T/U 的 _lo 版与 nosc_J/U 的 _hi 版),只有套在还有足够非零分钟的 I、T 两个节点上的 _hi 版活着(cov 0.9988,但 Lnet −8.6% / −5.5%)。原因在函数定义:它用同一条序列自己的 95%/5% 分位数,零填充序列的 5% 分位恒为 0 → good = (k>0) & (|v|>1e-8) 为假 → NaN。",
+   "operators": [
+    "day_es_ratio_hi",
+    "day_es_ratio_lo",
+    "select_where"
+   ],
+   "recheck": "只要被包的序列里零的占比超过 5%(_lo)或 95%(_hi)就会退化;套在原始分钟序列(Ret、in_pct(Close,5))上没有这个问题 —— 那才是这两个算子的正确用法。"
+  },
+  {
+   "id": "LF3",
+   "claim": "cs_state_rank(x, d) 单独当信号必然退化(它每天只是一个全市场常数),只能当 select_where 的条件;而作为两条信号之间的权重,实测上问不出任何东西 —— 一个固定常权就能打平甚至打赢任何状态权重。",
+   "evidence": "nosc_AC_cs_state_rank 在 s2 里 cov 0.9992 但 dist 0.0003(被表过滤掉)。F 组三条:固定 0.25 常权 h_f_blend_fix025 utrain +16.0%/2.31 ≥ 截面离散度权重 h_f_blend_disp +15.5%/2.17 ≥ 波动状态权重 h_f_blend_calm +15.1%/2.12,而三条都在 k_known(+15.4%/2.22)的噪声带内。",
+   "operators": [
+    "cs_state_rank",
+    "cs_mean",
+    "cross_zscore",
+    "sigmoid",
+    "select_where"
+   ],
+   "recheck": "本条证据来自「叠加本身的增量就是零」的场景 —— 零上面加权重只能加噪声。若某条信号对家族本来就有正增量,状态权重还值得再问一次;要问就用 select_where(cs_state_rank(...), A, B) 做整日切换(每天截面只来自一个面板,干净),而不是 sigmoid 加权。"
+  },
+  {
+   "id": "LF4",
+   "claim": "「段内超额」不能当「只做这一段的收益」来读 —— 必须加上该段的段等权超额。段表里一个漂亮的段内数字,写成表达式后可以缩水一大半。",
+   "evidence": "s1 读到结构变体在「成交额最高 20%」段内 +10.8%,据此把「只在高成交额 40% 里选」写成 h_e_spine_high40,预期 ≈ +10.8%;实测 utrain +9.5%,因为那一段的段等权超额是 −17.8%。反向的例子同样成立:原式在「近 15 日有冻结盘口」段内 +14.3%,但该段段等权 −67.4%,所以它是原式全市场 −3.2% 的来源而不是亮点。",
+   "operators": [
+    "cs_first_high40",
+    "cs_first_low40",
+    "cs_last_high20"
+   ],
+   "recheck": "两者只在段等权超额接近 0 时可以互换。表头其实写了「段内净超额 + 段等权超额 ≈ 只做这一段相对全市场的超额」,但读到一个大号段内数字时非常容易忘。"
+  },
+  {
+   "id": "LF5",
+   "claim": "写筛子(把一批票从多头书里剔出去)必须保证被排序的 y 的多头端在高值,即 cs_last_high20(neg(k), key) 而不是 cs_last_high20(k, key);否则方向拟合会把「被剔除的那 20%」整段选成多头书,测出来的是「只买被标记的票」。",
+   "evidence": "s2 里 h_g_fam_nofrozen / h_g_fam_norun / h_g_fam_nonew 三条都写成 cs_last_high20(cross_mean(day_std(Amt),30), key)(漏了 neg),而家族的多头端在低值 → train 上拟合出 sg = −1 → 被 −1 平移的那 20% 占据面板底部、恰好成了多头书。结果 +9.9% / +0.5% / +3.3%,三条全部测反、作废。正确写法的对照组 k_known_xfrozen = cs_last_high20(neg(cross_mean(day_std(Amt),30)), cross_max(day_zero_ratio(Ret),15)),sg +1,+18.5%/3.15。",
+   "operators": [
+    "cs_last_high20",
+    "cs_last_low20",
+    "cs_first_high40",
+    "cs_first_low40",
+    "neg"
+   ],
+   "recheck": "普适:凡是靠 _lexi 做 ±1 平移的 cs_first_* / cs_last_* 四族都有这个陷阱,而且方向拟合不会报错,只会给出一个看似合理的数字。写完先问一句「我的 y 的多头端在高值吗」。"
+  },
+  {
+   "id": "LF6",
+   "claim": "「尺度不变的比值 + ε」这个手写模式里,承重的既不是「比值」也不是「ε 的爆炸」,而是「分母是当天自己的那个顺序统计量」。把分母换成任何不会为 0 的同量纲量都会塌。",
+   "evidence": "spine(÷ 当天 q95 + 1e-6)utrain +5.1%;去掉分母 h_a_upsum20 +0.5%;分母换成 20 日平均日内波动 h_a_upsum_vol20 +0.6%;分母换成当天 1 分钟收益标准差 h_c_std_thresh20 dist 0.19 ✗;分位档位从 95% 放宽到 75% h_c_q75_thresh20 dist 0.23 ✗。另一端:把分位数分母上的 ε 符号翻过来 sub_N_sub −19.1%;用 log 把 q05=0 的日子整日变 NaN 丢掉 sub_Y_log +4.9%。",
+   "operators": [
+    "day_quantile",
+    "day_std",
+    "add",
+    "div",
+    "log"
+   ],
+   "recheck": "本条建立在一个会出现「分位数恰为 0」的市场上(A 股涨跌停 + 停牌)。在没有涨跌停的市场里 ε 永远惰性,这套对立就不存在;那时「÷ 当天分位数」是否仍优于「÷ 滚动波动」需要重新测。"
+  },
+  {
+   "id": "LF7",
+   "claim": "重尾日值序列的外层记忆首选「滚动上尾分位均值」cross_tail_mean_q75(·, 60),次选 cross_max,绝不要用滚动 z 分数。",
+   "evidence": "同一个逐日 spine 上:cross_tail_mean_q75(·,60) utrain +7.7%、Lshp 0.92、LTO 1.9%、ρk 0.28;cross_mean(·,20) +5.1%、0.58、ρk 0.35;cross_max(·,60) +3.0%、cross_max(·,30) +2.2%(是 max 一族里唯一为正的两档);而 mem_zscore5/10/30/60 是全表最差的一簇(−13.2% / −10.3% / −4.9% / −4.5%,Lshp 低到 −3.70)且 LTO 飙到 8~14%(其余变体 1~5%)。ts_quantile_q25 +2.9%、ts_med +0.8% 在同一方向上。",
+   "operators": [
+    "cross_tail_mean_q75",
+    "cross_tail_mean_q25",
+    "cross_max",
+    "cross_mean",
+    "cross_zscore"
+   ],
+   "recheck": "成立条件是日值本身重尾(本例每隔若干天就有一个 1e3~1e5 量级的爆炸)。日值接近高斯时三者会趋同,z 分数的换手劣势仍在但幅度会小得多。"
+  },
+  {
+   "id": "LF8",
+   "claim": "cs_bucket_rank 在 s1 里让候选过不了 dist 门槛的问题已经修好了,现在可以放心用桶内秩做中性化。",
+   "evidence": "s1:bk_liq 与 bk_known 双双 dist 0.20 ✗(两条都被门槛杀掉,E 组三条假设当时是带着风险写的)。s2:bk_liq dist 0.99、bk_known 1.00、h_e_spine_bk_liq 1.00、h_e_spine_bk_known 1.00、h_h_spine_bk_age 1.00 —— docs/new_operators.md 记载的「全局秩 ×1e-4 打破十路并列」这次生效了。",
+   "operators": [
+    "cs_bucket_rank",
+    "cs_bucket_demean",
+    "cs_bucket_zscore"
+   ],
+   "recheck": "每轮拿到结果仍然先看 dist 那一列:并列打破依赖 _pct_rank 的 stable argsort,如果桶键本身有大量并列(例如封顶到 250 的 cross_valid_count),桶的划分会退化成少数几个大桶,dist 不一定塌但中性化的意义会变 —— 这正是本轮改用 cross_age 的理由。"
+  }
+ ],
+ "hypotheses_written": 25,
+ "new_operator_requests": [
+  {
+   "name": "day_quantile_expand(x, q)",
+   "definition": "日内扩张窗口分位数:对每一分钟 t,取当天第 0..t 分钟里有限值的 q 分位(与 in_zscore_expand 同样的因果口径;不足若干根时 NaN)。输出形状与 x 同为分钟级。",
+   "why": "整棵 F109 树的触发阈值 day_quantile(Ret, 0.95) 是全日顺序统计量 —— 开盘第一分钟的掩码就用到了当天收盘的信息。这不是看未来(因子是日频、T 日收盘后才使用),但它让「日内被推着走」这个语义不成立,也让任何逐分钟实时版本写不出来。本轮我只能用 in_zscore_expand(Ret) > 2 做代理(hypo3 的 h3_spine_izexp),但 z 分数和分位数不是同一个量 —— 而「阈值必须是分位数、换成标准差就退化(h_c_std_thresh20 dist 0.19 ✗)」恰恰是本因子最硬的一条结论。有了它才能分开「承重的是当天分位数这个水平」与「承重的是分位数的全日性」。F106 的 erm 一族同样需要。"
+  },
+  {
+   "name": "day_tail_ratio(x, q)",
+   "definition": "day_es_ratio_hi 的参数化版:超过当天 q 分位的分钟上 x 的均值 ÷ 该分位;分位近 0 或没有分钟超过它时 NaN。q < 0.5 时自动取下尾(低于 q 分位的分钟均值 ÷ 该分位),等价于 day_es_ratio_lo。",
+   "why": "C 组证明阈值档位是承重件:95% → 75% 直接退化(h_c_q75_thresh20 dist 0.23 ✗)。但现在 day_es_ratio_hi/lo 把 0.95 / 0.05 写死,无法在「带 NaN 保护」的量上扫档位 —— 而带保护的版本正是 hypo3 要判的主线(h3_es_hi_r1)。要知道「尾部有多窄才算尾部」(90% / 99%)只能手写 div(day_sum(select_where(...)), add(day_quantile(...), eps)),那又把 1e-6 带回来了,两个变量混在一起。"
+  },
+  {
+   "name": "cross_tail_mean(x, d, q)",
+   "definition": "现有 cross_tail_mean_q25 / cross_tail_mean_q75 的参数化版:近 d 日里 x 高于(q ≥ 0.5)或低于(q < 0.5)其自身 q 分位的那些日子上 x 的均值。",
+   "why": "本轮最好的自有版本就是 cross_tail_mean_q75(SPINE_D, 60)(比 20 日均值多 +2.6pp、ρk 从 0.35 降到 0.28、LTO 只 1.9%),也是整张表里「外壳换一下就赚」这条规律的最佳落点。但现在只有 q25 / q75 两档,判不出「读的是最激烈的那几天」还是「只是一个更长的稳健窗口」—— hypo3 里我只能用 q25 + 窗口 20/60 四个格子去逼近。要把 q90 / q95 与窗口 20/40/60/120 扫成一张小表就需要 q 可配。这是跨因子的(F106、F108 的重尾日值同样适用)。"
+  }
+ ],
+ "tooling_problems": [
+  "./scripts/study.sh table <fid> s2 --all 的输出里 expr 列被截在约 300 字符、且不打印 SSA 节点字母表 —— 要知道某个 abl_*/sub_* 到底改了哪个节点,只能回去读 runs/<fid>/sweep_s2.json 的 results[id]['expr'](上一轮已记,仍然如此)。另外整行长达 ~700 字符,直接 head 会被输出上限截断,本轮要先用 awk 按 | 砍掉第 9 个字段才读得动 233 行。",
+  "s2 的 sweep_s2.json 里有 243 条结果,表里只有 233 行:被过滤掉的 13 条是 cov=0.00 / dist=0.00 的完全退化件(abl_V、iso_K、iso_V、nosc_AC_cs_state_rank,以及 6 条 nosc_*_day_es_ratio_*)。过滤本身合理,但表里没有任何一行字说明「不在表里 = 已跑且退化」—— 很容易被下一位读成「这几条没跑」,从而在下一批里重复提同样的假设。建议表尾加一行「另有 N 条 cov/dist 归零的退化件,见 JSON」。",
+  "cs_last_high20 / cs_last_low20 / cs_first_high40 / cs_first_low40 四族的 docstring 没有点明「y 的多头端必须在高值,否则方向拟合会把被平移的那一段选成多头书」。我上一轮写的三条筛子假设(h_g_fam_nofrozen / norun / nonew)就因为 y 漏了 neg() 而全部测反方向,而且不报错、数字看起来还挺合理(+9.9% / +0.5% / +3.3%)。建议在 docs/new_operators.md 的这四行里加一句话。"
+ ]
+}
+```
+
+```
+Structured output provided successfully
+```
+
+## 它写过 / 改过的文件
+
+- `/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/state.md`
+
+## 它返回给工作流的结构化结果
+
+见 `handoff/F109_erm_mag_gap_5m_tsm20/results/verdict.json`。
 
 ## 它拿到的任务书
 

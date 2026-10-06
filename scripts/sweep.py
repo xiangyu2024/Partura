@@ -136,12 +136,23 @@ def score(vid):
     raw = np.asarray(p, dtype=np.float64)
     ic = dg.ic_row(p[tr], tgt[tr], target_ranks=G["tr_ranks"])
     sign = 1.0 if not np.isfinite(ic["rank_ic"]) or ic["rank_ic"] >= 0 else -1.0
-    out = {"sign": sign, "rank_ic_train": abs(ic["rank_ic"]), "cov": ic["coverage_labelled"],
-           "dist": dg.distinct_fraction(p[tr])}
+    # A screen / segment operator (cs_first_* / cs_last_*) has its direction written into it: y is "the higher the
+    # better" and the names it moves go to the bottom.  Letting the rank IC pick the sign turns "never hold these"
+    # into "hold only these" without an error -- several leads lost whole groups of hypotheses to it.
+    locked = bool(re.match(r"\s*cs_(first|last)_(low|high)\d+\(", G["exprs"].get(vid, "")))
+    if locked:
+        sign = 1.0
+    out = {"sign": sign, "sign_locked": locked, "rank_ic_train": abs(ic["rank_ic"]), "cov": ic["coverage_labelled"],
+           "dist_raw": dg.distinct_fraction(p[tr])}
+    out["dist"] = out["dist_raw"]
     if not np.isfinite(ic["rank_ic"]):
         return vid, {**out, "dead": True}
     b = bk.books(sign * raw, tgt, tr, {"train": tr, "valid": va})
     u = bk.books(sign * raw, tgt, us, {"utrain": us})
+    # the gate is about the signal that is TRADED (the panel after its EMA): a count / share panel has few distinct
+    # values on any one day and a perfectly continuous smoothed signal
+    if u["hl_long"]:
+        out["dist"] = max(out["dist_raw"], dg.distinct_fraction(bk.smoothed(sign * raw, u["hl_long"])[tr]))
     for name, src in (("train", b), ("valid", b), ("utrain", u)):
         for rk in ("long", "ls"):
             r = src["by_rank"][rk]["splits"][name]
@@ -185,7 +196,7 @@ with slot():
     tgt = ps.target(1)
     tr, va, us = ps.split_slice("train"), ps.split_slice("valid"), ps.split_slice("utrain")
     os.environ["PARTURA_RANK_DEVICE"] = ""           # workers are forked: CPU ranking only
-    G.update(panels=panels, tgt=tgt, tr=tr, va=va, us=us, tr_ranks=dg.rank_rows(tgt[tr]))
+    G.update(panels=panels, tgt=tgt, tr=tr, va=va, us=us, tr_ranks=dg.rank_rows(tgt[tr]), exprs={i: v[0] for i, v in V.items()})
     for name, key in (("r_orig", "v_base"), ("r_known", "k_known")):
         p = np.asarray(panels[key], dtype=np.float64)
         s0 = np.sign(dg.ic_row(panels[key][tr], tgt[tr], target_ranks=G["tr_ranks"])["rank_ic"]) or 1.0

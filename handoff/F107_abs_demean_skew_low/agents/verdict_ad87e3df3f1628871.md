@@ -1,6 +1,6 @@
 # verdict:F107_abs_demean_skew_low — agent ad87e3df3f1628871(工作流 wf_4811c95a-915)
 
-- 状态:**还在跑**;开始 10-05 15:06,最后一次动作 10-05 15:16;工具调用 28 次
+- 状态:**已返回结果**;开始 10-05 15:06,最后一次动作 10-05 15:29;工具调用 96 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F107_abs_demean_skew_low/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -787,10 +787,974 @@ R0 建档 → 1~2 轮 16 假设 + S1/S2 + x1/x2 → 第 2 轮读留出段 → 3~
 (b) `h_vol_cv_low` 与 `sub_A_day_gini` 逐位相同,把 `day_gini` 的读法从推断变成确证;(c) 读 `_lexi` 源码发现筛子方向与 sg 耦合,救回上一轮 D 组的解释(它们测的是反面)。
 ```
 
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **算子按代码不按名字**(已累计四处):`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso);`log(x) = log(|x|)` 且 `|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);
+  `sqrt(x) = sqrt(|x|)`、`cs_normalize` 正仿射(都与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ(相对波动),只有喂 Ret / Amt 才是集中度**。
+  旧坑仍成立:`day_skew` 分母是路径自身标准差;`cross_delay` 与 `ts_delay`(d>0)逐行等价不是 bug;引擎 `cross_mean` ≠ 缓存面板滚动 nanme
+… (627 字符略) …
+9` / `10` / `11` / `12`。本轮一个字都没动;发现问题写进结果卡。
+- 半衰期口径有坑(`f_m20` 在 train 口径选 hl20、utrain 口径选 hl10);ρ 符号约定有坑(`f_K +0.28` 与 `known_stdamt_mean30 −0.28` 是同一式,差在方向有没有乘进交易信号)。
++ - **算子按代码不按名字**(已累计四处):`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso);`log(x) = log(|x|)` 且 `|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);
+  `sqrt(x) = sqrt(|x|)`、`cs_normalize` 正仿射(都与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ(相对波动),只有喂 Ret / Amt 才是集中度**。
+  旧坑仍成立:`day_skew` 分母是路径自身标准差;引擎 `cross_mean` ≠ 缓存面板滚动 nanmean(引 x1 数字要标「numpy 探路」)。
+- **「段内」和「全市场」是两回事**(原式全市场 +1.7%、成交额每一档段内都负);**段内高 ≠ 该倾向那一段**(`h_scr_newlist_gini`:gini 次新段内 +14.8%,倾向次新后 valid 翻负,次新段等权 −28.7%)。
+- `[trivial_boolean]` 的算子(`day_zero_ratio` / `day_flat_ratio` / `day_flat_run_max`)在 hypo 里先用 `cross_mean(·, d)` 包一层;**dist 门槛真会杀掉好行**(`h_path_pos` dist 0.03 ✗、`h_thin_flatrun` dist 0.17 ✗)。
+- **`study.sh table` 的输出别写进共用临时目录的固定文件名**:同批别的因子的主研会并发写同名文件,读到一半会变成别人的表(本轮踩过,差点把 F106 的数字当成 F107 的)。文件名带 `<fid>_` 前缀。
+- **判断类 notes 已定稿,不要改**:`08` / `09` / `10` / `11` / `12`。半衰期口径有坑(`f_m20` train 口径选 hl20、utrain 选 hl10);ρ 符号有坑(`f_K +0.28` 与 `known_stdamt_mean30 −0.28` 是同一式)。
+```
+
+**10-05 15:17 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   11789 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **gini 机制确证:** `h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/**+9.4%**、Lshp 2.65/1.28/2.26、LTO 9.7%、ρk 0.32
+与 `sub_A_day_gini` +10.0/+5.4/+8.7、2.39/1.26/2.07、LTO 9.7%、ρk 0.33 **逐位相同** → `day_gini` 喂正的紧的价格水平 **= c·σ/μ**。
+不除价位就死(`h_vol_std_low` sg 翻 +1,−7.5%);喂有符号字段就死(`h_gini_ret` +2.5、`h_leaf_gini_inp
+… (2 字符略) …
+` −0.5);极值写法 valid 塌(`h_vol_range` +10.0/**+1.4**/+7.6)。
+字段全可换(`h_gini_close` +8.7)。**折叠只在 train 段承重**:`h_gini_iso` −9.2/**+5.8**/−4.9(train 差 19pp,**valid 段 U 型消失**)。
++ **gini 机制确证:** `h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/**+9.4%**、2.65/1.28/2.26、LTO 9.7%、ρk 0.32
+与 `sub_A_day_gini` +10.0/+5.4/+8.7、2.39/1.26/2.07、LTO 9.7%、ρk 0.33 **逐位相同** → `day_gini` 喂正的紧的价格水平 **= c·σ/μ**。
+不除价位就死(`h_vol_std_low` sg 翻 +1,−7.5%);喂有符号字段就死(`h_gini_ret` +2.5);极值写法 valid 塌(`h_vol_range` +10.0/**+1.4**/+7.6);字段全可换(`h_gini_close` +8.7)。
+**折叠只在 train 段承重**:`h_gini_iso` −9.2/**+5.8**/−4.9(train 差 19pp,**valid 段 U 型消失**)。
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 本轮的实质进展是机制说清了,而且剥出一条别的因子:
+(a) `abs_(cs_demean(x))` 这个结构量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 因此必然是薄度倾斜;
+(b) s1 的 gini 线索确证为「无尺度的日内相对波动」,更干净的写法是 `abs_(cs_demean(day_std(Ret)))`(**全表唯一段内全正、流动性倾斜 ≈ 0 的一条**),
+但它相对已知族同样零增量,**应另立研究,不算 F107 的提纯**。
+
+产出:`synthesis.md` 追加「第二轮(s2)对账与结论」(76 行)+「第二轮补记:人话版回测表 + 融合与平滑」(26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
++ 本轮的实质进展是机制说清了,而且剥出一条别的因子:
+(a) `abs_(cs_demean(x))` 这个结构量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 因此必然是薄度倾斜;
+(b) s1 的 gini 线索确证为「无尺度的日内相对波动」,更干净的写法是 `abs_(cs_demean(day_std(Ret)))`(**全表唯一段内全正、流动性倾斜 ≈ 0 的一条**),
+但它相对已知族同样零增量,**应另立研究,不算 F107 的提纯**。
+产出:`synthesis.md` 追加两节(s2 对账 76 行 + 人话版回测表与融合/平滑 26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 5. 不要再做的:扫窗口、加外层保序变换、换折叠中心、把价格水平叶子换成别的价格水平、把**原式**再和 K 相加(overlay 阶梯两轮都单调下坡)。
+6. 上一轮留的三个别的立项仍有效:① 低特质波动 2023-08 后不付钱(影响整批结论);② `corr60(A, μ)` 另立;③「低换手 + 浅回撤」须换事前判据。
+
+## 7. 留出段
+
+**已读,一次(tag `FINAL`,10-04 15:05,exit 0,5 变体)。不许再读、不许再下 final 工单、不许打开 `runs/F107_*/sweepfinal_*.json`。**
+事前判据在 `10_distilled.md`「读留出段之前」(一字未改),判决在同文件「读完之后」。服务器运行合计 **5/8**,本轮加 **0** 次。
+第二、三批的裁决只能在 train / valid / utrain 上做;真出现值得上留出段的东西,**必须先和总领确认是否另立研究**。
++ 5. 不要再做的:扫窗口、加外层保序变换、换折叠中心、把价格水平叶子换成别的价格水平、把**原式**再和 K 相加(overlay 阶梯两轮都单调下坡)。
+6. 上一轮留的三个别的立项仍有效:① 低特质波动 2023-08 后不付钱(影响整批结论);② `corr60(A, μ)` 另立;③「低换手 + 浅回撤」须换事前判据。
+
+## 7. 留出段
+
+**已读,一次(tag `FINAL`,10-04 15:05,exit 0,5 变体)。不许再读、不许再下 final 工单、不许打开 `runs/F107_*/sweepfinal_*.json`。**
+事前判据在 `10_distilled.md`「读留出段之前」(一字未改),判决在同文件「读完之后」。服务器运行合计 **5/8**,本轮加 **0** 次(hypo3 解析检查不算算力)。
+第二、三批的裁决只能在 train / valid / utrain 上做;真出现值得上留出段的东西,**必须先和总领确认是否另立研究**。
+```
+
+**10-05 15:17 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   11743 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **平滑 = 换手平台(不是视界平台):** `h_gini_ema30` +13.2/+7.8/**+11.7%**、Lshp 3.29/1.85/**2.87**、LTO 9.7→**4.0%**(`ema10` +11.2 / 2.71 同值);原式 `mem_ema30` +6.6 / 1.31 / LTO 2.8%。
++3~5pp 几乎全是省下的费用,**代价有具体位置**:冻结盘口段 gini 从 +5.7% 翻到 **−8.7%**(原式记忆版 −23.7~−40.5%)。
+**融合两轮都失败:** `h_blend_gini_mem` +8.2 < gini 单独 +8.7;`ov_p025/p05/p10` +13.6/+13.1/+12.5、`h_ov_gini_p05` +15.0(ρk 0.95)**全部不过 +15.4%,阶梯单调下坡**(负权重 +10.7/+8.3/+4.9)。
++ **平滑 = 换手平台(不是视界平台):** `h_gini_ema30` +13.2/+7.8/**+11.7%**、Lshp 3.29/1.85/**2.87**、LTO 9.7→**4.0%**;原式 `mem_ema30` +6.6 / 1.31 / 2.8%。
++3~5pp 几乎全是省下的费用,**代价有具体位置**:冻结盘口段 gini 从 +5.7% 翻到 **−8.7%**(原式记忆版 −23.7~−40.5%)。
+**融合两轮都失败:** `h_blend_gini_mem` +8.2 < gini 单独 +8.7;`ov_p025/p05/p10` +13.6/+13.1/+12.5、`h_ov_gini_p05` +15.0 **全部不过 +15.4%,阶梯单调下坡**。详见 `synthesis.md` 末节。
+```
+
+**10-05 15:18 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **筛子的方向陷阱(逐条读数在 `synthesis.md` §1(D)):** 上一轮 D 组六条没包 `neg`,train 把 sg 选成 −1 → 多头书变成**只买被标出的那一段**,
+所以 `h_scr_price_mem` −1.5%、`h_scr_star_mem` −4.0% 是**反向确证解剖**,不是「剔除无效」;`h_scr_liquid_gini` +12.5%(两段最稳)的 ρk 0.78、最薄档超配 +19.8pp → 稳的是倾斜。
+通用 `seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,是它唯一选到股的地方)。
+
+**全否的三组:** 薄度反证(`
+… (364 字符略) …
+p va −0.26、ρk 0.04;overlay 与两腿相加见上。
+`h_cc_regres_gini_known` +13.4/+21.7/**+15.8%**、Lshp 2.53 看着最好,但 ρk **0.71**、最低成交额档超配 +57.9pp、LTO 6.0% —— **先残差再折叠 = 重新折出一个流动性代理**。
++ **筛子的方向陷阱(逐条读数在 `synthesis.md` §1(D)):** 上一轮 D 组六条没包 `neg`,train 把 sg 选成 −1 → 多头书变成**只买被标出的那一段**,
+所以 `h_scr_price_mem` −1.5%、`h_scr_star_mem` −4.0% 是**反向确证解剖**,不是「剔除无效」;`h_scr_liquid_gini` +12.5%(两段最稳)ρk 0.78、最薄档超配 +19.8pp → 稳的是倾斜。
+通用 `seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,是它唯一选到股的地方)。
+
+**全否的三组:** 薄度反证(`h_thin_zero` −7.3、裸薄度 `h_thin_rival` −1.1、`h_thin_flatrun` +8.1 但 **dist 0.17 ✗**)→ 原式**不是**薄度代理;
+顺序路径统计量(centroid −1.2、signed −4.7、`h_path_pos` +6.1 但 **dist 0.03 ✗**);变化率叶子(`h_leaf_ret_skew` **−0.1**/+8.7、inpct −1.4、inlogchg +0.9,train 全在 0)
+→ **`day_skew` 在 A 股分钟数据上对纯多头不出活,喂什么字段都一样。**
+
+**增量三件套(gini 版)全否:** `h_res_known_gini` +5.0/**−1.3**/+3.3、Lshp va −0.26、ρk 0.04。
+`h_cc_regres_gini_known` +13.4/+21.7/**+15.8%**、2.53 看着最好,但 ρk **0.71**、最低成交额档超配 +57.9pp、LTO 6.0% —— **先残差再折叠 = 重新折出一个流动性代理**。
+```
+
+**10-05 15:18 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   11654 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:18 · Bash** — Measure per-section byte sizes
+
+```bash
+cd /Users/wxy/Desktop/Partura && awk '/^## /{if(s)printf "%s: %d bytes\n", s, n; s=$0; n=0} {n+=length($0)+1} END{printf "%s: %d bytes\n", s, n}' notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+## 1. 现状: 1047 bytes
+## 2. 中间结果(事实 + 数字 + 出处): 3544 bytes
+## 3. 过程与逻辑: 673 bytes
+## 4. 假设表: 725 bytes
+## 5. 候选: 1203 bytes
+## 6. 后面的思路: 1294 bytes
+## 7. 留出段: 517 bytes
+## 8. 给接手者的提醒: 2107 bytes
+```
+
+**10-05 15:18 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **机制(本轮核心,三条独立证据):**
+① 换中心无效:`h_cc_regres_known` ρo **0.99**(+2.0%)、`h_cc_regres_price` ρo 0.99(+2.2%)、`h_fold_median` ρo **1.00**(+1.1%)、`h_fold_winsor_first` ρo 0.96(+1.4%)。
+② 折叠**之后**中性化翻负:`bk_known` −3.3 / `res_known` −3.4 / `bk_liq` −2.5 / `res_liq` −2.7%。
+③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。
+→ 
+… (2 字符略) …
+原式 = 折叠生出来的薄度倾斜**(最低成交额档超配 +16.5pp、该档段等权 +15.1%,而段内 −8.1%)。
+反证:`day_std(Ret)` 截面离散度不随流动性变,折叠它**不生倾斜**(五档偏离 +2.2/+2.4/−0.3/−2.3/−2.0pp,段内 +2.4/+2.3/+0.5/+7.4/+18.7 全正)。
++ **机制(本轮核心,三条独立证据):**
+① 换中心无效:`h_cc_regres_known` / `h_cc_regres_price` ρo **0.99**、`h_fold_median` ρo **1.00**(三条都只 +1~2%)。
+② 折叠**之后**中性化翻负:`bk_known` −3.3 / `res_known` −3.4 / `bk_liq` −2.5 / `res_liq` −2.7%。
+③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。
+→ **原式 = 折叠生出来的薄度倾斜**(最低成交额档超配 +16.5pp、该档段等权 +15.1%,而段内 −8.1%)。
+反证:`day_std(Ret)` 截面离散度不随流动性变,折叠它**不生倾斜**(五档偏离 +2.2/+2.4/−0.3/−2.3/−2.0pp,段内 +2.4/+2.3/+0.5/+7.4/+18.7 全正)。
+```
+
+**10-05 15:18 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **先读 `notes/<fid>/synthesis.md`**(222 行:1–117 = s1 综合,118–193 = s2 对账与定论,194– = 人话版回测表 + 融合/平滑);这页只是索引。
+- **筛子算子的方向与 sg 耦合(会让一整组假设反掉)**:`cs_last_high20/low20/high40/low40`、`cs_first_*` 都是 `_lexi(y,x,lo,hi,shift)` = 给被标出那段的 `rank(y)` 加减 1。
+  **只有 sg = +1 时 `cs_last_*` 才是排除筛子;sg = −1 时多头书恰好变成只买那一段。** 写法:照通用行把 y 包成「高的好」(`cs_last_high20(neg(k_known), x)`),或解释结果前先核对表里的 sg 列。
++ - **先读 `notes/<fid>/synthesis.md`**(222 行:1–117 = s1 综合,118–193 = s2 对账与定论,194– = 人话版回测表 + 融合/平滑);这页只是索引。
+- **筛子算子的方向与 sg 耦合(会让一整组假设反掉)**:`cs_last_*` / `cs_first_*` = `_lexi(y,x,lo,hi,shift)`,给被标出那段的 `rank(y)` 加减 1。
+  **只有 sg = +1 时才是排除筛子;sg = −1 时多头书恰好变成只买那一段。** 写法:照通用行把 y 包成「高的好」(`cs_last_high20(neg(k_known), x)`),或读结果前先核对 sg 列。
+```
+
+**10-05 15:19 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - 第一批 16 条:全部裁决(`05_hypotheses.md`),本轮无反例。
+- 第二批 40 条(`hypo.yaml`):**本轮全部对账完**,逐组裁决在 `synthesis.md`「第二轮(s2)对账与结论 §1」。
+  A 前提错(但错法 = 发现)· B 全否 · C **确证 + 找到更好写法** · D **方向写反,结论须按反面读** · E 全否 · F 全否 · G 全否 · H 全否。
+- 第三批 25 条(`hypo3.yaml`,**25/25 parse**):A 同方差桶内折叠(4)· B 赢家 `day_std(Ret)` 换一圈(6)· C 封板两侧 + 更准的冻结筛子(4)·
+  D 市场状态(2)· E 价位格子(2)· F 赢家的增量三件套 + 方向写对的筛子(4)· **G 融合与平滑(3)**。每条针对哪条结论写在文件里。
++ - 第一批 16 条:全部裁决(`05_hypotheses.md`),本轮无反例。
+- 第二批 40 条(`hypo.yaml`):**本轮全部对账完**,逐组裁决在 `synthesis.md`「第二轮(s2)对账与结论 §1」。
+  A 前提错(但错法 = 发现)· B 全否 · C **确证 + 更好写法** · D **方向写反,须按反面读** · E / F / G / H 全否。
+- 第三批 25 条(`hypo3.yaml`,**25/25 parse**):A 桶内折叠(4)· B 赢家 `day_std(Ret)` 换一圈(6)· C 封板两侧 + 冻结筛子(4)· D 市场状态(2)·
+  E 价位格子(2)· F 赢家的增量三件套 + 方向写对的筛子(4)· **G 融合与平滑(3)**。每条针对哪条结论写在文件里。
+```
+
+**10-05 15:19 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   11494 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:19 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **筛子的方向陷阱(逐条读数在 `synthesis.md` §1(D)):** 上一轮 D 组六条没包 `neg`,train 把 sg 选成 −1 → 多头书变成**只买被标出的那一段**,
+所以 `h_scr_price_mem` −1.5%、`h_scr_star_mem` −4.0% 是**反向确证解剖**,不是「剔除无效」;`h_scr_liquid_gini` +12.5%(两段最稳)ρk 0.78、最薄档超配 +19.8pp → 稳的是倾斜。
+通用 `seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,是它唯一选到股的地方)。
+
+**全否的三组:** 薄度反证(`h_
+… (119 字符略) …
+igned −4.7、`h_path_pos` +6.1 但 **dist 0.03 ✗**);变化率叶子(`h_leaf_ret_skew` **−0.1**/+8.7、inpct −1.4、inlogchg +0.9,train 全在 0)
+→ **`day_skew` 在 A 股分钟数据上对纯多头不出活,喂什么字段都一样。**
++ **筛子的方向陷阱(逐条读数在 `synthesis.md` §1(D)):** D 组六条没包 `neg`,sg 被选成 −1 → 多头书变成**只买被标出的那一段**;所以 `h_scr_price_mem` −1.5%、
+`h_scr_star_mem` −4.0% 是**反向确证解剖**,不是「剔除无效」。通用 `seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,是它唯一选到股的地方)。
+
+**全否的三组:** 薄度反证(`h_thin_zero` −7.3、裸薄度 `h_thin_rival` −1.1)→ 原式**不是**薄度代理;顺序路径统计量(centroid −1.2、signed −4.7);
+变化率叶子(`h_leaf_ret_skew` **−0.1**/+8.7、inpct −1.4、inlogchg +0.9,train 全在 0)→ **`day_skew` 对纯多头不出活,喂什么字段都一样。**
+```
+
+**10-05 15:19 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **算子按代码不按名字**(已累计四处):`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso);`log(x) = log(|x|)` 且 `|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);
+  `sqrt(x) = sqrt(|x|)`、`cs_normalize` 正仿射(都与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ(相对波动),只有喂 Ret / Amt 才是集中度**。
+  旧坑仍成立:`day_skew` 分母是路径自身标准差;引擎 `cross_mean` ≠ 缓存面板滚动 nanmean(引 x1 数字要标「numpy 探路」)。
+- **「段内」和「全市场」是两回事**(原式全市场 +1.7%、成交额每一档段内都负);**段内高 ≠ 该倾向那一段**(`h_scr_newlist_gini`:gini 次新段内 +14.8%,倾向次新后 valid 翻负,次新段等权 −28.7%)。
++ - **算子按代码不按名字**(四处):`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso);`log(x) = log(|x|)`、`|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);
+  `sqrt(x) = sqrt(|x|)`、`cs_normalize` 正仿射(与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ,只有喂 Ret / Amt 才是集中度**。
+  旧坑:`day_skew` 分母是路径自身标准差;引擎 `cross_mean` ≠ 缓存面板滚动 nanmean(引 x1 数字要标「numpy 探路」)。
+- **「段内」和「全市场」是两回事**(原式全市场 +1.7%、成交额每档段内都负);**段内高 ≠ 该倾向那一段**(`h_scr_newlist_gini`:gini 次新段内 +14.8%,倾向次新后 valid 翻负)。
+```
+
+**10-05 15:20 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 4. **C 组的冻结筛子对整批有外部性**:`k_known_xfrozen` 比 `k_known` 好 +3.1pp / +0.93 夏普;`h3_knownx_atmax` / `h3_knownx_flat` 若更好,**整批的通用筛子基准都该换**,建议总领在批次层面排。
+5. 不要再做的:扫窗口、加外层保序变换、换折叠中心、把价格水平叶子换成别的价格水平、把**原式**再和 K 相加(overlay 阶梯两轮都单调下坡)。
+6. 上一轮留的三个别的立项仍有效:① 低特质波动 2023-08 后不付钱(影响整批结论);② `corr60(A, μ)` 另立;③「低换手 + 浅回撤」须换事前判据。
++ 4. **C 组的冻结筛子对整批有外部性**:`k_known_xfrozen` 比 `k_known` 好 +3.1pp / +0.93 夏普;`h3_knownx_atmax` / `h3_knownx_flat` 若更好,**整批的通用筛子基准都该换**。
+5. 不要再做的:扫窗口、加外层保序变换、换折叠中心、把价格水平叶子换成别的价格水平、把**原式**再和 K 相加(阶梯两轮都单调下坡)。
+6. 别的立项仍有效:① 低特质波动 2023-08 后不付钱(影响整批结论);② `corr60(A, μ)` 另立;③「低换手 + 浅回撤」须换事前判据。
+```
+
+**10-05 15:20 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   11143 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:20 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- R0 建档 → 1~2 轮 16 假设 + S1/S2 + x1/x2 → 第 2 轮读留出段 → 3~5 轮核验、报告、结题(否定)→ **第 6 轮** s1 大表综合(+40 假设)→ **第 7 轮(本轮)** s2 对账与定论。
+本轮做了三件前几轮做不到的事:(a) 「换中心无效 / 折叠后中性化翻负 / 抹掉异方差归零」三面夹击,把「距离」与「异方差」分开 —— 推翻「这是个中心度因子」的那一刀;
+(b) `h_vol_cv_low` 与 `sub_A_day_gini` 逐位相同,把 `day_gini` 的读法从推断变成确证;(c) 读 `_lexi` 源码发现筛子方向与 sg 耦合,救回上一轮 D 组的解释(它们测的是反面)。
++ R0 建档 → 1~2 轮 16 假设 + S1/S2 + x1/x2 → 第 2 轮读留出段 → 3~5 轮核验、报告、结题(否定)→ **第 6 轮** s1 大表综合(+40 假设)→ **第 7 轮(本轮)** s2 对账与定论。
+本轮三件前几轮做不到的事:(a) 三面夹击把「距离」与「异方差」分开 —— 推翻「这是个中心度因子」的那一刀;(b) `h_vol_cv_low` 与 `sub_A_day_gini` 逐位相同,
+把 `day_gini` 的读法从推断变成确证;(c) 读 `_lexi` 源码发现筛子方向与 sg 耦合,救回上一轮 D 组的解释。
+```
+
+**10-05 15:20 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **三条升级版的共同毛病:train +9~12%、valid 只有 +5~8%,而基准 valid +22.3%。** 所以「升级」升的是机制理解,不是业绩。
+- 下一批最可能成为候选的四条:`h3_res_known_stdret`(赢家最硬的一关)、`h3_knownx_plus_stdret`(叠在最强行上的双筛子)、
+  `h3_blend_own2_ema30`(本因子自己能做出的最好一版)、`h3_bz_skew_known`(问出 F107 本体的最后一点)。
++ - **三条升级版的共同毛病:train +9~12%、valid 只有 +5~8%,而基准 valid +22.3%。** 所以「升级」升的是机制理解,不是业绩。
+- 下一批最可能成为候选的四条:`h3_res_known_stdret`、`h3_knownx_plus_stdret`、`h3_blend_own2_ema30`、`h3_bz_skew_known`(理由见 §6)。
+```
+
+**10-05 15:20 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **增量三件套(gini 版)全否:** `h_res_known_gini` +5.0/**−1.3**/+3.3、Lshp va −0.26、ρk 0.04。
+`h_cc_regres_gini_known` +13.4/+21.7/**+15.8%**、2.53 看着最好,但 ρk **0.71**、最低成交额档超配 +57.9pp、LTO 6.0% —— **先残差再折叠 = 重新折出一个流动性代理**。
++ **增量三件套(gini 版)全否:** `h_res_known_gini` +5.0/**−1.3**/+3.3、Lshp va −0.26、ρk 0.04。`h_cc_regres_gini_known` +13.4/+21.7/**+15.8%**、2.53 看着最好,
+但 ρk **0.71**、最低成交额档超配 +57.9pp、LTO 6.0% —— **先残差再折叠 = 重新折出一个流动性代理**。
+```
+
+**10-05 15:20 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10922 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:20 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- > **留出段已读(tag `FINAL`,1 次),额度用完,不许再读**;本轮没打开 `runs/*/sweepfinal_*.json`。
+> 本轮只读 `study.sh table F107_abs_demean_skew_low s2 --all`(124 变体 + 市场解剖)+ 算子源码,**没起服务器计算**(只跑 hypo3 解析检查)。
++ > **留出段已读(tag `FINAL`,1 次),额度用完,不许再读**;本轮没打开 `runs/*/sweepfinal_*.json`,只读 s2 大表(124 变体 + 市场解剖)+ 算子源码,**没起服务器计算**。
+```
+
+**10-05 15:21 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - `[trivial_boolean]` 的算子(`day_zero_ratio` / `day_flat_ratio` / `day_flat_run_max`)在 hypo 里先用 `cross_mean(·, d)` 包一层;**dist 门槛真会杀掉好行**(`h_path_pos` dist 0.03 ✗、`h_thin_flatrun` dist 0.17 ✗)。
+- **`study.sh table` 的输出别写进共用临时目录的固定文件名**:同批别的因子的主研会并发写同名文件,读到一半会变成别人的表(本轮踩过,差点把 F106 的数字当成 F107 的)。文件名带 `<fid>_` 前缀。
+- **判断类 notes 已定稿,不要改**:`08` / `09` / `10` / `11` / `12`。半衰期口径有坑(`f_m20` train 口径选 hl20、utrain 选 hl10);ρ 符号有坑(`f_K +0.28` 与 `known_stdamt_mean30 −0.28` 是同一式)。
++ - `[trivial_boolean]` 的算子(`day_zero_ratio` / `day_flat_ratio` / `day_flat_run_max`)写 hypo 时先用 `cross_mean(·, d)` 包一层;**dist 门槛真会杀好行**(`h_path_pos` 0.03 ✗、`h_thin_flatrun` 0.17 ✗)。
+- **`study.sh table` 的输出别写进共用临时目录的固定文件名**:同批别的主研会并发写同名文件,读到一半会变成别人的表(本轮踩过,差点把 F106 的数字当成 F107 的)。名字带 `<fid>_`。
+- **判断类 notes 已定稿不要改**:`08`~`12`。半衰期有坑(`f_m20` train 选 hl20、utrain 选 hl10);ρ 符号有坑(`f_K +0.28` 与 `known_stdamt_mean30 −0.28` 是同一式)。
+```
+
+**10-05 15:21 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10775 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:21 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **结案。** 对纯多头用户,F107 原式相对已知成交额族 `k_known` **零增量、多头腿不可用** —— 这是第 **3** 条独立路径得到同一结论
+(留出段判据 −6.12pp → s1 的成交额段内分解 → s2 的「折叠 = 异方差」机制)。推荐仍是 `recommended_id = f_m20`、`recommended_kind = known_family`,**不改判**。
+
+本轮的实质进展是机制说清了,而且剥出一条别的因子:
+(a) `abs_(cs_demean(x))` 这个结构量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 因此必然是薄度倾斜;
+(b) s1 的 gini 
+… (56 字符略) …
+`(**全表唯一段内全正、流动性倾斜 ≈ 0 的一条**),
+但它相对已知族同样零增量,**应另立研究,不算 F107 的提纯**。
+产出:`synthesis.md` 追加两节(s2 对账 76 行 + 人话版回测表与融合/平滑 26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
++ **结案。** 对纯多头用户,F107 原式相对已知成交额族 `k_known` **零增量、多头腿不可用** —— 第 **3** 条独立路径得到同一结论
+(留出段判据 −6.12pp → s1 的成交额段内分解 → s2 的「折叠 = 异方差」机制)。推荐仍是 `recommended_id = f_m20`、`recommended_kind = known_family`,**不改判**。
+
+本轮的实质进展是机制说清了,而且剥出一条别的因子:(a) `abs_(cs_demean(x))` 量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 必然是薄度倾斜;
+(b) s1 的 gini 线索确证为「无尺度的日内相对波动」,更干净的写法 `abs_(cs_demean(day_std(Ret)))`(**全表唯一段内全正、倾斜 ≈ 0**)相对已知族同样零增量,**应另立研究**。
+产出:`synthesis.md` 追加两节(s2 对账 76 行 + 人话版回测表与融合/平滑 26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
+```
+
+**10-05 15:21 · Bash** — Recheck state.md size and sections
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && grep -c "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10698 notes/F107_abs_demean_skew_low/state.md
+8
+```
+
+**10-05 15:21 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **平滑 = 换手平台(不是视界平台):** `h_gini_ema30` +13.2/+7.8/**+11.7%**、Lshp 3.29/1.85/**2.87**、LTO 9.7→**4.0%**;原式 `mem_ema30` +6.6 / 1.31 / 2.8%。
++3~5pp 几乎全是省下的费用,**代价有具体位置**:冻结盘口段 gini 从 +5.7% 翻到 **−8.7%**(原式记忆版 −23.7~−40.5%)。
+**融合两轮都失败:** `h_blend_gini_mem` +8.2 < gini 单独 +8.7;`ov_p025/p05/p10` +13.6/+13.1/+12.5、`h_ov_gini_p05` +15.0 **全部不过 +15.4%,阶梯单调下坡**。详见 `synthesis.md` 末节。
++ **平滑 = 换手平台(不是视界平台):** `h_gini_ema30` +13.2/+7.8/**+11.7%**、Lshp 3.29/1.85/**2.87**、LTO 9.7→**4.0%**;原式 `mem_ema30` +6.6 / 1.31 / 2.8%。
++3~5pp 几乎全是省下的费用,**代价有具体位置**:冻结段 gini 从 +5.7% 翻到 **−8.7%**(原式记忆版 −23.7~−40.5%)。
+**融合两轮都失败:** `h_blend_gini_mem` +8.2 < gini 单独 +8.7;`ov_p025/p05/p10` +13.6/+13.1/+12.5、`h_ov_gini_p05` +15.0 **全部不过 +15.4%,单调下坡**。详见 `synthesis.md` 末节。
+```
+
+**10-05 15:21 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - `best_own`:①`h_gini_ema30` +11.7% / **2.87** / LTO 4.0% / ρk 0.35 —— 非家族里 utrain 夏普最高,但 **valid 两侧全败**(+7.8 对 +22.3、1.85 对 3.46);
+  ②`h_vol_std_ret = abs_(cs_demean(day_std(Ret)))` +8.7% / 2.13 / LTO 5.2% / **ρk 0.19** —— 段内全正、倾斜 ≈ 0、六年无负年、下跌市 +7.0%、冻结段 +7.9%;③`h_vol_cv_low` +9.4 / 2.26(机制确证用)。
+- `best_on_known`:`h_cc_regres_gini_known` +15.8% / 2.53 —— 对 `k_known` 持平、对 `k_known_xfrozen` **−2.7pp / −0.62 夏普**、贵一倍、ρk 0.71。**没有任何建在家族上的用法强于基准。**
++ - `best_own`:①`h_gini_ema30` +11.7% / **2.87** / LTO 4.0% / ρk 0.35 —— 非家族里 utrain 夏普最高,但 **valid 两侧全败**(+7.8 对 +22.3、1.85 对 3.46);
+  ②`h_vol_std_ret = abs_(cs_demean(day_std(Ret)))` +8.7% / 2.13 / LTO 5.2% / **ρk 0.19** —— 段内全正、倾斜 ≈ 0、六年无负年、下跌市 +7.0%、冻结段 +7.9%;③`h_vol_cv_low` +9.4 / 2.26(机制确证用)。
+- `best_on_known`:`h_cc_regres_gini_known` +15.8% / 2.53 —— 对 `k_known` 持平、对 `k_known_xfrozen` **−2.7pp / −0.62 夏普**、贵一倍、ρk 0.71。**没有建在家族上的用法强于基准。**
+```
+
+**10-05 15:21 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 2. 再看 **F / G 组**:`h3_res_known_stdret` 是赢家最硬的一关(原式 −3.4、gini valid −1.3);`h3_knownx_plus_stdret` 问「F107 的内容能不能加到全表最强那一行上」;
+   G 组把「平滑 + 等权融合」做在对的两条腿上(前两次融合里总有一条腿是原式)。**判据:只抬 train 不抬 valid 一律算过拟合。**
+3. **`abs_(cs_demean(day_std(Ret)))` 建议另立研究**(连同 A / B / G 组)—— 它与原式 ρo 0.29,是另一条因子,不要再挂在 F107 名下。
++ 2. 再看 **F / G 组**:`h3_res_known_stdret` 是赢家最硬的一关(原式 −3.4、gini valid −1.3);`h3_knownx_plus_stdret` 问「能不能加到全表最强那一行上」;
+   G 组把「平滑 + 等权融合」做在对的两条腿上(前两次融合里总有一条腿是原式)。**判据:只抬 train 不抬 valid 一律算过拟合。**
+3. **`abs_(cs_demean(day_std(Ret)))` 建议另立研究**(连同 A / B / G 组)—— 与原式 ρo 0.29,是另一条因子,不要再挂在 F107 名下。
+```
+
+**10-05 15:22 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10663 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **全否的三组:** 薄度反证(`h_thin_zero` −7.3、裸薄度 `h_thin_rival` −1.1)→ 原式**不是**薄度代理;顺序路径统计量(centroid −1.2、signed −4.7);
+变化率叶子(`h_leaf_ret_skew` **−0.1**/+8.7、inpct −1.4、inlogchg +0.9,train 全在 0)→ **`day_skew` 对纯多头不出活,喂什么字段都一样。**
++ **全否的三组(逐条读数在 `synthesis.md` §1(E)(F)(G)):** 薄度反证 −7.3 / −1.1 → 原式**不是**薄度代理;顺序路径统计量 −1.2 / −4.7;变化率叶子 train 全在 0
+→ **`day_skew` 对纯多头不出活,喂什么字段都一样。**
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **算子按代码不按名字**(四处):`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso);`log(x) = log(|x|)`、`|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);
+  `sqrt(x) = sqrt(|x|)`、`cs_normalize` 正仿射(与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ,只有喂 Ret / Amt 才是集中度**。
+  旧坑:`day_skew` 分母是路径自身标准差;引擎 `cross_mean` ≠ 缓存面板滚动 nanmean(引 x1 数字要标「numpy 探路」)。
++ - **算子按代码不按名字**(四处):`pow_05 = sign(x)·|x|^0.5` 保号(其实是 iso);`log = log(|x|)`、`|x| ≤ EPS` 时 NaN(恰好把多头书 NaN 掉);`sqrt = sqrt(|x|)`、
+  `cs_normalize` 正仿射(与原式秩等价);**`day_gini` 在正的紧的价格水平上 ≈ σ/μ,只有喂 Ret / Amt 才是集中度**。`day_skew` 分母是路径自身标准差;引擎 `cross_mean` ≠ 缓存面板滚动 nanmean。
+```
+
+**10-05 15:22 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10528 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **筛子的方向陷阱(逐条读数在 `synthesis.md` §1(D)):** D 组六条没包 `neg`,sg 被选成 −1 → 多头书变成**只买被标出的那一段**;所以 `h_scr_price_mem` −1.5%、
+`h_scr_star_mem` −4.0% 是**反向确证解剖**,不是「剔除无效」。通用 `seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,是它唯一选到股的地方)。
++ **筛子的方向陷阱(逐条在 `synthesis.md` §1(D)):** D 组六条没包 `neg`,sg 被选成 −1 → 多头书变成**只买被标出的那一段**,所以 `h_scr_price_mem` −1.5%、`h_scr_star_mem` −4.0%
+是**反向确证解剖**,不是「剔除无效」。`seg_xfrozen_m` −1.8% 对原式 +1.7% → **真剔冻结段使原式差 3.5pp**(冻结段内 +8.5%,它唯一选到股的地方)。
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **gini 机制确证:** `h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/**+9.4%**、2.65/1.28/2.26、LTO 9.7%、ρk 0.32
+与 `sub_A_day_gini` +10.0/+5.4/+8.7、2.39/1.26/2.07、LTO 9.7%、ρk 0.33 **逐位相同** → `day_gini` 喂正的紧的价格水平 **= c·σ/μ**。
+不除价位就死(`h_vol_std_low` sg 翻 +1,−7.5%);喂有符号字段就死(`h_gini_ret` +2.5);极值写法 valid 塌(`h_vol_range` +10.0/**+1.4**/+7.6);字段全可换(`h_gini_close` +8.7)。
+**折叠只在 train 段承重**:`h_gini_iso` −9.2/**+5.8**/−4.9(train 差 19pp,**valid 段 U 型消失**)。
++ **gini 机制确证:** `h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/**+9.4%**、2.65/1.28/2.26、LTO 9.7%、ρk 0.32 与 `sub_A_day_gini`
++10.0/+5.4/+8.7、2.39/1.26/2.07、9.7%、0.33 **逐位相同** → `day_gini` 喂正的紧的价格水平 **= c·σ/μ**。不除价位就死(−7.5%);喂有符号字段就死(`h_gini_ret` +2.5);
+极值写法 valid 塌(`h_vol_range` +10.0/**+1.4**);字段全可换(`h_gini_close` +8.7)。**折叠只在 train 段承重**:`h_gini_iso` −9.2/**+5.8**/−4.9(**valid 段 U 型消失**)。
+```
+
+**10-05 15:22 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && grep -c "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10456 notes/F107_abs_demean_skew_low/state.md
+8
+```
+
+**10-05 15:22 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **先读 `notes/<fid>/synthesis.md`**(222 行:1–117 = s1 综合,118–193 = s2 对账与定论,194– = 人话版回测表 + 融合/平滑);这页只是索引。
++ - **先读 `synthesis.md`**(222 行:1–117 s1 综合,118–193 s2 对账与定论,194– 人话版回测表 + 融合/平滑);这页只是索引。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **已读,一次(tag `FINAL`,10-04 15:05,exit 0,5 变体)。不许再读、不许再下 final 工单、不许打开 `runs/F107_*/sweepfinal_*.json`。**
+事前判据在 `10_distilled.md`「读留出段之前」(一字未改),判决在同文件「读完之后」。服务器运行合计 **5/8**,本轮加 **0** 次(hypo3 解析检查不算算力)。
+第二、三批的裁决只能在 train / valid / utrain 上做;真出现值得上留出段的东西,**必须先和总领确认是否另立研究**。
++ **已读,一次(tag `FINAL`,10-04 15:05,exit 0,5 变体)。不许再读、不许再下 final 工单、不许打开 `runs/F107_*/sweepfinal_*.json`。**
+事前判据在 `10_distilled.md`「读留出段之前」(一字未改),判决在同文件「读完之后」。服务器运行合计 **5/8**,本轮加 **0** 次。
+二、三批的裁决只能在 train / valid / utrain 上做;真出现值得上留出段的东西,**必须先和总领确认是否另立研究**。
+```
+
+**10-05 15:23 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10403 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 1. 先看 **A 组**:桶内 z 化折叠若仍 ≈ 0,F107 本体的内容为零、可以彻底关掉;这是结案前唯一值得再问的一问。
++ 1. 先看 **A 组**:桶内 z 化折叠若仍 ≈ 0,F107 本体的内容为零、可以彻底关掉 —— 结案前唯一值得再问的一问。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 出处一律 `s2` 大表(124 行)+ 同轮市场解剖。Lnet = 多头腿扣 15bp 净超额(train / valid / **utrain**),Lshp = 纯多头夏普。
+基准 `k_known` +12.6/+22.3/**+15.4%**、Lshp 1.78/3.46/**2.22**、LTO 3.4%;`k_known_xfrozen` **+16.4/+23.2/+18.5%**、Lshp 2.81/3.98/**3.15**(**全表最强行**)。
++ 出处一律 `s2` 大表(124 行)+ 同轮解剖。Lnet = 多头腿扣 15bp 净超额(train / valid / **utrain**),Lshp = 纯多头夏普。
+基准 `k_known` +12.6/+22.3/**+15.4%**、1.78/3.46/**2.22**、LTO 3.4%;`k_known_xfrozen` **+16.4/+23.2/+18.5%**、2.81/3.98/**3.15**(**全表最强行**)。
+```
+
+**10-05 15:23 · Bash** — Recheck state.md size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10388 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **`study.sh table` 的输出别写进共用临时目录的固定文件名**:同批别的主研会并发写同名文件,读到一半会变成别人的表(本轮踩过,差点把 F106 的数字当成 F107 的)。名字带 `<fid>_`。
++ - **`study.sh table` 的输出别写进共用临时目录的固定文件名**:同批别的主研会并发写同名文件,读到一半会变成别人的表(本轮踩过,差点把 F106 当成 F107)。名字带 `<fid>_`。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **仍然没有可推荐的新候选**(没有一条同时打过 `k_known` 的 +15.4% / 2.22)。人话版对照表见 `synthesis.md` 末节。
++ **仍然没有可推荐的新候选**(没有一条同时打过 `k_known` 的 +15.4% / 2.22)。人话版对照表见 `synthesis.md` 末节。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- **仍然没有可推荐的新候选**(没有一条同时打过 `k_known` 的 +15.4% / 2.22)。人话版对照表见 `synthesis.md` 末节。
++ **没有可推荐的新候选**(没有一条同时打过 `k_known` 的 +15.4% / 2.22)。人话版对照表见 `synthesis.md` 末节。
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - 第一批 16 条:全部裁决(`05_hypotheses.md`),本轮无反例。
+- 第二批 40 条(`hypo.yaml`):**本轮全部对账完**,逐组裁决在 `synthesis.md`「第二轮(s2)对账与结论 §1」。
+  A 前提错(但错法 = 发现)· B 全否 · C **确证 + 更好写法** · D **方向写反,须按反面读** · E / F / G / H 全否。
++ - 第一批 16 条:全部裁决(`05_hypotheses.md`),本轮无反例。
+- 第二批 40 条(`hypo.yaml`):**本轮全部对账完**(逐组裁决在 `synthesis.md` §1):A 前提错(但错法 = 发现)· B 全否 · C **确证 + 更好写法** · D **方向写反,须按反面读** · E~H 全否。
+```
+
+**10-05 15:23 · Bash** — Final state.md size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && grep -c "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10321 notes/F107_abs_demean_skew_low/state.md
+8
+```
+
+**10-05 15:23 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - 第三批 25 条(`hypo3.yaml`,**25/25 parse**):A 桶内折叠(4)· B 赢家 `day_std(Ret)` 换一圈(6)· C 封板两侧 + 冻结筛子(4)· D 市场状态(2)·
+  E 价位格子(2)· F 赢家的增量三件套 + 方向写对的筛子(4)· **G 融合与平滑(3)**。每条针对哪条结论写在文件里。
++ - 第三批 25 条(`hypo3.yaml`,**25/25 parse**):A 桶内折叠(4)· B 赢家 `day_std(Ret)` 换一圈(6)· C 封板两侧 + 冻结筛子(4)· D 市场状态(2)· E 价位格子(2)·
+  F 赢家的增量三件套 + 筛子(4)· **G 融合与平滑(3)**。每条针对哪条结论写在文件里。
+```
+
+**10-05 15:23 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10306 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **三条升级版的共同毛病:train +9~12%、valid 只有 +5~8%,而基准 valid +22.3%。** 所以「升级」升的是机制理解,不是业绩。
+- 下一批最可能成为候选的四条:`h3_res_known_stdret`、`h3_knownx_plus_stdret`、`h3_blend_own2_ema30`、`h3_bz_skew_known`(理由见 §6)。
++ - **三条升级版的共同毛病:train +9~12%、valid 只有 +5~8%,而基准 valid +22.3%** → 「升级」升的是机制理解,不是业绩。
+- 下一批最可能成为候选的四条:`h3_res_known_stdret`、`h3_knownx_plus_stdret`、`h3_blend_own2_ema30`、`h3_bz_skew_known`(见 §6)。
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10295 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- ③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。
+→ **原式 = 折叠生出来的薄度倾斜**(最低成交额档超配 +16.5pp、该档段等权 +15.1%,而段内 −8.1%)。
++ ③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。→ **原式 = 折叠生出来的薄度倾斜**(最低成交额档超配 +16.5pp、该档段等权 +15.1%,而段内 −8.1%)。
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && grep -c "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10294 notes/F107_abs_demean_skew_low/state.md
+8
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- - **「段内」和「全市场」是两回事**(原式全市场 +1.7%、成交额每档段内都负);**段内高 ≠ 该倾向那一段**(`h_scr_newlist_gini`:gini 次新段内 +14.8%,倾向次新后 valid 翻负)。
++ - **「段内」≠「全市场」**(原式全市场 +1.7%、成交额每档段内都负);**段内高 ≠ 该倾向那一段**(`h_scr_newlist_gini`:gini 次新段内 +14.8%,倾向次新后 valid 翻负)。
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 2. 再看 **F / G 组**:`h3_res_known_stdret` 是赢家最硬的一关(原式 −3.4、gini valid −1.3);`h3_knownx_plus_stdret` 问「能不能加到全表最强那一行上」;
+   G 组把「平滑 + 等权融合」做在对的两条腿上(前两次融合里总有一条腿是原式)。**判据:只抬 train 不抬 valid 一律算过拟合。**
++ 2. 再看 **F / G 组**:`h3_res_known_stdret` 是赢家最硬的一关(原式 −3.4、gini valid −1.3);`h3_knownx_plus_stdret` 问「能不能加到全表最强那一行上」;G 组把「平滑 +
+   等权融合」做在对的两条腿上(前两次融合里总有一条腿是原式)。**判据:只抬 train 不抬 valid 一律算过拟合。**
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10281 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- > 主研**第 7 轮(批量扫描 s2 对账轮)**写(Opus 5,2026-10-05),整页覆盖重写。
+> `abs_(cs_demean(day_skew(Low)))`,挖掘 #613。记 `A = day_skew(Low)`、`B = cs_demean(A)`,信号 `abs(B)`,方向 **−1**。
++ > 主研**第 7 轮(s2 对账轮)**写(Opus 5,2026-10-05),整页覆盖重写。`abs_(cs_demean(day_skew(Low)))`,挖掘 #613。
+> 记 `A = day_skew(Low)`、`B = cs_demean(A)`,信号 `abs(B)`,方向 **−1**。
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10268 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 本轮的实质进展是机制说清了,而且剥出一条别的因子:(a) `abs_(cs_demean(x))` 量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 必然是薄度倾斜;
++ 本轮进展是机制说清了,而且剥出一条别的因子:(a) `abs_(cs_demean(x))` 量的是 **x 的截面异方差**,不是「离中心的距离」(三条独立证据,§2),原式的 +1.7% 必然是薄度倾斜;
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && grep -c "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10259 notes/F107_abs_demean_skew_low/state.md
+8
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- 产出:`synthesis.md` 追加两节(s2 对账 76 行 + 人话版回测表与融合/平滑 26 行);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
++ 产出:`synthesis.md` 追加两节(s2 对账 + 人话版回测表与融合/平滑);`hypo3.yaml` **25 条 / 25 parse**;journal 新一条。
+```
+
+**10-05 15:24 · Bash** — Final size check
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10245 notes/F107_abs_demean_skew_low/state.md
+```
+
+**10-05 15:24 · 改文件** `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+```
+- ③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。→ **原式 = 折叠生出来的薄度倾斜**(最低成交额档超配 +16.5pp、该档段等权 +15.1%,而段内 −8.1%)。
++ ③ 把异方差抹掉**再**折叠就归零:`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%。→ **原式 = 折叠生出的薄度倾斜**(最低成交额档超配 +16.5pp、段等权 +15.1%,而段内 −8.1%)。
+```
+
+**10-05 15:25 · Bash** — Confirm state.md under 10KB with 8 sections
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F107_abs_demean_skew_low/state.md && echo "--- sections ---" && grep "^## " notes/F107_abs_demean_skew_low/state.md
+```
+
+```
+   10236 notes/F107_abs_demean_skew_low/state.md
+--- sections ---
+## 1. 现状
+## 2. 中间结果(事实 + 数字 + 出处)
+## 3. 过程与逻辑
+## 4. 假设表
+## 5. 候选
+## 6. 后面的思路
+## 7. 留出段
+## 8. 给接手者的提醒
+```
+
+**10-05 15:25 · agent 的话**
+
+10,236 bytes (under the 10 KB cap), 8 sections. Now the journal note.
+
+**10-05 15:25 · Bash** — Write journal note for s2 round
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F107_abs_demean_skew_low "[主研] 批量扫描 s2 对账与结论" <<'EOF'
+- **对账**:第二批 40 条逐组裁完。A 组前提是错的且错法 = 本轮最大发现(换中心 `h_cc_regres_known` / `h_cc_regres_price` ρo **0.99**、`h_fold_median` ρo **1.00** —— 交易信号一点没动);B 全否;C **确证**(`h_vol_cv_low` 与 `sub_A_day_gini` 逐位相同 → `day_gini` 喂正的紧的价格水平 = c·σ/μ);D **六条筛子方向全被写反**(`cs_last_*` 只在 sg=+1 时是排除筛子,sg=−1 时多头书变成只买被标出那段)→ 结论须按反面读;E/F/G/H 全否。
+- **机制定论:`abs_(cs_demean(x))` 量的是 x 的截面异方差,不是「离中心的距离」。** 三面夹击:换中心无效(ρo 0.99/1.00)+ 折叠后中性化翻负(`bk_known` −3.3 / `res_known` −3.4)+ 把异方差抹掉再折叠归零(rank-first −0.2、bucket-first −3.1)。所以原式那 +1.7% 是折叠生出的**薄度倾斜**(最低成交额档超配 +16.5pp、段内 −8.1%),**不是**薄度代理(E 组已否)。反证:`day_std(Ret)` 截面离散度不随流动性变,折叠它就不生倾斜(五档偏离 ≈ 0、段内全正)。
+- **定论**:`best_own` = `h_gini_ema30` +11.7% / Lshp 2.87 / LTO 4.0%(valid 两侧全败家族 +7.8 对 +22.3)与 `h_vol_std_ret = abs_(cs_demean(day_std(Ret)))` +8.7% / 2.13 / ρk **0.19**(全表唯一段内全正 + 倾斜 ≈ 0 + 六年无负年);`best_on_known` = `h_cc_regres_gini_known` +15.8% / 2.53 但 ρk **0.71**、对 `k_known_xfrozen` −2.7pp / −0.62 夏普 → **建在家族上没有任何用法强于基准**。verdict 维持:原式 = 已知族更弱更贵的版本、多头腿不可用,**不是提纯也当不了筛子**;波动分支是另一条因子穿同一件外套,建议另立研究。
+- **用户那一问(人话版回测表 + 融合与平滑)**:写进 `synthesis.md` 末节。平滑(`cross_ema30`)是**换手平台**:原式 +1.7→+6.6%、gini +8.7→+11.7%,+3~5pp 几乎全是省下的费用,代价精确落在冻结盘口段(gini 那一段 +5.7 → **−8.7%**)。融合**两轮都失败**:两条自有腿相加 +8.2 < gini 单独 +8.7;叠家族 ov_p025/p05/p10 = +13.6/+13.1/+12.5、`h_ov_gini_p05` +15.0,全部不过 +15.4% 且单调下坡。三条升级版的共同毛病:**train +9~12% 而 valid 只有 +5~8%,基准 valid +22.3%**。
+- **第三批 25 条**(`hypo3.yaml`,25/25 parse):A 桶内 z 化折叠(4)· B 赢家 `day_std(Ret)` 换一圈(6)· C 封板两侧 + 更准的冻结筛子(4)· D 市场状态(2)· E 价位格子(2)· F 赢家的增量三件套 + 方向写对的筛子(4)· **G 融合与平滑(3,直接回答用户那一问,判据写明「只抬 train 不抬 valid 一律算过拟合」)**。为腾位置删了 `h3_bd_skew_known`、`h3_state_flip` 两条信息量最低的。
+- 本轮**没起服务器计算**(只跑 hypo3 解析检查),**没读测试段**;踩到一个工具坑:`study.sh table` 的输出写进共用临时目录的固定文件名会被同批别的主研覆盖,读到一半变成了 F106 的表(已写进 state.md §8)。
+EOF
+```
+
+```
+已记入 notes/F107_abs_demean_skew_low/journal.md(18 条)
+```
+
+**10-05 15:25 · Bash** — Verify only F107 files changed
+
+```bash
+cd /Users/wxy/Desktop/Partura && git status --porcelain 2>/dev/null | head -20; echo "--- verify no other factor touched ---"; ls -la studies/F107_abs_demean_skew_low/hypo3.yaml notes/F107_abs_demean_skew_low/synthesis.md notes/F107_abs_demean_skew_low/state.md notes/F107_abs_demean_skew_low/journal.md
+```
+
+```
+ M handoff/F101_day_shine_retstd/STATE.md
+ M handoff/F101_day_shine_retstd/agents/verdict_aba6480b25c40a77e.md
+ M handoff/F102_kurt_autocorr/STATE.md
+ M handoff/F102_kurt_autocorr/agents/verdict_af1e2cec7e004ff15.md
+ M handoff/F104_kurt_masktop_amt/STATE.md
+ M handoff/F104_kurt_masktop_amt/agents/verdict_a53a8354e270b05d9.md
+ M handoff/F105_std_fangzheng_covamt/STATE.md
+ M handoff/F105_std_fangzheng_covamt/agents/verdict_abf3a5599890322c7.md
+ M handoff/F106_erm_mag_gap_1m/STATE.md
+ M handoff/F106_erm_mag_gap_1m/agents/verdict_ae0c50256218363f2.md
+ M handoff/F107_abs_demean_skew_low/STATE.md
+ M handoff/F107_abs_demean_skew_low/agents/verdict_ad87e3df3f1628871.md
+ M handoff/F108_max_ntkurt_close/STATE.md
+ M handoff/F108_max_ntkurt_close/agents/verdict_ae70bca6af3f47ef1.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/STATE.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/agents/verdict_a83a83140db02b4fe.md
+ M handoff/F110_ret_fair_log/STATE.md
+ M handoff/F111_spearman_qclose/STATE.md
+ M handoff/F112_scale_spow_masktop/STATE.md
+ M handoff/STATUS.md
+--- verify no other factor touched ---
+-rw-r--r--@ 1 wxy  staff  36114 Oct  5 15:25 notes/F107_abs_demean_skew_low/journal.md
+-rw-r--r--@ 1 wxy  staff  10236 Oct  5 15:24 notes/F107_abs_demean_skew_low/state.md
+-rw-r--r--@ 1 wxy  staff  24805 Oct  5 15:12 notes/F107_abs_demean_skew_low/synthesis.md
+-rw-r--r--@ 1 wxy  staff  18310 Oct  5 15:11 studies/F107_abs_demean_skew_low/hypo3.yaml
+```
+
+**10-05 15:27 · agent 的话**
+
+All deliverables are on disk. Submitting the structured result.
+
+**10-05 15:29 · StructuredOutput**
+
+```json
+{
+ "factor_id": "F107_abs_demean_skew_low",
+ "one_line": "原式的多头腿收益是 `abs_(cs_demean(·))` 折出来的薄度倾斜(换中心 ρo 0.99 信号不动、把异方差抹掉再折叠就归零),相对已知族零增量;s2 唯一的真东西是从它身上剥出的 `abs_(cs_demean(day_std(Ret)))`(全表唯一段内全正、流动性倾斜 ≈ 0、ρk 0.19),但 valid 只有 +6.4% 对家族 +22.3% —— 那是另一条因子,不是 F107 的提纯。",
+ "confirmed": [
+  "C 组机制确证:`day_gini` 喂正的紧的价格水平 = c·σ/μ(无尺度相对波动)—— `h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/+9.4%、Lshp 2.65/1.28/2.26、LTO 9.7%、ρk 0.32 与 `sub_A_day_gini` +10.0/+5.4/+8.7、2.39/1.26/2.07、LTO 9.7%、ρk 0.33 逐位相同",
+  "C 组:承重的恰好是「用标准差写的、无尺度的」那一种 —— 不除价位就死(`h_vol_std_low` sg 翻成 +1、−7.5%)、喂有符号字段就死(`h_gini_ret` +2.5、`h_leaf_gini_inpct` −0.5)、用极值写 valid 塌(`h_vol_range` +10.0/+1.4/+7.6、Lshp va 0.31);字段仍全可换(`h_gini_close` +8.7)",
+  "C 组:记忆/平滑对 gini 也是白送的换手平台 —— `h_gini_ema30` +13.2/+7.8/+11.7%、Lshp 3.29/1.85/2.87、LTO 9.7→4.0%(`ema10` +11.2 / 2.71 同值)",
+  "D 组(必须按反面读):`h_scr_price_mem` 实际是「只买最贵 20%」→ −1.5%、`h_scr_star_mem` 实际是「只买又贵又新的 20%」→ −4.0% —— 反向确证了解剖(价格最高档段内 −8.1%、科创板 −24.3%)",
+  "D 组:冻结盘口段是原式唯一真选到股的地方 —— 通用 `seg_xfrozen_m`(真剔冻结,sg +1)−1.8% 对原式 +1.7%,剔掉反而差 3.5pp(该段段内 +8.5%)",
+  "A 组的反面得到确认:`day_skew(Low)` 与流动性、价位几乎无截面关系 —— `h_cc_regres_known` ρo 0.99(+2.0%)、`h_cc_regres_price` ρo 0.99(+2.2%),中心没有错位",
+  "s1 的「折叠生倾斜」从读法升级成机制定论:把异方差抹掉再折叠就归零(`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%),而截面离散度不随流动性变的量折叠后不生倾斜(`day_std(Ret)` 五档持仓偏离 +2.2/+2.4/−0.3/−2.3/−2.0pp、段内 +2.4/+2.3/+0.5/+7.4/+18.7 全正)"
+ ],
+ "refuted": [
+  "A 组前提(中心错位)被否:换成流动性/价位条件均值后交易信号一点没动(ρo 0.99);先桶内百分位再折叠反而翻负(`h_cc_bucket_pre` −3.1%,与折叠后再中性化的 `bk_known` −3.3% 同值),gini 版从 +8.7 掉到 +0.8(`h_cc_bucket_pre_gini`)",
+  "A 组唯一「看着最好」的那条不算提纯:`h_cc_regres_gini_known` +13.4/+21.7/+15.8%、Lshp 2.53,但 ρk 0.71、最低成交额档超配 +57.9pp、LTO 6.0% —— 先取残差再折叠会把残差的异方差重新折成流动性代理,对 `k_known_xfrozen` 是 −2.7pp / −0.62 夏普",
+  "B 组(换折叠方式)四条全否、全在噪声内:`h_fold_median` ρo 1.00(+1.1%)、`h_fold_winsor_first` ρo 0.96(+1.4%)、`h_fold_rankfirst` ρo 0.88(−0.2%)——「偏度的截面分布自己偏、均值中心被尾巴拖走」不成立(均值与中位数在这个量上秩相等);gini 上 rank-first 明显更差(+5.2 对 +8.7,LTO 9.7→11.8%)→ gini 的水平带信息",
+  "E 组(薄度代理)全否,我上一轮的机制故事错了:`h_thin_zero` −7.3%、裸薄度 `h_thin_rival` −1.1%(复现不了记忆家族的 +5~6%)、`h_thin_flatrun` +8.1% 但 dist 0.17 ✗、`h_thin_validcnt` dist 0.05 ✗ —— 原式不是薄度代理,是异方差代理(薄度只是异方差最大的地方)",
+  "F 组(带顺序的路径统计量)全否:`h_path_centroid` −1.2%、`h_path_signed` −4.7%;`h_path_pos` 两段稳(+6.2/+5.7/+6.1、Lshp 1.63)但 dist 0.03 ✗,不能当候选",
+  "G 组(叶子换成变化率)全否且 train 全在 0:`h_leaf_ret_skew` −0.1/+8.7/+2.4、`h_leaf_inpct_close` −1.4/+7.3/+1.1、`h_leaf_inlogchg_amt` +0.9/+6.7/+2.5 —— `day_skew` 在 A 股分钟数据上对纯多头不出活,喂价格/收益/成交额变化率都一样",
+  "H 组(gini 的增量三件套)全否,与原式同命:`h_res_known_gini` +5.0/−1.3/+3.3、Lshp va −0.26、ρk 0.04;`h_ov_gini_p05` +15.0%、ρk 0.95 不过家族 +15.4%;`h_blend_gini_mem` +8.2% < gini 单独 +8.7% —— ρo 0.27 的时段互补没有变成一条稳的",
+  "s1 推论「gini 次新段内 +14.8% ⇒ 该倾向次新」不成立:`h_scr_newlist_gini`(实际是剔掉最新 40%)+8.2/−0.5/+5.8 < gini 单独 —— 次新段的段等权超额是 −28.7%,段内高 ≠ 该倾向那一段",
+  "D 组的筛子形态无一过关:`h_scr_frozen_mem` +7.0 / `h_scr_frozen_gini` +7.5(实际是「只在最薄 20% 里按平庸度选」,夏普反而更差);`h_scr_liquid_gini` +12.4/+12.5/+12.5 两段最稳但 ρk 0.78、最薄档超配 +19.8pp、高流动两档段内 −25.3/−41.2% —— 稳的那部分就是倾斜",
+  "用户那一问的直接答案:融合与平滑都救不了这一族 —— 平滑只是省成本(原式 +1.7→+6.6、gini +8.7→+11.7,代价精确落在冻结盘口段:gini 段内 +5.7 → ema30 版 −8.7,原式记忆版 −23.7~−40.5);融合两轮零战绩(自有两腿相加 +8.2 < +8.7;叠家族 ov_p025/p05/p10 = +13.6/+13.1/+12.5、负权重 +10.7/+8.3/+4.9,阶梯单调下坡)"
+ ],
+ "best_own": [
+  {
+   "id": "h_gini_ema30",
+   "expr": "cross_ema(abs_(cs_demean(day_gini(Low))), 30)",
+   "note": "人话:买「日内相对波动最接近全市场中位」的票,评分再按 30 日 EMA 抹平。train +13.2% / valid +7.8% / 用户训练段 +11.7%,纯多头夏普 3.29/1.85/2.87,日换手 4.0%,ρk 0.35。非家族里 utrain 夏普最高,但 valid 两侧全败基准(+7.8 对 +22.3、1.85 对 3.46),所以是线索不是候选;它的平滑代价有具体位置(冻结盘口段 −8.7%,未平滑版 +5.7%)"
+  },
+  {
+   "id": "h_vol_std_ret",
+   "expr": "abs_(cs_demean(day_std(Ret)))",
+   "note": "人话:买「当天分钟收益波动最接近全市场中位」的票。train +9.5% / valid +6.4% / 用户训练段 +8.7%,夏普 2.31/1.65/2.13,日换手 5.2%,ρk 0.19(全表最低)。**全表唯一「成交额五档段内全正(+2.4/+2.3/+0.5/+7.4/+18.7)且持仓偏离 ≈ 0」的一条**,低配最小市值档 −12.0pp 还赚 +14.9%,下跌市 +7.0 / 上涨 +10.3、高波动 +8.1 / 低波动 +9.2(全表最平)、六年无负年、冻结盘口段内 +7.9%。本研究唯一不靠倾斜赚钱的版本,但样本外仍低家族 16pp,且与原式 ρo 0.29 —— 建议另立研究"
+  },
+  {
+   "id": "h_vol_cv_low",
+   "expr": "abs_(cs_demean(div(day_std(Low), day_mean(Low))))",
+   "note": "人话:同上,但写成「当日最低价的标准差 ÷ 当日均价」。train +11.0% / valid +5.4% / 用户训练段 +9.4%,夏普 2.65/1.28/2.26,日换手 9.7%,ρk 0.32。价值在于它与 `sub_A_day_gini` 逐位相同,把 `day_gini` 的读法从推断变成确证;业绩上被上面两条支配"
+  }
+ ],
+ "best_on_known": [
+  {
+   "id": "h_cc_regres_gini_known",
+   "expr": "abs_(cs_regres(day_gini(Low), cs_rank(cross_mean(day_std(Amt), 30))))",
+   "note": "人话:先把日内相对波动对流动性取残差,再折叠。train +13.4% / valid +21.7% / 用户训练段 +15.8%(utrain 净超额全表最高)、夏普 2.13/3.56/2.53、日换手 6.0%。但 ρk 0.71、最低成交额档超配 +57.9pp —— 按本轮机制(先残差再折叠会把残差的异方差重新折成流动性代理)它只是**已知族的另一种写法**:对 `k_known`(+15.4 / 2.22)持平且在噪声带内,对通用筛子基准 `k_known_xfrozen`(+18.5 / 3.15)明确更差 −2.7pp / −0.62 夏普,成本还贵一倍。筛子方向也不过关(`scr_xhi_p` +12.7、`scr_xhi_m` +5.9 < +15.4),overlay 阶梯单调下坡 → **建在已知族上没有任何用法强于基准**"
+  }
+ ],
+ "verdict": "**原式 = 已知成交额族的更弱更贵版本,多头腿不可用**(第 3 条独立路径复现:留出段判据 −6.12pp → s1 的成交额段内分解 → s2 的「折叠 = 异方差」机制;这次说清了钱从哪来)。**不是提纯**:换中心(ρo 0.99 / 1.00)、换折叠方式(四条全在噪声内)、桶内化与中性化(−3.1 / −3.3 / −3.4)—— 要么零变化要么翻负;**也当不了筛子**(给已知族当筛子 +12.7% < +15.4%);**融合与平滑也救不了**(平滑只省成本、代价在冻结盘口段;融合两轮零战绩且阶梯单调下坡)。gini / 波动分支是**另一条因子穿着同一件外套**,机制坐实为「日内相对波动的截面中位度」,但相对已知族同样零增量(`res_known` valid −1.3%)。→ F107 本体结案,维持 `recommended_id = f_m20`、`recommended_kind = known_family`,不改判;`abs_(cs_demean(day_std(Ret)))` 连同第三批 A / B / G 三组**另立一个研究**,不要再挂在 F107 名下。给用户看的人话版回测对照表(含「融合与平滑」的全部现有读数)写在 `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/synthesis.md` 末节,可直接转给用户:三条升级版 train +9~12%、valid 只有 +5~8%,而基准 valid +22.3% —— 升级升的是机制理解,不是业绩。",
+ "lab_findings": [
+  {
+   "id": "LF1",
+   "claim": "`abs_(·)` / `pow_2(·)` / `sqrt(·)` 包着 `cs_demean` / `cs_normalize` 的「折叠距离」结构,量的是 **x 在这一类股票里的截面方差(异方差)**,不是「这只票离中心多远」;所以方向取「离中心最近」时,多头书必然被推到 x 最稳的那一类股票上,净超额等于那一类的风格溢价。",
+   "evidence": "三条互相独立的证据同时成立:(a) 把中心从全市场均值换成流动性/价位条件均值或中位数,交易信号一点没动(`h_cc_regres_known` / `h_cc_regres_price` ρo 0.99、`h_fold_median` ρo 1.00)→ 中心没错位;(b) 折叠**之后**再中性化全部翻负(`bk_known` −3.3 / `res_known` −3.4 / `bk_liq` −2.5 / `res_liq` −2.7%);(c) 把异方差抹掉**再**折叠就归零(`h_fold_rankfirst` −0.2%、`h_cc_bucket_pre` −3.1%)。对账:原式全市场 +1.7% 而成交额五档段内 −8.1/−6.4/−3.7/−1.6/−2.4 全负,书对最低成交额档超配 +16.5pp(该档段等权 +15.1%)。",
+   "operators": [
+    "abs_",
+    "pow_2",
+    "sqrt",
+    "cs_demean",
+    "cs_normalize",
+    "cs_bucket_rank",
+    "cs_regres",
+    "cs_rank"
+   ],
+   "recheck": "失效条件:当 x 的截面离散度**不**随已知风格变化时,折叠就不生倾斜,此时段内可以全正 —— 本轮反例 `abs_(cs_demean(day_std(Ret)))`:五档持仓偏离 +2.2/+2.4/−0.3/−2.3/−2.0pp、段内 +2.4/+2.3/+0.5/+7.4/+18.7。所以迁移用法是:先查「x 的截面方差跟哪个已知风格对齐」,再看段内那一行,不要只看全市场净超额。"
+  },
+  {
+   "id": "LF2",
+   "claim": "`day_gini(x)` 喂**正的、紧的价格水平**(Low/Close/Open/Vwap,日内相对离散度 0.5%~5%)时 ≈ c·σ/μ,是**无尺度的日内相对波动**,不是集中度;只有喂有符号或宽尺度字段(Ret / Amt)才是集中度。",
+   "evidence": "`h_vol_cv_low = abs_(cs_demean(div(day_std(Low), day_mean(Low))))` +11.0/+5.4/+9.4%、Lshp 2.65/1.28/2.26、LTO 9.7%、ρk 0.32 与 `sub_A_day_gini` +10.0/+5.4/+8.7、2.39/1.26/2.07、LTO 9.7%、ρk 0.33 **逐位相同**;不除价位就死(`h_vol_std_low` 方向翻成 +1、−7.5%),喂 Ret 就死(`h_gini_ret` +2.5%),喂 in_pct 更差(`h_leaf_gini_inpct` −0.5%)。",
+   "operators": [
+    "day_gini",
+    "day_std",
+    "day_mean",
+    "div"
+   ],
+   "recheck": "只在「分母(均值)在截面上同量级、分子远小于分母」时成立。换到成交额、收益率或跨市场价位相差百倍的面板上,gini 回到集中度语义,结论失效。"
+  },
+  {
+   "id": "LF3",
+   "claim": "`cs_last_high20/low20/high40/low40` 与 `cs_first_*`(内核 `_lexi(y,x,lo,hi,shift)`,给被标出那段的 `rank(y)` 加减 1)的筛子语义与 **train 选出的方向 sg 耦合**:只有 sg = +1 时它是「排除那一段」;sg = −1 时多头书恰好变成「只买那一段」。",
+   "evidence": "上一轮 D 组六条写的 y 都是「低的好」、没包 `neg`,train 把 sg 选成 −1,于是 `h_scr_price_mem`(本意剔最贵)变成只买最贵 20% → −1.5%、`h_scr_star_mem`(本意剔科创板代理)变成只买它 → −4.0%;大表的通用行(`scr_xhi_p`、`k_known_xfrozen`)都包了 `neg` 且 sg = +1。",
+   "operators": [
+    "cs_last_high20",
+    "cs_last_low20",
+    "cs_last_high40",
+    "cs_last_low40",
+    "cs_first_low20",
+    "cs_first_high20",
+    "cs_first_low40",
+    "cs_first_high40",
+    "neg"
+   ],
+   "recheck": "写筛子假设时一律照通用行把 y 包成「高的好」(`cs_last_high20(neg(k), x)`);解释任何 `cs_*_high/low*` 结果之前先核对表里的 sg 列,否则整组结论会反过来。"
+  },
+  {
+   "id": "LF4",
+   "claim": "`cross_ema` / `cross_mean` / `cross_decay_linear`(窗口 5~60)作用在日频折叠量上是**换手平台不是视界平台**:窗口跨 12 倍读数全平,+3~5pp 几乎全是省下的交易费用;而代价精确落在「状态刚刚变化」的那一段。",
+   "evidence": "原式 `mem_*` 5/10/30/60:cross_ema +6.0/+6.0/+6.6/+6.1、cross_mean +5.2/+5.3/+5.5/+5.9、decay_linear +5.1/+5.7/+5.8/+6.1(LTO 从 10.9% 掉到 2.8%~5.8%);gini 版 `h_gini_ema30` +11.7 / Lshp 2.87 / LTO 4.0% 与 `ema10` +11.2 / 2.71 同值。代价:冻结盘口段(占 6.5%、段等权 −67.4%)gini 未平滑 +5.7% → ema30 版 **−8.7%**,原式的记忆版 −23.7%~−40.5%,而原式自己在那一段 +8.5%。",
+   "operators": [
+    "cross_ema",
+    "cross_mean",
+    "cross_decay_linear",
+    "cross_min",
+    "cross_max",
+    "cross_zscore",
+    "cross_stddev"
+   ],
+   "recheck": "若因子的信息本身就是「今天的状态变化」(封板、停牌、刚放量),平滑会把它卖掉 —— 决定平滑之前先看冻结/封板段的段内读数。另外:`cross_zscore` 把水平量变成 churn(原式 5/10/30/60 = −28.5/−22.8/−12.7/−9.9%、LTO 升到 35.6%),`cross_min/max` 改变了对象、不算平滑。"
+  },
+  {
+   "id": "LF5",
+   "claim": "判「这条因子是不是靠风格倾斜赚钱」的硬判据是**两列一起看**:各档的「段内超额」全正 **且** 「持仓占比偏离」≈ 0;单看全市场净超额会被倾斜骗,单看段内超额会得出「该倾向那一段」的错结论。",
+   "evidence": "正例 `abs_(cs_demean(day_std(Ret)))`:段内 +2.4/+2.3/+0.5/+7.4/+18.7 全正、偏离 ≈ 0,且下跌市 +7.0 / 上涨 +10.3、高波动 +8.1 / 低波动 +9.2、六年无负年。反例一:原式全市场 +1.7% 但成交额每一档段内都负(倾斜 +16.5pp 换来的)。反例二:`h_scr_newlist_gini` —— gini 在次新段段内 +14.8%(全表最好),按「段内高就该倾向它」改写后 valid 翻负(+8.2/−0.5/+5.8),因为次新段的段等权超额是 −28.7%。",
+   "operators": [
+    "cs_first_low40",
+    "cs_first_high40",
+    "cs_bucket_rank",
+    "cs_regres"
+   ],
+   "recheck": "段内读数在占比很小的段上(科创板 4.0%、冻结盘口 6.5%)噪声大,不能单条下结论;「段等权超额」必须和段内超额一起引用。"
+  },
+  {
+   "id": "LF6",
+   "claim": "在「纯多头净超额 + 夏普」这个口径下,**融合/叠加到今天为止零战绩,而且 overlay 阶梯是单调的**:权重越大越差、负权重更差,最好的那一档只是给已知族掺了几个点的水(ρk 已 0.96)。只有「被叠的腿 ρk 低 **且** 段内不靠倾斜」时才值得再试一次。",
+   "evidence": "原式叠家族:+15.4(家族单独)→ +13.6(w=0.25)→ +13.1(0.5)→ +12.5(1.0),负权重 +10.7/+8.3/+4.9;换成 gini 腿一样(`h_ov_gini_p05` +15.0、ρk 0.95);两条自有腿相加 `h_blend_gini_mem` +8.2 < gini 单独 +8.7(尽管两腿 ρo 只 0.27、时段互补);当筛子 `scr_xhi_p` +12.7、`scr_xhi_m` +5.9。",
+   "operators": [
+    "add",
+    "mul",
+    "cs_rank",
+    "cs_regres",
+    "cs_last_high20"
+   ],
+   "recheck": "本轮为此专门留了三条(`h3_blend_own2` / `h3_blend_own2_ema30` / `h3_ov_blend_known_p05`),叠的是 ρk 0.19 / 0.35 的两条平滑腿 —— 这是这条规律唯一还没被检验的入口。判据写进文件:只抬 train 不抬 valid 就是过拟合。"
+  },
+  {
+   "id": "LF7",
+   "claim": "算子必须按函数定义读,名字会骗人,而且骗法恰好打在多头书上:`pow_05(x) = sign(x)·|x|^0.5` 保号(其实是 iso,不是 sqrt);`log(x) = log(|x|)` 且 `|x| ≤ EPS` 时返回 NaN —— 对折叠因子来说,被 NaN 掉的恰好是最靠近中心的票,也就是整个多头书。",
+   "evidence": "`sub_C_pow_05` −24.4%、ρo −0.04,与 `iso_B`(去掉 abs_)−31.9% 同族;`sub_C_log` −0.1% 对原式 +1.7%(差的那一点就是丢掉中心票的罚金);对照 `sqrt(x) = sqrt(|x|)` 与 `cs_normalize`(正仿射)都与原式秩等价(ρo 0.97 / 0.99)。另外 `day_skew` 的分母是路径自身标准差,所以它读的是形状不是尺度。",
+   "operators": [
+    "pow_05",
+    "pow_1_5",
+    "log",
+    "sqrt",
+    "cs_normalize",
+    "abs_",
+    "day_skew"
+   ],
+   "recheck": "任何 `e ≤ 1` 的幂算子都可能保号;任何带 EPS 保护的算子都要问「被判成缺失的是哪一群票」。读结果前先打开 `common.py` / `ops_ext.py` 看一眼实现。"
+  }
+ ],
+ "hypotheses_written": 25,
+ "new_operator_requests": [
+  {
+   "name": "cross_ema_reset(x, d, c)",
+   "definition": "与 `cross_ema(x, d)` 相同的分块精确递推,但在条件张量 c 为真的那一天把状态**重置为当日值**(即 ema_t = x_t,而不是 α·x_t + (1−α)·ema_{t−1}),之后继续正常递推。c 为 0/1 面板(来自 `is_gt` 等)。",
+   "why": "本轮量出了平滑的代价**有确切位置**:平滑在所有腿上都白送 +3~5pp(全是省下的换手费),但它把「这只票今天刚被钉住/刚封板」这条信息卖掉了 —— gini 在冻结盘口段从 +5.7% 翻到 ema30 版 −8.7%,原式的记忆版 −23.7~−40.5%,而原式自己在那一段 +8.5%。现在只能用 `select_where(c, 今日值, ema 值)` 近似,但那是「当天切换一次」,递推状态仍带着陈旧的均值,下一天又回到旧状态。有了 reset 版就能一次问清「平滑能不能只省成本、不卖掉状态变化」,这对整批因子(每条都在用记忆省换手)都有外部性。"
+  },
+  {
+   "name": "cs_bucket_std(y, x)",
+   "definition": "y 在「x 的同一个十分位」内的截面标准差,广播回每只票(与 `cs_bucket_demean` / `cs_bucket_zscore` 同一套分桶)。",
+   "why": "本轮的核心结论是「`abs_(cs_demean(x))` 量的是 x 在这一类股票里的方差,不是距离」,但三条证据都是**间接**的(换中心无效 / 折叠后中性化翻负 / 抹掉异方差归零)。有了 `cs_bucket_std` 就能把「倾斜」本身写成一条显式因子直接跑:若 `cs_bucket_std(day_skew(Low), k_known)` 单独就能复现原式的 +1.7% 和它的段内形状,机制从推断变成等式;若复现不了,说明折叠里还有别的东西。这是一把可以搬到任何「折叠类」因子上的尺子(F101 / F106 / F110 / F113 都有同构结构),比每条因子各自做一遍桶内 z 化便宜得多。"
+  }
+ ],
+ "tooling_problems": [
+  "`./scripts/study.sh table <fid> <tag> --all` 只往 stdout 打印,没有 `--out`;我把它重定向到 session scratchpad 的固定文件名 `s2_table.txt`,结果**同批别的因子的主研并发写了同名文件**,我读第二段时拿到的是 F106_erm_mag_gap_1m 的 200 行表(表头和 `v_base` 的表达式都变了才发现),差一点把别人的数字写进 F107 的结论。建议:`study.sh table` 加 `--out <path>` 或默认落到 `runs/<fid>/table_<tag>.txt`;至少在 handoff/README 里写明「重定向的文件名必须带 fid 前缀」。我已把这条坑写进 `notes/F107_abs_demean_skew_low/state.md` §8。",
+  "`state.md ≤ 10 KB` 这个约束没有任何工具校验:上一轮(同一任务模板)写出来的 state.md 是 11,454 B,超了 12%,一直没人发现。本轮重写后压到 10,236 B。建议 `scripts/recorder.py` 或 `study.sh note` 顺手检查 `notes/<fid>/state.md` 的字节数并在状态板上标红 —— 现在 15 条因子的 state.md 很可能普遍超标。",
+  "`study.sh hypo3` 会 `rsync` 到服务器再 SSH 跑 `check_hypo.py`,一次往返约 1 分钟;本地没有离线的纯解析检查。写 25 条假设时只能一次性全推上去,改一条就要再等一轮。建议给 `check_hypo.py` 加一个只做表达式解析/算子签名校验的本地模式(不碰数据)。"
+ ]
+}
+```
+
+```
+Structured output provided successfully
+```
+
 ## 它写过 / 改过的文件
 
 - `/Users/wxy/Desktop/Partura/studies/F107_abs_demean_skew_low/hypo3.yaml`
 - `/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/state.md`
+
+## 它返回给工作流的结构化结果
+
+见 `handoff/F107_abs_demean_skew_low/results/verdict.json`。
 
 ## 它拿到的任务书
 

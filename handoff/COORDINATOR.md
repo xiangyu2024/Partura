@@ -2,6 +2,44 @@
 
 _最后更新:2026-10-05 13:45 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
+## ★ 2026-10-05 傍晚:定位改了 —— Partura 不再是 AlphaCube 的下游(先读这一段)
+
+用户给了路线图 `~/Downloads/AlphaCube_Partura_Research_Reading_Roadmap.docx`(文字摘录在 `docs/roadmap_2026-10_extract.txt`),并要求:
+「多加一个块叫**反向指引 alphacube**。你的研究结论,可以变成指引 alphacube:改进奖励函数,改进评估因子方法,(重要)改进拒绝或者降低哪些
+action 或者子结构的出现概率,增加你觉得有意思的可能研究方向的办法。我们现在研究一个 idea,只能自己生成一些因子,其实应该把想法给
+alphacube 化,然后暴力搜索一下(短暂一下)。」定位与做法写在 **`docs/reverse_guidance.md`** 和 `CLAUDE.md` 开头。
+
+**已经建好的(都在仓库里,服务器已同步)**
+- `guidance/B01.yaml`:7 条奖励、7 条评估、33 条先验(5 封禁 / 14 降权 / 7 升权 / 7 改写去重)、已知池、5 个想法;每条带证据。
+- `partura/steer.py`:模式匹配器(读表达式字符串)、`Guidance`(canonical / dedup_key / weight / accept)、奖励 `reward()`
+  (`long` / `long_tradable` / `long_bucket` / `long_marginal` / `long_screen`;方向按多头腿、半衰期按纯多头书、分数取 train 与 valid 较差的)。
+- `scripts/motif_stats.py` → `guidance/motif_stats_s2.json`:同一个动作套在 15 条因子上的成对统计(先验的证据)。
+- `scripts/idea_search.py` + `./scripts/study.sh idea <id> [--budget 192 --population 48 --tag e1]`(`idea-log <id>` 看日志,`idea-pull` 拉证据):
+  把一个想法交给 AlphaCube 的 GP 短搜,steer 臂(种子 + 算子加权 + 过指引 + 留在邻域)对 control 臂(同预算、同奖励、不带干预)。
+  **不改 AlphaCube 的文件**:运行时替换 `alphacube.mining.scoring.make_scorer`、`TypedTreeGenerator.acceptable` / `._pick`。
+  冒烟测试通过(预算 16,465 秒);第一代约 5 分钟,全市场大约 6~10 秒一个候选。
+- `scripts/guidance_report.py` → `research/alpha_distillation/B01_reverse_guidance.md`(给用户看的;有干预实验时自动带上结果)。
+- `scripts/merge_lab.py`:14 份对账的 101 条 lab 结论已并入 `lab/findings.yaml`(共 154 条)。`handoff/TOOLING.md`:主研们报的工具问题与处置。
+
+**这一轮顺手修掉的错**(都影响结论,第三轮因此整轮重跑)
+- `cross_ema` 在成交额量级的输入上溢出成 NaN(float32;F105 主研发现)→ 改在 float64 里算;缓存里 186 张相关面板已清。
+- 9 个新算子被 AlphaCube 的自检错标成 boolean(进不了 GP 词表、不能当根)→ `ops_ext` 建注册表后清标。
+- `scripts/sweep.py`:`dist` 门槛改算在实际交易的信号上;`cs_first_*` / `cs_last_*` 为根的变体锁定方向。
+- `scripts/sweep_final.py`:候选按被选中时的方向读测试段。
+
+**正在跑(2026-10-05 约 18:00 PDT 起)**
+- 服务器 screen `idea_I2_dispersion_fold`:想法 I2(日内离散度的折叠)两臂各 192 个候选,奖励 `long_marginal`;日志 `logs/_idea_I2_dispersion_fold.log`,
+  产出 `episodes/e1_I2_dispersion_fold/evidence.json`。
+- 服务器 screens `r3_F1xx`:第三轮(tag `s3`)15 条全部重跑(4 个槽;之前 9 条跑完的结果是旧 `cross_ema` 下的,作废)。
+
+**它们跑完之后(按顺序)**
+1. `./scripts/study.sh idea-pull`;`python scripts/guidance_report.py guidance/B01.yaml`(干预实验进报告);在 `episodes/e1_…/episode.md` 写信念更新,回改 `guidance/B01.yaml` 的权重 / 状态。
+2. 拉回 `runs/<fid>/*_s3.json`(`rsync --include='*_s3.json'`);服务器 `scripts/batch_cluster.py … --tag s3` → `scripts/batch_fuse.py … --tag s3`(融合的测试段读数,记账)。
+3. 本机 `scripts/motif_stats.py … --tag s3`、`scripts/batch2_summary.py … --tag s3`、`scripts/readable_report.py … --tag s3` → 发给用户(用户要的是好读的那种)。
+4. 再跑 1~2 个想法(I1 当筛子 `long_screen`、I5 只换奖励不限结构 —— 后者是「先验本身有没有用」最干净的检验)。
+5. F111 的对账因断网没回来(`resumeFromRunId: "wf_4811c95a-915"` 可补);不影响第三轮(它的 `hypo3.yaml` 已写好并通过校验)。
+6. commit + push;更新记忆。
+
 ## ▶ 2026-10-05 14:55 PDT:用户说「继续」,已恢复(13:53–14:55 曾全部暂停)
 
 用户恢复时加了两件事,**都已交付**(15:20):

@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 17:13(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -10,39 +10,36 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F112_scale
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 2 次**(10-04 23:28, 10-05 12:04)—— **不许再读**。候选在留出段上的数全在 `runs/F112_scale_spow_masktop/final.json`(`./scripts/study.sh digest F112_scale_spow_masktop final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `lead:F112_scale_spow_masktop#2`:已返回结果,最后动作 10-05 00:04 → `handoff/F112_scale_spow_masktop/agents/lead_R2_aa3f59c581b7d0b47.md`
-  - `work:F112_scale_spow_masktop#2`:中断,最后动作 10-05 00:20 → `handoff/F112_scale_spow_masktop/agents/work_R2_a61c6ea7258b8d7a8.md`
   - `synth:F112_scale_spow_masktop`:已返回结果,最后动作 10-05 11:12 → `handoff/F112_scale_spow_masktop/agents/synth_a694b71713f4efd0c.md`
+  - `verdict:F112_scale_spow_masktop`:已返回结果,最后动作 10-05 15:38 → `handoff/F112_scale_spow_masktop/agents/verdict_a6d0af83ba4c6fe5b.md`
+  - `verdict:F112_scale_spow_masktop`:失败,最后动作 10-05 16:40 → `handoff/F112_scale_spow_masktop/agents/verdict_a41bea2fd05e1c896.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F112_scale_spow_masktop` 看服务器上的 tag,`./scripts/study.sh digest F112_scale_spow_masktop <tag>` 重看结果)。
 
-## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-05 11:08 更新)—— **先读这个文件**
+## 研究现状(`notes/F112_scale_spow_masktop/state.md`,10-05 15:33 更新)—— **先读这个文件**
 
 # 研究现状 · F112_scale_spow_masktop
 
-> 第 **5** 轮(主研 Opus 5)覆盖重写于 2026-10-05。**每轮整个文件覆盖重写。**
-> 读序:本页 → `synthesis.md`(本轮综合,最新口径)→ `studies/F112_scale_spow_masktop/hypo.yaml`(第二批 38 条假设)
-> → 旧轮 `10_distilled.md` / `09_diagnosis.md` / `results/R3.md`(留出段结论仍有效)。
+> 第 **6** 轮(主研 Opus 5)覆盖重写于 2026-10-05。**每轮整个文件覆盖重写。**
+> 读序:本页 → `synthesis.md`(§1 机制 / §2–4 s1 判读 / **末节「第二轮(s2)对账与结论」= 最新口径**)
+> → `studies/F112_scale_spow_masktop/hypo3.yaml`(第三批 24 条,24/24 parse)→ 旧轮 `10_distilled.md` / `results/R3.md`。
 > 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
-> 本轮证据 = `runs/F112_scale_spow_masktop/sweep_s1.json`(113 变体,train/valid)+ `anatomy_s1.json`(utrain 分段/分时)。
-> 本轮**没读留出段、没自己起服务器计算**,只跑了 `study.sh table / src / ops / hypo / note`。数字全是 train / valid / utrain。
+> 本轮证据 = `runs/F112_scale_spow_masktop/sweep_s2.json`(162 变体)+ s2 解剖。**没读测试段、没起服务器计算**,
+> 只用了 `study.sh table / src / ops / hypo3 / note`。数字全是 train / valid / utrain(ut)。
 
 ## 1. 现状(一句话)
 
-**结论不变:不建议纳入 —— 但「为什么」换掉了。** 旧结论是「落在两个已知暴露之间」;本轮大表 + 解剖证明
-这棵树是**两条因子叠在一起**:去掉 `ts_scale` 的那一半是低价 / 微盘 beta(`iso_E` ut +8.4%,但在任何价格桶
-内部都 -9%~-26%),带 `ts_scale` 的那一半是一条**1 个月反转**(`abl_D` ut +7.8%,每个价格桶内都正,信息集中在
-高流动性 / 冻结盘口 / 创业板 / 高波动)。全市场口径对家族仍**无增量**(overlay 六档全低于 `k_known` +15.4%,
-`res_known` ut +0.2%/+0.03)。**唯一活口**:家族自己在成交额桶内几乎没有信息 ⇒ 它是一条流动性 beta,
-而比值族的 alpha 恰在家族不去的那一段。下一步 = 跑第二批 38 条(已 parse 通过),重点是 D 组流动性聚焦。
+**提纯成立、升华不成立,结论仍是不纳入。** s2 把原式 ut **+4.2%/0.74** 提到 **+10.1%/1.55**、换手 6.6% → **3.2%**
+(`h_csrank_cs241_ema`:删掉截尾 D 改 `cs_rank`、窗口拉到 241、`cross_ema` 10 平滑)。但解剖显示这 +10% 里**一半以上是
+低价 / 低成交额段的段等权 beta**(持仓 +45.1% 压在价格最低 20%,该段段等权 +7.0%);段内 alpha 只剩 +1~+8pp。
+对已知成交额族**零增量**(筛子 +11.8%、叠加 +13.5%、残差 +0.2%,全低于 `k_known` +15.4%/2.22),
+而一条与本因子完全无关的通用筛子 `k_known_xfrozen`(家族剔掉近 15 日冻结盘口最重 20%)就有 **+18.5%/3.15**。
 
-(…全文 6040 字符,读 `notes/F112_scale_spow_masktop/state.md`)
+(…全文 6786 字符,读 `notes/F112_scale_spow_masktop/state.md`)
 
-## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:23 条,其中研究员自己写的 12 条)
+## 研究日志(`notes/F112_scale_spow_masktop/journal.md`:24 条,其中研究员自己写的 13 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:25 [auto] ⚠ 读留出段:final F1_final,阶段 F1_final(留出段只能读这一次;候选与判据应当已经写在 10_distilled.md 里)
 
 ### 2026-10-04 23:28 [auto] F1_final 跑完(exit 0);重看结果:./scripts/study.sh digest F112_scale_spow_masktop F1_final
 
@@ -93,6 +90,15 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 5. 相对家族无增量(全市场口径):overlay 六档全低于 k_known +15.4%、res_known ut +0.2%/+0.03 ⇒ 不建议纳入。唯一活口:家族自己在成交额桶内几乎无信息(-4.1/-5.3/-8.2/-5.2/+2.5)却把 +80.3% 持仓压在最低档 ⇒ 它是流动性 beta,而比值族的 alpha 恰在它不去的那一段;overlay 与线性秩残差测不到这种分段互补,cs_first_high40 没试过。
 6. 已落盘 notes/synthesis.md 与 studies/hypo.yaml(38 条,38/38 parse)。
 
+### 2026-10-05 15:34 [主研] 批量扫描 s2 对账与结论
+
+s2(162 变体)对完账:A 组「删截尾 D 改 cs_rank + 窗口 50/241 + cross_ema」是唯一的真进展 —— h_csrank_cs241_ema ut +10.1%/1.55、换手 3.2%(原式 +4.2%/0.74、6.6%),h_csrank_w50 +10.2%/1.56;镜像实验 h_masktop_mirror(+7.7)坐实「D 抹掉的是多头自己的尾巴」,h_winsor_w50_out(+4.4 vs +7.6)说明收益在右尾。
+s1 认定的唯一活口「流动性聚焦」被彻底否定(h_liq_first40 -1.3%、h_liq_mul -5.4%,只有桶内中性 +6.1% ≈ 基线);制度代理、显式「跌幅×cv」、峰度/gini/flat、状态门乘子、微结构代理全部否定;去 nansum 的干净 div 族天花板只有 +7.3%,低于保留 ts_scale 的 +10.1% ⇒ 旧的「应改写成 div 一族」作废。
+改掉 s1 两处判读:(1) 段内净超额必须和段等权超额一起读 —— 冻结盘口「段内 +29.6%」配段等权 -67.4%,是坑不是富矿;真正有用的是把它剔掉(k_known_xfrozen +18.5%/3.15 > k_known +15.4%/2.22)。(2) ts_scale 的 nansum 对次新的低配是有益副产品。
+定论:best_own = h_csrank_cs241_ema / h_csrank_w50 / h_div_med60;best_on_known 没有(筛子 +11.8%、叠加 +13.5%、残差 +0.2%,全低于 k_known)。verdict = 提纯成立、升华不成立、仍不纳入 —— 解剖归因显示 +10% 里一半以上是低价/低成交额段的段等权 beta,段内 alpha 只剩 +1~+8pp。
+第三批 24 条已写并 24/24 parse(hypo3.yaml):重点是 ts_rank/cross_rank 的秩版(162 变体里一次没出现)、cs_bucket_zscore 扣段 beta、冻结筛子迁移到 best_own、cs_flip_by_state/cs_state_rank 正规状态门(含状态加权的「反转 ⊕ 家族」混合)。
+本轮没读测试段、没起服务器计算;scripts/ partura/ workflows/ handoff/ lab/ docs/ 和别的因子未动。
+
 ## 工单与结果卡(`notes/F112_scale_spow_masktop/orders/`、`notes/F112_scale_spow_masktop/results/`)
 
 - R0:工单 —,结果卡 有
@@ -124,12 +130,15 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 - `sweep_s2`  10-05 11:47  162 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s2`
 - `anatomy_s2`  10-05 12:01  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s2`
 - `sweepfinal_s2`  10-05 12:06  8 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweepfinal_s2`
+- `sweep_s3`  10-05 16:25  186 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s3`
+- `anatomy_s3`  10-05 16:30  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s3`
+- `sweepfinal_s3`  10-05 16:32  8 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweepfinal_s3`
 - `A1_channels`(自写脚本的输出)  10-04 14:21  exit 0  → `logs/F112_scale_spow_masktop_A1_channels.log`
 - `A2_increment`(自写脚本的输出)  10-04 15:37  exit 0  → `logs/F112_scale_spow_masktop_A2_increment.log`
 
 ## 已写的 notes(`notes/F112_scale_spow_masktop/`)
 
-`01_expression.md`(4K)、`02_operators.md`(15K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(33K)、`06_baseline.md`(11K)、`07_F1_final.md`(5K)、`07_S1_minimal.md`(7K)、`07_S2_combo.md`(7K)、`07x_01_a1_channels.md`(7K)、`07x_02_a2_increment.md`(5K)、`08_variants.md`(5K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(5K)、`12_next.md`(4K)、`journal.md`(38K)、`state.md`(9K)、`synthesis.md`(12K)
+`01_expression.md`(4K)、`02_operators.md`(15K)、`03_decomposition.md`(6K)、`04_grammar.md`(6K)、`05_hypotheses.md`(33K)、`06_baseline.md`(11K)、`07_F1_final.md`(5K)、`07_S1_minimal.md`(7K)、`07_S2_combo.md`(7K)、`07x_01_a1_channels.md`(7K)、`07x_02_a2_increment.md`(5K)、`08_variants.md`(5K)、`09_diagnosis.md`(8K)、`10_distilled.md`(14K)、`11_risks.md`(5K)、`12_next.md`(4K)、`journal.md`(40K)、`state.md`(9K)、`synthesis.md`(20K)
 
 ## 自写的探针与分析脚本(`studies/F112_scale_spow_masktop/`)
 
@@ -139,3 +148,4 @@ f_t50 +10.47%/+1.330、f_x241 +9.42%/+1.338、f_known +13.23%/+1.402。
 ## 结构化结果(`handoff/F112_scale_spow_masktop/results/`)
 
 - `synthesis.json`
+- `verdict.json`

@@ -1,6 +1,6 @@
 # F111_spearman_qclose — 交接状态
 
-_自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 16:50(`python scripts/recorder.py --brief F111_spearman_qclose` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #953(批次 B01_single_factors)
 - 表达式:`ts_spearman(day_quantile(Close), 10)`
@@ -10,104 +10,118 @@ _自动生成于 2026-10-05 13:33(`python scripts/recorder.py --brief F111_spear
 - **阶段:研究进行中(还没有结构化结论)**
 - **留出段已经读过 1 次**(10-05 12:04)—— **不许再读**。候选在留出段上的数全在 `runs/F111_spearman_qclose/final.json`(`./scripts/study.sh digest F111_spearman_qclose final`)。
 - 最近的 agent(**一般不需要读它们的流水** —— 交接的正本是 state.md、journal.md、工单和结果卡;流水很长,只在这些对不上时才查):
-  - `work:F111_spearman_qclose#1`:已返回结果,最后动作 10-05 00:09 → `handoff/F111_spearman_qclose/agents/work_R1_aae62ed0fb3b82fe7.md`
-  - `lead:F111_spearman_qclose#2`:中断,最后动作 10-05 00:20 → `handoff/F111_spearman_qclose/agents/lead_R2_aeedf79bbeec0a00f.md`
   - `synth:F111_spearman_qclose`:已返回结果,最后动作 10-05 11:20 → `handoff/F111_spearman_qclose/agents/synth_a763c4b39efb8321d.md`
+  - `verdict:F111_spearman_qclose`:失败,最后动作 10-05 15:35 → `handoff/F111_spearman_qclose/agents/verdict_a3cee9f79f0862f8e.md`
+  - `verdict:F111_spearman_qclose`:失败,最后动作 10-05 16:40 → `handoff/F111_spearman_qclose/agents/verdict_a3cea9cf2904fa486.md`
 
 **接手的人该做什么:** 研究还没做完。先读下面的研究日志和已有的 notes,**接着做**,不要推倒重来;已经跑过的阶段不要重跑(`./scripts/study.sh list F111_spearman_qclose` 看服务器上的 tag,`./scripts/study.sh digest F111_spearman_qclose <tag>` 重看结果)。
 
-## 研究现状(`notes/F111_spearman_qclose/state.md`,10-05 11:18 更新)—— **先读这个文件**
+## 研究现状(`notes/F111_spearman_qclose/state.md`,10-05 16:10 更新)—— **先读这个文件**
 
 # F111_spearman_qclose 研究现状
 
-> 主研每轮**覆盖重写**。最后更新:**2026-10-05,工作流第 2 轮主研**(批量扫描 s1 的综合)。
-> `ts_spearman(day_quantile(Close), 10)`,挖掘库 #953。本轮的完整论证在
-> `notes/F111_spearman_qclose/synthesis.md`(**先读它**);第二批假设在
-> `studies/F111_spearman_qclose/hypo.yaml`(34 条,34/34 parse)。
+> 主研每轮**覆盖重写**。最后更新:**2026-10-05,工作流第 3 轮主研**(批量扫描 **s2** 的对账与定论)。
+> `ts_spearman(day_quantile(Close), 10)`,挖掘库 #953。完整论证在 `notes/F111_spearman_qclose/synthesis.md`
+> —— **先读它的「## 第二轮(s2)对账与结论」**(80 行,本轮全部结论都在里面;前面 §1–§5 来自 s1 那一轮,
+> 凡与 s2 冲突以 s2 为准)。假设表:第二批 `studies/F111_spearman_qclose/hypo.yaml`(34 条,已跑完 = s2);
+> 第三批 `studies/F111_spearman_qclose/hypo3.yaml`(25 条,25/25 parse,**还没跑**)。
 > 旧的逐轮实验文件(`04_grammar.md`、`05_hypotheses.md`、`06_baseline.md`、`07_*`、`results/R1.md`)仍在,
-> 但**凡与批量扫描 s1 的大表冲突,以大表为准**(用户规矩)。
+> 但**凡与批量扫描大表冲突,以大表为准**(用户规矩)。**留出段一个数字都没读过**(`sweepfinal_s2.json` 没打开)。
 
 ## 1. 一句话现状
 
-身份、承重件、市场分布**都已定清**。结论是**否定性的但有证据**:对纯多头用户,F111 **不是可单独上的因子,
-也量不出相对已知成交额族的增量**(ov_m025 +15.6%/2.32 vs k_known +15.4%/2.22,全在噪声内)。
-唯一还没量过、值得再花一次服务器时间的口径:**已知族定流动性倾斜 + f 只做桶内排序**(`h_ov_bk` / `h_ov_bk05`)。
-留出段**一个数字都没读过**。
+**定论已下,方向性是否定的,但留了一个必须补的格子。** F111 = **秩口径的短期市场同步性**
+(自身 10~20 日路径与全市场等权共识秩路径的相关)。提纯**成功但很小**:唯一站得住的改动是剔掉
+「近 15 日出现过冻结盘口」的 20%(`seg_xfrozen_p` +13.5% / 2.46,ρk 0.42→**0.11**)。升华**失败**:
+建在已知族上的任何用法(+15.5~15.6% / 2.32~2.35)对 `k_known`(+15.4% / 2.22)在噪声内,
+对通用筛子基准 `k_known_xfrozen`(+18.5% / 3.15)**明确落后 2.9~3.0pp / 0.80~0.93 夏普**。
+**唯一的缺口**:s2 的叠加全都只叠在 `k_known` 上,「叠在 `k_known_xfrozen` 上」一格都没量过 ⇒
+「无增量」目前只对 `k_known` 口径成立、对正确基准**待定**,靠 `h3_xfz_plus_f` 定案。
 
-## 2. 中间结果(全部来自 `study.sh table F111_spearman_qclose s1`;噪声 ±3pp / ±0.3)
+## 2. 中间结果(全部来自 `study.sh table F111_spearman_qclose s2 --all`;噪声 ±3pp / ±0.3;ut 口径)
 
-- **原式**:+10.4/+17.0/+12.3%(tr/va/ut),Lshp 1.79/3.07/2.15,LTO 4.1%,ρk +0.42,空头腿毛 +23.4/+31.2%
-  (钱主要在空头腿,纯多头只吃到小半 —— 硬上限)。
-- **承重件只有根上的 `ts_spearman`**:ts_skew +2.8 / ts_var +2.3 / ts_std +0.7 / ts_rank −3.4 / ts_argmax −11.5 /
-  ts_kurt −13.0;叶子 `iso_A = day_quantile(Close)` 单独只 +5.8%、ρo 0.22。
-- **多余的**:日内折叠整层(day_last/day_close **+13.2% 最好**、q25 +12.8、min +12.5、first +12.2、median=base、max +11.4,
-  全在噪声内;换成非价格水平就塌:day_gini +6.1、day_skew +4.6);四个价格叶子 Open/Low/High/Vwap ρo **1.00**;
-  外层日轴记忆**一条都没超过原式**(最好 decay_linear60 +12.2);`cs_winsor` 恒等(corr 本来有界)。
-- **窗口**:5 → +10.2(dist ✗)、10 → +12.3、**20 → +12.7**、30 → +11.5;平台宽、峰在 20,LTO 4.1→3.0→2.6%。
-- **水平承重、变化是毒药**:cross_zscore 5/10/30/60 = −14.6/−10.3/−3.0/−1.0,cross_stddev 全负,rel60 −3.9
-  ⇒ 它是**持久的股票属性**,不是事件。折叠(abs_/pow_2)全塌 ⇒ 单调。
-- **解剖最重要的一格(按 20 日成交额,段内净超额 / 括号=超配)**:
-  最低 20% **−0.1%(+30.3%)**、20-40% −2.2%、40-60% +1.8%、60-80% +3.2%、**最高 20% +9.5%(−16.7%)**;
-  已知族同一列 −4.1/−5.3/−8.2/−5.2/**+2.5%**、最低桶超配 **+80.3%**。
-  ⇒ **两条因子重叠的那部分(低流动性倾斜)恰恰是 f 自己没本事的部分;f 会选股的地方正是已知族空白的地方。**
-- 其他分段:市值中小更好(最高 20% 只 +2.4%);创业板 +14.4 > 深主板 +13.5 > 沪主板 +11.2 > **科创板 −3.6**;
-  **次新(7.1%)段等权 −28.7% 但段内选股力最强 +16.9%**;**近 15 日有冻结盘口(6.5%)段等权 −67.4%、段内 −38.7%**(f 在那里挑到最差的)。
-- 时间:2018 +16.9 / 2019 +7.8 / **2020 +1.6** / 2021 +15.7 / 2022 +16.4 / 2023H1 +18.2;
-  市场上涨 +17.4 vs 下跌 +5.9;放量 +17.4 vs 缩量 +8.3;高离散 +15.1 vs 低 +9.6。
-- **增量**:ov_m025 +15.6%/**2.32** vs k_known +15.4%/2.22(**噪声内**);反向掺(ov_p025 +9.4%/1.37)大幅变差 ⇒
-  方向是真的、量不出增量。res_known +5.9%/1.09、res_liq +6.6%/1.22(bk_* 因并列 dist ✗,数字同档)。
-  上一轮:对 9 个标准控制变量**一起**中性化后多头腿毛 +13.6% → **+0.1%**。
+- **基准**:v_base +12.3% / 2.15(LTO 4.1%、ρk 0.42、空头腿毛 +23.4/+31.2%)、k_known +15.4% / 2.22、
+  **k_known_xfrozen +18.5% / 3.15**(= 已知族剔掉近 15 日冻结最重的 20%,本轮才出现的通用筛子基准)。
+- **自己最好的三个**:`seg_xfrozen_p` +13.5% / **2.46**(ρo 0.53、**ρk 0.11**、LTO 4.4%)>
+  `h_pe_last20` = `ts_pearson(day_last(Close), 20)` +13.2% / 2.37 > `sub_A_day_last` +13.2% / 2.29。
+  相对 v_base 只高 0.9~1.2pp / 0.1~0.3 夏普 —— **都在噪声边缘**,只有 ρk 0.42→0.11 是噪声解释不掉的。
+- **`seg_xfrozen_p` 的收益来自哪**:填的是 f 最弱的两年(2019 +14.0% vs base +7.8%、2020 +4.4% vs +1.6%),
+  代价 2022 −3.6pp ⇒ **夏普涨来自年度更平、不是整体抬升**;冻结持仓 6.5%→1.3%,五个成交额桶的桶内
+  选股力全部抬高。但剩下那 1.3% 里它挑得更差(段内 −38.7% → −92.8%)⇒ **只切暴露、没修机制**。
+- **六条 s1 推论的对账**:(i) 抽掉共同成分 ⇒ 塌 **支持**(`h_relpath` +0.9% / 0.12);(ii) 再乘一次市场方向 ⇒
+  反转 **支持**(`h_mkt_undo` −9.1%);(iii) 显式 O(N) 等价物 **否定**(`h_mkt_explicit` −0.9%,居中点代理错了);
+  (iv) 个股层面「放量才有效」**否定**(`h_act_mul` +4.0%、`h_act_add` +1.3%);(v) 冻结筛子 **想法支持 / 我的写法否定**
+  (我的 `cross_mean` 版 +11.3~11.8%,通用 `cross_max` 版 +13.5%);(vi) day_last 的 0.9pp 来自少并列 **否定**
+  (`h_wmean_carrier` +12.8%、ρo 0.99)。
+- **四条新事实**:① `ts_pearson` 与 `ts_spearman` ρo 0.98 ⇒「秩」不承重,且能跑 d=40 ⇒ **窗口平台 10≈20>30>40**;
+  ② s1「书压在低流动端是浪费」**反了** —— `h_f_excl_illiq` +6.4%、`h_stack_liq` +7.0% 都腰斩,**f 多头净超额的
+  一大半是流动性倾斜本身**;③ **筛子不对称**:已知族剔掉 f 最低 20%(`scr_xhi_m`)+15.5% 等于白剔、剔掉 f 最高 20%
+  (`scr_xhi_p`)塌成 **+5.3% / 0.80、LTO 11.5%** ⇒ **已知族多头腿本来就压在 f 的高分区里**,ρk 0.42 低估了多头腿重叠;
+  ④ 载体换成**日收益**路径只掉 1.3pp(`h_ret_path20` +11.0% / 2.00、多空 valid 3.89 全表最高)⇒ 承重的是
+  **与市场同步(秩 beta)**,不是价格路径单调。
+- **空头腿的钱在哪**:三条剔除写法把空头腿 valid 从 +31.2% 打到 −8.3% / −8.4%、多头腿几乎不动 ⇒
+  **+31% 全部来自那 6.5% 冻结票**;`h_excl_young` 同样打到 +14.2% ⇒ 那 6.5% 与次新高度重叠(新股一字板)。
 
 ## 3. 过程与逻辑(这一轮做了什么)
 
-读源码 + 代数化简把根节点解掉(§8 第 2 条)→ 对照大表把「承重 / 多余 / 可互换 / 平台」四类一次分完 →
-从市场解剖读出「选股力随流动性单调上升、而持仓压在最不流动端」这条不对称 → 据此把增量问题从「加权叠加」
-重新提成「倾斜 vs 桶内排序」→ 写 34 条第二批假设。**没有起任何服务器计算**(只用 `study.sh table/src/ops/hypo`)。
-身份的结论与上一轮的数值结果(逐日 Spearman 1.0000、ρ^time 单独 −5.60% / 乘 c(t) 后 +18.62%)一致,互为佐证。
+只用 `study.sh table/hypo3`,**没有起任何服务器计算**。先把 s1 综合里六条推论逐条对到 s2 的变体 id 和数字上
+(含两处「大表会把人骗过去」的坑,见 synthesis §5),再用 `scr_xhi_m` / `scr_xhi_p` 的不对称和 `h_ret_path20`
+补出两条 s1 没有的事实,最后发现 s2 的增量口径全建在 `k_known` 而不是本轮才出现的 `k_known_xfrozen` 上 ⇒
+把这一格写成第三批里优先级最高的 `h3_xfz_plus_f`。第三批 25 条全是**只有第四批新算子才写得出**的,
+或本轮结果直接指向的最小子结构替换。
 
-## 4. 假设表(第二批 34 条,全文在 `studies/F111_spearman_qclose/hypo.yaml`)
+## 4. 假设表(第三批 25 条,全文在 `studies/F111_spearman_qclose/hypo3.yaml`,25/25 parse)
 
-六组:A 便宜内核与最好结构的组合(h_sp_last20、h_pe_last40…);B 并列伪影与冻结盘口(h_wmean_carrier、h_excl_flat…);
-C 机制 c(t)×自身趋势(**h_mkt_explicit / h_mkt_undo / h_relpath** —— 这三条一跑就能定案机制);
-D 换载体 Ret↔成交额变化率(**h_ret_path** 区分 beta 与条件动量);E 把解剖写进表达式(**h_ov_bk / h_f_excl_illiq / h_act_bucket**);
-F 叠加(h_stack_liq、h_stack_flat)。
-**优先级**:h_ov_bk > h_mkt_explicit > h_ret_path > h_f_excl_illiq > h_excl_flat > h_sp_last20 > 其余。
+九组:A 最好的两件事叠起来 + 筛子档位 / 窗口(`h3_best2` / `h3_xfz40` / `h3_xfz_w60`);
+B 「冻结」到底是什么事件(`h3_xfz_flatmax` 单格定案 `cross_max` vs `cross_mean`、`day_at_max_ratio` /
+`day_at_min_ratio` 分开涨停跌停、`cross_flat_ratio` 量日间并列、`day_distinct_ratio` 量价格格子粗细);
+C 伪影单独计价(`h3_flat_iso` / `h3_f_minus_flat`);D 桶内 z 分数 / 去均值保留幅度(`h3_bkz_*` / `h3_bkd_*`);
+E `cross_age` 代替饱和的 `valid_count`;F 市场状态写进表达式(`cs_state_rank` / `cs_flip_by_state` /
+`select_where`)+ **`h3_xfz_plus_f`**;G day_last 那 0.9pp 的两个解释(`day_topw_mean` / `in_index`);
+H 稳健标准化(`cross_madz` / `cs_robust_z`);I 收益路径线(`h3_ret_pe40` / `h3_ret_xfz`)。
+**优先级**:`h3_xfz_plus_f` > `h3_best2` > `h3_xfz_flatmax` > `h3_bkz_age` > `h3_sel_dir` > `h3_robust_path` > 其余。
 
-## 5. 候选(读留出段之前的排序)
+## 5. 候选(读留出段之前的排序,判据写死在这里)
 
-1. **ov_m025**(已知族 + 0.25 权重的 f)—— 全表最好,但相对 k_known 的优势在噪声内,**必须写成「没有量出增量」**。
-2. **sub_A_day_last / h_sp_last20**(`ts_spearman(day_last(Close), 20)`)—— 原式的提纯版,同口径下 +0.9~+1.4pp。
-3. **k_known** 本身 —— 任何 final 都必须带上它做基准。
-判据:若候选在留出段相对 k_known 的多头净超额差 < 3pp 且夏普差 < 0.3,就判「没有增量」。
+1. **`k_known_xfrozen`** = `cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))`
+   +18.5% / 3.15 —— **全表最好,但它不含 f**;任何 final 都必须带它做基准,而不是只带 k_known。
+2. **`seg_xfrozen_p`** +13.5% / 2.46、ρk 0.11 —— 本因子唯一站得住的提纯,价值在**低相关的备选腿**,不在业绩。
+3. **`h_pe_last20`** +13.2% / 2.37 —— 便宜内核(`ts_spearman` d=50 OOM,`ts_pearson` 跑得了 d=40)。
+**判据**:候选在留出段相对 **k_known_xfrozen** 的多头净超额差 < 3pp 且夏普差 < 0.3 ⇒ 判「没有增量」。
+若 `h3_xfz_plus_f` 跑出来 ≈ +18.5% / 3.15,则「无增量」升级成对正确基准成立,这条因子可以收尾。
 
 ## 6. 后面的思路
 
-最有价值的一次运行是把第二批里 **C 组 + E 组**一起跑(机制定案 + 增量口径),A/B/D/F 作为同一张表的陪跑。
-若 h_mkt_explicit 复现 f,则这族因子脱离 O(N²),可以开更长窗口;若 h_ret_path 也成立,说明真正的对象是「秩 beta」,
-应该换一条主线去做而不是继续提纯 F111。
+一次运行的最高价值组合:**`h3_xfz_plus_f` + `h3_best2` + `h3_xfz_flatmax` + `h3_bkz_age`**(正确基准的增量 +
+两件好事能不能加 + 聚合算子定案 + 把次新段的「段等权是陷阱、段内排序最强」切开),其余 21 条陪跑。
+若 `h3_xfz_plus_f` ≈ k_known_xfrozen,这条因子就该收尾(结论:只是已知族 + 通用筛子的影子);
+若 `h3_ret_pe40` / `h3_ret_xfz` 把收益路径载体推到 +12% 以上,**真正该立项的对象是「秩 beta / 同步性」这条线,
+不是继续提纯 F111**。不要再碰叠加权重这个旋钮(0.25 / 0.5 / 1.0 已单调变差)。
 
 ## 7. 留出段
 
-**没读过,一次都没有。** 读之前候选、排序、判据按 §5 写死。
+**没读过,一次都没有**(`runs/F111_spearman_qclose/sweepfinal_*.json` 从未打开)。读之前候选、排序、判据按 §5 写死;
+注意 §5 的判据基准本轮**从 k_known 换成了 k_known_xfrozen**,这是和上一轮唯一不同的地方。
 
 ## 8. 给接手者的提醒
 
-- **先读 `synthesis.md`,不要先读旧的 07_* 文件**(它们来自小样本逐轮实验)。
-- `ts_spearman` 名为时序、`arity=1`,**实为跨股票两两**(`nd_ts.py:483` 有 `for i in range(N)`);
-  `day_quantile` 默认 q=0.5 **就是 day_median**。两处都会把人骗过去。
+- **先读 `synthesis.md` 的「## 第二轮(s2)对账与结论」**;不要先读旧的 `07_*`(来自小样本逐轮实验)。
+- 名字骗人两处:`ts_spearman` 名为时序、`arity=1`,**实为跨股票**(`nd_ts.py:483` 有 `for i in range(N)`);
+  `day_quantile` 默认 q=0.5 **就是 day_median**。
 - 代数事实:完整窗口上各股秩向量都是 0..d−1 的排列、**σ_j 是同一个常数** ⇒
-  `mean_j corr(R_i,R_j) ∝ corr(R_i, 等权共识秩路径)`,**两两配对里没有配对信息**。
-- 实现伪影:`stable=True` 排序把**并列按时间先后给秩** ⇒ 10 天不动的价格路径 ≡ 完美单调上升,
-  在上涨窗口里被打满分。上一轮量过:它不承担毛收益,但承担「低换手」(剔除并列后 LTO 4%→23%)。
-- **`ts_spearman` 在 d=50 上 OOM(上一轮连挂两次 exit 97),d=30 跑得成**;长窗口一律走 `ts_pearson`(分块、峰值有预算上界)。
-- `ts_*` 窗口池 [1,5,10,20,30,40,50],`cross_*`/`in_*` 是 [3,5,10,15,30,60,241] —— 别写 `cross_mean(x, 20)`。
-- 空头腿虚高的坑(次日封板标签 NaN)只影响多空口径;这条因子的空头腿本来就大,**别拿它论证纯多头可用**。
+  `mean_j corr(R_i,R_j) ∝ corr(R_i, 等权共识秩路径)`,**O(N²) 配对里没有配对信息**。
+- 实现伪影:`stable=True` 排序把并列按时间先后给秩 ⇒ 10 天不动的价格路径 ≡ 完美单调上升。
+  s2 已判定:**伪影不承担毛收益也不承担净超额**(`h_wmean_carrier` ρo 0.99),只承担「便宜」(低换手)。
+- **大表两个坑**(本轮踩过):① `sg` 由 train 的**多空** rank IC 定、不是多头腿定 ⇒ 别把 Lnet 为负读成
+  「反过来就有正的」;② `cs_first_*` / `cs_last_*` 是**词典序偏移、不产生 NaN**,外面套一个 `neg()`
+  **会换掉交易的是哪一段**(`seg_hiliq_m` 的真实语义是「在流动性后 60% 里按 +f 选」)。
+- **`ts_spearman` 在 d=50 OOM(exit 97)**;长窗口一律走 `ts_pearson`(与原式 ρo 0.98、同档)。
+- 窗口池:`ts_*` [1,5,10,20,30,40,50];`cross_*` / `in_*` [3,5,10,15,30,60,241] —— 别写 `cross_mean(x, 20)`。
+- 空头腿虚高的坑(次日封板标签 NaN)只影响多空口径;这条因子空头腿本来就大,**别拿它论证纯多头可用**。
 
-## 研究日志(`notes/F111_spearman_qclose/journal.md`:20 条,其中研究员自己写的 10 条)
+## 研究日志(`notes/F111_spearman_qclose/journal.md`:21 条,其中研究员自己写的 11 条)
 
 最近的 5 条(更早的和全文看文件):
-
-### 2026-10-04 23:52 [auto] 启动 exec x2_increment:studies/F111_spearman_qclose/x2_increment.py
 
 ### 2026-10-04 23:58 [auto] x2_increment 跑完(exit 0);重看结果:logs/F111_spearman_qclose_x2_increment.log
 
@@ -152,6 +166,17 @@ x1_identity(2)+S2_window(3,本轮跑成)+x2_increment(4)= 4 次,与工单原文"
 增量:ρk 0.42、ov_m025 +15.6%/2.32 vs k_known +15.4%/2.22(噪声内)、res_known +5.9%/1.09 ⇒ 多头腿上没有可量出的增量;唯一没试过的口径是「已知族定倾斜 + f 只做桶内排序」(h_ov_bk)。
 已交:notes/synthesis.md、studies/hypo.yaml(34 条,34/34 parse)。
 
+### 2026-10-05 16:10 [主研] 批量扫描 s2 对账与结论
+
+对账(s1 六条推论):支持 (i) 抽掉市场共同成分即塌(h_relpath +0.9%/0.12)、(ii) 再乘一次市场方向退回反转(h_mkt_undo −9.1%);
+否定 (iii) 显式 O(N) 机制等价物(h_mkt_explicit −0.9%,我把「市场方向」的居中点代理错了)、(iv) 个股截面代理「放量才有效」(h_act_mul +4.0%)、
+(vi) day_last 的 0.9pp 来自少并列(h_wmean_carrier +12.8%、ρo 0.99 ⇒ 伪影不承担收益);(v) 冻结筛子想法对、我的写法错 —— 只差 cross_mean→cross_max 就差 1.7pp/0.40。
+四条新事实:ts_pearson 与原式 ρo 0.98 且跑得了 d=40(平台 10≈20>30>40);s1「书压在低流动端是浪费」反了(f 多头的一大半就是流动性倾斜);
+scr_xhi_p 剔掉 f 最高 20% 后已知族从 +15.4% 塌到 +5.3% ⇒ 已知族多头腿本来就压在 f 的高分区里(ρk 0.42 低估多头腿重叠);载体换日收益只掉 1.3pp ⇒ 承重的是秩 beta/同步性。
+定论:best_own = seg_xfrozen_p +13.5%/2.46(ρk 0.42→0.11,唯一站得住的提纯,但只切暴露没修机制);best_on_known 全部打不过 k_known_xfrozen(+18.5%/3.15),落后 2.9~3.0pp。
+verdict = 提纯成功、升华失败、对 k_known 口径无增量;诚实缺口:s2 的叠加全叠在 k_known 上,「叠在 k_known_xfrozen 上」一格没量过 ⇒ 第三批 h3_xfz_plus_f 补这一格(优先级第一)。
+已交:synthesis.md「第二轮(s2)对账与结论」(80 行)、state.md 覆盖重写(8 节 9.3KB)、hypo3.yaml(25 条 25/25 parse)。没起服务器,没读留出段。
+
 ## 工单与结果卡(`notes/F111_spearman_qclose/orders/`、`notes/F111_spearman_qclose/results/`)
 
 - R0:工单 —,结果卡 有
@@ -183,7 +208,7 @@ x1_identity(2)+S2_window(3,本轮跑成)+x2_increment(4)= 4 次,与工单原文"
 
 ## 已写的 notes(`notes/F111_spearman_qclose/`)
 
-`01_expression.md`(3K)、`02_operators.md`(9K)、`03_decomposition.md`(4K)、`04_grammar.md`(11K)、`05_hypotheses.md`(34K)、`06_baseline.md`(12K)、`07_S1_whatis.md`(7K)、`07x_1_identity.md`(14K)、`journal.md`(34K)、`state.md`(6K)、`synthesis.md`(12K)
+`01_expression.md`(3K)、`02_operators.md`(9K)、`03_decomposition.md`(4K)、`04_grammar.md`(11K)、`05_hypotheses.md`(34K)、`06_baseline.md`(12K)、`07_S1_whatis.md`(7K)、`07x_1_identity.md`(14K)、`journal.md`(36K)、`state.md`(9K)、`synthesis.md`(22K)
 
 ## 自写的探针与分析脚本(`studies/F111_spearman_qclose/`)
 

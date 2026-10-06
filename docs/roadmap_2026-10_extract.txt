@@ -1,0 +1,204 @@
+ALPHACUBE × PARTURA
+[Title] Alpha Mining Research Roadmap
+从 RL / GP 因子挖掘，到 LLM-guided search、经验学习与 Alpha Pool Aggregation
+用途：为 AlphaCube / Partura 下一阶段工程与论文阅读服务整理日期：2026-10
+[Heading1] 1. 先给结论：你现在最值得做什么
+当前最优策略不是为了论文暂停工程，而是继续把 AlphaCube 做成 production-oriented research engine，同时从现在开始用论文级实验纪律记录每一次 search intervention。原因是：公开文献已经快速进入 LLM + symbolic/RL alpha mining、trajectory learning、success/failure memory 和 factor-model co-optimization；单纯“LLM + GP/RL”的概念 novelty 很可能只有较短窗口。更难复制的壁垒是：在大 operator/action space、真实分钟数据、多目标、多时间尺度和严格 OOS 条件下仍然稳定运行，并能把大量因子有效组合成可交易 signal。
+你当前的 6–7 个基础分钟特征 + 300+ 多维算子，不应简单理解为“feature 少”。大量算子本身承担 representation expansion。更有意义的比较指标是：可达 expression space、有效 branching factor、搜索吞吐量、invalid-expression rate、每单位 compute 的 OOS alpha discovery rate，以及发现 alpha 的多样性。
+[Heading2] 建议的近期优先级
+[ListBullet] 第一优先：继续 AlphaCube 的 scalable search engineering，并保留完全 untouched 的 OOS / control search。
+[ListBullet] 第二优先：把 Partura 从“表达式精修器”升级为 meta-researcher：读取成功与失败轨迹，形成 hypothesis，并干预 AlphaCube 的 search prior / action mask / operator budget。
+[ListBullet] 第三优先：系统研究 Alpha Pool Aggregation。它不仅决定最终 signal，也应反过来成为 alpha discovery 的评价函数。
+[ListBullet] 第四优先：Risk 与 Portfolio + Execution。真正的 production system 最终必须把 alpha decay、risk、cost、impact、capacity 联合起来。
+[Heading1] 2. 文献演化地图
+论文
+核心范式
+LLM/搜索关系
+你该学什么
+优先级
+AlphaGen (KDD 2023)
+RL 挖协同 alpha pool
+无 LLM
+reward 与 downstream combination 耦合
+必读
+AlphaForge (AAAI 2025)
+挖掘 + 动态组合
+非 LLM 核心
+动态 factor selection / weighting
+必读
+Alpha-GPT
+LLM 解释研究员 idea 并生成 alpha
+LLM-native
+semantic hypothesis → expression
+选读
+HARLA / Hybrid LLM+RL (2026)
+LLM 辅助 AlphaGen/RL
+LLM 周期性干预 pool
+LLM 如何嵌入 RL loop
+必读
+AlphaAgent (KDD 2025)
+LLM multi-agent alpha mining
+LLM 主导
+AST originality / semantic consistency / complexity
+必读
+R&D-Agent-Quant (NeurIPS 2025)
+factor-model 联合研发
+agent + backtest feedback
+Research→Develop→Feedback 与 joint optimization
+必读
+LLM Semantic Pruning + GP (2026)
+GP + LLM semantic pruning
+LLM 是 GP reviewer/operator
+闭环触发、验证、rollback
+必读
+QuantaAlpha (2026)
+trajectory-level evolutionary agent
+LLM 学研究轨迹
+mutation/crossover research trajectory
+强烈推荐
+FactorEngine (2026)
+program-level factor mining
+directional LLM + local/Bayesian search
+experience KB、learning from failures
+强烈推荐
+Hubble (2026)
+safe/diverse agentic mining
+positive/negative RAG
+成功失败都进入下一轮 + family diagnostics
+强烈推荐
+[Heading1] 3. 核心论文逐篇阅读指南
+[Heading2] 3.1 AlphaGen — Generating Synergistic Formulaic Alpha Collections via Reinforcement Learning (KDD 2023)
+亮点：它不是逐个挖“最好”的因子，而是直接优化一组因子的协同性：某个新 alpha 对 downstream combination model 的边际贡献被用作 RL return。也就是说，alpha discovery 从一开始就知道最终要被组合。
+对你的价值：对你最重要的是 reward design。你的 AlphaCube 不应只按单因子 IC/Sharpe 排序；未来可把“加入当前 pool 后，OOS ensemble 的边际提升、相关性、稳定性、capacity”直接写入 reward。
+阅读时重点：重点读：state/action/reward；expression construction；alpha pool update；组合模型如何反馈给 generator。
+[Heading2] 3.2 AlphaForge — A Framework to Mine and Dynamically Combine Formulaic Alpha Factors (AAAI 2025)
+亮点：两阶段：先生成 formulaic factors，再根据因子的时间表现进行选择并动态调整组合权重。它直接指出固定 factor weights 难以适应非平稳市场。
+对你的价值：这是你当前 4000→300→combined signal 最直接的文献之一。不要只看 generator，重点研究它如何利用 factor temporal performance 做 selection/weighting。
+阅读时重点：重点读：动态组合机制；factor selection；weight adaptation；与固定线性组合相比的增益；是否存在 leakage / regime sensitivity。
+[Heading2] 3.3 Alpha-GPT — Human-AI Interactive Alpha Mining for Quantitative Investment
+亮点：把 quant researcher 的自然语言 idea 转成 alpha。核心价值是 human/LLM semantic prior，而不是大规模 brute-force search。
+对你的价值：对 Partura 的价值在“如何表达 hypothesis、如何把 hypothesis 映射成 executable expression”。但它不是你的核心搜索范式。
+阅读时重点：重点读：prompt/interaction representation；idea→alpha translation；LLM 的典型局限。
+[Heading2] 3.4 A Hybrid Approach to Formulaic Alpha Discovery with Large Language Model Assistance (HARLA, 2026)
+亮点：明确比较 LLM-only 与 LLM-enhanced existing framework。其 hybrid 路线把 LLM 放进 AlphaGen/RL 优化循环，周期性更新 alpha pool，再让 RL 继续搜索。
+对你的价值：这是与你 AlphaCube⇄Partura 最近的早期参照之一，但它主要让 LLM 改 pool，而不是让 empirical discovery 更新一个独立 researcher 的 belief，再由 researcher 修改 search policy。
+阅读时重点：重点读：LLM 何时触发；LLM 看到了哪些 history；LLM 能控制什么；RL 与 LLM 的职责边界。
+[Heading2] 3.5 AlphaAgent — LLM-Driven Alpha Mining with Regularized Exploration to Counteract Alpha Decay (KDD 2025)
+亮点：LLM agent 主导 alpha mining，同时用 AST similarity 强制 originality、用 LLM 检查 hypothesis-factor semantic alignment、用 AST complexity 控制过度工程化。
+对你的价值：对 Partura 最有价值的是：如何显式表示“研究假设—表达式”的一致性，以及如何把 novelty/complexity 做成系统约束。
+阅读时重点：重点读：AST similarity；hypothesis-factor alignment；complexity regularization；跨牛熊/跨市场 decay evaluation。
+[Heading2] 3.6 R&D-Agent-Quant — A Multi-Agent Framework for Data-Centric Factors and Model Joint Optimization (NeurIPS 2025)
+亮点：把量化研发拆成 Research → Development → Feedback，并通过 multi-armed bandit 自适应选择研究方向；最重要的是同时优化 factor 和 downstream model，而不是把两者割裂。
+对你的价值：这篇直接回应你现在的 aggregation 焦虑：如果 downstream model 不够好，你可能误判 factor pool。factor quality 和 aggregation/model quality 应该 joint-evolve。
+阅读时重点：重点读：feedback 如何改变下一轮 hypothesis；factor-model co-optimization；scheduler；实验记录与自动 R&D loop。
+[Heading2] 3.7 LLM-Assisted Semantic Pruning for Genetic Programming-Based Alpha Factor Discovery (2026)
+亮点：LLM 作为 GP expression tree 的 semantic reviewer，在 GP evolution 中触发 pruning；prune 后强制 IC validation，不通过则 rollback。实验使用高频加密货币数据。
+对你的价值：它证明 LLM 可以成为 symbolic search loop 内部的 operator，而不仅是生成器。但它的 LLM 更像“监工/剪枝器”，还不是你设想的会更新研究 belief 的 Partura。
+阅读时重点：重点读：TEDE Trigger–Evaluate–Decide–Execute；trigger filters；validation/rollback；LLM latency 如何被工程化控制。
+[Heading2] 3.8 QuantaAlpha — An Evolutionary Framework for LLM-Driven Alpha Mining (2026)
+亮点：把一次完整 alpha-mining run 当成 trajectory；定位 trajectory 中较差步骤做 targeted mutation，并把不同高 reward trajectory 的有效片段 crossover。
+对你的价值：它开始优化“怎么研究”，而不仅是“哪个 expression 好”。这与 Partura 的 meta-research 方向高度相关。
+阅读时重点：重点读：trajectory representation；suboptimal-step localization；mutation/crossover；经验如何跨轮次复用。
+[Heading2] 3.9 FactorEngine — A Program-level Knowledge-Infused Factor Mining Framework for Quantitative Investment (2026)
+亮点：把 factor 提升到 executable program 层；明确分离 logic revision vs parameter optimization、LLM directional search vs Bayesian hyperparameter search、LLM vs local computation；并维护 experience knowledge base，包含 failure learning。
+对你的价值：这几乎直接支持你的职责分工：Partura 决定“往哪里搜、为什么”，AlphaCube/本地搜索器负责大规模参数与组合搜索。失败结果不是垃圾，而是 research evidence。
+阅读时重点：重点读：experience KB schema；failure trajectory 如何存；directional search 与 parameter search 的接口；program-level expressiveness。
+[Heading2] 3.10 Hubble — An LLM-Driven Agentic Framework for Safe, Diverse, and Reproducible Alpha Factor Discovery (2026)
+亮点：用受限 operator DSL + AST sandbox 做安全执行；把 top formulas 与 family-level diagnostics 回馈后续 rounds，并使用 positive/negative RAG。
+对你的价值：它最值得 Partura 学的是：不要只存“好因子”；要把失败 family、重复 motif、结构诊断也持久化。公开实验规模约 500 只美股、三轮 104 个 valid candidates，也说明学术 prototype 与 industrial search engine 的规模差异。
+阅读时重点：重点读：positive/negative memory；family-level diagnostics；diversity penalty；persistent artifacts。
+[Heading1] 4. 这些论文的频率与工程尺度：和 AlphaCube 怎么比
+公开 formulaic-alpha 文献总体明显偏向日频 equity 与较受控的 DSL/search space。HARLA/AlphaGen 系列使用 CSI300 的日频 OHLCV/VWAP，典型 target 是未来 20 日收益；Hubble 明确以 daily equity data 为场景；AlphaAgent 主要在 CSI500 / S&P500 做跨市场验证。一个明显例外是 2026 的 LLM-assisted GP semantic pruning，使用高频 BTC/ETH 数据。
+论文
+市场/频率
+公开规模特征
+与你的差异
+AlphaGen / HARLA
+CSI300；日频；20-day forward return
+基础输入主要 OHLCV/VWAP；受控 operator DSL
+你的分钟三维结构、300+ operators 与多维计算使 branching/search space 更大
+AlphaAgent
+CSI500 + S&P500；股票因子
+关注 decay/originality/semantic consistency
+你的核心优势更偏 scalable symbolic search engineering
+QuantaAlpha
+CSI300，向 CSI500/S&P500 transfer
+trajectory-level agentic search
+你可把 trajectory learning 接到更大的 AlphaCube search backend
+Hubble
+约500只美股；daily equity
+主 run 三轮约104 valid candidates
+与 industrial-scale persistent mining 的吞吐量目标差距明显
+LLM Semantic Pruning + GP
+BTC/ETH 高频数据
+GP tree + periodic LLM pruning
+频率更接近你，但 LLM 职责较窄
+FactorEngine
+真实 OHLCV；program-level
+强调 tractability、knowledge/experience
+更接近 Partura 的方向，但不是你的三维大 operator search 设计
+因此，“6–7 个 base features”本身不是 AlphaCube 的主要短板。你需要量化的是 operator-induced feature expansion 和实际 search complexity。如果 300+ operators 中大量算子能把一个 primitive 映射成新的时间/横截面/第三维表示，那么 primitive count 会严重低估实际 representation capacity。
+[Heading1] 5. 你现在应该单独立项：Alpha Pool Aggregation
+是的，你应该系统学 model aggregation，而且它不只是 portfolio construction 的小组件。对一个 4000-factor pool，aggregation model 本身决定了你如何评价“这一批因子到底好不好”。如果 aggregation 太弱，强因子可能被错误判为无效；如果 aggregation 太灵活，又会把噪声拟合成漂亮回测。
+[Heading2] 建议把问题拆成三层
+[ListBullet] Pool compression：4000 → 数百。保留你现在的多维聚类/相关性/稳定性筛选，但增加 conditional redundancy：两个因子总体相关低，不代表在关键 regime 下不重复。
+[ListBullet] Forecast aggregation：数百 → 一个或多个 combined forecasts。至少建立强基线：regularized linear (ridge/elastic net)、IC/IR-weighted、online/dynamic weighting；再与 LightGBM/boosting、shallow neural gating 等比较。
+[ListBullet] Regime / online allocation：权重不是静态的。研究 rolling performance、decay、turnover、cross-factor covariance、market regime 如何进入 weighting。AlphaForge 是最直接起点。
+一个关键原则：不要因为 tree model 当前输给线性模型，就假定 tree model“只是没训好”。在弱信号、高噪声、强横截面结构下，线性/正则化模型本来就可能拥有更好的 bias-variance tradeoff。正确做法是把 aggregation 变成严格的 OOS benchmark：固定相同 factor pool、相同训练窗、相同 cost assumptions，比 predictive IC、net Sharpe、turnover、stability 与 regime robustness。
+[Heading2] 与 discovery 联动的下一步
+最终不要把 AlphaCube 和 aggregator 完全串联。AlphaGen 已经提供了一个重要思想：generator 的 reward 可以来自 downstream combination 的边际贡献。你的版本可以更进一步，让 AlphaCube 优先发现“能改善当前 ensemble”的 alpha，而不是只发现 standalone IC 高的 alpha；Partura 再分析哪些 family 真正带来 marginal information。
+[Heading1] 6. 从这些论文反推 Partura 的目标架构
+Partura 最值得追求的不是“更聪明地改表达式”，而是成为一个可更新 belief 的 meta-researcher。建议把每轮研究持久化成结构化 Research Episode：
+[ListBullet] Hypothesis：为什么某类结构可能有效；来自论文、历史成功/失败、市场机制或 AlphaCube anomaly。
+[ListBullet] Intervention：修改了哪些 search prior / action mask / operator probability / topology / target / universe / compute budget。
+[ListBullet] Control：同 compute budget 下未经 Partura 干预的 AlphaCube。
+[ListBullet] Evidence：成功与失败 expressions、trajectory、family diagnostics、OOS IC/Sharpe、diversity、cost、capacity proxy。
+[ListBullet] Belief update：哪些假设被加强、削弱或推翻；下一轮为什么改变研究方向。
+真正要验证的不是“Partura 生成了更好的因子”，而是随着 episode 增加，Partura 是否提高了每单位 compute 的 untouched-OOS discovery efficiency，减少重复探索，并能把在一个 horizon/universe 学到的研究规律迁移到另一个任务。
+[Heading1] 7. 推荐阅读顺序（按你现在最有用排序）
+顺序
+论文
+为什么现在读
+1
+AlphaGen
+先把“generator 与 downstream aggregation 耦合”的思想吃透。
+2
+AlphaForge
+马上对应你现在的 4000→300→combined signal。
+3
+HARLA / Hybrid LLM+RL
+看 LLM 如何实际插入 AlphaGen/RL loop。
+4
+FactorEngine
+看 directional search、参数搜索分工与 failure memory。
+5
+QuantaAlpha
+看 trajectory-level research evolution。
+6
+R&D-Agent-Quant
+看 factor 与 model 联合优化、feedback scheduler。
+7
+Hubble
+看 positive/negative memory 与 family diagnostics。
+8
+AlphaAgent
+补 semantic consistency、originality、complexity regularization。
+9
+LLM Semantic Pruning + GP
+看如何把 LLM 作为 search-loop operator 并做 rollback。
+10
+Alpha-GPT
+补早期 LLM-native / human-AI hypothesis generation。
+[Heading1] 8. 论文与入口
+AlphaGen — Generating Synergistic Formulaic Alpha Collections via Reinforcement Learninghttps://doi.org/10.1145/3580305.3599831
+AlphaForge — A Framework to Mine and Dynamically Combine Formulaic Alpha Factorshttps://doi.org/10.1609/aaai.v39i12.33365
+Alpha-GPT — Human-AI Interactive Alpha Mining for Quantitative Investmenthttps://arxiv.org/abs/2308.00016
+A Hybrid Approach to Formulaic Alpha Discovery with Large Language Model Assistancehttps://doi.org/10.1007/s11704-025-41061-5
+AlphaAgent — LLM-Driven Alpha Mining with Regularized Exploration to Counteract Alpha Decayhttps://doi.org/10.1145/3711896.3736838
+R&D-Agent-Quant — A Multi-Agent Framework for Data-Centric Factors and Model Joint Optimizationhttps://arxiv.org/abs/2505.15155
+LLM-Assisted Semantic Pruning for Genetic Programming-Based Alpha Factor Discoveryhttps://doi.org/10.3390/app16126231
+QuantaAlpha — An Evolutionary Framework for LLM-Driven Alpha Mininghttps://arxiv.org/abs/2602.07085
+FactorEngine — A Program-level Knowledge-Infused Factor Mining Framework for Quantitative Investmenthttps://arxiv.org/abs/2603.16365
+Hubble — An LLM-Driven Agentic Framework for Safe, Diverse, and Reproducible Alpha Factor Discoveryhttps://arxiv.org/abs/2604.09601
+[Heading1] 9. 一句话研究定位
+AlphaCube 负责高熵、可扩展的 empirical discovery；Partura 负责从成功与失败实验中形成并更新研究 belief，再反过来改变 AlphaCube 的搜索策略；aggregation、risk 与 execution 则把 discovery 变成可部署的 PnL。

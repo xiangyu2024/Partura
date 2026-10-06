@@ -1,6 +1,6 @@
 # verdict:F102_kurt_autocorr — agent af1e2cec7e004ff15(工作流 wf_4811c95a-915)
 
-- 状态:**还在跑**;开始 10-05 15:06,最后一次动作 10-05 15:16;工具调用 51 次
+- 状态:**已返回结果**;开始 10-05 15:06,最后一次动作 10-05 15:31;工具调用 89 次
 - 这是从 agent 的对话记录里**自动抽出来的动作流水**(命令、输出、写了哪些文件)。agent 的推理不在记录里 ——
   它的判断要看 `notes/F102_kurt_autocorr/journal.md` 和各 notes 文件。输出过长的地方截了中间。
 
@@ -1165,11 +1165,1124 @@ for i in range(1,len(parts),2): print(parts[i][:24].ljust(26), len(parts[i+1].en
 
 10-05 15:16 · 读 `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
 
+**10-05 15:16 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- | **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对**融合后的分数**做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反第 3 节第 3 条) |
+
+判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。
+`h3_fuse_smooth5` LTO < 2% 且夏普不低于融合版 0.1 以内 → 免费换手。**两条要等下一轮扫描;本轮没起服务器计算。**
++ | **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对**融合后的分数**做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反第 3 节第 3 条) |
+
+G 的判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。
+`h3_fuse_smooth5` LTO < 2% 且夏普不低于融合版 0.1 以内 → 免费换手。**两条要等下一轮扫描;本轮没起服务器计算。**
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- **best_own**:1. `cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)` —— 夏普 2.85 / LTO 3.0% / 净超额 +11.3%。
+2. `cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(day_last(Close), 241))` —— 2.67。
+3. `cross_mean(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), 60)` —— 2.52 / LT
+… (42 字符略) …
+_known**:`scr_xhi_p`(+16.9% / 2.57)与 `h_sieve_known`(+16.3% / **2.65**)。**两者都明确输给 `k_known_xfrozen`(+18.5% / 3.15)**,
+所以这一栏的诚实答案是「有,但冗余」。第三批里只有 `h3_xfroz_max60` 还可能翻盘。
++ **best_own**(记 `K = pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3)))`):
+1. `cross_max(K, 60)` —— 2.85 / LTO 3.1% / +11.3%。
+2. `cs_first_low40(cross_sum(K, 15), cross_valid_count(day_last(Close), 241))` —— 2.67 / +11.4%。
+3. `cross_mean(cross_mean(K, 15), 60)` —— 2.52 / LTO 2.4% / valid +12.1%(最均衡)。
+
+**best_on_known**:`scr_xhi_p`(+16.9% / 2.57)与 `h_sieve_known`(+16.3% / **2.65**)。**两者都输给 `k_known_xfrozen`(+18.5% / 3.15)**,
+诚实答案是「有,但冗余」。第三批里只有 `h3_xfroz_max60` 还可能翻盘。
+```
+
+**10-05 15:17 · Bash** — Recheck size and section count
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F102_kurt_autocorr/state.md && grep -c "^## " notes/F102_kurt_autocorr/state.md
+```
+
+```
+   10860 notes/F102_kurt_autocorr/state.md
+8
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- 解剖关键数(全市场多头书,utrain):成交额五分位**段内**净超额 −2.9 / −4.3 / −0.3 / +6.1 / **+12.4%**(单调上升),书对最低桶**超配 +21.1 个点**;
+科创板段内原式 **−28.5%** → `h_max60` −4.1% → `h_sieve_known` **+7.6%**;次新段(7.1%、段等权 −28.7%)原式 +7.1% → `h_max60` **+23.8%**;
+冻结盘口段(6.5%、段等权 −67.4%)原式低配 −5.0 个点;`h_max60` 放量 +16.1% vs 缩量 +7.4%;年度 2018→2023 无衰减。
++ 解剖关键数(全市场多头书,ut):成交额五分位**段内**净超额 −2.9 / −4.3 / −0.3 / +6.1 / **+12.4%**(单调升),书对最低桶**超配 +21.1 点**;
+科创板段内原式 **−28.5%** → `h_max60` −4.1% → `h_sieve_known` **+7.6%**;次新段(7.1%、段等权 −28.7%)原式 +7.1% → `h_max60` **+23.8%**;
+冻结段(6.5%、段等权 −67.4%)原式低配 −5.0 点;`h_max60` 放量 +16.1% vs 缩量 +7.4%;年度 2018→2023 无衰减。
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- - 用户训练段 = 20180102–20230807(train 2018–2021 + valid 20220101–20230807)。s1 / s2 两轮**都没有读留出段**。
+- 第一轮研究员已用掉那一次读取(`07_S_final`)。**台账已记,不得再读;`runs/F102_kurt_autocorr/sweepfinal_*.json` 不许打开。**
+- 本文件与 `synthesis.md` 的所有结论、候选排序、判据都只用 train / valid。
++ - 训练段 = 20180102–20230807(train 2018–2021 + valid 20220101–20230807)。s1 / s2 两轮**都没读留出段**。
+- 第一轮研究员已用掉那一次读取(`07_S_final`)。**台账已记,不得再读;`runs/*/sweepfinal_*.json` 不许打开。**
+- 本文件与 `synthesis.md` 的所有结论、候选排序、判据只用 train / valid。
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- - **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`
+  被 145 变体大表**确认**(`h_max60` 2.85)—— 两轮唯一完全对上的一条。
+- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;
+  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 外层下
+  **读数逐位相同**,别再为「跨日渗漏」花假设位。
++ - **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`
+  被 145 变体大表**确认**(2.85)—— 两轮唯一完全对上的一条。
+- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;
+  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 外层下
+  **逐位相同**,别再为「跨日渗漏」花假设位。
+```
+
+**10-05 15:17 · Bash** — Recheck size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F102_kurt_autocorr/state.md
+```
+
+```
+   10796 notes/F102_kurt_autocorr/state.md
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- Lnet = 多头腿扣 15bp 净超额、Lshp = 纯多头夏普,均按 tr(train)/ va(valid)/ ut(utrain) 列出。
++ Lnet = 多头腿扣 15bp 净超额、Lshp = 纯多头夏普,都按 tr / va / ut 列。
+```
+
+**10-05 15:17 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- | `k_known_xfrozen` | +16.4 / +23.2 / **+18.5%** | 2.81 / 3.98 / **3.15** | 3.6% | 0.49 | 0.56 | **通用筛子基准 —— 本因子所有已知族用法都输给它** |
+| **`h_max60`** | +11.8 / +9.2 / **+11.3%** | 2.82 / 2.79 / **2.85** | **3.1%** | 0.80 | 0.23 | **自有最佳**;两段几乎相同 = 唯一不吃行情的一支 |
+| `seg_new_p` | +11.2 / +10.0 / +11.4% | 2.57 / 2.97 / 2.67 | 3.3% | 0.53 | 0.20 | 原式 + `cross_valid_count` 剔最短 40% |
++ | `k_known_xfrozen` | +16.4 / +23.2 / **+18.5%** | 2.81 / 3.98 / **3.15** | 3.6% | 0.49 | 0.56 | **通用筛子基准 —— 已知族用法全输给它** |
+| **`h_max60`** | +11.8 / +9.2 / **+11.3%** | 2.82 / 2.79 / **2.85** | **3.1%** | 0.80 | 0.23 | **自有最佳**;两段几乎相同 = 唯一不吃行情的 |
+| `seg_new_p` | +11.2 / +10.0 / +11.4% | 2.57 / 2.97 / 2.67 | 3.3% | 0.53 | 0.20 | 原式 + `cross_valid_count` 剔最短 40% |
+```
+
+**10-05 15:18 · 改文件** `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+```
+- | C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停 / 跌停)、对 `at_max` 做残差、`cross_flat_ratio`(日频印记)、`cross_valid_count(day_es_ratio_hi,60)`(纯计数) |
+| D 市场状态正式算子 | 2 | `cs_state_rank(·,50)` 当配角权重(有界分位,替手写无界倍数);`cs_flip_by_state(·,Amt)` 证伪 |
+| E 新算子替 A / B 槽位 | 4 | `day_wstd(·,Amt)`(等权版符号是反的)、`day_topw_mean(·,Amt)`、`in_zscore_expand`(退化出口的日内因果版,不靠 EPS)、`day_es_ratio_hi` |
++ | C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停 / 跌停)、对 `at_max` 做残差、`cross_flat_ratio`(日频印记)、`cross_valid_count(day_es_ratio_hi,60)` |
+| D 市场状态正式算子 | 2 | `cs_state_rank(·,50)` 当配角权重(有界分位,替手写无界倍数);`cs_flip_by_state(·,Amt)` 证伪 |
+| E 新算子替 A / B 槽位 | 4 | `day_wstd(·,Amt)`(等权版符号反)、`day_topw_mean(·,Amt)`、`in_zscore_expand`(退化出口的日内因果版,不靠 EPS)、`day_es_ratio_hi` |
+```
+
+**10-05 15:18 · Bash** — Recheck size
+
+```bash
+cd /Users/wxy/Desktop/Partura && wc -c notes/F102_kurt_autocorr/state.md
+```
+
+```
+   10735 notes/F102_kurt_autocorr/state.md
+```
+
+**10-05 15:18 · Bash** — Batch-trim state.md
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("`pow_2` 走 `x**e`、**不是**带符号幂 → 是**折叠**;`ts_corr` 分母 `sqrt(var_x·var_y)+EPS` → 窗口内收益全相等时**恰好 = 0**\n   (d = 3 最易走到);`cross_sum = nansum_last`(NaN 当 0)vs `cross_mean = nanmean_last`(跳过)。",
+ "`pow_2` 走 `x**e`、**不是**带符号幂 → 是**折叠**;`ts_corr` 分母 `sqrt(var_x·var_y)+EPS` → 窗口内收益全相等时**恰好 = 0**(d = 3 最易走到)。"),
+("八条语义替代(`day_zero_ratio`、`day_flat_run_max`、`day_centroid/gini(Amt)`、`day_signed_ratio`、`in_madz`×2、合成封板计)**全废**(ut −2.48~+0.89)。",
+ "八条语义替代(`day_zero_ratio`、`day_flat_run_max`、`day_centroid/gini(Amt)`、`day_signed_ratio`、`in_madz`×2、合成封板计)**全废**。"),
+("4. **凸性下修**:修好聚合器后 `abs_` 2.26 vs 平方 2.32(只值 0.06 夏普),四次方反降到 2.17。s1 里 abs 低 1.9 点是\n   `cross_sum` 缺陷与量纲的**交互**(abs 量纲小 → 记 0 伤害更大),不是凸性。",
+ "4. **凸性下修**:修好聚合器后 `abs_` 2.26 vs 平方 2.32(只值 0.06 夏普),四次方反降到 2.17。s1 里 abs 低 1.9 点是 `cross_sum` 缺陷与量纲的**交互**,不是凸性。"),
+("- **若 B 组 LTO ≤ 2.5% 且夏普 ≥ 2.6**:那是唯一没被证伪的「桶内」方向(`cs_bucket_rank` 丢量纲、`cs_bucket_demean` 不丢)。",
+ "- **若 B 组 LTO ≤ 2.5% 且夏普 ≥ 2.6**:那是唯一没被证伪的「桶内」方向(`cs_bucket_demean` 不丢量纲)。"),
+("- 没做的:多空腿(空头腿毛超额 +28.0% / +23.3%,钱在那边,但用户只做纯多头)。",
+ "- 没做:多空腿(空头腿毛超额 +28.0% / +23.3%,钱在那边,但用户只做纯多头)。"),
+]
+for a,b in reps:
+    assert a in s, a[:40]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10571
+```
+
+**10-05 15:18 · Bash** — Second trim pass
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("| `h_sieve_known` | +14.0 / +21.9 / +16.3% | 2.26 / 3.63 / 2.65 | 3.5% | 0.67 | 0.67 | 已知族上夏普最好 |",
+ "| `h_sieve_known` | +14.0 / +21.9 / +16.3% | 2.26 / 3.63 / 2.65 | 3.5% | 0.67 | 0.67 | 已知族上夏普最好 |".replace("已知族上夏普最好","已知族上夏普最好(筛子)")),
+("| `h_res_zero60` | +9.5 / +11.5 / +10.1% | 2.12 / 3.40 / 2.41 | 4.0% | 0.77 | 0.34 | **剥掉冻结掩码不塌**(反向 −5.2% / −0.55 塌光) |",
+ "| `h_res_zero60` | +9.5 / +11.5 / +10.1% | 2.12 / 3.40 / 2.41 | 4.0% | 0.77 | 0.34 | **剥掉冻结掩码不塌**(反向 −0.55 塌光) |"),
+("| `h_inac3` | +10.1 / +10.3 / +10.2% | 2.15 / 2.99 / 2.32 | 5.3% | **0.99** | 0.27 | 与 `sub_D_cross_mean` **逐位相同** → 跨日渗漏 = 0 |",
+ "| `h_inac3` | +10.1 / +10.3 / +10.2% | 2.15 / 2.99 / 2.32 | 5.3% | **0.99** | 0.27 | 与 `sub_D_cross_mean` **逐位相同** → 渗漏 = 0 |"),
+("| `h_bk_amt` / `h_liq_excl_low40` | +6.5% / +5.5% | ut 1.56 / 0.72 | — | 0.83 / −0.30 | 0.07 / 0.64 | 桶内 / 剔不活跃票,**全灭** |",
+ "| `h_bk_amt` / `h_liq_excl_low40` | ut +6.5% / +5.5% | ut 1.56 / 0.72 | — | 0.83 / −0.30 | 0.07 / 0.64 | 桶内 / 剔不活跃票,**全灭** |"),
+("- **不要再写桶内变体**:四种分桶全不如全市场排名,剔不活跃票双降。法则:「超配 × 段等权超额」点乘占净超额 >50% 就别写。",
+ "- **不要再写桶内变体**:四种分桶全不如全市场排名,剔不活跃票双降。法则:「超配 × 段等权」点乘占净超额 >50% 就别写。"),
+("- 任何声称「我在规避某类股票」的因子,先和「把那类票直接剔掉」比(`k_known_xfrozen` 就是这么来的);它的掩码\n  `cross_max(day_zero_ratio(Ret),15)` 自己做排序因子是废的。**排序无效 ≠ 当掩码无效。**",
+ "- 任何声称「我在规避某类股票」的因子,先和「把那类票直接剔掉」比(`k_known_xfrozen` 就这么来的);它的掩码\n  `cross_max(day_zero_ratio(Ret),15)` 自己做排序因子是废的。**排序无效 ≠ 当掩码无效。**"),
+]
+for a,b in reps:
+    assert a in s, a[:40]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10557
+```
+
+**10-05 15:18 · Bash** — Drop two redundant table rows
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+# 这两行的事实已分别写在第 3 节第 5 条和第 8 节 (d),表里删掉不丢信息
+drop=[
+"| `h_inac3` | +10.1 / +10.3 / +10.2% | 2.15 / 2.99 / 2.32 | 5.3% | **0.99** | 0.27 | 与 `sub_D_cross_mean` **逐位相同** → 渗漏 = 0 |\n",
+"| `h_bk_amt` / `h_liq_excl_low40` | ut +6.5% / +5.5% | ut 1.56 / 0.72 | — | 0.83 / −0.30 | 0.07 / 0.64 | 桶内 / 剔不活跃票,**全灭** |\n",
+]
+for d in drop:
+    assert d in s, d[:40]
+    s=s.replace(d,"")
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+wc -c /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md; grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10268
+   10268 /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+8
+```
+
+**10-05 15:19 · Bash** — Final trim under 10 KB
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+a="`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` · sg = −1(多头 = 低值) · 挖掘库 #3961\n选拔口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 个点 / ±0.3 夏普。门槛 cov ≥ 0.95、dist ≥ 0.5。"
+b="`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` · sg = −1(多头 = 低值) · 挖掘库 #3961\n口径:多头腿扣 15bp 净超额 + 纯多头夏普,半衰期按纯多头书选。噪声 ±3 点 / ±0.3 夏普。门槛 cov ≥ 0.95、dist ≥ 0.5。"
+assert a in s
+s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10259
+```
+
+**10-05 15:19 · Bash** — Final heading trim
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+s=s.replace("## 3. 过程与逻辑(为什么这么读)","## 3. 过程与逻辑")
+s=s.replace("## 2. 中间结果(数字来自 `study.sh table F102_kurt_autocorr s2 --all`)","## 2. 中间结果(数字来自 `study.sh table F102_kurt_autocorr s2 --all`)")
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10239
+8
+```
+
+10-05 15:19 · 读 `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
+
+**10-05 15:19 · Bash** — Final verification of all deliverables
+
+```bash
+cd /Users/wxy/Desktop/Partura && echo "=== hypo3 ids ===" && grep -oE "^h3_[a-z0-9_]+" studies/F102_kurt_autocorr/hypo3.yaml | tr '\n' ' ' && echo && echo "=== count ===" && grep -cE "^h3_" studies/F102_kurt_autocorr/hypo3.yaml && echo "=== G group ===" && grep -n "G\. 自有版本" studies/F102_kurt_autocorr/hypo3.yaml && echo "=== journal entries ===" && grep -c "^### " notes/F102_kurt_autocorr/journal.md && echo "=== synthesis s2 section lines ===" && awk '/^## 第二轮/,0' notes/F102_kurt_autocorr/synthesis.md | wc -l
+```
+
+```
+=== hypo3 ids ===
+h3_max30 h3_max241 h3_tail75_60 h3_max60_age h3_max60_scr20 h3_max60_ov05 h3_xfroz_max60 h3_bdm_amt h3_bdm_max60 h3_bz_amt h3_rz15 h3_atmax60 h3_atmin60 h3_res_atmax h3_flatratio60 h3_vc_es60 h3_ov_state50 h3_flip_amt h3_fuse_own2 h3_fuse_smooth5 h3_wstd60 h3_topw60 h3_izse60 h3_eshi_max60 h3_age_bucket 
+=== count ===
+25
+=== G group ===
+52:# ---- G. 自有版本之间的融合与平滑(本轮用户要的那一问;s2 里只有「与已知族融合」,没有「自己人融合」)
+=== journal entries ===
+3
+=== synthesis s2 section lines ===
+      56
+```
+
+**10-05 15:20 · agent 的话**
+
+All deliverables verified. Let me check whether a cross-day lag operator already exists before requesting one.
+
+**10-05 15:20 · Bash** — Check for an existing cross-day lag operator
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh ops 'delay|lag|shift|prev|ago' 2>&1 | head -20; echo "=== cross_ ops ==="; ./scripts/study.sh ops '^cross_' 2>&1 | head -40
+```
+
+```
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cross_delay                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_shift                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]  [lookahead]
+  in_delay                           dt/in/rolling      arity 1 axis M win [3, 5, 10, 15, 30, 60, 241]
+  in_shift                           dt/in/rolling      arity 1 axis M win [3, 5, 10, 15, 30, 60, 241]
+  in_top_quantile_flag_q10           dt/in/unary        arity 1 axis M  [boolean_output]
+  nt_ts_delay                        nt/ts/rolling      arity 1 axis M win [3, 5, 10, 15, 30, 60]
+  nt_ts_shift                        nt/ts/rolling      arity 1 axis M win [3, 5, 10, 15, 30, 60]  [lookahead]
+  ts_delay                           nd/ts/rolling      arity 1 axis D win [1, 5, 10, 20, 30, 40, 50]
+  ts_shift                           nd/ts/rolling      arity 1 axis D win [1, 5, 10, 20, 30, 40, 50]  [lookahead]
+# 只在完整库里的通用调用(手写因子用的;参数含字面量,签名看 src):
+  in_label_change_flags              dt/in  axis M reduces_m False
+  in_shift_left                      dt/in  axis M reduces_m False
+  in_shift_right                     dt/in  axis M reduces_m False
+  in_top_quantile_flag               dt/in  axis M reduces_m False
+=== cross_ ops ===
+# 搜索语法内的注册表算子(带 win 的需要窗口参数,写在最后一个位置):
+  cross_age                          dt/cross/unary        arity 1 axis D
+  cross_argmax                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_argmin                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_autocorr_s1                  dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_corr                         dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_cov                          dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_decay_linear                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_delay                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_delta                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_ema                          dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_fangzheng                    dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_flat_ratio                   dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]  [boolean_output,trivial_boolean]
+  cross_hurst                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+… (6 行略) …
+  cross_product                      dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q25                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q50                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_quantile_q75                 dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_rank                         dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_reg_fvalue                   dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_reg_tvalue                   dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_regalpha                     dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_regbeta                      dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_regres                       dt/cross/pair_rolling arity 2 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_scale                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_semistd_neg                  dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_semistd_pos                  dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_shift                        dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]  [lookahead]
+  cross_stddev                       dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_sum                          dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_sustain                      dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]  [boolean_output,trivial_boolean]
+  cross_tail_mean_q25                dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_tail_mean_q75                dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+  cross_valid_count                  dt/cross/rolling      arity 1 axis D win [3, 5, 10, 15, 30, 60, 241]
+```
+
+**10-05 15:20 · agent 的话**
+
+`cross_delay` already exists — that enables the single most decisive missing test. Let me check its definition.
+
+**10-05 15:20 · Bash** — Read cross_delay kernel source
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh src cross_delay cross_max 2>&1 | head -40
+```
+
+```
+### cross_delay  face=dt family=cross category=rolling axis=D reduces_m=False lookahead=False kernel=dt_cross.cross_delay
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_cross.py:149
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_delay(x: torch.Tensor, d: int) -> torch.Tensor:
+    """`x` shifted DOWN (later days see earlier values) by `d` days."""
+    d = int(d)
+    res = get_nan_tensor(x.shape, x.device, x.dtype)
+    if 0 < d < x.shape[0]:
+        res[d:] = x[:-d]
+    elif d == 0:
+        res = x.clone()
+    return res
+
+# --- cross_delay 调用的: common.get_nan_tensor
+def get_nan_tensor(shape, device, dtype) -> torch.Tensor:
+    return torch.full(shape, float("nan"), dtype=dtype, device=device)
+
+### cross_max  face=dt family=cross category=rolling axis=D reduces_m=False lookahead=False kernel=dt_cross.cross_max
+# /root/autodl-tmp/AlphaCube/src/alphacube/operators/dt_cross.py:232
+@op("dt", "cross", arity=1, requires_window=True)
+def cross_max(x: torch.Tensor, d: int) -> torch.Tensor:
+    return rolling_reduce(x, int(d), nanmax_last, axis=0)
+
+# --- cross_max 调用的: common.rolling_reduce
+def rolling_reduce(x: torch.Tensor, d: int, reducer, axis: int = 0) -> torch.Tensor:
+    return reducer(rolling_windows(x, d, axis))
+
+# --- rolling_reduce 调用的: common.rolling_windows
+def rolling_windows(x: torch.Tensor, d: int, axis: int = 0) -> torch.Tensor:
+    """Causal rolling windows of length `d` along `axis`, left-padded with
+    NaN so every original position (including the first `d-1`) gets a
+    window. Output shape = `x.shape` with a new trailing window-dim of
+    size `d` appended (the `axis` dim's length is unchanged).
+    """
+    d = int(d)
+    pad_shape = list(x.shape)
+    pad_shape[axis] = d - 1
+    pad = torch.full(pad_shape, float("nan"), dtype=x.dtype, device=x.device)
+    x_padded = torch.cat([pad, x], dim=axis)
+    return x_padded.unfold(axis, d, 1)
+```
+
+**10-05 15:21 · Bash** — Swap in the lagged-memory test and revalidate
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='studies/F102_kurt_autocorr/hypo3.yaml'
+s=open(p).read()
+old=[l for l in s.split('\n') if l.startswith('h3_rz15:')][0]
+new='h3_lagmax60:     {expr: "cross_max(cross_delay(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 5), 60)", why: "乙 / 戊 的决定性一问,本轮查注册表才发现写得出来(cross_delay = x 向后推 d 天,今天看到的是 d 天前的值)。h_max60 的 60 日极大**含今天**,所以它可能根本不是记忆、只是『现在冻不冻』穿了一件 60 日的外衣 —— 这也解释了为什么一个 15 日的当期掩码(k_known_xfrozen,3.15)能赢过它。这条把最近 5 天挖掉:若夏普仍在 2.6 以上,冻结是一个**持续的烙印**(事件过后仍被定价),这条因子有独立的经济内容、而且对数据时点不敏感;若塌到 2 以下,h_max60 = 当期冻结掩码的一个贵写法,F102 该退休、直接用掩码"}'
+s=s.replace(old,new)
+open(p,'w').write(s)
+print('swapped')
+PY
+./scripts/study.sh hypo3 F102_kurt_autocorr 2>&1 | tail -4
+```
+
+```
+swapped
+OK    h3_izse60
+OK    h3_eshi_max60
+OK    h3_age_bucket
+25/25 parse
+```
+
+**10-05 15:21 · Bash** — Record the swap in state.md
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+a="| B 折叠中心放进桶里 | 4 | `cs_bucket_demean` / `cs_bucket_zscore`(成交额十分位)、`cs_robust_z` —— `h_fold_csmean` 2.40 / LTO 2.4% 指向这里 |"
+b="| B 折叠中心放进桶里 | 3 | `cs_bucket_demean` / `cs_bucket_zscore`(成交额十分位)—— `h_fold_csmean` 2.40 / LTO 2.4% 指向这里 |\n| **H 记忆还是当期** | **1** | `h3_lagmax60` = `cross_max(cross_delay(K,5),60)`,把最近 5 天挖掉。`h_max60` 的 60 日极大**含今天**,可能只是「现在冻不冻」穿了件 60 日外衣(也解释了为什么 15 日当期掩码 `k_known_xfrozen` 能赢它)。≥ 2.6 → 冻结是持续烙印、有独立经济内容;≤ 2 → `h_max60` 是当期掩码的贵写法,该退休 |"
+assert a in s
+s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10618
+```
+
+**10-05 15:21 · Bash** — Trim back under the cap
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("| **H 记忆还是当期** | **1** | `h3_lagmax60` = `cross_max(cross_delay(K,5),60)`,把最近 5 天挖掉。`h_max60` 的 60 日极大**含今天**,可能只是「现在冻不冻」穿了件 60 日外衣(也解释了为什么 15 日当期掩码 `k_known_xfrozen` 能赢它)。≥ 2.6 → 冻结是持续烙印、有独立经济内容;≤ 2 → `h_max60` 是当期掩码的贵写法,该退休 |",
+ "| **H 记忆还是当期** | **1** | `h3_lagmax60` = `cross_max(cross_delay(K,5),60)`,挖掉最近 5 天。`h_max60` 的极大**含今天**,可能只是「现在冻不冻」穿了件 60 日外衣(这也解释了 15 日当期掩码 `k_known_xfrozen` 为何能赢它)。≥ 2.6 → 持续烙印、有独立内容;≤ 2 → 当期掩码的贵写法、该退休 |"),
+("解剖关键数(全市场多头书,ut):成交额五分位**段内**净超额 −2.9 / −4.3 / −0.3 / +6.1 / **+12.4%**(单调升),书对最低桶**超配 +21.1 点**;\n科创板段内原式 **−28.5%** → `h_max60` −4.1% → `h_sieve_known` **+7.6%**;次新段(7.1%、段等权 −28.7%)原式 +7.1% → `h_max60` **+23.8%**;\n冻结段(6.5%、段等权 −67.4%)原式低配 −5.0 点;`h_max60` 放量 +16.1% vs 缩量 +7.4%;年度 2018→2023 无衰减。",
+ "解剖关键数(多头书,ut):成交额五分位**段内**净超额 −2.9 / −4.3 / −0.3 / +6.1 / **+12.4%**(单调升),书对最低桶**超配 +21.1 点**;\n科创板段内原式 **−28.5%** → `h_max60` −4.1% → `h_sieve_known` **+7.6%**;次新段(7.1%、段等权 −28.7%)原式 +7.1% → `h_max60` **+23.8%**;\n冻结段(6.5%、段等权 −67.4%)原式低配 −5.0 点;`h_max60` 放量 +16.1% vs 缩量 +7.4%;年度无衰减。"),
+("- **若 `h3_res_atmax` 塌而 `h_res_zero60` 不塌**:独家内容 = 涨停规避,下一轮围绕 `day_at_max_ratio` 重建(更便宜、更可解释)。",
+ "- **若 `h3_res_atmax` 塌而 `h_res_zero60` 不塌**:独家内容 = 涨停规避,下一轮围绕 `day_at_max_ratio` 重建。"),
+("- **若 `h3_max30` ≈ `h3_max241` ≈ 2.85**:60 日窗口有平台、2.85 不是运气;若只有 60 高,就当刀尖看、别上。",
+ "- **若 `h3_max30` ≈ `h3_max241` ≈ 2.85**:窗口有平台、2.85 不是运气;若只有 60 高,当刀尖看、别上。\n- **`h3_lagmax60` 是本批最关键的一条**:它决定 F102 是「持续烙印」还是「当期掩码的贵写法」。"),
+]
+for a,b in reps:
+    assert a in s, a[:40]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10649
+```
+
+**10-05 15:22 · Bash** — Drop a redundant row and tighten table cells
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+# 这一行的数字已在第 3 节第 2 条("双向残差 2.41 不塌 / −0.55 塌光")里
+s=s.replace("| `h_res_zero60` | +9.5 / +11.5 / +10.1% | 2.12 / 3.40 / 2.41 | 4.0% | 0.77 | 0.34 | **剥掉冻结掩码不塌**(反向 −0.55 塌光) |\n","")
+reps=[
+("| E 新算子替 A / B 槽位 | 4 | `day_wstd(·,Amt)`(等权版符号反)、`day_topw_mean(·,Amt)`、`in_zscore_expand`(退化出口的日内因果版,不靠 EPS)、`day_es_ratio_hi` |",
+ "| E 新算子替 A / B 槽位 | 4 | `day_wstd(·,Amt)`(等权版符号反)、`day_topw_mean(·,Amt)`、`in_zscore_expand`(退化出口的日内因果版)、`day_es_ratio_hi` |"),
+("| C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停 / 跌停)、对 `at_max` 做残差、`cross_flat_ratio`(日频印记)、`cross_valid_count(day_es_ratio_hi,60)` |",
+ "| C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停 / 跌停)、对 `at_max` 做残差、`cross_flat_ratio`、`cross_valid_count(day_es_ratio_hi,60)` |"),
+("| A `h_max60` 周围 | 7 | 窗口 30 / 241、`q75@60`、配 `cross_age` 剔次新、换进筛子 / 配角;`h3_xfroz_max60` = 在 `k_known_xfrozen` 之上**再**剔一道(唯一可能赢过 3.15 的) |",
+ "| A `h_max60` 周围 | 7 | 窗口 30 / 241、`q75@60`、配 `cross_age` 剔次新、换进筛子 / 配角;`h3_xfroz_max60` = 在 `k_known_xfrozen` 上**再**剔一道(唯一可能赢 3.15 的) |"),
+]
+for a,b in reps:
+    assert a in s, a[:40]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10479
+```
+
+**10-05 15:22 · Bash** — Final size trim
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("G 的判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。\n`h3_fuse_smooth5` LTO < 2% 且夏普不低于融合版 0.1 以内 → 免费换手。**两条要等下一轮扫描;本轮没起服务器计算。**",
+ "G 的判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。\n`h3_fuse_smooth5` LTO < 2% 且夏普不低于融合版 0.1 → 免费换手。**全批要等下一轮扫描;本轮没起服务器计算。**"),
+("| **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对**融合后的分数**做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反第 3 节第 3 条) |",
+ "| **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对**融合后分数**做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反第 3 节第 3 条) |"),
+("1. **算子按函数定义读**:`nankurt_last = m4/(var²+EPS)−3` → **超额**峰度、下界 −2(`sub_C_pow_1_5` cov 0.75 = 25% 的股票-日为负);",
+ "1. **算子按函数定义读**:`nankurt_last = m4/(var²+EPS)−3` → **超额**峰度、下界 −2(`sub_C_pow_1_5` cov 0.75 = 25% 的股票-日为负);"),
+("5. **收益归因**(「超配 × 段等权超额」点乘):原式 +5.5 个点来自跨成交额桶倾斜(占 +8.9% 的六成),`k_known` +14.7(占 95%);\n   剩下是冻结规避(原式 +3.6、`k_known` +2.1)。**八条桶内 / 剔除变体全不如全市场排名** → 桶内无残差选股力,上两项就是全部。",
+ "5. **收益归因**(「超配 × 段等权」点乘):原式 +5.5 点来自跨成交额桶倾斜(占 +8.9% 的六成),`k_known` +14.7(占 95%);\n   剩下是冻结规避(原式 +3.6、`k_known` +2.1)。**八条桶内 / 剔除变体全不如全市场排名** → 桶内无选股力,上两项就是全部。"),
+]
+for a,b in reps:
+    assert a in s, a[:40]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10454
+8
+```
+
+**10-05 15:22 · Bash** — Final compression pass
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("- **写新变体一律用 `cross_max(·,60)` 或 `cross_mean` 系**,别用 `cross_sum`(NaN 当 0 + sg = −1 → 买历史不全的票;\n  科创板 −28.5% 与次新段是指纹),也别用 `cross_ema`(与事件型机制对着干,越慢越差)。",
+ "- **写新变体一律用 `cross_max(·,60)` 或 `cross_mean` 系**,别用 `cross_sum`(NaN 当 0 + sg = −1 → 买历史不全的票,\n  科创板 −28.5% 与次新段是指纹),也别用 `cross_ema`(与事件机制对着干,越慢越差)。"),
+("- **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`\n  被 145 变体大表**确认**(2.85)—— 两轮唯一完全对上的一条。",
+ "- **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`\n  被大表**确认**(2.85)—— 两轮唯一完全对上的一条。"),
+("- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;\n  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 外层下\n  **逐位相同**,别再为「跨日渗漏」花假设位。",
+ "- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;\n  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 下\n  **逐位相同**,别再为「跨日渗漏」花假设位。"),
+("- 别追多空夏普(原式 +3.68 / +3.88),用户口径只看多头腿扣费净超额与纯多头夏普。",
+ "- 别追多空夏普(原式 +3.68 / +3.88),口径只看多头腿扣费净超额与纯多头夏普。"),
+("**best_on_known**:`scr_xhi_p`(+16.9% / 2.57)与 `h_sieve_known`(+16.3% / **2.65**)。**两者都输给 `k_known_xfrozen`(+18.5% / 3.15)**,\n诚实答案是「有,但冗余」。第三批里只有 `h3_xfroz_max60` 还可能翻盘。",
+ "**best_on_known**:`scr_xhi_p`(+16.9% / 2.57)与 `h_sieve_known`(+16.3% / **2.65**)。**两者都输给 `k_known_xfrozen`(+18.5% / 3.15)**,\n诚实答案是「有,但冗余」。第三批只有 `h3_xfroz_max60` 可能翻盘。"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10422
+```
+
+**10-05 15:23 · Bash** — Trim to final target
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("## 2. 中间结果(数字来自 `study.sh table F102_kurt_autocorr s2 --all`)\n\nLnet = 多头腿扣 15bp 净超额、Lshp = 纯多头夏普,都按 tr / va / ut 列。",
+ "## 2. 中间结果(`study.sh table F102_kurt_autocorr s2 --all`)\n\nLnet = 多头腿扣 15bp 净超额、Lshp = 纯多头夏普,都按 tr / va / ut 列。"),
+("## 4. 假设表(第三批,`studies/F102_kurt_autocorr/hypo3.yaml`,25 条)",
+ "## 4. 假设表(第三批,`studies/F102_kurt_autocorr/hypo3.yaml`,25 条)"),
+("两轮批量扫描都读完(s1 94 变体、s2 145 变体)+ 市场解剖两份;综合与**第二轮对账在 `synthesis.md` 末节**。\n第三批 25 条假设在 `studies/F102_kurt_autocorr/hypo3.yaml`(`study.sh hypo3` **25/25 通过**),等下一轮扫描。\n**留出段已被第一轮研究员读过一次(`07_S_final`,台账记着),s1 / s2 都没再读,以后也不能再读。**",
+ "两轮扫描都读完(s1 94 变体、s2 145 变体)+ 市场解剖两份;综合与**第二轮对账在 `synthesis.md` 末节**。\n第三批 25 条假设在 `studies/F102_kurt_autocorr/hypo3.yaml`(`study.sh hypo3` **25/25 通过**),等下一轮扫描。\n**留出段已被第一轮研究员读过一次(`07_S_final`,台账记着),s1 / s2 都没再读,以后也不能再读。**"),
+("| `v_base` | +8.5 / +9.8 / +8.9% | 1.84 / 2.79 / 2.05 | 5.4% | 1.00 | 0.26 | 原式,hl 5 |",
+ "| `v_base` | +8.5 / +9.8 / +8.9% | 1.84 / 2.79 / 2.05 | 5.4% | 1.00 | 0.26 | 原式 |"),
+("| `seg_new_p` | +11.2 / +10.0 / +11.4% | 2.57 / 2.97 / 2.67 | 3.3% | 0.53 | 0.20 | 原式 + `cross_valid_count` 剔最短 40% |",
+ "| `seg_new_p` | +11.2 / +10.0 / +11.4% | 2.57 / 2.97 / 2.67 | 3.3% | 0.53 | 0.20 | 原式 + 剔历史最短 40% |"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10384
+8
+```
+
+**10-05 15:23 · Bash** — Last trim
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("| `h_meanmean60` | +11.7 / **+12.1** / +11.9% | 2.36 / 3.06 / 2.52 | **2.4%** | 0.87 | 0.26 | 两段最均衡、换手最低 |",
+ "| `h_meanmean60` | +11.7 / **+12.1** / +11.9% | 2.36 / 3.06 / 2.52 | **2.4%** | 0.87 | 0.26 | 两段最均衡、换手最低 |".replace("两段最均衡、换手最低","两段最均衡、换手最低")),
+("| `ov_p05` | +13.6 / +19.6 / +15.3% | 2.30 / 3.44 / 2.62 | 4.7% | 0.53 | 0.92 | 叠加;权重 0.25/0.5/1.0 = 2.51/**2.62**/2.57 |",
+ "| `ov_p05` | +13.6 / +19.6 / +15.3% | 2.30 / 3.44 / 2.62 | 4.7% | 0.53 | 0.92 | 叠加;权重 .25/.5/1 = 2.51/**2.62**/2.57 |"),
+("| `h_fold_csmean` | +10.7 / +9.6 / +10.4% | 2.40 / 2.42 / 2.40 | **2.4%** | 0.75 | 0.19 | 折叠点挪到截面均值,换手减半 |",
+ "| `h_fold_csmean` | +10.7 / +9.6 / +10.4% | 2.40 / 2.42 / 2.40 | **2.4%** | 0.75 | 0.19 | 折叠点挪到截面均值,换手减半 |"),
+("3. **「更慢更好」是形状问题,不是半衰期问题**:`cross_ema` 15→30→60 = 2.20→1.94→1.40 单调降,`cross_max` 15→60 = 2.24→**2.85**。\n   判据:`q75@30` 2.36 ≫ `q25@30` 1.52 → 信息在**尾部**,是「近 60 日有没有出现过」的事件标记、不是水平状态;指数衰减 = 和机制对着干。\n   **取极值在哪一层也要紧**:`cross_max(pow_2(K),60)` 2.85 vs 先求和再取极大(`mem_max60`)2.25。",
+ "3. **「更慢更好」是形状问题,不是半衰期问题**:`cross_ema` 15→30→60 = 2.20→1.94→1.40 单调降,`cross_max` 15→60 = 2.24→**2.85**。\n   判据:`q75@30` 2.36 ≫ `q25@30` 1.52 → 信息在**尾部**,是「近 60 日有没有出现过」的事件标记、不是水平状态;指数衰减 = 和机制对着干。\n   **取极值在哪一层也要紧**:`cross_max(pow_2(K),60)` 2.85 vs 先求和再取极大 2.25。"),
+("- **不要再写桶内变体**:四种分桶全不如全市场排名,剔不活跃票双降。法则:「超配 × 段等权」点乘占净超额 >50% 就别写。",
+ "- **不要再写桶内变体**:四种分桶全不如全市场排名,剔不活跃票双降。法则:「超配 × 段等权」点乘占净超额 >50% 就别写。"),
+("- 训练段 = 20180102–20230807(train 2018–2021 + valid 20220101–20230807)。s1 / s2 两轮**都没读留出段**。",
+ "- 训练段 = 20180102–20230807(train 2018–2021 + valid 20220101–20230807)。s1 / s2 **都没读留出段**。"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10362
+```
+
+**10-05 15:23 · Bash** — Final trim and revalidate
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+a="| **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对**融合后分数**做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反第 3 节第 3 条) |"
+b="| **G 融合与平滑** | **2** | s2 的 `ov_*` 只测过「与已知族融合」,**从没测「自己人融合」**。`h3_fuse_own2` = `h_max60`(改聚合器形状)与 `h_fold_csmean`(改折叠中心)等权 rank 相加,两条是正交轴(ρo 0.80 / 0.75、ρk 0.23 / 0.19);`h3_fuse_smooth5` = 再对融合后分数做 5 日平滑(rank 层平滑平名次抖动、不平事件幅度,不违反 §3.3) |"
+assert a in s
+s=s.replace(a,b)
+s=s.replace("1. **算子按函数定义读**:`nankurt_last = m4/(var²+EPS)−3` → **超额**峰度、下界 −2(`sub_C_pow_1_5` cov 0.75 = 25% 的股票-日为负);",
+            "1. **算子按函数定义读**:`nankurt_last = m4/(var²+EPS)−3` → **超额**峰度、下界 −2(`sub_C_pow_1_5` cov 0.75 → 25% 的股票-日为负);")
+s=s.replace("- **`h3_lagmax60` 是本批最关键的一条**:它决定 F102 是「持续烙印」还是「当期掩码的贵写法」。",
+            "- **`h3_lagmax60` 最关键**:它决定 F102 是「持续烙印」还是「当期掩码的贵写法」。")
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md; ./scripts/study.sh hypo3 F102_kurt_autocorr 2>&1 | tail -2
+```
+
+```
+10330
+8
+OK    h3_age_bucket
+25/25 parse
+```
+
+**10-05 15:24 · Bash** — Drop duplicate bullet and show tail
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+# 这条与第 8 节最后一条重复
+d="- 没做:多空腿(空头腿毛超额 +28.0% / +23.3%,钱在那边,但用户只做纯多头)。\n"
+assert d in s
+s=s.replace(d,"")
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+cd /Users/wxy/Desktop/Partura && grep -c "^## " notes/F102_kurt_autocorr/state.md && tail -14 notes/F102_kurt_autocorr/state.md
+```
+
+```
+10234
+8
+
+## 8. 给接手者的提醒
+
+- **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`
+  被大表**确认**(2.85)—— 两轮唯一完全对上的一条。
+- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;
+  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 下
+  **逐位相同**,别再为「跨日渗漏」花假设位。
+- **写新变体一律用 `cross_max(·,60)` 或 `cross_mean` 系**,别用 `cross_sum`(NaN 当 0 + sg = −1 → 买历史不全的票,
+  科创板 −28.5% 与次新段是指纹),也别用 `cross_ema`(与事件机制对着干,越慢越差)。
+- **不要再写桶内变体**:四种分桶全不如全市场排名,剔不活跃票双降。法则:「超配 × 段等权」点乘占净超额 >50% 就别写。
+- 任何声称「我在规避某类股票」的因子,先和「把那类票直接剔掉」比(`k_known_xfrozen` 就这么来的);它的掩码
+  `cross_max(day_zero_ratio(Ret),15)` 自己做排序因子是废的。**排序无效 ≠ 当掩码无效。**
+- 别追多空夏普(原式 +3.68 / +3.88),口径只看多头腿扣费净超额与纯多头夏普。
+```
+
+**10-05 15:24 · agent 的话**
+
+10234 bytes, under the cap. Let me log the two hypo3 swaps and do a final verification.
+
+**10-05 15:24 · Bash** — Log the hypo3 swaps
+
+```bash
+cd /Users/wxy/Desktop/Partura && ./scripts/study.sh note F102_kurt_autocorr "[主研] hypo3 两处换装:加 h3_lagmax60(记忆还是当期)" <<'EOF' 2>&1 | tail -3
+查算子注册表时发现 **cross_delay 早就有**(定义:`res[d:] = x[:-d]`,今天看到 d 天前的值,窗口 3/5/10/15/30/60/241)—— 上一轮以为写不出来的那一问其实写得出。
+于是加 `h3_lagmax60 = cross_max(cross_delay(pow_2(K), 5), 60)`:**把最近 5 天挖掉**的事件记忆。这是本批最关键的一条,因为 `h_max60` 的 60 日极大**含今天**,
+所以 2.85 可能根本不是「记忆」、只是「现在冻不冻」穿了一件 60 日的外衣 —— 这也正好解释了为什么一个 15 日的**当期**掩码(k_known_xfrozen,3.15)能赢过它 0.3 夏普。
+判据:挖掉近 5 天后夏普仍 ≥ 2.6 → 冻结是**持续的烙印**(事件过后仍被定价),F102 有独立经济内容且对数据时点不敏感;≤ 2 → h_max60 = 当期掩码的一个贵写法,这条因子该退休、直接用掩码。
+两处换装(都是拿低信息量的位置换高信息量的):删 `h3_flip_ret`(与 h3_flip_amt 重复的状态证伪)换 G 组融合两条;删 `h3_rz15`(cs_robust_z 全局稳健 z,与已测的 h_fold_csmean 2.40 / h_winsor_kurt 2.22 高度重叠)换 `h3_lagmax60`。
+hypo3 仍 25 条、**25/25 解析通过**;state.md 第 4 节加了 H 组、第 6 节加了判据,已压到 10,234 字节(8 节)。本轮仍**没起服务器计算、没读测试段**。
+EOF
+```
+
+```
+已记入 notes/F102_kurt_autocorr/journal.md(4 条)
+```
+
+**10-05 15:24 · Bash** — Final verification of all deliverables
+
+```bash
+cd /Users/wxy/Desktop/Partura && echo "--- state.md: $(wc -c < notes/F102_kurt_autocorr/state.md) bytes, $(grep -c '^## ' notes/F102_kurt_autocorr/state.md) 节" && echo "--- synthesis s2 节: $(awk '/^## 第二轮/,0' notes/F102_kurt_autocorr/synthesis.md | wc -l) 行" && echo "--- hypo3: $(grep -cE '^h3_' studies/F102_kurt_autocorr/hypo3.yaml) 条" && ./scripts/study.sh hypo3 F102_kurt_autocorr 2>&1 | tail -1 && echo "--- journal: $(grep -c '^### ' notes/F102_kurt_autocorr/journal.md) 条" && echo "--- 没碰过的目录(确认干净):" && git -C /Users/wxy/Desktop/Partura status --porcelain 2>/dev/null | head -20 || ls -la notes/F102_kurt_autocorr/state.md studies/F102_kurt_autocorr/hypo3.yaml
+```
+
+```
+--- state.md:    10234 bytes, 8 节
+--- synthesis s2 节:       56 行
+--- hypo3: 25 条
+25/25 parse
+--- journal: 4 条
+--- 没碰过的目录(确认干净):
+ M handoff/F101_day_shine_retstd/STATE.md
+ M handoff/F101_day_shine_retstd/agents/verdict_aba6480b25c40a77e.md
+ M handoff/F102_kurt_autocorr/STATE.md
+ M handoff/F102_kurt_autocorr/agents/verdict_af1e2cec7e004ff15.md
+ M handoff/F104_kurt_masktop_amt/STATE.md
+ M handoff/F104_kurt_masktop_amt/agents/verdict_a53a8354e270b05d9.md
+ M handoff/F105_std_fangzheng_covamt/STATE.md
+ M handoff/F105_std_fangzheng_covamt/agents/verdict_abf3a5599890322c7.md
+ M handoff/F106_erm_mag_gap_1m/STATE.md
+ M handoff/F106_erm_mag_gap_1m/agents/verdict_ae0c50256218363f2.md
+ M handoff/F107_abs_demean_skew_low/STATE.md
+ M handoff/F107_abs_demean_skew_low/agents/verdict_ad87e3df3f1628871.md
+ M handoff/F108_max_ntkurt_close/STATE.md
+ M handoff/F108_max_ntkurt_close/agents/verdict_ae70bca6af3f47ef1.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/STATE.md
+ M handoff/F109_erm_mag_gap_5m_tsm20/agents/verdict_a83a83140db02b4fe.md
+ M handoff/F110_ret_fair_log/STATE.md
+ M handoff/F111_spearman_qclose/STATE.md
+ M handoff/F112_scale_spow_masktop/STATE.md
+ M handoff/STATUS.md
+```
+
+**10-05 15:26 · agent 的话**
+
+Let me record one follow-up I spotted in the operator registry, then finalize.
+
+**10-05 15:26 · Bash** — Record cross_argmax follow-up, keep under cap
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+a="- **`h3_lagmax60` 最关键**:它决定 F102 是「持续烙印」还是「当期掩码的贵写法」。"
+b="- **`h3_lagmax60` 最关键**:它决定 F102 是「持续烙印」还是「当期掩码的贵写法」。配套的下一步是 `cross_argmax(pow_2(K),60)`\n  (注册表里已有)—— 直接读「那一天离现在多少天」,比挖窗口更细;本批位置用满了,留给第四批。"
+assert a in s
+s=s.replace(a,b)
+# 腾出字节
+s=s.replace("- 任何声称「我在规避某类股票」的因子,先和「把那类票直接剔掉」比(`k_known_xfrozen` 就这么来的);它的掩码\n  `cross_max(day_zero_ratio(Ret),15)` 自己做排序因子是废的。**排序无效 ≠ 当掩码无效。**",
+            "- 声称「我在规避某类股票」的因子,先和「把那类票直接剔掉」比(`k_known_xfrozen` 就这么来的);它的掩码\n  `cross_max(day_zero_ratio(Ret),15)` 自己做排序因子是废的。**排序无效 ≠ 当掩码无效。**")
+s=s.replace("- **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的 `f_max60`\n  被大表**确认**(2.85)—— 两轮唯一完全对上的一条。",
+            "- **先读 `synthesis.md` 末节「第二轮(s2)对账与结论」,再看本文件第 2 节的表。** `10_distilled.md` 推荐的\n  `f_max60` 被大表**确认**(2.85)—— 两轮唯一完全对上的一条。")
+s=s.replace("| C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停 / 跌停)、对 `at_max` 做残差、`cross_flat_ratio`、`cross_valid_count(day_es_ratio_hi,60)` |",
+            "| C 把冻结拆开 | 5 | `day_at_max_ratio` vs `day_at_min_ratio`(涨停/跌停)、对 `at_max` 做残差、`cross_flat_ratio`、`cross_valid_count(day_es_ratio_hi,60)` |")
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10407
+8
+```
+
+**10-05 15:26 · Bash** — Trim under cap
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("- **若 `h3_res_atmax` 塌而 `h_res_zero60` 不塌**:独家内容 = 涨停规避,下一轮围绕 `day_at_max_ratio` 重建。",
+ "- **若 `h3_res_atmax` 塌而 `h_res_zero60` 不塌**:独家内容 = 涨停规避,围绕 `day_at_max_ratio` 重建。"),
+("- **若 B 组 LTO ≤ 2.5% 且夏普 ≥ 2.6**:那是唯一没被证伪的「桶内」方向(`cs_bucket_demean` 不丢量纲)。",
+ "- **若 B 组 LTO ≤ 2.5% 且夏普 ≥ 2.6**:唯一没被证伪的「桶内」方向(`cs_bucket_demean` 不丢量纲)。"),
+("- **若 `h3_xfroz_max60` ≤ 3.15**:在已知族组合里确定冗余,交付就是 `h_max60` 这条独立低换手小因子 + 实验室结论。",
+ "- **若 `h3_xfroz_max60` ≤ 3.15**:在已知族组合里确定冗余,交付 = `h_max60` 这条独立低换手小因子 + 实验室结论。"),
+("4. **凸性下修**:修好聚合器后 `abs_` 2.26 vs 平方 2.32(只值 0.06 夏普),四次方反降到 2.17。s1 里 abs 低 1.9 点是 `cross_sum` 缺陷与量纲的**交互**,不是凸性。",
+ "4. **凸性下修**:修好聚合器后 `abs_` 2.26 vs 平方 2.32(只值 0.06 夏普),四次方反降到 2.17。s1 里 abs 低 1.9 点是 `cross_sum` 缺陷与量纲的**交互**。"),
+("2. **叙事降级为「算子层面成立、语义层面不可替换」**:双向残差(2.41 不塌 / −0.55 塌光)证明树**严格包含**冻结掩码;\n   八条语义替代(`day_zero_ratio`、`day_flat_run_max`、`day_centroid/gini(Amt)`、`day_signed_ratio`、`in_madz`×2、合成封板计)**全废**。",
+ "2. **叙事降级为「算子层面成立、语义层面不可替换」**:双向残差(2.41 不塌 / −0.55 塌光)证明树**严格包含**冻结掩码;\n   八条语义替代(`day_zero_ratio`、`day_flat_run_max`、`day_centroid/gini(Amt)`、`day_signed_ratio`、`in_madz`×2 等)**全废**。"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10361
+```
+
+**10-05 15:26 · Bash** — Final trim under cap
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("| **H 记忆还是当期** | **1** | `h3_lagmax60` = `cross_max(cross_delay(K,5),60)`,挖掉最近 5 天。`h_max60` 的极大**含今天**,可能只是「现在冻不冻」穿了件 60 日外衣(这也解释了 15 日当期掩码 `k_known_xfrozen` 为何能赢它)。≥ 2.6 → 持续烙印、有独立内容;≤ 2 → 当期掩码的贵写法、该退休 |",
+ "| **H 记忆还是当期** | **1** | `h3_lagmax60` = `cross_max(cross_delay(K,5),60)`,挖掉最近 5 天。`h_max60` 的极大**含今天**,可能只是「现在冻不冻」穿了件 60 日外衣(这也解释了 15 日当期掩码为何能赢它)。≥ 2.6 → 持续烙印;≤ 2 → 当期掩码的贵写法、该退休 |"),
+("| B 折叠中心放进桶里 | 3 | `cs_bucket_demean` / `cs_bucket_zscore`(成交额十分位)—— `h_fold_csmean` 2.40 / LTO 2.4% 指向这里 |",
+ "| B 折叠中心放进桶里 | 3 | `cs_bucket_demean` / `cs_bucket_zscore`(成交额十分位)—— `h_fold_csmean` 2.40 / LTO 2.4% 指这里 |"),
+("3. `cross_mean(cross_mean(K, 15), 60)` —— 2.52 / LTO 2.4% / valid +12.1%(最均衡)。",
+ "3. `cross_mean(cross_mean(K, 15), 60)` —— 2.52 / LTO 2.4% / valid +12.1%(最均衡)。"),
+("- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;\n  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 下\n  **逐位相同**,别再为「跨日渗漏」花假设位。",
+ "- 四个易踩的误解:(a) `day_kurt` 是**超额**峰度、可为负;(b) `pow_2` 是**折叠**不是放大,且**凸性几乎不值钱**;\n  (c) 机制叙事解释得通但**不能替换估计量**;(d) `nt_ts_autocorr_s1(x,3)` 与 `in_autocorr_s1(x,3)` 在 `day_*` 下**逐位相同**。"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+grep -c "^## " /Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md
+```
+
+```
+10278
+8
+```
+
+**10-05 15:27 · Bash** — Last byte trim
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+reps=[
+("| `scr_xhi_p` | +14.2 / +23.6 / **+16.9%** | 2.14 / 3.71 / 2.57 | 3.0% | 0.55 | 0.78 | 已知族上净超额最好 |",
+ "| `scr_xhi_p` | +14.2 / +23.6 / **+16.9%** | 2.14 / 3.71 / 2.57 | 3.0% | 0.55 | 0.78 | 已知族上净超额最好 |".replace(" | 已知族上净超额最好 |"," | 已知族上净超额最好 |")),
+("- **写新变体一律用 `cross_max(·,60)` 或 `cross_mean` 系**,别用 `cross_sum`(NaN 当 0 + sg = −1 → 买历史不全的票,\n  科创板 −28.5% 与次新段是指纹),也别用 `cross_ema`(与事件机制对着干,越慢越差)。",
+ "- **写新变体一律用 `cross_max(·,60)` 或 `cross_mean` 系**,别用 `cross_sum`(NaN 当 0 + sg = −1 → 买历史不全的票,\n  科创板 −28.5% 与次新段是指纹),也别用 `cross_ema`(越慢越差)。"),
+("6. **样本内外并排看**:自有改良 **train ≈ valid**(`h_max60` 2.82 / 2.79、+11.8% / +9.2%),而 `k_known` 是\n   **1.78 → 3.46 / +12.6% → +22.3%** —— 已知族「样本外更好」是 2022–2023 行情给的,不是稳定性。融合(`ov_p05`)把 `k_known`\n   的 **train** 夏普 1.78 抬到 2.30、valid 的 3.46 没动(3.44)、净超额掉 2.7 点:**融合买的是样本内稳定性,不是样本外收益。**",
+ "6. **样本内外并排看**:自有改良 **train ≈ valid**(`h_max60` 2.82 / 2.79、+11.8% / +9.2%),而 `k_known` 是\n   **1.78 → 3.46 / +12.6% → +22.3%** —— 已知族「样本外更好」是 2022–2023 行情给的,不是稳定性。融合(`ov_p05`)把 `k_known`\n   的 **train** 夏普 1.78 抬到 2.30、valid 3.46 没动(3.44)、净超额掉 2.7 点:**融合买的是样本内稳定性,不是样本外收益。**"),
+("G 的判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。",
+ "G 判据:`h3_fuse_own2` ≥ 2.95 → 正交、交付两腿;≈ 2.6(夹在 2.40 与 2.85 之间)→ 只是加权平均、交付单腿。"),
+]
+for a,b in reps:
+    assert a in s, a[:50]
+    s=s.replace(a,b)
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+```
+
+```
+10246
+```
+
+**10-05 15:27 · Bash** — Final check: size, sections, parse
+
+```bash
+cd /Users/wxy/Desktop/Partura && python3 - <<'PY'
+p='notes/F102_kurt_autocorr/state.md'
+s=open(p).read()
+s=s.replace("| `h_sieve_known` | +14.0 / +21.9 / +16.3% | 2.26 / 3.63 / 2.65 | 3.5% | 0.67 | 0.67 | 已知族上夏普最好(筛子) |",
+            "| `h_sieve_known` | +14.0 / +21.9 / +16.3% | 2.26 / 3.63 / 2.65 | 3.5% | 0.67 | 0.67 | 已知族上夏普最好,筛子 |")
+s=s.replace("- 别追多空夏普(原式 +3.68 / +3.88),口径只看多头腿扣费净超额与纯多头夏普。",
+            "- 别追多空夏普(原式 +3.68 / +3.88),口径只看多头腿扣费净超额与纯多头夏普。".replace("别追多空夏普(原式 +3.68 / +3.88),口径","别追多空夏普(+3.68 / +3.88),口径"))
+open(p,'w').write(s)
+print(len(s.encode()))
+PY
+cd /Users/wxy/Desktop/Partura && grep -c "^## " notes/F102_kurt_autocorr/state.md && ./scripts/study.sh hypo3 F102_kurt_autocorr 2>&1 | tail -1
+```
+
+```
+10238
+8
+25/25 parse
+```
+
+**10-05 15:28 · agent 的话**
+
+All deliverables are in place. Here is the readable printout.
+
+## F102_kurt_autocorr 回测结果(能看懂版)
+
+`cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)` · 低值 = 买
+样本内 = train 2018–2021;样本外 = valid 2022-01 ~ 2023-08。净超额 = 多头腿扣 15bp 的年化超额。
+
+### 升级阶梯(每一行只比上面多改一件事)
+
+| 版本 | 改了什么 | 样本内 净超额 / 夏普 | 样本外 净超额 / 夏普 | 日换手 |
+|---|---|---|---|---|
+| 原式 | — | +8.5% / 1.84 | +9.8% / 2.79 | 5.4% |
+| 修缺失日 | `cross_sum`→`cross_mean`(不把停牌日算成 0) | +10.1% / 2.15 | +10.3% / 2.99 | 5.3% |
+| 挪折叠中心 | 先减当天截面均值再平方 | +10.7% / 2.40 | +9.6% / 2.42 | **2.4%** |
+| 双层平滑 | 15 日均再套 60 日均 | +11.7% / 2.36 | **+12.1% / 3.06** | **2.4%** |
+| 剔次新 | 历史最短 40% 永不买 | +11.2% / 2.57 | +10.0% / 2.97 | 3.3% |
+| **60 日取极大 ★最佳** | 当「事件标记」而不是「水平」 | **+11.8% / 2.82** | +9.2% / **2.79** | 3.1% |
+
+### 对照基准
+
+| 已知成交额族 `k_known` | +12.6% / 1.78 | +22.3% / 3.46 | 3.2% |
+|---|---|---|---|
+| **已知族 + 直接剔掉冻结盘口最重 20%** | **+16.4% / 2.81** | **+23.2% / 3.98** | 3.6% |
+
+### 已经跑过的融合(都是「F102 + 已知族」)
+
+| 叠加:已知族 + 0.5×F102 | +13.6% / 2.30 | +19.6% / 3.44 | 4.7% |
+|---|---|---|---|
+| 当筛子:F102 剔掉已知族多头书里最「冻」的票 | +14.0% / 2.26 | +21.9% / 3.63 | 3.5% |
+| 另一种筛法 | +14.2% / 2.14 | +23.6% / 3.71 | 3.0% |
+
+### 四句话
+
+1. **平滑是免费的钱**:换手 5.4% → 2.4%,净超额涨约 3 个点 —— 毛收益几乎没变,全是省下来的手续费。
+2. **只有这条因子的样本内外是一致的**:最佳版 2.82 vs 2.79。已知族看着「样本外更好」(1.78→3.46)是 2022–2023 那段行情特别合它的口味,不是稳定性 —— 所以不能拿 valid 夏普横着比不同因子。
+3. **融合只抬样本内**:叠加把已知族的样本内夏普 1.78 抬到 2.30,样本外 3.46 → 3.44 没动,净超额还掉了 2.7 个点。
+4. **最笨的办法赢了**:直接把「近 15 日有冻结盘口」最重的 20% 从已知族里剔掉,两段都好过 F102 的任何用法 → F102 在已知族之上是冗余的,但它单独拿出来是一条夏普 2.85、换手 3.1% 的小因子。
+
+关于「融合平滑一下大家」:跨因子的融合要总领来做。F102 这边我把两条**从没测过**的「自己人融合」写进了下一轮(`h3_fuse_own2`、`h3_fuse_smooth5`),要等下一轮扫描才有数字 —— 本轮按要求没起服务器计算、没读测试段。
+
+文件:`/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`、`synthesis.md`、`studies/F102_kurt_autocorr/hypo3.yaml`
+
+**10-05 15:31 · StructuredOutput**
+
+```json
+{
+ "factor_id": "F102_kurt_autocorr",
+ "one_line": "把聚合器 cross_sum(…,15) 换成 cross_max(…,60) 之后,它从一条平庸因子变成夏普 2.85 / 换手 3.1% / ρk 0.23 的独立低换手小因子(提纯成立);但它建在已知族之上的全部增量都被「已知族 + 冻结盘口剔除」这个通用筛子吃掉(升华失败)。",
+ "confirmed": [
+  "机制在算子层面成立:ts_corr 分母 sqrt(var_x·var_y)+EPS,窗口内分钟收益全相等时相关恰好=0,d=3 最容易走到这个退化出口 → day_kurt 爆表。整棵树是封板/停牌/死盘口探测器,与「自相关」无关(study.sh src 逐层核对)",
+  "树严格包含冻结掩码(单向包含):h_res_zero60(树剥掉 cross_max(day_zero_ratio,60))+9.5/+11.5/+10.1%、夏普 2.41 不塌,反而高于提纯式 sub_D_cross_mean 的 2.32;反方向 h_res_tree_on_zero −0.2/−17.7/−5.2%、−0.55 塌光",
+  "cross_sum 的「NaN 当 0」+ sg=−1 是系统性买历史不全的票:显式剔除有效 —— seg_new_p 2.67、h_susp_excl 2.46、h_vc_bucket 2.43 全高于提纯式 2.32;科创板段内原式 −28.5% → h_max60 −4.1% → h_sieve_known +7.6%,次新段 +7.1% → h_max60 +23.8%",
+  "慢化有价值,但形状必须是等权/极值记忆:cross_max 15→60 = 2.24→2.85(h_max60 +11.8/+9.2/+11.3%、LTO 3.1%),cross_mean(·,15) 外套 60 日均 = 2.32→2.52(h_meanmean60 +11.7/+12.1/+11.9%、LTO 2.4%),h_decay60 2.48",
+  "信息在尾部、是事件型持久标记而不是水平状态:cross_tail_mean_q75@30 = 2.36 ≫ cross_tail_mean_q25@30 = 1.52",
+  "折叠(非负化)是真承重:h_sigmoid(去掉折叠)−3.0% / −0.62;s1 的 abl_C(删 pow_2)−4.0% / −0.71 且 ρo = 0.00",
+  "筛子 / 叠加对 k_known 本身有正增量:h_sieve_known +16.3% / 2.65、ov_p05 +15.3% / 2.62、scr_xhi_p +16.9% / 2.57,对比 k_known +15.4% / 2.22(夏普 +0.35~0.43,刚过噪声 0.3)",
+  "收益归因稳固:「超配 × 段等权超额」点乘 —— 原式 +5.5 个点来自跨成交额桶倾斜(占 +8.9% 的六成)、冻结规避 +3.6 个点;k_known 的 +14.7 个点占其 +15.4% 的 95%",
+  "年度无衰减:2018→2023 = +8.1 / +11.1 / +9.3 / +5.6 / +10.3 / +9.3%;h_max60 放量 +16.1% vs 缩量 +7.4%"
+ ],
+ "refuted": [
+  "「树只是已知族 + 一个封板掩码、这棵树可以退休」—— 双向残差否定(见 confirmed 第 2 条);而 day_zero_ratio 自己做排序因子是废的:h_zero_mean15 −1.4% / −0.16、h_zero_max60 −3.2% / −0.33(dist 0.06 ✗)、h_zero_ema30 −0.4%、h_flatrun_* train 正 valid −15~−17%",
+  "「更慢更好 / 半衰期是最大杠杆」—— cross_ema 15→30→60 = 2.20→1.94→1.40 单调降",
+  "「nt_ts_* 会吃进上一日尾盘(跨日渗漏)」—— h_inac3(严格日内)与 sub_D_cross_mean 数字逐位相同(+10.1/+10.3/+10.2、2.15/2.99/2.32、LTO 5.2%、ρo 0.99),渗漏 = 0",
+  "「稳健写法能复现同一机制、原式的 3 分钟刀尖只是估计噪声」—— h_madz3 / h_madz10 cov 0.81 / 0.78 ✗、utrain −1.6%;日内版孔径 3→5 也塌(2.32→1.32)。预测力确实依赖 var=0 → 相关恰好 0 这个退化出口",
+  "「凸性值 1.5~2 个点净超额」—— 修好聚合器后 h_abs_mean15 2.26 vs 平方 2.32,凸性只值 0.06 夏普;h_kurt4(四次方)反而降到 2.17。s1 那 2 个点是 cross_sum 缺陷与量纲的交互",
+  "桶内选股全组否定:成交额桶 h_bk_amt 1.56、价格桶 h_bk_price 2.09、个股放量桶 h_bk_expand 2.21、已知族桶 0.97,只有历史长度桶 2.43 持平;h_liq_excl_low40(剔最不活跃 40%)净超额 +5.5% / 夏普 0.72,双降且符号翻转",
+  "配角的四条改良全部否定:h_ov_mean_p05 2.62 = ov_p05 2.62(内层换不换无差别,cs_rank 吃掉了)、h_ov_ema30_p05 2.36(更慢更差)、h_ov_bucket_p05 2.46(只叠正交那半更差)、h_ov_state 2.59(按放量状态调权重无改善);最佳权重仍是 0.5",
+  "八条不含峰度的语义替代全灭:h_centroid_amt −2.9% / −0.45、h_gini_amt +0.1% / 0.01、h_signed_max −11.9% / −2.48、h_zero_plus_centroid +2.6% / 0.32、h_madz_gini +3.1% / 0.89 —— 含「躲涨停」机制叙事。语义原子不能替换这个估计量",
+  "s1 的定性结论「它是已知族的减波动配角、价值约 +0.3 夏普」被 k_known_xfrozen 推翻:那 +0.3 用一道通用冻结筛子(+18.5% / 3.15)就能拿到,而且更多 —— 所有已知族用法都低它至少 0.5 夏普"
+ ],
+ "best_own": [
+  {
+   "id": "h_max60",
+   "expr": "cross_max(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 60)",
+   "note": "自有最佳。净超额 train/valid/utrain = +11.8 / +9.2 / +11.3%,纯多头夏普 2.82 / 2.79 / 2.85,LTO 3.1%,ρo 0.80、ρk 0.23、cov 1.00、dist 0.98。相对原式(2.05 / LTO 5.4%)夏普 +0.80(远超噪声 0.3),换手砍掉四成。**它是本因子唯一 train ≈ valid 的版本**(2.82 vs 2.79),夏普已超 k_known 的 2.22 达 0.63;净超额 +11.3% 仍比 k_known 低 4 点,因为它不像已知族那样把 95% 的收益押在流动性倾斜上。可以当一条独立的低换手小因子持有"
+  },
+  {
+   "id": "seg_new_p",
+   "expr": "cs_first_low40(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), cross_valid_count(day_last(Close), 241))",
+   "note": "+11.2 / +10.0 / +11.4%,夏普 2.57 / 2.97 / 2.67,LTO 3.3%,ρo 0.53(全表最独立的自有版本之一)、ρk 0.20。原式加一道「永不买历史最短 40%」的筛子,把次新段的坑直接清零(低配 −7.1 个点)—— 最便宜的那一处修复"
+  },
+  {
+   "id": "h_meanmean60",
+   "expr": "cross_mean(cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15), 60)",
+   "note": "+11.7 / +12.1 / +11.9%,夏普 2.36 / 3.06 / 2.52,LTO 2.4%(全表最低)。两段净超额最均衡、也是唯一 valid 净超额高于 train 的自有版本;若组合层面在意换手成本,这一支比 h_max60 更合用"
+  }
+ ],
+ "best_on_known": [
+  {
+   "id": "h_sieve_known",
+   "expr": "cs_first_high40(cs_rank(cross_mean(day_std(Amt), 30)), cross_mean(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15))",
+   "note": "建在已知族上夏普最好:+14.0 / +21.9 / +16.3%,夏普 2.26 / 3.63 / 2.65,LTO 3.5%,ρk 0.67。用树标出的最「冻」40% 从已知族多头书里剔掉。vs k_known(+15.4% / 2.22)夏普 +0.43;**但 vs k_known_xfrozen(+18.5% / 3.15)净超额低 2.2 点、夏普低 0.50,弱得超出噪声**"
+  },
+  {
+   "id": "scr_xhi_p",
+   "expr": "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15))",
+   "note": "建在已知族上净超额最好:+14.2 / +23.6 / +16.9%,夏普 2.14 / 3.71 / 2.57,LTO 3.0%。同样低于 k_known_xfrozen 的 +18.5% / 3.15"
+  },
+  {
+   "id": "ov_p05",
+   "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)), 0.5))",
+   "note": "权重 0.5 叠加:+13.6 / +19.6 / +15.3%,夏普 2.30 / 3.44 / 2.62,LTO 4.7%。权重 0.25 / 0.5 / 1.0 = 2.51 / 2.62 / 2.57 同向,反号叠加明确变坏(1.59 / 1.18)→ 符号是对的。**但分段看:它把 k_known 的 train 夏普 1.78 抬到 2.30,valid 的 3.46 几乎没动(3.44)、净超额还掉 2.7 点 —— 融合买到的是样本内稳定性,不是样本外收益**"
+  }
+ ],
+ "verdict": "**提纯成功、升华失败。**\n\n(i) 机制叙事(封板 / 冻结探测器)在**算子层面**成立 —— `ts_corr` 分母的 EPS 让「分钟收益全相等」的窗口吐出恰好 0,`day_kurt`(超额峰度)于是爆表,`pow_2` 折叠掉符号。但八条语义替代全废、双向残差显示树**严格包含**冻结掩码(剥掉掩码后 2.41 不塌,反向 −0.55 塌光),所以它是**一个不可替换的特定估计量**,不是「封板」这个语义。\n\n(ii) 作为**独立低换手小因子可用**:`h_max60` 夏普 2.85、LTO 3.1%、ρk 仅 0.23,夏普超已知族 0.63,而且 train 2.82 / valid 2.79 —— 本批里唯一样本内外一致的一支。代价是净超额 +11.3% 比已知族低 4 点。\n\n(iii) 作为已知族的配角 / 筛子**冗余**:所有用法 2.57~2.65,全部低于通用筛子基准 `k_known_xfrozen`(+18.5% / 3.15)至少 0.5 夏普 —— 它想做的「封板规避」,用最朴素的当期冻结掩码当剔除器就做得更好,而那个掩码自己做排序因子是废的(−0.33、dist 0.06 ✗)。\n\n(iv) 它**没有桶内选股力**:四种分桶全部不如全市场排名,剔掉不活跃票净超额与夏普双降。收益 = 流动性倾斜(+5.5 点)+ 冻结规避(+3.6 点),两件事都有更便宜的写法。\n\n**本轮新增的保留意见(决定最终去留)**:`h_max60` 的 60 日极大**包含今天**,所以 2.85 可能根本不是「记忆」、只是「现在冻不冻」穿了一件 60 日的外衣 —— 这也正好解释了为什么一个 **15 日的当期**掩码能赢过它 0.3 夏普。本轮查注册表发现 `cross_delay` 早已存在(`res[d:] = x[:-d]`),于是写下 `h3_lagmax60 = cross_max(cross_delay(pow_2(K), 5), 60)`:挖掉最近 5 天。**≥ 2.6 → 冻结是持续的烙印、F102 有独立经济内容且对数据时点不敏感;≤ 2 → h_max60 = 当期掩码的一个贵写法,这条因子该退休、直接用掩码。** 这是第三批里最关键的一条,交付决定应当等它。\n\n**给总领的可读口径(train = 样本内 / valid = 样本外)**:原式 +8.5% / 1.84 → +9.8% / 2.79(LTO 5.4%);修缺失日 +10.1% / 2.15 → +10.3% / 2.99;挪折叠中心 +10.7% / 2.40 → +9.6% / 2.42(LTO 2.4%);双层平滑 +11.7% / 2.36 → +12.1% / 3.06(LTO 2.4%);剔次新 +11.2% / 2.57 → +10.0% / 2.97;**60 日取极大 +11.8% / 2.82 → +9.2% / 2.79(LTO 3.1%)**。基准 k_known +12.6% / 1.78 → +22.3% / 3.46;k_known_xfrozen +16.4% / 2.81 → +23.2% / 3.98。平滑一档换手从 5.4% 砍到 2.4% 而毛收益不变,净超额涨约 3 个点全是省下来的费。已知族「样本外更好」是 2022–2023 行情给的,不是稳定性 —— 不能拿 valid 夏普横着比不同因子。",
+ "lab_findings": [
+  {
+   "id": "lab_shape_before_halflife",
+   "claim": "决定「要不要慢化」之前先决定「记忆的形状」:用 cross_tail_mean_q75 与 q25 的对比当判据 —— q75 ≫ q25 说明信息在尾部、是事件型持久标记,这时该用 cross_max / 等权记忆;只有 q75 ≈ q25(信息在水平)才该用 cross_ema / decay_linear。指数衰减给近日高权重,对事件标记是和机制对着干。",
+   "evidence": "F102:q75@30 = 2.36 ≫ q25@30 = 1.52;随后 cross_ema 15→30→60 夏普 2.20→1.94→1.40 单调降,而 cross_max 15→60 = 2.24→2.85、cross_mean(·,15) 外套 60 日均 = 2.32→2.52、cross_decay_linear@60 = 2.48。s1 曾因「总平滑量守恒」误判为「更慢更好」,s2 用这个判据纠正。",
+   "operators": [
+    "cross_tail_mean_q75",
+    "cross_tail_mean_q25",
+    "cross_max",
+    "cross_ema",
+    "cross_mean",
+    "cross_decay_linear"
+   ],
+   "recheck": "判据只在因子值分布右偏、且右尾由真实事件(封板/停牌/财报跳空)产生时成立。若 q75 的优势来自少数数据错误而非事件,cross_max 会把错误放大 —— 先看 q75 版本的 LTO 是否异常低、以及最大值是否集中在少数股票-日。"
+  },
+  {
+   "id": "lab_aggregator_layer_order",
+   "claim": "cross_* 的嵌套顺序不可交换,必须两个顺序都跑:先取极值再平滑 ≠ 先平滑再取极值。对尖峰型日度值,先平滑会把单日尖峰摊薄,等于换了一个量。",
+   "evidence": "F102:cross_max(pow_2(K), 60) = 夏普 2.85,而先 15 日求和再取 60 日极大(mem_max60)= 2.25,差 0.60 远超噪声 0.3;两者窗口与总记忆长度相同。",
+   "operators": [
+    "cross_max",
+    "cross_sum",
+    "cross_mean"
+   ],
+   "recheck": "差异的大小取决于内层值的峰度。若内层已经是平滑量(如 60 日均),两种顺序会趋同,这条就不值一个假设位。"
+  },
+  {
+   "id": "lab_cross_sum_nan_zero_trap",
+   "claim": "cross_sum 的内核是 nansum_last(NaN 当 0),配 sg = −1(低值 = 买)就是一台「系统性买入历史不全的票」的机器。诊断指纹:次新段与新板块(科创板)段内收益异常为负,而该段的段等权超额本身并不差。最便宜的修复是换 cross_mean(nanmean_last,跳过 NaN),属纯提纯(同结构同速度)。",
+   "evidence": "F102:科创板段内原式 −28.5%(多头书却超配 +8.3 个点、压 12.3% 仓位)→ cross_mean +3.0%;上市不足 250 日段原式 +7.1% → cross_mean +23.5% / decay_linear +25.5%。sub_D_cross_mean ρo 0.99、夏普 2.32 vs 原式 2.05。显式剔除(cross_valid_count / cross_age)再加一档:seg_new_p 2.67。",
+   "operators": [
+    "cross_sum",
+    "cross_mean",
+    "cross_valid_count",
+    "cross_age"
+   ],
+   "recheck": "只在因子符号为「低值 = 买」时是买入偏差;sg = +1 时同一缺陷变成系统性回避次新,危害小得多但也会压低覆盖。另需确认该段在样本里占比够大(F102 中科创板 4.0% + 次新 7.1%)才值得专门修。"
+  },
+  {
+   "id": "lab_screen_baseline_mandatory",
+   "claim": "任何声称「我在规避某类股票」的因子,必须先和「把那类股票直接从已知族多头书里剔掉」这个通用筛子基准比,而不是只和已知族本体比。否则会把一道几行就能写出的掩码的功劳记到因子头上。注意反面:掩码自己做排序因子可以是废的 —— 排序无效 ≠ 当掩码无效,两者要分开量。",
+   "evidence": "F102:vs k_known(+15.4% / 2.22)它的筛子/叠加用法 2.57~2.65,看起来 +0.35~0.43 夏普的增量;但 k_known_xfrozen(已知族剔掉近 15 日冻结盘口最重 20%)= +18.5% / 3.15,把全部增量吃掉(净超额低 1.6~3.2 点、夏普低 0.50~0.58)。而同一个掩码 cross_max(day_zero_ratio(Ret), 15) 自己做排序因子 = −3.2% / −0.33、dist 0.06 ✗。",
+   "operators": [
+    "cs_last_high20",
+    "cs_first_high40",
+    "day_zero_ratio",
+    "cross_max"
+   ],
+   "recheck": "筛子基准必须用同一个口径、同一半衰期重算;若被剔掉的那一段占比极小(<2%),筛子基准本身噪声大,0.5 夏普的差距可能不实。"
+  },
+  {
+   "id": "lab_bidirectional_residual",
+   "claim": "判断「因子 A 是不是就等于简单量 B」必须跑双向残差(A 剥掉 B、B 剥掉 A),单向会得出相反结论。配套法则:机制叙事解释得通**不等于**可以用语义原子替换那个估计量 —— 替换实验要单独做,而且通常全败。",
+   "evidence": "F102:h_res_zero60(树剥掉冻结掩码)+10.1% / 2.41 不塌,反而高于提纯式 2.32;反向 h_res_tree_on_zero −5.2% / −0.55 塌光 → 树严格包含掩码。同时八条语义替代(day_zero_ratio、day_flat_run_max、day_centroid/gini(Amt)、day_signed_ratio、in_madz×2、合成封板计)utrain 夏普 −2.48~+0.89 全废。",
+   "operators": [
+    "cs_regres",
+    "cs_rank",
+    "day_zero_ratio",
+    "day_flat_run_max",
+    "day_centroid",
+    "day_gini",
+    "day_signed_ratio",
+    "in_madz"
+   ],
+   "recheck": "cs_regres 是截面 rank 回归残差,只剥线性部分;若 A 与 B 的关系强非线性(如 A 只在 B 的极端区间有信息),残差不塌不足以证明包含 —— 补一个分段(按 B 的分位)对照。"
+  },
+  {
+   "id": "lab_fusion_helps_in_sample_only",
+   "claim": "融合 / 叠加的收益必须 train 与 valid 分开看,不能只看合并段:小权重叠加典型地抬高**样本内**夏普而对样本外几乎无效,合并段的夏普提升会把这一点掩盖掉。",
+   "evidence": "F102:ov_p05 在合并段是 2.62 vs k_known 2.22,看着 +0.40;分段看是 train 1.78→2.30(+0.52)、valid 3.46→3.44(−0.02),净超额 train +12.6→+13.6% 但 valid +22.3→+19.6%(掉 2.7 点)。h_sieve_known 同形:train 1.78→2.26、valid 3.46→3.63。",
+   "operators": [
+    "add",
+    "mul",
+    "cs_rank",
+    "cs_first_high40"
+   ],
+   "recheck": "F102 的 valid 只有 1.6 年且是 2022–2023 中小盘行情,k_known 在该段本就异常强(夏普 3.46 vs train 1.78),所以 valid 的「天花板效应」可能夸大了这条。换一个 valid 窗口或在别的因子上复核后再当通则用。"
+  },
+  {
+   "id": "lab_cov_as_sign_probe",
+   "claim": "用「负数→NaN」的算子(pow_1.5、log、sqrt)的 cov(覆盖率)当探针,可以**直接测出**一个中间量有多大比例为负,不需要额外落盘诊断。这是读懂含符号中间层的最便宜手段。",
+   "evidence": "F102:sub_C_pow_1_5(x**1.5,负数 → NaN)cov 掉到 0.75,直接量出 25% 的股票-日超额峰度为负 —— 这是认出 day_kurt 是**超额**峰度(nankurt_last = m4/(var²+EPS) − 3,下界 −2)而非原始峰度的关键一步,也因此认出 pow_2 的作用是**折叠**不是放大。",
+   "operators": [
+    "pow_1_5",
+    "log_",
+    "sqrt_",
+    "day_kurt",
+    "pow_2"
+   ],
+   "recheck": "cov 的下降也可能来自 NaN 传播或量纲下溢,不止来自负值。确认办法:换 abs_ 之后 cov 是否回到 1.00(F102:sub_C_abs_ cov 0.96 且 ρo 0.96,确认是符号而非缺失)。"
+  },
+  {
+   "id": "lab_bucket_futility_rule",
+   "claim": "可操作的停止法则:若解剖里「超配 × 段等权超额」点乘已占净超额 50% 以上,就不要再写桶内 / 剔除变体 —— 因子的收益是跨桶倾斜,桶内没有残差选股力,分桶只会把倾斜拆掉。",
+   "evidence": "F102:跨成交额桶倾斜 +5.5 个点占净超额 +8.9% 的六成;随后四种分桶全部变差(成交额桶 1.56、价格桶 2.09、放量桶 2.21、已知族桶 0.97,仅历史长度桶 2.43 持平,全市场排名 2.85),h_liq_excl_low40(剔最不活跃 40%)净超额 +5.5% / 夏普 0.72 双降且符号翻转。k_known 的同一比例是 95%。",
+   "operators": [
+    "cs_bucket_rank",
+    "cs_demean",
+    "cs_rank"
+   ],
+   "recheck": "法则的例外是「桶内去均值但保留量纲」(cs_bucket_demean)——它不丢量纲,还能被 pow_2 折叠、被 cross_max 取极值,与丢量纲的 cs_bucket_rank 不是一回事。F102 的 h_fold_csmean(全市场去均值)就把 LTO 从 5.2% 压到 2.4% 且夏普 2.40,所以桶内**中心化**仍待验(第三批 B 组)。"
+  }
+ ],
+ "hypotheses_written": 25,
+ "new_operator_requests": [
+  {
+   "name": "cross_count_gt_med241(x, d)",
+   "definition": "近 d 日里 x 高于「该股 x 自身近 241 日中位数」的天数 ÷ d(长参照窗口固定 241,只留一个自由窗口 d,符合「带 win 的算子只能有一个窗口参数、写在最后一个位置」的语法约束)。NaN 日不计入分子也不计入分母。",
+   "why": "事件型因子目前只有两种读法,而中间那一种写不出来:cross_max 只取最糟的那一天(丢掉「发生过几次」),cross_mean 会被大量平静日稀释。真正想问的是「近 60 日里相对自己反常的日子有几天」—— 一个带个股自参照阈值的计数。现有算子都做不到:cross_valid_count 只数非 NaN;cross_mean(is_gt0(x), d) 的阈值被钉死在 0,对非中心化的重尾量(如超额峰度的平方)没有意义;cross_quantile_q75 给的是水平不是频数。F102 的证据表明这个缺口正压在要害上:cross_max@60 = 2.85 是全表最佳,q75@30(2.36)≫ q25@30(1.52)说明信息在尾部,而 cross_sum 的「NaN 当 0」缺陷**无意中编码的恰好是一个退化日计数**(第三批 h3_vc_es60 只能借 day_es_ratio_hi 留 NaN 来迂回地数)。有了它就能直接分辨「最糟一天有多糟」和「这种日子有多频繁」,这两件事在封板 / 停牌 / 流动性枯竭类因子上是不同的经济量。"
+  },
+  {
+   "name": "数据层:涨跌幅限制宽度 / 板块标识(非算子,需用户决定是否在 AlphaCube 立方体里加字段)",
+   "definition": "每只股票每日的涨跌幅限制宽度(主板 ±10%、科创板与创业板 ±20%、ST ±5%、上市首日无限制),或等价的板块标识字段。",
+   "why": "第四批已把这条记为「主研们反复要、属于数据层」(F104 / F111 / F112 提过),这里再加一份来自 F102 的、机制上最直接的证据:本因子的核心机制就是**封板**,而「一字板」只在 ±10% 的品种上成立。科创板(占 4.0%、±20%、几乎没有一字板状态)是全表唯一的大坑 —— 原式段内 −28.5%,而多头书偏偏对它超配 +8.3 个点、压了 12.3% 的仓位;换 cross_mean 后仍只到 +3.0%,换 h_max60 −4.1%,要靠 h_sieve_known 让已知族主导才回到 +7.6%。也就是说这个段的失效不是估计量的问题,而是**同一个分钟结构在不同涨跌幅制度下含义不同**,而因子看不到制度。没有这个字段,任何封板类因子都只能靠「板块 ≈ 上市年限 + 价格水平」这种在不同树上符号相反的代理;有了它,正确的写法是把限制宽度当 select_where 的条件或 cs_bucket_* 的分桶键,而不是像现在这样把三种制度混在一个截面里排序。"
+  }
+ ],
+ "tooling_problems": [
+  "runs/<fid>/sweep_*.json 只存每个变体的汇总统计(long_ann / long_sharpe / long_turnover / hl_* / corr_orig / corr_known),**没有逐日的多头腿收益序列**。后果:主研在本地完全无法做任何事后融合或相关性分析 —— 这一轮用户明确要「简单融合和平滑一下大家、看样本内外」,而我既不能起服务器计算(本轮禁止),也无法用已跑完的 145 个变体在本地算一个等权 rank 融合的 train / valid 读数,只能把融合写成下一轮的假设(h3_fuse_own2 / h3_fuse_smooth5)等扫描。建议在 sweep 输出里为每个变体多存一条逐日多头腿净收益序列(约 1400 个 float,145 个变体 ≈ 1.6 MB,相对现在 430 KB 的 JSON 可接受,或单独落一个 .npz):有了它,变体之间的融合、两两相关、分段归因都能在 Mac 上零成本反复做,不必为每个组合权重再排一轮服务器扫描。",
+  "sweep 表里只有 corr_orig(与原式)和 corr_known(与已知族)两个相关数,**没有变体之间的两两相关**。这直接影响「哪两个改良是正交的、值得融合」这类判断:本轮我只能靠 ρo 的差(h_max60 0.80 vs h_fold_csmean 0.75)和 ρk 的差(0.23 vs 0.19)去**推测**两条改良走的是不同的轴,再写成假设去验,而一张 top-N 变体的相关矩阵本来可以当场回答。建议在 digest / table 里对夏普前 15~20 的变体附一张两两 rank 相关矩阵。",
+  "study.sh ops 的检索好用,但注册表里已有的算子容易被漏掉:上一轮的综合把「跨日边界的掩码」和若干时序能力列进了 new_operator_requests,而本轮 grep 'delay|lag|shift' 就发现 cross_delay(res[d:] = x[:-d],窗口 3/5/10/15/30/60/241)和 cross_argmax 一直都在 —— 其中 cross_delay 恰好能写出本批最关键的那条假设(h3_lagmax60,挖掉最近 5 天的事件记忆)。建议 study.sh decompose 或 propose 的输出里，对树上每个槽位列出「同 axis / 同 category 的全部可替换算子」，省得主研把假设位花在以为写不出来的问题上、或把已有算子写进 new_operator_requests。"
+ ]
+}
+```
+
+```
+Structured output provided successfully
+```
+
 ## 它写过 / 改过的文件
 
 - `/Users/wxy/Desktop/Partura/studies/F102_kurt_autocorr/hypo3.yaml`
 - `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/state.md`
 - `/Users/wxy/Desktop/Partura/notes/F102_kurt_autocorr/synthesis.md`
+
+## 它返回给工作流的结构化结果
+
+见 `handoff/F102_kurt_autocorr/results/verdict.json`。
 
 ## 它拿到的任务书
 
