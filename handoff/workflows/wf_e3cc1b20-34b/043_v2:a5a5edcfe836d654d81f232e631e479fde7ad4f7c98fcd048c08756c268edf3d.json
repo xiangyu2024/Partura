@@ -1,0 +1,24 @@
+{
+ "type": "result",
+ "key": "v2:a5a5edcfe836d654d81f232e631e479fde7ad4f7c98fcd048c08756c268edf3d",
+ "agentId": "af1297d4e49a82489",
+ "result": {
+  "order": "R2",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F108_max_ntkurt_close/results/R2.md",
+  "tags": [
+   "S2_overlay",
+   "x3_attrib"
+  ],
+  "summary": "执行完 R2(实验工单):judgment of §A3 overlay 增量真伪的三个疑点。配置加 S2_overlay 阶段(9 变体,6 含 nt_*),check 一次通过,服务器跑完 exit 0(246.6s,cuda,peak 5.04GiB)。studies/F108_max_ntkurt_close/x3_attrib.py 写好后 exec 两次(第1次自检未过,诊断出书①universe 多交了 isfinite(D30) 的限制,修正后第2次四项自检全过,246s级,跑完§A/B/C/D)。关键数字:H16(买不进记账)死——剔 NaN 后增量仍 train+2.52pp/valid+1.30pp、两段同向≥1pp;H18(单点权重)不干净——w∈[0.1,0.6] 两段都优于家族线(不是尖峰),但 train 上 0.25 比邻近值高 0.9~1.3pp(不是纯平台);H17(任意弱信号都行)三个安慰剂都没达到\"增量≥g_w25\"的判据,但 p_k2(混入家族第2成员)最接近(train+1.5pp<+2.5pp,valid反而−0.2pp);附带发现\"只避开一字板(r≥24.9)\"只解释总增量的10.5%/12.7%,g_tail 配置实测远差于 g_w25;逐年6年5年增量为正,不是只靠1~2年。g_tail 的算子按工单写的 cs_quantile_q75 经 src 核实语义不对(标记的是最高75%不是最高25%),换成 cs_quantile_q25,意图不变。g_k2w25 的 valid@hl0 读数 JSON 里确实拿不到,照实报告未冒充。结果卡、两份事实 notes(07_S2_overlay.md、07x_3_x3_attrib.md)、journal 共3条都已写好。运行预算:全研究累计7/8(含S0),R2 因自检失败多耗1次,现在只剩1次留给 final,零余量。",
+  "problems": [
+   "g_tail 算子替换:工单写 cs_quantile_q75,study.sh src 核实其语义是'标记当天最高75%'(x>=当日25分位)而不是'x高于75分位';真正标记'最高25%'的是 cs_quantile_q25,已换用并在结果卡详细说明,意图未变",
+   "x3_attrib 第1次提交(exit 0)自检未过:书①(K1单独)universe 误交了 isfinite(D30) 限制,train 侧 mismatch +1.3pp(超±0.5pp门槛)。已诊断修正(每支按自己的可得性独立排名,严格对应引擎 cs_rank 语义)并重跑,第2次四项自检全过(diff -0.03~+0.05pp)。两次提交都计入服务器运行次数,R2 从计划2次变3次",
+   "运行预算:全研究累计服务器运行(含S0,按state.md既定口径)=7/8,只剩1次留给final,零余量——R3不能再加任何实验,必须直接裁决R2+读留出段",
+   "g_k2w25 在 valid 侧严格同半衰期(hl0)的 Lnet/Lshp 拿不到:它自己选的 hl_long=3,runs/.../S2_overlay.json 的 books.sweep 只扫train、by_rank.splits.valid 只存了hl3那一行,没有冒充,照实空着",
+   "k_mean30 的 by_year 诊断没有产出:工具行为是 by_year/neutralise/profile 只对本次run的stage内变体计算,不像rank_corr会跨阶段读缓存(配置里加了k_mean30没用),改用x3_attrib§C的book①(数值上≈k_mean30)代替给出并排对照",
+   "H17的安慰剂p_k2(混入家族自己的第二成员K2)是三个安慰剂里最接近复刻g_w25的(train增量+1.5pp vs g_w25的+2.5pp,但valid增量反而-0.2pp),没达到工单判据阈值,但建议主研专门看一眼,因为它不是随便什么信号都行,而是家族内部另一个已知算子",
+   "H18(w=0.25是尖峰还是平台)不是干净的二选一:相对家族基准两段都在w∈[0.1,0.6]区间更好(不是尖峰),但train上0.25比邻近0.15/0.4的读数高0.9~1.3pp(不是纯平台),具体数字已列入结果卡2.6/§D,留给主研定性判断"
+  ]
+ }
+}

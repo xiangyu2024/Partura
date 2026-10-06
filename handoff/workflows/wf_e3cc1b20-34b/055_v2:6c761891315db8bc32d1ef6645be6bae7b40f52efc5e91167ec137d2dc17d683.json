@@ -1,0 +1,44 @@
+{
+ "type": "result",
+ "key": "v2:6c761891315db8bc32d1ef6645be6bae7b40f52efc5e91167ec137d2dc17d683",
+ "agentId": "ae5d6ae4559cdb8a5",
+ "result": {
+  "factor_id": "F109_erm_mag_gap_5m_tsm20",
+  "lens": "numbers",
+  "issues": [
+   {
+    "severity": "minor",
+    "where": "notes/F109_erm_mag_gap_5m_tsm20/10_distilled.md 第12-14行(「读留出段之前」冻结段落);同一段落被逐字收录进 research/alpha_distillation/F109_erm_mag_gap_5m_tsm20.md 约第1538行",
+    "what": "「第二条基准(已知家族)是 +12.6% / 1.78」紧跟在「10 个结构变体在同一半衰期 hl 20 下最好的是 a_sig +2.3%」之后,没有重新声明自己用的是哪个半衰期,容易被读成「同一 hl20 下家族是 +12.6%/1.78」——这正是 study.json 自己定性为「口径张冠李戴」的那同一个错误(真实值:固定 hl20 上家族是 +8.4%/1.21,+12.6%/1.78 是家族自选的 hl0 那一行)。该错误已在 09_diagnosis.md 一.6、05_hypotheses.md H9 行、state.md §2 三处改正,但 10_distilled.md 本身以及报告里逐字收录它的位置未同步改正,留了一处与已被认定、已被改正的错误同源的歧义表述。",
+    "evidence": "10_distilled.md 原文(未改动):「...而且那 +2.3% 由 2018 一年撑起(2018 +11.1%、2019 +0.1%、2020 −1.0%、2021 −1.6%)。第二条基准(已知家族)是 +12.6% / 1.78。」runs/F109_erm_mag_gap_5m_tsm20/S_final.json 的 sweep 字段:f_fam30 在 hl20 行 Lnet=8.4%、Lshp=1.21(不是 12.6%/1.78,后者是 hl0 = f_fam30 自己的 hl_long)。study.json 的 tooling_problems 第1条明确把这个错误定性为「口径张冠李戴」,并列出已改正的三处(09_diagnosis.md 一.6、05_hypotheses.md H9 行、state.md §2),没有提 10_distilled.md。报告正文行 488 与 1438-1440 已把同一数字双标注(hl20: +8.4%/1.21;家族自选 hl0: +12.6%/1.78)并带⚠更正说明,而报告行 1538(10_distilled.md 原文逐字收录处)没有这个说明。",
+    "fix": "在 10_distilled.md 这句话后加一个不改变原意、不涉及裁决的脚注/括注,例如「(家族自己的 hl0,不是本句上文的 hl20)」,仿照 R3 在 results/R2.md 第3节之后追加「更正」小节、不删改原表的做法;不需要重新裁决、不需要改候选或推荐。"
+   }
+  ],
+  "checked": [
+   "handoff/F109_erm_mag_gap_5m_tsm20/results/study.json 全字段(established/unresolved/lab_findings/holdout_reads/server_runs/finalist_ids 等)与 runs/*.json、notes 交叉核对",
+   "runs/F109_erm_mag_gap_5m_tsm20/ledger.json:holdout reads=1、split 口径读取次数汇总",
+   "S_final.json 五个候选(f_fam30/f_sig/f_orig/f_sum/f_lvl)的 books_user.splits[utrain/holdout] 的 long_ann(Lnet)、long_sharpe(Lshp)精确值,逐一与 journal.md/10_distilled.md/study.json 的抄录数字核对(10 组读数全部精确匹配,误差仅在显示舍入内)",
+   "判据C三个差值(f_sig/f_sum/f_lvl 各自 holdout Lnet 减 f_fam30 holdout Lnet)按原始浮点数手算,核对 -16.43pp/-11.16pp/-15.32pp",
+   "判据D(f_sum − f_orig,holdout 与 utrain 两段)按原始浮点数手算,核对 +0.06pp 与 +6.57pp",
+   "hlL 口径(books_user.splits.ls_sharpe)与 hlS 口径(books_user.by_rank['ls'])两套多空数字分别核对 f_orig 1.784/2.766(utrain)、2.261/2.276(holdout),并核对 08_variants.md 第5条「权威表」与 results/R3.md 更正小节逐项数字",
+   "diagnostics.by_year 原始数据核对 f_orig 8年(确认3/8为正:2022 +0.38%、2024 +4.65%、2025 +3.32%)与 f_fam30 8年(确认8/8全正,最差2020 +6.60%),并手算五个候选各自的八年算术均值(+14.9%/+3.1%/+2.5%/+2.0%/−1.5%)复核 state.md/11_risks.md 的汇总数",
+   "判据F 2024/2025 逐年数字(家族 +9.17%/+14.32%;f_sig/f_sum/f_lvl 的 2024/2025)与 11_risks.md §6 表格核对",
+   "S0_baseline.json:v_base 的 by_rank['ls'] utrain ls_sharpe=2.7663(published 2.77,容差±0.01内)、long_gross_ann=-0.0006(published -0.001,容差±0.002内);sign/hl 方向一致",
+   "S_final.json 与 S1_lvl.json 的 cov/dist 门槛:S_final 五候选全部 1.00/1.00;S1_lvl 中仅 a_evt 未过(dist=0.0153,digest 显示 0.02,与十个变体里唯一未过门槛的描述一致)",
+   "a_evt 在 notes 与报告中每一处引用(LF3/LF4、09_diagnosis、10_distilled、报告行1397/1563等)是否都带「dist 过不了门槛,只作诊断」的caveat——确认从未被当作合格候选或未加说明的证据",
+   "S2_family 四个变体(b_skew1/b_skew5/b_max20/b_sig60)在报告中的「从未进过服务器运行」披露(报告行1297-1305)是否为静默空表——确认有完整说明文字",
+   "S0_baseline.json / S1_lvl.json / S_final.json 的 errors 字段均为空 {}(无求值失败案例被当证据使用)",
+   "runs/F109_erm_mag_gap_5m_tsm20/*.json 文件修改时间:S_final.json(15:19)晚于 S1_lvl.json(14:06)与 S0_baseline.json(11:54),目录下无 rev*/audit* 文件,确认 S_final 是最后一次阶段运行且唯一触碰holdout的运行",
+   "journal.md 时间戳:10_distilled.md「读留出段之前」候选/判据冻结的记录(主研第4轮,15:01)早于 [auto] 读留出段事件(15:14),确认预注册发生在读holdout之前;读holdout之后(15:20起)的记录确认候选列表与推荐(f_fam30)未变",
+   "studies/F109_erm_mag_gap_5m_tsm20/{x1_anatomy.py,x2_incremental.py} 源码:grep 'holdout'/'2024'/'2025'/'20230808' 等关键字均无匹配,确认自写脚本未触碰留出段数据",
+   "logs/F109_erm_mag_gap_5m_tsm20_x1_anatomy.log:numpy重构 rank相关1.0000、buyable标签→raw标签切换(2.55→0.35、34.4%→18.1%、3.46→2.47、28.4%→22.4%)、事件次日超额(-55.6/-35.1)等数字核对",
+   "logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log:BASE vs FAM30 残差 R² 0.012/0.022、配对差 -2.0%/-2.4%(t -2.64/-2.52)、FAM30+0.3·EVT 配对差 +1.0%/+0.8%(t +3.27/+3.03)、EVTFLAG占比6.78%/1.94%、剔除前后 +12.6%→+16.1%/+22.3%→+22.9% 逐项核对",
+   "known_exposure_r2=0.132 溯源:05_hypotheses.md/07_neutralise.md/state.md/报告四处一致,且与07_neutralise.md中v_base all_controls行R²=0.132一致",
+   "configs/F109_erm_mag_gap_5m_tsm20.yaml 的 S_final 五个变体 id、表达式与 study.json finalist_ids、10_distilled.md候选表逐一核对一致",
+   "report 行数(1914行)与journal.md第6轮主研记录的「重跑report,1914行」一致",
+   "git status --short partura scripts lab docs:空输出,确认无越界文件修改"
+  ],
+  "overall": "对40多个支撑主要结论的数字做了逐一核对(直接读 runs/*.json 原始字段、ledger.json、两个自写脚本的日志,而不是只信 notes 里的抄录),包括五个S_final候选的holdout/utrain多头腿净超额与夏普、判据C/D的差值、hlL与hlS两套多空口径数字、八年逐年数据与算术均值、S0基线复现published表、x2_incremental的残差与配对差统计量——全部精确匹配(多数误差在小数点后第3-4位的显示舍入内),没有发现\"张冠李戴\"或口径混淆的真实错误。留出段纪律干净:ledger确认holdout只读1次,S_final五候选含原式(f_orig)和已知家族基准(f_fam30),10_distilled.md的候选排序与判据确认写于读holdout之前(journal时间戳15:01 < 15:14),读holdout后候选与推荐(f_fam30)未变,自写探针脚本未触碰holdout数据。门槛(cov/dist)在被推荐候选与全部S_final候选上都满足;唯一未过门槛的a_evt全程只作诊断证据且每次引用都有caveat,不存在\"求值失败当证据\"的问题。基线复现在容差内。S2_family空表有完整披露文字,不是静默空表。partura/scripts/lab/docs目录下git status干净,无越界修改。研究团队自己在R3→R6轮已经抓到并改正了两处真实的口径错误(f_orig正年数2/8→3/8、\"固定hl20下家族+12.6%\"应为+8.4%),这两处改正本身也逐一核对准确。唯一的发现是:上述第二处改正在09_diagnosis.md/05_hypotheses.md/state.md三处都做了,但在10_distilled.md的冻结段落(以及报告中逐字收录该段落之处)没有同步加注说明,留了一处与已被认定的错误同源的歧义表述——定性为minor,因为它不改变任何结论,且报告主体的H9表和对应诊断段落已经正确双标注并带更正说明,只是这一处内部预注册文本本身仍可能被断章取义误读。总体结论:这份研究在\"数字与流程\"这一路上经得起核查,归因(把改进算在半衰期平滑名下、不算结构)写得清楚且符合用户选拔口径的要求。",
+  "refutation_attempt": "带着\"默认不成立、找证据证明它不成立\"的立场,专门尝试了以下几类攻击,均未能推翻研究结论或抓到除上述一条之外的真实错误:(1)systematically重算候选间差值、年度均值等\"衍生数字\"(不是notes里直接抄的,而是我自己从原始JSON重新计算的),逐一复核判据C/D的差值、八年算术均值、EVTFLAG占比——全部与notes吻合,没能找到计算错误;(2)专门去查hlL/hlS两套多空口径是否还有notes未发现的第二处混用(除了R2第3节那处已知且已改正的),逐一核对了08_variants.md的\"权威表\"、R3.md的更正小节、state.md的警示框、10_distilled.md的\"空头腿\"表——没有找到新的混用;(3)专门检查是否有\"求值失败\"或未过门槛的变体被偷偷当成正面证据(重点查了a_evt和S2_family四条)——两类都有清晰、一致的caveat,不构成违规;(4)专门检查自写脚本(x1_anatomy.py/x2_incremental.py)是否绕过ledger偷读了holdout数据——grep未命中任何holdout相关字面量;(5)专门检查S_final.json是否真的是目录下最后一次运行(用文件mtime而不是信research自己的说法)——确认无误;(6)专门检查10_distilled.md\"读留出段之前\"锁定候选的时间戳是否真的早于读holdout的时间戳(用journal.md的[auto]事件时间,不是信journal的文字描述)——15:01 < 15:14,确认无误;(7)检查了被选拔口径明确要求\"归因写对\"的那条(改进来自半衰期平滑还是结构)——state.md/10_distilled.md/报告都用\"固定hl20表\"把两者分开比,符合用户规定的方法,不构成\"因为改进来自半衰期就判候选不成立\"的误判。最终只有10_distilled.md那一处表述残留歧义经得住我的质疑,且其严重性在\"报告正文是否已经正确处理\"这一关键问题上验证为否(即报告主体已修正,只是预注册冻结件本身未加注)。"
+ }
+}

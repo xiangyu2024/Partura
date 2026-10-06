@@ -1,0 +1,24 @@
+{
+ "type": "result",
+ "key": "v2:628f3bca095b87f14a0a9828c56dcf4684dd6132c389ef94bdae174e26cd406b",
+ "agentId": "ab1ea8a7172111e8e",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F115_all_tide_mean_30/results/R1.md",
+  "tags": [
+   "S1_anatomy",
+   "x1_anat_mfi"
+  ],
+  "summary": "R1 工单(S1_anatomy 8 变体 + 分析脚本 x1_anat_mfi)全部按原样做完,没有需要绕过/缩减的地方。配置在我接手前已经写好且与工单逐字符一致,未再改动。check 报 7 条 \"contains a LOOKAHEAD operator\"(v_base 本身 + 6/8 新变体);查本机 AlphaCube 源码确认只对应 in_local_mean(H8 已确认的日内非因果算子,不参与 run/exec 的真实求值),判定为已知的非阻塞提示,原样跑。两次服务器运行(run S1_anatomy、exec 新写的 studies/F115_all_tide_mean_30/anat_mfi.py)都是 exit 0,8/8 变体、6/6 面板全部求值成功,用满工单给的 2 次运行上限,只用了 train/valid,从未碰 holdout(已用 ledger.json 核实零 holdout 记录)。anat_mfi.py 写了三层自检(字符串拼接对比 configs 的 expression、合成数组手算答案、真实数据 rank_ic 对上 S0 的 +0.0374)全部通过。结果卡 results/R1.md 按工单 6 项逐一列出数字(主表、固定半衰期表、rank 相关矩阵、分位剖面、中性化表、x1_anat_mfi 的六面板分布与 H3 直接检验)及两个遗留工具问题的回答,并单列\"没人要但值得注意的\"异常。同时补了 notes/07_S1_anatomy.md 与 07x_1_anat_mfi.md 的\"问题/结果\"两节(解读留空),记了一条 [执行] journal 日志。没有触碰 state.md、configs 以外的受限目录、或其他因子的文件(已用 git status/diff 及文件 mtime 核实)。",
+  "problems": [
+   "a_width_only(纯几何通道 M)dist=0.23,没过用户 dist>=0.5 门槛,其数字仍全部列出但不是可用因子",
+   "H3 的直接检验(按因子 O 分桶看 M/|N| 中位数)结果是平的:Q1/Q5/Q10 三桶 median(M) 几乎相等(94/95/94),没有出现'Q10 桶 M 明显更小'的模式",
+   "O 与 known_stdamt_mean30/ctl_ivol/ctl_mom20 的 rank 相关,原始面板与交易信号三项符号全部相反(+0.17/+0.24/+0.44 vs -0.26/-0.21/-0.22),与 R0 异常第7条同一现象,这次精确定量",
+   "多个变体(a_no_rate valid、a_rank_pre train+valid、a_abs train)的 20 分位剖面在 Q10 处不单调,不只 v_base 一个",
+   "固定半衰期表仍然没有 Lgross 列(与 R0 相同的工具限制),H7 的'平滑把毛超额抬五倍'推断本轮仍未直接验证",
+   "known_stdamt_mean30 这次在两处输出都正常打印(与 R0 记录的'缺失'不同),但查不到 R0 当时为什么没打印出来",
+   "check 命令对 v_base 和 6/8 新变体报 LOOKAHEAD 警告(实为 in_local_mean,H8 已确认无害),已在结果卡说明诊断依据,供主研和后续审查确认这个判断是否认可"
+  ]
+ }
+}

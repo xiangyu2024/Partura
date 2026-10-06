@@ -1,0 +1,193 @@
+{
+ "type": "result",
+ "key": "v2:1df43d5ad4f05dadb831f272feb982d75e24f9fa003eb242a891f8cb07a4d404",
+ "agentId": "a6d0af83ba4c6fe5b",
+ "result": {
+  "factor_id": "F112_scale_spow_masktop",
+  "one_line": "提纯成立、升华不成立:删掉截尾 D 改 cs_rank + 窗口拉到 50/241 + cross_ema 平滑,把原式 ut +4.2%/0.74(换手 6.6%)提到 +10.1%/1.55(换手 3.2%),但解剖归因显示这 +10% 里一半以上是低价 / 低成交额段的段等权 beta,对已知成交额族零增量,也当不了筛子 —— 仍不建议纳入。",
+  "confirmed": [
+   "H4 截尾 D 有害,而且损失是单边的 —— 镜像实验坐实 s1 的机制:遮最低一成(= 多头腿自己的尾巴)v_base +4.2%/0.74,遮最高一成 h_masktop_mirror +7.7%/1.28 ≈ 完全删掉 abl_D +7.8%/1.12",
+   "H7′ 窗口 50~241 是平台:h_csrank_w50(ts_scale 50)+10.2%/1.56 ≈ h_csrank_cs241_ema(cross_scale 241 + ema10)+10.1%/1.55,而换手从 5.7% 降到 3.2%",
+   "cs_rank 替代 D 优于纯删 D,主要体现在 valid:h_csrank_w50 va +12.5%、h_csrank_cs241_ema va +11.7%,而 h_nomask_cs241 va 只有 +7.3%",
+   "收益在右尾、不是噪声在右尾:外层缩尾 h_winsor_w50_out +4.4%/0.74 vs h_nomask_w50_ema10 +7.6%/1.17(-3.2pp)",
+   "H8 相对已知成交额族无增量 —— 三条独立路径一致:最好筛子 scr_xhi_p +11.8%/1.79、最好叠加 ov_p025 +13.5%/2.00(六档随权重单调变坏到 +5.4%)、秩残差 res_known +0.2%/0.03,全部低于 k_known +15.4%/2.22",
+   "s1 §4「已知族的 +15.4% 主要是流动性 / 微盘水平 beta」被一条干净的反向实验强支持:h_amtstd_ratio30 = div(day_std(Amt), cross_mean(day_std(Amt), 30))(分子是 k_known 的被平滑量、分母是 k_known 自己)ut -0.5%/-0.08",
+   "「A 只是当天的价格水平,用哪个摘法都一样」再次成立,成交额加权也不更准:h_vwapish_30 +6.4%/0.73 与 h_div_mean30 +6.4%/0.72 逐位持平",
+   "窗口内的连板 / 跌停尖峰是噪声不是收益来源:分母换窗口中位数 h_div_med60 +7.3%/0.85 > 换均值 h_div_mean30 +6.4%/0.72;而「对整个窗口取均值」不额外降噪(点对点 h_rev_delay30 +6.1%/0.73 ≈ 均值版)"
+  ],
+  "refuted": [
+   "推论 1 / D 组「流动性聚焦」(s1 认定的唯一活口)彻底否定:h_liq_first40 ut -1.3%/-0.21、h_liq_first40_abl -1.0%/-0.19、h_liq_mul -5.4%/-0.60、h_liq_excl20 +2.9%/0.32;只有桶内中性 h_liq_bk +6.1%/0.75 ≈ 未中性基线 +6.4%/0.72(不掉,也没增量)。旁证:seg_lowliq_m +11.2%/1.84 的 ρk 是 0.80,它赚的是家族自己的低流动性 beta,而且在成交额低档方向翻成动量",
+   "推论 2「剔掉价格最低 20% 应消掉 -12.1%」否定:h_px_excl20 +4.2%/0.51、h_px_bk +5.3%/0.64,均不优于基线 ⇒ v_base 在那一档的 -12.1% 是 D(截尾)的产物,干净版里本来就没有",
+   "推论 3「涨跌幅制度代理复制创业板那一段」否定:h_lim_first40 -4.1%/-0.44(valid -15.7%)、h_lim_bk +4.7%/0.57;cross_max(day_max(High)/day_min(Low), 241) 读到的是「一年里最疯的那天」(连板 / 操纵票),不是制度宽度",
+   "推论 4「E = 跌幅 × cv」的显式重写否定:h_rev_x_cv +3.2%/0.35、h_dd_max60 +2.3%/0.26、h_dd_tailq75_60 +3.9%/0.43 —— 源码推导严格,但经济内容无法被任何显式写法复制",
+   "推论 5「去掉 nansum 能换来业绩」一半否定:h_div_mean30 +6.4%/0.72 只比 v_base 高 2.2pp(噪声边缘),干净 div 族天花板 h_div_med60 +7.3%/0.85,全面低于保留 ts_scale/cross_scale 的 +10.1%/1.55 ⇒ state.md 旧 §6「这棵树应改写成 div(day_median, cross_mean) 一族」作废。另:去 nansum 后窗口单调性反转(30 +6.4% > 241 +5.4%)⇒ 窗口旋钮调的是分母稳定性 + 平滑,不是反转期长度",
+   "推论 6 上半「同一比值形状搬到成交额上也该有信号」否定:h_amt_ratio30 -1.4%/-0.22、h_inpct_amt_ratio -12.4%/-2.61",
+   "C 组「第二个加数给它正确量级 / 换无尺度日内形状」全灭,峰度及同类彻底判死:h_kurt_z30 -17.1%/-4.02、h_gini_own30 -28.0%/-5.03(全表最差)、h_flat_own30 -18.9%/-2.94 —— 后者同时否掉「直接把冻结盘口写进表达式」(F108 的推断在本树上不成立)",
+   "F 组方向整个反了,s1 的「冻结盘口是富矿」是判读错误:段内 abl_D +29.6% 配段等权 -67.4%,只做这一段仍大亏;超配写法 h_frozen_bk +5.7%/0.72、h_frozen_mul +4.4%/0.55(tr +1.3 / va +12.2,极不稳)。正确用法是剔掉它 —— 通用筛子 k_known_xfrozen +18.5%/3.15 > k_known +15.4%/2.22",
+   "H 组状态门的写法(逐日常数乘子 + 日轴 EMA)否定:h_state_vol +5.3%/0.63、h_state_thin +4.9%/0.58,都低于同核基线 +6.4%/0.72",
+   "I 组微观结构否定:h_press_ema10 -5.1%/-0.92、h_press_rev +2.2%/0.34(tr -1.9 / va +12.4,不可用)、h_centroid_rev +1.1%/0.16 —— day_signed_ratio 这个净买入压力代理太吵",
+   "E 组上市时间拿不出次新段内的 +11.2~+17.2%:h_age_bk +6.2%/0.76 ≈ 基线、h_age_first40 +1.8%/0.26(两条用的 cross_valid_count 在 241 处饱和,结论要打折,hypo3 换 cross_age 重试)",
+   "本因子当筛子给已知族不成立:scr_xhi_p +11.8%/1.79、scr_xhi_m +9.2%/1.45,都低于 k_known +15.4%/2.22,更低于与本因子完全无关的 k_known_xfrozen +18.5%/3.15"
+  ],
+  "best_own": [
+   {
+    "id": "h_csrank_cs241_ema",
+    "expr": "cross_ema(cross_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 241), 10)",
+    "note": "ut +10.1%/1.55(train +9.5% / valid +11.7%,最平衡),多头日换手 3.2%(原式 6.6%),ρo 0.45、ρk 0.38,cov 1.00 / dist 1.00。本条因子目前最好的版本:原式 +4.2%/0.74 的 2.4 倍净超额 / 2.1 倍夏普,换手砍半。但仍低于 k_known +15.4%/2.22,且解剖显示持仓 +50.4% 压在价格最低 20%(段等权 +7.0%)、+21.6% 压在成交额最低 20%(段等权 +15.1%)⇒ 一半以上是段 beta"
+   },
+   {
+    "id": "h_csrank_w50",
+    "expr": "ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50)",
+    "note": "ut +10.2%/1.56(train +9.2% / valid +12.5%),换手 5.7%,ρo 0.61、ρk 0.35。与上一条在噪声内同一条(窗口 50~241 是平台),只是换手高 2.5pp;结构更短,适合当 hypo3 的实验底座"
+   },
+   {
+    "id": "h_div_med60",
+    "expr": "div(day_median(Close), cross_med(day_median(Close), 60))",
+    "note": "ut +7.3%/0.85(train +7.2% / valid +7.6%),换手 4.2%,ρo 0.51。单层比值、无 nansum 暴露、分母对连板 / 跌停尖峰免疫 —— 干净 div 族里最好的一条,作为「一个月反转模板」留档。比 ts_scale 族低 2.8pp / 0.7 夏普,证明这棵树的收益不止是「相对自己一个月均价的涨跌」"
+   }
+  ],
+  "best_on_known": [
+   {
+    "id": "scr_xhi_p",
+    "expr": "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30))",
+    "note": "最好的筛子用法(已知族剔掉本因子最高 20%,即剔掉「最跌」的票):ut +11.8%/1.79,cov 1.00 / dist 1.00、ρk 0.87。比 k_known(+15.4%/2.22)低 3.6pp / 0.43 夏普,比通用筛子 k_known_xfrozen(+18.5%/3.15)低 6.7pp / 1.36 夏普 ⇒ 不如不筛"
+   },
+   {
+    "id": "ov_p025",
+    "expr": "add(cs_rank(cross_mean(day_std(Amt), 30)), mul(cs_rank(ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)), 0.25))",
+    "note": "最好的叠加(权重 +0.25,最小的那一档):ut +13.5%/2.00,ρk 0.96。六档 p025/p05/p10/m025/m05/m10 = +13.5/+12.4/+11.3/+11.0/+8.7/+5.4,随权重单调变坏且全部低于 k_known ⇒ 叠加的最优权重是 0"
+   },
+   {
+    "id": "(结论)",
+    "expr": "—",
+    "note": "best_on_known 实际上不存在:筛子 +11.8%、叠加 +13.5%、桶内中性 bk_known +0.8%/0.17、秩残差 res_known +0.2%/0.03,四条路径全部低于 k_known +15.4%/2.22,更全部低于 k_known_xfrozen +18.5%/3.15。真正有用的筛子是「剔掉近 15 日冻结盘口最重的 20%」,与本因子无关"
+   }
+  ],
+  "verdict": "**提纯成立、升华不成立;结论仍是不纳入,也不能当筛子。** 分三层说:(1) 提纯确实做到了 —— 把截尾 D 换成 cs_rank、窗口拉到 50/241、加 cross_ema 10,ut 从 +4.2%/0.74 提到 +10.1%/1.55、多头换手从 6.6% 降到 3.2%,train/valid 平衡(+9.5%/+11.7%),三件已确立的事第一次叠在一起且没有互相抵消;两个镜像实验(遮最高一成 +7.7% ≈ 完全删掉 +7.8%;外层缩尾 -3.2pp)把 s1 推出的机制坐实了。(2) 但提纯出来的东西**不是新信息**:按「超配 × 段等权超额」给 h_csrank_w50 做归因,价格一轴约 +5.4pp、成交额一轴约 +6.9pp(两者重叠),段内净超额(价格五档 +0.9/+4.8/+8.4/+6.5/+0.4)才是真 alpha，量级只有 +1~+8pp。它是「低价 / 微盘段 beta + 一条弱的 1 个月排名反转」的合成,与已知成交额族赚的是同一块 beta —— 这正是筛子 / 叠加 / 桶内中性 / 秩残差四条路径全部减分的原因。(3) 本轮还**改掉了 s1 两处判读**:冻结盘口段和次新段不是「被低配的富矿」而是书本来就该回避的坑(段内 +29.6% 配段等权 -67.4%),`ts_scale` 的 nansum 对次新的 -5.5% 低配是有益副产品;而「应改写成干净 div 一族」作废(天花板 +7.3% < +10.1%)。s1 认定的唯一活口(流动性聚焦)已判死。**还没穷尽的只剩三件,全在 hypo3**:(a) 把「相对自身近期水平」从比值换成秩 —— `ts_rank` / `cross_rank` 已经存在,前两轮 162 个变体里一次没出现;(b) 用 `cs_bucket_zscore` / `cs_bucket_demean` 把段 beta 真正扣掉后量剩余 alpha;(c) 用 `cs_flip_by_state` / `cs_state_rank` 正规重做状态门,其中 `h3_state_w_vol`(高波动日听反转、低波动日听家族)是 best_on_known 的最后一次机会 —— 若它能过 k_known,这条因子的价值在「当家族的状态开关」而不在自己。(a)(b) 都平淡时即可结案;结案前只需读一次留出段,≤5 条 final。**本轮没读测试段(sweepfinal_*.json 一个字没打开)、没起服务器计算。**",
+  "lab_findings": [
+   {
+    "id": "L1_segment_excess_must_be_read_with_segment_beta",
+    "claim": "解剖表的「段内净超额」必须和「段等权超额」一起读(段内 + 段等权 ≈ 只做这一段相对全市场)。单独看段内会系统性地把「书该回避的坑」读成「被低配的富矿」,并据此提出一整组注定失败的假设。",
+    "evidence": "F112 的 s1 据「冻结盘口段内 abl_D +29.6%、持仓 -3.2%」判定那是富矿,提了 h_frozen_bk / h_frozen_mul;s2 结果 +5.7%/0.72 和 +4.4%/0.55(train +1.3% / valid +12.2%,不可用)。该段段等权是 -67.4%。反过来,按「剔掉这一段」写的通用筛子 k_known_xfrozen = cs_last_high20(neg(k_known), cross_max(day_zero_ratio(Ret), 15)) 把家族从 +15.4%/2.22 推到 +18.5%/3.15。次新段(段等权 -28.7%)同样:h_age_bk +6.2%、h_age_first40 +1.8%。",
+    "operators": [
+     "cs_last_high20",
+     "cs_bucket_rank",
+     "cross_max",
+     "day_zero_ratio"
+    ],
+    "recheck": "段占比很小(< 2%)时段等权超额本身噪声大,不能用它下大结论;另外「段内 + 段等权」只是一阶近似,段内书的换手和段内样本数变化会让它偏离。"
+   },
+   {
+    "id": "L2_mask_damage_is_one_sided_use_the_mirror",
+    "claim": "`cs_mask_top_replace_mean*` 这类「把截面一端的一成换成均值」的算子,对纯多头的伤害是**单边**的:它只在遮掉多头腿自己那一端时有害。判定方法是遮另一端的镜像实验,而不是删掉它的 ablation —— 镜像实验才能分开「离群值处理有害」和「抹掉了自己要买的尾巴」。",
+    "evidence": "F112:遮最低一成(方向 -1 下正是多头腿的尾巴)v_base ut +4.2%/0.74;遮最高一成 h_masktop_mirror +7.7%/1.28,与完全删掉的 abl_D +7.8%/1.12 持平而不是与 v_base 持平;同时 sub_D_cs_winsor +7.8%/1.13 ≈ abl_D ⇒ 损失不是离群值问题。",
+    "operators": [
+     "cs_mask_top_replace_mean",
+     "cs_mask_top_replace_mean_neg",
+     "cs_winsor"
+    ],
+    "recheck": "只在方向 sg 固定(镜像后 sg 不翻)且该算子位于树的内层、后面还有非单调算子时成立;若该算子就在最外层,遮哪一端都只是改尾部平局,结论会被摊平。"
+   },
+   {
+    "id": "L3_source_equivalence_is_not_a_substitutable_substructure",
+    "claim": "源码上严格成立的等价推导**不等于**可替换的子结构。把一个算子的数学作用显式重写成另一组算子,常常复制不出它的业绩 —— 尤其当重写过程把「两项的相对量级」换成了「两项的秩相乘」。",
+    "evidence": "F112 的 signedpower 在 ts_scale 内严格等于 x²/Σx² ≈ r²/(30(1+cv²))(abl_E → v_base 差 +1.4pp、pow_3 与 pow_2 持平,都与此一致)。但三条显式重写全败:h_rev_x_cv(跌幅秩 × 月内 cv 秩)+3.2%/0.35、h_dd_max60(相对 60 日最高价的回撤)+2.3%/0.26、h_dd_tailq75_60 +3.9%/0.43,对照同期的 abl_D +7.8%/1.12。",
+    "operators": [
+     "signedpower",
+     "ts_scale",
+     "mul",
+     "cs_rank",
+     "cross_stddev"
+    ],
+    "recheck": "失效条件已定位在「秩相乘丢掉相对量级」:下一次要用保留量纲的写法(直接 mul 原量,或 cs_bucket_demean 保留刻度)再判一次,否则这条只能说明「秩相乘不行」而不是「机制不存在」。"
+   },
+   {
+    "id": "L4_outer_winsor_is_a_clean_knife_on_tail_attribution",
+    "claim": "在最外层加 `cs_winsor` 是判定「收益在尾部还是噪声在尾部」的干净一刀:它把两端压成平局,不改中段排序。重尾因子若因此塌掉,说明钱在尾部,之后所有平滑 / 记忆都不能先缩尾。",
+    "evidence": "F112:h_winsor_w50_out(cs_winsor 在最外层)+4.4%/0.74 vs h_nomask_w50_ema10 +7.6%/1.17,-3.2pp;而同一个 cs_winsor 放在内层当 D 的替代(sub_D_cs_winsor +7.8%/1.13 ≈ abl_D +7.8%/1.12)完全无害。",
+    "operators": [
+     "cs_winsor",
+     "cross_ema",
+     "ts_scale"
+    ],
+    "recheck": "注意 F112 这一条缺一个「w50 裸版」对照(只有 w30 裸版 abl_D 和 w50+ema 版),所以「-3.2pp 全是缩尾造成的」只是半定;hypo3 的 h3_nomask_w50 补这个洞。另外纯单调的外层标准化(cs_robust_z、cs_demean 在正值域)不改当日截面序,对纯多头书完全无效,不要拿它们做这种实验。"
+   },
+   {
+    "id": "L5_three_ways_to_say_relative_to_own_history",
+    "claim": "「相对自身近期水平」有三种实现,业绩和符号可以完全不同,必须三种都写:比值(ts_scale / cross_scale / div-by-rolling-mean,对缺失日和窗口内尖峰敏感、输出重尾)、z 分数(cross_zscore / cross_madz,F112 上符号整个反过来)、秩(ts_rank / cross_rank,有界、免疫尾部和量纲)。**秩版两个算子早就存在,不需要新算子。**",
+    "evidence": "F112 两轮 162 个变体里:比值族 +4.2%~+10.2%;mem_zscore 5/10/30/60 四档 ut -15.1%/-14.1%/-12.8%/-9.7%(符号反);ts_rank / cross_rank **零次出现** —— ts 池 1/5/10/20/30/40/50、cross 池 3/5/10/15/30/60/241,cross_rank 的 kernel 是 nanrank_last(修过原版 2-D 布尔索引串列的 bug)。",
+    "operators": [
+     "ts_scale",
+     "cross_scale",
+     "cross_zscore",
+     "cross_madz",
+     "ts_rank",
+     "cross_rank"
+    ],
+    "recheck": "结论是「三种都要写」而非「秩版更好」——F112 的秩版要等 s3 才有数。若某因子的信息真在水平量纲里(例如价格水平 beta),秩版会把它抹掉、看起来更差,这时差异本身就是归因证据。"
+   },
+   {
+    "id": "L6_market_state_gate_cannot_be_a_per_day_constant",
+    "claim": "「只在某种市场状态下有效」**不能**写成「乘一个逐日常数再做日轴 EMA」:日内常数不改当日截面序,EMA 之后只剩一条被状态权重污染的平滑,系统性地略差于不加。正规写法是 `cs_state_rank`(市场状态分位,当权重或 select_where 的条件)、`cs_flip_by_state`(低状态日翻转截面序)。",
+    "evidence": "F112:h_state_vol = cross_ema(mul(cs_rank(FALL30), cs_mean(day_std(Ret))), 10) ut +5.3%/0.63、h_state_thin +4.9%/0.58,而同核无门基线 h_div_mean30 +6.4%/0.72;而被试图写进去的状态效应很大(v_base 市场高波动段 +13.2% vs 低波动段 -4.7%,差 17.9pp)。",
+    "operators": [
+     "cs_mean",
+     "cross_ema",
+     "cs_state_rank",
+     "cs_flip_by_state",
+     "select_where"
+    ],
+    "recheck": "`cs_state_rank` 在 nd 面用的是 **ts** 窗口池(1/5/10/20/30/40/50),不是 cross 池;`cs_flip_by_state` 的状态比较固定用 241 日中位数、不可调。正规写法是否有效待 s3 验证 —— 若 cs_flip_by_state 也不行,说明状态效应在纯多头书上不可表达,而不是写法问题。"
+   },
+   {
+    "id": "L7_bucket_neutral_vs_rank_residual_give_different_answers",
+    "claim": "当被中性化的 x 本身就是一条强 beta 时,线性秩残差(`cs_regres(cs_rank(y), cs_rank(x))`)和桶内中性(`cs_bucket_rank(y, x)`)给出的答案差很大,桶内版才是对的口径:残差在尾部不保证每个 x 桶的持仓份额相同,会把 y 整体归零。",
+    "evidence": "F112:res_known(线性秩残差,对 k_known)ut +0.2%/0.03、res_liq +0.0%/0.01,几乎完全归零;而 h_liq_bk(流动性十分位内中性)+6.1%/0.75 ≈ 未中性的同核基线 h_div_mean30 +6.4%/0.72,h_px_bk +5.3%/0.64、h_age_bk +6.2%/0.76 也都只掉一点。",
+    "operators": [
+     "cs_regres",
+     "cs_bucket_rank",
+     "cs_bucket_zscore",
+     "cs_bucket_demean"
+    ],
+    "recheck": "`cs_bucket_rank` 扔掉量纲、在每个桶内重新铺满 (0,1],当各桶信号离散度差数倍时会造出假的桶间等权;要把「中心对了」和「刻度对了」分开,必须配 `cs_bucket_zscore`(除桶内 std)和 `cs_bucket_demean`(保留量纲)各跑一次 —— F112 的 hypo3 C 组就是这个对照。"
+   },
+   {
+    "id": "L8_ratio_shape_does_not_transfer_from_price_to_volume",
+    "claim": "「今天相对自己近 d 日」这个比值形状在价格上有信号、搬到成交额上没有,而且可以用来反向鉴定一条成交额基准到底是「水平 beta」还是「相对自身的偏离」:把基准自己去水平,塌掉就说明它是水平 beta。",
+    "evidence": "F112:同一个 div(x, cross_mean(x, 30)),x = day_median(Close) 时 ut +6.4%/0.72;x = day_sum(Amt) 时 -1.4%/-0.22;x = day_std(Amt)(即 k_known 的被平滑量,分母正是 k_known 自己)时 -0.5%/-0.08,而 k_known 本身 +15.4%/2.22。配合解剖(k_known 在成交额五桶内 -4.1/-5.3/-8.2/-5.2/+2.5,却把 +80.3% 持仓压在最低档、该段段等权 +15.1%)⇒ 家族是流动性 / 微盘水平 beta。",
+    "operators": [
+     "div",
+     "cross_mean",
+     "day_std",
+     "day_sum"
+    ],
+    "recheck": "口径是 A 股纯多头扣费净超额;多空口径或别的市场不一定(k_known 的多空夏普 train/valid 是 +1.87/+3.70,水平 beta 在多空里也能活)。另外 in_pct 版(h_inpct_amt_ratio -12.4%/-2.61)说明「换成量的变化率」会更糟,不是代理没选好。"
+   }
+  ],
+  "hypotheses_written": 24,
+  "new_operator_requests": [
+   {
+    "name": "ts_scale_mean(x, d)",
+    "definition": "x[t] / nanmean(近 d 日 x);窗口池用 **ts 池**(1/5/10/20/30/40/50),与 ts_scale 逐位对照",
+    "why": "ts_scale 的分母是 nansum,对窗口内缺失日敏感(F112 §1 的实现级暴露)。要做「去掉 nansum 暴露但别的都不变」的干净对照,现在只能写 div(x, cross_mean(x, d)),而 cross 池是 3/5/10/15/30/60/241 —— 没有 20/40/50。结果是「窗口长度」和「分母是和还是均值」这两个变量永远绑在同一条变体里:F112 这一轮在 ts_scale 族看到窗口单调(w20 +1.0% → w50 +4.9%)、在 cross_mean 族看到窗口反转(30 +6.4% → 241 +5.4%),无法判断哪一半是哪个原因造成的,A/B 两组只能半定。有了同池的均值版,一条变体就能切开。"
+   },
+   {
+    "name": "cs_state_mix(a, b, g, d)",
+    "definition": "s = cs_state_rank(g, d)(市场状态分位,(0,1]);返回 s·(cs_rank(a) − 0.5) + (1 − s)·(cs_rank(b) − 0.5)",
+    "why": "「高波动日听这条信号、低波动日听那条」是多条因子共同的 best_on_known 形状(F112 的状态效应有 17.9pp:高波动段 +13.2% vs 低波动段 -4.7%,而家族在所有状态下都没有负数)。现在只能写成 add(mul(cs_state_rank(g,d), cs_rank(a)), mul(cs_state_rank(neg(g),d), cs_rank(b))) —— 又长,而且 cs_state_rank(neg(g)) 只是 1−rank 的近似(差 1/d,且 neg 在 NaN / 符号上另有行为),两个权重不严格互补。cs_flip_by_state 只能做 ±1 的硬翻转、状态窗口固定 241,做不了连续插值。"
+   },
+   {
+    "name": "(数据层,再提一次)流通市值 / 流通股本",
+    "definition": "立方体里加 FloatCap 字段,使表达式侧能写 day_sum(Amt)/FloatCap、能做规模中性",
+    "why": "F112 这一轮的核心定论卡在这里:best_own 的 +10% 里一半以上是段 beta,但「规模」在表达式侧只有价格和成交额两个代理,而这两个代理在本树上结论相反(价格桶内段内全正 +0.9~+8.4%,成交额桶内只有最高档正 +7.3%、其余 -4.3~+3.5%)。没有真规模字段就无法把段 beta 和段内 alpha 干净分开,只能靠「超配 × 段等权超额」粗估。注意**解剖表侧已经有流通市值分段**(本轮 s2 的解剖表打了流通市值五档),说明控制变量侧已有这份数据、只是表达式侧取不到 —— 这个不对称本身值得用户裁决。"
+   }
+  ],
+  "tooling_problems": [
+   "ts 窗口池(1/5/10/20/30/40/50)与 cross 窗口池(3/5/10/15/30/60/241)只在 5/10/30 相交。换核做对照时窗口被迫同时变,两个变量混在一条变体里 —— F112 的「窗口单调性 vs nansum 暴露」就是因此只能半定(见 new_operator_requests 的 ts_scale_mean)。",
+   "解剖表只打「段内净超额」和「段等权超额」两列,没有合计列(段内 + 段等权 ≈ 只做这一段相对全市场)。F112 的 s1 因此把冻结盘口段(段内 +29.6% / 段等权 -67.4%)和次新段(+11.2% / -28.7%)两块都读成「被低配的富矿」,并据此提了 4 条注定失败的假设(h_frozen_bk / h_frozen_mul / h_age_bk / h_age_first40)。建议加一列合计,或至少在表头把读法写上。",
+   "cross_valid_count(x, 241) 在 241 处饱和,当上市时间代理时上市 300 日和 3000 日同值。s2 的 h_age_bk / h_age_first40 两条是用这个饱和版跑的,结论只能打折(新算子 cross_age 不饱和,hypo3 已换)。",
+   "h_winsor_w50_out 这条变体缺一个「ts_scale(signedpower(add(...)), 50) 裸版」对照(表里只有 w30 裸版 abl_D 和 w50+ema 版),使「外层缩尾 -3.2pp」与「cross_ema 有益」分不开。批量扫描在加旋钮组合时应自动补齐缺的单旋钮基线;本轮只能把它写进 hypo3(h3_nomask_w50)下一轮再补。",
+   "sub_E_sigmoid / sub_D_cs_quantile_q25/q50/q75 / sub_D_cs_mean / sub_D_cs_sum / sub_F_ts_argmin / sub_F_ts_argmax 七行 dist ≤ 0.03 被打 ✗(多头换手 0.3%~2.3%,基本是常数或接近常数的信号),它们占了全表约 4% 的算力但不可能成为候选。扫描时若能先按换手 / 有效取值数预筛掉这类退化变体,同样预算能多试七条真假设。"
+  ]
+ }
+}

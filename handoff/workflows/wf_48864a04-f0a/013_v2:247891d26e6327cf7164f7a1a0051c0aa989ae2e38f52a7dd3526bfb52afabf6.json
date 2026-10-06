@@ -1,0 +1,12 @@
+{
+ "type": "result",
+ "key": "v2:247891d26e6327cf7164f7a1a0051c0aa989ae2e38f52a7dd3526bfb52afabf6",
+ "agentId": "a5a61945b977394a6",
+ "result": {
+  "status": "order",
+  "order": "R1",
+  "kind": "experiment",
+  "summary": "R1 还没有结果卡(notes/F107_abs_demean_skew_low/results/ 目录都还不存在),而它要收的两个任务此刻都还活在服务器上(635384.pt_F107_S12、635516.pt_F107_x2,10-05 04:29 启动,list 显示 Detached)——上一轮的执行是启动完就被额度掐断的,工单一条都没废。所以按接力规矩不另开工单,把 R1 原样交回执行:wait + digest 收 S12、wait 收 x2、留一份 propose 草稿、写结果卡,千万不要重跑。等待期间我做了只有主研该做的事——核对五个载荷算子的源码,拿到两条对下一轮裁决要紧的事实:(1) cross_delay 与 ts_delay 在 d>0 时逐行等价,所以 config 里两种写法混用不是 bug,H14(全局最要紧那条)的对手变体 r_absret/m20_absret 是忠实的、可以直接用来裁决——同时要警告执行别去「统一」它们,改了就和 x1 不可比;(2) 引擎 cross_mean 的 min_periods=1,与 x1 的 roll_mean 语义相同,所以「面板差 12.6」既不是 min_periods 也不是浮点误差,x2 §a 写好的两个候选解释可能都对不上;剩下的解释是引擎内部重算原式时的 mask ≠ 缓存面板的 mask 导致单观测窗口,我把它立为 H15,并指出 §a 已经在印判它所需的 finite days in window。据此把下一轮的读表顺序定为「先 §a/H15,再 H14」:H15 不成立的话 x1 那张时间尺度表(候选名单所依赖的)就得用引擎数字重建。state.md 已整页覆盖重写(8 节,新增 H15),journal 记了一条,R1 末尾追加了一段只含三条「别踩」的附录、没有改它要做的事。",
+  "state_written": true
+ }
+}

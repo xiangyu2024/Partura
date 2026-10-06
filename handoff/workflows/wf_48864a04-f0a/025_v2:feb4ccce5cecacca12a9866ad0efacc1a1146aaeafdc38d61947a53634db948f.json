@@ -1,0 +1,12 @@
+{
+ "type": "result",
+ "key": "v2:feb4ccce5cecacca12a9866ad0efacc1a1146aaeafdc38d61947a53634db948f",
+ "agentId": "a069d7be57c2c2603",
+ "result": {
+  "status": "order",
+  "order": "R1",
+  "kind": "experiment",
+  "summary": "R1 还没有结果卡(上一个执行在 `study.sh wait` 这一步被额度打断),按规矩不另开工单,原样交回执行收尾 —— 它起的 x2 job 其实已经在服务器上跑完了(exit 0,2026-10-05_04:54:27),只是日志没拉回本地、结果卡和 07x_2 没写;我已在工单补注和 state.md §8 里写明:只需 `wait`(对已结束的 job 立刻返回并拉回日志),**不要重跑**,而且 `wait` 只打印最后 200 行、必须读日志全文,否则 H10 全部证据所在的第 1~2 节会整段漏掉。等不到结果的这一轮我做了三件事:(1) 把上一位主研采信的数字自己对着 runs/S0_baseline.json 和服务器内核源码验了一遍(sign −1、hl_long = hl_ls = 20、全半衰期多头腿皆负、day_quantile = nanquantile、is_gt 严格且输出 int、ledger 里 holdout 0 次读取),全部对得上,结论不变;(2) 排掉两颗雷 —— `st.control(\"g_max30\"/\"g_limitup30\")` 缺失是**假警报**(两者就定义在本因子配置的 gates 第 50–51 行,`control()` 会查 gates),而「延长半衰期」这条路是**由口径约定关死**的(网格 {0,1,2,3,5,10,20} 写在 playbook §1、没有任何配置项可调,扩了就和用户表不可比;且 hl→∞ 的极限是「从没封过板的股票」= 超额 ≈ 0,翻不成正 alpha);(3) 读懂 x2 源码后把 R1 的读法**事前登记死**(05_hypotheses.md 末尾):第 2 节是 18 个(标记, 家族)组合而噪声 ±3 个点,故 H10 要四条全中(动机标记 / 四格全中 / 占比 ≥2% 且机制可见 / ΔLnet ≥ 1 点),叠加行的 LS 与 short 由 push_down 构造决定不可读,第 5 节三条计数构造的多头腿是并列假书(H11 只认 rank IC),H12 要以完整定义的 EMA20(涨停标记) 和 all four 残差为主证据。我**刻意没有去读** x2 的输出 —— 判据既已预登记,先偷看就毁掉了它的意义。",
+  "state_written": true
+ }
+}

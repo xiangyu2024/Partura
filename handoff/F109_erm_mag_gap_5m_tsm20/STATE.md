@@ -1,6 +1,6 @@
 # F109_erm_mag_gap_5m_tsm20 — 交接状态
 
-_自动生成于 2026-10-05 15:31(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F109_erm_mag_gap_5m_tsm20` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 erm_mag_gap_5m_tsm20(批次 B01_single_factors)
 - 表达式:`ts_mean(sub(div(div(day_sum(select_where(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95)), sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), create_like(Close, 0))), add(day_sum(is_gt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.95))), create_like(day_quantile(Ret, 0.95), 1e-06))), add(day_quantile(Ret, 0.95), create_like(day_quantile(Ret, 0.95), 1e-06))), div(div(day_sum(select_where(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05)), abs_(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1))), create_like(Close, 0))), add(day_sum(is_lt(sub(div(Close, in_delay(Close, 5)), create_like(Close, 1)), day_quantile(Ret, 0.05))), create_like(day_quantile(Ret, 0.05), 1e-06))), add(abs_(day_quantile(Ret, 0.05)), create_like(day_quantile(Ret, 0.05), 1e-06)))), 20)`
@@ -144,6 +144,9 @@ by_rank['ls']、diagnostics.by_year)、ledger.json、logs/*_x1_anatomy.log、log
 - `sweep_s2`  10-05 12:16  243 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweep_s2`
 - `anatomy_s2`  10-05 12:20  0 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 anatomy_s2`
 - `sweepfinal_s2`  10-05 12:22  8 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweepfinal_s2`
+- `sweep_s3`  10-05 18:22  268 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweep_s3`
+- `anatomy_s3`  10-05 18:29  0 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 anatomy_s3`
+- `sweepfinal_s3`  10-05 18:32  8 个变体  → `./scripts/study.sh digest F109_erm_mag_gap_5m_tsm20 sweepfinal_s3`
 - `x1_anatomy`(自写脚本的输出)  10-04 12:36  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x1_anatomy.log`
 - `S1_S2`(自写脚本的输出)  10-04 13:19  exit 97  → `logs/F109_erm_mag_gap_5m_tsm20_S1_S2.log`
 - `x2_incremental`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F109_erm_mag_gap_5m_tsm20_x2_incremental.log`

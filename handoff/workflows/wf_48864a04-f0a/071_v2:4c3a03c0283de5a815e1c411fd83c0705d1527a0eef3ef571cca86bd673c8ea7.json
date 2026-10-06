@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:4c3a03c0283de5a815e1c411fd83c0705d1527a0eef3ef571cca86bd673c8ea7",
+ "agentId": "a106e5b7d350956c3",
+ "result": {
+  "order": "R2",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/results/R2.md",
+  "tags": [
+   "S_final"
+  ],
+  "summary": "工单 R2(kind: final,唯一一次读留出段)已按原文完整执行,未增删候选、未改判据。前置检查(ledger.json 无 holdout 记录、10_distilled.md 已有「读留出段之前」节)通过后:用一次性脚本从 configs/F109_erm_mag_gap_5m_tsm20.yaml 里按变体 id 整行取出 v_base/a_sig/a_sum/b_lvl 的 expr(逐字节断言与来源相等),加上工单给的 f_fam30 字面表达式,追加 S_final 阶段(5 变体,全部 final: true);git diff 确认该文件相对上次提交只多了这 9 行,其余 26 个旧变体与 4 个阶段一字未动。check 31/31 OK → final 一次 wait(无排队、无 exit 97)即完成,334.0s,peak anon 5.76 GiB,JSON errors={},engine_timings=[]、日志无任何 [panels] 行,确认 5 个面板全部缓存命中。判据 G 复现表全部对上(最大偏差 0.04pp)。留出段主表(books_user)、多空口径、rank IC、cov/dist、2018–2025 逐年表、判据 A–F 的配平数字均已原样抄进结果卡,未做任何\"所以它是…\"式的解读。主动报告的异常:(1) f_lvl 的 hlL/hlS 在 train-fit(5/0)与 utrain-fit(3/1)下不同,其余 4 候选不变;(2) 判据 F 预先写的\"三条结构候选 2024/2025 两年都 <+5%\"在 2024 年全部未发生(f_sig/f_sum/f_lvl 分别 +8.84%/+9.99%/+11.06%,后两条数值上还高于 f_fam30 自己的 +9.17%),2025 年三条又都明显为负;(3) JSON 的 ic_user/ic_holdout 结构性缺少 rank_ic_traded 字段(只有 splits.train/valid 才有),工单第4项要的\"traded 版\"在 utrain/holdout 上拿不到;(4) f_lvl 2020/2025 的 by_year.long_share 字段因分母≈0 而退化成几百倍的异常值,不影响 Lnet/LS 本身。已写结果卡 results/R2.md 并记日志(journal.md 14 条)。10_distilled.md、state.md、scripts/、partura/、handoff/、lab/、docs/ 及其他因子文件均未触碰。另注:study.sh brief 的自动交接页里\"留出段已读\"提示硬编码指向 runs/<fid>/final.json,这是 scripts/recorder.py 自身的通用文案(没有适配实际 tag 名 S_final),不是我改的,也不在我可改范围内,仅供主研知晓,实际数字都在 S_final.json。",
+  "problems": [
+   "f_lvl 的 hlL/hlS 在 train-fit(5/0)与 utrain-fit(3/1)口径下不同,逐年表用的是 utrain-fit 口径,与判据G表(train-fit)不是同一个半衰期,读数字时别混用",
+   "判据F预先写的『三条结构候选2024、2025两年都<+5%』在2024年全部未发生:f_sig/f_sum/f_lvl 2024年holdout Lnet分别+8.84%/+9.99%/+11.06%,其中f_sum、f_lvl数值上还高于f_fam30自己2024年的+9.17%;2025年三条又都明显为负(-1.92%~-12.66%)。10_distilled.md判据F原文已预留『两年里有一年反过来,写进11_risks.md』的退路,这正是那一年",
+   "S_final.json里ic_user/ic_holdout没有rank_ic_traded字段(只有splits.train/valid才有,读本机partura/runner.py第177行附近是因为该字段只在dec_splits=['train','valid']的循环里补),工单第4项要的『ic_user与ic_holdout的rank IC与rank IC traded』在utrain/holdout上traded这一半结构性拿不到,已在结果卡里原样说明",
+   "f_lvl在by_year诊断里2020、2025两年的long_share字段是退化大数值(-218.68、-157.48,因long_gross_ann+short_gross_ann分母≈0），不是真实比例，不影响同一行的Lnet/LS，只是提醒以后别误用这个字段",
+   "f_orig的holdout Lshp(+0.713)高于判据A预测的『<0.5』,但离否定门槛『≥1.0』也有距离;同一候选holdout Lnet(+2.88%)仍明显低于预测上限+5%——Lnet与Sharpe没有整齐地双双落在判据A预测的同一侧,只报数字，留给主研判断",
+   "scripts/study.sh brief 的自动交接页硬编码提示『候选在留出段上的数全在 runs/<fid>/final.json』,但本次tag是S_final、实际文件是S_final.json,这是scripts/recorder.py自身未适配自定义tag名的通用文案,不是本轮改的,也不在执行可改范围(scripts/)内,仅告知主研别被这条自动提示误导"
+  ]
+ }
+}

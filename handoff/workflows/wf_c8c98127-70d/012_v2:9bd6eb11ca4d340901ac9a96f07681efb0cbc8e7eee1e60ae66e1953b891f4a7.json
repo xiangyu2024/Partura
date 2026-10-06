@@ -1,0 +1,27 @@
+{
+ "type": "result",
+ "key": "v2:9bd6eb11ca4d340901ac9a96f07681efb0cbc8e7eee1e60ae66e1953b891f4a7",
+ "agentId": "af0a6582c37fdb9a7",
+ "result": {
+  "order": "R0",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/results/R0.md",
+  "summary": "在 /Users/wxy/Desktop/Partura 下为 F112_scale_spow_masktop 完成了\"建档\"(R0)。notes/F112_scale_spow_masktop/ 此前完全是空的(brief 确认:无 state.md,journal 0 条),属于从零建档,不是补缺。\n\n依次执行:brief → digest S0_baseline → overview_for.py → decompose(服务器端探针+SSA 分解)→ 对表达式里 6 个算子(day_quantile、day_kurt、add、cs_mask_top_replace_mean_neg、signedpower、ts_scale)逐个用 study.sh src 读内核源码(含其调用的底层函数 create_like/cs_mask_top_replace_mean/rank/_mean/_valid/rolling_windows/scale_last_ratio)。写出四份事实性文档 + 结果卡 + 1 条日志:\n\n- 01_expression.md(4.6KB):来历、表达式树 A~F、逐层公式与机械描述、与公布值出入的数字对照。\n- 02_operators.md(16KB):6 个算子的精确公式、计算轴、齐次度、NaN/边界、取负后奇偶性、lookahead,逐条标注\"和名字不一样的地方\"。\n- 03_decomposition.md(6.5KB):重复子树(无)、跨日回看天数(全树仅 ts_scale 一个跨日节点,回看 30 天)、恒等节点(无)、各中间节点量纲与理论取值范围、明确列出未做经验分布测量的缺口。\n- 06_baseline.md(12KB):两本书 train/valid/utrain 口径下的 Lnet/Lshp/Lgross/LTO/LS/short/rIC/cov/dist,固定半衰期对照表,分位剖面(两段均非全程单调),逐年,衰减,全部控制变量的中性化 R² 与残差表现,两种口径(交易信号 vs 原始面板)的 rank 相关,留出段未读的证据(ledger.json 无 holdout 记录)。\n- results/R0.md(6KB):一页事实+异常摘要,12 条异常/缺口逐条列出。\n- journal.md:追加 1 条 [执行] 日志。\n\n最重要的发现(均为事实,未下结论):(1) 与用户表的微小出入(utrain LS +2.59 vs 公布 +2.58,Lgross +9.1% vs 公布 +8.9%)复现成立,源码定位到两个候选机制(ts_scale 左补 NaN 的窗口边界;cs_mask_top_replace_mean_neg 用 ceil 取整+稳定排序打并列),未做数值 diff 验证因果。(2) 两处\"名字陷阱\":cs_mask_top_replace_mean_neg 因 _neg 后缀实际遮罩当天最低 10%(不是字面\"mask_top\"的最高);ts_scale 每只股票除以自己的滚动和,一般不是横截面保序的。(3) day_kurt 内部私有函数 _kurt 的源码读不到(study.sh src 工具限制),用同库另两处 kurt 实现跨证代替。\n\n严格遵守任务边界:只写了 notes/F112_scale_spow_masktop/ 下的文件,未改 configs/*.yaml、scripts/、partura/、workflows/、handoff/、lab/、docs/ 或其他因子的文件;未派生子 agent;全文中文、术语保留英文;四份 notes 和结果卡只写事实与异常,未提假设、未设计实验、未下结论。",
+  "problems": [
+   "day_kurt 内部调用的私有函数 _kurt 源码没有读到:study.sh src _kurt 和 study.sh src common._kurt 均返回 not found(工具限制:解析不了 C._kurt 这种模块别名+属性式调用),只能用同库另两处 kurt 实现(nankurt_last、day_kurt_masked)跨实现互证+探针数值吻合,不是源码逐字确认。",
+   "中间节点 A~E(day_quantile/day_kurt/add/cs_mask_top_replace_mean_neg/signedpower 的输出)没有做真实数据上的经验分布测量(均值/标准差/百分位数),只给出了由齐次度和公式推出的理论量纲与理论界;decompose 只跑了内置合成探针,没有为这棵树写 studies/F112_scale_spow_masktop/probes.py。这超出了本次建档任务列出的步骤,留给需要时再做。",
+   "与用户发布值的出入(utrain 口径 LS +2.59 vs 公布 +2.58;Lgross +9.1% vs 公布 +8.9%)只在源码层面列出了两个候选机制(ts_scale 的窗口边界处理、cs_mask_top_replace_mean_neg 的 ceil 取整与并列打破约定),没有做逐日数值 diff 去验证这两个候选是否真的是原因;holdout 列(公布 2.64/0.125)因留出段未读,完全无法对比。",
+   "空头腿毛超额占长短合计约 77%(train),day_kurt(High) 属于 playbook §6 第 6 条点名的峰度类风险算子,但本次没有跑 st.target(buyable=False) 去检验空头腿是否被次日封涨停票的 0 收益标签抬高——这是未知,不是已排除。",
+   "S0_baseline.json 里 rICtraded(平滑后交易信号的 rank IC)字段整体缺失(rank_ic_traded 键不存在于 train/valid 的 splits 里),digest 打印为空;看起来是这次运行/这版流程本身没有写入该字段,不是 F112 特有的异常,但按要求记录为「探针/诊断读数为空」。"
+  ],
+  "tags": [
+   "Partura",
+   "F112_scale_spow_masktop",
+   "建档",
+   "执行",
+   "Sonnet5",
+   "AlphaCube算子溯源",
+   "基线复现"
+  ]
+ }
+}

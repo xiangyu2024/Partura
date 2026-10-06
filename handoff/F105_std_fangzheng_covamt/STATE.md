@@ -1,6 +1,6 @@
 # F105_std_fangzheng_covamt — 交接状态
 
-_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F105_std_fangzheng_covamt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #25(批次 B01_single_factors)
 - 表达式:`ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)`
@@ -103,9 +103,9 @@ v_base = +9.3 / +18.2(ut +11.8),Lshp 1.96,ρk 0.72。三条路全是零增量:
 - `sweep_s2`  10-05 11:46  134 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s2`
 - `anatomy_s2`  10-05 11:57  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s2`
 - `sweepfinal_s2`  10-05 11:59  8 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweepfinal_s2`
-- `sweep_s3`  10-05 16:27  161 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s3`
-- `anatomy_s3`  10-05 16:32  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s3`
-- `sweepfinal_s3`  10-05 16:34  8 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweepfinal_s3`
+- `sweep_s3`  10-05 17:38  161 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweep_s3`
+- `anatomy_s3`  10-05 17:49  0 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt anatomy_s3`
+- `sweepfinal_s3`  10-05 17:59  8 个变体  → `./scripts/study.sh digest F105_std_fangzheng_covamt sweepfinal_s3`
 - `x1_events`(自写脚本的输出)  10-03 19:28  exit 0  → `logs/F105_std_fangzheng_covamt_x1_events.log`
 - `x2_longleg`(自写脚本的输出)  10-03 23:05  exit 0  → `logs/F105_std_fangzheng_covamt_x2_longleg.log`
 - `audit1`(自写脚本的输出)  10-03 23:29  exit 0  → `logs/F105_std_fangzheng_covamt_audit1.log`

@@ -1,0 +1,24 @@
+{
+ "type": "result",
+ "key": "v2:18d6b6708536752783a7c98c75b88841180f145b7dfd7b9e075b7617262873f6",
+ "agentId": "a8639308f6e6f4143",
+ "result": {
+  "order": "R1 (kind: experiment, factor F113_nested_tsmax_demean)",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/results/R1.md",
+  "tags": [
+   "S1_chain",
+   "x1_ties"
+  ],
+  "problems": [
+   "区块1第2条(多头腿内部的并列组/最大并列组测量)我用了 sig(平滑交易信号)而不是 raw 面板——工单只在第1条(dist自检)明确写了'raw 面板',第2、3条没重复限定,我按和第3条(工单原文写'sig值')同属一组来解读;这是我的解读选择,已在结果卡'做了什么'第3点标出,需主研确认是否认可",
+   "区块1的dist自检,工单原文写'train+valid合起来的中位数'要复现S0的0.5847,但生产S0实际只用 dg.distinct_fraction(p64[train切片])(源码确认);我把train-only(=0.5847,精确复现)和train+valid合并(=0.5724)两个数都算了,都在±0.02容差内,但严格说不是同一口径",
+   "区块1~6和B节的多/空头腿选择统一用 n=round(0.10×有效股票数),工单原文明确要求round;但生产alphacube.metrics.long_short_weights用的是floor,两者在n×0.10接近整数时相差最多1个名额,所以区块6等算出的数字和主表digest的short/Lgross列不是100%同一批名额",
+   "区块5里 known_stdamt_max9 本次(多头口径)选到 hl=5,与工单主研补注引用'06_baseline.md §8 记录 hl:9d:0'不一致;去查了06_baseline.md,该表确实显示known_stdamt_max9为hl=0但known_stdamt_mean30('30d:1')根本没在那份文档出现过——怀疑是R0已知的rank_by从ls改成long之前的旧口径遗留(同R0异常③同一根因),但没有查实,留给主研或下一轮执行核实",
+   "c9_rankfold的dist=0.98,不是预期的接近1.00(cs_rank理论上应几乎消掉并列),2%的差距来源本次没有拆解",
+   "B节'切割点上进了/被切掉的列下标中位数'这一项,v_base/c9 × train/valid 四组里只有v_base/train凑够1个同时满足'有并列且组内既有进的又有被切掉的'的抽样日,其余3组是0天——不是脚本错误,是区块1本身显示切割点并列基本不存在(中位数=1,即无并列),样本太小测不出结论",
+   "c4_nodemean_out 与 c8_nofold_out 的rank相关达+0.99(几乎同一个东西),但两者代数推导上是不同结构,工单没有预测到这一点;多头腿数字也确实很接近(属于本次意外发现,不是错误)"
+  ],
+  "summary": "在 /Users/wxy/Desktop/Partura 下执行了工单 R1(kind: experiment)。brief 确认 R1.md 是唯一待办工单且 S1_chain/x1_ties 两个 tag 此前都没跑过(不是中断恢复,从零做)。(A) 在 configs/F113_nested_tsmax_demean.yaml 里照工单逐字加了 title 定稿、S1_chain 阶段(10个变体 c1_b_max5…c10_medfold)、diagnostics 追加、新增 corr_ids;check 22/22 通过;run+wait 完成,exit 0,240.5s,peak 4.76G,errors={}。(B) 按工单写了 studies/F113_nested_tsmax_demean/x1_ties_and_longbook.py(六个区块 H1/H2/H6/H7 + 主研补注B节H11三项),脚本开头对合成数据做了自检(pick_legs/col_quantiles/board_of/distinct_fraction/权重gross=1net=0全部验证通过),exec+wait完成,exit 0,六个区块和B节全部跑完无FAILED。两次服务器运行,符合工单'合计2次'的约束。结果已写入 notes/F113_nested_tsmax_demean/results/R1.md(做了什么/工单要的数字用表格逐项列出/异常9条/原始输出位置)，日志记了3条([执行]开工、S1_chain结果摘要、R1完成总结)。关键数字:消融候选 c3_g_fold1/c4_nodemean_out/c8_nofold_out 的多头腿净超额在 train/valid 两段同向为正(+5.9%~+6.9% / +9.6%~+13.3%),远好于 v_base(+1.6%/-1.7%,R0);升华候选 c9_rankfold 为 +3.0%/+0.1%,明显偏弱,固定半衰期表上也更单薄。工单要求复核的两处代数审计(H9: c6_nomul_nosub vs v_base rank相关;H8: c5_nopow15 的 hl=0 行 vs v_base)均精确通过,无红色警报。H1(并列噪声)在实际交易信号(sig)口径下测不出明显并列(多头腿dist中位数=1.000,并列组占比中位数=0);H11(c9是否为股票代码/板块暴露假阳性)的列序分位(0.477~0.526,贴着0.50)和板块占比偏离(train段科创板偏离9.2~9.5个百分点,valid段普遍<5个百分点)都没有明确越过工单的判定线,但train的偏离已接近10个百分点这条线——数字已完整列在结果卡,H1/H2/H3/H5/H9/H11 的裁决和结论留给主研,本结果卡只写事实不下判断。"
+ }
+}

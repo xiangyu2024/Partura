@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:b17bb0374569bed7bbca8856553ddab094643e583eb1fbc86336c04aa998a3dc",
+ "agentId": "aae62ed0fb3b82fe7",
+ "result": {
+  "order": "R2（notes/F111_spearman_qclose/orders/R2.md，含\"修订 R2-a\"）",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F111_spearman_qclose/results/R2.md",
+  "tags": [
+   "S2_window",
+   "x2_increment"
+  ],
+  "summary": "按修订 R2-a 把 configs/F111_spearman_qclose.yaml 的 S2_window 阶段四处删掉 w_last_50（variants/corr_ids/neutralise/profile），check 通过后重跑，exit 0（290.2s，峰值内存 5.36 GiB，远低于此前两次 exit 97 的上限，确认死因就是 w_last_50）。按修订2的机械规则从 digest 选出 BESTW = p_last_30（ts_pearson(day_last(Close),30)）作为 F2。新写 studies/F111_spearman_qclose/x2_increment.py 实现 block A（组合书 30 行）/B（双重排序 5 本书）/C（残差 6 行）/D（numpy 描述统计）/E（H8 复核 + 分桶 IC），sign_f/sign_k/pct_rank 取法照抄 x1_identity.py 的 block (c)。开工前先用 --mock 在本机空跑一遍（不消耗服务器配额），发现并修了一个浮点边界 bug：w*pr_f+(1-w)*pr_k 在 w=0/1 精确边界上 0*NaN=NaN 会让零权重那一侧自己的缺失值漏进边界书（这个公式是 R1/x1_identity.py 原样在用的，只是没被专门测过）；改成边界处直接取对应一侧，中间三个 w 值公式不变，并用 bk.book_row 在 hl=0 上的可证明精确不变量重写了 self_check()，--mock 和真实两次运行都 PASS。exec x2_increment 一次，exit 0，本轮服务器运行正好用了修订 R2-a 规定的 2 次（S2_window 1 次 + exec 1 次）。逐项核对了工单\"要带回来的数字\"全部 16 项（block A 的两个自检：w=1 跨家族逐位一致 PASS，w=0 与 R1 数字 14 接近但不逐位相等、差值量级与 R1 自己记录的 0.3~0.9pp 区间吻合；block B 的 5 本掩码书覆盖率/中位只数/分位剖面；block C 的 6 行残差，F1 对 3 条 known 家族的 R² 与 R1 的 v_base 版高度吻合；block D 的两张十分位表，确认 F1 多头端是更不活跃更小更低波动的票；block E 的 H8 复核方向与 playbook 一致），还只读核对了 partura/books.py 第 61 行（多头腿等权基准 = 当天平滑后信号有值且有标签的全部股票）和 alphacube/metrics.py 的 ema_rows（确认平滑不改变缺失值范围）。写了结果卡 results/R2.md（做了什么/工单数字逐项表格/值得注意的异常/原始输出位置四节，只写事实不下结论），记了两条日志（一条结果摘要，一条更正了第一条里写错的全研究服务器运行计数）。只碰了 configs/F111_spearman_qclose.yaml、studies/F111_spearman_qclose/x2_increment.py（新建）、notes/F111_spearman_qclose/results/R2.md（新建）三处，journal.md 通过 study.sh note 追加，没有碰 partura/、scripts/、handoff/、lab/、docs/ 或别的因子的文件（git status 核对过）。",
+  "problems": [
+   "d3 要的 rank 相关数量：工单数字清单写「6 个」，但 block D 正文只点名了 5 个目标（v_base/F1/3 条 known_*）；按 5 个做了，数量不一致留给主研判断",
+   "block C 的残差 R²（原始日频，不平滑）显示 F2 比 F1 更接近 3 条 known 家族（0.126~0.129 vs 0.066~0.111），但 S2_window 的 rank_corr_train（平滑交易信号口径）方向相反（F1 的|相关| 0.35~0.41 高于 F2 的 0.30~0.35）；两个口径定义不同，排名矛盾，已写进结果卡但没有判断该信哪个",
+   "block A 自检 b：known_stdamt_max9 这条家族 w=0 的 hlL 从 R1 的 5 变成本轮的 2，LTO 差了约 1.6~1.9pp，比另外两条家族明显大，怀疑该家族半衰期扫描曲线本身有多个接近打平的候选点",
+   "S2_window 的 digest 里 w_last_5 的 dist=0.06，远低于 0.5 门槛（其余变体都是 0.89 或 1.00，cov 都没问题）",
+   "修复的 0*NaN 边界 bug 是 R1/x1_identity.py 原样在用的公式，R1 当时没有专门测过这一点；不确定 R1 已发布的 w=0/w=1 数字是否受过影响（R1 只跑了 1 个 f，且可能该因子与 3 条 known 家族的缺失值分布恰好高度重合而没触发），留给主研判断是否需要补注"
+  ]
+ }
+}

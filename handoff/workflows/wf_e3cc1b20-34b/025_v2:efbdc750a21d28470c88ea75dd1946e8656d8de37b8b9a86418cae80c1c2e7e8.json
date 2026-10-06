@@ -1,0 +1,17 @@
+{
+ "type": "result",
+ "key": "v2:efbdc750a21d28470c88ea75dd1946e8656d8de37b8b9a86418cae80c1c2e7e8",
+ "agentId": "a2cc3b41af9915b6e",
+ "result": {
+  "order": "R2",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F106_erm_mag_gap_1m/results/R2.md",
+  "tags": [
+   "S_final"
+  ],
+  "problems": [
+   "非阻塞性的小不确定项(已在结果卡与07_S_final.md里写明,不影响交付):diagnostics.by_year 这张表背后用的是 books(train拟合半衰期)还是 books_user(utrain拟合半衰期),JSON 没有字段标注;用 f_excl_blown15(两套hl不同的唯一变体)去反推,数字恰好落在两种假设中间,没能排除任何一种。不影响本卡引用的 f_orig/f_known30 逐年数字,因为这两条在两套口径下 hl 相同、没有歧义。"
+  ],
+  "summary": "工单 R2(kind: final)是\"读留出段\"工单,但进入本轮时 S_final 已经在更早一轮以 exit 0 跑完(ledger.json 显示 holdout reads=1/expressions=5,留出段唯一一次读取已用掉),工单末尾\"补充(主研第3轮)\"也明确写了本轮服务器运行应为0次、只需 digest+读JSON+写两份文件。因此本轮没有调用 check/final/run/exec,没有修改 configs/F106_erm_mag_gap_1m.yaml,只做了:(1) ./scripts/study.sh digest F106_erm_mag_gap_1m S_final 重看;(2) 用 python3 直接读 runs/F106_erm_mag_gap_1m/S_final.json 的 books/books_user/profile/diagnostics 各字段核对精确数值;(3) 写 notes/F106_erm_mag_gap_1m/07_S_final.md(完整事实记录:五条候选的决策口径/用户口径主表、sign/dist/cov、固定半衰期扫描全表、C3/C4降级后的四段对照、f_orig与用户公布行对照、分位剖面、逐年、rank相关)和 notes/F106_erm_mag_gap_1m/results/R2.md(结果卡,按C1~C6分组呈现数字);(4) 记了一条 [执行] 日志。核实并在卡里写明了工单要求的三件事:两条叠加候选用的是cs_rank主版不是兜底版(f_known30与f_known30r在hl0下书逐项相同、rank相关=1.000);holdout的分位剖面在JSON里不存在(profile只有train/valid,f_known30r和f_excl_lu15连profile字段本身都没有);holdout没有固定半衰期网格(sweep只在各自拟合段算),C3/C4按工单要求降级为\"引擎各自拟合半衰期下的差值=上界\"读法,四个split(train/valid/utrain/holdout)分别给出并标注是否同一半衰期。关键数字:f_orig holdout Lnet −3.19%/Lshp −0.69/LS +3.11/Lgross −1.38%,与用户表test列(LS 3.11/Lgross −1.4%)精确复现;f_known30 holdout Lnet +14.10%/Lshp +1.51,落在用户给的+13~15%/1.4~1.9区间;C3(f_excl_blown15−f_known30r)holdout上界+0.54pp,C4(f_excl_lu15−f_known30r)holdout上界+0.75pp;五个变体cov(ic_holdout.coverage)全部0.9675、dist全部≥0.9933,C6全过;无求值失败、无NaN异常,sign/sign_user全部−1。所有数字逐项与主研state.md §2.1/2.2的裁决表核对一致,没有发现需要特别提醒主研的不一致项。本结果卡只写事实与异常,C1~C6的裁决留给下一轮主研。"
+ }
+}

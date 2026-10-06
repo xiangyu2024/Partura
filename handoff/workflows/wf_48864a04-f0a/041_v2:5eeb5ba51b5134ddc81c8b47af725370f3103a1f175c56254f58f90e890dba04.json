@@ -1,0 +1,20 @@
+{
+ "type": "result",
+ "key": "v2:5eeb5ba51b5134ddc81c8b47af725370f3103a1f175c56254f58f90e890dba04",
+ "agentId": "a0dc4328b75db9875",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F109_erm_mag_gap_5m_tsm20/results/R1.md",
+  "tags": [
+   "S1_lvl",
+   "x2_incremental"
+  ],
+  "problems": [
+   "EVTFLAG 口径选了 x1 的 THR=1e-4 近似退化判据（与 REG 的 NaN 条件保持同一口径），不是严格浮点 q95==0/q05==0；如果主研本意是严格 ==0，第4项的占比和剔除效果数字需要重算，已在结果卡『做了什么』第4条和『值得注意』第6条写明。",
+   "a_evt 这一变体没过 dist≥0.5 门槛（精确值0.0153），这是工单自己预判的，只当诊断看，两本书数字仍抄回了表里。",
+   "b_sig60 这次只进了 rank 相关矩阵当 ref，它自己的两本书/十分位/中性化按修订A′的安排没有跑（10变体上限用在了S1_nodes+S2_level上），不是遗漏。"
+  ],
+  "summary": "在 /Users/wxy/Desktop/Partura 下按工单 notes/F109_erm_mag_gap_5m_tsm20/orders/R1.md 末尾的「修订 A′」完成了 A、B 两组实验（唯一一张还没有结果卡的工单）。A 组：用脚本把配置里 b_lvl/b_lvlq 整行剪进新阶段 S2_level，check 全绿后 run 了 tag S1_lvl（S1_nodes+S2_level，10 变体），一次 wait 就拿到结果，exit 0，无排队、无新面板计算（证实了修订A′对缓存的预判），10 个变体全部求值成功，仅 a_evt 未过 dist 门槛（0.0153，工单预判之内）。B 组：新写 studies/F109_erm_mag_gap_5m_tsm20/x2_incremental.py（复用 x1_anatomy.py 的日频零件代码原文），脚本开头有纯 numpy 自测（校验了新写的秩空间残差、配对差 t 统计量、剔除补位权重函数），本机自测通过后用 study.sh exec 跑在真实数据上，运行时自检（BASE/FAM30 对照 x1/S0 已知答案）也通过，exit 0，一次成功。结果卡 notes/F109_erm_mag_gap_5m_tsm20/results/R1.md 已写完，按工单逐项列出了多头/多空口径两本书、固定半衰期表、rank IC、门槛、十分位剖面、中性化表、条件IC、逐年、完整rank相关矩阵（A组10变体+4个ref+控制变量，脚本直接从JSON生成，未手抄）、B组四项（含配对t统计量）；并在\"没人要但值得注意的\"里报告了几处异常：a_sum在hl20下train多头腿净超额只有+0.8%（低于工单+3%判据下界）、EVT对FAM30残差化后Lnet从-3.5%/-3.3%跌到-14.4%/-14.7%（R²却只有0.005~0.009）、9个秩相加组合里只有FAM30+0.3*EVT的配对差在train/valid都显著为正、EVTFLAG在FAM30多头十分位的占比train(6.78%)比valid(1.94%)高3.5倍。study.sh propose 的90条草稿已跑，完整表达式存在notes/F109_erm_mag_gap_5m_tsm20/R1_propose_draft.txt，结果卡末尾附了条目清单。已记一条研究日志。全程只用了train/valid，没有碰留出段；没有改动scripts/、partura/、workflows/、handoff/、lab/、docs/或其他因子的文件；没有触碰state.md（留给主研）；没有使用Agent/Workflow工具派生子agent。结果卡里只写了事实和异常，没有下结论。"
+ }
+}

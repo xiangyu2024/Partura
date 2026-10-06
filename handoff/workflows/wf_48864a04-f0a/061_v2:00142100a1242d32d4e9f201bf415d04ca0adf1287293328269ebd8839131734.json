@@ -1,0 +1,20 @@
+{
+ "type": "result",
+ "key": "v2:00142100a1242d32d4e9f201bf415d04ca0adf1287293328269ebd8839131734",
+ "agentId": "a0819b08292f1d769",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F108_max_ntkurt_close/results/R1.md",
+  "tags": [
+   "x2_longonly",
+   "S1_nodes"
+  ],
+  "problems": [
+   "S1_nodes 的固定半衰期表(H15 的判据)digest 只打印 train 侧(工具本身的既有行为,summarize.py 的 sweep 只在 fit=train 上扫半衰期),不是我省略;valid 侧若要同一半衰期的严格对照,还差一次类似 x1 fixed_line 的补充读数,留给下一张工单。",
+   "S1_nodes 里 n_nocube 的实测数字(rank corr 对 v_base 0.870、train Lnet -2.6%/+2.4%、LTO 6.3%)精确对应 x1 表里的『Kmax』那一行,不是工单 why 文本引用的『r=max|K|』那一行(0.880/-1.8%/6.6%)——day_max(K) 只取 Kmax 单边、x1 的 r 取 max(Kmax,-Kmin) 双边,表达式完全照抄工单未改动,H3 的方向不受影响(已在结果卡与 07_S1_nodes.md 里注明)。",
+   "x2_longonly §A2(H11 的核心测量)48 行结果本身不'干净':五分位池多数增量小且 train/valid 方向不稳,只有十分位池、尤其剔 30%(特别是 K1×D_m30:净增量 train+1.5pp/valid+2.1pp)清楚过了工单 ≥1.5pt 两段同向的门槛,需要主研按口径裁决哪些组合算'过关'。"
+  ],
+  "summary": "完成工单 R1(kind: experiment)。按硬顺序跑了两次服务器:(1) 新写 studies/F108_max_ntkurt_close/x2_longonly.py(复用 x1 已算的 base/jmax 面板,没有引入新 NT 表达式),补齐 x1 被内存守卫掐断的 §A(叠在已知家族上的剔除式组合,H11 核心测量)+ §B(H14 单边剔除 vs 完整排序、H9 层内排序代理)+ §C(同一尾部条件概率)+ §0(utrain+固定hl10),exec 运行 exit 0,全程 process anon < 1.9 GiB,未触发内存守卫;(2) 在 configs/F108_max_ntkurt_close.yaml 新增 S1_nodes 阶段(8 个变体,表达式与 why 照抄工单,k_max10 按工单已指定用窗口 10 替代用户口径的窗口 9),check 通过后 run,exit 0、168.8s、用上了 GPU。两次运行都一次性顺利跑完,没有中断或需要重跑的部分。本地先用合成数据对新写的几个 helper 函数(screened_book/layered_pct_rank/同只数匹配控制)做了 dry-run 自检并修了一处广播 bug,再提交服务器。读数要点(只报事实,未下结论):H11 的核心测量不干净,仅十分位池+高剔除比例(尤其 K1×D_m30 剔30%)两段同向过了+1.5pt门槛;H14 在 §B1 得到干净支持(剔除式随比例单调改善,十分位完整排序几乎为零/负);H9 在 §B2 仅 cross_mean(day_amt,30) 两段一致为正;§0 的 utrain+固定hl10 读到 Lnet 为负(-0.6%),与用户发布值 +5.6% 方向不一致。已写结果卡 notes/F108_max_ntkurt_close/results/R1.md(逐项数字表+异常清单+原始输出位置),以及工单要求的 07_S1_nodes.md、07x_2_x2_longonly.md 事实部分(解读留空/待主研),并记了 3 条研究日志。严格只用 train/valid(+ utrain 读一次已发布对照),没有碰 holdout、没有调用 study.sh final;没有改动 state.md、05_hypotheses.md、07x_1_x1_anatomy.md、10_distilled.md,没有碰 scripts/partura/workflows/handoff/lab/docs/ 或任何别的因子的文件。"
+ }
+}

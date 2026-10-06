@@ -1,6 +1,6 @@
 # F104_kurt_masktop_amt — 交接状态
 
-_自动生成于 2026-10-05 17:10(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F104_kurt_masktop_amt` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #4190(批次 B01_single_factors)
 - 表达式:`day_kurt(nt_cs_mask_top_replace_mean_neg(abs_(Amt)))`
@@ -122,9 +122,9 @@ best_on_known:没有净增量。最强的 h_known_nofrozen +18.5% / 3.15 与通�
 - `sweep_s2`  10-05 11:39  121 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s2`
 - `anatomy_s2`  10-05 12:02  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s2`
 - `sweepfinal_s2`  10-05 12:14  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s2`
-- `sweep_s3`  10-05 16:13  146 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s3`
-- `anatomy_s3`  10-05 16:35  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s3`
-- `sweepfinal_s3`  10-05 16:37  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s3`
+- `sweep_s3`  10-05 17:36  146 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweep_s3`
+- `anatomy_s3`  10-05 17:45  0 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt anatomy_s3`
+- `sweepfinal_s3`  10-05 18:26  8 个变体  → `./scripts/study.sh digest F104_kurt_masktop_amt sweepfinal_s3`
 - `x1`(自写脚本的输出)  10-03 19:33  exit 0  → `logs/F104_kurt_masktop_amt_x1.log`
 - `x2`(自写脚本的输出)  10-03 23:20  exit 0  → `logs/F104_kurt_masktop_amt_x2.log`
 - `audit1`(自写脚本的输出)  10-03 23:56  exit 0  → `logs/F104_kurt_masktop_amt_audit1.log`

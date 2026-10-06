@@ -1,0 +1,83 @@
+{
+ "type": "result",
+ "key": "v2:ae463701db8d1ebfc01e17057fd480305c6547b67b6852f452ef14c0b0b3278d",
+ "agentId": "a13eafdc5cc99920d",
+ "result": {
+  "verdict": "restart_needed",
+  "summary": "Scope of the verdict: rl_hit_1 only. gp_hit_1 should keep running; nothing I found changes its reward or would crash it.\n\nRL (rl_hit_1): the new below-bar reward gives PPO a stationary safe harbour. A candidate below the bar is paid its own fitness (about -0.02) every time it is emitted, while re-emitting a pool member is paid -1. On a synthetic cube (150 names x 260 days, alphagen, 2000 episodes, bar 0, two seeds) the policy collapsed onto one junk expression and the pool stopped growing after the first quarter. Paying repeats of a below-bar key the -1 penalty (monkeypatched, same seed) restored exploration: 46 admissions instead of 9. This is synthetic evidence; I could not check production.\n\nBefore killing anything, read rl_hit_1_run.log (I did not touch the server):\n- **Collapsed:** the `pool` number in the progress lines has stopped growing and batches fly by (everything is cached). Let it finish, because RL has no checkpoints and killing it loses the pool it has. Then patch and relaunch.\n- **Still early or pool still growing slowly:** kill, patch, relaunch.\n\nChecked and fine:\n- **Tests:** the requested pytest command gives 88 passed.\n- **CLI smokes on a synthetic store:** all exit 0 and write a run dir. Covered gp + long_hit (with rolling-block, ban-top-n, ban-rank-corr, archive-dedup), alphagen + long_hit + `--rl-min-solo 0` with inherited bans, alphaqcm / alphaforge / alphasage / warmstart with long_hit + bar 0, and the old paths (gp and alphagen with `--fitness rank_ic --turnover-penalty 0.14`, gp with `--fitness ic`).\n- **Empty pool:** all five RL miners with an unreachable bar finish without a crash (\"pool is empty; nothing to report\", exit 1, nothing written). A 1-member pool runs the full report with all 8 combine methods.\n- **Fresh-policy pass rate at bar 0 (synthetic):** of 600 episodes 142 completed; 78 were gate-rejected, 60 below the bar, 4 at or above it (2.8% of completed, 0.7% of episodes). The pool does not stay empty there.\n- **Solo-score cache:** safe. There are no stochastic operators, a failed chunk gives a None panel (never a partial one), and there is one engine per rewarder (the universe wrapper included). About 4 KB per entry, so under 10 MB at budget 2000.\n- **GP checkpoints:** long_hit writes the `score_xs_top20` … `score_distinct` columns; rank_ic and ic headers are unchanged. Every archive consumer in scripts/ reads by column name, and merge_archives' `score_ic` / `score_rank_ic` / `score_turnover` are still written.\n- **Launch scripts under bash 3.2:** empty BAN_ARGS / UNI_ARGS / SOLO_ARGS, the `nb=` line (prints 0), keys with commas, parentheses and `|w3`, FITNESS validation, MIN_SOLO=off, `--exemplar-cache \"\"` passed once and accepted, and every flag parsed by the real parser. There is no `set -u`, so bash 5 behaves the same. I had no bash 5 to run.\n- **chain_next.new_bans:** correct on the sample line.\n- **Inherited bans:** a second GP run inheriting 9 keys banned 7 new ones with zero overlap, no archived tree contained an inherited key, and the cumulative count included the inherited ones. No \"everything banned\" state at this scale.\n- **Degenerate panels:** 15 cases (all-NaN, inf, constant, one column, …) through long_hit / long / rank_ic `score` and `score_combined` raised nothing and never returned a NaN fit.",
+  "issues": [
+   {
+    "severity": "high",
+    "restart": true,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/mining/env.py:245-249",
+    "what": "The below-bar reward is a stationary safe harbour for PPO (affects rl_hit_1 only, not GP). A candidate under the bar is paid max(solo, 0.5 x penalty), in practice its solo of about -0.02 (the -0.5 floor never binds for long_hit; pure daily noise scores about -0.1), and it is paid that again on every repeat. Re-emitting a pool member is paid -1 (DuplicateFactorError). So the best repeatable reward is a junk expression just under the bar, and the policy converges onto it and stops exploring. This changes which expressions the RL is paid for.",
+    "evidence": "Synthetic cube (150 names x 260 days x 24 min, planted signal), run_mining with alphagen, long_hit, rl_min_solo=0, budget 2000, default PPO settings. Seed 0: pool reached 9 in the first quarter and never grew; in the last quarter 417 of 417 completed expressions were below the bar, 401 of them `day_mean(Open)` at reward -0.0172; 317 unique expressions in the whole run. Seed 1: last quarter 409 of 412 below the bar (`day_median(Vwap/Low/Close/Open)`), 0 added. Counterfactual, same seed 0, with repeats of an already-paid below-bar key paid the penalty (monkeypatched): 1467 unique expressions, 54 unique with solo >= 0 (vs 9), 46 admissions (vs 9), 18 of them in the last quarter. Not verified on production data; the mechanism does not depend on the data.",
+    "fix": "In BatchRewarder keep a set of below-bar keys already paid. First time: max(solo, 0.5 x penalty). Repeat: self.penalty, with reason \"... (repeat)\". Update tests/test_long_hit_scorer.py::test_rl_pool_refuses_candidates_below_the_solo_bar to match. Rewrites with identical ranks (e.g. add(x, x)) are still distinct keys; a rank-level seen-index like archive_dedup would close that too. Then relaunch RL. Check rl_hit_1_run.log first; RL has no checkpoints, so killing it loses its pool."
+   },
+   {
+    "severity": "medium",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/mining/env.py:257-275 (with pool.py:153-156)",
+    "what": "Pre-existing, not from this change, but it is the next attractor once the issue above is fixed. `added=True` and the pool's fitness are paid whenever try_add does not raise, even when the member pruned for capacity is the candidate itself and the pool is unchanged. Once the pool is full, any gate-passing non-duplicate candidate is paid the unchanged pool fitness, repeatedly.",
+    "evidence": "Same synthetic setup with no bar (the rl_long_1 regime): 1430 of 1625 completed expressions were \"added\" into a 10-member pool. In the last quarter 403 of 406 were \"added\", all at exactly +0.3389 (pool unchanged), e.g. `day_max(Close)` 81 times with solo -0.019 and `day_max(Amt)` 73 times with solo -0.066. With the bar on, this path needs solo >= bar, so it is rarer but still open.",
+    "fix": "After try_add, check whether the candidate is actually a member (`expr in self.pool`). If it is not, treat it as not added and pay it like a below-bar candidate (solo once, penalty on repeats). Ship in the same patch as the fix above."
+   },
+   {
+    "severity": "medium",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/mining/scoring.py:325-326 (HIT_WEIGHTS sh_top20 / sh_rankw) with /Users/wxy/Desktop/AlphaCube/scripts/rl_long.sh:24 (MIN_SOLO default 0)",
+    "what": "Bar 0 is not break-even. Two fitness components are the absolute Sharpe of long-only books, so they carry the market's own Sharpe: the fitness of a static, zero-information, zero-turnover factor is about 0.0183 x (equal-weight market Sharpe over the training window). With a positive market Sharpe, no-information low-turnover characteristics clear MIN_SOLO=0; with a negative one, real factors must first overcome the offset. GP ranking is barely affected, since the offset is nearly common to all factors.",
+    "evidence": "make_scorer(target, \"long_hit\") on a synthetic 600 x 1000 target, static random factor. Market Sharpe +0.90 gives fit +0.0129; +0.13 gives +0.0004; -1.11 gives -0.0122. For comparison, a slow AR(0.98) no-information factor scores -0.004 / -0.012 / -0.027 and daily noise about -0.09 to -0.13. The production market Sharpe is not known to me.",
+    "fix": "At launch compute the offset (score a static random panel once, or 0.0183 x market Sharpe) and set MIN_SOLO = offset + margin. Alternatively apply the bar to fitness minus that offset. This is a next-launch tuning change; it does not need its own restart."
+   },
+   {
+    "severity": "medium",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/pipeline.py:432-434 and /Users/wxy/Desktop/AlphaCube/src/alphacube/cli.py:157",
+    "what": "No crash with an empty or 1-member pool, but an empty pool writes nothing: run_dir is None, there is no members.csv or meta.json, and the exit code is 1. RL has no checkpoints, so every solo score computed during the run is discarded, and a killed RL run leaves nothing either.",
+    "evidence": "run_mining with rl_min_solo=1e9 for alphagen, alphaqcm, alphaforge, alphasage and warmstart: all return pool=0, run_dir=None, \"best reward -inf\", last log line \"pool is empty; nothing to report\". CLI with --pool-capacity 1: full report, members.csv and combined.npy written, 8 combine methods fine.",
+    "fix": "Dump rew._solo_scores (expression, fit, components) to <run>/solo_scores.csv before the empty-pool return and at normal exit, ideally every N batches as well. Then an RL run with a strict bar is never a total loss."
+   },
+   {
+    "severity": "low",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/scripts/chain_next.py:19 and /Users/wxy/Desktop/AlphaCube/src/alphacube/mining/env.py:127",
+    "what": "new_bans mis-parses an empty ban line. \"封禁 0 个一层结构,累计生效 N 个: \" followed by a newline makes the regex's `\\s*` cross the line break and capture the next log line as a key. GP then dies at start-up in check_ban_key (loud). RL never validates --ban keys, so a malformed key is silently carried and bans nothing.",
+    "evidence": "new_bans(\"  封禁 0 个一层结构,累计生效 3 个: \\n  按 rank 相关封禁:本块新增样本 0 个,累计 41 个\\n\") returns ['按 rank 相关封禁:本块新增样本 0 个,累计 41 个']. The sample line from the task parses correctly into 3 keys. A zero-ban line needs a block whose final population has no finite fitness: unlikely at population 64, but the small smoke run did produce a 1-key ban line.",
+    "fix": "Use `[::][ \\t]*(.*?)[ \\t]*$` and keep only keys starting with `O:`. Call gp.check_ban_key on the RL path too (pipeline.py, before building BatchRewarder)."
+   },
+   {
+    "severity": "low",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/scripts/rl_long.sh:24",
+    "what": "MIN_SOLO as a negative number in scientific notation is rejected by argparse, because `--rl-min-solo -1e-3` looks like an option. Plain negative decimals work.",
+    "evidence": "Stubbed dry run with the real parser: MIN_SOLO=-0.01 parses to rl_min_solo=-0.01; MIN_SOLO=-1e-3 fails with \"argument --rl-min-solo: expected one argument\", exit 2 (immediate and loud).",
+    "fix": "SOLO_ARGS=(\"--rl-min-solo=${MIN_SOLO:-0}\")"
+   },
+   {
+    "severity": "low",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/mining/env.py:245 and /Users/wxy/Desktop/AlphaCube/src/alphacube/cli.py:325-328",
+    "what": "`--rl-min-solo` is silently ignored when no scorer is built (`--fitness ic` with turnover penalty 0), and for GP. The help text says the candidate \"is paid that fitness\", but the code pays max(solo, 0.5 x penalty). Neither affects the current runs.",
+    "evidence": "Code path: pipeline.py:399 builds a scorer only if kind != \"ic\" or penalty > 0; env.py:245 requires `self.scorer is not None`.",
+    "fix": "Raise in cmd_mine when --rl-min-solo is given with --fitness ic and no turnover penalty, or with --miner gp. Correct the help text."
+   },
+   {
+    "severity": "low",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/src/alphacube/mining/env.py:168-196 with /Users/wxy/Desktop/AlphaCube/scripts/rl_long.sh:44 (GPU fraction 0.3)",
+    "what": "Unverified risk. With BAN_FROM, RL loads the rank-ban exemplars in 150-tree engine calls under a 0.3 GPU cap, and the tolerant engine drops trees silently on CUDA OOM. The log line cannot tell OOM drops from the 0.99 exemplar dedup.",
+    "evidence": "Code reading only. The comment at gp.py:478 records 462 exemplars in one call using 31.9 of 32.6 GB; scaled linearly, 150 trees is about 10 GB against a cap of about 9.8 GB. Locally on CPU, 23 of 23 loaded.",
+    "fix": "Compare \"rank-ban exemplars: N 个\" in rl_hit_1_run.log with the `exemplars` count on gp_hit_1's first generation line. Same archive, keys and view, so they should be equal. If RL's is smaller, lower the batch for RL (e.g. 50) and log how many panels came back None."
+   },
+   {
+    "severity": "low",
+    "restart": false,
+    "where": "/Users/wxy/Desktop/AlphaCube/scripts/gp_long.sh:37-44 and /Users/wxy/Desktop/AlphaCube/scripts/rl_long.sh:27-34",
+    "what": "BAN_FROM is not transitive. A run's log only prints the bans it made itself, not the ones it inherited, so round 3 must list every earlier run (BAN_FROM=\"gp_long_1 gp_hit_1\"). Listing only the latest silently drops the older bans and their archive. Separately, the gp_long.sh header still says it inherits nothing.",
+    "evidence": "Smoke run gp_d inherited 9 keys from gp_a; its own log's ban lines list only its 7 new keys. new_bans on that log returns 7. Keys duplicated across several runs are harmless (frozenset).",
+    "fix": "Document it in the script header, or have the script echo the inherited keys in the same \"封禁\" format so one log carries the full chain."
+   }
+  ]
+ }
+}

@@ -2,6 +2,49 @@
 
 _最后更新:2026-10-05 13:45 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
+## ⏱ 现状快照(2026-10-05 19:45 PDT;用户提醒额度将尽 —— 接手的人先读这一段)
+
+**用户刚给的两句授权(原话)**:「你的需求我全部满足」「partura的权限等级比alphacube高」。总领的理解与安排:
+(1) 数据层字段(流通市值 / 流通股本、涨跌幅限制宽度 / 板块)可以加;(2) 半衰期网格可以加 40 / 60;(3) 指引钩子可以并进 AlphaCube 本体;
+(4) Partura 可以改 AlphaCube —— 在 `~/Desktop/AlphaCube` 开分支做、向后兼容(不传新参数时行为与随机数流不变)、测试通过后再同步到服务器的
+`/root/autodl-tmp/AlphaCube/src`(2026-10-05 核对过:服务器 src 与本机 HEAD `517fd09` 逐字节相同;scripts/ 有两个 .sh 不同、tests/ 服务器缺几个文件)。
+服务器上不是自己起的进程照旧不杀。
+
+**所有 agent 的产出都在仓库里**:`handoff/workflows/<run_id>/`(每个 agent 的返回值一份 JSON + `journal.jsonl` 原件 + `INDEX.json`),
+由 `scripts/wf_dump.py --loop 120` 每两分钟从会话目录抄一次(普通进程,不耗额度;重启命令:
+`(nohup ~/.venvs/alphacube/bin/python scripts/wf_dump.py --loop 120 > logs/_wf_dump.log 2>&1 &)`)。每条因子的结论照旧在 `handoff/<fid>/`(recorder)。
+
+**正在跑的两个工作流(被额度打断后原样续跑,做完的 agent 走缓存)**
+| 工作流 | run id | 做什么 | 续跑 |
+|---|---|---|---|
+| partura-review-audit | `wf_b7c13476-92d` | 对抗式审查:6 个维度(奖励数学 / 匹配器与规则 / GP 钩子 / 成对统计 / 流水线与样本外纪律 / 筛子算子与可交易池)各一位 Opus 5 审查者 + 45 个扩展算子分 9 组由 Sonnet 5 写朴素参考实现逐元素对拍;每条发现再由 Opus 5 复现或推翻 | `Workflow({scriptPath: "…/workflows/scripts/partura-review-audit-wf_b7c13476-92d.js", resumeFromRunId: "wf_b7c13476-92d"})` |
+| alphacube-steering-design | `wf_8604f186-483` | 5 位读者摸清 AlphaCube(表达式 / 引擎 / 挖掘 / 存储与数据 / 测试)→ 3 位架构师各出一份设计(日频字段进表达式 + 指引钩子进本体 + Partura 迁移)→ 3 位评审打分 → 综合成最终设计与工作包 | 同上,脚本 `alphacube-steering-design-wf_8604f186-483.js`,`resumeFromRunId: "wf_8604f186-483"` |
+脚本都在 `~/.claude/projects/-Users-wxy-Desktop-230P-hw2/a975f7b7-25eb-4993-9a81-70b3c9c381f0/workflows/scripts/`。
+**拿到结果之后**:审查 → 把 `survived` 里的缺陷逐条修掉(先 high),补测试,受影响的结果重跑;设计 → 总领过一遍 `final`,再起实现工作流
+(在 AlphaCube 的 git worktree 里按工作包实现 → 跑测试 → 对抗式审查 → 合并 → 同步服务器 → 建日频字段库)。
+
+**服务器上正在跑(screen)**
+- `idea_I2_dispersion_fold`:想法 I2 的干预实验重跑(tag `e2`,奖励 `long_marginal`,两臂各 192);日志 `logs/_idea_I2_dispersion_fold.log`。
+- `idea_I5`:想法 I5(只换奖励 `long_bucket`、不限结构 = 先验本身的检验)跑完接着跑 I1(当筛子,`long_screen`);日志 `logs/_idea_I5_within_bucket_anything.log`、`logs/_idea_I1_frozen_state.log`。
+  结果用 `./scripts/study.sh idea-pull` 拉到 `episodes/e2_*/evidence.json`,`python scripts/guidance_report.py guidance/B01.yaml` 会把它们写进指引报告第四节。
+  e1(首跑)的结论作废:对池子的边际奖励两边股票池不一致(已修:`RewardContext.pool_in_universe`),带指引的一臂把预算花在同一个种子的等价包裹上
+  (已修:`steer.simplify` / `nonneg`、接受钩子按规范形去重、规则 D15~D17)。
+
+**第三轮(tag `s3`)已全部完成**(15 条;修过 cross_ema 溢出、dist 门槛、筛子方向之后的重跑):`runs/<fid>/{sweep,anatomy,sweepfinal}_s3.json` 已拉回本机;
+聚类 `runs/_batch_B01/cluster_s3.json`(24 簇;已知族簇首 `F114.h3_xfr_plus_state`;独立簇首 8 个)、融合 `runs/_batch_B01/fuse_s3.json`(测试段已读、记账)。
+融合读数(成员各自平滑后等权;多头净超额 样本内 / 样本外,括号纯多头夏普):原式 15 条 +15.8 / +11.1(3.26 / 1.63);升级版 15 条 +20.4 / +15.9(3.53 / 1.63);
+**独立 9 个 +20.1 / +15.7(3.99 / 1.88)**;已知族簇首单独 +19.4 / +13.8(3.51 / 1.87);独立 9 + 簇首 +21.0 / +15.9(3.95 / 1.88);一半一半 +21.2 / +15.5(3.75 / 1.81)。
+和第二轮(独立 9 个 +20.1 / +17.3,3.95 / 1.93)在噪声内一致:第三批假设没有把样本外再往上推。
+独立 9 个(s3):F101.fld_Volume_Amt、F102.h3_age_bucket、F103.nosc_B_cross_semistd_neg、F107.h3_blend_own2_ema30、F110.h3_cvx_xage、F111.h3_best2、F112.iso_E、F113.h3_g6_bdemean、F115.h3_raw_amt。
+
+**还没做的(按顺序)**
+1. 用 s3 重出给用户看的两份:`python scripts/readable_report.py batches/B01_single_factors.yaml --tag s3`(先给 s3 新成员在 `NOTES` 里补一句大白话说明)、
+   `python scripts/batch2_summary.py … --tag s3`;`python scripts/motif_stats.py … --tag s3` 后重出指引报告。
+2. 半衰期网格加 40 / 60(用户已同意):建议保留原网格的读数,另在最优半衰期顶到 20 时加算 40 / 60(`partura/books.py` 的 `HALFLIVES`、`scripts/sweep.py` 的 `score`)。等审查工作流结束再改这两个文件。
+3. 新算子(5 位主研要):与方向无关的剔除 `cs_drop_high20 / low20`(置 NaN 而不是压到最底)、更细的档位 `cs_last_high10 / 05`。
+4. F111 的对账没回来(断网);`handoff/TOOLING.md` 里「待修 / 待做」的各项。
+5. 实现工作流(见上)→ 日频字段库 → 第四轮(带流通市值的假设)→ 最终总表与指引 v2。
+
 ## ★ 2026-10-05 傍晚:定位改了 —— Partura 不再是 AlphaCube 的下游(先读这一段)
 
 用户给了路线图 `~/Downloads/AlphaCube_Partura_Research_Reading_Roadmap.docx`(文字摘录在 `docs/roadmap_2026-10_extract.txt`),并要求:

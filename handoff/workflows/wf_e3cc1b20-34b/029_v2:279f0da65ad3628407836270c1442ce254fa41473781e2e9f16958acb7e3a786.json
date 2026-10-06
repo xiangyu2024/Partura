@@ -1,0 +1,20 @@
+{
+ "type": "result",
+ "key": "v2:279f0da65ad3628407836270c1442ce254fa41473781e2e9f16958acb7e3a786",
+ "agentId": "a19055ac0f98830d9",
+ "result": {
+  "order": "R3",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/results/R3.md",
+  "tags": [
+   "S_final"
+  ],
+  "problems": [
+   "无法实现的地方:无,工单四步(配 S_final 阶段、check、final、读数)按原样跑完,没有需要偏离工单的坑。",
+   "两处口径澄清(非研究思路偏离,已在结果卡'做了什么'里写明):(1) JSON 里 utrain/holdout 数字实际在 results.<id>.books_user.by_rank.{long,ls}.splits.{utrain,holdout} 下,不是工单猜测的 results.<id>.books...splits.holdout(books 只有 train/valid 两个 split,没有 holdout);(2) dist(=distinct)在 JSON 里是变体级别单一标量,不分 split,没有 holdout 专属字段。",
+   "JSON 里没有 holdout 的 profile(分位剖面)、也没有 utrain/holdout 的 sweep(固定半衰期表)——只有 train/valid,已在结果卡里写明'JSON 里没有这个字段',没有估算替代。",
+   "值得主研注意但未下结论的数字摆动:f_cvxD20 holdout Ln(+12.8%)比 train/valid(+7.9%/+8.1%)都高 4.7~4.9 点,超过规矩摘要±3点噪声带(Lshp差在±0.3内);f_known30 holdout(+14.1%/+1.51)比 valid(+22.3%/+3.46)低8.2点/1.95,远超噪声带(但比train只差+1.5点/-0.27)。"
+  ],
+  "summary": "完成工单 R3(kind: final,F110_ret_fair_log 全研究唯一一次读留出段)。先确认两条前置条件满足(ledger.json 无 holdout 记录;10_distilled.md 已有\"读留出段之前\"节),用脚本从配置文件里原样抠出 5 个表达式(不手打)新建阶段 S_final(5 变体,group: final / final: true / profile: true),corr_ids 和 diagnostics 按工单改小,S0_baseline/S1_long 原样未动。check 25/25 OK,./scripts/study.sh final F110_ret_fair_log S_final S_final 跑完 exit 0(154.2s),ledger 确认 holdout 只读了一次(reads=1,5个表达式)。canary 7 项(5个rank corr + 2个train Ln/Lshp)全部与工单预期吻合,无需任何修正。从 runs/F110_ret_fair_log/S_final.json 直接读出 5 候选 × 4 段(train/valid/utrain/holdout)× 两种口径的完整数字(hlL/Ln/Lshp/Lg/LTO、hlS/LS/short、cov/dist),绕开了 digest 控制台\"LTO/short 单列实际是 utrain 值\"的已知坑;算出工单要的 5 个判据差值(J3-a/J3-b/J4/J5-a/J5-b);整理了 6×6 相关矩阵、6×12 corr_with 表、8年 by_year 表(标出 2023 是切点混合年、2024/2025 才是纯 holdout)、f_cvxD20 与 f_known30 的分位剖面(仅 train/valid,JSON 无 holdout 版本)、固定半衰期表(仅 train)。结果卡只写事实和差值,未做\"过关/被否定\"式判断,留给主研裁决。已记日志(journal.md 第 20 条)。本次是 S0 之外第 6 次服务器运行,未超预算;只改了 configs/F110_ret_fair_log.yaml 和 notes/F110_ret_fair_log/ 下的文件。"
+ }
+}

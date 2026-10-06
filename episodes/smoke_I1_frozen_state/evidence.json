@@ -1,0 +1,205 @@
+{
+ "idea": {
+  "id": "I1_frozen_state",
+  "hypothesis": "盘口冻结(封板、停牌前后、无成交)是一个持续几周的状态,处在这个状态里的票系统性跑输;哪一种「冻结度」的写法、多长的记忆最能标出它",
+  "seeds": [
+   "cross_max(day_zero_ratio(Ret), 15)",
+   "cross_mean(day_flat_ratio(Close), 15)",
+   "cross_max(day_flat_run_max(Close), 15)",
+   "cross_mean(day_zero_ratio(Amt), 30)"
+  ],
+  "grammar": {
+   "leaves": [
+    "Ret",
+    "Close",
+    "Low",
+    "Amt"
+   ],
+   "day_ops": [
+    "day_zero_ratio",
+    "day_flat_ratio",
+    "day_flat_run_max",
+    "day_distinct_ratio",
+    "day_at_max_ratio",
+    "day_at_min_ratio"
+   ],
+   "memory_ops": [
+    "cross_max",
+    "cross_mean",
+    "cross_ema",
+    "cross_tail_mean_q75"
+   ],
+   "windows": [
+    5,
+    10,
+    15,
+    30,
+    60
+   ]
+  },
+  "reward": "long_bucket",
+  "note": "既当单因子搜,也当筛子搜(当筛子时奖励 = 已知族排掉它最高两成之后的多头腿)"
+ },
+ "reward": "long_bucket",
+ "budget": 16,
+ "population": 8,
+ "seed": 0,
+ "boost": 8.0,
+ "period": [
+  "20180102",
+  "20230807",
+  "20220101"
+ ],
+ "guidance": "guidance/B01.yaml",
+ "arms": {
+  "steer": {
+   "seconds": 464.51247549057007,
+   "scored": 22,
+   "gate_fail": 11,
+   "scoring_seconds": 137.9717001914978,
+   "archive": 11,
+   "live": 11,
+   "passers": 0,
+   "sampling": {
+    "proposed": 29,
+    "accepted": 23,
+    "outside": 4,
+    "thinned": 2
+   },
+   "candidates": [
+    {
+     "expr": "cs_last_low20(neg(cross_max(day_flat_ratio(Close), 5)), cross_mean(day_flat_ratio(Close), 15))",
+     "fit": -0.029572,
+     "train": -0.509592,
+     "valid": -0.985726,
+     "train_ann": -0.015536,
+     "valid_ann": -0.032904,
+     "hl": 20.0,
+     "sign": 1.0,
+     "turnover": 0.061071,
+     "rho_known": 0.088892
+    },
+    {
+     "expr": "cs_bucket_rank(day_zero_ratio(Close), day_autocorr_n1(High))",
+     "fit": -0.033045,
+     "train": -1.101508,
+     "valid": -1.033949,
+     "train_ann": -0.058349,
+     "valid_ann": -0.094636,
+     "hl": 20.0,
+     "sign": 1.0,
+     "turnover": 0.043666,
+     "rho_known": 0.06898
+    },
+    {
+     "expr": "cross_mean(day_flat_ratio(Close), 15)",
+     "fit": -0.03842,
+     "train": 0.61385,
+     "valid": -1.280664,
+     "train_ann": 0.05227,
+     "valid_ann": -0.122693,
+     "hl": 20.0,
+     "sign": -1.0,
+     "turnover": 0.05956,
+     "rho_known": -0.588587
+    },
+    {
+     "expr": "cs_last_low20(neg(cross_max(day_flat_ratio(Close), 5)), cross_mean(neg(cross_max(day_flat_ratio(Close), 5)), 15))",
+     "fit": -0.041932,
+     "train": 0.495307,
+     "valid": -1.397727,
+     "train_ann": 0.040111,
+     "valid_ann": -0.127844,
+     "hl": 20.0,
+     "sign": 1.0,
+     "turnover": 0.061758,
+     "rho_known": -0.513947
+    },
+    {
+     "expr": "cs_bucket_rank(day_flat_ratio(Close), day_autocorr_n1(High))",
+     "fit": -0.042722,
+     "train": 0.461468,
+     "valid": -1.424064,
+     "train_ann": 0.038333,
+     "valid_ann": -0.128602,
+     "hl": 20.0,
+     "sign": -1.0,
+     "turnover": 0.067615,
+     "rho_known": -0.463309
+    },
+    {
+     "expr": "cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 5)), day_autocorr_n1(High))",
+     "fit": -0.045333,
+     "train": 0.180449,
+     "valid": -1.511103,
+     "train_ann": 0.011479,
+     "valid_ann": -0.092704,
+     "hl": 20.0,
+     "sign": -1.0,
+     "turnover": 0.073518,
+     "rho_known": -0.414893
+    },
+    {
+     "expr": "cs_last_low20(neg(cross_max(day_flat_ratio(Close), 5)), cross_mean(cross_max(day_flat_ratio(Close), 5), 15))",
+     "fit": -0.047374,
+     "train": -0.475217,
+     "valid": -1.579139,
+     "train_ann": -0.018996,
+     "valid_ann": -0.067627,
+     "hl": 20.0,
+     "sign": -1.0,
+     "turnover": 0.076616,
+     "rho_known": -0.055956
+    },
+    {
+     "expr": "cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 5)), day_autocorr_n1(Close))",
+     "fit": -0.049499,
+     "train": 0.133645,
+     "valid": -1.649961,
+     "train_ann": 0.008414,
+     "valid_ann": -0.100131,
+     "hl": 20.0,
+     "sign": -1.0,
+     "turnover": 0.073642,
+     "rho_known": -0.448866
+    },
+    {
+     "expr": "cross_mean(cs_last_low20(neg(cross_max(day_flat_ratio(Low), 5)), day_min(neg(Low))), 15)",
+     "fit": -0.055293,
+     "train": -0.226274,
+     "valid": -1.843103,
+     "train_ann": -0.015847,
+     "valid_ann": -0.134734,
+     "hl": 5.0,
+     "sign": 1.0,
+     "turnover": 0.061946,
+     "rho_known": 0.103575
+    },
+    {
+     "expr": "cs_last_low20(neg(cross_max(day_flat_ratio(Close), 5)), day_min(neg(Low)))",
+     "fit": -0.056888,
+     "train": -0.06152,
+     "valid": -1.896252,
+     "train_ann": -0.003954,
+     "valid_ann": -0.126399,
+     "hl": 20.0,
+     "sign": 1.0,
+     "turnover": 0.057408,
+     "rho_known": -0.011466
+    },
+    {
+     "expr": "cs_bucket_rank(ts_corr(day_flat_ratio(Close), day_at_min_ratio(High), 5), day_autocorr_n1(High))",
+     "fit": -0.104244,
+     "train": -3.474808,
+     "valid": -3.282956,
+     "train_ann": -0.098321,
+     "valid_ann": -0.08598,
+     "hl": 20.0,
+     "sign": 1.0,
+     "turnover": 0.116163,
+     "rho_known": 0.005556
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "type": "result",
+ "key": "v2:d52fbdf06e3ec452cc2fb597e01f9c6f8ee9bcf9ab53c4b740509755882b5fe6",
+ "agentId": "a6cffe6798a10bbfd",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/results/R1.md",
+  "tags": [
+   "S1_minimal",
+   "A1_channels"
+  ],
+  "problems": [
+   "06_baseline.md/state.md 引用的 v_base|ctl_cap、v_base|ctl_amt 条件IC负数数组,在 S0_baseline.json(原始、从未重跑)和本轮全新 S1_minimal.json 里都是同一组正数(两次独立运行逐位一致),磁盘上找不到那组负数的来源——需要主研核对、决定是否订正这两份 notes。",
+   "state.md/06_baseline.md 记录'rank_ic_traded 字段读数为空'这条工具的坑,实测该字段在 S0_baseline.json 里确实存在且数值正常(与 decay h=1 自洽)——这条记录看起来需要撤销或更正。",
+   "A1_channels §3 发现 train 期间某一天 v_base 的 F 面板有 3038 只股票(约全市场 58%)取值完全相同,脚本只打了数量没打具体日期,要深究需要再加一行 print 重跑(本卡没有多花这一次运行)。"
+  ],
+  "summary": "R1(kind: experiment)已完整做完。brief 确认 R1 是唯一已下单但无结果卡的工单(前两个执行 agent 被额度打断、未留下任何半成品);list 确认服务器上只有 S0_baseline [exit 0],S1_minimal/A1_channels 都要新跑。\n\n按工单在 configs/F112_scale_spow_masktop.yaml 加了 title 和 S1_minimal 阶段(10 变体,表达式逐字照抄)+ diagnostics;check 22/22 OK(工单担心 cross_scale 解析不过的分支没有发生,4 条 cross_scale 变体全部跑通);run+wait S1_minimal,exit 0,281.7s。随后按 S1_minimal 的 digest 立刻把主表、固定半衰期表写进结果卡并记了一条 journal note(按工单\"中断恢复\"的执行顺序要求)。\n\n然后写了 studies/F112_scale_spow_masktop/a1_channels.py(§1 numpy 重建+自检、§2 ceil/round/热身三个版本对公布值出入、§3 封板票两条腿两种标签+质点、§4 通道分解+H2b分桶+偏度、§5 signedpower二阶项,外加一节原始面板口径rank相关补第3项数字),脚本开头的纯numpy自检先在本机单独跑通过(含NaN边界、EPS保护、mask替换、随机数组形状的已知答案断言),再提交到服务器;exec+wait,exit 0,五节+附加节全部跑完,无一节被异常打断。\n\n工单\"要带回来的数字\"1~8项逐项都有答案,写进了结果卡(S1_minimal主表、固定半衰期表、两套rank相关、中性化表、条件IC、分位/逐年/衰减、A1_channels五节、异常)。特别注意里预告的公布值出入问题有了具体答案:ceil→round能让utrain LS从+2.59变成与公布完全相同的+2.58,Lgross从+9.1%移近到+9.0%(仍差公布8.9% 0.1pp);29天热身边界假设反而让两个数字都变得更远,不支持这个机制。\n\n主动发现并如实记录了两处现有notes与磁盘实际数据不符(条件IC v_base|ctl_cap/ctl_amt的符号、rank_ic_traded字段是否存在),用两次独立的服务器运行互相印证排除了偶然性,只写事实不下结论,留给主研裁决。另外还有若干\"没人要但值得注意\"的发现(10个变体上\"两套rank相关符号相反\"这个结构性现象被扩展确认、某天F面板3038只股票完全同值的异常并列、e的横截面偏度被尾部极端值拉到+18等)。\n\n全程只用了train/valid/utrain,没有读holdout、没有调study.sh final,没有碰partura/、scripts/、handoff/、docs/、workflows/、lab/或别的因子的文件,没有用Agent/Workflow工具派生子agent。两次journal note按工单要求的时点记录(S1_minimal跑完后立即记一次、A1_channels跑完后记一次),journal.md从3条增加到9条(含auto行)。"
+ }
+}

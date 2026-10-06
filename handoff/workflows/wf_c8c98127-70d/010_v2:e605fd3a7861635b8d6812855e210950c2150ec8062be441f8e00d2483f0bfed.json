@@ -1,0 +1,27 @@
+{
+ "type": "result",
+ "key": "v2:e605fd3a7861635b8d6812855e210950c2150ec8062be441f8e00d2483f0bfed",
+ "agentId": "a067aac26fed39d46",
+ "result": {
+  "order": "R0",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F111_spearman_qclose/results/R0.md",
+  "summary": "作为 Partura 的\"执行\"(Sonnet 5)角色,为因子 F111_spearman_qclose 完成了建档(R0)。流程:先读 docs/study_playbook.md;./scripts/study.sh brief 确认此前 3 次 study agent 都因对话额度耗尽 0 工具调用失败、notes 目录只有 1 条 journal 记录,没有可复用的已有工作;依次跑了 digest S0_baseline、overview_for.py、decompose;用 ./scripts/study.sh src 读了表达式 ts_spearman(day_quantile(Close), 10) 里两个算子的内核源码(dt_day.py:150、nd_ts.py:483);并核对了 runs/F111_spearman_qclose/S0_baseline.json 原始数据与 partura/propose.py 的字段分类注释。写完 4 份事实性 notes(01_expression.md、02_operators.md、03_decomposition.md、06_baseline.md)和结果卡 results/R0.md,记了一条 [执行] journal 日志。\n\n核心发现(事实,未下结论):(1) day_quantile(Close) 表达式里省略了 q 参数,落到函数签名默认值 q=0.5,实际算的是日内分钟 Close 的中位数,不是因子名\"qclose\"暗示的特殊分位点;项目里另有独立的 day_median 算子(走不同代码路径 C._median,未能读到其源码),两者统计定义相同但未验证数值是否逐位一致。(2) ts_spearman 声明 family=ts、arity=1,但函数体内有显式的 for i in range(N) 跨股票循环:它计算的是每只股票与全市场其他每只股票在同一 10 天窗口内的 Spearman 相关、再取横截面平均,不是单变量时间序列统计量——这是全部发现里最重要的\"名实不符\"。(3) S0_baseline 精确复现了配置里的 published 发布行(sign=+1、hl=10、ls≈2.62、long≈0.164),但前提是用\"用户口径 utrain + hl=10(多空选的半衰期)+ 毛超额(long_gross_ann,不是净超额 long_ann)\"去对比——published.long 列是毛超额,这是最容易被后续研究张冠李戴的一点。(4) 决策口径下 Lnet(多头腿净超额,hlL=20):train +10.4%/valid +17.0%;多空口径 LS(hlS=10):train 2.41/valid 3.20;多头腿只占 long-short 总收益 37%~39%;分位剖面 train/valid 均严格单调;rank 相关最高是 known_stdamt_mean30(−0.42),远低于 0.95 的同族门槛;cov=0.99、dist=0.85 均过门槛。所有数字都标明了 train/valid/utrain 口径,holdout 未读。没有提出任何假设、实验设计或研究结论,完全留给主研(Opus 5)在下一轮基于这些文件决策。",
+  "problems": [
+   "day_median 底层调用的 C._median 是未注册的内部辅助函数,study.sh src 解析不到它的源码(报 not found),因此未能验证 day_quantile(Close) 落到的默认中位数与 day_median(Close) 在分钟数为偶数的交易日上是否逐位相同——这不在这条因子的表达式树内,是旁证,不影响主线结论。",
+   "中性化 R²(digest:交易信号 0.276 / 原始面板 0.253)与 overview_for.py 给的 0.287(原始日截面 rank 回归)不是同一个对象,三者接近但未对齐口径;两个工具给出的 v_base 与 ctl_amt 的 rank 相关也有 -0.35 对 -0.34 的小差异,本次未深究原因。",
+   "逐年/衰减/中性化/条件IC/分位剖面几张诊断表用的半衰期(hl_used=20)是靠数字反推确认的(未中性化行的 rIC 与 train 段 rICtraded 对上),JSON 里没有字段直接标注这一点,未用其他方法交叉验证。",
+   "digest 打印的单一 cov=0.99 门槛值未能唯一定位具体对应哪个 split(train 侧 coverage_labelled=0.9909、utrain 合并侧=0.9937,两者都四舍五入成 0.99,valid 侧 0.9992 会四舍五入成 1.00)——三个数字都远高于 0.95 门槛,不影响'通过门槛'这一事实。"
+  ],
+  "tags": [
+   "Partura",
+   "F111_spearman_qclose",
+   "建档",
+   "R0",
+   "执行",
+   "ts_spearman",
+   "day_quantile",
+   "alpha_distillation"
+  ]
+ }
+}

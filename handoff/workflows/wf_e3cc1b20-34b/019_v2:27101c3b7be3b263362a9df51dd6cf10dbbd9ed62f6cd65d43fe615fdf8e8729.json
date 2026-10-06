@@ -1,0 +1,12 @@
+{
+ "type": "result",
+ "key": "v2:27101c3b7be3b263362a9df51dd6cf10dbbd9ed62f6cd65d43fe615fdf8e8729",
+ "agentId": "a9fca7853ab5edfd4",
+ "result": {
+  "status": "order",
+  "order": "R2",
+  "kind": "experiment",
+  "summary": "R2 有工单、没有结果卡(上一轮执行被打断),所以按规矩不另开工单,R2 交回执行。但原样重跑会确定性地再死:查日志发现 S2_window 两次 exit 97 都是 w_last_50(ts_spearman d=50)退到 CPU 后把本进程撑到 anon 15.3 GiB > 14.0 守卫上限,d=30 是跑成了的。于是给 R2 追加「修订 R2-a」:删 w_last_50(含最容易漏的 corr_ids,否则引擎会为相关矩阵重算那个面板又挂)、不补 d=50 替代变体(d 轴斜率在 5/10/20/30 上就能读,d=30 已进已知家族频段;这段记为「工具成本放弃测量,不是证据」)、block 优先级改 B>A(双重排序是 H4 的决定项、也是唯一新信息)、F2 改可选(第 1 项再挂也不拖垮 H4 的决定性实验)、第 1 项只许跑一次 + 写脚本的内存纪律。研究路线不变:下一轮读到 R2 就裁决 H12/H4 并直接进读留出段。落盘:state.md 整篇重写并从 33.9KB 压到 13.8KB/159 行,05_hypotheses.md 的 H12 补注「只测 d∈5/10/20/30」,journal 记了本轮判断。",
+  "state_written": true
+ }
+}

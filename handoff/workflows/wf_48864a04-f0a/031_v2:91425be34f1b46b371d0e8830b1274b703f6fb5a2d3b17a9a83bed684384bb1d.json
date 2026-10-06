@@ -1,0 +1,21 @@
+{
+ "type": "result",
+ "key": "v2:91425be34f1b46b371d0e8830b1274b703f6fb5a2d3b17a9a83bed684384bb1d",
+ "agentId": "aa36e98ed8291d0cb",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F110_ret_fair_log/results/R1.md",
+  "tags": [
+   "x1c",
+   "x1d"
+  ],
+  "summary": "工单 R1(kind: experiment)已执行完毕。先读 docs/study_playbook.md,再 ./scripts/study.sh brief/list 确认 R1 是唯一待办工单、服务器上尚无 x1c/x1d(之前两轮执行都因额度耗尽空转)。按工单末尾「第3轮主研补注」对 studies/F110_ret_fair_log/x1_anatomy.py 做了三处最小改动(均已在结果卡写明行号):(C1)加 NEED_SIG 让 `0 B D` 路径整段跳过21个候选的计算;(C2)B 段后加 `del P` 释放约400MB;(C3)加 `import gc`,在候选循环末尾加 `del sm`+`gc.collect()`,并把 SIG 存成 float32(已核对 diagnose.py/books.py 里所有消费 SIG 的函数都会先 upcast 到 float64,这个改动是安全的)。随后跑了两次 exec:`x1c`(sections `0 B D`,exit 0,258s)和 `x1d`(sections `C E`,exit 0,132s),都没有被内存守卫打断。canary 逐项对上(rank corr 1.00000,train/valid 的 rIC/LS/Lg/Ln 与 state.md 记录完全一致)。工单「要带回来的数字」1/2/4/5/6 项全部拿到并全文贴进结果卡;第3项里 B 段两个点名要补的数(rank corr(S,day_std(Ret))=+0.422、Mc/Qc 切格后的四个数)拿到了,但工单还要的「切格后分位数表」和「切格版信号的两本书」脚本现有代码没有实现——这不在「第3轮补注」批准的三处改动范围内,我没有自己加这段分析代码,在结果卡里写明了卡在哪,留给主研判断是否要单开一张小工单补。已写完结果卡 notes/F110_ret_fair_log/results/R1.md(做了什么/工单要的数字逐项表格/没人要但值得注意的/原始输出在哪,四节齐全),并用 study.sh note 记了一条 [执行] 日志摘要关键数字。按任务分工要求,没有改动 state.md(留给下一轮主研覆盖重写)、没有碰 configs/、partura/、scripts/、docs/、handoff/ 或任何别的因子的文件。",
+  "problems": [
+   "工单第3项要的两个B段子项——切格(Mc/Qc)后 (M-Q)/mean 的 p1/p5/p25/p50/p75/p95/p99 分位数表、以及用 Mc/Qc 重建的「切格版交易信号」与原式的 rank corr + 两本书——x1_anatomy.py 现有代码没有实现,没有做成;按工单「不要重写脚本」且补注只批准C1/C2/C3三处改动的约束,我没有自己加这段分析代码,留给主研裁定是否值得单开工单补。",
+   "两次运行都没被内存守卫打断,但x1c等run slot只等了129s、x1d完全没排队,无法从数字上区分这是C1/C2/C3改动真的省了内存,还是这次服务器本身比上一轮空——结果卡已如实写明,留给主研判断。",
+   "按工单原文H9判据(hl40/60的Ln在train和valid都>+3%)逐候选核对:原式结构c0和D单独c1在整张半衰期网格里train侧Ln从未超过+3%(c0最高+1.2%@hl30,c1最高+1.8%@hl40);只有换了结构的c2=D*sigma在hl40/60同时过线——这是按工单判据字面核对得到的结果,不是我下的结论,但和『原式+更长半衰期就够』的方向不完全一致,需要主研注意。",
+   "c14/c16/c17/c18几个『剥掉D、只剩权重』的候选,Ln在train/valid两段符号相反(train为负、valid转正),落差8~13个点,超出手册给的噪声带(±3点),已在结果卡标注但未做解读。"
+  ]
+ }
+}

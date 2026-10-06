@@ -182,12 +182,14 @@ with slot():
     OPW = G.operator_weights()
     stats = Counter()
     seeds_repr = set()
+    first_form = {}                                         # canonical key -> the first spelling the search proposed
 
     def base_weight(s):
         return 0.0 if (s.name in risky and s.name not in EXT) else 1.0
 
     def install(arm):
         stats.clear()
+        first_form.clear()
 
         def pick(self, specs):
             faces = {}
@@ -213,6 +215,13 @@ with slot():
                 return True
             stats["proposed"] += 1
             try:
+                # a different spelling of something already proposed (abs_ of a non-negative, a window-1 identity,
+                # a price leaf swapped ...) is not a new candidate: episode e1's first run spent most of the steer
+                # arm on re-wrappings of one seed, all with the same score
+                key = G.dedup_key(e)
+                if first_form.setdefault(key, e) != e:
+                    stats["equivalent"] += 1
+                    return False
                 if G.banned(e):
                     stats["banned"] += 1
                     return False
@@ -253,7 +262,7 @@ with slot():
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
                   panel_cache_bytes=6 * 1024 ** 3)
         if arm == "steer" and seeds:
-            gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 2), seed_max_depth=9)
+            gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
         try:
             run_mining(STORE, mirror_root=MIRROR, start=START, end=END, warmup=60, label="open_vwap15_buyable", horizon=1, miner="gp",
                        budget=BUDGET, seed=SEED, device="cuda", pool="mse", pool_capacity=10, dedup=0.95, min_coverage=0.9,

@@ -1,0 +1,23 @@
+{
+ "type": "result",
+ "key": "v2:946c73dbc38a75a7c916a77cddb03c6882b734d7e4c0114921aa773b1b9a845c",
+ "agentId": "aa46cb6dfc1b77c78",
+ "result": {
+  "order": "R1",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F107_abs_demean_skew_low/results/R1.md",
+  "tags": [
+   "S12",
+   "x2",
+   "propose"
+  ],
+  "problems": [
+   "工单B项(固定半衰期表)要求train与valid都要、且要可跨变体比较的毛超额:实际引擎输出(runs/F107_abs_demean_skew_low/S12.json的books.sweep)只在train/fit段扫半衰期网格,且sweep里只有long_ann(净超额)/long_sharpe/long_turnover,没有long_gross_ann(毛超额);valid只在各变体自选的hlL单点出数,没有半衰期扫描。未新起服务器运行去补(工单只授权S12collect+x2一次exec),已在结果卡B节写清缺口并给出能拿到的替代数字(train侧Lnet在hl20下的v_base/m10/m20/m30/m60/m120对照)。",
+   "工单C项要求g_absidio20/g_kurtlow20/known_stdamt_mean30三个gates进diagnostics.neutralise残差表:核对S12.json确认gates本来就不在m20/m60的neutralise regressor集合里(只有9个ctl_*+all_controls),这与config注释(gates要用exec脚本单独量)一致。用x1(numpy,仅v_base)和x2 §d/§e(引擎,m20/m60/m120对K和kurtLow的真实book残差)顶上,已在结果卡C节列出,但不是标准表要求的那个线性回归残差格式。",
+   "x1(numpy探路)与S12(引擎)在p_nodemean、p_rank两个变体上的空头腿毛超额/多空夏普差异(约1.4个百分点、0.06~0.23)明显大于其余可对照变体(多数逐位相同或差≤0.6pp),这两个变体都不涉及cross_mean(H15讲的滚动窗口问题),差异来源未查明,已在结果卡列出两边数字。",
+   "x2 §b显示mean20(|B|+λB)在train上选的λ=+0.6(train Lnet+7.8%)在valid上只有+1.4%,而valid自己在同一网格里最好的点是λ=−0.3(+6.7%)——train/valid的最优方向相反;mean60版本没有这个问题。只报数字,未做裁决。",
+   "p_signed(保留符号、不折叠)在hlL=20下的多头最大回撤达train−119.1%/valid−56.7%,是S12全部22个变体里最极端的数字,只记录未深查。"
+  ],
+  "summary": "因子 F107_abs_demean_skew_low 的工单 R1(kind: experiment)。接手时 S12(S1_parts 11 变体 + S2_memory 11 变体)与 x2(studies/F107_abs_demean_skew_low/x2_elevate.py 的 a-f 六节)都已经是上一轮执行在额度中断前启动、仍在服务器上跑的任务(635384.pt_F107_S12、635516.pt_F107_x2),本轮没有新起任何服务器运行,只用 `study.sh wait` 把两者收回(均 exit 0:S12 482.2s/cuda,x2 1883s 含 1485s guard 排队),再跑了一次 `study.sh propose` 留草稿。\n\n把 S12 的 22 变体主表(含 Lmdd、与 v_base 的精确秩相关——这两项不在 digest 文字打印里,是从 `runs/F107_abs_demean_skew_low/S12.json` 直接取的)、rIC/cov/dist、固定半衰期表、中性化表(9 个 controls)、config 指定的 4×5 秩相关矩阵(同样从 JSON 精确提取,digest 打印只给了\"各变体对 v_base\"一行)、分位剖面、条件 IC、逐年,以及 x2 六节(含 H15 的面板取证、H13 的移心/倾斜最优点、H.e 的已知家族增量表)全部核对、整理进了结果卡 `notes/F107_abs_demean_skew_low/results/R1.md`,并单独写了工单要求的\"x1 numpy 读数与引擎数字对不上的地方\"一节(逐变体列出:5 个完全对齐、2 个有约 1pp 以上的小差且来源未查、m10~m120 全部在 ±0.6pp 噪声带内)。\n\n工单 B、C 两项要的数据,这次引擎实际产出的结构里本来就不完整(B 项缺 valid 侧半衰期扫描与跨变体同半衰期的毛超额;C 项缺 gates 的标准中性化残差),已如实记录缺口、给出能找到的最接近替代数字,没有为了凑数去新起服务器运行(工单只授权了 S12 collect + x2 一次 exec)、没有改动 config 或任何脚本逻辑。另外补了三份事实类 notes(07_S1_parts.md、07_S2_memory.md、07x_2_elevate.md,只写事实表格、解读留白给主研),并记了一条 [执行] 日志摘要关键数字。全程只用 train/valid/utrain,没有读 holdout(ledger.json 核对过,splits 只有 train/valid/utrain 三种,没有 final 记录),没有touch configs/F107_abs_demean_skew_low.yaml、studies/ 脚本、scripts/、partura/、workflows/、lab/、docs/,也没有改 state.md(留给主研按分工重写)或任何别的因子的文件(git status 核对过,F107 之外的改动都来自并行跑的其他因子 session)。"
+ }
+}

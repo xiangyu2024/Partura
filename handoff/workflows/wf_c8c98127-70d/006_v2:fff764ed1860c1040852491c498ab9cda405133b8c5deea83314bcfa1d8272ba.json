@@ -1,0 +1,27 @@
+{
+ "type": "result",
+ "key": "v2:fff764ed1860c1040852491c498ab9cda405133b8c5deea83314bcfa1d8272ba",
+ "agentId": "ac6feba1ae448c5d4",
+ "result": {
+  "order": "R0",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F114_q25_closeret/results/R0.md",
+  "summary": "R0 建档(执行角色)全部完成。严格限定在 notes/F114_q25_closeret/ 下写文件,未动 scripts/、partura/、workflows/、handoff/、lab/、docs/、configs/*.yaml 或任何其他因子的文件(用 git status 核对过,改动范围只有这一个因子的 notes/)。\n\n做了什么:\n1. 先 ./scripts/study.sh brief F114_q25_closeret 看交接页(确认之前几次尝试都因撞额度失败、0 工具调用,没有可接续的工作;S0_baseline 已在服务器跑完)。\n2. 一条命令看了三样:study.sh digest ... S0_baseline、scripts/overview_for.py、study.sh decompose。\n3. 对表达式里的两个算子(day_close、cross_quantile_q25)跑 study.sh src 读内核源码,含调用的底层函数(day_last/last_valid_last、rolling_windows)。\n4. 写了四份事实文件:\n   - 01_expression.md(来历、逐层拆开、与 published 值的对照)\n   - 02_operators.md(两个算子的精确公式/轴/窗口/齐次度/NaN边界/有没有用到未来数据;附源码原文)\n   - 03_decomposition.md(量纲、路径回看、恒等节点检查)\n   - 06_baseline.md(基线全套读数:两种半衰期选法、固定半衰期表、train/valid核心指标、long_share、分位剖面逐档、逐年、衰减、全部控制变量中性化、条件IC、两种口径的rank相关、cov/dist门槛)\n5. 写了结果卡 results/R0.md(上述要点 + 5 条异常)。\n6. 记了日志(./scripts/study.sh note ... \"[执行] R0 建档完成\")。\n\n关键事实:S0 复现用户发布值(方向-1、hl=20、utrain LS=+2.36、utrain多头腿毛超额+5.9%;发现 published.long 对应的是毛超额不是净超额,净超额+3.6%是Partura新算的)。多头口径与多空口径选半衰期在train上都选到网格上限20,没有分化。train/valid多头腿净超额+1.8%/+8.1%,long_share 19%~31%(钱主要在空头腿)。分位剖面train不单调(Q10低于Q8/Q9)、valid单调。cov=1.00、dist=0.62两道门槛都过。errors={},两个算子探针表都完整,没有求值失败。\n\n最重要的\"名字骗人\"发现:day_close 字面是\"收盘价\",但内核实现只是\"取当天最后一个非NaN值\"的别名;喂给它的 Ret 是逐分钟收益字段(证据:本因子自己的配置把 ctl_ivol 定义为 day_std(Ret) 并注释\"日内已实现波动\"),所以 day_close(Ret) 取到的是\"当天最后一个有效分钟自己的那一笔分钟收益\",不是收盘价也不是当日总收益。\n\n没有写 notes/F114_q25_closeret/state.md —— 按 handoff/README.md 的分工,这是\"主研\"每轮覆盖重写的文件,不在\"执行\"R0 的交付范围内,留给主研第一轮写。",
+  "problems": [
+   "Ret 字段的精确定义(简单收益还是对数收益、以哪个价格为基准、\"最后一个有效分钟\"对应几点)本地文档和两个内核的源码/注释里都没有直接给出,只能靠本因子配置注释(ctl_ivol=day_std(Ret)标\"日内已实现波动\")和其他因子notes的旁证推断为逐分钟步进收益,没有另写探针验证,留作开放问题。",
+   "S0_baseline.json 顶层字段 rank_by=\"ls\",与当前 configs/F114_q25_closeret.yaml 里的 rank_by: long 不一致(大概率是配置改动发生在S0跑完之后);books.hl_long/hl_ls 两个字段各自独立存着且都是20,目前看数字没受影响,但没有验证重跑S0是否会有不同结果,留给下一步判断是否需要重跑。",
+   "顶部决策口径表的 rICtraded tr/va 两列,digest 文本显示为空白;已确认 train 的数其实存在于 JSON 的 diagnostics.neutralise.v_base._traded_signal.rank_ic(0.0070),是展示层留空不是数据缺失,但valid对应的块没找到,未专门确认是否该诊断本来就只覆盖train。",
+   "cross_quantile_q25 的\"脉冲记忆天数=0\"探针读数只做了记录,没有另写探针去确认具体机制(例如是否因为q25是下四分位数、对单日孤立正向异常值不敏感)。"
+  ],
+  "tags": [
+   "partura",
+   "F114_q25_closeret",
+   "执行角色",
+   "建档",
+   "R0",
+   "baseline",
+   "operators",
+   "decomposition"
+  ]
+ }
+}

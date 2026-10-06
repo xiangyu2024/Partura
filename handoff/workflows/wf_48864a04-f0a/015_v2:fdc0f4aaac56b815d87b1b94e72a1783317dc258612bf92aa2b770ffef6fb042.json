@@ -1,0 +1,12 @@
+{
+ "type": "result",
+ "key": "v2:fdc0f4aaac56b815d87b1b94e72a1783317dc258612bf92aa2b770ffef6fb042",
+ "agentId": "a89c0f5c96d88858c",
+ "result": {
+  "status": "order",
+  "order": "R1",
+  "kind": "experiment",
+  "summary": "R1 仍然没有结果卡(服务器上只有 S0_baseline exit 0、x1 exit 97,无正在跑的任务,results/ 为空),按接力规矩不另开工单,把 R1 交回执行;额度已重置,这次应当能真的跑起来。但 R1 已连续两轮没跑成,所以本轮没有只是原样交回:我读了 x1_anatomy.py 和 study.sh 源码,把 R1 原文委托给执行自己判断的两个问题替它判完(SECTIONS 是集合且顺序由源码写死 ⇒ 传 B D 会整段跳过 canary,第 1 次运行参数必须是 0 B D;D 段只用 T/D/sigma,不依赖 SIG,不会 KeyError),并堵掉三个会白烧一次运行的坑:候选循环不在 if \"C\" in SECTIONS 里,0 B D 会静默算满 6 个 KEEP 候选并把 6 个面板留在 SIG 里(没人用,且正好夹在 B 和 D 之间——上一轮被守卫打断的地带),给了两行 NEED_SIG 改法;B 段之后 del P 白送约 400 MB;R1 第 8 条让加的 gc.collect() 会 NameError(脚本没 import gc)。已作为「第 3 轮主研补注」追加到 R1 末尾,并把两处 exec 命令块和那个过时的 sections B D 标题都改成 0 B D(这是最容易被复制粘贴跑错的一行)。这些都是关于脚本的事实、不是关于因子的证据,所以假设表一条都没动。",
+  "state_written": true
+ }
+}

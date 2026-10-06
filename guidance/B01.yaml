@@ -116,6 +116,9 @@ priors:
   - {id: D12_nansum_memory, action: weight, w: 0.5, pattern: "{cross_sum|ts_sum|ts_scale}(_, $w)", why: nansum 把缺失日当 0,把停牌 / 次新推到一端;用 cross_mean, evidence: [f102-l2, nan-aware-rolling-ops-inflate-young-stocks-and-zero-on-first-obs]}
   - {id: D13_root_rank_before_smoothing, action: weight, w: 0.6, pattern: "root: cs_rank(_)", why: 先取秩再平滑把重尾量的「峰值记忆」变成普通均值平滑(15 条里 d 中位 −0.16、33% 明显变差), evidence: [wrappers.rk, f103-l1]}
   - {id: D14_generic_overlay_on_known, action: weight, w: 0.3, pattern: "add(cs_rank(cross_mean(day_std(Amt), 30)), _)", why: 把任意因子的排名叠到已知族上,90 例里 0 例两段都升, evidence: [wrappers.ov_p025, wrappers.ov_p05, wrappers.ov_p10]}
+  - {id: D15_ema_of_ema, action: weight, w: 0.2, pattern: "cross_ema(_, $w)", depth_ge: 2, why: 记忆套记忆只是把同一条因子再磨一遍(第一次想法短搜里带指引的一臂前 12 名全是同一个种子的重复包裹、分数相同), evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
+  - {id: D16_mean_of_mean, action: weight, w: 0.2, pattern: "cross_mean(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
+  - {id: D17_decay_of_decay, action: weight, w: 0.2, pattern: "cross_decay_linear(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   # ---- 升权
   - {id: U1_root_slow_memory, action: weight, w: 2.0, pattern: "root: {cross_ema|cross_mean|cross_decay_linear}(_, {30|60})", why: 对日度统计量做 30~60 日的均值 / 指数记忆是唯一「大多数时候有益、几乎不伤」的外层动作(两段都升 50~60%,明显变差 ≤ 7%;60 日最好), evidence: [memory_by_window.mem_mean60, memory_by_window.mem_decay_linear60, memory_by_window.mem_ema30, extreme-memory-fixes-turnover]}
   - {id: U2_bounded_intraday_dispersion, action: weight, w: 2.0, pattern: "{day_gini|day_flat_ratio|day_zero_ratio|day_flat_run_max|day_es_ratio_hi|day_es_ratio_lo|day_distinct_ratio|day_centroid}({Ret|@price})", why: 有界、无尺度的日内离散度 / 冻结度统计量是这一批里独立新因子的共同来源(F107 基尼、F106 零收益占比、F113 收益基尼), evidence: ["F107 h_gini_ema30 2.87 / 测试 2.10", "F106 h_zero_minus_liq", docs/new_operators.md]}

@@ -1,0 +1,21 @@
+{
+ "type": "result",
+ "key": "v2:3c5ef8486aa3869502e6ed0234cd1f663ce943caacc621361b1b005e461dbd03",
+ "agentId": "a2e9337773dd9fbc1",
+ "result": {
+  "order": "R3",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F112_scale_spow_masktop/results/R3.md",
+  "summary": "R3(kind: final,本研究唯一一次读留出段)已完整执行完毕。跑前确认了两条前提(ledger 无 holdout 记录、10_distilled.md 已有「读留出段之前」一节),都满足。按工单原样在 configs/F112_scale_spow_masktop.yaml 末尾加了 F1_final 阶段(5 变体:f_orig/f_nomask30/f_t50/f_x241/f_known)并替换了 diagnostics 块,没有做任何偏离工单的修改——check 一次就 37/37 OK。跑了 study.sh final → wait → digest,exit 0,耗时163.4s,peak 4.12GiB,errors={}。工单要求的\"免费一致性检查\"(新变体 train/valid 数字 vs 历史 S0/S1/S2 同树变体)全部逐位相等,rank相关(对f_orig: +0.784/+0.743/+0.509)与历史记录一致,没有发现任何不一致。门槛全过(cov 0.997~1.00、dist 0.975~1.00),5个变体 sign 全部 -1,没有一行需要作废。已把工单要的8项数字逐项写入结果卡 results/R3.md(主表按 A卷[train拟合,train/valid] / B卷[utrain拟合,utrain/holdout]分开列出并说明这是JSON本身的数据形状;固定半衰期表、逐年、分位剖面、rank相关矩阵、衰减、controls缺失说明、errors/exit/耗时全部列出),并在\"没人要但值得注意的\"里记录了 f_known 与同树 gate 的 rank 相关呈 -0.92 而非 ±1(平滑口径不同导致,非数据错误)等读数细节。只写了事实,没有做任何判断/结论。已记日志(journal.md,21条)。只动了允许的文件(configs/.../F112_scale_spow_masktop.yaml、notes/F112_scale_spow_masktop/{results,journal}),没有碰 scripts/partura/handoff/docs/workflows/lab 或其他因子的文件,没有写分析脚本/跑exec。",
+  "tags": [
+   "F1_final"
+  ],
+  "problems": [
+   "JSON 里只有两套互相独立的切分:A卷(train拟合,只含train/valid)和B卷(utrain拟合,只含utrain/holdout),不存在'用train拟合的hl去评holdout'这第三种切法——已在结果卡里分卷列出并说明,不是配置错误",
+   "ic_user/ic_holdout 里没有 rank_ic_traded 字段,holdout/utrain 段的 rICtraded 留空(按工单要求没有自己写脚本去算)",
+   "profile 诊断只覆盖train/valid,没有holdout版本的分位剖面",
+   "diagnostics 顶层没有 controls 键(conditional设为空后就不再产出),第7项数字按工单要求直接报告缺失",
+   "f_known 与字面同一棵树的 gate(known_stdamt_max9)在 rank_corr_train 矩阵里相关是-0.9224而非±1.0,原因是矩阵对候选变体用拟合半衰期平滑后的带符号信号、对controls/gates用未平滑原始值——纯读数口径问题,已在结果卡注明,不影响任何上报数字"
+  ]
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "type": "result",
+ "key": "v2:8a3346337d62ac26e30945be980842e6f9a598ec81c3bb16e55899785a841ca8",
+ "agentId": "a696126293179fc51",
+ "result": {
+  "order": "R3",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/results/R3.md",
+  "tags": [
+   "S_final"
+  ],
+  "problems": [
+   "非执行失败,但工单没预先设想到的方向:f_cb 在 holdout 上不是'打平' f_kf30 而是明显更差(Lnet 低 5.17pp、Lshp 低 0.465,超噪声带),10_distilled.md §3 的 P3 判据只写了'打平'/'更好'两种预期,机械判据仍算'未被否定'但方向值得主研留意",
+   "f_c4/f_m1 的多头腿 valid→holdout 衰减 9.6~11.9pp,远超 f_kf30 自己的 1.3pp 衰减,且 f_c4/f_m1 的 holdout 排序相对 train 反转(未达 P4 的 6pp 门槛,机械未被否定)",
+   "实现细节(非问题):f_orig/f_cb 的 why 文本里 ASCII 直引号与 YAML 双引号冲突,改用 YAML 单引号包裹整条 why,内容未改",
+   "工具行为异常(不影响正确性):check 对 f_kf30 没有打印'与已有树重复'的提示,尽管它与 S2_bench/kf_mean30 表达式逐字相同;已用 rank_corr_train(=+1.000)交叉确认数值一致,非 bug 影响结果"
+  ],
+  "summary": "工单 R3(kind: final)是本因子研究唯一一次读留出段。前置检查通过(ledger 无 holdout 记录,10_distilled.md 已有\"读留出段之前\"节)后,在 configs/F113_nested_tsmax_demean.yaml 追加阶段 S_final(5 个变体 f_orig/f_c4/f_m1/f_kf30/f_cb,逐字抄工单表达式,均加 final: true,并把新 id 追加进 corr_ids/diagnostics.by_year/diagnostics.profile),check 37/37 OK 后跑 study.sh final,exit 0、5/5 无错、385.9s。只跑了这一次 final,服务器运行计数到 5/8。\n\n逐项核对工单要的数字:主表(多头+多空口径,train/valid/utrain/holdout 四段)、cov/dist(5 个变体 4 个 split 全过门槛)、逐年 Lnet/LS(by_year_scope 覆盖 2018-2025 全 8 年)、分位剖面 Q1-10(仅产出 train/valid,holdout 工具未产出,按工单未重跑)、P0~P5 判据逐条机械算式(全部\"未被否定\")、留出段段长(20230808-20251231,581 个交易日)。张冠李戴自检:train/valid 10 个 Lnet 全部在 10_distilled.md §1 的 ±0.5pp 容差内(实际偏差<0.05pp),三个指定的 rank_corr_train 格子都 ≈+1.00,没有发现表达式/id 对错行。\n\n机械判据结果:P0(用户表口径校准)、P1(原式多头腿不可用)、P2(子结构有正的多头腿)、P3(相对已知家族无增量)、P4(族内选谁在噪声里)、P5(已知家族自身稳)全部\"未被否定\"——与 10_distilled.md §3 预先写定的\"预期(不被否定)\"分支一致。但结果卡\"没人要但值得注意的\"一节标出了两处工单没预先设想的新事实留给主研:① f_cb 在 holdout 上明显差于 f_kf30(非\"打平\"),② 候选(f_c4/f_m1)的 holdout 衰减比已知家族基准剧烈得多、且族内排序反转。只写事实数字和机械算式,没有改候选、没有换推荐、没有下任何\"所以…\"的结论——那是下一轮主研的事。已记日志(journal.md 第 21 条)。"
+ }
+}

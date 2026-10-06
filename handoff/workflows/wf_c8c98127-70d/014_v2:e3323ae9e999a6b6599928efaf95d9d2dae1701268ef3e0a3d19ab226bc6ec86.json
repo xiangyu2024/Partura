@@ -1,0 +1,27 @@
+{
+ "type": "result",
+ "key": "v2:e3323ae9e999a6b6599928efaf95d9d2dae1701268ef3e0a3d19ab226bc6ec86",
+ "agentId": "a90200e4d0e83c361",
+ "result": {
+  "order": "R0",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F113_nested_tsmax_demean/results/R0.md",
+  "summary": "以「执行」(Sonnet 5)身份为 F113_nested_tsmax_demean 完成 R0 建档,全程在 /Users/wxy/Desktop/Partura 下操作,未改动 scripts/、partura/、workflows/、handoff/、lab/、docs/ 或任何其他因子的文件,也未改动这条因子自己的 configs/*.yaml。\n\n做的事:先读 docs/study_playbook.md,确认 notes/F113_nested_tsmax_demean/ 此前完全空白(3 次此前的 study agent 都在会话额度上立即失败,没留下任何 notes);随后按顺序跑了 study.sh digest ... S0_baseline、scripts/overview_for.py、study.sh decompose,并对表达式里全部 7 个不同算子(day_mean/ts_max/sub/cs_demean/pow_2/mul/pow_1_5)跑 study.sh src 读内核源码及其调用的底层函数;另外交叉核对了 runs/F113_nested_tsmax_demean/{S0_baseline,ledger}.json 原文与 configs/F113_nested_tsmax_demean.yaml 的 git 历史。\n\n写了 5 个文件:\n- notes/F113_nested_tsmax_demean/01_expression.md — 来历、逐层 SSA 拆解(与 decompose 字母对齐)、机械一句话描述。\n- notes/F113_nested_tsmax_demean/02_operators.md — 7 个算子的精确公式/轴/窗口/齐次度/NaN 边界行为,标出 3 处\"和名字不一样\"(pow_1_5 的 e>1 不保号分支、mul 常量操作数不按通用齐次度 2 计、ts_max 与 cross_max 同内核异显存实现)。\n- notes/F113_nested_tsmax_demean/03_decomposition.md — 齐次度链推导(对 Ret 整体 6 次齐次)、恒非负性证明、重复子树判定(无,纯链状)、82 天累计回看的逐层推导、sub(·,-5) 被下一步 cs_demean 精确代数抵消的证明、warmup 行数异常(view.warmup_rows 实测 0)。\n- notes/F113_nested_tsmax_demean/06_baseline.md — S0_baseline 完整基线读数:复现核对(长表 long 列实为毛超额非净超额)、半衰期选择(hlL=hlS=1,7 点 sweep 证实两种口径在此因子上同时选到 1)、两种口径两本书的 Lnet/Lshp/Lgross/LTO/LS/short/long_share、分位剖面(逐档列出,不单调,valid 峰值在 Q3 不在 Q10)、中性化表(9 控制变量 + all_controls)、条件 IC、控制变量/已知家族自身表现、两套 rank 相关(原始面板 vs 交易信号,标出符号对齐关系)、逐年、衰减、cov/dist 门槛(并区分 coverage 与 coverage_labelled 两个不同口径)。\n- notes/F113_nested_tsmax_demean/results/R0.md — 一页结果卡,只写事实和异常,不下结论。\n\n另外用 study.sh note 记了一条 [执行] 日志(已确认写入 journal.md)。\n\n写进结果卡的主要异常(均已标为\"待确认\"而非结论):① 配置里的 known_stdamt_mean30(gates/corr_with)在 S0_baseline 的所有已算结果里缺失,核对 git log 判断是这条配置项加入时间(commit 5ed9d09,10-04 12:02)晚于 S0 的生成时间(10-03 17:52),未重跑验证;② S0 的 view.warmup_rows 实测为 0,配置写的 warmup:60 本身也不够覆盖结构所需的 82 天累计回看,猜测数据源无 2018 年之前历史,未核实;③ books/books_user 内部 rank_by 字段是旧值 'ls',但完整半衰期 sweep 证实该因子上两种选拔口径碰巧都选到 hl=1,数字未受影响;④ digest 的 rICtraded 字段两段为空,未确认原因;⑤ digest 与 overview_for.py 的 rank 相关口径不同(原始面板 vs 交易信号),符号常相反但不是矛盾。全部 7 个算子声明 lookahead=False 且源码左填充印证不读未来;S0_baseline 本身 errors={},没有求值失败。",
+  "problems": [
+   "known_stdamt_mean30 在 S0_baseline 已算结果(中性化表/rank相关表/overview_for.py)里全部缺失;判断是配置加入时间晚于 S0 运行(git log 显示添加它的 commit 在 S0_baseline.json 生成之后),但未重跑 S0 验证,仍是待确认项。",
+   "S0_baseline 的 view.warmup_rows 实测为 0,与配置 warmup:60、以及树结构所需的 82 个交易日累计回看都不一致;猜测数据源从 20180102 起没有更早历史,但本次没有核实数据源的实际起始日期,也没有验证 train 最开头约 82 个交易日是否存在边界偏差。",
+   "study.sh digest 打印的 rICtraded(平滑后交易信号的 rank IC)在 train/valid 两段都是空(—),没有确认这是这条因子特有的现象还是工具在特定条件下的通用行为。",
+   "留出段(holdout)按规矩本次未读,公布值里的 ls[1]=1.09 / long[1]=0.024 两个数字无法核对,也不在本次建档范围内。"
+  ],
+  "tags": [
+   "partura",
+   "F113_nested_tsmax_demean",
+   "建档",
+   "R0",
+   "执行",
+   "operators",
+   "baseline",
+   "SSA分解"
+  ]
+ }
+}

@@ -158,6 +158,46 @@ class Pattern:
         return bool(self.find(n))
 
 
+# Operators whose output is never negative, and operators that keep "never negative" when every tensor operand is.
+# Used by the canonical form: abs_ of such a sub-tree is the sub-tree (a GP breeds these wrappers for free and each
+# one costs an evaluation).  A name missing from the lists only means a rewrite is not made -- never a wrong one.
+NONNEG_OPS = frozenset("""abs_ pow_2 sqrt sigmoid day_std day_var day_gini day_zero_ratio day_flat_ratio day_distinct_ratio
+    day_at_max_ratio day_at_min_ratio day_flat_run_max day_pos_ratio day_wstd cross_stddev ts_stddev cross_valid_count cross_age
+    cross_flat_ratio cross_semistd_neg cross_semistd_pos cs_rank in_stddev_rolling in_stddev_full nt_ts_std nt_ts_var""".split())
+SIGN_KEEPING_OPS = frozenset("""cross_ema cross_mean cross_max cross_min cross_med cross_sum cross_decay_linear cross_fangzheng
+    cross_tail_mean_q25 cross_tail_mean_q75 cross_quantile_q25 cross_quantile_q75 ts_mean ts_max ts_min ts_sum ts_med ts_decay_linear
+    day_mean day_sum day_max day_min day_median day_quantile day_first day_last day_close day_open in_slice in_delay in_local_mean
+    in_mean_full add mul div cs_winsor pow_05 pow_1_5 pow_2_5 pow_3 signedpower""".split())
+IDEMPOTENT_OPS = frozenset("abs_ cs_demean cs_rank cs_winsor cs_normalize cs_robust_z neg_abs".split())
+
+
+def nonneg(n: Node) -> bool:
+    """True when the sub-tree can be shown never to be negative (conservative: False when unsure)."""
+    if n.args is None:
+        if n.is_number:
+            return float(n.name) >= 0
+        return n.name in LEAF_KINDS["@price"] or n.name in LEAF_KINDS["@flow"]
+    if n.name in NONNEG_OPS:
+        return True
+    if n.name in SIGN_KEEPING_OPS:
+        return all(nonneg(a) for a in n.args)
+    return False
+
+
+def simplify(n: Node) -> Node:
+    """Rewrites that hold for every input: f(f(x)) = f(x) for idempotent f; abs_(x) = x when x is never negative."""
+    if n.args is None:
+        return n
+    n = Node(n.name, tuple(simplify(a) for a in n.args))
+    if len(n.args) == 1:
+        a = n.args[0]
+        if n.name in IDEMPOTENT_OPS and a.args is not None and a.name == n.name:
+            return a
+        if n.name == "abs_" and nonneg(a):
+            return a
+    return n
+
+
 def nesting(n: Node, name: str) -> int:
     """Deepest chain of ``name`` nodes along one root-to-leaf path."""
     here = 1 if n.args is not None and n.name == name else 0
@@ -232,6 +272,7 @@ class Guidance:
         n = parse_expr(expr)
         for _ in range(8):
             before = str(n)
+            n = simplify(n)
             for r in self.rules:
                 if r.action == "rewrite":
                     n = self._apply(r, n, True)
@@ -316,9 +357,22 @@ class RewardContext:
         self.untradable, self.liq, self.pool = untradable, liq, pool
         self.base = base                       # z-rank of the signal a "screen" candidate is applied to (the known family, unscreened)
         self._base_rows = None
+        self._pool_u = None
         self.halflives = tuple(halflives)
         self._bucket = None
         self._pool_rows = None
+
+    def pool_in_universe(self):
+        """The pool re-ranked INSIDE the reward's universe.  The candidate is scored with the untradable names
+        removed; a pool left on the full universe keeps the excess it earns by avoiding them (they are in its
+        benchmark), so 'blend minus pool' compared two different games and every candidate came out negative
+        (episode e1, first run).  Both sides of the difference must live in the same universe."""
+        if self._pool_u is None:
+            import numpy as np
+            from . import diagnose as dg
+            p = self.pool if self.untradable is None else np.where(self.untradable, np.nan, self.pool)
+            self._pool_u = dg._zrank(p)
+        return self._pool_u
 
     def bucket(self, n: int = 10):
         if self._bucket is None:
@@ -374,8 +428,8 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
             if kind == "long_bucket":
                 sm = _bucket_rank(sm, ctx.bucket())
             elif kind == "long_marginal":
-                z = dg._zrank(sm)
-                sm = np.where(np.isfinite(z) & np.isfinite(ctx.pool), 0.5 * z + 0.5 * ctx.pool, np.nan)
+                z, pu = dg._zrank(sm), ctx.pool_in_universe()
+                sm = np.where(np.isfinite(z) & np.isfinite(pu), 0.5 * z + 0.5 * pu, np.nan)
             elif kind == "long_screen":
                 z = dg._zrank(sm)                            # [-0.5, 0.5]; the top fifth of the candidate goes below everything
                 sm = np.where(np.isfinite(ctx.base), np.where(np.isfinite(z) & (z > 0.3), -1.0 + 0.1 * ctx.base, ctx.base), np.nan)
@@ -388,7 +442,8 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
     base_tr = base_va = 0.0
     if kind == "long_marginal":
         if ctx._pool_rows is None:
-            ctx._pool_rows = (bk.book_row(ctx.pool, ctx.tgt, ctx.train), bk.book_row(ctx.pool, ctx.tgt, ctx.valid))
+            pu = ctx.pool_in_universe()
+            ctx._pool_rows = (bk.book_row(pu, ctx.tgt, ctx.train), bk.book_row(pu, ctx.tgt, ctx.valid))
         base_tr, base_va = ctx._pool_rows[0]["long_sharpe"], ctx._pool_rows[1]["long_sharpe"]
     if kind == "long_screen":
         if ctx._base_rows is None:
@@ -402,5 +457,5 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
             "valid": {k: va[k] for k in ("long_ann", "long_sharpe", "long_turnover", "long_mdd")}}
 
 
-__all__ = ["Node", "parse_expr", "walk", "operators", "leaves", "Pattern", "nesting", "Rule", "Guidance",
+__all__ = ["Node", "parse_expr", "walk", "operators", "leaves", "Pattern", "nesting", "nonneg", "simplify", "Rule", "Guidance",
            "RewardContext", "reward", "REWARDS", "LEAF_KINDS"]

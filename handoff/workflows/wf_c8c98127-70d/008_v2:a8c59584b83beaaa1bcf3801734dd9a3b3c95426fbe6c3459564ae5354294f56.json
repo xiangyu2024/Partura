@@ -1,0 +1,26 @@
+{
+ "type": "result",
+ "key": "v2:a8c59584b83beaaa1bcf3801734dd9a3b3c95426fbe6c3459564ae5354294f56",
+ "agentId": "a7273d2d90aa037a4",
+ "result": {
+  "order": "R0",
+  "completed": true,
+  "result_card": "/Users/wxy/Desktop/Partura/notes/F115_all_tide_mean_30/results/R0.md",
+  "summary": "为 F115_all_tide_mean_30 完成 R0 建档(执行角色,只记事实,不下结论)。流程:先 `./scripts/study.sh brief` 确认此前完全空白(无 notes/journal/state,只有配置骨架和已跑完的 S0_baseline);读了 `docs/study_playbook.md`;跑了三件事看全貌(`digest S0_baseline`、`overview_for.py`、`decompose`);对表达式里全部 10 个不同算子(in_slice、in_local_mean、day_argmax、in_slice_to_end、day_argmin、day_locate、in_slice_from_start、sub、div、cross_mean)及其调用的底层函数(get_nan_tensor、create_like、rolling_reduce、rolling_windows、nanmean_last)逐一读了内核源码。\n\n写了四个文件(均在 /Users/wxy/Desktop/Partura/notes/F115_all_tide_mean_30/ 下):\n- 01_expression.md:来历、逐层拆开(与 SSA 变量名一致)、一句话、S0 对公布值的复现情况。\n- 02_operators.md:10 个算子逐一给出精确公式、轴、窗口/回看、齐次度、NaN/边界行为、是否布尔/档位输出、是否跨日,并标出 day_locate 的 arity 声明与签名/注册表不一致、三个\"索引型\"算子(in_slice_to_end/in_slice_from_start/day_locate)内置探针全部报错的事实。\n- 03_decomposition.md:15 个中间节点(A..O)的量纲与取值范围表;证明 M=F−I≥0 恒成立;推出 M=0 退化情形下 N=0/0=NaN;累计日轴回看=20 天;确认树里没有恒等/近似恒等节点。\n- 06_baseline.md:决策口径(hlL=hlS=10)与用户口径(hlL=10/hlS=2)下 train/valid/utrain 的 Lnet/Lshp/LS/Lgross/LTO/short、long_share、分位剖面(逐档列出,valid 不单调)、全部控制变量的中性化 R² 与残差、条件 IC、控制变量/已知家族单独当因子、逐年、衰减、两套不同口径的 rank 相关(原始面板 vs hl=2 平滑信号,明确标注不能混用)、cov/dist 门槛(均 1.00)。\n\n写了结果卡 notes/F115_all_tide_mean_30/results/R0.md(一页事实摘要 + 10 条异常记录),并用 `./scripts/study.sh note` 记了一条 `[执行] R0` 日志(journal.md 首次有内容)。git status 核对过,本轮只新增了 notes/F115_all_tide_mean_30/ 目录,没有改动 scripts/、partura/、docs/、handoff/ 或其他因子的文件。",
+  "problems": [
+   "内置探针对 in_slice_to_end、in_slice_from_start、day_locate 三个算子的全部实测项报错(探针自身给这三个算子的索引型第二参数喂了形状不对的随机张量导致 IndexError),这三个算子的齐次度/位移不变性/NaN行为/符号敏感性只能靠读源码定性,没有探针实测数字——这是现有内置探针集合的覆盖缺口,不是本轮任务要求修复的范围(本轮只读源码和已有探针结果,没有写新探针)。",
+   "S0_baseline 的 digest 输出里,config 配置的 4 个 known_* gates 之一(known_stdamt_mean30)没有出现在'控制变量/已知家族自己当因子'表和 rank 相关列表里(corr_with 列了12个,两处都只打印11个),没有报错信息,原因未知,已在结果卡里原样记录,未做进一步排查。",
+   "digest 没有打印 valid 段的空头腿毛超额(short va)和 rICtraded(tr/va 均为'—'),导致 long_share 等衍生量只能在 train/utrain 算出,valid 算不出来——这是已有 S0 结果本身缺的数字,本轮未重跑任何阶段去补。"
+  ],
+  "tags": [
+   "partura",
+   "F115_all_tide_mean_30",
+   "建档",
+   "R0",
+   "执行角色",
+   "AlphaCube算子语义",
+   "SSA分解",
+   "基线读数"
+  ]
+ }
+}
