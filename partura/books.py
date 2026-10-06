@@ -9,7 +9,7 @@ judges a factor by two books built from a causally EMA-smoothed signal:
   signal and a label that day.  A holding whose label is missing (it opened
   locked at limit-up and could not have been bought) earns 0.
 
-The half-life is chosen from {0, 1, 2, 3, 5, 10, 20} on the FIT period only,
+The half-life is chosen from ``HALFLIVES`` (the user's {0, 1, 2, 3, 5, 10, 20} plus 40 and 60) on the FIT period only,
 by that book's own after-cost Sharpe, and then held fixed.
 
 ``stats`` and ``long_book`` are vendored from that script rather than imported
@@ -40,7 +40,11 @@ import numpy as np  # noqa: E402
 
 from alphacube.metrics import ema_rows, long_short_weights, portfolio_returns  # noqa: E402
 
-HALFLIVES = (0.0, 1, 2, 3, 5, 10, 20)
+# The user's own table fits the half-life in {0, 1, 2, 3, 5, 10, 20}.  Several leads found the best one pinned at
+# 20 for level-type factors, and the user agreed (2026-10-05) to extend the grid: 40 and 60 are added.  A row whose
+# fitted half-life is 40 or 60 is therefore not comparable with the user's original table -- reports say so.
+USER_HALFLIVES = (0.0, 1, 2, 3, 5, 10, 20)
+HALFLIVES = USER_HALFLIVES + (40, 60)
 TOP_FRAC = 0.10
 COST = 0.0015
 
@@ -194,5 +198,5 @@ def quantile_profile(sm: np.ndarray, target: np.ndarray, days: slice, n: int = 1
     return rows
 
 
-__all__ = ["HALFLIVES", "TOP_FRAC", "COST", "stats", "long_book", "short_leg_excess", "smoothed",
+__all__ = ["HALFLIVES", "USER_HALFLIVES", "TOP_FRAC", "COST", "stats", "long_book", "short_leg_excess", "smoothed",
            "fit_halflives", "book_row", "books", "views_of", "quantile_profile"]

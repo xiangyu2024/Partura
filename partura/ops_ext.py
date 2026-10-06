@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import math
 
+from typing import Tuple
+
 import torch
 
 from alphacube.operators.common import EPS, op, rolling_windows
@@ -215,7 +217,12 @@ def cross_zscore(x: torch.Tensor, d: int) -> torch.Tensor:
     w0 = torch.where(ok, w, torch.zeros_like(w))
     m = w0.sum(-1) / n.clamp(min=1).to(x.dtype)
     var = (torch.where(ok, (w - m.unsqueeze(-1)) ** 2, torch.zeros_like(w))).sum(-1) / n.clamp(min=1).to(x.dtype)
-    z = (x - m) / (torch.sqrt(var) + EPS)
+    # A window that is constant up to rounding has sd ~ 1e-7 x its own level, and (x - m) / (sd + EPS) is then
+    # +-1 from float32 noise alone (a constant 1.5e9 gave a steady stream of 1.0).  Measure the spread against the
+    # window's own magnitude and call such a window 0, which is what the formula means.
+    sd = torch.sqrt(var)
+    scale = w0.abs().amax(-1)
+    z = torch.where(sd > 1e-6 * scale, (x - m) / (sd + EPS), torch.zeros_like(sd))
     return torch.where((n > 1) & torch.isfinite(x), z, torch.full_like(x, NAN))
 
 
@@ -316,12 +323,34 @@ def cross_tail_mean_q75(x: torch.Tensor, d: int) -> torch.Tensor:
     return _tail_mean(x, d, 0.75, False)
 
 
+def _rank_block(x: torch.Tensor, ok: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """(first, last) percentile rank of each cell's own TIE BLOCK, in (0, 1]."""
+    v = torch.where(ok, x, torch.full_like(x, torch.finfo(x.dtype).max))
+    s, order = torch.sort(v, dim=-1, stable=True)
+    s = s.contiguous()
+    first = (torch.searchsorted(s, s, right=False) + 1).to(x.dtype)
+    last = torch.searchsorted(s, s, right=True).to(x.dtype)
+    n = ok.sum(-1, keepdim=True).to(x.dtype).clamp(min=1)
+    lo = torch.empty_like(x).scatter_(-1, order, first) / n
+    hi = torch.empty_like(x).scatter_(-1, order, last) / n
+    return torch.where(ok, lo, torch.full_like(x, NAN)), torch.where(ok, hi, torch.full_like(x, NAN))
+
+
 def _lexi(y: torch.Tensor, x: torch.Tensor, lo: float, hi: float, shift: float) -> torch.Tensor:
-    """rank(y) in (0, 1], shifted by ``shift`` for the stocks whose x-rank is in (lo, hi]."""
+    """rank(y) in (0, 1], shifted by ``shift`` for the stocks whose x lies in the quantile band (lo, hi].
+
+    The band is made of whole TIE BLOCKS of x: a block of equal x values is in the band only if all of it fits
+    inside (lo, hi].  With ordinal ranks the cut used to fall INSIDE a block and the members on either side were
+    decided by the stocks' column order -- on ``cross_valid_count`` (93% of the names tied at the window length)
+    a '20% youngest' screen removed 7 points of young names and 13 points of arbitrary old ones, the same ones
+    every day.  So the band is AT MOST 20% / 40% wide and narrower when x saturates: that is intended.
+    The output itself keeps ordinal ranks of y, so it stays free of ties."""
     y, x = _f(y), _f(x)
     ok = torch.isfinite(y) & torch.isfinite(x)
-    rx, ry = _pct_rank(x, ok), _pct_rank(y, ok)
-    return torch.where(ok, ry + shift * ((rx > lo) & (rx <= hi)).to(y.dtype), torch.full_like(y, NAN))
+    ry = _pct_rank(y, ok)
+    bl, bh = _rank_block(x, ok)
+    band = (bl > lo) & (bh <= hi)
+    return torch.where(ok, ry + shift * band.to(y.dtype), torch.full_like(y, NAN))
 
 
 @op("nd", "cs", arity=2)
@@ -370,7 +399,8 @@ def day_flat_run_max(x: torch.Tensor) -> torch.Tensor:
     eq = (a == b) & torch.isfinite(a) & torch.isfinite(b)
     c = torch.cumsum(eq.to(x.dtype), dim=-1)
     reset = torch.cummax(torch.where(eq, torch.zeros_like(c), c), dim=-1).values     # count at the last break
-    run = (c - reset).max(dim=-1).values
+    z = torch.zeros(x.shape[:-1] + (1,), dtype=x.dtype, device=x.device)       # c - reset >= 0: a zero column changes nothing,
+    run = torch.cat([z, c - reset], dim=-1).max(dim=-1).values                # and a 1-minute day no longer raises
     n = torch.isfinite(x).sum(-1)
     return _day(run / n.clamp(min=1).to(x.dtype), n > 1)
 
@@ -384,6 +414,8 @@ def in_madz(x: torch.Tensor, d: int) -> torch.Tensor:
 
     Scale-free with a RELATIVE epsilon, unlike a rolling kurtosis whose absolute epsilon
     (1e-9 on var**2) crushes low-priced stocks and any return-sized input to a constant.
+    'Median' is ``torch.nanmedian`` -- on an even count the LOWER of the two middle values,
+    as in every median operator of the library (in_med, day_median, cs_median), not their mean.
     (Requested by F108.)"""
     x = _f(x)
     w = rolling_windows(x, int(d), -1)
@@ -511,16 +543,17 @@ def cs_flip_by_state(y: torch.Tensor, g: torch.Tensor) -> torch.Tensor:
     version will be clearly WORSE than y -- which is itself the test.  (F104.)"""
     y = _f(y)
     m = _market_series(g)
-    hi = _trailing_rank(m, 241) > 0.5
-    ok = torch.isfinite(y)
+    st = _trailing_rank(m, 241)                                  # NaN on a day whose state is undefined (g all missing)
+    ok = torch.isfinite(y) & torch.isfinite(st).unsqueeze(-1)    # no state -> no signal, rather than a silent 'low'
     r = _pct_rank(y, ok) - 0.5
-    sgn = torch.where(hi, torch.ones_like(m), -torch.ones_like(m)).unsqueeze(-1)
+    sgn = torch.where(st > 0.5, torch.ones_like(m), -torch.ones_like(m)).unsqueeze(-1)   # HIGH = strictly above the median
     return torch.where(ok, r * sgn, torch.full_like(y, NAN))
 
 
 @op("dt", "day", arity=1)
 def day_at_max_ratio(x: torch.Tensor) -> torch.Tensor:
-    """Share of the day's finite minutes whose value equals the day's maximum.
+    """Share of the day's finite minutes whose value equals the day's maximum (NaN on a day
+    with fewer than two finite minutes: one print is not a day).
     On Close / High: time spent pinned at the day's high -- a limit-up lock reads near 1,
     a normal day near 1/240.  (F106, F110: 'locked at the top' vs 'locked at the bottom'
     are different events and ``day_flat_ratio`` cannot tell them apart.)"""
@@ -534,7 +567,8 @@ def day_at_max_ratio(x: torch.Tensor) -> torch.Tensor:
 
 @op("dt", "day", arity=1)
 def day_at_min_ratio(x: torch.Tensor) -> torch.Tensor:
-    """Share of the day's finite minutes whose value equals the day's minimum."""
+    """Share of the day's finite minutes whose value equals the day's minimum (NaN on a day
+    with fewer than two finite minutes)."""
     x = _f(x)
     ok = torch.isfinite(x)
     n = ok.sum(-1)
@@ -546,7 +580,7 @@ def day_at_min_ratio(x: torch.Tensor) -> torch.Tensor:
 @op("dt", "day", arity=1)
 def day_distinct_ratio(x: torch.Tensor) -> torch.Tensor:
     """Number of DISTINCT values among the day's finite minutes, divided by their count:
-    1/n = one price all day, 1 = every minute different.  On a price: how many price
+    1/n = one price all day, 1 = every minute different (NaN with fewer than two finite minutes).  On a price: how many price
     levels the day visited -- coarse for low-priced stocks on a one-tick grid.  (F107.)"""
     x = _f(x)
     ok = torch.isfinite(x)
@@ -585,7 +619,12 @@ def day_topw_mean(y: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
 
 
 def _es_ratio(x: torch.Tensor, q: float, hi: bool) -> torch.Tensor:
-    x = _f(x)
+    # In float64: the interpolated quantile of a float32 row can land one ulp on the wrong side of the order
+    # statistic it sits on, and the strict comparison then admits (or drops) the boundary minute -- a 3% error
+    # in the ratio at the real width of 241.  The result goes back to the input dtype (float32 in production).
+    x0 = _f(x)
+    out_dtype = x0.dtype
+    x = x0.to(torch.float64)
     ok = torch.isfinite(x)
     v = torch.nanquantile(torch.where(ok, x, torch.full_like(x, NAN)), q, dim=-1, keepdim=True)
     sel = ok & ((x > v) if hi else (x < v))
@@ -593,7 +632,7 @@ def _es_ratio(x: torch.Tensor, q: float, hi: bool) -> torch.Tensor:
     es = torch.where(sel, x, torch.zeros_like(x)).sum(-1) / k.clamp(min=1).to(x.dtype)
     v = v.squeeze(-1)
     good = (k > 0) & (v.abs() > 1e-8)
-    return _day(es / torch.where(good, v, torch.ones_like(v)), good)
+    return _day(es / torch.where(good, v, torch.ones_like(v)), good).to(out_dtype)
 
 
 @op("dt", "day", arity=1)
@@ -633,13 +672,23 @@ def in_zscore_expand(x: torch.Tensor) -> torch.Tensor:
     'Unusual relative to today so far' -- causal within the day, unlike a full-day
     z-score, which knows the close at the open.  (F110.)"""
     x = _f(x)
-    ok = torch.isfinite(x)
-    v = torch.where(ok, x, torch.zeros_like(x))
-    n = torch.cumsum(ok.to(x.dtype), -1)
-    s1, s2 = torch.cumsum(v, -1), torch.cumsum(v * v, -1)
-    mu = s1 / n.clamp(min=1)
-    var = (s2 / n.clamp(min=1) - mu * mu).clamp(min=0)
-    return torch.where(ok & (n >= 5), (x - mu) / (torch.sqrt(var) + EPS), torch.full_like(x, NAN))
+    # Running moments of the data SHIFTED by the row's first finite minute, in float64.  The plain two-pass
+    # E[X^2] - E[X]^2 subtracts two numbers of the size of the level squared: on an amount-sized input the
+    # variance came out <= 0, was clamped to 0, and the rounding residue of (x - mean) was divided by EPS --
+    # errors of 1e3 to 1e11.  Variance is shift-invariant and the shift is known at the first minute, so this
+    # is the same quantity, causally.
+    xd = x.double()
+    ok = torch.isfinite(xd)
+    idx = torch.argmax(ok.to(torch.int8), dim=-1, keepdim=True)
+    c = torch.gather(torch.where(ok, xd, torch.zeros_like(xd)), -1, idx)
+    y = torch.where(ok, xd - c, torch.zeros_like(xd))
+    n = torch.cumsum(ok.to(xd.dtype), -1)
+    nc = n.clamp(min=1)
+    s1, s2 = torch.cumsum(y, -1), torch.cumsum(y * y, -1)
+    m = s1 / nc
+    var = (s2 / nc - m * m).clamp(min=0)
+    z = ((xd - c) - m) / (torch.sqrt(var) + EPS)
+    return torch.where(ok & (n >= 5), z, torch.full_like(xd, NAN)).to(x.dtype)
 
 
 @op("dt", "cross", arity=1, requires_window=True)

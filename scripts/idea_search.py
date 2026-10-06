@@ -65,7 +65,12 @@ idea = next(i for i in G.spec["ideas"] if i["id"] == IDEA)
 KIND = opt("--reward", idea.get("reward", "long_tradable"))
 # a "discovery": the reward's own score (the worse of train and valid) clears this.  Level rewards are pure-long
 # Sharpes; the marginal and screen rewards are differences against the pool / the base.
-THR = float(opt("--threshold", 0.2 if KIND in ("long_marginal", "long_screen") else 1.0))
+# (level rewards: a pure-long Sharpe; paired rewards: the information ratio of the paired daily difference --
+# 1.0 over the 5.4 years of train + valid is a t-statistic of about 2.3)
+THR = float(opt("--threshold", 1.0))
+from partura.steer import REWARDS  # noqa: E402
+if KIND not in REWARDS:
+    raise SystemExit(f"unknown reward {KIND!r}; choose from {REWARDS}")
 gram = idea.get("grammar") or {}
 IDEA_OPS = set()
 for key in ("day_ops", "memory_ops", "convex", "fold", "inner", "ops"):
@@ -100,7 +105,12 @@ with slot():
     untradable = (fr_rank > 0.8) | (np.asarray(aux["age"], np.float64) < 0.9 * possible) | ~np.isfinite(frozen)
     pool_sig = dg._zrank(bk.smoothed(float(pool_spec["sign"]) * np.asarray(aux["pool"], np.float64), float(pool_spec["hl"])))
     known_z = dg._zrank(float(G.spec["pool"][0]["sign"]) * np.asarray(aux["known"], np.float64))
-    ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=known_z, halflives=(0.0, 5, 20))
+    # what a SCREEN idea is measured against: by default the pool's strongest member (the known family that already
+    # has the generic frozen-quote screen) -- against the unscreened family one candidate in four "works" (e2_I1),
+    # because its long book has a junk tail that almost any marker of odd names removes.  --screen-base known for the old reference.
+    SCREEN_BASE = opt("--screen-base", "pool")
+    ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig,
+                        base=pool_sig if SCREEN_BASE == "pool" else known_z, halflives=(0.0, 5, 20))
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
           f"untradable {untradable[np.isfinite(tgt)].mean():.1%} of the labelled cells", flush=True)
 
@@ -123,7 +133,7 @@ with slot():
     SCORERS = []
 
     class ParturaScorer:
-        columns = ("p_score", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known")
+        columns = ("p_score", "p_s_train", "p_s_valid", "p_share", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known")
 
         def __init__(self, target, **kw):
             self.base = asc.PanelScorer(target, kind="rank_ic", turnover_penalty=0.0, min_coverage=kw.get("min_coverage", 0.5),
@@ -156,7 +166,8 @@ with slot():
             n = np.maximum(ok.sum(1), 1)
             with np.errstate(invalid="ignore", divide="ignore"):
                 c = ((zc * kc).sum(1) - zc.sum(1) * kc.sum(1) / n) / np.sqrt(((zc ** 2).sum(1) - zc.sum(1) ** 2 / n) * ((kc ** 2).sum(1) - kc.sum(1) ** 2 / n))
-            out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"], p_sign=r["sign"], p_hl=r["hl"],
+            out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"], p_s_train=r["score_train"],
+                       p_s_valid=r["score_valid"], p_share=r.get("screened_share", float("nan")), p_sign=r["sign"], p_hl=r["hl"],
                        p_train_sharpe=r["train"]["long_sharpe"], p_valid_sharpe=r["valid"]["long_sharpe"], p_train_ann=r["train"]["long_ann"],
                        p_valid_ann=r["valid"]["long_ann"], p_turnover=r["train"]["long_turnover"], p_rho_known=float(np.nanmean(c)))
             self.seconds += time.time() - t
@@ -179,6 +190,10 @@ with slot():
     # per-element-loop operators out).  The steer arm adds the guidance and the idea.
     T = agen.TypedTreeGenerator
     _acceptable, _pick = T.acceptable, T._pick
+    _mutate_window, _mutate_constant = T.mutate_window, T.mutate_constant
+    import random as _random
+    hook_rng = _random.Random((SEED * 2654435761) & 0xFFFFFFFF)   # the guidance's own draws: never the generator's stream
+    family_first = {}                                       # family key -> the first canonical member proposed
     OPW = G.operator_weights()
     stats = Counter()
     seeds_repr = set()
@@ -190,6 +205,8 @@ with slot():
     def install(arm):
         stats.clear()
         first_form.clear()
+        family_first.clear()
+        hook_rng.seed((SEED * 2654435761) & 0xFFFFFFFF)
 
         def pick(self, specs):
             faces = {}
@@ -228,15 +245,32 @@ with slot():
                 if MUST and not (MUST & set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", e))):
                     stats["outside"] += 1
                     return False
-                if not G.accept(e, u=self._rng.random()):
+                if not G.accept(e, u=hook_rng.random()):
                     stats["thinned"] += 1
+                    return False
+                # a sibling by renaming of price fields of something already proposed: usually close, sometimes
+                # not -- sampled less often, never refused for good
+                fam = G.family_key(e)
+                if family_first.setdefault(fam, key) != key and hook_rng.random() >= G.family_weight:
+                    stats["sibling"] += 1
                     return False
             except ValueError:
                 stats["unread"] += 1                         # a tree the string matcher cannot read is not judged
             stats["accepted"] += 1
             return True
 
+        def guarded(fn):                                    # AlphaCube's window / constant mutations do not ask `acceptable`
+            def wrapped(self, expr, *a, **k):                # (a ban on ...|w3 came back through them 67 times in 300); here they do
+                child = fn(self, expr, *a, **k)
+                if child is None or acceptable(self, child):
+                    return child
+                stats["mutation_refused"] += 1
+                return None
+            return wrapped
+
         T._pick, T.acceptable = pick, acceptable
+        if arm == "steer":
+            T.mutate_window, T.mutate_constant = guarded(_mutate_window), guarded(_mutate_constant)
 
     seeds = []
     for s in idea.get("seeds", []):
@@ -253,7 +287,7 @@ with slot():
     gpu_lock.__enter__()
     if torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
-    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
+    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir" if KIND in ("long_marginal", "long_screen") else "long_sharpe", "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "arms": {}}
     for arm in ARMS:
         ta = time.time()
@@ -263,6 +297,9 @@ with slot():
                   panel_cache_bytes=6 * 1024 ** 3)
         if arm == "steer" and seeds:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
+        import shutil
+        shutil.rmtree(ep_dir / arm, ignore_errors=True)       # a shorter rerun must not read the longer run's last checkpoint
+        err = None
         try:
             run_mining(STORE, mirror_root=MIRROR, start=START, end=END, warmup=60, label="open_vwap15_buyable", horizon=1, miner="gp",
                        budget=BUDGET, seed=SEED, device="cuda", pool="mse", pool_capacity=10, dedup=0.95, min_coverage=0.9,
@@ -270,8 +307,10 @@ with slot():
                        combine_methods=(), smooth_halflives=(), allow_resource_risk=True, workdir=str(PARTURA_ROOT / "tmp"),
                        out_root=str(ep_dir), run_id=arm, save_values=False, gp_params=gp)
         except Exception as exc:                             # noqa: BLE001  (the archive checkpoints are what we read)
-            print(f"[idea] {arm}: run_mining ended with {type(exc).__name__}: {str(exc)[:300]}", flush=True)
+            err = f"{type(exc).__name__}: {str(exc)[:300]}"
+            print(f"[idea] {arm}: run_mining ended with {err}", flush=True)
         T._pick, T.acceptable = _pick, _acceptable
+        T.mutate_window, T.mutate_constant = _mutate_window, _mutate_constant
         files = sorted((ep_dir / arm / "checkpoints").glob("archive_gen*.csv"))
         rows = list(csv.DictReader(files[-1].open(encoding="utf-8"))) if files else []
 
@@ -281,7 +320,8 @@ with slot():
             except ValueError:
                 return float("nan")
 
-        cand = [{"expr": r["expression"], "fit": num(r, "fitness"), "score": num(r, "score_p_score"), "train": num(r, "score_p_train_sharpe"), "valid": num(r, "score_p_valid_sharpe"),
+        cand = [{"expr": r["expression"], "fit": num(r, "fitness"), "score": num(r, "score_p_score"), "s_train": num(r, "score_p_s_train"),
+                 "s_valid": num(r, "score_p_s_valid"), "share": num(r, "score_p_share"), "train": num(r, "score_p_train_sharpe"), "valid": num(r, "score_p_valid_sharpe"),
                  "train_ann": num(r, "score_p_train_ann"), "valid_ann": num(r, "score_p_valid_ann"), "hl": num(r, "score_p_hl"), "sign": num(r, "score_p_sign"),
                  "turnover": num(r, "score_p_turnover"), "rho_known": num(r, "score_p_rho_known")} for r in rows]
         live = [c for c in cand if math.isfinite(c["fit"])]
@@ -290,7 +330,7 @@ with slot():
         best5 = sorted(live, key=lambda c: -c["fit"])[:5]
         for c in best5:
             print(f"        best: score {c['score']:+.2f} (train {c['train']:+.2f} valid {c['valid']:+.2f}) hl {c['hl']:g} rho_known {c['rho_known']:+.2f} | {c['expr'][:140]}", flush=True)
-        evidence["arms"][arm] = {"seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in SCORERS[n0:]),
+        evidence["arms"][arm] = {"error": err, "checkpoints": len(files), "seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in SCORERS[n0:]),
                                  "scoring_seconds": sum(s.seconds for s in SCORERS[n0:]), "archive": len(cand), "live": len(live),
                                  "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80]}
         print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}) "
@@ -319,15 +359,17 @@ with slot():
                 c = ((x * y).sum(1) - x.sum(1) * y.sum(1) / n) / np.sqrt(((x ** 2).sum(1) - x.sum(1) ** 2 / n) * ((y ** 2).sum(1) - y.sum(1) ** 2 / n))
             return float(np.nanmean(c))
 
-        pz = pool_sig[:cut:5]
+        pz, kz = pool_sig[:cut:5], known_z[:cut:5]
         for arm in evidence["arms"]:
             A = evidence["arms"][arm]
             heads = []
             for c in A["candidates"]:
                 if c["expr"] not in Z or not c["score"] >= THR:
                     continue
-                c["rho_pool"] = rho(Z[c["expr"]], pz)
-                if KIND != "long_screen" and (abs(c["rho_pool"]) >= 0.5 or abs(c.get("rho_known") or 0) >= 0.5):
+                # both correlations on the signal that would be TRADED (smoothed at the chosen half-life), the same
+                # measurement for the pool and for the known family; one that cannot be measured does not pass
+                c["rho_pool"], c["rho_known_traded"] = rho(Z[c["expr"]], pz), rho(Z[c["expr"]], kz)
+                if KIND != "long_screen" and not (abs(c["rho_pool"]) < 0.5 and abs(c["rho_known_traded"]) < 0.5):
                     continue                                 # a screen is judged by what it does to the base, not by being unlike it
                 if all(abs(rho(Z[c["expr"]], Z[h["expr"]])) < 0.7 for h in heads):
                     heads.append(c)

@@ -140,14 +140,28 @@ def score(vid):
     # better" and the names it moves go to the bottom.  Letting the rank IC pick the sign turns "never hold these"
     # into "hold only these" without an error -- several leads lost whole groups of hypotheses to it.
     locked = bool(re.match(r"\s*cs_(first|last)_(low|high)\d+\(", G["exprs"].get(vid, "")))
+    sign_ic = sign
     if locked:
         sign = 1.0
-    out = {"sign": sign, "sign_locked": locked, "rank_ic_train": abs(ic["rank_ic"]), "cov": ic["coverage_labelled"],
+    out = {"sign": sign, "sign_ic": sign_ic, "sign_locked": locked, "rank_ic_train": abs(ic["rank_ic"]), "cov": ic["coverage_labelled"],
            "dist_raw": dg.distinct_fraction(p[tr])}
     out["dist"] = out["dist_raw"]
     if not np.isfinite(ic["rank_ic"]):
         return vid, {**out, "dead": True}
     b = bk.books(sign * raw, tgt, tr, {"train": tr, "valid": va})
+    # The direction of a VARIANT is the one whose pure long book is better on train -- the user holds the long leg,
+    # and the sign of the rank IC can be set by the short leg (an event, a limit board) or flip between train and
+    # train+valid on a weak signal.  It also settles a screen wrapped in something (mul, cs_rank, add): the rank IC of
+    # such a panel is dominated by the step between the two groups and turned "never hold these" into "hold only
+    # these".  The original and the benchmarks keep the user's rule (sign of the rank IC); a root screen stays +1.
+    if not locked and G["kinds"].get(vid) not in ("base", "bench"):
+        b2 = bk.books(-sign * raw, tgt, tr, {"train": tr, "valid": va})
+        s1 = b["by_rank"]["long"]["splits"]["train"]["long_sharpe"]
+        s2 = b2["by_rank"]["long"]["splits"]["train"]["long_sharpe"]
+        if np.nan_to_num(s2, nan=-9e9) > np.nan_to_num(s1, nan=-9e9):
+            sign, b = -sign, b2
+            out["sign"] = sign
+    out["sign_by"] = "locked" if locked else ("rank_ic" if G["kinds"].get(vid) in ("base", "bench") else "long_book")
     u = bk.books(sign * raw, tgt, us, {"utrain": us})
     # the gate is about the signal that is TRADED (the panel after its EMA): a count / share panel has few distinct
     # values on any one day and a perfectly continuous smoothed signal
@@ -196,7 +210,7 @@ with slot():
     tgt = ps.target(1)
     tr, va, us = ps.split_slice("train"), ps.split_slice("valid"), ps.split_slice("utrain")
     os.environ["PARTURA_RANK_DEVICE"] = ""           # workers are forked: CPU ranking only
-    G.update(panels=panels, tgt=tgt, tr=tr, va=va, us=us, tr_ranks=dg.rank_rows(tgt[tr]), exprs={i: v[0] for i, v in V.items()})
+    G.update(panels=panels, tgt=tgt, tr=tr, va=va, us=us, tr_ranks=dg.rank_rows(tgt[tr]), exprs={i: v[0] for i, v in V.items()}, kinds={i: v[1] for i, v in V.items()})
     for name, key in (("r_orig", "v_base"), ("r_known", "k_known")):
         p = np.asarray(panels[key], dtype=np.float64)
         s0 = np.sign(dg.ic_row(panels[key][tr], tgt[tr], target_ranks=G["tr_ranks"])["rank_ic"]) or 1.0

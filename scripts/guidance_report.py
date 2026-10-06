@@ -20,7 +20,7 @@ def opt(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 
 
-TAG = opt("--tag", "s2")
+TAG = opt("--tag", "s3")
 G = yaml.safe_load((root / argv[0]).read_text(encoding="utf-8"))
 M = json.loads((root / "guidance" / f"motif_stats_{TAG}.json").read_text(encoding="utf-8"))
 _lab = yaml.safe_load((root / "lab" / "findings.yaml").read_text(encoding="utf-8"))
@@ -33,7 +33,7 @@ def stat(a):
     if not a:
         return ""
     f = lambda x, p=False: "—" if x is None else (f"{x:.0%}" if p else f"{x:+.2f}")  # noqa: E731
-    return (f"{a['n']} 例({a['factors']} 条因子):夏普变化中位 {f(a['d_median'])},明显变好 {f(a['up'], 1)}、明显变差 {f(a['down'], 1)}、"
+    return (f"{a.get('n_live', a['n'])} 例可用 / 共 {a['n']} 例({a['factors']} 条因子):夏普变化中位 {f(a['d_median'])},明显变好 {f(a['up'], 1)}、明显变差 {f(a['down'], 1)}、"
             f"两段都升 {f(a['both'], 1)}" + (f"、废品率 {a['dead']:.0%}" if a["dead"] >= 0.2 else ""))
 
 
@@ -62,12 +62,14 @@ L = [f"# 反向指引 AlphaCube:{G['batch'].split('_')[0]} 的研究结论怎样
 W = M["wrappers"]
 L += ["## 先说结论", "",
       f"1. **现在的奖励在给流动性倾斜付钱。**「只在成交额最低四成里选」这一个动作,不管套在哪条因子上都把纯多头夏普抬高 {W['seg_lowliq_m']['d_median']:+.2f}"
-      f"({W['seg_lowliq_m']['up']:.0%} 明显变好、{W['seg_lowliq_m']['both']:.0%} 两段都升)。所以搜索头部才会全是成交额一族 —— 要改的是奖励(桶内选股、可交易池、对池子的边际贡献),不是再多封几个结构。",
+      f"({W['seg_lowliq_m']['up']:.0%} 明显变好、{W['seg_lowliq_m']['both']:.0%} 两段都升);反过来「只在成交额最高四成里选」是 {W['seg_hiliq_p']['d_median']:+.2f} / {W['seg_hiliq_m']['d_median']:+.2f}"
+      f"(两个方向都试了,{W['seg_hiliq_p']['down']:.0%} / {W['seg_hiliq_m']['down']:.0%} 明显变差)。所以搜索头部才会全是成交额一族 —— 要改的是奖励(桶内选股、可交易池、对池子的边际贡献),不是再多封几个结构。",
       f"2. **对自身历史做 z 分数必须封禁。** {W['mem_zscore']['n']} 例里 {W['mem_zscore']['down']:.0%} 明显变差、没有一例两段都升,夏普中位 {W['mem_zscore']['d_median']:+.2f}。"
       f"外层的截面折叠({W['fold_mean']['d_median']:+.2f})、滚动标准差({W['mem_stddev']['d_median']:+.2f})、除以自己的历史均值({W['rel60']['d_median']:+.2f})是同一类错误:把持久的截面水平除掉了,而多头腿就在水平里。",
       f"3. **唯一「大多数时候有益、几乎不伤」的外层动作是慢记忆。** 30~60 日的均值 / 指数平均 / 线性衰减:两段都升 {W['mem_mean']['both']:.0%}~{W['mem_ema']['both']:.0%},明显变差只有 {W['mem_mean']['down']:.0%}~{W['mem_ema']['down']:.0%}。它不该靠搜索去重新发现 —— 评估时自动配上。",
       f"4. **把任意因子叠到已知族上没有用。** 三个权重 × 15 条因子,两段都升的是 {W['ov_p025']['both']:.0%} / {W['ov_p05']['both']:.0%} / {W['ov_p10']['both']:.0%}。值钱的是和池子不相关的东西融合之后的增量,所以奖励要直接量「对池子的边际贡献」。",
-      f"5. **一成的评估预算花在废品上**(废品率 {M['dead_rate']:.1%}),其中有整类是可以事先拒绝的:截面聚合(cs_mean / cs_sum / cs_median / cs_stddev_full)当因子用 100% 是废品;分母里的绝对小量(+1e-6)删掉之后 7 例全部变好。", ""]
+      f"5. **{M['dead_rate']:.0%} 的评估预算花在废品上**(门槛改算在实际交易的信号上之后;之前算在原面板上时是 10%,一半是误杀),其中有整类可以事先拒绝:截面聚合(cs_mean / cs_sum / cs_median / cs_stddev_full)当因子用 100% 是废品。", "",
+      "(更正:上一版这里还写着「分母里的 +1e-6 删掉之后 7 例全部变好」。审查发现那 7 例里真正碰到 1e-6 的只有 4 例、其中 3 例判废,剩下 1 例的消融也不是干净的删除 —— 这句话没有证据,已删;对应的规则由封禁降为降权,理由只剩两条手写因子的机制分析。)", ""]
 
 # ---- 1. reward
 L += ["## 一、奖励函数", "", "| | 改什么 | 为什么 | 状态 |", "|---|---|---|---|"]
@@ -88,10 +90,11 @@ L += ["## 三、动作与子结构的先验(重点)", "",
       "不需要生成器自己支持算子概率。改写在打分前做,等价的候选只评一次。", "",
       "### 3.1 证据:同一个外层动作套在 15 条因子上", "",
       "| 外层动作 | 是什么 | 例数 | 夏普变化中位 | 明显变好 | 明显变差 | 两段都升 | 与原式的秩相关 |", "|---|---|---|---|---|---|---|---|"]
-NAMES = {"seg_lowliq_m": "只在成交额最低四成里,按因子自己的方向选", "seg_hiliq_p": "把成交额最高四成排到最后", "seg_new_p": "把上市最短的四成排到最后", "seg_xfrozen_m": "把冻结盘口最重的两成排到最后",
+NAMES = {"seg_lowliq_m": "只在成交额最低四成里按 −x 选", "seg_lowliq_p": "只在成交额最低四成里按 +x 选", "seg_hiliq_p": "只在成交额最高四成里按 +x 选", "seg_hiliq_m": "只在成交额最高四成里按 −x 选",
+         "seg_xfrozen_m": "−x,把冻结盘口最重的两成排到最后", "seg_xfrozen_p": "+x,把冻结盘口最重的两成排到最后",
          "mem_ema": "cross_ema(·, 5~60)", "mem_decay_linear": "cross_decay_linear(·, 5~60)", "mem_mean": "cross_mean(·, 5~60)", "mem_max": "cross_max(·, 5~60)",
          "win": "cs_winsor(·)", "rk": "cs_rank(·)", "ov_p025": "已知族 + 0.25 × 本因子", "ov_p05": "已知族 + 0.5 × 本因子", "ov_p10": "已知族 + 1.0 × 本因子",
-         "scr_xhi_p": "已知族,排掉本因子最高两成", "mem_min": "cross_min(·, 5~60)", "res_liq": "对成交额取秩残差", "bk_liq": "成交额分桶内排名", "res_known": "对已知族取秩残差",
+         "scr_xhi_p": "已知族,排掉本因子最高两成", "scr_xhi_m": "已知族,排掉本因子最低两成", "mem_min": "cross_min(·, 5~60)", "res_liq": "对成交额取秩残差", "bk_liq": "成交额分桶内排名", "res_known": "对已知族取秩残差",
          "bk_known": "已知族分桶内排名", "mem_stddev": "cross_stddev(·, 5~60)", "fold_sq": "pow_2(cs_demean(·))", "fold_rank": "abs_(cs_demean(cs_rank(·)))",
          "rel60": "除以自己的 60 日均值", "fold_mean": "abs_(cs_demean(·))", "mem_zscore": "cross_zscore(·, 5~60)"}
 for k in NAMES:
@@ -99,7 +102,8 @@ for k in NAMES:
     if a:
         p = lambda x: "—" if x is None else f"{x:.0%}"  # noqa: E731
         L.append(f"| `{k}` | {NAMES[k]} | {a['n']} | {a['d_median']:+.2f} | {p(a['up'])} | {p(a['down'])} | {p(a['both'])} | {a['rho_orig_median']:.2f} |")
-L += ["", "叠加 / 筛子类(`ov_*`、`scr_*`)是和已知族比,其余是和原式比。分桶 / 残差类(`bk_*`、`res_*`)变差,说明这批因子的多头腿大半就是流动性 —— 这正是结论 1。", ""]
+L += ["", "叠加 / 筛子类(`ov_*`、`scr_*`)是和已知族比,其余是和原式比。分桶 / 残差类(`bk_*`、`res_*`)变差,说明这批因子的多头腿大半就是流动性 —— 这正是结论 1。",
+      "筛子 / 分段类(根是 `cs_first_*` / `cs_last_*`)的方向是锁定的,±x 两个方向各算一行;`seg_new_*`(按上市时间分段)这一轮的读数作废 —— 分段键 93% 并列,旧算子在并列块里按股票顺序任意切,已修,等第四轮。", ""]
 
 
 def rule_table(title, rows, cols):
@@ -120,7 +124,7 @@ L += rule_table("3.5 打分前改写 / 去重(等价的候选只评一次)", [r 
 
 # selected paired substitution evidence
 L += ["### 3.6 换算子 / 删节点 / 换叶子的成对统计(节选)", "", "| 动作 | 例数 | 夏普变化中位 | 明显变好 | 明显变差 | 废品率 | 读法 |", "|---|---|---|---|---|---|---|"]
-PICK = [("ablate_by_operator", "create_like", "删掉分母里的小常数:全部变好"), ("ablate_by_operator", "div", "删掉除法:多数变好"),
+PICK = [("ablate_by_operator", "div", "「删掉」除法 = 只留被除数(整个分母一起没了):多数变好"),
         ("substitute_pairs", "div → mul", "除法换乘法"), ("substitute_pairs", "add → mul", "加法换乘法"),
         ("substitute_outgoing", "ts_min →", "窗口为 1 的 ts_min 换成任何东西都不变:它是恒等"), ("substitute_outgoing", "day_quantile →", "价格水平取哪个统计量无所谓"),
         ("substitute_outgoing", "pow_1_5 →", "外层幂次是乘客"), ("substitute_outgoing", "cs_demean →", "换成别的截面算子多数是废品"),
@@ -144,20 +148,23 @@ L += ["## 四、交给 AlphaCube 短搜的想法", "",
 for i in G["ideas"]:
     L.append(f"| `{i['id']}` | {i['hypothesis']} | " + "<br>".join(f"`{s}`" for s in i.get("seeds", [])[:3]) + ("" if i.get("seeds") else "(不限结构)") + f" | `{i['reward']}` |")
 eps = sorted((root / "episodes").glob("*/evidence.json")) if (root / "episodes").is_dir() else []
-eps = [e for e in eps if not e.parent.name.startswith("smoke")]
+eps = [e for e in eps if not e.parent.name.startswith(("smoke", "e1_"))]          # e1: the reward compared two universes -- void
 if eps:
-    L += ["", "### 干预实验(每一行是一臂;同一个想法的两臂只差「有没有指引」)", "",
-          "| 实验 | 臂 | 评估的候选 | 过门槛 | 两段多头腿都站得住 | 其中互不重复且不在已知池里 | 每百次评估的发现数 | 用时 |", "|---|---|---|---|---|---|---|---|"]
+    L += ["", "### 干预实验(同一个想法的两臂只差「有没有指引」;完整的实验卡在 `episodes/<实验>/episode.md`)", "",
+          "| 实验 | 奖励 | 带指引:评估 / 过线 / 最好 | 对照:评估 / 过线 / 最好 | 结论 |", "|---|---|---|---|---|"]
     for e in eps:
         E = json.loads(e.read_text(encoding="utf-8"))
-        for arm, A in E["arms"].items():
-            L.append(f"| `{e.parent.name}`({E['reward']}) | {'带指引' if arm == 'steer' else '对照'} | {A['scored']} | {A['live']} | {A['passers']} | {A.get('independent_distinct', '—')} | "
-                     f"{A.get('efficiency_per_100', float('nan')):.1f} | {A['seconds'] / 60:.0f} 分 |")
-        for arm, A in E["arms"].items():
-            hs = A.get("heads", [])[:5]
-            if hs:
-                L += ["", f"`{e.parent.name}` {'带指引' if arm == 'steer' else '对照'}臂找到的(纯多头夏普 训练 / 验证;奖励口径下):", ""]
-                L += [f"- {h['train']:.2f} / {h['valid']:.2f},半衰期 {h['hl']:g},与池子相关 {h.get('rho_pool', float('nan')):+.2f}:`{h['expr']}`" for h in hs]
+        thr = float(E.get("threshold", 1.0))
+
+        def cell(A):
+            sc = sorted([c["score"] for c in A["candidates"] if c.get("score") == c.get("score")], reverse=True)
+            return f"{A['scored']} / {sum(x >= thr for x in sc)} / {sc[0]:+.2f}" if sc else f"{A['scored']} / 0 / —"
+
+        bf = e.parent / "belief.md"
+        head = bf.read_text(encoding="utf-8").strip().split("\n")[0].strip("* ") if bf.is_file() else "(信念更新待写)"
+        arms = E["arms"]
+        L.append(f"| `{e.parent.name}` | `{E['reward']}`(过线 ≥ {thr:g}) | {cell(arms['steer']) if 'steer' in arms else '—'} | {cell(arms['control']) if 'control' in arms else '—'} | {head} |")
+    L += ["", "「过线」数的是存下来的前 80 个候选里分数达到线的个数。首跑(`e1_*`)作废:那时对池子的边际奖励两边不在同一个股票池里。"]
 else:
     L += ["", "(干预实验的结果出来后会列在这里。)"]
 L.append("")

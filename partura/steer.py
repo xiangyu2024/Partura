@@ -168,7 +168,7 @@ SIGN_KEEPING_OPS = frozenset("""cross_ema cross_mean cross_max cross_min cross_m
     cross_tail_mean_q25 cross_tail_mean_q75 cross_quantile_q25 cross_quantile_q75 ts_mean ts_max ts_min ts_sum ts_med ts_decay_linear
     day_mean day_sum day_max day_min day_median day_quantile day_first day_last day_close day_open in_slice in_delay in_local_mean
     in_mean_full add mul div cs_winsor pow_05 pow_1_5 pow_2_5 pow_3 signedpower""".split())
-IDEMPOTENT_OPS = frozenset("abs_ cs_demean cs_rank cs_winsor cs_normalize cs_robust_z neg_abs".split())
+IDEMPOTENT_OPS = frozenset("abs_ cs_demean cs_rank".split())     # exactly f(f(x)) = f(x); nothing "nearly" idempotent belongs here
 
 
 def nonneg(n: Node) -> bool:
@@ -281,13 +281,37 @@ class Guidance:
         return str(n)
 
     def dedup_key(self, expr: str) -> str:
-        """Canonical form with every leaf family collapsed to its representative: two candidates with the same
-        key are the same experiment and only one of them should be scored."""
-        s = self.canonical(expr)
-        for r in self.rules:
-            if r.action == "dedup_key" and r.pattern.tree.name in LEAF_KINDS:
-                s = re.sub(r"\b(" + "|".join(LEAF_KINDS[r.pattern.tree.name]) + r")\b", r.to, s)
-        return re.sub(r"\s+", "", s)
+        """The canonical form: two candidates with the same key are the same experiment -- exactly, by the rewrite
+        rules -- and only one of them should be scored.  Nothing that is merely "usually similar" is merged here."""
+        return re.sub(r"\s+", "", self.canonical(expr))
+
+    def family_key(self, expr: str) -> str:
+        """The canonical form with the leaves of each ``family`` rule relabelled by order of first appearance
+        (the k-th distinct price field met becomes @P<k>).  Two candidates with the same family key differ only
+        by a renaming of those fields: ``day_std(Low)`` and ``day_std(Close)``, but NOT ``sub(High, Low)`` and
+        ``sub(Close, Open)`` -- and not a tree and the tree with one of two leaves swapped.  Such siblings are
+        usually close (median rank correlation 0.96-0.98 in the batch) and sometimes not (0.45), so a family is
+        a reason to sample a sibling less often (``family_weight``), never to refuse it."""
+        kinds = {r.pattern.tree.name: r for r in self.rules if r.action == "family" and r.pattern.tree.name in LEAF_KINDS}
+        if not kinds:
+            return self.dedup_key(expr)
+        seen: Dict[str, Dict[str, str]] = {k: {} for k in kinds}
+
+        def relabel(n: Node) -> Node:
+            if n.args is None:
+                for k in kinds:
+                    if n.name in LEAF_KINDS[k]:
+                        m = seen[k]
+                        return Node(m.setdefault(n.name, f"{k[:2].upper()}{len(m) + 1}"))
+                return n
+            return Node(n.name, tuple(relabel(a) for a in n.args))
+
+        return re.sub(r"\s+", "", str(relabel(parse_expr(self.canonical(expr)))))
+
+    @property
+    def family_weight(self) -> float:
+        ws = [r.w for r in self.rules if r.action == "family"]
+        return min(ws) if ws else 1.0
 
     # -- weights
     def explain(self, expr: str) -> List[Rule]:
@@ -323,8 +347,10 @@ class Guidance:
 
     def operator_weights(self) -> Dict[str, float]:
         """A coarse per-operator multiplier for generators that only take one number per operator: the weight of
-        every rule whose pattern is led by that operator at the root or anywhere.  Structure-specific rules lose
-        their context here (that is what ``accept`` is for); this is the fallback, not the mechanism."""
+        every rule that says "this operator, whatever its operands, wherever it sits".  A rule with any context --
+        anchored at the root, with a specific operand, an exception or a nesting depth -- is NOT folded in: a
+        root-only ban turned into a vocabulary ban removed five operators from the steered arm that the rule
+        never meant to touch.  Context is what ``accept`` enforces; this is the fallback, not the mechanism."""
         out: Dict[str, float] = {}
         for r in self.rules:
             if r.action not in ("ban", "weight"):
@@ -332,7 +358,7 @@ class Guidance:
             head = r.pattern.tree.name
             names = [x.strip() for x in head[1:-1].split("|")] if head.startswith("{") else [head]
             generic = all(a.name in ("_", "$w") or re.fullmatch(r"_\d+", a.name or "") for a in r.pattern.tree.args or ())
-            if not generic or r.unless is not None or r.depth_ge:
+            if not generic or r.unless is not None or r.depth_ge or r.pattern.root:
                 continue
             for nm in names:
                 out[nm] = out.get(nm, 1.0) * (r.w if r.action == "weight" else 0.0)
@@ -402,60 +428,143 @@ def _bucket_rank(sm, bucket, n: int = 10):
     return np.where(fin, (within + 1.0) / np.maximum(np.take_along_axis(cnt, b, axis=1), 1), np.nan)
 
 
-def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool = True) -> Dict[str, object]:
-    """Score one raw (days, stocks) panel.
+PAIRED = ("long_marginal", "long_screen")     # rewards that are a DIFFERENCE between two books on one universe
+PAIRED_FLOOR = -1.0                             # a paired information ratio below this in either period is a rejection
 
-    For each direction and each half-life of the grid the signal is smoothed, transformed as the reward says,
-    and its pure long book (top decile, equal weight, net of 15 bp, against the equal-weight of the names that
-    have a signal and a label) is scored on the training period; the best (direction, half-life) BY THE LONG BOOK
-    on train is kept.  ``score`` is the pure-long Sharpe -- the worse of train and valid when ``both_periods``.
-    ``long_marginal`` scores the 50/50 blend with the pool minus the pool alone.  ``long_screen`` uses the
-    candidate as a SCREEN: the base signal (the known family) with the candidate's top fifth sent to the bottom,
-    minus the base alone -- the reward for an idea whose claim is "this marks the names not to hold"."""
+
+def _daily_long_net(sm, tgt, days):
+    """Daily net excess of the pure long book of ``sm`` over ``days`` (the book starts empty)."""
+    from alphacube.metrics import long_short_weights
+
+    from . import books as bk
+    s, t = sm[days], tgt[days]
+    return bk.long_book(long_short_weights(s, bk.TOP_FRAC), s, t)[0]
+
+
+def _ir(d) -> float:
+    import numpy as np
+    f = d[np.isfinite(d)]
+    if f.size < 30 or not f.std() > 0:
+        return float("nan")
+    return float(f.mean() / f.std() * np.sqrt(252))
+
+
+def _top_band(x, frac: float = 0.2):
+    """Boolean (days, stocks): the names whose whole TIE BLOCK lies in the top ``frac`` of the day's finite values.
+    A block that straddles the cut is left out as a whole, so the band is at most ``frac`` wide, never decided by
+    the order of the stocks, and a saturating panel (a share with most names at its floor) cannot screen 27% on
+    one half-life and 20% on another."""
+    import numpy as np
+    import torch
+    t = torch.from_numpy(np.ascontiguousarray(x, dtype=np.float64))
+    ok = torch.isfinite(t)
+    v = torch.where(ok, t, torch.full_like(t, float("-inf")))
+    s_, order = torch.sort(v, dim=-1, stable=True)
+    s_ = s_.contiguous()
+    first = torch.searchsorted(s_, s_, right=False)
+    n = ok.sum(-1, keepdim=True)
+    below = (first - (t.shape[-1] - n)).to(torch.float64) / n.clamp(min=1).to(torch.float64)   # share of names strictly below the block
+    band = torch.zeros_like(ok).scatter_(-1, order, below >= (1.0 - frac) - 1e-12) & ok
+    return band.numpy()
+
+
+def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool = True) -> Dict[str, object]:
+    """Score one raw (days, stocks) panel.  Direction and half-life are chosen on the TRAINING period only.
+
+    Level rewards -- ``long`` / ``long_tradable`` / ``long_bucket``: the signal (direction x EMA) is, for the last
+    two, cut to the tradable universe AFTER smoothing (the EMA sees the whole history; the universe only decides
+    who can be ranked today), for the last one ranked inside liquidity buckets; its pure long book (top decile,
+    equal weight, net of 15 bp, against the equal weight of the names with a signal and a label) is scored and
+    the best (direction, half-life) by train Sharpe is kept.  ``score`` = pure-long Sharpe, the worse of train
+    and valid.
+
+    Paired rewards -- a candidate judged by what it does to another book ON THE SAME CELLS:
+    ``long_marginal``  the 50/50 rank blend of candidate and pool, against the pool on exactly the cells where
+                       the blend exists (a candidate's own missing values would otherwise move its benchmark);
+    ``long_screen``    the base signal with the candidate's top fifth (whole tie blocks) sent below everything,
+                       against the base itself.
+    Their ``score`` is the information ratio of the PAIRED DAILY DIFFERENCE of the two books' net excess over
+    train + valid together, unless the ratio of either period alone is below ``PAIRED_FLOOR`` (then that one):
+    a Sharpe difference required in both periods cannot be met in a period where the pool's own Sharpe is 3.5
+    (episode e2_I2), a paired difference says whether the candidate adds return reliably.  A candidate that
+    changes nothing in the book (difference identically zero) is rejected, not scored 0."""
     import numpy as np
 
     from . import books as bk
     from . import diagnose as dg
 
+    if kind not in REWARDS:
+        raise ValueError(f"unknown reward {kind!r}; choose from {REWARDS}")
     raw = np.asarray(panel, dtype=np.float64)
-    if ctx.untradable is not None and kind in ("long_tradable", "long_bucket", "long_marginal"):
-        raw = np.where(ctx.untradable, np.nan, raw)
-    best = None
-    for hl in ctx.halflives:
-        sm0 = bk.smoothed(raw, hl)                           # the EMA is linear: one pass serves both directions
-        for sign in (1.0, -1.0):
-            sm = sign * sm0
-            if kind == "long_bucket":
-                sm = _bucket_rank(sm, ctx.bucket())
-            elif kind == "long_marginal":
-                z, pu = dg._zrank(sm), ctx.pool_in_universe()
-                sm = np.where(np.isfinite(z) & np.isfinite(pu), 0.5 * z + 0.5 * pu, np.nan)
-            elif kind == "long_screen":
-                z = dg._zrank(sm)                            # [-0.5, 0.5]; the top fifth of the candidate goes below everything
-                sm = np.where(np.isfinite(ctx.base), np.where(np.isfinite(z) & (z > 0.3), -1.0 + 0.1 * ctx.base, ctx.base), np.nan)
-            r = bk.book_row(sm, ctx.tgt, ctx.train)
-            key = float(np.nan_to_num(r["long_sharpe"], nan=-9e9))
-            if best is None or key > best[0]:
-                best = (key, sign, float(hl), sm, r)
-    _, sign, hl, sm, tr = best
-    va = bk.book_row(sm, ctx.tgt, ctx.valid)
-    base_tr = base_va = 0.0
-    if kind == "long_marginal":
-        if ctx._pool_rows is None:
+    mask = ctx.untradable if (ctx.untradable is not None and kind in ("long_tradable", "long_bucket", "long_marginal")) else None
+    keep = ("long_ann", "long_sharpe", "long_turnover", "long_mdd")
+    best, extra = None, {}
+
+    if kind not in PAIRED:
+        for hl in ctx.halflives:
+            sm0 = bk.smoothed(raw, hl)                       # the EMA is linear: one pass serves both directions
+            if mask is not None:
+                sm0 = np.where(mask, np.nan, sm0)
+            for sign in (1.0, -1.0):
+                sm = sign * sm0
+                if kind == "long_bucket":
+                    sm = _bucket_rank(sm, ctx.bucket())
+                r = bk.book_row(sm, ctx.tgt, ctx.train)
+                key = float(np.nan_to_num(r["long_sharpe"], nan=-9e9))
+                if best is None or key > best[0]:
+                    best = (key, sign, float(hl), sm, r)
+        _, sign, hl, sm, tr = best
+        va = bk.book_row(sm, ctx.tgt, ctx.valid)
+        s_tr, s_va = tr["long_sharpe"], va["long_sharpe"]
+        score = min(s_tr, s_va) if both_periods else s_tr
+    else:
+        if kind == "long_marginal":
             pu = ctx.pool_in_universe()
-            ctx._pool_rows = (bk.book_row(pu, ctx.tgt, ctx.train), bk.book_row(pu, ctx.tgt, ctx.valid))
-        base_tr, base_va = ctx._pool_rows[0]["long_sharpe"], ctx._pool_rows[1]["long_sharpe"]
-    if kind == "long_screen":
-        if ctx._base_rows is None:
-            ctx._base_rows = (bk.book_row(ctx.base, ctx.tgt, ctx.train), bk.book_row(ctx.base, ctx.tgt, ctx.valid))
-        base_tr, base_va = ctx._base_rows[0]["long_sharpe"], ctx._base_rows[1]["long_sharpe"]
-    s_tr, s_va = tr["long_sharpe"] - base_tr, va["long_sharpe"] - base_va
-    score = min(s_tr, s_va) if both_periods else s_tr
+            cells = np.isfinite(raw) & np.isfinite(pu) if mask is None else np.isfinite(raw) & np.isfinite(pu) & ~mask
+            ref = np.where(cells, pu, np.nan)                # the pool, on exactly the cells the blend can use
+            ref_tr, ref_va = _daily_long_net(ref, ctx.tgt, ctx.train), _daily_long_net(ref, ctx.tgt, ctx.valid)
+        else:
+            ref = ctx.base
+            if ctx._base_rows is None:
+                ctx._base_rows = (_daily_long_net(ref, ctx.tgt, ctx.train), _daily_long_net(ref, ctx.tgt, ctx.valid))
+            ref_tr, ref_va = ctx._base_rows
+        for hl in ctx.halflives:
+            sm0 = bk.smoothed(raw, hl)
+            z0 = dg._zrank(np.where(cells, sm0, np.nan)) if kind == "long_marginal" else None
+            for sign in (1.0, -1.0):
+                if kind == "long_marginal":
+                    sm = np.where(cells, 0.5 * sign * z0 + 0.5 * pu, np.nan)       # rank(-x) = -rank(x): one ranking per half-life
+                    share = float("nan")
+                else:
+                    band = _top_band(np.where(np.isfinite(ref), sign * sm0, np.nan))
+                    sm = np.where(np.isfinite(ref), np.where(band, ref - 2.0, ref), np.nan)   # below every unscreened name, order kept
+                    share = float(band[ctx.train].sum() / max(np.isfinite(ref[ctx.train]).sum(), 1))
+                with np.errstate(invalid="ignore"):
+                    spread = np.nanmedian(np.nanstd(sm[ctx.train], axis=1))
+                if not spread > 1e-12:                       # a signal with no cross-section (the pool blended with minus
+                    continue                                 # itself) has no book: its "book" is the order of the columns
+                ir = _ir(_daily_long_net(sm, ctx.tgt, ctx.train) - ref_tr)
+                key = 0.0 if ir != ir else ir                # NaN = the book IS the reference book: worth exactly nothing,
+                if best is None or key > best[0]:            # which still beats a direction that makes the book worse
+                    best = (key, sign, float(hl), sm, ir, share)
+        if best is None or best[4] != best[4]:               # the best this candidate can do is to change nothing
+            nanrow = {k: float("nan") for k in keep}
+            return {"score": float("-inf"), "sign": 1.0, "hl": float(ctx.halflives[0]), "kind": kind, "score_train": float("nan"),
+                    "score_valid": float("nan"), "score_all": float("nan"), "no_effect": True, "train": nanrow, "valid": nanrow}
+        _, sign, hl, sm, s_tr, share = best
+        d_tr = _daily_long_net(sm, ctx.tgt, ctx.train) - ref_tr
+        d_va = _daily_long_net(sm, ctx.tgt, ctx.valid) - ref_va
+        s_va, s_all = _ir(d_va), _ir(np.concatenate([d_tr, d_va]))
+        worst = min(s_tr, s_va) if (s_tr == s_tr and s_va == s_va) else float("nan")
+        score = worst if not worst >= PAIRED_FLOOR else s_all            # NaN (a no-op) falls through to -inf below
+        if not both_periods:
+            score = s_tr
+        tr, va = bk.book_row(sm, ctx.tgt, ctx.train), bk.book_row(sm, ctx.tgt, ctx.valid)
+        extra = {"score_all": float(s_all), "screened_share": share} if kind == "long_screen" else {"score_all": float(s_all)}
     return {"score": float(score) if score == score else float("-inf"), "sign": sign, "hl": hl, "kind": kind,
-            "score_train": float(s_tr), "score_valid": float(s_va),
-            "train": {k: tr[k] for k in ("long_ann", "long_sharpe", "long_turnover", "long_mdd")},
-            "valid": {k: va[k] for k in ("long_ann", "long_sharpe", "long_turnover", "long_mdd")}}
+            "score_train": float(s_tr), "score_valid": float(s_va), **extra,
+            "train": {k: tr[k] for k in keep}, "valid": {k: va[k] for k in keep}}
 
 
 __all__ = ["Node", "parse_expr", "walk", "operators", "leaves", "Pattern", "nesting", "nonneg", "simplify", "Rule", "Guidance",
-           "RewardContext", "reward", "REWARDS", "LEAF_KINDS"]
+           "RewardContext", "reward", "REWARDS", "PAIRED", "PAIRED_FLOOR", "LEAF_KINDS"]

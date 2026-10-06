@@ -36,7 +36,8 @@ for name in names:
     E = json.loads((d / "evidence.json").read_text(encoding="utf-8"))
     G = Guidance.load(root / E.get("guidance", "guidance/B01.yaml"))
     idea, kind = E["idea"], E["reward"]
-    levels = LEVELS.get(kind, (0.0, 0.3, 0.5, 1.0))
+    old_scale = kind in LEVELS and float(E.get("threshold", 1.0)) < 0.5      # before 2026-10-06 the paired rewards were Sharpe differences
+    levels = LEVELS[kind] if old_scale else (0.0, 0.5, 1.0, 1.5) if kind in LEVELS else (0.0, 0.3, 0.5, 1.0)
     rows, found = [], {}
     for arm, A in E["arms"].items():
         cs = [c for c in A["candidates"] if fin(c.get("score"))]
@@ -69,7 +70,9 @@ for name in names:
     for r in rows:
         L.append(f"| {ARM.get(r['arm'], r['arm'])} | {r['scored']} | {r['gate']} | {r['live']} | {r['distinct']} / {r['saved']} | " + " | ".join(str(x) for x in r["levels"])
                  + f" | {r['best']:+.2f} | {r['top5']:+.2f} | {'—' if r['heads'] is None else r['heads']} | {r['minutes']:.0f} 分 |")
-    L += ["", f"分数的含义:" + {"long_marginal": "候选与已知池五五混合后的纯多头夏普减池子自己的,train 与 valid 取较差的", "long_screen": "已知族把候选最高的两成排到最后之后的纯多头夏普减已知族自己的,train 与 valid 取较差的",
+    paired_new = "「候选改过的书」减「参照书」的逐日净超额之差在 train+valid 合并段上的信息比(任一段低于 −1 则取那一段);参照书 = "
+    L += ["", f"分数的含义:" + {"long_marginal": ("候选与已知池五五混合后的纯多头夏普减池子自己的,train 与 valid 取较差的(旧口径)" if old_scale else paired_new + "同一批格子上的已知池;候选改过的书 = 两者排名五五混合"),
+                           "long_screen": ("已知族把候选最高的两成排到最后之后的纯多头夏普减已知族自己的,train 与 valid 取较差的(旧口径)" if old_scale else paired_new + "已知族;候选改过的书 = 已知族把候选最高两成(整块并列)排到最后"),
                            "long_bucket": "可交易池里、成交额十档内排名之后的纯多头夏普,train 与 valid 取较差的", "long_tradable": "可交易池里的纯多头夏普,train 与 valid 取较差的",
                            "long": "纯多头夏普,train 与 valid 取较差的"}.get(kind, kind) + "。「分数 ≥」各列数的是互不等价的候选。", ""]
     for r in rows:

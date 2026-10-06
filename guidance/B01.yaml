@@ -34,7 +34,7 @@ reward:
     change: 奖励 = 候选与当前因子池五五混合之后,纯多头夏普 / 净超额相对池子本身的增量(AlphaGen 的做法:生成器的回报来自下游组合的边际贡献)
     why: 把任意一条因子的排名叠到已知族上,15 条 × 6 个权重没有一次两段都升(0/90);独立的 9 个融合后样本外 +17.3% / 1.93 而单个只有 +2~+12% —— 值钱的是「对池子的增量」,不是单打独斗的夏普
     evidence: [wrappers.ov_p025, wrappers.ov_p05, wrappers.ov_p10, "runs/_batch_B01/fuse_s2.json", amt-level-family-evades-rank-ban]
-    status: implemented        # reward 'long_marginal'(池 = guidance 里列的 pool 表达式)
+    status: implemented        # reward 'long_marginal';2026-10-06 改口径:混合书与池子书在同一批格子上的逐日差的信息比(train+valid 合并段;任一段低于 −1 判负)。原口径「两段夏普差取较差者」在 e2_I2 里被证明不可用,且两边股票池不一致(审查)
   - id: R4_both_periods
     change: 奖励取 train、valid 两段里较差的那个(或要求两段多头腿都为正),不用合并段
     why: valid(2022-01~2023-08)是成交额水平 / 小市值的大年,合并段会系统性挑到成交额占比最高的写法;平滑买到的样本外一致性在合并段上被抹平
@@ -81,6 +81,10 @@ evaluation:
     change: 选拔只看多头腿(净超额、纯多头夏普),多空夏普只作参考
     why: 可买入标签把次日封涨停的票记成缺失,空头书里等于收益 0,集中度 / 峰度类因子的多空夏普因此虚高 0.5~0.7;15 条原式多空夏普 2.3~3.9,多头腿站得住的只有 5 条
     evidence: [buyable-label-inflates-short-leg-of-concentration-factors, buyable-label-filter-deepens-short-side-of-volume-spike-groups]
+  - id: E7_power_of_an_episode
+    change: 检验「先验 / 指引有没有提高发现率」的实验,每臂至少几千次评估;几百次的短搜只用来回答「这个想法的邻域里有没有东西」
+    why: 桶内口径下随机搜索的发现率低于 1%,每臂 124 次评估时两臂的差别全在抽样误差里(e2_I5:≥0.3 的 2 对 0,≥0 的 8 对 15,方向都不一致)
+    evidence: ["episodes/e2_I5_within_bucket_anything"]
   - id: E6_episode_with_control
     change: 每一次干预都配一个同预算、不带干预的对照搜索;记「每千次评估里过门槛、两段多头腿为正、与已知池不重合的候选数」
     why: 要验证的不是某次搜到了好因子,而是干预有没有提高单位算力的发现效率
@@ -91,15 +95,16 @@ priors:
   - {id: C1_window1_identity, action: rewrite, pattern: "{ts_min|ts_max|ts_mean|ts_med|ts_sum|ts_decay_linear}(_, 1)", to: operand, why: 窗口为 1 的日轴滚动是逐位恒等, evidence: [f103-l3, 'substitute_outgoing."ts_min →" d 0.00 ρ1.00']}
   - {id: C2_abs_of_nonneg, action: rewrite, pattern: "abs_(@flow)", to: operand, why: 成交额 / 成交量恒非负, evidence: ["F104 abl_A 与原式逐位相同"]}
   - {id: C3_nested_powers, action: rewrite, pattern: "{pow_1_5|pow_2|pow_2_5|pow_3|sqrt}({pow_1_5|pow_2|pow_2_5|pow_3|sqrt}(_))", to: single_power, why: 两层幂次在恒正操作数上就是一层, evidence: [rank-preserving-outer-map-is-a-noop, f102-l1]}
-  - {id: C4_root_winsor, action: rewrite, pattern: "root: cs_winsor(_)", to: operand, why: 最外层缩尾不改十分位书(15 条里 d 中位 0.00、ρ原式 0.99), evidence: [wrappers.win]}
+  - {id: C4_root_winsor_note, action: weight, w: 1.0, pattern: "root: cs_winsor(_)", why: "最外层缩尾通常不改十分位书(15 条里夏普变化中位 0.00、与原式秩相关中位 0.99),但不是等价改写:相关最低 0.57,15 条里 2 条越出噪声带且训练段多头腿变号(F112 −0.99、F110 +0.31)。它是另一个实验,不是同一个候选的短写法 —— 2026-10-06 审查后从「改写」降为不加权的备注", evidence: [wrappers.win, "handoff/workflows/wf_b7c13476-92d: C4_root_winsor"]}
   - {id: C5_cov_self, action: rewrite, pattern: "day_cov(_1, _1)", to: "day_var(_1)", why: 操作数相同的协方差就是方差, evidence: ["F105 iso_A"]}
   - {id: C6_shift_scale_const, action: rewrite, pattern: "root: {add|sub|mul}(_, $w)", to: operand, why: 最外层加减常数、乘正常数不改截面排序, evidence: [rank-preserving-outer-map-is-a-noop, "F113 sub(·, −5) / mul(·, 5)"]}
-  - {id: C7_price_leaf_family, action: dedup_key, pattern: "@price", to: Close, why: 把价格叶子互换(Close↔Open/High/Low/Vwap)ρ原式 0.96~0.98、d ≈ 0;只差价格叶子的候选算同一个, evidence: [leaf_field."Close → Low", leaf_field."Close → Open", leaf_field."Close → High"]}
+  - {id: C8_bucket_rank_twice, action: rewrite, pattern: "cs_bucket_rank(cs_bucket_rank(_1, _2), _2)", to: "cs_bucket_rank(_1, _2)", why: 同一个键上桶内排名两次等于一次(想法短搜 e2_I1 里带指引的一臂为它各付了一次钱), evidence: ["episodes/e2_I1_frozen_state"]}
+  - {id: C7_price_leaf_family, action: family, w: 0.3, pattern: "@price", why: "只把价格字段整体换名的兄弟(day_std(Low) 对 day_std(Close))通常很近(秩相关中位 0.96~0.98、夏普变化 ≈ 0),偶尔不近(F109 上 0.45~0.49)。所以是「少采样兄弟」(已提过同族的,以 0.3 的概率放行),不是「同一个候选」;含两个不同价格字段的式子(sub(High, Low) 对 sub(Close, Open))不算同族 —— 2026-10-06 审查后由全局去重改成按首次出现重标号的家族键", evidence: [leaf_field."Close → Low", leaf_field."Close → Open", leaf_field."Close → High", "handoff/workflows/wf_b7c13476-92d: dedup_key"]}
   # ---- 拒绝
   - {id: B1_root_zscore_own_history, action: ban, pattern: "root: {cross_zscore|ts_zscore}(_, $w)", why: 对自身历史做 z 分数把因子变成尖峰探测器 —— 60 例里 98% 明显变差、0 例两段都升、d 中位 −2.73, evidence: [wrappers.mem_zscore]}
   - {id: B2_day_scalar_as_factor, action: ban, pattern: "root: {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_max|cs_min}(_)", why: 截面聚合每天只有一个数,整个截面同值,100% 废品, evidence: [substitute_incoming."→ cs_mean", substitute_incoming."→ cs_stddev_full", substitute_incoming."→ cs_sum"]}
   - {id: B3_day_scalar_multiplier, action: ban, pattern: "{mul|div}(_, {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_state_rank}(_))", why: 乘除一个铺满截面的日标量,取秩之后被抹掉(no-op);市场状态只能经 select_where / cs_flip_by_state 进表达式, evidence: ["F101 verdict LF5"]}
-  - {id: B4_abs_epsilon_denominator, action: ban, pattern: "div(_, add(_, create_like(_, $w)))", why: 分母里的绝对小量(+1e-6)在不同量纲上含义不同,把因子变成涨跌停探测器;删掉它 7 例全升、d 中位 +1.59, evidence: [ablate_by_operator.create_like]}
+  - {id: D0_abs_epsilon_denominator, action: weight, w: 0.3, pattern: "div(_, add(_, create_like(_, $w)))", why: "分母里的绝对小量(+1e-6)在不同量纲上含义不同;F106 / F109 两条手写因子的综合都指出它把因子变成涨跌停探测器。证据是这两条的机制分析,不是统计:原来引用的「删掉后 7 例全部变好」经审查不成立(7 例里真正碰到 1e-6 的只有 4 例,其中 3 例判废,剩下 1 例的消融也不是干净的删除)—— 所以由封禁降为降权", evidence: ["notes/F106_erm_mag_gap_1m/synthesis.md", "notes/F109_erm_mag_gap_5m_tsm20/synthesis.md", "handoff/workflows/wf_b7c13476-92d: headline 5 / B4"]}
   - {id: B5_ts_product, action: ban, pattern: "ts_product(_, $w)", why: 80% 废品, evidence: [substitute_incoming."→ ts_product"]}
   # ---- 降权
   - {id: D1_root_fold_of_formed_factor, action: weight, w: 0.25, pattern: "root: {abs_|pow_2}(cs_demean(_))", unless: "{abs_|pow_2}(cs_demean({day_std|day_gini|day_mean|cross_ema|cross_mean}(_)))", why: 把一条已成形的因子再做截面折叠,15 条里 80% 明显变差(d 中位 −1.49);折叠只对日内离散度 / 活跃度这类量是结构, evidence: [wrappers.fold_mean, wrappers.fold_rank, wrappers.fold_sq, moderate-activity-fold-is-generic-benchmark-first]}
