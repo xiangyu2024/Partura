@@ -86,6 +86,13 @@ for s in idea.get("seeds", []):
 MUST = set(gram.get("day_ops", []))                       # the neighbourhood: a candidate must carry one of these
 ep_dir = PARTURA_ROOT / "episodes" / f"{TAG}_{IDEA}"
 ep_dir.mkdir(parents=True, exist_ok=True)
+# which code produced this evidence: episode e3_I1 ran an older copy of this script on the server (a file missed in a
+# sync) and nothing in its evidence said so -- the reference of the screen was not the one the card described
+import hashlib  # noqa: E402
+
+CODE = {f: hashlib.sha1((PARTURA_ROOT / f).read_bytes()).hexdigest()[:12] for f in
+        ("scripts/idea_search.py", "partura/steer.py", "partura/steer_fast.py", "partura/ops_ext.py", "partura/books.py", GPATH) if (PARTURA_ROOT / f).is_file()}
+print(f"[idea] code {CODE}; screen base {opt('--screen-base', 'pool')}; reward device {os.environ.get('PARTURA_REWARD_DEVICE', '') or 'numpy (reference)'}", flush=True)
 print(f"[idea] {IDEA}: reward {KIND}; budget {BUDGET} (population {POP}); arms {ARMS}; idea operators {sorted(IDEA_OPS)}; must-contain {sorted(MUST)}", flush=True)
 
 with slot():
@@ -138,7 +145,8 @@ with slot():
     SCORERS = []
 
     class ParturaScorer:
-        columns = ("p_score", "p_s_train", "p_s_valid", "p_share", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known")
+        columns = ("p_score", "p_s_train", "p_s_valid", "p_share", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known",
+                   "p_ir_train", "p_ir_valid", "p_dann_train", "p_dann_valid")        # paired rewards: the raw ratio and the size (net excess a year) behind the sized score
 
         def __init__(self, target, **kw):
             self.base = asc.PanelScorer(target, kind="rank_ic", turnover_penalty=0.0, min_coverage=kw.get("min_coverage", 0.5),
@@ -174,7 +182,8 @@ with slot():
             out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"], p_s_train=r["score_train"],
                        p_s_valid=r["score_valid"], p_share=r.get("screened_share", float("nan")), p_sign=r["sign"], p_hl=r["hl"],
                        p_train_sharpe=r["train"]["long_sharpe"], p_valid_sharpe=r["valid"]["long_sharpe"], p_train_ann=r["train"]["long_ann"],
-                       p_valid_ann=r["valid"]["long_ann"], p_turnover=r["train"]["long_turnover"], p_rho_known=float(np.nanmean(c)))
+                       p_valid_ann=r["valid"]["long_ann"], p_turnover=r["train"]["long_turnover"], p_rho_known=float(np.nanmean(c)),
+                       **{f"p_{k}": float(r.get(k, float("nan"))) for k in ("ir_train", "ir_valid", "dann_train", "dann_valid")})
             self.seconds += time.time() - t
             return out
 
@@ -292,7 +301,7 @@ with slot():
     gpu_lock.__enter__()
     if torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
-    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir" if KIND in ("long_marginal", "long_screen") else "long_sharpe", "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
+    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "arms": {}}
     for arm in ARMS:
         ta = time.time()
@@ -328,7 +337,8 @@ with slot():
         cand = [{"expr": r["expression"], "fit": num(r, "fitness"), "score": num(r, "score_p_score"), "s_train": num(r, "score_p_s_train"),
                  "s_valid": num(r, "score_p_s_valid"), "share": num(r, "score_p_share"), "train": num(r, "score_p_train_sharpe"), "valid": num(r, "score_p_valid_sharpe"),
                  "train_ann": num(r, "score_p_train_ann"), "valid_ann": num(r, "score_p_valid_ann"), "hl": num(r, "score_p_hl"), "sign": num(r, "score_p_sign"),
-                 "turnover": num(r, "score_p_turnover"), "rho_known": num(r, "score_p_rho_known")} for r in rows]
+                 "turnover": num(r, "score_p_turnover"), "rho_known": num(r, "score_p_rho_known"),
+                 **{k: num(r, f"score_p_{k}") for k in ("ir_train", "ir_valid", "dann_train", "dann_valid")}} for r in rows]
         live = [c for c in cand if math.isfinite(c["fit"])]
         passers = [c for c in live if found(c)]
         scored = sum(s.n for s in SCORERS[n0:])

@@ -102,12 +102,25 @@ for name in names:
     if paired_now:
         L += ["", "合并段的 5.6 年里 train 占 4 年,信息比被它主导;所以「发现」另外要求 train、valid 各自的成对信息比都过 "
               f"{DISCOVERY_MIN_PERIOD:g}(`partura.steer.is_discovery`)。"]
+        if E.get("score_scale") == "paired_ir_sized":
+            L += ["这次的信息比是**带大小的**:账面每年多赚不到 1 个点的,按比例打折(`partura.steer._sized`)—— 又小又稳的改动不再算数。"]
+        else:
+            L += ["**注意**:这次的信息比还不带大小 —— 每天只换掉一两只票、换得略好而且很稳的候选也会得高分;要看账面多赚了多少(各臂找到的那几行)。"]
+        if E.get("screen_base") is None and kind == "long_screen":
+            L += ["**注意**:证据文件里没有 `screen_base` —— 这次跑的是旧版脚本,筛子的参照是**没做过筛子的已知族**。"]
+        elif kind == "long_screen":
+            L += [f"筛子的参照:{'已做过通用冻结筛子的已知族(池子里最强的一个)' if E['screen_base'] == 'pool' else '没做过筛子的已知族'}。"]
+        if E.get("code"):
+            L += ["代码指纹:" + "、".join(f"`{k}` {v}" for k, v in E["code"].items()) + (f";奖励在 {E['reward_device']} 上算" if E.get("reward_device") else "") + "。"]
     L += ["", "## 各臂找到的(" + ("算作发现的前几个,互不等价;括号里是两段各自的成对信息比" if paired_now else "互不等价的前几个;纯多头夏普 train / valid 是奖励口径下的") + ")", ""]
 
     def line(c):
         if paired_now:
-            return (f"- {c['score']:+.2f}(成对信息比 train {c.get('s_train', float('nan')):+.2f} / valid {c.get('s_valid', float('nan')):+.2f};改过的书的纯多头夏普 "
-                    f"{c['train']:+.2f} / {c['valid']:+.2f},半衰期 {c['hl']:g}):`{c['expr']}`")
+            size = ""
+            if c.get("dann_train") == c.get("dann_train") and c.get("dann_train") is not None:      # recorded since the sized reward
+                size = (f";每年多赚 train {c['dann_train']:+.1%} / valid {c['dann_valid']:+.1%},原始信息比 {c.get('ir_train', float('nan')):+.2f} / {c.get('ir_valid', float('nan')):+.2f}")
+            return (f"- {c['score']:+.2f}({'带大小的' if size else ''}成对信息比 train {c.get('s_train', float('nan')):+.2f} / valid {c.get('s_valid', float('nan')):+.2f}{size};改过的书的纯多头夏普 "
+                    f"{c['train']:+.2f} / {c['valid']:+.2f},半衰期 {c['hl']:g},方向 {int(c.get('sign', 1)):+d}):`{c['expr']}`")
         return f"- {c['score']:+.2f}(train {c['train']:+.2f} / valid {c['valid']:+.2f},半衰期 {c['hl']:g},与已知族相关 {c['rho_known']:+.2f}):`{c['expr']}`"
 
     for arm, cs in found.items():

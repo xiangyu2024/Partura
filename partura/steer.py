@@ -27,6 +27,7 @@ Pattern syntax -- an expression, with
 from __future__ import annotations
 
 import hashlib
+import os
 import math
 import re
 from dataclasses import dataclass, field
@@ -461,16 +462,18 @@ def _bucket_rank(sm, bucket, n: int = 10):
 PAIRED = ("long_marginal", "long_screen")     # rewards that are a DIFFERENCE between two books on one universe
 PAIRED_FLOOR = -1.0                             # a paired information ratio below this in either period is a rejection
 DISCOVERY_MIN_PERIOD = 0.5                      # a paired find must reach this in EACH period on its own
+PAIRED_SIZE = 0.01                              # a paired difference smaller than this (net excess per year) is discounted pro rata
 
 
 def is_discovery(kind: str, score, s_train=None, s_valid=None, threshold: float = 1.0) -> bool:
     """Does a scored candidate count as a find?
 
     Level rewards: ``score`` is already the worse of the two periods, so ``score >= threshold`` is the whole test.
-    Paired rewards: ``score`` is the information ratio over train + valid TOGETHER, and four of those 5.6 years are
-    the training period -- a screen that only worked in 2018-2021 clears any line on it (episode e3_I1: the steer
-    arm's head was +5.06 on train and +0.08 on valid).  So each period on its own must reach
-    ``DISCOVERY_MIN_PERIOD`` as well; a period that could not be measured does not pass.
+    Paired rewards: ``score`` is the (sized) information ratio over train + valid TOGETHER, and four of those 5.6
+    years are the training period -- a screen that only worked in 2018-2021 clears any line on it (episode e3_I1:
+    the steer arm's head was +5.06 on train and +0.08 on valid).  So each period on its own must reach
+    ``DISCOVERY_MIN_PERIOD`` as well; a period that could not be measured does not pass.  Pass the SIZED ratios
+    (``score_train`` / ``score_valid`` of ``reward``): a find is then reliable and worth something in each period.
     """
     def fin(x):
         return x is not None and x == x and abs(x) != float("inf")
@@ -497,6 +500,29 @@ def _ir(d) -> float:
     if f.size < 30 or not f.std() > 0:
         return float("nan")
     return float(f.mean() / f.std() * np.sqrt(252))
+
+
+def _ann(d) -> float:
+    """Annualised mean of a daily series (its finite days)."""
+    import numpy as np
+    f = d[np.isfinite(d)]
+    return float(f.mean() * 252) if f.size else float("nan")
+
+
+def _sized(ir: float, ann: float, unit: float = PAIRED_SIZE) -> float:
+    """An information ratio that also has to be WORTH something: ``ir * min(1, ann / unit)`` when positive.
+
+    The information ratio of a paired difference has no scale.  A screen that swaps one or two names of the book a
+    day, for slightly better ones, every day, scores 2 or 3 on it while the book earns 0.2 points a year more
+    (episode e3_I1: every one of the control arm's "finds" was of this kind -- 22 by the ratio, none whose book
+    was a point a year better in both periods; the steered arm had 11).  With the cap, a difference of ``unit``
+    (1 point of net excess a year) or more keeps its ratio, a smaller one is discounted in proportion, and a
+    negative ratio is left as it is."""
+    if ir != ir or ir <= 0:
+        return ir
+    if ann != ann:
+        return float("nan")
+    return ir * min(1.0, max(ann, 0.0) / unit)
 
 
 def _top_band(x, frac: float = 0.2):
@@ -536,8 +562,12 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
     Their ``score`` is the information ratio of the PAIRED DAILY DIFFERENCE of the two books' net excess over
     train + valid together, unless the ratio of either period alone is below ``PAIRED_FLOOR`` (then that one):
     a Sharpe difference required in both periods cannot be met in a period where the pool's own Sharpe is 3.5
-    (episode e2_I2), a paired difference says whether the candidate adds return reliably.  A candidate that
-    changes nothing in the book (difference identically zero) is rejected, not scored 0."""
+    (episode e2_I2), a paired difference says whether the candidate adds return reliably.  Every such ratio is
+    SIZED (``_sized``): discounted pro rata when the difference is worth less than ``PAIRED_SIZE`` (1 point of
+    net excess a year) -- a ratio alone rewards changes that are tiny and steady.  ``score_train`` /
+    ``score_valid`` / ``score_all`` are the sized ratios; the raw ones and the annualised differences are returned
+    as ``ir_*`` / ``dann_*``.  A candidate that changes nothing in the book (difference identically zero) is
+    rejected, not scored 0."""
     import numpy as np
 
     from . import books as bk
@@ -545,6 +575,13 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
 
     if kind not in REWARDS:
         raise ValueError(f"unknown reward {kind!r}; choose from {REWARDS}")
+    dev = os.environ.get("PARTURA_REWARD_DEVICE", "")
+    if dev:                                                   # the same reward with its sorts on an accelerator
+        try:
+            from .steer_fast import reward_fast
+            return reward_fast(panel, ctx, kind, both_periods=both_periods, device=dev)
+        except Exception as exc:                              # noqa: BLE001  (never let the fast path decide the answer)
+            print(f"[steer] reward on {dev} failed ({type(exc).__name__}: {exc}); using the reference", flush=True)
     raw = np.asarray(panel, dtype=np.float64)
     mask = ctx.untradable if (ctx.untradable is not None and kind in ("long_tradable", "long_bucket", "long_marginal")) else None
     keep = ("long_ann", "long_sharpe", "long_turnover", "long_mdd")
@@ -593,7 +630,8 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
                     spread = np.nanmedian(np.nanstd(sm[ctx.train], axis=1))
                 if not spread > 1e-12:                       # a signal with no cross-section (the pool blended with minus
                     continue                                 # itself) has no book: its "book" is the order of the columns
-                ir = _ir(_daily_long_net(sm, ctx.tgt, ctx.train) - ref_tr)
+                d = _daily_long_net(sm, ctx.tgt, ctx.train) - ref_tr
+                ir = _sized(_ir(d), _ann(d))                 # reliable AND worth something (see _sized)
                 key = 0.0 if ir != ir else ir                # NaN = the book IS the reference book: worth exactly nothing,
                 if best is None or key > best[0]:            # which still beats a direction that makes the book worse
                     best = (key, sign, float(hl), sm, ir, share)
@@ -604,18 +642,21 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
         _, sign, hl, sm, s_tr, share = best
         d_tr = _daily_long_net(sm, ctx.tgt, ctx.train) - ref_tr
         d_va = _daily_long_net(sm, ctx.tgt, ctx.valid) - ref_va
-        s_va, s_all = _ir(d_va), _ir(np.concatenate([d_tr, d_va]))
+        d_all = np.concatenate([d_tr, d_va])
+        size = {"ir_train": _ir(d_tr), "ir_valid": _ir(d_va), "ir_all": _ir(d_all),
+                "dann_train": _ann(d_tr), "dann_valid": _ann(d_va), "dann_all": _ann(d_all)}
+        s_va, s_all = _sized(size["ir_valid"], size["dann_valid"]), _sized(size["ir_all"], size["dann_all"])
         worst = min(s_tr, s_va) if (s_tr == s_tr and s_va == s_va) else float("nan")
         score = worst if not worst >= PAIRED_FLOOR else s_all            # NaN (a no-op) falls through to -inf below
         if not both_periods:
             score = s_tr
         tr, va = bk.book_row(sm, ctx.tgt, ctx.train), bk.book_row(sm, ctx.tgt, ctx.valid)
-        extra = {"score_all": float(s_all), "screened_share": share} if kind == "long_screen" else {"score_all": float(s_all)}
+        extra = {"score_all": float(s_all), **size, **({"screened_share": share} if kind == "long_screen" else {})}
     return {"score": float(score) if score == score else float("-inf"), "sign": sign, "hl": hl, "kind": kind,
             "score_train": float(s_tr), "score_valid": float(s_va), **extra,
             "train": {k: tr[k] for k in keep}, "valid": {k: va[k] for k in keep}}
 
 
 __all__ = ["Node", "parse_expr", "walk", "operators", "leaves", "Pattern", "nesting", "nonneg", "simplify", "Rule", "Guidance",
-           "RewardContext", "reward", "REWARDS", "PAIRED", "PAIRED_FLOOR", "DISCOVERY_MIN_PERIOD", "is_discovery", "LEAF_KINDS",
+           "RewardContext", "reward", "REWARDS", "PAIRED", "PAIRED_FLOOR", "PAIRED_SIZE", "DISCOVERY_MIN_PERIOD", "is_discovery", "LEAF_KINDS",
            "MONOTONE_ANY", "MONOTONE_NONNEG", "strip_root_monotone"]

@@ -168,3 +168,17 @@ def test_family_key_strips_order_preserving_root_wrappers():
     assert g.family_key("pow_05(day_std(Low))") == g.family_key("day_std(Close)")
     assert str(strip_root_monotone(parse_expr("pow_3(sigmoid(neg(Close)))"))) == str(parse_expr("neg(Close)"))
     assert g.family_weight == 0.3
+
+
+def test_sized_ratio_discounts_small_differences():
+    """A paired information ratio has no scale: a tiny, steady difference must not outrank one that is worth something."""
+    from partura.steer import PAIRED_SIZE, _sized
+
+    assert PAIRED_SIZE == 0.01
+    assert _sized(2.0, 0.002) == pytest.approx(0.4)          # +0.2 points a year, very steady: e3_I1's control "finds"
+    assert _sized(1.4, 0.032) == pytest.approx(1.4)          # +3.2 points a year: keeps its ratio
+    assert _sized(1.0, 0.01) == pytest.approx(1.0)
+    assert _sized(-0.7, -0.02) == -0.7                       # a loss is not softened
+    assert _sized(0.0, 0.0) == 0.0
+    assert _sized(float("nan"), 0.01) != _sized(float("nan"), 0.01)
+    assert _sized(2.0, 0.002) < _sized(1.4, 0.032)
