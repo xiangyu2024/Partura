@@ -183,7 +183,20 @@ with slot():
     KN = [k for k in ("known", "known_xfrozen") if k in ix]
 
     def is_known(k):
-        return "day_std(Amt)" in spec[k]["expr"] or any(similar(k, b) for b in KN)
+        """Is THIS candidate the known family?  Built on it; or close to the plain benchmark (rank correlation or
+        long-book overlap); or holding the same book as the screened benchmark.  For the screened benchmark only
+        the overlap is read: two signals that share the screen share the fifth of the names it sends to the bottom,
+        which lifts their rank correlation whatever is above it."""
+        if "day_std(Amt)" in spec[k]["expr"]:
+            return True
+        if "known" in ix and similar(k, "known"):
+            return True
+        return "known_xfrozen" in ix and O[ix[k], ix["known_xfrozen"]] >= OVL
+
+    for k in names:
+        spec[k]["known_like"] = bool(is_known(k))
+        for b in KN:
+            spec[k][f"rho_{b}"], spec[k][f"ovl_{b}"] = float(C[ix[k], ix[b]]), float(O[ix[k], ix[b]])
 
     elig = sorted([k for k in names if spec[k]["role"] != "orig"], key=lambda k: -shp(k))
     heads, member_of = [], {}
@@ -197,7 +210,8 @@ with slot():
     clusters = []
     for h in heads:
         mem_ = [k for k in elig if member_of[k] == h]
-        clusters.append({"head": h, "members": mem_, "known_family": bool(is_known(h) or any(spec[k]["role"] == "bench" for k in mem_))})
+        clusters.append({"head": h, "members": mem_, "known_family": bool(spec[h]["known_like"] or any(spec[k]["role"] == "bench" for k in mem_)),
+                         "known_like_members": [k for k in mem_ if spec[k]["known_like"]]})
     for k in names:                                              # where does each original fall?
         if spec[k]["role"] == "orig":
             near = [h for h in heads if similar(k, h)]
@@ -205,7 +219,7 @@ with slot():
             spec[k]["in_cluster"] = max(near, key=lambda h: C[ix[k], ix[h]]) if near else None
     kn_heads = [c["head"] for c in clusters if c["known_family"]]
     known_head = kn_heads[0] if kn_heads else None               # heads are in Sharpe order
-    indep = [c["head"] for c in clusters if not c["known_family"] and shp(c["head"]) >= SH_MIN]
+    indep = [c["head"] for c in clusters if not spec[c["head"]]["known_like"] and not c["known_family"] and shp(c["head"]) >= SH_MIN]
     print(f"[cluster] {len(clusters)} clusters; known head {known_head}; independent heads (Sharpe >= {SH_MIN:g}): {indep}", flush=True)
 
     def mix(keys, weights=None):
@@ -263,7 +277,8 @@ with slot():
 
 out = {"batch": bname, "tag": TAG, "rule": __doc__.split("    python")[0].strip(), "thresholds": {"rho": RHO, "overlap": OVL, "min_sharpe": SH_MIN},
        "holdout_read": READ, "split": list(SPLITS["utrain"]), "names": names, "known_head": known_head, "independent_heads": indep,
-       "info": {k: {x: spec[k].get(x) for x in ("expr", "sign", "hl", "kind", "role", "fid", "cid", "also", "books", "nearest_head", "in_cluster")} for k in names},
+       "info": {k: {x: spec[k].get(x) for x in ("expr", "sign", "hl", "kind", "role", "fid", "cid", "also", "books", "nearest_head", "in_cluster", "known_like",
+                                               "rho_known", "ovl_known", "rho_known_xfrozen", "ovl_known_xfrozen")} for k in names},
        "corr": {a: {b: float(C[ix[a], ix[b]]) for b in names} for a in names},
        "overlap": {a: {b: float(O[ix[a], ix[b]]) for b in names} for a in names},
        "clusters": clusters, "combos": combos, "leave_one_out": loo, "pair_with_known_head": pair}

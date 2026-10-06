@@ -385,6 +385,32 @@ def cs_last_low20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     return _lexi(y, x, -1.0, 0.2, -1.0)
 
 
+# Finer bands, asked for by five leads after round 3: the names a screen is meant to remove are 6-7% of the market
+# (a frozen quote, a recent listing), and a 20% quota takes two thirds of its victims from somewhere else.
+@op("nd", "cs", arity=2)
+def cs_last_high10(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_high20`` with the HIGHEST 10% of ``x`` (whole tie blocks) pushed to the bottom."""
+    return _lexi(y, x, 0.9, 1.0, -1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_high05(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_high20`` with the HIGHEST 5% of ``x`` (whole tie blocks) pushed to the bottom."""
+    return _lexi(y, x, 0.95, 1.0, -1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_low10(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_low20`` with the LOWEST 10% of ``x`` (whole tie blocks) pushed to the bottom."""
+    return _lexi(y, x, -1.0, 0.1, -1.0)
+
+
+@op("nd", "cs", arity=2)
+def cs_last_low05(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """As ``cs_last_low20`` with the LOWEST 5% of ``x`` (whole tie blocks) pushed to the bottom."""
+    return _lexi(y, x, -1.0, 0.05, -1.0)
+
+
 @op("dt", "day", arity=1)
 def day_flat_run_max(x: torch.Tensor) -> torch.Tensor:
     """Longest RUN of consecutive minutes whose value equals the previous minute's, divided
@@ -772,7 +798,8 @@ NEW_OPERATORS = ("in_pct", "in_logchg", "day_flat_ratio", "day_pos_ratio", "day_
                  "cs_last_high40", "cs_last_low40", "cs_state_rank", "cs_flip_by_state", "day_at_max_ratio",
                  "day_at_min_ratio", "day_distinct_ratio", "day_wstd", "day_topw_mean", "day_es_ratio_hi",
                  "day_es_ratio_lo", "in_index", "in_zscore_expand", "cross_madz", "cross_flat_ratio",
-                 "cross_semistd_neg", "cross_semistd_pos", "cross_age")
+                 "cross_semistd_neg", "cross_semistd_pos", "cross_age",
+                 "cs_last_high10", "cs_last_high05", "cs_last_low10", "cs_last_low05")
 
 
 def install() -> None:

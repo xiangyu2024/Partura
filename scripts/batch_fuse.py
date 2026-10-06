@@ -59,7 +59,12 @@ for k, v in first["splits"].items():
     SPLITS[k] = (str(v[0]), str(v[1]))
 K = json.loads((PARTURA_ROOT / "runs" / f"_batch_{bname}" / f"cluster_{TAG}.json").read_text(encoding="utf-8"))
 key_of = {v["expr"].replace(" ", ""): k for k, v in K["info"].items()}
-known_fam = {m: c["known_family"] for c in K["clusters"] for m in c["members"]}
+# each candidate's OWN verdict (batch_cluster measures it per candidate); older cluster files only have the head's
+known_fam = {k: (v["known_like"] if v.get("known_like") is not None else None) for k, v in K["info"].items()}
+for c in K["clusters"]:
+    for m in c["members"]:
+        if known_fam.get(m) is None:
+            known_fam[m] = c["known_family"]
 
 
 def train_sharpe(key):
@@ -77,7 +82,8 @@ for f in batch["factors"]:
     def put(cid, name):
         r = R[cid]
         members[name] = {"expr": r["expr"], "sign": float(r["sign_user"]), "hl": float(r["books_user"]["by_rank"]["long"]["hl"]),
-                         "fid": fid, "cid": cid, "kind": r["kind"], "cluster_key": key_of.get(r["expr"].replace(" ", ""))}
+                         "fid": fid, "cid": cid, "kind": r["kind"], "cluster_key": key_of.get(r["expr"].replace(" ", "")),
+                         **{x: (K["info"].get(key_of.get(r["expr"].replace(" ", "")), {}) or {}).get(x) for x in ("known_like", "rho_known", "ovl_known", "ovl_known_xfrozen")}}
         return name
 
     for b, name in (("k_known", "known"), ("k_known_xfrozen", "known_xfrozen")):
@@ -189,7 +195,7 @@ with slot():
 out = {"batch": bname, "tag": TAG, "rule": __doc__.split("    python")[0].strip(), "min_sharpe": SH_MIN,
        "split": {"train": list(SPLITS["utrain"]), "test": list(SPLITS["holdout"])}, "dates": list(ps.dates),
        "groups": groups, "known_head": kh,
-       "members": {k: {x: v.get(x) for x in ("expr", "sign", "hl", "fid", "cid", "kind", "cluster_key", "rows", "by_year_long_net", "daily")} for k, v in members.items()},
+       "members": {k: {x: v.get(x) for x in ("expr", "sign", "hl", "fid", "cid", "kind", "cluster_key", "known_like", "rho_known", "ovl_known", "ovl_known_xfrozen", "rows", "by_year_long_net", "daily")} for k, v in members.items()},
        "fusions": fusions}
 p = PARTURA_ROOT / "runs" / f"_batch_{bname}" / f"fuse_{TAG}.json"
 p.write_text(json.dumps(out, ensure_ascii=False, default=float), encoding="utf-8")

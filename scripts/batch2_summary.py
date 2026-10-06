@@ -131,8 +131,19 @@ def ush(x):
 
 seen = set()
 uniq = [x for x in sorted(pool, key=ush) if not (x[2]["expr"] in seen or seen.add(x[2]["expr"]))]
-indep = [x for x in uniq if abs(x[2].get("corr_known") or 0) < 0.5 and "day_std(Amt)" not in x[2]["expr"]][:12]
-onkn = [x for x in uniq if x not in indep and (abs(x[2].get("corr_known") or 0) >= 0.5 or "day_std(Amt)" in x[2]["expr"])][:14]
+_cp = root / "runs" / f"_batch_{Path(argv[0]).stem.split('_')[0]}" / f"cluster_{TAG}.json"
+_kl = {v["expr"].replace(" ", ""): v.get("known_like") for v in json.loads(_cp.read_text(encoding="utf-8"))["info"].values()} if _cp.is_file() else {}
+
+
+def _known_like(x):
+    """The measured verdict of batch_cluster (rank correlation / long-book overlap with the known family and with
+    its screened version), so that this table and the readable report cannot disagree; the old rule when absent."""
+    v = _kl.get(x[2]["expr"].replace(" ", ""))
+    return v if v is not None else (abs(x[2].get("corr_known") or 0) >= 0.5 or "day_std(Amt)" in x[2]["expr"])
+
+
+indep = [x for x in uniq if not _known_like(x)][:12]
+onkn = [x for x in uniq if _known_like(x)][:14]
 T = ["", "## 0. 最值得看的(两张榜都**按用户训练段的纯多头夏普排序**,没有用测试段挑)", ""]
 if known_row:
     h, a, t = known_row

@@ -2,6 +2,42 @@
 
 _最后更新:2026-10-05 13:45 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
+## ⏱⏱⏱ 现状快照(2026-10-06 10:30 PDT;最新,先读这段)
+
+**昨夜**:审查工作流 `wf_b7c13476-92d` 跑完(93 个 agent,1240 万 token —— 就是它把额度用光的;1:50 重置)。实现工作流在第一个包的审查处被额度打断,今天 09:55 已原样续跑。
+
+**审查的结果与处置**:`handoff/REVIEW_FINDINGS.md`(逐条)。24 条成立(13 条 high 全部被复现)、31 条被推翻。今天上午已修 23 条(只剩「报告口径」那条刚修完、等第四轮验证),
+回归测试 `tests/test_ops_ext.py`(14 例)+ `tests/test_steer.py`(14 例),全部通过(`ALPHACUBE_ROOT=~/Desktop/AlphaCube PYTHONPATH=~/Desktop/AlphaCube/src:. ~/.venvs/alphacube/bin/python -m pytest tests/ -q` → 46 passed)。
+影响结论的几条:
+- **筛子 / 分段算子在并列块里按股票顺序任意切**(`_lexi`)。「剔上市最短两成」实际只有 7 个点是次新、13 个点是任意的老票 → 第三轮里所有以 `cross_valid_count` 当键的读数作废
+  (含 F103 的「连剔冻结盘口 + 次新 +18.1 / +16.8」那一行的第二层)。已改成整块并列进带。
+- **对池子的边际奖励两边不在同一个股票池**(候选自己的缺失会移动它的基准)→ 改成同一批格子上的成对逐日差的信息比(`partura/steer.py: reward`,`PAIRED`)。
+- **`dedup_key` 把所有价格叶子并成一个**(`sub(High, Low)` 与 `sub(Close, Open)` 被当成同一个候选)→ 只做精确等价;价格换名的兄弟改成「少采样」(`family_key`)。
+- **指引报告里「+1e-6 删掉后 7 例全部变好」没有证据** → 已更正,对应规则由封禁降为降权。
+- 5 个算子的数值问题(float32 / 成交额量级)。
+
+**同时做的口径改动**(用户已同意)
+- 半衰期网格加 40 / 60(`partura/books.py`:`HALFLIVES = USER_HALFLIVES + (40, 60)`);落在 40 / 60 的行与用户原表不可比。
+- 批量扫描里**变体的方向按训练段纯多头书定**(原式与基准仍按 rank IC 的符号;根是筛子的锁 +1)—— `scripts/sweep.py: score`,字段 `sign_by`。
+- 已知族的判定逐候选实测(`scripts/batch_cluster.py: is_known` → `info[k].known_like`),聚类、融合、两份报告共用。
+- 新算子:`cs_last_high10 / high05 / low10 / low05`(更细的筛子档位)。扩展库现在 49 个。
+
+**服务器上正在跑**
+- 第四轮(tag `s4`,screens `r4_F1xx`,4 个槽):15 条全部重跑(算子修正 + 新方向规则 + 新半衰期网格;假设表同第三轮)。日志 `logs/<fid>_round4.log`。
+- screen `after_r4`(`tmp/after_round4.sh`):等第四轮结束 → `batch_cluster --tag s4` → `batch_fuse --tag s4`(融合的测试段读数,记账)→ 两个想法短搜重跑(tag `e3`:
+  I2 用成对信息比的边际奖励;I1 当筛子、参照改成已做通用筛子的已知族)。进度看 `logs/_after_round4.log`。
+- **跑完之后**:拉回 `runs/<fid>/*_s4.json`、`runs/_batch_B01/{cluster,fuse}_s4.json`、`./scripts/study.sh idea-pull`;
+  `python scripts/motif_stats.py batches/B01_single_factors.yaml --tag s4`;`python scripts/readable_report.py … --tag s4`(先给 s4 的新成员补 `NOTES`);
+  `python scripts/batch2_summary.py … --tag s4`;`python scripts/episode_report.py`;`python scripts/guidance_report.py guidance/B01.yaml --tag s4`;发给用户。
+
+**想法短搜的三条结论**(实验卡 `episodes/e2_*/episode.md`;都是旧奖励口径,e3 会按新口径重跑其中两个)
+- I2:离散度折叠在 2018–2021 给池子加 0.3~0.6 夏普,2022-01~2023-08 持平;旧奖励取两段较差者 → 全负。被否定的是奖励写法。
+- I5:每臂 ~124 次评估,桶内口径下发现率 <1%,量不出先验的作用;要几千次评估。
+- I1:带指引 41 个过线、对照 35 个,最好 +0.46 对 +0.45 —— 打平。已知族的多头书有垃圾尾巴,任何标出异常票的量都能剔掉一部分;筛子的参照必须是已做通用筛子的已知族。
+
+**AlphaCube 改造**:实现工作流 `wf_a9e46c78-369` 续跑中(WP1 已提交 `1167f00`,在 `~/Desktop/AlphaCube-steering` 分支 `partura-steering`)。它结束后的事见下面 22:00 那段的「实现完成之后」。
+注意:WP11(Partura 迁移)在 `~/Desktop/Partura-steering` 分支 `ac-plugin` 上做,它基于昨晚的提交;今天主分支上 `partura/ops_ext.py`、`scripts/idea_search.py` 改了很多,合并 `ac-plugin` 时以**主分支的行为为准**逐处合。
+
 ## ⏱⏱ 现状快照(2026-10-05 22:00 PDT;比下面 19:45 那一段新,先读这段)
 
 **AlphaCube 改造:设计已定,正在实现**

@@ -85,15 +85,23 @@ def cand(s, cid):
     return FIN[s][cid], v["hl"], v["splits"]["utrain"], v["splits"]["holdout"]
 
 
+def near(s, cid):
+    """Measured closeness to the known family (training period): rank correlation / share of the long book in common."""
+    m = J["members"].get(f"{s}.{cid}") or {}
+    if m.get("rho_known") is None:
+        return "—"
+    return f"{m['rho_known']:+.2f} / {m['ovl_known']:.0%}"
+
+
 def row_of(s, cid):
     r, hl, a, t = cand(s, cid)
     _, _, oa, ot = cand(s, "v_base")
     return (f"| {s} {NAME[s]} | {NOTES.get(f'{s}.{cid}', '')} | **{pc(a['long_ann'])}** | **{pc(t['long_ann'])}** | {sh(a['long_sharpe'])} | {sh(t['long_sharpe'])} "
-            f"| {pc(t['long_mdd'])} | {a['long_turnover']:.1%} | {pc(oa['long_ann'])} → {pc(ot['long_ann'])} |")
+            f"| {pc(t['long_mdd'])} | {a['long_turnover']:.1%} | {near(s, cid)} | {pc(oa['long_ann'])} → {pc(ot['long_ann'])} |")
 
 
-HEAD = ["| 来自 | 升级版做了什么 | 样本内超额 | 样本外超额 | 样本内夏普 | 样本外夏普 | 样本外最大回撤 | 日换手 | 原式的超额(样本内 → 样本外) |",
-        "|---|---|---|---|---|---|---|---|---|"]
+HEAD = ["| 来自 | 升级版做了什么 | 样本内超额 | 样本外超额 | 样本内夏普 | 样本外夏普 | 样本外最大回撤 | 日换手 | 与已知族:秩相关 / 多头书重合 | 原式的超额(样本内 → 样本外) |",
+        "|---|---|---|---|---|---|---|---|---|---|"]
 tr0, tr1 = J["split"]["train"]
 te0, te1 = J["split"]["test"]
 
@@ -117,9 +125,10 @@ for k in sorted(indep, key=lambda k: -cand(*k.split(".", 1))[2]["long_sharpe"]):
     L.append(row_of(*k.split(".", 1)))
 kn = J["members"]["known"]["rows"]
 L += ["", "### 表 2:已知族(成交额离散度 `cross_mean(day_std(Amt), 30)`,买成交额波动小的)的升级版", "",
-      "这些和已知族是同一个东西的不同写法,彼此高度重合,**只能选一个用,不能叠加**。", ""] + HEAD
+      "这些建在已知族上,或者持有的多头书与它(或与它做过冻结盘口筛子的版本)重合一半以上。重合度写在每行:重合高的几行是同一本书的不同写法,**只能选一个用**;"
+      "重合低而被归到这里的,是因为与「已知族 + 冻结盘口筛子」那本书重合。判据逐条实测(训练段),不看式子长相。", ""] + HEAD
 L.append(f"| 对照 | 已知族本身,不做任何改动 | **{pc(kn['train']['long_ann'])}** | **{pc(kn['test']['long_ann'])}** | {sh(kn['train']['long_sharpe'])} | {sh(kn['test']['long_sharpe'])} "
-         f"| {pc(kn['test']['long_mdd'])} | {kn['train']['long_turnover']:.1%} | — |")
+         f"| {pc(kn['test']['long_mdd'])} | {kn['train']['long_turnover']:.1%} | +1.00 / 100% | — |")
 onk = [k for k in J["groups"]["upg"] if k not in indep and not k.endswith(".orig")] + ["F101.seg_lowliq_m"]
 onk = [k for k in onk if k.split(".", 1)[1] in FIN[k.split(".", 1)[0]]]
 for k in sorted(dict.fromkeys(onk), key=lambda k: -cand(*k.split(".", 1))[2]["long_sharpe"]):
