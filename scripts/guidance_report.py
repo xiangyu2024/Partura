@@ -164,7 +164,8 @@ if eps:
         thr = float(E.get("threshold", 1.0))
         # before 2026-10-06 a paired reward's score was a Sharpe DIFFERENCE, already the worse of the two periods:
         # those runs are counted as they were scored (score >= line), like a level reward
-        kind = E["reward"] if E.get("score_scale") == "paired_ir" or E["reward"] not in PAIRED else "long"
+        # (told apart by the line the run was given: below 0.5 on the old scale, 1.0 since -- as scripts/episode_report.py does)
+        kind = "long" if E["reward"] in PAIRED and thr < 0.5 else E["reward"]
 
         def cell(A):
             # the one definition of a find (partura.steer.is_discovery), counted over candidates that are not a
