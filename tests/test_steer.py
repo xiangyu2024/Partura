@@ -132,3 +132,39 @@ def test_guidance_file_loads_and_judges():
     assert G.weight("cross_ema(cross_ema(abs_(cs_demean(day_gini(Low))), 10), 241)") < G.weight("cross_ema(abs_(cs_demean(day_gini(Low))), 30)")
     hits = [G.accept("cross_ema(day_std(Ret), 30)", u=u) for u in (0.01, 0.99)]
     assert hits[0] and isinstance(hits[1], bool)
+
+
+def test_is_discovery_paired_needs_both_periods():
+    """A paired reward's combined ratio is dominated by the training period: a find needs each period on its own."""
+    from partura.steer import is_discovery
+
+    assert is_discovery("long", 1.2)                                         # level reward: the score is the whole test
+    assert not is_discovery("long", 0.9)
+    assert not is_discovery("long", float("nan")) and not is_discovery("long", float("-inf"))
+    assert is_discovery("long_screen", 1.5, 1.46, 1.41)
+    assert not is_discovery("long_screen", 2.9, 5.06, 0.08)                  # e3_I1: only the training period carries it
+    assert not is_discovery("long_marginal", 1.5, 1.4, None)                 # a period that was not measured does not pass
+    assert not is_discovery("long_marginal", 0.8, 0.9, 0.9)                  # below the line on the combined period
+    assert is_discovery("long_marginal", 0.8, 0.9, 0.9, threshold=0.5)
+
+
+def test_family_key_strips_order_preserving_root_wrappers():
+    """pow_05(X) orders a cross-section as X does: a sibling of X (family), not X itself (dedup)."""
+    from partura.steer import Guidance, parse_expr, strip_root_monotone
+
+    g = Guidance({"priors": [{"id": "fam", "action": "family", "w": 0.3, "pattern": "root: {pow_05|pow_1_5|pow_2|sqrt|sigmoid}(_)"},
+                             {"id": "px", "action": "family", "w": 0.3, "pattern": "@price"}]})
+    x = "ts_std(pow_1_5(day_flat_ratio(Vwap)), 20)"
+    assert g.family_key(f"pow_05({x})") == g.family_key(x) == g.family_key(f"pow_05(pow_05({x}))")
+    assert g.dedup_key(f"pow_05({x})") != g.dedup_key(x)                       # never the same experiment
+    assert g.family_key(f"pow_1_5({x})") == g.family_key(x)                    # the operand (a std) is never negative
+    # x**2 of something that can be negative folds it: not order-preserving, not a sibling
+    assert g.family_key("pow_2(cs_demean(day_std(Ret)))") != g.family_key("cs_demean(day_std(Ret))")
+    assert g.family_key("sqrt(sub(Close, Open))") != g.family_key("sub(Close, Open)")      # sqrt(|x|) folds as well
+    # only at the root: the same wrapper inside the tree is a different factor
+    assert g.family_key(f"cross_mean(pow_05(day_std(Ret)), 5)") != g.family_key("cross_mean(day_std(Ret), 5)")
+    # a wrapper the rule does not name is left alone, and the price-leaf family still works underneath
+    assert g.family_key("pow_3(day_std(Low))") != g.family_key("day_std(Low)")
+    assert g.family_key("pow_05(day_std(Low))") == g.family_key("day_std(Close)")
+    assert str(strip_root_monotone(parse_expr("pow_3(sigmoid(neg(Close)))"))) == str(parse_expr("neg(Close)"))
+    assert g.family_weight == 0.3

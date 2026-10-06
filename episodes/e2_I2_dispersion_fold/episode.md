@@ -18,12 +18,12 @@
 
 ## 证据
 
-| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | 分数 ≥ 0 | 分数 ≥ 0.1 | 分数 ≥ 0.2 | 分数 ≥ 0.3 | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 带指引 | 104 | 17 | 87 | 79 / 80 | 7 | 0 | 0 | 0 | +0.02 | +0.01 | — | 20 分 |
-| 对照 | 125 | 21 | 104 | 80 / 80 | 9 | 1 | 0 | 0 | +0.10 | +0.08 | — | 23 分 |
+| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | 分数 ≥ 0 | 分数 ≥ 0.1 | 分数 ≥ 0.2 | 分数 ≥ 0.3 | **发现(分数 ≥ 0.2)** | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 带指引 | 104 | 17 | 87 | 79 / 80 | 7 | 0 | 0 | 0 | **0**(0 族) | +0.02 | +0.01 | — | 20 分 |
+| 对照 | 125 | 21 | 104 | 80 / 80 | 9 | 1 | 0 | 0 | **0**(0 族) | +0.10 | +0.08 | — | 23 分 |
 
-分数的含义:候选与已知池五五混合后的纯多头夏普减池子自己的,train 与 valid 取较差的(旧口径)。「分数 ≥」各列数的是互不等价的候选。
+分数的含义:候选与已知池五五混合后的纯多头夏普减池子自己的,train 与 valid 取较差的(旧口径)。「分数 ≥」各列数的是互不等价的候选;「族」= 只差价格字段换名、或只在最外层多套一个保序函数的算一族。
 
 带指引的一臂提出了 674 棵树:封禁 0、不在想法邻域 435、按权重抽掉 40、与已提过的等价 82、放行 117。
 
@@ -37,6 +37,8 @@
 - +0.01(train +1.74 / valid +3.56,半衰期 5,与已知族相关 +0.82):`cs_bucket_rank(day_mean(Amt), cs_demean(cross_stddev(pow_3(abs_(day_es_ratio_lo(Open))), 15)))`
 - +0.00(train +1.65 / valid +3.70,半衰期 20,与已知族相关 +0.88):`cs_bucket_rank(day_mean(Amt), cs_bucket_zscore(cross_valid_count(cs_robust_z(ts_var(day_es_ratio_hi(pow_05(Volume)), 10)), 30), abs_(abs_(ts_pearson(inv(log(day_es_ratio_hi(Amt))), 40)))))`
 - +0.00(train +1.65 / valid +3.67,半衰期 20,与已知族相关 +0.86):`cs_bucket_rank(day_mean(Amt), cs_demean(cross_stddev(pow_1_5(abs_(day_es_ratio_lo(Open))), 3)))`
+- +0.00(train +1.74 / valid +3.55,半衰期 20,与已知族相关 +0.79):`cs_bucket_rank(cs_bucket_rank(day_mean(Amt), cs_demean(cross_stddev(pow_3(abs_(day_es_ratio_lo(Open))), 30))), cs_demean(cross_stddev(pow_3(abs_(day_es_ratio_lo(Open))), 30)))`
+- -0.00(train +1.64 / valid +3.63,半衰期 20,与已知族相关 +0.84):`cs_bucket_rank(day_mean(Amt), cs_demean(cross_stddev(pow_3(cross_stddev(pow_3(abs_(day_es_ratio_lo(Open))), 10)), 3)))`
 
 **对照**
 
@@ -46,6 +48,8 @@
 - +0.06(train +1.84 / valid +3.61,半衰期 20,与已知族相关 +0.80):`day_std(in_delta(in_delta(nt_ts_var(Amt, 60), 60), 60))`
 - +0.04(train +1.69 / valid +3.64,半衰期 20,与已知族相关 +0.83):`day_quantile_q25(in_delta(in_delta(in_delta(in_delta(nt_ts_var(Amt, 5), 5), 60), 5), 60))`
 - +0.03(train +1.73 / valid +3.57,半衰期 20,与已知族相关 +0.77):`day_quantile_q25(in_delta(nt_ts_var(Amt, 60), 60))`
+- +0.03(train +1.67 / valid +3.70,半衰期 20,与已知族相关 +0.85):`day_quantile_q25(in_delta(in_delta(nt_ts_var(Amt, 5), 5), 60))`
+- +0.02(train +1.97 / valid +3.57,半衰期 20,与已知族相关 +0.81):`day_std(nt_ts_var(Amt, 3))`
 
 ## 信念更新
 

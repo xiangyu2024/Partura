@@ -163,12 +163,28 @@ class Pattern:
 # one costs an evaluation).  A name missing from the lists only means a rewrite is not made -- never a wrong one.
 NONNEG_OPS = frozenset("""abs_ pow_2 sqrt sigmoid day_std day_var day_gini day_zero_ratio day_flat_ratio day_distinct_ratio
     day_at_max_ratio day_at_min_ratio day_flat_run_max day_pos_ratio day_wstd cross_stddev ts_stddev cross_valid_count cross_age
-    cross_flat_ratio cross_semistd_neg cross_semistd_pos cs_rank in_stddev_rolling in_stddev_full nt_ts_std nt_ts_var""".split())
+    cross_flat_ratio cross_semistd_neg cross_semistd_pos cs_rank in_stddev_rolling in_stddev_full nt_ts_std nt_ts_var
+    nt_ts_stddev ts_std ts_var""".split())
 SIGN_KEEPING_OPS = frozenset("""cross_ema cross_mean cross_max cross_min cross_med cross_sum cross_decay_linear cross_fangzheng
     cross_tail_mean_q25 cross_tail_mean_q75 cross_quantile_q25 cross_quantile_q75 ts_mean ts_max ts_min ts_sum ts_med ts_decay_linear
     day_mean day_sum day_max day_min day_median day_quantile day_first day_last day_close day_open in_slice in_delay in_local_mean
     in_mean_full add mul div cs_winsor pow_05 pow_1_5 pow_2_5 pow_3 signedpower""".split())
 IDEMPOTENT_OPS = frozenset("abs_ cs_demean cs_rank".split())     # exactly f(f(x)) = f(x); nothing "nearly" idempotent belongs here
+# Unary operators that are strictly increasing where they are defined, so f(x) orders a cross-section exactly as x
+# does: everywhere (pow_05 is a signed root, pow_3 is odd, signedpower keeps the sign, sigmoid), or only for an
+# operand that is never negative.  At the ROOT of a candidate such a wrapper changes nothing a rank-based book sees
+# on the day -- only how the days mix under the EMA -- so the candidate and its wrapped self are siblings
+# (``Guidance.family_key``), never one experiment (``dedup_key``).
+MONOTONE_ANY = frozenset("pow_05 pow_3 signedpower sigmoid".split())
+MONOTONE_NONNEG = frozenset("pow_1_5 pow_2 pow_2_5 sqrt abs_".split())
+
+
+def strip_root_monotone(n: Node, names=None) -> Node:
+    """``n`` without the order-preserving unary wrappers at its root (only those in ``names`` when given)."""
+    while n.args is not None and len(n.args) == 1 and (names is None or n.name in names) and (
+            n.name in MONOTONE_ANY or (n.name in MONOTONE_NONNEG and nonneg(n.args[0]))):
+        n = n.args[0]
+    return n
 
 
 def nonneg(n: Node) -> bool:
@@ -291,10 +307,24 @@ class Guidance:
         by a renaming of those fields: ``day_std(Low)`` and ``day_std(Close)``, but NOT ``sub(High, Low)`` and
         ``sub(Close, Open)`` -- and not a tree and the tree with one of two leaves swapped.  Such siblings are
         usually close (median rank correlation 0.96-0.98 in the batch) and sometimes not (0.45), so a family is
-        a reason to sample a sibling less often (``family_weight``), never to refuse it."""
+        a reason to sample a sibling less often (``family_weight``), never to refuse it.
+
+        A ``family`` rule anchored at the root (``root: {pow_05|sqrt|...}(_)``) adds the second kind of sibling:
+        the same tree inside an order-preserving wrapper.  ``pow_05(X)`` ranks every cross-section as ``X`` does,
+        so a decile book or a top-fifth screen built on it is the same book at half-life 0 and nearly the same
+        under an EMA (episode e3_I1: both arms' lists of finds were padded with such re-wrappings)."""
         kinds = {r.pattern.tree.name: r for r in self.rules if r.action == "family" and r.pattern.tree.name in LEAF_KINDS}
+        # a ``family`` rule anchored at the root, "root: {f|g|h}(_)": order-preserving wrappers of the whole tree
+        wraps = set()
+        for r in self.rules:
+            if r.action == "family" and r.pattern.root and r.pattern.tree.args is not None:
+                h = r.pattern.tree.name
+                wraps.update(x.strip() for x in h[1:-1].split("|")) if h.startswith("{") else wraps.add(h)
+        tree = parse_expr(self.canonical(expr))
+        if wraps:
+            tree = strip_root_monotone(tree, wraps)
         if not kinds:
-            return self.dedup_key(expr)
+            return re.sub(r"\s+", "", str(tree))
         seen: Dict[str, Dict[str, str]] = {k: {} for k in kinds}
 
         def relabel(n: Node) -> Node:
@@ -306,7 +336,7 @@ class Guidance:
                 return n
             return Node(n.name, tuple(relabel(a) for a in n.args))
 
-        return re.sub(r"\s+", "", str(relabel(parse_expr(self.canonical(expr)))))
+        return re.sub(r"\s+", "", str(relabel(tree)))
 
     @property
     def family_weight(self) -> float:
@@ -430,6 +460,26 @@ def _bucket_rank(sm, bucket, n: int = 10):
 
 PAIRED = ("long_marginal", "long_screen")     # rewards that are a DIFFERENCE between two books on one universe
 PAIRED_FLOOR = -1.0                             # a paired information ratio below this in either period is a rejection
+DISCOVERY_MIN_PERIOD = 0.5                      # a paired find must reach this in EACH period on its own
+
+
+def is_discovery(kind: str, score, s_train=None, s_valid=None, threshold: float = 1.0) -> bool:
+    """Does a scored candidate count as a find?
+
+    Level rewards: ``score`` is already the worse of the two periods, so ``score >= threshold`` is the whole test.
+    Paired rewards: ``score`` is the information ratio over train + valid TOGETHER, and four of those 5.6 years are
+    the training period -- a screen that only worked in 2018-2021 clears any line on it (episode e3_I1: the steer
+    arm's head was +5.06 on train and +0.08 on valid).  So each period on its own must reach
+    ``DISCOVERY_MIN_PERIOD`` as well; a period that could not be measured does not pass.
+    """
+    def fin(x):
+        return x is not None and x == x and abs(x) != float("inf")
+
+    if not fin(score) or score < threshold:
+        return False
+    if kind not in PAIRED:
+        return True
+    return fin(s_train) and fin(s_valid) and min(s_train, s_valid) >= DISCOVERY_MIN_PERIOD
 
 
 def _daily_long_net(sm, tgt, days):
@@ -567,4 +617,5 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
 
 
 __all__ = ["Node", "parse_expr", "walk", "operators", "leaves", "Pattern", "nesting", "nonneg", "simplify", "Rule", "Guidance",
-           "RewardContext", "reward", "REWARDS", "PAIRED", "PAIRED_FLOOR", "LEAF_KINDS"]
+           "RewardContext", "reward", "REWARDS", "PAIRED", "PAIRED_FLOOR", "DISCOVERY_MIN_PERIOD", "is_discovery", "LEAF_KINDS",
+           "MONOTONE_ANY", "MONOTONE_NONNEG", "strip_root_monotone"]

@@ -43,7 +43,7 @@ from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401  (registers the extension operators before the registry is built)
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
-from partura.steer import Guidance, RewardContext, reward as steer_reward  # noqa: E402
+from partura.steer import DISCOVERY_MIN_PERIOD, PAIRED, Guidance, RewardContext, is_discovery, reward as steer_reward  # noqa: E402
 
 argv = sys.argv[1:]
 
@@ -68,6 +68,11 @@ KIND = opt("--reward", idea.get("reward", "long_tradable"))
 # (level rewards: a pure-long Sharpe; paired rewards: the information ratio of the paired daily difference --
 # 1.0 over the 5.4 years of train + valid is a t-statistic of about 2.3)
 THR = float(opt("--threshold", 1.0))
+
+
+def found(c):
+    """A find, by the one definition in partura.steer (paired rewards: both periods have to carry it)."""
+    return is_discovery(KIND, c["score"], c.get("s_train"), c.get("s_valid"), THR)
 from partura.steer import REWARDS  # noqa: E402
 if KIND not in REWARDS:
     raise SystemExit(f"unknown reward {KIND!r}; choose from {REWARDS}")
@@ -325,7 +330,7 @@ with slot():
                  "train_ann": num(r, "score_p_train_ann"), "valid_ann": num(r, "score_p_valid_ann"), "hl": num(r, "score_p_hl"), "sign": num(r, "score_p_sign"),
                  "turnover": num(r, "score_p_turnover"), "rho_known": num(r, "score_p_rho_known")} for r in rows]
         live = [c for c in cand if math.isfinite(c["fit"])]
-        passers = [c for c in live if c["score"] >= THR]
+        passers = [c for c in live if found(c)]
         scored = sum(s.n for s in SCORERS[n0:])
         best5 = sorted(live, key=lambda c: -c["fit"])[:5]
         for c in best5:
@@ -333,7 +338,7 @@ with slot():
         evidence["arms"][arm] = {"error": err, "checkpoints": len(files), "seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in SCORERS[n0:]),
                                  "scoring_seconds": sum(s.seconds for s in SCORERS[n0:]), "archive": len(cand), "live": len(live),
                                  "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80]}
-        print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}) "
+        print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}{', each period >= ' + format(DISCOVERY_MIN_PERIOD, 'g') if KIND in PAIRED else ''}) "
               f"in {time.time() - ta:.0f}s; sampling {dict(stats)}", flush=True)
         (ep_dir / "evidence.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
@@ -342,7 +347,7 @@ with slot():
     allp = {}
     for arm in evidence["arms"]:
         for c in evidence["arms"][arm]["candidates"]:
-            if c["score"] >= THR:
+            if found(c):
                 allp.setdefault(c["expr"], c)
     if allp:
         P = ps.compute({f"c{i}": e for i, e in enumerate(allp)})
@@ -364,7 +369,7 @@ with slot():
             A = evidence["arms"][arm]
             heads = []
             for c in A["candidates"]:
-                if c["expr"] not in Z or not c["score"] >= THR:
+                if c["expr"] not in Z or not found(c):
                     continue
                 # both correlations on the signal that would be TRADED (smoothed at the chosen half-life), the same
                 # measurement for the pool and for the known family; one that cannot be measured does not pass

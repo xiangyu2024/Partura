@@ -85,6 +85,10 @@ evaluation:
     change: 检验「先验 / 指引有没有提高发现率」的实验,每臂至少几千次评估;几百次的短搜只用来回答「这个想法的邻域里有没有东西」
     why: 桶内口径下随机搜索的发现率低于 1%,每臂 124 次评估时两臂的差别全在抽样误差里(e2_I5:≥0.3 的 2 对 0,≥0 的 8 对 15,方向都不一致)
     evidence: ["episodes/e2_I5_within_bucket_anything"]
+  - id: E8_paired_find_needs_both_periods
+    change: 成对奖励(long_marginal / long_screen)下,一个候选算「发现」= 合并段信息比过线,而且 train、valid 各自的成对信息比都 ≥ 0.5(`partura.steer.is_discovery`)
+    why: 合并段 5.6 年里 train 占 4 年,信息比被它主导 —— e3_I1 带指引一臂的头名 train +5.06 / valid +0.08,只在 2018–2021 有效;只按合并段数两臂是 50 对 63,加上两段各自都站得住之后是 26 对 22
+    evidence: ["episodes/e3_I1_frozen_state", "episodes/e3_I2_dispersion_fold"]
   - id: E6_episode_with_control
     change: 每一次干预都配一个同预算、不带干预的对照搜索;记「每千次评估里过门槛、两段多头腿为正、与已知池不重合的候选数」
     why: 要验证的不是某次搜到了好因子,而是干预有没有提高单位算力的发现效率
@@ -100,6 +104,7 @@ priors:
   - {id: C6_shift_scale_const, action: rewrite, pattern: "root: {add|sub|mul}(_, $w)", to: operand, why: 最外层加减常数、乘正常数不改截面排序, evidence: [rank-preserving-outer-map-is-a-noop, "F113 sub(·, −5) / mul(·, 5)"]}
   - {id: C8_bucket_rank_twice, action: rewrite, pattern: "cs_bucket_rank(cs_bucket_rank(_1, _2), _2)", to: "cs_bucket_rank(_1, _2)", why: 同一个键上桶内排名两次等于一次(想法短搜 e2_I1 里带指引的一臂为它各付了一次钱), evidence: ["episodes/e2_I1_frozen_state"]}
   - {id: C7_price_leaf_family, action: family, w: 0.3, pattern: "@price", why: "只把价格字段整体换名的兄弟(day_std(Low) 对 day_std(Close))通常很近(秩相关中位 0.96~0.98、夏普变化 ≈ 0),偶尔不近(F109 上 0.45~0.49)。所以是「少采样兄弟」(已提过同族的,以 0.3 的概率放行),不是「同一个候选」;含两个不同价格字段的式子(sub(High, Low) 对 sub(Close, Open))不算同族 —— 2026-10-06 审查后由全局去重改成按首次出现重标号的家族键", evidence: [leaf_field."Close → Low", leaf_field."Close → Open", leaf_field."Close → High", "handoff/workflows/wf_b7c13476-92d: dedup_key"]}
+  - {id: C9_root_monotone_family, action: family, w: 0.3, pattern: "root: {pow_05|pow_1_5|pow_2|pow_2_5|pow_3|sqrt|sigmoid|signedpower}(_)", why: "最外层套一个保序的一元函数(pow_05 是带符号开方、pow_3 是奇函数;pow_1_5 / pow_2 / pow_2_5 / sqrt 只在里面非负时算),每天截面上的排序不变 —— 十分位书和筛子在半衰期 0 时一模一样,有 EMA 时也只差在各天怎么混。所以算同族(少采样),不算同一个候选。e3_I1 两臂的「发现」清单都被这种换皮撑大:带指引头五名里四个是同一棵树套 pow_05", evidence: ["episodes/e3_I1_frozen_state"]}
   # ---- 拒绝
   - {id: B1_root_zscore_own_history, action: ban, pattern: "root: {cross_zscore|ts_zscore}(_, $w)", why: 对自身历史做 z 分数把因子变成尖峰探测器 —— 60 例里 98% 明显变差、0 例两段都升、d 中位 −2.73, evidence: [wrappers.mem_zscore]}
   - {id: B2_day_scalar_as_factor, action: ban, pattern: "root: {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_max|cs_min}(_)", why: 截面聚合每天只有一个数,整个截面同值,100% 废品, evidence: [substitute_incoming."→ cs_mean", substitute_incoming."→ cs_stddev_full", substitute_incoming."→ cs_sum"]}

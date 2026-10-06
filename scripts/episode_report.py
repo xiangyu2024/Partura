@@ -10,6 +10,9 @@ line (the first episodes showed it):
 * distinct                                candidates that are not a re-spelling of one another (canonical form of
                                           the guidance): a search that scores five spellings of one tree found one thing;
 * how many clear each of several score levels, and the best and the mean of the five best distinct candidates;
+* finds, by the one definition in ``partura.steer.is_discovery``: for the paired rewards the score is an information
+  ratio over train + valid together, which the longer training period dominates, so a find also needs each period
+  on its own (episode e3_I1 is why);
 * when the run measured it: distinct passers that are not the known pool.
 
     python scripts/episode_report.py [<episode dir name> ...]      (default: every episode with evidence)
@@ -19,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from partura.steer import Guidance  # noqa: E402
+from partura.steer import DISCOVERY_MIN_PERIOD, PAIRED, Guidance, is_discovery  # noqa: E402
 
 root = Path(__file__).resolve().parents[1]
 names = [a for a in sys.argv[1:] if not a.startswith("-")] or sorted(p.parent.name for p in (root / "episodes").glob("*/evidence.json"))
@@ -39,6 +42,14 @@ for name in names:
     old_scale = kind in LEVELS and float(E.get("threshold", 1.0)) < 0.5      # before 2026-10-06 the paired rewards were Sharpe differences
     levels = LEVELS[kind] if old_scale else (0.0, 0.5, 1.0, 1.5) if kind in LEVELS else (0.0, 0.3, 0.5, 1.0)
     rows, found = [], {}
+
+    def fkey(e):
+        try:
+            return G.family_key(e)
+        except ValueError:
+            return e
+    paired_now = kind in PAIRED and not old_scale          # the paired information ratio (since 2026-10-06)
+    find_head = (f"发现(合并段 ≥ {float(E.get('threshold', 1.0)):g} 且两段各 ≥ {DISCOVERY_MIN_PERIOD:g})" if paired_now else f"发现(分数 ≥ {float(E.get('threshold', 1.0)):g})")
     for arm, A in E["arms"].items():
         cs = [c for c in A["candidates"] if fin(c.get("score"))]
         seen, distinct = set(), []
@@ -51,11 +62,18 @@ for name in names:
                 seen.add(k)
                 distinct.append(c)
         top5 = distinct[:5]
+        thr = float(E.get("threshold", 1.0))
+        finds = [c for c in distinct if is_discovery(kind, c["score"], c.get("s_train"), c.get("s_valid"), thr)]
         rows.append({"arm": arm, "scored": A["scored"], "gate": A["gate_fail"], "live": A["live"], "saved": len(cs), "distinct": len(distinct),
                      "levels": [sum(c["score"] >= lv for c in distinct) for lv in levels], "best": distinct[0]["score"] if distinct else float("nan"),
-                     "top5": sum(c["score"] for c in top5) / len(top5) if top5 else float("nan"), "heads": A.get("independent_distinct"),
+                     "top5": sum(c["score"] for c in top5) / len(top5) if top5 else float("nan"), "heads": A.get("independent_distinct"), "finds": len(finds), "families": len({fkey(c["expr"]) for c in finds}),
                      "minutes": A["seconds"] / 60, "sampling": A.get("sampling") or {}})
-        found[arm] = distinct[:6]
+        heads, fams = [], set()                                # one line per family: a find and its re-wrappings are one find
+        for c in (finds if paired_now else distinct):
+            if fkey(c["expr"]) not in fams:
+                fams.add(fkey(c["expr"]))
+                heads.append(c)
+        found[arm] = heads[:8] or distinct[:6]
     L = [f"# 研究实验 `{name}`", "",
          f"想法 `{idea['id']}`;奖励 `{kind}`;每臂预算 {E['budget']} 个候选(种群 {E['population']},随机种子 {E['seed']});搜索只看 {E['period'][0]}–{E['period'][1]}(其中 {E['period'][2]} 起算 valid),测试段没有打开。", "",
          "## 假设", "", idea.get("hypothesis", ""), "",
@@ -65,27 +83,37 @@ for name in names:
          f"- 每棵候选树过指引 `{E.get('guidance')}`:封禁的不放行,降权 / 升权按概率放行,等价写法只放行第一个",
          "", "## 对照", "", "同一个 GP、同一个奖励、同样的预算与随机种子、同一个算子库;不带种子、不过指引、均匀采样。", "",
          "## 证据", "",
-         "| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | " + " | ".join(f"分数 ≥ {lv:g}" for lv in levels) + " | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |",
-         "|---|---|---|---|---|" + "---|" * len(levels) + "---|---|---|---|"]
+         "| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | " + " | ".join(f"分数 ≥ {lv:g}" for lv in levels) + f" | **{find_head}** | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |",
+         "|---|---|---|---|---|" + "---|" * len(levels) + "---|---|---|---|---|"]
     for r in rows:
         L.append(f"| {ARM.get(r['arm'], r['arm'])} | {r['scored']} | {r['gate']} | {r['live']} | {r['distinct']} / {r['saved']} | " + " | ".join(str(x) for x in r["levels"])
-                 + f" | {r['best']:+.2f} | {r['top5']:+.2f} | {'—' if r['heads'] is None else r['heads']} | {r['minutes']:.0f} 分 |")
+                 + f" | **{r['finds']}**({r['families']} 族) | {r['best']:+.2f} | {r['top5']:+.2f} | {'—' if r['heads'] is None else r['heads']} | {r['minutes']:.0f} 分 |")
     paired_new = "「候选改过的书」减「参照书」的逐日净超额之差在 train+valid 合并段上的信息比(任一段低于 −1 则取那一段);参照书 = "
     L += ["", f"分数的含义:" + {"long_marginal": ("候选与已知池五五混合后的纯多头夏普减池子自己的,train 与 valid 取较差的(旧口径)" if old_scale else paired_new + "同一批格子上的已知池;候选改过的书 = 两者排名五五混合"),
                            "long_screen": ("已知族把候选最高的两成排到最后之后的纯多头夏普减已知族自己的,train 与 valid 取较差的(旧口径)" if old_scale else paired_new + "已知族;候选改过的书 = 已知族把候选最高两成(整块并列)排到最后"),
                            "long_bucket": "可交易池里、成交额十档内排名之后的纯多头夏普,train 与 valid 取较差的", "long_tradable": "可交易池里的纯多头夏普,train 与 valid 取较差的",
-                           "long": "纯多头夏普,train 与 valid 取较差的"}.get(kind, kind) + "。「分数 ≥」各列数的是互不等价的候选。", ""]
+                           "long": "纯多头夏普,train 与 valid 取较差的"}.get(kind, kind) + "。「分数 ≥」各列数的是互不等价的候选;「族」= 只差价格字段换名、或只在最外层多套一个保序函数的算一族。", ""]
     for r in rows:
         if r["sampling"]:
             s = r["sampling"]
             L.append(f"带指引的一臂提出了 {s.get('proposed', 0)} 棵树:封禁 {s.get('banned', 0)}、不在想法邻域 {s.get('outside', 0)}、按权重抽掉 {s.get('thinned', 0)}、"
                      f"与已提过的等价 {s.get('equivalent', 0)}、放行 {s.get('accepted', 0)}。")
-    L += ["", "## 各臂找到的(互不等价的前几个;纯多头夏普 train / valid 是奖励口径下的)", ""]
+    if paired_now:
+        L += ["", "合并段的 5.6 年里 train 占 4 年,信息比被它主导;所以「发现」另外要求 train、valid 各自的成对信息比都过 "
+              f"{DISCOVERY_MIN_PERIOD:g}(`partura.steer.is_discovery`)。"]
+    L += ["", "## 各臂找到的(" + ("算作发现的前几个,互不等价;括号里是两段各自的成对信息比" if paired_now else "互不等价的前几个;纯多头夏普 train / valid 是奖励口径下的") + ")", ""]
+
+    def line(c):
+        if paired_now:
+            return (f"- {c['score']:+.2f}(成对信息比 train {c.get('s_train', float('nan')):+.2f} / valid {c.get('s_valid', float('nan')):+.2f};改过的书的纯多头夏普 "
+                    f"{c['train']:+.2f} / {c['valid']:+.2f},半衰期 {c['hl']:g}):`{c['expr']}`")
+        return f"- {c['score']:+.2f}(train {c['train']:+.2f} / valid {c['valid']:+.2f},半衰期 {c['hl']:g},与已知族相关 {c['rho_known']:+.2f}):`{c['expr']}`"
+
     for arm, cs in found.items():
-        L += [f"**{ARM.get(arm, arm)}**", ""] + [f"- {c['score']:+.2f}(train {c['train']:+.2f} / valid {c['valid']:+.2f},半衰期 {c['hl']:g},与已知族相关 {c['rho_known']:+.2f}):`{c['expr']}`" for c in cs] + [""]
+        L += [f"**{ARM.get(arm, arm)}**", ""] + [line(c) for c in cs] + [""]
     b = d / "belief.md"
     L += ["## 信念更新", "", b.read_text(encoding="utf-8").strip() if b.is_file() else "(待写:这次实验让哪条规则的权重 / 状态变了,为什么。)", ""]
     (d / "episode.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"wrote {d / 'episode.md'}")
     for r in rows:
-        print(f"   {r['arm']:8s} scored {r['scored']:4d} live {r['live']:4d} distinct {r['distinct']:3d}/{r['saved']:<3d} levels {dict(zip(levels, r['levels']))} best {r['best']:+.2f} top5 {r['top5']:+.2f}")
+        print(f"   {r['arm']:8s} scored {r['scored']:4d} live {r['live']:4d} distinct {r['distinct']:3d}/{r['saved']:<3d} levels {dict(zip(levels, r['levels']))} finds {r['finds']} ({r['families']} families) best {r['best']:+.2f} top5 {r['top5']:+.2f}")

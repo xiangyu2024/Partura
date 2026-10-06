@@ -18,12 +18,12 @@
 
 ## 证据
 
-| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | 分数 ≥ 0 | 分数 ≥ 0.1 | 分数 ≥ 0.2 | 分数 ≥ 0.3 | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 带指引 | 172 | 43 | 129 | 77 / 80 | 77 | 64 | 41 | 19 | +0.46 | +0.40 | 6 | 19 分 |
-| 对照 | 152 | 29 | 123 | 80 / 80 | 80 | 52 | 35 | 19 | +0.45 | +0.43 | 10 | 23 分 |
+| 臂 | 付费评估 | 没过门槛 | 活着的 | 互不等价的(存下来的前 80 里) | 分数 ≥ 0 | 分数 ≥ 0.1 | 分数 ≥ 0.2 | 分数 ≥ 0.3 | **发现(分数 ≥ 0.2)** | 最好 | 前五(互不等价)均值 | 过线且不在已知池里、互不重复 | 用时 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 带指引 | 172 | 43 | 129 | 77 / 80 | 77 | 64 | 41 | 19 | **0**(0 族) | +0.46 | +0.40 | 6 | 19 分 |
+| 对照 | 152 | 29 | 123 | 80 / 80 | 80 | 52 | 35 | 19 | **0**(0 族) | +0.45 | +0.43 | 10 | 23 分 |
 
-分数的含义:已知族把候选最高的两成排到最后之后的纯多头夏普减已知族自己的,train 与 valid 取较差的(旧口径)。「分数 ≥」各列数的是互不等价的候选。
+分数的含义:已知族把候选最高的两成排到最后之后的纯多头夏普减已知族自己的,train 与 valid 取较差的(旧口径)。「分数 ≥」各列数的是互不等价的候选;「族」= 只差价格字段换名、或只在最外层多套一个保序函数的算一族。
 
 带指引的一臂提出了 392 棵树:封禁 0、不在想法邻域 74、按权重抽掉 56、与已提过的等价 39、放行 223。
 
@@ -37,6 +37,8 @@
 - +0.38(train +2.16 / valid +3.92,半衰期 5,与已知族相关 +0.41):`cross_mean(cs_bucket_zscore(day_zero_ratio(nt_ts_var(Close, 5)), day_autocorr_n1(High)), 15)`
 - +0.36(train +2.14 / valid +3.93,半衰期 20,与已知族相关 +0.20):`cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(nt_ts_var(Close, 5)))`
 - +0.35(train +2.22 / valid +3.83,半衰期 20,与已知族相关 +0.53):`cross_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 5)), day_autocorr_n1(nt_ts_var(Close, 5))), 15)`
+- +0.35(train +2.17 / valid +3.82,半衰期 20,与已知族相关 +0.36):`cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 5)), day_sum(High))`
+- +0.35(train +2.13 / valid +4.07,半衰期 20,与已知族相关 +0.38):`cs_first_high40(day_flat_run_max(in_stddev_full(Open)), day_flat_run_max(Close))`
 
 **对照**
 
@@ -46,6 +48,8 @@
 - +0.42(train +2.26 / valid +3.90,半衰期 20,与已知族相关 +0.19):`cross_max(div(day_wstd(Low, Low), day_median(Low)), 241)`
 - +0.42(train +2.26 / valid +3.89,半衰期 20,与已知族相关 +0.19):`cross_max(div(day_wstd(Low, Close), day_median(Close)), 241)`
 - +0.42(train +2.25 / valid +3.89,半衰期 20,与已知族相关 +0.19):`cross_max(div(day_wstd(Low, Close), day_median(Low)), 241)`
+- +0.41(train +2.19 / valid +3.94,半衰期 5,与已知族相关 +0.15):`cross_max(ts_min(cross_max(div(day_wstd(Low, Close), day_median(Close)), 241), 20), 10)`
+- +0.37(train +2.15 / valid +3.98,半衰期 5,与已知族相关 +0.21):`cross_max(div(cross_max(div(day_wstd(Low, Close), day_median(Low)), 241), cross_max(ts_min(day_kurt(Amt), 20), 241)), 241)`
 
 ## 信念更新
 
