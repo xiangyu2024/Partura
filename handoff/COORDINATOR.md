@@ -2,6 +2,32 @@
 
 _最后更新:2026-10-05 13:45 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
+## ⏱⏱ 现状快照(2026-10-05 22:00 PDT;比下面 19:45 那一段新,先读这段)
+
+**AlphaCube 改造:设计已定,正在实现**
+- 设计工作流 `wf_8604f186-483` 已完成(12 个 agent 全部返回)。最终设计:`docs/alphacube_steering_design.md`(日频字段 = 新叶子类 `DailyFeature`,形状复用 COLLAPSED;
+  生成器四个可选关键字 `op_weight / accept / daily_fields(+daily_leaf_prob) / leaf_slots` + `hook_rng`;打分器注册表 `register_scorer`,工厂能拿到 `dates / warmup`;
+  插件加载 `--plugin` / `ALPHACUBE_PLUGINS` / `load_plugins`;`@op(..., real_valued=True)`;修 `mutate_window / mutate_constant` 与 `generate()` 回退绕过接受检查的漏洞;
+  `run_mining` 只多一个参数 `daily_root`,其余走 `gp_params`)。基线测试:617 passed / 10 skipped / 1 xfailed(约 2 分钟)。11 个工作包(WP1–WP11,文件归属互不相交)。
+- **实现工作流 `wf_a9e46c78-369`(2026-10-05 21:55 起,串行,一个包一个包做)**:Sonnet 5 实现并提交 → Opus 5 对着设计审查并写测试攻击 → 有缺陷则 Opus 5 修复 → 全部做完后
+  三项整分支验证(默认行为与基线逐位相同 / 新能力端到端 / 整套测试与文档)。顺序:WP1, WP6, WP2, WP3, WP5, WP9, WP4, WP7, WP8, WP10(可选), WP11(Partura 迁移)。
+  代码在 **git worktree** 里:`~/Desktop/AlphaCube-steering`(分支 `partura-steering`,基于 517fd09)、`~/Desktop/Partura-steering`(分支 `ac-plugin`)。每个包一条提交(标题以 `WPn:` 开头),
+  所以断了也不丢;实现者会先看 git log,已有 `WPn:` 提交的包不重做。
+  续跑:`Workflow({scriptPath: "…/workflows/scripts/alphacube-steering-implement-wf_a9e46c78-369.js", resumeFromRunId: "wf_a9e46c78-369", args: <handoff/workflows/impl_args.json 的内容>})`。
+- **实现完成之后(总领做,不要让 agent 做)**:看三项验证的结论 → 把 `partura-steering` 并进 AlphaCube 的 `tradable-backtest` 和 `main`(用户的规矩:推了就并入 main)并 push →
+  rsync `src/` 与 `scripts/build_daily_fields.py` 到服务器 `/root/autodl-tmp/AlphaCube/`(先确认服务器上没有别人的 AlphaCube 进程)→ 在服务器上跑建库脚本(数据放 `/root/autodl-tmp/AlphaCube/daily_fields/`)→
+  合并 Partura 的 `ac-plugin` → 用正式钩子重跑一个想法短搜作验收 → 第四轮(带流通市值的假设)。
+
+**审查工作流 `wf_b7c13476-92d` 仍在跑**(21:41 时已有 56 个 agent 返回;结果在 `handoff/workflows/wf_b7c13476-92d/`)。回来之后:修 `survived` 里的缺陷(先 high)、补测试、受影响的结果重跑。
+
+**想法短搜(tag `e2`,修过奖励之后)的证据**(`episodes/e2_*/evidence.json`;两臂各预算 192,实际付费评估 100~170 个):
+| 想法 | 奖励 | 带指引 | 对照 | 读法 |
+|---|---|---|---|---|
+| I2 日内离散度折叠 | `long_marginal`(与池子五五混合减池子,train / valid 取差的) | 0 个过线(≥0.2),最好 +0.02 | 0 个,最好 +0.10 | **这个奖励在这两段上谁也过不了**:valid(2022-01~2023-08)是已知族最强的一段(夏普约 4),任何东西五五掺进去都稀释它,取两段较差者就恒为负。合并段上独立因子对池子是 +0.3~+0.4 夏普(见 `cluster_s2` 的五五混合)。→ R3 与 R4 不能叠用:边际奖励要在合并段上量,或取两段增量的均值 |
+| I5 不限结构、只换奖励 | `long_bucket`(可交易池 + 成交额桶内) | 0 个过线(≥1.0),最好 0.58 | 0 个,最好 0.29 | 192 的预算在桶内口径下谁也到不了 1.0;带指引的最好值高一倍,但样本太小,**不能说先验有效**。要么加预算,要么把过线标准降到 0.5 再比 |
+| I1 冻结盘口当筛子 | `long_screen`(已知族排掉候选最高两成,减已知族) | **44 个过线(≥0.2),最好 +0.46** | (22:00 还在跑) | 这条通了。最好的是「10 分钟滚动方差为零的分钟占比,在同价位股票里排名」—— 把最小报价单位造成的假冻结(低价股零收益分钟天然多)扣掉了,是人没写过的写法 |
+首跑(tag `e1`)的结论作废(奖励两边股票池不一致)。
+
 ## ⏱ 现状快照(2026-10-05 19:45 PDT;用户提醒额度将尽 —— 接手的人先读这一段)
 
 **用户刚给的两句授权(原话)**:「你的需求我全部满足」「partura的权限等级比alphacube高」。总领的理解与安排:
