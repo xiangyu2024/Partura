@@ -63,6 +63,23 @@ L = [f"# 反向指引 AlphaCube:{G['batch'].split('_')[0]} 的研究结论怎样
 
 # ---- headline
 W = M["wrappers"]
+# ---- the out-of-sample check of the two things this batch leaned on most: screens on the known family, and the fusion
+OOS = []
+_pf, _k1 = root / "runs" / "_batch_B01" / "paired_fusions.json", root / "runs" / "K001_known_screens" / "sweepfinal_s1.json"
+if _pf.is_file() and _k1.is_file():
+    PF = json.loads(_pf.read_text(encoding="utf-8")).get(TAG) or {}
+    K1 = json.loads(_k1.read_text(encoding="utf-8"))["results"]
+    xf = K1["k_known_xfrozen"]["paired"]["k_known"]
+    singles = [K1[k]["paired"]["k_known"]["holdout"]["t"] for k in K1 if k.startswith("s_")] + [xf["holdout"]["t"]]
+    picked = [K1[k]["paired"]["k_known"]["holdout"]["t"] for k in json.loads(_k1.read_text(encoding="utf-8")).get("overlay", [])]
+    ak, ao = PF.get("A-known"), PF.get("A-O")
+    if ak and ao:
+        OOS = [f"6. **样本内的成对统计不等于样本外(2026-10-06 的两次对账)。** 对已知族做筛子:通用冻结筛子样本内比已知族每年多 {xf['utrain']['ann']:+.1%}(信息比 {xf['utrain']['ir']:+.2f}),"
+               f"样本外只多 {xf['holdout']['ann']:+.1%}(t = {xf['holdout']['t']:+.1f});短搜找到的九个单层筛子样本外 t 最高 {max(singles):+.1f},按样本内挑的六个多层筛子最高 {max(picked):+.1f} —— "
+               "没有一条达到事先写下的 t ≥ 2(`studies/K001_known_screens/README.md`)。筛子的增益集中在 2018–2020。"
+               f"融合:独立升级版的融合比 15 条原式的融合样本外每年多 {ao['test'][0]:+.1%}(t = {ao['test'][2]:+.1f},幅度和样本内的 {ao['train'][0]:+.1%} 一样);"
+               f"比已知族多 {ak['test'][0]:+.1%}(t = {ak['test'][2]:+.1f})—— 2.3 年的样本分不出来。所以「比基准好」一律用同一天相减的成对差来判(规则 E9)。"]
+
 L += ["## 先说结论", "",
       f"1. **现在的奖励在给流动性倾斜付钱。**「只在成交额最低四成里选」这一个动作,不管套在哪条因子上都把纯多头夏普抬高 {W['seg_lowliq_m']['d_median']:+.2f}"
       f"({W['seg_lowliq_m']['up']:.0%} 明显变好、{W['seg_lowliq_m']['both']:.0%} 两段都升);反过来「只在成交额最高四成里选」是 {W['seg_hiliq_p']['d_median']:+.2f} / {W['seg_hiliq_m']['d_median']:+.2f}"
@@ -75,12 +92,14 @@ L += ["## 先说结论", "",
        f"(两段都升 {W['mem_mean']['both']:.0%}~{W['mem_ema']['both']:.0%},明显变差 {W['mem_mean']['down']:.0%}~{W['mem_ema']['down']:.0%})—— 之前看到的增益是「平滑不够长」,不是结构。评估时让半衰期自己去选,不必让搜索去套记忆。"),
       f"4. **把任意因子叠到已知族上没有用。** 三个权重 × 15 条因子,两段都升的是 {W['ov_p025']['both']:.0%} / {W['ov_p05']['both']:.0%} / {W['ov_p10']['both']:.0%}。值钱的是和池子不相关的东西融合之后的增量,所以奖励要直接量「对池子的边际贡献」。",
       f"5. **{M['dead_rate']:.0%} 的评估预算花在废品上**(门槛改算在实际交易的信号上之后;之前算在原面板上时是 10%,一半是误杀),其中有整类可以事先拒绝:截面聚合(cs_mean / cs_sum / cs_median / cs_stddev_full)当因子用 100% 是废品。", "",
+      *OOS,
       "(更正:上一版这里还写着「分母里的 +1e-6 删掉之后 7 例全部变好」。审查发现那 7 例里真正碰到 1e-6 的只有 4 例、其中 3 例判废,剩下 1 例的消融也不是干净的删除 —— 这句话没有证据,已删;对应的规则由封禁降为降权,理由只剩两条手写因子的机制分析。)", ""]
 
 # ---- 1. reward
 L += ["## 一、奖励函数", "", "| | 改什么 | 为什么 | 状态 |", "|---|---|---|---|"]
 for r in G["reward"]:
-    L.append(f"| {r['id'].split('_')[0]} | {r['change']} | {r['why']} | {ST.get(r['status'], r['status'])} |")
+    oos = f"<br>**样本外**:{r['out_of_sample']}" if r.get("out_of_sample") else ""
+    L.append(f"| {r['id'].split('_')[0]} | {r['change']} | {r['why']}{oos} | {ST.get(r['status'], r['status'])} |")
 L += ["", "已实现的四种奖励在 `partura/steer.py: reward()`:`long`(原口径)、`long_tradable`(R1)、`long_bucket`(R1 + R2)、`long_marginal`(R1 + R3)、`long_screen`(把候选当筛子用:已知族排掉候选最高两成,减已知族本身);"
       "R4~R6 是它们共有的:两个方向各建一次多头书取好的、半衰期在网格上按纯多头夏普取、分数取 train 与 valid 里较差的那个。", ""]
 

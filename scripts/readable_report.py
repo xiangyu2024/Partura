@@ -173,7 +173,7 @@ for name, label in (("O", "**原式** 15 条等权(升级之前)"), ("U", "**升
                     ("C", f"独立的 {len(indep)} 个 + 已知族最好的一个({len(indep) + 1} 个等权)"), ("D", f"一半已知族最好的一个 + 一半独立 {len(indep)} 个的均值")):
     M, g = chosen(name)
     L.append(frow(label, len(F[name]["members"]) if name != "B" else 1, g["train"], g["test"], M["by_year_long_net"]))
-L += ["", "(逐年那一列里 2023 年横跨样本内外。)", "",
+L += ["", "(逐年那一列里 2023 年横跨样本内外。)", "", "__PAIRED__", "",
       f"### 表 4:平滑的作用(以「独立的 {len(indep)} 个等权」为例,融合之后再做一次指数平滑)", "",
       "| 融合后的半衰期(日) | 样本内超额 | 样本内夏普 | 样本内换手 | 样本外超额 | 样本外夏普 | 样本外最大回撤 | 样本外换手 |", "|---|---|---|---|---|---|---|---|"]
 MA = F["A"]["methods"]["each"]
@@ -251,10 +251,36 @@ def crash(daily, a="20240116", b="20240206"):
     return sum(0.0 if v is None else v for d, v in zip(dates, daily) if a <= d <= b)
 
 
+def paired(a, b):
+    """Two books on the same days: the daily difference of their net excess -> (annualised, information ratio, t), in and out of sample.
+    Two annualised numbers each carry about +-3 points of noise; most of it cancels in the difference."""
+    out = {}
+    for nm, sl in (("train", slice(0, isplit)), ("test", slice(isplit, None))):
+        d = [x - y for x, y in zip(a[sl], b[sl]) if x is not None and y is not None]
+        m = sum(d) / len(d)
+        sd = (sum((x - m) ** 2 for x in d) / len(d)) ** 0.5
+        out[nm] = (m * 252, m / sd * 252 ** 0.5, m / sd * len(d) ** 0.5)
+    return out
+
+
+DAILY = {"known": J["members"]["known"]["daily"], **{k: F[k]["methods"]["each"]["daily"] for k in F}}
+PNAME = {"known": "已知族单独", "O": "原式 15 条等权", "U": "升级版 15 条等权", "A": f"独立的 {len(indep)} 个等权", "B": "已知族里最好的升级版", "C": f"独立 {len(indep)} 个 + 已知族最好的一个"}
+PT = ["### 表 3b:和基准同一天相减(这才是「比谁好」的检验)", "",
+      "两本书大半持仓相同,各自 ±3 个点的噪声在相减时抵掉大半。t 值 ≥ 2 才算统计上站得住;样本外只有约 2.3 年,所以每年差 5 个点左右才到得了 2。", "",
+      "| 谁 减 谁 | 样本内:每年多赚 | 样本内 t | 样本外:每年多赚 | 样本外信息比 | 样本外 t |", "|---|---|---|---|---|---|"]
+PAIRS = {}
+for a, b in (("A", "O"), ("U", "O"), ("A", "known"), ("C", "known"), ("B", "known"), ("O", "known")):
+    q = PAIRS[(a, b)] = paired(DAILY[a], DAILY[b])
+    PT.append(f"| {PNAME[a]} − {PNAME[b]} | {q['train'][0]:+.1%} | {q['train'][2]:+.1f} | **{q['test'][0]:+.1%}** | {q['test'][1]:+.2f} | **{q['test'][2]:+.1f}** |")
+L[L.index("__PAIRED__")] = "\n".join(PT)
+qo, qk = PAIRS[("A", "O")], PAIRS[("A", "known")]
+
 conc = [
-    f"1. **融合有用,而且样本外站得住**。{len(indep)} 个独立升级版等权融合:样本内 {pc(gA['train']['long_ann'])}(夏普 {sh(gA['train']['long_sharpe'])}),样本外 {pc(gA['test']['long_ann'])}(夏普 {sh(gA['test']['long_sharpe'])});"
+    f"1. **融合比原式好,样本外幅度没缩水;比已知族好多少,样本外分不出来。** {len(indep)} 个独立升级版等权融合:样本内 {pc(gA['train']['long_ann'])}(夏普 {sh(gA['train']['long_sharpe'])}),样本外 {pc(gA['test']['long_ann'])}(夏普 {sh(gA['test']['long_sharpe'])});"
     f"8 个年份的超额都在 {min(MAo['by_year_long_net'].values()):+.0%} ~ {max(MAo['by_year_long_net'].values()):+.0%} 之间。"
-    f"对照:已知族单独 {pc(kn['train']['long_ann'])} / {pc(kn['test']['long_ann'])}(夏普 {sh(kn['train']['long_sharpe'])} / {sh(kn['test']['long_sharpe'])})。",
+    f"和 15 条原式的融合同一天相减:样本内每年多 {qo['train'][0]:+.1%},样本外多 {qo['test'][0]:+.1%}(t = {qo['test'][2]:.1f})。"
+    f"和已知族单独({pc(kn['train']['long_ann'])} / {pc(kn['test']['long_ann'])},夏普 {sh(kn['train']['long_sharpe'])} / {sh(kn['test']['long_sharpe'])})同一天相减:"
+    f"样本内多 {qk['train'][0]:+.1%}(t = {qk['train'][2]:.1f}),样本外多 {qk['test'][0]:+.1%}(t = {qk['test'][2]:.1f})—— 方向一致、夏普更高,但两年半的样本不足以说它确实比已知族好(表 3b)。",
     f"2. **升级前后**。原式 15 条直接融合:{pc(gO['train']['long_ann'])} / {pc(gO['test']['long_ann'])}(夏普 {sh(gO['train']['long_sharpe'])} / {sh(gO['test']['long_sharpe'])});"
     f"升级版 15 条融合:{pc(gU['train']['long_ann'])} / {pc(gU['test']['long_ann'])}(夏普 {sh(gU['train']['long_sharpe'])} / {sh(gU['test']['long_sharpe'])})。"
     f"超额多了 {min(gU['train']['long_ann'] - gO['train']['long_ann'], gU['test']['long_ann'] - gO['test']['long_ann']) * 100:.0f}~{max(gU['train']['long_ann'] - gO['train']['long_ann'], gU['test']['long_ann'] - gO['test']['long_ann']) * 100:.0f} 个点,样本外夏普几乎没变 —— 因为这 15 个升级版里有 {len([k for k in J['groups']['upg'] if k not in indep])} 个落在已知族里(表 2),波动跟着已知族走。只用 {len(indep)} 个独立的反而更好。",
