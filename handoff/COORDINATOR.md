@@ -2,7 +2,50 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱ 现状快照(2026-10-06 14:10 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱ 现状快照(2026-10-06 16:25 PDT;最新,先读这段)
+
+**今天下午的三个更正 / 对账(都已推送,最后一条提交见 `git log`)**
+
+1. **K001 筛子研究:搜到的筛子样本外没有站住。**(`studies/K001_known_screens/README.md`「结果」;规则写在看结果之前)
+   九个单层两成筛子 + 样本内前六个多层筛子,测试段上对已知族的成对差 t 最高 1.1;通用冻结筛子自己样本内 +3.1 个点、样本外 +0.9 个点(t = 0.6),
+   增益集中在 2018–2020(逐年 +6.5 / +3.4 / +4.8,之后平均 +0.9)。「成交集中价位不稳」当筛子是空操作。→ 指引 U5 由升权改为备注,R1 加了样本外读数。
+2. **第四轮融合对已知族的样本外优势:+2.3 个点 / 年,t = 0.6。**(`runs/_batch_B01/paired_fusions.json`;好读版报告表 3b)
+   同一天相减:独立 12 个的融合 − 15 条原式的融合 = 样本内 +5.5、样本外 **+6.5**(t 1.5,幅度没缩水);− 已知族 = 样本内 +5.1(t 2.1)、样本外 **+2.3**(t 0.6)。
+   三轮都是这个量级(s2 +3.2 / t 0.8;s3 +1.6 / t 0.4)。原式的融合样本外比已知族**差** 4.3 个点。
+   说法要改成:「升级把一批比已知族差的原式变成了不比它差、夏普更高(1.98 对 1.52)的东西;比已知族好多少,两年半的样本分不出来」。指引规则 E9:比基准好一律用成对差判。
+3. **e3_I1 的参照写错了,而且「打平」是尺子的问题。**(`episodes/e3_I1_frozen_state/belief.md`)
+   服务器上跑的是旧版 `scripts/idea_search.py`(`tmp/after_round4.sh` 直接起的,没先同步)→ 参照是没做过筛子的已知族。
+   按成对信息比数 26 对 22;按「账面每年多赚 ≥ 1 个点、两段都是」数,带指引 **11 族**、对照 **0 族**(事后读数)。对照臂的发现是又小又稳的改动(信息比 2~3、账面 +0.2~0.8 个点)。
+
+**因此改的代码**
+- `partura/steer.py: _sized` —— 成对奖励带大小:`IR × min(1, 每年多赚 / 1 个点)`;`score / score_train / score_valid` 都带大小,另返回 `ir_*`、`dann_*`。指引 R8。
+- `partura/steer_fast.py` —— 奖励里的排序 / 桶内排名 / 并列带 / 十分位书搬到 torch(`PARTURA_REWARD_DEVICE=cuda`;出错回退原版)。
+  服务器实测(`scripts/reward_bench.py`,真实面板 8 个):4.9 / 5.0 / 10.9 / 7.4 / 7.9 秒 → 1.2~1.4 秒,所有返回值相对差 ≤ 3.5e-14。
+  之前每个候选 ~10~16 秒里有一半是奖励;现在 ~6.5 秒(面板 ~5 秒)。这是目前量到的最大一项搜索效率改进(1.6~2.5 倍),比先验大。
+- `scripts/idea_search.py`:证据里记 `code`(文件指纹)、`screen_base`、`reward_device`、原始信息比与每年多赚。
+- `scripts/study.sh code`:一次同步全部代码(partura / scripts / guidance / batches / tests / configs)。**服务器端的启动脚本(tmp/*.sh)不会同步,起之前先跑它。**
+- `scripts/sweep_final.py` 成对表、`scripts/paired_table.py`;`scripts/readable_report.py` 表 3b;`scripts/guidance_report.py` 第 6 条结论。
+- 测试 56 例通过(`tests/test_steer_fast.py` 7 例:原版 vs torch 版逐数相同)。
+
+**服务器上正在跑:e4 确认实验**(事先约定 `episodes/e4_PLAN.md`;16:19 PDT 起,`tmp/run_e4.sh`,两个 screen 各占一路 GPU)
+- screen `e4k`:`--screen-base known`,种子 1、2、3 依次 → `episodes/e4k{1,2,3}_I1_frozen_state/`,日志 `logs/_idea_e4k{n}_I1.log`
+- screen `e4p`:`--screen-base pool`,种子 1、2、3 依次 → `episodes/e4p{1,2,3}_I1_frozen_state/`
+- 每个种子两臂约 35~40 分钟;全部跑完约 2 小时。完成记在服务器 `logs/_e4.log`。
+- **跑完之后**:`./scripts/study.sh idea-pull` → `python scripts/episode_report.py` → 按 `e4_PLAN.md` 的判读写 `episodes/e4_SUMMARY.md` 和各卡的 `belief.md`
+  (主指标:每个种子两臂各自的发现族数;带指引合计 ≥ 对照 2 倍且至少两个种子同向才算有证据)→ `python scripts/guidance_report.py guidance/B01.yaml --tag s4`。
+
+**AlphaCube 改造(实现工作流 `wf_a9e46c78-369`,仍在跑)**:分支 `partura-steering` 16:18 时到 `cc6619b` WP3(14:15 提交;正在审查 / 修)。
+还剩 WP5, WP9, WP4, WP7, WP8, WP10, WP11 和三项整分支验证,按现在的速度还要 8~12 小时。结束之后总领要做的事不变(见下面 22:00 那段「实现完成之后」)。
+注意:并入后 WP11 的 `ac-plugin` 分支和主分支在 `partura/steer.py`、`scripts/idea_search.py` 上差得更多了(今天加了 `steer_fast`、带大小的奖励、指纹),合并时以**主分支为准**。
+
+**接下来(按顺序)**
+1. e4 的结果 → 判读 → 指引更新。
+2. 实现工作流结束 → 验证 → 并入 AlphaCube main → 同步服务器 → 建日频字段库 → 合并 Partura `ac-plugin` → 用正式钩子重跑一个短搜作验收。
+3. 第五轮:带流通市值 / 涨跌幅宽度的假设(`DailyFeature` 叶子)。筛子不再当通用变体(K001)。
+4. 搜索效率的下一项:候选的门槛失败率 13~39%(付了面板钱才知道是废品)→ 先在小样本(1/8 股票)上算面板、过了再算全市场(多保真度);还没做。
+5. `handoff/TOOLING.md` 里剩下的工具项。
+
+## ⏱⏱⏱⏱ 现状快照(2026-10-06 14:10 PDT;已被上面 16:25 那段更新 —— 其中「I1 参照 = 已做通用筛子的已知族」「第三次打平」两句作废)
 
 **第四轮(s4,带全部修正)已完成并交付**(提交 `ece6845`;报告 `research/alpha_distillation/B01_upgrades_and_fusion.md`、`B01_batch2_summary.md`)。
 多头净超额 样本内 / 样本外(纯多头夏普);样本内 = 2018-01 ~ 2023-08-07,样本外 = 2023-08-08 ~ 2025-12-31,扣 15 bp:
