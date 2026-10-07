@@ -38,7 +38,9 @@ if opt("--forward"):
 SPLIT = "20230808"
 isplit = next(i for i, d in enumerate(dates) if d >= SPLIT)
 ifw = next((i for i, d in enumerate(dates) if d >= "20260101"), len(dates))          # the forward segment, when the series has it
-NAME = {"fusion:A": "12 个独立升级版的等权融合", "fusion:C": "独立升级版 + 已知族头名的融合", "fusion:D": "一半已知族头名 + 一半独立升级版",
+NAME = {"trainto/champion_signal_buyable": "AlphaCube 挖掘冠军(4206 个挖掘因子两层合成)", "champion_signal_buyable": "AlphaCube 挖掘冠军(旧选族)",
+        "legacy_signal": "AlphaCube 手写库冠军(1392 个手写因子两层合成)", "trainto/legacy_signal": "AlphaCube 手写库冠军",
+        "fusion:A": "12 个独立升级版的等权融合", "fusion:C": "独立升级版 + 已知族头名的融合", "fusion:D": "一半已知族头名 + 一半独立升级版",
         "F104.sub_A_sqrt@ls": "单因子 F104 升级版(日内成交额峰度)", "F104.sub_A_sqrt@long": "单因子 F104 升级版(日内成交额峰度)"}
 
 
@@ -151,7 +153,7 @@ for j, o in enumerate(LS):
              f'样本外 {pct(s["out"]["ann"])}、夏普 {s["out"]["sharpe"]:.2f}、回撤 {pct(s["out"]["mdd"])}{fwd}</text>')
 A.append("</svg>")
 out_dir = root / "research" / "alpha_distillation"
-SUF = "_to2026" if opt("--forward") else ""
+SUF = opt("--suffix") or ("_to2026" if opt("--forward") else "")
 (out_dir / f"{BATCH}_best_longshort{SUF}.svg").write_text("\n".join(A), encoding="utf-8")
 
 # ---- 2. pure long: TOTAL return (compounded), next to the equal-weight universe; log scale
