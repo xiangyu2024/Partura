@@ -106,6 +106,7 @@ if cmd == "export":
             w = csv.DictWriter(fh, fieldnames=["i", "run", "expression", "name", "kind"])
             w.writeheader()
             w.writerows(rows)
+        np.save(pool / "dates.npy", np.asarray([str(d) for d in ps.dates]))        # the scorer checks the view against this
         (pool / "export.json").write_text(json.dumps({"n": len(rows), "failed": bad, "source": str(src), "keys": keys}, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"[export] {pool}: {len(rows)} panels linked; {len(bad)} failed", flush=True)
         mem.stop()
