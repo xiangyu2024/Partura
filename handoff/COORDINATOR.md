@@ -2,7 +2,38 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 21:03 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 22:20 PDT;最新,先读这段)
+
+**e5 消融已出结论**(`episodes/e5_SUMMARY.md`):种子、邻域、先验三样都有贡献、大致可加(实测互不相关的发现,每百次评估:对照 0.7 → 单开 0.9 / 1.2 / 1.8 → 开两样 2.6 / 1.9 / 3.1 → 全开 4.1)。
+按事先的族数标准:邻域、先验「有用」,种子「不确定」。按 GPU 小时:全开 27.6、对照 4.6;「种子 + 先验」4.2(一个 run 搜进了慢算子)。种子间方差大,单看任何一格不可靠。
+确定性核对通过(同种子同代码重跑逐分数相同)。
+
+**先验这条线的两个新结果**
+- `scripts/prior_check.py`:B01 的规则在 GP 没被过滤过的候选上大多不触发;触发最多的 D7(除法降权)不区分好坏。
+- `scripts/gp_archive_priors.py`:从 AlphaCube 自己的 GP 存档学(7 个结束于 2023-08-07 的运行,4,052 个候选;`guidance/gp_archive_stats_{fullmarket,hs300}.json`)。
+  8 个算子在全市场和沪深300 的运行里都稳定垫底 → `guidance/GP01_learned.yaml`(8 条降权)。
+  D12(求和型记忆降权)在全市场存档上方向相反(1.74 倍进前五分之一)、在沪深300 上方向正确(0.27 倍)—— 全市场的适应度在为「缺失日当 0」付钱(躲垃圾票)。D7 两边都不区分 → **e6 / e7 跑完之后把 D7 降为备注**(现在不能动 B01.yaml:排队里的 run 还要用它)。
+- 只用结束于 20230807 的运行;`gpu12 / gpu15 / gpu16` 的 end 是 20251231(适应度见过测试段),`gpu2~gpu11 / 14 / 17` 没有 meta —— 都不用,免得把测试段漏进先验。
+
+**服务器上的队列(都用 `scripts/server/run_idea_seeds.sh`;跑之前都已 `study.sh code`)**
+| screen | 内容 | 状态 |
+|---|---|---|
+| `e6a` | e6 种子 1、3(`I7_beyond_liquidity`,`long_bucket`,预算 384,线 0.75) | 种子 1 完(带指引最好 0.73、对照 0.37,都没过线);种子 3 在跑 |
+| `e6c` | e6 种子 2 | 在跑 |
+| `e7c` → `e7b` | e7 对照(种子 1、2、3),然后 B01 先验一格 | 排在 `e6c` 后面 |
+| `e7l` | e7 学到的先验一格(`--guidance guidance/GP01_learned.yaml`) | 排在 `e6a` 后面 |
+完成记录:服务器 `logs/_e6b.log`(3 行)、`logs/_e7c.log` / `_e7b.log` / `_e7l.log`(各 3 行)。预计 e6 约 23:30 PDT、e7 约 02:00 PDT 跑完。
+
+**跑完之后要做的**
+1. e6:`./scripts/study.sh idea-pull` → `python scripts/episode_summary.py e6b I7_beyond_liquidity`;有 ≥ 0.75 的发现才按 `e6_PLAN.md` 读样本外
+   (`scripts/idea_final.py e6b1_I7_beyond_liquidity e6b2_I7_beyond_liquidity e6b3_I7_beyond_liquidity`,服务器,记账);写 `episodes/e6_SUMMARY.md`。
+2. e7:按 `episodes/e7_PLAN.md` 算「质量产出」(每百次付费评估里分数 ≥ 1.0 的存档候选数)、没过门槛的比例、`independent_distinct`,三格 × 三个种子;写 `episodes/e7_SUMMARY.md`。
+3. 然后改 `guidance/B01.yaml`:D7 降为备注(w 1.0),D12 的 why 里写上两个股票池的对照;把 GP01 的 8 条并进来(若 e7 成立)。重出指引报告。
+4. AlphaCube 实现工作流结束后的总领步骤不变(见下面 22:00 那段「实现完成之后」)。
+
+**等用户定**:2026-01 ~ 2026-08 那段没碰过的数据怎么用;没读。
+
+## ⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 21:03 PDT;已被上面那段更新)
 
 **e4 的倍数更正**:按式子的族数是 44 对 4;按**实测互不相关**的发现数(交易信号两两秩相关 < 0.7)是 **16 对 3**(2:0、5:1、9:2,三个种子同向)。
 以后两个数都报、以实测的为准(指引 E10;`scripts/factorial_summary.py`、`episodes/e4_SUMMARY.md` 顶部的更正)。
