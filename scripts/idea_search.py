@@ -21,6 +21,7 @@ The search sees 20180102..20230807 (train + valid); the test period is not opene
     python scripts/idea_search.py <idea_id> [--guidance guidance/B01.yaml] [--budget 192] [--population 48]
                                   [--arms steer,control] [--seed 0] [--boost 8] [--tag e1] [--reward KIND]
                                   [--parts seeds,hood,priors|none]     (what the steer arm is made of: ablations)
+                                  [--halflives 0,5,20]                 (the reward's half-life grid)
 """
 import csv
 import json
@@ -63,6 +64,9 @@ SEED, BOOST, TAG = int(opt("--seed", 0)), float(opt("--boost", 8)), opt("--tag",
 # guidance's bans, down-weights, exact-equivalence and family thinning (and its coarse operator weights).
 # The default is all three; ``--parts none`` makes the steer arm the control.
 PARTS = {x for x in opt("--parts", "seeds,hood,priors").split(",") if x and x != "none"}
+# the half-lives the reward tries for every candidate (first maximum on the training period wins).  0, 5, 20 is what
+# e1-e5 used; a level-type idea whose seeds want slower smoothing (the batch's best members sit at 40-60) takes 60 as well
+HLS = tuple(float(x) for x in opt("--halflives", "0,5,20").split(","))
 if PARTS - {"seeds", "hood", "priors"}:
     raise SystemExit(f"--parts takes seeds, hood, priors (or none); got {sorted(PARTS)}")
 START, END, SPLIT = "20180102", "20230807", "20220101"
@@ -131,7 +135,7 @@ with slot():
     # because its long book has a junk tail that almost any marker of odd names removes.  --screen-base known for the old reference.
     SCREEN_BASE = opt("--screen-base", "pool")
     ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig,
-                        base=pool_sig if SCREEN_BASE == "pool" else known_z, halflives=(0.0, 5, 20))
+                        base=pool_sig if SCREEN_BASE == "pool" else known_z, halflives=HLS)
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
           f"untradable {untradable[np.isfinite(tgt)].mean():.1%} of the labelled cells", flush=True)
 
@@ -312,7 +316,7 @@ with slot():
     if torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
-                "guidance": GPATH, "parts": sorted(PARTS), "arms": {}}
+                "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "arms": {}}
     for arm in ARMS:
         ta = time.time()
         install(arm)
