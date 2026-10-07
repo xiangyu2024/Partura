@@ -20,8 +20,8 @@ G = Guidance.load(root / "guidance" / "B01.yaml")
 T = {}
 for label, spec in cells.items():
     pre, arm = (spec.split(":") + ["steer"])[:2]
-    fam = scored = runs = 0
-    per = []
+    fam = scored = runs = meas = 0
+    per, per_m = [], []
     for p in sorted((root / "episodes").glob(f"{pre}[0-9]_{idea}/evidence.json")):
         E = json.loads(p.read_text(encoding="utf-8"))
         A = E["arms"][arm]
@@ -34,24 +34,34 @@ for label, spec in cells.items():
                     keys.add(c["expr"])
         fam += len(keys); scored += A["scored"]; runs += 1
         per.append(len(keys))
-    T["".join(sorted(label.replace("0", "")))] = {"families": fam, "scored": scored, "runs": runs, "per_seed": per, "rate": 100.0 * fam / max(scored, 1)}
-print(f"{'parts on':10s} {'runs':>4s} {'scored':>6s} {'families':>8s} {'per seed':>12s} {'per 100':>8s}")
+        # finds that are distinct BY MEASUREMENT: mutual rank correlation of the traded signals below 0.7 (the search
+        # script computes it).  A family key only merges renamings and root wrappers; one lucky structure bred into
+        # twenty window / nesting variants is twenty "families" and one find (e5r1: 27 families, 4 distinct).
+        m = A.get("independent_distinct") or 0
+        meas += m
+        per_m.append(m)
+    T["".join(sorted(label.replace("0", "")))] = {"families": fam, "scored": scored, "runs": runs, "per_seed": per, "rate": 100.0 * fam / max(scored, 1),
+                                                  "distinct": meas, "distinct_per_seed": per_m, "distinct_rate": 100.0 * meas / max(scored, 1)}
+print(f"{'parts on':22s} {'runs':>4s} {'scored':>6s} {'families':>8s} {'per seed':>12s} {'per 100':>8s} | {'distinct':>8s} {'per seed':>12s} {'per 100':>8s}")
 NAME = {"s": "seeds", "h": "hood", "r": "priors"}
 for k in ("", "s", "h", "r", "hs", "rs", "hr", "hrs"):
     if k in T:
         t = T[k]
-        print(f"{'+'.join(NAME[x] for x in k) or 'none (control)':22s} {t['runs']:4d} {t['scored']:6d} {t['families']:8d} {str(t['per_seed']):>12s} {t['rate']:8.1f}")
-out = {"cells": T, "effects": {}}
-for part in "shr":
-    diffs = []
-    for other in ("", *[x for x in "shr" if x != part], "".join(x for x in "shr" if x != part)):
-        on, off = "".join(sorted(other + part)), "".join(sorted(other))
-        if on in T and off in T:
-            diffs.append((off or "none", T[on]["rate"] - T[off]["rate"], T[on]["families"] - T[off]["families"]))
-    if diffs:
-        m = sum(d[1] for d in diffs) / len(diffs)
-        helped = sum(d[1] > 0 for d in diffs)
-        verdict = "有用" if (helped >= 3 and m >= 2) else "没用" if abs(m) <= 1 else "不确定"
-        out["effects"][NAME[part]] = {"mean_rate_diff": m, "helped": helped, "of": len(diffs), "diffs": diffs, "verdict": verdict}
-        print(f"\n{NAME[part]:7s} on - off, families per 100 evaluations: " + ", ".join(f"given {d[0]}: {d[1]:+.1f} ({d[2]:+d} families)" for d in diffs) + f"   mean {m:+.1f}; helped in {helped}/{len(diffs)}  ->  {verdict}")
+        print(f"{'+'.join(NAME[x] for x in k) or 'none (control)':22s} {t['runs']:4d} {t['scored']:6d} {t['families']:8d} {str(t['per_seed']):>12s} {t['rate']:8.1f} | {t['distinct']:8d} {str(t['distinct_per_seed']):>12s} {t['distinct_rate']:8.1f}")
+out = {"cells": T, "effects": {}, "effects_distinct": {}}
+for metric, rate, cnt, slot, unit in (("families (pre-registered)", "rate", "families", "effects", 2.0), ("measured-distinct finds", "distinct_rate", "distinct", "effects_distinct", 0.5)):
+    print(f"\n-- main effects on {metric}, per 100 paid evaluations")
+    for part in "shr":
+        diffs = []
+        for other in ("", *[x for x in "shr" if x != part], "".join(x for x in "shr" if x != part)):
+            on, off = "".join(sorted(other + part)), "".join(sorted(other))
+            if on in T and off in T and T[on]["runs"] and T[off]["runs"]:
+                diffs.append((off or "none", T[on][rate] - T[off][rate], T[on][cnt] - T[off][cnt]))
+        if diffs:
+            m = sum(d[1] for d in diffs) / len(diffs)
+            helped = sum(d[1] > 0 for d in diffs)
+            # the pre-registered reading (families): useful = helped in >= 3 of 4 and >= 2 per 100; useless = within +-1
+            verdict = "有用" if (helped >= 3 and m >= unit) else "没用" if abs(m) <= unit / 2 else "不确定"
+            out[slot][NAME[part]] = {"mean_rate_diff": m, "helped": helped, "of": len(diffs), "diffs": diffs, "verdict": verdict}
+            print(f"{NAME[part]:7s} on - off: " + ", ".join(f"given {d[0]}: {d[1]:+.1f} ({d[2]:+d})" for d in diffs) + f"   mean {m:+.1f}; helped in {helped}/{len(diffs)}  ->  {verdict}")
 (root / "episodes" / f"e5_{idea}_factorial.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
