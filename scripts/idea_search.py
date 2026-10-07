@@ -119,10 +119,8 @@ with slot():
     from alphacube.catalog import default_registry
     from alphacube.parser import parse
     from alphacube.pipeline import run_mining
-    from alphacube.plugins import SearchHooks
 
-    EXT = {getattr(f, "__name__", str(f)) for f in getattr(ops_ext, "NEW_OPERATORS", ())}
-    EXT |= {"nt_" + n for n in EXT}
+    EXT = ac_plugin.partura_operator_names()
     reg = default_registry()
     risky = {s.name for s in reg.list_all() if getattr(s, "resource_risk", False)}
     searchable = {s.name for s in reg.searchable(include_boolean=False, include_resource_risk=True)}
@@ -140,6 +138,9 @@ with slot():
     # generator's own op_weight / accept hook reach every acceptance point for free (generate, the three
     # mutators, crossover, and generate()'s own fallback -- see docs/alphacube_steering_design.md, "乙
     # Steering hooks" items 1 and "must_fix #1"), which the old rebinding did not cover.
+    # Both arms' weights come from ONE formula, ac_plugin.arm_hooks (which also decides which arm the
+    # boost and the guidance belong to, and is tested on that directly) -- not from a local base_weight /
+    # weighted pair that could drift from the plugin's copy, or an arm->hooks table that could be swapped.
     OPW = G.operator_weights()
     stats = Counter()
     seeds_repr = set()
@@ -152,12 +153,6 @@ with slot():
     # own `miner_ref` is a local, and RunResult has no such field), so this script cannot draw from the
     # live object itself and instead keeps its own, under the same name.
     hook_rng = random.Random(SEED)
-
-    def base_weight(s):
-        return 0.0 if (s.name in risky and s.name not in EXT) else 1.0
-
-    def weighted(s):
-        return base_weight(s) * OPW.get(s.name, 1.0) * (BOOST if s.name in IDEA_OPS else 1.0)
 
     def guidance_accept(tree):
         """``SearchHooks.accept``: called as ``self.accept_hook(tree)`` from the generator's own
@@ -189,8 +184,6 @@ with slot():
         stats["accepted"] += 1
         return True
 
-    HOOKS = {"control": SearchHooks(op_weight=base_weight), "steer": SearchHooks(op_weight=weighted, accept=guidance_accept)}
-
     seeds = []
     for s in idea.get("seeds", []):
         try:
@@ -214,8 +207,15 @@ with slot():
         first_form.clear()
         hook_rng = random.Random(SEED)      # fresh per arm; only the steer arm's guidance_accept ever draws from it
         n0 = len(ac_plugin.SCORERS)
+        # THIS arm's hooks, built from the arm's own name -- arm_hooks is what decides that the boost
+        # (OPW x BOOST on the idea's operators) and the guidance go to "steer" and that "control" gets
+        # the base library filter alone; the keywords below are the same for both arms.  Set as the
+        # plugin's module state as well as passed, so anything else in the process that asks the plugin
+        # for its hooks mid-run (alphacube.plugins.search_hooks_from) sees the arm actually running.
+        ac_plugin.set_search_hooks(ac_plugin.arm_hooks(arm, risky=risky, ext=EXT, opw=OPW,
+                                                       idea_ops=IDEA_OPS, boost=BOOST, accept=guidance_accept))
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
-                  panel_cache_bytes=6 * 1024 ** 3, hooks=HOOKS[arm])
+                  panel_cache_bytes=6 * 1024 ** 3, hooks=ac_plugin.search_hooks())
         if arm == "steer" and seeds:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
         try:

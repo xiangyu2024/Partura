@@ -11,8 +11,13 @@ rebound ``TypedTreeGenerator._pick`` / ``.acceptable`` inside
   (re)built: wires ``ops_ext``'s legacy-table entries, declares AlphaCube's own
   three ``in_sustain_*`` kernels real-valued, and registers the ``"partura"``
   fitness kind (see ``alphacube.mining.scoring.register_scorer``).
-* :func:`search_hooks` -- the plugin's base, idea-independent steering opinion,
-  read by the CLI / ``alphacube.plugins.search_hooks_from``.
+* :func:`set_search_hooks` / :func:`search_hooks` -- the steering opinion a
+  caller sets as module state and the CLI / ``alphacube.plugins.
+  search_hooks_from`` reads back.  **Empty by default**: loading this plugin
+  for its operators alone steers nothing.
+* :func:`arm_hooks` -- the one place the operator-weight formula
+  ``scripts/idea_search.py``'s two arms are built from, so the control arm and
+  the steer arm cannot drift apart (nor be swapped) unnoticed.
 * :class:`ParturaScorer` / :func:`_partura_scorer_factory` -- the reward
   ``scripts/idea_search.py`` used to define inline, with its ``ctx`` / ``KIND``
   closure replaced by :func:`set_scorer_state` (module state the caller sets
@@ -23,8 +28,9 @@ rebound ``TypedTreeGenerator._pick`` / ``.acceptable`` inside
 See docs/alphacube_steering_design.md, "丙 Migration" and "### WP11"."""
 from __future__ import annotations
 
+import math
 import time
-from typing import Dict, List, Optional
+from typing import Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional
 
 import numpy as np
 
@@ -52,6 +58,14 @@ _AC_REAL_VALUED = ("in_sustain_mean", "in_sustain_stddev", "in_sustain_product")
 _ctx: Optional[RewardContext] = None
 _kind: Optional[str] = None
 _split: Optional[str] = None
+
+# -- the generator-side steering opinion, likewise module state a caller sets
+# (:func:`set_search_hooks`) and :func:`search_hooks` reads back.  ``None`` --
+# the default, and what nothing-but-``load_plugins`` leaves it at -- means NO
+# opinion: see :func:`search_hooks` for why that has to be the default.
+_hooks: Optional[SearchHooks] = None
+
+ARMS = ("control", "steer")
 
 # Every ParturaScorer ever constructed, in construction order -- the caller
 # slices this by its own high-water mark (``n0 = len(SCORERS)`` before an
@@ -177,25 +191,108 @@ def register() -> None:
     register_scorer("partura", _partura_scorer_factory)
 
 
+def partura_operator_names() -> FrozenSet[str]:
+    """Every operator name ``partura/ops_ext.py`` adds to the registry: the
+    kernels themselves plus the ``nt_`` twin each shared / nd one also
+    registers under.  The one definition of "Partura's own operators", shared
+    by :func:`arm_hooks` and by ``scripts/idea_search.py``'s own reporting."""
+    names = frozenset(ops_ext.NEW_OPERATORS)
+    return names | frozenset("nt_" + name for name in names)
+
+
+def set_search_hooks(hooks: Optional[SearchHooks]) -> None:
+    """Set (or, with ``None``, clear) the :class:`SearchHooks`
+    :func:`search_hooks` hands back -- the generator-side counterpart of
+    :func:`set_scorer_state`, and the ONLY way this plugin ever steers
+    sampling or acceptance.
+
+    Call it before ``run_mining`` / ``GPMiner``; ``scripts/idea_search.py``
+    calls it once per arm with that arm's :func:`arm_hooks`.  A caller that
+    never calls it (``--plugin partura.ac_plugin`` on AlphaCube's own CLI, say,
+    loaded for Partura's 45 operators and the ``"partura"`` fitness kind) gets
+    an empty bundle and therefore an unsteered run."""
+    global _hooks
+    if hooks is not None and not isinstance(hooks, SearchHooks):
+        raise TypeError(f"search hooks must be an alphacube.plugins.SearchHooks or None, not "
+                        f"{type(hooks).__name__}")
+    _hooks = hooks
+
+
 def search_hooks() -> SearchHooks:
-    """The plugin's base steering opinion with no further configuration: weight
-    every AlphaCube resource-risk operator that is not one of Partura's own
-    ``ops_ext`` kernels to 0 (a full-market search should not pay for an
-    operator Partura does not already rely on), and leave sampling and
-    acceptance otherwise exactly as today.  Read by the CLI's ``--plugin`` /
-    ``alphacube.plugins.search_hooks_from`` for a run with no further
-    Python-level configuration.
+    """Whatever :func:`set_search_hooks` was last given, else an EMPTY
+    ``SearchHooks()``.  Read with no arguments by the CLI's ``--plugin`` /
+    ``$ALPHACUBE_PLUGINS`` through ``alphacube.plugins.search_hooks_from``, and
+    by ``scripts/idea_search.py`` per arm.
 
-    ``scripts/idea_search.py`` builds its own, idea-specific ``SearchHooks``
-    instead of calling this directly: the steer arm's ``accept`` hook needs
-    that run's guidance and idea, which this function -- called with no
-    arguments -- has no way to know."""
-    ext = set(ops_ext.NEW_OPERATORS) | {"nt_" + name for name in ops_ext.NEW_OPERATORS}
+    Empty is the load-bearing default, not a stub.  ``SearchHooks()``'s fields
+    are each exactly ``TypedTreeGenerator``'s own default, so ``GPMiner(
+    hooks=SearchHooks())`` builds a byte-identical generator to ``hooks=None``
+    -- i.e. ``alphacube mine --plugin partura.ac_plugin --seed 7``, run only to
+    get Partura's operators and reward, stays comparable to the same command
+    without ``--plugin``.  An opinion here would not be: even one that assigns
+    weight 1.0 to every operator routes ``_pick`` through ``_pick_weighted``
+    (``random.choices`` rather than ``random.choice``), which moves the draw
+    sequence from index 0 on.  Measured (``alphacube.plugins.search_hooks_from
+    (["partura.ac_plugin"])`` against a live ``default_registry()``): an
+    op_weight zeroing the resource-risk operators outside ``ops_ext`` silently
+    cancelled ``--allow-resource-risk`` for exactly 4 of the 281 searchable
+    specs with no opt-out, and under the CLI's default
+    ``allow_resource_risk=False`` zeroed none of the 277 yet still diverged
+    ``generate_population(30)`` at index 0.  Both are pinned by
+    tests/test_ac_plugin.py.
 
-    def op_weight(spec) -> float:
-        return 0.0 if (spec.resource_risk and spec.name not in ext) else 1.0
+    ``scripts/idea_search.py``'s own arms are built by :func:`arm_hooks` and
+    then set here: the steer arm's ``accept`` hook needs that run's guidance
+    and idea, which this function -- called with no arguments -- cannot know."""
+    return _hooks if _hooks is not None else SearchHooks()
 
-    return SearchHooks(op_weight=op_weight)
+
+def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[Iterable[str]] = None,
+              opw: Optional[Mapping[str, float]] = None, idea_ops: Iterable[str] = (),
+              boost: float = 1.0, accept: Optional[Callable] = None) -> SearchHooks:
+    """The :class:`SearchHooks` for one arm of ``scripts/idea_search.py``'s A/B
+    -- the single home of the operator-weight formula both arms share, so the
+    arms cannot drift apart (and cannot be swapped) without this function
+    saying so.  Pure: no module state, no registry, no I/O.
+
+    * ``"control"`` -- ``op_weight`` is the base library filter ALONE (every
+      AlphaCube resource-risk operator that is not one of Partura's own weighs
+      0, everything else 1.0) and ``accept`` is ``None``.  ``opw``,
+      ``idea_ops``, ``boost`` and ``accept`` are accepted and deliberately
+      IGNORED, so one call site can pass the same keywords for both arms.
+    * ``"steer"`` -- that same base weight times the guidance's own
+      per-operator weight (``opw``, default 1.0) times ``boost`` for an
+      operator of the idea, plus ``accept`` as the acceptance hook.
+
+    So the two arms differ in exactly the two fields the design says they may
+    (``op_weight``, ``accept``): the boost and the guidance are the steer arm's
+    and only the steer arm's.  ``risky`` defaults to reading ``spec
+    .resource_risk`` off each spec; pass the name set from the run's own
+    registry (``{s.name for s in reg.list_all() if s.resource_risk}``) to keep
+    the formula textually identical to the pre-WP11 script's."""
+    if arm not in ARMS:
+        raise ValueError(f"arm must be one of {ARMS}, not {arm!r}")
+    risk_names = None if risky is None else frozenset(risky)
+    ext_names = partura_operator_names() if ext is None else frozenset(ext)
+    boost = float(boost)
+    if not math.isfinite(boost) or boost < 0:
+        raise ValueError(f"boost must be a finite float >= 0, not {boost!r}")
+
+    def base_weight(spec) -> float:
+        risk = spec.resource_risk if risk_names is None else (spec.name in risk_names)
+        return 0.0 if (risk and spec.name not in ext_names) else 1.0
+
+    if arm == "control":
+        return SearchHooks(op_weight=base_weight)
+
+    weights = dict(opw or {})
+    idea = frozenset(idea_ops)
+
+    def weighted(spec) -> float:
+        return base_weight(spec) * float(weights.get(spec.name, 1.0)) * (boost if spec.name in idea else 1.0)
+
+    return SearchHooks(op_weight=weighted, accept=accept)
 
 
-__all__ = ["SCORERS", "ParturaScorer", "set_scorer_state", "register", "search_hooks"]
+__all__ = ["ARMS", "SCORERS", "ParturaScorer", "arm_hooks", "partura_operator_names", "register",
+           "search_hooks", "set_scorer_state", "set_search_hooks"]

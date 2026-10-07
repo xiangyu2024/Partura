@@ -24,7 +24,7 @@ import alphacube.catalog as catalog  # noqa: E402
 from alphacube.catalog import build_registry, default_registry  # noqa: E402
 from alphacube.mining.generator import TypedTreeGenerator  # noqa: E402
 from alphacube.mining.scoring import SCORER_FACTORIES, scorer_kinds  # noqa: E402
-from alphacube.plugins import SearchHooks, load_plugins  # noqa: E402
+from alphacube.plugins import SearchHooks, load_plugins, search_hooks_from  # noqa: E402
 from alphacube.store import CubeStore  # noqa: E402
 from alphacube.synthetic import write_daily_fields, write_synthetic_store  # noqa: E402
 
@@ -93,19 +93,89 @@ def test_register_is_safe_to_call_more_than_once_in_one_process():
     assert SCORER_FACTORIES["partura"] is ac_plugin._partura_scorer_factory
 
 
-def test_search_hooks_has_no_opinion_without_configuration_beyond_op_weight():
+@pytest.fixture
+def no_plugin_hooks():
+    """Leave ``ac_plugin``'s hook state exactly as it was found: it is module
+    state, and a test that sets it must not leak an opinion into the next one."""
+    before = ac_plugin._hooks
+    ac_plugin.set_search_hooks(None)
+    try:
+        yield
+    finally:
+        ac_plugin.set_search_hooks(before)
+
+
+def test_search_hooks_is_empty_until_a_caller_sets_one(no_plugin_hooks):
+    """REGRESSION (WP11 review, defect 1): ``search_hooks()`` used to return a
+    hardcoded opinion -- an ``op_weight`` zeroing every resource-risk operator
+    outside ``ops_ext`` -- so ``--plugin partura.ac_plugin`` steered every
+    AlphaCube run with no way to turn it off.  The design asks for "a
+    SearchHooks built from module state the caller sets" (step 3); with nothing
+    set that is the EMPTY bundle."""
     ac_plugin.register()
     h = ac_plugin.search_hooks()
     assert isinstance(h, SearchHooks)
-    assert h.accept is None and h.daily_fields == () and h.daily_leaf_prob == 0.0 and h.leaf_slots == {}
+    assert h == SearchHooks()
+    assert (h.op_weight, h.accept, h.daily_fields, h.daily_leaf_prob, h.leaf_slots) == (None, None, (), 0.0, {})
+    # ... and that is what the CLI's --plugin / $ALPHACUBE_PLUGINS route reads
+    assert search_hooks_from(["partura.ac_plugin"]) == SearchHooks()
+
+
+def test_loading_the_plugin_does_not_cancel_allow_resource_risk(no_plugin_hooks):
+    """REGRESSION (WP11 review, defect 1a): measured against the live registry,
+    the old hardcoded ``op_weight`` forced exactly these four of the 281 specs
+    ``--allow-resource-risk`` makes searchable to weight 0 -- silently undoing
+    the flag the caller passed, with no opt-out."""
+    catalog._DEFAULT = None
+    load_plugins(["partura.ac_plugin"])
     reg = default_registry()
-    ext = set(ops_ext.NEW_OPERATORS) | {"nt_" + n for n in ops_ext.NEW_OPERATORS}
-    risky_not_ext = [s for s in reg.list_all() if s.resource_risk and s.name not in ext]
-    if risky_not_ext:
-        assert h.op_weight(risky_not_ext[0]) == 0.0
-    risky_ext = [s for s in reg.list_all() if s.resource_risk and s.name in ext]
-    for s in risky_ext:
-        assert h.op_weight(s) == 1.0
+    searchable = {s.name for s in reg.searchable(include_boolean=False, include_resource_risk=True)}
+    cancelled = ("in_mask_nearby_ones", "nt_ts_pearson", "nt_ts_spearman", "pow")
+    assert set(cancelled) <= searchable
+    hooks = search_hooks_from(["partura.ac_plugin"])
+    assert hooks.op_weight is None            # nothing left that could re-zero them
+
+
+def test_loading_the_plugin_leaves_the_generator_byte_identical(no_plugin_hooks):
+    """REGRESSION (WP11 review, defect 1b): with the CLI default
+    ``allow_resource_risk=False`` the old hook changed NO weight (all 277 specs
+    1.0) yet still diverged the population at index 0, because
+    ``op_weight is not None`` routes ``_pick`` into ``_pick_weighted``
+    (``random.choices`` instead of ``random.choice``).  So ``alphacube mine
+    --plugin partura.ac_plugin --seed 7``, run only for Partura's operators,
+    was not comparable to the same command without ``--plugin``.  The hooks are
+    fed in exactly as ``mining/gp.py`` feeds them."""
+    catalog._DEFAULT = None
+    load_plugins(["partura.ac_plugin"])
+    reg = default_registry()
+    hooks = search_hooks_from(["partura.ac_plugin"])
+    for rr in (False, True):
+        plain = TypedTreeGenerator(reg, seed=7, allow_resource_risk=rr)
+        hooked = TypedTreeGenerator(reg, seed=7, allow_resource_risk=rr, op_weight=hooks.op_weight,
+                                    accept=hooks.accept, daily_fields=hooks.daily_fields,
+                                    daily_leaf_prob=hooks.daily_leaf_prob, leaf_slots=hooks.leaf_slots)
+        assert [e.key() for e in hooked.generate_population(30)] == \
+               [e.key() for e in plain.generate_population(30)]
+
+
+def test_set_search_hooks_round_trips_and_clearing_restores_the_empty_bundle(no_plugin_hooks):
+    """The opt-out the old hardcoded opinion had none of: an opinion exists
+    only while a caller has set one, and ``None`` puts it back."""
+    mine = SearchHooks(op_weight=lambda s: 1.0, daily_leaf_prob=0.25)
+    ac_plugin.set_search_hooks(mine)
+    assert ac_plugin.search_hooks() is mine
+    assert search_hooks_from(["partura.ac_plugin"]) is mine
+    ac_plugin.set_search_hooks(None)
+    assert ac_plugin.search_hooks() == SearchHooks()
+    with pytest.raises(TypeError):
+        ac_plugin.set_search_hooks({"op_weight": None})          # not a SearchHooks
+
+
+def test_partura_operator_names_covers_ops_ext_and_its_nt_twins():
+    names = ac_plugin.partura_operator_names()
+    assert set(ops_ext.NEW_OPERATORS) <= names
+    assert {"nt_" + n for n in ops_ext.NEW_OPERATORS} <= names
+    assert len(names) == 2 * len(set(ops_ext.NEW_OPERATORS))
 
 
 # ---------------------------------------------------------------- ParturaScorer / _partura_scorer_factory
@@ -183,28 +253,96 @@ def test_scorer_needs_set_scorer_state_first():
 
 
 # ---------------------------------------------------------------- SearchHooks + a real generator
-def test_search_hooks_for_control_and_steer_differ_only_in_op_weight_and_accept():
-    control = SearchHooks(op_weight=lambda s: 1.0)
-    calls = []
+BOOST = 8.0
+IDEA_OP, PENALISED_OP = "day_mean", "day_max"
 
-    def steer_accept(tree):
-        calls.append(tree)
+
+def _arm_pair(accept=None):
+    """``scripts/idea_search.py``'s own two arms, built the way the script
+    builds them: ONE keyword set, the arm name the only thing that varies."""
+    reg = default_registry()
+    kw = dict(risky={s.name for s in reg.list_all() if s.resource_risk},
+              ext=ac_plugin.partura_operator_names(), opw={PENALISED_OP: 0.25},
+              idea_ops={IDEA_OP}, boost=BOOST, accept=accept)
+    return reg, ac_plugin.arm_hooks("control", **kw), ac_plugin.arm_hooks("steer", **kw)
+
+
+def test_arm_hooks_gives_the_boost_and_the_guidance_to_the_steer_arm_only():
+    """REGRESSION (WP11 review, defect 2): nothing pinned WHICH arm got the
+    guidance and the idea boost -- swapping them in ``scripts/idea_search.py``
+    left the whole file green, because the old test built two hand-made hooks
+    with identical ``op_weight`` and then asserted a fact about the generator.
+    The arm construction is now ``ac_plugin.arm_hooks``, asserted on directly."""
+    def guidance(tree):
         return True
 
-    steer = SearchHooks(op_weight=lambda s: 1.0, accept=steer_accept)
-    assert control.accept is None and steer.accept is steer_accept
-    assert control.op_weight is not steer.op_weight
+    reg, control, steer = _arm_pair(accept=guidance)
+    # the guidance is the steer arm's, and only the steer arm's
+    assert control.accept is None and steer.accept is guidance
+    # the idea's operator is boosted in the steer arm and untouched in the control arm
+    idea_spec = reg.get(IDEA_OP)
+    assert control.op_weight(idea_spec) == 1.0
+    assert steer.op_weight(idea_spec) == BOOST
+    # the guidance's own per-operator weight likewise reaches only the steer arm
+    pen_spec = reg.get(PENALISED_OP)
+    assert control.op_weight(pen_spec) == 1.0
+    assert steer.op_weight(pen_spec) == 0.25
+    # ... while the base library filter is identical in both: AlphaCube's own resource-risk
+    # operators out, Partura's ops_ext kernels in, everything else 1.0
+    ext = ac_plugin.partura_operator_names()
+    risky_not_ext = [s for s in reg.list_all() if s.resource_risk and s.name not in ext]
+    assert risky_not_ext
+    for s in risky_not_ext:
+        assert control.op_weight(s) == steer.op_weight(s) == 0.0
+    for s in [s for s in reg.list_all() if s.resource_risk and s.name in ext]:
+        assert control.op_weight(s) == steer.op_weight(s) == 1.0
+    # and the arms differ in NOTHING else (the design's "differ in exactly the op_weight/accept fields")
     assert (control.daily_fields, control.daily_leaf_prob, control.leaf_slots) == \
            (steer.daily_fields, steer.daily_leaf_prob, steer.leaf_slots) == ((), 0.0, {})
 
-    reg = default_registry()
-    gen_c = TypedTreeGenerator(reg, seed=11, op_weight=control.op_weight, accept=control.accept)
-    gen_s = TypedTreeGenerator(reg, seed=11, op_weight=steer.op_weight, accept=steer.accept)
-    pop_c = [e.key() for e in gen_c.generate_population(50)]
-    pop_s = [e.key() for e in gen_s.generate_population(50)]
-    # the same (uniform) op_weight -> the same population; an always-True accept adds a call, not a change
-    assert pop_c == pop_s
-    assert len(calls) >= 50
+
+def test_arm_hooks_control_ignores_the_boost_the_weights_and_the_accept_hook():
+    """One call site passes the same keywords for both arms, so "control gets
+    none of it" has to be ``arm_hooks``'s own doing, not the caller's."""
+    reg, control, _ = _arm_pair(accept=lambda tree: False)
+    plain = ac_plugin.arm_hooks("control", risky=set(), ext=set())
+    for name in (IDEA_OP, PENALISED_OP, "cs_rank"):
+        assert control.op_weight(reg.get(name)) == plain.op_weight(reg.get(name)) == 1.0
+    assert control.accept is None
+
+
+def test_arm_hooks_rejects_an_unknown_arm_and_a_bad_boost():
+    assert ac_plugin.ARMS == ("control", "steer")
+    with pytest.raises(ValueError):
+        ac_plugin.arm_hooks("steerr")
+    with pytest.raises(ValueError):
+        ac_plugin.arm_hooks("steer", boost=float("inf"))
+    with pytest.raises(ValueError):
+        ac_plugin.arm_hooks("steer", boost=-1.0)
+
+
+def test_a_generator_built_from_each_arm_draws_the_idea_operator_as_expected():
+    """The design's test bullet, actually exercised: "a generator built from
+    each yields the expected populations".  The boost is a sampling claim, so
+    it is checked by sampling -- not by comparing two hooks that happened to
+    share an ``op_weight``."""
+    reg, control, steer = _arm_pair()
+    gens = {}
+    for arm, hooks in (("control", control), ("steer", steer)):
+        gens[arm] = TypedTreeGenerator(reg, seed=23, allow_resource_risk=True, min_depth=2, max_depth=2,
+                                       op_weight=hooks.op_weight, accept=hooks.accept)
+    n = {arm: sum(repr(e).count(IDEA_OP) for e in g.generate_population(300)) for arm, g in gens.items()}
+    assert n["steer"] > n["control"], n
+    # the penalised operator goes the other way, and neither arm can draw a non-Partura
+    # resource-risk operator at all (weight 0 in both)
+    ext = ac_plugin.partura_operator_names()
+    banned = {s.name for s in reg.list_all() if s.resource_risk and s.name not in ext}
+    for arm, g in gens.items():
+        drawn = set()
+        for e in TypedTreeGenerator(reg, seed=29, allow_resource_risk=True, min_depth=2, max_depth=2,
+                                    op_weight=gens[arm].op_weight).generate_population(300):
+            drawn.update(re.findall(r"[A-Za-z_][A-Za-z_0-9]*(?=\()", repr(e)))
+        assert not (drawn & banned), (arm, sorted(drawn & banned))
 
 
 def test_op_weight_hook_removes_an_entire_face_from_generation():
@@ -323,5 +461,32 @@ def test_idea_search_script_loads_the_plugin_and_builds_plain_search_hooks():
     assert "ac_plugin.SCORERS" in src
     assert "hook_rng.random()" in src
     assert "self._rng.random()" not in src
-    assert "SearchHooks(op_weight=" in src
-    assert 'HOOKS = {"control":' in src or "HOOKS[arm]" in src
+    assert "hooks=ac_plugin.search_hooks()" in src
+
+
+def test_idea_search_builds_each_arms_hooks_from_that_arms_own_name():
+    """REGRESSION (WP11 review, defect 2): the arm -> hooks assignment used to
+    be a literal table in the script, which the suite only grepped for
+    (``'HOOKS = {"control":' in src or "HOOKS[arm]" in src`` -- satisfied by the
+    second branch alone), so swapping the two arms' hooks left every test
+    green.  There is no table any more: the script must build the running arm's
+    hooks from the loop variable itself, through the one tested helper, so
+    there is nothing left to swap.  (What the hooks then ARE is asserted on
+    ``ac_plugin.arm_hooks`` directly, above -- not grepped.)"""
+    import ast
+    src = (PARTURA_ROOT / "scripts" / "idea_search.py").read_text(encoding="utf-8")
+    tree = ast.parse(src, filename="idea_search.py")
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "arm_hooks"]
+    assert len(calls) == 1, f"expected exactly one ac_plugin.arm_hooks(...) call, found {len(calls)}"
+    call = calls[0]
+    assert isinstance(call.func.value, ast.Name) and call.func.value.id == "ac_plugin"
+    # the arm is passed, not named: arm_hooks(arm, ...) with arm the loop variable, never a literal
+    assert len(call.args) == 1 and isinstance(call.args[0], ast.Name) and call.args[0].id == "arm"
+    loops = [n for n in ast.walk(tree)
+             if isinstance(n, ast.For) and isinstance(n.target, ast.Name) and n.target.id == "arm"
+             and any(c is call for c in ast.walk(n))]
+    assert loops, "the arm_hooks(arm, ...) call must sit inside the `for arm in ARMS:` loop"
+    # and no local copy of the weight formula may come back alongside it
+    assert "def base_weight(" not in src and "def weighted(" not in src
