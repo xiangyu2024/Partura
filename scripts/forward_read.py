@@ -140,14 +140,28 @@ with slot():
 
     # ------------------------------------------------------------------ phase 1: does everything reproduce? (data to 2025-12-31 only)
     bad, worst = [], {"train_ann": 0.0, "train_sharpe": 0.0, "test_ann": 0.0, "test_sharpe": 0.0}
+    # One documented exception (research/forward_2026/PLAN.md, amendment of 2026-10-06 23:36; evidence in
+    # runs/_forward/view_consistency_20251231_20260916.json): F113's original adds 5 to a quantity of order 1e-3 and
+    # then removes the cross-sectional mean, so in float32 its values carry only three or four digits and move by
+    # about 1e-3 with the engine's chunking -- on every day of the history alike (rank correlation 0.99994-0.99999
+    # each year, top decile 99.6-100% the same names), not towards the end: numerical fragility, not look-ahead.
+    # Its book is weak (+0.6% a year) and moved by 0.08 points.  Every other object keeps the tight tolerance.
+    TOL = {"member F113.orig": (2e-3, 0.05)}
+    exceptions = []
 
     def check(name, got_tr, got_te, want_tr, want_te):
+        ta, ts_ = TOL.get(name, (5e-4, 0.02))
         for seg, g, w in (("train", got_tr, want_tr), ("test", got_te, want_te)):
             if w is None:
                 continue
             da, ds = abs(g["long_ann"] - w["long_ann"]), abs(g["long_sharpe"] - w["long_sharpe"])
-            worst[f"{seg}_ann"], worst[f"{seg}_sharpe"] = max(worst[f"{seg}_ann"], da), max(worst[f"{seg}_sharpe"], ds)
-            if not (da <= 5e-4 and ds <= 0.02):
+            if name in TOL:
+                exceptions.append(f"{name} {seg}: ann {g['long_ann']:+.4f} vs stored {w['long_ann']:+.4f}, sharpe {g['long_sharpe']:.3f} vs {w['long_sharpe']:.3f}")
+                if da <= ta and ds <= ts_:
+                    continue
+            else:
+                worst[f"{seg}_ann"], worst[f"{seg}_sharpe"] = max(worst[f"{seg}_ann"], da), max(worst[f"{seg}_sharpe"], ds)
+            if not (da <= ta and ds <= ts_):
                 bad.append(f"{name} {seg}: ann {g['long_ann']:+.4f} vs stored {w['long_ann']:+.4f}, sharpe {g['long_sharpe']:.3f} vs {w['long_sharpe']:.3f}")
 
     for k, v in J["members"].items():
@@ -169,7 +183,9 @@ with slot():
           f"old test period ann {worst['test_ann']:.1e}, sharpe {worst['test_sharpe']:.1e}  ->  {'PASS' if not bad else 'FAIL'}", flush=True)
     out_dir = PARTURA_ROOT / "runs" / "_forward"
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"check_{last}.json").write_text(json.dumps({"end": last, "objects": n_obj, "worst": worst, "failed": bad}, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out_dir / f"check_{last}.json").write_text(json.dumps({"end": last, "objects": n_obj, "worst": worst, "failed": bad, "documented_exceptions": exceptions}, ensure_ascii=False, indent=1), encoding="utf-8")
+    for x in exceptions:
+        print("   documented exception (wider tolerance): " + x, flush=True)
     if bad:
         for b in bad[:20]:
             print("   " + b, flush=True)
@@ -203,7 +219,7 @@ with slot():
         return {y: float(np.nanmean(d[yrs == y]) * 252) for y in sorted(set(yrs))}
 
     res = {"end": last, "forward": [str(dates[fw.start]), last, int(np.isfinite(tgt[fw]).any(1).sum())], "years_oos": float(np.isfinite(tgt[oos]).any(1).sum()) / 252.0,
-           "check": {"objects": n_obj, "worst": worst}, "benchmarks": {}, "fusions": {}, "paired": {}, "members": {}, "k001": {}, "e4": [], "conventions": {}, "daily": {}}
+           "check": {"objects": n_obj, "worst": worst, "documented_exceptions": exceptions}, "benchmarks": {}, "fusions": {}, "paired": {}, "members": {}, "k001": {}, "e4": [], "conventions": {}, "daily": {}}
     for k in ("known", "known_xfrozen"):
         res["benchmarks"][k] = {"expr": J["members"][k]["expr"], "sign": J["members"][k]["sign"], "hl": J["members"][k]["hl"], "level": level(SM[f"m:{k}"]), "by_year": by_year(SM[f"m:{k}"])}
     for name in build:
