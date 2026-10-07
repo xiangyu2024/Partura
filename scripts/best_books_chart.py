@@ -23,6 +23,18 @@ LS = opt("--ls", "F104.sub_A_sqrt@ls,fusion:C").split(",")
 LONG = opt("--long", "fusion:A")
 S = json.loads((root / "runs" / f"_batch_{BATCH}" / opt("--series", f"book_series_{TAG}.json")).read_text(encoding="utf-8"))
 dates, O = S["dates"], S["objects"]
+# --forward <forward_read json>: the objects that were on the forward segment's reading list (fusion:X) get their series
+# from that read, which runs to the store's last day; anything else keeps its series and simply ends where it ends
+if opt("--forward"):
+    FR = json.loads((root / opt("--forward")).read_text(encoding="utf-8"))
+    pad = len(FR["dates"]) - len(dates)
+    assert FR["dates"][:len(dates)] == dates, "the forward read does not start on the same days"
+    for o, d in O.items():
+        nm = o.split(":")[1] if o.startswith("fusion:") else None
+        for k in ("ls", "total", "bench", "excess"):
+            d[k] = FR["series"][nm][k] if nm in FR.get("series", {}) else d[k] + [None] * pad
+        d["ends"] = len(FR["dates"]) if nm in FR.get("series", {}) else len(dates)
+    dates = FR["dates"]
 SPLIT = "20230808"
 isplit = next(i for i, d in enumerate(dates) if d >= SPLIT)
 ifw = next((i for i, d in enumerate(dates) if d >= "20260101"), len(dates))          # the forward segment, when the series has it
@@ -56,12 +68,13 @@ def stat(r, compound):
     return {"ann": growth, "vol": sd * 252 ** 0.5, "sharpe": m / sd * 252 ** 0.5, "mdd": mdd, "days": n}
 
 
-SEGS = {"in": (0, isplit), "out": (isplit, ifw), "all": (0, len(dates))}
-if ifw < len(dates):
-    SEGS["fwd"] = (ifw, len(dates))
 stats = {}
 for o in set(LS) | {LONG}:
     d = O[o]
+    end = d.get("ends", len(dates))
+    SEGS = {"in": (0, isplit), "out": (isplit, min(ifw, end)), "all": (0, end)}
+    if ifw < end:
+        SEGS["fwd"] = (ifw, end)
     stats[o] = {"ls": {s: stat(d["ls"][a:b], False) for s, (a, b) in SEGS.items()}, "total": {s: stat(d["total"][a:b], True) for s, (a, b) in SEGS.items()},
                 "bench": {s: stat(d["bench"][a:b], True) for s, (a, b) in SEGS.items()}, "excess": {s: stat(d["excess"][a:b], False) for s, (a, b) in SEGS.items()},
                 "long_turnover": d["long_turnover"], "ls_turnover": d["ls_turnover"], "names_held": d["names_held"], "universe": d["universe"]}
@@ -105,8 +118,8 @@ def frame(title, sub, y_of, ticks, tick_label):
     return A
 
 
-def line(vals, y_of, color, width=2.0, dash=""):
-    pts = " ".join(f"{X(i):.1f},{y_of(v):.1f}" for i, v in enumerate(vals))
+def line(vals, y_of, color, width=2.0, dash="", end=None):
+    pts = " ".join(f"{X(i):.1f},{y_of(v):.1f}" for i, v in enumerate(vals[:end]))
     return f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="{width}"{" stroke-dasharray=" + chr(34) + dash + chr(34) if dash else ""} stroke-linejoin="round"/>'
 
 
@@ -118,14 +131,18 @@ for o in LS:
         s += x
         c.append(s)
     cum[o] = c
-top = max(max(c) for c in cum.values())
+top = max(max(c[:O[o].get("ends")]) for o, c in cum.items())
 step = 0.5 if top > 2 else 0.25
 ticks = [k * step for k in range(int(top / step) + 2)]
 y1 = lambda v: H - mb - (H - mt - mb) * v / ticks[-1]          # noqa: E731
-A = frame("多空:做多排名最好的 10%、做空最差的 10%(总敞口 1,扣 15bp 成本)", "纵轴 = 累计净收益(每日收益相加);灰线右侧是样本外", y1, ticks, lambda t: f"{t:.0%}")
+A = frame("多空:做多排名最好的 10%、做空最差的 10%(总敞口 1,扣 15bp 成本)", "纵轴 = 累计净收益(每日收益相加);虚线右侧是样本外" + (",橙色底是 2026 年的前推段" if ifw < len(dates) else ""),
+          y1, ticks, lambda t: f"{t:.0%}")
 COL = ["#1f5fbf", "#c0392b", "#27865a"]
 for j, o in enumerate(LS):
-    A.append(line(cum[o], y1, COL[j]))
+    A.append(line(cum[o], y1, COL[j], end=O[o].get("ends")))
+    if O[o].get("ends", len(dates)) < len(dates):
+        e = O[o]["ends"] - 1
+        A.append(f'<text x="{X(e) - 6:.1f}" y="{y1(cum[o][e]) + 20:.1f}" text-anchor="end" fill="{COL[j]}" font-size="12">止于 {dates[e][:4]}-{dates[e][4:6]}(不在前推段的读数清单里)</text>')
     s = stats[o]["ls"]
     y = mt + 40 + 22 * j
     A.append(f'<line x1="{ml + 14}" y1="{y - 4}" x2="{ml + 42}" y2="{y - 4}" stroke="{COL[j]}" stroke-width="3"/>')
@@ -134,7 +151,8 @@ for j, o in enumerate(LS):
              f'样本外 {pct(s["out"]["ann"])}、夏普 {s["out"]["sharpe"]:.2f}、回撤 {pct(s["out"]["mdd"])}{fwd}</text>')
 A.append("</svg>")
 out_dir = root / "research" / "alpha_distillation"
-(out_dir / f"{BATCH}_best_longshort.svg").write_text("\n".join(A), encoding="utf-8")
+SUF = "_to2026" if opt("--forward") else ""
+(out_dir / f"{BATCH}_best_longshort{SUF}.svg").write_text("\n".join(A), encoding="utf-8")
 
 # ---- 2. pure long: TOTAL return (compounded), next to the equal-weight universe; log scale
 d = O[LONG]
@@ -173,6 +191,6 @@ for j, (col, txt) in enumerate(rows):
 B.append(f'<text x="{W - mr - 6}" y="{y2(nav[-1]) - 8:.1f}" text-anchor="end" fill="#c0392b" font-weight="600">{nav[-1]:.1f} 倍</text>')
 B.append(f'<text x="{W - mr - 6}" y="{y2(ben[-1]) + 16:.1f}" text-anchor="end" fill="#666">{ben[-1]:.1f} 倍</text>')
 B.append("</svg>")
-(out_dir / f"{BATCH}_best_long_total.svg").write_text("\n".join(B), encoding="utf-8")
-(out_dir / f"{BATCH}_best_books.json").write_text(json.dumps({"end": dates[-1], "ls": LS, "long": LONG, "stats": stats}, ensure_ascii=False, indent=1), encoding="utf-8")
-print(f"wrote {out_dir / (BATCH + '_best_longshort.svg')} and {out_dir / (BATCH + '_best_long_total.svg')}; data to {dates[-1]}; final NAV {nav[-1]:.2f} vs {ben[-1]:.2f}")
+(out_dir / f"{BATCH}_best_long_total{SUF}.svg").write_text("\n".join(B), encoding="utf-8")
+(out_dir / f"{BATCH}_best_books{SUF}.json").write_text(json.dumps({"end": dates[-1], "ls": LS, "long": LONG, "stats": stats}, ensure_ascii=False, indent=1), encoding="utf-8")
+print(f"wrote {BATCH}_best_longshort{SUF}.svg and {BATCH}_best_long_total{SUF}.svg in {out_dir}; data to {dates[-1]}; final NAV {nav[-1]:.2f} vs {ben[-1]:.2f}")
