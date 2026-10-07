@@ -20,6 +20,7 @@ The search sees 20180102..20230807 (train + valid); the test period is not opene
 
     python scripts/idea_search.py <idea_id> [--guidance guidance/B01.yaml] [--budget 192] [--population 48]
                                   [--arms steer,control] [--seed 0] [--boost 8] [--tag e1] [--reward KIND]
+                                  [--parts seeds,hood,priors|none]     (what the steer arm is made of: ablations)
 """
 import csv
 import json
@@ -57,6 +58,13 @@ GPATH = opt("--guidance", "guidance/B01.yaml")
 BUDGET, POP = int(opt("--budget", 192)), int(opt("--population", 48))
 ARMS = opt("--arms", "steer,control").split(",")
 SEED, BOOST, TAG = int(opt("--seed", 0)), float(opt("--boost", 8)), opt("--tag", "e1")
+# What the steer arm is made of -- for ablations.  seeds: the idea's seeds enter the first generation;  hood: the
+# idea's operators are sampled more often and a candidate must carry one of its core operators;  priors: the
+# guidance's bans, down-weights, exact-equivalence and family thinning (and its coarse operator weights).
+# The default is all three; ``--parts none`` makes the steer arm the control.
+PARTS = {x for x in opt("--parts", "seeds,hood,priors").split(",") if x and x != "none"}
+if PARTS - {"seeds", "hood", "priors"}:
+    raise SystemExit(f"--parts takes seeds, hood, priors (or none); got {sorted(PARTS)}")
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE, MIRROR = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute", "/root/autodl-tmp/AlphaCube/mirror"
 
@@ -92,6 +100,7 @@ import hashlib  # noqa: E402
 
 CODE = {f: hashlib.sha1((PARTURA_ROOT / f).read_bytes()).hexdigest()[:12] for f in
         ("scripts/idea_search.py", "partura/steer.py", "partura/steer_fast.py", "partura/ops_ext.py", "partura/books.py", GPATH) if (PARTURA_ROOT / f).is_file()}
+print(f"[idea] steer arm = {sorted(PARTS) or 'nothing (= the control)'}", flush=True)
 print(f"[idea] code {CODE}; screen base {opt('--screen-base', 'pool')}; reward device {os.environ.get('PARTURA_REWARD_DEVICE', '') or 'numpy (reference)'}", flush=True)
 print(f"[idea] {IDEA}: reward {KIND}; budget {BUDGET} (population {POP}); arms {ARMS}; idea operators {sorted(IDEA_OPS)}; must-contain {sorted(MUST)}", flush=True)
 
@@ -227,7 +236,7 @@ with slot():
             for s in specs:
                 w = base_weight(s)
                 if arm == "steer":
-                    w *= OPW.get(s.name, 1.0) * (BOOST if s.name in IDEA_OPS else 1.0)
+                    w *= (OPW.get(s.name, 1.0) if "priors" in PARTS else 1.0) * (BOOST if ("hood" in PARTS and s.name in IDEA_OPS) else 1.0)
                 if w > 0:
                     faces.setdefault(s.face, []).append((s, w))
             if not faces:
@@ -239,33 +248,34 @@ with slot():
         def acceptable(self, tree):
             if not _acceptable(self, tree):
                 return False
-            if arm != "steer":
+            if arm != "steer" or not (PARTS & {"hood", "priors"}):
                 return True
             e = repr(tree)
-            if e in seeds_repr:
+            if e in seeds_repr and "seeds" in PARTS:
                 return True
             stats["proposed"] += 1
+            priors = "priors" in PARTS
             try:
                 # a different spelling of something already proposed (abs_ of a non-negative, a window-1 identity,
                 # a price leaf swapped ...) is not a new candidate: episode e1's first run spent most of the steer
                 # arm on re-wrappings of one seed, all with the same score
                 key = G.dedup_key(e)
-                if first_form.setdefault(key, e) != e:
+                if priors and first_form.setdefault(key, e) != e:
                     stats["equivalent"] += 1
                     return False
-                if G.banned(e):
+                if priors and G.banned(e):
                     stats["banned"] += 1
                     return False
-                if MUST and not (MUST & set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", e))):
+                if "hood" in PARTS and MUST and not (MUST & set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", e))):
                     stats["outside"] += 1
                     return False
-                if not G.accept(e, u=hook_rng.random()):
+                if priors and not G.accept(e, u=hook_rng.random()):
                     stats["thinned"] += 1
                     return False
                 # a sibling by renaming of price fields of something already proposed: usually close, sometimes
                 # not -- sampled less often, never refused for good
                 fam = G.family_key(e)
-                if family_first.setdefault(fam, key) != key and hook_rng.random() >= G.family_weight:
+                if priors and family_first.setdefault(fam, key) != key and hook_rng.random() >= G.family_weight:
                     stats["sibling"] += 1
                     return False
             except ValueError:
@@ -283,7 +293,7 @@ with slot():
             return wrapped
 
         T._pick, T.acceptable = pick, acceptable
-        if arm == "steer":
+        if arm == "steer" and PARTS & {"hood", "priors"}:      # with neither, the steer arm must be the control to the last draw
             T.mutate_window, T.mutate_constant = guarded(_mutate_window), guarded(_mutate_constant)
 
     seeds = []
@@ -302,14 +312,14 @@ with slot():
     if torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
-                "guidance": GPATH, "arms": {}}
+                "guidance": GPATH, "parts": sorted(PARTS), "arms": {}}
     for arm in ARMS:
         ta = time.time()
         install(arm)
         n0 = len(SCORERS)
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
                   panel_cache_bytes=6 * 1024 ** 3)
-        if arm == "steer" and seeds:
+        if arm == "steer" and seeds and "seeds" in PARTS:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
         import shutil
         shutil.rmtree(ep_dir / arm, ignore_errors=True)       # a shorter rerun must not read the longer run's last checkpoint
