@@ -2,7 +2,42 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱ 现状快照(2026-10-06 16:25 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 18:24 PDT;最新,先读这段)
+
+**e4 确认实验(事先约定 `episodes/e4_PLAN.md`,结果 `episodes/e4_SUMMARY.md`)**
+- 参照 = 未筛的已知族(e4k,三个种子):带指引 **44 族**发现 / 393 次评估,对照 **4 族** / 427 次;三个种子全部同向(9:0、22:1、13:3)。按事先的标准(≥ 2 倍且 ≥ 2 个种子同向)**成立**:
+  想法 + 指引在「有东西可找」的地方把搜索效率提高了约 10 倍。44 族里没有一族是种子本身。
+- 参照 = 已做通用筛子的已知族(e4p):两臂都是 0(931 次评估)。通用冻结筛子之外,这个邻域里没有可剔的票。
+- **样本外**(规则写在读之前,`scripts/idea_final.py`,`episodes/e4k1_e4k2_e4k3_final.json`):每个种子 × 臂的头名共 5 个,原样重建后都复现了搜索的数字,测试段成对差 −0.9 ~ +0.6 个点,**t 全部 < 1**(带指引 0/3,对照 0/2)。
+  → 搜索效率是真的,但「对已知族做筛子」这个想法没有样本外内容。方法通了,想法到此为止。
+
+**校准:这批因子赚的是哪一种钱**(`research/alpha_distillation/B01_reward_calibration.md`,`scripts/reward_probe.py`)
+- 第四轮的 12 个独立成员(及其核心)在三种口径下打分:原口径 → 可交易池(躲垃圾票不再算超额)→ 桶内(偏向低流动性不再算超额)。
+- 「典型性」折叠:原口径 valid +1.69 → 可交易池 −0.97(= 在躲垃圾票)。其余成员:可交易池里 1.3 ~ 3.5 → 桶内 −2.1 ~ +0.1(= 流动性倾斜)。
+  桶内两段都为正的只有两条:`ts_pearson(day_last(Close), 20)` +0.56 / +0.94、`cs_bucket_demean(cross_mean(day_gini(Ret), 30), LIQ)` +0.49 / +0.68。
+- 所以 2022 年以后这批因子的多头超额 = 躲垃圾票 + 流动性倾斜,不是新的选股内容 —— 和「融合比已知族只多 2.3 个点、t 0.6」是同一件事。
+
+**⚠ 要请用户定的一件事:服务器的数据其实到 2026-08-17(增量到 9 月中)**
+- `/root/autodl-tmp/qmt_daily_data/fast_factor_compute`:2092 个交易日,20180102 ~ 20260817;`incremental/segments` 到 20260916。我们所有的划分都只到 20251231。
+- 2026-01 ~ 2026-08 约 150 个交易日**从没被任何读数碰过**。我没有读它,也不要在用户同意之前读:读一次就不再干净。
+- 建议(等用户回答):把它当作一次性的前推检验,事先写死读什么(第四轮融合 A / C 对已知族的成对差;原式融合;通用冻结筛子;e6 若有发现),只读一次、记账。
+
+**服务器上正在跑:e5 消融**(事先约定 `episodes/e5_PLAN.md`;17:57 起,`tmp/run_e5.sh`,screen `e5a` / `e5b`;随后 screen `e5rr` 自动重跑 e5s1 / e5h1 作确定性核对)
+- 2×2×2:带指引一臂的三个开关 seeds / hood / priors(`scripts/idea_search.py --parts`),每格三个种子,只跑带指引的一臂;对照和全开两格用 e4k 的。
+- 完成记在服务器 `logs/_e5.log`(共 18 + 2 行),预计 20:15 PDT 前后跑完。
+- **跑完之后**:`./scripts/study.sh idea-pull` → `python scripts/factorial_summary.py I1_frozen_state 0=e4k:control shr=e4k:steer s=e5s h=e5h r=e5r sh=e5sh sr=e5sr hr=e5hr`
+  → 按 `e5_PLAN.md` 的标准写 `episodes/e5_SUMMARY.md`;核对 `rr_e5s1` / `rr_e5h1` 与原 run 是否一致(同种子同代码应当一致)。
+- 注意:e5 进行期间**不要同步 `scripts/idea_search.py`**(本机已加 `--halflives`,服务器上还是 e5 起跑时的版本 51248194fc24);等 e5 全部结束再 `./scripts/study.sh code`。
+- 教训:对照实验进行时别在同一张卡上跑别的东西。这次并行跑的校准是靠 GPU 锁排上队的(日志里 `got lock 'gpu' after 386s`),没有超占显存,但我事先的估计是错的。
+
+**下一个实验 e6(事先约定 `episodes/e6_PLAN.md`,还没跑)**:想法 `I7_beyond_liquidity`,奖励 `long_bucket`,半衰期 0/5/20/60,每臂预算 384,三个种子;发现线 0.75。
+起跑命令(e5 结束、`study.sh code` 之后,在服务器上仿照 `tmp/run_e4.sh` 写 `tmp/run_e6.sh`):
+`scripts/idea_search.py I7_beyond_liquidity --budget 384 --population 48 --tag e6b<seed> --seed <seed> --halflives 0,5,20,60 --threshold 0.75`;
+读样本外:`scripts/idea_final.py e6b1_I7_beyond_liquidity e6b2_… e6b3_…`。
+
+**AlphaCube 改造(工作流 `wf_a9e46c78-369`,仍在跑)**:`partura-steering` 到 `b12dca2` WP5(17:24;生成器钩子)。已完成 WP1, WP6, WP2, WP3, WP5;还剩 WP9, WP4, WP7, WP8, WP10, WP11 和三项整分支验证。
+
+## ⏱⏱⏱⏱⏱ 现状快照(2026-10-06 16:25 PDT;已被上面那段更新)
 
 **今天下午的三个更正 / 对账(都已推送,最后一条提交见 `git log`)**
 
