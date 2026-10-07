@@ -39,6 +39,7 @@ from .bridge import ensure_alphacube_on_path
 ensure_alphacube_on_path()
 
 from alphacube.mining import scoring as asc  # noqa: E402
+from alphacube.mining.generator import nd_twin_base  # noqa: E402
 from alphacube.mining.scoring import register_scorer  # noqa: E402
 from alphacube.plugins import SearchHooks, declare_real_valued  # noqa: E402
 
@@ -269,7 +270,19 @@ def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[
     and only the steer arm's.  ``risky`` defaults to reading ``spec
     .resource_risk`` off each spec; pass the name set from the run's own
     registry (``{s.name for s in reg.list_all() if s.resource_risk}``) to keep
-    the formula textually identical to the pre-WP11 script's."""
+    the formula textually identical to the pre-WP11 script's.
+
+    ``opw`` and ``idea_ops`` are matched by ND-face name AND by the ``nt_`` twin
+    of one (``alphacube.mining.generator.nd_twin_base``).  Both sets are written
+    in ND-face spelling -- ``opw`` comes from ``steer.Guidance
+    .operator_weights()``, whose keys are the heads of hand-written rule
+    patterns, and ``idea_ops`` from scraping the idea's own expression text --
+    while every nd-face kernel is in the registry TWICE, under ``X`` and
+    ``nt_X``.  Matching ``spec.name`` alone therefore steered half the kernel and
+    left the other half fully live: measured on AlphaCube over 400 seeds x
+    ``generate_population(25)``, zeroing one nd-face name took its ND-face draws
+    148 -> 0 and left the twin's at 17 -> 17.  ``ext`` already expanded the twins
+    itself (:func:`partura_operator_names`); these two did not."""
     if arm not in ARMS:
         raise ValueError(f"arm must be one of {ARMS}, not {arm!r}")
     risk_names = None if risky is None else frozenset(risky)
@@ -289,7 +302,12 @@ def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[
     idea = frozenset(idea_ops)
 
     def weighted(spec) -> float:
-        return base_weight(spec) * float(weights.get(spec.name, 1.0)) * (boost if spec.name in idea else 1.0)
+        twin = nd_twin_base(spec)                   # the ND-face name an nt_ spec is the twin of, else None
+        w = weights.get(spec.name)
+        if w is None:
+            w = 1.0 if twin is None else weights.get(twin, 1.0)
+        in_idea = spec.name in idea or (twin is not None and twin in idea)
+        return base_weight(spec) * float(w) * (boost if in_idea else 1.0)
 
     return SearchHooks(op_weight=weighted, accept=accept)
 

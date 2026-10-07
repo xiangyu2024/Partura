@@ -345,6 +345,40 @@ def test_a_generator_built_from_each_arm_draws_the_idea_operator_as_expected():
         assert not (drawn & banned), (arm, sorted(drawn & banned))
 
 
+def test_arm_hooks_matches_opw_and_idea_ops_on_the_nt_twin_too():
+    """REGRESSION (branch verification): ``opw`` keys come from ``Guidance
+    .operator_weights()`` (the heads of hand-written rule patterns) and
+    ``idea_ops`` from scraping the idea's expression text, so both are written in
+    ND-face spelling -- while every nd-face kernel is registered TWICE, as ``X``
+    and as ``nt_X``.  Matching ``spec.name`` alone steered half the kernel and
+    left the other half fully live: measured on AlphaCube over 400 seeds x
+    ``generate_population(25)``, zeroing one nd-face name took its ND-face draws
+    148 -> 0 and left the twin's at 17 -> 17.  ``ext`` already expanded the twins
+    itself (``partura_operator_names``); these two did not.  ``cs_mean`` /
+    ``cs_rank`` stand in for the real guidance's nd-face kernels."""
+    reg = default_registry()
+    nd, idea_nd = "cs_mean", "cs_rank"
+    assert {f"nt_{nd}", f"nt_{idea_nd}"} <= {s.name for s in reg.list_all()}, "both twins must exist"
+
+    kw = dict(risky=set(), ext=set(), opw={nd: 0.0}, idea_ops={idea_nd}, boost=BOOST)
+    steer = ac_plugin.arm_hooks("steer", **kw)
+    assert steer.op_weight(reg.get(nd)) == 0.0
+    assert steer.op_weight(reg.get(f"nt_{nd}")) == 0.0          # was 1.0: half-steered
+    assert steer.op_weight(reg.get(idea_nd)) == BOOST
+    assert steer.op_weight(reg.get(f"nt_{idea_nd}")) == BOOST   # was 1.0: half-boosted
+
+    # An explicit nt_ entry still wins, so the two faces can be weighted apart on purpose.
+    split = ac_plugin.arm_hooks("steer", risky=set(), ext=set(), opw={nd: 0.0, f"nt_{nd}": 2.0})
+    assert split.op_weight(reg.get(nd)) == 0.0
+    assert split.op_weight(reg.get(f"nt_{nd}")) == 2.0
+    # The control arm is still the base filter alone -- the twin rule must not leak into it.
+    control = ac_plugin.arm_hooks("control", **kw)
+    for name in (nd, f"nt_{nd}", idea_nd, f"nt_{idea_nd}"):
+        assert control.op_weight(reg.get(name)) == 1.0
+    # A dt-face operator has no twin at all, and is untouched by either key.
+    assert steer.op_weight(reg.get("day_mean")) == 1.0
+
+
 def test_op_weight_hook_removes_an_entire_face_from_generation():
     reg = default_registry()
 
