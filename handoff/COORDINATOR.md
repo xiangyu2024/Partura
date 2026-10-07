@@ -2,7 +2,30 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 00:19 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 01:05 PDT;最新,先读这段)—— 用户要合上 Mac,本机会睡眠;服务器上的队列自己跑
+
+**合盖之后**:本机的一切都会停(这个会话、AlphaCube 实现工作流 `wf_a9e46c78-369`、`recorder` / `wf_dump`、所有后台等待)。服务器上的 screen 不受影响。
+开盖之后先做:(1) 看服务器队列跑到哪了(下表);(2) 实现工作流若没有自己接着跑,按 22:00 那段的命令 `resumeFromRunId` 续跑;(3) 重新起 `caffeinate`、`scripts/wf_dump.py --loop 120`。
+
+**服务器上的队列(全部无人值守;按依赖排好)**
+| screen | 做什么 | 等谁 | 产物 / 日志 |
+|---|---|---|---|
+| `e7b` | e7 的最后两个 run(B01 先验一格,种子 2、3) | 在跑 | `logs/_e7b.log`(满 3 行即完);`episodes/e7{c,l,b}{1,2,3}_*` |
+| `tl1` | 两层合成第一阶段:Q 已打分、四个池子已合并、C_Q 已建(22 分钟);正在依次建 C_LQ、C_MQ、C_LM、C_LMQ,最后 `signal_books.py` | 在跑(只用 CPU) | `logs/_two_level_stage1.log`、`logs/_pool_<池>.log`;`pools/signals/C_*.npy`;`runs/_batch_B01/two_level_stage1.json` |
+| `ext1` | 两个现成冠军的 1627 个成员因子在延长视窗(到 20260916)上算出来(只算因子值,约 4 小时显卡) | e7 结束 | `logs/_extend_members_base.log`;`runs/_forward/members_base.json`;面板进 Partura 的面板缓存 |
+| `ext2` | 第一阶段五个新信号的成员因子同样算一遍 | `tl1`、`ext1` | `logs/_extend_members_new.log`;`runs/_forward/members_20260916.json` |
+
+**回来之后要做的(按顺序)**
+1. e7:`./scripts/study.sh idea-pull` → 按 `episodes/e7_PLAN.md` 算「质量产出」→ `episodes/e7_SUMMARY.md` → 改 `guidance/B01.yaml`(D7 降为备注等)。
+2. 两层合成第一阶段:拉回 `runs/_batch_B01/two_level_stage1.json`,看 `logs/_pool_*.log` 里 `build_champion` 自己的测试段报告;
+   算「加了 Q 的 − 基线」的成对差(纯多头逐日净超额、多空;各信号的序列都在 json 里)→ `research/two_level/STAGE1.md`;按 `PLAN.md` 判。
+3. 两层合成第二阶段(细则还没写,**先写再跑**):用延长视窗上的成员面板,按日期把训练段切在 20230807(前 1359 天),调用 AlphaCube 的
+   `build_champion.build` / `combine_two_level.fit_weights, blend`(族的成员沿用各自的 families.json,不重新选族)重建每个信号到 2026-09;
+   先核对它在 2018 ~ 2025 上和存档信号一致(逐日秩相关、书的数字),再按主判据读前推段;记账 `runs/_forward/ledger.json`。
+   成员里算不出来的(显存不够等)记在 members json 的 `error` 里,要在报告里写明少了几个。
+4. 然后才是「最好的」要不要换人。
+
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 00:19 PDT;已被上面那段更新)
 
 **用户 2026-10-07 凌晨的两条指示**
 1. 「我说的最好…是所有结果、所有代、所有方法做出来的信号…的最好的」→ 「最好」的范围是**全部**,包括 AlphaCube 自己的冠军、GP / RL 池子、手写库、滚动拟合,不只是 Partura 这几轮的融合。
