@@ -213,7 +213,14 @@ class PanelSet:
     # -- identity ---------------------------------------------------------
     @property
     def view_id(self) -> str:
-        raw = f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
+        # store.contract_hash is byte-identical to before whenever no daily-fields
+        # directory is attached (see docs/alphacube_steering_design.md, "Backward
+        # compatibility" item 7) and changes with one -- so this is a no-op for
+        # every existing cache entry and is what stops a rebuilt daily-fields
+        # directory from serving a stale panel for any expression containing a
+        # daily leaf (design, "One Partura-side cache fix the daily fields force").
+        raw = (f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
+               f"|{self.store.contract_hash}")
         return hashlib.sha1(raw.encode()).hexdigest()[:10]
 
     def _cache_path(self, expr_key: str) -> Optional[Path]:

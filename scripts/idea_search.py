@@ -13,8 +13,10 @@ into a search configuration for AlphaCube's own GP and runs it for a small budge
 Both arms are scored by the same Partura reward (``partura.steer.reward``), so the only difference between them
 is the intervention.  What is compared is discovery efficiency: of the candidates each arm paid to evaluate, how
 many pass the gates with a long leg on both train and valid, and how many of those are distinct and not the
-known pool.  Nothing in AlphaCube is edited: the reward and the sampling hooks are installed at run time
-(``alphacube.mining.scoring.make_scorer``, ``TypedTreeGenerator.acceptable`` / ``._pick``).
+known pool.  Nothing in AlphaCube is edited and nothing in it is monkeypatched: the reward is registered as the
+``"partura"`` fitness kind and the sampling hooks are plain ``alphacube.plugins.SearchHooks`` (``op_weight`` /
+``accept``), both reached through ``partura.ac_plugin``, AlphaCube's own plugin loader
+(``alphacube.plugins.load_plugins``) and ``alphacube.mining.gp.GPMiner(hooks=...)``.
 
 The search sees 20180102..20230807 (train + valid); the test period is not opened.
 
@@ -25,6 +27,7 @@ import csv
 import json
 import math
 import os
+import random
 import re
 import sys
 import time
@@ -82,6 +85,15 @@ with slot():
     mem = MemoryGuard(self_limit_gb=34, cgroup_limit_gb=70).start()
     t0 = time.time()
     import torch
+    # Load before anything touches default_registry() (ps.compute() below parses
+    # expressions, which does): installs ops_ext's legacy-table entries, declares
+    # AlphaCube's own in_sustain_* kernels real-valued and registers the "partura"
+    # fitness kind -- see partura/ac_plugin.py.  Idempotent, so running this script
+    # twice in one process (e.g. two arms of one pytest session) is safe.
+    from alphacube.plugins import load_plugins
+
+    from partura import ac_plugin
+    print(f"[idea] plugins loaded: {', '.join(load_plugins(['partura.ac_plugin']))}", flush=True)
     # ---- the reward's context, on the grid the GP will use (same view: start, end, warm-up)
     ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8)
@@ -104,12 +116,10 @@ with slot():
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
           f"untradable {untradable[np.isfinite(tgt)].mean():.1%} of the labelled cells", flush=True)
 
-    import alphacube.mining.generator as agen
-    import alphacube.mining.gp as agp
-    import alphacube.mining.scoring as asc
     from alphacube.catalog import default_registry
     from alphacube.parser import parse
     from alphacube.pipeline import run_mining
+    from alphacube.plugins import SearchHooks
 
     EXT = {getattr(f, "__name__", str(f)) for f in getattr(ops_ext, "NEW_OPERATORS", ())}
     EXT |= {"nt_" + n for n in EXT}
@@ -119,124 +129,67 @@ with slot():
     print(f"[idea] registry: {len(searchable)} searchable operators ({len(EXT & searchable)} of Partura's); "
           f"idea operators missing from the search vocabulary: {sorted(n for n in IDEA_OPS if n not in searchable and n in {s.name for s in reg.list_all()})}", flush=True)
 
-    # ---- the reward, as an AlphaCube scorer
-    SCORERS = []
-
-    class ParturaScorer:
-        columns = ("p_score", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known")
-
-        def __init__(self, target, **kw):
-            self.base = asc.PanelScorer(target, kind="rank_ic", turnover_penalty=0.0, min_coverage=kw.get("min_coverage", 0.5),
-                                        min_scored_days=kw.get("min_scored_days", 0.5))
-            self.target_t64, self.target_ranks_t = self.base.target_t64, self.base.target_ranks_t
-            if target.shape != ctx.tgt.shape or not np.array_equal(np.isfinite(target), np.isfinite(ctx.tgt)):
-                raise RuntimeError(f"the GP's label grid {target.shape} is not Partura's {ctx.tgt.shape}: the reward context would be misaligned")
-            self.n = self.gate = 0
-            self.seconds = 0.0
-            SCORERS.append(self)
-
-        def score(self, panel, gated=True):
-            t = time.time()
-            self.n += 1
-            out = {**self.base.score(panel, gated=gated), **{c: float("nan") for c in self.columns}}
-            if np.isfinite(out["fit"]):
-                dist = dg.distinct_fraction(panel)
-                out["p_dist"] = dist
-                if gated and not dist >= 0.5:
-                    out["fit"] = -np.inf
-            if not np.isfinite(out["fit"]):
-                self.gate += 1
-                self.seconds += time.time() - t
-                return out
-            r = steer_reward(panel, ctx, KIND)
-            z = dg._zrank(r["sign"] * np.asarray(panel[:cut:5], np.float64))
-            k = known_z[:cut:5]
-            ok = np.isfinite(z) & np.isfinite(k)
-            zc, kc = np.where(ok, z, 0.0), np.where(ok, k, 0.0)
-            n = np.maximum(ok.sum(1), 1)
-            with np.errstate(invalid="ignore", divide="ignore"):
-                c = ((zc * kc).sum(1) - zc.sum(1) * kc.sum(1) / n) / np.sqrt(((zc ** 2).sum(1) - zc.sum(1) ** 2 / n) * ((kc ** 2).sum(1) - kc.sum(1) ** 2 / n))
-            out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"], p_sign=r["sign"], p_hl=r["hl"],
-                       p_train_sharpe=r["train"]["long_sharpe"], p_valid_sharpe=r["valid"]["long_sharpe"], p_train_ann=r["train"]["long_ann"],
-                       p_valid_ann=r["valid"]["long_ann"], p_turnover=r["train"]["long_turnover"], p_rho_known=float(np.nanmean(c)))
-            self.seconds += time.time() - t
-            return out
-
-        def score_combined(self, panel):
-            return self.score(panel, gated=False)
-
-    _make = asc.make_scorer
-
-    def make_scorer(target, kind, **kw):
-        return ParturaScorer(target, **kw) if kind == "partura" else _make(target, kind, **kw)
-
-    asc.make_scorer = agp.make_scorer = make_scorer
-    for mod in (asc, agp):
-        if "partura" not in mod.FITNESS_KINDS:
-            mod.FITNESS_KINDS = tuple(mod.FITNESS_KINDS) + ("partura",)
+    # ---- the reward, as an AlphaCube scorer.  ParturaScorer now lives in partura/ac_plugin.py
+    # (registered under the fitness kind "partura" by load_plugins, above); this just tells it
+    # what to score with -- the ctx/KIND closure the inline class used to capture directly.
+    ac_plugin.set_scorer_state(ctx, KIND, SPLIT)
 
     # ---- sampling hooks.  Both arms: the same operator library (Partura's operators in, AlphaCube's own
-    # per-element-loop operators out).  The steer arm adds the guidance and the idea.
-    T = agen.TypedTreeGenerator
-    _acceptable, _pick = T.acceptable, T._pick
+    # per-element-loop operators out).  The steer arm adds the guidance and the idea.  Built as plain
+    # SearchHooks (alphacube.plugins) instead of rebinding TypedTreeGenerator._pick / .acceptable: the
+    # generator's own op_weight / accept hook reach every acceptance point for free (generate, the three
+    # mutators, crossover, and generate()'s own fallback -- see docs/alphacube_steering_design.md, "乙
+    # Steering hooks" items 1 and "must_fix #1"), which the old rebinding did not cover.
     OPW = G.operator_weights()
     stats = Counter()
     seeds_repr = set()
     first_form = {}                                         # canonical key -> the first spelling the search proposed
+    # A dedicated, seed-reproducible stream for the guidance's thinning draw, reseeded per arm (below) --
+    # never gen._rng: that is the miner's OWN tree-building stream, and reading u from it made the control
+    # arm meaningless (its trajectory depended on how many candidates were thinned, not just on the seed).
+    # TypedTreeGenerator exposes exactly this as gen.hook_rng -- but gen is built INSIDE run_mining and
+    # never reaches the caller (no parameter, return field or callback carries it; verified: pipeline.py's
+    # own `miner_ref` is a local, and RunResult has no such field), so this script cannot draw from the
+    # live object itself and instead keeps its own, under the same name.
+    hook_rng = random.Random(SEED)
 
     def base_weight(s):
         return 0.0 if (s.name in risky and s.name not in EXT) else 1.0
 
-    def install(arm):
-        stats.clear()
-        first_form.clear()
+    def weighted(s):
+        return base_weight(s) * OPW.get(s.name, 1.0) * (BOOST if s.name in IDEA_OPS else 1.0)
 
-        def pick(self, specs):
-            faces = {}
-            for s in specs:
-                w = base_weight(s)
-                if arm == "steer":
-                    w *= OPW.get(s.name, 1.0) * (BOOST if s.name in IDEA_OPS else 1.0)
-                if w > 0:
-                    faces.setdefault(s.face, []).append((s, w))
-            if not faces:
-                return _pick(self, specs)
-            names = sorted(faces)
-            f = self._rng.choices(names, weights=[sum(w for _, w in faces[n]) / len(faces[n]) for n in names])[0]
-            return self._rng.choices([s for s, _ in faces[f]], weights=[w for _, w in faces[f]])[0]
-
-        def acceptable(self, tree):
-            if not _acceptable(self, tree):
-                return False
-            if arm != "steer":
-                return True
-            e = repr(tree)
-            if e in seeds_repr:
-                return True
-            stats["proposed"] += 1
-            try:
-                # a different spelling of something already proposed (abs_ of a non-negative, a window-1 identity,
-                # a price leaf swapped ...) is not a new candidate: episode e1's first run spent most of the steer
-                # arm on re-wrappings of one seed, all with the same score
-                key = G.dedup_key(e)
-                if first_form.setdefault(key, e) != e:
-                    stats["equivalent"] += 1
-                    return False
-                if G.banned(e):
-                    stats["banned"] += 1
-                    return False
-                if MUST and not (MUST & set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", e))):
-                    stats["outside"] += 1
-                    return False
-                if not G.accept(e, u=self._rng.random()):
-                    stats["thinned"] += 1
-                    return False
-            except ValueError:
-                stats["unread"] += 1                         # a tree the string matcher cannot read is not judged
-            stats["accepted"] += 1
+    def guidance_accept(tree):
+        """``SearchHooks.accept``: called as ``self.accept_hook(tree)`` from the generator's own
+        ``acceptable()``, AFTER it has already checked ``is_valid_root`` and the ban set -- so, unlike the
+        old rebound ``acceptable(self, tree)``, this does not re-check either itself."""
+        e = repr(tree)
+        if e in seeds_repr:
             return True
+        stats["proposed"] += 1
+        try:
+            # a different spelling of something already proposed (abs_ of a non-negative, a window-1 identity,
+            # a price leaf swapped ...) is not a new candidate: episode e1's first run spent most of the steer
+            # arm on re-wrappings of one seed, all with the same score
+            key = G.dedup_key(e)
+            if first_form.setdefault(key, e) != e:
+                stats["equivalent"] += 1
+                return False
+            if G.banned(e):
+                stats["banned"] += 1
+                return False
+            if MUST and not (MUST & set(re.findall(r"[A-Za-z_][A-Za-z_0-9]*", e))):
+                stats["outside"] += 1
+                return False
+            if not G.accept(e, u=hook_rng.random()):
+                stats["thinned"] += 1
+                return False
+        except ValueError:
+            stats["unread"] += 1                         # a tree the string matcher cannot read is not judged
+        stats["accepted"] += 1
+        return True
 
-        T._pick, T.acceptable = pick, acceptable
+    HOOKS = {"control": SearchHooks(op_weight=base_weight), "steer": SearchHooks(op_weight=weighted, accept=guidance_accept)}
 
     seeds = []
     for s in idea.get("seeds", []):
@@ -257,10 +210,12 @@ with slot():
                 "guidance": GPATH, "arms": {}}
     for arm in ARMS:
         ta = time.time()
-        install(arm)
-        n0 = len(SCORERS)
+        stats.clear()
+        first_form.clear()
+        hook_rng = random.Random(SEED)      # fresh per arm; only the steer arm's guidance_accept ever draws from it
+        n0 = len(ac_plugin.SCORERS)
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
-                  panel_cache_bytes=6 * 1024 ** 3)
+                  panel_cache_bytes=6 * 1024 ** 3, hooks=HOOKS[arm])
         if arm == "steer" and seeds:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
         try:
@@ -271,7 +226,6 @@ with slot():
                        out_root=str(ep_dir), run_id=arm, save_values=False, gp_params=gp)
         except Exception as exc:                             # noqa: BLE001  (the archive checkpoints are what we read)
             print(f"[idea] {arm}: run_mining ended with {type(exc).__name__}: {str(exc)[:300]}", flush=True)
-        T._pick, T.acceptable = _pick, _acceptable
         files = sorted((ep_dir / arm / "checkpoints").glob("archive_gen*.csv"))
         rows = list(csv.DictReader(files[-1].open(encoding="utf-8"))) if files else []
 
@@ -286,12 +240,18 @@ with slot():
                  "turnover": num(r, "score_p_turnover"), "rho_known": num(r, "score_p_rho_known")} for r in rows]
         live = [c for c in cand if math.isfinite(c["fit"])]
         passers = [c for c in live if c["score"] >= THR]
-        scored = sum(s.n for s in SCORERS[n0:])
+        scored = sum(s.n for s in ac_plugin.SCORERS[n0:])
         best5 = sorted(live, key=lambda c: -c["fit"])[:5]
         for c in best5:
             print(f"        best: score {c['score']:+.2f} (train {c['train']:+.2f} valid {c['valid']:+.2f}) hl {c['hl']:g} rho_known {c['rho_known']:+.2f} | {c['expr'][:140]}", flush=True)
-        evidence["arms"][arm] = {"seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in SCORERS[n0:]),
-                                 "scoring_seconds": sum(s.seconds for s in SCORERS[n0:]), "archive": len(cand), "live": len(live),
+        # generator.unaccepted_fallbacks (how much of the steer arm's population the guidance never got
+        # to see) is NOT reported here: it lives on the TypedTreeGenerator run_mining constructs internally,
+        # and nothing run_mining/GPMiner returns -- not RunResult, not the checkpoint files, not an
+        # on_generation callback -- exposes a reference to it or to the generator that built it (verified
+        # against alphacube/pipeline.py and mining/gp.py). Surfacing it needs a channel added on the
+        # AlphaCube side (outside WP11's file list); flagged here rather than faked.
+        evidence["arms"][arm] = {"seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in ac_plugin.SCORERS[n0:]),
+                                 "scoring_seconds": sum(s.seconds for s in ac_plugin.SCORERS[n0:]), "archive": len(cand), "live": len(live),
                                  "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80]}
         print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}) "
               f"in {time.time() - ta:.0f}s; sampling {dict(stats)}", flush=True)

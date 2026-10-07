@@ -76,7 +76,7 @@ def _day(v: torch.Tensor, ok: torch.Tensor) -> torch.Tensor:
     return torch.where(ok, v, torch.full_like(v, NAN)).unsqueeze(-1)
 
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_flat_ratio(x: torch.Tensor) -> torch.Tensor:
     """Share of minutes (2nd to last) whose value equals the previous minute's:
     ``mean(x[t] == x[t-1])`` over minutes where both are finite.
@@ -262,7 +262,7 @@ def cs_winsor(x: torch.Tensor) -> torch.Tensor:
 
 # ----------------------------------------------------------------------------- asked for by the studies
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_zero_ratio(x: torch.Tensor) -> torch.Tensor:
     """Share of the day's finite minutes with ``x == 0`` exactly.
 
@@ -356,7 +356,7 @@ def cs_last_low20(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     return _lexi(y, x, -1.0, 0.2, -1.0)
 
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_flat_run_max(x: torch.Tensor) -> torch.Tensor:
     """Longest RUN of consecutive minutes whose value equals the previous minute's, divided
     by the number of finite minutes: in [0, 1].
@@ -401,7 +401,7 @@ def _buckets(x: torch.Tensor, ok: torch.Tensor) -> torch.Tensor:
     return torch.ceil(_pct_rank(x, ok) * 10.0).clamp(1, 10)
 
 
-@op("nd", "cs", arity=2)
+@op("nd", "cs", arity=2, real_valued=True)
 def cs_bucket_demean(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """``y`` minus the mean of ``y`` over the stocks in the same decile of ``x`` that day.
     Keeps y's units and magnitude (``cs_bucket_rank`` throws them away), so a fold
@@ -420,7 +420,7 @@ def cs_bucket_demean(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     return out
 
 
-@op("nd", "cs", arity=2)
+@op("nd", "cs", arity=2, real_valued=True)
 def cs_bucket_zscore(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """As ``cs_bucket_demean`` but divided by the bucket's own population std (+EPS):
     comparable across buckets whose dispersion differs severalfold.  (F101, F106.)"""
@@ -518,7 +518,7 @@ def cs_flip_by_state(y: torch.Tensor, g: torch.Tensor) -> torch.Tensor:
     return torch.where(ok, r * sgn, torch.full_like(y, NAN))
 
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_at_max_ratio(x: torch.Tensor) -> torch.Tensor:
     """Share of the day's finite minutes whose value equals the day's maximum.
     On Close / High: time spent pinned at the day's high -- a limit-up lock reads near 1,
@@ -532,7 +532,7 @@ def day_at_max_ratio(x: torch.Tensor) -> torch.Tensor:
     return _day(r, n > 1)
 
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_at_min_ratio(x: torch.Tensor) -> torch.Tensor:
     """Share of the day's finite minutes whose value equals the day's minimum."""
     x = _f(x)
@@ -543,7 +543,7 @@ def day_at_min_ratio(x: torch.Tensor) -> torch.Tensor:
     return _day(r, n > 1)
 
 
-@op("dt", "day", arity=1)
+@op("dt", "day", arity=1, real_valued=True)
 def day_distinct_ratio(x: torch.Tensor) -> torch.Tensor:
     """Number of DISTINCT values among the day's finite minutes, divided by their count:
     1/n = one price all day, 1 = every minute different.  On a price: how many price
@@ -657,7 +657,7 @@ def cross_madz(x: torch.Tensor, d: int) -> torch.Tensor:
     return torch.where((n * 2 >= int(d)) & (mad > 0) & torch.isfinite(x), z, torch.full_like(x, NAN))
 
 
-@op("dt", "cross", arity=1, requires_window=True)
+@op("dt", "cross", arity=1, requires_window=True, real_valued=True)
 def cross_flat_ratio(x: torch.Tensor, d: int) -> torch.Tensor:
     """Share of the last ``d`` days on which ``x`` equals the previous day's value exactly
     (over day pairs where both are finite); NaN with fewer than 2 such pairs.  On a daily
@@ -726,9 +726,25 @@ NEW_OPERATORS = ("in_pct", "in_logchg", "day_flat_ratio", "day_pos_ratio", "day_
                  "cross_semistd_neg", "cross_semistd_pos", "cross_age")
 
 
-def install() -> None:
-    """Make the registry and the legacy name tables pick the new kernels up, whatever was built before."""
-    import alphacube.catalog as catalog
+def install_kernels() -> None:
+    """Make the legacy name tables (``operators.operator_dict_DT`` /
+    ``operator_dict_ND``) pick the kernels above up, so ``fullcatalog`` /
+    ``parse_legacy`` resolve them by name exactly like a built-in.
+
+    The ``@op(...)``-decorated kernels above already land in
+    ``operators.common.OPERATOR_REGISTRY`` -- with their ``real_valued`` flag
+    already set -- the moment this module is imported; that part needs no
+    call.  What used to ALSO need a call, before WP11, was clearing the nine
+    boolean-mis-flagged kernels' flags through a ``catalog.build_registry``
+    monkeypatch: ``real_valued=True`` on those nine ``@op(...)`` decorators
+    above now does that at the definition site instead (see
+    docs/alphacube_steering_design.md, "丙 Migration"), so this function is
+    left with only the one thing nothing else does for it.
+
+    Called from a plugin's ``register()`` (see ``partura.ac_plugin``), before
+    the registry is (re)built -- ``alphacube.plugins.load_plugins`` is what
+    resets ``catalog._DEFAULT`` afterwards; this module does not reset it
+    itself any more."""
     import alphacube.operators as ops
     from alphacube.operators.common import OPERATOR_REGISTRY
     for name in NEW_OPERATORS:
@@ -737,26 +753,3 @@ def install() -> None:
             ops.operator_dict_DT[name] = meta["fn"]
         if meta["mode"] in ("nd", "shared"):
             ops.operator_dict_ND[name] = meta["fn"]
-    # The registry's smoke test feeds every kernel random floats and flags an output with one or two distinct
-    # values as a (trivial) boolean: not allowed as a root, not in the search vocabulary.  On random floats a
-    # "share of minutes with zero return" IS a constant -- and on real data it is one of the most informative
-    # things in the batch.  None of the kernels here is boolean, so the flags are cleared after every build.
-    if not getattr(catalog.build_registry, "_partura", False):
-        import dataclasses
-        _build = catalog.build_registry
-
-        def build_registry(*a, **k):
-            reg = _build(*a, **k)
-            for name in NEW_OPERATORS:
-                for n in (name, "nt_" + name):
-                    sp = reg._ops.get(n)
-                    if sp is not None and (sp.boolean_output or sp.trivial_boolean):
-                        reg._ops[n] = dataclasses.replace(sp, boolean_output=False, trivial_boolean=False)
-            return reg
-
-        build_registry._partura = True
-        catalog.build_registry = build_registry
-    catalog._DEFAULT = None            # rebuilt, with the extensions, on next use
-
-
-install()
