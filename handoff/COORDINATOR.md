@@ -2,7 +2,33 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 18:24 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 21:03 PDT;最新,先读这段)
+
+**e4 的倍数更正**:按式子的族数是 44 对 4;按**实测互不相关**的发现数(交易信号两两秩相关 < 0.7)是 **16 对 3**(2:0、5:1、9:2,三个种子同向)。
+以后两个数都报、以实测的为准(指引 E10;`scripts/factorial_summary.py`、`episodes/e4_SUMMARY.md` 顶部的更正)。
+
+**e5 消融:18 个 run 完成 16 个**(`episodes/e5_PLAN.md`;最后一格 seeds+priors 的种子 2、3 还在 screen `e5b` 里,种子 2 抽到很重的算子,一代约半小时)。
+- 中间读数(每百次付费评估里实测互不相关的发现):对照 0.7 / seeds 0.9 / hood 1.2 / priors 1.8 / seeds+hood 2.6 / hood+priors 3.1 / 全开 4.1;seeds+priors 只有 1 个种子(2.5)。
+  大致可加:三样各自都有贡献。跑完后:`./scripts/study.sh idea-pull` → `python scripts/factorial_summary.py I1_frozen_state 0=e4k:control shr=e4k:steer s=e5s h=e5h r=e5r sh=e5sh sr=e5sr hr=e5hr` → 写 `episodes/e5_SUMMARY.md`。
+- **确定性核对通过**:`rr_e5s1`、`rr_e5h1`(同种子、同代码重跑)和原 run 逐个候选、逐个分数完全相同(最大差 0)。→ 搜索在给定种子和代码下是确定的;并行跑的校准没有干扰 e5;以后对照臂不用重跑。
+- e5sr3 会在新版 `scripts/idea_search.py`(c26fdabde043,只多一个 `--halflives` 选项,默认值不变)下跑,其余 17 个是 51248194fc24;行为相同,指纹不同,写总结时注明。
+- **先验规则的直接检验**(`scripts/prior_check.py`,`runs/_ideas/prior_check_*.json`):拿对照臂(没被指引过滤过)的 638 个存活候选来看,
+  指引会碰到的只有 23%,几乎全是 D7(`div` × 0.5)一条,而且它不区分好坏(发现率 0.7% 对 1.0%,分数中位 +0.44 对 +0.47);
+  「毁掉多头腿」的那些规则(根上的 z 分数、滚动标准差、滚动最小)各只碰到 1~2 个 —— 碰到的确实都很差(−4.1、−1.9、−1.1),但 GP 的随机树里很少出现这些结构。
+  先验一臂的好处来自别处:没过门槛的比例从 30% 降到 21%(存档里看不到死掉的候选),以及等价 / 同族去重带来的多样性。
+  **结论草稿**:从 Partura 自己的批量变体里学到的动作先验,换到 AlphaCube 的 GP 上大多用不上(两个生成器提出的东西不一样);要给 GP 定先验,得从 GP 自己的存档里学。
+  用户的 AlphaCube 有约 22 个 GP 运行的存档(`/root/autodl-tmp/AlphaCube/mining_runs/*/checkpoints/archive_gen*.csv`,每个 250~570 个存活候选),还没用过 —— 这是先验这条线的下一步。
+
+**e6 已起跑**(`episodes/e6_PLAN.md`;21:02 PDT 起):想法 `I7_beyond_liquidity`,奖励 `long_bucket`,半衰期 0/5/20/60,预算 384,发现线 0.75。
+- screen `e6a`:种子 1、3(`scripts/server/run_idea_seeds.sh`,服务器端启动脚本现在在仓库里);screen `e6c`:种子 2,排在 `e5b` 后面。完成记在服务器 `logs/_e6b.log`(3 行)。
+- 每个种子两臂估计 1~3 小时(取决于抽到的算子有多重)。跑完:`idea-pull` → `python scripts/episode_summary.py e6b I7_beyond_liquidity` →
+  按 `e6_PLAN.md` 的规则读样本外:`scripts/idea_final.py e6b1_I7_beyond_liquidity e6b2_I7_beyond_liquidity e6b3_I7_beyond_liquidity`(服务器,记账)→ 写 `episodes/e6_SUMMARY.md`。
+
+**等用户定**:2026-01 ~ 2026-08 那段没碰过的数据怎么用(见下一段快照);没读。
+
+**AlphaCube 改造**:`partura-steering` 到 `0d93fa3` WP4(19:30)。已完成 WP1, WP6, WP2, WP3, WP5, WP9, WP4;还剩 WP7, WP8, WP10, WP11 和三项整分支验证。
+
+## ⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 18:24 PDT;已被上面那段更新)
 
 **e4 确认实验(事先约定 `episodes/e4_PLAN.md`,结果 `episodes/e4_SUMMARY.md`)**
 - 参照 = 未筛的已知族(e4k,三个种子):带指引 **44 族**发现 / 393 次评估,对照 **4 族** / 427 次;三个种子全部同向(9:0、22:1、13:3)。按事先的标准(≥ 2 倍且 ≥ 2 个种子同向)**成立**:
