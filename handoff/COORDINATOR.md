@@ -2,7 +2,30 @@
 
 _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 23:48 PDT;最新,先读这段)
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 00:19 PDT;最新,先读这段)
+
+**用户 2026-10-07 凌晨的两条指示**
+1. 「我说的最好…是所有结果、所有代、所有方法做出来的信号…的最好的」→ 「最好」的范围是**全部**,包括 AlphaCube 自己的冠军、GP / RL 池子、手写库、滚动拟合,不只是 Partura 这几轮的融合。
+   已交付 `research/alpha_distillation/ALL_best_books.md`(470 本书同一把尺子;`scripts/signal_books.py` 把服务器上存着的信号数组按 `partura.books.books` 重算,
+   AlphaCube 文档里的多空 4.75 / 4.92 逐位对上)。结论:**最好的是 AlphaCube 的两层合成冠军**——
+   多空:挖掘冠军(`_bench/trainto/champion_signal_buyable.npy`)测试段夏普 4.92、年化 +37.7%;手写库冠军 4.75、+37.5%。
+   纯多头:两个冠军测试段净超额 +17.1%(超额夏普 2.13 / 2.20),全部收益 2018 ~ 2025 净值 8.4 倍(挖掘冠军);Partura 融合 +16.4 ~ 16.6%(2.0)。
+   图:`B01_best_long_total_all.svg`、`B01_best_longshort_all.svg`;AlphaCube 自己的 100 万真实回测图 `AlphaCube_fullsample_1m.png`。
+   这些冠军信号只到 2025-12-31,还没有前推段读数。
+2. 「你也可以用两层合成冠军方法来处理其他因子池…partura 替换优化了一些的信号,或者这些信号加进某些里面」→ `research/two_level/PLAN.md`(写在建任何新信号之前):
+   池子 Q = Partura 第四轮全部产出(2730 个过门槛的变体 + 按规则挑出的候选,面板全部现成);建 C_Q、C_LQ(手写库 ∪ Q)、C_MQ(挖掘库 ∪ Q)、C_LM(对照)、C_LMQ;
+   主判据 = 加了 Q 的信号减它的基线,纯多头逐日净超额的成对差,测试段 t;因为测试段对 Q 不干净,**结论放在第二阶段(延到 2026 年的前推段)**。
+   流水线 `scripts/two_level.py`(只摆目录,打分与合成原样调用 AlphaCube 的 `score_all_factors.py` / `build_champion.py`,不改 AlphaCube;产物在服务器 `<Partura>/pools/`)。
+
+**服务器上在跑**
+- screen `tl1`:`scripts/server/run_two_level_stage1.sh`(只用 CPU;日志 `logs/_two_level_stage1.log`、`logs/_pool_<池>.log`):导出 Q ✓ → 打分 Q → 合并四个池子 → 依次建五个信号 → `signal_books.py` 出 `runs/_batch_B01/two_level_stage1.json`。估计 2~3 小时。
+  跑完:拉回 json → 成对差(加了 Q 的 − 基线;用各自序列算测试段 t)→ `research/two_level/STAGE1.md`。
+- e7(`e7c` → `e7b`;`e7l`):同上一段快照。
+- 第二阶段(还没写细则、还没跑):把两个现成冠军和第一阶段的信号延到 2026-09 —— 成员因子(挖掘冠军 886 个、手写库 744 个,加新信号的成员)要在延长后的视窗上重算
+  (每个约 8 秒 GPU,共 4 小时上下;磁盘够:460 GB 空闲),选族与权重仍只用到 2023-08-07(`build_champion.py` 的视窗写死到 20251231、训练段按 0.7 的比例切,
+  延长视窗要自己写一个调用它的 `pick_families / build` 的驱动,按日期切训练段);先核对重算的成员在重叠段复现原面板,再读前推段。
+
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-06 23:48 PDT;已被上面那段更新)
 
 **用户 2026-10-06 晚的两条指示**
 1. 「2026年的数据加入研究」→ 我的理解与做法:20260105 起的数据作为**只读不选的前推段**(不定方向、不选半衰期、不挑候选、不学先验;读数记账 `runs/_forward/ledger.json`),
