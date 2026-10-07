@@ -15,6 +15,16 @@ _最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更
 | `ext1` | 两个现成冠军的 1627 个成员因子在延长视窗(到 20260916)上算出来(只算因子值,约 4 小时显卡) | e7 结束 | `logs/_extend_members_base.log`;`runs/_forward/members_base.json`;面板进 Partura 的面板缓存 |
 | `ext2` | 第一阶段五个新信号的成员因子同样算一遍 | `tl1`、`ext1` | `logs/_extend_members_new.log`;`runs/_forward/members_20260916.json` |
 
+**01:15 补:整条链已经排到第二阶段,回来只需读结果**
+- 服务器 screen 的依赖:`e7b` →(e7 完)`ext1`(两个现成冠军的成员,显卡)→(`tl1`、`ext1` 完)`ext2`(五个新信号的成员)→(`ext2` 完)`tl2`
+  = `scripts/server/run_two_level_stage2.sh` → `scripts/two_level_forward.py`:沿用各自的族、AlphaCube 自己的 `build`、按日期切训练段重建到 2026-09;
+  先和存档信号核对(只用到 2025-12-31),**过了的才读前推段**并记账。细则已写进 `research/two_level/PLAN.md` 末尾(提交 `3249aa6`,早于任何信号被延长)。
+  产物:`runs/_forward/two_level_check_20260916.json`、`two_level_forward_20260916.json`、`signal_<名>_20260916.npy`;日志 `logs/_two_level_stage2.log`。
+- 第一阶段的头一个结果(`logs/_pool_Q.log`,AlphaCube 自己的测试段报告,剔除封板标签):**只用 Partura 信号的 C_Q** —— 2729 个健康因子 → 723 族 → 过门槛 214 → 取前 100 族、883 个成员;
+  多空平滑后 **+4.70**、rank IC 0.0557、纯多头前 20% 超额夏普 **+2.27**(+14.9%、回撤 −8.6%);同一张表里手写库冠军 +4.75 / +2.33、挖掘冠军 +4.92 / +2.34。
+  也就是由 15 条种子的变体合出来的信号,在测试段上和 1392 个手写因子、4206 个挖掘因子合出来的冠军基本持平(比我事先预期的好)。测试段对 Q 不干净,等前推段。
+- 今晚到服务器的 SSH 时断时连,本机的后台等待两次被掐断(退出码 255);服务器上的 screen 没受影响。回来直接看日志,不要依赖等待命令。
+
 **回来之后要做的(按顺序)**
 1. e7:`./scripts/study.sh idea-pull` → 按 `episodes/e7_PLAN.md` 算「质量产出」→ `episodes/e7_SUMMARY.md` → 改 `guidance/B01.yaml`(D7 降为备注等)。
 2. 两层合成第一阶段:拉回 `runs/_batch_B01/two_level_stage1.json`,看 `logs/_pool_*.log` 里 `build_champion` 自己的测试段报告;
