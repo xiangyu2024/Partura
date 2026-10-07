@@ -236,6 +236,21 @@ with slot():
         res["conventions"][nm] = {c: {s: row(x, sl, tgt) for s, sl in SEG4.items()} for c, x in (("user", sm), ("tradable", cut), ("bucket", buck))}
     for nm, key in (("known", "m:known"), ("known_xfrozen", "m:known_xfrozen"), ("O", "f:O"), ("U", "f:U"), ("A", "f:A"), ("C", "f:C")):
         res["daily"][nm] = [None if x != x else round(float(x), 7) for x in daily(SM[key], tgt)]
+    # L8 (PLAN, amended before the read): the same objects as a decile long/short book, and the pure long book's TOTAL
+    # return (net excess + the equal-weight return of the names with a signal and a label).  Descriptive.
+    from alphacube.metrics import portfolio_returns
+    LSK = ("ls_ann", "ls_sharpe", "ls_mdd", "ls_turnover")
+    r5 = lambda a: [None if x != x else round(float(x), 7) for x in a]    # noqa: E731
+    res["ls"], res["series"] = {}, {}
+    for nm, key in (("known", "m:known"), ("known_xfrozen", "m:known_xfrozen"), ("O", "f:O"), ("U", "f:U"), ("A", "f:A"), ("B", "f:B"), ("C", "f:C"), ("D", "f:D")):
+        sm = SM[key]
+        res["ls"][nm] = {s: {k: float(v) for k, v in bk.book_row(sm, tgt, sl).items() if k in LSK} for s, sl in SEG.items()}
+        w = long_short_weights(sm, bk.TOP_FRAC)
+        ok = np.isfinite(sm) & np.isfinite(tgt)
+        cnt = ok.sum(1)
+        ew = np.where(cnt > 0, np.where(ok, tgt, 0.0).sum(1) / np.maximum(cnt, 1), np.nan)
+        net = bk.long_book(w, sm, tgt)[0]
+        res["series"][nm] = {"ls": r5(portfolio_returns(w, tgt, bk.COST)[0]), "excess": r5(net), "bench": r5(ew), "total": r5(net + ew)}
     res["dates"] = [str(d) for d in dates]
     mem.stop()
 
