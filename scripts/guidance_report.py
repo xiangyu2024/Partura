@@ -174,6 +174,9 @@ for i in G["ideas"]:
     L.append(f"| `{i['id']}` | {i['hypothesis']} | " + "<br>".join(f"`{s}`" for s in i.get("seeds", [])[:3]) + ("" if i.get("seeds") else "(不限结构)") + f" | `{i['reward']}` |")
 eps = sorted((root / "episodes").glob("*/evidence.json")) if (root / "episodes").is_dir() else []
 eps = [e for e in eps if not e.parent.name.startswith(("smoke", "e1_"))]          # e1: the reward compared two universes -- void
+# runs of a multi-seed series (e4k1, e5sh2, e6b3, rr_e5s1 ...) are read together in episodes/<series>_SUMMARY.md, not one row each
+SERIES = [e for e in eps if re.match(r"^(rr_)?e\d+[a-z]+\d+_", e.parent.name)]
+eps = [e for e in eps if e not in SERIES]
 if eps:
     L += ["", "### 干预实验(同一个想法的两臂只差「有没有指引」;完整的实验卡在 `episodes/<实验>/episode.md`)", "",
           "| 实验 | 奖励 | 带指引:评估 / 发现(族)/ 最好 | 对照:评估 / 发现(族)/ 最好 | 结论 |", "|---|---|---|---|---|"]
@@ -210,6 +213,14 @@ if eps:
           "(规则 E8)。括号里按族数:只差价格字段换名、或只在最外层多套一个保序函数的算一族。首跑(`e1_*`)作废:那时对池子的边际奖励两边不在同一个股票池里。"]
 else:
     L += ["", "(干预实验的结果出来后会列在这里。)"]
+sums = sorted((root / "episodes").glob("e*_SUMMARY.md"))
+if sums:
+    L += ["", f"### 多种子的实验(共 {len(SERIES)} 个 run,合起来读)", ""]
+    for f in sums:
+        txt = f.read_text(encoding="utf-8")
+        title = txt.splitlines()[0].lstrip("# ").strip()
+        verdicts = [ln.strip("- ").strip() for ln in txt.splitlines() if ln.startswith(("- **e4k", "- **e4p", "1. **", "2. **"))][:3]
+        L += [f"- `episodes/{f.name}` —— {title}"] + [f"  - {v[:260]}" for v in verdicts]
 L.append("")
 
 # ---- 5. what would go into AlphaCube proper
