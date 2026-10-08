@@ -37,7 +37,7 @@
 
    先验真正大量触发的那一次(种子 1)没赢;赢的两次各只抽掉了 4 个和 6 个提议。抽掉头几个提议之后随机轨迹就和对照分开了,之后的差别是「搜到了哪里」,不是「少在垃圾上花了多少预算」。
 2. **主指标数的是写法,不是东西。** e7l 种子 2 的 50 个好候选全是同一样东西的各种写法:`ts_pearson(day_first(High), 40)` 再套一层、换窗口、叠 `nt_ts_delay` ——
-   也就是「日频价格水平的滚动自相关」,校准里已经认出来的那一族(`ts_pearson(day_last(Close), 20)`)。对照的种子 3 撞进的也是它(`ts_pearson(day_mean(Vwap), 10)`,20 个)。
+   也就是「日频价格路径的同步性」(`ts_pearson(x, d)` 的内核算的是这只股票 d 日窗口与其余每只股票同期窗口的平均相关),校准里已经认出来的那一族(`ts_pearson(day_last(Close), 20)`)。对照的种子 3 撞进的也是它(`ts_pearson(day_mean(Vwap), 10)`,20 个)。
    谁先撞进这一族、把存档填满,谁的「质量产出」就高。族键(`family_key`)也分不开它们(50 个写法算成 50 族),只有实测互不相关的计数靠得住。
 3. **按实测互不相关的发现数,三格分不出高下**:6 / 10 / 12 个(每百次 1.7 / 2.4 / 2.8),种子 1 三格都是 0。三个种子、个位数的计数,差别在噪声里(GP 的种子方差本来就极大)。
 
@@ -51,7 +51,7 @@
 | e7l | `ts_decay_linear(day_close(Amt), 10)` 1.30(0.90) | `ts_pearson(day_first(High), 40)` 1.81(0.33) | `pow_2_5(pow_2_5(cs_rank(cs_mask_top_replace_mean_neg(day_wstd(Close, Close)))))` 2.47(0.42) |
 | e7b | `day_topw_mean(Amt, Volume)` 1.60(0.87) | `day_wmean(Amt, Volume)` 2.23(0.83) | `pow_2(cs_last_high20(cs_first_low20(day_open(Volume), day_flat_ratio(High)), day_flat_ratio(High)))` 1.73(0.46) |
 
-和事先说的一样:奖励 `long` 下的好候选不是成交额一族,就是价格水平那一族。
+和事先说的一样:奖励 `long` 下的好候选不是成交额一族,就是价格路径同步性那一族。
 
 ## 结论与处置
 
