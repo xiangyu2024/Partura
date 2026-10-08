@@ -161,5 +161,5 @@ def test_the_header_of_the_script_names_the_two_stored_runs_and_their_exact_comm
                    "I5_within_bucket_anything e7bx \"1\" --reward long --parts priors --arms steer --budget 192 --population 48",
                    "--tag e7cx1 --seed 1 --reward long --arms control --budget 192 --population 48",
                    "--tag e7bx1 --seed 1 --reward long --parts priors --arms steer --budget 192 --population 48",
-                   "e7c1_I5_within_bucket_anything", "e7b1_I5_within_bucket_anything"):
+                   "e7c1_I5_within_bucket_anything", "e7b1_I5_within_bucket_anything", "acc7c1_I5_within_bucket_anything", "vendor/AlphaCube-steering"):
         assert needle in head, needle

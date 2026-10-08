@@ -1,4 +1,4 @@
-"""Does a fresh idea-search run reproduce a stored one?  Compares two ``evidence.json`` files arm by arm.
+r"""Does a fresh idea-search run reproduce a stored one?  Compares two ``evidence.json`` files arm by arm.
 
 WHY.  ``scripts/idea_search.py`` reaches AlphaCube through the plugin route (``partura/ac_plugin.py``:
 ``load_plugins`` + ``SearchHooks`` + a registered scorer); the stored episodes were produced by the monkeypatching
@@ -7,39 +7,43 @@ order from the same seed -- the search is deterministic (episode e5's re-runs ag
 under a new tag either reproduces the stored one exactly or it does not.  This script says which, and where it first
 does not.  It needs no GPU and no store: it only reads the two JSON files.
 
-HOW TO PRODUCE THE FRESH RUNS  (server; ``./scripts/study.sh code`` first, and the server's AlphaCube must be the
-partura-steering one -- ``python -c "import alphacube.plugins"`` must work).  The two stored runs are
-episodes/e7c1_I5_within_bucket_anything (the control arm) and episodes/e7b1_I5_within_bucket_anything (the steer arm
-with only the guidance's priors); both seed 1, budget 192, population 48 (episodes/e7_PLAN.md).  Under new tags
-``e7cx1`` / ``e7bx1`` -- the launcher builds the tag as <prefix><seed> and exports the same environment the stored runs
-had (``PARTURA_REWARD_DEVICE=cuda`` among it; the evidence records it):
+HOW TO PRODUCE THE FRESH RUNS  (server; ``./scripts/study.sh code`` first).  The two stored runs are
+episodes/e7c1_I5_within_bucket_anything (the control arm) and episodes/e7b1_I5_within_bucket_anything (the steer arm with
+only the guidance's priors); both seed 1, budget 192, population 48 (episodes/e7_PLAN.md).  The control arm has a second
+stored copy, episodes/acc7c1_I5_within_bucket_anything: the same run replayed with the OLD (monkeypatching) script on the
+new engine, candidate-for-candidate equal to e7c1 (handoff/ac_accept/ACCEPTANCE.md) -- so a difference against e7c1 that is
+absent against acc7c1 is not the engine's.
 
-    screen -dmS accc scripts/server/run_idea_seeds.sh I5_within_bucket_anything e7cx "1" --reward long --arms control --budget 192 --population 48
-    screen -dmS accb scripts/server/run_idea_seeds.sh I5_within_bucket_anything e7bx "1" --reward long --parts priors --arms steer --budget 192 --population 48
-
-which is, for each, ``python -u scripts/idea_search.py I5_within_bucket_anything --tag <tag> --seed 1 <the options above>``:
-
-    python -u scripts/idea_search.py I5_within_bucket_anything --tag e7cx1 --seed 1 --reward long --arms control --budget 192 --population 48
-    python -u scripts/idea_search.py I5_within_bucket_anything --tag e7bx1 --seed 1 --reward long --parts priors --arms steer --budget 192 --population 48
-
-The launcher exports ``ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube`` (and the matching ``PYTHONPATH``) unconditionally, so
-that directory must be the steering AlphaCube.  If it is vendored instead (``scripts/server/ac_accept/run.sh`` expects it at
-``$PARTURA/vendor/AlphaCube-steering``), run the same two commands by hand with the launcher's environment and that root:
+The merged script imports ``alphacube.plugins``, so it needs the steering AlphaCube.  It is deployed beside the old one,
+at /root/autodl-tmp/Partura/vendor/AlphaCube-steering (``python -c "import alphacube.plugins"`` with that PYTHONPATH must
+work).  ``scripts/server/run_idea_seeds.sh`` exports ``ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube`` unconditionally, i.e. the
+OLD engine, so until that directory is replaced use the launcher's own environment with the vendored root.  Under new tags
+``e7cx1`` / ``e7bx1`` (the tag of the launcher is <prefix><seed>):
 
     cd /root/autodl-tmp/Partura
     export ALPHACUBE_ROOT=/root/autodl-tmp/Partura/vendor/AlphaCube-steering
     export PYTHONPATH=$ALPHACUBE_ROOT/src:/root/autodl-tmp/Partura OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 PARTURA_RANK_DEVICE=cuda \
-           PARTURA_REWARD_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2
-    /root/miniconda3/envs/quant/bin/python -u scripts/idea_search.py I5_within_bucket_anything --tag e7cx1 --seed 1 --reward long --arms control --budget 192 --population 48
-    /root/miniconda3/envs/quant/bin/python -u scripts/idea_search.py I5_within_bucket_anything --tag e7bx1 --seed 1 --reward long --parts priors --arms steer --budget 192 --population 48
+           PARTURA_REWARD_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2 PARTURA_MEM_WAIT_S=10800
+    PY=/root/miniconda3/envs/quant/bin/python
+    $PY -u scripts/idea_search.py I5_within_bucket_anything --tag e7cx1 --seed 1 --reward long --arms control --budget 192 --population 48
+    $PY -u scripts/idea_search.py I5_within_bucket_anything --tag e7bx1 --seed 1 --reward long --parts priors --arms steer --budget 192 --population 48
+
+(``PARTURA_REWARD_DEVICE=cuda`` is what the stored evidence recorded.)  Once /root/autodl-tmp/AlphaCube is the steering
+engine, the launcher form does the same thing:
+
+    screen -dmS accc scripts/server/run_idea_seeds.sh I5_within_bucket_anything e7cx "1" --reward long --arms control --budget 192 --population 48
+    screen -dmS accb scripts/server/run_idea_seeds.sh I5_within_bucket_anything e7bx "1" --reward long --parts priors --arms steer --budget 192 --population 48
 
 Then, locally after ``./scripts/study.sh idea-pull`` (or on the server):
 
     python scripts/plugin_acceptance.py episodes/e7cx1_I5_within_bucket_anything episodes/e7c1_I5_within_bucket_anything
+    python scripts/plugin_acceptance.py episodes/e7cx1_I5_within_bucket_anything episodes/acc7c1_I5_within_bucket_anything
     python scripts/plugin_acceptance.py episodes/e7bx1_I5_within_bucket_anything episodes/e7b1_I5_within_bucket_anything
 
 Each prints ``identical`` or the first difference per arm, and exits 0 / 1.  Leave ``PARTURA_AC_FIXES`` unset for
-these runs: the two opt-in plugin changes (``in_sustain``, ``nt_twins``) move the draws on purpose.
+these runs: the two opt-in plugin changes (``in_sustain``, ``nt_twins``) move the draws on purpose.  (If the steered
+comparison differs and the control one does not, replay e7b1 with the OLD script on the same vendored engine -- main's
+``scripts/idea_search.py`` at commit 31765f1 -- to see whether it is the route or the engine.)
 
 THINGS THAT WILL LOOK LIKE A DIFFERENCE AND ARE NOT THE PLUGIN'S
   * the ``code`` fingerprints of ``scripts/idea_search.py`` / ``partura/ops_ext.py`` differ by construction (and the
