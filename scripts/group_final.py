@@ -355,14 +355,15 @@ def is_size_exposure(rank_corr: float, overlap: float) -> bool:
 def classify(t: float, ann_in: float) -> str:
     """README 判读.  Established = the combined period's paired t >= 2 AND the in-sample difference has the same
     (positive) sign; 1 <= t < 2, or t >= 2 with an in-sample difference of the other sign = right direction, not enough;
-    0 <= t < 1 = none; t < 0 = worse."""
+    -1 < t < 1 = none (a difference inside one standard error is no difference, whichever side of zero it falls on);
+    t <= -1 = worse."""
     if t is None or t != t:
         return NA
     if t >= T_ESTABLISHED and ann_in is not None and ann_in == ann_in and ann_in > 0:
         return "成立"
     if t >= T_RIGHT:
         return "方向对、证据不够"
-    if t >= 0:
+    if t > -T_RIGHT:
         return "没有"
     return "更差"
 

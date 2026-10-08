@@ -429,7 +429,7 @@ def test_book_overlap_and_the_size_labels():
 # ===================================================================================================== the verdicts
 @pytest.mark.parametrize("t,ann_in,label", [
     (3.0, 0.02, "成立"), (2.0, 0.001, "成立"), (1.99, 0.02, "方向对、证据不够"), (1.0, 0.02, "方向对、证据不够"),
-    (0.99, 0.02, "没有"), (0.0, 0.02, "没有"), (-0.001, 0.02, "更差"), (-3.0, -0.02, "更差"),
+    (0.99, 0.02, "没有"), (0.0, 0.02, "没有"), (-0.001, 0.02, "没有"), (-0.99, 0.02, "没有"), (-1.0, 0.02, "更差"), (-3.0, -0.02, "更差"),
     (2.5, -0.01, "方向对、证据不够"), (2.5, 0.0, "方向对、证据不够"), (2.5, float("nan"), "方向对、证据不够"),   # t >= 2 but the in-sample difference is not positive
     (float("nan"), 0.02, GF.NA), (None, 0.02, GF.NA)])
 def test_the_verdict_ladder(t, ann_in, label):
@@ -507,7 +507,7 @@ def test_rulers_are_described_and_never_relabelled_and_carriers_and_twins_get_no
 def test_the_twin_reading_is_parent_minus_twin_and_the_field_contributes_only_at_t_two():
     j = GF.judge_convention("c_p", "standalone", "k_known", _pair(0.5, 0.0), None, None, ROW, pair_twin=_pair(2.0, 0.01))
     assert j["twin"]["label"] == GF.TWIN_OK and j["twin"]["t_oos"] == 2.0
-    for t, in_, lab in ((1.99, 0.01, "方向对、证据不够"), (0.5, 0.01, "没有"), (-0.5, 0.01, "更差"), (2.5, -0.01, "方向对、证据不够")):
+    for t, in_, lab in ((1.99, 0.01, "方向对、证据不够"), (0.5, 0.01, "没有"), (-0.5, 0.01, "没有"), (-1.5, 0.01, "更差"), (2.5, -0.01, "方向对、证据不够")):
         assert GF.judge_convention("c_p", "standalone", "k_known", _pair(0.5, 0.0), None, None, ROW, pair_twin=_pair(t, in_))["twin"]["label"] == lab
     assert GF.judge_convention("c_p", "standalone", "k_known", _pair(0.5, 0.0), None, None, ROW)["twin"] is None
 
