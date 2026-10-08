@@ -42,7 +42,7 @@ OUT = PARTURA_ROOT / "runs" / "_risk"
 OUT.mkdir(parents=True, exist_ok=True)
 names = [n for n in (opt("--only") or "手写库冠军,挖掘冠军").split(",") if n]
 M = json.loads((PARTURA_ROOT / "runs" / "_forward" / f"members_{END}.json").read_text(encoding="utf-8"))
-EXPR = {"close": "day_last(Close)", "amt": "day_sum(Amt)", "high": "day_max(High)", "low": "day_min(Low)",
+EXPR = {"open": "day_first(Open)", "close": "day_last(Close)", "amt": "day_sum(Amt)", "high": "day_max(High)", "low": "day_min(Low)",
         "ltc": "neg(LogTotalCap)", "lfc": "neg(LogFloatCap)", "lfs": "neg(LogFloatShares)"}
 
 with slot():
