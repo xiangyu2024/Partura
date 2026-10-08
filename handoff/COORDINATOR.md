@@ -39,6 +39,20 @@ _最后更新:2026-10-07 18:40 PDT,Opus 5.5 主会话。每到一个里程碑更
 
 **本机的辅助进程**:`wf_dump.py --loop 120` 还在(pid 34204);`caffeinate`、`recorder.py` 已不在,需要时重起。
 
+**21:35 补:Partura 已切到新引擎的插件路线;第五轮(K002)在服务器上跑**
+- Partura `main` = `95c8395`:并入了 `ac-plugin`(搜索走 `partura/ac_plugin.py` 的正式钩子;验收 `e7cx1` / `e7bx1` 与存档逐候选相同,见 `handoff/ac_accept/ACCEPTANCE.md`)
+  和 `k002-tooling`(面板缓存按表达式认日频库、`sweep.py --only-extra` / `lock` / `base` / `twin`、`scripts/group_final.py`、`scripts/server/run_k002.sh`)。282 个测试。
+  服务器启动脚本默认用 `<Partura>/vendor/AlphaCube-steering`(`$PARTURA_AC` 可改回旧引擎);本机 `partura/bridge.py` 默认找同级的 `AlphaCube-steering`。
+  工作区:`~/Desktop/Partura-steering`(ac-plugin)、`~/Desktop/Partura-k002`(k002-tooling)都已并入,可以删(`git worktree remove`),还没删。
+- **更正了一个读错的算子**:`ts_pearson(x, d)` 是「与其余每只股票同期窗口的平均相关」(同步性),不是走势线性度(主研读内核查出;文档已改,`docs/new_operators.md` 末尾加了一节这类坑)。
+- **K002(`studies/K002_daily_fields/`)**:README = 规则(「现行规则」一段为准;原规则与修订都保留)+ 数据实测;`hypo.yaml` 189 条定稿(`b9ae507`);`HYPOTHESES.md` 主研的道理与预测。
+  规则要点:尺子 14 个总是读;独立假设按样本内纯多头夏普、修改型假设(带 `base`)按对载体成对差的信息比,各组各取至多 3 个;孪生 / 载体跟着读;
+  判读看合并段成对 t(独立对已知族、修改型对载体),「就是市值」看暴露,多重比较下 t 在 2 ~ 3 的只记候选。
+- **在跑**:screen `k002` = `run_k002.sh`(12:31 服务器时间起):`check_hypo` ✓ → 批量扫描(192 个对象,177 个新算,约 4 秒一个)→ `group_final.py --dry-run`(只挑不读)。
+  日志 `logs/K002_daily_fields_s1{,_hypo,_dry}.log`;产物 `runs/K002_daily_fields/sweep_s1.json`、`group_select_s1.json`。
+  **真正的读数没有排进去**:看过预演之后手工跑一次(命令在 `run_k002.sh` 文件头;同一标签只让读一次)。读完:拉回 `group_final_s1.json` → 写 `studies/K002_daily_fields/RESULT.md`(对照事先的预期)→ 对挑中的做市场解剖(`anatomy.py`)。
+- 日频库的身份只认 `meta.json` 的哈希:以后若重建日频库而 meta 不变,带日频叶子的缓存面板不会失效,要手工清。
+
 **19:45 补:AlphaCube 分支核对完、已并排部署并通过服务器验收;第五轮已起头**
 - `partura-steering` 现在在 `155ce38`(子代理加了三个提交:`12734f9` 流通股本列名改成实测的 `circulating_capital`;`215aff7` 默认路径不再多一行日志、不再多两个 `meta.json` 键;`155ce38` 文档 §7 如实写明 RL 封禁键校验这一处故意的变化)。
   966 passed / 10 skipped / 1 xfailed(子代理一遍、总领一遍)。本机逐字节比对:默认路径与基线一致。
