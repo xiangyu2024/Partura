@@ -40,6 +40,8 @@ isplit = next(i for i, d in enumerate(dates) if d >= SPLIT)
 ifw = next((i for i, d in enumerate(dates) if d >= "20260101"), len(dates))          # the forward segment, when the series has it
 NAME = {"trainto/champion_signal_buyable": "AlphaCube 挖掘冠军(4206 个挖掘因子两层合成)", "champion_signal_buyable": "AlphaCube 挖掘冠军(旧选族)",
         "legacy_signal": "AlphaCube 手写库冠军(1392 个手写因子两层合成)", "trainto/legacy_signal": "AlphaCube 手写库冠军",
+        "手写库冠军": "AlphaCube 手写库冠军(1392 个手写因子两层合成)", "挖掘冠军": "AlphaCube 挖掘冠军(4206 个挖掘因子两层合成)",
+        "C_LQ": "手写库 + Partura 信号的两层合成(C_LQ)", "C_MQ": "挖掘库 + Partura 信号的两层合成(C_MQ)", "C_LM": "手写库 + 挖掘库的两层合成(C_LM)", "C_Q": "只用 Partura 信号的两层合成(C_Q)",
         "fusion:A": "12 个独立升级版的等权融合", "fusion:C": "独立升级版 + 已知族头名的融合", "fusion:D": "一半已知族头名 + 一半独立升级版",
         "F104.sub_A_sqrt@ls": "单因子 F104 升级版(日内成交额峰度)", "F104.sub_A_sqrt@long": "单因子 F104 升级版(日内成交额峰度)"}
 
@@ -103,7 +105,7 @@ def frame(title, sub, y_of, ticks, tick_label):
          f'<rect x="{X(isplit):.1f}" y="{mt}" width="{X(min(ifw, n - 1)) - X(isplit):.1f}" height="{H - mt - mb}" fill="#f1f5fb"/>']
     if ifw < n:
         A.append(f'<rect x="{X(ifw):.1f}" y="{mt}" width="{W - mr - X(ifw):.1f}" height="{H - mt - mb}" fill="#fdf3e3"/>')
-        A.append(f'<text x="{(X(ifw) + W - mr) / 2:.1f}" y="{mt + 16}" text-anchor="middle" fill="#9a6a15">前推段(2026)</text>')
+        A.append(f'<text x="{W - mr - 4}" y="{mt + 16}" text-anchor="end" fill="#9a6a15">前推段(2026)</text>')
     A += [f'<text x="{ml}" y="24" font-size="17" font-weight="600" fill="#111">{title}</text>', f'<text x="{ml}" y="43" fill="#555">{sub}</text>',
           f'<text x="{(X(0) + X(isplit)) / 2:.1f}" y="{mt + 16}" text-anchor="middle" fill="#666">样本内</text>',
           f'<text x="{(X(isplit) + X(min(ifw, n - 1))) / 2:.1f}" y="{mt + 16}" text-anchor="middle" fill="#3b5b8c">样本外</text>']
@@ -145,12 +147,21 @@ for j, o in enumerate(LS):
     if O[o].get("ends", len(dates)) < len(dates):
         e = O[o]["ends"] - 1
         A.append(f'<text x="{X(e) - 6:.1f}" y="{y1(cum[o][e]) + 20:.1f}" text-anchor="end" fill="{COL[j]}" font-size="12">止于 {dates[e][:4]}-{dates[e][4:6]}(不在前推段的读数清单里)</text>')
+two = any("fwd" in stats[o]["ls"] for o in LS)                    # with a forward segment the legend takes two lines per series
+if two:                                                           # the legend then reaches into the curves: give it a backing
+    A.append(f'<rect x="{ml + 8}" y="{mt + 22}" width="738" height="{38 * len(LS) + 6}" fill="#ffffff" fill-opacity="0.86"/>')
+for j, o in enumerate(LS):
     s = stats[o]["ls"]
-    y = mt + 40 + 22 * j
+    y = mt + 40 + (38 if two else 22) * j
     A.append(f'<line x1="{ml + 14}" y1="{y - 4}" x2="{ml + 42}" y2="{y - 4}" stroke="{COL[j]}" stroke-width="3"/>')
-    fwd = f';前推段 {pct(s["fwd"]["ann"])}、夏普 {s["fwd"]["sharpe"]:.2f}' if "fwd" in s else ""
-    A.append(f'<text x="{ml + 48}" y="{y}" fill="#222">{NAME.get(o, o)}:样本内 年化 {pct(s["in"]["ann"])}、夏普 {s["in"]["sharpe"]:.2f}、回撤 {pct(s["in"]["mdd"])};'
-             f'样本外 {pct(s["out"]["ann"])}、夏普 {s["out"]["sharpe"]:.2f}、回撤 {pct(s["out"]["mdd"])}{fwd}</text>')
+    body = (f'样本内 年化 {pct(s["in"]["ann"])}、夏普 {s["in"]["sharpe"]:.2f}、回撤 {pct(s["in"]["mdd"])};'
+            f'样本外 {pct(s["out"]["ann"])}、夏普 {s["out"]["sharpe"]:.2f}、回撤 {pct(s["out"]["mdd"])}')
+    if two:
+        A.append(f'<text x="{ml + 48}" y="{y}" fill="#222" font-weight="600">{NAME.get(o, o)}</text>')
+        tail = f';前推段 {pct(s["fwd"]["ann"])}、夏普 {s["fwd"]["sharpe"]:.2f}、回撤 {pct(s["fwd"]["mdd"])}' if "fwd" in s else ""
+        A.append(f'<text x="{ml + 48}" y="{y + 17}" fill="#333" font-size="12">{body}{tail}</text>')
+    else:
+        A.append(f'<text x="{ml + 48}" y="{y}" fill="#222">{NAME.get(o, o)}:{body}</text>')
 A.append("</svg>")
 out_dir = root / "research" / "alpha_distillation"
 SUF = opt("--suffix") or ("_to2026" if opt("--forward") else "")
@@ -185,6 +196,7 @@ def leg(tag):
 rows = [("#c0392b", "这本多头书的全部收益"), ("#8a8a8a", "全市场等权(它的比较基准)"), (None, "样本内:" + leg("in")), (None, "样本外:" + leg("out"))]
 if "fwd" in s["total"]:
     rows.append((None, "前推段(2026):" + leg("fwd")))
+    B.append(f'<rect x="{ml + 8}" y="{mt + 22}" width="{728}" height="{20 * len(rows) + 8}" fill="#ffffff" fill-opacity="0.86"/>')
 for j, (col, txt) in enumerate(rows):
     y = mt + 40 + 20 * j
     if col:
