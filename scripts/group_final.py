@@ -960,8 +960,9 @@ def main(argv=None) -> int:
                 results[k]["changed_share"][conv] = {"in_sample": 1.0 - float(nanmean_quiet(by_day[us])), "oos": 1.0 - float(nanmean_quiet(by_day[oos]))}
         # the paired differences: against every --pair object for everything read, against its base for a modification, against its twin for a parent
         refs_of = {k: [] for k in read_ids}
+        always_refs = list(dict.fromkeys(list(pair_ids) + [KNOWN_ID] + ([SIZE_ID] if SIZE_ID in info else [])))       # the verdicts are defined against these two, whatever --pair says
         for k in read_ids:
-            refs_of[k] += [r for r in pair_ids if r != k]
+            refs_of[k] += [r for r in always_refs if r != k]
             if info[k]["role"] in ("modification", "ruler") and R[k].get("base"):
                 refs_of[k].append(R[k]["base"])
             if k in selected and twin_of(R, k) in info:

@@ -1079,6 +1079,11 @@ def test_always_groups_and_pair_options(monkeypatch, root, swept):
     assert set(sel["read"]) >= {"c_solo", "c_mod", "c_solo_twin"}
     with pytest.raises(SystemExit, match="not in the sweep"):
         run_gf(monkeypatch, root, swept.world, ["--dry-run", "--always", "a_nonesuch"])
+    # --pair only adds references: the verdicts are defined against k_known (and described against a_size) whatever it says
+    assert run_gf(monkeypatch, root, swept.world, ["--groups", "c_", "--always", "a_tsize", "--pair", "a_tsize", "--again"]) == 0
+    out = result(root)
+    assert out["verdicts"]["c_solo"]["fixed"]["vs_ref"] is not None and "c_solo" in out["paired"]["k_known"] and "a_tsize" in out["paired"]
+    assert out["verdicts"]["c_solo"]["fixed"]["vs_size"] is None and out["results"]["c_solo"]["exposure"]["is_size"] is False        # a_size is not read here: no size reading
     run_gf(monkeypatch, root, swept.world, ["--dry-run", "--per-group", "1"])        # at most one of EACH type per group
     g = selection(root)["groups"]
     assert all(len(g[p][t]["kept"]) <= 1 for p in g for t in ("standalone", "modification"))
