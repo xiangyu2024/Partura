@@ -107,6 +107,18 @@ evaluation:
     change: 「把搜出来的变体并进合成池」带来的测试段改善不算增益,要到前推段上用成对差确认;(假设,未检验)搜出来的池子的训练段适应度是被筛选抬高的,选族时应打折或按来源设配额 —— 样本内再留出一段排序解决不了(这些池子两段都被筛过),干净的检验只能等前推段变长
     why: 三个并集(手写库 ∪ Partura、挖掘库 ∪ Partura、手写库 ∪ 挖掘库)对各自的基线,测试段 +1.7 ~ +4.1 个点,前推段 −0.9 ~ −4.6 个点,合并段 t 0.5 ~ 0.7;入选的 100 族里搜出来的池子独占 42 ~ 71 族(C_LQ 里 Partura 独占 67 族),样本内拟合值涨、前推段反而低。两个现成冠军自己在前推段站住了(纯多头净超额 +16.9% / +16.6%)
     evidence: ["research/two_level/RESULT.md", "runs/_forward/two_level_forward_20260916.json"]
+  - id: E14_rulers_small_total_cap_and_within_size
+    change: 基准之外总是报两把尺子 —— 小总市值 neg(LogTotalCap),和候选放进流通市值十档内(cs_bucket_rank(x, LogFloatCap))之后的纯多头读数。全市场口径下好、档内没了的记为市值,不记为发现;桶内奖励的桶键用流通市值
+    why: K002:已知族放进同流通市值档内,样本内还剩 +7.7% / 1.02,样本外合并段只剩 +1.9% / 0.19(对已知族 −10.7 个点,t −1.9);小总市值合并段 +20.2% / 1.34,高于已知族 7.6 个点(t 1.5)、高于小流通市值 9.3 个点(t 2.4,差别在次新);同市值档内的典型性折叠 +12.6% / 2.06、每年 +10% ~ +19%
+    evidence: ["studies/K002_daily_fields/RESULT.md", "runs/K002_daily_fields/group_final_s1.json"]
+  - id: E15_modifications_are_judged_against_their_carrier
+    change: 筛子 / 罚分 / 只在某一段里买,按「对自己载体的成对差」排名、去重(两条差序列相关 < 0.7)和判读;不用新字段的对照版(孪生)不占名额、跟着读;「是不是市值」看暴露(与小市值的交易信号秩相关、多头书重合度),不看成对差的 t
+    why: 修改型假设的绝对夏普就是载体的夏普,按它排名排的是载体;两个不同的筛子秩相关 0.4 ~ 0.6 而书重合八成;与市值无关的书和小市值那本书跟踪误差十个点上下,成对 t 说明不了它是不是市值。主研在 K002 出数之前指出,规则据此修订
+    evidence: ["studies/K002_daily_fields/README.md", "scripts/group_final.py"]
+  - id: E16_limits_must_be_board_aware
+    change: 认涨停 / 跌停、把涨跌幅当「离限幅多远」用的写法,一律除以所在板块的涨跌幅宽度(日频字段 LimitWidth),不用固定百分比
+    why: K002 的涨停筛子 —— 按板块限幅认(e_xlimup10)对已知族合并段 +1.2 个点(t 4.4),样本内、测试段、前推段都为正;一律按 9.5% 认的孪生样本内一样好(+2.2,t 9.0),测试段是 0(t 0.04):2020 年以后一半的小票在 20% 涨跌幅的板上,9.5% 的大阳线不是涨停
+    evidence: ["studies/K002_daily_fields/RESULT.md", "studies/K002_daily_fields/K002_limitup_screen.svg"]
   - id: E9_paired_test_against_the_benchmark
     change: 说一个候选(或一个融合)「比基准好」,用**同一天相减**的逐日净超额之差来判:年化差、信息比、测试段的 t 值;两个年化数相减只当描述
     why: 两本书大半持仓相同,各自 ±3 个点的噪声在相减时抵掉大半。第四轮的结论因此要分开说 —— 独立升级版的融合比 15 条原式的融合样本外多 6.5 个点(t = 1.5,幅度没缩水);比已知族多 2.3 个点(t = 0.6,2.3 年的样本分不出来);三轮都是这个量级(s2 +3.2 / t 0.8,s3 +1.6 / t 0.4)
@@ -163,6 +175,10 @@ priors:
   - {id: U5_state_screen, action: weight, w: 1.0, pattern: "{cs_last_high20|cs_last_high40|cs_first_low40}(_, _)", why: "(2026-10-06 由升权 1.5 改为备注)用一个状态变量把一类票排掉 / 只在一类票里选,是这一批里样本内最大的单项改进 —— 但对已知族做筛子样本外没有站住:K001 按事先写下的规则读了九个单层筛子和六个多层的,对已知族的成对差 t 最高 1.1,通用冻结筛子自己 +0.9 个点(t = 0.6),增益集中在 2018–2020。「只在低流动性四成里选」那一半是流动性倾斜(见 R2),本来就不该升权", evidence: [wrappers.seg_lowliq_m, "known_xfrozen 3.15 对 2.22(样本内)", "studies/K001_known_screens/README.md"]}
   - {id: U6_rank_difference, action: weight, w: 1.5, pattern: "sub(cs_rank(_), cs_rank(_))", why: 两件事要分开时用秩相减,不用比值, evidence: ["F106 h_zero_minus_liq 测试 +15.5%", substitute_pairs."div → mul"]}
   - {id: U7_event_memory_max, action: weight, w: 1.5, pattern: "root: cross_max(_, {30|60})", why: 事件型的日度标记(尖峰)要用极值记忆,指数衰减和机制对着干;先用 q75 对 q25 的尾均值判断信息在尾部还是在水平, evidence: ["F102 h_max60 2.85 对原式 2.05", "F102 verdict lab_shape_before_halflife"]}
+  - {id: U8_typicality_fold_inside_size, action: weight, w: 1.5, pattern: "abs_(cs_bucket_zscore(_, {LogFloatCap|FloatCap|LogTotalCap}))", why: "同市值档内的 |z| 折叠(相对同样大小的票是不是典型)是 K002 里拿掉市值之后样本外还站得住的结构:b_fold_zs_sum_size 合并段 +12.6% / 2.06,2018 ~ 2026 每年 +10% ~ +19%,与小市值秩相关 0.06", evidence: ["studies/K002_daily_fields/RESULT.md"]}
+  - {id: U9_recent_limit_up_by_board, action: weight, w: 1.5, pattern: "cross_max(div(_, LimitWidth), $w)", why: "近若干日最大单日涨幅 ÷ 板块限幅:用它把刚涨停过的票排到最后,是这个项目第一条按规则读出来对已知族成对 t ≥ 2 的修改(+1.2 个点,t 4.4)", evidence: ["studies/K002_daily_fields/RESULT.md"]}
+  - {id: D18_flow_over_cap, action: weight, w: 0.5, pattern: "div({day_sum|day_std|day_mean}(@flow), {FloatCap|FloatShares|TotalCap})", why: "把成交额类的量除以市值(换手率写法)不是更干净的写法,是更差:20 日换手率合并段 −4.7%;c_dturn30_max −5.1% 而它的成交额版孪生 +12.5%。已知族里值钱的是市值那一半", evidence: ["studies/K002_daily_fields/RESULT.md"]}
+  - {id: D19_minute_flow_over_cap, action: weight, w: 0.5, pattern: "{day_sum|day_std|day_mean}(div(@flow, {FloatCap|FloatShares|TotalCap}))", why: "同 D18,分钟层面先除再聚合的写法", evidence: ["studies/K002_daily_fields/RESULT.md"]}
 
 # 已知池:R3 的池子,也是 E3「同一笔钱」检验的参照。按经济量维护,不按结构。
 pool:
