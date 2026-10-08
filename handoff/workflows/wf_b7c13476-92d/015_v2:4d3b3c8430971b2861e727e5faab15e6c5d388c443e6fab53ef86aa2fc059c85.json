@@ -1,0 +1,82 @@
+{
+ "type": "result",
+ "key": "v2:4d3b3c8430971b2861e727e5faab15e6c5d388c443e6fab53ef86aa2fc059c85",
+ "agentId": "a6541d6f9056689aa",
+ "result": {
+  "findings": [
+   {
+    "title": "_pct_rank 用序数秩打并列,_lexi 的筛子/分段在并列块内部按股票列序任意切,占 20% 里的 12.9pp 是老票",
+    "file": "/Users/wxy/Desktop/Partura/partura/ops_ext.py",
+    "line": 226,
+    "severity": "high",
+    "summary": "_pct_rank 用 argsort(argsort(...)) 得到序数秩,并列值按股票在面板里的列下标分先后;_lexi 的 (rx > lo) & (rx <= hi) 又恰好把切点落在并列块内部,所以 cs_first_*/cs_last_* 的「两成/四成」永远正好是 20%/40% 的名额,多出来的那部分成员完全由 symbol 数组顺序决定,与 x 的语义无关。",
+    "failure_scenario": "x = neg(cross_valid_count(day_last(Close), 241)) 时,92.9% 的票并列在 count=241(这个比例就是 F103 anatomy 里「上市:250日以上」= 92.912%)。合成实测(1000 票、7.1% 次新,与 anatomy 的 7.088% 对齐):cs_last_high20 剔掉 200/1000 = 20.0%,其中 71 只是真次新(7.1pp),另 129 只(12.9pp)是成熟票,且恰好是「成熟票里列下标最大的 129 只」,每一天都是同一批(第 300/450/600/699 天的被剔集合完全相同)。把列顺序随机置换后,1000 只里有 230 只换边,两次的被剔集合只重合 85/200。方向反过来一样坏:F102 的 seg_new_p = cs_first_low40(., cross_valid_count(...)) 本意「只在次新里按本因子选」,实际把 40% 的票提到书顶(7.1pp 次新 + 32.9pp 列下标最小的老票,老票占被选段的 83%),报出来的 −13.47%/夏普 −2.80 并不是「只在次新里无效」的证据。对「样本内 +18.1% / 样本外 +16.8%」(h_K_ex_both)的含义:第二层「剔次新」剔掉的 20% 里只有 7.1pp 是次新,12.9pp 是按 symbol 顺序固定的一块成熟票 —— 这个读数在 store 的 symbol 顺序一变(重建 cube、换 mirror、view(symbols=...)、max_symbols,或 store.py 把新代码 append 到末尾)就不可复现;好在同表里 k_known_xfrozen(只剔冻结)= +18.54%/3.15 vs h_K_ex_both = +18.10%/3.16,说明头条数字几乎全部来自第一层,第二层的增量(单独用时 h_K_ex_new = +16.67% vs k_known = +15.40%)才是被这个 bug 污染的部分。",
+    "evidence": "复现脚本 /Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t1_lexi_ties.py 与 t4_age_screens.py。t4 输出:「pushed 200/1000 = 20.0%; young among them 71/71; mature among them 129 (= 12.9% of the universe)」「the mature ones are exactly the last 129 mature COLUMNS ? True」「excluded-mature set on days 300/450/600/699: sizes [129,129,129,129], overlap with day 699: [129,129,129,129]」。t1 输出:「after permuting the column order: 230 of 1000 names change side (overlap of the two excluded sets 85/200)」。对照 runs/F103_amt_dw_decay/anatomy_s3.json:上市:不足250日 share 7.088%、近15日有冻结盘口 share 6.475%(即两层各剔 20%,而被引用来做理由的两个段分别只占 7.1% / 6.5%)。",
+    "suggested_fix": "在 _pct_rank 里改成并列取平均秩(或 min/max 秩),并让 _lexi 用「x 的分位阈值」而不是「秩名额」划带:thr = nanquantile(x, hi);band = x >= thr。这样并列块要么整体进带要么整体不进,带宽不再被钉死在 20%(真次新只有 7% 时就只剔 7%)。另外给 cs_first_*/cs_last_* 加一行文档:带宽是名额而非条件,x 并列多时结果与股票顺序有关。重算受影响的行:F103 的 h_K_ex_new / h_K_ex_both / h3_K_ex_age_cont,F102 的 seg_new_p,以及 docs/new_operators.md 里对这组算子的说明。"
+   },
+   {
+    "title": "cross_age 把数据起点就存在的全部股票压成同一个值(10000+t),docstring 却说它「不饱和」",
+    "file": "/Users/wxy/Desktop/Partura/partura/ops_ext.py",
+    "line": 713,
+    "severity": "high",
+    "summary": "cross_age 对「第一天就有值」的票返回 age + 10000,而 age 对这些票就是 t 本身,于是同一天里全部老票的 cross_age 完全相等。它被当作 cross_valid_count 的「连续、不饱和」替代品使用,实际上并列块一模一样(93%),配上 _pct_rank 的序数秩后切出的也是同一批按列序任意选的老票。",
+    "failure_scenario": "合成面板 700 天 × 1000 票、92.9% 自第一天起有值:cross_age 在最后一天对这 929 只票只有一个取值 10699.0(实测 np.unique 结果就是 [10699.]),cross_valid_count 的并列块与它完全重合。因此 cs_last_high20(y, neg(cross_age(day_last(Close)))) 剔掉的 200 只 = 71 只真次新 + 129 只「列下标最大的老票」,与 neg(cross_valid_count(...)) 剔掉的是同一批(实测两者的 mature-excluded 集合都等于最后 129 个成熟列)。被影响的已报数字:F103 的 h3_K_ex_age_cont = +17.21% / 夏普 2.53,它在表里的解读是「用连续上市时间做剔除也有效」,但实际度量的是「剔掉 7.1% 次新 + 12.9% 按 symbol 顺序挑的老票」;主研只要照 docstring 选 cross_age 去避开 cross_valid_count 的并列问题,就会原封不动地踩进同一个坑。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t4_age_screens.py:「cross_age of the 929 pre-data-start names on the last day: [10699.] (one single value -> a 93% tie block, exactly like cross_valid_count)」,以及紧跟的两段 cs_last_high20 对比(两个 x 的 pushed 构成完全相同)。另见 t2_buckets_days.py 的 [t6]:同一面板整体算 age 得 [10399., 299., 10399.],从第 200 天切片后再算得 [10199., 10199., 10199.]。",
+    "suggested_fix": "要么让老票的年龄保持单调可分(例如 old 用 -inf / NaN 明确表示「未知、不参与年龄比较」,或改成 age + 10000 但先把 age 对老票算成真实的 t 并在文档里说明这批票之间无法区分),要么直接在 docstring 里删掉「Unlike cross_valid_count it does not saturate」这句、改成「数据起点存在的票之间不可区分(同一天同值),做截面排序时是一个占 93% 的并列块」。另:cross_age 依赖传入张量的第一行,anatomy/sweep 都是整段算一次再切片所以一致,但任何只在 holdout 上重算面板的脚本会让所有票变成 10000+,需要在文档里写死「必须在 SPLITS['full'] 上算完再切」。"
+   },
+   {
+    "title": "sweep.py 的符号锁只认根节点,包一层 mul/cs_rank 的筛子假设会被按 IC 选成 sign=-1,变成「只买被标出的票」",
+    "file": "/Users/wxy/Desktop/Partura/scripts/sweep.py",
+    "line": 143,
+    "severity": "high",
+    "summary": "locked = re.match(r\"\\s*cs_(first|last)_(low|high)\\d+\\(\", expr) 只在表达式以筛子算子开头时把 sign 钉成 +1。只要外面包了任何东西(mul、cs_rank、add),锁就失效,sign 回到按 rank IC 的符号选,而 _lexi 面板的截面 IC 由「两组之间那一级台阶」主导,符号与多头口径的最优方向无关。",
+    "failure_scenario": "F114 的 h3_xfrozen_amtexp = mul(cs_rank(cs_last_high20(neg(cross_ema(cross_quantile_q25(day_close(Ret),60),30)), cross_max(day_zero_ratio(Ret),15))), cs_rank(div(cross_mean(day_sum(Amt),5), cross_mean(day_sum(Amt),60)))) 不以 cs_last_high20 开头,sign 被选成 -1.0。合成实测:panel 乘 -1 后,被推到底部的 20% 整体翻到顶部,多头书的 100/100 持仓全是「本该被剔掉的那批票」。于是表里记下的 utrain long_ann = -8.23%、夏普 -1.53 测的是假设的反面;而该行的 why 写着「三件好事:剔冻结 × 慢化 × 量能扩张 …… 若三者独立,这是 best_own 的天花板,也是本因子能给用户的全部」,这个「天花板不成立」的结论没有任何证据支持(原假设从未被评过)。全批 312 条含 cs_first_*/cs_last_* 的表达式里有 7 条逃过锁,其中 1 条(就是这条)被选成 -1。",
+    "evidence": "sweep.py:143 的 re.match 锚在串首;统计脚本结果:「expressions containing a cs_first_*/cs_last_* node: 312 / 操作符在 ROOT(sign 锁 +1): 305 / 不在根(锁失效): 7,其中 sign 选成 -1: 1 → F114_q25_closeret h3_xfrozen_amtexp -0.0823 -1.53」。方向翻转的机制见 /Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t1_lexi_ties.py 的 [t2]:「sign=+1 long book: 0/100 of the held names are screened-out ones;sign=-1 long book: 100/100」。",
+    "suggested_fix": "把锁改成「表达式里任何位置出现 cs_first_*/cs_last_* 就锁 +1」(re.search 而不是 re.match,或在 steer.parse_expr 的树上找节点),并在 sweep 的输出里把 sign_locked 打出来,好让读表的人看见哪几条是锁过的。顺带复算 F114 h3_xfrozen_amtexp 并修掉它在 F114 综合里支撑的结论。"
+   },
+   {
+    "title": "idea_search 的 untradable:冻结筛子是固定 20% 名额 + 平均秩,风平浪静的日子照剔两成,并列块大时按天在 0% 与整块之间跳",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 100,
+    "severity": "medium",
+    "summary": "fr_rank = dg._zrank(frozen) + 0.5 是当天的截面百分位,fr_rank > 0.8 因此恒定剔掉约 20% 的票,与「有没有冻结」无关;又因为 _zrank 用 pandas 的平均秩,frozen = cross_max(day_zero_ratio(Ret), 15) 在 1.0 上的点质量是一个整块,整块共享一个平均秩,于是整块要么全剔要么全留。",
+    "failure_scenario": "合成实测(2000 票 × 300 天):(a) 一个最差的票 zero_ratio 只有 0.349、80 分位 0.295 的平静日,仍有 19.9% 的票被判为 untradable —— 这些是完全正常的股票,它们既不能被持有、也被从奖励的等权基准里拿掉;(b) 让 frozen=1.0 的点质量取 25%,untradable 升到 24.96%;取 40% 时平均只剔 19.0%,即某些天整块 40% 全被剔、另一些天整块一个不剔(平均秩的百分位恰好落在 0.8 两侧),同一天里 52.5% 真正封死的票被留着可买。后果:long_tradable / long_bucket / long_marginal 三种奖励的宇宙按天忽大忽小,候选之间的分数不可比,评估预算有两成固定花在一批被随机剔掉的正常股票上。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t3_untradable_reward.py 的 [A] 段:「point mass at 1.0 = 25% -> untradable 24.96%」「= 40% -> untradable 19.00%; locked names 的 kept-rate 52.46%」「a calm day whose worst name has zero_ratio 0.349: still 19.9% of the names are declared untradable (80th pct = 0.295)」。注意这里的并列策略与 ops_ext 的 _pct_rank 相反(一个平均秩、一个序数秩),所以同一个「前 20%」在算子里和在 untradable 里是两批票。",
+    "suggested_fix": "把相对名额换成绝对条件:untradable_frozen = frozen > 0.9(和 anatomy.py 的 day_flat_ratio > 0.9 对齐),或者「frozen > 0.9 或截面百分位 > 0.8 两者取交」。至少把每天实际的 untradable 占比打进 evidence.json(现在只在启动时打一个全样本均值),这样整块跳动能被看见。"
+   },
+   {
+    "title": "day_zero_ratio / day_flat_ratio / day_flat_run_max 没有最少有效分钟数门槛,一天只有一笔成交的票读成「全市场最不冻结」",
+    "file": "/Users/wxy/Desktop/Partura/partura/ops_ext.py",
+    "line": 277,
+    "severity": "medium",
+    "summary": "三个算子的分母都是当天的有限分钟数,守卫只有 n > 0(flat_run_max 是 n > 1)。于是当天只有 1~2 根有限分钟、且那几根的 Ret ≠ 0 的票,day_zero_ratio = 0.0 —— 也就是截面上最低的冻结度,被筛子当成最健康的票;这类票恰恰是最不该持有的。",
+    "failure_scenario": "合成实测:一天 241 分钟里只有 1 根有限、Ret = +0.01 → day_zero_ratio = 0.0000(和一只全天正常成交、从不停顿的票同值);只有 1 根有限、Ret = 0 → 1.0000。把这条放回头条因子:cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)) 的 x 对这类超薄票取 0(连续 15 天每天都只有非零的几笔就一直是 0),于是它们稳稳落在「最不冻结」的一端不被剔;而 y = neg(cross_mean(day_std(Amt), 30)) 偏好成交额波动最小的票,超薄票的 Amt 标准差正是最小的一类 —— 筛子恰好在它要防的那批票上失效,而 sweep 口径里除了表达式自身没有别的可交易池(untradable 只在 idea_search 的奖励里用)。这会让 k_known_xfrozen(+18.54%)、h_K_ex_both(+18.10% / 样本外 +16.78%)这类数字偏乐观,幅度取决于真实数据里这类票的占比(本机无数据,未能定量)。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t3_untradable_reward.py 的 [B] 段:「a day with 1 finite minutes, each Ret = +0.01 -> day_zero_ratio = 0.0000」「a day with 2 finite minutes, each Ret = +0.01 -> 0.0000」「241 finite minutes, each Ret = 0.00 -> 1.0000」。停牌日(全天 NaN)返回 NaN、一字板日返回 1.0,这两种与文档一致(见 t2_buckets_days.py 的 [t5])。",
+    "suggested_fix": "给这三个算子加一个最少有效分钟数的守卫(例如 n >= 30,或 n >= 0.5 * T),不满足就返回 NaN;或者把分母换成当天的名义分钟数 T 而不是有限分钟数,这样「几乎不交易」会表现为低有效分钟数而不是「从不停顿」。顺便在 docs/new_operators.md 里写明分母是有限分钟数这件事。"
+   },
+   {
+    "title": "untradable 的「次新」门槛用 trimmed view 的天数算可用历史,忽略了 60 天 warm-up,视图开头上市的票永远不会被标为次新",
+    "file": "/Users/wxy/Desktop/Partura/scripts/idea_search.py",
+    "line": 99,
+    "severity": "medium",
+    "summary": "possible = np.minimum(241, np.arange(1, len(dates) + 1)) 按 ps.dates 的下标计算「到今天为止最多可能有多少个交易日」,但 PanelSet.dates = view.dates[trim:](panels.py:172)已经把 warmup=60 天剪掉了,而 cross_valid_count 是在含 warm-up 的视图上算的,所以第 i 天实际可用历史是 i+1+60,分母却写成 i+1。门槛被系统性放松。",
+    "failure_scenario": "合成实测(warmup=60、视图 400 天):一只在视图开始前 30 个交易日上市的票,按现在的 possible 在 400 天里一次都没被标为次新(0/400);把 warm-up 计进去应该被标 186 天。也就是说 2017 年末到 2018 年初上市的那批票,在 train 段开头的大半年里是「可交易」的,正好是这个筛子存在的理由。相关的同一个盲点出现在 anatomy.py:106 的 old_name = np.isfinite(full_px[:20]).any(axis=0):凡在视图前 20 天内有价格的票一律 age = 1e6,被归进「上市:250日以上」,所以 anatomy 报出的「上市:不足250日 share 7.088% / 段等权超额 −28.7%」漏掉了视图开头那一拨新票 —— 而 −28.7% 正是 h_K_ex_both 的 why 里用来论证第二层剔除的两个数字之一。",
+    "evidence": "/Users/wxy/Desktop/Partura/tmp/review/screen-ops-universe/t3_untradable_reward.py 的 [C] 段:「listed 30d before the view: flagged as too-new on 0 of 400 view days (with the warm-up counted: 186)」「listed on view day 100: 316 / 316」。分母来源见 partura/panels.py:172 self.dates = list(self.view.dates[self.trim:])。",
+    "suggested_fix": "possible = np.minimum(241, np.arange(1, len(dates) + 1) + ps.trim)(或直接把 ps.trim 传进来),这样第一天的门槛就是 0.9*61 而不是 0.9*1。anatomy.py 那边把 old_name 改成「在含 warm-up 的视图第一天就有价格」,或干脆用 cross_age 的同一口径,并在报告里注明视图起点前上市的票无法定年龄。"
+   }
+  ],
+  "checked_and_fine": [
+   "_lexi 的带宽与 docstring 完全一致:x 无并列时 cs_last_high20 / cs_first_high20 / cs_first_low20 / cs_last_low20 实测各移动 0.200,cs_first_low40 / cs_first_high40 / cs_last_high40 / cs_last_low40 各 0.400;(rx > lo) & (rx <= hi) 的区间端点(-1,0.2]/(-1,0.4]/(0.6,1.0]/(0.8,1.0] 与「最低/最高两成四成」对得上(t1_lexi_ties.py 的 [band] 段)。",
+   "_lexi 的「不产生 NaN、不产生并列、被移动的票与其余票严格分开」这条设计成立:shift=±1 配 ry∈(0,1],被移动组与未移动组的取值区间不重叠,每只票仍有互不相同的值,所以 books.long_book 的等权基准仍然覆盖全市场(超额不是对缩小后的宇宙算的)。",
+   "y 取负不改变「谁被排到最后」:带的归属只看 x,实测 cs_last_high20(-y, x) 与 cs_last_high20(y, x) 的底部集合完全相同。真正会把剔除器翻成「只买这些票」的只有作用在整个面板上的 sign(见 finding 3),sweep.py 对根节点是筛子算子的 305 条已经正确锁成 +1。",
+   "x 或 y 任一为 NaN → 输出 NaN,这些票被 long_book 的 ok = isfinite(sig) & isfinite(target) 同时从持仓和基准里剔掉,不会悄悄进书。cross_valid_count 对全 NaN 的票返回 0(永不 NaN)这点在这里无害,因为同一棵树里的 y 对这些票也是 NaN。",
+   "cs_bucket_rank / cs_bucket_demean / cs_bucket_zscore 的分桶边界正常:N=1000 → 每桶 100,N=1005 → 100/101 交替,N=23 → 2/2/2/3/...;ceil(pct_rank*10).clamp(1,10) 没有出现空桶或超大桶(A 股的 N 是数千,只有 N<=10 时每桶成单只票、demean/zscore 全 NaN,现实碰不到)。cs_bucket_rank 的桶中性性质实测成立:输出的前 10% 恰好从 10 个 x 桶各取 10 只。1e-4 的去并列权重只在股票数超过约 10 万时才会压过桶内一步(N=120000),当前规模下安全。",
+   "day_zero_ratio / day_flat_ratio / day_flat_run_max 在停牌日(全天 NaN)全部返回 NaN、不编造 0,与 docstring 一致;一字板日 Ret 全 0 → zero_ratio 1.0、flat_ratio 1.0、flat_run_max 0.9959(分母是有限分钟数,上界天然是 (n-1)/n,不是 bug);Close 恒定 → flat_ratio 1.0、zero_ratio 0.0、day_at_max_ratio 1.0,也都对。day_flat_run_max 的 cummax 重置写法在「全程相等」「全程不等」「NaN 打断」三种边界上都给出正确的最长连续段。",
+   "anatomy.py 的「近15日有冻结盘口」构造严格因果:hit[lag:] |= fr[:T-lag] 只回看过去,没有前视;市场状态(tr20 / vol20 / disp / tot60)也都是截至 t 的滚动量。",
+   "idea_search 的 untradable 三项本身都是因果量:frozen 是近 15 日的 cross_max、age 是近 241 日的有效天数、fr_rank 是当天的截面百分位,没有用到未来信息(问题在名额口径与 warm-up,不在前视)。",
+   "sweep.py / sweep_final.py / anatomy.py 都是在 SPLITS['full'](20180102–20251231、warmup 60)上把面板算一次再按 split_slice 切片,所以 cross_valid_count / cross_age 这类依赖历史起点的算子在 utrain 与 holdout 上是同一套数值,样本内外可比;idea_search 用的起点与 warm-up 也相同(20180102 / 60),cross_age 的 10000 基线一致。",
+   "partura/steer.py 的 RewardContext 目前初始化正确、reward() 能跑通(合成数据下 long_tradable 返回 score/sign/hl)。审查过程中 19:30 左右读到的版本里,__init__ 的末三行(self.halflives / self._bucket / self._pool_rows)被新加的 pool_in_universe 的 return 挡在后面成了死代码,那个状态下任何 reward() 调用都会 AttributeError: 'RewardContext' object has no attribute 'halflives',两个 arm 都会 0 候选;该文件 19:34 已被改回,这里只记录以免再次引入。",
+   "long_screen 奖励里候选与基线都在同一宇宙上算(ctx._base_rows 用的就是未加筛的 ctx.base),long_marginal 也通过 pool_in_universe() 把 pool 重排进去掉 untradable 的宇宙后再比,这两处「两边同一个游戏」的处理是对的。"
+  ]
+ }
+}

@@ -16,7 +16,7 @@ sign of their rank IC on the user's training period (the user's rule); a picked 
 picked under (``sign_flip`` marks the rare weak signal whose rank IC changes sign once valid is added).  The read
 is ledgered.
 
-    python scripts/sweep_final.py <factor_id> [--sweep s1] [--per-kind 1] [--kinds 3] [--ids a,b]
+    python scripts/sweep_final.py <factor_id> [--sweep s1] [--kinds 3] [--onknown 2] [--ids a,b]
 """
 import json
 import sys
@@ -77,7 +77,7 @@ for k in ok:
     kinds.append(kind)
     if len(kinds) >= NK:
         break
-ov = [k for k in ok if uses_known(k)][:2]
+ov = [k for k in ok if uses_known(k)][:int(opt("--onknown", 2))]
 extra = [k for k in (opt("--ids") or "").split(",") if k in R]
 ids = [k for k in dict.fromkeys(["v_base", "k_known", "k_known_xfrozen"] + picks + ov + extra) if k in R and not R[k].get("dead")]
 print(f"[final] {fid}: rule picks {picks} overlay {ov} extra {extra}", flush=True)
@@ -98,6 +98,7 @@ with slot():
         "holdout", len(ids), f"batch sweep {SW}: candidates picked by a fixed rule on train/valid ({', '.join(ids)})", f"sweep_final_{SW}")
     out = {"factor_id": fid, "sweep": SW, "rule": __doc__.split("    python")[0].strip(), "picks": picks, "overlay": ov, "results": {}}
     yrs = ps.years
+    series = {}
     for k in ids:
         raw = np.asarray(P[k], dtype=np.float64)
         ic = dg.ic_row(P[k][us], tgt[us], target_ranks=us_ranks)
@@ -117,10 +118,26 @@ with slot():
             w = long_short_weights(sm[sl], bk.TOP_FRAC)
             net = bk.long_book(w, sm[sl], tgt[sl])[0]
             by[str(y)] = float(np.nanmean(net) * 252)
+        # the book's daily net excess on each period, for the paired comparisons below (each period from an empty book,
+        # as in books.book_row)
+        series[k] = {nm: bk.long_book(long_short_weights(sm[sl], bk.TOP_FRAC), sm[sl], tgt[sl])[0] for nm, sl in (("utrain", us), ("holdout", ho))}
         out["results"][k] = {"expr": R[k]["expr"], "kind": R[k]["kind"], "why": R[k]["why"], "sign_user": sign,
                              "sign_ic_utrain": sign_ic, "sign_flip": bool(sign != sign_ic),
                              "corr_orig": R[k].get("corr_orig"), "corr_known": R[k].get("corr_known"),
                              "books_user": b, "by_year_long_net": by}
+    # Paired with the benchmarks: two annualised numbers each carry about +-3 points of noise, their DAILY DIFFERENCE
+    # does not (both books hold mostly the same names on the same days).  ann = annualised difference of the net
+    # excess, ir = its information ratio, t = ir * sqrt(years).
+    def paired(a, b):
+        d = a - b
+        d = d[np.isfinite(d)]
+        if d.size < 20 or d.std() == 0:
+            return {"ann": float("nan"), "ir": float("nan"), "t": float("nan"), "n": int(d.size)}
+        return {"ann": float(d.mean() * 252), "ir": float(d.mean() / d.std() * np.sqrt(252)), "t": float(d.mean() / d.std() * np.sqrt(d.size)), "n": int(d.size)}
+
+    REFS = [r for r in ("k_known", "k_known_xfrozen") if r in series]
+    for k in ids:
+        out["results"][k]["paired"] = {r: {nm: paired(series[k][nm], series[r][nm]) for nm in ("utrain", "holdout")} for r in REFS if r != k}
     mem.stop()
 
 p = PARTURA_ROOT / "runs" / fid / f"sweepfinal_{SW}.json"
@@ -136,4 +153,11 @@ for k in ids:
           f"{a['long_sharpe']:+5.2f} / {h['long_sharpe']:+5.2f}     | {a['long_turnover']:4.1%} | {la['ls_sharpe']:+5.2f} / {lh['ls_sharpe']:+5.2f} | "
           f"{(r['corr_orig'] or 0):+.2f} {(r['corr_known'] or 0):+.2f} | " + " ".join(f"{x:+5.1%}" for x in r["by_year_long_net"].values()))
     print(f"{'':22s} {r['expr'][:170]}")
+print(f"\n-- 和基准成对比较(同一天的净超额相减;年化差 / 信息比,测试段另给 t 值)--")
+print(f"{'id':22s} | 减已知族: 训练        测试             | 减通用筛子(已知族剔冻结): 训练        测试")
+for k in ids:
+    pr = out["results"][k].get("paired") or {}
+    cell = lambda r: ("        —            —          " if r not in pr else  # noqa: E731
+                      f"{pr[r]['utrain']['ann']:+6.1%} / {pr[r]['utrain']['ir']:+5.2f}   {pr[r]['holdout']['ann']:+6.1%} / {pr[r]['holdout']['ir']:+5.2f} (t {pr[r]['holdout']['t']:+4.1f})")
+    print(f"{k[:22]:22s} | {cell('k_known')} | {cell('k_known_xfrozen')}")
 print(f"\nwrote {p} ({time.time() - t0:.0f}s)")

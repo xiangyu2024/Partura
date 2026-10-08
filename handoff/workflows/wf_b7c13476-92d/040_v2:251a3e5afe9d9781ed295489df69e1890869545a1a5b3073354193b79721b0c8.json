@@ -1,0 +1,62 @@
+{
+ "type": "result",
+ "key": "v2:251a3e5afe9d9781ed295489df69e1890869545a1a5b3073354193b79721b0c8",
+ "agentId": "a8f4dc22d0cd1a692",
+ "result": {
+  "findings": [
+   {
+    "title": "cs_flip_by_state invents a signed value when the market state is undefined (g all-NaN that day)",
+    "file": "partura/ops_ext.py",
+    "line": 504,
+    "severity": "high",
+    "summary": "When g's cross-sectional mean for a day is itself NaN (e.g. every stock's g is missing that day), _trailing_rank correctly returns NaN for that day's state, but `hi = _trailing_rank(m, 241) > 0.5` evaluates NaN > 0.5 as False in torch, so the kernel silently takes the '-rank(y)' branch and returns a concrete signed value for every stock with finite y, instead of propagating NaN as the file's own module docstring promises ('NaN = missing; a kernel never invents a value for a missing input').",
+    "failure_scenario": "g = [[nan,nan],[1.0,2.0]], y = [[0.3,-0.1],[0.5,-0.5]] (D=2,S=2). g's day-0 cross-section is entirely NaN, so day 0's market state is undefined. Kernel: cs_flip_by_state(y,g)[0] = [-0.5, -0.0] (a fully concrete '-rank(y)' row), even though g carried zero information that day. Expected per the file's own stated invariant: [nan, nan]. Root cause verified directly: torch.nanmean on an all-NaN row returns NaN, and torch.tensor(float('nan')) > 0.5 evaluates to False in PyTorch, which is exactly why `hi` silently resolves to 'low' instead of 'undefined'. The scenario is exactly the mandated 'whole row NaN' test case applied to g. Causality (no lookahead into future days) was separately verified to hold for this operator at D up to 300, so this is purely the missing-state-mask bug, not a day-rolling bug.",
+    "suggested_fix": "AND state-definedness into the final mask, e.g. `state_ok = torch.isfinite(_trailing_rank(m, 241)); ok = torch.isfinite(y) & state_ok.unsqueeze(-1)`, so an undefined state produces NaN for every stock that day. If defaulting to 'low' is actually intended, say so explicitly in both this docstring and docs/new_operators.md instead of leaving it implicit.",
+    "evidence": "Reproduced in /Users/wxy/Desktop/Partura/tmp/review/audit_6/test_state_undefined.py and /Users/wxy/Desktop/Partura/tmp/review/audit_6/minimal_repros.py (case 4)."
+   },
+   {
+    "title": "day_at_max_ratio returns NaN instead of the docstring-implied 1.0 for a single-finite-minute day",
+    "file": "partura/ops_ext.py",
+    "line": 522,
+    "severity": "medium",
+    "summary": "The kernel gates its output to NaN whenever a day has only 1 finite minute (`return _day(r, n > 1)`), but the docstring ('Share of the day's finite minutes whose value equals the day's maximum') never states that requirement -- a lone finite minute trivially equals 'the day's maximum', so a docstring-only implementation gives 1.0, not NaN.",
+    "failure_scenario": "x = [[[nan, nan, 7.0, nan, nan]]] (D=1,S=1,M=5, exactly one finite minute = 7.0). Kernel day_at_max_ratio(x) = nan. Docstring-only reference: finite={7.0}, day's max=7.0, 1 of 1 finite minutes equals the max -> 1.0. Verified across M in {241,5,2,1} and float32/float64 (always nan vs 1.0 at n==1); the same n==1 condition also fires incidentally inside the mandated random+NaN battery (e.g. M=2 with 30% NaN, M=1 with almost any scenario), not just a hand-picked column.",
+    "suggested_fix": "Either state the requirement explicitly in the docstring (e.g. 'NaN unless at least 2 finite minutes exist that day') and keep `n > 1`, or relax the gate to `n > 0` to match the literal 'share of finite minutes' formula, which is well-defined for n=1.",
+    "evidence": "Reproduced via element-wise sweep in /Users/wxy/Desktop/Partura/tmp/review/audit_6/run_compare.py and minimally in minimal_repros.py (case 1). No-cross-day causality separately confirmed fine in test_causality.py."
+   },
+   {
+    "title": "day_at_min_ratio returns NaN instead of the docstring-implied 1.0 for a single-finite-minute day",
+    "file": "partura/ops_ext.py",
+    "line": 536,
+    "severity": "medium",
+    "summary": "Same pattern as day_at_max_ratio: the docstring ('Share of the day's finite minutes whose value equals the day's minimum') says nothing about needing more than one finite minute, but the kernel's `_day(r, n > 1)` gate forces NaN at n==1 where the literal formula gives 1.0.",
+    "failure_scenario": "x = [[[nan, nan, 7.0, nan, nan]]] (same as above). Kernel day_at_min_ratio(x) = nan. Docstring-only reference: the single finite value trivially equals the day's minimum -> 1.0. Confirmed across M in {241,5,2,1}, both dtypes, and incidentally inside the generic NaN/ties battery at small M.",
+    "suggested_fix": "Same as day_at_max_ratio: either document the n>1 requirement explicitly, or change the gate to n > 0.",
+    "evidence": "Reproduced in /Users/wxy/Desktop/Partura/tmp/review/audit_6/run_compare.py and minimal_repros.py (case 2). Causality confirmed fine."
+   },
+   {
+    "title": "day_distinct_ratio returns NaN instead of the docstring-implied 1.0 for a single-finite-minute day",
+    "file": "partura/ops_ext.py",
+    "line": 547,
+    "severity": "medium",
+    "summary": "The docstring ('Number of DISTINCT values among the day's finite minutes, divided by their count') implies a ratio defined for any n>=1 (its own example '1/n = one price all day' doesn't exclude n=1), but the kernel's `_day(..., n > 1)` gate forces NaN when exactly one minute is finite, where the formula's literal value is 1 distinct / 1 finite = 1.0.",
+    "failure_scenario": "x = [[[nan, nan, 7.0, nan, nan]]]. Kernel day_distinct_ratio(x) = nan. Docstring-only reference: 1 distinct value among 1 finite minute -> 1/1 = 1.0. Confirmed across M in {241,5,2,1}, both dtypes, and incidentally inside the generic NaN/ties battery at small M (e.g. M=2 with 30% NaN collapsing to 1 finite minute).",
+    "suggested_fix": "Either document the n>1 requirement explicitly in the docstring, or relax the gate from `n > 1` to `n > 0` so a single surviving minute reads 1.0 as the formula implies.",
+    "evidence": "Reproduced in /Users/wxy/Desktop/Partura/tmp/review/audit_6/run_compare.py and minimal_repros.py (case 3). Core distinct-counting logic itself (ties, constant rows, mixed sign, extreme magnitude) verified correct for n>=2 in all tested cases; causality confirmed fine."
+   },
+   {
+    "title": "cs_flip_by_state's docstring doesn't say how a tie at the median resolves (implementation always resolves it to HIGH)",
+    "file": "partura/ops_ext.py",
+    "line": 504,
+    "severity": "low",
+    "summary": "The docstring frames the state test as 'the day's cross-sectional mean of g compared with the median ... over the last 241 days' (high/low) but never says what happens when today's value equals that median exactly. The implementation (percentile rank of m[t] in its own trailing window, > 0.5) is mathematically exactly a non-strict '>=' comparison against the median, not the more literal strict '>' reading -- ties always go HIGH.",
+    "failure_scenario": "g2 = a constant (D=3,S=2) panel, every entry 3.0 (so the market mean is 3.0 every day and always ties its own trailing median). y2 = [[1,2],[3,-1],[0.5,-0.5]]. Kernel cs_flip_by_state(y2,g2) = [[0,0.5],[0.5,0],[0.5,0]], i.e. the '+rank(y)' branch on every single day. A strict '>' reading of the docstring (high only if m[t] is strictly above its window median) would instead take '-rank(y)' every day: [[0,-0.5],[-0.5,0],[-0.5,0]]. Broader check: a reference using '>=' matches the kernel with 0 mismatches across D in {1,5,50,300} and both dtypes; the same reference using strict '>' disagrees (sign-flipped) on 13-39 cells in every one of those runs, always exactly where m[t] ties the window median (constant or heavily-tied g).",
+    "suggested_fix": "State the tie convention explicitly, e.g. 'high when m[t] is at or above the trailing 241-day median (ties count as high)', in both this docstring and the docs/new_operators.md table entry for cs_flip_by_state.",
+    "evidence": "Verified in /Users/wxy/Desktop/Partura/tmp/review/audit_6/run_compare.py (strict vs nonstrict tie_rule sweep) and minimal_repros.py (case 5)."
+   }
+  ],
+  "checked_and_fine": [
+   "day_wstd (ops_ext.py:561): the weighted-population-std formula (sqrt(sum(|w|(x-m)^2)/sum(|w|)), m = weighted mean), the sw>0 NaN-gating, tie/constant/extreme-magnitude(1e9,1e16)/tiny(1e-9)/mixed-sign/short-history/M=241-vs-small-M/float32-vs-float64 behavior, and no-cross-day causality all matched the docstring exactly across D=6-300, M in {1,2,5,241}, both dtypes. The one apparent float32 mismatch found (M=2, |x|~1e9, a row with exactly one valid (x,w) pair) is inherent float32 rounding in the (x*w)/w round-trip, not a kernel/docstring gap: a native-float32 'naive' implementation of the exact same documented formula reproduces the identical value (32.0) where a float64 reference gives the mathematically exact 0.0 -- confirmed directly in tmp/review/audit_6/test_wstd_precision.py."
+  ]
+ }
+}

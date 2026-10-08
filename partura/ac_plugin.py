@@ -8,9 +8,10 @@ rebound ``TypedTreeGenerator._pick`` / ``.acceptable`` inside
 ``scripts/idea_search.py``; both are gone (WP11).  What is left:
 
 * :func:`register` -- called once by ``load_plugins`` before the registry is
-  (re)built: wires ``ops_ext``'s legacy-table entries, declares AlphaCube's own
-  three ``in_sustain_*`` kernels real-valued, and registers the ``"partura"``
-  fitness kind (see ``alphacube.mining.scoring.register_scorer``).
+  (re)built: wires ``ops_ext``'s legacy-table entries and registers the
+  ``"partura"`` fitness kind (see ``alphacube.mining.scoring.register_scorer``).
+  With the opt-in fix ``"in_sustain"`` (below) it also declares AlphaCube's own
+  three ``in_sustain_*`` kernels real-valued.
 * :func:`set_search_hooks` / :func:`search_hooks` -- the steering opinion a
   caller sets as module state and the CLI / ``alphacube.plugins.
   search_hooks_from`` reads back.  **Empty by default**: loading this plugin
@@ -24,11 +25,40 @@ rebound ``TypedTreeGenerator._pick`` / ``.acceptable`` inside
   once, before ``run_mining``) and its train/valid split recomputed from the
   ``dates`` / ``warmup`` the factory itself receives rather than from a
   script-level global.
+* :func:`asked_from` -- which generator method an ``accept`` hook is being asked
+  for (the one thing the hook signature does not say; see there).
+
+**This route is a re-plumbing of ``main``'s, not a different experiment.**  With
+nothing switched on, the vocabulary, the operator weights, the filter and the
+reward are those of the monkeypatching ``scripts/idea_search.py`` of ``main``
+(``tests/test_plugin_equivalence.py`` and ``tests/test_ac_plugin.py`` pin each of
+them, and the real scripts were run side by side on a synthetic store: same
+candidates, same order, same scores, same counters).  Two changes the WP11 branch
+made on top of that move the draws, so they are OFF unless asked for -- by
+``$PARTURA_AC_FIXES=in_sustain,nt_twins`` or :func:`set_fixes`, and a run that
+switches one on records it (``evidence["plugin_fixes"]``) because its numbers
+are then no longer comparable with the stored episodes:
+
+* ``in_sustain`` -- AlphaCube's ``in_sustain_mean`` / ``_stddev`` / ``_product``
+  are declared real-valued, which puts 3 more operators into the search
+  vocabulary (286 -> 289 with resource-risk operators allowed).  Every pick from
+  the ``dt`` face then maps the same random number to a different operator.
+* ``nt_twins`` -- the guidance's per-operator weights and the idea boost also
+  reach an ND-face operator's ``nt_`` twin, which ``main``'s ``pick`` never did.
+
+One difference is AlphaCube's and cannot be switched off from here: when
+``TypedTreeGenerator.generate()`` runs out of its 64 tries, the baseline returned
+the minimal tree without asking ``acceptable`` and AlphaCube-steering asks it
+(with a hook installed, up to 64 more times).  It takes 64 refusals in a row --
+5e-6 per call at the lowest acceptance of any stored steer arm -- and
+``tests/test_plugin_equivalence.py`` documents it.
 
 See docs/alphacube_steering_design.md, "丙 Migration" and "### WP11"."""
 from __future__ import annotations
 
 import math
+import os
+import sys
 import time
 from typing import Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional
 
@@ -53,12 +83,43 @@ from .steer import RewardContext, reward as steer_reward  # noqa: E402
 # compatibility" item 9 (AlphaCube's own WP1 declares nothing).
 _AC_REAL_VALUED = ("in_sustain_mean", "in_sustain_stddev", "in_sustain_product")
 
+# -- the WP11 branch's two changes that move the draws away from ``main``'s
+# monkeypatching route; OFF by default (see the module docstring).
+KNOWN_FIXES = ("in_sustain", "nt_twins")
+_fixes_explicit: Optional[FrozenSet[str]] = None
+
+
+def _parse_fixes(text: str) -> FrozenSet[str]:
+    names = frozenset(x.strip() for x in str(text).replace(";", ",").split(",") if x.strip())
+    unknown = sorted(names - set(KNOWN_FIXES))
+    if unknown:
+        raise ValueError(f"unknown plugin fix(es) {unknown}; choose from {KNOWN_FIXES}")
+    return names
+
+
+def set_fixes(names: Optional[Iterable[str]]) -> None:
+    """Switch the opt-in fixes on for this process (``None``: go back to what
+    ``$PARTURA_AC_FIXES`` says).  Call it BEFORE ``load_plugins`` -- the
+    ``in_sustain`` declaration is made by :func:`register`."""
+    global _fixes_explicit
+    _fixes_explicit = None if names is None else _parse_fixes(",".join(names))
+
+
+def fixes() -> FrozenSet[str]:
+    """The opt-in fixes in force: :func:`set_fixes` if it was called, else
+    ``$PARTURA_AC_FIXES`` (comma separated; empty = none)."""
+    if _fixes_explicit is not None:
+        return _fixes_explicit
+    return _parse_fixes(os.environ.get("PARTURA_AC_FIXES", ""))
+
+
 # -- module state a caller sets once, before run_mining, in place of the
 # ctx/KIND closure scripts/idea_search.py used to build ParturaScorer with
 # inline.  Every arm of one run shares the same reward, context and split.
 _ctx: Optional[RewardContext] = None
 _kind: Optional[str] = None
 _split: Optional[str] = None
+_known: Optional[np.ndarray] = None      # z-rank of the known family, for p_rho_known (None: ctx.base)
 
 # -- the generator-side steering opinion, likewise module state a caller sets
 # (:func:`set_search_hooks`) and :func:`search_hooks` reads back.  ``None`` --
@@ -75,16 +136,23 @@ ARMS = ("control", "steer")
 SCORERS: List["ParturaScorer"] = []
 
 
-def set_scorer_state(ctx: RewardContext, kind: str, split: str) -> None:
+def set_scorer_state(ctx: RewardContext, kind: str, split: str, known: Optional[np.ndarray] = None) -> None:
     """Tell :func:`_partura_scorer_factory` what reward context, reward kind
     and train/valid split date to score with.  ``ctx`` must be built over the
     SAME view GPMiner itself mines on (its ``tgt`` / ``untradable`` / ``liq`` /
     ``pool`` / ``base`` planes are taken as already correctly trimmed of
     whatever lead-in warm-up rows that view carries -- see
     :func:`_partura_scorer_factory`).  Call this once per run, before
-    ``run_mining``; it is the same for every arm of one run."""
-    global _ctx, _kind, _split
-    _ctx, _kind, _split = ctx, str(kind), str(split)
+    ``run_mining``; it is the same for every arm of one run.
+
+    ``known`` is the z-rank plane of the known family that ``p_rho_known`` (the
+    rank correlation recorded for every candidate) is measured against.  It is
+    NOT always ``ctx.base``: with ``--screen-base pool`` the context's base is
+    the pool's strongest member while ``p_rho_known`` has always been taken
+    against the unscreened known family.  ``None`` keeps the earlier behaviour
+    (``ctx.base``)."""
+    global _ctx, _kind, _split, _known
+    _ctx, _kind, _split, _known = ctx, str(kind), str(split), known
 
 
 class ParturaScorer:
@@ -95,8 +163,10 @@ class ParturaScorer:
     not directly, so its train/valid split is always derived from the
     ``dates`` / ``warmup`` the factory was given."""
 
-    columns = ("p_score", "p_sign", "p_hl", "p_train_sharpe", "p_valid_sharpe", "p_train_ann",
-               "p_valid_ann", "p_turnover", "p_dist", "p_rho_known")
+    # (the paired rewards' raw ratio and the size -- net excess a year -- behind the sized score come last)
+    columns = ("p_score", "p_s_train", "p_s_valid", "p_share", "p_sign", "p_hl", "p_train_sharpe",
+               "p_valid_sharpe", "p_train_ann", "p_valid_ann", "p_turnover", "p_dist", "p_rho_known",
+               "p_ir_train", "p_ir_valid", "p_dann_train", "p_dann_valid")
 
     def __init__(self, target: np.ndarray, warmup: int, cut: int, **kw) -> None:
         if _ctx is None or _kind is None:
@@ -132,7 +202,7 @@ class ParturaScorer:
             return out
         r = steer_reward(panel, _ctx, _kind)
         z = dg._zrank(r["sign"] * np.asarray(panel[:self._cut:5], np.float64))
-        k = _ctx.base[:self._cut:5]
+        k = (_ctx.base if _known is None else _known)[:self._cut:5]
         ok = np.isfinite(z) & np.isfinite(k)
         zc, kc = np.where(ok, z, 0.0), np.where(ok, k, 0.0)
         n = np.maximum(ok.sum(1), 1)
@@ -140,10 +210,12 @@ class ParturaScorer:
             c = ((zc * kc).sum(1) - zc.sum(1) * kc.sum(1) / n) / np.sqrt(
                 ((zc ** 2).sum(1) - zc.sum(1) ** 2 / n) * ((kc ** 2).sum(1) - kc.sum(1) ** 2 / n))
         out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"],
-                   p_sign=r["sign"], p_hl=r["hl"], p_train_sharpe=r["train"]["long_sharpe"],
-                   p_valid_sharpe=r["valid"]["long_sharpe"], p_train_ann=r["train"]["long_ann"],
-                   p_valid_ann=r["valid"]["long_ann"], p_turnover=r["train"]["long_turnover"],
-                   p_rho_known=float(np.nanmean(c)))
+                   p_s_train=r["score_train"], p_s_valid=r["score_valid"],
+                   p_share=r.get("screened_share", float("nan")), p_sign=r["sign"], p_hl=r["hl"],
+                   p_train_sharpe=r["train"]["long_sharpe"], p_valid_sharpe=r["valid"]["long_sharpe"],
+                   p_train_ann=r["train"]["long_ann"], p_valid_ann=r["valid"]["long_ann"],
+                   p_turnover=r["train"]["long_turnover"], p_rho_known=float(np.nanmean(c)),
+                   **{f"p_{k_}": float(r.get(k_, float("nan"))) for k_ in ("ir_train", "ir_valid", "dann_train", "dann_valid")})
         self.seconds += time.time() - t
         return out
 
@@ -186,9 +258,17 @@ def _partura_scorer_factory(target: np.ndarray, *, dates=None, warmup: int = 0, 
 def register() -> None:
     """Called by ``alphacube.plugins.load_plugins(["partura.ac_plugin"])``
     before the registry is (re)built -- see that function's docstring for why
-    it is safe (and required) to call more than once in one process."""
+    it is safe (and required) to call more than once in one process.
+
+    What it does by default is exactly what ``main``'s ``ops_ext.install()``
+    did for the search: Partura's kernels reach the legacy name tables, and the
+    ``"partura"`` fitness kind exists.  (The nine kernels the registry's smoke
+    test mis-flags as boolean are real-valued at their own ``@op`` now.)  The
+    declaration of AlphaCube's own ``in_sustain_*`` trio is made only with the
+    ``in_sustain`` fix on (:func:`fixes`): it enlarges the search vocabulary."""
     ops_ext.install_kernels()
-    declare_real_valued(*_AC_REAL_VALUED)
+    if "in_sustain" in fixes():
+        declare_real_valued(*_AC_REAL_VALUED)
     register_scorer("partura", _partura_scorer_factory)
 
 
@@ -248,9 +328,13 @@ def search_hooks() -> SearchHooks:
     return _hooks if _hooks is not None else SearchHooks()
 
 
-def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[Iterable[str]] = None,
-              opw: Optional[Mapping[str, float]] = None, idea_ops: Iterable[str] = (),
-              boost: float = 1.0, accept: Optional[Callable] = None) -> SearchHooks:
+ARM_PARTS = ("seeds", "hood", "priors")           # what a steer arm can be made of (--parts)
+
+
+def arm_hooks(arm: str, *, parts: Optional[Iterable[str]] = None, risky: Optional[Iterable[str]] = None,
+              ext: Optional[Iterable[str]] = None, opw: Optional[Mapping[str, float]] = None,
+              idea_ops: Iterable[str] = (), boost: float = 1.0, accept: Optional[Callable] = None,
+              nt_twins: bool = False) -> SearchHooks:
     """The :class:`SearchHooks` for one arm of ``scripts/idea_search.py``'s A/B
     -- the single home of the operator-weight formula both arms share, so the
     arms cannot drift apart (and cannot be swapped) without this function
@@ -258,12 +342,24 @@ def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[
 
     * ``"control"`` -- ``op_weight`` is the base library filter ALONE (every
       AlphaCube resource-risk operator that is not one of Partura's own weighs
-      0, everything else 1.0) and ``accept`` is ``None``.  ``opw``,
-      ``idea_ops``, ``boost`` and ``accept`` are accepted and deliberately
-      IGNORED, so one call site can pass the same keywords for both arms.
+      0, everything else 1.0) and ``accept`` is ``None``.  ``parts``, ``opw``,
+      ``idea_ops``, ``boost``, ``accept`` and ``nt_twins`` are accepted and
+      deliberately IGNORED, so one call site can pass the same keywords for
+      both arms.
     * ``"steer"`` -- that same base weight times the guidance's own
       per-operator weight (``opw``, default 1.0) times ``boost`` for an
-      operator of the idea, plus ``accept`` as the acceptance hook.
+      operator of the idea, plus ``accept`` as the acceptance hook -- each of
+      the three only when the matching part is in ``parts``.
+
+    ``parts`` is what the steer arm is made of (``--parts``; ``None`` = all
+    three): ``"priors"`` switches the guidance on (its operator weights, and
+    ``accept``'s bans / thinning / equivalence / siblings), ``"hood"`` the
+    idea's neighbourhood (the ``boost`` of its operators, and ``accept``'s
+    must-contain test), ``"seeds"`` the idea's seeds -- which are the caller's
+    ``initial_population``, so they change nothing here.  With neither
+    ``"priors"`` nor ``"hood"`` the steer arm is handed no ``accept`` and plain
+    weights: it is the control to the last draw (``--parts none`` is the
+    ablation that says so).
 
     So the two arms differ in exactly the two fields the design says they may
     (``op_weight``, ``accept``): the boost and the guidance are the steer arm's
@@ -272,19 +368,26 @@ def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[
     registry (``{s.name for s in reg.list_all() if s.resource_risk}``) to keep
     the formula textually identical to the pre-WP11 script's.
 
-    ``opw`` and ``idea_ops`` are matched by ND-face name AND by the ``nt_`` twin
-    of one (``alphacube.mining.generator.nd_twin_base``).  Both sets are written
-    in ND-face spelling -- ``opw`` comes from ``steer.Guidance
-    .operator_weights()``, whose keys are the heads of hand-written rule
-    patterns, and ``idea_ops`` from scraping the idea's own expression text --
-    while every nd-face kernel is in the registry TWICE, under ``X`` and
-    ``nt_X``.  Matching ``spec.name`` alone therefore steered half the kernel and
-    left the other half fully live: measured on AlphaCube over 400 seeds x
-    ``generate_population(25)``, zeroing one nd-face name took its ND-face draws
-    148 -> 0 and left the twin's at 17 -> 17.  ``ext`` already expanded the twins
-    itself (:func:`partura_operator_names`); these two did not."""
+    ``opw`` and ``idea_ops`` are matched by ``spec.name`` -- exactly as the
+    monkeypatching ``pick`` of ``main`` did.  An ND-face kernel is in the
+    registry TWICE, as ``X`` and as ``nt_X``, and both sets are written in
+    ND-face spelling (``opw`` from ``steer.Guidance.operator_weights()``, whose
+    keys are the heads of hand-written rule patterns; ``idea_ops`` from
+    scraping the idea's own expression text), so by name alone the ``nt_`` twin
+    keeps weight 1.0: measured on AlphaCube over 400 seeds x
+    ``generate_population(25)``, zeroing one nd-face name took its ND-face
+    draws 148 -> 0 and left the twin's at 17 -> 17.  ``nt_twins=True`` closes
+    that half (the twin inherits the ND name's entry unless it has one of its
+    own, ``alphacube.mining.generator.nd_twin_base``) -- the fix the WP11
+    branch carried.  It is OFF by default because it changes which operators
+    the steer arm draws, so a run with it on is a different experiment from
+    every stored episode.  ``ext`` already expanded the twins itself
+    (:func:`partura_operator_names`)."""
     if arm not in ARMS:
         raise ValueError(f"arm must be one of {ARMS}, not {arm!r}")
+    made_of = frozenset(ARM_PARTS if parts is None else parts)
+    if made_of - set(ARM_PARTS):
+        raise ValueError(f"parts takes {ARM_PARTS}; got {sorted(made_of - set(ARM_PARTS))}")
     risk_names = None if risky is None else frozenset(risky)
     ext_names = partura_operator_names() if ext is None else frozenset(ext)
     boost = float(boost)
@@ -298,19 +401,43 @@ def arm_hooks(arm: str, *, risky: Optional[Iterable[str]] = None, ext: Optional[
     if arm == "control":
         return SearchHooks(op_weight=base_weight)
 
-    weights = dict(opw or {})
-    idea = frozenset(idea_ops)
+    weights = dict(opw or {}) if "priors" in made_of else {}
+    idea = frozenset(idea_ops) if "hood" in made_of else frozenset()
+    judge = accept if made_of & {"hood", "priors"} else None
 
     def weighted(spec) -> float:
-        twin = nd_twin_base(spec)                   # the ND-face name an nt_ spec is the twin of, else None
+        twin = nd_twin_base(spec) if nt_twins else None   # the ND-face name an nt_ spec is the twin of, else None
         w = weights.get(spec.name)
         if w is None:
             w = 1.0 if twin is None else weights.get(twin, 1.0)
         in_idea = spec.name in idea or (twin is not None and twin in idea)
         return base_weight(spec) * float(w) * (boost if in_idea else 1.0)
 
-    return SearchHooks(op_weight=weighted, accept=accept)
+    return SearchHooks(op_weight=weighted, accept=judge)
 
 
-__all__ = ["ARMS", "SCORERS", "ParturaScorer", "arm_hooks", "partura_operator_names", "register",
-           "search_hooks", "set_scorer_state", "set_search_hooks"]
+def asked_from(*methods: str) -> bool:
+    """Is the ``accept`` hook that is running now being asked for the child of one
+    of the ``TypedTreeGenerator`` methods named in ``methods``?
+
+    ``SearchHooks.accept`` is called ``accept(tree)`` from the generator's
+    ``acceptable()`` and says nothing about WHO asked.  One counter of the
+    evidence (``sampling["mutation_refused"]``: a window or a constant mutation
+    whose child the guidance turned down) needs exactly that, and the
+    monkeypatching script got it for free by wrapping those two methods.  So the
+    hook looks one frame up the stack for ``acceptable`` and reads the name of
+    its caller.  Only called on a refusal, so the cost is nil; ``False`` when
+    the hook is called some other way (a unit test, a tool).  The coupling to
+    AlphaCube's method names is pinned by
+    ``tests/test_ac_plugin.py::test_asked_from_sees_the_mutator_that_asked``."""
+    f = sys._getframe(1)
+    while f is not None:
+        if f.f_code.co_name == "acceptable" and f.f_code.co_filename.replace("\\", "/").endswith("mining/generator.py"):
+            caller = f.f_back
+            return caller is not None and caller.f_code.co_name in methods
+        f = f.f_back
+    return False
+
+
+__all__ = ["ARMS", "ARM_PARTS", "KNOWN_FIXES", "SCORERS", "ParturaScorer", "arm_hooks", "asked_from", "fixes",
+           "partura_operator_names", "register", "search_hooks", "set_fixes", "set_scorer_state", "set_search_hooks"]

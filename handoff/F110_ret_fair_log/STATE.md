@@ -1,6 +1,6 @@
 # F110_ret_fair_log — 交接状态
 
-_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F110_ret_fair_log` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:手写 ret_fair_log(批次 B01_single_factors)
 - 表达式:`mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(in_sustain_stddev(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)), day_mean(in_sustain_stddev(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))), Ret, 5)))))`
@@ -211,6 +211,9 @@ day_std(Ret) 版);best_on_known 无 —— 最好的 ov_p025 +13.4、scr_xhi_p +
 - `sweep_s3`  10-05 18:24  234 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweep_s3`
 - `anatomy_s3`  10-05 18:37  0 个变体  → `./scripts/study.sh digest F110_ret_fair_log anatomy_s3`
 - `sweepfinal_s3`  10-05 18:39  8 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweepfinal_s3`
+- `sweep_s4`  10-06 10:22  234 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweep_s4`
+- `anatomy_s4`  10-06 11:22  0 个变体  → `./scripts/study.sh digest F110_ret_fair_log anatomy_s4`
+- `sweepfinal_s4`  10-06 11:26  8 个变体  → `./scripts/study.sh digest F110_ret_fair_log sweepfinal_s4`
 - `x1`(自写脚本的输出)  10-04 13:07  exit 97  → `logs/F110_ret_fair_log_x1.log`
 - `x1c`(自写脚本的输出)  10-04 14:05  exit 0  → `logs/F110_ret_fair_log_x1c.log`
 - `x1d`(自写脚本的输出)  10-04 14:09  exit 0  → `logs/F110_ret_fair_log_x1d.log`

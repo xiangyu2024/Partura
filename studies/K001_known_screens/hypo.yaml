@@ -1,0 +1,138 @@
+# K001_known_screens —— 筛子假设(总领,2026-10-06;来源:想法短搜 e2_I1 / e3_I1 的两臂各自找到的筛子 + 审查后修正的算子语义)
+# 每条的 y 都是 neg(已知族)(越大越想买),方向锁 +1。只读 train / valid;按规则读测试段。
+
+s_frozen20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))"
+  why: "单层筛子:已知族,把「近 15 日零收益分钟占比的最大值(通用的冻结盘口筛子)」最高的 20% 排到最后"
+s_frozen10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))"
+  why: "单层筛子:已知族,把「近 15 日零收益分钟占比的最大值(通用的冻结盘口筛子)」最高的 10% 排到最后"
+s_frozen05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))"
+  why: "单层筛子:已知族,把「近 15 日零收益分钟占比的最大值(通用的冻结盘口筛子)」最高的 5% 排到最后"
+s_pin20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_at_max_ratio(Vwap), 15))"
+  why: "单层筛子:已知族,把「近 15 日钉在当日最高价的分钟占比(涨停封板;e3_I1 带指引一臂最稳的)」最高的 20% 排到最后"
+s_pin10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_at_max_ratio(Vwap), 15))"
+  why: "单层筛子:已知族,把「近 15 日钉在当日最高价的分钟占比(涨停封板;e3_I1 带指引一臂最稳的)」最高的 10% 排到最后"
+s_pin05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_at_max_ratio(Vwap), 15))"
+  why: "单层筛子:已知族,把「近 15 日钉在当日最高价的分钟占比(涨停封板;e3_I1 带指引一臂最稳的)」最高的 5% 排到最后"
+s_flatv20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_mean(cross_max(pow_2_5(day_flat_ratio(Vwap)), 10), 15))"
+  why: "单层筛子:已知族,把「均价不动的分钟占比的 10 日最大、15 日均值(e3_I1)」最高的 20% 排到最后"
+s_flatv10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), cross_mean(cross_max(pow_2_5(day_flat_ratio(Vwap)), 10), 15))"
+  why: "单层筛子:已知族,把「均价不动的分钟占比的 10 日最大、15 日均值(e3_I1)」最高的 10% 排到最后"
+s_flatv05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), cross_mean(cross_max(pow_2_5(day_flat_ratio(Vwap)), 10), 15))"
+  why: "单层筛子:已知族,把「均价不动的分钟占比的 10 日最大、15 日均值(e3_I1)」最高的 5% 排到最后"
+s_volprof20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "单层筛子:已知族,把「成交最集中的分钟所在价位的 20 日波动(e3_I1 对照臂最稳的)」最高的 20% 排到最后"
+s_volprof10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "单层筛子:已知族,把「成交最集中的分钟所在价位的 20 日波动(e3_I1 对照臂最稳的)」最高的 10% 排到最后"
+s_volprof05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "单层筛子:已知族,把「成交最集中的分钟所在价位的 20 日波动(e3_I1 对照臂最稳的)」最高的 5% 排到最后"
+s_volprof220:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_std(day_wmean(Volume, High), 20))"
+  why: "单层筛子:已知族,把「成交量加权最高价的 20 日波动(e3_I1 对照臂)」最高的 20% 排到最后"
+s_volprof210:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), ts_std(day_wmean(Volume, High), 20))"
+  why: "单层筛子:已知族,把「成交量加权最高价的 20 日波动(e3_I1 对照臂)」最高的 10% 排到最后"
+s_volprof205:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), ts_std(day_wmean(Volume, High), 20))"
+  why: "单层筛子:已知族,把「成交量加权最高价的 20 日波动(e3_I1 对照臂)」最高的 5% 排到最后"
+s_tickfrz20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), ts_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(High)), 15))"
+  why: "单层筛子:已知族,把「10 分钟滚动方差为零的分钟占比,在同价位股票里排名(e2_I1:扣掉最小报价单位造成的假冻结)」最高的 20% 排到最后"
+s_tickfrz10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), ts_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(High)), 15))"
+  why: "单层筛子:已知族,把「10 分钟滚动方差为零的分钟占比,在同价位股票里排名(e2_I1:扣掉最小报价单位造成的假冻结)」最高的 10% 排到最后"
+s_tickfrz05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), ts_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(High)), 15))"
+  why: "单层筛子:已知族,把「10 分钟滚动方差为零的分钟占比,在同价位股票里排名(e2_I1:扣掉最小报价单位造成的假冻结)」最高的 5% 排到最后"
+s_xvol20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(div(day_wstd(Low, Close), day_median(Low)), 241))"
+  why: "单层筛子:已知族,把「过去一年相对价格的日内波动的最大值(e2_I1 对照臂)」最高的 20% 排到最后"
+s_xvol10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), cross_max(div(day_wstd(Low, Close), day_median(Low)), 241))"
+  why: "单层筛子:已知族,把「过去一年相对价格的日内波动的最大值(e2_I1 对照臂)」最高的 10% 排到最后"
+s_xvol05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), cross_max(div(day_wstd(Low, Close), day_median(Low)), 241))"
+  why: "单层筛子:已知族,把「过去一年相对价格的日内波动的最大值(e2_I1 对照臂)」最高的 5% 排到最后"
+s_new20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_valid_count(day_last(Close), 241)))"
+  why: "单层筛子:已知族,把「上市不足 241 日(修正后的算子只收整块并列:真正的次新约 7%)」最高的 20% 排到最后"
+s_age20:
+  expr: "cs_last_high20(neg(cross_mean(day_std(Amt), 30)), neg(cross_age(day_last(Close))))"
+  why: "单层筛子:已知族,把「上市以来的天数最短的」最高的 20% 排到最后"
+s_age10:
+  expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), neg(cross_age(day_last(Close))))"
+  why: "单层筛子:已知族,把「上市以来的天数最短的」最高的 10% 排到最后"
+s_age05:
+  expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), neg(cross_age(day_last(Close))))"
+  why: "单层筛子:已知族,把「上市以来的天数最短的」最高的 5% 排到最后"
+s_frozen40:
+  expr: "cs_last_high40(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))"
+  why: "冻结盘口剔四成:继续变好说明剔的是整条低流动性尾巴,变差说明该剔的只是一小撮"
+d_frz_pin20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(day_at_max_ratio(Vwap), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「近 15 日钉在当日最高价的分钟占比(涨停封板;e3_I1 带指引一臂最稳的)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_pin10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(day_at_max_ratio(Vwap), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「近 15 日钉在当日最高价的分钟占比(涨停封板;e3_I1 带指引一臂最稳的)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_flatv20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(cross_max(pow_2_5(day_flat_ratio(Vwap)), 10), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「均价不动的分钟占比的 10 日最大、15 日均值(e3_I1)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_flatv10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(cross_max(pow_2_5(day_flat_ratio(Vwap)), 10), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「均价不动的分钟占比的 10 日最大、15 日均值(e3_I1)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_volprof20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "两层:先做通用的冻结盘口筛子,再把「成交最集中的分钟所在价位的 20 日波动(e3_I1 对照臂最稳的)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_volprof10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "两层:先做通用的冻结盘口筛子,再把「成交最集中的分钟所在价位的 20 日波动(e3_I1 对照臂最稳的)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_volprof220:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_std(day_wmean(Volume, High), 20))"
+  why: "两层:先做通用的冻结盘口筛子,再把「成交量加权最高价的 20 日波动(e3_I1 对照臂)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_volprof210:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_std(day_wmean(Volume, High), 20))"
+  why: "两层:先做通用的冻结盘口筛子,再把「成交量加权最高价的 20 日波动(e3_I1 对照臂)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_tickfrz20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(High)), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「10 分钟滚动方差为零的分钟占比,在同价位股票里排名(e2_I1:扣掉最小报价单位造成的假冻结)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_tickfrz10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), ts_mean(cs_bucket_rank(day_zero_ratio(nt_ts_var(Close, 10)), day_sum(High)), 15))"
+  why: "两层:先做通用的冻结盘口筛子,再把「10 分钟滚动方差为零的分钟占比,在同价位股票里排名(e2_I1:扣掉最小报价单位造成的假冻结)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_xvol20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_max(div(day_wstd(Low, Close), day_median(Low)), 241))"
+  why: "两层:先做通用的冻结盘口筛子,再把「过去一年相对价格的日内波动的最大值(e2_I1 对照臂)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_xvol10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_max(div(day_wstd(Low, Close), day_median(Low)), 241))"
+  why: "两层:先做通用的冻结盘口筛子,再把「过去一年相对价格的日内波动的最大值(e2_I1 对照臂)」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_new20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cross_valid_count(day_last(Close), 241)))"
+  why: "两层:先做通用的冻结盘口筛子,再把「上市不足 241 日(修正后的算子只收整块并列:真正的次新约 7%)」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_age20:
+  expr: "cs_last_high20(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cross_age(day_last(Close))))"
+  why: "两层:先做通用的冻结盘口筛子,再把「上市以来的天数最短的」最高的 20% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+d_frz_age10:
+  expr: "cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), neg(cross_age(day_last(Close))))"
+  why: "两层:先做通用的冻结盘口筛子,再把「上市以来的天数最短的」最高的 10% 排到最后 —— 它在通用筛子之外还多剔掉了什么"
+t_frz_pin10_volprof10:
+  expr: "cs_last_high10(cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(day_at_max_ratio(Vwap), 15)), ts_std(day_topw_mean(Volume, Close), 20))"
+  why: "三层:冻结 + 封板 + 成交分布不稳"
+t_frz_pin10_new:
+  expr: "cs_last_high20(cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(day_at_max_ratio(Vwap), 15)), neg(cross_valid_count(day_last(Close), 241)))"
+  why: "三层:冻结 + 封板 + 次新"
+q_frz_pin10_volprof10_new:
+  expr: "cs_last_high20(cs_last_high10(cs_last_high10(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15)), cross_mean(day_at_max_ratio(Vwap), 15)), ts_std(day_topw_mean(Volume, Close), 20)), neg(cross_valid_count(day_last(Close), 241)))"
+  why: "四层全上:看是否仍然可加"
+o_frz_minus_pin:
+  expr: "sub(cs_rank(cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))), mul(cs_rank(cross_mean(day_at_max_ratio(Vwap), 15)), 0.25))"
+  why: "不剔、只罚:冻结筛过的已知族排名减 0.25 × 封板占比的排名"

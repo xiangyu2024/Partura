@@ -1,0 +1,295 @@
+{
+ "type": "result",
+ "key": "v2:c385103c49d5dd8f4e795787c3a13c25349c990cb25160d2c1d5a6caf3d4714a",
+ "agentId": "a1b0a36e280f29e3c",
+ "result": {
+  "facts": [
+   {
+    "topic": "Q1-fixtures",
+    "detail": "Shared session-scoped fixtures live in tests/conftest.py:8-18 (not the root conftest): registry() -> default_registry(); store() -> write_synthetic_store(tmp, n_symbols=10, n_days=60, n_minutes=24, seed=11, suspended_frac=0.05, unlisted_days=8); view() -> store.view(); raw() -> masked float32 numpy {field: (S,D,M)} dict + the tradable plane. Used, unmodified, by nearly every test in my 7 assigned files except test_parser.py/test_expression.py (which need no cube at all).",
+    "refs": "tests/conftest.py:8-18"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "Root /Users/wxy/Desktop/AlphaCube/conftest.py only inserts src/ onto sys.path so pytest works without an editable install; it defines no fixtures.",
+    "refs": "conftest.py:1-8"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "pyproject.toml's only pytest config is testpaths=[\"tests\"] and filterwarnings=[ignore FutureWarning, ignore DeprecationWarning]; no addopts, no custom markers registered, no coverage/lint config of any kind anywhere in the repo.",
+    "refs": "pyproject.toml:8-10"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "scripts/build_synthetic_cube.py is a thin dispatcher: it hardcodes sub='synth' and calls alphacube.cli.main(['synth', ...]), which routes to cmd_synth -> write_synthetic_store. The real generator is make_synthetic_cube/write_synthetic_store in src/alphacube/synthetic.py, not the script itself.",
+    "refs": "scripts/build_synthetic_cube.py:1-11; src/alphacube/synthetic.py:22-88; src/alphacube/cli.py:56-64"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "make_synthetic_cube(n_symbols=12, n_days=80, n_minutes=241, seed=0, suspended_frac=0.02, unlisted_days=0, plant_beta=0.0) builds exactly the 8 CUBE_FIELDS (Open/High/Low/Close/Volume/Vwap/Ret/Amt) with cross-sectional beta/market/idio structure and U-shaped intraday volume; suspended_frac marks random (S,D) cells SUSPENDED, but unlisted_days marks OUTSIDE_LIFECYCLE only on the LAST symbol's first N days (status[-1, :unlisted_days]), not a random subset.",
+    "refs": "src/alphacube/synthetic.py:22-80"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "day_status is stored as a genuine flat (S,D) int8 side-array (day_status.npy) next to the (S,D,M) cube fields, loaded once and cached, and sliced per-chunk by CubeView.tradable_s/_d. This is the only existing precedent in the codebase for a 'daily-only, not per-minute' array living beside the cube -- directly relevant prior art for the new FloatCap/TotalCap/LimitWidth daily fields.",
+    "refs": "src/alphacube/store.py:40-41,106,152-164,191-192,379-390,435-447,452-476"
+   },
+   {
+    "topic": "Q1-fixtures",
+    "detail": "When a test needs the real production grid width or isolation from the shared fixture, it calls write_synthetic_store itself with its own tmp_path_factory dir and n_minutes=241 (the real grid) instead of the shared fixture's n_minutes=24, e.g. tests/test_gp_seeds.py's module-scoped `cube` fixture (8x50x241, seed=5) and tests/test_engine.py::test_kernels_never_write_into_operands (5x40x241, seed=2).",
+    "refs": "tests/test_gp_seeds.py:22-26; tests/test_engine.py:267-268"
+   },
+   {
+    "topic": "Q1-oracle",
+    "detail": "test_engine.py's module docstring states the file's own correctness convention explicitly: references are computed by calling the raw operator kernels (alphacube.operators, e.g. ops.dt_day.day_std) the way a single stock/day/panel would, NEVER by calling CubeEngine a second time as its own oracle. Assertions are np.array_equal(..., equal_nan=True) -- exact bit equality, not np.allclose.",
+    "refs": "tests/test_engine.py:1-3,25-50,57-69,73-89,92-102"
+   },
+   {
+    "topic": "Q1-oracle",
+    "detail": "The one deliberate exception to bit-exact assertion is test_panel_to_cube_handoff_and_round_structure, which uses np.allclose(rtol=1e-5) because it compares two DIFFERENT expressions that are only mathematically (not bit-) equivalent due to reduction order.",
+    "refs": "tests/test_engine.py:105-112"
+   },
+   {
+    "topic": "Q1-oracle",
+    "detail": "Chunk-invariance is tested separately from kernel correctness: the same expressions are run under several CubeEngine(chunk_symbols=,chunk_days=) configurations and asserted bit-equal to the unchunked run, including over a random 200-tree population from TypedTreeGenerator(seed=9) with 4 known-broken operator names filtered out; those 4 are pinned separately by a strict xfail.",
+    "refs": "tests/test_engine.py:126-136,169-189,192-207; docs/design.md:273-279"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "GPMiner.__init__ creates exactly one random.Random(seed) (self._rng) and hands that SAME object to TypedTreeGenerator(..., rng=self._rng) -- the miner and its generator share one RNG stream, so any new call consuming randomness anywhere in the path shifts every later draw.",
+    "refs": "src/alphacube/mining/gp.py:201,241"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "TypedTreeGenerator._pick is the single sampling choke point for operator choice: it groups specs by face, calls self._rng.choice(sorted(faces)) (dict keys deliberately sorted first for determinism) to pick a face, then self._rng.choice(...) again within that face. Called from generate, mutate_operator, and _gen/_collapse_leaf's window-selection path.",
+    "refs": "src/alphacube/mining/generator.py:268-273,119-125,195,304,310"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "Verified live: TypedTreeGenerator.mutate_window (221-234) and mutate_constant (236-246) end with `return child if is_valid_root(child) else None` and never call self.acceptable(child), unlike mutate_subtree/mutate_operator/mutate_hoist/crossover which all do. I reproduced this: with banned_substructures={'O:log(F:Amt)'} and e=parse('ts_mean(day_max(mul(log(Amt), 2)), 5)') (acceptable(e) is already False), 200/200 calls to both mutate_window and mutate_constant returned children that still carried the banned key 'O:log(F:Amt)' in one_layer_keys(child); the control, mutate_subtree, leaked 0/200.",
+    "refs": "src/alphacube/mining/generator.py:107-111,161-177,178-207,208-219,221-234,236-246,248-266"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "test_mining.py::test_unseeded_runs_are_unchanged_by_the_seed_plumbing is the project's existing exemplar pattern for 'a new optional parameter must be a no-op by default': same seed, default initial_population vs initial_population=(), asserts list(a._archive)==list(b._archive) bit for bit. Any new hook parameter (scorer registry, generator weights/accept, plugin loading) should get an analogous test.",
+    "refs": "tests/test_mining.py:61-68"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "test_mining.py::test_skip_kernels_reproduces_the_trajectory_until_the_first_refusal is the exemplar for 'per-generation trajectory must be byte-identical up to where a new mechanism actually diverges it': it spies on m.fitness to capture each generation's expression keys, and separately shows that REMOVING an operator from the vocabulary (vs refusing it at evaluation time) diverges at generation 1 -- the right template for testing the new accept(tree)->bool hook.",
+    "refs": "tests/test_mining.py:231-289"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "No existing test does a direct before/after repr-level snapshot of generate_population(N) for a fixed seed; the closest existing patterns are archive/trajectory equality (test_mining.py:61-68, 231-289), not a literal population diff. A new test for the generator-hooks work should add this snapshot style explicitly.",
+    "refs": "tests/test_mining.py:61-68,231-289"
+   },
+   {
+    "topic": "Q2-rng",
+    "detail": "Engine-side determinism (chunking/evaluation order) is checked by bit-exact panel comparison (Q1-oracle facts) and is orthogonal to the GP layer's random.Random stream (Q2-rng facts) -- daily-leaf work (甲) is regression-tested the first way, generator/scorer hook work (乙) the second way.",
+    "refs": "tests/test_engine.py:126-189; tests/test_mining.py:61-68,231-289"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "pytest --collect-only -q: 628 tests collected in 3.29s, zero collection errors, against a clean working tree (git status --short empty) on branch tradable-backtest at commit 517fd09 (identical to main at the same commit).",
+    "refs": "AlphaCube repo, commit 517fd09"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "Full run as instructed (`python -m pytest -q -x --durations=15`): 617 passed, 10 skipped, 1 xfailed, 14 warnings, in 157.48s (0:02:37), exit code 0. No failures -- the suite is currently fully green, well inside the 15-minute budget.",
+    "refs": "live run, 2026-10-05"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "All 10 skips are environment/optional-dependency gaps, fully accounted for: 3 from @requires_xgboost-marked tests (xgboost not installed), 5 tabpfn-related (4 via a fixture's internal pytest.skip because TabPFNRegressorEstimator isn't defined when `tabpfn` fails to import, +1 via pytest.importorskip('tabpfn') on the real-integration smoke test), 2 from pytest.importorskip('matplotlib'). Verified xgboost/tabpfn/matplotlib all raise ModuleNotFoundError in ~/.venvs/alphacube.",
+    "refs": "tests/test_estimators_extra.py:58-63,82,105,153-165,257-258; tests/test_ls_report.py:52,87"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "The 1 xfailed is test_sliding_masked_family_is_chunk_invariant, a strict xfail pinning a known, documented bug (sliding_*_masked_p5 rolls along dim 0 instead of the minute axis, mixing stock boundaries under chunking) -- not a regression.",
+    "refs": "tests/test_engine.py:192-207; docs/design.md:273-279"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "Slowest test overall by a wide margin: tests/test_tokens_env.py::test_mask_and_push_agree at 63.35s (next slowest is 7.22s, ~9x gap) -- it exhaustively compares the RL Vocabulary's push/mask logic token-by-token across the whole vocabulary. Anyone iterating on the (optional) RL-side hooks will pay this on every run touching mining/tokens.py.",
+    "refs": "tests/test_tokens_env.py::test_mask_and_push_agree; docs/design.md:158"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "Other notably slow tests from the full run: test_legacy_corpus.py::test_corpus_evaluates_on_synthetic_cube 7.22s; test_gp_seeds.py::test_narrow_seed_segments_never_meet_full_width_subtrees 6.35s; test_rl_miners.py::test_alphaqcm_runs 5.95s; test_conformal_risk.py (2 tests) ~5-6s each; test_device_parity.py::test_no_operator_fails_only_on_the_accelerator 3.84s -- this one actually executes (not skipped) because this Mac exposes an MPS device.",
+    "refs": "live --durations=15 output"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "My 7 assigned files run in isolation (`pytest tests/test_engine.py tests/test_expression.py tests/test_parser.py tests/test_catalog.py tests/test_mining.py tests/test_gp_seeds.py tests/test_general_call.py --durations=0`): 105 passed, 1 xfailed, 0 failed, 0 skipped, 13.59s total. Slowest within this subset: test_gp_seeds.py::test_narrow_seed_segments_never_meet_full_width_subtrees (~5s, a 300-iteration crossover/mutation loop over a 241-minute cube).",
+    "refs": "live run, 2026-10-05"
+   },
+   {
+    "topic": "Q3-baseline",
+    "detail": "Both existing docs' test-count claims are stale: docs/HANDOFF.md §5.1 says '354 passed, 8 skipped, 1 xfailed (约 2 分钟)' and README.md §验证 says '303 passed, 8 skipped (可选依赖 lightgbm / xgboost / tabpfn)' -- both well below the current 617/10/1/157s. README additionally names lightgbm as a skip cause but grep finds zero references to lightgbm in any test file today, while 2 of the current 10 skips (matplotlib) are named in neither doc.",
+    "refs": "docs/HANDOFF.md:110-113; README.md:92-96"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "Every inspected src/ library module defines __all__ at the end (generator.py, gp.py, scoring.py, pool.py, tokens.py, catalog.py, axes.py, tradability.py, synthetic.py, expression.py, parser.py, engine/engine.py all have exactly one __all__), except cli.py (0, it's an entry-point script) and every file under tests/ (0/68) -- __all__ is a library-module convention, deliberately absent from the CLI and from tests.",
+    "refs": "grep across src/alphacube/**/*.py and tests/*.py"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "Type annotations are present on essentially every function signature (params and return type) using typing generics (Optional/Sequence/Dict/List/Tuple/Callable) plus `from __future__ import annotations` (61 files use it) rather than PEP604 syntax; dataclasses are @dataclass(frozen=True) with field(default_factory=...) for mutable defaults, e.g. OpSpec.",
+    "refs": "src/alphacube/axes.py:59-85; src/alphacube/mining/generator.py:69-76"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "Raised exception messages (ValueError/KeyError/ParseError) are uniformly English, specific, and usually f-strings with !r on the offending value, with zero exceptions observed across every raise read in this pass, e.g. f\"unknown operator {name!r}\", f\"duplicate operator name {spec.name!r}\", f\"fitness_kind must be one of {FITNESS_KINDS}, not {fitness_kind!r}\".",
+    "refs": "src/alphacube/catalog.py:336,330; src/alphacube/mining/gp.py:308"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "Comments/docstrings are mixed-language by stated convention, not sloppiness: docs/HANDOFF.md §13 requires every fix to carry a test that reproduces the bug plus a comment on how the bug originally happened. Most test docstrings follow this as English 'war-story' prose with concrete production numbers; some whole test-module docstrings and terser inline notes are Chinese (e.g. test_gp_seeds.py's module docstring, test_mining.py's '内存' section banner, a Chinese inline note in generator.py about seed/in_slice width mismatches).",
+    "refs": "docs/HANDOFF.md:465; tests/test_gp_seeds.py:1-2; tests/test_mining.py:721-724; src/alphacube/mining/generator.py:~169-171"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "No linter/type-checker/formatter config exists anywhere (no ruff/mypy/flake8/black section in pyproject.toml, no .flake8/mypy.ini files found) and there is no CI (.github/ does not exist) -- style is enforced by review/convention only. `# noqa: BLE001` (ruff's bare-except code) still appears as a marker despite ruff not being configured, always paired with a trailing '- reason' comment.",
+    "refs": "src/alphacube/catalog.py:109,122,216,268,384"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "Documented project conventions (docs/HANDOFF.md §13): every fix needs a test that is confirmed failing on the old code first; classification criteria should be empirically probed, not hand-written name lists ('判据尽量探针实测,不手写名单', matching catalog.py's _probe_* machinery); CLI arguments get a dedicated completeness test; all performance claims must be measured, never estimated.",
+    "refs": "docs/HANDOFF.md:463-471"
+   },
+   {
+    "topic": "Q4-style",
+    "detail": "tests/test_production.py::test_cli_mine_accepts_every_run_mining_knob already generically enforces that every `a.<name>` attribute cli.cmd_mine's source reads (via re.findall(r'\\ba\\.([a-z_]+)', inspect.getsource(cli.cmd_mine))) is defined by build_parser(). Adding a new --plugin CLI flag plus a matching a.plugin read in cmd_mine is therefore automatically checked by this existing test, with no new test needed for that specific wiring.",
+    "refs": "tests/test_production.py:96-122"
+   },
+   {
+    "topic": "Q4-docsync",
+    "detail": "Doc-sync inventory once the three capabilities land: docs/design.md needs a new subsection for daily-only fields plus edits near §7 (挖掘层 mining layer) and §11.4 (boolean self-check); docs/HANDOFF.md needs §5.1's stale test-count line refreshed, §5.9's CLI table extended with --plugin/new mine flags, and possibly §13 amended if the probe-vs-declared-flag tension (see insertion_points) is resolved; README.md needs its §验证 table refreshed (already the most stale of the three) and its 目录/快速开始 sections touched if new scripts are added. §5.1/§验证 need refreshing regardless of this project, since they are already stale today.",
+    "refs": "docs/design.md:153-211,299-321; docs/HANDOFF.md:110-113,237-251,463-471; README.md:92-102"
+   },
+   {
+    "topic": "Q5-registry-corroboration",
+    "detail": "train.py:62's own comment independently states '29 个严格 0/1 的算子' (29 strictly-0/1 operators) for allow_boolean_ops, matching both design.md's 22-trivial + 7-non-trivial = 29 breakdown and my live registry probe (boolean_output=True count is exactly 29: 22 trivial_boolean=True, 7 trivial_boolean=False). Three independent sources agree on the CURRENT (pre-fix) count.",
+    "refs": "train.py:62; docs/design.md:299-321; live registry introspection"
+   },
+   {
+    "topic": "Q5-boolean-selfcheck",
+    "detail": "Live-verified: default_registry().get('in_sustain_stddev') has boolean_output=True, trivial_boolean=True today, yet its implementation computes torch.sqrt(var) over NaN-aware windowed data -- a genuine standard deviation, not a boolean. Root cause: the catalog probe (_probe_constant_capable/_probe_distinct_values) feeds this binary operator's first 'mask' argument a generic continuous random tensor (never exactly equal to 1.0), so the real trigger-match path (`torch.where(mask==1,...)`) never fires and the output collapses to one constant purely as a probe artifact, not a true property of the operator.",
+    "refs": "src/alphacube/catalog.py:183-220,278-296,378-400; src/alphacube/operators/dt_in.py:819-843; live probe output"
+   },
+   {
+    "topic": "Q5-boolean-selfcheck",
+    "detail": "The same mask-probing artifact independently affects in_sustain_mean and in_sustain_product (both genuinely continuous: nanmean/prod of windowed data, dt_in.py:820-828,846-859) and, by a related mechanism (the probe's strictly-positive input makes x.bool() true everywhere, trivializing the 'distance to nearest 1' calculation), in_left_one_distance_or_idx and in_left_one_distance_zero (genuinely integer-valued position distances, dt_in.py:608-629) -- 5 operators confirmed continuous/ordinal by direct source reading, all currently misflagged boolean_output=True/trivial_boolean=True.",
+    "refs": "src/alphacube/operators/dt_in.py:608-629,820-828,846-859"
+   },
+   {
+    "topic": "Q5-boolean-selfcheck",
+    "detail": "By contrast, in_is_neighbor, in_no_neighbor, in_sustain, and cross_sustain were checked and are genuinely boolean/indicator-valued by construction (outputs restricted to {0,1}/{0,1,NaN} regardless of input) -- their boolean_output=True flag is correct, not a probe artifact, matching design.md §11.4's explicit list of 22 intentionally-blocked trivial predicates.",
+    "refs": "src/alphacube/operators/dt_in.py:566-582,862+; src/alphacube/operators/dt_cross.py:470-493; docs/design.md:299-321"
+   },
+   {
+    "topic": "Q5-boolean-selfcheck",
+    "detail": "ts_outlier_33/cross_outlier_33/nt_ts_outlier_33 are baked variants (fixed n=3.0,m=3.0) of cross_outlier/ts_outlier, whose raw kernels return a ternary {+1,-1,0} 'outlier flag', not a strict binary -- yet all three are currently boolean_output=True (and coarse_output is 0 for the WHOLE registry, meaning nothing currently lands in the 'ternary' bucket the OpSpec schema explicitly defines for this case). I could not determine, within this pass, whether this is a genuine probe artifact (small default rolling window making the bottom-n% selection empty) or a legitimate collapse at that window size -- flagged as open_question, not asserted as a 6th-9th misflagged operator.",
+    "refs": "src/alphacube/catalog.py:166-167; src/alphacube/operators/dt_cross.py:411-434; src/alphacube/operators/nd_ts.py:339-345; live probe output (coarse_output n=0)"
+   },
+   {
+    "topic": "Q5-scorer-registry",
+    "detail": "make_scorer(target, kind, ...) (scoring.py:510-521) has exactly two branches: kind in ('long','long_hit') -> LongScorer/LongHitScorer, else -> PanelScorer(kind=kind,...). FITNESS_KINDS=('ic','rank_ic','long','long_hit') (scoring.py:31) is checked, hardcoded, at 3 other sites: GPMiner.__init__'s ValueError guard (gp.py:307-308), cli.py's `--fitness` argparse choices=(...) (cli.py:330), and PanelScorer's own internal branch on self.kind=='rank_ic' (scoring.py:71) -- 4 hardcoded sites total, matching the task's description.",
+    "refs": "src/alphacube/mining/scoring.py:31,43-50,71,510-521; src/alphacube/mining/gp.py:307-308; src/alphacube/cli.py:330"
+   },
+   {
+    "topic": "Q5-scorer-registry",
+    "detail": "make_scorer's signature takes only (target, kind, *, turnover_penalty, signed, cost_per_side, top_frac, min_coverage, min_scored_days) -- no view or dates parameter at all today, so a registered scorer factory cannot currently split train/valid by the view's own date range without a signature change threaded from GPMiner's call site.",
+    "refs": "src/alphacube/mining/scoring.py:510-512; src/alphacube/mining/gp.py:320-325"
+   },
+   {
+    "topic": "Q5-scorer-registry",
+    "detail": "GPMiner only builds a scorer (self._scorer = make_scorer(...)) when self._rich is True (fitness_kind != 'ic' or turnover_penalty > 0); the plain default path (fitness_kind='ic', turnover_penalty=0.0) never touches make_scorer at all, which is the exact no-op path any registry addition must leave untouched.",
+    "refs": "src/alphacube/mining/gp.py:313-325"
+   },
+   {
+    "topic": "Q5-generator-hooks",
+    "detail": "TypedTreeGenerator.acceptable(tree) (generator.py:107-111) is the single existing acceptance point ('legal root that carries no banned primitive'), called by generate, mutate_subtree, mutate_operator, mutate_hoist, and crossover -- the natural place to also call a future accept(tree)->bool hook alongside the banned-substructures check.",
+    "refs": "src/alphacube/mining/generator.py:107-111,119-125,176,206,215,264"
+   },
+   {
+    "topic": "Q5-plugin-loading",
+    "detail": "No plugin mechanism of any kind exists anywhere in src/ today (grep for 'plugin' across the whole src tree returns zero hits); cli.py's build_parser has no --plugin or equivalent argument.",
+    "refs": "grep across src/alphacube/**/*.py"
+   },
+   {
+    "topic": "Q5-plugin-loading",
+    "detail": "train.py is a SEPARATE entry point that imports run_mining directly from alphacube.pipeline and bypasses cli.py entirely (its own argparse/hardcoded kwargs, e.g. allow_boolean_ops=False at train.py:62). A --plugin flag added only to cli.py's mine subparser would not reach train.py callers unless the hook is also exposed on run_mining/GPMiner itself and train.py is updated to pass it through.",
+    "refs": "train.py:13-22,62"
+   },
+   {
+    "topic": "Q5-plugin-loading",
+    "detail": "design.md:317-318 states allow_boolean_ops is shared by THREE call sites: the GP generator, the RL vocabulary (mining/tokens.py), AND Feature Boosting (mining/boosting.py, not read in this pass). Any boolean-self-check fix or plugin-registered operator needs to be checked against all three, not just the two (generator.py, tokens.py) I directly verified share registry.searchable(include_boolean=...).",
+    "refs": "docs/design.md:317-318; src/alphacube/mining/generator.py:88-89; src/alphacube/mining/tokens.py:82-83"
+   },
+   {
+    "topic": "Q5-rl-side",
+    "detail": "mining/tokens.py's Vocabulary class has no banned_substructures, no acceptance hook, and no per-operator sampling weight mechanism of any kind (grep for banned_substructures/check_ban_key/sample_weight/bias as an operator-weight concept across tokens.py, base.py, and all four RL miners -- alphaforge.py, alphagen.py, alphaqcm.py, alphasage.py -- returns only each miner's unrelated sep_bias kwarg, which biases the STOP token, not operator choice). The optional 乙.5 RL-side hooks have no existing partial implementation to extend; it is new ground, separate from the GP generator's _pick/acceptable.",
+    "refs": "src/alphacube/mining/tokens.py:71-96; src/alphacube/mining/alphaforge.py:30,38; src/alphacube/mining/alphagen.py:43,49-52"
+   }
+  ],
+  "insertion_points": [
+   {
+    "where": "src/alphacube/axes.py:59-85 (OpSpec frozen dataclass) + src/alphacube/catalog.py:378-400 (_make_spec)",
+    "change": "Add an override field (e.g. real_valued: bool=False) read from the @op(...) registration metadata, applied in _make_spec BEFORE the _probe_constant_capable/_probe_distinct_values calls run, so a declared operator's boolean_output/trivial_boolean are forced False regardless of what the probe would conclude.",
+    "risk": "OpSpec is frozen with no existing override field, so every OpSpec(...) construction site needs the new (defaulted) kwarg -- I only directly verified _make_spec (catalog.py) and the _VARIANT_DEFS baking loop (catalog.py:418) as construction sites; did not exhaustively search for others. Also in direct tension with docs/HANDOFF.md:466's stated preference for probe-based over hand-written criteria -- frame the new field as a declaration on the operator itself (close to its definition), not a disconnected override list, to stay consistent with that convention."
+   },
+   {
+    "where": "src/alphacube/mining/generator.py:221-234 (mutate_window) and :236-246 (mutate_constant)",
+    "change": "Change the final `return child if is_valid_root(child) else None` in both methods to go through `self.acceptable(child)` instead (acceptable() already calls is_valid_root internally), matching mutate_subtree/mutate_operator/mutate_hoist/crossover.",
+    "risk": "Verified live that this is a real, currently-silent leak (200/200 repro rate on a minimal tree). Fix is a tiny, well-isolated two-line change with LOW implementation risk, but it changes GP trajectories for any run that combines --ban/--ban-rank-corr with nonzero window/constant mutation (the fix makes banning more effective than before, which is desired, but is a behavior change for that configuration -- not a no-op). The plain no-bans default path is unaffected since acceptable() is a no-op when banned_substructures is empty."
+   },
+   {
+    "where": "src/alphacube/mining/generator.py:268-273 (_pick) and its call sites at :119-125,195,304,310",
+    "change": "Thread an optional weights mapping (by operator name or face) through _pick, used only when non-empty.",
+    "risk": "HIGHEST risk item for RNG-stream fidelity: _pick's current two-level uniform draw is exactly `self._rng.choice(sorted(faces))` then `self._rng.choice(within-face-list)`. The 'no weights' path MUST execute these exact same calls on the exact same sorted sequences -- routing it through any generalized weighted-sampling formula (even one mathematically equivalent to uniform) will desync the shared random.Random stream from GPMiner._rng and silently break every seeded-run reproducibility test (test_mining.py:231-289,389-394) even when no caller passes weights."
+   },
+   {
+    "where": "src/alphacube/mining/scoring.py:31 (FITNESS_KINDS), :510-521 (make_scorer); src/alphacube/mining/gp.py:307-308,320-325; src/alphacube/cli.py:330 (--fitness choices=)",
+    "change": "Replace the closed FITNESS_KINDS tuple / argparse choices= with a registry (dict) of kind-name -> scorer-factory that built-ins populate by default and external modules can extend; all 4 sites read from the same registry.",
+    "risk": "argparse's choices= is evaluated at build_parser() call time, before any plugin module is imported, so choices= likely must be dropped in favor of post-parse validation against the live registry (same pattern as check_ban_key, gp.py:139) -- this changes WHEN and HOW a bad --fitness value errors (today: immediate, friendly argparse error; after: later, possibly less friendly). Also make_scorer is called from src/alphacube/pipeline.py and from tests/test_long_scorer.py / tests/test_long_hit_scorer.py (grep-confirmed) which were not individually re-verified in this pass -- any new parameter must be an optional trailing kwarg, not a signature-breaking change."
+   },
+   {
+    "where": "src/alphacube/mining/scoring.py:510-512 (make_scorer signature) and src/alphacube/mining/gp.py:320-325 (its call site)",
+    "change": "Add an optional view/dates parameter to make_scorer, forwarded from GPMiner's call site, so a registered factory can split train/valid itself.",
+    "risk": "Must default to None/unused for LongScorer/LongHitScorer/PanelScorer's own constructors (none of which currently take a view) to avoid breaking the other call sites named above."
+   },
+   {
+    "where": "src/alphacube/cli.py build_parser's mine subparser (160-345) and cmd_mine (108-159)",
+    "change": "Add --plugin (action='append') and, inside cmd_mine, import-and-invoke each plugin module's registration hook BEFORE default_registry()/TypedTreeGenerator/Vocabulary are constructed.",
+    "risk": "The generic a.<name>-vs-parser completeness test (tests/test_production.py:96-122) automatically covers the argparse<->cmd_mine wiring, but NOT the ordering requirement (hook must run before the registry/vocabulary is finalized) -- that needs its own dedicated test. Also train.py bypasses cli.py entirely (imports run_mining from pipeline.py directly) -- a cli.py-only --plugin flag will not reach train.py callers unless the hook is also exposed on run_mining/GPMiner and train.py is updated to pass it through."
+   },
+   {
+    "where": "src/alphacube/store.py (day_status pattern, 40-476) and src/alphacube/synthetic.py (make_synthetic_cube/write_synthetic_store, 22-88)",
+    "change": "Model new (S,D) daily-field side-arrays (FloatCap, TotalCap, LimitWidth, board code, listed-days-count) on the existing day_status.npy precedent: a flat (S,D) array alongside the cube, read via a new CubeStore method and sliced per-chunk by new CubeView methods analogous to tradable_s/_d; extend write_synthetic_store with an optional, default-off kwarg to emit synthetic versions for tests.",
+    "risk": "This is NEW ground, not an extension of an existing pattern: day_status today is consumed only by the tradability mask, never by CubeEngine/parser/expression.py's type system, so there is no precedent for what expression-level 'shape' a daily leaf gets or how it broadcasts against (S,D,M) operands in elementwise ops -- a genuine open design question (see open_questions), not just plumbing."
+   },
+   {
+    "where": "tests/conftest.py:8-18 (session-scoped store/view/raw fixtures)",
+    "change": "Add any new daily-field synthetic data as an optional, default-off kwarg on write_synthetic_store/make_synthetic_cube rather than a parallel fixture, so the many tests already depending on these exact fixtures (all of my 7 assigned files except test_parser.py/test_expression.py) are unaffected unless they opt in.",
+    "risk": "LOW if strictly additive-with-default-off; re-run the full suite (617 passed/157s baseline recorded) after any conftest.py edit to confirm no shared-fixture shape change leaked into unrelated tests."
+   },
+   {
+    "where": "src/alphacube/mining/tokens.py Vocabulary.__init__ (71-96)",
+    "change": "If pursuing the optional 乙.5 RL-side hooks at all: add banned_substructures/weight concepts here, since none exist today.",
+    "risk": "No shared code path with the GP generator exists (RL miners sample from Vocabulary + their own neural nets, not TypedTreeGenerator), so this is realistically a separate, similarly-sized project rather than a small add-on -- scope this explicitly rather than assume it piggybacks on 乙.2's generator work."
+   }
+  ],
+  "open_questions": [
+   "Where exactly is --warmup's 'day-axis warm-up rows read before --start' implemented? CubeStore.view()'s signature (store.py:204-205) takes only symbols/max_symbols/start/end, no warmup kwarg -- I did not trace pipeline.py/cmd_mine's handling of --warmup in this pass, which 甲's 'automatic alignment under warm-up' requirement needs resolved precisely.",
+   "The task states '9 个比例类算子被错标' for the boolean self-check. I independently verified 5 (in_sustain_mean, in_sustain_stddev, in_sustain_product, in_left_one_distance_or_idx, in_left_one_distance_zero) by reading their source, and found 3 more candidates (ts_outlier_33, cross_outlier_33, nt_ts_outlier_33) that are also currently boolean_output=True despite their kernel returning a ternary flag -- but could not determine within this pass whether that is a genuine probe artifact or a legitimate collapse at the probe's default small window. That is 5 confirmed + 3 unresolved = 8, not 9, and no other candidate turned up among the full 22-member trivial_boolean list (the remaining 14 were verified genuinely boolean-by-construction). The designer should re-derive this list empirically rather than trust either count.",
+   "Does OpSpec (frozen dataclass) get constructed, pattern-matched, or compared (dataclasses.replace, ==, positional unpacking) anywhere outside _make_spec and the _VARIANT_DEFS baking loop in a way that would make adding a new field riskier than a plain additive default-value change? Not exhaustively searched.",
+   "mining/boosting.py (Feature Boosting) is named in design.md:317-318 as a third consumer of allow_boolean_ops alongside the GP generator and RL vocabulary; I did not read it in this pass, so it's unconfirmed whether it independently calls registry.searchable(...) and needs its own boolean-self-check-fix test coverage.",
+   "What expression-system 'shape' should a daily (S,D) leaf get -- does it coincide with today's COLLAPSED (which currently specifically means 'one value per stock-day, derived by reducing a minute cube'), or does it need its own distinct flag even though the numeric shape coincides? No existing precedent answers this; expression.py's shape machinery was not deeply read in this pass.",
+   "Is train.py being actively maintained as a second entry point, or is it expected to be superseded by cli.py? This determines whether 乙.3's plugin hook needs to be separately wired into train.py or whether that's out of scope."
+  ],
+  "summary": "Read-only recon of AlphaCube's tests/ directory and conventions, scoped to: tests/conftest.py, test_engine.py, test_expression.py, test_parser.py, test_catalog.py, test_mining.py, test_gp_seeds.py, test_general_call.py, root conftest.py, pyproject.toml, scripts/build_synthetic_cube.py, docs/design.md, docs/HANDOFF.md -- plus targeted, read-only Python introspection (registry probes) and source checks (generator.py, catalog.py, scoring.py, gp.py, cli.py, store.py, synthetic.py, tokens.py) needed to ground the insertion_points and test-case lists precisely. No files were modified; two throwaway probe scripts were written to the session scratchpad only.\n\nHeadline results: the full suite is currently clean -- 628 collected, 617 passed / 10 skipped (all 3 optional-dependency gaps: xgboost, tabpfn, matplotlib -- fully identified) / 1 xfailed (a documented, intentional strict xfail) / 0 failed, in 157.48s. My 7 assigned files in isolation: 105 passed / 1 xfailed / 0 failed / 0 skipped in 13.59s. Both docs/HANDOFF.md and README.md quote stale, lower test counts and need updating regardless of this project. I empirically reproduced two of the computed task's claims rather than taking them on faith: (1) TypedTreeGenerator.mutate_window and mutate_constant genuinely never check self.acceptable(), so a banned substructure survives through both 200/200 times in a minimal repro, while mutate_subtree correctly filters it 0/200; (2) the registry's boolean self-check probe genuinely misflags in_sustain_mean/_stddev/_product and in_left_one_distance_or_idx/_zero as boolean, because the probe feeds a non-mask continuous tensor into operators whose first operand must semantically be a 0/1 mask -- 5 confirmed by reading their actual (continuous/ordinal) implementations, with 3 more (*_outlier_33) suspicious but unresolved (open question), short of the claimed count of 9. Full detail, every claim with a file:line or identifier ref, is in facts/insertion_points/open_questions below, organized by the five requested questions (fixtures & oracle style, RNG/bit-exact pinning, baseline, code style & doc sync, and per-capability new-test-case lists for daily leaves, scorer registry, generator hooks, plugin loading, and the boolean self-check)."
+ }
+}

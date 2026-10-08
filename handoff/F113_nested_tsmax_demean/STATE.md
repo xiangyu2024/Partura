@@ -1,6 +1,6 @@
 # F113_nested_tsmax_demean — 交接状态
 
-_自动生成于 2026-10-05 19:26(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F113_nested_tsmax_demean` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #1375(批次 B01_single_factors)
 - 表达式:`pow_1_5(ts_max(pow_2(cs_demean(mul(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(day_mean(Ret), 5), -5)), 30)), 20), 5))), 30))`
@@ -148,6 +148,9 @@ k_known_xfrozen(+18.5%/3.15);best_on_known 的 h_k2 +17.2%/2.66 赢 k_known 但�
 - `sweep_s3`  10-05 17:54  265 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweep_s3`
 - `anatomy_s3`  10-05 18:04  0 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean anatomy_s3`
 - `sweepfinal_s3`  10-05 18:08  8 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweepfinal_s3`
+- `sweep_s4`  10-06 10:46  265 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweep_s4`
+- `anatomy_s4`  10-06 10:54  0 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean anatomy_s4`
+- `sweepfinal_s4`  10-06 10:59  8 个变体  → `./scripts/study.sh digest F113_nested_tsmax_demean sweepfinal_s4`
 - `x1_ties`(自写脚本的输出)  10-04 14:22  exit 0  → `logs/F113_nested_tsmax_demean_x1_ties.log`
 - `x2_increment`(自写脚本的输出)  10-04 15:35  exit 0  → `logs/F113_nested_tsmax_demean_x2_increment.log`
 

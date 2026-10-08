@@ -47,7 +47,9 @@ def test_unpatched_build_registry_flags_none_of_the_nine_kernels():
     object, not wrapped)."""
     assert not hasattr(catalog.build_registry, "_partura")
     reg = build_registry()
-    assert len(reg) == 304
+    # 244 of AlphaCube's own + Partura's kernels (every nd one twice, as X and nt_X).  It was 304 with 45 kernels
+    # (15 of them nd); main has since added the four nd kernels cs_last_{high,low}{10,05}: 4 + 4 more entries = 312
+    assert len(reg) == 312
     flagged = [n for name in NINE_MISFLAGGED for n in (name, "nt_" + name)
               if (sp := reg._ops.get(n)) is not None and (sp.boolean_output or sp.trivial_boolean)]
     assert flagged == []
@@ -73,7 +75,22 @@ def test_install_kernels_populates_the_legacy_tables_and_is_idempotent():
 
 
 # ---------------------------------------------------------------- load_plugins / register
-def test_load_plugins_registers_partura_and_declares_in_sustain_real_valued():
+@pytest.fixture
+def in_sustain_fix():
+    """The opt-in ``in_sustain`` fix on for one test -- and its two process-wide traces (the names added to
+    ``catalog.REAL_VALUED_OVERRIDES``, and the registry built with them) taken out again afterwards, so no later
+    test sees a vocabulary of 289 where ``main``'s route has 286."""
+    ac_plugin.set_fixes(["in_sustain"])
+    try:
+        yield
+    finally:
+        ac_plugin.set_fixes(None)
+        catalog.REAL_VALUED_OVERRIDES.difference_update(ac_plugin._AC_REAL_VALUED)
+        catalog._DEFAULT = None
+
+
+def test_load_plugins_registers_partura_and_declares_in_sustain_real_valued(in_sustain_fix):
+    # (with the opt-in fix on: by default the declaration is NOT made, see the next test)
     catalog._DEFAULT = None
     loaded = load_plugins(["partura.ac_plugin"])
     assert loaded == ["partura.ac_plugin"]
@@ -85,6 +102,49 @@ def test_load_plugins_registers_partura_and_declares_in_sustain_real_valued():
         assert sp.boolean_output is False and sp.trivial_boolean is False
     # in_sustain itself is genuinely boolean (a 0/1 propagation mask) and must stay flagged
     assert reg.get("in_sustain").boolean_output or reg.get("in_sustain").trivial_boolean
+
+
+def test_load_plugins_by_default_leaves_the_in_sustain_kernels_flagged_as_main_had_them():
+    """``main``'s monkeypatching route only ever cleared Partura's own kernels' flags.  Declaring AlphaCube's
+    ``in_sustain_mean`` / ``_stddev`` / ``_product`` real-valued is correct for them but enlarges the search
+    vocabulary by 3 (286 -> 289 with resource-risk operators allowed), so every ``dt``-face pick maps the same random
+    number to a different operator: not the same experiment as any stored episode.  It is the ``in_sustain`` fix."""
+    assert not (set(ac_plugin._AC_REAL_VALUED) & catalog.REAL_VALUED_OVERRIDES)
+    catalog._DEFAULT = None
+    assert load_plugins(["partura.ac_plugin"]) == ["partura.ac_plugin"]
+    assert "partura" in scorer_kinds()
+    reg = default_registry()
+    searchable = {s.name for s in reg.searchable(include_boolean=False, include_resource_risk=True)}
+    for name in ac_plugin._AC_REAL_VALUED:
+        sp = reg.get(name)
+        assert (sp.boolean_output or sp.trivial_boolean) and name not in searchable
+    assert not (set(ac_plugin._AC_REAL_VALUED) & catalog.REAL_VALUED_OVERRIDES)
+
+
+def test_default_vocabulary_is_alphacubes_own_plus_partura_s_kernels_unflagged():
+    """What ``main``'s route builds: AlphaCube's registry untouched, plus every Partura kernel (and nt_ twin)
+    searchable.  Pinned structurally: take Partura's names out of the build and what is left must be what the
+    plugin route searches, name for name and in the same order (the order is part of the draw)."""
+    catalog._DEFAULT = None
+    load_plugins(["partura.ac_plugin"])
+    theirs = {n for n in ac_plugin.partura_operator_names()}
+    with_partura = default_registry()
+    got = [s.name for s in with_partura.searchable(include_boolean=False, include_resource_risk=True)]
+    for n in ops_ext.NEW_OPERATORS:                         # every kernel is in; an nd one also as nt_<name>
+        assert n in with_partura._ops, n
+    for n in theirs:                                        # (a dt-face kernel has no nt_ twin: nothing to find)
+        sp = with_partura._ops.get(n)
+        if sp is not None:
+            assert not (sp.boolean_output or sp.trivial_boolean), n
+            assert n in got, n
+    excluded = catalog.EXCLUDED_KERNELS
+    catalog.EXCLUDED_KERNELS = {**excluded, **{n: "left out for this test" for n in ops_ext.NEW_OPERATORS}}
+    try:
+        alone = [s.name for s in build_registry().searchable(include_boolean=False, include_resource_risk=True)]
+    finally:
+        catalog.EXCLUDED_KERNELS = excluded
+        catalog._DEFAULT = None
+    assert [n for n in got if n not in theirs] == alone
 
 
 def test_register_is_safe_to_call_more_than_once_in_one_process():
@@ -237,7 +297,10 @@ def test_score_combined_matches_score_ungated_and_tracks_n_and_gate():
     panel = 0.3 * ctx.tgt + np.random.default_rng(5).normal(size=ctx.tgt.shape)
     out_gated = scorer.score(panel, gated=True)
     out_combined = scorer.score_combined(panel)
-    assert out_combined == scorer.score(panel, gated=False)
+    again = scorer.score(panel, gated=False)
+    # (a level reward leaves the paired columns -- p_share, p_ir_*, p_dann_* -- NaN, and NaN != NaN)
+    assert out_combined.keys() == again.keys()
+    assert all(out_combined[k] == again[k] or (out_combined[k] != out_combined[k] and again[k] != again[k]) for k in again)
     assert scorer.n == 3
     assert set(ac_plugin.ParturaScorer.columns) <= set(out_gated)
 
@@ -360,7 +423,7 @@ def test_arm_hooks_matches_opw_and_idea_ops_on_the_nt_twin_too():
     nd, idea_nd = "cs_mean", "cs_rank"
     assert {f"nt_{nd}", f"nt_{idea_nd}"} <= {s.name for s in reg.list_all()}, "both twins must exist"
 
-    kw = dict(risky=set(), ext=set(), opw={nd: 0.0}, idea_ops={idea_nd}, boost=BOOST)
+    kw = dict(risky=set(), ext=set(), opw={nd: 0.0}, idea_ops={idea_nd}, boost=BOOST, nt_twins=True)   # the opt-in fix
     steer = ac_plugin.arm_hooks("steer", **kw)
     assert steer.op_weight(reg.get(nd)) == 0.0
     assert steer.op_weight(reg.get(f"nt_{nd}")) == 0.0          # was 1.0: half-steered
@@ -368,7 +431,7 @@ def test_arm_hooks_matches_opw_and_idea_ops_on_the_nt_twin_too():
     assert steer.op_weight(reg.get(f"nt_{idea_nd}")) == BOOST   # was 1.0: half-boosted
 
     # An explicit nt_ entry still wins, so the two faces can be weighted apart on purpose.
-    split = ac_plugin.arm_hooks("steer", risky=set(), ext=set(), opw={nd: 0.0, f"nt_{nd}": 2.0})
+    split = ac_plugin.arm_hooks("steer", risky=set(), ext=set(), opw={nd: 0.0, f"nt_{nd}": 2.0}, nt_twins=True)
     assert split.op_weight(reg.get(nd)) == 0.0
     assert split.op_weight(reg.get(f"nt_{nd}")) == 2.0
     # The control arm is still the base filter alone -- the twin rule must not leak into it.
@@ -377,6 +440,18 @@ def test_arm_hooks_matches_opw_and_idea_ops_on_the_nt_twin_too():
         assert control.op_weight(reg.get(name)) == 1.0
     # A dt-face operator has no twin at all, and is untouched by either key.
     assert steer.op_weight(reg.get("day_mean")) == 1.0
+
+
+def test_arm_hooks_by_default_matches_opw_and_idea_ops_by_name_only_like_mains_pick():
+    """The default is ``main``'s: its ``pick`` looked ``opw`` and the idea's operators up by ``spec.name``, so an
+    ND-face operator's ``nt_`` twin kept weight 1.0.  (The branch's fix for that half is the ``nt_twins`` opt-in,
+    tested above: it changes which operators the steer arm draws.)"""
+    reg = default_registry()
+    nd, idea_nd = "cs_mean", "cs_rank"
+    steer = ac_plugin.arm_hooks("steer", risky=set(), ext=set(), opw={nd: 0.0}, idea_ops={idea_nd}, boost=BOOST)
+    assert steer.op_weight(reg.get(nd)) == 0.0 and steer.op_weight(reg.get(idea_nd)) == BOOST
+    assert steer.op_weight(reg.get(f"nt_{nd}")) == 1.0
+    assert steer.op_weight(reg.get(f"nt_{idea_nd}")) == 1.0
 
 
 def test_op_weight_hook_removes_an_entire_face_from_generation():

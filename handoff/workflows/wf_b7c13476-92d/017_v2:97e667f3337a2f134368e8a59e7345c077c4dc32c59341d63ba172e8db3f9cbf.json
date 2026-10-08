@@ -1,0 +1,80 @@
+{
+ "type": "result",
+ "key": "v2:97e667f3337a2f134368e8a59e7345c077c4dc32c59341d63ba172e8db3f9cbf",
+ "agentId": "a80346d9e9edb4296",
+ "result": {
+  "findings": [
+   {
+    "title": "s2 的筛子/分段变体方向仍被 rank IC 重拟合:3.1 证据表两行在 s3 整体翻号(+1.01 → −3.18、+0.41 → −4.47)",
+    "file": "/Users/wxy/Desktop/Partura/research/alpha_distillation/B01_reverse_guidance.md",
+    "line": 50,
+    "severity": "high",
+    "summary": "s2 跑的时候 scripts/sweep.py:142 的筛子方向锁定还没生效(sweep_s2.json 里 15 条因子的 seg_*/scr_* 全部 sign_locked=False),rank IC 把 seg_hiliq_p / seg_new_p 的面板整体取负,于是「只在最高四成里选」实际被当成「把最高四成排到最后」来打分;s3 锁定方向后这两行完全翻号,而报告和 guidance/B01.yaml 已经把 s2 的数字当成结论 1 的证据发出去了。",
+    "failure_scenario": "输入 runs/F1*/sweep_s2.json 的 seg_hiliq_p(expr = cs_first_high40(X, cross_mean(day_sum(Amt),30))):15/15 条因子 sign=−1、sign_locked=False;motif_stats 得到 d 中位 +1.01、明显变好 87%、两段都升 93%,直接印在报告 3.1 表第 2 行,并被 guidance/B01.yaml:31 的 R2_within_liquidity_bucket(状态「已实现」)列为 evidence。换成 s3(同一批因子、同一段数据,只是 sign_locked=True)同一行是 d 中位 −3.18、明显变好 0%、明显变差 100%;seg_new_p 从 +0.41/60% 变成 −4.47/0%/100% 变差。也就是说:生成器若照 3.1 表把 cs_first_high40(·, 流动性) 这一族当成「抬高 1 个夏普」的动作升权,它在现在的方向约定下拿到的是本批最差的一类候选。",
+    "suggested_fix": "报告与 guidance/B01.yaml 的 3.1 表只引用 s3(或任何 sign_locked=True 的轮次);对 s2 产出的 seg_*/scr_* 行加上「方向未锁定,所测为取负后的书」的标注,并把 NAMES 里的「把成交额最高四成排到最后」改成它在锁定约定下真正对应的表达式(cs_last_high40(X, LIQ)),否则结构先验的符号是反的。",
+    "evidence": "复现:cd /Users/wxy/Desktop/Partura && python3 tmp/review/motif-stats/check.py s2 和 ... s3(输出见 tmp/review/motif-stats/out_check.txt)。逐因子 sign:seg_hiliq_p 在 s2 是 F101..F115 全部 −1/sign_locked=False,s3 全部 +1/True。guidance/motif_stats_s2.json vs 新生成的 guidance/motif_stats_s3.json:wrappers.seg_hiliq_p d_median +1.01 → −3.18(up 87%→0%,down 7%→100%),wrappers.seg_new_p +0.41 → −4.47。"
+   },
+   {
+    "title": "结论 1 的 +1.18 主要是「底座本来就没用」造成的回归效应,底座夏普 ≥ 1 的因子上只剩 +0.41 中位 / +0.09 均值",
+    "file": "/Users/wxy/Desktop/Partura/research/alpha_distillation/B01_reverse_guidance.md",
+    "line": 9,
+    "severity": "high",
+    "summary": "seg_lowliq_m 的 d 与底座自身夏普相关 −0.84,变体的绝对夏普挤在很窄的一条带里(中位 +1.84、标准差 0.64,底座是中位 +0.70、标准差 1.11),所以 d ≈ 1.84 − 底座;「不管套在哪条因子上都抬高 +1.18」这句话是由 10 条多头腿本来就是负数/接近 0 的因子撑起来的,而且报告拿来与它对读的 seg_hiliq_p 同时换了段又换了方向,不能互相印证。",
+    "failure_scenario": "输入 15 条因子的 v_base 与 seg_lowliq_m(s2 与 s3 完全一致):全样本 d 中位 +1.18、87% 明显变好、93% 两段都升。只取底座 utrain 纯多头夏普 ≥ 1 的 5 条(F101 1.37、F102 2.05、F103 1.49、F105 1.96、F111 2.15),d 变成中位 +0.41、均值 +0.09,逐条是 +1.30/+0.41/+0.76/+0.15/−2.18 —— 最好的那条底座(F111)掉 2.18。贡献 +1.18 的是 F106(−1.91→+1.05)、F109(−1.24→+1.67)、F110(−0.03→+1.15)这种底座本身无效的因子。另外 15 条 seg_lowliq_m 变体里 14 条的绝对夏普低于已知成交额族基准本身(+2.22),所以「低流动性段内选股」并没有产出超过已知池的东西。方向配对也不对称:同向的 seg_hiliq_m 是 −1.04,反向的 seg_lowliq_p 是 −0.23,而报告并列的 seg_lowliq_m(同向+低流动性)与 seg_hiliq_p(反向+高流动性)差了两个因素。",
+    "suggested_fix": "headline 1 和 guidance/B01.yaml 的 R2 把统计量改成「条件在底座夏普 ≥ 1 上」的版本,或者直接报告 d 对底座夏普的回归(斜率/相关),并补一个不含因子的纯分段配置项(cs_first_low40(常数面板, LIQ))来把「配置收益」从「段内选股」里拆出来;与 seg_hiliq_p 对读要换成方向匹配的 seg_hiliq_m。",
+    "evidence": "tmp/review/motif-stats/check.py(输出 tmp/review/motif-stats/out_check.txt):corr(base sharpe, d[seg_lowliq_m]) = −0.84;seg_lowliq_m 变体绝对夏普中位 +1.84 sd 0.64 对底座中位 +0.70 sd 1.11;「只看底座 ≥ 1」一节 seg_lowliq_m n=5 med +0.41 mean +0.09 up 60% down 20%;逐因子绝对夏普表显示 known 固定 +2.22,只有 F101 的 +2.67 高于它。"
+   },
+   {
+    "title": "headline 5 与 ban B4 的「+1e-6 删掉后 7 例全部变好」:真正删到 1e-6 的只有 4 例,其中 3 例判废,可用观测只有 1 条",
+    "file": "/Users/wxy/Desktop/Partura/research/alpha_distillation/B01_reverse_guidance.md",
+    "line": 13,
+    "severity": "high",
+    "summary": "把 7 个 create_like 消融按节点身份逐一还原后,只有 4 个删的是 create_like(·, 1e-06),且 F106.abl_R(cov 0)、F109.abl_V(cov 0)、F109.abl_K(cov 0.94 不过门槛)三条没有可用的 d,剩下 1 条(F106.abl_G,d=+1.09);撑起「100% 变好」的另外 3 条删的是 select_where 的 0 填充分支和「收盘比 − 1」里的那个 1,是完全不同的干预。motif_stats 的 agg 把 n 算在全部行上、把 up/down 算在存活行上,报告的「7 例」和「100%」因此分母不同。",
+    "failure_scenario": "输入 runs/F106_erm_mag_gap_1m/sweep_s2.json 与 runs/F109_erm_mag_gap_5m_tsm20/sweep_s2.json 的 7 条 abl_* (why = 「删掉 X = create_like」):motif_stats 输出 ablate_by_operator.create_like = {n:7, factors:2, dead:0.43, d_median:+1.59, up:1.0, both:1.0},guidance_report 把它写成「分母里的绝对小量(+1e-6)删掉之后 7 例全部变好」,并据此在 guidance/B01.yaml:102 把 div(_, add(_, create_like(_, $w))) 封禁(概率 0)。逐节点还原后:F106.abl_G 删 create_like(day_quantile(Ret,0.95), 1e-06) → d=+1.09(唯一可用);F106.abl_R、F109.abl_V 删的也是 1e-06 但 cov=0 判废;F109.abl_K 删 1e-06 但 cov=0.94 不过门槛;F106.abl_C 删 create_like(Ret,0)(掩码的 else 分支)→ +1.45;F109.abl_G 删 create_like(Close,0) → +1.74;F109.abl_C 删 create_like(Close,1)(把 Close/Close[−5] 变成收益率的那个 1)→ +1.77。而且 7 条全部来自 F106/F109 —— 同一个 ES/VaR 构造的 1 分钟版与 5 分钟版,实际上是 1 条因子。",
+    "suggested_fix": "headline 5 与 B4 的 why 改写成「4 例里 1 例可用(d +1.09,1 条构造)」,并把 create_like 这一组按被删常数的取值(1e-06 / 0 / 1)拆成三个 key,否则 ban 的强度与证据不符;同时让 agg 另报一个 n_live,让报告的百分比和例数共用分母。",
+    "evidence": "复现:ALPHACUBE_ROOT=/Users/wxy/Desktop/AlphaCube PYTHONPATH=/Users/wxy/Desktop/AlphaCube/src:/Users/wxy/Desktop/Partura ~/.venvs/alphacube/bin/python /Users/wxy/Desktop/Partura/tmp/review/motif-stats/ablate_exact.py s2 create_like(输出 tmp/review/motif-stats/out_create_like.txt)。脚本用 alphacube.expression.replace 枚举基式每个节点的 splice 结果并与变体 expr 精确匹配,所以被删节点是按身份确定的,末尾汇总:「cases that really delete a 1e-06 constant: 4」「usable 1e-06 cases: 1 median d +1.09」。"
+   },
+   {
+    "title": "「删掉一个节点」实际是把该节点除第一个操作数以外的子树全删:47/97 条消融改动多于一个节点,D7「删掉除法 73% 变好」测的是「删掉整个分母」",
+    "file": "/Users/wxy/Desktop/Partura/scripts/motif_stats.py",
+    "line": 106,
+    "severity": "high",
+    "summary": "partura/propose.py:208 的消融用 node.operands[0] 顶替整个节点,二元/三元节点的其余操作数一并消失;ablate_by_operator 表题写的是「删掉一个节点(d ≈ 0 且 ρ原式 ≈ 1 = 这个节点是乘客)」,但 97 条消融里 47 条不是单节点删除。div 这一行 11 例全部删掉了整个分母子树,其中 8 例删掉的分母里正好包含和上一条 finding 同一个 +1e-6,且 9/11 来自 F106+F115… 实际是 F106+F109 这同一个构造。",
+    "failure_scenario": "输入 runs/F109_erm_mag_gap_5m_tsm20/sweep_s2.json 的 abl_AB(why =「删掉 AB = sub」):按表题读者会以为只去掉了一个 sub,实际这一步同时删掉了 4 个 sub、5 个 div、6 个 create_like、10 个 Close 叶子 —— 几乎整棵树只留了一支。再看 ablate_by_operator.div = {n:11, factors:4, d_median:+0.97, up:0.73},报告 3.6 表写「删掉除法:多数变好」、guidance/B01.yaml:111 据此把 div(_, _) 降权到 0.5 并解释为「比值在这批树里多数是负担」。逐节点还原显示 11 例无一例外是「删掉 div 节点并丢弃分母子树」(例如 F106.abl_I 丢掉 add(day_sum(is_gt(...)), create_like(q,1e-06)),F109.abl_B 丢掉 in_delay(Close,5)),所以这批数据支持的是「这些分母子树有害」,不支持「比值形式有害」;而 9/11 来自 F106(底座 −1.91)与 F109(底座 −1.24)这同一个 ES/VaR 构造的两个分辨率版本,叠加上一条 finding 的回归效应。",
+    "suggested_fix": "消融表改名为「删掉这个节点及其除首操作数外的子树」,或在 propose 里另出一类真正的单节点改写(二元节点用 ab→a 与 ab→b 两条,当前只有前者);div 这一行在报告里加上「9/11 来自 F106/F109 同一构造、两条底座夏普均为负」,并把 D7 的 why 从「比值是负担」改成「这些带软分母的比值是负担」。",
+    "evidence": "复现:python3 /Users/wxy/Desktop/Partura/tmp/review/motif-stats/regex_vs_tree.py s2(输出 tmp/review/motif-stats/out_regex.txt,首行「ablate rows: 50 clean, 47 where the extracted name is not a clean single-node deletion」);逐节点还原:... ablate_exact.py s2 div(输出 tmp/review/motif-stats/out_div.txt,11 例每条都有 ALSO DELETED 行,汇总「cases that really delete a 1e-06 constant: 8」)。因子归属:ablate div 11 行 = F106 4 + F109 5 + F110 1 + F115 1;configs/F106_erm_mag_gap_1m.yaml 与 configs/F109_erm_mag_gap_5m_tsm20.yaml 的 title 显示是同一个构造的 1 分钟 / 5 分钟版。"
+   },
+   {
+    "title": "叶子正则停在第一个左括号,把 4 种不同替换并成一个 Ret → in_pct 桶;拆开后流向类 +0.22 与价格类 −0.29 符号相反,而 D9 降权只覆盖正的那一半",
+    "file": "/Users/wxy/Desktop/Partura/scripts/motif_stats.py",
+    "line": 127,
+    "severity": "medium",
+    "summary": "正则 (.+?)(?:\\(|:|$) 把 in_pct(Volume,1)、in_pct(Amt,1)、in_pct(Close,5)、in_pct(Vwap,1) 四种替换都抽成「in_pct」,于是 Ret → in_pct 这一行(n=28)同时包含「收益换成量的变化率」和「1 分钟收益换成 5 分钟收益 / VWAP 收益」;拆开看两组结论相反,池化后的 −0.09 把它们抹平了。",
+    "failure_scenario": "输入 7 条因子的 leaf_Ret_volchg / leaf_Ret_amtchg / leaf_Ret_ret5 / leaf_Ret_vwapchg(各 7 例):motif_stats 输出 leaf_field.\"Ret → in_pct\" = {n:28, factors:7, d_median:−0.09, up:13%, down:35%},报告 3.6 表读作「收益换量的变化率:换了一个因子,少数变好」,guidance/B01.yaml:113 的 D9 据此把 {day_std|day_sum|day_mean|day_kurt}(in_pct(@flow, $w)) 降权到 0.5。按替换拆开:流向类(in_pct(Volume,1)+in_pct(Amt,1),14 例)d 中位 +0.22、30% 明显变好、20% 明显变差;价格类(in_pct(Close,5)+in_pct(Vwap,1),14 例)d 中位 −0.29、0% 明显变好、46% 明显变差。D9 的模式里 @flow 只匹配 Amt/Volume,也就是说它要降权的那一半证据是正的,支撑它的那一半(价格变化率)根本不在它的模式里。",
+    "suggested_fix": "把 leaf/field 的桶键改成完整替换串(或 field→替换表达式的 key),不要停在第一个括号;Ret → in_pct 行拆成 Ret → in_pct(@flow) 与 Ret → in_pct(@price) 两行,并据此重判 D9 的权重方向(另有 leaf_field.\"Amt → in_pct\" 3 例全降 d −1.45 可以单独支撑 D9,应作为它的唯一证据)。",
+    "evidence": "复现:python3 /Users/wxy/Desktop/Partura/tmp/review/motif-stats/create_like_and_buckets.py s2(输出 tmp/review/motif-stats/out_buckets.txt 第 2 节):ALL 28 as published med −0.09 up 13% down 35%;in_pct(Amt,1) med +0.27、in_pct(Volume,1) med +0.19、in_pct(Close,5) med −0.29、in_pct(Vwap,1) med −0.27;flow 14 例 med +0.22 up 30% down 20%,price 14 例 med −0.29 up 0% down 46%。另见 out_regex.txt 的 leaf/field 分桶表,该行标为 MIXED。"
+   },
+   {
+    "title": "替换统计静默丢掉 69 条 nosc_*(齐次度 0 的无尺度替换),而表题写的是「不论换成谁」;补回后 day_sum → 等多行明显变弱",
+    "file": "/Users/wxy/Desktop/Partura/scripts/motif_stats.py",
+    "line": 114,
+    "severity": "medium",
+    "summary": "re.match(r\"([A-Za-z_0-9]+) → ([A-Za-z_0-9]+)\") 匹配不上 propose 为无尺度替换写的 why(「day_sum(齐次度 1.0) → day_gini(齐次度 0):尺度是不是必需的」),630 条 substitute 行里 69 条因此不进三张替换表;被丢掉的恰好是最可能与原算子行为不同的一类(齐次度从 1 变 0),所以「不论换成谁」这个表题与数据不符。",
+    "failure_scenario": "输入 15 条因子的全部 substitute 行:正则匹配 561 条(0 条抽错),69 条 nosc_* 全部落空(例如 F101.nosc_J_day_gini、F102.nosc_D_cross_scale、F103.nosc_E_ts_scale)。把它们按同样的 A → 分桶补回去:day_sum → 从 24 例 / 判废 0 / med +1.51 / 100% 明显变好 / 83% 两段都升 变成 40 例 / 判废 6 / med +1.34 / 79% / 62%;day_mean → 明显变差 54% → 67%;day_quantile → 明显变差 0% → 20%(报告 3.6 表「价格水平取哪个统计量无所谓」因此偏乐观);cross_mean → med −1.24 → −2.06;in_mean_full → med −0.25 → −0.01。这些行是 C7、D8、D9、「不可替代」类读法的依据,所以表上的强弱排序会变。",
+    "suggested_fix": "正则放宽成 ([A-Za-z_0-9]+)(?:\\([^)]*\\))? → ([A-Za-z_0-9]+)(?:\\([^)]*\\))?,或者干脆不从 why 文本抽、改成在 propose/sweep 落盘时把 (node_op, new_op) 作为字段写进 sweep_*.json;另外给每张表加一列「落空行数」,否则这类静默丢弃不会被发现。",
+    "evidence": "复现:python3 /Users/wxy/Desktop/Partura/tmp/review/motif-stats/regex_vs_tree.py s2 → 「substitute rows: 561 clean, 0 mismatched, 69 dropped because the regex does not match」,dropped ids by prefix: Counter({'nosc': 69});补回前后的对照见 python3 /Users/wxy/Desktop/Partura/tmp/review/motif-stats/create_like_and_buckets.py s2 第 3 节(tmp/review/motif-stats/out_buckets.txt)。"
+   }
+  ],
+  "checked_and_fine": [
+   "配对的底座选择本身是对的:overlay(ov_*)与 screen(scr_*)减 k_known、memory/shape/neutral/segment 减 v_base,都和表达式的语义一致(ov_* 里本身带 cs_rank(已知族),scr_* 是「已知族被本因子筛过」,seg_* 是「本因子加段限制」)。",
+   "hypo 的「含 day_std(Amt) 就减已知族」这条启发式没有污染任何已发布的数字:s2 里被它路由到已知族的 75 条 hypo 全部是 h_ov_k_* / h_res_k_* / h_bk_k_* 这类真的叠在已知族上的假设(逐条看过前 6 条),而且 motif_stats 的分组键只收 kind ∈ {memory, shape, neutral, overlay, screen, segment} 或 id ∈ {rk, win, z60, rel60},hypo 行只进 n_variants 与 dead_rate(这两个量不用 ref),所以即使归错也改不了任何一张表。",
+   "正则抽名字本身没抽错:97/97 条消融抽出的算子确实离开了树(0 条抽不到、0 条抽出的名字还在树里),561 条匹配上的替换里 A 确实消失、B 确实出现、且恰好只有一个节点变化(0 条错配);字段/叶子的价格互换、量额互换全部抽对。问题在表题语义(finding 4)和静默丢弃(finding 6),不在抽名字。",
+   "报告里引用的数字与 JSON 完全一致:3.1 表 25 行、3.6 表 17 行、3.2~3.5 的全部成对统计证据格、headline 2/3/4 的每个数都能从 guidance/motif_stats_s2.json 原样对上;我又用独立重写的实现从 runs/F1*/sweep_s2.json 重算了 3.1 全表与 ablate/substitute/leaf 分桶,结果逐位相同(tmp/review/motif-stats/out_check.txt 末段)。唯一与 JSON 不符的句子是 headline 5 的「7 例全部变好」(JSON 是 n=7、废品率 43%、变好 100% 即 4/4),已单列为 finding 3;另外 headline 2 的「60 例里 98%」里 98% 的分母是 59 个存活行,按 60 算是 97%。",
+   "「4 个窗口算成 4 例」这个夸大并不改变结论 2 和 3:把 mem_* 按因子折叠(4 个窗口取均值,一条因子一行)后 mem_zscore 中位 −2.79 / 100% 明显变差 / 0% 两段都升,mem_mean +0.10 / 53% 两段都升、mem_ema +0.16 / 67%、mem_decay_linear +0.07 / 67%、mem_stddev −0.69 / 67% 明显变差、mem_min −0.43 / 60% 明显变差 —— 与逐变体版本几乎一样。结论 4 本来就是一条因子一行(ov_* n=15),六个权重全是 0% 两段都升,R3 说的「0/90」我逐格数过确实是 0/90。真正在按因子聚合后垮掉的是结论 1,但原因不是窗口复制而是底座质量(finding 2),结论 5 的「7 例」则是 1 条构造(finding 3)。",
+   "B2(截面聚合当因子)稳:→ cs_mean 5 例 4 条因子 100% 废品、→ cs_sum 4 例 3 条因子 100%、→ cs_stddev_full 4 例 3 条因子 100%,s3 完全不变。封禁模式里额外写的 cs_median / cs_max / cs_min 没有实测,但属于安全外推。",
+   "叠加项的方向是可比的:ov_* 的成交方向与 k_known 的成交方向在 90 格里有 87 格一致(例外是 F103/F105/F115 的 ov_m10),所以「叠加后减已知族」确实是在比同一个池子方向;又因为 90 格的两段都升全是 0,R3 的「0/90」不受这 3 格影响。",
+   "scr_xhi_* 用的是 k_known 而不是 sweep.py 专门建的 k_known_xfrozen(「每条因子自己的筛子要打败的通用筛子基准」)。因为 k_known_xfrozen 更强(例如 F101 训练段纯多头夏普 2.81 对 1.78),换成它只会让 scr_xhi_p 更负,已发布的结论方向不会反,属于可以更严而非算错。",
+   "s3 上多数结论不变:mem_* 全族、fold_*、rel60、rk、win、bk_*、res_*、ov_*、seg_lowliq_m、seg_xfrozen_m、scr_xhi_* 的中位/占比与 s2 一致或只差 0.02;3.6 表 17 行里 13 行不变。变的是:整体废品率 10.1% → 5.4%(headline 5 的「一成评估预算」现在是半成),cs_demean → 废品率 74% → 59% 且明显变好 0% → 27%(「换成别的截面算子多数是废品」变弱),ts_max → 废品率 38% → 12%,ts_spearman → 中位 −2.06 → −2.58(更强),seg_hiliq_p / seg_new_p / seg_xfrozen_p 翻号(finding 1)。新文件只写了 guidance/motif_stats_s3.json,没有改动任何已有文件。"
+  ]
+ }
+}

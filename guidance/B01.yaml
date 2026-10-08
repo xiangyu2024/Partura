@@ -25,6 +25,7 @@ reward:
     why: 约 6.5% 的冻结盘口票(封板 / 停牌前后)段等权超额 −67%/年;现在的奖励会为「认出这些票」付钱,所以搜索反复产出涨跌停探测器;把它放进奖励,搜索才会去找「在干净池子里排序」的内容
     evidence: [f102-l7, head-count-is-not-return-contribution, "known vs known_xfrozen: 训练段纯多头夏普 2.22 → 3.15,多头书只重合 50%", "F103 连剔冻结盘口 + 次新: 3.16 / 测试 1.74"]
     status: implemented        # partura/steer.py: reward 'long_tradable'
+    out_of_sample: "K001(2026-10-06,按事先写下的规则读):通用冻结筛子对已知族的成对差 样本内 +3.1 个点(信息比 0.92)、样本外 +0.9 个点(t = 0.6);逐年 +6.5 / +3.4 / +4.8(2018–2020),2021 年以后平均 +0.9。所以这条奖励的理由是「买不进 / 卖不出的票不该进书和基准」(可交易性),不是「它能多赚 3 个点」"
   - id: R2_within_liquidity_bucket
     change: 奖励 = 按 30 日成交额分十桶、桶内排名之后的多头腿净超额(cs_bucket_rank(x, cross_mean(day_sum(Amt), 30)))
     why: 「只在低流动性四成里选」这个动作不管套在哪条因子上都 +1.2 夏普(15 条里 13 条升、14 条两段都升)—— 说明现在的奖励给流动性倾斜本身付钱,GP 头部才会全是成交额一族;桶内奖励把这笔钱拿掉
@@ -34,7 +35,12 @@ reward:
     change: 奖励 = 候选与当前因子池五五混合之后,纯多头夏普 / 净超额相对池子本身的增量(AlphaGen 的做法:生成器的回报来自下游组合的边际贡献)
     why: 把任意一条因子的排名叠到已知族上,15 条 × 6 个权重没有一次两段都升(0/90);独立的 9 个融合后样本外 +17.3% / 1.93 而单个只有 +2~+12% —— 值钱的是「对池子的增量」,不是单打独斗的夏普
     evidence: [wrappers.ov_p025, wrappers.ov_p05, wrappers.ov_p10, "runs/_batch_B01/fuse_s2.json", amt-level-family-evades-rank-ban]
-    status: implemented        # reward 'long_marginal'(池 = guidance 里列的 pool 表达式)
+    status: implemented        # reward 'long_marginal';2026-10-06 改口径:混合书与池子书在同一批格子上的逐日差的信息比(train+valid 合并段;任一段低于 −1 判负)。原口径「两段夏普差取较差者」在 e2_I2 里被证明不可用,且两边股票池不一致(审查)
+  - id: R8_paired_reward_is_sized
+    change: 成对奖励(long_marginal / long_screen)的信息比带大小 —— score = IR × min(1, 每年多赚 / 1 个点);两段各自也这样算
+    why: 成对差的信息比没有量纲。每天只换掉书里一两只票、换得略好而且很稳,信息比能到 2~3 而账面一年只多 0.2 个点 —— e3_I1 对照臂的 22 个「发现」全是这一种(账面两段都多 1 个点的:带指引 11 族,对照 0 族);其中最高分的一类(成交集中价位的 20 日波动)在 K001 里当筛子是空操作
+    evidence: ["episodes/e3_I1_frozen_state", "studies/K001_known_screens/README.md: H2"]
+    status: implemented        # partura/steer.py: _sized, PAIRED_SIZE = 0.01
   - id: R4_both_periods
     change: 奖励取 train、valid 两段里较差的那个(或要求两段多头腿都为正),不用合并段
     why: valid(2022-01~2023-08)是成交额水平 / 小市值的大年,合并段会系统性挑到成交额占比最高的写法;平滑买到的样本外一致性在合并段上被抹平
@@ -66,7 +72,7 @@ evaluation:
     why: 计数 / 占比类面板(零收益分钟占比、桶内排名)任一天只有几十个取值,被机械判死,而它们平滑之后是连续的 —— 这批里最有用的几个状态变量都是这一类;方向被翻转的筛子会把「永不持有」测成「只持有」而且不报错
     evidence: ["F106 verdict tooling: bk_liq dist 0.20 判死,外套 cross_mean(·,5) 后 dist 1.00", "F101 verdict LF8", "handoff/TOOLING.md"]
   - id: E2_three_cheap_siblings
-    change: 每个候选连同三个便宜的兄弟一起评、取最好的记分:自身、外面套 cross_ema(·,30)、排掉冻结盘口的筛子版
+    change: 每个候选连同便宜的兄弟一起评、取最好的记分:自身(半衰期网格到 60 日)、排掉冻结盘口的筛子版;外面再套 cross_ema(·,30) 在网格到 60 之后已经多余
     why: 这三样是对几乎所有底座都安全或有益的后处理(EMA / 均值记忆 50~60% 两段都升、只有 3~16% 明显变差);让搜索去重新发现它们是浪费预算
     evidence: [wrappers.mem_ema, wrappers.mem_mean, wrappers.mem_decay_linear, wrappers.seg_xfrozen_m]
   - id: E3_same_money_test
@@ -81,6 +87,34 @@ evaluation:
     change: 选拔只看多头腿(净超额、纯多头夏普),多空夏普只作参考
     why: 可买入标签把次日封涨停的票记成缺失,空头书里等于收益 0,集中度 / 峰度类因子的多空夏普因此虚高 0.5~0.7;15 条原式多空夏普 2.3~3.9,多头腿站得住的只有 5 条
     evidence: [buyable-label-inflates-short-leg-of-concentration-factors, buyable-label-filter-deepens-short-side-of-volume-spike-groups]
+  - id: E7_power_of_an_episode
+    change: 检验「先验 / 指引有没有提高发现率」的实验,每臂至少几千次评估;几百次的短搜只用来回答「这个想法的邻域里有没有东西」
+    why: 桶内口径下随机搜索的发现率低于 1%,每臂 124 次评估时两臂的差别全在抽样误差里(e2_I5:≥0.3 的 2 对 0,≥0 的 8 对 15,方向都不一致)
+    evidence: ["episodes/e2_I5_within_bucket_anything"]
+  - id: E10_count_finds_by_measured_distinctness
+    change: 一次搜索「找到了几个」按实测互不相关的个数算(交易信号两两秩相关 < 0.7),式子的族数只当上限
+    why: 族键只认价格字段换名和最外层保序函数;一个撞对了的结构会被 GP 繁殖成一串窗口、嵌套不同的变体,每个都是一「族」。e5r1 是 27 族 / 实测 4 个;e4k 三个种子合计 44 族对 4 族,实测是 16 对 3
+    evidence: ["episodes/e4_SUMMARY.md", "episodes/e5r1_I1_frozen_state"]
+  - id: E11_search_metric_counts_things_and_reports_firing
+    change: 检验「先验有没有用」的搜索实验,主指标按实测互不相关、且不在已知池里的发现数算(每百次付费评估),不数「存下来的好候选」;同时报先验实际抽掉了多少提议,触发很少的运行不算先验的证据;每格至少 8 个种子
+    why: e7 的主指标数的是写法 —— 学到的先验「质量产出」是对照的 2.3 倍,但赢的两次里先验只抽掉了 4 / 254 和 6 / 253 个提议,好候选全是「日频价格水平的滚动自相关」一族的各种写法(50 个写法、族键也算成 50 族);按实测互不相关是 6 / 10 / 12 个,分不出高下。唯一重复出来的效果是没过门槛的比例 30% → 22%
+    evidence: ["episodes/e7_SUMMARY.md", "episodes/e7_summary.json"]
+  - id: E12_compare_combined_signals_at_a_fixed_halflife
+    change: 比较两个合成信号(或核对一个信号有没有复现)时固定同一个平滑半衰期,或在样本内打平的几个半衰期上取平均;不要各自重选
+    why: 样本内纯多头夏普相差不到 0.02 的两个半衰期,测试段的纯多头净超额能差 1 ~ 3 个点(C_LMQ:hl 5 / 10 / 20 = +17.1% / +18.3% / +19.9%);五个新合成信号里三个在重建后换了半衰期,而固定半衰期时重建与存档只差 0.3 个点以内。合成信号之间 1 ~ 2 个点的差距落在这个抖动里
+    evidence: ["research/two_level/RESULT.md", "runs/_forward/two_level_hl_diag_20260916.json"]
+  - id: E13_pooling_searched_variants_does_not_carry_forward
+    change: 「把搜出来的变体并进合成池」带来的测试段改善不算增益,要到前推段上用成对差确认;(假设,未检验)搜出来的池子的训练段适应度是被筛选抬高的,选族时应打折或按来源设配额 —— 样本内再留出一段排序解决不了(这些池子两段都被筛过),干净的检验只能等前推段变长
+    why: 三个并集(手写库 ∪ Partura、挖掘库 ∪ Partura、手写库 ∪ 挖掘库)对各自的基线,测试段 +1.7 ~ +4.1 个点,前推段 −0.9 ~ −4.6 个点,合并段 t 0.5 ~ 0.7;入选的 100 族里搜出来的池子独占 42 ~ 71 族(C_LQ 里 Partura 独占 67 族),样本内拟合值涨、前推段反而低。两个现成冠军自己在前推段站住了(纯多头净超额 +16.9% / +16.6%)
+    evidence: ["research/two_level/RESULT.md", "runs/_forward/two_level_forward_20260916.json"]
+  - id: E9_paired_test_against_the_benchmark
+    change: 说一个候选(或一个融合)「比基准好」,用**同一天相减**的逐日净超额之差来判:年化差、信息比、测试段的 t 值;两个年化数相减只当描述
+    why: 两本书大半持仓相同,各自 ±3 个点的噪声在相减时抵掉大半。第四轮的结论因此要分开说 —— 独立升级版的融合比 15 条原式的融合样本外多 6.5 个点(t = 1.5,幅度没缩水);比已知族多 2.3 个点(t = 0.6,2.3 年的样本分不出来);三轮都是这个量级(s2 +3.2 / t 0.8,s3 +1.6 / t 0.4)
+    evidence: ["runs/_batch_B01/paired_fusions.json", "scripts/sweep_final.py: paired", "studies/K001_known_screens/README.md"]
+  - id: E8_paired_find_needs_both_periods
+    change: 成对奖励(long_marginal / long_screen)下,一个候选算「发现」= 合并段(带大小的)信息比过线,而且 train、valid 各自的都 ≥ 0.5(`partura.steer.is_discovery`)
+    why: 合并段 5.6 年里 train 占 4 年,信息比被它主导 —— e3_I1 带指引一臂的头名 train +5.06 / valid +0.08,只在 2018–2021 有效;只按合并段数两臂是 50 对 63,加上两段各自都站得住之后是 26 对 22
+    evidence: ["episodes/e3_I1_frozen_state", "episodes/e3_I2_dispersion_fold"]
   - id: E6_episode_with_control
     change: 每一次干预都配一个同预算、不带干预的对照搜索;记「每千次评估里过门槛、两段多头腿为正、与已知池不重合的候选数」
     why: 要验证的不是某次搜到了好因子,而是干预有没有提高单位算力的发现效率
@@ -91,15 +125,17 @@ priors:
   - {id: C1_window1_identity, action: rewrite, pattern: "{ts_min|ts_max|ts_mean|ts_med|ts_sum|ts_decay_linear}(_, 1)", to: operand, why: 窗口为 1 的日轴滚动是逐位恒等, evidence: [f103-l3, 'substitute_outgoing."ts_min →" d 0.00 ρ1.00']}
   - {id: C2_abs_of_nonneg, action: rewrite, pattern: "abs_(@flow)", to: operand, why: 成交额 / 成交量恒非负, evidence: ["F104 abl_A 与原式逐位相同"]}
   - {id: C3_nested_powers, action: rewrite, pattern: "{pow_1_5|pow_2|pow_2_5|pow_3|sqrt}({pow_1_5|pow_2|pow_2_5|pow_3|sqrt}(_))", to: single_power, why: 两层幂次在恒正操作数上就是一层, evidence: [rank-preserving-outer-map-is-a-noop, f102-l1]}
-  - {id: C4_root_winsor, action: rewrite, pattern: "root: cs_winsor(_)", to: operand, why: 最外层缩尾不改十分位书(15 条里 d 中位 0.00、ρ原式 0.99), evidence: [wrappers.win]}
+  - {id: C4_root_winsor_note, action: weight, w: 1.0, pattern: "root: cs_winsor(_)", why: "最外层缩尾通常不改十分位书(15 条里夏普变化中位 0.00、与原式秩相关中位 0.99),但不是等价改写:相关最低 0.57,15 条里 2 条越出噪声带且训练段多头腿变号(F112 −0.99、F110 +0.31)。它是另一个实验,不是同一个候选的短写法 —— 2026-10-06 审查后从「改写」降为不加权的备注", evidence: [wrappers.win, "handoff/workflows/wf_b7c13476-92d: C4_root_winsor"]}
   - {id: C5_cov_self, action: rewrite, pattern: "day_cov(_1, _1)", to: "day_var(_1)", why: 操作数相同的协方差就是方差, evidence: ["F105 iso_A"]}
   - {id: C6_shift_scale_const, action: rewrite, pattern: "root: {add|sub|mul}(_, $w)", to: operand, why: 最外层加减常数、乘正常数不改截面排序, evidence: [rank-preserving-outer-map-is-a-noop, "F113 sub(·, −5) / mul(·, 5)"]}
-  - {id: C7_price_leaf_family, action: dedup_key, pattern: "@price", to: Close, why: 把价格叶子互换(Close↔Open/High/Low/Vwap)ρ原式 0.96~0.98、d ≈ 0;只差价格叶子的候选算同一个, evidence: [leaf_field."Close → Low", leaf_field."Close → Open", leaf_field."Close → High"]}
+  - {id: C8_bucket_rank_twice, action: rewrite, pattern: "cs_bucket_rank(cs_bucket_rank(_1, _2), _2)", to: "cs_bucket_rank(_1, _2)", why: 同一个键上桶内排名两次等于一次(想法短搜 e2_I1 里带指引的一臂为它各付了一次钱), evidence: ["episodes/e2_I1_frozen_state"]}
+  - {id: C7_price_leaf_family, action: family, w: 0.3, pattern: "@price", why: "只把价格字段整体换名的兄弟(day_std(Low) 对 day_std(Close))通常很近(秩相关中位 0.96~0.98、夏普变化 ≈ 0),偶尔不近(F109 上 0.45~0.49)。所以是「少采样兄弟」(已提过同族的,以 0.3 的概率放行),不是「同一个候选」;含两个不同价格字段的式子(sub(High, Low) 对 sub(Close, Open))不算同族 —— 2026-10-06 审查后由全局去重改成按首次出现重标号的家族键", evidence: [leaf_field."Close → Low", leaf_field."Close → Open", leaf_field."Close → High", "handoff/workflows/wf_b7c13476-92d: dedup_key"]}
+  - {id: C9_root_monotone_family, action: family, w: 0.3, pattern: "root: {pow_05|pow_1_5|pow_2|pow_2_5|pow_3|sqrt|sigmoid|signedpower}(_)", why: "最外层套一个保序的一元函数(pow_05 是带符号开方、pow_3 是奇函数;pow_1_5 / pow_2 / pow_2_5 / sqrt 只在里面非负时算),每天截面上的排序不变 —— 十分位书和筛子在半衰期 0 时一模一样,有 EMA 时也只差在各天怎么混。所以算同族(少采样),不算同一个候选。e3_I1 两臂的「发现」清单都被这种换皮撑大:带指引头五名里四个是同一棵树套 pow_05", evidence: ["episodes/e3_I1_frozen_state"]}
   # ---- 拒绝
   - {id: B1_root_zscore_own_history, action: ban, pattern: "root: {cross_zscore|ts_zscore}(_, $w)", why: 对自身历史做 z 分数把因子变成尖峰探测器 —— 60 例里 98% 明显变差、0 例两段都升、d 中位 −2.73, evidence: [wrappers.mem_zscore]}
   - {id: B2_day_scalar_as_factor, action: ban, pattern: "root: {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_max|cs_min}(_)", why: 截面聚合每天只有一个数,整个截面同值,100% 废品, evidence: [substitute_incoming."→ cs_mean", substitute_incoming."→ cs_stddev_full", substitute_incoming."→ cs_sum"]}
   - {id: B3_day_scalar_multiplier, action: ban, pattern: "{mul|div}(_, {cs_mean|cs_sum|cs_median|cs_stddev_full|cs_state_rank}(_))", why: 乘除一个铺满截面的日标量,取秩之后被抹掉(no-op);市场状态只能经 select_where / cs_flip_by_state 进表达式, evidence: ["F101 verdict LF5"]}
-  - {id: B4_abs_epsilon_denominator, action: ban, pattern: "div(_, add(_, create_like(_, $w)))", why: 分母里的绝对小量(+1e-6)在不同量纲上含义不同,把因子变成涨跌停探测器;删掉它 7 例全升、d 中位 +1.59, evidence: [ablate_by_operator.create_like]}
+  - {id: D0_abs_epsilon_denominator, action: weight, w: 0.3, pattern: "div(_, add(_, create_like(_, $w)))", why: "分母里的绝对小量(+1e-6)在不同量纲上含义不同;F106 / F109 两条手写因子的综合都指出它把因子变成涨跌停探测器。证据是这两条的机制分析,不是统计:原来引用的「删掉后 7 例全部变好」经审查不成立(7 例里真正碰到 1e-6 的只有 4 例,其中 3 例判废,剩下 1 例的消融也不是干净的删除)—— 所以由封禁降为降权", evidence: ["notes/F106_erm_mag_gap_1m/synthesis.md", "notes/F109_erm_mag_gap_5m_tsm20/synthesis.md", "handoff/workflows/wf_b7c13476-92d: headline 5 / B4"]}
   - {id: B5_ts_product, action: ban, pattern: "ts_product(_, $w)", why: 80% 废品, evidence: [substitute_incoming."→ ts_product"]}
   # ---- 降权
   - {id: D1_root_fold_of_formed_factor, action: weight, w: 0.25, pattern: "root: {abs_|pow_2}(cs_demean(_))", unless: "{abs_|pow_2}(cs_demean({day_std|day_gini|day_mean|cross_ema|cross_mean}(_)))", why: 把一条已成形的因子再做截面折叠,15 条里 80% 明显变差(d 中位 −1.49);折叠只对日内离散度 / 活跃度这类量是结构, evidence: [wrappers.fold_mean, wrappers.fold_rank, wrappers.fold_sq, moderate-activity-fold-is-generic-benchmark-first]}
@@ -108,23 +144,23 @@ priors:
   - {id: D4_own_history_relative, action: weight, w: 0.25, pattern: "root: div(_1, {cross_mean|ts_mean}(_1, $w))", why: 除以自己的历史均值把持久的截面水平除掉了,而多头腿就在水平里(d 中位 −1.32), evidence: [wrappers.rel60, "F101 h_rv_own_rel_fold"]}
   - {id: D5_std_moments_on_flow, action: weight, w: 0.3, pattern: "{day_kurt|day_skew}(@flow)", why: 成交额的标准化高阶矩把水平除掉,多头腿是死的;保尺度的统计量(day_std)或持续性统计量才有, evidence: [intraday-amt-dispersion-adds-no-long-leg-to-liquidity-family-after-2020, 'substitute_outgoing."day_kurt →"']}
   - {id: D6_tiny_window_corr_on_ret, action: weight, w: 0.3, pattern: "{nt_ts_autocorr_s1|nt_ts_corr|nt_ts_pearson}(Ret, {2|3|4|5})", why: 3 分钟窗口的滚动相关在贴着最小报价单位跳的收益上是封板日探测器,不是自相关, evidence: [f102-l3]}
-  - {id: D7_ratio_with_soft_denominator, action: weight, w: 0.5, pattern: "div(_, _)", why: 比值在这批树里多数是负担(删掉 div 73% 明显变好;div → mul 83% 变好);想要「相对」用秩相减 sub(cs_rank(a), cs_rank(b)), evidence: [ablate_by_operator.div, substitute_pairs."div → mul", substitute_outgoing."div →"]}
+  - {id: D7_ratio_with_soft_denominator, action: weight, w: 0.5, pattern: "div(_, _)", why: 比值在这批树里多数是负担(删掉 div 73% 明显变好;div → mul 83% 变好);想要「相对」用秩相减 sub(cs_rank(a), cs_rank(b));(2026-10-07 注)在 AlphaCube 的 GP 存档上这条不区分好坏(全市场与沪深300 都是);e7b 原样带着它没有比对照差,权重不动, evidence: [ablate_by_operator.div, substitute_pairs."div → mul", substitute_outgoing."div →"]}
   - {id: D8_volume_as_level, action: weight, w: 0.5, pattern: "{day_std|day_sum|day_mean|day_max}(Volume)", why: 水平类统计量里把成交额换成成交量 80% 明显变差(价格混淆:按股数算的低档偏向低价票), evidence: [leaf_field."Amt → Volume"]}
   - {id: D9_flow_change_rate_in_level_stat, action: weight, w: 0.5, pattern: "{day_std|day_sum|day_mean|day_kurt}(in_pct(@flow, $w))", why: 这些树要的是水平不是变化率(Amt → in_pct:3 例全降,d −1.45);Ret ↔ 量变化率互换只在 F101 这种粗糙度结构上成立, evidence: [leaf_field."Amt → in_pct", leaf_field."Ret → in_pct"]}
   - {id: D10_mu_sigma_trigger_mask, action: weight, w: 0.3, pattern: "is_gt(_1, add(in_mean_full(_1), in_stddev_full(_1)))", why: 「高于当天均值 + 1σ」的稀疏触发掩码是 F101 样本外失效的来源;掩码越稠密越好,最干净的写法是 in_stddev_rolling(Ret, 5), evidence: [volume-surge-mask-is-a-proxy-for-large-move-minutes, "F101 verdict: valid −1.6% → +8.9~+11.6%"]}
   - {id: D11_nested_rolling_max, action: weight, w: 0.2, pattern: "ts_max(_, $w)", depth_ge: 3, why: 三层以上嵌套的滚动最大值只是把噪声钉住(F113 整棵树被丢弃后才有东西), evidence: ['substitute_outgoing."ts_max →"', "F113 synthesis"]}
-  - {id: D12_nansum_memory, action: weight, w: 0.5, pattern: "{cross_sum|ts_sum|ts_scale}(_, $w)", why: nansum 把缺失日当 0,把停牌 / 次新推到一端;用 cross_mean, evidence: [f102-l2, nan-aware-rolling-ops-inflate-young-stocks-and-zero-on-first-obs]}
+  - {id: D12_nansum_memory, action: weight, w: 0.5, pattern: "{cross_sum|ts_sum|ts_scale}(_, $w)", why: nansum 把缺失日当 0,把停牌 / 次新推到一端;用 cross_mean;(2026-10-07 注)GP 存档上:全市场方向相反(含它的候选进前五分之一是平均的 1.74 倍 —— 全市场的适应度在为「缺失日当 0」付钱),沪深300 里方向正确(0.27 倍);所以这条只在没有垃圾票的范围里成立,权重不动, evidence: [f102-l2, nan-aware-rolling-ops-inflate-young-stocks-and-zero-on-first-obs]}
   - {id: D13_root_rank_before_smoothing, action: weight, w: 0.6, pattern: "root: cs_rank(_)", why: 先取秩再平滑把重尾量的「峰值记忆」变成普通均值平滑(15 条里 d 中位 −0.16、33% 明显变差), evidence: [wrappers.rk, f103-l1]}
   - {id: D14_generic_overlay_on_known, action: weight, w: 0.3, pattern: "add(cs_rank(cross_mean(day_std(Amt), 30)), _)", why: 把任意因子的排名叠到已知族上,90 例里 0 例两段都升, evidence: [wrappers.ov_p025, wrappers.ov_p05, wrappers.ov_p10]}
   - {id: D15_ema_of_ema, action: weight, w: 0.2, pattern: "cross_ema(_, $w)", depth_ge: 2, why: 记忆套记忆只是把同一条因子再磨一遍(第一次想法短搜里带指引的一臂前 12 名全是同一个种子的重复包裹、分数相同), evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   - {id: D16_mean_of_mean, action: weight, w: 0.2, pattern: "cross_mean(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   - {id: D17_decay_of_decay, action: weight, w: 0.2, pattern: "cross_decay_linear(_, $w)", depth_ge: 2, why: 同上, evidence: ["episodes/e1_I2_dispersion_fold(首跑)"]}
   # ---- 升权
-  - {id: U1_root_slow_memory, action: weight, w: 2.0, pattern: "root: {cross_ema|cross_mean|cross_decay_linear}(_, {30|60})", why: 对日度统计量做 30~60 日的均值 / 指数记忆是唯一「大多数时候有益、几乎不伤」的外层动作(两段都升 50~60%,明显变差 ≤ 7%;60 日最好), evidence: [memory_by_window.mem_mean60, memory_by_window.mem_decay_linear60, memory_by_window.mem_ema30, extreme-memory-fixes-turnover]}
+  - {id: U1_root_slow_memory_note, action: weight, w: 1.0, pattern: "root: {cross_ema|cross_mean|cross_decay_linear}(_, {30|60})", why: "外层 30~60 日记忆是安全的(明显变差 ≤ 15%),但不值得升权:半衰期网格放到 40 / 60 之后(第四轮),同样的包裹夏普变化中位只有 +0.02~+0.04 —— 之前的 +0.12 是「平滑不够长」,不是结构。2026-10-06 由升权 2.0 改为不加权", evidence: [wrappers.mem_mean, wrappers.mem_ema, memory_by_window.mem_mean60, "guidance/motif_stats_s3.json 对 s4"]}
   - {id: U2_bounded_intraday_dispersion, action: weight, w: 2.0, pattern: "{day_gini|day_flat_ratio|day_zero_ratio|day_flat_run_max|day_es_ratio_hi|day_es_ratio_lo|day_distinct_ratio|day_centroid}({Ret|@price})", why: 有界、无尺度的日内离散度 / 冻结度统计量是这一批里独立新因子的共同来源(F107 基尼、F106 零收益占比、F113 收益基尼), evidence: ["F107 h_gini_ema30 2.87 / 测试 2.10", "F106 h_zero_minus_liq", docs/new_operators.md]}
   - {id: U3_short_window_roughness, action: weight, w: 2.0, pattern: "day_mean(in_stddev_rolling(_, {3|5|10}))", why: 5 分钟滚动波动的全天平均是「日内微观结构有多粗糙」的干净写法,valid 全族最高, evidence: ["F101 h_rv_roll5_fold valid 2.78"]}
   - {id: U4_bucket_relative, action: weight, w: 2.0, pattern: "{cs_bucket_rank|cs_bucket_demean|cs_bucket_zscore}(_, _)", why: 在同类股票内比较是把流动性倾斜拿掉的正确写法(线性秩残差不是尾部中性的), evidence: [linear-rank-residual-is-not-tail-neutral, "F101 verdict LF4"]}
-  - {id: U5_state_screen, action: weight, w: 1.5, pattern: "{cs_last_high20|cs_last_high40|cs_first_low40}(_, _)", why: 用一个状态变量把一类票排掉 / 只在一类票里选,是这一批里最大的单项改进;R1 上线后这条降回 1, evidence: [wrappers.seg_lowliq_m, "known_xfrozen 3.15 对 2.22"]}
+  - {id: U5_state_screen, action: weight, w: 1.0, pattern: "{cs_last_high20|cs_last_high40|cs_first_low40}(_, _)", why: "(2026-10-06 由升权 1.5 改为备注)用一个状态变量把一类票排掉 / 只在一类票里选,是这一批里样本内最大的单项改进 —— 但对已知族做筛子样本外没有站住:K001 按事先写下的规则读了九个单层筛子和六个多层的,对已知族的成对差 t 最高 1.1,通用冻结筛子自己 +0.9 个点(t = 0.6),增益集中在 2018–2020。「只在低流动性四成里选」那一半是流动性倾斜(见 R2),本来就不该升权", evidence: [wrappers.seg_lowliq_m, "known_xfrozen 3.15 对 2.22(样本内)", "studies/K001_known_screens/README.md"]}
   - {id: U6_rank_difference, action: weight, w: 1.5, pattern: "sub(cs_rank(_), cs_rank(_))", why: 两件事要分开时用秩相减,不用比值, evidence: ["F106 h_zero_minus_liq 测试 +15.5%", substitute_pairs."div → mul"]}
   - {id: U7_event_memory_max, action: weight, w: 1.5, pattern: "root: cross_max(_, {30|60})", why: 事件型的日度标记(尖峰)要用极值记忆,指数衰减和机制对着干;先用 q75 对 q25 的尾均值判断信息在尾部还是在水平, evidence: ["F102 h_max60 2.85 对原式 2.05", "F102 verdict lab_shape_before_halflife"]}
 
@@ -161,3 +197,9 @@ ideas:
     grammar: {}
     reward: long_bucket
     note: 这条不限定结构,只换奖励 —— 是 R2 的干预实验本身
+  - id: I7_beyond_liquidity
+    hypothesis: 把「躲垃圾票」和「偏向低流动性」两样都从奖励里拿掉之后(可交易池、成交额十档内排名),还有没有两段都站得住的选股内容;手里最接近的两条是「20 日收盘价走势的线性度」(桶内 +0.56 / +0.94)和「日内收益基尼系数减同档均值」(+0.49 / +0.68)
+    seeds: ["ts_pearson(day_last(Close), 20)", "cs_bucket_demean(cross_mean(day_gini(Ret), 30), cross_mean(day_sum(Amt), 30))"]
+    grammar: {ops: [ts_pearson, ts_spearman, day_gini, cs_bucket_demean], windows: [10, 20, 30, 60]}
+    reward: long_bucket
+    evidence: ["research/alpha_distillation/B01_reward_calibration.md"]

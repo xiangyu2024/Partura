@@ -1,6 +1,6 @@
 # F112_scale_spow_masktop — 交接状态
 
-_自动生成于 2026-10-05 19:26(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:56(`python scripts/recorder.py --brief F112_scale_spow_masktop` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #574(批次 B01_single_factors)
 - 表达式:`ts_scale(signedpower(cs_mask_top_replace_mean_neg(add(day_quantile(Close), day_kurt(High)))), 30)`
@@ -133,6 +133,9 @@ s1 认定的唯一活口「流动性聚焦」被彻底否定(h_liq_first40 -1.3%
 - `sweep_s3`  10-05 18:25  187 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s3`
 - `anatomy_s3`  10-05 18:38  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s3`
 - `sweepfinal_s3`  10-05 18:40  8 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweepfinal_s3`
+- `sweep_s4`  10-06 10:21  187 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweep_s4`
+- `anatomy_s4`  10-06 11:18  0 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop anatomy_s4`
+- `sweepfinal_s4`  10-06 11:22  8 个变体  → `./scripts/study.sh digest F112_scale_spow_masktop sweepfinal_s4`
 - `A1_channels`(自写脚本的输出)  10-04 14:21  exit 0  → `logs/F112_scale_spow_masktop_A1_channels.log`
 - `A2_increment`(自写脚本的输出)  10-04 15:37  exit 0  → `logs/F112_scale_spow_masktop_A2_increment.log`
 

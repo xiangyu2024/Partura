@@ -1,6 +1,6 @@
 # F103_amt_dw_decay — 交接状态
 
-_自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F103_amt_dw_decay` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
+_自动生成于 2026-10-06 11:53(`python scripts/recorder.py --brief F103_amt_dw_decay` 刷新)。这一页说的是「磁盘上有什么」;判断和想法在研究日志与 notes 里。_
 
 - 来源:挖掘 #820(批次 B01_single_factors)
 - 表达式:`cross_max(mul(day_close(Amt), ts_min(pow_3(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 5)`
@@ -91,6 +91,9 @@ _自动生成于 2026-10-05 19:23(`python scripts/recorder.py --brief F103_amt_d
 - `sweep_s3`  10-05 17:32  197 个变体  → `./scripts/study.sh digest F103_amt_dw_decay sweep_s3`
 - `anatomy_s3`  10-05 18:30  0 个变体  → `./scripts/study.sh digest F103_amt_dw_decay anatomy_s3`
 - `sweepfinal_s3`  10-05 18:33  8 个变体  → `./scripts/study.sh digest F103_amt_dw_decay sweepfinal_s3`
+- `sweep_s4`  10-06 10:44  197 个变体  → `./scripts/study.sh digest F103_amt_dw_decay sweep_s4`
+- `anatomy_s4`  10-06 10:50  0 个变体  → `./scripts/study.sh digest F103_amt_dw_decay anatomy_s4`
+- `sweepfinal_s4`  10-06 11:09  8 个变体  → `./scripts/study.sh digest F103_amt_dw_decay sweepfinal_s4`
 - `x1`(自写脚本的输出)  10-03 19:40  exit 0  → `logs/F103_amt_dw_decay_x1.log`
 - `x2`(自写脚本的输出)  10-03 19:56  exit 0  → `logs/F103_amt_dw_decay_x2.log`
 - `x3`(自写脚本的输出)  10-03 23:04  exit 0  → `logs/F103_amt_dw_decay_x3.log`

@@ -1,0 +1,197 @@
+{
+ "type": "result",
+ "key": "v2:e9349b5d8563d9a7dc7cebee5ceed791647ddcfd905ff4389ca682689932d4b2",
+ "agentId": "a7252351b466fbf2c",
+ "result": {
+  "facts": [
+   {
+    "topic": "CubeStore symbols/dates: types and order",
+    "detail": "CubeStore.symbols is a plain List[str] (store.meta['symbols'], or synthesized 's{i}' if absent); CubeStore.dates is a List[str] of YYYYMMDD strings. Both come straight from dt_meta.json with no transformation. date_range() casts dates to int and uses np.searchsorted, so dates must already be ascending; SegmentedCubeStore enforces self.dates == sorted(self.dates) at construction.",
+    "refs": "store.py:104-105 (CubeStore.__init__); store.py:195-202 (date_range); store.py:303-304 (SegmentedCubeStore ascending-date assertion)"
+   },
+   {
+    "topic": "CubeStore.view() symbol order is NOT re-sorted",
+    "detail": "view(symbols=[...]) builds sym_idx by looking up each requested symbol in a fresh {symbol:index} dict and keeps the CALLER's order (no sort). Only when symbols=None does it fall back to np.arange (store's own order). max_symbols just truncates after that.",
+    "refs": "store.py:204-219 (CubeStore.view)"
+   },
+   {
+    "topic": "SegmentedCubeStore.symbols is base-order-then-appended, not globally sorted",
+    "detail": "self.symbols = base_symbols + extra, where base_symbols is the base store's own saved order and extra is sorted(union of later segments' symbols - base_symbols) appended AFTER all base symbols regardless of numeric value. Confirmed in practice: base store has 5207 symbols (minute/dt_meta.json), but the live SegmentedCubeStore Partura's build_shared.py opened on 2026-10-04 reported 5220 symbols (view.symbols printed in shared/README.txt) -- 13 symbols added by the 6 incremental segments, appended at the tail, not interleaved by ticker. Any new side-store MUST align by symbol STRING, never by positional index copied from one store object into another.",
+    "refs": "store.py:305-307 (SegmentedCubeStore.__init__); server:/root/autodl-tmp/qmt_daily_data/fast_factor_compute/minute/dt_meta.json (n_symbols=5207); /Users/wxy/Desktop/Partura/shared/README.txt on server (\"x 5220 symbols\"); /Users/wxy/Desktop/Partura/scripts/build_shared.py:43"
+   },
+   {
+    "topic": "warmed_view: what it does and does not change",
+    "detail": "warmed_view(store, start, end, warmup, symbols, max_symbols) first builds base = store.view(...) for the requested [start,end] window, then sets d0 = max(0, base.d0 - warmup) and returns CubeView(store, base.sym_idx, d0, base.d1) plus trim = base.d0 - d0. It only ever moves the day-axis start earlier, in trading-day row units (not calendar days); it never touches symbols/sym_idx. trim can be SMALLER than the requested warmup when the store has insufficient history before start (left-censoring) -- callers must slice [trim:] after evaluation, which is exactly what evaluate_factors does.",
+    "refs": "research.py:82-86 (warmed_view); research.py:110-111 (warm budget = max_window(...,'D') + warmup_buffer); research.py:117-120,132 (trim applied post-evaluation)"
+   },
+   {
+    "topic": "CubeView row-chunk/day-chunk reading and the subset-view row mapping",
+    "detail": "CubeView.sym_idx (int64 ndarray) is the row number into the underlying STORE's own arrays, not a 0..n index; view.symbols/view.dates are plain string lists built once in __init__ ([store.symbols[i] for i in sym_idx], store.dates[d0:d1]) and are never cached as dicts anywhere in store.py. read_s(name,s_lo,s_hi) and read_d(name,d_lo,d_hi) address the VIEW's own local 0-based symbol/day axis; _rows() converts a contiguous run of sym_idx to a slice (cheap stripe read) or else falls back to fancy indexing.",
+    "refs": "store.py:406-447 (CubeView, _rows, read_s, read_d, tradable)"
+   },
+   {
+    "topic": "tradability.py is a pure function of (symbols, dates) strings -- no file I/O",
+    "detail": "board_limit(symbols, dates) classifies purely by string prefix: '688'/'689'->20% (STAR), '300'/'301'/'302'->20% after 2020-08-24 (GEM), '4'/'8'/'92'->30% (BSE), else 10% (main board). limit_locks/entry_locks derive limit-up/down purely from cube High/Low/Close plus board_limit's array; ST's 5% band is NOT represented (cube carries no ST flag) and is only approximately covered by a 'single price, >4.5% from prior close' heuristic.",
+    "refs": "tradability.py:1-9 (module docstring), 18-30 (board_limit), 43-60 (limit_locks), 83-88 (entry_locks)"
+   },
+   {
+    "topic": "Label.compute's buyable=True path depends on tradability.entry_locks",
+    "detail": "Label(kind='open_vwap15', horizon, buyable=True).compute() calls tradability.entry_locks(view) and NaNs out any decision whose t+1 entry window is locked at limit-up. Any new daily field used inside a label/scoring path that wants board/limit semantics should reuse tradability.board_limit rather than re-deriving it.",
+    "refs": "label.py:148-159 (Label.compute); label.py:34-41 (OPEN_VWAP_WINDOW/OPEN_VWAP_MIN_MINUTES)"
+   },
+   {
+    "topic": "tearsheet.load_caps: the existing FloatCap/TotalCap reader",
+    "detail": "load_caps(cap_dir, dates, symbols) loops dates, reads daily_capital/{d}.parquet with columns [symbol, circulating_market_value, total_market_value], maps df.symbol through a freshly-built {symbol:column-index} dict (built once per call, not cached across calls), and leaves (D,S) cells NaN when the file is missing or the symbol absent that day. This is effectively the reference implementation for the new sidecar's per-date ingest step.",
+    "refs": "scripts/tearsheet.py:40-58 (load_caps)"
+   },
+   {
+    "topic": "tearsheet.index_members and list_day: ListDays is already synthesized purely from the cube, with left-censoring",
+    "detail": "index_members() takes list_day (a per-symbol row index, NOT a calendar date) and compares (t - list_day) >= min_age. list_day itself is built in tradable_backtest.py's prepare step as np.argmax(alive, axis=1) over the VIEW's own day_status!=OUTSIDE_LIFECYCLE plane, with list_day forced to -10_000 for any symbol already alive on the view's first day (i.e. 'listed before this window, exact date unknown to the cube'). This is exactly the left-censoring problem a security_master-based ListDays field would fix.",
+    "refs": "scripts/tearsheet.py:70-92 (index_members); scripts/tradable_backtest.py:117-126 (Market.list_day field + comment), 162-176 (load_market), 553-558 (list_day = np.argmax(alive,...); list_day[alive[:,0]] = -10_000)"
+   },
+   {
+    "topic": "Existing (D,S) sidecar precedent (amount_day.npy) has NO self-describing meta -- purely positional, by convention/filename only",
+    "detail": "_bench/tradable/amount_day.npy is a bare (D,S) float array produced once from a specific market npz snapshot and consumed later (universe.py:70, ls_anatomy.py) with zero runtime check that its rows/cols still match the CURRENT mkt.dates/mkt.symbols -- alignment is trusted by convention, not verified. This is the anti-pattern the new sidecar's meta.json (dates/symbols lists + hash/build time) is meant to fix.",
+    "refs": "scripts/universe.py:56-70; scripts/ls_anatomy.py:57,154; scripts/tradable_backtest.py:555-558 (where list_day/adj/etc. are npz-packed together)"
+   },
+   {
+    "topic": "Partura build_shared.py: current pipeline and its output shape, also lacking self-describing meta",
+    "detail": "Builds log_float_cap.npy/log_total_cap.npy/log_turnover_rate.npy under /root/autodl-tmp/Partura/shared/ (and mirrored to the local checkout's shared/ per CLAUDE.md conventions) from warmed_view(open_cube_store(STORE), '20180102','20251231', warmup=60) + tearsheet.load_caps. Verified on server: each .npy is 40,549,088 bytes = header + 1942*5220 float32, i.e. (D,S) = (1942,5220), matching the view's trimmed date count x the SegmentedCubeStore's current (base+incremental) symbol count. The only provenance record is a plain-text README.txt ('built <ts> from <cap_dir>; view <d0>..<d1> x <n> symbols'), not a machine-readable dates/symbols list.",
+    "refs": "/Users/wxy/Desktop/Partura/scripts/build_shared.py:1-16,35-64; server: /root/autodl-tmp/Partura/shared/ (ls -la, README.txt) and /root/autodl-tmp/Partura/shared/*.npy sizes"
+   },
+   {
+    "topic": "Partura bridge.py path/plugin wiring (read for context, not my primary file set)",
+    "detail": "alphacube_root() resolves $ALPHACUBE_ROOT, else sibling AlphaCube checkout, else /root/autodl-tmp/AlphaCube. ensure_alphacube_on_path() inserts AlphaCube's src/ on sys.path AND auto-imports partura.ops_ext (best-effort, swallows exceptions) 'before anything parses' -- this is the exact informal mechanism a formal --plugin loader (mentioned in the broader task's part B) would replace.",
+    "refs": "/Users/wxy/Desktop/Partura/partura/bridge.py:21-30,39-50"
+   },
+   {
+    "topic": "daily_capital on the server: real coverage is 2114 date-files, 20180102..20260916, plus a point-in-time bookkeeping system",
+    "detail": "ls daily_capital shows 2114 files matching YYYYMMDD.parquet (head 20180102, tail 20260916) PLUS five sibling directories that are NOT dates: first_used/, first_used_meta/, first_used_quality/, quality/, versions/, checkpoints/, and a top-level _meta.json. versions/ holds 4 content-hash-named entries; checkpoints/<date>.json and first_used_meta/<date>.json exist per date.",
+    "refs": "server: ssh ... 'ls daily_capital | grep -vE \"^[0-9]{8}\\.parquet$\"'; ls -ld daily_capital/{first_used,first_used_meta,first_used_quality,quality,versions}; ls daily_capital/checkpoints | head"
+   },
+   {
+    "topic": "daily_capital/<date>.parquet columns and verified share-count semantics",
+    "detail": "Columns: date, symbol, day_status, circulating_capital, total_capital, circulating_market_value, total_market_value. Verified numerically on 20230807.parquet (4927 rows): circulating_market_value/circulating_capital and total_market_value/total_capital produce IDENTICAL describe() statistics (mean 22.32, min 1.29, max 1887.93 CNY/share) -- i.e. both 'capital' columns ARE share counts (not monetary capital) sharing one implied per-share price; circulating_capital <= total_capital holds for all 4926 TRADING rows. units block in daily_capital/_meta.json confirms: {'capital':'share','market_value':'CNY'}. Symbol format is 'NNNNNN.SZ'/'NNNNNN.SH', byte-identical to the cube's own symbol format (minute/dt_meta.json symbols sample) and to security_master.parquet's symbol column.",
+    "refs": "server: python read of daily_capital/20230807.parquet (shape (4927,7), dtypes, ratio describe()); server:/root/autodl-tmp/qmt_daily_data/daily_capital/_meta.json ('fields', 'units')"
+   },
+   {
+    "topic": "daily_capital causality evidence: share-count fields are quarter-end-anchored, not trade-date-anchored; price timing not independently verified",
+    "detail": "quality/<date>.parquet (18 cols incl. field, status, raw_value, used_value, source_effective_date, candidate_effective_date, raw_effective_date, observed_at, availability, date_quality) shows, for trade_date=20230807, source_effective_date=candidate_effective_date=raw_effective_date='20230630' (prior quarter end) for ordinary SOURCE_ACCEPTED_UNVERIFIED rows; source_effective_date==trade_date for only 0.47% of that date's 9854 quality rows (mostly REVIEWED_OVERRIDE cases, e.g. 688347.SH where raw_value is NaN and used_value is a manually-anchored override). This means the SHARE-COUNT denominator legitimately lags to the last disclosed filing (not a look-ahead issue, since quarterly filings are public well before the next quarter's trading days), but it also means a naive 'same trade_date' assumption is wrong for ~99.5% of rows. observed_at timestamps (2026-09-15/09-17) show the whole 2018-2026 history was BATCH-CONSTRUCTED/backfilled in Sept 2026, not fed live day-by-day. Status counts for 20230807: SOURCE_ACCEPTED_UNVERIFIED 9824, MATERIAL_CHANGE_UNVERIFIED 28, REVIEWED_OVERRIDE 2 (only 2 of 9854 rows actually had raw_value != used_value on this sample date). The PRICE side of market_value's own timing (day-t close vs day-(t-1) close) was deliberately NOT verified against the cube's Close field in this phase (would require reading a cube .npy, outside the parquet/json-only mandate for this recon pass) -- flagged as an open question.",
+    "refs": "server: python read of daily_capital/quality/20230807.parquet (columns, head, value_counts, raw_value vs used_value diff); server:/root/autodl-tmp/qmt_daily_data/daily_capital/_meta.json ('policy':'capital_quality_v5_revision_anchor', 'quality_counts')"
+   },
+   {
+    "topic": "daily_capital/first_used vs the main file: one spot check found zero divergence (not a disproof of the revision risk)",
+    "detail": "first_used/<date>.parquet has the IDENTICAL schema to <date>.parquet (date,symbol,day_status,circulating_capital,total_capital,circulating_market_value,total_market_value). For 20230807, a full merge-and-diff on circulating_market_value across all 4927 rows found 0 differing rows between the main file and first_used -- so for this one sampled date, today's load_caps/build_shared.py reading the main file happens to match the 'first captured' vintage. This is one data point, not a proof that main==first_used everywhere/always; existing consumers (tearsheet.load_caps, Partura build_shared.py) read only the main (potentially-revisable) file, never first_used.",
+    "refs": "server: python merge of daily_capital/20230807.parquet vs daily_capital/first_used/20230807.parquet; first_used_meta/20230807.json (version/output_sha256/quality_sha256 fields)"
+   },
+   {
+    "topic": "daily_capital coverage by era (the 4 requested sample years) and missingness pattern",
+    "detail": "Sampled 20180102, 20200703, 20230807, 20250807: row counts grow with listings (3234 / 3661 / 4927 / 5125); circulating_market_value non-null fraction is 0.9434 (2018) / 0.9967 (2020) / 0.9998 (2023) / 0.9984 (2025) -- i.e. ~5.7% missing in the earliest sampled day vs <=0.3% later. circulating_capital (share count) is 100% non-null on all 4 sampled days even when market_value is NaN, and day_status on those rows is SUSPENDED/RESUMED -- i.e. missing market value correlates with the cube's own non-TRADING day_status, not with missing share-count metadata. 100% of symbols present in daily_capital on all 4 sampled days are also in the cube's BASE 5207 symbols and in security_master's 5208 symbols (frac_in_cube_base_syms = frac_in_security_master = 1.0 on every sampled day).",
+    "refs": "server: python loop over daily_capital/{20180102,20200703,20230807,20250807}.parquet computing notna fractions, day_status uniques, and symbol-set overlap against minute/dt_meta.json and security_master.parquet"
+   },
+   {
+    "topic": "security_master.parquet: schema, IPO list_date coverage, ST-via-name-prefix, and a zero-delisting gap",
+    "detail": "Columns (all dtype object/str): symbol, name, list_date, delist_date, universe_sources. 5208 rows, 0 duplicated symbols. list_date is a YYYYMMDD string reaching back to the 1990s (e.g. 000001.SZ -> '19910403'), i.e. NOT left-censored by the cube's 2018 start -- strictly better than tradable_backtest.py's cube-derived list_day for a ListDays field. delist_date is null for ALL 5208 rows (no delistings represented at all in this snapshot). universe_sources has exactly ONE distinct value across all 5208 rows ('沪深A股') -- it carries no board/exchange-segment information, so it is useless for a 'Board' field. 203/5208 names start with 'ST' or '*ST' (e.g. 000010.SZ '*ST美丽', 000078.SZ 'ST海王') -- a usable ST proxy, but it is a CURRENT snapshot of `name` only, not a dated history of when each symbol carried/dropped the marker.",
+    "refs": "server: python read of qmt_stock_data/processed/reference/security_master.parquet (dtypes, head, delist_date.notna().sum()==0, universe_sources.unique(), name.str.startswith(('ST','*ST')).sum()==203)"
+   },
+   {
+    "topic": "status/history.parquet: the likely source of the cube's own day_status, carries no ST/board info",
+    "detail": "9,079,906 rows x 4 cols: symbol, trade_date, suspendFlag, day_status (values seen: TRADING/SUSPENDED/RESUMED, matching DAY_STATUS_CODES's label set minus OUTSIDE_LIFECYCLE). No ST, no board, no listing/delisting date here -- this table is purely a per-(symbol,date) trading/suspension status feed, structurally parallel to but separate from daily_capital's own day_status column.",
+    "refs": "server: python read of qmt_stock_data/processed/status/history.parquet (shape, columns, head); qmt_stock_data/processed/_meta.json ('status_file')"
+   },
+   {
+    "topic": "fast_factor_compute/minute: base store size and the ACTUAL current total coverage via incremental segments",
+    "detail": "minute/dt_meta.json: fields=[Amt,Close,High,Low,Open,Ret,Volume,Vwap], n_symbols=5207, n_days=2092 (20180102..20260817), n_minutes=241, symbols pre-sorted ascending in the base. incremental/index.json (schema qmt-v2-fast-factor-segment-index-1, run_status COMPLETE) lists 6 segments: 20260818-20260831(10d), 20260901-20260904(4d), 20260907-20260908(2d), 20260909-20260910(2d), 20260911-20260911(1d), 20260914-20260916(3d) = 22 more days. Base(2092) + segments(22) = 2114 days ending 20260916 -- EXACTLY matching daily_capital's 2114-file, 20180102..20260916 coverage at the moment of this check.",
+    "refs": "server: cat/python of fast_factor_compute/minute/dt_meta.json and fast_factor_compute/incremental/index.json; fast_factor_compute/_build_state.json (n_symbols 5207, n_days 2092, stock_day_files 9079906)"
+   },
+   {
+    "topic": "fast_factor_compute/daily/ is a pre-existing, DIFFERENT, apparently-static daily-bar store -- not read by store.py, not incrementally updated",
+    "detail": "fast_factor_compute/daily/meta.json describes a daily-bar OHLCV store (fields: AdjClose, Amount, Close, High, Low, Open, Return, Volume, Vwap; n_days=2092, n_instruments=5207, dtype float32) -- i.e. a daily aggregation of the SAME base 2092 days, built by the same ingestion pipeline. store.py has no code path that reads anything under <compute_root>/daily (only <root>/minute and <root>/incremental/*/minute per _load_index/SegmentedCubeStore), and there is no incremental/index.json-equivalent under daily/, so it appears frozen at the base's 2092 days while minute/ has moved on to 2114 via segments. Do not reuse this directory's layout or location for the new FloatCap/TotalCap/etc. sidecar -- different schema (price bars, not capitalization/listing metadata) and seemingly not kept current.",
+    "refs": "server: cat fast_factor_compute/daily/meta.json (head); store.py:1-6,233-244,396-403 (what store.py actually reads -- no 'daily' reference anywhere)"
+   },
+   {
+    "topic": "Server project/path conventions (from AlphaCube's own handoff docs, corroborated by the daily_capital/fast_factor_compute layout actually observed)",
+    "detail": "Server AlphaCube checkout lives at /root/autodl-tmp/AlphaCube (rsync mirror of the local Desktop/AlphaCube checkout); the stated rule is 'only modify things under /root/autodl-tmp/AlphaCube, the machine is shared, other jobs run on it, do not touch other paths or delete data'. The cube itself (/root/autodl-tmp/qmt_daily_data/fast_factor_compute) and daily_capital are both OUTSIDE that writable root and were confirmed read-only in this phase. This matches the task's own suggested new-data location, /root/autodl-tmp/AlphaCube/daily_fields/.",
+    "refs": "/Users/wxy/Desktop/AlphaCube/docs/HANDOFF.md:63,65,77,121; /Users/wxy/Desktop/AlphaCube/docs/交接_可交易性约束.md:37,39-40,42"
+   },
+   {
+    "topic": "Partura's shared-server etiquette helper (guard.limit_threads), already used by build_shared.py",
+    "detail": "partura/guard.py documents and enforces being 'a good neighbour on a shared server': caps this process's own CPU threads/GPU share, flock-based exclusivity, memory ceiling watchdog. build_shared.py calls limit_threads(2) before importing numpy. A new daily-fields build script run on the same server should follow the same convention.",
+    "refs": "/Users/wxy/Desktop/Partura/partura/guard.py:1-20; /Users/wxy/Desktop/Partura/scripts/build_shared.py:22-25"
+   },
+   {
+    "topic": "File-size basis for a build-time estimate (no measured timing log was found)",
+    "detail": "Core daily_capital/<date>.parquet files are small: 128K (20180102) to 200K (20230807); the 4.5G total du -sh on the whole daily_capital directory includes the 5 bookkeeping sibling directories (quality/, first_used/, etc.), not just the ~2114 core date files. A build script reading only the core files (~2114 x ~150-200KB) moves roughly 0.3-0.4GB total, which on the server's local NVMe should be an I/O-trivial, Python-loop-dominated job (tearsheet.load_caps's per-file pandas overhead, not disk, would dominate). No actual wall-clock log of a full 2114-file load_caps run was found anywhere in Partura/logs, Partura/runs or Partura/handoff, including for the most recent build_shared.py run (2026-10-04 07:35, confirmed only by output file mtimes/README.txt, not a captured stdout log).",
+    "refs": "server: du -sh daily_capital/20230807.parquet daily_capital/20180102.parquet daily_capital; du -sh daily_capital; local: grep across /Users/wxy/Desktop/Partura/logs, /runs, /handoff for 'float cap finite'/'build_shared' (no hits)"
+   },
+   {
+    "topic": "The new field, 301655.SZ, that is in daily_capital but in NO cube segment yet -- concrete evidence the two pipelines are independently paced",
+    "detail": "security_master.parquet has exactly one symbol (301655.SZ) not in the cube's base 5207; verified it is present in daily_capital/20260916.parquet, ABSENT from daily_capital/20230807.parquet (so it is a recent addition to daily_capital's own universe), and absent from ALL 6 incremental segment dt_meta.json symbol lists on the server -- i.e. this symbol exists in daily_capital today but has not yet been ingested into the minute cube (base or incremental) at all. Any sidecar built from daily_capital alone can therefore legitimately contain symbols the live cube/view does not yet know about; this is harmless (the view simply never asks for that column) but is a good automated staleness signal to log at build time.",
+    "refs": "server: python set-difference of minute/dt_meta.json symbols vs security_master symbols; grep of 301655.SZ across incremental/*/minute/dt_meta.json and daily_capital/{20230807,20260916}.parquet"
+   },
+   {
+    "topic": "synthetic.py's default test-fixture symbol format cannot exercise non-main-board classification (minor, pre-existing)",
+    "detail": "synthetic.make_synthetic_cube's default symbols = [f'SH.6{i:05d}' for i in range(S)] (e.g. 'SH.600000'), which does NOT start with '688'/'689'/'300'/'301'/'302'/'4'/'8'/'92' under tradability.board_limit's prefix test, so it is always classified as 10%-main-board. conftest.py's session-scoped `store` fixture (used by many tests) uses this default. test_tradability.py itself avoids the problem by building its OWN tiny store with real-looking symbols (SYMS = ['600000.SH','600001.SH','688001.SH']). Anyone adding unit tests for a new Board/LimitWidth daily field against the shared conftest `store` fixture should be aware it cannot exercise GEM/STAR/BSE branches without overriding symbols the way test_tradability.py does.",
+    "refs": "/Users/wxy/Desktop/AlphaCube/src/alphacube/synthetic.py:66 (symbols = [f'SH.6{i:05d}' ...]); /Users/wxy/Desktop/AlphaCube/tests/conftest.py:13-18; /Users/wxy/Desktop/AlphaCube/tests/test_tradability.py:12"
+   },
+   {
+    "topic": "DAILY_MACROS is the existing mechanism for exposing a cube-derived 'daily' quantity to expressions, with no file I/O",
+    "detail": "store.py's own module docstring states 'There is no separate daily store: daily fields are cube expressions (day_last(Close)), see parser.DAILY_MACROS' -- parser.py defines DAILY_MACROS as a name->source-string rewrite table consulted during parsing/conversion (coerce_daily). Board and LimitWidth, being pure functions of (symbols, dates) already implemented in tradability.py, are natural candidates to expose the SAME way (a macro/registry entry that calls tradability.board_limit(view.symbols, view.dates) at evaluation time) rather than being materialized into the new (D_all,S_all) sidecar at all -- they need zero storage and have zero staleness risk since they never depend on daily_capital/security_master.",
+    "refs": "store.py:1-6 (module docstring); parser.py:46 (DAILY_MACROS dict), 106,139,149 (macro expansion sites)"
+   }
+  ],
+  "insertion_points": [
+   {
+    "where": "New module, e.g. /Users/wxy/Desktop/AlphaCube/src/alphacube/daily_fields.py, sibling to store.py",
+    "change": "A DailyFieldStore (or similar) class holding its OWN meta.json with explicit 'dates': List[str] and 'symbols': List[str] (built from the sidecar's own build-time union, not copied from any live CubeStore/CubeView), plus 'source' and 'built_at'. Build {symbol:col}/{date:row} dicts ONCE at construction (store.py's own view() rebuilds this dict on every call -- cheap at ~5200 symbols, so either convention is fine, but caching is free and avoids repeating the mistake load_caps already makes of rebuilding it per date-file instead of once). A read(field, view) method takes a CubeView and returns a (view.n_days, view.n_symbols) array by looking up view.dates/view.symbols by STRING against the cached dicts, writing NaN for any view date/symbol absent from the sidecar (covers both real missingness and sidecar staleness -- see the 301655.SZ fact).",
+    "risk": "If this instead keys off view.sym_idx/d0/d1 (store-row integers) the way CubeStore.read_cube does, it will silently misalign the moment the sidecar's own symbol/date order differs from whatever CubeStore happened to have at sidecar-build time (SegmentedCubeStore's base+appended-extras order is not globally sorted -- see fact above), or the moment a later incremental segment changes view.symbols' composition without the sidecar being rebuilt."
+   },
+   {
+    "where": "Engine/parser leaf-resolution path (engine/engine.py, parser.py) -- OUTSIDE the file set read in this recon pass",
+    "change": "Whatever currently resolves a bare name to a cube field (today, exclusively an (S,D,M) mmap slice via CubeView.read_s/read_d) needs a second branch for 'this name is a daily-sidecar field': resolve via DailyFieldStore.read(name, view) instead, producing a (D,S)-or-(S,D) array at the SAME semantic position a day_last(...)-style macro result would occupy, then let existing day-shape broadcasting/elementwise rules take over.",
+    "risk": "Not inspected in this pass (out of my assigned file set); flagged so the next recon/design step on parser.py/engine.py explicitly owns deciding the exact broadcast/elementwise contract between a (D,S) daily field and (S,D,M) minute tensors, which the task's own brief calls out as still undecided."
+   },
+   {
+    "where": "tradability.py (new thin field, OR a new daily_fields.py wrapper) for Board/LimitWidth",
+    "change": "Expose Board and LimitWidth as REGISTRY/macro entries that call tradability.board_limit(view.symbols, view.dates) at evaluate time, not as materialized sidecar columns -- they are pure functions of symbol+date strings already, with existing unit tests (test_tradability.py). Only wrap them in a (D_all,S_all) float32 file if a later design explicitly wants ALL daily fields to share one code path; doing so would be redundant storage with zero added information and a (currently theoretical) staleness vector the pure-function version can never have.",
+    "risk": "Low; the only real risk is test-fixture coverage (see synthetic.py fact) -- any new unit test over Board/LimitWidth-as-daily-field should build its own small store with multi-board symbols the way test_tradability.py does, not rely on conftest.py's default `store` fixture."
+   },
+   {
+    "where": "Build script location + invocation (new script, e.g. /Users/wxy/Desktop/AlphaCube/scripts/build_daily_fields.py, run on the server under /root/autodl-tmp/AlphaCube)",
+    "change": "Model the per-date loop directly on tearsheet.load_caps (scripts/tearsheet.py:40-58): iterate the FULL daily_capital date-file listing (independent source of truth for D_all, not the cube's own dates) to get circulating_market_value/total_market_value/circulating_capital/total_capital; separately join security_master.parquet on symbol for list_date (-> ListDays via the trading calendar) and name-prefix (-> a current-only ST proxy, clearly labeled as such). Call partura.guard.limit_threads-equivalent etiquette (or just set OMP/MKL/OPENBLAS thread env vars to 1-2) since this runs on the shared GPU box. Write output only under /root/autodl-tmp/AlphaCube/daily_fields/ (never under qmt_daily_data/ or qmt_stock_data/).",
+    "risk": "Must decide daily_capital vs daily_capital/first_used as the source (see causality fact) BEFORE writing the first version, since switching later silently changes every downstream number without an obvious signal; whichever is chosen should be recorded in the sidecar's own meta.json ('source': 'daily_capital' | 'daily_capital/first_used') so it's auditable later."
+   },
+   {
+    "where": "Partura scripts/build_shared.py and scripts/tearsheet.py's load_caps/index_members call sites (migration target for part C of the larger task, not built in this pass)",
+    "change": "Once the sidecar + engine hooks exist, build_shared.py's own load_caps call (build_shared.py:45) and tearsheet.py's load_caps/index_members (tearsheet.py:40-92, and callers in universe.py:69-70, tearsheet.py:205) become candidates to read FloatCap/TotalCap/ListDays from the new sidecar instead of re-reading daily_capital/security_master per invocation -- removing duplicate parsing logic and giving tearsheet.py's real-money backtest and the GP/RL search the exact same FloatCap numbers for the first time.",
+    "risk": "tearsheet.py's load_caps/index_members are backtest-report code with their own tests (test_tearsheet.py); migrating them is a behavior change for a real-money-presentation script, not just an internal refactor -- should be done with before/after numeric comparison, not a silent swap."
+   },
+   {
+    "where": "Causality open question -- price-timing of circulating_market_value/total_market_value (day t vs day t-1 close)",
+    "change": "One additional READ-ONLY check, deliberately NOT done in this phase (it would read a cube .npy field, outside this pass's parquet/json-only mandate): pick a handful of known limit-up/limit-down stock-days (derivable from tradability.entry_locks/limit_locks on a tiny symbol/date slice) and compare the day-over-day ratio of circulating_market_value/circulating_capital against board_limit's exact +-10/20/30% to see which of close[t] or close[t-1] it matches.",
+    "risk": "Until this is checked, treat 'market value is knowable at close of day t' as a WORKING ASSUMPTION (supported by file-naming convention and domain convention, not by direct evidence), and do not let a GP/RL search run unsupervised long enough to exploit a potential off-by-one-day leak before this is confirmed."
+   },
+   {
+    "where": "ListDays field definition",
+    "change": "Prefer security_master.parquet's list_date (full historical IPO date, not left-censored) over tradable_backtest.py's cube-internal list_day heuristic (store.py-adjacent script, tradable_backtest.py:553-556) when building the sidecar. For the ~1-symbol-and-growing set of cube/view symbols with NO security_master row (or vice versa, symbols in daily_capital/security_master not yet in the cube -- see the 301655.SZ fact), define and document an explicit sentinel (NaN, consistent with every other sidecar field's missing-value convention) rather than silently defaulting to 0 or -10000.",
+    "risk": "Silently mixing the two ListDays conventions (calendar-date-based vs cube-window-based) across different parts of the codebase would make the same stock's 'age' disagree between tearsheet.py's live backtest and a GP-mined factor that uses the new sidecar field -- should be a single source of truth going forward."
+   },
+   {
+    "where": "ST field, if implemented at all",
+    "change": "If a Board/ST-style field is added, document explicitly in its sidecar meta/docstring that ST, unlike the other fields, is a CURRENT-NAME-DERIVED snapshot (security_master.name starting with 'ST'/'*ST' as of whenever security_master.parquet was last refreshed), not a point-in-time history -- i.e. it must not be fed into a backtest/GP-mining date range as if it were historically accurate day-by-day.",
+    "risk": "An unlabeled, always-current-only ST flag used inside a rolling backtest or GP/RL search is a classic look-ahead-bias vector: the search could 'discover' an ST-conditioned factor that is really just leaking today's ST status onto 2018-era rows."
+   }
+  ],
+  "open_questions": [
+   "Is circulating_market_value/total_market_value computed from day t's own closing price or day t-1's? Not independently verified against the cube's Close field in this phase (deliberately out of scope: would require reading a .npy field, outside the parquet/json-only server mandate given for this recon pass). The share-count denominator IS confirmed quarter-end-anchored (source_effective_date, not trade_date, for 99.5%+ of rows), but that does not settle the price-side timing.",
+   "Does daily_capital/<date>.parquet ever meaningfully diverge from daily_capital/first_used/<date>.parquet at scale? Only one date (2023-08-07) was spot-checked and showed zero divergence across all 4927 rows. The quality/<date>.parquet schema (raw_value vs used_value, REVIEWED_OVERRIDE/MATERIAL_CHANGE_UNVERIFIED statuses) proves the infrastructure for revisions exists and is used (2 of 9854 rows differed on the sampled date), but whether revisions are common/rare, and whether they cluster in particular symbols or periods, is unknown.",
+   "Is fast_factor_compute/daily/ (the pre-existing daily-bar OHLCV store, frozen at the base's 2092 days) consumed by ANY current pipeline, or is it dead/legacy? No reference to it was found in store.py/research.py/tradability.py/tearsheet.py/build_shared.py, but a full repo-wide grep for a reader of this specific path was not run.",
+   "Why is delist_date 100% null across all 5208 security_master rows -- is this a genuine 'no delistings in this universe snapshot' or a known data gap in how security_master.parquet is built? Not documented anywhere found. This matters for whether historically-delisted symbols (if any exist in the cube's 2018-2026 history at all) have correct list_date/name coverage.",
+   "Does security_master.parquet cover 北交所 (BSE, '4'/'8'/'92'-prefixed) symbols at all, or only 沪深A股? All 5208 observed rows show universe_sources=='沪深A股' with no other value seen; no BSE-prefixed symbol's row was specifically inspected to confirm it's present with correct list_date/name.",
+   "What is the actual measured wall-clock time to build the new sidecar end-to-end (reading ~2114 daily_capital files + the security_master join)? No log of a full load_caps-equivalent run's timing was found locally; the only basis given here is file-size extrapolation (~0.3-0.4GB of core parquet across 2114 files), not a measured number.",
+   "Is 301655.SZ (in daily_capital's latest file, absent from every cube segment including incremental) an isolated one-off, or a sign that daily_capital's ingestion cadence is now consistently running ahead of the cube's incremental segments by some regular lag? Only this single symbol was checked; the general lag pattern between the two pipelines' update cadences was not characterized beyond this one data point and the one coincidental date-range match (both currently end 20260916).",
+   "Exactly how is the minute cube's own day_status.npy populated from status/history.parquet (or some other source) -- is it a direct 1:1 copy, or does cube-side logic (e.g. RESUMED detection) add information status/history.parquet's own day_status column doesn't have? Not traced; status/history.parquet's day_status values (TRADING/SUSPENDED/RESUMED) look like they could be the direct source, but the actual ingestion code path (qmt_ingest, not in either repo read in this pass) was not located or read."
+  ],
+  "summary": "Read-only store-data recon for the AlphaCube daily-field side-store, covering both the local code (store.py, research.py, tradability.py, label.py, tearsheet.py, Partura's build_shared.py/bridge.py/guard.py) and read-only server inspection (daily_capital, fast_factor_compute, qmt_stock_data/processed, Partura's server shared/). Headline findings: (1) CubeStore/CubeView symbols and dates are always plain Python str lists with NO cached symbol/date->index dict anywhere, and critically, SegmentedCubeStore.symbols is base-order-then-appended-extras (NOT globally sorted) -- so any new sidecar must align strictly by symbol/date STRING, never by position copied from a live view (verified concretely: base store has 5207 symbols, the live segmented store Partura last opened had 5220). warmed_view only shifts the day-axis start earlier in trading-day units and reports a trim count; symbols are untouched. (2) On the server, daily_capital/<date>.parquet (2114 files, 20180102..20260916, symbol format identical to the cube's) is exactly tearsheet.load_caps's existing source for circulating/total market value and share counts (verified numerically), but it sits beside an unused-by-current-code point-in-time bookkeeping system (first_used/, quality/, versions/) whose quality/ schema proves share-count values are anchored to quarter-end disclosure dates, not trade_date -- a real but nuanced causality subtlety current consumers (tearsheet.py, build_shared.py) don't account for; the PRICE-side day-t-vs-day-(t-1) timing was deliberately left unverified since confirming it would require a non-parquet/json (.npy) read outside this pass's mandate. (3) Of the requested fields, FloatCap/TotalCap/FloatShares/TotalShares/ListDays genuinely need the new sidecar (security_master.parquet gives a non-left-censored list_date and a CURRENT-ONLY ST proxy via name prefix), while Board and LimitWidth need no new data file at all -- tradability.board_limit already derives both purely from symbol-string prefixes. (4) The cube's own incremental segments and daily_capital's batch ingestion are independently paced (concretely: one symbol, 301655.SZ, is in daily_capital's latest file but in no cube segment yet), so the sidecar needs its own explicit append/rebuild step; nothing in store.py keeps it current automatically. Facts below carry file:line or exact server-path/query refs; insertion_points flag where a daily_fields.py-style module, the engine/parser hookup (outside this file set), the build script, and the causality check itself should land; open_questions lists what was deliberately left unverified rather than guessed."
+ }
+}

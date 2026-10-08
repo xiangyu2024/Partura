@@ -1,0 +1,43 @@
+{
+ "type": "result",
+ "key": "v2:85cc5024852cb5894cb4df93f5bc1d2023d2cf4887228c892b09296c3b55abdf",
+ "agentId": "aa10694d08d94c751",
+ "result": {
+  "checked_and_fine": [
+   "cross_flat_ratio (partura/ops_ext.py:661-673) -- matches its docstring ('share of the last d days on which x equals the previous day's value exactly, over pairs where both are finite; NaN with fewer than 2 such pairs') exactly: 0 mismatches across the full edge-case battery (random floats; 10/20/30% scattered NaN; a whole day (row) NaN; a whole stock (column) NaN; a constant column; 3/4/5-level tie-heavy columns; magnitudes 1e9, 1e16, 1e-9; mixed sign; short history with D<d; d in {5,10,20}; float32 vs float64 with input-rounding accounted for) and at the exact n=2-pairs boundary. Causality verified: replacing all data after a cut day with unrelated extreme values never changes the output on or before the cut day.",
+   "cross_semistd_neg (partura/ops_ext.py:676-694) -- matches sqrt(mean(min(log(x[t]/x[t-1]),0)^2)) over the window with the n>=3-valid-days threshold, tested on the same battery restricted to positive x (including non-positive contamination that must be masked to NaN, extreme magnitude, ties, short history, float32/float64): 0 mismatches. Causal.",
+   "cross_semistd_pos (partura/ops_ext.py:697-700) -- matches sqrt(mean(max(log(x[t]/x[t-1]),0)^2)) with the same n>=3 threshold on the same battery: 0 mismatches. Causal. (Its docstring is incomplete -- see the separate low-severity finding -- but the implementation itself is correct.)",
+   "cross_age (partura/ops_ext.py:703-714) -- matches 'trading days since first finite value, 0 on that day, keeps incrementing through suspensions, NaN before, and a stock already finite on day 0 starts at age 10000' exactly, with exact (not just close) integer agreement in both float32 and float64, across staggered-listing/never-listed/suspension-gap/whole-row-NaN/whole-col-NaN cases and at a realistic multi-year scale (D=2200, ages up to ~12,200, no float32 drift). Causal. Note: cross_* kernels take a 2-D (day, stock) tensor with no minute axis (confirmed from ops_ext.py's header and AlphaCube's common.py), so the audit's generic 'M=241 vs smaller M' case does not apply to any of these 5 operators."
+  ],
+  "findings": [
+   {
+    "title": "cross_madz's median_d/MAD_d use torch's 'lower median' tie-break, not the textbook median its docstring describes",
+    "file": "partura/ops_ext.py",
+    "line": 654,
+    "severity": "high",
+    "summary": "cross_madz (ops_ext.py:646-657) computes median_d and MAD_d with torch.nanmedian, which for an EVEN number of finite window values returns the LOWER of the two middle sorted values instead of their average. The docstring's '(x[t]-median_d)/(1.4826*MAD_d+1e-6*|median_d|)' uses the word 'median', which any docstring-only reference implementation (and any reader) reads as the textbook definition that averages the two middle values when the count is even. The kernel silently diverges from that whenever the window's finite count is even and the two middle values differ -- which is roughly half of all valid outputs on continuous data.",
+    "failure_scenario": "Minimal repro, verified by calling partura.ops_ext.cross_madz directly: x=[1.0,2.0,3.0,4.0] (one stock, 4 days), d=4, day t=3 (today=4.0, all 4 days finite so n=4>=d/2=2, defined). Docstring-literal median/MAD: median=2.5, MAD=median(1.5,0.5,0.5,1.5)=1.0 -> z=(4-2.5)/(1.4826*1.0+1e-6*2.5)=1.011734. Actual kernel output: 1.348980 (~33% relative error, far outside the 1e-4 tolerance), because torch.nanmedian([1,2,3,4])=2.0 (picks the lower of the tied-free middle pair {2,3}) instead of 2.5. The same root cause also flips the NaN/finite decision: window [3,2,2,1] (d=5, t=3, n=4 finite): textbook MAD=median(1,0,0,1)=0.5 (nonzero -> docstring says a finite z=-1.348978 is expected), but torch's lower-median of the sorted deviations [0,0,1,1] is 0 (the lower of the tied middle pair), so MAD_kernel=0 and the kernel masks the whole cell to NaN -- a valid day silently dropped. Swept over (60,10) random panels at d in {5,10,20}: 9 to 530 of the ~500-600 valid cells per (case,d) combination mismatched the docstring-literal reference (both as wrong values and as NaN-pattern flips on tie-heavy cases). Re-deriving the SAME reference using torch's own lower-median rule instead made all 39,420 sampled cells across the full edge-case battery (random/NaN/ties/constant-column/extreme-magnitude 1e-9..1e16/short-history, float32 and float64) match exactly -- isolating this one implementation choice as the sole, exact source of disagreement. Causality is unaffected: output at day<=t does not depend on days>t.",
+    "evidence": "torch.nanmedian(torch.tensor([1.,2.,3.,4.]))==2.0 but numpy.median([1,2,3,4])==2.5; torch.nanmedian(torch.tensor([10.,20.,30.,40.,50.,60.]))==30.0 vs numpy.median==35.0 (verified directly in the project's venv, torch 2.14.0). cross_madz([[1.],[2.],[3.],[4.]], d=4)[3,0] == 1.3489796992045067 (kernel) vs 1.0117344332010774 (docstring-literal reference).",
+    "suggested_fix": "Compute med/mad as the textbook median over the finite subset -- sort the finite values and average the two central order statistics when the count is even -- for both the x-median and the MAD-median steps, instead of torch.nanmedian. If the lower-median behavior is intentional (e.g. to match in_madz at ops_ext.py:379 and cs_robust_z at ops_ext.py:442, which use the identical torch.nanmedian pattern and are outside this audit's 5-operator scope but likely share the same divergence -- worth checking separately), say so explicitly in the docstring instead of using the unqualified word 'median'."
+   },
+   {
+    "title": "cross_madz's docstring omits cross_zscore's explicit 'today included' window convention",
+    "file": "partura/ops_ext.py",
+    "line": 647,
+    "severity": "low",
+    "summary": "cross_madz's docstring says 'over the last d days' and calls itself a 'Robust version of cross_zscore', but unlike cross_zscore's own docstring (which explicitly says 'the window (today included)'), it never states whether day t itself is inside the window used for median_d/MAD_d. Implementation does include today (the rolling window's last slot is x[t] itself; verified by testing), so this is a documentation gap, not a behavior bug.",
+    "failure_scenario": "No wrong output results from this -- the implementation is correct and consistent with cross_zscore. But a reader auditing or reusing cross_madz from its own docstring alone, without also reading cross_zscore's, could reasonably assume 'the last d days' excludes today (x[t]) and build an off-by-one reference, a different trading rule, or a mismatched upstream port from that wrong assumption.",
+    "suggested_fix": "Add the same '(today included)' clause cross_zscore uses, e.g.: '... over the last d days (today included); NaN with fewer than d/2 finite days or MAD = 0.'"
+   },
+   {
+    "title": "cross_semistd_pos's docstring omits the formula and NaN-threshold stated in cross_semistd_neg",
+    "file": "partura/ops_ext.py",
+    "line": 699,
+    "severity": "low",
+    "summary": "cross_semistd_pos's entire docstring is 'Upside semi-deviation of the daily log change of a positive x over d days.' It gives no formula and does not repeat cross_semistd_neg's explicit 'NaN with fewer than 3 days' rule, relying entirely on the reader inferring the max(log-change,0) symmetry and the threshold from the sibling function a few lines above.",
+    "failure_scenario": "No wrong output results -- testing confirms the implementation matches the implied sqrt(mean(max(log(x[t]/x[t-1]),0)^2)) formula and the n>=3 threshold exactly. But a reader auditing or upstreaming just this one function in isolation (docs/new_operators.md's own stated upstreaming process is to copy one function at a time into AlphaCube) cannot verify or reproduce the exact contributing-day definition or NaN rule from this docstring alone.",
+    "suggested_fix": "Spell out the full formula and NaN condition the way cross_semistd_neg does, e.g.: 'Upside semi-deviation of the daily log change of a positive x over the last d days: sqrt(mean(max(log(x[t]/x[t-1]), 0)^2)); NaN with fewer than 3 such days.'"
+   }
+  ]
+ }
+}

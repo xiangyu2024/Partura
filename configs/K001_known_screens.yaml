@@ -1,0 +1,256 @@
+# Partura study K001_known_screens —— 不是用户表里的因子:已知族本身当底座,检验各种筛子(假设在 studies/K001_known_screens/hypo.yaml)
+factor_id: K001_known_screens
+title: 已知成交额族的筛子研究:哪些票该从它的多头书里剔掉(来自想法短搜 e2_I1 / e3_I1 的发现)
+expression: cross_mean(day_std(Amt), 30)
+baseline_id: v_base
+label:
+  kind: open_vwap15
+  horizon: 1
+  buyable: true
+  verify_against: /root/autodl-tmp/AlphaCube/_bench/trainto/allfac_buyable/_target.npy
+cost_per_side: 0.0015
+top_frac: 0.1
+rank_by: long
+horizons:
+- 1
+- 2
+- 3
+- 5
+- 10
+- 20
+warmup: 60
+splits:
+  train:
+  - '20180102'
+  - '20211231'
+  valid:
+  - '20220101'
+  - '20230807'
+  utrain:
+  - '20180102'
+  - '20230807'
+  holdout:
+  - '20230808'
+  - '20251231'
+  full:
+  - '20180102'
+  - '20251231'
+fit_split: train
+user_split: utrain
+controls:
+  ctl_amt: log(add(day_sum(Amt), 1))
+  ctl_price: log(day_last(Close))
+  ctl_ivol: day_std(Ret)
+  ctl_range: div(sub(day_max(High), day_min(Low)), day_last(Close))
+  ctl_rev1: div(day_last(Close), ts_delay(day_last(Close), 1))
+  ctl_mom20: div(day_last(Close), ts_delay(day_last(Close), 20))
+  ctl_dvol20: ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)
+external_controls:
+  ctl_cap: /root/autodl-tmp/Partura/shared/log_float_cap.npy
+  ctl_turnrate: /root/autodl-tmp/Partura/shared/log_turnover_rate.npy
+gates:
+  known_amt_max9: cross_max(day_sum(Amt), 9)
+  known_stdamt_max9: cross_max(day_std(Amt), 9)
+  known_ivol_max9: cross_max(day_var(Ret), 9)
+  known_stdamt_mean30: cross_mean(day_std(Amt), 30)
+  g_absidio20: cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)
+  g_kurtlow20: cross_mean(day_kurt(Low), 20)
+corr_ids:
+- p_nodemean
+- p_close
+- p_range
+- p_rank
+- r_absret
+- r_kurtret
+- m20
+- m60
+- m120
+- mr60
+- mx20
+- m20_absret
+corr_with:
+- ctl_amt
+- ctl_cap
+- ctl_turnrate
+- ctl_ivol
+- ctl_dvol20
+- ctl_price
+- ctl_rev1
+- ctl_mom20
+- known_amt_max9
+- known_stdamt_max9
+- known_ivol_max9
+- known_stdamt_mean30
+- g_absidio20
+- g_kurtlow20
+diagnostics:
+  decay:
+  - v_base
+  - m20
+  - m60
+  by_year:
+  - v_base
+  - m20
+  - m60
+  - m120
+  - mr60
+  - m20_absret
+  neutralise:
+  - v_base
+  - m20
+  - m60
+  profile:
+  - v_base
+  - p_nodemean
+  - p_rank
+  - p_cube
+  - r_absret
+  - m20
+  - m60
+  - m120
+  - mx20
+  - m60_nodemean
+  - m20_absret
+  conditional:
+  - factor: v_base
+    gate: ctl_cap
+    buckets: 5
+  - factor: v_base
+    gate: ctl_amt
+    buckets: 5
+  - factor: m60
+    gate: known_stdamt_mean30
+    buckets: 5
+  - factor: m60
+    gate: ctl_cap
+    buckets: 5
+stages:
+- id: S0_baseline
+  question: Partura 自己求值出来的原式,能不能复现用户表里公布的那一行?它的钱在多头腿还是空头腿?
+  variants:
+  - id: v_base
+    group: baseline
+    expr: abs_(cs_demean(day_skew(Low)))
+    why: 原始表达式
+- id: S1_parts
+  question: 原式三个节点(偏度、截面去均值、折叠)和字段各自是不是必需的?它是不是「日频 |特质收益|」「分钟收益峰度」这类朴素读数的另一种写法?
+  variants:
+  - id: p_signed
+    group: ablate
+    expr: cs_demean(day_skew(Low))
+    why: H5:去掉折叠。若两头都差(倒 U),带符号的版本应该塌掉;若它不塌,折叠丢了方向信息
+  - id: p_nodemean
+    group: ablate
+    expr: abs_(day_skew(Low))
+    why: H6:去掉截面去均值。x1 §1:当天截面均值/标准差 37% 的日子超过 0.25。H6(去均值多余)预测书不变;x1 的 numpy 版本说多头腿毛超额从 9.4% 掉到 3.4% —— 用引擎坐实
+  - id: p_znorm
+    group: substitute
+    expr: abs_(cs_normalize(day_skew(Low)))
+    why: 去均值之外再除以当天截面标准差:日内同序,但改变了各天在 EMA 里的权重。若截面离散度大的日子(行情极端的日子)才是信号来源,它应该变差
+  - id: p_close
+    group: field
+    expr: abs_(cs_demean(day_skew(Close)))
+    why: H10:字段 Low 换成 Close。若 Low 只是同一条路径的另一种采样,书在噪声内相同、秩相关 > 0.9
+  - id: p_range
+    group: substitute
+    expr: abs_(cs_demean(div(sub(add(day_max(Low), day_min(Low)), add(day_median(Low), day_median(Low))), sub(day_max(Low), day_min(Low)))))
+    why: H9:三阶矩换成有界的不对称度 (max+min-2*median)/(max-min)。没有厚尾。H9(三阶矩不必需)预测多头腿不降;空头腿若明显变弱,说明偏度对尾部的放大是空头腿的来源(H1)
+  - id: p_rank
+    group: substitute
+    expr: cs_rank(abs_(cs_demean(day_skew(Low))))
+    why: H1/H2:逐日取截面秩再平滑,尾部被压平。H2(多头腿在主体)预测多头腿毛超额不降;H1(空头腿在尾部)预测多空夏普与空头腿大降
+  - id: p_cube
+    group: substitute
+    expr: pow_3(abs_(cs_demean(day_skew(Low))))
+    why: H1/H2 的另一头:立方把权重全压到尾部事件上。H1 预测空头腿不降;H2 预测多头腿的排序变差(多头端只剩「没出过事」这一条信息)
+  - id: r_absret
+    group: rival
+    expr: abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1))))
+    why: H3 的直接替换实验:完全不看日内路径,只用日频 |特质收益|(同样的去均值+折叠)。x1 §7:它的 20 日 EMA 与原式可交易信号秩相关 -0.54、单独就把残差多头腿毛超额压到 2.9%。若它的书复现原式,原式就是特质波动的带噪声写法
+  - id: r_kurtret
+    group: rival
+    expr: day_kurt(Ret)
+    why: H1 的朴素等价物:分钟收益的峰度(跳价 / 封板日同样极端)。若空头腿相同而多头腿不同,说明原式的多头腿不来自「跳价」这一维
+  - id: r_kurtlow
+    group: rival
+    expr: day_kurt(Low)
+    why: 同一条价格水平路径的四阶矩:x1 里它的 EMA20 与原式可交易信号秩相关 -0.78,多头腿毛超额却是 0。它是用来说明「原式的多头腿不在与峰度共享的那部分里」的对照
+  - id: r_mktcorr
+    group: rival
+    expr: day_corr(Ret, nt_cs_mean(Ret))
+    why: H7:直接量「跟不跟大盘走」(分钟收益与全市场分钟均值收益的日内相关,方向预期为正)。若原式的多头腿就是同步性,它应该复现多头腿且秩相关高
+- id: S2_memory
+  question: 把日轴记忆写进表达式之后,多头腿净超额的改善有多大、来自平滑还是结构?记忆该是均值、中位数还是极值,窗口多长最稳?
+  variants:
+  - id: m10
+    group: window
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 10)
+    why: H11:窗口邻域的短端。与原式在同一固定半衰期下比,看结构(等权窗口)本身有没有贡献
+  - id: m20
+    group: window
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 20)
+    why: H11:x1 里 mean20 + 半衰期 20 是 train/valid 最均衡的一个(+5.0% / +7.5%)。预测:多头腿净超额两段都比原式高 3 个点以上,毛超额不升(改进来自换手)
+  - id: m30
+    group: window
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 30)
+    why: H11:邻域
+  - id: m60
+    group: window
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 60)
+    why: H11:x1 里 +6.0% / +6.6%。预测同 m20;若 m60 明显好于 m20,慢变量的尺度比一个月更长
+  - id: m120
+    group: window
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 120)
+    why: H11 的长端:x1 里 train 降(+4.6%)而 valid 升(+9.7%),两段不同向。它是用来看「更长」是否已经过头的
+  - id: md60
+    group: substitute
+    expr: cross_med(abs_(cs_demean(day_skew(Low))), 60)
+    why: H2:记忆换成中位数,尾部事件完全不进来。H2(多头腿在主体)预测多头腿不降;若多头腿明显变差,多头端需要「最近没出过事」这条排除信息
+  - id: mr60
+    group: substitute
+    expr: cross_mean(cs_rank(abs_(cs_demean(day_skew(Low)))), 60)
+    why: H2:先取截面秩再求 60 日均值(尾部压平但仍计数)。与 m60、md60 一起看尾部在多头腿里起多大作用
+  - id: mx20
+    group: substitute
+    expr: cross_max(abs_(cs_demean(day_skew(Low))), 20)
+    why: H1:记忆换成 20 日极值(只记最出格的一天)。若多头腿只是「最近没出过事」,它应该与 m20 一样好;若多头腿需要主体的平均水平,它会差
+  - id: m60_nodemean
+    group: ablate
+    expr: cross_mean(abs_(day_skew(Low)), 60)
+    why: H6 在慢尺度上:60 日平均之后,当天的截面均值还重不重要?若仍然明显更差,「相对全市场当天的形状」是多头腿的实质
+  - id: m20_absret
+    group: rival
+    expr: cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)
+    why: H3:朴素的日频 |特质收益| 配上同样的 20 日记忆。它与 m20 的多头腿之差,就是日内路径形状在特质波动之外多给的东西
+  - id: m60_absret
+    group: rival
+    expr: cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 60)
+    why: 同上,60 日
+- id: S_final
+  question: 只凭 train/valid 选定的 5 个候选,在留出段上是什么样?这条因子对纯多头用户相对已知家族有没有增量?
+  variants:
+  - id: f_orig
+    group: baseline
+    final: true
+    expr: abs_(cs_demean(day_skew(Low)))
+    why: 基准 1:原式 + 多头最优半衰期。判据 1:它在测试段应该仍然是「毛超额被换手吃掉」(Lnet +1~+4%、Lshp 0.2~0.8)
+  - id: f_m20
+    group: distilled
+    final: true
+    expr: cross_mean(abs_(cs_demean(day_skew(Low))), 20)
+    why: 第一推荐,这条因子的提纯版(ρ(v_base)=0.918)。判据 2:应比 f_orig 高 ≥3pp 净超额、≥0.3 夏普,且毛超额不高于 f_orig
+  - id: f_K
+    group: known
+    final: true
+    expr: cross_mean(day_std(Amt), 30)
+    why: 基准 2:已知家族(必含)。判据 0:它自己在测试段应落在 Lnet +13~+15%、Lshp 1.4~1.9;若它塌了,判据 3 作废
+  - id: f_m20K
+    group: blend
+    final: true
+    expr: add(cs_rank(cross_mean(abs_(cs_demean(day_skew(Low))), 20)), cs_rank(cross_mean(day_std(Amt), 30)))
+    why: 判据 3(决定性):提纯版与已知家族等权相加。playbook §6.2 指定的增量检验。只有它比 f_K 高 ≥3pp 且 ≥0.3 夏普,才算有增量
+  - id: f_m20absret
+    group: rival
+    final: true
+    expr: cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)
+    why: 判据 4(H14):同样的「去均值+折叠+20 日记忆」,但完全不看日内路径。valid 上它比 f_m20 高 6.5pp;测试段若重现,「241 根分钟最低价是负贡献」就确立

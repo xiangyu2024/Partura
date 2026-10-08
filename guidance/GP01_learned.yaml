@@ -1,0 +1,100 @@
+# 从 AlphaCube 的 GP 自己的存档里学到的先验(scripts/gp_archive_priors.py;2026-10-06)
+# 规则(写在看任何 e7 结果之前):一个算子在全市场 3 个运行里「进前五分之一 ≤ 0.3 倍、进后五分之一 ≥ 1.1 倍」,并且在沪深300 的 4 个运行里也是「≤ 0.5 倍、≥ 0.9 倍」→ 降权。
+# 状态(2026-10-07,episodes/e7_SUMMARY.md):按事先的规则 e7 判「有用」(质量产出是对照的 2.3 倍),但赢的两次里这些规则只抽掉了 4 个和 6 个提议,
+#   按实测互不相关的发现数和对照分不出高下 —— 未证实,不并入 B01.yaml;要 8 个种子以上、按互不相关计数再测。
+# 只有降权,没有升权:全市场存档里的「好」算子大多是成交额一族(奖励在为流动性和垃圾票付钱),不拿来升权。
+version: 1
+batch: GP01_learned_from_gp_archives
+evidence_base:
+  runs:
+  - gp_base_1
+  - gp_hit_1
+  - gp_long_1
+  - gp_hs300_1
+  - gp_hs300_2
+  - gp_hs300_seed2
+  - gp_hs300_seed3
+  candidates: 4052
+  note: 只用结束于 20230807 的运行;适应度是 AlphaCube 自己的(全市场三种 + 沪深300),在每个运行内取分位
+reward: []
+evaluation: []
+priors:
+- id: L_day_skew
+  action: weight
+  w: 0.25
+  pattern: day_skew(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 70 个候选进前五分之一的是平均的 0.14 倍、进后五分之一的是 1.93 倍;沪深300 的 4 个运行里 173 个,0.03 / 0.92
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_day_close
+  action: weight
+  w: 0.25
+  pattern: day_close(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 55 个候选进前五分之一的是平均的 0.09 倍、进后五分之一的是 1.73 倍;沪深300 的 4 个运行里 39 个,0.00 / 2.56
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_sqrt
+  action: weight
+  w: 0.25
+  pattern: sqrt(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 57 个候选进前五分之一的是平均的 0.18 倍、进后五分之一的是 1.75 倍;沪深300 的 4 个运行里 154 个,0.06 / 1.20
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_day_corr
+  action: weight
+  w: 0.25
+  pattern: day_corr(_, _)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 40 个候选进前五分之一的是平均的 0.12 倍、进后五分之一的是 2.00 倍;沪深300 的 4 个运行里 94 个,0.32 / 1.28
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_day_autocorr_n1
+  action: weight
+  w: 0.25
+  pattern: day_autocorr_n1(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 49 个候选进前五分之一的是平均的 0.20 倍、进后五分之一的是 1.63 倍;沪深300 的 4 个运行里 60 个,0.00 / 1.00
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_day_hurst
+  action: weight
+  w: 0.25
+  pattern: day_hurst(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 53 个候选进前五分之一的是平均的 0.19 倍、进后五分之一的是 1.32 倍;沪深300 的 4 个运行里 47 个,0.00 / 2.77
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_pow_05
+  action: weight
+  w: 0.25
+  pattern: pow_05(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 69 个候选进前五分之一的是平均的 0.22 倍、进后五分之一的是 1.16 倍;沪深300 的 4 个运行里 62 个,0.00 / 1.94
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+- id: L_day_sum
+  action: weight
+  w: 0.5
+  pattern: day_sum(_)
+  why: GP 自己的存档里稳定垫底:全市场 3 个运行里含它的 44 个候选进前五分之一的是平均的 0.11 倍、进后五分之一的是 1.14 倍;沪深300 的 4 个运行里 185 个,0.11 / 1.11
+  evidence:
+  - guidance/gp_archive_stats_fullmarket.json
+  - guidance/gp_archive_stats_hs300.json
+pool:
+- id: known_amt_dispersion
+  expr: cross_mean(day_std(Amt), 30)
+  sign: -1
+  hl: 0
+- id: known_xfrozen
+  expr: cs_last_high20(neg(cross_mean(day_std(Amt), 30)), cross_max(day_zero_ratio(Ret), 15))
+  sign: 1
+  hl: 2
+ideas:
+- id: I0_open_search
+  hypothesis: 不给想法、不给种子:只看先验本身对一次普通搜索的作用
+  seeds: []
+  grammar: {}
+  reward: long

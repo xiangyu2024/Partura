@@ -17,6 +17,7 @@
 #   study.sh list <fid>                    what has ALREADY run for this study on the server (tags, exit codes)
 #   study.sh status                        what Partura jobs are on the server right now
 #   study.sh table <fid> [tag]             the BATCH SWEEP table (hundreds of variants side by side) + the market anatomy
+#   study.sh code                          sync ALL code and configuration to the server (do this before any server-side launcher)
 #   study.sh hypo <fid>                    check that studies/<fid>/hypo.yaml (hypotheses for the next sweep) parses
 #   study.sh brief <fid>                   the HANDOFF briefing: where this study stands, its journal, what exists -- read it first
 #   study.sh note <fid> "<title>" [<<EOF]  append an entry to the research journal notes/<fid>/journal.md (body on stdin)
@@ -69,7 +70,20 @@ push() {   # this study's inputs only
   return 0
 }
 
+code() {   # every piece of code and configuration a server run reads, in ONE sync.  A launcher that lives on the
+           # server (tmp/*.sh) does not sync anything: run `study.sh code` before starting one.  (Episode e3_I1 ran a
+           # stale scripts/idea_search.py that way, and its card described a reference the run never used.)
+  local d
+  for d in partura scripts guidance batches tests configs; do
+    $RS "$SSH" "$d/" "$HOST:$R/$d/" || return 1
+  done
+  $SSH $HOST "cd $R && sha1sum scripts/idea_search.py partura/steer.py partura/steer_fast.py partura/ops_ext.py | cut -c1-12,41-"
+}
+
 case "$cmd" in
+  code)      # sync all code and configuration to the server (not the results); prints the fingerprints the server now has
+    code
+    ;;
   ops)
     $SSH $HOST "$ENV && $RPY -m partura.remote_tools ops '${1:-.}' 2>&1 | grep -v 'FutureWarning\|vmap(single_row)'"
     ;;
@@ -170,8 +184,10 @@ case "$cmd" in
     ;;
   idea)      # hand an idea (guidance/*.yaml -> ideas) to AlphaCube: a short steered GP search plus its control; detached, log logs/_idea_<id>.log
     id=$1; shift
-    $RS "$SSH" guidance/ "$HOST:$R/guidance/" && $RS "$SSH" partura/steer.py partura/ops_ext.py "$HOST:$R/partura/" && $RS "$SSH" scripts/idea_search.py "$HOST:$R/scripts/" || exit 1
-    $SSH $HOST "$ENV && export PARTURA_GPU_WAYS=\${PARTURA_GPU_WAYS:-2} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 && screen -dmS idea_$id bash -c '$RPY -u scripts/idea_search.py $id $* > logs/_idea_$id.log 2>&1' && echo started idea_$id"
+    code > /dev/null || exit 1
+    tag=$(echo " $*" | sed -n 's/.* --tag \([^ ]*\).*/\1/p')        # several runs of one idea: one screen and one log per tag
+    nm="${tag:+${tag}_}$id"
+    $SSH $HOST "$ENV && export PARTURA_GPU_WAYS=\${PARTURA_GPU_WAYS:-2} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 PARTURA_REWARD_DEVICE=\${PARTURA_REWARD_DEVICE-cuda} && screen -dmS idea_$nm bash -c '$RPY -u scripts/idea_search.py $id $* > logs/_idea_$nm.log 2>&1' && echo started idea_$nm (log logs/_idea_$nm.log)"
     ;;
   idea-log)  # the tail of an idea search's log
     $SSH $HOST "grep -v 'FutureWarning\|vmap(single_row)\|UserWarning' $R/logs/_idea_$1.log | tail -${2:-25} | cut -c1-320"

@@ -1,0 +1,287 @@
+{
+ "type": "result",
+ "key": "v2:845d958a2d0fceaf9f3637cc25a29dcd98e0206a39f715c2e1c500852a34f762",
+ "agentId": "a82a7ee8c39953ef1",
+ "result": {
+  "facts": [
+   {
+    "topic": "DAG construction",
+    "detail": "Dag.__init__(roots) calls _add(expr) per root; _add recurses into expr.operands, dedups purely on the structural key() string via self.by_key, and records which root positions point to each shared Node in node.root_indices. topo is children-before-parents post-order.",
+    "refs": "src/alphacube/engine/dag.py:50-72"
+   },
+   {
+    "topic": "CSE key format",
+    "detail": "key() is cached on the Expression (_key slot) and is a pure structural string with no view/store identity in it: Feature='F:{field}', Constant='C:{value!r}', _OpNode='O:{spec.name}(child1.key(),...)|w{window}', GeneralCall='G:{spec.name}(...)'.",
+    "refs": "src/alphacube/expression.py:65-71,116-117,132-133,226-229,335-342"
+   },
+   {
+    "topic": "is_leaf is the only leaf-type check in the DAG",
+    "detail": "Node.is_leaf = isinstance(self.expr, (Feature, Constant)) — a hardcoded 2-type tuple. Dag.computed = every node NOT is_leaf; leaves get no mode/round_id and are excluded from assign_modes/plan_rounds entirely ('leaves are never scheduled').",
+    "refs": "src/alphacube/engine/dag.py:38-40,74-76; src/alphacube/engine/schedule.py:24-25"
+   },
+   {
+    "topic": "Exhaustive list of is_leaf / leaf-type consumers",
+    "detail": "Grep-verified: dag.py:40 (definition), dag.py:76 (Dag.computed), schedule.py:62 (_p_eligible), schedule.py:84 (assign_modes step 2 skips leaf children), schedule.py:113 (closure() readiness — a leaf is always 'ready'), engine.py:192 (bare-leaf-root path), engine.py:278 (_run_cube_chunk.operand). engine.py:357 (_run_panel_round.operand) has NO is_leaf check at all — it only special-cases Constant. No occurrence of is_leaf or Feature/Constant isinstance checks anywhere in kernels.py.",
+    "refs": "src/alphacube/engine/dag.py:40,76; src/alphacube/engine/schedule.py:62,84,113; src/alphacube/engine/engine.py:192,278,357; (kernels.py: zero matches)"
+   },
+   {
+    "topic": "assign_modes algorithm",
+    "detail": "3 passes over dag.computed: (1) hard requirement + P-eligibility bottom-up via _p_eligible; (2) free nodes inherit mode from computed cube children bottom-up (leaf children explicitly skipped here); (3) else inherit from parents top-down, else default 'S'.",
+    "refs": "src/alphacube/engine/schedule.py:67-95"
+   },
+   {
+    "topic": "_p_eligible",
+    "detail": "A node can run in panel (P) mode if spec.face=='nd' (always), or if family=='elementwise' and every child is (is_leaf AND shape.degenerate) or (not is_leaf AND (mode==MODE_P OR shape.degenerate)). Today the leaf branch is only ever exercised by Constant, since Feature.shape.degenerate is always False.",
+    "refs": "src/alphacube/engine/schedule.py:57-64"
+   },
+   {
+    "topic": "plan_rounds / round formation",
+    "detail": "Greedy: repeatedly compute closure(MODE_P) first (free), else whichever of closure(MODE_S)/closure(MODE_D) is larger; each chosen node gets round_id=len(rounds). After all rounds exist, per-node boundary/panel_out/bound_layout/mask_out are derived by comparing round_id across parent edges: cross-round + degenerate -> panel_out (in-memory (S,D) hand-off); cross-round + full-width -> boundary (on-disk memmap); a boundary read ONLY by D-mode rounds is stored day-major for I/O locality; mask_out marks where the NaN mask must be re-applied under the default 'boundaries' policy (roots, panel_out, boundary, or any node feeding a D-axis/S-axis/NT op).",
+    "refs": "src/alphacube/engine/schedule.py:98-168"
+   },
+   {
+    "topic": "Face/compute-axis type table (why cross_* needs full D, nt_cs_* needs full S)",
+    "detail": "The canonical table: dt/in,day are M-axis (chunkable on S or D); dt/cross is D-axis, chunkable only on S (needs the whole day axis per stock); nd/cs,ts are whole-panel (D,S), never chunked; nt/cs,ts are per-day (M,S) face calls, D-mode only. OpSpec.allowed_modes encodes this directly: face=='nd'->(P,); face=='nt'->(D,); compute_axis=='D'->(S,) [cross_*]; compute_axis=='S'->(D,) [nt_cs_*].",
+    "refs": "src/alphacube/axes.py:7-18,98-110"
+   },
+   {
+    "topic": "evaluate() top-level flow",
+    "detail": "Validates every root is shape.degenerate (raises unless tolerant=True, collecting per-index errors instead); builds Dag+plan_rounds; computes (cs,cd) via _chunk_sizes; for a MODE_P round calls _run_panel_round ONCE on whole (D,S) tensors (no chunk loop); for S/D rounds, loops lo in range(0,n,step) with step=cs|cd and n=S|D, calling _run_cube_chunk per chunk.",
+    "refs": "src/alphacube/engine/engine.py:135-205"
+   },
+   {
+    "topic": "_chunk_sizes byte-budget model",
+    "detail": "wmax = largest .window among computed nodes that are not restores_m; overhead=12+min(wmax,64); per_symbol=D*M*4*overhead bytes, per_day=S*M*4*overhead; cs/cd = explicit chunk_symbols/chunk_days if given, else chunk_bytes // per_symbol_or_day clamped to [1,S or D]. chunk_bytes defaults to 2<<30 (2 GiB). The model scales purely with M (minute width); it has no notion of a leaf that is only (C,D) or (S,C).",
+    "refs": "src/alphacube/engine/engine.py:74-75,124-132"
+   },
+   {
+    "topic": "_load_leaf_cube is the sole in-chunk leaf reader, and it is NOT isinstance(Feature)-gated",
+    "detail": "Constant -> torch.full((1,1,1), expr.value, dtype=self.dtype, device=self.device) built directly in the engine's configured dtype. Anything else (today always a Feature) falls through unconditionally to arr = view.read_s(expr.field,lo,hi) or view.read_d(expr.field,lo,hi), i.e. it assumes a '.field' attribute and a (C,D,M)/(S,C,M) cube on disk, with no isinstance(Feature) check at all. The result is then masked via self._mask_cube(t, tradable).",
+    "refs": "src/alphacube/engine/engine.py:227-232"
+   },
+   {
+    "topic": "Feature leaves are always read from disk as float32, Constant is built directly in engine dtype",
+    "detail": "CubeStore.read_cube and SegmentedCubeStore.read_cube both hardcode dtype=np.float32 for the numpy array; .to(self.device,self.dtype) upcasts to float64 only afterward if dtype='float64'. Constant's torch.full(...) is built directly in self.dtype, skipping the float32 round-trip. A new leaf type that is NOT backed by a float32 numpy source would need to decide which path it follows.",
+    "refs": "src/alphacube/store.py:177,357; src/alphacube/engine/engine.py:101-102,228-231"
+   },
+   {
+    "topic": "Bare-leaf-as-root path has a leaf-type gap of its own",
+    "detail": "evaluate()'s final output-collection loop special-cases node.is_leaf -> self._leaf_panel(node.expr); _leaf_panel handles ONLY Constant and otherwise raises ValueError(f'leaf {expr!r} is not a daily value') — the error text itself already names the exact concept ('a daily value') that a new leaf type would need to satisfy.",
+    "refs": "src/alphacube/engine/engine.py:185-196,208-216"
+   },
+   {
+    "topic": "P-round operand loader has NO fallback for any leaf besides Constant",
+    "detail": "_run_panel_round.operand() special-cases isinstance(c.expr, Constant) (-> torch.full((1,1),...)), else only looks in `values` (same-round already-computed) or `panels` (hand-off from an earlier round); any other leaf type raises RuntimeError('panel operand {key} unavailable'). This path is never hit today because Feature is never P-eligible, but a new leaf marked shape.degenerate=True WILL be routed into P-mode by _p_eligible for the common elementwise case (e.g. div(day_sum(Amt), FloatCap)), making this the first real gap most new-leaf designs will hit.",
+    "refs": "src/alphacube/engine/engine.py:352-363"
+   },
+   {
+    "topic": "Collapsed intermediate stitching across S/D chunks",
+    "detail": "On n.panel_out, panels[n.key] is lazily allocated once as np.full((S,D),nan); each chunk takes out[...,0] (column 0, exact for a degenerate value), expands a fully-collapsed (1,1) chunk result up to the chunk's real stock/day extent, masks it, then writes into the disjoint slice p[lo:hi,:] (S-mode) or p[:,lo:hi] (D-mode). Chunks within a round are processed strictly sequentially and never overlap, so stitching is just writing into disjoint slices of one persistent array — no merge/reduce step exists or is needed.",
+    "refs": "src/alphacube/engine/engine.py:309-322"
+   },
+   {
+    "topic": "Full-width (boundary) stitching across a mode switch",
+    "detail": "On n.boundary, a np.memmap is lazily created under a per-call TemporaryDirectory, shaped (D,S,width) or (S,D,width) per n.bound_layout (width comes from the actual result's last dim, e.g. narrower after in_slice); each chunk writes its slice, transposed when the writing round's axis order differs from the file's stored layout. Cleaned up (tmp.cleanup()) at the end of every evaluate() call — never persisted.",
+    "refs": "src/alphacube/engine/engine.py:159-164,199-204,323-344"
+   },
+   {
+    "topic": "Internal panel orientation differs from the external result orientation",
+    "detail": "The internal `panels` dict is (S,D) float32 ('key -> (S,D) float32'); EvalResult.panels (user-facing) is (D,S), produced by one final transpose per root at the very end of evaluate() (out[i]=np.ascontiguousarray(p.T,...)). A new daily-leaf's raw data is described by the task as already '(D,S)' — that is the OPPOSITE of the engine's own internal (S,D) convention, so a transpose decision point exists wherever the new leaf's raw array is first touched.",
+    "refs": "src/alphacube/engine/engine.py:66,151,196"
+   },
+   {
+    "topic": "Per-chunk operand memoization and eviction",
+    "detail": "_run_cube_chunk.operand() caches each distinct child's tensor by c.key in a per-chunk `values` dict (checked before is_leaf/panels/bounds), guaranteeing one store-read (or one panel/boundary slice) per distinct operand per chunk regardless of how many trees reference it; evicted via a remaining_uses refcount once the last use within the round is spent, except when c.is_root (reason for that specific exemption not established with certainty from reading the code — see open_questions). This CSE-at-read-time behavior is locked by test_each_operand_is_read_once_per_chunk.",
+    "refs": "src/alphacube/engine/engine.py:257-288,345-348; tests/test_engine.py:210-235"
+   },
+   {
+    "topic": "kernels.py never inspects leaf type",
+    "detail": "apply_cube/apply_panel operate purely on already-loaded tensors, dispatching only on spec.face/compute_axis/family; grep confirms zero references to Feature/Constant/is_leaf anywhere in kernels.py. M-axis ops get a zero-copy (A*B,M) row view, NT ops loop per day over a (M,S) face, D-axis (cross_*) ops loop per stock over (D,M) restricted to mode==MODE_S (raises RuntimeError otherwise), elementwise uses plain torch broadcasting. Consequence: a new leaf TYPE needs zero kernels.py changes — the change is entirely in 'how a leaf becomes a tensor', not in 'what an operator does with a tensor'.",
+    "refs": "src/alphacube/engine/kernels.py:1-22,186-240"
+   },
+   {
+    "topic": "_align_widths / width-1 broadcasting",
+    "detail": "_align_widths broadcasts any width-1 operand up to the shared minute width and explicitly raises ValueError on two genuinely different non-1 widths. A degenerate leaf naturally presents as width-1 here, the same path Constant already uses — no special-casing needed once the tensor shape is right.",
+    "refs": "src/alphacube/engine/kernels.py:122-143"
+   },
+   {
+    "topic": "CubeView construction and the private _rows helper",
+    "detail": "CubeView(store, sym_idx, d0, d1) precomputes self._contiguous (whether sym_idx is one ascending run) once in __init__; _rows(s_lo,s_hi) returns a cheap contiguous slice when possible, else an explicit fancy-index array. read_s/read_d BOTH delegate symbol-index resolution to _rows and day-index resolution to self.d0+lo offsetting.",
+    "refs": "src/alphacube/store.py:406-425"
+   },
+   {
+    "topic": "read_s / read_d contracts",
+    "detail": "read_s(name,s_lo,s_hi) -> (C,D,M) float32 for view-local symbols [s_lo,s_hi), full view day range, via store.read_cube(name, self._rows(s_lo,s_hi), self.d0, self.d1). read_d(name,d_lo,d_hi) -> (S,C,M) float32 for view-local days [d_lo,d_hi), full view symbol set, via store.read_cube(name, self._rows(0,n_symbols), self.d0+d_lo, self.d0+d_hi).",
+    "refs": "src/alphacube/store.py:427-433"
+   },
+   {
+    "topic": "tradable() is the existing precedent for a whole-view-cached, thinly-sliced (S,D) accessor",
+    "detail": "CubeView.tradable() computes and caches a (S,D) bool for the WHOLE view exactly once (store.read_status + np.isin against TRADING/RESUMED codes, cached in self._tradable); tradable_s/tradable_d are thin lo:hi slices of that cached array. This is structurally the closest existing template for a new daily-field accessor: compute/cache the whole-view (S,D) array once, then slice.",
+    "refs": "src/alphacube/store.py:435-447"
+   },
+   {
+    "topic": "CubeStore's on-disk format structurally assumes one shared (S,D,M) shape across all fields in a store",
+    "detail": "build_cube_store requires `len({cubes[n].shape for n in names}) == 1` (all fields share one (S,D,M) shape); CubeStore.field() separately asserts `arr.shape == (n_symbols,n_days,n_minutes)` per field. A daily (S,D) field cannot simply be added as an 'M=1' entry inside the SAME store directory without changing one of these checks (or writing it as a genuinely separate store/format). store.py's own module docstring states 'There is no separate daily store: daily fields are cube expressions' — referring to the PRE-EXISTING day_last(Close)-style derived values, not to new exogenous daily data.",
+    "refs": "src/alphacube/store.py:1-6,115-123,452-466"
+   },
+   {
+    "topic": "CubeStore field-level caching and mirror/madvise machinery exists because minute cubes are gigabytes",
+    "detail": "CubeStore.field() mmaps and caches dtfield_<name>.npy per field name, shared across every CubeView built from that store. read_cube additionally picks a D-major 'mirror' when the slice pattern is few-days/many-symbols, driven by advise_access madvise hints — documented as mattering because a strided read without the hint pulled ~197x the wanted bytes on a 9.8 GB field. A (S,D) daily field at the SAME production scale (5219 symbols x 1942 days x 4 bytes) is only ~40 MB per field, small enough to load wholesale into RAM with ordinary numpy indexing, so none of this mmap/madvise/mirror machinery is a hard requirement for daily fields.",
+    "refs": "src/alphacube/store.py:62-88,115-150,179-189; src/alphacube/engine/engine.py:45-46 (9.8 GB at 5219x1942x241 figure)"
+   },
+   {
+    "topic": "SegmentedCubeStore joins an immutable base with append-only date segments",
+    "detail": "SegmentedCubeStore combines `<root>/minute` (base) with `<root>/incremental/<rel>/minute` segments listed in `incremental/index.json`; read_cube/read_status fan a requested slice across whichever segments cover the requested days and reassemble into one array, filling any uncovered cell with NaN. Whether daily fields need an analogous incremental-append story, or can be rebuilt wholesale, is not established (open question).",
+    "refs": "src/alphacube/store.py:263-393"
+   },
+   {
+    "topic": "The engine has NO concept of warm-up; it is 100% caller-side convention",
+    "detail": "view.n_days always spans the engine's full evaluation window with no padding/trim logic inside CubeEngine or CubeView. research.warmed_view(store,start,end,warmup,...) extends the view's d0 backward by `warmup` raw day-index positions and returns (CubeView, trim) where trim=base.d0-d0; downstream code (pipeline.run_mining, fullcatalog.evaluate_factors) explicitly slices result[trim:] after evaluate() to drop the padded rows. expression.max_window(expr,'D') (largest rolling-window literal along the day axis in a tree) is how callers size how much warm-up a given expression set actually needs.",
+    "refs": "src/alphacube/research.py:82-86; src/alphacube/pipeline.py:244,253,447; src/alphacube/fullcatalog.py:109-120; src/alphacube/expression.py:411-424"
+   },
+   {
+    "topic": "cross_* day-axis rolling NaN-pads at the start of whatever day span it is given",
+    "detail": "operators/common.py's rolling_windows(x,d,axis) left-pads axis with d-1 NaNs then unfolds — causal, no wraparound. Because cross_* (compute_axis='D') is restricted to allowed_modes=(MODE_S,), an S-mode chunk always carries the FULL view day axis (chunking is only over stocks in S-mode), so this NaN-pad happens exactly once, at the start of the VIEW's day range, not per day-chunk. Correctness for the 'real' analysis window depends entirely on the caller having padded the view's d0 far enough back via warmed_view.",
+    "refs": "src/alphacube/operators/common.py:426-437; src/alphacube/axes.py:98-110"
+   },
+   {
+    "topic": "UniverseEngine is a pure post-hoc decorator on EvalResult.panels",
+    "detail": "UniverseEngine.evaluate() calls through to the wrapped engine unchanged, then overwrites every output panel with np.where(self._member, p, np.nan); __getattr__ forwards every other attribute/method (including .view) straight to the wrapped engine. It never touches leaf-loading, chunking, or the panels/bounds dicts internal to CubeEngine.evaluate() — zero changes needed here for a new daily leaf.",
+    "refs": "src/alphacube/pipeline.py:144-158"
+   },
+   {
+    "topic": "UniverseEngine is constructed at two separate call sites",
+    "detail": "run_mining wraps the shared `engine` once (for non-GP miners/labels), and separately re-wraps GPMiner's OWN internally-constructed engine (with an explicit comment that GP builds its own engine so it must be wrapped again). Any change to how CubeEngine is constructed (e.g. passing new daily-field data) must be threaded through both sites.",
+    "refs": "src/alphacube/pipeline.py:257-260,368-379"
+   },
+   {
+    "topic": "Device plumbing is uniform; no device-conditional code exists in engine.py/kernels.py",
+    "detail": "CubeEngine.__init__ sets self.device=torch.device(device) (default 'cpu') and self.dtype; every tensor the engine creates is moved via .to(self.device,self.dtype) at each of 9+ call sites (leaves, panel-slices, boundary-slices, constants, masking). torch_threads, if given, calls the GLOBAL torch.set_num_threads(...) — a process-wide side effect, not scoped to one engine instance.",
+    "refs": "src/alphacube/engine/engine.py:74-118,225,229,231,237,250,358,362,380,393"
+   },
+   {
+    "topic": "There is no dedicated OOM-handling code in engine.py/kernels.py/store.py/dag.py/schedule.py",
+    "detail": "Grep across all 5 assigned files for OOM/cuda/OutOfMemory/MemoryError finds nothing beyond ordinary device plumbing. The ONLY exception handling in the chunk/panel evaluation loops is the generic `except Exception as exc:` in _run_cube_chunk and _run_panel_round, active only under evaluate(tolerant=True); it sets n.failed/n.error and lets any dependent node (checked at the top of each node's processing) also fail and be skipped, rather than raising. A CUDA OutOfMemoryError is caught by this SAME generic path with no type-specific handling.",
+    "refs": "src/alphacube/engine/engine.py:290-307,366-384"
+   },
+   {
+    "topic": "The actual GPU memory cap and the 'OOM is silent' design intent live in cli.py / mining/, outside the 5 assigned files",
+    "detail": "cli.py reads env var ALPHACUBE_GPU_FRACTION and calls torch.cuda.set_per_process_memory_fraction(frac) when device starts with 'cuda', with an explicit comment: tolerant-mode engine OOM 'only lets the node silently fail, no error is raised'. mining/gp.py and mining/env.py each have their own comments explicitly relying on this contract (CUDA OOM in the tolerant engine drops the tree silently) to batch large exemplar evaluations without crashing the run.",
+    "refs": "src/alphacube/cli.py:111-118; src/alphacube/mining/gp.py:477-482; src/alphacube/mining/env.py:174-182"
+   },
+   {
+    "topic": "Test fixtures build real on-disk synthetic stores, session-scoped",
+    "detail": "tests/conftest.py: `registry` = catalog.default_registry(); `store` = synthetic.write_synthetic_store(root, n_symbols=10, n_days=60, n_minutes=24, seed=11, suspended_frac=0.05, unlisted_days=8); `view` = store.view(); `raw` = an independent {field:(S,D,M)} + tradable-masked reference copy read directly off store.field(f), bypassing CubeView, used as ground truth in test_engine.py.",
+    "refs": "tests/conftest.py:1-35"
+   },
+   {
+    "topic": "synthetic.py builds realistic in-memory cubes then writes the real on-disk format",
+    "detail": "make_synthetic_cube builds Open/High/Low/Close/Volume/Vwap/Ret/Amt with common-factor+idiosyncratic-walk closes, a Brownian-bridge intraday path, U-shaped volume, an optional planted day_std(Ret)->next-day-return signal (plant_beta), random SUSPENDED stock-days (suspended_frac), and an OUTSIDE_LIFECYCLE tail on the last symbol (unlisted_days); write_synthetic_store then calls store.build_cube_store to write the genuine dt_meta.json + dtfield_*.npy + day_status.npy layout, so tests exercise the real CubeStore disk-read path, not a mock.",
+    "refs": "src/alphacube/synthetic.py:1-89; src/alphacube/store.py:452-482"
+   },
+   {
+    "topic": "test_engine.py correctness/chunk-invariance strategy",
+    "detail": "References are computed by looping per-symbol or per-day calls directly into alphacube.operators.* (never through the engine), e.g. test_dt_families_bit_exact_vs_per_symbol. Chunk-invariance is pinned by running the same expressions under several (chunk_symbols,chunk_days) pairs including degenerate (1,1) and asserting bit-exact equality against the unchunked default, both on a fixed small set (test_chunk_invariance) and on a random TypedTreeGenerator population covering every registered operator (test_chunk_invariance_over_random_population). test_kernels_never_write_into_operands builds ONE expression per registry.list_all() entry (so any newly-registered operator — or, by extension, a working new leaf type used in such an expression — is automatically swept in) against a private n_minutes=241 synthetic store.",
+    "refs": "tests/test_engine.py:1-50,126-189,238-281"
+   },
+   {
+    "topic": "Boundary/mode-switch tests pin the exact disk layout and read/write access pattern",
+    "detail": "test_boundary_materialisation, test_boundary_reads_and_writes_follow_the_access_pattern, and test_day_major_boundaries_give_the_same_values construct cross_*/nt_cs_* combinations that force S<->D mode switches and assert on plan.boundaries, eng._bound_layout, and (via monkeypatching advise_access) the exact sequence of strided-vs-contiguous madvise calls.",
+    "refs": "tests/test_engine.py:115-123,284-340"
+   },
+   {
+    "topic": "test_device_parity.py scope and skip condition",
+    "detail": "Accelerator-specific tests (needs_accel) skip entirely when neither torch.cuda.is_available() nor torch.backends.mps.is_available(). What is unconditionally tested regardless of hardware is the dtype='float64' reference-widening mode, used as the arbiter for float32-vs-accelerator comparisons since cross-device float32 reduction order is explicitly NOT promised — only the finite/NaN pattern and bit-exactness of selection operators (day_last etc., which pick rather than reduce) are required to match across devices. No OOM-specific test exists in this file or in test_engine.py.",
+    "refs": "tests/test_device_parity.py:1-58,66-121"
+   },
+   {
+    "topic": "CubeView itself has direct unit coverage, independent of the engine",
+    "detail": "test_store.py::test_view_selection_and_reads exercises read_s/read_d against both a contiguous max_symbols/date-range view and a non-contiguous explicit-symbols view (checking fancy-indexing correctness and that the returned array is independently writeable); test_tradable_matches_status checks tradable() against the day_status plane directly.",
+    "refs": "tests/test_store.py:19-32,44-50"
+   },
+   {
+    "topic": "Parsing: a bare identifier becomes Feature(field) in exactly one place, gated by a hardcoded field tuple",
+    "detail": "catalog.CUBE_FIELDS=('Open','High','Low','Close','Volume','Vwap','Ret','Amt') is a hardcoded, store-independent tuple fed into Registry(fields=...) via build_registry/default_registry. parser._Parser.name(ident) is the ONLY place a bare identifier becomes Feature(field), gated by `ident in self.reg.fields` (==CUBE_FIELDS) or FIELD_ALIASES; an unrecognized identifier (e.g. 'FloatCap' today) raises ParseError unless it also matches DAILY_MACROS/DAILY_NAME_ALIASES, both of which expand to ordinary MINUTE-cube expressions (e.g. close_1d -> day_last(Close)), not to a new exogenous value.",
+    "refs": "src/alphacube/catalog.py:375,405,450-454; src/alphacube/parser.py:39-42,133-143"
+   },
+   {
+    "topic": "daily.py's 'daily' concept is a DIFFERENT, pre-existing mechanism and must not be conflated with the task's new exogenous daily fields",
+    "detail": "daily.py's DailyData/DAILY_FIELD_EXPRESSIONS table maps every daily field name to a cube-expression STRING (e.g. 'Close':'day_last(Close)') evaluated by the engine from the real minute cube; the module docstring explicitly says it 'is never a data source'. FloatCap/TotalCap/etc. have no minute-cube representation at all and cannot be produced by any day_* expression over an existing Feature, so they are a genuinely new kind of leaf, not an instance of this existing mechanism.",
+    "refs": "src/alphacube/daily.py:1-28"
+   },
+   {
+    "topic": "Within one evaluate() call, every engine-internal cache is keyed purely by structural expr.key(), with no view identity, and is discarded at the end of the call",
+    "detail": "`values` (per-chunk), `panels`, and `bounds` are all local variables of CubeEngine.evaluate(), keyed by node.key; bounds.clear() and tmp.cleanup() run in evaluate()'s finally block. There is NO cross-call panel cache anywhere in engine.py/dag.py/schedule.py/kernels.py — a brand-new CubeEngine/Dag is built on every evaluate() call.",
+    "refs": "src/alphacube/engine/engine.py:148-205"
+   },
+   {
+    "topic": "A SEPARATE, higher-level panel cache exists outside the assigned files (located but not read in depth)",
+    "detail": "mining/gp.py and mining/env.py each keep their own `self._panel_cache` (ctor params panel_cache_items/panel_cache_bytes). mining/rankban.py::view_cache_key(view,sample_days,sample_symbols) fingerprints a VIEW (not an expression) by hashing (first_date,last_date,n_dates,n_symbols,sample_days,sample_symbols) — for a different cache (ExemplarCache). This is the closest existing precedent for 'view identity' as a cache-key component that the task's own prompt worries about ('面板缓存的键要正确'), but these files are outside my assigned scope (engine/ + store.py CubeView) and were only located by grep, not read.",
+    "refs": "src/alphacube/mining/gp.py:164-166,347,353,419-420; src/alphacube/mining/env.py:103-104,114,117; src/alphacube/mining/rankban.py:242-249"
+   }
+  ],
+  "insertion_points": [
+   {
+    "where": "src/alphacube/engine/dag.py:39-40 (Node.is_leaf)",
+    "change": "Add the new daily-leaf Expression class to the isinstance tuple, e.g. isinstance(self.expr, (Feature, Constant, DailyFeature)).",
+    "risk": "This is the single most load-bearing one-line change and the easiest to forget. If skipped, the new node is treated as 'computed': assign_modes immediately does `spec = n.spec; if spec.face==...` on a leaf whose .spec is None (the Expression base-class default) -> AttributeError on first use, a loud but possibly confusing failure far from the actual root cause."
+   },
+   {
+    "where": "src/alphacube/engine/engine.py:227-232 (_load_leaf_cube)",
+    "change": "Add an isinstance(expr, DailyFeature) branch BEFORE the generic fallback: read a (C,D) or (S,C) slice from the new CubeView accessor, .unsqueeze(-1) to the (.,.,1) collapsed-cube shape apply_cube already expects (same trick _panel_slice uses at line 237), and call self._mask_cube(t, tradable) on it exactly like the Feature branch does.",
+    "risk": "If the isinstance branch is added but the _mask_cube call is forgotten, a suspended stock-day's raw daily value would NOT be forced to NaN before feeding a cross_*/nt_* consumer, silently reintroducing the exact 'fake finite value' bug the engine's whole masking design exists to prevent (see test_mask_every_node). If the branch is omitted entirely, the new leaf falls through to `expr.field` + view.read_s/read_d and raises KeyError from CubeStore.field()'s 'store has no field' check — loud, not silent."
+   },
+   {
+    "where": "src/alphacube/engine/engine.py:352-363 (_run_panel_round.operand)",
+    "change": "Add a branch that loads the new leaf's whole-view (D,S)-or-(S,D) array directly (P-rounds are never chunked, so load once, transpose/tensorize, no lo:hi slicing needed), mirroring the existing panels[c.key] branch at lines 361-362, and mask it the same way.",
+    "risk": "HIGHEST-PROBABILITY first failure: _p_eligible will route almost every realistic use of a degenerate daily leaf (e.g. div(day_sum(Amt), FloatCap)) straight into a P-mode round, which today has no fallback for any non-Constant leaf and raises RuntimeError('panel operand ... unavailable'). A design that only patches _load_leaf_cube (the S/D-mode path) and not this method will work for some trees and mysteriously crash on others depending purely on what else is in the expression. A SECOND, subtler risk if this branch is added without masking: an nd/cs operator (e.g. cs_rank, which DOES mix across all stocks on a day) would see an unmasked suspended-day value and could let it skew the ranks/reductions of OTHER stocks on that same day, even though that stock's own output cell later gets masked away — a cross-sectional leak, not merely a self-contained one."
+   },
+   {
+    "where": "src/alphacube/engine/engine.py:185-196,208-216 (_leaf_panel / bare-leaf-root path)",
+    "change": "Optionally add a branch for a bare new-leaf-as-root (factor := FloatCap with no wrapping operator).",
+    "risk": "Low priority — the task's own examples only use the new leaf as an operand. Skipping it leaves a bare-root use raising ValueError (whose current text, 'is not a daily value', already names the gap) rather than misbehaving silently, so it is safe to defer to a second pass."
+   },
+   {
+    "where": "src/alphacube/expression.py (new DailyFeature(Expression) class, parallel to Feature/Constant around lines 110-141)",
+    "change": "Implement _make_key() with a NEW key prefix (e.g. 'DF:{field}', distinct from Feature's 'F:{field}') and _infer_shape() returning either COLLAPSED or WIDE_DEGENERATE.",
+    "risk": "The Shape choice is not cosmetic: it directly decides whether _p_eligible routes a consumer into P-mode, and whether in_expand(FloatCap,...) is grammar-legal under strict=True via operand_ok's `spec.restores_m -> sh.collapsed` check. No existing leaf type is 'always degenerate, always literally width-1, never genuinely full-width' in quite the way a daily leaf is, so there is no copy-paste precedent to lean on here (flagged in open_questions)."
+   },
+   {
+    "where": "src/alphacube/store.py, new methods on CubeView (after tradable_d, ~line 447) backed by a new accessor on CubeStore/SegmentedCubeStore (near field()/read_cube(), lines 115-177 and 353-377)",
+    "change": "Mirror the existing tradable()/tradable_s()/tradable_d() pattern exactly: compute+cache the whole-view (S,D) array once, reuse the existing private _rows helper and self.d0 offsetting for lo:hi slicing — but back it with a small in-memory numpy array per daily field (tens of MB at production scale) rather than an mmap.",
+    "risk": "If instead someone tries to force daily fields through the EXISTING dtfield_<name>.npy / field() machinery by writing them as 'M=1' cubes into the SAME store directory, they will collide with build_cube_store's hard 'all cubes must share one (S,D,M) shape' check and CubeStore.field()'s per-field shape assertion — i.e. the current on-disk format structurally refuses a daily field unless it is its own separate store/format (consistent with the task's own 丙 section asking for a dedicated build script)."
+   },
+   {
+    "where": "src/alphacube/engine/engine.py:124-132 (_chunk_sizes)",
+    "change": "Optionally give daily-leaf bytes their own (non-M-scaled) term in the per_symbol/per_day cost model.",
+    "risk": "Low — skipping this only makes chunk-size estimation more conservative than necessary when daily leaves are involved (daily fields are tiny relative to the M-scaled minute cube terms already dominating the estimate); it is not a correctness bug either way."
+   },
+   {
+    "where": "src/alphacube/parser.py:133-143 (_Parser.name) plus a new field-name set parallel to catalog.CUBE_FIELDS (catalog.py:375)",
+    "change": "Recognize daily-field identifiers and emit the new DailyFeature node instead of raising ParseError / falling into Feature.",
+    "risk": "Outside the 5 files I was assigned to read in depth; flagged for whoever owns parsing. Until this exists, the new leaf type can only be built by constructing Expression trees programmatically (which matches the task's explicit 'GP/RL sampling is optional, syntax/parse/eval must work first' ordering, so this can legitimately come later)."
+   },
+   {
+    "where": "src/alphacube/expression.py:398-404 (is_valid_root)",
+    "change": "Extend the `any(isinstance(n, Feature) for n in expr.nodes())` check to also accept the new leaf type, if a tree whose only field-reference is a daily leaf should be a valid search-grammar root.",
+    "risk": "This gate is consulted by GP/RL tree generators, NOT by CubeEngine.evaluate() itself (evaluate() only checks shape.degenerate) — skipping it only blocks the SEARCH from proposing such a tree; direct/manual evaluation through the engine is unaffected, matching the task's 'GP/RL sampling is an optional second step.'"
+   },
+   {
+    "where": "src/alphacube/pipeline.py:257-260 and 368-379 (the two UniverseEngine/CubeEngine construction sites in run_mining)",
+    "change": "If the new daily-leaf data must be attached at CubeEngine-construction time (e.g. a new constructor kwarg), thread the same argument through BOTH sites.",
+    "risk": "GPMiner builds its own engine separately from the shared one; missing one site would silently give GP runs a different daily-field availability than non-GP runs, an easy asymmetry to miss since both code paths look superficially similar."
+   }
+  ],
+  "open_questions": [
+   "Should the new daily-leaf's Shape be COLLAPSED (collapsed=True, width=1, like a day_* result — grammar-legal straight into in_expand under strict=True) or WIDE_DEGENERATE (collapsed=False, degenerate=True, like Constant)? No existing leaf is 'always degenerate, always literally one real value per stock-day, never genuinely full-width' in quite this way, so there is no direct precedent to copy; this choice determines _p_eligible routing and in_expand legality.",
+   "Where should the raw (S,D) daily-field array actually live on disk: a brand-new lightweight sibling format (own directory/meta, loaded wholesale into RAM, as the task's own 丙 section anticipates), or some extension of CubeStore's existing meta schema? build_cube_store's 'one shared (S,D,M) shape' check and CubeStore.field()'s per-field shape assertion make the second option non-trivial as-is. I did not read any 甲-scope data-layer code (e.g. scripts/tearsheet.py::load_caps) to see whether a convention already half-exists there.",
+   "Do daily fields need their own incremental/segmented-append story (mirroring SegmentedCubeStore's base+incremental-segments join by date), or is a single flat file rebuilt wholesale acceptable? This depends on how the daily-field build script (丙) is meant to be re-run over time.",
+   "Should a bare DailyFeature be a valid factor ROOT on its own (needs both _leaf_panel and is_valid_root updated), or only ever usable as an operand inside a larger expression? The task's own examples (cs_bucket_rank(x, FloatCap), div(day_sum(Amt), FloatCap)) only show operand usage.",
+   "Given daily fields are tiny at production scale (~40 MB per field for 5219 symbols x 1942 days), is any day-major/stock-major on-disk layout choice (mirroring CubeStore's D-major-mirror optimization for minute cubes) actually warranted, or is a single in-memory array per field always sufficient? I believe the latter but have not seen the real target field count/size the design will settle on.",
+   "Does the mining-package panel cache (mining/gp.py, mining/env.py) or mining/rankban.py::view_cache_key need ANY change to work correctly once expressions can contain a new leaf type, or does it already work unmodified because it keys generically by expr.key()/a view fingerprint regardless of what kind of leaf an expression contains? I only located these by grep; I did not read them, since they are outside my assigned file set (engine/ + store.py CubeView).",
+   "In _run_cube_chunk's eviction loop (engine.py:345-348), why is a node specifically exempted from `values`-dict eviction when `c.is_root` is true? Every mechanism that actually consumes a root's value (panel_out commit, boundary memmap write) already runs unconditionally earlier in the same node's processing, independent of this cache. I could not establish the rationale with certainty from reading the code alone, so I am not asserting one.",
+   "Is there an existing convention anywhere in the codebase (outside my assigned files) for how a 'point-in-time, causal-by-construction, no-warm-up-needed' value should be documented/typed differently from a value that DOES need warm-up (like day_last(Close))? The task's own phrasing ('t 日收盘可知,因果') suggests this distinction matters for correctness documentation, but I found no existing type-system flag for it beyond Shape.degenerate."
+  ],
+  "summary": "Read src/alphacube/engine/{dag,engine,schedule,kernels}.py and store.py's CubeView end-to-end. Compilation pipeline: Dag dedups expressions purely by structural expr.key() (no view identity anywhere in it) into a children-before-parents topo order; schedule.assign_modes gives every non-leaf node a mode (P/S/D) via a 3-pass bottom-up/top-down propagation keyed off each operator's declared face+compute_axis (axes.py's table), then plan_rounds greedily batches same-mode ready nodes into Rounds and marks cross-round edges as either an in-memory (S,D) 'panel' hand-off (degenerate values) or an on-disk (S,D,M)/(D,S,M) memmap 'boundary' (full-width values). CubeEngine.evaluate() runs P-rounds once on whole tensors and S/D-rounds chunk-by-chunk (chunk size from chunk_symbols/chunk_days or a chunk_bytes/M-scaled byte budget), stitching collapsed results into disjoint slices of a persistent (S,D) array and boundary results into a lazily-created memmap, both purely sequential (no merge step needed). Leaf-type dispatch is extremely concentrated: exactly 4 call sites across 2 files (dag.py's is_leaf isinstance tuple; engine.py's _load_leaf_cube, _leaf_panel, and _run_panel_round.operand) decide how a leaf becomes a tensor, and kernels.py never inspects leaf type at all — so adding a new 'daily leaf' needs zero kernels.py changes but DOES need all 3 engine.py sites updated (the P-mode operand loader is the one most likely to be missed, since _p_eligible will route most realistic uses of a degenerate daily leaf straight into P-mode) plus careful masking at each (verified by tracing the code: panels already carry an invariant that every resident value is pre-masked on suspended stock-days, which a new leaf's read-path must independently uphold or risk a cross-sectional leak through nd/cs operators). Warm-up for cross_*/ts_* rolling is entirely a caller convention (research.warmed_view pads the view's d0 backward and returns a trim count; the engine itself has no warm-up concept — it just evaluates the NaN-padded early rows like any other day). UniverseEngine is a pure post-hoc NaN-mask decorator on EvalResult.panels and needs no changes. Device is a uniform .to(device,dtype) everywhere with no device-conditional code; 'silent OOM' is not a dedicated mechanism in the 5 assigned files at all — it is the generic tolerant=True except-Exception in _run_cube_chunk/_run_panel_round, with the actual GPU memory cap set externally in cli.py and relied upon explicitly by mining/gp.py and mining/env.py. Tests build real on-disk synthetic stores (synthetic.py -> store.build_cube_store) via session-scoped fixtures and pin correctness/chunk-invariance against manually-computed per-symbol/per-day references, plus a sweep over every registered operator. CubeStore's on-disk format structurally assumes one shared (S,D,M) shape per store and has mmap/madvise/D-major-mirror machinery that exists only because minute cubes are gigabytes — a (S,D) daily field is tiny by comparison (~40MB/field at production scale), so CubeView's existing tradable()-style whole-view-cached-then-sliced pattern (not the mmap machinery) is the right template to copy. Design-level choices (where daily-field data physically lives, what Shape a daily leaf declares, whether it can be a bare root) are left as open questions rather than guessed."
+ }
+}
