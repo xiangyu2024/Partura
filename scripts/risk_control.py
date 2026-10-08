@@ -473,7 +473,7 @@ def run(name):
     cnt = ok.sum(1)
     ew = np.where(cnt > 0, np.where(ok, tgt, 0.0).sum(1) / np.maximum(cnt, 1), np.nan)
     W0 = top_book(sm, k10)
-    live = W0.sum(1) > 0
+    live = (W0.sum(1) > 0) & np.isfinite(ew)                    # the two last days have no label yet
     res, series, makers = {}, {}, {}
 
     def book(W, e=None):
