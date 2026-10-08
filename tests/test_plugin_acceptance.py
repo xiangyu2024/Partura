@@ -3,7 +3,6 @@
     ALPHACUBE_ROOT=~/Desktop/AlphaCube-steering PYTHONPATH=~/Desktop/AlphaCube-steering/src:. \
         python -m pytest tests/test_plugin_acceptance.py -q
 """
-import copy
 import importlib.util
 import json
 import math
