@@ -1,8 +1,45 @@
 # 总领(协调者)的现状 —— B01 批次(15 条单因子)
 
-_最后更新:2026-10-06 14:10 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
+_最后更新:2026-10-07 18:40 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 01:05 PDT;最新,先读这段)—— 用户要合上 Mac,本机会睡眠;服务器上的队列自己跑
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 18:40 PDT;最新,先读这段)—— 无人值守的那条链全部跑完、结果已读;AlphaCube 改造待并入
+
+**服务器**:队列 07:50 PDT 全部收尾(`e7` 九次、`tl1`、`ext1`、`ext2`、`tl2`),现在没有我的进程、GPU 空闲。磁盘 `/root/autodl-tmp` 只剩 314 GB(90%):
+延长视窗上的成员面板约 113 GB(2596 个 × 44 MB)进了 `runs/_panels`,加上原有 139 GB。**还没清**(重算要 4 小时显卡);磁盘是多人共用的,要用大空间之前先清这一块。
+
+**已出的结论(全部提交 `81068b3` / `b535b59`,已推送)**
+1. **两层合成用到别的因子池 → `research/two_level/RESULT.md`**(`scripts/two_level_report.py` 生成;规则在 `PLAN.md`)。
+   - 加进 Partura 的信号没有让两层合成变好:C_LQ − 手写库冠军 测试段 +4.1 个点(t 1.5)/ 前推段 −4.6 / 合并段 +2.1(t 0.7)→ 没有延续;C_MQ − 挖掘冠军 +1.7 / −0.9 / +1.1(t 0.5)→ 没有延续;
+     C_LMQ − C_LM 测试段就是 −1.0,且 C_LMQ 没过核对、按规则不读前推段。
+   - 不含 Partura 的并集 C_LM 是同一个样子(测试段 +2.2 ~ +2.5,前推段 −2.4 ~ −2.7)→ 并池的测试段改善不算增益。入选的 100 族里搜出来的池子独占 42 ~ 71 族(选族按训练段适应度,偏向被筛选过的池子)。
+   - **两个现成冠军在 2026 年站住了**:纯多头净超额 / 超额夏普 手写库 +17.1% / 2.20 → **+16.9% / 1.99**,挖掘 +16.8% / 2.10 → **+16.6% / 1.49**;多空夏普 4.77 → 2.78、4.95 → 2.44。
+     2026 年至 09-16 全部收益 +5.8% / +5.6%,全市场等权 −5.4%。
+   - 「最好的」没有实质换人:合并段名义最高 C_LQ(多空 4.43、纯多头 +19.2%),对手写库冠军成对差 +2.1 个点(t 0.7);超额夏普最高仍是手写库冠军(2.16),2026 年单看它也最高。
+   - C_LMQ 没过核对的原因(`scripts/two_level_hl_diag.py`,只用到 2025 年底):核对时重选了半衰期,样本内 hl 5 / 10 几乎打平;固定半衰期时重建与存档只差 0.1 个点以内。
+     教训:核对要固定存档信号的半衰期;半衰期在样本内分不出、样本外能差 1 ~ 3 个点(指引 E12)。
+   - 图:`research/alpha_distillation/B01_best_longshort_all_to2026.svg`、`B01_best_long_total_all_to2026{,_mined,_CLQ}.svg`;榜单 `ALL_best_books.md` 末尾增补了 2026 年一节。
+     给用户看的 PNG 在 `~/Desktop/230P_hw2/partura_charts/`(headless Chrome 截的:`--headless=new --screenshot`,窗口 1000×540、缩放 2)。
+2. **e7 → `episodes/e7_SUMMARY.md`**(`scripts/e7_summary.py`):按事先的规则两套先验都判「有用」(质量产出 对照 11.1 / 学到的 25.5 / B01 16.7 每百次),
+   **但不能归因**:赢的两次里学到的先验只抽掉 4 / 254、6 / 253 个提议,好候选全是「日频价格水平的滚动自相关」一族的各种写法;按实测互不相关是 6 / 10 / 12,分不出。
+   唯一重复出来的效果:没过门槛的比例 30% → 22%。**没有据此改指引**:GP01 不并入 B01;D7 / D12 权重不动、只补注记。新规则 E11(主指标按实测互不相关计数、报触发率、≥ 8 个种子)。
+   要真回答:每格 8 个种子、约 24 次运行(两路 GPU 三四小时)—— 排在 AlphaCube 并入之后,走正式钩子,优先级低于换信息源。
+3. 指引新增 E11 / E12 / E13(并池的测试段改善不算增益;待检验的假设:选族的适应度留出训练期靠后一段只用来排序),`B01_reverse_guidance.md` 已重新生成。
+
+**AlphaCube 改造(`~/Desktop/AlphaCube-steering`,分支 `partura-steering`)**
+- 实现工作流 `wf_a9e46c78-369` 已全部完成:11 个工作包 + 三项整体验收 + 一次验收后的修复(`e4b258a`);943 passed / 10 skipped / 1 xfailed;Partura 侧 `~/Desktop/Partura-steering`(分支 `ac-plugin`,`1cc1379`)57 passed。
+- 整体验收的结论(在 `9aa7e2a` 上测的):不传新参数时所有数字、随机抽取、注册表逐字节相同;但默认路径上有三处**非数值**的差别 ——
+  (1) `run_mining` 每次多打一行 `daily fields: none attached`;(2) `meta.json` 多一个 `store_contract_hash` 键;(3) RL 那条路对永远匹配不上的封禁键由静默忽略变成报错。
+- **进行中**(18:15 起,Sonnet 子代理):修掉 (1)(2)、把 (3) 作为第四条故意的行为改变写进文档,并在最终提交上重跑逐字节比对
+  (`~/Desktop/Partura/tmp/impl/verify_defaults/`;`e4b258a` 动了 RL 各 miner、generator、pipeline,之后没人重新证明过默认路径)。
+- 之后由总领做(顺序):读子代理的结果 → `partura-steering` 快进并入 `tradable-backtest` 和 `main` 并推送(在 worktree 里做,不在共用目录 checkout main)→
+  确认服务器上没有别人的 AlphaCube 进程(18:38 看过:没有 python 进程、没有 screen)→ rsync `src/` 和 `scripts/build_daily_fields.py` →
+  建日频库(先 `--dry-run`;`--store /root/autodl-tmp/qmt_daily_data/fast_factor_compute --cap-dir /root/autodl-tmp/qmt_daily_data/daily_capital --out /root/autodl-tmp/AlphaCube/daily_fields`)→
+  并入 Partura 的 `ac-plugin`(`partura/steer.py`、`ops_ext.py`、`scripts/idea_search.py` 以 main 的行为为准)→ 走正式钩子的验收搜索 → 第五轮(流通市值 / 涨跌幅宽度等日频字段的假设)。
+- 服务器上的 AlphaCube 目录 `git` 报 dubious ownership(属主不是 root),**不要去改 git 配置**;同步一直是 rsync。
+
+**本机的辅助进程**:`wf_dump.py --loop 120` 还在(pid 34204);`caffeinate`、`recorder.py` 已不在,需要时重起。
+
+## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 01:05 PDT;已被上面那段更新)—— 用户要合上 Mac,本机会睡眠;服务器上的队列自己跑
 
 **合盖之后**:本机的一切都会停(这个会话、AlphaCube 实现工作流 `wf_a9e46c78-369`、`recorder` / `wf_dump`、所有后台等待)。服务器上的 screen 不受影响。
 开盖之后先做:(1) 看服务器队列跑到哪了(下表);(2) 实现工作流若没有自己接着跑,按 22:00 那段的命令 `resumeFromRunId` 续跑;(3) 重新起 `caffeinate`、`scripts/wf_dump.py --loop 120`。
