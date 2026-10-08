@@ -1,6 +1,6 @@
 """partura.steer on synthetic data: every reward kind runs and behaves; the matcher and the canonical form.
 
-    ALPHACUBE_ROOT=~/Desktop/AlphaCube PYTHONPATH=~/Desktop/AlphaCube/src:. python -m pytest tests/test_steer.py -q
+    ALPHACUBE_ROOT=~/Desktop/AlphaCube-steering PYTHONPATH=~/Desktop/AlphaCube-steering/src:. python -m pytest tests/test_steer.py -q
 """
 import numpy as np
 import pytest

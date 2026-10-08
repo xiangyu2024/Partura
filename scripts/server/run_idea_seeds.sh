@@ -8,7 +8,7 @@
 # Each run writes episodes/<prefix><seed>_<idea>/ and logs/_idea_<prefix><seed>_<idea>.log; a line per finished run goes to logs/_<prefix>.log.
 # WAIT_FOR=<screen name> makes it wait until that screen is gone before starting (to queue behind another launcher).
 cd /root/autodl-tmp/Partura
-export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 \
+export PYTHONPATH=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering}/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 \
        PARTURA_RANK_DEVICE=cuda PARTURA_REWARD_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2 PARTURA_MEM_WAIT_S=10800
 PY=/root/miniconda3/envs/quant/bin/python
 idea=$1; prefix=$2; seeds=$3; shift 3

@@ -20,10 +20,15 @@ PARTURA_ROOT = Path(__file__).resolve().parents[1]
 
 
 def alphacube_root() -> Path:
-    """`$ALPHACUBE_ROOT`, else the sibling directory of the Partura checkout."""
+    """`$ALPHACUBE_ROOT`, else the steering engine Partura is written against (vendored next to the code on the
+    server, a sibling worktree on the laptop), else the sibling AlphaCube checkout.
+
+    Since 2026-10-07 Partura needs AlphaCube's plugin loader, search hooks, scorer registry and daily fields
+    (branch ``partura-steering``); the plain checkout only has them once that branch is merged into it."""
     env = os.environ.get("ALPHACUBE_ROOT")
     cands = [Path(env)] if env else []
-    cands += [PARTURA_ROOT.parent / "AlphaCube", Path.home() / "Desktop" / "AlphaCube",
+    cands += [PARTURA_ROOT / "vendor" / "AlphaCube-steering", PARTURA_ROOT.parent / "AlphaCube-steering",
+              PARTURA_ROOT.parent / "AlphaCube", Path.home() / "Desktop" / "AlphaCube",
               Path("/root/autodl-tmp/AlphaCube")]
     for c in cands:
         if (c / "src" / "alphacube" / "__init__.py").is_file():

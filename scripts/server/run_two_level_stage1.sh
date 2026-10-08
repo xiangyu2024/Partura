@@ -2,7 +2,7 @@
 # Server side: stage 1 of research/two_level/PLAN.md -- the two-level method on pools that contain Partura's signals.
 # CPU only (every panel is cached).  Run `./scripts/study.sh code` on the Mac first.  Log: logs/_two_level_stage1.log
 cd /root/autodl-tmp/Partura
-export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 PARTURA_RANK_DEVICE=cpu PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2
+export PYTHONPATH=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering}/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 PARTURA_RANK_DEVICE=cpu PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2
 PY=/root/miniconda3/envs/quant/bin/python
 B=/root/autodl-tmp/AlphaCube/_bench
 L=logs/_two_level_stage1.log

@@ -1,7 +1,7 @@
 """Regression tests for the extension operators: every case below was a defect found by the independent audit
 (handoff/workflows/wf_b7c13476-92d) or by a lead reading a table, reproduced before it was fixed.
 
-    ALPHACUBE_ROOT=~/Desktop/AlphaCube PYTHONPATH=~/Desktop/AlphaCube/src:. python -m pytest tests/test_ops_ext.py -q
+    ALPHACUBE_ROOT=~/Desktop/AlphaCube-steering PYTHONPATH=~/Desktop/AlphaCube-steering/src:. python -m pytest tests/test_ops_ext.py -q
 """
 import numpy as np
 import pytest

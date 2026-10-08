@@ -9,7 +9,7 @@
 #         EXTRA=--holdout scripts/run_server.sh <config.yaml> S_final      # the ONE holdout read
 set -u
 cd /root/autodl-tmp/Partura
-export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:/root/autodl-tmp/Partura
+export PYTHONPATH=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering}/src:/root/autodl-tmp/Partura
 export ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export PARTURA_RANK_DEVICE=${PARTURA_RANK_DEVICE:-cuda}

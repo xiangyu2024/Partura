@@ -4,7 +4,7 @@
 #   WAIT_FOR="tl1 ext1"    screen -dmS ext2 scripts/server/run_extend_members.sh new
 # Waits until every screen named in WAIT_FOR is gone.  Log: logs/_extend_members_<set>.log.  `./scripts/study.sh code` first.
 cd /root/autodl-tmp/Partura
-export PYTHONPATH=/root/autodl-tmp/AlphaCube/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=/root/autodl-tmp/AlphaCube OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 \
+export PYTHONPATH=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering}/src:/root/autodl-tmp/Partura ALPHACUBE_ROOT=${PARTURA_AC:-/root/autodl-tmp/Partura/vendor/AlphaCube-steering} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 \
        PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=4 PARTURA_GPU_WAYS=2 PARTURA_MEM_WAIT_S=10800 \
        PARTURA_GPU_MAX_FRAC=0.85      # the card is ours once the searches are done: heavy hand-written members need more than the shared 45%
 PY=/root/miniconda3/envs/quant/bin/python

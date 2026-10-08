@@ -4,7 +4,7 @@
 # report -- not the alpha: a synthetic cube has no signal, so every IC here is noise.
 set -eu
 PY=${PY:-$HOME/.venvs/alphacube/bin/python}
-AC=${ALPHACUBE_ROOT:-$HOME/Desktop/AlphaCube}
+AC=${ALPHACUBE_ROOT:-$HOME/Desktop/AlphaCube-steering}
 WORK=${WORK:-/tmp/partura_smoke}
 CFG=${CFG:-configs/F001_dwgated_covamtlow.yaml}
 mkdir -p "$WORK"

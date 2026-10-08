@@ -557,8 +557,12 @@ def test_no_monkeypatch_remnants_anywhere_in_the_partura_tree():
               "FITNESS_" + "KINDS", "dataclasses" + ".replace")
     this_file = Path(__file__).resolve()
     hits = []
-    for path in sorted(PARTURA_ROOT.rglob("*.py")):
-        if "/.git/" in str(path) or path.resolve() == this_file:
+    # Partura's own code only: partura/, scripts/, tests/.  The main work tree also holds gitignored scratch (tmp/ has
+    # whole copies of AlphaCube's source from the reviews) and, on the server, the vendored engine (vendor/) -- neither
+    # is Partura code, and both legitimately contain these names.
+    own = [p for d in ("partura", "scripts", "tests") for p in (PARTURA_ROOT / d).rglob("*.py")]
+    for path in sorted(own):
+        if path.resolve() == this_file:
             continue
         text = path.read_text(encoding="utf-8")
         for needle in needles:
