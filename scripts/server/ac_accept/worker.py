@@ -248,6 +248,9 @@ def _scrub(line: str, out: Path) -> str:
     s = line.replace(str(out.resolve()), "<OUT>").replace(str(out), "<OUT>")
     s = re.sub(r"\d+(?:\.\d+)?s\b", "<T>s", s)
     s = re.sub(r"eta [^\s,)]+", "eta <T>", s)
+    # server copy: the progress line also prints the process's and the container's memory, which another tenant's job
+    # moves between two runs of the same code (seen: "cg 37/90G" against "cg 38/90G", every result file identical)
+    s = re.sub(r"mem rss \S+ cache \S+ exem \S+ fam \S+ cg \S+", "mem <M>", s)
     return s
 
 
