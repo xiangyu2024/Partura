@@ -178,3 +178,20 @@ README 实测小市值与换手率秩相关 +0.40(我的读法,见「需要实�
 - `lock: true` 除了 README 指定的六把尺子,我还加在了 42 条方向属于结构的假设上(见文首);批量扫描要认这个键,否则它们退回「按训练段定方向」(预期结果相同,但不再有保证)。
 - `a_board`、`a_young` 两把尺子的十分位书落在并列块里,由代码顺序决定(过不了 0.5 的区分度门槛);板块和上市天数的读数以 E 组的成对差为准。
 - 批量扫描默认 `--max 260`:自动变体约 60 个 + 本文件 185 条 = 245,再加别的 extra 文件会把排在后面的假设不报错地截掉。
+
+---
+
+## 补记(2026-10-07 21:00 PDT;总领修订读数规则之后,仍在任何回测之前。上面的正文没有动,只改了 `hypo.yaml`)
+
+- **两条实测(总领,生产库)**:「需要实测的」第 1、2 条已确认 —— 后复权收盘价吃掉现金分红(工商银行 2024-07-16 当天 −0.0513,茅台 2024-06-19 −0.0205);送转除权日股本和价格同一天变(比亚迪 2025-07-29)。净回报率 / 不分红 / 增发那十来条读的就是想读的量。3 日中位数照旧保留(它防的是两个字段错开更新,代价只是事件晚一天被认出)。
+- **`hypo.yaml` 现在 189 条**:A 8(撤掉 `a_young`、`a_board`)/ `x_` 载体 6 / B 40 / C 48 / D 39 / E 48;`check_hypo` 189 / 189。已有的表达式一条没改。`e_main_only`、`e_wide_only`、`e_xage1y` 升为尺子(id 和位置不变);正文里「与 a_young / a_board 对账」的地方以这三把尺子为准,正文「读数时请注意」各条已被 README 的修订吸收。
+- **带 `base` 的(修改型)74 条**:B 5、C 5(含孪生 2)、D 16(含孪生 1)、E 48(含孪生 7、尺子 3)。按载体:`k_known` 46、`a_known_in_size` 17、`k_known_xfrozen` 2、`x_sync` 2、`x_f107_low` 2、`b_sync_in_size` / `x_f105core_in_size` / `x_f110core_in_size` / `x_f114core_in_size` / `x_dturn30_low` 各 1。链都只有一步;文件里当载体的都锁了方向;父是修改型的孪生带同一个 base。
+  参加挑选的:B 独立 35 + 修改 5;C 独立 25 + 修改 3;D 独立 15 + 修改 15;E 独立 0 + 修改 38。
+- **拿不准而做了选择的**:
+  1. B 组四条带筛子的升级版(`b_f105_in_size`、`b_f110_in_size`、`b_f111_in_size`、`b_f114_in_size`)按「筛子是修改」处理,base 是不带筛子的档内核心。代价:F105 / F110 / F114 的档内核心是 `x_` 载体,不参加 B 组独立假设的排名(F111 的核心 `b_sync_in_size` 参加)。想让它们参加,把这三个 `x_` 前缀改成 `b_` 即可。
+  2. `d_oh_hard` 从「方向不锁的独立假设」改成修改型(base `a_known_in_size`,加 `lock`,why 重写):不改的话它的绝对夏普就是载体的夏普,会占 D 组独立假设的名额。
+  3. 权重为 1 的秩相加减和融合(`c_size_plus_dturn`、`c_size_plus_dturn2`、`c_f106_turn`、`b_known_rkdiff_size`、`b_fuse5_in_size`)算独立,和尺子 `a_size_plus_known` 同一类;市值 / 换手率中性化(`*_in_size`、`*_in_size_turn`、`b_f113_nested`)和换键 / 换窗口 / 换记忆的兄弟写法也算独立。
+  4. `e_known_in_age`(及孪生)、`e_known_board` 算已知族的修改(base `k_known`;后者加了 `lock`)。D 组的 `d_vol_board`、`d_turn_board` 是同一种板块去均值,但在 D 组里是自成一条的因子,算独立;它们的对照分别是 `d_vollim20_twin`、`c_logturn20`,被挑中时请一起读。
+  5. 叠在通用冻结筛子上的两条(`e_xjunk3_xfz`、`e_xmicro05_xfz`)base 取 `k_known_xfrozen`,不取 `e_xjunk3` / `e_xmicro05`(那样是两步链;why 问的也正是「冻结筛子之外还有没有」)。
+  6. `c_dturn_xfz` 的 base 用新加的 `x_dturn30_low`(取负、锁方向),不直接用 `c_dturn30`(它的方向按训练段定)。`b_sync_in_size` 因为当了 base,方向锁定为买高。
+- **押注不变**,按现行规则的身份:独立 —— `b_fuse3_in_size`、`b_fold_zs_sum_size`、`b_f113_in_size`、`c_f113_turnkey`、`c_turn20_max`、`c_size_plus_dturn2`、`d_netpay241_in_size`、`d_maxlim20`;修改型 —— `d_nonpay_pen`(对 `a_known_in_size`)、`e_xnonpay`、`e_xlimdn20`、`e_xpx2`(对 `k_known`)。

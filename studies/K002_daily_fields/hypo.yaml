@@ -1,13 +1,20 @@
-# K002_daily_fields —— 假设(主研,2026-10-07;写在算任何一个带日频叶子的因子之前,一次写完)
-# A 组 10 条是总领定的尺子(id 与表达式照抄 README)。B 拿掉市值之后还剩什么 / C 成交额换成换手率 / D 新信息 / E 已知族上的筛子。
+# K002_daily_fields —— 假设(主研,2026-10-07;第一版 185 条写在算任何一个带日频叶子的因子之前,原样在提交 61e374a)
+# 修订(2026-10-07 21:00 PDT,README「规则的修订」之后、仍在任何回测之前):撤掉 a_young / a_board 两把尺子;加 base 键;加 6 条 x_ 载体;
+#   已有的表达式一条没改(只改了若干 why,以及 b_sync_in_size / d_oh_hard / e_known_board 三条新加了 lock)。
+# A 组 8 条是总领定的尺子(id 与表达式照抄 README)。e_main_only / e_wide_only / e_xage1y 升为尺子(id 不变,留在 E 组原来的位置,不占 E 组名额)。
+# x_ 载体 / B 拿掉市值之后还剩什么 / C 成交额换成换手率 / D 新信息 / E 已知族上的筛子。
 # 约定:
+#   · base: <id> = 修改型假设:在这个载体的书上「改一点」—— 筛子与分段(cs_last_* / cs_first_*)、门槛标记、罚分 / 加分、只在某个板里买、
+#     以及把载体放进一个不改变它主体的分桶键或板块去均值(e_known_in_age、e_known_board)。它按「对载体的成对差」排名、去重、判读。base 只走一步。
+#     载体 = neg(cross_mean(day_std(Amt), 30)) 或它的排名 → base: k_known;通用冻结筛子之上再剔 → base: k_known_xfrozen。
+#   · 没有 base 的是独立假设(自成一条因子):市值 / 换手率中性化(_in_size、_in_size_turn)、换键 / 换窗口 / 换记忆的兄弟写法、等权的秩相加减和融合都算独立。
+#   · x_ 开头的是载体(kind: carrier):只为了给某条修改型假设当 base 才列出来,不参加挑选;方向锁定。
+#   · id 以 _twin 结尾的是孪生(同一结构、不用日频字段的写法),不参加挑选,父假设被读时一起读、报「父 − 孪生」。父是修改型的,孪生带同一个 base。
+#     孪生恰好是基准或尺子时(v_base、k_known_xfrozen、a_known_in_size、c_logturn20)不重复列出,在 why 里注明。
 #   · 方向由训练段的纯多头书机械地定;只有筛子(根是 cs_last_* / cs_first_*,方向锁 +1)、秩相加减、罚分里的取负是结构的一部分。
-#   · id 以 _twin 结尾的是孪生(同一结构、不用日频字段的写法),只用来做成对差,不该参加各组「样本内前 3」的排名。
-#     孪生恰好是基准或尺子时(v_base、k_known_xfrozen、a_known_in_size 等)不重复列出,在 why 里注明。
-#   · D 组的「罚分」类假设以 a_known_in_size 为载体(载体 ± 一个稀疏的日频事件量),成对基准是 a_known_in_size。
 #   · 门槛型筛子写成 sub(cs_rank(y), 0/1 标记):被标记的票排到所有其他票之下;根不是筛子算子,批量扫描自己的锁认不出它。
-#   · lock: true = 方向锁定为表达式写的方向(README 20:13 的补记)。A 组六条照 README;另外我给「方向是结构的一部分、但根不是 cs_last_* / cs_first_*」的
-#     假设也加了:门槛型筛子、只在某个板里买、载体上的罚分、方向固定的秩相加。总领若只想锁 A 组,删掉其余的键即可(预期训练段定出的方向相同)。
+#   · lock: true = 方向锁定为表达式写的方向(README 20:13 的补记)。A 组六条照 README;另外「方向是结构的一部分、但根不是 cs_last_* / cs_first_*」的
+#     假设也带:门槛型筛子、只在某个板里买、载体上的罚分、方向固定的秩相加、x_ 载体,以及当了 base 的 b_sync_in_size。
 #   · 没有预热(库从 2018-01-02 起),所以长窗口的变化量都写成「相对窗口低点 / 高点」或逐日累加,不用长滞后的 ts_delta;
 #     取窗口极值之前先做 3 日中位数(cross_med),单日的数据尖峰进不了极值;日轴长窗口一律用 cross_*(引擎按股票分块),不用 ts_*(整块面板)。
 #   · 常数:ln(10 亿) = 20.7233,ln(20 亿) = 21.4164,ln 2 = 0.6931,ln 1.05 = 0.0488,ln 1.02 = 0.0198;243 / 486 / 729 个交易日 ≈ 上市 1 / 2 / 3 年。
@@ -41,12 +48,36 @@ a_size_plus_known:
   expr: "add(cs_rank(neg(LogFloatCap)), cs_rank(neg(cross_mean(day_std(Amt), 30))))"
   why: "尺子:小市值排名与已知族排名等权相加。"
   lock: true
-a_young:
-  expr: "ListAge"
-  why: "尺子:上市天数,方向按训练段定。2018 年以前上市的票并列在哨兵值上,十分位书落进并列块时按代码顺序取,读数要对照 e_xyoung 系列。"
-a_board:
-  expr: "LimitWidth"
-  why: "尺子:涨跌幅宽度,方向按训练段定。只有 0.10 / 0.20 两个取值,十分位书在并列块里按代码顺序取;板块对比以 e_main_only / e_wide_only 的成对差为准。"
+x_f105core_in_size:
+  expr: "cs_bucket_rank(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), LogFloatCap)"
+  why: "载体(不参加挑选):F105 的核心(成交额方差长期水平的 5 日波动,取负)在市值档内的排名,不带冻结筛子;b_f105_in_size 的 base。方向锁定为买高(第四轮升级版里的取向)。"
+  kind: carrier
+  lock: true
+x_f110core_in_size:
+  expr: "cs_bucket_rank(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(div(day_last(Close), day_first(Open)), 1))), 30)), LogFloatCap)"
+  why: "载体(不参加挑选):F110 的核心(日内涨跌幅带符号平方的 30 日 EMA 取负:买近一个月日内大跌过的)在市值档内的排名,不剔次新;b_f110_in_size 的 base。方向锁定为买高。"
+  kind: carrier
+  lock: true
+x_f114core_in_size:
+  expr: "cs_bucket_rank(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), LogFloatCap)"
+  why: "载体(不参加挑选):F114 的核心(收盘那一分钟收益的 60 日下四分位,再 30 日 EMA,取负)在市值档内的排名,不带冻结筛子;b_f114_in_size 的 base。方向锁定为买高。"
+  kind: carrier
+  lock: true
+x_dturn30_low:
+  expr: "neg(cross_mean(day_std(div(Amt, FloatCap)), 30))"
+  why: "载体(不参加挑选):换手率写法的已知族取负(买分钟换手率离散度低的,方向锁定);c_dturn_xfz 的 base。与 c_dturn30 是同一个量 —— c_dturn30 自己的方向仍按训练段定,所以不能直接拿它当 base。"
+  kind: carrier
+  lock: true
+x_sync:
+  expr: "ts_pearson(day_last(Close), 20)"
+  why: "载体(不参加挑选):同步性(F111 的核心:20 日收盘价路径与其余股票路径的平均相关),全市场排序、不分段,方向锁定为买高;c_seg_sync_turn 及其孪生的 base。"
+  kind: carrier
+  lock: true
+x_f107_low:
+  expr: "neg(add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), cs_rank(cross_ema(abs_(cs_demean(day_gini(Low))), 30))))"
+  why: "载体(不参加挑选):F107 独立升级版取负(买日内波动和最低价基尼都接近市场典型值的,方向锁定),全市场排序、不分段;c_seg_fold_turn 及其孪生的 base。"
+  kind: carrier
+  lock: true
 b_known_in_tcap:
   expr: "cs_bucket_rank(cross_mean(day_std(Amt), 30), LogTotalCap)"
   why: "换键 流通市值 → 总市值:若档内残余是「可交易盘子」的流动性溢价(对手是为流动性付价的短线资金),按总市值分档会把锁仓多的票和全流通票混在一档,档内排名重新带上流通盘大小。预期买低、与 a_known_in_size 秩相关 > 0.9、净超额高 0~2 个点;若成对差为 0,流通比例在这里不起作用。"
@@ -76,7 +107,8 @@ b_known_in_size_max:
   why: "均值 → 最大值记忆(指引 U7):同市值里近 30 日最热闹的一天也不热闹的票,对手是追放量的短线资金,放量后的回落由他们承担。预期买低,净超额比均值版高 0~2 个点;若最差,该看的是水平而不是事件。"
 b_known_xfz_in_size:
   expr: "cs_last_high20(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), cross_max(day_zero_ratio(Ret), 15))"
-  why: "市值档内的已知族,再把近 15 日冻结盘口最重的两成排到最后(方向锁定):校准说超额 = 躲垃圾票 + 流动性倾斜,这里拿掉市值、留下躲垃圾票。预期比 a_known_in_size 高 2~4 个点、增益集中在 2018~2020(全市场口径下实测如此);若增益为 0,冻结筛子原来剔的就是极小市值。"
+  why: "市值档内的已知族,再把近 15 日冻结盘口最重的两成排到最后(方向锁定):校准说超额 = 躲垃圾票 + 流动性倾斜,这里拿掉市值、留下躲垃圾票。预期比 a_known_in_size 高 2~4 个点、增益集中在 2018~2020(全市场口径下实测如此);若增益为 0,冻结筛子原来剔的就是极小市值。修改型(base = a_known_in_size)。"
+  base: a_known_in_size
 b_frozen_in_size:
   expr: "cs_bucket_rank(cross_max(day_zero_ratio(Ret), 15), LogFloatCap)"
   why: "冻结度本身(近 15 日零收益分钟占比的最大值)放到同市值档内比,看「垃圾票」是不是独立于市值的状态。预期买低,净超额 +2~+5%、2021 年后衰减;若多头腿为负,同档里零收益分钟多只是清淡(与 a_known_in_size 是同一根轴的两头)。"
@@ -97,7 +129,8 @@ b_f103_in_size:
   why: "F103 独立升级版(收盘那一分钟的成交额 × 成交额下行波动的 DW)在市值档内;它与已知族相关 0.58,是成交额水平的另一种写法。预期买低,与 a_known_in_size 秩相关 > 0.7、净超额不高于它;若明显更高,收盘成交额里有档内信息。"
 b_f105_in_size:
   expr: "cs_last_high20(cs_bucket_rank(neg(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)), LogFloatCap), cross_max(day_zero_ratio(Ret), 15))"
-  why: "F105 独立升级版的核心(成交额方差长期水平的 5 日波动,取负)先在市值档内排名,再照原样剔冻结两成(方向锁定)。预期净超额 +3~+6%,其中一半来自筛子(对照 b_known_xfz_in_size);若不高于后者,核心在档内没有自己的内容。"
+  why: "F105 独立升级版的核心(成交额方差长期水平的 5 日波动,取负)先在市值档内排名,再照原样剔冻结两成(方向锁定)。修改型(base = x_f105core_in_size,不带筛子的档内核心):判的是筛子多出来的部分,预期 +1~+3 个点;整条的水平预期 +3~+6%,若不高于 b_known_xfz_in_size,核心在档内没有自己的内容。"
+  base: x_f105core_in_size
 b_f106_in_size:
   expr: "cs_bucket_rank(sub(cs_rank(neg(cross_mean(day_zero_ratio(Ret), 30))), cs_rank(cross_mean(day_sum(Amt), 30))), LogFloatCap)"
   why: "F106 独立升级版(零收益分钟少 减 成交额)在市值档内:第二项是流动性倾斜,分档后只剩档内换手率。预期买高,净超额 +2~+5%;若与 a_known_in_size 的成对差为 0,「不钉在一个价位上」在档内没有贡献。"
@@ -109,13 +142,16 @@ b_f107_in_size:
   why: "F107 独立升级版(日内波动与最低价基尼离全市场均值的距离,30 日 EMA)在市值档内;校准说这类典型性折叠是在躲垃圾票。预期买低,样本内净超额保住原来 +13.6% 的一半上下(+5~+8%);若跌到 +3% 以下,以全市场均值为中心的折叠偷带了市值(对照 b_fold_zs_sum_size)。"
 b_f110_in_size:
   expr: "cs_last_low20(cs_bucket_rank(neg(cross_ema(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(div(day_last(Close), day_first(Open)), 1))), 30)), LogFloatCap), cross_age(day_last(Close)))"
-  why: "F110 独立升级版的核心(日内涨跌幅带符号平方的 30 日 EMA 取负:买近一个月日内大跌过的)在市值档内排名,再照原样把上市最短的两成排到最后(方向锁定);对手是日内追涨杀跌的散户。预期净超额 +5~+8%;若降到 +2% 以下,日内反转的收益集中在小票里。"
+  why: "F110 独立升级版的核心(日内涨跌幅带符号平方的 30 日 EMA 取负:买近一个月日内大跌过的)在市值档内排名,再照原样把上市最短的两成排到最后(方向锁定);对手是日内追涨杀跌的散户。修改型(base = x_f110core_in_size):判的是剔次新在档内核心上多出来的部分,预期 0~+1 个点;整条的水平预期 +5~+8%,若降到 +2% 以下,日内反转的收益集中在小票里。"
+  base: x_f110core_in_size
 b_f111_in_size:
   expr: "cs_last_high20(cs_bucket_rank(ts_pearson(day_last(Close), 20), LogFloatCap), cross_max(day_zero_ratio(Ret), 15))"
-  why: "F111 独立升级版的核心在市值档内排名,再剔冻结两成(方向锁定);按内核定义 ts_pearson(x, 20) 是这只股票 20 日收盘价路径与其余股票路径的平均相关(同步性),不是与时间的相关。预期净超额 +5~+8%(校准:成交额桶内夏普 +0.56 / +0.94);若 < +2%,走势随大流只是大票的属性。"
+  why: "F111 独立升级版的核心在市值档内排名,再剔冻结两成(方向锁定);按内核定义 ts_pearson(x, 20) 是这只股票 20 日收盘价路径与其余股票路径的平均相关(同步性),不是与时间的相关。修改型(base = b_sync_in_size):判的是冻结筛子在档内同步性上多出来的部分,预期 +1~+3 个点、集中在 2018~2020;若为 0,同步性低的票已经包含了冻结盘口的票。整条的水平预期 +5~+8%(校准:成交额桶内夏普 +0.56 / +0.94)。"
+  base: b_sync_in_size
 b_sync_in_size:
   expr: "cs_bucket_rank(ts_pearson(day_last(Close), 20), LogFloatCap)"
-  why: "上一条去掉冻结筛子:同步性在市值档内的排序;没有个股事件的票走势随大流,对手是追个股题材的资金。预期买高,净超额比上一条低 1~3 个点;若两条一样,同步性低的票已经包含了冻结盘口的票。"
+  why: "同步性(F111 的核心)在市值档内的排序,不带冻结筛子;没有个股事件的票走势随大流,对手是追个股题材的资金。预期买高,净超额 +3~+6%;若 < +1%,走势随大流只是大票的属性。它同时是 b_f111_in_size 的 base,所以方向锁定为买高(第四轮 F111 的方向)。"
+  lock: true
 b_f112_in_size:
   expr: "cs_bucket_rank(ts_scale(signedpower(cs_rank(add(day_quantile(Close), day_kurt(High)))), 50), LogFloatCap)"
   why: "F112 独立升级版(后复权价格的截面位次相对自己 50 日的占比:近 50 日名次掉下来的)在市值档内;名次下降和「跌成了小票」是连着的。预期买低,净超额 +3~+6%;若为 0,原来买的是市值名次的下降。"
@@ -127,7 +163,8 @@ b_f113_nested:
   why: "F113 升级版原样(减同成交额档均值)再放到市值档内排名:成交额和市值都近似拿掉,是 b_f113_in_size 的下界。预期买低,净超额 +3~+6%;若两条相差 3 个点以上,差的那部分是档内换手率。"
 b_f114_in_size:
   expr: "cs_last_high20(cs_bucket_rank(neg(cross_ema(cross_quantile_q25(day_close(Ret), 60), 30)), LogFloatCap), cross_max(day_zero_ratio(Ret), 15))"
-  why: "F114 独立升级版的核心(收盘那一分钟收益的 60 日下四分位,再 30 日 EMA,取负)在市值档内排名,再剔冻结两成(方向锁定);它与已知族相关只有 0.04。预期净超额 +4~+7%、拿掉市值几乎不变;若掉一半以上,尾盘被砸的票只是小票。"
+  why: "F114 独立升级版的核心(收盘那一分钟收益的 60 日下四分位,再 30 日 EMA,取负)在市值档内排名,再剔冻结两成(方向锁定);它与已知族相关只有 0.04。修改型(base = x_f114core_in_size):判的是筛子多出来的部分,预期 +1~+3 个点;整条的水平预期 +4~+7%、拿掉市值几乎不变,若掉一半以上,尾盘被砸的票只是小票。"
+  base: x_f114core_in_size
 b_f115_in_size:
   expr: "cs_bucket_rank(cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 31, 211), 5), day_argmax(in_local_mean(in_slice(Volume, 31, 211), 5)))))), sub(day_argmin(in_slice_to_end(in_slice(Amt, 31, 211), day_argmax(in_slice(Amt, 31, 211)))), day_argmin(in_slice_from_start(in_slice(Amt, 31, 211), day_argmax(in_slice(Amt, 31, 211)))))), 20), LogFloatCap)"
   why: "F115 独立升级版(潮汐:放量峰前后两个成交谷底之间的价格变化速度)在市值档内;它本来就是最弱的一条(样本内 +6.9%)。预期买低,净超额 +2~+4%;若为 0,这条不再跟。"
@@ -171,6 +208,7 @@ b_fuse5_in_size:
   lock: true
 c_dturn30:
   expr: "cross_mean(day_std(div(Amt, FloatCap)), 30)"
+  twin: k_known
   why: "已知族整条换成换手率写法:分钟换手率(成交额 ÷ 流通市值)的日内离散度,30 日均值;孪生就是已知族本身(v_base),不另列。它把 log 市值那一项减掉,预期买低、样本内净超额只剩 +3~+7%(已知族 +15.4%)、与 a_size 的秩相关降到 0 附近;若仍在 +12% 以上,已知族的超额不是市值。"
 c_dturn10:
   expr: "cross_mean(day_std(div(Amt, FloatCap)), 10)"
@@ -198,9 +236,11 @@ c_dturn30_max_twin:
   why: "孪生:成交额写法的最大值记忆。"
 c_dturn30_tcap:
   expr: "cross_mean(day_std(div(Amt, TotalCap)), 30)"
+  twin: k_known
   why: "换分母 流通市值 → 总市值:成交额 ÷ 总市值 = 换手率 × 流通比例,锁仓多的票被读成更清淡。预期买低、与 c_dturn30 秩相关 > 0.9;若它明显更好,多出来的是「流通比例低」本身,这与 D 组的悬置盘假设方向相反,要对账。"
 c_dvolsh30:
   expr: "cross_mean(day_std(div(Volume, FloatShares)), 30)"
+  twin: k_known
   why: "换分母 成交量 ÷ 流通股本(按股数的换手率):若 Volume 是未复权的实际股数,它与 c_dturn30 只差分钟均价与收盘价之比,秩相关应 > 0.98。预期买低;秩相关明显偏低说明 Volume 复权过或单位不一致(需要实测),那样这条作废。"
 c_turn20_med:
   expr: "cross_med(div(day_sum(Amt), FloatCap), 20)"
@@ -231,6 +271,7 @@ c_turn_in_size_twin:
   why: "孪生:同市值档内的 20 日成交额。"
 c_dturn_in_size:
   expr: "cs_bucket_rank(cross_mean(day_std(div(Amt, FloatCap)), 30), LogFloatCap)"
+  twin: a_known_in_size
   why: "换手率写法的已知族放到市值档内,孪生是尺子 a_known_in_size(不另列)。预期两者秩相关 > 0.95、读数相同 —— 这是本组的零假设对照;若这一对都有显著成对差,成对检验的噪声带估小了。"
 c_abturn:
   expr: "div(cross_mean(div(day_sum(Amt), FloatCap), 20), cross_mean(div(day_sum(Amt), FloatCap), 241))"
@@ -294,7 +335,9 @@ c_f113_turnkey_twin:
   why: "孪生:F113 独立升级版原式(样本内 +11.2%)。"
 c_dturn_xfz:
   expr: "cs_last_high20(neg(cross_mean(day_std(div(Amt, FloatCap)), 30)), cross_max(day_zero_ratio(Ret), 15))"
-  why: "通用冻结筛子套在换手率写法上(方向锁定;孪生是基准 k_known_xfrozen,不另列):换手率写法的书不再集中在最小的票里,冻结盘口的票占比应更低。预期筛子的增益从 +3.1 个点降到 +1~+2;若增益更大,垃圾票藏在低换手率里而不是小市值里。"
+  twin: k_known_xfrozen
+  why: "通用冻结筛子套在换手率写法上(方向锁定;孪生是基准 k_known_xfrozen,不另列):换手率写法的书不再集中在最小的票里,冻结盘口的票占比应更低。预期筛子的增益从 +3.1 个点降到 +1~+2;若增益更大,垃圾票藏在低换手率里而不是小市值里。修改型(base = x_dturn30_low)。"
+  base: x_dturn30_low
 c_size_plus_dturn:
   expr: "add(cs_rank(neg(LogFloatCap)), cs_rank(neg(cross_mean(day_std(div(Amt, FloatCap)), 30))))"
   why: "把已知族按分解重新拼出来:小市值排名 + 低换手率离散度排名,等权(尺子 a_size_plus_known 是在已知族上再加一份市值)。预期买高,与已知族秩相关 > 0.9、净超额 +14~+18%;若比已知族高 3 个点以上,已知族里两项的隐含权重不是最优的。"
@@ -305,16 +348,20 @@ c_size_plus_dturn2:
   lock: true
 c_seg_sync_turn:
   expr: "cs_first_low40(ts_pearson(day_last(Close), 20), cross_mean(div(day_sum(Amt), FloatCap), 20))"
-  why: "只在换手率最低的四成里按同步性(F111 的核心)选(方向锁定):指引 R2 里「只在低成交额四成里选」套在任何因子上都 +1.2 夏普,成交额低 = 小 × 清淡,这里只留清淡。预期净超额 +4~+8%、远低于孪生;若接近孪生,R2 的增益是换手率而不是市值。"
+  why: "只在换手率最低的四成里按同步性(F111 的核心)选(方向锁定):指引 R2 里「只在低成交额四成里选」套在任何因子上都 +1.2 夏普,成交额低 = 小 × 清淡,这里只留清淡。预期净超额 +4~+8%、远低于孪生;若接近孪生,R2 的增益是换手率而不是市值。修改型(base = x_sync,不分段的同步性)。"
+  base: x_sync
 c_seg_sync_turn_twin:
   expr: "cs_first_low40(ts_pearson(day_last(Close), 20), cross_mean(day_sum(Amt), 30))"
   why: "孪生:原来的写法(成交额最低四成里按同步性选)。"
+  base: x_sync
 c_seg_fold_turn:
   expr: "cs_first_low40(neg(add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), cs_rank(cross_ema(abs_(cs_demean(day_gini(Low))), 30)))), cross_mean(div(day_sum(Amt), FloatCap), 20))"
-  why: "同上,因子换成 F107 的典型性折叠(取负:买典型的)。预期净超额 +5~+9%;若它与孪生的差明显小于 c_seg_sync_turn 那一对,折叠自己已经带着市值。"
+  why: "同上,因子换成 F107 的典型性折叠(取负:买典型的)。预期净超额 +5~+9%;若它与孪生的差明显小于 c_seg_sync_turn 那一对,折叠自己已经带着市值。修改型(base = x_f107_low)。"
+  base: x_f107_low
 c_seg_fold_turn_twin:
   expr: "cs_first_low40(neg(add(cs_rank(cross_ema(abs_(cs_demean(day_std(Ret))), 30)), cs_rank(cross_ema(abs_(cs_demean(day_gini(Low))), 30)))), cross_mean(day_sum(Amt), 30))"
   why: "孪生:成交额最低四成里按典型性折叠选。"
+  base: x_f107_low
 d_netpay241:
   expr: "cross_sum(sub(ts_delta(log(day_last(Close)), 1), ts_delta(LogTotalCap, 1)), 241)"
   why: "净回报率(新信息,分钟行情看不到除权):后复权收盘价的对数涨幅减总市值的对数涨幅,逐日累加 241 日 = 现金分红率 − 净增发(送转在两边约掉;缺失日记 0,那天没有事件)。分红且不摊薄的公司有真实现金流,对手是给增发接盘、追题材的资金;预期买高但书偏大票,样本内净超额 −2~+3%,若负方向两段都站得住则 A 股奖励的是融资扩张。2018 年 6 月前窗口内没有除权日,读数是噪声。"
@@ -330,65 +377,82 @@ d_fnetpay241_in_size:
 d_issue_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), cross_min(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 241)), 2))"
   why: "增发的罚分:载体 a_known_in_size 减 2 ×「总股本(除送转)比近 241 日低点多了多少」;定增 / 配股之后长期跑输是文献里有的,对手是锁定期满后卖出的定增参与方。事件稀疏所以只当罚分,预期比载体高 0.3~1 个点;若为负,A 股的增发在样本内是题材利好。"
+  base: a_known_in_size
   lock: true
 d_nonpay_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(is_lt(sub(cross_max(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 300), cross_med(sub(LogTotalCap, log(day_last(Close))), 3)), 0.001), 1.0))"
   why: "不分红的排到最后(载体同上):近 300 日「总市值 ÷ 后复权价」没有出现过 0.1% 以上的回落 = 一年多没有现金分红;亏损或未分配利润为负的公司不能分红,所以它是没有财务数据时的盈利代理。预期比载体高 1~3 个点、集中在最小三档;若为 0 或负,垃圾票的定义里不需要「不分红」。2018 年 7 月前标记不可靠。"
+  base: a_known_in_size
   lock: true
 d_oh_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(LogTotalCap, LogFloatCap), 0.5))"
-  why: "悬置盘的罚分:载体 a_known_in_size 减 0.5 × log(总市值 ÷ 流通市值);未流通的部分是将来的供给(首发原股东、定增锁定),全流通的票罚分为 0、不受并列影响。预期比载体高 0.3~1 个点;若为负,流通比例低的票(次新、A+H)样本内反而好,与 a_young 对账。"
+  why: "悬置盘的罚分:载体 a_known_in_size 减 0.5 × log(总市值 ÷ 流通市值);未流通的部分是将来的供给(首发原股东、定增锁定),全流通的票罚分为 0、不受并列影响。预期比载体高 0.3~1 个点;若为负,流通比例低的票(次新、A+H)样本内反而好,与 e_xage1y(上市不足一年的筛子)对账。"
+  base: a_known_in_size
   lock: true
 d_oh_hard:
   expr: "sub(mul(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), 0.001), sub(LogTotalCap, LogFloatCap))"
-  why: "悬置盘当主键、载体只用来打破并列(流通比例恰为 1 的票并列,直接排名会按代码顺序切):正方向的书 = 全流通票里载体最好的,负方向的书 = 流通比例最低的。预期方向为正、净超额接近载体;若训练段选了负方向,多头腿是次新 / 低流通比例,它应过不了 valid。"
+  why: "悬置盘的硬筛子:只在全流通(流通比例 = 1)的票里按载体 a_known_in_size 选,有悬置的按规模依次排到后面(载体乘 0.001 只用来给并列的全流通票排序,不对并列的量取秩);与 d_oh_pen 是「剔」和「只罚」之别。预期比载体高 0~1 个点;若明显低于 d_oh_pen,一刀切把只有小额悬置的好票也剔掉了。第一版方向不锁;改成修改型之后方向锁定。"
+  base: a_known_in_size
+  lock: true
 d_oh_young_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(mul(sub(LogTotalCap, LogFloatCap), is_lt(ListAge, 729)), 0.5))"
   why: "只罚上市三年内的悬置盘(首发限售:一年期和三年期解禁日是确定的,规模大)。预期比 d_oh_pen 有效(对载体 +0.5~+1.5 个点);若两条一样,起作用的不是首发限售。"
+  base: a_known_in_size
   lock: true
 d_oh_old_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(mul(sub(LogTotalCap, LogFloatCap), is_gt(ListAge, 729)), 0.5))"
   why: "只罚上市三年以上的悬置盘(定增锁定、A+H 的非 A 股部分、未流通的国有股)。预期接近 0;若比 d_oh_young_pen 更有效,悬置盘效应是股权结构而不是解禁预期。"
+  base: a_known_in_size
   lock: true
 d_unl20_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 20)), 2))"
   why: "窗口本身是问题:解禁后的抛压持续多久;20 日 = 只罚刚解禁的(量法见 d_unl60_pen)。预期弱于 120 日版(减持有比例和节奏限制);若 20 日最好,效应是解禁日前后的一次性冲击。"
+  base: a_known_in_size
   lock: true
 d_unl60_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 60)), 2))"
   why: "解禁的罚分:流通比例(log,先取 3 日中位数挡掉单日数据尖峰)比近 60 日低点高出多少 = 这段时间解禁了多少,送转和股价都不影响它(用窗口低点而不是 60 日差分,跨停牌和样本起点都有值)。减持规则把解禁股的卖出摊到几个季度,卖方与价格无关;预期比载体高 0.3~1 个点,若为负则解禁是利空出尽。"
+  base: a_known_in_size
   lock: true
 d_unl120_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 120)), 2))"
   why: "同上,120 日。预期是四个窗口里最好的;若不如 20 日,见 d_unl20_pen。"
+  base: a_known_in_size
   lock: true
 d_unl241_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 241)), 2))"
   why: "同上,241 日(一年内解禁过)。预期与 120 日接近;若明显更差,抛压在半年内结束。"
+  base: a_known_in_size
   lock: true
 d_fexp120_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(sub(LogFloatCap, log(day_last(Close))), 3), cross_min(cross_med(sub(LogFloatCap, log(day_last(Close))), 3), 120)), 2))"
   why: "换量法:流通市值 ÷ 后复权价(= 除送转之后的流通股本)比近 120 日低点高出多少,比流通比例口径多认出配股、转债转股这类流通股和总股本一起增加的扩张。预期与 d_unl120_pen 秩相关 > 0.9;若它更好,转股 / 配股也在起作用。"
+  base: a_known_in_size
   lock: true
 d_shup120_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(sub(cross_med(LogFloatShares, 3), cross_min(cross_med(LogFloatShares, 3), 120)), 2))"
   why: "换量法:直接用流通股本(含送转),10 送 10 会被读成流通盘翻倍。预期比 d_fexp120_pen 差(送转不增加供给);若更好,高送转之后的贴权也在里面。"
+  base: a_known_in_size
   lock: true
 d_conv60_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(cross_mean(mul(is_gt0(ts_delta(LogFloatShares, 1)), 1.0), 60), 2))"
   why: "持续小额增股:近 60 日里流通股本有增加的天数占比;几乎每天都增一点的是可转债在转股(转股的人当天卖出)或激励行权,是持续的小卖压。预期比载体高 0~0.5 个点、只影响百分之几的票;若为 0,这条信息太稀。"
+  base: a_known_in_size
   lock: true
 d_young2y_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(is_lt(ListAge, 486), 1.0))"
-  why: "上市不足两年(486 个交易日)的排到最后,载体 a_known_in_size:市值拿掉之后次新还该不该躲 —— 同档里次新换手高、面对两轮解禁。预期比载体高 0~1 个点;若为负,样本内(注册制初期)次新是赢家,与 a_young 的方向对账。"
+  why: "上市不足两年(486 个交易日)的排到最后,载体 a_known_in_size:市值拿掉之后次新还该不该躲 —— 同档里次新换手高、面对两轮解禁。预期比载体高 0~1 个点;若为负,样本内(注册制初期)次新是赢家,与 e_xage1y 的读数对账。"
+  base: a_known_in_size
   lock: true
 d_limdn20_pen:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(is_lt(cross_min(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth), 20), -0.95), 1.0))"
   why: "近 20 日收过跌停(日跌幅 ≥ 本板限幅的 95%)的排到最后,载体 a_known_in_size:跌停封死的票成交额极低、会被当成清淡,连续跌停的是出事的公司。预期比载体高 0.5~1.5 个点;若为负,跌停后的反弹更大。ST 的 5% 跌停认不出。"
+  base: a_known_in_size
   lock: true
 d_limdn20_pen_twin:
   expr: "sub(cs_bucket_rank(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), mul(is_lt(cross_min(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20), -0.095), 1.0))"
   why: "孪生:固定 −9.5% 门槛,在 20% 板上把普通大跌也算进去。"
+  base: a_known_in_size
   lock: true
 d_px:
   expr: "sub(LogFloatCap, LogFloatShares)"
@@ -431,15 +495,17 @@ d_vollim20_twin:
   why: "孪生:不归一的 20 日波动率。"
 d_vol_board:
   expr: "cs_regres(cross_stddev(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20), LimitWidth)"
+  twin: d_vollim20_twin
   why: "另一种板块中性:波动率减本板(10% / 20%)的截面均值 —— 键只有两个取值时,回归残差恰好是组内去均值。预期买低,净超额介于 d_vollim20 与其孪生之间;若三条读数一样,板块在波动率因子里不重要。"
 d_amplim20:
   expr: "cross_mean(div(sub(div(day_max(High), day_min(Low)), 1), LimitWidth), 20)"
-  why: "日内振幅 ÷ 涨跌幅宽度的 20 日均值:振幅大 = 日内博弈激烈、散户参与多。预期买低,净超额 +3~+6%;若孪生(不归一)更好,20% 板的大振幅本身该躲(与 a_board 对账)。"
+  why: "日内振幅 ÷ 涨跌幅宽度的 20 日均值:振幅大 = 日内博弈激烈、散户参与多。预期买低,净超额 +3~+6%;若孪生(不归一)更好,20% 板的大振幅本身该躲(与 e_main_only / e_wide_only 对账)。"
 d_amplim20_twin:
   expr: "cross_mean(sub(div(day_max(High), day_min(Low)), 1), 20)"
   why: "孪生:不归一的日内振幅。"
 d_turn_board:
   expr: "cs_regres(cross_mean(log(div(day_sum(Amt), FloatCap)), 20), LimitWidth)"
+  twin: c_logturn20
   why: "换手率的板块中性:log 换手率的 20 日均值减本板均值(孪生是 c_logturn20,不另列);若 20% 板的票换手率普遍更高(预期如此,未实测),全市场的低换手排序会把它们整体排除。预期买低,净超额与 c_logturn20 相差 ±2 个点;差 4 个点以上说明低换手的多头腿里有一块是少持 20% 板。"
 d_smb_in_size:
   expr: "cs_bucket_rank(sub(cross_mean(mul(sub(cs_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), div(cs_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), FloatCap)), cs_sum(add(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 0), FloatCap)))), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 60), mul(cross_mean(sub(cs_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), div(cs_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), FloatCap)), cs_sum(add(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 0), FloatCap)))), 60), cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60))), LogFloatCap)"
@@ -450,167 +516,216 @@ d_smb_in_size_twin:
 e_xmicro05:
   expr: "cs_last_low05(neg(cross_mean(day_std(Amt), 30)), LogFloatCap)"
   why: "已知族,把流通市值最小的 5% 排到最后(方向锁定):这一撮是壳和退市候选的集中地,容量也最小。样本内小票是大年,预期净超额比已知族低 0~2 个点、最大回撤更浅;若净超额不降反升,已知族的超额不在最小的票里。"
+  base: k_known
 e_xmicro10:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), LogFloatCap)"
   why: "同上,剔最小 10%:已知族与小市值秩相关 +0.60,多头书预期集中在最小几档(占比需要实测)。预期净超额比已知族低 1~3 个点、与 a_size 的秩相关下降;若比 e_xmicro05 的回撤没有更浅,该躲的只是最小的一撮。"
+  base: k_known
 e_xmicro10_twin:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), cross_mean(day_sum(Amt), 30))"
   why: "孪生:没有市值时只能剔 30 日成交额最低的 10% —— 那是已知族自己最想买的票(指引 E3)。预期净超额比已知族低 5 个点以上;与 e_xmicro10 的成对差 = 把「小」和「清淡」分开之后的差别。"
+  base: k_known
 e_xmicro20:
   expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), LogFloatCap)"
   why: "同上,剔最小两成(K001 的经验:垃圾尾巴约占两成)。预期净超额比已知族低 3~6 个点;若不降,已知族「就是市值」的说法不成立。"
+  base: k_known
 e_xmicro10_tcap:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), LogTotalCap)"
   why: "换键 总市值最小的 10%(壳价值和市值退市看的是总市值)。预期与 e_xmicro10 的书重合九成、读数相同;若它更好,该躲的是「公司小」而不是「流通盘小」。"
+  base: k_known
 e_xcap10y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(LogFloatCap, 20.7233), 1.0))"
   why: "绝对门槛:流通市值低于 10 亿元(ln = 20.72)的排到最后;壳价值和退市线是绝对金额,分位数筛子在熊市底部和牛市顶部剔的是完全不同的票。预期熊市年份剔得多、牛市几乎不剔,净超额比已知族低 0~2 个点;若优于剔除量相近的 e_xmicro05,绝对金额才是对的尺度。"
+  base: k_known
   lock: true
 e_xcap20y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(LogFloatCap, 21.4164), 1.0))"
   why: "同上,门槛 20 亿元(ln = 21.42)。预期净超额比已知族低 2~5 个点;若不降,见 e_xmicro20。"
+  base: k_known
   lock: true
 e_xpenny05:
   expr: "cs_last_low05(neg(cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogFloatShares))"
   why: "已知族,把名义股价最低的 5% 排到最后(方向锁定):清淡的低价小票 = 面值退市候选和长期亏损的老公司,成交额低所以排在已知族前面。预期比已知族高 0.5~1.5 个点、且增益在 2021 年以后不消失;若为负,低价股的彩票溢价还在。"
+  base: k_known
 e_xpenny10:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogFloatShares))"
   why: "同上,剔最低 10%。预期增益不比 5% 大(该剔的是离面值近的一小撮);若更大,低价本身(不只是退市风险)就该躲。"
+  base: k_known
 e_xpenny10_twin:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), log(day_last(Close)))"
   why: "孪生:用后复权收盘价的水平当「低价」,它剔掉的是另一批票(历史上送转少的)。预期增益为 0。"
+  base: k_known
 e_xpx2:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(sub(LogFloatCap, LogFloatShares), 0.6931), 1.0))"
   why: "绝对门槛:名义股价低于 2 元(ln 2 = 0.693)的排到最后;面值退市线是 1 元连续 20 日,2 元以下离它只有几个跌停,这是规则决定的门槛。预期被剔的占 2%~5%(熊市更多)、比已知族高 0.3~1 个点;若为 0,已知族的书里本来就没有这些票。"
+  base: k_known
   lock: true
 e_xyoung05:
   expr: "cs_last_low05(neg(cross_mean(day_std(Amt), 30)), ListAge)"
   why: "已知族,把上市最短的 5% 排到最后(方向锁定;2018 年以前上市的并列在哨兵值、不会被剔):次新换手高、估值高、面对解禁,对手是炒新的资金。它们成交活跃、预期本来就很少进已知族的书,所以只比已知族高 0~1 个点;若为负,样本内次新是赢家。"
+  base: k_known
 e_xyoung10:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), ListAge)"
   why: "同上,10%。预期与 5% 接近;若 10% 明显更好,该躲的不只是上市一年内的。"
+  base: k_known
 e_xyoung10_twin:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), cross_age(day_last(Close)))"
   why: "孪生:cross_age 写法(同 K001 的 s_age10);它把数据起点 2018-01-02 当天停牌、之后复牌的老股票也算成新股。"
+  base: k_known
 e_xyoung20:
   expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), ListAge)"
   why: "同上,两成。预期增益不随带宽增加;若增加,被剔的已经不是次新而是 2018 年以后上市的整个群体。"
+  base: k_known
 e_xyoung20_twin:
   expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), cross_age(day_last(Close)))"
   why: "孪生:同 K001 的 s_age20(K001 样本内比已知族高 2.3 个点);若它与 ListAge 版的成对差集中在 2018~2019,那笔增益来自躲开复牌补跌的票而不是次新。"
+  base: k_known
 e_xage1y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(ListAge, 243), 1.0))"
-  why: "绝对门槛:上市不足 243 个交易日(一年期首发限售解禁之前);分位数版在 IPO 少的年份会把上市两三年的也剔掉。预期与 e_xyoung05 接近;若绝对门槛更好,该躲的是「解禁前」这个阶段。"
+  why: "尺子(修订后总是读,不占 E 组名额;替代 a_young):上市不足 243 个交易日(一年期首发限售解禁之前)的排到最后;分位数版在 IPO 少的年份会把上市两三年的也剔掉。预期与 e_xyoung05 接近;若绝对门槛更好,该躲的是「解禁前」这个阶段。"
+  base: k_known
   lock: true
 e_xpre1y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(abs_(sub(ListAge, 223)), 21), 1.0))"
   why: "上市第 203~243 个交易日(一年期解禁前两个月)的排到最后:首发原股东的限售股在上市满一年解禁,日期事先确定,市场提前交易这笔供给。预期被剔的不到 1%、比已知族高 0~0.5 个点;若为 0,已知族不持有这些票或抛压已被提前消化。"
+  base: k_known
   lock: true
 e_xpost1y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(abs_(sub(ListAge, 274)), 31), 1.0))"
   why: "上市第 244~304 个交易日(一年期解禁之后三个月):减持有节奏限制,真实卖出发生在解禁之后。预期弱于 e_xpre1y(预期已反映);若更强,压力来自真实卖出而不是预期。"
+  base: k_known
   lock: true
 e_xpre3y:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(abs_(sub(ListAge, 709)), 21), 1.0))"
   why: "上市第 689~729 个交易日(三年期解禁前两个月:控股股东的股份,规模最大但很少真卖);满三年的样本 2021 年以后才有。预期效应小于一年期;若更大,市场怕的是规模而不是真实卖出。"
+  base: k_known
   lock: true
 e_xunl60:
   expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 60)))"
   why: "已知族,把近 60 日解禁规模(流通比例的 log 比窗口低点高出多少)最大的 5% 排到最后(方向锁定;只收整块并列,没有解禁的票不会被随机剔进来)。原股东减持与价格无关、摊在几个季度里;预期比已知族高 0.3~1 个点,若为负则解禁后不跌。"
+  base: k_known
 e_xunl120:
   expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 120)))"
   why: "同上,120 日。预期是三个窗口里最好的(README 预期当筛子每年多 0.5~1 个点);若 60 日最好,抛压只有一个季度。"
+  base: k_known
 e_xunl241:
   expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 241)))"
   why: "同上,241 日(一年内解禁过)。预期与 120 日接近;若明显更差,抛压在半年内结束。"
+  base: k_known
 e_xunl120_10:
   expr: "cs_last_high10(neg(cross_mean(day_std(Amt), 30)), sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 120)))"
   why: "档位 10%:把小额解禁(股权激励解锁)也剔掉。预期不如 5%;若更好,小额解禁同样有抛压。"
+  base: k_known
 e_xshup120:
   expr: "cs_last_high05(neg(cross_mean(day_std(Amt), 30)), sub(cross_med(LogFloatShares, 3), cross_min(cross_med(LogFloatShares, 3), 120)))"
   why: "换键 流通股本(含送转)比 120 日低点多了多少:送转会排在最前面。预期比 e_xunl120 差(送转不增加供给);若更好,高送转之后的贴权值得躲。"
+  base: k_known
 e_xunl120_abs:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_gt(sub(cross_med(sub(LogFloatCap, LogTotalCap), 3), cross_min(cross_med(sub(LogFloatCap, LogTotalCap), 3), 120)), 0.0488), 1.0))"
   why: "绝对门槛:近 120 日流通盘因解禁扩大 5% 以上(log 1.05 = 0.0488);分位数版在解禁高峰和淡季的规模门槛不同。预期与 e_xunl120 接近;若差 1 个点以上,该用规模门槛而不是名次。"
+  base: k_known
   lock: true
 e_xoh10:
   expr: "cs_last_low10(neg(cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogTotalCap))"
   why: "已知族,把流通比例最低的 10% 排到最后(方向锁定):未流通部分最大 = 将来的供给最多。预期比已知族高 0~1 个点;这批票多是上市三年内的,与 e_xyoung 系列的成对差告诉我们起作用的是「年轻」还是「没解禁完」。"
+  base: k_known
 e_xoh20:
   expr: "cs_last_low20(neg(cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogTotalCap))"
   why: "同上,两成。预期增益不随带宽增加;若增加,低流通比例本身(控盘、A+H)也该躲。"
+  base: k_known
 e_xoh_abs:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(sub(LogFloatCap, LogTotalCap), -0.6931), 1.0))"
   why: "绝对门槛:流通比例低于 50%(log = −0.693)。预期与 e_xoh10 接近;若更好,该看的是比例本身而不是名次。"
+  base: k_known
   lock: true
 e_oh_soft:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(sub(LogTotalCap, LogFloatCap), 0.5))"
   why: "只罚不剔:已知族排名减 0.5 × log(总市值 ÷ 流通市值),罚分随未流通规模连续增加(K001 的 H5:只罚不如剔)。预期介于已知族与 e_xoh10 之间;若比两者都好,规模越大压力越大。"
+  base: k_known
   lock: true
 e_xnonpay:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(sub(cross_max(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 300), cross_med(sub(LogTotalCap, log(day_last(Close))), 3)), 0.001), 1.0))"
   why: "已知族,把近 300 日没有现金分红的排到最后(盈利代理,见 d_nonpay_pen):小而清淡的票里不分红的多是亏损壳(亏损或未分配利润为负不能分红),冻结筛子是用盘口状态去猜这类票、这里用分红直接认。预期被剔的占书的三到四成、比已知族高 1~3 个点、2021 年以后不像冻结筛子那样消失;若增益只在 2018~2020,它和冻结筛子是同一回事。"
+  base: k_known
   lock: true
 e_xissuer:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_gt(sub(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), cross_min(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 241)), 0.0198), 1.0))"
   why: "已知族,把近 241 日总股本(除送转)增加 2% 以上的排到最后(定增、配股、激励授予)。预期被剔的占 5%~10%、比已知族高 0~1 个点;若为负,小票的增发在样本内是利好。"
+  base: k_known
   lock: true
 e_pay_soft:
   expr: "add(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(cs_winsor(sub(cross_max(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 241), cross_med(sub(LogTotalCap, log(day_last(Close))), 3))), 5))"
   why: "只加分不剔:已知族排名 + 5 × 近 241 日分红率(截面 1% / 99% 缩尾;2% 的分红率加 0.1 个名次,不分红的加 0,不对并列的量取秩)。指引 D14 说往已知族上叠任意因子 90 例里 0 例两段都升;这条是有机制的反例候选,预期 +0~+1 个点,若为负则 D14 照旧成立。"
+  base: k_known
   lock: true
 e_xlimup10:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_gt(cross_max(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth), 10), 0.95), 1.0))"
   why: "已知族,把近 10 日收过涨停(日涨幅 ≥ 本板限幅的 95%)的排到最后:一字板当天成交额离散度极低,会被已知族当成清淡。预期比已知族高 1~3 个点(K001 的封板筛子样本内 +3.8)、增益集中在 2018~2020(通用冻结筛子实测如此);若为 0,封板的票不在已知族的书里。ST 的 5% 涨停认不出。"
+  base: k_known
   lock: true
 e_xlimup10_twin:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_gt(cross_max(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 10), 0.095), 1.0))"
   why: "孪生:固定 9.5% 门槛,在 20% 板上把普通大涨也算进去。"
+  base: k_known
   lock: true
 e_xlimdn20:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(cross_min(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth), 20), -0.95), 1.0))"
   why: "已知族,把近 20 日收过跌停的排到最后:跌停封死的票成交额同样极低,连续跌停的是出事的公司;回测按次日开盘卖出,实际上跌停卖不掉,所以这条对实盘的价值大于读数。预期比已知族高 0.5~1.5 个点;若为负,跌停后的反弹更大。"
+  base: k_known
   lock: true
 e_xlimdn20_twin:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(cross_min(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20), -0.095), 1.0))"
   why: "孪生:固定 −9.5% 门槛。"
+  base: k_known
   lock: true
 e_main_only:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(LimitWidth, 10))"
-  why: "只在 10% 涨跌幅的票里买已知族(20% 板整体排到后面):没有科创板 / 创业板权限的账户只能这样做,而 10% 板的小票有封板和壳价值、错误定价更多。预期与已知族的成对差 ±1 个点(预期书里 20% 板本来就少);2019-07 之前就是已知族。"
+  why: "尺子(修订后总是读,不占 E 组名额):只在 10% 涨跌幅的票里买已知族(20% 板整体排到后面):没有科创板 / 创业板权限的账户只能这样做,而 10% 板的小票有封板和壳价值、错误定价更多。预期与已知族的成对差 ±1 个点(预期书里 20% 板本来就少);2019-07 之前就是已知族。"
+  base: k_known
   lock: true
 e_wide_only:
   expr: "add(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(LimitWidth, 10))"
-  why: "只在 20% 板里买已知族(2019-07 前等于已知族,到 2020-08 只有科创板,之后加上创业板):注册制的板块壳价值低、机构多。预期净超额明显低于已知族(+5~+10%);若与 e_main_only 的成对差为 0,已知族在两种板上一样有效。"
+  why: "尺子(修订后总是读,不占 E 组名额):只在 20% 板里买已知族(2019-07 前等于已知族,到 2020-08 只有科创板,之后加上创业板):注册制的板块壳价值低、机构多。预期净超额明显低于已知族(+5~+10%);若与 e_main_only 的成对差为 0,已知族在两种板上一样有效。"
+  base: k_known
   lock: true
 e_gem_only:
   expr: "add(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_gt(BoardCode, 1.5), 1.0))"
   why: "只在创业板里买已知族(BoardCode 不随日期变):创业板 2020-08-24 从 10% 改成 20%,是同一批票上的制度变化,逐年看改之前和之后。预期改之后净超额下降(封板溢价消失);若不变,涨跌幅宽度不影响这条因子。"
+  base: k_known
   lock: true
 e_xstar:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), mul(is_lt(abs_(sub(BoardCode, 1)), 0.5), 1.0))"
   why: "已知族,不买科创板(50 万门槛,很多账户没有权限)。预期与已知族的成对差在 ±0.5 个点内;这条是给实盘口径用的对照。"
+  base: k_known
   lock: true
 e_known_board:
   expr: "cs_regres(neg(log(cross_mean(day_std(Amt), 30))), LimitWidth)"
-  why: "已知族的板块中性版:−log 成交额离散度减本板(10% / 20%)均值;预期 20% 板上的票新、换手高,在已知族的书里很少(占比未实测)。预期净超额比已知族低 1~3 个点;掉 5 个点以上则「少持 20% 板」是已知族的一个大成分(与 a_board 对账)。"
+  why: "已知族的板块中性版:−log 成交额离散度减本板(10% / 20%)均值;预期 20% 板上的票新、换手高,在已知族的书里很少(占比未实测)。预期净超额比已知族低 1~3 个点;掉 5 个点以上则「少持 20% 板」是已知族的一个大成分(与 e_main_only / e_wide_only 对账)。"
+  base: k_known
+  lock: true
 e_known_in_age:
   expr: "cs_bucket_rank(cross_mean(day_std(Amt), 30), ListAge)"
   why: "已知族在上市天数十档内排名。预期与孪生秩相关 > 0.98、读数相同;若 2018~2019 的成对差不为 0,以前的「次新」分档里混着 2018 年初停牌、之后复牌的老股票(那天有多少只停牌需要实测)。"
+  base: k_known
 e_known_in_age_twin:
   expr: "cs_bucket_rank(cross_mean(day_std(Amt), 30), cross_age(day_last(Close)))"
   why: "孪生:分档键用 cross_age(day_last(Close))。"
+  base: k_known
 e_xjunk3:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), greater(add(add(is_lt(sub(LogFloatCap, LogFloatShares), 0.6931), is_lt(LogFloatCap, 20.7233)), is_lt(ListAge, 243)), 0.5))"
   why: "明文的垃圾票规则(低于 2 元 或 流通市值低于 10 亿 或 上市不足一年)套在已知族上;冻结筛子只是这类票的统计代理。预期比已知族高 1~2 个点;若拿不到冻结筛子样本内增益(+3.1 个点)的三分之一,垃圾票不能用这三条说清楚。"
+  base: k_known
   lock: true
 e_xjunk4:
   expr: "sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), greater(add(add(add(is_lt(sub(LogFloatCap, LogFloatShares), 0.6931), is_lt(LogFloatCap, 20.7233)), is_lt(ListAge, 243)), is_lt(sub(cross_max(cross_med(sub(LogTotalCap, log(day_last(Close))), 3), 300), cross_med(sub(LogTotalCap, log(day_last(Close))), 3)), 0.001)), 0.5))"
   why: "上一条再加「近 300 日不分红」。预期比已知族高 2~4 个点、被剔的占四成上下;若与 e_xnonpay 相同,前三条规则是多余的。"
+  base: k_known
   lock: true
 e_xjunk3_xfz:
   expr: "cs_last_high20(sub(cs_rank(neg(cross_mean(day_std(Amt), 30))), greater(add(add(is_lt(sub(LogFloatCap, LogFloatShares), 0.6931), is_lt(LogFloatCap, 20.7233)), is_lt(ListAge, 243)), 0.5)), cross_max(day_zero_ratio(Ret), 15))"
   why: "明文规则之后再做通用冻结筛子(方向锁定):两者可加还是重复。预期比 k_known_xfrozen 高 0~1 个点;若相等,明文规则认出的票是冻结筛子的子集。"
+  base: k_known_xfrozen
 e_xmicro05_xfz:
   expr: "cs_last_high20(cs_last_low05(neg(cross_mean(day_std(Amt), 30)), LogFloatCap), cross_max(day_zero_ratio(Ret), 15))"
   why: "通用冻结筛子再剔最小 5%(方向锁定)。预期净超额比 k_known_xfrozen 低 0~2 个点、回撤更浅;若更高,冻结筛子漏掉的垃圾在最小的票里。"
+  base: k_known_xfrozen
