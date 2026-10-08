@@ -31,12 +31,12 @@ def rows(name):
         if k in picked and not picked[k]["passes_insample"]:
             mark = "x"
         out.append([mark + k, v["family"], f(i["sharpe"], "{:.2f}"), f(i["ann"]), f(i["mdd"]), f(i["calmar"], "{:.2f}"),
-                    f(o["sharpe"], "{:.2f}"), f(o["ann"]), f(o["mdd"]), f(o["calmar"], "{:.2f}"), f(o["ex_ann"]), f(o["ex_sharpe"], "{:.2f}"), f(o["expo"], "{:.0%}"), f(o["turn"], "{:.1%}"),
+                    f(o["sharpe"], "{:.2f}"), f(o["ann"]), f(o["mdd"]), f(o["calmar"], "{:.2f}"), f(o["ex_ann"]), f(o["ex_sharpe"], "{:.2f}"), f(o.get("ex_mdd")), f(o["expo"], "{:.0%}"), f(o["turn"], "{:.1%}"),
                     f(p.get("ann")), f(p.get("t"), "{:+.1f}"), f"[{ci[0]:+.2f}, {ci[2]:+.2f}]", f(st.get("total")), f(v["stats"]["forward"]["sharpe"], "{:.2f}"), f(v["stats"]["forward"]["mdd"]), v.get("verdict", "")])
     return out
 
 
-HEAD = ["book", "方法", "内夏普", "内年化", "内回撤", "内Calmar", "外夏普", "外年化", "外回撤", "外Calmar", "外超额", "超额夏普", "仓位", "换手", "对基线年化差", "t", "夏普差90%区间", "踩踏段", "2026夏普", "2026回撤", "判读"]
+HEAD = ["book", "方法", "内夏普", "内年化", "内回撤", "内Calmar", "外夏普", "外年化", "外回撤", "外Calmar", "外超额", "超额夏普", "超额回撤", "仓位", "换手", "对基线年化差", "t", "夏普差90%区间", "踩踏段", "2026夏普", "2026回撤", "判读"]
 for name in J["champions"]:
     R_ = rows(name)
     print(f"\n## {name}(半衰期 {J['champions'][name]['halflife']:g};* = 该方法族样本内选中的格子,x = 样本内就不如基线;外 = {J['segments']['oos'][0]} ~ {J['segments']['oos'][1]})")

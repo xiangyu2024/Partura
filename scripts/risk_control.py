@@ -47,8 +47,9 @@ GRID_A2 = [2.0, 3.0]
 GRID_A4 = [0.0, 0.25, 0.5, 1.0]                                 # 0 = the ruler (normalised mean, no penalty)
 SPEC_A5 = {"ind": [], "ind_size": ["size"], "ind_size_vol_liq": ["size", "vol", "liq"]}
 GRID_Q = [0.05, 0.10, 0.20]
-GRID_B2 = ([(lam, "full", dl) for lam in (1.0, 5.0, 20.0, 80.0) for dl in (None, 0.05)]
-           + [(lam, "free", dl) for lam in (2.0, 5.0, 10.0) for dl in (None, 0.05)])
+GRID_B2 = ([(lam, "full", dl, "total") for lam in (1.0, 5.0, 20.0, 80.0) for dl in (None, 0.05)]
+           + [(lam, "free", dl, "total") for lam in (2.0, 5.0, 10.0) for dl in (None, 0.05)])
+GRID_B5 = [(lam, "full", None, "active") for lam in (10.0, 40.0, 160.0, 640.0)]      # round 2 (post hoc): risk measured against the equal-weight universe
 B2_EVERY, B2_CAND, B2_CAP_MULT, B2_H = 5, 0.20, 5.0, 10.0
 GRID_B3 = ([("tv", s, None) for s in (0.15, 0.20, 0.25)] + [("trend", n, lvl) for n in (20, 60, 120) for lvl in (0.5, 0.0)]
            + [("stamp", k, lvl) for k in ("sp3", "sp5", "ld3", "ld5", "any") for lvl in (0.5, 0.0)]
@@ -164,7 +165,7 @@ def seg_stats(net, ew, expo, turn, nn, sl):
     w20 = float((c[20:] - c[:-20]).min()) if x.size > 20 else float("nan")
     return {"ann": ann, "vol": vol, "sharpe": ann / vol if vol > 0 else float("nan"), "mdd": mdd, "calmar": ann / abs(mdd) if mdd < 0 else float("nan"),
             "total": float(nav[-1] - 1), "ex_ann": float(ex.mean() * 252), "ex_sharpe": float(ex.mean() / ex.std() * np.sqrt(252)) if ex.std() > 0 else float("nan"),
-            "ex_total": float(ex.sum()), "expo": float(expo[sl][m].mean()), "turn": float(turn[sl][m].mean()), "names": float(nn[sl][m].mean()), "worst20": w20, "n": int(x.size)}
+            "ex_total": float(ex.sum()), "ex_mdd": float((np.cumprod(1 + ex) / np.maximum.accumulate(np.cumprod(1 + ex)) - 1).min()), "expo": float(expo[sl][m].mean()), "turn": float(turn[sl][m].mean()), "names": float(nn[sl][m].mean()), "worst20": w20, "n": int(x.size)}
 
 
 def paired(a, b, sl):
@@ -335,7 +336,7 @@ def a_side(name, hl):
     mean = m1 / np.maximum(m0, 1e-12)
     std = np.sqrt(np.clip(m2 / np.maximum(m0, 1e-12) - mean * mean, 0, None))
     for lam in GRID_A4:
-        out[f"A4_l{lam:g}"] = ("A4 分歧惩罚", {"lambda": lam}, np.where(seen & (m0 > 0.5 * aw.sum()), mean - lam * std, np.nan))
+        out[f"A4_l{lam:g}"] = ("A4 分歧惩罚" if lam else "A4 λ=0(尺子:归一化均值,应等于基线)", {"lambda": lam}, np.where(seen & (m0 > 0.5 * aw.sum()), mean - lam * std, np.nan))
     raw = out["base"][2]
     y = r[:TR].reshape(-1).astype(np.float32)
     for spec, (Q, V) in NB.items():
@@ -407,7 +408,8 @@ def b2_prepare(sm, ew):
             med, hi = np.nanmedian(sv), np.nanquantile(sv, 0.9)
             d = np.where(np.isfinite(sv[c]), 0.5 * sv[c] + 0.5 * med, hi)
             bench = DUM[fin[t]].mean(0)
-            days[t] = {"c": c, "X": X[c], "G": np.linalg.cholesky(Fc).T, "d": d, "alpha": mu_m + a0 + s_ * z[t, c], "ind": DUM[c], "bench": bench,
+            uni = fin[t] & valid
+            days[t] = {"xbar": X[uni].mean(0), "c": c, "X": X[c], "G": np.linalg.cholesky(Fc).T, "d": d, "alpha": mu_m + a0 + s_ * z[t, c], "ind": DUM[c], "bench": bench,
                        "cap": B2_CAP_MULT / max(1.0, np.floor(fin[t].sum() * TOP))}
     _B2.update(days=days, base=top_book(sm, np.maximum(1, np.floor(fin.sum(1) * TOP).astype(int))), alpha_fit={"slope": s_, "intercept": a0, "market": mu_m})
     return _B2["alpha_fit"]
@@ -415,7 +417,7 @@ def b2_prepare(sm, ew):
 
 def b2_cell(cell):
     import cvxpy as cp
-    lam, bud, dl = cell
+    lam, bud, dl, kind = cell
     days = _B2["days"]
     W = _B2["base"].astype(np.float32).copy()
     first = min(days) if days else D
@@ -427,7 +429,8 @@ def b2_cell(cell):
             q = days[t]
             n = q["c"].size
             w = cp.Variable(n)
-            risk = cp.sum_squares(q["G"] @ (q["X"].T @ w)) + cp.sum_squares(cp.multiply(np.sqrt(q["d"]), w))
+            expo_ = q["X"].T @ w - (q["xbar"] * cp.sum(w) if kind == "active" else 0.0)       # active = exposure relative to the equal-weight universe
+            risk = cp.sum_squares(q["G"] @ expo_) + cp.sum_squares(cp.multiply(np.sqrt(q["d"]), w))
             obj = q["alpha"] @ w - 0.5 * lam * risk - (COST / B2_H) * cp.norm1(w - prev[q["c"]])
             cons = [w >= 0, w <= q["cap"], (cp.sum(w) == 1) if bud == "full" else (cp.sum(w) <= 1)]
             if dl is not None:
@@ -524,7 +527,32 @@ def run(name):
     iv = 1.0 / np.clip(np.where(np.isfinite(vol20), vol20, vq[1][:, None]), vq[0][:, None], vq[1][:, None])
     add("B1w_invvol", "B1w 权重 ∝ 1/波动", {}, maker=lambda: top_book(sm, k10, iv))
     add("B1w_invvar", "B1w 权重 ∝ 1/波动", {"power": 2}, maker=lambda: top_book(sm, k10, iv * iv))
-    print(f"[rc] {name}: B1 ({time.time() - t0:.0f}s)", flush=True)
+    # ---- B4 (round 2, designed after round 1 was read): the top 10 % WITHIN each bucket, so the book carries the universe's own
+    #      size / industry mix -- risk control on the excess side, where round 1 located the only non-market risk (the size bet)
+    def group_top(groups):
+        sel = np.zeros((D, S), dtype=bool)
+        for t in range(D):
+            m_ = fin[t] & (groups[t] >= 0)
+            if m_.sum() < 50:
+                continue
+            ser = pd.Series(sm[t][m_])
+            g_ = pd.Series(groups[t][m_])
+            rk = ser.groupby(g_.values).rank(ascending=False, method="first")
+            n_g = ser.groupby(g_.values).transform("size")
+            sel[t, np.flatnonzero(m_)[(rk <= np.maximum(1, np.floor(n_g * TOP))).to_numpy()]] = True
+        w_ = sel.astype(np.float64)
+        return w_ / np.maximum(w_.sum(1, keepdims=True), 1)
+
+    pf = pct_rows(np.where(fin, lfc, np.nan))
+    ind_g = np.tile(industry, (D, 1))
+    GRP = {"size10": np.where(np.isfinite(pf), np.minimum(np.floor(pf * 10), 9), -1).astype(int), "industry": np.where(ind_g >= 0, ind_g, 99)}
+    GRP["size5_industry"] = np.where(np.isfinite(pf), np.minimum(np.floor(pf * 5), 4) * 100 + GRP["industry"], -1).astype(int)
+    W4 = {}
+    for gk, g_ in GRP.items():
+        W4[gk] = group_top(g_)
+        add(f"B4_{gk}", "B4 桶内选股(第二轮,事后)", {"groups": gk}, W=W4[gk])
+        add(f"B4_{gk}_half", "B4 桶内选股(第二轮,事后)", {"groups": gk, "mix_with_baseline": 0.5}, W=0.5 * W4[gk] + 0.5 * W0)
+    print(f"[rc] {name}: B1 / B4 ({time.time() - t0:.0f}s)", flush=True)
 
     # ---- B3: exposure rules on the baseline book
     net0 = series["base"]
@@ -580,11 +608,11 @@ def run(name):
         fit = b2_prepare(sm, np.nan_to_num(ew, nan=0.0))
         print(f"[rc] {name}: B2 risk model ready, {len(_B2['days'])} rebalances, alpha fit {fit} ({time.time() - t0:.0f}s)", flush=True)
         import multiprocessing as mp
-        with mp.get_context("fork").Pool(min(WORKERS, len(GRID_B2))) as pool:
-            for (lam, bud, dl), W, fails in pool.imap_unordered(b2_cell, GRID_B2):
-                key = f"B2_lam{lam:g}_{bud}" + ("" if dl is None else f"_ind{dl:g}")
+        with mp.get_context("fork").Pool(min(WORKERS, len(GRID_B2) + len(GRID_B5))) as pool:
+            for (lam, bud, dl, kind), W, fails in pool.imap_unordered(b2_cell, GRID_B2 + GRID_B5):
+                key = (f"B2_lam{lam:g}_{bud}" + ("" if dl is None else f"_ind{dl:g}")) if kind == "total" else f"B5_active_lam{lam:g}"
                 Wd = W.astype(np.float64)
-                add(key, "B2 组合优化", {"lambda": lam, "budget": bud, "industry_dev": dl, "failed_solves": fails, "alpha_fit": fit}, W=Wd, keep=True)
+                add(key, "B2 组合优化" if kind == "total" else "B5 主动风险优化(第二轮,事后)", {"lambda": lam, "budget": bud, "industry_dev": dl, "failed_solves": fails, "alpha_fit": fit}, W=Wd, keep=True)
         print(f"[rc] {name}: B2 ({time.time() - t0:.0f}s)", flush=True)
 
     # ---- selection (in-sample only) and verdicts
@@ -639,6 +667,7 @@ def run(name):
             continue
         v["paired"] = {s: paired(series[k], net0, sl) for s, sl in SEG.items() if s != "stampede"}
         v["dsharpe_oos_ci90"] = boot_dsharpe(series[k][o], net0[o])
+        v["dexsharpe_oos_ci90"] = boot_dsharpe(series[k][o] - ew[o], net0[o] - ew[o])
         v["dsharpe_insample_ci90"] = boot_dsharpe(series[k][SEG["insample"]], net0[SEG["insample"]])
         so, bo = v["stats"]["oos"], res["base"]["stats"]["oos"]
         v["dmdd_oos"] = so["mdd"] - bo["mdd"]
