@@ -535,6 +535,20 @@ def test_view_id_matches_contract_hash_byte_identical_claim_with_no_daily_source
     assert ps.store.contract_hash == store.contract_hash
 
 
+def test_view_id_is_what_it_always_was_when_no_daily_source_is_attached(tmp_path, monkeypatch):
+    """The shared panel cache (``runs/_panels/<view_id>``) is keyed by it: an id that moves while the data does not
+    makes every stored panel a miss.  So without a daily source it is exactly the pre-WP11 string's hash (the
+    ``contract_hash`` term joins it only when a daily directory is attached -- the test above)."""
+    import hashlib
+
+    from partura.panels import PanelSet
+    monkeypatch.delenv("ALPHACUBE_DAILY_FIELDS", raising=False)
+    store = _tiny_store(tmp_path)
+    ps = PanelSet(str(store.directory), store.dates[0], store.dates[-1], warmup=0, device="cpu")
+    raw = f"{ps.store_path}|{ps.start}|{ps.end}|{len(ps.symbols)}|{ps.dates[0]}|{ps.dates[-1]}"
+    assert ps.view_id == hashlib.sha1(raw.encode()).hexdigest()[:10]
+
+
 # ---------------------------------------------------------------- no monkeypatching left anywhere
 def test_no_monkeypatch_remnants_anywhere_in_the_partura_tree():
     # Built from fragments so this assertion does not match its OWN source line -- this file is

@@ -213,14 +213,14 @@ class PanelSet:
     # -- identity ---------------------------------------------------------
     @property
     def view_id(self) -> str:
-        # store.contract_hash is byte-identical to before whenever no daily-fields
-        # directory is attached (see docs/alphacube_steering_design.md, "Backward
-        # compatibility" item 7) and changes with one -- so this is a no-op for
-        # every existing cache entry and is what stops a rebuilt daily-fields
-        # directory from serving a stale panel for any expression containing a
-        # daily leaf (design, "One Partura-side cache fix the daily fields force").
-        raw = (f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
-               f"|{self.store.contract_hash}")
+        # The shared panel cache is keyed by this id, so it must not move for a view whose panels cannot have
+        # changed: with no daily-fields source attached the id is exactly what it always was (every existing
+        # ``runs/_panels`` entry stays reachable).  A daily source changes what an expression containing a daily
+        # leaf evaluates to, and a rebuilt directory must not be served a stale panel -- so, and only then, the
+        # store's ``contract_hash`` (which covers the daily source's identity) joins the id.
+        raw = f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
+        if getattr(self.store, "daily", None) is not None:
+            raw += f"|{self.store.contract_hash}"
         return hashlib.sha1(raw.encode()).hexdigest()[:10]
 
     def _cache_path(self, expr_key: str) -> Optional[Path]:
