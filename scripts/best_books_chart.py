@@ -138,6 +138,9 @@ for o in LS:
 top = max(max(c[:O[o].get("ends")]) for o, c in cum.items())
 step = 0.5 if top > 2 else 0.25
 ticks = [k * step for k in range(int(top / step) + 2)]
+if ifw < len(dates):                                              # the two-line legend needs head-room above the curves
+    while ticks[-1] < top * 1.45:
+        ticks.append(ticks[-1] + step)
 y1 = lambda v: H - mb - (H - mt - mb) * v / ticks[-1]          # noqa: E731
 A = frame("多空:做多排名最好的 10%、做空最差的 10%(总敞口 1,扣 15bp 成本)", "纵轴 = 累计净收益(每日收益相加);虚线右侧是样本外" + (",橙色底是 2026 年的前推段" if ifw < len(dates) else ""),
           y1, ticks, lambda t: f"{t:.0%}")
@@ -148,8 +151,6 @@ for j, o in enumerate(LS):
         e = O[o]["ends"] - 1
         A.append(f'<text x="{X(e) - 6:.1f}" y="{y1(cum[o][e]) + 20:.1f}" text-anchor="end" fill="{COL[j]}" font-size="12">止于 {dates[e][:4]}-{dates[e][4:6]}(不在前推段的读数清单里)</text>')
 two = any("fwd" in stats[o]["ls"] for o in LS)                    # with a forward segment the legend takes two lines per series
-if two:                                                           # the legend then reaches into the curves: give it a backing
-    A.append(f'<rect x="{ml + 8}" y="{mt + 22}" width="738" height="{38 * len(LS) + 6}" fill="#ffffff" fill-opacity="0.86"/>')
 for j, o in enumerate(LS):
     s = stats[o]["ls"]
     y = mt + 40 + (38 if two else 22) * j
