@@ -39,6 +39,20 @@ _最后更新:2026-10-07 18:40 PDT,Opus 5.5 主会话。每到一个里程碑更
 
 **本机的辅助进程**:`wf_dump.py --loop 120` 还在(pid 34204);`caffeinate`、`recorder.py` 已不在,需要时重起。
 
+**19:45 补:AlphaCube 分支核对完、已并排部署并通过服务器验收;第五轮已起头**
+- `partura-steering` 现在在 `155ce38`(子代理加了三个提交:`12734f9` 流通股本列名改成实测的 `circulating_capital`;`215aff7` 默认路径不再多一行日志、不再多两个 `meta.json` 键;`155ce38` 文档 §7 如实写明 RL 封禁键校验这一处故意的变化)。
+  966 passed / 10 skipped / 1 xfailed(子代理一遍、总领一遍)。本机逐字节比对:默认路径与基线一致。
+- **没有并入 AlphaCube 的 main,没有推 GitHub,没有覆盖服务器上的 `/root/autodl-tmp/AlphaCube`** —— 这三件事用户没有明说过,留给用户点头(记忆里的规则:用户说了才提交 / 推送)。
+- 改为**并排部署**:新引擎在服务器 `<Partura>/vendor/AlphaCube-steering`(`VERSION` 记着提交号);用法 `PYTHONPATH=<vendor>/src:<Partura> ALPHACUBE_ROOT=<vendor>`。
+  `scripts/study.sh` 的 `ENV` 和 `scripts/server/*.sh` 里写死的还是旧路径 —— **等 `ac-plugin` 并进来之后一起改成一个变量**(现在改会和正在合并的分支撞)。
+- 服务器验收(`handoff/ac_accept/ACCEPTANCE.md`;`scripts/server/ac_accept/run.sh`):GPU + 生产库上新旧对拍全部相同(除了故意的那一处);用新引擎重放 e7c1,78 个候选逐个相同。
+- 日频库:`<Partura>/daily_fields`(FloatCap / TotalCap / FloatShares;建库 14 秒)。带日频叶子的表达式在生产库上能算(`tmp/daily_smoke.py` 的读数写进了 `studies/K002_daily_fields/README.md`)。
+  本机也能做解析自查:`ALPHACUBE_ROOT=~/Desktop/AlphaCube-steering PYTHONPATH=~/Desktop/AlphaCube-steering/src:~/Desktop/Partura python scripts/check_hypo.py <hypo.yaml>`。
+- **第五轮 = `studies/K002_daily_fields/`**:README(数据实测、五组问题、A 组十个尺子、读数规则、事先的预期)已提交 `5f1d2df`,早于任何带日频叶子的因子被计算。
+  主研(Opus 子代理)在写 `hypo.yaml` 与 `HYPOTHESES.md`。回来之后:解析自查 → 配 `configs/K002_daily_fields.yaml`(照 K001)→ 批量扫描要能挂日频库(`ALPHACUBE_DAILY_FIELDS` 或 `daily_root`;
+  面板缓存的键要带日频库的身份,见 `ac-plugin` 对 `partura/panels.py` 的改动)→ `sweep_final.py` 要加前推段一列(照 `idea_final.py`)→ 服务器上跑 → 按 README 的规则读一次。
+- 还在跑的子代理:合并 `main` → `ac-plugin`(Sonnet;回来后总领核对、在主工作区 `git merge ac-plugin`、推送,再做走正式钩子的验收:重放 e7c1 与 e7b1 对存档)。
+
 ## ⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱⏱ 现状快照(2026-10-07 01:05 PDT;已被上面那段更新)—— 用户要合上 Mac,本机会睡眠;服务器上的队列自己跑
 
 **合盖之后**:本机的一切都会停(这个会话、AlphaCube 实现工作流 `wf_a9e46c78-369`、`recorder` / `wf_dump`、所有后台等待)。服务器上的 screen 不受影响。
