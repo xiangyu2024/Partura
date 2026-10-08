@@ -1,5 +1,10 @@
 """Do the hypotheses of a sweep parse?  (server side; see `study.sh hypo`)
 
+An entry is `id: {expr: "...", why: "..."}` (or just `id: "expr"`); `lock: true` pins its direction to the way the
+expression is written (partura/hypo.py) -- the value must be a real boolean.  `base: <id>` marks a modification of another
+object; the id must be an entry of this file or one of v_base / k_known / k_known_xfrozen.  `twin: <id>` names the comparison object of a
+hypothesis (same rule for the id); `kind: carrier` marks an object that exists to be someone's base.
+
     python scripts/check_hypo.py studies/<fid>/hypo.yaml
 """
 import sys
@@ -8,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import yaml  # noqa: E402
 
+from partura.hypo import BENCHMARK_IDS, base_of, kind_of, lock_of, twin_key_of  # noqa: E402
 from partura.panels import parse_research  # noqa: E402
 
 try:
@@ -22,8 +28,14 @@ bad = 0
 for i, v in d.items():
     e = v["expr"] if isinstance(v, dict) else str(v)
     try:
+        lock = lock_of(str(i), v)
+        base, twin, kind = base_of(str(i), v), twin_key_of(str(i), v), kind_of(str(i), v)
+        for what, ref in (("base", base), ("twin", twin)):
+            if ref is not None and ref not in d and ref not in BENCHMARK_IDS:
+                raise ValueError(f"hypothesis {i}: {what} {ref!r} is neither an entry of this file nor one of {', '.join(BENCHMARK_IDS)}")
         parse_research(e)
-        print(f"OK    {i}")
+        print(f"OK    {i}" + ("  [lock: direction as written]" if lock else "") + (f"  [base: {base}]" if base else "")
+              + (f"  [twin: {twin}]" if twin else "") + (f"  [kind: {kind}]" if kind else ""))
     except Exception as exc:  # noqa: BLE001
         bad += 1
         print(f"FAIL  {i}: {type(exc).__name__}: {str(exc)[:220]}\n      {e[:200]}")

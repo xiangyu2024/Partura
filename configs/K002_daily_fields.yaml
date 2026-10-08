@@ -1,0 +1,81 @@
+# Partura study K002_daily_fields —— 不是用户表里的因子:已知成交额族当底座,检验日频字段(流通市值、股本、板块、上市天数)带来什么
+# 假设在 studies/K002_daily_fields/hypo.yaml;读数规则(写在算任何一个带日频叶子的因子之前)在同目录 README.md「读数规则」。
+# 跑法:scripts/sweep.py K002_daily_fields --extra studies/K002_daily_fields/hypo.yaml --only-extra;
+#       scripts/group_final.py K002_daily_fields --dry-run(只选不读)→ 去掉 --dry-run(读一次,记账)。
+# 与 configs/K001_known_screens.yaml 的差别:factor_id / title,顶层多一个 daily_fields;去掉了 K001 的 stages / corr_ids / diagnostics
+# (它们点名 K001 的变体,批量扫描与读数路径都不用)。stages 留成空列表:study.sh check、runner、report 都要 cfg["stages"] 这个键存在。
+factor_id: K002_daily_fields
+title: 日频字段(流通市值、股本、板块、上市天数)给已知成交额族带来什么:五组问题 A 校准 / B 拿掉市值 / C 写法替换 / D 新信息 / E 筛子
+expression: cross_mean(day_std(Amt), 30)
+baseline_id: v_base
+# 日频字段库(AlphaCube 的 DailyFieldStore 目录,build_daily_fields.py 建的):挂上之后表达式里才能写 FloatCap / LogFloatCap / ...
+# 面板缓存只对带日频叶子(键里有 DF:)的表达式加上它的身份,其余表达式的缓存键不变(partura/panels.py: view_id_for)。
+daily_fields: /root/autodl-tmp/Partura/daily_fields
+label:
+  kind: open_vwap15
+  horizon: 1
+  buyable: true
+  verify_against: /root/autodl-tmp/AlphaCube/_bench/trainto/allfac_buyable/_target.npy
+cost_per_side: 0.0015
+top_frac: 0.1
+rank_by: long
+horizons:
+- 1
+- 2
+- 3
+- 5
+- 10
+- 20
+warmup: 60
+splits:
+  train:
+  - '20180102'
+  - '20211231'
+  valid:
+  - '20220101'
+  - '20230807'
+  utrain:
+  - '20180102'
+  - '20230807'
+  holdout:
+  - '20230808'
+  - '20251231'
+  full:
+  - '20180102'
+  - '20251231'
+fit_split: train
+user_split: utrain
+controls:
+  ctl_amt: log(add(day_sum(Amt), 1))
+  ctl_price: log(day_last(Close))
+  ctl_ivol: day_std(Ret)
+  ctl_range: div(sub(day_max(High), day_min(Low)), day_last(Close))
+  ctl_rev1: div(day_last(Close), ts_delay(day_last(Close), 1))
+  ctl_mom20: div(day_last(Close), ts_delay(day_last(Close), 20))
+  ctl_dvol20: ts_stddev(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)
+external_controls:
+  ctl_cap: /root/autodl-tmp/Partura/shared/log_float_cap.npy
+  ctl_turnrate: /root/autodl-tmp/Partura/shared/log_turnover_rate.npy
+gates:
+  known_amt_max9: cross_max(day_sum(Amt), 9)
+  known_stdamt_max9: cross_max(day_std(Amt), 9)
+  known_ivol_max9: cross_max(day_var(Ret), 9)
+  known_stdamt_mean30: cross_mean(day_std(Amt), 30)
+  g_absidio20: cross_mean(abs_(cs_demean(div(day_last(Close), cross_delay(day_last(Close), 1)))), 20)
+  g_kurtlow20: cross_mean(day_kurt(Low), 20)
+corr_with:
+- ctl_amt
+- ctl_cap
+- ctl_turnrate
+- ctl_ivol
+- ctl_dvol20
+- ctl_price
+- ctl_rev1
+- ctl_mom20
+- known_amt_max9
+- known_stdamt_max9
+- known_ivol_max9
+- known_stdamt_mean30
+- g_absidio20
+- g_kurtlow20
+stages: []

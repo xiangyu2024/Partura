@@ -28,7 +28,7 @@ import yaml  # noqa: E402
 
 from partura import books as bk  # noqa: E402
 from partura.bridge import PARTURA_ROOT  # noqa: E402
-from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
+from partura.panels import SHARED_CACHE, PanelSet, config_daily_root, default_mirror, default_store  # noqa: E402
 from partura.splits import SPLITS  # noqa: E402
 
 argv = sys.argv[1:]
@@ -89,10 +89,11 @@ with slot():
     mem = MemoryGuard(self_limit_gb=30, cgroup_limit_gb=70).start()
     t0 = time.time()
     lab = cfg.get("label") or {}
-    ps = PanelSet("/root/autodl-tmp/qmt_daily_data/fast_factor_compute", SPLITS["full"][0], SPLITS["full"][1],
+    ps = PanelSet(default_store(), SPLITS["full"][0], SPLITS["full"][1],
                   warmup=int(cfg.get("warmup", 60)), device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE),
-                  mirror_root="/root/autodl-tmp/AlphaCube/mirror", workdir=str(PARTURA_ROOT / "tmp"),
-                  label_kind=lab.get("kind", "open_vwap15"), label_buyable=bool(lab.get("buyable", True)), batch=8)
+                  mirror_root=default_mirror(), workdir=str(PARTURA_ROOT / "tmp"),
+                  label_kind=lab.get("kind", "open_vwap15"), label_buyable=bool(lab.get("buyable", True)), batch=8,
+                  daily_root=config_daily_root(cfg))
     aux = {"a_px": "day_last(Close)", "a_amt20": "cross_mean(day_sum(Amt), 20)",
            "a_ret": "div(day_last(Close), ts_delay(day_last(Close), 1))", "a_flat": "day_flat_ratio(Close)"}
     P = ps.compute({**{k: R[k]["expr"] for k in picked}, **aux})

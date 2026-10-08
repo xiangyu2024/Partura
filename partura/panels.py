@@ -10,7 +10,10 @@ reads panels from here.  Deliberate choices:
   The key is the parsed expression's structural key plus the view identity, so
   a control or a sub-tree computed for one factor is free for the next, and a
   changed view can never silently reuse an old panel.  Writes are atomic
-  (temp file + rename) because several studies run at once.
+  (temp file + rename) because several studies run at once.  With a daily-field
+  store attached the view identity gains the store's identity for the expressions
+  that read it (a ``DF:`` leaf) and ONLY for those -- every other panel keeps the
+  key it always had (``PanelSet.view_id_for``).
 * **Small batches, one GPU job at a time.**  Heavy operators evaluated together
   blow GPU memory (the other session's ``pick_single_factors --verify``
   evaluates one expression at a time for the same reason), so expressions go
@@ -26,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -45,6 +49,41 @@ from alphacube.research import warmed_view  # noqa: E402
 from alphacube.store import open_cube_store  # noqa: E402
 
 SHARED_CACHE = PARTURA_ROOT / "runs" / "_panels"
+
+# Where the study scripts read the minute store and its mirror.  The server paths are the defaults; the environment
+# variables exist so that a script can be run against a synthetic store on a laptop (partura/study_tools.py has always
+# read the same two variables).
+DEFAULT_STORE = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute"
+DEFAULT_MIRROR = "/root/autodl-tmp/AlphaCube/mirror"
+
+
+def default_store() -> str:
+    """``$PARTURA_STORE`` when set and non-empty, else the production minute store."""
+    return os.environ.get("PARTURA_STORE") or DEFAULT_STORE
+
+
+def default_mirror() -> str:
+    """``$PARTURA_MIRROR`` when set and non-empty, else the production D-major mirror."""
+    return os.environ.get("PARTURA_MIRROR") or DEFAULT_MIRROR
+
+
+def config_daily_root(cfg) -> Optional[str]:
+    """The study config's top-level ``daily_fields`` (a daily-field store directory), or None when it names none --
+    the one place every script reads that key, so "no key" means the same thing everywhere."""
+    v = (cfg or {}).get("daily_fields")
+    return str(v) if v else None
+
+
+# An expression key (``Expression.key()``) tags a daily-field leaf ``DF:<field>`` (alphacube.expression.DailyFeature) and
+# every other node ``F:`` / ``C:`` / ``O:`` / ``G:`` / ``L:``; the daily store is read by DailyFeature leaves and by
+# nothing else (engine.py: _leaf_panel / _load_leaf_cube / the panel-round operand).  The look-behind keeps a field or
+# operator whose name merely ENDS in "DF" from matching.
+_DAILY_LEAF = re.compile(r"(?<![A-Za-z0-9_])DF:")
+
+
+def uses_daily_leaf(expr_key: str) -> bool:
+    """Can the panel of the expression with this key depend on an attached daily-field store?"""
+    return _DAILY_LEAF.search(expr_key) is not None
 
 
 def parse_research(src: str, n_minutes: int = 241):
@@ -144,7 +183,7 @@ class PanelSet:
                  torch_threads: Optional[int] = None, workdir: Optional[str] = None,
                  label_kind: str = "open_vwap15", label_buyable: bool = False,
                  batch: int = 4, cpu_fallback: bool = False, chunk_bytes: Optional[int] = None,
-                 quiet: bool = False) -> None:
+                 quiet: bool = False, daily_root: Optional[str] = None) -> None:
         requested = device
         device = choose_device(device, quiet=quiet)
         if requested.startswith("cuda") and device == "cpu":
@@ -158,7 +197,10 @@ class PanelSet:
             torch.cuda.set_per_process_memory_fraction(f)
             self.gpu_fraction = f
         self.store_path = store_path
-        self.store = open_cube_store(store_path, mirror_root=mirror_root)
+        # ``daily_root`` None = exactly what the call was before this argument existed: open_cube_store then falls back
+        # to $ALPHACUBE_DAILY_FIELDS, and with that unset no daily source is attached.
+        self.daily_root = daily_root
+        self.store = open_cube_store(store_path, mirror_root=mirror_root, daily_root=daily_root)
         self.view, self.trim = warmed_view(self.store, start, end, warmup, max_symbols=max_symbols)
         self.start, self.end, self.warmup = start, end, warmup
         self.device, self.chunk_symbols, self.chunk_days = device, chunk_symbols, chunk_days
@@ -211,22 +253,42 @@ class PanelSet:
         return True
 
     # -- identity ---------------------------------------------------------
+    def _plain_raw(self) -> str:
+        return f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
+
+    @property
+    def plain_view_id(self) -> str:
+        """The view's identity with no daily-fields source in it: exactly what ``view_id`` was before daily sources
+        existed, and what it still is when none is attached."""
+        return hashlib.sha1(self._plain_raw().encode()).hexdigest()[:10]
+
     @property
     def view_id(self) -> str:
         # The shared panel cache is keyed by this id, so it must not move for a view whose panels cannot have
         # changed: with no daily-fields source attached the id is exactly what it always was (every existing
         # ``runs/_panels`` entry stays reachable).  A daily source changes what an expression containing a daily
         # leaf evaluates to, and a rebuilt directory must not be served a stale panel -- so, and only then, the
-        # store's ``contract_hash`` (which covers the daily source's identity) joins the id.
-        raw = f"{self.store_path}|{self.start}|{self.end}|{len(self.symbols)}|{self.dates[0]}|{self.dates[-1]}"
+        # store's ``contract_hash`` (which covers the daily source's identity) joins the id.  (``_cache_path`` goes
+        # one step further: an expression with no daily leaf keeps the daily-free id even then -- ``view_id_for``.)
+        raw = self._plain_raw()
         if getattr(self.store, "daily", None) is not None:
             raw += f"|{self.store.contract_hash}"
         return hashlib.sha1(raw.encode()).hexdigest()[:10]
 
+    def view_id_for(self, expr_key: str) -> str:
+        """The view identity under which the panel of the expression with this key is cached.
+
+        Per EXPRESSION, not per view: the daily store is read by daily-field leaves (``DF:`` in the key) and by nothing
+        else, so a panel without one cannot depend on it and keeps the daily-free identity -- the shared cache already
+        holds hundreds of GB of such panels, and attaching a daily store must neither orphan nor duplicate them.  Only a
+        panel with a daily leaf gets the daily-aware ``view_id``.  (With no daily source attached the two ids are the
+        same string, so every key is what it was.)  The label's tag, which has no leaf at all, is daily-free too."""
+        return self.view_id if uses_daily_leaf(expr_key) else self.plain_view_id
+
     def _cache_path(self, expr_key: str) -> Optional[Path]:
         if not self.cache_dir:
             return None
-        h = hashlib.sha1(f"{self.view_id}|{expr_key}".encode()).hexdigest()[:16]
+        h = hashlib.sha1(f"{self.view_id_for(expr_key)}|{expr_key}".encode()).hexdigest()[:16]
         return self.cache_dir / f"{h}.npy"
 
     # -- labels -----------------------------------------------------------
@@ -406,7 +468,7 @@ class PanelSet:
                     _atomic_save(p, arr)
                     _drop_page_cache(p)
                     p.with_suffix(".json").write_text(json.dumps(
-                        {"expression": repr(todo[n]), "key": keys[n], "view_id": self.view_id, "name": n},
+                        {"expression": repr(todo[n]), "key": keys[n], "view_id": self.view_id_for(keys[n]), "name": n},
                         ensure_ascii=False), encoding="utf-8")
             if not self.quiet:
                 print(f"[panels]   {min(b0 + self.batch, len(uniq))}/{len(uniq)} "
