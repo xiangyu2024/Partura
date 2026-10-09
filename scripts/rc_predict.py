@@ -35,7 +35,9 @@ def opt(name, default=None):
     return argv[argv.index(name) + 1] if name in argv else default
 
 
-R = PARTURA_ROOT / "runs" / "_risk"
+R = Path(opt("--dir")) if opt("--dir") else PARTURA_ROOT / "runs" / "_risk"
+if not R.is_absolute():
+    R = PARTURA_ROOT / R
 TAG = opt("--tag", "p1")
 SKIP = set((opt("--skip") or "").split(",")) - {""}
 CHAMPS = {"手写库冠军": 20.0, "挖掘冠军": 10.0}
@@ -158,7 +160,7 @@ dates = np.asarray(base["dates"])
 D, S = len(dates), len(base["symbols"])
 ix = lambda d: int(np.searchsorted(dates, d))                   # noqa: E731
 TR = base["train_stop"]
-SEG = {"insample": slice(T0, TR), "test": slice(TR, ix("20260101")), "forward": slice(ix("20260101"), D), "oos": slice(TR, D), "stampede": slice(ix("20240116"), ix("20240207"))}
+SEG = {"insample": slice(T0, TR), "test": slice(TR, ix("20260101")), "forward": slice(ix("20260101"), ix("20260917")), "oos": slice(TR, ix("20260917")), "stampede": slice(ix("20240116"), ix("20240207"))}
 tgt = np.load(R / "target.npy")
 r = np.nan_to_num(tgt, nan=0.0)
 ld = lambda k: np.load(R / f"px_{k}.npy").astype(np.float64)    # noqa: E731
@@ -360,6 +362,116 @@ def bad_model(name, sm, ew, X, fnames, h):
     return pb, y, cand, top, pb - pt
 
 
+# ------------------------------------------------------------------ 6.1: the frozen market model, forward ledger
+def track():
+    P, Y, fwd5 = market_models(market_features())
+    p = P[("f5", "logit")]
+    raw, held = flag_of(p, 0.8)
+    out = {"spec": "M_f5_logit_q0.8_l0.5 (research/risk_control/FROZEN_M.json)", "last_day": str(dates[-1]), "rows": []}
+    ref = PARTURA_ROOT / "runs" / "_risk" / "risk_control_p2.json"
+    if ref.is_file():
+        old = json.loads(ref.read_text(encoding="utf-8"))
+        op = np.asarray([np.nan if v is None else v for v in old["diagnostics"]["market_prob"]["f5_logit"]], dtype=float)
+        n = min(len(op), D)
+        same = bool(list(old["dates"][:n]) == [str(d) for d in dates[:n]])
+        out["overlap_check"] = {"days": int(n), "same_calendar": same, "max_abs_diff_prob": float(np.nanmax(np.abs(op[:n] - p[:n]))) if same else None}
+    f0 = ix("20260917")
+    for t in range(f0, D):
+        out["rows"].append({"date": str(dates[t]), "prob": None if p[t] != p[t] else float(p[t]), "flag": bool(raw[t]), "half_exposure": bool(held[t]),
+                            "market_next": None if ewt[t] != ewt[t] else float(ewt[t]), "fwd5": float(fwd5[t]) if t + 5 <= D - 2 else None})
+    x = ewt0[f0:]
+    e = np.where(held[f0:], 0.5, 1.0)
+    if x.size > 20:
+        sh = lambda v: float(v.mean() / v.std() * np.sqrt(252)) if v.std() > 0 else float("nan")     # noqa: E731
+        f5 = np.asarray([r_["fwd5"] if r_["fwd5"] is not None else np.nan for r_ in out["rows"]])
+        fl = np.asarray([r_["flag"] for r_ in out["rows"]])
+        out["summary"] = {"days": int(x.size), "flag_share": float(held[f0:].mean()), "market_sharpe": sh(x), "half_on_flag_sharpe": sh(e * x),
+                          "fwd5_after_flag": float(np.nanmean(f5[fl])) if fl.any() else None, "fwd5_otherwise": float(np.nanmean(f5[~fl])) if (~fl).any() else None}
+    (R / "track_M.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"[rp] track: last day {dates[-1]}, {len(out['rows'])} forward days; overlap {out.get('overlap_check')}; summary {out.get('summary')}", flush=True)
+
+
+# ------------------------------------------------------------------ 6.2: the asymmetric bad-stock prediction as a pool factor
+def asym_factor_study():
+    import lightgbm as lgb
+    sys.path.insert(0, "/root/autodl-tmp/AlphaCube/scripts")
+    from combine_two_level import blend, fit_weights
+    from alphacube.metrics import cs_pearson, nanmean_quiet, zscore_rows
+    t0 = time.time()
+    h, cap = 5, 3_000_000
+    fnames, X = stock_features(np.full((D, S), np.nan))
+    K = X.shape[-1]
+    ex0 = np.nan_to_num(tgt - ewt0[:, None], nan=0.0)
+    c = np.concatenate([np.zeros((1, S)), np.cumsum(ex0, 0)])
+    fx = np.where(np.isfinite(tgt), c[np.minimum(np.arange(D) + h, D)] - c[:-1], np.nan)
+    fx[max(D - h - 1, 0):] = np.nan
+    pr = pct_rows(fx)
+    yb, yt = (pr <= S_BAD).astype(np.float32).ravel(), (pr > 1 - S_BAD).astype(np.float32).ravel()
+    fc = np.isfinite(close)
+    valid = np.isfinite(fx) & fc
+    fac = np.full((D, S), np.nan)
+    rng = np.random.default_rng(0)
+    Xf = X.reshape(-1, K)
+    kw = dict(n_estimators=200, max_depth=4, num_leaves=15, learning_rate=0.05, subsample=0.8, subsample_freq=1, colsample_bytree=0.8, min_child_samples=500, n_jobs=16, verbose=-1, random_state=0)
+    for t in range(T0, D, S_REFIT):
+        tr = np.zeros((D, S), dtype=bool)
+        tr[60:t - h - 1] = valid[60:t - h - 1]
+        idx = np.flatnonzero(tr.ravel())
+        if idx.size > cap:
+            idx = np.sort(rng.choice(idx, cap, replace=False))
+        Xt = Xf[idx]
+        mb, mt = lgb.LGBMClassifier(**kw).fit(Xt, yb[idx]), lgb.LGBMClassifier(**kw).fit(Xt, yt[idx])
+        hi = min(t + S_REFIT, D)
+        te = np.zeros((D, S), dtype=bool)
+        te[t:hi] = fc[t:hi]
+        fac[te] = -(mb.predict_proba(X[te])[:, 1] - mt.predict_proba(X[te])[:, 1])
+        print(f"[rp] asym factor: fit at {dates[t]} on {idx.size:,} rows ({time.time() - t0:.0f}s)", flush=True)
+    np.save(R / "asym_factor_h5.npy", fac.astype(np.float32))
+    seg = {"train_window": slice(T0, TR), "test": SEG["test"], "forward": SEG["forward"], "oos": SEG["oos"]}
+    tw = slice(T0, TR)
+
+    def long_excess(sig, hl):
+        sm = ema_rows(sig, hl)
+        fin = np.isfinite(sm)
+        W = top_book(sm, np.maximum(1, np.floor(fin.sum(1) * TOP).astype(int)))
+        ok = fin & np.isfinite(tgt)
+        ew = np.where(ok.sum(1) > 0, np.where(ok, tgt, 0.0).sum(1) / np.maximum(ok.sum(1), 1), np.nan)
+        net = (W * r).sum(1) - COST * np.abs(np.diff(W, axis=0, prepend=np.zeros((1, S)))).sum(1)
+        return np.where((W.sum(1) > 0) & np.isfinite(ew), net - ew, np.nan), np.where((W.sum(1) > 0) & np.isfinite(ew), net, np.nan)
+
+    def st(x, sl):
+        f = x[sl][np.isfinite(x[sl])]
+        return {"ann": float(f.mean() * 252), "sharpe": float(f.mean() / f.std() * np.sqrt(252)), "t": float(f.mean() / f.std() * np.sqrt(f.size)), "n": int(f.size)} if f.size > 20 and f.std() > 0 else {}
+
+    z = zscore_rows(fac)
+    ric = cs_pearson(pct_rows(fac), pct_rows(tgt))
+    res = {"factor": {"rank_ic": {k: float(np.nanmean(ric[sl])) for k, sl in seg.items()}, "long_excess_hl5": {k: st(long_excess(fac, 5.0)[0], sl) for k, sl in seg.items()}}, "champions": {}}
+    print(f"[rp] asym factor alone: rank IC {res['factor']['rank_ic']}; long excess {res['factor']['long_excess_hl5']}", flush=True)
+    if nanmean_quiet(cs_pearson(z[tw], tgt[tw])) < 0:
+        z = -z
+    for name in names:
+        F = np.load(R / f"fam_{name}.npy", mmap_mode="r")
+        comp = [np.asarray(F[k], dtype=np.float64) for k in range(F.shape[0])]
+        w_orig = np.load(R / f"famw_{name}.npy")
+        w100, w101 = fit_weights(comp, tgt, tw, "lstsq"), fit_weights(comp + [z], tgt, tw, "lstsq")
+        hl = CHAMPS[name]
+        S_ = {"orig": blend(comp, w_orig), "c100_window": blend(comp, w100), "c101_window": blend(comp + [z], w101)}
+        E = {k: long_excess(v, hl) for k, v in S_.items()}
+        out = {"halflife": hl, "weight_new": float(w101[-1]), "weight_new_vs_abs_median": float(abs(w101[-1]) / np.median(np.abs(w101[:-1]))), "weight_rank_of_new_by_abs": int((np.abs(w101) > abs(w101[-1])).sum() + 1),
+               "books": {k: {s_: st(E[k][0], sl) for s_, sl in seg.items()} for k in E},
+               "total_oos": {k: (lambda x: {"sharpe": float(np.nanmean(x) / np.nanstd(x) * np.sqrt(252)), "mdd": float((np.cumprod(1 + np.nan_to_num(x)) / np.maximum.accumulate(np.cumprod(1 + np.nan_to_num(x))) - 1).min())})(E[k][1][SEG["oos"]]) for k in E},
+               "paired_c101_minus_c100": {s_: st(E["c101_window"][0] - E["c100_window"][0], sl) for s_, sl in seg.items()},
+               "paired_c101_minus_orig": {s_: st(E["c101_window"][0] - E["orig"][0], sl) for s_, sl in seg.items()},
+               "paired_c100_minus_orig": {s_: st(E["c100_window"][0] - E["orig"][0], sl) for s_, sl in seg.items()}}
+        res["champions"][name] = out
+        p_ = out["paired_c101_minus_c100"]
+        print(f"[rp] {name}: new family weight rank {out['weight_rank_of_new_by_abs']}/101; 101 − 100 (same window): test {p_['test']['ann']:+.2%} (t {p_['test']['t']:+.1f}), forward {p_['forward']['ann']:+.2%} (t {p_['forward']['t']:+.1f}), "
+              f"oos {p_['oos']['ann']:+.2%} (t {p_['oos']['t']:+.1f}); 100-window − orig oos {out['paired_c100_minus_orig']['oos']['ann']:+.2%} ({time.time() - t0:.0f}s)", flush=True)
+        del comp
+    (R / "asym_factor_study.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    Ledger(PARTURA_ROOT / "runs" / "_forward" / "ledger.json").record("forward", 2 * len(names) + 1, "risk control R002 section 6.2: asymmetric bad-stock factor added to the champions' pools", "asym_factor_study")
+
+
 # ------------------------------------------------------------------ the study
 def run(name, MK):
     hl = CHAMPS[name]
@@ -481,6 +593,13 @@ def run(name, MK):
     return {"halflife": hl, "books": res, "picks": picks, "stacks": {k: v["params"] for k, v in res.items() if k.startswith("X")}, "series": {k: r5(series[k]) for k in keep},
             "bench": r5(ew), "diagnostics": diag}
 
+
+if "--track" in argv or "--asym-factor" in argv:
+    with slot():
+        mem = MemoryGuard(self_limit_gb=60, cgroup_limit_gb=80).start()
+        track() if "--track" in argv else asym_factor_study()
+        mem.stop()
+    raise SystemExit(0)
 
 with slot():
     mem = MemoryGuard(self_limit_gb=60, cgroup_limit_gb=80).start()

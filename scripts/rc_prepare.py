@@ -37,11 +37,12 @@ def opt(name, default=None):
 
 
 STORE = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute"
-END = "20260916"
-OUT = PARTURA_ROOT / "runs" / "_risk"
+END = opt("--end", "20260916")
+BASE_END = "20260916"                                          # the end of the champions' extended signals / members
+OUT = Path(opt("--out")) if opt("--out") else PARTURA_ROOT / "runs" / "_risk"
 OUT.mkdir(parents=True, exist_ok=True)
 names = [n for n in (opt("--only") or "手写库冠军,挖掘冠军").split(",") if n]
-M = json.loads((PARTURA_ROOT / "runs" / "_forward" / f"members_{END}.json").read_text(encoding="utf-8"))
+M = json.loads((PARTURA_ROOT / "runs" / "_forward" / f"members_{BASE_END}.json").read_text(encoding="utf-8"))
 EXPR = {"open": "day_first(Open)", "close": "day_last(Close)", "amt": "day_sum(Amt)", "high": "day_max(High)", "low": "day_min(Low)",
         "ltc": "neg(LogTotalCap)", "lfc": "neg(LogFloatCap)", "lfs": "neg(LogFloatShares)"}
 
@@ -55,7 +56,7 @@ with slot():
     syms = list(ps.symbols)
     ix = lambda d: int(np.searchsorted(dates, d))             # noqa: E731
     us, n_old = slice(0, ix("20230808")), ix("20260101")
-    if us.stop != 1359 or str(dates[n_old - 1]) != "20251231" or str(dates[-1]) != END:
+    if us.stop != 1359 or str(dates[n_old - 1]) != "20251231" or (END == BASE_END and str(dates[-1]) != END):
         raise SystemExit(f"unexpected calendar: {us.stop} training days, old view ends {dates[n_old - 1]}, view ends {dates[-1]}")
     tgt = np.asarray(ps.target(1), dtype=np.float64)
     np.save(OUT / "target.npy", tgt)
@@ -79,7 +80,7 @@ with slot():
     np.save(OUT / "px_rawprice.npy", raw_px.astype(np.float32))
     print(f"[rc] view {dates[0]}..{dates[-1]}: {len(dates)} x {len(syms)}; industry from {snap.name}: {int((ind >= 0).sum())} mapped, {len(set(ind[ind >= 0]))} industries; "
           f"raw price median {np.nanmedian(raw_px[-1]):.3f} (last day), {np.nanmedian(raw_px[0]):.3f} (first day); total cap median {np.exp(np.nanmedian(P['ltc'][-1])):.3g} ({time.time() - t0:.0f}s)", flush=True)
-    (OUT / "base.json").write_text(json.dumps({"dates": [str(d) for d in dates], "symbols": syms, "train_stop": us.stop, "old_stop": n_old, "end": END,
+    (OUT / "base.json").write_text(json.dumps({"dates": [str(d) for d in dates], "symbols": syms, "train_stop": us.stop, "old_stop": n_old, "end": END, "last": str(dates[-1]),
                                                 "industry_snapshot": snap.name}, ensure_ascii=False), encoding="utf-8")
 
     if "--skip-families" not in argv:
