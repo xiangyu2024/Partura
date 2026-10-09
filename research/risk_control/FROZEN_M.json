@@ -1,0 +1,14 @@
+{
+ "name": "M_f5_logit_q0.8_l0.5",
+ "frozen_on": "2026-10-08",
+ "code_commit": "1b19853",
+ "code": "scripts/rc_predict.py: market_features, market_models (target f5, model logit), flag_of(p, 0.8)",
+ "target": "sum of the tradable equal-weight market return over label rows t..t+4 < -5%",
+ "model": "SimpleImputer(median) + StandardScaler + LogisticRegression(C=0.1, class_weight=balanced, max_iter=2000); expanding window from day 60, refit every 20 days from day 500; a training row s needs s <= t-7",
+ "use": "prob > expanding 80% quantile of its own past predictions (>= 120 obs, lagged one day) -> exposure 0.5; held 3 more days after the condition clears",
+ "data_read_until": "20260916",
+ "forward_from": "20260917",
+ "how_to_read": "rc_prepare.py --end <last day> --out runs/_risk_track --skip-families ; rc_predict.py --dir runs/_risk_track --track  -> runs/_risk_track/track_M.json (also checks that the overlap reproduces runs/_risk/risk_control_p2.json)",
+ "verdict_rule": "after >= 250 new trading days containing >= 5 fall episodes: fwd5 after a flag below fwd5 otherwise AND Sharpe of half-on-flag equal-weight market above fully invested; otherwise rejected",
+ "in_sample_record": "out-of-sample 2023-08-08..2026-09-16 (already seen, not evidence): Sharpe 1.32/1.34 vs 0.99/1.01; the whole gain is 2024-01/02"
+}
