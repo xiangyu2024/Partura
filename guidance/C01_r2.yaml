@@ -1,0 +1,215 @@
+# C01 第 2 轮的指引(research/coldstart_C01/PLAN.md §2.5)。只看本实验 R1 那 8 次搜索的证据与算子内核源码;
+# 另外用到的公开文献常识一律在文本里标明「先验」。pool 原样照抄 C00_base.yaml,奖励 long 不动。
+#
+# 这一轮要做两件事。
+#   (1) 把 R1 漏掉的算力收回来 —— R1 的 273 个通过者里 217 个(79%)与 pool / 已知族 |ρ|≥0.5,
+#       种子 101/102/106/108 因此一个 head 都没有。下面 5 条 ban 打掉其中 189 个,一个 R1 head 都不碰
+#       (逐条在 627 个 R1 候选上核对过)。
+#   (2) 把主要算力押到 R1 完全空白的两个机制上(收益在一天里什么时候到账、成交额落在哪一边的分钟),
+#       而不是复刻种子 104 的 cs_mask_top_replace_mean_neg(inv(div(day_distinct_ratio, day_std))) 族 ——
+#       那一族按全臂对 R1 已收 heads 去重(|ρ|<0.7)基本不会算成新 head。压住它靠的不是先验(任何命中
+#       R1 head 的模式都不许写),靠的是两个 idea 的 grammar.day_ops 这道硬 must-contain,不含其中
+#       任一算子的候选一律判 outside。
+#
+# 总领审定时的改动(理由与核对数字见 research/coldstart_C01/beliefs_r2.md 第 3 节):
+#   - 加 C2P6、C2P7 两条 ban:把「名义股价水平」与「价格当被加权量」这两条后门关掉 —— 不关的话,C2a 提权的
+#     day_first/day_last 与 C2b 提权的 day_wmean/day_wstd/day_topw_mean 会把 R1 里分数≈0.5 的价格水平吸引子
+#     (R1 存档里两条新增 ban 额外命中 95 个候选,只有 1 个过线 —— 它是种子 107 那个 head 的孪生;0 个 head)和种子 104 族的加权孪生带进两个邻域。两条在 R1 的 18 个 head 上命中 0 个。
+#   - C2a 的 must-contain 去掉 day_sum(它是通用归并,不读时点;留着它邻域会收进 day_sum(Close) 这类价格水平);
+#     种子 3 的开盘价改用 day_first(Open)(原写法 day_first(Close) 是第一分钟收盘价,不是开盘价)。
+#   - C2b 种子 1 改成「钱经历的减时间经历的」差值写法,与当天涨跌方向(短期反转)分开。
+#   - C2a 的先验更正:公开文献里 A 股隔夜收益在市场层面平均为负、日内为正(与美股相反),本 idea 只押横截面。
+version: 1
+batch: C01_r2
+evidence_base:
+  digest: research/coldstart_C01/digest_r2.md
+  episodes: c01r1s101..c01r1s108_I0_open_search
+reward: []
+evaluation: []
+priors:
+- id: C2P1_flow_plain_reducers
+  action: ban
+  pattern: '{day_max|day_min|day_mean|day_median|day_sum|day_quantile|day_quantile_q25|day_quantile_q75|day_var|day_skew|day_kurt}(@flow)'
+  w: 0
+  why: '成交额与成交量的平凡日内聚合(水平、离散度、形状)只是已知流动性族换个写法,不是新信息。可证伪:
+    若这条对,R2 的 B 臂通过者里 |ρ|≥0.5 的占比会从 R1 的 79% 降到 40% 以下而 heads 数不降;若 B 臂反而
+    整组颗粒无收、evidence 的 sampling.banned 占掉提议的大头,说明禁得过宽,应改成降权。'
+  evidence:
+  - 'research/coldstart_C01/digest_r2.md: 通过者前 60 里 day_max(Amt) +2.09/ρ+0.81、day_median(Volume)
+    与 day_var(Amt) 的 9 条组合 +1.95/ρ+0.85、day_skew(Amt) 的 4 条 +0.95/ρ+0.88,全都不是 head'
+  - 'episodes/c01r1s106_I0_open_search/evidence.json: 31 个通过者、heads 0,通过者几乎全是
+    day_max/day_median/day_var(Amt|Volume) 的加法堆叠'
+  - 'episodes/c01r1s101_I0_open_search/evidence.json: 77 个通过者、heads 0,主干是 day_sum(Volume)
+    与 day_var(Low) 套 pow_1_5 的膨胀链'
+- id: C2P2_flow_weighted_by_flow
+  action: ban
+  pattern: '{day_wmean|day_wstd|day_topw_mean}(@flow, _)'
+  w: 0
+  why: '把成交额自己当被加权量(day_wstd(Amt,Amt) 之类)得到的还是成交额水平;把 Ret 当被加权量
+    (day_wmean(Ret,Amt))才是量价交互,所以这条只禁前者,故意把 day_*(Ret, @flow) 整个留给 C2b。
+    可证伪:若这条对,R2 B 臂里不会再出现 |ρ|>0.7 的 day_w*(@flow, _) 通过者,而 C2b 的 (Ret, Amt)
+    配对至少出 1 个 head;若 C2b 也一个都出不来,说明被禁掉的不是陪跑而是这类算子的全部信号。'
+  evidence:
+  - 'research/coldstart_C01/digest_r2.md: day_wstd(Amt, Amt) +2.28/ρ+0.78、day_wmean(Amt, Amt)
+    +2.22/ρ+0.83、day_wstd(Amt, Ret) +2.04/ρ+0.81,都通过门槛、都不是 head'
+  - 'episodes/c01r1s108_I0_open_search/evidence.json: 50 个通过者、heads 0,day_wstd/day_wmean/day_topw_mean
+    的第一个参数全是 Amt 或 Volume'
+- id: C2P3_pool_restated
+  action: ban
+  pattern: '{cross_mean|cross_scale|cross_stddev|cross_rank|cross_quantile_q25|cross_quantile_q75|cross_tail_mean_q25|cross_tail_mean_q75}(day_std(@flow),
+    _)'
+  w: 0
+  why: 'pool 本身就是 cross_mean(day_std(Amt), 30),把外层换成另一个按日滚动的归并算子得到的是同一个
+    东西,按判读规则永远不可能成为 head。可证伪:若这条对,R2 B 臂里这一形状的通过者为 0 而 heads 数不降。'
+  evidence:
+  - 'research/coldstart_C01/digest_r2.md: sub(cross_scale(day_std(Amt), 15), day_wmean(Amt, Volume))
+    +2.23/ρ+0.83;mul(2, pow_1_5(add(day_sum(Volume), pow_1_5(pow_1_5(cross_quantile_q75(day_std(Amt), 3))))))
+    +2.04/ρ+0.87'
+  - 'episodes/c01r1s101_I0_open_search/evidence.json: 含 cross_quantile_q75(day_std(Amt), _) 的候选 26 个,
+    全部通过、全部 |ρ|≥0.5、heads 0'
+- id: C2P4_open_close_bar_flow_level
+  action: ban
+  pattern: '{day_first|day_last|day_open|day_close}(@flow)'
+  unless: cs_first_low20(day_open(@flow), _)
+  w: 0
+  why: '开盘或收盘那一分钟的成交额仍然是流动性水平(裸 day_open(Amt) 自己就 +1.56、ρ+0.91),而 C2a 把
+    day_first/day_last 提权 8 倍,等于给这个水平量开了一条带提权的后门。unless 原样豁免 R1 两个 head 用的
+    cs_first_low20(day_open(@flow), _) 结构,所以这条不碰任何 R1 head。可证伪:若这条对,种子 201–204
+    这 4 次运行里不会出现以首末分钟成交额为核的通过者,而 C2a 的 Ret 首末分钟形式照常被提议。'
+  evidence:
+  - 'research/coldstart_C01/digest_r2.md: 种子 103 的通过者主干是 cs_first_low20(day_open(Amt), x) 的各种 x,
+    其中只有 2 个算 head'
+  - 'episodes/c01r1s103_I0_open_search/evidence.json: 以 day_open(Amt) 为 y 的候选 24 个,裸值 score +1.56、ρ+0.91'
+- id: C2P5_price_variance_level
+  action: ban
+  pattern: day_var(@price)
+  w: 0
+  why: '价格叶子的日内方差是名义股价平方乘日内波动平方,量纲随股价走,是 pool 的近亲而不是无量纲特征;
+    R1 的 18 个 head 没有一个用 day_var。可证伪:若这条禁错了,R2 B 臂每百次付费评估的 heads 数会低于
+    R1 同种子水平,那时应退回只禁 day_var(Low)。'
+  evidence:
+  - 'research/coldstart_C01/digest_r2.md: mul(2, pow_2(add(day_sum(Volume), pow_1_5(add(day_sum(Volume),
+    pow_1_5(add(cross_quantile_q75(day_std(Amt), 3), day_var(Low)))))))) +2.11/ρ+0.87'
+  - 'episodes/c01r1s101_I0_open_search/evidence.json: 含 day_var(Low) 的候选 32 个,其中 30 个是 |ρ|≥0.5
+    的通过者,heads 0'
+- id: C2P6_price_as_weighted_quantity
+  action: ban
+  pattern: '{day_wmean|day_wstd|day_topw_mean}(@price, _)'
+  w: 0
+  why: '把价格叶子当被加权量,day_wmean/day_topw_mean 得到的是名义股价水平,day_wstd 得到的是价格单位的日内
+    离散度 —— 后者就是 R1 种子 104 那一族(day_std(Close|Vwap))的加权孪生,按跨轮去重成不了新 head。C2b 把
+    这三个算子提权 8 倍是要它们去称 Ret,不是再称一遍价格;C2P2 已经禁了称成交额的写法,这条补上称价格的。
+    可证伪:若这条对,种子 205–208 的存档里不会再出现分数 0.4–0.6、ρ≈0.42 的价格加权候选堆,而 (Ret, @flow)
+    写法照常被提议;若种子 205–208 的 sampling.banned 占提议 >30% 且通过者为 0,说明禁得过宽,R3 改成降权。'
+  evidence:
+  - 'episodes/c01r1s108_I0_open_search/evidence.json: day_wmean(Low, Vwap)、day_wmean(High, Volume)、
+    day_topw_mean(Close, Close)、day_topw_mean(High, High)、day_topw_mean(Low, Vwap) 等 8 个候选分数都是
+    +0.50/+0.51、ρ 0.42–0.43、valid +1.55–1.57 —— 同一个名义股价读数的不同拼写,一个都没过线'
+  - 'episodes/c01r1s101..108_I0_open_search/evidence.json: 在 627 个 R1 候选上本条命中 11 个(9 个只被本条命中,
+    分数最高 +0.51;唯一的通过者 ρ+0.70,已被 C2P1 命中),命中 R1 head 0 个'
+- id: C2P7_nominal_price_level
+  action: ban
+  pattern: '{day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_quantile|day_quantile_q25|day_quantile_q75}(@price)'
+  unless: 'div({day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_quantile|day_quantile_q25|day_quantile_q75}(@price), _)'
+  w: 0
+  why: '开盘价、收盘价、日均价这类名义股价水平,在 R1 是一个「差一点过线」的吸引子:各种拼写都落在分数 ≈0.5、
+    ρ≈0.42 上,却一个 head 都没出,种子 102 一次运行就把 33 个存档位(共 80)花在这里。C2a 把 day_first/day_last 提权
+    8 倍、C2b 的种子用到 day_mean,而 8 个叶子里 5 个是价格,不禁就会把这个吸引子带进两个邻域、占掉精英位。
+    unless 豁免价格作分子的比值(div(day_first(Open), ts_delay(day_last(Close), 1)) 这类隔夜 / 日内收益),
+    所以 C2a 的价格比值写法不受影响。day_min 故意不在列表里:R1 的一个 head 用了 day_min(Close)。
+    可证伪:若这条对,R2 B 臂存档里不再出现 0.4–0.7 分、ρ≈0.42 的价格水平候选堆,种子 201–204 的通过者里
+    |ρ|≥0.5 的占比 <40%;若种子 201–204 的 sampling.banned 占提议 >40% 而通过者为 0,说明 unless 太窄,
+    R3 改成降权。'
+  evidence:
+  - 'episodes/c01r1s102_I0_open_search/evidence.json: day_close(Vwap)、signedpower(day_close(Close))、
+    pow_3(day_max(High))、day_max(High) 等 33 个存档候选是名义股价水平,分数最高 +0.54、多数在 +0.35–0.54、无一过线,种子 102 全程 heads 0'
+  - 'episodes/c01r1s107_I0_open_search/evidence.json: cs_mask_top_replace_mean_neg(day_last(Open)) +0.60、
+    cs_mask_top_replace_mean_neg(day_mean(Open)) +0.56,ρ 0.38,都没过线;双层 mask 的
+    cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile_q75(Open))) +1.31、ρ 0.30 过线但
+    不是 head(与该次运行的 head、双层 mask 的 day_std(Open) 那条 |ρ|≥0.7)'
+  - 'episodes/c01r1s101..108_I0_open_search/evidence.json: 在 627 个 R1 候选上本条命中 97 个,其中 85 个只被本条
+    命中、分数中位 +0.50,其中过线的只有上面那 1 个 head 孪生;另 4 个通过者 ρ≥0.71、同时被 C2P1/C2P2 命中;
+    命中 R1 head 0 个'
+pool:
+- id: known_amt_dispersion
+  expr: cross_mean(day_std(Amt), 30)
+  sign: -1
+  hl: 0
+ideas:
+- id: C2a_when_the_return_arrives
+  hypothesis: 'A 股 T+1 下今天买的票今天卖不掉,开盘买入者要承担扛过夜的风险,所以市场层面开盘价平均是打了
+    折的。在这个平均折价之下,一只票的收益仍长期靠隔夜跳空到账(而不是靠盘中那 241 分钟走出来),说明它
+    在开盘集合竞价里长期有被消息与关注驱动的追价需求在推,这部分需求是价格压力、会回吐;收益靠盘中走出来
+    的票,买家是能在日内分批成交的耐心资金。把收益在一天里什么时候到账做成特征(EMA 半衰期交给搜索),
+    做多盘中到账的那一侧。R1 对这整块是空白,Ret 叶子在通过者里的 lift 只有 0.63,18 个 head 没有一个碰过
+    隔夜与日内的切分或日内时点。'
+  thesis:
+    mechanism: '先验(公开文献,置信中等):A 股在市场层面与美股相反,隔夜收益平均为负、日内为正,文献把它
+      归因于 T+1(开盘买入者当天卖不掉,要求折价)。所以本 idea 不押市场层面的符号,只押横截面:在平均折价
+      之下仍长期靠隔夜跳空到账的票,是开盘集合竞价里关注度驱动的追价需求在推,会回吐;盘中逐步走出来的
+      收益更像信息被耐心资金吸收。竞争性先验:A 股短期反转若主要集中在日内段,隔夜减日内写法上搜索会选 +1,
+      那读到的是日内反转(已知风格),不是本机制 —— 见 fails_if (c)。核是收益之差或按自身日内波动归一,
+      是无量纲特征,与成交额的水平或离散度(pool)讲的不是一件事。'
+    counterparty: '另一边是看到隔夜消息、第二天开盘在集合竞价里追价的散户与关注驱动资金。他们在价格已经含进
+      消息之后成交,又因为 T+1 必须把仓位扛过夜;一只票的跳空长期压过市场平均的开盘折价,就是他们长期在买
+      这只票,多付的那部分是给卖方的。'
+    prediction: '种子 201–204 这 4 次运行里,至少 1 个 head 的核含 day_first 或 day_last 作用在 Ret 上、或在价格
+      比值里(Open / Close),或含 day_centroid / day_argmax / day_argmin;它与 pool 的 |ρ|≤0.3、换手 ≤0.12;在隔夜占比写法上搜索
+      选到的方向是 -1(做多盘中到账的一侧)。这 4 次运行的通过者里 |ρ|≥0.5 的占比 <40%(R1 全臂是 79%)。'
+    fails_if: '(a) 4×192 次付费评估后邻域里一个通过者都没有,说明这个切分在 2018–2023H1 的截面上没有溢价;
+      (b) 通过者的 |ρ| 中位数 ≥0.5,说明跳空幅度只是小盘与低流动性的代理;(c) 在隔夜占比写法上搜索选到 +1
+      (做多靠隔夜到账的票),与机制相反;(d) head 只出在 cs_first_low20 的种子上且方向是 +1,那时被筛中的
+      那 20% 恰好成了纯多头书、拿到的是一价与锁停名字,是算子平移的假象,不算这条机制成立。'
+  seeds:
+  - div(abs_(day_first(Ret)), day_std(Ret))
+  - sub(mul(2, day_first(Ret)), day_sum(Ret))
+  - sub(div(day_first(Open), ts_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)))
+  - cs_first_low20(sub(mul(2, day_first(Ret)), day_sum(Ret)), day_distinct_ratio(Close))
+  - sub(day_first(Ret), day_last(Ret))
+  - cs_first_low20(day_centroid(Amt), day_distinct_ratio(Close))
+  grammar:
+    day_ops: [day_first, day_last, day_centroid, day_argmax, day_argmin]
+    ops: [ts_delay, cs_first_low20, div, sub, abs_]
+    leaves: [Ret, Open, Close, Amt]
+    windows: [1]
+  reward: long
+- id: C2b_turnover_on_the_up_minutes
+  hypothesis: '散户的彩票需求在日内是可观测的,显眼的上涨分钟把成交额吸过去,于是这一天钱经历的收益
+    (按成交额加权的分钟收益)高于时间经历的收益(等权分钟收益),分钟收益分布的右尾也更肥。一只票长期
+    让钱落在上涨分钟一侧,说明它长期被追涨,价格里含着这份投机溢价,后续收益更低;做多的是没人追的那一侧,
+    即钱落在下跌分钟、右尾不肥的票。所有核都是份额之差、相关或按自身日内波动归一的无量纲量,免得退化成
+    波动族;核心读数是「钱经历的减时间经历的」差值,它和当天涨跌方向(短期反转)不是一件事。R1 对这整块是空白,
+    成交额与收益的配对(day_signed_ratio、day_wmean(Ret, _)、day_corr(Ret, _))在 627 个候选里一次都没有
+    进过通过者,day_w* 的第一个参数全是 Amt 或 Volume。'
+  thesis:
+    mechanism: '成交额落在上涨分钟的那一侧等于主动买入在追价(先验,公开文献里 A 股资金流与主动买入占比类
+      指标在月度横截面上是反向的,净流入之后跑输,属于价格压力回吐;彩票需求、日内 MAX 与偏度的负溢价是
+      同一类故事)。按成交额加权与按时间加权的分钟收益之差、以及重仓分钟的平均收益,都是这件事的直接读数,
+      天然无量纲,和 pool 的成交额离散度不是一件事。'
+    counterparty: '另一边是看到显眼上涨分钟才进场的散户,以及被日内动量吸引的短线资金。他们成交在当天成交额
+      加权均价之上,买到的是彩票形状的分布,让渡掉的是期望收益;向这份需求卖出的是同一天分批派发的资金。'
+    prediction: '种子 205–208 这 4 次运行里,至少 1 个 head 的核含 (Ret, @flow) 的配对原子(day_signed_ratio、
+      day_wmean、day_wstd、day_topw_mean、day_corr 的第一个参数是 Ret)或 day_es_ratio_hi(Ret);
+      方向是做多没被追的一侧(在 day_signed_ratio 写法上是 -1);这 4 次运行通过者的 |ρ| 中位数 <0.4;
+      它与 C2a 的 head 的 |ρ|<0.7,否则两个 idea 其实是同一个关注度因子、去重后只剩一个;至少 1 个通过者
+      来自差值写法(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Close)) 或 (day_wmean − day_mean) /
+      day_wstd 一系),而不只是裸 day_signed_ratio(Ret, Amt) 这类与当天涨跌同向的读数。'
+    fails_if: '(a) 邻域里的通过者 |ρ| 全部 ≥0.5,说明成交额加权与时间加权的收益差只是买卖价差或刻度粗细的
+      代理;(b) 这些 head 与 R1 种子 104 那一族(cs_mask_top_replace_mean_neg 加 day_std(Close) 与
+      day_distinct_ratio)的 |ρ|≥0.7、被跨轮去重刷掉,说明读到的是一价日与粗价格刻度(低名义股价)而不是
+      追涨;(c) 搜索选到的方向是做多被追的一侧,那是日内动量的延续而不是彩票式高估;(d) 这 4 次运行一个
+      通过者都没有;(e) 通过者全是裸 day_signed_ratio(Ret, Amt) / day_topw_mean(Ret, Amt) 这类与当天涨跌
+      同向的读数、差值写法一个都不过线 —— 那读到的是短期反转,不是钱落在哪一边,不算这条机制成立。'
+  seeds:
+  - sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Close))
+  - div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_wstd(Ret, Amt))
+  - div(day_topw_mean(Ret, Amt), day_wstd(Ret, Amt))
+  - cs_first_low20(day_signed_ratio(Ret, Amt), day_distinct_ratio(Close))
+  - day_corr(Ret, Amt)
+  - day_es_ratio_hi(Ret)
+  grammar:
+    day_ops: [day_signed_ratio, day_wmean, day_wstd, day_topw_mean, day_corr, day_es_ratio_hi, day_skew]
+    ops: [cs_first_low20, div, sub]
+    leaves: [Ret, Amt, Volume, Close]
+    windows: []
+  reward: long

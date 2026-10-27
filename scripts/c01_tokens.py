@@ -45,7 +45,8 @@ for f in sorted(WF.glob("agent-*.jsonl")):
         msg = m.get("message") or {}
         if m.get("type") == "assistant":
             for blk in msg.get("content") or []:
-                if isinstance(blk, dict) and blk.get("type") == "tool_use":
+                if isinstance(blk, dict) and blk.get("type") == "tool_use" and blk.get("name") not in ("StructuredOutput",):
+                    # an agent's returned text may NAME a forbidden path (repeating the rule); only tool calls that read count
                     s = json.dumps(blk.get("input"), ensure_ascii=False)
                     for x in FORBIDDEN.findall(s):
                         hits.append({"tool": blk.get("name"), "match": x, "input": s[:240]})
