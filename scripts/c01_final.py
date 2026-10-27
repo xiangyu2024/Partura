@@ -207,12 +207,16 @@ pairs = []
 for k in (2, 3):
     for ra in [r for r in ARMS["A"] if r["round"] == k]:
         rb = next((r for r in ARMS["B"] if r["round"] == k and r["seed"] == ra["seed"]), None)
+        ha = ra["evidence"]["arms"]["control"].get("independent_distinct", 0)
+        ga = ra["evidence"]["arms"]["control"]["gate_fail"] / max(ra["evidence"]["arms"]["control"]["scored"], 1)
         if rb:
-            ha, hb = ra["evidence"]["arms"]["control"].get("independent_distinct", 0), rb["evidence"]["arms"]["steer"].get("independent_distinct", 0)
-            ga = ra["evidence"]["arms"]["control"]["gate_fail"] / max(ra["evidence"]["arms"]["control"]["scored"], 1)
+            hb = rb["evidence"]["arms"]["steer"].get("independent_distinct", 0)
             gb = rb["evidence"]["arms"]["steer"]["gate_fail"] / max(rb["evidence"]["arms"]["steer"]["scored"], 1)
-            pairs.append({"round": k, "seed": ra["seed"], "heads_A": ha, "heads_B": hb, "gate_A": ga, "gate_B": gb,
-                          "passers_A": ra["evidence"]["arms"]["control"]["passers"], "passers_B": rb["evidence"]["arms"]["steer"]["passers"]})
+            pb = rb["evidence"]["arms"]["steer"]["passers"]
+        else:                                                 # PLAN §6 revision 2: a B run that failed twice counts as 0
+            hb, gb, pb = 0, float("nan"), 0
+        pairs.append({"round": k, "seed": ra["seed"], "heads_A": ha, "heads_B": hb, "gate_A": ga, "gate_B": gb, "B_failed": rb is None,
+                      "passers_A": ra["evidence"]["arms"]["control"]["passers"], "passers_B": pb})
 wins = sum(p["heads_B"] > p["heads_A"] for p in pairs)
 loss = sum(p["heads_B"] < p["heads_A"] for p in pairs)
 nn = wins + loss
@@ -247,6 +251,7 @@ out["anatomy"] = {a: {"discoveries": anatomy(passers[a]), "heads": anatomy(out["
 for k in (2, 3):
     bk_ = [c for c in passers["B"] if c["round"] == k]
     out["anatomy"].setdefault("B_in_hood", {})[f"r{k}"] = {"discoveries": len(bk_), "in_hood": sum(1 for c in bk_ if c["hood"] and any(op in c["expr"] for op in c["hood"]))}
+out["gpu_seconds"] = {a: sum(r["evidence"]["arms"][r["arm"]]["seconds"] for r in rs) for a, rs in ARMS.items()}
 out["seconds"] = time.time() - t0
 (D / ("final_dry.json" if DRY else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 

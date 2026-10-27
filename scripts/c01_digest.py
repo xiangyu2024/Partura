@@ -59,6 +59,27 @@ for j in range(1, K):
                           "train": c.get("train"), "valid": c.get("valid"), "hl": c.get("hl"), "sign": c.get("sign"),
                           "turnover": c.get("turnover"), "rho_known": c.get("rho_known"), "rho_pool": c.get("rho_pool"),
                           "head": c["expr"] in heads, "pass": c["score"] >= LINE})
+# failed B-arm runs of earlier rounds (exit codes from the server's rN.exit / rNrerun.exit, pulled into this folder;
+# a rerun's code overrides the first attempt's) -- PLAN §6 revision 2: a B run that still fails counts as 0 discoveries
+failed = []
+for j in range(1, K):
+    status = {}
+    for f in (D / f"r{j}.exit", D / f"r{j}rerun.exit"):
+        if f.is_file():
+            for line in f.read_text().split("\n"):
+                if line.strip():
+                    tag, code = line.split()[:2]
+                    if j == 1 or tag.endswith("B"):
+                        status[tag] = int(code)
+    for tag, code in sorted(status.items()):
+        if code != 0:
+            logs = sorted((D / "failures").glob(f"{tag}.fail*.log"))
+            why = ""
+            for lg in logs:
+                txt = lg.read_text(errors="replace")
+                hit = [x for x in txt.split("\n") if ("Error" in x or "exit" in x or "No space" in x or "Not enough free space" in x)]
+                why += (hit[-1] if hit else "") + " "
+            failed.append({"round": j, "tag": tag, "exit": code, "why": why.strip()[:300]})
 if not runs:
     raise SystemExit(f"no B-arm evidence for rounds < {K}: pull it first (./scripts/study.sh idea-pull)")
 
@@ -80,7 +101,7 @@ def lift(key):
     return sorted(rows, key=lambda r: -r[3])
 
 
-out = {"round_to_write": K, "runs": runs, "n_candidates": len(cands), "n_passers": len(passers), "n_heads": len(heads),
+out = {"round_to_write": K, "runs": runs, "failed": failed, "n_candidates": len(cands), "n_passers": len(passers), "n_heads": len(heads),
        "heads": heads, "passers_top": passers[:60], "nonpassers_top": [c for c in cands if not c["pass"]][:30],
        "op_lift": lift(ops_of), "leaf_lift": lift(leaves_of)}
 (D / f"digest_r{K}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
@@ -97,6 +118,12 @@ L = [f"# C01 证据摘要:写第 {K} 轮指引之前(只含 B 臂自己的运行
 for r in runs:
     L.append(f"| R{r['round']} | {r['seed']} | {r['idea']} | {r['scored']} | {100 * r['gate_fail_share']:.0f}% | {r['passers']} | {r['heads']} | "
              f"{r['heads_per_100']:.1f} | {r['seconds']} | {json.dumps(r['sampling'], ensure_ascii=False)} |")
+if failed:
+    L += ["", "## 失败的运行(按 PLAN §6 修订 2:重跑后仍失败的 B 运行,该种子的发现记为 0)", "", "| 轮 | 任务 | 退出码 | 原因(日志摘录) |", "|---|---|---|---|"]
+    for x in failed:
+        L.append(f"| R{x['round']} | {x['tag']} | {x['exit']} | {x['why']} |")
+L += ["", "运行时间:见上表「秒」一列。注意:分钟级跨股票截面算子(nt_cs_* / nt_ts_*)与日内折叠混用的表达式,"
+      "引擎要把整块 (股票, 日, 分钟) 中间量落盘,每个节点约 6.8 GB,并且很慢;R2 有一次运行因此写满数据盘。"]
 L += ["", "## heads(互不相关、|ρ| 对已知族与 pool 都 < 0.5)", "", "| 轮 | 种子 | score | train | valid | 半衰期 | 方向 | 换手 | ρ已知 | 表达式 |", "|---|---|---|---|---|---|---|---|---|---|"]
 for c in heads:
     L.append(f"| R{c['round']} | {c['seed']} | {f(c['score'])} | {f(c['train'])} | {f(c['valid'])} | {c['hl']:g} | {c['sign']:+g} | {c['turnover']:.3f} | {f(c['rho_known'])} | `{c['expr']}` |")
