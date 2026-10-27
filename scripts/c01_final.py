@@ -78,7 +78,23 @@ for a, rs in ARMS.items():
                             "hood": sorted(set((r["idea"].get("grammar") or {}).get("day_ops", [])))})
     lst.sort(key=lambda c: -c["score"])
     passers[a] = lst
-uniq = sorted({c["expr"] for lst in passers.values() for c in lst})
+# PLAN §6 revision 3: a discovery that is the known family by the search's own measurement (max(|rho_pool|, |rho_known_traded|)
+# >= 0.5, the same train days, smoothing and direction as below) can never be a head -- it is not rebuilt; a random 20 of
+# them are rebuilt anyway and both measurements are reported, so the shortcut is checked, not assumed.
+def known_by_search(c):
+    r = [abs(c[k]) for k in ("rho_pool", "rho_known_traded") if isinstance(c.get(k), (int, float)) and c[k] == c[k]]
+    return bool(r) and max(r) >= RHO_KNOWN
+
+
+for lst in passers.values():
+    for c in lst:
+        src = next((x for r in ARMS["A"] + ARMS["B"] if r["episode"] == c["episode"] for x in r["evidence"]["arms"][r["arm"]]["candidates"] if x["expr"] == c["expr"]), {})
+        c["rho_pool"], c["rho_known_traded"] = src.get("rho_pool"), src.get("rho_known_traded")
+prefiltered = sorted({c["expr"] for lst in passers.values() for c in lst if known_by_search(c)}
+                     - {c["expr"] for lst in passers.values() for c in lst if not known_by_search(c)})
+check_known = [prefiltered[j] for j in sorted(set(int(k * len(prefiltered) / 20) for k in range(20)))] if prefiltered else []
+uniq = sorted({c["expr"] for lst in passers.values() for c in lst} - set(prefiltered)) + check_known
+print(f"[c01] known family by the search's own measurement, not rebuilt: {len(prefiltered)} (rebuilt anyway as a check: {len(check_known)})", flush=True)
 print(f"[c01] discoveries: A {len(passers['A'])}, B {len(passers['B'])}; {len(uniq)} distinct expressions to rebuild", flush=True)
 
 with slot():
@@ -149,13 +165,18 @@ with slot():
             Z[e] = dg._zrank(sm)[:tr.stop:5]
         print(f"[c01] rebuilt {min(i + 16, len(uniq))}/{len(uniq)} ({time.time() - t0:.0f}s)", flush=True)
 
-    out = {"plan": "research/coldstart_C01/PLAN.md", "dry_run": DRY, "view": [str(dates[0]), END], "years_test": years_ho, "years_forward": years_fw,
+    chk = [{"expr": e, "full_view": rho(Z[e], kz), "search": max(abs(c["rho_known_traded"]) for lst in passers.values() for c in lst if c["expr"] == e)}
+           for e in check_known if e in Z]
+    if chk:
+        print(f"[c01] prefilter check on {len(chk)}: |rho| full view vs search, max abs diff {max(abs(abs(x['full_view']) - x['search']) for x in chk):.4f}; "
+              f"would have been heads by the full-view number: {sum(abs(x['full_view']) < RHO_KNOWN for x in chk)}", flush=True)
+    out = {"plan": "research/coldstart_C01/PLAN.md", "dry_run": DRY, "prefiltered_known": len(prefiltered), "prefilter_check": chk, "view": [str(dates[0]), END], "years_test": years_ho, "years_forward": years_fw,
            "trials": {a: sum(r["evidence"]["arms"][r["arm"]]["scored"] for r in rs) for a, rs in ARMS.items()}, "arms": {}}
     for a, lst in passers.items():
         heads = []
         for c in lst:
             e = c["expr"]
-            if e not in Z:
+            if e not in Z or e in prefiltered:
                 continue
             c["rho_known_full"] = rho(Z[e], kz)
             if abs(c["rho_known_full"]) >= RHO_KNOWN:
