@@ -1,0 +1,378 @@
+# C01 第 3 轮(最后一轮)的指引(research/coldstart_C01/PLAN.md §2.5)。只看本实验 B 臂自己的 15 次运行
+# (R1 共用的 8 次 + R2 的 7 次;207B 两次都失败,按 PLAN §6 修订 2 记 0)、算子内核源码与 partura/ 的代码。
+# 公开文献常识一律在文本里标「先验」。pool 原样照抄 C00_base.yaml,奖励 long 不动。
+#
+# 先接受 R2 的结论,不改故事:
+#   - R2 的两个 idea 在样本内就失败了,而且主要是实现失误,不是机制被证伪。(1) ban 是按写法匹配的(@flow 只匹配
+#     裸叶子),GP 一层包装就绕开(day_last(pow_1_5(Amt))、day_std(Amt) 根本没被禁);(2) must-contain 只查记号
+#     在不在表达式里(idea_search.py 的 hood 判定),一个装饰性的 day_centroid(Ret) 就能满足;(3) 12 个机制种子
+#     都是日频原始形式,换手 0.10–0.145,被 15bp 单边成本杀死(换手 ≥0.08 的 58 个候选只过线 2 个,中位分数 −0.66)。
+#   - R2 的 2 个 head 是被 cs_first_low20 平移过的流动性(未平移孪生 |ρ| 0.91),不算 C2a 成立;C2b 按
+#     beliefs_r2 §6 放弃(205–208 里 |ρ|<0.5 的通过者 0 个)。
+#   - C2a 的机制本轮**不复测**:它自己写下的失效条件 (c) 触发了 —— 隔夜减日内的两种写法(Ret 首分钟版 −0.40、
+#     价格比值版 −1.12)在 train 上都选了 +1,即做多「靠隔夜到账」的那一侧,与机制预测的方向相反。把成本
+#     加回去只能说明毛收益可能为正,救不了方向。隔夜/日内的比值写法并没有被本轮任何先验禁掉(C3P6 的 unless
+#     原样放过价格作分子的 div),305–308 的开放搜索仍然可以走到那里;本轮只是不为它花一张卡和 4 次运行。
+#
+# 这一轮改变做法:**按叶子和算子词表关掉已知族,不再按写法逐条堵**。
+#   口径:|ρ| = max(|rho_pool|, |rho_known_traded|),缺失退 |rho_known|;「通过」= score ≥ 1。
+#   15 次运行合计 1187 个存档候选、568 个通过者、20 个 head(与 digest_r3.md 逐字一致)。
+#   下面 11 条先验在这 568 个通过者上的命中率是 **100%**,20 个 head 也全部命中。这不是误伤,是本实验到现在
+#   为止的通过者**全部**落在四类东西里:流动性叶子(500 个通过者,其中 |ρ|<0.5 的只有 11 个 = 2.2%)、
+#   nt_* 分钟×股票截面(163/8)、104 族的 day_distinct_ratio(90/33)、价格单位日内离散度 day_std|day_var(@price)
+#   (104/38)。按 PLAN §3.1 的跨轮贪心去重,已经找到的那些 head 再找一次是零增量(beliefs_r2 B10),
+#   所以把它们关掉按主判据不花代价。代价在别处,写明白:
+#     (a) 量价交互类 idea 在 R3 全部出局;
+#     (b) 幸存下来的 114 个已有候选里**一个通过者都没有**,最高分 +0.688 —— R3 是一次押在没搜过的空间上的
+#         下注。如果 R3 回来是 0 个通过者,那就是「在这个奖励下,除了这四类之外没有东西」的答案,要如实记,
+#         不许事后把它说成指引的问题或空间的问题二选一:两种可能性靠 sampling 计数和幸存候选的分数分布区分。
+#
+# 两条强制通道的机械事实(自己在本机实测过,不是推断):
+#   - 算子名级的 ban 会被 Guidance.operator_weights() 折叠成按算子名的粗权重,经 ac_plugin.arm_hooks 传成
+#     TypedTreeGenerator 的 op_weight;generator._pick_weighted 把权重 0 的算子**直接剔出抽样**(整个面都是 0
+#     时那个面退出抽样)。实测:加上本文件的先验后,65 个可搜索 nt_* 算子全部权重 0、nt 面退出,3000 棵生成树里
+#     含 nt_*、ts_spearman、day_distinct_ratio 的各 0.00%(对照臂同样 3000 棵里是 6.57% / 1.33% / 3.93%)。
+#     所以 C3P2/C3P3/C3P4 是词表级的,不依赖 accept,207B 那种落盘事故在 R3 不可能重演。
+#   - **叶子级的 ban 只走 accept 这一道**:叶子抽样(generator._leaf/_collapse_leaf)对 self.fields 做均匀抽取,
+#     根本不读 op_weight,所以 C3P1 不改变提议分布(实测含流动性叶子的生成树 36.8% → 35.7%),它是在 accept
+#     里逐棵拒掉。generate() 在 accept 连续失败 max_retries*4 = 64 次后会走 fallback,那里不再问 accept(只查
+#     AlphaCube 自己的 banned_substructures,而 Partura 从不往那里写),理论上会漏出被禁的树。本规则集下实测
+#     1500 次 generate:C3a 邻域每棵树平均 4.8 次提议(banned 61.4%、outside 17.6%、accepted 20.8%)、
+#     I0 每棵 2.3 次(banned 55.5%、accepted 43.7%),**两者 fallback 都是 0 次,返回的树里被禁的 0 棵**
+#     (因为干净树仍占三分之一以上)。这是本文件唯一的「软」禁令,预测里按 ≤2% 的漏网写。
+#
+# 种子分配(交给 scripts/c01_jobs.py 的那份):
+#   [{"idea": "C3a_slow_lottery_shape", "seeds": [301, 302, 303, 304]},
+#    {"idea": "I0_open_search",         "seeds": [305, 306, 307, 308]}]
+#   第二个 idea 刻意是 C00 的开放搜索(无种子、无邻域),所以 305–308 的 B 臂 = 对照 + 本文件的先验。
+#
+# 总领审定(R3,写在开跑之前):批准主研的做法与两个 idea,改了三处,理由逐条写在规则的 why 里。
+#   (1) 加 C3P10:把 R2 的 C2P6(加权价格水平 day_wmean/day_wstd/day_topw_mean(@price, _))带回来并补 day_cov(@price, _)。
+#       草案没带它也没写理由,而幸存候选前 16 名里 5 个正是它挡的吸引子,另有 7 个以 day_cov(@price, _) 为核(C3P5 的孪生);
+#       本机实测草案下 I0 新生成的树里 9.4% 落在这两类上,加上本条后 0%,代价是每棵树的提议数 2.35 → 2.56。
+#   (2) 加 C3P11a / C3P11b:控制种子 7、8 的算子被 idea_search.py 的 IDEA_OPS 按 8 倍提权(种子算子自动并入),
+#       卡里「后代不会繁殖」并不成立。这两条让控制种子只给一次参照读数(种子按 seeds_repr 放行、照常打分),
+#       它们的子树不再进 C3a 的后代 —— 否则 C3a 可能读到的是零收益分钟(流动性)或慢波动,而不是彩票形状。
+#   (3) C3a 的 hypothesis 更正一处事实:慢偏度测过一次(R2/206 的 ts_decay_linear 版本,+0.215,方向对)。
+#   先验因此是 14 条(12 ban + 2 weight 0.2;主研的 11 条一字未改)。主研卡 cards_r3.md 未改,与本文件不一致处以本文件为准。
+#   理由是 B 臂自己的证据:R1 的 18 个 head 全部来自开放搜索,R2 加了 must-contain 邻域之后只有 2 个、而且是
+#   洗过的流动性;而 R2 的 outside 只占提议的 10–22%,说明邻域是被装饰性满足的。把一半算力押在「只有先验的
+#   开放搜索」上,既是对冲,也是对本轮主要工具(先验)的一次干净 A/B —— 305–308 的 A 臂是同种子的纯对照。
+version: 1
+batch: C01_r3
+evidence_base:
+  digest: research/coldstart_C01/digest_r3.md
+  episodes: c01r1s101..c01r1s108_I0_open_search, c01r2s201B..c01r2s208B (207B 失败,记 0)
+reward: []
+evaluation: []
+priors:
+- id: C3P1_no_flow_leaves
+  action: ban
+  pattern: '@flow'
+  w: 0
+  why: '把「量」这一侧整个关掉:表达式里任何位置出现 Amt 或 Volume 叶子就不提议。B 臂自己的读数是含流动性
+    叶子的通过者 500 个、其中 |ρ|<0.5 的只有 11 个(2.2%),而不含它们的通过者 68 个里 49 个(72%)是低 ρ ——
+    在这个奖励下「量」几乎只能生产已知族的改写。按写法逐条堵已经试过并失败(R2 的 C2P1–C2P4 被 day_std(Amt)、
+    day_last(pow_1_5(Amt)) 一步变异绕开),所以改成按叶子。代价是量价交互类 idea 在 R3 全部出局,接受。
+    可证伪:若这条对,R3 八次运行的通过者里含流动性叶子的 ≤2%(实测 1500 次 generate 漏网 0 次),而通过者里
+    |ρ|<0.5 的占比 ≥50%(R1 21%、R2 1.4%);若 R3 的通过者里仍有 >20% 含流动性叶子,说明禁令被 generate 的
+    fallback 绕开(叶子抽样不读 op_weight,只有 accept 一道),下一轮必须把禁令接到 banned_substructures 上。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 叶子富集表 Amt lift 1.53(633 个候选里 464 个通过)、Volume 1.18,
+    而 Ret 0.90、Open 0.78;通过者前 60 里 day_wstd(Amt, Amt) +2.28/ρ+0.78、day_wmean(Amt, Amt) +2.22/ρ+0.83
+    都不是 head'
+  - 'episodes/c01r1s101_I0_open_search/evidence.json: 77 个通过者、heads 0,主干是 day_sum(Volume) 与
+    day_var(Low) 的膨胀链;episodes/c01r1s106_I0_open_search/evidence.json: 31 个通过者、heads 0'
+  - 'episodes/c01r2s203B_C2a_when_the_return_arrives/evidence.json: 53 个通过者里绝大多数是
+    day_last(in_max(mul(Amt, Amt))) 一族,裸写法 ρ+0.81;两个 head 都是它被 cs_first_low20 平移后的版本'
+- id: C3P2a_nt_minute_cross_one_arg
+  action: ban
+  pattern: '{nt_cs_demean|nt_cs_mask_top_replace_mean|nt_cs_mask_top_replace_mean_neg|nt_cs_mean|nt_cs_median|nt_cs_normalize|nt_cs_quantile_q25|nt_cs_quantile_q50|nt_cs_quantile_q75|nt_cs_rank|nt_cs_robust_z|nt_cs_scale|nt_cs_stddev_full|nt_cs_sum|nt_cs_winsor}(_)'
+  w: 0
+  why: '环境约束,不是研究结论:分钟级跨股票截面算子与日内折叠混用时,引擎要把整块 (股票, 日, 分钟) 中间量
+    落盘(每节点约 6.8 GB),R2 有一次运行因此写满数据盘、两次重跑都在第 1 代就死,C2b 另外两次跑了 3474 秒和
+    9824 秒;R3 单任务上限 180 分钟,跑死或超时就是该种子记 0。研究上的代价也小:含 nt_* 的通过者 163 个里
+    |ρ|<0.5 的只有 8 个。本条按调用元数分三条(a/b/c),是因为模式必须匹配调用形态,不是三条独立主张。
+    可证伪:若这三条对,R3 八次运行的存档里含 nt_* 的候选是 0(走的是词表通道:operator_weights() 把 65 个
+    可搜索 nt_* 算子的权重打到 0,_pick_weighted 把权重 0 的算子剔出抽样、nt 面整个退出),每次运行墙钟
+    < 60 分钟,没有任务被磁盘守护或时限杀掉;若仍出现 nt_* 候选,说明我对 op_weight 通道的读法错了。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 失败的运行表(c01r2s207B 退出码 143,磁盘守护「free 57G < 60G:
+    spill 196G, killing」)与「秒」一列(205 → 3474、206 → 9824,C2a 四次是 764–1964)'
+  - 'episodes/c01r2s205B_C2b_turnover_on_the_up_minutes/evidence.json: 存档 80 个候选里 98.8% 含 nt_ts_*,
+    72 个通过者、heads 0;episodes/c01r2s206B_C2b_turnover_on_the_up_minutes/evidence.json: 12 个通过者、heads 0'
+- id: C3P2b_nt_minute_cross_two_arg
+  action: ban
+  pattern: '{nt_cs_bucket_demean|nt_cs_bucket_rank|nt_cs_bucket_zscore|nt_cs_first_high20|nt_cs_first_high40|nt_cs_first_low20|nt_cs_first_low40|nt_cs_flip_by_state|nt_cs_last_high05|nt_cs_last_high10|nt_cs_last_high20|nt_cs_last_high40|nt_cs_last_low05|nt_cs_last_low10|nt_cs_last_low20|nt_cs_last_low40|nt_cs_regres|nt_cs_state_rank|nt_ts_argmax|nt_ts_argmin|nt_ts_autocorr_s1|nt_ts_decay_linear|nt_ts_delay|nt_ts_delta|nt_ts_hurst|nt_ts_kurt|nt_ts_max|nt_ts_mean|nt_ts_med|nt_ts_min|nt_ts_outlier_33|nt_ts_pearson|nt_ts_product|nt_ts_quantile_q25|nt_ts_quantile_q50|nt_ts_quantile_q75|nt_ts_rank|nt_ts_scale|nt_ts_shift|nt_ts_skew|nt_ts_spearman|nt_ts_std|nt_ts_stddev|nt_ts_sum|nt_ts_var}(_, _)'
+  w: 0
+  why: '同 C3P2a(带窗口的 nt_ts_* 和两操作数的 nt_cs_* 调用形态是 op(x, y))。这一条是三条里唯一碰到 head 的:
+    它命中 R1 种子 105 的两个 head(day_median(nt_cs_last_high40(...))),但按 PLAN §3.1 跨轮去重,R3 再找到
+    它们的孪生是零增量,而它们带来的运行成本是上面那三条环境事实。可证伪:若这条对,R3 存档里含 nt_ts_*/
+    nt_cs_* 的候选为 0,而且 8 次运行没有一次超过 90 分钟;若有运行仍然因落盘被杀,说明慢的不只是 nt_ 这一族。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 算子富集表里 nt_ts_quantile_q25 lift 2.09(21 个候选全部通过)、
+    nt_ts_decay_linear 2.03、nt_cs_normalize 1.84 —— 这一族极容易过门槛,却只贡献 2 个 head(R1 种子 105)'
+  - 'research/coldstart_C01/digest_r3.md: 「注意:分钟级跨股票截面算子(nt_cs_* / nt_ts_*)与日内折叠混用的
+    表达式,引擎要把整块 (股票, 日, 分钟) 中间量落盘,每个节点约 6.8 GB,并且很慢;R2 有一次运行因此写满数据盘」'
+- id: C3P2c_nt_minute_cross_three_arg
+  action: ban
+  pattern: '{nt_ts_corr|nt_ts_cov|nt_ts_reg_fvalue|nt_ts_reg_tvalue|nt_ts_regalpha|nt_ts_regbeta|nt_ts_regres}(_, _, _)'
+  w: 0
+  why: '同 C3P2a(成对滚动的 nt_ts_* 调用形态是 op(x, y, win))。本实验里它只命中 1 个候选、0 个通过者,写它
+    是为了把 nt 面关干净 —— 留一个算子不禁,_pick_weighted 会按「存活算子的平均权重」给 nt 面重新分配质量,
+    那一个算子就会被反复抽到。可证伪:若这条对,R3 存档里这七个算子出现 0 次;若出现,说明我对 op_weight 的
+    面内归一读法错了。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 1187 个候选里这七个算子合计出现 1 次,0 个通过者(算子富集表里
+    出现 ≥3 次的名单里没有它们)'
+- id: C3P3_ts_spearman_runtime
+  action: ban
+  pattern: ts_spearman(_, _)
+  w: 0
+  why: '也是环境约束:ts_spearman 的内核对股票维保留显式 Python 循环(5207 次),每次循环内部再算 (T, d, N−1)
+    的张量,总计算量随股票数平方增长;本实验里唯一大量提议它的那次运行(种子 206)墙钟 9824 秒 ≈ 2.7 小时,
+    是 B 臂最慢的一次,而 R3 的时限是 180 分钟。它的同构替身 ts_pearson 完全向量化(不取秩、用批量矩阵乘),
+    在本实验里跑过而且便宜(种子 203 那次运行 841 秒,存档里有 ts_pearson(day_argmin(Open), 20) +0.64/|ρ|0.21/
+    换手 0.030),所以这条只禁 ts_spearman、把 ts_pearson 留着 —— 「跨股票同期相关」这个读数并没有被关掉。
+    可证伪:若这条对,R3 没有任何运行超过 90 分钟,而含 ts_pearson 的候选照常出现在存档里;若 R3 出现含
+    ts_pearson 的高耗时运行,说明慢的不是秩计算而是这一族本身,下一轮要连 ts_pearson 一起禁。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 种子 206 墙钟 9824 秒(B 臂最慢),它的存档与「没过线里分数最高的
+    30 个」里大量是 sub(1, ts_spearman(day_skew(...), 50)) 一族;同一张表里种子 203 是 841 秒'
+  - 'episodes/c01r2s206B_C2b_turnover_on_the_up_minutes/evidence.json: 含 ts_spearman 的候选 23 个,
+    其中通过门槛的只有 1 个、|ρ|<0.5 的通过者 0 个'
+- id: C3P4_distinct_ratio_family
+  action: ban
+  pattern: day_distinct_ratio(_)
+  w: 0
+  why: 'day_distinct_ratio 是 R1 种子 104 那一族的签名分子:它出现在 90 个通过者、13 个 head 里,占本实验
+    20 个 head 的 65%。内核读的是「当天不同报价个数 ÷ 有效分钟数」,一价日恰好等于 1/241,本质是价格刻度
+    粗细(低名义股价)的代理,不是一个机制。按 PLAN §3.1 的跨轮贪心去重,R3 再找到它的孪生只要分数低于 R1
+    的 +2.72 就是零增量(beliefs_r2 B10),所以这条禁令按主判据不花代价、只省算力。可证伪:若这条对,R3 的
+    通过者里没有一个的核是「某个分位或离散度 ÷ day_std」这种 104 族形状,而通过者总数不低于 R1 同种子水平的
+    一半;若 R3 的通过者为 0、且幸存候选的最高分仍低于 +0.7,说明我连带关掉的不只是 104 族,R3 之后应改成降权。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: heads 表里 12/20 个 head 的核是
+    cs_mask_top_replace_mean_neg(inv(div(day_distinct_ratio(Vwap), day_std(Close)^k))) 一族(全部来自种子 104),
+    另有 cs_first_low20(day_distinct_ratio(Close), day_distinct_ratio(Close)) +1.02'
+  - 'research/coldstart_C01/beliefs_r2.md: B10「跨轮去重是按 score 从高到低贪心…所以『再收割 104 族』最好的
+    情况也是零增量」;B3 把这一族读成「低名义股价 × 价格单位日内离散度的内层分位带」'
+- id: C3P5_price_unit_dispersion
+  action: ban
+  pattern: '{day_std|day_var}(@price)'
+  w: 0
+  why: '价格叶子的日内标准差/方差是「名义股价 × 日内波动」,量纲随股价走,是 pool(成交额离散度)的近亲而
+    不是无量纲特征;它是 104/107 族的第二个核,出现在 104 个通过者、10 个 head 里,同样按跨轮去重是零增量。
+    刻意只禁价格叶子:day_std(Ret) 是无量纲的已实现日内波动,本轮的种子要用它做归一化,不在禁令内。
+    可证伪:若这条对,R3 的通过者里不再出现 cs_mask_*(day_std(@price)) 这一族,而 day_std(Ret) 作为分母照常
+    出现在通过者里;若 R3 的通过者里一个含 day_std(Ret) 的都没有,说明我把归一化的路也一起堵了。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: heads 表里 cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(inv(day_std(Vwap))))
+    +1.90 与 cs_demean(...(day_std(Open))...) +1.76,以及 104 族里以 day_std(Close)/day_std(Vwap) 为分母的 9 条'
+  - 'guidance/C01_r2.yaml: C2P5 已经按同一个量纲理由禁掉 day_var(@price)(R1 命中 30 个 |ρ|≥0.5 的通过者、
+    0 个 head);本条把 day_std(@price) 补上,因为 R1/R2 的证据显示它是同一个读数的主写法'
+- id: C3P6_nominal_price_level
+  action: ban
+  pattern: '{day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_min|day_quantile|day_quantile_q25|day_quantile_q75}(@price)'
+  unless: 'div({day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_min|day_quantile|day_quantile_q25|day_quantile_q75}(@price), _)'
+  w: 0
+  why: '名义股价水平(开盘价、收盘价、日均价、日内极值)在本实验里是一个「差一点过线」的吸引子:各种拼写都
+    落在分数 ≈0.5、|ρ|≈0.42,种子 102 一次运行把 33 个存档位花在这里、heads 0。R2 原样带过一轮(C2P7),
+    本轮把 day_min 也放进列表:R2 刻意漏掉它是为了不碰那个用 day_min(Close) 的 R1 head,而该 head 现在已被
+    C3P4 命中,留着 day_min 只剩 day_min(Vwap) +0.46/|ρ|0.42 这类吸引子。unless 原样放过价格作分子的比值
+    (隔夜/日内收益这类无量纲写法),所以开放搜索那半边仍然能走到价格比值。可证伪:若这条对,R3 八次运行
+    合计「分数 0.4–0.7 且 |ρ| 0.36–0.45」的价格水平候选 ≤10(R1 90、R2 31);若某次运行 banned 占提议 >70%
+    而通过者为 0,说明禁得过宽,下一轮改成降权。'
+  evidence:
+  - 'episodes/c01r1s102_I0_open_search/evidence.json: day_close(Vwap)、pow_3(day_max(High)) 等 33 个存档候选
+    是名义股价水平,最高 +0.54、无一过线,该次运行 heads 0'
+  - 'research/coldstart_C01/beliefs_r2.md: B2「名义股价水平是一个差一点过线的吸引子…分数 ≈+0.5、ρ≈0.42、
+    valid ≈+1.6,从不单独过线,却吃掉大量存档位」;P9 的核对结果是 R2 里这个吸引子仍有 31 个(预测 ≤30 失败)'
+- id: C3P7_price_level_wrapped
+  action: ban
+  pattern: '{day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_min|day_quantile|day_quantile_q25|day_quantile_q75}({pow_05|pow_1_5|pow_2|pow_2_5|pow_3|sqrt|abs_|log|neg|inv|signedpower|in_max|in_min}(@price))'
+  w: 0
+  why: 'R2 的实测是 C2P7 被一层单调包装绕开:day_last(sqrt(Open))、day_last(pow_1_5(abs_(Close)))、
+    day_first(in_max(Close)) 读的还是同一个名义股价水平。这条把一层包装补上(本实验里命中 15 个候选、
+    2 个通过者、0 个 head)。已知漏网写明:两层包装(day_last(pow_1_5(sqrt(pow_1_5(Close)))) 这类,本实验里
+    3 个)仍然逃掉,我不再加第三条规则 —— 按名字往下堆规则正是 R2 失败的那条路,真正的闸是 C3P5/C3P6 之外的
+    叶子层面。可证伪:若这条对,R3 存档里「单层包装的价格水平」候选为 0;若两层包装的价格水平在 R3 存档里
+    >10 个,说明按写法堵这条路彻底无效,下一轮只能在叶子层面限制。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 没过线里分数最高的 30 个里有 day_last(pow_1_5(sqrt(sqrt(sqrt(pow_1_5(Amt))))))
+    +0.99 与 day_last(sqrt(sqrt(Amt))) +0.95 —— 同一个包装手法在流动性叶子上的版本'
+  - 'episodes/c01r2s202B_C2a_when_the_return_arrives/evidence.json: day_last(sqrt(sqrt(Vwap)))、
+    day_last(pow_1_5(sqrt(Low)))、day_last(neg(sqrt(Open))) 等 8 个候选分数 +0.53 上下、|ρ|≈0.42,一个都没过线'
+- id: C3P8_rank_shift_screens
+  action: weight
+  pattern: '{cs_first_high20|cs_first_high40|cs_first_low20|cs_first_low40|cs_last_high05|cs_last_high10|cs_last_high20|cs_last_high40|cs_last_low05|cs_last_low10|cs_last_low20|cs_last_low40}(_, _)'
+  w: 0.2
+  why: 'R2 的两个 head 是被 cs_first_low20 平移过的流动性:未平移的孪生
+    sub(mul(2, day_last(in_max(mul(Amt, Amt)))), day_sum(Ret)) 是 |ρ| 0.91,套上筛选后降到 0.46–0.52、换筛选量
+    后降到 0.19 —— 这一层能把 |ρ| 刷低而多头书照旧。但本实验 20 个 head **全部**含平移筛选或 mask(这两条
+    规则分别命中 5 个和 13 个 head,合起来 20/20),直接禁这两层等于在样本内把全部已有发现清零,那样就分不清
+    「空间是空的」和「我把空间关死了」。所以降权到 0.2:算子抽样和 accept 两道各乘 0.2(裸算子名模式会被
+    operator_weights() 折叠成粗权重,这里是故意的),实测 3000 棵生成树里含平移筛选的从对照臂的 12.1% 降到
+    2.7%。可证伪:若这条对,R3 的通过者里含 cs_first_*/cs_last_* 的占比 <5%(R1+R2 是 59/568 = 10%,其中
+    R2 一轮就有 43 个),而且没有一个 head 的低 |ρ| 是靠它来的(判法:把筛选层剥掉的孪生在同一次存档里的
+    |ρ|);若 R3 的 head 仍然全部含平移筛选,说明 0.2 不够,下一轮只能禁。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: 通过者前 60 里 sub(mul(2, day_last(in_max(mul(Amt, Amt)))), day_sum(Ret))
+    +2.15/ρ+0.81,而同一次运行里它的 cs_first_low20 版本 +2.32/ρ+0.38 被记成 head'
+  - 'research/coldstart_C01/cards_r2.md: 「不要用筛选平移排名来刷 head 数…它能把 |ρ| 刷低而多头书照旧」
+    —— R2 自己写下的判读纪律,R2 的结果正是撞上了它'
+- id: C3P9_mask_top_replace
+  action: weight
+  pattern: '{cs_mask_top_replace_mean|cs_mask_top_replace_mean_neg}(_)'
+  w: 0.2
+  why: 'cs_mask_top_replace_mean(_neg) 把截面最低(最高)10% 换成当天均值,整段平移排名,同样能把 |ρ| 刷低;
+    它是 104/107 族的外壳,出现在 57 个通过者、13 个 head 里,而且本实验 60 个「|ρ|<0.5 的通过者」里有 42 个
+    含它 —— 低 |ρ| 和这层壳高度共生,这正是最可疑的地方。和 C3P8 同理不禁、降权到 0.2(实测生成树里从对照臂
+    的 2.0% 降到 0.33%)。可证伪:若这条对,R3 的通过者里含 mask 的比例 <5%(R1+R2 是 57/568 = 10%,全部来自
+    R1 的种子 104/105/107),而且不会再出现「核是价格离散度、靠两层 mask 把 |ρ| 压到 0.3」的通过者;若 R3 的
+    通过者里含 mask 的比例仍 >20%,说明降权在 GP 的精英保留下不起作用,下一轮只能禁或改用 family 规则。'
+  evidence:
+  - 'research/coldstart_C01/digest_r3.md: heads 表里 13/20 含 cs_mask_top_replace_mean_neg;通过者前 60 里
+    cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile_q75(Open))) 这类纯价格水平 + 两层
+    mask 的候选 +1.31/ρ+0.30 过线却不是 head'
+  - 'research/coldstart_C01/beliefs_r2.md: B3/B4「cs_mask_top_replace_mean_neg 把最低 10% 换成截面均值,所以
+    纯多头书是原信号的第 10–20% 分位带…这是 GP 用 mask 挑分位带,典型的样本内过拟合形状」'
+- id: C3P10_price_weighted_level_and_cov
+  action: ban
+  pattern: '{day_wmean|day_wstd|day_topw_mean|day_cov}(@price, _)'
+  w: 0
+  why: '(总领加)R2 的 C2P6 原样带回并补上 day_cov。草案没有带 C2P6、也没写理由,而它挡的正是幸存候选里最集中的
+    吸引子:114 个幸存候选的前 16 名里有 5 个是 day_wmean(Low, Vwap)、day_topw_mean(High, High)、
+    day_topw_mean(Close, Close)、day_topw_mean(Low, Vwap)、pow_1_5(day_topw_mean(Low, Low)),全部 +0.505–0.511、
+    |ρ|0.42、valid ≈+1.56,就是 beliefs_r2 B2 的名义股价水平吸引子换成加权写法。day_wstd(@price, _) 是 C3P5 所禁
+    day_std(@price) 的加权孪生;day_cov(x, x) 就是 day_var(x),幸存候选里 pow_3(day_cov(Vwap, Vwap)) +0.367、
+    day_cov(Close, Close) +0.357、day_cov(Low, High) +0.358,|ρ| 全在 0.49 —— 价格单位方差从 C3P5 旁边漏出来。
+    C3P1 关掉流动性叶子之后,剩下 6 个叶子里 5 个是价格,开放搜索那半边最容易掉进的就是这两个坑。第一个参数是
+    @price 而不是 _,所以不折叠进算子词表、只走 accept;day_wmean(Ret, _)、day_cov(Ret, _)、day_corr 照常可用。
+    可证伪:若这条对,R3 存档里这四个算子第一参数为价格叶子的候选 0 个,而「分数 0.4–0.6 且 |ρ| 0.40–0.50」的
+    价格水平/价格方差候选 8 次合计 ≤10;若漏口换到第二参数(day_cov(Ret, @price) 之类)并在 R3 存档里 >5 个,
+    说明按名字补洞到头了,下一轮只能在叶子层面限制价格。'
+  evidence:
+  - 'episodes/c01r1s108_I0_open_search/evidence.json: day_wmean(Low, Vwap) +0.511、day_topw_mean(High, High) +0.510、
+    day_topw_mean(Close, Close) +0.509、day_topw_mean(Low, Vwap) +0.506,|ρ_known| 0.42,该次运行 heads 0'
+  - 'episodes/c01r1s105_I0_open_search/evidence.json: pow_3(day_cov(Vwap, Vwap)) +0.367、day_cov(Close, Close) +0.357、
+    log(day_cov(Close, Close)) +0.056,|ρ| 0.49–0.50;episodes/c01r1s106_I0_open_search/evidence.json: day_cov(Low, High) +0.358'
+  - 'guidance/C01_r2.yaml: C2P6 {day_wmean|day_wstd|day_topw_mean}(@price, _) 已经按同一理由禁过;R2 七次运行的存档里
+    这三个算子以价格叶子开头的候选 0 个(规则生效),而不在 C2P6 里的 day_cov 有 2 个(sub(day_signed_ratio(Ret, Low),
+    day_cov(Close, High)) +0.339、mul(day_cov(High, Amt), day_argmin(High)) +0.258)。本条在 1187 个候选上命中 23 个
+    (R1 21、R2 2)、通过者 1 个(已被 C3P1 命中)、head 0;新打掉的幸存候选 12 个,最高 +0.511'
+- id: C3P11a_control_zero_ratio_does_not_breed
+  action: ban
+  pattern: day_zero_ratio(_)
+  w: 0
+  why: '(总领加)让 C3a 的控制种子真的只「花 1 次评估给参照读数」。scripts/idea_search.py 把种子里出现的全部算子
+    并进 IDEA_OPS、按 8 倍提权,而 day_zero_ratio 只出现在控制种子 7 里 —— 草案因此在无意中把一个一价日/流动性
+    标记(零收益分钟占比;先验:Lesmond 式非流动性度量)按 8 倍推进了 C3a 的提议,而 must-contain 只查记号,
+    div(day_skew(Ret), day_zero_ratio(Ret)) 这种树就在邻域里。这和 C3P1 关掉「量」那一侧的目的相反。按算子名禁:
+    operator_weights() 折叠成权重 0、剔出抽样(8 倍提权乘 0 仍是 0)。种子本身不受影响:guidance_accept 第一行
+    对 seeds_repr 里的树直接放行,AlphaCube 的种子过滤查的是 generator.specs(不按权重筛),所以种子 7 照常进初代、
+    照常被打分、照常出现在存档里。可证伪:若这条对,R3 存档里除种子 7 本身以外含 day_zero_ratio 的候选 0 个,
+    且种子 7 的读数出现在 301–304 的存档里;若种子 7 不在存档里,说明种子放行的读法错了,fails_if (d) 的对照
+    改用运行日志里的种子分数。'
+  evidence:
+  - 'scripts/idea_search.py: IDEA_OPS = grammar 各键 ∪ 种子里的全部算子名,arm_hooks 对其乘 boost=8;MUST 只来自
+    grammar.day_ops;guidance_accept 对 seeds_repr 里的树直接返回 True'
+  - 'episodes/c01r1s103_I0_open_search/evidence.json: cs_first_low20(day_open(Amt), day_zero_ratio(Close)) +1.21、
+    |ρ|0.93 —— 本实验里含 day_zero_ratio 的唯一通过者落在流动性族里'
+  - 'episodes/c01r2s205B_C2b_turnover_on_the_up_minutes/evidence.json: sub(day_wstd(nt_ts_delay(Volume, 5), div(Amt, High)),
+    pow_05(cross_ema(day_skew(Ret), 5))) +1.06/|ρ|0.65 —— idea 的 day_op 挂在慢归并下面装饰一个流动性核,
+    must-contain 在本实验里就是这样被满足过的'
+- id: C3P11b_control_slow_vol_does_not_breed
+  action: ban
+  pattern: '{cross_mean|cross_ema|cross_med|ts_mean}(day_std(Ret), $w)'
+  w: 0
+  why: '(总领加)同 C3P11a,对控制种子 8 cross_mean(day_std(Ret), 60) —— 卡里自己把它定为「已知族(波动)的无量纲
+    版本」。草案里 day_std 因种子 3 与种子 8、cross_mean 因 memory_ops 各被 8 倍提权,这棵控制子树是 C3a 邻域里
+    被推得最狠的组合之一;它一旦得分不低,交叉就会把它和一个装饰性的 day_skew 拼在一起(R2 种子 205 正是这样满足
+    must-contain 的),C3a 读到的就是波动而不是彩票形状,而按 PLAN §3.1 的 head 判据(只对 pool 量 |ρ|)这种
+    「波动换皮」会被照样记成 head。只禁「慢归并直接套在裸 day_std(Ret) 上」这一棵子树,不禁 day_std(Ret) 本身:
+    种子 3 那种逐日归一 div(day_max(Ret), day_std(Ret)) 照常可用。参数不是 _,不折叠进算子词表,只走 accept;
+    种子 8 本身按 seeds_repr 放行,照常给出参照读数。可证伪:若这条对,R3 存档里除种子 8 本身以外含
+    cross_*/ts_mean(day_std(Ret), w) 的候选 0 个;若 C3a 的通过者里仍有 >30% 的排名由 day_std(Ret) 那一支
+    决定(结构判:day_std(Ret) 在 sub/add/mul 的一支上,idea day_op 在另一支上),说明波动换了写法进来,下一轮
+    把 day_std(Ret) 从种子里拿掉。'
+  evidence:
+  - 'research/coldstart_C01/cards_r3.md: 种子 8 定义为「控制:已实现日内波动的慢均 —— 已知族(波动)的无量纲版本」,
+    并写「后代进不了邻域、不会繁殖」;按 scripts/idea_search.py 的 IDEA_OPS / MUST 两条通道,这句话只对不带 idea
+    day_op 的后代成立,交叉出来的混合树可以进邻域'
+  - 'episodes/c01r2s205B_C2b_turnover_on_the_up_minutes/evidence.json: sub(day_wstd(...), pow_05(cross_ema(day_q_stat_std(Low), 5)))
+    一族与 pow_05(cross_ema(day_skew(Ret), 5)) 那条 —— 慢归并子树在交叉里被整块搬运,换掉里面的 day_op 分数几乎不变
+    (+1.06 上下),排名由另一支决定'
+pool:
+- id: known_amt_dispersion
+  expr: cross_mean(day_std(Amt), 30)
+  sign: -1
+  hl: 0
+ideas:
+- id: C3a_slow_lottery_shape
+  hypothesis: '一只票的分钟收益分布长期右偏、右尾长、极值相对自身波动大,说明它长期在满足散户的彩票需求 ——
+    买家要的是「可能一把涨很多」的形状,愿意为这个形状让渡期望收益。把这个形状做成**慢变量**(日内形状逐日
+    算完,再按 30–60 个交易日归并),它就是一个股票特征而不是一笔交易;做多形状最不像彩票的那一侧。R1/R2
+    几乎没有在可存活的换手下测过这件事:B 臂里裸 day_skew(Ret) 的换手 0.0946、裸 day_es_ratio_hi(Ret) 的换手
+    0.1004,年化成本拖累 7.2%/7.6%,两个都被成本拖成负分;而 cross_mean 在 1187 个候选里只出现过 1 次、
+    cross_med 2 次、ts_mean 3 次 —— 「日内形状 + 慢归并」这个写法几乎是空白。(总领更正:慢形式**测过一次**,
+    R2 种子 206 的 sub(1, ts_decay_linear(day_skew(Ret), 50)) +0.215(train +0.21 / valid +0.52,sign +1 即做多
+    低慢偏度,方向对;换手 0.039、|ρ_known| 0.16、还原毛 train 年化 ≈+4.4%)。所以裸的慢偏度离门槛很远,本卡
+    要过线靠的是右尾、极值÷自身波动、上下不对称那几支,或者 GP 把它们组合起来;种子 1 本身预期只有 0.1–0.5。)'
+  thesis:
+    mechanism: '先验(公开文献,置信中等):彩票型需求 —— 已实现偏度、日内 MAX、特质偏度在横截面上有负溢价,
+      通常解释为投资者对小概率大赢的偏好与过度加权,A 股散户占比高、这类需求更强。本实验自己的证据只能说:
+      B 臂测过这个形状的裸日频写法、方向选的是「做多低彩票形状」那一侧,但被成本杀死。机制读数全部是无量纲
+      的形状量(偏度、峰度、尾均值÷分位、极值÷自身波动、上下半幅之比),不含价格水平、不含成交额,和 pool
+      (成交额离散度)讲的不是一件事;慢归并(cross_mean/cross_ema/cross_med 30–60 天)既是为了把它变成特征、
+      也是为了把换手压到 0.06 以下 —— 这是 R2 的教训,不是调参。竞争性先验:分钟收益的尾部形状会被价格刻度
+      牵着走(低价股一个 tick 就是几十 bp,极值更大、零收益分钟更多),那是刻度代理不是彩票需求,所以种子里
+      放了两个专门的控制读数(见 fails_if (d))。'
+    counterparty: '另一边是买「形状」的散户与打板资金:他们盯的是这只票过去一段时间里经常出现的那种日内急拉,
+      愿意在今天的价格上多付一点去换一个右偏的分布。他们亏的是期望收益 —— 为小概率大涨多付的那部分,长期由
+      向这份需求派发的耐心资金收走。因为这是对「形状」的偏好而不是对「消息」的反应,它可以长期存在、不需要
+      买家犯错一次就学会,这也是为什么它应该是个慢变量而不是一两天的事件。'
+    prediction: '种子 301–304 这四次运行里:(1) 至少 1 个 head,其核含 day_skew / day_kurt / day_max /
+      day_es_ratio_hi / day_es_ratio_lo 之一,并且这个 day_op 落在 cross_mean / cross_ema / cross_med / ts_mean
+      之下(不是挂在不决定排名的那一支上 —— 这条要逐个 head 看表达式结构,R2 的 must-contain 就是被装饰性
+      满足的);(2) 该 head 的方向是做多低彩票形状的一侧(在 cross_mean(day_skew(Ret), 60) 与
+      cross_ema(day_es_ratio_hi(Ret), 30) 这类写法上 sign = −1);(3) 这四次运行通过者的换手中位数 ≤0.05,
+      换手 >0.08 的通过者 0 个,hl 选到 20 的占多数;(4) 通过者的 |ρ| 中位数 <0.40,|ρ|≥0.5 的占比 <35%;
+      (5) 含流动性叶子的通过者 ≤2%、含 nt_* 与 ts_spearman 的候选 0 个;(6) 至少 1 个通过者来自归一化或
+      尾部不对称的写法(种子 3/4/6 的后代),不只是裸 day_skew/day_kurt 的慢均;(7) 两个控制种子
+      (cross_mean(day_zero_ratio(Ret), 60) 读一价/刻度、cross_mean(day_std(Ret), 60) 读已实现波动)的 score
+      都低于至少两个机制种子,且 cross_mean(day_std(Ret), 60) 的 |ρ| 明显高于机制种子;(8) sampling 计数:
+      banned 占提议 55%–70%、outside 10%–25%、accepted ≥15%、scored ≥90;每次运行墙钟 <60 分钟。'
+    fails_if: '(a) 4×192 次付费评估后邻域里 |ρ|<0.5 的通过者为 0 —— 这个形状在 2018–2023H1 的截面上没有溢价,
+      或者慢归并把信息抹平了(用换手分布区分:若通过者换手普遍 <0.02 且分数普遍 <0.5,是抹平);
+      (b) 通过者的 |ρ| 中位数 ≥0.5 —— 彩票形状只是波动/小盘的代理;
+      (c) 搜索选到的方向是 +1(做多高彩票形状的一侧)—— 与机制相反,按失效论处,不许事后改故事说这是动量;
+      (d) 过线的只有未归一的裸形式,而三支无量纲写法(day_max÷day_std、右尾减左尾、上下半幅之比)一个通过者
+      都没有,或者控制种子 cross_mean(day_zero_ratio(Ret), 60) 的分数反而最高 —— 读到的是价格刻度粗细与
+      一价日,不是彩票需求;
+      (e) 只有 day_kurt(左右对称的厚尾)那一支过线而偏度、右尾那几支都不过线 —— 读到的是特质波动/尾部风险,
+      不是「右偏」,这时 hypothesis 要改写成特质尾部风险,不算本卡成立;
+      (f) 通过者的 idea day_op 都挂在不决定排名的那一支上(装饰性满足 must-contain)—— 邻域没起作用,机制
+      没被测到,不算失效也不算成立,要按「这一轮白跑」记。'
+  seeds:
+  - cross_mean(day_skew(Ret), 60)
+  - cross_ema(day_es_ratio_hi(Ret), 30)
+  - cross_mean(div(day_max(Ret), day_std(Ret)), 30)
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 60)
+  - cross_med(day_kurt(Ret), 30)
+  - cross_mean(div(sub(day_max(Ret), day_median(Ret)), sub(day_median(Ret), day_min(Ret))), 60)
+  - cross_mean(day_zero_ratio(Ret), 60)
+  - cross_mean(day_std(Ret), 60)
+  grammar:
+    day_ops: [day_skew, day_kurt, day_max, day_es_ratio_hi, day_es_ratio_lo]
+    memory_ops: [cross_mean, cross_ema, cross_med, ts_mean]
+    ops: [div, sub]
+    leaves: [Ret]
+    windows: [30, 60]
+  reward: long
+- id: I0_open_search
+  hypothesis: 不给想法、不给种子、不设邻域:AlphaCube 自己的一次普通搜索(本轮它仍然带本文件的先验,所以它是
+    「只有先验的开放搜索」,不是对照)
+  seeds: []
+  grammar: {}
+  reward: long
