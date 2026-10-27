@@ -92,7 +92,8 @@ for lst in passers.values():
         c["rho_pool"], c["rho_known_traded"] = src.get("rho_pool"), src.get("rho_known_traded")
 prefiltered = sorted({c["expr"] for lst in passers.values() for c in lst if known_by_search(c)}
                      - {c["expr"] for lst in passers.values() for c in lst if not known_by_search(c)})
-check_known = [prefiltered[j] for j in sorted(set(int(k * len(prefiltered) / 20) for k in range(20)))] if prefiltered else []
+_ck = [e for e in prefiltered if "nt_" not in e]               # the check itself must not be the minute-level spill it avoids
+check_known = [_ck[j] for j in sorted(set(int(k * len(_ck) / 20) for k in range(20)))] if _ck else []
 uniq = sorted({c["expr"] for lst in passers.values() for c in lst} - set(prefiltered)) + check_known
 print(f"[c01] known family by the search's own measurement, not rebuilt: {len(prefiltered)} (rebuilt anyway as a check: {len(check_known)})", flush=True)
 print(f"[c01] discoveries: A {len(passers['A'])}, B {len(passers['B'])}; {len(uniq)} distinct expressions to rebuild", flush=True)
