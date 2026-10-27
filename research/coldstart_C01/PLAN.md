@@ -127,3 +127,16 @@ Partura 的 agent **不得读**:`lab/findings.yaml`、`guidance/` 下除 `C00_ba
 - `research/coldstart_C01/cards/`:每个成立 head 的信号卡(thesis、可证伪预测、失效条件、表达式、时点、各段读数、风格中性化读数、换手、与已知族的相关)。
 - `episodes/c01r<k>s<seed>_<idea>/evidence.json`:原始证据,不覆盖。
 - `guidance/C01_r2.yaml`、`guidance/C01_r3.yaml`、`research/coldstart_C01/beliefs_r<k>.md`:Partura 每轮的指引与信念。
+
+## 6. 修订
+
+### 修订 1(2026-10-26 23:15,R2 运行中、任何 R2 结果和任何样本外读数之前)
+
+**改了什么**:§3.4 加一个次指标,只报不判 —— 每个 head 的多头书(前 10%)里,有多大比例同时在已知族的多头书(前 10%)里;
+在 train + valid 段与测试段各算一次(只看持仓,不看收益)。主判据、heads 的定义、阈值都不改。
+
+**为什么**:Partura 在 R2 的规划里指出,`cs_first_low20` / `cs_mask_top_replace_mean_neg` 这类筛选会把一整块排名平移,
+把整截面的 |ρ| 压低,而多头书拿的可能仍是已知族的票 —— 按 |ρ| 去重有被绕过的风险。持仓重合度能直接看出这一点。
+
+**当时看过什么**:R1 的 8 份证据与 digest_r2(样本内),以及 Partura R2 的规划与指引。没有看过任何 R2 运行结果,没有任何样本外读数。
+代码:`scripts/c01_final.py` 的 `overlap()`。

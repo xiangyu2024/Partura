@@ -116,6 +116,20 @@ with slot():
             c = ((x * y).sum(1) - x.sum(1) * y.sum(1) / n) / np.sqrt(((x ** 2).sum(1) - x.sum(1) ** 2 / n) * ((y ** 2).sum(1) - y.sum(1) ** 2 / n))
         return float(np.nanmean(c))
 
+    def top_decile(x):
+        with np.errstate(invalid="ignore"):
+            q = np.nanquantile(np.where(np.isfinite(x), x, np.nan), 1.0 - bk.TOP_FRAC, axis=1, keepdims=True)
+            return np.isfinite(x) & (x >= q)
+
+    KNOWN_TOP = top_decile(known_z)
+
+    def overlap(sm, sl):
+        """Mean daily share of the head's top decile that is also in the known family's top decile (holdings only)."""
+        ht = top_decile(sm[sl])
+        n = ht.sum(1)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return float(np.nanmean(np.where(n > 0, (ht & KNOWN_TOP[sl]).sum(1) / n, np.nan)))
+
     # ---- rebuild every discovery once (the same expression found by both arms is one panel)
     SM, Z = {}, {}
     sign_hl = {}
@@ -152,6 +166,11 @@ with slot():
             sm = SM[h["expr"]].astype(np.float64)
             h["re_train"], h["re_valid"] = bk.book_row(sm, tgt, tr)["long_sharpe"], bk.book_row(sm, tgt, va)["long_sharpe"]
             h["reproduces"] = bool(abs(h["re_train"] - h["train"]) < 0.05 and abs(h["re_valid"] - h["valid"]) < 0.05)
+            # PLAN §6 (revision 1): a screen can shift a block of ranks and keep |rho| low while the LONG BOOK is still the
+            # known family's -- so also the share of the head's top decile that is in the known family's top decile
+            h["overlap_known_train"] = overlap(sm, us)
+            if not DRY:
+                h["overlap_known_test"] = overlap(sm, ho)
         out["arms"][a] = {"discoveries": len(lst), "heads": heads}
         print(f"[c01] arm {a}: {len(lst)} discoveries -> {len(heads)} heads; reproduce {sum(h['reproduces'] for h in heads)}/{len(heads)}", flush=True)
 
