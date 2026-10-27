@@ -79,7 +79,9 @@ for j in range(1, K):
                 txt = lg.read_text(errors="replace")
                 hit = [x for x in txt.split("\n") if ("Error" in x or "exit" in x or "No space" in x or "Not enough free space" in x)]
                 why += (hit[-1] if hit else "") + " "
-            failed.append({"round": j, "tag": tag, "exit": code, "why": why.strip()[:300]})
+            meaning = {135: "SIGBUS:落盘把共享数据盘写满后崩溃", 143: "被停止:磁盘守护(数据盘不足 60 GB)或单任务时限",
+                       124: "超过单任务时限", 137: "被强制结束"}.get(code, "")
+            failed.append({"round": j, "tag": tag, "exit": code, "why": (meaning + " | " + why.strip())[:300]})
 if not runs:
     raise SystemExit(f"no B-arm evidence for rounds < {K}: pull it first (./scripts/study.sh idea-pull)")
 
@@ -122,6 +124,9 @@ if failed:
     L += ["", "## 失败的运行(按 PLAN §6 修订 2:重跑后仍失败的 B 运行,该种子的发现记为 0)", "", "| 轮 | 任务 | 退出码 | 原因(日志摘录) |", "|---|---|---|---|"]
     for x in failed:
         L.append(f"| R{x['round']} | {x['tag']} | {x['exit']} | {x['why']} |")
+    gl = D / "diskguard.log"
+    if gl.is_file():
+        L += ["", "磁盘守护日志:", ""] + [f"    {x}" for x in gl.read_text().split("\n") if "killing" in x or "removed" in x]
 L += ["", "运行时间:见上表「秒」一列。注意:分钟级跨股票截面算子(nt_cs_* / nt_ts_*)与日内折叠混用的表达式,"
       "引擎要把整块 (股票, 日, 分钟) 中间量落盘,每个节点约 6.8 GB,并且很慢;R2 有一次运行因此写满数据盘。"]
 L += ["", "## heads(互不相关、|ρ| 对已知族与 pool 都 < 0.5)", "", "| 轮 | 种子 | score | train | valid | 半衰期 | 方向 | 换手 | ρ已知 | 表达式 |", "|---|---|---|---|---|---|---|---|---|---|"]
