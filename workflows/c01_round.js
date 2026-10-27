@@ -126,11 +126,23 @@ const FINAL_SCHEMA = {
   required: ['approved', 'guidance_path', 'assignment', 'edits', 'beliefs_path', 'predictions'],
 }
 
+
+// A dropped network or an API error makes agent() return null after its own retries; try the same call again (twice)
+// before giving up, so a short outage delays a round instead of killing it.  The workflow can also be resumed.
+async function call(prompt, opts, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    const r = await agent(prompt, i ? { ...opts, label: `${opts.label}#retry${i}` } : opts)
+    if (r) return r
+    log(`${opts.label}: no result (attempt ${i + 1}/${tries})`)
+  }
+  return null
+}
+
 const digest = `${D}/digest_r${K}.md`
 const priorBeliefs = K > 2 ? `、上一轮的信念 ${D}/beliefs_r${K - 1}.md、上一轮的 thesis 卡 ${D}/cards_r${K - 1}.md 和指引 ${ROOT}/${PREV}` : ''
 
 phase('Plan')
-const plan = await agent(`${place('总领')}
+const plan = await call(`${place('总领')}
 
 读 ${D}/PLAN.md(实验约定)、${digest}(B 臂到目前为止的证据摘要;原始证据在 ${D}/digest_r${K}.json)${priorBeliefs}。
 ${K > 2 ? '先对上一轮信念里写下的预测逐条对账:对了、错了、还是看不出来。' : ''}
@@ -139,9 +151,11 @@ ${K > 2 ? '先对上一轮信念里写下的预测逐条对账:对了、错了�
 执行是另一个模型、看不到你的推理:任务要写清楚读哪些文件、算什么、交回什么。最后给主研一段方向性指示。
 ${VOCAB}`, { label: `c01r${K}:coord-plan`, phase: 'Plan', schema: PLAN_SCHEMA, model: M.coord })
 
+if (!plan) return { round: K, error: 'coordinator plan failed after retries -- resume or rerun this round' }
+
 phase('Analyze')
 const found = (await parallel((plan.exec_tasks || []).slice(0, 3).map(t => () =>
-  agent(`${place('执行')}
+  call(`${place('执行')}
 
 总领派给你的任务(${t.id}):
 ${t.task}
@@ -169,7 +183,9 @@ ${found.map(f => `--- ${f.id}\n${f.findings}`).join('\n')}
 ${extra || ''}
 ${GUIDE_FORMAT}
 ${VOCAB}`
-let lead = await agent(leadPrompt(), { label: `c01r${K}:lead`, phase: 'Write', schema: LEAD_SCHEMA, model: M.lead })
+let lead = await call(leadPrompt(), { label: `c01r${K}:lead`, phase: 'Write', schema: LEAD_SCHEMA, model: M.lead })
+
+if (!lead) return { round: K, error: 'lead failed after retries -- resume or rerun this round', plan, found }
 
 phase('Check')
 const checkPrompt = () => `${place('检查')}
@@ -177,13 +193,13 @@ const checkPrompt = () => `${place('检查')}
 只做一件事:在终端运行下面这条命令,把**完整输出**和退出码原样交回(不要改任何文件,不要自己判断,以脚本为准):
 \`${ENVSH} && ${PY} scripts/c01_check_guidance.py ${GUIDE} --digest ${D}/digest_r${K}.json; echo "exit=$?"\`
 admissible = (退出码为 0)。`
-let check = await agent(checkPrompt(), { label: `c01r${K}:check`, phase: 'Check', schema: CHECK_SCHEMA, model: M.check })
+let check = await call(checkPrompt(), { label: `c01r${K}:check`, phase: 'Check', schema: CHECK_SCHEMA, model: M.check })
 let revised = false
 if (!check || !check.admissible) {
   revised = true
-  lead = await agent(leadPrompt(`\n**上一版没有通过校验**,校验输出如下;只改校验指出的问题,其余不动:\n${check ? check.output : '(检查没有返回)'}\n`),
+  lead = await call(leadPrompt(`\n**上一版没有通过校验**,校验输出如下;只改校验指出的问题,其余不动:\n${check ? check.output : '(检查没有返回)'}\n`),
     { label: `c01r${K}:lead-revise`, phase: 'Check', schema: LEAD_SCHEMA, model: M.lead })
-  check = await agent(checkPrompt(), { label: `c01r${K}:check2`, phase: 'Check', schema: CHECK_SCHEMA, model: M.check })
+  check = await call(checkPrompt(), { label: `c01r${K}:check2`, phase: 'Check', schema: CHECK_SCHEMA, model: M.check })
 }
 if (!check || !check.admissible) {
   log(`round ${K}: guidance not admissible after one revision -- the B arm falls back to ${PREV} (PLAN.md §2.7)`)
@@ -191,7 +207,7 @@ if (!check || !check.admissible) {
 }
 
 phase('Approve')
-const fin = await agent(`${place('总领')}
+const fin = await call(`${place('总领')}
 
 主研写好了 ${ROOT}/${GUIDE} 和 ${D}/cards_r${K}.md,已通过确定性校验。主研的说明:${lead.summary}
 你本轮定的问题:${plan.focus}
