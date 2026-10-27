@@ -1,0 +1,39 @@
+% Slide 7: AlphaCube as a black box with three ports.  Inside: a real typed expression tree
+% sub(cross_mean(day_skew(Ret), 20), cross_mean(day_std(Amt), 30))  (parses in AlphaCube's strict grammar);
+% the pattern day_skew(_) of an illustrative weight rule matches one subtree.
+\begin{tikzpicture}[grid, yscale=0.94]
+  \tikzset{tn/.style={draw=ink, fill=white, font=\notesize\ttfamily, inner sep=3pt, minimum height=0.32in},
+           port/.style={draw=accent, t35, minimum size=0.15in, inner sep=0}}
+  % ---------------- the black box
+  \draw[ink] (3.15,0) rectangle (9.60,-3.68);
+  \node[anchor=west, font=\nodesize, inner sep=0] at (3.35,-0.30) {{\mediumfont AlphaCube}\enspace typed GP over (stock, day, minute)};
+  \node[ann, anchor=east] at (9.45,-0.30) {code \,·\, 0 tokens};
+  % ---------------- ports and the three handles
+  \foreach \y/\h/\d/\p in {-0.85/{seeds}/{≤ POP/4 = 12 kept}/{initial population},
+                           -1.90/{$w(x)$}/{\texttt{op\_weight}; idea × 8}/{proposal reweighting},
+                           -2.95/{accept($x$)}/{bans, thinning, hood}/{filter}} {
+    \node[lb, minimum width=2.55in, text width=2.42in] at (1.275,\y) {{\mediumfont \h}\\[-1pt]{\notesize\color{sec}\d}};
+    \draw[arrl] (2.55,\y) -- (3.075,\y);
+    \node[port] at (3.15,\y) {};
+    \node[annl, anchor=west] at (3.32,\y) {\p};
+  }
+  % ---------------- the tree (levels at y = -0.85, -1.52, -2.19, -2.86)
+  \draw[guide] (5.20,-2.525) -- (9.45,-2.525);
+  \node[ann, anchor=north east] at (9.45,-2.54) {$S{\times}D{\times}M \to S{\times}D$};
+  \fill[accent!10] (5.33,-1.97) rectangle (6.47,-3.11);
+  \draw[accent] (5.33,-1.97) rectangle (6.47,-3.11);
+  \node[tn] (n0) at (7.35,-0.85) {sub};
+  \node[tn] (n1) at (6.35,-1.52) {cross\_mean};
+  \node[tn] (n2) at (8.40,-1.52) {cross\_mean};
+  \node[tn] (n3) at (5.90,-2.19) {day\_skew};
+  \node[tn] (n4) at (6.90,-2.19) {20};
+  \node[tn] (n5) at (7.95,-2.19) {day\_std};
+  \node[tn] (n6) at (8.90,-2.19) {30};
+  \node[tn] (n7) at (5.90,-2.86) {Ret};
+  \node[tn] (n8) at (7.95,-2.86) {Amt};
+  \foreach \a/\b in {n0/n1, n0/n2, n1/n3, n1/n4, n2/n5, n2/n6, n3/n7, n5/n8} { \draw[ink] (\a.south) -- (\b.north); }
+  \node[annl, anchor=north west, align=left] at (5.33,-3.14) {matches \texttt{day\_skew(\_)}: rule P1 gives $w(x)=2$\\[-2pt]{\itshape\color{sec}illustrative}};
+  % ---------------- output
+  \draw[arr] (9.60,-1.90) -- (10.10,-1.90);
+  \node[cb, minimum width=1.533in, text width=1.40in] at (10.8665,-1.90) {scored\\archive};
+\end{tikzpicture}

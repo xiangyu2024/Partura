@@ -1,0 +1,52 @@
+% Slide 4: where tokens go.  Left: cumulative tokens vs candidates evaluated per arm (C01 per-arm counts on x;
+% slopes and step heights illustrative).  Right: a candidate funnel and the point at which each design pays.
+\begin{tikzpicture}[grid]
+  % ---------------- left panel: cost curves.  X(c) = 0.75 + c * 5.6 / 4608
+  \begin{scope}[xshift=0.20in]
+  \def\Y{-2.90}
+  \draw[->, ink] (0.75,\Y) -- (6.75,\Y);
+  \draw[->, ink] (0.75,\Y) -- (0.75,0.05);
+  \foreach \x/\l in {0.75/0, 2.617/{1,536}, 4.483/{3,072}, 6.35/{4,608}} {
+    \draw[ink] (\x,\Y) -- ++(0,-0.07);
+    \node[ann, anchor=north] at (\x,\Y-0.09) {\l};
+  }
+  \foreach \x/\l in {1.683/R1, 3.550/R2, 5.417/R3} { \node[ann, anchor=north] at (\x,\Y-0.09) {\l}; }
+  \node[ann, anchor=north] at (3.55,\Y-0.42) {candidates evaluated per arm};
+  \node[ann, anchor=south] at (0.75,0.10) {tokens, cumulative};
+  % guides: step levels to the axis, end of R3
+  \draw[guide] (0.75,-2.30) -- (2.617,-2.30);
+  \draw[guide] (0.75,-1.70) -- (4.483,-1.70);
+  \node[ann, anchor=east] at (0.70,-2.30) {$T_2$};
+  \node[ann, anchor=east] at (0.70,-1.70) {$T_2{+}T_3$};
+  % LLM as generator: tokens grow with every candidate (runs off the panel)
+  \draw[->, ink] (0.75,\Y) -- (1.86,-0.05);
+  \node[anchor=north west, align=left, inner sep=0] at (2.10,0.02)
+    {{\mediumfont LLM as generator}\\[-1pt]{\notesize\color{sec}tokens $\propto$ candidates: one prompt per $x$}};
+  % LLM as belief-updater: a staircase, one step per agent round (R1 is shared and agent-free)
+  \draw[accent] (0.75,\Y) -- (2.617,\Y) -- (2.617,-2.30) -- (4.483,-2.30) -- (4.483,-1.70) -- (6.35,-1.70);
+  \node[annl, anchor=west, font=\notesize\ttfamily] at (2.66,-2.60) {C01\_r2.yaml};
+  \node[annl, anchor=west, font=\notesize\ttfamily] at (4.53,-2.00) {C01\_r3.yaml};
+  \node[anchor=south east, align=right, inner sep=0] at (6.35,-1.52)
+    {{\mediumfont\color{accent}LLM as belief-updater (Partura)}\\[-1pt]{\notesize\color{sec}tokens $\propto$ rounds; the GP explores at 0 tokens}};
+  \node[ann, anchor=west, font=\notesize\itshape] at (4.62,-2.45) {illustrative: slopes and};
+  \node[ann, anchor=west, font=\notesize\itshape] at (4.62,-2.63) {step heights not measured};
+  \end{scope}
+  % ---------------- right panel: candidate funnel, centre x = 8.65
+  \node[ann, anchor=north west] at (7.45,0.02) {candidate funnel \enspace\itshape illustrative proportions};
+  \node[anni, anchor=north west] at (7.45,-0.28) {LLM as generator pays here, once per $x$};
+  \draw[->, ink] (8.65,-0.56) -- (8.65,-0.70);
+  \foreach \y/\w/\l in {-0.85/2.40/proposed, -1.27/1.75/{pass the gates}, -1.69/0.60/discoveries,
+                        -2.11/0.30/{distinct heads}, -2.53/0.12/{valid heads}} {
+    \draw[ink] (8.65-\w/2,\y+0.15) rectangle (8.65+\w/2,\y-0.15);
+    \node[anni, anchor=west] at (10.05,\y) {\l};
+  }
+  % one accent tick per proposed candidate: what the generator pays for
+  \foreach \i in {1,...,30} { \draw[accent] (7.45+\i*0.0774,-0.78) -- ++(0,-0.14); }
+  % funnel silhouette
+  \draw[guide] (7.45,-1.00) -- (7.775,-1.12);  \draw[guide] (9.85,-1.00) -- (9.525,-1.12);
+  \draw[guide] (7.775,-1.42) -- (8.35,-1.54);   \draw[guide] (9.525,-1.42) -- (8.95,-1.54);
+  \draw[guide] (8.35,-1.84) -- (8.50,-1.96);    \draw[guide] (8.95,-1.84) -- (8.80,-1.96);
+  \draw[guide] (8.50,-2.26) -- (8.59,-2.38);    \draw[guide] (8.80,-2.26) -- (8.71,-2.38);
+  \draw[arrl] (8.65,-2.68) -- (8.65,-2.86);
+  \node[lb, t20, minimum width=2.90in, text width=2.78in] at (8.65,-3.20) {Partura pays here:\\one digest read per round};
+\end{tikzpicture}

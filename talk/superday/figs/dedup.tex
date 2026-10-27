@@ -1,0 +1,31 @@
+% Slide 12: greedy de-duplication into heads (illustrative).  Candidates sorted by score, left to right;
+% each is kept as a head unless it correlates with the known family k (|rho| >= 0.5, links below)
+% or with a head already kept (|rho| >= 0.7, links above).
+\begin{tikzpicture}[grid, yscale=0.72]
+  \tikzset{cand/.style={draw=ink, minimum size=0.34in, inner sep=0, font=\notesize},
+           head/.style={draw=accent, t28, minimum size=0.34in, inner sep=0, font=\notesize},
+           link/.style={->, sec, line width=0.9pt, shorten >=1pt}}
+  \node[draw=ink, minimum size=0.34in, inner sep=0, font=\notesize\itshape] (k) at (0.40,0) {$k$};
+  \node[ann, anchor=south west] at (0.23,0.20) {known family};
+  \foreach \i/\x/\s in {1/1.65/head, 2/2.62/cand, 3/3.59/head, 4/4.56/cand, 5/5.53/cand,
+                        6/6.50/head, 7/7.47/cand, 8/8.44/cand, 9/9.41/head} {
+    \node[\s] (c\i) at (\x,0) {\i};
+  }
+  \node[draw=rulec, minimum size=0.34in, inner sep=0, font=\notesize, text=sec] (c10) at (10.62,0) {10};
+  % threshold: discoveries need score >= 1.0
+  \draw[guide] (10.02,0.55) -- (10.02,-1.12);
+  \node[ann, anchor=south west, align=left] at (10.08,0.24) {score < 1.0:\\not a discovery};
+  % links to an earlier head (above) and to the known family (below)
+  \draw[link] (c2.north) -- ++(0,0.30) -| (c1.north);
+  \draw[link] (c5.north) -- ++(0,0.30) -| (c3.north);
+  \draw[link] (c7.north) -- ++(0,0.30) -| (c6.north);
+  \foreach \a/\b in {2.135/2, 4.56/5, 6.985/7} { \node[ann, anchor=south] at (\a,0.47) {$|\rho| \ge 0.7$}; }
+  \draw[link] (c4.south) -- ++(0,-0.40) -| ([xshift=0.06in]k.south);
+  \draw[link] (c8.south) -- ++(0,-0.78) -| ([xshift=-0.06in]k.south);
+  \node[ann, anchor=north] at (2.60,-0.70) {$|\rho(x,k)| \ge 0.5$};
+  \node[ann, anchor=north] at (6.70,-1.08) {$|\rho(x,k)| \ge 0.5$};
+  % score axis
+  \draw[->, ink] (1.40,-1.42) -- (9.85,-1.42);
+  \node[ann, anchor=north west] at (1.40,-1.46) {sorted by score, high to low; $\rho$: mean daily rank correlation on train, every 5th day};
+  \node[ann, anchor=north east, font=\notesize\itshape] at (11.633,-1.46) {illustrative};
+\end{tikzpicture}

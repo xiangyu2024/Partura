@@ -1,0 +1,39 @@
+% Slide 13: model tiers as a stepped strip (block width = model tier), calls per round as squares
+% (filled = made every round, outline = only if needed), what each tier reads, and its tokens (measured: pending).
+\begin{tikzpicture}[grid]
+  \tikzset{call/.style={draw=accent, t35, minimum size=0.20in, inner sep=0},
+           opt/.style={draw=accent, minimum size=0.20in, inner sep=0},
+           cell/.style={anchor=west, inner sep=0}}
+  \def\P{0.50}
+  \node[ann, anchor=base west] at (0,-0.12) {model tier};
+  \node[ann, anchor=base west] at (2.10,-0.12) {role};
+  \node[ann, anchor=base west] at (3.75,-0.12) {calls per round};
+  \node[ann, anchor=base west] at (5.75,-0.12) {reads};
+  \node[ann, anchor=base west] at (9.90,-0.12) {tokens per round};
+  \draw[rulec] (0,-0.25) -- (11.633,-0.25);
+  \foreach \i/\w/\t/\m/\r/\rd in {0/1.90/t35/{Opus 5.5}/Coordinator/{digest of arm B; the Lead’s YAML and cards},
+                                  1/1.65/t28/{Opus 5}/Lead/{digest; questions; executor findings; kernels},
+                                  2/1.40/t20/{Sonnet 5}/Executors/{digest; arm B’s evidence.json; kernel source},
+                                  3/1.15/t10/{Haiku 5.5}/Checker/{output of c01\_check\_guidance.py}} {
+    \pgfmathsetmacro\y{-0.25-(\i+0.5)*\P}
+    \draw[accent, \t] (0,-0.25-\i*\P) rectangle (\w,-0.25-\i*\P-\P);
+    \node[cell, font=\nodesize] at (0.12,\y) {\mediumfont\m};
+    \node[cell, font=\nodesize] at (2.10,\y) {\r};
+    \node[cell, font=\notesize, text=ink] at (5.75,\y) {\rd};
+    \node[cell, font=\notesize\itshape, text=sec] at (9.90,\y) {measured, pending};
+  }
+  % call markers (row centres -0.50, -1.00, -1.50, -2.00)
+  \node[call] at (3.87,-0.50) {}; \node[call] at (4.15,-0.50) {};                             \node[anni, anchor=west] at (4.32,-0.50) {2};
+  \node[call] at (3.87,-1.00) {}; \node[opt] at (4.15,-1.00) {};                              \node[anni, anchor=west] at (4.32,-1.00) {1 (+1)};
+  \node[call] at (3.87,-1.50) {}; \node[opt] at (4.15,-1.50) {}; \node[opt] at (4.43,-1.50) {}; \node[anni, anchor=west] at (4.60,-1.50) {1–3};
+  \node[call] at (3.87,-2.00) {}; \node[opt] at (4.15,-2.00) {};                              \node[anni, anchor=west] at (4.32,-2.00) {1 (+1)};
+  % code tier
+  \draw[ink] (0,-2.25) rectangle (0.90,-2.75);
+  \node[cell, font=\nodesize] at (0.12,-2.50) {\mediumfont code};
+  \node[cell, font=\nodesize] at (2.10,-2.50) {scripts, GPU};
+  \node[cell, font=\notesize, text=sec] at (3.87,-2.50) {—};
+  \node[cell, font=\notesize] at (5.75,-2.50) {evidence; guidance; agent transcripts};
+  \node[cell, font=\nodesize] at (9.90,-2.50) {\mediumfont 0};
+  \draw[rulec] (0,-2.85) -- (11.633,-2.85);
+  \node[ann, anchor=north west] at (0,-2.90) {filled: every round; outline: if needed; (+1): one revision and one re-check; each call retried ≤ 2× if empty; arm A makes no call.};
+\end{tikzpicture}

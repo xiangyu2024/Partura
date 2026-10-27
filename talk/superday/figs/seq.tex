@@ -1,0 +1,67 @@
+% Slide 9: one round (k = 2) as a sequence diagram, following workflows/c01_round.js and the c01 scripts.
+% Time flows down; messages carry files.  Lifelines: Coordinator, Executors (1-3 in parallel), Lead, Checker, code, Judge.
+\begin{tikzpicture}[grid, yscale=0.96]
+  \tikzset{msg/.style={->, line width=0.9pt},
+           ml/.style={font=\notesize\ttfamily, text=ink, fill=white, inner sep=1.5pt},
+           mt/.style={font=\notesize, text=ink, fill=white, inner sep=1.5pt},
+           act/.style={draw=accent, t20},
+           actc/.style={draw=ink, fill=white},
+           hd/.style={minimum width=1.38in, text width=1.30in, minimum height=0.68in, align=center, inner sep=3pt}}
+  \def\top{-0.68}\def\bot{-5.28}
+  % ---------------- lifelines and heads  (x: C 0.70, E 2.25, L 3.80, K 5.35, S 6.90, J 8.45)
+  \foreach \x in {0.70,3.80,5.35,6.90,8.45} { \draw[rulec] (\x,\top) -- (\x,\bot); }
+  \foreach \x in {2.13,2.25,2.37} { \draw[rulec] (\x,\top) -- (\x,\bot); }
+  \node[hd, draw=accent, fill=white] at (2.37,-0.22) {};
+  \node[hd, draw=accent, fill=white] at (2.31,-0.28) {};
+  \foreach \x/\r/\m/\s in {0.70/Coordinator/{Opus 5.5}/accent, 2.25/Executors/{Sonnet 5, 1–3}/accent, 3.80/Lead/{Opus 5}/accent,
+                           5.35/Checker/{Haiku 5.5}/accent, 6.90/Code/{GPU + scripts}/ink, 8.45/Judge/code/ink} {
+    \node[hd, draw=\s, fill=white, font=\nodesize] at (\x,-0.34) {{\mediumfont\r}\\[-1pt]{\notesize\color{sec}\m}};
+  }
+  % ---------------- activation bars
+  \draw[actc] (6.83,-0.84) rectangle (6.97,-1.00);      % c01_digest.py
+  \draw[act] (0.63,-1.00) rectangle (0.77,-1.92);       % Coordinator "plan"
+  \draw[act] (2.07,-1.30) rectangle (2.43,-1.70);       % Executors, in parallel
+  \draw[act] (3.73,-1.62) rectangle (3.87,-3.50);       % Lead: write, self-check, revise
+  \draw[act] (5.28,-2.70) rectangle (5.42,-3.72);       % Checker (+ re-check)
+  \draw[act] (0.63,-3.72) rectangle (0.77,-4.42);       % Coordinator "final"
+  \draw[actc] (6.83,-4.42) rectangle (6.97,-5.14);      % c01_jobs.py + c01_queue.sh on the GPU
+  \draw[actc] (8.38,-5.14) rectangle (8.52,-5.26);      % Judge, after R3
+  % ---------------- messages (labels above the arrow; a white mask hides the lifelines behind them)
+  \draw[msg] (6.83,-1.00) -- node[ml, pos=0.62, above=1pt] {digest\_r2.md} (0.77,-1.00);
+  \draw[msg] (0.77,-1.30) -- node[mt, above=1pt] {1–3 tasks} (2.07,-1.30);
+  \draw[msg] (2.43,-1.62) -- node[mt, above=1pt] {findings} (3.73,-1.62);
+  \draw[msg] (0.77,-1.90) -- node[mt, pos=0.25, above=1pt] {questions, brief} (3.73,-1.90);
+  % Lead writes both files and runs the check script itself
+  \draw[msg] (3.87,-2.06) -- (4.20,-2.06) -- (4.20,-2.26) -- (3.87,-2.26);
+  \node[anchor=west, align=left, fill=white, inner sep=1.5pt, font=\notesize] at (4.26,-2.16)
+    {\texttt{C01\_r2.yaml}, \texttt{cards\_r2.md};\\[-2pt]runs the check itself};
+  \draw[msg] (3.87,-2.70) -- node[ml, above=1pt] {C01\_r2.yaml} (5.28,-2.70);
+  % loop frame: one revision by the Lead, then a re-check
+  \draw[sec] (3.58,-2.84) rectangle (6.30,-3.60);
+  \draw[sec, fill=white] (3.58,-2.84) -- (5.72,-2.84) -- (5.72,-2.98) -- (5.62,-3.08) -- (3.58,-3.08) -- cycle;
+  \node[ann, anchor=west, text=ink] at (3.62,-2.96) {loop ≤ 1 [exit ≠ 0]};
+  \draw[msg] (5.28,-3.32) -- node[mt, above=1pt] {script output} (3.87,-3.32);
+  \draw[msg] (3.87,-3.50) -- node[mt, above=1pt, pos=0.45] {revised} (5.28,-3.50);
+  \draw[msg] (5.28,-3.72) -- node[mt, pos=0.55, above=1pt] {exit 0: admissible} (0.77,-3.72);
+  % Coordinator "final": review, edit or veto, beliefs and seed assignment
+  \draw[msg] (0.77,-3.92) -- (1.12,-3.92) -- (1.12,-4.10) -- (0.77,-4.10);
+  \node[anchor=west, align=left, fill=white, inner sep=1.5pt, font=\notesize] at (1.18,-4.01)
+    {review, edit or veto;\\[-2pt]\texttt{beliefs\_r2.md}};
+  \draw[msg] (0.77,-4.42) -- node[mt, pos=0.62, above=1pt] {final \texttt{C01\_r2.yaml} + seed assignment} (6.83,-4.42);
+  \node[ann, anchor=west, align=left, fill=white] at (7.05,-4.62) {\texttt{c01\_queue.sh}:\\16 jobs, 2 at a time};
+  \draw[msg] (6.97,-5.14) -- node[ml, pos=0.5, above=1pt] {evidence.json} (8.38,-5.14);
+  \node[ann, anchor=north] at (7.675,-5.17) {after R3};
+  % ---------------- tier strip: model tier vs calls per round
+  \def\sx{9.75}
+  \node[ann, anchor=south west] at (\sx,-0.12) {tier \,·\, calls per round};
+  \foreach \y/\t/\m/\c/\n in {-0.46/t35/{Opus 5.5}/{Coordinator}/2, -1.14/t28/{Opus 5}/{Lead}/{1 (+1)},
+                              -1.82/t20/{Sonnet 5}/{Executors}/{1–3}, -2.50/t10/{Haiku 5.5}/{Checker}/{1 (+1)}} {
+    \node[draw=accent, \t, minimum width=1.883in, minimum height=0.68in, anchor=west, inner sep=0] at (\sx,\y) {};
+    \node[anchor=west, align=left, inner sep=0, font=\nodesize] at (\sx+0.12,\y) {{\mediumfont\m}\\[-1pt]{\notesize\color{sec}\c}};
+    \node[anchor=east, inner sep=0, font=\nodesize] at (11.52,\y) {\mediumfont\n};
+  }
+  \node[draw=ink, minimum width=1.883in, minimum height=0.68in, anchor=west, inner sep=0] at (\sx,-3.18) {};
+  \node[anchor=west, align=left, inner sep=0, font=\nodesize] at (\sx+0.12,-3.18) {{\mediumfont code}\\[-1pt]{\notesize\color{sec}scripts, GPU}};
+  \node[anchor=east, inner sep=0, font=\nodesize] at (11.52,-3.18) {\mediumfont 0};
+  \node[ann, anchor=north west, align=left] at (\sx,-3.62) {(+1): one revision\\and one re-check.\\Two failed checks:\\previous guidance.\\Each call retried\\≤ 2× if empty.\\Round $k = 2$ shown.};
+\end{tikzpicture}

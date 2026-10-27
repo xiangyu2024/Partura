@@ -1,0 +1,56 @@
+% Slide 3: two speeds.  Outer slow ring (Partura, tokens) around an inner fast ring (AlphaCube GP, 0 tokens).
+% Ring radius 1.85 in; node boxes 1.62 x 0.68 in; arc end angles computed so every arc stops 0.07 in short of a box.
+\begin{tikzpicture}[grid]
+  \def\R{1.85}
+  \begin{scope}[shift={(2.72,-1.84)}]
+    % ---- inner fast ring: one tick = one evaluated expression
+    \draw[sec, postaction={decorate}, decoration={markings,
+          mark=at position 0.20 with {\arrow{Stealth[length=6pt,width=5pt]}},
+          mark=at position 0.70 with {\arrow{Stealth[length=6pt,width=5pt]}}}]
+      (90:0.85) arc[start angle=90, end angle=-270, radius=0.85];
+    \foreach \a in {0,3,...,357} { \draw[sec] (\a:0.85) -- (\a:0.93); }
+    \node[align=center, font=\notesize, text=ink, inner sep=0] at (0,0)
+      {{\mediumfont AlphaCube GP}\\8 × 192 evals\\\textcolor{sec}{0 tokens}};
+    % ---- outer slow ring: five large nodes, four of them paid in tokens
+    \tikzset{ring/.style={minimum width=1.62in, text width=1.5in}}
+    \node[lb, ring, t10] (ev) at (126:\R) {read\\evidence};
+    \node[lb, ring, t20] (th) at (54:\R)  {form\\theses};
+    \node[lb, ring, t28] (gd) at (-18:\R) {compile\\guidance};
+    \node[cb, ring, fill=white] (ss) at (-90:\R) {steered\\search};
+    \node[lb, ring, t35] (bu) at (198:\R) {update\\beliefs};
+    \draw[arrl] (96.40:\R)  arc[start angle=96.40,  end angle=83.60,  radius=\R];
+    \draw[arrl] (35.95:\R)  arc[start angle=35.95,  end angle=-5.00,  radius=\R];
+    \draw[arrl] (-32.05:\R) arc[start angle=-32.05, end angle=-61.55, radius=\R];
+    \draw[arrl] (-118.45:\R) arc[start angle=-118.45, end angle=-147.95, radius=\R];
+    \draw[arrl] (185.00:\R) arc[start angle=185.00, end angle=144.05, radius=\R];
+    % math on the arcs
+    \node[annl, anchor=west] at (16:2.02) {$w(x)=\prod_{r} w_r$};
+    \node[annl, anchor=north west] at (-47:1.98) {seeds, $w(x)$, accept};
+    \node[ann, anchor=north east] at (-133:1.98) {archive};
+    % zoom: the inner ring is what happens inside "steered search"
+    \draw[guide, draw=sec] (ss.north west) -- (-152:0.95);
+    \draw[guide, draw=sec] (ss.north east) -- (-28:0.95);
+  \end{scope}
+  % ---- legend and token meter (right)
+  \def\mx{6.30}
+  \draw[arrl] (\mx,-0.12) -- (\mx+0.32,-0.12);
+  \node[anni, anchor=west] at (\mx+0.40,-0.12) {slow ring: one lap = one round of agent calls};
+  \foreach \i in {0,...,7} { \draw[sec] (\mx+0.03+\i*0.045,-0.43) -- ++(0,0.10); }
+  \node[anni, anchor=west] at (\mx+0.40,-0.38) {fast ring: one tick = one evaluated expression};
+  \node[ann, anchor=west] at (\mx+0.40,-0.60) {8 seeds × 192 evaluations per arm in every round};
+  \node[ann, anchor=west] at (\mx,-0.98) {tokens per round, by activity \enspace\itshape illustrative split};
+  % segments: heights sum to the distance from y = -1.18 to the steered-search centre (-3.69)
+  \draw[accent, t10] (\mx,-1.18) rectangle (\mx+0.38,-1.90);
+  \draw[accent, t20] (\mx,-1.90) rectangle (\mx+0.38,-2.52);
+  \draw[accent, t28] (\mx,-2.52) rectangle (\mx+0.38,-3.13);
+  \draw[accent, t35] (\mx,-3.13) rectangle (\mx+0.38,-3.69);
+  \foreach \y/\a/\w in {-1.54/{read evidence}/{Coordinator plan, Executors (Sonnet 5)},
+                        -2.21/{form theses}/{Lead (Opus 5)},
+                        -2.825/{compile guidance}/{Lead writes, Checker (Haiku 5.5) runs the check},
+                        -3.41/{update beliefs}/{Coordinator final (Opus 5.5)}} {
+    \node[anchor=west, align=left, inner sep=0, font=\nodesize] at (\mx+0.55,\y) {\a\\[-1pt]{\notesize\color{sec}\w}};
+  }
+  \draw[ink] (\mx-0.10,-3.69) -- (\mx+0.48,-3.69);
+  \draw[guide, draw=sec] (ss.east) -- (\mx-0.10,-3.69);
+  \node[anchor=north, inner sep=0, font=\nodesize] at (4.88,-3.76) {steered search: {\mediumfont 0 tokens}};
+\end{tikzpicture}
