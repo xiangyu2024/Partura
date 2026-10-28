@@ -6,11 +6,11 @@
 # then recorded as failed by c01_queue.sh) and that directory is removed.  Nothing outside Partura/tmp/alphacube_* is touched.
 #   screen -dmS c01_guard scripts/server/c01_diskguard.sh        (stop: touch research/coldstart_C01/guard.stop)
 MIN=${MIN_FREE_GB:-60}
-cd /root/autodl-tmp/Partura
+cd ${PARTURA_HOME:-/root/autodl-tmp/Partura}
 LOG=research/coldstart_C01/diskguard.log
 echo "[guard] $(date +%F_%T) started, min free ${MIN}G" >> $LOG
 while [ ! -f research/coldstart_C01/guard.stop ]; do
-  avail=$(df -BG --output=avail /root/autodl-tmp | tail -1 | tr -dc 0-9)
+  avail=$(df -BG --output=avail ${GUARD_DISK:-/root/autodl-tmp} | tail -1 | tr -dc 0-9)
   if [ "${avail:-0}" -lt "$MIN" ]; then
     big=$(du -s tmp/alphacube_* 2>/dev/null | sort -rn | head -1 | cut -f2)
     if [ -n "$big" ]; then
@@ -20,7 +20,7 @@ while [ ! -f research/coldstart_C01/guard.stop ]; do
       [ -n "$pids" ] && kill -TERM $pids 2>/dev/null; sleep 20
       [ -n "$pids" ] && kill -KILL $pids 2>/dev/null; sleep 5
       rm -rf "$big"
-      echo "[guard] $(date +%F_%T) removed $big; free now $(df -BG --output=avail /root/autodl-tmp | tail -1 | tr -dc 0-9)G" >> $LOG
+      echo "[guard] $(date +%F_%T) removed $big; free now $(df -BG --output=avail ${GUARD_DISK:-/root/autodl-tmp} | tail -1 | tr -dc 0-9)G" >> $LOG
     fi
   fi
   sleep 20

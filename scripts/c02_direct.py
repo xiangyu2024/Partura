@@ -34,7 +34,9 @@ K = int(sys.argv[1])
 D = PARTURA_ROOT / "research" / "coldstart_C02"
 H = yaml.safe_load((D / f"hypotheses_r{K}.yaml").read_text(encoding="utf-8"))
 START, END, SPLIT = "20180102", "20230807", "20220101"
-STORE, MIRROR = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute", "/root/autodl-tmp/AlphaCube/mirror"
+STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
+MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
+MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None      # a host without the D-major mirror reads the store itself
 THR = 0.7
 RHO = float(os.environ.get("PARTURA_RHO_REJECT", "0.5"))
 G = Guidance.load(PARTURA_ROOT / "guidance" / "C02_base.yaml")

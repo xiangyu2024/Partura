@@ -44,7 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from partura.guard import MemoryGuard, limit_threads, slot  # noqa: E402
 
-limit_threads(8)
+limit_threads(int(os.environ.get("PARTURA_THREADS", 8)))
 import numpy as np  # noqa: E402
 import yaml  # noqa: E402
 
@@ -83,7 +83,9 @@ HLS = tuple(float(x) for x in opt("--halflives", "0,5,20").split(","))
 if PARTS - {"seeds", "hood", "priors"}:
     raise SystemExit(f"--parts takes seeds, hood, priors (or none); got {sorted(PARTS)}")
 START, END, SPLIT = "20180102", "20230807", "20220101"
-STORE, MIRROR = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute", "/root/autodl-tmp/AlphaCube/mirror"
+STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
+MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
+MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None      # a host without the D-major mirror reads the store itself
 
 G = Guidance.load(PARTURA_ROOT / GPATH)
 idea = next(i for i in G.spec["ideas"] if i["id"] == IDEA)
@@ -272,8 +274,11 @@ with slot():
         # the arm actually running.
         ac_plugin.set_search_hooks(ac_plugin.arm_hooks(arm, parts=PARTS, risky=risky, ext=EXT, opw=OPW, idea_ops=IDEA_OPS, boost=BOOST,
                                                        accept=guidance_accept, nt_twins="nt_twins" in FIXES))
-        gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
-                  panel_cache_bytes=6 * 1024 ** 3, hooks=ac_plugin.search_hooks())
+        # the in-memory panel cache only saves recomputation (results do not depend on it); a host with more memory
+        # (the second server: 1 TB) raises it with $PARTURA_PANEL_CACHE_GB / $PARTURA_PANEL_CACHE_ITEMS
+        gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura",
+                  panel_cache_items=int(os.environ.get("PARTURA_PANEL_CACHE_ITEMS", 256)),
+                  panel_cache_bytes=int(float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)) * 1024 ** 3), hooks=ac_plugin.search_hooks())
         if arm == "steer" and seeds and "seeds" in PARTS:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), max(1, int(POP * SEED_SHARE))), seed_max_depth=9)
         import shutil

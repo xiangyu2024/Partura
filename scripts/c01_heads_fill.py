@@ -9,6 +9,7 @@ thresholds (|rho| < 0.5 against the pool and the known family, < 0.7 between hea
     python scripts/c01_heads_fill.py <episode>  (e.g. c01r3s302A_I0_open_search)   -> fills arms.<arm>.heads in its evidence.json
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -29,7 +30,9 @@ from partura.steer import Guidance, is_discovery  # noqa: E402
 EP = PARTURA_ROOT / "episodes" / sys.argv[1]
 E = json.loads((EP / "evidence.json").read_text(encoding="utf-8"))
 START, END, SPLIT = E["period"]
-STORE, MIRROR = "/root/autodl-tmp/qmt_daily_data/fast_factor_compute", "/root/autodl-tmp/AlphaCube/mirror"
+STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
+MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
+MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None      # a host without the D-major mirror reads the store itself
 G = Guidance.load(PARTURA_ROOT / E["guidance"])
 KIND, THR = E["reward"], float(E.get("threshold", 1.0))
 

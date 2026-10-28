@@ -134,6 +134,8 @@ class MemoryGuard:
     """Exit THIS process before memory becomes somebody else's problem."""
 
     def __init__(self, self_limit_gb: float = 14.0, cgroup_limit_gb: float = 34.0, every: float = 2.0) -> None:
+        # a host whose cgroup is the whole machine (the second server: 1 TB, other people's processes in it) sets its own line
+        cgroup_limit_gb = float(os.environ.get("PARTURA_CGROUP_LIMIT_GB", cgroup_limit_gb))
         self.self_limit, self.cgroup_limit, self.every = self_limit_gb, cgroup_limit_gb, every
         self.peak = 0.0
         self._stop = threading.Event()
