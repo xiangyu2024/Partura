@@ -1,0 +1,483 @@
+# C04 B 组第 1 轮指引(W2,总领)。依据:research/coldstart_C04/PLAN.md、hypotheses_r1.yaml、direct_r1.md / .json、prior_c04.md,
+# 以及 C01 的样本内材料(beliefs_r3.md、episodes/c01*/evidence.json)。pool 原样抄自 guidance/C04_base.yaml。
+#
+# ── 直接检验读到了什么(详见 W2 总领的判读)────────────────────────────────────
+#   64 个变体 0 个发现,最好的是 H4/v4 neg(LogFloatShares) +0.48(train 0.48 / valid 0.76,方向 −1)。
+#   W1 押的五个机制在样本内都不成立:
+#   - H1:派现方那一侧在 train 上就没有超额;
+#   - H2:没有超出 H1 的增量;
+#   - H3:读到的是 60 日反转的代理;
+#   - H4:方向反了,唯一接近过线的是「同市值下股数多 = 名义低价」,即幸存者偏差 + 粗刻度的代理;
+#   - H5:动量多头腿两段都是负的。
+#   本轮能用的正面信息是四条事实:
+#   1. P、FR、RP 三个恒等式在真实数据上成立(H2/v12 被门槛判废;H4/v6 −2.06 ≈ v1 −2.08);
+#   2. 纯事件差分会被离散度门槛判废(H1/v5 v8 v10、H2/v1 v2 v9 v12、H3/v1 v3 v5);
+#   3. 市值控制把价格水平杀掉(H4/v8 −1.17,H4/v1 −2.08);
+#   4. 增发方 / 定增方是 valid 段很强的空头腿(H1/v1 −2.47、H3/v9 −2.52),纯多头拿不到。
+#   所以本轮没有「已确认的写法」可以精修,种子全部是 new,不放 improve。
+#
+# ── 本轮押什么 ───────────────────────────────────────────────────────────────
+#   两个 idea,701–708 给 C2a、709–716 给 C2b。两个机制互相独立,而且都不建在 W1 失败的原料上。
+#   - C2a:以本板涨跌停幅度(LimitWidth)为尺子的日度彩票特征。多头腿是离涨停最远、上尾最薄的安静股。
+#     「平稳」是 C03 在中性化奖励下样本内站得住的两个主题之一(另一个是分钟价量配对);这里把它搬到 C03 heads 没碰过的日度尺度上,
+#     并且用到一个新字段。
+#   - C2b:对全市场消息的反应迟滞(Hou–Moskowitz 2005 的价格延迟)。多头腿是迟滞、被忽视的股票。
+#     原料是 cs_mean(日收益) 的滞后项,GP 几乎不会凑出来,与 C01/C02 的同时同步性 head(ts_pearson)是两件事。
+#   不设 day_ops:C01 证明它会被装饰性地满足;而且 day_ops 也能匹配叶子名,一旦写上就会把随机半代逼成必须含 LimitWidth。
+#
+# ── 先验:省预算,不改奖励 ──────────────────────────────────────────────────
+#   (1) C01–C03 head 族:在这些族里找到的东西,按 PLAN §3 不算新 head,所以禁掉或降权。
+#       C01 / C02 族:排名平移、mask、同步性、刻度计数、价格单位离散度、价格路径形状、开盘竞价量、盘中段收益 I。
+#       C03 族:分钟价量配对、成交量重心、日内波动的波动。
+#   (2) C04 新字段:LogFloatCap / LogTotalCap / LogFloatShares 叶子降到 0.3。
+#       依据是直接检验里以这三个字段为原料的 47 个有分变体全部 < 0.5;
+#       唯一接近的 H4/v4 是 W1 事先登记、不许做核心的低价代理;纯事件差分则被门槛白白判废。
+#       BoardCode / ListAge 叶子降到 0.4:它们单独排序会被离散度门槛判废。
+#   (3) 白花评估的写法:常数包装、截面常数(根上的 cs_mean 等)、两层单调包装、价格字段改名的孪生。
+#   全部权重 ≤ 1,所以 w_ref = 1。凡是会被折叠成算子权重的 weight 规则都带 unless: '__never__(_)',
+#   让它只走 accept 这一道(否则对算子会被乘两次,对叶子无效)。
+#
+# ── 主研的本机核验(只核,不动种子顺序与先验 id)────────────────────────────
+#   29 个种子逐个按运行自己的过滤器核过(gp.py 对 initial_population 的那一串):深度 6–9,全部 ≤ seed_max_depth = 9
+#   (idea_search.py 传的就是 9);is_valid_root 全过;contains_lookahead 全无;所有算子都在 generator.specs 的词表里;
+#   G.canonical 不改写任何一个种子(没有 rewrite 规则,simplify 也没动它们);同一 idea 内 Expression.key() 与 family_key 都无重复 ——
+#   所以 gp.py 的 uniq 不会合并掉任何一个,29 个全部进初代。
+#   种子不会被自己的先验筛掉:idea_search.py 的 guidance_accept 第一行就是 `if e in seeds_repr: return True`,
+#   所以 C2a 种子 18 的 w = 0.3(C4P13 命中,它带 LogFloatCap / LogFloatShares)只影响它后代被提议的频率,不影响它本身入群。
+#   31 条先验用 23 个代表树实测,逐条落在设计的权重上:LimitWidth 当除数 / cs_regres 自变量时 w = 1、放别处 0.4;
+#   换窗口、换算子、去掉尺子的消融仍是 w = 1(邻域没有被自己的先验堵住);根上的裸动量 0.3、价格水平 ts_skew 0.2、差分上的 ts_skew 1.0;
+#   同步性 / 刻度计数 / 价格离散度 / 价量配对 / 波动的波动 / 根上的 cs_ 聚合全部 0。
+#   两处如实记下的近似:(1) 对数收益 ÷ 简单口径 LimitWidth 还剩约 8% 的板块依赖(写进 C2a 的 mechanism 与 fails_if (g));
+#   (2) C2a 种子 6、7 与 C2b 种子 6、9 深度正好 9,顶在上限上,没有再加一层的余量。
+#   cross_semistd_pos / neg 的入参必须是正的价格水平:算子内部自己取 log(x[t]/x[t−1])(ops_ext.py _semistd),
+#   所以 C2a 种子 12 写 day_last(Close) 是对的 —— 日后不要「改进」成把日收益喂进去,那会走 clamp(min=1e-30) 变成垃圾。
+#
+# ── 总领复审(主研之后;批准,改了五处,种子顺序与编号、先验一律未动,只在 C2a 末尾加了种子 20)──────────
+#   0. 另核一条主研没核的初代过滤:gp.py _seeded_population 按适应度挑种子时「同一骨架只要一个」(clustering.skeleton_key,
+#      叶子名与常数值都折叠,窗口不折叠)。30 个种子按运行的同一条解析路径算 skeleton_key:C2a 20 个、C2b 10 个全部互不相同,
+#      所以除了适应度非有限(门槛废品 / 相关度拒绝)的种子,全部进初代(seed_keep = int(48 × 0.5) = 24 ≥ 20)。
+#   1. 更正 C2a mechanism 里「train 段几乎全是 10% 板,样本内可以忽略」:train = 2018-01-02 ~ 2021-12-31(idea_search.py START/SPLIT),
+#      科创板 2019-07 起 20%、创业板 2020-08-24 起 20%(tradability.board_limit),train 的最后约三分之一和整个 valid 段里
+#      约四分之一到三分之一的股票不是 10% 板。归一在样本内就起作用。
+#   2. 由此补一条主研没写的风险:除以 LimitWidth 会让 20% / 30% 板的股票系统性显得「安静」(它们的日波动比主板高得远不到一倍),
+#      方向 −1 的多头书因此超配创业板 / 科创板 / 北交所,而奖励的控制里没有板块。加 fails_if (h),改 prediction (3)。
+#   3. 补上同一构造的样本内先验(prior_c04.md 的 C02 直接检验 H7_daily_max_lottery,奖励是不中性化的 long):
+#      日收益 MAX 方向 −1 train −0.38 / valid +0.66、ρ已知 +0.43;MAX ÷ 自身波动 −0.67 / +0.21;日收益偏度 ts_skew(·, 40) +0.47 / +0.54。
+#      所以 MAX 族的 |ρ已知| 预期约 0.4(改 prediction (5)),偏度这一支是证据最强的一支 —— 据此加种子 20:
+#      cs_regres(ts_skew(日收益, 40), LimitWidth),即 C02 那条差 0.03 过线的偏度,按板块去均值(新字段的第二种用法)。角色 new。
+#      另补 fails_if (i):负偏度端的多头书可能是「接飞刀」(被无退市股的幸存者偏差抬高),或刚开板的新股
+#      (上市初期连续涨停让窗口内偏度机械地强负;C02 那条 +0.47 的读数里同样含着这一份)。
+#   4. C2b 补 fails_if (f):cross_corr / cross_regbeta 没有最少样本数(operators/common.py rolling_pair_reduce 的 count 只 clamp 到 1),
+#      上市头几天的相关是 ±1;long_neutral 奖励不用 untradable 掩码,新股在书里。这是能造出假延迟读数的小样本假象。
+#   design_r1.md 写在这次复审之前(其中「19 个种子」「29 个种子」指加种子 20 之前);复审的理由与预测见 research/coldstart_C04/beliefs_r1.md。
+version: 1
+batch: C04_r1
+evidence_base:
+  direct: research/coldstart_C04/direct_r1.md
+  hypotheses: research/coldstart_C04/hypotheses_r1.yaml
+  prior: research/coldstart_C04/prior_c04.md
+reward: []
+evaluation: []
+priors:
+- id: C4P1_rank_shift_screens
+  action: ban
+  pattern: '{cs_first_high20|cs_first_high40|cs_first_low20|cs_first_low40|cs_last_high05|cs_last_high10|cs_last_high20|cs_last_high40|cs_last_low05|cs_last_low10|cs_last_low20|cs_last_low40}(_, _)'
+  w: 0
+  why: '排名平移筛选会把已知族洗成低 |ρ|:C01 的 60 个低 ρ 通过者里,52 个靠它或 mask,未平移的孪生 ρ +0.81。
+    C01 的 heads 里 15 个以上含它,C03 A 组 603A / 605A / 608A / 614A 的 heads 也全靠它。在这里找到的东西不新,样本外也是换皮。'
+  evidence:
+  - 'research/coldstart_C01/beliefs_r3.md: B13'
+  - 'research/coldstart_C04/prior_c04.md: C01 heads 中 cs_first_low20 / cs_last_low40 一族;C03 heads 中 cs_last_high40 / cs_first_high40 / cs_last_low40 一族'
+- id: C4P2_mask_top_replace
+  action: ban
+  pattern: '{cs_mask_top_replace_mean|cs_mask_top_replace_mean_neg}(_)'
+  w: 0
+  why: '理由同 C4P1。它是 C01 104 族 head 的外壳(C01 heads 表里 13 个),也是 C03 602A 族的外壳(做多后复权价最高端,在 C04 的市值控制下就是市值)。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 heads 以 cs_mask_top_replace_mean_neg 开头的 13 个;C03 heads pow_2(day_close(Open)) 一族'
+- id: C4P3_synchronicity
+  action: ban
+  pattern: 'ts_pearson(_, $w)'
+  w: 0
+  why: '跨股票同步性是 C01 / C02 的 head 族:C01 有 ts_pearson(day_sum(Close), 10) 一族,C02 有 ts_pearson(day_sum(Ret), 30) 一族。在这里找到的东西不新。
+    C2b 押的是对滞后市场收益的反应,用 cross_corr / cross_regbeta 写,不经过 ts_pearson;这条禁令也防止 C2b 的后代漂回同时同步性。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 heads ts_pearson(day_sum(Close), 10) 等 4 个;C02 heads ts_pearson(day_sum(Ret), 30) 等 12 个'
+- id: C4P4_tick_and_frozen_counts
+  action: ban
+  pattern: '{day_distinct_ratio|day_zero_ratio|day_flat_ratio|day_flat_run_max|day_pos_ratio}(_)'
+  w: 0
+  why: '报价刻度 / 一价分钟 / 涨跌分钟的计数。本轮 H4/v9 cross_mean(day_zero_ratio(Ret), 30) 以 ρ已知 −0.57 被拒;
+    C03 的两条同类对照也都以 0.57 被拒。day_distinct_ratio 是 C01 104 族的签名。这一族只会白花付费评估。'
+  evidence:
+  - 'research/coldstart_C04/direct_r1.md: H4/v9 被相关度拒绝(ρ已知 −0.57)'
+  - 'research/coldstart_C04/prior_c04.md: C03 直接检验 H5/v9、H3/v10 被拒;C01 heads 13 个含 day_distinct_ratio'
+- id: C4P5_price_unit_dispersion
+  action: ban
+  pattern: '{day_std|day_var}(@price)'
+  w: 0
+  why: '价格叶子的日内离散度 = 名义股价 × 波动,是 C01 104 / 107 族的第二个核。只禁价格叶子,day_std(Ret) 不在内。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 heads inv(div(...day_std(Close)...)) 一族、cs_demean(...day_std(Open)...)'
+- id: C4P6_price_path_shape
+  action: ban
+  pattern: '{day_kurt|day_skew|day_hurst|day_autocorr_n1}(@price)'
+  w: 0
+  why: '价格叶子的日内路径形状是 C01 的 head 族(306B 的 day_kurt(High)、305B 的 day_autocorr_n1(Vwap)),在这里找到的东西不新。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 heads ts_product(cross_quantile_q25(pow_2(day_kurt(High)), 30), 50)、ts_reg_tvalue(div(day_autocorr_n1(Vwap), ...))'
+- id: C4P7_opening_auction_flow
+  action: ban
+  pattern: '{day_first|day_open}(@flow)'
+  w: 0
+  why: '开盘那一分钟的成交额 / 成交量是 C01 的 head 族(cs_first_low20(day_open(Amt), ·)),也是 C02 A 组 17 个 cross_regbeta(pow_1_5(day_first(Amt)), ·, 241) heads 的核。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 heads day_open(Amt) / day_first(Volume) 5 个;C02 heads pow_1_5(day_first(Amt)) 17 个'
+- id: C4P8a_intraday_return_I
+  action: ban
+  pattern: 'div({day_last|day_close}(@price), {day_first|day_open}(@price))'
+  w: 0
+  why: '盘中段收益 I 是 C02 的 head 族(cross_ema(I, 30) 等);C03 的中性化奖励下它本身只有 −0.24。在这里找到的东西不新,也不赚钱。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads cross_ema(log(div(day_last(Close), day_first(Open))), 30) 等;C03 直接检验 H4/v12 −0.24'
+- id: C4P8b_I_log_difference
+  action: ban
+  pattern: 'sub(log({day_last|day_close}(@price)), log({day_first|day_open}(@price)))'
+  w: 0
+  why: '与 C4P8a 是同一个量 I(两个 log 相减),C03 W2 记下的漏口。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads 的 I 族'
+- id: C4P8c_I_minute_sum
+  action: ban
+  pattern: '{day_sum|day_mean}(Ret)'
+  w: 0
+  why: '第 0 分钟的 Ret 恒为 0,所以分钟收益的日内和 / 均值就是 I(差一个常数倍),也是 C02 heads ts_decay_linear(day_sum(Ret), 30)、
+    ts_pearson(day_sum(Ret), 30) 的原料。只禁直接作用在 Ret 叶子上的写法;day_sum(pow_2(Ret)) 不在内。两个 idea 的日收益都用
+    ts_delta(log(day_last(Close)), 1)(收盘到收盘,含隔夜),不经过它。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads ts_decay_linear(day_sum(Ret), 30) 0.78、ts_pearson(day_sum(Ret), 30) 1.75'
+- id: C4P9a_constant_over_tree
+  action: ban
+  pattern: 'div($w, _)'
+  unless: '__never__(_)'
+  w: 0
+  why: '常数 ÷ 子树 = 子树取倒数,截面排序相同或整体反转(方向由奖励选),白花一次付费评估。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C01 / C02 heads 中的常数包装'
+- id: C4P9b_tree_over_constant
+  action: ban
+  pattern: 'div(_, $w)'
+  unless: '__never__(_)'
+  w: 0
+  why: '子树 ÷ 常数 = 缩放,同 C4P9a。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads add(cs_first_high20(·), −5) 一类常数包装'
+- id: C4P10_symmetric_style_folds
+  action: ban
+  pattern: '{abs_|pow_2}({cs_demean|cs_robust_z}(_))'
+  w: 0
+  why: '截面去均值后取绝对值或平方,得到的是离截面中心的距离。对风格变量(含 C04 新加的市值)来说,这就是线性中性化剔不掉的非线性风格:
+    控制只去掉 z(rank(LogFloatCap)) 的线性部分(PLAN §4 局限 2)。找到它是风格漏口,不是机制。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 直接检验 H6/v8 abs_(cs_demean(cs_rank(cross_mean(day_sum(Amt), 30)))) train +0.31 / valid −0.05'
+  - 'research/coldstart_C04/hypotheses_r1.yaml: 文件头「自己定的硬规矩」中 LogFloatCap 非线性变换一条'
+- id: C4P11a_c03_volume_return_pairing
+  action: ban
+  pattern: '{day_corr|day_cov}(_, @flow)'
+  w: 0
+  why: '分钟收益与分钟成交量的配对是 C03 B 组 C2a 的 head 族(cross_ema(day_corr(Ret, Volume), 30) 等),day_corr(Low, Volume)、day_cov(Vwap, Amt)
+    也在 C03 A 组的 heads 里。在这里找到的东西不新(PLAN §3:与 C01–C03 heads |ρ| < 0.7)。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads cross_ema(day_corr(Ret, Volume), 30)(5 个运行)、inv(sigmoid(ts_scale(day_corr(Low, Volume), 30)))、sigmoid(cs_first_high40(day_cov(Vwap, Amt), ·))'
+- id: C4P11b_c03_volume_return_pairing_rev
+  action: ban
+  pattern: '{day_corr|day_cov}(@flow, _)'
+  w: 0
+  why: '同 C4P11a,参数顺序反过来的写法:C03 head cross_mean(day_corr(Volume, div(Ret, Volume)), 60) +1.43、day_cov(Amt, Amt)。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads cross_mean(day_corr(Volume, div(Ret, Volume)), 60)、cross_mean(day_corr(div(Ret, Volume), Volume), 241)'
+- id: C4P11c_c03_return_pairing_any
+  action: weight
+  pattern: 'day_corr(Ret, _)'
+  unless: '__never__(_)'
+  w: 0.2
+  why: 'C4P11a 的漏口:成交量藏在子树里,例如 C03 head cross_mean(day_corr(Ret, div(div(abs_(Ret), Volume), Volume)), 60)。只降权、不禁。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads cross_mean(day_corr(Ret, div(div(abs_(Ret), Volume), Volume)), 60)'
+- id: C4P11d_c03_signed_impact
+  action: weight
+  pattern: 'day_signed_ratio(_, _)'
+  unless: '__never__(_)'
+  w: 0.2
+  why: '冲击不对称占比是 C03 B 组 C2a 的另一支 head 族(cross_mean(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 60) 出现在 7 个运行里)。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads cross_mean(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 60)、cross_sum(cross_mean(day_signed_ratio(Ret, div(Ret, Volume)), 60), 30)'
+- id: C4P11e_c03_volume_centroid
+  action: weight
+  pattern: 'day_centroid(_)'
+  unless: '__never__(_)'
+  w: 0.2
+  why: '成交量在日内的时间重心是 C03 的 head 族:A 组 612A 的 ts_mean(pow_3(ts_mean(day_centroid(Volume), 10)), 10),B 组 602B 的 cross_ema(cross_ema(day_centroid(Volume), 3), 3)。
+    C01 B12 也记过:含 centroid 的通过者全部带流动性叶子,是装饰。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads 中 day_centroid(Volume) 一族 5 个'
+  - 'research/coldstart_C01/beliefs_r3.md: B12'
+- id: C4P11f_c03_vol_of_vol
+  action: ban
+  pattern: 'cross_stddev({day_std|day_var}(_), $w)'
+  w: 0
+  why: '日内波动在日与日之间的波动是 C03 B 组 C2b 的 head 族,例如 cross_stddev(day_std(Ret), 60),以及带 es_ratio / hurst / valid_count 分母的变体。
+    C2a 用的是日收益本身的尾部(cross_stddev 作用在 ts_delta 上),不在这条之内。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads div(cross_stddev(day_std(Ret), 60), cross_mean(day_es_ratio_hi(Ret), 60)) 等 7 个'
+- id: C4P12_flow_leaves_down
+  action: weight
+  pattern: '@flow'
+  unless: '__never__(_)'
+  w: 0.3
+  why: '含 Amt / Volume 叶子的树以 0.3 的相对概率被接受。已知族本身就是成交额构造。C01 的 568 个通过者里 500 个含流动性叶子,低 ρ 的只有 2.2%(B12);
+    本轮 H1/v13 换手率水平 −1.11,ρ已知 +0.47,贴着拒绝线;C03 的价量配对族另由 C4P11 处理。两个 idea 的种子都不含流动性叶子。只降权,不禁。'
+  evidence:
+  - 'research/coldstart_C01/beliefs_r3.md: B11、B12'
+  - 'research/coldstart_C04/direct_r1.md: H1/v13 sub(log(cross_mean(day_sum(Volume), 30)), LogFloatShares) −1.11,ρ已知 +0.47'
+- id: C4P13_size_share_leaves_down
+  action: weight
+  pattern: '{LogFloatCap|LogTotalCap|LogFloatShares}'
+  unless: '__never__(_)'
+  w: 0.3
+  why: '含市值 / 股本叶子的树以 0.3 的相对概率被接受。直接检验里用这三个字段构造的 47 个有分变体全部 < 0.5。
+    唯一接近线的 H4/v4 neg(LogFloatShares) +0.48 选了 −1,即做多同市值下股数最多 = 名义价格最低的股票。
+    W1 事先登记过:做多极低价的写法不许当核心,因为库里没有退市股,幸存者偏差抬高的正是低价一侧,而且低价 = 粗刻度。
+    纯事件差分(Δ 股本、Δ 流通比例、Δ P)在无事件股票上是 float32 网格上的并列值,有 11 个变体被离散度门槛判废,白花评估。
+    市值线性控制之后,价格水平与市值增长也都是负分(H4/v1 −2.08、H4/v8 −1.17、H1/v12 −1.36)。只降权,不禁。
+    LimitWidth 不在内:C2a 要用它。'
+  evidence:
+  - 'research/coldstart_C04/direct_r1.md: H1–H4 中以 LogFloatCap / LogTotalCap / LogFloatShares 为原料的变体 0 个 ≥ 0.5;H4/v4 +0.48(方向 −1);门槛废品 H1/v5 v8 v10、H2/v1 v2 v9 v12、H3/v1 v3 v5'
+  - 'research/coldstart_C04/hypotheses_r1.yaml: 文件头「自己定的硬规矩」:任何做多极小市值、极低价、濒危股的核心一律不写'
+- id: C4P14_label_leaves_down
+  action: weight
+  pattern: '{BoardCode|ListAge}'
+  unless: '__never__(_)'
+  w: 0.4
+  why: '离散标签单独排序会被离散度门槛判废:ListAge 在样本内 65–97% 同值,离散度 0.351。当门控用也没改变任何读数:H1/v9 −3.16 对 v1 −2.47,H4/v7 −1.61 对 v1 −2.08。
+    BoardCode 的经济含义(涨跌停幅度)已经在 LimitWidth 里。只降权,不禁。'
+  evidence:
+  - 'research/coldstart_C04/hypotheses_r1.yaml: 三个离散字段的用法(E1 Q6(i))'
+  - 'research/coldstart_C04/direct_r1.md: H1/v9、H4/v7'
+- id: C4P11g_c02_price_level_skew
+  action: weight
+  pattern: 'ts_skew(_, $w)'
+  unless: 'ts_skew({ts_delta|cross_delta}(_, $w), $w)'
+  w: 0.2
+  why: 'C02 B 组有一支 head 族是价格水平路径的偏度:ts_skew(ts_delay(day_last(Close), 1), 40),以及 ts_skew(log(div(day_last(Close), ·)), 40)。
+    C2a 的种子 11 是日收益(差分)的偏度,只要把 ts_delta 变异成 ts_delay 就会掉进这个旧族。所以凡是不作用在差分上的 ts_skew 都以 0.2 的概率接受。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads ts_skew(ts_delay(day_last(Close), 1), 40) +0.72、ts_skew(log(div(day_last(Close), day_first(in_first(log(High))))), 40) +1.02'
+- id: C4P11h_c02_price_position
+  action: weight
+  pattern: '{cross_scale|ts_scale}(_, $w)'
+  unless: '__never__(_)'
+  w: 0.3
+  why: '价格在自身区间里的位置(cross_scale / ts_scale 作用在价格水平上)是 C02 B 组的 head 族,如 cross_ema(cross_scale(day_last(Close), 15), 241);
+    C03 615A 的 ts_scale(day_corr(Low, Volume), 30) 也用它。两个 idea 都不需要它。只降权,不禁。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C02 heads cross_ema(cross_scale(day_last(Close), 15), 241) +1.58、pow_2(cross_scale(day_last(log(Open)), 30))、ts_scale(log(sqrt(day_max(Close))), 40)'
+- id: C4P11i_plain_price_momentum
+  action: weight
+  pattern: 'root: {cross_mean|cross_sum|cross_ema|cross_decay_linear|ts_mean|ts_sum|ts_decay_linear}(ts_delta(log({day_last|day_close}(@price)), $w), $w)'
+  w: 0.3
+  why: '把日收益直接在时间上求和或平均,就是 k 日动量 / 反转。本轮这一族在两段都是负分:H5/v4 一年动量 −2.83、H3/v11 60 日反转 −0.76、
+    H1/v11 −0.99、H2/v11 15 日收益 −2.39。C2a 用日收益的极值与高阶矩,两个 idea 都把 ts_delta(log(day_last(Close)), 1) 当积木,
+    它被 ×8 提权,后代很容易退化成这种平均。只管根上的写法,只降权。'
+  evidence:
+  - 'research/coldstart_C04/direct_r1.md: H5/v1–v8 全负;H3/v11、v12;H1/v11;H2/v11'
+- id: C4P11j_plain_k_day_return
+  action: weight
+  pattern: 'root: {cross_delta|ts_delta}(log({day_last|day_close}(@price)), $w)'
+  w: 0.3
+  why: '根上的 k 日收益(动量 / 反转)。理由同 C4P11i;20 日反转本身就在奖励的控制里。'
+  evidence:
+  - 'research/coldstart_C04/direct_r1.md: H2/v11 cross_delta(log(day_last(Close)), 15) −2.39'
+- id: C4P14b_limit_width_only_as_ruler
+  action: weight
+  pattern: 'LimitWidth'
+  unless: '{div|cs_regres}(_, LimitWidth)'
+  w: 0.4
+  why: 'LimitWidth 只取 0.1 / 0.2 / 0.3 三个值,单独排序或被平均都会被离散度门槛判废(与 ListAge 同理)。它的经济含义只在当尺子时成立:
+    作日收益的分母,或者作 cs_regres 的自变量(按板块去均值)。C2a 的种子全部是这两种用法。
+    其余位置的 LimitWidth(随机日频叶子会把它放进任何地方,例如 cross_tail_mean_q75(LimitWidth, 241))以 0.4 的概率接受。'
+  evidence:
+  - 'research/coldstart_C04/hypotheses_r1.yaml: 三个离散字段的用法(E1 Q4、Q5、Q6)'
+  - '本机生成实测(TypedTreeGenerator + arm_hooks,600 棵):对照臂 3% 的树含 LimitWidth,多为 cross_regres(LimitWidth, ·)、cross_tail_mean_q75(LimitWidth, ·) 这类常数位置'
+- id: C4P15_stacked_monotone_wrappers
+  action: weight
+  pattern: '{sigmoid|signedpower|pow_05|pow_1_5|pow_2|pow_2_5|pow_3|sqrt|log}({sigmoid|signedpower|pow_05|pow_1_5|pow_2|pow_2_5|pow_3|sqrt|log}(_))'
+  unless: '__never__(_)'
+  w: 0.3
+  why: '两层单调包装叠在一起,截面排序几乎不变,却各占一次付费评估。典型是 C03 608A 的 sigmoid(signedpower(pow_3(...))) 和 C01 的 log(log(abs_(...)))。
+    根上的单层包装由下面的 family 规则处理。'
+  evidence:
+  - 'research/coldstart_C04/prior_c04.md: C03 heads sigmoid(signedpower(sigmoid(signedpower(pow_3(ts_skew(...))))));C01 heads log(log(abs_(ts_spearman(...))))'
+- id: C4P16_constant_cross_section
+  action: ban
+  pattern: 'root: {cs_mean|cs_sum|cs_median|cs_stddev_full}(_)'
+  w: 0
+  why: '截面聚合会广播成同一天所有股票同一个值,放在根上就没有截面,只会被离散度门槛判废。C2b 的种子用 cs_mean 造市场收益,
+    cs_mean 因此在 C2b 里被 ×8 提权,这条防止它的随机半代把评估白花在常数面板上。'
+  evidence:
+  - 'partura/steer.py neutral_residual:截面上没有离散的一天没有书;AlphaCube nd_cs.cs_mean 广播回输入形状'
+- id: C4P17a_root_wrapper_siblings
+  action: family
+  pattern: 'root: {pow_05|pow_1_5|pow_2|pow_2_5|pow_3|signedpower|sigmoid|sqrt|abs_}(_)'
+  w: 0.3
+  why: '根上的保序包装与原树在当天是同一本十分位书,只在 EMA 跨日混合时略有差别。这类孪生以 0.3 的概率采样。'
+  evidence:
+  - 'partura/steer.py Guidance.family_key 文档(e3_I1:两组的发现列表都被这类重包装填充)'
+- id: C4P17b_price_field_siblings
+  action: family
+  pattern: '@price'
+  w: 0.3
+  why: '只把价格字段改名(day_last(Close) 换成 day_last(Open) / Vwap)的孪生通常高度相关,以 0.3 的概率采样。不禁。'
+  evidence:
+  - 'partura/steer.py Guidance.family_key 文档(批次里同族孪生的秩相关中位数 0.96–0.98)'
+pool:
+- id: known_amt_dispersion
+  expr: cross_mean(day_std(Amt), 30)
+  sign: -1
+  hl: 0
+ideas:
+- id: C2a_limit_scaled_lottery
+  hypothesis: '日收益的上尾离本板涨停越近、越频繁的股票随后跑输;多头腿是日度走势离涨停最远、上尾最薄的安静股票。
+    上尾用三类量刻画:近 1–3 个月的最大单日涨幅 ÷ 本板涨跌停幅度、接近涨停的天数、上尾三阶矩 / 上下半幅之比 / 连涨。
+    本轮新字段 LimitWidth 当尺子:同样 9.8% 的涨幅,在主板是涨停,在 20% 板块不是。'
+  thesis:
+    mechanism: '谁跑赢:近 1–3 个月里没有接近涨停的大涨日、上尾相对本板涨跌停幅度最薄的股票 —— 多头腿是「最不像彩票」的那一端,不是彩票股本身。
+      A 股散户的彩票需求集中在涨停附近:涨停是最显眼的注意力事件(涨停榜、打板、连板),投资者为「再来一个涨停」的小概率大涨多付钱
+      (Bali–Cakici–Whitelaw 2011 的 MAX、Barberis–Huang 2008 的偏度偏好;都是先验文献,不是本样本的证据)。
+      十分位多头书的基准是全体等权,被追捧的彩票股收益偏低、拉低了基准,多头腿取到的就是这个差额。所以即使文献把利润记在空头腿,
+      这条机制在纯多头、相对等权的书里也有一份。
+      涨跌停幅度随板块和日期而变:主板 10%;创业板 2020-08-24 起、科创板自开板起为 20%;北交所 30%。用 LimitWidth 归一之后,「离涨停多近」在不同板块之间可比。
+      归一只做到这个程度(主研本机算的):ts_delta(log(·)) 是对数收益,而 dailyfields.derive 的 LimitWidth 是简单收益口径的 0.10 / 0.20 / 0.30,
+      所以涨停那一天的比值按板块是 log(1.1)/0.1 = 0.953、log(1.2)/0.2 = 0.912、log(1.3)/0.3 = 0.875 —— 还剩约 8% 的板块依赖,
+      种子 6、7 的 0.8 阈值因此在主板相当于「到涨停的 84%」、20% 板 88%、北交所 91%。(总领复审更正:这里原写「train 段几乎全是 10% 板,样本内可以忽略」,不对。
+      train 是 2018-01-02 ~ 2021-12-31,科创板 2019-07 起、创业板 2020-08-24 起是 20%,train 的最后约三分之一与整个 valid 段里约四分之一到三分之一的股票不是 10% 板,
+      所以这条残余在样本内就起作用,只是幅度小。)改用 log(1 + LimitWidth) 当分母能消掉它,但种子 6、7 已经顶在 seed_max_depth = 9 上,加一层就会被 gp.py 丢掉,所以本轮保留简单口径并记下。
+      这是新字段的一种 GP 很难凑出来的用法:随机叶子要正好落在日收益的分母上。按深度说更硬(主研本机核过):随机半代按 min_depth = 2、max_depth = 4 生成,
+      而核心骨架 cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), d) 深度 6,随机树到不了,这个邻域只能由种子带进去。
+      奖励的控制里只有分钟波动水平(线性)和 20 日反转;上尾的形状不在控制里,包括相对自身波动的极值、相对涨停的位置、上下不对称、连涨。
+      与 C03 的日内跳跃族(日内波动的波动、分钟峰度)不是一个尺度:这里全部是收盘到收盘的日收益。
+      总领复审补的三条。
+      (i) 板块倾斜:除以 LimitWidth 不只是换尺子。20% / 30% 板股票的日波动比主板高得远不到一倍,所以它们的 X 系统性偏小,
+      方向 −1 的多头书会在 train 的后三分之一和整个 valid 段超配创业板 / 科创板 / 北交所;奖励的控制里没有板块,这份倾斜原样进分数。
+      种子 14(原始 MAX 对 LimitWidth 做 cs_regres,即按板块去均值)是它的对照,见 fails_if (h)。
+      (ii) 同一构造的样本内先验(prior_c04.md 的 C02 直接检验 H7_daily_max_lottery;那里的奖励是不中性化的 long,不是本轮的 long_neutral):
+      日收益 MAX 方向 −1 train −0.38 / valid +0.66、ρ已知 +0.43;MAX ÷ 自身波动 −0.67 / +0.21;日收益偏度 ts_skew(·, 40) 方向 −1 +0.47 / +0.54(差 0.03 过线);
+      日收益波动 −0.95,ρ已知 0.51 被拒。读法:不中性化时做多低 MAX 比做多低波动好约 0.6(train),MAX 里波动之外的那部分方向是对的;
+      但 MAX 与已知族 ρ 约 0.4,贴着拒绝线;偏度离已知族远、最接近过线。C01 beliefs_r3 B15 的分钟偏度读数四条方向也全是「做多低偏度」(都离门槛远)。
+      所以偏度 / 不对称这一支(种子 8–12、20)是证据最强的一支,种子 20 就是 C02 那条偏度按板块去均值。
+      (iii) 多头腿的账:如果超额只来自「彩票股跑输」,十分位纯多头书只拿到约十分之一(彩票股在等权基准里只占一成)。
+      能让安静股自己跑赢的是偏度偏好的均衡含义(Barberis–Huang:给定波动,正偏度股被高估、负偏度股被低估;先验),
+      所以多头腿的论证在偏度写法上最干净,在 MAX 写法上最弱。'
+    counterparty: '追涨停、打板、追连板的散户与短线资金,以及冲着涨停榜买入的注意力驱动型买家:他们为接近涨停的上尾付溢价,
+      把期望收益让给持有日度走势平稳、从不上涨停榜的股票的一方。'
+    prediction: '(1) 20 个种子里至少 1 个 score ≥ 0.5:22%。种子分数的中位数在 −0.3 到 +0.2 之间。
+      (2) 方向:分数 > 0 的种子里 ≥ 80% 选 −1,即做多上尾最薄的一端;连涨种子 cross_autocorr_s1 也选 −1。
+      (3)(总领复审改写)train 上种子 2(MAX / L,30 日)≥ 种子 14(按板块回归的原始 MAX,30 日):50%;
+        valid 上种子 14 ≥ 种子 2:60%。valid 段约三分之一的股票不是 10% 板,X 的板块倾斜在那里最大。
+        这一条带先验污染:我知道 2022–2023 年创业板 / 科创板整体弱于等权全市场。
+      (4) 名义价格十分位内去均值(种子 18)保留种子 2 的 train 分数的 ≥ 70%:60%。
+        波动十分位内去均值(种子 19)保留 ≥ 70%:55%。种子 19 分桶用的 cross_mean(day_std(Ret), 20) 与奖励里的波动控制是同一条表达式
+        (主研核过 scripts/idea_search.py 的控制清单),所以它读到的正好是「线性控制剔不掉的那部分波动」,不是另一个波动代理。
+      (5)(总领复审改写)换手 0.03–0.06,241 日写法 ≤ 0.035。MAX 类种子(1–7、13、14、16–19)|ρ已知| 在 0.25–0.48、
+        偏度 / 不对称类(8–12、15、20)< 0.25:70%(依据 C02 H7:MAX ρ +0.43、偏度 +0.18)。
+        8 次运行里至少 1 个 C2a 候选因 |ρ已知| ≥ 0.5 被拒(最可能是种子 3、16、17 的长窗口后代):60%。
+      (6) 8 次运行合计至少 1 个新 head(score ≥ 0.5、|ρ已知| < 0.5、与 C01–C03 heads |ρ| < 0.7):32%。
+        有的话,train 是约束腿(train < valid):75%;它落在偏度 / 不对称这一支(种子 8–12、20 及其后代):60%。
+      (7) 种子 20 与种子 11 的分数差 |Δ| < 0.15:65%(偏度按股票自身标准化,板块均值差不大)。'
+    fails_if: '(a) 通过者选 +1(做多彩票端):与机制相反。按 W1 的统一判据 (c),可以记为发现,不能说成机制成立。
+      (b) 原始写法过线,而名义价格十分位内去均值的种子 18 及其后代 ≤ 0:读到的是低价 / 粗刻度 / 幸存者偏差,按 H4/v4 那一类处理,不算机制。
+      (c) 原始写法过线,而波动十分位内去均值的种子 19 ≤ 0:读到的是非线性波动(控制只去掉线性部分)。
+      (d) 通过者与 C03 日内跳跃 heads 的残差 |ρ| ≥ 0.7:不新。
+      (e) LimitWidth 归一的写法都不比种子 11(原始日收益偏度)、种子 14(按板块回归的原始 MAX)好:
+        新字段没有贡献,机制可能仍成立,但「C04 的增益来自新字段」这句话不能说。
+      (f) 通过者换手 > 0.07:是噪声排序,不是慢特征。
+      (g) 通过者只在某一个板块上成立:先查上面那条对数 / 简单口径的 8% 残余(以及 20% 板只覆盖 train 段后三分之一的日期),再谈机制。
+      (h)(总领复审)以 X 为原料的写法(种子 1–10、16、17)在 valid 上比种子 14 高 0.3 以上、train 上不高:
+        读到的是板块倾斜(X 让 20% / 30% 板显得安静,方向 −1 就超配它们),不是「离涨停多近」。
+      (i)(总领复审)偏度写法(种子 11、20 及后代)过线、选 −1,而多头书集中在近 60 日出现过接近跌停(X ≤ −0.8)的股票:
+        负偏度端是「接飞刀」,库里没有退市股,幸存者偏差会把它在三段里都抬高;按代理读,不说机制成立。
+        同一处还有一个机械来源:主板新股上市初期连续涨停,日收益在窗口里堆在 +0.095 附近,开板后的几天落在下方,
+        所以上市后约一个窗口长度内 ts_skew 机械地为强负(nanskew_last 无最少样本数),方向 −1 会把刚开板的新股放进多头书;
+        long_neutral 不用 untradable 掩码,只有标签挡掉封板买不进的那几天。多头书里上市不足 60 日的股票占比明显偏高时,先按这个读。'
+  seeds:
+  - cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 15)
+  - cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30)
+  - cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 60)
+  - cross_mean(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 5), 60)
+  - cross_tail_mean_q75(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 60)
+  - cross_mean(sigmoid(mul(20, sub(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 0.8))), 60)
+  - cross_mean(sigmoid(mul(20, sub(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 0.8))), 241)
+  - cross_mean(pow_3(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 60)
+  - cross_mean(pow_3(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 241)
+  - add(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30), cross_min(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30))
+  - ts_skew(ts_delta(log(day_last(Close)), 1), 50)
+  - div(cross_semistd_pos(day_last(Close), 60), add(cross_semistd_neg(day_last(Close), 60), 0.002))
+  - div(cross_max(ts_delta(log(day_last(Close)), 1), 30), add(cross_stddev(ts_delta(log(day_last(Close)), 1), 60), 0.005))
+  - cs_regres(cross_max(ts_delta(log(day_last(Close)), 1), 30), LimitWidth)
+  - cross_autocorr_s1(ts_delta(log(day_last(Close)), 1), 60)
+  - cross_max(div(sub(log(day_max(High)), ts_delay(log(day_last(Close)), 1)), LimitWidth), 30)
+  - cross_mean(div(sub(log(day_max(High)), log(day_last(Close))), LimitWidth), 60)
+  - cs_bucket_demean(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30), cross_mean(day_std(Ret), 20))
+  - cs_regres(ts_skew(ts_delta(log(day_last(Close)), 1), 40), LimitWidth)
+  seed_roles: [new, new, new, new, new, new, new, new, new, new, new, new, new, new, new, new, new, new, new, new]
+  grammar: {}
+  reward: long_neutral
+- id: C2b_slow_to_market_news
+  hypothesis: '今天的收益还在跟着昨天(以及前几天)全市场收益走的股票,即对全市场消息反应迟滞、被忽视的股票,随后跑赢;
+    多头腿是迟滞最大的一端。迟滞用日收益对滞后一天到一周的等权市场收益的相关系数 / 回归系数度量。
+    另有三种写法:对同时相关做截面残差、按板块回归、用开盘跳空对昨天市场收益的相关。'
+  thesis:
+    mechanism: '谁跑赢:价格对全市场消息反应慢、今天还在补昨天市场涨跌的股票 —— 多头腿是迟滞、被忽视的那一端。
+      信息扩散有摩擦:关注少的股票里,把市场层面的消息并入价格的交易者少,价格要一到几天才追上。
+      持有这类股票要承担更高的信息不确定与更差的风险分担,所以有溢价(Hou–Moskowitz 2005 的价格延迟,
+      在规模与流动性之外仍定价;Merton 1987 的投资者认知假说;都是先验文献,不是本样本的证据)。
+      奖励线性控制了流动性、市值、波动与 20 日反转,这些是延迟最主要的相关物,所以剩下的是控制之外的延迟。
+      原料 cs_mean(日收益) 的滞后项在 C01–C03 的词表里可达,但 GP 要同时凑出截面均值、滞后、跨日相关三步。
+      按深度说(主研本机核过):随机半代是 min_depth = 2、max_depth = 4,而种子 1 的骨架深度 7、种子 6 和 9 深度 9,随机树到不了这个深度。
+      结构上也核过这条路通:cs_mean 是 ND 面算子,引擎把 (D, S) 面板交给它、按 expand_as 广播回原形(nd_cs.cs_mean),
+      cross_* 原样透传形状,所以 cross_corr(个股日收益, ts_delay(cs_mean(日收益), 1), d) 读的确实是「个股对滞后市场」的跨日相关。
+      它与 C01 / C02 的同步性 heads(ts_pearson,读的是同时相关)是两件事;种子 7 直接对同时相关做截面残差,把这一点从比较变成读数。
+      A 股特有的竞争解释:涨跌停封板会让价格机械地滞后一天。种子 8 按板块回归,种子 10 用开盘跳空,用来分开这一点(见 fails_if)。'
+    counterparty: '只盯热门股、不跟踪冷门股的注意力有限的投资者与被动交易者:他们不为冷门股承担信息不确定性,让出了这份溢价;
+      另一边是愿意持有反应慢、关注少的股票并等待价格追上的资金。'
+    prediction: '(1) 10 个种子里至少 1 个 score ≥ 0.5:10%。
+      (2) 延迟写法的通过者选 +1(做多迟滞端):65%。
+      (3) 对同时相关做截面残差的种子 7 保留种子 1 的 train 分数的 ≥ 70%:60%。按板块回归的种子 8 保留 ≥ 70%:65%。
+      (4) 241 日写法换手 ≤ 0.03;全部种子 |ρ已知| < 0.3:85%。
+      (5) 8 次运行合计至少 1 个新 head:20%。
+      (6) 若有通过者,与 C01 / C02 的 ts_pearson heads 的残差 |ρ| < 0.5:75%。'
+    fails_if: '(a) 通过者选 −1(做多反应最快的股票):与机制相反,按 W1 的统一判据 (c) 记为发现,不算机制。
+      (b) 种子 1 过线,而对同时相关做截面残差的种子 7 ≤ 0,或者通过者与 C01 / C02 的 ts_pearson heads 残差 |ρ| ≥ 0.7:
+        读到的是同时同步性(旧族),不是延迟。
+      (c) 种子 8(按板块回归)比种子 1 掉一半以上:读到的是涨跌停幅度不同带来的机械滞后,不是信息扩散。
+      (d) 只有滞后 1 天的写法过线,滞后 2 天(种子 3)、滞后 1–5 天(种子 4)、开盘跳空(种子 10)全部 ≤ 0:
+        读到的是一天的非同步交易或封板,不是认知摩擦。
+      (e) 通过者换手 > 0.05:相关系数的估计噪声在主导排序。
+      (f)(总领复审)通过者的多头书里上市不足 60 个交易日的股票占比明显高于全市场:cross_corr / cross_regbeta 没有最少样本数
+        (operators/common.py rolling_pair_reduce 的 count 只 clamp 到 1),上市头几天的相关是 ±1,long_neutral 奖励又不用 untradable 掩码,
+        新股会占据两端。这是小样本假象,不是延迟。'
+  seeds:
+  - cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 241)
+  - cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 60)
+  - cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 2), 241)
+  - cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(ts_sum(cs_mean(ts_delta(log(day_last(Close)), 1)), 5), 1), 241)
+  - cross_regbeta(ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), ts_delta(log(day_last(Close)), 1), 241)
+  - div(cross_regbeta(ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), ts_delta(log(day_last(Close)), 1), 241), add(abs_(cross_regbeta(cs_mean(ts_delta(log(day_last(Close)), 1)), ts_delta(log(day_last(Close)), 1), 241)), 0.2))
+  - cs_regres(cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 241), cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)), 241))
+  - cs_regres(cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 241), LimitWidth)
+  - cross_corr(ts_delta(log(day_last(Close)), 1), ts_delay(sub(cs_mean(ts_delta(log(day_last(Close)), 1)), abs_(cs_mean(ts_delta(log(day_last(Close)), 1)))), 1), 241)
+  - cross_corr(sub(log(day_first(Open)), ts_delay(log(day_last(Close)), 1)), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 241)
+  seed_roles: [new, new, new, new, new, new, new, new, new, new]
+  grammar: {}
+  reward: long_neutral
