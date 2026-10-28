@@ -155,6 +155,12 @@ def set_scorer_state(ctx: RewardContext, kind: str, split: str, known: Optional[
     _ctx, _kind, _split, _known = ctx, str(kind), str(split), known
 
 
+# C02 (research/coldstart_C02/PLAN.md): a candidate whose |rank correlation| with the known family (the same p_rho_known
+# this scorer reports: the signed raw panel against the known family's z-rank, training days, every 5th) is at least
+# $PARTURA_RHO_REJECT gets fitness -inf -- it is scored and reported, but never bred from.  Unset = off (every earlier episode).
+RHO_REJECT = float(os.environ["PARTURA_RHO_REJECT"]) if os.environ.get("PARTURA_RHO_REJECT") else None
+
+
 class ParturaScorer:
     """Partura's pure-long reward (``partura.steer.reward``) as an AlphaCube
     scorer, plus the ``p_*`` archive columns ``scripts/idea_search.py`` reads
@@ -182,7 +188,7 @@ class ParturaScorer:
                                     min_coverage=kw.get("min_coverage", 0.5),
                                     min_scored_days=kw.get("min_scored_days", 0.5))
         self.target_t64, self.target_ranks_t = self.base.target_t64, self.base.target_ranks_t
-        self.n = self.gate = 0
+        self.n = self.gate = self.rho_rejected = 0
         self.seconds = 0.0
         SCORERS.append(self)
 
@@ -209,7 +215,11 @@ class ParturaScorer:
         with np.errstate(invalid="ignore", divide="ignore"):
             c = ((zc * kc).sum(1) - zc.sum(1) * kc.sum(1) / n) / np.sqrt(
                 ((zc ** 2).sum(1) - zc.sum(1) ** 2 / n) * ((kc ** 2).sum(1) - kc.sum(1) ** 2 / n))
-        out.update(fit=0.03 * r["score"] if np.isfinite(r["score"]) else -np.inf, p_score=r["score"],
+        rho_known = float(np.nanmean(c))
+        rej = RHO_REJECT is not None and np.isfinite(rho_known) and abs(rho_known) >= RHO_REJECT
+        if rej:
+            self.rho_rejected += 1
+        out.update(fit=0.03 * r["score"] if (np.isfinite(r["score"]) and not rej) else -np.inf, p_score=r["score"],
                    p_s_train=r["score_train"], p_s_valid=r["score_valid"],
                    p_share=r.get("screened_share", float("nan")), p_sign=r["sign"], p_hl=r["hl"],
                    p_train_sharpe=r["train"]["long_sharpe"], p_valid_sharpe=r["valid"]["long_sharpe"],
@@ -331,6 +341,29 @@ def search_hooks() -> SearchHooks:
 ARM_PARTS = ("seeds", "hood", "priors")           # what a steer arm can be made of (--parts)
 
 
+def env_operator_weights() -> Dict[str, float]:
+    """The ENVIRONMENT's operator weights, applied to BOTH arms (C02, research/coldstart_C02/PLAN.md): read from
+    ``$PARTURA_ENV_OPW`` as ``name=w,prefix*=w`` (e.g. ``ts_spearman=0,nt_*=0``).  Unset = {} = every weight 1.0,
+    i.e. exactly the behaviour of every earlier episode."""
+    out: Dict[str, float] = {}
+    for item in (os.environ.get("PARTURA_ENV_OPW") or "").split(","):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            out[k.strip()] = float(v)
+    return out
+
+
+def env_weight(env: Mapping[str, float], name: str) -> float:
+    if not env:
+        return 1.0
+    if name in env:
+        return float(env[name])
+    for k, v in env.items():
+        if k.endswith("*") and name.startswith(k[:-1]):
+            return float(v)
+    return 1.0
+
+
 def arm_hooks(arm: str, *, parts: Optional[Iterable[str]] = None, risky: Optional[Iterable[str]] = None,
               ext: Optional[Iterable[str]] = None, opw: Optional[Mapping[str, float]] = None,
               idea_ops: Iterable[str] = (), boost: float = 1.0, accept: Optional[Callable] = None,
@@ -394,9 +427,13 @@ def arm_hooks(arm: str, *, parts: Optional[Iterable[str]] = None, risky: Optiona
     if not math.isfinite(boost) or boost < 0:
         raise ValueError(f"boost must be a finite float >= 0, not {boost!r}")
 
+    env = env_operator_weights()
+
     def base_weight(spec) -> float:
         risk = spec.resource_risk if risk_names is None else (spec.name in risk_names)
-        return 0.0 if (risk and spec.name not in ext_names) else 1.0
+        if risk and spec.name not in ext_names:
+            return 0.0
+        return env_weight(env, spec.name)
 
     if arm == "control":
         return SearchHooks(op_weight=base_weight)

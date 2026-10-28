@@ -69,6 +69,9 @@ ARMS = opt("--arms", "steer,control").split(",")
 if set(ARMS) - {"steer", "control"}:             # (the monkeypatching version ran any other name as a control)
     raise SystemExit(f"--arms takes steer and control; got {ARMS}")
 SEED, BOOST, TAG = int(opt("--seed", 0)), float(opt("--boost", 8)), opt("--tag", "e1")
+# the share of the first generation the idea's seeds may take (the rest is the generator's own random trees); 0.25 is
+# what every episode before C02 used (POP // 4)
+SEED_SHARE = float(opt("--seed-share", 0.25))
 # What the steer arm is made of -- for ablations.  seeds: the idea's seeds enter the first generation;  hood: the
 # idea's operators are sampled more often and a candidate must carry one of its core operators;  priors: the
 # guidance's bans, down-weights, exact-equivalence and family thinning (and its coarse operator weights).
@@ -251,7 +254,8 @@ with slot():
     if torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
-                "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "arms": {}}
+                "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "seed_share": SEED_SHARE,
+                "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""), "arms": {}}
     for arm in ARMS:
         ta = time.time()
         stats.clear()
@@ -271,7 +275,7 @@ with slot():
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura", panel_cache_items=256,
                   panel_cache_bytes=6 * 1024 ** 3, hooks=ac_plugin.search_hooks())
         if arm == "steer" and seeds and "seeds" in PARTS:
-            gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), POP // 4), seed_max_depth=9)
+            gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), max(1, int(POP * SEED_SHARE))), seed_max_depth=9)
         import shutil
         shutil.rmtree(ep_dir / arm, ignore_errors=True)       # a shorter rerun must not read the longer run's last checkpoint
         err = None
@@ -306,6 +310,7 @@ with slot():
         for c in best5:
             print(f"        best: score {c['score']:+.2f} (train {c['train']:+.2f} valid {c['valid']:+.2f}) hl {c['hl']:g} rho_known {c['rho_known']:+.2f} | {c['expr'][:140]}", flush=True)
         evidence["arms"][arm] = {"error": err, "checkpoints": len(files), "seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in ac_plugin.SCORERS[n0:]),
+                                 "rho_rejected": sum(getattr(s, "rho_rejected", 0) for s in ac_plugin.SCORERS[n0:]),
                                  "scoring_seconds": sum(s.seconds for s in ac_plugin.SCORERS[n0:]), "archive": len(cand), "live": len(live),
                                  "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80]}
         print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}{', each period >= ' + format(DISCOVERY_MIN_PERIOD, 'g') if KIND in PAIRED else ''}) "
