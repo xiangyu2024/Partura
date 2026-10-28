@@ -77,7 +77,7 @@ with slot():
     t0 = time.time()
     from alphacube.plugins import load_plugins
     load_plugins(["partura.ac_plugin"])
-    from alphacube.expression import ShapeError, is_valid_root, make_node
+    from alphacube.expression import Feature, ShapeError, is_valid_root, make_node
     from alphacube.expression import replace as ex_replace
     from alphacube.parser import parse
 
@@ -261,7 +261,7 @@ with slot():
             if is_valid_root(v) and repr(v) != h["expr"]:
                 var.append(("knockout", repr(n), repr(v)))
                 ko += 1
-        fields = list(dict.fromkeys(n.name for n in nodes if not n.operands and n.name in SWAP))
+        fields = list(dict.fromkeys(n.field for n in nodes if isinstance(n, Feature) and n.field in SWAP))
         for fld in fields[:2]:
             v = re.sub(rf"\b{fld}\b", SWAP[fld], h["expr"])
             if v != h["expr"]:

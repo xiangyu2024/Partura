@@ -161,7 +161,8 @@ elif MODE == "mission":
         rq.write_text(json.dumps(plan["R"], ensure_ascii=False), encoding="utf-8")
         log = ROOT / "logs" / f"_c05R_s{S}_{X}_r{K}.log"
         procs.append((f"R_s{S}_{X}_r{K}", subprocess.Popen([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], cwd=ROOT,
-                                                            stdout=log.open("w"), stderr=subprocess.STDOUT)))
+                                                            stdout=log.open("w"), stderr=subprocess.STDOUT,
+                                                            env={**os.environ, "PARTURA_GPU_WAYS": "3"})))   # a small job: the third way
     finish(S, X, K, procs)
 else:
     raise SystemExit(f"unknown mode {MODE}")

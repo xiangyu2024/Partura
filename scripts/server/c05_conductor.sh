@@ -13,18 +13,19 @@ waitfor() { while [ ! -e "$1" ]; do sleep 30; done; }
 for k in 1 2 3; do
   until grep -q '"independent_distinct"' episodes/c05s${S}M${k}_I0_open_search/evidence.json 2>/dev/null; do sleep 30; done
   say "round $k: M batch $k ready"
-  ( [ $k -eq 1 ] || waitfor $D/arms/s${S}_A_r$((k - 1)).DONE
+  [ -e $D/arms/s${S}_A_r$k.DONE ] || ( [ $k -eq 1 ] || waitfor $D/arms/s${S}_A_r$((k - 1)).DONE
     $PY scripts/c05_round.py A $S $k > logs/_c05A_s${S}_r$k.log 2>&1; say "A round $k ended" ) &
   if [ ! -e $D/loc/s${S}_r$k.READY ]; then
-    $PY -u scripts/c05_locate.py locate $S B $k > logs/_c05loc_s${S}_B_r$k.log 2>&1 || { say "locate B failed"; exit 4; }
+    PARTURA_GPU_WAYS=3 $PY -u scripts/c05_locate.py locate $S B $k > logs/_c05loc_s${S}_B_r$k.log 2>&1 || { say "locate B failed"; exit 4; }
     if [ $k -eq 1 ]; then
       cp $D/loc/s${S}_B_r1.json $D/loc/s${S}_B0_r1.json; cp $D/loc/s${S}_B_r1.md $D/loc/s${S}_B0_r1.md
     else
-      $PY -u scripts/c05_locate.py locate $S B0 $k > logs/_c05loc_s${S}_B0_r$k.log 2>&1 || { say "locate B0 failed"; exit 4; }
+      PARTURA_GPU_WAYS=3 $PY -u scripts/c05_locate.py locate $S B0 $k > logs/_c05loc_s${S}_B0_r$k.log 2>&1 || { say "locate B0 failed"; exit 4; }
     fi
     touch $D/loc/s${S}_r$k.READY
   fi
   say "round $k: located; waiting for Partura's plan"
+  if [ -e $D/arms/s${S}_B_r$k.DONE ] && [ -e $D/arms/s${S}_B0_r$k.DONE ]; then continue; fi    # a restart: this round is done
   waitfor $D/arms/s${S}_B_r$k.yaml
   $PY scripts/c05_round.py b0plan $S $k >> $LOG 2>&1 || { say "b0plan failed"; exit 5; }
   $PY scripts/c05_round.py mission $S B $k > logs/_c05mis_s${S}_B_r$k.log 2>&1 & p1=$!
