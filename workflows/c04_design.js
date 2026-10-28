@@ -51,7 +51,7 @@ const ENV = `
 ## 指引文件的格式(${ROOT}/${GUIDE})
 
 从 ${ROOT}/guidance/C04_base.yaml 复制起步;\`pool\` 必须原样;\`reward: []\`、\`evaluation: []\`。
-- \`ideas\`:1 或 2 个。每个 idea 的 \`seeds\` 就是你设计的**初始种群**:≤ 24 个表达式,会占初代 48 个个体里的最多一半,另一半是 GP 自己的随机树(它们也过环境规则和你的先验)。
+- \`ideas\`:1、2 或 4 个(C03 里同一 idea 的 8 次运行初代种子完全相同,heads 被种子里的子族数封顶;C04 的主指标按种子配对,更多 idea = 更多互相独立的种子)。每个 idea 的 \`seeds\` 就是你设计的**初始种群**:≤ 24 个表达式,会占初代 48 个个体里的最多一半,另一半是 GP 自己的随机树(它们也过环境规则和你的先验)。
   每个种子在平行的 \`seed_roles\` 里标 \`new\`(新的、预期与已知族和 C01 heads 低相关的机制)或 \`improve\`(对 C01 某个 head 或某个直接检验发现的潜在大幅改进);**improve ≤ 1/3**。
   每个 idea 要有 \`id\`(C2…开头)、\`hypothesis\`、\`thesis: {mechanism, counterparty, prediction, fails_if}\`、\`seeds\`、\`seed_roles\`、\`reward: long_neutral\`。
   \`grammar.day_ops\` 是可选的「邻域硬约束」(候选必须含其一;C01 证明它很容易被装饰性满足,慎用);idea 里出现的算子采样频率 ×8。
@@ -60,7 +60,7 @@ const ENV = `
 - \`priors\`(可选):\`{id, action: ban|weight|rewrite|family, pattern, w, why, evidence}\`。模式语法:\`_\` 任意子树、\`$w\` 数字、\`{a|b}\`、\`@price\`/\`@flow\`/\`@any\`、\`root:\`。
   **按字段类型加权**:例如 \`{id: P_flow, action: weight, w: 0.3, pattern: '@flow', unless: '__never__(_)', why: ..., evidence: [...]}\` —— 含 Amt/Volume 叶子的树以 0.3 的相对概率被接受
   (必须带这个 \`unless\`,否则会被折叠成对叶子无效的算子权重)。一条 w > 1 的规则会让其余所有树相对降权。
-- 种子分配:随机数种子 ${SEEDS.join(', ')};1 个 idea 用满 16 个;2 个 idea 时前 8 个给第一个、后 8 个给第二个。
+- 种子分配:随机数种子 ${SEEDS.join(', ')};1 个 idea 用满 16 个;2 个 idea 时前 8 个给第一个、后 8 个给第二个;4 个 idea 时按顺序每个 4 个。
 - 写完自己跑:\`${ENVSH} && ${PY} scripts/c04_check.py guidance ${GUIDE}\`,不合格就改到合格。`
 
 const READ_SCHEMA = {

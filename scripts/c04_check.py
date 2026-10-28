@@ -7,7 +7,7 @@
 hypotheses: <= 8 hypotheses, <= 64 variants in all; every hypothesis has a thesis (mechanism / counterparty / prediction /
 fails_if) and at least one ``control`` variant; every variant parses in the search grammar and uses no operator the
 environment bans (ts_spearman, nt_*); variant ids unique.
-guidance:  loads; pool = C02_base; reward / evaluation empty; 1-2 ideas, reward long; seeds parse, use no banned operator,
+guidance:  loads; pool = C02_base; reward / evaluation empty; 1, 2 or 4 ideas (16 seeds split evenly), reward long_neutral; seeds parse, use no banned operator,
 <= 24 per idea, each with a role in ``seed_roles`` (new | improve), improve <= 1/3; priors well formed.
 Both: nothing cites a file the plan forbids (RESULT.md, final*.json, ledger, runs/, lab/, C02 arm A).
 """
@@ -96,8 +96,8 @@ else:
         if spec.get(k):
             issues.append(f"'{k}' must be empty")
     ideas = spec.get("ideas") or []
-    if not 1 <= len(ideas) <= 2:
-        issues.append(f"{len(ideas)} ideas (1-2)")
+    if len(ideas) not in (1, 2, 4):                              # C04 PLAN §2: 16 seeds split evenly over 1, 2 or 4 ideas
+        issues.append(f"{len(ideas)} ideas (1, 2 or 4)")
     for i in ideas:
         iid = i.get("id", "?")
         if i.get("reward") != "long_neutral":
