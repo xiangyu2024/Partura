@@ -54,7 +54,8 @@ with slot():
     from alphacube.plugins import load_plugins
     load_plugins(["partura.ac_plugin"])
     ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0.4, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
-                  workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8)
+                  workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
+                  daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec, known_spec = G.spec["pool"][-1], G.spec["pool"][0]
     aux = ps.compute({"frozen": "cross_max(day_zero_ratio(Ret), 15)", "age": "cross_valid_count(day_last(Close), 241)",
                       "liq": "cross_mean(day_sum(Amt), 30)", "pool": pool_spec["expr"], "known": known_spec["expr"]})
@@ -71,7 +72,10 @@ with slot():
     if KIND == "long_neutral":
         from partura.steer import neutral_basis
         nq = ps.compute({"n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))"})
-        ctx.neutral_Q = neutral_basis([aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]])
+        ctls = [aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]]
+        if os.environ.get("PARTURA_NEUTRAL_SIZE"):   # C04: size (log float cap) regressed out as well
+            ctls.append(ps.compute({"n_size": "LogFloatCap"})["n_size"])
+        ctx.neutral_Q = neutral_basis(ctls)
     labelled = np.isfinite(tgt)
     kz = known_z[:cut:5]
 

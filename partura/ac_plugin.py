@@ -435,8 +435,13 @@ def arm_hooks(arm: str, *, parts: Optional[Iterable[str]] = None, risky: Optiona
             return 0.0
         return env_weight(env, spec.name)
 
+    # C04: the environment's daily leaves (both arms; $PARTURA_DAILY_FIELDS, $PARTURA_DAILY_LEAF_PROB); unset = none
+    dfields = tuple(x for x in (os.environ.get("PARTURA_DAILY_FIELDS") or "").split(",") if x)
+    dprob = float(os.environ.get("PARTURA_DAILY_LEAF_PROB", "0")) if dfields else 0.0
+    dkw = {"daily_fields": dfields, "daily_leaf_prob": dprob} if dfields else {}
+
     if arm == "control":
-        return SearchHooks(op_weight=base_weight)
+        return SearchHooks(op_weight=base_weight, **dkw)
 
     weights = dict(opw or {}) if "priors" in made_of else {}
     idea = frozenset(idea_ops) if "hood" in made_of else frozenset()
@@ -450,7 +455,7 @@ def arm_hooks(arm: str, *, parts: Optional[Iterable[str]] = None, risky: Optiona
         in_idea = spec.name in idea or (twin is not None and twin in idea)
         return base_weight(spec) * float(w) * (boost if in_idea else 1.0)
 
-    return SearchHooks(op_weight=weighted, accept=judge)
+    return SearchHooks(op_weight=weighted, accept=judge, **dkw)
 
 
 def asked_from(*methods: str) -> bool:

@@ -138,7 +138,8 @@ with slot():
     print(f"[idea] plugins loaded: {', '.join(load_plugins(['partura.ac_plugin']))}; opt-in plugin fixes: {FIXES or 'none'}", flush=True)
     # ---- the reward's context, on the grid the GP will use (same view: start, end, warm-up)
     ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
-                  workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8)
+                  workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
+                  daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec = G.spec["pool"][-1]
     aux = ps.compute({"frozen": "cross_max(day_zero_ratio(Ret), 15)", "age": "cross_valid_count(day_last(Close), 241)",
                       "liq": "cross_mean(day_sum(Amt), 30)", "pool": pool_spec["expr"], "known": G.spec["pool"][0]["expr"]})
@@ -163,7 +164,10 @@ with slot():
     if KIND == "long_neutral":                     # C03: liquidity, volatility, 20-day reversal and the known family regressed out
         from partura.steer import neutral_basis, neutral_residual
         nq = ps.compute({"n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))"})
-        ctx.neutral_Q = neutral_basis([aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]])
+        ctls = [aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]]
+        if os.environ.get("PARTURA_NEUTRAL_SIZE"):   # C04: size (log float cap) regressed out as well
+            ctls.append(ps.compute({"n_size": "LogFloatCap"})["n_size"])
+        ctx.neutral_Q = neutral_basis(ctls)
         print(f"[idea] neutral basis ready: {ctx.neutral_Q.shape}", flush=True)
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
           f"untradable {untradable[np.isfinite(tgt)].mean():.1%} of the labelled cells", flush=True)
@@ -262,7 +266,8 @@ with slot():
         torch.cuda.set_per_process_memory_fraction(0.40)
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "seed_share": SEED_SHARE,
-                "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""), "arms": {}}
+                "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""),
+                "daily_fields": os.environ.get("PARTURA_DAILY_FIELDS", ""), "neutral_size": bool(os.environ.get("PARTURA_NEUTRAL_SIZE")), "arms": {}}
     for arm in ARMS:
         ta = time.time()
         stats.clear()
@@ -294,7 +299,8 @@ with slot():
                        budget=BUDGET, seed=SEED, device="cuda", pool="mse", pool_capacity=10, dedup=0.95, min_coverage=0.9,
                        min_scored_days=0.5, cost_per_side=0.0015, checkpoint_every=1, rolling_block=0, block_combine=False,
                        combine_methods=(), smooth_halflives=(), allow_resource_risk=True, workdir=str(PARTURA_ROOT / "tmp"),
-                       out_root=str(ep_dir), run_id=arm, save_values=False, gp_params=gp)
+                       out_root=str(ep_dir), run_id=arm, save_values=False, gp_params=gp,
+                       **({"daily_root": os.environ["PARTURA_DAILY_ROOT"]} if os.environ.get("PARTURA_DAILY_ROOT") else {}))
         except Exception as exc:                             # noqa: BLE001  (the archive checkpoints are what we read)
             err = f"{type(exc).__name__}: {str(exc)[:300]}"
             print(f"[idea] {arm}: run_mining ended with {err}", flush=True)
