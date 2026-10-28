@@ -20,7 +20,9 @@ def _ctx(seed=0, halflives=(0.0, 5, 20)):
     liq[rng.random((D, S)) < 0.02] = np.nan
     pool = dg._zrank(rng.standard_normal((D, S)) + 2.0 * np.nan_to_num(tgt) * 3)
     untr = rng.random((D, S)) < 0.2
-    return steer.RewardContext(tgt, slice(0, CUT), slice(CUT, D), untradable=untr, liq=liq, pool=pool, base=pool, halflives=halflives)
+    ctx = steer.RewardContext(tgt, slice(0, CUT), slice(CUT, D), untradable=untr, liq=liq, pool=pool, base=pool, halflives=halflives)
+    ctx.neutral_Q = steer.neutral_basis([liq, pool])           # C03: what reward "long_neutral" regresses out
+    return ctx
 
 
 def _panels(seed=1):

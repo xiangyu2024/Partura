@@ -31,15 +31,16 @@ from partura.steer import Guidance, RewardContext  # noqa: E402
 from partura.steer import reward as steer_reward  # noqa: E402
 
 K = int(sys.argv[1])
-D = PARTURA_ROOT / "research" / "coldstart_C02"
+D = PARTURA_ROOT / "research" / os.environ.get("PARTURA_STUDY_DIR", "coldstart_C02")
+KIND = os.environ.get("PARTURA_REWARD_KIND", "long")
 H = yaml.safe_load((D / f"hypotheses_r{K}.yaml").read_text(encoding="utf-8"))
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None      # a host without the D-major mirror reads the store itself
-THR = 0.7
+THR = float(os.environ.get("PARTURA_THRESHOLD", 0.7))
 RHO = float(os.environ.get("PARTURA_RHO_REJECT", "0.5"))
-G = Guidance.load(PARTURA_ROOT / "guidance" / "C02_base.yaml")
+G = Guidance.load(PARTURA_ROOT / "guidance" / os.environ.get("PARTURA_BASE_GUIDANCE", "C02_base.yaml"))
 
 rows = []
 for h in H["hypotheses"]:
@@ -67,6 +68,10 @@ with slot():
     pool_sig = dg._zrank(bk.smoothed(float(pool_spec["sign"]) * np.asarray(aux["pool"], np.float64), float(pool_spec["hl"])))
     known_z = dg._zrank(float(known_spec["sign"]) * np.asarray(aux["known"], np.float64))
     ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=pool_sig, halflives=(0.0, 5.0, 20.0))
+    if KIND == "long_neutral":
+        from partura.steer import neutral_basis
+        nq = ps.compute({"n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))"})
+        ctx.neutral_Q = neutral_basis([aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]])
     labelled = np.isfinite(tgt)
     kz = known_z[:cut:5]
 
@@ -101,7 +106,7 @@ with slot():
             r.update(coverage=cov, distinct=dist, gate=bool(cov >= 0.9 and dist >= 0.5))
             if not r["gate"]:
                 continue
-            rw = steer_reward(panel, ctx, "long")
+            rw = steer_reward(panel, ctx, KIND)
             r.update(score=rw["score"], s_train=rw["score_train"], s_valid=rw["score_valid"], sign=rw["sign"], hl=rw["hl"],
                      train=rw["train"]["long_sharpe"], valid=rw["valid"]["long_sharpe"], train_ann=rw["train"]["long_ann"],
                      valid_ann=rw["valid"]["long_ann"], turnover=rw["train"]["long_turnover"], rho_known=rho_known(panel, rw["sign"]))

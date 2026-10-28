@@ -397,7 +397,47 @@ class Guidance:
 
 
 # ------------------------------------------------------------------ rewards
-REWARDS = ("long", "long_tradable", "long_bucket", "long_marginal", "long_screen")
+REWARDS = ("long", "long_tradable", "long_bucket", "long_marginal", "long_screen", "long_neutral")
+
+
+def neutral_basis(controls) -> "np.ndarray":
+    """C03 (research/coldstart_C03/PLAN.md): for every day, an orthonormal basis of [1, z-ranked controls] on the names
+    where every control exists -- shape (days, stocks, k + 1), float32, zero rows where a control is missing.  The
+    residual of a signal on it (``neutral_residual``) is the signal with the controls' daily cross-section regressed out."""
+    import numpy as np
+    from . import diagnose as dg
+    zs = [dg._zrank(np.asarray(c, np.float64)) for c in controls]
+    D, S = zs[0].shape
+    Q = np.zeros((D, S, len(zs) + 1), np.float32)
+    for t in range(D):
+        ok = np.ones(S, bool)
+        for z in zs:
+            ok &= np.isfinite(z[t])
+        if ok.sum() < 50:
+            continue
+        X = np.column_stack([np.ones(int(ok.sum()))] + [z[t][ok] for z in zs])
+        q, _ = np.linalg.qr(X)
+        Q[t, ok] = q.astype(np.float32)
+    return Q
+
+
+def neutral_residual(sm, Q) -> "np.ndarray":
+    """The z-rank of ``sm`` with the daily projection on ``Q`` removed.  A missing value is filled with the mean rank (0)
+    for the projection and missing again in the result; a name without the controls is missing too.  Deterministic,
+    the same for every arm (the approximation is documented in research/coldstart_C03/PLAN.md)."""
+    import numpy as np
+    from . import diagnose as dg
+    z = dg._zrank(np.asarray(sm, np.float64))
+    fin = np.isfinite(z) & (np.abs(Q).sum(2) > 0)
+    y = np.where(fin, z, 0.0)
+    Qd = Q.astype(np.float64)
+    r = y - np.einsum("dsk,dk->ds", Qd, np.einsum("dsk,ds->dk", Qd, y))
+    # a day where the controls span the signal (residual spread ~ float noise) has no signal: ranking the rounding
+    # error would invent a book that is not there
+    with np.errstate(invalid="ignore"):
+        rs = np.sqrt(np.nansum(np.where(fin, r, 0.0) ** 2, 1) / np.maximum(fin.sum(1), 1))
+    fin &= (rs > 1e-6)[:, None]
+    return np.where(fin, r, np.nan)
 
 
 class RewardContext:
@@ -413,6 +453,7 @@ class RewardContext:
         self.tgt, self.train, self.valid = tgt, train, valid
         self.untradable, self.liq, self.pool = untradable, liq, pool
         self.base = base                       # z-rank of the signal a "screen" candidate is applied to (the known family, unscreened)
+        self.neutral_Q = None                  # C03: the daily basis of the style controls (``neutral_basis``), for reward "long_neutral"
         self._base_rows = None
         self._pool_u = None
         self.halflives = tuple(halflives)
@@ -592,6 +633,8 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
             sm0 = bk.smoothed(raw, hl)                       # the EMA is linear: one pass serves both directions
             if mask is not None:
                 sm0 = np.where(mask, np.nan, sm0)
+            if kind == "long_neutral":                       # residual(-x) = -residual(x): one projection per half-life
+                sm0 = neutral_residual(sm0, ctx.neutral_Q)
             for sign in (1.0, -1.0):
                 sm = sign * sm0
                 if kind == "long_bucket":

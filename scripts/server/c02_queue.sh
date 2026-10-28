@@ -13,7 +13,7 @@ export PYTHONPATH=${PARTURA_AC:-$PARTURA_HOME/vendor/AlphaCube-steering}/src:$PA
        PARTURA_RANK_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PARTURA_SLOTS=${PARTURA_SLOTS:-4} PARTURA_GPU_WAYS=${PARTURA_GPU_WAYS:-2} \
        PARTURA_MEM_WAIT_S=10800 PARTURA_REWARD_DEVICE=${PARTURA_REWARD_DEVICE-cuda} OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 PARTURA_RHO_REJECT=${PARTURA_RHO_REJECT:-0.5} PARTURA_ENV_OPW=${PARTURA_ENV_OPW:-ts_spearman=0,nt_*=0}
 PY=${PY:-/root/miniconda3/envs/quant/bin/python}
-D=research/coldstart_C02
+D=research/${PARTURA_STUDY_DIR:-coldstart_C02}
 JOBS=$D/jobs_$ROUND.tsv
 [ -f "$JOBS" ] || { echo "no $JOBS"; exit 2; }
 mkdir -p logs
@@ -27,11 +27,11 @@ run_one() {   # <tag> <idea> <guidance> <arms> <seed> [extra...]
     $PY -u scripts/idea_search.py "$idea" --guidance "$g" --arms "$arms" --seed "$seed" --tag "$tag" "$@" > "$log" 2>&1
   local code=$?
   echo "[partura exit $code $(date +%F_%T)]" >> "$log"
-  echo "$tag $code" >> research/coldstart_C02/$ROUND.exit
-  echo "[c02] $tag exit $code $(date +%F_%T)" >> research/coldstart_C02/$ROUND.log
+  echo "$tag $code" >> $D/$ROUND.exit
+  echo "[c02] $tag exit $code $(date +%F_%T)" >> $D/$ROUND.log
 }
 export -f run_one
-export ROUND PY JOB_MINUTES PARTURA_HOME
+export ROUND PY JOB_MINUTES PARTURA_HOME D
 # the disk guard (C01 PLAN §6 revision 2) must be running whenever jobs are
 GUARD="env PARTURA_HOME=$PARTURA_HOME GUARD_DISK=${GUARD_DISK:-/root/autodl-tmp} scripts/server/c01_diskguard.sh"
 if command -v screen >/dev/null; then

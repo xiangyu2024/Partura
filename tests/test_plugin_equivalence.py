@@ -443,6 +443,7 @@ def test_the_registered_scorer_scores_and_records_exactly_what_mains_inline_one_
     cut = 180
     known = dg._zrank(np.random.default_rng(9).normal(size=tgt.shape))            # NOT ctx.base: --screen-base pool
     ctx = RewardContext(tgt, slice(0, cut), slice(cut, D), untradable=frozen, liq=liq, pool=pool, base=pool, halflives=(0.0, 5, 20))
+    ctx.neutral_Q = __import__('partura.steer', fromlist=['neutral_basis']).neutral_basis([liq, pool])   # C03 reward "long_neutral"
     dates = [f"{20200101 + i}" for i in range(D)]
     ac_plugin.set_scorer_state(ctx, kind, dates[cut], known=known)
     new = ac_plugin._partura_scorer_factory(tgt, dates=dates, warmup=0, min_coverage=0.5, min_scored_days=0.5)
@@ -466,6 +467,7 @@ def test_p_rho_known_is_measured_against_the_known_family_not_the_screen_base():
     cut = 180
     known = dg._zrank(np.random.default_rng(2).normal(size=tgt.shape))
     ctx = RewardContext(tgt, slice(0, cut), slice(cut, tgt.shape[0]), untradable=frozen, liq=liq, pool=pool, base=pool, halflives=(0.0,))
+    ctx.neutral_Q = __import__('partura.steer', fromlist=['neutral_basis']).neutral_basis([liq, pool])   # C03 reward "long_neutral"
     dates = [f"{20200101 + i}" for i in range(tgt.shape[0])]
     out = {}
     for label, k in (("known", known), ("default", None)):

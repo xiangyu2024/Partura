@@ -160,6 +160,11 @@ with slot():
     SCREEN_BASE = opt("--screen-base", "pool")
     ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig,
                         base=pool_sig if SCREEN_BASE == "pool" else known_z, halflives=HLS)
+    if KIND == "long_neutral":                     # C03: liquidity, volatility, 20-day reversal and the known family regressed out
+        from partura.steer import neutral_basis, neutral_residual
+        nq = ps.compute({"n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))"})
+        ctx.neutral_Q = neutral_basis([aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]])
+        print(f"[idea] neutral basis ready: {ctx.neutral_Q.shape}", flush=True)
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
           f"untradable {untradable[np.isfinite(tgt)].mean():.1%} of the labelled cells", flush=True)
 
@@ -334,7 +339,10 @@ with slot():
         Z = {}
         for i, (e, c) in enumerate(allp.items()):
             if f"c{i}" in P:
-                Z[e] = dg._zrank(bk.smoothed(c["sign"] * np.asarray(P[f"c{i}"], np.float64), c["hl"]))[:cut:5]
+                sm_ = bk.smoothed(c["sign"] * np.asarray(P[f"c{i}"], np.float64), c["hl"])
+                if KIND == "long_neutral":                   # what the reward traded: the residual on the style controls
+                    sm_ = neutral_residual(sm_, ctx.neutral_Q)
+                Z[e] = dg._zrank(sm_)[:cut:5]
 
         def rho(a, b):
             ok = np.isfinite(a) & np.isfinite(b)

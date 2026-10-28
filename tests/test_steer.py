@@ -5,7 +5,7 @@
 import numpy as np
 import pytest
 
-from partura.steer import Guidance, Pattern, RewardContext, REWARDS, _bucket_rank, nonneg, parse_expr, reward, simplify
+from partura.steer import Guidance, Pattern, RewardContext, REWARDS, _bucket_rank, nonneg, parse_expr, reward, simplify, neutral_basis
 
 
 def _world(seed=0, D=260, S=300):
@@ -26,6 +26,7 @@ def test_every_reward_runs_and_is_finite(kind):
     # (alpha is a real signal in this world, so every reward -- the paired ones included -- has something to measure)
     alpha, liq, tgt, frozen, pool = _world()
     ctx = RewardContext(tgt, slice(0, 180), slice(180, 260), untradable=frozen, liq=liq, pool=pool, base=pool, halflives=(0.0, 5))
+    ctx.neutral_Q = neutral_basis([liq, pool])               # C03: what reward "long_neutral" regresses out
     r = reward(alpha, ctx, kind)
     assert np.isfinite(r["score"]) and r["sign"] in (1.0, -1.0) and r["hl"] in (0.0, 5.0)
     assert set(r["train"]) >= {"long_ann", "long_sharpe", "long_turnover"}

@@ -171,10 +171,19 @@ def reward_fast(panel, ctx, kind: str = "long", *, both_periods: bool = True, de
 
     if kind not in PAIRED:
         bucket = _cached(ctx, "bucket", dev, lambda: torch.as_tensor(np.ascontiguousarray(ctx.bucket(), dtype=np.int64), device=dev)) if kind == "long_bucket" else None
+        Q = _cached(ctx, "neutral_Q", dev, lambda: torch.as_tensor(ctx.neutral_Q, device=dev)) if kind == "long_neutral" else None
         for hl in ctx.halflives:
             sm0 = _t(bk.smoothed(raw, hl), dev)              # the EMA is linear: one pass serves both directions
             if mask is not None:
                 sm0 = torch.where(mask, nan, sm0)
+            if Q is not None:                                # C03: the residual on the style controls (steer.neutral_residual)
+                z = zrank(sm0)
+                fin = torch.isfinite(z) & (Q.abs().sum(2) > 0)
+                y = torch.where(fin, z, torch.zeros_like(z)).to(torch.float32)
+                r = y - torch.einsum("dsk,dk->ds", Q, torch.einsum("dsk,ds->dk", Q, y))
+                rs = torch.sqrt((torch.where(fin, r, torch.zeros_like(r)) ** 2).sum(1) / fin.sum(1).clamp(min=1))
+                fin = fin & (rs > 1e-4)[:, None]          # float32 here: a residual this small is the controls themselves
+                sm0 = torch.where(fin, r.to(torch.float64), nan)
             for sign in (1.0, -1.0):
                 sm = sign * sm0
                 if bucket is not None:
