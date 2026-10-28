@@ -1,0 +1,241 @@
+# C03 第 1 轮指引(W2 定稿,主研;初始种群与先验由总领设计,主研未改动任何种子与先验,只改了注释与措辞)。
+# 总领 W2 审定(2026-10-28,GP 精修之前)改了四处,理由与预测见 research/coldstart_C03/beliefs_r1.md:
+#   (1) C2a 7 号(去 U 形的证伪腿)由 sub(Volume, cross_delay(Volume, 5)) 换成 div(Volume, cross_mean(Volume, 30)):
+#       除以过去 30 天同一分钟的均量,乘性地约掉这只票自己的日内量形;旧写法只减一天,噪声大到读数弱时判不了 fails_if(c),
+#       而且「减」留下 (当天量级 - 1) x 日内量形 这一块 U 形。新写法顺带把集合竞价那一分钟的高杠杆压到 1 附近(主研漏口 3)。
+#   (2) 新增先验 C3P8b:禁 {day_sum|day_mean}(Ret) —— 分钟收益的日内和就是 I,不含价格叶子,C3P1 碰不到,且 day_sum 在 C2b 里被 x8 提权。
+#   (3) 新增先验 C3P8c:禁 sub(log(收盘价), log(开盘价)) 这个 I 的别名(主研漏口 1),不再只降权到 0.3。
+#   (4) C2b 末尾加 12、13 号:日内变异系数(H5/v3)与峰度(H5/v7)的 241 日版。直接检验里窗口 30 -> 60 让 train 上升
+#       (v1 -> v3 0.22 -> 0.31、v4 -> v5 0.11 -> 0.38),而奖励自己的 EMA 一律被弃(H5 全族 hl = 0);逐日的形状量做长窗口平均
+#       没有「单个尖峰日进出窗口」的跳变,是 C2b 里最可能真正降下换手的慢写法(日频变异系数 1、2 号的分子正是被尖峰日主导的)。
+#   其余种子、先验、角色、分配都不改;improve = 0。改后 c03_check.py guidance -> ADMISSIBLE(2 个 idea、14 条先验、24 个种子)。
+# 依据:research/coldstart_C03/direct_r1.md / .json(B 组直接检验 64 次,已从 B 组预算里扣)、
+# research/coldstart_C03/hypotheses_r1.yaml、research/coldstart_C03/prior_c03.md(C01 与 C02 的样本内 heads)。
+# 口径:奖励 long_neutral(风格中性化后的残差十分位纯多头书,扣 15bp);score = train 与 valid 较差的那个;
+#   发现 = score >= 0.5 且与已知族 cross_mean(day_std(Amt), 30) 的 |rho| < 0.5;禁 ts_spearman 与全部 nt_*;
+#   终局只认与 C01、C02 的 heads 都 |rho| < 0.7 的「新」东西。
+# 预算:每个随机数种子 188 次付费评估(= 192 - ceil(64/16)),population 48,--seed-share 0.5(种子最多占初代 24 个)。
+# 种子分配:C2a_volume_backed_minutes -> 601, 602, 603, 604, 605, 606, 607, 608;
+#          C2b_intraday_jumpiness   -> 609, 610, 611, 612, 613, 614, 615, 616。
+# 一页说明(每个种子的出处、为什么放、预期它的后代找到什么):research/coldstart_C03/design_r1.md
+# 本轮的两件事:(1) 直接检验里方向对、两段都为正、只被 15bp 成本挡在 0.5 以下的三族(H4/v7、H3/v4、H5 全族)
+#   要靠长窗口 / EMA / 中位数 / 更稳的日聚合把换手从 0.040-0.087 压下来;(2) 用对照式的种子(去 U 形(总领审定后为除以 30 日同分钟均量)、
+#   波动桶内去均值、价格桶内去均值)把机制和代理分开 —— 这两件事都写在各自 idea 的 prediction / fails_if 里。
+# 两个 idea 的 grammar 都留空 {}:C01 证明 day_ops 的 must-contain 会被装饰性满足(一个无关算子挂在树上就算满足),
+#   聚焦靠 idea 内算子的 x8 提权和种子本身就够。
+# 主研本机核对(无数据无 GPU):scripts/c03_check.py guidance -> ADMISSIBLE(2 个 idea、12 条先验、22 个种子,exit 0);
+#   22 个种子都能按搜索语法解析、用到的算子都在搜索词表里、都不被本文件的先验挡掉(seeds 在 scripts/idea_search.py 的
+#   guidance_accept 里直接放行)、深度 3-5(seed_max_depth 9)、同一 idea 内 skeleton_key 互不相同
+#   (gp.py 的 _seeded_population 同骨架只留一个);本文件折叠成算子权重的 20 个名字全部出自本意就要整体禁掉的
+#   四条先验(C3P2 / C3P3a / C3P3b / C3P4),@price 的 0.3 与两条 div 常数禁令都带 __never__ 的 unless,没有被误折叠;
+#   没有任何 w > 1 的规则;400 次生成模拟见 design_r1.md 末节。
+version: 1
+batch: C03_r1
+evidence_base:
+  direct: research/coldstart_C03/direct_r1.md
+  prior: research/coldstart_C03/prior_c03.md
+reward: []
+evaluation: []
+priors:
+- id: C3P1_price_leaves_down
+  action: weight
+  pattern: '@price'
+  unless: '__never__(_)'
+  w: 0.3
+  why: '含 Close/Open/High/Low/Vwap 叶子的树以 0.3 的相对概率被接受。直接检验里以价格为原料的两个假设(H1、H2,22 个变体)
+    净分全部为负,毛夏普最好的 H1/v3 也只有 train 0.31;后复权价格水平 H1/v11 为 −0.90。C01、C02 的 heads 大半是价格族
+    (价格水平、价格单位的离散度、盘中收益 I),在那里找到的东西与先验 head |ρ| ≥ 0.7 的概率高。两个 idea 的种子都不含价格叶子。不禁。'
+  evidence:
+  - 'research/coldstart_C03/direct_r1.md: H1 v1-v11、H2 v1-v11 的 score 全部 < 0;H1/v11 log(day_last(Close)) −0.90'
+  - 'research/coldstart_C03/prior_c03.md: C01 / C02 heads 表'
+- id: C3P2_synchronicity
+  action: ban
+  pattern: 'ts_pearson(_, $w)'
+  w: 0
+  why: '跨股票同步性:C01 的 ts_pearson(价格水平) 一族与 C02 的 ts_pearson(day_sum(Ret), 30)、ts_pearson(day_skew(Ret), 30) 一族都已是 head,
+    在这里找到的东西按 PLAN §3 不算新。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 heads ts_pearson(day_sum(Close), 10) 一族 4 个;C02 heads ts_pearson(day_sum(Ret), 30) 等 12 个'
+- id: C3P3a_rank_shift_screens
+  action: ban
+  pattern: '{cs_first_high20|cs_first_high40|cs_first_low20|cs_first_low40|cs_last_high05|cs_last_high10|cs_last_high20|cs_last_high40|cs_last_low05|cs_last_low10|cs_last_low20|cs_last_low40}(_, _)'
+  w: 0
+  why: '排名平移筛选:C01 的 60 个低 ρ 通过者里 52 个靠它们把已知族洗成低 |ρ|;C01 heads 里 15 个以上含它们。'
+  evidence:
+  - 'research/coldstart_C03/hypotheses_r1.yaml: 文件头「自己定的硬规矩」第 1 条'
+  - 'research/coldstart_C03/prior_c03.md: C01 heads cs_first_low20 / cs_last_low40 一族'
+- id: C3P3b_mask_top_replace
+  action: ban
+  pattern: '{cs_mask_top_replace_mean|cs_mask_top_replace_mean_neg}(_)'
+  w: 0
+  why: '同 C3P3a;C01 104 族 head 的外壳(C01 heads 表里 13 个)。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 heads,cs_mask_top_replace_mean_neg 开头的 13 个'
+- id: C3P4_tick_and_frozen_counts
+  action: ban
+  pattern: '{day_distinct_ratio|day_zero_ratio|day_flat_ratio|day_flat_run_max|day_pos_ratio}(_)'
+  w: 0
+  why: '报价刻度 / 一价 / 涨跌分钟计数:本轮两条对照 day_zero_ratio(Ret)、day_pos_ratio(Ret) 都以 ρ已知 0.57 被拒;
+    day_distinct_ratio 是 C01 104 族的签名。long_neutral 不套 untradable 掩码、价格刻度不在控制里,这一族只会白花付费评估。'
+  evidence:
+  - 'research/coldstart_C03/direct_r1.md: H5/v9 ρ 0.57、H3/v10 ρ 0.57,均被相关度拒绝'
+  - 'research/coldstart_C03/prior_c03.md: C01 heads 13 个含 day_distinct_ratio'
+- id: C3P5_price_unit_dispersion
+  action: ban
+  pattern: '{day_std|day_var}(@price)'
+  w: 0
+  why: '价格叶子的日内离散度 = 名义股价 × 波动,是 C01 104/107 族的第二个核。只禁价格叶子,day_std(Ret) 不在内(C2b 要用)。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 heads inv(div(...day_std(Close)...)) 一族与 cs_demean(...day_std(Open)...)'
+- id: C3P6_price_path_shape
+  action: ban
+  pattern: '{day_kurt|day_skew|day_hurst|day_autocorr_n1}(@price)'
+  w: 0
+  why: '价格路径的日内形状是 C01 的 head 族(306B 的 ts_product(cross_quantile_q25(pow_2(day_kurt(High)), 30), 50) +1.23、
+    305B 的 day_autocorr_n1(Vwap))。C2b 押的是收益的尾部形状 day_kurt(Ret),必须把后代挡在价格版之外,否则终局与这个 head |ρ| 难过 0.7。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 heads c01r3s306B ts_product(cross_quantile_q25(pow_2(day_kurt(High)), 30), 50)'
+- id: C3P7_opening_auction_flow
+  action: ban
+  pattern: '{day_first|day_open}(@flow)'
+  w: 0
+  why: '开盘竞价那一分钟的成交额 / 成交量水平:C01 heads(cs_first_low20(day_open(Amt), ·) 一族)与 C02 A 组 17 个
+    cross_regbeta(pow_1_5(day_first(Amt)), ·, 241) heads 都在这一族,不算新;它也是流动性水平的时间序列包装。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 heads day_open(Amt) / day_first(Volume) 5 个;C02 heads pow_1_5(day_first(Amt)) 17 个'
+- id: C3P8_intraday_return_I
+  action: ban
+  pattern: 'div({day_last|day_close}(@price), {day_first|day_open}(@price))'
+  w: 0
+  why: '盘中段收益 I 是 C02 的 head 族(cross_ema(I, 30) 等四种写法);本轮它本身(H4/v12)只有 −0.24,以它为原料的 H1/v7、
+    H2/v9、H4/v1 全负。在这里找到的东西不新,也不赚钱。'
+  evidence:
+  - 'research/coldstart_C03/direct_r1.md: H4/v12 cross_ema(log(div(day_last(Close), day_first(Open))), 30) −0.24'
+  - 'research/coldstart_C03/prior_c03.md: C02 heads cross_ema(log(div(day_last(Close), day_first(Open))), 30) 0.98 等'
+- id: C3P8b_I_as_minute_return_sum
+  action: ban
+  pattern: '{day_sum|day_mean}(Ret)'
+  w: 0
+  why: '(总领 W2 补)C3P8 的漏口之一:第 0 分钟 Ret 恒为 0、Close 等于 Open,所以分钟收益的日内和 / 均值就是盘中段收益 I(差一个常数倍),
+    不含价格叶子,C3P1 的降权也碰不到它;C2b 的 8 号种子含 day_sum,day_sum 在 C2b 里被 x8 提权,这条漏口在 C2b 会被放大。
+    只禁「直接作用在 Ret 叶子上」,day_sum(pow_2(Ret))、day_sum(abs_(Ret))、day_mean(in_stddev_rolling(Ret, 5)) 都不在内。
+    操作数是具体叶子,不会被折叠成 day_sum / day_mean 的算子权重。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C02 heads ts_decay_linear(day_sum(Ret), 30) 0.78、ts_pearson(day_sum(Ret), 30) 1.75、ts_pearson(day_mean(Ret), 20) 一族'
+  - 'research/coldstart_C03/direct_r1.md: H4/v12 cross_ema(I, 30) −0.24(I 在中性化奖励下不赚钱)'
+- id: C3P8c_I_as_log_difference
+  action: ban
+  pattern: 'sub(log({day_last|day_close}(@price)), log({day_first|day_open}(@price)))'
+  w: 0
+  why: '(总领 W2 补)C3P8 的另一个漏口:两个 log 相减与 log(div(·,·)) 是同一个量 I。主研 W2 记下了它(设计说明「三处损耗」第 1 条),
+    原先只被 C3P1 降权到 0.3;这里直接禁掉,终局不必再单独抽查。'
+  evidence:
+  - 'research/coldstart_C03/design_r1.md: 「已知的三处损耗与漏口」第 1 条'
+  - 'research/coldstart_C03/direct_r1.md: H4/v12 −0.24;H1/v7、H2/v9、H4/v1 以 I 为原料全负'
+- id: C3P9a_constant_over_tree
+  action: ban
+  pattern: 'div($w, _)'
+  unless: '__never__(_)'
+  w: 0
+  why: '常数 ÷ 子树 = 子树取倒数,截面排序与子树相同或整体反转(方向由奖励选),白花一次付费评估。带 unless 是为了不被折叠成 div 的算子权重。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C01 / C02 heads 中常数包装一类'
+- id: C3P9b_tree_over_constant
+  action: ban
+  pattern: 'div(_, $w)'
+  unless: '__never__(_)'
+  w: 0
+  why: '子树 ÷ 常数 = 缩放,同 C3P9a。'
+  evidence:
+  - 'research/coldstart_C03/prior_c03.md: C02 heads add(cs_first_high20(·), −5) 一类常数包装'
+- id: C3P10_symmetric_style_folds
+  action: ban
+  pattern: '{abs_|pow_2}({cs_demean|cs_robust_z}(_))'
+  w: 0
+  why: '截面去均值后取绝对值 / 平方 = 离截面中位数的距离,对风格变量就是线性中性化剔不掉的非线性风格(PLAN §4 局限 1)。
+    本轮两条对照 H6/v8(非线性流动性,换手 0.033、train 0.31)、H5/v10(非线性波动,−0.35)读的就是它:找到它是风格漏口,不是机制。'
+  evidence:
+  - 'research/coldstart_C03/direct_r1.md: H6/v8 abs_(cs_demean(cs_rank(cross_mean(day_sum(Amt), 30)))) train +0.31 / valid −0.05;H5/v10 −0.35'
+pool:
+- id: known_amt_dispersion
+  expr: cross_mean(day_std(Amt), 30)
+  sign: -1
+  hl: 0
+ideas:
+- id: C2a_volume_backed_minutes
+  hypothesis: '分钟级的价量配对:上涨分钟有量、下跌分钟缩量(分钟收益与分钟成交量正相关;等价地,单位成交量的价格冲击集中在下跌分钟)
+    的股票随后跑赢;无量上涨、放量下跌的随后跑输。直接检验里两种互不相同的构造选出同一个经济方向:H4/v7 cross_mean(day_corr(Ret, Volume), 30)
+    方向 +1、train 0.22 / valid 2.30(毛 1.04 / 3.29,换手 0.047);H3/v4 冲击不对称占比方向 −1、0.04 / 1.58(毛 0.69 / 2.36,换手 0.040);
+    ρ已知 −0.27 / −0.23。两者都被 15bp 的成本压在 0.5 以下。'
+  thesis:
+    mechanism: '分钟成交量标出的是谁在急着成交。上涨分钟放量说明买方是主动、愿付冲击的一侧(Llorente 等 2002:投机性 / 知情交易下,
+      有量的价格变动会延续);下跌分钟缩量说明卖压没有成交背书,只是盘口薄造成的流动性缺口,随后被修复。反过来,无量上涨是没有订单流
+      支撑的漂移,放量下跌是真实的卖出需求。第二种读法与它同向:单位成交量的冲击集中在下跌一侧 = 卖方流动性差(Brennan–Chordia–
+      Subrahmanyam–Tong 2012),持有者为退出困难要求补偿。相关系数与占比都把成交量水平(流动性控制)和波动水平约掉;
+      无机制仿真里 day_corr(Ret, Volume) 与均值 I 的秩相关只有 +0.04,不是盘中反转的代理。H4 原先按 Campbell–Grossman–Wang
+      押的反方向(放量的变动回吐)在 v1/v2/v3/v10 上全部失败,这一点写进 fails_if。'
+    counterparty: '在缩量下跌里把筹码卖进薄盘口、付出冲击的散户与止损盘,以及在无量上涨中追价的跟风资金;收钱的是在薄卖盘里承接、
+      并跟随放量一侧订单流的资金。'
+    prediction: '(1) 锚种子复现直接检验:cross_mean(day_corr(Ret, Volume), 30) 方向 +1、0.22 ± 0.10;冲击占比锚方向 −1、0.04 ± 0.10。
+      (2) 慢写法(60 / 241 日、cross_ema)换手 ≤ 0.040,train 净分比锚高 ≥ 0.15;601-608 合计至少 1 个 score ≥ 0.5 的通过者(总领概率 ≈ 45%)。
+      (3) 相关系数族的通过者方向 +1,冲击占比族方向 −1(同一个经济方向)。
+      (4) 去掉日内 U 形的写法(今天的分钟量除以过去 30 天同一分钟的均量,乘性地约掉这只票自己的日内量形)≥ 同窗口锚(60 日)的 70%:
+      做功的是今天的量与今天的收益对齐,不是开盘 / 收盘时段的收益形态。
+      (5) 通过者 |ρ已知| 中位数 < 0.35,valid ≥ train(直接检验两条锚都是 valid 远高于 train)。'
+    fails_if: '(a) 8 × 188 次评估后没有 score ≥ 0.5 的通过者,且 train 净分最高 < 0.35 —— 机制在毛收益上存在,但在 15bp、纯多头残差书下不可交易,
+      如实记负结果;(b) 相关系数族的通过者选 −1、或冲击占比族选 +1 —— 方向翻转,读到的不是这个机制;(c) 去 U 形的种子及其后代 ≤ 0、
+      而原始相关系数过线 —— 读到的是日内时段的收益形态(开盘 / 尾盘相对盘中),终局按 C02 的 I 族核 |ρ|;(d) 通过者大半靠价格叶子或 I 拼出
+      (GP 漂离了价量配对)—— 不是本机制;(e) 通过者 |ρ已知| 中位数 ≥ 0.4 —— 读到的是流动性。'
+  seeds:
+  - cross_mean(day_corr(Ret, Volume), 30)
+  - cross_mean(day_corr(Ret, Volume), 60)
+  - cross_mean(day_corr(Ret, Volume), 241)
+  - cross_ema(day_corr(Ret, Volume), 30)
+  - cross_med(day_corr(Ret, Volume), 60)
+  - cross_mean(day_corr(Ret, pow_05(Volume)), 60)
+  - cross_mean(day_corr(Ret, div(Volume, cross_mean(Volume, 30))), 60)
+  - cross_mean(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 30)
+  - cross_mean(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 60)
+  - cross_ema(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 30)
+  - cross_mean(day_signed_ratio(Ret, div(abs_(Ret), pow_05(Volume))), 60)
+  seed_roles: [new, new, new, new, new, new, new, new, new, new, new]
+  grammar: {}
+  reward: long_neutral
+- id: C2b_intraday_jumpiness
+  hypothesis: '日内收益「跳」的股票(分钟收益厚尾、方差集中在少数分钟、日内波动在日与日之间忽高忽低)随后跑输,走得平稳的跑赢。
+    直接检验 H5 的六个不同写法(5 / 15 分钟滚动波动的变异系数、30 / 60 日的日频波动变异系数、日内峰度、不归一的波动的波动)
+    全部选方向 −1、两段都为正(毛 train 0.52-1.05、valid 1.31-1.97),最好的 H5/v5 0.38;换手 0.050-0.082 吃掉 3.8-6.2%/年,
+    没有一个过 0.5。v8(变异系数对峰度取残差)train −1.03:在 train 上「模糊性」就是厚尾,本 idea 押的是厚尾 / 跳,不是模糊性。'
+  thesis:
+    mechanism: '跳来自离散的信息与注意力冲击、以及热钱的集中扫单(打板、拉抬):分钟收益厚尾、方差集中在少数几分钟的票,吸引为
+      「再来一次」的小概率大涨多付钱的散户(分钟尺度的 MAX / 彩票偏好,A 股高频峰度因子同向),价格被推离价值、随后回落;
+      走得平稳的票没有这层溢价。峰度、变异系数、最大分钟方差占比都是归一化的形状量,波动水平在分母里约掉,
+      与奖励控制里的 cross_mean(day_std(Ret), 20) 线性正交。'
+    counterparty: '追逐日内脉冲的散户与短线热钱,他们为跳的形状付溢价;收钱的是持有平稳票、不参与这类博弈的资金。'
+    prediction: '(1) 锚种子复现直接检验 ± 0.10(日频变异系数 60 日 0.38、日内变异系数 60 日 0.31)。
+      (2) 慢写法(241 日、cross_ema、cross_med)换手 ≤ 0.045、毛夏普不降;609-616 合计至少 1 个 score ≥ 0.5 的通过者(总领概率 ≈ 40%)。
+      (3) 全部通过者方向 −1。
+      (4) 在波动十分位内去均值的峰度保留 ≥ 70% 的分数 —— 不是非线性波动(H5/v10 在 train 上的毛夏普 0.73 与核心 0.80 分不开,这一条专门分开它)。
+      (5) 在价格十分位内去均值的峰度保留 ≥ 70% —— 不是低价股的刻度离散(价格刻度不在控制里)。
+      (6) 稳健的跳度量(day_gini、最大分钟方差占比、尾部均值比)≥ 峰度锚 −0.10;通过者 |ρ已知| < 0.3。'
+    fails_if: '(a) 8 × 188 次评估后没有 score ≥ 0.5 的通过者 —— 跳的溢价在成本后不可交易,记负结果;(b) 任一通过者选 +1 —— 彩票方向反了;
+      (c) 波动十分位内去均值的种子及其后代 ≤ 0 而原始峰度过线 —— 读到的是非线性波动(PLAN §4 局限 1),不是跳;
+      (d) 价格十分位内去均值的种子及其后代 ≤ 0 而原始峰度过线 —— 读到的是刻度离散,按 C01 104 族处理;
+      (e) 终局通过者与 C01 head ts_product(cross_quantile_q25(pow_2(day_kurt(High)), 30), 50) 残差 |ρ| ≥ 0.7 —— 不新。'
+  seeds:
+  - div(cross_stddev(day_std(Ret), 60), cross_mean(day_std(Ret), 60))
+  - div(cross_stddev(day_std(Ret), 241), cross_mean(day_std(Ret), 241))
+  - cross_mean(div(day_std(in_stddev_rolling(Ret, 5)), day_mean(in_stddev_rolling(Ret, 5))), 60)
+  - cross_mean(day_kurt(Ret), 60)
+  - cross_ema(day_kurt(Ret), 30)
+  - cross_med(day_kurt(Ret), 60)
+  - cross_mean(day_gini(Ret), 60)
+  - cross_mean(div(day_max(pow_2(Ret)), day_sum(pow_2(Ret))), 60)
+  - cross_mean(day_es_ratio_hi(abs_(Ret)), 60)
+  - cs_bucket_demean(cross_mean(day_kurt(Ret), 60), cross_mean(day_std(Ret), 30))
+  - cs_bucket_demean(cross_mean(day_kurt(Ret), 60), day_last(Close))
+  - cross_mean(div(day_std(in_stddev_rolling(Ret, 5)), day_mean(in_stddev_rolling(Ret, 5))), 241)
+  - cross_mean(day_kurt(Ret), 241)
+  seed_roles: [new, new, new, new, new, new, new, new, new, new, new, new, new]
+  grammar: {}
+  reward: long_neutral
