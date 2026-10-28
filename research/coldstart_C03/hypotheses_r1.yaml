@@ -1,0 +1,435 @@
+# C03 第 1 轮假设(W1,主研写)。6 个假设,64 个变体 = B 组 64 次直接评估。
+#
+# 预算:B 组每种子的 GP 预算 = 192 − ⌈64/16⌉ = 188。57–64 个变体都只扣 4 次,所以写满 64。
+# 本轮全部是 new,没有 improve 卡:新颖性在终局按残差量,同族改进不算新。
+#
+# 记号(YAML 里已全部展开,此处只为阅读):
+#   I = log(div(day_last(Close), day_first(Open)))        盘中段收益(今收 / 今开),也是 C02 的 head 族
+#   A = log(div(day_max(High), day_min(Low)))             日内对数振幅(无方向)
+#   S = div(abs_(Ret), pow_05(Volume))                    分钟的价格冲击效率(每单位根号成交量推动的价格)
+#
+# 判据(PLAN §2.2 / §3,与 C01、C02 都不同,写 prediction 时已按它改口径):
+#   奖励 long_neutral:原始面板 → 半衰期 0/5/20 平滑 → 截面 z 排名 → 每天对
+#   [1, z(流动性 cross_mean(day_sum(Amt),30)), z(波动 cross_mean(day_std(Ret),20)),
+#    z(20 日反转 div(day_last(Close), ts_delay(day_last(Close),20))), z(已知族 cross_mean(day_std(Amt),30))]
+#   做 OLS 取残差 → 十分位纯多头书 → 扣 15bp。score = min(train, valid);score ≥ 0.5 = 发现;
+#   与已知族的 |ρ| ≥ 0.5 直接拒。还原毛收益 = train_ann + 0.756 × 日换手(E1 已核对 0.003 × 252 = 0.756)。
+#   残差之后不再平滑、不再排名(E1 核对 steer.py:633→636→639→642 之间没有别的处理)。
+#   valid 约 1.6 年,夏普标准误约 0.8(train 约 0.5),所以单个变体过 0.5 只是弱证据:
+#   每个机制都写了 3–4 个写法不同的 core,机制成立的证据是「≥ 2 个 core 同号为正」,不是任何单条读数。
+#
+# 自己定的硬规矩(C01 / C02 假象的来源,逐条避开):
+#   不用 cs_first_* / cs_last_* / cs_mask_*(C01 的 60 个低 ρ 通过者里 52 个是它们平移造出来的);
+#   不用 day_distinct_ratio / day_flat_ratio,day_zero_ratio 只能当 control(它们读的是锁停股与粗刻度股,
+#     而 long_neutral 和 long 一样不套 untradable 掩码 —— E1 核实 steer.py:627 的元组里只有
+#     long_tradable / long_bucket / long_marginal,刻度与价格水平也不在控制里,所以这类筛选在 C03 仍会拿分);
+#   价格水平不作核心(只在 H1 当对照);Amt / Volume 只出现在相关系数或比值里,量纲必须被约掉
+#     (唯一例外是总领加的对照 H6/v8:流动性排名离中位数的距离,是排名的对称函数,只作校准);
+#   不用 ts_spearman / nt_*(环境禁用)、不用 ts_pearson(跨股票同步性一族在 C01 + C02 已用尽);
+#   cross_* 窗口取 {3,5,10,15,30,60,241},ts_* 取 {1,5,10,20,30,40,50};cross_ema 的 d 是半衰期(E1 用阶跃函数实测)。
+#
+# 控制变量的选择:线性风格已被奖励拿掉,所以「只由流动性 / 波动 / rev20 / 已知族构成」的对照残差约等于 0、
+#   什么也证明不了。全文只留 1 个这样的健全性锚(H1/v10 的振幅水平)。其余 control 都是奖励没拿掉的代理:
+#   盘中反转 I(C02 head)、后复权价格水平、零收益分钟占比(刻度 / 一价)、非线性风格 |cs_demean(cs_rank(·))|。
+#
+# 执行交回(E1 / E2)里改变了写法的两条:
+#   E1 实测 day_topw_mean(y, w) 在 |w| 的 0.9 分位为 0 时退化成 day_mean(y)(全天),而 S 在零收益分钟上恰好为 0
+#     —— 所以按总领的交回规则,H2 加了一条严格取前 k 个分钟的写法(in_topk_masked_exact,E1 实测平局不会扩大选择),
+#     它替换原定的「60 日窗口」消融;day_topw_mean 的平局退化值(等权均价 / VWAP)留作 H2/v11 的对照。
+#   E1 实测 cross_corr / ts_corr 是同一个实现(逐位相同),成对剔除 NaN,分母恒 > 0,所以结构上永不返回 NaN:
+#     常数窗口与前 d−1 天都被强制为 0.0 —— 覆盖率没有风险,H1 / H4 的 30 日保留为主写法(总领交回条件不成立)。
+#   E1 的另一条要记在 H1/v10、H5/v6、H6/v8 上:GPU 版把「残差谱范数 < 1e-4」判为没有信号(参考实现是 1e-6),
+#     所以这几条被判「无信号」时要记成「中性化生效」,不是读数失败。
+#
+# 我的事先预测:6 个假设里过线的中位数是 2(最可能是 H1、H4);P(0 个过线) 约 15–20%。
+#   全部概率压在 25–35%:C02 的校准教训是「没测过的机制会过线」这类判断全错了。
+#   另外两条校准读数:H1/v10(振幅水平)的 |score| < 0.3;H4/v12(C02 的 I 反转 head 本身)在中性化下 < 0.5(约 65%)。
+#
+# ── 总领审阅(W1,写在直接检验之前)────────────────────────────────────────────────
+# 1. 盘中收益 I 的机械载荷(本机合成仿真,不含任何真实数据):分钟波动与成交量取 U 形、首分钟 Ret = 0、
+#    开盘竞价成交量为离群点,价与量之间不放任何机制。在这样一个「没有机制」的世界里,30 日均值与均值 I 的截面秩相关:
+#    cross_mean(RSJ) +0.80;in_demean 后的 RSJ(单日)+0.47;最高冲击 20 分钟均价 / VWAP(单日)+0.67;
+#    等权均价 / VWAP(单日)+0.84;cross_mean(day_corr(Close, |Ret|)) −0.49;cross_mean(day_corr(Close, Volume)) −0.78;
+#    day_corr(Ret, Volume) +0.04。奖励的控制里没有 I。所以:
+#    · H2、H3 的 core(以及 H1 的 v1–v3,经「大振幅日的涨跌方向」)在 sign −1 下白拿盘中反转;它们过线只是弱证据,
+#      对 cross_ema(I, 30) 的残差版才是机制读数 —— 残差版 < 0.3 记为「机制未被证明」,不只是「不新」。
+#    · H1/v4、H4/v4 在 sign −1 下白亏盘中反转(做多的是高 I 的一端),已从 core 降为 ablation,不计入机制判据;
+#      H4 的日内构造改由 I 残差版 v10 承担(升为 core)。C02 的 CPV −0.92 与这个机械方向一致。
+# 2. 统一的机制判据(替换各卡里「≥ 2 个 core 同号为正」的说法):
+#    (a) 至少 2 个「不同构造」的 core 在 train 上选出预期方向且 score > 0,其中至少 1 个 ≥ 0.5;
+#        只差窗口的孪生(30/60 日、cross_stddev 与 std(log) 这种单调变换)算 1 个构造;
+#    (b) 该卡的关键剔除读数过关(H1–H4:I 残差版 ≥ 0.3 且同向;H5:v9 < 核心且 v8 ≥ 0.3;H6:v7 ≥ 0.3 且 v6、v10 < 核心);
+#    (c) 方向否决:不同构造的 core 多数选出相反方向,或任何 ≥ 0.5 的 core 选出相反方向,本假设即否(可记反号发现)。
+#    「残差版 < 0.3 = 不新」只在对应 core ≥ 0.5 时才有判读意义;core 本身没过线时,残差读数只报不判。
+# 3. 改了的变体:H1/v4 core→ablation;H4/v4 core→ablation、H4/v10 ablation→core;
+#    H6/v4 由成交量版 CV(与 v2 几乎同一个量)换成「对数成交额日变化的 60 日标准差」(交替,而不是水平离散);
+#    H6/v8 由不归一的成交额标准差(残差必然≈0、多半被 ρ已知 拒,信息量低)换成「非线性流动性」对照,与 H5/v10 成对。
+#    变体总数不变(64),预算不变。
+# 4. 总领的事先预测见各卡 prediction 末尾的「总领:」一句,汇总:任一 core ≥ 0.5 的假设数中位 2(H3 ≈ H1 > H2 > H6 > H4 > H5);
+#    按上面 (a)+(b) 判为机制成立的中位 1,P(0 个) ≈ 35%。
+
+hypotheses:
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H1_price_conditional_range
+  hypothesis: >-
+    同一只股票在相对高价的日子振幅更大(价格与振幅在时间上正相关)的,随后跑输;
+    低价日振幅更大的(恐慌后有人承接),随后跑赢。
+  thesis:
+    mechanism: >-
+      振幅度量分歧。重要的不是振幅有多大(那是波动,奖励的控制变量里已经有),而是分歧出现在价格的哪个位置。
+      分歧集中在高位,说明上涨是靠不断提高报价从追涨者手里换来的,持有者正在用高振幅派发;
+      分歧集中在低位,说明下跌中有资金在承接。相关系数把价格与振幅两条腿的量纲和水平都约掉,
+      只留下这个「配对关系」,所以它既不是价格水平也不是波动水平。开源证券的「理想振幅」是同一思路的日频实现(先验)。
+    counterparty: >-
+      在高位追涨的散户与动量资金:他们在高振幅的高价日接走派发盘,支付了全部的冲击成本与随后的回落;
+      收钱的是在低位高振幅日承接、并愿意等几周的资金。
+    prediction: >-
+      方向 sign = −1(做多相关系数低的一端)。机制成立按文件头的统一判据:不同构造的 core 是 {v1, v2}(振幅,窗口孪生)
+      与 v3(日内标准差),两者都选 sign −1 且 > 0、其一 ≥ 0.5,并且 v9(I 残差)≥ 0.3 且同向。
+      中位猜测 score 0.3–0.9(按 ±0.3 放宽即 0.0–1.2),换手 0.02–0.04。
+      v2(60 日)的换手应低于 v1,净分 ≥ v1;窗口单调性 v5(15 日) < v1 ≤ v2。
+      v3(把振幅换成分钟收益的日内标准差)与 v1 同号 —— 两种振幅度量同号才算机制,而不是某个度量的特性。
+      I 的机械载荷:大振幅日的涨跌决定了它之后的价格高低,所以 corr(价, 振幅) 带着「大日子的方向」,
+      sign −1 白拿一部分盘中反转 —— v9 是本卡的关键读数。
+      v4(日内版)已降为 ablation:U 形分钟波动让它在无机制时就与均值 I 秩相关 −0.49,sign −1 白亏盘中反转,不计入判据。
+      健全性锚 v10(无条件的振幅水平)的 |score| < 0.3。
+      v11(后复权价格水平)可能过线,它是 C02 的 head 族,不算本假设成立;核心必须高于它才有增量。
+      总领:P(v1–v3 任一 ≥ 0.5)≈ 45%,P(按统一判据成立)≈ 30%;过线时 sign −1 的概率 ≈ 80%;v9 约为 v1 的 50–80%。
+    fails_if: >-
+      核心在 train 上选出 sign = +1(做多「高价日振幅大」的一端;按统一判据 (c):{v1, v2} 与 v3 多数选 +1,
+      或任一 ≥ 0.5 的 core 选 +1)—— 派发的机制陈述反了,本假设即否;反号过线可以记为发现,但不能说成机制成立。
+      v4 选 +1 不触发这一条:它的方向由 U 形波动与 I 的机械关系决定。
+      v7(把价格条件换成当天涨跌方向 I)≥ 核心 —— 读到的是「涨跌日的波动不对称」,那是 H3 的地盘,不是价格位置。
+      v8(把振幅换成成交额)≥ 核心 —— 读到的是「高价日放量」,即流动性的时间序列包装(C02 A 组用开盘竞价成交额
+      做年度回归的那一族 1.3–1.7 已经占了这块),不是分歧。
+      v10(无条件的振幅水平)与核心同样好 —— 读到的是波动,并且说明线性中性化漏了波动。
+      v9(对 C02 的 I 反转 head 取残差)< 0.3 而核心 ≥ 0.5 —— 核心读到的是盘中反转的机械载荷:机制未被证明、也不新,
+      W2 不为它设计种群。
+      不同构造的 core 只有 1 个为正、另一个 ≈ 0 —— 按 valid 1.6 年、夏普标准误 0.8 的口径当作噪声,不记作机制成立。
+  novelty: >-
+      E2 在 c01 / c02 两组 4399 条去重存档里按结构检索 cross_corr / ts_corr,只有 26 条,最高 1.24,
+      而那一条是「cross_corr(day_pos_ratio(Open), day_ar1_coefficient(Ret), 3) + cross_ema(day_last(Amt), 60)」
+      —— 做功的是后面那个流动性加法项;没有任何一条是「价格水平 × 振幅」的结构。97 个先验 head 里
+      cross_corr / ts_corr / day_corr 的出现次数为 0。结构上:核心不含价格水平本身(v11 是对照)、
+      不含同步性 ts_pearson、不含 I、不含刻度与一价日筛选、不含排名平移、不含开盘竞价成交额
+      —— 与 E2 给出的七个族标签(F_mask / F_tick_pricevol / F_sync / F_intraday_rev / F_price_level /
+      F_open_amount / F_reg)都不重合。预期取残差后 |ρ| < 0.7 的理由:相关系数的截面排名由配对关系决定,
+      而先验 head 的排名由水平决定(流动性水平、价格水平、同步性)。唯一的风险是高价股长期振幅也大,
+      使 v1 带上价格水平的成分 —— v9(对 I 的残差)与 v11(价格水平的可比尺子)两条读数专门量这一点。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_corr(day_last(Close), log(div(day_max(High), day_min(Low))), 30)", predicts: "过线,sign −1,score 0.3–0.9,换手 ≈ 0.03。30 个交易日里收盘价水平与当日对数振幅的相关。E1 核实 cross_corr 永不返回 NaN(常数窗口与前 29 天强制为 0.0),覆盖率无风险,所以 30 日留作主写法。"}
+  - {id: v2,  role: core,     expr: "cross_corr(day_last(Close), log(div(day_max(High), day_min(Low))), 60)", predicts: "过线且 ≥ v1,换手更低。60 日让相关系数更稳,也把成本摊薄;若明显弱于 v1,说明这是一个月尺度的状态而不是股票属性。"}
+  - {id: v3,  role: core,     expr: "cross_corr(day_last(Close), day_std(Ret), 30)", predicts: "过线,与 v1 同号。把振幅换成分钟收益的日内标准差(E1 核实 day_std 是总体标准差、跳过 NaN)。两种振幅度量同号,才是机制而不是 High / Low 这两个极值点的特性。"}
+  - {id: v4,  role: ablation, expr: "cross_mean(day_corr(Close, abs_(Ret)), 30)", predicts: "(总领由 core 降为 ablation)日内版:大的分钟波动是否出现在当天价格的高处。但分钟波动是 U 形(开盘尖峰),上涨日的大波动机械地落在低价处,无机制仿真里它与均值 I 的秩相关 −0.49:sign −1 做多的是高 I 一端、白亏盘中反转。预期 score < 0.3,或 train 选 +1 —— 那是 I,不是派发;不计入机制判据。它与 v1 的差距用来量 U 形伪影有多大。"}
+  - {id: v5,  role: ablation, expr: "cross_corr(day_last(Close), log(div(day_max(High), day_min(Low))), 15)", predicts: "弱于 v1:15 个点的相关系数噪声大、换手高。用来画窗口曲线,顺带检查成本。"}
+  - {id: v6,  role: ablation, expr: "cross_corr(day_mean(Vwap), log(div(day_max(High), day_min(Low))), 30)", predicts: "与 v1 接近。条件腿换成当日均价,排除「用的是收盘价这个特定时点」的可能;若明显弱于 v1,做功的是收盘价相对全天的位置,机制要改写。"}
+  - {id: v7,  role: ablation, expr: "cross_corr(log(div(day_last(Close), day_first(Open))), log(div(day_max(High), day_min(Low))), 30)", predicts: "弱于核心。条件换成当天的涨跌方向而不是价格位置。若它 ≥ 核心,读到的是涨跌日的波动不对称(H3 的地盘),H1 的「价格位置」陈述不成立。"}
+  - {id: v8,  role: ablation, expr: "cross_corr(day_last(Close), day_sum(Amt), 30)", predicts: "弱于核心,且可能被 ρ已知 拒。把振幅换成成交额:若它 ≥ 核心,读到的是「高价日放量」,是流动性的时间序列包装,不是分歧。"}
+  - {id: v9,  role: ablation, expr: "cs_regres(cross_corr(day_last(Close), log(div(day_max(High), day_min(Low))), 30), cross_ema(log(div(day_last(Close), day_first(Open))), 30))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。对 C02 的 I 反转 head 取截面残差 —— 直接检验不报与先验 head 的 ρ,残差是唯一读法。E1 核实 cs_regres 是带截距的逐日 OLS 残差、不对回归元取排名,所以这是一次偏弱的剔除:它过关不等于终局的 |ρ| 一定 < 0.7。"}
+  - {id: v10, role: control,  expr: "cross_mean(log(div(day_max(High), day_min(Low))), 30)", predicts: "全文唯一的健全性锚,预期 |score| < 0.3。它与 C02 H1/v13 逐字相同,那次 ρ已知 = +0.53、被相关度拒绝,所以这次多半也标「被相关度拒绝」;直接检验仍报它的 score,读 score 即可。无条件的振幅水平就是波动,控制变量里有 cross_mean(day_std(Ret), 20),残差应该几乎什么都不剩。它若被 GPU 版判为「无信号」(E1:残差谱范数 < 1e-4),那是中性化生效的证据,不是读数失败。"}
+  - {id: v11, role: control,  expr: "log(day_last(Close))", predicts: "可能过线,但不算本假设成立。后复权价格水平是没被中性化掉的风格(C02 的 head div(day_last(Close), day_sum(pow_3(log(Close)))) 2.24、cross_ema(cross_scale(day_last(Close), 15), 241) 1.58 都在这一族)。它的作用是给核心一把可比的尺子:核心若只有它的水平,H1 没有增量。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H2_smart_money_minutes
+  hypothesis: >-
+    单位成交量推动价格最多的那些分钟代表知情的激进交易;这些分钟的均价低于全天 VWAP(知情者在低位吸筹)的股票,随后跑赢。
+  thesis:
+    mechanism: >-
+      用 |分钟收益| / 根号(分钟成交量) 度量一分钟的价格冲击效率,最高的那些分钟是有信息、愿意付冲击的激进单。
+      把这些分钟的均价与全天 VWAP 相比,得到一个围绕 1 的无量纲比值:小于 1 说明激进交易发生在当天的低价区,
+      是吸筹;大于 1 说明激进交易在高价区,是派发。随后几周价格向知情的那一侧移动。
+      机制要求的只是「选哪些分钟」,成交量只进入选择与根号归一,量纲在比值里被约掉。
+      开源证券 2019 的聪明钱因子是同一构造(先验)。
+    counterparty: >-
+      在当天高价区被动成交的散户与跟风资金 —— 他们成交在知情者的对面;
+      因子做多的那一侧,就是知情资金正在低位买入的股票。
+    prediction: >-
+      方向 sign = −1(做多比值低者)。机制成立按文件头的统一判据:不同构造的 core 是 v1(严格前 20 分钟)、
+      {v2, v3}(day_topw_mean,窗口孪生)、v4(β = 0.25);另加两条剔除:v9(I 残差)≥ 0.3 且同向,
+      最好的 core 比 v11 高 ≥ 0.2(「选哪些分钟」这一步必须有增量)。
+      I 的机械载荷是本卡最大的风险:分母 VWAP 被开盘竞价那一分钟的巨量拉向开盘价,无机制仿真里
+      「前 20 分钟均价 / VWAP」与 I 的秩相关 +0.67、「等权均价 / VWAP」(= v11)+0.84 —— sign −1 白拿盘中反转,
+      所以 core 过线本身几乎不说明知情交易。
+      中位猜测 score 0.2–0.7(按 ±0.3 放宽即 −0.1 到 1.0),换手 0.02–0.04(10 日窗口的 v2 可能到 0.05)。
+      v1(严格取 20 个分钟)与 v3(day_topw_mean 取 10% ≈ 24 个分钟)应同号、量级接近:
+      两者只差「平局会不会吞掉全天」。E1 实测 day_topw_mean 在 |w| 的 0.9 分位为 0 时退化成 day_mean,
+      而 S 在零收益分钟上恰好为 0,所以成交稀疏的票上 v2 / v3 / v4 会向对照 v11 塌缩 —— 若 v1 明显强于 v3,
+      差别就是这个退化。权重腿的消融 v5(只用 |Ret|)、v6(只用 Volume)都应弱于核心;
+      安慰剂 v7 的 |score| 必须 < 核心的 70%。
+      总领:P(v1–v4 任一 ≥ 0.5)≈ 40%(大半来自 I),P(按统一判据成立)≈ 15%;v11 自己 ≥ 0.5 的概率 ≈ 35%;
+      v1 与 v3 的差 < 0.2(两者的选择大半重合)。
+    fails_if: >-
+      核心在 train 上选出 sign = +1(做多激进分钟均价高于 VWAP 的一侧)—— 「知情者在低位吸筹」反了,本假设即否。
+      v7(权重换成 3 个交易日前同一分钟的成交量)≥ 核心的 70% —— 读到的是日内 U 形时段的均价
+      (开盘与尾盘那些分钟),不是今天的知情分钟。
+      v10(收盘相对 VWAP)≥ 核心 —— 读到的只是盘中位置,即 I 的另一种写法;
+      v11(等权均价 / VWAP)≈ 核心(差 < 0.2)—— 读到的是 day_topw_mean 的平局退化值,也是开盘竞价把 VWAP 拉向开盘价
+      造成的 I 载荷,机制根本没被测到。
+      v9(对 I 反转 head 取残差)< 0.3 而核心 ≥ 0.5 —— 核心读到的是 I 的机械载荷:机制未被证明、也不新。
+      覆盖率被门槛废掉 —— day_wmean 在权重和为 0 的零成交日给 NaN(E1 核实),若覆盖率 < 0.9,
+      以 v1 这种写法的读数为准。
+  novelty: >-
+      E2 检索:存档 4399 条里 day_topw_mean 出现 236 条、其中 186 条 score ≥ 0.5,但同时满足
+      「day_topw_mean(价格, div(abs_(Ret), pow_05(Volume)))」结构的是 0 条 —— 全库连 "div(abs_(Ret)" 这个子串都不存在。
+      那 236 条全部是价格或成交额的水平做权重(day_topw_mean(Low, Amt)、(Amt, Volume)、(Vwap, Amt) 之类),
+      且几乎都套在 ts_spearman(本环境禁用)里。97 个先验 head 里含 day_topw_mean 的只有 2 条,
+      都是 ts_spearman(day_topw_mean(Low, Amt), ·) 的跨股票同步性写法,原料是成交额水平而不是冲击效率。
+      结构上:输出是一个围绕 1 的比值,分子分母同为价格(价格水平相消)、成交额只进选择与根号归一、
+      不含同步性、不含刻度筛选、不含排名平移、不含开盘竞价成交额。预期残差后 |ρ| < 0.7 的理由:
+      它的截面排名由「当天哪些分钟是知情的」决定,先验 head 的排名由流动性与价格水平决定。
+      曾担心的门槛风险不成立:E1 核实 distinct_fraction 量的是同一天里有多少只股票取到不同的值,
+      与取值范围有界无关,一个连续量做 30 日平均后通常接近 1。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_mean(div(day_mean(in_topk_masked_exact(div(abs_(Ret), pow_05(Volume)), Close, 20)), day_wmean(Close, Volume)), 30)", predicts: "过线,sign −1,score 0.2–0.7。严格取冲击效率最高的 20 个分钟(E1 实测 in_topk_masked_exact 用 torch.topk 精确取 k 个,平局不会扩大选择,全平也只取 k 个)。机制最干净的写法,也是 v3 的匹配孪生;按总领的交回规则,它替换原定的 60 日窗口消融。给 W2 的提醒:in_topk_masked_exact(·, ·, 20) 是完整库的通用调用,搜索语法里只有 in_topk_masked_exact_k5,GP 改不了 k,种子里若用它要么接受 k 固定,要么换成 k5 写法。"}
+  - {id: v2,  role: core,     expr: "cross_mean(div(day_topw_mean(Close, div(abs_(Ret), pow_05(Volume))), day_wmean(Close, Volume)), 10)", predicts: "过线,sign −1,与 v3 同号。开源证券原版的 10 日平均;换手最高(≈ 0.05),净分可能被成本压到 v3 之下。"}
+  - {id: v3,  role: core,     expr: "cross_mean(div(day_topw_mean(Close, div(abs_(Ret), pow_05(Volume))), day_wmean(Close, Volume)), 30)", predicts: "过线,sign −1,与 v1 量级接近。30 日平均:换手压到 0.03 量级,是本假设最可能活下来的写法。"}
+  - {id: v4,  role: core,     expr: "cross_mean(div(day_topw_mean(Close, div(abs_(Ret), pow_05(pow_05(Volume)))), day_wmean(Close, Volume)), 30)", predicts: "与 v3 同号同量级。β = 0.25 版(成交量只开四次方根):选择更偏向大收益的分钟而不是小量的分钟。若它明显强于 v3,做功的是「大波动分钟」而不是「冲击效率」,机制陈述要弱化成前者。"}
+  - {id: v5,  role: ablation, expr: "cross_mean(div(day_topw_mean(Close, abs_(Ret)), day_wmean(Close, Volume)), 30)", predicts: "弱于核心。权重只用 |Ret|(β = 0):选的是波动最大的分钟,不管它用了多少量。v5 与 v3 的差就是「每单位成交量」这一步的价值。"}
+  - {id: v6,  role: ablation, expr: "cross_mean(div(day_topw_mean(Close, Volume), day_wmean(Close, Volume)), 30)", predicts: "弱于核心,接近对照 v11。权重只用 Volume:选的是量最大的分钟(开盘与尾盘),分子因此贴近 VWAP 自身,比值接近 1。"}
+  - {id: v7,  role: ablation, expr: "cross_mean(div(day_topw_mean(Close, div(abs_(Ret), pow_05(cross_delay(Volume, 3)))), day_wmean(Close, Volume)), 30)", predicts: "安慰剂,|score| < 核心的 70%。权重里的成交量换成 3 个交易日前同一分钟的量:日内 U 形与集中度保留,只拆掉「今天的量与今天的收益对齐」。若它 ≥ 核心的 70%,v1–v4 读到的是时段,不是知情分钟。"}
+  - {id: v8,  role: ablation, expr: "cross_mean(div(day_topw_mean(Vwap, div(abs_(Ret), pow_05(Volume))), day_wmean(Vwap, Volume)), 30)", predicts: "与 v3 接近。把分钟的价格代表从 Close 换成 Vwap:同一句话、更贴近真实成交价。若明显不同,说明分钟内的 Close 与 Vwap 之差(分钟内的位置)在做功。"}
+  - {id: v9,  role: ablation, expr: "cs_regres(cross_mean(div(day_topw_mean(Close, div(abs_(Ret), pow_05(Volume))), day_wmean(Close, Volume)), 30), cross_ema(log(div(day_last(Close), day_first(Open))), 30))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。比值与当天涨跌天然相关(上涨日的高冲击分钟多半在高价区),对 C02 的 I 反转 head 取残差是唯一能读出增量的办法。"}
+  - {id: v10, role: control,  expr: "cross_mean(div(day_last(Close), day_wmean(Close, Volume)), 30)", predicts: "不应 ≥ 核心。收盘价相对 VWAP = 盘中位置,是 I 的粗化版,也是一个奖励没拿掉的代理(C02 的 I 反转 head 族)。它若 ≥ 核心,H2 只是 I 反转换了一张脸。"}
+  - {id: v11, role: control,  expr: "cross_mean(div(day_mean(Close), day_wmean(Close, Volume)), 30)", predicts: "不应 ≈ 核心。等权均价 / VWAP 正是 day_topw_mean 在平局时的退化值(E1 实测:0.9 分位为 0 时选中全天)。若它 ≈ v3 而 v1 明显不同,说明 v2–v4 读到的只是这个退化值,H2 要以 v1 的读数为准。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H3_signed_variance_asymmetry
+  hypothesis: >-
+    日内已实现方差里由上涨分钟贡献的占比越高,随后越跑输;由下跌分钟贡献的占比越高,随后越跑赢。
+  thesis:
+    mechanism: >-
+      把一天的分钟平方收益按收益符号拆开:上行占比高,说明这天的波动是正向跳 —— 公众可见的上冲、彩票型的回报形状,
+      偏好这种分布的投资者愿意为它多付钱,溢价随后回落;下行占比高,说明波动来自抛售,价格被压到折价,随后修复。
+      它是一个纯形状量:方差的总量在分母里被约掉,值域 [−1, 1],所以与奖励控制里的波动水平正交。
+      Bollerslev–Li–Zhao 2020 的 RSJ、A 股的「下行波动占比」是同一个量(先验)。
+    counterparty: >-
+      为彩票型分布付钱、追最近有过正向跳的散户;收钱的是在抛售中承接、承担了下行波动的资金。
+    prediction: >-
+      方向 sign = −1。机制成立按文件头的统一判据:不同构造的 core 是 {v1, v2}(窗口孪生)与 v3(去当日漂移),
+      两者都选 sign −1 且 > 0、其一 ≥ 0.5,并且 v8(I 残差)≥ 0.3 且同向。中位猜测 score 0.2–0.6
+      (按 ±0.3 放宽即 −0.1 到 0.9),换手 0.02–0.03。
+      I 的机械载荷:无机制仿真里 cross_mean(RSJ) 与均值 I 的秩相关 +0.80 —— sign −1 白拿盘中反转,core 过线只是弱证据。
+      v3(先用 in_demean 去掉当日漂移)与 v1 同号;in_demean 只去掉「高斯漂移」那一部分(仿真里单日秩相关由 +0.80
+      降到 +0.47),肥尾大分钟构成当天涨跌的那部分 I 载荷还在,所以 v3 不能代替 v8。
+      若 v3 明显更强,说明做功的是形状而不是当天涨跌,机制更干净。
+      v5(净路径 / 总路径)是「当天涨跌方向」的粗化版,应被盘中反转吸收、弱于核心。
+      v6(日内偏度)按 C01 在 long 下的 +0.2 预期弱;v9(对偏度取残差)≥ 0.3 才说明它不只是偏度。
+      v7(10 日)用来看成本:窗口短、换手高,净分应低于 v1。
+      总领:P(v1–v3 任一 ≥ 0.5)≈ 45%(高频偏度 / RSJ 是 A 股文献里最稳的高频因子之一,再加上白拿的 I),
+      P(按统一判据成立)≈ 30%;过线时 sign −1 的概率 ≈ 85%;v9(偏度残差)< 0.3 的概率 ≈ 55%。
+    fails_if: >-
+      核心在 train 上选出 sign = +1(做多上行方差占比高者)—— 彩票溢价的方向反了,本假设即否。
+      v10(只数上涨分钟个数、不看幅度)与核心同样好 —— 读到的是涨跌分钟占比,它对刻度与一价日敏感
+      (C01 的 cs_first_low20(day_open(Amt), day_pos_ratio(Ret)) 2.25 就在这一族),不是方差的不对称。
+      v8(对 I 反转 head 取残差)< 0.3 而核心 ≥ 0.5 —— 它只是盘中反转换了一张脸:机制未被证明、也不新。
+      v9 < 0.3 —— 它只是日内偏度,不是符号不对称。
+      覆盖率异常低 —— E1 实测 day_signed_ratio(Ret, pow_2(Ret)) 在整天 Ret 恒为 0 时分母为 0、输出 NaN,
+      锁停与零成交日会掉格子;若覆盖率 < 0.9 被门槛废掉,以 v3 的读数为准(in_demean 之后极少出现整天恒等)。
+  novelty: >-
+      E2 检索:day_signed_ratio 全库 68 条,其中第一个参数是 Ret 的 23 条、过 0.5 的 3 条;
+      但第二个参数是 pow_2(Ret) 的 0 条 —— 那 23 条全是 High / Low / Close / Vwap / Amt / Volume 做权重,
+      读的是「成交额或价格在涨跌分钟之间的分配」,没有一条是已实现方差的符号拆分。
+      97 个先验 head 里 day_signed_ratio 一条也没有。结构上不含价格水平、不含成交额(v4 是消融)、
+      不含同步性、不含刻度筛选、不含排名平移、不含开盘竞价成交额。预期残差后 |ρ| < 0.7 的理由:
+      它是一个有界占比,分母把方差水平约掉,与流动性、波动、价格水平都不同构;
+      最接近的先验是 C02 的 ts_pearson(day_skew(Ret), 30) 这一族(0.87–0.95),但那是跨股票同步性作用在偏度上,
+      本假设既不取同步性也不取偏度 —— v9 的残差就是为「它是不是只是偏度」准备的。
+      E1 核实的另一点让它更干净:权重用 pow_2(Ret) 时,Ret = 0 的分钟权重为 0,只进分母不进分子,
+      所以零收益分钟既不能伪造信号也不被排出分母。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 30)", predicts: "过线,sign −1,score 0.2–0.6,换手 ≈ 0.03。E1 手算核对:它等于 (上行分钟的 Ret² 之和 − 下行分钟的 Ret² 之和) / 总 Ret²,正是 RSJ 的占比形式。"}
+  - {id: v2,  role: core,     expr: "cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 60)", predicts: "与 v1 同号,换手更低。若 60 日 ≥ 30 日,说明符号不对称是慢变的股票属性而不是短期状态,W2 应优先用长窗。"}
+  - {id: v3,  role: core,     expr: "cross_mean(day_signed_ratio(in_demean(Ret), pow_2(in_demean(Ret))), 30)", predicts: "与 v1 同号,可能更强。先去掉当日漂移(in_demean 是日内去均值),剩下的是绕着当日均值的上下不对称。总领注:它只剥掉高斯漂移造成的那部分 RSJ(约 1.6 × 分钟漂移 / 分钟波动),肥尾大分钟带来的 I 载荷还在(仿真单日秩相关 +0.47),所以它不是「纯形状」,I 的剔除仍以 v8 为准。"}
+  - {id: v4,  role: ablation, expr: "cross_mean(day_signed_ratio(Ret, div(abs_(Ret), Volume)), 30)", predicts: "与核心同号,量级不定。权重换成每单位成交量的价格冲击:读的是「冲击发生在上涨还是下跌分钟」。Volume = 0 的分钟给 ±inf、被 isfinite 排除(E1 核实),所以它只用有量的分钟。"}
+  - {id: v5,  role: ablation, expr: "cross_mean(day_signed_ratio(Ret, Ret), 30)", predicts: "弱于核心。净路径 / 总路径 = Σ Ret / Σ|Ret|,是当天涨跌方向的粗化版,应被盘中反转吸收。它与核心的差就是「用幅度的平方加权」这一步的价值。"}
+  - {id: v6,  role: ablation, expr: "cross_mean(day_skew(Ret), 30)", predicts: "弱(C01 在 long 下读到 +0.2)。日内收益偏度:同样是三阶的不对称,但它被单个极值分钟主导,而占比形式有界。作对比用。"}
+  - {id: v7,  role: ablation, expr: "cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 10)", predicts: "弱于 v1:换手升到 0.05 量级,成本按 0.756 × 换手 吃掉约 4%/年。用来确认慢形式是必要的。"}
+  - {id: v8,  role: ablation, expr: "cs_regres(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 30), cross_ema(log(div(day_last(Close), day_first(Open))), 30))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。上行方差占比与当天涨跌天然相关,对 C02 的 I 反转 head 取残差是唯一的读法。"}
+  - {id: v9,  role: ablation, expr: "cs_regres(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 30), cross_mean(day_skew(Ret), 30))", predicts: "≥ 0.3。剔除日内偏度之后还剩多少 —— 回答「它是不是只是偏度换了一种写法」。若 < 0.3,H3 应并入偏度族,而偏度族在 C01 的 long 下只有 +0.2。"}
+  - {id: v10, role: control,  expr: "cross_mean(day_pos_ratio(Ret), 30)", predicts: "不应 ≥ 核心。只数上涨分钟的个数、不看幅度:同样的原料、去掉「方差」这个加权,对粗刻度与一价日最敏感。它若 ≥ 核心,H3 读到的是涨跌分钟占比(C01 已有的那一族),不是方差的符号不对称。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H4_volume_conditioned_reversal
+  hypothesis: >-
+    盘中价格的上行恰好发生在成交额最大的日子(价量在时间上正相关)的股票随后跑输;
+    价格变动与成交额无关或反向的随后跑赢。
+  thesis:
+    mechanism: >-
+      区分流动性需求与信息:若上涨总是发生在放量日,说明价格是买方用成交量换来的 —— 他们需要即时性、支付冲击,
+      这部分位移没有信息,随后回吐;若价格变动与成交额无关或反向(缩量时在动),位移更可能来自信息,会延续。
+      日内版是同一句话:放量分钟里在涨,说明买方在不断提价。相关系数把成交额的量纲约掉,
+      所以它既不是流动性水平(控制变量),也不是成交额的离散度(已知族)。
+      Campbell–Grossman–Wang 1993、Llorente 等 2002,以及 A 股的 CPV(先验)。
+    counterparty: >-
+      在放量上涨中市价追入的散户与动量资金,他们支付了全部的价格冲击;
+      收钱的是在放量中卖出、并在冲击消退后买回的流动性提供方。
+    prediction: >-
+      方向 sign = −1。机制成立按文件头的统一判据:不同构造的 core 是 {v1, v2}(日频相关,窗口孪生)、
+      v3(成交额加权减等权)与 v10(日内 CPV 的 I 残差);v3 与 v1 在每只股票上必然同号(协方差与相关系数同号),
+      二者一致只算半条证据,所以本卡成立要求 v10 也选 sign −1 且 > 0;另加 v9(I 残差)≥ 0.3 且同向。
+      中位猜测 score 0.2–0.7(按 ±0.3 放宽即 −0.1 到 1.0),换手 0.02–0.04。
+      C02 在 long 下读到的 cross_mean(day_corr(Close, Volume), 30) = −0.92(15 日 −1.30、60 日 −0.87、
+      day_corr(Ret, Volume) −0.28)。总领改口:这一族首先是 I 的反号代理 —— 开盘竞价那一分钟的成交量是全天离群点
+      (E1 实测),无机制仿真里 cross_mean(day_corr(Close, Volume), 30) 与均值 I 的秩相关 −0.78,sign −1 做多的是高 I
+      一端、白亏盘中反转;风格只是第二层。所以 v4 已降为 ablation,日内构造改由 v10 承担。
+      v4 在 long_neutral 下的预期:score < 0.3,或 train 选 +1 并靠 I 过线 —— 两种都不算本假设的证据。
+      另外两条锚:v12(C02 的 I 反转 head 本身)预期 < 0.5(约 65% 概率),它不是新 head;
+      v3(成交额加权的 I 减等权的 I)是不用相关系数的第二种写法,它的排名还混着 I 的波动与成交额的变异系数(H6),
+      若 v3 明显强于 v1,先怀疑这两样。
+      总领:P(v1/v2/v3/v10 任一 ≥ 0.5)≈ 30%,P(按统一判据成立)≈ 15%;v12 ≥ 0.5 的概率 ≈ 50%(比主研乐观:
+      I 与 20 日收到收反转只部分重合,隔夜段不在 I 里)。
+    fails_if: >-
+      核心在 train 上选出 sign = +1(做多放量上涨者)—— 那是信息被延续,流动性需求回吐的陈述反了,本假设即否。
+      v11(abs_(I) 与成交额的相关,无方向)与核心同样好 —— 读到的是「放量日波动大」这个机械关系,
+      不是方向性的追涨。
+      v9(对 I 反转 head 取残差)< 0.3 而 v1 ≥ 0.5 —— 日频相关只是 I 的粗化版:机制未被证明、也不新。
+      v10(已是 core)≤ 0 或选 +1 —— 日内 CPV 在剔除 I 之后不剩东西。这一条是本假设成立与否的关键:
+      E1 核实首分钟(开盘集合竞价)的 Volume 是全天的离群点,所以 day_corr(Close, Volume) 有一块就是
+      「开盘价相对全天均价的位置」,也就是当天盘中涨跌的反号。
+      v4 选 +1 不触发方向否决:它的方向由竞价成交量与 I 的机械关系决定。
+      核心全部被 ρ已知 ≥ 0.5 拒 —— 相关系数虽无量纲,但若与成交额离散度同构,这条路关死。
+      v5(收到收、含隔夜)远好于核心 —— 做功的是隔夜段,机制要改写。
+  novelty: >-
+      E2 检索:cross_corr / ts_corr 全库 26 条里没有一条是「收益 × 成交额」的结构;
+      day_corr(价格或收益, 量) 全库只有 10 条 —— 8 条是 C02 的直接检验(全部为负,最高 +0.39 是
+      add(cs_rank(mean), cs_rank(stddev)) 的合成)、1 条是 C01 的深层装饰、1 条是 cross_delay 包装,
+      没有一条 score ≥ 0.5,也没有一条进 97 个 head。97 个 head 里 cross_corr / ts_corr / day_corr 的出现次数为 0。
+      所以 v1–v3 是全新结构,v4 是 C02 在 long 下测过、在 long_neutral 下从未读过的量。
+      结构上:成交额只出现在相关系数与「加权减等权」的比值里(量纲被约掉),不含价格水平、不含同步性、
+      不含刻度筛选、不含排名平移、不含开盘竞价成交额 —— 与 E2 的七个族标签都不重合。
+      预期残差后 |ρ| < 0.7 的最大风险就是与 C02 的 I 反转 head 重合,v9 / v10 两条残差专门读它;
+      E1 核实 ts_corr 与 cross_corr 是同一个实现(逐位相同),所以 v5 与 v1 的差别只在收益的定义,不在算子。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_corr(log(div(day_last(Close), day_first(Open))), day_sum(Amt), 30)", predicts: "过线,sign −1,score 0.2–0.7,换手 ≈ 0.03。30 日里盘中段收益与当日成交额的相关:正 = 上涨靠放量换来。"}
+  - {id: v2,  role: core,     expr: "cross_corr(log(div(day_last(Close), day_first(Open))), day_sum(Amt), 60)", predicts: "与 v1 同号,换手更低。E1 核实相关系数至少要 2 个成对有效日才非退化,60 日的估计更稳。"}
+  - {id: v3,  role: core,     expr: "sub(div(cross_mean(mul(log(div(day_last(Close), day_first(Open))), day_sum(Amt)), 30), cross_mean(day_sum(Amt), 30)), cross_mean(log(div(day_last(Close), day_first(Open))), 30))", predicts: "与 v1 同号。不用相关系数的第二种写法:成交额加权的盘中收益减等权的盘中收益(量纲在比值里约掉)。它比相关系数更直接地量「钱落在哪些日子的收益上」;与 v1 同号才算机制,而不是相关系数这个统计量的特性。"}
+  - {id: v4,  role: ablation, expr: "cross_mean(day_corr(Close, Volume), 30)", predicts: "(总领由 core 降为 ablation)日内版的 CPV。竞价离群量 + U 形成交量让它在无机制时就与均值 I 秩相关 −0.78,sign −1 白亏盘中反转。预期 score < 0.3,或 train 选 +1 并靠 I 过线;C02 在 long 下的 −0.92 与这个机械方向一致。它与 v10 的差就是 I 在这个量里占了多少。"}
+  - {id: v5,  role: ablation, expr: "ts_corr(log(div(day_last(Close), ts_delay(day_last(Close), 1))), day_sum(Amt), 30)", predicts: "与 v1 同号。收到收(含隔夜)的日收益与成交额的相关。E1 核实 ts_corr 与 cross_corr 逐位相同,所以差别只在收益定义:若它远好于 v1,做功的是隔夜段,机制要改写。"}
+  - {id: v6,  role: ablation, expr: "cross_corr(log(div(day_last(Close), day_first(Open))), log(day_sum(Amt)), 30)", predicts: "与 v1 接近。成交额取对数后再求相关:压掉放量日的长尾。若明显强于 v1,说明 v1 被少数巨量日主导。"}
+  - {id: v7,  role: ablation, expr: "cross_mean(day_corr(Ret, Volume), 30)", predicts: "与 v4 同号、可能更弱(C02 在 long 下 −0.28,比 v4 的 −0.92 更接近 0)。用分钟收益而不是价格路径,去掉日内趋势成分。"}
+  - {id: v8,  role: ablation, expr: "cross_mean(day_corr(Close, Volume), 15)", predicts: "弱于 v4,换手更高(C02 在 long 下 15 日 −1.30,比 30 日更负)。窗口曲线的短端,顺带检查成本。"}
+  - {id: v9,  role: ablation, expr: "cs_regres(cross_corr(log(div(day_last(Close), day_first(Open))), day_sum(Amt), 30), cross_ema(log(div(day_last(Close), day_first(Open))), 30))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。v1 的两条腿里有一条就是 I,与 C02 的 I 反转 head 重合的风险最高。"}
+  - {id: v10, role: core,     expr: "cs_regres(cross_mean(day_corr(Close, Volume), 30), cross_ema(log(div(day_last(Close), day_first(Open))), 30))", predicts: "(总领由 ablation 升为 core)sign −1,score −0.2 到 0.6。v4 剔除 I 之后的日内 CPV,是本卡唯一不被 I 机械决定方向的日内构造。C02 在 long 下测过同一条(−0.72,比不取残差的 −0.92 更接近 0);线性残差剔不干净按符号起作用的那部分 I,所以它若仍为负,先看 v4 与它的差。"}
+  - {id: v11, role: control,  expr: "cross_corr(abs_(log(div(day_last(Close), day_first(Open)))), day_sum(Amt), 30)", predicts: "不应 ≥ 核心,|score| < 0.3。量与波动幅度的相关:同样的原料、去掉方向,是众所皆知的机械正相关。它若 ≥ 核心,核心读到的不是追涨。"}
+  - {id: v12, role: control,  expr: "cross_ema(log(div(day_last(Close), day_first(Open))), 30)", predicts: "预期 < 0.5(约 65% 概率)。C02 的 head 本身(long 下 0.98,四种写法 0.84–0.98),放在这里是校准锚:读 C02 那条慢盘中反转在中性化之后还剩多少。它过线也不是新 head。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H5_vol_of_vol_ambiguity
+  hypothesis: >-
+    日内波动本身不稳定(分钟波动的波动大)的股票随后跑输 —— 信息越模糊,散户越容易过度反应。
+  thesis:
+    mechanism: >-
+      用日内滚动 5 或 15 分钟的波动序列度量「这一天的波动是否稳定」,再取它的变异系数:系数大说明波动忽高忽低,
+      当天的信息环境模糊(Brenner–Izhakian 2018 的 ambiguity:不是风险的大小,而是对风险本身的不确定)。
+      模糊会放大过度反应 —— 投资者不确定该相信什么的时候更依赖情绪与关注,价格偏离更远,随后回落。
+      变异系数把波动水平约掉,所以与奖励控制里的 cross_mean(day_std(Ret), 20) 正交。
+      方正证券「云开雾散」在 A 股报的方向是做多低模糊;美股文献对模糊溢价的符号不一致,
+      这里按 A 股取 −1,反号的处置写在 fails_if 里(先验)。
+    counterparty: >-
+      在模糊的信息环境里过度反应的散户;收钱的是能在模糊中定价、愿意承担「不知道风险有多大」这层不确定的资金。
+    prediction: >-
+      方向 sign = −1。机制成立按文件头的统一判据:不同构造的 core 是 {v1, v3}(5 分钟窗,日窗孪生)与 v2(15 分钟窗),
+      两者都选 sign −1 且 > 0、其一 ≥ 0.5;另加 v9 < 核心、v8 ≥ 0.3。中位猜测 score 0.1–0.5
+      (按 ±0.3 放宽即 −0.2 到 0.8),换手 0.02–0.03。本卡没有 I 的机械载荷(变异系数不带方向),但有刻度与开盘尖峰两个伪影。
+      v1(5 分钟)与 v2(15 分钟)应同号;若只有一个为正,按噪声处理(valid 1.6 年,夏普标准误 0.8)。
+      v4 / v5(日频的波动的波动)是同一句话的日频版:若它们明显强于 v1–v3,机制的时间尺度要改写成日频。
+      v6(不归一的「波动的波动」)预期 ≈ 0 或被 ρ已知 拒 —— 它就是波动水平的另一种写法,奖励会把它拿掉。
+      v10(非线性风格)是给 W2 的警示读数,预期过 0.5 的概率约 30%;它过线说明线性中性化的漏口不小,
+      但不算 H5 成立。
+      总领:P(v1–v3 任一 ≥ 0.5)≈ 25%,P(按统一判据成立)≈ 12%;方向 −1 的把握只有 ≈ 60%;
+      v9(零收益分钟占比)|score| ≥ 0.5 的概率 ≈ 45%,v10 ≥ 0.5 的概率 ≈ 25%。
+    fails_if: >-
+      核心在 train 上选出 sign = +1 —— A 股的模糊折价方向反了。鉴于美股文献本身符号不一致,
+      这时记成「反号发现」,但不记作本假设成立。
+      v9(零收益分钟占比)≥ 核心 —— 读到的是粗刻度与无成交分钟的伪影:低价股在一个 tick 的网格上,
+      滚动波动里会出现大量 0,变异系数被机械抬高。这是本假设最大的风险,因为 long_neutral 和 long 一样
+      不套 untradable 掩码(E1 核实 steer.py:627 的元组里只有 long_tradable / long_bucket / long_marginal),
+      刻度与价格水平也不在控制里。核心 ≥ 0.5 而 v9 也 ≥ 0.5 且同号时,一律按刻度伪影处理,不记作发现。
+      v8(对日内峰度取残差)< 0.3 —— 它只是尾部,不是模糊性。
+      v6 远好于 v1 —— 做功的是波动水平,机制陈述错。
+      还要把 E1 的两条算子事实记在读数里:in_stddev_rolling 的前 d−1 个分钟是部分窗口(不是 NaN),
+      所以每天开头几分钟的波动被系统性低估;分钟轴是 241 个连续编号的交易事件、午休不留空列,
+      跨 11:30 / 13:00 边界的那十几个窗口把午休前后混在一起 —— 两者都让分母略偏,但对截面排名影响有限。
+      总领补一条更大的:分钟波动是 U 形,开盘十几分钟的尖峰支配 day_std(in_stddev_rolling(·)),所以变异系数有一大块是
+      「开盘波动有多集中」,即隔夜信息在开盘被消化的强度,不是全天的模糊性。核心过线时,W2 先核它与 |隔夜跳空|
+      (C02 H2/v11,ρ已知 0.52、被拒)的相关;若高,H5 读到的是隔夜信息,而且后代有被 ρ已知 拒的风险。
+  novelty: >-
+      E2 检索:in_stddev_rolling(Ret, ·) 与 cross_stddev(day_std(Ret), ·) 在 4399 条去重存档里的匹配数为 0;
+      该标签命中的 39 条全部是 day_kurt(Ret)(C01 R3 的「慢彩票形状」,最高 0.54,全部来自同两个运行)。
+      97 个先验 head 里 in_stddev_rolling 与 cross_stddev 一条也没有。
+      结构上不含价格水平、不含成交额、不含同步性、不含 I、不含刻度筛选(v9 是对照)、不含排名平移;
+      唯一与先验族接触的地方是「波动」,而变异系数把水平约掉 —— 这正是它与控制变量、已知族分开的理由。
+      预期残差后 |ρ| < 0.7:与它最近的先验 head 是 C01 的
+      ts_product(cross_quantile_q25(pow_2(day_kurt(High)), 30), 50)(日内峰度的分位数,+1.23),
+      v8 的残差专门读这一点;峰度是四阶的尾部,变异系数是二阶量的二阶矩,两者在构造上不同。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_mean(div(day_std(in_stddev_rolling(Ret, 5)), day_mean(in_stddev_rolling(Ret, 5))), 30)", predicts: "过线,sign −1,score 0.1–0.5,换手 ≈ 0.03。5 分钟滚动波动的日内变异系数,再取 30 日均值。"}
+  - {id: v2,  role: core,     expr: "cross_mean(div(day_std(in_stddev_rolling(Ret, 15)), day_mean(in_stddev_rolling(Ret, 15))), 30)", predicts: "与 v1 同号。15 分钟窗:更平滑、对单分钟的刻度跳动不敏感,所以它比 v1 更能区分「模糊」与「刻度伪影」。两者同号才算机制。"}
+  - {id: v3,  role: core,     expr: "cross_mean(div(day_std(in_stddev_rolling(Ret, 5)), day_mean(in_stddev_rolling(Ret, 5))), 60)", predicts: "与 v1 同号,换手更低。若 60 日 ≥ 30 日,模糊是慢变的股票属性而不是当天的状态。"}
+  - {id: v4,  role: ablation, expr: "div(cross_stddev(day_std(Ret), 30), cross_mean(day_std(Ret), 30))", predicts: "方向同核心,量级不定。日频版的「波动的波动」:30 天里日内波动的变异系数。若它明显强于 v1–v3,机制的时间尺度是日而不是分钟。"}
+  - {id: v5,  role: ablation, expr: "div(cross_stddev(day_std(Ret), 60), cross_mean(day_std(Ret), 60))", predicts: "与 v4 同号,换手更低。v4 / v5 一起给出日频版的窗口曲线。"}
+  - {id: v6,  role: ablation, expr: "cross_mean(day_std(in_stddev_rolling(Ret, 5)), 30)", predicts: "预期 ≈ 0 或被 ρ已知 拒。不归一的「波动的波动」:它与波动水平几乎同构,而控制里有 cross_mean(day_std(Ret), 20),残差应该不剩东西。v6 与 v1 的差就是「除以均值」这一步的全部价值。若被 GPU 版判为无信号(残差谱范数 < 1e-4),那是中性化生效。"}
+  - {id: v7,  role: ablation, expr: "cross_mean(day_kurt(Ret), 30)", predicts: "弱(C01 在 long 下同族最高 0.54,且方向 −1)。日内收益峰度:尾部的厚度,不是波动的不稳定。作对比用。"}
+  - {id: v8,  role: ablation, expr: "cs_regres(cross_mean(div(day_std(in_stddev_rolling(Ret, 5)), day_mean(in_stddev_rolling(Ret, 5))), 30), cross_mean(day_kurt(Ret), 30))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。剔除日内峰度之后还剩多少 —— 回答「模糊性是不是只是厚尾」,也顺带剔了 C01 那条峰度 head 的方向。"}
+  - {id: v9,  role: control,  expr: "cross_mean(day_zero_ratio(Ret), 30)", predicts: "不应 ≥ 核心。零收益分钟占比 = 刻度粗 + 无成交:本假设最像的伪影来源,而奖励不剔锁停股、刻度也不在控制里,所以它很可能自己就过线。它 ≥ 核心时,H5 的读数一律记为刻度伪影。"}
+  - {id: v10, role: control,  expr: "abs_(cs_demean(cs_rank(cross_mean(day_std(Ret), 30))))", predicts: "过 0.5 的概率约 30%。控制变量的非线性函数(波动排名离截面中位数的距离):用来量线性中性化的漏口有多大(PLAN §4 局限 1)。它过线是给 W2 的警示 —— A 组 GP 很可能挖到这一类 —— 不是 H5 成立。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H6_turnover_instability
+  hypothesis: >-
+    成交额时冷时热(日成交额相对自身均值的离散度大)的股票随后跑输;成交稳定的跑赢。
+  thesis:
+    mechanism: >-
+      成交额的不稳定是情绪资金进出的痕迹:一只票被一阵关注推高成交、随后冷却,这个来回本身说明它的持有者里
+      短线与情绪资金占比高,定价被这类资金的进出推离价值,随后回落。
+      关键是变异系数而不是标准差:均值把规模与流动性水平约掉,留下的是「相对自身的忽冷忽热」
+      —— 这是它能和控制变量里的流动性水平、已知族的成交额离散度分开的唯一理由,也是本假设的全部风险。
+      Chordia–Subrahmanyam–Anshuman 2001 用换手率的波动度量这件事,A 股的换手率波动因子同向(先验)。
+    counterparty: >-
+      被一阵热度吸引、在成交放大时追入的情绪资金;收钱的是在热度里卖出、等冷却后买回的资金。
+    prediction: >-
+      方向 sign = −1。机制成立按文件头的统一判据:不同构造的 core 是 {v1, v2, v3}(水平离散:30/60 日的变异系数,
+      std(log) 在对数正态下是变异系数的单调变换,算同一构造)与 v4(对数成交额日变化的标准差:交替,而不是水平离散),
+      两者都选 sign −1 且 > 0、其一 ≥ 0.5;另加 v7 ≥ 0.3、v6 与 v10 < 核心。中位猜测 score 0.1–0.5
+      (按 ±0.3 放宽即 −0.2 到 0.8),换手 0.02–0.04。本卡没有 I 的机械载荷,风险在非线性的规模 / 流动性(v8 量它)。
+      C02 在 long 下实测 30 日变异系数 = −0.35(train −0.247 / valid −0.348,半衰期 5,换手 0.057),
+      ρ已知 = +0.04 —— ρ 只有 0.04 是这一条值得测的主要依据:变异系数确实没有落回成交额的水平与离散度。
+      v3(对数成交额的标准差)与 v2 应同号:std(log) 同样无量纲,而且对单日巨量不那么敏感,可能比比值更稳。
+      v4(交替)与 v2 同号才说明「忽冷忽热」本身在做功;v2 过线而 v4 ≈ 0,读到的是成交额的慢趋势(关注度的升降),
+      要和 v10 一起看。v7(对 C01 那个「相对自身一年的量」head 取残差)≥ 0.3 才算新。
+      v8(非线性流动性)是全卷的校准读数,和 H5/v10 成对:它过线说明线性中性化在规模上漏得多,
+      H6 的核心若与它同时过线,先怀疑核心只是「小而冷门」的非线性包装。
+      总领:P(v1–v4 任一 ≥ 0.5)≈ 35%,P(按统一判据成立)≈ 20%;过线时 sign −1 的概率 ≈ 75%;
+      v8 选 +1(做多两端)且 ≥ 0.5 的概率 ≈ 35%。
+    fails_if: >-
+      核心在 train 上选出 sign = +1(做多成交不稳定者)—— 那是信息到达被奖励,情绪进出的陈述反了,本假设即否。
+      核心被 ρ已知 ≥ 0.5 拒 —— 即便只用比值也落回已知族,这条路关死(C02 的 +0.04 让这个结局不太可能,
+      但 60 日、241 日、对数形式、日变化形式都没测过)。
+      v8(非线性流动性)≥ 0.5 且与核心同向过线、核心又只比它高不到 0.2 —— 读到的是规模的非线性,不是成交的不稳定。
+      v10(5 日对 60 日的成交额水平比值,即异常换手 / 注意力)≥ 核心 —— 读到的是注意力冲击的水平
+      而不是不稳定性,机制要改写成 C01 那一族(cross_scale(·, 241) 的「今天的量相对自身一年」)。
+      v6(尖峰,最大值比均值)≥ 核心 —— 做功的是单日巨量(上榜、公告),不是持续的忽冷忽热。
+      v7 < 0.3 —— 即便过线也与 C01 的 head 高度重合,终局不算新,W2 不为它设计种群。
+      v9(15 日)明显最好而 v2(60 日)≈ 0 —— 做功的是短窗换手而不是慢变的股票属性,成本口径下不可靠。
+  novelty: >-
+      E2 检索:cross_stddev(day_sum(Amt | Volume)) 与 cross_stddev(log(day_sum(·))) 在 4399 条去重存档里
+      只有 1 条 —— 就是 C02 直接检验的 30 日变异系数本身(−0.35);97 个先验 head 里 cross_stddev 一条也没有。
+      所以 60 日、241 日、对数形式、Volume 形式都是空白。与 97 个 head 的结构差别:
+      不含价格水平、不含同步性、不含 I、不含刻度与一价日、不含排名平移,也不含开盘竞价成交额
+      —— C02 A 组那 17 条 cross_regbeta(pow_1_5(day_first(Amt)), …, 241) 用的是开盘一分钟的成交额水平
+      做年度回归(流动性的时间序列包装),本假设用的是整日成交额的时间离散度除以自身均值。
+      预期残差后 |ρ| < 0.7:最近的邻居是 C01 的 head
+      cross_scale(mul(signedpower(day_std(Volume)), day_first(Volume)), 241)(今天的量相对自身一年,+2.05),
+      v7 的残差专门量这一点;其次是已知族本身,由 ρ已知 的实测把关(C02 读到 +0.04)。
+  variants:
+  - {id: v1,  role: core,     expr: "div(cross_stddev(day_sum(Amt), 30), cross_mean(day_sum(Amt), 30))", predicts: "过线,sign −1,score 0.1–0.5。日成交额的 30 日变异系数。C02 在 long 下读到 −0.35、ρ已知 +0.04:本轮读的是同一条在中性化之后的分数,也是 H6 的基准。"}
+  - {id: v2,  role: core,     expr: "div(cross_stddev(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))", predicts: "与 v1 同号,换手更低。60 日从未测过;若它明显好于 v1,说明忽冷忽热是慢变的股票属性,W2 应用长窗做种子。"}
+  - {id: v3,  role: core,     expr: "cross_stddev(log(day_sum(Amt)), 60)", predicts: "与 v2 同号。对数成交额的标准差:同样无量纲(乘性缩放不变),但不受巨量日的长尾主导。若它明显强于 v2,比值形式只是对数形式的粗近似。"}
+  - {id: v4,  role: core,     expr: "cross_stddev(ts_delta(log(day_sum(Amt)), 1), 60)", predicts: "(总领替换原成交量版变异系数:60 日内价格变化很小,它与 v2 几乎是同一个量)与 v2 同号,score 0.0–0.5。对数成交额逐日变化的 60 日标准差:量的是「今天对昨天」的忽冷忽热(交替),而 v1–v3 量的是 60 日里的水平离散,后者把成交额的慢趋势(关注度在升或在降)也算了进去。对数正态 AR(1) 下 std(Δlog) = 水平离散 × √(2(1 − φ)),所以两者在持续性 φ 上分家。零成交日 log 得 −inf,本机核过 cross_stddev 会把含它的窗口给成 NaN(覆盖率略降,不会伪造信号),与 v3 相同。"}
+  - {id: v5,  role: ablation, expr: "div(cross_stddev(day_sum(Amt), 241), cross_mean(day_sum(Amt), 241))", predicts: "与核心同号,换手最低。一年的变异系数:若它最好,这是一个几乎不变的股票属性(更像持有者结构),机制陈述要从「一阵热度」改成「长期的交易者构成」。"}
+  - {id: v6,  role: ablation, expr: "div(cross_max(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))", predicts: "与核心同号、量级不定。尖峰:60 日里最大一天的量比均值。它 ≥ 核心时,做功的是单日巨量(上榜、公告)而不是持续的忽冷忽热。"}
+  - {id: v7,  role: ablation, expr: "cs_regres(div(cross_stddev(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60)), cross_scale(mul(signedpower(day_std(Volume)), day_first(Volume)), 241))", predicts: "≥ 0.3 才算新,< 0.3 = 不新。对 C01 那个「相对自身一年的量」head(+2.05,ρ已知 +0.32)取截面残差 —— 直接检验不报与先验 head 的 ρ,这是唯一的读法。"}
+  - {id: v8,  role: control,  expr: "abs_(cs_demean(cs_rank(cross_mean(day_sum(Amt), 30))))", predicts: "(总领替换原不归一的成交额标准差:它的线性部分正是奖励控制里的流动性与已知族,残差必然≈0,还多半被 ρ已知 拒,信息量低)非线性流动性:流动性排名离截面中位数的距离,和 H5/v10 的非线性波动成对。它对流动性排名是对称函数,与已知族的线性秩相关≈0,不会被拒。sign +1 做多两端(最冷门与最热门),sign −1 做多中间。预期 train 选 +1,score 0.2–0.8 —— 2018–2023 的小盘溢价是凸的。它过线说明 PLAN §4 局限 1 的漏口在规模上不小,是给 W2 和终局的警示(A 组 GP 很可能挖到这一类),不算 H6 成立。"}
+  - {id: v9,  role: ablation, expr: "div(cross_stddev(day_sum(Amt), 15), cross_mean(day_sum(Amt), 15))", predicts: "弱于 v1,换手最高。15 日的变异系数:窗口曲线的短端,用来确认慢形式是必要的(按 0.756 × 换手,换手 0.06 就要 4.5%/年的毛收益才回本)。"}
+  - {id: v10, role: control,  expr: "log(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)))", predicts: "不应 ≥ 核心。异常换手水平(5 日量比 60 日量)= 注意力冲击,是和「不稳定」最容易混的那个代理,而且它属于 C01 的 cross_scale(·, 241) 那一族。它 ≥ 核心时,H6 读到的是注意力的水平,不是成交的不稳定。"}
