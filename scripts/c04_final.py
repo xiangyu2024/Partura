@@ -23,6 +23,7 @@ ledgered (runs/_c04/ledger.json) and refused a second time.
 
     python scripts/c04_final.py [--dry-run] [--gpu-fraction 0.4]      -> research/coldstart_C04/final.json
 --dry-run: heads and the in-sample reproduction check only; nothing out of sample is computed or ledgered.
+--fix-rerun '<reason>': PLAN revision 3 -- the same read again after an implementation error was fixed; ledgered with the reason -> final_fix.json.
 """
 import json
 import math
@@ -74,7 +75,8 @@ ARMS = {a: runs_of(a) for a in ("A", "B")}
 for a, rs in ARMS.items():
     print(f"[c04] arm {a}: {len(rs)} runs ({Counter(r['round'] for r in rs)})", flush=True)
 AFTER_ABORT = argv[argv.index("--after-abort") + 1] if "--after-abort" in argv else ""
-if not DRY and Ledger(LEDGER).summary().get("holdout") and not AFTER_ABORT:
+FIX = argv[argv.index("--fix-rerun") + 1] if "--fix-rerun" in argv else ""   # PLAN revision 3: re-run after an implementation error, ledgered, -> final_fix.json
+if not DRY and Ledger(LEDGER).summary().get("holdout") and not AFTER_ABORT and not FIX:
     raise SystemExit(f"the test period of C04 has already been read ({LEDGER}); this read happens once "
                      f"(--after-abort '<reason>' only when the previous read stopped before producing any result)")
 
@@ -238,7 +240,7 @@ with slot():
     # ---- PRIMARY (C04 PLAN §3): per seed, the fusion of that run's own heads
     SEEDFUSE = {}
     for a, lst in passers.items():
-        for seed in sorted({c["seed"] for c in lst if c["seed"] is not None}):
+        for seed in sorted({r["seed"] for r in ARMS[a]}):   # every run of the arm (PLAN §3: a seed without heads holds cash), not only seeds with discoveries
             hs = []
             for c in lst:
                 e = c["expr"]
@@ -264,8 +266,8 @@ with slot():
             del SM[e]
     if not DRY:
         n = sum(len(v["heads"]) for v in out["arms"].values())
-        tag = "c04_final" + ("_after_abort" if AFTER_ABORT else "")
-        why = f" -- re-read after an aborted read: {AFTER_ABORT}" if AFTER_ABORT else ""
+        tag = "c04_final" + ("_after_abort" if AFTER_ABORT else "_fix" if FIX else "")
+        why = f" -- re-read after an aborted read: {AFTER_ABORT}" if AFTER_ABORT else f" -- re-run to fix an implementation error: {FIX}" if FIX else ""
         Ledger(LEDGER).record("holdout", n, f"C04 heads of both arms, test period 20230808..20251231, by PLAN.md §3{why}", tag)
         Ledger(LEDGER).record("forward", n, f"C04 heads of both arms, forward column 20260101..{END} (reported, not judged){why}", tag)
         for a, A in out["arms"].items():
@@ -369,7 +371,7 @@ for k in (1,):
     out["anatomy"].setdefault("B_in_hood", {})[f"r{k}"] = {"discoveries": len(bk_), "in_hood": sum(1 for c in bk_ if c["hood"] and any(op in c["expr"] for op in c["hood"]))}
 out["gpu_seconds"] = {a: sum(r["evidence"]["arms"][r["arm"]]["seconds"] for r in rs) for a, rs in ARMS.items()}
 out["seconds"] = time.time() - t0
-(D / ("final_dry.json" if DRY else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+(D / ("final_dry.json" if DRY else "final_fix.json" if FIX else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 for a, A in out["arms"].items():
     print(f"\n== arm {a}: {A['discoveries']} discoveries, {len(A['heads'])} heads" + ("" if DRY else f", valid out of sample {A['valid_oos']} (style-neutral {A['valid_oos_neutral']})"))
