@@ -82,6 +82,16 @@ PARTS = {x for x in opt("--parts", "seeds,hood,priors").split(",") if x and x !=
 HLS = tuple(float(x) for x in opt("--halflives", "0,5,20").split(","))
 if PARTS - {"seeds", "hood", "priors"}:
     raise SystemExit(f"--parts takes seeds, hood, priors (or none); got {sorted(PARTS)}")
+# C05 (research/coldstart_C05/PLAN.md §2.1-2.5).  --ban-library: a JSON list of {"expr": ...} -- a candidate whose daily
+# ranks correlate with one of them (|rho| >= --ban-rank-corr; AlphaCube's own RankSimilarityBan) or that has the same
+# operator skeleton (fields, constants and windows abstracted) is refused.  --must-contain: an E mission's core -- every
+# candidate must carry it verbatim, and its periphery (the operators outside the core) must not be one already seen around
+# it (--periphery-seen, a JSON list of expressions).  --neutral-extra: a JSON list of {"expr", "sign", "hl"} -- the core's
+# family, added to the long_neutral controls.  --graft-fill N: the seeds are topped up to N with random trees carrying
+# the core (a daily-shaped non-root subtree of a generated tree replaced by it).
+BAN_LIB, BAN_RHO = opt("--ban-library"), float(opt("--ban-rank-corr", 0.7))
+CORE, PERI_SEEN, NEUTRAL_EXTRA = opt("--must-contain"), opt("--periphery-seen"), opt("--neutral-extra")
+GRAFT_FILL = int(opt("--graft-fill", 0))
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
@@ -167,6 +177,11 @@ with slot():
         ctls = [aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]]
         if os.environ.get("PARTURA_NEUTRAL_SIZE"):   # C04: size (log float cap) regressed out as well
             ctls.append(ps.compute({"n_size": "LogFloatCap"})["n_size"])
+        if NEUTRAL_EXTRA:                            # C05 E missions: the core's family, as traded (sign x smoothed)
+            fam = json.loads(Path(NEUTRAL_EXTRA).read_text(encoding="utf-8"))
+            FP = ps.compute({f"f{i}": f["expr"] for i, f in enumerate(fam)})
+            ctls += [bk.smoothed(float(f["sign"]) * np.asarray(FP[f"f{i}"], np.float64), float(f["hl"])) for i, f in enumerate(fam) if f"f{i}" in FP]
+            print(f"[idea] neutral basis: {sum(f'f{i}' in FP for i in range(len(fam)))} of {len(fam)} family members added", flush=True)
         ctx.neutral_Q = neutral_basis(ctls)
         print(f"[idea] neutral basis ready: {ctx.neutral_Q.shape}", flush=True)
     print(f"[idea] context ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names; train {cut} days, valid {len(dates) - cut}; "
@@ -259,6 +274,93 @@ with slot():
             print(f"[idea] seed dropped ({type(exc).__name__}: {str(exc)[:80]}): {s}", flush=True)
     print(f"[idea] {len(seeds)} of {len(idea.get('seeds', []))} seeds parse in the search grammar", flush=True)
 
+    # ---- C05: the library bans, the pinned core and its periphery, the grafted seeds
+    from collections import Counter as _Counter
+    from dataclasses import replace as _dc_replace
+
+    from alphacube.expression import ShapeError, is_valid_root
+    from alphacube.expression import replace as _ex_replace
+    from alphacube.mining.clustering import skeleton_key
+
+    def _p(s):
+        return parse(s, strict=True, coerce_daily=True, n_minutes=241, allow_general=True)
+
+    def skel(t):
+        return re.sub(r"@\d+", "", skeleton_key(t))
+
+    def _ops(t):
+        return _Counter(n.name for n in t.nodes() if n.operands)
+
+    LIB = []
+    if BAN_LIB:
+        for x in json.loads(Path(BAN_LIB).read_text(encoding="utf-8")):
+            try:
+                LIB.append(_p(x["expr"] if isinstance(x, dict) else x))
+            except Exception as exc:                         # noqa: BLE001
+                print(f"[idea] library member dropped ({type(exc).__name__}): {str(x)[:80]}", flush=True)
+    SKEL_BAN = {skel(t) for t in LIB}
+    core_t = _p(CORE) if CORE else None
+    core_key = core_t.key() if core_t is not None else None
+    core_ops = _ops(core_t) if core_t is not None else _Counter()
+
+    def has_core(t):
+        return any(n.key() == core_key for n in t.nodes())
+
+    def periphery(t):
+        c = _ops(t)
+        c.subtract(core_ops)
+        return frozenset(k for k, v in c.items() if v > 0)
+
+    SEEN = {frozenset()}                                      # the core alone is not a new periphery
+    if core_t is not None and PERI_SEEN:
+        for s in json.loads(Path(PERI_SEEN).read_text(encoding="utf-8")):
+            try:
+                t = _p(s["expr"] if isinstance(s, dict) else s)
+            except Exception:                                # noqa: BLE001
+                continue
+            if has_core(t):
+                SEEN.add(periphery(t))
+
+    def c05_ok(t, count=True):
+        why = ("c05_skeleton" if SKEL_BAN and skel(t) in SKEL_BAN else
+               "c05_no_core" if core_t is not None and not has_core(t) else
+               "c05_periphery_seen" if core_t is not None and periphery(t) in SEEN else None)
+        if why and count:
+            stats[why] += 1
+        return why is None
+
+    C05 = bool(SKEL_BAN or core_t is not None)
+    print(f"[idea] C05: library {len(LIB)} (rank ban {BAN_RHO if LIB else 'off'}, {len(SKEL_BAN)} skeletons); core {CORE or 'none'}; "
+          f"{len(SEEN) - 1} peripheries seen around it", flush=True)
+    if core_t is not None and GRAFT_FILL > len(seeds):
+        from alphacube.mining.generator import TypedTreeGenerator
+        bh = ac_plugin.arm_hooks("control", risky=risky, ext=EXT)
+        gseed = (SEED * 7919 + 17) & 0xFFFFFFFF
+        gen = TypedTreeGenerator(reg, seed=gseed, allow_resource_risk=True, op_weight=bh.op_weight,
+                                 daily_fields=bh.daily_fields, daily_leaf_prob=bh.daily_leaf_prob)
+        grng = random.Random(gseed)
+        have = {skel(e) for e in seeds}
+        n0, tries = len(seeds), 0
+        while len(seeds) < GRAFT_FILL and tries < 20000:
+            tries += 1
+            try:
+                t = gen.generate()
+            except Exception:                                # noqa: BLE001
+                continue
+            slots = [n for n in t.nodes()[1:] if n.shape.collapsed and n.shape.degenerate]
+            if not slots:
+                continue
+            try:
+                g = _ex_replace(t, grng.choice(slots), core_t)
+            except ShapeError:
+                continue
+            if not is_valid_root(g) or not c05_ok(g, count=False) or skel(g) in have:
+                continue
+            have.add(skel(g))
+            seeds.append(g)
+            seeds_repr.add(repr(g))
+        print(f"[idea] C05: {len(seeds) - n0} grafted seeds carry the core ({tries} trees drawn)", flush=True)
+
     from partura.guard import exclusive
     gpu_lock = exclusive("gpu")                               # one of the GPU ways for the whole search: a sweep may share the card, two may not
     gpu_lock.__enter__()
@@ -267,7 +369,10 @@ with slot():
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "seed_share": SEED_SHARE,
                 "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""),
-                "daily_fields": os.environ.get("PARTURA_DAILY_FIELDS", ""), "neutral_size": bool(os.environ.get("PARTURA_NEUTRAL_SIZE")), "arms": {}}
+                "daily_fields": os.environ.get("PARTURA_DAILY_FIELDS", ""), "neutral_size": bool(os.environ.get("PARTURA_NEUTRAL_SIZE")),
+                "c05": {"ban_library": BAN_LIB, "library": len(LIB), "ban_rank_corr": BAN_RHO if LIB else None, "skeletons": len(SKEL_BAN),
+                        "core": CORE, "peripheries_seen": len(SEEN) - 1, "neutral_extra": NEUTRAL_EXTRA, "graft_fill": GRAFT_FILL,
+                        "seeds": [repr(e) for e in seeds]} if C05 or NEUTRAL_EXTRA else None, "arms": {}}
     for arm in ARMS:
         ta = time.time()
         stats.clear()
@@ -282,8 +387,17 @@ with slot():
         # that arm the control to the last draw.  Set as the plugin's module state as well as passed, so anything
         # else in the process that asks the plugin for its hooks mid-run (alphacube.plugins.search_hooks_from) sees
         # the arm actually running.
-        ac_plugin.set_search_hooks(ac_plugin.arm_hooks(arm, parts=PARTS, risky=risky, ext=EXT, opw=OPW, idea_ops=IDEA_OPS, boost=BOOST,
-                                                       accept=guidance_accept, nt_twins="nt_twins" in FIXES))
+        hooks = ac_plugin.arm_hooks(arm, parts=PARTS, risky=risky, ext=EXT, opw=OPW, idea_ops=IDEA_OPS, boost=BOOST,
+                                    accept=guidance_accept, nt_twins="nt_twins" in FIXES)
+        if C05:                                              # the library's skeletons and the core, in front of whatever else judges
+            inner = hooks.accept
+
+            def c05_accept(t, inner=inner):
+                if not c05_ok(t):
+                    return refused()
+                return True if inner is None else inner(t)
+            hooks = _dc_replace(hooks, accept=c05_accept)
+        ac_plugin.set_search_hooks(hooks)
         # the in-memory panel cache only saves recomputation (results do not depend on it); a host with more memory
         # (the second server: 1 TB) raises it with $PARTURA_PANEL_CACHE_GB / $PARTURA_PANEL_CACHE_ITEMS
         gp = dict(population_size=POP, min_depth=2, max_depth=4, fitness_kind="partura",
@@ -291,6 +405,8 @@ with slot():
                   panel_cache_bytes=int(float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)) * 1024 ** 3), hooks=ac_plugin.search_hooks())
         if arm == "steer" and seeds and "seeds" in PARTS:
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), max(1, int(POP * SEED_SHARE))), seed_max_depth=9)
+        if LIB:
+            gp.update(ban_rank_corr=BAN_RHO, ban_exemplars=list(LIB))
         import shutil
         shutil.rmtree(ep_dir / arm, ignore_errors=True)       # a shorter rerun must not read the longer run's last checkpoint
         err = None
