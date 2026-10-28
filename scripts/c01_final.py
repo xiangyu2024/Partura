@@ -63,8 +63,10 @@ def runs_of(arm):
 ARMS = {a: runs_of(a) for a in ("A", "B")}
 for a, rs in ARMS.items():
     print(f"[c01] arm {a}: {len(rs)} runs ({Counter(r['round'] for r in rs)})", flush=True)
-if not DRY and Ledger(LEDGER).summary().get("holdout"):
-    raise SystemExit(f"the test period of C01 has already been read ({LEDGER}); this read happens once")
+AFTER_ABORT = argv[argv.index("--after-abort") + 1] if "--after-abort" in argv else ""
+if not DRY and Ledger(LEDGER).summary().get("holdout") and not AFTER_ABORT:
+    raise SystemExit(f"the test period of C01 has already been read ({LEDGER}); this read happens once "
+                     f"(--after-abort '<reason>' only when the previous read stopped before producing any result)")
 
 passers, EXCLUDED = {}, {}
 EXCLUDE_OPS = ("ts_spearman",)
@@ -103,7 +105,7 @@ print(f"[c01] known family by the search's own measurement, not rebuilt: {len(pr
 print(f"[c01] discoveries: A {len(passers['A'])}, B {len(passers['B'])} (left out by revision 4: {EXCLUDED}); {len(uniq)} distinct expressions to rebuild", flush=True)
 
 with slot():
-    mem = MemoryGuard(self_limit_gb=34, cgroup_limit_gb=70).start()
+    mem = MemoryGuard(self_limit_gb=60, cgroup_limit_gb=80).start()   # PLAN §6 revision 5 (34 GB aborted the first read)
     t0 = time.time()
     import torch
     from alphacube.plugins import load_plugins
@@ -200,12 +202,18 @@ with slot():
         out["arms"][a] = {"discoveries": len(lst), "heads": heads}
         print(f"[c01] arm {a}: {len(lst)} discoveries -> {len(heads)} heads; reproduce {sum(h['reproduces'] for h in heads)}/{len(heads)}", flush=True)
 
+    keep = {h["expr"] for v in out["arms"].values() for h in v["heads"]}
+    for e in list(SM):
+        if e not in keep:
+            del SM[e]
     if not DRY:
         n = sum(len(v["heads"]) for v in out["arms"].values())
-        Ledger(LEDGER).record("holdout", n, f"C01 heads of both arms, test period 20230808..20251231, by PLAN.md §3", "c01_final")
-        Ledger(LEDGER).record("forward", n, f"C01 heads of both arms, forward column 20260101..{END} (reported, not judged)", "c01_final")
+        tag = "c01_final" + ("_after_abort" if AFTER_ABORT else "")
+        why = f" -- re-read after an aborted read: {AFTER_ABORT}" if AFTER_ABORT else ""
+        Ledger(LEDGER).record("holdout", n, f"C01 heads of both arms, test period 20230808..20251231, by PLAN.md §3{why}", tag)
+        Ledger(LEDGER).record("forward", n, f"C01 heads of both arms, forward column 20260101..{END} (reported, not judged){why}", tag)
         for a, A in out["arms"].items():
-            fused = []
+            fsum, fcnt = None, None
             for h in A["heads"]:
                 sm = SM[h["expr"]].astype(np.float64)
                 for nm, sl, yrs in (("test", ho, years_ho), ("forward", fw, years_fw)):
@@ -217,9 +225,16 @@ with slot():
                 h["test_neutral"] = {"ann": rn["long_ann"], "sharpe": rn["long_sharpe"], "t": rn["long_sharpe"] * math.sqrt(years_ho), "r2": info["mean_r2"]}
                 h["valid_oos"] = bool(h["test"]["ann"] > 0 and h["test"]["t"] >= T_LINE)
                 h["valid_oos_neutral"] = bool(h["test_neutral"]["ann"] > 0 and h["test_neutral"]["t"] >= T_LINE)
-                fused.append(dg._zrank(sm))
-            if fused:
-                fz = np.nanmean(np.stack(fused), axis=0)
+                z = dg._zrank(sm)
+                ok = np.isfinite(z)
+                if fsum is None:
+                    fsum, fcnt = np.zeros_like(z), np.zeros(z.shape, np.int32)
+                fsum += np.where(ok, z, 0.0)
+                fcnt += ok
+                del z, ok, res
+            if fsum is not None:
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    fz = np.where(fcnt > 0, fsum / np.maximum(fcnt, 1), np.nan)
                 A["fused"] = {nm: {k: bk.book_row(fz, tgt, sl)[k] for k in ("long_ann", "long_sharpe", "long_turnover", "long_mdd")}
                               for nm, sl in (("train", tr), ("valid", va), ("test", ho), ("forward", fw))}
             A["valid_oos"] = sum(h["valid_oos"] for h in A["heads"])
