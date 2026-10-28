@@ -1,0 +1,481 @@
+# C04 第 1 轮假设(W1,主研写)。5 个假设,64 个变体 = B 组 64 次直接评估。
+#
+# 预算:B 组每种子的 GP 预算 = 192 − ⌈64/16⌉ = 188。49–64 个变体都只扣 4 次,所以写满 64。
+# 本轮全部是 new,没有 improve 卡。
+#
+# ── 本轮押什么 ──────────────────────────────────────────────────────────────
+# C04 真正新增的只有 6 个日频字段,其中能单独排序的只有三个 Log* 字段(另外三个是离散标签,见下)。
+# C01–C03 的样本内先验说明两件事:价量这一侧的族要么已经用尽、要么到样本外留不住;
+# 中性化之后真正卡住的是 train(2018–2021)这一段(c03 两组 2479 个存档候选里,score ≥ 0.3 的候选
+# train < valid 的比例 A 组 89%、B 组 97%)。所以本轮押「用 Log* 字段的会计恒等式构造 GP 很难碰到的经济量」:
+# H1–H4 的原料在 C01–C03 完全不存在;H5 不用新字段,是 GP 从没搜过的长周期结构(E2 在 6940 行存档里只命中 2 条)。
+# 每条都写明多头腿是谁:奖励只交易残差排名最高的 10%,利润在空头腿的机制在这里一分也拿不到。
+#
+# ── 记号(YAML 里已全部展开,此处只为阅读;恒等式由 E1 在玩具数据上 float64 核过,股票 6 全程最大误差 3.6e-15)──
+#   LP   = log(day_last(Close))                       后复权收盘的对数
+#   P    = LP − LogTotalCap = log(复权因子) − log(总股本)。未复权价在两项里严格相消,
+#                                                      所以 P 只在分红 / 送转 / 增发 / 回购注销当天跳变;
+#                                                      送转同时抬高复权因子与股本,在 P 里抵消。
+#                                                      ΔP = 股息率 − 净增发 = Daniel–Titman composite issuance 的相反数
+#   PAY  = P − cross_mean(P, 241)                     线性衰减的「过去一年净派现」
+#   FR   = LogFloatCap − LogTotalCap = log(流通 / 总股本)。解禁↑,定增与股权激励授予↓,送转不变
+#   RP   = LogFloatCap − LogFloatShares = log(未复权收盘)
+#   NS   = LogTotalCap − RP = log(总股本)
+#   LA   = LP − RP = log(复权因子)(分红 + 送转)
+#   dLP  = ts_delta(LP, 1)                            日对数收益
+#   R60  = log(div(day_last(Close), cross_delay(day_last(Close), 60)))   60 日收益(R30 同理)
+#   U60  = ΔFR(60) + |ΔFR(60)|                        只留流通比例上升的部分(×2);U30 同理
+#   PRET = cross_sum(dLP, 241) − cross_sum(dLP, 15)   过去一年、跳过最近 15 天的累计收益
+#   PN   = cross_mean(sign(dLP), 241)                 一年内上涨日占比(的符号均值)
+#
+# ── 判据(PLAN §2.2 / §3)──────────────────────────────────────────────────
+#   奖励 long_neutral:原始面板 → 半衰期 0/5/20 平滑 → 截面 z 排名 → 每天对
+#   [1, z(流动性 cross_mean(day_sum(Amt),30)), z(波动 cross_mean(day_std(Ret),20)),
+#    z(20 日反转), z(已知族 cross_mean(day_std(Amt),30)), z(市值 LogFloatCap)]
+#   做 OLS 取残差 → 十分位纯多头书 → 扣 15bp。score = min(train, valid);score ≥ 0.5 = 发现;
+#   与已知族的 |ρ| ≥ 0.5 直接拒。年化成本 = 0.756 × 日换手。
+#   valid 只有约 1.6 年、夏普标准误约 0.8,所以单条过 0.5 只是弱证据:每个机制都写了 3–5 个写法不同的 core。
+#   统一的机制判据(写在这里,各卡的 fails_if 按它写):
+#     (a) 至少 2 个「不同构造」的 core 在 train 上选出预期方向且 score > 0,其中至少 1 个 ≥ 0.5;
+#         只差窗口、或只差去哪一种中性化的孪生,算 1 个构造;
+#     (b) 该卡指定的对照与消融不推翻它(逐条见各卡 fails_if);
+#     (c) 方向否决:任何 ≥ 0.5 的 core 选出相反方向,本假设即否。反向过线可以记为发现,但不能说成机制成立。
+#
+# ── 两个门槛不一样(E1 Q6 实测)───────────────────────────────────────────
+#   直接检验:覆盖率 ≥ 0.9 且离散度 ≥ 0.5,不到就判门槛废品、没有分数;GP 端覆盖率只要 0.5。
+#   所以:cross_delta / cross_delay 的 241 日窗口一律禁用(严格位移、前 d 天全 NaN,而 warmup 只有 60 天,
+#   会让 train 头约 181 天与新股的第一年为 NaN、覆盖率约 0.8)。一年期的量全部写成 sub(x, cross_mean(x, 241)):
+#   cross_mean / sum / max / min 用 nan 归约,窗口不满也出数(E1 Q1 实测,整窗全 NaN 才给 NaN)。60 及以下的严格位移可以用。
+#   离散度门槛对噪声没有免疫力(E1 Q6:70% 为常数 → 离散度 0.301 判废;同一组叠加 1e-6 的噪声 → 离散度 1.00 过关)。
+#   这对本轮关系很大:事件型信号在无事件股票上是「0 + 约 1.9e-6 的 float32 舍入噪声」(E1 第二部分实测的噪声底),
+#   如果事件股不足 10%,前十分位剩下的名额由噪声决定、每天重排、白吃成本。所以每个事件型假设都带一条慢底座的 core。
+#   ΔFR 例外:它对无事件股票是精确 0(E1 的 E-j / E-k 噪声底都是 0),所以 H3 的无底座写法会被离散度门槛判废,不是靠噪声过关。
+#   (总领审定:上面「靠噪声过门槛」的前提在 float32 上不成立 —— 舍入噪声落在网格点上、是并列值,见下方「总领审定」第 0 条。)
+#
+# ── 三个离散字段的用法(E1 实测)─────────────────────────────────────────
+#   ListAge、BoardCode、LimitWidth 单独排序过不了离散度门槛(ListAge:view 首日已上市的股票同一天全部等于同一个
+#   10000+t,样本内占 65–97%;E1 Q6(i) 实测 65% 同值 → 离散度 0.351)。它们只能当门控(less(ListAge, 250))、
+#   除数,或进 cs_regres(y, LimitWidth)(E1 Q5:自变量只取两类时 cs_regres 精确等于组内去均值,三档是跨 0.1/0.2/0.3 的线性拟合)。
+#   不许进 cs_bucket_*:E1 Q4 实测 _pct_rank 用双 argsort、平局按列顺序拆开,同一类别会被切进不同的桶,
+#   相邻的两个不同类别还会被混进同一个桶。LimitWidth 里没有 ST(只按代码前缀与日期取值,主板 10% / 双创 20% / 北交所 30%)。
+#
+# ── 自己定的硬规矩(C01–C03 假象的来源,逐条避开)──────────────────────
+#   不用 cs_first_* / cs_last_* / cs_mask_*(C01 的 60 个低 ρ 通过者里 52 个是排名平移造出来的,未平移的孪生 ρ = +0.81);
+#   不用 day_distinct_ratio / day_flat_ratio,day_zero_ratio 只能当 control(它们读的是一价日与粗刻度股;
+#     C04 的未复权价给这类筛选开了新入口 —— 低价意味着相对刻度粗,所以 H4 必须带刻度对照);
+#   LogFloatCap 的任何非线性变换不作核心:控制只去掉 z(rank(LogFloatCap)) 的线性部分,pow / abs / 分位翻转都会在残差里
+#     留下小盘尾巴,而且会被幸存者偏差放大(库里 5207 只股票全部存续到末日、没有退市股);
+#   任何做多极小市值、极低价、濒危股的核心一律不写(同一个幸存者偏差;train / valid / test 三段都会被系统性抬高);
+#   Amt / Volume 的水平与离散度不作核心(已知族),换手率水平只作 control(它在对数空间约等于「流动性控制 − 市值控制」);
+#   后复权价格水平不作核心(C03 直接检验里中性化后是 −0.90,只在 H4 当对照);
+#   不用 ts_spearman / nt_* / ts_pearson;不用 NaN 截子宇宙(纯多头书的基准是「当天有信号且有标签的股票」的等权,
+#     E1 Q7 核过:信号为 NaN 的股票同时退出持仓和基准,所以截子宇宙会改变基准,不许这样造分);
+#   is_gt0 / is_lt0 返回 int32,喂给 cross_* 会在填 NaN 时直接报错(E1 Q2 原文 RuntimeError),跨日计数一律用 sign(·)(float32);
+#   任何分母都不许可能为 0(div(x,0) = inf 会排到最前,div(0,0) = NaN;log(0) = NaN、log(−1) = 0,E1 Q3);
+#   cross_* 窗口取 {3,5,10,15,30,60,241},ts_* 取 {1,5,10,20,30,40,50}。
+#
+# ── 执行交回(E1 / E2)改变了什么 ─────────────────────────────────────────
+#   1. E1 第二部分证实 E-b(cross_sum(ts_delta(P,1),241))漏掉停牌期间的分红:停牌边界的两个单日差分都有一侧为 NaN,
+#      被 nansum 跳过,玩具里对隐藏分红全程为 0;而 E-a(水平差)捕捉到了它。按总领的交回规则,H1 的主写法保持
+#      水平差版(v1),逐日差分版留在消融(H1/v2)并注明。同一条也记在 H5:PRET 用的就是累计求和,
+#      所以加了 H5/v7(水平差版动量,不丢停牌跳变、覆盖率满)作对照。
+#   2. E1 的 E-k 实测 U60 对股票 5(定增,ΔFR < 0)精确截成 0,对股票 6(送转式的等比例变动)恒为 0 —— U60 的写法不改。
+#   3. E1 的 E-l 实测常数底座把干净门控破坏成「所有股票每天都非零」的 0.04 ×(−R60):H3/v2 必须与 H3/v11 一起读,
+#      并加了 H3/v16(底座 0.01)量出「多少分来自事件、多少来自反转」。
+#   4. E1 Q4 证实离散标签被按列顺序拆桶:维持「三个离散字段不许进 cs_bucket_*」。
+#   5. E1 Q6(iii) 证实 1e-6 的噪声就能让离散度从 0.301 跳到 1.00:无底座的事件型 core 保留,但 prediction 里一律写明
+#      「预期换手偏高、前十分位在淡季由噪声占据」。
+#   6. E2 的检索结果写进了 H5 的 novelty(长窗口价格路径在 C01–C03 的 6940 行去重存档里只命中 2 条,
+#      score ≥ 0.5 的只有 1 条且方向 −1;跨日涨跌计数只命中 1 条且为负分),所以 H5 的新颖性不降级。
+#
+# ── 先验污染声明 ───────────────────────────────────────────────────────────
+#   我知道 2023–2025 年 A 股的一些公开事实:红利风格 2022–2024 年强势;2024 年新规推动分红、回购并收紧退市;
+#   微盘股 2024 年初大跌后又反弹。H1、H2 的选族可能受此影响。我给的理由是公开文献(Daniel–Titman 2006、
+#   Pontiff–Woodgate 2008、Boudoukh 等 2007、Ikenberry 等 1995、Shleifer 1986、Field–Hanka 2001、
+#   Campbell–Grossman–Wang 1993、Birru–Wang 2016、Da–Gurun–Warachka 2014),但不能证明没有被污染。
+#   train(2018–2021)在红利风格之前,这正是约束腿;结论性判读要看前推段(2026 年起)的方向是否一致。
+#
+# ── 我的事先预测 ───────────────────────────────────────────────────────────
+#   5 个假设里过线(任一 core ≥ 0.5)的中位数是 1,最可能是 H1,其次 H3;P(0 个过线) 约 40%。
+#   全部压在 12–30%:C02、C03 的校准教训是「没测过的机制会过线」这类判断偏乐观。
+#   三条可事后核对的校准读数:H1/v13(换手率水平)|score| < 0.3;H4/v6 ≈ H4/v1(|Δscore| < 0.1);H3/v5 选 −1。
+#   另外预期 H3 的无底座 core(v1/v3/v4,以及 v5)多数被离散度门槛判废 —— 那个判废本身是读数,不是失败。
+
+# ── 总领审定(W1 之后、直接检验之前;改了哪些、为什么)──────────────────────
+#   审了四件事:经济学是否说得通、能否证伪、与已知族和 C01–C03 heads 是否预期低相关、对照能否把机制与代理分开。
+#   五张卡都批准;改动只动写法与判读,不改假设本身。变体数仍是 64(H1 17 / H2 12 / H3 16 / H4 11 / H5 8),
+#   新写法全部在严格文法(allow_general=False)下解析通过,c04_check 判 ADMISSIBLE。
+#   0. 最要紧的一条:「1e-6 的噪声会把离散度抬到 1.00」(E1 Q6(iii))在本轮的真实算子上不成立。
+#      离散度 = 每天「不同取值数 / 有值股票数」的中位数(partura/diagnose.py distinct_fraction)。Log* 字段入库是 float64 取对数再转 float32
+#      (E1 的 toydata 注明与 dailyfields.py 一致),算子在 float32 上算,所以无事件股票的 P、FR、NS 及其差分不是连续噪声,
+#      而是落在 1–5 个 float32 网格点上的并列值。本地模拟(3000 只、无事件、算子取自注册表;脚本在总领的 scratchpad,quant_sim*.py):
+#      cross_delta(P,15) 离散度 0.002(67% 精确为 0)、cross_delta(P,3) 0.002、ΔFR(60) 0.001、U60×(−R60) 0.10、FR − 一年均值 0.10、
+#      −min(Δlog 股数) 0.001;后复权价按 0.01 舍入后 cross_delta(P,15) 也只有 0.08。只有 cross_max(ΔFR,60)×(−R60)(0.57)、
+#      FR 水平(0.59,取决于全流通股票占比)靠网格抖动过线。PAY(一年水平)能过门槛,是因为过去一年有派现的股票约占 0.6–0.7,不是因为噪声。
+#      后果:原设计里 H2 的无底座写法(v1 / v2 / v4 / v5 / v6 / v7 / v9 / v12)淡季几乎全是并列值,很可能全部判废,只剩 v3 / v10
+#      这一个构造有分数,统一判据 (a) 满足不了;H3 同理只剩 v2。
+#      所以:H2 的 v4 换成第二个带底座的构造(30 日线性衰减 + PAY),v5 / v6 / v7 改成与 v3 同一底座、只差一处的写法;
+#      H3 的 v6 / v7 / v8 / v10 / v13 改成与 v2 同一底座(0.04)、只差一处的成对写法,v14 加底座并升为 core。
+#      无底座的机制写法(H1/v8、v10,H2/v1、v2、v9、v12,H3/v1、v3、v4、v5、v9)保留:它们的判废本身是读数
+#      (H2/v12 判废 = P 在无事件股票上逐值不变 = 恒等式在 float32 精度上成立),每条的 predicts 都写了门槛预期。
+#   1. 另外两处必然判废:H5/v5 的等权 sign 均值只取 k/241(模拟 0.02)→ 改 cross_decay_linear(0.75);
+#      H5/v8(价格变动天数占比)等权 0.006、线性加权 0.24 → 换成波动调整动量(更要紧的代理);H3/v8 对 view 首日已上市的股票乘 0 → 加底座。
+#   2. H4:原文「名义价格只在除权日跳变、换手 < 0.02」与 C03 的实测(价格水平残差化后换手 0.055)不符,改为 0.03–0.06;
+#      原 fails_if (e)「v4 / v5 ≥ v1 即判否」在市值中性化后几乎必然触发(log 价 = log 市值 − log 股数),改成只认「远高于」;
+#      加 (f):本卡只有一个构造,过线只能记信号存在;novelty 加 C03 的 602A 族(做多后复权价最高端,与本卡同向,残差重合风险最高)。
+#   3. H1:mechanism 写明多头腿实际是高股息,与价值 / 行业 / 国企风格不可分;fails_if (b) 改为以 v17 为判据(v11 单独高不判否)。
+#   4. H2/v12:旺季每 3 天有几个百分点的股票除息,改掉「几乎不可能有除息」;加了送转季尖峰(股本与复权因子入库日期不一致)这一种读法。
+#   5. H1/v4、H4/v3:2020-08-24 之前创业板也是 10%,LimitWidth 在 train 的大半段只分出科创板。
+#   读代码确认的两件事(都不改写法):long_neutral 奖励不使用 untradable 掩码(partura/steer.py:只有 long_tradable / long_bucket /
+#   long_marginal 用),所以新股在书的股票池里,H1/v9、H4/v7 的 ListAge 门控有实际作用;方向与半衰期在 train 上挑、score = min(train, valid)。
+#   给 W2 的含义:GP 端的离散度门槛同样是 0.5,所以任何以 cross_delta / ts_delta 作用在 Log* 差上的「纯事件」种子,
+#   除非带连续底座,初代就会被门槛挡掉;GP 自己随机抽到的日频叶子也多半如此。
+#
+# ── 总领的事先预测(写在直接检验之前)────────────────────────────────────
+#   「过线」= 任一变体 score ≥ 0.5 且未被相关度拒绝。P(64 个变体全部 < 0.5) ≈ 50%。
+#   门槛:H2/v12 被离散度门槛判废 60%;H2/v1、v2 判废 70%;H3/v1、v3、v5 判废 75%;H1/v1 过门槛 85%;H5/v5、v8 过门槛 90%。
+#   H1:任一 core 过线 25%,方向 +1(做多高派现)的条件概率 85%;过线的话 train 是约束腿(train < valid:85%),换手 0.025–0.045。
+#       v11 与 v12 的分数接近(|Δ| < 0.2:70%,恒等式下两者只差 PAY)。
+#   H2:任一 core 过线 15%,几乎只会经由带底座的 v3 / v4 / v10(即「H1 + 旺季加分」),而且与 H2/v8(= H1/v1)同进退;
+#       v3 − v8 > 0.1(H2 对 H1 有增量)的概率 35%。
+#   H3:任一变体过线 18%,方向 +1(做多「已跌下来」的一端);但最可能过线的是带底座的 v2 / v14 / v16 与对照 v11(60 日反转),
+#       所以「过线而机制不成立(fails_if (b))」的概率高于「机制成立」(约 2 : 1)。
+#   H4:任一 core 过线 10%;方向不定(+1 : −1 ≈ 55 : 45),train 与 valid 的风格相反(2019–2020 大盘高价、2022–2023 微盘低价),min 两头都难过。
+#       v6 ≈ v1(|Δscore| < 0.1):75%;v4 / v5 至少一条被与已知族的 |ρ| 拒:40%。
+#   H5:任一 core 过线 12%;若过线,方向 −1(做多一年输家、长期反转,且吃幸存者偏差)与 +1 约 55 : 45 —— 反向过线按统一判据 (c) 判否。
+#   过线假设个数的中位数 0–1;最可能的单个读数是 H1 的 +1,其次是 H3 的反转成分。
+
+hypotheses:
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H1_net_payout
+  hypothesis: >-
+    过去一年净派现(现金分红 + 回购注销 − 增发)高的公司随后跑赢;
+    信号用「后复权收盘 ÷ 总市值」这个会计恒等式构造,未复权价与送转都在两项里自动抵消。
+  thesis:
+    mechanism: >-
+      谁跑赢:过去一年把现金还给股东(分红、回购注销)而且没有大额增发的公司 —— 多头腿是派现方,不是不派现方。
+      恒等式 P = log(后复权收盘) − LogTotalCap = log(复权因子) − log(总股本):未复权价在两项里严格相消
+      (E1 在玩具数据上 float64 核过,最大误差 3.6e-15),所以 P 只在分红、送转、增发、回购注销当天跳变;
+      送转同时抬高复权因子和总股本,在 P 里抵消(E1 的 E-a:分红股票跳 +0.0303 ≈ +D/r,增发股票跳 −0.1814 ≈ −log1.2,
+      送转股票不动,只有 1.9e-6 的噪声)。于是 ΔP = 股息率 − 净增发率,即 Daniel–Titman 2006 composite issuance 的相反数。
+      机制:管理层在股价低估时回购、在高估时增发,市场对这个管理层私有信息反应不足
+      (Daniel–Titman 2006、Pontiff–Woodgate 2008 的 net share issuance、Boudoukh 等 2007 的 net payout、
+      Ikenberry 等 1995 的回购后漂移;全部是先验文献,不是本样本的证据)。
+      文献里这一族的正 alpha 主要来自高派现组,也就是多头腿,这正是纯多头口径需要的。
+      它是慢变量:年度事件 + 线性衰减,换手低、成本小,而且与五个控制变量都不是线性关系。
+      不可识别项(总领审定时加,先写在前面):A 股的回购注销很少,PAY 的前十分位绝大多数是高股息率股,所以多头腿实际检验的是
+      「派现方跑赢」;Daniel–Titman 的管理层择时那一半(增发方跑输)落在空头腿,本轮拿不到。高股息又与价值、行业(银行、煤炭、
+      公用事业、交运)和国企属性高度重合,本轮没有估值、行业、所有制字段,所以 H1 过线只能记成「高派现多头腿」,
+      不能记成择时机制成立,也不能与价值 / 行业轮动分开。
+    counterparty: >-
+      追逐增发、并购与扩张故事的投资者:他们为「把钱投回去」的公司多付钱,同时低估「把钱还出来」的公司,
+      亏在管理层的回购 / 增发择时上。另一边是把高股息当作低成长代理、系统性回避派现股的成长型资金,
+      以及在增发公告后接盘的跟随者。
+    prediction: >-
+      方向 +1(做多高净派现)。v1 选 +1 的概率 75%;至少一个 core ≥ 0.5 的概率 30%。
+      构造内的可证伪比较:v1 > v5 且 v1 > v6 的概率 55%(送转只有在复权因子与股本合起来时才抵消,
+      这是「恒等式有用」的直接证据);v7 < v1 的概率 65%(v7 把解禁算成了增发);
+      v8 的 |score| < 0.3 的概率 70%(回购注销太稀疏);v13 的 |score| < 0.3 或被判无信号的概率 65%。
+      core 的 train < valid 的概率 75%(c03 存档里 score ≥ 0.3 的候选 89–97% 都是 train < valid)。
+      换手:v1 ≤ 0.035 的概率 60%,v15 < v1。
+      门槛:PAY 对无事件股票是 0 ± 1.9e-6 的噪声,但 A 股年度分红覆盖面大,真实事件股占比应远超 10%,
+      所以 v1 的前十分位应由真实派现股而不是噪声占据。另一面(总领审定时加):这层噪声是 float32 网格上的并列值,
+      不产生不同取值,所以 v1 的离散度 ≈ 过去一年有派现或股本事件的股票占比(约 0.6–0.7),能过 0.5 的门槛但余量不大(过门槛 85%)。
+      如果 v1 的换手 ≥ 0.06,优先怀疑字段时点
+      (供应商市值用的价格与分钟收盘不同源,或滞后一天),不当机制读。
+    fails_if: >-
+      (a) core 在 train 上选 −1(做多增发方):与机制相反,按统一判据 (c) 本假设即否。
+      (b) v17(对一年动量取截面残差)< 0.3 而 v1 ≥ 0.5:读到的是一年动量 —— 奖励只控制 20 日反转,不控制一年动量。
+      v17 是这一条的判据;v11(一年后复权动量)只是比较尺:v11 ≥ v1 的 70% 且同号时先看 v17,v17 ≥ 0.3 就不判否
+      (恒等式成立时 v11 − v12 = PAY,v11 单独的分数主要来自未复权价的一年走势,它高不说明 PAY 是动量。总领审定时改:
+      原文「v11 ≥ v1 的 70% 且同号」单独就判否,会把一个与动量正交、只是恰好与动量同期有效的 PAY 误判掉)。
+      (c) v1 ≥ 0.5 而 v3 < 0.3:读到的是非线性市值尾巴(市值只被线性中性化)。
+      (d) v1 的换手 ≥ 0.06,或 v12(一年市值增长)与 v1 几乎同分:恒等式在真实数据上不成立(字段时点),
+      v1 残留了价格成分 —— 这时 H1 / H2 / H3 的全部读数都要重判,诊断看 H2/v12。
+      (e) v14 或 v16 比 v1 掉一半以上:读到的是波动或流动性的非线性暴露。
+  novelty: >-
+      原料在 C01–C03 不存在:那三轮没有任何股本或市值字段,E2 在 6940 行去重存档里没有找到一条含复权因子或股数的表达式
+      (那三轮的词表里根本没有这些叶子),所以结构上必然是新的。预期 |ρ| 低的理由:PAY 只在股本与分红事件日跳变,
+      与成交额水平、成交额离散度(已知族 cross_mean(day_std(Amt),30))、分钟形状族没有任何共同叶子,
+      与已知族的 ρ 应接近 0。GP 很难碰到:它要同时凑出「后复权价减总市值」再加一年衰减,两步都要正好。
+      终局要特别核的残差重合风险:高派现股偏大盘、偏低波动,所以与 C01–C03 里低波动 / 大盘倾向的 head
+      (以 day_std(Open)、day_std(Vwap) 为核的那一族,以及 C03 以 pow_2(day_mean(Open)) 为核的那一族)可能有残差重合;
+      奖励已经线性中性化了波动与市值,剩余重合应 < 0.5,但必须逐条量 |ρ| 才算。
+  variants:
+  - {id: v1,  role: core,     expr: "sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241))", predicts: "过线,sign +1,换手 ≤ 0.035。整条假设的基准读数:线性衰减的过去一年净派现。score ≥ 0.5 的先验概率 30%。"}
+  - {id: v15, role: core,     expr: "sub(cross_mean(sub(log(day_last(Close)), LogTotalCap), 5), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241))", predicts: "与 v1 同号,换手低于 v1(只差窗口,算同一个构造)。短端用 5 日均值:两个作用 —— 降换手,以及把供应商市值与分钟收盘之间可能的一天时点错位平掉。若 v15 明显高于 v1,按 fails_if (d) 当时点问题读,而不是当机制读。"}
+  - {id: v3,  role: core,     expr: "cs_bucket_demean(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), LogFloatCap)", predicts: "与 v1 同号。规模十分位内去均值(LogFloatCap 连续,E1 Q4 实测连续自变量每桶精确等分、无平局问题),拿掉线性中性化留下的非线性市值尾巴。v1 ≥ 0.5 而 v3 < 0.3 按 fails_if (c) 读。"}
+  - {id: v4,  role: core,     expr: "cs_regres(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), LimitWidth)", predicts: "与 v1 同号。对 LimitWidth 做截面 OLS 取残差 = 按板块(主板 / 双创 / 北交所)线性去均值,排除「只是板块轮动」。注意它不是严格的组内去均值(三档是跨 0.1/0.2/0.3 的线性拟合),是偏弱的剔除;而且 2020-08-24 之前创业板也是 10%,train 的大半段这条只把科创板(2019-07 起)分出来。"}
+  - {id: v14, role: core,     expr: "cs_bucket_demean(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), cross_mean(day_std(Ret), 20))", predicts: "与 v1 同号。波动十分位内去均值:高派现股偏低波动,这条排除「只是低波动」。与 v3 成对,两条都掉一半以上按 fails_if (e) 读。"}
+  - {id: v2,  role: ablation, expr: "cross_sum(ts_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241)", predicts: "与 v1 同号、预期略低。等权逐日差分之和。E1 第二部分实测它漏掉停牌期间发生的分红与股本变动(停牌边界的单日差分两侧有 NaN,被 nansum 跳过,玩具里对隐藏分红全程为 0),所以它是「纯跳变」而 v1 是「与滚动均值的偏差」。留在消融:若它明显高于 v1,做功的是衰减权重而不是事件本身。"}
+  - {id: v5,  role: ablation, expr: "neg(sub(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), cross_mean(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), 241)))", predicts: "< v1(55%)。只看股数的相反数(−Δlog 总股本),含送转噪声:送转抬高股数但不是增发。门槛(总领审定时加):一年内总股本有变动的股票可能不到一半,其余是 float32 网格上的并列值(本地模拟离散度 0.003),可能被判废;判废与「< v1」同样支持「恒等式里的复权因子项不可少」。"}
+  - {id: v6,  role: ablation, expr: "sub(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 241))", predicts: "< v1(55%)。只看复权因子(分红 + 送转),含送转噪声。v5 与 v6 都低于 v1,才证明恒等式里的抵消是有用的那一步。"}
+  - {id: v7,  role: ablation, expr: "sub(sub(log(day_last(Close)), LogFloatCap), cross_mean(sub(log(day_last(Close)), LogFloatCap), 241))", predicts: "< v1(65%)。流通版:用 LogFloatCap 代替 LogTotalCap,于是解禁被当成增发记进去。它与 v1 的差额量出解禁污染的大小,也和 H3 对接。"}
+  - {id: v8,  role: ablation, expr: "neg(cross_min(ts_delta(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), 1), 241))", predicts: "|score| < 0.3(70%),换手偏高。只看回购注销(一年内股数的最大单日下降)。E1 的 E-g 实测该写法只对股数下降的股票非零、方向正确,但 A 股回购注销稀疏,前十分位会被噪声占据。门槛(总领审定时加):更可能直接被离散度门槛判废(本地模拟无事件时离散度 0.001)—— 判废与「|score| < 0.3」同样支持「回购注销太稀疏」。"}
+  - {id: v9,  role: ablation, expr: "sub(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), mul(0.1, less(ListAge, 250)))", predicts: "≈ v1 或略高。排雷门控:上市不足 250 个交易日的新股被减 0.1(PAY 的量级约 0.02,所以这是硬压到底部)。E1 的 E-o 实测门控只对 ListAge < 250 的股票生效、其余逐值等于 v1。若明显高于 v1,说明 v1 的多头腿里混了新股。"}
+  - {id: v10, role: ablation, expr: "sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 60))", predicts: "< v1。季度窗口:净派现是年度事件,60 日窗口只捕捉当季除息,预期衰减。它与 H2 的窗口曲线对接。门槛(总领审定时加):60 日窗口只在除息季前后有过半的股票非零,淡季是网格上的并列值,按每天离散度的中位数可能被判废;判废时窗口曲线看 H2 的 v3 / v10 / v6。"}
+  - {id: v16, role: ablation, expr: "cs_bucket_demean(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), cross_mean(day_sum(Amt), 30))", predicts: "与 v1 同号。流动性十分位内去均值:奖励只线性控制流动性,这条排除非线性流动性暴露。"}
+  - {id: v17, role: ablation, expr: "cs_regres(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)), sub(log(day_last(Close)), cross_mean(log(day_last(Close)), 241)))", predicts: "≥ 0.3 且与 v1 同向才算机制;< 0.3 而 v1 ≥ 0.5 时按 fails_if (b) 读。对 v11(一年后复权动量)取截面残差,把「是不是动量」从两个分数的比较变成一次直接读数。注意 cs_regres 是带截距的逐日 OLS 残差、不对回归元取排名,所以这是偏弱的剔除:它过关不等于终局与 C01–C03 的 head 的 |ρ| 一定 < 0.7。"}
+  - {id: v11, role: control,  expr: "sub(log(day_last(Close)), cross_mean(log(day_last(Close)), 241))", predicts: "预期与 v1 不同号,或明显弱于 v1。一年后复权动量 —— H1 最危险的代理,因为奖励只控制 20 日反转。按 fails_if (b) 读。"}
+  - {id: v12, role: control,  expr: "sub(LogTotalCap, cross_mean(LogTotalCap, 241))", predicts: "|score| 小。一年市值增长:它是 P 的分母项单独拿出来,方向与增发相反。若与 v1 几乎同分,说明做功的是市值项而不是复权因子项,按 fails_if (d) 读。"}
+  - {id: v13, role: control,  expr: "sub(log(cross_mean(day_sum(Volume), 30)), LogFloatShares)", predicts: "|score| < 0.3 或被判无信号(65%)。换手率水平(30 日成交量 / 流通股本),在对数空间约等于「流动性控制 − 市值控制」,预期被这两个控制张成。这是本轮中性化是否真的生效的校准锚;被判「无信号」要记成中性化生效,不是读数失败。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H2_exdiv_clientele
+  hypothesis: >-
+    刚除息、而且年度派现水平高的股票在除息后约 2–6 周跑赢;
+    差别化股息税造成的短线客户群在登记日前卖出、除息后回补。
+  thesis:
+    mechanism: >-
+      谁跑赢:刚刚除息、而且年度派现水平高的股票,窗口是除息后约 2–6 周 —— 多头腿是除息后的回补方。
+      原料与 H1 相同(P = log(后复权收盘) − LogTotalCap),但读的是 15–30 日的变化而不是一年水平,
+      所以这张卡检验的是另一件事:派现效应是长期定价(H1),还是除息前后的交易(H2)。
+      机制:A 股差别化股息税按持股期计征(不足 1 个月 20%、1 个月至 1 年 10%、1 年以上免征),
+      短线持有者因此有动机在登记日前卖出、除息后买回(税务客户群效应,Elton–Gruber 一脉;先验);
+      叠加散户的「填权」行为。两者都在除息后形成买压,所以利润落在多头腿。
+      因为 P 里不含未复权价,cross_delta(P, d) 不是收益,是纯事件量 —— 这既是它的干净处,也是它的门槛风险。
+    counterparty: >-
+      在登记日前为避税卖出的短线资金,以及在登记日前为拿股息买入、除息后立刻卖出的套息资金:
+      前者把筹码在除息前让出、在除息后再买回(付两次冲击成本),后者在除息后集中卖出,
+      两边都把除息后几周的收益让给了愿意在除息后持有的一方。
+    prediction: >-
+      方向 +1。v3 ≥ v1 的概率 65%:淡季里 cross_delta(P,15) 对绝大多数股票是 0 ± 1.9e-6 的噪声,
+      PAY 底座把这一段的排序交给年度派现水平,消掉噪声换手。
+      门槛(总领审定时改写):这层噪声是 float32 网格上的并列值,不是连续噪声。本地模拟(3000 只、无事件、按 E1 的入库方式:
+      float64 取对数再转 float32,算子取自注册表)里 cross_delta(P, 15) 有 67% 精确为 0、其余落在 ±1–2 个 ulp 上,离散度 0.002;
+      后复权价按 0.01 舍入时也只有 0.08。E1 Q6 的「1e-6 噪声 → 离散度 1.00」用的是连续噪声,不适用。
+      所以无底座的 v1 / v2 / v9 / v12 淡季几乎全是并列值,按每天离散度的中位数,很可能被直接检验判门槛废品(70%);
+      原 v4 / v5 / v6 / v7 已改成带底座的写法。只有供应商价格与分钟收盘口径不同、P 带真实抖动时,v1 才会靠抖动过门槛、再每天重排白吃成本。
+      v5 < v3 的概率 60%(v5 含送转)。至少一个 core ≥ 0.5 的概率 15% —— 这是五条里第二低的,
+      因为效应集中在 5–7 月,其余月份这张卡没有信号。
+      覆盖率:15 / 30 日的严格位移在 60 天 warmup 之内,没有风险;241 日位移已按环境约束禁用。
+    fails_if: >-
+      (a) core 选 −1(做多除息前、或做空除息后):与机制相反,按统一判据 (c) 本假设即否。
+      (b) v8(PAY 本身)≥ v3:这只是 H1,不是除息窗口的交易,H2 没有增量。
+      (c) v5 ≥ v3 且 v9 > 0.3:读到的是送转或股本事件,不是现金分红(v9 被门槛判废时只看前半句)。
+      (d) v11 或 v12 与 core 同号且 ≥ core 的 70%:恒等式在真实数据上漏了未复权价,
+      cross_delta(P, d) 残留了价格成分,读到的是 15 日收益(v11)或短期反转(v12)。
+      这一条一旦成立,H1、H2、H3 的全部读数都要按「字段时点」重判。反过来,v12 被离散度门槛判废(离散度 ≪ 0.5)
+      本身就证明 P 在无事件股票上逐值不变、恒等式在 float32 精度上成立,(d) 不成立。
+      (e) v6(60 日)≥ v3 且 ≥ v10:窗口定位错了,那是 H1 的季度版(H1/v10),不是 2–6 周的客户群回补。
+  novelty: >-
+      与 H1 同源:原料在 C01–C03 不存在,与已知族没有共同叶子。与 H1 的区别是窗口 —— 15/30 日的严格位移
+      对「什么时候除息」敏感,一年水平对「派了多少」敏感;两者预期正相关但不重合,v8 作为 control 就是用来量这个重合的。
+      终局要核的残差重合风险:除息集中在 5–7 月,所以这张卡的残差有季节性,与任何日历效应型 head 的重合要量;
+      按 E2 的检索,C01–C03 的存档里没有这类 head(没有任何以日历或季节为条件的结构)。
+      另外要核的是它与 H1 的残差 |ρ| —— 若两张卡的残差 |ρ| ≥ 0.7,终局只能算一个新发现。
+  variants:
+  - {id: v3,  role: core,     expr: "add(cross_delta(sub(log(day_last(Close)), LogTotalCap), 15), sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)))", predicts: "本卡预期最好的一条(≥ v1,65%),换手明显低于 v1。带慢底座的核心写法:事件股按除息跳变排到前面,非事件股按年度派现水平排序,所以淡季不靠噪声排名。"}
+  - {id: v1,  role: core,     expr: "cross_delta(sub(log(day_last(Close)), LogTotalCap), 15)", predicts: "选 +1。15 日的净派现变化(除息后 3 周),机制最干净的写法。很可能被离散度门槛判废(淡季的取值是 float32 网格上的并列值,见 prediction);拿到分数时说明 P 带真实抖动,预期换手高、淡季前十分位由抖动占据。它与 v3 的差额量出底座值多少分。"}
+  - {id: v2,  role: core,     expr: "cross_delta(sub(log(day_last(Close)), LogTotalCap), 30)", predicts: "选 +1,与 v1 同号,门槛风险同 v1。30 日窗口,覆盖除息后 2–6 周的后半段;机制说回补要几周,所以 v2 ≥ v1 更符合机制。"}
+  - {id: v10, role: core,     expr: "add(cross_delta(sub(log(day_last(Close)), LogTotalCap), 30), sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)))", predicts: "与 v3 同号。30 日窗口的带底座版本,v2 与 v3 的交叉项;四个 core 里换手应最低。"}
+  - {id: v4,  role: core,     expr: "add(sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 30)), sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)))", predicts: "与 v3 同号。第二个带底座的构造:除息后的跳变按 30 日线性衰减(P − 30 日均值 = 股息率 ×(1 − k/30)),而不是 v3 / v10 的方窗;底座同为 PAY。若 v1 / v2 被门槛判废,它与 v3 是本卡仅有的两个「不同构造」、有把握拿到读数的 core。总领审定时替换原 v4(5 日窗、无底座:淡季几乎全是 float32 网格上的并列值,必然判废)。"}
+  - {id: v5,  role: ablation, expr: "add(cross_delta(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 15), sub(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 241)))", predicts: "< v3(60%)。与 v3 只差一处:用复权因子(LA = log 后复权价 − log 未复权价,含送转)代替 P。A 股送转集中在年报季,所以这条与 v3 的差额量的正是送转污染,按 fails_if (c) 读。总领审定时加了与 v3 相同结构的一年底座(原写法无底座,淡季判废)。"}
+  - {id: v6,  role: ablation, expr: "add(cross_delta(sub(log(day_last(Close)), LogTotalCap), 60), sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241)))", predicts: "≤ v10。与 v3 / v10 只差窗口:60 日已经超出 2–6 周;v6 ≥ v3 且 v6 ≥ v10 按 fails_if (e) 读。总领审定时加了 PAY 底座(原写法无底座,淡季判废),于是 v3 / v10 / v6 是同一底座下 15 / 30 / 60 日的窗口曲线。"}
+  - {id: v7,  role: ablation, expr: "cs_bucket_demean(add(cross_delta(sub(log(day_last(Close)), LogTotalCap), 15), sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241))), LogFloatCap)", predicts: "与 v3 同号。规模十分位内去均值:高股息股偏大盘,这条拿掉非线性市值尾巴。总领审定时把被去均值的对象从无底座的 v1 换成 v3(v1 很可能被门槛判废,桶内去均值不增加不同取值的个数)。"}
+  - {id: v8,  role: control,  expr: "sub(sub(log(day_last(Close)), LogTotalCap), cross_mean(sub(log(day_last(Close)), LogTotalCap), 241))", predicts: "可能过线(它就是 H1/v1),但过线不算 H2 成立。用来量 H2 与 H1 的重合:v8 ≥ v3 按 fails_if (b) 读。"}
+  - {id: v9,  role: control,  expr: "cross_delta(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), 15)", predicts: "|score| 小,或被离散度门槛判废(15 日内有股本变动的股票远不到一半,其余是网格上的并列值)。15 日股本事件本身(增发、送转、回购注销),不含分红。> 0.3 且 v5 ≥ v3 时按 fails_if (c) 读。"}
+  - {id: v11, role: control,  expr: "cross_delta(log(day_last(Close)), 15)", predicts: "预期与 core 无关或反号。15 日后复权收益:在恒等式成立时它与 v1 正交(P 里未复权价严格相消)。若它与 v1 高度同向,说明供应商市值的价格与分钟收盘不同源,按 fails_if (d) 读。"}
+  - {id: v12, role: control,  expr: "cross_delta(sub(log(day_last(Close)), LogTotalCap), 3)", predicts: "本轮最锐的字段诊断,先读离散度、再读分数(总领审定时重写)。单只股票 3 个交易日里有除息或股本变动的概率很低,所以淡季这条是 float32 网格上的并列值(本地模拟离散度 0.002);旺季每 3 天有几个百分点的股票除息,前十分位是「刚除息 0–2 天」的股票。判读:(1) 被离散度门槛判废(60%)= P 在无事件股票上逐值不变,恒等式在 float32 精度上成立,没有价格成分 —— 这是好消息;(2) 过了门槛,说明 P 带真实抖动(供应商价格舍入或收盘价口径不同),这时看分数:像短期反转那样选 −1、分数可读,说明 P 漏了未复权价,整组 Log* 写法按 fails_if (d) 重判;集中在送转季的正分则可能是总股本与复权因子的入库日期不一致(P 在除权日前后出现一天到几天的 ±log(1+送转比例) 尖峰),要与 H1/v15、H1/v5、v6 一起读,不当 H2 的机制读。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H3_unlock_pressure_reversal
+  hypothesis: >-
+    近 60 个交易日流通股比例上升(限售股解禁)、而且股价已经跌下来的股票随后回补;
+    解禁本身预期在空头腿,纯多头的利润只在「卖压已兑现 × 已下跌」这个交互项上。
+  thesis:
+    mechanism: >-
+      谁跑赢:近 60 个交易日内流通股比例明显上升(解禁)、并且这段时间股价已经跌下来的股票 ——
+      多头腿是「砸完了的解禁股」,不是解禁股本身。恒等式 FR = LogFloatCap − LogTotalCap = log(流通股 / 总股本):
+      解禁使 FR 上升,定增与股权激励授予使它下降,送转不改变它(E1 的 E-j 实测:解禁股票给出 +log(1/0.6) 并在 60 日窗内保持、
+      出窗归零;等比例变动的股票 ΔFR 恒为 0)。U60 = ΔFR + |ΔFR| 只留上升部分(×2),
+      E1 的 E-k 实测它把下降一侧(定增)精确截成 0。
+      核心是 U60 ×(−60 日收益):解禁带来的卖压是非信息性的(锁定期到期、流动性需求),
+      压力兑现之后价格回补(Shleifer 1986 需求曲线向下;Field–Hanka 2001 解禁日前后的价格压力;
+      Campbell–Grossman–Wang 1993 非信息交易引起的反转;全部是先验)。
+      为什么必须是交互项:单看解禁,原始股东的持续减持多半占主导,利润在空头腿(v5 预期选 −1),
+      纯多头口径拿不到;只有「已经跌下来」这个条件把卖压已兑现的那一端挑出来,利润才在多头腿。
+      rev20 已在奖励的控制里被线性拿掉,而线性控制拿不走交互项。
+    counterparty: >-
+      解禁后急于减持的原始股东与定增方:他们的卖出不含关于基本面的新信息,只是锁定期到期与流动性需求,
+      为换手付出价格折让;以及在解禁公告期跟随抛售的资金。收钱的是愿意在卖压兑现后承接并等几周的一方。
+    prediction: >-
+      方向 +1。v1 / v2 选 +1 的概率 65%;v5(解禁本身)选 −1 的概率 55%;v11(60 日反转)< v2 的概率 60%;
+      v6 < v2 的概率 60%。至少一个 core ≥ 0.5 的概率 20%。
+      门槛风险是本卡最可能的失败方式,要先读再读分数:任意 60 日窗口内有解禁的股票应远不到一半,
+      而 ΔFR 对无事件股票在玩具数据上是精确 0(E1 的 E-j / E-k 噪声底都是 0,不是 1e-6 噪声),
+      所以 v1 / v3 / v4 / v5 对多数股票可能精确为 0,离散度 < 0.5 而被直接检验判门槛废品
+      (E1 Q6(ii):70% 为常数 → 离散度 0.301)。这个判废本身是读数:它说明 FR 的事件覆盖面,也说明
+      GP 端(覆盖率只要 0.5、离散度同样要 0.5)会同样挡掉这一族,所以 W2 的种子要用带底座的写法。
+      总领审定时加的保留:「精确 0」只在玩具数据的全流通股票上核过。真实库里 LogFloatCap 与 LogTotalCap 是两个各自舍入的 float32 对数
+      (量级约 23,一个 ulp 约 1.9e-6),流通 < 总股本的股票的 FR 逐日带 ±1–2 个 ulp 的抖动;但这层抖动落在网格点上、是并列值,
+      不产生不同取值(本地模拟:ΔFR(60) 离散度 0.001、U60×(−R60) 0.10、FR − 一年均值 0.10),所以 v1 / v3 / v5 / v9 仍很可能判废。
+      例外是 v4:60 日内单日 ΔFR 的最大值对流通 < 总股本的股票几乎总是正的 1–2 个 ulp,乘上连续的 −R60 就各不相同(模拟 0.57),
+      它很可能过门槛,而前十分位在解禁淡季由「抖动为正 × 60 日跌幅」的非事件股补齐 —— 等于在约一半非事件股里做 60 日反转,必须与 v11 一起读。
+      所以本卡的消融一律改成与 v2 同一底座(0.04)的成对写法(v6、v7、v8、v10、v13,总领审定时改),都拿得到读数,
+      而且每一条与 v2 只差一处;v14 也加了底座并升为 core,使得在无底座写法全被判废时,仍有两个「不同构造」的 core
+      (v2:60 日窗口的累计解禁;v14:一年线性衰减的解禁记忆)可以按统一判据 (a) 判读。
+      带常数底座的写法覆盖率与离散度都满;但 E1 的 E-l 实测底座把干净门控破坏成「所有股票每天都非零」的 0.04 ×(−R60),
+      所以 v2 / v14 / v16 必须与 v11 一起读。
+    fails_if: >-
+      (a) core 选 −1(做多解禁后上涨的股票):与卖压回补相反,按统一判据 (c) 本假设即否。
+      (b) v11 / v12 ≥ v2 的 70%:读到的是 60 / 30 日反转,底座吃掉了门控,v2 没有增量。
+      (c) v6 ≥ v2:送转污染(LogFloatShares 的跳变含送转,FR 不含 —— E1 的 E-m 实测送转股票在 v6 的写法下非零)。
+      (d) v5 选 +1 且 ≥ v1:那是「解禁本身利好」(例如被当作治理改善或流动性改善的信号),换了机制,
+      不能记成卖压回补,要另立假设。
+      (e) v15(流通比例水平)≥ core:读到的是股权结构这个结构性变量,不是解禁事件。
+      (f) v10 ≥ v2:截正部没有必要,做功的是 ΔFR 的两侧而不是解禁 —— 那更像是「股本变动 × 反转」的混合,机制陈述要改写。
+      (g) v13 与 v2 差别很大(|Δscore| ≥ 0.3):结果依赖 R60 这个特定的跌幅写法(60 日前那一天的取值),不稳。
+  novelty: >-
+      原料在 C01–C03 不存在。它不是反转的改写:R60 / R30 本身作为 v11 / v12 单独评估,
+      核心是「事件 × 下跌」的乘积,而 C01–C03 的存档里没有任何以股本或流通比例为条件的交互项
+      (E2 在 6940 行里检索到的交互全部是价量叶子之间的)。与已知族没有共同叶子。
+      终局要核的残差重合风险:解禁股偏小盘、偏近年上市,所以与任何小盘 / 新股倾向的 head 可能重合;
+      要特别说明的是本卡的多头腿是「有解禁事件且已下跌」的股票,幸存者偏差会抬高这一端(跌下来又没退市),
+      所以 H3 的读数要按偏乐观处理 —— 这写在这里,终局判读时不许忘。
+      本卡不做多极小市值、极低价或濒危股:截正部只挑解禁事件,不挑市值分位。
+  variants:
+  - {id: v2,  role: core,     expr: "mul(add(add(cross_delta(sub(LogFloatCap, LogTotalCap), 60), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 60))), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "本卡唯一有把握拿到读数的写法(覆盖率与离散度都满),预期选 +1。带 0.04 的常数底座:事件股的权重是非事件股的 2.5–25 倍(典型解禁 ΔFR 约 0.05–0.5,U60 是它的两倍)。必须与 v11 一起读:E1 的 E-l 实测底座使非事件股按 −R60 排序,所以 v2 ≥ 0.5 而 v11 也接近时按 fails_if (b) 读,不算发现。"}
+  - {id: v1,  role: core,     expr: "mul(add(cross_delta(sub(LogFloatCap, LogTotalCap), 60), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 60))), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "选 +1,但很可能被离散度门槛判废(无事件股票精确为 0)。它是机制最干净的写法:解禁上升幅度 × 60 日跌幅,非事件股完全不参与排序。被判废时读 v2 / v16。"}
+  - {id: v3,  role: core,     expr: "mul(add(cross_delta(sub(LogFloatCap, LogTotalCap), 30), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 30))), neg(log(div(day_last(Close), cross_delay(day_last(Close), 30)))))", predicts: "与 v1 同号(只差窗口,算同一个构造),同样有门槛风险。30 日窗口更靠近解禁日,卖压可能还没结束,所以 v3 < v1 更符合「兑现后回补」的机制;v3 > v1 则说明回补更快。"}
+  - {id: v4,  role: core,     expr: "mul(cross_max(ts_delta(sub(LogFloatCap, LogTotalCap), 1), 60), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "与 v1 同号,门槛风险同样高。改用 60 日内最大单日解禁(cross_max(ts_delta(FR,1),60)),对「一次大额解禁」而不是「累计流通比例上升」敏感。E1 Q1 实测 cross_max 用 nan 归约、窗口不满也出数,所以停牌不丢窗口。门槛另有一层(总领审定时加):60 日内单日 ΔFR 的最大值对流通 < 总股本的股票几乎总是正的 1–2 个 float32 ulp,本地模拟离散度 0.57,所以它很可能过门槛,但淡季的前十分位是「抖动为正 × 60 日跌幅」的非事件股,要与 v11 一起读。"}
+  - {id: v5,  role: ablation, expr: "cross_delta(sub(LogFloatCap, LogTotalCap), 60)", predicts: "选 −1 的概率 55%:解禁后的持续减持占主导,利润在空头腿。这正是本卡必须写成交互项的理由。它选 +1 且 ≥ v1 时按 fails_if (d) 读。门槛:无事件股票的 ΔFR 是 0 或 ±1 个 ulp 的并列值(本地模拟离散度 0.001),很可能被判废;那样「解禁本身在空头腿」这一条本轮读不到,fails_if (d) 只能留空。"}
+  - {id: v6,  role: ablation, expr: "mul(add(add(cross_delta(LogFloatShares, 60), abs_(cross_delta(LogFloatShares, 60))), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "< v2(60%)。与 v2 只差一处:用 LogFloatShares 的 60 日变化代替 FR,于是送转被当成解禁记进去(E1 的 E-m 实测送转股票在该写法下非零)。它与 v2 的差额量出送转污染,按 fails_if (c) 读。总领审定时加了与 v2 相同的正部与底座:原写法里 LogFloatShares 是直接存的字段,股本不变的股票逐值相同、差分精确为 0,几乎必然被离散度门槛判废,而它要比较的 v1 也可能被判废。"}
+  - {id: v7,  role: ablation, expr: "mul(add(add(cross_delta(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), 60), abs_(cross_delta(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)), 60))), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "方向不定,预期弱于 v2。与 v2 只差事件变量:总股本上升(增发、送转、股权激励授予)的正部 × 下跌。定增后的下跌也是一种卖压,但增发同时稀释老股东,两个效应方向相反;用来把「解禁」与「增发」两种股本事件分开。总领审定时加了与 v2 相同的正部与底座(原写法不截正部、无底座,60 日内有股本变动的股票远不到一半,本地模拟离散度 0.20,判废)。"}
+  - {id: v8,  role: ablation, expr: "mul(add(mul(add(cross_delta(sub(LogFloatCap, LogTotalCap), 60), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 60))), less(ListAge, 10000)), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "与 v2 同号。与 v2 只差一处:事件权重只给 2018 年数据开始之后上市的股票(less(ListAge, 10000) = 1),即 IPO 锁定期解禁 —— 这一族的解禁规模最大最集中,但幸存者偏差也最强,所以它高于 v2 不能算加分证据;明显低于 v2 说明定增与股权激励的解禁也在做功。总领审定时加了底座:原写法对 view 首日已上市的股票(样本内 65–97%)乘 0 得精确 0,必然被离散度门槛判废,拿不到读数。"}
+  - {id: v9,  role: ablation, expr: "sub(sub(LogFloatCap, LogTotalCap), cross_mean(sub(LogFloatCap, LogTotalCap), 241))", predicts: "选 −1 或接近 0,同 v5。线性衰减的一年解禁(FR 与其一年均值之差),不乘下跌,覆盖率满。它是 v5 的慢版。离散度取决于一年内有解禁(或定增)的股票是否过半:无事件股票是 0 或 ±1 个 ulp 的并列值(本地模拟离散度 0.10),所以仍可能被判废(总领审定时改了原文「离散度满」)。"}
+  - {id: v10, role: ablation, expr: "mul(add(mul(2, cross_delta(sub(LogFloatCap, LogTotalCap), 60)), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "< v2。与 v2 只差一处:不截正部(2·ΔFR 代替 ΔFR + |ΔFR|,对 ΔFR ≥ 0 的股票逐值等于 v2),于是定增(ΔFR < 0)的股票权重变小或变负,配上涨也会被排进多头腿。用来确认 U60 的截断是必要的一步;v10 ≥ v2 按 fails_if (f) 读。总领审定时改成与 v2 成对的带底座写法(原写法无底座、与 v1 比,两条都可能被门槛判废)。"}
+  - {id: v13, role: ablation, expr: "mul(add(add(cross_delta(sub(LogFloatCap, LogTotalCap), 60), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 60))), 0.04), neg(sub(log(day_last(Close)), cross_mean(log(day_last(Close)), 60))))", predicts: "与 v2 同号、|Δscore| < 0.3。与 v2 只差一处:把「下跌」改写成「现价低于 60 日均价」,对单日跳空和 60 日前那一天的取值都不敏感;底座部分因此也换成另一种 60 日反转。两条一起读判断结果是否依赖 R60 这个特定写法,按 fails_if (g) 读。总领审定时改成与 v2 成对(原写法不截正部、无底座、与 v10 成对,两处都可能被门槛判废)。"}
+  - {id: v14, role: core,     expr: "mul(add(add(sub(sub(LogFloatCap, LogTotalCap), cross_mean(sub(LogFloatCap, LogTotalCap), 241)), abs_(sub(sub(LogFloatCap, LogTotalCap), cross_mean(sub(LogFloatCap, LogTotalCap), 241)))), 0.04), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "与 v2 同号,换手更低。一年衰减解禁的正部(加 0.04 底座)× 60 日跌幅:k 天前解禁的股票权重按 1 − k/241 线性衰减,比 v2 的 60 日方窗慢、事件记忆更长,是与 v2「不同构造」、而且有把握拿到读数的第二个 core。若解禁回补的半衰期超过 60 日,这条应优于 v2。总领审定时加底座并由 ablation 升为 core(原写法对全流通股票精确为 0,门槛有风险)。"}
+  - {id: v16, role: ablation, expr: "mul(add(add(cross_delta(sub(LogFloatCap, LogTotalCap), 60), abs_(cross_delta(sub(LogFloatCap, LogTotalCap), 60))), 0.01), neg(log(div(day_last(Close), cross_delay(day_last(Close), 60)))))", predicts: "与 v2 同号、更事件主导、换手更高。底座缩到 0.01:底座只改变事件股与非事件股的相对权重,不改变两组内部的排序,所以 v2 与 v16 的差异直接量出「多少分来自事件、多少来自反转」。v16 > v2 支持机制,v16 < v2 说明分数主要来自反转那一半。"}
+  - {id: v11, role: control,  expr: "neg(log(div(day_last(Close), cross_delay(day_last(Close), 60))))", predicts: "预期弱于 v2。60 日反转本身 —— 奖励只控制 20 日反转,所以这是 H3 最危险的代理。按 fails_if (b) 读。"}
+  - {id: v12, role: control,  expr: "neg(log(div(day_last(Close), cross_delay(day_last(Close), 30))))", predicts: "预期弱于 v2,是 v3 的对照。30 日反转本身;它与 v11 一起画出反转的窗口曲线,用来判断 core 的分数有多少是反转贡献的。"}
+  - {id: v15, role: control,  expr: "sub(LogFloatCap, LogTotalCap)", predicts: "很可能被离散度门槛判废,那个判废本身是读数。流通比例水平本身(结构性变量,不是事件):A 股有相当比例的股票流通股等于总股本,FR 精确为 0,若这类股票超过一半就过不了离散度门槛 —— 它正好告诉我们 FR 的平局结构,进而说明 U60 为 0 的股票占比有多大。能拿到分数时按 fails_if (e) 读。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H4_nominal_price_illusion
+  hypothesis: >-
+    同样市值下名义(未复权)股价高、也就是总股数少的股票随后跑赢;
+    投资者高估低价股的上行偏度,为名义便宜多付钱。
+  thesis:
+    mechanism: >-
+      谁跑赢:同样市值下名义股价高的股票 —— 多头腿是高价股,不是低价股。
+      恒等式 RP = LogFloatCap − LogFloatShares = log(未复权收盘)(E1 的 E-n 实测它与直接对未复权价取对数的差在
+      1e-6 量级,是两条 float32 量化路径的差,不是模型误差)。
+      机制:名义价格幻觉 —— 投资者把低价股当作「便宜」和「有上行空间」,高估它的上行偏度并为此多付钱,
+      于是低价股的预期收益被压低(Birru–Wang 2016;先验)。股价的名义水平在同等市值下只反映股数这一个会计选择,
+      按理不该定价,所以它是一个纯粹的行为偏误度量。
+      为什么它适合纯多头:做多端是高名义价格股,而幸存者偏差抬高的是低价一侧(库里 5207 只股票全部存续到末日、
+      没有退市股),所以本卡在样本内的证据偏保守 —— 真实效应应当比读数更强,而不是更弱。
+      名义价格的截面排序是慢变量(截面离散约 0.7 个对数单位,日变动约 0.03);但它不是「只在除权日跳变」—— 未复权价每天随收益变动,
+      而且 C03 的 B2 实测 log(Close) 这类价格水平残差化后换手 0.055(对 20 日反转取残差把价格的日变动带了回来),
+      所以本卡的成本优势有限(总领审定时改了原文「只在除权日跳变、换手最低」的说法)。
+      在市值被线性中性化之后,「同市值下名义价格高」与「同市值下股数少」是同一个量(log 价 = log 市值 − log 股数),
+      本轮没有能把名义价格幻觉与股本结构分开的第二种构造。
+    counterparty: >-
+      按「每股多少钱」而不是按市值判断贵贱的散户,以及偏好低价股彩票属性(小面值、高名义上行空间)的交易者:
+      他们为低价股的名义便宜支付溢价,把收益让给愿意买高价股的一方。
+    prediction: >-
+      方向 +1。最关键的一条是字段口径核对:v6 与 v1 的 score、方向、换手几乎相同(|Δscore| < 0.1)的概率 80% ——
+      v6 用分钟数据拼的未复权 VWAP(day_sum(Amt) / day_sum(Volume))做同一件事,不成立就说明 RP 不是未复权价,
+      H1 / H2 / H3 的恒等式也要一起重判。
+      v8(后复权价格水平)< v1 的概率 60%:C03 的直接检验里后复权价格水平中性化后是 −0.90,而未复权价从没测过。
+      v9(刻度)被与已知族的 ρ 拒,或低于 core 的概率 70%(C03 测过同一条,ρ已知 = +0.57,被拒过一次)。
+      至少一个 core ≥ 0.5 的概率 12%。
+      换手(总领审定时改):按 C03 的 B2,残差书换手的下限约 0.03,价格水平类残差化后约 0.05,所以预期 v1 在 0.03–0.06、v11 略低;
+      只有 v1 的换手 > 0.08 才说明读到的不是价格水平。
+      v4 / v5(股数本身,未经市值中性化的原始写法)被与已知族的 |ρ| ≥ 0.5 拒的概率 40%:股数少 ≈ 流通盘小 ≈ 成交额小,
+      而已知族做多的正是分钟成交额离散度低的股票;v1(同市值下的价格)不在这条线上。这条拒绝本身是读数。
+    fails_if: >-
+      (a) core 选 −1(做多低价股):与机制相反。而且做多低价股的多头腿同时吃幸存者偏差与粗刻度筛选两份红利,
+      所以反向过线按统一判据 (c) 只记为发现,绝不能说成「发现了名义价格幻觉的反面」。
+      (b) v9 ≥ core,或 core 被与已知族的 ρ 拒:读到的是价格刻度 / 一价日筛选(C01 的 day_distinct_ratio 一族),
+      不是名义价格幻觉。
+      (c) v6 与 v1 不一致(|Δscore| ≥ 0.1 或方向相反):字段口径有问题,RP 不是未复权价。
+      例外(总领审定时加):若 Volume 的单位在板块之间不同(手 / 股),v6 会带一个按板块的常数偏移(log 100),
+      那是分钟成交量的口径,不是市值字段的问题 —— 先查这一条,再判 RP。
+      (d) v2 或 v10 比 v1 掉一半以上:读到的是非线性市值或波动暴露。
+      (e) v4 / v5 远高于 v1(例如 v4 ≥ 0.5 而 v1 < 0.3):奖励对市值只做线性中性化,做功的是「股数 / 市值」排名的非线性部分,
+      那更像小盘或股本结构,机制陈述要改写。v4 / v5 ≈ v1 是恒等式的预期(总领审定时改:原文「v4 / v5 ≥ v1 即判否」
+      在市值中性化之后几乎必然触发,判不出任何东西)。
+      (f) 本卡只有一个构造:v2 / v3 / v10 是 v1 的中性化孪生,v11 是窗口孪生,v6 是字段核对。按统一判据 (a),
+      本卡即使过线也只能记「信号存在」,不能记「名义价格幻觉成立」(总领审定时加)。
+  novelty: >-
+      C01–C03 只有后复权价格,没有未复权价:C03 的直接检验测过 log(day_last(Close))(中性化后 −0.90),
+      E2 在 6940 行去重存档里检索「用 Amt / Volume 拼未复权价」只命中 1 条(score −0.68,而且是包在分钟形状里的
+      day_signed_ratio),没有任何一条是未复权价格水平。
+      这是五条里残差重合风险最高的一条,必须写明:C01 的 104 族(低后复权价 × 价格单位离散度)与 C01 的价格水平 head
+      做多的是低价端,而本卡做多高价端;未复权价与后复权价在长期上涨股上差别很大(复权因子累积),
+      但横截面上两者正相关,所以 v1 与 C01 价格水平族的残差 |ρ| 可能偏高,而且可能是高度负相关。
+      终局必须对 C01 的价格水平族与 104 族逐条量 |ρ|;≥ 0.7 就不算新,即使 score 过线。
+      还有一族方向相同、更危险(总领审定时加):C03 A 组的 602A 族
+      cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(pow_2(day_close(Open))))(方向 +1,C03 奖励下 score 0.61–1.49)
+      做多的就是后复权价最高的一端(该算子把最低的 10% 换成截面均值)。未复权价与后复权价同向,v1 与它的残差 |ρ| 可能接近 0.7。
+      v8(后复权价格水平)给的是这一族在 C04 奖励下的尺子:v8 ≥ 0.5 时,v1 的任何过线都要先对 602A 族量 |ρ| 再谈新。
+  variants:
+  - {id: v1,  role: core,     expr: "cross_mean(sub(LogFloatCap, LogFloatShares), 60)", predicts: "过线则 sign +1,换手 0.03–0.06(总领审定时改了原文「< 0.02」:C03 实测价格水平残差化后约 0.05)。60 日平均未复权价的对数。本卡的基准读数。"}
+  - {id: v2,  role: core,     expr: "cs_bucket_demean(cross_mean(sub(LogFloatCap, LogFloatShares), 60), LogFloatCap)", predicts: "与 v1 同号。规模十分位内去均值:名义价格与市值天然正相关,而市值只被线性中性化,这条拿掉非线性尾巴。它掉一半以上按 fails_if (d) 读。"}
+  - {id: v3,  role: core,     expr: "cs_regres(cross_mean(sub(LogFloatCap, LogFloatShares), 60), LimitWidth)", predicts: "与 v1 同号。对 LimitWidth 做截面回归去板块:双创板的发行价与股本结构和主板不同,这条排除「只是双创 vs 主板」。2020-08-24 之前创业板也是 10%,train 的大半段这条只把科创板(2019-07 起)分出来。"}
+  - {id: v4,  role: ablation, expr: "neg(LogFloatShares)", predicts: "≈ v1(总领审定时改了原文「< v1」)。只看流通股本的相反数:原始写法里它直接做多股数少的公司,混进大量小市值,所以有 40% 的概率被与已知族的 |ρ| ≥ 0.5 拒;但奖励把市值线性中性化之后,「同市值下股数少」就是「同市值下价格高」,残差书应与 v1 接近,差额只来自排名的非线性。只有远高于 v1 时按 fails_if (e) 读。"}
+  - {id: v5,  role: ablation, expr: "neg(sub(LogTotalCap, sub(LogFloatCap, LogFloatShares)))", predicts: "≈ v4,与 v4 同号。同 v4 但用总股本,不受解禁影响。v4 与 v5 的差额量出解禁(流通 / 总股本之差)对股数排序的影响;它们与 v1 的差额只来自排名的非线性(总领审定时改:市值中性化之后「股数少」与「同市值下价格高」分不开,原文「把两者分出来」做不到)。"}
+  - {id: v6,  role: ablation, expr: "cross_mean(log(div(day_sum(Amt), day_sum(Volume))), 60)", predicts: "与 v1 几乎相同(|Δscore| < 0.1,80%)。用分钟数据拼的未复权 VWAP 的对数(60 日均值):这不是独立机制,是字段口径的核对;若分钟 Volume 的单位在板块之间不同(手 / 股),它会带按板块的常数偏移、与 v1 分开,那要先当成交量口径查,不当 RP 的问题(fails_if (c) 的例外)。边界:全天停牌时 day_sum(Volume) = 0,若 Amt 同时为 0 则 div(0,0) = NaN、被 nan 归约跳过(安全);只有「有金额无成交量」才会产生 inf 并排到最前,这在经济上不可能发生。"}
+  - {id: v7,  role: ablation, expr: "sub(cs_rank(cross_mean(sub(LogFloatCap, LogFloatShares), 60)), less(ListAge, 250))", predicts: "≈ v1 或略高。去掉新股高价:上市不足 250 个交易日的新股在排名上被减 1(cs_rank 在 [0,1],所以这是硬压到底部)。新股发行价高、上市初期价格高,是 v1 多头腿里最可疑的一块;明显高于 v1 说明 v1 的分数里有新股成分。"}
+  - {id: v10, role: ablation, expr: "cs_bucket_demean(cross_mean(sub(LogFloatCap, LogFloatShares), 60), cross_mean(day_std(Ret), 20))", predicts: "与 v1 同号。波动十分位内去均值:低价股波动高,这条排除「只是低波动(做多高价股 = 做多低波动)」的反向解释。"}
+  - {id: v11, role: ablation, expr: "cross_mean(sub(LogFloatCap, LogFloatShares), 241)", predicts: "与 v1 同号,换手更低(只差窗口,算同一个构造)。一年均值的名义价格:对除权日的跳变更不敏感。若它明显优于 v1,说明做功的是更稳定的股票属性而不是近期的价格水平。"}
+  - {id: v8,  role: control,  expr: "cross_mean(log(day_last(Close)), 60)", predicts: "< v1(60%)。后复权价格水平 —— C03 测过,中性化后是负的,也是 C01 的 head 族。它给 core 一把可比的尺子:v8 ≈ v1 说明读到的是旧的价格水平族,不是未复权价。"}
+  - {id: v9,  role: control,  expr: "cross_mean(day_zero_ratio(Ret), 30)", predicts: "被与已知族的 ρ 拒,或低于 core(70%)。零收益分钟占比(30 日均值):价格刻度 / 一价日的代理。低价股的相对刻度粗,这是本卡最危险的假象(C01 的 day_distinct_ratio 一族正是靠它)。C03 的直接检验里同一条 ρ已知 = +0.57,已被拒过一次。按 fails_if (b) 读。"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+- id: H5_frog_in_the_pan
+  hypothesis: >-
+    过去一年(跳过最近 15 个交易日)上涨、而且这段上涨由许多个小幅上涨日连续累积起来的股票随后跑赢;
+    连续到达的小额信息不触发注意力,被逐步而不完全地定价。
+  thesis:
+    mechanism: >-
+      谁跑赢:过去一年累计上涨(跳过最近 15 个交易日以避开短期反转)、而且这段上涨是由许多个小幅上涨日连续累积、
+      不是由少数几个大跳变造成的股票 —— 多头腿是「连续慢涨」的那一端。
+      机制:注意力有限 —— 单日幅度小的消息不触发投资者的关注与重新定价,信息被逐步而不完全地吸收,
+      动量因此在「连续型」股票上更强、更持久(Da–Gurun–Warachka 2014 frog-in-the-pan;
+      Hong–Stein 1999 的渐进信息扩散;先验)。反应不足型异象的利润在多头腿(上涨组继续涨),
+      这正是本轮纯多头口径需要的;长期反转那一族的利润在空头腿,所以不写。
+      PN 用 sign(日收益) 的一年均值度量上涨日占比:E1 Q2 实测 sign 返回 float32、NaN 输入输出 0,
+      可以安全喂给 cross_mean;is_gt0 / is_lt0 返回 int32,喂给 cross_* 会在填 NaN 时直接报错,所以不用它们。
+      但等权的 PN 只取 k/241 这类离散值,单独排序过不了离散度门槛(截面上最多几百个不同值);v1–v3 里它与动量排名相加,不受影响,
+      单独出现的 v5 改用 cross_decay_linear(总领审定时改;v8 换成了波动调整动量)。
+      它是五条里优先级最低的一条:不用新字段,新颖性只来自 GP 没搜过的长周期结构。
+    counterparty: >-
+      只对大幅、显著的价格与消息冲击作出反应的注意力有限的投资者:他们在连续小幅上涨的股票上定价不足,
+      把收益让给愿意持有「没有故事」的慢牛股的一方;以及把连续小涨误读为「已经涨完」而提前卖出的交易者。
+    prediction: >-
+      方向 +1。core 选 +1 的概率 55%;v4 < v1 的概率 60%(连续性要加分,否则这只是一年动量);
+      至少一个 core ≥ 0.5 的概率 12% —— 五条里最低。
+      覆盖率:cross_sum 用 nan 归约、窗口不满也出数(E1 Q1 实测),所以 PRET 与 PN 的覆盖率满。
+      但 E1 第二部分证明 cross_sum(ts_delta(·,1), 241) 会漏掉停牌期间的跳变(停牌边界的单日差分两侧有 NaN、
+      被 nansum 跳过),所以 PRET 对长期停牌股低估累计收益;v7 用两端水平相减改写,是不丢停牌跳变的对照,
+      v4 与 v7 的差额量出这个漏项有多大。
+      v8(波动调整的一年动量)< v1 的概率 60%:若反过来,「连续性」的加分其实是波动缩放(平稳上涨 = 低波动的赢家),不是有限注意力(总领审定时把原 v8 换掉,原写法过不了离散度门槛)。
+    fails_if: >-
+      (a) core 选 −1:与反应不足相反(那是长期反转,利润在空头腿),按统一判据 (c) 本假设即否。
+      (b) v4(纯动量)≥ v1:连续性没有加分,这只是一年动量,不是 frog-in-the-pan。
+      (c) v6(60 日反转)≥ v1 的 70%:读到的是反转。
+      (d) v8(波动调整动量)≥ v1:连续性项的加分可以由「收益 / 波动」解释,frog-in-the-pan 没有增量。
+      (e) v7 与 v4 差别很大(|Δscore| ≥ 0.3):PRET 的停牌漏项是主导,所有读数要按 v7 重算,
+      而且 W2 的种子要改用水平差版。
+  novelty: >-
+      不用新字段,新颖性来自结构。E2 对 C01–C03 的 6940 行去重存档做过正则检索:长窗口价格路径
+      (20–241 日的位移 / 差分,以及 cross_sum(ts_delta(·)) 这种累计)只命中 2 条,score ≥ 0.5 的只有 1 条
+      (C02 直接检验里的一条 20 日反转,score 0.65、方向 −1、ρ已知 +0.09);跨日涨跌计数(sign / is_gt0 / is_lt0)
+      只命中 1 条,score −0.83。所以这个空间在 C01–C03 基本是空的,|ρ| 预期低。
+      终局要核的残差重合风险两处:C01 的 ts_pearson 跨股票同步性族(那一族也吃趋势,score 1.4–2.0),
+      以及任何以 day_sum(Ret) 为叶子的 head(C02 的 ts_pearson(day_sum(Ret),30) 一族 score 1.75)——
+      后者是分钟收益的日度和在时间上的自相似,与一年累计收益不是同一个量,但都带趋势,必须逐条量 |ρ|。
+  variants:
+  - {id: v1,  role: core,     expr: "add(cs_rank(sub(cross_sum(ts_delta(log(day_last(Close)), 1), 241), cross_sum(ts_delta(log(day_last(Close)), 1), 15))), cs_rank(cross_mean(sign(ts_delta(log(day_last(Close)), 1)), 241)))", predicts: "过线则 sign +1。一年动量(跳过最近 15 天)的排名 + 一年上涨日占比的排名。本卡的基准读数;两项都用 cs_rank 相加,所以量纲不混。"}
+  - {id: v2,  role: core,     expr: "add(cs_rank(sub(cross_sum(ts_delta(log(day_last(Close)), 1), 241), cross_sum(ts_delta(log(day_last(Close)), 1), 15))), cs_rank(mul(sign(sub(cross_sum(ts_delta(log(day_last(Close)), 1), 241), cross_sum(ts_delta(log(day_last(Close)), 1), 15))), cross_mean(sign(ts_delta(log(day_last(Close)), 1)), 241))))", predicts: "与 v1 同号。原文的 ID 写法:连续性项带动量的符号,所以下跌股的连续性反向计分(连续小跌也被低估,但那一端在空头腿,本轮拿不到)。深度约 9,偏深,W2 时按分数再定要不要当种子。"}
+  - {id: v3,  role: core,     expr: "add(cs_rank(sub(cross_sum(ts_delta(log(day_last(Close)), 1), 60), cross_sum(ts_delta(log(day_last(Close)), 1), 15))), cs_rank(cross_mean(sign(ts_delta(log(day_last(Close)), 1)), 60)))", predicts: "与 v1 同号(只差窗口,算同一个构造)。60 日版:检验 frog-in-the-pan 的时间尺度是一年还是一季。v3 > v1 说明它是季度现象,W2 的种子要相应改窗口。"}
+  - {id: v4,  role: ablation, expr: "sub(cross_sum(ts_delta(log(day_last(Close)), 1), 241), cross_sum(ts_delta(log(day_last(Close)), 1), 15))", predicts: "< v1(60%)。纯动量(一年累计收益,跳过最近 15 天),没有连续性项。v4 ≥ v1 按 fails_if (b) 读。"}
+  - {id: v5,  role: ablation, expr: "cross_decay_linear(sign(ts_delta(log(day_last(Close)), 1)), 241)", predicts: "单独很弱,|score| < 0.3。纯连续性(一年上涨日占比,线性加权),没有动量项。总领审定时把 cross_mean 换成 cross_decay_linear:等权的 sign 均值只取 k/241 这类离散值,截面上最多几百个不同值、离散度远低于 0.5,原写法必然被门槛判废;线性加权(权重 1..241)的取值近乎连续,含义不变,只是近期权重更大。连续性是动量的调节变量,不是独立信号。它若单独过线,机制要改写成「上涨日频率」那一类。"}
+  - {id: v7,  role: ablation, expr: "sub(cross_delay(log(day_last(Close)), 15), cross_mean(log(day_last(Close)), 241))", predicts: "与 v4 同号、|Δscore| < 0.3。水平差版的动量:15 日前的后复权价对数 − 一年均价对数。它与 v4 测同一个经济量,但用两端水平相减,不丢停牌期间的跳变(E1 第二部分:水平差型算子捕捉到停牌期的事件,累计求和型永久漏掉),而且覆盖率满。按 fails_if (e) 读。"}
+  - {id: v6,  role: control,  expr: "neg(log(div(day_last(Close), cross_delay(day_last(Close), 60))))", predicts: "预期弱于 core。60 日反转:奖励只控制 20 日反转,所以中期反转是本卡最危险的代理。按 fails_if (c) 读。"}
+  - {id: v8,  role: control,  expr: "div(sub(cross_sum(ts_delta(log(day_last(Close)), 1), 241), cross_sum(ts_delta(log(day_last(Close)), 1), 15)), add(cross_stddev(ts_delta(log(day_last(Close)), 1), 241), 0.002))", predicts: "< v1(60%)。波动调整的一年动量:PRET ÷(一年日收益标准差 + 0.002)。frog-in-the-pan 最近的代理是「平稳上涨 = 低波动的赢家」:许多个小幅上涨日累积出的涨幅,天然就是收益 / 波动高的那一端,而奖励只线性控制 20 日的分钟波动,不控制一年的日收益波动。v8 ≥ v1 按 fails_if (d) 读。分母加 0.002(日波动通常 0.02–0.04)防止新股前几天标准差为 0 时出 inf。总领审定时替换:原 v8 是一年内「当日有价格变动」的天数占比,模拟实测(4000 只、tick 0.01)等权写法离散度 0.006、线性加权 0.24,两种写法都过不了 0.5 的门槛(大多数股票一年只有几天不动,取值高度并列),拿不到读数;它要排除的「每天都动」假象也弱于波动缩放这一条。"}
