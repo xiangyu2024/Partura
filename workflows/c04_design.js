@@ -46,7 +46,7 @@ const ENV = `
 ## 环境规则(两组相同)
 
 奖励 \`long_neutral\`(信号对流动性 / 波动 / 20 日反转 / 已知族 / 市值做截面中性化后的残差建十分位纯多头书,扣 15bp;score = train 与 valid 较差的;**score ≥ 0.5 为发现**);**与已知族 \`cross_mean(day_std(Amt), 30)\` 的 |ρ| ≥ 0.5 → 判不合格**;
-**禁 \`ts_spearman\` 与全部 \`nt_*\`**。可用 6 个日频字段叶子(LogFloatCap、LogTotalCap、LogFloatShares、LimitWidth、BoardCode、ListAge;只能进 cs_/ts_/cross_/逐元素算子)。**只做多头腿**:种子要让「跑赢」的股票排到最前,而不只是把跑输的排到最后。样本外只认与 C01–C03 heads |ρ| < 0.7 的「新」东西(见 ${D}/prior_c04.md)。
+**禁 \`ts_spearman\` 与全部 \`nt_*\`**。可用 6 个日频字段叶子(LogFloatCap、LogTotalCap、LogFloatShares、LimitWidth、BoardCode、ListAge(数据开始前已上市的记 10000 + 天数);只能进 cs_/ts_/cross_/逐元素算子)。**只做多头腿**:种子要让「跑赢」的股票排到最前,而不只是把跑输的排到最后。样本外只认与 C01–C03 heads |ρ| < 0.7 的「新」东西(见 ${D}/prior_c04.md)。
 
 ## 指引文件的格式(${ROOT}/${GUIDE})
 
