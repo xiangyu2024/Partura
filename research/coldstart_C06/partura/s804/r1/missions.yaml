@@ -1,0 +1,89 @@
+seed: 804
+round: 1
+slots:
+  - type: E
+    core: 'ts_decay_linear(pow_3(day_mean(Open)), 20)'
+    hypothesis: >-
+      【核心是什么、为什么是 alpha】核心 ts_decay_linear(pow_3(day_mean(Open)), 20) 是名义股价水平(pow_3 单调、20 日线性衰减只做平滑)。
+      定位输出的拆解说明它是本批 4 个 head 的 alpha 来源:把 cs_first_low20(y, 核心) 整段跳掉,head +0.76 掉到 -1.05、head +0.65 掉到 -2.78,
+      而被筛选的 y 单独都是负的(-1.06、-2.78);核心单独、高价在长端是 -1.15。也就是在 LogFloatCap 线性中性化之后,低名义股价有正溢价,
+      且这个暴露是指示函数型的(线性市值控制拿不掉)。
+      【已见过的外围】只有一种:cs_first_low20(y, 核心) 把最便宜 20% 硬顶到长端,y 是流通股本、以价格为单位的日内离散度 day_wstd 或 |day_corr|,
+      外加 1e-7 量级的 ts_var(day_gini(High), ·) 尾巴,以及 head +0.91 的符号翻转(把最便宜 20% 压下去,+0.91 反而高于顶上去的 +0.78)。
+      后者说明:最便宜的那一端里混着该避开的票。
+      【本位要试的外围 = 彩票型需求筛子】Kumar(2009)把低价 + 高特质偏度定义为彩票股并显示散户集中持有;Birru & Wang(2016)显示投资者高估低价股的上行空间
+      (把低价当成高偏度);Bali-Cakici-Whitelaw(2011)与 Amaya 等(2015)显示高 MAX / 高已实现偏度的股票随后收益低。
+      所以低价溢价的多头腿被便宜段里的彩票股拖累:同样便宜,收益分布右偏、常有极端上冲的那些被高估。
+      【算子怎么实现】(1)连续的便宜度 neg(核心),再用排除型筛 cs_last_high20 / cs_last_high10 把彩票度最高的 20% / 10% 压到底部、永远进不了多头书;
+      彩票度一律用尺度无关的量:分钟收益已实现偏度 ts_mean(day_skew(Ret), 20)、右尾形状 ts_mean(day_es_ratio_hi(Ret), 20)、
+      以自身波动标准化的 MAX 即 (20 日最大日收益 - 20 日均值) / 20 日标准差、日收益 20 日偏度 ts_skew;
+      (2)价格十分位内的条件排序 cs_bucket_rank / cs_bucket_zscore(只和同价位的同伴比偏度;Green & Hwang(2009)显示价格档位本身是投资者的分类标签),
+      再与便宜度的截面秩相加或相乘;(3)两道筛:先去彩票,再用 cs_last_low10 / cs_last_low05 去掉价格最低的 5%-10%(面值退市与壳投机集中的那一端),
+      对应 head +0.91 的证据。
+      【和已有外围的不同】已有外围全是单个 cs_first_low20、y 都是规模或价格单位的量;没有一个用到收益分布的形状,没有排除型筛(cs_last_*)、
+      没有分桶条件排序、没有两道筛或交互。彩票度量全部尺度无关(偏度、尾部形状、波动标准化的 MAX),不是波动或市值的单调重写,不碰陷阱 1、3;
+      核心是真实的个股价格,不是截面常数,不碰陷阱 2。
+      【为什么样本外还会在】彩票偏好是散户主导市场里有跨国、跨年代记录的行为偏差;A 股散户成交占比高、涨跌停与 T+1 制度在 2023-08 之后没有变。
+      这个筛子去掉的是便宜段里最投机的尾部,即使低价溢价本身随风格减弱,剔除彩票股仍是相对改进,而不依赖某一段小盘行情。
+    literature:
+      - {title: 'Who Gambles in the Stock Market?', authors: 'Alok Kumar', year: '2009-08', url: 'https://doi.org/10.1111/j.1540-6261.2009.01483.x', treatment: '彩票股 = 低价 + 高特质偏度;把便宜度与彩票特征拆开,只买便宜而非彩票的那部分'}
+      - {title: 'Nominal Price Illusion', authors: 'Justin Birru, Baolian Wang', year: '2016', url: 'https://www.ivey.uwo.ca/media/3777565/birru.pdf', treatment: '投资者高估低价股的上行偏度;低价段里按实际偏度筛,去掉被高估的部分'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011-02', url: 'https://doi.org/10.1016/j.jfineco.2010.08.014', treatment: '过去一个月最大日收益 MAX;这里用自身波动标准化成尺度无关的版本做排除筛'}
+      - {title: 'Does Realized Skewness Predict the Cross-Section of Equity Returns?', authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez', year: '2015-10', url: 'https://doi.org/10.1016/j.jfineco.2015.02.009', treatment: '用日内高频收益算已实现偏度,高偏度随后收益低;对应 day_skew(Ret) 的 20 日均值'}
+      - {title: 'Price-based return comovement', authors: 'T. Clifton Green, Byoung-Hyoun Hwang', year: '2009', url: 'https://ideas.repec.org/a/eee/jfinec/v93y2009i1p37-50.html', treatment: '价格档位是投资者的分类标签;在价格十分位内做条件排序(cs_bucket_rank / cs_bucket_zscore)'}
+    seeds:
+      - 'cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20))'
+      - 'cs_last_high10(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20))'
+      - 'cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_es_ratio_hi(Ret), 20))'
+      - 'cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), div(sub(ts_max(div(day_last(Close), ts_delay(day_last(Close), 1)), 20), ts_mean(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)), ts_std(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)))'
+      - 'cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_skew(div(day_last(Close), ts_delay(day_last(Close), 1)), 20))'
+      - 'add(cs_rank(neg(ts_decay_linear(pow_3(day_mean(Open)), 20))), cs_bucket_rank(neg(ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20)))'
+      - 'add(cs_rank(neg(ts_decay_linear(pow_3(day_mean(Open)), 20))), cs_rank(cs_bucket_zscore(neg(ts_mean(day_skew(Ret), 10)), ts_decay_linear(pow_3(day_mean(Open)), 20))))'
+      - 'mul(cs_rank(neg(ts_decay_linear(pow_3(day_mean(Open)), 20))), cs_rank(neg(ts_mean(day_skew(Ret), 20))))'
+      - 'cs_first_low40(neg(ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))'
+      - 'cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))'
+      - 'cs_last_low05(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_es_ratio_hi(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))'
+      - 'cs_last_high20(cs_first_low40(neg(ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_es_ratio_hi(Ret), 20))'
+      - 'cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), div(sub(ts_max(div(day_last(Close), ts_delay(day_last(Close), 1)), 20), ts_mean(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)), ts_std(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)))'
+  - type: N
+    hypothesis: >-
+      【机制】A 股开盘集合竞价以散户为主,注意力驱动的买单集中在开盘:Berkman 等(2012)显示受关注的股票隔夜上涨、随后盘中回吐;
+      Aboody 等(2018)显示隔夜收益是个股层面的散户情绪代理,隔夜收益高的股票随后跑输;Lou-Polk-Skouras(2019)显示收益在隔夜与盘中两段之间拉锯,
+      隔夜段的持续溢价对应之后的反向。A 股的 T+1 让开盘买入的人当天不能卖出,开盘价里的情绪溢价不能当日被套利掉,会在之后几天到几周里回吐。
+      所以过去一段时间持续高开(累计隔夜收益高)的股票随后差,持续低开的随后好;纯多头书买后者。
+      【算子怎么实现】隔夜对数收益 ON = log(div(day_first(Open), ts_delay(day_last(Close), 1)))(当日第一分钟开盘价 / 上一交易日最后一分钟收盘价)。
+      种子取负后的 10-40 日均值、和、中位数、线性衰减;尺度无关的版本:ON 均值除以 ON 标准差、高开天数占比 ts_mean(is_gt0(ON), 20)、只累计高开部分 mul(ON, is_gt0(ON));
+      用集合竞价热度加权:ON 乘以第一分钟成交量相对当日均量 div(day_first(Volume), day_mean(Volume));
+      以及相对自身基线的异常隔夜情绪:sub(ts_mean(ON, 50), ts_mean(ON, 5)) 与 ts_rank(ts_mean(ON, 5), 50)。
+      【和库里已有的不同】5 个 head 都在价格水平 / 流通股本这一根轴上(外加一个日内成交质心),没有一个用到隔夜跳空;
+      20 日反转控制是收盘到收盘的总收益,隔夜段只占日收益方差的一小部分,且与当日盘中段负相关,所以 ON 的累计与反转控制只部分相关;
+      种子刻意不用盘中收益本身(它和 20 日总收益高度相关),也不含任何波动或市值的凸变换,预期与所有 head 的 |rho| < 0.3。
+      【为什么样本外还会在】它依赖两条制度事实:散户在开盘集中下单、T+1;2023-08 之后两者都没变。情绪溢价的回吐是行为偏差,
+      在美股有多个年代的记录,不依赖本批 head 可能吃到的那段小盘行情(本批 head 的 valid 夏普是 train 的 2-3 倍)。
+    inspired_by: '本批唯一不在价格 / 市值轴上的信息是 head +0.58 的主项 -day_centroid(sqrt(Volume)),即开盘段的交易行为带信息;这里换成文献依据更强的开盘段读数(隔夜价格跳空,而不是成交量的时间位置)。文献:Berkman 等 2012、Aboody 等 2018、Lou-Polk-Skouras 2019。'
+    literature:
+      - {title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the Opening', authors: 'Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang', year: '2012-08', url: 'https://doi.org/10.1017/S0022109012000270', treatment: '受关注股票隔夜上涨、盘中回吐;用累计隔夜收益度量开盘情绪溢价'}
+      - {title: 'Overnight Returns and Firm-Specific Investor Sentiment', authors: 'David Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman', year: '2018-04', url: 'https://doi.org/10.1017/S0022109017000989', treatment: '隔夜收益是个股散户情绪代理,高隔夜收益随后跑输;取负的隔夜收益均值与相对自身基线的异常值'}
+      - {title: 'A Tug of War: Overnight versus Intraday Expected Returns', authors: 'Dong Lou, Christopher Polk, Spyros Skouras', year: '2019-10', url: 'https://doi.org/10.1016/j.jfineco.2019.03.011', treatment: '收益拆成隔夜与盘中两段;只用隔夜段,避开与总收益(反转控制)高度相关的盘中段'}
+      - {title: 'Intraday Patterns in the Cross-Section of Stock Returns', authors: 'Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka', year: '2010-08', url: 'https://arxiv.org/pdf/1005.3535', treatment: '开盘时段的可预测性最强;用开盘第一分钟(含集合竞价)成交量相对全天均量加权隔夜收益'}
+    seeds:
+      - 'neg(ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20))'
+      - 'neg(ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 10))'
+      - 'neg(ts_sum(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 40))'
+      - 'neg(ts_med(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20))'
+      - 'neg(ts_decay_linear(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20))'
+      - 'neg(div(ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), ts_std(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)))'
+      - 'neg(ts_mean(is_gt0(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20))'
+      - 'neg(ts_mean(mul(log(div(day_first(Open), ts_delay(day_last(Close), 1))), is_gt0(log(div(day_first(Open), ts_delay(day_last(Close), 1))))), 20))'
+      - 'neg(ts_mean(mul(log(div(day_first(Open), ts_delay(day_last(Close), 1))), div(day_first(Volume), day_mean(Volume))), 20))'
+      - 'sub(ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 50), ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 5))'
+      - 'neg(ts_rank(ts_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 5), 50))'
+      - 'neg(ts_mean(mul(log(div(day_first(Open), ts_delay(day_last(Close), 1))), div(day_first(Volume), day_mean(Volume))), 10))'
+R:
+  - head: 'sub(cs_first_low20(abs_(day_wstd(Vwap, High)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_var(day_gini(High), 10))'
+    why: '拆解里跳掉 ts_decay_linear 后 +0.755 -> +0.88(增益 +0.12,已过替换门槛),窗口 20->10 也更好,说明价格的 20 日平滑有害;abs_ 作用在非负的 day_wstd 上是恒等(必要性 +0.00);尾巴 ts_var(day_gini(High), 10) 量级约 1e-7,在另外两个 head 里跳掉必要性都是 -0.00;pow_3 只是单调变换,cs_first_low20 只看 x 的秩。变体逐步删掉这些部件。'
+    variants:
+      - 'sub(cs_first_low20(abs_(day_wstd(Vwap, High)), pow_3(day_mean(Open))), ts_var(day_gini(High), 10))'
+      - 'cs_first_low20(abs_(day_wstd(Vwap, High)), pow_3(day_mean(Open)))'
+      - 'cs_first_low20(day_wstd(Vwap, High), day_mean(Open))'
+      - 'cs_first_low20(day_wstd(Vwap, High), ts_mean(day_mean(Open), 5))'

@@ -1,0 +1,131 @@
+seed: 805
+round: 1
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: 核心 day_centroid(Volume) = 当天成交量沿分钟轴的重心(0 = 全在开盘,1 = 全在收盘),描述成交发生在日内什么时点,这是
+    std / kurt / gini 等无序统计量全部丢掉的一维;它有界、无量纲、截面上高度持续,更像股票属性而不是信号。快照里含它的 36 个候选,看得见的外围几乎全是
+    pow_1_5 / pow_2_5 及其嵌套:在 [0,1] 的非负输入上它们严格单增,而奖励先对信号逐日取秩再中性化,所以这些外围交易的是和裸核同一本书(含核心候选平均
+    score 约 0.00,发现门槛 0.5)。一个没被定价的静态属性分数就该是 0,所以如果这一维里有东西,它在偏离与条件化里,不在水平里。本 E 位的外围只用打破秩等价的三类处理,每个种子的外围至少两种算子。(A)
+    自身历史偏离:cross_zscore / cross_madz(稳健版)/ cross_rank / 短长 EMA 之差,把静态水平变成事件,即这只股票本周的成交比它自己过去
+    20-120 天异常地偏晚或偏早。机制:A 股机构比散户更集中在开盘与收盘附近交易、全天价格跟随机构流(Qiu-Huang-Jiang 2023);收盘段成交与被动/机构资金及收盘价格压力相关(Bogousslavsky-Muravyev);成交活动相对自身近几周的异常变化携带关注度与信息,而水平不携带(Gervais-Kaniel-Mingelgrin
+    2001 用的正是偏离而非水平)。偏离写法还顺带消掉上交所 2018-08-20 引入收盘集合竞价造成的重心水平跳变(Han 等 2022),窗口过后自身均值已更新,train
+    内部的制度切换不会被当成信号。(B) 非线性条件化:cs_bucket_rank / cs_bucket_zscore 在同一市值十分位、同一流动性十分位、同一波动十分位内比较时点,cs_last_high10
+    把报价长期冻结(停牌、锁板)的 10% 名字压到底。奖励对市值、流动性的中性化是线性的,而尾盘成交占比与被动持股、指数成分的关系是阶梯式非线性的(成分股门槛),分桶把这部分代理整个去掉,留下同类股票之间的时点差;剔除冻结报价是为了不让涨停锁板(成交全在早盘、重心机械偏小)冒充信号。(C)
+    交互:时点偏离乘当日净买压 day_signed_ratio(Ret, Amt)、时点与净买压的 20 日滚动相关(晚盘放量的日子是在买还是在卖)、时点偏离乘异常成交量的截面秩(放量且放在尾盘)、时点偏离乘最后一分钟收益(收盘集合竞价的价格压力随后回吐),以及按全市场成交额状态翻转(Admati-Pfleiderer
+    1988:知情与流动性交易的聚集随市场状态而变)。与已有外围的区别:已有的是秩保持的单调变换,信息量为零;这里每一类都改变截面排序,且三类各自对应一个可证伪的判断(偏离有效
+    = 时点是事件;分桶后才有效 = 信号原被规模/流动性代理压住;交互有效 = 方向信息在尾盘)。为什么样本外还会在:驱动力是制度与结构性的,收盘集合竞价、指数与
+    ETF 以收盘价为基准、机构与散户的日内时点分工,2023-08 之后都没有改变;偏离类与分桶类只用相对量,不依赖某段时期的水平;所有种子用 5-20 日均值或
+    EMA 平滑以压低换手,适配扣 15bp 的纯多头十分位书。
+  literature:
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: 2001-06
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i3p877-919.html
+    treatment: 成交活动取相对自身近几周历史的偏离而非水平:A 类外围 cross_zscore / cross_madz / cross_rank;以及用异常成交量加权
+  - title: Should We Use Closing Prices? Institutional Price Pressure at the Close
+    authors: Vincent Bogousslavsky, Dmitriy Muravyev
+    year: '2019'
+    url: https://ssrn.com/abstract=3485840
+    treatment: 收盘段成交与被动/ETF 持股的非线性关联:B 类按市值、流动性分桶去代理;收盘价格压力随后回吐:时点偏离乘最后一分钟收益
+  - title: When do they trade? Heterogeneous investors in China
+    authors: Jiayan Qiu, Wei Huang, Ying Jiang
+    year: 2023-06
+    url: https://doi.org/10.1016/j.frl.2023.103729
+    treatment: A 股机构在开盘与收盘更活跃且价格跟机构走:日内时点部分是投资者结构的代理,分桶去结构、偏离取事件
+  - title: 'Reexamining the impact of closing call auction on market quality: A natural
+      experiment from the Shanghai stock exchange'
+    authors: Qian Han, Chengzhi Zhao, Jing Chen, Qian Guo
+    year: 2022-09
+    url: https://doi.org/10.1016/j.pacfin.2022.101821
+    treatment: 上交所 2018-08-20 引入收盘集合竞价,成交向竞价前转移:重心水平有制度跳变,用自身历史偏离而不是水平
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://www.gsb.stanford.edu/faculty-research/publications/theory-intraday-patterns-volume-price-variability
+    treatment: 知情与流动性交易的时点聚集随市场状态而变:cs_flip_by_state 按全市场成交额状态条件化
+  seeds:
+  - cross_mean(cross_zscore(day_centroid(Volume), 20), 5)
+  - cross_ema(cross_madz(day_centroid(Volume), 60), 5)
+  - sub(cross_ema(day_centroid(Volume), 3), cross_ema(day_centroid(Volume), 40))
+  - cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_zscore(cross_mean(cross_zscore(day_centroid(Volume), 20), 5), LogFloatCap)
+  - cs_bucket_rank(cross_zscore(cross_ema(day_centroid(Volume), 5), 60), cross_mean(day_std(Ret),
+    20))
+  - cross_corr(day_centroid(Volume), day_signed_ratio(Ret, Amt), 20)
+  - cross_mean(mul(cross_zscore(day_centroid(Volume), 20), day_signed_ratio(Ret, Amt)),
+    10)
+  - cross_mean(mul(cross_zscore(day_centroid(Volume), 20), cs_rank(cross_zscore(day_sum(Volume),
+    20))), 5)
+  - cs_flip_by_state(cross_ema(day_centroid(Volume), 10), day_sum(Amt))
+  - cross_mean(mul(cross_zscore(day_centroid(Volume), 20), day_last(Ret)), 5)
+- type: N
+  hypothesis: 定号成交的日内时点不对称:尾盘在买、早盘在卖(或反过来)。机制:A 股机构比散户更集中在开盘与收盘附近交易,且全天价格跟随机构而非散户(Qiu-Huang-Jiang
+    2023-06);临近收盘的成交含有迟到的知情交易(Gao-Han-Li-Zhou 2018 对日内动量的解释);用分钟收益的符号给成交量定号是买卖方向的标准日频代理(Chordia-Roll-Subrahmanyam
+    2002 的订单失衡,Pastor-Stambaugh 2003 的收益定号成交量)。由此:一只股票上涨分钟的成交重心若持续晚于下跌分钟的成交重心,说明尾盘那部分更知情的资金在净买、早盘(隔夜消息驱动、散户为主)在净卖,尾盘资金的信息尚未完全进入价格,随后数日到数周有漂移;反之是尾盘派发。另有一条推断(非文献证实)的
+    A 股增强:T+1 下当天买入不能当天卖,对未来几日有把握的买方在尾盘建仓所承担的日内风险最小。算子实现,四种独立写法互相校验:(1) sub(day_centroid(mul(Volume,
+    is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret)))) = 上涨分钟成交重心减下跌分钟成交重心,在 [-1,1];其中一版再乘
+    is_gt0(in_index(Volume)) 去掉第 0 格开盘集合竞价,因为那一格的收益符号是隔夜跳空,不是日内时点;另一版用 Amt。(2) day_signed_ratio(Ret,
+    mul(Volume, in_index(Volume))) 减 day_signed_ratio(Ret, Volume):按时刻加权的净买压减不加权的净买压;以及按时刻加权减按
+    1-时刻加权。(3) 最后 60 分钟(in_index > 0.75)的净买压减全天净买压。(4) day_corr(in_index(Volume),
+    mul(Volume, sign(Ret))):定号成交量随时刻上升的趋势。每个日值用 10-20 日均值或 EMA 聚合成持续的吸筹/派发,并压低换手;另有几版做自身
+    60 日偏离、市值分桶、波动分桶、剔除冻结报价、乘异常成交量截面秩(Gervais 等 2001:放量日信息更多)。与已有的东西不同:快照里没有 head;快照唯一富集的结构
+    day_centroid(Volume) 是不定号的成交时点(什么时候交易),这里是定号成交的时点差(什么时候买、什么时候卖);不定号重心是上涨与下跌两个重心的成交加权平均,本位取的是两者之差,构造上与它近似正交。它也不是
+    20 日反转的改写:只用分钟收益的符号,不用幅度,且是晚减早的差分,当天整体涨跌在差分里大部分相消。涨停锁板的分钟收益为 0,既不进上涨也不进下跌,锁板日的机械偏差因此大部分自动去掉;长期冻结的名字另由
+    cs_last_high10 剔除。为什么样本外还会在:T+1、收盘集合竞价、机构与散户的日内分工都是制度与结构,2023-08 之后没有改变;信号全是相对量(差分、比值、自身偏离),不依赖某段时期的水平。
+  inspired_by: 第 1 批:唯一不崩塌的结构是 day_centroid(Volume)(含它的 36 个候选平均 score 约 0,不含的约 -2),说明日内时点这一维截面结构稳定,但不定号的水平不赚钱;把时点定号(买的时点对卖的时点)是把这一维变成方向信息最直接的一步。文献:Qiu-Huang-Jiang
+    2023-06(机构在开收盘交易、价格跟机构),Gao-Han-Li-Zhou 2018(尾盘迟到的知情交易)。
+  literature:
+  - title: When do they trade? Heterogeneous investors in China
+    authors: Jiayan Qiu, Wei Huang, Ying Jiang
+    year: 2023-06
+    url: https://doi.org/10.1016/j.frl.2023.103729
+    treatment: 机构集中在开盘与收盘交易、价格跟机构走:尾盘成交的方向更接近知情方向
+  - title: Market intraday momentum
+    authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+    year: 2018-08
+    url: https://doi.org/10.1016/j.jfineco.2018.05.009
+    treatment: 临近收盘的迟到知情交易:比较尾盘段与全天 / 早盘段的方向
+  - title: Order imbalance, liquidity, and market returns
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: 2002-07
+    url: https://ideas.repec.org/a/eee/jfinec/v65y2002i1p111-130.html
+    treatment: 用定号成交(订单失衡)而非总成交度量交易活动:按分钟收益符号拆分上涨/下跌成交
+  - title: Liquidity Risk and Expected Stock Returns
+    authors: Lubos Pastor, Robert F. Stambaugh
+    year: '2003'
+    url: https://doi.org/10.1086/374184
+    treatment: 收益定号成交量作为没有逐笔方向数据时的买卖方向代理
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: 2001-06
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i3p877-919.html
+    treatment: 相对自身历史的异常成交携带信息:时点差乘异常成交量截面秩,以及时点差的自身 60 日偏离
+  seeds:
+  - cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), 10)
+  - cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), 20)
+  - cross_ema(sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(mul(Amt, is_lt0(Ret)))),
+    5)
+  - cross_mean(sub(day_centroid(mul(mul(Volume, is_gt0(Ret)), is_gt0(in_index(Volume)))),
+    day_centroid(mul(mul(Volume, is_lt0(Ret)), is_gt0(in_index(Volume))))), 10)
+  - cross_mean(sub(day_signed_ratio(Ret, mul(Volume, in_index(Volume))), day_signed_ratio(Ret,
+    Volume)), 10)
+  - cross_ema(sub(day_signed_ratio(Ret, mul(Volume, in_index(Volume))), day_signed_ratio(Ret,
+    mul(Volume, sub(1, in_index(Volume))))), 5)
+  - cross_mean(sub(day_signed_ratio(Ret, mul(Volume, is_gt0(sub(in_index(Volume),
+    0.75)))), day_signed_ratio(Ret, Volume)), 10)
+  - cross_mean(day_corr(in_index(Volume), mul(Volume, sign(Ret))), 20)
+  - cross_zscore(cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), 5), 60)
+  - cs_bucket_rank(cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), 20), LogFloatCap)
+  - cs_bucket_rank(cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), 10), cross_mean(day_std(Ret), 20))
+  - cross_mean(mul(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume,
+    is_lt0(Ret)))), cs_rank(cross_zscore(day_sum(Volume), 20))), 10)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

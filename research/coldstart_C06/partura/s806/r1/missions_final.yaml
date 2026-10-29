@@ -1,0 +1,117 @@
+seed: 806
+round: 1
+slots:
+- type: E
+  core: day_cov(Vwap, Ret)
+  hypothesis: '【核心是什么】day_cov(Vwap, Ret) 是 M 第 1 批 85 个已评分候选里出现最多(22 个)、也是唯一量纲自洽的日内部件
+    (共性表其余各行都是它外面套 add(LimitWidth, ·) 的写法)。记分钟对数收益 w_i、累计 c_i、全天收益 R、 已实现方差 Q = Σw_i²、路径偏离
+    δ = mean(c) − R/2,用恒等式 Σ c_i·w_i = (R² + Q)/2 可解析展开: day_cov(Vwap, Ret) ≈ (P̄/M)·(Q/2
+    − R·δ),P̄ 为当日分钟均价水平,M = 241。 所以它是两样东西的混合:(a) P̄·Q/2 = 价格水平 × 当日已实现方差,这是量纲 / 波动代理,属于规则
+    §4 陷阱 3, 线性中性化去不掉这个乘积项;(b) −R·δ = 当日行情是集中在尾盘(后置)还是早盘(前置):−R·δ > 0 表示 无论涨跌,这一天的主要位移发生得晚。
+    【为什么 (b) 可能是 alpha】A 股 T+1:尾盘才发生的大位移多由噪声 / 散户追涨杀跌推动,当天买入的人只能隔夜或 次日盘中退出,价格压力在下一段被动回吐;早盘完成、午后横住的行情更像信息已被消化。Chu,
+    Gu, Zhou (2019) 在 A 股报告了日内段与隔夜段「同段延续、跨段反转」,并把跨段反转归因于 T+1 与噪声交易;Heston, Korajczyk,
+    Sadka (2010) 说明日内时点本身携带可在截面上重复出现的收益模式。 【已见过的外围,和这次的区别】快照里含该核心的写法只有:add 一个 LimitWidth(LimitWidth
+    板块间落差 0.10,比 day_cov 整个截面的标准差大 2–3 个数量级,截面排序就是「先按板块、组内按 day_cov 破平局」的字典序, 并借这个小扰动绕过
+    distinct 门槛)、add 两次 LimitWidth、在其上再套 ts_min(·, 20)、add 一份自己的副本 —— 外围算子集合只有 {add}
+    与 {add, ts_min},全是在给核心加板块常数。本位的外围做的是相反的事:把 (a) 拿掉, 只留 (b),且完全不用 LimitWidth、不用任何凸变换。
+    (1) 无量纲化:除以 mul(day_mean(Vwap), day_var(Ret))(≈ P̄·Q/M),得到 ≈ 1/2 − R·δ/Q,即「趋势强度
+    × 后置 程度」;或除以 mul(day_std(Vwap), day_std(Ret)),得到相关系数形式。两者都不随价格水平和波动水平缩放。 (2) 条件化而不是线性中性化:cs_bucket_zscore
+    / cs_bucket_rank 只在当日已实现方差、20 日波动或价格水平的 同一十分位桶内比较,让残留的 Q 与 P̄ 暴露在桶内近乎常数 —— 这是对陷阱
+    3 的直接防御。桶变量都是连续量, 不用 LimitWidth / BoardCode 分桶(它们大量并列,按 _pct_rank 的序号排名会落到陷阱 2
+    的列序斜坡上)。 (3) 有符号版本:mul(sub(·, 0.5), sign(day_sum(Ret))) ≈ −|R|·δ/Q,即收盘相对全天时间均价的强弱,
+    把尾盘拉升和尾盘杀跌分开(T+1 只锁住买方,两者不该对称)。 (4) 多日处理:cross_mean 5 / 20 日、cross_decay_linear
+    10 日,压掉单日路径噪声(日内形状类量在周频上预测力 最好);cross_zscore / ts_rank 20 日,取相对自身历史的新息,去掉个股持久水平(Flögel,
+    Schlag, Zunft 的 滚动标准化思路)。 【为什么样本外还会在】驱动 (b) 的是 T+1、涨跌停与散户为主的成交结构,这些在 2023-08-08
+    之后没有改变; 归一化之后的量不随波动环境漂移,而被拿掉的 P̄·Q 部分正是会随 2022 年前后波动环境翻符号的低波动风格暴露, 这也是本血统在 min(train,
+    valid) 下一直为负的原因之一。方向交给奖励在 train 上定,不写先验符号。'
+  literature:
+  - title: Intraday momentum and reversal in Chinese stock market
+    authors: Xiaojun Chu, Zherong Gu, Haigang Zhou
+    year: 2019-09
+    url: https://ideas.repec.org/a/eee/finlet/v30y2019icp83-88.html
+    treatment: 日内不同时段的收益在 A 股上同段延续、跨段反转,归因于 T+1 与噪声交易;据此把核心里的「行情时点」项与量级项分开,单独留时点
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    url: https://ar5iv.arxiv.org/html/1005.3535
+    treatment: 日内时点本身是截面收益的可重复来源;不要把全天信息揉成一个带量纲的标量
+  - title: Momentum-Managed Equity Factors
+    authors: Volker Flögel, Christian Schlag, Claudia Zunft
+    year: 2021-07
+    url: https://publikationen.ub.uni-frankfurt.de/opus4/files/61452/SSRN-id3423287.pdf
+    treatment: 信号相对自身历史的标准化(这里用 cross_zscore / ts_rank 的 20 日窗口近似)
+  - title: Predicting Stock Returns Using Industry-Relative Firm Characteristics
+    authors: Clifford S. Asness, R. Burt Porter, Ross L. Stevens
+    year: 2000-02
+    url: https://www.aqr.com/Insights/Research/Working-Paper/Predicting-Stock-Returns-Using-IndustryRelative-Firm-Characteristics
+    treatment: 组内相对值而不是原始值排序(这里用 cs_bucket_zscore / cs_bucket_rank 在波动或价格水平的分位桶内比较)
+  seeds:
+  - div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret)))
+  - div(day_cov(Vwap, Ret), mul(day_std(Vwap), day_std(Ret)))
+  - cross_zscore(div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret))), 20)
+  - cs_bucket_zscore(div(day_cov(Vwap, Ret), day_mean(Vwap)), day_var(Ret))
+  - cs_bucket_rank(div(day_cov(Vwap, Ret), day_var(Ret)), day_mean(Vwap))
+- type: N
+  hypothesis: '【机制】日内分钟收益分布的上下不对称 = 彩票性 / 注意力驱动的买盘。散户偏好小概率的大涨(概率加权,Barberis 与 Huang
+    2008),会高估右尾重、上冲集中在放量分钟的股票,其后收益偏低。Amaya, Christoffersen, Jacobs, Vasquez (2015)
+    用日内高频收益算的已实现偏度对下一周截面收益有显著负预测,而已实现波动本身没有;Bali, Cakici, Whitelaw (2011) 的 MAX 效应是它的日频版本。A
+    股散户成交占比高、T+1、有涨跌停,这种需求更集中、更难被套利掉。 【算子怎样实现】全部是尺度不变的比值,不含任何价格 / 波动 / 成交额水平,所以不是控制变量的非线性重写(避开
+    §4 陷阱 1 与 3;正半方差只以「占比」出现,值域 [0, 1],不是方差本身): day_skew(Ret) 分钟收益偏度;div(day_sum(mul(is_gt0(Ret),
+    mul(Ret, Ret))), day_sum(mul(Ret, Ret))) 正半方差 占已实现方差的比例(Barndorff-Nielsen 等的已实现半方差,只取比值);day_es_ratio_hi(Ret)
+    右尾形状、 sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)) 左右尾厚度差;div(add(day_max(Ret),
+    day_min(Ret)), day_std(Ret)) 最大上跳与最大下跳的不对称;div(day_topw_mean(Ret, Volume), day_std(Ret))
+    成交量最大的 10% 分钟里的标准化收益 —— 注意力冲击来时价格往哪边跳;day_signed_ratio(Ret, Volume) 按 tick 规则的成交量不平衡,以及扣掉价格路径自身
+    不平衡 day_signed_ratio(Ret, Ret) 之后的超额量不平衡(Narayan 等 2015 在中国日内数据上发现标准化订单不平衡有 预测力)。多日处理:cross_mean
+    5 / 20 日(偏度类量在周频最强)、cross_max 20 日(MAX 型)、在 20 日波动十分位 桶内取秩(确保它不是波动的代理)。 【和库里已有的不同】本种子库里还没有
+    head;M 第 1 批唯一的血统 day_cov(价格, 收益) 只含二阶矩(已实现方差) 和分钟顺序上的时点信息,85 个候选的富集子树里没有任何三阶矩
+    / 上下不对称 / 量价不对称的量。本位的输入是 收益分布形状和成交量落在哪一侧,和分钟的先后顺序无关,与本轮 E 位(时点)也是两回事。 【为什么样本外还会在】驱动它的是投资者偏好和
+    A 股交易制度(散户结构、T+1、涨跌停),不是某一段行情;这些量 不随波动水平漂移,不会因为 2022 年后波动环境变化而翻符号。方向交给奖励在 train
+    上定,不写先验符号。'
+  inspired_by: M 第 1 批:85 个候选全为负,唯一富集的血统 day_cov(Vwap, Ret) 解析展开后只是「价格 × 已实现方差」加「行情时点」,批里完全没有三阶矩与量价不对称;文献
+    Amaya et al. 2015(日内已实现偏度)与 Bali et al. 2011(MAX)
+  literature:
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: '2015'
+    url: https://repec.econ.au.dk/repec/creates/rp/13/rp13_41.pdf
+    treatment: 用日内高频收益算已实现偏度做截面预测变量;周频聚合(cross_mean 5)
+  - title: 'Measuring downside risk: realised semivariance'
+    authors: Ole E. Barndorff-Nielsen, Silja Kinnebrock, Neil Shephard
+    year: '2010'
+    url: https://www.nuff.ox.ac.uk/economics/papers/2008/w2/downside.pdf
+    treatment: 按分钟收益正负拆已实现方差;这里只用正半方差占比这个无量纲比值
+  - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    url: https://doi.org/10.1016/j.jfineco.2010.08.014
+    treatment: 极端上跳(彩票性)预测低收益;这里用 cross_max(day_skew(Ret), 20) 与标准化最大上跳的尺度不变写法
+  - title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security
+      Prices'
+    authors: Nicholas Barberis, Ming Huang
+    year: '2008'
+    url: https://doi.org/10.1257/aer.98.5.2066
+    treatment: 偏度被定价的理论机制(概率加权导致正偏资产被高估)
+  - title: Do order imbalances predict Chinese stock returns? New evidence from intraday
+      data
+    authors: Paresh Kumar Narayan, Seema Narayan, Joakim Westerlund
+    year: '2015'
+    url: https://ideas.repec.org/a/eee/pacfin/v34y2015icp136-151.html
+    treatment: 标准化的日内买卖不平衡((买−卖)/(买+卖))在中国股票上有预测力;这里用 day_signed_ratio 的 tick 规则代理
+  seeds:
+  - day_skew(Ret)
+  - cross_mean(day_skew(Ret), 5)
+  - ts_mean(cs_bucket_rank(cross_mean(day_skew(Ret), 5), cross_mean(day_std(Ret),
+    20)), 5)
+  - div(day_sum(mul(is_gt0(Ret), mul(Ret, Ret))), day_sum(mul(Ret, Ret)))
+  - day_es_ratio_hi(Ret)
+  - sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret))
+  - div(add(day_max(Ret), day_min(Ret)), day_std(Ret))
+  - cross_mean(div(add(day_max(Ret), day_min(Ret)), day_std(Ret)), 20)
+  - div(day_topw_mean(Ret, Volume), day_std(Ret))
+  - cross_mean(div(day_topw_mean(Ret, Volume), day_std(Ret)), 5)
+  - sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Ret))
+  - cross_mean(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Ret)), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

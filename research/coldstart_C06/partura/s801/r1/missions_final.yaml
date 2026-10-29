@@ -1,0 +1,124 @@
+seed: 801
+round: 1
+slots:
+- type: N
+  hypothesis: 机制(放量收益反转,Campbell-Grossman-Wang 1993;Llorente-Michaely-Saar-Wang 2002):伴随异常放量的价格变动更多是非信息性的流动性冲击(散户集中追涨杀跌、被迫交易),由逆向
+    / 做市资金吸收后会回吐;缩量下的价格变动更多来自信息,倾向延续。所以真正会反转的是「量加权的那部分收益」,不是整段 20 日收益。奖励的 20 日反转控制只线性扣掉等权的总收益;本位要的是它没有覆盖的交互项
+    cov(收益, 相对成交量) = 量加权收益 − 等权收益。 算子实现:(1) 日尺度:在 20 / 40 / 60 日窗口里用 cross_corr、cross_regbeta、cross_mean(mul(...))
+    算日对数收益(或开盘到收盘的日内收益)与成交额、或成交额相对自身 20 / 60 日的 z 分数(Gervais-Kaniel-Mingelgrin 2001
+    的异常放量口径,即「对这只股票自己而言异常」,不是成交额水平)的相关、斜率、协方差;协方差与斜率里的收益先除以自身 20 / 60 日波动做成无量纲。(2)
+    分钟尺度:同一个交互在日内复现 —— day_corr(Ret, Amt)、成交额加权与等权分钟收益之差 (day_wmean − day_mean)/day_std、最重
+    10% 分钟的平均收益相对全天均值 (day_topw_mean − day_mean)/day_std、净买入压力 day_signed_ratio 乘当日成交额
+    z 分数,再 20 日平均或 EMA。 全部是相关系数或标准化后的无量纲量:不含成交额水平(避开流动性与已知族两个控制),不对波动做凸变换(陷阱 1),不含市值字段(陷阱
+    3),没有 cs_* 截面算子(陷阱 2)。与 20 日反转控制只有部分相关(估计 0.2–0.4,上涨期多伴随放量),线性中性化后剩下的正是交互项。 与库的区别:库里唯一的
+    head 是静态的浮股 / 股价水平线(日度秩与 LogFloatShares 相同),不含任何收益或成交量的时间信息,预计与它 |ρ| < 0.1,输入和机制都不同。
+    方向交给奖励,预期为负:收益与放量正相关(放量上涨、缩量下跌)的名字随后跑输;多头腿 = 放量下跌、缩量上涨的名字,即流动性提供的回报。 样本外为什么还在:这是对流动性提供者的补偿,来源是
+    A 股散户占成交大头、T+1 与卖空受限导致的放量追涨杀跌,这些制度与参与者结构在样本期后没有改变;CGW 与 LMSW 在不同市场、不同年代都复现了「高量收益更易反转」;它和常规
+    20 日反转正交,不依赖一个已被广泛交易的线性反转。
+  inspired_by: M 第 1 批:90 个已评分候选里 28 个塌缩到同一条浮股水平线,库里只有一条静态水平轴,没有任何量价交互;文献 Campbell-Grossman-Wang
+    1993、Llorente 等 2002 的放量收益反转
+  literature:
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: 1993-11
+    url: https://doi.org/10.2307/2118454
+    treatment: 把日收益与成交量做交互:伴随高成交量的收益自相关更负(更易反转),用的是去趋势后的成交量而非水平
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 个股层面回归 r(t+1) 对 r(t) 与 r(t)×去趋势对数换手 的交互系数;交互项的符号区分流动性(对冲)交易与信息交易
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: 2001-06
+    url: https://doi.org/10.1111/0022-1082.00349
+    treatment: 成交量冲击按股票自身近期成交量的相对水平定义(异常放量),而不是截面上的成交量水平
+  seeds:
+  - cross_corr(log(div(day_last(Close), ts_delay(day_last(Close), 1))), day_sum(Amt),
+    20)
+  - cross_corr(log(div(day_last(Close), ts_delay(day_last(Close), 1))), day_sum(Amt),
+    60)
+  - cross_corr(log(div(day_last(Close), ts_delay(day_last(Close), 1))), cross_zscore(day_sum(Amt),
+    60), 20)
+  - cross_corr(log(div(day_last(Close), day_first(Open))), day_sum(Amt), 20)
+  - cross_corr(day_sum(Ret), day_sum(Amt), 40)
+  - cross_regbeta(cross_zscore(day_sum(Amt), 60), div(log(div(day_last(Close), ts_delay(day_last(Close),
+    1))), cross_stddev(log(div(day_last(Close), ts_delay(day_last(Close), 1))), 60)),
+    20)
+  - cross_ema(day_corr(Ret, Amt), 10)
+  - cross_mean(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret)), 20)
+  - cross_mean(mul(day_signed_ratio(Ret, Amt), cross_zscore(day_sum(Amt), 20)), 20)
+- type: N
+  hypothesis: 机制(彩票偏好 / 偏度定价):散户偏爱右偏(彩票型)的收益分布,愿为之支付溢价;卖空受限的 A 股里高偏度股票被持续高估、随后跑输,负偏、左尾更重的股票被低估。Amaya-Christoffersen-Jacobs-Vasquez
+    2015 用日内高频收益算已实现偏度,发现它显著负向预测下一周收益;Bollerslev-Li-Zhao 2020 的相对符号跳跃 RSJ = (上行已实现方差
+    − 下行已实现方差)/总已实现方差 同样负向;Boyer-Mitton-Vorkink 2010 用日收益的(预期)偏度。关键是偏度是三阶标准化矩,对波动的尺度不变,所以和奖励的波动控制不是同一个量(不同于
+    MAX 那种随波动放大的尾部指标)。 算子实现:(1) day_skew 在 1 分钟 / 5 分钟对数收益(in_logchg(Close, 1/5),不含隔夜跳空)与
+    Ret 上逐日算已实现偏度,再 cross_mean / cross_med / cross_ema 平滑 20–60 日;(2) RSJ 写成 day_sum(Ret·|Ret|)/day_sum(Ret²);(3)
+    ACJV 的偏度写成 day_sum(Ret³)/RV^1.5;(4) 尾部形状:day_es_ratio_hi 与左右尾之差;(5) 标准化的分钟 MAX:day_max(Ret)/day_std(Ret);(6)
+    日收益在 60 / 120 日上的偏度 ts_skew;(7) 当日振幅里位于开盘价之上的占比,作为日内上冲不对称的无量纲代理。 全部是比值或标准化量:不对波动、成交额、市值做凸变换(陷阱
+    1、3),不用 cs_* 截面算子(陷阱 2)。与 20 日反转控制有部分正相关(上涨期偏度偏正),估计 0.2–0.4,线性中性化后扣掉。 与库的区别:库里只有静态的浮股
+    / 股价水平线,这一族读的是收益分布的形状,预计与 head |ρ| < 0.15;也与第一个 N 位(量价交互)不是同一类输入。 方向预期为负(多头腿 =
+    已实现偏度最低、左尾最重的名字)。 样本外为什么还在:偏度溢价来自稳定的偏好(累积前景理论里对小概率大收益的过度加权),不是一次性的信息;A 股散户主导、卖空受限的套利限制在样本期后依旧;它在美股、多国样本、不同样本期都被复现;而且这里用的是尺度不变的形状量,不会因为波动环境切换而变成一个波动因子。
+  inspired_by: 库里唯一的 head 是低名义股价(低价股),文献里低价股效应与彩票偏好 / MAX 效应必须分开检验(Bali-Cakici-Whitelaw
+    2011);这里直接去买彩票偏好那条更一般的机制,用收益分布形状而不是价格水平
+  literature:
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: 2015-10
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 用日内高频收益逐期算已实现偏度 sqrt(N)·Σr³/RV^1.5,按它排序做多低偏度、做空高偏度;偏度与已实现波动分开处理
+  - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+    authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+    year: 2020-05
+    url: https://doi.org/10.1017/S0022109019000097
+    treatment: 把已实现方差按收益符号拆成上行 / 下行半方差,用相对符号跳跃 (RV+ − RV−)/RV 这个无量纲量做截面排序
+  - title: Expected Idiosyncratic Skewness
+    authors: Brian Boyer, Todd Mitton, Keith Vorkink
+    year: 2010-01
+    url: https://doi.org/10.1093/rfs/hhp041
+    treatment: 用日收益在数月窗口上的偏度刻画彩票性,高偏度对应低预期收益
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    url: https://www.nber.org/papers/w14804.pdf
+    treatment: 用窗口内最大单期收益(MAX)度量彩票性;这里改成除以当日波动的标准化 MAX,去掉它与波动的机械相关
+  seeds:
+  - cross_mean(day_skew(Ret), 20)
+  - cross_mean(day_skew(in_logchg(Close, 1)), 20)
+  - cross_med(day_skew(in_logchg(Close, 5)), 20)
+  - cross_ema(day_skew(in_logchg(Close, 1)), 10)
+  - cross_mean(day_skew(Ret), 60)
+  - cross_mean(div(day_sum(mul(mul(Ret, Ret), Ret)), mul(day_sum(mul(Ret, Ret)), sqrt(day_sum(mul(Ret,
+    Ret))))), 20)
+  - cross_mean(div(day_sum(mul(mul(Ret, Ret), sign(Ret))), day_sum(mul(Ret, Ret))),
+    20)
+  - cross_mean(div(day_sum(mul(mul(Ret, Ret), sign(Ret))), day_sum(mul(Ret, Ret))),
+    60)
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)
+  - ts_skew(log(div(day_last(Close), ts_delay(day_last(Close), 1))), 60)
+  - ts_skew(log(div(day_last(Close), ts_delay(day_last(Close), 1))), 120)
+R:
+- head: inv(pow_3(pow_3(pow_3(LogFloatShares))))
+  why: 烂部件 1:三层 pow_3 与 inv 的包装。LogFloatShares 恒在约 16–27 之间,x>0 上 x^27 严格递增、1/x 严格递减,四个算子合起来是单调重参数化,日度截面秩与裸字段完全相同;奖励第一步就对(平滑后的)信号取秩,所以这四层在
+    hl=0 时不改变书。定位证据:三个充分性子树 + 一个敲除变体都在 +0.47 ~ +0.48,head 是 +0.5001,四层算子的必要性只有 +0.02,落在同一面板不同写法的离散带里;同时
+    x^27 在流通股最多的名字上约 2e38,离 float32 上限 3.4e38 只差不到一倍,任何加法兄弟都会被它压没,数值上是烂的。烂部件 2:叶子
+    LogFloatShares 是一个代理。LogFloatCap(控制之一)= LogFloatShares + log(名义股价),线性中性化扣掉流通市值后,这个
+    head 交易的残差主要是 −log(名义股价),即低价股;股本里与价格无关的部分只是噪声。变体:(a) 只去包装:LogFloatShares、inv(LogFloatShares);(b)
+    把「叶子 + 包装」换成被代理的量本身:sub(LogFloatCap, LogFloatShares)(按恒等式精确等于 log 名义收盘价)、log(day_last(Close))、二者的
+    20 日均值;(c) 把包装在 EMA 下唯一可能起作用的部分(时间上的凸性 ≈ 近 20 日浮股的 soft-min / soft-max)显式写出:cross_min
+    / cross_max(LogFloatShares, 20),看它是不是装饰;(d) 把叶子换成股本结构而不是股本数量:sub(LogTotalCap,
+    LogFloatCap) = log(总股本 / 流通股本),价格精确约掉。预期:(a)(c) 与 head 同分(包装是装饰);(b) 若高出 0.1 就用数值安全、含义直接的写法替换这个
+    head。
+  variants:
+  - LogFloatShares
+  - inv(LogFloatShares)
+  - sub(LogFloatCap, LogFloatShares)
+  - log(day_last(Close))
+  - cross_mean(sub(LogFloatCap, LogFloatShares), 20)
+  - log(cross_mean(day_last(Close), 20))
+  - cross_min(LogFloatShares, 20)
+  - cross_max(LogFloatShares, 20)
+  - sub(LogTotalCap, LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

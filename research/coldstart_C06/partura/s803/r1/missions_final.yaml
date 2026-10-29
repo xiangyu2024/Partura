@@ -1,0 +1,132 @@
+seed: 803
+round: 1
+slots:
+- type: E
+  core: day_kurt(Ret)
+  hypothesis: 核心 day_kurt(Ret) 是 241 根一分钟收益的峰度(score +0.97,方向 -1,即多头买低峰度)。它对日内仿射变换不变、自己除掉了尺度,所以不是波动控制
+    cross_mean(day_std(Ret),20) 的另一种写法。但它混着两样东西。Ret 在 0 上有点质量(无成交、封板、价格没跨过一个 tick
+    的分钟都恰为 0)。设 n=241 分钟里只有 k 分钟非零,则代数上 kurt+3 = (n/k)·c,c 是活跃分钟自身的四阶矩比(正负一个 tick
+    来回跳约为 1,高斯约为 3,跳跃驱动的 >3)。随机张量验算(不碰数据):48 个活跃分钟的高斯日 kurt=10.7,高于 241 分钟全活跃的 t(4)
+    日 3.1;乘上活跃占比 (1-zero_ratio) 后分别是 2.7 与 6.1,形状的顺序就回来了。所以裸核心的截面排序主要由「交易稀疏度」n/k 决定,而
+    5 个控制里没有一个直接量它:成交额水平不等于有价格变化的分钟数,低价股 0.01 元的 tick 粗,成交额再大也有大量零分钟。本位要试的外围只做一件事:把稀疏度从核心里拆出去,让
+    GP 在剩下的「活跃分钟的尾部形状 c」上长。三种实现:(a) 精确的代数修正 mul(add(核心,3), sub(1, day_zero_ratio(Ret))),值就是
+    c;(b) 减法版 sub(add(核心,3), div(3, sub(1, day_zero_ratio(Ret)))) = (n/k)(c-3),即超出「同样稀疏度下高斯应有峰度」的部分;(c)
+    非参数版 cs_bucket_rank(核心或其 20 日均值, 稀疏度变量),只在稀疏度相同的十分位里比峰度,稀疏度变量用 20 日平均零收益比例、20
+    日平均最长静止段 day_flat_run_max,或价格水平 day_last(Close)(tick 网格的粗细)。另外 cs_winsor 先截尾再做
+    20 日 EMA,因为只有开盘一跳的一天 kurt 约为 +236,不截尾的 EMA 是峰值记忆而不是水平。c 的机制是:这只股票的价格是连续地被发现,还是靠少数几笔大单、消息或逼近涨跌停的跳跃完成;高
+    c 是彩票型、跳跃驱动的人群(散户偏好的 MAX 类股票),低 c 是连续定价。和以前不同:快照里只有裸核心,没有任何候选把零收益质量从峰度里代数地或分组地拿掉;外围用的
+    mul/add/sub/day_zero_ratio、cs_bucket_rank+稀疏度变量、cs_winsor 都不是平滑或单调改写。刻意避开的陷阱:不用
+    LimitWidth / BoardCode / 日度 day_zero_ratio 当分桶变量(取值只有 3–4 个或 k/241 个,_pct_rank
+    用列序拆并列,分桶会变成列序斜坡,陷阱 2);修正乘的是 [0,1] 的活跃占比,没有对任何波动量做凸变换(陷阱 1);c 无量纲,不是市值或流动性的非线性函数(陷阱
+    3),按成交额分桶那颗种子是在去掉流动性而不是加入它。样本外为什么还在:稀疏度和 tick 网格会随监管、价格水平和市场冷热漂移,这正是裸核心不稳的部分;拆掉之后剩下的
+    c 反映信息怎样到达这只股票,是慢变的股票特征(head 的半衰期 20 已在网格上边界),A 股散户对彩票型股票的偏好是结构性的。若这些种子大多因与核心
+    |rho|>=0.7 被划掉,或得分明显低于核心,也直接告诉我们核心主要是稀疏度代理。
+  literature:
+  - title: Does realized skewness predict the cross-section of equity returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: '2015'
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 用日内收益算的已实现峰度/偏度做截面排序的先例;他们没有在算矩之前剔除零收益分钟,本位补的正是这一步
+  - title: A New Estimate of Transaction Costs
+    authors: David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka
+    year: '1999'
+    url: https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html
+    treatment: 零收益比例是交易摩擦/流动性的独立度量;我们把它当作要从峰度里分离出去的那一维(按它分桶或按活跃占比做代数修正)
+  - title: 'Liquidity and Expected Returns: Lessons from Emerging Markets'
+    authors: Geert Bekaert, Campbell R. Harvey, Christian Lundblad
+    year: '2007'
+    url: https://www.nber.org/papers/w11413
+    treatment: 新兴市场里按月平均的零收益占比是有效的流动性变量;借用其月度(约 20 日)平均的写法作为分桶变量 cross_mean(day_zero_ratio(Ret),20)
+  - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    url: https://doi.org/10.1016/j.jfineco.2010.08.014
+    treatment: 彩票型(极端收益集中)股票未来收益偏低的机制;对应修正后 c 的高端
+  - title: Power and Bipower Variation with Stochastic Volatility and Jumps
+    authors: Ole E. Barndorff-Nielsen, Neil Shephard
+    year: '2004'
+    url: https://doi.org/10.1093/jjfinec/nbh001
+    treatment: 跳跃测度要对单个极端观测稳健的论证;对应先 cs_winsor 截尾再做 EMA
+  seeds:
+  - cross_mean(mul(add(day_kurt(Ret), 3), sub(1, day_zero_ratio(Ret))), 20)
+  - cross_ema(cs_winsor(mul(add(day_kurt(Ret), 3), sub(1, day_zero_ratio(Ret)))),
+    20)
+  - cross_mean(sub(add(day_kurt(Ret), 3), div(3, sub(1, day_zero_ratio(Ret)))), 20)
+  - cs_bucket_rank(cross_mean(mul(add(day_kurt(Ret), 3), sub(1, day_zero_ratio(Ret))),
+    20), cross_mean(day_sum(Amt), 20))
+- type: N
+  hypothesis: 新 idea:日内价格效率,即一分钟收益的序列相关。机制:分钟收益的负自相关 / 方差比 VR<1 是暂时性价格压力被流动性提供者吸收后的回弹(Roll
+    1984 的买卖价差反弹);正自相关 / VR>1 是信息慢慢进入价格、或散户追涨杀跌造成的日内延续(价格延迟)。文献里价格延迟高的股票在截面上有显著溢价(Hou
+    & Moskowitz 2005),短期收益可预测性随流动性变化(Chordia, Roll & Subrahmanyam 2008),|1-VR| 与 |自相关|
+    是标准的低效率度量(Boehmer & Kelley 2009)。算子实现:(1) 方差比 div(day_std(in_pct(Close, q)), day_std(in_pct(Close,
+    1))),q=5、15 分钟的重叠收益,随机游走下比值约为 sqrt(q),偏高=日内趋势,偏低=日内回复;Vwap 版 in_logchg(Vwap,10)/in_logchg(Vwap,1)
+    用成交均价,压掉最后一笔的反弹;(2) 一阶 / 五阶自相关 day_autocorr(in_logchg(Vwap, 1), n):Vwap 在无成交分钟为
+    NaN,day_autocorr 丢掉含 NaN 的配对,所以只在真正成交的分钟上算,不是零收益质量的产物;对照的钟表时间版 day_autocorr(in_pct(Close,
+    1), 1) 把零分钟也算进去;(3) 幅度版 abs_(sub(log(VR 比值), 0.8047))(0.8047 = log sqrt5,即随机游走基准)与
+    abs_(自相关),按 Boehmer & Kelley 量「偏离随机游走多远」而不管方向;(4) 路径效率 |当日净变动| / 当日路径总长 = div(abs_(day_sum(Ret)),
+    day_sum(abs_(Ret))):随机游走下它约为 1/sqrt(k)(k=活跃分钟数),所以单独用就是稀疏度代理;种子里只用两种去掉这一机械部分的写法:乘
+    sqrt(241·(1-零收益比例)) 归一,或在 20 日平均零收益比例的十分位内排序。所有日度值都取 20 日均值或 EMA,因为 241 个点的单日自相关很吵。我的先验方向:多头
+    = 日内接近随机游走或轻度回复的股票,空掉的一端是日内强延续(羊群追涨,之后反转);但由 GP 决定符号。为什么和库里不同:库里唯一的 head day_kurt(Ret)
+    是分钟收益分布的排列不变统计量,把 241 分钟打乱顺序它的值不变,而本位所有种子都是顺序的函数(打乱后 VR、自相关、路径效率全变)。5 个控制都不量序列相关:波动控制是标准差水平,反转控制是
+    20 日累计收益(日度而非日内),流动性是成交额水平,已知族是成交额离散度。刻意避开的陷阱:不用 day_durbin_watson(其分母不去均值,约等于已实现方差,陷阱
+    1),不做任何凸变换,所有量都是无量纲比值或相关系数;tick 网格造成的机械反弹(低价股在两个相邻价位间来回跳,陷阱 3 的价格/流动性非线性)用 cs_bucket_rank
+    在价格十分位或零收益比例十分位内排序拿掉。样本外为什么还在:日内序列相关来自市场结构(T+1、散户占比高、涨跌停、tick 网格),这些在 2023 年之后都没有变;价格延迟/低效率溢价在多个市场、几十年的样本里都有记录,不是样本内挖出来的尖峰。
+  inspired_by: 第 1 批唯一的 head day_kurt(Ret) 能拿 +0.97,说明一分钟收益分布里有可交易的信息;但峰度是排列不变的,日内分钟的顺序信息库里还完全没人碰。文献:Lo
+    & MacKinlay 1988 的方差比,Boehmer & Kelley 2009 用 |1-VR| 与 |自相关| 量低效率,Hou & Moskowitz
+    2005 的价格延迟溢价
+  literature:
+  - title: 'Stock Market Prices Do Not Follow Random Walks: Evidence from a Simple
+      Specification Test'
+    authors: Andrew W. Lo, A. Craig MacKinlay
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.41
+    treatment: 方差比 VR(q):用不同聚合窗口重算方差再取比值;我们取 q=5、15 分钟,日内算
+  - title: A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient
+      Market
+    authors: Richard Roll
+    year: '1984'
+    url: https://doi.org/10.1111/j.1540-6261.1984.tb03897.x
+    treatment: 负的一阶序列协方差 = 买卖价差反弹;我们只在成交分钟上算一阶自相关,并按价格十分位排序去掉 tick 网格的机械部分
+  - title: Market Frictions, Price Delay, and the Cross-Section of Expected Returns
+    authors: Kewei Hou, Tobias J. Moskowitz
+    year: '2005'
+    url: https://doi.org/10.1093/rfs/hhi023
+    treatment: 价格延迟(信息进入价格的慢)在截面上有溢价;我们用日内正自相关与 VR>1 作为日内尺度上的延迟
+  - title: Institutional Investors and the Informational Efficiency of Prices
+    authors: Ekkehart Boehmer, Eric K. Kelley
+    year: '2009'
+    url: https://doi.org/10.1093/rfs/hhp028
+    treatment: 用日内收益的 |1-VR| 与 |自相关| 作为个股定价低效率度量;对应幅度版种子
+  - title: Liquidity and market efficiency
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2008'
+    url: https://doi.org/10.1016/j.jfineco.2007.03.005
+    treatment: 短期(分钟级)收益可预测性随流动性变化;提醒我们要在流动性/稀疏度相同的组内比较序列相关
+  seeds:
+  - cross_ema(day_autocorr(in_pct(Close, 1), 1), 20)
+  - cross_mean(day_autocorr(in_logchg(Vwap, 1), 5), 20)
+  - cross_mean(mul(div(abs_(day_sum(Ret)), day_sum(abs_(Ret))), sqrt(mul(241, sub(1,
+    day_zero_ratio(Ret))))), 20)
+  - cs_bucket_rank(cross_mean(day_autocorr(in_logchg(Vwap, 1), 1), 20), cross_mean(day_zero_ratio(Ret),
+    20))
+  - cs_bucket_rank(cross_mean(div(abs_(day_sum(Ret)), day_sum(abs_(Ret))), 20), cross_mean(day_zero_ratio(Ret),
+    20))
+R:
+- head: day_kurt(Ret)
+  why: 两个部件各有一个具体可指的毛病。输入 Ret:在 0 上有点质量(无成交、封板、价格没跨 tick 的分钟恰为 0),代数上 kurt+3 = (241/k)·c,活跃分钟数
+    k 主导截面排序;随机张量验算:48 个活跃分钟的高斯日 kurt=10.7,高于全天活跃的 t(4) 日 3.1。另外 Ret 首分钟可能含隔夜跳空,一个观测就能主宰四阶矩(Blanc,
+    Chicheportiche & Bouchaud 2014:隔夜段峰度远高于日内段)。根算子 day_kurt:对单个打印无界,只有开盘一跳的一天约为 +236;日内
+    U 型波动季节性本身就会通过方差混合造出峰度。替换件逐个对准这些毛病:in_logchg(Vwap,1)(Vwap 在无成交分钟为 NaN,只在成交分钟上算同一统计量);in_pct(Close,1)(日内重建,首分钟为
+    NaN,不含隔夜);in_madz(Ret,30)(按局部 30 分钟稳健尺度标准化,去掉 U 型季节性带来的混合峰度);day_gini(有界、尺度无关,不被单个打印支配);day_es_ratio_hi
+    / lo(分侧的尾部条件均值比,薄日返回 NaN,对应双侧峰度里哪一侧在起作用)。
+  variants:
+  - day_kurt(in_logchg(Vwap, 1))
+  - day_kurt(in_pct(Close, 1))
+  - day_kurt(in_madz(Ret, 30))
+  - day_gini(Ret)
+  - day_gini(in_logchg(Vwap, 1))
+  - day_es_ratio_hi(Ret)
+  - day_es_ratio_lo(Ret)
+audit:
+  attempts: 1
+  file: audit_1.yaml

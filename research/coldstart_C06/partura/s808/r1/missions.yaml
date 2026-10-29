@@ -1,0 +1,53 @@
+seed: 808
+round: 1
+slots:
+  - type: N
+    hypothesis: '机制:名义股价幻觉(低价股效应)。A 股交易以散户为主,投资者按「每股多少钱」而不是按市值判断贵贱,把低价股当成上涨空间更大、偏度更高的彩票;Birru-Wang 用拆股做的干净检验显示,名义价格一降,投资者对未来偏度的预期就跳升,而事后实际偏度反而下降。结果是低价股被系统性高估、高价股被低估。每股价格由送转、拆股这类公司行为维持,不由基本面决定(Weld 等 2009),所以它是一条与市值不同、变得很慢的横截面特征。
+      算子怎么实现:本环境的价格字段是后复权的,名义价格只能从两个字段拼出来:sub(LogFloatCap, LogFloatShares) = log(流通市值 / 流通股本) = log(未复权股价);或者 div(day_sum(Amt), day_sum(Volume)),因为 Amt 与 Volume 是原始口径,两者之比是未复权均价。为了不让它变成市值的非线性重写(已知陷阱 3),主种子用 cs_bucket_rank(价格, LogFloatCap),也就是每天在流通市值十分位桶内对价格排序。输出在每个市值桶里都是均匀分布,top 十分位里各市值档占的份额相同,线性中性化挡不住的非线性规模暴露被直接拿掉;这就是 DGTW 1997 特征匹配基准的做法。cs_regres(价格, LogFloatCap) 是 OLS 残差版的对照。
+      第二组种子先在市值桶内排序,再在波动(cross_mean(day_std(Ret), 20))、流动性(cross_mean(day_sum(Amt), 30))、上市年龄(ListAge)、总市值的十分位桶内再排一次,逐个隔开「低价 = 高波动 / 高价差 / 次新」这些已知替身(Bhardwaj-Brooks 1992 指出低价效应与价差、规模缠在一起)。
+      第三组按 Birru-Wang 与 Bali-Cakici-Whitelaw 2011,把价格轴和彩票特征组合起来:彩票特征是 20 日日内分钟已实现偏度 cross_mean(day_skew(Ret), 20),以及 20 日最大日收益按涨跌停幅度 LimitWidth 归一。组合方式有秩相减和「低价 × 高偏度」交互两种。低价且高偏度、或接近涨停的股票,是幻觉最强的地方。方向不写死,交给奖励的 sign。
+      为什么和以前不一样:快照第 1 批共性表的 7 行全是单字段 LogFloatShares 的单调包装或单字段窗口归约(inv / abs_ / log / pow_2 / ts_max / ts_decay_linear),这些写法在秩上等价,score 均值挤在 0.465–0.486,没有一个子树组合过两个字段。流通股本被市值控制中性化以后,能剩下的只有 −log 名义价格加上非线性的规模残差,两者混在一起。这里把价格显式写成两个字段之差,并在市值桶内排序,把价格轴和规模残差拆开。这是对那一簇的实质改进,能说清为什么:它去掉的正是那一簇里属于陷阱 3 的部分。主种子与市值控制的秩相关按构造约等于 0。
+      为什么样本外还会在:来源是散户对每股价格的认知偏差,加上 A 股做空受限带来的套利限制,不是数据里的巧合。价格水平靠公司行为维持、变得极慢,信号换手低,15bp 成本吃不掉多少。桶内排序已经去掉规模的非线性部分,剩下的不是小盘溢价的另一种写法,所以不依赖规模风格在样本外是否延续。'
+    inspired_by: '快照第 1 批的共性表:7 行全是 LogFloatShares 的单字段单调包装,score 均值卡在 0.465–0.486、差一点到 0.5,而且没有一个候选组合过两个字段。流通股本被市值中性化后剩下的是 −log 名义价格加非线性规模残差。文献:Birru-Wang「Nominal Price Illusion」、Weld 等「The Nominal Share Price Puzzle」。'
+    literature:
+      - {title: 'Nominal Price Illusion', authors: 'Birru, J.; Wang, B.', year: '2012-12', url: 'https://www.efmaefm.org/0efmameetings/EFMA%20ANNUAL%20MEETINGS/2013-Reading/papers/EFMA2013_0526_fullpaper.pdf', treatment: '低价诱发对偏度的高估:价格轴与偏度 / 彩票特征组合,以及用剔除合理成分后的价格残差代替原始价格'}
+      - {title: 'The Nominal Share Price Puzzle', authors: 'Weld, W.C.; Michaely, R.; Thaler, R.H.; Benartzi, S.', year: '2009-05', url: 'https://ideas.repec.org/a/aea/jecper/v23y2009i2p121-42.html', treatment: '名义价格由公司行为维持、不由基本面决定:把它当成独立于市值的慢变量'}
+      - {title: 'The January Anomaly: Effects of Low Share Price, Transaction Costs, and Bid-Ask Bias', authors: 'Bhardwaj, R.; Brooks, L.', year: '1992-06', url: 'https://ideas.repec.org/a/bla/jfinan/v47y1992i2p553-75.html', treatment: '低价效应与规模、价差、波动缠在一起:在波动、流动性桶内再排序,把这些替身隔开'}
+      - {title: 'Measuring Mutual Fund Performance with Characteristic-Based Benchmarks', authors: 'Daniel, K.; Grinblatt, M.; Titman, S.; Wermers, R.', year: '1997-07', url: 'https://ideas.repec.org/a/bla/jfinan/v52y1997i3p1035-58.html', treatment: '特征匹配:市值十分位桶内的条件秩(cs_bucket_rank),不假设线性,用来去掉非线性规模暴露'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Bali, T.G.; Cakici, N.; Whitelaw, R.F.', year: '2011-02', url: 'https://ideas.repec.org/a/eee/jfinec/v99y2011i2p427-446.html', treatment: '用 20 日最大日收益衡量彩票偏好,这里按涨跌停幅度归一后与价格轴组合'}
+    seeds:
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)'
+      - 'cs_regres(sub(LogFloatCap, LogFloatShares), LogFloatCap)'
+      - 'cs_bucket_rank(log(div(day_sum(Amt), day_sum(Volume))), LogFloatCap)'
+      - 'cs_bucket_rank(cross_mean(log(div(day_sum(Amt), day_sum(Volume))), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_rank(cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap), ListAge)'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogTotalCap)'
+      - 'cs_regres(cs_regres(sub(LogFloatCap, LogFloatShares), LogFloatCap), cross_mean(day_std(Ret), 20))'
+      - 'sub(cs_rank(cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)), cs_rank(cross_mean(day_skew(Ret), 20)))'
+      - 'sub(cs_rank(cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)), cs_rank(div(cross_max(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20), LimitWidth)))'
+      - 'mul(sub(1.0, cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)), cs_rank(cross_mean(day_skew(Ret), 20)))'
+  - type: N
+    hypothesis: '机制:日内量价动态。放量伴随的价格变动更可能是非信息性的流动性冲击,流动性提供者吸收之后会回吐;缩量的价格变动更可能来自知情交易,会延续。Campbell-Grossman-Wang 1993 的成交量—收益自相关模型:高成交量日的收益更容易反转。Llorente-Michaely-Saar-Wang 2002 把个股层面的这种关系和信息不对称联系起来:在 r(t+1) = c0 + c1·r(t) + c2·V(t)·r(t) 里,对冲型交易主导的股票 c2 为负(放量收益反转),投机或知情交易主导的 c2 为正(放量收益延续)。这里把这个日频模型搬到分钟:每天用 241 根分钟线度量「当天的价格变动有多少落在放量分钟上、放量分钟的收益之后是延续还是回吐」,再取 10–60 日均值,作为股票的特征。
+      算子怎么实现:(1) day_corr(Ret, Volume),分钟收益与分钟成交量的相关;正值表示上涨分钟放量、下跌分钟缩量。(2) sub(day_wmean(Ret, Volume), day_mean(Ret)),成交量加权的分钟收益减等权的,等于分钟收益与相对成交量的协方差,也就是当日价格变动里由重成交分钟贡献的那部分。(3) sub(day_topw_mean(Ret, Volume), day_mean(Ret)),成交量最大的 10% 分钟的平均收益减全天平均。(4) day_corr(Ret, in_delay(mul(Ret, Volume), 1)),下一分钟收益与上一分钟「成交量 × 收益」的相关,就是 LMSW 回归里 c2 在分钟级的直接对应。(5) day_corr(abs_(Ret), Volume),成交量与价格波动的绑定程度,是信息型交易的强度。外层用 cross_mean / cross_ema 取 10、20、60 日;cs_bucket_rank 在市值或波动桶内排序的版本作对照,保证结果不是规模或波动的替身。方向交给 sign。
+      为什么和以前不一样:快照第 1 批的共性表全是静态日频字段 LogFloatShares 的包装,没有任何分钟级量价联合结构进入。这里的输入是分钟 Ret 与 Volume 的日内联合分布,机制是流动性冲击的回吐,与名义价格、规模无关。和 5 个控制比:20 日反转控制的是收益的总量,这里度量的是收益在日内按成交量怎么分配,相关系数版本与收益总量近似无关;波动、流动性、成交额波动三个控制都是二阶矩或水平,而 day_corr 无量纲。预期这些种子与各控制的 |ρ| 都明显低于 0.5,与快照的 0 个 head 无从相关。
+      为什么样本外还会在:放量收益的回吐是对提供流动性的补偿,只要市场里有大量非信息性交易者,它就存在;A 股成交的大头来自散户,这个前提在 2023 年后没有变。它不是会被一次性套利掉的定价错误。度量用相关系数和协方差,对样本外成交额整体水平的变化不敏感。20 日平均让信号换手适中,15bp 成本可以承受。'
+    inspired_by: '文献:Campbell-Grossman-Wang 1993、Llorente-Michaely-Saar-Wang 2002 的成交量—收益动态。快照方面:第 1 批共性表里只有静态日频字段,分钟立方体的量价联合结构完全没被用到。'
+    literature:
+      - {title: 'Trading Volume and Serial Correlation in Stock Returns', authors: 'Campbell, J.Y.; Grossman, S.J.; Wang, J.', year: '1993-11', url: 'https://doi.org/10.2307/2118454', treatment: '放量伴随的收益反转:按成交量给分钟收益加权,取加权与等权之差、或量价相关'}
+      - {title: 'Dynamic Volume-Return Relation of Individual Stocks', authors: 'Llorente, G.; Michaely, R.; Saar, G.; Wang, J.', year: '2002', url: 'https://doi.org/10.1093/rfs/15.4.1005', treatment: 'r(t+1) 对 V(t)·r(t) 的交互系数度量放量收益是延续还是反转;这里搬到分钟级,写成 day_corr(Ret, in_delay(mul(Ret, Volume), 1))'}
+    seeds:
+      - 'cross_mean(day_corr(Ret, Volume), 20)'
+      - 'cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 20)'
+      - 'cross_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 20)'
+      - 'cross_mean(day_corr(Ret, in_delay(mul(Ret, Volume), 1)), 20)'
+      - 'cross_mean(day_corr(Close, Volume), 20)'
+      - 'cross_mean(day_corr(Ret, Volume), 60)'
+      - 'cross_ema(day_corr(Ret, Amt), 10)'
+      - 'div(cross_mean(day_corr(Ret, Volume), 20), cross_stddev(day_corr(Ret, Volume), 20))'
+      - 'cs_bucket_rank(cross_mean(day_corr(Ret, Volume), 20), LogFloatCap)'
+      - 'cross_mean(day_corr(abs_(Ret), Volume), 20)'
+      - 'cs_bucket_rank(cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20), cross_mean(day_std(Ret), 20))'
+      - 'sub(cs_rank(cross_mean(day_corr(Ret, Volume), 20)), cs_rank(cross_mean(day_corr(Ret, in_delay(mul(Ret, Volume), 1)), 20)))'
+R: []

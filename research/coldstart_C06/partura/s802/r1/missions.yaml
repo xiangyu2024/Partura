@@ -1,0 +1,107 @@
+seed: 802
+round: 1
+slots:
+- type: E
+  core: sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))
+  hypothesis: 【核心 S 是什么】S = sigmoid(ts_regbeta(x=day_flat_run_max(Vwap), y=day_durbin_watson(Volume), 50)):过去 50 个交易日里,「当天分钟均价被钉在同一个值上的最长连续时长占比」对「当天分钟成交量的粗糙度 Σ(Δv)²/Σv²(尺度无关)」的时序 OLS 斜率,sigmoid 把斜率饱和成近似符号(定位输出:裸斜率 valid -0.14,加 sigmoid 后 +1.14;Vwap→Close 四棵 head 全部变差,说明钉住的是「有成交的价格」,不是没成交)。多头腿是斜率持续为负的股票:价格钉得越久,成交量反而越平稳 —— 连续、均匀地在同一个价位成交,即盘口在某一档被持续吸收(大额挂单 / 封板),而不是偶发的零星成交。S 单独 score +0.80,与已知族 rho -0.12。【已见过的外围】库里含 S 的 5 个 head 的外围只有 inv、pow_1_5、sigmoid、ts_decay_linear、再套一层 ts_regbeta(day_flat_run_max(Vwap), ·)—— 全部是 S 的一元单调变换或时间平滑,只改变 EMA 里哪些天占权重,没有引入任何第二个输入。【这次的外围做什么】补上 S 看不到的三件事,每件都用 S 以外的新输入实现:(A) 钉在哪里:钉在当天最高均价(买盘被吸收 / 涨停封板)还是最低均价(卖盘被吸收 / 跌停封板),用 day_at_max_ratio(Vwap) - day_at_min_ratio(Vwap) 在同一 50 日窗口的均值 P 表示(正常日两者都约 1/240,差约为 0;封板日接近 ±1)。实现方式是 mul(inv(ts_decay_linear(S, 40)), P):inv(decay(S)) 把 S 的多头腿(S 持续接近 0)放大,再乘有符号的 P,把这条腿按钉价方向劈成两半 —— 不能直接 mul(S, P),那样 S≈0 的多头腿乘完都是 0,会被挤到中间;另有 day_signed_ratio(in_delta(Vwap,1), Volume)(成交量加权的均价涨跌方向)作为方向的第二种量法。(B) 为什么钉住:低价股在 0.01 元最小价位上是机械性的钉住(一个价位就是很大的百分比),那不是盘口吸收。用 day_distinct_ratio(Vwap)(当天走过多少个不同的价格,网格粗的股票低)、day_flat_ratio(Vwap)、价格水平 day_last(Close) 做分桶去均值 / 截面残差 / 比值,把 S 的持续度和「同样网格粗细的股票」比,去掉机械钉住的那部分。(C) 何时进入:ts_delta(ts_decay_linear(S,20),20) 与 decay(S,10)-decay(S,60) 数的是「刚进入负斜率状态」而不是「一直在里面」,与已有的长平滑是相反的时间操作。【避开的陷阱】S 有约三分之一的并列(sigmoid 饱和),所以不把 S 直接送进任何基于 _pct_rank 的 cs_* / rank 算子(会变成列序斜坡,陷阱 2);分桶变量都是连续的 50 日均值或价格,不用 3 值的 LimitWidth / BoardCode 做桶(同样会按列序切桶);不对 DW 做凸变换(陷阱 1),不引入市值 / 波动 / 流动性的非线性函数(陷阱 3)—— day_distinct_ratio 与 day_at_max_ratio 是价格网格与钉价位置的计数,不是成交量水平。【为什么和以前不一样】已有外围全部是 S 的单调函数,与 S 的秩相关接近 1;这里的外围乘上有符号的第二输入或减去同类股票均值,会改变多头十分位里装的是哪些股票。【为什么样本外还会在】(A) 依据的是制度:A 股 10%/20% 涨跌停与 T+1 下,封板是大户有目的地在一个价位持续吃单(Chen 等 2019 用账户数据证明),涨停封板后价格延续、跌停封板后延续下跌,钉价方向本身就是信息,这是交易制度决定的,不随样本期变;(B) 依据的是价格离散性(Harris 1991):最小价位约束造成的钉住是纯机械的,剔除它之后剩下的才是盘口吸收,这一拆分越干净,越不依赖低价股效应这个会随注册制和退市改变的代理。
+  literature:
+  - title: Daily price limits and destructive market behavior
+    authors: Ting Chen, Zhenyu Gao, Jibao He, Wenxi Jiang, Wei Xiong
+    year: 2019-01
+    url: https://ideas.repec.org/a/eee/econom/v208y2019i1p249-264.html
+    treatment: 封板是大户有目的地在一个价位持续吃单,涨停 / 跌停方向不同的后续路径 → 用钉在日内最高 / 最低均价的分钟占比把 S 的多头腿按方向拆开
+  - title: Statistical Properties and Pre-hit Dynamics of Price Limit Hits in the Chinese Stock Markets
+    authors: Yu-Lei Wan, Wen-Jie Xie, Gao-Feng Gu, Zhi-Qiang Jiang, Wei Chen, Xiong Xiong, Wei Zhang, Wei-Xing Zhou
+    year: 2015-03
+    url: https://arxiv.org/abs/1503.03548
+    treatment: 跟踪进入封板状态前后的演化而非静态的一日统计 → 用 ts_delta(decay(S)) 区分新进入状态与长期处于状态
+  - title: Stock Price Clustering and Discreteness
+    authors: Lawrence Harris
+    year: '1991'
+    url: https://doi.org/10.1093/rfs/4.3.389
+    treatment: 价格离散性随价格水平变化,低价股受最小价位约束 → 用 day_distinct_ratio(Vwap) / 价格水平分桶去均值,剔除机械钉住
+  seeds:
+  - mul(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40)), ts_mean(sub(day_at_max_ratio(Vwap), day_at_min_ratio(Vwap)), 50))
+  - mul(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40)), ts_mean(day_signed_ratio(in_delta(Vwap, 1), Volume), 50))
+  - mul(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40)), ts_mean(day_at_max_ratio(Vwap), 50))
+  - mul(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40)), ts_mean(day_at_min_ratio(Vwap), 50))
+  - ts_decay_linear(mul(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))), sub(day_at_max_ratio(Vwap), day_at_min_ratio(Vwap))), 40)
+  - cs_bucket_demean(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), ts_mean(sub(day_at_max_ratio(Vwap), day_at_min_ratio(Vwap)), 50))
+  - div(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), ts_mean(day_distinct_ratio(Vwap), 50))
+  - mul(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), ts_mean(day_distinct_ratio(Vwap), 50))
+  - cs_bucket_demean(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), ts_mean(day_distinct_ratio(Vwap), 50))
+  - cs_regres(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), ts_mean(day_flat_ratio(Vwap), 50))
+  - cs_bucket_demean(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40), day_last(Close))
+  - ts_delta(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 20), 20)
+  - sub(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 10), ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 60))
+  - mul(ts_delta(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 20), 20), ts_mean(sub(day_at_max_ratio(Vwap), day_at_min_ratio(Vwap)), 50))
+- type: N
+  hypothesis: 【机制】被吸收的订单流:成交量站在哪一边,和价格往哪一边走,是两件事。day_signed_ratio(Ret, Volume) = Σ V·sign(r) / Σ V,按分钟 tick rule 把成交量记为主动买(分钟收益为正)或主动卖(为负),是不需要逐笔数据的日度净主动买入占比(Lee-Ready 1991 的 tick test;Easley-López de Prado-O’Hara 2012 的 bulk volume classification 也是按 bar 的价格变化切成交量);day_signed_ratio(Ret, Ret) = Σ r / Σ|r|,是当天价格路径的净方向占路径总长度的比例(效率比)。两者之差 A = 净主动买入占比 - 价格净方向:成交量说「在买」而价格没涨(A > 0),说明主动买单被对面的限价单吸收了;A < 0 说明主动卖单被吸收、价格没跌。Kyle(1985)里知情交易者把订单拆开以隐藏信息,做市方 / 限价方吸收订单流;Chordia-Subrahmanyam(2004)发现个股订单不平衡有很强的自相关(拆单),并且在控制同期价格变化之后,滞后的不平衡仍能预测收益。在 A 股,主动下单的多是散户,而有信息的大资金常用限价单被动成交;所以我的事先预期是:被吸收的主动卖出(A 持续为负:卖压大而价格不跌)之后收益更高,多头做 A 低的那一端(奖励会扫正负号,方向由数据定,这里先写下预期)。【算子怎样实现】(1) 差值:sub(day_signed_ratio(Ret,Volume), day_signed_ratio(Ret,Ret)),按 10/20/40 日平均或线性衰减(拆单的执行期是几天到几周);(2) 逐股时序残差:ts_regres(价格方向或 day_sum(Ret), 订单流, 60) 取每只股票自己 60 日内「订单流里价格解释不了的部分」,不同股票的冲击系数不同,残差比差值更干净;(3) 截面残差:cs_regres(订单流, 价格方向 / 当日收益),把订单流对同日价格变化做截面回归后取残差,专门去掉和 20 日反转控制重合的那部分;(4) 拆单的持续性:ts_autocorr(订单流, 40, 1) 乘订单流均值;(5) 最重的 10% 分钟(day_topw_mean(sign(Ret), Volume))的方向与其余分钟方向之差,以及这些分钟的超额收益 —— 大块成交的方向与散单方向不一致时,更可能是大资金;(6) 换成 5 分钟价格变化做 tick rule 的版本,检验 1 分钟噪声。【为什么和库里不同】库里 6 个 head:5 个是价格钉住时长对成交量粗糙度的斜率 S 的单调变换,1 个是日内成交量第一小时对最后一小时的差;全部不含价格变化的方向。这里的输入是收益符号与成交量的联合,机制是订单流被吸收,预期与所有 head 的 |rho| < 0.3。订单流以符号为主、对成交量做了自身归一化,所以不是流动性、波动或市值的非线性重写;价格方向的部分被差值 / 残差扣掉,不是 20 日反转的换写法。【为什么样本外还会在】这是交易机制造成的,不是统计巧合:大资金必须拆单执行(冲击成本随单量上升),拆单在几天到几周内留下持续的、被吸收的单边订单流;只要 A 股的投资者结构仍是散户主动成交、机构被动挂单,这个痕迹就会存在。统计量是分钟成交量的占比与收益符号,不依赖成交量水平和波动水平,换手率整体变化或波动率换档时不会失效。
+  inspired_by: 第 1 批:库里两份真实信息都是价格与成交量的日内联合形态(S:价格钉住时长 × 成交量粗糙度;day_mean(neg(in_delta(Volume,60))):成交量的日内时点),但没有一个 head 用到价格变化的方向与成交量的联合;文献里最成熟的这类量是订单不平衡(Chordia-Subrahmanyam 2004)
+  literature:
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    url: https://ideas.repec.org/a/eee/jfinec/v72y2004i3p485-518.html
+    treatment: 个股订单不平衡自相关(拆单),控制同期价格变化后滞后不平衡预测收益 → 订单流减去价格方向 / 对价格回归取残差
+  - title: Inferring Trade Direction from Intraday Data
+    authors: Charles M. C. Lee, Mark J. Ready
+    year: '1991'
+    url: https://doi.org/10.1111/j.1540-6261.1991.tb02683.x
+    treatment: tick test 判定成交方向 → day_signed_ratio(Ret, Volume) 按分钟收益符号给成交量定方向
+  - title: Flow Toxicity and Liquidity in a High-frequency World
+    authors: David Easley, Marcos M. López de Prado, Maureen O’Hara
+    year: '2012'
+    url: https://doi.org/10.1093/rfs/hhs053
+    treatment: 按 bar 的价格变化切分买卖成交量(bulk volume classification)→ 1 分钟与 5 分钟价格变化两种 bar 的 tick rule
+  - title: Continuous Auctions and Insider Trading
+    authors: Albert S. Kyle
+    year: '1985'
+    url: https://doi.org/10.2307/1913210
+    treatment: 知情者拆单、做市方吸收订单流、价格只部分反映 → 订单流里价格没有解释的部分才是信息
+  seeds:
+  - ts_mean(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Ret)), 20)
+  - ts_mean(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Ret)), 10)
+  - ts_decay_linear(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Ret)), 40)
+  - ts_mean(ts_regres(day_signed_ratio(Ret, Ret), day_signed_ratio(Ret, Volume), 60), 10)
+  - ts_mean(ts_regres(day_sum(Ret), day_signed_ratio(Ret, Volume), 60), 20)
+  - cs_regres(ts_mean(day_signed_ratio(Ret, Volume), 20), ts_mean(day_signed_ratio(Ret, Ret), 20))
+  - ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 20)
+  - ts_mean(day_signed_ratio(Ret, Volume), 20)
+  - mul(ts_autocorr(day_signed_ratio(Ret, Volume), 40, 1), ts_mean(day_signed_ratio(Ret, Volume), 20))
+  - ts_mean(sub(day_topw_mean(sign(Ret), Volume), day_signed_ratio(Ret, Volume)), 20)
+  - ts_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 20)
+  - ts_corr(day_signed_ratio(Ret, Volume), day_sum(Ret), 40)
+  - ts_mean(sub(day_signed_ratio(in_delta(Close, 5), Volume), day_signed_ratio(in_delta(Close, 5), in_delta(Close, 5))), 20)
+  - ts_rank(ts_mean(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Ret)), 5), 60)
+R:
+- head: inv(ts_decay_linear(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))), 40))
+  why: 内层 inv 是烂的:定位拆解里敲掉它 score 从 +0.73 升到 +0.96(train 0.96 / valid 2.43),必要性 -0.23,rho_head 0.64、rho_known -0.16。机制上,S 的多头腿 S≈0,inv(S) 把这些天变成极大值,ts_decay_linear 被单个极端日主导,而不是数「最近有多少天处在这个状态」;去掉 inv 后 decay 才是在数天数(distinct 0.67→0.84)。同时 ts_regbeta 窗口 50 偏短(另一棵 head 上 50→25 崩到 +0.40,50→100 +0.32),50 日的斜率估计误差大(Vasicek 1973),所以给出窗口 100、decay 80、以及把斜率换成 t 值(用估计误差标准化,而不是靠 sigmoid 硬截断)的版本。
+  variants:
+  - inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40))
+  - inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 100)), 40))
+  - inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 80))
+  - inv(ts_decay_linear(sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 40))
+- head: inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))))))
+  why: 两个部件是烂的:(1) ts_regbeta 窗口 50 太短 —— 拆解里 50→25 valid 掉到 +0.40,50→100 升到 +1.16(gain +0.32,rho_head 0.73);(2) 中段 pow_1_5(inv(sigmoid(·))) 必要性 -0.10(敲掉 +0.93),只是在 S 的单调函数上再叠单调函数。两处改动合并成第二个变体。
+  variants:
+  - inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 100))))))))
+  - inv(pow_1_5(inv(sigmoid(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 100)))))))
+- head: inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))), 40))
+  why: 两个窗口都偏短:这棵 head 上 ts_decay_linear 20→+1.11、40→+1.14、80→+1.24(单调上升);ts_regbeta 50→100 在兄弟 head 上 +0.32。decay 的作用是把 sigmoid 造成的并列块拆开、数处在状态里的天数,窗口越长计数越细;斜率窗口越长估计误差越小。给出两者合并与各自的版本。
+  variants:
+  - inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 100))))), 80))
+  - inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 100))))), 40))
+  - inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))), 120))
+- head: day_mean(neg(in_delta(Volume, 60)))
+  why: 叶子 Volume 是烂的:in_delta 沿分钟轴差分后取日均会逐项抵消,这个量等于(第一小时成交量 - 最后一小时成交量)/ 181,单位是股数,所以它的截面排序主要由股票的成交量水平决定,是流动性的非线性函数(陷阱 3),线性中性化只去掉线性部分。把 Volume 换成当日占比 in_scale(Volume) = v_t / Σv,只留下「成交量在一天里前重后轻还是前轻后重」的时点形态;如果原 head 的分数来自流动性的残留,换掉后会掉;如果来自时点形态,会持平或上升。另给 Amt 与 30 / 120 分钟两个尺度。
+  variants:
+  - day_mean(neg(in_delta(in_scale(Volume), 60)))
+  - day_mean(neg(in_delta(in_scale(Amt), 60)))
+  - day_mean(neg(in_delta(in_scale(Volume), 30)))
+  - day_mean(neg(in_delta(in_scale(Volume), 120)))
+- head: sigmoid(ts_regbeta(day_flat_run_max(Vwap), sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))
+  why: '【第 1 次审计后重写】原先的 Volume→Amt 撤回:DW 对同一只股票同一天尺度不变,Amt 只多了日内价格的加权,变体与原 head 的 |ρ| 是 0.998;「四棵里三棵 Amt ≥ Volume」是我读错了拆解表(+1.14 那棵 1.14→1.11、+0.83 嵌套 pow 那棵 0.83→0.82、+0.73 那棵 0.73→0.74),+0.13 只来自 valid,是挑数字。【这次替换的部件】sigmoid 里的原始斜率 β,换成同一次滚动 OLS 给出的 t 值 ts_reg_tvalue(参数顺序与 ts_regbeta 相同,都是 y 对 x)。变体 1 只换内层(与其他 S 系 head 共用的那棵子树),变体 2 内外两层都换。【为什么原始 β 是烂的】β = ρ·σ_y/σ_x,而 sigmoid 的饱和点是按 β 的原始单位定的。所以一只股票的 S 是贴在 0/1 上还是处在线性段,取决于 σ_y/σ_x(成交量粗糙度的日间离散 ÷ 钉价时长的日间离散)这个与信号无关的尺度,而不是斜率的符号有多可靠。对这棵 head,这一点比对其他 S 系 head 更要紧:外层量的是过去 50 日 S 随钉价时长 x 同向还是反向变动;在整个窗口里都饱和的股票上 S 几乎不动,外层斜率约为 0,head 约为 0.5。也就是说,这棵 head 能「看到」哪些股票,是由 σ_y/σ_x 挑出来的。t = β/se = ρ·√(n−2)/√(1−ρ²),只取决于窗口内的相关和样本数,去掉了这个尺度;它表达的正是「斜率的符号有多可靠」,而定位输出说信息就在符号里(裸 β 的 valid −0.14,sigmoid(β) +1.14;+0.73 那棵 head 敲掉 sigmoid 后 +0.73→−0.07)。sigmoid(t) 只在 |t| 很大、也就是窗口内 |ρ| 接近 1 时才饱和,所以内层换成 t 值后,外层回归的 y 在几乎所有股票上都有正常的变动。【证据】(1) 相关度表里结构相同的一对:inv(ts_decay_linear(sigmoid(β),40)) 与 inv(ts_decay_linear(sigmoid(t),40)) 相比,distinct 0.84→1.00,与波动控制的 |ρ| 0.22→0.05,5 个控制都 ≤ 0.06。说明 sigmoid(β) 的饱和格局里带着一部分波动,属于陷阱 3 一类的非线性残留;这棵 head 本身与波动的 |ρ| 约 0.16(相关度表没有单列 head 本身,这里用与它 |ρ| 0.998 的 Amt 版那一行)。(2) 源码:tvalue 与 beta 出自同一次 rolling_ols,se = √(rss/(n−2)/Σdx²);y 在窗口里为常数时 β=0、rss=0,t = 0/(0+EPS) = 0,不会炸。(3) 同一行里,这棵 head 与其他 S 系 head 的 |ρ| 最高只有 0.28,它的信息在 S 的变动里而不在 S 的水平里,所以「谁的 S 会动」由一个无关尺度决定,对它的伤害最直接。【没有的证据】这棵 head 上没有直接测过这个替换;score 方面的依据只有上面的结构对照与「信息在符号」的定位结果。窗口不动:这棵 head 外层 50→25 是 −0.05,50→100 是 +0.47,50 已是最好的。若两个变体都掉分,说明这棵 head 的分数有一部分来自 σ_y/σ_x 的挑选,第 2 轮不再在它上面花 E 或 R。'
+  variants:
+  - sigmoid(ts_regbeta(day_flat_run_max(Vwap), sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))
+  - sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))

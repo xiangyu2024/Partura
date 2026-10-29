@@ -1,0 +1,62 @@
+seed: 807
+round: 1
+slots:
+  - type: E
+    core: 'pow_2(day_wmean(Ret, Ret))'
+    hypothesis: '核心 W² = pow_2(day_wmean(Ret, Ret)),其中 W = Σr|r| / Σ|r| = (RS⁺ − RS⁻) / Σ|r|:上行与下行已实现半方差之差,除以日内路径长度(r 为分钟收益)。快照的拆解给出:带符号的 W 单独 score −0.19,折叠成 W² 是 +0.89(内层 pow_2 的必要性 +1.08),head W⁴ 是 +1.18 —— 信息在「日内单边程度的幅度」,不在方向。但 W 有量纲:随机游走下 W ≈ σ·√峰度/√N·Z + 漂移项,所以 W² 同时混着三样东西:日内波动尺度 σ²、分钟收益的厚尾/跳跃、真正的单边程度。已见过的外围(外层 pow_2、inv、ts_cov / day_var / day_median 的组合)没有一个把这三样分开。外层 pow_2 尤其可疑:W² ≥ 0 且 t↦t² 在 [0,∞) 单调,W⁴ 与 W² 在每一天的截面秩完全相同,它带来的 +0.29 全部来自 hl=20 的 EMA 被拉向月内最极端的那一天,而且 train +0.29 / valid −0.31;凸化正是已知陷阱 1、3 把波动尾部带回奖励的方式。本位的外围做三件以前没做过的事:(1) 非线性地去掉波动尺度 —— 同日除以 RV 型分母:div(W², pow_2(day_wmean(abs_(Ret), Ret))) 中 day_wmean(abs_(Ret), Ret) = Σr²/Σ|r|,所以这个比值恰好是 Bollerslev–Li–Zhao 的相对符号跳跃 RSJ = (RS⁺ − RS⁻)/RV 的平方,无量纲、有界;或者在 20 日波动十分位内排序 cs_bucket_rank(·, cross_mean(day_std(Ret), 20)),把线性秩中性化去不掉的凸波动部分在每个十分位里清零。(2) 把月度聚合显式化,并分开「典型日」与「尾部日」:cross_med / cross_mean / cross_tail_mean_q75 / cross_quantile_q75 / cross_max,窗口 20 = head 被选中的半衰期;以及 cross_zscore(cross_mean(·, 5), 60)「这一周的单边程度相对本股过去三个月是否异常」(冲击而非水平,持久的波动水平被减掉)。这些替代了隐式的凸化 EMA,让纯多头十分位书不依赖少数极端日。(3) 按涨跌停幅度归一化(Hung–Yang 2018 对有涨跌停市场 MAX 的处理):LimitWidth 决定一天单边最多能走多远,20% 板的 W² 不能和 10% 板直接比,除以 LimitWidth² 后再在波动十分位内比较。种子全部是 20 日以上的聚合或十分位内秩,所以预计与 head 的日度秩 |ρ| 远低于 0.7(日度 W² 的截面秩大部分是 χ² 型的当日噪声,月度聚合与它只共享持久部分),与波动控制的 |ρ| 也远低于 0.5。为什么样本外还会在:单边、跳跃式的日内走势吸引注意力与彩票型需求,在卖空受限、散户主导、有涨跌停的 A 股难以被套利(Bali–Cakici–Whitelaw 2011 的 MAX;Nartea–Kong–Wu 2017 证明 A 股的 MAX 与特质波动率并存、互不吸收,所以必须显式去掉波动才能看清 MAX 型信息);去掉波动尺度与凸化之后留下的部分不再依赖只在 train 上选出的幂次,如果它仍然有效,它就是结构性的而不是参数性的;如果它失效,说明 head 主要是非线性波动,这一点本身也决定第 2 轮该不该继续深挖这个核心。'
+    literature:
+      - {title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns', authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao', year: '2020', url: 'https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html', treatment: '用日内收益的上下行半方差之差除以已实现方差得到无量纲的相对符号跳跃 RSJ,做横截面排序;本位用 div(W², pow_2(day_wmean(abs_(Ret), Ret))) 精确实现 RSJ² 这一归一化'}
+      - {title: 'The MAX Effect: Lottery Stocks with Price Limits and Limits to Arbitrage', authors: 'Weifeng Hung, Jimmy Yang', year: '2018', url: 'https://ideas.repec.org/a/eee/finmar/v41y2018icp77-91.html', treatment: '在有涨跌停的市场里把 MAX 按涨跌停幅度重新标准化后再做横截面检验;本位用 div(·, pow_2(LimitWidth))'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011-02', url: 'https://www.nber.org/papers/w14804.pdf', treatment: '同一批日度数据用月内最大值而非均值聚合(MAX vs IVOL);本位用显式的 cross_max / cross_quantile_q75 / cross_tail_mean_q75 与 cross_med 对照'}
+      - {title: 'Do extreme returns matter in emerging markets? Evidence from the Chinese stock market', authors: 'Gilbert V. Nartea, Dongmin Kong, Ji Wu', year: '2017', url: 'https://ideas.repec.org/a/eee/jbfina/v76y2017icp189-197.html', treatment: 'A 股上 MAX 与特质波动率独立共存、互不吸收,需要同时控制;本位用 cs_bucket_rank 在波动十分位内排序,非线性地去掉波动'}
+      - {title: 'Does realized skewness predict the cross-section of equity returns?', authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez', year: '2015', url: 'https://doi.org/10.1016/j.jfineco.2015.02.009', treatment: '日内高阶矩先用已实现方差的幂归一化成无量纲量,再按周/月聚合做横截面;本位的同日 RV 型分母与月度聚合'}
+    seeds:
+      - 'cross_mean(div(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(abs_(Ret), Ret))), 20)'
+      - 'cross_tail_mean_q75(div(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(abs_(Ret), Ret))), 20)'
+      - 'cross_med(div(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(abs_(Ret), Ret))), 20)'
+      - 'cs_bucket_rank(cross_mean(div(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(abs_(Ret), Ret))), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cross_mean(div(pow_2(day_wmean(Ret, Ret)), day_var(Ret)), 20)'
+      - 'cs_bucket_rank(cross_mean(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_tail_mean_q75(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_max(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_med(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_quantile_q75(div(pow_2(day_wmean(Ret, Ret)), pow_2(LimitWidth)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_mean(div(pow_2(day_wmean(Ret, Ret)), pow_2(LimitWidth)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cross_zscore(cross_mean(pow_2(day_wmean(Ret, Ret)), 5), 60)'
+      - 'cross_zscore(cross_mean(div(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(abs_(Ret), Ret))), 5), 60)'
+  - type: N
+    hypothesis: '日内资金流失衡的幅度(VPIN 型的订单流毒性)预测收益,预期方向为负。快照里唯一的 head 测的是价格路径有多单边(收益加权的分钟收益);本位换一个被观测的量:成交额在上涨分钟与下跌分钟之间的失衡,即只用分钟 K 线做的批量成交分类(BVC 的硬分类版):每分钟的成交额按该分钟收益的符号记为买方或卖方发起。算子实现:(a) 日级 abs_(day_signed_ratio(Ret, Amt)) = |上涨分钟成交额占比 − 下跌分钟成交额占比|,有界在 [0,1],不含波动尺度;(b) 桶级,更贴近 Easley–López de Prado–O’Hara 2012 的 VPIN(各桶 |V_B − V_S| / V 的平均):day_mean(div(abs_(in_sum_rolling(mul(sign(Ret), Amt), 30)), in_sum_rolling(Amt, 30))),用 15 / 30 分钟的滚动桶;(c) 月度聚合 cross_mean / cross_tail_mean_q75(20 日),以及 cross_zscore(cross_mean(·, 5), 60)「相对本股历史的异常失衡」;(d) 失衡方向的不稳定性 cross_stddev(day_signed_ratio(Ret, Amt), 20):一个月里买卖方向来回翻 = 意见分歧;(e) 成交最重的 10% 分钟的收益相对当日波动 |day_topw_mean(Ret, Amt)| / day_std(Ret):重仓分钟的价格冲击;(f) 资金与价格的背离 |day_signed_ratio(Ret, Amt) − day_signed_ratio(Ret, Ret)|:钱偏在一边而价格没跟着走(被吸收的流量)。VPIN 机械地与流动性相关(成交稀的股票失衡噪声大),所以有 3 个种子在 20 日成交额十分位内排序(cs_bucket_rank),非线性地去掉流动性(已知陷阱 3)。方向:在卖空受限、散户主导的 A 股,持续单边的资金流更多是注意力驱动的追涨杀跌而不是被补偿的信息风险,Chen–Liu–Teka–Zhang 2022 在 A 股分钟数据上发现聪明钱指标与未来收益负相关;美股 PIN 文献(Easley–Hvidkjaer–O’Hara 2002)给的是信息风险正溢价 —— 两个机制都清楚,方向由奖励在 train 上定,选到哪一边都可解释。为什么和库里不同:输入从「收益加权的收益」换成「按收益符号划分的成交额」,桶级失衡是成交额的比值、不含收益幅度,预计与 head 的日度秩 |ρ| 在 0.3 以下。为什么样本外还会在:卖空约束、涨跌停与散户成交占比是 A 股的制度特征,不随样本期改变;种子只用 15 / 20 / 30 / 60 这类常规窗口,没有在 train 上挑出来的参数或幂次。'
+    inspired_by: '第 1 批唯一 head pow_2(pow_2(day_wmean(Ret, Ret))) 的拆解:信息在日内单边的幅度而不是方向(W 单独 −0.19,W² +0.89)—— 把同一个「单边」机制从价格路径换到资金流这条测量通道;方法来自 Easley–López de Prado–O’Hara 2012 的 VPIN / 批量成交分类。'
+    literature:
+      - {title: 'Flow Toxicity and Liquidity in a High-Frequency World', authors: 'David Easley, Marcos López de Prado, Maureen O’Hara', year: '2012', url: 'https://ideas.repec.org/a/oup/rfinst/v25y2012i5p1457-1493.html', treatment: 'VPIN:没有逐笔方向时按价格变动把每个桶的成交量分成买/卖(批量成交分类),取各桶 |V_B − V_S| / V 的平均;本位用分钟收益符号硬分类 + 15/30 分钟滚动桶实现'}
+      - {title: 'Is Information Risk a Determinant of Asset Returns?', authors: 'David Easley, Soeren Hvidkjaer, Maureen O’Hara', year: '2002', url: 'https://doi.org/10.1111/1540-6261.00493', treatment: '由买卖失衡估计的知情交易概率(PIN)作为横截面定价特征;本位用月度聚合的失衡幅度作为对应物'}
+      - {title: 'Smart money in China’s A-share market: Evidence from big data', authors: 'Zhenhua Chen, Zhenya Liu, Hanen Teka, Yifan Zhang', year: '2022', url: 'https://ideas.repec.org/a/eee/riibaf/v61y2022ics0275531922000514.html', treatment: 'A 股 1 分钟数据构造的资金流「聪明度」月度指标,与未来收益呈负向横截面关系;本位的 day_topw_mean(Ret, Amt) 与月度聚合'}
+      - {title: 'Individual Investor Trading and Stock Returns', authors: 'Ron Kaniel, Gideon Saar, Sheridan Titman', year: '2008-02', url: 'https://ideas.repec.org/a/bla/jfinan/v63y2008i1p273-310.html', treatment: '月度净买卖强度(带符号)预测下月收益;本位刻意取幅度(abs_ / 桶级 |失衡|)而不是符号,与之对照'}
+    seeds:
+      - 'cross_mean(abs_(day_signed_ratio(Ret, Amt)), 20)'
+      - 'cross_tail_mean_q75(abs_(day_signed_ratio(Ret, Amt)), 20)'
+      - 'day_mean(div(abs_(in_sum_rolling(mul(sign(Ret), Amt), 30)), in_sum_rolling(Amt, 30)))'
+      - 'day_mean(div(abs_(in_sum_rolling(mul(sign(Ret), Amt), 15)), in_sum_rolling(Amt, 15)))'
+      - 'cross_mean(day_mean(div(abs_(in_sum_rolling(mul(sign(Ret), Amt), 30)), in_sum_rolling(Amt, 30))), 20)'
+      - 'cs_bucket_rank(cross_mean(abs_(day_signed_ratio(Ret, Amt)), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cs_bucket_rank(cross_mean(day_mean(div(abs_(in_sum_rolling(mul(sign(Ret), Amt), 30)), in_sum_rolling(Amt, 30))), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cross_mean(div(abs_(day_topw_mean(Ret, Amt)), day_std(Ret)), 20)'
+      - 'cross_stddev(day_signed_ratio(Ret, Amt), 20)'
+      - 'cs_bucket_rank(cross_stddev(day_signed_ratio(Ret, Amt), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cross_zscore(cross_mean(abs_(day_signed_ratio(Ret, Amt)), 5), 60)'
+      - 'cross_mean(abs_(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Ret))), 20)'
+R:
+  - head: 'pow_2(pow_2(day_wmean(Ret, Ret)))'
+    why: '三个部件可疑,每个变体只动其中一个(或明确写出动了两个)。(1) 外层 pow_2:W² ≥ 0 且 t↦t² 在 [0,∞) 单调,所以 W⁴ 与 W² 在每一天的截面秩完全相同,外层 pow_2 不带任何当日截面信息;它的 +0.29(W² +0.89 → W⁴ +1.18)全部来自 hl=20 的 EMA 被拉向月内最极端的一天,而且 train +0.29 / valid −0.31(W² 的 valid +1.66 高于 head 的 +1.35),方向与半衰期又都只按 train 选 —— 典型的凸化在 train 上过拟合,也是已知陷阱 1 的形状。变体 1–5 把它换成显式的 20 日聚合(cross_max / cross_quantile_q75 / cross_tail_mean_q75 / cross_med)或更不凸的 pow_1_5。(2) W 里的波动尺度:随机游走下 W ≈ σ·√峰度/√N·Z + 漂移,W⁴ 因而含 σ⁴,是波动的非线性函数,线性中性化去不掉(陷阱 3)。变体 6–9 换成无量纲的写法:除以 day_wmean(abs_(Ret), Ret) = Σr²/Σ|r|(得到相对符号跳跃 RSJ = (RS⁺ − RS⁻)/RV)或 day_std(Ret),换成路径效率 day_signed_ratio(Ret, Ret) = Σr/Σ|r|,或在 20 日波动十分位内排序;若它们都明显变差,说明 head 的分数主要来自波动尺度。(3) 自加权 |r|:定位工具的字段替换表不含 Ret,这个部件从没被测过;变体 10–11 换成成交额加权、以及不加权(day_mean)。'
+    variants:
+      - 'cross_max(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_quantile_q75(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_tail_mean_q75(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_med(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'pow_1_5(pow_2(day_wmean(Ret, Ret)))'
+      - 'pow_2(pow_2(div(day_wmean(Ret, Ret), day_wmean(abs_(Ret), Ret))))'
+      - 'pow_2(pow_2(div(day_wmean(Ret, Ret), day_std(Ret))))'
+      - 'pow_2(pow_2(day_signed_ratio(Ret, Ret)))'
+      - 'cs_bucket_rank(pow_2(pow_2(day_wmean(Ret, Ret))), cross_mean(day_std(Ret), 20))'
+      - 'pow_2(pow_2(day_wmean(Ret, Amt)))'
+      - 'pow_2(pow_2(day_mean(Ret)))'
