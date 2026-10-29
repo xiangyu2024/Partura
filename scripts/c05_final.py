@@ -98,7 +98,10 @@ for S in SEEDS:
         base = []
         for h in LIB[(S, "M")] + extra:
             if h["expr"] in rep:
-                r = rep[h["expr"]]
+                r, seen = rep[h["expr"]], {h["expr"]}
+                while r["expr"] in rep and r["expr"] not in seen:     # PLAN revision 13: a chain of replacements ends at its last link
+                    seen.add(r["expr"])
+                    r = rep[r["expr"]]
                 h = {**h, **{k_: r[k_] for k_ in ("expr", "sign", "hl", "score", "train", "valid")}, "replaced": h["expr"], "role": h["role"] + "+R"}
             base.append(h)
         LIB[(S, X)] = base

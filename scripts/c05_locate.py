@@ -159,7 +159,10 @@ with slot():
     heads = []
     for h in c05_lib.heads(eps):
         if h["expr"] in rep:                                  # an R replacement of an earlier round stands in for its head
-            r = rep[h["expr"]]
+            r, seen = rep[h["expr"]], {h["expr"]}
+            while r["expr"] in rep and r["expr"] not in seen:     # PLAN revision 13: follow a chain of replacements to its end
+                seen.add(r["expr"])
+                r = rep[r["expr"]]
             h = {**h, **{k: r[k] for k in ("expr", "sign", "hl", "score", "train", "valid")}, "replaces": h["expr"]}
         heads.append(h)
 

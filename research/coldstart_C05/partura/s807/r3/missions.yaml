@@ -1,0 +1,199 @@
+seed: 807
+round: 3
+slots:
+  - type: E
+    core: 'day_var(Ret)'
+    hypothesis: >-
+      alpha 来源(本种子最硬的一条):日内已实现方差的「软幂平均」。pow_2_5(pow_3(day_var(Ret))) 配 EMA20、方向 −1,
+      score 2.04 / valid 3.16,是库里最高分的 head;同一条 ^7.5 阶梯换五种载体(day_var、DW(High)、DW(Close)、DW(Low)、Parkinson 极差²)
+      全部 ≥ 1.0、valid 全部 ≥ 2.0;三条硬极值对照(cross_max、上四分位均值)全败,经典日收益 MAX −0.85。奖励只控制了日内波动的 20 日均值。
+      家族控制只放这一个 head(快照里原样含 day_var(Ret) 的只有它),所以核心的「水平 + 凸聚合」信息会被全部扣掉;
+      本任务押的是**给定方差之后,日内收益分布的形状**:核心只当分母、归一化量或分组变量,外围全部无量纲,因而家族控制几乎扣不到它们。
+      六族外围:(1) 带符号拆分 —— 相对带符号跳跃变差 RSJ = mean(r|r|)/var 及其 20 日均值、周度下行半方差占比
+      (Bollerslev–Li–Zhao 2020 的 RSJ;Barndorff-Nielsen–Kinnebrock–Shephard 的已实现半方差);
+      (2) 尾部形状 —— 已实现偏度 mean(r^3)/var^1.5(日度与周度)、已实现峰度 mean(r^4)/var^2、在 day_var 十分位内的偏度 z 分、
+      在上市年限十分位内的已实现偏度(Amaya 等 2015:周度已实现偏度最低十分位减最高十分位每周约 19bp,峰度弱正,波动本身不显著);
+      (3) 跳跃与集中度 —— 双幂变差 / 已实现方差(连续部分占比)、当日最大一分钟平方收益 / 方差及其 20 日均值、
+      成交额最重 10% 分钟上的平方收益 / 全天方差(Barndorff-Nielsen–Shephard 2004);
+      (4) 日内时点 —— 上午盘方差 / 全天方差、尾盘 30 分钟方差 / 全天方差(Andersen–Bollerslev 1997 的日内周期);
+      (5) 路径结构 —— 20 日方差比(日内收益平方的 20 日均值 / 分钟方差的 20 日均值,Lo–MacKinlay 1988)、分钟收益一阶自协方差 / 方差。
+      核心周围此前只见过根上的幂次({pow_3}、{pow_2_5, pow_3}、{pow_2_5})、ts_cov(day_median(Vwap), ·) 与 div(DW(High), ·),以上外围都没出现过。
+      明确不要的写法:再爬幂次阶梯(家族控制必扣光);cross_regbeta(day_var(Ret), ·, d)(10~20 日窗口里 Σ(x−x̄)² 约 1e-11 < 1e-9,整支是 NaN);
+      cross_corr 两边都是 day_var 量纲(分母 sqrt(var·var) 远小于 EPS,退化成放大的协方差,重演 r1a);
+      cs_stddev_full / cs_sum / cs_mean 当 cs_last_* / cs_first_* 的第一个参数(截面常数经 _pct_rank 序数秩变成股票列序,r2a 的唯一 head 就是这个后门);
+      不用 BoardCode / LimitWidth 当 cs_bucket_* 的分组变量(取值很少,序数秩会按列序把同值块切开)。
+      方向交给奖励:美股文献里已实现偏度与 RSJ 都是负向,A 股带符号跳跃的文献(Chao 等 2017)是正向。
+    literature:
+      - title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns'
+        authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao'
+        year: '2020'
+        url: 'https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html'
+        treatment: '按分钟收益符号拆开已实现方差,用归一化的「好波动减坏波动」(相对带符号跳跃变差)给个股排序;借来做 mean(r|r|)/day_var(Ret) 及其 20 日均值'
+      - title: 'Measuring downside risk: realised semivariance'
+        authors: 'Ole E. Barndorff-Nielsen, Silja Kinnebrock, Neil Shephard'
+        year: '2008'
+        url: 'https://www.nuff.ox.ac.uk/economics/papers/2008/w2/downside.pdf'
+        treatment: '只用负收益分钟计算已实现半方差;借来做周度下行半方差 / 周度已实现方差'
+      - title: 'Sign realized jump risk and the cross-section of stock returns: Evidence from China''s stock market'
+        authors: 'Y. Chao, X. Liu, S. Guo'
+        year: '2017-08'
+        url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5542663/'
+        treatment: 'A 股高频数据上正跳跃方差减负跳跃方差的符号差与后续收益正相关;用来提醒 RSJ 的方向不预设,交给奖励'
+      - title: 'Does realized skewness predict the cross-section of equity returns?'
+        authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez'
+        year: '2015'
+        url: 'https://doi.org/10.1016/j.jfineco.2015.02.009'
+        treatment: '用日内收益构造已实现偏度 / 峰度,按周聚合后排序;借来做 mean(r^3)/var^1.5、mean(r^4)/var^2 及其周度均值、方差十分位内的偏度'
+      - title: 'Power and bipower variation with stochastic volatility and jumps'
+        authors: 'Ole E. Barndorff-Nielsen, Neil Shephard'
+        year: '2004'
+        url: 'https://academic.oup.com/jfec/article/2/1/1/960705'
+        treatment: '相邻绝对收益乘积之和(双幂变差)对跳跃稳健,已实现方差减去它就是跳跃部分;借来做双幂变差 / 已实现方差、最大一分钟平方收益 / 方差'
+      - title: 'Intraday periodicity and volatility persistence in financial markets'
+        authors: 'Torben G. Andersen, Tim Bollerslev'
+        year: '1997'
+        url: 'https://ideas.repec.org/a/eee/empfin/v4y1997i2-3p115-158.html'
+        treatment: '日内波动有稳定的 U 型周期;借来把方差拆到上午盘与尾盘 30 分钟,看个股偏离这个形状的程度'
+      - title: 'Stock Market Prices Do Not Follow Random Walks: Evidence from a Simple Specification Test'
+        authors: 'Andrew W. Lo, A. Craig MacKinlay'
+        year: '1988'
+        url: 'https://web.mit.edu/Alo/www/Papers/lo-mackinlay-88.html'
+        treatment: '比较不同采样频率下的方差(方差比);借来做日内收益平方的 20 日均值 / 分钟方差的 20 日均值,以及分钟收益一阶自协方差 / 方差'
+    seeds:
+      - 'div(day_mean(mul(Ret, abs_(Ret))), day_var(Ret))'
+      - 'cross_mean(div(day_mean(mul(Ret, abs_(Ret))), day_var(Ret)), 20)'
+      - 'div(cross_sum(day_mean(pow_2(sub(Ret, abs_(Ret)))), 5), cross_sum(day_var(Ret), 5))'
+      - 'div(day_mean(pow_3(Ret)), pow_1_5(day_var(Ret)))'
+      - 'cross_mean(div(day_mean(pow_3(Ret)), pow_1_5(day_var(Ret))), 5)'
+      - 'div(day_mean(pow_2(pow_2(Ret))), pow_2(day_var(Ret)))'
+      - 'cs_bucket_zscore(day_skew(Ret), day_var(Ret))'
+      - 'cs_bucket_zscore(div(day_mean(pow_3(Ret)), pow_1_5(day_var(Ret))), ListAge)'
+      - 'div(day_mean(mul(abs_(Ret), in_delay(abs_(Ret), 1))), day_var(Ret))'
+      - 'div(day_max(pow_2(Ret)), day_var(Ret))'
+      - 'cross_mean(div(day_max(pow_2(Ret)), day_var(Ret)), 20)'
+      - 'div(day_topw_mean(pow_2(Ret), Amt), day_var(Ret))'
+      - 'div(day_var(in_half(Ret, True)), day_var(Ret))'
+      - 'div(day_var(in_slice(Ret, 211, 240)), day_var(Ret))'
+      - 'div(cross_mean(pow_2(day_sum(Ret)), 20), cross_mean(day_var(Ret), 20))'
+      - 'div(day_mean(mul(Ret, in_delay(Ret, 1))), day_var(Ret))'
+  - type: E
+    core: 'pow_2(cross_mean(day_wmean(Ret, Ret), 5))'
+    hypothesis: >-
+      alpha 来源(本种子唯一一条不是纯量纲的信息):日内自加权漂移 W = day_wmean(Ret, Ret) 先在 5 日上带符号平均、再折叠。
+      证据全是付费的:自身 1.05(所在 head pow_2(pow_2(cross_mean(W, 5))) 1.71 / valid 2.50 的 62%),去掉 cross_mean 的必要性 +0.53,
+      窗口 2 / 5 / 10 = 1.49 / 1.71 / 1.40,「先平均再折叠」1.71 > 「先折叠再平均」1.36;两个空对照都决定性通过
+      (|5 日收盘收益|^4 = −1.20,不是周度极端收益;不加权的 5 日日内漂移 ^4 = −0.02,自加权必要)。
+      家族控制只放 M1 那个 head(W 的 5 日均值的四次方),所以「持续量的量级」会被扣掉;本任务押的是**持续性本身**与它的条件化:
+      (1) 无量纲的一致性 —— (mean W)^2 / mean(W^2)、(mean W / mean|W|)^2、5 日持续量 / 20 日典型 W^2:同样的量级,是每天一点点同向(连续信息)
+      还是一两天大动(离散信息)(Da–Gurun–Warachka 2014);
+      (2) 计数版信息离散度 —— 在持续量十分位内,W 同号天数占比的 z 分(不带符号与带符号各一个);
+      (3) 方向 —— 带符号的持续量;方向 × 换手率去均值后的秩、持续量 × 换手率秩、换手率十分位内的持续量
+      (Medhat–Schmeling 2022:高换手股票的上月收益延续、低换手的反转);持续量 × 「日内漂移与隔夜缺口是否同向」(Lou–Polk–Skouras 2019 的隔夜 / 日内拉锯);
+      (4) 相对自身历史 —— 持续量在自身 60 日里的时间序列分位、持续量减去它的 20 日 EMA;
+      (5) 条件化 —— 在日内方差十分位、上市年限十分位内的 |mean W| z 分;(6) 信噪比 —— 持续量 / 5 日平均日内方差。
+      cs_bucket_zscore 的被解释变量一律先 sqrt(=|mean W|,量纲约 1e-4),避开 (y−μ)/(σ+1e-9) 在 1e-8 量纲上的 EPS 收缩。
+      核心周围此前只见过 {pow_2}(head 本身),以上外围都没出现过。
+      明确不要的写法:cross_corr / cross_autocorr 两边都是 W^2 量纲(约 1e-8,分母远小于 EPS,退化成 1e9 × 协方差,重演 r1a 的 7 个 head);
+      cross_regbeta 的第一参数放 W 系列(NaN 闸门);再加根上的幂次(家族控制必扣光);cs_*_full / cs_sum / cs_mean 当 _lexi 族的第一个参数(列序后门)。
+      方向交给奖励;Kudryavtsev 2017(连续同号之后下一天反转)是反方向的证据。
+    literature:
+      - title: 'Frog in the Pan: Continuous Information and Momentum'
+        authors: 'Zhi Da, Umit G. Gurun, Mitch Warachka'
+        year: '2014'
+        url: 'https://ideas.repec.org/a/oup/rfinst/v27y2014i7p2171-2218..html'
+        treatment: '同样的形成期累计收益,按同号天数占比把「连续小幅同向」与「少数大跳」分开,前者动量更强、更不反转;借来做 (mean W)^2/mean(W^2) 与持续量十分位内的同号天数占比'
+      - title: 'Short-Term Momentum'
+        authors: 'Mamdouh Medhat, Maik Schmeling'
+        year: '2022'
+        url: 'https://repec.cepr.org/repec/cpr/ceprdp/DP15857.pdf'
+        treatment: '按上月收益与换手率双重排序:高换手延续、低换手反转;借来做持续量(带符号)与换手率秩的交互、换手率十分位内的持续量'
+      - title: 'The Effect of Preceding Sequences on Stock Returns'
+        authors: 'A. Kudryavtsev'
+        year: '2017'
+        url: 'https://efaj.actavia.vse.cz/artkey/efa-201704-0006_the-effect-of-preceding-sequences-on-stock-returns.php'
+        treatment: '连续同号多天之后下一天显著反转(小盘、高波动更强);作为反方向证据,所以带符号版本的方向不预设'
+      - title: 'A tug of war: Overnight versus intraday expected returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        url: 'https://personal.lse.ac.uk/polk/research/TugOfWar.pdf'
+        treatment: '收益拆成隔夜与日内两段,各自延续、跨段反转;借来做持续量 × sign(5 日日内漂移 × 5 日隔夜缺口)'
+    seeds:
+      - 'div(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), cross_mean(pow_2(day_wmean(Ret, Ret)), 5))'
+      - 'div(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), pow_2(cross_mean(abs_(day_wmean(Ret, Ret)), 5)))'
+      - 'div(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), cross_mean(pow_2(day_wmean(Ret, Ret)), 20))'
+      - 'cs_bucket_zscore(abs_(cross_mean(sign(day_wmean(Ret, Ret)), 5)), pow_2(cross_mean(day_wmean(Ret, Ret), 5)))'
+      - 'cs_bucket_zscore(cross_mean(sign(day_wmean(Ret, Ret)), 5), pow_2(cross_mean(day_wmean(Ret, Ret), 5)))'
+      - 'mul(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), sign(cross_mean(day_wmean(Ret, Ret), 5)))'
+      - 'mul(mul(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), sign(cross_mean(day_wmean(Ret, Ret), 5))), cs_demean(cs_rank(cross_mean(sub(log(day_sum(Volume)), LogFloatShares), 20))))'
+      - 'mul(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), cs_rank(cross_mean(sub(log(day_sum(Volume)), LogFloatShares), 20)))'
+      - 'cs_bucket_zscore(sqrt(pow_2(cross_mean(day_wmean(Ret, Ret), 5))), cross_mean(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'mul(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), sign(mul(cross_mean(day_wmean(Ret, Ret), 5), cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 5))))'
+      - 'cross_rank(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), 60)'
+      - 'sub(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), cross_ema(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), 20))'
+      - 'cs_bucket_zscore(sqrt(pow_2(cross_mean(day_wmean(Ret, Ret), 5))), day_var(Ret))'
+      - 'cs_bucket_zscore(sqrt(pow_2(cross_mean(day_wmean(Ret, Ret), 5))), ListAge)'
+      - 'div(pow_2(cross_mean(day_wmean(Ret, Ret), 5)), cross_mean(day_var(Ret), 5))'
+R:
+  - head: 'pow_2(pow_2(pow_2(day_topw_mean(Ret, Amt))))'
+    why: >-
+      r1b 的唯一 head(0.6845,train 0.68 / valid 1.62;门槛 0.7845)。它的幂次阶梯 ^2 / ^4 / ^8 = −0.30 / 0.14 / 0.68,
+      train 与 valid 同时上升(valid 0.57 / 0.86 / 1.62),不是只靠 train 的部件;^8 很可能还没到软幂平均的饱和点(同族的 day_var 在 ^7.5 方差、即 ^15 收益量纲处才到 2.04)。
+      把根上的幂推到 ^10 与 ^12(topw 量纲约 1e-3,^12 约 1e-36,仍在 float32 范围内),是同一个东西,替换机会最大的一组。
+    variants:
+      - 'pow_2_5(pow_2(pow_2(day_topw_mean(Ret, Amt))))'
+      - 'pow_3(pow_2(pow_2(day_topw_mean(Ret, Amt))))'
+  - head: 'pow_2_5(pow_3(day_var(Ret)))'
+    why: >-
+      库里最高分的 head(2.0432;门槛 2.1432)。(a) 换载体为按 |r| 加权的日内标准差,幂次与原式对齐(wstd^15 = 方差量纲的 ^7.5):
+      第 1 轮在同一幂次上 wstd 比普通 std 高 0.9(0.93 对 0.03),是唯一有机会顶掉它的一条;
+      (b) 去掉第 0 列(09:30 集合竞价那一根)再算方差:若竞价那一分钟的收益含隔夜缺口,它在 ^7.5 下会主导极端日,这一条既判来源 ① 有多少是隔夜缺口,也可能更干净;
+      (c) 阶梯作用在「相对自身 60 日水平」的无量纲方差上(控制只投掉了 20 日均值):判来源 ① 是「天生高波动」还是「这个月异常高波动」,大概率不替换,买证据。
+    variants:
+      - 'pow_2_5(pow_3(pow_2(day_wstd(Ret, Ret))))'
+      - 'pow_2_5(pow_3(day_var(in_slice(Ret, 1, 240))))'
+      - 'pow_2_5(pow_3(div(day_var(Ret), cross_mean(day_var(Ret), 60))))'
+  - head: 'ts_sum(cross_stddev(day_durbin_watson(High), 60), 1)'
+    why: >-
+      1.1007(train 1.10 / valid 2.05;门槛 1.2007)。ts_sum(·, 1) 是恒等算子(必要性 −0.003);载体 DW(High) 在 ^7.5 阶梯上已被 day_var(Ret) 以 +0.27 超过。
+      同一种「波动之波动」聚合换到更好的载体上,并去掉恒等算子;60 日与 120 日两个窗口(train 是约束端)。
+    variants:
+      - 'cross_stddev(day_var(Ret), 60)'
+      - 'cross_stddev(day_var(Ret), 120)'
+  - head: 'cs_last_high40(cs_stddev_full(day_durbin_watson(High)), cross_corr(day_durbin_watson(High), day_quantile(Volume), 20))'
+    why: >-
+      r2a 的唯一 head(0.6326,train 0.63 / valid 1.85;门槛 0.7326)是股票列序的产物:cs_stddev_full 在截面上是常数,
+      _lexi 的 _pct_rank 是序数秩、并列按列序,第一项退化成「股票列号 / n」,真信号只有第二个参数那个 40% 的筛子(r2a 前五里两个 valid 完全相同 3.263867 是签名)。
+      列号约等于交易所 / 板块代码,这个 head 留在库里就是一个无意的板块押注。三种去列序写法:组内改按 DW(High) 排、筛子变量单独当因子、
+      组内改按 LogFloatCap 排(规模在控制里,中性化后基本只剩筛子)。三者与原式共享同一个 40/60 切分,交易信号 ρ 估计在 0.6~0.7,有替换机会。
+    variants:
+      - 'cs_last_high40(day_durbin_watson(High), cross_corr(day_durbin_watson(High), day_quantile(Volume), 20))'
+      - 'cross_corr(day_durbin_watson(High), day_quantile(Volume), 20)'
+      - 'cs_last_high40(LogFloatCap, cross_corr(day_durbin_watson(High), day_quantile(Volume), 20))'
+  - head: 'cross_regbeta(day_std(Volume), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)'
+    why: >-
+      M3 子族 B 的代表(1.1995,train 2.03 / valid 1.20;门槛 1.2995)。cs_robust_z 是全部付费记录里唯一负必要性的部件(去掉后 1.2910,差 0.0085);
+      去掉它的版本是 valid 约束,原式窗口 7 / 15 / 30 的 train 单调升,所以 (a) 去掉 cs_robust_z 并把窗口放到 20。
+      (b)(c) 买证据:beta = cov/Σ(x−x̄)² 的截面被 1/var_x 主导,解释变量单独 ρ_known 0.57;inv(15 日成交量离散度) 判「这一族是不是成交量离散度的倒数换了外衣」;
+      薄交易旗标在非奇异聚合下的第一次测量 —— 旗标的 distinct 只有 0.053 是因为它是「不同取值数 / 分钟数」= k/240,截面上最多约 240 个取值(量化,不是二值),
+      60 日均值把取值数放大到够过 distinct 闸门。R 只替换不收录(PLAN 修订 10(2)),(b)(c) 过线也进不了库,只为笔记。
+    variants:
+      - 'cross_regbeta(day_std(Volume), cs_mask_top_replace_mean_neg(day_distinct_ratio(Volume)), 20)'
+      - 'inv(cross_stddev(day_std(Volume), 15))'
+      - 'cross_mean(day_distinct_ratio(Volume), 60)'
+  - head: 'cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15)'
+    why: >-
+      1.0946(train 1.89 / valid 1.09;门槛 1.1946),valid 约束。同一个负必要性部件 cs_robust_z:在姊妹 head 上去掉它 valid +0.09、train −0.6,
+      这里 train 有 0.8 的余量,去掉它最可能把 valid 推过门槛。
+    variants:
+      - 'cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_distinct_ratio(Volume))), 15)'
+  - head: 'cross_regbeta(cs_normalize(day_last(in_sum_rolling(Volume, 5))), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)'
+    why: >-
+      0.7508(train 1.14 / valid 0.75;门槛 0.8508),同样是 valid 约束、train 有余量;去掉负必要性的 cs_robust_z。
+    variants:
+      - 'cross_regbeta(cs_normalize(day_last(in_sum_rolling(Volume, 5))), cs_mask_top_replace_mean_neg(day_distinct_ratio(Volume)), 15)'
+  - head: 'cross_regbeta(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)'
+    why: >-
+      M3 子族 A 的代表(1.2147;门槛 1.3147)。inv(cs_demean(·)) 是把极点放在每日截面均值上的奇异变换,两个 knockout 各掉 1.1,去不掉;
+      唯一没测过的是窗口 15(5 / 10 / 20 = 0.56 / 1.21 / 1.15,峰在 10~20 之间)。
+    variants:
+      - 'cross_regbeta(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 15)'

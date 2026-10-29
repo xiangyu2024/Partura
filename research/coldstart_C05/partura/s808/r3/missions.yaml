@@ -1,0 +1,89 @@
+seed: 808
+round: 3
+slots:
+  - type: E
+    core: 'day_centroid(Amt)'
+    hypothesis: '核心 = day_centroid(Amt):当日分钟成交额沿分钟轴的质心(0 = 全在开盘,1 = 全在收盘)。它是本种子最强的被测量:慢分量 ts_mean(day_centroid(Amt), 20) 单独 +1.27(train 1.27 / valid 1.71),裸日度值 −0.08;两个最强 head(+1.77、+1.64)都是它在某个噪声 / 粒度变量十分位内的 20 日平均,sign −1(做多成交偏早盘、回避成交压尾盘的一端);Amt 换 Volume 几乎不动(1.56 / 1.66),窗口 10 / 20 / 40 都 ≥ 1.28,两段都强。为什么是 alpha:尾盘成交是机构、被动资金与指数调仓的通道(Bogousslavsky 2016:规模与流动性溢价集中在收盘前实现;Qiu-Huang-Jiang 2023:A 股机构集中在开盘与收盘附近交易,价格跟机构走),所以一只股票的成交习惯性压在一天的哪一段,是持续性的投资者结构特征。本位奖励把 head 1、head 2 加进控制,质心「水平」那部分已经拿走,只有水平之外的时点信息拿分 —— 这也是让产出躲过最终去重(ρ ≥ 0.7 就丢)的唯一办法。快照里核心外面只出现过一种写法:放进某个变量的十分位内做 cs_bucket_zscore / cs_bucket_rank,再 ts_mean / ts_max 慢化(外围集合 {cs_bucket_zscore}、{ts_mean, cs_bucket_zscore}、加 day_autocorr_n1、加 ts_max / day_distinct_ratio / cs_bucket_rank)。本位全部换成没见过的四类处理,16 个种子的外围算子集合两两不同:(A) 相对自身历史的时点漂移 —— 质心减自身 241 日中位数、120 日时序 z、慢分量的 20 日变化(种子 1–3;Han 等 2022:2018 年收盘集合竞价改变的正是成交的日内分布,而且对小盘更强,时点「变了」本身可能是信息);(B) 时点的不稳定与尾部 —— 40 日标准差、40 日右尾均值减中位数(偶发的尾盘重日 = 调仓 / 竞价事件,BlackRock 2020)、日间自相关(习惯性还是偶发)(种子 4–6);(C) 时点与收益、成交量、隔夜跳空的共动 —— 尾盘重的日子是涨还是跌、是不是放量日、是不是跳空日,以及金额质心与股数质心之差(高价位的成交是否更晚)(种子 7–10;Qiu-Huang-Jiang 2023、Lou-Polk-Skouras 的隔夜 / 日内拆分);(D) 把核心的慢分量当「同时点同伴组」的分组变量,在组内比另一个量 —— 成交时间的分散度(二阶矩)、成交峰值时刻、手数栅格、分钟成交额自相关、5 日反转,以及与分钟收益自相关的秩交互(种子 11–16;这是第 2 轮 E 位最强 head 的同一种结构:核心当分组变量、组内比新被测量;Freyberger 等的非参数条件化)。不再给水平加 30 日以上的平滑(head 1 的 40 日平均那一支 ρ_known 已到 −0.56,越线)。方向交给 sign。'
+    literature:
+      - {title: 'Infrequent Rebalancing, Return Autocorrelation, and Seasonality', authors: 'Bogousslavsky, V.', year: '2016-12', url: 'https://infoscience.epfl.ch/record/229415', treatment: '规模与流动性溢价集中在收盘前实现、小盘股的尾盘换手相对上升:成交压尾盘是调仓资金的通道 → 读时点相对自身历史的漂移(种子 1–3)与偶发的尾盘重日(种子 4–6),而不只是水平'}
+      - {title: 'When do they trade? Heterogeneous investors in China', authors: 'Qiu, J.; Huang, W.; Jiang, Y.', year: '2023-06', url: 'https://ideas.repec.org/a/eee/finlet/v54y2023ics1544612323001034.html', treatment: 'A 股机构集中在开盘与收盘附近交易、价格跟机构走:质心与当日收益的 40 日相关(尾盘重的日子是涨还是跌,种子 7)、与当日成交额的 40 日相关(种子 8)'}
+      - {title: 'A Tug of War: Overnight Versus Intraday Expected Returns', authors: 'Lou, D.; Polk, C.; Skouras, S.', year: '2015-03', url: 'https://researchonline.lse.ac.uk/id/eprint/87481', treatment: '隔夜与日内由不同资金主导:质心与当日隔夜跳空的 60 日相关(跳空日成交前置还是后置,种子 9)'}
+      - {title: 'Reexamining the impact of closing call auction on market quality: A natural experiment from the Shanghai stock exchange', authors: 'Han, Q.; Zhao, C.; Chen, J.; Guo, Q.', year: '2022', url: 'https://ideas.repec.org/a/eee/pacfin/v74y2022ics0927538x22001160.html', treatment: '收盘集合竞价把成交从收盘挪到收盘前、对小盘影响更大:时点的漂移、波动类量在流动性(20 日成交额)十分位内比较,而不是跨股票比水平(种子 3–5)'}
+      - {title: 'Viewpoint: A Global Perspective on Market-on-Close Activity', authors: 'BlackRock', year: '2020-07', url: 'https://www.blackrock.com/corporate/literature/whitepaper/viewpoint-a-global-perspective-on-market-on-close-activity-july-2020.pdf', treatment: '被动 / ETF 资金与指数再平衡把成交推到收盘,而且是偶发的:质心的 40 日右尾均值减中位数、40 日标准差、日间自相关(种子 4–6)'}
+      - {title: 'Dissecting Characteristics Nonparametrically', authors: 'Freyberger, J.; Neuhierl, A.; Weber, M.', year: '2017-03', url: 'https://www.nber.org/papers/w23227', treatment: '非线性的条件化能抓到线性控制漏掉的增量:把核心的慢分量当分组变量,在同时点同伴组内比较成交分散度、峰值时刻、手数栅格、分钟成交额自相关、5 日反转(种子 11–15)'}
+    seeds:
+      - 'ts_mean(sub(day_centroid(Amt), cross_quantile_q50(day_centroid(Amt), 241)), 10)'
+      - 'ts_decay_linear(cross_zscore(day_centroid(Amt), 120), 20)'
+      - 'cs_bucket_zscore(ts_delta(ts_mean(day_centroid(Amt), 20), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cs_bucket_zscore(cross_stddev(day_centroid(Amt), 40), cross_mean(day_sum(Amt), 20))'
+      - 'cs_bucket_demean(sub(cross_tail_mean_q75(day_centroid(Amt), 40), cross_quantile_q50(day_centroid(Amt), 40)), cross_mean(day_sum(Amt), 20))'
+      - 'cross_autocorr_s1(day_centroid(Amt), 60)'
+      - 'ts_corr(day_centroid(Amt), day_sum(Ret), 40)'
+      - 'cross_corr(day_centroid(Amt), day_sum(Amt), 40)'
+      - 'ts_corr(day_centroid(Amt), sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 60)'
+      - 'ts_mean(sub(cs_rank(day_centroid(Amt)), cs_rank(day_centroid(Volume))), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_wstd(in_index(Amt), Amt), ts_mean(day_centroid(Amt), 20)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_argmax(Amt), ts_mean(day_centroid(Amt), 20)), 20)'
+      - 'ts_max(ts_max(cs_bucket_demean(day_distinct_ratio(Volume), ts_decay_linear(day_centroid(Amt), 20)), 40), 40)'
+      - 'cross_tail_mean_q75(cs_bucket_zscore(day_autocorr_n1(Amt), ts_decay_linear(day_centroid(Amt), 20)), 20)'
+      - 'cs_bucket_rank(ts_delta(log(day_last(Close)), 5), ts_mean(day_centroid(Amt), 20))'
+      - 'ts_mean(mul(cs_rank(day_centroid(Amt)), cs_rank(day_autocorr_n1(Ret))), 20)'
+  - type: N
+    hypothesis: '本种子三轮里最硬的一条经验事实(解剖员 §1.5):第 2 轮 N 位用同一套「分位内条件标准化 + 时序归约」处理 12 类分钟统计量,活下来的三类 —— 成交时点(day_centroid)、分钟收益 lag-1 自相关(day_autocorr_n1)、取值重复结构(day_distinct_ratio)—— 都依赖分钟的排列顺序或取值的重复;与排列无关的占比 / 集中度 / 尾部形状(零收益占比、基尼、上涨占比、买卖压力、右尾、贴极值时间、大额分钟收益)全部 0 个。解释:已知族 cross_mean(day_std(Amt), 30) 与流动性控制已经占住了日内剖面的「离散度 / 规模」,排列无关的量大多是它的另一种读法;只有读「次序」的量站在它外面。本位只换被测量,全部取次序依赖类里本种子没碰过的:(1) 波动发生的时点 —— |分钟收益| 的质心、分钟振幅的质心、|收益| 与时间的相关(种子 1–3);(2) 长记忆 —— 分钟收益与分钟成交额的 Hurst 指数(种子 4–6);(3) 多滞后的序列相关 —— Ljung-Box Q 序列的离散度、5 分钟滞后相关、5 / 10 分钟对 1 分钟的方差比,即 Roll 式反弹在更长尺度上的读法(种子 7–11);(4) 分钟波动聚集 —— |收益| 的 lag-1 自相关(种子 12);(5) 量价领先滞后 —— 按成交额加权的收益延续、上一分钟成交额对本分钟收益 / |收益| 的相关(种子 13–15);(6) 日内路径的线性度 —— 价格对时间相关的平方(种子 16)。处理手法只用本种子验证过的两套:噪声 / 序列相关类 = 市值或流动性十分位内 z + 两层 40 日上包络(79 日最大值,来源 E 的写法);时点 / 路径类 = 流动性(20 日成交额)、噪声或原始粒度包络的十分位内 z + 20 日平均(来源 D 的写法;不按市值分桶 —— 市值桶在时点轴上比不分桶还差,1.12 < 1.27)。刻意不放:day_durbin_watson、day_ar1_coefficient、day_autocorr_n1(Amt / Volume)(会被库禁令挡掉,R 也在问它们),以及成交量的时点(那是 E 位的事)—— 第 2 轮两个位撞在同一个被测量上的错不再犯。方向交给 sign。'
+    inspired_by: '解剖员 analysis.md §1.5 的成绩单(第 2 轮 N 位 16 条同处理种子:活下来的全是次序依赖类)与 §4.3 的 N1 / N2;文献员 Q3(Roll 1984 的序列协方差、Subrahmanyam 2008 的滞后委托流、Asparouhova 等 2010 的流动性偏误)、Q4(Eom 等的 Hurst 指数与可预测性;Stachowiak 2004 的反例 —— 法国日内数据上游程 / 方差比检验测不出可预测性,所以这一类的成功可能是局部的)、Hasbrouck 1991(交易对价格的信息含量)'
+    literature:
+      - {title: 'A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market', authors: 'Roll, R.', year: '1984-09', url: 'https://www.bauer.uh.edu/rsusmel/phd/roll1984.pdf', treatment: '序列协方差 = 买卖价差反弹:把 lag-1 推广到更长尺度 —— Ljung-Box Q 序列的离散度、5 分钟滞后相关、5 / 10 分钟对 1 分钟的方差比(种子 7–11)'}
+      - {title: 'Hurst exponent and prediction based on weak-form efficient market hypothesis of stock markets', authors: 'Eom, C.; Choi, S.; Oh, G.; Jung, W-S.', year: '2007-12', url: 'https://arxiv.org/pdf/0712.1624', treatment: '长记忆程度与可预测性相关:分钟收益与分钟成交额的 Hurst 指数,在市值 / 流动性十分位内比较(种子 4–6)'}
+      - {title: 'Measuring the Information Content of Stock Trades', authors: 'Hasbrouck, J.', year: '1991-03', url: 'https://ideas.repec.org/a/bla/jfinan/v46y1991i1p179-207.html', treatment: '交易对价格的信息含量:按成交额加权的收益延续、上一分钟成交额对本分钟收益 / |收益| 的相关(种子 13–15)'}
+      - {title: 'Lagged Order Flows and Returns: A Longer-Term Perspective', authors: 'Subrahmanyam, A.', year: '2008', url: 'https://ideas.repec.org/a/eee/quaeco/v48y2008i3p623-640.html', treatment: '滞后的委托流在控制滞后收益后仍有增量:量价领先滞后的日度读数取 20 日平均,再在流动性十分位内比较(种子 14)'}
+      - {title: 'Liquidity Biases in Asset Pricing Tests', authors: 'Asparouhova, E.; Bessembinder, H.; Kalcheva, I.', year: '2010', url: 'https://ideas.repec.org/a/eee/jfinec/v96y2010i2p215-237.html', treatment: '噪声代理的横截面排序有流动性偏误:噪声 / 序列相关类量都在流动性(20 日成交额)或噪声十分位内比较,不在全市场比'}
+      - {title: 'Prévisibilité des rentabilités boursières. Une étude empirique du marché boursier français sur données intraquotidiennes', authors: 'Stachowiak, C.', year: '2004', url: 'https://ideas.repec.org/a/prs/ecoprv/ecop_0249-4744_2004_num_166_5_7382.html', treatment: '反例:日内游程与方差比检验在法国股票上测不出可预测性 → 方差比只放 2 条、Hurst 只放 3 条,不押重注'}
+    seeds:
+      - 'ts_mean(cs_bucket_zscore(day_centroid(Ret), cross_mean(day_sum(Amt), 20)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_centroid(sub(High, Low)), cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_corr(in_index(Ret), abs_(Ret)), ts_max(ts_max(day_distinct_ratio(Ret), 40), 40)), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_hurst(Ret), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_hurst(Ret), cross_mean(day_sum(Amt), 20)), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_hurst(Amt), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_q_stat_std(Ret), cross_mean(day_sum(Amt), 20)), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_q_stat_std(Ret), cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap)), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_corr(Ret, in_delay(Ret, 5)), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(div(day_std(in_delta(Close, 5)), day_std(in_delta(Close, 1))), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(div(day_std(in_delta(Close, 10)), day_std(in_delta(Close, 1))), cross_mean(day_sum(Amt), 20)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_autocorr_n1(abs_(Ret)), cross_mean(day_sum(Amt), 20)), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_corr(Ret, in_delay(mul(Ret, Amt), 1)), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_corr(Ret, in_delay(Amt, 1)), cross_mean(day_sum(Amt), 20)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_corr(abs_(Ret), in_delay(Amt, 1)), cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap)), 20)'
+      - 'ts_mean(cs_bucket_zscore(pow_2(day_corr(in_index(Close), Close)), cross_mean(day_sum(Amt), 20)), 20)'
+R:
+  - head: 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40), 40)'
+    why: '拆解工具给出的唯一 R 候选:根窗口 40 → 80(两层 ts_max 合起来是 119 日最大值)已付费测到 +1.1545(train 1.15 / valid 2.06,ρ_head 0.97,ρ_known −0.14),三条替换条件全满足 → 变体 1 必须放,白送 +0.17 的库质量。根窗口 20 / 40 / 80 → 0.84 / 0.99 / 1.15 还在升,变体 2 再走一格(120,即 159 日);变体 3 在 80 的基础上把条件变量的成交额窗口 20 → 60(工具只动第一个带窗口的节点,这个窗口从没被动过);变体 4 在 80 的基础上把分组变量直接换成已知族 cross_mean(day_std(Amt), 30) 本身(它与 20 日成交额的 ρ 约 0.98,若更好说明分组要的是已知族的分位)。同一 head 只取合格变体里最好的一个。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40), 80)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40), 120)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 60)), 40), 80)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_std(Amt), 30)), 40), 80)'
+  - head: 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap), 40), 40)'
+    why: '来源 E(分钟收益 lag-1 自相关 = Roll 式反弹)在市值十分位内 z + 79 日上包络,+0.95;去掉 cs_bucket_zscore 掉到 −0.03(必要性 +0.98),分组是这条轴的命门,但分组变量只试过市值。M 的粒度轴上同一处理把分组从市值换成 20 日成交额 +0.17(上一轮唯一的替换);Asparouhova-Bessembinder-Kalcheva 2010:噪声代理的溢价被流动性偏误放大,在流动性组内比正是对这个偏误的修正 → 变体 1、2 分组换成 20 / 60 日成交额。变体 3 换成近亲算子 AR(1) 系数(同一身份、不同归一化,ρ_head 应 ≥ 0.9,分数可能更好)。变体 4 分组换成原始粒度的 79 日包络(把一跳造成的机械反弹分出去,只比同栅格股票的噪声)。窗口不再动:根窗口 20 / 40 / 80 = 0.57 / 0.95 / 0.75,峰已在所选值上。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), cross_mean(day_sum(Amt), 20)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), cross_mean(day_sum(Amt), 60)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_ar1_coefficient(Ret), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), ts_max(ts_max(day_distinct_ratio(Ret), 40), 40)), 40), 40)'
+  - head: 'ts_mean(cs_bucket_zscore(day_centroid(Amt), cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap)), 20)'
+    why: '本组最强的干净口径 head(+1.64,门槛 1.74)。knockout:组内比较值 +0.37,分组变量里的市值 z 值 +0.19;而分组变量 cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap) 是当日读数,单独 −0.67,要两层上包络才到 +0.95 —— 同伴组是按噪声很大的当日值分的。变体 1 把分组变量里的市值换成 20 日成交额(M 轴上 +0.17 的同一个替换);变体 2 分组变量先做 20 日平均(同伴组更稳);变体 3 分组变量直接用 head 5 的 79 日上包络(head 1 用粒度包络当分组拿到 1.77,同一种做法)。三条都不动被测量与 20 日平均,只换分组,ρ_head 应 ≥ 0.8;不用粒度轴当分组,免得把它改成 head 1 的近亲(分数升了、独立产出反而少一个)。'
+    variants:
+      - 'ts_mean(cs_bucket_zscore(day_centroid(Amt), cs_bucket_zscore(day_autocorr_n1(Ret), cross_mean(day_sum(Amt), 20))), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_centroid(Amt), ts_mean(cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap), 20)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_centroid(Amt), ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap), 40), 40)), 20)'
+  - head: 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Amt), LogFloatCap), 40), 40)'
+    why: 'head 8(分钟成交额 lag-1 自相关,市值十分位内 z + 79 日上包络,+0.64,门槛 0.744)。它与 head 5 是同一次运行的 heads,运行内互相 |ρ| < 0.7 已经保证,不是孪生,值得改。变体 1 分组换 20 日成交额(同 head 5 的理由);变体 2 根窗口 40 → 80(119 日;head 4 上同样的延长 +0.17,head 8 的 valid 0.76 高于 train 0.64,也是「还没慢够」的形状)。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Amt), cross_mean(day_sum(Amt), 20)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Amt), LogFloatCap), 40), 80)'
+  - head: 'ts_mean(ts_max(cs_bucket_zscore(day_distinct_ratio(Volume), LogFloatCap), 40), 20)'
+    why: 'head 13(手数栅格 day_distinct_ratio(Volume),市值十分位内 z,40 日峰值再 20 日平均,+0.538)是全库门槛最低的(0.638),train 0.54 / valid 2.51,弱在 train。上一轮 R 在 M 的粒度轴上测到「峰值的峰值」比「峰值的平均」好 0.37(0.82 vs 0.45),而 head 13 用的正是后者;两层 ts_max 的写法在第 2 轮 GP 里被 M 那个 head 的骨架禁令挡住、从没评过 → 变体 1 改成两层 ts_max;变体 2 分组换 20 日成交额;变体 3 两处一起换。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Volume), LogFloatCap), 40), 40)'
+      - 'ts_mean(ts_max(cs_bucket_zscore(day_distinct_ratio(Volume), cross_mean(day_sum(Amt), 20)), 40), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Volume), cross_mean(day_sum(Amt), 20)), 40), 40)'
