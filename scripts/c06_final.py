@@ -228,8 +228,9 @@ with slot():
             raw = np.asarray(P[f"q{j}"], np.float64)
             best = None
             for hl in (0.0, 5.0, 20.0):
+                base = steer.neutral_residual(bk.smoothed(raw, hl), QF)          # the residual is linear: the sign only flips it
                 for sg in (1.0, -1.0):
-                    sm = steer.neutral_residual(sg * bk.smoothed(raw, hl), QF)
+                    sm = sg * base
                     tr_, va_ = book(sm, tr)["long_sharpe"], book(sm, va)["long_sharpe"]
                     if best is None or min(tr_, va_) > best[0]:
                         best = (min(tr_, va_), sg, hl, tr_, va_, sm)
