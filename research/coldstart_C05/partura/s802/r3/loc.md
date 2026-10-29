@@ -1,6 +1,6 @@
 # 定位:种子 802,B 组,第 3 轮(只含 train / valid)
 
-快照:c05s802M1_I0_open_search, c05s802M2_I0_open_search, c05s802M3_I0_open_search, c05s802Br1a_Ea, c05s802Br1b_Nb, c05s802Br2a_Ea, c05s802Br2b_Nb;已生效的 R 替换 3 个。score = train 与 valid 残差纯多头书净夏普中较差的(≥ 0.5 为发现)。
+快照:c05s802M1_I0_open_search, c05s802M2_I0_open_search, c05s802M3_I0_open_search, c05s802Br1a_Ea, c05s802Br1b_Nb, c05s802Br2a_Ea, c05s802Br2b_Nb;已生效的 R 替换 4 个。score = train 与 valid 残差纯多头书净夏普中较差的(≥ 0.5 为发现)。
 
 ## heads(23 个)
 

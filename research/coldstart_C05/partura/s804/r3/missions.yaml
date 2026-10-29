@@ -1,0 +1,195 @@
+seed: 804
+round: 3
+slots:
+- type: E
+  core: 'day_signed_ratio(Ret, Amt)'
+  hypothesis: >-
+    核心 K = day_signed_ratio(Ret, Amt) = sum(|Amt| * sign(Ret)) / sum(|Amt|),即分钟级 tick rule 的净买压(源码 partura/ops_ext.py:122;x = Ret 时不退化,有界 [-1, 1]、尺度无关),
+    是第 2 轮 N 位 head abs_(ts_mean(K, 20))(score +0.713,train +0.713 / valid +0.822,sign -1,hl 20)的原样子树,单独可求值(-2.50)。
+    为什么它是 alpha 来源:跳掉 ts_mean 的必要性 +2.23(全库最高);Amt -> Volume 几乎不变(+0.717);窗口 10 / 20 / 40 = -0.32 / +0.71 / +1.07 单调上升,是一个慢变的股票特质而不是事件;
+    整族 rho_known 只有 -0.06 ~ -0.17(全库离已知流动性族最远);valid / train = 1.15(不像价格族、G 族那样 valid 是 train 的 2-3 倍)。读法:多头 = 多日净买压的幅度小 = 双向成交均衡;
+    方向本身(不取绝对值 train -0.34)被 20 日反转控制吃掉。核心是 2 个节点的叶子型(第 2 轮 5 节点核心 C 让生成器拒绝了 3092 次、0 过线;第 1 轮 2 节点核心只拒绝 701 次),生成器的自由度够。
+    奖励的控制里加入家族(就这 1 个 head),所以只有「多日净买压幅度」之外的信息拿分。快照里见过的外围:{abs_, ts_mean}(含双 abs_、双 ts_mean)、{cs_bucket_rank, ts_mean}、
+    {cs_regres, ts_mean, day_sum}、{ts_regbeta, ts_delay, day_sum}、{ts_corr, ts_delay}、{sub, ts_mean, day_signed_ratio}、{cross_zscore, abs_};种子全部避开,并且不再把 abs_ 当第一层(那是家族占住的一步)。
+    这次的外围分四类,都是以前没有出现过的读法:
+    (1) 拆开幅度 —— 买、卖两条腿分开(家族把两头对称折叠,不对称是第一个没试过的自由度);减掉同规模十分位平均净买压之后的特质部分(40 日均值里有一块是全市场同向的共同签名,
+    Chordia-Roll-Subrahmanyam 2002:不平衡在市场层面高度持续);|多日均值| / 多日的 |单日值| 均值 = 持续占比(把「冷门股单日签名本来就大」这一块除掉)。
+    (2) 签名的构成 —— 成交最重 10% 分钟的方向减全天方向(Barclay-Warner 1993:哪些成交推动价格);按分钟位置加权减等权(尾盘压力);早盘时段减全天(Bogousslavsky 2021:按时段切开);
+    按 |Ret| 软加权减硬符号(Easley-López de Prado-O'Hara 2016 的 BVC 用价格变化幅度做软分配,不是只看符号)。
+    (3) 签名流与价格的关系 —— 昨天的净买压与今天收益的 60 日相关(Llorente-Michaely-Saar-Wang 2002:延续 = 知情交易,反转 = 风险分摊);今天的净买压追不追昨天的相对涨跌(正反馈);
+    同日签名流与收益的对齐;Kyle 1985 的 lambda(收益对签名流的 40 日斜率)在已知流动性族的十分位内取秩(把 lambda 带进来的流动性水平剥掉,吸取 G 族「带尺度的斜率 = 流动性的非线性暴露」的教训)。
+    (4) 事件与偏离 —— 只在放量日(成交额 60 日 z > 1)上平均的净买压(Campbell-Grossman-Wang 1993:放量日的流动性冲击之后反转);5 日净买压相对自身 60 日的 z 分数;
+    20 日净买压的秩减 20 日收益的秩(买压没有反映进价格)。
+    所有种子把 K 放在保序位置(时间平均、同量纲加减、相关的一个参数、回归的 x 位但 K 本身无量纲),不放进 sign(·) 或状态参数。预期:(4) 的方向类多半被 20 日反转控制吃掉;
+    (1) 的买卖腿与家族秩相关可能接近 0.7、被库禁令拒掉 —— 这两类主要给 GP 当交叉材料。
+  literature:
+  - title: 'Discerning Information from Trade Data'
+    authors: "David Easley, Marcos López de Prado, Maureen O'Hara"
+    year: '2016-05'
+    url: 'https://ideas.repec.org/a/eee/jfinec/v120y2016i2p269-285.html'
+    treatment: 'BVC:不靠逐笔、按价格变化的幅度给成交量做软的买卖分配 —— 用 |Ret| 软加权的签名比例减硬符号版,看两者的差是否带信息'
+  - title: 'Order imbalance, liquidity, and market returns'
+    authors: 'Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam'
+    year: '2002-07'
+    url: 'https://authors.library.caltech.edu/records/z2akv-j0p87'
+    treatment: '不平衡在市场层面高度持续、无论方向都降低流动性:减掉同规模十分位的平均签名取个股特质部分,并用 |多日均值| / 单日幅度均值 把冷门股的单日噪声除掉'
+  - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+    authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang'
+    year: '2002'
+    url: 'https://www.johnhcochrane.com/s/llorente_michaely_saar_wang_volume_rfs.pdf'
+    treatment: '逐股票滚动的「成交之后收益延续还是反转」区分知情与风险分摊交易:昨天的净买压与今天收益的 60 日相关'
+  - title: 'Trading Volume and Serial Correlation in Stock Returns'
+    authors: 'John Y. Campbell, Sanford J. Grossman, Jiang Wang'
+    year: '1993-11'
+    url: 'https://dash.harvard.edu/bitstream/1/3128710/2/campbell_trading.pdf'
+    treatment: '放量日的价格变动更可能来自流动性冲击、之后反转:只在成交额异常放大的日子上平均净买压'
+  - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+    authors: 'Michael J. Barclay, Jerold B. Warner'
+    year: '1993'
+    url: 'https://doi.org/10.1016/0304-405X(93)90029-B'
+    treatment: '推动价格的是特定的一部分成交:成交最重 10% 分钟的净方向减全天的净方向'
+  - title: 'Continuous Auctions and Insider Trading'
+    authors: 'Albert S. Kyle'
+    year: '1985-11'
+    url: 'https://www.econometricsociety.org/publications/econometrica/1985/11/01/continuous-auctions-and-insider-trading'
+    treatment: '价格冲击 lambda = 价格变动对签名订单流的斜率:收益对 K 的 40 日回归斜率,在已知流动性族十分位内取秩'
+  - title: 'The Cross-Section of Intraday and Overnight Returns'
+    authors: 'Vincent Bogousslavsky'
+    year: '2021'
+    url: 'https://ideas.repec.org/a/eee/jfinec/v141y2021i1p172-194.html'
+    treatment: '不同特征在一天里不同时段兑现:早盘时段的净买压减全天净买压、按分钟位置加权的净买压减等权'
+  seeds:
+  - 'add(abs_(ts_mean(day_signed_ratio(Ret, Amt), 40)), ts_mean(day_signed_ratio(Ret, Amt), 40))'
+  - 'sub(abs_(ts_mean(day_signed_ratio(Ret, Amt), 40)), ts_mean(day_signed_ratio(Ret, Amt), 40))'
+  - 'abs_(cs_bucket_demean(ts_mean(day_signed_ratio(Ret, Amt), 40), LogFloatCap))'
+  - 'div(abs_(ts_mean(day_signed_ratio(Ret, Amt), 40)), ts_mean(abs_(day_signed_ratio(Ret, Amt)), 40))'
+  - 'ts_mean(sub(day_topw_mean(sign(Ret), Amt), day_signed_ratio(Ret, Amt)), 20)'
+  - 'abs_(ts_mean(sub(day_topw_mean(sign(Ret), Amt), day_signed_ratio(Ret, Amt)), 40))'
+  - 'ts_mean(sub(day_signed_ratio(Ret, mul(Amt, in_index(Amt))), day_signed_ratio(Ret, Amt)), 20)'
+  - 'ts_mean(sub(day_signed_ratio(in_half(Ret), in_half(Amt)), day_signed_ratio(Ret, Amt)), 20)'
+  - 'ts_mean(sub(day_signed_ratio(Ret, mul(Amt, abs_(Ret))), day_signed_ratio(Ret, Amt)), 20)'
+  - 'ts_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 60)'
+  - 'ts_corr(cs_rank(ts_delay(day_sum(Ret), 1)), day_signed_ratio(Ret, Amt), 40)'
+  - 'ts_corr(day_signed_ratio(Ret, Amt), day_sum(Ret), 40)'
+  - 'cs_bucket_rank(ts_regbeta(day_signed_ratio(Ret, Amt), day_sum(Ret), 40), cross_mean(day_std(Amt), 30))'
+  - 'ts_mean(mul(day_signed_ratio(Ret, Amt), is_gt(cross_zscore(day_sum(Amt), 60), 1)), 40)'
+  - 'cross_zscore(ts_mean(day_signed_ratio(Ret, Amt), 5), 60)'
+  - 'sub(cs_rank(ts_mean(day_signed_ratio(Ret, Amt), 20)), cs_rank(ts_sum(day_sum(Ret), 20)))'
+- type: E
+  core: 'day_centroid(Volume)'
+  hypothesis: >-
+    核心 Q = day_centroid(Volume)(|Volume| 沿分钟轴的质心 / (T-1),有界 [0, 1]、尺度无关,源码 partura/ops_ext.py:155),是库里最高的 head
+    ts_mean(cs_bucket_rank(Q, LogFloatCap), 20)(+1.227,train +1.420 / valid +1.227,sign -1)与 C = sub(Q, day_centroid(Ret))(+0.884)的原样子树,单独可求值(-0.087)。
+    为什么它是 alpha 来源:当日的钟是噪声(-0.09),它的 20 日持久分量是本种子最大的单步增量(ts_mean(Q, 20) 单独 +1.244);Volume -> Amt 稳(+1.165);这个轴贡献了库里 4 个 head,
+    valid / train 在 0.87 ~ 1.2(库里最不像只吃一段行情的一族)。但同一步平滑把 rho_known 推到 -0.512(越线),规模桶内比较是让它合法的那一步 —— 钟的「位置」约有一半是已知流动性族的另一种写法。
+    奖励的控制里加入家族(这 2 个 head:位置的规模桶内读法 + 量波时点错配),所以只有「钟的平均位置」之外的信息拿分。核心与第 1 轮唯一成功的 E 核心同为 2 节点叶子型。
+    见过的外围:{ts_mean, cs_bucket_rank}、{cs_bucket_rank, day_centroid}、{sub, day_centroid}、{sub, ts_mean, day_centroid}(第 1 轮相对 20 日均值的偏移)、
+    第 2 轮 E 位 104 个候选的 {ts_sum, cs_first_low20, cs_stddev_full, day_quantile, day_kurt, ...} 各种嵌套;种子全部避开。
+    这次的外围全部离开「平均位置」:(1) 二阶矩 —— 钟的 40 日离散度(在已知流动性族十分位内取秩,堵住「冷门股的钟本来就乱」这条流动性通道)、钟的变异系数
+    (Chordia-Subrahmanyam-Anshuman 2001:成交活跃度的变异程度本身是负向定价的特征;这里把被度量的东西从「量」换成「时点」);
+    (2) 相对自身、相对市场 —— 5 日钟相对自身 60 日的 z 分数及其幅度、钟与全市场平均钟的 60 日相关、钟的 1 日自相关
+    (Białkowski-Darolles-Le Fol 2008:日内量分布 = 全市场共同的季节性部分 × 个股动态部分,标准做法是两个基准都减;与市场钟同步的票更像被指数 / 被动资金驱动,习惯稳不稳是另一维);
+    (3) 钟与其他日度量的共动 —— 与当日收益、与异常放量、与当日净买压、与当日波动的 40 日相关(Admati-Pfleiderer 1988:知情者与相机抉择的流动性交易者都在择时;
+    问的是「哪种日子成交偏早」,而不是「平均偏早」);(4) 钟的形状 —— 最重 10% 分钟的平均时点减质心(偏度)、成交额的钟减成交量的钟(价高的分钟是否偏晚 = 日内趋势与成交时点的交互)、
+    规模十分位内去均值后的 20 日钟取绝对值(U 形:照搬价格 U 形 head 在价格轴上成立的那一步,Freyberger-Neuhierl-Weber 2020 的非线性函数形状)。
+    避开的位置:Q >= 0,不放进 sign / day_signed_ratio 的 x 位(恒为 1)、cs_flip_by_state / cs_state_rank 的状态参数(塌成市场标量)、*_reg* 的 x 位(被尺度整除);
+    任何接近 20 日均值的写法都会与 head +1.227 秩相关 >= 0.7 被库禁令拒绝,所以没有纯平滑 / 纯桶内秩。主要风险:未分桶的二阶矩类多半撞 rho_known 闸门。
+  literature:
+  - title: 'Improving VWAP strategies: A dynamic volume approach'
+    authors: 'Jedrzej Białkowski, Serge Darolles, Gaëlle Le Fol'
+    year: '2008-09'
+    url: 'https://ourarchive.otago.ac.nz/bitstream/handle/10523/1540/ImprovingVWAPStrategiesADynamicalVolumeApproach2006.pdf'
+    treatment: '日内量分布拆成全市场共同的季节性部分与个股动态部分:钟相对自身 60 日的偏离、钟与全市场平均钟的同步程度'
+  - title: 'Trading activity and expected stock returns'
+    authors: 'Tarun Chordia, Avanidhar Subrahmanyam, Ravi Anshuman'
+    year: '2001-01'
+    url: 'https://ideas.repec.org/a/eee/jfinec/v59y2001i1p3-32.html'
+    treatment: '成交活跃度的变异程度是负向定价的横截面特征:换成时点的变异 —— 钟的 40 日离散度(流动性十分位内取秩)与变异系数'
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: 'Anat R. Admati, Paul Pfleiderer'
+    year: '1988'
+    url: 'https://www.gsb.stanford.edu/faculty-research/publications/theory-intraday-patterns-volume-price-variability'
+    treatment: '知情与相机抉择的流动性交易者择时、把成交集中到同一段:钟与当日收益 / 异常放量 / 净买压 / 波动的共动,而不是钟的平均位置'
+  - title: 'Dissecting Characteristics Nonparametrically'
+    authors: 'Joachim Freyberger, Andreas Neuhierl, Michael Weber'
+    year: '2020'
+    url: 'https://papers.ssrn.com/abstract=2935432'
+    treatment: '特征对收益的影响允许任意非线性形状:规模十分位内去均值后的钟取绝对值(两头对中间的 U 形)'
+  seeds:
+  - 'cs_bucket_rank(ts_stddev(day_centroid(Volume), 40), cross_mean(day_std(Amt), 30))'
+  - 'div(ts_stddev(day_centroid(Volume), 40), ts_mean(day_centroid(Volume), 40))'
+  - 'cross_zscore(ts_mean(day_centroid(Volume), 5), 60)'
+  - 'abs_(cross_zscore(ts_mean(day_centroid(Volume), 5), 60))'
+  - 'ts_corr(day_centroid(Volume), ts_delay(day_centroid(Volume), 1), 40)'
+  - 'ts_corr(day_centroid(Volume), cs_mean(day_centroid(Volume)), 60)'
+  - 'ts_decay_linear(sub(day_topw_mean(in_index(Volume), Volume), day_centroid(Volume)), 20)'
+  - 'ts_decay_linear(sub(day_centroid(Amt), day_centroid(Volume)), 20)'
+  - 'ts_corr(day_centroid(Volume), day_sum(Ret), 40)'
+  - 'ts_corr(day_centroid(Volume), cross_zscore(day_sum(Volume), 20), 40)'
+  - 'ts_corr(day_centroid(Volume), day_signed_ratio(Ret, Amt), 40)'
+  - 'cs_bucket_rank(ts_corr(day_centroid(Volume), day_std(Ret), 40), cross_mean(day_std(Amt), 30))'
+  - 'abs_(cs_bucket_demean(ts_mean(day_centroid(Volume), 20), LogFloatCap))'
+R:
+- head: 'abs_(ts_mean(day_signed_ratio(Ret, Amt), 20))'
+  why: >-
+    窗口是这个 head 唯一的软处:10 / 20 / 40 日 = -0.32 / +0.71 / +1.07 单调上升,20 日没到顶。40 日版已知 +1.068(gain +0.355,sign -1 同号,rho_known -0.174),是本轮最可能成立的替换;
+    60、120 日测它是否还在上升(同一 head 取合格者里分数最高的)。只改窗口、不改算子种类 —— 第 2 轮成立的 2 个替换都是这一类,而 6 次换算子全部因方向翻转作废。
+  variants:
+  - 'abs_(ts_mean(day_signed_ratio(Ret, Amt), 40))'
+  - 'abs_(ts_mean(day_signed_ratio(Ret, Amt), 60))'
+  - 'abs_(ts_mean(day_signed_ratio(Ret, Amt), 120))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: '定位工具的机械 R 候选:ts_reg_tvalue 窗口 50 -> 100 已知 +0.911(gain +0.236),sign +1 与原 head 同号(t -> beta 的换法翻号,窗口不翻号),rho_known -0.379;窗口 25 是 -0.62,只试 100。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 100))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: '同一个 50 -> 100 的窗口改写施加到 G 族的兄弟 head(外壳不动);这一族里窗口是唯一既提分又不翻号的改写。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 100))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_topw_mean(Amt, Ret), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: '同上,G 族里 x 为 day_topw_mean(Amt, Ret) 的那个 head,窗口 50 -> 100。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_topw_mean(Amt, Ret), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 100))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 50), 3), 3), 50))'
+  why: '同上,双层嵌套的 G 族 head,只把最外层的 ts_reg_tvalue 窗口 50 -> 100(内层不动)。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 50), 3), 3), 100))'
+- head: 'ts_mean(cs_bucket_rank(day_centroid(Volume), LogFloatCap), 20)'
+  why: >-
+    拆解显示规模桶这一步在分数上多余(跳掉 +1.244 vs +1.227),但它是让式子合法的一步(跳掉后 rho_known -0.512 越线)。它真正的作用是挡住流动性,
+    那就直接在已知流动性族 cross_mean(day_std(Amt), 30) 的十分位内取秩:rho_known 应接近 0,分数可能保住甚至更高;需要 >= +1.327 才替换。
+  variants:
+  - 'ts_mean(cs_bucket_rank(day_centroid(Volume), cross_mean(day_std(Amt), 30)), 20)'
+- head: 'sub(day_centroid(Volume), day_centroid(Ret))'
+  why: >-
+    同轴的钟:裸质心不论 hl 怎么选都是 -0.09,先做 20 日等权平均再按 hl 5 平滑就到 +1.24 —— 盒式平均与 EMA 在这一轴上差别巨大。C 目前只靠 hl 20 的 EMA,
+    给它同一个 20 日等权平均,需要 >= +0.984 才替换。
+  variants:
+  - 'ts_mean(sub(day_centroid(Volume), day_centroid(Ret)), 20)'
+- head: 'add(day_cov(in_index(Volume), Volume), day_centroid(Ret))'
+  why: >-
+    从未拆解。day_cov(in_index(Volume), Volume) 带 Volume 的量纲,day_centroid(Ret) 在 [0, 1],add 里后者被前者完全压过,这个 head 实质就是带尺度的钟(有代理嫌疑)。
+    第一个变体去掉被压掉的一腿(若分数相当或更好就是干净的替换);第二个把协方差换成相关系数,两条腿量纲才可比 —— 若它远低于第一个,说明分数在尺度里(又一个流动性的非线性暴露)。
+  variants:
+  - 'day_cov(in_index(Volume), Volume)'
+  - 'add(day_corr(in_index(Volume), Volume), day_centroid(Ret))'
+- head: 'cs_first_high40(cross_delay(day_signed_ratio(High, Open), 60), ts_stddev(pow_2_5(cs_mask_top_replace_mean(cs_mask_top_replace_mean(day_durbin_watson(Ret)))), 10))'
+  why: >-
+    退化 head:被排序项恒等于 1,段内顺序 = 符号表列序(一个静态板块标签);段的指示函数占信号方差的大头,只换段内排序项的变体与原 head 的 rho 约 0.63(第 2 轮已量)。
+    第 2 轮换进去的 C(单独 +0.88)只到 -0.04;这次换成库里最干净、单独 +1.07 的 40 日净买压幅度(sign -1 同向:多头 = 低 DW 波动段里净买压幅度最小的)。需要 >= +0.740。
+  variants:
+  - 'cs_first_high40(abs_(ts_mean(day_signed_ratio(Ret, Amt), 40)), ts_stddev(pow_2_5(cs_mask_top_replace_mean(cs_mask_top_replace_mean(day_durbin_watson(Ret)))), 10))'
+- head: 'cs_first_high40(cross_delay(cs_first_high40(day_signed_ratio(High, Open), ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10)), 60), cross_delay(cs_first_high40(day_signed_ratio(High, Open), ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10)), 60))'
+  why: >-
+    同样的退化:外层对自己做段(单调),实质 = 「60 天前的 DW 波动段」+ 列序。保留 60 天前的段(这样 rho_head 才能 >= 0.5),段内的列序换成库里最强的 head(单独 +1.227,sign -1 同向)。需要 >= +0.699。
+  variants:
+  - 'cs_first_high40(ts_mean(cs_bucket_rank(day_centroid(Volume), LogFloatCap), 20), cross_delay(ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10), 60))'
+- head: 'inv(day_es_ratio_lo(add(Volume, Vwap)))'
+  why: >-
+    M 第 3 批新进来、从未拆解。day_es_ratio_lo 在 5% 分位 |q| <= 1e-8 时返回 NaN,分钟成交量的 5% 分位在冷门票上常为 0,所以 add(Volume, Vwap) 是拿价格给分母垫地板、提高覆盖率的技巧,
+    价格水平可能从这里漏进来。三刀:20 日等权平均(同钟那一轴的经验,唯一的替换尝试,需要 >= +0.668);去掉地板(若塌掉,吃的是「死分钟有多少」而不是低尾形状);
+    去掉 inv(inv 在正值上单调,但 hl = 20 > 0 时平滑在取秩之前,不是恒等变换,直接量出这层伪影)。
+  variants:
+  - 'ts_mean(inv(day_es_ratio_lo(add(Volume, Vwap))), 20)'
+  - 'inv(day_es_ratio_lo(Volume))'
+  - 'day_es_ratio_lo(add(Volume, Vwap))'

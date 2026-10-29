@@ -171,7 +171,9 @@ const results = await parallel(SEEDS.map(S => async () => {
   const anat = (args.skip_anatomy || []).includes(S) ? { skipped: true }
     : await agent(anatPrompt(S), { label: `${tag}:anatomy`, phase: 'Anatomy', model: M.anat, schema: ANAT_SCHEMA })
   if (!anat) return { seed: S, failed: 'anatomy' }
-  const lib = await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
+  // PLAN revision 12: a seed whose lit.md is already complete on disk (the run was cut by a usage limit after it) skips the literature step
+  const lib = (args.skip_lit || []).includes(S) ? { skipped: true }
+    : await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
   const pi = await agent(piPrompt(S), { label: `${tag}:pi`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
   if (!pi) return { seed: S, failed: 'pi', anat, lib }
   let chk = await agent(checkPrompt(S), { label: `${tag}:check`, phase: 'Check', model: M.check, schema: CHECK_SCHEMA })
