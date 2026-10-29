@@ -1,0 +1,58 @@
+seed: 808
+round: 1
+slots:
+  - type: E
+    core: 'inv(LogFloatShares)'
+    hypothesis: 'M 第 1 批 91 个已评分候选里约四成落在 0.465–0.486 这条窄带(差一点过线),是同一个静态特征:流通股本在控制 LogFloatCap 之后剩下的那部分(名义股价轴,或规模的非线性残差)。控制里已有 LogFloatCap,所以 LogFloatCap 与 LogFloatShares 的任何线性组合(包括 log 名义股价 = LogFloatCap − LogFloatShares)在秩中性化之后都退化成这同一个残差;再套单调包装只会停在 0.47–0.49。要过线、要带来新信息,只能改核心之外的两件事。(1) 中性化的形状:用市值 / 总市值 / 成交额 / 自由流通比例的十分位内条件秩或条件 z 分(cs_bucket_rank、cs_bucket_zscore)代替全市场线性秩投影,区分「名义股价」和「规模的非线性残差」(Banz;Fama-French 2008;DGTW 1997)。(2) 与第二种信息交互:20 日最大日收益(含按涨跌停幅度缩放的版本)、日内波动、价格栅格粗细(day_distinct_ratio,低价股一跳占比大)、市场成交热度状态(cs_flip_by_state,迎合理论说低价溢价随情绪变)。另外放三条识别用的种子:精确的 log 名义股价 sub(LogFloatCap, inv(inv(LogFloatShares)));自由流通轴 cs_regres(sub(LogTotalCap, LogFloatCap), inv(LogFloatShares)),价格在这里精确抵消;累计复权因子(后复权收盘的 log 减 log 名义股价)。这三条在初代的得分直接回答 alpha 在价格轴还是股本轴上。按解剖员的推断,快照里含核心的候选外围只有单字段单调包装和分钟字段算子,没有横截面条件算子,也没有第二个日频规模字段,所以这些外围都是新的。每个种子的外围算子集合互不相同。方向一律交给 GP 的 sign。'
+    literature:
+      - {title: 'Nominal Price Illusion', authors: 'Birru, J.; Wang, B.', year: '2016', url: 'https://www.efmaefm.org/0efmameetings/EFMA%20ANNUAL%20MEETINGS/2013-Reading/papers/EFMA2013_0526_fullpaper.pdf', treatment: '不用原始价格排序,而用价格相对规模拟合价格的残差(cs_regres(LogFloatCap, inv(LogFloatShares)));偏度幻觉在难套利股票里更强,所以把价格轴与波动 / 最大日收益交互'}
+      - {title: 'Measuring Mutual Fund Performance with Characteristic-Based Benchmarks', authors: 'Daniel, K.; Grinblatt, M.; Titman, S.; Wermers, R.', year: '1997-07', url: 'https://ideas.repec.org/a/bla/jfinan/v52y1997i3p1035-58.html', treatment: '按特征分组匹配基准,不假设线性:改成在市值 / 总市值十分位内取条件秩(cs_bucket_rank),代替全市场线性秩中性化'}
+      - {title: 'Dissecting Anomalies', authors: 'Fama, E.F.; French, K.R.', year: '2008-08', url: 'https://ideas.repec.org/a/bla/jfinan/v63y2008i4p1653-1678.html', treatment: '分规模组检验异象是否只在微盘股里成立:用规模分组内的条件秩区分名义股价与规模的非线性残差'}
+      - {title: 'What Determines Chinese Stock Returns?', authors: 'Wang, F.; Xu, Y.', year: '2004-11', url: 'https://rpc.cfainstitute.org/en/research/financial-analysts-journal/2004/what-determines-chinese-stock-returns', treatment: '自由流通比例先对规模做横截面回归取残差再排序:cs_regres(sub(LogTotalCap, LogFloatCap), inv(LogFloatShares))'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Bali, T.G.; Cakici, N.; Whitelaw, R.F.', year: '2009-03', url: 'https://ideas.repec.org/a/eee/jfinec/v99y2011i2p427-446.html', treatment: '用过去一个月最大日收益代理彩票偏好:在 MAX 十分位内对价格轴取秩、与价格轴加减组合,检验低价是不是彩票效应的代理'}
+      - {title: 'Catering through Nominal Share Prices', authors: 'Baker, M.; Greenwood, R.; Wurgler, J.', year: '2008-01', url: 'https://www.nber.org/papers/w13762', treatment: '低价溢价随投资者偏好时变:cs_flip_by_state 按全市场成交额状态翻转价格轴'}
+      - {title: 'The January Anomaly: Effects of Low Share Price, Transaction Costs, and Bid-Ask Bias', authors: 'Bhardwaj, R.; Brooks, L.', year: '1992', url: 'https://ideas.repec.org/a/bla/jfinan/v47y1992i2p553-75.html', treatment: '低价效应与交易成本缠在一起:在成交额十分位内对价格轴做条件 z 分(cs_bucket_zscore)'}
+    seeds:
+      - 'sub(LogFloatCap, inv(inv(LogFloatShares)))'
+      - 'cs_regres(LogFloatCap, inv(LogFloatShares))'
+      - 'cs_regres(sub(LogTotalCap, LogFloatCap), inv(LogFloatShares))'
+      - 'sub(log(day_last(Close)), sub(LogFloatCap, inv(inv(LogFloatShares))))'
+      - 'cs_bucket_rank(inv(LogFloatShares), LogFloatCap)'
+      - 'cs_bucket_rank(sub(LogFloatCap, inv(inv(LogFloatShares))), LogTotalCap)'
+      - 'cs_bucket_zscore(cs_regres(LogFloatCap, inv(LogFloatShares)), cross_mean(day_sum(Amt), 20))'
+      - 'cs_regres(cs_regres(LogFloatCap, inv(LogFloatShares)), cs_rank(ListAge))'
+      - 'cs_bucket_rank(cs_regres(LogFloatCap, inv(LogFloatShares)), cross_max(ts_delta(log(day_last(Close)), 1), 20))'
+      - 'cs_bucket_rank(div(cross_max(ts_delta(log(day_last(Close)), 1), 20), LimitWidth), cs_regres(LogFloatCap, inv(LogFloatShares)))'
+      - 'add(cs_rank(cs_regres(LogFloatCap, inv(LogFloatShares))), cs_rank(cross_max(ts_delta(log(day_last(Close)), 1), 20)))'
+      - 'sub(cs_rank(cs_regres(LogFloatCap, inv(LogFloatShares))), cs_rank(cross_max(ts_delta(log(day_last(Close)), 1), 20)))'
+      - 'cs_bucket_rank(cs_regres(LogFloatCap, inv(LogFloatShares)), cross_mean(day_distinct_ratio(Close), 20))'
+      - 'cs_flip_by_state(cs_regres(LogFloatCap, inv(LogFloatShares)), day_sum(Amt))'
+      - 'mul(cs_regres(LogFloatCap, inv(LogFloatShares)), cs_rank(cross_mean(day_std(Ret), 20)))'
+      - 'cs_bucket_rank(cs_regres(LogFloatCap, inv(LogFloatShares)), sub(LogTotalCap, LogFloatCap))'
+  - type: N
+    hypothesis: 'A 股的日收益被各板块的涨跌停带截断(主板 10%,科创板与 2020-08-24 之后的创业板 20%,北交所 30%)。彩票型需求和涨跌停附近的行为(MAX 效应、冲高回落 / 炸板、触板后的反转或延续)都应该相对于带宽来量:主板 +9.5% 已经接近封板,创业板 2020-08 之后同样的涨幅只有半个带宽。用原始收益排序会把不同板块混在一起。这次把四类量换算成带宽单位(除以 LimitWidth),或者在同带宽组内排序(cs_bucket_rank(·, LimitWidth)):20 日 / 5 日最大和最小日收益及上下尾均值、日内最高价相对昨收的距离(离涨停多近)、从日内高点的回落(上影)、日内最低价相对昨收的距离(离跌停多近)。再加三种连续的触板强度:带宽收益的三次方均值、触板接近度 × 回落、按异常成交额加权的带宽收益。看这些量在控制流动性 / 波动 / 20 日反转 / 已知族 / 市值之后还剩多少。方向交给 sign;按 MAX 文献,预期是做多彩票性弱的一端。'
+    inspired_by: '按解剖员的统计,本批 91 个候选没有一个用到 LimitWidth 或 BoardCode,而它们就在 6 个日频字段里;PLAN §1 第 3 条记着 C04 唯一站住的贡献是按涨跌停幅度缩放日收益(方向由 GP 从数据里定);文献员 Q4 的涨跌停文献(Chen 等 2017 涨停日大户买入后反转、窄带宽反转更强;Wan 等 2015、Wu 等 2017 触板前后的动态),以及 Q1 的 MAX 效应(Bali 等)'
+    literature:
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Bali, T.G.; Cakici, N.; Whitelaw, R.F.', year: '2009-03', url: 'https://ideas.repec.org/a/eee/jfinec/v99y2011i2p427-446.html', treatment: '过去一个月最大日收益作彩票偏好代理;这里换成带宽单位,或在同带宽组内排序,再加上尾均值这类更稳健的写法'}
+      - {title: 'Daily Price Limits and Destructive Market Behavior', authors: 'Chen, T.; Gao, Z.; He, J.; Jiang, W.; Xiong, W.', year: '2017-11', url: 'https://www.nber.org/papers/w24014', treatment: '涨停日大户净买入、次日卖出,随后反转,窄带宽的股票反转更强:涨跌停宽度当调节变量,用 5 日 MAX 抓短期反转,用 cs_bucket_rank(·, LimitWidth) 做组内比较'}
+      - {title: 'Statistical Properties and Pre-Hit Dynamics of Price Limit Hits in the Chinese Stock Markets', authors: 'Wan, Y-L.; Xie, W-J.; Gu, G-F.; Jiang, Z-Q.; Chen, W.; Xiong, X.; Zhang, W.; Zhou, W-X.', year: '2015-03', url: 'https://arxiv.org/pdf/1503.03548', treatment: '不用 0/1 触板旗标,分涨停、跌停两个方向构造连续载体:日内最高 / 最低价相对昨收的带宽单位距离'}
+      - {title: 'Post-hit dynamics of price limit hits in the Chinese stock markets', authors: 'Wu, T.; Wang, Y.; Li, M-X.', year: '2017', url: 'https://ideas.repec.org/a/eee/phsmap/v465y2017icp464-471.html', treatment: '连续触板的天数是独立因素:用带宽收益三次方的 20 日均值、触板接近度 × 回落的 20 日均值,作连续的触板强度'}
+      - {title: 'Information Discovery in Share Lockups: Evidence from the Split-Share Structure Reform in China', authors: 'Liao, L.; Liu, B.; Wang, H.', year: '2009-10', url: 'https://efmaefm.org/0EFMSYMPOSIUM/2010-China/papers/LLW_splitshare20091030.pdf', treatment: '异常成交量本身就是连续信号:用当日成交额 / 20 日均成交额给带宽收益加权'}
+    seeds:
+      - 'cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20)'
+      - 'cs_bucket_rank(cross_max(ts_delta(log(day_last(Close)), 1), 20), LimitWidth)'
+      - 'cross_min(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20)'
+      - 'cross_tail_mean_q75(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30)'
+      - 'cross_max(div(sub(log(day_max(High)), ts_delay(log(day_last(Close)), 1)), LimitWidth), 20)'
+      - 'cross_mean(div(sub(log(day_max(High)), log(day_last(Close))), LimitWidth), 20)'
+      - 'cross_mean(mul(div(sub(log(day_max(High)), ts_delay(log(day_last(Close)), 1)), LimitWidth), div(sub(log(day_max(High)), log(day_last(Close))), LimitWidth)), 20)'
+      - 'cross_mean(pow_3(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 20)'
+      - 'cs_bucket_rank(ts_skew(ts_delta(log(day_last(Close)), 1), 30), LimitWidth)'
+      - 'sub(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20), cross_mean(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20))'
+      - 'cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 5)'
+      - 'cross_min(div(sub(log(day_min(Low)), ts_delay(log(day_last(Close)), 1)), LimitWidth), 20)'
+      - 'cs_bucket_rank(cross_max(div(sub(log(day_max(High)), ts_delay(log(day_last(Close)), 1)), LimitWidth), 20), LogFloatCap)'
+      - 'cross_tail_mean_q25(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 30)'
+      - 'cross_mean(mul(div(ts_delta(log(day_last(Close)), 1), LimitWidth), div(day_sum(Amt), cross_mean(day_sum(Amt), 20))), 20)'
+      - 'add(cross_max(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20), cross_min(div(ts_delta(log(day_last(Close)), 1), LimitWidth), 20))'
+R: []   # 快照里 0 个 head,R 在代码层面不可能(c05_check 与 c05_locate direct 都只接受快照里的 head);本轮 16 次 R 与 48 次拆解都用不上

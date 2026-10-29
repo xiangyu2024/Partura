@@ -1,0 +1,136 @@
+seed: 806
+round: 1
+# PI 第 1 轮决定。快照 = M 第 1 批(85 个已评分候选,0 个 head,全部负分),所以本轮没有 R、没有库禁令。
+# 位 a = E(核心 day_cov(Vwap, Ret),外围专门去量纲);位 b = N(无量纲的日内分布 / 路径形状,文献里的经典写法)。
+slots:
+  - type: E
+    core: 'day_cov(Vwap, Ret)'
+    hypothesis: >-
+      共性表的 7 行折算下来只有 1 条血统、2 个信号;真正带日内信息的部件是 day_cov(Vwap, Ret)(22 个候选含它,
+      含 / 不含 −0.83 / −1.46;p 值因血统相关而高估,只当描述)。卡 1 的 add(LimitWidth, ·) 在量纲上把它降成板块
+      哑变量的破平局项,不选。按解剖员的分解 day_cov(Vwap, Ret) ≈ (P̄/M)(Q/2 − R·δ):一半是「价格水平 × 当日已实现方差」
+      (价格水平不在控制里,当日方差只被 20 日均波动部分控制),一半是「当日收益 × 行情出现得多晚」(时点项)。
+      我的判断是它相对「亏得少」主要来自前者(代理)加上这条血统换手低,时点项是否带 alpha 未知;这一位就是把两者拆开。
+      外围处理(都是快照里没见过的:以前只见过 add LimitWidth、再套 ts_min、重复相加):
+      (1) 除以 day_mean(Vwap) 去价格水平;(2) 再除以 day_var(Ret) 只留时点项 −Rδ/Q;(3) 改用 day_std 归一化(等价于相关);
+      (4) 多日处理:cross_mean / cross_ema 平滑、cross_zscore 与「减自身 20 日均值」的新息写法、ts_rank、上四分位日均值;
+      (5) 组内标准化(按市值十分位 cs_bucket_zscore)而不是把哑变量加到信号上;(6) LimitWidth 只作缩放(除以 LimitWidth 的平方,
+      方差量纲),不作加项;(7) 对照:不去量纲只平滑的 cross_mean(day_cov, 20) 与先截面排序再平均;以及除以 20 日平均方差
+      (保留当日波动新息)对比除以当日方差。哪个方向赚钱交给 GP 和 train 定,不写先验符号。
+      判决:若去量纲的时点版明显差于只平滑的原版,说明来源是价格 × 波动代理,第 2 轮不再在这个核心上花 E 位。
+    literature:
+      - title: 'Momentum-Managed Equity Factors'
+        authors: 'Volker Flögel, Christian Schlag, Claudia Zunft'
+        year: '2021-07'
+        url: 'https://publikationen.ub.uni-frankfurt.de/opus4/files/61452/SSRN-id3423287.pdf'
+        treatment: '因子值相对自身历史做时序标准化(z 分数)再用 → cross_zscore(·, 20)、减自身 20 日均值的新息、ts_rank'
+      - title: 'Predicting Stock Returns Using Industry-Relative Firm Characteristics'
+        authors: 'Clifford S. Asness, R. Burt Porter, Ross L. Stevens'
+        year: '2000-02'
+        url: 'https://www.aqr.com/Insights/Research/Working-Paper/Predicting-Stock-Returns-Using-IndustryRelative-Firm-Characteristics'
+        treatment: '先在组内标准化再全市场排序,而不是把分组哑变量直接加到信号上 → cs_bucket_zscore(·, LogFloatCap)'
+      - title: 'Does Realized Skewness Predict the Cross-Section of Equity Returns?'
+        authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez'
+        year: '2015'
+        url: 'https://repec.econ.au.dk/repec/creates/rp/13/rp13_41.pdf'
+        treatment: '用尺度不变的高频矩把「形状」与「波动量级」分开,周频持有 → 除以 day_var / day_std 去量纲,cross_ema(·, 5)'
+      - title: 'The Cross-Section of Volatility and Expected Returns'
+        authors: 'Andrew Ang, Robert J. Hodrick, Yuhang Xing, Xiaoyan Zhang'
+        year: '2006'
+        url: 'https://www.nber.org/papers/w10852'
+        treatment: '(特质)波动是已知的负向截面变量 → 对照种子:除以 20 日平均方差(保留当日波动新息)vs 除以当日方差'
+      - title: 'Price limit change and magnet effect: The role of investor attention'
+        authors: 'Xiaotao Zhang, Xinxian Li, Jing Hao, Peigong Li'
+        year: '2022-12'
+        url: 'https://ideas.repec.org/a/eee/finlet/v53y2023ics154461232200753x.html'
+        treatment: '涨跌停幅度以乘性交互进入,而不是静态分组 → LimitWidth 只作缩放(除以其平方),不作加项'
+    seeds:
+      - 'div(day_cov(Vwap, Ret), day_mean(Vwap))'
+      - 'div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret)))'
+      - 'cross_mean(div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret))), 20)'
+      - 'cross_ema(div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret))), 5)'
+      - 'cross_zscore(div(day_cov(Vwap, Ret), day_mean(Vwap)), 20)'
+      - 'div(day_cov(Vwap, Ret), mul(day_std(Vwap), day_std(Ret)))'
+      - 'cross_mean(div(day_cov(Vwap, Ret), mul(day_std(Vwap), day_std(Ret))), 10)'
+      - 'div(div(day_cov(Vwap, Ret), day_mean(Vwap)), pow_2(LimitWidth))'
+      - 'cs_bucket_zscore(div(day_cov(Vwap, Ret), day_mean(Vwap)), LogFloatCap)'
+      - 'sub(div(day_cov(Vwap, Ret), day_mean(Vwap)), cross_mean(div(day_cov(Vwap, Ret), day_mean(Vwap)), 20))'
+      - 'div(day_cov(Vwap, Ret), mul(day_mean(Vwap), cross_mean(day_var(Ret), 20)))'
+      - 'cross_tail_mean_q75(div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret))), 20)'
+      - 'ts_rank(div(day_cov(Vwap, Ret), day_mean(Vwap)), 20)'
+      - 'cross_mean(day_cov(Vwap, Ret), 20)'
+      - 'cross_mean(cs_rank(day_cov(Vwap, Ret)), 20)'
+      - 'mul(div(day_cov(Vwap, Ret), mul(day_mean(Vwap), day_var(Ret))), day_centroid(Volume))'
+  - type: N
+    hypothesis: >-
+      无量纲的日内收益分布 / 价格路径形状。这一批的 day_cov(Vwap, Ret) 把「形状」(行情出现得多晚)和「量级」(价格 × 方差)
+      混在一起;文献里同一类信息的标准写法都是尺度不变的:已实现偏度 / 峰度、按收益符号拆开的半方差(相对符号跳跃
+      Σr|r| / Σr²)、归一化的成交不平衡 (上涨分钟量 − 下跌分钟量) / 总量、时点与收益的相关、尾盘 30 分钟收益、
+      隔夜段与盘中段分开的累计收益、成交量加权均价相对时间加权均价的偏离、量价相关。它们都不含价格水平和波动量级,
+      所以在五个控制(流动性、20 日均波动、20 日反转、已知族、市值)之后更可能留下独立信息;多数先做 5–20 日平滑以压换手
+      (纯多头 + 15bp)。另放一个 LimitWidth 缩放的周收益(PLAN §1 第 3 条:C04 唯一留下的构造,方向交给数据)和一个
+      按市值十分位组内标准化的偏度。方向一律交给 train 定,不写先验符号。16 个种子骨架互不相同。
+    inspired_by: >-
+      M 第 1 批:day_cov(Vwap, Ret) 血统(22 个候选,共性表均值差 +0.63)是这批里唯一带日内信息的结构,但它的截面主要由
+      价格水平 × 已实现方差决定(解剖 §1.4);本位做它的无量纲孪生(day_corr、价格分布偏度、时点相关)和文献里同族的
+      尺度不变量(Amaya et al. 2015 的已实现偏度;Barndorff-Nielsen et al. 的半方差;Narayan et al. 2015 的成交不平衡;
+      Chu et al. 2019 的 A 股日内动量与 T+1 跨段反转;Lou et al. 2019 的隔夜 / 盘中拔河)。
+    literature:
+      - title: 'Does Realized Skewness Predict the Cross-Section of Equity Returns?'
+        authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez'
+        year: '2015'
+        url: 'https://repec.econ.au.dk/repec/creates/rp/13/rp13_41.pdf'
+        treatment: '高频收益的已实现偏度 / 峰度当截面预测变量,周频 → cross_mean(day_skew(Ret), 20)、cross_ema(day_skew(Ret), 5)、cross_mean(day_kurt(Ret), 20)'
+      - title: 'Measuring downside risk: realised semivariance'
+        authors: 'Ole E. Barndorff-Nielsen, Silja Kinnebrock, Neil Shephard'
+        year: '2010'
+        url: 'https://www.nuff.ox.ac.uk/economics/papers/2008/w2/downside.pdf'
+        treatment: '已实现方差按收益符号拆成上 / 下半方差 → 相对符号跳跃 day_signed_ratio(Ret, pow_2(Ret)) = Σr|r| / Σr²'
+      - title: 'Realized Semicovariances'
+        authors: 'Tim Bollerslev, Jia Li, Andrew J. Patton, Rogier Quaedvlieg'
+        year: '2020-07'
+        url: 'https://www.econometricsociety.org/doi/10.3982/ECTA17056'
+        treatment: '同号 / 异号部分的信息不同 → 同上,按符号拆而不是整体方差'
+      - title: 'Do order imbalances predict Chinese stock returns? New evidence from intraday data'
+        authors: 'Paresh Kumar Narayan, Seema Narayan, Joakim Westerlund'
+        year: '2015'
+        url: 'https://ideas.repec.org/a/eee/pacfin/v34y2015icp136-151.html'
+        treatment: '不平衡标准化为 (买 − 卖) / (买 + 卖) → day_signed_ratio(Ret, Volume)、day_signed_ratio(Ret, Amt)'
+      - title: 'Intraday momentum and reversal in Chinese stock market'
+        authors: 'Xiaojun Chu, Zherong Gu, Haigang Zhou'
+        year: '2019'
+        url: 'https://ideas.repec.org/a/eee/finlet/v30y2019icp83-88.html'
+        treatment: 'A 股日内按时段切片(首 / 尾半小时),同段延续、跨段反转 → 尾盘 30 分钟收益 day_last(in_sum_rolling(Ret, 30))、时点与收益的相关'
+      - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        url: 'https://personal.lse.ac.uk/polk/research/TugOfWar.pdf'
+        treatment: '隔夜段与盘中段分开构造,两段符号常相反 → 20 日累计隔夜收益 log(开盘 / 昨收)'
+      - title: 'Intraday Patterns in the Cross-Section of Stock Returns'
+        authors: 'Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka'
+        year: '2010'
+        url: 'https://ar5iv.arxiv.org/html/1005.3535'
+        treatment: '日内信息按时段 / 时点看,不揉成一个量级 → day_centroid(Ret)、day_corr(in_index(Ret), Ret)'
+      - title: 'Predicting Stock Returns Using Industry-Relative Firm Characteristics'
+        authors: 'Clifford S. Asness, R. Burt Porter, Ross L. Stevens'
+        year: '2000-02'
+        url: 'https://www.aqr.com/Insights/Research/Working-Paper/Predicting-Stock-Returns-Using-IndustryRelative-Firm-Characteristics'
+        treatment: '组内标准化 → cs_bucket_zscore(偏度, LogFloatCap)'
+    seeds:
+      - 'cross_mean(day_skew(Ret), 20)'
+      - 'cross_ema(day_skew(Ret), 5)'
+      - 'cross_mean(day_kurt(Ret), 20)'
+      - 'cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 20)'
+      - 'cross_mean(day_signed_ratio(Ret, Volume), 20)'
+      - 'cross_ema(day_signed_ratio(Ret, Amt), 10)'
+      - 'cross_mean(day_corr(Vwap, Ret), 20)'
+      - 'cross_mean(div(sub(day_mean(Vwap), day_median(Vwap)), day_std(Vwap)), 10)'
+      - 'cross_mean(day_corr(in_index(Ret), Ret), 20)'
+      - 'cross_mean(day_centroid(Ret), 20)'
+      - 'cross_mean(day_last(in_sum_rolling(Ret, 30)), 10)'
+      - 'cross_sum(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)'
+      - 'cross_mean(div(day_sum(Ret), LimitWidth), 5)'
+      - 'cross_ema(day_corr(Vwap, Volume), 10)'
+      - 'cross_mean(log(div(day_wmean(Vwap, Volume), day_mean(Vwap))), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_skew(Ret), 20), LogFloatCap)'
+R: []

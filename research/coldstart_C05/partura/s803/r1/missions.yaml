@@ -1,0 +1,98 @@
+seed: 803
+round: 1
+slots:
+  - type: E
+    core: 'day_kurt(Ret)'
+    hypothesis: >-
+      核心 day_kurt(Ret)(方向 -1,hl 20,score 0.97,valid 1.54 > train 0.97)量的是分钟收益分布的形状;它对日内仿射变换不变,所以躲过了日内波动控制。
+      但奖励是先对原始值做 EMA 再排序,原始峰度极重尾(只有一分钟有成交的日子约 +236),所以 EMA20 实际是「过去一个月有没有出现过尖峰日」的峰值记忆;
+      而尖峰日的来源至少有三种:零收益分钟多(成交稀疏,或低名义价格导致一跳就是 0.2%~0.3%,分钟收益落在价格网格上),封板/跳跃日,以及真的尾部形状。
+      本任务把核心本身(sign x EMA20)放进控制,只奖励核心之外的信息,所以单调改写、换平滑窗口在构造上拿不到分。存档里核心周围见过哪些外围,定位输出没有打印;共性表为空意味着 43 个精英里至多 3 个把核心包在别的东西里,最可能是单个 cross_* 或算术包一层,所以种子尽量用 >= 2 个算子或不常抽到的算子。这次试的外围分三类:
+      (1) 拿掉疑似混淆:在零收益比例或名义价格(day_sum(Amt)/day_sum(Volume),未复权)的十分位内排序、截面秩回归残差;以及个股时序上对自身日内波动 / 成交额回归的残差(今天的尖不是因为今天冷清或今天活跃)—— 剩下的才是真的形状;
+      (2) 改时间轴上的聚合:控制里是原始值 EMA 的峰值记忆,这里换成 60 日中位数 / 40 日下四分位尾均值(平常日子的形状)、日秩的慢 EMA,和稳健异常度 cross_madz(今天比自己平常尖多少);
+      (3) 和成交的共动与方向:峰度与当日成交额的 20 日时序相关(尖峰出现在放量日 = 信息,出现在冷清日 = 流动性)、峰度乘偏度(尖在哪一侧;sign 不在搜索词表里,直接乘偏度)、收益峰度减成交额峰度的秩差。
+      都不用 BoardCode / LimitWidth 分桶(取值大量并列,十分位会按代码顺序切)。
+    literature:
+      - {title: 'Does realized skewness predict the cross-section of equity returns?', authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez', year: '2015', url: 'https://doi.org/10.1016/j.jfineco.2015.02.009', treatment: '用日内收益算的已实现峰度 / 偏度直接做截面排序,不先剔除零收益分钟 —— 这正是核心的写法;本任务把剔除这一步放到外围(种子 1-3、12、13、16)'}
+      - {title: 'A New Estimate of Transaction Costs', authors: 'David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka', year: '1999', url: 'https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html', treatment: '零收益比例本身是交易摩擦的读数;借来当分桶 / 回归变量,把核心里的摩擦成分拿掉'}
+      - {title: 'Liquidity and Expected Returns: Lessons from Emerging Markets', authors: 'Geert Bekaert, Campbell R. Harvey, Christian Lundblad', year: '2007', url: 'https://www.nber.org/papers/w11413.pdf', treatment: '零收益比例按月平均当独立的流动性变量;种子 16 用它的 20 日均值做分桶变量'}
+      - {title: 'Power and Bipower Variation with Stochastic Volatility and Jumps', authors: 'Ole E. Barndorff-Nielsen, Neil Shephard', year: '2004', url: 'https://www.nuffield.ox.ac.uk/economics/papers/2003/w18/eric_may03.pdf', treatment: '让统计量不被单个极端观测支配;这里搬到日这条轴上:用多日中位数 / 下四分位尾均值 / 日秩的 EMA 代替原始值的 EMA(种子 5、6、14)'}
+      - {title: 'The fine structure of volatility feedback II: overnight and intra-day effects', authors: 'Pierre Blanc, Remy Chicheportiche, Jean-Philippe Bouchaud', year: '2013-09', url: 'https://arxiv.org/abs/1309.5806', treatment: '隔夜与日内分开算同一个矩;种子 12 用只在有成交的分钟上、且不含首根 bar 的收益算峰度,与核心做秩差'}
+      - {title: 'The Dependence between Hourly Prices and Trading Volume', authors: 'Prem C. Jain, Gun-Ho Joh', year: '1988-09', url: 'https://resolve.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/dependence-between-hourly-prices-and-trading-volume/C305DB5BFB5F2B2D803BB94449AF8B47', treatment: '收益与成交量的同期 / 滞后依赖,分正负收益;种子 4、8、9、15 把核心和日内波动 / 成交额放在时序上做相关 / 回归,种子 10 乘偏度分侧'}
+    seeds:
+      - 'cs_bucket_rank(day_kurt(Ret), day_zero_ratio(Ret))'
+      - 'cs_bucket_rank(day_kurt(Ret), log(div(day_sum(Amt), day_sum(Volume))))'
+      - 'cs_regres(cs_rank(day_kurt(Ret)), cs_rank(day_zero_ratio(Ret)))'
+      - 'cross_regres(day_std(Ret), day_kurt(Ret), 40)'
+      - 'cross_med(day_kurt(Ret), 60)'
+      - 'cross_tail_mean_q25(day_kurt(Ret), 40)'
+      - 'cross_madz(day_kurt(Ret), 60)'
+      - 'cross_corr(day_kurt(Ret), day_sum(Amt), 20)'
+      - 'cross_corr(day_kurt(Ret), day_kurt(Amt), 20)'
+      - 'mul(day_kurt(Ret), day_skew(Ret))'
+      - 'sub(cs_rank(day_kurt(Ret)), cs_rank(day_kurt(Amt)))'
+      - 'sub(cs_rank(day_kurt(Ret)), cs_rank(day_kurt(in_logchg(Vwap, 1))))'
+      - 'cs_regres(cs_rank(day_kurt(Ret)), cs_rank(log(div(day_sum(Amt), day_sum(Volume)))))'
+      - 'cross_ema(cs_rank(day_kurt(Ret)), 40)'
+      - 'cross_regres(day_sum(Amt), day_kurt(Ret), 20)'
+      - 'cs_bucket_rank(cross_ema(day_kurt(Ret), 20), cross_mean(day_zero_ratio(Ret), 20))'
+  - type: N
+    hypothesis: >-
+      峰度是矩统计量:它把一天 241 根分钟收益当成一个无序的样本,扔掉了两样东西 —— 分钟的先后顺序,以及每分钟成交了多少钱。
+      这一批唯一的 head 正是这样一个只看形状的统计量,而且它拿到 0.97;五个控制(成交额水平、日内波动、20 日反转、成交额日内离散、市值)也都不含顺序和成交时点。
+      新想法:分钟序列的顺序信息与「成交钟」信息本身就是截面 alpha。三条线:
+      (a) 顺序 / 定价效率:分钟收益的一阶自回归系数、Durbin-Watson、R/S Hurst(负自相关 = 买卖价差反弹,正自相关 = 价格延迟);
+      (b) 成交钟 vs 钟表钟:成交额加权波动 / 钟表波动、成交最重的 10% 分钟的平均收益、成交额在一天里的重心与是否后置、成交时点减波动时点;
+      (c) 量价的同期与领先滞后:分钟收益与成交额的同期相关、收盘价与成交量的相关、上一分钟收益对这一分钟成交额、带方向的成交额占比。
+      都是尺度无关的日内统计量,和库里的 day_kurt 骨架不同。
+    inspired_by: '第 1 批唯一的 head day_kurt(Ret) 只读分钟收益分布的形状;它丢掉的顺序和成交额权重就是这个任务要读的东西。文献:Roll (1984) 用一阶自协方差读价差,Lo-MacKinlay (1988) 用方差比读定价效率,Clark (1973) 用成交量当时钟,Admati-Pfleiderer (1988) 与 Jain-Joh (1988) 的日内成交时点与量价依赖。'
+    literature:
+      - {title: 'A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient Market', authors: 'Richard Roll', year: '1984', url: 'https://www.bauer.uh.edu/rsusmel/phd/roll1984.pdf', treatment: '价格变化的一阶序列相关为负 = 买卖价差反弹;种子 1、2、3、11、15 读分钟收益的一阶自回归 / DW'}
+      - {title: 'Stock Market Prices Do Not Follow Random Walks: Evidence from a Simple Specification Test', authors: 'Andrew W. Lo, A. Craig MacKinlay', year: '1988', url: 'https://doi.org/10.1093/rfs/1.1.41', treatment: '用收益序列的自相关结构度量定价效率,个股层面多为负自相关;决定 1、2 号种子的预期方向不预设,由奖励选方向'}
+      - {title: 'A Subordinated Stochastic Process Model with Finite Variance for Speculative Prices', authors: 'Peter K. Clark', year: '1973', url: 'https://doi.org/10.2307/1913889', treatment: '价格由累计成交量这个随机时钟驱动;种子 8、9 在成交额加权下读波动与收益(成交钟 vs 钟表钟)'}
+      - {title: 'A Theory of Intraday Patterns: Volume and Price Variability', authors: 'Anat R. Admati, Paul Pfleiderer', year: '1988', url: 'https://doi.org/10.1093/rfs/1.1.3', treatment: '日内成交量的时点模式(U 型)来自知情 / 流动性交易者的集中;种子 6、7、16 读成交额的重心、是否后置、与波动时点之差'}
+      - {title: 'The Dependence between Hourly Prices and Trading Volume', authors: 'Prem C. Jain, Gun-Ho Joh', year: '1988-09', url: 'https://resolve.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/dependence-between-hourly-prices-and-trading-volume/C305DB5BFB5F2B2D803BB94449AF8B47', treatment: '同期与滞后的量价相关,正负收益不对称;种子 4、5、12、10 读同期相关、上一分钟收益对成交额、带方向的成交额占比'}
+    seeds:
+      - 'day_ar1_coefficient(Ret)'
+      - 'day_durbin_watson(Ret)'
+      - 'cross_mean(day_ar1_coefficient(in_logchg(Vwap, 1)), 20)'
+      - 'day_corr(Ret, Amt)'
+      - 'cross_mean(day_corr(Close, Volume), 20)'
+      - 'day_centroid(Amt)'
+      - 'day_corr(in_index(Amt), Amt)'
+      - 'div(day_wstd(Ret, Amt), day_std(Ret))'
+      - 'day_topw_mean(Ret, Amt)'
+      - 'day_signed_ratio(Ret, Amt)'
+      - 'cs_bucket_rank(day_durbin_watson(Ret), cross_mean(day_sum(Amt), 20))'
+      - 'day_corr(in_delay(Ret, 1), Amt)'
+      - 'cross_mean(day_hurst(Ret), 20)'
+      - 'cross_ema(day_signed_ratio(Ret, Amt), 5)'
+      - 'cs_bucket_rank(day_ar1_coefficient(Ret), log(div(day_sum(Amt), day_sum(Volume))))'
+      - 'sub(day_centroid(Amt), day_centroid(Ret))'
+R:
+  - head: 'day_kurt(Ret)'
+    why: >-
+      两个节点的树,拆解 0 次(根不跳、Ret 没有同类字段、没有窗口),所以没有任何部件被证明是烂的;只能换件,每个换件对准一个具体怀疑,同时当判决用。
+      [输入 Ret 带零点质量 + 首根 bar] 1 只在有成交的分钟上算(Vwap 缺失处跳过,且不含首根)、2 日内重建收益(首分钟为 NaN)、3 五分钟收益(价格网格上很少为 0:离散度是不是来源);
+      [算子 day_kurt 被单个打印支配、在零质量上饱和] 4 有界的 gini、5/6 单侧尾部条件均值比(死日构造上为 NaN)、7 奇数阶矩;
+      [原始值极重尾、EMA 变成峰值记忆] 8 先截面秩再交给奖励的 EMA、9 对 kurt+5 取对数(kurt >= -2,安全)、10 20 日中位数;
+      [核心可能只是别的原子] 11 零收益比例的 EMA10(H1 成交稀疏;EMA 外壳只是为过 distinct >= 0.5 门槛,k/241 型比例的 20 日均值取值太少)、12 未复权名义价格的对数(H4 价格网格:价格字段是后复权的,Amt/Volume 才是成交价)、
+      13 停在当日最高价的时间占比的 EMA10(H3 封板)、14 尺度无关的 MAX(H3 彩票)、15 换成成交额的峰度(收益形状还是成交形状)、16 最长静止段的 EMA10(连续封板 vs 零散不动)。
+      判读看 score 和 rho_head:换件过 +0.1 且 rho_head >= 0.5 就替换;原子类(11-14)rho_head >= 0.5 就说明 head 主要是那个原子。
+    variants:
+      - 'day_kurt(in_logchg(Vwap, 1))'
+      - 'day_kurt(in_pct(Close, 1))'
+      - 'day_kurt(in_pct(Close, 5))'
+      - 'day_gini(Ret)'
+      - 'day_es_ratio_hi(Ret)'
+      - 'day_es_ratio_lo(Ret)'
+      - 'day_skew(Ret)'
+      - 'cs_rank(day_kurt(Ret))'
+      - 'log(add(day_kurt(Ret), 5))'
+      - 'cross_med(day_kurt(Ret), 20)'
+      - 'cross_ema(day_zero_ratio(Ret), 10)'
+      - 'log(div(day_sum(Amt), day_sum(Volume)))'
+      - 'cross_ema(day_at_max_ratio(Close), 10)'
+      - 'div(day_max(Ret), day_std(Ret))'
+      - 'day_kurt(Amt)'
+      - 'cross_ema(day_flat_run_max(Ret), 10)'

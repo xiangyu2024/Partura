@@ -1,0 +1,69 @@
+seed: 801
+round: 1
+slots:
+  - type: E
+    core: 'LogFloatShares'
+    hypothesis: 'alpha 来源:M 第 1 批唯一的 head inv(pow_3(pow_3(pow_3(LogFloatShares)))) 的四层包装在截面上是恒等变换(拆解里 5 个秩等价写法 rho_known 全等 -0.2945,score 0.47-0.50),真正起作用的是字段 LogFloatShares 本身;控制 LogFloatCap 之后它的残差约等于 -log(名义股价),多头 = 同等流通市值下股本最多、股价最低的一档。所以核心取裸字段。族中性化会把这条水平线的书扣掉,只奖励浮股信息里水平之外的部分。快照里含核心的外围全是逐元素幂 / 倒数族(pow_3、pow_05、pow_2_5、inv);这次的外围换成三类以前没见过的处理:(1) 以流通股本作分母的换手率,log 成交量减核心,取 5 / 20 日均值、20 日最大值、20 日波动、成交额口径,依据 Mei-Scheinkman-Xiong:小流通盘的高换手是投机而非流动性;(2) 流通股扩张事件做成连续量:核心减去它 120 日滚动最小值(按扩张占原流通盘的比例,依据刘娥平-唐舜),加一个小的换手率秩项保证过 distinct 门,以及用扩张前的旧流通股(滚动最小值)作分母的换手率;(3) 市值十分位内的股本秩(约等于分档内的低股价,同时扣掉非线性规模)与波动、MAX、换手做截面秩乘积,依据 Birru-Wang:名义价格溢价在难套利、高波动股票里更强。种子全部是减法取对数 / 秩乘积 / 分档秩,不做加性叠加,避免水平项把外围压掉后被秩禁令毙掉。'
+    literature:
+      - {title: 'Speculative Trading and Stock Prices: An Analysis of Chinese A-B Share Premia', authors: 'Jianping Mei, Jose A. Scheinkman, Wei Xiong', year: '2004-08', url: 'https://users.nber.org/~confer/2004/cwgf04/xiong.pdf', treatment: '小流通盘、高换手归因于投机交易:把流通股本当作换手率的分母与成交量交互,而不是单独当规模用'}
+      - {title: '可交易性折扣、价值转移与限售股解禁', authors: '刘娥平, 唐舜', year: '2014-09', url: 'https://qks.shufe.edu.cn/J/ArticleQuery/A160824000481/CN', treatment: '解禁冲击随新增流通股占原流通盘的比例加重、在解禁前后一段窗口里渐进形成:用连续的「当前流通股减滚动最小值」代替事件哑变量'}
+      - {title: 'The IPO Lock-Up Period: Implications for Market Efficiency and Downward Sloping Demand Curves', authors: 'Eli Ofek, Matthew Richardson', year: '2000-01', url: 'https://archive.nyu.edu/bitstream/2451/27072/2/wpa99054.pdf', treatment: '完全可预期的解禁仍伴随价格下跌和约 40% 的成交量跳升:扩张事件和换手率放在同一个特征里看'}
+      - {title: 'Nominal Price Illusion', authors: 'Justin Birru, Baolian Wang', year: '2016-03', url: 'https://ideas.repec.org/p/ecl/ohidic/2015-15.html', treatment: '名义价格溢价在控制规模后仍在,且在难套利(小盘、高波动)股票里更强:按波动 / 彩票度量做条件化'}
+    seeds:
+      - 'sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares)'
+      - 'sub(log(cross_mean(day_sum(Volume), 5)), LogFloatShares)'
+      - 'sub(log(cross_max(day_sum(Volume), 20)), LogFloatShares)'
+      - 'sub(log(cross_stddev(day_sum(Volume), 20)), LogFloatShares)'
+      - 'sub(log(cross_mean(day_sum(Amt), 20)), LogFloatShares)'
+      - 'sub(log(cross_mean(day_sum(Volume), 20)), cross_min(LogFloatShares, 120))'
+      - 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.1, cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares))))'
+      - 'sub(sub(log(cross_mean(day_sum(Volume), 5)), LogFloatShares), sub(log(cross_mean(day_sum(Volume), 60)), cross_min(LogFloatShares, 60)))'
+      - 'mul(cs_bucket_rank(LogFloatShares, LogFloatCap), cs_rank(cross_stddev(day_sum(Ret), 20)))'
+      - 'mul(cs_bucket_rank(LogFloatShares, LogFloatCap), cs_rank(cross_max(day_sum(Ret), 20)))'
+      - 'mul(cs_bucket_rank(LogFloatShares, LogFloatCap), cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares)))'
+      - 'cs_bucket_rank(sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares), LogFloatShares)'
+      - 'cs_bucket_rank(sub(log(cross_mean(day_sum(Volume), 5)), LogFloatShares), ListAge)'
+      - 'mul(cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares)), cs_rank(cross_max(div(day_sum(Ret), LimitWidth), 20)))'
+      - 'mul(LogFloatShares, cross_max(div(day_sum(Ret), LimitWidth), 20))'
+  - type: N
+    hypothesis: '把日收益按本板涨跌停幅度缩放(Ret / LimitWidth = 用掉了允许波幅的几成)之后,彩票型 / 触板型特征才在跨板块的截面上可比:主板涨 5% 与创业板 / 科创板涨 5% 离涨停的距离完全不同,未缩放的 MAX、波动在混合截面里把板块构成和彩票偏好搅在一起。这条轴和本种子库里唯一的 head(浮股水平 / 低名义股价)几乎正交,五个控制里只有 20 日点对点收益和分钟级波动,不覆盖日收益的极值、偏度和触板距离。种子覆盖:缩放后的 MAX / MIN / 波动 / 涨跌不对称 / 衰减均值、近涨停与近跌停天数的软计数(触板频率的连续版)、盘中最高价相对昨收的触板距离和上影线(冲板失败)、相邻两日缩放收益的乘积(触板后次日延续)、MAX 与成交额异动的交互;另留两个未缩放的彩票度量作对照。方向不先验写死,由 GP 定。'
+    inspired_by: 'M 第 1 批:90 个已评分候选里不含浮股水平线的 62 个均值 -0.96,库里没有任何收益极值 / 涨跌停类因子;PLAN §1 第 3 条记下的唯一留下来的特征构造(日收益按涨跌停幅度缩放,方向由 GP 定);文献员题目 4(涨跌停宽度是调节变量、触板后次日延续)与题目 1(MAX 彩票偏好,在散户占比高的股票里更强)。'
+    literature:
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011-02', url: 'https://www.nber.org/papers/w14804.pdf', treatment: '用月内最大单日收益 MAX 度量彩票偏好;这里改成按本板涨跌停幅度缩放后的 MAX / MIN'}
+      - {title: 'Daily price limits and destructive market behavior', authors: 'Ting Chen, Zhenyu Gao, Jibao He, Wenxi Jiang, Wei Xiong', year: '2019-01', url: 'https://ideas.repec.org/a/eee/econom/v208y2019i1p249-264.html', treatment: '涨跌停宽度是调节变量,触板后的反转在更窄的限制下更明显:收益先按本板宽度归一化再取极值、计数'}
+      - {title: 'Statistical Properties and Pre-hit Dynamics of Price Limit Hits in the Chinese Stock Markets', authors: 'Yu-Lei Wan et al.', year: '2015-03', url: 'https://arxiv.org/abs/1503.03548', treatment: '触板后次日延续的概率高于反转(跌停尤甚):相邻两日缩放收益的乘积、盘中触板距离'}
+      - {title: 'Lottery-Like Stocks and the Cross-Section of Expected Stock Returns in the Korean Stock Market', authors: 'Jangkoo Kang, Myunghwa Shim', year: '2014-05', url: 'https://m.earticle.net/Article/A238246', treatment: 'MAX 效应在散户交易占比高的股票里更强:MAX 与短期成交额异动做秩乘积'}
+    seeds:
+      - 'cross_max(div(day_sum(Ret), LimitWidth), 20)'
+      - 'cross_min(div(day_sum(Ret), LimitWidth), 20)'
+      - 'cross_max(div(day_sum(Ret), LimitWidth), 60)'
+      - 'cross_stddev(div(day_sum(Ret), LimitWidth), 20)'
+      - 'add(cross_max(div(day_sum(Ret), LimitWidth), 20), cross_min(div(day_sum(Ret), LimitWidth), 20))'
+      - 'cross_decay_linear(div(day_sum(Ret), LimitWidth), 10)'
+      - 'cross_mean(abs_(div(day_sum(Ret), LimitWidth)), 20)'
+      - 'cross_mean(sigmoid(mul(20, sub(div(day_sum(Ret), LimitWidth), 0.7))), 20)'
+      - 'cross_mean(sigmoid(mul(20, sub(neg(div(day_sum(Ret), LimitWidth)), 0.7))), 20)'
+      - 'cross_max(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), LimitWidth), 20)'
+      - 'cross_mean(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)), div(day_last(Close), ts_delay(day_last(Close), 1))), LimitWidth), 20)'
+      - 'cross_mean(mul(ts_delay(div(day_sum(Ret), LimitWidth), 1), div(day_sum(Ret), LimitWidth)), 20)'
+      - 'div(cross_max(div(day_sum(Ret), LimitWidth), 20), cross_stddev(div(day_sum(Ret), LimitWidth), 20))'
+      - 'mul(cs_rank(cross_max(div(day_sum(Ret), LimitWidth), 20)), cs_rank(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))))'
+      - 'cross_max(day_sum(Ret), 20)'
+      - 'ts_skew(day_sum(Ret), 20)'
+R:
+  - head: 'inv(pow_3(pow_3(pow_3(LogFloatShares))))'
+    why: '四层 pow_3 / inv 在截面上是恒等变换(拆解的 5 个秩等价写法 rho_known 四位小数全等),只在半衰期 EMA 里留下一个 0.03 宽的凸性噪声带;x^27 在 1e32-1e38 量级,离 float32 上限只差一次乘法,加性组合里会把任何外围压掉(共性表 8 行均值全落在 0.480-0.484)。这 13 个变体去掉包装或把叶子 / 包装换掉,目的是分开三种解释并补上定位工具没做的敏感性:(a) 低名义股价 —— 变体 2、3、4、11;(b) 没扣干净的非线性规模暴露(Barra 的 Non-linear Size 就是把规模的三次方再对线性规模正交化)—— 变体 4(市值十分位内的股本秩,分档中性化把非线性规模扣掉)、5(LogTotalCap 换同类字段);(c) 半衰期平滑 × 中性化的管道假象 —— 变体 6、7(叶子换成控制本身);外加浮股扩张的 soft-min / soft-max(8、9)、自由流通比例这条新轴的预检(10)、跨板块构成(12)、Birru-Wang 的高波动条件化(13)。替换门(+0.10)只预期在 2 或 4 上有小概率触发。'
+    variants:
+      - 'LogFloatShares'
+      - 'sub(LogFloatCap, LogFloatShares)'
+      - 'log(day_last(Close))'
+      - 'cs_bucket_rank(LogFloatShares, LogFloatCap)'
+      - 'LogTotalCap'
+      - 'inv(pow_3(pow_3(pow_3(LogFloatCap))))'
+      - 'LogFloatCap'
+      - 'cross_min(LogFloatShares, 60)'
+      - 'cross_max(LogFloatShares, 60)'
+      - 'sub(LogTotalCap, LogFloatCap)'
+      - 'cross_mean(sub(LogFloatCap, LogFloatShares), 60)'
+      - 'div(LogFloatShares, LimitWidth)'
+      - 'mul(cs_rank(LogFloatShares), cs_rank(cross_mean(day_std(Ret), 20)))'

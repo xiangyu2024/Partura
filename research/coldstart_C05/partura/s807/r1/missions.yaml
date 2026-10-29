@@ -1,0 +1,144 @@
+seed: 807
+round: 1
+slots:
+  - type: E
+    core: 'pow_2(day_wmean(Ret, Ret))'
+    hypothesis: >-
+      alpha 来源:day_wmean(Ret, Ret) = (RS+ - RS-)/sum|r|,即按路径长度加权的日内漂移;折叠成平方后只留「日内单边程度」的幅度。
+      证据三条齐全:共性 +2.27(p 0.000,但样本是同一血缘,打折)、自身 score +0.89(head 的 76%,valid +1.66 是快照里最高)、
+      内层 pow_2 的必要性 +1.08(带符号版单独 -0.19)。head 外层的 pow_2 不带新截面信息(W^2 与 W^4 平滑前秩相同),
+      +0.29 全来自 20 日 EMA 把均值偏向窗口最大值,且 train +0.29 / valid -0.31。
+      奖励把 head 当家族控制,所以核心的单调函数一律得 0;本任务只押「核心本身给不出、但只有和核心一起才有意义」的信息,外围分四族,
+      全部避开快照里含核心的候选反复出现的外围词汇(pow_2、inv、ts_cov、day_var、day_median、day_std、day_quantile_q75),
+      也避开 R 里已直接评估的 cross_max(.,20) 与 cross_quantile_q75(.,20) 原式:
+      (1) 单边程度在时间上的形状(主押):最单边那天离今天多远(cross_argmax)、峰值相对 60 日基线(cross_max / cross_mean)、
+      今天相对自身历史的异常(cross_madz、5 日减 60 日)、偶发还是持续(变异系数、下 25% 尾均值、一阶自相关)——
+      这些都不是 EMA(核心) 的单调函数,是 MAX 文献「换一种窗口聚合,归因整个转移」的直接延伸;
+      (2) 给定幅度之后的方向:W|W|、20 日内幅度与带符号 W 的相关、幅度乘成交额方向占比(A 股符号跳跃文献里方向是有信息的);
+      (3) 单边日是不是放量日、是不是薄交易日(cross_corr 对 day_sum(Amt) / day_flat_ratio(Close)),区分知情与噪声;
+      (4) 日内何时动、是跳还是连续、有没有隔夜缺口、按涨跌停幅度归一化(day_centroid、day_gini、隔夜缺口、LimitWidth)。
+    literature:
+      - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+        authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw'
+        year: '2011-02'
+        url: 'https://www.nber.org/papers/w14804.pdf'
+        treatment: '同一批日度数据换成月内最大值聚合,归因从均值型(IVOL)转到极值型;借来做峰值相对基线、最单边那天的位置'
+      - title: 'The MAX Effect: Lottery Stocks with Price Limits and Limits to Arbitrage'
+        authors: 'Weifeng Hung, Jimmy Yang'
+        year: '2018'
+        url: 'https://ideas.repec.org/a/eee/finmar/v41y2018icp77-91.html'
+        treatment: '有涨跌停的市场里极值被板宽削平,按涨跌停幅度重新标准化;借来做 div(核心, pow_2(LimitWidth))'
+      - title: 'Frog in the Pan: Continuous Information and Momentum'
+        authors: 'Zhi Da, Umit G. Gurun, Mitch Warachka'
+        year: '2014'
+        url: 'https://www3.nd.edu/~zda/Frog.pdf'
+        treatment: '同样的累计收益分「连续小步」与「少数跳跃」;借来区分单边程度是偶发还是持续(变异系数、下尾均值、自相关、day_gini)'
+      - title: 'Sign realized jump risk and the cross-section of stock returns: Evidence from China''s stock market'
+        authors: 'Youcong Chao, Xiaoqun Liu, Shijun Guo'
+        year: '2017-08'
+        url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5542663/'
+        treatment: 'A 股带符号跳跃变差有横截面预测力、负跳跃更强;借来在固定幅度之后再加方向(W|W|、幅度与带符号 W 的相关)'
+      - title: 'The High-Volume Return Premium'
+        authors: 'Simon Gervais, Ron Kaniel, Dan H. Mingelgrin'
+        year: '2001-06'
+        url: 'https://doi.org/10.1111/0022-1082.00349'
+        treatment: '异常放量日之后收益不同于缩量日;借来看单边日是否同时是放量日(幅度与日成交额的 20 日相关)'
+      - title: 'A tug of war: Overnight versus intraday expected returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        url: 'https://doi.org/10.1016/j.jfineco.2019.03.011'
+        treatment: '隔夜与日内收益由不同的投资者群体驱动;借来让日内单边与隔夜缺口的幅度相互作用'
+    seeds:
+      - 'cross_argmax(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'div(cross_max(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(pow_2(day_wmean(Ret, Ret)), 60))'
+      - 'cross_madz(pow_2(day_wmean(Ret, Ret)), 60)'
+      - 'sub(cross_mean(pow_2(day_wmean(Ret, Ret)), 5), cross_mean(pow_2(day_wmean(Ret, Ret)), 60))'
+      - 'div(cross_stddev(pow_2(day_wmean(Ret, Ret)), 20), cross_mean(pow_2(day_wmean(Ret, Ret)), 20))'
+      - 'cross_tail_mean_q25(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_corr(pow_2(day_wmean(Ret, Ret)), cross_delay(pow_2(day_wmean(Ret, Ret)), 1), 20)'
+      - 'mul(pow_2(day_wmean(Ret, Ret)), sign(day_wmean(Ret, Ret)))'
+      - 'cross_corr(pow_2(day_wmean(Ret, Ret)), day_wmean(Ret, Ret), 20)'
+      - 'mul(pow_2(day_wmean(Ret, Ret)), day_signed_ratio(Ret, Amt))'
+      - 'cross_corr(pow_2(day_wmean(Ret, Ret)), day_sum(Amt), 20)'
+      - 'cross_corr(pow_2(day_wmean(Ret, Ret)), day_flat_ratio(Close), 20)'
+      - 'mul(pow_2(day_wmean(Ret, Ret)), day_centroid(Ret))'
+      - 'mul(pow_2(day_wmean(Ret, Ret)), day_gini(Ret))'
+      - 'div(pow_2(day_wmean(Ret, Ret)), pow_2(LimitWidth))'
+      - 'mul(pow_2(day_wmean(Ret, Ret)), abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))))'
+  - type: N
+    hypothesis: >-
+      把「日内单边」从价格路径换到成交额这条测量通道:只用分钟 K 线,按分钟收益的符号把成交额分成上涨分钟与下跌分钟
+      (day_signed_ratio(Ret, Amt),是 BVC 的硬分类版),以及成交最重的 10% 分钟的平均收益(day_topw_mean(Ret, Amt),聪明钱)。
+      这不是核心的外围改写,是换了被观测的量:钱实际站在哪一边,而不是价格走了多单边。
+      两个方向都给种子、让 GP 定:(a) 幅度(折叠后的失衡、月内峰值),对应核心「幅度有信息、符号没有」的发现;
+      (b) 方向(20 日平均净流向、重成交分钟相对平均分钟的收益差、流向相对自身历史的异常),对应文献里月度净买卖强度与 A 股聪明钱指标的负向横截面关系。
+      另加两条「流向与价格是否一致」的种子:成交额方向减路径方向(有量没价 = 被吸收),以及 20 日内流向与日内收益的相关(价格对流向的敏感度,类似价格冲击)。
+      事先判断方向更可能是带符号的那一族胜出;若折叠版胜出,才算支持「幅度」这条新假设。
+    inspired_by: >-
+      M 第 1 批唯一的 head pow_2(pow_2(day_wmean(Ret, Ret))):价格路径的单边幅度负向预测收益,且符号单独无用;
+      文献员 L4:BVC 框架(Easley 等 2012)给了无逐笔数据时按价格变动符号分配成交量的依据,Chen 等(2022)在 A 股 1 分钟数据上发现聪明钱指标与未来收益负相关,
+      Kaniel 等(2008)的月度净买卖强度预测下月收益。
+    literature:
+      - title: 'Flow Toxicity and Liquidity in a High-Frequency World'
+        authors: 'David Easley, Marcos Lopez de Prado, Maureen O''Hara'
+        year: '2012'
+        url: 'https://ideas.repec.org/a/oup/rfinst/v25y2012i5p1457-1493.html'
+        treatment: '没有逐笔方向时按价格变动把每个时间桶的成交量分给买方与卖方(BVC);借来做 day_signed_ratio(Ret, Amt)'
+      - title: 'Smart money in China''s A-share market: Evidence from big data'
+        authors: 'Zhenhua Chen, Zhenya Liu, Hanen Teka, Yifan Zhang'
+        year: '2022'
+        url: 'https://ideas.repec.org/a/eee/riibaf/v61y2022ics0275531922000514.html'
+        treatment: 'A 股 1 分钟数据识别聪明钱,指标与未来收益横截面负相关;借来做 day_topw_mean(Ret, Amt) 及其相对平均分钟的差'
+      - title: 'Individual Investor Trading and Stock Returns'
+        authors: 'Ron Kaniel, Gideon Saar, Sheridan Titman'
+        year: '2008-02'
+        url: 'https://ideas.repec.org/a/bla/jfinan/v63y2008i1p273-310.html'
+        treatment: '月度净买卖强度(带符号)预测下月收益;借来做 20 日平均净流向'
+      - title: 'Illiquidity and Stock Returns: Cross-Section and Time-Series Effects'
+        authors: 'Yakov Amihud'
+        year: '2002'
+        url: 'https://www.casact.org/abstract/illiquidity-and-stock-returns-cross-section-and-time-series-effects'
+        treatment: '收益对成交的敏感度当价格冲击;借来做流向与日内收益的 20 日相关'
+    seeds:
+      - 'pow_2(day_signed_ratio(Ret, Amt))'
+      - 'cross_max(pow_2(day_signed_ratio(Ret, Amt)), 20)'
+      - 'div(cross_mean(pow_2(day_signed_ratio(Ret, Amt)), 20), LimitWidth)'
+      - 'pow_2(day_topw_mean(Ret, Amt))'
+      - 'cross_mean(day_signed_ratio(Ret, Amt), 20)'
+      - 'cross_zscore(day_signed_ratio(Ret, Amt), 20)'
+      - 'day_topw_mean(Ret, Amt)'
+      - 'cross_mean(day_topw_mean(Ret, Amt), 20)'
+      - 'cross_tail_mean_q75(day_topw_mean(Ret, Amt), 20)'
+      - 'sub(day_topw_mean(Ret, Amt), day_mean(Ret))'
+      - 'cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 20)'
+      - 'div(day_wmean(Ret, Amt), day_std(Ret))'
+      - 'sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Ret))'
+      - 'cross_corr(day_signed_ratio(Ret, Amt), day_sum(Ret), 20)'
+R:
+  - head: 'pow_2(pow_2(day_wmean(Ret, Ret)))'
+    why: >-
+      外层 pow_2 必要但不含新截面信息(W^2 与 W^4 平滑前秩完全相同,+0.29 全来自 20 日 EMA 偏向窗口最大值),而且 train +0.29 / valid -0.31,
+      方向、半衰期、幂次都只在 train 上选,是头号嫌疑部件;权重字段 Ret 不在拆解工具的换字段表里、head 没有窗口节点、唯一的跳过算子被去重吃掉,
+      所以必要性与敏感性证据本轮是缺失而不是为零。16 个变体分五组:
+      (1) 空对照,判是不是旧异象换了写法:波动尾部 pow_2(pow_2(day_std))、薄交易 day_zero_ratio、不加权的日内漂移 day_mean(≈ 日收益四次幂)、经典 MAX(20 日最大日收益);
+      (2) 无量纲化:sum r / sum|r|(路径效率)、W^2 / 日内方差;
+      (3) 显式时间聚合替换外层 pow_2:cross_max、cross_quantile_q75、先 5 日平均再折叠 / 先折叠再 5 日平均;
+      (4) 沿幂次 p 扫描(p = 3、6,加上已知的 2、4);
+      (5) 权重字段与形态:成交额加权、r^2 加权、自加权二阶矩 day_wstd,以及按涨跌停幅度归一化的 W(Hung 与 Yang 2018)。
+    variants:
+      - 'pow_2(pow_2(day_std(Ret)))'
+      - 'pow_2(pow_2(day_zero_ratio(Ret)))'
+      - 'pow_2(pow_2(day_mean(Ret)))'
+      - 'cross_max(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)'
+      - 'pow_2(day_signed_ratio(Ret, Ret))'
+      - 'div(pow_2(day_wmean(Ret, Ret)), day_var(Ret))'
+      - 'cross_max(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_quantile_q75(pow_2(day_wmean(Ret, Ret)), 20)'
+      - 'cross_mean(pow_2(pow_2(day_wmean(Ret, Ret))), 5)'
+      - 'pow_2(pow_2(cross_mean(day_wmean(Ret, Ret), 5)))'
+      - 'pow_1_5(pow_2(day_wmean(Ret, Ret)))'
+      - 'pow_3(pow_2(day_wmean(Ret, Ret)))'
+      - 'pow_2(pow_2(day_wmean(Ret, Amt)))'
+      - 'pow_2(pow_2(day_wmean(Ret, pow_2(Ret))))'
+      - 'pow_2(pow_2(day_wstd(Ret, Ret)))'
+      - 'pow_2(pow_2(div(day_wmean(Ret, Ret), LimitWidth)))'
