@@ -43,7 +43,7 @@ EOF
               nohup bash -c '\$PY -u scripts/c05_locate.py corr $S C $K research/coldstart_C06/audit/$Q.json > logs/_c06corr_$Q.log 2>&1; echo \"[corr exit \$?]\" >> logs/_c06corr_$Q.log' > /dev/null 2>&1 < /dev/null &"
     echo "started the correlation job on $(echo $H | awk '{print $NF}')"
   fi
-  for t in $(seq 1 34); do                      # at most ~8.5 minutes per call, so one call fits a 10-minute tool limit
+  for t in $(seq 1 20); do                      # ~5-6 minutes per call (ssh included), well inside a 10-minute tool limit
     st=$($H "grep -ao '\[corr exit [0-9]*\]' $RH/logs/_c06corr_$Q.log 2>/dev/null | tail -1")
     [ -n "$st" ] && break
     sleep 15

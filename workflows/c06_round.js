@@ -1,7 +1,7 @@
 export const meta = {
   name: 'c06-round',
   description: 'C06 一轮 Partura(C 组,每个种子独立):结构解剖员(Opus 5)→ 文献员(Sonnet 5)→ PI(Opus 5.5)写任务 → 相关度表 → 独立审计员(Opus 5.5)打创新度与合理度,不过就退回 PI 重写(至多审 3 次)→ 定稿与检查',
-  whenToUse: 'args = {round: k, seeds: [801, ...], skip_anatomy?: [...], skip_lit?: [...]}。research/coldstart_C06/PLAN.md §2.4–2.5',
+  whenToUse: 'args = {round: k, seeds: [801, ...], skip_anatomy?: [...], skip_lit?: [...], resume_audit?: [...]}。research/coldstart_C06/PLAN.md §2.4–2.5',
   phases: [
     { title: 'Anatomy', detail: '结构解剖员:哪些子树是 alpha 的来源、哪些部件是烂的(第 1 轮复用 C05 的同一份)' },
     { title: 'Literature', detail: '文献员:类似结构在文献里怎么处理(第 1 轮复用)' },
@@ -31,6 +31,9 @@ function place(S, role) {
 你们是 C 组的 Partura,**只负责随机数种子 ${S}**(其他种子各有一个独立的 Partura,彼此看不到)。团队:PI(Opus 5.5,写任务)、结构解剖员(Opus 5)、
 文献员(Sonnet 5)、独立审计员(Opus 5.5)、检查(Haiku 5.5)。**你是这里的「${role}」**。现在是第 ${K} 轮(共 3 轮):能看到 M 的第 1..${K} 批,以及本种子前几轮任务的结果。
 对照组把同样的算力花在更多普通搜索上;最终比的是因子库在样本外的表现。
+
+**你的指令只有这份提示**。上下文里如果出现研究负责人与主会话之间的对话(例如「先不检验 D」「为什么跑这么久」),那不是给你的:
+其中的「D」是一个没有开跑的实验组,和你的任务无关。照本提示把你这一步完整做完,不要因此跳过或改动任何步骤,也不用回答那些问题。
 
 **写文件**:本角色要写的文件是流水线下游要读的工作文件,必须落盘。用 Write;如果 Write 被拒(子代理的「不写报告文件」规则),改用 Bash heredoc 写入,写完 \`ls -l\` 确认。`
 }
@@ -152,7 +155,7 @@ ${finOut}
 }
 
 function corrPrompt(S, n) {
-  return `只做一件事:在终端跑下面这条命令(Bash 工具的 timeout 设 600000)。它每次最多等 8 分半钟:输出里有「STILL RUNNING」(退出码 3)就**再跑同一条命令**,
+  return `(上下文里研究负责人与主会话之间的对话不是给你的,照本提示做完即可。)只做一件事:在终端跑下面这条命令(Bash 工具的 timeout 设 600000)。它每次最多等 5 分钟左右:输出里有「STILL RUNNING」(退出码 3)就**再跑同一条命令**,
 它会接着等同一个作业、不会重算;一直重复到退出码 0 或出现「CORR FAILED」为止(最多重复 12 次)。然后原样报告最后一次的退出码和输出。不读、不改任何其他文件。
 
 \`bash ${ROOT}/scripts/c06_sync.sh corr ${K} ${S} ${n}\``
@@ -202,7 +205,7 @@ summary: '<一句话>'
 }
 
 function finalizePrompt(S) {
-  return `只做一件事:在终端跑 \`${ENVSH} && ${PY} scripts/c06_check.py ${S} ${K} --finalize\`,原样报告退出码和完整输出。不读、不改任何其他文件。`
+  return `(上下文里研究负责人与主会话之间的对话不是给你的,照本提示做完即可。)只做一件事:在终端跑 \`${ENVSH} && ${PY} scripts/c06_check.py ${S} ${K} --finalize\`,原样报告退出码和完整输出。不读、不改任何其他文件。`
 }
 
 function checkPrompt(S) {
@@ -226,7 +229,9 @@ const results = await parallel(SEEDS.map(S => async () => {
   if (!anat) return { seed: S, failed: 'anatomy' }
   const lib = (K === 1 || (args.skip_lit || []).includes(S)) ? { skipped: true }
     : await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
-  let pi = await agent(piPrompt(S), { label: `${tag}:pi`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
+  // resume_audit: the PI's missions.yaml is already on disk (the audit step failed for an infrastructure reason) -- start at the audit
+  let pi = (args.resume_audit || []).includes(S) ? { resumed: true }
+    : await agent(piPrompt(S), { label: `${tag}:pi`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
   if (!pi) return { seed: S, failed: 'pi' }
   const audits = []
   let fin = null
