@@ -1,0 +1,96 @@
+seed: 801
+round: 3
+# PI 决定(第 3 轮,最后一轮):槽 a = E(核心 day_durbin_watson(Close),第一次用,E 额度 2 -> 1);槽 b = N(日内收益分布的高阶形状)。
+# 不接受定位工具报出的 head +1.56 的 ts_std@50->25 替换(增益 +0.12 < 噪声底 0.4;窗口 25 / 50 / 100 = +1.68 / +1.56 / +1.59 是一条平线;
+# rho_head 0.996 即同一个因子;第 2 轮以同样理由拒绝了 head +1.69 的 cross_min@60->120,这里保持一致),所以没有列进 R。
+# 解剖员 R 清单的两处改动:(1) 他的 R2 signedpower(signedpower(day_std(Ret))) = std^4 = var^2,只等于 dw^2(-0.21)而不是 dw^4,改成 day_var(Ret) 的四次方;
+# (2) 他的 R6 pow_3^3(LogFloatCap) 与 R8 sub(LogFloatShares, cross_mean(LogFloatShares, 120)) 不列,理由见各组 why。
+# 奖励代码核对(steer.py:430 / steer_fast.py:180):long_neutral 先对 EMA 后的信号取 z-秩、再对控制的 z-秩做线性投影,
+# 所以凸变换只在 EMA 那一步起作用;解剖员 §1.3 的「原始重尾值线性投影把控制反号灌回」通道在这个管道里不存在。下面的 E 与 R 按这个读法设计。
+slots:
+  - type: E
+    core: 'day_durbin_watson(Close)'
+    hypothesis: '核心 day_durbin_watson(Close) 不是自相关统计量:分母是没去均值的平方和(alphacube dt_day.py:273-297),所以它约等于日内每分钟收益的均方 = 日内已实现方差,对价格水平不变(解剖员用真算子复算 Spearman 1.000)。含它的三个 head(+1.56 / +1.44 / +0.67,全部来自 M 第 3 批,sign 都是 -1)只用过一种外围:对日频 dw 序列做幂和时序标准差的堆叠,外围算子集合都是 {signedpower, ts_std, ts_stddev} 的子集。dw、dw^2、dw^4 逐日截面排序完全相同,score 却是 -1.85 / -0.21 / +1.26;我核对了奖励代码,中性化之前先对 EMA 后的信号取 z-秩(steer.py:430,GPU 版 steer_fast.py:180),所以凸度唯一起作用的地方是 EMA(steer.py:633):EMA(dw^4) 约等于近一两个月日内方差的峰值。这一族因此最可能是「近月峰值日内方差 / 波动率的波动,相对 20 日平均波动(控制只有均值)的剩余」,多头 = 峰值最低、方差最稳的一档 —— 控制没覆盖峰值、vol-of-vol 和日内方差的结构,这是 alpha 的来源;但快照只用幂堆这一种写法表达过它。这一位把这三个 head 加进控制,所以退化成峰值 / 水平本身拿不到分;种子里一个 signedpower / pow_* 都不用,外围全部换成快照里从没出现过的、尺度无关的五类处理(都是比值或对数尺度,对日内方差水平不变):(a) 尖峰比:今天 / 自己 60 日常态、近 20 日峰值 / 60 日均值、log dw 的 60 日 z 分数;(b) 对数尺度的 vol-of-vol:log dw 的 20 / 60 日标准差、dw 的 60 日变异系数(Baltussen 等 2018:高 vol-of-vol 跑输,且独立于波动水平);(c) 两个采样尺度之比:1 分钟方差 / 5 分钟收益方差(买卖价跳动 / 微观结构噪声的份额,两尺度估计的思路),以及 20 日日内分钟方差 / 20 日日收益二阶矩(日内噪声相对日间变动);(d) 方差在一天里的位置:开盘后 30 分钟、收盘前 30 分钟、上午的 dw 占全天 dw 的比(日内波动 U 形);(e) 连续 / 跳跃:相邻分钟 |收益| 乘积的均值(双幂次变差)/ dw。拿到分只能说明日内方差的形状 / 尺度结构本身有信息,不是凸变换或水平。'
+    literature:
+      - {title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns', authors: 'Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient', year: '2018-08', url: 'https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/unknown-unknowns-uncertainty-about-risk-and-stock-returns/6E0E98349D20C1DCF67F3A0452361B80', treatment: 'vol-of-vol 当成独立于波动水平的截面特征(高 vol-of-vol 每年跑输约 8%):这里用 log dw 的 20 / 60 日标准差和 dw 的变异系数,都对水平不变'}
+      - {title: 'A Tale of Two Time Scales: Determining Integrated Volatility With Noisy High-Frequency Data', authors: 'Lan Zhang, Per A. Mykland, Yacine Aït-Sahalia', year: '2005', url: 'https://www.nber.org/papers/w10111', treatment: '粗、细两个采样频率各算一次已实现方差,二者的差别识别微观结构噪声:这里用 1 分钟 dw 与 5 分钟收益方差之比当噪声份额'}
+      - {title: 'Separating Microstructure Noise from Volatility', authors: 'Federico M. Bandi, Jeffrey R. Russell', year: '2006-03', url: 'https://ideas.repec.org/a/eee/jfinec/v79y2006i3p655-692.html', treatment: '用不同采样频率下的收益矩把真实波动与噪声方差分开:这里用 20 日日内分钟方差 / 20 日日收益二阶矩(分钟尺度对日尺度)'}
+      - {title: 'Power and Bipower Variation with Stochastic Volatility and Jumps', authors: 'Ole E. Barndorff-Nielsen, Neil Shephard', year: '2004-01', url: 'https://academic.oup.com/jfec/article/2/1/1/960705', treatment: '已实现方差减双幂次变差 = 跳跃部分:这里用相邻分钟 |收益| 乘积的均值 / dw 当连续成分的份额'}
+      - {title: 'An Investigation of Transactions Data for NYSE Stocks', authors: 'Robert A. Wood, Thomas H. McInish, J. Keith Ord', year: '1985', url: '(无直链;Journal of Finance 40, 723-739,见 r3/lit.md 题目 4 出处 5)', treatment: '日内波动呈 U 形(开盘、收盘段高):这里把开盘后 30 分钟、收盘前 30 分钟、上午的 dw 占全天 dw 的比做成截面特征(文献只描述模式,没当预测变量,是空白)'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011', url: 'https://www.nber.org/papers/w14804', treatment: '极值(MAX)与水平(IVOL)高度相关却不是同一个量,前者吞掉后者:把「峰值」和「水平」分开,这里用近 20 日 dw 峰值 / 60 日均值'}
+    seeds:
+      - 'div(day_durbin_watson(Close), cross_mean(day_durbin_watson(Close), 60))'
+      - 'cross_mean(div(day_durbin_watson(Close), cross_mean(day_durbin_watson(Close), 60)), 20)'
+      - 'div(cross_max(day_durbin_watson(Close), 20), cross_mean(day_durbin_watson(Close), 60))'
+      - 'cross_zscore(log(day_durbin_watson(Close)), 60)'
+      - 'cross_stddev(log(day_durbin_watson(Close)), 60)'
+      - 'cross_stddev(log(day_durbin_watson(Close)), 20)'
+      - 'div(cross_stddev(day_durbin_watson(Close), 60), cross_mean(day_durbin_watson(Close), 60))'
+      - 'div(day_durbin_watson(Close), day_var(in_pct(Close, 5)))'
+      - 'cross_mean(div(day_durbin_watson(Close), day_var(in_pct(Close, 5))), 20)'
+      - 'div(cross_mean(day_durbin_watson(Close), 20), cross_mean(mul(day_sum(Ret), day_sum(Ret)), 20))'
+      - 'div(day_durbin_watson(in_slice(Close, 1, 30)), day_durbin_watson(Close))'
+      - 'div(day_durbin_watson(in_slice(Close, 211, 240)), day_durbin_watson(Close))'
+      - 'cross_mean(div(day_durbin_watson(in_slice(Close, 1, 30)), day_durbin_watson(Close)), 20)'
+      - 'cross_mean(div(day_durbin_watson(in_half(Close)), day_durbin_watson(Close)), 20)'
+      - 'div(day_mean(mul(abs_(Ret), in_delay(abs_(Ret), 1))), day_durbin_watson(Close))'
+      - 'cross_mean(div(day_mean(mul(abs_(Ret), in_delay(abs_(Ret), 1))), day_durbin_watson(Close)), 20)'
+  - type: N
+    hypothesis: '日内分钟收益分布在二阶之上的形状(偏度、峰度、按符号拆开的半方差、跳跃的大小与份额、尾部形状)。dw 这一轮说明日内分钟收益的二阶矩在这个种子里有钱,而二阶的水平正好是一个控制;二阶以上的形状五个控制一个都不覆盖,本种子 594 个已评分候选里一次都没出现过(没有任何 day_skew / day_kurt / 半方差 / 跳跃的写法),与库里的价格水平 / 列序、季度反转、开盘竞价三条轴也都正交。按第 2 轮的教训(短的单轴种子会传下去,第 1 轮那种多层复合种子会被丢掉),14 个种子全部是一条轴、至多两层包装,全部尺度无关:(1) 已实现峰度 / 偏度:日值、5 日均值(文献的周汇总)、20 日均值,以及在 5 分钟收益上算的版本(更粗的采样,少受买卖价跳动影响);(2) 相对带符号跳跃变差 sum(r|r|) / sum(r^2) = (上行半方差 - 下行半方差) / 已实现方差 的 5 / 20 日均值;(3) 用当日分钟收益标准差标准化的最大 / 最小分钟收益(分钟级的 MAX / MIN);(4) 左尾、右尾的 ES / VaR 比(day_es_ratio_lo / hi 在分钟收益上,快照里只在 M2 那个被 cs_state_rank 压平的分支里出现过)。方向由 GP 定;我预期偏度、MAX 两支做多低的一端(彩票偏好)。'
+    inspired_by: '本种子 M 第 3 批的 dw 家族(+1.56 / +1.44 / +0.67):日内分钟收益的二阶结构在这里过线,而二阶以上从没被试过(解剖员 §4.3 灵感 1);文献员题目 4:Amaya 等用日内收益算的周度已实现偏度强负预测、峰度弱正预测、已实现波动本身不显著,Barndorff-Nielsen-Kinnebrock-Shephard 的已实现半方差与 Patton-Sheppard 的带符号跳跃变差。旁证:PLAN 修订 3 记载同一环境(同一数据、同一奖励)里另一个种子的 M 第 1 批唯一 head 是 day_kurt(Ret) —— 我只用了 PLAN 里这一句,没有读那个种子的任何文件。'
+    literature:
+      - {title: 'Do Realized Skewness and Kurtosis Predict the Cross-Section of Equity Returns?', authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez', year: '2011-12', url: 'https://repec.econ.au.dk/repec/creates/rp/11/rp11_44.pdf', treatment: '用日内收益算每周的已实现偏度、峰度,十分组排序(发表版 JFE 2015):这里 day_skew / day_kurt(Ret) 取日值、5 日均值(周汇总)和 20 日均值'}
+      - {title: 'Measuring Downside Risk: Realised Semivariance', authors: 'Ole E. Barndorff-Nielsen, Silja Kinnebrock, Neil Shephard', year: '2008-08', url: 'https://www.nuff.ox.ac.uk/economics/papers/2008/w2/downside.pdf', treatment: '已实现方差按高频收益的正负拆成两个半方差:这里用 sum(r|r|) = 上行半方差 - 下行半方差,再除以已实现方差做成尺度无关'}
+      - {title: 'Good Volatility, Bad Volatility: Signed Jumps and the Persistence of Volatility', authors: 'Andrew J. Patton, Kevin Sheppard', year: '2015-07', url: 'https://ideas.repec.org/a/tpr/restat/v97y2015i2p683-697.html', treatment: '带符号跳跃变差(两个半方差之差)比对称的已实现方差更有信息、上下行不对称:这里只做差 / 比,不假设两侧等权'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011', url: 'https://www.nber.org/papers/w14804', treatment: '月内最大单日收益 MAX 衡量彩票性、低 MAX 一端表现好:这里换到分钟粒度,用 day_max(Ret) / day_std(Ret) 与 day_min(Ret) / day_std(Ret) 的 20 日均值'}
+      - {title: 'Separating Microstructure Noise from Volatility', authors: 'Federico M. Bandi, Jeffrey R. Russell', year: '2006-03', url: 'https://ideas.repec.org/a/eee/jfinec/v79y2006i3p655-692.html', treatment: '最高频的采样噪声最大,适当放粗采样:这里偏度、峰度各加一个在 5 分钟收益 in_pct(Close, 5) 上算的版本'}
+    seeds:
+      - 'day_kurt(Ret)'
+      - 'cross_mean(day_kurt(Ret), 5)'
+      - 'cross_mean(day_kurt(Ret), 20)'
+      - 'day_skew(Ret)'
+      - 'cross_mean(day_skew(Ret), 5)'
+      - 'cross_mean(day_skew(Ret), 20)'
+      - 'cross_mean(day_kurt(in_pct(Close, 5)), 20)'
+      - 'cross_mean(day_skew(in_pct(Close, 5)), 20)'
+      - 'cross_mean(div(day_mean(mul(Ret, abs_(Ret))), day_mean(mul(Ret, Ret))), 5)'
+      - 'cross_mean(div(day_mean(mul(Ret, abs_(Ret))), day_mean(mul(Ret, Ret))), 20)'
+      - 'cross_mean(div(day_max(Ret), day_std(Ret)), 20)'
+      - 'cross_mean(div(day_min(Ret), day_std(Ret)), 20)'
+      - 'cross_mean(day_es_ratio_lo(Ret), 20)'
+      - 'cross_mean(day_es_ratio_hi(Ret), 20)'
+R:
+  - head: 'signedpower(ts_std(signedpower(signedpower(day_durbin_watson(Close))), 50))'
+    why: '本种子最强的新家族,要分清它是什么。奖励先对 EMA 后的信号取 z-秩再投影(steer.py:430),凸变换只在 EMA 那一步起作用(EMA(dw^4) 约等于近一两个月日内方差的峰值),所以问题变成:它是「峰值 / vol-of-vol 相对平均波动的剩余」这条真轴,还是凸 + EMA 从波动控制本身造出来的分。七个变体:1 波动控制自己的四次方 —— 若它也 >= +0.5,凸 + EMA 能从控制本身造分(漏灌读法);若 < +0.5,dw 族的分不来自控制本身。2 day_var(Ret) 的四次方(约等于 dw^4,因为 dw 约等于分钟收益均方;解剖员原稿 day_std 的四次方只等于 dw^2)—— 量 dw 这个误名的算子相对标准日内方差有没有多带东西。3、4 诚实的峰值 cross_max(dw, 20 / 60),一个凸算子都没有;若 >= head + 0.1 且 rho_head >= 0.5,就用它替掉幂堆写法。5 今天 / 60 日常态的尖峰比、6 近 20 日峰值 / 60 日均值:尺度无关,只剩「峰值相对自己的水平」那部分(与 E 位 (a) 一支在标准口径下互证)。7 day_durbin_watson(Ret):分子分母都在分钟收益上,约等于 2(1 - 一阶自相关),这才是真的 DW,把路径粗糙度与波动水平分开。'
+    variants:
+      - 'signedpower(signedpower(cross_mean(day_std(Ret), 20)))'
+      - 'signedpower(signedpower(day_var(Ret)))'
+      - 'cross_max(day_durbin_watson(Close), 20)'
+      - 'cross_max(day_durbin_watson(Close), 60)'
+      - 'div(day_durbin_watson(Close), cross_mean(day_durbin_watson(Close), 60))'
+      - 'div(cross_max(day_durbin_watson(Close), 20), cross_mean(day_durbin_watson(Close), 60))'
+      - 'day_durbin_watson(Ret)'
+  - head: 'ts_std(signedpower(ts_stddev(day_durbin_watson(Close), 20)), 50)'
+    why: '去掉中间那层 signedpower 后 ts_std(ts_stddev(dw, 20), 50) = +1.13(必要性 +0.31 在噪声内,hl 0,不经 EMA),是这一族里唯一不靠凸变换过线的写法;但标准差随日内方差水平按比例放大,它仍混着水平。两个尺度无关的 vol-of-vol(Baltussen 等 2018):8 同一结构搬到 log dw 上;9 dw 的 60 日变异系数。若二者 >= +0.5,vol-of-vol 是独立于水平的真轴(且 8 若 >= head + 0.1、rho_head >= 0.5 就替掉幂堆写法);若都 < +0.3,这个 head 的分来自水平那一侧。'
+    variants:
+      - 'ts_std(ts_stddev(log(day_durbin_watson(Close)), 20), 50)'
+      - 'div(cross_stddev(day_durbin_watson(Close), 60), cross_mean(day_durbin_watson(Close), 60))'
+  - head: 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.1, cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), day_quantile(Ret))))))'
+    why: '拆解:换手小项单独 +0.51 但与已知族 rho -0.74;掺进流通股扩张事件 X 后 rho_known 降到 -0.46,权重 1.0 时回到 -0.59、Volume 换 Amt 时变 +0.59,也就是权重 0.1 和字段 Volume 恰好是让它留在合格区的细节 —— 疑似已知流动性族钻 |rho| < 0.5 的空子。10 权重不变、只把并列打破项换成与流动性无关又不是控制的 ListAge:仍约 +0.9 则事件项是来源;掉到 +0.5 以下则这个 head 是流动性代理,判读时第 1 轮 E 的产出要打折。解剖员的另一个变体 sub(LogFloatShares, cross_mean(LogFloatShares, 120)) 不列:多数股票日上它与 X 一样恒为 0,要么过不了 distinct 门,要么靠滚动均值的浮点误差过门,没有判别力。'
+    variants:
+      - 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.1, cs_rank(ListAge))))'
+  - head: 'mul(cs_rank(cross_min(cs_bucket_demean(neg(cross_mean(day_sum(Ret), 60)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), 60)), cs_quantile_q75(cross_mean(mul(cs_rank(cross_min(cs_bucket_demean(neg(cross_mean(day_sum(Ret), 60)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), 60)), cs_rank(cross_mean(div(day_first(Amt), day_sum(Vwap)), 20))), 20)))'
+    why: '这个 head 的真来源是 Z = cs_rank(cross_min(cs_bucket_demean(neg(60 日平均日收益), A), 60))(单独 +0.58;控制只有 20 日点对点反转)。但 A 已被第 2 轮 R 判为「板块内列序切片 + 当日成交分钟数」,A 这层分组可能只是装饰。11 去掉分组、只留季度反转的季度地板;12 分组换成真流通市值十分位;13 去掉地板、只留 60 日反转的秩。三者对照 Z 的 +0.58,把「分组」「地板」「季度反转本身」三样分开。'
+    variants:
+      - 'cs_rank(cross_min(neg(cross_mean(day_sum(Ret), 60)), 60))'
+      - 'cs_rank(cross_min(cs_bucket_demean(neg(cross_mean(day_sum(Ret), 60)), LogFloatCap), 60))'
+      - 'cs_rank(neg(cross_mean(day_sum(Ret), 60)))'
+  - head: 'cs_regres(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), LogFloatCap)'
+    why: '第 2 轮 N 的四个 head 都带 cs_regres(., LogFloatCap),而 LogFloatCap 本来就是控制;cs_regres 是在原始尺度、EMA 之前逐日做截面回归,中性化是在 EMA 之后对 z-秩做投影,两者不是一回事。14 去掉这层(就是第 2 轮的种子 1,存档里有、没进 heads):若 >= +0.80 且 rho_head >= 0.5 就换成更短的写法;若低于 +0.70,原始尺度上的规模残差是必要的。'
+    variants:
+      - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 20)'
+  - head: 'cs_last_high10(LimitWidth, day_open(Open))'
+    why: 'M3 独立长出的 cs_last_high10(LimitWidth, day_open(Open)):LimitWidth 只有三四个取值,_pct_rank 并列按列号打破,y 槽就是被涨跌幅宽度切块的列序斜坡,x 槽是 09:30 竞价价的排除筛选。15 纯斜坡 cs_rank(LimitWidth):若 train 低、valid 高的两期分裂重现(第 2 轮无分块版本 train +0.004 / valid +1.85),判读时把这一族单列。16 补第 1 轮 N 欠的判别:按涨跌停幅度缩放的日收益的 20 日最大值(缩放 MAX)三轮都没被直接评估过,一次给个读数。'
+    variants:
+      - 'cs_rank(LimitWidth)'
+      - 'cross_max(div(day_sum(Ret), LimitWidth), 20)'

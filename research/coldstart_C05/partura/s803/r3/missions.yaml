@@ -1,0 +1,139 @@
+seed: 803
+round: 3
+slots:
+  - type: E
+    core: 'ts_skew(day_durbin_watson(Open), 50)'
+    hypothesis: >-
+      核心 A(本核心的第 2 个、也是最后一个 E 位)。day_durbin_watson 用在价格水平上就是当日已实现方差(r2 的 R:ts_skew(day_var(Ret), 50) 对头 rho 0.94);
+      新信息全在外层 50 日偏度:这只股票自己 50 天里有没有出现过孤立的、极端的爆波动日。四条轴都站得住(去掉外层 -2.13 / -2.32,窗口 25-100、Open->Close 都不崩),
+      r2 的 R 用付费评估排掉了五条混淆:零成交质量(Vwap 版 1.41,更好)、名义价格(rho -0.065)、平方与否(std 版 1.17)、要原始右尾(取 log -2.02、Bowley 偏度 -1.29)、
+      上下行不对称(-1.18)。它是本种子唯一一条做到这一步、并且已经证明「外面还有东西」的核心:r2 的 E 用「居中秩乘积」长出了 核心 x 当日成交额(1.41,本种子第 3 高),
+      两个居中都必要(+1.84 / +1.93)—— 核心的溢价在活跃股里成立、在不活跃股里反向;而奖励的中性化是对控制的线性投影,拿不掉乘积与 V 型。
+      本任务的家族控制里已经有 核心 x 成交额 与核心本身,所以与成交额高度相关的条件变量只拿它正交的那一半。
+      和以前见过的外围不一样在三处:(1) 条件变量全部是 r2 没试过的,按 Muller-Schmickler 的「交互收益集中在摩擦类异象(规模、短期反转、流动性)」
+      与 Stambaugh-Yu-Yuan 的「波动类异象的溢价在高估 / 低估两端不对称」来选:换手率(当日 / 20 日,成交额里市值控制不掉的那一半)、异常放量(60 日稳健 z)、
+      规模(稳健 z,不是秩)、20 日与 5 日收益(反转 / 错误定价)、20 日 MAX(彩票)、20 日平均波动水平(IVOL)、20 日平均隔夜收益(情绪)、
+      爆波动日的位置(最近一次爆在哪天);(2) 跨轴:核心 x 本种子自己挖出、五个控制都不含的另外两条轴(成交时点差、隔夜偏度)与分钟轴的尖峰(day_kurt 的 EMA);
+      (3) 新形式:V 型 abs(居中秩)(线性投影拿不掉的非单调)、V 型 x 成交额、单边筛选 cs_last_low40(把换手率最低 40% 推到底,看溢价在哪一半;
+      用 40% 而不是 10% / 20%,因为本机模拟里 20% 的筛选与核心的秩相关 0.67、10% 是 0.82,会撞 0.7 的库禁令)。
+      r2 的 cs_bucket_rank 写法(把条件变量的影响除掉)六个全败,本轮一个不用;价格、上市年龄、零收益比例三个条件变量 r2 全 < 0.1,本轮不再试。
+    literature:
+      - {title: 'Interacting Anomalies', authors: 'Karsten Muller, Simon Schmickler', year: '2020-07', url: 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3646417', treatment: '把条件变量当第二维(双重排序)而不是线性控制;交互收益最大的组合几乎总有一个摩擦类异象(规模、短期反转、流动性)。种子 1-6 按这个名单选条件变量,写成连续的居中秩乘积'}
+      - {title: 'Arbitrage Asymmetry and the Idiosyncratic Volatility Puzzle', authors: 'Robert F. Stambaugh, Jianfeng Yu, Yu Yuan', year: '2015', url: 'https://www.nber.org/papers/w18560', treatment: '波动类异象的负向溢价集中在被高估的一端、在被低估的一端反号;种子 5-9 用近期收益、MAX、波动水平、隔夜情绪这些错误定价 / 情绪代理当条件变量'}
+      - {title: 'Trading Activity and Expected Stock Returns', authors: 'Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman', year: '2001', url: 'https://ideas.repec.org/a/eee/jfinec/v59y2001i1p3-32.html', treatment: '成交额与换手率是两种交易活跃度的度量;种子 1、2、16 把条件变量从成交额换成换手率 log(成交额) - LogFloatCap(r2 里成交额换成股数就从 1.41 塌到 -0.08,条件变量的身份没定)'}
+      - {title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011', url: 'https://doi.org/10.1016/j.jfineco.2010.08.014', treatment: '20 日最大日收益是彩票需求的读数;种子 7 用它当条件变量:爆波动的溢价是否只在彩票股里成立'}
+      - {title: 'Unveiling Contemporaneous Relations Between Jump Risk and Cross Section of Stock Returns', authors: 'Saranya Kshatriya, Krishna Prasanna', year: '2020-09', url: 'https://doi.org/10.1111/irfi.12235', treatment: '跳跃的幅度与频率 / 时点分开定价;核心的偏度把它们混在一个数里,种子 13 用最近一次爆波动日的位置(ts_argmax)当条件变量'}
+      - {title: 'Explaining Stock Returns with Intraday Jumps', authors: 'Diego Amaya, Aurelio Vasquez', year: '2011-01', url: 'https://www.efmaefm.org/0efmameetings/EFMA%20ANNUAL%20MEETINGS/2011-Braga/papers/0307.pdf', treatment: '跳跃代理扛得住已实现偏度 / 峰度控制、单独进截面;种子 12 把分钟轴的尖峰(day_kurt 的 EMA)与日轴的爆波动做交互'}
+    seeds:
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_mean(sub(log(day_sum(Amt)), LogFloatCap), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_madz(day_sum(Amt), 60)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), cs_robust_z(LogFloatCap))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(div(day_last(Close), ts_delay(day_last(Close), 20))), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ts_delta(log(day_last(Close)), 5)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_max(day_sum(Ret), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_mean(day_std(Ret), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(sub(day_centroid(Amt), day_centroid(Ret))), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_ema(day_kurt(Ret), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ts_argmax(day_durbin_watson(Open), 50)), 0.5))'
+      - 'abs_(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5))'
+      - 'mul(abs_(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5)), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'cs_last_low40(ts_skew(day_durbin_watson(Open), 50), sub(log(day_sum(Amt)), LogFloatCap))'
+  - type: N
+    hypothesis: >-
+      隔夜 / 日内这条切分,外加「条件 / 交互」这个本种子唯一被证实的机制。r2 的 N 位 15 个「把日频量换成自己 50 日分布的形状」种子只中了 1 个,
+      而且中的理由不是「形状」而是「隔夜」:ts_skew(今开 / 昨收, 50) = 1.16(sign +1,做多隔夜偏度高的一端),去掉 ts_delay(变成当日开收比)掉到 -1.02,
+      收盘到收盘与日内两种日收益的偏度都 <= 0.12。五个控制(成交额水平、日内波动、20 日反转、已知族、市值)里没有任何隔夜的东西 —— 20 日反转是收盘到收盘的水平。
+      方向 +1 与彩票文献相反,更像「隔夜跳空是信息,之后延续」而不是「彩票被高估」。本位问四件没碰过的事:
+      (a) 隔夜与日内的拉锯:两者的 50 日相关、昨日日内与今日隔夜的相关、20 日隔夜均值、隔夜减日内的 20 日均值、隔夜偏度减日内偏度(种子 1、2、3、6、7);
+      (b) 隔夜在全部波动里的份量,与跳空是否放量(隔夜收益 50 日标准差 / 收盘到收盘标准差;|隔夜| 与 log 成交额的 50 日相关)(种子 4、15);
+      (c) 上跳空与下跳空分开:隔夜对数收益的上尾条件均值减中位数、中位数减下尾条件均值(种子 13、14),以及开盘集合竞价之后第一分钟的 20 日漂移(种子 5);
+      (d) 把 r2 的 E 里唯一奏效的「居中秩乘积」搬到本种子另外两条没被控制的轴上:隔夜偏度 x 成交额、20 日隔夜均值 x 成交额、成交时点差 x 成交额(种子 8-10),
+      以及尾盘那一条(r2 的 R:最后 30 分钟带走核心 B 74% 的 alpha;r^2 版掉 1.00,所以只用 |r|):最后 30 分钟以外的成交额占比减同时段 |r| 占比、
+      成交额加权波动 / 钟表波动(种子 11、12)。
+      不再做「某个日频量的 50 日偏度」(r2 已测死),不碰日方差本身(核心 A 的地盘,而且会撞 0.7 的库禁令)。
+    inspired_by: >-
+      r2 的 N 位(c05s803Br2b_Nb):原样种子 ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50) 过线 1.16,必要性 +2.17 / +2.21 把「隔夜」钉成必要条件,
+      同一轮的收盘到收盘、日内偏度 <= 0.12;r2 的 E 位:核心 x 当日成交额的居中秩乘积 1.41(线性中性化拿不掉交互);r2 的 R:核心 B 去掉最后 30 分钟掉 0.67、
+      平方版掉 1.00。文献:Lou-Polk-Skouras(隔夜 / 日内溢价分属两段)、Bogousslavsky(规模 / 流动性溢价在最后半小时实现)、Wu-Wang-Li(A 股开盘即涨跌停之后的动态)、
+      Barndorff-Nielsen-Shephard(|r| 比 r^2 不易被单根大跳主宰)、Zhang-Bi-Shen(量价领先滞后随知情交易占比变化,流动性可作代理)。
+    literature:
+      - {title: 'A Tug of War: Overnight versus Intraday Expected Returns', authors: 'Dong Lou, Christopher Polk, Spyros Skouras', year: '2019', url: 'https://doi.org/10.1016/j.jfineco.2019.03.011', treatment: '收益拆成隔夜与日内两段分别看,两段由不同投资者驱动、溢价方向可以相反;种子 1-3、6、7 把这个拆分写成隔夜与日内的相关、各自的 20 日漂移与它们的差'}
+      - {title: 'The Cross-Section of Intraday and Overnight Returns', authors: 'Vincent Bogousslavsky', year: '2021', url: 'https://ideas.repec.org/a/eee/jfinec/v141y2021i1p172-194.html', treatment: '不同异象的溢价在一天里的不同时段实现(规模 / 流动性在收盘前半小时,工作论文版本的表述);种子 11 只看最后 30 分钟的成交与波动占比'}
+      - {title: 'Post-hit Dynamics of Price Limit Hits in the Chinese Stock Markets', authors: 'Ting Wu, Yue Wang, Ming-Xia Li', year: '2017', url: 'https://ideas.repec.org/a/eee/phsmap/v465y2017icp464-471.html', treatment: 'A 股开盘即涨跌停会在隔夜收益里制造孤立的极端值;种子 13、14 把上跳空与下跳空的尾部分开读,种子 5 读开盘集合竞价之后第一分钟的漂移'}
+      - {title: 'Power and Bipower Variation with Stochastic Volatility and Jumps', authors: 'Ole E. Barndorff-Nielsen, Neil Shephard', year: '2004', url: 'https://academic.oup.com/jfec/article/2/1/1/960705', treatment: '阶数 p < 2 的幂次变差对稀疏大跳不敏感;尾盘那两个种子的波动腿只用 |r|(day_sum(abs_(Ret)))与成交额加权标准差,不用 r^2'}
+      - {title: 'Investor Structure and the Price-Volume Relationship in a Continuous Double Auction Market: An Agent-Based Modeling Perspective', authors: 'Wei Zhang, Zhengzheng Bi, Dehua Shen', year: '2016', url: 'https://ideas.repec.org/a/eee/phsmap/v467y2017icp345-355.html', treatment: '(仿真)量价领先滞后的强弱随知情交易者占比变化;种子 10 用成交额当这个占比的代理,与成交时点差做居中秩乘积'}
+      - {title: 'Interacting Anomalies', authors: 'Karsten Muller, Simon Schmickler', year: '2020-07', url: 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3646417', treatment: '异象与摩擦类变量(流动性)的交互收益;种子 8-10 把成交额当第二维,与隔夜 / 时点两条轴做连续交互'}
+    seeds:
+      - 'ts_corr(div(day_first(Open), ts_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)), 50)'
+      - 'sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_mean(log(div(day_last(Close), day_first(Open))), 20))'
+      - 'cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)'
+      - 'div(ts_std(div(day_first(Open), ts_delay(day_last(Close), 1)), 50), ts_std(div(day_last(Close), ts_delay(day_last(Close), 1)), 50))'
+      - 'cross_mean(log(div(day_first(Close), day_first(Open))), 20)'
+      - 'sub(ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50), ts_skew(div(day_last(Close), day_first(Open)), 50))'
+      - 'ts_corr(div(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(div(day_last(Close), day_first(Open)), 1), 50)'
+      - 'mul(sub(cs_rank(ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(sub(day_centroid(Amt), day_centroid(Ret))), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'sub(div(day_sum(in_delay(Amt, 30)), day_sum(Amt)), div(day_sum(in_delay(abs_(Ret), 30)), day_sum(abs_(Ret))))'
+      - 'div(day_wstd(Ret, Amt), day_std(Ret))'
+      - 'sub(cross_tail_mean_q75(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 50), cross_med(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 50))'
+      - 'sub(cross_med(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 50), cross_tail_mean_q25(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 50))'
+      - 'ts_corr(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), log(day_sum(Amt)), 50)'
+R:
+  - head: 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+    why: >-
+      末轮的 R 结果没有下一轮去用,只能靠「替换」改主指标,所以按替换期望值排。
+      1 窗口 100:拆解里已测 1.6493(train / valid 都更好),rho_head 0.792、rho_known -0.049,三条全满足 —— 但 r_candidates 不自动生效,必须在这里再付 1 次才会替换。
+      2、3 核心腿换成 r2 的 R 里赢了的干净孪生 ts_skew(day_var(Ret), ·)(同口径下比 DW 版高 +0.20),窗口 100 与 50 各一个(孪生自己的窗口曲线在 50 最高);
+      4 核心腿换成只在成交过的分钟上算的 Vwap 版(r2 的 R:1.41,valid 2.98 全族最高)配窗口 100。同一个头的几个变体,规则取最好的那个替换。
+      5 伪证:核心腿换成市值(两个控制自己的交互,完全不含日内信息);若 >= 0.5,这个头大半是「控制集合的非线性」,判读要打折;若 ~0.35,核心的形状确实贡献了 +1.0。
+      6 条件腿换成 log 换手率(成交额里没被 LogFloatCap 控制掉的那一半):Amt->Volume 让它从 1.41 塌到 -0.08,条件变量到底是规模还是交易活跃度,标准口径下读一次。
+    variants:
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 100)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_var(Ret), 100)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_var(Ret), 50)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Vwap), 100)), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(LogFloatCap), 0.5), sub(cs_rank(day_sum(Amt)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 0.5))'
+  - head: 'cross_autocorr_s1(ts_skew(day_durbin_watson(Open), 50), 6)'
+    why: >-
+      全库最高分(1.81),替换线 1.913。内层的日方差有两个已证更好的写法、外层窗口有一个已证更好的方向,各换一处:
+      7 day_var(Ret)(孪生在同口径下 +0.20);8 Vwap 版(只用成交过的分钟,r2 的 R +0.19、valid 2.98);
+      9 偏度窗口 100(DW 版 25 / 50 / 100 = 1.06 / 1.18 / 1.28,交互头 1.41 -> 1.65,窗口 100 在 DW 这一支上两次都更好)。
+      不放 Open->Close(+0.08,差 0.02 到线,而且 r2 已证这一族的 Open<->Close 是训练段抖动)。
+    variants:
+      - 'cross_autocorr_s1(ts_skew(day_var(Ret), 50), 6)'
+      - 'cross_autocorr_s1(ts_skew(day_durbin_watson(Vwap), 50), 6)'
+      - 'cross_autocorr_s1(ts_skew(day_durbin_watson(Open), 100), 6)'
+  - head: 'ts_skew(day_var(Ret), 50)'
+    why: >-
+      1.43,替换线 1.525。10 日方差先除以当日全市场平均日方差再取 50 日偏度:全市场一起爆波动的日子(2018 贸易战、2020-02-03 开盘)对每只股票都是同一个尖峰,
+      把它们除掉,剩下的才是个股自己的孤立爆波动日(Lee-Mykland:个股跳跃多数对应公司自己的事件);这是对输入的替换,不加外围。
+      11 Vwap 版 + 窗口 100:Vwap 版 50 日是 1.41(valid 2.98),窗口 100 在 DW 这一支上两次都更好。
+    variants:
+      - 'ts_skew(div(day_var(Ret), cs_mean(day_var(Ret))), 50)'
+      - 'ts_skew(day_durbin_watson(Vwap), 100)'
+  - head: 'sub(day_centroid(Amt), day_centroid(Ret))'
+    why: >-
+      0.90,替换线 1.004。波动时点那一腿的幂次阶梯:day_centroid 自己取 |x|,所以 Ret 是 |r|^1(0.90),mul(Ret, Ret) 是 |r|^2(-0.10,被一根大打印主宰);
+      源码里 sqrt 是 sqrt(abs),12 sqrt(Ret) = |r|^0.5、13 sqrt(sqrt(Ret)) = |r|^0.25,沿阶梯继续往下压大打印的权重(Barndorff-Nielsen-Shephard:p < 2 的幂次变差对稀疏大跳不敏感)。
+    variants:
+      - 'sub(day_centroid(Amt), day_centroid(sqrt(Ret)))'
+      - 'sub(day_centroid(Amt), day_centroid(sqrt(sqrt(Ret))))'
+  - head: 'ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50)'
+    why: >-
+      1.16,替换线 1.256。窗口是它唯一的弱轴(25 / 50 / 100 = 0.35 / 1.16 / 0.69):14 窗口 65 看峰在不在 50 右边。
+      15 隔夜收益先做截面去均值再取 50 日偏度:全市场同一天的大跳空(政策 / 外盘)对所有股票是同一个尖峰,去掉它只留个股自己的跳空(Wu-Wang-Li 的开盘涨跌停是个股层面的),
+      是对输入的替换,不加外围。
+    variants:
+      - 'ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 65)'
+      - 'ts_skew(cs_demean(div(day_first(Open), ts_delay(day_last(Close), 1))), 50)'
+  - head: 'cross_corr(day_kurt(Ret), day_gini(Ret), 241)'
+    why: >-
+      0.73,全库替换线最低(0.826)。r2 的三个换件(压尾、零收益比例、双截面秩)全败、两个翻号:只要动峰度的尾它就翻号,所以不再动 day_kurt,只换搭档;
+      16 搭档换成本种子自己的时点轴 day_centroid(Amt)(峰度尖不尖与成交是否挤在尾盘长期是否同向)。期望不高,是一张彩票。
+    variants:
+      - 'cross_corr(day_kurt(Ret), day_centroid(Amt), 241)'
