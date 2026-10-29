@@ -1,7 +1,7 @@
 export const meta = {
   name: 'c06-round',
   description: 'C06 一轮 Partura(C 组,每个种子独立):结构解剖员(Opus 5)→ 文献员(Sonnet 5)→ PI(Opus 5.5)写任务 → 相关度表 → 独立审计员(Opus 5.5)打创新度与合理度,不过就退回 PI 重写(至多审 3 次)→ 定稿与检查',
-  whenToUse: 'args = {round: k, seeds: [801, ...], skip_anatomy?: [...], skip_lit?: [...], resume_audit?: [...]}。research/coldstart_C06/PLAN.md §2.4–2.5',
+  whenToUse: 'args = {round: k, seeds: [801, ...], skip_anatomy?: [...], skip_lit?: [...], resume_audit?: [...], start_attempt?: {seed: n}, revise_after?: {seed: n}}。research/coldstart_C06/PLAN.md §2.4–2.5',
   phases: [
     { title: 'Anatomy', detail: '结构解剖员:哪些子树是 alpha 的来源、哪些部件是烂的(第 1 轮复用 C05 的同一份)' },
     { title: 'Literature', detail: '文献员:类似结构在文献里怎么处理(第 1 轮复用)' },
@@ -230,12 +230,23 @@ const results = await parallel(SEEDS.map(S => async () => {
   const lib = (K === 1 || (args.skip_lit || []).includes(S)) ? { skipped: true }
     : await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
   // resume_audit: the PI's missions.yaml is already on disk (the audit step failed for an infrastructure reason) -- start at the audit
-  let pi = (args.resume_audit || []).includes(S) ? { resumed: true }
+  let pi = ((args.resume_audit || []).includes(S) || (args.start_attempt || {})[S] || (args.revise_after || {})[S]) ? { resumed: true }
     : await agent(piPrompt(S), { label: `${tag}:pi`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
   if (!pi) return { seed: S, failed: 'pi' }
   const audits = []
   let fin = null
-  for (let n = 1; n <= MAX_AUDITS; n++) {
+  // resuming after an interruption (usage limit): start_attempt {seed: n} -- the PI's draft for attempt n is on disk, start at its
+  // correlation table; revise_after {seed: n} -- audit n is on disk, re-derive its verdict (deterministic) and start at the PI's rewrite
+  let n0 = (args.start_attempt || {})[S] || 1
+  const ra = (args.revise_after || {})[S]
+  if (ra) {
+    fin = await agent(finalizePrompt(S), { label: `${tag}:finalize${ra}`, phase: 'Finalize', model: M.run, schema: RUN_SCHEMA })
+    if (!fin || fin.exit_code !== 0) return { seed: S, failed: `finalize ${ra}`, fin }
+    pi = await agent(revisePrompt(S, ra, fin.output), { label: `${tag}:pi-revise${ra}`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
+    if (!pi) return { seed: S, failed: `revise ${ra}` }
+    n0 = ra + 1
+  }
+  for (let n = n0; n <= MAX_AUDITS; n++) {
     let c = await agent(corrPrompt(S, n), { label: `${tag}:corr${n}`, phase: 'Audit', model: M.run, schema: RUN_SCHEMA })
     if (!c || c.exit_code !== 0) c = await agent(corrPrompt(S, n), { label: `${tag}:corr${n}-retry`, phase: 'Audit', model: M.run, schema: RUN_SCHEMA })
     if (!c || c.exit_code !== 0) return { seed: S, failed: `corr ${n}`, corr: c, audits }
