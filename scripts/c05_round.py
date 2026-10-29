@@ -7,6 +7,10 @@
                                                                  population 32, budget 96 each) and the R variants (direct)
 Each writes arms/s<seed>_<arm>_r<round>.DONE ("<tag> <exit code>" per job) when every job has ended.
 Every GP run is banned from the arm's library: M batches 1..round + the arm's own earlier missions (rank |rho| >= 0.7, same skeleton).
+
+$PARTURA_C0X=C06 (research/coldstart_C06/PLAN.md §2.3): mission mode for C06's arm C -- files under research/coldstart_C06, missions
+named c06s<seed>C..., M still C05's; an E slot's reward no longer adds the core's family to the controls (the library ban keeps
+the search off the family); the R files' additions are library members too.
 """
 import glob
 import json
@@ -21,7 +25,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import c05_lib  # noqa: E402
 
-D, EP = ROOT / "research" / "coldstart_C05", ROOT / "episodes"
+STUDY = os.environ.get("PARTURA_C0X", "C05")
+PFX = STUDY.lower()
+D, EP = ROOT / "research" / f"coldstart_{STUDY}", ROOT / "episodes"
 ARMS = D / "arms"
 PY = os.environ.get("PY", sys.executable)
 MODE = sys.argv[1]
@@ -32,7 +38,7 @@ def snapshot(S, X, K):
     evidence failed twice: it spent its budget and produced nothing, so it is left out (PLAN revision 6)."""
     eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
     for k in range(1, K):
-        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"c05s{S}{X}r{k}[ab]_*")))
+        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"{PFX}s{S}{X}r{k}[ab]_*")))
                 if (Path(p) / "evidence.json").is_file() or not (ARMS / f"s{S}_{X}_r{k}.DONE").is_file()]
     return eps
 
@@ -43,7 +49,8 @@ def library(S, X, K):
     for k in range(1, K):
         f = ARMS / f"s{S}_{X}_r{k}_R.json"
         if f.is_file():
-            lib += [{**r, "src": f.name} for r in json.loads(f.read_text(encoding="utf-8"))["replacements"]]
+            R = json.loads(f.read_text(encoding="utf-8"))
+            lib += [{**r, "src": f.name} for r in R["replacements"] + R.get("additions", [])]
     f = ARMS / f"lib_s{S}_{X}_r{K}.json"
     f.write_text(json.dumps(lib, ensure_ascii=False, indent=1), encoding="utf-8")
     return f, lib
@@ -145,7 +152,7 @@ def finish(S, X, K, procs):
             code = subprocess.run(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env).returncode
             tag = tag + " (rerun)"
         lines.append(f"{tag} {code}")
-        if tag.startswith("c05s") and isinstance(p, subprocess.Popen) or tag.endswith("(rerun)"):
+        if tag.startswith(f"{PFX}s") and isinstance(p, subprocess.Popen) or tag.endswith("(rerun)"):
             with (ROOT / "logs" / f"_idea_{tag.split()[0]}.log").open("a") as fh:
                 fh.write(f"[partura exit {code}]\n")
     (ARMS / f"s{S}_{X}_r{K}.DONE").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -217,11 +224,11 @@ elif MODE == "mission":
     seen = ARMS / f"seen_s{S}_{X}_r{K}.json"
     seen.write_text(json.dumps([a["expr"] for a in c05_lib.archive(snapshot(S, X, K))]), encoding="utf-8")
     base = yaml.safe_load((ROOT / "guidance" / "C05_base.yaml").read_text(encoding="utf-8"))
-    base["batch"] = f"C05_s{S}_{X}_r{K}"
+    base["batch"] = f"{STUDY}_s{S}_{X}_r{K}"
     base["ideas"] = list(base["ideas"])
     jobs = []
     for i, (s, j) in enumerate(zip(plan["slots"], "ab")):
-        seed, tag = 1000 * S + 10 * K + i + 1, f"c05s{S}{X}r{K}{j}"
+        seed, tag = 1000 * S + 10 * K + i + 1, f"{PFX}s{S}{X}r{K}{j}"
         if s["type"] == "E":
             core = s["core"]
             ck = P_(core).key()
@@ -231,8 +238,9 @@ elif MODE == "mission":
             iid = f"E{j}"
             base["ideas"].append({"id": iid, "hypothesis": s.get("hypothesis", "B0: mechanical core"), "seeds": list(s.get("seeds") or [])[:16],
                                   "grammar": {}, "reward": "long_neutral"})
+            extra = ["--neutral-extra", str(ff)] if STUDY == "C05" else []         # C06 PLAN §2.3: the E reward is everyone's reward
             jobs.append((tag, iid, "steer", seed, ["--parts", "seeds", "--seed-share", "1.0", "--must-contain", core, "--periphery-seen", str(seen),
-                                                    "--neutral-extra", str(ff), "--graft-fill", "32", "--ban-library", str(lf)]))
+                                                    *extra, "--graft-fill", "32", "--ban-library", str(lf)]))
         elif s.get("seeds"):
             iid = f"N{j}"
             base["ideas"].append({"id": iid, "hypothesis": s.get("hypothesis", ""), "seeds": list(s["seeds"])[:16], "grammar": {}, "reward": "long_neutral"})
@@ -251,7 +259,7 @@ elif MODE == "mission":
     elif plan.get("R"):
         rq = ARMS / f"rreq_s{S}_{X}_r{K}.json"
         rq.write_text(json.dumps(plan["R"], ensure_ascii=False), encoding="utf-8")
-        log = ROOT / "logs" / f"_c05R_s{S}_{X}_r{K}.log"
+        log = ROOT / "logs" / f"_{PFX}R_s{S}_{X}_r{K}.log"
         RCMDS[f"R_s{S}_{X}_r{K}"] = ([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], {**os.environ, "PARTURA_GPU_WAYS": "2"}, log)
         procs.append((f"R_s{S}_{X}_r{K}", subprocess.Popen([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], cwd=ROOT,
                                                             stdout=log.open("w"), stderr=subprocess.STDOUT,

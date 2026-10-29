@@ -8,6 +8,13 @@
     python scripts/c05_locate.py direct <seed> <arm> <round> <requests.json>
         requests = [{"head": <expr of a snapshot head>, "variants": [<expr>, ...]}, ...] (<= 16 variants in all)
         -> research/coldstart_C05/arms/s<seed>_<arm>_r<round>_R.json: every variant scored, and the replacements (§2.5 rule)
+    python scripts/c05_locate.py corr <seed> <arm> <round> <requests.json>          (C06 only: the auditor's correlation table)
+        requests = [{"where": "...", "expr": "..."}, ...]  -> <requests>_corr.json / .md: for every expression (train, every 5th
+        day), |rho| of its daily ranks with each snapshot head's (the GP library ban's measure), of its residual on the five controls
+        with each head's traded residual, and of its ranks with each control.  No score, no Sharpe: not an evaluation.
+
+$PARTURA_C0X=C06 (research/coldstart_C06/PLAN.md): the same tools for C06's arm C -- its files under research/coldstart_C06, its
+missions named c06s<seed>C..., M still C05's; R also takes in a good variant that is a different thing from its head (an addition).
 """
 import glob
 import json
@@ -36,7 +43,11 @@ from partura.steer import reward as steer_reward  # noqa: E402
 
 MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
 os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
-D = PARTURA_ROOT / "research" / "coldstart_C05"
+if MODE == "corr":      # C06: short and small -- the third GPU way (the GP runs only ever take two), a small share of the card, no run slot
+    os.environ.update(PARTURA_GPU_WAYS="3", PARTURA_GPU_RESERVE_GB="1", PARTURA_GPU_MIN_GB="1")
+STUDY = os.environ.get("PARTURA_C0X", "C05")                 # C06 reuses C05's M; its own missions are c06s...
+D = PARTURA_ROOT / "research" / f"coldstart_{STUDY}"
+PFX = STUDY.lower()
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
@@ -53,7 +64,7 @@ def snapshot_episodes():
     eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
     for k in range(1, K):                                 # a mission that ended without evidence produced nothing (PLAN revision 6)
         done = (D / "arms" / f"s{S}_{ARM}_r{k}.DONE").is_file()
-        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"c05s{S}{ARM}r{k}[ab]_*"))) if (Path(p) / "evidence.json").is_file() or not done]
+        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"{PFX}s{S}{ARM}r{k}[ab]_*"))) if (Path(p) / "evidence.json").is_file() or not done]
     missing = [p for p in eps if not (p / "evidence.json").is_file()]
     if missing:
         raise SystemExit(f"snapshot incomplete: {[p.name for p in missing]}")
@@ -71,10 +82,22 @@ def replacements():
     return out
 
 
+def additions():
+    """C06 PLAN §2.3: the variants this arm's R files of rounds < K took in as heads of their own."""
+    out = []
+    for k in range(1, K):
+        f = D / "arms" / f"s{S}_{ARM}_r{k}_R.json"
+        if f.is_file():
+            out += [{**r, "src": f.name} for r in json.loads(f.read_text(encoding="utf-8")).get("additions", [])]
+    return out
+
+
 sys.path.insert(0, str(PARTURA_ROOT / "scripts"))
 import c05_lib  # noqa: E402
 
-with slot():
+import contextlib  # noqa: E402
+
+with (contextlib.nullcontext() if MODE == "corr" else slot()):
     mem = MemoryGuard(self_limit_gb=int(os.environ.get("PARTURA_SELF_LIMIT_GB", 34)), cgroup_limit_gb=int(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 70))).start()
     t0 = time.time()
     from alphacube.plugins import load_plugins
@@ -86,7 +109,7 @@ with slot():
     def P_(s):
         return parse(s, strict=True, coerce_daily=True, n_minutes=241, allow_general=True)
 
-    ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0.3, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
+    ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0.12 if MODE == "corr" else 0.3, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
                   daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec, known_spec = G.spec["pool"][-1], G.spec["pool"][0]
@@ -165,6 +188,7 @@ with slot():
                 r = rep[r["expr"]]
             h = {**h, **{k: r[k] for k in ("expr", "sign", "hl", "score", "train", "valid")}, "replaces": h["expr"]}
         heads.append(h)
+    heads += [{k: a[k] for k in ("expr", "sign", "hl", "score", "train", "valid", "src")} for a in additions()]
 
     prev = []                                                 # what the arm's earlier missions did (train / valid only)
     for ep in eps:
@@ -197,10 +221,72 @@ with slot():
             if ok:
                 b = max(ok, key=lambda r: r["score"])
                 repl.append({"head": hd, **{k: b[k] for k in ("expr", "sign", "hl", "score", "train", "valid")}})
+        adds = []
+        if STUDY == "C06":                                     # C06 PLAN §2.3: better, but a different thing from its head -> a head of its own
+            lib_z = [traded(h)[:cut:5] for h in heads]
+            for r in sorted(out, key=lambda r: -(r.get("score") or -9)):
+                if not (r.get("gate") and r.get("rho_head") is not None and r["rho_head"] < 0.5 and r["score"] >= r["head_score"] + 0.1
+                        and abs(r["rho_known"]) < RHO and r["expr"] not in {a["expr"] for a in repl}):
+                    continue
+                z = res[r["expr"]]["_traded"][:cut:5]
+                if all(abs(corr(z, y)) < 0.7 for y in lib_z):
+                    adds.append({"head": r["head"], **{k: r[k] for k in ("expr", "sign", "hl", "score", "train", "valid")}})
+                    lib_z.append(z)
         f = D / "arms" / f"s{S}_{ARM}_r{K}_R.json"
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps({"seed": S, "arm": ARM, "round": K, "paid": len(todo), "rows": out, "replacements": repl}, ensure_ascii=False, indent=1), encoding="utf-8")
-        print(f"wrote {f}: {len(todo)} variants, {len(repl)} replacements ({time.time() - t0:.0f}s)")
+        f.write_text(json.dumps({"seed": S, "arm": ARM, "round": K, "paid": len(todo), "rows": out, "replacements": repl, "additions": adds},
+                                ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"wrote {f}: {len(todo)} variants, {len(repl)} replacements, {len(adds)} additions ({time.time() - t0:.0f}s)")
+        mem.stop()
+        sys.exit(0)
+
+    if MODE == "corr":                                         # C06 PLAN §2.5: the auditor's correlation table (no score, no Sharpe)
+        qf = Path(sys.argv[5])
+        req = json.loads(qf.read_text(encoding="utf-8"))
+        cz = {"liq": aux["liq"], "vol": aux["n_vol"], "rev": aux["n_rev"], "known": aux["known"], "size": aux["n_size"]}
+        cz = {k: dg._zrank(np.asarray(v, np.float64))[:cut:5] for k, v in cz.items()}
+        hz, hr = [], []                                        # raw daily ranks (as the GP's RankSimilarityBan) and traded residuals
+        for h in heads:
+            p = np.asarray(ps.compute({"x": h["expr"]})["x"], np.float64)
+            hz.append((h["expr"], dg._zrank(p)[:cut:5]))
+            hr.append((h["expr"], float(h["hl"]), dg._zrank(neutral_residual(bk.smoothed(float(h["sign"]) * p, float(h["hl"])), QF))[:cut:5]))
+        exprs = list(dict.fromkeys(q["expr"] for q in req))
+        rows = {}
+        for i in range(0, len(exprs), 8):
+            chunk = exprs[i:i + 8]
+            P = {}
+            for j, e in enumerate(chunk):
+                try:
+                    P[e] = ps.compute({"x": e})["x"]
+                except Exception as exc:                       # noqa: BLE001
+                    rows[e] = {"error": f"{type(exc).__name__}: {str(exc)[:120]}"}
+            for e, p in P.items():
+                panel = np.asarray(p, np.float64)
+                cov, dis = float(np.isfinite(panel[labelled]).mean()), dg.distinct_fraction(panel)
+                z = dg._zrank(panel)[:cut:5]
+                zr = {hl: dg._zrank(neutral_residual(bk.smoothed(panel, hl), QF))[:cut:5] for hl in {hl for _, hl, _ in hr}}  # at each head's half-life
+                rh = sorted(((abs(corr(z, y)), x) for x, y in hz), reverse=True)
+                rr = sorted(((abs(np.nan_to_num(corr(zr[hl], y))), x) for x, hl, y in hr), reverse=True)
+                rows[e] = {"gate": bool(cov >= 0.9 and dis >= 0.5), "coverage": round(cov, 3), "distinct": round(dis, 3),
+                           "max_head": round(rh[0][0], 3) if rh else 0.0, "top_heads": [[round(r, 3), x] for r, x in rh[:3]],
+                           "max_head_resid": round(rr[0][0], 3) if rr else 0.0, "top_heads_resid": [[round(r, 3), x] for r, x in rr[:3]],
+                           "controls": {k: round(abs(corr(z, y)), 3) for k, y in cz.items()}}
+            print(f"[corr] {min(i + 8, len(exprs))}/{len(exprs)} ({time.time() - t0:.0f}s)", flush=True)
+        res = [{**q, **rows.get(q["expr"], {"error": "did not compute"})} for q in req]
+        qf.with_name(qf.stem + "_corr.json").write_text(json.dumps({"heads": len(hz), "rows": res}, ensure_ascii=False, indent=1), encoding="utf-8")
+        L = [f"# 相关度表:种子 {S},{ARM} 组,第 {K} 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)", "",
+             f"快照里 {len(hz)} 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|"
+             f"(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。", "",
+             "| 位置 | 门槛 | 与 head 最大 \\|ρ\\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for r in res:
+            if "error" in r:
+                L.append(f"| {r['where']} | 算不出:{r['error'][:60]} | | | | | | | | | `{r['expr']}` |")
+                continue
+            c = r["controls"]
+            L.append(f"| {r['where']} | {'过' if r['gate'] else '废品'} | {r['max_head']:.2f} | `{r['top_heads'][0][1][:60] if r['top_heads'] else '—'}` | "
+                     f"{r['max_head_resid']:.2f} | {c['liq']:.2f} | {c['vol']:.2f} | {c['rev']:.2f} | {c['known']:.2f} | {c['size']:.2f} | `{r['expr']}` |")
+        qf.with_name(qf.stem + "_corr.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+        print(f"wrote {qf.stem}_corr.json / .md: {len(res)} rows ({time.time() - t0:.0f}s)")
         mem.stop()
         sys.exit(0)
 
