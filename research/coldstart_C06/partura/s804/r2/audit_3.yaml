@@ -1,0 +1,25 @@
+attempt: 3
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [1, 2]
+    reasons: '【与上一稿比】这一稿只删了 R4。a 位 12 个种子与上稿逐字相同:我把 corr_2.request.json 与 corr_3.request.json 逐项比了一遍,唯一的差别是 R4 那一行;corr_3 的数也与 corr_2 一致。重新逐项核对后维持原判。 【门槛】核心 K = cross_stddev(day_skew(Ret), 60)(dt_cross.cross_stddev:沿日轴滚动 60 天取 nanstd),与控制的 |ρ| 最大是 size 0.406(liq 0.10 / vol 0.18 / rev 0.01 / known 0.057),< 0.5;12 个种子都原样含 K。表格划掉 3(0.958)、5(0.706)、9(0.85)、11(0.945)、12(0.953)。 【我划掉 1、2】理由不变。common._skew 先除以当日标准差,day_skew 本来就是标准化过、会变号的量。div(K, cross_mean / cross_med(abs_(day_skew(Ret)), 60)) 在整列偏度乘一个常数时不变,σ 被约掉,比值只是 60 日偏度均值的 t 值倒数的单调函数,不是 VOV;abs_ 又把常年右偏(Amaya:随后差)和常年左偏(随后好)折到同一端。它们与 K 只有 0.405 / 0.41,恰好说明丢了 K 自己的信息。 【留下的 4、6、7、8、10】ops_ext._lexi 按 x 的整块并列切带,带内 _pct_rank(y) 加 1 或减 1,输出没有并列。实现的就是「K 当门槛,池内按 20 / 10 日低已实现偏度或按自身波动标准化的 MAX 排」;8 的池子是「偏度符号稳定」,池内排序方向一致。这几个与 K 是 0.479–0.646,与其它 head 最高 0.352(Cr1a 里含 ts_mean(day_skew(Ret), 20) 的那一族),残差 ≤ 0.556;控制最大 size 0.293、vol 0.236、rev 0.204。没有凸变换,没有截面常数进 cs_*,也没有规模 / 波动 / 流动性的非线性函数,不碰 §4。剩 5 个,够 4 个的下限。 【创新度 3】输入仍是偏度这一类(与 K 同类,也与 Cr1a 的偏度筛子同类),机制是「测量质量门槛 + 池内 Amaya 低偏度 / BCW 标准化 MAX」,与裸 K 不同,也说得出为什么。幸存种子与 K 都 > 0.3,到不了 4。 【合理度 3,不是 4】门槛的前提是「K 低 = 偏度读数可信」,而价位离散的混淆方向正好相反(几元的票分钟收益近似三点分布,K 也低)。能区分两者的 11、12 被表格划掉了,这个混淆在本位里没法证伪。文献支持只是类比(VOV 原文讲的是隐含波动的波动),也没有 train 上的证据。'
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [8]
+    reasons: '【与上一稿比】13 个种子逐字相同,相关度的数一致,维持原判。 【逐个核对算子】CV = log(div(day_last(Close), day_wmean(Vwap, Amt))):ops_ext.day_wmean = Σ Vwap·|Amt| / Σ|Amt|,只算两者都有限的分钟,同一天内复权因子约掉,尺度无关。day_last(in_delay(Close, 30)):dt_in.in_delay 只在分钟轴内平移,取到的是 14:30 的价。in_index > 0.875 在 241 根的网格上恰好是 14:31–15:00,常数由交易时段定。ops_ext.day_centroid = Σ t·|x| / Σ|x| / (T − 1)。都实现了假设里说的量。 【与库比】种子 1–9 与 14 个 head 的原始 |ρ| ≤ 0.125、残差 ≤ 0.07;成交时点种子 10–13 与 head +0.58 是 0.25–0.35。 【控制】CV 均值类种子(1、4、5、9)与 rev 0.395–0.459,< 0.5。它是日收益里的一个时段分量,不是控制的非线性重写。5 是带符号的量除以 day_std(Ret),vol 只有 0.04,不落陷阱 1 / 3。表格划掉 11(known 0.511)。10 的 liq 0.461 / known 0.457 贴着门槛,但它是成交占比(比值)的 20 日均值,不是成交额水平的函数,保留。12 是 head +0.58 主项的 20 日均值(0.343),是对那一项的直接检验,不是整只 head 的换皮,保留。 【我划掉 8】neg(ts_med(尾盘 30 分钟收益, 20)) 的 distinct 只有 0.578:约四成票并列在 0,读到的是价位粗、尾盘不动,不是收盘压力;并列块中性化以后,排序的只剩控制拟合值。均值版 7(distinct 0.999)保留。剩 11 个。 【创新度 4】输入和机制都不在库里,主体种子与所有 head 的 |ρ| < 0.13。不给 5:(vwap − close) 这类写法和收盘操纵的文献都早已有。 【合理度 3,不是 4】文献记录的主要是次日 / 隔夜的回吐,多周的截面可预测性是从 Coval-Stafford 类推来的,没有 train 证据。CV 还混着当天下午的趋势。上一轮同样是「日收益的一个时段分量取负再累计」的 N 位(隔夜跳空),种子没有一个入库,这类信号被 rev 控制吃掉的风险不小。'
+    revise: '—'
+R:
+  - head: 'cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), 20)), neg(ts_decay_linear(pow_3(day_mean(Open)), 20)))'
+    soundness: 3
+    reasons: '与上一稿逐字相同。变体与 loc.md 拆解表里 knockout ts_mean(cs_last_high20(...), 20) 那一行逐字一致:+1.5578 → +1.6591,train +1.56 → +1.66 与 valid +2.26 → +2.82 同向;同一个手术在 head +1.22 上也再现了。只删一层,结构更简单,不是调参。corr_3:与原 head 0.725(表里最像的就是原 head,走替换),known 0.197,控制最大 size 0.382。 【更正我前两次审计里的一句】我照搬了 PI 的「ρ≈0.96、标准误 0.10–0.14、约 1 个标准误」。相关度表里变体与原 head 的日度秩 ρ 是 0.725(R2 是 0.688、R3 是 0.701),不是 0.96。如果两本书的收益相关也在这个量级,按我在 R4 上用过的同一个公式,标准误约 sqrt(2×0.275/4) ≈ 0.37,+0.10 只有约 0.3 个标准误。PI 的 0.96 在我能看的材料里找不到出处。这削弱了「部件是烂的」的统计力度,但没有改变方向:增益是实测的,train 与 valid 同向,在两个 head 的同一位置上方向一致。这和 R4 不同,R4 的方向证据是反的,提出者自己也不预期有增益。给 3 不给 4。另外,+1.6591 只比替换门槛 +1.6578 高 0.0013,过不过线在刀口上。'
+  - head: 'cs_last_low10(cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_mean(cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_mean(day_skew(Ret), 20)), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))'
+    soundness: 3
+    reasons: '与上一稿逐字相同。变体与拆解行一致:+1.2180 → +1.3290(过替换门槛 +1.318),train +1.22 → +1.33 与 valid +2.54 → +2.83 同向。与原 head 0.688(最像的就是原 head,走替换),known 0.036。没交「去掉中间那层筛子」(+0.08,不到门槛),克制得当。按表里的 0.688 算,标准误约 0.40,+0.11 约 0.3 个标准误(同 R1 的更正);而且与 R1 结构几乎相同,算不上独立重复。机制清楚,改动实现了它,方向有实测,给 3。'
+  - head: 'cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20)), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))'
+    soundness: 3
+    reasons: '与上一稿逐字相同。变体只去掉外层筛子变量上的 ts_mean(·, 20);里面 cs_last_low10(cs_last_high20(...), P) 的输出同样是 _lexi 的「秩加减 1」区块结构,所在位置与 R1、R2 实测无益的那一层相同,其余一字未改。与原 head(+0.79)0.701(最像的就是原 head),残差 0.847,known 0.037。依据只有类比,而且被类比的两次实测本身各只有约 0.3 个标准误(见 R1 的更正)。PI 预计 +0.80 ~ +0.90,中心约 +0.85,高于原 head;和 R4 不同,提出者预期有增益,只是可能到不了 +0.1 的门槛。只交 1 个变体,只花 1 次评估。给 3,是贴着下限的 3。'
+summary: 'PI 按上次意见撤掉了 R4,其余逐字未改。a(E,K 的外围)维持 3/3,我划掉 1、2,表格另划 5 个,剩 5 个;b(N,尾盘压力回吐)维持 4/3,我划掉 8,表格另划 11,剩 11 个;R1–R3 维持 3,但我更正一点:变体与原 head 的日度秩 ρ 是 0.69–0.73,不是 PI 写的 0.96,所以 +0.1 的增益约 0.3 个标准误,R1 也只比替换门槛高 0.0013。'

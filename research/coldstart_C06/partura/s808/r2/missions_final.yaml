@@ -1,0 +1,186 @@
+seed: 808
+round: 2
+slots:
+- type: E
+  core: cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap)
+  hypothesis: '核心是「当天分钟收益取到多少个不同值」在同市值十分位里的 z 分(核心卡 #5;H1 里把它跳掉,必要性 +2.19)。机械上 day_distinct_ratio(Ret)
+    是三条通道叠在一起的(Harris 1991):(i) 相对最小变动价位:未复权价越低,0.01 元网格越粗,收益值越容易重复;(ii) 成交活跃度:没成交的分钟收益恰为
+    0,只占一个值;(iii) 日内波幅:以 tick 计的区间越宽,访问的价位越多。库里 H2 的 sign 是 −1,多头腿是同市值里最不离散的票,方向与
+    LOT / FHT 一支一致:零收益和停滞报价度量的是交易成本,非流动性水平带溢价(Lesmond 等 1999;Amihud 2002)。问题在于核心只对市值做了条件化。通道
+    (ii)(iii) 正好是奖励里流动性、波动两个控制管的东西,奖励只把它们线性去掉;而 day_distinct_ratio 是 [1/n, 1] 上的饱和函数,非线性的那部分会漏回来(规则
+    §4 陷阱 1/3,只是凸变换换成了饱和变换)。通道 (i) 就是名义价格,第 1 轮已经测过:市值桶内价格秩的候选均值是 −0.29,在本奖励下不值钱。所以
+    H2 现在的分数分不清是「交易成本溢价」,还是「低换手 / 低波动多头腿从线性中性化的缝里漏回来」。 外围做三件事。(1) 特征匹配,也就是 DGTW 1997
+    的顺序配对:在核心外面再套一层 cs_bucket_zscore 或 cs_bucket_rank,分桶变量分别用未复权均价 div(day_sum(Amt),
+    day_sum(Volume))(相对 tick,对应 Holden 2009 拆 tick 通道的做法;Amt、Volume 是原始口径,第 1 轮相关度表证实这条写法与
+    size 的 ρ 为 0.000)、当日对数换手 sub(log(day_sum(Amt)), LogFloatCap)、当日分钟波动 day_std(Ret)、零收益分钟占比
+    day_zero_ratio(Ret)。种子 5 连配价格和换手两层,种子 8、9 用 40 日水平分桶。配完剩下的是:同市值、同价格网格、同换手的同行里,谁的报价更停滞。这才是
+    LOT 意义上的成本,不是控制的替身。按零收益占比配的那颗(种子 4)把停滞(零)和网格 × 波幅(非零值的重复)拆开,看溢价跟哪一半走。(2) 用水平,不用峰值:Amihud
+    2002 定价的是预期非流动性,即一段时间的平均水平,所以聚合用 cross_mean / cross_ema / cross_quantile_q50(20–60
+    日)。再按 Amihud 的「水平 vs 冲击」分解,用时间序列差分写冲击:sub(5 日均值, 60 日均值) 和 cross_zscore(5 日均值,
+    60)。Amihud 的结论是两者符号相反,要分开估;这里不像 H1 那样按自己的 40 日峰值分桶。(3) 可交易性筛子:最停滞的票里混着封板、准停牌的票(day_flat_run_max
+    的源码注释举的就是封板 240 分钟),它们的收益由事件决定。cs_last_high10(neg(水平), cross_mean(day_flat_run_max(Close),
+    20)) 把 20 日最长不动段最长的 10% 推出多头;cs_last_low20(neg(水平), LogFloatCap) 按 Liu-Stambaugh-Yuan
+    2019 的做法,把壳价值污染最重的最小市值 20% 推出多头。这两颗写在 neg 之后,按预期方向(sign +1 = 做多低离散)设计;奖励若选了反方向,被筛掉的票会进多头,这本身就是证伪。
+    为什么和以前不一样:快照里含这个核心的候选,外围只有 {}、{ts_max}、{ts_max, cs_bucket_zscore} 三种。H2 取 79 日滚动峰值;H1
+    按自己的 40 日峰值分十分位再 z 化;两者做的都是放大同一核心的峰值。没有一个候选按价格、换手、波动或零收益占比配过对,没有用过平均水平和时间序列差分,也没有筛子。本位外围用到的算子(div、day_sum、log、sub、day_std、day_zero_ratio、cross_mean、cross_ema、cross_quantile_q50、cross_zscore、cs_bucket_rank、cs_last_high10、cs_last_low20、neg、day_flat_run_max)与已有外围几乎不重合,要做的事也相反:已有外围在放大,这里在剥离替身。多了一层配对,与
+    H2 的相关应当下降,具体以相关度表为准。核心已在市值十分位内 z 化,与 size 控制的相关按构造约为 0。 为什么样本外还会在:如果配完还在,它度量的是同等活跃度、同等价格网格下的报价停滞,也就是交易成本本身。交易成本溢价是持有难交易资产的补偿;A
+    股 0.01 元 tick、T+1、散户主导这些制度在 2023-08 之后没有变,它不依赖一次性的定价错误。水平信号变得慢,20–60 日平均让换手低,15bp
+    吃不掉多少。如果配完就没了,说明轴 B 是控制的饱和改写,第 3 轮就不再押它。'
+  literature:
+  - title: A New Estimate of Transaction Costs
+    authors: Lesmond, D.A.; Ogden, J.P.; Trzcinka, C.A.
+    year: '1999'
+    url: https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html
+    treatment: 零收益 / 停滞的频率度量交易成本;当作一段时间的水平来用(cross_mean / cross_quantile_q50 20–60
+      日)
+  - title: Stock Price Clustering and Discreteness
+    authors: Harris, L.
+    year: '1991'
+    url: https://ideas.repec.org/a/oup/rfinst/v4y1991i3p389-415.html
+    treatment: 离散程度随价格水平、波动、成交频率分别变化:按未复权价、分钟波动、换手分别配对,把三条通道拆开
+  - title: New Low-Frequency Spread Measures
+    authors: Holden, C.W.
+    year: '2009'
+    url: https://host.kelley.iu.edu/cholden/Holden%20(2009).pdf
+    treatment: 价格聚集 / 离散由相对 tick 决定,可以显式拆出:按未复权均价 div(day_sum(Amt), day_sum(Volume))
+      分桶
+  - title: 'Illiquidity and Stock Returns: Cross-Section and Time-Series Effects'
+    authors: Amihud, Y.
+    year: '2002'
+    url: https://www.cis.upenn.edu/~mkearns/finread/amihud.pdf
+    treatment: 预期非流动性(水平)与未预期非流动性(冲击)分开、符号相反:水平用多日均值,冲击用 sub(5 日均值, 60 日均值) 和 cross_zscore
+  - title: Measuring Mutual Fund Performance with Characteristic-Based Benchmarks
+    authors: Daniel, K.; Grinblatt, M.; Titman, S.; Wermers, R.
+    year: 1997-07
+    url: https://ideas.repec.org/a/bla/jfinan/v52y1997i3p1035-58.html
+    treatment: 顺序特征配对:在市值十分位 z 化之后,再在价格 / 换手 / 波动十分位内 z 化或排序,不假设线性
+  - title: Size and Value in China
+    authors: Liu, J.; Stambaugh, R.F.; Yuan, Y.
+    year: 2018-03
+    url: https://www.nber.org/papers/w24458
+    treatment: A 股最小市值那一段带壳价值,应整段剔除而不是线性中性化:cs_last_low20(neg(水平), LogFloatCap)
+  seeds:
+  - cross_mean(cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret),
+    LogFloatCap), div(day_sum(Amt), day_sum(Volume))), sub(log(day_sum(Amt)), LogFloatCap)),
+    40)
+  - cross_quantile_q50(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret),
+    LogFloatCap), div(day_sum(Amt), day_sum(Volume))), 60)
+  - sub(cross_mean(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 5), cross_mean(cs_bucket_zscore(day_distinct_ratio(Ret),
+    LogFloatCap), 60))
+  - cross_zscore(cross_mean(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    5), 60)
+- type: N
+  hypothesis: 机制:日内收益分布的不对称,即彩票偏好。按 Barberis-Huang 2008 的概率加权,投资者高估小概率的大涨,愿意为正偏的股票付溢价;正偏股票因此被高估,事后收益低。A
+    股散户占比高、融券难,这种高估套利不掉。Amaya 等 2015 用日内 5 分钟收益算已实现偏度,它预测下一期横截面收益,方向为负。Bollerslev-Li-Zhao
+    2020 用上行与下行已实现半方差之差(相对符号跳跃变差 RSJ),得到同向且更稳的结果。负偏的一侧是日内急跌,对应急于卖出的一方付给流动性提供者的补偿;在纯多头书里,多头腿的来源在这一侧。文献里两腿都有贡献、空头腿更大,而本奖励只看多头腿,所以预期分数放得保守。
+    算子怎么实现:先把收益里的开盘集合竞价 bar 0 和尾盘集合竞价剥掉。in_slice(Ret, 1, 237) 是 09:31–14:57 的 1 分钟收益;in_slice(in_pct(Close,
+    5), 6, 237) 是同一时段的 5 分钟(重叠)收益,不含隔夜跳空。用 5 分钟,是因为本种子的轴 B 已经说明,这个立方体里的分钟统计被 0.01
+    元网格支配:低价股的 1 分钟收益只取几个离散值,三阶矩会被网格噪声淹没(第 1 轮审计也指出过)。5 分钟加总把网格噪声压下去,这也是 Amaya 等用
+    5 分钟收益的原因。(1) 偏度:day_skew(上面的收益),取 cross_mean 20 / 60 日或半衰期 10 的 cross_ema。(2)
+    RSJ:div(day_sum(mul(r, abs_(r))), day_sum(mul(r, r))) = (RV⁺ − RV⁻)/RV,无量纲,取 20
+    日均值。(3) 去替身的条件版,用 cs_bucket_rank 在四种十分位内排序:未复权均价十分位(去 tick 通道);20 日对数收益 ts_delta(log(day_last(Close)),
+    20) 十分位(偏度和同期收益有机械重叠,去掉与 20 日反转控制共享的部分);分钟波动十分位;换手十分位(彩票需求随关注度变,隔开关注度)。(4) 封在跌停上会机械地制造负偏,而封板是另一种事件(Chen
+    等 2019)。所以把 20 日里贴在日内最低价时间最长的 10% 推出多头:cs_last_high10(neg(偏度), cross_mean(day_at_min_ratio(Close),
+    20)),按预期方向(sign +1 = 做多低偏度)写。(5) 日频对照:20 日日收益偏度 ts_skew(…, 20),即 Boyer-Mitton-Vorkink
+    2010 的低频版本。除第 (4) 颗外,方向都交给奖励的 sign。 为什么和以前不一样:库里 6 个 head 只有两条轴。一条是静态规模(LogFloatShares
+    / LogFloatCap 的包装与折叠);另一条是分钟价格的平手结构(day_distinct_ratio / day_flat_run_max),数的是收益值重复多少次、报价多久不动。偏度和
+    RSJ 读的是非零变动的带符号三阶形状:零收益分钟只改变偏度的大小,不决定它的符号,平手结构决定不了它。第 1 轮两个位都没有拿分钟收益的带符号高阶矩当主信号;偏度只在名义价格那一位的组合里当过配角,用的还是含
+    bar 0 的 1 分钟收益。预期与所有 head 的 |ρ| < 0.3,与 5 个控制的 |ρ| < 0.5:偏度无量纲,与波动、成交额的水平无关;与反转的重叠由收益十分位版本处理。具体以相关度表为准。
+    为什么样本外还会在:来源是投资者偏好(概率加权)加卖空限制,不是数据里的巧合。Amaya 等的样本覆盖 1993–2013,对多种控制稳健;Bollerslev
+    等的结果在 2010 年代仍成立。A 股的散户结构和融券难在 2023-08 之后没变。度量无量纲,对成交额整体水平的变化不敏感;20–60 日平均让换手适中。
+  inspired_by: 快照:库里 6 个 head 只有规模和分钟平手结构两条轴,293 个已评分候选的共性表里没有任何分钟收益的带符号高阶矩;轴 B 又说明分钟统计被
+    0.01 元网格支配,所以要用 5 分钟加总、价格十分位内排序来去网格噪声。第 1 轮审计意见:分钟偏度受相对最小价位影响。文献:Amaya 等 2015、Bollerslev-Li-Zhao
+    2020、Barberis-Huang 2008。
+  literature:
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Amaya, D.; Christoffersen, P.; Jacobs, K.; Vasquez, A.
+    year: 2015-10
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 用日内 5 分钟收益算已实现偏度、取多日平均,作为横截面特征(方向为负):day_skew(in_slice(in_pct(Close,
+      5), 6, 237)) 的 20 / 60 日均值
+  - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+    authors: Bollerslev, T.; Li, S.Z.; Zhao, B.
+    year: 2020-05
+    url: https://doi.org/10.1017/S0022109019000097
+    treatment: 相对符号跳跃变差 (RV⁺ − RV⁻)/RV:div(day_sum(mul(r, abs_(r))), day_sum(mul(r,
+      r)))
+  - title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security
+      Prices'
+    authors: Barberis, N.; Huang, M.
+    year: 2008-12
+    url: https://doi.org/10.1257/aer.98.5.2066
+    treatment: 机制:概率加权让正偏证券被高估;方向和多空两腿的解释
+  - title: Expected Idiosyncratic Skewness
+    authors: Boyer, B.; Mitton, T.; Vorkink, K.
+    year: 2010-01
+    url: https://doi.org/10.1093/rfs/hhp041
+    treatment: 日频收益偏度作为低频对照:ts_skew(日收益, 20)
+  - title: Stock Price Clustering and Discreteness
+    authors: Harris, L.
+    year: '1991'
+    url: https://ideas.repec.org/a/oup/rfinst/v4y1991i3p389-415.html
+    treatment: 离散价格网格污染高频矩:用 5 分钟加总,并在未复权价十分位内排序
+  - title: Daily Price Limits and Destructive Market Behavior
+    authors: Chen, T.; Gao, Z.; He, J.; Jiang, W.; Xiong, W.
+    year: 2017-11
+    url: https://www.nber.org/papers/w24014
+    treatment: 触及涨跌停是独立事件,不并进连续特征:把贴着日内最低价最久的票(跌停封板)推出多头
+  seeds:
+  - cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20)
+  - cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 60)
+  - cross_ema(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 10)
+  - cross_mean(day_skew(in_slice(Ret, 1, 237)), 20)
+  - cs_bucket_rank(cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20), div(day_sum(Amt),
+    day_sum(Volume)))
+  - cs_bucket_rank(cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20), ts_delta(log(day_last(Close)),
+    20))
+  - cs_bucket_rank(cross_mean(div(day_sum(mul(in_slice(in_pct(Close, 5), 6, 237),
+    abs_(in_slice(in_pct(Close, 5), 6, 237)))), day_sum(mul(in_slice(in_pct(Close,
+    5), 6, 237), in_slice(in_pct(Close, 5), 6, 237)))), 20), ts_delta(log(day_last(Close)),
+    20))
+  - cs_bucket_rank(cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20), cross_mean(day_std(Ret),
+    20))
+  - cs_bucket_rank(cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20), cross_mean(sub(log(day_sum(Amt)),
+    LogFloatCap), 20))
+  - cs_last_high10(neg(cross_mean(day_skew(in_slice(in_pct(Close, 5), 6, 237)), 20)),
+    cross_mean(day_at_min_ratio(Close), 20))
+  - ts_skew(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)
+R:
+- head: ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40),
+    40)
+  why: 可疑的部件是峰值里面那一层:原子 day_distinct_ratio(Ret) 只对 LogFloatCap 做了条件化。这个原子同时随价格网格变粗而降、随成交频率升高而升、随波动升高而升(Harris
+    1991)。只按市值分桶,价格、换手、波动三条通道都原样留着;后两条是奖励的控制,奖励只线性去掉,而一个 [1/n, 1] 的饱和函数会把非线性部分漏回来(陷阱
+    1/3 的饱和版)。23 次拆解一次也没换过字段或条件轴,这个问题目前零证据。变体保持 H2 的 ts_max∘ts_max 外壳不动,分数差只来自换掉的那个部件:1–4
+    在市值 z 化之后再按未复权均价(相对 tick)/ 当日对数换手 / 当日分钟波动 / 零收益占比做第二层 z 化;5 连配价格和换手两层;6、7 把原子换成单通道的(neg(day_zero_ratio(Ret))
+    只剩成交活跃度;day_distinct_ratio(Close) 是当天访问过的价位数,只剩网格 × 波幅);8 把 ts_max∘ts_max 换成 60
+    日均值。ts_max 在这里是 distinct 闸门的开门器,没有经济含义(拆解:去掉它就没有分数);LOT / Amihud 定价的是平均水平,而 H2
+    自己的窗口 40→80 分数从 0.82 升到 0.86,说明越接近水平越好。判读:1–3 若保住 ≥ 0.8,轴 B 是真来源,干净版可替换 H2;若都掉到
+    0.3 以下,H2 是控制的改写,第 3 轮不再投它。
+  variants:
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    div(day_sum(Amt), day_sum(Volume))), 40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    sub(log(day_sum(Amt)), LogFloatCap)), 40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    day_std(Ret)), 40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    day_zero_ratio(Ret)), 40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret),
+    LogFloatCap), div(day_sum(Amt), day_sum(Volume))), sub(log(day_sum(Amt)), LogFloatCap)),
+    40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(neg(day_zero_ratio(Ret)), LogFloatCap), 40), 40)
+  - ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Close), LogFloatCap), 40), 40)
+  - cross_mean(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 60)
+- head: ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret),
+    LogFloatCap), 40)), 40), 40)
+  why: 可疑的部件是外层 cs_bucket_zscore 的 y:用的是生的 day_distinct_ratio(Ret),不是市值条件化后的版本。分桶变量
+    ts_max(cs_bucket_zscore(…, LogFloatCap), 40) 与市值无关,所以每个桶里各市值档、各价格档混在一起;在桶内对生的离散度做
+    z 化,会把生离散度自带的规模和价格倾斜重新带回信号(陷阱 3)。H1 是库里最强的 head(+1.45),它有多少来自这条倾斜,决定第 3 轮怎么用轴
+    B。变体把这个 y 换成市值十分位内 z 化的版本(就是 H2 里用的那个子树),其余不动。分数基本不掉,说明 H1 的 alpha 不靠规模倾斜;掉得多,说明
+    H1 部分是陷阱 3。
+  variants:
+  - ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap),
+    ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40), 40)
+audit:
+  attempts: 2
+  file: audit_2.yaml

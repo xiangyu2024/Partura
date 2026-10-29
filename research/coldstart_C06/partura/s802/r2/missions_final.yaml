@@ -1,0 +1,217 @@
+seed: 802
+round: 2
+slots:
+- type: E
+  core: cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret))
+  hypothesis: 【核心 C 是什么】C = cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret))。day_signed_ratio(Ret,
+    Volume) = Σ V·sign(r) / Σ V(源码 ops_ext.py:122;r=0 的分钟只进分母)= 按 1 分钟 tick rule 给成交量定方向的日度净主动买入占比;cs_regres(·,
+    day_sum(Ret)) 逐日做截面回归,扣掉「当日价格走了多远」能解释的部分。剩下的是:主动成交站在一边、价格却没有相应走过去 —— 被对手方限价单吸收掉的订单流。第
+    1 轮 N 位产出了库里的 head ts_decay_linear(ts_decay_linear(C, 20), 40)(+0.89,train 0.89
+    / valid 1.85,方向 +1 = 做多被吸收的主动买入);C 外面只套一层 decay 20 / 40 就有 +0.52 / +0.62。第 1 轮相关度表里
+    ts_decay_linear(C, 20) 与 5 个控制:liq 0.01 / vol 0.05 / rev 0.13 / known 0.00 / size
+    0.24,与当时所有 head 的原始 |ρ| ≤ 0.04。方向 +1 与 Chordia-Subrahmanyam(2004:控制同期收益后,买方不平衡之后收益更高)以及
+    Jones-Shi-Zhang-Zhang(2019,A 股账户数据:大额账户与机构的净交易正向预测未来收益)一致。【已见过的外围】含 C 的候选,外围只有时间平滑:{ts_decay_linear}(+0.89
+    / +0.62 / +0.52),以及再套一次 cs_regres(·, day_sum(Ret)) 的 {ts_decay_linear, cs_regres,
+    day_sum}(截面残差幂等,分数与单层逐位相等,等于没做)。从来没有外围引入过 C 以外的输入。【这次的外围做什么:处理 C 的测量误差】C 是 1 分钟
+    bar 上的 tick rule 估计量,误差很大,而且误差的大小在股票之间差很多。外围全部带进新输入,针对这一点:(1)哪些股票的 C 是 tick rule
+    根本定不了方向的(主线,种子 1–6)。分子只数价格变了的分钟,零收益分钟的成交量只进分母。w = day_signed_ratio(abs_(Ret),
+    Volume) = Σ V·1[r≠0] / Σ V(sign(|r|) 在 r≠0 时为 1、r=0 时为 0),正好是 C 的分母里被 tick rule
+    定了方向的成交量占比。w 低,说明当天大部分成交没有方向、OF 由少数几分钟决定,C 的极端值多半是噪声。实现:cs_last_low20 / cs_last_low10(平滑后的
+    C, 同窗口的 w 均值)把这些名字排除出多头书(种子 1、2);mul(decay(C,20), ts_mean(w,20)) 与 ts_decay_linear(mul(C,
+    w), 20) 按可靠度把估计值往 0 收缩,前者按股票、后者按天(种子 3、4;errors-in-variables 的标准处理,权重是 [0,1] 内的正数,不是两个有符号量相乘);day_zero_ratio(Ret)(零收益分钟数占比)和
+    day_gini(Volume)(成交集中在少数分钟)是同一件事按分钟数、按集中度的另两种量法(种子 5、6)。依据:tick / Lee-Ready 分类在成交稀疏、单子小的时候误判系统性更高(Odders-White
+    2000;Aktas-Kryzanowski 2014);在只有 bar 数据时 tick rule 识别主动方有误(Chakrabarty-Pascual-Shkilko
+    2015;Easley-López de Prado-O'Hara 2016)。这是方向误判,不是幅度偏差,线性中性化和截面残差都去不掉,只能按每只股票可被分类的程度去筛或收缩。(2)每只股票自己的噪声尺度(种子
+    7、8)。div(ts_mean(C,20), ts_std(C,60)) 是订单流的 t 值:均值相同,日间离散大的那只更不可信。种子 8 再叠加 (1)
+    的筛。(3)持续性 = 拆单的痕迹(种子 9、10)。Chordia-Subrahmanyam(2004)的机制是机构拆单使不平衡自相关;C 不自相关的股票,它的均值更像噪声。ts_autocorr(C,
+    60/120, 1) 只当排除筛(cs_last_low20 / cs_last_low40),不和 C 相乘(两个有符号量相乘会把四个象限塌成两端)。(4)两个次要检验,各
+    2 个种子。(a) 吸收在价格上看不看得到(种子 11、12)。库里另一份信息 S = sigmoid(ts_regbeta(day_flat_run_max(Vwap),
+    day_durbin_watson(Volume), 100)):它的多头腿是 decay(S) 低,即价格钉得越久、成交量越平稳 = 一个价位被持续吃单。C
+    说谁是主动方,S 说有一堵挂单墙在吸收;两者同时成立,就是主动买单正在吃一堵卖墙。cs_first_low20 把处在这个状态的 20% 名字排到最前、在其中按
+    C 排序;cs_last_high40 把明显不在这个状态(斜率持续为正)的 40% 压到最后。这是一个条件双排序,不是把两个 head 相加。(b) 时间(种子
+    13、14)。sub(decay(C,20), ts_mean(C,120)) 扣掉每只股票自己 120 日的 OF 常态:价格离散、买卖反弹会让 tick
+    rule 对某些股票有持久的偏差,这部分是微观结构的假象,不是资金流。sub(decay(C,10), decay(C,60)) 问的是「刚开始被吸收」给不给分。Barber-Odean-Zhu(2009)发现不平衡在周到月的尺度上延续、在年的尺度上反转。已知
+    C 越平滑越好(+0.52 → +0.62 → +0.89),所以我事先预期这两个种子弱于 (1)–(3),放进来是为了让结果能证伪「慢的部分才是信息」。【避开的陷阱】所有筛用
+    cs_last_* / cs_first_*:x 位按并列整块进出(ops_ext.py 的 _rank_block),不用会在并列块里按列序切桶的 cs_bucket_*。w、零收益占比、基尼都是有界的比例,不是成交额或换手的水平;不做任何凸变换;不用
+    day_max(Volume)(按股数计的峰量:M 的拆解里换成 Amt 后,所在 head 从 +1.29 崩到 −0.17,说明它带着价格水平)。w 低、零收益占比高的股票偏向低价股;排除它们只会把多头书从低价股那边推开,和低价股效应(陷阱
+    3)方向相反,不是借它涨分。S 只出现在种子 11、12 的筛位,从不直接被排序,所以 S 的饱和并列不会变成列序斜坡。【为什么和以前不一样】以前的外围全是
+    C 的时间平滑,只改变 EMA 里哪些天占权重,与 C 的秩相关接近 1。这里的外围要么改变多头十分位里装哪些股票(把 10–40% 不可靠或不在吸收状态的名字整块排除),要么按可靠度或自身噪声改变每只股票的权重。新输入是
+    w、零收益占比、成交基尼、C 的自相关和 S 的状态。【为什么样本外还会在】(i) 测量误差来自「在 1 分钟 bar 上做 tick rule」这个构造本身,是机械的:只要用分钟数据算
+    OF,零收益分钟和成交集中就会让一部分股票的估计不可靠,与样本期无关,所以筛掉它们带来的提纯在样本外同样成立;(ii) 核心的 alpha 来自拆单与吸收(Kyle
+    1985;Chordia-Subrahmanyam 2004)。A 股机构 / 大户被动挂单、散户主动成交的结构没有变(Jones 等用 2016–2019
+    的账户数据确认大额账户净交易正向预测收益);(iii) 外围不引入任何波动、市值或流动性的水平,换手整体变化或波动换档时,筛的定义不变。
+  literature:
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: 2004-06
+    url: https://ideas.repec.org/a/eee/jfinec/v72y2004i3p485-518.html
+    treatment: 拆单使不平衡自相关、控制同期收益后买方不平衡预测正收益 → 方向 +1;用 C 的自相关当排除筛;订单流按自身噪声标准化
+  - title: On the occurrence and consequences of inaccurate trade classification
+    authors: Elizabeth R. Odders-White
+    year: 2000-08
+    url: https://ideas.repec.org/a/eee/finmar/v3y2000i3p259-286.html
+    treatment: 成交方向分类的误判发生率与后果 → 按可分类成交占比筛掉 / 收缩不可靠的 C
+  - title: Trade classification accuracy for the BIST
+    authors: Osman Ulas Aktas, Lawrence Kryzanowski
+    year: '2014'
+    url: https://ideas.repec.org/a/eee/intfin/v33y2014icp259-282.html
+    treatment: 成交稀疏、单子小时误判率更高 → 零收益分钟占比、成交集中度作为不可靠的标记
+  - title: 'Evaluating trade classification algorithms: Bulk volume classification
+      versus the tick rule and the Lee-Ready algorithm'
+    authors: Bidisha Chakrabarty, Roberto Pascual, Andriy Shkilko
+    year: '2015'
+    url: https://ideas.repec.org/a/eee/finmar/v25y2015icp52-79.html
+    treatment: 只有 bar 数据时 tick rule 的分类误差 → 零收益 bar 无法定方向,用其成交量占比度量 C 的可分类程度
+  - title: 'Understanding Retail Investors: Evidence from China'
+    authors: Charles M. Jones, Donghui Shi, Xiaoyan Zhang, Xinran Zhang
+    year: 2019-09
+    url: https://abfer.org/media/abfer-events-2022/annual-conference/papers-investfin/AC22P3020_Understanding-Retail-Investors_Evidence-from-China.pdf
+    treatment: A 股账户数据:大额账户与机构的净交易正向预测收益 → 方向 +1 的 A 股证据
+  - title: Do Retail Trades Move Markets?
+    authors: Brad M. Barber, Terrance Odean, Ning Zhu
+    year: 2009-01
+    url: https://ideas.repec.org/a/oup/rfinst/v22y2009i1p151-186.html
+    treatment: 不平衡在周到月尺度延续、年尺度反转 → 短平滑减长平滑、扣掉 120 日常态的时间检验
+  seeds:
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_mean(day_signed_ratio(abs_(Ret), Volume), 40))
+  - cs_last_low10(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    20), ts_mean(day_signed_ratio(abs_(Ret), Volume), 20))
+  - mul(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 20),
+    ts_mean(day_signed_ratio(abs_(Ret), Volume), 20))
+  - ts_decay_linear(mul(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), day_signed_ratio(abs_(Ret),
+    Volume)), 20)
+  - cs_last_low20(div(ts_mean(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_std(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 40)), ts_mean(day_signed_ratio(abs_(Ret),
+    Volume), 40))
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 60, 1))
+  - cs_last_low40(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    20), ts_autocorr(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 120,
+    1))
+  - sub(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 20),
+    ts_mean(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 120))
+- type: N
+  hypothesis: 【机制:跳跃不对称 / 偏度偏好】把一天的分钟价格变化 Δp 按方向拆成两部分已实现半方差:RV+ = Σ_{Δp>0} Δp²,RV−
+    = Σ_{Δp<0} Δp²。相对有号跳跃 RSJ = (RV+ − RV−) / RV ∈ [−1, 1](Bollerslev-Li-Zhao 2020
+    的 good minus bad volatility,按 RV 归一化)。RSJ > 0:当天的大幅变动集中在上行(正偏,彩票型);RSJ < 0:大幅变动集中在下行。Barberis-Huang(2008)的概率加权:投资者高估小概率的大涨,所以正偏的股票被高估、负偏的被低估。Bollerslev
+    等按 RSJ 排序,低组未来收益显著高于高组,控制其他公司特征之后仍在;Amaya-Christoffersen-Jacobs-Vasquez(2015)用日内已实现偏度得到同方向的结论。A
+    股散户占成交大头、偏好彩票型股票(Li-Liu 2019 用 2011–2018 上证 A 股证实 MAX 效应存在)。事先方向:做多 RSJ 低的一端(大幅变动集中在下行、被彩票偏好冷落的股票)。【算子怎样实现】day_signed_ratio(x,
+    y) = Σ|y|·sign(x) / Σ|y|(ops_ext.py:122)。取 x = in_delta(Close, 1)(同一天内相邻分钟收盘价之差;源码
+    dt_in.py:301 第一分钟为 NaN,所以天然不含隔夜跳空),y = mul(x, x),就逐字是 RSJ = Σ Δp²·sign(Δp) / Σ
+    Δp²。后复权的价格尺度在同一只股票同一天里约掉,所以 RSJ 是尺度无关的比例;Δp = 0 的分钟两边都不进。RSJ 和当日涨跌同号,裸 RSJ 的 20
+    日均值会和 20 日反转控制重合(种子 1 是裸的基线,预计可能被相关度表划掉)。所以主要种子用三种办法去掉「方向」、只留「形状」:(a) cs_regres(RSJ,
+    day_sum(Ret)) 逐日在截面上扣掉当日收益(种子 2、3、9);(b) sub(RSJ, ER),ER = day_signed_ratio(Δp,
+    Δp) = ΣΔp / Σ|Δp| 是按 |Δp| 加权的方向(效率比),RSJ 按 Δp² 加权;两者之差 = 大幅变动比一般变动更偏向哪一边(种子 4、5、6、8、10);(c)
+    cs_regres(ts_mean(RSJ, 20), ts_sum(day_sum(Ret), 20)) 直接在 20 日尺度上扣掉 20 日收益(种子
+    7)。平滑用 ts_mean / ts_decay_linear,20–60 日(Bollerslev 等按周、Amaya 等按周到月;日度 RSJ 噪声大,需要平均)。稳健性:5
+    分钟价格变化 in_delta(Close, 5) 版(种子 8、9;Bollerslev 等用 5 分钟收益,降低买卖反弹噪声);分钟 Ret 版(种子
+    10);日内已实现偏度 day_skew(Ret) 版(种子 11,Amaya 等);再对订单流 OF = day_signed_ratio(Ret, Volume)
+    做一次截面残差的版本(种子 12、13),明确拿掉和库里订单流 head 共有的那部分。【为什么和库里不同】库里 16 个 head:7 个是价格钉住时长对成交量粗糙度的斜率(S
+    族),1 个日内成交量时点,1 个被吸收的订单流(按成交量加权的价格方向),1 个凸化的日内已实现方差(pow_2(pow_2_5(day_durbin_watson(High))),量的是最近波动的大小),4
+    个流通股本 × 成交筛,2 个价格水平的分桶改写。没有一个量过价格变动的不对称。RSJ 对上下行对称的放大缩小不变,只看大幅变动偏向哪一边,所以与波动的大小无关,不是波动控制的非线性重写(陷阱
+    1 / 3 要求的是波动大小的凸函数,这里是半方差之比)。它只用价格变化、不用成交量。与订单流 head 的区别在权重:OF 按成交量给方向加权(谁在主动成交),RSJ
+    按变动幅度的平方加权(大幅变动往哪边走)。预期与所有 head 的 |ρ| < 0.3。【为什么样本外还会在】(i) 偏度溢价来自偏好(概率加权),不是某段样本的统计巧合:美国(Bollerslev
+    等;Amaya 等)和中国(Li-Liu 2019 的 MAX 效应;Chao-Liu-Guo 2017 用中国 5 分钟数据在组合层面发现有号跳跃的风险溢价),不同市场、不同时期都有;(ii)
+    A 股散户占成交大头、融券受限,被高估的正偏股票很难被套利掉。我们做的是被冷落的负偏一端(纯多头),不依赖做空;(iii) RSJ 是半方差之比,尺度无关,换手和波动整体换档时定义不变;只用日内相邻分钟的价格变化,不受隔夜跳空和停复牌的影响。
+  inspired_by: 第 2 批:M 的最高分 head pow_2(pow_2_5(day_durbin_watson(High))) 量的是最近日内已实现方差的大小,凸度越高分越高(陷阱
+    1),库里没有任何量看波动的方向不对称;第 1 轮 N 位说明 day_signed_ratio 这种「按权重给方向记账」的日度统计量在本数据上有信息,把权重从成交量换成变动幅度的平方,就是
+    Bollerslev-Li-Zhao(2020)的相对有号跳跃
+  literature:
+  - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+    authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+    year: 2020-05
+    url: https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html
+    treatment: 日内上 / 下行已实现半方差之差按 RV 归一化(RSJ),低 RSJ 未来收益高 → day_signed_ratio(Δp, Δp²);5
+      分钟版
+  - title: Does realized skewness predict the cross-section of equity returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: 2013-11
+    url: https://ideas.repec.org/a/eee/jfinec/v118y2015i1p135-167.html
+    treatment: 日内已实现偏度低的股票未来收益高(工作稿 2013-11,JFE 2015)→ day_skew(Ret) 版种子与周到月的平滑
+  - title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security
+      Prices'
+    authors: Nicholas Barberis, Ming Huang
+    year: 2008-12
+    url: https://www.aeaweb.org/articles?id=10.1257/aer.98.5.2066
+    treatment: 概率加权使正偏证券被高估 → 机制与事先方向(做多负偏一端)
+  - title: 投资者关注与最大日收益率效应(Investor Attention and the Max Effect)
+    authors: 李杰松、刘媛
+    year: 2019-05
+    url: https://journal.ujn.edu.cn/en/article/22549152/
+    treatment: 2011–2018 上证 A 股存在 MAX(彩票偏好)效应 → A 股偏度偏好的证据
+  - title: 'Sign realized jump risk and the cross-section of stock returns: Evidence
+      from China''s stock market'
+    authors: Youcong Chao, Xiaoqun Liu, Shijun Guo
+    year: 2017-08
+    url: https://ideas.repec.org/a/plo/pone00/0181990.html
+    treatment: 中国 5 分钟数据上有号跳跃带风险溢价(组合层面)→ 5 分钟价格变化版种子
+  seeds:
+  - ts_mean(cs_regres(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close, 1),
+    in_delta(Close, 1))), day_sum(Ret)), 20)
+  - ts_decay_linear(cs_regres(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close,
+    1), in_delta(Close, 1))), day_sum(Ret)), 40)
+  - ts_mean(sub(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close, 1), in_delta(Close,
+    1))), day_signed_ratio(in_delta(Close, 1), in_delta(Close, 1))), 20)
+  - ts_decay_linear(sub(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close, 1),
+    in_delta(Close, 1))), day_signed_ratio(in_delta(Close, 1), in_delta(Close, 1))),
+    40)
+  - ts_mean(sub(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close, 1), in_delta(Close,
+    1))), day_signed_ratio(in_delta(Close, 1), in_delta(Close, 1))), 60)
+  - cs_regres(ts_mean(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close, 1),
+    in_delta(Close, 1))), 20), ts_sum(day_sum(Ret), 20))
+  - ts_mean(sub(day_signed_ratio(in_delta(Close, 5), mul(in_delta(Close, 5), in_delta(Close,
+    5))), day_signed_ratio(in_delta(Close, 5), in_delta(Close, 5))), 20)
+  - ts_mean(cs_regres(day_signed_ratio(in_delta(Close, 5), mul(in_delta(Close, 5),
+    in_delta(Close, 5))), day_sum(Ret)), 20)
+  - ts_mean(sub(day_signed_ratio(Ret, mul(Ret, Ret)), day_signed_ratio(Ret, Ret)),
+    20)
+  - ts_mean(cs_regres(day_skew(Ret), day_sum(Ret)), 20)
+  - ts_mean(cs_regres(cs_regres(day_signed_ratio(in_delta(Close, 1), mul(in_delta(Close,
+    1), in_delta(Close, 1))), day_sum(Ret)), day_signed_ratio(Ret, Volume)), 20)
+R:
+- head: inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap),
+    day_durbin_watson(Volume), 100))))))))
+  why: ts_regbeta 的窗口 100 是烂部件。本轮定位对这棵 head 本身的拆解:窗口 100 → 200,score +1.155 → +1.393(train
+    1.16 → 1.39,valid 1.66 → 2.42,两个区间同向);50 → 100 → 200 单调(+0.83 / +1.16 / +1.39)。机制:50–100
+    日的滚动斜率估计误差大,经过近似取符号的 sigmoid 后变成符号翻转,加长窗口降噪。变体就是拆解里测过的那一个,同族 ρ 必然 ≥ 0.5,走替换。不再往
+    400 推:窗口越长,斜率越接近一个不随时间变的个股常数(Lewellen-Nagel 2006 的方差分解),那是样本外风险,不是更多信息。
+  variants:
+  - inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap),
+    day_durbin_watson(Volume), 200))))))))
+- head: inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    100)), 40))
+  why: 同一个烂部件:ts_regbeta 窗口 100。证据来自同一子树 sigmoid(ts_regbeta(…)) 的兄弟 head(100 → 200
+    +0.24,两区间同向),以及这棵 head 自己的上一步:第 1 轮 R 里它的窗口 50 版(去掉内层 inv 后)+0.961,窗口 100 版 +1.048。它自己这一步的增益比兄弟小,所以我对过
+    +0.1 的线只有一半把握。只换窗口,不动 decay 40:第 1 轮已测过「窗口 100 + decay 80」反而更低(两个降噪改动叠加是过度平滑)。
+  variants:
+  - inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200)), 40))
+- head: pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    50))))
+  why: ts_regbeta 窗口 50 是烂部件,而且在这棵 head 上有直接测过的替换:本轮拆解里 +1.155 那棵 head 的子树 pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap),
+    day_durbin_watson(Volume), 100)))) 被单独评过分,= +0.887(train 0.887 / valid 2.97,coverage
+    0.983,distinct 0.714)。它与这棵 head(+0.71,train 0.81 / valid 0.71)只差窗口 50 → 100,增益
+    +0.18 ≥ 0.1,同族,走替换。valid 从 0.71 升到 2.97 是两个区间里原来较差的那个大幅改善,不是只在 train 上挑数字。另给窗口
+    200(同一子树在兄弟 head 上 100 → 200 继续上升),规则只取最好的一个。
+  variants:
+  - pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    100))))
+  - pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200))))
+- head: ts_decay_linear(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    20), 40)
+  why: 平滑核偏短。这棵 head 是第 1 轮 N 位的产出,同一核心外面的平滑长度与分数:decay 20 → +0.52(train 0.52 / valid
+    2.22),decay 40 → +0.62(train 0.62 / valid 2.63),decay 20 再 decay 40(支撑约 59 天)→
+    +0.89(train 0.89 / valid 1.85)。较差的那个区间一直是 train,而 train 随有效回看长度单调上升;valid 不单调,但始终远高于
+    train,不是瓶颈。机制:日度 tick rule 订单流噪声很大,拆单留下的单边流要在几周到一个季度上平均才显出来。上限有文献:Barber-Odean-Zhu(2009)发现不平衡在周到月尺度延续、在年尺度反转,所以只把支撑拉到约
+    80–100 天,不再往长走。两个变体:内层 40 外层 40(支撑约 79 天);内层 20 外层 80(支撑约 99 天)。事先登记:两个都过不了 +0.987,就说明约
+    60 天的核已经接近最优,第 3 轮不在更长平滑上花种子。
+  variants:
+  - ts_decay_linear(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), 40)
+  - ts_decay_linear(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    20), 80)
+audit:
+  attempts: 1
+  file: audit_1.yaml

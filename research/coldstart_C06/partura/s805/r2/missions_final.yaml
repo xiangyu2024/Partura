@@ -1,0 +1,196 @@
+seed: 805
+round: 2
+slots:
+- type: N
+  hypothesis: '【机制】日内收益分布的不对称:好波动与坏波动。A 股成交以散户为主,散户偏好彩票型(正偏)收益;Barberis-Huang 2008
+    证明在累积前景理论的概率加权下,投资者高估正偏证券, 正偏证券的期望超额收益为负。一只股票过去 1–4 周的分钟收益若呈现「上涨靠少数大跳、下跌是平缓阴跌」(已实现偏度为正、相对符号跳跃变差
+    RSJ = (RV⁺ − RV⁻)/RV 为正), 它就是彩票型,会被追捧、随后 1–4 周跑输;坏波动主导(负偏)的股票被过度回避,随后跑赢。Amaya
+    等 2015 用日内数据构造周度已实现偏度,最低偏度十分位减最高十分位下一周约 19bp、t 约 3.7; Bollerslev-Li-Zhao 2020
+    按归一化的「好减坏」半方差排序,下期收益差显著,控制其他特征后仍在。**事先给定方向:信号取 −1(做多低 RSJ / 低偏度)**;若 reward 选
+    +1,本假设即被证伪。 【算子怎样实现】r = in_slice(Ret, 1, 236):只取连续竞价 09:31–14:56。第 0 列是 09:30
+    开盘集合竞价(alphacube dt_in.in_half 的注释写明 V2 第 0 列是开盘竞价、两个连续竞价时段是第 1–120、121–240 列),
+    第 237–240 列是 14:57–15:00 收盘集合竞价窗口(深市一直有,上交所 2018-08-20 起才有)。第 0 格的收益是隔夜跳空,第 240
+    格是收盘竞价撮合,两格的 |r| 常是普通分钟的数倍: 不切掉的话 RV 被一两格主导,RSJ 退化成「跳空方向」或「收盘竞价方向」,还把上交所的制度跳变带进
+    train。四种独立写法互相校验: (1) RSJ_day = day_signed_ratio(r, pow_2(r)) = Σ r²·sign(r) /
+    Σ r²,恰好就是 (RV⁺ − RV⁻)/RV,在 [−1, 1]; (2) 已实现偏度 day_skew(r),逐日中心化的三阶标准矩; (3) 立方加权
+    Σ |r|³·sign(r) / Σ |r|³(day_signed_ratio(r, mul(pow_2(r), abs_(r)))),只看大跳; (4)
+    极值不对称 (max r − |min r|)/(max r + |min r|),日内版的 MAX 效应。 去漂移版先 in_demean(r) 减掉当日分钟均值,去掉「当天整体涨跌」对
+    RSJ 的机械贡献,使它与 20 日反转控制分离(偏度本身已逐日中心化)。 聚合用 cross_ema(·, 5)(对应文献的周度窗口)与 cross_mean(·,
+    20)(月度,换手更低,适配 15bp 成本)。两个分桶种子在同一波动十分位、同一流动性十分位内比较不对称性: 偏度与波动水平的交互是非线性的,分桶只在十分位内重排,不对波动做任何凸变换(不落
+    §4-1)。上午段(第 1–120 列)与下午段(第 121–236 列)各一版,检验不对称在哪个时段产生。 两个全天版(含竞价格)是对照,预期明显更差;若反而更好,说明信息在竞价跳空里而不在日内分布里。
+    【和库里已有的不同】库里 6 个 head 是成交量的日内时点(day_centroid 的平滑水平)和流通股本 / 价格水平;本位的输入是分钟收益的符号与幅度,不含成交量、规模或价格水平,机制是彩票偏好而不是交易时点。
+    偏度与 RSJ 都是无量纲比值,不是波动的单调或凸函数(不是 §4-1),也不是市值、波动、流动性的非线性重写(不是 §4-3);没有截面常数进 cs_*(不是
+    §4-2)。 第 1 轮的 N 是「按分钟收益符号给成交量定号的时点差」,本位完全不用成交量。预计与所有 head 的日度秩 |ρ| < 0.3,与 5 个控制
+    < 0.4(最大的是 20 日反转,去漂移版更低)。 【为什么样本外还会在】驱动力是散户的彩票偏好加上套利限制(涨跌停、T+1、融券难),这些是 A 股的制度与投资者结构,2023-08
+    之后没有改变; 信号全是标准化比值,不依赖某段时期的波动或价格水平;切掉竞价格后不受上交所 2018 年收盘竞价改革影响,train 与 valid 口径一致。'
+  inspired_by: 文献:Amaya 等 2015 的周度已实现偏度、Bollerslev-Li-Zhao 2020 的好坏半方差。批次:第 1 轮 N
+    位说明分钟收益的「符号」拿来给成交量定号噪声很大(最好 +0.27), 但分钟收益分布本身的形状(哪一侧有大跳)在本种子的库和前两批里一次都没有被用过;库里两类
+    head(成交时点、规模/价格水平)都不碰它,是最干净的空白。
+  literature:
+  - title: Does realized skewness predict the cross-section of equity returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: 2015-10
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 用日内高频收益构造周度已实现偏度,按偏度排序看下一周收益(低偏度跑赢):day_skew(连续竞价分钟收益) 加 5 日 EMA /
+      20 日均值
+  - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+    authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+    year: 2020-05
+    url: https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html
+    treatment: 上/下半方差之差按总已实现方差归一后排序:day_signed_ratio(r, pow_2(r)) = (RV⁺ − RV⁻)/RV
+  - title: 'Good Volatility, Bad Volatility: Signed Jumps and the Persistence of Volatility'
+    authors: Andrew J. Patton, Kevin Sheppard
+    year: 2015-07
+    url: https://public.econ.duke.edu/~ap172/Patton_Sheppard_Realized_Semivariance_7oct11.pdf
+    treatment: 把已实现方差按收益符号拆成上、下半方差,用符号跳跃变差刻画不对称;立方加权版只看大跳
+  - title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security
+      Prices'
+    authors: Nicholas Barberis, Ming Huang
+    year: 2008-12
+    url: https://ideas.repec.org/a/aea/aecrev/v98y2008i5p2066-2100.html
+    treatment: 概率加权使正偏证券被高估、期望超额收益为负:事先给定方向 −1
+  - title: 'The Quality of Price Formation at Market Openings and Closings: Evidence
+      from the Nasdaq Stock Market'
+    authors: Michael S. Pagano, Lin Peng, Robert A. Schwartz
+    year: 2008-05
+    url: https://gfk-cfs.de/media//08_45.pdf
+    treatment: 用分钟级颗粒度把集合竞价与连续竞价分开处理:in_slice 去掉第 0 列与第 237–240 列
+  seeds:
+  - cross_ema(day_signed_ratio(in_slice(Ret, 1, 236), pow_2(in_slice(Ret, 1, 236))),
+    5)
+  - cross_ema(day_signed_ratio(in_demean(in_slice(Ret, 1, 236)), pow_2(in_demean(in_slice(Ret,
+    1, 236)))), 5)
+  - cross_ema(day_skew(in_slice(Ret, 1, 236)), 5)
+  - cross_mean(day_skew(in_slice(Ret, 1, 236)), 20)
+  - cross_ema(day_signed_ratio(in_slice(Ret, 1, 236), mul(pow_2(in_slice(Ret, 1, 236)),
+    abs_(in_slice(Ret, 1, 236)))), 5)
+  - cross_ema(div(sub(day_max(in_slice(Ret, 1, 236)), abs_(day_min(in_slice(Ret, 1,
+    236)))), add(day_max(in_slice(Ret, 1, 236)), abs_(day_min(in_slice(Ret, 1, 236))))),
+    5)
+  - cross_ema(day_signed_ratio(in_slice(Ret, 121, 236), pow_2(in_slice(Ret, 121, 236))),
+    5)
+  - cross_ema(day_signed_ratio(in_slice(Ret, 1, 120), pow_2(in_slice(Ret, 1, 120))),
+    5)
+  - cs_bucket_rank(cross_ema(day_signed_ratio(in_slice(Ret, 1, 236), pow_2(in_slice(Ret,
+    1, 236))), 5), cross_mean(day_std(Ret), 20))
+  - cs_bucket_rank(cross_mean(day_skew(in_slice(Ret, 1, 236)), 20), cross_mean(day_std(Ret),
+    20))
+  - cs_bucket_rank(cross_ema(day_skew(in_slice(Ret, 1, 236)), 5), cross_mean(day_sum(Amt),
+    30))
+  - cross_ema(day_signed_ratio(Ret, pow_2(Ret)), 5)
+  - cross_ema(day_skew(Ret), 5)
+- type: N
+  hypothesis: 【机制】日内量价共振:成交量是追着价格来的,还是价格跟着成交量走。Campbell-Grossman-Wang 1993:非信息性的买卖压力由风险厌恶的做市方吸收,
+    伴随高成交量的价格变动随后反转;Llorente-Michaely-Saar-Wang 2002:投机(信息)交易带来的量价变动延续,对冲 / 流动性交易带来的反转;Karpoff
+    1987 综述量价关系在上涨时更陡(不对称)。 日内版本:一只股票的成交若持续集中在当天的相对高价处(分钟收盘价与分钟成交量正相关,VWAP 高于等时加权均价),说明成交量是追着价格来的(A
+    股散户追涨), 这部分推高是流动性需求而不是信息,随后数周回吐;成交集中在当天低价处(负相关)说明有资金在回落中承接,随后跑赢。**事先给定方向:共振类信号取
+    −1(做多量价负相关)。** 第二个可证伪的切分是领先滞后:「上一分钟涨、这一分钟放量」corr(r_{t−1}, V_t) 是追涨,预测为负;「先放量、后上涨」corr(r_t,
+    V_{t−1}) 是知情交易领先,预测为正;两者之差把追涨与知情分开。 【算子怎样实现】P = in_slice(Close, 1, 236),V = in_slice(Volume,
+    1, 236),r = in_slice(Ret, 1, 236),同样只取 09:31–14:56 的连续竞价:第 0 列开盘竞价、第 237–240 列收盘竞价窗口的成交量是普通分钟的数倍,
+    价格又恰好是开盘价与收盘价,不切掉的话 day_corr 由两个端点决定,退化成「收盘高于开盘吗」,即当日涨跌,与 20 日反转控制同源。 day_corr(P,
+    V) 是逐日 Pearson;log(V) 版压低大单的杠杆,并让零成交分钟(log 0 为 NaN,day_corr 只用两边都有限的分钟)自动退出计算,锁板、停牌分钟因此不进;
+    log(day_wmean(P, V) / day_mean(P)) 是同一机制的 VWAP 溢价写法;day_corr(r, V) 看放量分钟是上涨还是下跌;in_delay(·,
+    1) 的两版是分钟级领先滞后,第三版取两者之差。 逐日值用 cross_mean(·, 20) 或 cross_ema(·, 10) 聚合成持续的量价形态并压低换手;两个分桶种子在同一流动性十分位、同一波动十分位内比较;下午段一版(第
+    121–236 列)检验共振是否主要发生在午后。 全天版(含竞价格)是对照,预期更差。 【和库里已有的不同】库里的 head 是成交量对「时间」的重心(什么时候交易)与规模
+    / 价格水平;本位是成交量对「价位」的共振与量价谁领先,价格路径是输入的一半。 上涨日与下跌日的 corr(P, V) 符号各异,20 日平均后与时点重心只剩「时点
+    × 日内趋势」的交叉项,预计与 head +1.28 的日度秩 |ρ| < 0.3; 相关系数与对数比都无量纲,与流动性、波动、市值控制没有单调关系(不是
+    §4-3),没有凸变换(不是 §4-1),没有截面常数(不是 §4-2); 只用价格在当天的相对位置而不用涨跌幅,与 20 日反转只通过日内趋势弱相关。第
+    1 轮 N 是「按收益符号定号的成交时点差」,本位不看时点、看价位与领先滞后。 【为什么样本外还会在】散户占成交的大头、追涨、T+1 造成的流动性需求冲击是
+    A 股的结构,2023-08 之后没有改变;做市方吸收压力再收回补偿是一般均衡机制,不是某段行情; 信号全是相关系数与对数比,不依赖某段时期的水平,切掉竞价格后也不受上交所
+    2018 年收盘竞价改革影响。
+  inspired_by: 第 1、2 批:本种子唯一被证实的来源是「成交量在时间上怎么分布」(head +1.28,做多成交偏早),第 1 轮 N 位最好的一条(+0.27)方向也是「早买晚卖」——
+    成交量与价格路径怎样对齐里可能有信息,但用分钟收益符号定号太吵。本位把对齐对象从「时间」换成「价位」与「领先滞后」,用相关系数而不是符号计数。文献:Campbell-Grossman-Wang
+    1993、Llorente 等 2002。
+  literature:
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: 1993-11
+    url: https://dash.harvard.edu/bitstream/1/3128710/2/campbell_trading.pdf
+    treatment: 伴随高成交量的价格变动是非信息性压力、随后反转:成交集中在当日高价处(corr(P, V) > 0)预测为负
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 量价动态区分投机(延续)与对冲(反转):量领先价与量滞后价两版及其差
+  - title: 'The Relation Between Price Changes and Trading Volume: A Survey'
+    authors: Jonathan M. Karpoff
+    year: 1987-03
+    url: https://ideas.repec.org/a/cup/jfinqa/v22y1987i01p109-126_01.html
+    treatment: 量价关系的不对称(上涨时更陡):在同一天内比较放量分钟落在高价还是低价
+  - title: 'The Quality of Price Formation at Market Openings and Closings: Evidence
+      from the Nasdaq Stock Market'
+    authors: Michael S. Pagano, Lin Peng, Robert A. Schwartz
+    year: 2008-05
+    url: https://gfk-cfs.de/media//08_45.pdf
+    treatment: 用分钟级颗粒度把集合竞价与连续竞价分开:in_slice 去掉第 0 列与第 237–240 列
+  seeds:
+  - cross_mean(day_corr(in_slice(Close, 1, 236), in_slice(Volume, 1, 236)), 20)
+  - cross_ema(day_corr(in_slice(Close, 1, 236), in_slice(Volume, 1, 236)), 10)
+  - cross_mean(day_corr(in_slice(Close, 1, 236), log(in_slice(Volume, 1, 236))), 20)
+  - cross_mean(log(div(day_wmean(in_slice(Close, 1, 236), in_slice(Volume, 1, 236)),
+    day_mean(in_slice(Close, 1, 236)))), 20)
+  - cross_mean(day_corr(in_slice(Ret, 1, 236), in_delay(in_slice(Volume, 1, 236),
+    1)), 20)
+  - cross_mean(day_corr(in_slice(Close, 121, 236), in_slice(Volume, 121, 236)), 20)
+  - cs_bucket_rank(cross_mean(day_corr(in_slice(Close, 1, 236), in_slice(Volume, 1,
+    236)), 20), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_rank(cross_mean(day_corr(in_slice(Close, 1, 236), in_slice(Volume, 1,
+    236)), 20), cross_mean(day_std(Ret), 20))
+  - cross_mean(day_corr(Close, Volume), 20)
+R:
+- head: log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  why: 四类部件各有问题,依据都在 loc 的拆解与代码里。(1) 分桶键 cross_mean^3(day_sum(Amt), 30) 是代理:把整个分桶敲掉
+    score 只变 +0.0024(1.2758 → 1.2734), 但与已知族的相关从 −0.21 回到 −0.55,这个 head 合格与否全靠一个流动性键顺手带走了已知族(两者都是
+    Amt 量纲、高度相关)。Kim-Korajczyk-Neuhierl 2021 指出用相关代理做双重排序会给出误导结论, 应直接按要控制的量分桶。变体 1、2
+    把键换成已知族 cross_mean(day_std(Amt), 30) 与波动控制;变体 3、4 换成落在多头腿上的两条非线性通道:冻结报价 / 锁板 (锁板日成交全在早盘,重心机械偏早,而
+    long_neutral 不加不可交易掩码)用 cross_mean(day_flat_ratio(Close), 20),新股连板用 ListAge。 这四个直接替换键,对照基线是裸核
+    cross_ema(day_centroid(Volume), 10) 的 +1.3132:分数保住即该通道不是来源,塌掉即这个 head 是该通道的改写。
+    (2) 输入 Volume 的 241 格里有两个集合竞价格:第 0 列是 09:30 开盘竞价(alphacube dt_in.in_half 的注释),第
+    237–240 列是 14:57–15:00 收盘竞价窗口(深市一直有,上交所 2018-08-20 才有,train 前约 8 个月沪市这几格是连续竞价)。
+    重心里第 240 格权重为 1、第 0 格只进分母,两格成交是普通分钟的数倍,重心的截面差可能有相当部分只是「收盘竞价份额 − 开盘竞价份额」,并带着交易所的制度跳变。
+    变体 5、6、7 用 in_slice 分别去掉开盘格、收盘窗口、两者;对所有股票统一切到 14:56,两个交易所、改革前后口径一致。 (3) 字段与窗口:Volume
+    → Amt 已测 +1.3684(+0.093,差 0.007 到门槛);窗口 10 → 20 只掉 0.09 而 10 → 5 掉 0.78,信号是慢变量、EMA
+    10 偏短。变体 8 = Amt + 20,变体 9 = Amt + 连续竞价 + 20。 (4) 平滑器:窗口减半掉 0.78 说明单日重心噪声大,一两笔大单就能把当天重心拉偏;变体
+    10 用 20 日滚动中位数代替 EMA。 变体 11、12 是 (1)(2)(3) 的组合:连续竞价重心按已知族分桶,两处修正都成立时这是最干净的写法。外层保序的
+    log 一律不动(它只挪 0.02–0.07),所以每个变体与原 head 的差都来自被换掉的那个部件。
+  variants:
+  - log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(day_std(Amt),
+    30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(day_std(Ret),
+    20)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(day_flat_ratio(Close),
+    20)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), ListAge))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Volume, 1, 240)), 10), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Volume, 0, 236)), 10), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Volume, 1, 236)), 10), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Amt, 1, 236)), 20), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_med(day_centroid(Volume), 20), cross_mean(cross_mean(cross_mean(day_sum(Amt),
+    30), 30), 30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Volume, 1, 236)), 10), cross_mean(day_std(Amt),
+    30)))
+  - log(cs_bucket_rank(cross_ema(day_centroid(in_slice(Amt, 1, 236)), 20), cross_mean(day_std(Amt),
+    30)))
+- head: cs_last_low20(cs_last_low20(sub(sub(day_pos_ratio(High), day_first(abs_(sub(-2,
+    abs_(sub(-1, Open)))))), day_first(abs_(sub(-2, abs_(sub(-1, Open)))))), day_first(High)),
+    ts_argmax(day_first(abs_(sub(-1, Open))), 1))
+  why: 外层筛变量 ts_argmax(day_first(abs_(sub(-1, Open))), 1) 恒等于 1:alphacube common.nanargmax_last
+    在 1 日窗口里 pct 返回 (0 + 1)/1 = 1.0;loc 单独评估它 distinct 0.0003、过不了门槛。 截面常数作 cs_last_low20
+    的筛变量时整个截面是一个并列块、被移位的带是空的,外层是空操作(loc 的 Open → Close 交换只改到这个常数里,score 一位不差)。 去掉
+    ts_argmax 这个死件、只留它的参数 day_first(abs_(sub(-1, Open)))(= 1 + 开盘价),loc 已测 +0.9387,比原
+    head 高 +0.127。 如实说明:替换后这本书仍是「价格水平带」书,而且这里的价格是后复权价(alphacube daily.py / tradability.py
+    的注释),混有除权历史;我们不认为它是新信息, 只是把库里一个含截面常数的 head 换成不含常数的同族写法。
+  variants:
+  - cs_last_low20(cs_last_low20(sub(sub(day_pos_ratio(High), day_first(abs_(sub(-2,
+    abs_(sub(-1, Open)))))), day_first(abs_(sub(-2, abs_(sub(-1, Open)))))), day_first(High)),
+    day_first(abs_(sub(-1, Open))))
+audit:
+  attempts: 1
+  file: audit_1.yaml

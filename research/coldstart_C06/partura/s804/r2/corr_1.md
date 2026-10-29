@@ -1,0 +1,37 @@
+# 相关度表:种子 804,C 组,第 2 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 14 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 1.00 | `cross_stddev(day_skew(Ret), 60)` | 1.00 | 0.10 | 0.18 | 0.01 | 0.06 | 0.41 | `cross_stddev(day_skew(Ret), 60)` |
+| slot a seed 1 | 过 | 0.41 | `cross_stddev(day_skew(Ret), 60)` | 0.43 | 0.22 | 0.13 | 0.01 | 0.17 | 0.10 | `div(cross_stddev(day_skew(Ret), 60), cross_mean(abs_(day_skew(Ret)), 60))` |
+| slot a seed 2 | 过 | 0.41 | `cross_stddev(day_skew(Ret), 60)` | 0.41 | 0.22 | 0.16 | 0.00 | 0.17 | 0.12 | `div(cross_stddev(day_skew(Ret), 60), cross_med(abs_(day_skew(Ret)), 60))` |
+| slot a seed 3 | 过 | 0.96 | `cross_stddev(day_skew(Ret), 60)` | 0.95 | 0.04 | 0.19 | 0.01 | 0.01 | 0.32 | `div(cross_stddev(day_skew(Ret), 60), sqrt(cross_mean(add(day_kurt(Ret), 3), 60)))` |
+| slot a seed 4 | 过 | 0.63 | `cross_stddev(day_skew(Ret), 60)` | 0.53 | 0.04 | 0.21 | 0.20 | 0.07 | 0.29 | `cs_first_low20(neg(ts_mean(day_skew(Ret), 20)), cross_stddev(day_skew(Ret), 60))` |
+| slot a seed 5 | 过 | 0.71 | `cross_stddev(day_skew(Ret), 60)` | 0.61 | 0.06 | 0.21 | 0.06 | 0.10 | 0.35 | `cs_first_low20(neg(cross_mean(day_skew(Ret), 60)), cross_stddev(day_skew(Ret), 60))` |
+| slot a seed 6 | 过 | 0.58 | `cross_stddev(day_skew(Ret), 60)` | 0.49 | 0.01 | 0.15 | 0.16 | 0.04 | 0.27 | `cs_first_low20(neg(ts_mean(day_skew(Ret), 10)), cross_stddev(day_skew(Ret), 60))` |
+| slot a seed 7 | 过 | 0.65 | `cross_stddev(day_skew(Ret), 60)` | 0.56 | 0.04 | 0.24 | 0.19 | 0.08 | 0.29 | `cs_last_high20(neg(ts_mean(day_skew(Ret), 20)), cross_stddev(day_skew(Ret), 60))` |
+| slot a seed 8 | 过 | 0.49 | `cross_stddev(day_skew(Ret), 60)` | 0.43 | 0.10 | 0.17 | 0.18 | 0.06 | 0.20 | `cs_first_low20(neg(ts_mean(day_skew(Ret), 20)), div(cross_stddev(day_skew(Ret), 60), cross_mean(abs_(day_skew(Ret)), 60)))` |
+| slot a seed 9 | 过 | 0.85 | `cross_stddev(day_skew(Ret), 60)` | 0.81 | 0.01 | 0.24 | 0.15 | 0.04 | 0.37 | `mul(cs_rank(neg(cross_stddev(day_skew(Ret), 60))), cs_rank(neg(ts_mean(day_skew(Ret), 20))))` |
+| slot a seed 10 | 过 | 0.48 | `cross_stddev(day_skew(Ret), 60)` | 0.45 | 0.01 | 0.10 | 0.13 | 0.00 | 0.15 | `cs_first_low20(neg(div(sub(ts_max(div(day_last(Close), ts_delay(day_last(Close), 1)), 20), ts_mean(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)), ts_std(div(day_last(Close), ts_delay(day_last(Close), 1)), 20))), cross_stddev(day_skew(Ret), 60))` |
+| slot a seed 11 | 过 | 0.94 | `cross_stddev(day_skew(Ret), 60)` | 0.94 | 0.16 | 0.25 | 0.01 | 0.11 | 0.41 | `cs_bucket_rank(neg(cross_stddev(day_skew(Ret), 60)), sub(LogFloatCap, LogFloatShares))` |
+| slot a seed 12 | 过 | 0.95 | `cross_stddev(day_skew(Ret), 60)` | 0.95 | 0.14 | 0.20 | 0.01 | 0.09 | 0.40 | `cs_bucket_rank(neg(cross_stddev(day_skew(Ret), 60)), cross_mean(day_zero_ratio(Ret), 60))` |
+| slot b seed 1 | 过 | 0.08 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.05 | 0.07 | 0.02 | 0.46 | 0.06 | 0.08 | `neg(ts_mean(log(div(day_last(Close), day_wmean(Vwap, Amt))), 20))` |
+| slot b seed 2 | 过 | 0.05 | `sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_va` | 0.05 | 0.07 | 0.03 | 0.32 | 0.07 | 0.06 | `neg(ts_mean(log(div(day_last(Close), day_wmean(Vwap, Amt))), 10))` |
+| slot b seed 3 | 过 | 0.06 | `sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_va` | 0.05 | 0.14 | 0.06 | 0.32 | 0.13 | 0.00 | `neg(ts_med(log(div(day_last(Close), day_wmean(Vwap, Amt))), 20))` |
+| slot b seed 4 | 过 | 0.10 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.05 | 0.06 | 0.05 | 0.44 | 0.04 | 0.06 | `neg(div(ts_mean(log(div(day_last(Close), day_wmean(Vwap, Amt))), 20), ts_std(log(div(day_last(Close), day_wmean(Vwap, Amt))), 20)))` |
+| slot b seed 5 | 过 | 0.09 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.05 | 0.10 | 0.04 | 0.45 | 0.08 | 0.06 | `neg(ts_mean(div(log(div(day_last(Close), day_wmean(Vwap, Amt))), day_std(Ret)), 20))` |
+| slot b seed 6 | 过 | 0.12 | `cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_m` | 0.07 | 0.04 | 0.04 | 0.20 | 0.02 | 0.12 | `neg(cross_mean(log(div(day_last(Close), day_wmean(Vwap, Amt))), 60))` |
+| slot b seed 7 | 过 | 0.05 | `cross_stddev(day_skew(Ret), 60)` | 0.04 | 0.12 | 0.07 | 0.12 | 0.11 | 0.03 | `neg(ts_mean(log(div(day_last(Close), day_last(in_delay(Close, 30)))), 20))` |
+| slot b seed 8 | 过 | 0.06 | `sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_va` | 0.05 | 0.12 | 0.11 | 0.08 | 0.11 | 0.03 | `neg(ts_med(log(div(day_last(Close), day_last(in_delay(Close, 30)))), 20))` |
+| slot b seed 9 | 过 | 0.08 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.04 | 0.11 | 0.00 | 0.40 | 0.10 | 0.03 | `neg(ts_mean(mul(log(div(day_last(Close), day_wmean(Vwap, Amt))), div(day_sum(mul(Amt, is_gt(in_index(Amt), 0.875))), day_sum(Amt))), 20))` |
+| slot b seed 10 | 过 | 0.25 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.12 | 0.46 | 0.23 | 0.19 | 0.46 | 0.37 | `neg(ts_mean(div(day_sum(mul(Amt, is_gt(in_index(Amt), 0.875))), day_sum(Amt)), 20))` |
+| slot b seed 11 | 过 | 0.35 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.24 | 0.48 | 0.42 | 0.19 | 0.51 | 0.13 | `neg(ts_mean(day_centroid(Amt), 20))` |
+| slot b seed 12 | 过 | 0.34 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.23 | 0.32 | 0.41 | 0.19 | 0.36 | 0.03 | `neg(ts_mean(day_centroid(sqrt(Volume)), 20))` |
+| slot b seed 13 | 过 | 0.31 | `sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_w` | 0.05 | 0.04 | 0.01 | 0.18 | 0.03 | 0.03 | `sub(ts_mean(day_centroid(Amt), 50), ts_mean(day_centroid(Amt), 5))` |
+| R 1 variant 1 | 过 | 0.72 | `cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_m` | 0.77 | 0.22 | 0.10 | 0.03 | 0.20 | 0.38 | `cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20))), neg(ts_decay_linear(pow_3(day_mean(Open)), 20)))` |
+| R 2 variant 1 | 过 | 0.69 | `cs_last_low10(cs_last_high20(cs_last_high20(neg(ts_decay_lin` | 0.73 | 0.01 | 0.07 | 0.08 | 0.04 | 0.03 | `cs_last_low10(cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_mean(day_skew(Ret), 20))), ts_decay_linear(pow_3(day_mean(Open)), 20))` |
+| R 3 variant 1 | 过 | 0.70 | `cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_m` | 0.85 | 0.03 | 0.10 | 0.07 | 0.04 | 0.15 | `cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))), ts_decay_linear(pow_3(day_mean(Open)), 20))` |
+| R 4 variant 1 | 过 | 0.38 | `sub(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), cs_f` | 0.28 | 0.21 | 0.35 | 0.09 | 0.23 | 0.28 | `sub(cs_first_low20(abs_(day_wstd(Vwap, High)), sub(LogFloatCap, LogFloatShares)), ts_var(day_gini(High), 10))` |
+| R 4 variant 2 | 过 | 0.36 | `sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_va` | 0.31 | 0.35 | 0.10 | 0.12 | 0.32 | 0.01 | `sub(cs_first_low20(abs_(day_wstd(Vwap, High)), sub(log(day_mean(Open)), sub(LogFloatCap, LogFloatShares))), ts_var(day_gini(High), 10))` |

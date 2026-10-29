@@ -1,0 +1,126 @@
+seed: 803
+round: 2
+slots:
+  - type: E
+    core: 'day_centroid(Amt)'
+    hypothesis: '核心 day_centroid(Amt) 是当日成交额在 241 根分钟上的时间重心。源码(partura/ops_ext.py):sum(t*|Amt_t|)/sum|Amt|/(T-1),落在 [0,1],0 = 全在开盘、1 = 全在收盘,对成交额的尺度完全不敏感。第 0 列是 9:30 开盘集合竞价;最后一列在深市全样本、沪市 2018-08-20 之后含收盘集合竞价。
+      库里唯一用到它的 head 是 cs_mask_top_replace_mean(mul(0.5, neg(day_centroid(Amt))))(+0.86,valid +1.06,与已知族 -0.19)。它读的是时点的「水平」,即这只股票的钱习惯在一天里什么时候来。这是一个慢变的客户结构特征:开盘竞价占比高的是散户和隔夜消息型,尾盘和收盘竞价占比高的是机构和指数型。它再把最早的那 10%(停牌、极薄、开盘封板)并到均值。见过的外围只有 neg、mul(0.5,·)、cs_mask_top_replace_mean 三种。
+      本位的外围只做一件事:不问时点的水平,而问时点相对某个参照偏了多少。三种参照,对应三个机制。
+      (i) 相对自己的常态:cross_zscore(·,20)、cross_madz(·,60)、cross_mean(cross_zscore(·,60),5),量的是今天的钱比这只股票平时来得早还是晚。机制是注意力冲击。Barber & Odean (2008) 显示新闻、异常成交、极端收益会让个人投资者净买入。在 A 股,隔夜消息和关注度冲击表现为开盘竞价与头半小时的异常放量;T+1 下早盘追进去的钱当天卖不掉。所以「钱比平时早得多」是被注意力推高、随后回吐的一端,「比平时晚」对应机构执行与收盘竞价需求。水平因子做不到这一点:开盘竞价占比天生高的股票每天都早,但它的 z 值接近 0。
+      (ii) 相对价格方向:sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(Amt)) 及其 10 日均值,另有下跌分钟版和按流动性十分位排序版。is_gt0(Ret) 是 0/1,Ret 为 0 或缺失的分钟权重为 0,所以前一项是「上涨分钟里成交的那部分钱」的时间重心,减去全部钱的重心。>0 表示推涨的钱集中在尾盘(尾盘拉升、收盘前抢筹);<0 表示推涨在早盘,午后是卖方。机制:尾盘集中的单向推价是收盘价操纵的典型指纹,Comerton-Forde & Putnins (2011) 用收盘前的价格冲击加次日回吐来度量它。我们用的是不需要逐笔数据的分钟版:上涨分钟的钱比整体晚多少。
+      (iii) 相对价格移动的时点:cs_regres(day_centroid(Ret), day_centroid(Amt)),即当日截面上价格移动重心对成交额重心回归的残差;另有它的 10 日均值、同一天两个重心之差的 20 日均值,以及按流动性十分位排序的版本。注意 day_centroid 内部先取绝对值,所以 day_centroid(Ret) 是 |Ret| 的重心,即价格在什么时候动。残差 >0 表示价格的移动落在钱之后:钱先到、价后动,信息进入价格慢,是 Hou & Moskowitz (2005) 价格延迟在日内尺度上的版本。残差 <0 表示价先动、钱后跟:少数成交先完成定价,后面的钱是跟风。cs_regres 让这一项与核心本身在截面上线性正交,所以它不会是 head 的换皮。
+      另有 1 颗 cs_bucket_rank(cross_stddev(day_centroid(Amt),20), 20 日平均成交额):在流动性相同的组内比时点的不稳定程度,即事件驱动的程度。
+      为什么和以前不同:三种参照都把时点的水平差掉了。(i) 减去自己的均值;(ii) 是同一天两个重心之差;(iii) 的截面残差与核心正交。所以和 head 5 的相关只剩它们各自的机制部分。它们都不是平滑或单调改写。外围算子集合 {cross_zscore}、{cross_madz}、{sub, mul, is_gt0}、{cs_regres}、{cross_stddev, cs_bucket_rank} 与见过的三种都不同。种子里的 10/20 日均值只是为了压住单日重心的噪声(极薄股票上涨分钟只有几分钟),本身不是本位要做的事。
+      刻意避开的陷阱:没有任何凸变换;所有量都是 [0,1] 内重心之差、z 值或截面残差,无量纲,与成交额水平无关(陷阱 1、3)。分桶变量是连续的 20 日平均成交额,没有大量并列(陷阱 2)。不用 Vwap,因为 Vwap 的 NaN 形态会把流动性带进来(第 1 轮表:Vwap 类日内统计量与流动性 0.69–0.72)。
+      样本外为什么还在:(a) 交易所规则变化会整体搬移时点的水平,这正是水平因子的风险,例如沪市 2018-08-20 引入收盘集合竞价,Han 等 (2022) 记录了成交被推向收盘。本位三种对照都是同一只股票在同一天、或与自己近期之内的比较,规则对所有分钟的搬移在差里一阶抵消。(b) 注意力驱动的散户买入、尾盘推价、信息进入价格的快慢,都来自市场参与者结构(散户占比、T+1、涨跌停),2023 年之后没有变。(c) Admati & Pfleiderer (1988) 与 Heston, Korajczyk & Sadka (2010) 都显示日内时点是独立于成交量和波动水平的通道。我们利用的不是样本内的数值巧合。'
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988'
+        url: 'https://doi.org/10.1093/rfs/1.1.3'
+        treatment: '成交在时间上集中,知情交易者把单子放进流动性交易的高峰;所以「钱在什么时候来」是交易者构成的信号。我们把它压成逐股逐日的重心,并和自己的常态比'
+      - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors'
+        authors: 'Brad M. Barber, Terrance Odean'
+        year: '2008'
+        url: 'https://doi.org/10.1093/rfs/hhm079'
+        treatment: '新闻、异常成交带来的注意力冲击驱动个人净买入;我们把冲击识别为钱比自己 20/60 日常态来得异常早(cross_zscore / cross_madz)'
+      - title: 'Intraday Patterns in the Cross-Section of Stock Returns'
+        authors: 'Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka'
+        year: '2010-08'
+        url: 'https://ar5iv.arxiv.org/html/1005.3535'
+        treatment: '日内时点是成交量、波动水平解释不了的收益通道;所以用日内的对照(上涨分钟 vs 全部、价格移动 vs 成交额),而不是水平'
+      - title: 'Measuring closing price manipulation'
+        authors: 'Carole Comerton-Forde, Talis J. Putnins'
+        year: '2011'
+        url: 'https://opus.cloud1.lib.uts.edu.au/handle/10453/31358'
+        treatment: '收盘前集中的单向价格冲击加随后回吐是操纵的指纹;对应上涨分钟成交额重心减全部成交额重心'
+      - title: 'Market Frictions, Price Delay, and the Cross-Section of Expected Returns'
+        authors: 'Kewei Hou, Tobias J. Moskowitz'
+        year: '2005'
+        url: 'https://doi.org/10.1093/rfs/hhi023'
+        treatment: '价格延迟(信息进入价格的慢)有截面溢价;对应价格移动重心对成交额重心的截面残差(价格比钱晚多少)'
+      - title: 'Reexamining the Impact of Closing Call Auction on Market Quality: A Natural Experiment from the Shanghai Stock Exchange'
+        authors: 'Han, Zhao, Chen, Guo'
+        year: '2022'
+        url: 'https://orca.cardiff.ac.uk/id/eprint/151359/'
+        treatment: '沪市 2018-08-20 收盘集合竞价把成交推向收盘,时点水平在 train 段内有一次断点;我们用自比和日内对照让这种水平搬移一阶抵消'
+    seeds:
+      - 'cross_zscore(day_centroid(Amt), 20)'
+      - 'cross_madz(day_centroid(Amt), 60)'
+      - 'cross_mean(cross_zscore(day_centroid(Amt), 60), 5)'
+      - 'sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(Amt))'
+      - 'cross_mean(sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(Amt)), 10)'
+      - 'cross_mean(sub(day_centroid(mul(Amt, is_lt0(Ret))), day_centroid(Amt)), 10)'
+      - 'cs_bucket_rank(cross_mean(sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(Amt)), 10), cross_mean(day_sum(Amt), 20))'
+      - 'cs_regres(day_centroid(Ret), day_centroid(Amt))'
+      - 'ts_mean(cs_regres(day_centroid(Ret), day_centroid(Amt)), 10)'
+      - 'cross_mean(sub(day_centroid(Ret), day_centroid(Amt)), 20)'
+      - 'cs_bucket_rank(cross_mean(sub(day_centroid(Ret), day_centroid(Amt)), 20), cross_mean(day_sum(Amt), 20))'
+      - 'cs_bucket_rank(cross_stddev(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 20))'
+  - type: N
+    hypothesis: '新 idea:已实现方差的「符号构成」(good volatility 与 bad volatility)。
+      机制:把当日分钟收益的平方和拆成上涨分钟与下跌分钟两半,RSJ = (RV+ - RV-)/RV = sum(r|r|)/sum(r^2),落在 [-1,1]。RSJ 高表示当日波动主要来自向上的移动,即彩票式的上跳;RSJ 低表示主要来自向下的移动。Bollerslev, Li & Zhao (2020) 用美股日内收益发现,按 RSJ 排序的组合之后的收益差异很大,高 RSJ 跑输,控制已知特征后仍显著。机制上有两条:偏好正偏度、做概率加权的投资者为上跳付高价(Barberis & Huang 2008);Patton & Sheppard (2015) 的坏波动更持久,下跌主导的波动之后要求更高补偿。A 股散户占比高、彩票偏好强,这两条在这里只会更强。方向先验:多头 = RSJ 最低(坏波动主导)的十分位,最后由 GP 定符号。
+      算子实现:mul(Ret, abs_(Ret)) = r|r|,其日和 = RV+ - RV-;mul(Ret, Ret) 的日和 = RV;两者相除就是 RSJ。种子有以下几类。日度版与 5 日均值。5 日与 20 日的「池化」版 div(cross_sum(分子,d), cross_sum(分母,d)):与论文按周聚合半方差一致,让这段时间里方差最大的日子起主导,而不是每天的比值等权。成交额加权版 sum(Amt*r|r|)/sum(Amt*r^2):只看有真钱成交时价格往哪边动。对照用活跃分钟上的已实现偏度 mul(day_skew(Ret), sqrt(sub(1, day_zero_ratio(Ret)))),即 Amaya 等 (2015) 的 realized skewness。零收益分钟会把钟表时间的偏度放大 sqrt(n/k) 倍,乘 sqrt(1-零比例) 就还原成活跃分钟的偏度。随机张量验算(不碰数据):48 个活跃分钟时钟表偏度的截面标准差 1.07,修正后 0.47,比值 2.28,约等于 sqrt(241/48)=2.24。
+      分桶版有四种。在 20 日收益十分位内排序,拿掉「RSJ 只是这段时间涨跌的另一种写法」。在 5 日收益十分位内排序,对应论文控制的周度反转。在 20 日平均零收益比例十分位内排序:薄股票只有几次移动时,日度 RSJ 纯抽样噪声就大(随机张量:高斯活跃分钟 k=240/120/48 时日度 RSJ 截面标准差 0.11/0.16/0.24);粗 tick 股票每次只跳一个 tick,r^2 都相等,RSJ 退化成上跳次数减下跳次数除以总次数。组内排序让这两类不能挤满十分位。最后一种在 20 日平均成交额十分位内排序。
+      为什么和库里不同:库里 6 个 head 全是收益的「偶函数」。day_kurt、(kurt+3)^2、day_durbin_watson 与它的 ts_skew、hurst 减 kurt 的组合,把所有分钟收益取负号值都不变;day_centroid(Amt) 根本不读收益。RSJ 与已实现偏度是「奇函数」(本机验算:收益取负,RSJ 精确变号,day_kurt 不变)。在涨跌大致对称的截面上,奇函数与任何偶函数的秩相关期望为 0,所以它不会是任何 head 的改写。5 个控制里只有 20 日反转带符号,但它是日度累计收益,不是日内方差的符号构成;而且我们另有在收益十分位内排序的种子。
+      刻意避开的陷阱:RSJ 是两个同为二次齐次的和之比,零次齐次、有界,不对任何波动量做凸变换(陷阱 1);零收益分钟对分子分母的贡献都是 0,所以它不是稀疏度或流动性的改写(陷阱 3);分桶变量都是连续量,不用 LimitWidth/BoardCode(陷阱 2);Close 是后复权价,只用它的 20 日、5 日比值当收益,不当价位。
+      样本外为什么还在:(1) 机制是投资者偏好(正偏度和彩票偏好)与风险补偿(坏波动更持久),不是在样本内拟合出来的形状。(2) 证据来自另一个市场、另一段时间的日内数据,与我们的样本内完全不重叠;在我们这里也成立,就不是巧合。(3) 这个量无量纲,不随波动水平、tick 网格或成交额水平的漂移而漂移。'
+    inspired_by: '第 2 批 M 的两个最高分 head 是 ts_skew(day_durbin_watson(Open), 50) 和它外面再套 cross_autocorr_s1 的版本。按源码,它们读的其实是已实现方差的「大小」:nanskew_last 的分母是 std**3 + 1e-9,输入量级约 1e-6 时归一化被 EPS 钉死,输出等于 1e9 乘以三阶中心矩,是 σ 的 6 次齐次量(陷阱 1)。同一份分钟收益里诚实、尺度无关的问题,不是方差有多大,而是方差由哪一边的移动构成。第 1 轮 R 的单侧尾部量 day_es_ratio_hi(Ret)/day_es_ratio_lo(Ret) 在 train 上有 -0.63/-0.57 的分数(按 head 方向),说明分侧的信息存在,但被 tick 网格污染。文献:Bollerslev, Li & Zhao (2020) 的 RSJ;Patton & Sheppard (2015) 的符号跳跃。'
+    literature:
+      - title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns'
+        authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao'
+        year: '2020-05'
+        url: 'https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html'
+        treatment: '用日内收益的上下半方差构造 RSJ = (RV+ - RV-)/RV,按周聚合后做截面排序;我们照搬定义,用 sum(r|r|)/sum(r^2) 写出,并做 5/20 日池化'
+      - title: 'Good Volatility, Bad Volatility: Signed Jumps and the Persistence of Volatility'
+        authors: 'Andrew J. Patton, Kevin Sheppard'
+        year: '2015-07'
+        url: 'https://ideas.repec.org/a/tpr/restat/v97y2015i2p683-697.html'
+        treatment: '用 r^2*1{r>0} 与 r^2*1{r<0} 拆已实现方差,signed jump variation = RV+ - RV-;坏波动更持久,是风险补偿一侧的依据'
+      - title: 'Does realized skewness predict the cross-section of equity returns?'
+        authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez'
+        year: '2015'
+        url: 'https://doi.org/10.1016/j.jfineco.2015.02.009'
+        treatment: '日内收益的已实现偏度按周排序;我们乘 sqrt(1-零收益比例) 去掉零分钟造成的 sqrt(n/k) 放大,作为 RSJ 的对照'
+      - title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security Prices'
+        authors: 'Nicholas Barberis, Ming Huang'
+        year: '2008-12'
+        url: 'https://doi.org/10.1257/aer.98.5.2066'
+        treatment: '概率加权使正偏度(上跳主导)的资产被高估、之后收益低;是 RSJ 高端跑输的行为机制,也是样本外仍在的理由'
+    seeds:
+      - 'div(day_sum(mul(Ret, abs_(Ret))), day_sum(mul(Ret, Ret)))'
+      - 'cross_mean(div(day_sum(mul(Ret, abs_(Ret))), day_sum(mul(Ret, Ret))), 5)'
+      - 'div(cross_sum(day_sum(mul(Ret, abs_(Ret))), 5), cross_sum(day_sum(mul(Ret, Ret)), 5))'
+      - 'div(cross_sum(day_sum(mul(Ret, abs_(Ret))), 20), cross_sum(day_sum(mul(Ret, Ret)), 20))'
+      - 'cs_bucket_rank(div(cross_sum(day_sum(mul(Ret, abs_(Ret))), 20), cross_sum(day_sum(mul(Ret, Ret)), 20)), div(day_last(Close), cross_delay(day_last(Close), 20)))'
+      - 'cs_bucket_rank(cross_mean(div(day_sum(mul(Ret, abs_(Ret))), day_sum(mul(Ret, Ret))), 5), div(day_last(Close), cross_delay(day_last(Close), 5)))'
+      - 'cs_bucket_rank(div(cross_sum(day_sum(mul(Ret, abs_(Ret))), 5), cross_sum(day_sum(mul(Ret, Ret)), 5)), cross_mean(day_zero_ratio(Ret), 20))'
+      - 'cs_bucket_rank(div(cross_sum(day_sum(mul(Ret, abs_(Ret))), 20), cross_sum(day_sum(mul(Ret, Ret)), 20)), cross_mean(day_sum(Amt), 20))'
+      - 'div(cross_sum(day_sum(mul(mul(Ret, abs_(Ret)), Amt)), 5), cross_sum(day_sum(mul(mul(Ret, Ret), Amt)), 5))'
+      - 'cross_mean(mul(day_skew(Ret), sqrt(sub(1, day_zero_ratio(Ret)))), 5)'
+R:
+  - head: 'ts_skew(day_durbin_watson(Open), 50)'
+    why: '烂部件:ts_skew 的输入没有归一化,所以 ts_skew 实际没有在算偏度。
+      依据(源码):alphacube/operators/common.py 的 nanskew_last 返回 m3/(std**3 + EPS),EPS = 1e-9 是绝对常数。day_durbin_watson(x) = sum(dx^2)/sum(x^2),分母不去均值;作用在分钟价格上约等于 day_std(Ret)^2,A 股约 1e-6 到 1e-5,其 50 日标准差同量级,std**3 约 1e-18,远小于 1e-9。所以 ts_skew 返回的是 1e9 乘以 50 日三阶中心矩,是 σ 的 6 次齐次量,规则 §4 陷阱 1 的凸性藏在了 EPS 里。随机张量验算:输入尺度 ≤ 1e-4 时,输出与 m3*1e9 四位有效数字相同。
+      依据(定位):再套一层 ts_skew 的 coverage 只有 0.8708。nanskew_last 唯一返回 NaN 的地方就是 std > EPS 这道闸,它在 1e-9 量级上咬住,反证内层输出就在这个量级。
+      替换件把输入变成无量纲:log(DW),即对数已实现方差,Andersen, Bollerslev, Diebold & Ebens (2001) 显示对数已实现波动近似正态,是这条文献线的标准处理;或者 DW 除以自己的 50 日均值。两者都让 ts_skew 真的算偏度。若分数仍 ≥ 原 head + 0.1,M 第 2 批这一族就是真的波动形状因子,用诚实版替换陷阱版;若掉到 0.5 以下,head 的分数来自凸性,下一轮不再在这一族上花 GP 位。'
+    variants:
+      - 'ts_skew(log(day_durbin_watson(Open)), 50)'
+      - 'ts_skew(div(day_durbin_watson(Open), cross_mean(day_durbin_watson(Open), 50)), 50)'
+  - head: 'cross_mean(mul(add(day_kurt(Ret), 3), add(day_kurt(Ret), 3)), 15)'
+    why: '烂部件:mul(x, x),其中 x = add(day_kurt(Ret), 3)。
+      依据(源码 + 代数):alphacube 的 _kurt 先去均值、用总体矩、再减 3,所以 kurt+3 = m4/m2^2 ≥ 1 > 0 恒成立。平方因此是严格单调变换,逐日截面秩与 day_kurt(Ret) 完全相同,不带任何新的排序信息。它唯一的作用,是让外面的 cross_mean(·,15) 变成凸平均,被 15 天里峰度最高的那一天主导(Jensen),也就是把「过去三周有没有一个尖峰日」藏在平方里。
+      变体把这件事去掉或显式写出来:直接去掉平方,cross_mean(day_kurt(Ret),15);上四分之一尾部均值 cross_tail_mean_q75;75% 分位 cross_quantile_q75;中位数 cross_med 作为对照(典型水平,不看尖峰)。哪一条最好,就说明 head 6 读的是尖峰还是水平。显式写法若 ≥ 0.75,就按规则替换掉一个靠凸变换绕过库禁令的改写。'
+    variants:
+      - 'cross_mean(day_kurt(Ret), 15)'
+      - 'cross_tail_mean_q75(day_kurt(Ret), 15)'
+      - 'cross_quantile_q75(day_kurt(Ret), 15)'
+      - 'cross_med(day_kurt(Ret), 15)'
+  - head: 'day_kurt(Ret)'
+    why: '烂部件:day_kurt(Ret) 里与成交时间峰度共享的那一部分。
+      依据(第 1 轮 R,已付费):只在有成交的分钟上算同一统计量的 day_kurt(in_logchg(Vwap, 1)),与 head 的日度秩相关 0.69–0.81,score 却只有 +0.02(head +0.97);另一方面,把零收益质量放大的 day_gini(Ret) 落进了已知族(|ρ| 0.63)。所以 head 的分数集中在钟表时间峰度里「不被」成交时间峰度解释的那 20–30%,两者共享的部分是稀释信号的死重。
+      机制:Clark (1973)、Westerfield (1977):日历时间收益的峰度 = 成交时间收益的峰度 + 成交时钟随机快慢造成的混合峰度。减去成交时间峰度,剩下的就是成交到达的突发程度。
+      变体:直接相减;以及秩空间的截面残差 cs_regres(cs_rank(·), cs_rank(·))(两个峰度都重尾,在秩上回归不会被几个极端值支配)。'
+    variants:
+      - 'sub(day_kurt(Ret), day_kurt(in_logchg(Vwap, 1)))'
+      - 'cs_regres(cs_rank(day_kurt(Ret)), cs_rank(day_kurt(in_logchg(Vwap, 1))))'

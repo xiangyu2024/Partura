@@ -1,0 +1,113 @@
+seed: 806
+round: 2
+slots:
+  - type: E
+    core: 'day_centroid(Amt)'
+    hypothesis: '【核心是什么】day_centroid(Amt) = Σ t·Amt_t / Σ Amt_t,t 是分钟位置归一化到 [0,1](0 = 全在开盘,1 = 全在收盘):一天的钱在什么时候成交。有界、尺度不变,不含价格或成交额的水平。M 第 2 批 head 4 `sqrt(ts_quantile_q50(day_centroid(Amt), 20))`(+1.22,train 1.22 / valid 1.34,方向 −1 = 做多成交偏早的股票)和 head 7 都是它的 10–20 日中位数水平;共性表里它是出现最多的有效子树(n 31,均值差 +1.41)。拆解表:裸日度值 −0.08,20 日中位数 +1.21,去掉中位数的必要性 +1.73,Amt→Volume 不变 —— alpha 在持久成分里,单日新息不值钱。
+      【已见过的外围,以及它的问题】快照里含这个核心的写法只有 {ts_quantile_q50 平滑, sqrt, cs_mask_top_replace_mean_neg}:都是在「水平」上再平滑,或砍掉最低 10%。这个水平有一部分是已知族:拆解表里 ρ(已知族) 随窗口 10/20/40 日单调升到 0.40/0.49/0.56,越平均越像控制变量。再做水平版既会被库禁令拒掉(与 head 4 的 ρ ≥ 0.7),也没有新信息。
+      【本位外围要做的事:不再取时点的水平,而是拿它和别的量比】
+      (1) 量的时点 vs 价格位移的时点。day_centroid 内部取 |x|,所以 day_centroid(Ret) 是 |分钟收益| 的重心,即价格在一天里什么时候动。种子取两者 10 / 20 日中位数之差(或日度差的中位数)。差 > 0:钱比价格晚到,后段大成交几乎不动价格,对应深的流动性 / 被动 / T+1「收盘买、次日开盘卖」的流动性买盘(LY2022 把 A 股成交 U 形的收盘端归因于这种 T+1 安排)。差 < 0:价格比钱晚动,尾段价格在薄成交里被推动(无量拉抬或打压),收盘价噪声大,之后回吐。依据是 AP1988:知情交易推动价格,能择时的流动性交易者挤向厚市场时段。所以「量与价在时间上错开多少」区分的是两类交易者,不是交易了多少。另有两个非参数写法:在价格时点十分位内给量的时点取秩;在量的时点水平十分位内给差取秩。后者按构造与 head 4 的水平无关。
+      (2) 时点的迁移。把 GKM2001「相对自身 50 日窗口」的新息构造搬到时点维度:10 日中位数减 50 日中位数;除以 50 日标准差的标准化版;cross_zscore(·, 50) 的 10 日均值;在 50 日水平的十分位内取秩(防止迁移只是极端水平的均值回复)。迁移向开盘,是由隔夜信息或注意力驱动的新参与者到来;迁移向收盘,是被动、收盘竞价或 T+1 流动性资金进入。LMSW2002:同样的成交,投机(信息)交易伴随延续,风险分担交易伴随反转。
+      (3) 非线性剥离规模和流动性:cs_bucket_rank(·, cross_mean(day_sum(Amt), 30)) 与 cs_bucket_rank(·, LogFloatCap) 在流动性或市值的每个十分位内各自取秩,于是多头十分位里每个规模档占同样份额。线性中性化去不掉的非线性规模暴露(陷阱 3)由此在构造上拿掉(FNW2020 的非参数、分组条件化思路)。分桶变量都是连续量,不用 LimitWidth / BoardCode(大量并列会落到陷阱 2 的列序斜坡上)。全位不用凸变换,不用 mask。
+      【已知的毛病】第 0 根 bar 是开盘集合竞价,最后一根含收盘竞价。竞价有大成交但只有一个价格,所以 (1) 的差一部分在读竞价占比,而竞价占比可能是规模的代理,(3) 的分桶版本就是为它设的。若第 0 根的 Ret 含隔夜跳空,|Ret| 的重心会被跳空幅度拉向 0,10 / 20 日中位数可以压掉单日跳空。
+      【为什么样本外还会在】决定成交时点结构的是制度:T+1、开盘与收盘集合竞价、散户在开盘集中下单、被动资金在收盘成交,这些 2023-08-08 之后都没有变。差值与迁移都是有界的无量纲量,不随波动或成交额水平漂移。分桶版本保证收益不来自小市值或低流动性那一端的风格,那一端在不同年份会翻符号。被拿掉的「水平」,正是窗口越长越像已知族的那部分。
+      【方向与判决】方向交给奖励在 train 上定。我的先验:(1) 取 +1,做多「价格早动、钱晚到」;(2) 取 −1,做多迁移向开盘。事先判决:本位所有与 head 4 日度秩 |ρ| < 0.7 的候选若都低于 0.3,就认定 day_centroid 族的分数只是水平本身(流动性 / 规模代理),第 3 轮不再碰它。'
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988'
+        url: 'https://doi.org/10.1093/rfs/1.1.3'
+        treatment: '知情交易推动价格,可自由择时的流动性交易集中到厚市场时段;据此把「量的时点」和「价格位移的时点」分开构造再做差,用错开程度区分信息交易与流动性交易'
+      - title: 'Last hour momentum in the Chinese stock market'
+        authors: 'Lu Yang'
+        year: '2022'
+        url: 'https://doi.org/10.1108/CFRI-06-2021-0106'
+        treatment: 'A 股 T+1 下「收盘买入、次日开盘卖出」是流动性交易者的最优安排,构成成交 U 形的收盘端;据此把收盘端的晚到成交读成流动性需求,而不是信息'
+      - title: 'The High-Volume Return Premium'
+        authors: 'Simon Gervais, Ron Kaniel, Dan Mingelgrin'
+        year: '2001'
+        url: 'https://rodneywhitecenter.wharton.upenn.edu/wp-content/uploads/2014/04/9901.pdf'
+        treatment: '成交特征相对自身 50 日窗口的异常(新息)与其水平分开、预测力不同;这里搬到时点维度:10 日中位数减 50 日中位数,以及标准化版'
+      - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+        authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang'
+        year: '2002'
+        url: 'https://www.nber.org/papers/w8312'
+        treatment: '同样的成交量,投机(信息)交易伴随延续,风险分担交易伴随反转;据此用「谁在什么时候交易」的迁移区分两类参与者'
+      - title: 'Dissecting Characteristics Nonparametrically'
+        authors: 'Joachim Freyberger, Andreas Neuhierl, Michael Weber'
+        year: '2020'
+        url: 'https://www.nber.org/papers/w23227'
+        treatment: '线性设定会漏掉特征的非线性效应;这里用规模 / 流动性十分位内取秩(cs_bucket_rank)代替只靠线性中性化,去掉非线性规模暴露'
+    seeds:
+      - 'sub(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Ret), 10))'
+      - 'ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 10)'
+      - 'ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 20)'
+      - 'cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Ret), 10))'
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 20), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 10), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 10), LogFloatCap)'
+      - 'sub(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Amt), 50))'
+      - 'div(sub(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Amt), 50)), ts_std(day_centroid(Amt), 50))'
+      - 'ts_mean(cross_zscore(day_centroid(Amt), 50), 10)'
+      - 'cs_bucket_rank(sub(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Amt), 50)), ts_quantile_q50(day_centroid(Amt), 50))'
+      - 'cs_bucket_rank(sub(ts_quantile_q50(day_centroid(Amt), 10), ts_quantile_q50(day_centroid(Amt), 50)), cross_mean(day_sum(Amt), 30))'
+  - type: N
+    hypothesis: '【机制】A 股 T+1 下,同样的净买入压力出现在一天里不同的时段,含义相反。早盘:隔夜积累的信息在开盘后成交,早盘的买卖不平衡主导当天的价格发现(ZWB2011 的中国股票分时段证据),这部分是信息,方向应延续。尾盘:T+1 让「收盘买入、次日开盘卖出」成为流动性交易者的最优安排(LY2022),尾盘和收盘竞价的净买盘大量是流动性或噪声需求,造成临时价格压力,之后回吐(CS2004:同期不平衡与收益正相关,滞后不平衡与收益负相关,作者读作库存 / 价格压力的回复)。全天的量价不平衡把这两个符号相反的东西加在了一起。
+      【r1 的现象】r1 N 位离过线最近的 5 条,全是全天 day_signed_ratio(Ret, Volume) 的 20 / 60 日均值:train ≈ 0,valid +1.3…+2.3(loc.md「本组之前各轮的任务」)。我的解释:两段的权重在 2018–2021 与 2022–2023 不同,全天加总后互相抵消。拆开以后,每一段的符号应在两段样本里都成立。这是本位要检验、也可以被证伪的预测:若拆开后各候选的 train 腿仍都 ≤ 0.2,这一族就是随样本期变的,第 3 轮放弃。
+      【算子怎样实现】day_signed_ratio(Ret, mul(Volume, mask)) = 掩码内的分钟里,上涨分钟成交量占比减下跌分钟成交量占比,∈ [−1, 1](掩码外权重为 0,分子分母都不计)。掩码用 in_index(分钟位置 t/240)造:早盘连续竞价 mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)),去掉第 0 根开盘集合竞价,免得隔夜跳空方向乘竞价量混进来;下午 greater(in_index(Volume), 0.5);最后 30 分钟(含收盘竞价)greater(in_index(Volume), 0.875)。三类写法:
+      (a) 早盘减下午的不平衡差;
+      (b) 尾盘不平衡,以及它相对全天不平衡的超额;
+      (c) 不切时段的连续版「哪一侧在什么时候」:sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret)))) = 上涨分钟成交的时间重心减下跌分钟成交的时间重心,> 0 表示买压集中在后段、卖压在前段。
+      多日处理用 5 / 20 日 cross_mean,因为 r1 的经验是只有平滑版本接近过线。另有三个分桶版:在 20 日波动、20 日收益或流动性的十分位内取秩,确保它不是波动、反转或流动性的非线性重写。全部是有界的无量纲比值,不含价格、成交额或波动的水平。
+      【和库里已有的不同】库里 8 个 head 没有一个用到成交方向(涨 / 跌分钟)。head 4 / 7 的时点不带符号,head 1–3、5、6、8 是市值、价格水平或成交额水平。r1 的 N 位用的是全天不平衡、偏度和尾部;这里换成按时段拆开、两段预期符号相反的不平衡,以及买压与卖压的时点差。输入是同一类(量价方向),机制不同(早盘信息 vs T+1 流动性压力)。
+      【已知的毛病】上交所 2018-08-20 起才有收盘集合竞价,train 头 8 个月沪市尾盘的成交构成不同。最后 30 分钟的掩码覆盖 30 根 bar,不只看最后一根,对此不太敏感。若 Ret 在零成交分钟为 0,这些分钟只进分母。
+      【为什么样本外还会在】T+1、开盘与收盘集合竞价、以散户为主的尾盘追涨结构,2023-08-08 之后都没有变。这是交易制度造出来的时段不对称,不是某一段行情。比值有界,不随波动或成交额水平漂移。方向交给奖励在 train 上定;先验是:早盘减下午取 +1,尾盘或超额尾盘不平衡取 −1,买卖时点差取 −1。'
+    inspired_by: 'r1 N 位(c06s806Cr1b_Nb)最好 5 条全是全天 day_signed_ratio(Ret, Volume) 的 20 / 60 日均值,train ≈ 0、valid +1.3…+2.3;M 第 2 批 head 4 / 7 说明「什么时候成交」有持久的截面信息。文献:Zhang, Wang, Bremer 2011(早盘不平衡主导中国股票的日内价格发现)与 Lu Yang 2022(T+1 下收盘买入是流动性安排)'
+    literature:
+      - title: 'Order Imbalance and Intraday Price Discovery: Evidence from Chinese Stock Markets'
+        authors: 'Zhaohui Zhang, Jiamin Wang, Ronald Bremer'
+        year: '2011'
+        url: 'https://ideas.repec.org/a/wsi/rpbfmp/v14y2011i04ns0219091511500019.html'
+        treatment: '早盘的买卖不平衡主导当天其余时段揭示的信息;据此单独构造早盘(去掉开盘竞价)的不平衡,不与尾盘混在一起'
+      - title: 'Last hour momentum in the Chinese stock market'
+        authors: 'Lu Yang'
+        year: '2022'
+        url: 'https://doi.org/10.1108/CFRI-06-2021-0106'
+        treatment: 'T+1 下收盘买入、次日开盘卖出是流动性交易者的最优安排;据此把尾盘 / 收盘竞价的净买盘读成流动性压力,预期符号与早盘相反'
+      - title: 'Order imbalance and individual stock returns: Theory and evidence'
+        authors: 'Tarun Chordia, Avanidhar Subrahmanyam'
+        year: '2004'
+        url: 'https://ideas.repec.org/p/cdl/anderf/qt34k8f3pv.html'
+        treatment: '同期不平衡与收益正相关,滞后不平衡与收益负相关(价格压力回复);据此预期尾盘不平衡的方向为负'
+      - title: 'Do order imbalances predict Chinese stock returns? New evidence from intraday data'
+        authors: 'Paresh Kumar Narayan, Seema Narayan, Joakim Westerlund'
+        year: '2015'
+        url: 'https://ideas.repec.org/a/eee/pacfin/v34y2015icp136-151.html'
+        treatment: '不平衡用 (买−卖)/(买+卖) 的比例形式,在中国股票的日内数据上有预测力;这里用 day_signed_ratio 的 tick 规则代理,并按时段掩码'
+    seeds:
+      - 'sub(day_signed_ratio(Ret, mul(Volume, mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)))), day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.5))))'
+      - 'cross_mean(sub(day_signed_ratio(Ret, mul(Volume, mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)))), day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.5)))), 5)'
+      - 'cross_mean(sub(day_signed_ratio(Ret, mul(Volume, mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)))), day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.5)))), 20)'
+      - 'cs_bucket_rank(cross_mean(sub(day_signed_ratio(Ret, mul(Volume, mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)))), day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.5)))), 20), cross_mean(day_std(Ret), 20))'
+      - 'cross_mean(day_signed_ratio(Ret, mul(Volume, mul(greater(in_index(Volume), 0.0), less(in_index(Volume), 0.5)))), 5)'
+      - 'cross_mean(day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.875))), 5)'
+      - 'cs_bucket_rank(cross_mean(day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.875))), 20), cross_mean(day_sum(Ret), 20))'
+      - 'sub(cross_mean(day_signed_ratio(Ret, mul(Volume, greater(in_index(Volume), 0.875))), 20), cross_mean(day_signed_ratio(Ret, Volume), 20))'
+      - 'sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret))))'
+      - 'cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret)))), 5)'
+      - 'cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret)))), 20)'
+      - 'cs_bucket_rank(cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret)))), 20), cross_mean(day_sum(Amt), 30))'
+R:
+  - head: 'sqrt(ts_quantile_q50(day_centroid(Amt), 20))'
+    why: '烂部件是根上的 sqrt。付费拆解:去掉它是 +1.2061,原 head 是 +1.2227,差 0.017。day_centroid ∈ [0,1] 恒正,sqrt 是单调变换,不改任何一天的截面排序,只通过 EMA 作用在变换后的值上留下一点残差,近乎死算子。它占着的位置留下一个真毛病:这个水平与已知族的 |ρ| 是 0.49,并随窗口 10/20/40 日单调升到 0.40/0.49/0.56,离不合格线只差一步,而且有一部分分数可能来自线性中性化去不掉的非线性流动性 / 规模暴露(陷阱 3)。变体把死的 sqrt 换成在已知族、流动性或市值十分位内取秩:每个十分位内输出均匀,多头十分位里每档占同样份额,非线性暴露在构造上拿掉,|ρ(已知族)| 应降到远低于 0.5。这三个变体同时是一次直接检验:若都 ≥ 原 head + 0.1 就替换;若都掉到 0.5 以下,说明这一族的分数就是那部分代理。'
+    variants:
+      - 'cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 20), LogFloatCap)'
+  - head: 'cs_mask_top_replace_mean_neg(ts_quantile_q50(cs_mask_top_replace_mean_neg(ts_quantile_q50(ts_quantile_q50(day_centroid(Amt), 10), 10)), 10))'
+    why: '烂部件是两个 cs_mask_top_replace_mean_neg。依据有三条。(i) 它把截面最低 10% 的值换成截面均值(nd_cs.py 的 negate-flip-negate)。这个 head 的方向是 −1,做多的正是重心最低、成交最靠前的那一档,mask 两次把它最想持有的股票挪到中间,赶出多头十分位。(ii) 被挪走的是一整块并列值,平均秩后块内残差的排序恰好是控制拟合值的反序,这是陷阱 3 的离散形式。(iii) 同一个核心、不带 mask 的 head 4 是 +1.22,比这个 head 的 +0.82 高 0.41。变体:两个都去掉、只去外层、只去内层,看是哪一个在伤分数。再加一个两个都去掉后在已知族十分位内取秩的版本:三层 10 日中位数的有效窗口约 30 日,按 0.40/0.49/0.56 的趋势,不剥离的话 |ρ(已知族)| 可能 ≥ 0.5,会被判不合格。代价:替换后它与 head 4 会高度相关,库里多一个近重复项;但多头腿被控制变量折叠的 head,比一个重复项更糟。'
+    variants:
+      - 'ts_quantile_q50(ts_quantile_q50(ts_quantile_q50(day_centroid(Amt), 10), 10), 10)'
+      - 'ts_quantile_q50(cs_mask_top_replace_mean_neg(ts_quantile_q50(ts_quantile_q50(day_centroid(Amt), 10), 10)), 10)'
+      - 'cs_mask_top_replace_mean_neg(ts_quantile_q50(ts_quantile_q50(ts_quantile_q50(day_centroid(Amt), 10), 10), 10))'
+      - 'cs_bucket_rank(ts_quantile_q50(ts_quantile_q50(ts_quantile_q50(day_centroid(Amt), 10), 10), 10), cross_mean(day_std(Amt), 30))'

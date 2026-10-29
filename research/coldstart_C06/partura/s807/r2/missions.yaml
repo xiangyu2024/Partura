@@ -1,0 +1,144 @@
+seed: 807
+round: 2
+slots:
+- type: N
+  hypothesis: 日收益拆成两段,看一只股票的收益长期「在哪一段发生」。隔夜段 ON = log(今开/昨收) = log(div(day_first(Open), ts_delay(day_last(Close), 1)))(day_first(Open) 是 09:30 集合竞价 bar 的开盘价;价格字段是后复权的,跨除权日连续),日内段 ID = log(今收/今开) = log(div(day_last(Close),
+    day_first(Open))),两段之和就是当日对数总收益。机制:两段由不同的人定价 —— 隔夜段是开盘集合竞价里积累了一夜的订单(散户、注意力驱动的买单集中在开盘;A 股 T+1 下开盘买入者当天不能卖,隔夜段还要补偿这个持有约束),日内段是连续竞价里套利者与机构的交易。收益长期偏在哪一段,刻画的是这只股票的投资者结构(clientele),是持续数月到数年的公司特征:Lou–Polk–Skouras
+    2019 发现两段各自的持续性能延续数年、跨段反转;Berkman 等 2012 与 Akbas 等 2022 发现「隔夜被推高、日内被套利者打回」的模式预测后续收益;A 股上 T+1 让两段之间出现强反转(白颢睿等 2020),中国的异象更多在隔夜段赚钱(Lin–Chang–Chou 2023)。算子实现:(1) 两腿之差 sub(cross_mean(ON, d), cross_mean(ID,
+    d)),d = 20/60/120/241 —— 奖励的 20 日反转控制就是总收益 ON+ID,取差在构造上把总收益那一维拿掉,只留下「归属」;(2) 单腿 cross_mean(ON, 60/241) 与 cross_mean(ID, 120),窗口都长于反转控制的 20 日;(3) 无量纲版:差 ÷ (mean|ON| + mean|ID|),把波动尺度除掉,不让它变成波动的非线性函数(陷阱
+    3);(4) cs_regres(mean ON, mean ID):隔夜段里不能被日内段线性解释的部分;(5) 跨段反转强度:cross_corr(ON, ID, 60/120) 与 cross_regbeta(ON, ID, 60)(当天日内对开盘跳空的回补斜率)—— 这是 Akbas 等「隔夜涨、日内跌」频率的连续版本;不用计数版,因为 20/60 日的计数只有 21/61 个取值,过不了
+    distinct ≥ 0.5 的门槛,也不用 is_gt0 / sign 这类平凡布尔。方向:文献两边都有,不预设,由奖励在 train 上定;先验是 ON − ID 取 −1(开盘注意力推高、日内被打回的股票后续回吐),跨段相关越负(日内回补越彻底)后续越好。为什么和库里不同:库里 8 个 head 全是日内分钟收益的二阶量(W = Σr|r|/Σ|r| 的凸化;day_durbin_watson(High)
+    实为日内已实现方差及其凸化;它的 60 日标准差)或股本规模;本位第一次用 Open 字段和跨日(昨收→今开)结构,测的是一阶收益在时钟上的归属,不是幅度,预计与所有 head 的日度秩 |ρ| < 0.3;与 5 个控制 < 0.5(20 日差值版与反转控制的相关可能偏高,其余窗口更长)。为什么样本外还会在:T+1、开盘集合竞价、散户主导与卖空约束是 A 股的制度特征,不随样本期改变;LPS
+    记录的分化持续数年;信号是 60–241 日的慢变量,换手低,15 bp 吃不掉;没有凸变换、没有在 train 上挑的幂次。先说清的风险:一字板日开盘价等于涨跌停价,ON 被截断、ID = 0,这是真实值不是缺失;单腿 ON 与波动有一定负相关(高风险股隔夜折价更深),所以放了无量纲版和相关系数版作对冲。
+  inspired_by: 第 1–2 批的全部 head 都是日内分钟收益的二阶量或股本规模,301 个已评分候选里 Open 字段一次都没出现、没有任何跨日(昨收→今开)结构;文献 Lou–Polk–Skouras 2019、Akbas 等 2022、白颢睿等 2020
+  literature:
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: 2019-10
+    url: https://researchonline.lse.ac.uk/id/eprint/87481
+    treatment: 把日收益拆成隔夜(昨收→今开)与日内(今开→今收)两段,分段看策略利润与公司层面的持续性;本位的 ON / ID 两腿与两腿之差
+  - title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the Open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang
+    year: 2012-08
+    url: https://www.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/paying-attention-overnight-returns-and-the-hidden-cost-of-buying-at-the-open/F9AAD159B512C651F09D5D52011D88E0
+    treatment: 注意力驱动的开盘买入推高隔夜收益、随后日内反转;本位的方向先验(ON − ID 取 −1)
+  - title: Overnight returns, daytime reversals, and future stock returns
+    authors: Ferhat Akbas, Ekkehart Boehmer, Chao Jiang, Paul D. Koch
+    year: 2022-09
+    url: https://ideas.repec.org/a/eee/jfinec/v145y2022i3p850-875.html
+    treatment: 一个月内「隔夜为正、随后日内为负」的频率预测未来收益;本位用 cross_corr(ON, ID, d) / cross_regbeta(ON, ID, 60) 做它的连续版本(计数版过不了 distinct 门槛)
+  - title: The cross-section of intraday and overnight returns
+    authors: Vincent Bogousslavsky
+    year: 2021-07
+    url: https://doi.org/10.1016/j.jfineco.2020.07.020
+    treatment: 套利资金的隔夜持仓约束让定价错误在日内与隔夜两段表现相反;本位不预设方向、由奖励在 train 上定
+  - title: 中国股票市场月频动量效应消失之谜——基于T+1制度下隔夜折价现象的研究
+    authors: 白颢睿、吴辉航、柯岩
+    year: 2020-04
+    url: https://qks.shufe.edu.cn/J/PDFFullDown/A67fdee67-f823-44ad-8489-d42bcfae03ae
+    treatment: A 股 T+1 下隔夜折价与日内/隔夜两段之间的强反转;本位的跨段反转强度种子,以及对「单腿 ON 与波动相关」的提醒(放无量纲版)
+  - title: Overnight versus intraday returns of anomalies in China
+    authors: Chaonan Lin, Hui-Wen Chang, Robin K. Chou
+    year: 2023-06
+    url: https://ideas.repec.org/a/eee/pacfin/v79y2023ics0927538x23000732.html
+    treatment: 把 LPS 的拆分搬到中国,异象更多在隔夜段赚钱、与美股模式不同;本位不照搬美股的符号
+  seeds:
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_mean(log(div(day_last(Close), day_first(Open))), 20))
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), cross_mean(log(div(day_last(Close), day_first(Open))), 60))
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 120), cross_mean(log(div(day_last(Close), day_first(Open))), 120))
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 241), cross_mean(log(div(day_last(Close), day_first(Open))), 241))
+  - cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)
+  - cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 241)
+  - cross_mean(log(div(day_last(Close), day_first(Open))), 120)
+  - div(sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), cross_mean(log(div(day_last(Close), day_first(Open))), 60)), add(cross_mean(abs_(log(div(day_first(Open), ts_delay(day_last(Close),
+    1)))), 60), cross_mean(abs_(log(div(day_last(Close), day_first(Open)))), 60)))
+  - div(sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 241), cross_mean(log(div(day_last(Close), day_first(Open))), 241)), add(cross_mean(abs_(log(div(day_first(Open), ts_delay(day_last(Close),
+    1)))), 241), cross_mean(abs_(log(div(day_last(Close), day_first(Open)))), 241)))
+  - cs_regres(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), cross_mean(log(div(day_last(Close), day_first(Open))), 60))
+  - cs_regres(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 120), cross_mean(log(div(day_last(Close), day_first(Open))), 120))
+  - cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 60)
+  - cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 120)
+  - cross_regbeta(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 60)
+- type: N
+  hypothesis: |-
+    可交易股本的净供给:过去一年里公司还给股东多少(派现、回购注销),又向市场新增了多少可交易股份(解禁、增发)。这就是 Boudoukh–Michaely–Richardson–Roberts 2007 的净派现收益率(派现 + 回购 − 发行),符号取反就是 Daniel–Titman 2006 的复合发行。预期方向 −1:多头是净派现最高、没有新增供给的一端。
+
+    恒等式(审计已核对):价格字段后复权,LogFloatCap = log(流通股数 × 未复权价),所以 x_F = sub(LogFloatCap, log(day_last(Close))) = log 流通股数 − log 累计复权因子 + 常数。价格和送转都精确抵消:送转时股数 ×k、复权因子 ×k。派现让 x 下降约 D/P(按除息日价格),解禁、增发让 x 上升。x_T 把 LogFloatCap 换成 LogTotalCap,是总股本口径:定增在发行日计入,流通口径要到解禁日才计入。
+
+    第 2 稿改的是实现(第 1 稿 10 个种子在相关度表里全是门槛废品),机制不变:
+    (1) 覆盖率。不再用 d ≥ 60 的 ts_delta(它要求恰好 d 行之前有值),改成逐日差分的 NaN 安全累积 ts_sum(ts_delta(x, 1), 241)。ts_delta(x, 1) 只要求前一行有值;ts_sum 是 nansum,左侧用 NaN 填充,只有 241 天全缺才是 NaN,所以训练开头和新股只累积已有的日子,覆盖率应与叶子本身相当(预计 ≥ 0.97)。没有缺失时,望远镜求和恰好等于 x_t − x_{t−240};停牌跨过事件日会丢掉那一次事件,可以接受。
+    (2) distinct。删掉 60 / 120 日版本,所有种子的累积窗口都是 241 日,覆盖一个完整的分红季。一年里没有任何公司行为的股票,值只是两个端点的 float32 舍入差:x 在 15–25 的量级,ulp 是 2^-20 ~ 2^-19(1e-6 ~ 2e-6),差值只落在 ±几个 ulp 的格点上,这一块每天最多贡献十几个不同的值。每天有 3500–4700 只股票有值,这一块对 distinct 的贡献 < 0.5%,所以 distinct ≥ 0.5 只能来自真有事件的股票,舍入噪声凑不出门槛。第 1 稿 60 日版 distinct 0.334、覆盖率 0.942 是旁证:非事件股精确抵消,落成并列。
+    |值| < 1e-4 的比例我这里算不出来(PI 不跑服务器,本机没有数据),先给先验。稳态约 0.2–0.3,即一年里既没派现、股本也没变的股票(2017–2021 年度实施现金分红的 A 股公司约占七成,这是公开年度统计的约数,未在本数据上核实;另有解禁、高管锁定股调整、增发)。有两个时段会升到 0.4–0.6:每年 6–7 月,今年除息日晚于去年那一天的派现股,窗口里暂时一次除息也没有;训练开头约 4 个月,窗口里只有 2017 年 10–12 月的 60 天预热,很少有除息。新相关度表的「门槛」列会验证 distinct。
+    (3) 纯多头腿,直说。方向 −1 的多头十分位是过去一年净派现收益率最高的股票。对绝大多数成员来说,它就是按除息日价格计的过去 12 个月股息率,加上少量回购注销,且同期没有新增供给。它和股息率 / 价值风格只差两点:(a) 发行和解禁记负,高股息但同期有大额解禁或定增的股票进不了多头;(b) 派现按除息日价格计,不随当前价格变。我不声称它和股息率是两回事。这一位检验的就是:净派现收益率这条多头腿,在 5 个控制中性化以后能不能过线。Boudoukh 等 2007 发现,净派现收益率比股息率含有更多关于预期收益的截面信息,这是把发行一并计入的理由。
+    它不是控制变量的非线性重写(陷阱 3):它的变化只来自公司行为(复权因子与股本),不来自价格、波动、成交额或市值。高股息股偏低波动,这一部分会被线性中性化去掉,残差里留下的是同一波动水平内派现的高低。方向 +1 的多头腿(新增供给最多)与文献相反,奖励若在 train 上选了 +1,应当视为可疑。
+    (4) 锁仓比例水平项 sub(LogTotalCap, LogFloatCap) 与 head 8 的 |ρ| 是 0.42,只在一个种子里出现(与总股本口径的发行相加:仍被锁住的未来供给 + 已发生的净发行)。
+    (5) cs_regres(流通口径, 总股本口径):派现对两个口径的影响相同,在残差里基本抵消,剩下的是流通股相对总股本的变化,即解禁(正)与定增尚未解禁(负)。
+
+    为什么和库里不同:库里没有 head 用到公司行为。head 8 ts_sum(LogFloatShares, 30) 是股本的水平,对 LogFloatCap 中性化以后约是 −log 价格(第 1 稿 R3 变体 1 与它的残差 |ρ| 是 0.85);本位取的是价格与送转都精确抵消以后的变化。第 1 稿 241 日版与 head 的原始 |ρ| 是 0.08–0.26,与 5 个控制 ≤ 0.21;新写法在没有缺失的地方与它逐点相同,预计不变。
+
+    为什么样本外还会在:派现与限售解禁的时间表是制度性的,不随样本期改变。净发行 / 净派现异象在美股发表之后仍然稳健(Pontiff–Woodgate 2008 在 1970 年后的样本里,它的显著性超过规模、账面市值比和动量)。变量一年只变几次,换手极低,15 bp 可以忽略。没有凸变换,也没有在 train 上挑的参数。
+
+    风险:(i) 发行异象的主力在发行方(空头腿),纯多头吃不到;多头腿能不能过线,目前没有 train 上的证据。train 里 2019–2020 年的成长行情对高派现不利,score 取 train 与 valid 中较差的一个,可能卡在这里。(ii) 训练开头约 4 个月窗口不满、并列多,这段时间多头书有一部分成员由控制的投影决定。(iii) 6–7 月的空档让部分派现股的值暂时归零再回来,带来少量换手;放了 20 / 60 日均值版对冲。(iv) LogTotalCap 含 H / B 股,只影响水平项,不影响变化项(H 股增发除外)。不用 LimitWidth / BoardCode。
+  inspired_by: 第 2 批 M 的 head ts_sum(LogFloatShares, 30) 与共性表里反复出现的 cross_fangzheng(pow_2_5(LogFloatShares), 60):后者的 60 日标准差项只在流通股本变过的股票上非零,是一个被凸幂包起来的股本变动探测器;第 1 次审计对实现的意见(用 NaN 安全的累积、窗口 ≥ 241 日、讲清纯多头腿);文献 Daniel–Titman 2006、Boudoukh 等 2007、Pontiff–Woodgate 2008、刘娥平–唐舜 2014
+  literature:
+  - title: Market Reactions to Tangible and Intangible Information
+    authors: Kent Daniel, Sheridan Titman
+    year: 2006-08
+    url: https://ideas.repec.org/p/nbr/nberwo/9743.html
+    treatment: 复合发行 ι = log(ME_t/ME_{t−τ}) − r(t−τ, t):市值增长减去总收益,派现记为负发行;本位用 ts_sum(ts_delta(sub(LogFloatCap 或 LogTotalCap, log(day_last(Close))), 1), 241) 实现,τ = 1 年
+  - title: 'On the Importance of Measuring Payout Yield: Implications for Empirical Asset Pricing'
+    authors: Jacob Boudoukh, Roni Michaely, Matthew Richardson, Michael R. Roberts
+    year: 2007-04
+    url: https://ideas.repec.org/a/bla/jfinan/v62y2007i2p877-915.html
+    treatment: 净派现收益率(派现 + 回购 − 发行)比股息率含有更多关于预期收益的截面信息;本位方向 −1 的多头腿就是它,把发行一并计入、不只看股息率
+  - title: Share Issuance and Cross-Sectional Returns
+    authors: Jeffrey Pontiff, Artemiza Woodgate
+    year: 2008-04
+    url: https://ideas.repec.org/a/bla/jfinan/v63y2008i2p921-945.html
+    treatment: 用期间(拆股调整后的)股数变化做横截面预测;本位用后复权因子扣掉送转,只留真实的股数变化
+  - title: The Expiration of IPO Share Lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: 2001-04
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i2p471-500.html
+    treatment: 锁定期解禁带来永久性的负异常收益、不反弹;本位用流通口径(解禁日计入)和 241 日累积窗口,事件在窗口里一直计入
+  - title: 可交易性折扣、价值转移与限售股解禁
+    authors: 刘娥平、唐舜
+    year: 2014-09
+    url: https://qks.sufe.edu.cn/J/ArticleQuery/A160824000481/CN
+    treatment: A 股限售股解禁:新增流通股相对比例越高负效应越大;本位的流通口径发行与 cs_regres(流通口径, 总股本口径) 的解禁分量
+  - title: What Determines Chinese Stock Returns?
+    authors: Fenghua Wang, Yexiao Xu
+    year: 2004-11
+    url: https://ideas.repec.org/a/taf/ufajxx/v60y2004i6p65-77.html
+    treatment: 自由流通比例在 A 股有独立于账面市值比的定价力;本位唯一的锁仓比例种子 sub(LogTotalCap, LogFloatCap)
+  seeds:
+  - 'ts_sum(ts_delta(sub(LogFloatCap, log(day_last(Close))), 1), 241)'
+  - 'ts_sum(ts_delta(sub(LogTotalCap, log(day_last(Close))), 1), 241)'
+  - 'cross_mean(ts_sum(ts_delta(sub(LogFloatCap, log(day_last(Close))), 1), 241), 20)'
+  - 'cross_mean(ts_sum(ts_delta(sub(LogTotalCap, log(day_last(Close))), 1), 241), 20)'
+  - 'cross_mean(ts_sum(ts_delta(sub(LogFloatCap, log(day_last(Close))), 1), 241), 60)'
+  - 'cross_mean(ts_sum(ts_delta(sub(LogTotalCap, log(day_last(Close))), 1), 241), 60)'
+  - 'cs_regres(ts_sum(ts_delta(sub(LogFloatCap, log(day_last(Close))), 1), 241), ts_sum(ts_delta(sub(LogTotalCap, log(day_last(Close))), 1), 241))'
+  - 'add(sub(LogTotalCap, LogFloatCap), ts_sum(ts_delta(sub(LogTotalCap, log(day_last(Close))), 1), 241))'
+R:
+- head: ts_sum(pow_2_5(ts_sum(pow_3(day_durbin_watson(High)), 1)), 1)
+  why: 两个部件可疑。(1) 数值:float32 的最小非规格数是 1.4e-45。day_durbin_watson(High) 的分母不去均值,约等于每分钟收益平方的均值(日内已实现方差,1e-6 ~ 2e-5),DW^7.5 在 1e-44 量级,约一半股票直接下溢为 0 —— 定位输出量到 distinct 从 pow_3 那一层的 0.9996 掉到 head 的 0.5523(擦着
+    0.5 的门槛),其它所有表达式都在 0.997 以上;方向 −1 的纯多头书买的正是这个并列块,块内残差的排序完全由 5 个控制决定。变体 1 乘 1000.0:(1000·DW)^7.5 = 1000^7.5 · DW^7.5 是正常数倍,EMA 是线性的、z 秩对正仿射不变,数学上与 head 逐日同秩,唯一的差别是不再下溢 —— 分数差很多就说明 head 的分数是数值假象;更高则应替换掉这个并列的版本。(2)
+    字段:DW(High) 是没声明的已实现方差;定位输出的凸度阶梯 e = 1 / 2.5 / 3 / 7.5 给出 −1.17 / +0.72 / +0.96 / +1.78,而四者每天的截面秩完全相同(非负量上的幂只改 EMA 怎么混合日子),增益全在 train(valid 从 e = 2.5 起饱和在 +2.4 ~ +2.7)—— 陷阱 1 的形状。变体 2 把叶子换成奖励自己声明的波动度量
+    day_std(Ret),同一条凸化阶梯(0.002^7.5 ≈ 1e-20,不下溢)。它若同样高分,head 1 就是低波动多头腿换了字段;它若胜出替换 head 1,换进库的仍是同一个机制、只是不再下溢,不新增陷阱(诊断用途)。
+  variants:
+  - ts_sum(pow_2_5(ts_sum(pow_3(mul(day_durbin_watson(High), 1000.0)), 1)), 1)
+  - ts_sum(pow_2_5(ts_sum(pow_3(day_std(Ret)), 1)), 1)
+- head: ts_sum(cross_stddev(day_durbin_watson(High), 60), 1)
+  why: cross_stddev(DW(High), 60) 必要性 +2.28(去掉它退回原始 DW 是 −1.18),但没有去尺度:已实现方差近似乘性,60 日标准差 ≈ c × 60 日均值,秩上与波动水平高度重合,分不清它是「风险的不确定性」(vol-of-vol;文献里的独立证据用的是隐含波动的波动,不能直接套过来)还是 RV 水平的又一个非线性写法(陷阱 3)。变体 3 换成变异系数
+    std/mean(去尺度的 vol-of-vol);变体 4 是同一个变异系数套在奖励声明的波动度量 day_std(Ret) 上;变体 5 是未去尺度的 day_std(Ret) 版空对照。外层 ts_sum(·, 1) 是恒等算子,保留只为让「只动 cross_stddev 这一个部件」一目了然。3/4 若仍 ≥ head + 0.1,应以去尺度版替换(更不依赖波动水平);3/4 塌而 5
+    保住,head 4 就是波动水平。
+  variants:
+  - ts_sum(div(cross_stddev(day_durbin_watson(High), 60), cross_mean(day_durbin_watson(High), 60)), 1)
+  - ts_sum(div(cross_stddev(day_std(Ret), 60), cross_mean(day_std(Ret), 60)), 1)
+  - ts_sum(cross_stddev(day_std(Ret), 60), 1)
+- head: ts_mean(pow_2(mul(pow_2(day_wmean(Ret, Ret)), day_var(Ret))), 30)
+  why: 部件 mul(·, day_var(Ret)) 可疑:必要性 +0.17,它就是把波动本身乘回去,等于手动加回中性化要去掉的东西(陷阱 3)。r1 对同一个 W 核心的直接评估里,四种去尺度写法全部塌掉(RSJ⁴ +0.18、(W/σ)⁴ +0.17、路径效率⁴ −0.71、波动十分位内 −0.75),但这个 head 上还没有严格对照。变体只把 mul 换成 div、其余一字不动:若掉到
+    +0.5 以下,这个部件的贡献就是波动尺度;若反而 ≥ head + 0.1,应以不含波动乘数的版本替换。
+  variants:
+  - ts_mean(pow_2(div(pow_2(day_wmean(Ret, Ret)), day_var(Ret))), 30)
