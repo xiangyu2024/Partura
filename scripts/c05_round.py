@@ -28,9 +28,12 @@ MODE = sys.argv[1]
 
 
 def snapshot(S, X, K):
+    """M batches 1..K, then the arm's missions of rounds < K.  A mission whose round has ended (its .DONE exists) but that left no
+    evidence failed twice: it spent its budget and produced nothing, so it is left out (PLAN revision 6)."""
     eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
     for k in range(1, K):
-        eps += sorted(Path(p) for p in glob.glob(str(EP / f"c05s{S}{X}r{k}[ab]_*")))
+        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"c05s{S}{X}r{k}[ab]_*")))
+                if (Path(p) / "evidence.json").is_file() or not (ARMS / f"s{S}_{X}_r{k}.DONE").is_file()]
     return eps
 
 
@@ -48,22 +51,47 @@ def library(S, X, K):
 
 def gp(tag, idea, guidance, arm, seed, budget, extra):
     log = ROOT / "logs" / f"_idea_{tag}.log"
-    cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('JOB_MINUTES', 180)}m", PY, "-u", "scripts/idea_search.py", idea,
+    cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('C05_JOB_MINUTES', 720)}m", PY, "-u", "scripts/idea_search.py", idea,
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
     # scheduling only (PLAN revision 1): a GP run uses ~3 GB of the card, so four may share it; a smaller panel cache keeps four in memory
-    env = {**os.environ, "PARTURA_GPU_WAYS": "2", "PARTURA_SLOTS": "8",
+    env = {**os.environ, "PARTURA_GPU_WAYS": "2", "PARTURA_SLOTS": "4",
            "PARTURA_PANEL_CACHE_GB": str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6))))}
+    CMDS[tag] = (cmd, env, budget)
     return tag, subprocess.Popen(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env)
+
+
+CMDS = {}
+
+
+def broken(tag):
+    """PLAN revision 6: a GP run whose evaluations failed in the engine (no GPU memory left) -- empty archive, or fewer
+    scored candidates than a quarter of its budget -- is an infrastructure failure, not a search outcome."""
+    eps = glob.glob(str(EP / f"{tag}_*" / "evidence.json"))
+    if not eps:
+        return True
+    for A in json.loads(Path(eps[0]).read_text(encoding="utf-8"))["arms"].values():
+        if A.get("live", 0) == 0 or A.get("scored", 0) < 0.25 * CMDS[tag][2]:
+            return True
+    return False
 
 
 def finish(S, X, K, procs):
     lines = []
     for tag, p in procs:
         code = p.wait()
+        if tag in CMDS and (code != 0 or broken(tag)):      # one rerun, by itself (PLAN revision 6)
+            log = ROOT / "logs" / f"_idea_{tag}.log"
+            log.rename(log.with_suffix(".broken.log"))
+            for ep in glob.glob(str(EP / f"{tag}_*" / "evidence.json")):
+                Path(ep).rename(Path(ep).with_suffix(".broken.json"))
+            cmd, env, _ = CMDS[tag]
+            code = subprocess.run(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env).returncode
+            code = code if not broken(tag) else 98
+            tag = tag + " (rerun)"
         lines.append(f"{tag} {code}")
         if tag.startswith("c05s"):
-            with (ROOT / "logs" / f"_idea_{tag}.log").open("a") as fh:
+            with (ROOT / "logs" / f"_idea_{tag.split()[0]}.log").open("a") as fh:
                 fh.write(f"[partura exit {code}]\n")
     (ARMS / f"s{S}_{X}_r{K}.DONE").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))

@@ -35,7 +35,7 @@ from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residu
 from partura.steer import reward as steer_reward  # noqa: E402
 
 MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
-os.environ.update(PARTURA_SLOTS="8", PARTURA_GPU_WAYS="2")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
+os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
 D = PARTURA_ROOT / "research" / "coldstart_C05"
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = "20180102", "20230807", "20220101"
@@ -51,8 +51,9 @@ G = Guidance.load(PARTURA_ROOT / "guidance" / "C05_base.yaml")
 def snapshot_episodes():
     """M batches 1..K, then this arm's missions of rounds < K, in that order."""
     eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
-    for k in range(1, K):
-        eps += sorted(Path(p) for p in glob.glob(str(EP / f"c05s{S}{ARM}r{k}[ab]_*")))
+    for k in range(1, K):                                 # a mission that ended without evidence produced nothing (PLAN revision 6)
+        done = (D / "arms" / f"s{S}_{ARM}_r{k}.DONE").is_file()
+        eps += [Path(p) for p in sorted(glob.glob(str(EP / f"c05s{S}{ARM}r{k}[ab]_*"))) if (Path(p) / "evidence.json").is_file() or not done]
     missing = [p for p in eps if not (p / "evidence.json").is_file()]
     if missing:
         raise SystemExit(f"snapshot incomplete: {[p.name for p in missing]}")

@@ -64,7 +64,7 @@ def opt(name, default=None):
 
 IDEA = argv[0]
 if os.environ.get("PARTURA_STUDY_DIR") == "coldstart_C05":    # scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
-    os.environ.update(PARTURA_SLOTS="8", PARTURA_GPU_WAYS="2",
+    os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2",
                       PARTURA_PANEL_CACHE_GB=str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)))))
 GPATH = opt("--guidance", "guidance/B01.yaml")
 BUDGET, POP = int(opt("--budget", 192)), int(opt("--population", 48))

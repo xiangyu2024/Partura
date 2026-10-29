@@ -17,6 +17,6 @@ for S in ${3:-801 802 803 804 805 806 807 808}; do
            [ $K -gt 1 ] && $H "test -e $R/arms/s${S}_B_r$((K - 1))_R.json && cat $R/arms/s${S}_B_r$((K - 1))_R.json" > $P/R_prev.json
            [ -s $P/R_prev.json ] || rm -f $P/R_prev.json
            echo "$S: $(wc -c < $P/loc.json) bytes of locate output" ;;
-    push)  $H "cat > $R/arms/s${S}_B_r$K.yaml" < $P/missions.yaml && echo "$S pushed" ;;
+    push)  $H "cat > $R/arms/.s${S}_B_r$K.yaml.part && mv $R/arms/.s${S}_B_r$K.yaml.part $R/arms/s${S}_B_r$K.yaml" < $P/missions.yaml && echo "$S pushed" ;;   # atomic
   esac
 done

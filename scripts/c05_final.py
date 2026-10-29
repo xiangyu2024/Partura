@@ -44,7 +44,9 @@ DRY = "--dry-run" in argv
 GPU = float(argv[argv.index("--gpu-fraction") + 1]) if "--gpu-fraction" in argv else 0.4
 D, EP = PARTURA_ROOT / "research" / "coldstart_C05", PARTURA_ROOT / "episodes"
 LEDGER = D / "ledger_c05.json"
-SEEDS, XS = list(range(801, 809)), ("A", "B0", "B")
+SEEDS, XS = [int(x) for x in os.environ.get("C05_SEEDS", "801,802,803,804,805,806,807,808").split(",")], ("A", "B0", "B")
+if not DRY and len(SEEDS) != 8:
+    raise SystemExit("the real read covers all 8 seeds")
 T_LINE, RHO_KNOWN, RHO_HEAD, RHO_ANTI = 2.0, 0.5, 0.7, -0.5
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
@@ -76,6 +78,9 @@ for S in SEEDS:
             types = slot_types(S, X, k)
             for p in sorted(glob.glob(str(EP / f"c05s{S}{X}r{k}[ab]_*"))):
                 ep = Path(p)
+                if not (ep / "evidence.json").is_file():          # failed twice: budget spent, nothing produced (PLAN revision 6)
+                    MISS.append({"seed": S, "arm": X, "round": k, "slot": ep.name.split("_")[0][-1], "type": "failed", "scored": 0, "heads": 0})
+                    continue
                 j = ep.name.split("_")[0][-1]
                 E = c05_lib.evidence(ep)
                 for arm, A_ in E["arms"].items():
