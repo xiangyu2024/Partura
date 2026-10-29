@@ -8,8 +8,9 @@ K=${2:?round}
 L=/Users/wxy/Desktop/Partura/research/coldstart_C05
 # every remote call is retried (the old server's ssh gateway drops connections now and then); a fetched file must be non-empty
 rsh() { local H="$1"; shift; for i in 1 2 3 4 5; do $H "$@" && return 0; sleep 10; done; return 1; }
-host() { if [ $1 -le 804 ]; then echo "ssh -p 29982 root@connect.westd.seetacloud.com"; else echo "ssh root@100.111.77.69"; fi; }
-dir() { if [ $1 -le 804 ]; then echo /root/autodl-tmp/Partura/research/coldstart_C05; else echo /var/snap/docker/common/var-lib-docker/c02_partura/Partura/research/coldstart_C05; fi; }
+# PLAN revision 11: seed 802 from round 3 on lives on the new host
+host() { if [ $1 -le 804 ] && ! { [ $1 = 802 ] && [ $K -ge 3 ]; }; then echo "ssh -p 29982 root@connect.westd.seetacloud.com"; else echo "ssh root@100.111.77.69"; fi; }
+dir() { if [ $1 -le 804 ] && ! { [ $1 = 802 ] && [ $K -ge 3 ]; }; then echo /root/autodl-tmp/Partura/research/coldstart_C05; else echo /var/snap/docker/common/var-lib-docker/c02_partura/Partura/research/coldstart_C05; fi; }
 for S in ${3:-801 802 803 804 805 806 807 808}; do
   H=$(host $S); R=$(dir $S); P=$L/partura/s$S/r$K
   case $1 in

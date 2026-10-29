@@ -136,7 +136,7 @@ print(f"[idea] code {CODE}; screen base {opt('--screen-base', 'pool')}; reward d
 print(f"[idea] {IDEA}: reward {KIND}; budget {BUDGET} (population {POP}); arms {ARMS}; idea operators {sorted(IDEA_OPS)}; must-contain {sorted(MUST)}", flush=True)
 
 with slot():
-    mem = MemoryGuard(self_limit_gb=34, cgroup_limit_gb=70).start()
+    mem = MemoryGuard(self_limit_gb=float(os.environ.get("PARTURA_SELF_LIMIT_GB", 34)), cgroup_limit_gb=70).start()   # C05 PLAN revision 11: the host may allow more
     t0 = time.time()
     import torch
     # Load before anything touches default_registry() (ps.compute() below parses expressions, which does): installs

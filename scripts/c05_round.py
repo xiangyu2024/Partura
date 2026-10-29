@@ -104,6 +104,7 @@ def gp(tag, idea, guidance, arm, seed, budget, extra):
 
 
 CMDS = {}
+RCMDS = {}
 
 
 def broken_ep(ep, budget):
@@ -137,6 +138,11 @@ def finish(S, X, K, procs):
             cmd, env, _ = CMDS[tag]
             code = subprocess.run(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env).returncode
             code = code if not broken(tag) else 98
+            tag = tag + " (rerun)"
+        if tag in RCMDS and code != 0:                       # the R evaluation gets the same one rerun (PLAN revision 11)
+            cmd, env, log = RCMDS[tag]
+            log.rename(log.with_suffix(".broken.log"))
+            code = subprocess.run(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env).returncode
             tag = tag + " (rerun)"
         lines.append(f"{tag} {code}")
         if tag.startswith("c05s") and isinstance(p, subprocess.Popen) or tag.endswith("(rerun)"):
@@ -246,6 +252,7 @@ elif MODE == "mission":
         rq = ARMS / f"rreq_s{S}_{X}_r{K}.json"
         rq.write_text(json.dumps(plan["R"], ensure_ascii=False), encoding="utf-8")
         log = ROOT / "logs" / f"_c05R_s{S}_{X}_r{K}.log"
+        RCMDS[f"R_s{S}_{X}_r{K}"] = ([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], {**os.environ, "PARTURA_GPU_WAYS": "2"}, log)
         procs.append((f"R_s{S}_{X}_r{K}", subprocess.Popen([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], cwd=ROOT,
                                                             stdout=log.open("w"), stderr=subprocess.STDOUT,
                                                             env={**os.environ, "PARTURA_GPU_WAYS": "2"})))   # the same two ways as the GP runs (PLAN revision 2)
