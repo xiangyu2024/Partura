@@ -63,6 +63,9 @@ def opt(name, default=None):
 
 
 IDEA = argv[0]
+if os.environ.get("PARTURA_STUDY_DIR") == "coldstart_C05":    # scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
+    os.environ.update(PARTURA_SLOTS="8", PARTURA_GPU_WAYS="4",
+                      PARTURA_PANEL_CACHE_GB=str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)))))
 GPATH = opt("--guidance", "guidance/B01.yaml")
 BUDGET, POP = int(opt("--budget", 192)), int(opt("--population", 48))
 ARMS = opt("--arms", "steer,control").split(",")
@@ -444,7 +447,8 @@ with slot():
         evidence["arms"][arm] = {"error": err, "checkpoints": len(files), "seconds": time.time() - ta, "scored": scored, "gate_fail": sum(s.gate for s in ac_plugin.SCORERS[n0:]),
                                  "rho_rejected": sum(getattr(s, "rho_rejected", 0) for s in ac_plugin.SCORERS[n0:]),
                                  "scoring_seconds": sum(s.seconds for s in ac_plugin.SCORERS[n0:]), "archive": len(cand), "live": len(live),
-                                 "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80]}
+                                 "passers": len(passers), "sampling": dict(stats), "candidates": sorted(live, key=lambda c: -c["fit"])[:80],
+                                 "heads": [], "independent_distinct": 0}   # (no passers at all: stays 0 -- C05 PLAN revision 2)
         print(f"[idea] {arm}: {scored} scored, {len(live)} live in the archive, {len(passers)} pass (score >= {THR:g}{', each period >= ' + format(DISCOVERY_MIN_PERIOD, 'g') if KIND in PAIRED else ''}) "
               f"in {time.time() - ta:.0f}s; sampling {dict(stats)}", flush=True)
         (ep_dir / "evidence.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
