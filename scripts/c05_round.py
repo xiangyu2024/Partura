@@ -51,7 +51,10 @@ def gp(tag, idea, guidance, arm, seed, budget, extra):
     cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('JOB_MINUTES', 180)}m", PY, "-u", "scripts/idea_search.py", idea,
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
-    return tag, subprocess.Popen(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT)
+    # scheduling only (PLAN revision 1): a GP run uses ~3 GB of the card, so four may share it; a smaller panel cache keeps four in memory
+    env = {**os.environ, "PARTURA_GPU_WAYS": "4", "PARTURA_SLOTS": "8",
+           "PARTURA_PANEL_CACHE_GB": str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6))))}
+    return tag, subprocess.Popen(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env)
 
 
 def finish(S, X, K, procs):
