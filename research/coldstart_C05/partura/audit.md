@@ -10,3 +10,4 @@
 | 1 | wf_44c95afb(804) | 1 | 804 的 PI 在本地校验表达式时用 `Guidance.load("guidance/C05_base.yaml")` 构造解析器(与 c05_check.py 的做法相同),不是读结果 |
 | 2 | wf_bf412b93(801、803) | 1 | 误报:803 解剖员用 Bash 写入的文件内容里提到文件名 |
 | 2 | wf_fe8422a7(805、806) | 1 | 805 的 PI `cat guidance/C05_base.yaml`(环境定义,不含结果),轻微越界,同 801 / 802 |
+| 2 | wf_7cf5962f(804、807、808) | 1 | 808 的 PI `cat guidance/C05_base.yaml`(环境定义,不含结果),轻微越界 |
