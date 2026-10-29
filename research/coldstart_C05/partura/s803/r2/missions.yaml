@@ -1,0 +1,138 @@
+seed: 803
+round: 2
+slots:
+  - type: E
+    core: 'ts_skew(day_durbin_watson(Open), 50)'
+    hypothesis: >-
+      核心 ts_skew(day_durbin_watson(Open), 50)。day_durbin_watson 用在价格水平上是当日已实现方差(分母是 Σx² 不是去均值平方和;解剖员算术:与 day_var(Ret) 差 0.4%,秩相关 1.00,
+      乘性标度不变所以复权因子被约掉);外层 50 日偏度读的是这只股票自己日方差序列的形状。方向 -1 = 做多两个半月里没有孤立爆波动日、方差天天差不多的股票。
+      它是本种子唯一四条轴都站得住的来源:去掉外层只剩日内方差 -2.13,加上外层 +1.18;窗口 25 / 100、字段 Open->Close 都不崩;整个家族 valid 都在 2.0-2.5;rho_known 0.19。
+      ts_skew 对仿射变换不变,所以五个水平控制(波动、成交额、20 日反转、已知族、市值)以及价格水平、股本在构造上都碰不到它。
+      本任务把含核心的两个 head(1.56 与 1.23)放进控制,只奖励核心之外的信息。快照里含核心的外围是 M2 那一批的写法:再套一层 ts_skew、cross_autocorr_s1、换窗口 ——
+      都是对同一个偏度数再做时序平滑 / 变换。这次的外围换成核心没有读、也没人试过的四件事,并且全部写成「核心十分位内的另一个量」(cs_bucket_rank(X, 核心))或
+      「居中秩的交互项」(mul(sub(cs_rank(核心), 0.5), sub(cs_rank(X), 0.5))),使候选与核心本身的秩相关接近 0,过得了 0.7 的库禁令:
+      (1) 爆波动日的时点:窗口里最大方差日的位置、50 日减 20 日偏度、偏度的 10 日变化、偏度相对自己 120 日中位数(种子 1-4);
+      (2) 爆波动的方向:log 日方差与当日日内收益的 50 日相关 —— 爆的是涨日还是跌日(好波动 / 坏波动)(种子 5、6);
+      (3) 爆波动是不是放量:log 日方差与 log 成交额的 50 日相关(种子 7、8);以及 vol-of-vol(日方差的变异系数)、波动聚集(log 日方差的一阶自相关)、
+      今天的方差相对 50 日中位数(种子 9-11);
+      (4) 核心的效果随不随名义价格(LogFloatCap - LogFloatShares,即给定市值的 log 价格,价格网格混淆所在)、流动性、上市年龄、零收益比例变化(种子 12-15),
+      以及按市场波动状态翻向(种子 16;若核心在两种状态里都有效,翻向版应明显更差,这本身就是判决)。
+      工程注意:日方差量级约 1e-6,AlphaCube 的相关 / 回归 / 峰度在分母加 EPS = 1e-9,对裸 DW 求相关会被压向 0 并变成水平代理、求峰度恒为 NaN,
+      所以外围里凡是对日方差求二阶量的地方都先取 log。
+    literature:
+      - {title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns', authors: 'Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient', year: '2018', url: 'https://doi.org/10.1017/S0022109018000480', treatment: '波动的波动是独立于波动水平的定价量;种子 9 把日方差的变异系数放在核心十分位内读(核心是偏度,变异系数是离散度,两者互补而不互替)'}
+      - {title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns', authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao', year: '2020', url: 'https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html', treatment: '把方差按收益方向分开;这里在日这条轴上做:log 日方差与日内收益的 50 日相关,种子 5 在核心十分位内读,种子 6 与核心做交互'}
+      - {title: 'Expected Idiosyncratic Skewness', authors: 'Brian Boyer, Todd Mitton, Keith Vorkink', year: '2010', url: 'https://papers.ssrn.com/abstract=1541002', treatment: '原始滚动偏度是噪声大、持续性弱的估计;种子 2-4 不再加平滑,而是读核心的变化与它相对自己常态的偏离(爆波动日刚进窗口还是快出窗口)'}
+      - {title: 'The Dependence between Hourly Prices and Trading Volume', authors: 'Prem C. Jain, Gun-Ho Joh', year: '1988-09', url: 'https://resolve.cambridge.org/core/journals/journal-of-financial-and-quantitative-analysis/article/dependence-between-hourly-prices-and-trading-volume/C305DB5BFB5F2B2D803BB94449AF8B47', treatment: '波动与成交量的共动;种子 7、8 读日方差与成交额的 50 日时序相关(放量的爆波动 = 信息,缩量的爆波动 = 流动性冲击)'}
+      - {title: 'Estimation of Stock Price Variances and Serial Covariances from Discrete Observations', authors: 'Lawrence Harris', year: '1990', url: 'https://ideas.repec.org/a/cup/jfinqa/v25y1990i03p291-306_00.html', treatment: '价格离散会抬高测得的方差,偏差依赖价格档位;种子 13 把给定市值的 log 名义价格当调节变量与核心做交互,看核心是否只在低价股里有效'}
+      - {title: 'A New Estimate of Transaction Costs', authors: 'David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka', year: '1999', url: 'https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html', treatment: '零收益比例是交易摩擦的读数;种子 15 把它的 20 日均值当调节变量与核心做交互'}
+      - {title: 'Volatility-of-Volatility Risk', authors: 'Darien Huang, Christian Schlag, Ivan Shaliastovich, Julian Thimme', year: '2019', url: 'https://ideas.repec.org/a/cup/jfinqa/v54y2019i6p2423-2452_5.html', treatment: 'vol-of-vol 与波动水平弱相关、各自定价;种子 16 用全市场平均日内波动的状态让核心翻向,检验核心的溢价是否依赖市场波动状态'}
+    seeds:
+      - 'cs_bucket_rank(ts_argmax(day_durbin_watson(Open), 50), ts_skew(day_durbin_watson(Open), 50))'
+      - 'sub(ts_skew(day_durbin_watson(Open), 50), ts_skew(day_durbin_watson(Open), 20))'
+      - 'cs_rank(ts_delta(ts_skew(day_durbin_watson(Open), 50), 10))'
+      - 'sub(ts_skew(day_durbin_watson(Open), 50), cross_med(ts_skew(day_durbin_watson(Open), 50), 120))'
+      - 'cs_bucket_rank(ts_corr(log(day_durbin_watson(Open)), day_sum(Ret), 50), ts_skew(day_durbin_watson(Open), 50))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ts_corr(log(day_durbin_watson(Open)), day_sum(Ret), 50)), 0.5))'
+      - 'cs_bucket_rank(ts_corr(log(day_durbin_watson(Open)), log(day_sum(Amt)), 50), ts_skew(day_durbin_watson(Open), 50))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ts_corr(log(day_durbin_watson(Open)), log(day_sum(Amt)), 50)), 0.5))'
+      - 'cs_bucket_rank(div(cross_stddev(day_durbin_watson(Open), 50), cross_mean(day_durbin_watson(Open), 50)), ts_skew(day_durbin_watson(Open), 50))'
+      - 'cs_bucket_rank(cross_autocorr_s1(log(day_durbin_watson(Open)), 50), ts_skew(day_durbin_watson(Open), 50))'
+      - 'cs_bucket_rank(div(day_durbin_watson(Open), cross_med(day_durbin_watson(Open), 50)), ts_skew(day_durbin_watson(Open), 50))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_mean(day_sum(Amt), 20)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(sub(LogFloatCap, LogFloatShares)), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(ListAge), 0.5))'
+      - 'mul(sub(cs_rank(ts_skew(day_durbin_watson(Open), 50)), 0.5), sub(cs_rank(cross_mean(day_zero_ratio(Ret), 20)), 0.5))'
+      - 'cs_flip_by_state(ts_skew(day_durbin_watson(Open), 50), cross_mean(day_std(Ret), 20))'
+  - type: N
+    hypothesis: >-
+      本种子唯一被拆解四条轴证实的机制是:把一个旧的日频量换成「它自己 50 日分布的形状」。裸日方差 -2.13,套上 ts_skew(·, 50) 变成 +1.18,
+      因为偏度对仿射变换不变,控制拿掉的是水平,偏度读的是形状,两者在构造上正交。而五个控制全部是水平(成交额均值、波动均值、20 日反转、成交额日内离散的均值、市值)。
+      新想法:「日频量自身时间分布的形状」是一类 alpha,不只对已实现方差成立 —— 爆发型的股票(偶尔爆量、偶尔暴涨、偶尔一天里一分钟吃掉全天)吸引注意力与彩票需求而被高估,
+      做多形状平稳的一端。把同一招用到核心 A 没读的日频量上,三组:
+      (a) 成交额:50 日偏度、上尾均值 / 中位数、变异系数(交易活跃度的波动)、今天相对自己 50 日的稳健 z(异常成交)、分位数偏度、上下行半偏差比、log 成交额的峰度(种子 1-7);
+      (b) 收益:收盘到收盘、隔夜(今开 / 昨收)、日内(分钟收益之和)三种日收益的 50 日偏度 —— 彩票 / 特质偏度,并把隔夜与日内分开(种子 8-10);
+      (c) 日内形状序列:分钟峰度、成交时点重心、零收益比例、带方向成交额占比、成交额集中度这些日频量的 50 日偏度(种子 11-15)。
+      都不对日方差本身做(会撞核心 A 的 0.7 库禁令,也不是新信息)。
+    inspired_by: >-
+      M 第 2 批:ts_skew(day_durbin_watson(Open), 50) 去掉外层是 -2.13、加上是 +1.18,是本种子最强、valid 最稳(全家族 2.0-2.5)的来源;
+      文献:Chordia-Subrahmanyam-Anshuman (2001) 交易活跃度的波动、Gervais-Kaniel-Mingelgrin (2001) 异常成交、Bali-Cakici-Whitelaw (2011) 与 Boyer-Mitton-Vorkink (2010) 彩票 / 特质偏度、
+      Lou-Polk-Skouras (2019) 隔夜与日内分开、Kim-White (2004) 稳健偏度。
+    literature:
+      - {title: 'Trading activity and expected stock returns', authors: 'Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman', year: '2001', url: 'https://doi.org/10.1016/S0304-405X(00)00080-5', treatment: '交易活跃度的变异系数(不是水平)与未来收益负相关;种子 3 用 50 日成交额的标准差 / 均值'}
+      - {title: 'The High-Volume Return Premium', authors: 'Simon Gervais, Ron Kaniel, Dan H. Mingelgrin', year: '2001', url: 'https://doi.org/10.1111/0022-1082.00349', treatment: '相对自己历史的异常成交量预测收益;种子 4 用今天成交额相对自己 50 日的稳健 z,种子 1、2、5、6 读爆量在 50 日里的不对称'}
+      - {title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011', url: 'https://doi.org/10.1016/j.jfineco.2010.08.014', treatment: '日收益分布右尾极端(彩票)的股票被高估;种子 8-10 用三种日收益的 50 日偏度代替单日 MAX'}
+      - {title: 'Expected Idiosyncratic Skewness', authors: 'Brian Boyer, Todd Mitton, Keith Vorkink', year: '2010', url: 'https://papers.ssrn.com/abstract=1541002', treatment: '特质偏度与未来收益负相关;种子 8 是它的直接写法(总偏度,不先拟合)'}
+      - {title: 'A tug of war: Overnight versus intraday expected returns', authors: 'Dong Lou, Christopher Polk, Spyros Skouras', year: '2019', url: 'https://doi.org/10.1016/j.jfineco.2019.03.011', treatment: '隔夜与日内收益由不同投资者驱动、溢价方向不同;种子 9(隔夜)与种子 10(日内)分开读偏度'}
+      - {title: 'On More Robust Estimation of Skewness and Kurtosis', authors: 'Tae-Hwan Kim, Halbert White', year: '2004-03', url: 'https://ideas.repec.org/a/eee/finlet/v1y2004i1p56-73.html', treatment: '矩偏度易被单点支配;种子 5 用四分位(Bowley)偏度,种子 2 用上尾条件均值 / 中位数,与种子 1 的矩偏度对照'}
+    seeds:
+      - 'ts_skew(day_sum(Amt), 50)'
+      - 'div(cross_tail_mean_q75(day_sum(Amt), 50), cross_med(day_sum(Amt), 50))'
+      - 'div(cross_stddev(day_sum(Amt), 50), cross_mean(day_sum(Amt), 50))'
+      - 'cross_madz(day_sum(Amt), 50)'
+      - 'div(sub(sub(cross_quantile_q75(day_sum(Amt), 50), cross_quantile_q50(day_sum(Amt), 50)), sub(cross_quantile_q50(day_sum(Amt), 50), cross_quantile_q25(day_sum(Amt), 50))), sub(cross_quantile_q75(day_sum(Amt), 50), cross_quantile_q25(day_sum(Amt), 50)))'
+      - 'div(cross_semistd_pos(day_sum(Amt), 50), cross_semistd_neg(day_sum(Amt), 50))'
+      - 'ts_kurt(log(day_sum(Amt)), 50)'
+      - 'ts_skew(div(day_last(Close), ts_delay(day_last(Close), 1)), 50)'
+      - 'ts_skew(div(day_first(Open), ts_delay(day_last(Close), 1)), 50)'
+      - 'ts_skew(day_sum(Ret), 50)'
+      - 'ts_skew(day_kurt(Ret), 50)'
+      - 'ts_skew(day_centroid(Amt), 50)'
+      - 'ts_skew(day_zero_ratio(Ret), 50)'
+      - 'ts_skew(day_signed_ratio(Ret, Amt), 50)'
+      - 'ts_skew(day_gini(Amt), 50)'
+R:
+  - head: 'ts_skew(day_durbin_watson(Open), 50)'
+    why: >-
+      核心 A 的两条未排除混淆和 ts_skew 这个部件的替换件。
+      [零收益质量] 1 Vwap 在无成交分钟缺失,DW 的分子只用两端都有效的对 = 只在成交过的分钟上算已实现方差(r1 同一刀让 day_kurt 从 0.97 掉到 0.02);
+      [算术核对] 2 day_var(Ret) 应与头几乎同分、rho_head >= 0.9,否则解剖员的「DW(Open) = 日内方差」要重写;
+      [要不要原始右尾] 3 不平方(std)、4 取 log 再算偏度:沿幂次阶梯 1 -> 0.5 -> 0 看 alpha 掉多少,掉得越多越说明它要的是孤立爆波动日的极端值;
+      [替换 ts_skew 部件] 5 上尾条件均值 / 中位数、6 四分位(Bowley)偏度(Kim-White 2004:不被单点支配)、7 上下行半偏差比(Bollerslev-Li-Zhao 2020 的方向思路);
+      [名义价格] 8 sub(LogFloatCap, LogFloatShares) 是给定市值的精确 log 价格,只用允许的日频叶子;它对头的 rho_head 就是价格网格混淆的份量。
+      不放 ts_kurt(day_durbin_watson(Open), 50):日方差的方差约 1e-12 < EPS = 1e-9,nankurt 恒为 NaN,会是门槛废品。
+      不放 Open->Close(+0.21):同一换法在 head 1 上是 -0.23,valid 不动,判为训练段抖动。
+    variants:
+      - 'ts_skew(day_durbin_watson(Vwap), 50)'
+      - 'ts_skew(day_var(Ret), 50)'
+      - 'ts_skew(day_std(Ret), 50)'
+      - 'ts_skew(log(day_durbin_watson(Open)), 50)'
+      - 'div(cross_tail_mean_q75(day_durbin_watson(Open), 50), cross_med(day_durbin_watson(Open), 50))'
+      - 'div(sub(sub(cross_quantile_q75(day_durbin_watson(Open), 50), cross_quantile_q50(day_durbin_watson(Open), 50)), sub(cross_quantile_q50(day_durbin_watson(Open), 50), cross_quantile_q25(day_durbin_watson(Open), 50))), sub(cross_quantile_q75(day_durbin_watson(Open), 50), cross_quantile_q25(day_durbin_watson(Open), 50)))'
+      - 'div(cross_semistd_pos(day_durbin_watson(Open), 50), cross_semistd_neg(day_durbin_watson(Open), 50))'
+      - 'sub(LogFloatCap, LogFloatShares)'
+  - head: 'cross_autocorr_s1(ts_skew(ts_skew(day_durbin_watson(Open), 50), 50), 3)'
+    why: >-
+      里面那层重复的 ts_skew 必要性 +0.0065(knockout 1.5565 对 1.5630),而且把输入 coverage 从 0.998 压到 0.871,
+      cross_autocorr_s1 再用 count.clamp(min=1) 把这约 12.8% 的格子(历史不足 100 天的次新 / 复牌股)填成常数 0 或 ±1 —— 库里最高分的 head 有 1/8 的值是造出来的。
+      去掉它,并用窗口扫描里最好的 6(双层版 3 -> 6 值 +0.05)。估计到不了 +0.1 的替换线,但若到了,库里就换成没有假值块的版本。
+    variants:
+      - 'cross_autocorr_s1(ts_skew(day_durbin_watson(Open), 50), 6)'
+  - head: 'cross_corr(day_kurt(Ret), day_gini(Ret), 241)'
+    why: >-
+      库里结构最弱的 head(0.73,train 卡住,valid 2.30):窗口是刀锋(241 -> 120 变 -0.23,-> 482 变 -1.14 且翻号);
+      day_kurt(Ret) 原始值极重尾(只有一分钟有成交的日子约 +236),在 241 日的 Pearson 相关里几个尖峰日就决定了结果;
+      搭档 day_gini(Ret) 本身 rho_known -0.63,是已知族的另一种写法。
+      9 先压尾 log(kurt + 5) 再求相关;10 搭档换成零收益比例(这个 head 读的是不是「尖峰是不是躺平造出来的」);11 两边先截面秩再求时序相关(去掉全市场共动与尾部)。
+      它只有 0.73,+0.1 的线在全库最好过。
+    variants:
+      - 'cross_corr(log(add(day_kurt(Ret), 5)), day_gini(Ret), 241)'
+      - 'cross_corr(day_kurt(Ret), day_zero_ratio(Ret), 241)'
+      - 'cross_corr(cs_rank(day_kurt(Ret)), cs_rank(day_gini(Ret)), 241)'
+  - head: 'sub(day_centroid(Amt), day_centroid(Ret))'
+    why: >-
+      核心 B(成交时点减波动时点)两半单独都是废的、差值 0.90;没测过的风险是收盘集合竞价那几根 bar 主宰了 day_centroid(Amt),那它就只是尾盘量占比。
+      in_delay(x, d) 把当日最后 d 根分钟推出窗口、开头补 NaN,重心整体平移一个常数,截面次序等于只用前 241 - d 根算的重心,两半同样平移,差值不受影响。
+      12 去掉最后 3 根(14:57-15:00 的收盘集合竞价);13 去掉最后 30 根(文献 [S30][S31]:改革后成交从收盘那一刻迁到收盘前几分钟);
+      14 波动时点改用平方收益(检验是否被一根大打印主宰)。12 若几乎不掉,第 3 轮可以放心给核心 B 一个 E 位。
+    variants:
+      - 'sub(day_centroid(in_delay(Amt, 3)), day_centroid(in_delay(Ret, 3)))'
+      - 'sub(day_centroid(in_delay(Amt, 30)), day_centroid(in_delay(Ret, 30)))'
+      - 'sub(day_centroid(Amt), day_centroid(mul(Ret, Ret)))'
+  - head: 'sub(day_centroid(Amt), LogFloatShares)'
+    why: >-
+      day_centroid(Amt) 在 [0, 1] 里、截面离散约 0.05-0.1,LogFloatShares 的截面离散约 1,所以这个 head 的秩几乎全由 LogFloatShares 决定;
+      控制里有 LogFloatCap,LogFloatShares = LogFloatCap - log 价格,残差后它约等于 -log 名义价格。换成精确的 log 名义价格(去掉成交时点那一半):
+      rho_head 若 >= 0.7 说明它就是价格因子;score 若 >= 0.63 就按规则换成更干净的写法。与上面第 8 个是同一个表达式,只算一次,rho_head 分别对两个 head 报。
+    variants:
+      - 'sub(LogFloatCap, LogFloatShares)'

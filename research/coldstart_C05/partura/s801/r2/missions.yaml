@@ -1,0 +1,81 @@
+seed: 801
+round: 2
+slots:
+  - type: E
+    core: 'cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)'
+    hypothesis: 'alpha 来源:核心 A = 同组(BoardCode 的十个序号桶 = 板块 × 代码段邻域,若 store 按代码排列即同板块同上市批次)内的相对价格水平,再套一个季度滚动最小值 = 「近一季在同组里从没便宜过」。它是快照里唯一一个自己就过线的子树(单独 score +0.76,train +0.76 / valid +1.22,distinct 1.0),里层分组标准化的必要性 +2.38 / +1.90,远高于约 0.4 的噪声底;换成裸价格水平 cross_min(day_sum(Vwap), 60) 就掉到 -0.69 / -0.41。第 1 轮 R 显示分钟价格字段多半是复权价(log 名义股价与 log(day_last(Close)) 只有 0.33 量级的关系),所以 A 更可能是「同组相对的长周期累计涨幅的地板」,与 52 周高点 / 参考点价格一族同类,而不是名义低价;本轮 R 1-4 同时做这一判别。快照里 A 只被用过一种方式:塞进 cs_last_high20 的 x 槽当 20% 排除筛选,y 槽要么是常数(常数的序号排名 = 一条静态列序斜坡,6 个 head 靠它过 distinct 门),要么是停在日内最低价时间对竞价量的残差,外围算子集合只有这 2 种。这次的外围全部换成以前没见过的四类处理:(1) 条件 / 序贯双重排序:cs_first_high40 / cs_first_high20 / cs_first_low40 把 A 的头部(或尾部)一段整体放在前面,段内按一个真实的第二变量排序(低 MAX、低偏度、5 日反转、低成交额异动、低波动),也反过来在低 MAX 段内按 A 排序 —— 用真实变量代替列序斜坡;(2) 连续交互:A 的秩与低波动、竞价成交额占比、低隔夜跳空的秩相乘或相加;(3) 时间维度:A 距自身 120 日最高点的距离、A 在自身 60 日里的 z 分数、A 的 20 日变化(参考点 / 近高点:离自己的锚多远,而不是在截面上多高);(4) 把 A 当别人的分组变量:A 十分位内的半年动量组内秩、MAX 组内 z 分数、60 日收益组内去均值(同业内比较)。奖励把 A 的家族(heads +1.69、+1.49)加进控制,所以退化成 A 本身拿不到分,只有段内排序、交互和时间维度上的新信息拿分。硬位移(ts_delay / ts_delta)都不超过 120 日,滚动窗口按部分窗口求值,覆盖率不会掉到 0.9 以下。'
+    literature:
+      - {title: 'The 52-Week High and Momentum Investing', authors: 'Thomas J. George, Chuan-Yang Hwang', year: '2004-10', url: 'https://onlinelibrary.wiley.com/doi/10.1111/j.1540-6261.2004.00695.x', treatment: '用「当前价相对自身 52 周高点的比例」而不是价格或收益本身做预测变量:这里对 A 取它距自身 120 日最高点的距离、在自身 60 日里的 z 分数'}
+      - {title: 'The Effect of Reference Point Prices on Mergers and Acquisitions', authors: 'Malcolm Baker, Xin Pan, Jeffrey Wurgler', year: '2012-10', url: 'https://www.nber.org/papers/w15551', treatment: '历史价格极值本身是一个与基本面无关的参考点(NBER 工作论文 2009-12 首发):把 A 的滚动极值当锚,度量离锚的距离与变化'}
+      - {title: 'Do Industries Explain Momentum?', authors: 'Tobias J. Moskowitz, Mark Grinblatt', year: '1999-08', url: 'https://ideas.repec.org/a/bla/jfinan/v54y1999i4p1249-1290.html', treatment: '在组内而不是全市场比较收益:把 A 的十分位当同业分组,在组内对半年动量、MAX、60 日收益取秩 / z 分数 / 去均值'}
+      - {title: 'Empirical Asset Pricing: The Cross Section of Stock Returns', authors: 'Turan G. Bali, Robert F. Engle, Scott Murray', year: '2016-04', url: 'https://www.wiley.com/en-us/Empirical+Asset+Pricing%3A+The+Cross+Section+of+Stock+Returns-p-9781118095041', treatment: '条件(序贯)双重排序与独立排序分开做:先按 A 分段、段内按第二变量排序(cs_first_*),并且两个变量轮流当第一道筛选'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011-02', url: 'https://www.nber.org/papers/w14804', treatment: '月内最大单日收益 MAX 作为彩票偏好度量,低 MAX 一端表现更好:作为 A 段内与 A 组内的第二排序变量'}
+    seeds:
+      - 'cs_first_high40(neg(cross_max(day_sum(Ret), 20)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_first_low40(neg(ts_skew(day_sum(Ret), 20)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_first_high40(neg(cross_mean(day_sum(Ret), 5)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_first_high40(neg(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60))), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_first_high20(neg(cross_stddev(day_sum(Ret), 20)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_first_low40(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), cross_max(day_sum(Ret), 20))'
+      - 'mul(cs_rank(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), cs_rank(neg(cross_stddev(day_sum(Ret), 20))))'
+      - 'add(cs_rank(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), cs_rank(neg(cross_max(day_sum(Ret), 20))))'
+      - 'mul(cs_rank(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), cs_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 20)))'
+      - 'mul(cs_rank(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60)), cs_rank(neg(cross_mean(div(day_first(Open), ts_delay(day_last(Close), 1)), 20))))'
+      - 'sub(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), cross_max(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), 120))'
+      - 'cross_zscore(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), 60)'
+      - 'ts_delta(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), 20)'
+      - 'cs_bucket_rank(div(day_last(Close), ts_delay(day_last(Close), 120)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_bucket_zscore(neg(cross_max(day_sum(Ret), 20)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_bucket_demean(neg(cross_mean(day_sum(Ret), 60)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+  - type: N
+    hypothesis: '09:30 开盘集合竞价(241 格的第一格:day_first(Volume) / day_first(Amt) 是竞价量 / 竞价额,day_first(Open) 是竞价价)承载的是开盘注意力与隔夜信息,和本种子库里占主导的「同组相对价格水平」轴正交,五个控制(流动性、波动、20 日点对点反转、已知族、流通市值)一个都不覆盖它。本种子库里唯一一个真正的排序变量(head +1.69 的 y 槽)是「停在日内最低价的时间占比对竞价量的截面残差」,在 at_min_ratio 大量并列时它的排序几乎就是竞价量 —— 竞价这条轴已经在最好的 head 里露过头,但从没被单独当因子用过。种子分五支:(1) 竞价成交额占全日比的 20 日均值、它相对自身 60 日的 z 分数、对流通市值的截面残差、近 5 日竞价额相对 60 日常态日成交额、竞价量相对当日峰值分钟量;(2) 隔夜跳空(竞价价 / 昨收)的 20 日均值、最大值与波动,日内(收 / 开)的 20 日均值,隔夜减日内(隔夜与日内的拔河),以及两者的 20 日时间序列相关(开盘方向是否被日内延续);(3) 竞价额占比加权的带符号跳空(竞价里的方向性压力);(4) 用「封在日内最高 / 最低的时间占比」做 10% 排除筛选,段内按跳空或 5 日反转排序(封涨停后的反转、封跌停后的延续);(5) 高低封板时间差对竞价量的残差、日内价位数对 log 名义股价的残差(扣掉报价格栅之后的僵化报价)。停在极值的时间占比大量并列,只当筛选变量或回归的被解释变量用,不直接取序号秩(否则列序斜坡会被带进来)。方向由 GP 定。'
+    inspired_by: 'M 第 1-2 批与本组第 1 轮的快照:库里唯一的真排序变量 cs_regres(day_at_min_ratio(Vwap), day_first(Volume)) 让 head +1.69 比同筛选变量的常数 y 版本(+1.49)多 +0.21,差别全在 valid;共性表里 day_first(Open) / log(day_first(Open)) 是正效应样本最大的一行(53 个候选,p 0.000);解剖员 4.3 节灵感 1 与 2;文献员题目 4(Berkman et al. 2012 开盘注意力与隔夜收益,Wan et al. 2015 与 Chen et al. 2019 的涨跌停封板后延续 / 反转,Liu 2006 的交易速度)。'
+    literature:
+      - {title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the Open', authors: 'Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang', year: '2012-08', url: 'https://ideas.repec.org/a/cup/jfinqa/v47y2012i04p715-741_00.html', treatment: '隔夜收益(开盘相对昨收)系统性偏高、随后日内部分反转,集中在受关注的股票:跳空的 20 日均值 / 最大值、竞价额占比加权的跳空、跳空与竞价额异动的组合'}
+      - {title: 'A Tug of War: Overnight Versus Intraday Expected Returns', authors: 'Dong Lou, Christopher Polk, Spyros Skouras', year: '2019-10', url: 'https://ideas.repec.org/a/eee/jfinec/v134y2019i1p192-213.html', treatment: '把收益拆成隔夜与日内两段分别做截面特征,两段的持续性和方向不同:隔夜均值、日内均值、两者之差、两者的时间序列相关'}
+      - {title: 'Statistical Properties and Pre-hit Dynamics of Price Limit Hits in the Chinese Stock Markets', authors: 'Yu-Lei Wan, Wen-Jie Xie, Gao-Feng Gu, Zhi-Qiang Jiang, Wei Chen, Xiong Xiong, Wei Zhang, Wei-Xing Zhou', year: '2015-03', url: 'https://arxiv.org/abs/1503.03548', treatment: '触板后次日延续概率高于反转、跌停更明显:把封在日内最低的时间占比当排除筛选,段内按 5 日反转排序'}
+      - {title: 'Daily price limits and destructive market behavior', authors: 'Ting Chen, Zhenyu Gao, Jibao He, Wenxi Jiang, Wei Xiong', year: '2019-01', url: 'https://www.nber.org/papers/w24014', treatment: '大户在触及涨停当天买入、次日卖出,预测更强的反转(NBER 工作论文 2017-11 首发):把封在日内最高的时间占比当排除筛选、高低封板时间做差'}
+      - {title: 'A liquidity-augmented capital asset pricing model', authors: 'Weimin Liu', year: '2006-12', url: 'https://www.casact.org/abstract/liquidity-augmented-capital-asset-pricing-model', treatment: '用窗口内零成交天数度量交易速度 / 锁定风险:在分钟粒度上换成日内价位数与封板时长,并对名义价格(报价格栅)取残差'}
+    seeds:
+      - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 20)'
+      - 'cross_zscore(div(day_first(Amt), day_sum(Amt)), 60)'
+      - 'cs_regres(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), LogFloatCap)'
+      - 'div(cross_mean(day_first(Amt), 5), cross_mean(day_sum(Amt), 60))'
+      - 'cross_mean(div(day_first(Volume), day_max(Volume)), 20)'
+      - 'cross_mean(div(day_first(Open), ts_delay(day_last(Close), 1)), 20)'
+      - 'cross_max(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)'
+      - 'cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)'
+      - 'cross_mean(div(day_last(Close), day_first(Open)), 20)'
+      - 'sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_mean(log(div(day_last(Close), day_first(Open))), 20))'
+      - 'cross_corr(div(day_first(Open), ts_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)), 20)'
+      - 'cross_mean(mul(div(day_first(Amt), day_sum(Amt)), log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20)'
+      - 'cs_last_high10(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_mean(day_at_max_ratio(Close), 20))'
+      - 'cs_last_high10(neg(cross_mean(day_sum(Ret), 5)), cross_mean(day_at_min_ratio(Close), 20))'
+      - 'cs_regres(cross_mean(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 20), cross_mean(day_first(Volume), 20))'
+      - 'cs_regres(cross_mean(day_distinct_ratio(Close), 20), sub(LogFloatCap, LogFloatShares))'
+R:
+  - head: 'cs_last_high20(pow_05(day_signed_ratio(Close, Close)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+    why: '这个 head(+1.49)的 y 槽 pow_05(day_signed_ratio(Close, Close)) 是常数(单独 distinct 0.0003、门槛废品;换字段、去 pow_05 都逐位相同),在 cs_last_high20 里只剩序号排名 = 静态列序斜坡;股票层面唯一的活输入是筛选变量 A。10 个变体分三组。(a) A 是什么,单独求值、与 A 本身的 +0.76 比:1 把 day_sum(Vwap) 换成精确 log 名义股价;2 换成 log(day_mean(Vwap))(log 复权价,与 1 只差「复权 vs 名义」);3 换成 day_mean(Vwap)(与 A 只差「当日有成交的分钟数」这条薄 / 封板通道);4 里层分组变量 BoardCode 换成 LogFloatCap(真十分位,判别「板块 × 代码段邻域」是不是关键)。(b) 列序斜坡值多少:5 纯斜坡本身(常数的序号秩);6 y 换成控制字段 LogFloatCap;7 y 换成 A 本身(多头 = A 的 80-90 分位);8 y 换成真实变量 MAX(20 日最大日收益,低 MAX 优先)—— 6/7/8 若比原 head 高 0.1 以上且仍是同一个东西,就用有经济含义的排序替掉这条斜坡。(c) 筛选的形状:9 band 20% 改 10%(真尾部效应应持平或更强);10 外层 cross_min 换成 cross_mean(「从没便宜过」是否只是平滑)。不接受定位工具报的 head +1.69 的 cross_min@60->120 替换(增益 +0.31 在噪声底以下、同样的改动在本 head 上是 -0.15、rho_known -0.4959 贴着 0.5 的红线),所以不列入。'
+    variants:
+      - 'cross_min(cs_bucket_zscore(sub(LogFloatCap, LogFloatShares), cross_min(cs_bucket_zscore(sub(LogFloatCap, LogFloatShares), BoardCode), 60)), 60)'
+      - 'cross_min(cs_bucket_zscore(log(day_mean(Vwap)), cross_min(cs_bucket_zscore(log(day_mean(Vwap)), BoardCode), 60)), 60)'
+      - 'cross_min(cs_bucket_zscore(day_mean(Vwap), cross_min(cs_bucket_zscore(day_mean(Vwap), BoardCode), 60)), 60)'
+      - 'cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), LogFloatCap), 60)), 60)'
+      - 'cs_rank(day_signed_ratio(Close, Close))'
+      - 'cs_last_high20(LogFloatCap, cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high20(cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high20(cross_max(day_sum(Ret), 20), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high10(pow_05(day_signed_ratio(Close, Close)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high20(pow_05(day_signed_ratio(Close, Close)), cross_mean(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+  - head: 'cs_last_high20(pow_05(cs_regres(day_at_min_ratio(Vwap), day_first(Volume))), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+    why: '这个 head(+1.69)是 11 个里唯一 y 槽不是常数的:停在日内最低价的时间占比对竞价量的截面残差;pow_05 是单调装饰(必要性 +0.0009)。at_min_ratio 在正常日几乎都等于 1/241,大量并列,所以残差的排序多半由竞价量决定。3 个变体都去掉 pow_05:11 y 只留竞价量 day_first(Volume)(y 的内容是不是就是竞价量);12 at_min 换成 at_max(停在日内最高 = 封涨停 / 僵化在高位,快照里从没出现过;文献说涨跌两侧不对称);13 y 换成竞价成交额占全日比(把 N 位的主变量放进已知有效的筛选里先测一次)。任何一个若比原 head 高 0.1 以上且仍是同一个东西,就是更干净的写法。'
+    variants:
+      - 'cs_last_high20(day_first(Volume), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high20(cs_regres(day_at_max_ratio(Vwap), day_first(Volume)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+      - 'cs_last_high20(div(day_first(Amt), day_sum(Amt)), cross_min(cs_bucket_zscore(day_sum(Vwap), cross_min(cs_bucket_zscore(day_sum(Vwap), BoardCode), 60)), 60))'
+  - head: 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.1, cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), day_quantile(Ret))))))'
+    why: '这个 head 的 +1.07 是 E 任务在 6 个控制下的增量分(另加了 M1 浮股 head 的家族),不是标准口径;它的内容是流通股扩张事件 X = sub(LogFloatShares, cross_min(LogFloatShares, 120)),外加一个换手秩小项。换手项有害:相对权重 0.10 -> 0.05 时同族过线者从 +0.69 升到 +1.07;day_quantile(Ret) 在 1e7 量级的成交量面前在 float32 里不存在,log 又在 cs_rank 里面,都是装饰。14 只留 X(多数股票日上 X = 0,先看能不能过 distinct 门);15 X 加一个权重 0.001 的流通市值秩当并列打破(市值是控制,会被中性化扣掉,只为过门、不引入换手);16 原 head 本身在标准 5 个控制下重评一次,给 E 口径做校准,并与 15 比出换手项在标准口径下的作用。第 3 轮要不要把 X 当 E 核心,看 14-16。'
+    variants:
+      - 'sub(LogFloatShares, cross_min(LogFloatShares, 120))'
+      - 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.001, cs_rank(LogFloatCap)))'
+      - 'add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), add(sub(LogFloatShares, cross_min(LogFloatShares, 120)), mul(0.1, cs_rank(sub(log(cross_mean(day_sum(Volume), 20)), day_quantile(Ret))))))'
