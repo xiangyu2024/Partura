@@ -1,0 +1,185 @@
+seed: 804
+round: 2
+slots:
+- type: E
+  core: 'sub(day_centroid(Volume), day_centroid(Ret))'
+  hypothesis: >-
+    核心 C = sub(day_centroid(Volume), day_centroid(Ret)),第 1 轮 N 位的 head(score +0.88,train +0.88 / valid +1.05,sign -1,hl 20;整个 head 当核心,PLAN 修订 3)。
+    为什么它是 alpha 来源:两条腿单独都没用甚至有害(day_centroid(Volume) -0.09、day_centroid(Ret) -1.38;第 1 轮 R 另量 day_centroid(sqrt(Volume)) +0.06),
+    只有两者之差拿分,是快照里唯一一个分数不能由任何部件复现的真交互项;day_centroid 是 |x| 沿分钟轴的质心、有界且尺度无关,
+    进不来成交量 / 市值量纲(对照 G 族 beta 与 t 值之分所暴露的尺度嫌疑);valid/train = 1.19,是库里唯一不像只吃 2022-01 ~ 2023-08 一段行情的 head。
+    读法:sign -1 => 多头 = 成交偏早、波动(|Ret|)偏晚。我不把它当成已证实的「知情交易时点」(文献员题 1:HKS 2010 提醒日内形状与跨日收益延续是两回事),只当成待解剖的交互项。
+    见过的外围:快照里原样含 C 的候选只有它自己(外围为空);两条腿周围见过的写法是 cs_bucket_rank(day_centroid(Volume), day_centroid(Ret))、
+    ts_mean(cs_bucket_rank(day_centroid(Volume), LogFloatCap), 10)、day_cov(in_index(Volume), Volume)、原始 / sqrt 质心、相对自身 20 日均值的偏离 —— 种子全部避开。
+    这次的外围(和以前都不一样):(1) 测量质量筛 —— 质心在成交稀疏、连板封死、新股上市初期这些情形下是机械失真的,所以把最年轻 20%(ListAge)、
+    最不流动 20%(30 日成交额)、分钟冻结最多的 10%(day_zero_ratio(Ret) 的 20 日均值:涨跌停封死 / 无成交;文献员题 4 Wan et al. 2015:涨停集中在开盘、跌停集中在尾盘,会直接搬动质心)
+    推到书底,另有一个剔除最高波动 20%;(2) 条件段 —— 成交集中度高(day_gini(Volume):Admati-Pfleiderer 1988 的裁量性集中、Barclay-Warner 1993)、
+    当日异常放量(信息到达日)、量与 |收益| 在分钟上本来同步(MDH,Clark 1973)的段排在前面,问「错配在哪里更灵」;
+    (3) 错配的时间序列性质 —— 符号的持续率、20 日均值除以 20 日波动(一致性)、相对自身 60 日的偏离、5 日减 60 日(变化);
+    (4) 分时段与第二种波动代理 —— 扣掉早盘段内自己的错配(HKS 2010 / Bogousslavsky 2021:按时段切开)、加上用分钟振幅 High-Low 定位的波动时点、加上开盘集合竞价成交占比。
+    所有种子都把 C 放在保序的位置(neg / 段筛 / 同量纲加减 / 时间平滑),不放进任何 *_reg* 参数位或 cs_flip_by_state 的第二参 —— 第 1 轮 E 的核心 day_mean(Open) 就是在
+    cross_reg_tvalue 里被整除掉的。奖励控制里加 C 自身这一个 head;库禁令拒掉与 C 秩相关 >= 0.7 的候选,所以纯平滑 / 纯桶内排序成不了 head,
+    能拿分的只有「C 在哪些股票 / 哪些日子更灵」或「C 加上另一个时点量」的新信息。
+    风险(写在前面):家族控制只有 1 个 head,比第 1 轮 E 的 4 个弱;段筛里的段本身若有独立 alpha(低波、流动性尾部)会混进分数 —— 对账时把 head 与它的段单独比较。
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: 'Anat R. Admati, Paul Pfleiderer'
+    year: '1988'
+    url: 'https://www.gsb.stanford.edu/faculty-research/publications/theory-intraday-patterns-volume-price-variability'
+    treatment: '流动性交易者把交易集中到冲击小的时段、知情者跟随掩护:用成交集中度(day_gini(Volume))当错配起作用的条件段,而不是只看波动水平'
+  - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+    authors: 'Michael J. Barclay, Jerold B. Warner'
+    year: '1993'
+    url: 'https://doi.org/10.1016/0304-405X(93)90029-B'
+    treatment: '价格变动由特定规模的成交推动:错配 x 成交集中度(大额成交占比)的交互,检验错配是否只是成交结构的另一种写法'
+  - title: 'Intraday Patterns in the Cross-section of Stock Returns'
+    authors: 'Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka'
+    year: '2010'
+    url: 'https://ideas.repec.org/a/bla/jfinan/v65y2010i4p1369-1407.html'
+    treatment: '用离散时段而不是全天连续统计量;日内形状本身不等于收益延续 —— 把早盘段内的错配从全天错配里扣掉'
+  - title: 'The Cross-Section of Intraday and Overnight Returns'
+    authors: 'Vincent Bogousslavsky'
+    year: '2021'
+    url: 'https://ideas.repec.org/a/eee/jfinec/v141y2021i1p172-194.html'
+    treatment: '不同特征的溢价在一天里不同窗口兑现:按时段切片(开盘段 / 收盘段)而不是只用全天质心'
+  - title: 'A Subordinated Stochastic Process Model with Finite Variance for Speculative Prices'
+    authors: 'Peter K. Clark'
+    year: '1973-01'
+    url: 'https://www.econometricsociety.org/publications/econometrica/1973/01/01/subordinated-stochastic-process-model-finite-variance'
+    treatment: 'MDH:量与波动同受信息流驱动、应当同步 —— 以分钟上量与 |收益| 的同步程度当条件段,问不同步在同步股里是不是更有信息'
+  - title: 'Statistical Properties and Pre-Hit Dynamics of Price Limit Hits in the Chinese Stock Markets'
+    authors: 'Yu-Lei Wan, Wen-Jie Xie, Gao-Feng Gu, Zhi-Qiang Jiang, Wei Chen, Xiong Xiong, Wei Zhang, Wei-Xing Zhou'
+    year: '2015-04'
+    url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4395215/'
+    treatment: '涨停多在开盘附近触发、跌停多在最后一小时:封板会机械地搬动质心 —— 把分钟冻结最多的名字从错配的多头书里剔掉'
+  seeds:
+  - 'cs_last_low20(neg(sub(day_centroid(Volume), day_centroid(Ret))), ListAge)'
+  - 'cs_last_low20(neg(sub(day_centroid(Volume), day_centroid(Ret))), cross_mean(day_sum(Amt), 30))'
+  - 'cs_last_high10(neg(sub(day_centroid(Volume), day_centroid(Ret))), ts_mean(day_zero_ratio(Ret), 20))'
+  - 'cs_last_high20(neg(sub(day_centroid(Volume), day_centroid(Ret))), cross_mean(day_std(Ret), 20))'
+  - 'cs_first_high40(neg(sub(day_centroid(Volume), day_centroid(Ret))), day_gini(Volume))'
+  - 'cs_first_high40(neg(sub(day_centroid(Volume), day_centroid(Ret))), cross_zscore(day_sum(Volume), 20))'
+  - 'cs_first_high40(neg(sub(day_centroid(Volume), day_centroid(Ret))), ts_mean(day_corr(abs_(Ret), Volume), 20))'
+  - 'ts_mean(sign(sub(day_centroid(Volume), day_centroid(Ret))), 20)'
+  - 'div(ts_mean(sub(day_centroid(Volume), day_centroid(Ret)), 20), ts_stddev(sub(day_centroid(Volume), day_centroid(Ret)), 20))'
+  - 'cross_zscore(sub(day_centroid(Volume), day_centroid(Ret)), 60)'
+  - 'sub(ts_mean(sub(day_centroid(Volume), day_centroid(Ret)), 5), ts_mean(sub(day_centroid(Volume), day_centroid(Ret)), 60))'
+  - 'add(sub(day_centroid(Volume), day_centroid(Ret)), sub(day_centroid(Volume), day_centroid(sub(High, Low))))'
+  - 'sub(sub(day_centroid(Volume), day_centroid(Ret)), sub(day_centroid(in_half(Volume)), day_centroid(in_half(Ret))))'
+  - 'add(sub(day_centroid(Volume), day_centroid(Ret)), div(day_first(Volume), day_sum(Volume)))'
+- type: N
+  hypothesis: >-
+    分钟级的订单流方向、毒性与价格冲击,是本种子快照里从没被真正碰过的一块。证据:day_signed_ratio 在 378 个候选里出现了 46 次以上,
+    但全是 day_signed_ratio(High, Open) / (Close, Low) / (Low, Low) 这类恒等于 1 的退化写法(价格字段的符号恒正,解剖 §1.6-1.7),
+    这个算子的本意 —— 按分钟涨跌给成交额签名、得到净买压 day_signed_ratio(Ret, Amt) —— 一次都没出现;
+    而 G(自身 +1.44)里必要的一腿 day_topw_mean(Amt, Ret)(波动最大的 10% 分钟里的成交额)本身就是一个冲击 / 订单流量,只是带着金额量纲、经回归的尺度进入。
+    idea:把订单流拆开,每一类都给无量纲写法(避开 G 族的尺度嫌疑、也避开线性流动性控制):
+    (a) 方向:净买压的 20 日持续(分钟版 tick rule,BVC 思路)、净买压在规模十分位内的排序、「价格没有反映的买压」(净买压对同期日内收益的截面残差;20 日反转在控制里,方向类只看残差);
+    (b) 毒性:|净买压| 的 20 日均值(VPIN 的不平衡幅度,Easley-López de Prado-O'Hara)与它相对自身 60 日的偏离;
+    (c) 冲击结构:成交与 |收益| 在分钟上的对齐(day_corr)、成交最重的 10% 分钟的 |收益| 相对全天平均(Barclay-Warner:哪些成交推动价格)、
+    波动最大的 10% 分钟里的成交额占全天平均的倍数(G 那一腿的无量纲版)、最大成交分钟的涨跌方向;
+    (d) 弹性:昨天的净买压对今天日内收益的 40 日回归斜率(Pástor-Stambaugh 的 γ 思路;x 是 [-1, 1] 的签名比例,不带成交量单位)、净买压的 1 日自相关(拆单 / 羊群);
+    (e) Amihud 式冲击(|收益| / 成交额)在流动性十分位内的排序 —— 冲击 ≠ 流动性水平(Amihud 2002、Kyle 1985 的 λ)。
+    另有按成交额与按成交量加权的净买压之差(上涨分钟是否在更高价位成交 = 追涨)。预期:方向类多半被反转控制吃掉,冲击结构类最可能过线。
+  inspired_by: >-
+    本批:day_signed_ratio 的 46 次出现全是恒等于 1 的退化写法,本意从未被试(解剖 §1.6-1.7);G 的必要部件 day_topw_mean(Amt, Ret)(解剖 §1.1,跳掉内层 -1.46)。
+    文献:文献员题 1 ②⑤(Easley et al. 2012 的成交量时钟与订单流毒性、Barclay-Warner 1993)、题 2 ①②③(Pástor-Stambaugh 2003、Amihud 2002、Kyle 1985)。
+  literature:
+  - title: 'Flow Toxicity and Liquidity in a High Frequency World'
+    authors: "David Easley, Marcos López de Prado, Maureen O'Hara"
+    year: '2012'
+    url: 'https://papers.ssrn.com/abstract=1695596'
+    treatment: '订单流不平衡的幅度当毒性:|按分钟涨跌签名的成交占比| 的均值,与它相对自身历史的偏离'
+  - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+    authors: 'Michael J. Barclay, Jerold B. Warner'
+    year: '1993'
+    url: 'https://doi.org/10.1016/0304-405X(93)90029-B'
+    treatment: '看哪些成交推动价格:成交最重的分钟的 |收益| 相对全天平均分钟'
+  - title: 'Continuous Auctions and Insider Trading'
+    authors: 'Albert S. Kyle'
+    year: '1985-11'
+    url: 'https://www.econometricsociety.org/publications/econometrica/1985/11/01/continuous-auctions-and-insider-trading'
+    treatment: '价格冲击 = 价格变动 / 签名订单流的斜率:用分钟上 |收益| 与成交的对齐、签名流对收益的斜率'
+  - title: 'Illiquidity and Stock Returns: Cross-Section and Time-Series Effects'
+    authors: 'Yakov Amihud'
+    year: '2002'
+    url: 'https://www.cis.upenn.edu/~mkearns/finread/amihud.pdf'
+    treatment: '|收益| / 成交额 当单位成交的冲击;放在流动性十分位内排序,把冲击和流动性水平分开'
+  - title: 'Liquidity Risk and Expected Stock Returns'
+    authors: 'Ľuboš Pástor, Robert F. Stambaugh'
+    year: '2003'
+    url: 'https://www.johnhcochrane.com/s/pastor_stambaugh_jpe.pdf'
+    treatment: '签名成交对后续收益的回归系数本身当特征(γ):昨天的净买压对今天收益的滚动斜率'
+  seeds:
+  - 'ts_mean(day_signed_ratio(Ret, Amt), 20)'
+  - 'day_signed_ratio(Ret, Amt)'
+  - 'cs_bucket_rank(ts_mean(day_signed_ratio(Ret, Amt), 10), LogFloatCap)'
+  - 'cs_regres(ts_mean(day_signed_ratio(Ret, Amt), 10), ts_mean(day_sum(Ret), 10))'
+  - 'ts_mean(abs_(day_signed_ratio(Ret, Volume)), 20)'
+  - 'cross_zscore(abs_(day_signed_ratio(Ret, Volume)), 60)'
+  - 'ts_mean(day_corr(abs_(Ret), Volume), 20)'
+  - 'cs_bucket_rank(ts_mean(day_corr(abs_(Ret), Volume), 20), cross_mean(day_std(Ret), 20))'
+  - 'ts_mean(div(day_topw_mean(abs_(Ret), Volume), day_mean(abs_(Ret))), 20)'
+  - 'ts_mean(div(day_topw_mean(Amt, Ret), day_mean(Amt)), 20)'
+  - 'div(day_topw_mean(Amt, Ret), day_mean(Amt))'
+  - 'ts_mean(day_topw_mean(sign(Ret), Amt), 20)'
+  - 'ts_regbeta(ts_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 40)'
+  - 'ts_corr(day_signed_ratio(Ret, Amt), ts_delay(day_signed_ratio(Ret, Amt), 1), 20)'
+  - 'cs_bucket_rank(ts_mean(div(day_sum(abs_(Ret)), day_sum(Amt)), 20), cross_mean(day_sum(Amt), 30))'
+  - 'ts_mean(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Volume)), 20)'
+R:
+- head: 'cs_bucket_rank(sqrt(cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_regbeta(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))), ListAge)'
+  why: >-
+    三层外壳全是负担:cs_bucket_rank(·, ListAge) 扣 0.26(+1.10 -> +0.84),sqrt 扣 0.25(sqrt 在源码里是 sqrt(|x|),在 cs_bucket_rank 下秩不变,
+    只通过 hl 平滑起作用,拆解里 +0.28 的「必要性」是 hl/sign 按 train 选造成的伪影),cs_first_high20(day_autocorr_n1(pow_05(Amt)), ·) 扣 0.09(被排序项单独 -0.36)。
+    拆解的充分性行已知 G = ts_regbeta(...) 单独 +1.44、带 cs_first_high20 的 +1.35;机械 R 候选不收充分性行,所以要自己提。
+    前 3 个是替换候选(G、作 ρ_head 备份的 cs_first_high20 版、Volume->Amt 版;同一 head 取合格者中分数最高的);
+    后 3 个是 G 的尺度判定(同一位置 ts_regbeta +1.44 而 ts_reg_tvalue -0.14,t 值单调于相关系数,所以 alpha 不在共动方向里而在 σ_y/σ_x 里):
+    σ_x 单独、把 x 先按自身 50 日 z 分数标准化后的同一回归(去掉 1/σ_x,Gu-Kelly-Xiu 式先标准化再用)、σ_y/σ_x 不带相关系数。它们决定第 3 轮要不要给 G 一个 E 位;分数够也照样可以替换。
+  variants:
+  - 'ts_regbeta(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50)'
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_regbeta(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  - 'ts_regbeta(day_median(Amt), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50)'
+  - 'ts_stddev(day_median(Volume), 50)'
+  - 'ts_regbeta(cross_zscore(day_median(Volume), 50), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50)'
+  - 'div(ts_stddev(cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50), ts_stddev(day_median(Volume), 50))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: >-
+    同一位置 ts_regbeta 单独 +1.44、ts_reg_tvalue 单独 -0.14:t 值把承载 alpha 的尺度整除掉了,ts_reg_tvalue 是烂部件,换成 ts_regbeta(已知这一式 +1.35)。
+    不同时把它也换成裸 G —— 上一个 head 若换成 G,两个 head 变成同一个式子,最终合库只留一个。
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_regbeta(day_median(Volume), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: '同样的 ts_reg_tvalue -> ts_regbeta(t 值除掉尺度);内层 x 是按市场状态翻转的股本秩而不是价格,换完是 G 的一个内层不同的变体。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_regbeta(day_median(Volume), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), cross_reg_tvalue(cs_flip_by_state(LogFloatShares, day_mean(Open)), day_topw_mean(Amt, Ret), 3), 3), 50))'
+- head: 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_reg_tvalue(day_topw_mean(Amt, Ret), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+  why: '同样的 t -> beta;这里 x 是 day_topw_mean(Amt, Ret)(带金额量纲),换完也是一次尺度判定:换一个带量纲的 x,beta 是否同样起作用。'
+  variants:
+  - 'cs_first_high20(day_autocorr_n1(pow_05(Amt)), ts_regbeta(day_topw_mean(Amt, Ret), cross_reg_tvalue(day_mean(Open), cross_reg_tvalue(day_mean(Open), day_topw_mean(Amt, Ret), 3), 3), 50))'
+- head: 'cs_first_high40(cross_delay(day_signed_ratio(High, Open), 60), ts_stddev(pow_2_5(cs_mask_top_replace_mean(cs_mask_top_replace_mean(day_durbin_watson(Ret)))), 10))'
+  why: >-
+    被排序项 cross_delay(day_signed_ratio(High, Open), 60) 恒等于 1(分钟 High 恒正,sign 恒 +1),其秩 = 股票在符号表里的列序,是一个偷来的静态标签;
+    这个 head 真正用到的数据只有条件变量(日内收益 DW 统计量的 10 日波动;共性 +1.14,p 0.027)。测条件变量单独,以及把段内的列序换成一个真信号(错配 C,sign -1 时多头 = 低 DW 波动段里错配最负的)。
+    段的指示函数占信号方差的大头,所以两者与原 head 的 ρ 预计 >= 0.5。
+  variants:
+  - 'ts_stddev(pow_2_5(cs_mask_top_replace_mean(cs_mask_top_replace_mean(day_durbin_watson(Ret)))), 10)'
+  - 'cs_first_high40(sub(day_centroid(Volume), day_centroid(Ret)), ts_stddev(pow_2_5(cs_mask_top_replace_mean(cs_mask_top_replace_mean(day_durbin_watson(Ret)))), 10))'
+- head: 'cs_first_high40(cross_delay(cs_first_high40(day_signed_ratio(High, Open), ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10)), 60), cross_delay(cs_first_high40(day_signed_ratio(High, Open), ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10)), 60))'
+  why: >-
+    同上的退化:里层被排序项恒等于 1(列序),外层对自己做 band(单调),实质是「60 天前的 DW 波动段 + 列序」。测条件变量的当前值单独,
+    以及 60 日均值(把「60 天前」换成「过去 60 天的持续水平」,不再是一个陈旧的单日快照)。
+  variants:
+  - 'ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10)'
+  - 'ts_mean(ts_stddev(pow_2_5(cs_mask_top_replace_mean(day_durbin_watson(Ret))), 10), 60)'
+- head: 'ts_mean(cs_bucket_rank(day_centroid(Volume), LogFloatCap), 10)'
+  why: '库里唯一 train(+1.26)> valid(+0.67)的 head,score 卡在 valid;10 日均值在取桶内秩之后。测平滑加长到 20 日,以及先平滑原始质心再取规模桶内秩(换掉部件的顺序)。'
+  variants:
+  - 'ts_mean(cs_bucket_rank(day_centroid(Volume), LogFloatCap), 20)'
+  - 'cs_bucket_rank(ts_mean(day_centroid(Volume), 20), LogFloatCap)'
+- head: 'cs_bucket_rank(sqrt(cs_flip_by_state(day_mean(Open), day_mean(Open))), ListAge)'
+  why: >-
+    sqrt 在源码里是 sqrt(|x|),把 cs_flip_by_state 的正负翻转整个吃掉:这个 head 实际是 |价格秩 - 0.5| 的 U 形(最便宜与最贵两头),再在 ListAge 十分位内取秩;
+    同样的 ListAge 桶在 G 的 head 上扣了 0.26。去掉 ListAge 桶。
+  variants:
+  - 'sqrt(cs_flip_by_state(day_mean(Open), day_mean(Open)))'

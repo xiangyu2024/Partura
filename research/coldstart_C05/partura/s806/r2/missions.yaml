@@ -1,0 +1,164 @@
+seed: 806
+round: 2
+# PI 第 2 轮决定。快照 = M 第 1、2 批 + 本组第 1 轮两个位;9 个 head,其中 6 个(F1 折叠市值、F2 低价分段、F3 流动性错位)经济上是同一簇
+# 「控制变量的非线性再编码 / 未被控制的风格」,真正尺度不变、有付费证据的来源只有头 4(成交时间重心的 20 日中位数)和头 7(day_kurt(Ret))。
+# 位 a = E(核心 = 头 4 的核心,机械核心卡第 1 名);位 b = N(裸的日内收益分布方向 + 按成交强度分解收益)。
+# 不给 day_kurt(Ret) 本轮的 E:它的家族就是它自己(门槛最硬),方向与文献相反、还可能是最小报价单位的代理 —— 先用 R 的两次直接评估判清楚,第 3 轮再定。
+# day_cov(Vwap, Ret) 用过 1 个 E、0 产出、对照显示代理主导:收掉,不再用。
+slots:
+  - type: E
+    core: 'ts_quantile_q50(day_centroid(Amt), 20)'
+    hypothesis: >-
+      核心是日内成交额的时间重心(0 = 全在开盘,1 = 全在收盘)的 20 日中位数。它是 alpha 来源的依据全部来自同一个 head 内部的付费拆解
+      (运行固定,不受共性表的运行混合污染):单独 +1.21(所在 head +1.22);去掉 20 日中位数只剩当日重心 −0.51(必要性 +1.73,全快照最大);
+      Amt→Volume 打平(不是「钱」的代理);窗口 10 / 20 / 40 = +0.98 / +1.22 / +1.22 平台化;train +1.21 / valid +1.27 两段最对称。
+      它在 Amt、价格、股本上齐次零次,结构上不可能是市值 / 流动性 / 价格水平被折叠或分段后的再编码 —— 快照 9 个 head 里 6 个是那一簇,
+      所以它是本组库里分散度的主要来源。经济读法:成交的日内时点是投资者结构的持久特征(开盘段散户、收盘竞价段机构与被动资金),
+      当日值里混着会隔夜反转的收盘价格压力,20 日中位数把它平掉。
+      本位奖励把头 4 放进控制,只有核心之外的新信息拿分;快照里含该核心的外围只见过 {sqrt}(在正值上保序,等于没做)。
+      这次的外围全部是没见过的四组:
+      (1) 水平还是变化:20 日减 60 日中位数(近两月的投资者结构迁移)、50 日时序分位、当日偏离与近一周偏离 —— 直接检验「alpha 只在持久水平」;
+      (2) 把「何时成交」拆细:收盘集合竞价(末分钟)成交占比、首分钟成交占比、成交额最重 10% 分钟的平均时点、|Ret| 的时间重心(价的时点)、
+      成交集中度 gini × 重心(集中在收盘的程度)、重心的 30 日波动 / 水平(投资者结构是否稳定)—— 检验头 4 的信息在收盘竞价还是开盘,量的时点与价的时点是否错开;
+      (3) 单边 / 非单调:压掉最晚 10%、突出最早 20%、离截面中位数的绝对距离 —— 把折叠 / 分段用在一个齐次零次的 alpha 上(不是用在控制变量上),检验关系是否单调;
+      (4) 交互:在最早成交的 20% 里按 60 日异常换手、按 15 日累计隔夜收益排序,时点与日收益的 20 日时序相关(晚盘成交是否落在上涨日)—— 投资者结构 × 注意力 / 隔夜—日内拔河。
+      两个变量组合时按它们与核心的相关方向选 sub / add(与核心正相关的用 sub,负相关的用 add),或让另一个量的截面离散度占主导,
+      免得组合与头 4 的秩相关 ≥ 0.7 被库禁令拒掉。刻意不做:纯平滑(与头 4 高相关,会被拒)、按 LogFloatCap / LimitWidth / BoardCode 分组
+      (奖励会把分数给到控制变量的非线性残留上)、与 day_kurt(Ret) 叠加(库里已有,搭便车)。分母只用不会为 0 的量(day_sum(Amt)、核心本身)。
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988-03'
+        url: 'https://doi.org/10.1093/rfs/1.1.3'
+        treatment: '日内成交的时段分布是不同类型交易者策略性扎堆的结果,两端对应不同的交易者构成 → 把重心拆成开盘 / 收盘 / 最重分钟的时点,并做单边分段而不只当连续水平'
+      - title: 'Should We Use Closing Prices? Institutional Price Pressure at the Close (later: Who Trades at the Close?)'
+        authors: 'Vincent Bogousslavsky, Dmitriy Muravyev'
+        year: '2019-11'
+        url: 'https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3485840'
+        treatment: '收盘竞价成交占比反映机构 / 被动资金,收盘价格压力隔夜反转 → 末分钟成交占比的 20 日中位数;当日与近一周重心相对 20 日中位数的偏离'
+      - title: 'Factor beta, overnight and intraday expected returns in China'
+        authors: 'Zhengke Ye, Danling Jiang, Yunfeng Luo'
+        year: '2023-03'
+        url: 'https://ideas.repec.org/a/eee/glofin/v56y2023ics1044028323000224.html'
+        treatment: 'A 股隔夜与日内的溢价符号相反、由投资者构成解释 → 在开盘集中成交(散户主导)的一段里按累计隔夜收益排序'
+      - title: 'Intraday Patterns in the Cross-section of Stock Returns'
+        authors: 'Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka'
+        year: '2010'
+        url: 'https://ar5iv.arxiv.org/html/1005.3535'
+        treatment: '日内模式的跨日持续约 40 个交易日,且量、波动的日内模式本身不是收益延续的代理 → 用 20 对 60 日、50 日时序分位检验持续性;量的时点对价(|Ret|)的时点'
+    seeds:
+      - 'sub(ts_quantile_q50(day_centroid(Amt), 20), cross_quantile_q50(day_centroid(Amt), 60))'
+      - 'ts_rank(ts_quantile_q50(day_centroid(Amt), 20), 50)'
+      - 'sub(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'cross_mean(sub(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20)), 5)'
+      - 'sub(cs_rank(ts_quantile_q50(day_centroid(Amt), 20)), cs_rank(ts_quantile_q50(div(day_last(Amt), day_sum(Amt)), 20)))'
+      - 'add(cs_rank(ts_quantile_q50(day_centroid(Amt), 20)), cs_rank(ts_quantile_q50(div(day_first(Amt), day_sum(Amt)), 20)))'
+      - 'sub(cs_rank(ts_quantile_q50(day_centroid(Amt), 20)), cs_rank(ts_quantile_q50(day_centroid(Ret), 20)))'
+      - 'sub(cs_rank(ts_quantile_q50(day_centroid(Amt), 20)), cs_rank(ts_quantile_q50(day_topw_mean(in_index(Amt), Amt), 20)))'
+      - 'div(cross_stddev(day_centroid(Amt), 30), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'mul(ts_quantile_q50(day_centroid(Amt), 20), ts_quantile_q50(day_gini(Amt), 20))'
+      - 'cs_last_high10(ts_quantile_q50(day_centroid(Amt), 20), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'cs_first_low20(ts_quantile_q50(day_centroid(Amt), 20), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'abs_(sub(ts_quantile_q50(day_centroid(Amt), 20), cs_median(ts_quantile_q50(day_centroid(Amt), 20))))'
+      - 'cs_first_low20(cross_zscore(day_sum(Amt), 60), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'cs_first_low20(cross_sum(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 15), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'mul(ts_quantile_q50(day_centroid(Amt), 20), ts_corr(day_centroid(Amt), day_sum(Ret), 20))'
+  - type: N
+    hypothesis: >-
+      不预平滑的日内收益分布「方向」,以及「收益是在哪些分钟里赚到的」。本组第 1 轮 N 位的教训:裸 day_kurt(Ret) +0.97,
+      任何 cross_mean 平滑都掉到 0.46–0.61 —— 奖励自带半衰期搜索(hl ∈ {0, 2, 5, 10, 20}),预平滑是重复劳动;
+      而第 1 轮的偏度、相对符号跳跃、成交不平衡全部是先平滑才放进去的,它们的裸值其实没被检验过。峰度是无方向的尾部厚度,
+      这一位问两件它没回答的事:
+      (a) 尾部的方向:裸已实现偏度、右尾与左尾 ES 比的秩差、偏度 × 峰度、|Ret| 最大 10% 分钟的平均收益(带符号的跳跃)与其 20 日中位数、
+      相对符号跳跃 Σr|r| / Σr² 的裸值,外加「彩票」型的 30 日最大日收益;
+      (b) 按成交强度分解收益:成交额最大 10% 分钟的平均收益(裸值、15 日均值、减全天平均分钟收益)、成交额加权减等权的分钟收益(及其 20 日中位数)、
+      分钟收益与成交额的相关、|Ret| 与成交额的相关、上涨分钟占比及其与日收益的秩差(收益是许多小步走出来的还是几次跳出来的)。
+      依据:高成交时段的价格信息含量更高,所以重成交分钟的收益更像信息(延续)、轻成交分钟的更像噪声(反转);
+      20 日反转控制只去掉总收益的线性部分,这个分解它没有。全部齐次零次(不含价格水平、市值、成交额水平),
+      不碰 LogFloatCap / 股价 / Amt 水平的折叠或分段(那一簇 M 自己在大量产出,融合时会被去重挤掉)。方向一律交给 train;15 个种子骨架互不相同。
+    inspired_by: >-
+      本组第 1 轮 N 位的 head day_kurt(Ret)(+0.97,做多低峰度)与它的平滑版(0.46–0.61)的对照:裸值优于预平滑、尾部形状被定价但只测了无方向的那一面;
+      M 第 2 批头 4(成交的日内时点被定价,且与规模 / 流动性无关)→ 进一步问「成交最重的那些分钟里价格往哪走」。
+      文献:Amaya et al. 2015(周频已实现偏度 / 峰度)、Chao–Liu–Guo 2017(A 股带符号的跳跃被定价)、Admati–Pfleiderer 1988(高成交时段价格信息含量高)、
+      Bali–Cakici–Whitelaw 2011(彩票型尾部)。
+    literature:
+      - title: 'Does Realized Skewness Predict the Cross-Section of Equity Returns?'
+        authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez'
+        year: '2015'
+        url: 'https://repec.econ.au.dk/repec/creates/rp/13/rp13_41.pdf'
+        treatment: '用日内高频收益的已实现偏度当截面变量(偏度负向预测、峰度方向不稳)→ 裸 day_skew(Ret),平滑交给奖励的半衰期'
+      - title: 'Sign realized jump risk and the cross-section of stock returns: Evidence from China''s stock market'
+        authors: 'Youcong Chao, Xiaoqun Liu, Shijun Guo'
+        year: '2017-08'
+        url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5542663/'
+        treatment: '把已实现跳跃按正负拆开分别定价,而不是用对称的高阶矩 → |Ret| 最大分钟的带符号均值、Σr|r| / Σr²、右尾与左尾 ES 比之差、偏度 × 峰度'
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988-03'
+        url: 'https://doi.org/10.1093/rfs/1.1.3'
+        treatment: '成交量大的时段价格更有信息含量 → 成交额最重 10% 分钟的平均收益、成交额加权与等权分钟收益之差、分钟收益与成交额的相关'
+      - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+        authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw'
+        year: '2011'
+        url: 'https://www.nber.org/papers/w14804.pdf'
+        treatment: '用近一月最大日收益度量彩票型尾部,控制规模、流动性、偏度后仍稳健 → cross_max(day_sum(Ret), 30),作为峰度 / 跳跃的正交对照'
+    seeds:
+      - 'day_skew(Ret)'
+      - 'sub(cs_rank(day_es_ratio_hi(Ret)), cs_rank(day_es_ratio_lo(Ret)))'
+      - 'mul(day_skew(Ret), day_kurt(Ret))'
+      - 'day_topw_mean(Ret, abs_(Ret))'
+      - 'ts_quantile_q50(day_topw_mean(Ret, abs_(Ret)), 20)'
+      - 'day_signed_ratio(Ret, pow_2(Ret))'
+      - 'cross_max(day_sum(Ret), 30)'
+      - 'day_topw_mean(Ret, Amt)'
+      - 'cross_mean(day_topw_mean(Ret, Amt), 15)'
+      - 'sub(day_topw_mean(Ret, Amt), day_mean(Ret))'
+      - 'sub(day_wmean(Ret, Amt), day_mean(Ret))'
+      - 'ts_quantile_q50(day_wmean(Ret, Amt), 20)'
+      - 'day_corr(Ret, Amt)'
+      - 'day_corr(abs_(Ret), Amt)'
+      - 'sub(cs_rank(day_pos_ratio(Ret)), cs_rank(day_sum(Ret)))'
+R:
+  - head: 'sqrt(cross_quantile_q25(cs_last_low40(LogFloatCap, day_quantile_q75(Amt)), 3))'
+    why: >-
+      cross_quantile_q25(·, 3)(近 3 日的下四分位)在一个几乎不变的折叠值上只把它往下拖、把换手抬上去:拆解里去掉它 score +2.115
+      (train +2.115 / valid +2.392,两段都比原 head 好),增益 +0.33。只提这一个变体(窗口 3→2 的那个增益小且争同一个 head;
+      带宽收窄 / 换叶子会让「最好的合格变体」变成更窄、更可能过拟合的版本,不提)。
+    variants:
+      - 'sqrt(cs_last_low40(LogFloatCap, day_quantile_q75(Amt)))'
+  - head: 'sqrt(cross_quantile_q25(cs_last_low40(LogFloatCap, day_quantile(Low)), 3))'
+    why: >-
+      与头 1 完全相同的部件、相同的结构,只是筛子换成分钟最低价的中位数;头 1 上去掉这个部件两段都变好,这里同样去掉。
+    variants:
+      - 'sqrt(cs_last_low40(LogFloatCap, day_quantile(Low)))'
+  - head: 'sqrt(ts_quantile_q50(day_centroid(Amt), 20))'
+    why: >-
+      诊断为主(替换门槛 +0.1 大概率到不了,但每个数字都决定第 3 轮怎么用核心 A):滚动中位数换成滚动均值(中位数的稳健性是否必要);
+      窗口 20→50(40 已打平,看平台在哪结束);把隐含的「全市场截面排序」换成按 LogFloatCap、按 30 日平均成交额的十分位组内排序
+      (组内版若不掉,头 4 就不是规模 / 流动性的非线性残留;若掉很多,它的一部分是代理)。sqrt 是保序装饰,不去(已测打平)。
+    variants:
+      - 'sqrt(ts_mean(day_centroid(Amt), 20))'
+      - 'sqrt(ts_quantile_q50(day_centroid(Amt), 50))'
+      - 'sqrt(cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 20), LogFloatCap))'
+      - 'sqrt(cs_bucket_rank(ts_quantile_q50(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 30)))'
+  - head: 'day_kurt(Ret)'
+    why: >-
+      单算子,没有可去的部件;能替换的是隐含的「全市场截面排序」。怀疑:分钟收益的峰度很大一部分由最小报价单位决定(低价股的分钟收益是
+      一个跳价的整数倍,零值多、偶有跳动 → 峰度高)以及报价停滞(涨跌停 / 冷门股,Adcock et al. 2019 指出涨跌停截断会扭曲高阶矩),
+      做多低峰度可能部分是在做多高价、连续成交的股票。换成按收盘价十分位、按零收益分钟占比十分位的组内排序:不掉 → 峰度本身是来源,
+      第 3 轮值得给它 E;掉很多 → 它是价格离散度 / 停滞的代理,不再深挖。
+    variants:
+      - 'cs_bucket_rank(day_kurt(Ret), day_last(Close))'
+      - 'cs_bucket_rank(day_kurt(Ret), day_zero_ratio(Ret))'
+  - head: 'cs_mask_top_replace_mean_neg(day_quantile_q75(pow_2_5(Amt)))'
+    why: >-
+      pow_2_5 保序、逐分钟作用,唯一的作用是决定被错位的最低 10% 落到截面的哪个分位(模拟:92 分位;去掉后约 74 分位)。
+      去掉它:若 score 不掉,这个部件是装饰,换成更简单的;若大掉,说明这个 head 的全部内容就是「错位落点」,是纯代理。
+    variants:
+      - 'cs_mask_top_replace_mean_neg(day_quantile_q75(Amt))'
+  - head: 'cs_first_low20(cs_normalize(day_open(Open)), cs_mask_top_replace_mean_neg(day_quantile_q75(pow_2_5(Close))))'
+    why: >-
+      cs_normalize 在 _lexi 的 y 位只用到秩,逐位恒等(拆解已测必要性 −0.00);pow_2_5 只改错位落点。两个一起去,得到同一个结构的最简写法,
+      并看「便宜但不是最便宜」那条带子对落点有多敏感。
+    variants:
+      - 'cs_first_low20(day_open(Open), cs_mask_top_replace_mean_neg(day_quantile_q75(Close)))'

@@ -1,0 +1,177 @@
+seed: 807
+round: 2
+slots:
+  - type: E
+    core: 'day_durbin_watson(High)'
+    hypothesis: >-
+      alpha 来源:day_durbin_watson(High) = sum (dHigh)^2 / sum High^2,分母不去均值,恒非负、尺度无关,
+      约等于分钟最高价序列的每分钟已实现方差(dt_day.py:273)。它是快照里证据最硬的测量量:两种完全不同的聚合各自都过线
+      (^7.5 + EMA20 → 1.78 / valid 2.66;60 日滚动标准差、hl 0 → 1.10 / valid 2.05),换字段 High→Low 仍有 1.54(valid 2.77),
+      幂次阶梯在 train 与 valid 上同时上升。奖励只控制了日内波动的 20 日均值(cross_mean(day_std(Ret), 20)),它的极端与离散度没被控制。
+      取裸的测量量而不是 pow_3(...):根上的单调幂在 hl 0 下是空操作、在 hl > 0 下只改 EMA 的跨日权重,而这一层家族控制必然扣光。
+      家族控制会放进快照里含核心的两个 head(DW^7.5 + EMA20、cross_stddev(·, 60)),所以本任务只押它们给不出的信息。
+      快照里含核心的候选只见过「幂次」与「滚动标准差 / fangzheng」两招;本任务的外围分六族,全部避开这两招,也避开再加幂次:
+      (1) 上下行抖动的不对称:DW(High) 对 DW(Low) 的差与比、DW(High) 对 DW(Close) 的比(Rogers–Satchell 里 High、Low 角色不对称;拆解里 High、Low 各自有效);
+      (2) 这是哪一种波动:除以收盘收益的日内方差、除以 Parkinson 日内极差的平方(= 分钟已实现方差 / 极差²,价格在窄区间里来回碎动还是一路走完,日内的方差比);
+      (3) 相对自身历史的位置:cross_madz、5 日 / 60 日之比、归一化的波动之波动(变异系数,Baltussen 等 2018;快照里只有未归一化版)、抖动的向上跳变(semistd_pos);
+      (4) 峰值相对均值(Bali 等 2011 的 MAX 对 IVOL 分解,无量纲版);
+      (5) 抖动与活动 / 冻结报价 / 收益方向的跨日共动:与日成交额、day_flat_ratio(Close)、日内收益的 20 日相关(个股层面的杠杆 / 彩票不对称,Patton–Sheppard 的带符号拆分),
+          以及抖动水平的一阶自相关(状态是否持续);
+      (6) 截面条件化:在 day_std(Ret) 的十分位内做 z 分(给定普通波动之后多出来的最高价序列抖动)。
+      量纲注意:cross_corr 的分母加 1e-9,DW 的跨日方差约 1e-12,所以凡是两边都很小的相关一律先取 log 或 sqrt,避免重演 r1a 的 EPS 退化。
+      不加 LimitWidth(两次证伪)。方向交给奖励。
+    literature:
+      - title: 'The Extreme Value Method for Estimating the Variance of the Rate of Return'
+        authors: 'Michael Parkinson'
+        year: '1980-01'
+        url: 'https://www.jstor.org/stable/2352357'
+        treatment: '只用当日最高价与最低价估计方差;借来把分钟已实现方差除以 ln(High/Low)^2,区分碎动与单边走完'
+      - title: 'Estimating Variance From High, Low and Closing Prices'
+        authors: 'L. C. G. Rogers, S. E. Satchell'
+        year: '1991'
+        url: 'https://projecteuclid.org/euclid.aoap/1177005835'
+        treatment: '估计量里 High 与 Low 两项角色不对称;借来做 DW(High) 与 DW(Low) / DW(Close) 的差与比'
+      - title: 'Good Volatility, Bad Volatility: Signed Jumps and The Persistence of Volatility'
+        authors: 'Andrew J. Patton, Kevin Sheppard'
+        year: '2015'
+        url: 'https://ideas.repec.org/a/tpr/restat/v97y2015i2p683-697.html'
+        treatment: '按收益符号拆开已实现方差后信息更多;借来做抖动与日内收益的 20 日相关、抖动的向上跳变'
+      - title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns'
+        authors: 'Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient'
+        year: '2018-07'
+        url: 'https://personal.eur.nl/vanbekkum/2018JFQA_unknown_unknowns.pdf'
+        treatment: '风险本身的不确定性(波动之波动)高的股票跑输;借来做归一化的波动之波动(60 日标准差 / 60 日均值)'
+      - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+        authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw'
+        year: '2011-02'
+        url: 'https://www.nber.org/papers/w14804.pdf'
+        treatment: '同一批日度量换成月内最大值聚合,与均值型聚合分开定价;借来做 20 日峰值 / 20 日均值'
+      - title: 'A New Estimate of Transaction Costs'
+        authors: 'David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka'
+        year: '1999'
+        url: 'https://www.bauer.uh.edu/rsusmel/phd/lot_1999RFS.pdf'
+        treatment: '价格不动的时段占比当交易成本代理;借来看抖动是否与冻结报价占比在跨日上共动'
+    seeds:
+      - 'sub(day_durbin_watson(High), day_durbin_watson(Low))'
+      - 'div(day_durbin_watson(High), day_durbin_watson(Low))'
+      - 'div(day_durbin_watson(High), day_durbin_watson(Close))'
+      - 'div(day_durbin_watson(High), day_var(Ret))'
+      - 'div(day_durbin_watson(High), pow_2(log(div(day_max(High), day_min(Low)))))'
+      - 'cross_madz(day_durbin_watson(High), 60)'
+      - 'div(cross_mean(day_durbin_watson(High), 5), cross_mean(day_durbin_watson(High), 60))'
+      - 'div(cross_stddev(day_durbin_watson(High), 60), cross_mean(day_durbin_watson(High), 60))'
+      - 'cross_semistd_pos(day_durbin_watson(High), 60)'
+      - 'div(cross_max(day_durbin_watson(High), 20), cross_mean(day_durbin_watson(High), 20))'
+      - 'cross_corr(day_durbin_watson(High), day_sum(Amt), 20)'
+      - 'cross_corr(sqrt(day_durbin_watson(High)), day_flat_ratio(Close), 20)'
+      - 'cross_corr(log(day_durbin_watson(High)), day_sum(Ret), 20)'
+      - 'cross_autocorr(log(day_durbin_watson(High)), 20, 1)'
+      - 'cs_bucket_zscore(day_durbin_watson(High), day_std(Ret))'
+  - type: N
+    hypothesis: >-
+      交易活动的「二阶矩」:奖励控制了活动的水平(流动性 = cross_mean(day_sum(Amt), 30))和已知族(cross_mean(day_std(Amt), 30),也是水平主导),
+      但没有控制活动来得有多不均匀 —— 日内是一阵一阵地成交还是平滑地成交(分钟成交额的 DW 锯齿度、Gini、最重 10% 分钟的份额、日内变异系数),
+      跨日是忽多忽少还是稳定(日成交额 / 成交量的变异系数、向上跳变、相对自身历史的异常量)。
+      Chordia–Subrahmanyam–Anshuman(2001)在控制了成交水平之后发现成交额与换手率的波动性和未来收益显著负相关,Pereira–Zhang(2010)给了理论解释;
+      本种子已在三条通道上看到「非负、无量纲的日内量 + 凸聚合」能变成 alpha(DW(High)、topw、W²),所以种子里既给裸量也给凸聚合与 60 日离散度。
+      另给两条把价格与活动连起来的:价格抖动 / 成交抖动(日内的价格冲击)、分钟成交额与 |分钟收益| 的日内相关(成交是否推动价格),以及冻结报价占比的跨日波动(Lesmond 型)。
+      全部种子无量纲,避开已知族 |rho| ≥ 0.5 的取消资格;方向交给奖励(事先猜 −1:买成交平稳的股票)。
+      这条通道与快照里的价格幅度族是不同的被观测量;若它出 head,第 3 轮可以拿它当 E 的核心。
+    inspired_by: >-
+      M2 的 head:day_durbin_watson(High) 是一个尺度无关的「锯齿度」统计,用在价格上两种聚合都过线 —— 把同一个统计量从价格搬到成交额;
+      第 1 轮 N 的唯一 head pow_2(pow_2(pow_2(day_topw_mean(Ret, Amt)))) 说明「最重成交分钟」这条通道上凸聚合有信息;
+      文献员 L4 给出的空白:冻结报价 / 活动指标的跨日离散度没有人研究过;以及成交活动波动性的负溢价文献(Chordia 等 2001、Pereira–Zhang 2010)。
+    literature:
+      - title: 'Trading activity and expected stock returns'
+        authors: 'Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman'
+        year: '2001-01'
+        url: 'https://ideas.repec.org/a/eee/jfinec/v59y2001i1p3-32.html'
+        treatment: '控制成交水平后,成交额与换手率的跨期波动性(标准差、变异系数)与未来收益负相关;借来做日成交额 / 成交量的 20、60 日变异系数'
+      - title: 'Stock Returns and the Volatility of Liquidity'
+        authors: 'Joao Pedro Pereira, Harold H. Zhang'
+        year: '2010-08'
+        url: 'https://doi.org/10.1017/S0022109010000323'
+        treatment: '流动性的波动与收益负相关的理性解释(随机价格冲击);借来做价格抖动 / 成交抖动与分钟成交额的锯齿度'
+      - title: 'The High-Volume Return Premium'
+        authors: 'Simon Gervais, Ron Kaniel, Dan H. Mingelgrin'
+        year: '2001-06'
+        url: 'https://doi.org/10.1111/0022-1082.00349'
+        treatment: '相对自身历史的异常成交量预示之后的收益;借来做 cross_madz(day_sum(Amt), 60)'
+      - title: 'A New Estimate of Transaction Costs'
+        authors: 'David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka'
+        year: '1999'
+        url: 'https://www.bauer.uh.edu/rsusmel/phd/lot_1999RFS.pdf'
+        treatment: '价格不动的时段占比当交易成本代理;借来做 day_flat_ratio(Close) 的 20 日标准差(冻结状态的不稳定性,水平已被流动性控制吃掉)'
+    seeds:
+      - 'day_durbin_watson(Amt)'
+      - 'pow_2(pow_2(day_durbin_watson(Amt)))'
+      - 'cross_stddev(day_durbin_watson(Amt), 60)'
+      - 'day_durbin_watson(Volume)'
+      - 'day_gini(Amt)'
+      - 'div(day_topw_mean(Amt, Amt), day_mean(Amt))'
+      - 'div(day_std(Amt), day_mean(Amt))'
+      - 'div(cross_stddev(day_sum(Amt), 20), cross_mean(day_sum(Amt), 20))'
+      - 'div(cross_stddev(day_sum(Volume), 60), cross_mean(day_sum(Volume), 60))'
+      - 'cross_semistd_pos(day_sum(Amt), 20)'
+      - 'cross_madz(day_sum(Amt), 60)'
+      - 'div(day_durbin_watson(High), day_durbin_watson(Amt))'
+      - 'day_corr(Amt, abs_(Ret))'
+      - 'cross_stddev(day_flat_ratio(Close), 20)'
+R:
+  - head: 'ts_sum(pow_2_5(ts_sum(pow_3(day_durbin_watson(High)), 1)), 1)'
+    why: >-
+      两层 ts_sum(·, 1) 是恒等算子(必要性 −0.003),head 的真身是 DW(High)^7.5 + EMA20。
+      (a) 定位工具已评过的 ts_sum@1→2(1.9025,+0.127,rho_head 0.999)放进来触发替换;
+      (b–c) 两个决定性空对照,同一条 ^7.5 阶梯换成被控制掉的收盘收益日内方差(量纲与 DW 相同,所以用 day_var 而不是 day_std,凸性才可比)
+      与 Parkinson 日内极差平方 —— 若接近 1.78,来源就是「已知的波动尾部 / 极差」换了写法;
+      (d–e) 换价格序列:Close、Vwap 从没测过(拆解只换了 High↔Low),判「最高价序列」是否必要;
+      (f–g) 聚合方式:硬最大值与上四分位均值(Bali 等的前 k 大均值),和「凸幂 + EMA」的软聚合比。
+    variants:
+      - 'ts_sum(pow_2_5(ts_sum(pow_3(day_durbin_watson(High)), 1)), 2)'
+      - 'pow_2_5(pow_3(day_var(Ret)))'
+      - 'pow_2_5(pow_3(pow_2(log(div(day_max(High), day_min(Low))))))'
+      - 'pow_2_5(pow_3(day_durbin_watson(Close)))'
+      - 'pow_2_5(pow_3(day_durbin_watson(Vwap)))'
+      - 'cross_max(day_durbin_watson(High), 20)'
+      - 'cross_tail_mean_q75(day_durbin_watson(High), 20)'
+  - head: 'cross_corr(pow_2(day_wmean(Ret, Ret)), pow_2(pow_2(day_wmean(Ret, Ret))), 241)'
+    why: >-
+      分母 sqrt(var·var) 约 1e-21,远小于 EPS = 1e-9,这个「相关」实际是 1e9 × 滚动协方差;sign +1 与 60/120 窗口的 −1 相反,482 窗口塌到 0.16。
+      换成老实的写法:未归一化的 241 日标准差(量纲)与真正归一化的变异系数(形状),两者一起判「是量纲还是形状」。
+    variants:
+      - 'cross_stddev(pow_2(day_wmean(Ret, Ret)), 241)'
+      - 'div(cross_stddev(pow_2(day_wmean(Ret, Ret)), 241), cross_mean(pow_2(day_wmean(Ret, Ret)), 241))'
+  - head: 'cross_corr(pow_2(day_wmean(Ret, Ret)), pow_2(pow_2(day_wmean(Ret, Ret))), 60)'
+    why: >-
+      与 241 那个是同一构造、方向相反的孪生(最终库按 rho ≤ −0.5 会丢一个);同样的 EPS 退化。用老实的 60 日标准差看方向翻转是否也出现在老实写法里。
+    variants:
+      - 'cross_stddev(pow_2(day_wmean(Ret, Ret)), 60)'
+  - head: 'cross_corr(pow_2(day_wmean(Ret, Ret)), pow_2(day_wmean(Ret, Ret)), 20)'
+    why: >-
+      自己和自己求相关,解析上 = var/(var+EPS),本量纲下约 1e9 × var_20(W²);老实写法是 20 日标准差,rho 应很高,有机会直接替换成可解释的 head(门槛 1.31)。
+    variants:
+      - 'cross_stddev(pow_2(day_wmean(Ret, Ret)), 20)'
+  - head: 'cross_corr(pow_2(cs_mask_top_replace_mean_neg(pow_2(day_wmean(Ret, Ret)))), day_flat_ratio(Ret), 20)'
+    why: >-
+      cs_mask_top_replace_mean_neg(把截面最低 10% 抹成行均值)共性 +0.32、p 0.18,没有机制;去掉它保留其余结构,门槛 1.10。
+    variants:
+      - 'cross_corr(pow_2(pow_2(day_wmean(Ret, Ret))), day_flat_ratio(Ret), 20)'
+  - head: 'cross_corr(pow_2(day_wmean(Ret, Low)), pow_2(day_wmean(Ret, Ret)), 20)'
+    why: >-
+      价格字段当权重约等于等权(日内价格的相对变化只有 1% 量级),day_wmean(Ret, Low) 实为 day_mean(Ret),共性 −0.20;换成显式等权,门槛 0.71。
+    variants:
+      - 'cross_corr(pow_2(day_mean(Ret)), pow_2(day_wmean(Ret, Ret)), 20)'
+  - head: 'pow_2(pow_2(cross_mean(day_wmean(Ret, Ret), 5)))'
+    why: >-
+      先 5 日平均再折叠比先折叠再平均高 0.35,被读成「方向在多日间的持续性」;第 3 轮是否给核心 pow_2(cross_mean(day_wmean(Ret, Ret), 5)) E 位取决于两个空对照:
+      (1) 5 日收盘收益的绝对值四次方(含隔夜,不加权)—— 若接近 1.71,它只是「周度极端收益」;
+      (2) 不加权的 5 日日内漂移 —— 判自加权在周度上是否仍必要(日度上 day_mean 版只有 0.26)。
+    variants:
+      - 'pow_2(pow_2(log(div(day_last(Close), ts_delay(day_last(Close), 5)))))'
+      - 'pow_2(pow_2(cross_mean(day_sum(Ret), 5)))'
+  - head: 'ts_sum(LogFloatShares, 30)'
+    why: >-
+      LogFloatShares = LogFloatCap − log(价格),而控制里有 LogFloatCap、没有价格,所以这个 head 投影掉规模后约等于 −log(价格),
+      hl 0 下 ts_sum(·, 30) 不改秩。换成显式的价格水平,看是不是同一个东西、能不能更干净(门槛 0.62)。
+    variants:
+      - 'log(day_last(Close))'

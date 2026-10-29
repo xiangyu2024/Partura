@@ -1,0 +1,83 @@
+seed: 808
+round: 2
+slots:
+  - type: E
+    core: 'ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)'
+    hypothesis: '核心 = 分钟收益「栅格粒度」(当日不同分钟收益值的个数 / 分钟数)在市值十分位内的条件 z 分,取 40 日峰值。它是 M 第 2 批 head 1(+1.45)与 head 2(+0.82)共同的构件:单独 +0.58(train 0.58 / valid 0.90),distinct 0.96 自己过闸门;head 1 去掉 cs_bucket_zscore 就从 +1.45 变成 −0.73(必要性 +2.19);窗口 20 / 40 / 80 都稳;ρ_known +0.38。它是本种子唯一既不是静态风格、也不是控制变量变形的轴。为什么是 alpha 的来源:分钟收益只能取「一跳 / 价格」的整数倍,所以这个量同时读到相对一跳的粗细、无成交分钟(收益重复为 0)、当天真正走过的价位(Harris 1991;Onnela 等 2009;LOT 1999);奖励的控制是全市场秩空间的线性投影,市值分位内的相对位置是它挡不住的非线性。快照里核心外面只出现过两种写法:再堆 ts_max(head 2),和对同一个量再做一次 cs_bucket_zscore 双重条件化(head 1)。本位两条都不走,外围全换成没见过的三类处理:(1) 把核心当「同栅格同伴组」的分组变量,在组内比较另一个日内形状 / 计数量 —— 零收益分钟占比(LOT)、上涨分钟占比、成交基尼、成交重心、最长无量段、贴着日内高点的时间、成交量的手数栅格、买卖压力、分钟收益一阶自相关(买卖价差反弹)、左尾形状(种子 1–8、14、16)。依据:O''Hara-Saar-Zhong 2019 说受一跳约束和不受约束的股票,同一个微观结构量含义不同,应当在同栅格组内比;Bali-Engle-Murray 2016 的条件排序。组内形状轮换用 cs_bucket_rank / cs_bucket_demean / cs_bucket_zscore,时序归约用 ts_mean / ts_decay_linear / cross_tail_mean_q75 / cross_quantile_q50,不用 ts_max。(2) 相对自身历史的异常(Gervais-Kaniel-Mingelgrin 2001;Connolly-Stivers 2003):核心的 120 日稳健 z、核心减去自身一年中位数、同栅格组内的异常成交额、异常成交额与核心的秩乘积(种子 9–12)。(3) 同栅格组内的 5 日反转(Asness-Porter-Stevens 2000:组内短期反转主要来自买卖价差偏差)、同栅格组内的流通股本轴(本组第 1 轮那个 0.48 的簇)(种子 13、15)。奖励把 head 1、head 2 加进控制,只有核心之外的新信息拿分;这和最终库「M 在前,ρ ≥ 0.7 或 ≤ −0.5 就丢」的去重是对齐的,所以这里产出的 head 最可能留得下。方向一律交给 sign。'
+    literature:
+      - {title: 'Relative Tick Size and the Trading Environment', authors: 'O''Hara, M.; Saar, G.; Zhong, Z.', year: '2019', url: 'https://ideas.repec.org/a/oup/rasset/v9y2019i1p47-90..html', treatment: '受一跳约束与不受约束的股票,同一个量含义不同:用核心(栅格峰值)当分组变量,在它的十分位内对其他日内形状量取条件秩 / 条件 z 分'}
+      - {title: 'Stock Price Clustering and Discreteness', authors: 'Harris, L.', year: '1991', url: 'https://ideas.repec.org/a/oup/rfinst/v4y1991i3p389-415.html', treatment: '价格离散性随价格、波动上升,随市值、交易频率下降:栅格粗细与规模、活跃度缠在一起,所以在同栅格组内比较活跃度类量,把两者分开'}
+      - {title: 'A New Estimate of Transaction Costs', authors: 'Lesmond, D.A.; Ogden, J.P.; Trzcinka, C.A.', year: '1999', url: 'https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html', treatment: '零收益占比是交易成本的计数测度:day_zero_ratio(Ret) 在同栅格组内取条件 z 分,把「无成交」通道和「一跳」通道分开'}
+      - {title: 'Empirical Asset Pricing: The Cross Section of Stock Returns', authors: 'Bali, T.G.; Engle, R.F.; Murray, S.', year: '2016', url: 'https://mitpressbookstore.mit.edu/book/9781118095041', treatment: '条件(依赖)排序:第一维是核心,在它的十分位内对第二个量排序(cs_bucket_rank / cs_bucket_zscore / cs_bucket_demean)'}
+      - {title: 'The High-Volume Return Premium', authors: 'Gervais, S.; Kaniel, R.; Mingelgrin, D.H.', year: '2001-06', url: 'https://ideas.repec.org/a/bla/jfinan/v56y2001i3p877-919.html', treatment: '相对自身近期历史的异常成交:cross_zscore(day_sum(Amt), 20) 在同栅格组内取 z 分,并与核心做秩乘积'}
+      - {title: 'Momentum and Reversals in Equity-Index Returns During Periods of Abnormal Turnover and Return Dispersion', authors: 'Connolly, R.; Stivers, C.', year: '2003-08', url: 'https://ideas.repec.org/a/bla/jfinan/v58y2003i4p1521-1556.html', treatment: '先立条件期望再看偏离:核心相对自身 120 日分布的稳健 z(cross_madz)、核心减去自身 241 日中位数'}
+      - {title: 'Predicting Stock Returns Using Industry-Relative Firm Characteristics', authors: 'Asness, C.S.; Porter, R.B.; Stevens, J.L.', year: '2000-02', url: 'https://www.aqr.com/Insights/Research/Working-Paper/Predicting-Stock-Returns-Using-IndustryRelative-Firm-Characteristics', treatment: '组内短期反转主要来自买卖价差偏差:5 日收益在同栅格组内取条件秩;分钟收益一阶自相关(反弹)在同栅格组内取 z 分'}
+    seeds:
+      - 'ts_mean(cs_bucket_zscore(day_zero_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40)'
+      - 'ts_decay_linear(cs_bucket_rank(day_pos_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'cross_tail_mean_q75(cs_bucket_demean(day_gini(Volume), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'ts_mean(cs_bucket_rank(day_centroid(Amt), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'cross_quantile_q50(cs_bucket_zscore(day_signed_ratio(Ret, Amt), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'ts_decay_linear(cs_bucket_zscore(day_flat_run_max(Volume), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40)'
+      - 'ts_mean(cs_bucket_demean(day_at_max_ratio(Close), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'ts_mean(cs_bucket_zscore(day_distinct_ratio(Volume), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40)'
+      - 'cs_bucket_zscore(cross_zscore(day_sum(Amt), 20), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40))'
+      - 'mul(cs_rank(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), cs_rank(cross_zscore(day_sum(Amt), 20)))'
+      - 'cross_madz(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 120)'
+      - 'sub(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), cross_quantile_q50(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 241))'
+      - 'cs_bucket_rank(ts_delta(log(day_last(Close)), 5), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40))'
+      - 'ts_mean(cs_bucket_zscore(day_autocorr_n1(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+      - 'cs_bucket_rank(inv(LogFloatShares), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40))'
+      - 'ts_mean(cs_bucket_zscore(day_es_ratio_lo(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 20)'
+  - type: N
+    hypothesis: 'M 第 2 批交出的不只是一个因子,而是一个「处理手法」:日内比例 / 计数类量本身是门槛废品(day_distinct_ratio(Ret) 的 distinct 只有 0.06),先在市值十分位内做条件 z 分(拆开并列、去掉规模水平,distinct 0.43),再取 40 日峰值(distinct 0.96),就从废品做到 +0.58;再按自身峰值所在的十分位二次去水平,做到 +1.45。本种子只在一个被测量上用过它。这个位把同一手法迁移到快照里完全没碰过的日内形状 / 计数量上:价格不变分钟占比、最长停滞段(价格与成交量两种)、成交量的手数栅格、成交基尼、成交重心、贴着日内高点 / 低点的时间、上涨分钟占比、按成交额加权的买卖压力、右尾形状、分钟收益一阶自相关(反弹)、成交额最大 10% 分钟里的收益;另有两条按 head 1 的双重去水平写法(成交基尼、价格不变分钟占比),一条把条件变量从市值换成 20 日成交额(零收益占比,即 LOT 测度在流动性分组内比)。处理手法大多保留 M 验证过的「条件 z 分 + 40 日峰值」,少数换成 ts_mean / ts_decay_linear / cross_tail_mean_q75 / cs_bucket_rank,让 GP 自己定哪种归约好。负号那一侧的教训(价格、日收益、日内极值的水平量在这个奖励里全落在 −0.9 ~ −1.5,涨跌停带宽那条轴没留下任何痕迹)说明只用比例 / 形状 / 计数类的量,不用水平量。被测量与 M 的 head 不同,库禁令(ρ ≥ 0.7)会挡掉 day_distinct_ratio 的近亲,留下的东西不容易在最终去重里被 M 顶掉。方向交给 sign。'
+    inspired_by: 'M 第 2 批 head 1 / head 2 的拆解:去掉 cs_bucket_zscore 后 +1.45 → −0.73,两级子树单独 +0.58 / +1.17,distinct 0.06 → 0.43 → 0.96(解剖员 analysis.md §1.1、§1.6、§4.3 灵感 1);文献员 Q4(这些日内形状量在文献里多是描述性统计,横截面预测基本空白)、Q1(零收益比例 LOT)、Q2(条件排序 / 组内标准化)'
+    literature:
+      - {title: 'Empirical Asset Pricing: The Cross Section of Stock Returns', authors: 'Bali, T.G.; Engle, R.F.; Murray, S.', year: '2016', url: 'https://mitpressbookstore.mit.edu/book/9781118095041', treatment: '条件排序:先按市值十分位分桶,再在桶内对日内形状量取 z 分,而不是全市场回归残差'}
+      - {title: 'Predicting Stock Returns Using Industry-Relative Firm Characteristics', authors: 'Asness, C.S.; Porter, R.B.; Stevens, J.L.', year: '2000-02', url: 'https://www.aqr.com/Insights/Research/Working-Paper/Predicting-Stock-Returns-Using-IndustryRelative-Firm-Characteristics', treatment: '相对同组均值的特征比全市场特征更有信息:cs_bucket_zscore(·, LogFloatCap) 作用在每个新被测量上'}
+      - {title: 'A New Estimate of Transaction Costs', authors: 'Lesmond, D.A.; Ogden, J.P.; Trzcinka, C.A.', year: '1999', url: 'https://ideas.repec.org/a/oup/rfinst/v12y1999i5p1113-41.html', treatment: '零收益占比当交易成本测度:day_zero_ratio(Ret) 在 20 日成交额十分位内取 z 分,再取 40 日峰值'}
+      - {title: 'A Theory of Intraday Patterns: Volume and Price Variability', authors: 'Admati, A.R.; Pfleiderer, P.', year: '1988', url: 'https://academicnewsletter.sufe.edu.cn/info/355980', treatment: 'U 型日内成交是预期形状,看相对基准的偏离:成交重心 day_centroid(Amt) 在市值组内取 z 分再做 20 日均值'}
+      - {title: 'Stealth Trading and Volatility: Which Trades Move Prices?', authors: 'Barclay, M.J.; Warner, J.B.', year: '1993-12', url: 'https://ideas.repec.org/r/eee/jfinec/v34y1993i3p281-305.html', treatment: '信息集中在一部分交易里:成交基尼 day_gini(Volume)、成交额最大 10% 分钟里的收益 day_topw_mean(Ret, Amt),都在市值组内比'}
+    seeds:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_flat_ratio(Close), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_flat_run_max(Close), LogFloatCap), 40), 40)'
+      - 'ts_mean(ts_max(cs_bucket_zscore(day_distinct_ratio(Volume), LogFloatCap), 40), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_gini(Volume), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_centroid(Amt), LogFloatCap), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_at_max_ratio(Close), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_at_min_ratio(Close), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_pos_ratio(Ret), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_signed_ratio(Ret, Amt), LogFloatCap), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_es_ratio_hi(Ret), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_zero_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40), 40)'
+      - 'ts_max(cs_bucket_zscore(day_gini(Volume), ts_max(cs_bucket_zscore(day_gini(Volume), LogFloatCap), 40)), 40)'
+      - 'ts_max(cs_bucket_zscore(day_flat_ratio(Close), ts_max(cs_bucket_zscore(day_flat_ratio(Close), LogFloatCap), 40)), 40)'
+      - 'cross_tail_mean_q75(cs_bucket_zscore(day_topw_mean(Ret, Amt), LogFloatCap), 20)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_autocorr_n1(Ret), LogFloatCap), 40), 40)'
+      - 'ts_decay_linear(cs_bucket_rank(day_flat_run_max(Volume), LogFloatCap), 40)'
+R:
+  - head: 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 40)'
+    why: '拆解里没有必要性 ≤ 0 的部件,但它是唯一有「比原 head 好」变体的 head:外层窗口 20 / 40 / 80 → +0.79 / +0.82 / +0.86(valid 1.71),还在往上,只差 0.055 没到替换门槛 → 变体 1、2 顺着加长(外层 120;两层都 80)。变体 3、4 问外围 ts_max 是「峰值」信息还是只在变慢、降换手(head 3 的 train 掉 valid 升正是降换手的形状):外层换 ts_mean、整个换成 80 日均值;若与原 head 差不到 0.1,第 3 轮就不再在 ts_max 堆叠上花力气。变体 5–8 补上拆解工具漏做的字段替换(它的换表里没有 Ret 与 LogFloatCap,23 次评估 0 次换字段),识别三条通道:Ret → Close 只量价位栅格,去掉「无成交分钟收益重复为 0」那条通道;day_distinct_ratio → day_zero_ratio 是 LOT 零收益测度(若同分且 ρ 高,本轴就是分位内的 LOT 流动性);条件变量 LogFloatCap → 20 日成交额(若同分或更好,它是「流动性分位内」而不是「规模分位内」的东西);cs_bucket_zscore → cs_bucket_rank 问组内幅度有没有用。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 120)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 80), 80)'
+      - 'ts_mean(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 40)'
+      - 'ts_mean(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 80)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Close), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_zero_ratio(Ret), LogFloatCap), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_rank(day_distinct_ratio(Ret), LogFloatCap), 40), 40)'
+  - head: 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40), 40)'
+    why: '本种子最强的 head(+1.45),拆解只动过根上那层窗口(20 → +1.27,80 → +1.16,都更差),条件变量那层与中间那层的窗口从没动过,字段一次没换。变体 1、2 把条件变量里 ts_max 的窗口 40 → 120 / 20(二次去水平所参照的「自身体制」更慢 / 更快);变体 3 两处 Ret → Close(只量价位栅格);变体 4 根上 ts_max → ts_mean(峰值还是平均);变体 5 内层条件变量 LogFloatCap → 20 日成交额(第一次去水平按流动性分位而不是规模分位)。'
+    variants:
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 120)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 20)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Close), ts_max(cs_bucket_zscore(day_distinct_ratio(Close), LogFloatCap), 40)), 40), 40)'
+      - 'ts_mean(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40), 40)'
+      - 'ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), cross_mean(day_sum(Amt), 20)), 40)), 40), 40)'
+  - head: 'ts_max(ts_max(ts_max(cs_last_high05(LogFloatCap, LogFloatCap), 40), 40), 40)'
+    why: '解剖员判它为规模杠铃的代理:去掉 cs_last_high05 后 −0.03 且 ρ_known −0.55(会被判不合格);ts_max 每多一层 train 1.40 → 1.10 → 0.74 往下掉、valid 0.19 → 0.58 → 0.76 往上爬;根窗口 ×2 砍掉一半。筛子的宽度与方向从没测过:变体 1 剔最大 10%(更宽的大市值端);变体 2 改剔最小 5%(若大幅变差,「最大那一端单独有效应」的读法成立,对应 Shleifer 1986 / Gompers-Metrick 2001 的指数与机构资金托底);变体 3 三层 ts_max → ts_mean(峰值造成的「延迟进带」是不是它的全部作用)。'
+    variants:
+      - 'ts_max(ts_max(ts_max(cs_last_high10(LogFloatCap, LogFloatCap), 40), 40), 40)'
+      - 'ts_max(ts_max(ts_max(cs_last_low05(LogFloatCap, LogFloatCap), 40), 40), 40)'
+      - 'ts_mean(ts_mean(ts_mean(cs_last_high05(LogFloatCap, LogFloatCap), 40), 40), 40)'
