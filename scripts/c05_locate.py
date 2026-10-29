@@ -35,7 +35,7 @@ from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residu
 from partura.steer import reward as steer_reward  # noqa: E402
 
 MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
-os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
+os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
 D = PARTURA_ROOT / "research" / "coldstart_C05"
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = "20180102", "20230807", "20220101"

@@ -49,19 +49,68 @@ def library(S, X, K):
     return f, lib
 
 
+class Done:
+    """A job that already ended well (resumable runner, PLAN revision 7): nothing to wait for."""
+    def wait(self):
+        return 0
+
+
+class Adopted:
+    """A job of the same name still running from an earlier runner (PLAN revision 7): wait for it instead of starting a twin."""
+    def __init__(self, pattern, ep_glob=None):
+        self.pattern, self.ep_glob = pattern, ep_glob
+
+    def wait(self):
+        import time as _t
+        while running(self.pattern):
+            _t.sleep(30)
+        if self.ep_glob is None:
+            return 0
+        eps = glob.glob(self.ep_glob)
+        return 0 if eps and c05_lib.finished(eps[0]) else 1
+
+
+def running(pattern):
+    """Is a process whose command line contains ``pattern`` alive (other than this one)?"""
+    me = os.getpid()
+    for d in os.listdir("/proc"):
+        if d.isdigit() and int(d) != me:
+            try:
+                cmd = open(f"/proc/{d}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
+            except OSError:
+                continue
+            if pattern in cmd and "timeout" not in cmd.split()[0]:
+                return True
+    return False
+
+
 def gp(tag, idea, guidance, arm, seed, budget, extra):
     log = ROOT / "logs" / f"_idea_{tag}.log"
     cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('C05_JOB_MINUTES', 720)}m", PY, "-u", "scripts/idea_search.py", idea,
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
-    # scheduling only (PLAN revision 1): a GP run uses ~3 GB of the card, so four may share it; a smaller panel cache keeps four in memory
+    # scheduling only (PLAN revisions 2, 6): two GPU ways, four run slots, a panel cache of at most 24 GB
     env = {**os.environ, "PARTURA_GPU_WAYS": "2", "PARTURA_SLOTS": "4",
            "PARTURA_PANEL_CACHE_GB": str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6))))}
     CMDS[tag] = (cmd, env, budget)
+    eps = glob.glob(str(EP / f"{tag}_*"))
+    if eps and c05_lib.finished(eps[0]) and not broken_ep(eps[0], budget):     # resumable runner (PLAN revision 7)
+        print(f"{tag}: already finished, not rerun", flush=True)
+        return tag, Done()
+    if running(f"--tag {tag} "):
+        print(f"{tag}: still running from an earlier runner, adopted", flush=True)
+        return tag, Adopted(f"--tag {tag} ", str(EP / f"{tag}_*"))
     return tag, subprocess.Popen(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env)
 
 
 CMDS = {}
+
+
+def broken_ep(ep, budget):
+    for A in json.loads((Path(ep) / "evidence.json").read_text(encoding="utf-8"))["arms"].values():
+        if A.get("live", 0) == 0 or A.get("scored", 0) < 0.25 * budget:
+            return True
+    return False
 
 
 def broken(tag):
@@ -90,7 +139,7 @@ def finish(S, X, K, procs):
             code = code if not broken(tag) else 98
             tag = tag + " (rerun)"
         lines.append(f"{tag} {code}")
-        if tag.startswith("c05s"):
+        if tag.startswith("c05s") and isinstance(p, subprocess.Popen) or tag.endswith("(rerun)"):
             with (ROOT / "logs" / f"_idea_{tag.split()[0]}.log").open("a") as fh:
                 fh.write(f"[partura exit {code}]\n")
     (ARMS / f"s{S}_{X}_r{K}.DONE").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -188,7 +237,12 @@ elif MODE == "mission":
     gpath.parent.mkdir(parents=True, exist_ok=True)
     gpath.write_text(yaml.safe_dump(base, allow_unicode=True, sort_keys=False), encoding="utf-8")
     procs = [gp(tag, iid, str(gpath.relative_to(ROOT)), arm, seed, 96, extra) for tag, iid, arm, seed, extra in jobs]
-    if plan.get("R"):
+    if plan.get("R") and (ARMS / f"s{S}_{X}_r{K}_R.json").is_file():
+        print(f"R s{S} {X} r{K}: already evaluated, not rerun", flush=True)
+    elif plan.get("R") and running(f"c05_locate.py direct {S} {X} {K} "):
+        print(f"R s{S} {X} r{K}: still running from an earlier runner, adopted", flush=True)
+        procs.append((f"R_s{S}_{X}_r{K}", Adopted(f"c05_locate.py direct {S} {X} {K} ")))
+    elif plan.get("R"):
         rq = ARMS / f"rreq_s{S}_{X}_r{K}.json"
         rq.write_text(json.dumps(plan["R"], ensure_ascii=False), encoding="utf-8")
         log = ROOT / "logs" / f"_c05R_s{S}_{X}_r{K}.log"

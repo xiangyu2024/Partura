@@ -41,6 +41,7 @@ import c05_lib  # noqa: E402
 
 argv = sys.argv[1:]
 DRY = "--dry-run" in argv
+os.environ.setdefault("PARTURA_REPROMOTE", "1")                # PLAN revision 7
 GPU = float(argv[argv.index("--gpu-fraction") + 1]) if "--gpu-fraction" in argv else 0.4
 D, EP = PARTURA_ROOT / "research" / "coldstart_C05", PARTURA_ROOT / "episodes"
 LEDGER = D / "ledger_c05.json"

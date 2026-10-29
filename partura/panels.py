@@ -186,6 +186,8 @@ class PanelSet:
                  quiet: bool = False, daily_root: Optional[str] = None) -> None:
         requested = device
         device = choose_device(device, quiet=quiet)
+        self._requested, self._requested_fraction = requested, gpu_fraction
+        self._rank_device = os.environ.get("PARTURA_RANK_DEVICE", "")
         if requested.startswith("cuda") and device == "cpu":
             os.environ["PARTURA_RANK_DEVICE"] = ""          # ranks on the CPU too: no CUDA context at all
         # gpu_fraction None / 0 / "auto" = follow what is free on the card (the default on the server)
@@ -449,6 +451,21 @@ class PanelSet:
                         still.append(n)
                 if not still:
                     continue
+                # C05 PLAN revision 7: a view built while the card was crowded was put on the CPU for good -- and then computed
+                # on the CPU while holding a GPU way (hours for minute-level trees).  With $PARTURA_REPROMOTE, holding the way
+                # is the moment to look again: if the card has room now, this view moves (back) to it.
+                if os.environ.get("PARTURA_REPROMOTE") and str(self._requested).startswith("cuda") and not str(self.device).startswith("cuda") \
+                        and choose_device("cuda", quiet=True) == "cuda":
+                    self.device = "cuda"
+                    os.environ["PARTURA_RANK_DEVICE"] = self._rank_device
+                    self.auto_fraction = self._requested_fraction in (None, 0, 0.0, "auto")
+                    if not self.auto_fraction:
+                        torch.cuda.set_per_process_memory_fraction(float(self._requested_fraction))
+                        self.gpu_fraction = float(self._requested_fraction)
+                        if self._user_chunk_bytes is None:
+                            self.chunk_bytes = self._chunk_for(self.gpu_fraction)
+                    if not self.quiet:
+                        print("[panels] the card has room now: this view moves to the GPU", flush=True)
                 dev = self.device
                 if str(self.device).startswith("cuda") and not self._refresh_gpu_cap():
                     dev = "cpu"

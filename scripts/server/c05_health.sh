@@ -50,9 +50,14 @@ for s in sys.argv[1:]:
     print(f"s{s}: M {m}/4, rounds done {rounds}, conductor: {last[:90]} ({age:.0f} min ago)")
 EOF
 for s in $SEEDS; do
-  alive=$( (tmux ls 2>/dev/null; screen -ls 2>/dev/null) | grep -c "c05_c$s\b")
-  [ "$alive" = 0 ] && [ ! -e $D/arms/s$s.ALLDONE ] && echo "CONDUCTOR s$s: not running and not finished"
-  malive=$( (tmux ls 2>/dev/null; screen -ls 2>/dev/null) | grep -c "c05_m$s\b")
-  [ "$malive" = 0 ] && [ ! -e $D/m/s$s.DONE ] && echo "M CHAIN s$s: not running and not finished"
+  pgrep -f "c05_conductor.sh $s\$" >/dev/null || [ -e $D/arms/s$s.ALLDONE ] || echo "CONDUCTOR s$s: not running and not finished (the keeper restarts it once no runner is alive)"
+  pgrep -f "c05_m.sh $s\$" >/dev/null || [ -e $D/m/s$s.DONE ] || echo "M CHAIN s$s: not running and not finished"
+  for p in $(pgrep -f "idea_search.py|c05_locate.py|c05_final.py"); do
+    a=$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null); case "$a" in timeout*|bash*) continue ;; esac
+    t=$(echo "$a" | grep -o "c05s$s[A-Za-z0-9]*\|locate.py [a-z]* $s [A-Z0-9]* [0-9]"); [ -z "$t" ] && continue
+    l=$(ls -t logs/_idea_${t}.log logs/_c05R_s${s}_*.log logs/_c05loc_s${s}_*.log 2>/dev/null | head -1)
+    grep -aq "device=cpu" "$l" 2>/dev/null && [ "$(ps -o pcpu= -p $p | cut -d. -f1)" -gt 100 ] && echo "CPU-BOUND $t (pid $p): a panel view on the CPU"
+  done
 done
+pgrep -f "c05_keeper.sh" >/dev/null || echo "KEEPER: not running"
 echo "health check done $(date +%F_%T)"
