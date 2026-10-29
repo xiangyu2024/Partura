@@ -97,6 +97,7 @@ elif MODE == "b0plan":
                 used[s["core"]] = used.get(s["core"], 0) + 1
     slots = []
     cards = [c["core"] for c in loc["core_cards"]]
+    cards += [h["expr"] for h in loc["heads"] if h["expr"] not in cards]   # PLAN revision 3: then the whole heads, by score
     for s in B["slots"]:
         if s["type"] == "E":
             core = next((c for c in cards if used.get(c, 0) < 2 and c not in [x.get("core") for x in slots]), None)

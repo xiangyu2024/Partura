@@ -8,7 +8,7 @@ K=${2:?round}
 L=/Users/wxy/Desktop/Partura/research/coldstart_C05
 host() { if [ $1 -le 804 ]; then echo "ssh -p 29982 root@connect.westd.seetacloud.com"; else echo "ssh root@100.111.77.69"; fi; }
 dir() { if [ $1 -le 804 ]; then echo /root/autodl-tmp/Partura/research/coldstart_C05; else echo /var/snap/docker/common/var-lib-docker/c02_partura/Partura/research/coldstart_C05; fi; }
-for S in 801 802 803 804 805 806 807 808; do
+for S in ${3:-801 802 803 804 805 806 807 808}; do
   H=$(host $S); R=$(dir $S); P=$L/partura/s$S/r$K
   case $1 in
     ready) $H "test -e $R/loc/s${S}_r$K.READY" && echo "$S ready" || echo "$S waiting" ;;

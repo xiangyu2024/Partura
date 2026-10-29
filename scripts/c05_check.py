@@ -4,8 +4,8 @@
         reads research/coldstart_C05/partura/s<seed>/r<round>/missions.yaml (and loc.json, the locate output it was written from)
         exit 0 = admissible, 1 = not (the issues are printed)
 
-Two GP slots, each E or N.  E: a core that parses, is a daily-valued tree reading a field, is a subtree of a snapshot head or one of
-the locate output's subtrees, and has had < 2 E slots before; <= 16 seeds, each carrying the core verbatim.  N: a hypothesis and
+Two GP slots, each E or N.  E: a core that parses, is a daily-valued tree reading a field, is a subtree of a snapshot head (the whole head
+included) or one of the locate output's subtrees, and has had < 2 E slots before; <= 16 seeds, each carrying the core verbatim.  N: a hypothesis and
 1-16 seeds.  R: <= 16 variants in all, of heads in the snapshot.  Round 3: at least one N slot over rounds 1-3.  No seed uses an
 operator the environment bans (ts_spearman, nt_*).  Every literature source has a year, before 2023-08-08.
 """
@@ -72,7 +72,7 @@ known = set()                                                  # every subtree k
 for h in loc["heads"]:
     t, _ = tree(h["expr"])
     if t is not None:
-        known |= {n.key() for n in t.nodes()[1:]}
+        known |= {n.key() for n in t.nodes()}                 # a whole head counts too (PLAN revision 3)
 for e in [x["subtree"] for x in loc["enrichment"]] + [c["core"] for c in loc["core_cards"]]:
     t, _ = tree(e)
     if t is not None:

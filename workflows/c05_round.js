@@ -128,7 +128,7 @@ seed: ${S}
 round: ${K}
 slots:
   - type: E
-    core: '<核心表达式:原样取自 loc.md 里某个 head 的子树,或共性表 / 核心卡里的子树>'
+    core: '<核心表达式:原样取自 loc.md 里某个 head 的子树(整个 head 也可以),或共性表 / 核心卡里的子树>'
     hypothesis: '<为什么它是 alpha 的来源;这次要试的外围处理是什么,为什么和以前不一样>'
     literature: [{title: '...', authors: '...', year: 'YYYY-MM', url: '...', treatment: '<借用的处理>'}]
     seeds: ['<原样含核心的表达式>', ...]    # ≤ 16 个;初代其余个体由机械嫁接补满 32
