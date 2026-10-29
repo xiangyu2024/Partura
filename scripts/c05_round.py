@@ -52,7 +52,7 @@ def gp(tag, idea, guidance, arm, seed, budget, extra):
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
     # scheduling only (PLAN revision 1): a GP run uses ~3 GB of the card, so four may share it; a smaller panel cache keeps four in memory
-    env = {**os.environ, "PARTURA_GPU_WAYS": "3", "PARTURA_SLOTS": "8",
+    env = {**os.environ, "PARTURA_GPU_WAYS": "2", "PARTURA_SLOTS": "8",
            "PARTURA_PANEL_CACHE_GB": str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6))))}
     return tag, subprocess.Popen(cmd, cwd=ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env)
 
@@ -166,7 +166,7 @@ elif MODE == "mission":
         log = ROOT / "logs" / f"_c05R_s{S}_{X}_r{K}.log"
         procs.append((f"R_s{S}_{X}_r{K}", subprocess.Popen([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], cwd=ROOT,
                                                             stdout=log.open("w"), stderr=subprocess.STDOUT,
-                                                            env={**os.environ, "PARTURA_GPU_WAYS": "3"})))   # a small job: the third way
+                                                            env={**os.environ, "PARTURA_GPU_WAYS": "2"})))   # the same two ways as the GP runs (PLAN revision 2)
     finish(S, X, K, procs)
 else:
     raise SystemExit(f"unknown mode {MODE}")
