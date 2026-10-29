@@ -7,3 +7,4 @@
 | 1 | wf_a9dae9f2(806、808) | 0 | — |
 | 1 | wf_ccce5e8c(801 重跑文献员与 PI) | 0 | — |
 | 1 | wf_f2ab85eb(802) | 1 | 802 的 PI 读了 `guidance/C05_base.yaml`(环境定义,不含结果);同 801 的那次,轻微越界 |
+| 1 | wf_44c95afb(804) | 1 | 804 的 PI 在本地校验表达式时用 `Guidance.load("guidance/C05_base.yaml")` 构造解析器(与 c05_check.py 的做法相同),不是读结果 |

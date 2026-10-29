@@ -1,0 +1,125 @@
+seed: 804
+round: 1
+slots:
+- type: E
+  core: day_mean(Open)
+  hypothesis: 核心 = 名义股价水平 day_mean(Open)。拆解里它是 4 个 head 共用的唯一必要部件(整段筛选跳掉必要性 +1.81 / +3.43,被筛选的 y 单独为负),Open->Close、pow_3、ts_decay_linear 都无关紧要(去掉 decay 反而 +0.12),所以核心取最小的价格本身,把平滑与变换交还给 GP。它活过 LogFloatCap 线性中性化,是因为 cs_first_low20 给的是尾部指示函数这种非线性暴露;4 个 head 还共同指向「买便宜但避开最便宜的那一头」。快照里见过的外围只有一种写法:cs_first_low20(y, 价格) 加 LogFloatShares / day_wstd / day_corr 当 y,外加 ts_var(day_gini(High)) 这种约 1e-7 的装饰减数。这次的外围完全换掉:(1) 双重排序:在市值 / 总市值 / 流动性 / 上市年龄的十分位桶内比较价格(cs_bucket_rank / cs_bucket_zscore),把价格效应和规模、流动性的尾部分开;(2) 价格对非线性规模(规模的立方)回归取残差,直接检验它是不是非线性规模暴露的代理;(3) 剔除最便宜的 5% / 10%(cs_last_low05 / cs_last_low10),检验「便宜但不是最便宜」;(4) 价格相对自身历史的位置(相对 120 日高点、60 日 z 分数),时间序列读法;(5) 价格档位当分类标签:同价格档内的相对收益、同档内的日内偏度(低价股的偏度被高估);(6) 便宜段内区分「价格跌出来的便宜」与「流通股本扩张(解禁 / 送转)摊出来的便宜」。奖励控制里加入含该核心的 4 个 head,只有价格之外的新信息才拿分。
+  literature:
+  - title: Dissecting Anomalies
+    authors: Eugene F. Fama, Kenneth R. French
+    year: 2008-08
+    url: https://www.johnhcochrane.com/s/fama_french_dissecting_anomalies_JF.pdf
+    treatment: 异象收益集中在微盘、对权重方案敏感:在规模组内分别排序(组内比较价格),而不是全市场一起排
+  - title: The Nominal Price Premium
+    authors: Justin Birru, Baolian Wang
+    year: '2015'
+    url: https://www.ivey.uwo.ca/media/3775564/birru.pdf
+    treatment: 原始价格排序混入了「本来就该便宜」的部分:先对可解释变量回归、只用价格残差
+  - title: Nominal Price Illusion
+    authors: Justin Birru, Baolian Wang
+    year: '2016'
+    url: https://www.ivey.uwo.ca/media/3777565/birru.pdf
+    treatment: 投资者高估低价股的偏度:按价格档位分组看偏度(档内比较偏度)
+  - title: Price-based return comovement
+    authors: Jason Green, Byoung-Hyoun Hwang
+    year: '2009'
+    url: https://ideas.repec.org/a/eee/jfinec/v93y2009i1p37-50.html
+    treatment: 价格档位是投资者的分类标签、同档股票联动:用同价格档内的相对收益(档内去均值)
+  - title: The Barra US Equity Model (USE4) Methodology Notes
+    authors: Jose Menchero, D.J. Orr, Jun Wang
+    year: 2011-08
+    url: https://www.msci.com/documents/10199/242721/Barra_US_Equity_Model_USE4.pdf
+    treatment: 非线性规模:标准化规模的立方对线性规模正交化,捕捉线性规模控制吸收不掉的尾部
+  - title: 'Characteristic-Sorted Portfolios: Estimation and Inference'
+    authors: Matias D. Cattaneo, Richard K. Crump, Max H. Farrell, Ernst Schaumburg
+    year: 2018-09
+    url: https://arxiv.org/abs/1809.03584
+    treatment: 分段宽度是偏差-方差旋钮:5% / 10% / 20% / 40% 的段宽各当独立候选,不假设对称
+  - title: Share Issuance and Cross-sectional Returns
+    authors: Jeffrey Pontiff, Artemiza Woodgate
+    year: 2008-04
+    url: https://ideas.repec.org/a/bla/jfinan/v63y2008i2p921-945.html
+    treatment: 股本用变化量而不是水平:近期流通股本扩张
+  seeds:
+  - cs_bucket_rank(day_mean(Open), LogFloatCap)
+  - cs_bucket_rank(day_mean(Open), LogTotalCap)
+  - cs_bucket_zscore(neg(log(day_mean(Open))), LogFloatCap)
+  - cs_bucket_rank(day_mean(Open), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_rank(day_mean(Open), ListAge)
+  - cs_regres(log(day_mean(Open)), pow_3(cs_robust_z(LogFloatCap)))
+  - cs_last_low05(cs_bucket_rank(day_mean(Open), LogFloatCap), day_mean(Open))
+  - cs_last_low10(neg(day_mean(Open)), day_mean(Open))
+  - div(day_mean(Open), ts_max(day_mean(Open), 120))
+  - cross_zscore(day_mean(Open), 60)
+  - cs_bucket_demean(div(day_last(Close), ts_delay(day_last(Close), 5)), day_mean(Open))
+  - cs_bucket_rank(ts_mean(day_skew(Ret), 20), day_mean(Open))
+  - cs_first_low40(neg(ts_mean(day_skew(Ret), 20)), day_mean(Open))
+  - cs_first_low20(neg(sub(LogFloatShares, cross_ema(LogFloatShares, 60))), day_mean(Open))
+- type: N
+  hypothesis: 日内成交的时点分布是一条与价格 / 市值轴无关的截面信息:成交集中在早盘(信息到达、知情交易)的股票之后更好,集中在尾盘的更差。快照里唯一不属于价格轴的东西就是 head +0.58 的主项 -2*day_centroid(sqrt(Volume))(共性表 n=9、均值差 +0.64)。这里不只用连续质心,而是按文献把它拆成几种读法:离散的早盘时段成交占比(in_half)、成交最重的 10% 分钟落在一天的什么位置(day_topw_mean(in_index(Volume), Volume))、最重分钟的收益方向(隐蔽交易:大额成交在开收盘的价格冲击最大)、今天的成交时点相对自身 20 日习惯的偏移、成交时点相对 |收益| 时点的先后、质心在市值十分位桶内的相对位置、早盘时段收益的持续性。和 head +0.58 太像(秩相关 >= 0.7)的会被库禁令拒绝,所以种子尽量选不同的写法;原始质心本身放在 R 里直接量。
+  inspired_by: M 第 1 批 head +0.58 里的 day_centroid(sqrt(Volume)) 主项与共性表(n=9,均值差 +0.64,p 0.116);Admati & Pfleiderer 1988、Heston-Korajczyk-Sadka 2010、Gao-Han-Li-Zhou 2018、Blau-Van Ness-Van Ness 2009
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://da.lib.kobe-u.ac.jp/da/kernel/81000053/81000053.pdf
+    treatment: 日内成交集中是知情与流动性交易者择时的均衡结果:把成交时点当信息 / 择时的代理
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: 2010-08
+    url: https://arxiv.org/pdf/1005.3535
+    treatment: 用离散时段(开盘 / 收盘半小时)代替连续统计量;同一时段的收益跨日持续
+  - title: Market Intraday Momentum
+    authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+    year: '2018'
+    url: https://doi.org/10.1016/j.jfineco.2018.05.009
+    treatment: 早段收益预测尾段收益:按时段切开收益
+  - title: 'Intraday Stealth Trading: Which Trades Move Prices During Periods of High Volume?'
+    authors: Benjamin M. Blau, Bonnie F. Van Ness, Robert A. Van Ness
+    year: '2009'
+    url: https://ideas.repec.org/a/bla/jfnres/v32y2009i1p1-21.html
+    treatment: 大额成交在开盘与收盘时段的价格冲击最大:看最重成交分钟的收益方向与时点
+  seeds:
+  - div(day_sum(in_half(Volume)), day_sum(Volume))
+  - ts_mean(div(day_sum(in_half(Volume)), day_sum(Volume)), 10)
+  - day_topw_mean(in_index(Volume), Volume)
+  - ts_mean(day_topw_mean(in_index(Volume), Volume), 10)
+  - ts_mean(day_topw_mean(Ret, Volume), 10)
+  - day_topw_mean(Ret, Amt)
+  - sub(day_centroid(Volume), ts_mean(day_centroid(Volume), 20))
+  - sub(day_centroid(Volume), day_centroid(Ret))
+  - cs_bucket_rank(day_centroid(Volume), LogFloatCap)
+  - ts_mean(day_centroid(Amt), 20)
+  - day_corr(in_index(Volume), Volume)
+  - ts_mean(day_corr(in_index(Volume), Volume), 20)
+  - ts_mean(day_sum(in_half(Ret)), 20)
+  - day_wmean(Ret, in_index(Ret))
+R:
+- head: sub(cs_first_low20(abs_(day_wstd(Vwap, High)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_var(day_gini(High), 10))
+  why: ts_decay_linear(·, 20) 有害(跳掉 +0.755 -> +0.878,本轮唯一已过门槛的 R 候选);pow_3 在 rank 下无效;abs_ 作用在非负的 day_wstd 上是恒等;尾巴 ts_var(day_gini(High), 10) 约 1e-7,必要性 0.00。依次测:已知的去 decay 版、最简形、剔除最便宜 5% / 10%、段内改按价格本身排序(检验 day_wstd 是否只是价格的代理)、段宽 40%。
+  variants:
+  - sub(cs_first_low20(abs_(day_wstd(Vwap, High)), pow_3(day_mean(Open))), ts_var(day_gini(High), 10))
+  - cs_first_low20(day_wstd(Vwap, High), day_mean(Open))
+  - cs_last_low05(cs_first_low20(day_wstd(Vwap, High), day_mean(Open)), day_mean(Open))
+  - cs_last_low10(cs_first_low20(day_wstd(Vwap, High), day_mean(Open)), day_mean(Open))
+  - cs_first_low20(day_mean(Open), day_mean(Open))
+  - cs_first_low40(day_wstd(Vwap, High), day_mean(Open))
+- head: sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_var(day_gini(High), 10)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_var(day_gini(High), 10))
+  why: 两处 ts_var(day_gini(High), 10) 必要性都是 -0.00(量级 1e-7);cross_ema 窗口 120/241/482 不敏感,拆解没试过彻底去掉;价格外的 decay 去掉 +0.02。测最简形(裸股本、当日价格)、只去装饰、以及剔除最便宜 5%。
+  variants:
+  - cs_first_low20(LogFloatShares, day_mean(Open))
+  - cs_first_low20(cross_ema(LogFloatShares, 241), pow_3(day_mean(Open)))
+  - cs_last_low05(cs_first_low20(LogFloatShares, day_mean(Open)), day_mean(Open))
+- head: sub(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), cs_first_low20(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), ts_var(day_gini(High), 5)), ts_decay_linear(pow_3(day_mean(Open)), 20))), cs_first_low20(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), ts_var(day_gini(High), 5)), ts_decay_linear(pow_3(day_mean(Open)), 20)))
+  why: 化简后是 E2 - 2*cs_first_low20(E2, 价格):股本多(LogFloatCap 控制下约等于价低)但把最便宜的 20% 压下去;ts_var(day_gini(High), 5) 必要性 -0.00,双重 cross_ema 窗口不敏感。测裸字段最简形,以及同一想法的干净写法cs_last_low20 / cs_last_low10(股本排序、最便宜的一段排除),再加一个纯价格版检验「次便宜」是不是甜区。
+  variants:
+  - sub(sub(LogFloatShares, cs_first_low20(LogFloatShares, day_mean(Open))), cs_first_low20(LogFloatShares, day_mean(Open)))
+  - cs_last_low20(LogFloatShares, day_mean(Open))
+  - cs_last_low10(LogFloatShares, day_mean(Open))
+  - cs_last_low20(neg(day_mean(Open)), day_mean(Open))
+- head: sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_wmean(Ret, Volume), ts_reg_tvalue(day_quantile(Volume), day_mean(Ret), 10))))), 30), ts_var(day_gini(High), 10)), ts_var(day_gini(High), 10)), day_centroid(sqrt(Volume))), day_centroid(sqrt(Volume)))
+  why: 未被拆解。化简后主项是 -2*day_centroid(sqrt(Volume)),另一项 A 里 neg 被 abs_ 吃掉、pow_1_5 对负值出 NaN,两个 ts_var 尾巴约 1e-7。直接量质心单独(sqrt 与原始 Volume)以及去掉装饰后 A 与质心 1:1 的组合,确定 A 有没有贡献;同时为本轮 N 位定标。
+  variants:
+  - day_centroid(sqrt(Volume))
+  - day_centroid(Volume)
+  - sub(ts_mean(abs_(pow_1_5(cs_last_low10(day_wmean(Ret, Volume), ts_reg_tvalue(day_quantile(Volume), day_mean(Ret), 10)))), 30), day_centroid(sqrt(Volume)))
