@@ -1,0 +1,124 @@
+seed: 803
+round: 3
+slots:
+  - type: E
+    core: 'ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)'
+    hypothesis: '核心 C = ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50),是 head 1 cross_mean(sub(sqrt(C), day_centroid(Amt)), 20)(+1.65,方向 +1)的子树、核心卡第 2 条。源码:ts_reg_fvalue 走 rolling_ols,fvalue = ess/(mse+EPS) = (n−2)R²/(1−R²),对 x、y 对称,只依赖 |c|(c = ts_corr(day_std(Amt), day_centroid(Amt), 50));重心的 50 日方差比 EPS = 1e-9 大几个数量级,不是浮点垃圾。核心本身的证据(定位已付费):裸核心 +1.51(train 1.53 / valid 1.51),与已知族 ρ −0.23;裸 / sqrt / sub(sqrt, 重心) 三个单调改写是 1.51 / 1.49 / 1.56,凸度不是来源;Amt→Volume 仍 +1.17。多头 = F 高 = 成交爆发日与钱的时点联动得紧。
+      第 1 次审计之后改了什么:(1) 删掉「精度条件化」整支。相关度表已经给了判决:在重心标准差、零收益比例、基尼、已知族、时点水平的十分位内排序或取秩残差之后,F 与 head 1 仍是 0.75–0.81,这几个精度代理几乎解释不了 F 的截面排序,那几颗种子是 head 1 的换皮,后代也会被库禁令挡掉。本机合成面板只说明 F「能」读精度,表说明在真实截面上这一份不大。(2) 安慰剂差分升为主线:保留上一稿表上 0.35 / 0.62 / 0.67 的 3 颗,再补两种安慰剂。(3) 符号只留一颗,按审计意见改为在时点水平的十分位内比较。
+      本位外围只做一件事:用安慰剂把 F 里「不是成交本身驱动的」那几份差掉,留下「只有成交爆发才带动钱的时点」的那一份。每种安慰剂只换掉核心的一个输入、保留另一个,问 F 的哪一份能被它复现。
+      (a) 时点一侧的安慰剂 P_t = ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50):把钱的重心换成价格移动的重心(day_centroid 内部先取绝对值,即 |Ret| 的重心)。上一稿「两个重心对精度的暴露相同」的说法撤回,理由改为:成交爆发日如果是消息日(隔夜消息、开盘注意力),钱和价格移动会一起前移,这是 C 与 P_t 共有的真实耦合;秩差、秩残差、在 P_t 十分位内排序把这份共有的差掉,剩下的是不伴随价格时点移动的成交聚集,对应 Admati & Pfleiderer (1988) 里流动性交易者在同一时段的策略性聚集,而不是信息驱动的成交。种子 1–3(即上一稿的 9–11)。
+      (b) 爆发一侧的安慰剂 P_b = ts_reg_fvalue(day_std(Ret), day_centroid(Amt), 50):把分钟成交额的离散换成分钟收益的离散,问钱的时点是跟着成交额爆发动,还是跟着波动爆发动。Llorente, Michaely, Saar & Wang (2002) 用成交与收益的动态区分信息交易与对冲 / 流动性交易:伴随价格大幅变动的成交是信息型的。C 里能被 P_b 复现的那份,就是信息型爆发带动的时点;差掉以后剩下的是不伴随波动的成交爆发对时点的带动,和 (a) 是同一个问题,从另一个输入去问。种子 4 是秩差,安慰剂写成 abs_(ts_corr(day_std(Ret), day_centroid(Amt), 50)):F 是 |c| 的单调函数,取 cs_rank 之后两种写法的截面排序相同(只差各股窗口内的有效天数)。换写法只是工程原因:GP 选种时同一骨架只种一颗(gp.py 的 _seeded_population;骨架抽掉字段、保留窗口),写成 F 会和种子 1 同骨架而被合并掉。种子 5、6 把两种安慰剂都控制住:种子 5 先对 P_t 的秩取残差,再在 P_b 的十分位内排序;种子 6 反过来,先在 P_t 的十分位内排序,再对 P_b 的秩取残差。
+      (c) 时间一侧的安慰剂 P_l = ts_reg_fvalue(day_std(Amt), cross_delay(day_centroid(Amt), 5), 50):把重心滞后 5 个交易日。两条日度序列都有很强的持续性,50 日窗口里的低频共漂本身就会抬高 R²,即使同一天没有任何耦合,这是 Granger & Newbold (1974) 的伪回归。滞后 5 日后同日耦合基本消失,低频共漂还在,所以 C 与 P_l 的秩差读的是同一天的耦合比低频共漂多出来的那部分。局限要说清:序列的持续性会把一部分真实耦合也带进 P_l,这个差偏保守。种子 7 是秩差;种子 8 先对 P_t 取秩残差,再在 P_l 的十分位内排序,同时去掉价格时点共有的那份与低频共漂。
+      (d) 符号:种子 9 = cs_bucket_rank(mul(cs_rank(C), sign(c)), cross_mean(day_centroid(Amt), 20))。F 扔掉了符号:负号 = 爆发日的钱前移到开盘,正号 = 后移到尾盘与收盘竞价。上一稿的裸符号版与 head 1 是 0.73,与时点水平 head cross_mean(sqrt(sqrt(day_centroid(Amt))), 20) 是 0.42,说明符号里有一部分就是时点水平。这里在 20 日平均时点的十分位内比较有符号的耦合,符号只能读「爆发让钱偏离这只股票平时的时点」的方向,读不到水平本身。它是本位最可能被表划掉的一颗,划掉也不影响本位的主线。
+      为什么和以前不同:这个核心见过的外围只有平滑与单调改写,算子集合是 {}、{sqrt}、{sqrt, ts_decay_linear}、{sqrt, cross_mean}、{sub, day_centroid, cross_mean}、{sqrt, sub, day_centroid, cross_mean}。本位每颗种子的外围都含 cs_rank / cs_regres / cs_bucket_rank 和一个安慰剂(或符号),一次都没有出现过;没有任何平滑或单调改写的种子。
+      陷阱:没有凸变换,C 只进 cs_rank 或 cs_bucket_rank,量级与凸度都被拿掉;分桶变量都是连续量(安慰剂 F 值、20 日平均重心),没有大量并列,不触发列序斜坡;不是市值、波动、成交额水平的非线性函数(F 对 x、y 的仿射变换不变,P_b 里的 day_std(Ret) 只作为时间序列进相关,不以水平进信号);已知族不出现在任何种子里。
+      可检验的预期(样本内能判):若 F 的分数主要来自与价格时点共有的消息日耦合,种子 1–3 塌到 0.5 以下;若主要来自不伴随价格移动、不伴随波动的成交聚集,1–6 守住 1.0 以上;若 F 的截面排序主要是低频共漂,种子 7 与 head 1 的 ρ < 0.3 且分数塌掉,若是同日耦合,种子 7 守住。表上我预期种子 4、7 与 head 1 在 0.35–0.6,种子 5、6、8 在 0.5–0.67,种子 9 在 0.6–0.72。
+      样本外为什么还在:剩下的是参与者结构:成交爆发由流动性交易者的聚集驱动、而不由消息驱动的股票,爆发日钱的时点随之系统性移动。这由开收盘集合竞价、T+1 和投资者构成决定,2023 年之后没有变;核心在 train 与 valid 上一样强,不是某一段行情的产物。'
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988'
+        url: 'https://doi.org/10.1093/rfs/1.1.3'
+        treatment: '流动性交易者策略性地把成交聚集到同一时段,知情者跟随;对应时点一侧的安慰剂差分:成交爆发与钱的时点联动、而不与价格移动的时点联动的那一部分'
+      - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+        authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang'
+        year: '2002'
+        url: 'https://doi.org/10.1093/rfs/15.4.1005'
+        treatment: '用成交与收益的关系区分信息交易与对冲 / 流动性交易,伴随价格大幅变动的成交是信息型的;对应爆发一侧的安慰剂 P_b:把钱的时点对波动爆发的联动差掉'
+      - title: 'Spurious Regressions in Econometrics'
+        authors: 'Clive W. J. Granger, Paul Newbold'
+        year: '1974'
+        url: 'https://doi.org/10.1016/0304-4076(74)90034-7'
+        treatment: '两条持续性强的序列在有限窗口里回归,R² 会被低频共漂抬高;对应时间一侧的安慰剂 P_l:重心滞后 5 日后的 F 保留共漂、去掉同日耦合,与 C 取秩差'
+    seeds:
+      - 'sub(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50)))'
+      - 'cs_bucket_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50), ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50))'
+      - 'cs_regres(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50)))'
+      - 'sub(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(abs_(ts_corr(day_std(Ret), day_centroid(Amt), 50))))'
+      - 'cs_bucket_rank(cs_regres(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50))), ts_reg_fvalue(day_std(Ret), day_centroid(Amt), 50))'
+      - 'cs_regres(cs_bucket_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50), ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50)), cs_rank(ts_reg_fvalue(day_std(Ret), day_centroid(Amt), 50)))'
+      - 'sub(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(ts_reg_fvalue(day_std(Amt), cross_delay(day_centroid(Amt), 5), 50)))'
+      - 'cs_bucket_rank(cs_regres(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Ret), 50))), ts_reg_fvalue(day_std(Amt), cross_delay(day_centroid(Amt), 5), 50))'
+      - 'cs_bucket_rank(mul(cs_rank(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)), sign(ts_corr(day_std(Amt), day_centroid(Amt), 50))), cross_mean(day_centroid(Amt), 20))'
+  - type: N
+    hypothesis: '新 idea:同样一段涨跌,有多少是在开盘集合竞价里完成的,有多少是在连续竞价里完成的(隔夜与日内的拉锯)。
+      定义(后复权价;源码 alphacube/tradability.py 注明后复权价的比值跨除权日连续,跨日比价不用另外除权):隔夜 O = sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1),前收到今开,第 0 根分钟线是 9:30 开盘集合竞价;日内 I = sub(div(day_last(Close), day_first(Open)), 1)。(1+O)(1+I) = 日收益。停牌日没有分钟数据,复牌第一天的 cross_delay(day_last(Close), 1) 是 NaN,所以 O 也是 NaN;cross_sum 对 NaN 容忍,复牌跳空(多日收益)被自动剔除。
+      机制:两段由不同的人定价。开盘竞价集中了被隔夜消息和关注度吸引的个人买单。Berkman, Koch, Tuttle & Zhang (2012) 显示高关注度股票隔夜涨、日内回吐,开盘价相对日内偏高,难估值、难套利的股票更强。Lou, Polk & Skouras (2019) 显示机构与个人分别主导日内与隔夜,两段的截面溢价方向相反。A 股更强:T+1 使开盘买入当天不能卖出,Qiao & Dam (2020) 证明 T+1 让隔夜段系统性折价,折价随波动增大;An, Huang & Li (2022) 发现 A 股隔夜异象不对称,只在前一日日内段下跌之后显著。
+      算子实现:
+      (a) 主因子:把总收益固定住,只看隔夜那一份。cs_regres(cs_rank(cross_sum(O, d)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), d)))),d = 5 / 10 / 20。O + I 约等于总收益,所以这个残差就是负的日内残差,读的是「同样的 d 日涨跌,有多少是竞价给的」。它与 20 日反转控制在构造上正交:控制是总收益,这里把总收益回归掉了。中性化吃不掉它,不是因为凸,而是因为它本来就在控制的零空间里。
+      (b) LPS 的写法:sub(cs_rank(cross_sum(O, 20)), cs_rank(cross_sum(I, 20))),以及 5 日版;另留一颗裸的 cross_sum(O, 20) 作对照。
+      (c) T+1 折价里的风险补偿部分与波动成正比(Qiao & Dam),在 20 日平均分钟波动 cross_mean(day_std(Ret), 20) 的十分位内排序,把它和注意力部分分开。
+      (d) 不对称:cross_sum(mul(O, is_lt0(cross_delay(I, 1))), 20),只累计前一日日内段下跌之后的隔夜(An 等 2022),另有对总收益的秩残差版。
+      (e) 一字板:当天所有分钟 Ret = 0,day_std(Ret) = 0,O 是一个买不进的跳空;mul(O, is_gt0(day_std(Ret))) 把这些天置 0,再做 (a)。
+      (f) 开盘价被连续竞价纠正的强度:ts_corr(O, I, 20 / 60),无量纲、有界,即竞价定的价被日内系统性回吐的程度。
+      (g) 竞价占价格发现的份额:Σ|O| / (Σ|O| + Σ|I|),20 日,零次齐次。
+      为什么和库里不同:17 个 head 的输入全是单日之内的分钟分布(收益的高阶矩、零分钟、成交时点、DW),没有一个跨日比价,没有一个用到开盘价与前收。这组种子不对任何量做凸变换(陷阱 1);不用 cs_* 处理截面不变的量,分桶变量是连续的 20 日平均波动(陷阱 2);不是市值、波动、成交额的非线性函数(陷阱 3)。is_lt0 / is_gt0 只当条件门,累计量都是连续实数,过 distinct 门槛。
+      预期方向:多头 = 同样的涨跌里竞价份额小、价格在连续竞价里形成的股票;高隔夜份额那一端,是被开盘注意力抬高、随后回吐的。纯多头书只吃前一端。
+      样本外为什么还在:机制来自制度和投资者结构(T+1、开盘集合竞价、个人投资者占成交多数),2023-08 之后都没有变。隔夜 / 日内拆分在美股(Lou 等 2019、Berkman 等 2012)和 A 股(Qiao & Dam 2020、An 等 2022)两个市场、不同样本期都成立。它只用日频的开盘价与收盘价,没有分钟级的测量噪声,也不读薄股票的稀疏度,不会跟着换手状态漂移。'
+    inspired_by: 'M 第 1–3 批和本组 4 个位产出的 17 个 head 全部读单日之内的分钟分布,其中 12 个落在 σ 凸函数或交易密度两条通道上;M 第 3 批 0 个 head。库里没有任何跨日价格结构。文献:Lou, Polk & Skouras (2019) 的隔夜 / 日内拉锯;Berkman 等 (2012) 的开盘注意力溢价;Qiao & Dam (2020) 的 T+1 隔夜折价;An, Huang & Li (2022) 的 A 股不对称隔夜异象'
+    literature:
+      - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        url: 'https://researchonline.lse.ac.uk/id/eprint/119010'
+        treatment: '把日收益拆成隔夜段与日内段,按两段各自的累计收益排序,两段溢价方向相反;对应 sub(cs_rank(cross_sum(O,20)), cs_rank(cross_sum(I,20)))'
+      - title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the Open'
+        authors: 'Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang'
+        year: '2012-08'
+        url: 'https://ideas.repec.org/a/cup/jfinqa/v47y2012i04p715-741_00.html'
+        treatment: '受关注的股票开盘价被个人买单抬高、日内回吐;对应「同样的总收益里隔夜份额高」的那一端(对总收益的秩残差)'
+      - title: 'The Overnight Return Puzzle and the "T+1" Trading Rule in Chinese Stock Markets'
+        authors: 'Lin Qiao, Lammertjan Dam'
+        year: '2020'
+        url: 'https://ideas.repec.org/a/eee/finmar/v50y2020ics1386418120300033.html'
+        treatment: 'T+1 让 A 股隔夜段系统性折价,折价与波动正相关;对应在 20 日平均分钟波动十分位内排序,把风险补偿部分分开'
+      - title: 'The Asymmetric Overnight Return Anomaly in the Chinese Stock Market'
+        authors: 'Yahui An, Lin Huang, Youwei Li'
+        year: '2022-11'
+        url: 'https://ideas.repec.org/a/gam/jjrfmx/v15y2022i11p534-d974482.html'
+        treatment: 'A 股隔夜异象只在前一日日内段下跌之后显著;对应 mul(O, is_lt0(cross_delay(I, 1))) 的 20 日累计'
+    seeds:
+      - 'cs_regres(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 20))))'
+      - 'cs_regres(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 10)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 10))))'
+      - 'cs_regres(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 5)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 5))))'
+      - 'sub(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)), cs_rank(cross_sum(sub(div(day_last(Close), day_first(Open)), 1), 20)))'
+      - 'sub(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 5)), cs_rank(cross_sum(sub(div(day_last(Close), day_first(Open)), 1), 5)))'
+      - 'cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)'
+      - 'cs_bucket_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cs_regres(cs_rank(cross_sum(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 20)))), cross_mean(day_std(Ret), 20))'
+      - 'cross_sum(mul(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), is_lt0(cross_delay(sub(div(day_last(Close), day_first(Open)), 1), 1))), 20)'
+      - 'cs_regres(cs_rank(cross_sum(mul(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), is_lt0(cross_delay(sub(div(day_last(Close), day_first(Open)), 1), 1))), 20)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 20))))'
+      - 'cs_regres(cs_rank(cross_sum(mul(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), is_gt0(day_std(Ret))), 20)), cs_rank(div(day_last(Close), cross_delay(day_last(Close), 20))))'
+      - 'ts_corr(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 20)'
+      - 'ts_corr(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'div(cross_sum(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 20), add(cross_sum(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 20), cross_sum(abs_(sub(div(day_last(Close), day_first(Open)), 1)), 20)))'
+R:
+  - head: 'pow_2_5(sqrt(ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 20)))'
+    why: '烂部件:pow_2_5(sqrt(·)) 这层包装,以及 F 本身对 |相关| 的凸映射和被扔掉的符号。依据(源码 + 本机验算):ts_reg_fvalue = ess/(mse+EPS) = df·c²/(1−c²),c = ts_corr(x, y, d),相对误差 8e-7,且对 x、y 对称;所以 head = F^1.25,是对 |c| 的两层凸映射,方向信息在 c² 里丢了。依据(定位已付费):同一家族窗口 50 的三个单调改写(裸 / sqrt / sub(sqrt, 重心))是 1.509 / 1.490 / 1.557,sqrt 的必要性 +0.04,包装不带信息。变体:(1) 裸 F20,去掉包装;(2) abs_(ts_corr(·,·,20)),诚实的有界 |c|;(3) ts_corr(·,·,20),找回符号:爆发日的钱前移到开盘(负)还是后移到收盘(正);(4) cross_stddev(day_centroid(Amt), 20),F 的衰减分母。若 head 的分数主要是重心测量噪声造成的 R² 衰减(本机合成面板:真实耦合处处相同时,F 与重心噪声的秩相关 −0.80;Gassen, Ashbaugh-Skaife & Veenman 2020 在同步性 R² 上的同一结论),这个量本身就应带走大部分分数,回归与包装都是绕路。(1)(2) 若 ≥ head + 0.1,就用诚实版替换;(3) 明显高于 (2) 说明符号载有信息。'
+    variants:
+      - 'ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 20)'
+      - 'abs_(ts_corr(day_std(Amt), day_centroid(Amt), 20))'
+      - 'ts_corr(day_std(Amt), day_centroid(Amt), 20)'
+      - 'cross_stddev(day_centroid(Amt), 20)'
+  - head: 'cross_mean(sqrt(sqrt(day_centroid(Amt))), 20)'
+    why: '第 1 次审计之后换了目标:上一稿对 cs_mask_top_replace_mean(mul(0.5, neg(day_centroid(Amt)))) 做 R,三个变体与它的日度秩 ρ 都 < 0.3,替换走不通;审计员指出同样的想法应当对这个 head(+1.28,train 1.28 / valid 1.40,方向 −1,hl 5)做,它才是这三个变体的近亲。
+      烂部件:(1) 单日的 sqrt(sqrt(·)):定位里去掉外层 sqrt 的必要性只有 +0.03(cross_mean(sqrt(day_centroid(Amt)), 20) = +1.25);单日 day_centroid(Amt) 是 −0.08,单日 sqrt(sqrt(重心)) 是 −0.65,分数全在 20 日平均里,不在单日的凹变换里。(2) 平滑之后的时点水平贴着已知族:定位的 rho_known 随平滑单调上升,单日 −0.19,10 日 −0.41,20 日 cross_mean(sqrt(day_centroid(Amt)), 20) −0.5035,Volume 版 −0.4995,40 日 −0.5615;这个 head 是恰好卡在 0.5 线内的写法。机制上,成交越集中在开盘几分钟,day_std(Amt) 越大、重心越早,20 日平均后两者成了同一个慢变量。奖励只对已知族做线性中性化,剩下的非线性那份(§4 陷阱 3 的同一类问题)可能正在给这个 head 加分。
+      变体:去掉 sqrt(sqrt(·)),只留 20 / 40 日平均重心,并在已知族 cross_mean(day_std(Amt), 30) 的十分位内排序(非线性地去掉已知族),或对已知族的秩取残差(在秩上线性、在水平上非线性)。上一稿的相关度表已经给了这三个表达式的数:与本 head 的日度秩 |ρ| 是 0.84 / 0.66 / 0.87,全部 ≥ 0.5,替换走得通;与已知族 0.01 / 0.01 / 0.04;与 5 个控制最大 0.32。
+      判决:若某个变体 ≥ +1.38(原 head + 0.1),时点水平这条通道就换成一个不靠已知族、不带死重变换的干净版本;若明显掉下来(< 1.1),这个 head 的分数里有一份是已知族的非线性残余,给最终报告一个判决。分桶版与秩残差版的差,说明那份残余是不是只在十分位尺度上才看得到。'
+    variants:
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 40), cross_mean(day_std(Amt), 30))'
+      - 'cs_regres(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_std(Amt), 30)))'
+  - head: 'div(cross_max(ts_var(pow_2_5(cs_last_low40(day_q_stat_std(Volume), day_pos_ratio(Volume))), 50), 15), day_pos_ratio(Volume))'
+    why: '烂部件:pow_2_5(cs_last_low40(·,·)) 这一层藏着的样本删除(上一稿审计员已按源码核对):cs_last_low40(y, x) 对 x 最低 40% 的整段并列块输出 rank(y) − 1 ∈ (−1, 0],其余股票输出 rank(y);pow_2_5 走 torch.pow,负底数得 NaN;ts_var / cross_max 对 NaN 容忍,外层 coverage 看不出来。所以 ts_var 只在这只股票不在最稀疏 40% 的那些天上算,删掉哪些天由交易密度决定。定位的旁证(同骨架、+1.44 的 head):去掉 ts_var 后 coverage 0.8861,门槛废品;去掉 pow_2_5 后 valid 从 2.68 塌到 1.20,rho_known 从 −0.18 翻到 +0.45。
+      第 1 次审计之后改了什么:上一稿三个变体与原 head 的 ρ 只有 0.24–0.27,替换走不通;零收益比例那两颗是流动性的非线性重写,删掉。原因也看清了:上一稿的诚实版只去掉 pow_2_5,稀疏日的值变成 rank − 1,股票每进出一次最稀疏 40% 就跳 1,ts_var 读到的是切换频率,不再是原 head 的量。
+      变体只换掉筛子,其余结构一字不动:(1) 审计员的写法 pow_2_5(add(cs_last_low40(·,·), 1)):最稀疏 40% 仍排在底部,但不被删掉。它保留了「切换就跳」的结构(稠密日 (1, 5.66],稀疏日 (0, 1]),所以我预期它与原 head 的 ρ 也可能偏低,以表为准。(2) 把 cs_last_low40(y, x) 换成 cs_rank(y):源码里 cs_last_low40 对其余股票输出的就是 y 的序数秩,所以从不落进最稀疏 40% 的股票上,这个变体与原 head 逐点相同;差别只来自原来被删掉的那些天,而且值随 y 连续变化、不跳。它是离原 head 最近的诚实版,预期与原 head 的 ρ ≥ 0.5,可以走替换。
+      判决:若 (2) ≥ 原 head + 0.1(+1.01),用不靠 NaN 删除的版本替换;若明显更低,这个 head 的分数(尤其 valid 2.82)有一份是 NaN 筛选买来的,给最终报告一个判决。'
+    variants:
+      - 'div(cross_max(ts_var(pow_2_5(add(cs_last_low40(day_q_stat_std(Volume), day_pos_ratio(Volume)), 1)), 50), 15), day_pos_ratio(Volume))'
+      - 'div(cross_max(ts_var(pow_2_5(cs_rank(day_q_stat_std(Volume))), 50), 15), day_pos_ratio(Volume))'
+  - head: 'div(cross_sum(day_sum(mul(mul(Ret, Ret), abs_(Ret))), 3), cross_sum(cross_quantile_q50(ListAge, 3), 20))'
+    why: '烂部件:未归一化的分子 Σ|r|³ 与 ListAge 分母。依据(代数):mul(mul(Ret, Ret), abs_(Ret)) = |r|³,是 σ 的 3 次齐次量。依据(定位已付费):同一骨架分子换成奇函数 r|r| 后从 +1.40 掉到 +0.93,偶的比奇的高 0.47,赚分的是量级;两个 ListAge 子树 distinct 0.095 / 0.10,单独门槛废品,cross_quantile_q50 换成 cross_sum 必要性 +0.007,它只是粗分组缩放。本机:所有股票形状律相同、只有 σ 不同时,Σ|r|³ 与 σ 的秩相关 +0.95,除以 RV^1.5 后 +0.01。所以 head 是 σ³ 按粗年龄组缩放,即陷阱 1 的低波动多头腿。变体把分母换成文献的标准归一化 RV^{3/2}(Amaya 等 2015、Neuberger 2012 的已实现高阶矩定义),窗口 3 与 20,得到真正的形状量。若 ≥ 原 head + 0.1,用诚实版替换陷阱版;若 < 0.5,这个 head 的分数来自量级,给最终报告一个判决。'
+    variants:
+      - 'div(cross_sum(day_sum(mul(mul(Ret, Ret), abs_(Ret))), 3), pow_1_5(cross_sum(day_sum(mul(Ret, Ret)), 3)))'
+      - 'div(cross_sum(day_sum(mul(mul(Ret, Ret), abs_(Ret))), 20), pow_1_5(cross_sum(day_sum(mul(Ret, Ret)), 20)))'

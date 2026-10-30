@@ -1,0 +1,41 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [13]
+    reasons: '【核心】ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1) 是 head +1.62 的子树,也是核心卡第 14 条;相关度表上它与 5 个控制的 |ρ| 是 liq 0.10、vol 0.01、rev 0.01、known 0.08、size 0.00,全 < 0.5;第 1、2 轮的 E 核心分别是 S 和 C,所以这是 K 第一次做 E 核心。13 个种子都原样含核心,外围算子集合两两不同。
+      【创新度 3】含 K 的已有外围只有一种用法:在 C 族的 y 上做 cs_last_low20 排除筛(head +1.89 / +1.62 / +1.61 / +1.49 / +1.40 / +1.36 / +1.10 / +0.85 / +0.80 / +0.76,y 全是 ts_decay_linear(C, 30/40) 或它的加权版)。这次外围做两件以前没做过的事:(i) 把筛装到 C 以外的 y 上,包括 S 族(种子 1–5),以及库里没有的两个新 y:Q(day_topw_mean 取 |r|/√V 最大那 10% 分钟的 Vwap 均值,除以当日 VWAP)和 CPV(连续竞价段的 day_corr(Close, Volume));(ii) 用 cs_first_high40 做挑选(种子 2、5、8、11)。另有种子 12 作对照,区分读法甲和读法乙,这个设计可以证伪。相关度表:Q / CPV 种子 7、8、10、11 与所有 head 的原始 |ρ| 是 0.15–0.27,S 族种子 1–4 是 0.48–0.54,也就是在 S head 上加一道筛。筛的机制本身不新,S 族种子离 S head 约 0.5,所以给 3,不给 4。
+      【合理度 3,逐个算子核对】(1) _lexi(ops_ext.py:339):x 的并列整块一起进出带,输出是 y 的序数秩 ±1。K 是连续的相关系数,所以不会生成列序斜坡(陷阱 2),也不会因为装不进带而退化成恒等。cs_first_high40 给带 (0.6, 1] 加 1,书 = K 最高 40% 里 y 排前四分之一的名字,与 PI 的描述一致。(2) day_topw_mean(ops_ext.py:635)取 |w| ≥ 当日 90% 分位的分钟。in_pct(Close, 1) 的第 0 列是 NaN,所以集合竞价不参与挑选;V = 0 的分钟 w 是 inf 或 NaN,会被 isfinite 排除。Q 是同一天两个价格之比,尺度无关;Volume 未复权,但它只在一只股票的一天之内用来挑分钟,单位约掉。(3) in_slice(x, 1, 240) = x[:, 1:241],恰好去掉 241 列里的第 0 列竞价。(4) S 族种子 4、5 的 ts_corr 有界,不饱和。机制有 train 证据:K 在三棵 C head 上两个区间同向加分,而且第 2 轮 7 种内层字段都能用,支持「起作用的是持续性」。但这份证据只覆盖 y = C,S / Q / CPV 上没有,读法乙预测会失败。还要注意:long_neutral 奖励不施加 untradable 掩码(steer.py:627,只有 long_tradable / long_bucket / long_marginal 才用),所以 K 低的尾部里有冻结报价和新股。筛在 train 上加的分,有一部分可能就是「不买冻结的名字」这个 segment 效应。可靠度(甲)和 φ 低(没有拆单的散户票)也分不开。所以给 3,不给 4。
+      【划掉 13】种子 13 是不取 neg 的反向对照,与本位「做多低 Q」的方向相反。奖励会对 ±1 两个方向都试、取 train 较好的那个(steer.py:638 的 sign 循环),而在筛外面翻号,等于去买被筛掉的 K 低名字,所以它不是一个干净的方向对照,在种群里只是占一个名额。
+      【保留,但请注意】种子 3 的 pow_1_5 在基于秩的 cs_last_low40 里不起作用:inv(sigmoid) > 1,pow_1_5 在这个区间单调,而 hl = 0 时只有秩进入奖励。种子 1 用窗口 100,并没有拉开距离(与 S head 0.49;种子 2 用 200,是 0.48),而第 2 轮 R 已经表明 200 优于 100。S 族的 y 在 sigmoid 饱和于 1 的地方有整块并列(第 1 轮定稿记录 S 约三分之一并列),这些并列都在 y 的低端:方向 +1 时它们进不了书,但奖励若为某个后代选了方向 −1,书就会落在按列序排的并列块上(陷阱 2),看结果时请核对方向。Q 种子 6、7、13 与 rev 是 0.22–0.31,带有一部分反转。'
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [11]
+    reasons: '【创新度 4】day_first(Open)、day_last(Close)、cross_delay 在 29 个 head 里一个都没出现。相关度表上 12 个种子与 head 的原始 |ρ| 全部 ≤ 0.28:最高是种子 4 与 pow_2(pow_2_5(day_durbin_watson(High))) 的 0.28,种子 1–3 与 cross_cov(day_max(Ret), day_cov(Ret, Ret), 30) 是 0.24–0.26;残差 |ρ| 全部 ≤ 0.18。机制(隔夜段和日内段由两拨人定价)与库里的订单流吸收、价格黏性、波动凸函数都不同。文献里有这个机制(Lou-Polk-Skouras 2019、Berkman 等 2012、Akbas 等 2022),所以不给 5。
+      【算子核对】day_first(Open) 取当日第一个有效分钟,也就是网格第 0 列 09:30 集合竞价;cross_delay(·, 1) 是上一个交易日(dt_cross.py:150)。AlphaCube 的 daily.py 与 tradability.py 写明价格字段后复权、Amt / Volume 未复权,所以跨日比值跨除权日连续。log 是 log|x|(common.py:211),比值恒正,不受影响。对数下 O + I 恰好等于收盘到收盘,种子 1–3 里 ts_sum(O, 20) 的窗口与 log(C_t / C_{t−20}) 对齐。奖励的反转控制是 div(day_last(Close), ts_delay(day_last(Close), 20))(c05_locate.py:118),种子 1–3 回归的对象正是它的对数,表上它们的 rev 是 0.16 / 0.00 / 0.08,反转没有漏进来。
+      【合理度 3,不给 4】(a) 定位脚本的标签是 open_vwap15:书在下一个交易日开盘 15 分钟的 VWAP 买入,紧接着的那个隔夜跳空不在书里,书拿到的是日内段,再加一个隔夜段。Cheema 等(2022)在中国的结果是,两段的可预测性方向相反、相互抵消。Lou-Polk-Skouras 的「各段持续、跨段反转」放到控制总涨跌后的隔夜占比上,同样预测未来隔夜涨、日内跌。在这种持有方式下,净效应是什么符号,中国没有文献支撑,PI 自己也写了「把握不高」。(b) 种子 5、6 的 ts_corr(O, I),两条腿共用当日开盘价;种子 7 的 ts_corr(O_t, I_{t−1}) 共用昨收。这个价格里的暂时性噪声(竞价价偏离)以 + 和 − 同时进入两边,机械地制造负相关,类似 Roll 的买卖反弹。所以截面上量到的有一大块是开盘价 / 收盘价的噪声度,不是拉锯。60 日相关系数的标准误约 0.13,与它在截面上的离散同量级。这三个种子保留,但它们的分数不能当作拉锯的证据。(c) is_gt(NaN, 0) = 0(common.py:248),O 缺失的日子在种子 8、9 里按 0 计入均值,有轻微稀释。窗口 20 / 40 / 60 / 120 合理;种子 12 是两段绝对变动之比,有界、尺度无关,不是波动的凸函数(vol 0.12)。
+      【划掉 11】种子 11 想对 20 日收益取残差、去掉方向,相关度表上的结果却相反:不取残差的种子 10 与 rev 是 0.13,取了残差的种子 11 升到 0.42。原因是 cs_regres 在原始值上做 OLS(nd_cs.py:254)。X(有号的竞价量占比,量级约 0.01–0.1)在截面主体上与 R20 几乎无关,β 由尾部决定(连板、竞价量占比极端的名字)。于是残差在主体上约等于 X − β·R20,按秩看就成了一个改写过的反转。奖励只对秩做线性中性化(steer.py:424 的 neutral_residual),剩下的非线性部分与陷阱 3 同类,只是对象换成了反转控制。种子 4(rev 0.43)、9(0.41)也接近这条线,但两者都属于本位的 idea:种子 4 是主线(总涨跌固定时的隔夜占比,天然与日内段相关),种子 9 是 Akbas 的高开日日内反转,所以保留。看结果时请把它们与 rev 的关系一起看。'
+    revise: '—'
+R:
+  - head: 'cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 30), ts_autocorr(day_signed_ratio(Ret, Ret), 60, 1))'
+    soundness: 3
+    reasons: 'loc.md 对这棵 head 本身做了窗口拆解:15 / 30 / 60 → +1.25 / +1.49 / +1.65,valid 2.79 / 2.83 / 2.90 同向单调,增益 +0.16 ≥ 0.1,变体就是实测过的那一个。机制是日度 tick rule 订单流要在更长的窗口上平均,这与第 1、2 轮的平滑证据一致。给 3 不给 4:证据只是在两个窗口里挑了较好的一个;兄弟 head +1.89 上 20 / 40 / 80 是一个平台(+1.94 / +1.89 / +1.90),说明 30 并不普遍地烂。替换后它与 C 族 head 的原始 |ρ| 是 0.96,换来的是分数,不是多样性,PI 已如实写明。'
+  - head: 'cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 1))'
+    soundness: 3
+    reasons: '最有力的是变体 7。day_wmean(Volume, Volume) = ΣV² / ΣV(ops_ext.py:109),单位是股数,而 Volume 未复权(AlphaCube daily.py 的注释)。逐日截面 cs_regres(·, day_sum(Ret)) 之后,每只股票的残差序列 = 自身值 − α_t − β_t·r;成交股数小的名字,残差由全市场的 α_t、β_t 主导。所以自相关筛实际上在读「成交股数相对截面的量级」,这是流动性 / 股本的阶跃函数,属于陷阱 3 的方向。train 证据吻合:这棵 head 里 cs_regres 那一层的必要性是 +1.17,而 +1.61 里同样一层只有 +0.02;Volume→Amt 在这棵上掉 0.49,在其他 C head 上是中性的;相关度表上变体 7 的 size 是 0.15,在 7 个变体里最低(带宽 5% 的变体 6 是 0.28)。带宽 10% / 5%(变体 5、6)有 ops_ext.py 细带宽注释作依据(该剔的名字约占 6–7%),同时也是 segment 检验。变体 1–4(回看 120 / 30、滞后 2 / 5)检验的是从没拆过的参数,但「没测过」不等于「烂」,它们是探索;对持续性很高的成交集中度,滞后 2 / 5 仍有意义。整组给 3:变体 7 单独看可以给 4,但 7 个变体一起去冲 +1.99 的门槛,挑其中最好的一个有多重比较的问题。另:变体 7 与所有 head 的原始 |ρ| 最高只有 0.54,它与原 head 的 ρ 可能 < 0.5,那时按规则走收录而不是替换,PI 写的「必 ≥ 0.5」不一定成立。'
+  - head: 'inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 200)), 40))'
+    soundness: 4
+    reasons: 'ts_regbeta 就是 rolling_ols 的 beta(nd_ts.py:273),β = ρ·σ_y / σ_x 成立。x = day_flat_run_max(Vwap) ∈ [0, 1];它随时间几乎不变的名字,|β| 很大、sigmoid 饱和,inv(decay(sigmoid(β))) 的多头端很大程度上由 σ_x 决定。这个尺度与共动无关,很可能是流动性型的量。ts_corr 只留下 ρ:sigmoid(ρ) ∈ [0.27, 0.73],近线性、不饱和,inv 不跨 0,所以变体确实拿掉了这个尺度。train 证据:同一个 β 的两个单调变换,日度秩相关 1.00,分数却差 0.27(窗口 100)和 0.46(窗口 200),说明 S 族的分数依赖取值的形状,而不只是排序。第 1 轮 t 值替换为什么失败,PI 的解释说得通(sigmoid(t) 近似阶跃,把 ρ 的大小也丢了)。两档窗口都给了,也事先写明崩了说明什么。小更正:中性化是对 z-rank 做的(steer.py:424);形状起作用的通道是中性化之前对原始值做的时间平滑(steer.py:633,hl 5 / 20),不是线性中性化本身。'
+  - head: 'cross_cov(day_max(Ret), day_cov(Ret, Ret), 30)'
+    soundness: 4
+    reasons: 'day_cov(Ret, Ret) 是当日分钟方差,量级 ~σ²;day_max(Ret) 量级 ~σ;cross_cov(·, ·, 30) 是 30 日时序协方差(dt_cross.py:188,rolling_pair_reduce cov),量级 ~σ³。方向 −1 做多低端,也就是做多低波动、低波动之波动,与 §4 陷阱 1 的签名相同(第 2 轮 DW 凸度阶梯:凸度越高分越高)。cross_corr 把两边的标准差都除掉,只留下共动,是最小、而且正对病灶的替换。相关度表上变体与原 head 的 |ρ| 是 0.84、vol 0.34,书大体还在。变体崩或不崩都有明确的读法。'
+  - head: 'cross_cov(day_wmean(Ret, Ret), day_wmean(Ret, Ret), 5)'
+    soundness: 3
+    reasons: '核对 day_wmean(x, w) = Σx|w| / Σ|w|(ops_ext.py:109)与 day_signed_ratio(x, y) = Σ|y|·sign(x) / Σ|y|(ops_ext.py:122):day_wmean(Ret, Ret) = Σr|r| / Σ|r| = RSJ × (Σr² / Σ|r|) 成立。后一项量级 ~σ,拿掉它是对的;第 2 轮 RSJ 种子最高只有 +0.28,是旁证,说明 +0.67 可能来自这个尺度。给 3 不给 4:5 日方差只有 5 个观测,对一个有界比值非常嘈杂。原 head 也一样嘈杂,但变体原样继承了这个窗口,大概率过不了 +0.77,陷阱 head 仍会留在库里。如果想让这次 R 真有机会替换掉陷阱,可以同时给一个 20 日窗口的 RSJ 方差。相关度表上变体与原 head 的 |ρ| 是 0.85,这个尺度在排序上的作用没有 PI 说的那么大。'
+  - head: 'cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 40), ts_autocorr(ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1), 60, 1))'
+    soundness: 4
+    reasons: '外层 ts_autocorr 作用在一条 60 日滚动估计上(nd_ts.py:255,ts_autocorr = ts_corr(x[1:], x[:-1], d))。相邻两天共享 59 个观测,滞后 1 自相关对几乎所有名字都接近 1;最低的 20% 选出来的,是滚动估计跳得最厉害的名字(极端日进出窗口、停复牌)。这一层是退化的部件。train 证据很直接:去掉这一层的写法在第 2 轮已评过 +1.54(loc.md),用单层自相关筛的兄弟 head 是 +1.36 ~ +1.89,而这棵只有 +0.80。提醒:相关度表上变体与 head +1.62 的原始 |ρ| 是 0.99。替换以后,库里会有一对几乎相同的 head,这一对在 GP 的 0.7 库禁令下本来进不了库。它修好了一棵坏 head,但不增加信息。'
+summary: 'E 位把 K 筛搬到 S / Q / CPV 上并试挑选:创新度 3、合理度 3,划掉反向对照种子 13 后剩 12 个,通过。N 位做隔夜 / 日内拆分:创新度 4、合理度 3,划掉残差反而造出反转的种子 11 后剩 11 个,通过。6 个 R 组合理度 3–4,全部通过,但 R1 与 R6 的替换会让库里多出近重复。'

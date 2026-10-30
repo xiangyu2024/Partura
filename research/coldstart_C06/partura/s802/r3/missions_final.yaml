@@ -1,0 +1,283 @@
+seed: 802
+round: 3
+slots:
+- type: E
+  core: ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1)
+  hypothesis: '【核心 K 是什么】K = ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1):每只股票自己的日度净主动买入占比(1
+    分钟 tick rule,ops_ext.py:122,Σ|V|·sign(r) / Σ|V|,∈[−1, 1],尺度无关)在过去 60 天上的滞后 1 阶自相关。它是
+    head +1.62 的子树,也是定位机械核心卡第 14 条(均值差 +0.99,p 0.012,n = 10)。
+
+    【它是条件化部件,不是因子;但它的贡献很大】loc.md 的拆解:同一类筛单独评分全是负的(ts_autocorr(cs_regres(day_wmean(Volume,
+    Volume), day_sum(Ret)), 60, 1) −0.18;ts_autocorr(cs_regres(day_signed_ratio(Ret,
+    Ret), day_sum(Ret)), 60, 1) −0.81;ts_autocorr(day_signed_ratio(Ret, Ret), 60,
+    1) −0.76)。但作为 cs_last_low20 的 x 时,它给同一个 y = ts_decay_linear(C, 40/30)(C = cs_regres(day_signed_ratio(Ret,
+    Volume), day_sum(Ret));y 单独 train / valid 0.62 / 2.63、0.67 / 2.38)加了 train +1.28
+    / +0.99 / +0.82、valid +1.12 / +0.71 / +0.45(head +1.89 / +1.61 / +1.49),两个区间同向;敲掉自相关层(筛退回原始内层量)必要性
+    +0.72 / +0.34 / +0.77。第 2 轮 E 位的 10 个 head 在筛里用了 7 种不同的内层字段(成交集中度、裸订单流、效率比、涨分钟占比、可分类成交占比、Q
+    统计量、自相关的自相关),而 head +1.61 筛里那层 cs_regres(·, day_sum(Ret)) 必要性只有 +0.02。内层字段可以互换,起作用的是外层「这只股票自己的日度序列还有没有自相关」。
+
+    【机制:可靠度筛】设某个日度统计量 x_t = s_t + e_t,s 是系数 φ 的 AR(1),e 是测量噪声,则 corr(x_t, x_{t−1})
+    = φ · var(s) / (var(s) + var(e)),字面上就是一个可靠度比,也就是 Black-Jensen-Scholes 意义上的测量误差衰减系数。分钟成交稀疏、零收益分钟多、报价冻结的股票,任何由它的分钟数据算出的日度量都被
+    e 主导,自相关 ≈ 0(Lesmond-Ogden-Trzcinka:零收益说明价格没有吸收信息)。所以订单流自相关低,是「这只股票的分钟统计量量不准」的通用标记,不是订单流特有的性质;把这批名字排出多头书,书就只在量得准的名字里按
+    y 挑。硬排除而不是连续收缩,也有 train 证据:同一个测量误差理由做成连续收缩 mul(C, w),在 head +1.62 上必要性只有 +0.08。
+
+    【已见过的外围:全是 C 族】含这个核心的候选:head +1.62、+0.80,第 2 轮 top-5 的 +1.55、+1.54。外围算子集合 = {cs_last_low20,
+    ts_decay_linear, cs_regres, day_signed_ratio, day_sum, mul, abs_, 嵌套的 ts_autocorr,
+    嵌套的 cs_last_low20},y 全是 ts_decay_linear(C, 30/40) 或它的加权版。没有人把它装在 C 以外的 y 上,也没有人用它做「挑选」。
+
+    【这次的外围做什么:把筛搬到 C 以外、同样由分钟数据算出的预测量上,并把排除改成挑选】 (1) S 族(种子 1–5)。S 是库里另一个稳的来源(7 个
+    head,最高 +1.39),由 day_flat_run_max(Vwap)(价格黏性)对 day_durbin_watson(Volume) 回归而来,两个都是分钟统计量,同样怕量不准。种子
+    1 用窗口 100、种子 2 用挑选、种子 3 用 40% 带,都是为了离窗口 200 的 S head 远一点。种子 4、5 把 ts_regbeta 换成
+    ts_corr:β = ρ·σ_y/σ_x,σ_x 小(黏性几乎不变)的名字 |β| 很大、sigmoid 饱和,top 由这个尺度决定;ts_corr 只留
+    ρ,有界不饱和。方向与 S head 一致(S head 做多 β 低的一端,neg(decay(ρ)) 同向)。 (2) 聪明钱价格比 Q(种子 6–8、13)。Q
+    = div(day_topw_mean(Vwap, div(in_pct(Close, 1), sqrt(Volume))), day_wmean(Vwap,
+    Volume)):按 |r|/√V(单位√成交量的价格冲击)取冲击最大的 10% 分钟,看它们的平均成交价相对当日 VWAP。Barclay-Warner(1993):少数成交承担了大部分价格变动,知情交易者的单子单位成交量的冲击最大。Q
+    > 1 = 冲击最大的成交出现在高价位(逢高出货)。in_pct 第一列为 NaN,集合竞价那一列自动不参与挑选;两个同日价格之比,尺度无关。方向预期做多低
+    Q(neg);种子 13 是不取 neg 的反向对照。 (3) 价量相关 CPV(种子 9–12)。CPV = day_corr(in_slice(Close,
+    1, 240), in_slice(Volume, 1, 240)),只用连续竞价的 240 分钟:去掉 09:30 集合竞价那根巨量柱,否则相关系数会被「当日价格相对开盘价」主导,变成当日收益的代理。正
+    = 量随价涨(追涨),负 = 量落在价低处(承接)。方向预期做多低 CPV;种子 12 先对当日收益取截面残差。 (4) 挑选而非排除(种子 2、5、8、11)。cs_first_high40(y,
+    K) 把自相关最高的 40% 整块排到最前、在其中按 y 排序:多头书 = 最可靠的那 40% 里 y 最高的四分之一。库里 29 个 head 只会排除、从没挑选过。
+    排除带用 10% / 20% / 40% 三档。cs_last_* / cs_first_* 都按整块并列进出(ops_ext.py 的 _lexi / _rank_block),输出保留
+    y 的序数秩,不会生成列序斜坡(陷阱 2);K 是连续的相关系数,不会因为整块装不进带而退化成恒等。
+
+    【为什么和以前不一样,而且能证伪】以前的外围只回答「C 在可靠的名字上是不是更好」。这次回答「这个筛是不是对所有分钟统计量都成立的部件」,并且能把两种读法分开。读法甲(可靠度):筛在
+    S、Q、CPV 上也加分。读法乙:低可分类成交的名字上 cs_regres(C, day_sum(Ret)) 的残差约等于 −β·当日收益,筛只是把 C 里混进来的反转成分去掉;按这个读法,筛只对带
+    cs_regres(·, day_sum(Ret)) 这一步的 y 有用。种子 1–11、13 都不带这一步,只有种子 12 带,作对照。
+
+    【陷阱核对】K 是有界相关系数,不是市值、波动、流动性的函数;不做凸变换;没有种子用 LogFloatShares、day_quantile(Open) 这类价格水平量,也没有
+    day_max(Volume) 这类带单位的量。真正的风险是被排掉的 20% 可能是一个流动性 / 小盘 segment:排除是阶跃函数,线性中性化去不掉。所以请看相关度表上
+    K 与 liq / size 的 |ρ|,以及各种子的控制列。本轮 R 组在 head +1.89 上用 5% / 10% 带宽直接检验这一点:如果增益随带宽单调上升,那就是在赌一个
+    segment。
+
+    【为什么样本外还会在】(i) 分钟统计量量不准,是「在 1 分钟 bar 上算日度量」这个构造本身的机械性质:总有一批股票分钟成交稀疏、报价冻结,与样本期无关。(ii)
+    筛单独是负分,它不把某个风格的收益当信号,只改变 y 在谁身上被相信。(iii) 增益在 train(2018–2021)和 valid(2022–2023.8)这两段风格相反的区间里同向,不是在起约束的那一段上调出来的。(iv)
+    所有 y 都是尺度无关量(相关系数、比值、两价之比),换手或波动整体换档时定义不变。'
+  literature:
+  - title: 'The Capital Asset Pricing Model: Some Empirical Tests'
+    authors: Fischer Black, Michael C. Jensen, Myron Scholes
+    year: '1972'
+    url: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=908569
+    treatment: 个股估计量的测量误差把截面关系压向 0,处理办法是不相信每只股票的点估计 → 用信号自身的可靠度决定谁进书
+  - title: A New Estimate of Transaction Costs
+    authors: David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka
+    year: '1999'
+    url: https://www.bauer.uh.edu/rsusmel/phd/lot_1999RFS.pdf
+    treatment: 零收益 / 报价不动说明价格没有吸收信息 → 分钟数据冻结的名字上任何分钟统计量都量不准;我们用日度统计量自身的自相关当它的连续度量
+  - title: Noisy Prices and Inference Regarding Returns
+    authors: Elena Asparouhova, Hendrik Bessembinder, Ivalina Kalcheva
+    year: '2013'
+    url: https://doi.org/10.1111/jofi.12010
+    treatment: 价格里的噪声系统性地偏误基于收益的推断,修正方式是按观测的噪声大小区别对待 → 噪声大的名字不进多头书
+  - title: 'Stealth trading and volatility: Which trades move prices?'
+    authors: Michael J. Barclay, Jerold B. Warner
+    year: '1993'
+    url: https://doi.org/10.1016/0304-405X(93)90029-B
+    treatment: 少数成交承担大部分价格变动,知情单子单位成交量的冲击最大 → 按 |r|/√V 取冲击最大的 10% 分钟,看它们成交在什么价位(Q,种子
+      6–8、13)
+  seeds:
+  - cs_last_low20(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    100)), 40)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_first_high40(inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap),
+    day_durbin_watson(Volume), 200)), 40)), ts_autocorr(day_signed_ratio(Ret, Volume),
+    60, 1))
+  - cs_last_low40(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200)))), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_last_low20(neg(ts_decay_linear(ts_corr(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200), 40)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_first_high40(neg(ts_decay_linear(ts_corr(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    100), 40)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_last_low20(neg(ts_mean(div(day_topw_mean(Vwap, div(in_pct(Close, 1), sqrt(Volume))),
+    day_wmean(Vwap, Volume)), 10)), ts_autocorr(day_signed_ratio(Ret, Volume), 60,
+    1))
+  - cs_last_low10(neg(ts_decay_linear(div(day_topw_mean(Vwap, div(in_pct(Close, 1),
+    sqrt(Volume))), day_wmean(Vwap, Volume)), 20)), ts_autocorr(day_signed_ratio(Ret,
+    Volume), 60, 1))
+  - cs_first_high40(neg(ts_mean(div(day_topw_mean(Vwap, div(in_pct(Close, 1), sqrt(Volume))),
+    day_wmean(Vwap, Volume)), 20)), ts_autocorr(day_signed_ratio(Ret, Volume), 60,
+    1))
+  - cs_last_low20(neg(ts_mean(day_corr(in_slice(Close, 1, 240), in_slice(Volume, 1,
+    240)), 20)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_last_low10(neg(ts_decay_linear(day_corr(in_slice(Close, 1, 240), in_slice(Volume,
+    1, 240)), 40)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_first_high40(neg(ts_mean(day_corr(in_slice(Close, 1, 240), in_slice(Volume,
+    1, 240)), 20)), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+  - cs_last_low20(neg(ts_mean(cs_regres(day_corr(in_slice(Close, 1, 240), in_slice(Volume,
+    1, 240)), day_sum(Ret)), 20)), ts_autocorr(day_signed_ratio(Ret, Volume), 60,
+    1))
+- type: N
+  hypothesis: '【新 idea】隔夜段和日内段是两拨人在定价:同样的 20 日涨跌,来自隔夜(昨收 → 今日集合竞价)的那部分更多是关注度 / 情绪推动、更容易回吐;来自连续竞价段的那部分更多是信息。奖励里的
+    20 日反转控制对两段一视同仁(线性),「涨在哪一段」这份信息留在残差里。
+
+    【输入为什么是新的】库里 29 个 head 全部是日内分钟统计量,没有一个用到 day_first / day_last / cross_delay。in_delta(dt_in.py)/
+    in_pct(ops_ext.py)第一列为 NaN,网格第一列是 09:30 集合竞价,所以现有 head 用到的分钟价格变化都不含隔夜跳空。定义 O =
+    log(div(day_first(Open), cross_delay(day_last(Close), 1)))(隔夜),I = log(div(day_last(Close),
+    day_first(Open)))(日内),O + I = 收盘到收盘的对数收益。价格是后复权的,跨日比值就是收益;源码里 log 是 log|x|,比值恒正,不受影响。
+
+    【机制】(a) A 股 T+1,开盘有集合竞价。关注度驱动的买单集中在开盘(Berkman-Koch-Tuttle-Zhang 2012:高关注度股票隔夜涨、日内跌,在开盘买入有隐性成本);连续竞价段由能在当日反向交易的资金定价。Lou-Polk-Skouras(2019)发现两段收益由不同的客户群驱动,各自持续,符号常相反。(b)
+    所以在总涨跌相同的两只股票里,涨在隔夜的那只更像情绪,涨在日内的那只更像信息。(c) 我们不押 Akbas-Boehmer-Jiang-Koch(2022)原始的「拉锯强度」:Cheema-Chiah-Man(2022)在中国复现时发现,强度高的股票未来隔夜涨、日内跌,两段幅度相近、相互抵消,收盘到收盘不可预测;我们的书跨两段持有,所以主线是「控制了总涨跌之后的隔夜占比」(种子
+    1–4),拉锯强度只做两个对照(种子 8、9)。
+
+    【算子怎样实现】 种子 1–4:cs_regres(ts_sum(O, 20 / 60), 同窗口的收盘到收盘对数收益)。在总涨跌固定时,O 的残差与「隔夜减日内」的残差只差一个倍数(O
+    − I = 2O − (O + I)),所以这就是拉锯差在总收益之外的那部分。回归对象是显式的收盘到收盘收益,不是 day_sum(Ret):如果 20 日反转控制只含日内段,对
+    day_sum(Ret) 回归会让隔夜段的普通反转从这道缝里漏进来,那只是控制换写法(陷阱 3 的同类)。种子 3 在残差上再平滑 20 日;种子 4 用
+    decay 权重,并对同权重的 O + I 回归。 种子 5–7:ts_corr(O, I, 60 / 120) = 这只股票的跳空在当天被延续还是被抹掉(负
+    = 日内系统性地抹掉隔夜跳空,即拉锯);ts_corr(O, cross_delay(I, 1), 60) = 隔夜是否追随昨天日内的走势(散户追涨)。都是有界相关系数,不是收益水平。
+    种子 8、9:把 Akbas 等的「负日内反转」做成连续量,ts_mean(mul(is_gt(O, 0), neg(I)), 20) = 高开那些天的日内跌幅均值(不用
+    0/1 频率,避免 21 档的大并列)。种子 8 对 20 日收盘到收盘收益取残差;种子 9 减去自己 120 日的常态,对应 Akbas 用的「相对自身历史的异常频率」。
+    种子 10、11:集合竞价的有号成交占比 mul(sign(O), div(day_first(Volume), day_sum(Volume))) 的 20
+    日 decay,即开盘那一刻的订单流(竞价量占全天比例,按跳空方向记号);种子 11 对 20 日收益取残差。比例有界,不是成交量水平。 种子 12:div(Σ|O|,
+    Σ|O| + Σ|I|)(20 日)= 价格移动里发生在不交易时段的比例,也就是信息在收盘后到达的比例,尺度无关。
+
+    【方向预期】种子 1–4 为 −1:做多 20 日涨跌主要来自日内的名字。种子 5、6 为 −1(按 Akbas,拉锯越强未来越好;中国的直接证据是零,所以我对它们把握最低)。其余交给奖励的符号扫描。
+
+    【为什么和库里不同】输入(跨日价格、集合竞价)库里没有;机制(交易时段 = 客户群)与库里的订单流吸收、价格黏性、波动凸函数都不同。预期与所有 head 的
+    |ρ| < 0.3;残差版与 20 日反转控制的 |ρ| < 0.2。
+
+    【为什么样本外还会在】T+1 和开盘集合竞价是制度,不随样本期变;散户仍是 A 股交易的主体。信号都是两段收益的残差、相关系数或比例,不依赖波动或成交额的水平,换手或波动整体换档时定义不变。风险如实写:Cheema
+    等(2022)对原始拉锯强度的中国证据是零;Qiu(2022)只证实两段之间存在持续与反转,没给出符号。所以这一位把握不高,但它是本种子唯一一条输入完全在库外的路。'
+  inspired_by: 第 1–3 批与本组 heads 的整体现象:29 个 head 全是日内分钟统计量,没有一个看得到隔夜段(无 day_first /
+    day_last / cross_delay);M 第 3 批的 3 个 head 又只是波动的二阶函数。文献:Lou-Polk-Skouras(2019)的隔夜
+    / 日内拉锯,Berkman 等(2012)的开盘关注度,Akbas 等(2022)与它在中国的复现 Cheema 等(2022)。
+  literature:
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://personal.lse.ac.uk/polk/research/TugOfWar.pdf
+    treatment: 收益拆成隔夜与日内两段,两段由不同客户群驱动、各自持续 → O / I 的构造与「涨在哪一段」
+  - title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the
+      Open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Yinglei Jane Zhang
+    year: '2012'
+    url: https://kuscholarworks.ku.edu/bitstream/1808/10965/1/Koch_Paying%20Attention.pdf
+    treatment: 关注度驱动的开盘买压使隔夜涨、日内跌 → 隔夜占比是情绪标记(种子 1–4),集合竞价有号成交占比(种子 10、11)
+  - title: Overnight returns, daytime reversals, and future stock returns
+    authors: Ferhat Akbas, Ekkehart Boehmer, Chao Jiang, Paul D. Koch
+    year: '2022'
+    url: https://ink.library.smu.edu.sg/lkcsb_research/7712
+    treatment: 高开后日内下跌(负日内反转)的异常频率 = 拉锯强度 → 种子 8、9 的连续版与相对自身历史的异常值
+  - title: 'Overnight returns, daytime reversals, and future stock returns: Is China
+      different?'
+    authors: Muhammad A. Cheema, Mardy Chiah, Yimei Man
+    year: '2022'
+    url: https://ideas.repec.org/a/eee/pacfin/v74y2022ics0927538x22001044.html
+    treatment: 中国的拉锯强度预测未来隔夜涨、日内跌,两段相抵 → 主线不押原始强度,改押控制总涨跌后的隔夜占比
+  - title: Essays in Overnight Returns, Intraday Reversals, and Short-Selling Constraints
+      in Chinese Stock Market
+    authors: Jiayi Qiu
+    year: 2022-11
+    url: https://unnc.globalimpact.cn/en/studentTheses/essays-in-overnight-returns-intraday-reversals-and-short-selling-/
+    treatment: A 股 2009–2021 高频数据里隔夜段与日内段之间有持续与反转,归因于 T+1 与交易时点 → 中国市场的直接旁证(没给出符号)
+  seeds:
+  - cs_regres(ts_sum(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 20),
+    log(div(day_last(Close), cross_delay(day_last(Close), 20))))
+  - cs_regres(ts_sum(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 60),
+    log(div(day_last(Close), cross_delay(day_last(Close), 60))))
+  - ts_decay_linear(cs_regres(ts_sum(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 20), log(div(day_last(Close), cross_delay(day_last(Close), 20)))), 20)
+  - cs_regres(ts_decay_linear(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 40), ts_decay_linear(log(div(day_last(Close), cross_delay(day_last(Close),
+    1))), 40))
+  - ts_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))), 60)
+  - ts_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))), 120)
+  - ts_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(log(div(day_last(Close),
+    day_first(Open))), 1), 60)
+  - cs_regres(ts_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 0), neg(log(div(day_last(Close), day_first(Open))))), 20), log(div(day_last(Close),
+    cross_delay(day_last(Close), 20))))
+  - sub(ts_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    0), neg(log(div(day_last(Close), day_first(Open))))), 20), ts_mean(mul(is_gt(log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), 0), neg(log(div(day_last(Close), day_first(Open))))),
+    120))
+  - ts_decay_linear(mul(sign(log(div(day_first(Open), cross_delay(day_last(Close),
+    1)))), div(day_first(Volume), day_sum(Volume))), 20)
+  - div(ts_sum(abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))), 20),
+    add(ts_sum(abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))), 20),
+    ts_sum(abs_(log(div(day_last(Close), day_first(Open)))), 20)))
+R:
+- head: cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    30), ts_autocorr(day_signed_ratio(Ret, Ret), 60, 1))
+  why: 平滑核 30 偏短。loc.md 对这棵 head 本身的窗口拆解:15 / 30 / 60 → +1.25 / +1.49 / +1.65(valid
+    2.79 / 2.83 / 2.90),两个区间同向上升,增益 +0.15(loc.md 的 R 候选)。同族 head +1.89 上 20 / 40 /
+    80 → +1.94 / +1.89 / +1.90 是一个平台,30 落在平台的下沿之外。变体就是拆解里测过的那一个,同族 ρ 必 ≥ 0.5,走替换。代价如实写:替换后它与
+    head +1.61 只差 y 的窗口(60 对 40)和筛里一层必要性只有 +0.02 的 cs_regres,书会高度重叠;它换来的是分数,不是多样性。
+  variants:
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    60), ts_autocorr(day_signed_ratio(Ret, Ret), 60, 1))
+- head: cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 1))
+  why: 筛的三个参数从没被检验过,而且各有可疑之处。(1) 回看 60:c05_locate 只对表达式里第一个带窗口的节点(这里是 ts_decay_linear)做窗口拆解,ts_autocorr
+    的 60 一次都没动过;60 个观测的自相关标准误约 1/√60 ≈ 0.13,和截面上自相关的离散同量级,筛本身很吵 → 变体 1、2 试 120 / 30。(2)
+    滞后 1:同样没被拆过;若筛量的是可靠度(lag-k 自相关 ≈ φ^k × 可靠度,对可靠度仍单调),lag 2 / 5 仍应有效,若量的是隔日的拆单持续性,lag
+    5 应失效 → 变体 3、4。(3) 带宽 20%:ops_ext.py 里细带宽算子的注释写明,筛真正该剔的名字(冻结报价、新股)约占全市场 6–7%,20%
+    的配额有三分之二落在别处,是过度排除 → 变体 5、6 收到 10% / 5%;若分数随带宽单调下降,说明筛在赌一个 segment,而不是剔掉量不出来的名字。(4)
+    筛的内层 day_wmean(Volume, Volume) = ΣV²/ΣV,单位是股数,是库里 C 族唯一一个不尺度无关的筛输入:Volume → Amt
+    在这棵 head 上掉 0.49(+1.89 → +1.40),同一替换在另外三棵 C 族 head 上是中性的(+0.07 / −0.01 / +0.06),按差分归因只能落在这个带单位的量上(陷阱
+    3 方向)。变体 7 除以 day_mean(Volume),只留成交集中度、去掉量级。这 7 个变体门槛都是 +1.99;过线的与原 head ρ 必 ≥
+    0.5,走替换。
+  variants:
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 120, 1))
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 30, 1))
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 2))
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 5))
+  - cs_last_low10(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 1))
+  - cs_last_low05(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 1))
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(cs_regres(div(day_wmean(Volume, Volume), day_mean(Volume)), day_sum(Ret)),
+    60, 1))
+- head: inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200)), 40))
+  why: ts_regbeta 的斜率 β 带着一个与信号无关的选择尺度。β = ρ·σ_y/σ_x(common.py 的 ts_regbeta:β = cov
+    / var_x),x = day_flat_run_max(Vwap) ∈ [0, 1](价格黏性),y = day_durbin_watson(Volume)
+    无量纲。σ_x 很小(黏性几乎不随时间变)的名字 |β| 很大,sigmoid 饱和在 0 或 1,于是 inv(decay(sigmoid(β))) 的顶端由
+    σ_y/σ_x 决定,而不是由两者的共动决定。ts_corr 恰好只留 ρ:有界、连续,sigmoid(ρ) ∈ [0.27, 0.73] 不饱和,inv
+    在这个区间单调、不跨 0。第 1 轮试过的 t 值替换回答不了这个问题:t = ρ√(n−2)/√(1−ρ²) 在 n = 50–200 时数值很大,sigmoid(t)
+    几乎是 ρ 在 0 处的阶跃,把 ρ 的大小也一起丢了;那次三个变体全崩(−0.27 / −0.77 / −0.62),分不清是「σ 尺度带着 alpha」还是「阶跃丢掉了
+    ρ 的大小」。另一条证据说明 S 族的分数对「饱和 / 曲率与线性中性化怎么相互作用」很敏感:pow_1_5(inv(sigmoid(β))) 与 inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(β)))))))
+    是同一个 β 的单调变换,第 2 轮相关度表里窗口 100 的这一对原始秩相关 1.00,分数却是 +0.89 对 +1.16;窗口 200 的这一对(都在本轮快照里)是
+    +0.93 对 +1.39。这正是本变体要拿掉的东西。变体 1 窗口 200;变体 2 窗口 100,用来排除「200 日的 ρ 已经退化成静态特征」。过线(≥
+    +1.40)走替换;崩到 +0.9 以下,说明 S 族的分数实质依赖 σ_y/σ_x 这个选择尺度。
+  variants:
+  - inv(ts_decay_linear(sigmoid(ts_corr(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    200)), 40))
+  - inv(ts_decay_linear(sigmoid(ts_corr(day_flat_run_max(Vwap), day_durbin_watson(Volume),
+    100)), 40))
+- head: cross_cov(day_max(Ret), day_cov(Ret, Ret), 30)
+  why: 协方差这一层是波动的凸函数(陷阱 1 / 3)。day_cov(Ret, Ret) 是当日分钟收益的方差 = 已实现方差(量级 σ²),day_max(Ret)
+    是当日最大分钟收益(量级 σ),cross_cov(·, ·, 30)(dt_cross.py)是 30 日时序协方差,量级 ~σ³。方向 −1 = 做多低的一端
+    = 做多低波动。奖励只对 20 日日内波动做线性中性化,σ³ 的凸部分去不掉;它和第 2 轮 DW 那条凸度阶梯(凸度越高分越高)是同一个签名。把 cross_cov
+    换成 cross_corr,两边的波动尺度都除掉,只留「极端分钟与当日方差是否共动」。崩 ⇒ 这棵 head 的分数来自波动的三次方;不崩 ⇒ 共动本身是信息。过线(≥
+    +1.00)时按规则替换或收录,都是用无凸度的版本换掉一个陷阱 head。
+  variants:
+  - cross_corr(day_max(Ret), day_cov(Ret, Ret), 30)
+- head: cross_cov(day_wmean(Ret, Ret), day_wmean(Ret, Ret), 5)
+  why: day_wmean(Ret, Ret) 里混着一个波动尺度。day_wmean(x, w) = Σx|w| / Σ|w|(ops_ext.py:109),所以
+    day_wmean(Ret, Ret) = Σ r|r| / Σ|r| = [Σ r|r| / Σ r²] × [Σ r² / Σ|r|]:前一项是有界的上下行不对称
+    RSJ = day_signed_ratio(Ret, mul(Ret, Ret)),后一项是量级 ~σ 的波动尺度。cross_cov(X, X, 5)
+    是 X 的 5 日方差,所以这棵 head ~ σ² × (RSJ 的波动),方向 −1 = 做多低波动。变体把 X 换成 RSJ,恰好拿掉 [Σ r² /
+    Σ|r|] 这个因子,其他不动。第 2 轮 N 位用 RSJ 的整组种子最高只有 +0.28;若变体崩,说明 +0.67 全部来自那个波动尺度(陷阱 1 /
+    3)。过线(≥ +0.77)则替换或收录。
+  variants:
+  - cross_cov(day_signed_ratio(Ret, mul(Ret, Ret)), day_signed_ratio(Ret, mul(Ret,
+    Ret)), 5)
+- head: cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1), 60, 1))
+  why: 外层那一层 ts_autocorr 是退化的。内层 ts_autocorr(·, 60, 1) 是 60 日滚动估计,相邻两天共享 59 个观测,这条序列的滞后
+    1 阶自相关对几乎所有股票都接近 1;于是筛的最低 20% 不再是「订单流不自相关」的名字,而是滚动估计跳得最厉害的名字(窗口里进出一个极端日、停牌复牌)。证据:同一个
+    y、同一个内层字段、只有一层自相关的写法 cs_last_low20(ts_decay_linear(C, 40), ts_autocorr(day_signed_ratio(Ret,
+    Volume), 60, 1)) 第 2 轮已评过 +1.54(loc.md「本组之前各轮的任务」),兄弟 head 用单层自相关筛的是 +1.36 ~ +1.89,而这棵只有
+    +0.80。变体就是去掉多余的那一层,门槛 +0.90,同族 ρ 必 ≥ 0.5,走替换。代价如实写:替换后它与 head +1.62 的筛相同、y 相近,书会重叠;换来的是把一棵坏掉的
+    head 修好。
+  variants:
+  - cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)),
+    40), ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1))
+audit:
+  attempts: 1
+  file: audit_1.yaml

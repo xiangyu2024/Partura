@@ -1,0 +1,118 @@
+seed: 805
+round: 3
+slots:
+- type: N
+  hypothesis: 【机制】日内成交时点的「事件尾部」,不是时点的平均水平。库里已证明日内成交量重心的慢变水平有截面信息(head +1.28 = log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), …)),方向 −1,做多成交偏早的股票),但上一轮 R 的直接评估给了两条线索:(i) 把分桶键换成已知族或波动之后只剩 0.52 / 0.46,水平本身的干净部分在发现门槛附近;(ii) 把 cross_ema(·, 10) 换成 cross_med(·, 20) 掉 0.38(1.2758 → 0.8942),而 EMA 窗口 10 → 20 只掉 0.055 ——中位数与均值的差别就是丢掉偶发的极端日,说明一部分信息在「少数几天成交时点异常」里。我们的读法:这些极端日是执行事件。(a) 极端偏晚的日子(成交压到尾盘):基准化 / 被动资金与机构的收盘执行,Bogousslavsky-Muravyev 记录了收盘成交占比与被动 / ETF 持股相关、收盘有会回吐的机构价格压力 ⇒ 这类事件多的股票随后跑输,事先给定方向 −1;(b) 极端偏早的日子(成交压到开盘后):隔夜信息在开盘被知情方 / 机构消化(Qiu-Huang-Jiang 2023:A 股机构集中在开盘与收盘交易,价格跟机构走)⇒ 早尾深的股票随后跑赢,事先给定方向 +1。两条合起来 = 股票自己 50 日时点分布的偏斜:右尾(偏晚事件)比左尾(偏早事件)重,方向 −1。【算子怎样实现】c = day_centroid(in_slice(Volume, 1, 236)) = Σ t·|V_t| / Σ|V_t| / (T−1) ∈ [0, 1],只用 09:31–14:56 连续竞价分钟:第 0 列是 09:30 开盘集合竞价(alphacube dt_in.in_half 的注释),第 237–240 列是 14:57–15:00 收盘竞价窗口(上交所 2018-08-20 才有),切掉后两个交易所、改革前后口径一致,集合竞价份额的日间波动不混进来(那是 b 位的事;种子 4 是含竞价格的对照)。三类尾部写法互相校验:(1) 矩偏度 ts_skew(c, 50)(nanskew_last = m3 / σ³,对 c 的平移与缩放不变,因此与重心水平、与成交量大小都无关);(2) 尾均值稳健偏度 ((T75 − M) − (M − T25)) / (T75 − T25),T75 / T25 = cross_tail_mean_q75 / q25(50 日里上 / 下四分之一约 13 天的均值),M = cross_med,值在 (−1, 1):尾部用约 13 天而不是 1 天定义(Bali-Cakici-Whitelaw 用 MAX(2)–MAX(5) 做稳健性的同一思路),专门回答「ts_skew ≈ 窗口里有没有一次极端值、极值进窗 / 出窗造成 50 天回声」这个担心;(3) 单侧尾深 (T75 − M) / σ 与 (M − T25) / σ(σ = cross_stddev(c, 50),零次齐次),分别对应 (a)(b),事先方向 −1 与 +1。另有 Amt 版、100 日版、Pearson 写法 day_corr(in_index(V), V) 的偏度、ts_kurt(两侧尾部同时重,不定号)。三个条件化种子:在重心水平十分位内排(键 = cross_ema(day_centroid(Volume), 10),直接把库里那个水平 head 拿掉,只留尾部);在已知族十分位内排(cross_mean(day_std(Amt), 30));在冻结报价十分位内排(cross_mean(day_flat_ratio(Close), 20),连续值)。最后这个针对一个具体混杂:盘中涨停后封板的日子,成交集中在封板之前,重心机械偏早,早尾会挑出「最近有过涨停」的名字;按 20 日冻结比例分桶后这些名字被摊到各十分位,只占多头书的一小部分(上一轮 R 用同一个键给重心水平 head 分桶,分数 1.2556 几乎不变,说明这把键本身不伤信号)。【和库里已有的不同】与 head +1.28 / +0.51(重心水平):同一输入,泛函不同(三阶 / 尾部形状 vs 平滑均值),偏度对平移不变,按水平十分位分桶的种子与水平正交;与 M 第 3 批两个 ts_skew(·, 50) head:同一聚合,内层不同 —— 那两个是成交量的日内离散度 day_wstd(Volume, Vwap)(本身 rho_known 0.57,是已知族的同量纲代理,单独 −1.56)和分钟量价相关;本位内层是「成交在什么时候」,对成交量整体缩放不变,与成交量大小、与价格都无关。预计与所有 head 的日度秩 |ρ| < 0.3,与 5 个控制 < 0.3。不是 §4-1(没有对方差做凸变换,σ 只在分母里做尺度归一,结果有界);不是 §4-2(没有截面常数进 cs_*,三个分桶键都是连续量,不用 ListAge);不是 §4-3(偏度与尾部比值是零次齐次的,不是市值、波动、流动性的函数)。【为什么样本外还会在】执行日历是制度与投资者结构决定的:指数调整与被动资金在收盘执行、隔夜信息在开盘消化、T+1 下的日内节奏,2023-08 之后没有变;信号有界、尺度无关,不依赖某段行情的波动或价格水平;连续竞价切片让上交所 2018 年收盘竞价改革不进入信号;50 日窗口对应约一个季度的执行事件,换手低,适配 15bp 成本。【可证伪】(a) 若最好的种子方向与上面相反(偏斜 +1、晚尾 +1),「收盘执行压力回吐」这条错;(b) 若只有矩偏度过线、稳健偏度与单侧尾深全不过线,信号是单一极端日的回声,不是分布形状;(c) 若冻结报价分桶版明显差于不分桶版,早尾读的是涨停封板。
+  inspired_by: 第 2 轮 R 对 head +1.28 的直接评估:cross_ema@10 → cross_med@20 掉 0.38(丢尾部就掉分),换成已知族 / 波动键只剩 0.52 / 0.46(水平的干净部分很薄);M 第 3 批两个 head 都是 ts_skew(·, 50)(同一个日度量换成时间维的形状才有分);文献 Bali-Cakici-Whitelaw 2011 的 MAX(N) 稳健性做法。
+  literature:
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: 2011-02
+    url: https://www.nber.org/papers/w14804.pdf
+    treatment: 极值类特征的稳健性用「最高 N 天的均值」(MAX(2)–MAX(5))而不是单一最大值:这里用 cross_tail_mean_q75 / q25(50 日上 / 下四分之一的均值)定义尾部,构造尾均值稳健偏度,对照矩偏度
+  - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: 2008-04
+    url: https://ideas.repec.org/a/oup/rfinst/v21y2008i2p785-818.html
+    treatment: 把偶发的极端交易日当作事件(注意力 / 新闻日)来度量,看事件的频率与幅度而不是平均水平:时点分布的尾部
+  - title: When do they trade? Heterogeneous investors in China
+    authors: Jiayan Qiu, Wei Huang, Ying Jiang
+    year: 2023-06
+    url: https://doi.org/10.1016/j.frl.2023.103729
+    treatment: A 股机构集中在开盘与收盘附近交易、价格跟机构走:把极端偏早日与极端偏晚日分开成两条尾部,各给事先方向
+  - title: 'Who trades at the close? Implications for price discovery and liquidity (working paper dated 2020-12-03; earlier title: Should We Use Closing Prices? Institutional Price Pressure at the Close)'
+    authors: Vincent Bogousslavsky, Dmitriy Muravyev
+    year: 2020-12
+    url: https://ideas.repec.org/a/eee/finmar/v66y2023ics1386418123000502.html
+    treatment: 收盘成交与被动 / ETF 持股相关、收盘存在机构价格压力:偏晚尾(成交压到尾盘的日子)事先给定方向 −1
+  - title: Is Momentum an Echo?
+    authors: Amit Goyal, Sunil Wahal
+    year: 2015-12
+    url: https://doi.org/10.1017/S0022109015000575
+    treatment: 滚动窗口边界上的极端观测会造成机械回声:同时放 50 日与 100 日窗口,以及不被单日主导的尾均值写法,区分「分布形状」与「一次事件进出窗口」
+  seeds:
+  - ts_skew(day_centroid(in_slice(Volume, 1, 236)), 50)
+  - ts_skew(day_centroid(in_slice(Amt, 1, 236)), 50)
+  - ts_skew(day_centroid(in_slice(Volume, 1, 236)), 100)
+  - ts_skew(day_centroid(Volume), 50)
+  - div(sub(sub(cross_tail_mean_q75(day_centroid(in_slice(Volume, 1, 236)), 50), cross_med(day_centroid(in_slice(Volume, 1, 236)), 50)), sub(cross_med(day_centroid(in_slice(Volume, 1, 236)), 50), cross_tail_mean_q25(day_centroid(in_slice(Volume, 1, 236)), 50))), sub(cross_tail_mean_q75(day_centroid(in_slice(Volume, 1, 236)), 50), cross_tail_mean_q25(day_centroid(in_slice(Volume, 1, 236)), 50)))
+  - div(sub(sub(cross_tail_mean_q75(day_centroid(in_slice(Volume, 1, 236)), 100), cross_med(day_centroid(in_slice(Volume, 1, 236)), 100)), sub(cross_med(day_centroid(in_slice(Volume, 1, 236)), 100), cross_tail_mean_q25(day_centroid(in_slice(Volume, 1, 236)), 100))), sub(cross_tail_mean_q75(day_centroid(in_slice(Volume, 1, 236)), 100), cross_tail_mean_q25(day_centroid(in_slice(Volume, 1, 236)), 100)))
+  - div(sub(cross_tail_mean_q75(day_centroid(in_slice(Volume, 1, 236)), 50), cross_med(day_centroid(in_slice(Volume, 1, 236)), 50)), cross_stddev(day_centroid(in_slice(Volume, 1, 236)), 50))
+  - div(sub(cross_med(day_centroid(in_slice(Volume, 1, 236)), 50), cross_tail_mean_q25(day_centroid(in_slice(Volume, 1, 236)), 50)), cross_stddev(day_centroid(in_slice(Volume, 1, 236)), 50))
+  - ts_skew(day_corr(in_index(in_slice(Volume, 1, 236)), in_slice(Volume, 1, 236)), 50)
+  - ts_kurt(day_centroid(in_slice(Volume, 1, 236)), 50)
+  - cs_bucket_rank(ts_skew(day_centroid(in_slice(Volume, 1, 236)), 50), cross_ema(day_centroid(Volume), 10))
+  - cs_bucket_rank(ts_skew(day_centroid(in_slice(Volume, 1, 236)), 50), cross_mean(day_std(Amt), 30))
+  - cs_bucket_rank(ts_skew(day_centroid(in_slice(Volume, 1, 236)), 50), cross_mean(day_flat_ratio(Close), 20))
+- type: N
+  hypothesis: 【机制】集合竞价的参与份额 —— 一只股票有多大比例的成交在开盘 / 收盘两次集合竞价里完成 —— 刻画的是它的投资者结构(谁在什么机制下交易),而不是它的流动性水平。(1) 收盘竞价份额 k:美股证据(Bogousslavsky-Muravyev)是收盘竞价成交占比与被动 / ETF 持股强相关、与主动基金无关,收盘存在随后回吐的机构价格压力;A 股 Qiu-Huang-Jiang 2023 记录机构集中在开盘与收盘交易。库内证据(第 2 轮 R 的直接评估):head +1.28(重心水平,方向 −1)只去掉 14:57–15:00 四格掉 0.34(1.2758 → 0.9376),只去掉开盘格几乎不变(1.2658)—— 重心 head 里有一块就是「收盘那几格成交多 ⇒ 跑输」。份额把这一块从重心的连续时点里单独拿出来,事先给定方向 −1。(2) 开盘竞价份额 o:开盘竞价是隔夜信息被定价的地方。库内 head +1.13(cs_bucket_rank(cross_mean(day_first(Amt), 241), cross_mean(cross_mean(day_first(Amt), 241), 30)))证明开盘竞价成交这一维有信息(三个 knockout 的必要性 +1.41 / +1.88 / +2.03),但它的三个水平层(day_first(Amt)、其 241 日均值、再 30 日平滑)与已知族的 |ρ| 是 0.73–0.79,水平这条路被控制堵死,那个 head 只能测增长;份额 = 开盘竞价成交 / 全天成交,对成交量整体缩放零次齐次,消掉流动性水平。o 的方向不预设,两种解释给出相反的号(知情方在竞价消化隔夜信息 ⇒ +1;散户在竞价追隔夜消息 ⇒ −1),用 o 与 k 是否同号来判:同号同量级 ⇒ 信息是「集合竞价 vs 连续竞价」本身;异号 ⇒ 是开盘与收盘两类参与者。【算子怎样实现】o = div(day_first(Volume), day_sum(Volume))(day_first = 当日第一个非 NaN 分钟 = 第 0 列 09:30 开盘竞价);k = div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume))(in_slice 含首尾,第 237–240 列 = 14:57–15:00)。用 Volume 不用 Amt:生产库价格字段后复权、Amt 与 Volume 是原始值;份额本来无量纲,用股数避免把分钟间的名义价格变动带进来(head +1.13 的拆解里 Amt → Volume 一换就是 +0.18,而且两本书的 ρ 只有 0.33)。四组写法:(i) 水平:cross_mean(·, 20) 与 cross_med(·, 60)(中位数对少数一字板 / 新股连板日稳健 —— 一字板日几乎全部成交在开盘竞价,o 接近 1);(ii) 开盘减收盘:cross_mean(sub(o, k), 20),以及 log(收盘竞价量 / 开盘竞价量) 的 20 日均值(对数比对称、尺度无关;竞价量为 0 的日子 log 返回 NaN、被均值跳过);(iii) 份额的变化:sub(cross_mean(·, 20), cross_mean(·, 120)),以及把 head +1.13 的「慢均值在其自身 30 日滞后均值的十分位内排序」结构搬到 o 上 ——log o 的增长 = 开盘竞价成交的增长 − 全天成交的增长,把 +1.13 里与一般放量(Gervais-Kaniel-Mingelgrin 的高成交量溢价)共有的那部分扣掉;变化版同时让上交所 2018-08-20 收盘竞价改革造成的水平跳变在 120 日后自愈(Han-Zhao-Chen-Guo 2022:改革把成交从收盘连续竞价挪进了竞价前后,改革前沪市第 237–240 列是连续竞价分钟);(iv) 条件化:在冻结报价十分位内排(cross_mean(day_flat_ratio(Close), 20),连续值,对付锁板)、在已知族十分位内排(cross_mean(day_std(Amt), 30))、在流动性十分位内排(cross_mean(day_sum(Amt), 30))。刻意不用 ListAge 或 cross_valid_count(day_last(Close), 241) 当分桶键:前者对 2018 年前上市的股票是同一个哨兵值,后者对上市满一年的股票都等于 241,两者都是大并列块,_pct_rank 的稳定 argsort 会按列序把并列块切进几个十分位(§4-2)。【和库里已有的不同】与 head +1.13 / +0.63(开盘竞价成交额的慢速增长):同一类输入,机制不同 —— 它们测竞价成交的绝对量在涨,本位测竞价在全天成交里的比重(谁在竞价里交易);水平版对成交量整体缩放不变,与 +1.13 的水平层(rho_known 0.73–0.79)不是同一个量。与 head +1.28(重心):重心是连续的时刻加权,收盘竞价那四格在重心里权重为 1、与连续竞价分钟混在一起;份额把集合竞价这个离散的执行场所单独拿出来,并且同时看开盘一侧(重心里第 0 格权重为 0,只进分母)。预计与所有 head 的日度秩 |ρ| < 0.5(收盘份额与 +1.28 最高),与 5 个控制 < 0.4(最可能是市值:指数成分 / 被动持股集中在大盘股)。不是 §4-1(没有凸变换);不是 §4-2(没有截面常数进 cs_*,分桶键是连续量);对 §4-3 的风险(份额若只是市值的非线性函数)放了按流动性 / 已知族分桶的对照,相关度表会给市值那一列。【为什么样本外还会在】被动 / 指数资金在收盘竞价执行、隔夜信息在开盘竞价定价,由交易制度与投资者结构决定,2023-08 之后没有变;份额有界、零次齐次;2018-08-20 之后两个交易所的收盘制度一致,valid(2022-01 ~ 2023-08)整段在改革之后,score 取 train 与 valid 的较差者,只靠改革前沪深分裂的书过不了 valid。【可证伪】(a) 若 k 的最好写法方向是 +1,「收盘执行压力回吐」错,head +1.28 切片掉的那 0.34 应读成收盘前几分钟的时点,而不是竞价份额;(b) 若只有水平版过线、变化版与条件化版全不过线,且水平版与流动性的 |ρ| 偏高,它是流动性的非线性残余(§4-3);(c) 若冻结报价分桶版明显差于不分桶版,开盘份额读的是一字板。
+  inspired_by: 第 2 轮 R:head +1.28 去掉 14:57–15:00 四格掉 0.34、只去开盘格不变;本组第 2 轮 b 位产出的 head +1.13 / +0.63(开盘竞价成交的慢增长,水平层被已知族堵死);文献 Bogousslavsky-Muravyev 把竞价成交占全天的比值直接当信号构造。
+  literature:
+  - title: 'Who trades at the close? Implications for price discovery and liquidity (working paper dated 2020-12-03; earlier title: Should We Use Closing Prices? Institutional Price Pressure at the Close)'
+    authors: Vincent Bogousslavsky, Dmitriy Muravyev
+    year: 2020-12
+    url: https://ideas.repec.org/a/eee/finmar/v66y2023ics1386418123000502.html
+    treatment: 把竞价成交 / 全天成交这个无量纲比值直接构造成信号;收盘竞价份额与被动 / ETF 持股相关:k 的水平与变化,事先方向 −1
+  - title: 'Reexamining the impact of closing call auction on market quality: A natural experiment from the Shanghai stock exchange'
+    authors: Qian Han, Chengzhi Zhao, Jing Chen, Qian Guo
+    year: 2022-09
+    url: https://doi.org/10.1016/j.pacfin.2022.101821
+    treatment: 上交所 2018-08-20 引入收盘集合竞价、成交在收盘前后重新分配:份额的 20 日减 120 日变化版让这个水平跳变自愈,并依靠 valid 整段在改革之后来排除改革伪信号
+  - title: 'The Quality of Price Formation at Market Openings and Closings: Evidence from the Nasdaq Stock Market'
+    authors: Michael S. Pagano, Lin Peng, Robert A. Schwartz
+    year: 2008-05
+    url: https://gfk-cfs.de/media//08_45.pdf
+    treatment: 按分钟颗粒度把集合竞价与连续竞价分开:第 0 列(开盘竞价)与第 237–240 列(收盘竞价窗口)单独取出,分母用全天
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: 2001-06
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i3p877-919.html
+    treatment: 成交相对自身历史的变化(而不是水平)预测收益:把 head +1.13 的慢均值 vs 其滞后均值结构用在份额上,扣掉与一般放量共有的部分
+  - title: When do they trade? Heterogeneous investors in China
+    authors: Jiayan Qiu, Wei Huang, Ying Jiang
+    year: 2023-06
+    url: https://doi.org/10.1016/j.frl.2023.103729
+    treatment: A 股机构集中在开盘与收盘:开盘份额与收盘份额分开构造,并用二者之差 / 对数比检验是不是同一类参与者
+  seeds:
+  - cross_mean(div(day_first(Volume), day_sum(Volume)), 20)
+  - cross_med(div(day_first(Volume), day_sum(Volume)), 60)
+  - cross_mean(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 20)
+  - cross_med(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 60)
+  - cross_mean(sub(div(day_first(Volume), day_sum(Volume)), div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume))), 20)
+  - cross_mean(log(div(day_sum(in_slice(Volume, 237, 240)), day_first(Volume))), 20)
+  - sub(cross_mean(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 20), cross_mean(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 120))
+  - sub(cross_mean(div(day_first(Volume), day_sum(Volume)), 20), cross_mean(div(day_first(Volume), day_sum(Volume)), 120))
+  - cs_bucket_rank(cross_mean(div(day_first(Volume), day_sum(Volume)), 120), cross_mean(cross_mean(div(day_first(Volume), day_sum(Volume)), 120), 30))
+  - cs_bucket_rank(cross_med(div(day_first(Volume), day_sum(Volume)), 60), cross_mean(day_flat_ratio(Close), 20))
+  - cs_bucket_rank(cross_med(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 60), cross_mean(day_flat_ratio(Close), 20))
+  - cs_bucket_rank(cross_mean(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 20), cross_mean(day_std(Amt), 30))
+  - cs_bucket_rank(cross_mean(div(day_first(Volume), day_sum(Volume)), 20), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_rank(cross_mean(div(day_sum(in_slice(Volume, 237, 240)), day_sum(Volume)), 20), cross_mean(day_sum(Amt), 30))
+R:
+- head: cs_bucket_rank(cross_mean(day_first(Amt), 241), cross_mean(cross_mean(day_first(Amt), 241), 30))
+  why: 烂部件是字段 Amt。生产库里价格字段后复权、Amt 与 Volume 是原始值(alphacube daily.py 的注释:Amt/Volume 不在同一个价格空间),所以 day_first(Amt) = day_first(Volume) × 名义开盘价。这个 head 在「241 日均值的 30 日滞后均值」的十分位里按当前 241 日均值排序,排的是一个很小的差(约 15 天的增长);名义价格 15 天能动 ±10%,于是 Amt 版的排序里混进了一条名义价格的中期趋势,与要测的竞价成交增长无关。证据(loc.json 拆解,已付费):Amt → Volume = +1.3163(train 1.3163 / valid 2.1036),比原 head +0.18,rho_known −0.2192,与原 head 的 ρ 只有 0.3272 ——价格那一截不但没帮忙,还把书换掉了大半。变体 1 即此;按规则 §2 它是「收录」(ρ < 0.5),前提是与库里 head 都 < 0.7,相关度表会给。变体 2–4 检查同一个 head 里还有没有别的烂部件:变体 2(log):241 日算术均值被少数放量日(新闻、解禁、指数调整)主导,一次尖峰进出 241 日窗口和 30 日滞后窗口时会制造机械的「增长」(Goyal-Wahal 2015 讲的滚动窗口回声);对 log(day_first(Volume)) 取均值 = 几何均值,尖峰不再主导,竞价量为 0 的日子 log 返回 NaN、被 nanmean 跳过。若信号是真的参与度增长,它应当不掉;若掉得多,原 head 读的是尖峰回声。变体 3 与 4 是一个分解:day_first(Volume) = day_sum(Volume) × 开盘竞价份额。变体 3 把竞价格换成全天成交(若同样好,竞价那一格不特殊,信号是普通的放量,Gervais-Kaniel-Mingelgrin 的高成交量溢价);变体 4 换成份额(若它好而变体 3 差,竞价参与度本身是独立的一维)。两者里较差的那一半就是原 head 里的噪声部分。不测窗口:拆解表里 train 在 120 / 241 / 482 三点上是 1.09 / 1.13 / 1.11,窗口不是烂部件(valid 的起伏 0.84 / 2.48 / 0.40 是另一回事,R 改不了)。
+  variants:
+  - cs_bucket_rank(cross_mean(day_first(Volume), 241), cross_mean(cross_mean(day_first(Volume), 241), 30))
+  - cs_bucket_rank(cross_mean(log(day_first(Volume)), 241), cross_mean(cross_mean(log(day_first(Volume)), 241), 30))
+  - cs_bucket_rank(cross_mean(day_sum(Volume), 241), cross_mean(cross_mean(day_sum(Volume), 241), 30))
+  - cs_bucket_rank(cross_mean(div(day_first(Volume), day_sum(Volume)), 241), cross_mean(cross_mean(div(day_first(Volume), day_sum(Volume)), 241), 30))
+- head: cs_bucket_rank(cross_mean(cross_mean(day_first(Amt), 20), 20), cross_mean(cross_mean(cross_mean(day_first(Amt), 20), 20), 30))
+  why: 与上一组同一个烂部件,用在同一机制的短尺度版上(约 40 日三角均值 vs 其 30 日滞后均值)。day_first(Amt) = day_first(Volume) × 名义开盘价;在这个尺度上名义价格那一截是一条约 1 个月的价格变化,和 20 日反转控制同一个窗口量级 —— 线性中性化只去掉它的线性部分,剩下的非线性部分在十分位书里和成交增长混在一起。依据:241 日版上同一个交换已付费测得 +0.18、书换掉大半(ρ 0.33)。变体 1 = Volume 版;变体 2 = Volume 取对数后的几何均值版(去掉单日放量尖峰对 40 日均值的主导,理由同上一组变体 2)。若 ≥ 原 head + 0.1:与原 head ρ ≥ 0.5 则替换,< 0.5 且与库里都 < 0.7 则收录。
+  variants:
+  - cs_bucket_rank(cross_mean(cross_mean(day_first(Volume), 20), 20), cross_mean(cross_mean(cross_mean(day_first(Volume), 20), 20), 30))
+  - cs_bucket_rank(cross_mean(cross_mean(log(day_first(Volume)), 20), 20), cross_mean(cross_mean(cross_mean(log(day_first(Volume)), 20), 20), 30))
+- head: day_kurt(in_slice(Ret, 1, 236))
+  why: 怀疑的烂部件是峰度里的零收益点质量。_kurt(alphacube common.py)= mean(d⁴) / mean(d²)² − 3,尺度无关;但分钟收益里有大量恰好为 0 的分钟(无成交、封板、停牌、低价股的最小价位):若一只股票有比例 p 的分钟收益为 0、其余近似正态,则峰度 = 3 / (1 − p) − 3,p = 0.3 时 1.29、p = 0.6 时 4.5 —— 峰度对零点质量是一个机械的单调函数,也就是说这个 head 可能是「零收益分钟占比」= 非流动性 / 冻结报价的非线性改写(§4-3;ops_ext.py 里 day_flat_ratio 的说明也写着峰度在冻结状态下饱和)。文献:Lesmond-Ogden-Trzcinka 1999、Bekaert-Harvey-Lundblad 2007 把零收益占比当非流动性代理;Wang-Hudson-Rhodes-Zhang-Gregoriou 2020 发现控制波动后峰度对五种流动性代理(含零收益占比)都显著。这个 head 是本组第 2 轮的产物,拆解表是空的(loc 的变体生成器对分钟层子树不生成变体),到现在没有一个诊断数字。变体 1 去掉烂部件:div(r, is_gt0(abs_(r))) 在 r == 0 时是 0/0 = NaN、其余是 r/1 = r、NaN 仍是 NaN,_kurt 用 nanmean,于是只对非零分钟算峰度 —— 若保住 ≥ +1.03,替换成这个更干净的写法。变体 2 是被代理的量本身 day_zero_ratio(r)(与第 2 轮 R 第 1 项同一逻辑:直接评估被怀疑的通道);它若 rho_known ≥ 0.5 先天不能进库,花这一格是诊断:分数接近 +0.93 ⇒ 这个 head 在最终交付里要标成流动性改写。变体 3 是不含零点质量的尾部形状 day_es_ratio_hi(r)(95% 分位以上的均值 / 该分位,分位接近 0 的死日判 NaN 剔除),把「尾部形状」与「零点质量」分开。
+  variants:
+  - day_kurt(div(in_slice(Ret, 1, 236), is_gt0(abs_(in_slice(Ret, 1, 236)))))
+  - day_zero_ratio(in_slice(Ret, 1, 236))
+  - day_es_ratio_hi(in_slice(Ret, 1, 236))
+- head: ts_skew(day_wstd(Volume, Vwap), 50)
+  why: 脆的部件是矩偏度这个泛函。nanskew_last = m3 / σ³,50 个日度观测里 m3 由最大的一两个值决定,于是 ts_skew ≈「窗口里有没有一次极端值」,极值进窗 / 出窗各造成一次跳变;拆解表的证据:窗口 50 → 25 塌到 −0.30(train 也只有 0.46),50 → 100 掉到 0.53 —— 一个随窗口翻号的泛函是脆的。替换成同一窗口上的尾均值稳健偏度 ((T75 − M) − (M − T25)) / (T75 − T25)(T75 / T25 = 上 / 下四分之一约 13 天的均值,M = 中位数;Bali-Cakici-Whitelaw 2011 用 MAX(2)–MAX(5) 代替单一最大值的同一思路)。若这个 head 的信息是分布形状,稳健版保住并且更稳(可能 ≥ +0.98 ⇒ 替换);若它塌,head 读的是单一事件,最终交付要这样标注。内层 day_wstd(Volume, Vwap) 不动,两者的差只来自泛函。
+  variants:
+  - div(sub(sub(cross_tail_mean_q75(day_wstd(Volume, Vwap), 50), cross_med(day_wstd(Volume, Vwap), 50)), sub(cross_med(day_wstd(Volume, Vwap), 50), cross_tail_mean_q25(day_wstd(Volume, Vwap), 50))), sub(cross_tail_mean_q75(day_wstd(Volume, Vwap), 50), cross_tail_mean_q25(day_wstd(Volume, Vwap), 50)))
+- head: ts_skew(day_corr(Volume, Vwap), 50)
+  why: 同一个脆部件(矩偏度被单日极值主导;它的兄弟 head 窗口 50 → 25 塌到 −0.30),同一个替换:变体 1 = 尾均值稳健偏度,内层 day_corr(Volume, Vwap) 不动。变体 2 把泛函换成水平 cross_mean(·, 50),回答「是偏度这个泛函有用,还是日内量价相关的水平本身就有用」:东吴金工的 CPV 一类研报因子用的是均值聚合;本组第 2 轮 b 位用 20 日均值写同类量(字段与窗口都不同)83 个候选 0 个过线,但那是不可比的对照,这一格在同一个内层、同一个窗口上给出受控的数字。若水平版 ≥ +0.73 且与原 head ρ < 0.5、与库里都 < 0.7 则收录;否则它记录下「这个 head 的分数来自偏度泛函」,最终交付据此标注。
+  variants:
+  - div(sub(sub(cross_tail_mean_q75(day_corr(Volume, Vwap), 50), cross_med(day_corr(Volume, Vwap), 50)), sub(cross_med(day_corr(Volume, Vwap), 50), cross_tail_mean_q25(day_corr(Volume, Vwap), 50))), sub(cross_tail_mean_q75(day_corr(Volume, Vwap), 50), cross_tail_mean_q25(day_corr(Volume, Vwap), 50)))
+  - cross_mean(day_corr(Volume, Vwap), 50)

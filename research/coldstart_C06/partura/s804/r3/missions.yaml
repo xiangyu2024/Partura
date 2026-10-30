@@ -1,0 +1,190 @@
+seed: 804
+round: 3
+slots:
+  - type: E
+    core: 'day_centroid(sqrt(Volume))'
+    hypothesis: >-
+      【核心是什么、为什么是 alpha】核心 C = day_centroid(sqrt(Volume)):当日 241 根分钟上 sqrt(成交量) 的时间质心,
+      Σ t·|x| / Σ|x| / 240,0 = 全在开盘、1 = 全在收盘(ops_ext.day_centroid)。它是 head +1.39
+      neg(ts_mean(neg(ts_mean(C, 10)), 20)) 唯一读字段的部件(ts_mean 线性、内层 neg 恒等,全式 = ±C 的约 30 日均值;sign -1
+      ⇒ 多头书买成交最前置的十分位)。证据:(1) 同一构念的第二个独立测量 —— 最后 30 分钟成交额占比 —— 单独成了 head +1.30(sign +1
+      ⇒ 买尾盘占比最低),方向一致,两者都在库里,彼此 |ρ| < 0.7;(2) 共性表里 C 是 n ≥ 20 的所有行中均值差最大的一行(+1.38,p 0.000,n = 23);
+      (3) 字段互换不动(Volume→Amt:+1.39 → +1.36),窗口有内点但不是刀口(ts_mean 10/20/40 → +1.13/+1.39/+1.09),valid/train = 1.14,
+      全库最低;(4) sqrt 承重:不开方的 day_centroid(Amt) 与已知族 0.511 被表格划掉,开方后 liq 0.32 / vol 0.41 / known 0.36 ——
+      不开方时权重被开收盘集合竞价那几根巨量分钟独占,读到的是成交额的日内离散度(即已知族),开方后读到的才是成交在时段里铺得早还是晚。
+      C 自己的当日读数只有 +0.06:alpha 全在 10–40 日的持续分量里,必须由外围造出来 —— 这正是 E 位要评的东西。
+      【已见过的外围】含 C 的已评分候选只有一种写法:ts_mean(·, 10/20/40) 平滑 + neg(含 head +0.58 里的连减两次)。
+      【本位外围:三个各自可证伪的机制检验,每一个都在 C 之外加一个以前没出现过的部件】
+      (a) 机械前置的排除筛。涨跌停封板之后成交几乎停止,当日质心被机械地压向开盘 —— 这样的「前置」是一个事件,不是参与者结构。
+      封板日本身另有一套交易行为(Chen-Gao-He-Jiang-Xiong 2017:大户在触涨停当天建仓、次日卖出,随后价格反转),与 C 的机制无关、样本外也不稳。
+      实现:cs_last_high10 / cs_last_high20(y = neg(ts_mean(C, 20)), x = 冻结度),把近 20 日冻结最严重的 10–20% 压到最底、永远进不了多头书
+      (_lexi 按 x 的整块 tie 取带,带宽至多 10% / 20%,不会因并列落进列序斜坡)。冻结度用 ts_max(·, 20) 而不用均值,因为一个封板日就足以把那 20 天的
+      均值质心拉低:ts_max(day_flat_run_max(Close), 20)(最长连续不变分钟数 / 当日分钟数,封板 150 分钟 ≈ 0.6;价位粗的冷门票只有零散短游程,
+      算子 docstring 正是为区分这两者而写)、ts_max(day_at_max_ratio(Close), 20)(收盘价等于日内最高的分钟占比,封涨停 ≈ 1,正常日 ≈ 1/240)、
+      ts_max(day_at_min_ratio(Close), 20)(封跌停)。另有池子写法 cs_first_low20(neg(冻结度), ts_mean(C, 20)):最前置的 20% 里按冻结最少排。
+      预测:若 C 读的是参与者结构,排除后分数在 neg(ts_mean(C, 20)) 的 +1.34 上下 0.1 以内;若掉 0.2 以上,C 有一部分在读封板事件,最终库里要这么标注。
+      (b) 尾盘推价的检验:C 与当日日内收益的跨日相关 ts_corr(C, log(day_last(Close) / day_first(Open)), 40 / 60)。
+      机制:尾盘集中成交把收盘价推离均衡价、随后回吐(Hillion-Suominen 2004;Comerton-Forde-Putniņš 2011 的收盘操纵指数正是同时看尾盘价格变动与尾盘成交集中),
+      A 股的「尾盘拉升」是同一件事。如果「成交后置 = 差」是因为尾盘推价,那么该避开的应是「成交后置的日子恰好是上涨日」的票,即 ts_corr 高的票。
+      种子:单独的 neg(ts_corr)、把 ts_corr 最高的 20% 当排除筛(其余按 neg(ts_mean(C, 20)) 排)、在最前置的 20% 池子里按 ts_corr 低排、以及与 (a) 的两道筛。
+      这与第 2 轮 N 位的「收盘价相对 VWAP 的偏离」不是同一个形状:那里是对一个时段收益取多日均值(零产出),这里不对任何收益分量取均值,
+      量的是成交时点与收益方向的跨日协动;日内收益取开盘到收盘、不含隔夜,对数比值尺度无关。预测:单独的 ts_corr 分数低(+0.1 ~ +0.5);
+      排除筛版本若比 neg(ts_mean(C, 20)) 高 ≥ 0.05,支持尾盘推价这一机制。
+      (c) 持久特征 vs 暂时变化:neg(ts_mean(cross_zscore(C, 120), 10))(近 10 日相对自身过去 120 日的标准分)、sub(cross_mean(C, 240), ts_mean(C, 10))
+      (近 10 日比自己一年均值更前置多少)。Cremers-Mei(2007)把换手拆成持久的公司特定部分与暂时部分,这里对成交时点做同样的拆分。
+      预测:「变化」这一半弱(< +0.4)—— 第 2 轮里不开方的「50 日减 5 日」版本控制相关几乎为零,却没进 88 个候选的前 5;若反而 ≥ +0.8,
+      C 读的是事件(隔夜信息在开盘集中成交),而不是慢变的参与者结构。
+      (d) 被动资金足迹:cs_first_low40(neg(ts_mean(C, 20)), ts_mean(收盘集合竞价成交额占比, 20)),占比 = day_sum(Amt · [in_index > 0.9875]) / day_sum(Amt),
+      241 根网格上恰好是第 238–240 根(14:58–15:00;收盘竞价的撮合落在 15:00 那根,沪市 2018-08-20 起、深市更早)。Shen-Shi(2020)显示被动持股越高,
+      成交越集中在收盘前;Bogousslavsky-Muravyev 显示收盘竞价量来自 ETF / 指数调仓。这个种子只在收盘竞价参与最少的 40% 里按前置度排:
+      若 C 只是「被动资金占比低」的代理,池内就排不出东西。它与 head +1.39 的秩相关可能偏高、被表格划掉,我接受。
+      【和库里已有的不同】库里含 C 的只有「平滑 + 取负」;本位外围全是新部件:冻结 / 封板排除筛、成交时点与收益方向的跨日协动、相对自身历史的标准化、收盘竞价足迹池。
+      冻结度、ts_corr、竞价占比都不是市值 / 波动 / 流动性的函数;没有 signedpower / pow_ 一类凸变换,没有截面常数进 cs_*;
+      LimitWidth / BoardCode 这类几乎全并列的叶子刻意不拿来分桶(会落进陷阱 2)。控制桶内排序(cs_bucket_rank(neg(ts_mean(C, 20)), 波动))这一检验
+      我没有写进种子:它与 head +1.39 的秩相关约 0.85,表格必划、GP 的库禁令也会拒,放进来只是凑数。
+      【为什么样本外还会在】(1) C 是慢变量,alpha 全在 10–40 日持续分量里,换手低,15bp 成本吃得少;(2) head 的 valid/train 1.14 是全库最低,不靠 2022–23 风格;
+      (3) 外围 (a) 只去掉机械事件、(d) 只去掉被动资金足迹,剩下的部分比原 head 更干净,即使溢价变弱也是相对改进;(4) 涨跌停、T+1、收盘集合竞价制度在 2023-08 之后不变,
+      参与者在日内的下单时点是慢变的市场结构。
+      【风险,事先写明】两轮 E 位的共同现象是 GP 把控制叶子(LogFloatCap、day_quantile(Amt))嫁接进外围,本位种子没有这类叶子,但 GP 大概率仍会试;
+      冻结度的排除筛可能带进流动性暴露(冷门票游程长),相关度表若 liq ≥ 0.5 会划掉那几个,剩下的仍够 4 个。
+    literature:
+      - title: 'Daily Price Limits and Destructive Market Behavior'
+        authors: 'Ting Chen, Zhenyu Gao, Jibao He, Wenxi Jiang, Wei Xiong'
+        year: '2017-11'
+        url: 'https://www.nber.org/papers/w24014'
+        treatment: '触板 / 封板日是一类特殊事件(大户触涨停建仓、次日卖出、随后反转);借用:把近 20 日有封板式冻结的票当机械事件,用排除筛挡在多头书外'
+      - title: 'Measuring Closing Price Manipulation'
+        authors: 'Carole Comerton-Forde, Tālis J. Putniņš'
+        year: '2011-04'
+        url: 'https://opus.cloud1.lib.uts.edu.au/bitstream/10453/18830/1/2011002687.pdf'
+        treatment: '操纵指数同时看尾盘价格变动、尾盘成交集中与随后回吐;借用:成交时点与日内收益的跨日相关,识别「涨是靠尾盘成交推出来的」票'
+      - title: 'The Manipulation of Closing Prices'
+        authors: 'Pierre Hillion, Matti Suominen'
+        year: '2004-10'
+        url: 'https://ideas.repec.org/a/eee/finmar/v7y2004i4p351-375.html'
+        treatment: '尾盘集中交易把收盘价推离均衡价;借用:同上,作为「成交后置 = 差」的一个可检验机制'
+      - title: 'Turning Over Turnover'
+        authors: 'Martijn Cremers, Jianping Mei'
+        year: '2007-11'
+        url: 'https://archive.nyu.edu/handle/2451/27250'
+        treatment: '换手拆成持久的公司特定部分与暂时部分;借用:成交时点相对自身 120 / 240 日基线的偏离,把特征与变化分开'
+      - title: 'Index-based Investing and Intraday Stock Dynamics'
+        authors: 'Yiwen Shen, Meiqi Shi'
+        year: '2020-11'
+        url: 'https://papers.ssrn.com/abstract=3696124'
+        treatment: '被动持股越高成交越集中在收盘前;借用:收盘集合竞价成交占比当被动资金足迹,只在足迹最小的 40% 里按前置度排'
+    seeds:
+      - 'cs_last_high10(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_max(day_flat_run_max(Close), 20))'
+      - 'cs_last_high20(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_max(day_flat_run_max(Close), 20))'
+      - 'cs_last_high10(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_max(day_at_max_ratio(Close), 20))'
+      - 'cs_last_high10(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_max(day_at_min_ratio(Close), 20))'
+      - 'cs_first_low20(neg(ts_max(day_flat_run_max(Close), 20)), ts_mean(day_centroid(sqrt(Volume)), 20))'
+      - 'neg(ts_corr(day_centroid(sqrt(Volume)), log(div(day_last(Close), day_first(Open))), 60))'
+      - 'neg(ts_corr(day_centroid(sqrt(Volume)), log(div(day_last(Close), day_first(Open))), 40))'
+      - 'cs_last_high20(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_corr(day_centroid(sqrt(Volume)), log(div(day_last(Close), day_first(Open))), 60))'
+      - 'cs_first_low20(neg(ts_corr(day_centroid(sqrt(Volume)), log(div(day_last(Close), day_first(Open))), 60)), ts_mean(day_centroid(sqrt(Volume)), 20))'
+      - 'cs_last_high10(cs_last_high20(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_corr(day_centroid(sqrt(Volume)), log(div(day_last(Close), day_first(Open))), 60)), ts_max(day_flat_run_max(Close), 20))'
+      - 'neg(ts_mean(cross_zscore(day_centroid(sqrt(Volume)), 120), 10))'
+      - 'sub(cross_mean(day_centroid(sqrt(Volume)), 240), ts_mean(day_centroid(sqrt(Volume)), 10))'
+      - 'cs_first_low40(neg(ts_mean(day_centroid(sqrt(Volume)), 20)), ts_mean(div(day_sum(mul(Amt, is_gt(in_index(Amt), 0.9875))), day_sum(Amt)), 20))'
+  - type: N
+    hypothesis: >-
+      【第 1 次审计之后的重写:先认错】审计说得对。第一稿的主体 day_corr(div(Close, in_mean_rolling(Close, 30)), sqrt(Volume)) 在构造上就和当日方向耦合:
+      分钟价高于自身 30 分钟均价,通常就是刚涨过;A 股上涨的分钟往往放量(量价齐升),所以它上涨日为正、下跌日为负,20 日均值约等于「带量的收益符号」的累计。
+      表格上 rev 0.61–0.65,我写的 0.1–0.35 这条预测被否掉了。它和 head +0.58 的耦合也是同一个来源:按 _lexi 源码,那个 head 的第一项
+      ts_mean(abs_(neg(pow_1_5(cs_last_low10(W, ·)))), 30) 对九成的股票(池外)等于 rank(W)^1.5 的 30 日均值,W = day_wmean(Ret, Volume)
+      是成交量加权的分钟收益,正是「量价齐升有多强」这个量。Campbell-Grossman-Wang 1993、Llorente 等 2002 讲的「伴随成交量的收益会反转」,
+      预言的就是这一块会和反转高度相关。所以本稿把它们引作**要剔除的混杂**,不再当 alpha 的来源。「库里没有一个 head 同时用分钟价格和分钟成交量」这句也收回。
+      【idea 不变,只换实现】同样的日内涨跌之下,成交落在日内价格路径的哪里:是在价格已经涨上去之后放量(追涨、正反馈交易),
+      还是在价格已经跌下来之后放量(承接、逆向的流动性提供)。成交时点族(head +1.39 / +1.30)只看成交落在时间轴的哪里;本位看它落在价格路径的哪里,
+      而且在构造上与当日方向正交。
+      【机制】(1) 注意力追高:Barber-Odean 2008,个人投资者是注意力冲击股票的净买方,在价格已经上涨、成交已经放大的时候买入;
+      他们是付钱让价格上去的一方,不是信息方。(2) 正反馈交易:De Long-Shleifer-Summers-Waldmann 1990,跟着价格变动下单的交易者会让价格过度反应,
+      随后回吐;A 股的 T+1 让当天追高的人当天卖不掉,卖空约束让套利者无法当天把价格压回去。(3) 反向的一端:Kaniel-Saar-Titman 2008,
+      个人投资者在下跌后买入、为机构的需求提供流动性,被他们净买入的股票随后一个月有正的超额收益,而且这一点与过去收益、成交量效应是分开的。
+      合起来的预测是:同样的涨跌下,成交反复落在「刚涨上去」位置的票随后跑输,反复落在「刚跌下来」位置的票随后跑赢。
+      纯多头书买后者,所以种子全部取负,方向仍由 GP 自己选。
+      【按审计的五点逐条改】
+      (1) 主体在构造上与收益方向正交,用审计给的三种写法里的两种,并且叠在一起用:
+      ② 位置先滞后一分钟:L = in_delay(div(Close, in_mean_rolling(Close, 30)), 1),即成交到来之前那一分钟的价格相对它自己 30 分钟均价的位置
+      (in_mean_rolling 用左侧补 NaN 的 nanmean,前 29 分钟是扩张均值;in_delay 把第 0 分钟置 NaN,day_corr 会剔除)。
+      基础量 B = day_corr(L, sqrt(Volume)),读的是「成交来的时候,价格是不是已经处在局部高位」,去掉「本分钟放量上涨本身造出局部高点」那一部分。
+      但成交量自身有自相关,滞后只能去掉一部分,所以还要加下面这一步。
+      ③ 按当日方向逐日分桶,之后再取 20 日均值:cs_bucket_rank(B, X) 是 B 在 X 同一十分位里的秩(ops_ext.cs_bucket_rank:在每个十分位内是 (0, 1] 上的均匀分布)。
+      X 取两个:当日开盘到收盘的对数收益 log(div(day_last(Close), day_first(Open))),也就是当天的涨跌;以及 W = day_wmean(Ret, Volume),也就是审计点名的
+      「带量的收益符号」本身。另有一个种子两层嵌套,先按当日涨跌分桶,再按 W 分桶。逐日分桶是对的那一步,因为混杂是逐日的(当天往哪边走);
+      每天的桶内秩与当天的方向十分位正交,20 日的和也就与 20 天方向的和近似正交。20 日收益控制、head +0.58 的第一项,都是这种和。
+      ① 审计给的第一种写法原样留一个:cs_bucket_rank(neg(ts_mean(B, 20)), div(day_last(Close), ts_delay(day_last(Close), 20))),
+      分桶变量就是 rev 控制本身的表达式(十分位只看秩,和 20 日对数收益等价),rev 按构造≈0。
+      (2) 正面处理 head +0.58 的 day_wmean(Ret, Volume):种子 2–6 直接按 W 逐日分桶。W 在每天的桶内被拿掉了,
+      所以它们与那个 head 第一项(rank(W) 的 30 日均值)的相关,按构造应当很小;剩下的只有那个 head 的 -2C 项(成交质心)。
+      可证伪的预测:种子 2–6 与 head +0.58 的残差 |ρ| < 0.4。≥ 0.5 就说明我把耦合的来源找错了。
+      (3) 只用 20 日窗口,与 rev 控制同窗,是有意为之,不再拿 40 / 60 日去躲控制。第一稿的种子 4、7 以及两个未拆的对照(Close 原值、不加掩码的 12、13)都撤了。
+      分钟尺度上有一个 in_mean_rolling(Close, 60) 的种子(6 号),它改的是「局部」的定义(30 分钟还是 60 分钟),不是日窗口。
+      竞价掩码版(5 号)把开盘那一根和收盘集合竞价三根剔掉:M = div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), 同式),
+      在 241 根网格上恰好保留第 1–237 根,其余是 0/0 = NaN。
+      (4) Kyle 冲击那一支撤掉。审计说得对:|Ret| / sqrt(Volume) 丢了方向,算子实现不了「知情方在低位买入」。换成审计建议的「按 sign(Ret) 分开」:
+      F = sub(day_corr(L, mul(sqrt(Volume)·M, sign(Ret))), day_corr(L, mul(M, sign(Ret))))(种子 8;种子 9 是不加掩码的版本)。
+      第一项是成交前的局部位置与带符号成交量(上涨分钟记 +sqrtV,下跌分钟记 -sqrtV)的相关。为正,表示涨上去之后放量买、跌下来之后放量卖(正反馈);
+      为负,表示跌下来之后放量买、涨上去之后放量卖(逆向、承接)。第二项是同一个相关去掉成交量权重、只留分钟方向。减掉它,
+      就扣掉了分钟收益自相关和买卖价弹跳(价位越粗弹跳越大,那是价位粗细和流动性的读数,陷阱 3 的同类),剩下的只是成交量的贡献。
+      两项都是 [-1, 1] 里的相关系数,尺度无关。当天的方向只平移两边的均值,在相关里被去均值消掉,所以不需要再分桶。
+      (5) 价位水平版(第一稿的 9、10)留下,但要处理混杂。日内价格水平与成交量的相关 ≈「日内趋势 × 成交前置还是后置」:上涨日成交后置,相关就为正。
+      这正是本轮 E 位 ts_corr(C, 日内收益) 的日内版。处理办法照审计写的,逐日按 Z = mul(sub(day_centroid(sqrt(Volume)), 0.5), log(div(day_last(Close), day_first(Open))))
+      分桶,Z 就是「成交后置程度 × 当日涨跌」,两个因子都以 0 为中心。种子 10 是 day_corr(Close, 掩码 sqrt 成交量);种子 11 是连续竞价 VWAP 相对 TWAP、
+      除以 day_std(Ret)。11 号顺便改了审计指出的口径不一致:分母改成 day_mean(mul(Close, M)),和分子一样只取连续竞价的分钟。
+      【相关度表的预测(全部可证伪)】
+      - rev:种子 1–6 ≤ 0.25,种子 7 ≤ 0.05,种子 8–11 ≤ 0.2。种子 2–6 若 ≥ 0.3,说明逐日分桶没有去掉方向,本位仍是反转的换写。
+      - 与所有 head 的原始 |ρ|:多数 < 0.3,全部 < 0.45。种子 1(只按当日涨跌分桶)和种子 7(只按 20 日收益分桶)没有拿掉 W,与 head +0.58 可能到 0.35–0.5。
+      - liq / vol / known ≤ 0.4(第一稿主体是 0.21–0.33,其中一部分经由反转;分桶后应持平或更低),size ≤ 0.15。种子 8–9 的 liq ≤ 0.35:弹跳那一块已经扣掉了。
+      【和库里已有的不同】成交时点族只看时间轴;价格轴族只看价格水平(后复权价的区块);偏度 / 峰度族只看收益分布的形状;
+      head +0.58 的第一项是带量的收益符号,本位按构造把它剔掉了。本位读的是「同样的方向下,成交相对最近价格路径的位置」,库里没有这样的量。
+      不对任何时段收益取均值,所以不是前两轮零产出的「把日收益的一个时段分量取负再累计」那个形状。
+      【陷阱逐条】没有 signedpower / pow_ 一类凸变换。分桶变量逐股不同,不是截面常数。有一处平局要写明:全天封死的票价格不变,day_corr 的方差为 0,
+      返回 0;它们的 W 也是 0,于是在桶内形成一小块平局,_pct_rank 用稳定排序按列序给秩。这类股票日只占很小一部分,再经 20 日均值稀释,
+      不会构成列序斜坡,但我把它写在这里。没有市值、波动、流动性的非线性函数:day_std(Ret) 只在 11 号里当价格比值的尺度分母,当排序量用的始终是相关系数或桶内秩。
+      【产出预测(诚实)】第一稿主体在样本内的拉力,多半来自它和反转的耦合;拿掉之后,我写的种子预计 +0.2 ~ +0.7,产出 head 的把握约 3 成,
+      最可能的是种子 3–5(两层分桶)或种子 8(按方向拆开)。GP 自己那一半随机树另出 head 的把握约 4 成:前两轮 N 位的 head 都来自随机树。
+      【为什么样本外还会在】依赖的是参与者结构和交易制度:A 股个人投资者的成交占比、T+1、卖空约束,2023-08 之后都没变。
+      追涨与承接的行为在美股文献(Barber-Odean、Kaniel-Saar-Titman)里都有记录,不依赖本种子 head 可能吃到的 2022–23 小盘 / 低价行情。
+      本位与反转、与 head +0.58 是按构造正交的,所以即使反转在样本外变弱,也不会把它一起带走。
+    inspired_by: '本种子成交时点族(head +1.39 质心、head +1.30 尾盘占比)说明分钟成交的分布里有被定价的信息,但只用了时间轴;本位把同一份分钟成交投到价格路径上,并按第 1 次审计的五点要求,在构造上剔除当日方向与 head +0.58 的带量收益。文献:Barber-Odean 2008 注意力追高、De Long 等 1990 正反馈交易、Kaniel-Saar-Titman 2008 个人投资者的逆向流动性提供;Campbell-Grossman-Wang 1993 与 Llorente 等 2002 用来说明要剔除的混杂'
+    literature:
+      - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors'
+        authors: 'Brad M. Barber, Terrance Odean'
+        year: '2008-04'
+        url: 'https://doi.org/10.1093/rfs/hhm079'
+        treatment: '个人投资者是注意力冲击股票的净买方,买在价格已经上涨、成交已经放大之后;借用:成交前的局部位置高、又伴随买方成交,读作追高'
+      - title: 'Positive Feedback Investment Strategies and Destabilizing Rational Speculation'
+        authors: 'J. Bradford De Long, Andrei Shleifer, Lawrence H. Summers, Robert J. Waldmann'
+        year: '1990-06'
+        url: 'https://ideas.repec.org/a/bla/jfinan/v45y1990i2p379-95.html'
+        treatment: '跟着价格变动下单的正反馈交易造成过度反应与随后的回吐;借用:带符号成交量与成交前局部位置的相关(扣掉不加权的同一相关)当日内正反馈强度'
+      - title: 'Individual Investor Trading and Stock Returns'
+        authors: 'Ron Kaniel, Gideon Saar, Sheridan Titman'
+        year: '2008-02'
+        url: 'https://ideas.repec.org/a/bla/jfinan/v63y2008i1p273-310.html'
+        treatment: '个人投资者逆向交易、为机构需求提供流动性,被他们净买入的股票随后一个月正超额收益,且独立于过去收益与成交量效应;借用:同样方向下成交落在「刚跌下来」的位置 = 承接,纯多头买这一端'
+      - title: 'Trading Volume and Serial Correlation in Stock Returns'
+        authors: 'John Y. Campbell, Sanford J. Grossman, Jiang Wang'
+        year: '1993-11'
+        url: 'https://doi.org/10.2307/2118454'
+        treatment: '伴随大成交量的价格变动随后反转;本稿把它当作要剔除的混杂:逐日按当日涨跌与 day_wmean(Ret, Volume) 分桶,把「收益 × 成交量」这一块拿掉'
+      - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+        authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang'
+        year: '2002'
+        url: 'https://www.johnhcochrane.com/s/llorente_michaely_saar_wang_volume_rfs.pdf'
+        treatment: '个股的量价交互随信息型交易占比而变;同上,用来说明为什么第一稿主体会和反转、head +0.58 重合,以及本稿剔除的是哪一块'
+    seeds:
+      - 'neg(ts_mean(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sqrt(Volume)), log(div(day_last(Close), day_first(Open)))), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sqrt(Volume)), day_wmean(Ret, Volume)), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sqrt(Volume)), log(div(day_last(Close), day_first(Open)))), day_wmean(Ret, Volume)), 20))'
+      - 'neg(ts_med(cs_bucket_rank(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sqrt(Volume)), log(div(day_last(Close), day_first(Open)))), day_wmean(Ret, Volume)), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), mul(sqrt(Volume), div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99))))), log(div(day_last(Close), day_first(Open)))), day_wmean(Ret, Volume)), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(cs_bucket_rank(day_corr(in_delay(div(Close, in_mean_rolling(Close, 60)), 1), sqrt(Volume)), log(div(day_last(Close), day_first(Open)))), day_wmean(Ret, Volume)), 20))'
+      - 'cs_bucket_rank(neg(ts_mean(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sqrt(Volume)), 20)), div(day_last(Close), ts_delay(day_last(Close), 20)))'
+      - 'neg(ts_mean(sub(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), mul(mul(sqrt(Volume), div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)))), sign(Ret))), day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), mul(div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99))), sign(Ret)))), 20))'
+      - 'neg(ts_mean(sub(day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), mul(sqrt(Volume), sign(Ret))), day_corr(in_delay(div(Close, in_mean_rolling(Close, 30)), 1), sign(Ret))), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(day_corr(Close, mul(sqrt(Volume), div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99))))), mul(sub(day_centroid(sqrt(Volume)), 0.5), log(div(day_last(Close), day_first(Open))))), 20))'
+      - 'neg(ts_mean(cs_bucket_rank(div(log(div(day_wmean(Close, mul(Volume, div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99))))), day_mean(mul(Close, div(mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99)), mul(is_gt(in_index(Volume), 0.003), is_lt(in_index(Volume), 0.99))))))), day_std(Ret)), mul(sub(day_centroid(sqrt(Volume)), 0.5), log(div(day_last(Close), day_first(Open))))), 20))'
+R: []

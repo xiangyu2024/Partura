@@ -1,0 +1,266 @@
+seed: 806
+round: 3
+slots:
+  - type: E
+    core: 'sub(day_centroid(Amt), day_centroid(Ret))'
+    hypothesis: |-
+      【核心与额度】核心 D = sub(day_centroid(Amt), day_centroid(Ret)):钱在一天里的时间重心,减去 |分钟收益| 的时间重心。day_centroid 先取 |x|,再按 t/(T-1) 归一到 [0,1]。D 是 head 12 的子树,也是 head 8 的乘法同构:c_A·(1-c_R) 对 c_A 递增、对 c_R 递减,与差值同向。它还是共性表里的一行(+0.60,n 23)。这个核心此前用过 0 个 E 位。r2 的 E 位核心是 day_centroid(Amt),不是同一个子树。
+
+      【为什么它是 alpha 的来源】
+      - r2 付费证据:裸 D +0.90(train 0.90 / valid 1.05),是全库两段最接近的一条。Amt→Volume 互换后 0.93→0.98;窗口 10 / 20 / 40 为 0.68 / 0.93 / 0.84,没有悬崖。
+      - head 8 与已知族的 |ρ| 是 0.135;成交重心的水平版是 0.493。
+      - r2 的 R 组把成交重心的水平判成已知族的非线性重写:在已知族十分位内取秩,1.22 → 0.36;在流动性十分位内,→ 0.49。
+      - 机制上这是必然的。已知族控制 cross_mean(day_std(Amt), 30) 是分钟成交额剖面的离散度,c_A 是同一条剖面的一阶矩,所以水平版注定和已知族同源。
+      - D 把钱的时点和价格位移的时点相减,约掉了「剖面形状」这个公共成分,剩下的是量与价在时间上错开多少。依据 AP1988:知情交易推动价格,可择时的流动性交易挤到市场厚的时段,所以两者错开的程度区分的是谁在交易。
+      - 拟合方向 -1:做多「钱早到、价格晚动」。
+
+      【已见过的外围(全部)】
+      - {}:裸 D;
+      - {ts_quantile_q50 @10 / 20 / 30};
+      - {ts_quantile_q75, ts_quantile_q50}:head 12;
+      - 乘法同构加平滑:head 8;
+      - 先平滑后相减;
+      - 按自身水平 / 流动性 / 市值十分位分桶的 10 / 20 日中位数:r2 种子 5–7;
+      - GP 自己加的一层线性 day_std(Ret) 减项。
+      归纳:全部是「对 D 的水平做平滑或分桶」。这条路已经走到头:平滑后的 D 与 head 8 / head 12 的日度秩相关会到 0.7 以上,被库禁令拒掉。r2a 的第 3–5 名(0.87–0.93)就是这样没进库的。
+
+      【本位外围做三件事,都不是取水平,都在时间维度上做对比,把每只股票持久的 D 水平消掉】
+      (1) 事件条件化:错开只在有信息的日子才有含量。
+          - greater(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0) 标出成交额高于自身 20 日均值的日子,less(...) 标出低于的日子;
+          - 用 cross_sum(mul(D, I), 40) / cross_sum(I, 40) 算 40 日内放量日与缩量日各自的 D 条件均值,再相减;
+          - 强放量版:cross_zscore(day_sum(Amt), 20) > 1 的日子的 D 均值,减 60 日 D 均值;
+          - 连续版:cross_corr(D, cross_zscore(day_sum(Amt), 20), 40);
+          - 放量日 D 偏离自身 60 日常态的 20 日均值。
+          依据 GKM2001:成交要看相对自身窗口的异常。依据 LMSW2002:同样的成交,信息交易伴随延续,风险分担交易伴随反转,所以要看的是放量那天的量价关系怎样变化,而不是水平。
+          另放一条「只取放量日的 D 条件水平」(种子 5),它可能与 head 8 太像,交给相关度表裁决。
+      (2) 方向条件化:同样是价格晚动,往上推和往下砸的含义相反。
+          - 把 D 相对自身 60 日的偏离(cross_zscore,或减 ts_mean)乘以当天日内收益 log(day_last(Close) / day_first(Open)) 的符号或幅度,取 20 日均值;
+          - cross_corr(D, 日内收益, 40)。
+          读的是:这只股票的晚动通常发生在上涨日,还是下跌日(尾盘在薄量里被拉升或打压)。A 股尾盘有独立的价格行为:LY2022 发现 T+1 下最后一小时的收益可预测;CGZ2019 发现中国股票日内首尾时段的动量与反转。
+          日内收益用开盘价与收盘价显式构造,不用 day_sum(Ret),所以不依赖第 0 根 Ret 是否含隔夜跳空。
+          另有一条:按 |日内收益| 加权的 D 均值减等权均值,看错开在大波动日是否不同。
+      (3) 相对自身常态的新息:
+          - cross_zscore(D, 60);
+          - ts_rank(D, 60);
+          - 5 日均值减 60 日中位数;
+          - 非参数版:在 60 日 D 中位数的十分位内,给 5 日 D 均值取秩(cs_bucket_rank)。
+          迁移在 c_A 水平上试过(head 13,+0.59),在 D 上没试过。两者减掉的东西不同:前者减掉的是风格,后者减掉的是这只股票自己常态的错位。
+
+      【为什么和库里不同】三件事都把持久水平消掉,所以按构造,与 head 4 / head 8 / head 12 的日度秩 |ρ| 应远低于 0.7。预期 ≤ 0.5,种子 5 除外;与 5 个控制的 |ρ| 预期 ≤ 0.3。
+      本位不用凸变换,不用 mask,不用 cs_stddev_full;不以 LogFloat* / LimitWidth / BoardCode 作排序键或分桶键;唯一的分桶键是 D 自己的 60 日中位数,是连续量(避开陷阱 1–3)。
+
+      【已知的毛病】
+      (i) 2018-08-20 沪市启用收盘集合竞价,沪市股票的 c_A 在 train 里有一个台阶。(3) 的 60 日新息会在 2018-08 至 2018-11 把「沪 vs 深」读成新息,这只占 train 的约 6%。(1)(2) 是窗口内的对比:台阶在放量日与缩量日、上涨日与下跌日两边同时出现,相减后被消掉。
+      (ii) 40 日窗口里放量日可能只有十几天,条件均值噪声大。所以用 40 / 60 日,不用 20 日。
+      (iii) GP 只在核心外面长,很可能把平滑重新加回去。那样的候选会被库禁令拒掉,浪费一部分采样。
+
+      【为什么样本外还会在】
+      - 决定成交时点结构的是制度:T+1、开盘与收盘集合竞价、散户集中在开盘下单、被动资金在收盘成交。这些在 2023-08-08 之后都没有变。
+      - D 和三种对比都是有界、无量纲的量,不随成交额和波动的水平漂移。
+      - 三种外围都消掉了股票自身的持久水平,所以收益不来自那个窗口越长越像已知族的风格成分。
+
+      【事先判决】本位所有与 head 8 / head 12 日度秩 |ρ| < 0.7 的候选,若都低于 0.3,说明 D 的分数只在持久水平里。再看 R 里 head 12 的三个分桶变体:若它们也都 < 0.5,本种子的成交时点族(水平与差值)整体判为已知族 / 流动性的重写。
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: 'Anat R. Admati, Paul Pfleiderer'
+        year: '1988'
+        url: 'https://ideas.repec.org/a/oup/rfinst/v1y1988i1p3-40.html'
+        treatment: '知情交易推动价格、可择时的流动性交易挤到厚市场时段;据此把量的时点与价格位移的时点分开度量再相减,用错开程度区分交易者'
+      - title: 'The High-Volume Return Premium'
+        authors: 'Simon Gervais, Ron Kaniel, Dan Mingelgrin'
+        year: '2001'
+        url: 'https://rodneywhitecenter.wharton.upenn.edu/wp-content/uploads/2014/04/9901.pdf'
+        treatment: '成交的信息含量看它相对自身窗口的异常;据此用「成交额高于自身 20 日均值」标出事件日,只在事件日与非事件日之间比较 D'
+      - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+        authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang'
+        year: '2002'
+        url: 'https://www.nber.org/papers/w8312'
+        treatment: '同样的成交量,信息交易伴随延续、风险分担交易伴随反转,区分它们要看量价关系在放量时如何变化;据此用放量日减缩量日的 D 条件均值与 cross_corr(D, 异常成交额) 取代水平'
+      - title: 'Last hour momentum in the Chinese stock market'
+        authors: 'Lu Yang'
+        year: '2022'
+        url: 'https://doi.org/10.1108/CFRI-06-2021-0106'
+        treatment: 'T+1 下 A 股最后一小时的价格行为有独立的可预测性;据此把「价格晚动」按当天日内收益的方向拆开,而不是只看晚动的程度'
+      - title: 'Intraday momentum and reversal in Chinese stock market'
+        authors: 'Xiaojun Chu, Zherong Gu, Haigang Zhou'
+        year: '2019'
+        url: 'https://ideas.repec.org/a/eee/finlet/v30y2019icp83-88.html'
+        treatment: '中国股票日内首段与尾段收益之间存在动量与反转;据此把 D 的偏离与日内收益的符号 / 幅度相乘、与日内收益做滚动相关'
+    seeds:
+      - 'sub(div(cross_sum(mul(sub(day_centroid(Amt), day_centroid(Ret)), greater(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0)), 40), cross_sum(greater(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0), 40)), div(cross_sum(mul(sub(day_centroid(Amt), day_centroid(Ret)), less(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0)), 40), cross_sum(less(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0), 40)))'
+      - 'sub(div(cross_sum(mul(sub(day_centroid(Amt), day_centroid(Ret)), greater(cross_zscore(day_sum(Amt), 20), 1.0)), 60), cross_sum(greater(cross_zscore(day_sum(Amt), 20), 1.0), 60)), cross_mean(sub(day_centroid(Amt), day_centroid(Ret)), 60))'
+      - 'cross_corr(sub(day_centroid(Amt), day_centroid(Ret)), cross_zscore(day_sum(Amt), 20), 40)'
+      - 'cross_mean(mul(cross_zscore(sub(day_centroid(Amt), day_centroid(Ret)), 60), greater(cross_zscore(day_sum(Amt), 20), 0.0)), 20)'
+      - 'div(cross_sum(mul(sub(day_centroid(Amt), day_centroid(Ret)), greater(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0)), 40), cross_sum(greater(sub(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 0.0), 40))'
+      - 'cross_mean(mul(cross_zscore(sub(day_centroid(Amt), day_centroid(Ret)), 60), sign(log(div(day_last(Close), day_first(Open))))), 20)'
+      - 'cross_corr(sub(day_centroid(Amt), day_centroid(Ret)), log(div(day_last(Close), day_first(Open))), 40)'
+      - 'cross_mean(mul(sub(sub(day_centroid(Amt), day_centroid(Ret)), ts_mean(sub(day_centroid(Amt), day_centroid(Ret)), 60)), log(div(day_last(Close), day_first(Open)))), 20)'
+      - 'sub(div(cross_sum(mul(sub(day_centroid(Amt), day_centroid(Ret)), abs_(log(div(day_last(Close), day_first(Open))))), 20), cross_sum(abs_(log(div(day_last(Close), day_first(Open)))), 20)), cross_mean(sub(day_centroid(Amt), day_centroid(Ret)), 20))'
+      - 'cross_zscore(sub(day_centroid(Amt), day_centroid(Ret)), 60)'
+      - 'sub(ts_mean(sub(day_centroid(Amt), day_centroid(Ret)), 5), ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 60))'
+      - 'ts_rank(sub(day_centroid(Amt), day_centroid(Ret)), 60)'
+      - 'cs_bucket_rank(ts_mean(sub(day_centroid(Amt), day_centroid(Ret)), 5), ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 60))'
+  - type: N
+    hypothesis: |-
+      【机制:隔夜与日内的拔河】A 股每天的收益由两个价格形成过程拼成:
+      - 隔夜段:上一交易日收盘到当日开盘集合竞价;
+      - 日内段:开盘到收盘的连续竞价。
+      两段的参与者不同。开盘集合竞价集中的是隔夜下单的散户,以及对隔夜消息的反应;连续竞价里机构执行的占比高。这就是 LPS2019 的客群解释:散户偏隔夜,机构偏日内;很多策略的收益在两段符号相反,即「拔河」。
+      A 股的证据:
+      - BZ2020:T+1 让当日买入者不能当日卖出,隔夜收益因此系统性为负;这个负偏在分歧大、散户多、流动性差的股票上更强。
+      - LCC2023:中国市场异象的利润更多落在隔夜段。
+      - GHLX2019:隔夜收益有动量,而且在负面冲击后更强。
+      所以同样是 20 日涨跌,是隔夜涨的还是日内涨的,反映的是不同客群的需求,对之后收益的含义也不同。
+
+      【算子怎样实现】
+      - 隔夜收益 ON = log(day_first(Open) / ts_delay(day_last(Close), 1));日内收益 ID = log(day_last(Close) / day_first(Open))。价格是后复权的,除权日不会造出假跳空。
+      - 奖励已经对 20 日反转 day_last(Close)/ts_delay(day_last(Close), 20) 做了线性中性化。中性化之后,ON 的 20 日均值剩下的正是「这 20 日的涨跌有多少来自隔夜」。
+      种子:
+      (a) ON 的 5 / 20 / 60 日均值;
+      (b) 在同窗口总收益的十分位内给 ON 取秩(cs_bucket_rank),非参数地拿掉反转;
+      (c) LPS2019 的标准做法:两段各自取截面秩再相减;
+      (d) 符号计数 cross_mean(sign(ON), 20),对涨停开盘这类极端跳空稳健;
+      (e) ON 的 20 日均值除以 20 日标准差,即隔夜需求的一致性;
+      (f) GHLX2019 的不对称:只取负跳空部分的 20 日均值,在波动十分位内取秩;
+      (g) cross_corr(ON, ID, 60):开盘跳空在随后的日内被系统性回吐(负)还是延续(正),即单只股票上拔河的强度;
+      (h) 隔夜段占全部价格位移的比例 Σ|ON| / (Σ|ON| + Σ|ID|),以及它在波动十分位内的秩:价格发现发生在非交易时段还是交易时段;
+      (i) 两段秩差在流动性十分位内取秩(BZ2020:负偏随流动性变)。
+
+      【为什么和库里不同】
+      - 库里 14 个 head 没有一个用到隔夜 / 日内分解,也没有一个用到 day_first(Open) 与前收盘之比。head 2 / 3 / 10 的 day_open(Open) 是价格水平,不是收益。
+      - 输入(日频开盘价与收盘价)和机制(两段客群的拔河)都不同,预期与所有 head 的 |ρ| < 0.3。
+      - 不用任何分钟级微观结构量,所以不落在本种子 GP 偏爱的薄交易 / 零收益 / 价格离散度那一类。
+
+      【控制暴露】
+      - ON 的 20 日均值与 20 日反转会有中等相关,因为两段之和就是总收益,预期 0.3–0.5。(b)(i) 两类分桶,以及 (c)(d)(g),按构造低得多。
+      - |ON| 与 |ID| 都随波动变,所以 (h) 同时给了波动十分位内取秩的版本。
+      - 全位不用凸变换、mask、市值或板块键(避开陷阱 1–3)。
+
+      【为什么样本外还会在】
+      - T+1、开盘集合竞价、散户占成交的高比例,是制度和投资者结构,2023-08-08 之后没有变。
+      - LCC2023 的 A 股证据与 LPS2019 的美股证据,在不同市场、不同样本期各自成立,说明效应来自交易时段的客群划分,而不是某一段样本的巧合。
+      - 方向由奖励在 train 上定。我的先验是 +1(做多涨幅更多来自隔夜、日内被卖的股票):日内回吐是机构对散户隔夜需求的暂时性压价,之后回补。把握约 55%。
+    inspired_by: 'r1 与 r2 的两个 N 位都死于分钟级量价不平衡或偏度,而 GP 的随机半边两轮都被带到分钟级的薄交易 / 价格离散度量;库里 14 个 head 都是分钟剖面的形状、时点或市值形状,没有一个使用「收益在一天里由哪个交易时段贡献」这一维。文献:Lou, Polk, Skouras 2019(拔河),Lin, Chang, Chou 2023(中国异象的隔夜 / 日内分解),Gao, Han, Li, Xiong 2019(中国的隔夜动量与迟到知情交易),Zhang 2020(T+1 造成负的隔夜收益)'
+    literature:
+      - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        url: 'https://personal.lse.ac.uk/polk/research/TugOfWar.pdf'
+        treatment: '把收益拆成隔夜段与日内段、两段各自取截面秩再比较;客群解释为散户偏隔夜、机构偏日内'
+      - title: 'Overnight versus intraday returns of anomalies in China'
+        authors: 'Chaonan Lin, Hui-Wen Chang, Robin K. Chou'
+        year: '2023-06'
+        url: 'https://ideas.repec.org/a/eee/pacfin/v79y2023ics0927538x23000732.html'
+        treatment: '中国市场异象的利润更多落在隔夜段,方向与美股不同;据此不套用美股先验,方向交给奖励在 train 上定'
+      - title: 'Overnight Momentum, Informational Shocks, and Late-Informed Trading in China'
+        authors: 'Ya Gao, Xing Han, Youwei Li, Xiong Xiong'
+        year: '2019-10'
+        url: 'https://ideas.repec.org/p/pra/mprapa/96784.html'
+        treatment: '隔夜收益在中国有动量、负面冲击后更强;据此加入只取负跳空部分的不对称种子'
+      - title: 'T+1 trading mechanism causes negative overnight return'
+        authors: 'Bing Zhang'
+        year: '2020'
+        url: 'https://ideas.repec.org/a/eee/ecmode/v89y2020icp55-71.html'
+        treatment: 'T+1 使隔夜收益系统性为负,负偏在高分歧 / 高散户 / 低流动性股票上更强;据此给出在波动与流动性十分位内取秩的版本,防止它变成控制变量的重写'
+    seeds:
+      - 'cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)'
+      - 'cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)'
+      - 'cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 5)'
+      - 'cs_bucket_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), div(day_last(Close), ts_delay(day_last(Close), 20)))'
+      - 'cs_bucket_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), div(day_last(Close), ts_delay(day_last(Close), 60)))'
+      - 'cs_bucket_rank(cross_sum(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 5), div(day_last(Close), ts_delay(day_last(Close), 5)))'
+      - 'sub(cs_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)), cs_rank(cross_mean(log(div(day_last(Close), day_first(Open))), 20)))'
+      - 'cross_mean(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20)'
+      - 'div(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20))'
+      - 'cs_bucket_rank(cross_mean(mul(log(div(day_first(Open), ts_delay(day_last(Close), 1))), less(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 0.0)), 20), cross_mean(day_std(Ret), 20))'
+      - 'cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 60)'
+      - 'div(cross_sum(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20), add(cross_sum(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20), cross_sum(abs_(log(div(day_last(Close), day_first(Open)))), 20)))'
+      - 'cs_bucket_rank(div(cross_sum(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20), add(cross_sum(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20), cross_sum(abs_(log(div(day_last(Close), day_first(Open)))), 20))), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(sub(cs_rank(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)), cs_rank(cross_mean(log(div(day_last(Close), day_first(Open))), 20))), cross_mean(day_sum(Amt), 30))'
+R:
+  - head: 'ts_quantile_q50(ts_quantile_q75(sub(day_centroid(Amt), day_centroid(Ret)), 20), 20)'
+    why: |-
+      【烂部件】内层的 ts_quantile_q75(·, 20)。它是 20 日上四分位,外面再套 20 日中位数,有效滞后约 30–40 日。
+
+      【依据】
+      - 同一个差值的单层平滑版本都比 head 12 好(r2a 已付费):裸 D +0.90、ts_quantile_q50(D, 20) +0.87、ts_quantile_q50(D, 30) +0.93,而 head 12 只有 +0.68。
+      - 机制上,窗口上四分位 ≈ 中位数 + 0.67 倍窗口内的标准差。所以 q75 给每只股票加了一项「D 自身的日间离散度」。成交稀的股票成交重心更嘈杂,离散度更大,这就把一个流动性维度掺了进来。
+
+      【变体】去掉 q75,只留单层 20 日中位数,同时在已知族 / 流动性 / 波动十分位内取秩。这样做有两个目的:
+      (a) 这是唯一能回答「D 是不是成交重心水平那个已知族代理换了个方向」的实验。成交重心水平在已知族十分位内从 1.22 掉到 0.36。若 D 在已知族十分位内仍 ≥ 0.78,就把 head 12 替换成一个按构造不带已知族暴露的版本。波动十分位那一版针对的是 D 残存控制暴露里最大的一项(r2 相关度表里差值类种子与波动控制 0.23–0.27)。
+      (b) 不提交裸的 ts_quantile_q50(D, 20)。它虽然 +0.87,是确定性替换,但与 head 8 太像:R 的替换规则只查与原 head 的相关,替换后库里会多一个近重复项。
+      同理不提交 loc.json R 候选第 1 名(用 ts_quantile_q50(day_centroid(Amt), 20) 替换 head 8)。那个变体与 head 4 的秩完全相同(sqrt 对正量单调),而它拆掉的正是把已知族暴露从 0.49 降到 0.135 的差值结构。它的 +0.27 就是代理本身。
+
+      【代价】分桶版本与 head 8 也可能相关在 0.7 以上,相关度表会给出。若是那样,这一组在改进库这件事上的价值是零,只剩诊断价值。
+    variants:
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 20), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_rank(ts_quantile_q50(sub(day_centroid(Amt), day_centroid(Ret)), 20), cross_mean(day_std(Ret), 20))'
+  - head: 'cs_first_low40(LogFloatShares, day_centroid(Amt))'
+    why: |-
+      【烂部件】_lexi 的排序键 LogFloatShares。
+
+      【依据】(与第 1 稿相同)
+      - 按源码,cs_first_low40(y, x) = rank(y) + 1·{x 落在当日最低 40%},_lexi 只用两个参数的秩。方向 +1,所以多头是「当日成交偏早那 40% 里 LogFloatShares 最大的一档」。
+      - LogFloatShares 与市值控制 LogFloatCap 只差一个 log 价格。放在排序位上,这就是陷阱 3 的离散形式:线性中性化只去掉 rank(LogFloatShares) 的线性部分,带内「最大那一档」这个非线性选择留了下来。
+      - 共性表里 5 行 pow_* / abs_(LogFloatShares) 都是它的单调重写,秩完全相同,是 GP 在这个方向上拟合的痕迹。
+      - head 14 是全库最弱的 head:0.58,valid 0.58 < train 0.68。
+
+      【第 1 稿错在哪里】
+      - 第 1 稿把排序键换成 ts_quantile_q50(day_centroid(Amt), 20 / 60)。这正是 head 4 / head 9 的输入,即成交重心的水平。r2 的 R 组已经把它判为已知族的非线性代理(在已知族十分位内 1.22 → 0.36)。所以第 1 稿等于把一个控制代理换成另一个控制代理。
+      - 相关度表也这样显示:第 1 稿变体 1 与 head 9 / head 4 的残差为 0.74 / 0.66,变体 2 与 head 9 为 0.62。而两者与 head 4 / head 9 的原始 |ρ| 都 ≤ 0.26。原始低、残差高,说明控制拿掉之后剩下的主要是成交重心的水平。
+      - 带键也有同样的问题。示性函数 1{今天的重心落在最低 40%} 本身是今天的水平;经过半衰期 20 的 EMA,它变成「近期偏早的天数占比」,仍然是水平。第 1 稿两个变体与原 head 的原始 |ρ| 都是 0.70,就来自这条共用的带。
+
+      【为什么不交「只换排序键、保留原带」的写法】
+      - 审计意见给的第一种改法是 cs_first_low40(sub(ts_quantile_q50(day_centroid(Amt), 20), day_centroid(Amt)), day_centroid(Amt))。我没有交。
+      - 把输出拆开看:带 ≈ −(常态 + 偏离),排序键 = 常态 − 今天 = −偏离,常态的载荷只来自带。
+      - 第 1 稿的排序键是 +常态,还和带的 −常态抵掉了一部分;残差仍有 0.74。这一写法把这部分抵消也拿掉了,水平载荷只会更大。
+      - 所以本稿的原则是:带键与排序键都必须不带水平,否则不交。
+
+      【本稿:替换进来的键都不带水平】
+      (1) 在自己常态的十分位内,给今天的重心取秩:cs_bucket_rank(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20))。
+          - 常态相同的股票互相比较。每个十分位内输出是均匀的,所以常态的水平按构造被拿掉,剩下今天相对常态的偏离。
+          - 这是审计意见建议的第二种写法。
+          - 机制:GKM2001 说异常成交要看相对自身的偏离,这里搬到时点维度上。开盘段出现异常集中的成交,说明隔夜消息或注意力在开盘时到来。
+      (2) 同 (1),常态换成 60 日中位数:cs_bucket_rank(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 60))。
+          - 20 日中位数会被最近几天的异常日本身拉动,60 日常态更稳,偏离更「异常」。
+          - (1)(2) 对照着看窗口是否有悬崖。
+      (3) 保留 head 14 的 _lexi 骨架,把带键与排序键都换成不带水平的量:cs_first_low40(cross_zscore(day_sum(Amt), 20), sub(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20)))。
+          - 带:今天的重心比自己 20 日中位数提前得最多的那 40%。
+          - 带内排序:今天的成交额相对自身 20 日的 z 分数(cross_zscore 是逐只股票的时间序列 z 分数,源码 ops_ext.py)。
+          - 方向为 +1 时,多头是「今天成交异常地早,而且异常地多」,即开盘段出现放量的集中成交。
+          - z 分数用自身窗口标准化,按构造与成交额的水平(流动性控制)无关。
+
+      【不用的东西】不用凸变换、mask、cs_stddev_full,也不用 LogFloat* / LimitWidth / BoardCode。带键、排序键、分桶键都是连续量,不落 §4 陷阱 1–3。
+
+      【已知的毛病】
+      - 2018-08-20 沪市启用收盘集合竞价,沪市股票的成交重心有一个台阶。「今天相对常态」会在之后 20 / 60 个交易日里把它读成偏离,约占 train 的 2% / 6%。
+      - 单日偏离换手高。半衰期由评估在 train 上拟合,扣 15 bp 后能否过 0.68 是本组最大的不确定。
+
+      【门槛与事先判决】
+      - 需 ≥ 0.68 才进库。三个变体与原 head 预计都 < 0.5(不再共用那条带),走收录,要求与库里所有 head 的 |ρ| < 0.7。
+      - 若相关度表显示它们与 head 4 / head 9 的残差 ≥ 0.5,说明拿掉常态之后仍不干净,这一组只剩诊断价值。
+      - 若三个都 < 0.3,head 14 的 0.58 全在「LogFloatShares 排序 + 水平带」里,成交时点的单日偏离不带可交易的信息。
+    variants:
+      - 'cs_bucket_rank(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20))'
+      - 'cs_bucket_rank(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 60))'
+      - 'cs_first_low40(cross_zscore(day_sum(Amt), 20), sub(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20)))'
+  - head: 'sub(sub(day_q_stat_std(pow_1_5(Ret)), cs_stddev_full(sqrt(day_q_stat_std(pow_1_5(Ret))))), cs_stddev_full(sqrt(day_q_stat_std(pow_1_5(Ret)))))'
+    why: |-
+      【烂部件】pow_1_5,以及两个 cs_stddev_full 壳。
+
+      【依据】
+      (i) cs_stddev_full(X) 是每日截面常数:nd_cs.py 逐日跨股票算样本标准差,再广播回原形。所以减它不改任何一天的截面秩。r2b 的 26 个过线候选分数只差 0.758–0.800,这点差来自 EMA 对缺失日的处理。
+      (ii) pow_1_5 = pow_(x, 1.5)。按 common.py,e > 1 时走 x**e,负底数的非整数幂是 NaN,所以所有下跌分钟被删掉。本机用 torch 执行确认过:pow_([-0.01, 0, 0.01], 1.5) = [nan, 0, 0.001]。
+      (iii) day_q_stat_std 的 Q 统计量用整行长度 T = 241 作样本量,不是剔除 NaN 后实际的配对数。零自相关下 E[ρ̂²] ≈ 1/n_pairs,所以这个量主要读的是「非下跌分钟的连续配对有多少」,是薄交易 / 零收益 / 价格离散度的度量,不是日内收益的可预测性。
+
+      【变体】
+      (1) day_q_stat_std(Ret):保留全部分钟,读的是真正的日内收益自相关结构;
+      (2) 在 20 日零收益分钟占比 cross_mean(day_zero_ratio(Ret), 20) 的十分位内取秩:若分数留下,它就不是零收益计数;
+      (3) 在流动性十分位内取秩。
+
+      【门槛】≥ 0.90 则替换为机制清楚、或按构造不带流动性 / 零收益暴露的版本。若 (1)(2) 都崩,确认它是计数伪影。
+    variants:
+      - 'day_q_stat_std(Ret)'
+      - 'cs_bucket_rank(day_q_stat_std(pow_1_5(Ret)), cross_mean(day_zero_ratio(Ret), 20))'
+      - 'cs_bucket_rank(day_q_stat_std(pow_1_5(Ret)), cross_mean(day_sum(Amt), 30))'

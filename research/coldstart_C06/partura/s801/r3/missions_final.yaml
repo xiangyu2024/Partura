@@ -1,0 +1,311 @@
+seed: 801
+round: 3
+slots:
+- type: E
+  core: day_corr(Ret, Amt)
+  hypothesis: '【核心是什么】K = day_corr(Ret, Amt):当天 241 根分钟 bar 上「分钟收益」与「分钟成交额」的皮尔逊相关,有界于
+    [-1, 1],没有量纲。K > 0 = 当天的钱落在上涨的分钟里,K < 0 = 落在下跌的分钟里。它是定位共性表 / 核心卡第 32 项(16 个已评分候选含它,含
+    / 不含的均值 -0.13 / -0.89,均值差 +0.76,p 0.027);它的 EMA(10) 是核心卡第 31 项(10 个候选,均值差 +0.94,p
+    0.028)。整个实验还没有任何 E 位用过它。
+
+
+    【为什么是它,而不是库里已有的资金流倾斜】本种子三个资金流 head(+0.61、+0.91、+0.51)的日度内核都是 X = (day_wmean(Ret,
+    Amt) - day_mean(Ret)) / day_std(Ret)。day_wmean(x, w) = Σ|w|x / Σ|w|(ops_ext),所以
+    Σ(w_i/W)r_i - r̄ = cov(w, r) / w̄,X = corr(Ret, Amt) × sd(Amt) / mean(Amt) = K
+    × CV(Amt)(差一个 n/(n-1) 常数)。CV(Amt) 是日内成交额的变异系数,是非流动性;r2 审计意见已经指出「凡是取 X 幅度或尾部的外围都会把它重新暴露出来」,r2
+    a 位种子 11 与流动性 0.51 被划就是证据。K 把 CV(Amt) 按构造整除掉,只留下量价同期协变的方向,即价格冲击 / 知情交易不对称的那一半(Karpoff
+    1987 综述:成交量与价格变化的关系不对称;Blume-Easley-O''Hara 1994:成交量携带价格本身不含的、关于信号质量的信息)。
+
+
+    【这个核心已经见过的外围,以及它们的问题】只有纯时间平滑:cross_mean(K, 20)(r1 相关度表里与 20 日反转 0.53,被划,没有评估过)、cross_ema(K,
+    10)(与反转 0.45)、cross_mean(div(cross_ema(K, 10), day_std(Ret)), 15)(r1 a 位第 4 名,train
+    +0.44)。K 的平滑水平有一半是在读「近期涨没涨」:上涨日里放量的分钟本来就多是上涨的分钟,K 机械地与当日收益同号。奖励对 20 日反转做线性中性化,会把这一块连同一部分信号一起扣掉。所以本位的外围全部去问
+    K 里与当天价格方向无关的那部分、或 K 的动态,不再读 K 的水平。
+
+
+    【外围做的事,七族】
+
+    (1) 去方向的量价协变(承接 / 派发):下跌日里钱仍落在上涨的分钟 = 有人在承接,上涨日里钱落在下跌的分钟 = 有人在派发。三种互相独立的实现:逐股
+    60 日时间序列回归残差 cross_regres(日收益, K, 60) 的 10 日均值(cross_regres(x, y, d) 是 y 对 x 的滚动
+    OLS 在当天的残差,AlphaCube common.rolling_ols);逐日截面回归残差 cs_regres(K, 日收益) 的 20 日均值;K
+    的 20 日 / 5 日均值在同期 20 日 / 5 日总收益十分位内部的秩 cs_bucket_rank(·, 同期总收益)(第二个参数逐股不同,不碰陷阱
+    2;按构造与反转控制正交,r2 b 位同一写法与反转只有 0.01–0.04)。
+
+    (2) 按方向分解的逐股回归:cross_regalpha(sign(日收益), K, 60) 是 K 对当日涨跌符号回归的截距,即扣掉方向之后这只股票的量价协变水平;cross_regbeta(sign(日收益),
+    K, 60) 是斜率,约等于(上涨日平均 K - 下跌日平均 K)/ 2,即成交量是否「确认」价格方向(BEO 1994);cross_mean(K × sign(日收益),
+    20) 是同一个量的简单写法。
+
+    (3) 持续性:近 10 日 K 均值乘 K 自己的 60 日一阶自相关(cross_autocorr_s1)。机构拆单使订单失衡正自相关并正向预测收益(Chordia-Subrahmanyam
+    2004);自相关为负(流动性交易为主)的股票,乘积自动反号。
+
+    (4) 相对自身常态的异常:cross_zscore(K, 60) 的 5 日均值、5 日均值减 60 日均值(Gervais-Kaniel-Mingelgrin
+    2001 的口径:冲击按股票自己的常态定义),扣掉股票固有的、慢变的量价协变水平。
+
+    (5) 去掉全市场共同成分:逐股 K 对当日全市场平均 K 的 60 日时间序列回归残差 cross_regres(cs_mean(K), K, 60) 的
+    10 日均值(Hasbrouck-Seppi 2001:订单流有共同因子,个股特有的那部分才是个股信息)。cs_mean 是逐日截面常数,只作为逐股时间序列回归的自变量,不进入任何
+    _pct_rank,不是陷阱 2 的用法。
+
+    (6) 逐股的信息性:cross_corr(昨天的 K, 今天的隔夜收益, 60):这只股票盘中的量价协变能否领先于隔夜的重新定价(Llorente-Michaely-Saar-Wang
+    2002:量价关系按信息交易 / 对冲交易在股票之间分类)。
+
+    (7) 异常放量日加权:cross_mean(K × cross_zscore(day_sum(Amt), 60), 20)。成交额只以相对自身 60 日历史的
+    z 分数出现(含当天时 |z| ≤ √59),不读截面水平(GKM 2001 的高成交量日)。
+
+
+    【算子约束,也是复核产出的口径】不对成交额、波动取幂;不取 |K|、K 的尾部或 K 的滚动标准差(稀疏股票的 K 由少数几分钟决定,幅度与离散度会读到非流动性,陷阱
+    3);不用 log 作用于可正可负的量(源码里 log 是 log|x|,r2 的 +0.91 就建立在它上面);cs_* 只作用于逐股不同的量。
+
+
+    【和库里已有的不同】13 个 head 里没有一个含 day_corr(Ret, Amt);三个资金流 head 都经由 X 含 CV(Amt),而且读的是
+    X 的平滑水平(+0.61)或「倾斜幅度 × 当日波动」的 120 日逐股耦合(+0.91 / +0.51);没有一个以当天的价格方向为条件,也没有一个去掉全市场共同成分。
+
+
+    【为什么样本外还在】(a) K 是两条日内序列的相关系数,有界,对成交额和波动的水平不变;2018–2023 全市场成交额和波动的大幅漂移不进入信号,样本外的状态漂移同样不会。(b)
+    去方向的外围按构造不借反转溢价的分数:奖励里的反转控制和它没有可扣的线性部分,样本内的分数不来自控制的残余,也就不会在反转溢价变化时一起消失。(c) 承接
+    / 派发、拆单、T+1 与卖空受限下散户与机构的成交结构,在 2023-08-08 之后没有改变。方向不写死,交给奖励。
+
+
+    【事先写明的失败模式】K 的水平本身弱(含它的候选平均 -0.13,平滑后最好 +0.44),这一位可能颗粒无收;第 (7) 族给了 GP day_sum(Amt)
+    这个零件,若产出长成成交额的水平或幂,按陷阱 3 判,不当发现。'
+  literature:
+  - title: 'The Relation between Price Changes and Trading Volume: A Survey'
+    authors: Jonathan M. Karpoff
+    year: 1987-03
+    url: https://doi.org/10.2307/2330874
+    treatment: 成交量与价格变化的关系不对称,上涨与下跌时不同 —— 第 (1)(2) 族把 K 按当天的价格方向拆开
+  - title: 'Market Statistics and Technical Analysis: The Role of Volume'
+    authors: Lawrence Blume, David Easley, Maureen O'Hara
+    year: 1994-03
+    url: https://doi.org/10.1111/j.1540-6261.1994.tb04424.x
+    treatment: 成交量携带价格不含的关于信号质量的信息,量是否确认价格方向有预测含义 —— 第 (2) 族的 sign 回归斜率与 K × sign(日收益)
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 逐股估计量价关系,以其符号区分信息交易与对冲交易 —— 第 (6) 族用 K 对次日隔夜收益的逐股 60 日相关做这个分类
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    url: https://doi.org/10.1016/S0304-405X(03)00175-2
+    treatment: 拆单使个股订单失衡正自相关并正向预测收益 —— 第 (3) 族用 K 的自相关给近期 K 加权
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: 2001-06
+    url: https://doi.org/10.1111/0022-1082.00349
+    treatment: 冲击按股票自身近期常态定义 —— 第 (4) 族的自身 z 分数与短减长,第 (7) 族的异常放量日加权
+  - title: Common factors in prices, order flows, and liquidity
+    authors: Joel Hasbrouck, Duane J. Seppi
+    year: 2001-03
+    url: https://doi.org/10.1016/S0304-405X(00)00091-X
+    treatment: 个股订单流有共同因子 —— 第 (5) 族先把 K 对全市场平均 K 回归,只留个股特有的部分
+  - title: Continuous Auctions and Insider Trading
+    authors: Albert S. Kyle
+    year: 1985-11
+    url: https://www.econometricsociety.org/publications/econometrica/1985/11/01/continuous-auctions-and-insider-trading
+    treatment: 价格对订单流的敏感度度量知情交易 —— K 是这一关系在分钟收益与成交额上的无量纲版本,去掉了 Kyle λ 里的尺度比
+  seeds:
+  - cross_mean(cross_regres(log(div(day_last(Close), ts_delay(day_last(Close), 1))),
+    day_corr(Ret, Amt), 60), 10)
+  - cs_bucket_rank(cross_mean(day_corr(Ret, Amt), 5), div(day_last(Close), ts_delay(day_last(Close),
+    5)))
+  - mul(cross_mean(day_corr(Ret, Amt), 10), cross_autocorr_s1(day_corr(Ret, Amt),
+    60))
+  - cross_mean(cross_zscore(day_corr(Ret, Amt), 60), 5)
+  - sub(cross_mean(day_corr(Ret, Amt), 5), cross_mean(day_corr(Ret, Amt), 60))
+  - cross_mean(cross_regres(cs_mean(day_corr(Ret, Amt)), day_corr(Ret, Amt), 60),
+    10)
+  - cross_corr(cross_delay(day_corr(Ret, Amt), 1), log(div(day_first(Open), ts_delay(day_last(Close),
+    1))), 60)
+  - cross_mean(mul(day_corr(Ret, Amt), cross_zscore(day_sum(Amt), 60)), 20)
+- type: N
+  hypothesis: '【新 idea】A 股的交易日在时段上是结构化的:不同时段的成交由不同的参与者、不同的撮合机制产生。库里 13 个 head 没有一个用到「一天里的什么时候」——
+    没有 in_slice、in_index、day_centroid;+0.76 / +0.65 只把一天切成「隔夜 vs 整个盘中」两段。本位把盘中再切到时段一级。
+
+    分钟轴的约定(dt_in.in_half 的注释与 synthetic 的 V2 网格):index 0 = 09:30 开盘集合竞价那一根,1–120 =
+    上午 09:31–11:30,121–240 = 下午 13:01–15:00;211–240 = 14:31–15:00,238–240 = 14:58–15:00(收盘集合竞价段,深市一直如此,沪市自
+    2018-08-20 起)。in_slice(x, a, b) = x[:, a..b](含两端)。
+
+    - 开盘段:隔夜信息的集中消化与散户的注意力驱动下单(Berkman 等 2012:散户在开盘集中买入,把开盘价推高,随后盘中回落;Barber-Odean
+    2008:个人投资者是注意力驱动的净买方)。
+
+    - 尾盘段:机构执行、指数与基准相关的交易集中在收盘前(Bogousslavsky 2016:不频繁再平衡让收盘前的交易与收益呈日内季节性;Carhart-Kaniel-Musto-Reed
+    2002:收盘前抬价、次日回吐;Han-Zhao-Chen-Guo 2022:沪市引入收盘集合竞价后成交从连续竞价挤进竞价段,小盘股最明显)。
+
+    - 中段成交稀、信息少(Admati-Pfleiderer 1988 的 U 形)。
+
+
+    【train 上的直接证据(本组自己的付费评估)】r2 R 组把 head +0.61 的分钟窗口切到 31–210(去掉开盘 31 根、尾盘 30 根),train
+    从 +0.61 塌到 -0.13(valid +2.15),而只改平滑或分母的四个变体 train 都还在 +0.34 ~ +0.44。也就是说这一族的信息在
+    train 上几乎全部在一天的两端;一天的哪一段在交易,本身就是信号的一部分。
+
+
+    【算子怎么实现,五族,全部无量纲,不读成交额或波动的水平】
+
+    (1) 成交发生在什么时候:day_centroid(Amt) = Σ t·|Amt_t| / Σ|Amt_t| / (T-1) ∈ [0, 1](ops_ext),成交额的时间重心;尾盘
+    30 根、开盘 31 根(含竞价那一根)的成交额占全天比例 day_sum(in_slice(Amt, a, b)) / day_sum(Amt) ∈ [0,
+    1]。都取相对自身 60 日历史的偏离或 z 分数:异常地把成交挪到尾盘 = 机构在执行,挪到开盘 = 注意力。重心的水平只以 cs_bucket_rank(·,
+    cross_mean(day_sum(Amt), 30)) 出现,即在同一流动性十分位内部比较:大盘股的收盘竞价占比天然更高,不这样做,水平就会读到规模 /
+    流动性(陷阱 3)。
+
+    (2) 分时段收益相对同段自身波动:尾盘 30 根收益、开盘后 30 根收益(1–30,不含竞价那一根,免得读到隔夜跳空)、收盘竞价那几根(238–240)的
+    10 / 20 日均值除以同段 60 日标准差(t 值形式,无量纲)—— 尾盘抬价或打压、开盘注意力冲击、收盘竞价的价格压力会不会回吐。尾盘那一个再放一份
+    cs_bucket_rank(·, 20 日总收益),按构造与反转控制正交。
+
+    (3) 时段之间的逐股关系(60 日):开盘 30 根收益与当天其余时间收益的相关、与尾盘 30 根收益的相关(Gao-Han-Li-Zhou 2018 的「首半小时预测末半小时」做到个股层面;Lou-Polk-Skouras
+    2019 的隔夜 / 盘中拉锯切到时段一级;Heston-Korajczyk-Sadka 2010 把一天切成半小时段研究截面延续),以及开盘 30 根收益对隔夜跳空的回归斜率
+    cross_regbeta(隔夜收益, 开盘 30 根收益, 60)(跳空在开盘半小时里被吃回多少;读的是方向,不是 +0.76 那样的波动比)。
+
+    (4) 价格在什么时候动:day_centroid(in_slice(Ret, 1, 240))(|分钟收益| 的时间重心,去掉竞价那一根)的 60 日 z
+    分数 —— 信息是不是异常地集中在尾盘到达。
+
+    (5) 两段的资金行为:尾盘 30 根与开盘 30 根的分钟量价相关之差(20 日均值);尾盘收益方向 × 尾盘成交占比的自身 z 分数(10 日均值)。
+
+
+    【和库里已有的不同】输入(in_slice / day_centroid 切出的时段量)库里没有;机制(日内时段的客群与撮合方式)库里没有。+0.76 /
+    +0.65 是隔夜 vs 全天盘中的波动比,+0.61 / +0.91 / +0.51 是全天的资金流倾斜,DW 族是全天的已实现方差。
+
+
+    【为什么样本外还在】时段结构由交易所规则决定 —— 开盘 / 收盘集合竞价、T+1、午休 —— 2023-08-08 之后没有改变。沪市收盘竞价的制度断点(2018-08-20)在
+    train 内部,valid(2022-01 ~ 2023-08)完全在断点之后;score 取 train 与 valid 的较差者,能过线的东西必须在两种制度下都成立。占比与重心都相对自身历史(或在流动性十分位内部),不依赖某一时期的截面水平。散户开盘、机构尾盘是
+    A 股参与者结构的长期特征(Jiang-Luo-Ye 2023 用客群解释 A 股因子溢价在隔夜与盘中的差别)。方向不写死,交给奖励。
+
+
+    【事先写明的失败模式,供复核】(i) GP 拿到 day_sum(in_slice(Amt, …)) 这个零件,可能往分段成交额的水平或幂上爬(r1 b 位就是这样离开指定的轴、长成
+    1/V⁶ 的),产出若是成交额水平 / 幂,按陷阱 3 判废;(ii) 分段收益是日收益的一部分,长平滑会读到反转,所以带符号的收益全部先除以同段自身波动,另放了按
+    20 日收益分桶的写法;(iii) 238–240 那几根在沪市 2018-08 之前是连续竞价,含它的种子在 train 前 8 个月含义不同,只放一个。'
+  inspired_by: r2 R 组 A 的切片变体:head +0.61 的分钟窗口切到 31–210 后 train +0.61 → -0.13(valid
+    +2.15),信息在一天的两端;以及库里 13 个 head 没有一个读日内时点
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: 1988-01
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 流动性交易与知情交易都集中在开盘与收盘,形成 U 形 —— 时段占比要相对自身常态看,不能读截面水平
+  - title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the
+      Open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang
+    year: 2012-08
+    url: https://ideas.repec.org/a/cup/jfinqa/v47y2012i04p715-741_00.html
+    treatment: 散户买盘集中在开盘、开盘价偏高随后回落 —— 第 (1) 族的开盘成交占比 z 分数、第 (2) 族的开盘 30 根收益
+  - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior
+      of Individual and Institutional Investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: 2008-04
+    url: https://doi.org/10.1093/rfs/hhm079
+    treatment: 个人投资者是注意力驱动的净买方 —— 开盘段异常成交占比作为注意力的度量
+  - title: 'Leaning for the Tape: Evidence of Gaming Behavior in Equity Mutual Funds'
+    authors: Mark M. Carhart, Ron Kaniel, David K. Musto, Adam V. Reed
+    year: 2002-04
+    url: https://doi.org/10.1111/1540-6261.00438
+    treatment: 收盘前抬价、次日回吐 —— 第 (2) 族的尾盘 30 根收益与收盘竞价段收益相对自身波动
+  - title: Infrequent Rebalancing, Return Autocorrelation, and Seasonality
+    authors: Vincent Bogousslavsky
+    year: 2016-12
+    url: https://doi.org/10.1111/jofi.12436
+    treatment: 机构的不频繁再平衡集中在收盘前,产生日内季节性 —— 第 (1) 族的尾盘成交占比与成交重心
+  - title: Market Intraday Momentum
+    authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+    year: '2018'
+    url: https://academicnewsletter.sufe.edu.cn/info/356150
+    treatment: 首半小时收益预测末半小时收益 —— 第 (3) 族把它做成逐股 60 日相关
+  - title: Intraday Patterns in the Cross-section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: 2010-05
+    url: https://ar5iv.arxiv.org/html/1005.3535
+    treatment: 把一天切成半小时段研究截面收益的延续 —— 本位的切分粒度
+  - title: 'A tug of war: overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://researchonline.lse.ac.uk/id/eprint/87481
+    treatment: 同一策略的利润只在某一段兑现,两段之间拉锯 —— 第 (3) 族把拉锯从隔夜 / 盘中切到开盘 / 其余时间
+  - title: 'Reexamining the impact of closing call auction on market quality: A natural
+      experiment from the Shanghai stock exchange'
+    authors: Han, Zhao, Chen, Guo
+    year: '2022'
+    url: https://orca.cardiff.ac.uk/id/eprint/151359/
+    treatment: 收盘竞价把成交从连续竞价挤进竞价段,小盘股最明显,2018-08-20 是沪市断点 —— 尾盘占比相对自身历史、收盘竞价段只放一个种子
+  - title: Factor beta, overnight and intraday expected returns in China
+    authors: Danling Jiang, Yunfeng Luo, Zhengke Ye
+    year: 2023-05
+    url: https://ideas.repec.org/a/eee/glofin/v56y2023ics1044028323000224.html
+    treatment: A 股散户偏好开盘、机构偏好尾盘的客群效应 —— 样本外论据
+  seeds:
+  - cross_mean(cross_zscore(day_centroid(Amt), 60), 5)
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 30))
+  - cross_mean(sub(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cross_mean(div(day_sum(in_slice(Amt,
+    211, 240)), day_sum(Amt)), 60)), 5)
+  - cross_mean(cross_zscore(div(day_sum(in_slice(Amt, 0, 30)), day_sum(Amt)), 60),
+    5)
+  - div(cross_mean(day_sum(in_slice(Ret, 211, 240)), 10), cross_stddev(day_sum(in_slice(Ret,
+    211, 240)), 60))
+  - div(cross_mean(day_sum(in_slice(Ret, 1, 30)), 10), cross_stddev(day_sum(in_slice(Ret,
+    1, 30)), 60))
+  - cross_corr(day_sum(in_slice(Ret, 1, 30)), day_sum(in_slice(Ret, 31, 240)), 60)
+  - cross_corr(day_sum(in_slice(Ret, 1, 30)), day_sum(in_slice(Ret, 211, 240)), 60)
+  - cross_regbeta(log(div(day_first(Open), ts_delay(day_last(Close), 1))), day_sum(in_slice(Ret,
+    1, 30)), 60)
+  - cross_mean(cross_zscore(day_centroid(in_slice(Ret, 1, 240)), 60), 5)
+  - cross_mean(sub(day_corr(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), day_corr(in_slice(Ret,
+    1, 30), in_slice(Amt, 1, 30))), 20)
+  - cross_mean(mul(sign(day_sum(in_slice(Ret, 211, 240))), cross_zscore(div(day_sum(in_slice(Amt,
+    211, 240)), day_sum(Amt)), 60)), 10)
+  - div(cross_mean(day_sum(in_slice(Ret, 238, 240)), 20), cross_stddev(day_sum(in_slice(Ret,
+    238, 240)), 60))
+  - cs_bucket_rank(div(cross_mean(day_sum(in_slice(Ret, 211, 240)), 20), cross_stddev(day_sum(in_slice(Ret,
+    211, 240)), 60)), div(day_last(Close), ts_delay(day_last(Close), 20)))
+R:
+- head: div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))),
+    10), cross_stddev(cross_stddev(log(div(day_last(Close), day_first(Open))), 60),
+    60))
+  why: 'head +0.76(隔夜收益 10 日标准差 ÷ 盘中收益 60 日标准差的 60 日标准差)有两个可疑部件,各用定位输出里的证据。
+
+    (a) 分子的 10 日窗口:定位窗口阶梯 cross_stddev@5 / 10 / 20 = +0.52 / +0.76 / +0.93,单调上升,10
+    日落在坡上而不是峰上;10 个日收益的样本标准差相对误差约 1/√(2·10) ≈ 22%,20 日约 16%,10 日窗口在给分子加噪声。变体 1 把窗口改为
+    20(定位已付费:score +0.9312,train +0.93 / valid +1.46,与原 head ρ 0.98,与已知族 -0.13),按规则走替换。变体
+    2 把窗口推到 40,是判别:阶梯继续上升 → 读到的是隔夜波动的水平(期限比),回落 → 10–20 日是真的时间尺度;它若也 ≥ 原 head + 0.1,同样走替换。
+
+    (b) 开盘价本身:r2 审计意见给过竞争解释 —— 开盘集合竞价价格里有暂时性噪声,会机械地抬高隔夜收益的波动(Roll 1984 式的非流动性,陷阱 3);Amihud-Mendelson
+    1987 也报告开盘(竞价)收益离散度更大、一阶自相关更负。变体 3 把隔夜一段的终点从 day_first(Open) 换成 09:35–09:39 五根分钟
+    VWAP 的均值 day_mean(in_slice(Vwap, 5, 9)),绕开竞价;变体 4 把盘中一段的起点也换到同一点,两段仍然拼成收盘到收盘。二者都用
+    20 日窗口,与变体 1 直接对比:保住 → 隔夜信息是真的,并换成更干净的写法;塌掉 → 这个 head 主要是竞价噪声,写进报告。四个变体都保留「隔夜波动
+    ÷ 盘中波动」这一机制,与原 head 的 ρ 预计 ≥ 0.5。'
+  variants:
+  - div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20),
+    cross_stddev(cross_stddev(log(div(day_last(Close), day_first(Open))), 60), 60))
+  - div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 40),
+    cross_stddev(cross_stddev(log(div(day_last(Close), day_first(Open))), 60), 60))
+  - div(cross_stddev(log(div(day_mean(in_slice(Vwap, 5, 9)), ts_delay(day_last(Close),
+    1))), 20), cross_stddev(cross_stddev(log(div(day_last(Close), day_first(Open))),
+    60), 60))
+  - div(cross_stddev(log(div(day_mean(in_slice(Vwap, 5, 9)), ts_delay(day_last(Close),
+    1))), 20), cross_stddev(cross_stddev(log(div(day_last(Close), day_mean(in_slice(Vwap,
+    5, 9)))), 60), 60))
+- head: div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))),
+    10), cross_stddev(log(div(day_last(Close), day_first(Open))), 60))
+  why: head +0.65 就是 head +0.76 去掉分母外层 cross_stddev(·, 60) 的版本(定位里 +0.76 的这一敲除恰好得
+    +0.6474,必要性 +0.12),两个 head 是同一个东西。它的烂部件与 +0.76 相同:分子 10 日窗口落在单调上升的阶梯中段(+0.76 的阶梯
+    5 / 10 / 20 = +0.52 / +0.76 / +0.93),10 日标准差相对误差约 22%。变体把窗口改为 20,其余不动;≥ +0.75
+    且与原 head ρ ≥ 0.5 时替换,库里这一行换成噪声更小的写法。
+  variants:
+  - div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20),
+    cross_stddev(log(div(day_last(Close), day_first(Open))), 60))
+- head: cross_mean(cross_ema(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret)),
+    10), 15)
+  why: 烂部件是中段 180 根分钟,依据是本组 r2 自己在 train 上的付费评估:把分钟窗口切成 in_slice(·, 31, 210)(只留中段)后
+    train 从 +0.61 塌到 -0.13(valid +2.15),换平滑或分母的四个变体 train 都在 +0.34 ~ +0.44 —— 中段对
+    train 分数没有贡献,反而在稀释两端。三个变体只保留一端,平滑 (10, 15) 不变,以便与原 head 直接比:变体 1 = 1–30(09:31–10:00,连续竞价的头半小时,不含竞价那一根);变体
+    2 = 0–30(再加上 09:30 开盘集合竞价那一根);变体 3 = 211–240(14:31–15:00,含收盘集合竞价)。变体 1 与 2 只差
+    index 0 那一根:若 2 明显高于 1,这个 head 在 train 上的信息来自竞价那一根(竞价成交额的大权重 × 那一根的收益),那它和隔夜一支是同一件事;若
+    3 最好,读法是尾盘的机构执行流。Ret 与 Amt 同样切片,day_wmean / day_mean / day_std 口径一致。与原 head 的
+    ρ 预计 0.5–0.7,高出 0.1 时走替换,换进来的是机制说得清的单一时段版本。
+  variants:
+  - cross_mean(cross_ema(div(sub(day_wmean(in_slice(Ret, 1, 30), in_slice(Amt, 1,
+    30)), day_mean(in_slice(Ret, 1, 30))), day_std(in_slice(Ret, 1, 30))), 10), 15)
+  - cross_mean(cross_ema(div(sub(day_wmean(in_slice(Ret, 0, 30), in_slice(Amt, 0,
+    30)), day_mean(in_slice(Ret, 0, 30))), day_std(in_slice(Ret, 0, 30))), 10), 15)
+  - cross_mean(cross_ema(div(sub(day_wmean(in_slice(Ret, 211, 240), in_slice(Amt,
+    211, 240)), day_mean(in_slice(Ret, 211, 240))), day_std(in_slice(Ret, 211, 240))),
+    10), 15)
+audit:
+  attempts: 1
+  file: audit_1.yaml

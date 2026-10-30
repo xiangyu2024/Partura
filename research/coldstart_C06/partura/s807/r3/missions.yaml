@@ -1,0 +1,192 @@
+seed: 807
+round: 3
+slots:
+  - type: N
+    hypothesis: '「风险本身有多不确定」(vol-of-vol,对风险的不确定)是一个独立于波动水平的定价量:日波动 σ 相对它自己的起伏越大的股票,后续越差(方向预期 −1)。
+      机制与文献:Baltussen 等 2018 用个股隐含波动率的月度标准差度量「对风险的不确定」,高组比低组每年跑输约 8%,独立于约 20 个波动类效应,而且在卖空约束最松的分组里最弱、不显著
+      —— 读法是高不确定的股票被高估、空头腿受限的错误定价。A 股没有个股期权,本位改用分钟数据的已实现波动 day_std(Ret)。
+      与库里已有结构的关系(这是本位要解决的核心问题):库里的 head `ts_sum(cross_stddev(day_std(Ret), 60), 1)` 是同一输入的**未去尺度**写法。乘性尺度下
+      std_60(σ) ≈ mean_60(σ) × CV_60(σ),所以它的截面秩有很大一块就是波动水平 —— r2 的相关度表里它与波动控制的日度秩 |ρ| 是 0.56,是波动的非线性函数(规则 §4 陷阱 3),
+      是 r2 R 组用一个明写波动的空对照替换进库的。r2 R 组同时直接评估过去尺度那一半:`ts_sum(div(cross_stddev(day_std(Ret), 60), cross_mean(day_std(Ret), 60)), 1)`
+      score +1.04(train 1.04 / valid 1.11),与波动控制 0.18、与已知族 0.085;同组用 day_durbin_watson(High)(方差尺度)算的变异系数是 −0.30 ——
+      信息在 σ 的**相对**起伏里,不在方差尺度的尖刺里。这是本种子到现在唯一一个去掉波动尺度后 train 与 valid 都 ≥ 1.0 的量。但 60 日 CV 与上面那个 head 同分子、同窗口,
+      日度秩 |ρ| 大概率 ≥ 0.7,会被库禁令挡掉,所以种子里**不放** 60 日水平的变异系数,改用那个 head 在构造上给不出的四种写法:
+      (1) 对数波动的冲击,即随机波动模型里的 ξ:cross_stddev(ts_delta(log(day_std(Ret)), 1), 60),稳健版 cross_mean / cross_med(abs_(ts_delta(log(day_std(Ret)), 1)), 60),
+      以及先取 5 日均值、再取 5 日对数变化的周频版 cross_stddev(ts_delta(log(cross_mean(day_std(Ret), 5)), 5), 60)。log 让它无量纲(Andersen 等 2003:对数已实现波动近似正态,
+      是做离散度的自然尺度);差分去掉 head 里占大头的慢变水平与趋势;周频版按 Barndorff-Nielsen–Shephard 2002 关于已实现方差测量误差的结果,先聚合再差分,压掉 σ̂ 自身的抽样噪声。
+      (2) 按符号拆开:cross_semistd_pos / cross_semistd_neg(day_std(Ret), 60) 是 ops_ext 里现成的原子,恰好等于「σ 的日对数变化的上 / 下半标准差」,
+      把「风险突然跳高」与「风险突然消失」分开(Bollerslev–Li–Zhao 2020 对收益做的好 / 坏半方差拆分,搬到波动本身)。
+      (3) 短窗与其他估计量的变异系数:day_std(Ret) 的 20 日 CV、日内振幅 log(day_max(High)/day_min(Low)) 的 20 日 CV、成交额加权波动 day_wstd(Ret, Amt) 的 20 日 CV,
+      以及 cs_demean(log(day_std(Ret))) 的 20 日标准差 —— 先减去当日全市场的平均对数波动,拿掉所有股票共有的波动起伏,只剩个股自己的风险不确定。
+      (4) 持续性与日内口径:cross_autocorr(log(day_std(Ret)), 60, 1) —— 恒等式 var(Δlog σ) = 2·var(log σ)·(1 − ρ₁) 说明 (1) 混合了离散度与持续性,这一条把持续性那一半单独交给 GP;
+      日内 30 分钟滚动波动 in_stddev_rolling(Ret, 30) 的当日变异系数的 20 日均值(当日内部的 vol-of-vol,当日量而不是 60 日时序量)。
+      另有两条非线性对冲:cs_bucket_rank 在 20 日波动十分位内排 20 日 CV —— 把波动水平按十分位清零(陷阱 1/3);在 30 日成交额十分位内排 Δlog σ 的离散度
+      —— 薄交易股的 σ̂ 抽样噪声大,不能让奖励把「流动性的非线性函数」当成新信息(陷阱 3)。
+      为什么和库不同:库里 24 个 head 是波动水平的凸尾(6 个,W 与 DW 的高次幂)、未去尺度的波动离散度(1 个,上面那个)、成交量离散度的回归斜率(14 个 cross_regbeta)、
+      价格 / 股本水平(3 个);没有一个是无量纲的风险不确定性,也没有一个用到 σ 的对数变化、符号拆分或自相关。没有凸变换,没有 pow_*,不用 day_durbin_watson。
+      为什么样本外还会在:(a) 机制是高不确定股票被高估 + 空头腿受限,A 股的融券约束是制度性的,不随样本期变化;纯多头十分位买的是风险稳定的股票,它们相对全体等权的超额,来自全体里那些被高估的名字;
+      (b) 去尺度之后不再吃低波动的多头腿,不靠在 train 上挑出来的凸度 —— 现成证据是 60 日 CV 的 valid 1.11 ≥ train 1.04;(c) 种子只用 5 / 20 / 60 日常规窗口,没有幂次和调过的常数。
+      先说清的风险:Δlog σ 版里有一部分是 σ̂ 的抽样噪声,它随分钟收益的峰度与薄交易变大;若 GP 往那里长,会滑向 W² 族或流动性,所以放了成交额十分位内的版本。'
+    inspired_by: 'r2 R 组的直接评估:日度波动的 60 日变异系数 +1.04 / +1.11、与波动控制 0.18,却因为替换门槛差 0.33 分被丢掉;同组明写波动的 `ts_sum(cross_stddev(day_std(Ret), 60), 1)` 替换进库,与波动控制 0.56。文献 Baltussen–van Bekkum–van der Grient 2018 的 vol-of-vol。'
+    literature:
+      - title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns'
+        authors: 'Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient'
+        year: '2018'
+        url: 'https://personal.eur.nl/vanbekkum/2018JFQA_unknown_unknowns.pdf'
+        treatment: '把波动序列自身的月度标准差(vol-of-vol)作为横截面特征,高组跑输;本位把隐含波动换成已实现波动 day_std(Ret),并按对数 / 变异系数去尺度'
+      - title: 'Modeling and Forecasting Realized Volatility'
+        authors: 'Torben G. Andersen, Tim Bollerslev, Francis X. Diebold, Paul Labys'
+        year: '2003-03'
+        url: 'https://doi.org/10.1111/1468-0262.00418'
+        treatment: '对数已实现波动近似正态、长记忆;本位用 log(day_std(Ret)) 的差分、标准差与自相关度量风险的不确定'
+      - title: 'Econometric analysis of realized volatility and its use in estimating stochastic volatility models'
+        authors: 'Ole E. Barndorff-Nielsen, Neil Shephard'
+        year: '2002'
+        url: 'https://doi.org/10.1111/1467-9868.00336'
+        treatment: '已实现方差带测量误差,随机波动模型的参数要在聚合后的已实现量上估;本位的周频版先做 5 日均值再取 5 日对数变化'
+      - title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns'
+        authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao'
+        year: '2020'
+        url: 'https://ideas.repec.org/a/cup/jfinqa/v55y2020i3p751-781_2.html'
+        treatment: '按符号把波动拆成上 / 下两半分别定价;本位用 cross_semistd_pos / neg 把 σ 的对数变化拆成上跳与下跌'
+    seeds:
+      - 'div(cross_stddev(day_std(Ret), 20), cross_mean(day_std(Ret), 20))'
+      - 'cross_stddev(ts_delta(log(day_std(Ret)), 1), 60)'
+      - 'cross_stddev(ts_delta(log(cross_mean(day_std(Ret), 5)), 5), 60)'
+      - 'cross_mean(abs_(ts_delta(log(day_std(Ret)), 1)), 60)'
+      - 'cross_med(abs_(ts_delta(log(day_std(Ret)), 1)), 60)'
+      - 'cross_semistd_pos(day_std(Ret), 60)'
+      - 'cross_semistd_neg(day_std(Ret), 60)'
+      - 'cross_semistd_pos(cross_mean(day_std(Ret), 5), 60)'
+      - 'cross_stddev(cs_demean(log(day_std(Ret))), 20)'
+      - 'cross_autocorr(log(day_std(Ret)), 60, 1)'
+      - 'div(cross_stddev(log(div(day_max(High), day_min(Low))), 20), cross_mean(log(div(day_max(High), day_min(Low))), 20))'
+      - 'div(cross_stddev(day_wstd(Ret, Amt), 20), cross_mean(day_wstd(Ret, Amt), 20))'
+      - 'cross_mean(div(day_std(in_stddev_rolling(Ret, 30)), day_mean(in_stddev_rolling(Ret, 30))), 20)'
+      - 'cs_bucket_rank(div(cross_stddev(day_std(Ret), 20), cross_mean(day_std(Ret), 20)), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_stddev(ts_delta(log(day_std(Ret)), 1), 60), cross_mean(day_sum(Amt), 30))'
+  - type: N
+    hypothesis: '交易活跃度本身的不稳定(对流动性的不确定)预测收益,方向预期 −1:日成交量 / 成交额在几十个交易日里相对它自己的均值起伏越大,后续越差。
+      文献:Chordia–Subrahmanyam–Anshuman 2001 发现成交额与换手率的**变异性**(标准差与变异系数)与预期收益显著负相关,控制规模、账面市值比、动量与成交**水平**之后仍在;
+      Pereira–Zhang 2010 对价格冲击型流动性的波动给出同号的证据,并给了一个理性解释(能择时交易的投资者从流动性的起伏里得到期权价值,所以要求的回报更低)。
+      A 股还有一条投机机制:Mei–Scheinkman–Xiong 2009 用 A / B 股溢价表明 A 股的换手主要是投机性的、在卖空受限下抬高价格;Barber–Odean 2008 表明散户的买入集中在吸引注意力的股票上
+      (异常成交、极端收益)。成交脉冲频繁的股票反复成为注意力买入的对象而被高估,融券受限又让空头腿难以套利。
+      算子实现:变异系数 div(cross_stddev(day_sum(Volume), d), cross_mean(day_sum(Volume), d)),d = 20 / 60 / 120 —— 流通股本在窗口里不变时,股数口径与换手率的变异系数恒等
+      (分子分母同除股本),成交额口径 day_sum(Amt) 对应 CSA 的美元成交额变异系数;对数口径 cross_stddev(log(day_sum(Volume)), 60);冲击口径 cross_stddev / cross_mean(abs_(ts_delta(log(day_sum(Volume)), 1)), 60);
+      按方向拆开 cross_semistd_pos / neg(day_sum(Volume), 60)(ops_ext 原子:日对数变化的上 / 下半标准差)—— 上半是「成交脉冲」(注意力),下半是「成交枯竭」;
+      脉冲与典型日之比 div(cross_max(day_sum(Volume), 20), cross_med(day_sum(Volume), 60));以及 Pereira–Zhang 口径的价格冲击型流动性 div(day_std(Ret), day_sum(Amt))
+      (每单位成交额对应的波动,Amihud 比率的日内版)的 60 日变异系数。
+      三条对冲写在种子里:(i) 在 30 日成交额十分位内、在 LogFloatCap 十分位内排变异系数(cs_bucket_rank)—— Liu 2006 的零成交度量要按换手水平调整,这里用十分位内排序非线性地去掉
+      流动性与市值的水平(陷阱 3);(ii) cs_regres 把成交量的 60 日变异系数对 σ 的 60 日变异系数取逐日截面残差 —— 混合分布假说下量与波动同受信息流驱动,两者相关,
+      这一条只留「量在大起大落而波动没有」的部分,与本轮另一个位(风险的不确定)分开。
+      为什么和库不同:库里成交量的信息只出现在 14 个 cross_regbeta head 里,用的是**当日**分钟成交量的离散度 day_std(Volume) 或尾盘 k 分钟成交量的**水平**,
+      与离散网格量 day_distinct_ratio(Volume) 做 10–15 日回归,同一骨架里方向一半 +1、一半 −1;已知族 cross_mean(day_std(Amt), 30) 也是日内离散度的水平。
+      本位第一次用**跨日**、**无量纲**的成交变异性,而且不经过回归斜率 cov/var(x) 的 1/var(x) 极点。
+      定位里那一族的拆解(cs_normalize 去掉 x 的绝对尺度,从 0.77 升到 1.09;两条腿单独都不是因子)提示它读到的一部分可能就是「x 的跨日变异性」,本位用干净的写法直接量它。
+      为什么样本外还会在:CSA 2001 是控制成交水平之后仍成立、二十多年前就发表的结果,不是在本数据上挖出来的;A 股的散户投机与融券约束是制度性的;
+      纯多头十分位买的是成交稳定的股票,超额来自全体里被注意力推高的名字;种子只用 20 / 60 / 120 日常规窗口,没有幂次、没有凸变换。
+      风险:小盘股成交更脉冲,变异系数与流动性 / 市值可能有 0.3–0.5 的负相关(所以有十分位内版本);成交脉冲常与价格大幅变动同时出现,与 20 日反转控制可能有 0.2–0.3 的相关;
+      2018-01 至 2018-02 的 120 日窗口不满,只用到预热期以来的天数(NaN 安全的滚动)。'
+    inspired_by: 'M 第 3 批的 14 个 cross_regbeta head:都拿成交量离散度的水平做回归的 x,定位拆解显示分数集中在 β = corr·σ_y/σ_x 的 1/σ_x 上、方向没有被识别;文献 Chordia–Subrahmanyam–Anshuman 2001 的交易活跃度变异性'
+    literature:
+      - title: 'Trading activity and expected stock returns'
+        authors: 'Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman'
+        year: '2001-01'
+        url: 'https://doi.org/10.1016/S0304-405X(00)00080-5'
+        treatment: '用成交额与换手率的标准差、变异系数做横截面特征,控制成交水平后仍与收益负相关;本位的 20 / 60 / 120 日变异系数与十分位内版本'
+      - title: 'Stock Returns and the Volatility of Liquidity'
+        authors: 'João Pedro Pereira, Harold H. Zhang'
+        year: '2010-08'
+        url: 'https://doi.org/10.1017/S0022109010000323'
+        treatment: '把价格冲击型流动性的波动作为定价量,收益随流动性波动上升而下降;本位的 div(day_std(Ret), day_sum(Amt)) 的 60 日变异系数'
+      - title: 'Speculative trading and stock prices: Evidence from Chinese A-B share premia'
+        authors: 'Jianping Mei, Jose A. Scheinkman, Wei Xiong'
+        year: '2009-11'
+        url: 'https://www.nber.org/papers/w11362.pdf'
+        treatment: 'A 股换手主要是投机性的,在卖空受限下抬高价格;本位的方向先验与「为什么样本外还在」'
+      - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors'
+        authors: 'Brad M. Barber, Terrance Odean'
+        year: '2008-04'
+        url: 'https://doi.org/10.1093/rfs/hhm079'
+        treatment: '用异常成交量识别吸引注意力的股票,散户在这些股票上净买入;本位的成交脉冲口径 cross_semistd_pos 与 cross_max / cross_med 之比'
+      - title: 'A Liquidity-Augmented Capital Asset Pricing Model'
+        authors: 'Weimin Liu'
+        year: '2006-12'
+        url: 'https://rpc.cfainstitute.org/-/media/documents/article/cfa-digest/2007/dig-v37-n2-4603-pdf.pdf'
+        treatment: '零成交类的不流动度量要按换手水平调整后才单独成立;本位在成交额 / 市值十分位内排序'
+    seeds:
+      - 'div(cross_stddev(day_sum(Volume), 60), cross_mean(day_sum(Volume), 60))'
+      - 'div(cross_stddev(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))'
+      - 'div(cross_stddev(day_sum(Volume), 20), cross_mean(day_sum(Volume), 20))'
+      - 'div(cross_stddev(day_sum(Volume), 120), cross_mean(day_sum(Volume), 120))'
+      - 'cross_stddev(log(day_sum(Volume)), 60)'
+      - 'cross_stddev(ts_delta(log(day_sum(Volume)), 1), 60)'
+      - 'cross_mean(abs_(ts_delta(log(day_sum(Volume)), 1)), 60)'
+      - 'cross_semistd_pos(day_sum(Volume), 60)'
+      - 'cross_semistd_neg(day_sum(Volume), 60)'
+      - 'div(cross_max(day_sum(Volume), 20), cross_med(day_sum(Volume), 60))'
+      - 'div(cross_stddev(div(day_std(Ret), day_sum(Amt)), 60), cross_mean(div(day_std(Ret), day_sum(Amt)), 60))'
+      - 'cs_bucket_rank(div(cross_stddev(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60)), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_rank(div(cross_stddev(day_sum(Volume), 60), cross_mean(day_sum(Volume), 60)), LogFloatCap)'
+      - 'cs_regres(div(cross_stddev(day_sum(Volume), 60), cross_mean(day_sum(Volume), 60)), div(cross_stddev(day_std(Ret), 60), cross_mean(day_std(Ret), 60)))'
+R:
+  - head: 'cross_regbeta(day_std(Volume), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)'
+    why: '两个部件,每个变体只动一个。(1) cross_regbeta 的 1/σ_x:common.py 的 rolling_ols 给 β = cov/var(x) = corr·σ_y/σ_x,分母只有 > EPS 的保护。
+      y 是掩码后的 robust-z,σ_y 有界;x = day_std(Volume) 的 15 日标准差 ∝ 成交量尺度,所以 |β| ∝ 1/流动性尺度,而 corr 两种符号都有 ⟹ β 的截面排序是流动性的非单调函数,
+      线性中性化去不掉(陷阱 3)。旁证:同骨架 14 个 head 方向一半 +1、一半 −1(方向没有被识别);loc 拆解里 y 腿单独是门槛废品、x 腿单独与已知族 0.57 —— 分数只出现在比值里。
+      Frazzini–Pedersen 2014 的标准做法是把 β 写成 ρ·σ_i/σ_m、两部分分开估计再收缩,不直接用未收缩的裸斜率做横截面特征。
+      变体 1 只把 cross_regbeta 换成 cross_corr:共动的信息一字不改,只拿掉 σ_y/σ_x。判据:≥ +1.30 ⟹ 换进一个没有极点的写法;< +0.5 ⟹ 这一族的分数就是尺度。
+      (2) x 用股数口径:Amt = Volume × 价格,σ(Volume) 里藏着名义价格(1/σ(Volume) ≈ 价格/σ(Amt)),与库里价格 / 股本水平的 head 同一条线。
+      loc 拆解里两腿一起换 Volume→Amt,在三个同族 head 上是 1.199→0.989、1.215→0.638(方向还翻了)、1.094→1.371,不一致说明价格项在承重;那是两腿一起换,不是单部件。
+      变体 2 只换 x 的字段,y 不动。'
+    variants:
+      - 'cross_corr(day_std(Volume), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)'
+      - 'cross_regbeta(day_std(Amt), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)'
+  - head: 'cross_regbeta(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)'
+    why: '部件:y 腿的 inv(cs_demean(·)) 是一个没有截断的极点(common.py 的 inv 就是 1/x):day_distinct_ratio 恰好贴近当日截面均值的股票,y 爆成任意大、均值两侧符号相反。
+      依据:loc 拆解里去掉 inv(+0.089)或去掉 cs_demean(+0.101)都塌,两者缺一不可 —— 分数来自 1/(d − 当日均值) 这个爆炸项;
+      而 day_distinct_ratio(in_sum_rolling(Volume, 10)) 是离散网格量(定位实测 distinct 0.032,10 分钟滚动和几乎处处不同,大多数股票饱和在 1.0),哪些股票贴着均值是网格决定的,不是经济量。
+      变体 1 只在 y 最外层加 cs_winsor(ops_ext:逐日截面截到 1% / 99%,保序,只砍掉极点的爆炸值);判据:比 head 低 ≥ 0.5 ⟹ 极点本身就是信号,这一支是构造假象。
+      变体 2 只把 cross_regbeta 换成 cross_corr(同上一组:拿掉 σ_y/σ_x,检验 x 的 1/σ_x);变体 3 只把 x 的字段换成 Amt(同上一组的名义价格论证)。'
+    variants:
+      - 'cross_regbeta(day_last(in_sum_rolling(Volume, 10)), cs_winsor(inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10))))), 10)'
+      - 'cross_corr(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)'
+      - 'cross_regbeta(day_last(in_sum_rolling(Amt, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)'
+  - head: 'cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15)'
+    why: '部件:x 腿的股数口径(只换 x 的字段,y 一字不动)。
+      先改正上一稿:上一稿两条腿一起换成 Amt,我写「与原 head 的 ρ 必然 ≥ 0.5、触发替换」,与事实不符 —— loc 的 swap 行给它 rho_head 0.074,上一稿相关度表 0.21,
+      它走的会是收录通道,不是替换;而且 y 腿 day_distinct_ratio(Volume)→day_distinct_ratio(Amt) 不是去掉价格单位(Amt 几乎处处不同,distinct 比例大多饱和在 1.0,
+      读的是零成交分钟的占比,换了一个量)。价格单位的论证只对 x 腿成立,所以那个变体删掉,改成只换 x。
+      依据 (1) 机制:分钟间价格几乎不变(日内振幅几个百分点),所以 day_std(Amt) ≈ 当日价格 × day_std(Volume)。nd_cs.py 的 cs_normalize 是逐日截面线性 z-score,
+      (x − 当日截面均值) / 当日截面标准差,这两个量对所有股票相同:它去掉的是全市场共同的成交起伏,去不掉每只股票自己的尺度。
+      记股票 i 的 day_std(Volume) ≈ L_i·u_{i,t}(L_i 是它的股数口径成交尺度,u 是相对起伏),则 15 日 σ_x ≈ L_i·σ(u)/s,common.py 的 rolling_ols 给 β = cov/var_x,|β| ∝ 1/L_i;
+      而 L_i = 成交额尺度 / 价格 P_i,所以 |β| 里乘着名义价格 P_i —— 与库里 F4(后复权价格中位数加底部搬中)、F5(ts_sum(LogFloatShares, 30),r2 定稿里中性化后约等于 −log 价格)同一条线,
+      是价格的非线性重写(陷阱 3)。x 换成 Amt 后成交尺度变成 P_i·L_i,1/σ_x 里只剩成交额尺度,价格项消失;corr(x, y) 的符号与大小基本不变(15 天里价格的变动远小于成交量本身的起伏)。
+      依据 (2) train 上的旁证:这个 head train 1.89 / valid 1.09,差 0.80;同一个 head 去掉 cs_normalize(x 回到裸股数)是 train 1.94 / valid 0.77 ——
+      x 的尺度在承重,而且承重的那部分 train 上好、valid 上差。这一条只说明「x 的尺度在承重」,不单独说明是价格那一块;本变体就是把价格那一块单独拿出来量。
+      单部件:双层掩码(外层必要性 +0.05,R5 组判同类掩码)与 1/σ_x(R1 组用 cross_corr 判)都不动,只换 x 的字段。
+      与原 head 的 |ρ|:预期 0.80–0.92。依据:同族 R1 组变体 2 做的是同一个只换 x 字段的改动(那个 head 没有 cs_normalize),本轮相关度表给它与原 head 0.90;
+      β 的符号不变,只是 |β| 的截面排序按 P_i 重新洗了一遍。上一稿的 0.07 / 0.21 来自 y 腿,不来自 x 腿。
+      事先说定:若新相关度表给出它与原 head 的 |ρ| < 0.5,本组的前提(走替换、不走收录)就不成立,请直接删掉本组。
+      判据:≥ +1.194(与原 head ≥ 0.5、与已知族 < 0.5)⟹ 替换原 head,库里 head 个数不变,去掉 x 里的价格;≤ +0.79(比 head 低 ≥ 0.3)⟹ 这个 head 至少 0.3 的分数来自 x 里的价格项,
+      下一轮把同族的股数口径 x 一并当烂部件处理;介于两者之间 ⟹ 库不动,只作诊断。
+      赢了库会不会变坏:不会多出 head;新 head 的 x 用的是成交额,与已知族同字段,与已知族 |ρ| < 0.5 由规则把关(R1 组变体 2 是 0.30)。'
+    variants:
+      - 'cross_regbeta(cs_normalize(day_std(Amt)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15)'
+  - head: 'ts_sum(cross_stddev(day_std(Ret), 60), 1)'
+    why: '部件:cross_stddev 的输入没有去尺度。依据:乘性尺度下 std_60(σ) ≈ mean_60(σ)·CV_60(σ),这个 head 与波动控制的日度秩 |ρ| 是 0.56(r2 相关度表),即波动水平的非线性函数(陷阱 3);
+      它是 r2 R 组用明写波动的空对照替换进库的。同组直接评估过的去尺度版(60 日变异系数)+1.04 / +1.11、与波动控制 0.18。cross_stddev 这个算子本身不烂(loc 拆解必要性 +3.82,不动),
+      外层 ts_sum(·, 1) 是恒等(loc:子树与 head 的 score / train / valid 完全相同),也不动。
+      变体 1 只在输入上加 log:d log σ ≈ dσ/σ,对数空间的标准差近似变异系数,但不是 head 的单调函数;
+      变体 2 再减去当日截面均值 cs_demean(log σ),拿掉全市场共同的波动起伏,只剩个股自己的风险不确定。
+      判据:≥ +1.367 ⟹ 去尺度的版本替换(ρ ≥ 0.5)或收录进库;预期 +0.9 ~ +1.2、不触发,作为本轮 a 位的对照。'
+    variants:
+      - 'ts_sum(cross_stddev(log(day_std(Ret)), 60), 1)'
+      - 'ts_sum(cross_stddev(cs_demean(log(day_std(Ret))), 60), 1)'
+  - head: 'cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile(Open)))'
+    why: '部件:两层 cs_mask_top_replace_mean_neg。依据:nd_cs.py 里它把每日截面最低 10% 换成当日有效值的均值,不是单调变换 —— 最便宜的那 10% 被搬到分布中间,
+      再由中性化里的 LogFloatCap 控制把它们推回多头腿;day_quantile(Open) 默认 q = 0.5,即当日分钟开盘价的中位数 = (后复权)价格水平。
+      本组 r2 b 位的产出里单层 +0.44、双层 +0.93、三层 +0.70(定位 heads 表与 r2 b 位最好的 5 个),保序的极值处理不会有这种阶梯。
+      变体是去掉两层掩码的裸价格水平:< +0.5 ⟹ 这两个 head 的分数来自掩码的非单调搬移,即价格 / 市值的非线性重写(陷阱 3)。只花 1 次评估,预期不触发替换。'
+    variants:
+      - 'day_quantile(Open)'
