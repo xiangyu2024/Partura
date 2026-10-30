@@ -41,6 +41,7 @@ import c05_lib  # noqa: E402
 
 argv = sys.argv[1:]
 DRY = "--dry-run" in argv
+NO_CAL = "--no-calibration" in argv                     # a dry run may skip it (C06 PLAN revision 4)
 os.environ.setdefault("PARTURA_REPROMOTE", "1")                # PLAN revision 7
 GPU = float(argv[argv.index("--gpu-fraction") + 1]) if "--gpu-fraction" in argv else 0.4
 D5, D, EP = PARTURA_ROOT / "research" / "coldstart_C05", PARTURA_ROOT / "research" / "coldstart_C06", PARTURA_ROOT / "episodes"
@@ -114,7 +115,7 @@ for S in SEEDS:
 for S in SEEDS:
     GPUSEC["M"] = GPUSEC.get("M", 0.0) + sum(c05_lib.evidence(EP / f"c05s{S}M{e}_I0_open_search")["arms"]["control"]["seconds"] for e in range(1, 5))
 uniq = sorted({h["expr"] for v in LIB.values() for h in v})
-CAL = json.loads((D / "calib.json").read_text(encoding="utf-8")) if (D / "calib.json").is_file() else []
+CAL = [c for c in (json.loads((D / "calib.json").read_text(encoding="utf-8")) if (D / "calib.json").is_file() else []) if c["seed"] in SEEDS]
 cal_exprs = sorted({c["expr"] for c in CAL} - set(uniq))
 print(f"[c06] libraries: {', '.join(f'{X} {sum(len(LIB[(S, X)]) for S in SEEDS)}' for X in ('M',) + XS)}; {len(uniq)} distinct expressions; "
       f"evaluations {EVALS}; calibration {len(CAL)} rows ({len(cal_exprs)} more expressions)", flush=True)
@@ -216,30 +217,6 @@ with slot():
         out["libraries"].setdefault(str(S), {})[X] = [{k: h.get(k) for k in ("expr", "role", "mission", "round", "score", "train", "valid", "sign", "hl", "replaced", "reproduces")} for h in kept]
     print(f"[c06] reproduce: {sum(h['reproduces'] for v in KEPT.values() for h in v)}/{sum(len(v) for v in KEPT.values())}", flush=True)
 
-    # the auditor's calibration (C06 PLAN §3): every accepted / rejected seed expression read as a factor of its own; direction and
-    # half-life chosen in sample (the best min(train, valid) of the residual long book over sign +-1 and half-life 0 / 5 / 20)
-    calib = []
-    for i in range(0, len(cal_exprs), 16):
-        chunk = cal_exprs[i:i + 16]
-        P = ps.compute({f"q{j}": e for j, e in enumerate(chunk)})
-        for j, e in enumerate(chunk):
-            if f"q{j}" not in P:
-                continue
-            raw = np.asarray(P[f"q{j}"], np.float64)
-            best = None
-            for hl in (0.0, 5.0, 20.0):
-                base = steer.neutral_residual(bk.smoothed(raw, hl), QF)          # the residual is linear: the sign only flips it
-                for sg in (1.0, -1.0):
-                    sm = sg * base
-                    tr_, va_ = book(sm, tr)["long_sharpe"], book(sm, va)["long_sharpe"]
-                    if best is None or min(tr_, va_) > best[0]:
-                        best = (min(tr_, va_), sg, hl, tr_, va_, sm)
-            row = {"expr": e, "insample": best[0], "sign": best[1], "hl": best[2], "train": best[3], "valid": best[4]}
-            if not DRY:
-                row.update(test=book(best[5], ho)["long_sharpe"], forward=book(best[5], fw)["long_sharpe"])
-            calib.append(row)
-        print(f"[c06] calibration {min(i + 16, len(cal_exprs))}/{len(cal_exprs)} ({time.time() - t0:.0f}s)", flush=True)
-    cal_by = {r["expr"]: r for r in calib}
 
     if not DRY:
         n = len({h["expr"] for v in KEPT.values() for h in v})
@@ -278,6 +255,47 @@ with slot():
                                      "mean_test_sharpe": float(np.mean([h["test_sharpe"] for h in v if h["role"] == role])) if any(h["role"] == role for h in v) else None}
                               for role in sorted({h["role"] for h in v})} for X, v in heads.items()}
         print(f"PRIMARY: median C-A {p['median']:+.2f}, p(C better) {p['p_better']:.3f}, p(C worse) {p['p_worse']:.3f} -> {out['verdict_primary']}", flush=True)
+    out["seconds"] = time.time() - t0                # written now, so that the calibration below cannot cost the primary read
+    (D / ("final_dry.json" if DRY else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    if NO_CAL:
+        cal_exprs = []
+    # the auditor's calibration (C06 PLAN §3): every accepted / rejected seed expression read as a factor of its own, its direction and
+    # half-life chosen by the reward in sample -- the miners' own long_neutral reward (direction and half-life on train, score = the
+    # worse of train and valid), with the same tradability screen and the same five controls; then its residual book on test / forward
+    if cal_exprs:
+        from partura.steer import RewardContext
+        from partura.steer import reward as steer_reward
+        pool_spec = G.spec["pool"][-1]
+        ra = ps.compute({"frozen": "cross_max(day_zero_ratio(Ret), 15)", "age": "cross_valid_count(day_last(Close), 241)", "pool": pool_spec["expr"]})
+        frozen = np.asarray(ra["frozen"], np.float64)
+        possible = np.minimum(241, np.arange(1, len(dates) + 1))[:, None]
+        untradable = ((dg._zrank(frozen) + 0.5) > 0.8) | (np.asarray(ra["age"], np.float64) < 0.9 * possible) | ~np.isfinite(frozen)
+        pool_sig = dg._zrank(bk.smoothed(float(pool_spec["sign"]) * np.asarray(ra["pool"], np.float64), float(pool_spec["hl"])))
+        ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=pool_sig,
+                            halflives=(0.0, 5.0, 20.0))
+        ctx.neutral_Q = QF
+        labelled = np.isfinite(tgt[:va.stop])
+    calib = []
+    for i in range(0, len(cal_exprs), 16):
+        chunk = cal_exprs[i:i + 16]
+        P = ps.compute({f"q{j}": e for j, e in enumerate(chunk)})
+        for j, e in enumerate(chunk):
+            if f"q{j}" not in P:
+                calib.append({"expr": e, "error": "did not compute"})
+                continue
+            raw = np.asarray(P[f"q{j}"], np.float64)
+            cov, dis = float(np.isfinite(raw[:va.stop][labelled]).mean()), dg.distinct_fraction(raw[:va.stop])
+            row = {"expr": e, "gate": bool(cov >= 0.9 and dis >= 0.5)}
+            if row["gate"]:
+                rw = steer_reward(raw, ctx, "long_neutral")
+                row.update(score=float(rw["score"]), sign=float(rw["sign"]), hl=float(rw["hl"]),
+                           train=float(rw["train"]["long_sharpe"]), valid=float(rw["valid"]["long_sharpe"]))
+                if not DRY and np.isfinite(row["score"]):
+                    sm = steer.neutral_residual(row["sign"] * bk.smoothed(raw, row["hl"]), QF)
+                    row.update(test=book(sm, ho)["long_sharpe"], forward=book(sm, fw)["long_sharpe"])
+            calib.append(row)
+        print(f"[c06] calibration {min(i + 16, len(cal_exprs))}/{len(cal_exprs)} ({time.time() - t0:.0f}s)", flush=True)
+    cal_by = {r["expr"]: r for r in calib}
     out["calibration"] = [{**c, **{k: v for k, v in cal_by.get(c["expr"], {}).items() if k != "expr"}} for c in CAL]
     mem.stop()
 
