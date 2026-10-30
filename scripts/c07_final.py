@@ -48,7 +48,11 @@ T_LINE, RHO_KNOWN, RHO_HEAD, RHO_ANTI = 2.0, 0.5, 0.7, -0.5
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
-if not DRY and Ledger(LEDGER).summary().get("holdout"):
+DEV = argv[argv.index("--dev") + 1] if "--dev" in argv else None   # PLAN revision 1: the test period as a development set -- a library
+# from research/coldstart_C07/<DEV>/s<seed>_train.yaml stands in for V_tr; nothing is ledgered, the official verdict is untouched
+if DEV and DRY:
+    raise SystemExit("--dev reads the test period as a development set; it does not combine with --dry-run")
+if not DRY and not DEV and Ledger(LEDGER).summary().get("holdout"):
     raise SystemExit(f"the test period of C07 has already been read ({LEDGER}); this read happens once")
 
 
@@ -69,7 +73,7 @@ for S in SEEDS:
             cand.append({**h, "role": "M" if "M" in h["src"].split("_")[0][-2:] else "A"})
     LIB[(S, "A")] = cand
     for X, v in (("Vtr", "train"), ("Vall", "all")):
-        f = D / "verify" / f"s{S}_{v}.yaml"
+        f = D / (DEV if (DEV and X == "Vtr") else "verify") / f"s{S}_{v}.yaml"
         dec = {int(d["id"]): bool(d["keep"]) for d in (yaml.safe_load(f.read_text(encoding="utf-8")) or {}).get("decisions", [])} if f.is_file() else None
         if dec is None or set(dec) != set(range(1, len(cand) + 1)):
             if not DRY:
@@ -181,8 +185,9 @@ with slot():
 
     if not DRY:
         n = len({h["expr"] for v in KEPT.values() for h in v})
-        Ledger(LEDGER).record("holdout", n, "C07 libraries of M, A, V_tr, V_all: test period 20230808..20251231, by PLAN.md §3", "c07_final")
-        Ledger(LEDGER).record("forward", n, f"C07 libraries: forward column 20260101..{END} (reported, not judged)", "c07_final")
+        if not DEV:
+            Ledger(LEDGER).record("holdout", n, "C07 libraries of M, A, V_tr, V_all: test period 20230808..20251231, by PLAN.md §3", "c07_final")
+            Ledger(LEDGER).record("forward", n, f"C07 libraries: forward column 20260101..{END} (reported, not judged)", "c07_final")
         from scipy.stats import wilcoxon
 
         def compare(x, y, sl="test"):
@@ -212,9 +217,9 @@ with slot():
     mem.stop()
 
 out["seconds"] = time.time() - t0
-(D / ("final_dry.json" if DRY else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+(D / ("final_dry.json" if DRY else f"final_dev_{DEV}.json" if DEV else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 for S in SEEDS:
     r = out["per_seed"][str(S)]
     print(f"  s{S}: " + "  ".join(f"{X} {r[X]['heads']}h tr {r[X]['train']['long_sharpe']:+.2f} va {r[X]['valid']['long_sharpe']:+.2f}"
                                     + ("" if DRY else f" te {r[X]['test']['long_sharpe']:+.2f}") for X in ("M",) + XS))
-print(f"wrote {D / ('final_dry.json' if DRY else 'final.json')} ({out['seconds']:.0f}s)")
+print(f"wrote {D / ('final_dry.json' if DRY else f'final_dev_{DEV}.json' if DEV else 'final.json')} ({out['seconds']:.0f}s)")
