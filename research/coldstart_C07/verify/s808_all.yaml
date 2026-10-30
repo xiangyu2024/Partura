@@ -1,0 +1,114 @@
+seed: 808
+variant: all
+decisions:
+  - id: 1
+    keep: false
+    reason: '三层 ts_max 50 取约 148 天内个股超额(cs_demean)成交量加权分钟收益标准差 day_wstd(Ret, Volume) 的最大值,是波动的复杂函数(陷阱 2,波动 |ρ|=0.39、市值 0.49),且与 #4/#3/#2 的 |ρ| 为 0.81/0.76/0.73,同簇只留 #2,去掉。'
+  - id: 2
+    keep: true
+    reason: '两层 ts_max 50 取约 99 天内成交量加权分钟收益 day_wmean(Ret, Volume) 的最大值,即带量单日暴涨的 MAX/彩票偏好效应,方向 -1 回避彩票股,机制成立;与 #1/#3/#4 同簇(|ρ| 0.72–0.73),但那三条是波动峰值的换皮而本条是一阶矩极值,作为该簇唯一代表留下。'
+  - id: 3
+    keep: false
+    reason: 'ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 50) 是 59 天内超额日内波动的最大值,与 #1 同一构造只换窗口(与 #4/#1 |ρ| 0.79/0.76),且波动 |ρ|=0.50 为本簇最高,属波动换皮(陷阱 2),去掉。'
+  - id: 4
+    keep: false
+    reason: 'day_wstd(Ret, Ret) 是按 |Ret| 加权的分钟收益标准差,经 cs_normalize 后取约 99 天最大值,仍是日内波动峰值(陷阱 2,波动 0.42、市值 0.45),与 #1 |ρ|=0.81 为换写法,去掉。'
+  - id: 5
+    keep: false
+    reason: 'cross_autocorr_s1 套 cross_autocorr_s1、再两轮 ts_max 与 cs_last_high05、最后 cross_sum 60,是自相关的自相关的累加,读不出度量对象;且 day_distinct_ratio(Ret) 取值 k/n 大量并列,cs_last_high05 的序数排名按股票列序断开并列(陷阱 1),数字游戏,去掉。'
+  - id: 6
+    keep: false
+    reason: '分钟开盘价的 day_durbin_watson(分母是价位平方和,实为日内已实现方差)对 day_last(Amt) 的 30 日回归斜率再除以 day_last(Amt) 两次,量级由 1/Amt^3 主导,是符号乘非流动性(流动性 0.42、已知族 0.39,陷阱 2);且与 #7 |ρ|=0.89 却方向相反(+1 对 -1),同一信号两头押注,是拟合噪声,去掉。'
+  - id: 7
+    keep: false
+    reason: '与 #6 同一 ts_regbeta(day_last(Amt), day_durbin_watson(Open), 30) 构造,只把除数换成 day_median(Volume) 的平方,|ρ|=0.89 却取相反方向 -1,是流动性缩放的波动回归斜率(流动性 0.39、市值 0.43),无机制,去掉。'
+  - id: 8
+    keep: false
+    reason: 'cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, Open), 60) 是日均价(后复权价位)对「分钟开盘价与分钟收益的协方差」的 60 日回归斜率,斜率量级约为该协方差时间方差的倒数(波动分母),符号无经济含义,读不出在度量什么,去掉。'
+  - id: 9
+    keep: false
+    reason: '对 LogFloatShares 连用三次 cs_last_high40,按 day_q_stat_std(Amt) 及其自身中间结果做字典序筛选,多头最终落在「低 Q 组里流通股本居中偏下(组内约 33–50 分位)」这一任意带状切片,是股本(陷阱 2)的筛选游戏,去掉。'
+  - id: 10
+    keep: false
+    reason: '先算 15 日 t 值(day_cov(cross_madz(Low, 5), Amt) 对 pow_2_5(day_last(Amt))),取 40 日 q25,再对同一回归元求 241 日 t 值,t 值的 t 值没有可读含义;与 #11 只差外层窗口却 |ρ| 仅 0.24,说明是噪声,去掉。'
+  - id: 11
+    keep: false
+    reason: '与 #10 完全相同的「t 值的 t 值」嵌套,只把外层窗口 241 换成 60,|ρ|=0.24 表明结果随窗口乱变,无机制,去掉。'
+  - id: 12
+    keep: false
+    reason: 'in_reg_fvalue(Ret, Amt, 3) 是 3 分钟窗口(残差自由度 1)的 F 值,几乎是纯噪声;add(Ret, Open) 把收益率加到后复权价位上量纲不通(实际就是 Open 价位);再取 q25 对尾盘成交额^2.5 求 t 值,数字游戏,去掉。'
+  - id: 13
+    keep: false
+    reason: '241 日 t 值 → ts_max 40 → q25 40 → 再对同一 pow_2_5(day_last(Amt)) 求 241 日 t 值,t 值的 t 值无含义;与 #17 |ρ|=0.67、#23 0.55、#22 0.53,是同一模板的变体,去掉。'
+  - id: 14
+    keep: false
+    reason: 'cross_reg_tvalue 连套三层并夹 ts_max/ts_quantile_q25,同一回归元 pow_2_5(day_last(Amt)) 反复出现,是 #13/#22 模板的再嵌套,读不出度量对象,去掉。'
+  - id: 15
+    keep: false
+    reason: 'ts_max(·, 1) 是空操作,本体是 day_cov(cross_madz(Low, 5), Amt)(量级随成交额缩放)对尾盘成交额^2.5 的 241 日 t 值,主要反映成交额对成交额的共动(流动性 0.28,陷阱 2),且与保留的 #25 共用 cross_madz(Low, 5) 成分(|ρ| 0.31),去掉。'
+  - id: 16
+    keep: false
+    reason: 'day_cov(Close, Ret) 约等于价位×(日内方差/2 + 尾盘走强项),混入后复权价位,其 50 日 q25 对尾盘成交额^2.5 的 t 值再取 40 日最大;与 #26 |ρ|=0.67,是同一「波动–尾盘成交共动」的较脏写法,留 #26,去掉本条。'
+  - id: 17
+    keep: false
+    reason: '与 #13 同模板(内层 241 日 t 值 → 双层 ts_max 40 → q25 40 → 外层 t 值),|ρ|=0.67,t 值的 t 值无机制,去掉。'
+  - id: 18
+    keep: false
+    reason: 'Y 是 day_mean(cross_madz(Amt, 5))(分钟成交额相对近 5 日同分钟的异常度)的 40 日 q25,再对尾盘成交额^2.5 求 t 值,是成交额对成交额的机械共动,只是流动性动态的复杂函数(陷阱 2),去掉。'
+  - id: 19
+    keep: true
+    reason: '度量过去 241 日里个股价位(day_mean(pow_1_5(High)) 的 40 日 q25,t 值对复权缩放不变)与尾盘集合竞价成交额^2.5 的共动 t 值,方向 -1 买入「放量时价格偏低而非放量追涨」的股票,属 A 股已知的量价相关(CPV)机制;对五个控制 |ρ| 都不超过 0.10、与其他 head 最高 0.24,不重复,留下(同族共性注意:float32 下 pow_2_5 对尾盘成交额很大的股票可能溢出使 t 值恒为 0)。'
+  - id: 20
+    keep: false
+    reason: 'Y 是尾盘成交额自身的包络(ts_max(day_last(Amt), 40) 的 40 日 q25),再对同一尾盘成交额^2.5 求 t 值,是回归元对自身平滑值的回归,只度量尾盘成交额的持续性,属流动性的复杂函数(陷阱 2),去掉。'
+  - id: 21
+    keep: false
+    reason: '把一个 241 日滚动 t 值(逐日几乎不变)再对同一 pow_2_5(day_last(Amt)) 求 241 日 t 值,度量的是慢漂移与尾盘放量的巧合,t 值的 t 值无机制,去掉。'
+  - id: 22
+    keep: false
+    reason: '#13 模板再加一层 ts_quantile_q25 与外层 ts_max 40,t 值的 t 值;与 #23/#13 |ρ| 0.53、#17 0.48,同模板变体,去掉。'
+  - id: 23
+    keep: false
+    reason: '内层 241 日 t 值 → ts_max 10 → q25 40 → 外层 t 值 → ts_max 40,与 #27 |ρ|=0.67、#13 0.55,t 值的 t 值无机制,去掉。'
+  - id: 24
+    keep: false
+    reason: '内层是 day_cov(cross_madz(Low, 5), Low)(稳健 z 与后复权价位的协方差)对尾盘成交额^2.5 的 241 日 t 值,外层再对同一回归元求 t 值并取 ts_max 40,t 值的 t 值且内层混入价位口径,无机制,去掉。'
+  - id: 25
+    keep: true
+    reason: '度量过去 241 日里个股近 5 日相对价位(day_mean(cross_madz(Low, 5)),逐分钟对近 5 日同一分钟的稳健 z,对复权缩放不变)的 40 日 q25 与尾盘成交额^2.5 的共动 t 值,方向 -1 买入「放量出现在走弱时」的股票,是短周期的量价相关机制,与 #19 不同周期(|ρ| 不超过 0.17);流动性/已知族 |ρ| 0.44 偏高但不是换皮,与其他 head 最高 0.39(#29,已去),留下。'
+  - id: 26
+    keep: true
+    reason: '度量过去 241 日里日内已实现方差 day_cov(Ret, Ret) 的 40 日 q25 与尾盘成交额^2.5 的共动 t 值(再取 40 日最大),方向 -1 买入「尾盘放量时波动不放大」的股票,即量–波共动弱、非投机性成交;它是 #16/#28/#31/#33 一簇(与本条 |ρ| 0.67/0.54/0.36)中唯一不混入价位的干净写法,作为该簇代表留下。'
+  - id: 27
+    keep: false
+    reason: '与 #23 同模板(内层 t 值 → ts_max 30 → 外层 t 值 → ts_max 40),|ρ|=0.67,t 值的 t 值无机制,去掉。'
+  - id: 28
+    keep: false
+    reason: 'ts_sum(day_cov(Close, Ret), 40) 对尾盘成交额^2.5 的 t 值取 40 日最大,只是 #16 把 q25 换成 ts_sum 的写法,混入价位,与 #26/#16 |ρ| 0.54/0.51,去掉。'
+  - id: 29
+    keep: false
+    reason: 'day_cov(cross_madz(Close, 5), Low) 是稳健 z 与后复权最低价价位的日内协方差,量纲随价位走、读不出含义,再对尾盘成交额^2.5 求 t 值取 ts_max 40;与 #28/#25 |ρ| 0.40/0.39 部分重复,去掉。'
+  - id: 30
+    keep: false
+    reason: '以 day_cov(cross_madz(Low, 5), Amt) 为回归元、ts_std(day_mean(pow_1_5(High)), 40)(价位^1.5 的 40 日标准差)为因变量求 241 日 t 值,两边都是随价位或成交额缩放的混合量,读不出在度量什么,去掉。'
+  - id: 31
+    keep: false
+    reason: '回归元 pow_2_5(day_cov(Amt, Vwap)) 在成交额与分钟均价协方差为负的日子是 NaN(负数的 2.5 次方),回归只在被任意筛出的日子上做,且协方差随后复权价位缩放;因变量与 #16 相同(|ρ| 0.39),外套两层 ts_max,数字游戏,去掉。'
+  - id: 32
+    keep: false
+    reason: 'Y 是 day_cov(Amt, Ret) 的 40 日 q25,协方差量级随成交额放大,其下四分位在放量期机械变负,对尾盘成交额^2.5 的 t 值主要是成交额对成交额的共动(陷阱 2),train 1.09 到 valid 0.67 也在衰减,去掉。'
+  - id: 33
+    keep: false
+    reason: 'q25 → ts_max → q25 三层平滑同一个 day_cov(Close, Ret) 再对尾盘成交额^2.5 求 t 值,只是 #16 的冗余平滑写法(混入价位),train 1.49 到 valid 0.66 落差大,去掉。'
+  - id: 34
+    keep: false
+    reason: '内层 cross_reg_tvalue(pow_2_5(day_last(Amt)), day_cov(Close, Ret), 241) → ts_max 40 → q25 40 → 外层 t 值 → ts_max 40,t 值的 t 值;与 #22/#27 |ρ| 0.38,同模板变体,去掉。'
+  - id: 35
+    keep: false
+    reason: 'day_at_min_ratio(Vwap) 对连续交易的股票几乎都等于 1/n,形成巨大并列块,cs_last_low20 内部的序数排名把并列按股票列序断开(陷阱 1),再用 cross_autocorr_s1(day_wstd(Low, Vwap), 241) 筛选、cross_tail_mean_q25 平滑,本质是成交连续性/流动性(流动性 0.39,陷阱 2)加列序斜坡,去掉。'
+  - id: 36
+    keep: false
+    reason: '对同一个 day_at_min_ratio(Vwap) 及其 241 日自相关嵌套两次 cs_last_low20,并列块按列序排名(陷阱 1),主要反映成交是否连续即流动性(流动性与已知族 0.42),与 #37 |ρ| 0.48,去掉。'
+  - id: 37
+    keep: false
+    reason: '同 #35/#36 的 day_at_min_ratio(Vwap) 序数排名筛选模板,筛选变量换成 cross_semistd_pos(day_wstd(Low, Low), 241)(价位离散度的上行半方差,随价位缩放),列序斜坡(陷阱 1)加流动性(0.47,本库最高,陷阱 2),去掉。'

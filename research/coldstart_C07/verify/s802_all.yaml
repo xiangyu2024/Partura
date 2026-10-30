@@ -1,0 +1,39 @@
+seed: 802
+variant: all
+decisions:
+  - id: 1
+    keep: false
+    reason: 'day_mean(in_delta(Volume, 30)) 逐项相消后等于尾盘 30 根与开盘 30 根(含 09:30 竞价)原始成交股数之差,机制与 #2 同为成交量在日内的时间位置,但没有归一化、量级由成交股数主导(与流动性 0.41、已知族 0.43、与 #2 0.59),是 #2 无量纲写法加上一层流动性尺度的重复,去掉。'
+  - id: 2
+    keep: true
+    reason: '主体是 cs_first_high40 把 day_centroid(Volume) 前 40%(成交重心偏尾盘)的股票整体抬高一档,方向 -1 即只在成交偏早的股票里做多,组内按一年期 25% 分位重心是否刚创 20 日新低(ts_argmin)排序,与主信号同向;三层 signedpower 在正值上是单调变换、不改排名;与五个控制 |ρ| 都不超过 0.18,作为日内成交时点这一族的代表留下。'
+  - id: 3
+    keep: false
+    reason: '分段变量是 #2 整个表达式的 241 日 25% 分位(同一个成交重心信号换成一年持续度),组内排序 ts_argmin(cross_quantile_q25(cross_quantile_q25(...,241),241),20) 是分位数套分位数再取 20 日最小值位置,读不出机制,且这种慢阶梯序列取 argmin 后大量并列、名次由列序决定(陷阱 1);与 #2 只有 0.20 是窗口不同所致,不是新机制,去掉。'
+  - id: 4
+    keep: false
+    reason: '分段仍是 day_centroid(Volume) 前 40%,与 #2 族相同(与 #6 0.73、#7/#5 0.72);组内排序是对 cs_stddev_full(cross_mean(day_min(High),30)) 这个截面上处处相同的市场标量做 5 日 ts_reg_fvalue,再套 cross_quantile_q25 与 ts_argmin,还用了后复权价位 day_min(High),属数字游戏,去掉。'
+  - id: 5
+    keep: false
+    reason: '分段同样是 day_centroid(Volume) 前 40%,组内排序只是把 #2 的内层换成 cs_first_high40(ts_argmin(day_centroid(Volume),20), day_centroid(Volume)) 再取 241 日分位与 20 日 argmin,与 #7 0.83、#2 0.81,是 #2 的换写法,去掉。'
+  - id: 6
+    keep: false
+    reason: '同一个 cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(...),241),20), day_centroid(Volume)) 模块自我嵌套五六层,最外层分段仍等于 day_centroid(Volume) 前 40%,与 #2 0.80,嵌套没有新含义,是 #2 的重复,去掉。'
+  - id: 7
+    keep: false
+    reason: '与 #5 只差内层 cross_quantile_q25 的窗口 241 换成 10,分段仍是 day_centroid(Volume) 前 40%,与 #5 0.83、#2 0.82,是 #2 的换写法,去掉。'
+  - id: 8
+    keep: false
+    reason: '在 #2 的组内排序外再套一层 ts_argmin(·,20)(最小值位置序列的最小值位置,无含义),分段相同,与 #2 0.84,是 #2 的重复,去掉。'
+  - id: 9
+    keep: false
+    reason: '分段仍是 day_centroid(Volume) 前 40%(与 #8/#5/#2 0.73);组内排序是 day_hurst(Close)、后复权价位 day_max(High)、day_topw_mean(Ret, High) 与 LimitWidth 分段拼成的 cs_regres 截面残差再取 20 日 ts_argmin,读不出机制且依赖后复权价位(陷阱 3),去掉。'
+  - id: 10
+    keep: false
+    reason: '整条只是 day_last(Close) 与 day_quantile_q25(High) 的截面排名用 cs_first_low20 互相分段,两者都是后复权价位(陷阱 3),截面上不代表真实价格,读不出机制;train 0.61 与 valid 2.79 差距过大也不像稳定机制,去掉。'
+  - id: 11
+    keep: false
+    reason: '只由 LimitWidth 与 LogTotalCap 组成:rank(LimitWidth) 只有几档,并列由股票列序打破(陷阱 1 列序斜坡),cs_last_low05(·, LogTotalCap) 在方向 -1 下把总市值最小 5% 送进多头(市值换皮,与市值、流动性各 0.38),去掉。'
+  - id: 12
+    keep: false
+    reason: 'ts_rank(neg(day_first(Open)),30) 是 09:30 竞价开盘价在 30 日内的位置(近于反转控制,0.34),外面全是 LogTotalCap 分段与 ts_sum,cs_last_low05(·, LogTotalCap) 在方向 -1 下把总市值最小 5% 送进多头(与市值 0.47),是反转加市值的换皮,去掉。'

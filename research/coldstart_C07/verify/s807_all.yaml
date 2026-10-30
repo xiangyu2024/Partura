@@ -1,0 +1,21 @@
+seed: 807
+variant: all
+decisions:
+  - id: 1
+    keep: false
+    reason: '去掉(b):回归的因变量是 cs_rank(pow_05(ts_regbeta(...,cs_mean(day_median(Close)),5))),即把截面不变的后复权收盘价均值(价位无意义,陷阱3)对 ts_var(LogFloatCap,20) 加常数 cs_median(day_pos_ratio(Open))(Open>0 恒为1)做 5 日回归再开方取排名,读不出在度量什么,外层再对 q75 成交量做 241 日 beta,是数字游戏。'
+  - id: 2
+    keep: true
+    reason: '留下:核心是 cross_regbeta(day_quantile_q75(Volume), ts_var(LogFloatCap,30), 30),即个股近 30 日的市值波动随成交量放大的弹性(量-波耦合);加的 cs_median(day_pos_ratio(Open)) 恒为常数、按 LimitWidth 分桶去均值只扣掉板块均值,都不改变主体;与控制 |ρ|≤0.13、与 #1/#4/#5/#6 |ρ|≤0.07,不是换皮;与 #3 同骨架(0.63),两者只留这一个(半衰期 20 换手更低,valid +1.32 也更稳)。'
+  - id: 3
+    keep: false
+    reason: '去掉(a):与 #2 同一骨架 cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(add(常数, ts_var(LogFloatCap,·)), LimitWidth), 30),只把窗口 30 换成 20、常数换成 cs_median(ts_var(LogFloatCap,50))(分桶去均值后被消掉),|ρ|=0.63 (#2),是 #2 的换个写法。'
+  - id: 4
+    keep: false
+    reason: '去掉(b):day_zero_ratio(Open) 是价格恰为 0 的分钟占比,后复权价恒为正,截面上几乎处处为 0,经 cs_last_low05 的序数排名变成按列序的静态斜坡(陷阱1);唯一实质内容是把 LogTotalCap 最低 5% 推到底部,方向 -1 即做多最小 5% 市值,是市值控制换皮(陷阱2),与所有控制和 head |ρ|≤0.08 也符合斜坡特征。'
+  - id: 5
+    keep: false
+    reason: '去掉(a)(b):abs_(mul(cs_mask_top_replace_mean(day_corr(Ret,Open)), cs_last_low05(LogTotalCap,LogTotalCap))) 主体是乘上市值排名(与市值 |ρ|=0.55、流动性 0.39、已知族 0.37),cs_last_low05 把最小 5% 市值翻成负值再被 abs_ 翻回约 1,等于在 5% 处做一个市值锯齿,另把 day_corr 最高 10% 换成均值,是市值形状游戏而非日内相关的机制。'
+  - id: 6
+    keep: false
+    reason: '去掉(a):day_zero_ratio(Ret) 是零收益分钟占比,即经典的非流动性/价格粘滞度量(与流动性 |ρ|=0.42、已知族 0.38),mul 自身排名只是单调变换;cs_last_low05(·, LogTotalCap) 把最小 5% 市值变负,方向 -1 直接把它们送进多头,是流动性加市值的控制换皮。'

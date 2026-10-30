@@ -1,0 +1,39 @@
+seed: 802
+variant: train
+decisions:
+  - id: 1
+    keep: true
+    reason: 'day_mean(in_delta(Volume, 30)) 逐分钟错位相减后求和相消,等于(尾30分钟量 - 首30分钟量,含09:30竞价bar)/211,方向-1即做多早盘放量、做空尾盘放量的股票;日内成交时点是说得通的机制,幅度带成交量水平(流动性0.41、已知族0.43)但信息主要在符号上且评估已对控制做残差,与#2仅0.59、构造独立,留下。'
+  - id: 2
+    keep: true
+    reason: '今日成交重心 day_centroid(Volume) 落在截面最高40%(尾盘放量)的股票被置顶、方向-1做空,其余按其241日重心25%分位最近是否创20日新低(ts_argmin)排序;三层 signedpower 在[0,1]上是单调空操作,不改变带与排序,机制(日内成交时点)可读,且是#5–#8这一簇的中心(与#8 0.84、#7 0.82、#5 0.81),留它作这一簇的唯一代表。'
+  - id: 3
+    keep: false
+    reason: '带子换成 cross_quantile_q25(signedpower(#2式核心), 241),即一年里多数天落在尾盘放量带,仍是#2成交重心带的换个写法;排序项对一个字典序排名的平方连取两层241日分位数再取20日 ts_argmin,读不出在度量什么,|ρ|仅0.20不代表机制不同,train 1.73更像同一机制上叠加的拟合。'
+  - id: 4
+    keep: false
+    reason: '带子仍是 day_centroid(Volume)(与#6/#7/#5 0.72–0.73,#2簇的换写);排序项 ts_reg_fvalue(ts_mean(cross_argmax(day_hurst(Volume),3),50), cs_stddev_full(...), 5) 是对每天全市场同一值的截面常数做5天回归取F值,再取241日分位数与20日argmin,纯数字游戏。'
+  - id: 5
+    keep: false
+    reason: '#2的自嵌套换写:带 cs_first_high40(ts_argmin(day_centroid(Volume),20), day_centroid(Volume)) 的前40%恰好就是重心前40%那批股票,排序项又对同一结构取平方、241日分位数和20日argmin;与#7 0.83、#2 0.81。'
+  - id: 6
+    keep: false
+    reason: '同一个 cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(...),241),20), day_centroid(Volume)) 结构自我嵌套四五层,没有新增度量;与#2 0.80、#7 0.77,是#2的换写且嵌套无意义。'
+  - id: 7
+    keep: false
+    reason: '与#5只差内层 cross_quantile_q25 的窗口241→10,其余结构相同;与#5 0.83、#2 0.82,是#2/#5的换写。'
+  - id: 8
+    keep: false
+    reason: '与#2同带同内核,只把20日 ts_argmin 再套一层 ts_argmin(位置的位置没有含义);与#2 0.84,是#2的换写。'
+  - id: 9
+    keep: false
+    reason: '带子仍是 day_centroid(Volume)(与#8/#5/#2 0.73);排序项用后复权价位 day_max(High) 分段、按 High 价位挑分钟算 day_topw_mean(Ret, High)、再按 LimitWidth 分段后 cs_regres 并取20日argmin,落进价格口径陷阱且读不出度量什么。'
+  - id: 10
+    keep: false
+    reason: '只用后复权价位:以 day_quantile_q25(High)(同一价位)两次 cs_first_low20 切出 day_last(Close) 价位约第20–40%分位的一段置顶,后复权价位不代表真实价位(陷阱3),选的是一段静态价位区间,没有机制(波动0.00、与其他head ≤0.05)。'
+  - id: 11
+    keep: false
+    reason: 'LimitWidth 只有几个取值,作为 cs_first_high20 的 y 排名时大片并列由稳定排序按列序打破,成为静态列序斜坡(陷阱1),再与 LogTotalCap 分段、ts_sum 多层嵌套;市值0.38、流动性0.38、已知族0.34,是市值加列序的换皮。'
+  - id: 12
+    keep: false
+    reason: '核心 ts_rank(neg(day_first(Open)), 30) 是开盘价在30日区间中的位置(近似反转控制,反转0.34),外面套多层 LogTotalCap 前20%/后5%分段与 ts_sum(市值0.47,全表最高),是反转加市值控制的换皮;与#11 0.61,嵌套没有额外机制。'

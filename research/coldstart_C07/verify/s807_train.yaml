@@ -1,0 +1,21 @@
+seed: 807
+variant: train
+decisions:
+  - id: 1
+    keep: false
+    reason: '度量的是「市场平均后复权价 cs_mean(day_median(Close)) 对 20 日 LogFloatCap 方差做 5 日 ts_regbeta」再经 pow_05、cs_rank 后对 q75 分钟成交股数做 241 日 cross_regbeta 的斜率;去掉(b):被解释变量是截面不变的后复权价位(陷阱3),5 点回归的 cov/var 在方差走平时发散,cs_median(day_pos_ratio(Open)) 恒约为 1 是死项,读不出机制,是嵌套数字游戏。'
+  - id: 2
+    keep: false
+    reason: '度量的是按 LimitWidth 十分位去均值后的 30 日 LogFloatCap 方差对 q75 分钟成交股数的 30 日 cross_regbeta;去掉(b)/陷阱2:核心量 ts_var(LogFloatCap,30) 是市值水平的方差(波动加趋势,即控制换皮),斜率不无量纲、截面上主要由 std(方差)/std(成交股数) 的单位比决定;cs_median(day_pos_ratio(Open)) 恒约为 1 被去均值完全消掉是死项;LimitWidth 只有 0.10/0.20/0.30 几档,_buckets 用序数排名,并列的大批股票按列序切分十分位。'
+  - id: 3
+    keep: false
+    reason: '与 #2 同一骨架(cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(...LogFloatCap 方差..., LimitWidth), 30)),只把 ts_var 窗口从 30 换成 20,加进去的 cs_median(ts_var(LogFloatCap,50)) 是逐日截面常数被 bucket 去均值完全消掉;去掉(a):是 #2 的换写法(|ρ|=0.63,在本库最高),且有 #2 同样的(b)/陷阱2 问题。'
+  - id: 4
+    keep: false
+    reason: '去掉(b)/陷阱1:Open 是正的(后复权)价格,day_zero_ratio(Open) 对几乎所有股票都并列为 0,cs_last_low05 内部用稳定 argsort 做序数排名,把这个并列块变成按列序排的静态斜坡;唯一跟股票本身有关的只剩 LogTotalCap 最低 5% 那块,方向 -1 使它们进入多头,等于一个市值尾部阶跃(陷阱2);它与全部控制和其他 head 的 |ρ|≤0.08,也符合静态斜坡的特征。'
+  - id: 5
+    keep: false
+    reason: '度量的是 |把前 10% 换成均值后的日内 corr(Ret, Open)| × LogTotalCap 排名(最低 5% 先减 1 再被 abs_ 翻到约 0.95–1);去掉陷阱2:截面上主要是市值排名(与市值 |ρ|=0.55,与流动性 0.39、已知族 0.37),cs_last_low05(LogTotalCap, LogTotalCap) 加 abs_ 在 5% 处造出一个排名三次式去不掉的 V 形折点,乘上的 abs 加 top-mask 相关只是数字游戏。'
+  - id: 6
+    keep: false
+    reason: '度量的是分钟零收益占比 day_zero_ratio(Ret)(LOT 式非流动性/价位离散性)乘它自己被 LogTotalCap 最低 5% 下压后的排名;去掉陷阱2:最低 5% 市值的值全为负、其余全为正,方向 -1 让这 5% 微盘股不论信号如何都整块进多头,约占多头十分位的一半,是排名三次式去不掉的市值尾部阶跃;剩下一半按零收益占比最低来选,与流动性 |ρ|=0.42、已知族 0.38 相关,属控制换皮。'

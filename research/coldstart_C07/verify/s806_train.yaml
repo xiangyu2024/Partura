@@ -1,0 +1,27 @@
+seed: 806
+variant: train
+decisions:
+  - id: 1
+    keep: true
+    reason: '度量 20 日中位的成交额日内重心 day_centroid(Amt)(成交集中在早盘还是尾盘),是交易时点结构;centroid 是比值,与成交额规模无关,不是流动性换皮;与流动性/波动/已知族 |ρ| 0.47/0.39/0.49 偏中等,但评估已去掉对控制的线性、U 形和 S 形暴露,与其他 head 最高 0.10,留下。'
+  - id: 2
+    keep: false
+    reason: '(b) 先做 5 日回归 cross_reg_fvalue(day_mean(Open), day_centroid(High), 5)(仅 3 个自由度,F 值厚尾,含义是 5 日内价格水平对日内价格重心的解释力),再与 Volume 分位数的 3.75 次方取 30 日 Pearson 相关;这是统计量套统计量,读不出机制,相关值会被少数离群日主导;它的简单版本 #7 已经表达了量价相关。'
+  - id: 3
+    keep: false
+    reason: '(b) 含 cross_reg_fvalue(day_mean(Open), day_mean(Open), 5),自己对自己回归时 RSS≈0,F≈TSS/(舍入噪声+1e-9),只剩后复权价格水平的 5 日方差(陷阱 2、3)或数值噪声;再用 ts_regres 和 cross_corr 往上叠,是退化的数字游戏。'
+  - id: 4
+    keep: false
+    reason: '(b) 陷阱 1:day_pos_ratio(High) 在价格恒正时截面处处约等于 1,经 cs_last_low10 的序数排名后变成按列序排的静态斜坡(只多一个 day_at_min_ratio 低 10% 的 -1 平移),再嵌进 5 日 F 值、20 日残差、30 日相关,读不出在度量什么。'
+  - id: 5
+    keep: false
+    reason: '(b) 陷阱 1:同样以 cs_last_low10(day_pos_ratio(High), …) 的列序斜坡为回归元,另外还有 F 值套 F 值:cross_reg_fvalue(day_mean(Open), cross_reg_fvalue(…, 5), 5);算子嵌套没有意义,与 #2 的 |ρ| 0.27 也说明它是同族变体。'
+  - id: 6
+    keep: false
+    reason: '(b) 两个 5 日 F 值:day_argmax(High) 分别对 day_es_ratio_lo(Vwap) 和对后复权价格水平 day_mean(Open) 回归;先取 20 日残差,再与 Volume^3.75 取 30 日相关,三层统计量互相嵌套,没有可陈述的机制,而 day_mean(Open) 又是后复权价格水平(陷阱 3)。'
+  - id: 7
+    keep: true
+    reason: '度量 30 日内日内价格重心 day_centroid(High)(当天价格前低后高还是前高后低,比值消掉了复权尺度)与放量程度(分钟成交量 75 分位的 3.75 次方)的时间序列相关,即上涨是否伴随放量,是说得通的量价相关机制;与五个控制 |ρ| ≤0.11,与其他 head 最高 0.19(#3,已去掉),不重复,留下。'
+  - id: 8
+    keep: false
+    reason: '(b)+陷阱 3:各分支都是同一个后复权价格水平(day_quantile_q25(Open)、day_close(Open) 及其单调变换 sqrt/pow_3)。两层 cs_first_high20 互相套用后,结果等于 rank(后复权价)再给价格排名约 20%–40% 的一段加 1,只是在后复权价格水平上挑一个区间;后复权价不代表真实价位,没有机制。'

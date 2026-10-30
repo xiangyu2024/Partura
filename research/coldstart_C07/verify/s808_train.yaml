@@ -1,0 +1,114 @@
+seed: 808
+variant: train
+decisions:
+  - id: 1
+    keep: false
+    reason: '度量约 148 日内(ts_max 三层 50)截面去均值后的日内成交量加权收益标准差 day_wstd(Ret, Volume) 的最大值,即峰值波动;是波动控制的复杂函数(陷阱2),波动 0.39、市值 0.49,且与 #4/#3 互为换写(0.81/0.76)。'
+  - id: 2
+    keep: true
+    reason: '度量 99 日内(ts_max∘ts_max 即 ts_max 99)成交量加权分钟收益 day_wmean(Ret, Volume) 的最大值,方向 -1 做多近期没有极端上涨日的股票,即 MAX/彩票偏好效应,机制说得通;它由收益而非方差构成,与控制最高仅波动 0.41,最像的 #1/#3/#4(0.72–0.73)是波动换皮、已去掉,留下作为该族唯一代表。'
+  - id: 3
+    keep: false
+    reason: '与 #1 同构的峰值波动(ts_max 10 再 50 套 cs_demean(day_wstd(Ret, Volume))),波动 0.50 为全表最高,与 #4 0.79、#1 0.76,是波动控制换皮的换写。'
+  - id: 4
+    keep: false
+    reason: 'day_wstd(Ret, Ret) 是以 |Ret| 加权的日内收益标准差,cs_normalize 后取 99 日最大值,仍是峰值波动;与 #1 0.81、波动 0.42、市值 0.45,控制换皮。'
+  - id: 5
+    keep: false
+    reason: 'cross_autocorr_s1 套 cross_autocorr_s1,再与 ts_max、cs_last_high05 交替嵌套两层后 60 日 cross_sum,自相关的自相关读不出在度量什么;day_distinct_ratio(Ret) 取值为 k/n 大量并列,cs_last_high05 的序号排名按列序打破并列(陷阱1)。'
+  - id: 6
+    keep: false
+    reason: 'day_durbin_watson(Open) 的分母是未去均值的价位平方和,≈ 日内已实现方差;对 day_last(Amt) 的 30 日斜率再两次除以 day_last(Amt),量级由约 1/Amt^3 主导,是波动×流动性换皮(流动性 0.42、已知族 0.39),与 #7 0.89。'
+  - id: 7
+    keep: false
+    reason: '与 #6 同构,只把两次除数换成 day_median(Volume),|ρ|=0.89 的换写,同为流动性/波动换皮(流动性 0.39、已知族 0.37、市值 0.43)。'
+  - id: 8
+    keep: false
+    reason: 'cross_regbeta 的被解释变量 day_wmean(Vwap, Open) 是后复权价位(陷阱3),60 日斜率实为价格趋势与日内 day_cov(Open, Ret) 漂移的共同趋势(伪回归),量级约随 1/波动变化、符号由一个不稳定的相关决定,读不出机制。'
+  - id: 9
+    keep: false
+    reason: '本质是 rank(LogFloatShares) 经三次 cs_last_high40 屏蔽:方向 -1 后多头恰为低 day_q_stat_std(Amt) 股票中流通股本排名约 60–70% 分位的固定区间,是股本的分段换皮(陷阱2),cs_last_high40(cs_last_high40(...)) 的嵌套无机制。'
+  - id: 10
+    keep: false
+    reason: '以 pow_2_5(day_last(Amt))(float32 下约 1e10–1e20)为自变量的 cross_reg_tvalue:rolling_ols 的 t=β/(se+1e-9) 中 se≪1e-9,所谓 t 值实为 β×1e9,量级 ∝ 1/sd(Amt^2.5)(合成数据核对:成交额每升一个量级 t 降约 2.5 个量级),尾盘成交额 ≳3e7 元时 var_x 溢出为 inf、值恒为 0;截面排名≈相关符号×非流动性,数值伪影加流动性换皮,外面还套同一回归。'
+  - id: 11
+    keep: false
+    reason: '与 #10 同式,仅外层窗口 241→60(与 #10 0.24),同一个 β×1e9 伪 t 值,排名由 1/sd(Amt^2.5) 主导,无机制。'
+  - id: 12
+    keep: false
+    reason: '同 #10 的伪 t 值;被解释变量里 add(Ret, Open) 把分钟收益加到后复权价位上(量纲错配,≈Open),in_reg_fvalue(Ret, Amt, 3) 是 3 分钟窗口(自由度 1)的 F 值,嵌套无意义。'
+  - id: 13
+    keep: false
+    reason: 'pow_2_5(day_last(Amt)) 伪 t 值(#10)经 ts_max/ts_quantile_q25 后再套同一个 241 日 cross_reg_tvalue,两层伪回归嵌套;与 #17 0.67、#23 0.55,同族换写。'
+  - id: 14
+    keep: false
+    reason: '三层 241 日 cross_reg_tvalue(pow_2_5(day_last(Amt)), ...) 与 ts_max/ts_quantile_q25 交替嵌套,数字游戏;流动性 0.30、已知族 0.29。'
+  - id: 15
+    keep: false
+    reason: 'ts_max(…, 1) 是恒等;y=day_cov(cross_madz(Low, 5), Amt) 带成交额量纲,β 约 ∝ Amt/Amt^2.5,仍是 #10 的伪 t 值、流动性换皮(流动性 0.28、已知族 0.28)。'
+  - id: 16
+    keep: false
+    reason: '#10 伪 t 值(y 为 day_cov(Close, Ret) 的 50 日 q25,含后复权价位)再套 ts_max 40;与 #26 0.67、#28 0.51,同族换写。'
+  - id: 17
+    keep: false
+    reason: '#13 的换写(内层窗口 30、ts_max 两层),|ρ|=0.67,同一伪 t 值的嵌套。'
+  - id: 18
+    keep: false
+    reason: '同 #10 伪 t 值,y=day_mean(cross_madz(Amt, 5)) 的 40 日 q25;排名由 1/sd(Amt^2.5) 与相关符号决定,无机制。'
+  - id: 19
+    keep: false
+    reason: 'train 夏普全表最高(+1.84)但仍是 #10 的 β×1e9 伪 t 值;y=day_mean(pow_1_5(High)) 是后复权价位的 1.5 次方(陷阱3),无机制。'
+  - id: 20
+    keep: false
+    reason: 'y 是成交额 ts_max(day_last(Amt), 40) 的分位,x 是同一成交额的 2.5 次方:β×1e9 量级约 ∝ Amt^-1.5,直接是流动性换皮。'
+  - id: 21
+    keep: false
+    reason: '两层 cross_reg_tvalue(pow_2_5(day_last(Amt)), …, 241) 直接相套,伪 t 值的伪 t 值,读不出机制。'
+  - id: 22
+    keep: false
+    reason: 'ts_quantile_q25/ts_max 三层与两层 #10 伪 t 值交替嵌套;与 #23、#13 均 0.53,同族换写。'
+  - id: 23
+    keep: false
+    reason: '同族嵌套(内层 ts_max 10)的两层伪 t 值再套 ts_max 40;与 #27 0.67、#13 0.55,换写。'
+  - id: 24
+    keep: false
+    reason: '两层 #10 伪 t 值相套,内层 y=day_cov(cross_madz(Low, 5), Low) 以后复权 Low 为量纲(陷阱3),无机制。'
+  - id: 25
+    keep: false
+    reason: '同 #10 伪 t 值,y=day_mean(cross_madz(Low, 5)) 的 40 日 q25;流动性 0.44、已知族 0.44,是该族最像控制的一个。'
+  - id: 26
+    keep: false
+    reason: 'y=day_cov(Ret, Ret) 即日内收益方差(波动,陷阱2),套 #10 伪 t 值与 ts_max 40;与 #16 0.67。'
+  - id: 27
+    keep: false
+    reason: '两层 #10 伪 t 值加 ts_max 嵌套;与 #23 0.67,换写。'
+  - id: 28
+    keep: false
+    reason: 'y=ts_sum(day_cov(Close, Ret), 40)(含后复权价位),同 #10 伪 t 值再套 ts_max;与 #26 0.54、#16 0.51,流动性 0.30。'
+  - id: 29
+    keep: false
+    reason: 'y=day_cov(cross_madz(Close, 5), Low) 以后复权 Low 为量纲,同 #10 伪 t 值;流动性 0.32、已知族 0.31。'
+  - id: 30
+    keep: false
+    reason: '此处 t 值数值正常,但 y=ts_std(day_mean(pow_1_5(High)), 40) 是后复权价位^1.5 的 40 日波动(陷阱3+波动),对日内 day_cov(cross_madz(Low, 5), Amt) 做 241 日回归,是两个高持续序列的伪回归 t,读不出机制。'
+  - id: 31
+    keep: false
+    reason: '自变量 pow_2_5(day_cov(Amt, Vwap)):cov 为负时 2.5 次幂为 NaN,其余与 #10 相同的 β×1e9 伪影,再套两层 ts_max 40;与 #16 0.39。'
+  - id: 32
+    keep: false
+    reason: '同 #10 伪 t 值,y=day_cov(Amt, Ret) 带成交额量纲,无机制。'
+  - id: 33
+    keep: false
+    reason: '同 #10 伪 t 值,y 为 ts_quantile_q25∘ts_max∘ts_quantile_q25 三层嵌套的 day_cov(Close, Ret),数字游戏。'
+  - id: 34
+    keep: false
+    reason: '两层 #10 伪 t 值加 ts_max/ts_quantile_q25 嵌套;与 #22、#27 0.38,同族换写。'
+  - id: 35
+    keep: false
+    reason: 'day_at_min_ratio(Vwap) 大量并列(多数股票当天只有一分钟在最低,值同为 1/241),cs_last_low20 用序号排名按列序打破并列(陷阱1);方向 -1 把排除屏变成只做屏内,屏为 241 日 cross_autocorr_s1(day_wstd(Low, Vwap))(含后复权价位)最低 20%,无机制;流动性 0.39、已知族 0.39。'
+  - id: 36
+    keep: false
+    reason: '与 #35 同样的 at_min 并列与列序问题,屏用 at_min 自身的 241 日自相关再嵌一层 cs_last_low20;流动性/已知族 0.42,与 #37 0.48。'
+  - id: 37
+    keep: false
+    reason: '同族,屏为 cross_semistd_pos(day_wstd(Low, Low), 241)(价位离散度的上行半方差,即波动的波动)并内嵌一层 cross_tail_mean_q25;流动性 0.47、已知族 0.45、市值 0.39,是该族最像控制的一个。'

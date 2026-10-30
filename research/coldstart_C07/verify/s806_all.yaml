@@ -1,0 +1,27 @@
+seed: 806
+variant: all
+decisions:
+  - id: 1
+    keep: true
+    reason: '20 日成交额日内时间重心 day_centroid(Amt) 的中位数,方向 -1 即做多成交集中在早盘(含 09:30 竞价那根)、尾盘成交少的股票;归一化后度量的是成交的时间分布而非成交水平,尾盘成交占比是说得通的微观结构机制,与流动性/已知族 |ρ| 0.47/0.49 属中等且评估已对控制做到三次项残差,与其他 head |ρ| 不超过 0.10,留下。'
+  - id: 2
+    keep: false
+    reason: 'cross_reg_fvalue(day_mean(Open), day_centroid(High), 5) 是只有 5 个点(3 个自由度)的回归 F 值,度量过去 5 天价位与日内漂移是否线性相关,再与成交量的 3.75 次方求 30 日 Pearson 相关,两个厚尾序列的相关由少数极值主导,读不出机制;相对 #7 只是多套了一层 5 日 F 值,按 (b) 去掉。'
+  - id: 3
+    keep: false
+    reason: 'cross_reg_fvalue(day_mean(Open), day_mean(Open), 5) 是自己对自己回归,rss 只剩 float32 舍入误差,F = tss/(rss/3 + 1e-9) 是数值噪声且 tss 以后复权价位的平方为单位,再把它当 ts_regres 的自变量去解释 day_es_ratio_lo(Vwap),整串没有机制,按 (b) 去掉。'
+  - id: 4
+    keep: false
+    reason: 'cs_last_low10(day_pos_ratio(High), ...) 里 day_pos_ratio(High) 对正价格恒为 1、截面处处相同,经 _pct_rank 的稳定 argsort 变成按股票列序的静态斜坡(陷阱 1),再对这个斜坡做 5 日 F 值并嵌入整个 #2,是数字游戏,按 (b) 去掉。'
+  - id: 5
+    keep: false
+    reason: '与 #4 同样以 cs_last_low10(day_pos_ratio(High), day_at_min_ratio(Vwap)) 这个列序斜坡(陷阱 1)为回归自变量,另一侧是 F 值套 F 值 cross_reg_fvalue(day_mean(Open), cross_reg_fvalue(...), 5),没有可读的度量,按 (b) 去掉。'
+  - id: 6
+    keep: false
+    reason: '两个 5 日 F 值(day_es_ratio_lo(Vwap) 对 day_argmax(High)、day_mean(Open) 对 day_argmax(High))做 20 日 ts_regres 残差,再与成交量的 3.75 次方求 30 日相关,三层滚动回归统计量叠在一起且依赖后复权价位 day_mean(Open),读不出在度量什么,按 (b) 去掉。'
+  - id: 7
+    keep: true
+    reason: '30 日内日内价格漂移 day_centroid(High)(约等于 0.5 加午后价高于早盘的相对幅度)与当日典型分钟量(q75 的 3.75 次方)的时间序列相关,方向 -1 做多量价负相关,是经典量价相关机制;与五个控制 |ρ| 不超过 0.11、与其他 head 不超过 0.19,pow_2_5(pow_1_5) 只是让相关偏重放量日的凸变换,留下。'
+  - id: 8
+    keep: false
+    reason: '所有叶子都是后复权价位(day_quantile_q25(Open)、day_close(Open)),y 是价位的单调函数,两层 cs_first_high20 加 div(..., -5) 只是把价位排名约 20%–40% 那一段推到顶部,度量的是不代表真实价位的后复权价格(陷阱 3),train +0.59 而 valid +2.76 的跳跃也不像稳定机制,按 (b) 去掉。'
