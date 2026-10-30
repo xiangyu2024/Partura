@@ -27,6 +27,7 @@ import c05_lib  # noqa: E402
 
 STUDY = os.environ.get("PARTURA_C0X", "C05")
 PFX = STUDY.lower()
+MPFX = "c07" if STUDY == "C07" else "c05"                     # whose main AlphaCube: C06 reuses C05's, C07 runs its own
 D, EP = ROOT / "research" / f"coldstart_{STUDY}", ROOT / "episodes"
 ARMS = D / "arms"
 PY = os.environ.get("PY", sys.executable)
@@ -36,7 +37,7 @@ MODE = sys.argv[1]
 def snapshot(S, X, K):
     """M batches 1..K, then the arm's missions of rounds < K.  A mission whose round has ended (its .DONE exists) but that left no
     evidence failed twice: it spent its budget and produced nothing, so it is left out (PLAN revision 6)."""
-    eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
+    eps = [EP / f"{MPFX}s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
     for k in range(1, K):
         eps += [Path(p) for p in sorted(glob.glob(str(EP / f"{PFX}s{S}{X}r{k}[ab]_*")))
                 if (Path(p) / "evidence.json").is_file() or not (ARMS / f"s{S}_{X}_r{k}.DONE").is_file()]
@@ -172,7 +173,7 @@ ARMS.mkdir(parents=True, exist_ok=True)
 if MODE == "A":
     S, K = int(sys.argv[2]), int(sys.argv[3])
     lf, lib = library(S, "A", K)
-    procs = [gp(f"c05s{S}Ar{K}{j}", "I0_open_search", "guidance/C05_base.yaml", "control", 1000 * S + 10 * K + i, 128, ["--ban-library", str(lf)])
+    procs = [gp(f"{PFX}s{S}Ar{K}{j}", "I0_open_search", "guidance/C05_base.yaml", "control", 1000 * S + 10 * K + i, 128, ["--ban-library", str(lf)])
              for i, j in ((1, "a"), (2, "b"))]
     finish(S, "A", K, procs)
 

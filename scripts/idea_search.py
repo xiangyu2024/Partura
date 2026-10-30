@@ -54,6 +54,7 @@ from partura import ops_ext  # noqa: E402,F401  (registers the extension operato
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
 from partura.steer import DISCOVERY_MIN_PERIOD, PAIRED, REWARDS, Guidance, RewardContext, is_discovery  # noqa: E402
+from partura import steer  # noqa: E402
 
 argv = sys.argv[1:]
 
@@ -63,7 +64,7 @@ def opt(name, default=None):
 
 
 IDEA = argv[0]
-if os.environ.get("PARTURA_STUDY_DIR") in ("coldstart_C05", "coldstart_C06"):    # scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
+if os.environ.get("PARTURA_STUDY_DIR") in ("coldstart_C05", "coldstart_C06", "coldstart_C07"):    # scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
     os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1",
                       PARTURA_PANEL_CACHE_GB=str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)))))
 GPATH = opt("--guidance", "guidance/B01.yaml")
@@ -465,7 +466,7 @@ with slot():
         Z = {}
         for i, (e, c) in enumerate(allp.items()):
             if f"c{i}" in P:
-                sm_ = bk.smoothed(c["sign"] * np.asarray(P[f"c{i}"], np.float64), c["hl"])
+                sm_ = bk.smoothed(c["sign"] * steer.signal_input(P[f"c{i}"]), c["hl"])     # C07: ranked first if asked
                 if KIND == "long_neutral":                   # what the reward traded: the residual on the style controls
                     sm_ = neutral_residual(sm_, ctx.neutral_Q)
                 Z[e] = dg._zrank(sm_)[:cut:5]

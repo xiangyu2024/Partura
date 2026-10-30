@@ -400,13 +400,33 @@ class Guidance:
 REWARDS = ("long", "long_tradable", "long_bucket", "long_marginal", "long_screen", "long_neutral")
 
 
+def rank_first() -> bool:
+    """C07 (research/coldstart_C07/PLAN.md): $PARTURA_RANK_FIRST=1 -- a signal is ranked within each day's cross-section
+    BEFORE its EMA, so a monotone (e.g. convex) rewrite of an expression is the same signal and earns the same reward."""
+    return os.environ.get("PARTURA_RANK_FIRST", "") == "1"
+
+
+def signal_input(raw) -> "np.ndarray":
+    """What the reward smooths: the raw panel, or its daily z-rank under ``rank_first()``."""
+    if not rank_first():
+        return raw                                            # untouched (it may be an accelerator tensor)
+    import numpy as np
+    from . import diagnose as dg
+    if hasattr(raw, "detach"):
+        raw = raw.detach().cpu().numpy()
+    return dg._zrank(np.asarray(raw, np.float64))
+
+
 def neutral_basis(controls) -> "np.ndarray":
     """C03 (research/coldstart_C03/PLAN.md): for every day, an orthonormal basis of [1, z-ranked controls] on the names
     where every control exists -- shape (days, stocks, k + 1), float32, zero rows where a control is missing.  The
-    residual of a signal on it (``neutral_residual``) is the signal with the controls' daily cross-section regressed out."""
+    residual of a signal on it (``neutral_residual``) is the signal with the controls' daily cross-section regressed out.
+    C07: $PARTURA_NEUTRAL_POWERS="1,2,3" adds the squared and cubed control ranks, so U- and S-shaped exposures to a
+    control are regressed out too (non-linear neutralisation); the default "1" is the linear basis of C03-C06."""
     import numpy as np
     from . import diagnose as dg
-    zs = [dg._zrank(np.asarray(c, np.float64)) for c in controls]
+    powers = [int(x) for x in os.environ.get("PARTURA_NEUTRAL_POWERS", "1").split(",")]
+    zs = [dg._zrank(np.asarray(c, np.float64)) ** k for c in controls for k in powers]
     D, S = zs[0].shape
     Q = np.zeros((D, S, len(zs) + 1), np.float32)
     for t in range(D):
@@ -616,6 +636,7 @@ def reward(panel, ctx: RewardContext, kind: str = "long", *, both_periods: bool 
 
     if kind not in REWARDS:
         raise ValueError(f"unknown reward {kind!r}; choose from {REWARDS}")
+    panel = signal_input(panel)                              # C07: ranked before the EMA when $PARTURA_RANK_FIRST=1
     dev = os.environ.get("PARTURA_REWARD_DEVICE", "")
     if dev:                                                   # the same reward with its sorts on an accelerator
         try:
