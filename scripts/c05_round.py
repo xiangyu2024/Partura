@@ -27,7 +27,7 @@ import c05_lib  # noqa: E402
 
 STUDY = os.environ.get("PARTURA_C0X", "C05")
 PFX = STUDY.lower()
-MPFX = "c07" if STUDY == "C07" else "c05"                     # whose main AlphaCube: C06 reuses C05's, C07 runs its own
+MPFX = "c07" if STUDY in ("C07", "C08") else "c05"                     # whose main AlphaCube: C06 reuses C05's, C07 runs its own
 D, EP = ROOT / "research" / f"coldstart_{STUDY}", ROOT / "episodes"
 ARMS = D / "arms"
 PY = os.environ.get("PY", sys.executable)

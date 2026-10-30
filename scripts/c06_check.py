@@ -39,7 +39,8 @@ from alphacube.plugins import load_plugins  # noqa: E402
 load_plugins(["partura.ac_plugin"])
 S, K = int(sys.argv[1]), int(sys.argv[2])
 FINAL = "--finalize" in sys.argv
-P = ROOT / "research" / "coldstart_C06" / "partura" / f"s{S}"
+P = ROOT / "research" / f"coldstart_{os.environ.get('PARTURA_C0X', 'C06')}" / "partura" / f"s{S}"
+CTRL_STRIKE = float(os.environ.get("C06_CTRL_STRIKE", "0.5"))   # C08 (permissive audit): only a near-copy of a control is struck
 BANNED = re.compile(r"\b(ts_spearman|nt_[A-Za-z0-9_]+)\s*\(")
 G0 = Guidance.load(ROOT / "guidance" / "C05_base.yaml")
 issues = []
@@ -168,7 +169,7 @@ corr = {r["expr"]: r for r in json.loads(cf.read_text(encoding="utf-8"))["rows"]
 def disguised(e):
     """|rho| >= 0.7 with a head (the GP's library ban would refuse it anyway) or >= 0.5 with a control."""
     r = corr.get(e) or {}
-    return "error" not in r and bool(r) and (r.get("max_head", 0) >= 0.7 or max(r.get("controls", {}).values() or [0]) >= 0.5)
+    return "error" not in r and bool(r) and (r.get("max_head", 0) >= 0.7 or max(r.get("controls", {}).values() or [0]) >= CTRL_STRIKE)
 
 
 by_slot = {str(a.get("slot")).lower(): a for a in A.get("slots") or []}
@@ -179,7 +180,7 @@ for s, j in zip(slots, "ab"):
     struck_by_auditor = {int(x) for x in a.get("struck_seeds") or []}
     seeds = s.get("seeds") or []
     kept = [e for i, e in enumerate(seeds) if i + 1 not in struck_by_auditor and not disguised(e)]
-    core_bad = s["type"] == "E" and max(((corr.get(s["core"]) or {}).get("controls") or {}).values() or [0]) >= 0.5
+    core_bad = s["type"] == "E" and max(((corr.get(s["core"]) or {}).get("controls") or {}).values() or [0]) >= CTRL_STRIKE
     ok = nov >= 3 and snd >= 3 and len(kept) >= 4 and not core_bad
     rec = {"slot": j, "type": s["type"], "core": s.get("core"), "novelty": nov, "soundness": snd, "seeds": len(seeds),
            "struck_by_auditor": len(struck_by_auditor), "struck_by_table": sum(disguised(e) for e in seeds), "kept": len(kept),

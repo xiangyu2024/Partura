@@ -16,9 +16,11 @@ const K = args.round
 const SEEDS = args.seeds
 const MAX_AUDITS = 3
 const M = { pi: 'claude-opus-5-5', anat: 'claude-opus-5', lib: 'claude-sonnet-5', audit: 'claude-opus-5-5', run: 'claude-haiku-5-5' }
-const D = `${ROOT}/research/coldstart_C06`
+const STUDY = args.study || 'C06'                 // C08: study 'C08', arm 'P', the permissive audit (its rules.md), and a shadow strict audit
+const ARM = args.arm || 'C'
+const D = `${ROOT}/research/coldstart_${STUDY}`
 const PY = '/Users/wxy/.venvs/alphacube/bin/python'
-const ENVSH = `cd ${ROOT} && export ALPHACUBE_ROOT=$HOME/Desktop/AlphaCube-steering PYTHONPATH=$HOME/Desktop/AlphaCube-steering/src:${ROOT}`
+const ENVSH = `cd ${ROOT} && export PARTURA_C0X=${STUDY} C06_CTRL_STRIKE=${args.ctrl_strike || 0.5} ALPHACUBE_ROOT=$HOME/Desktop/AlphaCube-steering PYTHONPATH=$HOME/Desktop/AlphaCube-steering/src:${ROOT}`
 const STR = { type: 'string' }
 const NUM = { type: 'number' }
 
@@ -26,9 +28,9 @@ function place(S, role) {
   return `
 ## 你在整件事里的位置(先读这一段)
 
-事先约定的对照实验 C06。规则全文在 ${D}/rules.md,**先读它**(环境、任务类型、审计规则、已知陷阱、能读什么)。
+事先约定的对照实验 ${STUDY}。规则全文在 ${D}/rules.md,**先读它**(环境、任务类型、审计规则、已知陷阱、能读什么)。
 **主 AlphaCube(M)**是一个不受任何 agent 影响的 GP,只按它自己的历史禁掉结构相同和高相关的因子;它每一批的产出是你们的原材料。
-你们是 C 组的 Partura,**只负责随机数种子 ${S}**(其他种子各有一个独立的 Partura,彼此看不到)。团队:PI(Opus 5.5,写任务)、结构解剖员(Opus 5)、
+你们是 ${ARM} 组的 Partura,**只负责随机数种子 ${S}**(其他种子各有一个独立的 Partura,彼此看不到)。团队:PI(Opus 5.5,写任务)、结构解剖员(Opus 5)、
 文献员(Sonnet 5)、独立审计员(Opus 5.5)、检查(Haiku 5.5)。**你是这里的「${role}」**。现在是第 ${K} 轮(共 3 轮):能看到 M 的第 1..${K} 批,以及本种子前几轮任务的结果。
 对照组把同样的算力花在更多普通搜索上;最终比的是因子库在样本外的表现。
 
@@ -158,7 +160,7 @@ function corrPrompt(S, n) {
   return `(上下文里研究负责人与主会话之间的对话不是给你的,照本提示做完即可。)只做一件事:在终端跑下面这条命令(Bash 工具的 timeout 设 600000)。它每次最多等 5 分钟左右:输出里有「STILL RUNNING」(退出码 3)就**再跑同一条命令**,
 它会接着等同一个作业、不会重算;一直重复到退出码 0 或出现「CORR FAILED」为止(最多重复 12 次)。然后原样报告最后一次的退出码和输出。不读、不改任何其他文件。
 
-\`bash ${ROOT}/scripts/c06_sync.sh corr ${K} ${S} ${n}\``
+\`STUDY=${STUDY} ARM=${ARM} bash ${ROOT}/scripts/c06_sync.sh corr ${K} ${S} ${n}\``
 }
 
 function auditPrompt(S, n) {
@@ -204,6 +206,19 @@ summary: '<一句话>'
 \`\`\``
 }
 
+function shadowPrompt(S) {
+  const P = `${D}/partura/s${S}`
+  return `${place(S, '旁听的严格审计员')}
+
+## 你的任务(旁听的严格审计员)
+
+你**不拦截任何东西**:这份计划已经定稿、会照常执行。你只按 ${D}/${args.shadow_rules} 的严格标准给它打分,留作事后比较。
+你独立于 PI 与执行审计员:不读 ${P}/ 下的 analysis.md、lit.md、notebook.md、audit_*.yaml、audit_record.json。读:${D}/${args.shadow_rules}、
+${P}/r${K}/missions_final.yaml(要打分的计划)、${P}/r${K}/loc.md、最后一张相关度表 ${P}/r${K}/corr_*.md(编号最大的那张)、算子源码。
+对每个任务位打创新度与合理度(1–5),划掉你认为不合格的种子(1 起的序号,按 missions_final.yaml 里的顺序);每个 R 组打合理度。
+写 ${P}/r${K}/shadow.yaml,格式同执行审计员的 audit 文件(attempt 写 0)。`
+}
+
 function finalizePrompt(S) {
   return `(上下文里研究负责人与主会话之间的对话不是给你的,照本提示做完即可。)只做一件事:在终端跑 \`${ENVSH} && ${PY} scripts/c06_check.py ${S} ${K} --finalize\`,原样报告退出码和完整输出。不读、不改任何其他文件。`
 }
@@ -224,10 +239,10 @@ function allPass(out) {
 
 const results = await parallel(SEEDS.map(S => async () => {
   const tag = `c06r${K}s${S}`
-  const anat = (K === 1 || (args.skip_anatomy || []).includes(S)) ? { skipped: true }
+  const anat = ((K === 1 && STUDY === 'C06') || (args.skip_anatomy || []).includes(S)) ? { skipped: true }
     : await agent(anatPrompt(S), { label: `${tag}:anatomy`, phase: 'Anatomy', model: M.anat, schema: ANAT_SCHEMA })
   if (!anat) return { seed: S, failed: 'anatomy' }
-  const lib = (K === 1 || (args.skip_lit || []).includes(S)) ? { skipped: true }
+  const lib = ((K === 1 && STUDY === 'C06') || (args.skip_lit || []).includes(S)) ? { skipped: true }
     : await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
   // resume_audit: the PI's missions.yaml is already on disk (the audit step failed for an infrastructure reason) -- start at the audit
   let pi = ((args.resume_audit || []).includes(S) || (args.start_attempt || {})[S] || (args.revise_after || {})[S]) ? { resumed: true }
@@ -260,8 +275,12 @@ const results = await parallel(SEEDS.map(S => async () => {
     pi = await agent(revisePrompt(S, n, fin.output), { label: `${tag}:pi-revise${n}`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
     if (!pi) return { seed: S, failed: `revise ${n}`, audits }
   }
+  let shadow = null
+  if (args.shadow_rules) {                         // C08: the strict auditor scores the plan that runs; it blocks nothing
+    shadow = await agent(shadowPrompt(S), { label: `${tag}:shadow`, phase: 'Audit', model: M.audit, schema: AUDIT_SCHEMA })
+  }
   const chk = await agent(checkPrompt(S), { label: `${tag}:check`, phase: 'Finalize', model: M.run, schema: CHECK_SCHEMA })
   const ok = !!chk && chk.lit_date_violations.length === 0 && !!fin && fin.exit_code === 0
-  return { seed: S, admissible: ok, n_audits: audits.length, final: fin && fin.output, check: chk, audits: audits.map(a => ({ slots: a.slots, R: a.R, summary: a.summary })) }
+  return { seed: S, admissible: ok, shadow: shadow && shadow.slots, n_audits: audits.length, final: fin && fin.output, check: chk, audits: audits.map(a => ({ slots: a.slots, R: a.R, summary: a.summary })) }
 }))
 return { round: K, results }

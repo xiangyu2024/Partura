@@ -38,7 +38,7 @@ from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
-from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residual  # noqa: E402
+from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residual, signal_input  # noqa: E402
 from partura.steer import reward as steer_reward  # noqa: E402
 
 MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
@@ -48,6 +48,7 @@ if MODE == "corr":      # C06: short and small -- the third GPU way (the GP runs
 STUDY = os.environ.get("PARTURA_C0X", "C05")                 # C06 reuses C05's M; its own missions are c06s...
 D = PARTURA_ROOT / "research" / f"coldstart_{STUDY}"
 PFX = STUDY.lower()
+MPFX = "c07" if STUDY in ("C07", "C08") else "c05"           # whose main AlphaCube: C06 reuses C05's, C08 reuses C07's (the new rule)
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
@@ -61,7 +62,7 @@ G = Guidance.load(PARTURA_ROOT / "guidance" / "C05_base.yaml")
 
 def snapshot_episodes():
     """M batches 1..K, then this arm's missions of rounds < K, in that order."""
-    eps = [EP / f"c05s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
+    eps = [EP / f"{MPFX}s{S}M{e}_I0_open_search" for e in range(1, K + 1)]
     for k in range(1, K):                                 # a mission that ended without evidence produced nothing (PLAN revision 6)
         done = (D / "arms" / f"s{S}_{ARM}_r{k}.DONE").is_file()
         eps += [Path(p) for p in sorted(glob.glob(str(EP / f"{PFX}s{S}{ARM}r{k}[ab]_*"))) if (Path(p) / "evidence.json").is_file() or not done]
@@ -165,13 +166,13 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
                     z = dg._zrank(rw["sign"] * panel[:cut:5])
                     r.update(score=rw["score"], sign=rw["sign"], hl=rw["hl"], train=rw["train"]["long_sharpe"], valid=rw["valid"]["long_sharpe"],
                              rho_known=corr(z, kz))
-                    r["_traded"] = neutral_residual(bk.smoothed(rw["sign"] * panel, rw["hl"]), QF)
+                    r["_traded"] = neutral_residual(bk.smoothed(rw["sign"] * signal_input(panel), rw["hl"]), QF)
                 out[e] = r
         return out
 
     def traded(h):
         p = ps.compute({"x": h["expr"]})["x"]
-        return neutral_residual(bk.smoothed(float(h["sign"]) * np.asarray(p, np.float64), float(h["hl"])), QF)
+        return neutral_residual(bk.smoothed(float(h["sign"]) * signal_input(p), float(h["hl"])), QF)
 
     def clean(r):
         return {k: (round(v, 4) if isinstance(v, float) and math.isfinite(v) else (None if isinstance(v, float) else v))
@@ -192,7 +193,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
 
     prev = []                                                 # what the arm's earlier missions did (train / valid only)
     for ep in eps:
-        if ep.name.startswith(f"c05s{S}M"):
+        if ep.name.startswith(f"{MPFX}s{S}M"):
             continue
         E = c05_lib.evidence(ep)
         for arm_, A in E["arms"].items():
@@ -249,7 +250,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
         for h in heads:
             p = np.asarray(ps.compute({"x": h["expr"]})["x"], np.float64)
             hz.append((h["expr"], dg._zrank(p)[:cut:5]))
-            hr.append((h["expr"], float(h["hl"]), dg._zrank(neutral_residual(bk.smoothed(float(h["sign"]) * p, float(h["hl"])), QF))[:cut:5]))
+            hr.append((h["expr"], float(h["hl"]), dg._zrank(neutral_residual(bk.smoothed(float(h["sign"]) * signal_input(p), float(h["hl"])), QF))[:cut:5]))
         exprs = list(dict.fromkeys(q["expr"] for q in req))
         rows = {}
         for i in range(0, len(exprs), 8):
@@ -264,7 +265,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
                 panel = np.asarray(p, np.float64)
                 cov, dis = float(np.isfinite(panel[labelled]).mean()), dg.distinct_fraction(panel)
                 z = dg._zrank(panel)[:cut:5]
-                zr = {hl: dg._zrank(neutral_residual(bk.smoothed(panel, hl), QF))[:cut:5] for hl in {hl for _, hl, _ in hr}}  # at each head's half-life
+                zr = {hl: dg._zrank(neutral_residual(bk.smoothed(signal_input(panel), hl), QF))[:cut:5] for hl in {hl for _, hl, _ in hr}}  # at each head's half-life
                 rh = sorted(((abs(corr(z, y)), x) for x, y in hz), reverse=True)
                 rr = sorted(((abs(np.nan_to_num(corr(zr[hl], y))), x) for x, hl, y in hr), reverse=True)
                 rows[e] = {"gate": bool(cov >= 0.9 and dis >= 0.5), "coverage": round(cov, 3), "distinct": round(dis, 3),
