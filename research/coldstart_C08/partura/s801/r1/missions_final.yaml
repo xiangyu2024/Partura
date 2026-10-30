@@ -1,0 +1,122 @@
+seed: 801
+round: 1
+slots:
+- type: E
+  core: day_durbin_watson(Volume)
+  hypothesis: 【核心在量什么】本库的 day_durbin_watson 分母是 Σx² 而不是去均值的平方和(dt_day.py 源码),所以对分钟成交量它近似
+    2(1−ρ₁)·CV²/(1+CV²):一阶自相关低、且分钟量离散度高时取大值。高 = 成交量一根一根孤立地蹦(零散、不协调、注意力驱动的下单); 低 =
+    平滑、持续的成交流(大单被拆成小单在一天里匀速执行,Lillo–Mike–Farmer 的拆单机制)。它是 M 第 1 批 95 个候选里唯一过多重检验的子树
+    (含它的 46 个候选均值比不含的高 0.76,单边 p≈0.0002)。 【已见过的外围,本位全部避开】含该核心的 46 个候选只有两类外围:(1) 根部单调包装
+    pow_2_5 / pow_05 / pow_3 —— 在先排名的奖励下与裸核心是同一个秩信号; (2) cross_cov(·, ts_med(某个日内统计量,
+    30), 15/60) —— 与一条 30 日中位数做 15 日协方差,第二条腿在窗内近乎常数,窗口 15→60 效应归零,而且这层平均拉低了表现。 没有一个外围做过股内时序归一化、分桶内排序、或带收益方向。
+    【这次试的外围与机制】(a) 股内时序归一化:cross_zscore / cross_madz / ts_rank(60–120 日)以及「近一周 EMA
+    相对半年」——把持久的截面水平 (它和流动性、上市状态、板块纠缠,很可能是本批 train/valid 方向不稳、候选均值 −1.30 的原因)换成「这只股票的成交流最近变得异常零散/平滑」,即交易者构成的变化
+    (MSCI 2021 股内 vs 截面对照;Gervais 等 2001 相对自身历史的异常成交)。 (b) 分桶内排序 cs_bucket_rank:在分钟量
+    Gini 十分位内排 DW → 固定集中度/CV,只留下「顺序 / 持续性」那一半(把核心的两半分开); 在 ListAge 十分位内排 → 去掉次新股薄成交在
+    DW≈2 上界的堆积(Wan 等 2015);在 20 日成交额十分位内排 → 多头十分位从每个流动性档等量取票, 这是残差尺子的多项式回归做不到的交互中性化,也压低了冷门票带来的成本。
+    (c) 方向:DW 乘净买入成交占比(day_signed_ratio)的 20 日均值、DW 与当日收益 / 当日成交量的 20 日滚动相关——零散的爆发是在买还是在卖、
+    是否伴随放量(Llorente 等 2002:成交特征与收益方向的交互区分信息交易与流动性交易)。 (d) 20 日内粗糙度的分布:上尾均值、波动、30 日稳健中位数(唯一一个此前没套过
+    ts_med 的强部件)。 【为什么样本外还会在】订单如何被切分、谁在交易是慢变的微观结构属性,不是价格模式;(a)(b) 去掉的正是控制集只能按多项式去掉、去不掉交互的那部分水平混杂,
+    而这部分混杂最可能随市场风格切换,是 train/valid 不一致的来源;所有种子都是有界量(DW∈(0,2]、z 分数、桶内分位、相关系数),没有裸除法和爆点。
+  literature:
+  - title: The Theory of (Value) Relativity
+    authors: Waman Virgaonkar, Mehdi Alighanbari
+    year: 2021-05
+    url: https://www.msci.com/research-and-insights/blog-post/the-theory-of-value-relativity
+    treatment: 特征在本股自身历史里做 z 分数(股内口径),与截面口径相关低、风险调整后更稳 → cross_zscore / cross_madz
+      / ts_rank 外围
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: 2001-06
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i3p877-919.html
+    treatment: 成交特征相对本股自身近期历史的异常程度(而非截面水平)才有预测力 → 近一周 EMA 相对 120 日的 z 分数
+  - title: Theory for Long Memory in Supply and Demand
+    authors: Fabrizio Lillo, Szabolcs Mike, J. Doyne Farmer
+    year: 2005-06
+    url: https://iris.unipa.it/bitstream/10447/9549/1/PhysRevE.71.066122.pdf
+    treatment: 大单拆分产生持续的订单流 → 解释 DW 低端;在 Gini 十分位内排序以分离持续性一半
+  - title: Statistical Properties and Pre-Hit Dynamics of Price Limit Hits in the
+      Chinese Stock Markets
+    authors: Yu-Lei Wan, Wen-Jie Xie, Gao-Feng Gu, Zhi-Qiang Jiang, Wei Chen, Xiong
+      Xiong, Wei Zhang, Wei-Xing Zhou
+    year: 2015-04
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC4395215/
+    treatment: 次新股成交稀薄、统计量撞边界 → 在 ListAge 十分位内排序
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    url: https://archive.nyu.edu/jspui/bitstream/2451/26698/1/FIN-00-032.pdf
+    treatment: 成交特征与收益方向交互(信息交易延续、对冲交易反转)→ DW × 净买入占比、DW 与日收益的滚动相关
+  seeds:
+  - cross_zscore(day_durbin_watson(Volume), 60)
+  - cross_madz(day_durbin_watson(Volume), 60)
+  - cross_zscore(cross_ema(day_durbin_watson(Volume), 5), 120)
+  - cs_bucket_rank(day_durbin_watson(Volume), day_gini(Volume))
+  - cs_bucket_rank(cross_mean(day_durbin_watson(Volume), 20), cross_mean(day_gini(Volume),
+    20))
+  - cs_bucket_rank(cross_zscore(day_durbin_watson(Volume), 60), ListAge)
+  - cs_bucket_rank(cross_mean(day_durbin_watson(Volume), 20), cross_mean(day_sum(Amt),
+    20))
+  - cross_mean(mul(day_durbin_watson(Volume), day_signed_ratio(Ret, Amt)), 20)
+  - cross_corr(day_durbin_watson(Volume), day_mean(Ret), 20)
+  - cross_corr(day_durbin_watson(Volume), day_sum(Volume), 20)
+  - cross_stddev(day_durbin_watson(Volume), 20)
+- type: N
+  hypothesis: '【机制】成交量最集中的那些分钟,价格朝哪边走,决定这段收益之后是反转还是延续。Campbell–Grossman–Wang(1993):非信息交易者的买卖压力要由做市方/对手方承接,
+    需要补偿,所以伴随大成交量的价格变动随后反转;Llorente 等(2002):信息交易推动的变动延续,对冲/流动性交易推动的反转;Admati–Pfleiderer(1988):
+    可自由择时的流动性交易者会把单子集中到成交厚的时段。把这套逻辑放到日内分钟上:一只股票过去 20 天的收益里,有多少是在「放量爆发的分钟」里实现的、 有多少是在平静分钟里实现的
+    —— 爆发分钟的那部分以流动性需求为主,预期反转;平静分钟的那部分更接近信息,预期延续。 【算子怎么实现】(1) 爆发分钟的收益:day_topw_mean(Ret,
+    in_madz(Volume, 30)) = 当天「成交量相对前 30 分钟最反常」的 10% 分钟的平均收益 (in_madz 用滚动中位数和 MAD 定义爆发,前
+    30 分钟为空,所以开盘集合竞价与日内 U 形不会被当成爆发);减去 day_mean(Ret) 得到「爆发分钟相对全天」的倾斜; 再用 cs_bucket_rank
+    在 20 日平均分钟收益的十分位内排序,显式地做到「给定总收益,看它的构成」。(2) 量加权减等权的分钟收益 sub(day_wmean(Ret, Volume),
+    day_mean(Ret)) ≈ 分钟收益与分钟成交量的协方差 / 平均量;day_corr(Ret, Volume) 及其对 in_madz 爆发度的版本。
+    (3) 先后关系:day_corr(in_delay(Ret, 1), Volume) = 量是否追着上一分钟的涨跌来(追涨杀跌的注意力交易);day_corr(Ret,
+    in_delay(Volume, 1)) = 放量之后价格往哪走。 (4) 价位口径:VWAP/TWAP = div(day_wmean(Close, Volume),
+    day_mean(Close)) 与 day_corr(Close, Volume) —— 钱是在当天的高价位还是低价位成交的。 (5) 净买入占比 day_signed_ratio(Ret,
+    Amt) 在给定价格变动下的排序(放了很多买量价格却没涨 = 被吸收)。全部取 20 日(一个取 60 日)平均,一个做「近一周相对 60 日」的 z 分数。
+    【为什么和库里 / 控制不同】库里还没有 head;M 第 1 批 95 个候选只分别量了成交量形状(DW、偏度、开盘量)和价格路径(Vwap 的 AR1),
+    没有一个把分钟收益和分钟成交量放进同一个算子。5 个控制里:20 日反转控的是总收益,而这里量的是总收益在放量分钟与平静分钟之间的「分配」—— 按构造与总收益正交的那一部分(cs_bucket_rank
+    种子把这点写死);已知族 cross_mean(day_std(Amt), 30) 与流动性、波动都是无方向的水平量,这里全部带方向。 【为什么样本外还会在】它是流动性供给的补偿,来源是
+    A 股以散户为主、注意力驱动的下单结构,这一结构在 2018–2023 没有变; 信号是 20 日聚合、取值有界(相关系数、分钟收益均值、价格比),换手低、扣
+    15bp 后仍可交易,没有除以近零量的地方(Close>0;in_madz 的分母带相对 eps 且 MAD=0 处为空)。'
+  inspired_by: M 第 1 批:唯一显著的子树是成交量的爆发性 day_durbin_watson(Volume)(46/95 个候选含它),但整批没有一个候选问过「爆发的那几分钟价格往哪走」;机制来自
+    Campbell–Grossman–Wang 1993 与 Llorente 等 2002 的成交量–收益自相关文献
+  literature:
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: 1993-11
+    url: https://dash.harvard.edu/bitstream/1/3128710/2/campbell_trading.pdf
+    treatment: 伴随大成交量的价格变动是流动性需求、随后反转 → 爆发分钟收益 day_topw_mean(Ret, in_madz(Volume,30))
+      的 20 日均值
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    url: https://archive.nyu.edu/jspui/bitstream/2451/26698/1/FIN-00-032.pdf
+    treatment: 成交量 × 收益的交互区分信息交易(延续)与对冲交易(反转)→ 量加权减等权收益、day_corr(Ret, Volume) 与其先后关系版本
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://academicnewsletter.sufe.edu.cn/info/355980
+    treatment: 流动性交易者把单子集中到成交厚的时段 → 爆发分钟以流动性交易为主;用相对前 30 分钟的爆发而非原始量定义,避开确定性 U 形
+  seeds:
+  - cross_mean(day_topw_mean(Ret, in_madz(Volume, 30)), 20)
+  - cross_mean(sub(day_topw_mean(Ret, in_madz(Volume, 30)), day_mean(Ret)), 20)
+  - cs_bucket_rank(cross_mean(day_topw_mean(Ret, in_madz(Volume, 30)), 20), cross_mean(day_mean(Ret),
+    20))
+  - cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 60)
+  - cross_mean(day_corr(Ret, Volume), 20)
+  - cross_mean(day_corr(Ret, in_madz(Volume, 30)), 20)
+  - cross_mean(day_corr(in_delay(Ret, 1), Volume), 20)
+  - cross_mean(day_corr(Ret, in_delay(Volume, 1)), 20)
+  - cross_mean(div(day_wmean(Close, Volume), day_mean(Close)), 20)
+  - cross_mean(day_corr(Close, Volume), 20)
+  - cross_mean(day_signed_ratio(Ret, Amt), 20)
+  - cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 20), cross_mean(day_mean(Ret),
+    20))
+  - cross_zscore(cross_mean(day_corr(Ret, Volume), 5), 60)
+  - sub(cross_mean(day_topw_mean(Ret, Volume), 20), cross_mean(day_mean(Ret), 20))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

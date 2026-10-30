@@ -1,0 +1,70 @@
+seed: 803
+round: 1
+# 本轮快照 0 个 head、共性表 0 行、核心卡 0 张:没有合法的 E 核心,也没有 R 的目标 head,所以两个位都是 N、R 留空。
+slots:
+  - type: N
+    hypothesis: '机制:彩票偏好 / 偏度溢价。在散户占比高的 A 股,投资者愿意为「收益靠少数几次向上跳动实现」的股票(日内分钟收益右偏、上行跳跃占已实现方差的比例高)多付价格,这类股票随后跑输;方差主要来自下行跳动的股票则被压低、随后跑赢。这是分布的「形状」,不是分布的「位置」(反转)或「宽度」(波动)。
+      算子怎样实现:每天用当天 241 根分钟收益量分布的不对称,再用 cross_mean(·, 20) 或 5 日减 60 日把它变成持续数日的个股属性(15 bp 成本下只有名次持续的信号才可能留下来)。
+      具体写法:(1) 三阶矩 day_skew(Ret);(2) 相对符号跳跃变差 day_signed_ratio(Ret, mul(Ret, Ret)) = (上行半方差 − 下行半方差) / 已实现方差,有界于 [−1, 1];
+      (3) 同一偏度换价格路径与采样频率:day_skew(in_logchg(Vwap, 1))(均价路径,滤掉买卖价弹跳、剔除集合竞价那一分钟)与 day_skew(in_logchg(Close, 5))(5 分钟采样);
+      (4) 跳跃强度 day_kurt(Ret);(5) 尾部形状之差 sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret))(右尾超额 / 分位数 减 左尾,分位数近零时给 NaN 不爆点);
+      (6) 上行极值占日内极值区间的比例 div(day_max(Ret), sub(day_max(Ret), day_min(Ret)))(分钟级 MAX 对 MIN);
+      (7) 收盘在当日高低区间中的位置 (High − Close) / (High − Low);(8) 换时间尺度:20 日日收益偏度 ts_skew 与日度上 / 下半偏差之差;
+      (9) sub(5 日均偏度, 60 日均偏度) 看新近获得的彩票性;(10) cs_bucket_demean(·, day_last(Close)) 在价格十分位内去均值,消掉低价股分钟收益被最小变动价位离散化造成的机械偏度——这一版与不去均值的版本对照,本身就是「真来源 vs 价格代理」的检验。
+      为什么和已有的不同:库里目前没有任何 head;五个控制里,20 日反转是一阶矩,波动、成交额水平、成交额日内离散度是二阶量 / 水平,市值是规模。这里每个种子都是无量纲的三阶或符号不对称量:skew、RSJ 与尾部比都把波动的尺度除掉了,对波动做单调放缩不改变它们;控制的线性、U 形、S 形暴露被去掉之后,剩下的正是分布形状。
+      为什么样本外还会在:来源是行为性的概率加权偏好,不依赖某段行情;A 股融券受限、T+1,高估无法被及时套利;信号是 20 日平均的个股结构属性,名次持续,换手低。
+      数学检查:无前视(只用 t 日收盘前的分钟,t+1 早盘才交易);skew / kurt 在锁死日方差为 0 时给 NaN 而不是爆点;RSJ、max/(max − min)、收盘位置都有界;除法的分母只有整天一价时为 0(此时是 0/0 = NaN);所有窗口 ≤ 60 日,热身期不主导。'
+    inspired_by: 'M 第 1 批 43 个已评分候选无一成 head、共性表为空,所以不是从批次里的某个现象出发,而是从奖励口径留下的空地出发:五个控制只覆盖一阶(反转)、二阶(波动与成交额离散度)和水平量,收益分布的三阶 / 符号不对称完全没有被控制。文献:Amaya et al. (2015) 的分钟级已实现偏度、Bollerslev, Li & Zhao (2020) 的相对符号跳跃 RSJ、Barberis & Huang (2008) 的概率加权彩票偏好、Bali, Cakici & Whitelaw (2011) 的 MAX 效应。'
+    literature:
+      - {title: 'Does Realized Skewness Predict the Cross-Section of Equity Returns?', authors: 'Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez', year: '2015-10', url: 'https://doi.org/10.1016/j.jfineco.2015.02.009', treatment: '用日内高频收益算每只股票的已实现偏度与峰度,按周平均后做横截面排序:偏度低的跑赢、峰度高的跑赢;对应 cross_mean(day_skew(Ret), 20) 与 cross_mean(day_kurt(Ret), 20)'}
+      - {title: 'Good Volatility, Bad Volatility, and the Cross Section of Stock Returns', authors: 'Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao', year: '2020-05', url: 'https://doi.org/10.1017/S0022109019000097', treatment: '相对符号跳跃变差 RSJ = (RS+ − RS−)/RV:把已实现方差拆成上行与下行半方差,取其差除以总方差,尺度无关;对应 day_signed_ratio(Ret, mul(Ret, Ret))'}
+      - {title: 'Stocks as Lotteries: The Implications of Probability Weighting for Security Prices', authors: 'Nicholas Barberis, Ming Huang', year: '2008-12', url: 'https://doi.org/10.1257/aer.98.5.2066', treatment: '累积前景理论下投资者高估小概率的大收益,正偏的证券被高估、期望收益偏低;给出偏度溢价的行为机制'}
+      - {title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns', authors: 'Turan G. Bali, Nusret Cakici, Robert F. Whitelaw', year: '2011-02', url: 'https://doi.org/10.1016/j.jfineco.2010.08.014', treatment: '以极端最大收益(MAX)度量彩票性;这里搬到分钟级并对波动做尺度归一:day_max(Ret) 占 (day_max − day_min) 的比例'}
+      - {title: 'A Simple Estimation of Bid-Ask Spreads from Daily Close, High, and Low Prices', authors: 'Farshid Abdi, Angelo Ranaldo', year: '2017', url: 'https://ideas.repec.org/a/oup/rfinst/v30y2017i12p4437-4480..html', treatment: '用收盘价相对当日高低区间的位置(收盘 vs 高低中点)提取信息;这里取 (High − Close)/(High − Low) 的 20 日均值当作收盘位置的不对称'}
+    seeds:
+      - 'cross_mean(day_skew(Ret), 20)'
+      - 'cross_mean(day_signed_ratio(Ret, mul(Ret, Ret)), 20)'
+      - 'cross_mean(day_skew(in_logchg(Vwap, 1)), 20)'
+      - 'cross_mean(day_skew(in_logchg(Close, 5)), 20)'
+      - 'cross_mean(day_kurt(Ret), 20)'
+      - 'cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)'
+      - 'sub(cross_mean(day_skew(Ret), 5), cross_mean(day_skew(Ret), 60))'
+      - 'cross_mean(div(day_max(Ret), sub(day_max(Ret), day_min(Ret))), 20)'
+      - 'ts_skew(div(day_last(Close), ts_delay(day_last(Close), 1)), 20)'
+      - 'cross_mean(div(sub(day_max(High), day_last(Close)), sub(day_max(High), day_min(Low))), 20)'
+      - 'cs_bucket_demean(cross_mean(day_skew(Ret), 20), day_last(Close))'
+      - 'sub(cross_semistd_pos(day_last(Close), 20), cross_semistd_neg(day_last(Close), 20))'
+  - type: N
+    hypothesis: '机制:量与价怎样对齐,揭示是谁在交易。同样多的成交,可以集中在日内价格高位 / 上涨的分钟(追涨、正反馈交易:价格先动、成交量跟上),也可以集中在价格低位 / 下跌的分钟(承接、提供流动性)。按 Llorente et al. (2002),投机 / 信息驱动的成交伴随收益延续,对冲 / 流动性驱动的成交伴随反转;在散户占比高的 A 股,前一类主要是正反馈追涨(De Long et al. 1990),留下暂时性高估、之后几天回吐;后一类被压低、之后修复。
+      算子怎样实现:(1) 日内量价相关 day_corr(Close, Volume)(成交是否集中在当天的高价位)与 day_corr(Ret, Volume)(上涨分钟是否放量);
+      (2) 领先-滞后两个方向分开:day_corr(in_delay(Ret, 1), Volume) = 上一分钟的价格变动是否引来这一分钟的成交(反馈交易);day_corr(Ret, in_delay(Volume, 1)) = 上一分钟的放量是否领先这一分钟的价格(知情交易);day_corr(in_logchg(Volume, 1), Ret) = 量的加速是否伴随上涨;
+      (3) day_corr(abs_(Ret), Volume):成交量是否跟着信息(大幅波动)走;
+      (4) 无逐笔数据的订单失衡代理,两种分类对照:tick 规则 day_signed_ratio(Ret, Amt)(上涨分钟成交额占比 − 下跌分钟占比)与批量成交分类 day_wmean(sigmoid(in_zscore_expand(Ret)), Amt)(每分钟按当日至今标准化的收益给出连续的「买方发起」概率,再按成交额加权;in_zscore_expand 只用当天至今的分钟,因果);
+      (5) 资金流的不对称 day_skew(mul(Ret, Amt));(6) 日间尺度:cross_corr(day_last(Close), day_sum(Volume), 20) 与 cross_corr(day_mean(Ret), day_sum(Amt), 20)(Llorente 的「量 × 收益」交互在 20 日上的版本);
+      (7) 耦合的不稳定 cross_stddev(day_corr(Close, Volume), 20) 与 5 日减 60 日的变化;(8) cs_flip_by_state(·, day_sum(Amt)):市场整体放量与缩量时方向是否相反(Gao et al. 2018 发现量能状态改变日内收益的可预测性)。
+      为什么和已有的不同:库里目前没有任何 head;全部种子是相关系数、有界比例或偏度,成交额的量纲在分母里约掉,不读成交额的水平或日内离散度(流动性控制与已知族),也不读波动水平或累计收益(波动与反转控制);它读的是量与价的对齐方式与先后次序,这是五个控制都不含的信息。它可能与 20 日反转同向,但反转的线性 / U / S 形暴露在奖励里已经去掉,剩下的只能来自对齐方式本身。
+      为什么样本外还会在:投资者结构(散户追涨、T+1、融券受限)是缓慢变化的,量价对齐方式是这种结构在个股上的持续印记;20 日平均让名次持续,换手低。
+      数学检查:无前视;day_corr 在价格整天不动时给 0 而不是爆点;signed_ratio 与 BVC 份额有界;in_delay 只用同一天更早的分钟;cs_flip_by_state 的市场状态用 241 日滚动中位数,训练期最初约 180 日是在不足窗口上判定状态,只影响一小段的状态判定,不决定结果;其余窗口 ≤ 60。'
+    inspired_by: 'M 第 1 批无 head、共性表为空,所以从奖励口径的空地出发:五个控制都是单一变量的水平 / 离散度(成交额、波动、累计收益、市值),没有一个描述成交量与价格变动的联合关系。文献:Llorente, Michaely, Saar & Wang (2002) 的量-收益动态关系;De Long et al. (1990) 的正反馈交易;Lee & Ready (1991) 的 tick 规则;Easley, López de Prado & O''Hara (2012) 的批量成交分类;Gao, Han, Li & Zhou (2018) 的量能状态。'
+    literature:
+      - {title: 'Dynamic Volume-Return Relation of Individual Stocks', authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang', year: '2002', url: 'https://doi.org/10.1093/rfs/15.4.1005', treatment: '用「成交量 × 收益」的交互项区分投机交易(收益延续)与对冲交易(收益反转),且该系数在个股间随信息不对称程度系统性变化;对应日内与 20 日尺度的量价相关'}
+      - {title: 'Positive Feedback Investment Strategies and Destabilizing Rational Speculation', authors: 'J. Bradford De Long, Andrei Shleifer, Lawrence H. Summers, Robert J. Waldmann', year: '1990-06', url: 'https://doi.org/10.1111/j.1540-6261.1990.tb03695.x', treatment: '正反馈交易者跟着已发生的价格变动买入,造成短期过度与随后的回归;对应「价格领先成交量」的 day_corr(in_delay(Ret, 1), Volume)'}
+      - {title: 'Inferring Trade Direction from Intraday Data', authors: 'Charles M.C. Lee, Mark J. Ready', year: '1991-06', url: 'https://ideas.repec.org/a/bla/jfinan/v46y1991i2p733-46.html', treatment: '没有报价数据时只能用 tick 规则判定成交方向;对应按分钟收益符号切分成交额的 day_signed_ratio(Ret, Amt)'}
+      - {title: 'Flow Toxicity and Liquidity in a High-Frequency World', authors: 'David Easley, Marcos M. López de Prado, Maureen O''Hara', year: '2012', url: 'https://ideas.repec.org/a/oup/rfinst/v25y2012i5p1457-1493.html', treatment: '批量成交分类:按价格变动 / 其标准差过正态分布函数给出买方发起比例,连续加权而非按符号硬切;对应 day_wmean(sigmoid(in_zscore_expand(Ret)), Amt)'}
+      - {title: 'Market Intraday Momentum', authors: 'Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou', year: '2018-08', url: 'https://profiles.wustl.edu/en/publications/market-intraday-momentum/', treatment: '日内收益的可预测性在成交量高的日子更强:按市场量能状态区分;对应 cs_flip_by_state(·, day_sum(Amt))'}
+    seeds:
+      - 'cross_mean(day_corr(Close, Volume), 20)'
+      - 'cross_mean(day_corr(Ret, Volume), 20)'
+      - 'cross_mean(day_corr(in_delay(Ret, 1), Volume), 20)'
+      - 'cross_mean(day_corr(Ret, in_delay(Volume, 1)), 20)'
+      - 'cross_mean(day_corr(in_logchg(Volume, 1), Ret), 20)'
+      - 'cross_mean(day_corr(abs_(Ret), Volume), 20)'
+      - 'cross_corr(day_last(Close), day_sum(Volume), 20)'
+      - 'cross_corr(day_mean(Ret), day_sum(Amt), 20)'
+      - 'cross_stddev(day_corr(Close, Volume), 20)'
+      - 'sub(cross_mean(day_corr(Close, Volume), 5), cross_mean(day_corr(Close, Volume), 60))'
+      - 'cross_mean(day_signed_ratio(Ret, Amt), 20)'
+      - 'cross_mean(day_wmean(sigmoid(in_zscore_expand(Ret)), Amt), 20)'
+      - 'cross_mean(day_skew(mul(Ret, Amt)), 20)'
+      - 'cs_flip_by_state(cross_mean(day_corr(Close, Volume), 20), day_sum(Amt))'
+R: []

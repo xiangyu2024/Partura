@@ -1,0 +1,128 @@
+seed: 806
+round: 1
+slots:
+- type: E
+  core: day_max(Ret)
+  hypothesis: 核心 day_max(Ret) = 当天最大的一分钟涨幅(Ret 是分钟 bar 收益),是日内正向跳跃 / 博彩型收益的载体。它的水平值大半就是波动(控制
+    vol = cross_mean(day_std(Ret), 20)),新尺子会把这部分连同 U 形、S 形暴露一起残差掉。第 1 批共性表里,含这个核心的子树只出现了一摞外围
+    {cross_product(·,3), cross_max(·,30), abs_}:在取波动水平的极值;而且 cross_product 把缺失日当乘法单位元
+    1(窗口里每个停牌日把乘积放大约 1/x ≈ 200 倍),把全天没有上涨分钟的封死日变成精确 0,数值通道与信息混在一起,全部负分。本位的外围与之完全不同,分四层实现「跳跃形状」而不是「波动水平」:(1)
+    当天内部先标准化成跳跃统计量 Z = div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)),即最大分钟收益偏离当日均值多少个当日标准差(Lee
+    与 Mykland 2008 的检验统计量:单分钟收益除以本地波动)。总体标准差下 Z ≤ √(n−1) ≈ 15.5,有界;封死日与只有一分钟的日子是 0/0
+    = NaN,不是爆点。除掉波动水平之后剩下的是右尾的形状。(2) 沿日轴用 cross_ema(半衰期 5 / 10)、cross_tail_mean_q75(20
+    日里最高四分之一的均值,约等于文献的 MAX(5))、cross_max(20)(文献的 MAX(1))聚合,度量跳跃的频率与持续性,而不是某一天的极值;EMA
+    会跳过非有限值。(3) 用 Z 减去对称的下跳统计量 div(sub(day_mean(Ret), day_min(Ret)), day_std(Ret)),得到有符号跳跃:上跳相对下跳的不对称(文献:只有正向特质跳跃被定价)。(4)
+    显式处理两个状态:cs_bucket_rank 在 vol 控制的十分位内、或在零收益分钟占比(tick 离散 / 封死)的十分位内排序,去掉低价股 tick
+    离散对 Z 的机械影响;cs_last_high10 用 cross_max(day_zero_ratio(Ret), 15) 把封死最多的一档踢出多头书,cs_last_low05
+    用 cross_valid_count(day_last(Close), 120) 把近期上市 / 复牌的一档踢出,把旧写法藏在 0 与 NaN→1 里的两个通道拆开。另有一个
+    Z 的变体换了分母,用日内对数振幅 log(day_max(High)/day_min(Low)):一分钟拿走了全天振幅的多少,有界在 [0, 约 1]。还有两颗诊断种子,用来给旧写法的来源定价:cross_max(day_max(Ret),
+    30)(去掉 NaN→1 膨胀、保留捞尾),以及原链 cross_max(cross_product(day_max(Ret), 3), 30) 外面套上缺失日筛选。机制:A
+    股散户占比高,T+1 与涨跌停下博彩偏好更强;日内正跳跃多、右尾肥的股票被高估,随后跑输(Bali、Cakici 与 Whitelaw 2011;Lee 2023
+    发现 MAX 效应主要由正向特质跳跃驱动;Amaya 与 Vasquez 2011 用日内数据证实跳跃本身定价)。Wan 2018 指出在中国特质波动会吞掉
+    MAX:所以这里先除掉波动,只留形状。和以前不同:旧写法量的是波动水平的极值与数值通道,本位量的是标准化后的尾部形状与它的持续性,并把状态通道显式拆出。为什么样本外还在:来源是投资者偏好加上套利限制(做空约束、T+1),是制度性的;标准化后它与
+    5 个控制都不是同一个量;多日平滑压低换手,15 bp 成本下更扛得住(Novy-Marx 与 Velikov:低换手的异象扣成本后才留得住)。
+  literature:
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    url: https://archive.nyu.edu/handle/2451/27871
+    treatment: MAX(1) 与 MAX(5):月窗口里取最大一天或最大五天的均值;这里用 cross_max(Z, 20) 与 cross_tail_mean_q75(Z,
+      20) 实现,作用在跳跃统计量上而不是原始收益上
+  - title: The Role of Idiosyncratic Jumps in Stock Markets
+    authors: Suzanne S. Lee
+    year: 2023-02
+    url: https://www.scheller.gatech.edu/directory/research/finance/lee/pdf/idiosyncraticlee_2023_feb.pdf
+    treatment: 只有正向特质跳跃被定价且驱动 MAX 效应:用上跳 Z 减下跳统计量做有符号跳跃
+  - title: 'Jumps in Financial Markets: A New Nonparametric Test and Jump Dynamics'
+    authors: Suzanne S. Lee, Per A. Mykland
+    year: 2008-11
+    url: https://doi.org/10.1093/rfs/hhm056
+    treatment: 跳跃检验统计量 = 单期收益除以本地波动估计:div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret))
+  - title: Explaining Stock Returns with Intraday Jumps
+    authors: Diego Amaya, Aurelio Vasquez
+    year: 2011-01
+    url: https://www.efmaefm.org/0efmameetings/EFMA%20ANNUAL%20MEETINGS/2011-Braga/papers/0307.pdf
+    treatment: 用分钟数据度量跳跃,对多日跳跃取平均后排序:cross_ema / cross_mean 聚合
+  - title: Is the Idiosyncratic Volatility Anomaly Driven by the MAX or MIN Effect?
+      Evidence from the Chinese Stock Market
+    authors: Xiaoyuan Wan
+    year: '2018'
+    url: https://ideas.repec.org/a/eee/reveco/v53y2018icp1-15.html
+    treatment: 中国市场上特质波动吞掉 MAX:先除掉当日波动,或在 vol 控制十分位内排序(cs_bucket_rank),只留尾部形状
+  - title: A Taxonomy of Anomalies and Their Trading Costs
+    authors: Robert Novy-Marx, Mihail Velikov
+    year: 2014-12
+    url: https://www.nber.org/papers/w20721
+    treatment: 低换手的异象扣成本后才留得住:多日 EMA / 尾均值聚合压低换手
+  seeds:
+  - cross_ema(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), 10)
+  - cross_tail_mean_q75(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), 20)
+  - cross_max(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), 20)
+  - cross_mean(sub(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), div(sub(day_mean(Ret),
+    day_min(Ret)), day_std(Ret))), 20)
+  - cross_ema(sub(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), div(sub(day_mean(Ret),
+    day_min(Ret)), day_std(Ret))), 5)
+  - cs_bucket_rank(cross_ema(day_max(Ret), 10), cross_mean(day_std(Ret), 20))
+  - cs_bucket_rank(cross_ema(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)),
+    10), cross_mean(day_zero_ratio(Ret), 20))
+  - cs_last_high10(cross_ema(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)),
+    10), cross_max(day_zero_ratio(Ret), 15))
+  - cs_last_low05(cross_ema(div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), 10),
+    cross_valid_count(day_last(Close), 120))
+  - div(cross_ema(day_max(Ret), 10), cross_ema(day_std(Ret), 10))
+  - cross_max(day_max(Ret), 30)
+  - cs_last_low10(cross_max(cross_product(day_max(Ret), 3), 30), cross_valid_count(day_last(Close),
+    32))
+- type: N
+  hypothesis: 隔夜与日内的拔河。把每天的收益拆成两段:隔夜段 O = log(div(day_first(Open), cross_delay(day_last(Close),
+    1)))(今日开盘相对前一日收盘;cross_delay 取前一日,因果),日内段 I = log(div(day_last(Close), day_first(Open)))。机制:隔夜段的价格由集合竞价决定,参与者以注意力驱动的散户为主。A
+    股 T+1 下,开盘买入的人当天不能卖出,情绪性需求集中体现在开盘跳空上,随后在连续竞价里被机构与流动性提供者部分修正。持续的正隔夜收益是个股情绪的代理:Aboody
+    等(2018)发现隔夜收益短期持续,更长的期限上隔夜收益高的股票跑输、低的跑赢;Lou、Polk 与 Skouras(2019)发现两段收益由不同的客户群推动,在横截面上各自持续而彼此拉扯。算子实现:cross_mean
+    / cross_ema / cross_tail_mean_q75 度量 O 的持续水平与尖峰(注意力冲击);sub(O, I) 度量拔河的价差;cross_corr(O,
+    I, 20) 度量连续竞价是否系统性地回吐开盘跳空(负相关 = 开盘价被噪声交易推离、盘中被纠正);cross_corr(前一日 I, 今日 O, 20)
+    度量下一次开盘是延续还是反向前一个交易时段;隔夜平方和占两段平方和之比度量价格发现发生在竞价还是盘中;第一分钟成交额占全天的比例 div(day_first(Amt),
+    day_sum(Amt)) 是开盘注意力的直接代理,也用它给跳空加权;最后是 O 的 EMA 除以日内分钟波动的 EMA,即以盘中噪声为单位的跳空。数值上都是安全的:相关系数有界;比值的分母要么是同一窗口里的平方和(分子不超过分母),要么是带完整记忆的
+    EMA(不会因为连续封板变成 0);复牌日前一日收盘缺失,O 为 NaN,不会把多日收益当成隔夜;不用 cross_shift,没有前视。为什么和库里不同:第
+    1 批 M 的候选全部是交易时段内部的分钟统计(day_max(Ret)、day_close(Vwap)、day_std(Low)、day_cov(High,
+    Ret)),共性表里没有任何子树碰到开盘竞价跳空。控制里的 20 日反转是两段之和,本位度量的是两段之差与两段之间的关系,与和近似正交;它也不是波动、流动性、市值或成交额波动。为什么样本外还在:T+1、集合竞价制度与散户主导的开盘注意力在样本期之后都没有改变;机制来自交易制度与客户群结构,不是某段行情。
+  inspired_by: 第 1 批:115 个已评分候选全部是交易时段内部的分钟统计,唯一承重的是日轴上的慢聚合(cross_max(·, 30)),开盘竞价跳空这一段收益没有任何子树碰到;文献
+    Aboody、Even-Tov、Lehavy 与 Trueman 2018(隔夜收益是个股情绪代理),Lou、Polk 与 Skouras 2019(隔夜与日内的拔河)
+  literature:
+  - title: Overnight Returns and Firm-Specific Investor Sentiment
+    authors: David Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman
+    year: 2018-04
+    url: https://doi.org/10.1017/S0022109017000989
+    treatment: 隔夜收益(收盘到次日开盘)作为个股情绪代理:短期持续、长期反转;cross_mean / cross_ema / cross_tail_mean_q75
+      作用在 O 上
+  - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://doi.org/10.1016/j.jfineco.2019.03.011
+    treatment: 收益拆成隔夜与日内两段,两段由不同客户群推动、彼此拉扯:sub(O, I)、cross_corr(O, I)、隔夜方差占比
+  seeds:
+  - cross_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 20)
+  - cross_ema(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 5)
+  - cross_tail_mean_q75(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    20)
+  - cross_mean(sub(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open)))), 20)
+  - cross_ema(sub(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open)))), 10)
+  - cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))), 20)
+  - cross_corr(cross_delay(log(div(day_last(Close), day_first(Open))), 1), log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), 20)
+  - div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    log(div(day_first(Open), cross_delay(day_last(Close), 1)))), 20), add(cross_mean(mul(log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), log(div(day_first(Open), cross_delay(day_last(Close),
+    1)))), 20), cross_mean(mul(log(div(day_last(Close), day_first(Open))), log(div(day_last(Close),
+    day_first(Open)))), 20)))
+  - cross_mean(mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), div(day_first(Amt),
+    day_sum(Amt))), 20)
+  - cross_mean(div(day_first(Amt), day_sum(Amt)), 20)
+  - div(cross_ema(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 10),
+    cross_ema(day_std(Ret), 10))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

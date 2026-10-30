@@ -1,0 +1,119 @@
+seed: 805
+round: 1
+attempt: 0
+auditor: shadow-strict (Opus 5.5; scores only, intercepts nothing; standard = rules_strict.md)
+plan_scored: missions_final.yaml (seed indices below are 1-based in missions_final.yaml order)
+read: [rules.md, rules_strict.md, r1/missions_final.yaml, r1/loc.md, r1/corr_1.md, operator source]
+slots:
+- slot: a
+  type: E
+  core: day_centroid(Volume)
+  novelty: 3
+  soundness: 3
+  struck_seeds: []
+  pass_strict: true
+  alpha_source: >-
+    If it has alpha, it most likely comes from who is trading: how much of a stock's daily volume
+    goes to the late session and the closing call auction (institutional and index-fund execution)
+    versus the opening session (retail reacting to overnight news and attention). The deviation
+    seeds (zscore, madz, 5-minus-60) would add a short-lived "unusual timing today" shock on top
+    of that level.
+  novelty_reason: >-
+    Same input as the core: the order-aware intraday volume timing. The peripheries bring
+    different mechanisms: level vs deviation (seeds 1-3), regularity (4), auction tilt (5-6),
+    direction split (7-8), price-move vs volume timing (9) and regime grouping (10-11). None of
+    them is an order-preserving wrapper like the pow_* chains M already evaluated 29 times.
+    The library has no heads, and the core's maximum |rho| with the controls is 0.20. A 4 would
+    need inputs and mechanisms that are both new. Most seeds only re-express the core, so 3.
+  soundness_reason: >-
+    The mechanism is clear and the operators mostly do what the plan says. I checked the source.
+    day_centroid treats NaN minutes as zero weight and keeps the full 241-bar time axis, so
+    seed 5 is exactly the auction pull on the centroid and is bounded in [-1, 1].
+    delete_open_close blanks bars 0 and 1 and the last 3. cross_zscore and cross_madz have
+    floors against near-constant windows. Windows of 5/10/30/60 days are reasonable. I did not
+    give a 4, for three reasons:
+    (i) The only train evidence (about +0.44 for candidates containing the core) is for the
+    core's level. Seeds 1-4 deliberately remove that level and have no evidence of their own.
+    The cited literature (Admati-Pfleiderer, Lou-Polk-Skouras) is theory or overnight/intraday
+    work, not evidence for a volume-centroid signal.
+    (ii) Seeds 7-9 depend on Ret at the auction bars (bar 0 and bar 240). Ret is about
+    close/prev-close per bar, so bar 0 is either ~0 or the overnight gap. Either way,
+    is_gt0(Ret) and abs_(Ret) let the two auction bars' huge weights drive the up-minute or
+    |Ret| centroid. Seed 7 therefore partly measures open-auction share or the direction of the
+    close-auction move rather than "late buying". Seed 9 is partly the overnight gap size. The
+    plan does not address this.
+    (iii) The "habit" half of the level-vs-event contrast in the hypothesis (cross_med 30/60)
+    was removed by the table, so the slot now leans toward the event side, which is untested.
+  seed_notes:
+    1: kept - deviation of today's timing from own 30d; near-zero control loading; high turnover, 15bp cost risk
+    2: kept - robust (median/MAD) twin of seed 1 with 60d window; acceptable estimator variant
+    3: kept - timing migration (5d vs 60d)
+    4: kept - timing regularity; partly a sampling-noise / thin-trading proxy (vol 0.30, size 0.28 raw), residualisation should absorb the linear and nonlinear part
+    5: kept - auction tilt, exact by construction. For SH stocks before 2018-08-20 (no closing call auction) the last 3 bars are continuous trading, a small regime artifact in early train
+    6: kept - 30d smoothed auction tilt (liq 0.39 / known 0.43 raw, below the bar)
+    7: kept - direction split; contaminated by auction-bar Ret sign (see soundness_reason ii)
+    8: kept - 10d mean of seed 7, same caveat
+    9: kept - price-move centroid minus volume centroid; abs_(Ret) at bar 0 may be the overnight gap and dominate
+    10: kept - board-neutral core. Note cs_bucket_rank cuts BoardCode into rank deciles with ties broken by column order, so large boards are split by code order and boundary deciles mix boards. It is only an approximate "within board" grouping. Control loadings are almost identical to the core, so the gain may be small
+    11: kept - listing-age-decile neutral core; ListAge is continuous, so the deciles are well defined
+- slot: b
+  type: N
+  novelty: 4
+  soundness: 4
+  struck_seeds: [3]
+  pass_strict: true
+  alpha_source: >-
+    If it has alpha, it most likely comes from liquidity-demand reversal. When volume clusters at
+    the day's price highs, retail is chasing, and T+1 locks those buyers in, so the pressure
+    unwinds over the next days. When volume clusters at the lows (negative correlation), patient
+    buyers are absorbing the flow. This is the Campbell-Grossman-Wang reversal measured with
+    minute bars.
+  novelty_reason: >-
+    The input is new: how minute price level pairs with minute volume. The mechanism is new too:
+    chasing vs absorption, compared with the empty library and with the 5 controls (all of which
+    are level, size or dispersion statistics). Raw control loadings are 0.04-0.28. It is not a 5
+    because the construct is a documented A-share factor: the "CPV" price-volume correlation
+    factor (Dongwu Securities quant research, 2020) uses daily minute corr(close, volume), its
+    20-day mean, std and trend, with a negative sign. Daily analogues such as corr(open, volume)
+    are in the 101 Formulaic Alphas. On a trending day it is also partly the E core times the
+    day's direction.
+  soundness_reason: >-
+    The mechanism is clear and the operators implement it. day_corr is Pearson with EPS = 1e-9
+    on sqrt(var_x var_y), so it is bounded in [-1, 1] and gives exactly 0 on limit-locked days.
+    in_slice(.,1,237) keeps bars 1..237, dropping the open auction and the closing-auction
+    window. VWAP/TWAP divides by a strictly positive price. Windows are reasonable.
+    There is pre-2023-08-08 evidence: the CPV factor work above (A-shares, 2020) finds a negative
+    relation that survives controls for reversal, turnover and volatility. The cited
+    CGW 1993 / LMSW 2002 support it indirectly. The plan does not cite the direct evidence.
+    It is not a 5: the factor was published in 2020, inside the train window, and is widely
+    used, so there is a real crowding and decay risk that the "structural retail / T+1" argument
+    does not address.
+    Caveats: the raw-Volume Pearson seeds (1, 2, 7-11) are dominated by the two auction bars
+    (open and close auction volume are many times a normal minute), so they partly measure
+    "close vs open price x auction participation". Only seeds 4-6 control for this. Seed 10
+    pairs Volume[0] (open auction) with Close[5]-Close[0], so it is largely the direction of
+    the first 5 minutes after the open.
+  seed_notes:
+    1: kept - one-day intraday price-volume corr; the ruler's EMA smooths it
+    2: kept - 30d mean (CPV-style average)
+    3: STRUCK - field swap Volume->Amt of seed 2 with no separate mechanism. Amt is about Volume x minute price, so corr(Close, Amt) is corr(Close, Volume) plus a mechanical positive term from price itself. A reskin of seed 2 that wastes a seed slot
+    4: kept with caveat - in_rank uses ordinal ranks with ties broken by time order (stable argsort), not average ranks. Minute Close ties constantly on the tick grid, so the "Spearman" carries some within-tie time order. On limit-locked days it becomes corr(time, volume rank) instead of 0. The effect is small for most stocks (within-block share about 1/K^2 for K price levels) but real for low-price, low-range names
+    5: kept - continuous-session corr (auctions dropped), the clean version of the idea
+    6: kept - 30d mean of seed 5
+    7: kept - VWAP/TWAP; includes auction volumes at open and close prices
+    8: kept - 30d mean of seed 7
+    9: kept - corr(Ret, Volume) is the direction axis; known volume-return-correlation family; raw rev loading 0.39, the highest in the slot; auction-bar Ret dominates
+    10: kept - lead version; dominated by open-auction volume paired with the first 5-minute move (see soundness_reason)
+    11: kept - board-decile version of seed 2. Same approximate-grouping caveat as slot a seed 10. Weak stated reason for why board matters for price-volume co-movement
+R: []
+summary: >-
+  Both slots pass the strict standard. Slot a (E, day_centroid(Volume)) gets novelty 3 and
+  soundness 3: the mechanisms are distinct and the operators are correct (the auction-tilt seed
+  is exact by construction). The only evidence is for the core's level, which the deviation
+  seeds remove, and the Ret-based seeds are partly driven by the auction bars. Slot b (N,
+  intraday price-volume correlation) gets novelty 4 and soundness 4: the input and mechanism are
+  new to the library and controls, but the construct is a published A-share factor (CPV, 2020),
+  so not a 5, and there is crowding risk. I struck one seed in slot b, the Amt field-swap reskin
+  (seed 3). Main implementation caveats: auction-bar dominance in the raw Pearson and Ret
+  seeds, time-order tie-breaking in in_rank, and the approximate board grouping in
+  cs_bucket_rank. There are no R groups.

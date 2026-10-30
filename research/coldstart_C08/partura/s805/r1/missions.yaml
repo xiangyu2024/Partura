@@ -1,0 +1,103 @@
+seed: 805
+round: 1
+slots:
+  - type: E
+    core: 'day_centroid(Volume)'
+    hypothesis: >-
+      【核心是什么】day_centroid(Volume) = 当天 241 个分钟格上成交量的重心 sum(t*|V_t|)/sum(|V_t|),t 按 0..1 标定
+      (第 0 格是 09:30 开盘竞价,最后几格含收盘竞价)。0 = 成交全在开盘,1 = 全在收盘。它是「成交发生在一天的什么时候」,
+      正是 day_std / day_kurt / day_gini 这类无序统计量扔掉的信息。输出恒在 [0,1]、对成交量的任意正数缩放不变(拆股、股本变化都不影响),
+      只有全天零成交(停牌)才是 NaN,没有窗口、没有热身期,只用当天收盘前已知的分钟数据(收盘竞价在收盘时已知),无前视。
+      【为什么是 alpha 来源】成交时点反映的是「谁在交易」:A 股散户在开盘后追隔夜消息与关注度,机构 / 指数基金 / 算法执行集中在尾盘与收盘竞价
+      (Admati-Pfleiderer 的策略性聚集;Lou-Polk-Skouras 的不同客户群在不同时段交易)。M 第 1 批 62 个候选里,
+      只有含这个子树的 29 个在 train 与 valid 两段都稳(其余 33 个均值为负,典型的 train 拟合、valid 翻号),
+      但这 29 个的外围全是根上的保序包装 pow_2_5 / pow_1_5 / 双层 pow_2_5,在「先截面排名再 EMA」的尺子下与裸核逐日排名完全相同,
+      于是 29 次评估买到的是同一个实验,分数挤在约 0.44,离 0.5 只差一点。它的优点是「稳」不是「强」。
+      【这次的外围,机制各不相同,没有一个是保序一元包装】
+      (1) 习惯 vs 事件拆分:cross_med(核,30/60) 取个股自己 1–3 个月的中位成交时点 —— 中位数把指数调仓日、消息日这类收盘竞价暴增的少数日子
+      直接忽略,留下客户群结构决定的「习惯时点」,而且换手低、扣 15bp 后更划算;反过来 cross_zscore(核,30) / cross_madz(核,60)
+      只留「今天相对自己历史的异常时点」(Gervais-Kaniel-Mingelgrin 用相对自身历史而非水平的做法),
+      sub(cross_mean(核,5), cross_mean(核,60)) 是成交时点在几周内的迁移(资金结构在变),cross_stddev(核,30) 是时点的规律性
+      (程序化 / 指数资金每天形态稳定,注意力驱动的散户成交形态忽早忽晚)。这一组同时回答「alpha 在水平里还是在偏离里」。
+      (2) 竞价倾斜:sub(核, day_centroid(delete_open_close(Volume)))。delete_open_close 只把开盘两格和最后三格置为缺失,
+      day_centroid 把缺失当权重 0 而时间轴仍按完整 241 格标定,所以两项同尺度,差值精确等于「两端竞价把重心拉向收盘还是开盘」的量,
+      有界在 [-1,1]。它把核心里的竞价成分单独拎出来:收盘竞价是机构与指数资金的集中去处。
+      (3) 给无方向的重心补方向:sub(day_centroid(mul(Volume, is_gt0(Ret))), 核) = 上涨分钟的成交重心减全部成交重心,
+      为正说明买方成交来得比总成交晚(尾盘吸筹),为负说明上涨成交集中在早盘(追涨)。核心用 |V| 不含方向,这一项加了方向。
+      两项都在 [0,1],差有界;全天没有上涨分钟时为缺失,不是爆点。
+      (4) 时点错配:sub(day_centroid(abs_(Ret)), 核) = 价格波动的重心减成交的重心:有量无价(被动 / 流动性成交)与有价无量(信息)分开。
+      (5) 制度分组:cs_bucket_rank(核, BoardCode / ListAge) 在同一板块 / 同一上市年龄十分位内排名。板块决定竞价规则与涨跌幅
+      (创业板 2020-08 涨跌幅放宽,沪市 2018-08 才有收盘集合竞价),新股的日内成交形态也机械性地不同;
+      这些离散状态不在 5 个控制里,残差去不掉,分组后剩下的才是个股自己的时点信息。
+      【为什么和以前不同】以前见过的含核候选外围只有根上的 pow_*,它们对 [0,1] 内的值严格单调,排名后与裸核是同一个信号;
+      这里每个外围都引入了新的信息(跨日的中位数 / 标准化 / 迁移 / 规律性、竞价格的同尺度剔除、分钟收益方向、分钟波动时点、板块与上市年龄分组),
+      没有一个是保序变换。外围都很短(核心之外 1–4 个算子,日窗口只用 5/10/30/60),不给 GP 长深树、在 train 上过拟合的空间。
+      【为什么样本外还会在】机制来自 A 股的结构:散户占成交大头且在开盘集中反应隔夜信息、T+1 让追涨者当天无法离场、
+      机构与指数资金为降低冲击把执行放到尾盘与收盘竞价 —— 这些在 2023 年后不变。核心有界、尺度无关、无参数,
+      外围只用中位数 / 标准化 / 差分 / 分组这类不拟合参数的处理,样本外不会因数值或参数漂移失效。
+    literature:
+      - {title: 'A Theory of Intraday Patterns: Volume and Price Variability', authors: 'Anat R. Admati, Paul Pfleiderer', year: '1988', url: 'https://www.gsb.stanford.edu/faculty-research/working-papers/theory-intraday-trading-patterns-volume-price-variability', treatment: '日内成交在时间上的聚集是知情与流动性交易者策略选择的结果:用成交重心度量这种时点,并把开盘 / 收盘两端(竞价)单独拆出来看'}
+      - {title: 'The High-Volume Return Premium', authors: 'Simon Gervais, Ron Kaniel, Dan Mingelgrin', year: '2001', url: 'https://sites.duke.edu/sgervais/?p=64', treatment: '成交量特征用相对个股自身近期历史的异常度而不是截面水平:对应 cross_zscore / cross_madz / 短减长均值这组外围'}
+      - {title: 'A Tug of War: Overnight versus Intraday Expected Returns', authors: 'Dong Lou, Christopher Polk, Spyros Skouras', year: '2019', url: 'https://personal.lse.ac.uk/polk/research/TugOfWar.pdf', treatment: '不同客户群(机构 vs 个人)在一天的不同时段交易,alpha 集中在特定时段:把成交时点当成客户群结构的度量,并按收益方向拆分时点'}
+      - {title: 'Effectiveness of price limits: Evidence from China''s ChiNext market', authors: 'Bao Qi', year: '2023-06', url: 'https://ideas.repec.org/a/plo/pone00/0287548.html', treatment: '涨跌幅 / 板块制度改变日内交易动态:在 BoardCode 与 ListAge 的十分位内对时点排名,把制度带来的机械差异扣掉'}
+    seeds:
+      - 'cross_med(day_centroid(Volume), 30)'
+      - 'cross_med(day_centroid(Volume), 60)'
+      - 'cross_zscore(day_centroid(Volume), 30)'
+      - 'cross_madz(day_centroid(Volume), 60)'
+      - 'sub(cross_mean(day_centroid(Volume), 5), cross_mean(day_centroid(Volume), 60))'
+      - 'cross_stddev(day_centroid(Volume), 30)'
+      - 'sub(day_centroid(Volume), day_centroid(delete_open_close(Volume)))'
+      - 'cross_mean(sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))), 30)'
+      - 'sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(Volume))'
+      - 'cross_mean(sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(Volume)), 10)'
+      - 'sub(day_centroid(abs_(Ret)), day_centroid(Volume))'
+      - 'cs_bucket_rank(day_centroid(Volume), BoardCode)'
+      - 'cs_bucket_rank(cross_med(day_centroid(Volume), 30), BoardCode)'
+      - 'cs_bucket_rank(day_centroid(Volume), ListAge)'
+  - type: N
+    hypothesis: >-
+      【新 idea:成交落在当天价格路径的什么位置】把第 1 批里唯一稳定的那条轴(成交在「钟表时间」上的位置)换成「价格路径」上的位置:
+      当天的成交是集中在价格的高处还是低处、是跟着价格走还是逆着价格走。主算子是 day_corr(Close, Volume) —— 当天 241 个分钟的
+      收盘价与成交量的相关系数,在 [-1,1]。为正 = 价格越高的时刻成交越多(追涨、量随价走);为负 = 成交集中在价格低处(逢低承接)。
+      【机制】Campbell-Grossman-Wang:伴随大成交量的价格变动若来自非信息性的流动性需求,之后会反转;A 股散户占成交大头、
+      注意力驱动,盘中追涨的成交集中在当天价格高处,而 T+1 使这些买入当天无法离场,买压在之后几天回吐。相反,
+      成交集中在价格低处(机构的 VWAP / 被动执行、价值型买家逢低吸纳)是有耐心的承接盘。Llorente-Michaely-Saar-Wang:
+      量价的动态关系取决于知情交易与对冲 / 流动性交易的占比 —— 量价共动的方式本身就是在度量这个占比。所以预期高相关 → 未来偏弱,
+      低(负)相关 → 未来偏强(方向留给 train 自己选)。
+      【算子怎样实现】(a) 原始的日内量价相关 day_corr(Close, Volume) 及其 30 日均值(把单日噪声平均掉,得到个股稳定的量价共动习惯);
+      (b) 换成金额 Amt;(c) 先在日内对价格与成交量各自排名再求相关 day_corr(in_rank(Close), in_rank(Volume)) —— 秩相关,
+      不让一两根放量 K 线(尤其竞价格)支配相关系数,这里用 in_rank + day_corr 自己拼,不用 ts_spearman;
+      (d) 用 in_slice(…,1,237) 去掉开盘竞价格与收盘竞价窗口,只看连续竞价时段;(e) VWAP / TWAP = div(day_wmean(Close,Volume), day_mean(Close)):
+      成交是否以高于当天时间均价的价格成交,同一个想法的「价位」写法;(f) 方向版 day_corr(Ret, Volume):成交是否集中在上涨分钟;
+      (g) 领先版 day_corr(in_delta(Close,5), in_delay(Volume,5)):5 分钟前的成交量与其后 5 分钟的价格变化的相关 —— 成交是否领先价格(知情成交);
+      (h) 量价相关的 30 日波动、按 BoardCode 分组的版本。
+      【为什么和库里已有的不同】库里还没有任何 head;5 个控制是流动性、波动、20 日反转、成交额日内离散度族、流通市值,
+      都只看「量多大、价动多少」,不看量与价在日内怎样配对。第 1 批的核心 day_centroid(Volume) 看的是成交在钟表时间上的位置,
+      与价格路径无关;这里看的是成交相对价格路径的位置,输入(Close 与 Volume 的配对)和机制(追涨 vs 承接)都不同。
+      【数值与定义】day_corr 分母带 EPS,有界在 [-1,1];价格全天不动(一字板、停牌复牌)时方差为 0,相关系数为 0 而不是爆点,
+      只是少数锁死股票落在中间值;Close 恒为正,VWAP / TWAP 不会除以近零;所有量只用当天收盘前已知的分钟数据,
+      日窗口最长 30,热身期远短于 train。
+      【为什么样本外还会在】它依赖的是 A 股的制度与参与者结构(散户主导、T+1、涨跌停),而不是某一段行情;追涨盘的事后回吐
+      是流动性需求的补偿,只要散户占比与 T+1 不变就会持续。构造只有相关系数与均值,没有拟合参数。
+    inspired_by: >-
+      M 第 1 批:62 个候选里唯一在 train 与 valid 都稳的是有序的日内统计量 day_centroid(Volume)(成交在钟表时间上的位置),
+      无序的日内统计量全部两段翻号 —— 说明「成交在一天里怎样排布」比「成交分布的形状」更可靠;于是把轴从钟表时间换成价格路径。
+      文献:Campbell-Grossman-Wang 1993、Llorente-Michaely-Saar-Wang 2002、Admati-Pfleiderer 1988。
+    literature:
+      - {title: 'Trading Volume and Serial Correlation in Stock Returns', authors: 'John Y. Campbell, Sanford J. Grossman, Jiang Wang', year: '1993', url: 'https://doi.org/10.2307/2118454', treatment: '伴随高成交量的价格变动若由流动性需求驱动则随后反转:用日内量价相关度量成交是否集中在价格被推高的时刻'}
+      - {title: 'Dynamic Volume-Return Relation of Individual Stocks', authors: 'Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang', year: '2002', url: 'https://doi.org/10.1093/rfs/15.4.1005', treatment: '量与收益的动态关系取决于知情交易与对冲交易的占比:用量价共动(同期、方向、领先)的方式度量这个占比'}
+      - {title: 'A Theory of Intraday Patterns: Volume and Price Variability', authors: 'Anat R. Admati, Paul Pfleiderer', year: '1988', url: 'https://www.gsb.stanford.edu/faculty-research/working-papers/theory-intraday-trading-patterns-volume-price-variability', treatment: '日内成交与价格波动的形态由知情与流动性交易者的交易选择决定:把竞价格剔除、只看连续竞价时段的量价配对作为稳健性版本'}
+    seeds:
+      - 'day_corr(Close, Volume)'
+      - 'cross_mean(day_corr(Close, Volume), 30)'
+      - 'cross_mean(day_corr(Close, Amt), 30)'
+      - 'cross_mean(day_corr(in_rank(Close), in_rank(Volume)), 30)'
+      - 'day_corr(in_slice(Close, 1, 237), in_slice(Volume, 1, 237))'
+      - 'cross_mean(day_corr(in_slice(Close, 1, 237), in_slice(Volume, 1, 237)), 30)'
+      - 'div(day_wmean(Close, Volume), day_mean(Close))'
+      - 'cross_mean(div(day_wmean(Close, Volume), day_mean(Close)), 30)'
+      - 'cross_mean(day_corr(Ret, Volume), 30)'
+      - 'cross_mean(day_corr(in_delta(Close, 5), in_delay(Volume, 5)), 30)'
+      - 'cross_stddev(day_corr(Close, Volume), 30)'
+      - 'cs_bucket_rank(cross_mean(day_corr(Close, Volume), 30), BoardCode)'

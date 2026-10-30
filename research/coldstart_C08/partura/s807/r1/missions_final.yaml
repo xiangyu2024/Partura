@@ -1,0 +1,177 @@
+seed: 807
+round: 1
+slots:
+- type: E
+  core: ts_var(LogFloatCap, 20)
+  hypothesis: 核心 ts_var(LogFloatCap, 20) 是快照里唯一「拿掉就塌」的部件:head 2 把 ts_var(LogFloatCap,
+    30) 换成裸 LogFloatCap,0.79 → −0.55;head 1 去掉含它的 ts_regbeta(...),0.91 → −1.99;共性表里它出现在
+    48/114 个候选中,均值差 +0.75,p 0.0005(loc.md)。它度量的是 log 流通市值「水平」在 20 日内的方差,不是收益方差;对近似随机游走,它
+    ≈ 日频收益方差 × d/6 + (窗口内漂移)²/12 + 流通股本跳跃²。5 个控制里,波动控制是分钟内收益波动 cross_mean(day_std(Ret),
+    20),反转控制的排名平方 / 三次方吸收了 |20 日漂移| 的 U 形,市值控制是水平 —— 所以核心里能留下来的是日间 / 隔夜那一截低频方差(以及股本事件)。快照只用过它一种机器:外层
+    cross_regbeta(day_quantile_q75(Volume 或 Amt), ·, 15–482),内层 cs_bucket_demean(·,
+    LimitWidth) 或 ts_regbeta(·, cs_mean(day_median(Close)), 5),外加恒等的 add(cs_median(...),
+    ·)。这次的外围整个换掉:没有一个种子含 cross_regbeta、day_quantile_q75、LimitWidth、cs_median 或 day_pos_ratio。四类外围各实现一个机制:(1)
+    方差比 / 方差分解(Lo-MacKinlay 方差比、Yang-Zhang 隔夜与日内分解):log(核心) 减去 log(20 日分钟收益方差均值),或减去
+    2·log(开盘到收盘日收益的 20 日标准差),把「低频方差相对于日内方差多出来的部分」(隔夜跳空、日间自相关)显式剥出来;另有每只股票自己的 120 日时序回归残差版
+    cross_regres(log 日内方差, log 核心, 120),即今天的低频方差比这只股票平时由日内方差所预期的多多少。(2) 慢化:120 日均值、60
+    日中位数、120 日上尾均值。单个 20 点窗口的水平方差围绕其期望的变异系数约 0.9(布朗桥路径方差是 χ² 的加权和,首项占六成),核心单独当因子得
+    −2.71 主要是换手成本;长窗统计把它变成换手很低的「持久低频波动」。(3) 相对自身历史:cross_zscore(核心, 120)、log(核心 /
+    自身 120 日均值)、核心在 60 日内的变异系数(vol-of-vol):度量方差的变化而不是水平。(4) 同类相对与价格冲击:规模十分位桶内排名(60
+    日平滑)、板块桶内 z 分数(以真板块 BoardCode / 规模 LogFloatCap 代替只有 2–3 个取值、靠列序切片的 LimitWidth),以及
+    log(核心) − log(换手率) 的 60 日均值,即 Amihud 式「单位换手对应的价格变动」;再加一个尺度无关的量-波协动 cross_corr(核心,
+    log 日成交额, 60)(混合分布假说:信息流同时驱动成交与波动),对照快照里被 1/sd(自变量) 尺度污染的 regbeta。全部是当日及以前的日频数据,无前视;比值一律写成
+    log 差,log 对 |x| ≤ 1e-9 返回 NaN,避免近零除法爆点。为什么样本外还会在:低波动 / 低频方差溢价在 A 股被归于散户的彩票偏好,且对估计窗口(1
+    个月到 5 年)不敏感(Blitz 2021);方差比的成分(隔夜信息到达、日间自相关)是股票价格形成方式的慢变量;所有种子在 60–120 日尺度上平滑或取统计量,换手低,15
+    bp 成本吃不掉。
+  literature:
+  - title: 'Stock Market Prices Do Not Follow Random Walks: Evidence from a Simple
+      Specification Test'
+    authors: Andrew W. Lo, A. Craig MacKinlay
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.41
+    treatment: 多日价格水平方差与高频(单期)方差之比 —— 方差比;这里用 log(核心) − log(分钟方差) 实现
+  - title: Drift-Independent Volatility Estimation Based on High, Low, Open, and Close
+      Prices
+    authors: Dennis Yang, Qiang Zhang
+    year: '2000'
+    url: https://scholars.cityu.edu.hk/en/publications/drift-independent-volatility-estimation-based-on-high-low-open-an/
+    treatment: 把日方差分成隔夜与开盘到收盘两段;这里用核心相对于开盘到收盘收益方差的 log 差剥出隔夜 / 日间那一截
+  - title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    url: https://tinbergen.nl/publication/166928/unknown-unknowns-uncertainty-about-risk-and-stock-returns
+    treatment: 波动的波动(方差估计量自身的变异系数)作为独立于波动水平的横截面特征
+  - title: The Low-Volatility Effect in China
+    authors: David Blitz
+    year: 2021-05
+    url: https://robeco.com/nl-nl/visie/2021/05/the-low-volatility-effect-in-china
+    treatment: A 股低波动效应对估计窗口不敏感 —— 用 60–120 日的长窗统计量慢化核心
+  - title: 'Illiquidity and Stock Returns: Cross-Section and Time-Series Effects'
+    authors: Yakov Amihud
+    year: '2002'
+    url: https://doi.org/10.1016/S1386-4181(01)00024-6
+    treatment: 单位成交对应的价格变动(价格冲击)作为非流动性度量;这里用 log 方差 − log 换手率
+  - title: A Subordinated Stochastic Process Model with Finite Variance for Speculative
+      Prices
+    authors: Peter K. Clark
+    year: '1973'
+    url: https://www.econometricsociety.org/publications/econometrica/1973/01/01/subordinated-stochastic-process-model-finite-variance
+    treatment: 混合分布假说:信息流同时驱动成交量与波动 —— 用尺度无关的 cross_corr 度量两者协动
+  seeds:
+  - sub(log(ts_var(LogFloatCap, 20)), log(cross_mean(day_var(Ret), 20)))
+  - cross_mean(sub(log(ts_var(LogFloatCap, 20)), log(cross_mean(day_var(Ret), 20))),
+    60)
+  - cross_regres(log(cross_mean(day_var(Ret), 20)), log(ts_var(LogFloatCap, 20)),
+    120)
+  - sub(log(ts_var(LogFloatCap, 20)), mul(2, log(cross_stddev(log(div(day_last(Close),
+    day_first(Open))), 20))))
+  - cross_mean(ts_var(LogFloatCap, 20), 120)
+  - cross_med(ts_var(LogFloatCap, 20), 60)
+  - cross_tail_mean_q75(ts_var(LogFloatCap, 20), 120)
+  - cross_zscore(ts_var(LogFloatCap, 20), 120)
+  - sub(log(ts_var(LogFloatCap, 20)), log(cross_mean(ts_var(LogFloatCap, 20), 120)))
+  - div(cross_stddev(ts_var(LogFloatCap, 20), 60), cross_mean(ts_var(LogFloatCap,
+    20), 60))
+  - cross_mean(cs_bucket_rank(ts_var(LogFloatCap, 20), LogFloatCap), 60)
+  - cs_bucket_zscore(cross_mean(ts_var(LogFloatCap, 20), 60), BoardCode)
+  - cross_mean(sub(log(ts_var(LogFloatCap, 20)), sub(log(day_sum(Amt)), LogFloatCap)),
+    60)
+  - cross_corr(ts_var(LogFloatCap, 20), log(day_sum(Amt)), 60)
+- type: N
+  hypothesis: 交易活跃度的跨日不稳定性(volume-of-volume),以及风险本身的不稳定性(vol-of-vol),是被高估的特征,稳定的一端有正的超额收益。Chordia、Subrahmanyam、Anshuman(2001)发现:控制了活跃度水平之后,换手率
+    / 成交额的变异系数越高,未来收益越低。机制:在散户主导的市场里,成交突发对应注意力冲击,注意力驱动的净买入把价格推高、随后回落(Barber-Odean
+    2008);成交平稳、无人关注的股票被低估。Baltussen 等(2018)对波动的波动给出同方向的结果(风险的不确定性被高估)。算子实现:日成交额在 60
+    / 120 日上的变异系数 cross_stddev / cross_mean;log 成交额、log 换手率(log 日成交额 − LogFloatCap)的时序标准差;日内
+    q75 分钟成交额取 log 后的时序标准差;60 日峰值 / 中位数、120 日上尾均值 / 下尾均值(都写成 log 差,log 对近零返回 NaN,避免除以近零);log
+    成交额日变化的标准差;相对自身 20 日的异常成交强度 |cross_zscore| 的 60 日均值;风险一侧用 5 日分钟波动在 60 日内的变异系数、log
+    日内波动的 120 日标准差;再给一个规模十分位桶内 z 分数版(去掉小盘股机械性更不稳定的那部分)和一个活跃度与波动两种不稳定性的排名合成。与已有东西的不同:5
+    个控制全是水平量(30 日成交额均值、30 日日内成交额标准差均值、20 日分钟波动、市值、20 日反转),这里全部是尺度无关的跨日变异;快照里的 head
+    都是 cross_regbeta(day_quantile_q75(Volume), Y, d) = corr × sd(Y)/sd(X),其截面排序被 sd(X)
+    主导,而 sd(X) 的截面差异跨 3–4 个数量级、本质是成交量的水平,不是变异系数。为什么样本外还会在:注意力 / 彩票偏好是 A 股散户结构带来的行为偏差,不随样本期消失;Chordia
+    等用的是 1960–90 年代美股,对 2018 年以后的 A 股本身就是样本外;全部信号用 60–120 日窗口,换手很低。方向由 train 挑:Chordia
+    预测做多稳定端;若短窗的异常成交(Gervais、Kaniel、Mingelgrin 2001 的高成交量溢价,可见度假说)占上风,方向会相反 —— 两种都是有名字的机制。
+  inspired_by: 第 1 批的 3 个 head 都是 cross_regbeta(day_quantile_q75(Volume), Y, d):beta
+    = corr × sd(Y)/sd(X),截面排序被 1/sd(X) 主导;Volume→Amt 互换让两个 +1 方向的 head 变好(+0.59、+0.04),说明外层的活成分是成交活跃度的离散程度而不是协动,但在
+    head 里它和成交量水平、价格水平混在一起。本位把它写成尺度无关的显式特征。文献:Chordia, Subrahmanyam & Anshuman (2001)。
+  literature:
+  - title: Trading Activity and Expected Stock Returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+    year: '2001'
+    url: https://doi.org/10.1016/S0304-405X(00)00080-5
+    treatment: 换手率 / 成交额的跨期变异系数作为横截面特征(控制活跃度水平后与未来收益负相关)
+  - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior
+      of Individual and Institutional Investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    url: https://doi.org/10.1093/rfs/hhm079
+    treatment: 异常成交作为注意力冲击的代理;散户对受关注股票净买入
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    url: https://doi.org/10.1111/0022-1082.00349
+    treatment: 相对自身近期水平的异常成交量(这里用 |cross_zscore(日成交额, 20)| 的均值)
+  - title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    url: https://tinbergen.nl/publication/166928/unknown-unknowns-uncertainty-about-risk-and-stock-returns
+    treatment: 波动的波动:短期波动在较长窗口内的变异系数
+  seeds:
+  - div(cross_stddev(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))
+  - div(cross_stddev(day_sum(Amt), 120), cross_mean(day_sum(Amt), 120))
+  - cross_stddev(log(day_sum(Amt)), 60)
+  - cross_stddev(sub(log(day_sum(Amt)), LogFloatCap), 120)
+  - cross_stddev(log(day_quantile_q75(Amt)), 60)
+  - cross_stddev(log(day_quantile_q75(Amt)), 120)
+  - sub(log(cross_max(day_sum(Amt), 60)), log(cross_med(day_sum(Amt), 60)))
+  - sub(log(cross_tail_mean_q75(day_sum(Amt), 120)), log(cross_tail_mean_q25(day_sum(Amt),
+    120)))
+  - cross_stddev(cross_delta(log(day_sum(Amt)), 1), 60)
+  - cross_mean(abs_(cross_zscore(day_sum(Amt), 20)), 60)
+  - div(cross_stddev(cross_mean(day_std(Ret), 5), 60), cross_mean(day_std(Ret), 60))
+  - cross_stddev(log(day_std(Ret)), 120)
+  - cs_bucket_zscore(cross_stddev(log(day_sum(Amt)), 60), LogFloatCap)
+  - add(cs_rank(cross_stddev(log(day_sum(Amt)), 60)), cs_rank(cross_stddev(log(day_std(Ret)),
+    60)))
+R:
+- head: cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(add(cs_median(ts_var(LogFloatCap,
+    50)), ts_var(LogFloatCap, 20)), LimitWidth), 30)
+  why: cs_median(ts_var(LogFloatCap, 50)) 是每日一个横截面常数,被 cs_bucket_demean 精确抹掉:它把本来有用的
+    var50 加项废掉(拿掉 cs_median、让 var50 真正参与:+0.24)。外层自变量用股数 Volume,带进了后复权价格水平与按手取整(day_quantile_q75(Volume)
+    单独 distinct 只有 0.36):换成金额 Amt +0.59(valid 0.52 → 3.06)。窗口 30 偏短:30 → 60 +0.50。变体把三处好处组合起来、去掉死的常数加项;另给两个尺度无关的外层(cross_corr、cross_reg_tvalue),检验外层分数来自协动还是
+    regbeta 的 1/sd(自变量) 尺度,以及一个按规模 LogFloatCap 分桶的版本。
+  variants:
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(add(cs_median(ts_var(LogFloatCap,
+    50)), ts_var(LogFloatCap, 20)), LimitWidth), 30)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20),
+    LimitWidth), 60)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(add(ts_var(LogFloatCap,
+    50), ts_var(LogFloatCap, 20)), LimitWidth), 60)
+  - cross_corr(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth),
+    60)
+  - cross_reg_tvalue(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20),
+    LimitWidth), 60)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20),
+    LogFloatCap), 60)
+- head: cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(add(cs_median(day_pos_ratio(Open)),
+    ts_var(LogFloatCap, 30)), LimitWidth), 30)
+  why: add(cs_median(day_pos_ratio(Open)), ·) 是精确死重:Open 是后复权价、恒正,day_pos_ratio(Open)
+    ≡ 1,桶内去均值又把常数抹掉(拿掉 cs_median、以及 Open → Close 互换,分数都逐位不变)。窗口 30 偏短(30 → 60 +0.23,30
+    → 15 −0.76)。分桶字段 LimitWidth 只有 0.10 / 0.20 / 0.30 三个值,2020-08 之前几乎全市场 0.10,十分位桶实际上是按股票列序切出的代码片段:换成真板块
+    BoardCode 与规模 LogFloatCap。口径上换成 LogTotalCap(总股本不受限售解禁影响),检验流通股本跳跃是不是来源;ts_var
+    窗口试 40(共性表里均值差最高的窗口);外层换 cross_corr 同上做尺度对照。为了和 head 3 的替换保持分散,这一组保留 Volume。
+  variants:
+  - cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(add(cs_median(day_pos_ratio(Open)),
+    ts_var(LogFloatCap, 30)), LimitWidth), 60)
+  - cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogFloatCap, 30),
+    BoardCode), 60)
+  - cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogFloatCap, 30),
+    LogFloatCap), 60)
+  - cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogTotalCap, 30),
+    LimitWidth), 60)
+  - cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogFloatCap, 40),
+    LimitWidth), 60)
+  - cross_corr(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogFloatCap, 30),
+    LimitWidth), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

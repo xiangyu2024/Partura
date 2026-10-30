@@ -1,0 +1,153 @@
+seed: 804
+round: 1
+slots:
+- type: E
+  core: ts_var(LogFloatShares, 10)
+  hypothesis: 【alpha 来源】流通股数(LogFloatShares)只在股本事件日跳变:限售股解禁(IPO/定增锁定期满)、送转股除权、可转债转股、回购注销。核心
+    = 过去 10 个交易日流通股数对数的方差,大于 0 即「最近 10 天新增(或减少)了可交易的供给」。解禁与增发把一批成本极低的新卖家放进流通盘,他们在之后几周持续出货,价格在事件后几周承压(Field
+    & Hanka 2001:解禁日前后显著负超额收益、成交量放大约 40%;Pontiff & Woodgate 2008:股本扩张后横截面收益更低)。这是一个供给冲击,与
+    5 个控制(流动性水平、波动、20 日反转、成交额离散、市值)都不是同一个东西:市值控制的是股数×价格的水平,不是股数的变化。【这次的外围处理,三件事】(1)重要性阈值
+    mul(core, is_gt(core, 1e-8)):我在引擎上实测,股数不变的 10 日窗口在 float32 下并不精确为 0,约一半股票得到 3.6e-12
+    的舍入残差,所以裸核心实际上是按浮点位把股票分成两半(数值伪影);1e-8 比残差高约 2700 倍,又低于最小的有经济意义的事件(窗口边缘约 0.03%
+    的流通股变化),阈值之后无事件的名字精确为 0、有事件的名字保留事件大小。带符号的写法 mul(core, sign(ts_delta(LogFloatShares,
+    10))) 对不变的名字同样精确为 0(x-x=0),并把扩张(正)与回购注销(负)分开。(2)把它放在 cs_last_high05/10/20 的筛位(x
+    位):这些算子按「整块并列」取 band,精确为 0 的大块永远进不了 band,于是 band 恰好是事件最大的那批名字,它们被压到多头书之外,其余名字按
+    y 排序;cs_first_low20 再把回购注销(负值块)放到最前。用 ts_max(·, 20~60)/ts_mean(·, 30) 把「最近 10
+    天有事件」延长成「最近一到三个月有事件」,对应解禁后持续数周的卖压。(3)y 位放与供给/持有人结构相关的慢变量:−log 名义股价 sub(LogFloatShares,
+    LogFloatCap)、以股数计的异常成交量 div(cross_mean(day_sum(Volume), 5|10|20), cross_mean(day_sum(Volume),
+    60))、以股数计的换手率 sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares);并叠第二道筛:一年流通股扩张
+    sub(LogFloatShares, cross_ema(LogFloatShares, 241)) 与待解禁存量 sub(LogTotalCap, LogFloatCap)
+    的最高 10%/20%。以股数计的 y 在送转除权后会机械跳变(10 送 10 后成交量按股数翻倍、名义股价减半),核心的事件筛正好把这段被股本变动污染的窗口拿掉,这是核心和外围之间的具体分工。【和以前的不同】快照里含这个核心的候选只有
+    5 个,用的是裸核心(未阈值化,因此是舍入残差主导);本位每个种子都用阈值化或带符号的核心,并且都放在整块筛位上,外围算子集合(is_gt 阈值、sign∘ts_delta、cs_last_*/cs_first_low20、ts_max/ts_mean
+    记忆窗)与快照里见过的写法不同。【给审计的数学说明】核心单独当根会被门槛判为废品(绝大多数格子精确为 0,distinct 很低),这是并列块而不是缺陷;本位所有种子的输出都是
+    y 的序数秩加筛位移,distinct = 1,在合成立方体上实测 coverage 0.99、无 inf。没有前视:LogFloatShares 与成交量都是当天收盘前已知。没有除以近零:成交量比的分母窗口包含分子窗口,只可能是
+    0/0 = NaN。【为什么样本外还在】解禁、定增锁定期、送转是监管制度规定的、每年反复出现的事件;机制是「低成本持有人获得卖出权后出货」,不依赖某段行情;而股本变动对股数计量的机械污染是会计恒等式,永远成立。
+  literature:
+  - title: The Expiration of IPO Share Lockups
+    authors: Laura Casares Field; Gordon Hanka
+    year: 2001-04
+    url: https://doi.org/10.1111/0022-1082.00334
+    treatment: 把「锁定期满、新股份进入流通」当作事件,事件后数周的负超额收益与放量;借用为:用流通股数变化定位事件,把事件后一段窗口的名字排除出多头书
+  - title: The Role of Lockups in Initial Public Offerings
+    authors: Alon Brav; Paul A. Gompers
+    year: 2003-01
+    url: https://doi.org/10.1093/rfs/16.1.0001
+    treatment: 锁定期作为对内部人卖出的承诺,到期后供给释放;借用为:待解禁存量 sub(LogTotalCap, LogFloatCap) 作为第二道筛
+  - title: Share Issuance and Cross-Sectional Returns
+    authors: Jeffrey Pontiff; Artemiza Woodgate
+    year: 2008-04
+    url: https://ideas.repec.org/a/bla/jfinan/v63y2008i2p921-945.html
+    treatment: 用对数股数的变化率度量股本扩张,扩张越多未来收益越低;借用为:一年流通股扩张 sub(LogFloatShares, cross_ema(LogFloatShares,
+      241)) 与带符号的事件核心
+  - title: 'Trading Volume: Definitions, Data Analysis, and Implications of Portfolio
+      Theory'
+    authors: Andrew W. Lo; Jiang Wang
+    year: 2000-04
+    url: https://doi.org/10.1093/rfs/13.2.257
+    treatment: 成交量应当用流通股数归一成换手率才可比;借用为:以股数计的成交量与换手率在股本变动窗口里需要被剔除或归一
+  seeds:
+  - cs_last_high10(sub(LogFloatShares, LogFloatCap), mul(ts_var(LogFloatShares, 10),
+    is_gt(ts_var(LogFloatShares, 10), 1e-8)))
+  - cs_last_high05(sub(LogFloatShares, LogFloatCap), ts_max(mul(ts_var(LogFloatShares,
+    10), is_gt(ts_var(LogFloatShares, 10), 1e-8)), 40))
+  - cs_last_high10(div(cross_mean(day_sum(Volume), 5), cross_mean(day_sum(Volume),
+    60)), ts_max(mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10),
+    1e-8)), 50))
+  - cs_last_high10(div(cross_mean(day_sum(Volume), 20), cross_mean(day_sum(Volume),
+    60)), ts_max(mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10),
+    1e-8)), 50))
+  - cs_last_high05(div(cross_mean(day_sum(Volume), 5), cross_mean(day_sum(Volume),
+    60)), mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10), 1e-8)))
+  - cs_last_high10(div(cross_mean(day_sum(Amt), 5), cross_mean(day_sum(Amt), 60)),
+    ts_max(mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10), 1e-8)),
+    40))
+  - cs_last_high20(sub(log(cross_mean(day_sum(Volume), 20)), LogFloatShares), ts_max(mul(ts_var(LogFloatShares,
+    10), is_gt(ts_var(LogFloatShares, 10), 1e-8)), 20))
+  - cs_last_high10(cs_last_high10(sub(LogFloatShares, LogFloatCap), mul(ts_var(LogFloatShares,
+    10), is_gt(ts_var(LogFloatShares, 10), 1e-8))), sub(LogFloatShares, cross_ema(LogFloatShares,
+    241)))
+  - cs_last_high10(cs_last_high10(div(cross_mean(day_sum(Volume), 5), cross_mean(day_sum(Volume),
+    60)), ts_max(mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10),
+    1e-8)), 50)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high10(sub(LogFloatShares, LogFloatCap), mul(ts_var(LogFloatShares, 10),
+    sign(ts_delta(LogFloatShares, 10))))
+  - cs_first_low20(cs_last_high10(div(cross_mean(day_sum(Volume), 5), cross_mean(day_sum(Volume),
+    60)), mul(ts_var(LogFloatShares, 10), sign(ts_delta(LogFloatShares, 10)))), mul(ts_var(LogFloatShares,
+    10), sign(ts_delta(LogFloatShares, 10))))
+  - cs_last_high20(cs_last_high10(sub(LogFloatShares, LogFloatCap), ts_max(mul(ts_var(LogFloatShares,
+    10), is_gt(ts_var(LogFloatShares, 10), 1e-8)), 60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high10(div(cross_mean(day_sum(Volume), 10), cross_mean(day_sum(Volume),
+    60)), ts_mean(mul(ts_var(LogFloatShares, 10), is_gt(ts_var(LogFloatShares, 10),
+    1e-8)), 30))
+  - cs_last_high10(div(cross_mean(day_sum(Volume), 5), cross_mean(day_sum(Volume),
+    60)), ts_max(mul(ts_var(LogFloatShares, 10), sign(ts_delta(LogFloatShares, 10))),
+    50))
+- type: N
+  hypothesis: 【新 idea:隔夜与日内的拉锯(T+1 下的开盘集合竞价需求)】A 股是 T+1:开盘买入的人当天不能卖。隔夜积累的订单在 9:15–9:25
+    的集合竞价里一次性撮合,这部分需求以注意力驱动的散户为主;日内连续交易的需求方结构不同。所以一只股票的价格在「隔夜」与「日内」两段里由两类人定:隔夜段反映注意力与情绪,日内段反映连续交易者的纠正。持续靠隔夜跳高、又在日内被吐回的股票是被注意力需求抬高的,之后跑输;隔夜段解释了价格变动的多大份额,是这只股票价格被「竞价情绪」主导的程度(Berkman
+    et al. 2012:受关注的股票在开盘被个人投资者买高、日内回落;Aboody et al. 2018:隔夜收益是个股情绪的度量,之后反转;Lou, Polk
+    & Skouras 2019:隔夜与日内两类客户的拉锯;Qiao & Dam 2020:T+1 规则使中国股票的隔夜收益系统性偏离)。【算子怎么实现】隔夜对数收益
+    G = log(div(day_first(Open), ts_delay(day_last(Close), 1))),日内对数收益 I = log(div(day_last(Close),
+    day_first(Open)));开盘第一分钟(含集合竞价成交)占全天成交额的份额 F = div(day_first(Amt), day_sum(Amt))
+    度量竞价参与强度。种子在 20/60 日窗口上取:G 的均值与 EMA(隔夜情绪的累积)、|G| 的均值(竞价带来的信息/注意力冲击)、G 均值减 I 均值(拉锯的价差)、cross_corr(G,
+    I)(日内是否系统性回补隔夜跳空)、mean(sign(G)×I)(带方向的回补幅度)、log(std G) − log(std I)(价格波动有多少来自隔夜)、|G|/(|G|+|I|)
+    的均值(隔夜占的绝对位移份额)、F 的均值、G×F 的均值(以竞价参与加权的跳空)、cross_corr(G, F)(跳空是否伴随竞价放量)。【为什么和库里已有的不同】库里还没有
+    head;M 第 1 批的共性表 12 个子树全部是日内统计量或日频叶子,没有一个跨越「昨收—今开」这条边界。5 个控制里,20 日反转是收盘到收盘的总收益(=
+    G 与 I 之和),本位的种子是 G 与 I 的差、比、相关和份额,G 与 I 以相反或正交的权重进入;波动控制是日内分钟收益的标准差,不含隔夜段;流动性与成交额离散控制的是成交额水平,F
+    是无量纲的时间分布份额。【为什么样本外还在】T+1 与开盘集合竞价是制度性的,样本期内外都不变;散户在 A 股成交中的占比长期很高;机制是不同客户在不同时段定价,不是某段行情里挖出来的形状。评分标签从
+    T+1 开盘后的 VWAP 起算,正好落在「日内纠正」那一段。【数学说明】全部输入在当天收盘前已知,无前视;后复权价格使除权日不产生假跳空;唯一的除法是 F(分母包含分子,只可能
+    0/0 = NaN)和 |G|/(|G|+|I|)(同理),标准差比写成两个 log 之差(标准差为 0 时 log 给 NaN 而不是 inf);cross_corr
+    的分母自带 EPS。在合成立方体上实测 14 个种子 coverage 0.98–0.99、distinct = 1、无 inf。
+  inspired_by: M 第 1 批:共性表里反复出现的子树都是日内统计量(day_pos_ratio(Open)、day_gini(High))或日频叶子,没有任何子树跨越昨收到今开的隔夜边界;文献:Berkman
+    et al. 2012、Lou, Polk & Skouras 2019、Qiao & Dam 2020
+  literature:
+  - title: 'Paying Attention: Overnight Returns and the Hidden Cost of Buying at the
+      Open'
+    authors: Henk Berkman; Paul D. Koch; Laura Tuttle; Ying Jenny Zhang
+    year: 2012-08
+    url: https://doi.org/10.1017/S0022109012000270
+    treatment: 受关注股票的隔夜收益高、日内反转,源自个人投资者在开盘的集中买入;借用为:G 的均值、G 与 I 的相关、开盘分钟成交份额 F
+  - title: 'A Tug of War: Overnight versus Intraday Expected Returns'
+    authors: Dong Lou; Christopher Polk; Spyros Skouras
+    year: 2019-10
+    url: https://doi.org/10.1016/j.jfineco.2019.03.011
+    treatment: 把收益拆成隔夜与日内两段,两类客户在两段里定价、相互抵消;借用为:G 均值减 I 均值、隔夜波动份额
+  - title: Overnight Returns and Firm-Specific Investor Sentiment
+    authors: David Aboody; Omri Even-Tov; Reuven Lehavy; Brett Trueman
+    year: 2018-04
+    url: https://doi.org/10.1017/S0022109017000989
+    treatment: 用一段时间内累积的隔夜收益度量个股情绪,高情绪之后反转;借用为:G 的 20/60 日均值与 EMA
+  - title: The overnight return puzzle and the T+1 trading rule in Chinese stock markets
+    authors: Kenneth Qiao; Lammertjan Dam
+    year: 2020-09
+    url: https://doi.org/10.1016/j.finmar.2020.100534
+    treatment: T+1 规则使开盘买入者承担一天的不能卖出,隔夜收益系统性偏离;借用为:在中国市场按隔夜/日内拆分的依据
+  seeds:
+  - cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20)
+  - cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)
+  - cross_ema(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 10)
+  - cross_mean(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20)
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 20), cross_mean(log(div(day_last(Close),
+    day_first(Open))), 20))
+  - sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), cross_mean(log(div(day_last(Close),
+    day_first(Open))), 60))
+  - cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))), 20)
+  - cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))), 60)
+  - cross_mean(mul(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))),
+    log(div(day_last(Close), day_first(Open)))), 20)
+  - sub(log(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))),
+    20)), log(cross_stddev(log(div(day_last(Close), day_first(Open))), 20)))
+  - cross_mean(div(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))),
+    add(abs_(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), abs_(log(div(day_last(Close),
+    day_first(Open)))))), 20)
+  - cross_mean(div(day_first(Amt), day_sum(Amt)), 20)
+  - cross_mean(mul(log(div(day_first(Open), ts_delay(day_last(Close), 1))), div(day_first(Amt),
+    day_sum(Amt))), 20)
+  - cross_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), div(day_first(Amt),
+    day_sum(Amt)), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

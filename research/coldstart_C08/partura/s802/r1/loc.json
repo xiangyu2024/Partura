@@ -1,0 +1,226 @@
+{
+ "seed": 802,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "c07s802M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "day_mean(in_delta(Volume, 30))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": 0.691768,
+   "train": 0.691768,
+   "valid": 0.981276,
+   "src": "c07s802M1_I0_open_search"
+  }
+ ],
+ "n_archived": 98,
+ "enrichment": [
+  {
+   "subtree": "day_mean(in_delta(Volume, 5))",
+   "n_with": 4,
+   "mean_with": 0.5696,
+   "mean_without": -1.0243,
+   "effect": 1.5939,
+   "p": 0.0029
+  },
+  {
+   "subtree": "day_mean(neg(neg(in_delta(Volume, 5))))",
+   "n_with": 4,
+   "mean_with": 0.5559,
+   "mean_without": -1.0238,
+   "effect": 1.5797,
+   "p": 0.008
+  },
+  {
+   "subtree": "day_mean(neg(in_delta(Volume, 60)))",
+   "n_with": 16,
+   "mean_with": 0.0901,
+   "mean_without": -1.1641,
+   "effect": 1.2542,
+   "p": 0.0028
+  },
+  {
+   "subtree": "day_last(Amt)",
+   "n_with": 22,
+   "mean_with": -0.1299,
+   "mean_without": -1.1994,
+   "effect": 1.0695,
+   "p": 0.0013
+  },
+  {
+   "subtree": "cs_median(cs_robust_z(day_last(Amt)))",
+   "n_with": 8,
+   "mean_with": 0.0204,
+   "mean_without": -1.0464,
+   "effect": 1.0668,
+   "p": 0.0136
+  },
+  {
+   "subtree": "cs_robust_z(day_last(Amt))",
+   "n_with": 19,
+   "mean_with": -0.2348,
+   "mean_without": -1.1335,
+   "effect": 0.8987,
+   "p": 0.0095
+  },
+  {
+   "subtree": "day_flat_run_max(Vwap)",
+   "n_with": 6,
+   "mean_with": -0.1353,
+   "mean_without": -1.013,
+   "effect": 0.8777,
+   "p": 0.3554
+  },
+  {
+   "subtree": "ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)",
+   "n_with": 6,
+   "mean_with": -0.1353,
+   "mean_without": -1.013,
+   "effect": 0.8777,
+   "p": 0.3554
+  },
+  {
+   "subtree": "sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))",
+   "n_with": 4,
+   "mean_with": -0.1498,
+   "mean_without": -0.9937,
+   "effect": 0.8439,
+   "p": 0.4007
+  },
+  {
+   "subtree": "sqrt(sigmoid(LimitWidth))",
+   "n_with": 7,
+   "mean_with": -0.2875,
+   "mean_without": -1.011,
+   "effect": 0.7234,
+   "p": 0.456
+  },
+  {
+   "subtree": "sigmoid(LimitWidth)",
+   "n_with": 7,
+   "mean_with": -0.2875,
+   "mean_without": -1.011,
+   "effect": 0.7234,
+   "p": 0.456
+  },
+  {
+   "subtree": "day_durbin_watson(Volume)",
+   "n_with": 7,
+   "mean_with": -0.3174,
+   "mean_without": -1.0087,
+   "effect": 0.6913,
+   "p": 0.4697
+  },
+  {
+   "subtree": "cs_stddev_full(cs_robust_z(day_last(Amt)))",
+   "n_with": 10,
+   "mean_with": -0.4536,
+   "mean_without": -1.0168,
+   "effect": 0.5631,
+   "p": 0.1662
+  }
+ ],
+ "ablation": [
+  {
+   "head": "day_mean(in_delta(Volume, 30))",
+   "head_score": 0.691768,
+   "src": "c07s802M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_mean(in_delta(Amt, 30))",
+     "coverage": 0.9993,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -0.8059,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": 0.1129,
+     "valid": -0.8059,
+     "rho_known": -0.5177
+    },
+    {
+     "kind": "window",
+     "what": "in_delta@30->15",
+     "expr": "day_mean(in_delta(Volume, 15))",
+     "coverage": 0.9993,
+     "distinct": 0.883,
+     "gate": true,
+     "score": 0.5058,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": 0.5058,
+     "valid": 1.3383,
+     "rho_known": -0.4098
+    },
+    {
+     "kind": "window",
+     "what": "in_delta@30->60",
+     "expr": "day_mean(in_delta(Volume, 60))",
+     "coverage": 0.9993,
+     "distinct": 0.9472,
+     "gate": true,
+     "score": 0.519,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": 0.5939,
+     "valid": 0.519,
+     "rho_known": -0.4333
+    }
+   ]
+  }
+ ],
+ "paid": 3,
+ "core_cards": [
+  {
+   "core": "day_mean(in_delta(Volume, 5))",
+   "source": "enrichment",
+   "effect": 1.5939,
+   "p": 0.0029,
+   "n_with": 4
+  },
+  {
+   "core": "day_mean(neg(neg(in_delta(Volume, 5))))",
+   "source": "enrichment",
+   "effect": 1.5797,
+   "p": 0.008,
+   "n_with": 4
+  },
+  {
+   "core": "day_mean(neg(in_delta(Volume, 60)))",
+   "source": "enrichment",
+   "effect": 1.2542,
+   "p": 0.0028,
+   "n_with": 16
+  },
+  {
+   "core": "day_last(Amt)",
+   "source": "enrichment",
+   "effect": 1.0695,
+   "p": 0.0013,
+   "n_with": 22
+  },
+  {
+   "core": "cs_median(cs_robust_z(day_last(Amt)))",
+   "source": "enrichment",
+   "effect": 1.0668,
+   "p": 0.0136,
+   "n_with": 8
+  },
+  {
+   "core": "cs_robust_z(day_last(Amt))",
+   "source": "enrichment",
+   "effect": 0.8987,
+   "p": 0.0095,
+   "n_with": 19
+  }
+ ],
+ "r_candidates": [],
+ "missions_before": [],
+ "seconds": 33
+}

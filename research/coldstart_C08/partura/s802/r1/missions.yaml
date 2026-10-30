@@ -1,0 +1,92 @@
+seed: 802
+round: 1
+slots:
+  - type: E
+    core: 'day_mean(in_delta(Volume, 30))'
+    hypothesis: '核心 C = day_mean(in_delta(Volume, 30))。in_delta 在分钟轴上做 30 分钟差(前 30 分钟为 NaN),day_mean 是 nanmean,所以和式精确望远镜相消:C ≡ (最后 30 分钟成交股数之和 − 最前 30 分钟成交股数之和)/211,中间 181 分钟完全没用上(已用 numpy 对 d=5/15/30/60 验证)。库里唯一的 head 就是它本身(sign −1,半衰期 20,train 0.69 / valid 0.98):做多「开盘端重、收盘端轻」的票。窗口 15/30/60 都 ≥ 0.5,换成成交金额 Amt 掉到 −0.81 并越过与已知族 0.5 的线 → 它是关于成交时点结构(谁在开盘交易、谁在收盘交易)的信号,不是流动性水平。
+
+    外围刻意不做「除以一个日频标量」(C/当日量、C/流通股、按量分桶标准化):截面排名口径下 C 的排序主要由 sign(C) 决定,我做的数值模拟里 C 与 C/V 的秩相关约 0.85,库禁令会直接拒掉;这类纯尺度化放在本计划的 R 里直接评估,不占 GP。E 只做四类改变信号性质、无法被提进核心内部的外围:
+
+    (1) 时点画像的持续性(无量纲)。cross_ema(sign(C), 10) = 近期「收盘端重」天数的指数加权净占比;div(cross_mean(C,20), cross_stddev(C,20)) = 倾斜的 20 日信息比。机制:head 在半衰期 20 上胜出,说明 alpha 在慢变的「成交时点画像」——收盘端重的票由以收盘价为基准的机构流 / 尾盘资金主导,开盘端重的票由消化隔夜信息的交易主导;扔掉幅度、只留一致性,去掉的是单日噪声和成交量量级。
+
+    (2) 相对自身历史的异常时点。cross_zscore(C,20)、cross_delta(C,5)、ts_regres(day_sum(Volume), C, 20)(本股 20 日内当日成交量水平解释不了的倾斜)、cross_regbeta(day_sum(Volume), C, 20)(本股放量时多出来的量落在开盘还是收盘,量纲抵消)、mul(C, cross_zscore(day_sum(Volume),20))(异常放量日的倾斜)。机制:文献里异常成交量有差值型与比值型两种定义(关注度、意见分歧);这里把「异常」从量的大小移到量的时点——隔夜新闻引起的放量集中在开盘,指数调整 / 机构建仓引起的放量集中在收盘,两者对后续收益的含义不同。
+
+    (3) 用价格给时点定性。mul(C, sign(day_sum(Ret)))、cross_mean(mul(C, sign(day_sum(Ret))), 20)、cross_corr(C, day_sum(Ret), 20)、C × 开盘跳空 (day_first(Open)/前收 − 1)、C 与最后 30 分钟收益 day_sum(in_slice(Ret,211,240)) 的秩中心化乘积。机制:Llorente 等——量伴随收益时,知情交易导致延续、流动性 / 对冲交易导致反转;Boyarchenko 等——尾盘带方向的买卖失衡之后回吐。收盘端重 + 当日上涨 = 尾盘买压(拉升),收盘端重 + 下跌 = 尾盘抛压,开盘端重 + 跳空 = 隔夜信息被关注度驱动的资金在开盘消化;原 head 把这些方向相反的情形混在一起。
+
+    (4) 把集合竞价与连续竞价拆开。cs_regres(C, day_mean(in_delta(Volume, 5))) = 30 分钟倾斜里不能被「以两端集合竞价为主的 5 分钟倾斜」截面解释的部分,即连续竞价阶段的时点倾斜。机制:Givry(AMF)指出收盘集合竞价份额与最后 30 分钟连续竞价份额是两个走势不同的量;Han 等(2022)显示上交所 2018-08 引入收盘集合竞价后,成交从尾盘连续竞价挪进了集合竞价。
+
+    与以前不同:快照里含该核心的候选外围只见过 neg / neg∘neg(等于没加),共现材料是 day_last(Amt)、cs_robust_z、cs_median、cs_stddev_full、sigmoid(LimitWidth)、day_flat_run_max(Vwap) 这类截面标准化与旗标;没有任何候选做过时间序列持续性 / 异常化、价格定性或竞价拆分。每个种子的外围算子集合互不相同。
+
+    样本外还会在的理由:成交时点由投资者结构与交易制度决定(机构以收盘价为基准、散户集中在开盘),是慢变量;全部外围都是无量纲、秩或相关口径,不依赖成交量水平,不会因市场整体放量缩量而漂移;(3)(4) 有文献给出的方向性机制,不是纯拟合。数学上:只用当日 15:00 及以前的数据;分母只有 cross_stddev(C,20)(20 日内 C 恒为 0 的极薄票为 NaN,不是爆点)与前收价(恒正);sign 的离散性被 cross_ema 的几何权重化开,不会掉进 distinct 门槛。'
+    literature:
+      - {title: 'Dynamic Volume-Return Relation of Individual Stocks', authors: 'Llorente, Michaely, Saar, Wang', year: '2001-06', url: 'https://www.nber.org/papers/w8312', treatment: '量与收益的协动方向区分知情交易(延续)与对冲 / 流动性交易(反转) -> 用当日收益方向、开盘跳空、尾盘收益、20 日 cross_corr 给成交时点倾斜定性'}
+      - {title: 'The Overnight Drift', authors: 'Boyarchenko, Larsen, Whelan', year: '2020-02', url: 'https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr917.pdf', treatment: '尾盘带方向的失衡之后回吐 -> 收盘端重的倾斜按尾盘 30 分钟收益方向拆开(秩中心化乘积)'}
+      - {title: 'About the Increasing Part of Closing Auction (Fixing)', authors: 'Givry (AMF)', year: '2019-09', url: 'https://www.fmg.ac.uk/sites/default/files/images/6.2019%2009%2005%20-%20About%20the%20increasing%20part%20of%20closing%20auctions-ok%20to%20publish.pdf', treatment: '收盘集合竞价份额与最后 30 分钟连续竞价份额分开统计 -> 30 分钟倾斜对 5 分钟(竞价主导)倾斜做截面残差'}
+      - {title: 'Reexamining the Impact of Closing Call Auction on Market Quality: A Natural Experiment from the Shanghai Stock Exchange', authors: 'Han, Zhao, Chen, Guo', year: '2022', url: 'https://ideas.repec.org/a/eee/pacfin/v74y2022ics0927538x22001160.html', treatment: '收盘集合竞价上线后成交从尾盘连续竞价转入竞价 -> 竞价与连续竞价的倾斜要拆开'}
+      - {title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors', authors: 'Barber, Odean', year: '2008', url: 'https://ideas.repec.org/a/oup/rfinst/v21y2008i2p785-818.html', treatment: '比值型异常成交量 = 关注度 -> 倾斜相对本股 20 日历史的 z 分数、与异常放量的乘积'}
+    seeds:
+      - 'cross_ema(sign(day_mean(in_delta(Volume, 30))), 10)'
+      - 'div(cross_mean(day_mean(in_delta(Volume, 30)), 20), cross_stddev(day_mean(in_delta(Volume, 30)), 20))'
+      - 'cross_zscore(day_mean(in_delta(Volume, 30)), 20)'
+      - 'cross_delta(day_mean(in_delta(Volume, 30)), 5)'
+      - 'ts_regres(day_sum(Volume), day_mean(in_delta(Volume, 30)), 20)'
+      - 'cross_regbeta(day_sum(Volume), day_mean(in_delta(Volume, 30)), 20)'
+      - 'mul(day_mean(in_delta(Volume, 30)), cross_zscore(day_sum(Volume), 20))'
+      - 'mul(day_mean(in_delta(Volume, 30)), sign(day_sum(Ret)))'
+      - 'cross_mean(mul(day_mean(in_delta(Volume, 30)), sign(day_sum(Ret))), 20)'
+      - 'cross_corr(day_mean(in_delta(Volume, 30)), day_sum(Ret), 20)'
+      - 'mul(day_mean(in_delta(Volume, 30)), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))'
+      - 'mul(sub(cs_rank(day_mean(in_delta(Volume, 30))), 0.5), sub(cs_rank(day_sum(in_slice(Ret, 211, 240))), 0.5))'
+      - 'cs_regres(day_mean(in_delta(Volume, 30)), day_mean(in_delta(Volume, 5)))'
+  - type: N
+    hypothesis: '量价耦合:成交量是跟着价格上涨来的还是跟着下跌来的,放量的那几分钟价格走得多猛。快照里唯一的 head 只看量在什么时候来(两端块差,无符号),对价格完全无视;而量的信息含量取决于它与收益的耦合方式——Llorente 等(2001):知情交易驱动的量伴随收益延续,对冲 / 流动性驱动的量伴随反转,区分二者的正是量与收益的协动;Barber & Odean(2008):引起关注的放量时刻是散户集中净买入的时刻,随后收益偏低;Gervais 等(2001):异常放量改变可见度,带来之后的收益差异。所以「量伴随什么样的价格变化」是独立于「量在什么时候」的另一维信息。
+
+    算子实现(全部是日内分钟级、全部无量纲):
+    (a) 方向耦合:day_corr(Ret, Volume);day_corr(Close, Volume)(放量时价格处在日内高位还是低位);day_corr(Ret, in_delta(Volume,1))(量增的那一分钟是涨还是跌);day_signed_ratio(Ret, Volume)(上涨分钟成交占比 − 下跌分钟成交占比,不需要逐笔数据的净买压);sub(day_wmean(Ret, Volume), day_mean(Ret))(量加权分钟收益 − 等权分钟收益:重的分钟是否偏涨)。
+    (b) 先后关系:day_corr(Ret, in_delay(Volume,1))(量领先价:知情压力),day_corr(in_delay(Ret,1), Volume)(价领先量:追涨杀跌 / 关注度跟随)。
+    (c) 放量时刻的价格行为:in_zscore_rolling(Volume,30) 把每分钟的量相对此前 30 分钟标准化(去掉日内 U 型的机械成分);day_topw_mean(Ret, 它) = 放量最突出的 10% 分钟的平均收益;div(day_topw_mean(abs(Ret), 它), day_mean(abs(Ret))) = 放量时刻的波动是当日平常分钟的几倍(对关注度冲击的过度反应,除以当日平均绝对分钟收益切断与波动水平的联系);day_topw_mean(Ret, Volume) = 当日最重的 10% 分钟(主要在开盘与收盘)的收益,即 head 的价格那一面。day_corr(abs(Ret), Volume) = 信息到达(量与价格变动同步)的强度。
+    (d) 持续性:cross_mean(day_corr(Close, Volume), 20)、cross_mean(day_signed_ratio(Ret, Volume), 20):平均掉单日噪声,得到本股的量价耦合画像(深交所的 A 股资金流向研究报告:分钟级资金流向有中期反转)。
+
+    与库里已有的不同:库里只有无符号、只看两端的成交时点;这里全部是带符号或相对波动的量价协动,没有一项用到「量在开盘还是收盘」,也没有成交量水平(全是相关系数、占比、比值),与流动性 / 规模控制在构造上无关。
+
+    样本外还会在的理由:它度量的是谁在交易(关注度驱动的散户 vs 知情 / 机构),不是某段行情;A 股散户占比高、关注度驱动的放量追涨是制度与投资者结构决定的;(d) 的 20 日均值是慢变量,换手低,扣 15bp 后更稳。数学上:只用当日分钟数据,无前视(首分钟若含隔夜跳空,9:30 已知);一字板日分钟收益全为 0 时 day_corr 为 0 的少量并列,不影响 distinct;唯一的除法分母是当日平均绝对分钟收益,与分子同单位,比值有上界(约 241/24),不会爆点。'
+    inspired_by: '第 1 批:唯一的 head day_mean(in_delta(Volume, 30)) 是无符号的成交时点信号,完全不看价格;共性表里 day_durbin_watson(Volume)、day_flat_run_max(Vwap) 等量的时间结构线索都与价格无关。文献:Llorente 等 2001(量-收益动态)、Barber & Odean 2008(关注度)、Gervais 等 2001(高成交量溢价)。'
+    literature:
+      - {title: 'Dynamic Volume-Return Relation of Individual Stocks', authors: 'Llorente, Michaely, Saar, Wang', year: '2001-06', url: 'https://www.nber.org/papers/w8312', treatment: '用量与收益的协动符号区分知情与流动性交易 -> 日内 day_corr(Ret, Volume)、量 / 价先后的滞后相关'}
+      - {title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors', authors: 'Barber, Odean', year: '2008', url: 'https://ideas.repec.org/a/oup/rfinst/v21y2008i2p785-818.html', treatment: '放量 = 关注度冲击、散户净买入 -> 日内放量最突出分钟的收益与相对波动'}
+      - {title: 'The High-Volume Return Premium', authors: 'Gervais, Kaniel, Mingelgrin', year: '2001-06', url: 'https://doi.org/10.1111/0022-1082.00349', treatment: '异常放量改变可见度 -> 以分钟级滚动 z 分数识别放量时刻'}
+      - {title: 'The Overnight Drift', authors: 'Boyarchenko, Larsen, Whelan', year: '2020-02', url: 'https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr917.pdf', treatment: '带方向的成交失衡之后回吐 -> day_signed_ratio(Ret, Volume) 与其 20 日均值'}
+    seeds:
+      - 'day_corr(Ret, Volume)'
+      - 'day_corr(Close, Volume)'
+      - 'day_corr(Ret, in_delta(Volume, 1))'
+      - 'day_signed_ratio(Ret, Volume)'
+      - 'sub(day_wmean(Ret, Volume), day_mean(Ret))'
+      - 'day_corr(Ret, in_delay(Volume, 1))'
+      - 'day_corr(in_delay(Ret, 1), Volume)'
+      - 'day_topw_mean(Ret, in_zscore_rolling(Volume, 30))'
+      - 'div(day_topw_mean(abs(Ret), in_zscore_rolling(Volume, 30)), day_mean(abs(Ret)))'
+      - 'day_topw_mean(Ret, Volume)'
+      - 'day_corr(abs(Ret), Volume)'
+      - 'cross_mean(day_corr(Close, Volume), 20)'
+      - 'cross_mean(day_signed_ratio(Ret, Volume), 20)'
+R:
+  - head: 'day_mean(in_delta(Volume, 30))'
+    why: 'head 恒等于 (最后 30 分钟成交股数和 − 最前 30 分钟成交股数和)/211。三个部件有证据是可疑的:(1) 窗口:valid 腿随窗口单调下降(d=15 1.34、30 0.98、60 0.52),train 腿在 30 最高,两端各被一条腿卡住 → 测 3/5/10 与无量纲的 15;(2) 尺度:原始股数差没有除以任何量,截面两尾被高成交量的票占据,对流动性排名的多项式残差化去不掉这种异方差;Volume→Amt 已证明金额口径会推向控制(ρ_known 越过 0.5),所以只试股数口径的尺度化(当日量、自身 20 日均量、流通股 = 换手率口径);(3) 端块的构成:望远镜相消后只剩两端块,每块都把一个集合竞价分钟和 29 个连续竞价分钟混在一起,而文献把竞价份额与连续竞价份额当两个量,且上交所 2018-08-20 起有收盘集合竞价(train 内部的制度断点)→ 测只用竞价、只用连续竞价、只用开盘侧、只用收盘侧、上下午半天口径;(4) day_mean 的望远镜性质让中间 181 分钟作废 → 用 day_median 换掉,测中间段是否有同样的信息。不放 Amt 版、day_sum 版(与 day_mean 只差常数)、窗口 241(全 NaN)。'
+    variants:
+      - 'day_mean(in_delta(Volume, 3))'
+      - 'day_mean(in_delta(Volume, 5))'
+      - 'day_mean(in_delta(Volume, 10))'
+      - 'day_mean(in_delta(div(Volume, day_sum(Volume)), 30))'
+      - 'day_mean(in_delta(div(Volume, day_sum(Volume)), 15))'
+      - 'day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))'
+      - 'day_mean(in_delta(div(Volume, FloatShares), 30))'
+      - 'div(day_first(Volume), day_sum(Volume))'
+      - 'div(day_last(Volume), day_sum(Volume))'
+      - 'div(sub(day_last(Volume), day_first(Volume)), day_sum(Volume))'
+      - 'day_mean(in_delta(in_slice(Volume, 1, 239), 30))'
+      - 'day_mean(in_delta(div(in_slice(Volume, 1, 239), day_sum(Volume)), 30))'
+      - 'div(day_sum(in_slice(Volume, 0, 29)), day_sum(Volume))'
+      - 'div(day_sum(in_slice(Volume, 211, 240)), day_sum(Volume))'
+      - 'sub(day_sum(in_half(Volume, False)), day_sum(in_half(Volume, True)))'
+      - 'day_median(in_delta(Volume, 30))'
