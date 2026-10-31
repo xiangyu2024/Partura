@@ -1,0 +1,88 @@
+seed: 801
+round: 3
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: '【核心在量什么】day_centroid(Volume) = Σt·|Volume_t|/Σ|Volume_t|/(T−1),分钟成交量的日内「重心时刻」,已经是本种子库里支持面最广、最稳的子树:本轮 536 个已评分候选里,含它的 94 个均值 −0.17,不含的 −1.42,效应 +1.25,p≈0(core_cards #6);它贡献了库里 6 个 head 中的 4 个,其中本轮最强的 head(+1.50 train、+1.63 valid,`cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)),20), cross_mean(ts_kurt(day_min(Ret),5),20))`)就是 GP 自己在本轮第 2 批里把它和「5 日滚动的、单日最差分钟收益的峰度」配对配出来的——这是本组前两轮都没有试过的方向:当天单根最差分钟的尖峭程度(有没有在固定几分钟里砸出一个远超其余分钟的负收益)、这种尖峭是否持续了近一周,是否和成交量今天集中在哪个时点有关。拆解表的 knockout 行显示:去掉 ts_kurt 这层非线性(换成裸 day_min(Ret))score 从 +1.50 反而升到 +1.67(必要性 −0.17),说明「尾部有多厚」这层包装本身没有在帮忙,真正起作用的是「尾部收益的水平」与「量的时点」的配对这件事,而不是 kurt 这个特定算子——这给了外围一整条可以系统展开的方向,而不是只能原样重复 GP 找到的那一个表达式。
+
+
+    【已经见过的外围,本位要避开】day_centroid(Volume) 到目前为止被用过的外围:第 1 轮当排除筛选的 y(cs_last_low05/cs_last_low10,x = cross_corr(DW, day_sum(Volume),20));第 2 轮股内归一化(cross_zscore/cross_madz)、持续性/不稳定性(cross_mean/cross_stddev)、与 day_centroid(Ret) 的时点同步(sub/cross_corr)、ListAge/BoardCode 分桶、乘 day_signed_ratio;本轮 GP 自己的批次又补上了与 cross_mean(ts_kurt(day_min(Ret),5),20)、cross_mean(day_sum(Amt),20)、cross_mean(day_sum(Ret),20) 的 cs_bucket_rank 配对(均已入库为 head,库禁令会按算子骨架自动拒绝任何窗口/字段变体)。本位全部避开这些已见的具体算子骨架,改成四类此前都没做过的关系形式。
+
+
+    【这次试的外围与机制】(a) 换统计量、换极端方向:ts_skew(day_min(Ret),10) 代替 ts_kurt(day_min(Ret),5)(问「最差分钟持续地偏向一侧」而不是「有多尖」,窗口也换成 10 日);ts_kurt(day_max(Ret),5) 问对称的另一侧——当天最好的那一分钟是否也同样尖峭持续,检验机制是不是「任何极端的注意力驱动分钟」而非专属于崩盘;ts_kurt(sub(day_max(Ret),day_min(Ret)),5) 把当天振幅(最高分钟收益减最低分钟收益)本身的尖峭持续性拿来配对——三种此前都没有算过的尾部量,分别检验方向、对称性、振幅三个不同假设。(b) 从「分桶条件」换成「直接关系」:cross_corr(day_centroid(Volume), ts_kurt(day_min(Ret),10), 20) 直接问「这只股票的量集中时点」和「它的尾部持续尖峭程度」这两条 20 日序列本身是否同向变化——这是比 cs_bucket_rank(在尾部分位内排序 centroid)更直接的第二种配对方式,一个测条件分布,一个测共同趋势,机制证据如果在两种形式上都出现,比只在一种形式上出现更可信。(c) 带符号的交互:mul(sub(day_centroid(Volume), 0.5), cross_mean(ts_kurt(day_min(Ret),5),20)) 把「早盘集中(centroid<0.5)还是尾盘集中(centroid>0.5)」做成符号,乘上尾部持续尖峭程度——检验在崩盘型分钟持续出现的那些股票里,量是在开盘时(信息到达后迅速离场)还是收盘前(到点执行、恐慌性尾盘出逃)集中,这是 Admati–Pfleiderer(1988,round 2 已引用过的框架)下一个此前没写出来的具体方向预测;mul(cross_stddev(day_centroid(Volume),20), …) 换成用「重心本身 20 日内跳不跳」(不稳定性,第 2 轮已验证过的量)去 interact 同一个尾部统计量,问的是另一件事:执行节奏本身不稳定(今天早、明天晚)的股票,是不是同时也是尾部持续尖峭的股票,与 (c) 的「单日早晚方向」是正交的另一个维度。(d) 跨字段的时点比较,不走第 2 轮已经用过的「跟 day_centroid(Ret) 比时点」:cross_corr(day_centroid(Volume), day_centroid(Amt), 20) 比较「股数的时点」和「金额的时点」这两条 20 日序列是否持续对齐——两者的差异只可能来自分钟内价格水平的变化,对齐程度低且不稳定说明大额成交和低价量跑在不同的时段,这是第 2 轮比较 day_centroid(Volume) 与 day_centroid(Ret)(时点 vs 价格变动的时点)之外,第一次比较「同一个量用两种不同权重算出来的时点」;cross_corr(day_centroid(Volume), day_argmin(Ret), 20) 比较「量的重心」与「当天单根最差分钟具体发生在第几分钟」(day_argmin,原始分钟序号,不取绝对值、不聚合全天)这两条 20 日序列,问的是量的执行节奏是否持续地跟随(或领先/滞后于)那个最坏分钟的具体位置——这是「时点对时点」关系第一次用原始位置而不是另一个聚合统计量的时点来检验。(e) 方向 × 尾部的三重交互:cross_mean(mul(mul(day_centroid(Volume), day_signed_ratio(Ret,Amt)), ts_kurt(day_min(Ret),5)),20) 把第 2 轮已经验证过的「量时点 × 净买入方向」交互,限定在「尾部持续尖峭」的那个日子上再看——第 2 轮的版本不区分普通日子和崩盘型日子,这里专门问在最差分钟持续尖峭的那些日子里,这个交互是否比不加限定时更强;(f) 相对自身历史的版本:cs_bucket_rank(cross_zscore(day_centroid(Volume),60), cross_mean(ts_kurt(day_min(Ret),20),20)) 把第 2 轮验证过有效的「股内 60 日 z 分数」(而不是本轮 GP 自己用的 cross_mean 水平)接到尾部分桶上,窗口也换成 20 日(比 GP 用的 5 日更慢),检验这个机制是否在「相对自身历史异常」的口径下依然成立,而不仅是本轮 GP 随机搜索刚好撞中的那一个具体窗口组合。
+
+
+    【为什么和库里 / 控制不同】5 个控制(流动性、波动、20 日反转、已知族、市值)里没有一个是「日内什么时候」或「单分钟尾部有多尖/持续多久」的量;库里 6 个 head 没有一个把 day_centroid(Volume) 和分钟收益的极值统计(day_min/day_max)配过——本轮唯一的例外是 GP 自己随机搜出来的那一个 ts_kurt(day_min(Ret),5) 组合本身(它已经是 head,库禁令会自动拒绝任何算子骨架相同的候选)。本位的 10 个种子换了统计量(skew/振幅/最好分钟)、换了关系形式(直接相关、带符号交互、不稳定性交互)、换了跨字段比较对象(Amt 的时点、day_argmin 的原始位置)、换了归一化口径(z 分数代替水平),没有一个和现有 6 个 head 的骨架重合。
+
+
+    【为什么样本外还会在】单根分钟的极端尖峭及其持续性,反映的是信息事件触发的瞬时抛售压力有没有被散户的注意力持续追踪(Chen, Hong, Stein 2001 用成交量和收益的条件偏度预测收益崩溃;Easley, López de Prado, O''Hara 2012 的流动性毒性概念是同一类「知情/恐慌性下单在时间上聚集」的度量),这是交易行为/信息到达结构的属性,不是某一段时间特有的价格模式,2018–2023 没有发生过改变这类微观结构的事件;量集中的具体时点(day_centroid)同样是慢变的执行习惯/制度属性(round 1、2 已论证过)。所有种子都是有界或相对量(day_centroid∈[0,1]、z 分数、相关系数、符号×有界量的乘积),day_argmin 是离散的分钟序号(0–240,分布连续、不会堆在少数几档),没有除以近零量的地方(cross_corr/cross_autocorr 的协方差都带 EPS 保护,day_centroid 的分母 clamp(min=1e-30) 且只在成交量非零时输出)。'
+  literature:
+  - title: 'Forecasting Crashes: Trading Volume, Past Returns, and Conditional Skewness in Stock Prices'
+    authors: Joseph Chen, Harrison Hong, Jeremy C. Stein
+    year: '2001'
+    url: https://www.nber.org/papers/w7687
+    treatment: 成交量与收益条件偏度的交互预测收益崩溃 → 用分钟收益的尾部统计量(day_min/day_max 的滚动 skew/kurt)而不是水平量去配对量的时点
+  - title: Flow Toxicity and Liquidity in a High-Frequency World
+    authors: David Easley, Marcos López de Prado, Maureen O'Hara
+    year: '2012'
+    url: https://doi.org/10.1093/rfs/hhs053
+    treatment: 知情/恐慌性下单在时间上聚集产生的流动性毒性 → 单根最差分钟的尖峭持续性(ts_kurt(day_min(Ret),d))作为聚集程度的代理
+  seeds:
+  - cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_skew(day_min(Ret), 10), 20))
+  - cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_kurt(day_max(Ret), 5), 20))
+  - cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_kurt(sub(day_max(Ret), day_min(Ret)), 5), 20))
+  - cross_corr(day_centroid(Volume), ts_kurt(day_min(Ret), 10), 20)
+  - mul(sub(day_centroid(Volume), 0.5), cross_mean(ts_kurt(day_min(Ret), 5), 20))
+  - mul(cross_stddev(day_centroid(Volume), 20), cross_mean(ts_kurt(day_min(Ret), 5), 20))
+  - cross_corr(day_centroid(Volume), day_centroid(Amt), 20)
+  - cross_corr(day_centroid(Volume), day_argmin(Ret), 20)
+  - cross_mean(mul(mul(day_centroid(Volume), day_signed_ratio(Ret, Amt)), ts_kurt(day_min(Ret), 5)), 20)
+  - cs_bucket_rank(cross_zscore(day_centroid(Volume), 60), cross_mean(ts_kurt(day_min(Ret), 20), 20))
+- type: N
+  hypothesis: '【机制】A 股个股的日收益可以拆成两段:隔夜(昨日收盘到今日开盘,交易所休市,新信息只能在开盘集合竞价里第一次定价)和日内(今日开盘到收盘,连续竞价,订单流持续处理信息、情绪化资金跟风)。成熟市场的证据(Lou, Polk, Skouras 2019《A Tug of War》发现隔夜收益延续、日内收益反转;Berkman, Koch, Tuttle, Zhang 2012 发现隔夜跳空主要由注意力驱动的资金在开盘后被日内交易纠正/淡化)说明这两段的可预测性方向通常相反,但本组前两轮的所有种子都在用「一天」这个单位(day_mean/day_sum/day_centroid 等),从没有把一天切成隔夜和日内两段分别处理。A 股 T+1、无法做空、涨跌停限制下,隔夜缺口更可能携带机构/大户隔夜消化信息后的真实判断(日内无法马上反向交易出清),日内连续竞价段更容易被散户追涨杀跌污染,这个机制预期比成熟市场更强。
+
+
+    【算子怎么实现】隔夜收益比:div(day_open(Open), cross_delay(day_close(Close), 1))(今天开盘价 / 昨天收盘价,用 cross_delay 在日轴上取前一天的 day_close,不跨分钟轴,没有用到当天收盘后才知道的信息);日内收益比:div(day_close(Close), day_open(Open))(今天收盘价 / 今天开盘价)。两者各自做 20 日 cross_mean 得到持续的「隔夜偏向」和「日内偏向」水平;sub 把二者相减,直接给出偏向差;cs_bucket_rank(…, cross_mean(day_mean(Ret),20)) 版本延续本组第 1 轮 N 位验证过最干净的「给定 20 日总收益看构成」手法:给定总收益不变,这部分主要是隔夜贡献的股票,和主要是日内贡献的股票,后续表现是否不同。cross_autocorr(隔夜收益比, 20, 1) 是隔夜缺口本身日对日的持续性(习惯性跳空 vs 偶发);mul(隔夜收益比, day_signed_ratio(Ret,Amt)) 和它的 20 日均值问跳空之后,当天净买入方向是顺着缺口追(延续)还是反着缺口买(淡化/对冲);最后用 sub(cross_stddev(隔夜收益比,20), cross_stddev(日内收益比,20)) 问这只股票 20 日里的波动主要来自「休市时消化信息」还是「开市时交易出来」,并对 cross_mean(day_sum(Amt),20)(换手规模)做 cs_bucket_rank 中性化,避免薄成交股的隔夜缺口噪声主导多头书。
+
+
+    【为什么和库里 / 控制不同】5 个控制里的 20 日反转是用总收益算的,没有拆成隔夜 / 日内两段;已知族、流动性、波动、市值都不含「开盘 / 收盘」这个切分点。库里现有 6 个 head 全部基于分钟级成交量形状(day_centroid/DW)或静态板块字段(LimitWidth),没有一个用到 Open/Close 两个价格字段的日间跳空结构。
+
+
+    【为什么样本外还会在】隔夜与日内收益可预测性方向不同,是交易时段结构(休市 vs 连续竞价)决定的,不是某个样本期特有的价格模式,2018–2023 没有发生改变;A 股的 T+1 和涨跌停结构是本样本期内稳定存在的制度环境,不是会漂移的东西。所有种子都是价格比值(分母是收盘价或开盘价,严格 > 0)、它们的差,或有界的相关系数/符号交互,没有除以近零量的地方。'
+  inspired_by: Lou-Polk-Skouras (2019) 与 Berkman 等 (2012) 的隔夜/日内收益拆分文献;本组前两轮从未把一天切成隔夜/日内两段,库里也没有用到 Open/Close 跳空结构的 head
+  literature:
+  - title: 'A Tug of War: Overnight versus Intraday Expected Returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://doi.org/10.1016/j.jfineco.2018.09.006
+    treatment: 隔夜收益延续、日内收益反转,两段可预测性方向相反 → 把一天拆成隔夜/日内两个收益比分别聚合
+  - title: 'Paying Attention: Overnight Returns and the Limits to Arbitrage'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang
+    year: '2012'
+    url: https://doi.org/10.1017/S0022109012000270
+    treatment: 注意力驱动的隔夜跳空在开盘后被日内交易纠正 → 用隔夜缺口 × 当日净买入方向检验延续还是淡化
+  seeds:
+  - cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20)
+  - cross_mean(div(day_close(Close), day_open(Open)), 20)
+  - sub(cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_mean(div(day_close(Close), day_open(Open)), 20))
+  - cs_bucket_rank(cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_mean(day_mean(Ret), 20))
+  - cs_bucket_rank(cross_mean(div(day_close(Close), day_open(Open)), 20), cross_mean(day_mean(Ret), 20))
+  - cross_autocorr(div(day_open(Open), cross_delay(day_close(Close), 1)), 20, 1)
+  - mul(div(day_open(Open), cross_delay(day_close(Close), 1)), day_signed_ratio(Ret, Amt))
+  - cross_mean(mul(div(day_open(Open), cross_delay(day_close(Close), 1)), day_signed_ratio(Ret, Amt)), 20)
+  - sub(cross_stddev(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_stddev(div(day_close(Close), day_open(Open)), 20))
+  - cs_bucket_rank(sub(cross_stddev(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_stddev(div(day_close(Close), day_open(Open)), 20)), cross_mean(day_sum(Amt), 20))
+R:
+- head: cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(ts_kurt(day_min(Ret), 5), 20))
+  why: '拆解表(本轮 loc.json ablation,35 次评估之一)对「ts_kurt(day_min(Ret),5)」做 knockout(换成裸 day_min(Ret))后,score 从原 head 的 +1.50 升到 +1.67(train +1.50→+1.67,valid +1.63→+1.68),必要性 −0.17(负数即「去掉它反而更好」);这是 locate 自己标出的唯一一条 R 候选(loc.json r_candidates,增益 +0.17 > 门槛 +0.10)。同一张表里,另一侧的 knockout(去掉外层 cross_mean(…,20) 换成裸 abs_(day_centroid(Volume)))必要性 +0.81(显著变差);而 knockout「abs_」本身必要性恰好是 0.00——因为 day_centroid 的实现本身已经对输入取绝对值(ops_ext.day_centroid: x=_f(x).abs()),输出已经非负,外面再套一层 abs_() 在数学上是恒等操作,是 GP bloat 不是机制的一部分。合起来看,这个 head 里真正必要的部分只有「day_centroid(Volume) 20 日平滑后,在『单日最差分钟收益』20 日平滑分位内排序」,ts_kurt 这层非线性包装没有在帮忙。'
+  variants:
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 10))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 40))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 10), cross_mean(day_min(Ret), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 40), cross_mean(day_min(Ret), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Amt)), 20), cross_mean(day_min(Ret), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(ts_med(day_min(Ret), 5), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 5))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_max(Ret), 20))
+  - cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(sub(day_max(Ret), day_min(Ret)), 20))

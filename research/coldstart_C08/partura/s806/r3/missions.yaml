@@ -1,0 +1,90 @@
+seed: 806
+round: 3
+slots:
+- type: E
+  core: div(day_first(Amt), day_sum(Amt))
+  hypothesis: 核心 ATT = div(day_first(Amt), day_sum(Amt)) = 开盘第一分钟成交额占全天成交额的比例,取值在 [0,1](零成交日为 NaN)。它是本轮快照里新 head(+1.12,c08s806Pr2b_Nb,本组 r2 自己 N 位机械嫁接出来的、本轮分数第二高的 head)里承重的原子之一:loc.md 的拆解表明把这个比例从该 head 的子树里敲掉,整条链从 +1.12 掉到 -1.04(sufficiency,子树本身)乃至 -4.31(把它整段去掉只剩符号和两个log 项的链);R 候选表也显示把它旁边重复的 log(O) 因子精简掉(去掉多余的一次符号项,或去掉多余的一次大小项)各带来 +0.14 的增益——说明『开盘第一分钟到底占了多大份额』这件事本身在那条链里是必要且稳健的承重件。但它至今只在『与隔夜跳空 O 相乘』这一种用法下被测过(r1 的 N 位单独测过 cross_mean(ATT,20),分数不高、没有进 heads;r1/r2 的全部任务里 ATT 都只出现在 ATT*|O|*O 这一种交互形式里),从未单独当 E 核心深挖它自己的结构。本位问:这个比例本身(不跟任何跳空量交互)作为『当天的信息/关注度有多少集中在集合竞价这一个最早的时点上』的代理,是不是单独就携带跨日可持续的信息,还是只有在跟隔夜跳空的符号/大小交互时才有意义——这是把已证实有效的联合结构拆开做的一次干净的归因实验,是对已有发现的补充验证,不是重复。机制:Admati 与 Pfleiderer(1988)的理论是知情交易者与可以自由选择交易时点的流动性交易者,会在均衡里把交易聚集到彼此能互相掩护的时段;中国集合竞价阶段由高度散户化、注意力驱动的隔夜订单主导,前一晚消息(隔夜新闻、公告、北美夜盘联动)在开盘第一分钟释放得有多集中,衡量的是『这只股票有多少当天信息选择在最早的时点就动手』,是一个和 day_centroid(Amt) 不同粒度的问题:day_centroid 回答的是『全天交易发生在什么时候』这个连续的质心,ATT 回答的是分布最极端的一个点——开盘那一分钟——占了多大份额。Heston、Korajczyk 与 Sadka(2010)证明美股日内收益在固定钟表时刻上有约 40 个交易日的持续周期;ATT 是这个钟表轴上信息最密集的单点读数,如果类似的钟表周期在中国市场也存在,一只股票『惯常在开盘就用掉多少注意力』应该是一个稳定的跨日特征,而不是单日噪声。Lou、Polk 与 Skouras(2019)的隔夜/日内客户群拔河框架意味着,开盘瞬间到底被谁主导(提前下单的知情资金,还是扎堆的噪声/流动性需求),决定了隔夜这一段对该股票的信息含量;ATT 本身的水平和稳定性,是这个客户群构成的直接代理,不需要先知道隔夜方向就能问。Blume、Easley 与 O'Hara(1994)证明成交量本身携带信息、能改善价格发现;开盘量占比把这个一般性论点收窄成『信息在哪个时点被交易消化』的具体读数,为乘以日内波动的交互种子提供依据。算子实现,刻意避开本组历史上对 ATT 用过的唯一外围(裸的 cross_mean 平滑,以及『乘以 O 或 |O|』的交互):(1) 换统计量家族——cross_ema(半衰期 10、40,连续记忆而不是硬窗口均值)、cross_tail_mean_q75/q25(开盘关注度偏高/偏低那条尾部各自的条件均值,而不是典型水平)、cross_stddev 与 cross_madz(这只股票的开盘关注度本身有多不稳定/今天比自己的历史惊讶多少,而不是水平);(2) cross_delta(把『一贯的开盘关注习惯』和『最近的迁移』分开,这个变化检测器此前只用在 day_centroid 上,这里是第一次用在 ATT 上);(3) 一个不含任何隔夜量的交互——乘以 day_std(Ret)(问开盘关注度是不是在当天整体信息量/波动更大的日子里更强,直接检验 Admati-Pfleiderer『信息越值钱聚集越明显』这条预测,而且不经过隔夜跳空这个中介);(4) 两个中性化诊断——cs_bucket_rank 按 cross_mean(day_sum(Amt),30)(成交额水平,不是已知族 cross_mean(day_std(Amt),30) 那个波动量)分桶,检验 ATT 是不是薄股票的流动性水平伪影;按 ListAge 分桶,检验是不是上市时间短的名字机械地把早盘占比推高;(5) 一个共动检验——cross_corr(ATT, day_centroid(sub(High,Low)), 20),问『开盘吃掉多少成交额』与『当天的振幅发生在什么时候』是否对齐,是 r2 里 day_centroid(Amt) 与 day_centroid(sub(High,Low)) 共动检验的姊妹问题,但主体换成了分布的极端点而不是整体质心;(6) 一个排除诊断——cs_last_low05 用 cross_valid_count 筛掉近期上市/复牌的名字。为什么样本外还会在:中国散户主导的集合竞价制度、T+1 以及隔夜信息习惯性在开盘瞬间释放,在样本期内是结构性的、没有变化的客户群与微观结构特征,不依赖某一段行情;ATT 是一个份额量,数值上安全(分子不超过分母,零成交日给 NaN 不给 inf,与 day_centroid 已经核过的边界情形同构),去掉波动水平后与 5 个控制都不是同一个量(集中在哪个时点,不是波动、流动性水平、反转或市值本身)。
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 知情交易者与可自由选择时点的流动性交易者在均衡中把交易聚在某些时段互相掩护,聚集随私有信息强度变化——直接支持用开盘第一分钟成交额占比(ATT)衡量『信息在开盘集中释放的程度』,乘以 day_std(Ret) 的交互种子直接检验『信息越值钱聚集越明显』这条预测
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    url: https://arxiv.org/abs/1005.3535
+    treatment: 日内收益在固定钟表时刻上存在持续约 40 个交易日的系统性周期——ATT 是这个钟表轴上信息最密集的单点(开盘)读数,支持它的水平与稳定性(cross_ema/cross_stddev/cross_madz)本身可持续
+  - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://doi.org/10.1016/j.jfineco.2019.03.011
+    treatment: 隔夜与日内两段收益由不同客户群推动——开盘瞬间被哪类资金主导(ATT 的水平)是这个客户群构成的直接代理,不需要先知道隔夜方向
+  - title: 'Market Statistics and Technical Analysis: The Role of Volume'
+    authors: Lawrence Blume, David Easley, Maureen O'Hara
+    year: '1994'
+    url: https://doi.org/10.1111/j.1540-6261.1994.tb04424.x
+    treatment: 成交量本身携带信息、能改善价格发现——为『开盘量占比乘以当天整体波动』的交互种子提供依据(本轮用 WebSearch 核对了标题/作者/年份/卷期页码,DOI 取自二次引用源,未从出版社页面独立核实)
+  seeds:
+  - cross_ema(div(day_first(Amt), day_sum(Amt)), 10)
+  - cross_ema(div(day_first(Amt), day_sum(Amt)), 40)
+  - cross_tail_mean_q75(div(day_first(Amt), day_sum(Amt)), 20)
+  - cross_tail_mean_q25(div(day_first(Amt), day_sum(Amt)), 20)
+  - cross_stddev(div(day_first(Amt), day_sum(Amt)), 20)
+  - cross_madz(div(day_first(Amt), day_sum(Amt)), 60)
+  - cross_delta(cross_ema(div(day_first(Amt), day_sum(Amt)), 20), 20)
+  - mul(div(day_first(Amt), day_sum(Amt)), day_std(Ret))
+  - cs_bucket_rank(cross_ema(div(day_first(Amt), day_sum(Amt)), 20), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_rank(cross_ema(div(day_first(Amt), day_sum(Amt)), 20), ListAge)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), day_centroid(sub(High, Low)), 20)
+  - cs_last_low05(cross_ema(div(day_first(Amt), day_sum(Amt)), 20), cross_valid_count(day_last(Close), 120))
+- type: N
+  hypothesis: 本位在本组自己上一轮(r2)N 位产出、并被 GP 机械嫁接成本轮分数第二高新 head(+1.12,c08s806Pr2b_Nb)的结构上继续问一个新问题。那个 head 的形状是 cross_mean(mask(O>0) * ATT * |O| * O, 20)(O = 隔夜收益 log(day_first(Open)/cross_delay(day_last(Close),1)),ATT = 开盘第一分钟成交额占比),O>0 时 |O|*O = O²,所以它只在『隔夜上涨、且被开盘关注度确认』的日子上取非零的正值,sign=+1(多头=这类日子多的股票)。这意味着『被开盘关注度确认的隔夜跳跃』更像是会持续的真实信息事件,而不是传统 MAX/隔夜情绪文献里『跳得越高越该做空』的反转故事——呼应 Blume、Easley 与 O'Hara(1994)『放量确认的价格变动更可信』这个一般性论点。loc.md 的拆解证明 is_gt(O,0) 这个符号门是必要的(敲掉后从 +1.12 掉到 -0.21,必要性 +1.34),但这个 head 以及它全部的拆解候选(knockout/sufficiency/swap/window)都只测过『上涨被确认』这一侧,从未给出『下跌被确认』的镜像,也没有问过这个效应是不是对称。本位要问:隔夜『下跌』且被开盘关注度确认的日子,后续是继续走弱(与上涨侧同号的继续性,支持『关注度确认的方向都会续』这个统一机制),还是走强(反转,支持『坏消息更快被消化/短期修正』,或 An、Huang 与 Li(2022)已经证明的中国市场隔夜异象本身的不对称性—— 他们发现隔夜收益只在前一交易时段下跌之后才显著为负,归因于散户的有限注意力)。算子实现:n1 把已证实结构里的 is_gt 换成 is_lt,其余子树原样保留(mask(O<0)*ATT*|O|*O;|O|*O 在 O<0 时取负值,是该结构严格的符号镜像,不是重新设计的新形状);n2 把『符号』和『大小』拆开,用 mask(O<0)*ATT*O²(pow_2 代替 abs_*O,只问『被确认的下跌有多猛』,不带方向信息,和 n1 对比可以把『方向』与『大小』的贡献分开);n3 = 上涨侧的 mask(O>0)*ATT*O² 减 n2,是不带方向信息的净不对称(直接回答『确认的上涨能量』与『确认的下跌能量』哪个更强、强多少,呼应 r2 N 位对称 O²/I² 做过的上/下行能量差,但这里乘的是 ATT 而不是日内收益的平方);n4 是不分方向的总体交互 mul(ATT, pow_2(O))(去掉符号门,检验『按方向分 mask』是不是必要的,一个必要性诊断——如果 n4 的分数和 n1/原 head 的均值接近,说明符号门没有贡献,信息全在大小里);n5 = cross_corr(ATT, |O|, 20),把『当天的交互』换成『这只股票一贯有多强的关注度-跳空绑定』这个特质(trait,而不是某些具体日子的事件能量,是全新的统计量家族);n6/n7 把『乘以跳空大小』换成『只看确认侧(跌/涨各自)开盘关注度的水平本身』,不带大小权重,检验信息是不是只在于『那天有没有大量资金在开盘确认方向』而不是『跳了多大』;n8 = cross_corr(ATT, 昨日日内收益, 20),换一个全新的滞后维度——问『今天开盘的关注度』和『昨天收盘前的走势』是否存在稳定的跨日关系,这是本组三轮任务里都没问过的提前量(lead-lag,而不是同一天内的交互);n9/n10 把『乘以跳空大小』换成『乘以当天整体分钟波动 day_std(Ret)』,检验这种确认效应是不是关于隔夜跳空本身,还是关于那天整体信息量/波动有多大(day_std(Ret) 不含方向信息,只把隔夜的符号筛选保留、权重换成更宽的信息代理)。为什么和库里已有的不一样:库里两个对称二次型 head(+0.67、+0.60)和这次的新 head(+1.12)全部只问『隔夜整体水平』或『隔夜与日内之比』或『上涨侧单独的确认能量』;本组 r2 的 N 位已经问过对称 O²/I² 的上/下行能量分解,但从没有一颗种子把开盘关注度 ATT 按方向拆开,也没有一颗种子问过关注度与跳空的滞后关系或特质绑定,这些都是全新的轴。为什么样本外还会在:T+1、做空限制与散户主导的注意力分布,使『开盘关注度确认的方向性隔夜跳空』是制度性的、可持续的现象,不依赖某一段行情;An、Huang 与 Li(2022)已经证明中国市场隔夜异象的不对称并非噪声,是样本期内稳定存在的结构性特征。
+  inspired_by: 本轮快照里由 c08s806Pr2b_Nb(本组 r2 的 N 位)机械嫁接产生的本轮分数第二高 head(+1.12);loc.md 对它的拆解证明符号门 is_gt(O,0) 必要(敲掉后 -0.21,必要性 +1.34),但该 head 与它全部的拆解候选都只测过『上涨被确认』一侧;文献 An、Huang 与 Li(2022)关于中国隔夜异象不对称的发现,以及 Blume、Easley 与 O'Hara(1994)关于放量确认价格变动更可信的框架。
+  literature:
+  - title: The Asymmetric Overnight Return Anomaly in the Chinese Stock Market
+    authors: Yahui An, Lin Huang, Youwei Li
+    year: 2022-11
+    url: https://doi.org/10.3390/jrfm15110534
+    treatment: 中国市场隔夜异象的不对称结构(隔夜收益只在前一个交易时段下跌之后才显著为负),归因于散户的有限注意力——直接支持检验『开盘关注度确认的下跌隔夜』是继续走弱还是反转
+  - title: Overnight Returns and Firm-Specific Investor Sentiment
+    authors: David Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman
+    year: 2018-04
+    url: https://doi.org/10.1017/S0022109017000989
+    treatment: 隔夜收益作为个股情绪代理的基础框架;本位在它之上问这个情绪代理被开盘关注度确认之后是否左右对称
+  - title: 'Market Statistics and Technical Analysis: The Role of Volume'
+    authors: Lawrence Blume, David Easley, Maureen O'Hara
+    year: '1994'
+    url: https://doi.org/10.1111/j.1540-6261.1994.tb04424.x
+    treatment: 放量确认的价格变动更可能是真实信息、更可能持续,而不是噪声——是『被开盘关注度确认的隔夜跳跃』应该继续而不是反转这个假设的理论基础;本位检验这个论点对下跌方向是否依然成立
+  - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    url: https://doi.org/10.1016/j.jfineco.2019.03.011
+    treatment: 隔夜与日内两段收益由不同客户群推动、彼此拉扯的框架——本位的不对称检验问的是这个拔河结构本身是否左右对称
+  seeds:
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), pow_2(log(div(day_first(Open), cross_delay(day_last(Close), 1)))))), 20)
+  - sub(cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), pow_2(log(div(day_first(Open), cross_delay(day_last(Close), 1)))))), 20), cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), pow_2(log(div(day_first(Open), cross_delay(day_last(Close), 1)))))), 20))
+  - cross_mean(mul(div(day_first(Amt), day_sum(Amt)), pow_2(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))), 20)
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), div(day_first(Amt), day_sum(Amt))), 20)
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), div(day_first(Amt), day_sum(Amt))), 20)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), cross_delay(log(div(day_last(Close), day_first(Open))), 1), 20)
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), day_std(Ret))), 20)
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), day_std(Ret))), 20)
+R:
+- head: cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)
+  why: 拆解(loc.md)显示这个 head 里隔夜跳空 log(O) 被连乘了两次——一次在 abs_(log(O)) 里取大小,一次作为最外层单独乘回去再取一次大小和符号——knockout 掉其中任意一次,score 都从 +1.12 涨到 +1.26(必要性 -0.14,两处都是烂件):只留一次大小信息(去掉重复的符号+大小项)或只留一次符号+大小信息(去掉重复的 abs_ 大小项),都比原 head 更干净、分数更高。两个变体与原 head 的结构几乎相同(ρ 应该 >= 0.5),是同一个核心机制的精简版,不是新机制。
+  variants:
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))))), 20)
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(div(day_first(Amt), day_sum(Amt)), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)
+- head: cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30)), cross_mean(day_std(Amt), 30))
+  why: 拆解显示这个 head 的两处部件都偏慢:(1) 外层做桶内排序用的控制 cross_mean(day_std(Amt),30) 本身是烂件——knockout 换成裸的 day_std(Amt) 后必要性 -0.18(score 从 +1.01 涨到 +1.19,train/valid 同向),说明桶内排序要的是『今天』的成交额波动水平,被 30 日平滑钝化反而更差;(2) 内层 cross_ema(day_centroid(Amt),20) 的半衰期 20 太慢——window 行显示把半衰期从 20 改到 10,score 从 +1.01 跳到 +1.36(train +1.29->+1.50,valid +1.01->+1.36,同向改善),说明这个 head 想捕捉的信息比它自己选的半衰期更新得快。
+  variants:
+  - cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 10), cross_mean(day_std(Amt), 30)), cross_mean(day_std(Amt), 30))
+  - cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30)), day_std(Amt))
+- head: cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(cross_ema(day_centroid(Amt), 20), 30)), cross_mean(cross_ema(day_centroid(Amt), 20), 30))
+  why: 这个 head 与上一条共享同一个『内层 cross_ema(day_centroid(Amt),20) 半衰期 20 太慢』的部件问题:window 行把这个半衰期从 20 改到 10 后,score 从 +0.96 涨到 +1.07,valid 从 +1.64 涨到 +1.69,train 与 valid 同向改善,说明这个head 的两处内层引用(本身与作为自己的控制)都该用更快的半衰期。
+  variants:
+  - cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 10), cross_mean(cross_ema(day_centroid(Amt), 20), 30)), cross_mean(cross_ema(day_centroid(Amt), 20), 30))

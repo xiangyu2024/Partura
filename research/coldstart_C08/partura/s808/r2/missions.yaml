@@ -1,0 +1,107 @@
+seed: 808
+round: 2
+slots:
+- type: E
+  core: day_wstd(Ret, Volume)
+  hypothesis: 核心 day_wstd(Ret, Volume) 是按分钟成交量加权的日内已实现波动(源码:sqrt(sum(|Volume|*(Ret-m)^2)/sum(|Volume|)),m=day_wmean(Ret,Volume)),是库里当前最强的 head(+1.2567,`ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)` ≡ `ts_max(cs_demean(day_wstd(Ret, Volume)), 148)`)与另一个 head(+1.0659,`ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 100)` ≡ 同一条序列窗口 109)共同的子树,也是本轮定位输出共性表效应最大的原子(核心卡第 11 项,均值差 +1.1118,24 个候选含它),本轮是它第一次被交给 GP 单独开一个 E 位(此前只在 R 里被人工拆解)。 第 1 轮用 R 对这条序列做了 8 个判别式,已经钉死三件事(R_prev.json):① 把 ts_max 换成 ts_mean / cross_tail_mean_q75 / ts_quantile(0.9) 全部崩到 -2.57 / -0.17 / -2.16,证实 alpha 来自『单日尾部』而不是『波动水平』——是某一天出了事,不是这只股票一直这么躅;② cs_bucket_demean(…, LimitWidth) 版 1.3276,比原 head 还高,排除了板块 / 涨跌幅宽度是主要来源;③ cs_bucket_rank(…, ListAge) 版降到 0.7569(valid 从 1.79 掉到 0.76,降幅接近 0.5),上市年龄 / 停牌混淆没被排除,仍是悬案,本轮会在 R 位再测一次更干净的版本。 本位要回答的问题是:『出事的那一天』除了振幅大,还有没有别的、可独立验证的行为特征——如果有,支持『真的是一次信息冲击 / 彩票事件』;如果没有,支持『纯粹是单变量尾部统计量凑巧选中、脆弱』。 外围引入两个本轮定位输出才首次显著、库里和 R 都从未用过的原子:① day_centroid(Volume)(当天成交量的分钟级时间重心,0 = 全在开盘,1 = 全在收盘;本轮核心卡第 10 项,效应 +1.2622,12 个候选含它)——Admati-Pfleiderer (1988) 的理论预测知情交易与流动性交易集中在同一批厚时段,一次真正的信息冲击日,成交量的日内时间分布应偏离这只股票平时的形状,而单纯『窗口凑巧选中最大值』不会改变成交量的时间结构;② day_cov(Open, Ret)(当天分钟价格水平与分钟收益的协同方向;本轮唯二新 head 之一的组成部件,核心卡第 19 项,效应 +0.862,12 个候选含它)——协同为正近似『追涨』(价格已走高、收益仍为正),为负近似『逢低买入』(价格走低、收益反而更正),对应 Llorente-Michaely-Saar-Wang (2002)『个股量价动态按信息交易比重分化』的框架;③ cross_autocorr_s1(day_wstd(Ret, Volume), d)(该序列自身滞后一阶的日度自相关,库和 R 都没测过『这条序列是不是会自己重复』)——Giot-Laurent-Petitjean (2010)『交易活跃度只关联连续方差、不关联跳跃』与 Barndorff-Nielsen-Shephard (2004) 把已实现波动拆成连续项与跳跃项的框架一起说明:真正的『跳』在统计上应接近孤立事件、自相关低;如果核心序列滞后自相关很高,说明『尾部』其实是一段持续偏高的 regime,仍可能是『慢速波动水平』的某种残留;自相关低则支持孤立跳跃 / 彩票事件解释。 算子实现:种子 1-5 用当天 cs_rank 差 / 和(sub/add)直接构造『同一天』的联合信号(不经过任何窗口,只问『今天振幅排名』与『今天成交量时点排名』或『今天价格-收益协同排名』是否同时出现在两端),再取 148 日最大值 / 最小值;种子 6-7、12 把核心的 148 日尾部统计量或核心本身的持续性单独抽出来,用 cs_rank 差去掉持续性对尾部排名的贡献;种子 8-9、11 用 cs_bucket_rank 把『这只股票习惯性的成交时点 / 习惯性的趋势-反转风格 / 波动持续性』当成分桶变量,在同一桶内比尾部强度,非参数地剥掉这层『风格』混淆;种子 10、13 是不经过 bucket 的秩差版本,互相印证。 与库和 R 已见过的写法的区别:这条序列目前的 2 个 head、以及 R 轮 1 对它做的 8 个判别式,外围全部是『对同一条序列的归一化方式(cs_demean/cs_normalize/cs_rank/cs_robust_z/不归一化)』『取跨日极值的方式(ts_max/ts_mean/ts_med/argmax/quantile(0.9)/tail_mean)』『按一个静态字段分桶(LimitWidth/ListAge)』三选一,本质都是单变量序列换一种挤法;本位 13 个种子没有一个属于这三类,全部引入一个结构不同、本轮才被标为显著的第二统计量(时点、协同方向、自相关),和核心做同日或跨日联合,库里目前完全没有这种组合方式。 为什么样本外还会在:彩票偏好与注意力驱动的过度定价是慢变量,不依赖某一段行情;新增的三个判别维度都是无量纲或有界的秩差 / 相关系数类统计量,不靠挑某一个窗口常数吃饭,而是在问『这次尾部事件像不像一次真信息冲击』,联合判别式历史上被反复验证比单一水平统计量更稳健(Bali-Cakici-Whitelaw 2011;Amaya et al. 2015);窗口仍在已验证有效的 60-148 日平台上,没有引入新的未验证窗口自由度。
+  literature:
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Bali, T.G.; Cakici, N.; Whitelaw, R.F.
+    year: '2011'
+    url: https://www.nber.org/papers/w14804
+    treatment: MAX 效应与波动水平是两个独立信息源,本位用联合判别式(时点/协同/持续性)去检验这次的尾部是不是同类真实彩票事件
+  - title: Do Extreme Returns Matter in Emerging Markets? Evidence from the Chinese Stock Market
+    authors: Nartea, G.V.; Kong, D.; Wu, J.
+    year: '2017'
+    url: https://ideas.repec.org/a/eee/jbfina/v76y2017icp189-197.html
+    treatment: A 股 MAX 效应独立于特质波动存在,支撑本族继续深挖的前提
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, A.R.; Pfleiderer, P.
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 知情/流动性交易集中于同一厚时段 -> day_centroid(Volume) 作为『这一天是否异常』的独立时点证据
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Llorente, G.; Michaely, R.; Saar, G.; Wang, J.
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 量价动态按信息交易比重分化为延续/反转 -> day_cov(Open, Ret) 的正负作为『追涨』vs『逢低买入』的同日判别
+  - title: Trading Activity, Realized Volatility and Jumps
+    authors: Giot, P.; Laurent, S.; Petitjean, M.
+    year: '2010'
+    url: https://cris.maastrichtuniversity.nl/en/publications/trading-activity-realized-volatility-and-jumps
+    treatment: 交易活跃度只关联连续方差、不关联跳跃 -> 用 cross_autocorr_s1 的自相关高低区分持续 regime 与孤立跳
+  - title: Power and Bipower Variation with Stochastic Volatility and Jumps
+    authors: Barndorff-Nielsen, O.E.; Shephard, N.
+    year: '2004'
+    url: https://doi.org/10.1093/jjfinec/nbh001
+    treatment: 已实现波动可分解为连续项与跳跃项,跳跃项在统计上接近孤立不自相关 -> 支持把『滞后自相关低』读作『孤立跳跃』
+  seeds:
+  - ts_max(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_centroid(Volume))), 148)
+  - ts_max(add(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_centroid(Volume))), 148)
+  - ts_min(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_centroid(Volume))), 148)
+  - ts_max(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(abs_(day_cov(Open, Ret)))), 148)
+  - ts_max(add(cs_rank(day_wstd(Ret, Volume)), cs_rank(abs_(day_cov(Open, Ret)))), 148)
+  - sub(cs_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148)), cs_rank(cross_autocorr_s1(day_wstd(Ret, Volume), 60)))
+  - sub(cs_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148)), cs_rank(cross_autocorr_s1(day_wstd(Ret, Volume), 120)))
+  - cs_bucket_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148), cross_autocorr_s1(day_wstd(Ret, Volume), 60))
+  - cs_bucket_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148), ts_mean(day_centroid(Volume), 148))
+  - sub(cs_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148)), cs_rank(ts_mean(day_centroid(Volume), 148)))
+  - cs_bucket_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148), ts_mean(day_cov(Open, Ret), 148))
+  - cross_autocorr_s1(day_wstd(Ret, Volume), 120)
+  - sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(ts_mean(day_centroid(Volume), 148)))
+- type: N
+  hypothesis: 新想法:个股『日内趋势-反转风格』是不是一个稳定的个股特质,这个特质本身(不是某一天的读数)能不能预测横截面收益。 直接灵感来自上一轮 N 位(c08s808Pr1b_Nb)GP 自己长出来、完全不在我们种子设想之内的那条新 head——目前全库最高分(+1.303881):`cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 241)`。 拆开看:day_cov(Open, Ret) 是当天分钟『价格水平』(Open,逐分钟更新,近似当天累计走势)与『分钟收益』的协方差——为正说明这一天的收益更多出现在价格已经走高之后(追涨 / 动量延续),为负说明收益更多出现在价格走低之后(逢低买入 / 日内反转);day_wmean(Vwap, High) 是用每分钟 |High|(该分钟的振幅)给 Vwap 加权的均值,偏向这只股票当天波动最大的那些分钟的价格水平。cross_regbeta(X, Y, 241) 对每只股票单独做『过去约一年(241 个交易日)X 对 Y 的时间序列回归』取斜率——这不是某一天的信号,是『这只股票历史上,它的趋势 / 反转风格是否和它高波动时段的价格水平同向变化』这一件慢变量,接近个股自己的一个『行为类 beta』。loc.md 的拆解显示两个子部件单独上场都是负分(-1.79 / -1.34),alpha 完全来自『回归关系』本身;train(1.36)与 valid(1.30)非常接近,不像库里其它靠窗口选出来的 head 那样 valid 远高于 train,是一个支持『不是训练期运气』的信号。 机制(文献支持『个股有稳定的日内行为风格、要长窗口才估得准』这个大方向):Heston-Korajczyk-Sadka (2010) 直接证明个股自己的日内收益模式(哪半小时涨、哪半小时跌)在数周到数月内持续存在、且不被已知因子解释,支持把这类日内行为当作『个股特质、要长窗口才能可靠估计』而不是日频信号;Llorente-Michaely-Saar-Wang (2002)(上一轮已用过,这次换个角度:延续还是反转本身是个股的持续性格,随这只股票历史上信息交易占比不同而持续分化,不是偶然);Gao-Han-Li-Zhou (2018) 在美股证实日内价格路径的形状(最后半小时 vs 全天)本身携带可预测信息,支持『日内价格路径的形状』值得单独建模。 算子怎么实现它:把这个意外发现升级成一个结构化的族,而不是只守着那一个随机长出来的具体写法——① 换 X 腿(『今天的协同方向』用什么量):day_cov(Open,Ret) 原版、day_cov(High,Ret)(用振幅上限替代开盘价,检验是否必须用 Open)、day_corr(Open,Ret)(有界的相关系数版,去掉协方差天然随股价水平变化的尺度依赖,检验『协同方向』还是『协同的原始尺度』在起作用)、以及跨家族借用 day_wstd(Ret,Volume)(E 位核心,必须测的交叉验证:这个回归关系是不是只是在用另一种方式重新发现尾部波动);② 换 Y 腿(『哪些时段的价格水平』):day_wmean(Vwap,High) 原版、day_wmean(Close,High)(拆解里 swap Vwap->Close 已测到 1.33,略好于原版)、day_wmean(Vwap,Volume)(换成按成交量而不是振幅加权,检验是『高波动时段』还是『高成交时段』在起作用)、day_topw_mean(Close,High)(只看振幅最大的 10% 分钟,事件化版本)、day_wmean(High,Volume);③ 换窗口:120/180/361(241 与 482 已在拆解里测过,分别 0.46 与 0.70,都不如 241;本位补中间两个窗口,检验『一年』是否真是那个尺度还是241 本身也是 train 挑出来的);④ 换统计量种类:cross_regres(残差,检验『今天偏离历史回归关系多少』这个瞬时量是否比『历史回归关系本身』这个慢变量更有信息——如果残差版更好,说明这其实是个日频均值回复信号,不是个股特质)、cross_reg_tvalue(把斜率除以标准误,检验『统计显著性』是否比『斜率大小』更稳健,对估计样本少的新股是天然的收缩)、cross_regalpha(截距项,和斜率完全不同的信息维度,作为对照)。 与库里已有的不同:现在库里 8 个 head 没有一个用 cross_regbeta/regres/reg_tvalue/regalpha 这一族的『个股自身历史回归系数』,全部是『单一序列的跨日变换 / 极值 / 自相关』,或者就是这条意外跑出来的 head 本身;5 个控制(流动性、波动、20 日反转、已知族、市值)全部是水平或比值类统计量,没有任何『回归关系』类的度量,也没有任何『个股历史上两种日内行为是否联动』的度量,结构上是全新的一类统计量,不是现有任何 head 或控制换个写法。 为什么样本外还会在:cross_regbeta 用的是跨越约半年到一年半的回归窗口,天然是慢变量、换手率低,不依赖某一天或某一段行情;上一轮那条意外发现本身 train/valid 高度一致(1.36 vs 1.30),不是『valid 恰好配合』型的过拟合特征;其机制(个股有持续性的日内交易风格——由知情交易比重、投资者结构、流动性供给方式决定)是微观结构层面的慢变量,不会随某一段市场情绪改变,文献(Heston-Korajczyk-Sadka 2010;Llorente et al. 2002)显示这类个股特质本身能持续数周到数月。
+  inspired_by: 第 1 轮 N 位(c08s808Pr1b_Nb)的初代随机树——不是我们种子设想的『量-价耦合度』——自己长出了`cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 241)`,目前是全库最高分(+1.303881);拆解(loc.md)显示两条子部件单独都是负分、train/valid 高度一致。本位把这一次意外发现,系统化为一个可控的族。
+  literature:
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Heston, S.L.; Korajczyk, R.A.; Sadka, R.
+    year: '2010'
+    url: https://doi.org/10.1111/j.1540-6261.2010.01573.x
+    treatment: 个股自身的日内收益模式持续数周到数月、不被已知因子解释 -> 支持用约一年的 cross_regbeta 窗口估计个股的持久行为特质
+  - title: Market Intraday Momentum
+    authors: Gao, L.; Han, Y.; Li, S.Z.; Zhou, G.
+    year: '2018'
+    url: https://doi.org/10.1016/j.jfineco.2018.05.009
+    treatment: 日内价格路径的形状本身携带可预测信息 -> 支持用 day_wmean(·, High) 这类『按振幅挑时段』的路径统计量做 Y 腿
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Llorente, G.; Michaely, R.; Saar, G.; Wang, J.
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 延续 vs 反转随个股历史信息交易占比持续分化,不是偶然 -> 支持把 day_cov(Open,Ret) 的回归斜率读作个股的持久风格而非日频噪声
+  - title: 'Order Imbalance and Individual Stock Returns: Theory and Evidence'
+    authors: Chordia, T.; Subrahmanyam, A.
+    year: '2004'
+    url: https://www.cis.upenn.edu/~mkearns/finread/Chordia_buy-sell_orders.pdf
+    treatment: 做市商库存效应下订单流当期同向、滞后反转 -> 作为 day_cov(Open, Ret) 符号含义的背景机制
+  seeds:
+  - cross_regbeta(day_cov(Open, Ret), day_wmean(Close, High), 241)
+  - cross_regbeta(day_corr(Open, Ret), day_wmean(Vwap, High), 241)
+  - cross_regbeta(day_corr(Open, Ret), day_wmean(Close, High), 241)
+  - cross_regbeta(day_cov(High, Ret), day_wmean(Vwap, High), 241)
+  - cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, Volume), 241)
+  - cross_regbeta(day_cov(Open, Ret), day_topw_mean(Close, High), 241)
+  - cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 180)
+  - cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 361)
+  - cross_regres(day_cov(Open, Ret), day_wmean(Vwap, High), 241)
+  - cross_reg_tvalue(day_cov(Open, Ret), day_wmean(Vwap, High), 241)
+  - cross_regbeta(day_cov(Open, Ret), day_wmean(High, Volume), 241)
+  - cross_regbeta(day_cov(Open, Ret), day_wstd(Ret, Volume), 241)
+  - cross_regbeta(day_wstd(Ret, Volume), day_wmean(Vwap, High), 241)
+  - cross_regalpha(day_cov(Open, Ret), day_wmean(Vwap, High), 241)
+R:
+- head: ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)
+  why: 该 head 目前是全库最高分之一(+1.2567),第 1 轮的 8 个判别式已经确认它的 alpha 来自『单日尾部』而不是『水平』、不是『板块 / 限幅』,但 cs_bucket_rank(…, ListAge) 版从 1.2567 降到 0.7569(valid 从 1.79 掉到 0.76,降幅接近 0.5),上市年龄 / 停牌混淆仍未排除;另外 cs_demean 这一步(必要性 +0.23,是四个归一化方式里唯一真正有用的)是纯算术跨股票平均,如果某一天出现极端的个别离群值(比如一字涨跌停的巨幅 wstd),会把当天的市场均值拉偏,这是没被 R 轮 1 测过的、纯统计学意义上可能的烂部件;cross_valid_count(day_last(Close), 241) 是比静态 ListAge 更干净的动态年龄 / 停牌代理(能同时抓住新股和近期复牌股),用它做分桶去均值比上一轮的分桶排名更不受小桶内部分布怪异的影响。
+  variants:
+  - ts_max(cs_demean(cs_winsor(day_wstd(Ret, Volume))), 148)
+  - ts_max(cs_winsor(cs_demean(day_wstd(Ret, Volume))), 148)
+  - ts_max(cs_bucket_demean(day_wstd(Ret, Volume), cross_valid_count(day_last(Close), 241)), 148)
+- head: ts_max(ts_max(day_wmean(Ret, Amt), 50), 50)
+  why: 该 head(+1.0944)是 head2 家族(day_wmean(Ret,·) 的 99 日最大值)目前在库里的版本,第 1 轮 R 已经把 Volume 换成 Amt(+0.106),但从未给它加过 cs_demean/cs_rank 这一层归一化——day_wstd 家族(上面那个 head)恰恰因为 cs_demean(先减掉当天全市场的量加权波动水平)拿到了 +0.23 的必要性,日内收益均值同样可能被『今天大盘普涨 / 普跌』这种市场共同的日级漂移污染,使得『某一天资金加权涨幅最大』部分只是『那天恰好大盘大涨』,不是个股自己的事。
+  variants:
+  - ts_max(cs_demean(day_wmean(Ret, Amt)), 99)
+  - ts_max(cs_rank(day_wmean(Ret, Amt)), 99)
+- head: cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 241)
+  why: 该 head(+1.303881)目前是全库最高分,但两条腿 day_cov(Open,Ret) 和 day_wmean(Vwap,High) 都是跨股票绝对尺度不可比的量(协方差随股价水平的平方量级变化,VWAP 本身就是价格水平),如果两条腿里有共同的『今天大盘整体如何』成分,每只股票的 241 日回归就可能部分在吸收一个共同的市场因子而不是纯粹的个股特质;这是 N 位要系统探索的问题,在 R 位先用两个最小改动直接测一遍。
+  variants:
+  - cross_regbeta(day_cov(Open, Ret), cs_demean(day_wmean(Vwap, High)), 241)
+  - cross_regbeta(cs_demean(day_cov(Open, Ret)), day_wmean(Vwap, High), 241)

@@ -1,0 +1,83 @@
+seed: 805
+round: 3
+slots:
+  - type: E
+    core: day_corr(Ret, Volume)
+    hypothesis: '【核心是什么】day_corr(Ret, Volume) 是当天 241 个分钟格上「分钟收益」与「分钟成交量」的 Pearson 相关系数(dt_day.py 的 day_corr,分母带 EPS,全天价格锁死方差为 0 时给 0 不是爆点),恒在 [-1,1]。本组第 2 轮已把它立为 E 位核心,GP 自己从空白种群里独立演化出全库目前分数最高的 head(+1.18,剥壳后骨架是 cross_max(cross_mean(核心, 3), 60));第 2 轮 E 位的 8 个显式种子分别测了频率/幅度(is_gt0/is_lt0 占比)、相对自身历史的极值(cross_max/min 减 cross_mean)、迁移(5 减 60 均值)、稳定性(cross_stddev)、分钟方向不对称、按波动加权——结果本轮新增进 heads 表前五的只有一个 GP 机械嫁接出的候选(+0.54,day_corr(Ret, Ret) 与本核心的杂交),不是这 8 个显式种子血统里任何一个的后代,说明这几条「同一个相关系数再换一种跨日时间序列加工」的路都没能超过 GP 自己走出的结构,但留下三个没答的问题:(1)GP 用 cross_max 读到的是不是正好没被噪声污染的那一天,一个对单日噪声更稳健的「尾部水平」会不会同样有效甚至更好;(2)这个核心会不会在不同的市场状态(全市场当天整体波动高低、整体成交活跃度高低)下符号或强度不同——如果是,一个方向固定的版本会把两种状态的信号相互抵消而测不出来;(3)这个核心(同一时刻量价是否同步)会不会和本组第 1 轮确认的另一条独立轴 day_centroid(Volume)(成交发生在钟表时间的什么位置)存在交互——这两条轴此前从未被放进同一个表达式里测过,各自单独证明有效不代表背后是不是同一群交易者在起作用。 【这次的外围,机制各不相同】(1)稳健尾部替代单点极值:cross_tail_mean_q75(cross_mean(核心, 3), 60) 取最近 60 天里「核心的 3 日均值」落在自身当期 75% 分位以上那些天的平均,而不是只读一天的最大值(ops_ext.py 的 cross_tail_mean_q75/q25,与 cross_quantile_q75 是同一个分位点但取尾部均值而不是单个顺序统计量);cross_tail_mean_q25 是镜像的下尾。GP 验证的是「某一天的极值有用」,这组验证「稳健的尾部水平」是不是同样有用——如果尾部均值明显不输单点最大值,说明有用的是「最近持续偏强」而不是「恰好某一天特别强」;如果明显更差,说明 GP 找到的单点最大值本身就是 alpha 的来源(越极端越好),是信息不是可以被稳健化掉的噪声。另外两个种子不经过内层 3 日均值、直接对裸核心取尾部均值,检验「先平滑 3 天」这一步对尾部统计量是否依然必要(第 2 轮的必要性基线已经证明它对 cross_max 结构必要,这里换一种外层统计量重新确认)。(2)全市场状态条件翻转:cs_flip_by_state(cross_mean(核心, 3), day_std(Ret)) 用全市场当天的横截面平均分钟收益波动作状态变量,高于其自身 241 日滚动中位数时按 +rank 走、低于时按 -rank 走(ops_ext.py 的实现,状态来自全市场当天的横截面均值,不是任何单只股票自己的值);cs_flip_by_state(cross_mean(核心, 3), day_sum(Volume)) 换成用全市场当天的总成交量作状态变量。这条路问的是:量价共动在「全市场普遍恐慌/放量」的日子和「平静」的日子里是不是该反着用——Llorente 等人的框架本身是知情与流动性/对冲交易者的占比会随状态切换,但第 2 轮的「迁移」种子切的是「这只股票自己的近期水平」(cross_mean 短减长),这里切的是「全市场当天的状态」,是完全不同的条件对象,此前从未测过。(3)与钟表时间轴的交互:mul(核心, day_centroid(Volume))、cross_mean(mul(核心, day_centroid(Volume)), 20)、mul(cross_mean(核心, 3), day_centroid(Volume))——核心此前一直被单独测,这里第一次让它和本组另一条独立确认过的轴相乘。机制:如果「量价共动强」主要发生在「成交本就集中在尾盘」的股票上,更可能是机构/指数资金策略性建仓(Barclay-Warner:知情交易按成交量占比而不是绝对规模衡量更准,且集中在特定时点,不是均匀分布);如果发生在「成交集中在开盘」的股票上,更可能是散户追涨。两条轴方向一致时乘积放大、不一致时抵消——这是在问两条轴背后是不是同一群交易者,不是分别测各自的强度,数学上和分别测两个因子是不同的量(乘积的横截面排名不等于任一因子单独排名的单调变换)。(4)制度分组:cs_bucket_rank(cross_mean(核心, 3), BoardCode)、cs_bucket_rank(cross_mean(核心, 3), ListAge)——核心此前只做过跨日时间序列加工,从未按板块或上市年龄做横截面分组;涨跌停宽度、集合竞价规则按板块不同,新股炒作按上市年龄不同,这些机械差异都不在 5 个控制里,分组后剩下的才是个股自己的量价共动信息。 【为什么和以前不同】第 2 轮的 8 个种子全部是「同一个相关系数,换一种跨日的时间序列处理」——计数比例、极值相对自身均值、短长均值差、标准差、分钟符号筛选、乘法加权,全部沿着「日」这根轴在加工同一个输入,参照系都是这只股票自己的历史。这次四组没有一个是这种加工:尾部均值(1)换的是「读哪个顺序统计量」(分位数聚合,不是均值或极值);状态翻转(2)换的是参照系本身(全市场当天的状态,不是这只股票自己的历史水平);交互(3)换的是结合对象(另一个已分别证明在 train/valid 都稳的独立因子,不是自己的历史值或任何常数);分组(4)是这个核心第一次做横截面分组。 【为什么样本外还会在】day_corr 本身有界、无量纲、无参数;尾部均值只用分位数聚合,不拟合具体阈值,分位点(25%/75%)是结构性选择不是调出来的参数;状态翻转的参照是全市场自己最近 241 天的中位数,随时间自动重新校准,不会因某一段具体行情漂移而失效;交互项是两个分别在 train 与 valid 都稳的信号相乘,不引入新的拟合自由度;分组只去掉板块与上市年龄的离散差异,不拟合具体数值。机制上,知情与流动性交易者的占比随全市场状态切换、机构资金策略性择时聚集在特定时点,都是 A 股机构化程度与涨跌停制度决定的结构性事实,不依赖某一段具体行情的方向。 【已知的测量注意事项,不构成数学问题】day_std(Ret) 与 day_sum(Volume) 作为 cs_flip_by_state 的状态变量时,内部先取全市场当天的横截面均值再做自身历史分位(ops_ext.py 的 _market_series/_trailing_rank),不是任何单只股票自己当天的值,不会把同一只股票同一天的信息用两次造成前视;cross_tail_mean_q75/q25 在最近 d 天里有效交易日少于 2 天时给 NaN,不是除以近零的爆点。'
+    literature:
+      - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+        authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+        year: '2011'
+        url: https://doi.org/10.1016/j.jfineco.2010.08.014
+        treatment: 用上尾/下尾的条件均值而不是单日极值去读「极端是不是信息」,减少单日噪声主导极值统计量:支撑 cross_tail_mean_q75/q25 这组稳健化变体
+      - title: 'Dynamic Volume-Return Relation of Individual Stocks'
+        authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+        year: '2002'
+        url: https://doi.org/10.1093/rfs/15.4.1005
+        treatment: 量与收益的动态关系取决于知情交易与对冲/流动性交易的占比,这个占比会随状态切换:支撑用全市场状态(不是个股自己的历史)给量价共动做条件翻转
+      - title: Investor Sentiment and the Cross-Section of Stock Returns
+        authors: Malcolm Baker, Jeffrey Wurgler
+        year: '2006'
+        url: https://doi.org/10.1111/j.1540-6261.2006.00885.x
+        treatment: 某些横截面定价关系的方向会随整体市场情绪/状态翻转,不是固定不变的:支撑不预设量价共动一定是同一个方向,交给 cs_flip_by_state 自己检验
+      - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+        authors: Michael J. Barclay, Jerome B. Warner
+        year: '1993'
+        url: https://doi.org/10.1016/0304-405X(93)90029-B
+        treatment: 知情交易在特定时点策略性聚集,不是均匀分布在一天里:支撑把量价共动和成交时点重心(day_centroid)做乘法交互,检验两条轴背后是不是同一群交易者
+    seeds:
+      - cross_tail_mean_q75(cross_mean(day_corr(Ret, Volume), 3), 60)
+      - cross_tail_mean_q25(cross_mean(day_corr(Ret, Volume), 3), 60)
+      - cross_tail_mean_q75(day_corr(Ret, Volume), 60)
+      - cross_tail_mean_q25(day_corr(Ret, Volume), 60)
+      - cs_bucket_rank(cross_mean(day_corr(Ret, Volume), 3), BoardCode)
+      - cs_bucket_rank(cross_mean(day_corr(Ret, Volume), 3), ListAge)
+      - cs_flip_by_state(cross_mean(day_corr(Ret, Volume), 3), day_std(Ret))
+      - cs_flip_by_state(cross_mean(day_corr(Ret, Volume), 3), day_sum(Volume))
+      - mul(day_corr(Ret, Volume), day_centroid(Volume))
+      - cross_mean(mul(day_corr(Ret, Volume), day_centroid(Volume)), 20)
+      - mul(cross_mean(day_corr(Ret, Volume), 3), day_centroid(Volume))
+  - type: N
+    hypothesis: '【新 idea:日内上午与下午收益是「继续」还是「反转」,不是成交量或量价配对】把一天切成两段(ops_ext.py/dt_in.py 的 in_half,V2 口径:前半含开盘集合竞价、不含收盘集合竞价,后半反过来,与第 2 轮 N 位用过的同一个算子),分别取各段的分钟收益均值 day_mean(in_half(Ret, True))(上午)与 day_mean(in_half(Ret, False))(下午),度量两者是同向(继续,日内动量)还是反向(反转)。这与本组已确认的两条轴都不同:day_centroid(Volume) 看的是「成交发生在几点」,day_corr(Ret, Volume) 看的是「同一时刻价格和成交量是否同步变化」,这里看的是「同一天两个不相交时段的收益方向关系」——输入(两个时段各自的收益均值)和被测对象(continuation vs reversal,不是共动强度或成交时点分布)都不是这两条轴的子集或单调变换,数学上也不是同一个充分统计量(两条轴都可以为 0 的同时这里的继续/反转测度可以非 0,反之亦然)。 【机制】Gao-Han-Li-Zhou 的「日内动量」:一天前段的收益对后段收益有正向预测力,机制是信息沿着一天逐步扩散、动量交易者跟随趋势进场。但 A 股散户占比高、处置效应强(Feng-Seasholes 对中国投资者的直接证据:赢家仓位系统性地更早获利了结),如果上午的上涨主要是散户追涨造成的,午后更可能是获利了结/散户出货,体现为反转;如果上午的上涨是机构逐步建仓造成的(Admati-Pfleiderer 的策略性分批交易),午后更可能延续。两种机制在不同股票上可能都存在且强度不同,这次不预设哪个占优,方向留给 train 自己选。 【算子怎样实现】(1)同日继续/反转的直接度量:mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))) 为正表示上午下午同向(继续),为负表示反向(反转);这是单日值,噪声大,只做诊断基线。(2)持续的个股风格:cross_mean(上面的 mul, 20) 与 cross_mean(..., 60),把单日噪声平均成「这只股票近期习惯继续还是习惯反转」这件更稳定的事,而不是某一天的偶然结果。(3)风格一致性而非共同幅度:cross_corr(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False)), 60) 直接在日轴上对两个时段的收益序列求相关系数,而不是逐日乘积再平均——剥掉了「某一天两段都特别大」这种单日幅度对结果的支配,只剩「两段的方向是否倾向于一起变」这个更干净的统计量,和 (1)(2) 是不同的充分统计量(相关系数先各自标准化,乘积没有)。(4)用午后成交额占比加权:mul(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), div(day_sum(in_half(Amt, False)), day_sum(Amt))) 用「当天有多大比例的成交额发生在下午」给继续/反转信号加权——如果延续或反转主要发生在下午成交本来就活跃的那些天,说明背后真的有资金在交易这件事,不是下午安静无量时的随机噪声(Barclay-Warner:知情交易按成交量占比而不是绝对规模衡量更准)。(5)制度分组:cs_bucket_rank(cross_mean(上面的 mul, 20), BoardCode)、cs_bucket_rank(cross_mean(上面的 mul, 20), ListAge)——板块的涨跌停规则与集合竞价制度、新股上市初期的日内交易形态都会机械影响上午/下午收益的关系,这些离散状态不在 5 个控制里,分组后剩下的才是个股自己的继续/反转倾向。(6)必要性基线:cross_mean(day_mean(in_half(Ret, True)), 20) 与 cross_mean(day_mean(in_half(Ret, False)), 20) 单独测「只看上午(或只看下午)收益的持续性」,不涉及两段的关系——如果这两个基线本身就能打到 0.5 以上,说明信号只是普通的短期动量/反转,「两段关系」这个新机制没有加分;只有当 (1)-(4) 明显优于这两个基线,才说明「继续 vs 反转」这个关系本身就是信息来源,不是任一段自己的水平在起作用。(7)幅度版对照:cross_mean(mul(abs_(day_mean(in_half(Ret, True))), abs_(day_mean(in_half(Ret, False)))), 20) 只测「两段的波动幅度是否同步偏大」(类似已知的波动聚集),不管方向——用来把「方向性继续/反转」和「纯波动幅度聚集」这两件事分开,前者是这次真正要测的机制,后者只是诊断用的排除项。 【为什么和库里已有的不同】库里现在 5 个 head 和两轮任务测过的输入是:成交在钟表时间上的位置(day_centroid)、价格波动与成交的重心错配、量价瞬时相关系数(day_corr(Ret, Volume)/day_corr(Volume, Vwap))、以及没有进 head 的用分钟收益符号代理的净买压(day_signed_ratio,第 2 轮 N 位,评分 62 但最高只有 +0.26)。没有一个测过「同一天内两个不相交时段的收益本身的方向关系」——这是收益对收益的日内自相关结构,不是收益与成交量的配对,也不是成交量在时间轴上怎么分布,机制(日内动量 vs 处置效应导致的反转)和被测对象都是新的。 【为什么样本外还会在】in_half 按分钟格切分是固定的结构性切法,不是拟合出来的阈值;mul 与 cross_corr/cross_mean 都不引入拟合参数;(4)里的加权只用成交额占比,一个有界 [0,1] 的量。机制依赖的是信息沿交易时段扩散的普遍性(日内动量)与 A 股散户处置效应这两个结构性事实,不依赖某一段具体行情的方向,方向本身也留给 train 决定,不是预设的。 【已知的测量注意事项,不构成数学问题】in_half 的前后两段不是严格对称的 120/120 分钟(前段含开盘集合竞价、不含收盘集合竞价,后段相反),这是算子自己文档写明的边界归属选择,和第 2 轮 N 位用过的同一个算子共享这一性质,不是这次新引入的问题;day_sum(in_half(Amt, False)) 与 day_sum(Amt) 的比值在当天总成交额为 0(全天停牌)时按 div 的近零保护处理为缺失,不是除以近零的爆点,全天停牌的股票本身在所有字段上都应是缺失。'
+    inspired_by: 本轮 loc.md 的「本组之前各轮的任务」显示,第 2 轮 N 位(day_signed_ratio 净买压,含上午/下午两个时段分解版本)审计评分不低(62)但完全没有产出 head(最高只有 +0.26,低于我当时预测的 0.3-0.6 区间下限),说明「用分钟收益符号代理买卖方向、按时段切」这条具体路径在这个种子上走不通;但「上午/下午分别算」这个切分思路本身(in_half)和已确认有效的两条轴都不冲突,也没有被排除。这次换一个在这个切分上从未测过的输入:不再用分钟收益的符号去代理买卖方向,而是直接看两个时段各自的收益均值之间的方向关系(日内动量 vs 处置效应反转),是对同一个 in_half 切分工具的不同用法。文献:Gao-Han-Li-Zhou 2018(日内动量)、Feng-Seasholes 2005(中国散户的处置效应证据)。
+    literature:
+      - title: Market Intraday Momentum
+        authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+        year: '2018'
+        url: https://doi.org/10.1016/j.jfineco.2017.03.009
+        treatment: 一天前段的收益对后段收益有正向预测力(继续,不是反转):整个 N 位要检验的核心机制之一
+      - title: Do Investor Sophistication and Trading Experience Eliminate Behavioral Biases in Financial Markets?
+        authors: Lei Feng, Mark S. Seasholes
+        year: '2005'
+        url: https://doi.org/10.1093/rof/9.3.305
+        treatment: 中国散户投资者存在系统性的处置效应(赢家更早获利了结):支撑「午后获利了结导致反转」这条对立机制假设,方向留给 train 决定
+      - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+        authors: Michael J. Barclay, Jerome B. Warner
+        year: '1993'
+        url: https://doi.org/10.1016/0304-405X(93)90029-B
+        treatment: 知情交易按成交量占比而不是绝对规模衡量更准确:支撑用午后成交额占比给继续/反转信号加权
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: Anat R. Admati, Paul Pfleiderer
+        year: '1988'
+        url: https://www.gsb.stanford.edu/faculty-research/working-papers/theory-intraday-trading-patterns-volume-price-variability
+        treatment: 不同类型交易者在一天的不同时段策略性聚集,机构的分批执行偏向尾盘:支撑「机构建仓则延续、散户追涨则反转」这条机制分岔,以及按板块/上市年龄分组去掉机械性的时段参与差异
+    seeds:
+      - mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False)))
+      - cross_mean(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), 20)
+      - cross_mean(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), 60)
+      - cross_corr(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False)), 60)
+      - mul(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), div(day_sum(in_half(Amt, False)), day_sum(Amt)))
+      - cs_bucket_rank(cross_mean(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), 20), BoardCode)
+      - cs_bucket_rank(cross_mean(mul(day_mean(in_half(Ret, True)), day_mean(in_half(Ret, False))), 20), ListAge)
+      - cross_mean(day_mean(in_half(Ret, True)), 20)
+      - cross_mean(day_mean(in_half(Ret, False)), 20)
+      - cross_mean(mul(abs_(day_mean(in_half(Ret, True))), abs_(day_mean(in_half(Ret, False)))), 20)
+R:
+  - head: sub(cross_min(day_corr(Ret, Ret), 60), cross_mean(day_corr(Ret, Volume), 60))
+    why: '本轮结构解剖(loc.md「拆解」,14 次评估)已经直接评出:把第一个子树的窗口从 60 换成 120(sub(cross_min(day_corr(Ret, Ret), 120), cross_mean(day_corr(Ret, Volume), 60)))把分数从原 head 的 +0.54 推到 +0.87(train +0.87、valid +1.73),增益 +0.33,超过 R 的 +0.1 门槛(loc.json 的 r_candidates 条目,gain 0.3327,kind window);同一张拆解表里,保留窗口 60 只换字段(Volume->Amt,+0.56,增益仅 +0.02)或把窗口改小(60->30,+0.46,比原 head 还差)都明显不如换成 120 这一个改动,说明烂的部件具体是「cross_min 的窗口长度(60 天太短)」,不是 sub 的结构或 Volume 这个字段。这轮在已经证实的 120 窗口基础上,再往两边各探一步(90、150、180)看分数是单调还是在某处回落,并测一次把已证实的两个小增益(窗口 120 与字段 Amt)叠在一起是否能再往上走。'
+    variants:
+      - sub(cross_min(day_corr(Ret, Ret), 90), cross_mean(day_corr(Ret, Volume), 60))
+      - sub(cross_min(day_corr(Ret, Ret), 120), cross_mean(day_corr(Ret, Volume), 60))
+      - sub(cross_min(day_corr(Ret, Ret), 150), cross_mean(day_corr(Ret, Volume), 60))
+      - sub(cross_min(day_corr(Ret, Ret), 180), cross_mean(day_corr(Ret, Volume), 60))
+      - sub(cross_min(day_corr(Ret, Ret), 120), cross_mean(day_corr(Ret, Amt), 60))
