@@ -14,8 +14,9 @@ export const meta = {
 const ROOT = '/Users/wxy/Desktop/Partura'
 const K = args.round
 const SEEDS = args.seeds
-const MAX_AUDITS = 3
-const M = { pi: 'claude-opus-5-5', anat: 'claude-opus-5', lib: 'claude-sonnet-5', audit: 'claude-opus-5-5', run: 'claude-haiku-5-5' }
+const LEAN = !!args.lean                          // C08 revision 1: no anatomy / literature, Sonnet 5 for PI and auditor, one audit
+const MAX_AUDITS = LEAN ? 1 : 3
+const M = { pi: LEAN ? 'claude-sonnet-5' : 'claude-opus-5-5', anat: 'claude-opus-5', lib: 'claude-sonnet-5', audit: LEAN ? 'claude-sonnet-5' : 'claude-opus-5-5', run: 'claude-haiku-5-5' }
 const STUDY = args.study || 'C06'                 // C08: study 'C08', arm 'P', the permissive audit (its rules.md), and a shadow strict audit
 const ARM = args.arm || 'C'
 const D = `${ROOT}/research/coldstart_${STUDY}`
@@ -127,7 +128,7 @@ function piPrompt(S) {
 
 ## 你的任务(PI)
 
-读 ${P}/r${K}/analysis.md、lit.md、loc.md,${P}/notebook.md 与之前各轮的 missions_final.yaml、audit_record.json(若有),以及规则 §2–§4。
+读 ${LEAN ? '' : `${P}/r${K}/analysis.md、lit.md、`}${P}/r${K}/loc.md(细节在 loc.json)、R_prev.json(若有),${P}/notebook.md 与之前各轮的 missions_final.yaml、audit_record.json(若有),以及规则 §2–§4。
 决定本轮的 2 个 GP 任务位(各为 E 或 N)和可选的 R(至多 16 个变体)。**你的计划会交给独立审计员**按规则 §3 打创新度与合理度;
 它看不到你的笔记和文献摘要,只看 missions.yaml —— 所以 hypothesis 要把机制、算子怎么实现它、为什么和库里已有的不同、为什么样本外还会在写清楚。
 
@@ -239,10 +240,10 @@ function allPass(out) {
 
 const results = await parallel(SEEDS.map(S => async () => {
   const tag = `c06r${K}s${S}`
-  const anat = ((K === 1 && STUDY === 'C06') || (args.skip_anatomy || []).includes(S)) ? { skipped: true }
+  const anat = (LEAN || (K === 1 && STUDY === 'C06') || (args.skip_anatomy || []).includes(S)) ? { skipped: true }
     : await agent(anatPrompt(S), { label: `${tag}:anatomy`, phase: 'Anatomy', model: M.anat, schema: ANAT_SCHEMA })
   if (!anat) return { seed: S, failed: 'anatomy' }
-  const lib = ((K === 1 && STUDY === 'C06') || (args.skip_lit || []).includes(S)) ? { skipped: true }
+  const lib = (LEAN || (K === 1 && STUDY === 'C06') || (args.skip_lit || []).includes(S)) ? { skipped: true }
     : await agent(libPrompt(S), { label: `${tag}:literature`, phase: 'Literature', model: M.lib, schema: LIB_SCHEMA })
   // resume_audit: the PI's missions.yaml is already on disk (the audit step failed for an infrastructure reason) -- start at the audit
   let pi = ((args.resume_audit || []).includes(S) || (args.start_attempt || {})[S] || (args.revise_after || {})[S]) ? { resumed: true }
