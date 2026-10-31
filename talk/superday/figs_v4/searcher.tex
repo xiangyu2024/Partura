@@ -1,0 +1,40 @@
+% Slide 7 (v2): AlphaCube as a black box with three ports: seeds, direct evaluation (R), accept filter.
+% Inside: a real typed expression tree sub(cross_mean(day_skew(Ret), 20), cross_mean(day_std(Amt), 30)) as an example;
+% the highlighted subtree cross_mean(day_skew(Ret), 20) plays the role of a fixed E core.  Illustrative.
+\begin{tikzpicture}[grid, yscale=0.94]
+  \tikzset{tn/.style={draw=ink, fill=white, font=\notesize\ttfamily, inner sep=3pt, minimum height=0.32in},
+           port/.style={draw=accent, t35, minimum size=0.15in, inner sep=0}}
+  % ---------------- the black box
+  \draw[ink] (3.15,0) rectangle (9.60,-3.68);
+  \node[anchor=west, font=\nodesize, inner sep=0] at (3.35,-0.30) {{\mediumfont AlphaCube}\enspace typed GP over (stock, day, minute)};
+  \node[ann, anchor=east] at (9.45,-0.30) {code \,·\, 0 tokens};
+  % ---------------- ports and the three handles
+  \foreach \y/\h/\d/\p in {-0.85/{seeds}/{E: core kept in every seed; N: $\le 16$ seeds}/{initial population},
+                           -1.90/{direct evaluation}/{R: $\le 16$ variants per round, no GP run}/{R missions},
+                           -2.95/{accept filter}/{library ban: $|\rho| \ge 0.7$ or same skeleton}/{shared with M}} {
+    \node[lb, minimum width=2.55in, text width=2.42in] at (1.275,\y) {{\mediumfont \h}\\[-1pt]{\notesize\color{sec}\d}};
+    \draw[arrl] (2.55,\y) -- (3.075,\y);
+    \node[port] at (3.15,\y) {};
+    \node[annl, anchor=west] at (3.32,\y) {\p};
+  }
+  % ---------------- the tree (levels at y = -0.85, -1.52, -2.19, -2.86)
+  \draw[guide] (5.20,-2.525) -- (9.45,-2.525);
+  \node[ann, anchor=east] at (9.45,-0.56) {$S{\times}D{\times}M \to S{\times}D$};
+  \fill[accent!10] (5.20,-1.22) rectangle (7.40,-3.12);
+  \draw[accent] (5.20,-1.22) rectangle (7.40,-3.12);
+  \node[tn] (n0) at (7.35,-0.85) {sub};
+  \node[tn] (n1) at (6.35,-1.52) {cross\_mean};
+  \node[tn] (n2) at (8.40,-1.52) {cross\_mean};
+  \node[tn] (n3) at (5.90,-2.19) {day\_skew};
+  \node[tn] (n4) at (6.90,-2.19) {20};
+  \node[tn] (n5) at (7.95,-2.19) {day\_std};
+  \node[tn] (n6) at (8.90,-2.19) {30};
+  \node[tn] (n7) at (5.90,-2.86) {Ret};
+  \node[tn] (n8) at (7.95,-2.86) {Amt};
+  \foreach \a/\b in {n0/n1, n0/n2, n1/n3, n1/n4, n2/n5, n2/n6, n3/n7, n5/n8} { \draw[ink] (\a.south) -- (\b.north); }
+  \node[annl, anchor=north west, align=left] at (5.20,-3.16)
+    {E core (illustrative): kept verbatim in every candidate;\\[-2pt]{\itshape\color{sec}the rest of the tree may change}};
+  % ---------------- output
+  \draw[arr] (9.60,-1.90) -- (10.10,-1.90);
+  \node[cb, minimum width=1.533in, text width=1.40in] at (10.8665,-1.90) {scored\\archive};
+\end{tikzpicture}

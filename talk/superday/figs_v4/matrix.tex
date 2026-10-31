@@ -1,0 +1,63 @@
+% Slide 10 (v2, C05 design): seeds (columns) x rounds (rows).  The M row is shared and untouched; each round cell is split
+% into thirds A | B0 | B.  Timeline drawn to scale (same mapping as v1): x(date) = 11.633 in * (date - 2018-01-02) / (2026-09-16 - 2018-01-02).
+\begin{tikzpicture}[grid]
+  \def\cw{0.875}\def\ch{0.50}\def\xo{1.95}
+  % ---------------- column headers: seeds 801..808
+  \foreach \j/\s in {0/801,1/802,2/803,3/804,4/805,5/806,6/807,7/808} {
+    \node[ann] at (\xo+\j*\cw+0.5*\cw,-0.20) {\s};
+  }
+  % ---------------- row M: main search, 4 batches per seed, shared by all arms
+  \node[anchor=west, align=left, inner sep=0] at (0,-0.61) {\mediumfont M\\[-1pt]{\notesize\color{sec}shared, untouched}};
+  \foreach \j in {0,...,7} {
+    \draw[ink] (\xo+\j*\cw,-0.36) rectangle ++(\cw,-\ch);
+    \node[ann] at (\xo+\j*\cw+0.5*\cw,-0.61) {e = 1–4};
+  }
+  \node[ann, anchor=west] at (9.07,-0.61) {read by the locate tool};
+  % ---------------- rounds 1..3: each cell in thirds A | B0 | B (B = Partura, tinted)
+  \foreach \r/\top/\lab/\note in {1/-1.06/{round 1}/{sees M's batch 1},
+                                  2/-1.76/{round 2}/{sees M's batches 1–2},
+                                  3/-2.46/{round 3}/{sees M's batches 1–3}} {
+    \node[anchor=west, inner sep=0] at (0,\top-0.25) {\mediumfont\lab};
+    \foreach \j in {0,...,7} {
+      \fill[accent!10] (\xo+\j*\cw+2*\cw/3,\top) rectangle (\xo+\j*\cw+\cw,\top-\ch);
+      \draw[ink] (\xo+\j*\cw,\top) rectangle ++(\cw,-\ch);
+      \draw[ink] (\xo+\j*\cw+\cw/3,\top) -- ++(0,-\ch);
+      \draw[ink] (\xo+\j*\cw+2*\cw/3,\top) -- ++(0,-\ch);
+    }
+    % labels A | B0 | B in the first seed column only
+    \node[ann] at (\xo+0.5*\cw/3,\top-0.25) {A};
+    \node[ann] at (\xo+0.5*\cw,\top-0.25) {B0};
+    \node[annl] at (\xo+5*\cw/6,\top-0.25) {B};
+    \node[ann, anchor=west] at (9.07,\top-0.25) {\note};
+  }
+  % ---------------- legend
+  \node[ann, anchor=north west] at (0,-3.10) {one cell = one seed; in each round cell, left to right: A | B0 | B.\enspace B0 is the mechanical rule, B is Partura.};
+  \node[ann, anchor=north west] at (0,-3.32) {per round and seed, A and B each get 256 extra evaluations; M: 4 batches of 192, shared by all arms.};
+  % ---------------- timeline to scale
+  \def\ty{-4.30}
+  \node[ann, anchor=south] at (3.740,\ty+0.40) {seen by search and agents};
+  \node[ann, anchor=south] at (9.083,\ty+0.40) {read once};
+  \node[ann, anchor=south east] at (11.633,\ty+0.40) {report only};
+  \draw[guide] (0.05,\ty+0.36) -- (7.43,\ty+0.36);
+  \draw[accent, t10] (0,\ty+0.17) rectangle (5.343,\ty-0.17);
+  \draw[accent, t10] (5.343,\ty+0.17) rectangle (7.480,\ty-0.17);
+  \draw[ink] (7.480,\ty+0.17) rectangle (10.685,\ty-0.17);
+  \draw[ink] (10.704,\ty+0.17) rectangle (11.633,\ty-0.17);
+  \node[anni] at (2.672,\ty) {train};
+  \node[anni] at (6.412,\ty) {valid};
+  \node[anni] at (9.083,\ty) {test};
+  \node[anni] at (11.169,\ty) {forward};
+  \draw[ink] (0,\ty-0.17) -- ++(0,-0.07);
+  \node[ann, anchor=north west] at (0,\ty-0.25) {2018};
+  \draw[ink] (10.689,\ty-0.17) -- ++(0,-0.07);
+  \draw[ink] (11.633,\ty-0.17) -- ++(0,-0.07);
+  \node[ann, anchor=north east] at (11.633,\ty-0.25) {2026-09-16};
+  \foreach \x/\yr in {1.332/2019, 2.668/2020, 4.007/2021, 5.343/2022, 6.678/2023, 8.014/2024, 9.353/2025} {
+    \draw[ink] (\x,\ty-0.17) -- ++(0,-0.07);
+    \node[ann, anchor=north] at (\x,\ty-0.25) {\yr};
+  }
+  \node[ann, anchor=north west] at (0,\ty-0.55)
+    {train 2018-01-02 – 2021-12-31 \,·\, valid 2022-01-01 – 2023-08-07 \,·\, test 2023-08-08 – 2025-12-31 \,·\, forward 2026-01-05 – 2026-09-16};
+  \node[ann, anchor=north west] at (0,\ty-0.80)
+    {Forward end 2026-09-16 = last day of the store, as in Partura \texttt{research/two\_level/RESULT.md}.};
+\end{tikzpicture}
