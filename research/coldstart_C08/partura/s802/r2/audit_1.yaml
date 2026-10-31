@@ -1,0 +1,79 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 6, 8]
+    reasons: >-
+      核心 day_centroid(Volume) 经核对确系 loc.md 机械核心卡第 8 项 / 共性表第 8 行(54/302 个候选含它,p=0.000)的原子子树,
+      源码 partura/ops_ext.py:155 确认定义(centroid=Σt·|x|/Σ|x|/(T-1))与分母 clamp(min=1e-30) 保护属实;
+      核心与 5 个控制 |ρ| 最高 0.195(liq),远低于 E 位要求的 0.8,核心这一关过。
+      但 11 个种子里有 3 个被相关度表的数直接撞上:seed5 `cs_regres(day_centroid(Volume), day_gini(Volume))` 与已有 head
+      `day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))` 的日度秩 |ρ|=0.835≥0.7;seed8
+      `cross_zscore(day_centroid(Volume), 20)` 与同一 head |ρ|=0.732≥0.7——这两个都是"把 day_centroid(Volume) 做某种去水平/去趋势"
+      与那个本来就是"Volume 做自归一化"的 head 撞成同一个东西,按 §3 自动划掉(库禁令本就会拒)。seed6
+      `cross_mean(mul(day_centroid(Volume), day_gini(Volume)), 20)` 与流动性控制 |ρ|=0.88≥0.8(known 控制 0.836 也≥0.8),
+      几乎就是控制变量换皮,同样自动划掉。划完剩 8 个(1,2,3,4,7,9,10,11),≥4,过线。
+      幸存的外围四类在 loc.md 12 个 head 里确认从未出现:12 个 head 全部是 cross_quantile_q25/ts_argmin/cs_first_high40/signedpower
+      这套机械在 day_centroid(Volume) 外面长,没有一个做过 Volume-vs-Amt 跨字段比较,没有引入 day_gini(源码 ops_ext.py:136 核对是全新、
+      有界 [0,1) 的算子),也没有用昨日收益方向做滞后条件化——seed1/2/3(Amt 对照)、seed4(与 day_gini 的 mul 交互,未被控制撞上的那一个)、
+      seed7/9(20 日/5 日持续性)、seed10/11(ts_delay(day_sum(Ret),1) 严格取上一日值,核对无前视)这几类测的是真正不同的维度,
+      文献(Admati&Pfleiderer 1988、Easley&O'Hara 1987、Boyarchenko 等 2020)对口。创新度给 4 而非 5:3/11 个种子被表上的数直接
+      撞上已有材料,说明 PI 对"外围是否真新"的预判不够严。
+      合理度:算子逐个核对无误(day_centroid/day_gini 分母均 clamp;cs_regres 是同日截面 OLS 残差,alphacube/operators/nd_cs.py:254;
+      cross_mean/cross_delta/cross_zscore 都是按本股沿日轴滚动,不是跨股票;ts_delay 严格滞后)。唯一可议之处:(1) 类"份额-金额时点
+      背离"除了"大单小单错位"外,也可能部分来自当天价格本身的系统性涨跌(Amt≈Volume×Price,价格趋势会单独拉动 Amt 的 centroid)——
+      这是机制上存在另一种解释,不是数学问题,§3 讲清楚"说不清机制不是挡的理由",不构成阻拦。
+    revise: "—"
+  - slot: b
+    novelty: 5
+    soundness: 4
+    struck_seeds: [1, 2, 5, 6, 7]
+    reasons: >-
+      新 idea 全部建立在 LogFloatShares(限售解禁/股本供给)之上,与库里 12 个 head(全部基于 Volume/Amt 的日内分布,唯一例外的
+      +0.61 那个也只用了 Close/High/Ret/LimitWidth)和 5 个控制的日度秩 |ρ| 全部 ≤0.06,不是任何已有测度换个写法,创新度 5。
+      但相关度表的"门槛"列(c05_locate.py:162-163,coverage≥0.9 且 distinct_fraction≥0.5 才算过;distinct_fraction 定义见
+      partura/diagnose.py:136,是"截面里有值的名字中取值互不相同的比例"在抽样交易日上的中位数)暴露了一个真实的机械原因:LogFloatShares
+      对绝大多数股票、绝大多数交易日是分段常数(解禁/增发是稀发事件),cross_delta 一类的逐日差分构造在"没出事"的那些股票、那些日子
+      上精确等于 0——不是 bug,是字段本身的离散性决定的,但后果是 §4 允许挡的那类问题:十分位账本里这一大块被并列在同一个值上的名字,
+      排序由列序决定,不是真实信号。具体:seed1 `cross_delta(LogFloatShares, 5)` distinct=0.027(中位数 97.3% 的名字截面取同一个值);
+      seed2 `cross_delta(LogFloatShares, 20)` distinct=0.102;seed5 `ts_argmax(abs(cross_delta(LogFloatShares, 1)), 120)`
+      distinct=0.053;seed6 `cross_mean(is_gt0(cross_delta(LogFloatShares, 1)), 20)` distinct=0.002,最严重(is_gt0 是 0/1
+      旗标,cross_delta 绝大多数日子恰好为 0,is_gt0 几乎处处为 0,20 日平均也几乎处处为 0);seed7
+      `cross_mean(cross_delta(LogFloatShares, 5), 60)` distinct=0.292,60 日平滑后仍有约七成名字落在同一水平。以上 5 个按
+      "面板几乎是常数"逐个划掉。seed3 `sub(LogFloatShares, cross_quantile_q25(LogFloatShares, 241))` distinct=0.471,
+      虽然没过机械门槛但接近一半的名字互不相同,够不上"几乎是常数",留。seed4/8/9/10(distinct 0.517/0.999/0.625/0.605)本身就过了
+      机械门槛,留。划完剩 5 个(3,4,8,9,10),≥4,过线。
+      合理度:算子逐个核对无误——is_gt0=is_gt(x,0)取 0/1(alphacube/catalog.py:149);cross_delta 是按本股沿日轴的 x[t]-x[t-d];
+      cs_regres 是同日截面 OLS 残差;cross_zscore 是按本股自身滚动窗口去均值、除以带 EPS 保护的标准差;ts_argmax 是滚动窗口里的
+      argmax 位置——全部与假设文字描述一致,没有裸除法、没有未 clamp 的分母。窗口 5/20/60/120/241 都在本研究常见范围,241 日热身期
+      占 train(~980 个交易日)约四分之一,与快照里 M 自己大量使用 241 日窗口的先例一致,不构成"结果主要由热身期决定"。无前视:
+      LogFloatShares 是逐日登记的存量字段,只用到当天及更早的值;限售期到期日是法定、可预先排期的事件,这是机制论据不是前视问题。
+      机制本身干净、三篇文献(Scholes 1972、Field&Hanka 2001、刘娥平&唐舜 2014)都对口,且都在 2023-08 之前;6/10 个种子撞上了字段
+      离散性造成的"几乎是常数",是执行层面对字段稀疏性预判不足,不是机制本身有问题,幸存的 5 个种子实现没有问题,合理度给 4。
+    revise: "—"
+R:
+  - head: cs_first_high40(ts_argmin(cross_quantile_q25(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)), 241), 20), day_centroid(Volume))), 241), 241), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)), 241), 20), day_centroid(Volume))), 241))
+    soundness: 4
+    reasons: >-
+      loc.md 对该 head(score +1.23)的 knockout 拆解直接给出:去掉外层那一层 cross_quantile_q25(···,241) 后,子树本身评分 +1.64
+      (train +1.91, valid +1.64),比原 head 高 0.41,必要性 -0.41(负数=去掉反而更好)——variant1 逐字核对就是这个 knockout 变体,
+      与拆解表给出的表达式一致。variant2 把同一 head 的 ts_argmin 窗口从 20 改到 10,但保留原有的双层 241 分位数嵌套(不是在 variant1
+      基础上改),对应拆解表"window ts_argmin@20->10"那一行(评分 +1.42,train +1.42,valid +1.47,比原 head 高 0.19)——改动位置
+      与证据来源完全对应。variant3 把两处改动(去掉外层 241 分位数 + 窗口 20→10)叠加在一起,why 字段诚实说明"拆解表只测了窗口没测
+      这一步的 knockout,所以没有必要性数字",这是在两个互不重叠的树节点(外层 quantile 节点 vs argmin 窗口参数)分别有直接证据后的
+      合理叠加外推,不是无依据堆砌。算子核对无误,无数学问题。
+  - head: cross_reg_tvalue(day_sum(Volume), day_mean(in_delta(Volume, 30)), 30)
+    soundness: 4
+    reasons: >-
+      loc.md 对该 head(本组第 1 轮 E 位产出,+1.10)的 window 拆解:cross_reg_tvalue 窗口 30→60,评分到 +1.51(train +1.69,
+      valid +1.51),train 和 valid 都提升(不是单边被一条腿卡住拖上去的),比原 head 高 0.41,与 why 字段描述完全一致。
+      cross_reg_tvalue 是滚动 OLS 回归的 t 值(alphacube/operators/dt_cross.py:314,rolling_ols(...)["tvalue"]),窗口从 30
+      天放宽到 60 天通常会让 t 值估计更稳,方向合理,窗口量级也不极端。无数学问题。
+  - head: day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))
+    soundness: 4
+    reasons: >-
+      loc.md 对该 head(本组第 1 轮 R 的替换核心,+1.19)的 window 拆解:in_delta 窗口 30→15,评分到 +1.31(train +1.31,
+      valid +1.74),train(1.25→1.31)和 valid(1.19→1.74)都提升,与 why 字段的描述、以及第 1 轮笔记里"valid 腿随窗口变短而
+      变强"的结构(第 1 轮 d=15 单独测时 valid 到 1.34)方向一致、量级吻合。无数学问题。
+summary: slot a、slot b 均过线(分别划掉 11 个种子里的 3 个[撞已有 head 或撞控制变量]、10 个种子里的 5 个[面板几乎是常数],划完各剩 8 个和 5 个种子);3 个 R 组的窗口/拆解调整证据都直接来自 loc.md 的 knockout/window 拆解表,算子逐个核对无误,均过线。

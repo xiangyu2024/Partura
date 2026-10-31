@@ -1,0 +1,34 @@
+attempt: 1
+slots:
+- slot: a
+  novelty: 4
+  soundness: 4
+  struck_seeds:
+  - 4
+  - 6
+  - 11
+  reasons: 创新度=4(非5):库里4个head(loc.md)的外围共性只是『对同一条序列(day_wstd/day_wmean)套更长窗口的ts_max』(loc.md『共性』表前5行全是ts_max/day_wstd/day_wmean的子树,没有第二个统计量)。本位核心day_wmean(Ret,Volume)就是+0.99那个head的子树(ts_max(ts_max(day_wmean(Ret,Volume),50),50)=ts_max(x,99)),13个种子没有一个是单纯换窗口的ts_max(那属于GP外围去重会拒绝的已见外围),而是各自把第二个统计量接到核心上——上下行秩相加/分位数/条件均值(seed1-3)、无量纲ts_skew及其按LogFloatCap分桶版(seed4、5)、同波动十分位内比较(seed6)、与cs_demean(day_wstd)极值的秩差(seed7)、与等权漂移的秩差即订单流成分(seed8、9)、ts_argmax时机(seed10、11)、单独的下行极值(seed12、13)——把『彩票/MAX效应』里的上行不对称从波动水平里剥出来,库里确实没有先例,Bali-Cakici-Whitelaw(2011)的MAX/MIN并列检验、Amaya et al.(2015)的无标度已实现偏度、Nartea-Kong-Wu(2017)的A股MAX与特质波动并存证据分别对应②③④,引用贴切。打4分而非5分,是因为底层仍是同一条day_wmean序列,是在已识别的MAX效应paradigm内做实质性拆解,不是换一个独立信息源。
+  revise: —
+- slot: b
+  novelty: 5
+  soundness: 4
+  struck_seeds: []
+  reasons: '创新度=5:库里4个head和5个控制(liq/vol/rev/known=cross_mean(day_std(Amt),30)/size)全部是『某个加权或不加权日内量的水平』,本位核心构造是跨两个水平量取秩差或相关系数(量加权日内波动vs等权日内波动之差sub(cs_rank(day_wstd(Ret,Volume)),cs_rank(day_std(Ret)));|收益|与成交量的日内相关day_corr(abs_(Ret),Volume)),按构造正交于『水平』这一维,库内和控制里都没有任何『差』或『相关系数』类的统计量,是真正独立的一个轴,而不是现有信号的延伸。inspired_by段落给出的证据站得住:把Volume换成Amt后head几乎不变(ρ 0.9997),说明现有head载荷的是『加权』这个动作本身,『加权-不加权的差』自然是下一层问题。机制对应Clark(1973)成交量作为信息到达的随机时钟、Admati-Pfleiderer(1988)知情/流动性交易集中于同一厚时段、Llorente-Michaely-Saar-Wang(2002)量-收益动态随信息交易占比分化,文献贴切。相关度表确认:与库内head最大|ρ|只有0.57(seed5,cs_bucket_rank(ts_mean(day_wstd(Ret,Volume),120),ts_mean(day_std(Ret),120))),与控制最大|ρ|是0.571(seed11对liq)/0.552(对known),均远低于0.7/0.8的自动划掉线,不是任何head或控制的换皮。
+
+
+    合理度=4:12个种子逐个核对算子源码——day_wstd/day_std(AlphaCube dt_day.py)、day_corr(cov/(sqrt(var_x*var_y)+EPS),方差为0时corr=0而不是起点,与假设文本『锁死日方差为0时分母带EPS,输出0』一致)、day_topw_mean(abs_(Ret),Volume)(torch.nanquantile取0.9分位做掩码,k.clamp(min=1)防止除零,partura/ops_ext.py)、in_delay(Volume,1)(result[:,1:]=x[:,:-1],是向后lag不是前视)都是NaN安全且有界,没有§4的三类数学问题。cross_ema内部用float64防止金额量级输入的早期溢出bug,但这里喂给它的是已经界在[-1,1]的day_corr,不受影响(seed8 cross_ema(day_corr(...),40))。窗口40–120天,相对train+valid的总样本不被热身期主导。'
+  revise: —
+R:
+- head: ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 50)
+  soundness: 4
+  reasons: 机制成立:嵌套ts_max(x,a)再ts_max(,b)精确等于ts_max(x,a+b-1),a=10、b=50→组合窗口59,loc.md的window灵敏度表显示该head(score+0.68,全库最弱)正落在这一窗口段的坑里;把外层50换成100(组合窗口109)在loc.md『比原head好的拆解变体』一节已实测score 1.07(+0.39),与why文本『1.066(+0.385)』基本一致,window调整方向正确。需要订正一处引用:why文本称该变体与原head的『ρ_head 0.695』,但corr_1.json里该变体(R1 variant1)与被替换的原head(ts_max(ts_max(cs_demean(day_wstd(Ret,Volume)),10),50))的原始|ρ|实测是0.823(top_heads第三项),known族|ρ|仅0.05。0.695和0.823都≥0.5,§2规则下『替换原head』的结论不受影响,但建议把why文本里的数字改成0.823,避免下一轮误用0.695去判断別的门槛。
+- head: ts_max(ts_max(cs_normalize(day_wstd(Ret, Ret)), 50), 50)
+  soundness: 4
+  reasons: 机制成立:cs_normalize是逐日除以当日截面std,发生在取时序最大值之前;奖励本身已经把表达式逐日转成截面排名,所以这层按日定标对最终排名没有直接增益,只是改变了『哪一天会被ts_max选中』的相对尺度——knockout结果(去掉后0.79、valid 2.47、必要性-0.15)与loc.md完全一致,支持『换噪声』的判断。3个变体机制清楚:去掉cs_normalize(已测+0.152);去掉后把窗口推到head1所在的148平台;用cs_rank代替cs_normalize(先转百分位再取最大值,不受截面胖尾和当日离散度影响,且cs_rank是连续值,corr表里R2 variant3门槛=过、distinct未见异常,不会像ts_argmax那样落入低基数问题)。known族|ρ|全部≤0.09,远低于0.5。
+- head: ts_max(ts_max(day_wmean(Ret, Volume), 50), 50)
+  soundness: 4
+  reasons: 机制成立:Volume→Amt的swap测试与loc.md的swap行(+1.09、+1.53,较原head+0.10)吻合,确认权重选Volume还是Amt不是载荷部件。两个判别式设计合理:day_mean(Ret)是等权版,检验『加权』这个动作本身贡献多少alpha;day_topw_mean(Ret,Volume)是最重10%分钟的平均收益,检验alpha是否集中在放量分钟而不是全天弥漫。两个算子(day_mean、day_topw_mean)都已在源码里核对为NaN安全、有界,没有数学问题。
+- head: ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)
+  soundness: 4
+  reasons: 机制成立:三层嵌套ts_max(,50)精确等于单层ts_max(x,148)(3×50-2=148),loc.md的window表显示148接近train峰值而valid峰值落在99–109附近,why文本主动披露这一点,是诚实的过拟合风险说明,不属于§4的三类数学问题(没有前视、没有除零爆炸,『窗口是train选出来的』本身不是审计员可用的挡箭牌)。8个变体针对『尾部极值/慢速波动水平+低换手/上市年龄/涨跌幅宽度/时机』四种缠绕解释逐个设计判别式,机制对应清楚:ts_mean vs ts_max区分水平与尾部,cross_tail_mean_q75/ts_quantile(0.9)区分单日极值与一批尾部天,day_std换day_wstd区分等权与量加权,cs_rank换cs_demean区分排名尺度与原始尺度,cs_bucket_demean(…,LimitWidth)/cs_bucket_rank(…,ListAge)分别剥板块宽度与上市年龄的混淆(LimitWidth、ListAge都是允许使用的日频叶子字段,非前视),ts_argmax区分时机与幅度。最后一个变体ts_argmax(cs_demean(day_wstd(Ret,Volume)),148)与slot a的seed10一样,corr表『门槛』标『废品』(distinct=0.105)——追到源码(src/alphacube/operators/common.py的nanargmax_last,pct=True时取值也只有≤148个离散水平,相对5000多只股票必然大量并列;并列由rank()的stable=True argsort按原数组序打破,即按股票列序),这正是§4明文排除的『并列靠股票列序打破』,不算数值伪影,不据此扣分;只是提示它作为判别式的区分力可能有限,这是经验问题不是数学问题。
+summary: 两个任务位机制都清楚、与库内head及5个控制的相关度在阈值内:slot a(E,核心day_wmean(Ret,Volume)的MAX/彩票效应拆解)划掉seed4/6/11(ρ_head分别0.808/0.725/0.755,≥0.7自动划掉线)后仍剩10个种子,通过;slot b(N,日内量价耦合度)12个种子无一命中划掉线,通过;4个R组机制均合理(R1的why文本有一处ρ引用数字待订正为0.823,不影响替换原head的结论),ts_argmax相关的两处『门槛:废品』标记经查源码确认属于§4明文排除的并列按股票列序打破,不作为数学问题处理。

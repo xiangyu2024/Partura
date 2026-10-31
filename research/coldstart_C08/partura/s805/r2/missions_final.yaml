@@ -1,0 +1,155 @@
+seed: 805
+round: 2
+slots:
+- type: E
+  core: day_corr(Ret, Volume)
+  hypothesis: '【核心是什么】day_corr(Ret, Volume) 是当天 241 个分钟格上「分钟收益」与「分钟成交量」的 Pearson 相关系数
+    (alphacube/operators/dt_day.py:228,分母带 EPS,全天价格锁死、方差为 0 时给 0 而不是爆点),恒在 [-1,1]。
+    它度量的是「当天的成交是集中在价格被推高的时刻,还是价格被压低的时刻」——与第 1 批唯一稳定的核心 day_centroid(Volume) (成交发生在一天的什么钟表时间)是完全不同的输入:一个看成交相对价格路径的位置,一个看成交相对钟表时间的位置,
+    两者在新尺子下的日度排名不会是同一个信号。 【为什么是 alpha 来源】本轮定位里,这个核心自身的富集效应是 +0.77(loc.md 共性表),而且 GP
+    在完全独立的演化里 从空白种群里找到了全库目前分数最高的 head(+1.18,cross_max(add(add(5, cross_mean(day_corr(Ret,
+    Volume), 3)), cross_mean(day_corr(Ret, Volume), 3)), 60),train +1.18、valid +1.59)。拆解已经把这条
+    head 打开过:外层 add(5, X)+X 的加倍包装对分数贡献为 0(knockout 后分数不变,必要性 -0.00),真正的骨架只是 cross_max(cross_mean(day_corr(Ret,
+    Volume), 3), 60);去掉内层 cross_mean(.,3)、只用单日值,分数从 1.18 掉到 0.54(必要性 +0.64),说明「先把单日噪声平均
+    3 天」是必要的;cross_max 的窗口从 60 换成 30/120 都更差 (0.79/1.00),说明 60 天本身也不是随手选的。但 GP 自己只走出了这一条「均值
+    + 滚动最大值」的外围,没有告诉我们 均值和最大值这两步各自对应什么机制、量价共动这件事本身更可靠的维度是方向还是幅度、是整体还是分钟符号、是水平还是 按信息量加权。这次
+    E 位要把这些维度分开测。 【这次的外围,机制各不相同】 (1) 频率 vs 幅度:cross_mean(is_gt0(核), 60) 统计过去 60 天里「量价正相关」的天数占比,
+    cross_mean(is_lt0(核), 60) 统计负相关天数占比,两者之差是方向一致性(regime 的频率),不是 GP 已经验证过的 「幅度的均值」——同样是
+    60 天窗口,但度量的对象完全不同:一只股票可能大多数天小幅正相关、偶尔单日深度负相关 (均值被少数日子带偏),也可能稳定地弱负相关(频率度量更准)。这一组回答「alpha
+    在频率里还是在幅度里」。 (2) 意外 / 极值:sub(cross_max(核, 60), cross_mean(核, 60)) 是「最近 60 天里最像追涨的那一天,相对这只股票
+    自己的正常水平」,sub(cross_min(核, 60), cross_mean(核, 60)) 是镜像的「最像承接的那一天」。GP 已经验证了 cross_max
+    套在 cross_mean(.,3) 外面有贡献,但没有验证 cross_max 本身相对这只股票自己的基线是不是超额的—— 这是用「相对自身历史的异常」框架(Gervais-Kaniel-Mingelgrin),但用在量价共动的极值上,而不是成交量水平上,是新的。
+    (3) 迁移与稳定性:sub(cross_mean(核, 5), cross_mean(核, 60)) 是「量价共动 regime 最近有没有在换」(知情
+    / 流动性 交易占比切换,Llorente 等人的框架本身就是占比会变),与第 1 批对 day_centroid 做的「习惯迁移」是同一个统计手法, 但这里换的是
+    regime(谁在主导交易),不是习惯(交易发生在几点),机制不同。cross_stddev(核, 60) 是这个 regime 本身稳不稳(程序化 / 被动资金每天的量价关系模式稳定,注意力驱动的游资今天追涨明天割肉)。
+    (4) 分钟方向的不对称贡献:sub(核, day_corr(mul(Ret, is_gt0(Ret)), Volume)) 和 sub(核, day_corr(mul(Ret,
+    is_lt0(Ret)), Volume)) 把全天的相关系数拆成「主要来自上涨分钟」还是「主要来自下跌 分钟」两部分(两项都原样把核心 day_corr(Ret,
+    Volume) 写在 sub 的第一个操作数里)。Chen-Hong-Stein 的机制是 放量下跌比放量上涨携带更多关于未来的信息(信息不对称在下跌侧更强);GP
+    和第 1 轮 N 位都只测过对称的整体相关系数, 没有测过这种按分钟符号的不对称分解。 (5) 按信息量加权:mul(核, day_std(Ret)) 用当天分钟收益的标准差给相关系数加权——Avramov-Chordia-Goyal
+    的思路是 交易活动对收益的影响在信息量大的日子更强,一个大幅波动日里的量价相关系数比几乎不动的日子里同样的相关系数更可信, 数值上也不会被近零方差日子里被
+    EPS 拉向 0 的那部分放大噪声。cross_mean(mul(...), 20) 是它的 20 日平滑版。 (6) 必要性基线(复核 GP 自己的结构,不额外花成本去猜):cross_mean(核,
+    3) 单独测「只做 3 日均值、不套 60 日滚动 最大值」离 1.18 还差多少;cross_max(cross_mean(核, 3), 30) 测在没有
+    add(5,...) 冗余包装的干净写法下,窗口 60 换成 30 是不是仍然更差。这两条是把「哪一步真正起作用」钉死,不是新机制。 【为什么和以前不同】GP
+    自己的演化只给出一条「3 日均值 + 60 日滚动最大值」的外围路径(窗口、字段替换都是同一个外围 骨架下的近亲);第 1 轮 N 位测的是 Close 版、30
+    日均值版、秩相关版、VWAP/TWAP、领先版、板块分组——全部是 「整体对称相关系数,换一个平滑窗口或字段」。这里的 5 组外围没有一个是「同一个相关系数再换平滑窗口或字段」:
+    频率(1)换的是统计量本身(计数,不是求和);极值(2)换的是参照点(自身历史的极值,不是自身历史的均值); 迁移和稳定性(3)换的是被测对象(regime
+    切换 / regime 稳定性,不是水平);不对称分解(4)换的是输入(先按分钟 符号筛选,是非线性操作,不是线性平滑);信息量加权(5)换的是组合方式(与同一天另一个有界统计量做乘法交互,
+    不是单变量平滑)。 【为什么样本外还会在】核心是 Pearson 相关系数,有界、量纲无关、无参数;外围只用计数比例、自身历史的 max/min/mean、短长均值差、方差、分钟符号筛选、与同日另一个有界统计量的乘法交互——都不是拟合参数,不会因为某个
+    具体数值阈值在 2023 年后漂移而失效。机制上,量价共动背后追涨盘的事后回吐、信息不对称在下跌侧更强、被动资金的 稳定执行模式,都由 A 股散户占比高、T+1、机构被动化程度这些结构性事实决定,不依赖某一段具体行情。
+    【已知的测量注意事项,不构成数学问题】Ret 的第 0 格(开盘集合竞价)是隔夜跳空收益而不是分钟收益,这是核心本身和 GP 已评估过的全部版本共享的性质,不是这次新引入的问题;mul(Ret,
+    is_gt0(Ret)) / mul(Ret, is_lt0(Ret)) 这类按 分钟符号筛选,在少数单边行情日(全天无下跌分钟或无上涨分钟)会让被筛掉的一侧全天为
+    0,day_corr 的 EPS 保护让 这类日子的相关系数落在 0 附近而不是爆点,不是除以近零的伪影。'
+  literature:
+  - title: Continuous Auctions and Insider Trading
+    authors: Albert S. Kyle
+    year: '1985'
+    url: https://doi.org/10.2307/1913210
+    treatment: 知情交易强度随时间切换、不是恒定水平:支撑把量价共动的 regime 切换(迁移)与相对自身历史的极值(而不是它的平均水平)当作信息来源来测
+  - title: 'Forecasting Crashes: Trading Volume, Past Returns, and Conditional Skewness
+      in Stock Prices'
+    authors: Joseph Chen, Harrison Hong, Jeremy C. Stein
+    year: '2001'
+    url: https://doi.org/10.1016/S0304-405X(01)00066-6
+    treatment: 放量下跌比放量上涨携带更多关于未来的信息,不对称:把全天的量价相关系数按分钟收益符号拆成上涨分钟与下跌分钟两部分来比较
+  - title: The Impact of Trades on Daily Volatility
+    authors: Doron Avramov, Tarun Chordia, Amit Goyal
+    year: '2006'
+    url: https://doi.org/10.1093/rfs/hhj025
+    treatment: 交易活动对收益的影响在信息量大的日子更强:用当天分钟收益的波动给量价相关系数做乘法加权
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: '2001'
+    url: https://sites.duke.edu/sgervais/?p=64
+    treatment: 用相对个股自身历史的异常值而不是截面水平作参照:这里把它用在量价相关系数的近期极值(cross_max / cross_min 减 cross_mean)上,而不是成交量水平上
+  seeds:
+  - sub(cross_max(day_corr(Ret, Volume), 60), cross_mean(day_corr(Ret, Volume), 60))
+  - sub(cross_min(day_corr(Ret, Volume), 60), cross_mean(day_corr(Ret, Volume), 60))
+  - sub(cross_mean(day_corr(Ret, Volume), 5), cross_mean(day_corr(Ret, Volume), 60))
+  - cross_stddev(day_corr(Ret, Volume), 60)
+  - sub(day_corr(Ret, Volume), day_corr(mul(Ret, is_gt0(Ret)), Volume))
+  - sub(day_corr(Ret, Volume), day_corr(mul(Ret, is_lt0(Ret)), Volume))
+  - mul(day_corr(Ret, Volume), day_std(Ret))
+  - cross_mean(mul(day_corr(Ret, Volume), day_std(Ret)), 20)
+- type: N
+  hypothesis: 【新 idea:不用相关系数,用「成交额的方向性失衡」直接度量当天的净买卖压力】主算子是 Partura 自己的扩展算子 day_signed_ratio(Ret,
+    Amt)(partura/ops_ext.py:122):sum(|Amt_t| * sign(Ret_t)) / sum(|Amt_t|),恒在 [-1,1]——当天成交额里,发生在上涨分钟的比例减去发生在下跌分钟的比例,用分钟收益的符号替代没有的逐笔买卖方向标签。
+    这个算子在本轮 M 的两批、以及本组前两个任务位的 heads / 共性表 / 核心卡里都没有出现过,库里完全是空白。 【机制】这是经典的「订单失衡预测收益」机制(Chordia-Subrahmanyam):当天的净买压直接反映谁在主动吃单——A
+    股 散户追涨杀跌,净买压过高往往是短期过度买入,T+1 使其当天不能离场,压力在之后几天回吐;净买压持续偏负则是耐心 资金在吸纳。这与本轮 E 位测的 day_corr(Ret,
+    Volume)(线性共动程度,对称,不区分买卖哪一侧的权重更大)是不同的 统计量:相关系数回答「价格和成交量是否同步变化」,day_signed_ratio
+    回答「这些成交额有多大比例站在哪一侧」—— 数学上不是同一个量的两种写法(协方差为 0 时失衡比例可以非 0,反之亦然,两者的充分统计量不同)。 【算子怎样实现】
+    (1) 水平与平滑:day_signed_ratio(Ret, Amt) 原始日值;cross_mean(...,20)、cross_mean(...,60)
+    是持续净买压 (个股自己「习惯的买卖侵略性」,不是单日噪声)。 (2) 用量(份数)替代用钱(金额)做权重:day_signed_ratio(Ret, Volume)
+    不按成交金额、只按成交股数加权, cross_mean(...,20) 是它的平滑版。Easley-O'Hara 的机制是大额交易比小额交易携带更多信息,用
+    Amt(金额)自然给 大单更大权重,用 Volume(股数)则对低价股的大单和高价股的小单一视同仁;两者相减 sub(day_signed_ratio(Ret,
+    Amt), day_signed_ratio(Ret, Volume)) 单独拎出「价格 / 单笔金额加权」这一块贡献—— 如果上涨分钟里的单笔交易金额系统性更大(不只是股数更多),这一项为正。
+    (3) 稳定性:cross_stddev(day_signed_ratio(Ret, Amt), 20) 度量买卖侵略性是不是每天都差不多(程序化 / 机构
+    执行稳定)还是忽买忽卖(游资风格)。 (4) 迁移:sub(cross_mean(day_signed_ratio(Ret, Amt), 5), cross_mean(day_signed_ratio(Ret,
+    Amt), 60)) 度量 买卖压力最近是不是在切换方向(资金结构正在变),持续性与均值回复的节奏(Chordia-Roll-Subrahmanyam)。
+    (5) 制度分组:cs_bucket_rank(day_signed_ratio(Ret, Amt), BoardCode)、 cs_bucket_rank(day_signed_ratio(Ret,
+    Amt), ListAge) 把板块涨跌停制度、新股炒作这些离散状态(不在 5 个控制里) 的机械差异扣掉,剩下的才是个股自己的买卖压力。 (6) 时段分解:day_signed_ratio(in_half(Ret,
+    True), in_half(Amt, True))(dt_in.py:311 的 in_half,V2 口径下 前半是第 1-120 格、上午连续竞价,后半是第
+    121-240 格、含收盘集合竞价)只用上午的成交算净买压, day_signed_ratio(in_half(Ret, False), in_half(Amt,
+    False)) 只用下午;两者之差是「上午的买卖侵略性减下午的」—— 呼应第 1 轮笔记里「散户在开盘后追隔夜消息、机构把执行放到尾盘」的结构性假设,但这次直接度量「谁在侵略性地吃单」
+    而不是「成交发生在几点」,是对同一个结构性假设的另一个独立验证角度,和 E 位测的量价共动也是不同的输入。 已知口径注意事项:in_half 的后半段包含收盘集合竞价那一列,前半段不含开盘集合竞价那一列,两段不是严格对称的
+    120/120 分钟窗口,这是算子自己文档写明的边界归属选择,不是数值伪影;该算子在本环境里能正常解析与求值 (姊妹种子的检查角色已确认过)。 【为什么和库里已有的不同】核心算子
+    day_signed_ratio 在整个库(M 两批 + 本组两轮任务)里从未出现过;机制 (分配失衡 vs 共动系数)和输入(用分钟符号筛选权重求和,不是用两个序列的协方差归一化)都和
+    E 位、和第 1 轮 N 位 的 day_corr 家族不同;也和第 1 批唯一稳定的 day_centroid(钟表时间上的位置)不同——这里完全不看「什么时候」,
+    只看「钱往哪一侧去」。 【为什么样本外还会在】day_signed_ratio 恒在 [-1,1],分母在成交额全天为 0 时判 NaN,不是爆点;外围只用均值、
+    标准差、短长差分、板块 / 上市年龄分组、时段切片,都不是拟合参数,不会在 2023 年后系统性漂移。机制上依赖的是 散户占比、T+1、机构执行习惯这些结构性事实,不依赖某一段具体行情的方向。
+  inspired_by: 本轮 E 位与 GP 自己的 head(+1.18)都在用价格和成交量的「线性共动」(相关系数)这件事上找到了信号,说明「量价 配对关系」这条轴是活的;但相关系数是对称、协方差式的统计量,没有测过「不对称的分配」这个维度。Partura
+    自己的 扩展算子 day_signed_ratio 恰好实现了这个维度,而且从未被 M 或本组评估过。文献:Chordia-Subrahmanyam 2004、
+    Easley-O'Hara 1987、Admati-Pfleiderer 1988、Chordia-Roll-Subrahmanyam 2002。
+  literature:
+  - title: 'Order Imbalance and Individual Stock Returns: Theory and Evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    url: https://doi.org/10.1016/j.jfineco.2003.10.002
+    treatment: 净买卖失衡(而不是量价是否同步)直接预测个股未来收益,失衡之后会回吐:整个 N 位的核心机制
+  - title: Price, Trade Size, and Information in Securities Markets
+    authors: David Easley, Maureen O'Hara
+    year: '1987'
+    url: https://doi.org/10.1016/0304-405X(87)90029-8
+    treatment: 大额交易比小额交易携带更多信息:把净买压分别用成交金额和成交股数加权,差值拎出「价格 / 单笔规模加权」贡献的部分
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://www.gsb.stanford.edu/faculty-research/working-papers/theory-intraday-trading-patterns-volume-price-variability
+    treatment: 日内交易的时段结构由知情与流动性交易者的策略选择决定:这里把净买压按上午 / 下午两个连续竞价时段拆开,而不是像第 1 轮那样拆成交时点的重心
+  - title: Order Imbalance, Liquidity, and Market Returns
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2002'
+    url: https://doi.org/10.1016/S0304-405X(02)00136-8
+    treatment: 订单失衡的持续性与均值回复节奏:支撑对净买压做短窗与长窗均值差(迁移)和标准差(稳定性)的处理
+  seeds:
+  - day_signed_ratio(Ret, Amt)
+  - cross_mean(day_signed_ratio(Ret, Amt), 20)
+  - cross_mean(day_signed_ratio(Ret, Amt), 60)
+  - day_signed_ratio(Ret, Volume)
+  - cross_mean(day_signed_ratio(Ret, Volume), 20)
+  - sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Volume))
+  - cross_stddev(day_signed_ratio(Ret, Amt), 20)
+  - sub(cross_mean(day_signed_ratio(Ret, Amt), 5), cross_mean(day_signed_ratio(Ret,
+    Amt), 60))
+  - cs_bucket_rank(day_signed_ratio(Ret, Amt), BoardCode)
+  - cs_bucket_rank(day_signed_ratio(Ret, Amt), ListAge)
+  - day_signed_ratio(in_half(Ret, True), in_half(Amt, True))
+  - day_signed_ratio(in_half(Ret, False), in_half(Amt, False))
+  - sub(day_signed_ratio(in_half(Ret, True), in_half(Amt, True)), day_signed_ratio(in_half(Ret,
+    False), in_half(Amt, False)))
+R:
+- head: cross_mean(sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))),
+    30)
+  why: '这个 head 自己的 score 只有 +0.83(train +0.83,valid +3.36)。本轮定位的拆解表(loc.md「拆解」,21
+    次评估 之一)已经直接评估过把内层 sub(day_centroid(Volume), day_centroid(delete_open_close(Volume)))
+    整体换成裸核心 (即去掉「竞价倾斜」这一项,只对 day_centroid(Volume) 做 30 日平均)的 knockout 变体: cross_mean(day_centroid(Volume),
+    30),结果 score 跳到 +1.73(train +1.73,valid +1.88),必要性记为 -0.91—— 负数说明去掉这一项反而让分数大涨,也就是「竞价倾斜」sub
+    这个部件是烂的,在拖累原 head,不是在贡献 alpha。 同一张表里,保留这个烂部件只换字段(Volume->Amt,score +0.85)或只换窗口(15
+    天 +0.66、60 天 +0.56)都仍然 比干净的 knockout 版本(+1.73)差,进一步说明问题确实出在 sub(...) 这一层,不是窗口或字段选得不好。这里再补
+    窗口 15 和 60 两个纯净版本(分析阶段只直接测过纯净版本的 30 日窗),看裸核心的 30 日平均本身对窗口是不是敏感、 1.73 是不是三个窗口里最好的一个。'
+  variants:
+  - cross_mean(day_centroid(Volume), 30)
+  - cross_mean(day_centroid(Volume), 15)
+  - cross_mean(day_centroid(Volume), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

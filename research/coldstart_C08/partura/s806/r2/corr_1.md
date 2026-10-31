@@ -1,0 +1,30 @@
+# 相关度表:种子 806,P 组,第 2 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.35 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.60 | 0.18 | 0.16 | 0.13 | 0.19 | 0.07 | `day_centroid(Amt)` |
+| slot a seed 1 | 过 | 0.88 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.86 | 0.52 | 0.43 | 0.17 | 0.55 | 0.14 | `cross_ema(day_centroid(Amt), 10)` |
+| slot a seed 2 | 过 | 0.76 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.65 | 0.58 | 0.39 | 0.06 | 0.59 | 0.14 | `cross_ema(day_centroid(Amt), 40)` |
+| slot a seed 3 | 过 | 0.69 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.63 | 0.49 | 0.22 | 0.05 | 0.47 | 0.22 | `cross_tail_mean_q75(day_centroid(Amt), 20)` |
+| slot a seed 4 | 过 | 0.66 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.60 | 0.27 | 0.47 | 0.24 | 0.34 | 0.03 | `cross_tail_mean_q25(day_centroid(Amt), 20)` |
+| slot a seed 5 | 过 | 0.20 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.14 | 0.18 | 0.27 | 0.20 | 0.09 | 0.24 | `cross_stddev(day_centroid(Amt), 20)` |
+| slot a seed 6 | 过 | 0.09 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.10 | 0.01 | 0.04 | 0.11 | 0.01 | 0.01 | `cross_madz(day_centroid(Amt), 60)` |
+| slot a seed 7 | 过 | 0.14 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.56 | 0.67 | 0.19 | 0.09 | 0.57 | 0.49 | `cross_mean(div(day_centroid(Amt), day_gini(Amt)), 20)` |
+| slot a seed 8 | 过 | 0.18 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.47 | 0.15 | 0.96 | 0.17 | 0.21 | 0.15 | `cross_mean(mul(day_centroid(Amt), day_std(Ret)), 20)` |
+| slot a seed 9 | 过 | 0.12 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.08 | 0.06 | 0.18 | 0.08 | 0.10 | 0.13 | `cross_corr(day_centroid(Amt), day_centroid(sub(High, Low)), 20)` |
+| slot a seed 10 | 过 | 0.48 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.43 | 0.02 | 0.16 | 0.27 | 0.05 | 0.04 | `cross_delta(cross_ema(day_centroid(Amt), 20), 20)` |
+| slot a seed 11 | 过 | 0.66 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.77 | 0.00 | 0.30 | 0.07 | 0.01 | 0.23 | `cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))` |
+| slot a seed 12 | 过 | 0.75 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.68 | 0.52 | 0.40 | 0.09 | 0.54 | 0.09 | `cs_last_low10(cross_ema(day_centroid(Amt), 20), cross_valid_count(day_last(Close), 120))` |
+| slot b seed 1 | 过 | 0.43 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.46 | 0.37 | 0.56 | 0.02 | 0.41 | 0.14 | `cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)` |
+| slot b seed 2 | 过 | 0.45 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.46 | 0.30 | 0.42 | 0.23 | 0.33 | 0.02 | `cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)` |
+| slot b seed 3 | 过 | 0.12 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(cros` | 0.11 | 0.07 | 0.11 | 0.23 | 0.07 | 0.10 | `sub(cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20), cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20))` |
+| slot b seed 4 | 过 | 0.07 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.06 | 0.01 | 0.20 | 0.38 | 0.03 | 0.04 | `cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))))), 20)` |
+| slot b seed 5 | 过 | 0.15 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(cros` | 0.19 | 0.10 | 0.00 | 0.26 | 0.09 | 0.10 | `cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))))), 20)` |
+| slot b seed 6 | 过 | 0.10 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(cros` | 0.11 | 0.07 | 0.13 | 0.44 | 0.08 | 0.04 | `sub(cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))))), 20), cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))))), 20))` |
+| slot b seed 7 | 过 | 0.24 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.07 | 0.38 | 0.06 | 0.07 | 0.35 | 0.13 | `cross_ema(day_autocorr(Ret, 1), 10)` |
+| slot b seed 8 | 过 | 0.26 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.07 | 0.37 | 0.10 | 0.09 | 0.35 | 0.13 | `cross_mean(day_durbin_watson(Ret), 20)` |
+| slot b seed 9 | 过 | 0.52 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.60 | 0.41 | 0.66 | 0.14 | 0.46 | 0.07 | `cross_mean(mul(abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))), day_durbin_watson(Ret)), 20)` |
+| slot b seed 10 | 过 | 0.58 | `div(cross_mean(mul(log(div(day_first(Open), cross_delay(day_` | 0.60 | 0.33 | 0.48 | 0.14 | 0.39 | 0.08 | `cross_mean(mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)` |
+| slot b seed 11 | 过 | 0.07 | `ts_quantile_q50(day_centroid(Amt), 20)` | 0.02 | 0.05 | 0.08 | 0.17 | 0.06 | 0.00 | `cross_corr(div(day_first(Amt), day_sum(Amt)), log(div(day_last(Close), day_first(Open))), 20)` |

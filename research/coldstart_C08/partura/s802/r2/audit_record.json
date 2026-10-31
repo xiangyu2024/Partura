@@ -1,0 +1,95 @@
+{
+ "seed": 802,
+ "round": 2,
+ "attempts": 1,
+ "slots": [
+  {
+   "slot": "a",
+   "type": "E",
+   "core": "day_centroid(Volume)",
+   "novelty": 4,
+   "soundness": 4,
+   "seeds": 11,
+   "struck_by_auditor": 3,
+   "struck_by_table": 3,
+   "kept": 8,
+   "core_is_a_control": false,
+   "pass": true,
+   "seeds_all": [
+    "sub(day_centroid(Volume), day_centroid(Amt))",
+    "cross_mean(sub(day_centroid(Volume), day_centroid(Amt)), 20)",
+    "cs_regres(day_centroid(Volume), day_centroid(Amt))",
+    "mul(day_centroid(Volume), day_gini(Volume))",
+    "cs_regres(day_centroid(Volume), day_gini(Volume))",
+    "cross_mean(mul(day_centroid(Volume), day_gini(Volume)), 20)",
+    "cross_mean(day_centroid(Volume), 20)",
+    "cross_zscore(day_centroid(Volume), 20)",
+    "cross_delta(day_centroid(Volume), 5)",
+    "mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1)))",
+    "cross_mean(mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1))), 20)"
+   ],
+   "seeds_kept": [
+    "sub(day_centroid(Volume), day_centroid(Amt))",
+    "cross_mean(sub(day_centroid(Volume), day_centroid(Amt)), 20)",
+    "cs_regres(day_centroid(Volume), day_centroid(Amt))",
+    "mul(day_centroid(Volume), day_gini(Volume))",
+    "cross_mean(day_centroid(Volume), 20)",
+    "cross_delta(day_centroid(Volume), 5)",
+    "mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1)))",
+    "cross_mean(mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1))), 20)"
+   ]
+  },
+  {
+   "slot": "b",
+   "type": "N",
+   "core": null,
+   "novelty": 5,
+   "soundness": 4,
+   "seeds": 10,
+   "struck_by_auditor": 5,
+   "struck_by_table": 0,
+   "kept": 5,
+   "core_is_a_control": false,
+   "pass": true,
+   "seeds_all": [
+    "cross_delta(LogFloatShares, 5)",
+    "cross_delta(LogFloatShares, 20)",
+    "sub(LogFloatShares, cross_quantile_q25(LogFloatShares, 241))",
+    "cross_zscore(cross_delta(LogFloatShares, 20), 241)",
+    "ts_argmax(abs(cross_delta(LogFloatShares, 1)), 120)",
+    "cross_mean(is_gt0(cross_delta(LogFloatShares, 1)), 20)",
+    "cross_mean(cross_delta(LogFloatShares, 5), 60)",
+    "cs_regres(cross_delta(LogFloatShares, 20), LogFloatCap)",
+    "sub(cross_delta(LogFloatShares, 20), cross_mean(cross_delta(LogFloatShares, 20), 241))",
+    "cross_zscore(LogFloatShares, 241)"
+   ],
+   "seeds_kept": [
+    "sub(LogFloatShares, cross_quantile_q25(LogFloatShares, 241))",
+    "cross_zscore(cross_delta(LogFloatShares, 20), 241)",
+    "cs_regres(cross_delta(LogFloatShares, 20), LogFloatCap)",
+    "sub(cross_delta(LogFloatShares, 20), cross_mean(cross_delta(LogFloatShares, 20), 241))",
+    "cross_zscore(LogFloatShares, 241)"
+   ]
+  }
+ ],
+ "R": [
+  {
+   "head": "cs_first_high40(ts_argmin(cross_quantile_q25(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)), 241), 20), day_centroid(Volume))), 241), 241), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)), 241), 20), day_centroid(Volume))), 241))",
+   "soundness": 4,
+   "pass": true,
+   "variants": 3
+  },
+  {
+   "head": "cross_reg_tvalue(day_sum(Volume), day_mean(in_delta(Volume, 30)), 30)",
+   "soundness": 4,
+   "pass": true,
+   "variants": 1
+  },
+  {
+   "head": "day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))",
+   "soundness": 4,
+   "pass": true,
+   "variants": 1
+  }
+ ]
+}

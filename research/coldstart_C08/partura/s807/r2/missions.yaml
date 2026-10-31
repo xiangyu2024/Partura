@@ -1,0 +1,135 @@
+seed: 807
+round: 2
+slots:
+- type: E
+  core: day_std(Ret)
+  hypothesis: '核心 `day_std(Ret)`(分钟收益算出的日内已实现波动)是本种子目前唯一通过样本外检验的 N 位 head 的根:`cross_stddev(log(log(log(day_std(Ret)))), 120)`(score 0.84、train 0.84、valid 1.63、sign -1,src c08s807Pr1b_Nb,r2/loc.json heads[3])。共性表(r2/loc.json enrichment)里 `log(log(log(day_std(Ret))))` 均值差全表最高(+1.99,p 0.000,6/345);它的四条 sufficiency 行——day_std(Ret) 本身与它的 1/2/3 层 log——score 几乎逐位相同(-3.9354 / -3.7969 / -3.7936 / -3.7936,r2/loc.json ablation[2])。这正是奖励「先按日排名再 EMA,任何单调变换同分」规则的直接验证:log 的层数本身不是机制,核心真正的身份就是裸的 `day_std(Ret)`;层数只是外围(cross_stddev 这个非单调统计量)对分布右尾的压缩程度,是外围参数而不是核心内容。所以这次把核心退回最浅的 `day_std(Ret)`,把「压缩多少层」也交给外围去探索,而不是预先锁死在 3 层。
+
+
+    r2/loc.md 本轮的拆解已经把 cross_stddev 的窗口(60/120/240)、log 层数(1-4 层)、再包一层 cross_tail_mean_q75 这三类外围用尽(全部已见过,必须避开)。本轮四类外围各实现一个未被试过的机制:
+
+
+    (1) 非对称的「波动的波动」——round 1 只度量了波动离散的幅度,没问过它是不是对称的。`cross_semistd_neg` / `cross_semistd_pos`(partura/ops_ext.py:765,773;对取值恒正的 x 取逐日 log 变化率,只把负/正的一半取均方根)把「波动骤降」和「波动骤升」分开。Patton & Sheppard (2015) 发现正、负波动跳跃对未来波动的持续性贡献并不对称;机制上,如果「会不会突然爆出一次大波动」比「波动本身摆动多大」更能解释定价差,净不对称(sub)或尺度无关的比值(div)应该比对称的 cross_stddev 更干净。
+
+
+    (2) 波动序列自身的记忆结构——与「离散度」正交的新维度。`cross_autocorr`(AlphaCube dt_cross.py:198,窗口内 1 日滞后自相关)和 `cross_hurst`(dt_cross.py:443)度量的是「我的波动有多可预测 / 记忆多长」,不是「摆动多大」:同样 cross_stddev=0.9 的两只股票,可能一只是规律地来回摆(高自相关、高 Hurst),一只是随机地来回摆(低自相关、低 Hurst),奖励的线性/平方/三次方残差化区分不了这两种,但这里能。Corsi (2009) 的 HAR-RV 模型本身就建立在已实现波动有长记忆结构之上。
+
+
+    (3) 动态版:现在是不是比「我自己平时」更不稳定。`cross_zscore(cross_stddev(log(day_std(Ret)), 60), 240)` 把「最近 60 天的波动不稳定程度」相对这只股票自己过去 240 天的不稳定水平打分——round 1 的 60/120/240 只是换了平滑长度,度量的始终是不稳定的水平;这里度量的是不稳定的变化/冲击,是状态转换变量,机制更接近「风险重新定价」而不是「风险水平溢价」。
+
+
+    (4) 用真分组字段中性化,检验 0.84 分是不是规模/板块的构成效应。`cs_bucket_demean(·, BoardCode)`、`cs_bucket_zscore(·, LogFloatCap)` 直接包在已验证的完整 head 外面(核心 `day_std(Ret)` 仍原样嵌在最深处),直接检验这个新 head 是否只是「小盘股 / 某些板块本来就更不稳定」——round 1 的 R-C 发现按真板块分桶通常让分数小幅下降而不塌(r1/analysis.md §1.3),这里验证同一规律对这个新 head 是否成立。再用 `cross_regres`(dt_cross.py:309,`y~alpha+beta*x` 的残差,第一个参数是自变量)把「不稳定」相对「自己历史上的波动水平」做时序回归取残差,直接检验它是不是波动控制 `cross_mean(day_std(Ret), 20)` 的非线性影子,而不是靠相关度表猜。
+
+
+    为什么和控制不同:5 个控制里的波动控制是 `cross_mean(day_std(Ret), 20)`——日频波动的水平(20 日均值);本位全部种子度量的是这个水平在时间上的稳定性、对称性或记忆结构,是二阶统计量,奖励的残差化(线性、平方、三次方)去不掉二阶量的横截面差异,这与 round 1 用 `ts_var(LogFloatCap, 20)`(市值水平的方差,而控制是市值水平本身)拿到novelty 4 是同一个论证结构。为什么样本外还会在:Baltussen、van Bekkum、van der Grient (2018) 的「未知的未知」是对「风险的不确定性」本身定价的行为偏差,不随窗口选择消失;French、Schwert、Stambaugh (1987) 的波动反馈机制说明波动的动态(不只是水平)本身携带定价信息;全部种子窗口在 60-240 日,换手很低,15bp 成本吃不掉。'
+  literature:
+  - title: 'Unknown Unknowns: Uncertainty About Risk and Stock Returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    url: https://tinbergen.nl/publication/166928/unknown-unknowns-uncertainty-about-risk-and-stock-returns
+    treatment: 风险的不确定性本身(而非风险水平)被定价;本位把它具体化为波动的波动的非对称与持久性结构
+  - title: A Simple Approximate Long-Memory Model of Realized Volatility
+    authors: Fulvio Corsi
+    year: '2009'
+    url: https://doi.org/10.1093/jjfinec/nbp001
+    treatment: 已实现波动的长记忆/持续性结构(HAR-RV);这里用 cross_autocorr / cross_hurst 直接度量这段记忆结构本身
+  - title: 'Good Volatility, Bad Volatility: Signed Jumps and the Persistence of Volatility'
+    authors: Andrew J. Patton, Kevin Sheppard
+    year: '2015'
+    url: https://doi.org/10.1162/REST_a_00503
+    treatment: 正、负波动跳跃对未来波动持续性的贡献不对称;这里用 cross_semistd_neg / cross_semistd_pos 把波动的波动拆成上行/下行两半
+  - title: Expected Stock Returns and Volatility
+    authors: Kenneth R. French, G. William Schwert, Robert F. Stambaugh
+    year: '1987'
+    url: https://doi.org/10.1016/0304-405X(87)90026-2
+    treatment: 波动反馈机制:波动的动态本身(不只是水平)携带定价信息,支持把二阶量当作独立于波动水平控制的信号
+  seeds:
+  - cross_semistd_pos(day_std(Ret), 120)
+  - cross_semistd_neg(day_std(Ret), 120)
+  - sub(cross_semistd_pos(day_std(Ret), 120), cross_semistd_neg(day_std(Ret), 120))
+  - div(cross_semistd_pos(day_std(Ret), 120), cross_semistd_neg(day_std(Ret), 120))
+  - cross_semistd_pos(day_std(Ret), 60)
+  - cross_semistd_neg(day_std(Ret), 60)
+  - cross_autocorr(day_std(Ret), 60, 1)
+  - cross_autocorr(log(day_std(Ret)), 120, 1)
+  - cross_hurst(day_std(Ret), 120)
+  - cross_zscore(cross_stddev(log(day_std(Ret)), 60), 240)
+  - cs_bucket_demean(cross_stddev(log(log(log(day_std(Ret)))), 120), BoardCode)
+  - cs_bucket_zscore(cross_stddev(log(log(log(day_std(Ret)))), 120), LogFloatCap)
+  - cross_regres(cross_mean(day_std(Ret), 20), cross_stddev(log(day_std(Ret)), 120), 120)
+  - div(cross_stddev(day_std(Ret), 120), cross_mean(day_std(Ret), 120))
+- type: N
+  hypothesis: '灵感来自这一批本身的一个空白,和一个从未被用过的叶子。空白:`day_quantile_q75(Volume)` 是 345 个归档候选里出现次数最多的子树(66 次,r2/loc.json core_cards 第 8 位),但 round 1 的结构解剖核实过——它在全部归档历史里只当过 `cross_regbeta` 的自变量(r1/analysis.md §1.4/§1.5),从没有人把「一天里成交量 75 分位和 25 分位的比值」本身当成一个特征评估过。这个比值衡量的是日内成交的突发/集中程度:如果一天的成交在少数几分钟里爆发式出现(开盘、收盘、消息冲击),q75/q25 的比值会大;如果一天里的成交比较均匀,比值接近 1。从未被用过的叶子:`ListAge`(规则 §1 列出的 6 个日频叶子之一)在 345 个候选、6 个 head、core_cards、enrichment 表里一次都没出现过。
+
+
+    机制:Admati & Pfleiderer (1988) 的理论模型说,知情交易者的订单会引出有辨别力的流动性交易者选择在特定时段集中交易来隐藏自己——不同股票日内交易节奏本身的形状(平均而言有多突发)反映了这只股票平常的交易者构成(消息/知情交易主导,还是流动性驱动的均匀换手)。Kaniel、Saar、Titman (2008) 发现个人投资者的交易模式与随后收益之间存在系统性的关系,说明交易节奏的形状不是中性的噪音。
+
+
+    这与 round 1 的 N 位(Chordia 式活跃度 CV,跨天比较成交总量)和本轮的 E 位(波动的波动,跨天比较波动)是同一个「厌恶不确定性/交易结构」大叙事的第三个变种,但度量的截面维度完全不同——前两者都是「日与日之间」某个日频统计量的离散,这里是单日内部、分钟与分钟之间成交量分布的形状,不做跨天比较,是全新的维度;构造上也与流动性控制 `cross_mean(day_sum(Amt), 30)`(日成交金额的水平)正交(一个是形状,一个是总量)。
+
+
+    算子实现:`div(day_quantile_q75(Amt), day_quantile_q25(Amt))` 与成交股数版 `div(day_quantile_q75(Volume), day_quantile_q25(Volume))`(排除价格水平);`day_gini(Amt)` / `day_gini(Volume)`(partura/ops_ext.py:136,日内 Gini 系数,是比分位数比值更标准的集中度估计量,两种构造互相校验,不是同一个意思换皮)。单日原始值噪声很大(F14 的换手成本论证),主力种子取 60/120 日 `cross_mean` 慢化;再给一个 `log` 压缩版(呼应本轮 E 位已经验证过的「压缩右尾有用」这条经验)、一个 `cross_stddev`(集中度本身随时间是否稳定,是这个特征的二阶版本)、一个 `cross_zscore`(相对自己历史的异常集中度)。
+
+
+    最后三个种子是针对 `ListAge` 的稳健性检验:`cs_bucket_demean(·, ListAge)` 把这条慢变量按挂牌年龄十分位去均值,检验这是不是单纯「次新股刚上市交易更活跃/更集中」的机械效应——Zhang, X.F. (2006) 把挂牌时长列为信息不确定性的代理变量之一(与分析师覆盖、波动率并列),信息不确定性越高的公司,特征对收益的预测力通常越强;如果去掉按年龄分组后的均值仍留着大部分分数,说明这不是新股噪音的人工产物。`cs_rank(ListAge)` 单独测试纯挂牌时长本身有没有解释力,把「年龄」和「年龄条件下的交易节奏」两件事分开看。`cs_bucket_demean(·, BoardCode)` 与 `cs_bucket_zscore(·, LogFloatCap)` 同样检验板块/规模构成效应,与本轮 E 位用同一套工具,互为印证。
+
+
+    为什么样本外还会在:Admati-Pfleiderer 的知情/流动性交易混合是市场微观结构的结构性特征,不随样本期消失;Amihud & Mendelson (1986) 说明持续性的交易特征(不是一次性事件)本身可以被定价,这里主力种子全部取 60-120 日慢化,换手低;信息不确定性溢价(Zhang 2006)在 A 股这种个人投资者主导、分析师覆盖不均的市场里理应更强,而不是样本期特有的现象。'
+  inspired_by: 345 个归档候选里出现次数最多的子树 `day_quantile_q75(Volume)`(66 次)从未被当作独立特征,只当过 cross_regbeta 的自变量(r1/analysis.md §1.4);以及这一批 6 个 head、345 个候选、core_cards、enrichment 表里从未出现过的叶子 `ListAge`。文献:Admati & Pfleiderer (1988);Zhang (2006)。
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 知情交易与流动性交易的时段选择决定日内成交的集中/突发程度;这里把日内 q75/q25 成交量比值与 Gini 系数当作这种节奏形状的横截面特征
+  - title: Individual Investor Trading and Stock Returns
+    authors: Ron Kaniel, Gideon Saar, Sheridan Titman
+    year: '2008'
+    url: https://doi.org/10.1111/j.1540-6261.2008.01316.x
+    treatment: 个人投资者的突发性交易模式与随后收益之间的系统性关系,支持交易节奏形状携带定价信息
+  - title: Information Uncertainty and Stock Returns
+    authors: X. Frank Zhang
+    year: '2006'
+    url: https://doi.org/10.1111/j.1540-6261.2006.00831.x
+    treatment: 挂牌时长等信息不确定性代理变量会放大特征的定价力;这里用 ListAge 做分组中性化的稳健性检验
+  - title: Asset Pricing and the Bid-Ask Spread
+    authors: Yakov Amihud, Haim Mendelson
+    year: '1986'
+    url: https://doi.org/10.1016/0304-405X(86)90065-6
+    treatment: 持续性的交易特征本身可以被定价,支持用 60-120 日慢化而非一次性事件来构造信号
+  seeds:
+  - div(day_quantile_q75(Amt), day_quantile_q25(Amt))
+  - cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60)
+  - cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 120)
+  - cross_med(div(day_quantile_q75(Volume), day_quantile_q25(Volume)), 60)
+  - log(cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60))
+  - cross_stddev(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60)
+  - cross_zscore(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60)
+  - cs_bucket_demean(cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60), ListAge)
+  - cs_bucket_demean(cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60), BoardCode)
+  - cs_bucket_zscore(cross_mean(div(day_quantile_q75(Amt), day_quantile_q25(Amt)), 60), LogFloatCap)
+  - cross_mean(day_gini(Amt), 60)
+  - cross_mean(day_gini(Volume), 60)
+  - cs_rank(ListAge)
+R:
+- head: cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 60)
+  why: 该 head(score 1.4255)的 knockout 行(r2/loc.json ablation[0])显示敲掉 `cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth)` 后分数几乎不变(1.4218,necessity 0.0037)——LimitWidth 分桶对这个 head 基本是死重;而窗口 60→120 本身就有 +0.27(r2/loc.json r_candidates,score 1.6957)。变体把「窗口拉长」(已知最优 120,外加插值 90)、「换一个真正有信息的分桶字段」(BoardCode / LogFloatCap)、「外层换成尺度无关的 t 值」(检验 round 1 R-D 的发现——cross_reg_tvalue 通常比 regbeta 掉得少——在新窗口下是否依然成立)三件事分开与叠加验证。
+  variants:
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 120)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 90)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), BoardCode), 60)
+  - cross_reg_tvalue(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 120)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LogFloatCap), 120)
+- head: cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)
+  why: 该 head(score 1.0485)的 r_candidates 显示 Volume→Amt 是单笔增益最大的一步(+0.58,score 1.6296)——与 round 1 对 head1/head3(当时还是旧版)的发现完全一致:Amt 去掉了股数口径里混进来的价格水平/按手取整(r1/analysis.md §1.4)。变体把这个已确认的最大杠杆与窗口 120 叠加,换成 LogFloatCap 口径(检验股本跳跃是不是来源,呼应 r1/analysis.md §1.2 的 (a)/(b) 拆分),再换成尺度无关的 cross_corr(同一套 R-D 诊断在 LogTotalCap 口径上再验证一次)。
+  variants:
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 120)
+  - cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 30), LimitWidth), 60)
+  - cross_corr(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)
+- head: cross_corr(ts_var(LogFloatCap, 20), day_sum(Amt), 60)
+  why: 该 head(score 0.790355,本组自己上一轮 E 位 c08s807Pr1a_Ea 的产物)的 r_candidates 显示 Amt→Volume 有 +0.34 的增益(score 1.1316)——方向与 head1/head2 的 Amt 更优恰好相反,值得直接核对:这个 head 本身就是尺度无关的相关系数(不是 regbeta),所以 Volume 更好不太可能是「去掉价格水平」的问题,更可能是股数本身与市值方差的协动更强。变体把这个增益与窗口 30(round 1 已知该 head 在窗口 30 时几乎不掉分,0.774756)叠加,并给一个 log(Volume) 版本与 round 1 已验证过的 log(Amt) 版本(0.595584)对照。
+  variants:
+  - cross_corr(ts_var(LogFloatCap, 20), day_sum(Volume), 60)
+  - cross_corr(ts_var(LogFloatCap, 20), day_sum(Volume), 30)
+  - cross_corr(ts_var(LogFloatCap, 20), log(day_sum(Volume)), 60)

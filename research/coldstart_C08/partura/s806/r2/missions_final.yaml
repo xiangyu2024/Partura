@@ -1,0 +1,126 @@
+seed: 806
+round: 2
+slots:
+- type: E
+  core: day_centroid(Amt)
+  hypothesis: day_centroid(Amt) = 当天成交额 |Amt| 沿分钟轴的质心,缩放到 [0, 1]:sum(t*|Amt_t|)/sum(|Amt_t|)/(T-1);0
+    = 全部成交发生在开盘,1 = 全部发生在收盘,0.5 = 对称。它度量的是“这只股票的交易活跃度这一天最集中出现在什么钟表时刻”,一个与成交量方向无关、与成交量水平无关的纯时间配置量,本轮快照里分数最高的
+    head(+1.35)就建在它之上。为什么它可能是 alpha 来源:(1) Admati 与 Pfleiderer(1988)给出理论基础——知情交易者与可自由选择时点的流动性交易者在均衡中会把交易聚集到某些时段彼此掩护,聚集的时点因股票携带的私有信息强度、流动性交易者构成的不同而系统地不同,且信息越值钱聚集越明显;(2)
+    Heston、Korajczyk 与 Sadka(2010)用美股分钟数据证明,日内收益在固定的钟表时刻上存在持续约 40 个交易日的系统性周期,且不被规模、beta、指数成分解释。把两条放在一起:一只股票的交易通常落在哪个钟表时刻,决定了它更多暴露在这个周期的哪一段上,也携带着“这只股票的信息通常在哪个时段被定价”这层结构性信息。本轮共性表给出的拆解(loc.md)显示这个核心单独(“子树本身”)已经
+    +0.41,把 Amt 换成 Volume 仍有 +1.26,把 ts_quantile_q50 的窗口从 20 改成 10 或 40 仍有 +1.03 /
+    +1.12——换字段、换窗口都不伤它,说明它是一个稳健的结构,而不是某个窗口长度的偶然拟合,值得专门开一个 E 位深挖。外围怎么实现、和已经见过的写法有什么不同:快照里对这个核心试过的全部外围只有三类——ts_quantile_q50
+    的窗口{10, 20, 40}、字段互换 Amt->Volume、以及 head 本身——全部是“同一个统计量(trailing 中位数)、只换参数或字段”。本位的
+    12 颗种子刻意避开这三类,换成四个新的方向:(a) 换统计量家族——cross_ema(连续指数记忆,老的极端日是衰减掉而不是出窗口就消失)、cross_tail_mean_q75
+    / q25(只取“偏成交偏向收盘”或“偏成交偏向开盘”那条尾部的条件均值,把“典型水平”和“偶尔的极端日”分开)、cross_stddev / cross_madz(度量这个时点偏好本身在日度之间有多不稳定/今天比过去正常水平惊讶多少,而不是它的水平);(b)
+    交互——除以 day_gini(Amt)(当天成交在分钟之间整体有多集中,和“集中在什么时候”是两件独立的事,用这个比值问“时点信号在成交本身很零散还是很扎堆的日子里是不是不一样”)、乘以
+    day_std(Ret)(问聚集时点的信息量是不是在高波动/有信息的日子更强,直接对应 Admati-Pfleiderer 的预测);(c) 共动——与 day_centroid(sub(High,
+    Low))(用高低价差构造的“当天波动发生在什么时候”)做 cross_corr,这里核心只出现在相关的一侧、不是整条树,问的是“成交发生的时点”与“价格波动发生的时点”是否对齐,这是一个此前完全没人问过的、独立于核心水平的新轴;(d)
+    变化——对 cross_ema 后的水平再取 cross_delta,把“这只股票一贯的交易时点习惯”和“最近发生的时点迁移”分开(后者可能标记了持股结构/指数纳入等事件);外加两颗诊断种子:在我们自己的流动性-波动控制(cross_mean(day_std(Amt),
+    30))十分位内做 cs_bucket_rank(新尺子的残差只去到三次方,去不掉这种和另一个变量的桶内交互),以及用 cross_valid_count
+    筛掉近期上市/复牌的名字(第 1 轮解剖发现过这类名字会在幼稚的聚合里制造数值伪影,这里专门对这个新核心重新检验一次)。为什么样本外还会在:机制绑定在三个结构性事实上——中国的
+    T+1 与有限的日内做空,使“知情/非知情资金在日内选择什么时候动手”本身是市场微观结构的常态,不是某个行情阶段;收盘集合竞价制度(样本期内全市场统一、没有变过)机械地把跟踪指数净值的被动/基准化资金拉向收盘,这是制度性的客户群效应;Heston-Korajczyk-Sadka
+    自己的证据是这类钟表周期不被规模、beta 或指数成分解释、且每次能维持约 40 个交易日,是反复出现的微观结构规律而不是会被套利掉的短期错误定价。并且 5
+    个控制(流动性、波动、20 日反转、成交额波动族、市值)里没有任何一个是“交易发生在哪个时刻”,三次残差去不掉这个方向的暴露。
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 为交易聚集在特定时点本身携带信息提供理论基础:知情交易者与可自由选择时点的流动性交易者在均衡中把交易聚在某些时段互相掩护,聚集的时点因股票而异、随私有信息强度变化——day_centroid(Amt)
+      直接测量这个聚集时点,乘以 day_std(Ret) 的交互种子测这个聚集是否在高信息含量的日子更强
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    url: https://arxiv.org/abs/1005.3535
+    treatment: 日内收益在固定钟表时刻上存在持续约 40 个交易日的系统性周期,不被规模、beta、指数成分解释——支持“一只股票的交易通常落在哪个钟表时刻”本身是可持续的横截面信息来源,而非噪声
+  seeds:
+  - cross_tail_mean_q75(day_centroid(Amt), 20)
+  - cross_tail_mean_q25(day_centroid(Amt), 20)
+  - cross_stddev(day_centroid(Amt), 20)
+  - cross_madz(day_centroid(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_centroid(sub(High, Low)), 20)
+  - cross_delta(cross_ema(day_centroid(Amt), 20), 20)
+  - cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))
+- type: N
+  hypothesis: 本位在我们自己第 1 轮产出的两个 head(score +0.67、+0.60,本轮快照里的 c08s806Pr1b_Nb)之上换一个新轴继续挖,不走
+    E(两个 head 的结构——隔夜方差相对一个经隔夜-日内互协方差调整过的日内方差之比——已经是对称的二次型,继续在它外面长只能是再套一层平滑/筛选,买不到新机制),走
+    N:问这个“隔夜与日内的拔河”是不是左右不对称,以及这个拔河发生得有多快。记号与两个 head 完全一致、因果,不前视:隔夜收益 O = log(div(day_first(Open),
+    cross_delay(day_last(Close), 1)))(今日开盘相对前一日收盘,cross_delay 取前一日),日内收益 I = log(div(day_last(Close),
+    day_first(Open)))(今日收盘相对今日开盘)。机制与算子实现分三组:(1) 不对称的隔夜能量与不对称的拔河强度。用 is_lt(O, 0) 与
+    is_gt(O, 0) 当 0/1 掩码乘进 O*O(隔夜自身的平方)或 O*I(两个 head 分子项的核心,隔夜与日内的协方差核)里,再在 20 日窗口里
+    cross_mean。这里刻意不用真正的条件均值(即不除以窗口内满足符号条件的天数):20 天窗口内某个符号的天数可能很少甚至 0,除以它会制造规则 §4
+    点名的“除以近零的量”数值伪影;未归一化的窗口总和除以固定的 20,是有界、连续、不会因窗口内天数变化而跳变的近似,代价是把“条件发生的频率”也混进了水平里——这是刻意的工程选择,不是数值缺陷。n1=cross_mean(mask(O<0)*O*O,20)与
+    n2=cross_mean(mask(O>0)*O*O,20)分别是隔夜下跌和隔夜上涨各自贡献的平方能量,n3=n1-n2 是净不对称(更负 = 下跌隔夜的波动系统性地大于上涨隔夜);n4、n5
+    把同样的掩码乘进 O*I,n6=n4-n5 问的是“隔夜下跌后日内把它往回拉”这件事和“隔夜上涨后日内把它往回拉”这件事强度是否一样——这是两个 head
+    的对称二次型完全没问过的问题。An、Huang 与 Li(2022)发现中国市场的隔夜异象恰好不对称:隔夜收益只在前一个交易时段是下跌之后才显著为负,在上涨之后不显著,他们把它归因于散户的有限注意力;本位的掩码种子是把这类不对称结构直接写成算子,维度上做了区分——他们按前一日日内收益的方向分条件,这里按当天隔夜收益自己的方向分条件,检验的是同一类不对称机制在“拔河的哪一段先出现符号”这个更细的切面上是否依然存在。Ang、Chen
+    与 Xing(2006)证明下跌方向的波动单独定价、不能被上涨方向的波动替代,是支持把 O 的平方拆成上行/下行两半分别检验、而不是只看对称方差的第二条依据。(2)
+    价格发现速度。day_autocorr(Ret, 1) 与 day_durbin_watson(Ret) 都是分钟收益的一阶序列相关度量(Durbin-Watson
+    约等于 2*(1-一阶自相关))。Roll(1984)证明买卖价差造成的 bid-ask bounce 会在成交价序列里留下负的一阶自相关,相关系数的绝对水平反映了噪声交易/价差相对真实价格发现速度的占比。n7、n8
+    把它当作“隔夜冲击被消化得多快”的互补维度,分别用 cross_ema 和 cross_mean 平滑;n9=cross_mean(|O|*DW(Ret),20)用隔夜冲击的大小给价格发现速度加权,只在跳空较大的日子上看“日内价格发现是更快还是更慢”,这是这一批与之前各轮都没有出现过的算子(day_autocorr、day_durbin_watson
+    在本组历史任务里从未被用过)。(3) 注意力代理的新用法。div(day_first(Amt), day_sum(Amt))(开盘第一分钟成交额占全天的比例)第
+    1 轮已经单独当过信号(分数不高,没有进入这批 heads);本位不再把它当独立信号,而是与隔夜冲击的大小交互(n10=cross_mean(开盘占比*|O|,20),问开盘涌入的注意力是不是集中在隔夜跳空更大的那些日子)或者直接与日内收益做相关(n11=cross_corr(开盘占比,I,20),问“开盘有多少注意力”这件事本身与“日内怎么走”是否存在稳定的跨日关系)——这是把第
+    1 轮已经评估过的一个水平量,换成交互/相关的全新用法,外围与之前完全不同。为什么和库里已有的不一样:库里的两个 head 以及我们第 1 轮的全部种子,全部是对称的二次型(O*O、I*I
+    或它们的比);没有任何一个用符号掩码、上行/下行能量分解,也没有任何一个用分钟级序列相关(day_autocorr / day_durbin_watson)或把开盘注意力与冲击大小交互。为什么样本外还会在:不对称隔夜效应背后的机制——损失厌恶、恐慌性情绪、散户主导、T+1
+    与做空限制使负面消息只能在隔夜“发泄”、次日盘中才部分修正——是中国市场在样本期内没有变过的制度与投资者结构特征;买卖价差造成的分钟级自相关反映的是最小报价单位与做市商价差这类微观结构常数,同样是结构性的,不随某一段行情改变。
+  inspired_by: 本轮快照 c08s806Pr1b_Nb(我们自己第 1 轮的 N 位)产出的两个 head,score +0.67 与 +0.60,结构都是隔夜方差相对经互协方差调整过的日内方差之比;本轮
+    loc.md 对它们的拆解(knockout / sufficiency)证明这个比值结构本身是必要的,但拆解里出现的全部变体(Open->Close、Close->Vwap
+    字段互换,窗口 10/40)都只是同一个对称二次型换字段/窗口,没有一个问过符号/方向。另外本轮共性表里出现了 day_durbin_watson(Ret)(均值差
+    +0.76,p 0.106,n=4,偏弱但完全没被探索过)。文献 An、Huang 与 Li(2022)关于中国隔夜异象不对称的发现,以及 Roll(1984)关于买卖价差造成的日内序列相关
+  literature:
+  - title: The Asymmetric Overnight Return Anomaly in the Chinese Stock Market
+    authors: Yahui An, Lin Huang, Youwei Li
+    year: 2022-11
+    url: https://doi.org/10.3390/jrfm15110534
+    treatment: 中国市场隔夜异象的不对称结构(隔夜收益只在前一个交易时段下跌之后才显著为负,上涨之后不显著),归因于散户的有限注意力——是 n4/n5/n6
+      不对称拔河种子的直接依据
+  - title: Downside Risk
+    authors: Andrew Ang, Joseph Chen, Yuhang Xing
+    year: '2006'
+    url: https://doi.org/10.1093/rfs/hhj035
+    treatment: 下跌方向的波动单独定价、不被上涨方向的波动替代——支持把隔夜收益拆成下行能量(n1)与上行能量(n2)分别检验,而不是只看对称方差
+  - title: A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient
+      Market
+    authors: Richard Roll
+    year: '1984'
+    url: https://doi.org/10.1111/j.1540-6261.1984.tb03897.x
+    treatment: 买卖价差造成分钟收益的一阶负自相关,是 day_autocorr(Ret,1)、day_durbin_watson(Ret) 作为“价格发现速度”度量的理论依据
+  - title: Overnight Returns and Firm-Specific Investor Sentiment
+    authors: David Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman
+    year: 2018-04
+    url: https://doi.org/10.1017/S0022109017000989
+    treatment: 隔夜收益作为个股情绪代理的基础框架;本位在它之上多问一句这个情绪代理是否左右对称
+  seeds:
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))))), 20)
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))))), 20)
+  - sub(cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))))), 20), cross_mean(mul(is_gt(log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20))
+  - cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))))), 20)
+  - cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))))), 20)
+  - sub(cross_mean(mul(is_lt(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))))), 20), cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close),
+    1))), 0), mul(log(div(day_first(Open), cross_delay(day_last(Close), 1))), log(div(day_last(Close),
+    day_first(Open))))), 20))
+  - cross_ema(day_autocorr(Ret, 1), 10)
+  - cross_mean(day_durbin_watson(Ret), 20)
+  - cross_mean(mul(abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1)))),
+    day_durbin_watson(Ret)), 20)
+  - cross_mean(mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open),
+    cross_delay(day_last(Close), 1))))), 20)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), log(div(day_last(Close), day_first(Open))),
+    20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

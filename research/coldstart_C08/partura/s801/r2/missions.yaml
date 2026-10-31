@@ -1,0 +1,117 @@
+seed: 801
+round: 2
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: '【核心在量什么】day_centroid(x) = Σ t·|x_t| / Σ|x_t| / (T−1),分钟成交量在一天里的「重心时刻」,0=全在开盘、1=全在收盘、0.5=对称;源码(ops_ext.day_centroid)先取绝对值再按分钟序号加权平均,是把
+    day_gini / day_skew 这类「量有多集中」的统计量完全丢掉、只留「量集中在几点」这一件事的变量。它是本轮 317 个候选里支持面最广的子树之一(含它的 35 个候选均值 −0.19,不含的
+    −1.37,效应 +1.17,p≈0),第 1 轮 95 个候选里完全没有出现过,是本轮 M 第 2 批才带出来的新子树。它也已经是本组第 1 轮找到的唯一 head 的一部分:`cs_last_low05(day_centroid(Volume),
+    cross_corr(day_durbin_watson(Volume), day_sum(Volume), 20))`;拆解表的 sufficiency 测试显示单独留它、把 head 其余部分换成裸形式,score
+    就有 +0.44(train +1.09 valid +0.44),已经离及格线很近,且它与已知族的残差相关只有 −0.19(拆解表 rho_known 列),不是流动性或市值的化身。
+
+    【已经见过的外围,本位要避开】在已发现的 head 里,day_centroid(Volume) 只被用过两种处理:(a) 作为 cs_last_low05(y=它,x=cross_corr(DW,
+    day_sum(Volume), 20)) 的被排序变量,筛选变量跟它本身无关,只是借另一个量做排除;(b) 整个筛选结果再去跟 div(day_topw_mean(High, Open), DW)
+    做 50 日 ts_corr。这两种都没有碰过股内时间归一化、跟价格路径的同步性比较、以及板块/新股的分桶中性化,本位全部避开这两种已见过的外围。
+
+    【这次试的外围与机制】(a) 股内时序归一化:cross_zscore / cross_madz / ts_rank(60–120 日)——不问「这只股票的量集中在几点」的截面水平(那很可能跟涨跌停规则、是否有收盘集合竞价这类慢变的制度属性绑在一起),只问「相对它自己最近的历史,今天的集中点是不是反常地提前或推迟」,换手结构(交易者构成)的变化比绝对时刻更可能是慢变暴露之外的信息(复用第
+    1 轮对 DW 验证过有效的「股内 z 分数」处理,这次用在一个完全不同的核心上)。(b) 持续性/不稳定性:cross_mean(20 日)把重心时刻打平成「最近惯常的样子」,cross_stddev(20
+    日)量「这段时间内重心本身跳不跳」——长期稳定在某处(机构/被动盘的规律执行)与跳来跳去(散户追涨杀跌、事件驱动)是两件不同的事,原始单日取值分不开它们。(c) 与价格路径的同步性:day_centroid
+    对任何输入都先取绝对值,所以 day_centroid(Ret) 就是「当天 |分钟收益| 的重心」——哪个时间段价格动得最猛;sub(day_centroid(Volume), day_centroid(Ret))
+    与 cross_corr(两者, 20) 问的是成交量堆积的时间点和价格真正动起来的时间点是否对得上:对得上(差小/相关高)更像知情交易在价格变动的同时下单,对不上(量在波动小的时段堆积)更像被动/到点执行的流动性盘(Admati–Pfleiderer
+    1988 的框架正是预测知情交易与可择时的流动性交易在日内分布上不同)。这是本组第一次把「量的时刻」和「价格动的时刻」放进同一个表达式——M 两批候选和已发现的 head 都只处理过量本身的形状或量与价格水平的关系,没有处理过时点。(d)
+    制度性混杂的中性化:cs_bucket_rank(…, ListAge) 去掉新股上市初期(常无涨跌幅限制、巨量换手)对重心的机械扭曲;cs_bucket_rank(…, BoardCode) 去掉
+    2020 年后科创板/创业板引入收盘集合竞价、而主板长期没有这项机制带来的板块台阶——这种台阶是离散的,残差尺子对控制的线性/二次/三次回归去不掉。(e) 带方向:乘上 day_signed_ratio(Ret,
+    Amt)(净买入占比)、与 day_mean(Ret) 的滚动相关,问量堆积时点偏晚/偏早的股票,净买入方向和近期收益方向是什么。
+
+    【为什么和库里 / 控制不同】库里目前只有 1 个 head,它用 day_centroid(Volume) 做排除筛选的输入,没有把它当独立信号去做股内归一化或跟价格时点配对;5 个控制(流动性、波动、20
+    日反转、已知族、市值)全部是跨日或水平统计量,没有一个是「一天之内什么时候」这个时间维度的量,拆解表给出的 rho_known = −0.19 印证了这点不是控制的化身。
+
+    【为什么样本外还会在】日内交易时段的制度安排(集合竞价规则、涨跌停板分布)和不同类型投资者的下单时点偏好(机构被动盘匀速执行 vs 散户尾盘追涨)是慢变的市场微结构属性,不是某个瞬时的量价相关性,2018–2023
+    没有发生过交易时段规则的大范围变化(科创板 2020 年引入收盘集合竞价是本位特意用 BoardCode 分桶处理的那次例外,不是要回避而是要显式控制);所有种子都是有界量(day_centroid∈[0,1]、z
+    分数、相关系数、分桶分位),没有裸除法,不会有数值爆点。'
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://academicnewsletter.sufe.edu.cn/info/355980
+    treatment: 知情交易偏早、可自由择时的流动性交易偏向集中在成交厚的时段 → 比较 day_centroid(Volume) 与 day_centroid(Ret) 的日内时点是否对齐
+  - title: A transaction data study of weekly and intradaily patterns in stock returns
+    authors: Lawrence Harris
+    year: '1986'
+    url: https://www.sciencedirect.com/science/article/abs/pii/0304405X86900449
+    treatment: 记录了日内成交量/收益的经典 U 形(开盘、收盘两头重);day_centroid 的截面水平很可能就是这个 U 形强弱的代理,本位把它换成股内异常度和板块/新股分桶中性化,只问偏离这个制度基线的部分
+  seeds:
+  - cross_zscore(day_centroid(Volume), 60)
+  - cross_madz(day_centroid(Volume), 120)
+  - ts_rank(day_centroid(Volume), 120)
+  - cross_mean(day_centroid(Volume), 20)
+  - cross_stddev(day_centroid(Volume), 20)
+  - sub(day_centroid(Volume), day_centroid(Ret))
+  - cross_mean(sub(day_centroid(Volume), day_centroid(Ret)), 20)
+  - cross_corr(day_centroid(Volume), day_centroid(Ret), 20)
+  - cs_bucket_rank(day_centroid(Volume), ListAge)
+  - cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(day_sum(Amt), 20))
+  - cross_corr(day_centroid(Volume), day_mean(Ret), 20)
+  - cross_mean(mul(day_centroid(Volume), day_signed_ratio(Ret, Amt)), 20)
+  - cs_bucket_rank(day_centroid(Volume), BoardCode)
+  - cross_zscore(cross_mean(day_centroid(Volume), 5), 120)
+- type: E
+  core: ts_med(LimitWidth, 50)
+  hypothesis: '【核心在量什么】LimitWidth 是逐日频的静态叶子字段(涨跌幅限制的宽度:主板 10%、创业板/科创板 20%、ST/风险警示股 5%、新股上市前几日通常不设限),ts_med(LimitWidth,
+    50) 是它过去 50 个交易日的稳健中位数——把单日记录噪声/过渡日抹掉,留一个「这只股票最近一直处在哪个监管/风险分层」的慢变状态变量。它是本轮共性表里支持面最大的几个 LimitWidth
+    衍生子树之一(本身:含它的 30 个候选均值 −0.61,不含 −1.30,效应 +0.69,p=0.0004;同一簇里 cs_last_high20(LimitWidth, ts_med(LimitWidth,50))
+    效应 +1.24 是本轮共性表第一名,pow_1_5(LimitWidth) 效应 +0.75、n=34,cross_semistd_pos(LimitWidth,60) 效应 +0.93)。第
+    1 轮 95 个候选里完全没有 LimitWidth 的任何形式,是本轮才第一次出现的子树家族。
+
+    【已经见过的外围,本位要避开】到目前为止,库里和共性表里 LimitWidth 只被 GP 自己用过两种外围:pow_1_5 的单调包装(在先排名的奖励下跟裸 LimitWidth 是同一个秩信号)、以及
+    cs_last_high20 / cross_semistd_pos 这类直接在 LimitWidth 自己水平上做的筛选或半方差。本位要避开「还是在问 LimitWidth 的静态水平」,改成问「最近有没有发生监管分层的变化」,以及「去掉
+    board 本身的台阶之后,风险警示这一下还剩多少」。
+
+    【这次试的外围与机制】(a) 分层变化探测:sub(ts_med(LimitWidth,50), cross_mean(LimitWidth,250)) 与 cross_zscore(ts_med(LimitWidth,50),
+    250)——对绝大多数股票,过去 50 天和过去 250 天的中位数几乎相等(board / ST 身份一年里基本不变),这两个量只在「最近发生了限宽变化」(新披星戴帽、摘星脱帽、或注册制改革带来的限宽调整)的那一小部分股票上明显偏离
+    0,真正测的是「状态刚刚变化」这个事件本身,不是静态所属哪个板块。(b) 板块内中性化:cs_bucket_rank(ts_med(LimitWidth,50), BoardCode)——LimitWidth
+    几乎由板块决定,在 BoardCode 分桶内重新排序,剩下的几乎只是「同板块内被打上风险警示的那一小撮」,把板块本身的流动性/成长性差异(控制集的多项式回归去不掉这种离散台阶)过滤掉,只留风险分层这一件事。(c)
+    流动性交互中性化:cs_bucket_rank(…, cross_mean(day_sum(Amt),20))、cs_bucket_rank(…, cross_stddev(day_sum(Amt),20))——同第
+    1 轮对 DW 验证过有效的手法,这次用在一个完全不同的核心上,去掉跟成交规模及其波动的交互,而不只是线性暴露;cs_last_low10(…, cross_mean(day_sum(Amt),20))
+    额外排除最不流动的 10% 尾部,避免这部分名字的执行成本主导多头书。(d) 排除掉下跌刚发生的那一段:cs_last_low10(ts_med(LimitWidth,50), cross_mean(day_mean(Ret),20))——担心「先砸出跌停→再被打风险警示」这条因果链本身就是
+    20 日反转的另一种写法,这个筛选把最近 20 日平均收益最低的 10% 直接排除,剩下的更接近「已经在这个分层待了一段时间」而不是「刚砸出来的那一下」;cross_corr(ts_med(LimitWidth,50),
+    day_mean(Ret), 60) 则直接把这层相关记录下来,供后续核对。(e) 带方向:cross_mean(mul(ts_med(LimitWidth,50), day_signed_ratio(Ret,Amt)),
+    20) 及其 board 中性版——彩票类/壳资源炒作的特征是追涨而不是抄底(Kumar 2009、Bali–Cakici–Whitelaw 2011 的彩票偏好理论预测散户会为潜在暴涨尾部支付溢价、随后跑输),这里问的是「长期处在窄限宽/风险警示分层的股票,最近净买入越多,后续是不是跑输得更多」,跟
+    (a)(b)(c) 的「分层本身」是不同机制(交互 vs 水平)。
+
+    【为什么和库里 / 控制不同】5 个控制(流动性、波动、20 日反转、已知族 cross_mean(day_std(Amt),30)、市值 LogFloatCap)里没有任何一个是板块/监管分层变量,库里的唯一
+    head 完全没有用到 LimitWidth。(a)(b) 问的是分层变化和去掉 board 台阶后的风险标签,(c) 是交互中性化,(d) 是因果排除,(e) 带方向——这些跟「LimitWidth
+    的静态截面水平」(GP 自己已经试过的外围)是不同的机制。
+
+    【为什么样本外还会在】板块/ST 分层规则本身在 2018–2023 基本没变(创业板 2020 年注册制改革的限宽调整是 (a) 要专门捕捉的那类事件,不是要回避的例外);彩票类资产跑输是在多个市场反复验证过的现象(Kumar
+    2009 用美股个股做横截面排序,Bali–Cakici–Whitelaw 2011 用 MAX 排序做组合),机制是结构性的散户风险偏好,不是某一段时间的价格模式;Wan 等(2015)记录的中国涨跌停触发动态本身就随板块限宽不同而系统性不同,支持限宽是一个真实的制度分层变量而非噪声。所有种子都是分桶分位
+    / 相关系数 / 有界差值,LimitWidth 本身是离散的几档正数,ts_med / cross_mean 对它取值不会趋零,没有除以近零量的地方。'
+  literature:
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    url: https://www.sciencedirect.com/science/article/abs/pii/S0304405X10002231
+    treatment: 彩票型(高 MAX)股票被散户溢价追捧、随后系统性跑输 → 窄限宽/风险警示分层叠加净买入方向(day_signed_ratio)作为彩票需求的代理
+  - title: Who Gambles in the Stock Market?
+    authors: Alok Kumar
+    year: '2009'
+    url: https://onlinelibrary.wiley.com/doi/10.1111/j.1540-6261.2009.01483.x
+    treatment: 散户对彩票型特征的偏好是结构性的,不随样本期变化 → 支撑这条线在 train/valid 两段都应该在
+  - title: Statistical Properties and Pre-Hit Dynamics of Price Limit Hits in the Chinese Stock Markets
+    authors: Yu-Lei Wan, Wen-Jie Xie, Gao-Feng Gu, Zhi-Qiang Jiang, Wei Chen, Xiong Xiong, Wei Zhang,
+      Wei-Xing Zhou
+    year: 2015-04
+    url: https://pmc.ncbi.nlm.nih.gov/articles/PMC4395215/
+    treatment: 不同限宽板块的涨跌停触发动态系统性不同,支持 LimitWidth 是真实的制度分层变量 → 板块内(BoardCode)分桶中性化去掉板块台阶
+  seeds:
+  - sub(ts_med(LimitWidth, 50), cross_mean(LimitWidth, 250))
+  - cross_zscore(ts_med(LimitWidth, 50), 250)
+  - cs_bucket_rank(cross_zscore(ts_med(LimitWidth, 50), 250), ListAge)
+  - cs_bucket_rank(ts_med(LimitWidth, 50), cross_mean(day_sum(Amt), 20))
+  - cs_bucket_rank(ts_med(LimitWidth, 50), cross_stddev(day_sum(Amt), 20))
+  - cs_bucket_rank(ts_med(LimitWidth, 50), BoardCode)
+  - cross_corr(ts_med(LimitWidth, 50), day_mean(Ret), 60)
+  - cs_last_low10(ts_med(LimitWidth, 50), cross_mean(day_mean(Ret), 20))
+  - cross_mean(mul(ts_med(LimitWidth, 50), day_signed_ratio(Ret, Amt)), 20)
+  - cs_bucket_rank(cross_mean(mul(ts_med(LimitWidth, 50), day_signed_ratio(Ret, Amt)), 20), BoardCode)
+  - cs_last_low10(ts_med(LimitWidth, 50), cross_mean(day_sum(Amt), 20))

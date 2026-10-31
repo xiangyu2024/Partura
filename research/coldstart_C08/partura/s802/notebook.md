@@ -32,3 +32,34 @@
 ### 上一轮的预测对不对
 
 第 1 轮,没有上一轮。
+
+## 第 2 轮
+
+### 我目前对本种子 alpha 来源的信念(更新)
+
+- **第 1 轮核心验证 + 升级**:原始两端块差正确,已被 R 替换为按自身 20 日量级归一化的版本 `day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))`(score 1.19),`replacements_in_force = 1`,已生效。原始未归一化核心本身不再是 head,但它派生出的 3 个 E 位 head(`cross_reg_tvalue(day_sum(Volume), C, 30)` 1.10、`ts_autocorr_s1(C, 50)` 0.81、`cross_regbeta(day_sum(Volume), ts_autocorr_s1(C, 30), 20)` 0.70)仍然健在 —— 说明「成交时点」这条线只要换个归一化 / 持续性外壳,仍是有效来源,不是昙花一现。
+- **本轮最大变化**:M 第 2 批带来一个全新、证据远强于我们自己核心的主导家族 —— `day_centroid(Volume)`(日内成交量重心,一阶矩),出现在 54/302 个候选、效应 +1.81、p=0.000,是 12 个 head 里 8 个的底层材料,最高分到 +1.70(我们自己整条产出线最高只有 +1.19)。「成交时点」这个大方向被反复证实是本种子的主要 alpha 来源,但 M 自己只在它外面长出了 `cross_quantile_q25`→`ts_argmin`→`cs_first_high40` 这一套复杂的「历史极值定位 + 条件排序」机械,没有试过标准化 / 跨字段比较 / 价格条件化这类改变信号性质的操作 —— 这是本轮 E 位的机会。
+- 共性表里唯一不属于「成交时点」这个大类的线索:`LogFloatShares`(p=0.06,证据偏弱但方向独特)—— 限售股解禁 / 股份供给冲击,一个纯粹结构性、和成交量模式完全无关的假设,本轮放在 N 位试。
+- 不确定的地方(新增):`day_centroid` 这套复杂机械(`cross_quantile_q25`→`ts_argmin`→`cs_first_high40`)到底在提炼什么机制,还没有像第 1 轮对我们自己核心那样做过代数 / 数值验证 —— 留给下一轮补。
+
+### 本轮计划
+
+- **位 a = E**,核心 `day_centroid(Volume)`(本轮核心卡 #8,首次开仓),11 个种子,四类外围:份额 vs 金额口径分歧(`sub`/`cross_mean`/`cs_regres` 与 `day_centroid(Amt)`)、与日内集中度 `day_gini(Volume)` 交互(`mul`/`cs_regres`/`cross_mean`,`day_gini` 全快照首次使用)、惯常水平 vs 当日异常(`cross_mean`/`cross_zscore`/`cross_delta` 的 trait-vs-transient 分解)、用昨日(非今日)收益方向做滞后条件化(`mul` + `sign(ts_delay(...))` 及其 20 日持续版)。刻意不碰 M 已用到饱和的 `cross_quantile_q25`/`ts_argmin`/`cs_first_high40` 组合。
+- **位 b = N**,`LogFloatShares` 限售股解禁 / 供给冲击,10 个种子:跳变发生与幅度(`cross_delta` w5/w20、相对 241 日低位基准的超调幅度)、跳变标准化与频率(`cross_zscore` of delta、`is_gt0` 频率、60 日平滑)、按市值正交化(`cs_regres` against `LogFloatCap`)、自身节奏之外的加速(相对 241 日自身均值)与两个互补读数(`cross_zscore` 水平、`ts_argmax` 120 日最大跳变时点)。
+- **R**:3 个 head、5 个变体,全部直接取自 loc.md 本轮拆解表里「比原 head 好」的证据 —— +1.23 分头的冗余 quantile 层 knockout + `ts_argmin` 窗口 20→10(含两者叠加的组合变体)、+1.10 分头 `cross_reg_tvalue` 窗口 30→60、+1.19 分头 `in_delta` 窗口 30→15。
+
+### 事先预测(第 3 轮核对)
+
+1. **审计**:两个位都大概率通过。E 创新度预计 3–4(核心本身是 M 已经重仓的方向,但外围四类 —— 尤其是份额/金额分歧和与 `day_gini` 交互 —— 在整份 snapshot 里从未出现过,预计不会被判「换了写法」);N 创新度预计 4(字段本身全新)。被相关度表自动划掉的:E 里预计 0–2 个,最可能是 trait 类的 `cross_mean(C,20)`、`cross_zscore(C,20)`(全市场共同、慢变的画像,离 5 个慢速控制最近,风险最高);N 里预计 0 个。两个核心与 5 个控制的 |ρ| 预计都明显 < 0.8。
+2. **R**:预计 5 个变体评分大体落在拆解表已测出的区间(+1.3~+1.7);叠加变体(knockout + window10)预计评分略高于单独 knockout 的 +1.64(两处改动位置不冲突,参照第 1 轮 R 经验独立证据叠加大概率不会互相抵消)。3 个 head 原本就在 snapshot 里,变体若达标会直接 replace 各自原 head。
+3. **E(day_centroid 核心)**:预计 45%–55% 产出 ≥ 1 个 head。最大障碍不是分数而是 GP 库禁令 —— 这个核心已被 M 深挖到几乎每种 `cross_quantile_q25`/`ts_argmin`/`cs_first_high40` 排列组合都试过,GP 往「相似」方向长容易撞骨架被拒。份额 vs 金额分歧、与 `day_gini` 交互这两类因为引入了全新的第二输入,结构上离 M 的路线最远,预计最可能产出 head;trait 类 / 滞后条件化类风险更高(容易撞已有 head 骨架或转化不成新 head)。
+4. **N(LogFloatShares)**:预计 35%–45% 产出 ≥ 1 个 head,是本轮最没底的一个 —— 核心卡证据只有 p=0.06、15/302 覆盖,比第 1 轮 N 位失败时依赖的量价耦合假说证据还薄。如果产出,最可能来自跳变幅度直接构造(`cross_delta` w20、超调幅度)或市值正交化版本。如果 0 个 head,最可能原因是解禁事件在样本里出现频率太低、有效覆盖的交易日本身就少,扣完 15bp 和残差化后信息量不够,而不是机制错误。
+
+### 上一轮的预测对不对
+
+1. **审计**(预测两位都通过,N 创新度 4、E 创新度 3–4,E 被表划掉 0–2 个)—— **命中偏保守**。实际 `audit_record.json`:两位 pass=true,novelty 和 soundness **都是 4**(E 比预测更高),`struck_by_auditor=0`、`struck_by_table=0`(两位 13 个种子全部保留,比预测的「0–2 个被划掉」更干净)。R 的 soundness=4、pass=true。
+2. **R**(预测除以成交量尺度化约 1/3 机会触发替换;单侧至少一个 score ≥ 0.5 且收盘侧 ρ 更高;d=3/5/10 score ≥ 0.5 但低于 head;day_median < 0.3)—— **部分命中、部分明确 miss**。命中:①尺度化是本轮最强命中 —— `R_prev.json` 里 4 个「除以自身量级」的变体(score 0.84/0.89/1.19/0.89)**全部**触发 replace,命中率远高于预测的「约 1/3」,最终生效的正是分最高的 `/cross_mean(day_sum(Volume),20)` 版本(1.19,即 `replacements_in_force=1`);②d=5(0.58)、d=10(0.69)确实 ≥ 0.5 但低于 head(0.69,d=10 擦线);③`day_median`:`gate=false`(distinct 0.089 < 0.5 门槛,直接废品),比预测的「score<0.3」更差但方向命中。**Miss**:单侧预测完全错 —— 开盘侧(`day_first/day_sum`)score −0.90、收盘侧(`day_last/day_sum`)score −0.95,两者都远低于 0.5,「至少一个 ≥0.5」没兑现;且预测「收盘侧 ρ_head 更高」反了,实际开盘侧 ρ_head=0.46 > 收盘侧 0.11。d=3 也 miss:distinct(0.70)未跌破门槛,但 score 只有 0.23,比预测更差。
+3. **E(位 a)产出**(预测约 55% 产出 ≥ 1 head,最可能来自持续性 / 无量纲画像类,价格定性类单日版本难过 0.5)—— **命中且好于预测**。loc.md「本组之前各轮任务」显示 Pr1a_Ea 共 5 个结果过线(1.10/1.08/0.81/0.70/0.50),其中 1.10/0.81/0.70 这 3 个仍在本轮 12 个 head 之列;1.08(`cross_regbeta` w20 单独)和 0.50(`ts_autocorr_s1` w30 单独)没有出现在当前 head 表里(原因不明,可能展示有截断或被结构相近的更高分版本吸收,留给下一轮确认)。产出的 3 个 head 全部来自「持续性 / 跨日回归」类外围,**没有一个**来自「价格定性」类(`sign(day_sum(Ret))`、`cross_corr` with `Ret`、跳空乘积、rank-product)—— 精确命中预测。
+4. **N(位 b)产出**(预测约 60% 产出 ≥ 1 head,最可能来自 `day_corr(Close,Volume)` 或 `cross_mean(day_signed_ratio(Ret,Volume),20)`)—— **明确 miss**。loc.md 显示 Pr1b_Nb 评分 64 次、**过线 0、入 heads 0**,13 个种子全部没越过 0.5 线,包括预测最被看好的两个。教训:审计创新度 / 合理度过审 ≠ 信号本身够强,量价耦合这条路线(至少第 1 轮写的这 13 个具体构造)在本种子上没有体现出 alpha,不宜再简单重复「量 × 收益符号 / 相关系数」的同期条件化写法 —— 本轮 E 位的第(4)类外围已经注意到这点,改用滞后而非同期条件化,核心也换成了 `day_centroid`。
+
+(说明:R 的核对用的是 `r2/R_prev.json` 的 16 行明细逐条比对,`audit_record.json` 本身不含 R 的具体打分数字。)

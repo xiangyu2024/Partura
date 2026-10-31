@@ -1,0 +1,199 @@
+seed: 802
+round: 2
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: '核心 = day_centroid(Volume)(本轮快照共性表第 8 行,均值差 +1.81,p=0.000,54/302 个已评分候选含它,是本轮证据最强、最干净的一个原子子树;机械核心卡第
+    8 项)。
+
+
+    定义(照 Partura 算子源码 ops_ext.py:155 day_centroid,已读源码):centroid = Σ_t t·|Volume_t|
+    / Σ_t |Volume_t| / (T-1),t 是当日从 0 到 T-1 的分钟序号(T=241,09:30 集合竞价 + 240 根),取值在 [0,1],0=全部成交在开盘那一刻,1=全部成交在收盘那一刻,0.5=对称。它是当日成交量沿分钟轴分布的一阶矩——一个数概括"这一天的量整体偏向开盘端还是收盘端"。源码里分母已
+    clamp(min=1e-30),不是我们自己加的保护。
+
+
+    和第 1 轮核心的关系与区别:第 1 轮核心 day_mean(in_delta(Volume, 30)) 经代数验证恒等于(最后 30 分钟成交股数和 −
+    最前 30 分钟成交股数和)/211,只用了头尾两个 30 分钟块,中间 181 分钟被精确相消丢掉(第 1 轮 analysis.md §1.1 已证)。day_centroid
+    用的是全部 241 根分钟线的加权,任何一根分钟的成交量变化都会牵动它,包括第 1 轮核心完全看不到的中间段——这是两个核心在构造上真实、可验证的不同,不是同一个量换了写法。本轮共性表里
+    day_centroid(Volume) 单独出现在 54/302 个候选里,比第 1 轮唯一的 head 本身证据还强,而且是本轮 M 第 2 批里绝大多数高分
+    head(12 个里 8 个)共用的底层材料——但 M 自己在它外面长出的全部是 cross_quantile_q25(···, 241) → ts_argmin(···,
+    20) → cs_first_high40(···) 这一整套"截面滚动分位数 + 时序找极值位置 + 条件排序"的复杂机械,从未有任何候选在它外面做过标准化、与其他字段比较、或与价格条件化这类"改变信号性质"的操作。这正是深挖该做、而且现在竞争最少的空当。
+
+
+    本轮外围四类,刻意不碰 M 已经用到饱和的 cross_quantile_q25/ts_argmin/cs_first_high40 组合(骨架会直接撞库禁令,也不是新信息):
+
+
+    (1)份额口径 vs 金额口径的分歧。核心本身是按股数(份额)算的时点,还没有任何候选拿它和同一个算子在金额口径下的结果比较过。sub(day_centroid(Volume),
+    day_centroid(Amt)):同一天,按股数算的"量在什么时候来"和按金额算的"钱在什么时候来"如果不一致,说明大额(或高价)交易和小额(或低价)交易发生的时间点不同步——Easley
+    & O''Hara(1987)的做市商模型里交易规模本身携带信息(知情交易者偏好更大的单子,做市商据此定价),所以"份额时点"和"金额时点"的背离是在检测"大单和散单在日内是否错位发生",这是和核心本身测的"量整体偏向哪一端"完全不同的维度。cross_mean(·,
+    20) 是它的 20 日持续版本(区分结构性错位和单日噪声);cs_regres(·, ·) 是去掉两者截面上惯常共同变动部分之后的当日残差。
+
+
+    (2)和日内集中度交互。day_gini(Volume) 在本轮全部 302 个候选里从未出现过,是全新的组合算子:它刻画当日成交有多"扎堆"(0=全天均匀,→1=几分钟内全部成交)。mul(day_centroid(Volume),
+    day_gini(Volume)) 区分"晚且扎堆"(临近收盘的一次大宗冲击)和"晚但分散"(全天逐步往后移、持续的尾盘资金流)——这两种情形不该是同一回事:前者更像事件驱动的一次性冲击,后者更像制度性、慢变的"谁在交易"画像。cs_regres(·,
+    ·) 是去掉典型共同变动后的残差,cross_mean(·, 20) 是 20 日持续版本。
+
+
+    (3)惯常水平 vs 当日异常(标准的 trait-vs-transient 分解,但施加在一个全新核心上,检验的是"交易时点结构"本身是不是一个慢变、持久的股票特征)。cross_mean(·,
+    20)、cross_zscore(·, 20)、cross_delta(·, 5):哪些股票习惯性偏开盘端 / 偏收盘端(可能和股东结构、散户 / 机构占比有关——机构执行常以收盘价为基准,散户集中在消化隔夜信息的开盘),哪些只是今天偶然偏离自己的历史基线,哪些正在经历时点结构的迁移。Heston,
+    Korajczyk & Sadka(2010)发现日内固定半小时分段的收益存在跨天的自相关持续性,支持"日内时点结构里存在跨天可持续的部分、值得单独萃取"这个大方向(该文献测的是收益分段自相关,不是成交量重心,这里是机制上的借用,不是对这个具体构造的直接验证)。
+
+
+    (4)用"昨天"而不是"今天"的价格方向做条件化——和第 1 轮 E 位、N 位里反复用的"今天收益符号 × 核心"或"核心与今天收益的相关系数"是不同的提问方式,这里问的是领先—滞后关系,不是同期关系。mul(day_centroid(Volume),
+    sign(ts_delay(day_sum(Ret), 1))):昨天收出的方向,是否系统性地决定了今天的量往哪个方向偏。Boyarchenko, Larsen
+    & Whelan(2020)发现美股尾盘带方向的成交失衡之后出现隔夜反转,机制是做市商吸收尾盘失衡后把库存转移给隔夜其他投资者——这预测的是"昨天尾盘失衡的方向"领先影响"今天的交易时点结构",和同期条件化问的是不同的因果方向。cross_mean(·,
+    20) 是它的持续版本。
+
+
+    样本外还会在的理由:四类外围全部是无量纲的差、残差、持续均值或条件乘积,不依赖随市场整体放量缩量漂移的量级水平;(1)(2)把"时点"这同一个底层事实拆成了相互独立的切面(份额
+    vs 金额、位置 vs 集中度),对应的是交易者结构(谁在交易、单子多大、多集中)这类慢变的制度 / 投资者结构性质,不是某一段行情的拟合;(4)有文献给出明确的领先—滞后方向预期,不是单纯堆砌条件化。数学上:day_centroid、day_gini
+    的分母在源码里都已 clamp 保护;11 个种子里没有一个用裸的 div() 做分母,cross_zscore 是框架自带、文档里写明对近乎常数窗口有 EPS
+    保护的算子,不会把近零分母的爆点带进截面。'
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, Pfleiderer
+    year: 1988-01
+    url: https://ideas.repec.org/a/oup/rfinst/v1y1988i1p3-40.html
+    treatment: 信息驱动模型内生出成交量的日内集中模式,两端(开盘/收盘)的相对权重随信息吸收方式系统变化 -> day_centroid 是对这个"哪端占优"的单数概括,是为该机制找的合适形状
+  - title: Price, Trade Size, and Information in Securities Markets
+    authors: Easley, O'Hara
+    year: '1987'
+    url: https://ideas.repec.org/a/eee/jfinec/v19y1987i1p69-90.html
+    treatment: 交易规模本身携带信息(知情交易者偏好大单) -> 用份额权重与金额权重的时点分歧(Volume 版 vs Amt 版 centroid
+      的差)去捕捉大单与散单在日内的错位
+  - title: The Overnight Drift
+    authors: Boyarchenko, Larsen, Whelan
+    year: 2020-02
+    url: https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr917.pdf
+    treatment: 尾盘带方向的失衡之后出现隔夜反转 -> 用昨日收益符号(而非同期)对今日的时点重心做滞后条件化
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Heston, Korajczyk, Sadka
+    year: 2010-08
+    url: https://ar5iv.arxiv.org/html/1005.3535
+    treatment: 日内固定分段的收益存在跨天自相关持续性 -> 支持对时点重心做 20 日均值/zscore/5 日差分这类持续性萃取是有机制依据的方向
+  seeds:
+  - sub(day_centroid(Volume), day_centroid(Amt))
+  - cross_mean(sub(day_centroid(Volume), day_centroid(Amt)), 20)
+  - cs_regres(day_centroid(Volume), day_centroid(Amt))
+  - mul(day_centroid(Volume), day_gini(Volume))
+  - cross_mean(day_centroid(Volume), 20)
+  - cross_delta(day_centroid(Volume), 5)
+  - mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1)))
+  - cross_mean(mul(day_centroid(Volume), sign(ts_delay(day_sum(Ret), 1))), 20)
+- type: N
+  hypothesis: '新 idea:A 股限售股解禁 / 股份供给冲击,是一个和"量在什么时候来"完全不同维度的结构性信号——不看成交怎么分布,看的是可交易股本本身什么时候、为什么突然变多。
+
+
+    机制:A 股 IPO 与再融资都有法定限售期(控股股东 / 实控人通常 36 个月,其他发行前股东、战略配售、定增参与方多为 6—36 个月不等)。限售期到期当天,一批此前不可交易的股份一次性计入流通股本,LogFloatShares(流通股数的对数,六个日频字段叶子之一)在那一天跳升,此前此后基本走平——这是一个离散事件,不是连续漂移。经典的供给冲击
+    / 价格压力理论(Scholes 1972:个股需求曲线不是完全水平的,大额、突然的供给增加如果不能被完全的替代效应吸收,会压低价格)预测这类事件应对价格有负面影响;Field
+    & Hanka(2001)在美股 IPO 解禁样本上实测到解禁后成交量永久性 +40%、解禁日前后三天 −1.5% 的异常收益;刘娥平、唐舜(2014,《财经研究》)在
+    A 股限售股解禁样本上用期权定价模型刻画"可交易性折扣"并提出"可交易性价值转移"假说,发现累计异常收益在解禁前持续下行、解禁后略有回升,且新增流通股占比越高、套利风险越大、股东减持意愿越强,负面影响越大——这给了"流通股数突然跳升"一个方向明确、且专门在
+    A 股市场验证过的机制,不是凭空猜测。
+
+
+    受什么启发:本轮共性表 / 机械核心卡第 19 项 ts_argmin(cross_quantile_q25(LogFloatShares, 241), 40)(均值差
+    +0.87,p=0.060,15/302 个候选含它)是整个共性表里唯一一个不建立在 Volume/Amt 任何形式之上的条目,指向限售股解禁这条和本轮 E
+    位、第 1 轮两个位完全不相关的独立机制。但这一项本身只回答了"过去 40 天里,241 天滚动 25 分位数的最低点出现在第几天前"——是一个相当绕的时点代理,没有直接量出"跳了多少"或"跳得多不寻常"。本轮把这条线索拆成四类更直接、机制分得更清楚的构造,全部围绕
+    LogFloatShares,不碰任何 Volume/Amt(与本轮 E 位、第 1 轮两个位在字段上完全不重叠),也不把 liq/known/size 五个控制本身当信号用(唯一例外是第
+    (3) 类里把 LogFloatCap 当回归自变量去正交化,不是把控制包装成信号):
+
+
+    (1)跳的发生与幅度,直接测(比 argmin 式的间接时点代理直接得多):cross_delta(LogFloatShares, 5)——周度跳变,专门捕捉解禁当天本身(非解禁日应恒为
+    0 或接近 0,离散事件会在这里形成孤立尖峰);cross_delta(LogFloatShares, 20)——月度累计跳变,覆盖"最近一个月内发生过解禁、价格压力窗口大概还没完全消化"这个区间;sub(LogFloatShares,
+    cross_quantile_q25(LogFloatShares, 241))——当前股本高出自己过去一年低位基准多少,是跳升的累积超调幅度,和核心卡第
+    19 项问的是同一现象的另一个切面(幅度而非时点),互补而非重复。
+
+
+    (2)跳变本身的标准化与频率(区分"真正异常的一次性解禁"和"持续性的小额增发 / 期权行权"):cross_zscore(cross_delta(LogFloatShares,
+    20), 241)——这次月度跳变相对该股自己历史跳变波动率有多异常,用框架自带、带 EPS 保护的 cross_zscore,而不是裸除以 cross_stddev,避免长期不解禁的股票
+    241 天窗口里跳变标准差恰好为 0 造成的除零爆点;cross_mean(is_gt0(cross_delta(LogFloatShares, 1)),
+    20)——过去 20 天里有多少天股本在涨,测频率而非幅度,专门挑出"分批解禁 / 持续小额增发"这种和单次大额解禁不同的供给节奏;cross_mean(cross_delta(LogFloatShares,
+    5), 60)——60 天平滑版本,捕捉需要多个交易日才完全登记到位的解禁(过户、工商变更等行政环节的时滞)。
+
+
+    (3)相对规模正交化(排除"大公司解禁规模天然也大"这种和市值相关的机械关系):cs_regres(cross_delta(LogFloatShares,
+    20), LogFloatCap)——去掉市值对跳变幅度的典型截面解释力之后,剩下的"对这个规模的公司来说不寻常的跳变"。
+
+
+    (4)自身节奏之外的加速与互补读数:sub(cross_delta(LogFloatShares, 20), cross_mean(cross_delta(LogFloatShares,
+    20), 241))——这一个月的股本增长速度相对这只股票自己过去一年的平均增长节奏是不是明显加快了,把"本来就在稳定扩股"和"突然来了一波解禁"分开;cross_zscore(LogFloatShares,
+    241)——水平的标准化位置;ts_argmax(abs(cross_delta(LogFloatShares, 1)), 120)——过去 120 天里最大单日跳变发生在多少天前,用更长窗口交叉验证核心卡
+    argmin 式时点线索的稳健性。
+
+
+    和库里已有东西的区别:库里现在 12 个 head 全部建立在 Volume/Amt 的日内分布或水平之上,没有任何一个用到六个日频叶子字段里除 LimitWidth(已被第
+    1 轮判定为板块信息、不该用)之外的任何一个。这里的信号来源(法定限售期到期这个离散的制度事件)和成交时点、量价耦合这两条已经试过的路线在经济机制上完全独立。
+
+
+    样本外还会在的理由:限售期是法律规定的固定期限,不会因为市场整体行情好坏而改变,是制度性、可预先排期的事件,不依赖任何需要持续重新学习的市场状态;文献(Field
+    & Hanka 2001、刘娥平 & 唐舜 2014)在美股和 A 股两个市场、不同年代的样本上都观测到方向一致的效应,不是某一段特定市场环境的产物。数学上:LogFloatShares
+    是取对数后的非负日频字段,内部没有裸除法——(3)类用 cs_regres 做正交化,(2)类用 cross_zscore 而非裸 div,已避开近零分母风险;is_gt0
+    返回有界的 0/1,cross_mean of that 有界在 [0,1];cross_delta/sub 都是线性差,不会因分母近零产生爆点。
+
+
+    诚实的风险披露:核心卡第 19 项本身 p=0.060、只有 15/302 个候选覆盖,证据强度明显弱于本轮 E 位核心(p=0.000,54/302),是本轮两个位里证据基础最薄的一个,也是本轮最可能重演第
+    1 轮 N 位"审计通过、但 0 个 head"结局的位。与第 1 轮 N 位不同的是,这次信号来源是离散的公司行为事件而不是连续的量价统计量——如果确实无效,更可能是解禁压力已经被扣
+    15bp 成本和五个慢速控制(尤其是 20/30 日流动性、市值均值)吸收掉了大半,而不是机制本身有问题。'
+  inspired_by: 本轮(第 2 批)定位共性表 / 机械核心卡第 19 项:ts_argmin(cross_quantile_q25(LogFloatShares,
+    241), 40),均值差 +0.87、p=0.060、15/302 个候选含它——快照里唯一不建立在 Volume/Amt 任何形式之上的线索,指向限售股解禁
+    / 股份供给冲击这条完全独立的机制;文献:Field & Hanka(2001,美股 IPO 解禁)、刘娥平 & 唐舜(2014,A 股限售股解禁可交易性价值转移)、Scholes(1972,供给冲击价格压力理论)。
+  literature:
+  - title: The Expiration of IPO Share Lockups
+    authors: Field, Hanka
+    year: 2001-04
+    url: https://ideas.repec.org/a/bla/jfinan/v56y2001i2p471-500.html
+    treatment: 美股 IPO 解禁后量永久性 +40%、三天 −1.5% 异常收益 -> 把 LogFloatShares 的跳变当成"解禁事件"的直接代理,预期方向偏空
+  - title: 可交易性折扣、价值转移与限售股解禁
+    authors: 刘娥平, 唐舜
+    year: 2014-09
+    url: https://qks.shufe.edu.cn/J/ArticleQuery/A160824000481/CN
+    treatment: A 股限售股解禁前累计异常收益持续下行、解禁后略回升,新增流通股占比越高负面影响越大 -> 用跳变幅度(而非仅时点)衡量新增流通股占比,并按市值正交化
+  - title: 'The Market for Securities: Substitution versus Price Pressure and the
+      Effects of Information on Share Prices'
+    authors: Scholes
+    year: 1972-04
+    url: https://ideas.repec.org/a/ucp/jnlbus/v45y1972i2p179-211.html
+    treatment: 个股需求曲线非完全水平,大额突然的供给增加会压低价格(价格压力/替代假说) -> 为"流通股数跳升应有负向价格效应"提供最基础的理论落脚点
+  seeds:
+  - sub(LogFloatShares, cross_quantile_q25(LogFloatShares, 241))
+  - cross_zscore(cross_delta(LogFloatShares, 20), 241)
+  - cs_regres(cross_delta(LogFloatShares, 20), LogFloatCap)
+  - sub(cross_delta(LogFloatShares, 20), cross_mean(cross_delta(LogFloatShares, 20),
+    241))
+  - cross_zscore(LogFloatShares, 241)
+R:
+- head: cs_first_high40(ts_argmin(cross_quantile_q25(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241), 241), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+  why: 这个 head(score +1.23)有两层 cross_quantile_q25(···, 241) 嵌套。loc.md 本轮拆解把外层那一层 knockout
+    掉之后,子树本身评分 +1.64(train +1.91, valid +1.64),比原 head 高 0.41,必要性 = -0.41(负数 = 去掉反而更好)——外层这层
+    241 日滚动分位数是在对一个已经被里面同款算子处理过的量再做一次重复操作,证据显示它多余、甚至有害,不是必要机制。同一个 head 把外层 ts_argmin
+    的窗口从 20 改成 10,评分到 +1.42(train +1.42, valid +1.47),比原 head 高 0.19(拆解表只测了窗口没测这一步的
+    knockout,所以没有必要性数字,但方向和本轮其它窗口敏感性测试一致:往短调更好)。两处改动动的是树里两个不同节点(外层 quantile 节点 vs
+    ts_argmin 的窗口参数),互不冲突,所以额外测一个把两处证据叠加起来的版本。
+  variants:
+  - cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+  - cs_first_high40(ts_argmin(cross_quantile_q25(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241), 241), 10), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+  - cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241), 10), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+- head: cross_reg_tvalue(day_sum(Volume), day_mean(in_delta(Volume, 30)), 30)
+  why: 本组第 1 轮 E 位产出的 head,score +1.10(train +1.10, valid +1.14)。loc.md 本轮拆解把 cross_reg_tvalue
+    的回归窗口从 30 改到 60,评分到 +1.51(train +1.69, valid +1.51),比原 head 高 0.41,train 和 valid
+    都提升,不是单边被某一腿卡住——说明这个 t 值统计量需要更长的回归窗口才能把"自身成交水平解释不了的那部分倾斜"估计稳,30 天窗口本身是估计噪声大的烂部件,不是机制错。
+  variants:
+  - cross_reg_tvalue(day_sum(Volume), day_mean(in_delta(Volume, 30)), 60)
+- head: day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 30))
+  why: 本组第 1 轮 R 的替换核心,score +1.19(train +1.25, valid +1.19,score 被 valid 腿卡住)。loc.md
+    本轮拆解把 in_delta 的窗口从 30 改到 15,评分到 +1.31(train +1.31, valid +1.74),比原 head 高 0.12,valid
+    腿从 1.19 跳到 1.74,train 腿也从 1.25 微升到 1.31——这与笔记第 1 轮发现的"valid 腿随窗口变短而变强"的结构完全一致(第
+    1 轮 d=15 单独测时 valid 到 1.34,这次在成交量尺度化之后 valid 到 1.74 更高),30 天窗口在做完尺度化之后仍然偏长,是可以继续往短调的烂部件,不是机制错。
+  variants:
+  - day_mean(in_delta(div(Volume, cross_mean(day_sum(Volume), 20)), 15))
+audit:
+  attempts: 1
+  file: audit_1.yaml

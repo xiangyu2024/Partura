@@ -1,0 +1,115 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 3, 12, 13]
+    reasons: >-
+      核心 day_corr(Ret, Volume) 核对过 alphacube/operators/dt_day.py:228(day_corr):
+      分母 sqrt(var_x*var_y)+EPS,价格全天锁死时 var_x=0 则 cov 也=0,corr=0/(0+EPS)=0,
+      不是爆点;恒在 [-1,1]、只用当天收盘前已知的分钟数据,无前视。corr_1.json 里 slot a core
+      行:max_head=0.051、五个控制全部 ≤0.13,干净。
+      种子 1/2/3(频率维度,cross_mean(is_gt0(...),60) / is_lt0 / 两者之差)在 corr_1.json 里
+      gate=false、distinct=0.035/0.035/0.052(其余所有种子都在 0.99 以上)。查 catalog.py:149
+      is_gt0 = is_gt(x,0.0),是文件自己标注的 "trivial_boolean" 算子,catalog.py:188 记录过
+      同类算子(pow_05(eq(a,b)))在生产库里靠面板几乎常数拿到过虚假 |IC| 0.58 的事故。
+      partura/diagnose.py:136 distinct_fraction 的 docstring 直接写明:"A factor with a
+      handful of levels makes a decile book whose membership is decided by tie-breaking"——
+      day_corr 是连续量,但先用 is_gt0 把它按日切成 0/1,再对 60 天求平均,输出最多只有约 61 个
+      离散档,5220 只股票绝大多数会撞在同几个档上,十分位纯多头书的分组因此主要由同档内的股票
+      列序(tie-break)决定,不是由信号决定——这正是 §4"数值伪影:面板几乎是常数"要挡的情形,
+      和 §4 允许的"并列靠股票列序打破"(少量边界并列,列序只是打破平局)性质不同:这里列序
+      几乎决定了整本书。is_gt0 用在分钟级、马上喂进 day_corr(如种子 8/9 的
+      mul(Ret, is_gt0(Ret)))不会有这个问题——day_corr 的输出仍是连续的相关系数
+      (seed8/9 的 distinct=0.997/0.998);只有"先逐日二值化、再跨日长窗平均"这一种具体写法
+      会出事,划掉种子 1/2/3,但"频率 vs 幅度"这条轴本身不必因此判死,PI 下次可以换成不二值化
+      的频率代理(比如对核心做 cross_mean(sigmoid(k*核),60)这种连续近似)。
+      种子 12(cross_mean(day_corr(Ret, Volume), 3))与 loc.md「拆解」表里
+      head +1.18 的 sufficiency 行逐字相同(该子树单独作为候选已经评过:score -1.22,
+      train -1.22,valid +0.31),是已经知道答案的重复评估,划掉。
+      种子 13(cross_max(cross_mean(day_corr(Ret, Volume), 3), 30))在 corr_1.json 里原始
+      |ρ| 与现有最高分 head(+1.18 的那条)= 0.699(残差 0.705),离 GP 库禁令的 0.7 只差
+      0.001。loc.md 拆解表的 knockout 行已经证明 add(5,X)+X = 5+2X 是纯仿射包装,必要性记为
+      -0.00(knockout 后 60 窗版本分数原地不动,+1.18)——按 §1 自己的尺子"任何单调变换是
+      同一个信号,拿同样的分",种子 13 去掉这个已证明冗余的仿射包装、只把外层窗口从 60 换成
+      30,和拆解表里已经测过的"window: cross_max@60->30"那一行(score +0.79,train +0.79,
+      valid +1.38)在这把尺子下是同一个信号,答案已经知道。PI 自己在 hypothesis 里也把种子
+      12/13 标成"必要性基线...不是新机制",划掉这两个不影响这个位的新意。
+      划完还剩 8 个种子(4/5/6/7/8/9/10/11),对应 4 条互相独立、确实没测过的机制:
+      (a) 种子 4/5 用 cross_max/cross_min 减 cross_mean,测的是"相对自己历史的极值"
+      (Gervais-Kaniel-Mingelgrin 的相对自身基准思路,用在共动系数的极值上,不是用在成交量
+      水平上,库里没人这么测过);(b) 种子 6/7 测 regime 的迁移(短窗减长窗)和稳定性
+      (cross_stddev),和第 1 轮对 day_centroid 做的"迁移"是同一手法但换了被测对象;
+      (c) 种子 8/9 把全天相关系数按分钟涨跌符号拆成两半(Chen-Hong-Stein 的不对称机制,
+      GP 和第 1 轮都只测过对称整体相关系数);(d) 种子 10/11 用 day_std(Ret) 对相关系数做
+      乘法加权(Avramov-Chordia-Goyal)。这 8 个种子与任一 head 的原始 |ρ| 最高只有 0.56
+      (种子 7),与任一控制最高 0.54(种子 11 对 rev),都远低于自动划线(0.7/0.8),§4 明确
+      "与某个控制中度相关...不是问题",不划。
+      如果这个位有 alpha,最可能来自:A 股散户的追涨盘在量价同动的极值日之后被迫回吐
+      (种子 4/5、T+1 锁死导致的事后均值回复)、以及放量下跌比放量上涨多携带信息
+      (种子 8/9,Chen-Hong-Stein 的不对称),而不是"量价相关系数本身有多强"这件事——核心的
+      裸相关系数自己和任何 head 都几乎不相关(|ρ|=0.05),说明这条轴的信号确实藏在这几种
+      "怎么用"相关系数的二阶处理里,不是系数本身。
+    revise: '—'
+  - slot: b
+    novelty: 5
+    soundness: 5
+    struck_seeds: []
+    reasons: >-
+      主算子 day_signed_ratio 核对过 partura/ops_ext.py:122:
+      sum(|y|*sign(x))/sum(|y|),分母 den.clamp(min=1e-30) 且用 den>0 掩码返回 NaN
+      (不是被近零量除出来的爆点),恒在 [-1,1],和 hypothesis 描述完全一致。
+      查过 loc.md 的 heads 表、共性子树表(前 20)、两条 head 的拆解表,以及 r1 的
+      missions_final.yaml——day_signed_ratio 这个算子和任何用到它的表达式在库里(M 两批
+      + 本组 r1 的 E/N 两个位)一次都没出现过,是真正的空白,不是 day_corr 或 day_centroid
+      换皮:day_corr 度量"价格和成交量是否同向变化"(协方差归一化,对称),
+      day_signed_ratio 度量"这些成交额有多大比例站在涨的一侧"(符号加权求和的占比),数学上
+      协方差为 0 时失衡比例可以非 0、失衡比例为 0 时协方差也可以非 0,两者不是同一个充分
+      统计量的两种写法。
+      corr_1.json 里 slot b 全部 13 个种子 gate=true,与任一 head 的原始 |ρ| 最高只有 0.197
+      (种子 3,cross_mean(day_signed_ratio(Ret, Amt), 60)),离 0.7 很远;与控制最高 0.56
+      (种子 2/5 对 rev)和 0.32(种子 3 对 size),离 0.8 也很远,且 §4 明确"与某个控制中度
+      相关...不是问题",不划任何种子。
+      in_half 核对过 alphacube/operators/dt_in.py:311:N=241 时前半段是列 1:121(上午连续
+      竞价,不含第 0 列的开盘集合竞价),后半段是列 121:241(含最后一列的收盘集合竞价)——这个
+      不对称是算子自己代码里写明的边界归属选择,和 hypothesis 里的说明一致,不是数值伪影。
+      按分钟符号筛选权重(种子 6 的 Amt 减 Volume 加权之差)、按板块/上市年龄分桶(种子 9/10,
+      cs_bucket_rank 这个用法在 r1 已经跑通过)、按上午/下午切半(种子 11/12/13)都是把一个
+      已验证正常工作的算子组合用在新的输入上,逐项核对都确实实现了 hypothesis 里说的那个
+      机制(金额 vs 股数加权拎出"单笔规模"贡献、分桶扣掉板块/新股的机械差异、上午减下午拎出
+      "谁在侵略性吃单的时段差"),没有发现算子没有按描述实现的地方。
+      如果这个位有 alpha,最可能来自:A 股散户主导的日内净买压在 T+1 下当天没法离场,
+      过高的 day_signed_ratio(Ret, Amt) 是短期过度买入,之后几天向下回吐;金额 vs
+      股数加权之差(种子 6)能把"单纯买得人多"和"有大单在买"分开,这是 day_corr 那条轴
+      完全看不到的维度。
+    revise: '—'
+R:
+  - head: 'cross_mean(sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))), 30)'
+    soundness: 5
+    reasons: >-
+      这个 head 本身 score 只有 +0.83,loc.md 拆解表已经给出 knockout 证据:把内层
+      sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))) 整体换成裸核心
+      cross_mean(day_centroid(Volume), 30),score 跳到 +1.73(train +1.73,valid +1.88),
+      必要性 -0.91——明确的负必要性,说明"竞价倾斜"这个 sub 部件是在拖累原 head,不是在
+      贡献 alpha,R 去掉它的方向是对的。
+      变体 1(window=30)和这行 knockout 结果逐字相同,是已经知道答案的重复评估(score 已知
+      +1.73/+1.88);变体 2(window=15)、3(window=60)是真正补空的部分——拆解表之前只在
+      带 sub() 的"脏"版本上试过窗口 15/60(各是 +0.66、+0.56,都更差),没有在干净的裸核心
+      版本上试过 15/60,现在才知道 30 窗是不是三个窗口里最好的,这个问题问得对。
+      day_centroid 核对过 partura/ops_ext.py 的实现:恒在 [0,1](tot.clamp(min=1e-30)),
+      cross_mean 对一个有界量取窗口均值仍然有界,没有除以近零的爆点,没有前视。corr_1.json
+      里三个变体与任一 head 的原始 |ρ| 最高 0.55(变体 1),与控制最高 0.57(变体 3 对
+      known),都在自动划线(0.7/0.8)之下。
+      如果这个 head 有 alpha,最可能来自:机构/指数资金把日常执行放在相对固定的钟表时间
+      (day_centroid(Volume) 本身,第 1 轮已经验证过的稳定核心),干净的裸核心能把这个"习惯
+      时点"完整留下;原 head 多减的那个"竞价倾斜"项度量的是集合竞价把重心拉向哪端,这是
+      另一件事(制度性的、噪声更大),混进同一个表达式反而稀释了习惯时点本身的信号,所以
+      knockout 之后分数不降反升。
+summary: >-
+  两个任务位都过:a 位(day_corr(Ret, Volume) 深挖)划掉 3 个因 is_gt0+60 日平均导致面板
+  高度离散(distinct 0.035-0.052,十分位书基本靠股票列序分组)的种子,和 2 个与已知结果逐字
+  / 按仿射等价重复的"必要性基线"种子,剩 8 个种子对应 4 条独立未测过的机制,核心与所有控制
+  干净(novelty 4、soundness 4);b 位(day_signed_ratio 全新算子,库里完全空白)13 个种子
+  全部保留,核对算子实现与库里全部已有表达式均无重合(novelty 5、soundness 5)。R1 的三个
+  窗口变体机制清楚、已被定位阶段的拆解部分证实(knockout 必要性 -0.91),变体 1 和已知结果
+  重复但不影响整组的合理度判断(soundness 5)。

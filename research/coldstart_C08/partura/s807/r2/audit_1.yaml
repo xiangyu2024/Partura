@@ -1,0 +1,68 @@
+attempt: 1
+slots:
+- slot: a
+  novelty: 4
+  soundness: 4
+  struck_seeds:
+  - 2
+  - 9
+  - 11
+  - 12
+  - 14
+  reasons: '相关度表(r2/corr_1.json):核心 `day_std(Ret)` 与 5 控制最大 |ρ|=0.722(vol),<0.8,满足 E 位门槛;与已有 head 最大 |ρ|=0.166。14 个种子里 4 个按 §3 确定性规则(与某 head 日度秩 |ρ|≥0.7)自动划掉——GP 库禁令本来就会拒绝,等价于「head 换皮」:种子 2 `cross_semistd_neg(day_std(Ret), 120)` 对 head4(`cross_stddev(log(log(log(day_std(Ret)))), 120)`)|ρ|=0.706;种子 11 `cs_bucket_demean(head4, BoardCode)` |ρ|=0.932(残差 0.91,本来就是 head4 原样套一层按板块去均值);种子 12 `cs_bucket_zscore(head4, LogFloatCap)` |ρ|=0.888(残差 0.97);种子 14 `div(cross_stddev(day_std(Ret),120), cross_mean(day_std(Ret),120))` |ρ|=0.941——这是 day_std(Ret) 120 日变异系数,和 head4(120 日对数压缩后的 cross_stddev)本质上是同一个「day_std(Ret) 在 120 日窗口里的离散程度」,只是压缩方式不同,属于换了写法。
+
+
+    另外划掉种子 9 `cross_hurst(day_std(Ret), 120)`——不是相关度问题,是 §4 数学问题(定义坏掉)。corr_1.json 该行 coverage=0.890、gate=false(表里「废品」),而同核心同窗口的其它外围(种子 1 coverage 0.996、核心本身 0.999)都接近满覆盖,纯 120 日热身(占 train 约 12%、占 train+valid 约 8.7%)不足以单独解释这 10 个点的差距,更不该让 hurst 比同窗口的其它统计量多缺这么多。读源码(AlphaCube-steering/src/alphacube/operators/dt_cross.py:443 `cross_hurst`):去均值后沿时间轴 `cs = demean.cumsum(-1)`,torch 的 cumsum 不跳过 NaN——窗口里只要有一天输入是 NaN(停牌),从那天往后的全部 cs 位置整段变 NaN,`r_max`/`r_min` 只能退回窗口前段算,一旦这天正好是窗口第 0 天(整条窗口起点),cs 全段 NaN,R 退化成 -inf,log(负数 R/S) 给 NaN;同目录紧邻的 `cross_stddev`/`cross_semistd_*` 用的是 nanmean/nansum 式规约,对同一类停牌缺口完全免疫。本地用这份源码直接复现(相同输入,注入 0.45%-2.4% 比例的 NaN 停牌段):`cross_stddev` 覆盖率不受影响(100%),`cross_hurst` 覆盖率掉 1-2 个百分点;A 股真实停牌多是连续多日而非孤立单点,会把这个效应放大到观测到的量级。这是 `cross_hurst` 对缺失值处理不完备,不是「Hurst 概念本身算不出」,按 §4 可以挡。
+
+
+    划掉 {2,9,11,12,14} 后剩 9 个种子(1,3,4,5,6,7,8,10,13),≥4,通过;核心控制相关度 0.722<0.8,E 位核心未落入「控制换皮」。
+
+
+    保留种子逐个核对算子:种子 1/5(`cross_semistd_pos`)、种子 6(`cross_semistd_neg`,60 日)与 ops_ext.py:748-779 的 `_semistd` 一致——对恒正的 day_std(Ret) 取逐日 log 变化率,按方向平方后在窗口里取均值再开方,`ok=(x>0)&(prev>0)` 且 n≥3 才给值,day_std(Ret) 偶尔为 0(一字板日)时直接跳过而不是出爆点;种子 3(`sub`)、种子 4(`div`)是两者的净值与比值,是两种独立的实现互相校验,不是同一个意思换皮——种子 4 的分母(semistd_neg)理论上可能在某只股票 120 天里从未出现「波动下降日」而为 0,但相关度表里该种子 gate 是「过」、coverage 与同组其它种子相当,说明样本里没有出现这种退化。种子 7/8(`cross_autocorr`)按 dt_cross.py:198 是 `cross_corr(x[shift:], x[:-shift], d)`,窗口内 1 日滞后自相关,走 `rolling_pair_reduce`(NaN-safe,分母 `sqrt(var_x*var_y)+EPS`);种子 8 多一层 `log(day_std(Ret))`,log 在 |x|≤EPS 时返回 NaN 而不是 -inf(common.py:207),day_std(Ret)=0 的一字板日被正确跳过。种子 10 `cross_zscore(cross_stddev(log(day_std(Ret)),60),240)`——ops_ext.py:208 的 `cross_zscore` 显式 `ok=torch.isfinite(w)`,比标准 nanmean/nanstd 多一层 inf 过滤。种子 13 `cross_regres(cross_mean(day_std(Ret),20), cross_stddev(log(day_std(Ret)),120), 120)`——dt_cross.py:309 的 `rolling_ols(x,y,d)` 拟合 `y~α+βx`,第一个参数是自变量,与计划所述一致;用波动水平(控制同款的 20 日均值)回归「波动的离散」取残差,直接检验二阶量是不是水平控制的非线性影子,不是只靠相关度表猜——残差与 size/known 的 |ρ| 都在 0.14以下,支持这确实是正交的新量。全部核心/外围只用当日及以前的分钟与日频字段,无前视;120/240 日部分窗口热身占比不超过约 12%,不是「主要由热身期决定」。
+
+
+    如果它有 alpha,最可能来自:波动的波动(二阶量)的非对称性与记忆结构携带的是「风险不确定性」溢价(Baltussen et al. 2018)和波动反馈机制(French-Schwert-Stambaugh 1987)——这与已入库的 head4(对称压缩版 vol-of-vol)是同一大类但维度不同(方向、记忆、状态变化),保留种子与 head4 的残差相关度多数在 0.5 以下支持这一点。
+
+
+    非阻挡提醒:种子 1/2/5/6 与 size(LogFloatCap 原始秩)的相关普遍在 0.39-0.47,是因为波动的波动天然与规模相关(小盘股整体更不稳定),但奖励已对 LogFloatCap 做了线性/平方/三次方残差化,且 0.39-0.47 低于 0.5-0.8 两档阈值,不构成「控制变量换个写法」,不挡。'
+  revise: —
+- slot: b
+  novelty: 4
+  soundness: 3
+  struck_seeds:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 8
+  - 9
+  - 10
+  reasons: '相关度表(r2/corr_1.json):13 个种子里 7 个(2,3,5,6,8,9,10)门槛是「废品」,coverage 0.68-0.764,远低于本轮其它种子的 0.96-1.0,120 日热身只占 train 约 12%,解释不了这个差距——这是 §4 数学问题(数值伪影 + 定义坏掉),读源码并本地复现确认了机制:这 7 个种子的公共祖先是 `div(day_quantile_q75(Amt或Volume), day_quantile_q25(Amt或Volume))`(种子 1 本身,未加窗版本)。`day_quantile_q25` 按 AlphaCube catalog.py 映射到 `day_quantile(x, 0.25)`=`torch.nanquantile`,对一只股票某一天的分钟成交额/成交量序列,只要当天 ≥25% 的分钟成交为 0(A 股大量小盘/冷门票常见),q25 就精确等于 0;common.py:175 的 `div`=`torch.divide(x,y)` 没有任何近零保护(不像 `log` 在 |x|≤EPS 时会返回 NaN),0 做分母出来是 +inf。种子 2/3/5/6 把这个比值再套 `cross_mean`/`cross_stddev`(common.py:552/558,`w.nanmean(-1)`、基于 nan_count 的 nanstd),这两个规约只跳过 NaN,不跳过 inf——60/120 日窗口里只要撞上一天 q25=0,后面这 60/120 天的输出就整段变 inf,不是「坏一天」而是「坏一整段窗口」。本地用这份源码直接复现:构造一个 ~5% 的日子里 25%-30% 分钟成交为 0 的序列,原始比值约 4.8% 的日子是 inf,套 `cross_mean(60)` 后覆盖率从 95.2% 掉到 5.4%;方向和量级与相关度表里种子 1(未加窗,coverage 0.960)到种子 2/3(加 60/120 日窗,coverage 0.68-0.764)的真实掉幅一致。种子 8/9/10 在 `cross_mean` 的基础上再套 `cs_bucket_demean`/`cs_bucket_zscore`(ops_ext.py:463/482)——本地复现:同一天只要分桶里有一只股票的 `cross_mean` 是 inf,这只股票所在桶当天的桶均值就是 inf,demean 会把同一桶里所有其它(本来干净的)股票也拖成非有限值,模拟里 100%(1776/1776 天)如此——这正是 §4 点名的「除以近零的量造成的爆点支配了截面」,还被 `cs_bucket_demean`/`zscore` 放大成「拖累同桶所有股票」。种子 5 是种子 2 外面再包一层 `log`,common.py:207 的 `log` 对 |x|>EPS 原样取 log(|x|),inf 输入 log(inf)=inf,问题原样传递。种子 6 是种子 2 换 `cross_stddev`,同样不跳过 inf。划掉 2,3,5,6,8,9,10,共 7 个。
+
+
+    另外划掉种子 4 `cross_med(div(day_quantile_q75(Volume), day_quantile_q25(Volume)), 60)`——不是数学问题:`cross_med` 用 `nanmedian`,一个窗口里少数几天 inf 不会拖坏中位数(本地同样 5% 污染率下 `cross_med(60)` 覆盖率 100%,相关度表里种子 4 coverage=0.975,一致),但它与 liq 控制(流动性水平)的原始秩 |ρ|=0.854≥0.8,按 §3 确定性规则自动划掉——几乎就是这个控制换皮(高流动性股票分钟成交分布更均匀,q75/q25 中位数几乎是流动性水平的单调函数)。它的 distinct=0.765 明显低于同组其它种子(多在 0.95-1.0),佐证 Volume 按手取整后这个比值在清淡股上大量打结在同一个整数格点,支持它和流动性是同一个量这个结论,但不单独构成挡的理由。
+
+
+    划掉 {2,3,4,5,6,8,9,10} 共 8 个后剩 5 个种子(1,7,11,12,13),≥4,通过。
+
+
+    保留种子核对:种子 1(未加窗原始比值)与种子 7(`cross_zscore` 包的版本)gate 都是「过」,coverage 0.959-0.960——同样的 q25=0 缺口,种子 1 没有窗口把它摊开(单日缺失单日丢,不传染邻居),种子 7 的 `cross_zscore`(ops_ext.py:208)显式 `ok=torch.isfinite(w)`,窗口里的坏天被正确剔除而不是传染,本地复现同一个 `cross_zscore` 在 95% 干净/5% 污染窗口下覆盖率 71.9%(远高于裸 `cross_mean` 的 0-5.4%),方向一致。种子 11/12(`day_gini(Amt)`/`day_gini(Volume)`,ops_ext.py:136)按 docstring 就是专门为了不在清淡日爆掉设计的(0-1 有界,恒正输入取绝对值 + isfinite 掩码,缺失分钟排序置末再按 0 填充计算),与 liq 控制 |ρ|=0.797/0.798,刚好卡在 0.8 阈值之下——这是经验结果不是数学问题,但说明「分钟成交分布的集中度」这个新维度在这批数据里和流动性水平高度共线,novelty 判断时已把这一点计入。种子 13 `cs_rank(ListAge)`——与全部 head、全部控制的 |ρ| 都在 0.08-0.14,loc.md 的 enrichment/core_cards 表(21 条)里确认 ListAge 一次没出现过,是真的新叶子。
+
+
+    如果它有 alpha,最可能来自:day_gini/比值衡量的是「一天内成交是不是集中爆发在少数几分钟里」,这和流动性水平(控制)方向接近但不是同一个量(残差相关度 0.4-0.5 一档,原始相关度卡在 0.74-0.80 一档),Admati & Pfleiderer (1988) 的知情/流动性交易时段选择理论支持这是一个独立于成交总量水平的横截面维度。
+
+
+    非阻挡提醒:(1) 这个「日内集中度」想法把本位过半预算(7/13 个种子)押在了一个未加保护的除法上,而同一份计划自己在种子 11/12 里已经用了专门为避免这个问题设计的 `day_gini`——下一轮如果还要在这个方向深挖,应该把 day_gini/day_centroid 这类有界算子作为主力种子,把 `div(q75,q25)` 这种无保护除法放在后面做交叉验证,而不是反过来,这样可以少浪费评估预算;(2) 次新股在上市初期成交天然集中/稀疏,ListAge 分组稳健性检验设计合理,这不是数学问题,只是提醒。'
+  revise: —
+R:
+- head: cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 60)
+  soundness: 4
+  reasons: 这是 head1(score 1.4255,`cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 60)`)。loc.json ablation[0] 核对:敲掉 `cs_bucket_demean(ts_var(LogFloatCap,20),LimitWidth)` 后分数 1.4218(necessity 0.0037,几乎是死重),与 why 所述一致;窗口 60→120 单独有 +0.27(1.6957)。5 个变体分别单点检验:v1(窗口 120,复刻拆解里已验证的增益)、v2(插值窗口 90,之前没试过)、v3(LimitWidth→BoardCode 分桶)、v4(`cross_reg_tvalue` 代替 `cross_regbeta`,检验尺度无关版本是否更稳)、v5(LimitWidth→LogFloatCap 分桶,R_prev.json 显示上一轮同一分桶换法在另一个 head 上拿到过增益)。算子核对:`cross_regbeta` 的 β=cov/var_x,`rolling_ols` 只在 var_x>EPS 时计算(common.py:643),`day_quantile_q75(Amt)` 的方差远大于这个门槛,不会在分母上出爆点;`cs_bucket_demean` 按 x 的当日连续百分位分桶(ops_ext.py:463 的 `_pct_rank`),BoardCode 只有 4 个真实取值时十分位会退化成按列序打破,按 §4 这是允许的、不是数学问题。相关度表里 v1-v5 与原 head 的 |ρ| 0.48-0.95,其中 v3(BoardCode 分桶,0.95)和原 head 几乎重合在预期之内(why 本来就是要检验换分桶字段是否撼动分数)。全部变体只用当日及以前数据,无前视、无除零、无常数面板。
+- head: cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)
+  soundness: 4
+  reasons: 这是 head2(score 1.0485,`cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)`)。loc.json ablation[1] 核对:Volume→Amt 的 swap 行给出 score 1.6296(+0.5811,与 why 的「+0.58」一致),是该 head 全部拆解动作里单笔增益最大的一步。4 个变体:v1 原样复刻这个已确认的 Amt 替换(作为基线锚点)、v2 把 Amt 替换与窗口 120 叠加(检验是否可以继续叠加增益)、v3 把 LogTotalCap 换成 LogFloatCap(检验口径是不是来自总股本和流通股本的差异,呼应 loc.md r1 分析里「流通股本跳跃/解禁」这条线)、v4 把外层换成尺度无关的 `cross_corr`(检验增益是来自协动还是 regbeta 的 1/sd(X) 尺度)。算子核对与 R1 相同(`cross_regbeta` 的 var_x>EPS 保护、`cs_bucket_demean` 的连续分桶),`ts_var(LogTotalCap/LogFloatCap, 30)` 都是无除法的滚动方差,不出数值问题。相关度表里 v1(0.913)、v3(0.80)、v4(0.855)与原 head 相关都不低,符合「同一台机器上的单点改动」的预期。无前视、无除零。
+- head: cross_corr(ts_var(LogFloatCap, 20), day_sum(Amt), 60)
+  soundness: 4
+  reasons: 这是 head5(score 0.790355,`cross_corr(ts_var(LogFloatCap, 20), day_sum(Amt), 60)`,本组自己上一轮 E 位 c08s807Pr1a_Ea 的产物)。loc.json ablation[3] 核对:Amt→Volume 的 swap 行给出 score 1.1316(+0.34,与 why 一致),方向与 head1/head2 的「Amt 更优」相反——但该 head 本身是尺度无关的 `cross_corr`,不是 `cross_regbeta`,所以不涉及 R1/R2 里「Amt 去掉价格水平污染 Volume」的那条机制,更可能是股数本身与市值方差的协动更强,这个解释与 why 所述一致。3 个变体:v1 原样复刻已确认的 Volume 替换、v2 把这个替换与窗口 30 叠加(loc.json 显示窗口 60→30 单独有 +0.77 的同向增益,拆解过)、v3 给 `log(Volume)` 版本与 r1 已验证过的 `log(Amt)` 版本对照。算子核对:`cross_corr` 走 `rolling_pair_reduce`(common.py:621),相关系数分母 `sqrt(var_x*var_y)+EPS`,`ts_var`/`day_sum` 都不涉及除法,不出数值问题。无前视。
+summary: 两个任务位都放行:E 位核心退回裸 `day_std(Ret)`,14 个种子里 4 个因与库里 head4 的日度秩 |ρ|≥0.7 按库禁令自动划掉(基本是 head4 换了写法)、1 个(`cross_hurst`)因源码级的 NaN/inf 处理缺陷(cumsum 不过滤 NaN,停牌天传染整段窗口,coverage 0.890 对比同窗口其它种子 0.996-0.999)按 §4 划掉,剩 9 个,novelty 4、soundness 4;N 位里 `day_quantile_q75/q25` 比值在清淡分钟成交下精确除零出 inf,经 `cross_mean`/`cross_stddev`/`cs_bucket_demean`/`cs_bucket_zscore` 传染成整段窗口甚至整个分桶失真(本地复现确认机制),7 个种子按 §4 划掉,另 1 个(`cross_med` 版本)因与流动性控制 |ρ|≥0.8 按库禁令划掉,剩 5 个基于 day_gini / cross_zscore / ListAge 的干净种子,novelty 4、soundness 3(扣分原因:过半预算押在了同一个可预见、且计划自己用 day_gini 示范过规避方法的数值陷阱上)。三组 R 合理度都是 4,操作与 why 陈述、loc.json 拆解数字逐项核对一致,无前视、无除零、无常数面板。

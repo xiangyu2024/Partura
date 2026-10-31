@@ -1,0 +1,104 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 1
+    soundness: 1
+    struck_seeds: [1, 3, 4, 7, 8, 9, 10, 11, 12]
+    reasons: |-
+      核心 `sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)` 在
+      corr_1.json 里的 controls.size(与市值控制 LogFloatCap 的原始秩 |ρ|)= 1.0,不是接近 1、
+      是精确的 1.0,coverage/distinct 都是 0.999(gate=true,引擎的数值哨兵本身是过的)。
+      这已经超过 corr_1.md 表头自己定义的「控制列 ≥0.5 = 控制变量换个写法」,也超过 §3 自动划线
+      的「与某个控制 |ρ| ≥0.8 = 几乎就是这个控制」——意思是这个核心在原始截面秩上和
+      -LogFloatCap 完全重合,就是市值控制换了个写法,不是新东西。
+      【创新度=1 的依据】与 §3「1 = 与库里某个 head 或某个控制度量的是同一个东西(只是换了
+      写法)」逐字对应:这里对应的是控制,不是 head。loc.md 自己的 sufficiency 测试也印证了
+      为什么会这样——核心裸分布很脏(score -5.07/-3.55/-5.07,loc.md 原话「多数股票常年
+      正常,只有少数时段跳变,长尾」):ts_var(ts_mean(day_distinct_ratio(Vwap),20),10) 这个
+      二阶量对绝大多数股票常年贴着 0,只有极少数长尾事件显著偏离;LogFloatCap 跨公司连续展布
+      好几个量级。两者直接 sub(),输出的排序几乎完全听 LogFloatCap 的,day_distinct_ratio 的
+      贡献被尺度吞掉了。
+      【合理度=1 的依据,逐算子核对】sub / ts_var / ts_mean / day_distinct_ratio 本身没有前视
+      (Vwap 当天收盘前已知)、没有除零、没有面板常数(gate=true)。问题出在「核心怎么组合」这
+      一步:把一个几乎处处为 0、只在罕见长尾时刻跳动的二阶量,跟一个连续展布的大尺度量直接相
+      减,属于 §4「数值伪影」里「主导排序」的同一类问题,只是发生在 sub() 不是 div()——§4 举的
+      例子是「除以近零的量造成的爆点支配了截面」,这里是「尺度悬殊的两项相减,大尺度一方支配排
+      序」,结构相同。§4 明确说「与某个控制中度相关不算问题」,但这里不是中度(0.5 左右),是
+      1.00,已经越过 §3 自己给的 0.8 自动线,不受那条「不算问题」的保护。PI 引的 Harris (1991)
+      本身讲的是「价位(nominal price level)和成交频率」对离散度的影响,不是「市值」;
+      -LogFloatCap 是借市值去代理价位,但代理过头了,算子组合实际实现出来的是市值本身,没有实
+      现「剔除规模、留下离散度波动」这个设计意图。
+      【种子逐个检查】12 个种子里,1/3/4/7/8/9/10/11/12 这 9 个与 size 控制的原始秩 |ρ|
+      分别是 1.00/1.00/0.94/1.00/0.85/1.00/0.81/1.00/0.88,全部 ≥0.8,按 §3 确定性规则逐个
+      自动划掉。剩下 2/5/6(size |ρ| = 0.73/0.62/0.78)没踩中自动线,但划完只剩 3 个,没到
+      「划完还剩 ≥4 个」的门槛;而且这 3 个用的还是同一个有问题的核心,只是换了筛变量
+      (ListAge / cross_mean(day_zero_ratio(Ret),20)),没有解决核心本身「≈市值」的问题。
+      【E 位专项门槛】核心对 size 的 |ρ|=1.00 ≥0.8,直接不满足 §3「E 位还要求核心与每个控制的
+      |ρ| < 0.8」,这一条本身就足够否决这个位,不需要等种子计数。
+      liq=0.57、known=0.54 属于中度相关,按 §4 不算问题,不是这里的扣分点。
+    revise: |-
+      核心必须换掉现在这种「裸 sub(二阶量, LogFloatCap)」的写法,把它与 size 控制的 |ρ| 压到
+      明显 <0.8 之后才能再提交,具体两条路:
+      (1) 不要让 LogFloatCap 直接参与 y 位的相减——把它挪到筛选位(x position),让 y 位只留
+      day_distinct_ratio 的 ts_var/ts_mean 信号本身,规模暴露交给 cs_last_high*/cs_first_* 之
+      类的筛选算子去处理(head a 的外层本来就已经有 sub(LogTotalCap, LogFloatCap) 这个规模
+      筛,不需要在 y 位再叠一次规模)。
+      (2) 如果一定要在 y 位里混入 LogFloatCap,先把两项分别做横截面秩变换(避免尺度悬殊的量
+      直接相减),再相减。
+      换完之后重新跑一遍相关度表,确认新核心对 5 个控制(尤其 size)的原始秩 |ρ| 都 <0.8,种子
+      也要在新核心下重新算,确保划完还剩 ≥4 个,才算过线。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 6, 7, 8, 9, 11]
+    reasons: |-
+      【创新度=4 的依据】LimitWidth 是 partura/ops_ext.py 走 alphacube dailyfields.py 的
+      derive() 算出来的日频叶子(0.10 主板 / 0.20 科创创业 / 0.30 北交所,来自代码/上市日期标
+      签本身,不依赖未来数据),本种子 round1、round2 位 a 都没用过。5 个控制里没有一个是
+      「今天的涨跌幅相对自己监管限幅的占比」:liq/known 是成交额量级,vol 是分钟收益标准差
+      (不分方向、不看涨跌停边界),rev 是 20 日收益累计水平。corr_1.json 里 slot b 12 个候选
+      对 5 个控制的 |ρ| 除种子 4(见下)外最高只到 0.60(vol,种子 2/3/10,中度相关,§4 不算
+      问题),与两个已有 head 的 max_head 都在 0.025–0.355,远低于 0.7 的库禁门槛。字段和构造
+      都是本种子迄今没碰过的,给 4。
+      【合理度=4 的依据,逐算子核对】ret = log(day_last(Close)/ts_delay(day_last(Close),1)):
+      标准日收益,ts_delay 回看 1 天,当天收盘后已知,无前视;用后复权价不是问题(§4 明确)。
+      LimitWidth 恒为 0.10/0.20/0.30,不会在 0 附近,div() 没有除以近零的风险。sgn_rtl =
+      sign(ret)*|ret|/LimitWidth 理论值域贴着 [-1,1](对数收益与算术限幅有一点近似误差,PI 自
+      己说明了不影响排序单调性,不是伪影)。cross_corr 核对了实现(partura/ops_ext.py 没有自己
+      的 cross_corr,走 alphacube dt_cross.py 的 rolling_pair_reduce,是沿交易日轴的个股自身
+      滚动相关,不是跨股票横截面相关),和 PI 描述的用法(检验贴边是否伴随放量)一致。
+      is_gt(sgn_rtl,0.85)/is_lt(sgn_rtl,-0.85) 配合 ts_mean/ts_max(20) 的种子 6/7/8/9,以及
+      ts_mean(day_flat_run_max(Close),20) 的种子 11,在 corr_1.json 里 gate=false、
+      distinct 只有 0.001–0.205——20 天窗口里贴停是稀有事件,绝大多数股票 20 天一次都没有,
+      阈值化之后面板几乎处处是 0,这正是 §4「数值伪影:面板几乎是常数」要挡的问题,5 个种子都
+      应划掉;这是实现层面的问题,不否定「贴边强度」这个 idea 本身。
+      种子 4(ts_mean(sgn_rtl,20))与 rev(20 日反转)控制的原始秩 |ρ|=0.99,踩中 §3 自动线
+      ——20 日窗口把方向化之后的贴边强度直接平均,等价于把 20 日累计收益按个股几乎不变的
+      LimitWidth 常数重新标度一遍,排序基本等于 20 日反转控制本身;换成 60 日窗口的种子 5,
+      |ρ| 降到 0.48,说明问题只是「20 天窗口和反转控制的窗口撞上了」,划掉种子 4 即可,不是整
+      个 slot 的问题。
+      剩下 1/2/3/5/10/12(裸 rtl、20/60 日 ts_mean(rtl)、60 日 ts_mean(sgn_rtl)、
+      ts_stddev(sgn_rtl,20)、cross_corr(rtl,相对成交额,20))6 个种子 gate=true,与任何控制、
+      任何已有 head 都没有 ≥0.8/0.7,划完还剩 6 个,过线。窗口(20/60 日)与本实验其他位的习惯
+      一致,阈值 0.85 是在归一化之后的量上取的固定常数,不是对原始收益任意开刀,合理。
+    revise: '—'
+R:
+  - head: cs_last_high20(cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60), 60)), sub(LogTotalCap, LogFloatCap))
+    soundness: 4
+    reasons: |-
+      5 个变体精确对应 loc.md 自己拆解出的两处低必要性简化——knockout 去掉 y 位外层
+      ts_var(·,10)(必要性 -0.04,score 1.33→1.36)与 knockout 去掉 x 位重复的外层 ts_max
+      嵌套(必要性 +0.11,score 1.33→1.22)——的组合(variant 1),以及在这个组合之上分别微调
+      float-shares 的 ts_max 窗口(60→90,variant 2)、day_distinct_ratio 的 ts_mean 窗口
+      (20→40,variant 3)、内层筛带宽(cs_last_high10→20,variant 4)、外层筛变量
+      (sub(LogTotalCap,LogFloatCap)→ListAge,variant 5)。逐个核对表达式,5 个变体都精确对
+      应描述,没有多算或漏算一步,这是「没试过的组合,直接评估」的合理用法。5 个变体与已知族
+      (known)控制的 |ρ| 都在 0.26–0.37,满足 R 替换资格「<0.5」的门槛;corr_1.json 里 5 个
+      都 gate=true,没有前视、除零、面板常数问题。
+      唯一要提的保留意见:5 个变体的 y 位都仍然保留 sub(ts_mean(day_distinct_ratio(Vwap),20),
+      LogFloatCap) 这个子表达式——正是本轮位 a 被审计出「原始秩与 size 控制 |ρ|=1.00」那个结
+      构的近亲(只是去掉了外层 ts_var)。这个性质是从已经入库的 head a 原样继承来的,不是 R1
+      这次新引入的风险,R1 本身这 5 处改动都合理、该测;但如果某个变体真的替换了 head a,新
+      head 依然带着「y 位基本是市值」的底子,值得结构解剖员后续留意,不影响这次 R 组的合理度
+      判断。
+summary: 位 a(day_distinct_ratio 核心)创新度 1、合理度 1:核心对市值控制的原始秩 |ρ|=1.00,超过 0.8 自动线,划完仅剩 3 个种子,退回重写(把 LogFloatCap 挪出 y 位的直接相减);位 b(涨跌停贴版强度)创新度 4、合理度 4 通过,划掉 6 个数学问题种子(5 个面板近常数 + 1 个与 20 日反转控制 |ρ|=0.99 重合)剩 6 个;R1 五个变体合理度 4,直接评估。

@@ -1,0 +1,139 @@
+seed: 803
+round: 2
+slots:
+- type: E
+  core: cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))
+  hypothesis: '机制:核心回答的是"这一天的资金几点钟到",不是"有多少资金"。day_centroid(Amt)∈[0,1] 是以成交额为权重的分钟位置重心,
+    0=全部在开盘、1=全部在收盘;cs_mask_top_replace_mean 把 5×(−重心) 的截面最高 10%(=重心最低、即资金最早到的那一档股票)
+    按日替换成当日截面均值。round 2 loc.md 的拆解已经给出数字:单独用 neg(day_centroid(Amt)) 当因子 score 只有 +0.41
+    (train 1.05 valid 0.41);加上这道"裁掉最极端早盘集中股"之后升到 +0.56(train 0.97 valid 0.56);knockout
+    显示 裁剪方向的必要性高达 0.93(裁反了直接变成 −0.37),而 mul(5,·) 这个缩放常数必要性只有 0.003(可有可无,大概是 GP 变异留下的废料);swap
+    Amt→Volume 后几乎不掉分(+0.51),说明读的是"资金/股数到达的时点"这件事本身,不是 Amt 这个字段 的特有量纲。把这些数字拼起来,最合理的解释是:大部分股票的"早盘集中度"是一个连续、有信息的横截面变量——越早集中,越像
+    知情/机构资金在信息不对称刚结束时下单(Admati & Pfleiderer 1988 的理论预测知情交易集中在信息最不对称的时段,随意型/ 流动性驱动的交易在日内分布更均匀;Foster
+    & Viswanathan 1990 把这个预测推广到日间维度,知情程度随个股与时间系统性变化); 但分布最极端的那 10%(几乎全部成交压在开盘集合竞价的一两分钟)另有成因——大概率是单笔大额授信盘/集合竞价撮合机制本身的
+    机械印记(Barclay & Warner 1993 的"隐蔽交易"证据:知情交易者偏好中等规模、分散到若干分钟完成的委托,而不是一次性在 开盘打满;一次性全压开盘更像机制性建仓而非策略性知情交易),把这批"假早盘"替换成当天均值,相当于把机制噪声从策略信号里
+    摘掉,这正是 sufficiency/knockout 数字组合出的那条线。 算子怎样实现(围绕固定核心长外围,核心原样照抄,不碰核心本身): 1) "相对自身习惯的意外":sub(核心,
+    cross_mean(核心,60)) 与 sub(核心, cross_mean(核心,20))——同一只股票平时的早盘 集中度是持续的个股习惯(换手慢),只有"今天比平时更早"才是新鲜事件,这是与现有
+    head(读水平)结构不同的处理; 2) "钞票 vs 股数,谁更早":cs_regres(核心, 用 Volume 重跑同一套核心)——把"钞票到达的时点"里能被"股数到达的时点"
+    解释掉的部分去掉,剩下的近似"平均每笔的金额有多早到",比单纯 swap 字段更贴近"谁在交易"; 3) "早盘资金是否也伴随早盘的意外波动":用 day_corr(in_index(Amt),
+    abs_(Ret)) 做"波动是否也前置"的独立量,与核心 相加,或对核心取回归残差,检验知情交易的时点标记是否在"钱"与"信息冲击"两条线上一致; 4)
+    "买压时点版本":对核心做 cs_regres,去掉 20 日净买压 day_signed_ratio(Ret,Amt) 能解释的部分,把"何时"与 "谁净买入多少"两件事分开;
+    5) 两个代理自检:cs_bucket_demean(核心, div(day_sum(Amt), day_sum(Volume)))——用当日"实际成交额/实际成交股数"
+    这个未经复权调整的真实名义价格分桶去均值(round 1 审计员 audit_1.yaml 对另一位的"不挡但请留意"里给出的具体构造), 直接排除名义价格/最小变动价位的混淆;cs_bucket_demean(核心,
+    ListAge)——排除次新股的混淆(本环境的多头书没有剔除 次新股,round 1 analysis.md 专门点出这条);再留一条 sub(核心, 上面按名义价分桶去均值的版本)当诊断:如果这一项本身
+    接近原始分数,说明核心更多是价格水平的代理,如果很小,说明核心的信息主要在桶内; 6) 窗口敏感性:cross_mean(核心,5)、cross_mean(核心,10)——核心本身没有任何多日平滑(全靠打分器自己的
+    EMA hl=20),显式叠一层滚动平均,检验信号在更短或更长的持续窗口上是否更稳; 7) 市场状态翻转:cs_flip_by_state(核心, day_sum(Amt))——全市场成交清淡时,"早盘资金集中"的含义可能不同(清淡市场
+    开盘的那几分钟更容易被少数大单支配,而不是知情资金的系统性选择),检验信号是否只在成交活跃状态下有效。 为什么和库里已有的不同:库里唯一的 head 就是这个核心本身(来自
+    c08s803Pr1b_Nb);本位所有外围都是"核心 + 一个全新的 算子关系"(自身历史差分、与另一字段的回归残差、与名义价格/上市年龄分桶去均值、市场状态翻转、窗口平滑),没有一个只是
+    把 neg/mul 这类单调包装换一下——那种写法已经在快照里出现过(就是 head 本身)。 为什么样本外还会在:知情交易在信息不对称刚打开时集中下单,是关于"谁在交易"的持续性市场结构特征,不依赖某一段行情;
+    A 股 T+1、融券受限意味着这批"早盘知情货"不能被及时反向交易打掉,价格要几天才消化完,这和我们 15bp 成本、半衰期 5/20 的尺子吻合。用自身历史差分、去掉名义价格和上市年龄的那几个变体,专门是为了把"这其实只是价格水平或次新股代理"的那部分
+    风险剔出去——如果样本外仍有效,更可能是真实的时点结构而不是代理。 数学检查:day_centroid 的 ok=isfinite 掩码把无效分钟置 0,按
+    tot>0 判定有效性,不会 0/0;cs_mask_top_replace_mean 用 integer_rank>(count−n_top) 做掩码,count
+    由 mask.sum 得到、n_top=ceil(count*0.1),不会除以 0;cs_regres 的 beta 只在 var>EPS 时计算,否则给
+    0,不会爆点;cs_bucket_demean 的分桶变量 div(day_sum(Amt), day_sum(Volume)) 分母 在有成交分钟的日子严格大于
+    0(停牌日 Volume 整日 NaN,day_sum 返回 NaN,被 _day 的有效性位掩掉,不是 0/0 爆点); ListAge 是日频叶子,不参与任何除法;day_corr
+    分母带 EPS;新增窗口(5/10/20/60)全部 ≤60,热身期不主导;没有用到 t 日收盘后才知道的信息。'
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 理论证明知情交易集中在信息不对称最大的时段(例如刚开盘),随意/流动性交易在日内分布更均匀;对应 "早盘集中度是知情交易时点标记"这条机制假设
+  - title: A Theory of the Interday Variations in Volume, Variance, and Trading Costs
+      in Securities Markets
+    authors: F. Douglas Foster, S. Viswanathan
+    year: '1990'
+    url: https://ideas.repec.org/a/oup/rfinst/v3y1990i4p593-624.html
+    treatment: 把知情交易的时点偏好扩展到日间维度,知情程度随个股与时间系统性变化;支持把"早盘集中度"当作个股层面 持续的结构特征而非一次性噪声
+  - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+    authors: Michael J. Barclay, Jerold B. Warner
+    year: '1993'
+    url: https://doi.org/10.1016/0304-405X(93)90029-B
+    treatment: 知情交易者偏好中等规模、分散执行的委托(隐蔽交易),而非一次性在开盘打满;为"把最极端的早盘集中股 单独处理"提供机制支持——那批更像机制性建仓而非策略性知情交易
+  seeds:
+  - cs_regres(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))), cs_mask_top_replace_mean(mul(5,
+    neg(day_centroid(Volume)))))
+  - cross_mean(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))), 5)
+  - cross_mean(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))), 10)
+  - cs_flip_by_state(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))), day_sum(Amt))
+- type: N
+  hypothesis: 机制:分钟收益的弹性——价格被推开之后能不能弹回来。做市商/限价盘承接单边订单流会在买卖价之间来回跳(Roll 1984 的隐含 价差模型:lag-1
+    自相关为负,幅度与有效价差正相关),这个"弹跳"的强弱是流动性的一个无量纲标记。它的水平(某只股票平时 弹跳多大)几乎就是这只股票平时有多活跃/多大,属于流动性水平和市值,这两者已经是控制;但它的冲击——某几天比平时明显
+    更弹、价格路径的不同价位数骤降、日内从趋势变成均值回归——是流动性的一次性收紧,按 Amihud & Mendelson 1986 的流动性 定价逻辑和 Pastor
+    & Stambaugh 2003 对流动性冲击(不是流动性水平)定价的证据,冲击之后流动性溢价会在随后几天修复, 这是一个关于"水平的跳变"而不是"水平"的持续性事件。
+    算子怎样实现:(1) 弹跳强度 day_autocorr_n1(Ret)(lag-1 自相关,[-1,1] 有界,分母带 EPS);(2) 同一机制的 OLS
+    版本 day_ar1_coefficient(Ret)(分母 var_x>1e-8 才算);(3) 做市商报价密度的代理 day_distinct_ratio(Close)(当天走过的
+    不同价位数 / 分钟数,partura/ops_ext.py 自己的文档写明它在低价股上会因为最小变动价位变粗,这是本位专门要控制的那个 混淆);(4) 第三个独立视角
+    day_hurst(Ret)(R/S 法,<0.5 代表均值回归/弹性占优,S≥1e-9 才给值);(5) 每个诊断量都取 sub(cross_mean(·,5),
+    cross_mean(·,60)),用"最近 5 日均值 − 最近 60 日均值"把持续性的"这只股票平时弹不弹"这个 水平成分从两边相减抵消掉,只留"最近是不是比平时更弹/更冻/更均值回归"这个冲击;(6)
+    对冲击版本再做一次 cs_bucket_demean,分桶变量是 div(day_sum(Amt), day_sum(Volume))——当日总成交额/总成交股数,是没有经过后复权调整
+    的当天真实名义价(Close/Vwap 等价格字段都是后复权价,排序约等于累计收益,不是名义价;round 1 审计员 audit_1.yaml 对另一位的建议正是用这个量构造名义价代理),直接排掉价位粗细造成的混淆,这是本族(round
+    1 analysis.md 称为"族 C") 专门标注过、也是三个诊断量里最大的代理风险;(7) 用 cs_regres 把弹跳冲击里能被"走过的价位数"冲击解释掉的部分去掉,
+    留下更干净的"价格路径弹性冲击",排除"这只是今天走的价位少"这个更机械的解释;(8) 保留一个不做差分的水平版本 cross_mean(day_autocorr_n1(Ret),20)
+    当自检对照——如果这个版本因为与流动性控制 |ρ|≥0.8 被自动划掉而差分版本留下, 恰好证明差分确实把水平成分滤掉了。 为什么和库里已有的不同:库里唯一的
+    head 读的是"资金几点钟到"(时点,一阶的"何时");控制 2 (cross_mean(day_std(Ret),20))是波动的大小,已知族(cross_mean(day_std(Amt),30))是成交额日内离散度的大小,都是
+    "有多大/多散"的水平量,对它们做单调缩放不改变自相关系数、Hurst 指数或 distinct_ratio(它们本来就是无量纲的);本位 再用短窗减长窗的差分把持续性的流动性水平也抹掉,剩下的是"价格微观结构比平时更紧还是更松"这件事本身在时间上的跳变,
+    这是五个控制和现有 head 都没有覆盖的维度。round 1 的两个 N 位分别做了分钟收益分布的三阶/不对称(彩票偏好)与量价的 同期/领先滞后相关(Llorente),本位是分钟收益序列本身的一阶时间结构(弹性/均值回归),三者在数学上互不嵌套。
+    为什么样本外还会在:流动性冲击后的修复是流动性提供者对单边订单流的一次性定价行为,只要市场里流动性供给仍然有限 (A 股的 T+1、融券受限意味着流动性提供者不能靠卖空迅速对冲单边压力,冲击消化得比没有这些限制的市场更慢),这个修复
+    窗口就会存在,不依赖某一段具体行情;15bp 成本 + 半衰期 5/20 的尺子正好匹配"冲击后几天修复"这种持续性,而不是当天 就结束的噪声。 一个诚实的提醒:round
+    1 notebook 原计划"族 A(时点)机制应该最强",但实际把 head 做出来的恰恰是 round 1 没有选用、 而是 GP 自己随机长出来的时点族;本位选的"弹性冲击"在本轮
+    loc.json 的 enrichment 表里没有任何经验证据支持(完全没 出现 ar1/autocorr/hurst/distinct_ratio 任何子树),是纯粹的先验机制推理——round
+    1 的教训提醒要谨慎,所以刻意把 "自身历史差分""名义价格分桶""去掉价位数冲击能解释的部分"这三层自检都写进种子里,而不是只交一个裸的自相关水平。 数学检查:day_autocorr_n1
+    用 pair_mask 配对、分母 sqrt(var_t*var_lag+1e-8),价格整天不动时直接 NaN 而不是爆点; day_ar1_coefficient
+    的 phi 只在 var_x>1e-8 时计算,否则 NaN;day_hurst 要求 S≥1e-9 才给值,R/S 不会除以 0; day_distinct_ratio
+    的分母是 n.clamp(min=1),count≤1 时整行给 NaN;cs_bucket_demean 的分桶变量同 E 位, day_sum(Volume)
+    在停牌日整日 NaN 被有效性位掩掉,不是 0/0;cs_regres 的 beta 只在 var>EPS 时非零;所有窗口 (5/10/20/60)≤60,不落在热身期主导的区间;没有用到
+    t 日收盘后的信息。
+  inspired_by: round 1 的 analysis.md(结构解剖,族 C)与 notebook.md 第 1 轮备忘里写明"留到第 2、3 轮当
+    N 的备选"; 本轮核对 loc.json 的 enrichment 表后确认 M 两批候选里完全没有 ar1/autocorr/hurst/distinct_ratio
+    任何子树,是 空白而非试过无效。文献:Roll (1984) 的隐含价差模型、Amihud & Mendelson (1986) 与 Pastor & Stambaugh
+    (2003) 的流动性(冲击)定价证据。
+  literature:
+  - title: A Simple Implicit Measure of the Effective Bid-Ask Spread in an Efficient
+      Market
+    authors: Richard Roll
+    year: '1984'
+    url: https://doi.org/10.1111/j.1540-6261.1984.tb03897.x
+    treatment: 用收益的负自相关反推隐含有效价差(买卖价差弹跳);对应 day_autocorr_n1(Ret) 与 day_ar1_coefficient(Ret)
+  - title: Asset Pricing and the Bid-Ask Spread
+    authors: Yakov Amihud, Haim Mendelson
+    year: '1986'
+    url: https://doi.org/10.1016/0304-405X(86)90065-6
+    treatment: 流动性(价差)在横截面上被定价,为"流动性冲击后有修复"提供定价机制
+  - title: Liquidity Risk and Expected Stock Returns
+    authors: Lubos Pastor, Robert F. Stambaugh
+    year: '2003'
+    url: https://doi.org/10.1086/374184
+    treatment: 证明的是流动性冲击(而非流动性水平)带有风险溢价、随后修复;对应本位用短窗减长窗把水平成分差掉、 只留冲击的构造方式
+  seeds:
+  - sub(cross_mean(day_autocorr_n1(Ret), 5), cross_mean(day_autocorr_n1(Ret), 60))
+  - sub(cross_mean(day_ar1_coefficient(Ret), 5), cross_mean(day_ar1_coefficient(Ret),
+    60))
+  - sub(cross_mean(day_distinct_ratio(Close), 5), cross_mean(day_distinct_ratio(Close),
+    60))
+  - sub(cross_mean(day_hurst(Ret), 10), cross_mean(day_hurst(Ret), 60))
+  - cs_bucket_demean(sub(cross_mean(day_autocorr_n1(Ret), 5), cross_mean(day_autocorr_n1(Ret),
+    60)), div(day_sum(Amt), day_sum(Volume)))
+  - cs_bucket_demean(sub(cross_mean(day_distinct_ratio(Close), 5), cross_mean(day_distinct_ratio(Close),
+    60)), div(day_sum(Amt), day_sum(Volume)))
+  - cross_mean(day_autocorr_n1(Ret), 20)
+  - sub(cross_mean(day_autocorr_n1(Ret), 5), cross_mean(day_autocorr_n1(Ret), 20))
+  - sub(day_autocorr_n1(Ret), cross_mean(day_autocorr_n1(Ret), 60))
+  - cs_regres(sub(cross_mean(day_autocorr_n1(Ret), 5), cross_mean(day_autocorr_n1(Ret),
+    60)), sub(cross_mean(day_distinct_ratio(Close), 5), cross_mean(day_distinct_ratio(Close),
+    60)))
+  - sub(cross_mean(day_q_stat_std(Ret), 5), cross_mean(day_q_stat_std(Ret), 60))
+  - cs_bucket_demean(sub(cross_mean(day_hurst(Ret), 10), cross_mean(day_hurst(Ret),
+    60)), div(day_sum(Amt), day_sum(Volume)))
+R:
+- head: neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))))
+  why: 拆解表的 knockout 行已经测过:换掉内层 neg(必要性 0.93,方向决定一切)和去掉外层 mul(5,·)(必要性 0.003,可有可无,
+    score 从 0.5594 变 0.5564)。但 loc.md 自带的 6 次付费评估只测了"裁剪当前这侧尾部 vs 不裁剪",没有测过"裁另一侧 尾部"或"两侧都裁"。当前裁掉的是
+    −5×day_centroid(Amt) 的最高 10%,也就是原始 day_centroid(Amt) 最低的 10%—— 资金几乎全部压在开盘一两分钟的那批股票,猜测是集合竞价撮合机制或单笔大额委托的机械印记;完全没检验过另一个极端——
+    day_centroid(Amt) 最高的 10%(资金几乎全部挤在收盘前,可能是尾盘涨停封板、临收盘脉冲单或盘后消息前的尾盘抢筹)是否 同样该裁、或者该不该反过来裁。两个变体分别测"换一侧裁"和"两侧都裁"。
+  variants:
+  - neg(cs_mask_top_replace_mean_neg(mul(5, neg(day_centroid(Amt)))))
+  - neg(cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))))
+audit:
+  attempts: 1
+  file: audit_1.yaml

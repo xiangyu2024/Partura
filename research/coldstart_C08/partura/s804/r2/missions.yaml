@@ -1,0 +1,94 @@
+seed: 804
+round: 2
+slots:
+- type: E
+  core: sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)
+  hypothesis: '【核心】`sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)`——本轮定位共性表排名第一的子树(均值差 +2.24,p 0.000,374 个已评分候选里 6 个含它),同时是 head a(score +1.33)自身分解出的必要性最高的部件:loc.md 的 knockout 测试把 head a 的 y 位从「sub(ts_var(ts_mean(day_distinct_ratio(Vwap),20),10), LogFloatCap)」降级成裸的「ts_var(ts_mean(day_distinct_ratio(Vwap),20),10)」(去掉 −LogFloatCap 这一步),score 从 +1.33 掉到 +0.50,必要性 +0.83——是整条 head 里必要性最大的一步,比核心①ts_var(LogFloatShares,10)自己在round1的任何一次knockout都更集中。
+
+    【机制】day_distinct_ratio(Vwap) = 当天分钟 VWAP「不同取值数/分钟数」:0 代表整天一个价(停牌、一字板封死),1 代表每分钟都变。Harris (1991) 证明价格离散度/聚集随价位和波动升高、随市值和成交频率降低——这正是公式里 −LogFloatCap 在做的事:把 day_distinct_ratio 里纯粹因为「公司规模大小」带来的那部分剪掉,剩下的是「这只股票最近价格发现变粗/变细得有多剧烈,扣掉它本来的规模水平」。ts_mean(·,20) 把日度比率平滑成「最近一个月的正常颗粒度」,ts_var(·,10) 再测这把尺子在最近 10 天里有没有突然跳动——这是一个二阶量(「安静程度」本身有没有变),不是一阶的「安静不安静」。候选触发源之一:涨跌停封板当天分钟成交冻结,distinct_ratio 骤降,Seasholes & Wu (2007) 发现上海涨停当天放量、是强烈的注意力事件,带来之后一两天可预测的净买入;另一个可能触发源是换手结构的突然切换(不只是封板)。两类事件都会让「颗粒度」在短窗口内跳变,之后几天价格继续吸收或回吐,这是本位想抓的东西。
+
+    【外围怎么实现,和已见过的不同】库里含这个子树的 6 个候选(本轮共性表)清一色是 round1 head a 自己那套写法:两层 cs_last_high*(10%、20%)+ float-shares-var 的 ts_max(·,60) 筛 + free-float 缺口 sub(LogTotalCap,LogFloatCap) 当第二层筛,而且两层筛都是单一方向的 cs_last_high*。本位全部种子换一套筛变量——ListAge(上市以来交易日数,整个种子迄今没人用过)、cross_mean(day_zero_ratio(Ret),20)(零收益频率,round1 文献员已经给Lesmond-Ogden-Trzcinka 1999 的 LOT 度量背书,但从没真正当种子用过)、cross_valid_count(day_last(Close),60)(近期有效交易天数,抓停牌倾向)——并且对每个筛变量都配一对 cs_last_high*/cs_first_high* 与 cs_last_low*/cs_first_low* 镜像种子:直接吸收 round1 审计对位 a 的意见(cs_last_high* 只在 reward 选 sign=+1 时才把筛中的名字排出多头书,sign=−1 时反而排进去,round1 的量比/换手类 y 很可能撞上这条),本位不赌单一方向,让初始种群本身就覆盖两种极性,哪一种在 train 上一致由 reward 自己选。另外两个种子把核心重新在 Close 场上算一遍(ts_var(ts_mean(day_distinct_ratio(Close), 20), 10)),与 Vwap 版本相减或联合筛选,检验效应不是 Vwap 这一个字段的偶然伪影,而是「价格离散度」这个统计量本身的效应;还有一个种子把核心本身再做一次 ts_mean(·,10) 平滑,检验抓的是「最近持续不稳定」还是「单日跳变」。
+
+    【为什么和控制不是一回事】5 个控制里,流动性看成交额水平、波动看分钟收益标准差、20 日反转看收益累计、已知族看成交额的 30 日标准差、市值直接是对数市值——没有一个度量「价格离散度这把尺子本身最近有没有突然变过」,这是关于「测量工具的稳定性」的二阶统计量,控制组全是一阶水平量。
+
+    【为什么样本外还会在】涨跌停制度、集合竞价规则、以及价格发现在停牌/封板时被机械打断,都是监管结构性事实,训练段和验证段都适用,不依赖某一段行情;Harris (1991) 的离散度-市值关系是跨市场、跨时期稳健的横截面规律。
+
+    【给审计的数学说明】核心单独当 y 时(loc.md 的 sufficiency 测试)score −5.07:这个二阶量裸分布很脏(多数股票常年「正常」,只有少数时段跳变,长尾),不能直接当 y,必须配合筛位——这是 loc.md 自己给出的证据,不是臆测,也解释了为什么本位种子全部走「筛」而不是「裸排」。全部种子只用 sub / ts_var / ts_mean / day_distinct_ratio / cs_last_high05|10|20 / cs_last_low05|10|20 / cs_first_high20 / cs_first_low20 / cross_valid_count / cross_mean / day_zero_ratio / day_last 和已经验证过 coverage/distinct 正常的算子,没有新的除以近零分母,没有 ts_spearman / nt_*。'
+  literature:
+  - title: Stock Price Clustering and Discreteness
+    authors: Lawrence Harris
+    year: '1991'
+    url: https://ideas.repec.org/a/oup/rfinst/v4y1991i3p389-415.html
+    treatment: 价格离散度/聚集随价位和波动升高、随市值和成交频率降低;借用为:用 LogFloatCap 剪掉 day_distinct_ratio(Vwap) 里纯粹因公司规模带来的部分
+  - title: Predictable Behavior, Profits, and Attention
+    authors: Mark S. Seasholes; Guojun Wu
+    year: 2007-12
+    url: https://ideas.repec.org/a/eee/empfin/v14y2007i5p590-610.html
+    treatment: 上海涨停当天放量、是强烈的注意力事件,带来之后几天可预测的买入行为;借用为:day_distinct_ratio(Vwap) 骤降对应的封板/冻结时段是本核心捕捉到的触发事件之一
+  seeds:
+  - cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ListAge)
+  - cs_last_low10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ListAge)
+  - cs_first_high20(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ListAge)
+  - cs_first_low20(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ListAge)
+  - cs_last_high20(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), cross_mean(day_zero_ratio(Ret), 20))
+  - cs_last_low20(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), cross_mean(day_zero_ratio(Ret), 20))
+  - cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), cross_valid_count(day_last(Close), 60))
+  - cs_last_low10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), cross_valid_count(day_last(Close), 60))
+  - sub(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_var(ts_mean(day_distinct_ratio(Close), 20), 10))
+  - cs_last_high10(sub(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_var(ts_mean(day_distinct_ratio(Close), 20), 10)), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60))
+  - ts_mean(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), 10)
+  - cs_last_high05(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_stddev(day_zero_ratio(Ret), 20))
+- type: N
+  hypothesis: '【新 idea:涨跌停边界的「贴版强度」】A 股主板日内涨跌幅限制 ±10%(北交所 ±30%,科创板、2020-08-24 后创业板 ±20%)是一条会机械打断当天价格发现的边界条件。两条互补、方向相容的机制通道:(1) 封板本身是最直接的注意力事件——Seasholes & Wu (2007) 在上海市场发现涨停当天伴随放量和新闻曝光,个人投资者在之后一两天集中买入该股,带来可预测的次日买压;(2) 价格发现被制度性推迟——Kim & Rhee (1997,东京)、Wong, Liu & Zeng (2009,上海逐笔数据)、Adcock, Ye, Yin & Zhang (2019,沪深 A 股 2004–2018 年截断 GARCH) 都发现涨停后价格发现延迟、信息要往后几天才能完全吸收,是「继续朝同一方向走」的延续效应;Wong 等同时发现跌停端的模式不同——跌停后出现反转而不是延续,与缩量、价差走阔同时出现,更像恐慌出清后的回补。两条通道预测的方向相容:最近贴过涨停板(延续)和最近贴过跌停板(反转回补)都预期之后偏正收益,不是互相抵消的两件事。
+
+    【算子怎么实现】日收益 ret = log(day_last(Close)/ts_delay(day_last(Close),1))(与 round1 N 位 G 的写法一致,当天收盘前已知);用该股当天自己的涨跌停带宽 LimitWidth(主板 0.10、科创板/注册制后创业板 0.20、北交所 0.30 的日频叶子字段,本种子迄今所有任务没人用过)归一成 rtl = |ret|/LimitWidth——一个跨板块可比的「今天用掉了自己允许摆动空间的几成」,带符号版本 sgn_rtl = sign(ret)×rtl(+1 贴涨停,−1 贴跌停)。在 20/60 日窗口上取:rtl 的均值(不分方向的「最近多常贴边」)、sgn_rtl 的均值(带方向的净贴边压力)、用 is_gt(sgn_rtl,0.85)/is_lt(sgn_rtl,−0.85) 做出逐日涨停/跌停哑变量后取窗口均值(频率)、取窗口最大值(「最近有没有至少贴过一次」)、sgn_rtl 的窗口标准差(贴边方向本身的动荡程度)。另外两个种子用不依赖 LimitWidth 的算子做交叉验证:day_flat_run_max(Close)——算子文档本身写的就是「封在涨跌停一整天」的直接度量;cross_corr(rtl, 相对成交额)——检验贴边是放量造成的还是缩量硬跳,因为 LimitWidth 对 ST 股(真实限幅 5%)不单独打标、仍按主板 0.10 处理,贴边比例在 ST 股上会被稀释,minute 级的「冻结」算子不依赖这个字段,可以互相印证。
+
+    【为什么和库里已有的不同】LimitWidth 这个日频叶子字段,整个种子迄今没有任何 head、核心卡或共性表条目用过;5 个控制里,波动是分钟收益标准差(不区分是不是贴着监管边界),20 日反转是收益累计水平,都不是「今天的移动相对自己监管允许空间的占比」这个无量纲比率;本位和本轮位 a(day_distinct_ratio 核心)关心的是同一类边界现象的两种独立测法——位 a 是「价格发现变粗这件事本身」的间接代理(分钟级纹理),本位是用监管公开的带宽字段直接量出「贴边强度」,两者算子、字段几乎不重叠(一个不碰 LimitWidth,一个几乎全靠它),相关度表会给出两者到底有多独立。
+
+    【为什么样本外还会在】涨跌停幅度是交易所规则写进制度的,训练段和验证段都适用,不随某一段行情变化;个人投资者是 A 股成交的长期主力,注意力驱动的开盘/封板买入行为是结构性的,不是某个牛熊阶段的特例。
+
+    【数学说明】LimitWidth 恒为正(0.10/0.20/0.30),rtl 的分母不会在零附近,没有除以近零的问题;ret 在停牌或缺分钟数据的日子上是 NaN,照常传播、不产生 inf;sgn_rtl 的值域理论上接近 [−1,1](对数收益和算术限幅有一点近似误差,偶尔略超出 1,是刻度不完全对齐,不是伪影,不影响横截面排序);is_gt/is_lt 的阈值 0.85 是归一化之后的固定常数,不是对原始收益开的任意刀;没有用到 2023-08-08 之后的任何数字,没有前视(LimitWidth、Close 都在当天收盘前确定)。'
+  inspired_by: 本轮 loc.md 对 head a 的分解:必要性最高的部件是 day_distinct_ratio(Vwap) 的不稳定性,这类「价格发现被打断」最直接的制度原因是涨跌停封板;round1 笔记提到过换手冲击与股本供给冲击,这次换一个全新、迄今没用过的日频叶子字段(LimitWidth)直接量化同一类边界事件。文献:Seasholes & Wu (2007)、Kim & Rhee (1997)、Wong, Liu & Zeng (2009)、Adcock et al. (2019)。
+  literature:
+  - title: Predictable Behavior, Profits, and Attention
+    authors: Mark S. Seasholes; Guojun Wu
+    year: 2007-12
+    url: https://ideas.repec.org/a/eee/empfin/v14y2007i5p590-610.html
+    treatment: 涨停是上海市场个人投资者的注意力事件,之后一两天有可预测的净买入;借用为:涨停频率/强度(up_hit, sgn_rtl 均值)预期之后偏正收益
+  - title: 'Price Limit Performance: Evidence from the Tokyo Stock Exchange'
+    authors: Kenneth A. Kim; S. Ghon Rhee
+    year: '1997'
+    url: https://ideas.repec.org/a/bla/jfinan/v52y1997i2p885-99.html
+    treatment: 价格限制不能阻止信息流入,只是把价格发现推迟到之后几天;借用为:贴边事件后收益延续的机制依据
+  - title: Can price limits help when the price is falling? Evidence from transactions data on the Shanghai Stock Exchange
+    authors: Woon K. Wong; Bo Liu; Yong Zeng
+    year: '2009'
+    url: https://orca.cardiff.ac.uk/id/eprint/49184/
+    treatment: 涨停端延迟价格发现、跌停端价格反转,方向不对称;借用为:up_hit/down_hit 分开构造,而不是只用一个无符号强度
+  - title: 'Price discovery and volatility spillover with price limits in Chinese A-shares market: A truncated GARCH approach'
+    authors: Chris Adcock; C. Ye; S. Yin; Dalu Zhang
+    year: '2019'
+    url: https://ideas.repec.org/a/taf/tjorxx/v70y2019i10p1709-1719.html
+    treatment: 2004–2018 年沪深 A 股样本,涨停后延迟价格发现在两市场都不能被拒绝;借用为:延续机制在中国 A 股、长样本期上的直接证据
+  seeds:
+  - div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)
+  - ts_mean(div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth), 20)
+  - ts_mean(div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth), 60)
+  - ts_mean(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 20)
+  - ts_mean(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 60)
+  - sub(ts_mean(is_gt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 0.85), 20), ts_mean(is_lt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), -0.85), 20))
+  - ts_mean(add(is_gt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 0.85), is_lt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), -0.85)), 20)
+  - ts_max(is_gt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 0.85), 20)
+  - ts_max(is_lt(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), -0.85), 20)
+  - ts_stddev(mul(sign(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth)), 20)
+  - ts_mean(day_flat_run_max(Close), 20)
+  - cross_corr(div(abs_(log(div(day_last(Close), ts_delay(day_last(Close), 1)))), LimitWidth), div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 20)
+R:
+- head: cs_last_high20(cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60), 60)), sub(LogTotalCap, LogFloatCap))
+  why: loc.md 自己的拆解已经测过单独去掉 ts_var(·,10) 外层(必要性 −0.04,score 从 +1.33 反而到 +1.36)和单独去掉一层 ts_max 嵌套(必要性 +0.11,score 到 +1.22),两个都没到 R 要求的 +0.10(相对原 head +1.33,即需要 ≥ +1.43)的门槛,这正是 loc.md「比原 head 好的拆解变体:没有」的来源。没试过的是:(a) 把这两处低必要性的简化叠加在一起,看是否叠加后反而越过门槛、同时降低复杂度;(b) 在叠加之后的更简形式上,再分别试一下把 float-shares 的 ts_max 窗口拉长(60→90)、day_distinct_ratio 的 ts_mean 窗口拉长(20→40)、内层筛带宽放宽(cs_last_high10→cs_last_high20)、外层筛变量换成从未试过的 ListAge。这些组合都没被自动拆解跑过,直接评估。
+  variants:
+  - cs_last_high20(cs_last_high10(sub(ts_mean(day_distinct_ratio(Vwap), 20), LogFloatCap), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high10(sub(ts_mean(day_distinct_ratio(Vwap), 20), LogFloatCap), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 90)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high10(sub(ts_mean(day_distinct_ratio(Vwap), 40), LogFloatCap), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high20(sub(ts_mean(day_distinct_ratio(Vwap), 20), LogFloatCap), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high10(sub(ts_mean(day_distinct_ratio(Vwap), 20), LogFloatCap), ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60)), ListAge)

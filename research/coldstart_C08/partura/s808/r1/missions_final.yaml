@@ -1,0 +1,175 @@
+seed: 808
+round: 1
+slots:
+- type: E
+  core: day_wmean(Ret, Volume)
+  hypothesis: '核心 day_wmean(Ret, Volume) 是按成交量加权的分钟收益均值(源码:sum(Ret*|Volume|)/sum(|Volume|),权重和为
+    0 时 NaN),等于「当天平均分钟收益 + 分钟成交量与分钟收益的协方差项」,即当天的钱实际经历的涨跌。它是库里 head ts_max(ts_max(day_wmean(Ret,
+    Volume), 50), 50) 的子树;嵌套的运行最大值精确等于一个更宽的窗口,那个 head 就是 ts_max(day_wmean(Ret, Volume),
+    99):近 5 个月里资金加权涨得最猛的那一天,方向 -1,是日内、量加权版的 MAX / 彩票效应(Bali-Cakici-Whitelaw 2011;A
+    股上 Nartea-Kong-Wu 2017 证实 MAX 效应存在且与特质波动并存)。核心单独上场 -2.49、50 日最大值 -1.51、99 日最大值
+    +0.99,alpha 全在长窗口的极值那一层。 问题在于:单日最大值同时混着两样东西 —— (i) 波动水平(高波动股票的最大值天然大),(ii) 上行不对称(彩票性)。新尺子只去掉
+    20 日等权波动,99 日尺度的波动水平仍可能是那个 head 的主要来源。本位的外围全部用来把 (ii) 从 (i) 里剥出来,这件事库里没有任何 head
+    做过: ① 上行极值与下行极值的秩相加:add(cs_rank(ts_max(x, 99)), cs_rank(ts_min(x, 99))),及 5%/95%
+    分位版(ts_quantile)、上/下四分位条件均值版(cross_tail_mean_q75 / q25)。波动水平在两个秩里方向相反、相加时抵消,剩下的是「最猛上冲」相对「最狠下跌」的不对称;分位与条件均值版不依赖单独一天,更稳。
+    ② 时序偏度 ts_skew(x, 120):无标度,直接度量彩票性(Amaya 等 2015 的已实现偏度、Boyer-Mitton-Vorkink 2010
+    的预期特质偏度),并给一个在市值十分位内排名的版本 cs_bucket_rank(…, LogFloatCap),因为偏度与小市值天然相关。 ③ cs_bucket_rank(ts_max(x,
+    99), ts_mean(day_wstd(Ret, Volume), 99)):在同一个 99 日量加权波动十分位里比 MAX,非参数地拿掉波动水平。 ④
+    sub(cs_rank(ts_max(x, 99)), cs_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 99))):极端日是「单边上冲」还是「只是波动大」。
+    ⑤ 量价时机分量:sub(cs_rank(x), cs_rank(day_mean(Ret))) 是每天量加权漂移与等权漂移的截面秩差,抹掉当天的整体涨跌,只留「涨在放量分钟、跌在缩量分钟」这一订单流成分(Chordia-Subrahmanyam
+    2004:订单不平衡当期同向、滞后反转);取它的 99 日最大值与 60 日均值。 ⑥ 时机:ts_argmax(x, 120) 是离最猛那天过去了多久(注意力冲击的衰减),以及「幅度秩
+    − 时机秩」。 另有两个只看下行的种子(ts_min、下四分位条件均值),检验下行极值单独是否有信息。 与库里不同:库里 4 个 head 的外围只有「单一序列的长窗口
+    ts_max」,本位没有一个种子是换窗口的 ts_max(这个外围已见过,GP 也会按外围去重拒绝);每个种子都引入了第二个统计量(下行极值、偏度、波动水平、等权漂移、时机),按构造与
+    head 的秩相关应明显低于 0.7。 为什么样本外还在:彩票偏好与注意力驱动的过度定价是行为性的,在 A 股散户主导的结构下长期存在;这些量多数是秩差或无标度统计量,不依赖某一窗口的挑选;窗口
+    60–148 日,输出变化慢、换手低,15 bp 成本下不是靠运气。'
+  literature:
+  - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+    authors: Bali, T.G.; Cakici, N.; Whitelaw, R.F.
+    year: '2011'
+    url: https://www.nber.org/papers/w14804
+    treatment: 最大日收益 MAX 与最小日收益 MIN 并列检验,并用前 k 大日收益的均值代替单日最大值 -> 本位的 ts_max/ts_min
+      秩相加与 cross_tail_mean_q75/q25 条件均值版
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Amaya, D.; Christoffersen, P.; Jacobs, K.; Vasquez, A.
+    year: '2015'
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 用高频数据构造无标度的已实现偏度,偏度为负向预测而波动水平本身不显著 -> 本位对日度量加权漂移取 ts_skew
+  - title: Expected Idiosyncratic Skewness
+    authors: Boyer, B.; Mitton, T.; Vorkink, K.
+    year: '2010'
+    url: https://doi.org/10.1093/rfs/hhp041
+    treatment: 偏度(彩票性)而非波动水平定价,且与小市值相关 -> ts_skew 在 LogFloatCap 十分位内排名
+  - title: Do Extreme Returns Matter in Emerging Markets? Evidence from the Chinese
+      Stock Market
+    authors: Nartea, G.V.; Kong, D.; Wu, J.
+    year: '2017'
+    url: https://ideas.repec.org/a/eee/jbfina/v76y2017icp189-197.html
+    treatment: A 股 MAX 效应与特质波动效应是两个独立并存的信息源 -> 在同一波动十分位内比 MAX(cs_bucket_rank)、MAX
+      秩减波动极值秩
+  - title: 'Order Imbalance and Individual Stock Returns: Theory and Evidence'
+    authors: Chordia, T.; Subrahmanyam, A.
+    year: '2004'
+    url: https://www.cis.upenn.edu/~mkearns/finread/Chordia_buy-sell_orders.pdf
+    treatment: 按量构造的买卖不平衡当期同向、滞后反转 -> 量加权漂移与等权漂移的截面秩差(订单流成分)取长窗口最大值 / 均值
+  seeds:
+  - add(cs_rank(ts_max(day_wmean(Ret, Volume), 99)), cs_rank(ts_min(day_wmean(Ret,
+    Volume), 99)))
+  - add(cs_rank(ts_quantile(day_wmean(Ret, Volume), 0.95, 148)), cs_rank(ts_quantile(day_wmean(Ret,
+    Volume), 0.05, 148)))
+  - add(cs_rank(cross_tail_mean_q75(day_wmean(Ret, Volume), 120)), cs_rank(cross_tail_mean_q25(day_wmean(Ret,
+    Volume), 120)))
+  - cs_bucket_rank(ts_skew(day_wmean(Ret, Volume), 60), LogFloatCap)
+  - sub(cs_rank(ts_max(day_wmean(Ret, Volume), 99)), cs_rank(ts_max(cs_demean(day_wstd(Ret,
+    Volume)), 99)))
+  - ts_max(sub(cs_rank(day_wmean(Ret, Volume)), cs_rank(day_mean(Ret))), 99)
+  - ts_mean(sub(cs_rank(day_wmean(Ret, Volume)), cs_rank(day_mean(Ret))), 60)
+  - ts_argmax(day_wmean(Ret, Volume), 120)
+  - ts_min(day_wmean(Ret, Volume), 99)
+  - cross_tail_mean_q25(day_wmean(Ret, Volume), 120)
+- type: N
+  hypothesis: 新想法:日内「价格变动」与「成交量」的耦合度 —— 同一天的方差是发生在放量的分钟(量时钟)还是发生在冷清的分钟(日历时钟)。 机制:混合分布假说里成交量是信息到达的随机时钟(Clark
+    1973;Ané-Geman 2000);Admati-Pfleiderer 1988 证明知情交易与流动性交易会集中在同一批厚时段,所以「价格在有量时动」对应信息驱动的交易,「价格在没量时动」对应薄盘噪声与流动性不足;Llorente-Michaely-Saar-Wang
+    2002 显示个股的量-收益动态正是按信息交易所占比重分化的。耦合度因此是「这只股票的价格由谁、以什么方式在推动」的代理,而不是「它有多波动」。 算子实现(全部是无标度量):(a)
+    sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_std(Ret))) —— 量加权分钟波动与等权分钟波动的截面秩差,两项共有的波动水平被减掉,只留「波动集中在放量分钟」的程度;(b)
+    day_corr(abs_(Ret), Volume) —— 分钟 |收益| 与分钟成交量的日内相关,天然有界在 [-1, 1],锁死日方差为 0 时分母带
+    EPS,输出 0 而不是爆点;(c) day_topw_mean(abs_(Ret), Volume) 与 day_mean(abs_(Ret)) 的秩差
+    —— 最重 10% 分钟的平均 |收益| 相对全天平均,即放量分钟的单位价格冲击;(d) day_corr(abs_(Ret), in_delay(Volume,
+    1)) —— 上一分钟的量是否领先这一分钟的波动;(e) cs_bucket_rank 版 —— 在等权波动或 30 日成交额的同一十分位里比量加权波动 /
+    耦合度,非参数地剥掉水平。日度值再接 40–120 日的 ts_mean / cross_ema(半衰期 40)/ 上下尾条件均值 / ts_max,输出变化慢、换手低。
+    为什么与库和控制不同:库里 4 个 head 都是某一个加权日内量的「水平」的长窗口最大值;5 个控制(20 日等权波动、30 日成交额、20 日反转、市值、成交额离散度)也全是水平量。耦合度是秩差或相关系数,按构造与波动水平、流动性水平近似正交,正是控制集结构性缺失的那一维(Padungsaksawasdi-Daigler
+    2018:量加权已实现波动与普通已实现波动只弱相关、持续性也不同;Giot-Laurent-Petitjean 2010:交易活跃度只与连续方差相关、与跳跃无关,所以耦合度也区分了「连续的信息流」与「孤立的跳」)。
+    方向交给奖励:若耦合度代表信息交易比重,高耦合对应信息风险溢价(正向);若代表散户追涨时的集中放量,高耦合对应过度定价后的低收益(负向)。 为什么样本外还在:它来自交易机制(谁在什么时候交易)而不是某一段行情,在
+    A 股集合竞价 + 连续竞价的制度下稳定存在;使用 60–120 日平滑量,不靠某一个窗口或某一天。
+  inspired_by: 第 1 批的三族 head 原料全是加权的日内量 —— day_wstd(Ret, Volume)、day_wmean(Ret, Volume),以及按
+    |收益| 加权的 day_wstd(Ret, Ret);而 vol 控制用的是等权的 day_std(Ret)。把 Volume 换成 Amt 分数几乎不变(ρ_head
+    0.9997),说明载荷的是「加权」这个动作而不是用哪个量加权。本位问:加权与不加权之间的差、即价格变动与成交量的耦合本身,是不是一个独立的信息源。文献见下。
+  literature:
+  - title: A Subordinated Stochastic Process Model with Finite Variance for Speculative
+      Prices
+    authors: Clark, P.K.
+    year: '1973'
+    url: https://doi.org/10.2307/1913889
+    treatment: 把累计成交量当作价格过程的随机时钟 -> 量加权分钟波动与等权分钟波动之差(sub(cs_rank(day_wstd(Ret, Volume)),
+      cs_rank(day_std(Ret))))
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, A.R.; Pfleiderer, P.
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 交易集中的厚时段价格信息含量更高 -> 最重 10% 分钟的平均 |收益| 相对全天平均(day_topw_mean(abs_(Ret),
+      Volume))
+  - title: Order Flow, Transaction Clock, and Normality of Asset Returns
+    authors: Ané, T.; Geman, H.
+    year: '2000'
+    url: https://doi.org/10.1111/0022-1082.00286
+    treatment: 按交易时钟重采样收益 -> 用分钟成交量给分钟收益加权
+  - title: 'Volume Weighted Volatility: Empirical Evidence for a New Realised Volatility
+      Measure'
+    authors: Padungsaksawasdi, C.; Daigler, R.T.
+    year: '2018'
+    url: https://ideas.repec.org/a/ids/injbaf/v9y2018i1p61-87.html
+    treatment: 量加权已实现波动作为独立于普通已实现波动的统计量 -> 两者在截面上的秩差 / 十分位内排名
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Llorente, G.; Michaely, R.; Saar, G.; Wang, J.
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 个股的量-收益关系随信息交易比重而异 -> 用日内 |收益|-成交量相关度作为信息交易比重的横截面代理
+  - title: Trading Activity, Realized Volatility and Jumps
+    authors: Giot, P.; Laurent, S.; Petitjean, M.
+    year: '2010'
+    url: https://cris.maastrichtuniversity.nl/en/publications/trading-activity-realized-volatility-and-jumps
+    treatment: 交易活跃度只关联连续方差、不关联跳跃 -> 耦合度区分连续信息流与孤立跳,做长窗口平滑
+  seeds:
+  - ts_mean(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_std(Ret))), 60)
+  - ts_mean(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_std(Ret))), 120)
+  - ts_max(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_std(Ret))), 120)
+  - cross_tail_mean_q75(sub(cs_rank(day_wstd(Ret, Volume)), cs_rank(day_std(Ret))),
+    120)
+  - cs_bucket_rank(ts_mean(day_wstd(Ret, Volume), 120), ts_mean(day_std(Ret), 120))
+  - ts_mean(day_corr(abs_(Ret), Volume), 60)
+  - ts_mean(day_corr(abs_(Ret), Volume), 120)
+  - cross_ema(day_corr(abs_(Ret), Volume), 40)
+  - cross_tail_mean_q25(day_corr(abs_(Ret), Volume), 120)
+  - ts_mean(sub(cs_rank(day_topw_mean(abs_(Ret), Volume)), cs_rank(day_mean(abs_(Ret)))),
+    120)
+  - ts_mean(day_corr(abs_(Ret), in_delay(Volume, 1)), 60)
+  - cs_bucket_rank(ts_mean(day_corr(abs_(Ret), Volume), 60), cross_mean(day_sum(Amt),
+    30))
+R:
+- head: ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 50)
+  why: 内层窗口 10 是烂部件。嵌套运行最大值精确等于 ts_max(x, a+b-1),这个 head 的实际窗口是 59,正落在平台边缘:同一序列 W=34/50
+    为负分,W 在 99–148 一律约 +1.0;它的 valid 只有 0.68,是全库最弱的一段。把外层 50 换成 100(实际窗口 109)在拆解里已测得
+    1.066(+0.385),ρ_head 0.695。
+  variants:
+  - ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 100)
+- head: ts_max(ts_max(cs_normalize(day_wstd(Ret, Ret)), 50), 50)
+  why: cs_normalize 是烂部件:knockout 必要性 -0.15(去掉后 0.79,valid 2.47,ρ_head 0.93)。奖励本身先转截面秩,在取时序最大值之前再除以当天截面标准差,只是把每天的尺度换成噪声。变体:去掉
+    cs_normalize(已测 +0.152);去掉后把窗口推到 head1 所在平台(148);用 cs_rank 代替 cs_normalize(先转秩再取最大值,不受截面重尾与当日离散度影响)。
+  variants:
+  - ts_max(ts_max(day_wstd(Ret, Ret), 50), 50)
+  - ts_max(day_wstd(Ret, Ret), 148)
+  - ts_max(cs_rank(day_wstd(Ret, Ret)), 99)
+- head: ts_max(ts_max(day_wmean(Ret, Volume), 50), 50)
+  why: Volume 这个权重不是载荷部件:换成 Amt 后 ρ_head 0.9997、score +0.106,按金额加权更贴近「钱实际经历的收益」。另两个变体是判别式:等权
+    day_mean(Ret) 检验量加权本身贡献多少;day_topw_mean(Ret, Volume)(最重 10% 分钟的平均收益)检验 alpha 是否集中在放量分钟。
+  variants:
+  - ts_max(ts_max(day_wmean(Ret, Amt), 50), 50)
+  - ts_max(day_mean(Ret), 99)
+  - ts_max(day_topw_mean(Ret, Volume), 99)
+- head: ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)
+  why: 三层 ts_max 等价于 ts_max(x, 148);148 这个取值是 train 挑出来的(valid 的峰在 99–109)。更要紧的是还分不清哪个部件在载荷:运行最大值是阶梯函数、换手极低,而裸
+    day_wstd(Ret, Volume) 是 -3.47,所以「尾部极值」「慢速波动水平 + 低换手」「上市年龄(历史短的股票取最大值的样本少,最大值系统性偏小)」「涨跌幅宽度(20%
+    板块日内波动机械地大)」四种解释缠在一起。变体逐个判别:ts_mean 换 ts_max(水平 vs 尾部);cross_tail_mean_q75 与 ts_quantile
+    0.9(单日 vs 尾部一堆天);day_std 换 day_wstd(量加权 vs 等权);cs_rank 换 cs_demean(先转秩再取最大值);cs_bucket_demean(…,
+    LimitWidth)(板块);cs_bucket_rank(…, ListAge)(上市年龄);ts_argmax(时机 vs 幅度)。
+  variants:
+  - ts_mean(cs_demean(day_wstd(Ret, Volume)), 148)
+  - cross_tail_mean_q75(cs_demean(day_wstd(Ret, Volume)), 148)
+  - ts_max(cs_demean(day_std(Ret)), 148)
+  - ts_max(cs_rank(day_wstd(Ret, Volume)), 148)
+  - ts_max(cs_bucket_demean(day_wstd(Ret, Volume), LimitWidth), 148)
+  - cs_bucket_rank(ts_max(cs_demean(day_wstd(Ret, Volume)), 148), ListAge)
+  - ts_argmax(cs_demean(day_wstd(Ret, Volume)), 148)
+  - ts_quantile(cs_demean(day_wstd(Ret, Volume)), 0.9, 148)
+audit:
+  attempts: 1
+  file: audit_1.yaml
