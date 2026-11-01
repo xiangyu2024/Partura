@@ -1,0 +1,53 @@
+{
+ "type": "result",
+ "key": "v2:e5e4a4ef56d2aa11abdf22cedf365003070dbc574f3cb3e666b59a8f5422d0ba",
+ "agentId": "aaf1e4994b6705698",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/r3/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     11
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 30), ts_autocorr(day_signed_ratio(Ret, Ret), 60, 1))",
+    "soundness": 3
+   },
+   {
+    "head": "cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 40), ts_autocorr(cs_regres(day_wmean(Volume, Volume), day_sum(Ret)), 60, 1))",
+    "soundness": 3
+   },
+   {
+    "head": "inv(ts_decay_linear(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 200)), 40))",
+    "soundness": 4
+   },
+   {
+    "head": "cross_cov(day_max(Ret), day_cov(Ret, Ret), 30)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_cov(day_wmean(Ret, Ret), day_wmean(Ret, Ret), 5)",
+    "soundness": 3
+   },
+   {
+    "head": "cs_last_low20(ts_decay_linear(cs_regres(day_signed_ratio(Ret, Volume), day_sum(Ret)), 40), ts_autocorr(ts_autocorr(day_signed_ratio(Ret, Volume), 60, 1), 60, 1))",
+    "soundness": 4
+   }
+  ],
+  "summary": "Both slots and all six R groups pass the audit. Slot a (E, core K screen moved onto S/Q/CPV, plus selection mode) scores novelty 3 and soundness 3; seed 13 is struck because it is the reverse-direction control and the reward picks the sign itself, so 12 seeds remain and the core's largest control |ρ| is 0.10. Slot b (N, overnight/intraday split) scores novelty 4 and soundness 3; seed 11 is struck because residualizing on R20 raised its rev |ρ| from 0.13 to 0.42, the opposite of its stated aim, so 11 seeds remain. R soundness scores: R1 3, R2 3, R3 4, R4 4, R5 3, R6 4. The R1 and R6 replacements will add near-duplicates to the library (R6's variant has |ρ| 0.99 with head +1.62). One point checked in the code: the long_neutral reward does not apply the untradable mask (steer.py:627), so frozen-quote and newly listed names are still in the book."
+ }
+}

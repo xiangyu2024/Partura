@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:5cde4dc41d24c4a28839327826e3b1f7948196832bbe2d498d47b60a48369393",
+ "agentId": "a1aacd708786d7868",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r2/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     11,
+     12
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     7,
+     8
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "cross_mean(cross_ema(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret)), 10), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "cross_mean(div(day_sum(mul(mul(Ret, Ret), Ret)), mul(day_sum(pow_3(Volume)), day_sum(pow_3(Volume)))), 20)",
+    "soundness": 3
+   }
+  ],
+  "summary": "The audit is written to audit_2.yaml. Slots a and b and R group 1 are word for word the same as the first draft (corr_1 and corr_2 differ only in the three R-2 rows). I re-checked them and the outcome stands. Slot a (E, the money-flow tilt core moving beyond pure smoothing) scores novelty 3 and soundness 3; seeds 11 and 12 are struck, 11 seeds remain, and it passes. Slot b (N, overnight-versus-intraday tug of war) scores novelty 4 and soundness 4; seeds 7 and 8 are struck, 12 seeds remain, and it passes. R group 1 (+0.61, smoothing / denominator / slice variants) scores soundness 3 and passes. R group 2 (+1.22) is a real rewrite, not a rewording of the same content. Following my last audit, it replaces the volume-level power denominator with scale-free versions: Amt-weighted realized skewness (v1), ACJV skewness times the Amt z-score (v2), and the two combined (v3). That part really was bad: rho_known 0.58/0.52, float32 overflow with coverage 0.92, and a dose-response pattern. The variants do remove it: size exposure falls to 0.02–0.04, liquidity to 0.02–0.15, and correlation with the original head to 0.19–0.25. Soundness 3, passes. Not 4 for three reasons. First, the \"bounded\" claim holds only for v2; the day_wmean versions v1 and v3 are bounded by 1/√p, so a day where one low-money minute moves the price can reach about 69, and the 20-day mean is not trimmed, which is close to trap 3. Second, in v2, mul(skew, z) gives low-volume days a negative weight, so it tests the skew × abnormal-activity interaction, not \"skew matters more when volume is low\". Third, v1 has |ρ| 0.62 (raw) and 0.66 (residual) with the flow-tilt head +0.61, so it is closer to a relative of the tilt head."
+ }
+}

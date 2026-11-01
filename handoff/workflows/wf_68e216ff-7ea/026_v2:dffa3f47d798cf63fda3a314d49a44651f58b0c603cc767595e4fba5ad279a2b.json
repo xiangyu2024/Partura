@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:dffa3f47d798cf63fda3a314d49a44651f58b0c603cc767595e4fba5ad279a2b",
+ "agentId": "ab27e39a27878d986",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s803/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     6,
+     10
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "day_kurt(Ret)",
+    "soundness": 3
+   }
+  ],
+  "summary": "第 1 次审计已写入 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s803/r1/audit_1.yaml,文件能被 YAML 正常读取。两个任务位和 R 组都按 3/3 放行。\n\n**a 位(E,核心 day_kurt(Ret),从峰度里拿掉零收益稀疏度):创新度 3,合理度 3,剩 4 颗种子(2、3、5、12)。**\n- 恒等式 kurt+3=(n/k)·c 对源码核对过:alphacube 的 _kurt 先去均值、用总体矩、再减 3,day_zero_ratio 与 day_kurt 用同一组有限分钟,日内均值≈0 时是精确的。\n- 但相关度表不支持「裸核心的排序主要由稀疏度决定」:修正后的 c 与 head 仍有 0.89,按稀疏度分桶后有 0.94。\n- 剩下的种子原始 ρ 降到 0.42–0.51,是外层 20 日平滑造成的,不是 c 修正。按 head 自己的半衰期比交易信号,c 系种子的残差是 0.74–0.80,改变实在但幅度中等。\n- 我划掉 6–11:\n  - 6–10 是对裸峰度分桶排序,只是靠平滑躲过库禁令的 head 换皮,残差 0.85–0.87。\n  - 10、11 用 day_last(Close) 当 tick 网格的代理,这一步没实现:alphacube 的 label.py 和 daily.py 注释写明生产库的价格字段是后复权的,与真实成交价差 2.5–113 倍。未复权价位应该用 div(day_sum(Amt), day_sum(Volume))。\n- 表再划掉 1、4、6(与 head ≥0.7)。\n\n**b 位(N,日内分钟序列相关):创新度 3,合理度 3,剩 5 颗种子(7、8、9、11、12)。**\n- 种子 1–5 与流动性控制的 |ρ| 为 0.51–0.72,表会划掉。一分钟尺度的方差比和自相关在 train 上主要是价差反弹,也就是流动性量。\n- 剩下的种子与 head 的原始 |ρ| ≤0.38,机制依赖分钟顺序,这是排列不变的峰度拿不到的。输入同类,所以只给 3。\n- 我划掉两颗:\n  - 6:|Vwap 一阶自相关|。成交均价差分天然带正的自相关(Working 1960),薄股票则是负的反弹,取绝对值后对流动性呈 U 形,线性中性化去不掉,落进陷阱 3;它还带一个约 1/√(成交分钟数) 的噪声底。\n  - 10:按后复权 Close 分桶,和 a 位是同一个问题。\n\n**R 组(head day_kurt(Ret)):合理度 3。**\n- 有依据的部分:把根算子换成有界或分侧的版本,以及把输入换成只含成交分钟的 Vwap 收益,对应变体 1、5、6、7。\n- 7 个变体里有 3 个是浪费:\n  - 变体 2 与 head 的原始和残差都是 1.00,「首分钟含隔夜跳空」不成立。\n  - 变体 3 被门槛判为废品:30 分钟窗口一半以上是零时 MAD=0,返回 NaN。\n  - 变体 4 的 day_gini(Ret) 把零质量放大回来,与已知族 0.63,按规则不合格。\n\n按规则 §5,我没有读 analysis.md、lit.md、notebook.md。"
+ }
+}

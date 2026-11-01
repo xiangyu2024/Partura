@@ -63,3 +63,33 @@
 4. **N(位 b)产出**(预测约 60% 产出 ≥ 1 head,最可能来自 `day_corr(Close,Volume)` 或 `cross_mean(day_signed_ratio(Ret,Volume),20)`)—— **明确 miss**。loc.md 显示 Pr1b_Nb 评分 64 次、**过线 0、入 heads 0**,13 个种子全部没越过 0.5 线,包括预测最被看好的两个。教训:审计创新度 / 合理度过审 ≠ 信号本身够强,量价耦合这条路线(至少第 1 轮写的这 13 个具体构造)在本种子上没有体现出 alpha,不宜再简单重复「量 × 收益符号 / 相关系数」的同期条件化写法 —— 本轮 E 位的第(4)类外围已经注意到这点,改用滞后而非同期条件化,核心也换成了 `day_centroid`。
 
 (说明:R 的核对用的是 `r2/R_prev.json` 的 16 行明细逐条比对,`audit_record.json` 本身不含 R 的具体打分数字。)
+
+## 第 3 轮(最后一轮)
+
+### 上一轮(第 2 轮)的预测对不对
+
+1. **审计**(预测两位都大概率通过;E 创新度 3–4,划掉 0–2 个;N 创新度 4,划掉 0 个)—— **方向命中、强度明显低估**。实际 `r2/audit_record.json`:两位 pass=true。E novelty=4(落在预测区间顶端,命中)、soundness=4;但 struck_by_auditor=3、struck_by_table=3,合计 6 个被划掉(11 个种子只剩 8 个),远多于预测的"0–2 个"——明显低估了被划掉的比例,说明即便 periphery 被判定新颖、合理,表格的确定性相关度检验(ρ_head≥0.7 或 ρ_known≥0.8)仍然会刷掉相当一部分看似不同写法、实际日度秩很接近的种子。N novelty=5(高于预测的 4,命中但低估了上限),struck_by_auditor=5、struck_by_table=0,10 个种子剩 5 个——同样比预测的"0 个"差很多。**教训:以后估计"被划掉几个"时应该默认按 30%–50% 的比例走,而不是按"periphery 够新就不会被划"来估。**
+2. **R**(预测 5 个变体评分落在 +1.3~+1.7,叠加变体 knockout+window10 预计略高于单独 knockout 的 +1.64)—— **中心命中、"叠加更好"这个具体预测明确 miss**。实际(`r3/R_prev.json`,即本轮读到的上一轮 R 明细):5 个变体 score 分别为 1.6408 / 1.4203 / 1.4953 / 1.506 / 1.3118,全部落在预测区间内,5/5 触发 replace(命中好于预测的"大概率"表述)。但第 2 行"knockout + window 20→10"叠加变体只拿到 1.4203,**低于**单独 knockout 的 1.6408(第 1 行)——预测"叠加预计略高于单独 knockout"**明确 miss**:两处看起来独立、方向一致的改动叠加后反而更差,不能默认独立证据可以无脑相加。本轮 R 的双重 knockout 变体已经把这个教训写进 `why` 字段,降低了预期。
+3. **E(位 a,核心 `day_centroid(Volume)`)**(预测 45%–55% 产出 ≥1 head,最可能来自份额 vs 金额分歧、与 `day_gini` 交互这两类"结构上离 M 路线最远"的 periphery)—— **产出数量命中,具体来源完全 miss**。`loc.md` "本组之前各轮任务"显示 Pr2a_Ea 评分 94、过线 9、入 heads 3(命中"≥1 head"且好于预测概率)。但这 3 个幸存 head —— `ts_cov(LogTotalCap, day_centroid(Volume), 40)` +1.16、`ts_cov(LogTotalCap, cs_last_low20(ts_sum(day_zero_ratio(Close),1), day_centroid(Volume)), 50)` +0.81、`ts_cov(cs_last_low20(ts_sum(day_zero_ratio(Close),1), day_centroid(Volume)), day_centroid(Volume), 50)` +0.83 —— **全部**用到了 `LogTotalCap` 或 `day_zero_ratio(Close)`,这两个字段 / 子树**完全不在**我们当时设计的 11 个种子(Amt 分歧、`day_gini` 交互、trait、滞后价格方向)里。预测最被看好的"份额 vs 金额""`day_gini` 交互"两类**没有一个**直接产出 head。真正起作用的是 GP 初代里"机械嫁接补满 32"的那一半自由生长部分,自己撞上了 `LogTotalCap` 协方差和 `day_zero_ratio(Close)` 交互。**教训(直接驱动本轮设计):GP 的自由探索部分比我们手设的具体 periphery 类别更先摸到有效方向;既然 round2 已经证明 `day_zero_ratio(Close)`/Close 价格结构这条线索有信息量,本轮不再守着 Volume/Amt 猜新 periphery,而是把这条线索从"GP 偶然撞上"升级为"PI 主动设计的核心"(本轮位 b)。**
+4. **N(位 b,`LogFloatShares` 限售股解禁)**(预测 35%–45% 产出 ≥1 head)—— **明确 miss**。`loc.md` 显示 Pr2b_Nb 评分 81、过线 0、入 heads 0,5 个过审种子全部没越过 0.5 线,其中最高的两个(+0.08、+0.03)离线还很远。这是**连续第二轮** N 位 0 产出(第 1 轮量价耦合 64 次评估 0 产出,第 2 轮限售股解禁 81 次评估 0 产出),两次都是文献支撑、审计顺利通过(novelty 4–5)但信号本身不够。**这是本轮不再安排 N 位的主要依据**:3 轮里 N 位通过审计的硬性要求已经在第 1、2 轮满足(两次 pass=true),再猜第三个新机制的边际期望,明显低于把两个名额都投回"已验证有效、且还没挖满"的方向。
+
+### 我目前对本种子 alpha 来源的信念(第 3 轮更新)
+
+- **主线索确认**:本种子的 alpha 几乎全部来自"成交量日内分布"这一个大类(时点 `day_centroid(Volume)` / 块差 `day_mean(in_delta(Volume,30))`)。两轮独立、文献支撑、审计都顺利通过的 N 新 idea(量价耦合、限售股解禁)在合计 145 次评估里 0 个产出,强烈指向:偏离"成交量日内结构"这条主线的新假设,对这个种子信号强度本身不够,不是审计或设计层面的问题。
+- **新认识**:round2 的意外发现 —— GP 在 `day_centroid(Volume)` 这个 E 位上,即便我们手设的 4 类 periphery 全部没有直接产出 head,自由生长部分依然找到 3 个新 head,用的是完全没设计过的字段组合(`LogTotalCap` 协方差、`day_zero_ratio(Close)`/`day_centroid(Volume)` 交互)。说明"成交量时点"这条主线旁边,还有一层"Close 价格分布 / 价格停滞"相关的信息是真实存在、且 GP 自己已经摸到的,只是之前没有专门针对它设计种子。
+- **库集中度的担忧**:当前 16 个 head 里有 11 个(8 个 M + 3 个我们)直接建立在 `day_centroid(Volume)` 之上。GP 库禁令下继续往这个核心里加种子撞到近亲 head 的概率明显抬高;`day_mean(in_delta(Volume,30))` 只支撑 4 个 head,外围空间还有余量。最后一轮更应该分散,而不是继续集中。
+- **本轮(最后一轮)策略**:不安排 N 位(硬性要求已满足,两次 0 产出的经验说明边际期望低),两个位都是 E:(a) `day_mean(in_delta(Volume,30))` 的第 2 次、也是最后一次 E 机会,外围换成和涨跌停"磁吸 / 锁死"机制的交互(`day_at_max_ratio`/`day_at_min_ratio(Close)`)—— 这条线索对这个核心完全没试过,且这个核心比 `day_centroid` 更不饱和;(b) `day_quantile_q25(Close)` 作为全新核心(本种子第一次、也是唯一一次机会),直接把 round2 "GP 自己撞上"的 Close 价格分布线索,升级为 PI 主动设计,外围聚焦名义价格错觉(`day_distinct_ratio(Close)` 网格粗糙度、`LogFloatCap` 市值)的正交化。
+
+### 本轮计划
+
+- **位 a = E**,核心 `day_mean(in_delta(Volume, 30))`(本组第 1 轮核心,第 2/最后一次 E 使用),10 个种子,外围是和 A 股涨跌停磁吸/锁死机制(`day_at_max_ratio`/`day_at_min_ratio(Close)`)的交互:条件乘积(锁多头/锁空头/净方向)、正交化(cs_regres,检验块差 alpha 是否是限价机制的副产品)、持续性与 regime 变化(cross_mean/cross_delta)。
+- **位 b = E**,核心 `day_quantile_q25(Close)`(本轮共性表第 1 行,均值差 +1.32,p=0.000;本种子第 1 次、唯一一次脱离 Volume/Amt 的核心),10 个种子,外围是名义价格错觉(Birru & Wang 2016、Kumar 2009)与两个机械混淆变量的正交化:价格网格粗糙度(`day_distinct_ratio(Close)`,Harris 1994)、市值(`LogFloatCap`)。
+- **R**:1 个 head(score +1.64 的 `day_centroid` 二阶嵌套 head),2 个变体 —— 单独 knockout(loc.json r_candidates 已测,+1.8165,gain+0.1757)原样重交;双重 knockout(把对称出现的第二处同款冗余包装也去掉)作为本轮唯一新测,基于 round2 "叠加不一定更好"的教训保持谨慎预期。
+
+### 事先预测
+
+1. **审计**:两位大概率通过(核心都在 `loc.json` 的 heads/enrichment/core_cards 里)。核心 (a) 过去两轮都拿到 novelty 4,这次外围全新,预计 novelty 3–4;核心 (b) 是本种子第一次脱离 Volume/Amt 的核心,预计 novelty 4–5。两个核心与 5 个控制的 |ρ| 预计都明显 < 0.8。鉴于上一轮"低估划掉比例"的教训,这次预计被表格划掉的比例也上修:(a) 预计 2–4 个被划掉(持续性/regime 两类种子结构上更接近库内已有的 `day_mean(in_delta(Volume,30))` 衍生 head);(b) 预计 1–3 个被划掉(几个 `day_distinct_ratio` 相关种子彼此构造相近,日度秩可能彼此很高)。两位预计都能保住 ≥4 个剩余种子。
+2. **R**:单独 knockout 复测预计仍然 ≈ +1.8(同一个变体重新提交,只是走完 replace 流程,不是新信息)。双重 knockout 是唯一真正的新测:考虑到 round2 的教训,给 40% 概率 ≥ 单独 knockout 的 +1.82(两处是同一种操作的对称重复,比 round2 那次"knockout+window"异质叠加风险更低),60% 概率持平或略差,但不预期跌破原 head 的 +1.6408(两处都已验证"去掉反而更好",同时反转方向的概率低)。
+3. **E(位 a)× 涨跌停锁死**:预计 35%–45% 产出 ≥1 head —— 低于位 b,因为这条线索对这个核心是第一次试,没有像位 b 那样有 round2 GP 自由探索撞出来的"预告"证据。如果产出,最可能来自 (2) 类正交化种子(`cs_regres`),因为 (1) 类条件乘积更容易变成"多数股票接近 0、少数被锁死的股票主导排序"的粗糙信号,扣 15bp 成本后更容易打不过 0.5。
+4. **E(位 b)× 价格网格/市值正交化**:预计 50%–60% 产出 ≥1 head —— 高于位 a,因为 Close 价格分布这条线索已经被 round2 的 GP 自由探索间接验证过有信息量(`day_zero_ratio(Close)`/`day_centroid` 交互产出了 2 个 head),这次用更直接的操作(分位数本身、网格粗糙度本身)正面触碰同一层信息,预计命中率更高。如果 0 个 head,最可能的原因是"名义价格错觉"机制在扣完 15bp 和残差化市值/反转控制之后信息量不够,是信号强度问题而不是设计错误。
+5. **总体**:这是最后一轮,两位都是 E;R 至少有 1 个几乎确定的 +0.18 提升在手(单独 knockout),本轮 GP 位的净贡献下限不会是 0。

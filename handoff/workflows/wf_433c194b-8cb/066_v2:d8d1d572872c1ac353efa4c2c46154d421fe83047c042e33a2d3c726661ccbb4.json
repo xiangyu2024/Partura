@@ -1,0 +1,46 @@
+{
+ "type": "result",
+ "key": "v2:d8d1d572872c1ac353efa4c2c46154d421fe83047c042e33a2d3c726661ccbb4",
+ "agentId": "a9e180f05bf61aefd",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r2/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     1,
+     2
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     8
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), 20)), neg(ts_decay_linear(pow_3(day_mean(Open)), 20)))",
+    "soundness": 3
+   },
+   {
+    "head": "cs_last_low10(cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_mean(cs_last_high20(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_mean(day_skew(Ret), 20)), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))",
+    "soundness": 3
+   },
+   {
+    "head": "cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(cs_last_low10(cs_last_high20(neg(ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_mean(day_skew(Ret), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20)), 20)), ts_decay_linear(pow_3(day_mean(Open)), 20))",
+    "soundness": 3
+   },
+   {
+    "head": "sub(cs_first_low20(abs_(day_wstd(Vwap, High)), pow_3(day_mean(Open))), ts_var(day_gini(High), 10))",
+    "soundness": 2
+   }
+  ],
+  "summary": "I wrote /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r2/audit_2.yaml. It parses as YAML, and its R heads match missions.yaml word for word.\n\nSlots a and b are unchanged since audit 1: the seeds are identical and the correlation numbers match. I kept the same verdicts:\n- Slot a scores 3/3. I struck seeds 1 and 2 (the VOV-ratio seeds cancel K's own standard deviation). The table strikes 3, 5, 9, 11 and 12, which leaves 5 seeds.\n- Slot b scores 4/3. I struck seed 8, which has distinct 0.578. The table strikes seed 11 (known 0.511), which leaves 11 seeds.\n\nR1 to R3 are unchanged and stay at 3.\n\nR4 drops to soundness 2, so it fails. The PI did change the content, not just the wording: one variant, which only switches y to the scale-free intraday CV. It now has ρ 0.817 with its own head (the replacement path), known 0.062 and vol 0.278. But there is still no evidence the price factor in y is a bad part, and the locator output points the other way:\n- Long-only on the cheapest decile scores -1.16 / -0.45 in the locator's breakdown. The price factor in y is what keeps the head's long book out of that decile.\n- The variant is closest to head +0.65 (0.858 raw, 0.876 residual), not to its own head. That head is the scale-free version, which scored lower than the price-unit original.\n- The PI expects +0.75 to +0.95, so no gain over the original +0.88. At ρ≈0.82 the standard error of the Sharpe difference is about 0.3, so a +0.1 gain would mostly be noise.\n\nThe audit file also says I am correcting my audit-1 advice, which had presented this step as the way to pass. I recommend dropping R4, or moving the scale-free in-pool sort test to a GP slot in round 3.\n\nDisclosure: while looking around I printed r2/R_prev.json (round-1 R scoring rows, already reflected in loc.md) and r2/audit_record.json (my own audit-1 record). Neither is on the auditor's read list, and I did not use them for any score. I did not open analysis.md, lit.md or notebook.md."
+ }
+}

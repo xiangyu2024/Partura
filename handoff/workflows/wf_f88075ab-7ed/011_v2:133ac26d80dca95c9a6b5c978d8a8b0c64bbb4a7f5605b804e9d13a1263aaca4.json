@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:133ac26d80dca95c9a6b5c978d8a8b0c64bbb4a7f5605b804e9d13a1263aaca4",
+ "agentId": "a17708f6ee92c2129",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s801/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "pow_3(LogFloatShares)",
+    "hypothesis": "The head's alpha is the cross-sectional rank of LogFloatShares. With LogFloatCap controlled, that rank equals -log(nominal price), and because minute prices are back-adjusted, the share-count leaf is the GP's only view of nominal price. The 28 archived candidates that contain the core only wrap it in monotone power or inv transforms. This slot neutralizes the core family and tries three new kinds of outer treatment: (1) share-count dynamics (growth from the 1-year low, 60-day delta, i.e. bonus shares, unlocks and issuance), kept continuous with cs_last_high40 screens; (2) share structure (float/total ratio, ListAge as lockup overhang); (3) price-level behavioral features conditioned on share-count deciles via cs_bucket_rank and rank products (limit-scaled MAX, intraday skew, 52-week-high anchoring, tick-constraint flat ratio). 15 seeds."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Slow intraday order-flow and price-volume characteristics, averaged over 20-60 days: minute price-volume and return-volume correlation, volume-signed direction ratio, overnight gap and its ratio to the intraday return, volume centroid, share of up minutes, minute-return autocorrelation and kurtosis, volume Gini, cross-day return-amount correlation. Inspired by M batch 1: candidates without the share core averaged -0.96 because the 15bp cost dominates, and only a nearly static characteristic survived. These features are scale-free and slow, and are not directly the level controls. 15 seeds."
+   }
+  ],
+  "n_R": 16,
+  "predictions": "E: about 35% chance of at least one head. If one appears, it most likely comes from the conditioned behavioral seeds (cs_bucket_rank or rank product of MAX, skew, 52-week high or flat ratio with the core), with score 0.5-0.7 and low correlation to the M head. Share-dynamics and structure screens should score about 0-0.3 after family neutralization, and the raw share-growth seed may fail the distinct >= 0.5 gate. N: about 50% chance of at least one head, most likely from day_corr(Close,Volume), day_signed_ratio or the overnight-gap mean, score 0.5-0.8. Autocorr and centroid seeds are unlikely to reach 0.5, and day_gini(Volume) may hit the known-family rho rejection. R: about 25% chance of a replacement. The direct nominal price sub(LogFloatShares, LogFloatCap) should land within ±0.1 of the head, and clearly better would confirm price rather than shares is the source. The MAX, skew and share-growth screens or the bucket size-neutralization may add 0 to +0.1. There was no earlier round to grade.",
+  "summary": "I wrote missions.yaml for seed 801 round 1 and the check passes (c05_check.py 801 1 printed ADMISSIBLE). The plan is one E slot, one N slot and 16 R variants. I also created notebook.md with a 第 1 轮 section. analysis.md and lit.md were not in r1/, so I did the structure analysis and the literature myself. The citations are from memory, all published before 2023, and their DOIs still need the checker to verify. Reading of the source: the only head, inv(pow_3^3(LogFloatShares)), carries no information beyond the rank of LogFloatShares (the pow and inv layers change the score by 0.02-0.03). Since LogFloatCap is a control and prices are back-adjusted, I read it as a nominal low-price effect, and it is fragile (train score sits exactly at 0.50). The archive also shows that fast candidates were killed by the 15bp cost (mean score -0.96 without the core), so both slots favor slow signals. E pins the core pow_3(LogFloatShares) and tries outer treatments not seen around it before: share-count dynamics, float ratio and listing-age screens, and lottery or anchoring features conditioned on share-count deciles. N seeds slow (20-60 day) intraday order-flow and price-volume features. R tests direct nominal-price, total-share and bucket-neutralized replacements, plus screens that drop likely-harmful subgroups from the low-price long book. Files: /Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s801/r1/missions.yaml and /Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s801/notebook.md."
+ }
+}

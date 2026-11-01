@@ -1,0 +1,29 @@
+{
+ "type": "result",
+ "key": "v2:b91d2b820a15983571016de17a4ccf7a9ef04f1550311a8e8a1228eadf6d790c",
+ "agentId": "a7b5dc4f69df8ffe8",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s808/r1/analysis.md",
+  "cores": [
+   {
+    "core": "inv(LogFloatShares)",
+    "why": "深度 2(GP max_depth=4,外围还剩 2 层),共性表里唯一样本量够的一行(n_with=14,均值差 +1.106,p 0.010)。已见外围只有同字段单调包装(表里露出的唯一外包装是 log(inv(LogFloatShares))),没有第二个字段、没有横截面算子,所以外围新颖性(periphery 判定为算子名集合,见 idea_search.py:312)几乎自动满足。它的 alpha 来源是「流通市值被秩空间线性中性化之后剩下的那部分」,最可能是名义股价轴;用 cs_regres(LogFloatCap, inv(LogFloatShares)) 或 mul(LogFloatCap, inv(LogFloatShares)) 可以把价格轴显式取出来,绕开 inv 破坏 LogFloatCap − LogFloatShares 这个差的问题。"
+   },
+   {
+    "core": "ts_decay_linear(LogFloatShares, 50)",
+    "why": "深度 2,mean_with 0.4857 是全簇最高(p 0.003,但 p 在本表不可解读)。7 个合法核心里唯一带时间维度的,因此是唯一能「原样包含」地写出股本流量 sub(LogFloatShares, ts_decay_linear(LogFloatShares, 50))(近 50 日流通股本增长 = 解禁/定增/送转的供给冲击)的核心;这条轴与水平轴正交,是真新信息。注意:纯差分大多数票恰好为 0,会被 distinct_fraction ≥ 0.5 的闸门挡掉,必须乘进连续载体。"
+   },
+   {
+    "core": "log(LogFloatShares)",
+    "why": "备选。深度 2、外层保序,sub / cs_regres 组合时语义最干净(log 字段相减可直接得到 log 未复权股价与 −log 自由流通比例),适合在 PI 想用两个 E 位分别打「价格轴」和「股本流量轴」时作为第二个核心。明确不要 log(inv(LogFloatShares))(深度 3,GP 只剩 1 层)和 abs_ / pow_2 / ts_max 三行(n 只有 4–5,mean_with 落在簇的下半,外层算子纯噪声)。"
+   }
+  ],
+  "queries": [
+   "Q1(价格轴/核心 1):控制市值之后,名义股价(未复权的每股价格)本身在横截面上还有没有定价能力?文献里怎样构造与处理这个特征——取对数还是分位、是否按板块或股龄分组、是否与波动率或彩票型特征(最大日收益、偏度)交互、是否做过与市值的双变量排序?中文关键词:低价股效应、名义股价、每股股价、股价幻觉、彩票型股票、A 股横截面。English: nominal share price, low-price effect, price level and expected returns, penny stocks, lottery-like stocks, MAX effect, idiosyncratic skewness, China A-share cross-section.",
+   "Q2(股本轴与股本流量/核心 2):自由流通比例(流通股本/总股本)与流通股本的近期变动(限售解禁、定向增发、回购、送转)作为横截面特征,文献里怎样构造?用对数差分、事件窗口,还是解禁规模占流通市值的比例?有没有与换手率/波动率交互或按市值分组?另外有没有把累计分红送转历史(等价于后复权因子)当横截面特征用的做法?中文关键词:自由流通比例、限售股解禁、定向增发、股本变动、股票供给冲击、送股转增、复权因子、股息率。English: free float ratio, lockup expiration, share supply shock, seasoned equity offering, share issuance anomaly (Pontiff-Woodgate), net share issuance, stock splits, dividend yield anomaly, payout and expected returns.",
+   "Q3(方法论:判定真来源还是规模的代理):秩空间线性市值中性化之后残留的非线性规模暴露,文献里用什么办法识别和处理——分组内中性化(按市值分层内部排序)、双变量排序、市值平方项、特征调整收益?有没有比较过「正交化」与「双变量排序」给出不同结论的案例?中文关键词:市值中性化、非线性规模效应、分层排序、双变量排序、特征调整收益、微盘股。English: size neutralization, nonlinear size exposure, double sorting vs orthogonalization, characteristic-adjusted returns, Fama-MacBeth with size squared, microcap effect.",
+   "Q4(N 灵感:交易约束作为条件变量):涨跌停幅度与上市板块这类交易约束,文献里怎样作为横截面变量使用——用来缩放日收益或波动(按涨跌停幅度归一)、作为分组变量,还是作为事件(封板、开板)?A 股涨跌停制度下的动量/反转/波动率因子有没有做过这种归一化处理?中文关键词:涨跌停、价格限制、涨跌幅限制归一化、封板、创业板科创板 20% 涨跌幅、注册制。English: price limits, limit-hit, magnet effect, price limit and momentum reversal, volatility scaling under price limits, China ChiNext STAR 20% limit."
+  ],
+  "summary": "种子 808 第 1 轮快照只有 M 第 1 批:0 个 head、91 个已评分候选、拆解 0 次评估、R 候选 0 个。所以本轮没有任何充分性/必要性/敏感性实测,唯一证据是共性那 7 行——而这 7 行其实是 1 行。\n\n【alpha 的来源】7 个子树全是 LogFloatShares 的单字段包装(inv / ts_decay_linear(·,50) / abs_ / log / ts_max(·,50) / log∘inv / pow_2)。机制上它们同分:long_neutral 的 score 只经过 dg._zrank(diagnose.py:190)的横截面秩,hl=0 时任何严格单调变换给出完全相同的 score,sign 自动吸收方向;LogFloatShares 恒正且远离 0(dailyfields.py:57),这 5 个一元算子在该定义域严格单调;两个 50 日窗口归约作用在只随解禁/增发/送转跳变的静态字段上,近似等于水平值。数字也证实:7 行各自反推的全档均值都是 −0.4604(内部自洽),mean_with 全落在 0.4653–0.4857 这条 0.02 宽的带里,且整簇都卡在门槛 0.5 之下(最高 0.4857)——这就是 0 个 head 的直接原因。按 MWU 的 U 统计量反推,这条 0.02 带里约有 35–40 个候选,占 91 个的四成(推断):M 第 1 批约三分之一的预算在反复重新发现同一个静态特征。GP 会掉进去是量纲造成的:log 规模字段量级 ~20,而 day_std(Ret) ~1e-2、day_sum(Amt) ~1e7,加减结构里规模字段吞掉一切。\n\n真来源的身份:控制里已有 LogFloatCap(秩空间线性),所以留下的只能是正交于市值的那部分,按定义 LogFloatCap − LogFloatShares = log(未复权股价)、LogTotalCap − LogFloatCap = −log(自由流通比例)。于是有两种可能、本轮分不开:(a) 名义股价/低价股效应;(b) 只是规模的代理(线性秩中性化挡不住非线性规模暴露)。旁证:daily.py:25 说价格字段是后复权而 Amt/Volume 是原始的,所以 div(day_sum(Amt), day_sum(Volume)) 才是未复权均价——而这 91 个候选一次都没把两个字段组合起来,这条轴从未被试过。\n\n【烂部件】作用在静态字段上的全部单调一元包装(inv/abs_/log/pow_2/log∘inv)贡献精确为 0;50 日窗口归约同样无用,ts_max(·,50) 是簇里最差的一个。但本轮 R 在代码层面不可能:c05_check.py 的 heads 集合为空,任何 R 条目都会 NOT ADMISSIBLE;c05_locate.py 的 direct 模式会 SystemExit。48 次拆解 + 16 次 R 共 64 次评估本轮必然浪费(PLAN §2.3 不挪用),B 本轮只花 192 次而 A 花满 256 次——第 1 轮 B 组结构性吃亏,本轮唯一目标是产出第一个 head,把第 2 轮的 48 次拆解预算激活。\n\n【关键制度发现,给 PI】(1) 本轮合法的核心只有共性表那 7 个表达式:c05_check.py 的 known 集合在 heads 为空时只剩 enrichment 与 core_cards;裸叶子 LogFloatShares 不合法(共性只收 n.operands 非空的节点),这正是「7 行只是 1 行」的制度原因。(2) GP 自产树 max_depth=4,深度 2 的核心只给外围留 2 层,深度 3 的核心只留 1 层。(3) E 位 --parts seeds --seed-share 1.0 --graft-fill 32:初代 32 个全是种子,预算 96/种群 32 只有约 3 代,三分之一预算直接花在手写种子上;--parts seeds 下 priors 与 hood 都不开(无算子加权、无 guidance accept),初代种子是 Partura 唯一的通道;种子深度上限 9 而 GP 只能长到 4。(4) 本轮 E 的核心家族控制为空(库里无 head),E 的奖励与 N 完全一样,E 位很便宜。(5) 闸门 coverage ≥ 0.9 且 distinct_fraction ≥ 0.5:BoardCode(4 档)、LimitWidth(3–4 档)单独当因子必被挡死,只能作为缩放/条件变量乘进连续信号;纯事件差分同理。\n\n【N 灵感】① 三个 log 字段相减,把价格轴 sub(LogFloatCap, LogFloatShares) 与自由流通比例轴 sub(LogTotalCap, LogFloatCap) 写成分开的种子,这样第 2 轮能读出 alpha 在哪条轴上;② 未复权价 div(day_sum(Amt), day_sum(Volume)) 与它同 day_last(Close) 的比值(累计复权因子 = 累计分红送转痕迹);③ LimitWidth / BoardCode 作为缩放变量(PLAN §1 记着 C04 里 Partura 唯一站住的贡献就是日收益按涨跌停幅度缩放,方向由 GP 定)——方向一律交给 GP 的 sign,别在假设里写死。\n\n【留给第 2 轮核对的预测】P1 单字段单调包装/窗口归约继续落在 0.46–0.49 不过 0.5,本轮若出 head 必含第二个字段或一个差分;P2 sub(LogTotalCap, LogFloatCap) 的单独 score 低于 sub(LogFloatCap, LogFloatShares) 且在 0.1–0.5 之间;P3 纯股本差分会被 distinct 闸门挡掉;P4 手写种子的 score 分布明显高于机械嫁接那部分。"
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:e2291b4c1e26f559cb3ea001c8c739900a3bd338682bd36248311d73410c170e",
+ "agentId": "aed96d994c1b5de08",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     11,
+     12
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     7,
+     8
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "cross_mean(cross_ema(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret)), 10), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "cross_mean(div(day_sum(mul(mul(Ret, Ret), Ret)), mul(day_sum(pow_3(Volume)), day_sum(pow_3(Volume)))), 20)",
+    "soundness": 2
+   }
+  ],
+  "summary": "audit_1.yaml 已写入并确认能解析,R 组的 head 与 missions.yaml 逐字一致。两个任务位都通过,R 组一过一挡。\n\na 位(E 深挖,核心是资金流倾斜 X):创新度 3,合理度 3,划掉 11、12,留 11 个,通过。外围不再是纯平滑,改成相对自身历史的偏离、跨日加权、逐股相关等。按 §3,E 位的输入仍是同一个 X,所以给 3 不给 4。\n- 划 11:与流动性 |ρ| 0.51,属陷阱 3。\n- 划 12:与 head +0.61 的 |ρ| 0.80,是换皮。\n- X 恒等于 day_corr(Ret, Amt) 乘日内成交额变异系数,后者就是非流动性。取 X 幅度或尾部的外围会把它重新暴露出来(种子 11 是证据,种子 13 与市值已到 0.26)。\n- 种子 7–9 的逐股 120/60 日相关估计基本是噪声,但符合本位 idea,保留。\n- PI 拿 valid +2.61 当样本外证据不成立:score 是 train 与 valid 取小,head 本来就是按 valid 选的。\n\nb 位(N,隔夜与盘中拉锯):创新度 4,合理度 4,划掉 7、8,留 12 个,通过。与所有 head 的 |ρ| ≤ 0.18、与 5 个控制 ≤ 0.19。算子逐个核对过,文献直接针对这个切分并含 A 股。\n- 划 8:相关度表判为废品,distinct 只有 0.016。\n- 划 7:把同一个只有约 41 档的量包进 cs_bucket_rank 后 distinct 变成 0.994,但这完全来自按股票列序破平,是陷阱 2「借列序过 distinct 门槛」。\n- 种子 9–13(拉锯强度、隔夜占比、两段波动之比)有一个竞争解释:可能只是开盘集合竞价的价格噪声(Roll 式非流动性度量)。现在与控制的 |ρ| 还低。\n\nR 组:\n- head +0.61(换平滑窗口 / 分母 / 切片):合理度 3,通过。切片变体有价值;改窗口的依据弱;换 day_wstd 的论据被相关度表反驳,换后与控制的 |ρ| 反而升到 0.29–0.37。\n- head +1.22(成交量幂分母降幂):合理度 2,不通过。诊断是对的,分母确实是烂部件;但三个变体仍把成交股数的幂放在分母,若高出 0.1 而替换,换进库的仍是陷阱 3 的产物。剂量反应定位里已有两个点(+0.70 → +1.22),不必再花评估。建议改成尺度无关的分母,或删掉这一组。\n\n只读了 §5 允许的文件,没读 analysis.md、lit.md、notebook.md、r1/audit_1.yaml、R_prev.json。有一处要报告:为找残差的计算代码,我在仓库根目录跑了一次递归 grep,输出里列出了其他种子(s802–s807)几个 corr_*.json 的文件名。我没有打开这些文件,也没用到其中任何内容。"
+ }
+}

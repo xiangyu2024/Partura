@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:47ee152f0dddf36285c9a87714abf52e8e62d60e8222ca111868d25282e22c86",
+ "agentId": "ac54cab95515c27e6",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s806/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "day_max(Ret)",
+    "hypothesis": "The level of the largest one-minute up-move is mostly volatility, and the vol control removes that. The alpha, if there is any, should be in the shape of the right tail after standardisation. Z = (day_max − day_mean)/day_std is a Lee–Mykland-style jump statistic: it is bounded, and a locked day gives 0/0 = NaN, not a blow-up. Z is aggregated along the day axis with EMA, MAX(5) (cross_tail_mean_q75) and MAX(1). A signed version (up-jump Z minus down-jump Z) is included, as are ranks inside the vol-control decile and inside the zero-minute-share decile. cs_last_* screens push frozen names and recent listings / resumptions to the bottom of the book. Two seeds are diagnostics that price the old cross_product/cross_max chain. Mechanism: retail lottery demand plus T+1 and short-sale limits overprice stocks with a fat positive jump tail (Bali–Cakici–Whitelaw 2011, Lee 2023, Amaya–Vasquez 2011)."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Tug of war between the overnight and intraday parts of the return. O = log(today's open / yesterday's close) and I = log(close / open). Under T+1, attention-driven retail demand is concentrated in the opening call auction (the overnight gap), and the continuous session partly corrects it. A persistently positive O is a firm-level sentiment proxy, and those stocks later underperform (Aboody et al. 2018; Lou–Polk–Skouras 2019). Seeds: mean, EMA and upper-tail mean of O; the O−I spread; corr(O, I) and corr(previous day's I, O); the overnight variance share; first-minute turnover share, alone and as a weight on O; and EMA of O over EMA of intraday vol. All are bounded or have safe denominators and use no lookahead. No batch-1 subtree touches the auction gap. The 20-day reversal control is the sum of O and I, while these seeds measure their difference and how they relate."
+   }
+  ],
+  "n_R": 0,
+  "check_exit_code": 0,
+  "summary": "Seed 806 round 1 plan is written and passes c06_check.py (ADMISSIBLE, exit code 0).\n\nSlot a is E with core day_max(Ret) and 14 seeds. Every seed contains the core verbatim, and the periphery is deliberately different from the batch's {cross_product(·,3), cross_max(·,30), abs_} stack. The main seeds build a jump statistic, div(sub(day_max(Ret), day_mean(Ret)), day_std(Ret)), and wrap it in EMA, MAX(5) via cross_tail_mean_q75 and MAX(1) via cross_max. The other seeds are:\n- a signed up-minus-down jump\n- cross_madz against the stock's own history\n- cs_bucket_rank inside the vol-control decile and inside the zero-minute-share decile\n- cs_last_high10 and cs_last_low05 screens that push frozen names and recent listings / resumptions out of the long book\n- the jump's share of the day's log range\n- a ratio of EMAs\n- two diagnostics: cross_max(day_max(Ret), 30), and the original chain wrapped in a missing-day screen\n\nSlot b is N, overnight versus intraday (the T+1 sentiment channel), with 11 seeds built from overnight and intraday log returns: means, EMAs, spreads, correlations, the overnight variance share, and opening-minute turnover share.\n\nNo R this round. The snapshot has 0 heads, so c05_locate's direct mode exits on any R request.\n\nAll 25 seeds ran on a synthetic cube with no errors and no infinite values. Coverage was about 0.97 (the cube has 3% suspended days) and distinct ratios were 1.0. The real data can still fail the gate.\n\nLiterature: Aboody et al. 2018 and Lee–Mykland 2008 were checked against the publishers' pages; the rest comes from lit.md. The DOI for Lou–Polk–Skouras 2019 resolves to a 2019 JFE article, but I could not confirm its title because the web-search budget had run out.\n\nMain risk: day_max(Ret) may correlate with the vol control at |ρ| ≥ 0.8. I estimate about a 20% chance, and if it happens the whole E slot fails the audit.\n\nnotebook.md had no earlier entries, so I created it with the round 1 section: beliefs, a prediction for each slot, and no earlier round to check.\n\nFiles: /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s806/r1/missions.yaml and /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s806/notebook.md"
+ }
+}

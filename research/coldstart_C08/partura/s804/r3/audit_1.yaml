@@ -1,0 +1,120 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6]
+    reasons: |-
+      【核心本身,和上一轮的区别是否真的生效】核心 `ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10)`
+      在 corr_1.json 里:max_head=0.298(最像的是 head1,远低于 0.7 库禁线),controls=
+      {liq 0.47, vol 0.08, rev 0.01, known 0.41, size 0.42}——size(市值)只有 0.42,
+      既不到 corr_1.md 表头定义的「≥0.5=控制变量换个写法」,更不到 §3「≥0.8=几乎就是这个控制」
+      的自动线,也不到 E 位专项门槛的 0.8。上一轮同一个核心因为多了一层「减 LogFloatCap」,size
+      |ρ| 是精确的 1.00(round2/audit_1.yaml slot a);这一轮把 LogFloatCap 完全移出 y 位,
+      只保留纯粒度不稳定性,size |ρ| 从 1.00 降到 0.42——数字证实「移出 y 位」这条修复路径
+      (round2 审计给出的第一条建议)被逐字落实了,不是换个说法绕过去。12 个种子逐个检查:1/2/3/
+      7/8/9/10/11/12 这 9 个种子的 y 位不含任何 LogFloatCap/LogTotalCap 算术(seed1/2 用
+      ListAge 筛、seed3 用 cross_valid_count 筛、seed8 用 day_zero_ratio 筛、seed9 是跨字段
+      Vwap-vs-Close 的同尺度减法、seed10 用 LimitWidth 筛、seed7/12 只是加一层 ts_mean 平滑),
+      没有一个重犯「悬殊尺度直接相减」的错误;seed4/5 把 LogFloatCap 直接放进 cs_last_high20/
+      cs_last_low20 的 x 位(筛选位),而不是 y 位算术——核对 partura/ops_ext.py 的 `_lexi()`
+      实现(cs_last_high20/low20/cs_last_high10 等全部调用它):x 位只用于按百分位 TIE BLOCK
+      整块排除/置顶,参与的是 `torch.sort`/`searchsorted` 的排序逻辑,y 位的数值从未与 x 相加减,
+      PI 所称的「筛选位是排序安全的,不是数值运算」核对属实。seed4 的 size |ρ|=0.57、seed5 为
+      0.23,均 <0.8,中度相关不是问题(§4)。
+      【唯一要划掉的种子】seed6 `cs_last_high20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20),
+      10), sub(LogTotalCap, LogFloatCap))` 的 max_head=0.705(对象正是 head1 全文,
+      size |ρ| 反而只有 0.003)——≥0.7,踩中 §3「与某个 head 的日度秩 |ρ| ≥0.7」自动线,GP 的
+      库禁令本来就会拒绝这个候选,按确定性规则划掉。原因很直接:head1 外层正好也是
+      `cs_last_high20(..., sub(LogTotalCap, LogFloatCap))`,seed6 只是把 head1 的内层
+      `cs_last_high10(sub(TS,LogFloatCap), ts_max(...))` 换成了裸 TS,外层筛选权重大到让两者
+      排序几乎重合——这是「加了同一个外层筛,就撞上已有 head」的具体例子,划掉即可,不影响其余
+      11 个种子,也不说明核心本身有问题(核心裸身 max_head 只有 0.298)。
+      【机制核对,逐算子】day_distinct_ratio 的实现(ops_ext.py 第607行起)是「当天有效分钟里
+      不同取值数/有效分钟数」,文档原话「coarse for low-priced stocks on a one-tick grid」,
+      与 Harris (1991) 讲的价位/成交频率对离散度的影响一致;ts_mean(·,20)/ts_var(·,10) 是
+      AlphaCube nd_ts.py 标准的 rolling mean/var(rolling_reduce+nanmean_last/nanvar_last),
+      没有自定义数值风险。没有新的除法:day_distinct_ratio 内部的除法分母是
+      `n.clamp(min=1)`,且输出经 `_day(..., n>1)` 在有效分钟<2 时置 NaN,不会在近零分母上
+      爆点;NaN 按 coverage 门槛过滤(corr_1.json 全部种子 coverage=0.999)。没有前视:Vwap/
+      Close 都是当天收盘前确定的量。loc.md(round2)里这个核心的「近亲」(多一层减 LogFloatCap
+      的版本)sufficiency 测试给出 -5.07,核心本身(round2/loc.md 第46行)是 -1.58——两者都是
+      废品级裸排,但原因是该二阶量对绝大多数股票常年贴 0、只有少数长尾时段跳变,裸排几乎全靠并列
+      块、靠列序打破(§4 明确「并列靠列序打破……不是问题」),不是前视/数值伪影/定义坏掉;本位 12
+      个种子没有一个是裸核心,全部配了 ts_mean 平滑或 cs_last_*/cs_first_* 筛选位,这个弱点已经
+      被外围处理。
+      【创新度=4 的依据】核心 max_head=0.298、与任何控制 |ρ| 的最大值只有 0.47(均 <0.5),不是
+      库里 head 或控制换皮;虽然是 head1 的一个子树(E 位规则本来就要求核心取自某个 head 的子
+      树,这是合规用法不是扣分项),但测的对象——「颗粒度这把尺子本身是否突然变过」(二阶量)——
+      与 Harris (1991)讨论的「颗粒度的正常水平随规模变化」(一阶量)是两件不同的事,且与 5 个控
+      制(包括市值本身)都不重合,给 4(不给 5,因为裸核心信息量很弱、高度依赖外围筛选才能成
+      立,机制链条——粒度失稳 ← 封板/停牌 ← 注意力/价格发现延迟——是合理但偏迂回的两步推理)。
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: |-
+      【核心本身】`day_kurt(Ret)` 在 corr_1.json 里 max_head=0.079(最像
+      `day_mean(in_logchg(Amt, 30))`,远低于 0.7),controls={liq 0.09, vol 0.01,
+      rev 0.06, known 0.09, size 0.26}——没有一项接近 0.5,不是任何已有 head 或控制换皮。
+      loc.md 的共性表第12名(均值差 +0.95,p 0.000,19/530 候选含它),逐字核对属实。本种子
+      之前唯一碰过这个核心的是 round2 位 a 审计失败后转的 `c08s804Pr2a_I0_open_search`(loc.md
+      「本组之前各轮的任务」),那是无方向的开放 GP,顶部结果全部是单日 sigmoid 包装或
+      `cs_mask_top_replace_mean_neg` 截尾(score 最高仅 -0.00,全部没过线),没有一次做过跨日
+      时间窗口聚合——本位种子改用 ts_mean/ts_max/ts_stddev/ts_rank 做 5-60 日窗口聚合,确实是
+      没试过的外围,给 4。
+      【机制:和波动控制是否真的是两件事】vol 控制是 `cross_mean(day_std(Ret), 20)`,二阶矩;
+      day_kurt 是标准化四阶矩(核对 alphacube/operators/common.py `_kurt`:
+      `div(mean((x-mean)^4), mean(var)^2) - 3`,与 PI 描述的公式逐字一致)。新尺子已经去掉对
+      vol 秩及其平方、三次方的线性/U形/S形暴露(§1),四阶矩不是二阶矩的单调函数,标准差相同、
+      尾部形状不同的两只股票会被 day_kurt 区分开——这个独立性论证站得住,不是嵌套深就说不清楚
+      (§4 明确嵌套深不是问题)。
+      【划掉的种子】seed9 `ts_rank(day_kurt(Ret), 20)`:corr_1.json 给出 gate=false、
+      distinct=0.019、max_head=0.101、controls 全部 <0.03。核对 nd_ts.py 的 `ts_rank`
+      实现(`rolling_reduce(x, d, nanrank_last)`,pct=True 默认):对每只股票自己过去 20 天的
+      序列取百分位名次,本质上只能取 1/20…20/20 这 20 个离散值,20 天窗口把原本连续的 day_kurt
+      数值压成了全市场范围内只有 ~2% 的取值多样性——这与 round2/audit_1.yaml 划掉
+      `is_gt`/`is_lt` 阈值化种子(gate=false,distinct 0.001–0.205)用的是同一条理由:§4
+      「数值伪影:面板几乎是常数」,是实现层面的离散化问题,不否定「day_kurt 该不该做窗口聚合」
+      这个 idea 本身,按确定性规则划掉即可。
+      【其余种子逐项核对】sub(day_kurt(Ret), mul(day_skew(Ret), day_skew(Ret)))(seed10)及
+      其 ts_mean 包装(seed11):PI 引用的 Pearson 不等式——超额峰度 ≥ 偏度² − 2——是标准矩不等
+      式(非负量 E[(Z²-1-γ1·Z)²] 展开可得 kurt ≥ skew²+1,减 3 即超额峰度 ≥ skew²-2),
+      核对数学上成立,这个组合确实是在剔除偏度对峰度的机械抬升,不是任意拼接。日收益
+      ret/day_kurt 都在当天收盘前确定,没有前视;停牌/一字板全天冻结时分子分母同时精确为 0,
+      `torch.divide(0,0)=NaN`(非 inf),NaN 按 coverage 过滤(全部种子 coverage≈0.997-0.999),
+      不会以爆炸数值支配截面——且奖励口径是先转横截面秩再比较(§1),即使某只股票某天 kurt 异常
+      大,也只是把它排到当天最高名次,不会牵动其他股票的相对顺序,不是「除以近零量支配截面」。
+      PI 自己坦白的「贴版当天冻结/打开也会机械推高 kurt,与 round2 位 b 的贴版强度可能有重叠」是
+      经验问题不是数学问题(§4 没有「两个机制可能重叠」这一条),处理方式正确,不构成扣分。
+      【创新度=4、合理度=4 的综合】核心与库、控制都不重合,外围(时间窗口聚合 + 偏度剔除)是没
+      试过的新组合,13/14 种子通过,核对无前视、无除零爆点、无面板常数(划掉的 1 个已处理);
+      文献(Chen, Ding & Zhao 2019;Amaya et al. 2015)内容本身未独立核实,但其在本位里的用法
+      (方向预期、方法论借用)内部自洽,不作为扣分依据。
+    revise: '—'
+R:
+  - head: cs_last_high20(cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap), ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60), 60)), sub(LogTotalCap, LogFloatCap))
+    soundness: 4
+    reasons: |-
+      3 个变体都只针对 round2/audit_1.yaml 自己量化出的那个具体缺陷——head1 的 y 位子树
+      `sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)` 与市值控制
+      size 的原始秩 |ρ|=1.00——做最小改动,不是无依据的随便改。逐个核对:
+      variant1 去掉 y 位里的「减 LogFloatCap」,其余原样保留,对应「这部分是不是纯累赘」;
+      variant2 把去掉之后腾出的位置换成 `cs_last_high20(TS, LogFloatCap)`(排序安全的筛选,
+      而不是算术相减),对应 round2 审计给的第一条修复建议本身;variant3 在 variant1 的基础上
+      再把外层 `sub(LogTotalCap, LogFloatCap)` 换成裸 `LogFloatCap`,这是显式声明的「在
+      variant1 基础上叠加的第二步测试」,不是隐藏的双重改动。corr_1.json 核对:3 个变体
+      gate 全部 true,coverage/distinct 均 0.999/1.0,没有新引入除法、前视或面板常数风险;
+      用到的算子(ts_var/ts_mean/day_distinct_ratio/cs_last_high10/cs_last_high20/ts_max/
+      mul)全部是 head1 本来就在用、本轮已反复验证正常的算子,没有新算子。known 列三个变体分
+      别是 0.22/0.26/0.44,都 <0.5,满足 R「收录」资格里对已知族的门槛;与 head1 本身的
+      |ρ| 分别是 0.81/0.87/0.46——variant1/2 高是因为改动只触及 y 位一处、外层筛选结构原样
+      保留,预期如此,不是问题;variant3 改了两处所以相关度降到 0.46,与「variant3 测试范围更
+      大」的描述一致,不是数据不一致。
+      唯一保留意见(不影响这次合理度判断):3 个变体的 y 位都仍然含
+      `ts_mean(day_distinct_ratio(Vwap), 20)` 这个由头,如果某个变体真的替换了 head1,新 head
+      依然继承了「被 size 筛选位主导排序」的底子(本轮位 a seed6 的 0.705 就是一个旁证),值得
+      后续轮次留意,但这是「改完之后新 head 还剩多少市值敞口」的经验问题,不是本次 R 改动本身的
+      数学/实现问题。
+summary: 位 a(颗粒度失稳二阶核心)创新度4、合理度4通过,核对确认 LogFloatCap 已从 y 位移出(size|ρ|从上轮1.00降到0.42),划掉1个与head1撞车的种子(|ρ|=0.705)剩11个;位 b(分钟收益峰度)创新度4、合理度4通过,划掉1个离散化数值伪影种子(ts_rank窗口化,distinct=0.019)剩13个;R1三个变体精确对应round2审计量化出的缺陷,合理度4,直接评估。

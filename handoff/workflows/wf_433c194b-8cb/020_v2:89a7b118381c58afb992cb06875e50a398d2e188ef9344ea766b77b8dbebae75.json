@@ -1,0 +1,43 @@
+{
+ "type": "result",
+ "key": "v2:89a7b118381c58afb992cb06875e50a398d2e188ef9344ea766b77b8dbebae75",
+ "agentId": "abca30898f105d626",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r2/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     2,
+     3,
+     4,
+     8,
+     9,
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     5,
+     6
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 40)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40), 40)",
+    "soundness": 3
+   }
+  ],
+  "summary": "I wrote audit_2.yaml. Both slots pass and so do both R groups. The PI did not change either slot from attempt 1. The only edit is that the H5 R group was removed under the rules, and corr_2 matches corr_1 apart from that one row. Slot a (the E slot: matches the size-z-scored distinct-ratio core on price and turnover, plus level and shock variants) scores novelty 3 and soundness 3. This time I also strike seed 4, which corrects my own leniency in attempt 1. Matching on the zero-return ratio brings back the nominal-price / share-count channel the slot is meant to remove (size 0.398, H3/H5 0.596), and R1 v4 and v6 already run that diagnostic. Seeds 5, 6, 10 and 11 remain, exactly the minimum of 4. The slot's outputs need checking for vol exposure: matching on price exposes the low-vol leg, and no kept seed matches on both price and vol. They also need checking for rev exposure, since seeds 10 and 11 sit at 0.46-0.48. Slot b (realized skew and RSJ from 5-minute returns with the auctions removed) scores novelty 4 and soundness 4. I strike seeds 5 and 6, the unconditioned RSJ, because they rewrite the reversal control. I also note that seed 12's 20-day mean of at-min ratio mostly screens out stocks on the coarsest tick grid rather than limit-down locks. Both R groups score 3. The H1 evidence is indirect: the loc knockout changed the bucketing variable, not y."
+ }
+}

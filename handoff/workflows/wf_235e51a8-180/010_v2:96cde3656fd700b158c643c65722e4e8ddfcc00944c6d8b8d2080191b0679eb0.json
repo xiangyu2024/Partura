@@ -1,0 +1,23 @@
+{
+ "type": "result",
+ "key": "v2:96cde3656fd700b158c643c65722e4e8ddfcc00944c6d8b8d2080191b0679eb0",
+ "agentId": "a796f598b34c2c482",
+ "result": {
+  "guidance_path": "/Users/wxy/Desktop/Partura/guidance/C01_r3.yaml",
+  "cards_path": "/Users/wxy/Desktop/Partura/research/coldstart_C01/cards_r3.md",
+  "ideas": [
+   {
+    "id": "C3a_slow_lottery_shape",
+    "seeds": 4,
+    "prediction": "种子 301-304(8 条种子表达式:6 条机制 + 2 条控制,全部是 cross_mean/cross_ema/cross_med 30-60 天包起来的慢变量)。预测:(1) 至少 1 个 head,其核含 day_skew/day_kurt/day_max/day_es_ratio_hi/day_es_ratio_lo 之一,且该 day_op 落在慢归并之下、在决定排名的那一支上;(2) 方向 sign = -1(做多低彩票形状一侧);(3) 通过者换手中位数 <=0.05,换手 >0.08 的通过者 0 个,hl 多数选 20;(4) 通过者 |rho| 中位数 <0.40,|rho|>=0.5 占比 <35%(R1 79%、R2 98.6%);(5) 含流动性叶子的通过者 <=2%,含 nt_*/ts_spearman 的候选 0 个;(6) 至少 1 个通过者来自归一化或尾部不对称写法(day_max/day_std、右尾减左尾、上下半幅之比),不只是裸 skew/kurt 的慢均;(7) 两个控制种子 cross_mean(day_zero_ratio(Ret),60)(一价/刻度)与 cross_mean(day_std(Ret),60)(已实现波动)的 score 都低于至少两个机制种子,且后者 |rho| 明显更高;(8) sampling: banned 55-70%、outside 10-25%、accepted >=15%、scored >=90,每次运行墙钟 <60 分钟。失效:|rho| 中位数 >=0.5(波动/小盘代理)、sign 选 +1(与机制相反)、只有裸形式过线或控制种子分数最高(刻度假象)、只有 day_kurt 过线(特质尾部风险而非右偏)、day_op 都挂在不决定排名的支上(装饰性满足邻域,记这一轮白跑)。依据是 B 臂自己的三条读数:裸 day_skew(Ret)(score -0.640、sign -1、换手 0.0946、|rho|0.042、还原毛 train 年化 +2.9%)、裸 day_es_ratio_hi(Ret)(-0.902、sign -1、换手 0.1004、|rho|0.073、+1.8%)、cs_regres(day_kurt(Ret), cs_sum(day_es_ratio_hi(Ret)))(+0.084、sign -1、|rho|0.085)—— 方向都是机制预测的那一侧、|rho| 都极低、都被 15bp 成本拖成负分;而 cross_mean 在 1187 个候选里只出现过 1 次,慢形式从未被测。"
+   },
+   {
+    "id": "I0_open_search",
+    "seeds": 4,
+    "prediction": "种子 305-308,无种子表达式、无邻域,只带 11 条先验(所以不是对照臂;同种子的 A 臂就是纯对照,这四对是本实验唯一能单读「先验」这一个杠杆的地方)。预测:(1) 含 nt_*/ts_spearman/day_distinct_ratio 的候选各 0 个(词表级:operator_weights() 把它们的采样权重打到 0,_pick_weighted 直接剔除,nt 面整个退出 —— 实测 3000 棵生成树各 0.00%,对照臂是 6.57%/1.33%/3.93%);(2) 含流动性叶子的存档候选 <=2%(叶子禁令只走 accept,实测 1500 次 generate fallback 0 次、返回被禁树 0 棵);(3) sampling: banned 50-65%(实测 55.5%)、outside 0、accepted >=35%、scored >=90;(4) 每次运行墙钟 <40 分钟;(5) 四次合计通过者 1-60 个(点估计 10-25;R1 同样 8 次是 273 个、其中 217 是已知族);(6) 通过者 |rho| 中位数 <0.45、|rho|>=0.5 占比 <50%;(7) 低 rho 通过者里含平移筛选或 mask 的占比 <30%(R1+R2 是 52/60 = 87%)。失效:四次合计 0 个通过者 → 「这个奖励下除了那四类没有东西」;但若同时 banned >80% 或 scored <80,必须改判成「先验把生成卡住了」。"
+   }
+  ],
+  "priors": 11,
+  "summary": "R3 把做法从「按写法逐条堵」改成「按叶子和算子词表关掉已知族」,并把算力对半分给一个慢变量机制和一次只有先验的开放搜索。\\n\\n先接受 R2 的结论(不改故事):R2 的两个 idea 在样本内就失败,主因是实现失误 —— @flow 只匹配裸叶子(一层包装就绕开)、must-contain 只查记号在不在表达式里(装饰性满足)、种子是日频原始形式(换手 0.10-0.145,年化成本拖累 7.6%-11%,被 15bp 杀死)、R2 的 2 个 head 是被 cs_first_low20 平移过的流动性(未平移孪生 rho+0.81)。C2b 按 beliefs_r2 §6 放弃;C2a 的机制本轮不复测,因为它自己写下的失效条件 (c) 触发了 —— 隔夜减日内的两种写法在 train 上都选了 +1(与机制方向相反),把成本加回去救不了方向;这条路没有被任何先验关掉,开放搜索那半边仍可走到。\\n\\n11 条先验(9 ban + 2 weight 0.2):禁流动性叶子(@flow)、禁全部 nt_*(按元数三条,环境事实:每节点 6.8 GB 落盘、207B 两次都死、C2b 跑 3474s/9824s、R3 时限 180 分钟)、禁 ts_spearman(股票维 5207 次 Python 循环;向量化替身 ts_pearson 留着)、禁 day_distinct_ratio(104 族签名分子)、禁 day_std|day_var(@price)(名义股价×波动;day_std(Ret) 保留作归一)、禁名义股价水平及其一层包装;平移筛选 cs_first_*/cs_last_* 与 cs_mask_top_replace_mean(_neg) 只降权到 0.2 不禁 —— 因为直接禁会把样本内全部已有发现清零,那样就分不清「空间是空的」和「我把空间关死了」。\\n\\n我自己在 1187 个候选上核过:这些 ban 的并集命中 568/568 个通过者、20/20 个 head。这不是误伤,是本实验到现在的通过者全部落在四类东西里(流动性叶子 500 个通过者里低 rho 只有 11 个=2.2%;nt_* 163/8;day_distinct_ratio 90/33/13 heads;day_std|day_var(@price) 104/38/10 heads),而按 PLAN §3.1 跨轮贪心去重,再找一次这些 head 是零增量(B10),所以关掉它们按主判据不花代价。代价写明:量价交互 idea 全部出局;幸存的 114 个已有候选里 0 个通过者、最高分只有 +0.688 —— R3 是一次押在没搜过的空间上的下注,0 个通过者也是一个要如实记的答案。\\n\\n机制(C3a):分钟收益分布的彩票形状(偏度、右尾、极值÷自身波动、上下半幅之比)做成 30-60 天慢变量,做多最不像彩票的那一侧。证据是 B 臂自己的三条裸日频读数,方向、|rho| 和成本还原都对得上,而慢形式从未被测(cross_mean 在 1187 个候选里只出现 1 次)。两条控制种子(day_zero_ratio(Ret) 读刻度/一价日、day_std(Ret) 读已实现波动)刻意放在邻域之外,各花 1 次评估给出参照读数 —— 这就是「不只是价格刻度代理」的专门检验。\\n\\n机械事实已在本机实测:算子名级 ban 走 operator_weights()→op_weight 词表通道,权重 0 的算子被 _pick_weighted 直接剔出抽样(65 个 nt_* 全灭、nt 面退出,3000 棵生成树里 nt_*/ts_spearman/day_distinct_ratio 各 0.00%),所以落盘事故不可能重演;叶子级 ban 只走 accept,但本规则集下 1500 次 generate 的 fallback 是 0 次、返回被禁树 0 棵,每棵树 4.8 次(C3a)/2.3 次(I0)提议,outside 17.6%/0%,生成器没被搞坏。"
+ }
+}

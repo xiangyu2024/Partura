@@ -1,0 +1,37 @@
+{
+ "type": "result",
+ "key": "v2:f9483d21cb389cd6f7c7f33ad659165bfba189e987771db44bc700a9383ea40d",
+ "agentId": "a5265877f9de45cb0",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s805/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     2
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     8
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "log(cs_bucket_rank(cross_ema(day_centroid(Volume), 10), cross_mean(cross_mean(cross_mean(day_sum(Amt), 30), 30), 30)))",
+    "soundness": 3
+   },
+   {
+    "head": "cs_last_low20(cs_last_low20(sub(sub(day_pos_ratio(High), day_first(abs_(sub(-2, abs_(sub(-1, Open)))))), day_first(abs_(sub(-2, abs_(sub(-1, Open)))))), day_first(High)), ts_argmax(day_first(abs_(sub(-1, Open))), 1))",
+    "soundness": 3
+   }
+  ],
+  "summary": "Both N slots pass, and both R groups stay at soundness 3. The audit is written to /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s805/r2/audit_1.yaml, and it parses as valid YAML.\n\nSlot a (asymmetry of the minute-return distribution: RSJ and realized skew) scores novelty 4 and soundness 4. Its seeds have raw |ρ| of at most 0.25 with every head. I checked each operator against the source: in_slice(·,1,236) covers 09:31–14:56, day_signed_ratio(r, r²) is exactly RSJ, and days locked all day come out NaN rather than 0. I struck seed 2. It is the 20-day mean of RSJ without demeaning, so it uses the same window as the 20-day reversal control, and its |ρ| with that control is 0.49. That leaves 13 seeds. One caveat: the other RSJ seeds without demeaning are also 0.38–0.42 with reversal and partly pick up one-week reversal. The clean versions of this idea are the demeaned seed and the skew seeds.\n\nSlot b (intraday price–volume correlation, the published A-share CPV construction) scores novelty 4 and soundness 4. The table had already struck seeds 5 and 6, which use returns instead of price and are 0.53 and 0.58 with reversal. I also struck seed 8: its 0.49 comes almost entirely from seed 6. That leaves 9 seeds. Only seed 7 still tests the lead-lag (chasing vs informed trading) half of the hypothesis, so that half has largely failed.\n\nR1 (the +1.28 head) gets soundness 3. The main swap is supported: the bucket key adds nothing to the score (necessity 0.0024), and its only job is to bring the head's correlation with the known family from 0.55 down to 0.21 so it qualifies. Bucketing directly by the known family (variants 1, 11, 12) is the principled fix. Several other variants are weak:\n- **Variant 4 (ListAge):** its known-family |ρ| is 0.53, so it cannot qualify. It also hits trap §4-2: every stock listed before 2018 has ListAge set to 10000 plus the same day count, so they form one tie block that cs_bucket_rank splits into deciles by column order. The PI should drop it.\n- **Window-20 variants (8, 9, 12):** the ablation shows window 20 scoring lower than 10, so the evidence goes against them.\n- **Auction-slice variants (5–7):** their correlation with the original head is 0.99–1.00, so they can hardly gain the +0.1 they need.\n\nR2 gets soundness 3. The code confirms that ts_argmax(·,1) is the constant 1.0 and that the outer cs_last_low20 does nothing. But the +0.127 gain does not come from removing it: dropping the dead outer screen alone gains only 0.0007. The gain comes from a second price screen that repeats the inner one. It shows up only on train, and valid dips from 2.58 to 2.54. So this is a clean-up of the library, not new information."
+ }
+}

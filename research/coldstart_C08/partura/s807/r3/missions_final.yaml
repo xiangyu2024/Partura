@@ -1,0 +1,181 @@
+seed: 807
+round: 3
+slots:
+- type: E
+  core: day_std(Ret)
+  hypothesis: '核心同第 2 轮,仍为 day_std(Ret)(分钟收益算出的日内已实现波动)——这是它在本实验里最后一次可用的 E 位(规则 §2:每个核心至多
+    2 个 E 位)。再挖它而不是换一个全新核心,首先是因为它已经产出了本种子迄今样本外最强、最稳的发现(cross_stddev(log(log(log(day_std(Ret)))),
+    120),score 0.84、valid 1.63,本轮 loc.md heads[5]);但更重要的是一个本轮核对 ops_ext.py 源码才发现的、第
+    2 轮笔记完全没抓住的机制:第 2 轮 GP 没有选中我设计的任何一个外围(semistd/autocorr/hurst/zscore/regres 一个都没进最佳
+    5),而是自己用 cs_last_high05(y, x) 拼出了全场最高分 +0.88(valid 1.83,heads[4])和 +0.62(heads[7])。cs_last_high05
+    的源码文档写得很直白:''Rank of y with every stock in the HIGHEST 5% of x placed BELOW every
+    other stock'' —— 它不是把 day_std(Ret) 当『信号』去和另一个量比较协动或对称性,而是把 day_std(Ret) 当一个**排除筛**:当天波动最高的
+    5% 股票,无论另一个因子 y(这里是 pow_2_5(pow_2_5(LogFloatShares)) 的 cross_zscore)给它们多高的分,都被强行按到多头书的最底部,永远进不了多头。也就是说,这个核心真正贡献分数的身份,可能根本不是『波动水平的信号』,而是『用极端波动把最不可靠的名字从多头里筛掉』这件事本身——这是因子投资里一个很常见但和『波动溢价』完全不同的叙事(先选股、再用风险指标做排除性清洗)。第
+    2 轮我们把核心反复问『它自己的时间序列形状像不像波动的波动』,却从没问过『它配合另一个因子做排除筛,效果如何』。
+
+
+    本轮外围分三条,全部是第 2、3 轮都没碰过的写法:
+
+
+    (1) **把排除筛结构嫁接到第 1 轮已验证的市值方差线上**(直接回应上面这条新认识,而不是空想一个新机制):y 换成第 1 轮核心 ts_var(LogFloatCap,
+    20) 的 120 日自身历史 z 分数 cross_zscore(ts_var(LogFloatCap, 20), 120)(这个子树本身从未以当前写法被评估过,LogFloatShares
+    已经在本核心的现有 head 里用过,换成市值方差线是避免периphery重复的关键),x 仍是 day_std(Ret)。四个方向分开测:cs_last_high05(排除最高
+    5% 波动)、cs_last_low05(反过来排除最低 5% 波动,检验是不是方向搞反了——如果『排除』本身不是机制,排除哪一头应该效果相近或更差)、cs_last_high10(更宽的排除带,5%
+    太窄还是刚好)、cs_first_high40(换成『加分』而不是『排除』,即最高 40% 波动的名字被排到 y 排序的最前面而不是最后面——检验 heads[4]/[7]
+    的分数到底是『排除高波动有害』还是『任何对高波动分段的特殊处理』都加分)。
+
+
+    (2) **杠杆效应/非对称波动响应**(Christie 1982、Bekaert & Wu 2000 对 Black 1976 提出的杠杆效应做的系统横截面检验):用
+    cross_regbeta(x, y, d) 的 y~alpha+beta·x 构造,y = day_std(Ret)(核心,因变量原样嵌入),x = 昨日收益
+    cross_delay(day_mean(Ret), 1)(严格用 t-1 的冲击解释 t 日往后 d 天窗口里『波动对收益冲击的平均响应斜率』,不是同期相关,避免同日环内循环),以及用成交额加权的净买卖压力
+    day_signed_ratio(Ret, Amt) 代替简单收益作为冲击的第二种刻度。这与第 2 轮的『非对称』(semistd_pos/neg,对 day_std(Ret)
+    自己的变化量取正负半边)完全不是同一件事:semistd 问『波动变大和变小是否对称』,这里问『波动对*收益方向*的响应是否对称』——这才是文献里『杠杆效应』的本来定义,算子集合(cross_regbeta/cross_delay/day_mean/day_signed_ratio)在这个核心的任何一轮里都没出现过。
+
+
+    (3) **区间法波动与收益法波动的缺口**(Parkinson 1980 的极值法方差估计量;Alizadeh, Brandt & Diebold 2002
+    系统比较区间估计量与收益估计量的差异):用当日分钟最高价、最低价构造 Parkinson 式区间波动 sub(log(day_max(High)), log(day_min(Low)))(同一天内触达过的最高与最低价,取
+    log 差),与核心 day_std(Ret)(逐分钟收益算出的已实现波动)对照——两者理论上都在估计同一只股票同一天的真实波动,但区间法对买卖价差造成的微结构噪声更不敏感,收益法则把跳空、瞬时报价跳动都计入;二者的
+    log 差(sub(sub(log(day_max(High)), log(day_min(Low))), log(day_std(Ret))))衡量『当日价格路径的极值跨度相对已实现波动多出来的部分』,慢化到
+    60–120 日后是和第 2 轮『波动的波动』完全不同的截面特征(第 2 轮全部是 day_std(Ret) 对自己历史的统计量;这里是 day_std(Ret)
+    相对另一个独立估计量的缺口)。再给一个 cross_regres(log(day_std(Ret)), 区间波动, 120) 的时序回归残差版,直接检验『今天的区间跨度,相对这只股票历史上区间~已实现波动的平均关系,多出或少了多少』是否比简单
+    log 差更干净。
+
+
+    机制 (1) 与机制 (2) 各给一个按板块 BoardCode 分桶去均值的稳健性检验,检验是不是板块交易机制(连续竞价规则、涨跌停带宽)的构成效应。
+
+
+    为什么和控制不同:5 个控制里的波动控制是 20 日已实现波动的水平 cross_mean(day_std(Ret), 20);本位的三条机制分别是『用波动做排除筛而非信号』『波动对收益方向的响应斜率』『两种独立波动估计量之间的缺口』,全部是二阶/交叉/结构性的量,不是波动水平本身,奖励的残差化去不掉这类结构,这与第
+    2 轮论证(cross_stddev(log(day_std(Ret)),120) 不是波动控制的影子)是同一个论证套在新的外围上。为什么样本外还会在:杠杆效应是股票市场里重复验证最多次的截面规律之一,从
+    1976 年至今在几乎所有市场、所有样本期都稳定存在,不依赖估计窗口;区间法和收益法波动估计量的缺口反映的是报价机制和交易频率这类慢变量,不是某个样本期的特有噪声;用风险指标做排除性清洗是因子投资里长期存在的稳健性做法,不是对某段历史的过拟合;全部种子窗口
+    60–120 日(或滚动回归/排除筛本身自带长窗),换手低。'
+  literature:
+  - title: 'The stochastic behavior of common stock variances: Value, leverage and
+      interest rate effects'
+    authors: Andrew A. Christie
+    year: '1982'
+    url: https://doi.org/10.1016/0304-405X(82)90018-6
+    treatment: 杠杆效应的系统横截面检验;这里用 cross_regbeta(滞后日收益, day_std(Ret), d) 的斜率直接度量它
+  - title: Asymmetric Volatility and Risk in Equity Markets
+    authors: Geert Bekaert, Guojun Wu
+    year: '2000'
+    url: https://doi.org/10.1093/rfs/13.1.1
+    treatment: 区分杠杆效应与波动反馈机制;这里用滞后 1 日的收益冲击(而非同期)回归已实现波动,对齐其识别策略
+  - title: The Extreme Value Method for Estimating the Variance of the Rate of Return
+    authors: Michael Parkinson
+    year: '1980'
+    url: https://doi.org/10.1086/296071
+    treatment: 用当日最高价与最低价构造区间法波动估计量,这里与收益法 day_std(Ret) 对照取缺口
+  - title: Range-Based Estimation of Stochastic Volatility Models
+    authors: Sassan Alizadeh, Michael W. Brandt, Francis X. Diebold
+    year: '2002'
+    url: https://doi.org/10.1111/1540-6261.00454
+    treatment: 系统比较区间法与收益法波动估计量的效率与偏差差异,支持把二者的缺口当作独立于波动水平的结构特征
+  seeds:
+  - cross_regbeta(cross_delay(day_mean(Ret), 1), day_std(Ret), 60)
+  - cross_regbeta(cross_delay(day_mean(Ret), 1), day_std(Ret), 120)
+  - cross_regbeta(cross_delay(day_signed_ratio(Ret, Amt), 1), day_std(Ret), 120)
+  - cross_regres(log(day_std(Ret)), sub(log(day_max(High)), log(day_min(Low))), 120)
+  - cs_last_high05(cross_zscore(ts_var(LogFloatCap, 20), 120), day_std(Ret))
+  - cs_last_low05(cross_zscore(ts_var(LogFloatCap, 20), 120), day_std(Ret))
+  - cs_last_high10(cross_zscore(ts_var(LogFloatCap, 20), 120), day_std(Ret))
+  - cs_first_high40(cross_zscore(ts_var(LogFloatCap, 20), 120), day_std(Ret))
+  - cs_bucket_demean(cross_regbeta(cross_delay(day_mean(Ret), 1), day_std(Ret), 120),
+    BoardCode)
+  - cs_bucket_demean(cs_last_high05(cross_zscore(ts_var(LogFloatCap, 20), 120), day_std(Ret)),
+    BoardCode)
+- type: N
+  hypothesis: '灵感来自两处三轮里从未被真正用过的材料:(1) LimitWidth(涨跌停带宽)这个日频叶子,546 个历史候选、8 个 head、共性表、核心卡里,从来只被当成
+    cs_bucket_demean/cs_bucket_zscore 的『分桶字段』,没有人把『这只股票是不是真的被这个带宽锁死过』当一个独立特征算过;(2)
+    ops_ext.py 里的 day_at_max_ratio / day_at_min_ratio(当日有多少比例的分钟,价格停在当天的最高/最低点——对涨停/跌停后连续竞价冻结的股票,这个值会很高)和
+    day_flat_ratio(报价连续两分钟不变的比例,docstring 自己写的用途就是''frozen book'' state),三轮、546 个候选、全部
+    enrichment/core_cards 里一次都没出现过(day_pos_ratio、day_quantile、day_median、day_gini、day_centroid
+    都已经用过)。
+
+
+    机制:A 股的涨跌停板制度(主板 ±10%,创业板/科创板 ±20%,少数风险警示股 ±5%,这正是 LimitWidth 字段记录的内容)决定了,一只股票当天冲向价格带的一侧并封住、全天交易被锁死在那个价位附近时,留下的分钟数据会出现大量『同一个价格』的分钟——day_at_max_ratio(Close)/day_at_min_ratio(Close)
+    直接量化『这只股票今天封板封了多久』。Seasholes & Wu (2007) 发现上交所个股触及涨跌停当天之后,存在可预测的价格行为(触及涨停带来注意力冲击,随后有可预测的价格反应);Kim
+    & Rhee (1997) 在东京证交所的涨跌停研究里发现涨跌停本身会延迟价格发现、带来跨日的波动溢出;Kumar (2009) 的『彩票偏好』框架(本种子低波动/偏度那条线已经在用)直接预测散户会追逐『容易封板、高弹性』的股票,这类追涨行为本身是可预测的、带超额收益含义的交易者结构;Barber
+    & Odean (2008) 的注意力驱动买入在涨停这个最极端的注意力事件上应该最强。
+
+
+    这与第 1 轮 N 位(成交 CV,问『活跃度在天与天之间多不稳定』)和第 2 轮 N 位(日内 q75/q25 成交比值、Gini,问『单日内分钟与分钟之间成交分布的形状』)是同一个『厌恶不确定性
+    / 关注度驱动』大叙事的第三个变种,但截面维度完全不同——前两者都是『某个统计量在时间或分钟上有多离散』,这里是『价格有多频繁被行政性地锁死在制度边界上』,是交易制度决定的现象,不是统计分布决定的;与
+    5 个控制(流动性水平、波动水平、20 日反转、已知族、市值)构造上也不同:控制衡量的都是『正常交易状态下』的统计量,封板期间分钟数据近似退化(同一价格反复出现),这条特征专门刻画『多久处于非正常交易状态』。
+
+
+    算子实现:day_at_max_ratio(Close)/day_at_min_ratio(Close) 在 60/120 日上用 cross_mean 慢化(单日原始值噪声大,第
+    1 轮的换手论证同样适用);两者的净差 sub(...) 衡量『追涨封板 vs 杀跌封板』的不对称强度;day_flat_ratio(Close) 作一个更宽的『报价冻结』对照(不限定在极值,也包含流动性枯竭型的停滞,检验是不是单纯『不活跃』而不是『真的封板』);按涨跌停带宽
+    LimitWidth 分桶去均值,把『主板 ±10% 本来就比创业板 ±20% 更容易封住』这个机制性差异去掉,剩下的是『给定自己板块带宽后,封板倾向是否异常』;按规模
+    LogFloatCap 分桶 z 分数做第二个构成效应检验(小盘股本来就更容易封板);cross_zscore(·, 240) 给一个『相对自己历史』的动态版(这只股票最近是不是比它自己平时更容易封板,呼应第
+    2 轮 E 位的『动态』思路,但用在一个全新的底层量上);最后用 High 代替 Close 重复一遍 day_at_max_ratio 作稳健性检验(封板股票的Close
+    本身可能就等于涨停价,但 High 能捕捉『盘中触及过涨停但最后没封住』的情形,二者若分数相近说明『真正封住』和『盘中摸到过』的信息量接近,若明显不同说明『封住多久』比『摸到没摸到』更重要)。
+
+
+    为什么样本外还会在:涨跌停板制度是交易所规则,制度性的、不随样本期变化;Seasholes & Wu、Kim & Rhee 的发现都是基于制度结构本身(不是某段时期特有的流动性或监管环境);彩票偏好(Kumar
+    2009)被广泛证实是散户结构性的、长期存在的认知偏差,不会随窗口选择消失;主力种子全部60–120 日慢化,换手低。'
+  inspired_by: 546 个归档候选、8 个 head、共性表、核心卡里从未被当独立特征用过的叶子 LimitWidth(只当过分桶字段),以及从未出现过的算子
+    day_at_max_ratio / day_at_min_ratio / day_flat_ratio(ops_ext.py)。文献:Seasholes
+    & Wu (2007) 关于上交所涨跌停触及后的可预测价格行为;Kim & Rhee (1997) 的涨跌停表现研究。
+  literature:
+  - title: Predictable behavior, profits, and attention
+    authors: Mark S. Seasholes, Guojun Wu
+    year: '2007'
+    url: https://doi.org/10.1016/j.jempfin.2007.06.001
+    treatment: 上交所个股触及涨跌停价格上限当天之后存在可预测的价格行为;这里把『触及/封住涨跌停的频率』当慢变量特征
+  - title: 'Price Limit Performance: Evidence from the Tokyo Stock Exchange'
+    authors: Kenneth A. Kim, S. Ghon Rhee
+    year: '1997'
+    url: https://doi.org/10.1111/j.1540-6261.1997.tb04827.x
+    treatment: 涨跌停板制度延迟价格发现、带来跨日波动溢出;支持把封板频率当作一个跨日、慢变量的结构特征
+  - title: Who Gambles in the Stock Market?
+    authors: Alok Kumar
+    year: '2009'
+    url: https://doi.org/10.1111/j.1540-6261.2009.01483.x
+    treatment: 彩票偏好框架:散户追逐高弹性、易封板的股票,支持封板频率作为可预测的散户结构性交易代理
+  - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior
+      of Individual and Institutional Investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    url: https://doi.org/10.1093/rfs/hhm079
+    treatment: 注意力驱动的净买入;涨跌停是最极端的注意力事件,这里检验该机制在封板频率上的印记
+  seeds:
+  - cross_mean(day_at_max_ratio(Close), 60)
+  - cross_mean(day_at_max_ratio(Close), 120)
+  - cross_mean(day_at_min_ratio(Close), 60)
+  - cross_mean(day_at_min_ratio(Close), 120)
+  - sub(cross_mean(day_at_max_ratio(Close), 60), cross_mean(day_at_min_ratio(Close),
+    60))
+  - cs_bucket_demean(cross_mean(day_at_max_ratio(Close), 60), LimitWidth)
+  - cs_bucket_demean(cross_mean(day_at_min_ratio(Close), 60), LimitWidth)
+  - cross_mean(day_flat_ratio(Close), 60)
+  - cross_mean(day_flat_ratio(Close), 120)
+  - cs_bucket_zscore(cross_mean(day_at_max_ratio(Close), 60), LogFloatCap)
+  - cross_zscore(cross_mean(day_at_max_ratio(Close), 60), 240)
+  - cross_mean(day_at_max_ratio(High), 60)
+R:
+- head: cs_last_high05(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 241), day_std(Ret))
+  why: 该 head(score +0.88)的拆解(本轮 loc.md『拆解』第 4 节)里,knockout 掉一层 pow_2_5(只留单层 pow_2_5(LogFloatShares))
+    分数几乎不变(0.878→0.83,necessity +0.05,几乎是死重的一层幂变换);而窗口行显示 cross_zscore@241→120 本身就有
+    +0.59 的增益(0.878→1.47,本轮 loc.md 末尾『比原 head 好的拆解变体』已标出)。变体把『窗口拉短到 120/90/60(确认最优点)』与『去掉死重的一层
+    pow_2_5,甚至整个去掉幂变换(对一个之后要被 cross_zscore 吃掉均值/标准差的量,单调幂变换本身贡献有限)』分开与叠加验证。
+  variants:
+  - cs_last_high05(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 120), day_std(Ret))
+  - cs_last_high05(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 60), day_std(Ret))
+  - cs_last_high05(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 90), day_std(Ret))
+  - cs_last_high05(cross_zscore(pow_2_5(LogFloatShares), 120), day_std(Ret))
+  - cs_last_high05(cross_zscore(LogFloatShares, 120), day_std(Ret))
+- head: cs_last_high05(cross_zscore(cross_zscore(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)),
+    241), 241), 241), day_std(Ret))
+  why: 该 head(score +0.62)与上面 score +0.88 的 head 共享同一个底层子树 pow_2_5(pow_2_5(LogFloatShares)),区别只是外层多套了两次
+    cross_zscore(241)——多套的两层 z-score 反而让分数从 0.88 掉到 0.62,necessity 为负,是明确的『越包越差』。变体检验这个单调变差的梯度在哪一步最陡(双层
+    vs 三层),以及上面确认的窗口 120 增益是否对更深的嵌套同样有效。
+  variants:
+  - cs_last_high05(cross_zscore(cross_zscore(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)),
+    120), 120), 120), day_std(Ret))
+  - cs_last_high05(cross_zscore(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 241),
+    241), day_std(Ret))
+  - cs_last_high05(cross_zscore(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 120),
+    120), day_std(Ret))
+audit:
+  attempts: 1
+  file: audit_1.yaml

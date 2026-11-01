@@ -48,7 +48,8 @@ T_LINE, RHO_KNOWN, RHO_HEAD, RHO_ANTI = 2.0, 0.5, 0.7, -0.5
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
-DEV = argv[argv.index("--dev") + 1] if "--dev" in argv else None   # PLAN revision 1: the test period as a development set -- a library
+DEV = argv[argv.index("--dev") + 1] if "--dev" in argv else None
+FUSE_NEUTRAL = "--fuse-neutral" in argv   # PLAN revision 1: the test period as a development set -- a library
 # from research/coldstart_C07/<DEV>/s<seed>_train.yaml stands in for V_tr; nothing is ledgered, the official verdict is untouched
 if DEV and DRY:
     raise SystemExit("--dev reads the test period as a development set; it does not combine with --dry-run")
@@ -158,7 +159,10 @@ with slot():
             acc += np.where(ok, z, 0.0)
             cnt += ok
         with np.errstate(invalid="ignore", divide="ignore"):
-            return np.where(cnt > 0, acc / np.maximum(cnt, 1), np.nan)
+            out_ = np.where(cnt > 0, acc / np.maximum(cnt, 1), np.nan)
+        if FUSE_NEUTRAL:                                   # development: the fused book neutralised like every single head
+            out_ = steer.neutral_residual(out_, QF)
+        return out_
 
     def book(fz, sl):
         if fz is None:
@@ -217,9 +221,9 @@ with slot():
     mem.stop()
 
 out["seconds"] = time.time() - t0
-(D / ("final_dry.json" if DRY else f"final_dev_{DEV}.json" if DEV else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+(D / ("final_dry.json" if DRY else f"final_dev_{DEV}{'_fn' if FUSE_NEUTRAL else ''}.json" if DEV else "final.json")).write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 for S in SEEDS:
     r = out["per_seed"][str(S)]
     print(f"  s{S}: " + "  ".join(f"{X} {r[X]['heads']}h tr {r[X]['train']['long_sharpe']:+.2f} va {r[X]['valid']['long_sharpe']:+.2f}"
                                     + ("" if DRY else f" te {r[X]['test']['long_sharpe']:+.2f}") for X in ("M",) + XS))
-print(f"wrote {D / ('final_dry.json' if DRY else f'final_dev_{DEV}.json' if DEV else 'final.json')} ({out['seconds']:.0f}s)")
+print(f"wrote {D / ('final_dry.json' if DRY else f'final_dev_{DEV}' + ('_fn' if FUSE_NEUTRAL else '') + '.json' if DEV else 'final.json')} ({out['seconds']:.0f}s)")

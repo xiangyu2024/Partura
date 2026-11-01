@@ -1,0 +1,21 @@
+{
+ "type": "result",
+ "key": "v2:5e39028ea54e6699c3317fb133182b6f13d8e44a411b7b3667c0ff4b8c7e3145",
+ "agentId": "a3749dbe70636bd98",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "N",
+    "hypothesis": "放量收益反转 / 量价交互(CGW 1993、LMSW 2002、Gervais 等 2001):放量时的价格变动多是流动性冲击,之后会回吐;缩量时的变动多是信息,会延续。信号取的是 cov(收益, 相对成交量) 这一交互项,20 日反转控制里没有它。实现方式:日尺度用 cross_corr、cross_regbeta、标准化后的协方差,算日收益与成交额或其自身 z 分数的关系;分钟尺度用 day_corr(Ret, Amt)、量加权减等权的分钟收益、day_topw_mean、day_signed_ratio 乘异常放量。全部是无量纲量,不含成交额水平、市值或波动的凸变换。13 个种子。"
+   },
+   {
+    "type": "N",
+    "hypothesis": "彩票偏好 / 已实现偏度(Amaya 等 2015、Bollerslev-Li-Zhao 2020、Boyer-Mitton-Vorkink 2010、Bali 等 2011):高偏度股票被高估、之后跑输。偏度是三阶标准化矩,对波动尺度不变,所以和波动控制不是同一个量。实现方式:1 / 5 分钟收益的日已实现偏度,平滑 20–60 日;RSJ;ACJV 偏度;尾部 ES 比;标准化 MAX;日收益 60 / 120 日的 ts_skew;开盘价以上振幅占比。14 个种子。"
+   }
+  ],
+  "n_R": 9,
+  "check_exit_code": 0,
+  "summary": "第 1 轮计划已写好,c06_check.py 801 1 通过(退出码 0)。\n\n本轮两个位都开 N,不开 E。原因:定位输出里所有合法核心都是 LogFloatShares 的单调变换。按恒等式 LogFloatCap = LogFloatShares + log(名义股价),我估计它和 LogFloatCap 控制的截面秩相关在 0.75–0.8,这是推算,没有实测。这远超规则 §3 要求的「E 核心与每个控制 |ρ| < 0.5」,E 位基本必然退成普通 GP。另外陷阱 3 本身就把 LogFloatShares 列为市值字段。解剖员推荐 E 的理由之一是「族中性化」,那是 C05 的奖励;C06 的 E 位不控制核心家族,这条不成立。\n\n两个 N 位:\n- 位 a:放量收益反转,即 cov(收益, 相对成交量) 这个交互项,13 个种子,日尺度和分钟尺度都有。\n- 位 b:已实现偏度 / 彩票偏好,14 个种子。\n\nR 有 9 个变体,都挂在唯一的 head 上。思路是把单调包装去掉,再把叶子换成它实际代理的量:\n- log 名义股价:sub(LogFloatCap, LogFloatShares)、log(Close),以及二者的 20 日均值;\n- cross_min / cross_max(LogFloatShares, 20);\n- 自由流通比例 sub(LogTotalCap, LogFloatCap)。\n\n我的事先预测已写进 notebook:\n- 位 a 产出 1–2 个 head 的把握约 50%;\n- 位 b 产出至少 1 个 head 的把握约 35%;\n- R 不触发替换的把握约 75%;恒等式版的 log 股价若达到 0.6001,会替换原 head,把握约 20%。\n\n文献条目都是凭记忆写的,本轮没有联网核对。其中 Campbell-Grossman-Wang 1993 的 DOI 10.2307/2118454 把握最低,其次是 Amaya 2015 和 Bollerslev 2020 的 DOI。\n\n文件:\n- /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r1/missions.yaml\n- /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/notebook.md(新建,第 1 轮一节)"
+ }
+}

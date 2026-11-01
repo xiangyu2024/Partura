@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:192b79512b22d762e954adb9e8ea2e43cec6f850a928b4376d9df850f0bb071e",
+ "agentId": "a058fa183645a2187",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r2/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "cross_stddev(day_skew(Ret), 60)",
+    "hypothesis": "Unchanged (passed audit 1: novelty 3, soundness 3, 5 of 12 seeds kept). Core K is the +0.67 head. The periphery uses K as a measurement-quality gate and ranks the stable pool by low realized skew (Amaya) or by volatility-standardized MAX (BCW)."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Unchanged (passed audit 1: novelty 4, soundness 3, 11 of 13 seeds kept). Non-informational pressure at the close and in the last 30 minutes reverses: close vs. VWAP deviation, last-30-minute return, late-session turnover share and volume centroid, all accumulated over 10 to 60 days and sign-flipped."
+   }
+  ],
+  "n_R": 4,
+  "check_exit_code": 0,
+  "summary": "The only part that failed audit 1 was R group 4 (head +0.88, soundness 2), so it is the only part rewritten. Slots a and b and R1 to R3 passed and are byte-identical; a diff against the backup at /private/tmp/claude-501/-Users-wxy-Desktop-AlphaCube/84cd2fa5-62ee-4d6f-b035-b604567ee88d/scratchpad/missions_r2_attempt1.yaml confirms it.\n\nR4 change: I dropped the two variants that swapped the pool variable for nominal price and for the cumulative adjustment factor. The auditor found that y was still in adjusted-price units, so the split could not be read. Both variants also had |rho| < 0.27 with the head, so they would have been added as new heads rather than replacing a bad part. The nominal-price pool also came close to trap 3.\n\nFollowing the auditor's first step, R4 now has one variant that replaces only the ranking quantity y with its scale-free form:\n`sub(cs_first_low20(abs_(div(day_wstd(Vwap, High), day_mean(Vwap))), pow_3(day_mean(Open))), ts_var(day_gini(High), 10))`\nThe pool, abs_ and the ts_var tail are unchanged.\n\nEvidence and expectations in the why field:\n- y alone scores -1.06 / -0.39 in the sufficiency test, almost the same as price alone at -1.16 / -0.45, so y is mostly reading price level.\n- Inside the cheapest-20% pool, the price factor in y pushes the long book toward the pool's more expensive end, the opposite of the pool's direction.\n- Counter-evidence: head +0.65 uses the same smoothed-price pool with a scale-free y (day_corr) and scores 0.11 below the comparable original version (+0.76).\n- I put the chance of clearing the +0.978 replacement line at about 15%, and expect rho with the original head of 0.6 to 0.8.\n- Criteria set in advance: if vol |rho| >= 0.45, rho with the original head < 0.5, or the gain appears in only one of train and valid, the group should not pass.\n- The pool split moves to round 3, and only if this step does not lose score.\n\nI added a \"第 1 次审计之后的改动\" subsection to the round-2 section of /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/notebook.md. `c06_check.py 804 2` prints ADMISSIBLE with exit code 0. The plan has slots E and N (12 and 13 seeds) and 4 R groups with 1 variant each."
+ }
+}

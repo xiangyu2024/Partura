@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:6d51d25eb0bc4e415299adc3953db2d4355e3a81ba876966c3aadf391588e545",
+ "agentId": "adcb47eda15892aee",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))",
+    "hypothesis": "Left as it was (passed: novelty 3, soundness 3, 6/14 seeds kept). Core S, with a periphery that adds where the price is pinned (day_at_max_ratio - day_at_min_ratio), why it is pinned (tick-size controls) and when the stock enters the pinned state."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Left as it was (passed: novelty 4, soundness 4, 9/14 seeds kept). Absorbed order flow: tick-rule net buy ratio day_signed_ratio(Ret,Volume) minus the net price direction day_signed_ratio(Ret,Ret), plus time-series and cross-section residual versions."
+   }
+  ],
+  "n_R": 15,
+  "check_exit_code": 0,
+  "summary": "The only failure in audit 1 was R group 5 (head sigmoid(ts_regbeta(day_flat_run_max(Vwap), S, 50)), score +0.83), which got soundness 1. Slots a (E) and b (N) and R groups 1-4 passed and are unchanged; I confirmed their cores and seeds match audit_record.json.\n\nI rewrote R group 5 as follows.\n- **Dropped the Volume->Amt swap.** The auditor was right. DW is scale-invariant for a given stock on a given day, so the Amt variant has |rho| 0.998 with the original head. The claim that three of four heads had Amt >= Volume came from misreading the decomposition table, and the +0.13 gain came from valid only.\n- **New part being replaced:** the raw slope beta inside sigmoid, swapped for ts_reg_tvalue. Both come from the same rolling_ols call with the same argument order.\n- **Why beta is the bad part:** beta = rho*sigma_y/sigma_x, so whether sigmoid saturates for a stock depends on a scale factor unrelated to the signal. This head measures how S moves together with x. Where S saturates it barely moves, the head sits near 0.5, and which stocks this head responds to is effectively chosen by sigma_y/sigma_x.\n- **Evidence:** in the correlation table, inv(decay(sigmoid(beta),40)) compared with inv(decay(sigmoid(t),40)) goes from distinct 0.84 to 1.00 and from |rho| with the volatility control 0.22 to 0.05. In the source, a constant y gives t=0, so the t-value does not blow up. The missing evidence is stated plainly: this swap has never been scored on this head.\n\nNew variants (R total is now 15/16):\n- sigmoid(ts_regbeta(day_flat_run_max(Vwap), sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))\n- sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), sigmoid(ts_reg_tvalue(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))\n\nI added a 'first audit' subsection to /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/notebook.md saying what changed and why, with a prediction. `scripts/c06_check.py 802 1` prints ADMISSIBLE with exit code 0."
+ }
+}

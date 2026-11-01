@@ -1,0 +1,34 @@
+{
+ "type": "result",
+ "key": "v2:eb5e8b3ad93e00277164271f138332b3ddd093b50a29fbb54a97bc990028fd83",
+ "agentId": "ac278fd6c08cd5b83",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     8
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     10,
+     11
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "inv(pow_3(pow_3(pow_3(LogFloatShares))))",
+    "soundness": 3
+   }
+  ],
+  "summary": "Both N slots pass the first audit. Slot a (volume-return interaction) gets novelty 4 and soundness 3. I struck seed 8 because it uses raw returns that are not scaled by volatility, so the signal grows with volatility. The table separately strikes seeds 6, 9 and 12 for reversal |ρ| ≥ 0.5, which leaves 9 seeds. Slot a's soundness stays at 3 for two reasons: the CGW/LMSW evidence is about a 1–2 day reversal, not a 20–60 day ranking, and the minute-level seeds pick up the open/close U-shape in turnover rather than abnormal volume. Slot b (skewness/lottery) gets novelty 4 and soundness 4. I struck seed 11 (max/std, which still has residual |ρ| 0.53 with the head, so it is mostly the head again) and seed 10 (a one-sided right-tail ratio that reflects tick size and liquidity). The table also strikes seed 14, which leaves 11 seeds. The R group passes with soundness 3, and the parts it removes really are bad: the wrapper adds only +0.02 in the ablation and sits near the float32 limits, and the residual |ρ| of 0.87 between LFC−LFS and the head shows the head is really trading low nominal price. Three variants have problems. Variants 4 and 6 use log of the back-adjusted Close, which is not the nominal price (residual |ρ| 0.30 and size 0.42), so if they win they would be added to the library instead of replacing the head. Variant 9 (float ratio) does not remove a bad part and would wrongly take the replacement route. Variants 1, 2, 7 and 8 repeat the diagnostics the ablation already ran. If there is a rewrite, the R group should keep only variants 3 and 5."
+ }
+}

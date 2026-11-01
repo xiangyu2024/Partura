@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:4024a97065c26e981bae7633660d8505411f4951be9de3a6a779f62811fa98e8",
+ "agentId": "a52278edbdbb3fb69",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s806_all.yaml",
+  "n_heads": 8,
+  "kept": [
+   1,
+   7
+  ],
+  "dropped": [
+   {
+    "id": 2,
+    "reason": "cross_reg_fvalue(day_mean(Open), day_centroid(High), 5) is a 5-point (3 df) F-value, then Pearson-correlated over 30 days with volume^3.75; two heavy-tailed series, no readable mechanism; just #7 with an extra 5-day F layer (b)."
+   },
+   {
+    "id": 3,
+    "reason": "cross_reg_fvalue(day_mean(Open), day_mean(Open), 5) regresses a series on itself: rss is float32 rounding, F = tss/(rss/3+1e-9) is numerical noise in back-adjusted price units, then used as the ts_regres regressor (b)."
+   },
+   {
+    "id": 4,
+    "reason": "day_pos_ratio(High) is identically 1 for positive prices, so cs_last_low10(day_pos_ratio(High), ...) becomes a column-order static ramp via stable argsort (trap 1); then 5-day F-value on the ramp nested with all of #2 (b)."
+   },
+   {
+    "id": 5,
+    "reason": "Same column-order ramp cs_last_low10(day_pos_ratio(High), day_at_min_ratio(Vwap)) as regressor (trap 1), other side is F-of-F cross_reg_fvalue(day_mean(Open), cross_reg_fvalue(...), 5); no readable measure (b)."
+   },
+   {
+    "id": 6,
+    "reason": "Two 5-day F-values (es_ratio_lo(Vwap) vs argmax(High), mean(Open) vs argmax(High)) -> 20-day ts_regres residual -> 30-day corr with volume^3.75; three stacked rolling-regression statistics on back-adjusted price level, no mechanism (b)."
+   },
+   {
+    "id": 8,
+    "reason": "All leaves are back-adjusted price levels (day_quantile_q25(Open), day_close(Open)); y is monotone in price and the nested cs_first_high20 with div(...,-5) just lifts the ~20-40% price-rank band to the top; back-adjusted price is not a real price level (trap 3); train +0.59 vs valid +2.76 jump also not stable-looking (b)."
+   }
+  ]
+ }
+}

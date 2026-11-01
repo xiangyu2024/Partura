@@ -1,0 +1,26 @@
+{
+ "type": "result",
+ "key": "v2:572d32af79c8032851a290043ef429337d3263dac78d25013c1ac6970d70b48c",
+ "agentId": "acaf23a0d6b80d8e8",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s805/r1/shadow.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": []
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     3
+    ]
+   }
+  ],
+  "R": [],
+  "summary": "Shadow strict audit of seed 805, round 1. The file is written (attempt 0) and parses as YAML. Both slots pass the strict standard.\n\nSlot a (E, core day_centroid(Volume)) gets novelty 3 and soundness 3, with no seeds struck.\n- The peripheries use the same input as the core but different mechanisms: level vs deviation, regularity, auction tilt, direction split, price-move vs volume timing, and board / listing-age grouping.\n- I checked the operators in the source. day_centroid treats NaN minutes as zero weight on the full 241-bar axis, so sub(core, day_centroid(delete_open_close(Volume))) is exactly the auction pull and is bounded.\n- Not a 4, for three reasons:\n  - The only train evidence (about +0.44) is for the core's level, and the deviation seeds remove that level.\n  - The is_gt0(Ret) and abs_(Ret) seeds are partly driven by the auction bars.\n  - The cross_med \"habit\" seeds were struck by the table.\n\nSlot b (N, intraday price-volume correlation) gets novelty 4 and soundness 4, with seed 3 struck.\n- Seed 3, cross_mean(day_corr(Close, Amt), 30), is a field-swap reskin of seed 2 with no mechanism of its own.\n- The input and mechanism are new compared with the empty library and the controls.\n- It is not a 5 because the construct is the published A-share CPV price-volume correlation factor (Dongwu, 2020). That same paper is the pre-2023 evidence behind soundness 4. Because the factor was published inside the train window, it carries crowding risk, which is also why soundness is not 5.\n\nImplementation caveats noted in the file:\n- In the raw-Volume Pearson seeds, the open and close auction bars dominate the correlation.\n- in_rank breaks ties by time order (stable argsort) rather than using average ranks. On limit-locked days the rank-correlation seed therefore becomes corr(time, volume rank) instead of 0.\n- cs_bucket_rank(., BoardCode) only approximates grouping by board, because deciles of BoardCode break ties by column order.\n- The lead seed is dominated by the open-auction volume paired with the first 5-minute move.\n\nThere are no R groups."
+ }
+}

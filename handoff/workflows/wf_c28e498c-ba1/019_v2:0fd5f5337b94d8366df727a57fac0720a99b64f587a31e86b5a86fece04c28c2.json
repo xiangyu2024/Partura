@@ -1,0 +1,35 @@
+{
+ "type": "result",
+ "key": "v2:0fd5f5337b94d8366df727a57fac0720a99b64f587a31e86b5a86fece04c28c2",
+ "agentId": "afe3da60602975618",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": [
+     2,
+     7,
+     9,
+     11
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     1,
+     3,
+     7,
+     8,
+     9
+    ]
+   }
+  ],
+  "R": [],
+  "summary": "Both slots pass. 8 seeds remain in slot a and 7 in slot b. The snapshot has 0 heads, so I judged novelty against M's batch-1 archive.\n\nSlot a (nominal price within size deciles): novelty 3, soundness 4.\n- After size control, M's LogFloatShares cluster (mean 0.465–0.486) already is this price-given-size signal. What is new is the nonparametric size conditioning through cs_bucket_rank (size rho 0.000) and the low-price x skew interaction in seeds 10 and 12.\n- I checked the operators in the source. LogFloatCap minus LogFloatShares is log unadjusted price. label.py and daily.py say Amt and Volume are raw, so Amt/Volume is the unadjusted VWAP.\n- Score 4 rests on pre-2023 literature plus M's ~0.48 in-sample score on this axis. Not 5: the price effect may be shell-value or distress premium, and the 2020 delisting reform may flip its sign between train and valid.\n- Struck 2 and 9: OLS-residual versions, which after the reward's own rank neutralization are M's cluster again.\n- Struck 7: trap 2. Every stock listed before the store's first day has the same ListAge (10000 + days elapsed), so _pct_rank breaks the tie by column order and the deciles follow symbol code, not listing age.\n- Struck 11: traps 1/3. 20-day MAX return / LimitWidth has vol rho 0.452 and acts as a volatility proxy, so the long leg is the low-vol leg.\n\nSlot b (minute volume-return dynamics, CGW/LMSW): novelty 4, soundness 3.\n- The input and mechanism are new against the library.\n- The plan said the correlation versions would be unrelated to total return. The table refutes that: rho with the reversal control is 0.525, 0.575, 0.51 and 0.503 for seeds 1, 3, 8 and 9, and 0.493 for seed 2.\n- The literature is daily-frequency. At minute frequency the auction bars dominate volume, and I could not confirm from the code whether bar-0 Ret includes the overnight gap.\n- Seed 4 multiplies Ret by raw share volume, so a single minute can decide its correlation.\n- Struck 1, 3, 8 and 9: rho >= 0.5 with reversal, a rewrite of that control.\n- Struck 7: seed 1 again with Amt and an EMA.\n- Seed 4 (LMSW c2 at minute level, every control rho <= 0.2) is the cleanest seed in the slot.\n- Suggested, not required: drop the auction bars with in_slice, and convert volume to in_rank or relative volume.\n\nThere are no R groups. audit_1.yaml was written and parses as YAML; PyYAML isn't installed locally, so I parsed it with Ruby's YAML loader."
+ }
+}

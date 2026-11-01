@@ -1,0 +1,21 @@
+{
+ "type": "result",
+ "key": "v2:141726c1c92896c94afefe26903ac0e912967977afe33e56052fd4f52c607981",
+ "agentId": "a34fa0a00f0f6c670",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "N",
+    "hypothesis": "名义股价幻觉:散户按每股价格判断贵贱,把低价股当彩票(Birru-Wang)。名义价格由两个字段拼出:sub(LogFloatCap, LogFloatShares) 或未复权均价 Amt/Volume,再用 cs_bucket_rank 在流通市值十分位桶内排序(DGTW 式特征匹配),去掉非线性规模暴露(避开陷阱 3)。然后在波动、流动性、上市年龄、总市值桶内再排一次,隔开已知替身;并与日内偏度、MAX/LimitWidth 这些彩票特征组合。共 12 颗种子。"
+   },
+   {
+    "type": "N",
+    "hypothesis": "日内量价动态(Campbell-Grossman-Wang 1993、Llorente-Michaely-Saar-Wang 2002):放量伴随的价格变动是流动性冲击,会回吐;缩量的变动是知情交易,会延续。在分钟级用 day_corr(Ret, Volume)、成交量加权减等权的分钟收益、量最大 10% 分钟的收益、LMSW 交互系数 day_corr(Ret, in_delay(mul(Ret, Volume), 1)) 来度量,再取 10–60 日均值或 EMA,另有桶内排序版作对照。共 12 颗种子。"
+   }
+  ],
+  "n_R": 0,
+  "check_exit_code": 0,
+  "summary": "按你说的,没有检验 D,直接跑完了:种子 808 第 1 轮的计划已写好,c06_check 判定合格(ADMISSIBLE,退出码 0)。关于「为什么要这么久」,这一步里没有可以回答它的信息。\n\n**两个位都写成 N,没有 E。** 快照里没有任何 head,能用作核心的只有共性表那 7 行,而它们全是 LogFloatShares 套一层单调算子或单字段窗口,在秩上是同一个东西,score 均值都卡在 0.465–0.486。这些核心多半和市值控制的秩相关在 0.5 以上,E 位会被判为「核心是控制的替身」而不通过,而且正好落在已知陷阱 3 上。这一点我是推断的:相关度要在服务器上算,本地没有测。\n\n- **位 a:名义股价幻觉。** 用 `sub(LogFloatCap, LogFloatShares)`(即 log 未复权股价)或原始口径的 Amt/Volume 拼出名义价格,先在流通市值十分位桶内排序,去掉非线性规模暴露。再在波动、流动性、上市年龄、总市值桶内各排一次,并和日内偏度、按涨跌停幅度归一的 MAX 组合。共 12 颗种子。\n- **位 b:分钟级量价动态。** 依据 Campbell-Grossman-Wang 1993 和 Llorente-Michaely-Saar-Wang 2002。用的是分钟收益与成交量的相关、成交量加权减等权的分钟收益、成交量最大 10% 分钟的收益,以及搬到分钟级的 LMSW 交互系数。共 12 颗种子。\n- **R 为空。** 没有 head 可替换,脚本会拒。\n\n审计时有几颗种子可能被相关度表划掉:位 a 的 MAX/LimitWidth 那颗可能和波动控制太近,位 b 里加权减等权收益的几颗可能和 20 日反转太近。即使全部划掉,每个位也还剩 9–10 颗,高于 4 颗的下限。\n\nPI 笔记已新建并写入「第 1 轮」一节,包括目前的判断(LogFloatShares 那一簇是名义价格还是非线性规模残差,本轮分不开)和两个位的事先预测。第 1 轮没有上一轮的预测可核对。\n\n文件在这里:\n- /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r1/missions.yaml\n- /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/notebook.md"
+ }
+}
