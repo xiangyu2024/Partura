@@ -135,7 +135,7 @@
     {\mediumfont\titlesize Partura: an LLM research team\\[2pt]\mediumfont\titlesize that steers a symbolic alpha miner};
   \node[anchor=base west, inner sep=0, text=sec]
     at ($(current page.north west)+(0.85in,-3.45in)$)
-    {Seven rejected designs, then a first positive result};
+    {Seven iterations, one promising result};
   \draw[rulec] ($(current page.north west)+(0.85in,-3.85in)$) -- ++(11.633in,0);
   \node[anchor=base west, inner sep=0, text=ink]
     at ($(current page.north west)+(0.85in,-4.45in)$) {Xiangyu Wang};
@@ -195,7 +195,7 @@
 \textfirst
 \fig{figs_final/evo.tex}
 \gap{0.14in}
-\body{\lead{C01–C04:} whenever the LLM steered GP inside a fixed budget, its mistakes crowded out exploration: twice worse, twice no difference.}
+\body{\lead{C01–C04:} whenever the LLM steered GP inside a fixed budget, its mistakes crowded out exploration: twice worse, twice inconclusive.}
 \takeaway{So in C08 the main search is never touched by an agent; the LLM only spends the extra budget.}
 \src{Every design was pre-registered and judged against plain GP on the same seeds; designs changed after reading earlier results, so this is not a performance series. Details: backup pages. Sources: RESULT.md §1 of each study.}
 \end{frame}
@@ -212,7 +212,7 @@
 {\secsize\color{sec}C06: the strict gate was backwards}\par\vspace{0.06in}
 \bigmetric{$-$0.91 / $-$0.53}\par\vspace{0.06in}
 \body{Test Sharpe of seeds the auditor accepted / rejected (469 / 162).}\par\vspace{0.16in}
-\textcolor{accent}{\lead{$\to$ C08:} the auditor blocks only maths errors and duplicates.}
+\textcolor{accent}{\lead{$\to$ C08:} the auditor keeps its maths checks, loses its say on predictive quality.}
 \end{minipage}\hfill
 \begin{minipage}[t]{3.62in}\vspace{0pt}\raggedright
 {\secsize\color{sec}C07: the yardstick leaked}\par\vspace{0.06in}
@@ -221,7 +221,7 @@
 \textcolor{accent}{\lead{$\to$ C08:} rank first, non-linear neutralisation; the LLM proposes, it does not filter.}
 \end{minipage}
 \gap{0.16in}
-\takeaway{The LLM was a reliable critic (it caught reward leaks and a VWAP derivation error) but an unreliable gatekeeper.}
+\takeaway{The LLM was a reliable critic (it caught VWAP read as the minute close) but an unreliable gatekeeper.}
 \src{C05: fused-book Sharpe, mean of 8 seeds. C06: GP starting seeds read singly. C07: the leaks were a convex transform that rebuilt volatility and linear neutralisation that left U- and S-shaped exposure. Sources: research/coldstart\_C05..C07/RESULT.md.}
 \end{frame}
 
@@ -332,7 +332,7 @@ A against M: GP vs no extra search & 0.00 & 2 / 3 & no clear improvement \\
   \item \lead{Keep the LLM out of the main search.} Steering GP directly (C01–C04) never beat plain GP.
   \item \lead{Fix the referee before judging the agent.} Under a leaky yardstick the LLM optimised the leak (C05) and its gate looked wrong (C06).
   \item \lead{Critic, not gatekeeper.} It reliably found errors; its keep/drop calls did worse.
-  \item \lead{Status:} after seven rejected designs, a first positive result on a development set. Fresh data decides.
+  \item \lead{Status:} after seven iterations, one promising result on a development set. Fresh data decides.
 \end{nlist}
 \end{frame}
 
@@ -403,6 +403,24 @@ without it & 38 & +0.13 & 23 \\
 \gap{0.20in}
 \body{Round and flow are confounded: round 3 saw more of M and two earlier rounds. Not evidence that the lean flow is better.}
 \src{Source: research/coldstart\_C08/RESULT.md §3; final.json (extra\_heads).}
+\end{frame}
+
+\begin{frame}{Backup: one finished signal card (C08, seed 808)}
+\textfirst
+\begingroup\fontsize{15}{18.5}\selectfont
+\renewcommand\arraystretch{1.22}%
+\begin{tabular}{@{}L{2.05in}L{9.30in}@{}}
+\toprule
+\lead{Final expression} & \expr{add(cs_rank(cross_tail_mean_q75(day_wmean(Ret, Volume), 120)),}\newline\expr{    cs_rank(cross_tail_mean_q25(day_centroid(Volume), 120)))}\quad direction $-1$, half-life 5 days \\
+\lead{PI's seed} & same, with \expr{day_wmean(Ret, Volume)} in both terms: best-quartile plus worst-quartile volume-weighted day over 120 days. Volatility level enters the two ranks with opposite signs and cancels, leaving upside asymmetry: a lottery (MAX) effect, Bali, Cakici and Whitelaw (2011) \\
+\lead{What GP changed} & the downside term became the volume centroid, so the volatility-cancelling half is gone; \key{the PI's thesis no longer describes the signal} \\
+\lead{Thesis, final form} & low future returns where the best volume-weighted days are strongest and volume sits late in the session even on the earliest-trading days; untested reading of the final tree \\
+\lead{Evidence} & score 0.97 (train 0.97, valid 0.98); single-head residual long-only net Sharpe: test +0.90, forward +0.59 \\
+\lead{Audit, provenance} & E slot, core \expr{day_wmean(Ret, Volume)}; novelty 4, soundness 4, 10 of 13 seeds kept; round 1, lean flow; mission \file{c08s808Pr1a_Ea}; reproduces \\
+\bottomrule
+\end{tabular}
+\endgroup
+\src{Chosen after the read for being short and readable, not typical: P's 55 extra heads have median test Sharpe +0.07. Day centroid: where in the day volume trades, 0 = open, 1 = close; tail mean = mean of the days in that quartile. Sources: research/coldstart\_C08/partura/s808/r1/missions\_final.yaml, audit\_record.json; final.json; partura/ops\_ext.py.}
 \end{frame}
 
 \begin{frame}{Backup: C01–C04, the LLM steering the searcher}
