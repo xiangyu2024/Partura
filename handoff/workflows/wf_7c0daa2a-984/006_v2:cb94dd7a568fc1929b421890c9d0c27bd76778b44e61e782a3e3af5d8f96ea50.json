@@ -1,0 +1,45 @@
+{
+ "type": "result",
+ "key": "v2:cb94dd7a568fc1929b421890c9d0c27bd76778b44e61e782a3e3af5d8f96ea50",
+ "agentId": "aec87799f6d0527cd",
+ "result": {
+  "R": [
+   {
+    "head": "ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 10), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "ts_max(ts_max(cs_normalize(day_wstd(Ret, Ret)), 50), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "ts_max(ts_max(day_wmean(Ret, Volume), 50), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)",
+    "soundness": 4
+   }
+  ],
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s808/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     4,
+     6,
+     11
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 5,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "summary": "Independent audit (round 1, seed 808) completed per rules.md §3/§4/§5. Read only the permitted files (rules.md, missions.yaml, corr_1.md/json, loc.md, operator source in partura/ops_ext.py and AlphaCube-steering/src/alphacube/operators/*); did not read analysis.md/lit.md/notebook.md. No prior rounds existed to read. Applied the real §3 deterministic auto-strike rule (ρ_head≥0.7 or ρ_control≥0.8) directly from corr_1.json raw numbers, since the table's own 'gate' column is a different coverage/distinct data-quality check (from c05_locate.py/diagnose.py), not the correlation rule. Verified operator correctness (NaN-safety, division guards, no lookahead, tie-breaking) by reading source for day_wmean/day_wstd/day_corr/day_topw_mean/in_delay/cross_ema/cs_rank/cs_bucket_rank/cs_bucket_demean/ts_argmax/ts_quantile/cross_tail_mean_q25/q75. Key judgment call: two rows flagged 'gate: false/废品' (slot a seed 10, R4 variant 7, both ts_argmax-based) were traced to common.py's rank() using stable argsort (ties broken by array/stock-column order) combined with ts_argmax's inherent ≤120-148 discrete levels vs ~5220 stocks — this matches rules §4's explicit exemption ('并列靠股票列序打破... 不是问题'), so it was NOT used as a math-trap strike reason. Wrote audit_1.yaml: slot a (E) novelty=4 soundness=4, struck seeds 4/6/11 (ρ_head 0.808/0.725/0.755 ≥ the 0.7 auto-cut), 10 seeds remain, core-vs-control all <0.8 → passes. Slot b (N) novelty=5 soundness=4, no strikes (max ρ_head 0.57, max control ρ 0.571) → passes. Four R groups all soundness=4, with R1 flagged for a citation discrepancy (why-text cites ρ_head=0.695 vs the actual corr_1.json value 0.823 against the head being replaced — doesn't change the replace-vs-new-head outcome under §2's rule, but should be corrected in the next PI pass). File validated as parseable YAML via yaml.safe_load after writing."
+ }
+}

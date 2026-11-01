@@ -1,0 +1,35 @@
+{
+ "type": "result",
+ "key": "v2:a034ea8ad182e90b834655b23257828e1d026fb2b9bffe9cf83da50c55c6b04a",
+ "agentId": "a888c2abb52fbf65c",
+ "result": {
+  "R": [
+   {
+    "head": "cross_mean(sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))), 30)",
+    "soundness": 5
+   }
+  ],
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s805/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     1,
+     2,
+     3,
+     12,
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 5,
+    "soundness": 5,
+    "struck_seeds": []
+   }
+  ],
+  "summary": "Independent audit (seed 805, round 2, attempt 1) written to /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s805/r2/audit_1.yaml. Both GP slots pass.\n\nSlot a (E, core day_corr(Ret,Volume)): novelty 4, soundness 4. Struck seeds 1,2,3 (the \"frequency\" seeds cross_mean(is_gt0(core),60)/is_lt0/diff) because corr_1.json shows gate=false and distinct_fraction 0.035-0.052 vs ~0.99-1.0 for every other seed - confirmed via partura/diagnose.py:136 (distinct_fraction's own docstring: a factor with a handful of levels makes the decile book's membership decided by symbol-order tie-breaking) and catalog.py's documented is_gt0/\"trivial_boolean\" near-constant-panel risk (the pow_05(eq(a,b)) spurious-IC-0.58 incident). This is the §4 \"数值伪影/面板几乎是常数\" trap, distinct from the explicitly-allowed marginal symbol-order tie-break. Struck seed 12 (cross_mean(day_corr(Ret,Volume),3)) as a verbatim duplicate of a sufficiency-test row already evaluated in this round's own loc.md decomposition (score train -1.22/valid +0.31, already known). Struck seed 13 (cross_max(cross_mean(day_corr(Ret,Volume),3),30)) because its raw |ρ| with the top head is 0.699 (one-thousandth below the GP library's 0.7 ban), and loc.md's own knockout row proves the head's add(5,X)+X wrapper is a pure affine/monotonic no-op (necessity -0.00) — so under the reward rule's own \"any monotonic transform is the same signal\" definition, seed 13 is the same signal as the already-tested window-30 \"dirty\" variant (score +0.79/+1.38); PI's own hypothesis text labels both seeds 12/13 as \"necessity baseline...not a new mechanism.\" 8 seeds remain (4,5,6,7,8,9,10,11), covering 4 genuinely untested mechanisms (own-history extremes, regime migration/stability, asymmetric minute-sign decomposition, info-weighting); all verified against alphacube/operators/dt_day.py (day_corr's EPS-guarded denominator, no lookahead) with max raw |ρ| to any head ≤0.56 and to any control ≤0.54, both well under the 0.7/0.8 auto-strike lines.\n\nSlot b (N, day_signed_ratio - Partura's own operator): novelty 5, soundness 5, no seeds struck. Operator verified against partura/ops_ext.py:122 (bounded [-1,1], NaN-masked rather than blown up when turnover is zero) and confirmed absent from every library artifact readable (loc.md heads/common-subtree/decomposition tables, r1/missions_final.yaml) - genuinely novel mechanism (order-flow imbalance vs day_corr's co-movement), not a reskin. All 13 seeds gate=true with max raw |ρ| to any head 0.197 and to any control 0.56/0.32, both far under auto-strike thresholds (and moderate control correlation is explicitly not a strike reason per §4). in_half's asymmetric 120/120 split verified at alphacube/operators/dt_in.py:311 as an intentional, documented boundary choice, not a numerical artifact.\n\nR group (replace candidate for the +0.83 head cross_mean(sub(day_centroid(Volume), day_centroid(delete_open_close(Volume))), 30)): soundness 5. loc.md's decomposition already shows knocking out the sub() term lifts score +0.83 -> +1.73 (necessity -0.91, strongly negative, i.e. the auction-tilt subtraction actively hurts). Variant 1 (window=30) duplicates that already-known datapoint; variants 2/3 (window=15/60) genuinely fill the gap (decomposition only tried 15/60 on the \"dirty\" sub()-bearing version, never on the clean knockout). day_centroid verified bounded [0,1] in ops_ext.py, no lookahead; all three variants' correlations with heads/controls are well under auto-strike lines.\n\nRead scope respected per rules.md §5: only this round's missions.yaml/corr_1.md/.json/loc.md/.json, round 1's missions_final.yaml and audit_record.json, and allowed source (partura/ops_ext.py, partura/diagnose.py, partura/runner.py, scripts/c06_check.py, AlphaCube's src/alphacube/operators/{dt_day,dt_in}.py, catalog.py). Did not read analysis.md, lit.md, notebook.md, shadow.yaml, or any prior-round audit_*.yaml. No server run, no code changes, no git commit."
+ }
+}

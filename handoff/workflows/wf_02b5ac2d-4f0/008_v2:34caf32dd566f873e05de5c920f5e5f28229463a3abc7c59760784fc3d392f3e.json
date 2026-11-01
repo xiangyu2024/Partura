@@ -1,0 +1,38 @@
+{
+ "type": "result",
+ "key": "v2:34caf32dd566f873e05de5c920f5e5f28229463a3abc7c59760784fc3d392f3e",
+ "agentId": "ad55fc77e755f6e33",
+ "result": {
+  "approved": true,
+  "assignment": [
+   {
+    "idea": "C2a_limit_scaled_lottery",
+    "seeds": [
+     701,
+     702,
+     703,
+     704,
+     705,
+     706,
+     707,
+     708
+    ]
+   },
+   {
+    "idea": "C2b_slow_to_market_news",
+    "seeds": [
+     709,
+     710,
+     711,
+     712,
+     713,
+     714,
+     715,
+     716
+    ]
+   }
+  ],
+  "edits": "Approved with five edits to /Users/wxy/Desktop/Partura/guidance/C04_r1.yaml. Seed order, seed numbers and prior ids are unchanged. c04_check reran clean: ADMISSIBLE, exit 0, 2 ideas, 31 priors, 30 seeds; pool is identical to C04_base; reward and evaluation are []; improve = 0/30. The new file is /Users/wxy/Desktop/Partura/research/coldstart_C04/beliefs_r1.md. I did not touch design_r1.md, which belongs to the lead researcher.\n\nReview verdict:\n(a) Direct test was 0/64. The only near misses are proxies registered in W1 as not allowed (H4/v4, H4/v5) or a control that fails train (H3/v15). So all-new seeds with improve = 0 is the right response.\n(b) No known family, proxy or rejected writing is seeded. Seed 18 (nominal-price bucket) and seed 19 (vol-control bucket) are diagnostics.\n(c) I checked a filter the lead researcher did not: gp.py _seeded_population keeps one seed per skeleton (clustering.skeleton_key). All 20 C2a and 10 C2b skeletons are distinct, and seed_keep = 24, so every seed with finite fitness enters generation 0.\n\nEdits:\n1. Corrected the C2a mechanism claim that train is \"almost all 10% board\". Train runs to 2021-12-31. ChiNext has been 20% since 2020-08-24 and STAR since 2019-07, so roughly the last third of train and all of valid have about a quarter to a third of stocks on 20%/30% boards.\n2. Added a board-tilt risk. Dividing by LimitWidth makes 20%/30% boards look quiet, so a direction −1 long book overweights them, and the reward has no board control. Added fails_if (h) and rewrote prediction (3) so that seed 14 is the control.\n3. Added the prior evidence the lead researcher did not cite: C02 direct test H7_daily_max_lottery, under the non-neutral long reward. MAX scored −0.38 / +0.66 with ρ_known +0.43. MAX ÷ own vol scored −0.67 / +0.21. ts_skew(daily return, 40) scored +0.47 / +0.54. Consequences:\n   - Rewrote prediction (5): MAX-type |ρ_known| is about 0.25–0.48, not < 0.35, and I expect at least one rejection.\n   - Added a long-leg accounting paragraph: the skew writing has the cleanest long-leg argument.\n   - Added seed 20, cs_regres(ts_skew(ts_delta(log(day_last(Close)), 1), 40), LimitWidth), role new. It has depth 6. Window neighbours get w = 1; a drift to price-level skew gets w = 0.2.\n4. Added C2a fails_if (i). Negative-skew long books can be survivorship-assisted falling knives. Newly opened IPOs also have mechanically strong negative skew: nanskew_last has no minimum count, and long_neutral does not use the untradable mask.\n5. Added C2b fails_if (f). cross_corr / cross_regbeta have no minimum count (rolling_pair_reduce clamps count to 1), so new listings get ±1 correlations and sit at the extremes.\n\nA \"总领复审\" section in the YAML header records all of this.",
+  "predictions": "Written before any B-group GP run; full version in /Users/wxy/Desktop/Partura/research/coldstart_C04/beliefs_r1.md §4.\n\nMechanical:\n- C2a seeds_used ≥ 18 rows and C2b ≥ 9 per run: 85%. Rows can only be missing for ρ-rejected seeds.\n- Identical seed scores across the 8 runs of each idea.\n- No seed fails the coverage or dispersion gate: 90%.\n\nSeed readings:\n- C2a median seed score −0.3 to +0.2; at least one ≥ 0.5: 22%.\n- Best C2a seed is in the skew/asymmetry subfamily (seeds 8–12, 15, 20): 55%. MAX or soft-count (seeds 1–7): 30%.\n- At least 80% of C2a seeds scoring > 0 pick direction −1: 75%.\n- |ρ_known| is 0.25–0.48 for MAX-type seeds and < 0.25 for skew-type seeds: 70%.\n- In valid, seed 14 (board-regressed raw MAX) ≥ seed 2 (MAX/L): 60%. This carries prior contamination: I know ChiNext/STAR were weak in 2022–23.\n- |seed 20 − seed 11| < 0.15: 65%.\n- C2b: at least one seed ≥ 0.5: 10%. Passers pick +1: 60%. All |ρ_known| < 0.3: 85%.\n\nHeads (PLAN §3 dedupe):\n- B-group total heads: 0 at 50%, 1–2 at 35%, ≥ 3 at 15%.\n- A has more heads than B: 85%.\n- B runs with their own head: median 2 of 16; ≥ 8: 15%. Each idea's 8 runs are bimodal (≤ 2 or ≥ 6): 75%.\n- If B has heads, they come from C2a: 75%.\n- At least 60% of C2a heads are skew/asymmetry structures (ts_skew on daily returns, pow_3 moment, max+min, semistd ratio): 60%. Direction −1: 85%.\n- Heads containing LimitWidth are ≤ half of B heads, so the new field is likely not the source of gain: 60%.\n\nCorrelations of B heads:\n- All B heads |ρ_known| < 0.45: 85%.\n- At least one C2a candidate is rejected at ρ ≥ 0.5: 60%.\n- Max residual |ρ| with the 48 C01 heads < 0.4: 85%.\n- Skew-type heads against C02 price-level-skew heads: 0.2–0.6 and all < 0.7: 85%.\n- MAX-type heads against C03 intraday-jumpiness heads: 0.2–0.6 and all < 0.7: 80%.\n- C2a heads against C2b heads |ρ| < 0.3: 90%.\n\nShape of B heads:\n- Train is the binding leg (train < valid): 70%.\n- Turnover 0.03–0.06: 80%.\n- Any C2b head picks +1: 60%. Its |ρ| with the ts_pearson heads is < 0.5: 75%.\n- New-listing share of the long book above 2× the market: C2b heads 30%, skew heads 35%.\n\nOut of sample:\n- B heads' test residual Sharpe < half their in-sample score: 80%.\n- Main metric (16-pair Wilcoxon): indistinguishable 70%, B better 12%, B worse 18%."
+ }
+}

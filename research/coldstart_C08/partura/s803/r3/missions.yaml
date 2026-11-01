@@ -1,0 +1,219 @@
+seed: 803
+round: 3
+slots:
+  - type: E
+    core: cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15)
+    hypothesis: >-
+      机制:这个核心已经是库里分数最高的 head(+1.34),是"早盘资金时点"这条线(day_centroid(Amt))在两层掩码之间插入
+      5 日线性衰减之后长出来的——round 2 的拆解把"只裁一次极值"的 head2(+0.56)往上推到了 +1.34,但本轮 loc.json
+      新做的 11 次拆解只回答了"拿掉某一层会怎样"(ts_decay_linear 的必要性 +0.31,内层 sqrt 的必要性 +0.32、但去掉它
+      反而让 valid 从 1.34 冲到 2.35,train/valid 不对称值得留意;外层 sqrt 必要性 −0.01、第二层掩码必要性 0.00,
+      两者基本是数学意义上必然无效的缩放装饰——cs_mask_top_replace_mean 对正标量乘法是齐次的、ts_decay_linear 是
+      线性加权平均,这条链路里的 mul(5,·) 不可能改变最终按日截面排序的分数,再去提它们已经没有信息),没有一行回答
+      "这个已经验证的核心,换一种从未试过的外围,还能不能找到不是它自己重复表达的新结构"。本位把整个 head1 原样锁定
+      为核心,专门问三类此前没问过的问题:(a) head1 相对库里更简单的 head2,到底独立增加了多少信息,还是只是同一个
+      信号套了更多层外壳;(b) 这条时点效应是在小盘/低流动性股票里更强(更像集合竞价或委托规模的机械印记),还是在
+      大盘股里同样存在(更像真正的知情交易结构);(c) 这条效应是不是其实在变相读"净买卖压力"或"波动前置"这些更
+      熟悉的东西。
+      算子怎样实现(围绕固定核心长外围,核心原样照抄,不碰核心本身):
+      1) cs_regres(核心, head2)——head2=neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))) 已经是
+      库里的 head,把核心对它取回归残差,直接量化"衰减 + 第二次掩码"这两层新增结构相对最朴素的单次掩码版本到底带来
+      了多少独立信息;残差分数接近核心本身说明是真的新增信息,接近 0 说明 head1 基本是 head2 的重新包装;
+      2) cs_regres(核心, 用 Volume 重跑同一套"衰减+掩码"链路)——比 round 2 单纯 swap 字段更严格:先用 Volume
+      重建"衰减后的掩码时点"信号,再把核心对它取残差,检验"钞票的时点"去掉"股数的时点"能解释的部分之后是否还剩
+      东西,直接排除这是在读股数规模代理;
+      3) cs_regres(核心, 20 日净买压 day_signed_ratio(Ret,Amt))——检验这条时点效应是不是在代理"谁在净买入";
+      4) mul(核心, cs_rank(LogFloatCap))——不是去掉市值(市值已经是控制),而是用市值分位数去加权核心,检验效应
+      是集中在小盘股(更像集合竞价/委托规模的机械现象,呼应 Liu-Stambaugh-Yuan 2019 对 A 股最小 30% 市值"壳价值"
+      污染的发现)还是在全市值范围内均匀存在(更像真正、普适的知情交易时点结构);
+      5) mul(核心, cs_rank(cross_mean(day_sum(Amt),20)))——同样的加权思路换一个维度,按 20 日平均成交额分位数
+      加权,检验效应是不是集中在流动性好/差的子样本;
+      6) cs_flip_by_state(核心, cross_mean(day_std(Ret),20))——按全市场 20 日波动的状态翻转信号,是 round 2
+      用过的"按全市场成交额状态翻转"的姊妹检验,换成从未试过的条件维度(市场整体波动,而非成交量),检验知情交易的
+      时点结构在平静还是动荡市场里更有效(Admati & Pfleiderer 1988 的模型本身预测知情交易的时点集中度随信息环境
+      变化);
+      7) cs_regres(核心, cross_mean(day_corr(in_index(Amt),abs_(Ret)),20))——round 1 analysis.md 提出过"波动
+      是否也前置"这个独立诊断量,round 2 写进文字但被审计划掉(与 head2 相关度过线),本轮核心换成 head1 之后相关度
+      结构会变,用回归残差的形式重新检验一次,而不是直接相加;
+      8) sub(核心, cross_mean(核心,60))——自身历史差分,round 2 在更小的核心上试过同类写法因与 head 太像被划掉,
+      这次换上信息量更大的 head1 诚实地再试一次(即便再次被划掉,这本身也是一个有用的结果:说明"核心 vs 核心的移动
+      平均"这个结构性地太像母本,以后不必再试);
+      9) cs_bucket_demean(核心, div(day_sum(Amt), day_sum(Volume)))——round 2 用过的名义价格代理自检,这次第
+      一次用在真正进入库里的高分 head 本身上;
+      10) cs_bucket_demean(核心, cross_valid_count(day_last(Close),241))——round 1 analysis.md 点名的"上市
+      年龄/次新股"代理风险,这次换成 partura/ops_ext.py 自己文档建议的更干净的连续变量(过去 241 个交易日里的有效
+      交易日数,而不是离散的 ListAge 叶子),第一次真正检验这个风险;
+      11) cs_regres(核心, day_zero_ratio(Amt))——检验核心是不是在代理"这只股票今天有多少分钟完全没有成交"这种
+      机械缺量现象;
+      12) add(核心, cross_mean(day_signed_ratio(Ret,Amt),10))——和 (3) 的"减掉"相反,这里是线性组合而非清洗,
+      检验"时点"和"买压"加在一起是不是比单独的核心更强,用来区分"核心需要被清洗掉混淆"与"核心只是缺了另一个维度"
+      这两种不同的失败模式。
+      为什么和库里已有的不同:库里两个 head 都是 day_centroid(Amt) 家族,round 2 已经围绕更小的核心
+      cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))) 试过自身历史差分、Volume 回归、价格/上市年龄
+      分桶、窗口平滑、状态翻转五类外围,只有 Volume 回归、窗口平滑、状态翻转三类通过相关度表(round 2
+      audit_record.json:kept 4/12)。本位换了两处:(i) 核心本身升级为更复杂、信息量更大的 head1,同一个外围配方
+      作用在它上面也是全新的、从未评估过的候选树,相关度结构会不同;(ii) 新增三类 round 2 完全没用过的外围关系——
+      核心对 head2 的 cs_regres、按市值/流动性分位数加权(而非去均值或残差化)、按市场整体波动状态翻转(而非成交额
+      状态)——这三类在这颗种子的任何一轮里都没出现过。
+      为什么样本外还会在:round 2 的机制论证(知情/机构资金在信息不对称最大的时段下单,A 股 T+1、融券受限意味着这批
+      早盘货不能被及时反向交易打掉,价格要几天才消化,这与 15bp 成本、半衰期 5/20 的尺子吻合)对 head1 同样成立,
+      head1 只是在这条机制上叠加了更平滑的时间聚合与更干净的去噪,没有改变机制本身。本位的外围进一步把"这条效应
+      有多少是机制性的知情交易、有多少是集合竞价/委托规模/次新股/停牌这些机械副产品"拆得更细——残差化之后
+      (1)(2)(3)(7)(9)(10)(11)如果保留相当一部分分数,说明核心捕捉的是和这些已知混淆正交的结构性特征,按机制论证
+      不依赖具体某一段行情,样本外更可能继续有效;某个残差掉到 0 附近,也是一个诚实的负面发现,好过把混淆误当新发现
+      带到样本外。
+      数学检查:cs_regres 的 beta 只在 var>EPS 时计算否则给 0,不会爆点,两个输入都是已经评估过、coverage≥0.9 的
+      稠密信号;mul(核心, cs_rank(·)) 的 cs_rank 对无效值天然跳过,不产生 0/0;cs_flip_by_state 的状态用 241 日
+      滚动百分位算,day_std(Ret) 在少数完全横盘/涨跌停锁死的日子为 0 也只是让当天状态落在百分位下沿,不参与除法;
+      cs_bucket_demean 的两个分桶变量——div(day_sum(Amt), day_sum(Volume)) 分母在停牌日整日 NaN 被有效性位掩掉
+      不是 0/0(round 2 已验证),cross_valid_count 是计数不存在除零;day_zero_ratio 的分母是 clamp(min=1) 的有效
+      分钟数;add 与 sub 都是逐元素线性运算,不引入新的除法或开方;sqrt 在这套算子语言里是 sqrt(abs(x))
+      (operators/common.py 确认),核心内部多次出现的 sqrt 作用在可能为负的中间量上不会产生 NaN,这也是这个 head
+      本身能跑出正分数的原因;所有新增窗口(10/20/241)都在原有 60 日热身期之外合理取值,没有用到 t 日收盘后才知道
+      的信息。
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: Anat R. Admati, Paul Pfleiderer
+        year: '1988'
+        url: https://doi.org/10.1093/rfs/1.1.3
+        treatment: 理论证明知情交易集中在信息不对称最大的时段,随意/流动性交易在日内分布更均匀;支持本位用全市场
+          波动状态翻转来检验时点效应是否随信息环境变化
+      - title: 'Stealth Trading and Volatility: Which Trades Move Prices?'
+        authors: Michael J. Barclay, Jerold B. Warner
+        year: '1993'
+        url: https://doi.org/10.1016/0304-405X(93)90029-B
+        treatment: 知情交易者偏好中等规模、分散执行的委托而非一次性在开盘打满;为"极端早盘集中股另有机械成因"提供
+          机制支持,呼应本位用市值/流动性加权去分离机械印记与知情交易
+      - title: Size and Value in China
+        authors: Jianan Liu, Robert F. Stambaugh, Yu Yuan
+        year: '2019'
+        url: https://faculty.wharton.upenn.edu/wp-content/uploads/2018/03/Size-and-Value-in-China.pdf
+        treatment: A 股最小 30% 市值个股里相当比例是"壳价值"而非基本面;支持用 cs_rank(LogFloatCap) 对核心加权
+          检验效应是否集中在最小市值段(机械代理)还是全市值均匀存在(真实机制)
+    seeds:
+      - cs_regres(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))))
+      - cs_regres(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Volume))))), 5))
+      - cs_regres(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_mean(day_signed_ratio(Ret, Amt), 20))
+      - mul(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cs_rank(LogFloatCap))
+      - mul(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cs_rank(cross_mean(day_sum(Amt), 20)))
+      - cs_flip_by_state(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_mean(day_std(Ret), 20))
+      - cs_regres(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_mean(day_corr(in_index(Amt), abs_(Ret)), 20))
+      - sub(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_mean(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), 60))
+      - cs_bucket_demean(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), div(day_sum(Amt), day_sum(Volume)))
+      - cs_bucket_demean(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_valid_count(day_last(Close), 241))
+      - cs_regres(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), day_zero_ratio(Amt))
+      - add(cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15), cross_mean(day_signed_ratio(Ret, Amt), 10))
+  - type: E
+    core: day_quantile_q25(Ret)
+    hypothesis: >-
+      机制:day_quantile_q25(Ret) 是"这一天分钟收益从低到高排序、第 25 百分位"那个值——日内收益分布下四分之一处的
+      位置,一个对单笔极端分钟不敏感(不像 skew/kurt 被三次方/四次方放大单个异常分钟)、专门刻画"日内偏差的那段有
+      多深"的稳健统计量。本轮 loc.json 的共性表里它排第 11(均值差 +1.46,p=0.007,出现在 4 个候选里),是本轮快照
+      第一次给出和 day_centroid(Amt) 家族完全不同骨架的经验证据,而不是像 round 1 那样纯粹靠文献猜。round 1 的
+      Na 位已经试过 day_skew(Ret)、day_kurt(Ret)、RSJ 一类的参数矩,结果 0 个 head,kurt 比 skew 更接近及格线
+      但两者都没到 0.5(notebook 第 2 轮小节)。这次换一个不同的统计量家族——不是矩,是分位数——而且第一次拿到本轮
+      快照自己给出的共性证据支持,值得单独立一个 E 位而不是继续靠 N 位的随机树去赌。
+      算子怎样实现(围绕固定核心长外围,核心原样照抄,不碰核心本身):
+      1) cs_regres(核心, day_std(Ret))——day_quantile_q25(Ret) 的原始水平机械地随当天波动大小伸缩,这部分和已有
+      的波动控制(cross_mean(day_std(Ret),20))高度共线;用当日截面对 day_std(Ret) 取 OLS 残差(不是直接做比值,
+      比值在横盘/锁死日分母可能为 0,见数学检查)把规模共性去掉,剩下"相对当天自己的波动水平,下四分位偏离了多远"
+      这个形状信息;
+      2) cross_mean(·,20)——把 (1) 的残差做 20 日持续性检验,因为单日 241 个分钟样本点估计分位数噪声很大,20 日
+      平均把"下尾形状是不是持续的个股属性"和单日噪声分开,是本位主候选;
+      3) cross_mean(核心,20)——不做规模残差化的裸版本,可证伪对照:若和 (2) 分数相近说明规模混淆的担心多余,若
+      明显更差恰好证明 (1) 的残差化是必要的;
+      4) sub(核心, day_median(Ret))——另一种去水平的方式,去掉当天中心位置而非规模,衡量下四分位距当天中位数
+      多远;
+      5) cs_regres((4), day_std(Ret))——把 (4) 再做一次规模残差化,同时去掉位置和规模两层混淆后最干净的版本,
+      类比 Bollerslev-Li-Zhao (2020) 把已实现波动拆成上行/下行、下行部分单独定价更好的做法——这里先分离位置和
+      规模,只留"形状"这一层;
+      6) sub(day_quantile_q75(Ret), 核心)——上四分位减下四分位,一个对称、故意不做规模残差化的日内离散度(四分位
+      距),作为对照组:若这个对称版本比 (2)(5) 这些不对称、残差化过的版本分数更高,说明"下尾形状"假说站不住,核心
+      其实只是在读波动;
+      7) cs_bucket_demean((2), div(day_sum(Amt), day_sum(Volume)))——round 1/2 用过的名义价格代理自检,这次
+      用在一个全新的核心家族上;
+      8) cs_regres((2), cross_mean(day_skew(Ret),20))——对 round 1 Na 位已经交过、没做出 head 的 day_skew(Ret)
+      取残差,直接检验这个分位数版本是不是 skew 的另一种写法;
+      9) sub(cross_mean((1),5), cross_mean((1),60))——短窗减长窗的自身历史差分,检验"最近是不是比平时下尾更深"
+      这个冲击版本是否比持续水平版本更有效,呼应 round 2 N 位对 autocorr/hurst 家族用过的同一诊断手法;
+      10) cs_regres((2), cross_mean(day_signed_ratio(Ret,Amt),20))——检验这个下尾形状是不是在代理"净卖压更大"
+      的股票,把 round 1 Nb 位已经验证过的买压维度解释掉;
+      11) cs_bucket_demean((2), ListAge)——round 1 analysis.md 点名的次新股代理风险,在这个全新核心上直接检验;
+      12) cross_mean((1),60)——60 日窗口的敏感性对照,配合 (2) 的 20 日版本和 (9) 的 5/60 差分,三者放在一起能看
+      出这个"下尾形状"到底是短持续还是长持续的个股属性。
+      为什么和库里已有的不同:库里两个 head 都是 day_centroid(Amt) 家族——"钱什么时候到",是交易时点的横截面异质
+      性;本位的 day_quantile_q25(Ret) 是分钟收益分布本身的下尾形状,字段不同(Ret 而非 Amt),数学上不嵌套。本位
+      也和 round 1 Na 位(参数矩,对异常值敏感、是全局矩)不同,种子 (8) 直接做了"是不是同一个东西"的残差检验而
+      不是假设不同。本位还和 round 2 N 位(day_autocorr_n1/day_ar1_coefficient/day_hurst/day_distinct_ratio,
+      分钟收益的时间序列弹性)不同:那一族是"价格被推开之后能不能弹回来"的动态特征,本位是"这一天收益分布本身的
+      静态形状",不涉及任何自相关或滞后结构。
+      为什么样本外还会在:Amaya et al. (2015) 用日内数据构造的已实现偏度对下一期横截面收益有稳定的负向预测力,
+      Bollerslev-Li-Zhao (2020) 证明把已实现波动拆成上行/下行、只用下行部分预测效果更好,Ang-Chen-Xing (2006)
+      证明下行风险在横截面上是和总体波动分开定价的独立维度——三篇放在一起:"下尾有多深"这件事,在控制了规模(对
+      day_std(Ret) 残差化)和位置(对 day_median(Ret) 去中心化)之后,文献里有先例认为剩下的形状信息本身携带持续
+      的横截面定价信息,不是某一段行情的偶然产物;只要股票之间"日内下跌时能跌多深"这件事本身存在持续的个股差异
+      (可能来自杠杆/强平/止损盘结构的异质性),这个效应就不依赖样本内的具体时间窗口。
+      数学检查:cs_regres 的 beta 只在 var>EPS 时计算否则给 0,day_std(Ret) 在少数完全横盘/涨跌停锁死的日子恰好
+      为 0 也不会造成除零(cs_regres 内部用方差做分母、不是直接做比值,方差为 0 时直接给 beta=0,不会爆点——这正是
+      本位专门避开"用 div 去除一个会过零的量"这个 round 1 analysis.md §2.2 点名的陷阱的原因,没有在任何种子里写
+      div(day_quantile_q25(Ret), day_std(Ret)) 这种裸比值);day_median(Ret)、day_quantile_q75(Ret) 与核心本身
+      都是同一个排序统计量家族,输入有限则输出必定有限,没有新的除法或开方;cs_bucket_demean 的两个分桶变量同
+      round 2 已验证的写法(div(day_sum(Amt), day_sum(Volume)) 的分母在停牌日整日 NaN 被有效性位掩掉不是 0/0;
+      ListAge 是日频叶子不参与除法);所有窗口(5/20/60)都 ≤60,不落在热身期主导的区间;没有用到 t 日收盘后才知道
+      的信息。
+    literature:
+      - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+        authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+        year: '2015'
+        url: https://doi.org/10.1016/j.jfineco.2015.02.009
+        treatment: 日内高频数据构造的已实现偏度对下一期横截面收益有稳定的负向预测力;支持本位种子 (8) 把分位数
+          版本对 day_skew(Ret) 取残差,检验是否为同一个信号的另一种写法
+      - title: Good Volatility, Bad Volatility, and the Cross-Section of Stock Returns
+        authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+        year: '2020'
+        url: https://doi.org/10.1017/S0022109019000097
+        treatment: 把已实现波动拆成上行/下行两部分,只用下行部分预测横截面收益效果更好;支持本位优先用"下四分位
+          相对中位数、相对自身波动残差化"的构造(种子 5),而不是对称的离散度(种子 6 作为对照)
+      - title: Downside Risk
+        authors: Andrew Ang, Joseph Chen, Yuhang Xing
+        year: '2006'
+        url: https://doi.org/10.1093/rfs/hhj035
+        treatment: 下行风险在横截面上是和总体波动分开定价的独立维度;支持把"下尾分位数,残差化掉规模控制之后"
+          当作一个与已有波动控制结构上不同的风险/信号维度,而不是波动控制的重复表达
+    seeds:
+      - cs_regres(day_quantile_q25(Ret), day_std(Ret))
+      - cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 20)
+      - cross_mean(day_quantile_q25(Ret), 20)
+      - cross_mean(sub(day_quantile_q25(Ret), day_median(Ret)), 20)
+      - cross_mean(cs_regres(sub(day_quantile_q25(Ret), day_median(Ret)), day_std(Ret)), 20)
+      - cross_mean(sub(day_quantile_q75(Ret), day_quantile_q25(Ret)), 20)
+      - cs_bucket_demean(cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 20), div(day_sum(Amt), day_sum(Volume)))
+      - cs_regres(cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 20), cross_mean(day_skew(Ret), 20))
+      - sub(cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 5), cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 60))
+      - cs_regres(cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 20), cross_mean(day_signed_ratio(Ret, Amt), 20))
+      - cs_bucket_demean(cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 20), ListAge)
+      - cross_mean(cs_regres(day_quantile_q25(Ret), day_std(Ret)), 60)
+R:
+  - head: cross_mean(sqrt(cs_mask_top_replace_mean(mul(5, ts_decay_linear(sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))), 5)))), 15)
+    why: >-
+      本轮 loc.json 自带的 11 次拆解只测过"去掉某一层"(sufficiency/knockout/swap/window),没有测过"交换两层的
+      顺序"。目前的顺序是:先对 day_centroid 取第一次掩码替换均值并开方,再做 5 日线性衰减,再乘 5、做第二次掩码
+      替换均值、开方,最后 15 日滚动平均——衰减在先,第二次掩码在后。拆解表给出的数字是:单独去掉衰减这一层,
+      必要性 +0.31(有实质影响);单独去掉第二次掩码这一层,必要性 ≈0.00(几乎无影响)。但第二次掩码必要性≈0
+      很可能是因为它操作的对象(衰减之后的信号)已经被 5 日平均抹掉了尖锐的异常值,掩码自然没什么可裁;如果把顺序
+      换成"先做第二次掩码、再衰减",这次掩码面对的是衰减之前更原始、更尖的异常值,必要性未必还是 0——这是"第二次
+      掩码到底是不是废料"这件事唯一还没有被两种顺序都测过的维度,直接评估拿到真实数字,好过继续沿用"必要性≈0所以
+      它是废料"这个只在一种顺序下成立的结论。
+    variants:
+      - cross_mean(sqrt(ts_decay_linear(cs_mask_top_replace_mean(mul(5, sqrt(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))))), 5)), 15)
+  - head: neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))))
+    why: >-
+      round 2 的 R 已经测过"换成裁另一侧"和"裁完一次后再裁对侧"两种,都比原 head 差很多(R_prev.json:score
+      −0.37 与 −0.18,远低于原 head 的 +0.56)。但还有一种组合没测过:**同一侧再裁一次**——不换侧,就是把
+      cs_mask_top_replace_mean 对同一个量连续套两次,中间不插入任何其他运算。本轮的 head1(+1.34)恰好也是在
+      第一次掩码和第二次掩码之间插入了 5 日线性衰减才变强的;如果"连续同侧两次掩码、不插入衰减"本身就已经比单次
+      掩码好,说明是"多裁一轮极值"这个动作本身在起作用;如果和单次掩码几乎没有差别(或更差),说明 head1 真正起
+      作用的是中间那层衰减,不是第二次掩码本身——这能把 head1 新增的两个部件(衰减、二次掩码)的贡献拆开看,是
+      E 位种子 1(cs_regres(head1, head2))的一个廉价互补检验。
+    variants:
+      - neg(cs_mask_top_replace_mean(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt))))))

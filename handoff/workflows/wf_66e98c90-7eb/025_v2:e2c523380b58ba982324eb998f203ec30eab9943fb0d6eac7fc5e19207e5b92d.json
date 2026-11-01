@@ -1,0 +1,34 @@
+{
+ "type": "result",
+ "key": "v2:e2c523380b58ba982324eb998f203ec30eab9943fb0d6eac7fc5e19207e5b92d",
+ "agentId": "ac1ccfad616090775",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s807_all.yaml",
+  "n_heads": 6,
+  "kept": [
+   2
+  ],
+  "dropped": [
+   {
+    "id": 1,
+    "reason": "(b) The dependent variable is cs_rank(pow_05(ts_regbeta(...))). Inside it, the cross-sectional mean of back-adjusted Close (a meaningless price level, trap 3) is regressed over 5 days on ts_var(LogFloatCap,20) plus the constant cs_median(day_pos_ratio(Open)), which is always 1. This outer value then gets a 241-day beta against q75 Volume. It is unreadable nesting with no mechanism, so a numbers game."
+   },
+   {
+    "id": 3,
+    "reason": "(a) It has the same skeleton as #2: cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(add(const, ts_var(LogFloatCap,.)), LimitWidth), 30). Only the variance window changes (20 instead of 30), and the added constant is cancelled by the bucket demean. |rho|=0.63 with #2, so it is a rewrite of #2."
+   },
+   {
+    "id": 4,
+    "reason": "(b) day_zero_ratio(Open) is about 0 for every stock because adjusted Open is always positive. The ordinal rank inside cs_last_low05 turns these ties into a column-order ramp (trap 1). The only real content is pushing the bottom 5% of LogTotalCap down, so direction -1 goes long the smallest 5% of caps (size control skin, trap 2). |rho| is at most 0.08 against everything, which fits a ramp."
+   },
+   {
+    "id": 5,
+    "reason": "(a)(b) The value is dominated by multiplying with the market-cap rank: |rho| is 0.55 with cap, 0.39 with liquidity and 0.37 with the known family. cs_last_low05(LogTotalCap,LogTotalCap) flips the bottom 5% of caps negative, and abs_ flips them back to about 1, which makes a cap sawtooth at 5%. The top 10% of day_corr(Ret,Open) is also replaced by the mean. It is a cap-shape trick, not an intraday-correlation mechanism."
+   },
+   {
+    "id": 6,
+    "reason": "(a) day_zero_ratio(Ret) is the classic zero-return illiquidity measure (|rho| 0.42 with liquidity, 0.38 with the known family), and multiplying by its own rank is only a monotone transform. cs_last_low05(., LogTotalCap) makes the smallest 5% of caps negative, so direction -1 puts them straight into the long book. It is a rewrite of the liquidity and size controls."
+   }
+  ]
+ }
+}

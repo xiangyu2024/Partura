@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:750c1db5bb3ddfdffe037110d980bd0dd34600489407ce3e68a89c23d77e7e14",
+ "agentId": "a7e02113e69e2b185",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s803/r3/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50)",
+    "hypothesis": "F = df·R²/(1−R²) of the 50-day link between daily minute-amount dispersion and the amount centroid. It scores +1.51 (train 1.53 / valid 1.51), is scale-free and its score does not come from convexity. Because it is an R², measurement noise in the centroid pushes it down on thin stocks, so it may partly rank measurement precision (Gassen, Ashbaugh-Skaife & Veenman 2020; Scholes & Williams 1977). The periphery holds precision fixed in three ways: (i) cs_bucket_rank / rank residual within deciles of the centroid's 50-day std, the 20-day zero-return ratio, the 20-day minute-amount gini, the known family and the timing level; (ii) a placebo difference against the price-move-centroid F, which has the same precision exposure; (iii) the coupling sign that F throws away. 14 seeds; none are smoothing or monotone rewrites."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Tug of war between the opening call auction and the continuous session: of the same total move, how much was made overnight (prev close to open) and how much intraday. The main seed residualizes the 5/10/20-day cumulative overnight return on the total return in rank space, which by construction lies in the null space of the 20-day reversal control. Other seeds: LPS rank difference; ranking within volatility deciles (Qiao-Dam T+1 discount); overnight after a down session (An-Huang-Li 2022); one-price limit days dropped; ts_corr(O, I); the auction's share of price discovery. Back-adjusted price ratios are continuous across ex-dates. No head in the library uses cross-day prices. Literature: Lou-Polk-Skouras 2019, Berkman et al. 2012, Qiao-Dam 2020, An et al. 2022. 14 seeds."
+   }
+  ],
+  "n_R": 12,
+  "check_exit_code": 0,
+  "summary": "The round 3 plan is written and c06_check.py 803 3 returns ADMISSIBLE (exit 0). It has not been through the audit or the correlation table yet; those run downstream.\n\nSlot a is E on the F core, ts_reg_fvalue(day_std(Amt), day_centroid(Amt), 50). That core is a subtree of the +1.65 head and has had 0 E slots before. Its periphery fixes measurement precision (decile ranking and rank residuals on precision proxies, a placebo difference, sign recovery), which separates \"F reads precision\" from \"F is real coupling\". The core's correlation with the controls is unknown until the table runs. If it is 0.5 or more, the rewrite switches to the backup core sub(day_centroid(Ret), day_centroid(Amt)).\n\nSlot b is N on the overnight/intraday split. Its seeds are built so the 20-day reversal control cannot absorb them, and no head in the library uses cross-day prices.\n\nR has 4 groups and 12 variants:\n- head +1.05 (pow_2_5(sqrt(F20))): bare F20, abs ts_corr, signed ts_corr, centroid std.\n- head +0.86 (timing level): timing level ranked within known-family deciles.\n- head +0.91 (density over density with NaN selection): the version without pow_2_5, and the zero-return ratio averaged over 20 and 60 days.\n- head +1.53 (sigma-cubed over ListAge): the RV^1.5-normalized version.\n\nI left out pure sigma-cubed and the two locate variants that would score higher but only strengthen trap heads.\n\nAll seeds and variants computed on a synthetic cube with coverage of about 0.96–0.98. The zero-ratio variants could not be tested there, because the synthetic data has no zero-return minutes.\n\nThe notebook now ends with a round 3 section covering current beliefs, predictions for each task, and a table checking the round 2 predictions. Both files are in /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s803/ (r3/missions.yaml and notebook.md)."
+ }
+}

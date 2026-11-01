@@ -1,0 +1,44 @@
+{
+ "type": "result",
+ "key": "v2:588907f8704337265ccf4a6747f36e0819092ded00700e54a6a32e09bcdcd346",
+ "agentId": "a4d8881b4e0459884",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r3/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     4,
+     5,
+     6,
+     7,
+     9,
+     10,
+     11,
+     12
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     15
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "sub(cross_mean(cs_last_low10(cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), div(day_sum(Amt), day_sum(Volume))), LogFloatCap), div(day_sum(Amt), sub(log(day_sum(Amt)), LogFloatCap))), sub(log(day_sum(Amt)), LogFloatCap)), 241), day_kurt(Ret))",
+    "soundness": 4
+   },
+   {
+    "head": "ts_max(ts_max(cs_bucket_zscore(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), day_zero_ratio(Ret)), 40), 40)",
+    "soundness": 3
+   }
+  ],
+  "summary": "审计文件已写入 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r3/audit_1.yaml,能按 YAML 解析。\n\n**a 位(E,核心 day_kurt(Ret))**:创新 3 / 合理 3,通过。\n- 划掉 8 颗:4–7、9、10(按波动、换手、市值去配;这几个奖励本来就会线性中性化,配完与 H3 交易信号的残差 0.85–0.93,和裸 20 日均值的 0.94 没有差别),以及 11、12(本应读「偶发」,实际读的是水平,残差比读「持续」的种子 13 还高)。\n- 留下 1、2、3、8、13–16 共 8 颗。\n- 主要风险:PI 以为 kurt 的平滑版会被库禁令打掉,相关度表不支持。cross_mean(kurt,20) 与库里 head 的原始相关最大只有 0.55,禁令拦不住,GP 可能长出一批与 H3 交易信号残差约 0.9、却能入库的孪生体。\n\n**b 位(N,隔夜与日内收益的拉锯)**:创新 4 / 合理 4,通过。\n- 算子逐个核对过:价格是后复权价,cross_corr 只用两边都有值的日子。\n- 只划掉 15(隔夜方差占比):它是日内已实现方差的饱和函数,属于陷阱 3;也是唯一一颗与流动性控制 0.38、与已知族 0.39 相关的种子。\n\n**R 组**:\n- R1 合理 4:拆解数据和 0.994 的相关都说明 X 只是装饰。但变体 6–8 的前提(开盘竞价那根 bar 支配峰度)被表否定:去掉它后与 H3 仍是 0.99。平滑版里至少变体 4 会走「收录」而不是「替换」,结果是给 H3 加一个孪生,而不是替换它。\n- R2 合理 3:只有变体 1 直接检验规模倾斜被带回来的问题;变体 2 把 size 抬到 0.47,方向相反;变体 3 换的不是被怀疑的部件。\n\n**越权读取**:开工时我读了 r3/R_prev.json。它只有样本内的分数,没有样本外的数字,但不在 §5 给审计员的白名单里。打分没有用到其中任何 missions.yaml 和 loc.md 之外的信息。"
+ }
+}

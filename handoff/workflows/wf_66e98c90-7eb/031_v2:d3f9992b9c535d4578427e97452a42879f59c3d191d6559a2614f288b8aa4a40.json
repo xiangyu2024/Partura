@@ -1,0 +1,158 @@
+{
+ "type": "result",
+ "key": "v2:d3f9992b9c535d4578427e97452a42879f59c3d191d6559a2614f288b8aa4a40",
+ "agentId": "aa2f5f1210a5d912a",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s808_train.yaml",
+  "n_heads": 37,
+  "kept": [
+   2
+  ],
+  "dropped": [
+   {
+    "id": 1,
+    "reason": "Peak volatility: ts_max over about 148 days of cs_demean(day_wstd(Ret,Volume)). This is a complex function of the volatility control (trap 2): vol 0.39, cap 0.49. It is also a rewrite of #4/#3 (0.81/0.76)."
+   },
+   {
+    "id": 3,
+    "reason": "Same peak-volatility construction as #1 (day_wstd(Ret,Volume)). Its vol correlation of 0.50 is the highest in the table, and it correlates 0.79 with #4. A rewrite of a control re-skin."
+   },
+   {
+    "id": 4,
+    "reason": "day_wstd(Ret,Ret) is an intraday return std weighted by |Ret|. After cs_normalize it takes a 99-day max, so it is still peak volatility. Correlates 0.81 with #1; vol 0.42, cap 0.45."
+   },
+   {
+    "id": 5,
+    "reason": "cross_autocorr_s1 of cross_autocorr_s1, nested twice with ts_max and cs_last_high05: it is impossible to say what this measures. day_distinct_ratio(Ret) takes heavily tied k/n values, and the ordinal ranks inside cs_last_high05 break those ties by column order (trap 1)."
+   },
+   {
+    "id": 6,
+    "reason": "The denominator of day_durbin_watson(Open) is an un-demeaned sum of squared prices, so the statistic is about intraday realized variance. The 30-day beta on day_last(Amt) is then divided by day_last(Amt) twice, so its scale is dominated by about 1/Amt^3. Vol x liquidity re-skin: liq 0.42, known family 0.39, 0.89 with #7."
+   },
+   {
+    "id": 7,
+    "reason": "Same construction as #6 with day_median(Volume) as the divisor. A 0.89 rewrite of #6; liquidity re-skin (liq 0.39, cap 0.43)."
+   },
+   {
+    "id": 8,
+    "reason": "In the cross_regbeta the dependent variable day_wmean(Vwap,Open) is a back-adjusted price level (trap 3). The 60-day beta is a spurious-regression co-trend of price level and day_cov(Open,Ret), with scale near 1/vol and an unstable sign. No readable mechanism."
+   },
+   {
+    "id": 9,
+    "reason": "It is rank(LogFloatShares) passed through three cs_last_high40 screens. With direction -1 the long book is a fixed float-share band (about the 60-70th percentile) among names with low day_q_stat_std. A share-count re-skin (trap 2) with meaningless nested screens."
+   },
+   {
+    "id": 10,
+    "reason": "cross_reg_tvalue with x=pow_2_5(day_last(Amt)), which is about 1e10-1e20 in float32. In rolling_ols, t=beta/(se+1e-9) and se is far below 1e-9, so the 't' is really beta*1e9 and scales as 1/sd(Amt^2.5). A synthetic check confirmed t==beta/EPS exactly. When the last-minute amount is above roughly 3e7, var_x overflows to inf and the value is exactly 0. The cross-sectional rank is about sign(corr) x illiquidity: a numeric artifact and a liquidity re-skin."
+   },
+   {
+    "id": 11,
+    "reason": "Same expression as #10 with the outer window cut from 241 to 60. Same beta*1e9 pseudo-t, ranked by 1/sd(Amt^2.5)."
+   },
+   {
+    "id": 12,
+    "reason": "Same pseudo-t as #10. The y side contains add(Ret,Open), which adds a minute return to a back-adjusted price level (a unit mismatch), and in_reg_fvalue(Ret,Amt,3), a 3-minute F with 1 degree of freedom. Meaningless nesting."
+   },
+   {
+    "id": 13,
+    "reason": "The #10 pseudo-t nested inside another 241-day cross_reg_tvalue through ts_max and ts_quantile_q25. Rewrite within the family (0.67 with #17, 0.55 with #23)."
+   },
+   {
+    "id": 14,
+    "reason": "Three nested 241-day cross_reg_tvalue(pow_2_5(day_last(Amt)),...) layers alternating with ts_max and ts_quantile_q25: a numeric game. liq 0.30, known family 0.29."
+   },
+   {
+    "id": 15,
+    "reason": "ts_max(.,1) is the identity. y=day_cov(cross_madz(Low,5),Amt) is in amount units, so beta scales like Amt/Amt^2.5. Still the #10 pseudo-t and a liquidity re-skin (liq 0.28)."
+   },
+   {
+    "id": 16,
+    "reason": "The #10 pseudo-t on the q25 of day_cov(Close,Ret), wrapped in ts_max 40. Family rewrite (0.67 with #26)."
+   },
+   {
+    "id": 17,
+    "reason": "Rewrite of #13 (inner window 30, double ts_max), 0.67 correlation."
+   },
+   {
+    "id": 18,
+    "reason": "The #10 pseudo-t on the q25 of day_mean(cross_madz(Amt,5)). The rank is driven by 1/sd(Amt^2.5) and the sign of the correlation."
+   },
+   {
+    "id": 19,
+    "reason": "Highest train Sharpe (+1.84), but still the #10 beta*1e9 pseudo-t. y=day_mean(pow_1_5(High)) is a back-adjusted price level to the power 1.5 (trap 3)."
+   },
+   {
+    "id": 20,
+    "reason": "y is a quantile of the amount itself (ts_max(day_last(Amt),40)) and x is that amount to the power 2.5. beta*1e9 scales like Amt^-1.5, so this is a direct liquidity re-skin."
+   },
+   {
+    "id": 21,
+    "reason": "Two cross_reg_tvalue(pow_2_5(day_last(Amt)),...,241) layers nested directly: a pseudo-t of a pseudo-t."
+   },
+   {
+    "id": 22,
+    "reason": "Triple ts_quantile_q25/ts_max nesting around two #10 pseudo-t layers. Rewrite of #23/#13 (0.53)."
+   },
+   {
+    "id": 23,
+    "reason": "Nested two-layer pseudo-t plus ts_max. Rewrite of #27 (0.67)."
+   },
+   {
+    "id": 24,
+    "reason": "Two nested #10 pseudo-t layers. The inner y, day_cov(cross_madz(Low,5),Low), is in back-adjusted price units."
+   },
+   {
+    "id": 25,
+    "reason": "The #10 pseudo-t on the q25 of day_mean(cross_madz(Low,5)). liq 0.44 and known family 0.44, the most control-like member of the family."
+   },
+   {
+    "id": 26,
+    "reason": "y=day_cov(Ret,Ret) is intraday variance (volatility, trap 2) inside the #10 pseudo-t plus ts_max. 0.67 with #16."
+   },
+   {
+    "id": 27,
+    "reason": "Two-layer #10 pseudo-t plus ts_max. Rewrite of #23 (0.67)."
+   },
+   {
+    "id": 28,
+    "reason": "The #10 pseudo-t on ts_sum(day_cov(Close,Ret),40). 0.54 with #26, 0.51 with #16; liq 0.30."
+   },
+   {
+    "id": 29,
+    "reason": "The #10 pseudo-t with y=day_cov(cross_madz(Close,5),Low) in back-adjusted Low units. liq 0.32."
+   },
+   {
+    "id": 30,
+    "reason": "Here the t is numerically genuine, but y=ts_std(day_mean(pow_1_5(High)),40) is the 40-day volatility of back-adjusted price^1.5 (trap 3 plus volatility). It is regressed for 241 days against day_cov(cross_madz(Low,5),Amt): a spurious t between two persistent series with no readable mechanism."
+   },
+   {
+    "id": 31,
+    "reason": "x=pow_2_5(day_cov(Amt,Vwap)) is NaN whenever the covariance is negative. Otherwise the same beta*1e9 artifact as #10, wrapped in two ts_max 40 layers."
+   },
+   {
+    "id": 32,
+    "reason": "The #10 pseudo-t with y=day_cov(Amt,Ret) in amount units."
+   },
+   {
+    "id": 33,
+    "reason": "The #10 pseudo-t on a triple-nested ts_quantile_q25/ts_max/ts_quantile_q25 of day_cov(Close,Ret): a numeric game."
+   },
+   {
+    "id": 34,
+    "reason": "Two-layer #10 pseudo-t with ts_max/ts_quantile_q25 nesting. Family rewrite (0.38 with #22/#27)."
+   },
+   {
+    "id": 35,
+    "reason": "day_at_min_ratio(Vwap) is massively tied (most stocks have one minute at the low, value 1/241), and the ordinal ranks in cs_last_low20 break those ties by column order (trap 1). Direction -1 turns the exclusion screen into an inclusion screen: the bottom 20% of a 241-day autocorrelation of day_wstd(Low,Vwap), which carries back-adjusted price levels. liq 0.39, known family 0.39."
+   },
+   {
+    "id": 36,
+    "reason": "Same at_min tie and column-order problem as #35, with one more cs_last_low20 screen on at_min's own 241-day autocorrelation. liq and known family 0.42; 0.48 with #37."
+   },
+   {
+    "id": 37,
+    "reason": "Same family. The screen is cross_semistd_pos(day_wstd(Low,Low),241), the vol of a price-dispersion series, with a nested cross_tail_mean_q25. liq 0.47, known family 0.45, cap 0.39."
+   }
+  ]
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "type": "result",
+ "key": "v2:ac4542106d08e395a6abdd14296c6c1df40327ec2a07338ce5c3dfb9029560d7",
+ "agentId": "a5d0428c0491a824d",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s803/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     1,
+     2,
+     8,
+     9
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_skew(day_durbin_watson(Open), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_mean(mul(add(day_kurt(Ret), 3), add(day_kurt(Ret), 3)), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "day_kurt(Ret)",
+    "soundness": 3
+   }
+  ],
+  "summary": "两个任务位都通过,三组 R 也都通过。\n\nE 位 a(核心 day_centroid(Amt)):创新度 3,合理度 3。真正新的是上涨分钟成交额重心减全部成交额重心(种子 4–7),它与所有 head 的原始 |ρ| ≤ 0.16,与控制 ≤ 0.08。划掉 1、2、8、9:\n- 1、2:自比 z 值与 head 5 的原始 |ρ| 为 0.76/0.80,说明日度重心的截面差异主要是每天的波动,不是慢变特征;它们是 head 5 的换皮。\n- 8、9:|Ret| 重心与 day_kurt(Ret) 的残差 |ρ| 为 0.72,算子没有实现计划所说的价格延迟。\n\nN 位 b(RSJ):创新度 3,合理度 4,不划种子。实现与 Bollerslev, Li & Zhao (2020) 的定义逐项一致,没有落进 §4 的陷阱,而且有 2023-08-08 之前的文献证据。不给 5 的原因是:它与周度反转、粗 tick 的关系只能靠分桶种子去分辨。\n\nR 组:\n- R1:按源码核对了 nanskew_last 的 EPS=1e-9,又用 numpy 在合成数据上验算,ts_skew(DW) 实际输出 1e9·m3,属于陷阱 1。两个替换件都无量纲,给 4。\n- R2:平方在每天截面上是单调变换,只把 15 日均值变成被尖峰日支配的凸平均,给 3。\n- R3:有已付费的证据支持拿掉共享部分,但计划说的 Clark 成交时间机制没有被算子实现,给 3。\n\n需要说明一处越界:我误读了 r2/R_prev.json,它不在审计员的可读清单里。里面的数字计划里已经引用过,评分没有依据其中任何额外信息。我没有读 analysis.md、lit.md、notebook.md。"
+ }
+}

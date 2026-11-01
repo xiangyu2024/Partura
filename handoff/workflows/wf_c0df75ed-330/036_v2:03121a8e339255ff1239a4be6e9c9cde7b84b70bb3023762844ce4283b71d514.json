@@ -1,0 +1,38 @@
+{
+ "type": "result",
+ "key": "v2:03121a8e339255ff1239a4be6e9c9cde7b84b70bb3023762844ce4283b71d514",
+ "agentId": "a2d85b2317517717d",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s803/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": [
+     1,
+     2,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "neg(cs_mask_top_replace_mean(mul(5, neg(day_centroid(Amt)))))",
+    "soundness": 4
+   }
+  ],
+  "summary": "以独立审计员身份完成种子803第2轮第1次审计,写入 /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s803/r2/audit_1.yaml。读取范围严格限定在规则允许的文件:rules.md、r2/missions.yaml、r2/corr_1.md与corr_1.json、r2/loc.md、r1/missions_final.yaml、r1/audit_record.json,以及ops_ext.py和AlphaCube-steering源码中用到的算子实现(day_centroid、cs_mask_top_replace_mean(_neg)、cs_regres、cs_bucket_demean、cs_flip_by_state、day_autocorr_n1/day_ar1_coefficient/day_hurst/day_q_stat_std/day_distinct_ratio、day_corr、day_sum/_sum、div等),未读analysis.md/lit.md/notebook.md。\n\n核心发现:slot a(E位,围绕唯一head的核心day_centroid(Amt)择时深挖)12个种子里有7个(seed 1,2,4,5,6,7,8)与现有head原始秩|ρ|≥0.7,触发§3确定性自动划线(本质是外围只对核心做了窗口差分/桶内去均值/回归去相关等小幅修正,核心结构仍主导,导致高相关);另1个(seed9)经代数推导确认sub(y, cs_bucket_demean(y,x))恒等于分桶均值本身,一天只有10个桶、几千只股票共享10个值,对应§4\"面板几乎是常数\"的数值伪影,相关度表的gate=false/distinct=0.003也印证了这一点。划完刚好剩4个种子(3,10,11,12),压线通过≥4的门槛;其中seed10/11原始ρ未达0.7但残差ρ高达0.93-0.96,属于\"head换皮\"边界情况,未划但在reasons中明确提醒PI。novelty=3,soundness=4,判定通过。\n\nslot b(N位,日内收益一阶自相关/流动性弹性冲击,族外新维度)12个种子与head和5个控制相关度全线很低(最高0.51),loc.json的enrichment表核对确认是真正的空白(M两批候选从未出现相关子树),全部保留,novelty=4,soundness=4,判定通过。\n\nR组(对现有head的两个\"换一侧裁/两侧都裁\"变体)直接对应loc.md拆解表里\"knockout只测过一侧裁剪\"的空白,算子复用已核对过的cs_mask_top_replace_mean_neg,soundness=4。\n\n每个放行的提议都按规则写了\"如果有alpha最可能来自哪里\"的一句话,理由均引用了相关度表具体数值、具体head表达式与具体算子实现。"
+ }
+}

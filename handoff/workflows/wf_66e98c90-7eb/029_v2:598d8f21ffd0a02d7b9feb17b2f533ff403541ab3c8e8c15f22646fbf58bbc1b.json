@@ -1,0 +1,36 @@
+{
+ "type": "result",
+ "key": "v2:598d8f21ffd0a02d7b9feb17b2f533ff403541ab3c8e8c15f22646fbf58bbc1b",
+ "agentId": "a754d459d7cd76a28",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s807_train.yaml",
+  "n_heads": 6,
+  "kept": [],
+  "dropped": [
+   {
+    "id": 1,
+    "reason": "(b) Nested numeric game. A 5-day ts_regbeta regresses a cross-sectionally constant back-adjusted price level, cs_mean(day_median(Close)) (trap 3), on the 20-day var of LogFloatCap; with only 5 points cov/var blows up whenever that variance goes flat. The result passes through pow_05 and cs_rank, then a 241-day cross_regbeta on q75 minute share volume. cs_median(day_pos_ratio(Open)) is about 1 every day, so it is a dead term. No mechanism can be read from it."
+   },
+   {
+    "id": 2,
+    "reason": "(b)/trap 2. The core input ts_var(LogFloatCap,30) is the variance of the market-cap level (volatility plus trend), so it re-skins controls. Its 30-day cross_regbeta on q75 share volume is not scale-free, and across stocks it is driven mainly by the unit ratio std(var)/std(share volume). The constant cs_median(day_pos_ratio(Open)) is dead and is removed exactly by the bucket demean. LimitWidth takes only a few values, and _buckets uses ordinal ranks, so the large tied blocks are split into deciles by column order."
+   },
+   {
+    "id": 3,
+    "reason": "(a) Same skeleton as #2; only the ts_var window changes from 30 to 20, and the added cs_median(ts_var(LogFloatCap,50)) is a daily cross-sectional constant that cs_bucket_demean removes exactly. Its |rho| with #2 is 0.63, the highest in the library. It also has #2's (b)/trap-2 problems."
+   },
+   {
+    "id": 4,
+    "reason": "(b)/trap 1. Open is a positive back-adjusted price, so day_zero_ratio(Open) ties at 0 for nearly every stock. The ordinal _pct_rank inside cs_last_low05 then turns that tie block into a static ramp in column order. The only stock-specific content left is the bottom 5% of LogTotalCap, which direction -1 moves into the long book: a size step at the tail (trap 2). Its |rho| is at most 0.08 against every control and every other head, which fits a static ramp."
+   },
+   {
+    "id": 5,
+    "reason": "Trap 2. abs_(top-masked intraday corr(Ret,Open) x LogTotalCap rank) is mainly a market-cap rank: |rho| is 0.55 with market cap, 0.39 with liquidity and 0.37 with the known family. cs_last_low05(LogTotalCap, LogTotalCap) followed by abs_ folds the smallest 5% up to about 0.95-1, a V-shaped kink that a rank-cubic residual cannot remove. Multiplying by an abs'd, top-masked correlation is a numeric game."
+   },
+   {
+    "id": 6,
+    "reason": "Trap 2. day_zero_ratio(Ret) is multiplied by its own rank after cs_last_low05 has pushed the bottom 5% of LogTotalCap down. Every value in that bottom 5% is <=0 and every other value is >=0. Direction -1 therefore puts the smallest 5% of stocks by total cap into the long book as a block, whatever the signal says. That block is about half of the long decile and is a size tail step the rank-cubic residual cannot remove. The other half is picked by the lowest zero-return share, which has |rho| 0.42 with liquidity and 0.38 with the known family."
+   }
+  ]
+ }
+}

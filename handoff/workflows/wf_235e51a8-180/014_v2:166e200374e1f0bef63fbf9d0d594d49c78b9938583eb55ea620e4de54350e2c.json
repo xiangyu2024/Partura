@@ -1,0 +1,32 @@
+{
+ "type": "result",
+ "key": "v2:166e200374e1f0bef63fbf9d0d594d49c78b9938583eb55ea620e4de54350e2c",
+ "agentId": "a6418ea42747429d6",
+ "result": {
+  "approved": true,
+  "guidance_path": "/Users/wxy/Desktop/Partura/guidance/C01_r3.yaml",
+  "assignment": [
+   {
+    "idea": "C3a_slow_lottery_shape",
+    "seeds": [
+     301,
+     302,
+     303,
+     304
+    ]
+   },
+   {
+    "idea": "I0_open_search",
+    "seeds": [
+     305,
+     306,
+     307,
+     308
+    ]
+   }
+  ],
+  "edits": "批准主研的做法:按叶子和算子词表关掉已知族,算力分给 C3a + I0 各 4 个种子。主研的 11 条先验一字未改。改了三处,先验从 11 条变成 14 条(12 条 ban + 2 条 weight 0.2)。改完重跑检查器:ADMISSIBLE,2 ideas / 14 priors,exit 0。\n\n(1) 加 C3P10_price_weighted_level_and_cov:ban `{day_wmean|day_wstd|day_topw_mean|day_cov}(@price, _)`。\n- R2 的 C2P6 被草案去掉了,没有写理由。\n- 草案下幸存候选的前 16 名里,有 5 个正是它挡的加权价格水平吸引子(+0.505–0.511,|ρ| 0.42)。\n- 另有 7 个以 day_cov(@price, _) 为核,就是价格单位方差,是 C3P5 的孪生。\n- 在 1187 个候选上命中 23 个候选、1 个通过者(已被 C3P1 命中)、0 个 head。\n- 本机实测:草案下 I0 新生成的树有 9.4% 落在这两类上,加上本条后是 0%,代价是每棵接受的树的提议数从 2.35 升到 2.56。\n\n(2) 加 C3P11a(ban `day_zero_ratio(_)`)与 C3P11b(ban `{cross_mean|cross_ema|cross_med|ts_mean}(day_std(Ret), $w)`)。\n- idea_search.py 的 IDEA_OPS 会把种子里的全部算子并进来、按 8 倍提权,所以控制种子 7、8 的算子也被推进了 C3a 的提议。卡里写的「后代不会繁殖」并不成立:交叉出来的混合树可以带着 idea 的 day_op 进入邻域。\n- R2/205 有先例:day_skew 套在慢归并下,装饰一个流动性核(+1.06,ρ 0.65)。\n- 种子本身不受影响:它们按 seeds_repr 放行,AlphaCube 的种子过滤也不按权重筛,所以两个控制种子照常进初代、照常打分,给出一次参照读数。\n- 实测 C3a 新生成的树里含 day_zero_ratio 的比例从 4.1% 降到 0%。\n\n(3) 更正 C3a hypothesis 的一处事实:慢形式测过一次。R2/206 的 `sub(1, ts_decay_linear(day_skew(Ret), 50))` 得 +0.215,sign +1 即做多低慢偏度,方向对;还原毛收益约 +4.4%。所以种子 1 本身的预期下调到 0.1–0.5。\n\ncards_r3.md 没改,和 YAML 不一致的地方以 YAML 与 beliefs_r3 为准。\n\n隔离自查(如实记入审计):\n- 我第一次 ls 列出了 guidance/ 下其他文件的文件名(gp_archive_stats_*.json、motif_stats_*.json),没有读内容,也没有 grep。\n- PLAN §6 修订 2 正文里有一句含 A 臂 R2 的合计数。PLAN 是允许读的文件,我读到了,但没有用于任何决定。",
+  "beliefs_path": "/Users/wxy/Desktop/Partura/research/coldstart_C01/beliefs_r3.md",
+  "predictions": "机械预测(置信高;任一失败说明我对代码的读法错了):\n- M1:8 次存档里含 nt_*、ts_spearman、day_distinct_ratio 的候选各 0 个。\n- M2:含 day_zero_ratio 的只有种子 7 本身,含 cross_*/ts_mean(day_std(Ret), w) 的只有种子 8 本身;两个控制种子的读数都出现在 301–304 的存档里。\n- M3:存档里含流动性叶子的候选 ≤2%;失败线 >20%。\n- M4:C3P10 的四个算子以价格叶子为第一参数的候选 0 个。\n- M5:每次运行墙钟 <60 分钟,没有任务失败。\n- M6:sampling 计数。C3a 的 banned/proposed 在 45%–75%、outside 5%–25%;I0 的 banned 40%–72%;两者 scored ≥90。任一次 banned >80% 或 scored <80,判「先验把生成卡住了」。\n\n结果预测(置信低到中,区间放宽):\n- P1:8 次合计 heads 中位 1,80% 区间 0–4,P(0) ≈ 40%;C3a P(≥1) ≈ 35%,I0 P(≥1) ≈ 45%。\n- P2:通过者中位 6,80% 区间 0–30,P(0) ≈ 30%。\n- P3:最好分数中位 1.15,80% 区间 0.75–1.9。\n- P4:通过者 |ρ| 中位数 <0.40(点估计 0.30),|ρ| ≥0.5 的占比 <40%。\n- P5:通过者换手中位数 ≤0.045,换手 >0.08 的 ≤1 个。\n- P6:低 ρ 通过者里含平移筛选或 mask 的 <35%(此前是 87%)。\n- P7:合并门槛废品率从 R2 的 17% 升到 18%–35%(点估计 25%)。\n- P8:名义股价吸引子 8 次合计 ≤12 个。\n- P9:C3a 种子 1、2、8 的 sign 为 −1,种子 7 不是 8 条里分数最高的。\n- P10:C3a 的形状核通过者里,sign −1 的 ≥70%。\n- P11:C3a 通过者里,idea 的 day_op 在慢归并之下、而且在决定排名那一支上的 ≥50%;<20% 记白跑。\n- P12:I0 的通过者 ≥50% 以 Ret 叶子、无量纲价格形状或跨股票同步性为核。\n- P13:核是刻度近亲(day_flat_ratio、day_at_*_ratio、day_flat_run_max)的通过者 ≤3 个。\n- P14(终局才读):305–308 四对里,B 的 heads 输给 A 的不超过 2 对。\n\n放弃条件:\n- C3a:301–304 里邻域内 |ρ|<0.5 的通过者为 0,且结构合格的候选最高分 <0.6,就记负结果。sign +1 说明机制方向被否;只有 kurt 那一支过线,或 |ρ| 中位数 ≥0.5,就改写 hypothesis。\n- I0:0 个通过者,且 banned ≤72%、scored ≥90,在 RESULT 里写「四类之外没有东西」;banned >80%,则判指引的错。"
+ }
+}

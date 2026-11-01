@@ -1,0 +1,10 @@
+{
+ "type": "result",
+ "key": "v2:fedf5171e1f94ebb7782dc65d3b937f8519db6d42a9d79754882ed92a165be4d",
+ "agentId": "af8836bad476a4e93",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/guidance/C03_r1.yaml",
+  "n_seeds": 22,
+  "summary": "定稿了 /Users/wxy/Desktop/Partura/guidance/C03_r1.yaml 与说明 /Users/wxy/Desktop/Partura/research/coldstart_C03/design_r1.md。总领的种子和先验一条没改(yaml 的 YAML 结构与草稿逐字相同,只重写了文件头注释);scripts/c03_check.py guidance → ADMISSIBLE(2 个 idea、12 条先验、22 个种子,exit 0)。\n\n核过的事:22 个种子全部解析、算子都在搜索词表里、都不被本文件先验挡掉、深度 3–5(上限 9)、同一 idea 内 skeleton_key 互不相同、canonical 与写法逐字相同;只有 C2b 11 号(含 day_last(Close))权重 0.3,其余 1.0。折叠成算子权重的 20 个名字全部出自本意要整体禁掉的四条先验(C3P2/C3P3a/C3P3b/C3P4),@price 的 0.3 与两条 div 常数禁令的 __never__ unless 没有被误折叠;没有 w > 1 的规则;pool 与 C03_base 一致,reward/evaluation 为空。\n\n种子豁免在代码里确认了:scripts/idea_search.py 的 guidance_accept 第一句对 repr 在 seeds_repr 里的树直接 return True,在 bans/thinning/equivalence/sibling 之前;GP 构造走的 generator.acceptable 也是同一个 hook,所以同样豁免 —— 这条按 repr 字符串匹配,22 个种子 canonical 相同所以生效。\n\n400 次生成模拟(与运行脚本同一条 arm_hooks(\"steer\") 路径):C2a 每棵被接受的树 2.39 次提议、C2b 2.31,返回的 400 棵都不被禁;含价格叶子 55.8% / 41.2%(无先验对照 77.8% / 71.5%),含 Ret 31.5% / 22.0%(对照 24.5% / 15.0%)。无先验对照返回的树里 137 / 120 棵会被本文件先验禁掉。四种变异与种子间交叉各 40 次全部不被禁(mutate_constant 对两个锚返回 None:锚里只有窗口、没有可变常数,降换手靠 mutate_window)。21 条「应能到达的近邻」全部未被禁,13 条「应被挡住的写法」全部被禁。\n\n毛收益还原算术复算过(毛_年 = train_ann + 0.756×换手),与总领读数逐条吻合,并反解出「要过 0.5 所需的换手」:H5/v5 锚 0.059 → ≤0.049(只要 −18%,本轮最可能的通过者);H4/v7 锚 0.047 → ≤0.031(−34%);H3/v4 要 −70%,单靠慢化到不了,它的价值在与 H4/v7 的交叉。\n\n记下三处损耗/漏口(没改先验):(1) sub(log(day_last(Close)), log(day_first(Open))) 与被 C3P8 禁掉的 I 是同一个量,只被降权到 0.3,终局清点要单独抽查一次;(2) C2a 7 号只减 5 天前同一分钟,噪声大,读数弱时不要立刻按 fails_if(c) 判成时段效应;(3) day_corr 里集合竞价那一分钟(Ret≡0、量极大)是高杠杆点,词表里 delete_open_close 不可搜索,只能靠 6 号的开根号或 GP 自己走到 in_delay / in_demean。\n\n没改代码、PLAN、种子、先验;没跑服务器,没有 git 提交;C01/C02 的样本外结果与 C03 A 组的东西都没读。"
+ }
+}

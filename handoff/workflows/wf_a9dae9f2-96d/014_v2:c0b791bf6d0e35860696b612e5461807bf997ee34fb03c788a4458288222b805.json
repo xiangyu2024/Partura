@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:c0b791bf6d0e35860696b612e5461807bf997ee34fb03c788a4458288222b805",
+ "agentId": "a56432796d815bed3",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s806/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "day_cov(Vwap, Ret)",
+    "hypothesis": "The day_cov(Vwap, Ret) lineage is the only one in M batch 1 that carries intraday information (22 candidates, enrichment +0.63). Card 1's add(LimitWidth, ·) turns it into a board-dummy tie-breaker, so I did not pick card 1. day_cov ≈ (P̄/M)(Q/2 − Rδ) mixes a proxy, price level × same-day realized variance, with a timing term. The 16 seeds use peripheries not seen in the snapshot to separate the two: divide by day_mean(Vwap), divide by day_var or day_std, cross_mean / cross_ema / cross_zscore / ts_rank / upper-quartile mean, innovation against the stock's own 20-day mean, within-size-decile z-score, and LimitWidth only as a scale (divided by its square, never added). There are also contrast seeds: a smoothed version without normalization, rank-then-average, and division by the 20-day average variance."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Scale-free intraday return-distribution and price-path shape. 16 seeds with distinct skeletons: realized skewness (20-day mean, 5-day EMA, z-scored within size deciles), realized kurtosis, relative signed jump Σr|r|/Σr², volume- and amount-weighted order imbalance, day_corr(Vwap, Ret) (the core's scale-free twin), price-level (mean − median)/std, time-of-day vs return correlation, the time centroid of |Ret|, last-30-minute return, 20-day cumulative overnight return, LimitWidth-scaled 5-day return, price-volume correlation, and VWAP vs TWAP deviation. Mostly smoothed over 5–20 days to keep turnover low. The train period picks the direction."
+   }
+  ],
+  "n_R": 0,
+  "predictions": "E slot (day_cov(Vwap, Ret)): about 20% chance of a head, expected 0 and at most 1. If one appears, it is most likely a 20-day smoothed version or a grafted periphery signal riding along with the core. Decisive contrast: I predict the smoothed but unnormalized cross_mean(day_cov(Vwap, Ret), 20) scores at or above the pure-timing version cross_mean(div(day_cov, mul(day_mean(Vwap), day_var(Ret))), 20); a gap of ≥ 0.2 means the price × variance proxy dominates. This is the opposite of the analyst's prediction. If the timing version wins by 0.2 or more, round 2 should give the timing term the second E slot. Most E scores should fall between −0.6 and +0.3. N slot: about 50% chance of at least one head, expected 1–2. In order of confidence, the likely ones are realized skewness (smoothed, long the low-skew side), price-volume correlation (negative direction), and signed-jump / order imbalance (probably collapsed to one by the |rho| < 0.7 rule). Unlikely to pass: the time centroid, last-30-minute return, VWAP/TWAP deviation, and the LimitWidth-scaled return. If the LimitWidth one passes, it contradicts the analyst's §1.3 inference. I expect day_corr(Vwap, Ret) to score below the best of the day_cov lineage.",
+  "summary": "The round-1 plan for seed 806 passes c05_check.py (ADMISSIBLE, exit 0). The snapshot has 0 heads and only negative scores, so there is no R this round; a direct-evaluation request would make c05_locate.py exit, since it requires snapshot heads. Slot a is an E on day_cov(Vwap, Ret) (core card 5), not card 1's add(LimitWidth, ·): that one is a board-dummy laundering trap. Its 16 seeds strip the price-level and variance units and add multi-day, within-group and scale-only LimitWidth peripheries, plus contrast seeds. Slot b is an N on scale-free intraday shape measures, with 16 seeds drawn from the verified sources in lit.md. All seeds were also checked locally: they parse, are valid roots, use only operators that are neither boolean nor banned, have distinct skeletons, and every E seed carries the core with a periphery not seen in the snapshot. The notebook records my beliefs, the predictions, the plan for round 2, and a disclosure that PLAN revision 3 mentions day_kurt(Ret) from another seed. Files written: /Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s806/r1/missions.yaml and /Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s806/notebook.md."
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:ace8d3db82f160c6c3bebdd8f9025baab0ca2e9f45b03aee06b9b697e990c74e",
+ "agentId": "a6e0beb5edf9a1a48",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s806/r3/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "sub(day_centroid(Amt), day_centroid(Ret))",
+    "hypothesis": "Passed audit 1 (novelty 3, soundness 3). Kept exactly as written: the periphery compares D across time (high-volume vs low-volume days, by intraday-return direction, and against its own 60-day norm) instead of taking its level. 13 seeds; the auditor struck 5 and 12."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Passed audit 1 (novelty 4, soundness 4). Kept exactly as written: overnight vs intraday tug of war, ON = log(day_first(Open)/ts_delay(day_last(Close),1)). 14 seeds; the auditor struck 8."
+   }
+  ],
+  "n_R": 9,
+  "check_exit_code": 0,
+  "summary": "Only the two R groups that failed audit 1 were changed. Slots a and b and the R groups for head 12 and head 11 passed and are unchanged; a parsed-YAML comparison with the attempt-1 backup confirms they are identical.\n\nR group head 14 (`cs_first_low40(LogFloatShares, day_centroid(Amt))`, soundness 2) was rewritten. The draft's replacement sort key `ts_quantile_q50(day_centroid(Amt), 20/60)` was the level of the volume centroid, which is the known-family proxy. Corr_1 confirmed this: residual 0.74 / 0.66 with head 9 / head 4 even though the raw |rho| was at most 0.26. The new variants take the level out of both the band key and the sort key:\n- `cs_bucket_rank(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20))` (the auditor's second suggestion)\n- the same with a 60-day norm\n- `cs_first_low40(cross_zscore(day_sum(Amt), 20), sub(day_centroid(Amt), ts_quantile_q50(day_centroid(Amt), 20)))`\n\nI did not submit the auditor's first suggestion, which changes only the sort key and keeps the original band. The plan explains why: the norm loading then comes only from the band, without the partial cancellation the draft had, so that variant would carry more level, not less.\n\nR group head 1 (soundness 1) was dropped, not rewritten. Its only score sources are the LogFloatCap key and the sqrt fold. Any version with those removed cannot reach the 1.88 needed to enter the library, and keeping them just raises the score of a trap head. My round-3 notebook had already said I would accept this group being deleted.\n\nR now has 3 groups and 9 variants. I added a note to the round-3 section of /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s806/notebook.md. `c06_check.py 806 3` returns ADMISSIBLE with exit 0. The attempt-1 plan is backed up at /private/tmp/claude-501/-Users-wxy-Desktop-AlphaCube/84cd2fa5-62ee-4d6f-b035-b604567ee88d/scratchpad/missions_r3_attempt1.yaml.\n\nNote: missions_final.yaml and audit_record.json from the earlier --finalize run (20:22) are still on disk. They will be stale until the pipeline computes corr_2, runs audit 2 and finalizes again."
+ }
+}

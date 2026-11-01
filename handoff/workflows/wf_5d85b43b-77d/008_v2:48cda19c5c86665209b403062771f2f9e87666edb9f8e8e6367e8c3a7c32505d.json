@@ -1,0 +1,53 @@
+{
+ "type": "result",
+ "key": "v2:48cda19c5c86665209b403062771f2f9e87666edb9f8e8e6367e8c3a7c32505d",
+ "agentId": "a5ffbf3f17bb272b0",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s808/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     1,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     1,
+     5,
+     6,
+     7,
+     8,
+     10,
+     11
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_max(ts_max(ts_max(cs_demean(day_wstd(Ret, Volume)), 50), 50), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "ts_max(ts_max(day_wmean(Ret, Amt), 50), 50)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_regbeta(day_cov(Open, Ret), day_wmean(Vwap, High), 241)",
+    "soundness": 4
+   }
+  ],
+  "summary": "Both task slots pass. Slot a (E, core day_wstd(Ret,Volume)): novelty 4, soundness 4 — introduces day_centroid/day_cov/cross_autocorr_s1 as genuinely new joint-diagnostic atoms never combined with this core before; 7 of 13 seeds (1,6,7,8,9,10,11) auto-struck for |ρ_head|≥0.7 per corr_1.md, 6 remain (≥4, pass), core-vs-control max 0.60<0.8 satisfies the E-specific gate. Slot b (N, cross_regbeta family): novelty 3, soundness 3 — PASSES but downgraded because (a) the library already has 2 heads (+1.30, +0.57) in this exact family, contradicting the mission's \"no head uses this family\" novelty claim, and (b) source code (partura/steer.py, partura/propose.py leaf-kind \"@price\", and AlphaCube's synthetic.py construction of High=max(Open,Close)*(1+spread)) shows \"High\" is a price-level field, not the claimed \"minute amplitude/volatility\" — undermining (without invalidating, since it's not a §4 lookahead/division-by-near-zero/degenerate-panel problem) the stated mechanism for day_wmean(·,High)/day_topw_mean(·,High) seeds; 7 of 14 seeds (1,5,6,7,8,10,11) auto-struck (several at ρ=1.00, and seed 1 duplicates an already-computed loc.md dissection result), 7 remain (pass). All 3 R groups (cs_demean/cs_winsor/cross_valid_count fixes on the wstd head; cs_demean/cs_rank fix on the day_wmean(Ret,Amt) head; cs_demean on either leg of the cross_regbeta head to test for a shared market factor) score soundness 4 — operators verified against source for no lookahead, no near-zero division, no degenerate panels."
+ }
+}

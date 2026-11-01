@@ -1,0 +1,54 @@
+{
+ "type": "result",
+ "key": "v2:5e083670e088b3d9f77b139d7ec442bc2ce837da1d03b6ef07c69d21a8ee80e8",
+ "agentId": "afca3f99dd091ed91",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     1
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 2,
+    "struck_seeds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_sum(pow_2_5(ts_sum(pow_3(day_durbin_watson(High)), 1)), 1)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_sum(cross_stddev(day_durbin_watson(High), 60), 1)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_sum(LogFloatShares, 30)",
+    "soundness": 2
+   },
+   {
+    "head": "ts_mean(pow_2(mul(pow_2(day_wmean(Ret, Ret)), day_var(Ret))), 30)",
+    "soundness": 3
+   }
+  ],
+  "summary": "第 1 次审计已写入 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r2/audit_1.yaml,文件能正常解析。a 位(隔夜/日内收益归属,N)通过,创新 4、合理 4。算子逐个核对过:241 根 bar 的网格含 09:30 集合竞价,价格后复权,cross_regbeta 是 ID 对 ON 回归,cs_regres 是 ON 对 ID 取残差。只划掉种子 1(20 日差值版,与反转控制 |ρ| 0.53);保留的 13 个种子与 head 的原始 |ρ| ≤ 0.33,残差 |ρ| ≤ 0.16。PI 有一处说法不成立(不阻断本位):cov(ON−ID, ON+ID) = var(ON) − var(ID),所以取差去不掉总收益,60/120/241 日的差值版仍带中长期反转。b 位(净发行/解禁,N)不通过,创新 4、合理 2。恒等式本身正确,但相关度表里 10 个种子全是门槛废品(120/241 日的 ts_delta 覆盖率 0.786–0.89 < 0.9;60 日版 distinct 0.334,是 float32 并列造成的),所以全部划掉。退回意见:改用 NaN 安全的累积,例如 ts_sum(ts_delta(x, 1), 241);窗口不短于 241 日,并讲清纯多头腿实际买的是高派现股。R 组:R1、R2、R4 通过(各 3 分);R1 的乘 1000 变体能干净地检验 float32 下溢假象,但建议删掉 R1 变体 2 和 R2 变体 3,这两个空对照把波动写在了明处,一旦胜出就会把陷阱 3 因子换进库。R3 不通过(2 分):变体 1 只是换写法,两个发行变体覆盖率 0.893,同样是门槛废品。"
+ }
+}

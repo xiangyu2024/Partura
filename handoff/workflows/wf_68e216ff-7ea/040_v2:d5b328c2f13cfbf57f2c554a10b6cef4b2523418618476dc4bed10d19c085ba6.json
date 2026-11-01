@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:d5b328c2f13cfbf57f2c554a10b6cef4b2523418618476dc4bed10d19c085ba6",
+ "agentId": "a50e1728b9385075a",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "ts_decay_linear(pow_3(day_mean(Open)), 20)",
+    "hypothesis": "Passed audit 1 (novelty 3, soundness 3, 13/13 seeds), kept unchanged: inside the low-nominal-price core, exclusion filters (cs_last_high*), within-price-decile ranking and double filters strip lottery stocks (scale-free realized skew, right-tail shape, vol-normalized MAX, daily skew)."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Passed audit 1 (novelty 4, soundness 3, 9/12 seeds), kept unchanged (seeds 7/8/11 struck by audit stay in place so indices do not shift): reversal of opening sentiment premium; stocks with persistent overnight gap-ups underperform, long book buys persistent gap-downs (Berkman 2012, Aboody 2018, Lou-Polk-Skouras 2019; A-share T+1)."
+   }
+  ],
+  "n_R": 4,
+  "check_exit_code": 0,
+  "summary": "The rewrite is done and the check passes (c06_check.py 804 1 printed ADMISSIBLE, exit 0).\n\nThe only parts that failed audit 1 were R groups 2, 3 and 4. Slot a, slot b and R1 had passed, so I left them exactly as they were.\n\nWhat changed:\n- **R2, R3 and R4 are deleted, not rewritten.** R now has only R1 (head +0.76 without the 20-day smoothing on price), with 4 variants.\n  - R2 (head +0.78) and R4 (head +0.91) only removed decorations that do nothing: the tail's necessity is -0.00 and the cross_ema window makes no difference. Their expected scores stay within ±0.02 of the original head, well short of the +0.1 needed to replace it. They also correlate 0.97–0.99 with the original head, so they can't be added as new heads either. R4's variant has a 0.69 correlation with the size control, which is trap 3.\n  - R3's claim that \"term A is noise\" is contradicted by the correlation table: the residual |ρ| is only about 0.24, so when the head is traded it mostly trades A. That head was never decomposed, so there is no evidence any part of it is bad.\n  - No other head shows a decomposition gain of +0.1 or more (head +0.78 without smoothing gains only +0.02; head +0.65 gets -0.06). Rewording these groups and resubmitting would not change that.\n- **Slot b keeps the struck seeds 7, 8 and 11 where they were.** If I removed them, the remaining seeds would be renumbered and the next audit's struck-seed numbers would point at the wrong seeds.\n- **The day_centroid(sqrt(Volume)) idea is kept for later.** It is a separate new signal rather than a bad part of head +0.58, so it is noted as a round-2 N-slot candidate, or for after that head is decomposed.\n\nFiles:\n- Updated: /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r1/missions.yaml\n- Notebook: /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/notebook.md (new subsection \"第 1 次审计之后的改动\", added before \"上一轮的预测对不对\")\n- Copy of the previous draft: /private/tmp/claude-501/-Users-wxy-Desktop-AlphaCube/84cd2fa5-62ee-4d6f-b035-b604567ee88d/scratchpad/missions_r1_attempt1.yaml\n\nOn your question about why the run takes so long: this step only edited files and ran the check, so there is no timing information here to say where the time goes."
+ }
+}

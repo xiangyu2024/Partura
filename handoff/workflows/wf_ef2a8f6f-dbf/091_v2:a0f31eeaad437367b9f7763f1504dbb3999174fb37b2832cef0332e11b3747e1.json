@@ -1,0 +1,24 @@
+{
+ "type": "result",
+ "key": "v2:a0f31eeaad437367b9f7763f1504dbb3999174fb37b2832cef0332e11b3747e1",
+ "agentId": "a0f8cc97e7838bf3e",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s804/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": []
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [],
+  "summary": "Both slots pass. No seeds are struck, and the R group is empty because the snapshot has 0 heads. Slot a (E slot built around ts_var(LogFloatShares,10) as a float-share-change screen): novelty 4, soundness 3. There is no math problem. The PI correctly found and fixed a float32 rounding artifact in the bare core: about 1 ulp squared, roughly 3.6e-12, which matches nanstd_last. The fix is the is_gt(.,1e-8) threshold or sign(ts_delta). I checked that the tie-block logic in _lexi keeps the exact-zero block out of the band. The problem is direction. steer.reward picks sign +/-1 on train, and the cs_last_high* screen only keeps event names out of the long book when the sign is +1. Under -1, cs_last_high10/20 puts the event names in the long book, which is the opposite of the hypothesis. Seeds 3,4,5,6,7,9,11,13,14 rank by volume ratio or turnover, which likely take sign -1 in A-shares. Smaller points: share splits and stock dividends dominate the band because unadjusted share counts are squared, and the GP may drop the threshold. The suggested fix is to add neg(y) or cs_first_high20 variants. Slot b (N slot, overnight vs intraday tug-of-war): novelty 4, soundness 4. All operators were checked: no lookahead, log returns NaN rather than inf at zero, and cross_corr stays bounded. The highest control correlations are seed 4 vs vol (0.61) and seed 5 vs rev (0.53), so nothing is auto-struck."
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "type": "result",
+ "key": "v2:b7992684a5a8d1cb4ddbb704e9250824afae41f51f89523b87f134bd4cf28632",
+ "agentId": "af404b6f086e0cc18",
+ "result": {
+  "approved": true,
+  "guidance_path": "/Users/wxy/Desktop/Partura/guidance/C01_r2.yaml",
+  "assignment": [
+   {
+    "idea": "C2a_when_the_return_arrives",
+    "seeds": [
+     201,
+     202,
+     203,
+     204
+    ]
+   },
+   {
+    "idea": "C2b_turnover_on_the_up_minutes",
+    "seeds": [
+     205,
+     206,
+     207,
+     208
+    ]
+   }
+  ],
+  "edits": "批准主研的骨架:两个 idea 都是机制,不是 R1 公式的微调;5 条 ban 都有证据、0 误伤、全是 ban。改了 6 处,改完重跑检查器:ADMISSIBLE,2 ideas / 7 priors,exit 0。\n(1) 新增 C2P6 ban:{day_wmean|day_wstd|day_topw_mean}(@price, _)。C2b 把这三个算子提权 8 倍,day_wstd(Close, Amt) 就是种子 104 族核心 day_std(Close) 的加权孪生,能进 C2b 邻域,主研说的「不可达」只对原式成立。day_wmean / day_topw_mean 作用在价格上,得到的是名义股价水平。R1 上命中 11 个候选,0 个 head。\n(2) 新增 C2P7 ban:{day_first|day_last|day_open|day_close|day_sum|day_mean|day_median|day_max|day_quantile*}(@price),unless 价格作 div 的分子。名义股价水平在 R1 是一个吸引子:分数约 +0.5、ρ≈0.42,从不过线;种子 102 的 80 个存档位里有 33 个是它。C2a 把 day_first/day_last 提权 8 倍,不禁就会把它带进 C2a 邻域。unless 放过隔夜 / 日内收益这类价格比值。day_min 故意不列,因为 R1 有一个 head 用了 day_min(Close)。R1 上命中 97 个候选,其中 85 个只被本条命中;唯一过线的是种子 107 那个 head 的孪生;0 个 head;12 个种子都不受影响。\n(3) C2a 的 must-contain 去掉 day_sum。它是通用归并,不读时点。R1 上 C2a 邻域从 109 缩到 39 个候选,去掉被禁的从 32 缩到 16。\n(4) C2a 种子 3 的 day_first(Close) 改成 day_first(Open)。原式取的是第一分钟收盘价,不是开盘价;改后是真正的隔夜减盘中,和 Ret 首分钟的口径无关。\n(5) C2b 种子 1 改成 sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Close)),即钱经历的收益减时间经历的收益,和当天涨跌方向(短期反转)分开。同时给 C2b 加了对应的预测和 fails_if (e)。\n(6) 更正 C2a 的先验:公开文献里 A 股在市场层面隔夜收益平均为负、日内为正(Qiao & Dam 2020,先验),主研写反了;改成只押横截面,并写明竞争性先验(日内反转)。\n另外:代码显示标签做了买入可行性处理(入场日开盘锁涨停的票按持现金计),主研卡里「书本身没有涨停掩码」要按这条更正,已写进 beliefs。cards_r2.md 没改,它和最终 YAML 不一致的地方以 beliefs_r2.md 第 3 节为准。",
+  "beliefs_path": "/Users/wxy/Desktop/Partura/research/coldstart_C01/beliefs_r2.md",
+  "predictions": "口径:B 臂 R2 共 8 次运行,种子 201–208;|ρ|=max(|rho_pool|,|rho_known_traded|);括号里是 R1 基线。\nP1:通过者里 |ρ|≥0.5 的占比 ≤35%,点估计约 20%(79%);≥50% 判失败。\nP2:通过者 |ρ| 中位数 ≤0.35(0.88)。\nP3:各次运行自己的 heads 合计 ≥6,点估计 9,80% 区间 2–20;至少 5/8 次运行有 head(4/8);单次运行 heads ≤6(R1 有一次 12 个)。heads 合计 <3,或有 head 的运行 ≤3,判失败。\nP4:至少一半的 heads 含 Ret 叶子(3/18);同时含 cs_mask_top_replace_mean_neg 和 day_std(@price) 的 104 族形状 head ≤1(12)。\nP5:通过者总数在 20 到 273 之间。\nP6:合并门槛废品率 20%–45%(25%);任一次运行超过 60% 判失败。\nP7:最好分数 <2.72,点估计 1.6–2.3。\nP8:每次运行 banned/proposed ≤30%,outside/proposed 在 30%–85%,scored ≥90。若任一次 banned>40% 且 0 个通过者、outside>90%,或 scored<80,判邻域或先验过窄。\nP9:名义价格吸引子(分数 0.4–0.7 且 |ρ_known| 0.36–0.45 的存档候选)8 次合计 ≤15(90)。\nP10:C2b 的 signed_ratio 写法若有通过者,方向 −1 的概率 70%;差值写法至少 1 个通过者的概率 60%。\nP11:C2a 的隔夜减日内一系若有通过者,方向 +1 和 −1 各 50%(主研押 −1,我不押);centroid/argmax/argmin 一系至少 1 个通过者的概率 50%;若种子 3 一系(价格比值)和种子 2/4 一系(Ret 首分钟)选的方向不同,说明 Ret 首分钟不含隔夜。\n放弃规则:\n- 某个 idea 的 4 次运行合计 0 个 |ρ|<0.5 的通过者 → 放弃该 idea。\n- C2a 选 +1 → 机制失败,族改名为日内反转。\n- C2b 只有裸写法通过 → 归为短期反转。\n- outside>90% 时先放宽 day_ops,不急着放弃 idea。\n- banned>40% 且 0 个通过者 → ban 改成降权。"
+ }
+}

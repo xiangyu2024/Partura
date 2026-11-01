@@ -1,0 +1,29 @@
+{
+ "type": "result",
+ "key": "v2:ce95bbc0ca9e517f67dfd2a71480eed57da0a50ff9847cea54846cea0ae2912a",
+ "agentId": "ad150a2f73c0a9600",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s806/r1/analysis.md",
+  "cores": [
+   {
+    "core": "day_cov(Vwap, Ret)",
+    "why": "首选(机械核心卡第 5 名,不是第 1 名)。共性表里样本最多(22 个候选,均值差 +0.63,p 0.0002),而且是这条血统里唯一量纲自洽、真正携带日内信息的部件。机制可解析:记分钟对数收益 w_i、累计 c_i、R=全天收益、Q=已实现方差、δ=mean(c)−R/2,由 Σ c_i w_i=(R²+Q)/2 得 day_cov(Vwap,Ret) ≈ (P̄/M)·(Q/2 − R·δ)(本机模拟核对,单日吻合 0.1–4%)。即它是「价格水平 × 当日已实现方差」(代理)与「当日收益 × 行情出现得多晚」(可能的真来源)的混合;鞅零假设下前者占约 72% 的截面方差(秩相关 +0.82),而奖励的控制里没有价格水平、波动控制只是 20 日平均值,所以代理部分有相当一部分残留。好处是这个混合可以被外围分开:模拟里 day_cov/(P̄·Q) 与纯时点项秩相关 +1.00,所以 E 的外围方向明确 —— 用 div 配 day_var(Ret)/day_mean(Vwap)/day_std(Ret) 把量纲除掉。另外两条机械优势:(1) 深度 2,GP 子代受 max_depth=4 限制,留下两层外围空间(卡 1 深度 3 只剩一层);(2) 外围按算子名集合判重,{add} 与 {add, ts_min} 已被 seen,会自动把退化的 add(LimitWidth, ·) 再生挡掉。已见外围:add 一个 LimitWidth 叶子(18)、add 两次 LimitWidth(6)、再套 ts_min(·,20)(5)、add 一份自己的副本(4)。没见过且值得试:div/mul/sub、day_var/day_std/day_mean/day_sum、cross_mean/cross_stddev/cross_decay_linear、ts_mean/ts_rank/ts_delta/ts_corr、cs_demean/cs_scale/cs_regres,以及 LogFloatCap/ListAge 做交互。"
+   },
+   {
+    "core": "add(LimitWidth, day_cov(Vwap, Ret))",
+    "why": "机械核心卡第 1 名(均值差 +0.80,p 0.000,18 个候选),但我建议不要用。LimitWidth 是未标准化的原始板块限幅(0.10/0.20/0.30,创业板 2020-08-24 由 0.10 跳到 0.20,断点落在 train 内部),而 day_cov 的截面标准差约 3.8e-04,板块落差是它的 260 倍以上(模拟里 |day_cov|>0.10 的比例为 0)。奖励在进书前先取截面 z-rank,所以这个 add 在截面上是严格字典序:先按板块分组,组内才按 day_cov 破平局 —— 它是一个板块哑变量,day_cov 只是破平局项。而且这个写法正是 GP 绕过 ParturaScorer 的 distinct_fraction≥0.5 门槛的办法(纯 LimitWidth 只有 2–3 个取值必被拒,加一个处处不同的小量就过)。它「亏得少」有两个非 alpha 的解释:换手≈0 所以不付 15bp 成本;以及静态风格押注在 train 定方向 + score=min(train,valid) 的口径下结构上过不了 0.5。推论:卡 1、卡 2(add 两个 LimitWidth)、卡 7(重复 day_cov)产生完全相同的截面排序,是同一个因子;卡 3 的 ts_min 也仍是这个板块因子。若 PI 仍要用它,外围必须只用 mul/div 让 LimitWidth 变成缩放因子,不得再出现任何 add。"
+   },
+   {
+    "core": "day_cov(High, Ret)",
+    "why": "不建议单独占一个 E 位。它与 day_cov(Vwap, Ret) 是同一个东西:High 的分钟高价与 Vwap 的分钟均价近乎共线,两者作为因子的秩相关接近 1,skeleton_key 下骨架也相同(O:day_cov(F,F))。共性表里这两行统计量几乎逐位相同(n 都是 22,mean_with −0.8325/−0.8323,均值差 +0.6274/+0.6277),这不是一次通过了的「换同类字段」敏感性检验 —— 最可能是同一批候选里同时含这两个子树(若它们是独立候选,0.95 的家族吸收早就吞掉一方)。按 §2.5「每个核心至多 2 个 E 位」,把这两个位都留给 day_cov(Vwap, Ret)(本轮 1 个、第 2/3 轮视结果再 1 个)比做两遍同一件事划算。"
+   }
+  ],
+  "queries": [
+   "Q1(对准核心 day_cov(Vwap,Ret) 与 N1 无量纲路径形状):2023-08 之前的文献里,日内价格路径的形状 / 行情出现的时点被怎样做成截面预测变量?要:常见归一化口径(偏度这类尺度不变量、除以已实现波动、时间加权 vs 成交量加权均价)、预测期(次日开盘/次日收盘/5 日/20 日)、在中国 A 股报出的符号是动量还是反转、作者额外控制了什么(规模、流动性、换手、特质波动)。英文关键词:intraday momentum, intraday price path, intraday return skewness, half-hour return predictability, close-to-VWAP, VWAP deviation, time-weighted vs volume-weighted average price, order imbalance proxy。中文关键词:日内动量, 日内价格路径, 日内收益偏度, 尾盘收益, 均价偏离, 成交量加权均价, 日内交易不平衡。",
+   "Q2(对准核心的代理风险,即分解式里的 P̄·Q/2 项):「分钟价格水平与分钟收益的协方差」这类量在文献里怎样被分解、怎样把已实现方差与价格水平那部分剥掉?另外,当日已实现波动相对其自身 20 日均值的新息在 A 股截面上是不是已知的预测变量、符号是什么(这决定了 day_cov 的代理部分是不是只是低波动异象的另一种写法)?英文关键词:realized variance decomposition, realized semivariance, signed realized variance, realized skewness, volatility innovation, idiosyncratic volatility puzzle China, low-volatility anomaly A-shares, scale invariance of covariance measures。中文关键词:已实现方差分解, 已实现半方差, 已实现偏度, 波动率新息, 特质波动率异象, 低波动异象, A股截面。",
+   "Q3(对准 LimitWidth 这个部件与 N3「按限幅缩放」):A 股的涨跌停幅度 / 板块在文献里是怎么用的 —— 当分组变量、当缩放因子、还是当交互项?特别要:2020-08-24 创业板由 10% 改为 20% 被怎样处理(分段、剔除、还是当自然实验),以及接近限价时日内路径会发生什么(磁吸效应)对日内路径类指标的污染。英文关键词:price limits China, limit width 10% vs 20%, ChiNext registration-based reform 2020, STAR market 20% limit, magnet effect, limit hit, return truncation。中文关键词:涨跌停, 涨跌幅限制, 创业板注册制 2020-08-24, 科创板 20% 限幅, 磁吸效应, 收益截断, 一字板。",
+   "Q4(对准本环境的结构性约束:方向在 train 上定死、score 取 train 与 valid 的较差者):对日内类特征,2023-08 之前有哪些时序处理被报告为能让截面预测的符号在不同市场状态下保持稳定(滚动 z 分数 / 滚动秩标准化、相对自身移动平均的新息、行业或板块内排序、分组内标准化而不是把哑变量加到信号上)?以及这类信号的衰减速度(半衰期 / 最优持有期)大致是多少?英文关键词:rolling standardization of factors, time-series z-score of cross-sectional signals, within-group standardization, conditional double sort, factor decay half-life, regime stability of anomalies in China。中文关键词:因子滚动标准化, 时序标准化, 组内标准化, 双重排序, 因子衰减半衰期, 风格切换, 异象稳定性。"
+  ],
+  "summary": "种子 806 第 1 轮的定位输出几乎是空的:0 个 head,所以拆解 0 次评估(paid 0),充分性 / 必要性 / 敏感性三类证据本轮全都没有,只有共性表 7 行可用。而这 7 行是同一条 GP 血统的 7 种写法,折下来只有两个信号,而且全部候选的 score 都是负的(含最好结构那组均值 −0.58,离门槛 0.5 还差约 1.1)—— 这一批里没有 alpha 可供定位,「均值差 +0.80」只是「亏得少 0.80」。另外存档是 GP 进化出的精英集合(archive_gen*.csv,按 0.95 秩相似度做过家族吸收),含某子树的 18 个候选是一条血统的 18 个后代而非 18 个独立观测,所以共性表的 p 值不能当统计证据用。\n\n核心机械发现:LimitWidth 是未标准化的原始限幅(0.10/0.20/0.30),而 day_cov(Vwap,Ret) 的截面标准差约 3.8e-04,相差 2–3 个数量级;奖励在进书前先取截面 z-rank,因此 add(LimitWidth, day_cov(Vwap,Ret)) 在截面上是严格字典序(先板块分组、组内才按 day_cov 破平局),它是一个板块哑变量,而这个 add 正是 GP 绕过 distinct_fraction≥0.5 门槛的洗白写法(纯 LimitWidth 必被拒)。由此,共性表卡 1、卡 2、卡 7 产生完全相同的截面排序(同一个因子),卡 3 的 ts_min 仍是这个板块因子,day_cov(High,Ret) 与 day_cov(Vwap,Ret) 是同一个东西。这类因子「亏得少」的两个解释都不是 alpha:换手≈0 不付 15bp;以及静态风格押注在「train 定方向 + score=min(train,valid)」下结构上过不了 0.5。\n\nday_cov(Vwap,Ret) 本身是「代理 + 真来源」的混合:解析分解 ≈ (P̄/M)(Q/2 − R·δ),鞅零假设下约 72% 的截面方差只是「价格水平 × 当日已实现方差」(价格水平不在控制里,波动控制只是 20 日平均),剩下的是「当日收益 × 行情出现得多晚」这个 close-to-VWAP / 日内动量类的时点项;两者可以被外围分开(模拟里 day_cov/(P̄·Q) 与纯时点项秩相关 +1.00)。\n\n建议:E 位给 day_cov(Vwap,Ret)(非卡 1),外围走「除掉量纲」与「乘性引入 LimitWidth」两条;R 本轮不可能做 —— c05_locate.py 的 direct 模式对不在快照 heads 里的请求直接 SystemExit,heads=0,所以 R 必须为空(B0 跟随也是 0),那 16 次直接评估按 §2.3 作废;N 的三条灵感是无量纲日内路径形状(day_skew(Vwap)、day_corr(Vwap,Ret)、(mean−median)/std,它同时是上述代理判断的判决性检验)、成交量加权而非时间加权的均价 vs 中价、以及按 LimitWidth 缩放(PLAN §1 第 3 条的先例,方向交给数据)。另给了 PI 五条实现侧提醒(种子骨架必须互不相同否则被 skeleton_key 去重;32 个种子要吃掉约 1/3 预算;外围判重只看算子名集合;本轮库禁令为空;N 位同样会长出洗白写法),并在 §6 留了 4 条可检验预测供第 2 轮核对。"
+ }
+}

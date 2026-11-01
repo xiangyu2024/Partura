@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:774d8ea94d961d6dc07205d54be946158776d83c1a5967b12574dfa1f0d3018f",
+ "agentId": "a376a16c3b759f6b0",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify_v2/s806_train.yaml",
+  "n_heads": 8,
+  "kept": [
+   1,
+   8
+  ],
+  "dropped": [
+   {
+    "id": 2,
+    "reason": "Numerical artifact (float32 overflow). The head feeds pow_2_5(pow_1_5(Volume)), i.e. Volume^3.75, into a 30-day cross_corr. In float32, var_x*var_y overflows to inf, so the correlation comes out as exactly ±0. I ran the repo's rolling_pair_reduce on synthetic data: a stock whose 75th-percentile minute volume is above about 30k-50k shares gets zero (same window: f32 -0.0000, f64 -0.19). So a large slice of the cross-section, chosen by share volume, is pinned at 0, and the overflow dominates the ranking. Heavy-tailed F(1,3) values in x push the threshold even lower."
+   },
+   {
+    "id": 3,
+    "reason": "Numerical artifact (float32 overflow). In the outer 30-day correlation with Volume^3.75, var_y overflows to inf, so the correlation is exactly ±0. In the synthetic test, every stock with a 75th-percentile minute volume above about 50k-70k shares became zero, so the overflow dominates the ranking. The inner self-regression F is not the problem: measured exactly, it equals the 5-day sum of squared deviations divided by EPS."
+   },
+   {
+    "id": 4,
+    "reason": "Numerical artifact (float32 overflow). The 30-day correlation with Volume^3.75 overflows var_x*var_y, so stocks with a 75th-percentile minute volume above about 30k-50k shares are systematically pinned at exactly ±0, and the overflow dominates the ranking. Also, day_pos_ratio(High) is always 1, so the inner regressor is only the column-order rank, which barely changes over time."
+   },
+   {
+    "id": 5,
+    "reason": "Numerical artifact (float32 overflow). The 30-day correlation with Volume^3.75 overflows var_x*var_y, pinning stocks with a 75th-percentile minute volume above about 30k-50k shares at exactly ±0, so the overflow dominates the ranking. Also, day_pos_ratio(High) is always 1, so the inner regressor is only the column-order rank."
+   },
+   {
+    "id": 6,
+    "reason": "Numerical artifact (float32 overflow). The 30-day correlation with Volume^3.75 overflows var_x*var_y to inf, so stocks with a 75th-percentile minute volume above about 30k-50k shares are pinned at exactly ±0, and the overflow dominates the ranking."
+   },
+   {
+    "id": 7,
+    "reason": "Numerical artifact (float32 overflow). The sum of squared deviations of Volume^3.75 overflows to inf, so the correlation is exactly ±0. Synthetic check with the repo function: correct at 30k shares (75th-percentile minute volume); at 60k shares f32 gives 0.0000 while f64 gives -0.09. A large slice of A-shares by traded share count is pinned at 0, so the overflow dominates the ranking."
+   }
+  ]
+ }
+}

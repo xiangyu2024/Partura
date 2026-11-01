@@ -1,0 +1,29 @@
+{
+ "type": "result",
+ "key": "v2:d30366aafa9336c9e324be9c044351416bebc7f83b4e0c330f84a714800a43d5",
+ "agentId": "a96733b3c43cbfe6e",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s806/r2/analysis.md",
+  "cores": [
+   {
+    "core": "ts_quantile_q50(day_centroid(Amt), 20)",
+    "why": "首选 E 核心(机械核心卡第 1,自身付费 score +1.21,train +1.21 / valid +1.27 是整批唯一两段相等的子树)。day_centroid 是成交额在分钟轴上的重心,尺度不变、有界,是 M 第 2 批里唯一不是「水平」的量;必要性证据强(去掉 20 日中位数 → −0.51,必要性 +1.73)、敏感性证据强(Amt→Volume +1.21 不变,窗口 10/20/40 → 0.98/1.22/1.22 单调无悬崖)。隐患:ρ(已知族) 随窗口单调上升 0.40(10)/0.49(20)/0.56(40),与 r1 审计员抓到的 θ 指纹同型,说明被平均出来的是持久成分;所以本轮外围必须做「新息 + 分桶条件化」而不是再平滑。选带 20 日中位数的版本而不是裸 day_centroid(Amt),是因为 r1 的经验是「种子只定起点、外围由 GP 决定」,把持久水平做成核心才能逼外围去减掉它。已见外围只有 {平滑, sqrt, cs_mask_top_replace_mean_neg}。合法性风险:ρ(已知族) 0.4931 离 0.5 门槛只差 0.007,相关度表若超线则换备选 ts_quantile_q50(day_centroid(Amt), 10)(ρ 0.4027)。"
+   },
+   {
+    "core": "day_signed_ratio(Ret, Volume)",
+    "why": "次选 E 核心(机械核心卡第 19,富集 +0.26 / p 0.062 / n 17)。292 个归档候选里唯一「尺度不变 + 与 5 个控制 |ρ| ≤ 0.14 + 含它的候选均值高于不含」的量;路径效率 day_signed_ratio(Ret, Ret) 的均值差只有 +0.01,说明信息在成交量那一侧而不在价格路径里。r1 的 N 位最接近过线的 5 条全是它的 20/60 日平均(最好 +0.12),但 train ≈ 0 而 valid +1.3…+2.3,score 取较差的一段所以全部没过线。已见外围只有 {sub, cross_mean} 两个算子;本轮外围应做自身历史新息(cross_zscore 20)、波动/流动性桶内取秩、大单小单分侧、不平衡的持续性。事先判决只看 train 腿。"
+   },
+   {
+    "core": "cs_mask_top_replace_mean_neg(day_quantile_q75(pow_2_5(Close)))",
+    "why": "明确不推荐,但它在机械核心卡上排第 3(富集 +1.58,p 0.005,n 4),必须警告 PI 不要按卡取它。它的「alpha」是陷阱:cs_mask_top_replace_mean_neg 把最低 10% 换成截面均值,pow_2_5 把分布拉右偏从而把这个 10% 平坦块抬进多头十分位;而平均秩 + 线性中性化之后块内残差 = 常数 − 控制拟合值,多头就变成「做多控制变量的极端一端」(微盘/最不流动)。证据:day_quantile_q75(pow_2_5(Close)) 单独 −1.16,套上 mask 后 +0.45 且方向翻转。同族的 day_quantile_q75(Amt)、cs_last_low40(LogFloatCap, day_quantile_q75(Amt))、cross_quantile_q25(cs_last_low40(…), 3) 的 ρ(已知族) 分别是 0.885 / 0.769 / 0.799,按 E 位规则本来就不合法。"
+   }
+  ],
+  "queries": [
+   "日内成交量/成交额在一天之内的时点分布(开盘段占比、收盘集合竞价占比、成交重心/时间加权重心)在文献里被怎样处理?它预测截面收益的方向是什么?有没有证据表明它主要是规模/被动持股/流动性的代理,文献用什么办法剥掉那部分(分桶、对规模回归、取相对自身历史的异常值)?2023-08-08 之前、中国 A 股优先。关键词:成交量日内分布、成交重心、收盘集合竞价占比、开盘买盘、被动资金与指数成分、交易时点;intraday volume timing / distribution, closing auction volume share, time-weighted volume centroid, when during the day volume is traded, passive ownership and close-auction trading, overnight returns and buying at the open, high-volume return premium, Admati-Pfleiderer intraday volume patterns",
+   "一个持久的微观结构/交易行为特征,文献里怎样把它拆成「持久部分(风格、流动性暴露)」和「相对自身历史的异常部分」?异常成交量/异常换手这一类做法用什么窗口、什么标准化、预测期限多长,两部分各自的预测力如何?关键词:异常换手率、去趋势成交量、相对自身历史标准化、滚动 z 分数、特征的持久成分与短期成分;abnormal turnover, detrended volume, standardized unexpected volume, volume innovation, characteristic level vs innovation decomposition, rolling z-score standardization of firm characteristics",
+   "tick 规则的日内成交量不平衡(上涨分钟成交占比 − 下跌分钟成交占比)在中国 A 股上怎么处理:相对什么基准归一化(成交量/成交额/路径效率)、预测期限多长(日/周/月)、是否需要在流动性或波动分组内条件化、分大单小单后结论是否不同?有没有文献报告它的预测力在 2018–2021 与 2022 年之后不同(样本期分段结果)?关键词:订单不平衡、tick 规则交易方向判定、成交量不平衡、分笔规模(大单/小单)、路径效率;order imbalance, tick-rule trade classification, volume order imbalance China A-shares, trade-size-classified imbalance, order imbalance predictability horizon, subsample stability",
+   "非单调/分段/门槛型的截面特征(按市值秩折叠、只在某个分位带内选股、把最低一档替换成均值)与线性中性化的相互作用,文献有什么结论?线性正交化之后残留的非线性规模暴露有多大、怎么度量、推荐用什么替代(分桶中性化、单调性检验、非参数残差)?另外 A 股「低价股/微盘股溢价」在剔除 ST/退市风险尾部之后的刻画,「便宜但不是最便宜」这种非单调结构有没有文献版本?关键词:非线性因子暴露、分段与门槛特征、分桶中性化、低价股溢价、微盘股、ST 与退市风险、非单调性;nonlinear factor exposure after linear neutralization, piecewise threshold characteristics, within-group bucket neutralization vs linear residualization, low-price premium, microcap premium, delisting distress risk tail Chinese A-shares, non-monotonic characteristic-return relations"
+  ],
+  "summary": "写入 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s806/r2/analysis.md(258 行,中文,表达式引原文)。\n\n核心判断:M 第 2 批的 8 个 head 不是 8 个来源,而是 3 个族,其中 2 个半是线性中性化挡不住的水平/风格暴露。先从源码确立三条事实支撑全部判断:(1) 奖励流程是 表达式→EMA→截面 z-rank(并列取平均秩)→对 5 控制取残差→残差前 10% 等权纯多头,方向与半衰期在 train 上挑;(2) _lexi 家族(cs_first_low*/cs_last_low*)只用两个参数的秩,输出 = rank(y) + shift·band,所以套在参数上的单调变换是死算子;(3) 一个「平坦块」+ 线性中性化 = 做多控制变量的极端一端(块内残差 = 常数 − 控制拟合值),且 cs_mask_top_replace_mean_neg 的 top_ratio 0.1 正好等于多头十分位 TOP_FRAC 0.10。\n\n四个族:族 I(head 1/6)全部 alpha 由 sqrt(x)=sqrt(|x|) 的折叠造出 —— 只加/去一个绝对值,分数在同方向同半衰期下从 +1.78 翻到 −2.08(另一对 +2.11 对 −2.08 独立重复),排序键 LogFloatCap 就是 size 控制本身,多头落在市值 V 形两端;Amt→Volume 互换把 valid 腿打掉 1.8,判定代理。族 II(head 2/3/8)是价格水平的非单调带选择「便宜但不是最便宜」—— head 8 展开后就是做多价格第 2 十分位,head 3 的 mask 作用是把最便宜的 10% 踢出带外;价格水平不在 5 个控制里,中性化对它无效,判定「没被控制的风格,不是信息」。族 III(head 5)是 pow_2_5 把 10% 平坦块抬进多头十分位,判定代理,并明确告诫不要提交加凸度/收窄带宽这类会提分但属陷阱的 R。族 IV(head 4/7)day_centroid(Amt) 是唯一真来源候选,但起作用的是持久水平(裸值 −0.08 vs 20 日中位数 +1.21),且 ρ(已知族)随窗口单调升至 0.56(40 日版按奖励口径已不合格),且样本内拟合方向与「早盘散户注意力买盘应跑输」的文献机制相反。另有族 V:r1 的 day_signed_ratio(Ret, Volume) 是唯一尺度不变且高于池均值的一支,信息在成交量侧而非价格路径(路径效率均值差仅 +0.01),但 train ≈ 0 / valid +1.3…+2.3。\n\n烂部件:head 1 的 cross_quantile_q25(·,3) 必要性 −0.33(R1,两段都改善 ⇒ 替换);head 7 的两个 cs_mask_top_replace_mean_neg(R3,同核心无 mask 的 head 4 高 +0.41,且方向 −1 时 mask 恰好剔掉最想持有的一档 ⇒ 替换,代价是与 head 4 近重复);head 2 的 log、head 3 的 cs_normalize 必要性 −0.00 是死算子(进 _lexi 只用秩),head 4 根上的 sqrt 近乎死算子,head 8 的 x 参数位完全退化。\n\nr1 复盘:E 位(day_cov(Vwap,Ret))77 评分 0 head,最好 −0.09,且含该核心的 75 个归档候选均值 −1.45 低于 add(LimitWidth,·) 组的 −0.67 ⇒ 按 PI 自己写下的事先判决,本轮放弃该核心;最好的 5 条没有一条是计划形态(GP 走到 inv/ts_corr/cross_decay_linear),得出「种子只定起点,想让外围做指定的事必须把它做进核心」这条经验。N 位 62 评分 0 head,偏度族在富集表里连 4 次出现都没有(被 GP 淘汰),活下来的是量价不平衡。审计员 r1 划掉 a 位 9 个种子(4 个按 |ρ|≥0.5 确定性划掉、ts_rank distinct 0.018 废品、减 0.5 的常数错误),并修正了 PI 的展开式(Vwap 是 bar 内均价,½ 实为随股票持久的 θ 流动性特征)—— 这条预测被本轮数据证实。PI 的风险预测错在通道(担心波动,实际泄漏是流动性,且只在多日平均后出现)。\n\n本轮建议:两个位都押在与库里已有风格不相关的方向(库中 8 个 head 已有 5 个压在同一个低价/小市值非线性暴露上);N 位硬要求已在 r1 满足,所以两位都用 E 是允许的;R 只用 2–3 个额度(R1、R3,R2 备选)。"
+ }
+}

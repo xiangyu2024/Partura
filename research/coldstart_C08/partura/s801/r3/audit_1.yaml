@@ -1,0 +1,29 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 3, 5]
+    reasons: '核心day_centroid(Volume)是本组第2次(round2 slot a起)用作E核心,触及§2"每个核心整个实验至多2个E位"的上限,这是PI下一轮不能再用它的提示,不影响本次通过。核心与5控制最大|ρ|=known 0.195(liq .181/vol .156/rev .13/size .066),远低于E位0.8门槛。源码核对:day_centroid(ops_ext.py:155-166)输出在[0,1],分母clamp(min=1e-30)且仅tot>0时输出;day_min/day_max(dt_day.py:nanmin_last/nanmax_last)、ts_kurt/ts_skew(operators/nd_ts.py→common.py:nankurt_last/nanskew_last,var>EPS才算,否则记NaN,不会被零方差爆点支配)、day_argmin(dt_day.py:178-184,0-based原始分钟序号,NaN安全、不取abs不聚合)、cross_corr/cross_stddev(dt_cross.py:rolling_pair_reduce/nanstd_last)全部有EPS/clamp保护,没有除以近零量的地方;coverage全部0.998-0.999、distinct 0.885-1.000(corr_1.json),没有r1/r2审计里出现过的ts_rank式distinct<0.5死种子或LimitWidth式近常数面板问题。
+
+      10个种子里4个被§3确定性规则自动划掉(与某个head日度秩原始|ρ|≥0.7):种子1(ts_skew(day_min(Ret),10)版,max_head=0.948)、种子2(ts_kurt(day_max(Ret),5)版,=0.939)、种子3(振幅版,=0.964)——三者都和本轮head cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)),20), cross_mean(ts_kurt(day_min(Ret),5),20))(score+1.50/valid+1.63)几乎是同一个秩信号,只是换了被排序的尾部统计量或方向,是该head的换皮;种子5(mul(sub(centroid,0.5), cross_mean(ts_kurt(...),20)),=0.709)与head sub(day_centroid(Volume),day_centroid(Ret))(+0.63)同一量级重合。划完剩6个(4,6,7,8,9,10),≥4门槛过。
+
+      剩余种子逐个核对机制与算子是否吻合:种子4/7/8的cross_corr就是两条20日序列的滚动相关(dt_cross.py:193);种子4比较centroid(Volume)原始日值与ts_kurt(day_min(Ret),10)的平滑值(混了两种时间尺度,不是数学问题);种子7比较两种权重(Volume/Amt)算出的时点;种子8比较连续量[0,1]与离散分钟序号(Pearson相关对尺度不变,没问题);种子6是两个独立统计量相乘(不稳定性×尾部持续度),没有除零风险;种子9(三重交互,max_head=0.677,最像LimitWidth头部而不是本轮+1.50头部,是因为两者都含day_signed_ratio(Ret,Amt)这个共享子树,不是机制重复——round2 slot a种子11已验证"centroid×signed_ratio"两因子交互,本种子是在其上新加ts_kurt尾部门控,外围骨架和round2那个不同,不算换皮),在阈值内,保留;种子10(z分数+慢窗kurt,max_head=0.656)低于0.7自动线,但与head cross_zscore(cross_mean(day_centroid(Volume),5),120)的残差|ρ|达0.736(corr_1.json),提示残差化后这个种子的交易信号和已有一个z分数类head重叠不小,留但提示GP从它长出的子代要留意是否只是换皮。创新度4:四类外围(直接相关、带符号交互、跨字段时点比较、相对历史z分数)没有一个重复round1/round2已见过的外围骨架,round3第一次把尾部统计量day_min/day_max和day_centroid放进同一个表达式。合理度4:机制清楚(恐慌性抛售在时间上的聚集程度与放量时点的关系),引用Chen-Hong-Stein 2001、Easley等2012的类比合理,算子逐个核对无数学问题。如果它有alpha,最可能来自哪里:当天最差(或最好、振幅最大)那一分钟的尖峭/持续程度,与成交量日内堆积时点之间的协同,代理恐慌性/注意力驱动下单在时间上聚集的程度,不是流动性、波动或市值水平(核心与控制|ρ|全部≤0.22)。'
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 8]
+    reasons: 'N位把一天拆成隔夜(day_open(Open)/cross_delay(day_close(Close),1))和日内(day_close(Close)/day_open(Open))两段,库里6个head和5个控制都没碰过Open/Close跳空结构,是本组前两轮完全没试过的维度,机制有Lou-Polk-Skouras(2019)、Berkman等(2012)支撑。源码核对:day_open/day_close是day_first/day_last的别名(dt_day.py:138-148,当天第一/最后一个非NaN值);cross_delay(x,1)把x整体下移1天,后面的天看见更早的值(dt_cross.py:150-157,`res[d:]=x[:-d]`),没有用到未来信息;两个比值分母都是严格>0的价格,coverage 0.998-0.999、distinct 0.972-1.000,没有发现数值伪影。
+
+      10个种子里2个被§3确定性规则自动划掉:种子2(日内收益比20日均值,cross_mean(div(Close,Open),20))与控制rev(20日反转)的原始|ρ|=0.815≥0.8,几乎是反转控制换个写法——对多数股票,日内close/open比值的20日均值已经携带了日收益的大部分变动,与累计反转信号高度重合;种子8(隔夜比×净买入方向的20日均值)与head cross_mean(mul(ts_med(mul(ts_med(LimitWidth,50),...),day_signed_ratio(Ret,Amt))),20)(LimitWidth核,score+0.77)的原始|ρ|=0.719≥0.7,两者共享的day_signed_ratio(Ret,Amt)子树把两个本来完全不同核心的表达式拉到了同一个秩信号。划完剩8个(1,3,4,5,6,7,9,10),远超≥4门槛。
+
+      其余种子控制相关度都明显低于0.8自动阈值(种子3的rev=0.53最高,其次是已划掉的种子8外种子4的rev=0.485),§4明确"与某个控制中度相关"不是问题,不据此挡;与已知族(known列)全部≤0.17。机制核对:差值版(种子3)、分桶版(种子4/5)和种子2的问题不同,因为它们或者做减法剥离共同部分,或者用cs_bucket_rank显式固定住20日总收益再看构成,相关度表验证了这点(种子3 rev降到0.53,种子4/5分桶后rev 0.485/0.10);自相关版(种子6)、带方向交互(种子7/9... 实际为7/8中种子7留用)、波动分解(种子9/10)都是前两轮没试过的新组合。创新度4,合理度4:T+1、不能做空、涨跌停结构下,隔夜缺口更可能携带机构消化隔夜信息后的真实判断,日内连续竞价更容易被追涨杀跌污染,这是制度性、慢变的结构,2018-2023没有发生改变本身的事件。如果它有alpha,最可能来自哪里:隔夜(集合竞价、信息消化)与日内(连续竞价、情绪化跟风)两段订单流的构成系统性不同,划掉的种子2正好证明了哪一种写法会退化成反转控制的化身,保留的种子已经避开了这一点。'
+    revise: '—'
+R:
+  - head: 'cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(ts_kurt(day_min(Ret), 5), 20))'
+    soundness: 5
+    reasons: '替换候选针对head cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)),20), cross_mean(ts_kurt(day_min(Ret),5),20))(score+1.50/valid+1.63),依据是loc.json本轮唯一标出的拆解gain:knockout ts_kurt(day_min(Ret),5)换成裸day_min(Ret)后score升到+1.67/valid+1.68,必要性-0.17(负数即"去掉它反而更好"),超过§2"变体score≥原head+0.1"的门槛。源码核对:day_centroid内部已对输入取abs(ops_ext.py:160 `x=_f(x).abs()`),外层再套abs_()是恒等运算,与拆解表"abs_必要性=0.00"完全吻合,PI的写法准确,这确实不是机制的一部分而是GP bloat。
+
+      10个变体是围绕这个发现的系统扫描,没有重复:variant1正是locate报告的那个knockout(day_min窗口20);2/3只改day_min窗口(10/40);4/5只改外层cross_mean(abs_centroid)窗口(10/40);6把Volume换Amt;7把裸day_min换成ts_med(day_min,5)(换一种稳健平滑而不是kurt);8把外层窗口缩到5;9/10分别换成day_max(Ret)和振幅sub(day_max,day_min),对称检验这个发现是否只对"最差分钟"成立。相关度表确认(这是§2规则本身的门槛,不是我的判断范围,但核对过数值都在门槛内):10个变体与原head原始|ρ|0.78-0.96(≥0.5,满足"替换"条件)、与已知族|ρ|0.42-0.50(<0.5,满足去同质化条件);coverage/distinct全部健康(0.995-0.996/0.999),没有除零或退化定义风险。合理度5:机制不是假设出来的,是locate自己用确定性ablation直接测出来的增益,变体扫描的方向(窗口、字段、对称尾部、换统计量)覆盖了这个发现最自然的几个推广,没有发现问题。'
+summary: '两个任务位都通过:a位(E,day_centroid(Volume)核心,已达§2"同核心至多2个E位"上限)创新4/合理4,划掉4个与已有head几乎同一秩信号的种子(1,2,3,5,原始|ρ|0.71-0.96),剩6个;b位(N,隔夜/日内收益拆分)创新4/合理4,划掉2个(种子2是反转控制换写法rev=0.815,种子8与LimitWidth头部|ρ|=0.719),剩8个;R组(day_centroid+day_min去掉ts_kurt的去烂部件,源码验证abs_恒等)合理度5。全部放行,不退回PI重写。'

@@ -1,0 +1,29 @@
+{
+ "type": "result",
+ "key": "v2:4af5318ddbb255e40f0389547b45c7c1b0ee70edd1bc26319fee1e3345d5386d",
+ "agentId": "abcdb406cfbe32094",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s801/r1/analysis.md",
+  "cores": [
+   {
+    "core": "LogFloatShares",
+    "why": "真来源就是这个裸字段。head `inv(pow_3(pow_3(pow_3(LogFloatShares))))` 的四个算子在 x>0 上全部单调,而奖励 `neutral_residual` 第一步就取 z-rank,所以五种写法是同一个面板(四个拆解变体的 rho_known 全等于 −0.2945,这是秩等价的签名),score 只在 +0.4688~+0.5001 之间抖动(0.0313 的 EMA 时间凸性噪声带)。对 LogFloatCap 中性化后残差 ≈ −log(名义股价):多头腿 = 同等流通市值下股本更大、股价更低的股票。裸叶子量级 ~20,不会压掉外围(x^27 量级 1e32~2e38,离 float32 的 inf 只差一次乘法,且在 add/sub 里会把一切外围压成塌缩 —— 共性表 8 行 mean_with 全落在 [0.4799,0.4839] 这 0.004 宽的区间、28/90 个候选给出同一个 0.482,就是这个塌缩的指纹)。c05_check.py 把 head 的每个节点都算合法核心,所以裸叶子可用。E 位用它还有三条结构优势:族中性化恰好把那一个 head 的书扣掉;RankSimilarityBan 比原始面板秩,单调重写与加性塌缩子代 |rho|≈1 被免费毙掉(不花付费评估,但种子必须是乘性/比值/条件化/滚动型,否则空转);distinct>=0.5 的门挡掉一切纯事件特征,而 E 强制含核心 ⇒ 自带连续水平项过门、族中性化扣掉水平书 ⇒ E 是把浮股事件做成因子的唯一通道。已见外围全是幂/倒数族:{}、{pow_3}、{pow_05,pow_3}、{pow_2_5}、{pow_05,pow_2_5}、{inv,pow_3}(存档在 episodes/ 不可读,故种子应明显离开幂/倒数族)。"
+   },
+   {
+    "core": "pow_05(LogFloatShares)",
+    "why": "备选:共性表第 5 行(均值差 +1.05,p 0.072,5 个候选),合法核心卡,量级 ~4.5 同样不压外围。唯一好处是「核心原样包含」这条约束在结构上更有咬合力(裸叶子容易被任何树吞下),代价是多背一个在截面上无意义的算子。已见外围同为幂族组合。"
+   },
+   {
+    "core": "pow_3(LogFloatShares)",
+    "why": "机械核心卡第 1 名(均值差 +1.4436,p 0.000,28 个候选),B0 会取它 —— 但 B 不该取:量级 4e3~1.8e4,在 add/sub 里仍压掉 Ret(1e-2)、LimitWidth(1e-1) 量级的外围 ⇒ 子代大量塌缩 ⇒ 要么被秩禁令毙掉(这一位空转)、要么过不了 distinct 门;而它与裸叶子秩等价,没有任何额外信息,只多一层污染尺度的包装。写清这个理由本身就是 B 对 B0 的对照内容。"
+   }
+  ],
+  "queries": [
+   "低名义股价(对准核心):文献里如何处理「名义股价水平」这个截面特征?用 log(价格) 还是价格分位/分档?在控制了市值之后是否仍然显著(即我们的残差口径)?有没有按板块、上市年龄、散户参与度/换手率分组?与「彩票型偏好 / MAX 效应 / 低价股偏好」的度量是否交互或互为冗余?A 股与美股的结论差异与解释?中文关键词:名义股价、低价股效应、股价水平、便宜筹码、彩票偏好、散户偏好、每股价格幻觉。英文关键词:nominal share price, low-price effect, price level anomaly, penny stock, lottery demand, MAX effect, retail investor preference, A-share cross-section。",
+   "股数 vs 市值(对准核心的「只是代理」问题):在市值已被控制之后,股本数量本身(流通股数/总股数)还带不带截面信息?文献用什么变换(log、分位、股数/市值比)?有没有专门讨论「把一个规模变量对另一个规模变量回归后的残差」这种构造(流通股本对流通市值的残差 ≈ 倒数股价)会不会只是没扣干净的非线性规模暴露?中性化时用线性 log 市值 vs 分档/样条/分组中性化的差别?另外:自由流通比例(流通股本/总股本)作为截面预测变量的处理方式。中文关键词:股本结构、流通股数、总股本、自由流通比例、流通股占比、规模中性化、非线性规模暴露、分组中性化。英文关键词:shares outstanding, number of shares, share count, free float ratio, closely held shares, float-adjusted, size neutralization, nonlinear size exposure, residualizing on size。",
+   "浮股扩张事件(对准 E 的外围与 N):流通股本增加的事件(限售股解禁、定向增发、大宗/减持、送转股)在文献里怎样被做成截面特征?用水平量还是变化量?窗口多长(事件前后多少日/月)?是否按增加幅度占原流通股本的比例缩放?事件效应的衰减速度(几周/几个月)?有没有把事件特征与规模/股价水平的静态暴露分开的做法?有没有「用滚动最小值/滚动均值代替事件哑变量」把稀疏事件转成连续特征的处理?中文关键词:限售股解禁、解禁压力、定向增发、增发、送转股、高送转、流通股本增加、供给冲击、减持。英文关键词:lockup expiration, lock-up expiry, insider lockup, seasoned equity offering, private placement, share supply shock, free-float increase, index float adjustment, dilution, event-window feature construction。",
+   "涨跌停幅度缩放的收益(对准 N 的第 2 条灵感):文献里如何处理涨跌幅限制(10%/20%/30% 三档板块)对收益类特征的影响?有没有把日收益按允许波幅归一化(收益/涨跌停幅度)、或用「触板距离/触板频率」的做法?限制如何扭曲动量、反转、波动率这些常规特征,文献怎样修正?按板块(主板/创业板/科创板/北交所)分组还是加入板块哑变量?跌停/涨停封板后的次日收益结构?中文关键词:涨跌停、涨跌幅限制、触板、封板、涨停板效应、按波幅归一化、创业板 科创板 涨跌幅、板块差异。英文关键词:price limits, limit up, limit down, magnet effect, price-limit hit, return scaled by price limit, limit-width normalization, China A-share price limit rules。"
+  ],
+  "summary": "注意:我的 harness 禁止子代理写 report/analysis .md 文件,Write 被拒,analysis.md **没有落盘** —— 全文在我的最终文本消息里,需要由 PI 或调度脚本写到 /Users/wxy/Desktop/Partura/research/coldstart_C05/partura/s801/r1/analysis.md。\n\n结论:M 第 1 批只有一个来源,而且它是一个字段、不是一个结构 —— `LogFloatShares`。head `inv(pow_3(pow_3(pow_3(LogFloatShares))))` 的四个算子在 x∈[16,26] 上全部单调,而奖励先取 z-rank 再减投影,所以它与五种写法是同一个面板(四个拆解变体 rho_known 全等 −0.2945)、同一本书;score 只在 +0.4688~+0.5001 间抖动,差别仅来自 EMA(hl=20) 在取秩之前对凸变换的时间平均(x^27 ≈ soft-max、1/x^27 ≈ soft-min,只对最近浮股跳变过的股票起作用)。机制:LogFloatCap 是控制之一且 LogFloatCap = LogFloatShares + log(股价),故残差 ≈ −log(名义股价),多头腿 = 同等流通市值下股价最低的一档 —— A 股低价股/彩票偏好风格,不是新机制。\n\n两个必须让 PI 看见的事实:(1) head 的 score = 0.500147,过线余量 0.000147,而它的五个秩等价写法 +0.4688~+0.4831 全部不过线 —— 「唯一发现」是阈值噪声级的通过;(2) 共性表 8 行的 mean_with 全落在 [0.4799, 0.4839] 这 0.004 宽的区间内(mean_without = −0.9614),28/90 个结构不同的候选给出同一个 0.482,这是量级塌缩(x^27 达 1e32~2e38)的指纹:M 第 1 批把 31% 的已评分候选花在了同一个因子上。\n\n烂部件:按字面标准没有(唯一 knockout 必要性 +0.0227 > 0,r_candidates 空),但四个算子都是装饰,+0.0227 落在族内 0.0313 的噪声带里;x^27 还有害 —— 离 float32 的 inf 只差一次乘法,且在 add/sub 里压塌一切外围。\n\n定位工具的缺口:SWAP 表不含日频字段、head 无 window 节点,所以只付费 4 次 / 48 次,换同类字段与窗口 ×½×2 两类敏感性证据完全没有、且不可挪用 ⇒ R 的 16 次是本轮唯一能买证据的通道。建议 13 个 R 变体(全挂唯一 head,均可表述为去掉/替换部件,c05_check 会本地 parse):最小化 `LogFloatShares`、`inv(LogFloatShares)`;判「是股价还是股数」`sub(LogFloatCap, LogFloatShares)`、`log(day_last(Close))`、`LogTotalCap`;判「是不是中性化+平滑制造的管道假象」(最关键)`inv(pow_3(pow_3(pow_3(LogFloatCap))))`、`LogFloatCap`;事件倾斜+窗口敏感性 `cross_min/cross_max(LogFloatShares, 20/60)` 四个;另一条轴预检 `sub(LogTotalCap, LogFloatCap)`;板块条件化 `div(LogFloatShares, LimitWidth)`。预期替换触发数为 0,它们的价值是判别而非替换。\n\nE 位建议用裸核心 `LogFloatShares`:族中性化恰好扣掉那一个 head 的书;RankSimilarityBan 比原始面板秩,单调重写与加性塌缩子代 |rho|≈1 被免费毙掉(但种子必须乘性/比值/条件化/滚动,否则空转);distinct>=0.5 的门挡掉一切纯事件特征,而 E 强制原样含核心 ⇒ 自带连续水平项过门 ⇒ E 是把浮股事件(解禁/定增)做成因子的唯一通道。N 位建议换轴(自由流通比例 `sub(LogTotalCap, LogFloatCap)`,或 PLAN §1 记载的按涨跌停幅度缩放的收益),并注意 ListAge 的 10000 哨兵值会压掉一切、须先 cs_rank/log。\n\n未证实的前提:PARTURA_NEUTRAL_SIZE 在可读脚本里没找到被设置的地方(应在服务器端调度 shell),head 的分数来自 M 的 episode 而拆解变体是定位工具重算(总带 LogFloatCap);两者只差 0.03、与族内离散同量级,反过来提示 M 那次大概也开了 size 控制 —— 这是推断,不是核实。"
+ }
+}

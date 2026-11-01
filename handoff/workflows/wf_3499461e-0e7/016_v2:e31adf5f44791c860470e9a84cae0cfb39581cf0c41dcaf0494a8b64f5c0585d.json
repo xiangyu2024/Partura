@@ -1,0 +1,52 @@
+{
+ "type": "result",
+ "key": "v2:e31adf5f44791c860470e9a84cae0cfb39581cf0c41dcaf0494a8b64f5c0585d",
+ "agentId": "aeb2c3b6247a3f7f8",
+ "result": {
+  "R": [
+   {
+    "head": "cross_regbeta(day_quantile_q75(Amt), cs_bucket_demean(ts_var(LogFloatCap, 20), LimitWidth), 60)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_regbeta(day_quantile_q75(Volume), cs_bucket_demean(ts_var(LogTotalCap, 30), LimitWidth), 60)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_corr(ts_var(LogFloatCap, 20), day_sum(Amt), 60)",
+    "soundness": 4
+   }
+  ],
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s807/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     2,
+     9,
+     11,
+     12,
+     14
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     2,
+     3,
+     4,
+     5,
+     6,
+     8,
+     9,
+     10
+    ]
+   }
+  ],
+  "summary": "Independent audit (attempt 1) for seed 807, round 2, completed and written to /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s807/r2/audit_1.yaml. Both slots pass. Slot a (E, core bare day_std(Ret)): struck seeds 2/11/12/14 via the deterministic |rho_head|>=0.7 library-ban rule (near-duplicates of head4, the existing cross_stddev(log^3(day_std(Ret))),120) head), and struck seed 9 (cross_hurst) on a genuine §4 math-trap grounds I verified by reading AlphaCube's dt_cross.py source and reproducing it live: cross_hurst's cumsum-based R/S statistic is not NaN-safe (torch.cumsum propagates NaN forward from any suspension-day gap), unlike its sibling cross_stddev/cross_semistd reducers on the identical input series — this matches the real coverage gap in corr_1.json (0.890 vs 0.996-0.999 for same-window siblings), confirmed by a local synthetic reproduction showing cross_hurst loses coverage under injected NaN gaps while cross_stddev does not. 9 seeds remain (>=4), novelty 4, soundness 4. Slot b (N, day-internal trade-concentration idea): found and confirmed via source-reading plus live code reproduction a systematic §4 trap affecting 7 of 13 seeds (2,3,5,6,8,9,10): day_quantile_q25(Amt/Volume) hits exactly 0 for illiquid stock-days (>=25% zero-volume minutes), and common.py's unguarded `div` (torch.divide, no near-zero protection) produces +inf; downstream cross_mean/cross_stddev (torch nanmean/nanstd, which only skip NaN, not inf) then smear that single bad day's inf across the entire 60/120-day trailing window, and cs_bucket_demean/cs_bucket_zscore further spread the inf to every other (otherwise clean) stock sharing that day's decile bucket — I reproduced this end-to-end with the actual installed alphacube/partura operator code (synthetic illiquid series), showing cross_mean coverage collapsing from ~95% to ~5% while cross_med (robust to a minority-inf window) and the isfinite-guarded cross_zscore stay high, matching the real corr_1.json gate=false/coverage 0.68-0.764 pattern exactly. Also struck seed 4 (cross_med variant) via the deterministic |rho_control|>=0.8 rule (liq=0.854, essentially the liquidity control). 5 clean seeds remain (1, 7, 11, 12, 13: raw ratio, isfinite-guarded zscore, day_gini x2, cs_rank(ListAge)) — day_gini is explicitly documented in ops_ext.py as designed to avoid exactly this explosion, so the mission itself demonstrates the safe alternative it should have led with. Novelty 4 (genuine new dimension vs. existing heads/controls, confirmed via low correlations on surviving seeds), soundness 3 (passes, mechanism sound, but a majority of seeds hit an avoidable, foreseeable numeric defect). All three R groups (regbeta-LimitWidth-bucket head1, regbeta-LogTotalCap head2, cross_corr head5/Amt-day_sum) verified sound (soundness 4 each) by cross-checking each variant's claimed mechanism against loc.json's exact ablation numbers (necessity 0.0037, swap gains +0.58/+0.34/+0.27 etc., all matched) and against the relevant operator source (rolling_ols's var_x>EPS guard, cs_bucket_demean's continuous-percentile bucketing, rolling_pair_reduce's EPS-guarded correlation denominator) — no math traps found in any R variant. Key files read: rules.md, r2/missions.yaml, r2/corr_1.md and corr_1.json, r2/loc.md and loc.json, r2/R_prev.json, r1/audit_1.yaml and audit_record.json and missions_final.yaml (for context/format only, not analysis.md/lit.md/notebook.md which are off-limits), and operator source at /Users/wxy/Desktop/AlphaCube-steering/src/alphacube/operators/{dt_day.py,dt_cross.py,common.py} and /Users/wxy/Desktop/Partura/partura/ops_ext.py, plus the deterministic finalize script /Users/wxy/Desktop/Partura/scripts/c06_check.py (confirms exact auto-strike thresholds: |rho_head|>=0.7 or |rho_control|>=0.8 for C08, and that coverage/gate is NOT automatically enforced — striking math-trap seeds is solely the auditor's responsibility, which is what this audit did for the 8 trap seeds in slot b and the 1 in slot a)."
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:12f8594a144c0107d4cf54ac7a79e7c3b59c6881a30510616314b458a6410362",
+ "agentId": "aad47fa9a3598b5cd",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r2/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret))",
+    "hypothesis": "Unchanged (passed audit 1: novelty 3 / soundness 3; auditor struck seeds 11, 12; 11 kept). Same flow-tilt core as before. The outer layer moves away from pure smoothing: deviation from the stock's own history, cross-day amount weighting, per-stock lagged correlation and autocorrelation weighting, frequency minus magnitude, and sign relative to the day's direction."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Unchanged (passed audit 1: novelty 4 / soundness 4; auditor struck seeds 7, 8; 12 kept). Overnight-versus-intraday tug of war: the overnight drift scaled by the stock's own volatility; the overnight share ranked within buckets of the same-period total return, which is orthogonal to the reversal control by construction; per-stock overnight-intraday correlation and regression beta; and where price discovery happens."
+   }
+  ],
+  "n_R": 8,
+  "check_exit_code": 0,
+  "summary": "Audit 1 passed slot a (E), slot b (N) and R group A (+0.61 head, 5 variants). Only R group B (head +1.22, soundness 2) failed, and it is the only part rewritten. The old dose-ladder variants still divided by a power of the volume level, so they were dropped. The 3 new variants replace the (sum Volume^3)^2 denominator with scale-free quantities, and the numerator becomes realized skewness, sum r^3 / (sum r^2)^1.5, because sum r^3 by itself is a convex function of volatility (trap 1). v1 is amount-weighted realized skewness: cross_mean(div(day_wmean(r^3, Amt), pow_1_5(day_wmean(r^2, Amt))), 20). v2 is realized skewness times the 60-day z-score of day_sum(Amt) against the stock's own history. Amt is used instead of Volume so bonus-share splits do not show up as abnormal volume, and the z-score is multiplied rather than dividing by relative volume, which would turn the signal into a locked-limit-day indicator. v3 combines v1 and v2. Plain realized skewness is not re-evaluated: it equals r1 slot b seed 6, which is not among the top 5 r1b scores (fifth is +0.38), so it scored below +0.38 and serves as the floor reference. Prediction: none reaches +1.32 (95%). R now has 8 variants in total (5 + 3). A note on the change and why was appended to /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/notebook.md under '### 第 1 次审计之后的改动'. c06_check.py 801 2 reports ADMISSIBLE, exit 0."
+ }
+}

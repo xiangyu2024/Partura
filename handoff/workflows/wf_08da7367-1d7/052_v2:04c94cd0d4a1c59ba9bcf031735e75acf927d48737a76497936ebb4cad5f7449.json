@@ -1,0 +1,50 @@
+{
+ "type": "result",
+ "key": "v2:04c94cd0d4a1c59ba9bcf031735e75acf927d48737a76497936ebb4cad5f7449",
+ "agentId": "a0ad32351f9dfd15f",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r3/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": [
+     3,
+     8,
+     10,
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "cross_regbeta(day_std(Volume), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "cross_regbeta(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_sum(cross_stddev(day_std(Ret), 60), 1)",
+    "soundness": 4
+   },
+   {
+    "head": "cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile(Open)))",
+    "soundness": 3
+   }
+  ],
+  "summary": "PI 只重写了 R3,而且按第 1 次审计的意见改的是内容,不只是说法:只换 x 腿的字段,y 腿一字不动。新相关度表给它与原 head 0.75,走替换通道,合理度 3,通过。没给 4 的原因:没有 train 证据单独指向价格那一块;cs_normalize 的共同项让「掉分即价格项」只是近似;替换后剩下的 1/σ_x 尺度正是已知族的成交额尺度。a 位 3/4,划掉 3、8、10、13,剩 11 个;b 位 3/4,一个不划,剩 14 个。R1(3)、R2(4)、R4(4)、R5(3)都没有改,维持通过。另外提醒两点:R2 变体 1 与原 head 0.997,几乎没有区分力;本轮是最后一轮,R3 判据里「下一轮再处理」那一支无法执行。审计文件已写到 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r3/audit_2.yaml。"
+ }
+}

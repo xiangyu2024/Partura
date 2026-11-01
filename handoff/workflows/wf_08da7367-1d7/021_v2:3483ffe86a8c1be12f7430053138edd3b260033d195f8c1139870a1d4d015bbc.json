@@ -1,0 +1,50 @@
+{
+ "type": "result",
+ "key": "v2:3483ffe86a8c1be12f7430053138edd3b260033d195f8c1139870a1d4d015bbc",
+ "agentId": "a6480ab909964c46b",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r3/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": [
+     3,
+     8,
+     10,
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 3,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "cross_regbeta(day_std(Volume), cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume))), 15)",
+    "soundness": 3
+   },
+   {
+    "head": "cross_regbeta(day_last(in_sum_rolling(Volume, 10)), inv(cs_demean(day_distinct_ratio(in_sum_rolling(Volume, 10)))), 10)",
+    "soundness": 4
+   },
+   {
+    "head": "cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15)",
+    "soundness": 2
+   },
+   {
+    "head": "ts_sum(cross_stddev(day_std(Ret), 60), 1)",
+    "soundness": 4
+   },
+   {
+    "head": "cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile(Open)))",
+    "soundness": 3
+   }
+  ],
+  "summary": "第 3 轮第 1 次审计。两个 N 位都过,R3 不过。a 位(vol-of-vol 去尺度)创新度 3、合理度 4,划掉 4 个种子:3、8 是表规则,与 ts_sum(cross_stddev(day_std(Ret),60),1) 分别 0.743、0.733;10 自相关量的是持续性或流动性噪声,不是风险的不确定;13 日内滚动 std 量的是日内季节性和跳跃,开盘有补 NaN 的机械成分,控制后最像 LogFloatShares head(残差 0.584)。剩 11 个。b 位(成交变异性,CSA 2001)创新度 3(主体种子与 vol-of-vol head 0.47–0.56)、合理度 4,一个不划,剩 14 个;风险是股数口径会被送转抬高。R1 合理度 3、R2 4、R4 4、R5 3,都过。R3 合理度 2,删掉:PI 说它与原 head 必然 ≥0.5 会替换,但 loc 给 0.074、相关度表给 0.212,实际会作为新 head 收录;而且 y 腿 distinct_ratio(Amt) 和价格单位无关。改法是只换 x 腿。审计文件已写入并能按 YAML 解析。"
+ }
+}

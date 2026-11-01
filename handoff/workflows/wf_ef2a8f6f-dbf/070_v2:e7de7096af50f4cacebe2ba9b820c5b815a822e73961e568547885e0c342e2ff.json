@@ -1,0 +1,22 @@
+{
+ "type": "result",
+ "key": "v2:e7de7096af50f4cacebe2ba9b820c5b815a822e73961e568547885e0c342e2ff",
+ "agentId": "a5b1bd8ce8a4e9663",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s804/r1/missions.yaml",
+  "slots": [
+   {
+    "type": "E",
+    "core": "ts_var(LogFloatShares, 10)",
+    "hypothesis": "Share-supply shock. A float-share change in the last 10 days (lockup expiry, placement, bonus/transfer shares, conversion, buyback cancellation) brings in low-cost-basis sellers, which pushes returns down for weeks after (Field & Hanka 2001; Pontiff & Woodgate 2008). Outer treatment: (1) a materiality threshold mul(core, is_gt(core, 1e-8)). Measured on the engine: the bare core leaves a 3.6e-12 float32 residue on about half of the unchanged names, so the bare core is a float-bit partition. A signed variant mul(core, sign(ts_delta(LogFloatShares, 10))) is also exactly 0 for unchanged names. (2) The core goes in the x slot of the tie-block screens cs_last_high05/10/20 and cs_first_low20, with ts_max/ts_mean memory of 20-60 days. (3) The y slot holds slow supply- and holder-structure variables: -log nominal price, share-denominated abnormal volume, share-denominated turnover. A second screen covers 1-year float expansion and the locked-share overhang. The event screen also removes the mechanical jump that share-count changes cause in share-denominated y. 14 seeds."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Overnight-vs-intraday tug of war under T+1. The opening call auction concentrates attention-driven retail demand, so stocks whose price moves come mostly overnight and are given back intraday are overpriced and underperform from the next open (Berkman et al. 2012; Lou, Polk & Skouras 2019; Aboody et al. 2018; Qiao & Dam 2020). The three building blocks: G = log(day_first(Open)/ts_delay(day_last(Close),1)), I = log(day_last(Close)/day_first(Open)), and F = opening-minute share of daily turnover. Over 20/60-day windows the seeds use means and EMA of G, mean |G|, the G-I spread, cross_corr(G,I), signed gap fill, log std(G) - log std(I), the overnight share of absolute move, mean F, mean G*F, and cross_corr(G,F). None of M's batch-1 subtrees crosses the overnight boundary. The rev control is the close-to-close sum G+I, while these seeds use differences, ratios and correlations of G and I. 14 seeds."
+   }
+  ],
+  "n_R": 0,
+  "check_exit_code": 0,
+  "summary": "I wrote missions.yaml for seed 804, round 1, with two slots and no R. The last c06_check run returned ADMISSIBLE, exit 0.\n\n**Slot a (E, core ts_var(LogFloatShares, 10)).** While checking the core I found something that changes how it can be used. On a synthetic cube run through the real engine, an unchanged 10-day window does not give exactly 0. About half of the names get a float32 residue of 3.6e-12. So the bare core splits stocks by their float bits, and the analysis claim that it is exactly 0 is wrong. Every E seed therefore uses either a thresholded core mul(core, is_gt(core, 1e-8)) or a signed core mul(core, sign(ts_delta(LogFloatShares, 10))), which is exactly 0 for unchanged names. The core sits in the screen slot of cs_last_*/cs_first_low20, sometimes with a ts_max/ts_mean memory window. The other slot holds slow supply-related variables: nominal price, share-denominated abnormal volume and turnover. Some seeds add a second screen on 1-year float expansion or locked-share overhang.\n\n**Slot b (N, overnight vs intraday under T+1).** Seeds are built from the overnight gap G, the intraday return I and the opening-minute turnover share F: means, the G-I spread, their correlation, gap fill, variance share and auction-weighted gap. Nothing in M batch 1's subtree table crosses the previous-close-to-open boundary.\n\nAll 28 seeds parse and compute on the synthetic cube: coverage 0.98-0.99, distinct 1.0, no inf. None uses ts_spearman or nt_*. Literature is all before 2023-08. R is empty because the snapshot has no heads.\n\nI created notebook.md with the round-1 section: my beliefs, including the residue finding, and predictions. I expect slot a to give at least one head with about 30% probability, most likely abnormal volume with the event screen. Slot b is about 35%, most likely the G/I correlation or spread, with stocks strong overnight relative to intraday underperforming. Each prediction has a stated way to prove it wrong. There was no earlier round to grade.\n\nFiles are in /Users/wxy/Desktop/Partura/research/coldstart_C08/partura/s804:\n- r1/missions.yaml\n- notebook.md"
+ }
+}

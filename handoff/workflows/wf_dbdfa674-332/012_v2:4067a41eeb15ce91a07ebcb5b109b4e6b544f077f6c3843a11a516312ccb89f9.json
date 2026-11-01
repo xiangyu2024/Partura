@@ -1,0 +1,61 @@
+{
+ "type": "result",
+ "key": "v2:4067a41eeb15ce91a07ebcb5b109b4e6b544f077f6c3843a11a516312ccb89f9",
+ "agentId": "a49c5e613a0fae46a",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/r1/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     3,
+     4,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     14
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     8,
+     9,
+     11,
+     12,
+     14
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "inv(ts_decay_linear(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))), 40))",
+    "soundness": 4
+   },
+   {
+    "head": "inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))))))",
+    "soundness": 4
+   },
+   {
+    "head": "inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))), 40))",
+    "soundness": 3
+   },
+   {
+    "head": "day_mean(neg(in_delta(Volume, 60)))",
+    "soundness": 4
+   },
+   {
+    "head": "sigmoid(ts_regbeta(day_flat_run_max(Vwap), sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))",
+    "soundness": 3
+   }
+  ],
+  "summary": "Audit 2 is written to /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/r1/audit_2.yaml. Both task slots and all five R groups pass. The plan is unchanged except R group 5: slots a/b and R groups 1–4 match attempt 1 word for word, and their rows in corr_2 match corr_1.\n\nSlot a (E slot on core S) keeps novelty 3 / soundness 3. I also struck seed 14, which I missed in audit 1. It multiplies two signed quantities, each centred on 0 (ts_delta(decay(S)) and P), so 'just entering the state, pinned low' and 'just leaving it, pinned high' land at the same end. That is the same flaw I struck in slot b seed 9. Five seeds remain (1, 2, 5, 12, 13), so the slot still passes.\n\nSlot b (N slot, absorbed order flow) is unchanged at 4/4 with nine seeds left.\n\nR groups 1–4 keep their scores of 4/4/3/4.\n\nR group 5 is new content, not a rewording: the Volume→Amt variant and the misread ablation numbers are withdrawn. It now replaces the raw slope β with ts_reg_tvalue. I checked rolling_ols in the source: t = ρ√(n−2)/√(1−ρ²), so it does not depend on the scale of x or y. The edge cases PI states (constant y gives t = 0) hold. PI's argument also holds: with raw β, the scale σ_y/σ_x decides which stocks saturate the sigmoid and end up tied at 0.5 in the outer layer. Every number PI cites from the correlation tables checks out. I gave soundness 3, not 4, for three reasons:\n- There is no direct test of this swap on this head.\n- The ablation result that the information sits in the sign of β cannot tell a near-sign from sigmoid(t), which is a smooth function of ρ.\n- Variant 2 is not cleaner on volatility (0.17 vs 0.16)."
+ }
+}

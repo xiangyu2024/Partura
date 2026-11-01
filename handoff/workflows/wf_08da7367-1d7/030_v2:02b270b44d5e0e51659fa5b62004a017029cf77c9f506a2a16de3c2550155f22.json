@@ -1,0 +1,21 @@
+{
+ "type": "result",
+ "key": "v2:02b270b44d5e0e51659fa5b62004a017029cf77c9f506a2a16de3c2550155f22",
+ "agentId": "a1c4186c89fecaa91",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r3/missions.yaml",
+  "slots": [
+   {
+    "type": "N",
+    "hypothesis": "Unchanged, passed audit 1 (novelty 3, soundness 4, 11/15 seeds kept). Uncertainty about risk, measured scale-free as vol-of-vol: CV, changes in log sigma, semistd, and other forms of day_std(Ret); expected direction -1."
+   },
+   {
+    "type": "N",
+    "hypothesis": "Unchanged, passed audit 1 (novelty 3, soundness 4, 14/14 seeds kept). Variability of trading activity, i.e. uncertainty about liquidity: cross-day CV, log changes and semistd of daily Volume and Amt, with decile and cs_regres hedges; expected direction -1 (CSA 2001)."
+   }
+  ],
+  "n_R": 9,
+  "check_exit_code": 0,
+  "summary": "The only part that failed audit 1 was R group 3 (soundness 2), and it is the only part rewritten. Slots a and b and R groups 1, 2, 4 and 5 are exactly as before.\n\nWhat failed: the old variant switched both legs of the head cross_regbeta(cs_normalize(day_std(Volume)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15) to Amt. I had claimed it would \"certainly\" correlate ≥ 0.5 with the original head and so replace it. In fact the swap row in loc.json gives rho_head 0.074 (0.21 in corr_1), so a win would add it as a new head rather than replace the original. Also, switching the y leg to day_distinct_ratio(Amt) measures the share of zero-trade minutes; it does not remove the price unit.\n\nThe new variant switches only the x leg, as the auditor suggested: cross_regbeta(cs_normalize(day_std(Amt)), cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_robust_z(day_distinct_ratio(Volume)))), 15).\n\nThe why now says:\n- cs_normalize (nd_cs.py) is a daily cross-sectional z-score with the same mean and standard deviation for every stock. It cannot remove each stock's own share-count scale, so in rolling_ols |beta| is roughly proportional to price divided by the turnover scale. That price factor is the same price-level line as F4 and F5, i.e. a nonlinear rewrite of price (trap 3).\n- Train-side evidence: the head is train 1.89 / valid 1.09. Knocking out cs_normalize gives train 1.94 / valid 0.77, so the scale of x is carrying score.\n- It is a single-component change: the double mask and the 1/sigma_x part are left alone (R1 and R5 test those).\n- Expected |rho| with the original head is 0.80–0.92, based on R1 variant 2, the same x-only swap, which gets 0.90 in corr_1.\n- Pre-commitment: if the new correlation table gives < 0.5 against the original head, the group should be deleted.\n- Decision thresholds: ≥ +1.194 replaces the head; ≤ +0.79 means the price term carries at least 0.3 of the score; anything in between is diagnostic only.\n\nR still has 9 variants in 5 groups. I added a \"第 1 次审计之后的重写(第 2 稿)\" subsection to the round-3 section of /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/notebook.md. It records what changed and why, new predictions for this group, and the lesson: check rho_head in loc.json before claiming a variant will replace or be added. The c06_check.py 807 3 check passes: ADMISSIBLE, exit 0."
+ }
+}

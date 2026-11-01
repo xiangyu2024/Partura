@@ -1,0 +1,43 @@
+{
+ "type": "result",
+ "key": "v2:e0d36658b96c76259cc9ef74efb072fb63d6d7ec97dd4f5a767dcf5d809180cc",
+ "agentId": "ade966bb05d87d64f",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r3/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     2,
+     3,
+     5,
+     6,
+     7
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 10), cross_stddev(cross_stddev(log(div(day_last(Close), day_first(Open))), 60), 60))",
+    "soundness": 4
+   },
+   {
+    "head": "div(cross_stddev(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 10), cross_stddev(log(div(day_last(Close), day_first(Open))), 60))",
+    "soundness": 3
+   },
+   {
+    "head": "cross_mean(cross_ema(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_std(Ret)), 10), 15)",
+    "soundness": 3
+   }
+  ],
+  "summary": "Both slots and all three R groups pass. Slot a (E on core day_corr(Ret, Amt)) gets novelty 3 and soundness 3. I struck 5 of its 13 seeds and 8 remain. Seeds 2, 3 and 5 are still head +0.61 under another name: raw rho 0.68 / 0.68 / 0.73 and residual 0.72 / 0.74 / 0.80, and the table strikes seed 5 at 0.73 anyway. Seeds 6 and 7 work out to roughly |K|, which the slot's own operator rules forbid: their correlation with liq and known jumps from about 0.02 for the core to about 0.25. Slot b (N on intraday time segments) gets novelty 4 and soundness 4 with no seeds struck: every seed is below 0.3 against all heads and at most 0.35 against the controls. Two caveats on b: the open_vwap15 label enters after the next open, so a close-to-open reversal cannot be captured; and the 2018-08-20 Shanghai closing-auction break makes the 60-day self-history z-scores act as an exchange dummy for about 60 days in train. The R groups score 4 / 3 / 3. The written audit is at /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s801/r3/audit_1.yaml."
+ }
+}

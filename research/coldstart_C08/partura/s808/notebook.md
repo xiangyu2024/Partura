@@ -91,3 +91,18 @@ R 轮 1 的结果(R_prev.json)比我预想的还要干净,四种解释里的权�
 - head1 判别组(8 个,逐条见上面「更新后的信念」):`ts_mean`、`cross_tail_mean_q75`、`ts_quantile(0.9)` 三个都比我预测的下限还低(尤其后两个,我原来预测它们该有 1.0–1.3,结果是负的)——这是本轮里最大的认知更新,之前我没想到「尾部」要收紧到「单日」这么极端;`cs_rank`(1.2279)、`cs_demean(day_std)`(0.992)、`LimitWidth`(1.3276,方向对但幅度是正向意外)都落在或接近我预测的区间;只有 `ListAge`(0.7569,降 0.50)明显超出我设的 ≤0.3 容忍线,是唯一一个仍然悬而未决、被我带进第 2 轮 R 的点。`ts_argmax` 因 distinct 过低被 gate 掉,没有给出可比较的分数,和预测方向(<0.3)不矛盾但没法确认。head1 没被替换,和我给的「30% 被替换」一致(即多数情形下不替换)。
 
 解剖员 analysis.md §3 的 5 条预测:前 4 条(ts_mean 明显低于 +0.9;W≈109 在 0.95–1.15 且 valid 高于 1.79;cs_rank 不差于 1.06;LimitWidth 降不超过 0.3)**全部方向正确**,其中第 1 条的幅度被远远低估(解剖员猜 0.0–0.6,实际 -2.57)。第 5 条(E 固定在 W99 核心会有一半以上后代被禁)因为两轮都没把 E 放在这个核心的 ts_max 包裹形态上,继续无法检验——本轮 E 换成了裸的 `day_wstd(Ret, Volume)`(没有 ts_max 包裹),风险性质不同,这条预测作废,不再追踪。
+
+## 第 3 轮
+
+### 信念
+本种子 alpha 来源有三条:(a)单日尾部的量加权波动 day_wstd(Ret, Volume)(R 已证明必须是 ts_max 单日极值,不是水平);(b)慢变的个股执行结构特质——成交量时间重心 day_centroid(Volume)(ts_mean 20 单独 +1.28);(c)长窗口个股回归 cross_regbeta(day_cov(Open,Ret), …, 241)(+1.30,train/valid 接近)。N 位 r1、r2 均已通过审计,本轮 N 位属自选,仍写扎实。
+
+### 本轮预测
+- E(核心 ts_mean(day_centroid(Volume),20)):预测 55% 出 head,score 0.7–1.2;最可能是分桶(种子 1、8)或漂移 / 稳定度(5、3、12);种子 6/11(regbeta 链)若出则 ≥1.0。担心核心与流动性控制 |ρ| 接近 0.8,是审计风险点;预测划掉 1–3 个种子(种子 2、5 与 head +0.83 可能相关度偏高)。
+- N(成交量分布形状 day_gini / day_es_ratio_hi):预测 35% 出 head,score 0.5–0.8;若出,最可能是 ts_mean(day_gini) 的分桶版或与 Ret 的联动版(ts_corr / ts_regbeta);失败的主因是形状变量与流动性/市值控制重合,残差后消失。
+- 不放 R:上一轮 R 的两个 cross_regbeta 去部件变体都崩(-0.10 / +0.20),说明该 head 的两条腿缺一不可,没有明确的烂部件可去。
+
+### 上一轮预测对不对(据 r3/loc.md、R_prev.json)
+- r2 E(day_wstd(Ret,Volume)):预测 45% 出 head → 出了 1 个(+0.83),与『出 head』对,但赢者是 sub(cs_rank(wstd-kurt), cs_rank(ts_mean(day_centroid(Volume),20))),不是我预测的 bucket / autocorr 系,而是 day_centroid 秩差 + day_kurt;预测『同日 sub/add 版 0.6–1.0』大体对(0.83)。
+- r2 N(regbeta 近邻):预测 65% 出 head → 出了 +0.58(`cross_regbeta(day_cov(Open,Ret), day_wstd(High,Volume), 241)`),对但弱;预测的 Close 腿 / day_corr 种子未成为 head。
+- r2 R:head1 的 cs_winsor 版预测『±0.1 不变』错了(0.78 / 0.76,降 ~0.5),cross_valid_count 分桶版 1.20 接近原版,说明上市年龄不是主要来源但 winsor 会损伤极值;head2 加 cs_demean 预测『+0.1~0.3』错(0.94,降);cs_rank 版 1.09 持平;regbeta 两个 cs_demean 变体预测 1.1–1.4,实际 -0.10 / +0.20,大错——该 head 对腿的尺度极敏感,不是小修小补。无变体被采纳。

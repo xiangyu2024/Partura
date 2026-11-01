@@ -1,0 +1,37 @@
+# 相关度表:种子 801,P 组,第 3 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 6 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.71 | `sub(day_centroid(Volume), day_centroid(Ret))` | 0.62 | 0.18 | 0.16 | 0.13 | 0.20 | 0.07 | `day_centroid(Volume)` |
+| slot a seed 1 | 过 | 0.95 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.95 | 0.49 | 0.42 | 0.20 | 0.52 | 0.14 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_skew(day_min(Ret), 10), 20))` |
+| slot a seed 2 | 过 | 0.94 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.92 | 0.48 | 0.28 | 0.16 | 0.49 | 0.22 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_kurt(day_max(Ret), 5), 20))` |
+| slot a seed 3 | 过 | 0.96 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.96 | 0.48 | 0.28 | 0.17 | 0.49 | 0.22 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_mean(ts_kurt(sub(day_max(Ret), day_min(Ret)), 5), 20))` |
+| slot a seed 4 | 过 | 0.07 | `cross_zscore(cross_mean(day_centroid(Volume), 5), 120)` | 0.03 | 0.00 | 0.04 | 0.02 | 0.01 | 0.03 | `cross_corr(day_centroid(Volume), ts_kurt(day_min(Ret), 10), 20)` |
+| slot a seed 5 | 过 | 0.71 | `sub(day_centroid(Volume), day_centroid(Ret))` | 0.65 | 0.17 | 0.09 | 0.12 | 0.17 | 0.09 | `mul(sub(day_centroid(Volume), 0.5), cross_mean(ts_kurt(day_min(Ret), 5), 20))` |
+| slot a seed 6 | 过 | 0.09 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_m` | 0.07 | 0.23 | 0.02 | 0.17 | 0.16 | 0.13 | `mul(cross_stddev(day_centroid(Volume), 20), cross_mean(ts_kurt(day_min(Ret), 5), 20))` |
+| slot a seed 7 | 过 | 0.26 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.16 | 0.51 | 0.40 | 0.01 | 0.47 | 0.06 | `cross_corr(day_centroid(Volume), day_centroid(Amt), 20)` |
+| slot a seed 8 | 过 | 0.04 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.06 | 0.03 | 0.09 | 0.01 | 0.06 | 0.05 | `cross_corr(day_centroid(Volume), day_argmin(Ret), 20)` |
+| slot a seed 9 | 过 | 0.68 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.72 | 0.08 | 0.23 | 0.54 | 0.11 | 0.18 | `cross_mean(mul(mul(day_centroid(Volume), day_signed_ratio(Ret, Amt)), ts_kurt(day_min(Ret), 5)), 20)` |
+| slot a seed 10 | 过 | 0.66 | `sub(day_centroid(Volume), day_centroid(Ret))` | 0.74 | 0.01 | 0.02 | 0.11 | 0.01 | 0.02 | `cs_bucket_rank(cross_zscore(day_centroid(Volume), 60), cross_mean(ts_kurt(day_min(Ret), 20), 20))` |
+| slot b seed 1 | 过 | 0.13 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_m` | 0.13 | 0.09 | 0.15 | 0.20 | 0.09 | 0.11 | `cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20)` |
+| slot b seed 2 | 过 | 0.35 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.27 | 0.14 | 0.31 | 0.81 | 0.17 | 0.02 | `cross_mean(div(day_close(Close), day_open(Open)), 20)` |
+| slot b seed 3 | 过 | 0.27 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.20 | 0.14 | 0.30 | 0.53 | 0.16 | 0.02 | `sub(cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_mean(div(day_close(Close), day_open(Open)), 20))` |
+| slot b seed 4 | 过 | 0.19 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_m` | 0.14 | 0.06 | 0.06 | 0.48 | 0.06 | 0.12 | `cs_bucket_rank(cross_mean(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_mean(day_mean(Ret), 20))` |
+| slot b seed 5 | 过 | 0.03 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_m` | 0.16 | 0.07 | 0.13 | 0.10 | 0.05 | 0.02 | `cs_bucket_rank(cross_mean(div(day_close(Close), day_open(Open)), 20), cross_mean(day_mean(Ret), 20))` |
+| slot b seed 6 | 过 | 0.06 | `cs_bucket_rank(cross_mean(day_centroid(Volume), 20), cross_m` | 0.07 | 0.01 | 0.08 | 0.01 | 0.04 | 0.02 | `cross_autocorr(div(day_open(Open), cross_delay(day_close(Close), 1)), 20, 1)` |
+| slot b seed 7 | 过 | 0.15 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.63 | 0.01 | 0.01 | 0.14 | 0.01 | 0.06 | `mul(div(day_open(Open), cross_delay(day_close(Close), 1)), day_signed_ratio(Ret, Amt))` |
+| slot b seed 8 | 过 | 0.72 | `cross_mean(mul(ts_med(mul(ts_med(LimitWidth, 50), mul(ts_med` | 0.77 | 0.08 | 0.18 | 0.56 | 0.10 | 0.22 | `cross_mean(mul(div(day_open(Open), cross_delay(day_close(Close), 1)), day_signed_ratio(Ret, Amt)), 20)` |
+| slot b seed 9 | 过 | 0.12 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.26 | 0.29 | 0.43 | 0.14 | 0.27 | 0.05 | `sub(cross_stddev(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_stddev(div(day_close(Close), day_open(Open)), 20))` |
+| slot b seed 10 | 过 | 0.07 | `sub(day_centroid(Volume), day_centroid(Ret))` | 0.25 | 0.01 | 0.35 | 0.11 | 0.03 | 0.24 | `cs_bucket_rank(sub(cross_stddev(div(day_open(Open), cross_delay(day_close(Close), 1)), 20), cross_stddev(div(day_close(Close), day_open(Open)), 20)), cross_mean(day_sum(Amt), 20))` |
+| R 1 variant 1 | 过 | 0.95 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.96 | 0.42 | 0.14 | 0.15 | 0.43 | 0.22 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 20))` |
+| R 1 variant 2 | 过 | 0.94 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.95 | 0.44 | 0.18 | 0.11 | 0.45 | 0.21 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 10))` |
+| R 1 variant 3 | 过 | 0.95 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.95 | 0.42 | 0.21 | 0.20 | 0.44 | 0.21 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 40))` |
+| R 1 variant 4 | 过 | 0.78 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.85 | 0.33 | 0.12 | 0.18 | 0.34 | 0.19 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 10), cross_mean(day_min(Ret), 20))` |
+| R 1 variant 5 | 过 | 0.79 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.80 | 0.50 | 0.15 | 0.02 | 0.50 | 0.22 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 40), cross_mean(day_min(Ret), 20))` |
+| R 1 variant 6 | 过 | 0.95 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.96 | 0.42 | 0.14 | 0.14 | 0.43 | 0.22 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Amt)), 20), cross_mean(day_min(Ret), 20))` |
+| R 1 variant 7 | 过 | 0.93 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.93 | 0.41 | 0.15 | 0.16 | 0.43 | 0.21 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(ts_med(day_min(Ret), 5), 20))` |
+| R 1 variant 8 | 过 | 0.93 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.95 | 0.45 | 0.24 | 0.11 | 0.47 | 0.19 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_min(Ret), 5))` |
+| R 1 variant 9 | 过 | 0.92 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.93 | 0.41 | 0.11 | 0.10 | 0.42 | 0.25 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(day_max(Ret), 20))` |
+| R 1 variant 10 | 过 | 0.93 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), c` | 0.95 | 0.41 | 0.10 | 0.11 | 0.42 | 0.24 | `cs_bucket_rank(cross_mean(abs_(day_centroid(Volume)), 20), cross_mean(sub(day_max(Ret), day_min(Ret)), 20))` |

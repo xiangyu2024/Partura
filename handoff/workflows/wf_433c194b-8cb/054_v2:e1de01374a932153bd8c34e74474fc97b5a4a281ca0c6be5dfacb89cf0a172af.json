@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:e1de01374a932153bd8c34e74474fc97b5a4a281ca0c6be5dfacb89cf0a172af",
+ "agentId": "a45a5c1fcc723270e",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s807/r2/audit_2.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     1
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": []
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_sum(pow_2_5(ts_sum(pow_3(day_durbin_watson(High)), 1)), 1)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_sum(cross_stddev(day_durbin_watson(High), 60), 1)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_mean(pow_2(mul(pow_2(day_wmean(Ret, Ret)), day_var(Ret))), 30)",
+    "soundness": 3
+   }
+  ],
+  "summary": "Both slots pass with novelty 4 and soundness 4. Slot a (overnight vs intraday return split, N) is unchanged from attempt 1, so its scores are the same; seed 1 is struck because its |rho| with the reversal control is 0.53. Slot b (net payout / net issuance, N, draft 2) addressed every attempt-1 objection with real changes, not rewording: it now uses the NaN-safe cumulative ts_sum(ts_delta(x,1),241). All 8 seeds now clear the gate (coverage 0.998, distinct 0.715-0.917). Distinct follows event frequency, so it comes from real corporate actions rather than float32 rounding, and the 20-30% tie block sits mid-distribution, away from the long decile. None of slot b's seeds are struck. Two caveats on slot b. Seed 7 (cs_regres) is effectively a duplicate of seed 1, because its cross-sectional beta is about 0. If the vendor's share-count change and the price-adjustment factor change land on different days for bonus-share and rights issues, a spurious one-day spike could enter the long book; check this after evaluation. All three R groups pass with soundness 3. In R1 variant 2 and R2 variant 3 the PI changed only the wording, not the content; I still recommend deleting them."
+ }
+}

@@ -1,0 +1,46 @@
+{
+ "type": "result",
+ "key": "v2:cfedfe279034130b7d300f2bc002513187547ea2a6e50024f96485b71964e669",
+ "agentId": "a862aa341b8c78c88",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r2/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     2,
+     3,
+     8,
+     9,
+     13
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     5,
+     6
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40), 40)",
+    "soundness": 3
+   },
+   {
+    "head": "ts_max(ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), ts_max(cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap), 40)), 40), 40)",
+    "soundness": 3
+   },
+   {
+    "head": "cross_mean(cross_quantile_q50(cross_tail_mean_q75(cross_quantile_q50(cross_mean(LogFloatShares, 15), 241), 15), 241), 15)",
+    "soundness": 1
+   }
+  ],
+  "summary": "The audit is written to /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s808/r2/audit_1.yaml and parses as YAML. Both slots pass.\n\nSlot a (E, core cs_bucket_zscore(day_distinct_ratio(Ret), LogFloatCap)): novelty 3, soundness 3. I struck seeds 2, 3, 8 and 9. Each is a near-copy of H2: seeds 2 and 8 sit just under the 0.7 line on raw correlation, but their residual correlation with H3 and H2 is 0.80 or more; seeds 3 and 9 reach 0.87 with H2 after vol matching. I also struck seed 13, a size-step construction (trap 3, size 0.686). The table separately strikes 1, 7 and 12 for vol at or above 0.5. That leaves 5 seeds (4, 5, 6, 10, 11), and the core's largest control correlation is 0.396 (liquidity).\n- The price-matched and shock seeds really do move away from H2.\n- Price matching also exposes the volatility channel: vol rises from 0.19 to 0.54–0.59, which is the low-vol long-leg risk in traps 1 and 3.\n- The nested cs_bucket_zscore buckets on whole-market deciles, not within size buckets, so it partly brings size back: seed 4 goes from 0.008 to 0.398 on size.\n\nSlot b (N, 5-minute intraday realized skewness and RSJ with the opening and closing call auctions removed): novelty 4, soundness 4. Every remaining seed has raw |ρ| of 0.227 or less with all heads. I checked each operator (in_slice, in_pct, day_skew, the RSJ formula, cs_last_high10) and each implements what the plan says. I struck seeds 5 and 6, the unconditioned RSJ seeds. Averaged over 20 days, RSJ is a vol-scaled 20-day return, so these rewrite the reversal control (0.59 and 0.49). Seed 9 is the clean version, conditioned on return deciles, and stays.\n\nR groups:\n- H2 group: soundness 3, passes. Each of the 8 variants changes one part, so score differences can be attributed. The vol and turnover channels the PI suspects are nearly absent from H2 (v2 is 0.81 with H2, v3 0.91), so those two variants are mainly controls.\n- H1 group: soundness 3, passes. Swapping the raw y for the size-conditioned one is a plausible trap-3 test, and the variant is only 0.54 with H1, so that part carries much of H1.\n- H5 group: soundness 1, rejected. The variant cross_mean(LogFloatShares, 15) is trap 3 itself (size 0.779). It is 0.997 with H3 and 0.978 with H5, so the correlation table already answers the diagnostic it was meant for."
+ }
+}

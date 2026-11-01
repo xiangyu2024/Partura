@@ -1,0 +1,60 @@
+{
+ "type": "result",
+ "key": "v2:71ef377f275e3edb430500cf932e65ead614ca86df4ba8a9e5284f8dd2cb83d8",
+ "agentId": "a4b8804f81a0d1402",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s802/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": [
+     3,
+     4,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11
+    ]
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 4,
+    "struck_seeds": [
+     8,
+     9,
+     11,
+     12,
+     14
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "inv(ts_decay_linear(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))), 40))",
+    "soundness": 4
+   },
+   {
+    "head": "inv(pow_1_5(inv(sigmoid(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))))))",
+    "soundness": 4
+   },
+   {
+    "head": "inv(ts_decay_linear(inv(pow_1_5(inv(sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50))))), 40))",
+    "soundness": 3
+   },
+   {
+    "head": "day_mean(neg(in_delta(Volume, 60)))",
+    "soundness": 4
+   },
+   {
+    "head": "sigmoid(ts_regbeta(day_flat_run_max(Vwap), sigmoid(ts_regbeta(day_flat_run_max(Vwap), day_durbin_watson(Volume), 50)), 50))",
+    "soundness": 1
+   }
+  ],
+  "summary": "两个任务位都通过审计。位 a(E,S 核心):创新度 3、合理度 3;划掉 3、4、6–11,剩 6 个种子。(B) 部分全部出局:day_distinct_ratio(Vwap) 量的是成交活跃度,是流动性代理;后复权的 Close 不代表真实价位。位 b(N,订单流被吸收):创新度 4、合理度 4;划掉 8、9、11、12、14,剩 9 个种子。R 组 1–4 通过(合理度 4/4/3/4)。R 组 5(DW 的 Volume→Amt)合理度 1,删掉:DW 本身尺度不变,变体与原 head 的 |ρ| 为 0.998,增益只来自 valid。"
+ }
+}

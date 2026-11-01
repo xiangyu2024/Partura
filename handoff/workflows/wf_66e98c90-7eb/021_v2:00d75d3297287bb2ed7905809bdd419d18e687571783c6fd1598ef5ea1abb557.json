@@ -1,0 +1,39 @@
+{
+ "type": "result",
+ "key": "v2:00d75d3297287bb2ed7905809bdd419d18e687571783c6fd1598ef5ea1abb557",
+ "agentId": "a9645b2f93638f80d",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s806_train.yaml",
+  "n_heads": 8,
+  "kept": [
+   1,
+   7
+  ],
+  "dropped": [
+   {
+    "id": 2,
+    "reason": "(b) Statistic nested on statistic: a 5-day cross_reg_fvalue (3 degrees of freedom, heavy-tailed F) of day_centroid(High) on day_mean(Open), then a 30-day Pearson correlation with Volume_q75^3.75. No readable mechanism, and a few outlier days drive the result. Its simple version, #7, already expresses the price-volume correlation."
+   },
+   {
+    "id": 3,
+    "reason": "(b) cross_reg_fvalue(day_mean(Open), day_mean(Open), 5) regresses a series on itself, so RSS is about 0 and F is about TSS/(rounding noise + 1e-9). That is either the 5-day variance of the back-adjusted price level (traps 2 and 3) or numerical noise. A degenerate node."
+   },
+   {
+    "id": 4,
+    "reason": "(b) Trap 1: High > 0 everywhere, so day_pos_ratio(High) is about 1 across the whole cross-section. After cs_last_low10's ordinal rank it becomes a static ramp in column order. It is then wrapped in a 5-day F-value, a 20-day residual and a 30-day correlation, and it measures nothing readable."
+   },
+   {
+    "id": 5,
+    "reason": "(b) Trap 1: it also uses the column-order ramp from cs_last_low10(day_pos_ratio(High), ...) as a regressor, and it nests an F-value inside an F-value. A variant of the #2 family (|rho| 0.27)."
+   },
+   {
+    "id": 6,
+    "reason": "(b) Three nested layers. Two 5-day F-values regress day_argmax(High) on day_es_ratio_lo(Vwap) and on the back-adjusted price level day_mean(Open). It then takes a 20-day residual of one on the other and a 30-day correlation with Volume^3.75. No statable mechanism, and it touches trap 3."
+   },
+   {
+    "id": 8,
+    "reason": "(b) + trap 3: every branch is a monotone transform of the same back-adjusted price level (day_quantile_q25(Open), day_close(Open)). After the two nested cs_first_high20 calls, the result is rank(back-adjusted price) plus 1 for names ranked about 20-40% on that price. It just picks a band on a back-adjusted price that does not reflect the real price."
+   }
+  ]
+ }
+}

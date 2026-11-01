@@ -1,0 +1,45 @@
+{
+ "type": "result",
+ "key": "v2:cd23eac7f19f4313fb5f328224897acb185ac3fad6a1892b04b1d4db4f9d5249",
+ "agentId": "afe3e6fb713f709d5",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r1/audit_1.yaml",
+  "slots": [
+   {
+    "slot": "a",
+    "novelty": 3,
+    "soundness": 3,
+    "struck_seeds": []
+   },
+   {
+    "slot": "b",
+    "novelty": 4,
+    "soundness": 3,
+    "struck_seeds": [
+     7,
+     8,
+     11
+    ]
+   }
+  ],
+  "R": [
+   {
+    "head": "sub(cs_first_low20(abs_(day_wstd(Vwap, High)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_var(day_gini(High), 10))",
+    "soundness": 3
+   },
+   {
+    "head": "sub(cs_first_low20(sub(cross_ema(LogFloatShares, 241), ts_var(day_gini(High), 10)), ts_decay_linear(pow_3(day_mean(Open)), 20)), ts_var(day_gini(High), 10))",
+    "soundness": 2
+   },
+   {
+    "head": "sub(sub(sub(sub(ts_mean(abs_(neg(pow_1_5(cs_last_low10(day_wmean(Ret, Volume), ts_reg_tvalue(day_quantile(Volume), day_mean(Ret), 10))))), 30), ts_var(day_gini(High), 10)), ts_var(day_gini(High), 10)), day_centroid(sqrt(Volume))), day_centroid(sqrt(Volume)))",
+    "soundness": 2
+   },
+   {
+    "head": "sub(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), cs_first_low20(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), ts_var(day_gini(High), 5)), ts_decay_linear(pow_3(day_mean(Open)), 20))), cs_first_low20(sub(cross_ema(cross_ema(LogFloatShares, 241), 241), ts_var(day_gini(High), 5)), ts_decay_linear(pow_3(day_mean(Open)), 20)))",
+    "soundness": 2
+   }
+  ],
+  "summary": "两个任务位都通过,4 个 R 组只过了 R1,结果写在 /Users/wxy/Desktop/Partura/research/coldstart_C06/partura/s804/r1/audit_1.yaml。a 位(在低价核心外加彩票股排除筛)创新度 3、合理度 3,一个种子不划:排除筛核对源码无误,只扣分不判 2,因为核心 day_mean(Open) 是后复权价、不是名义价格,而且便宜股的 1 分钟偏度主要反映最小跳价,不反映彩票特征。b 位(隔夜情绪回吐)创新度 4、合理度 3:隔夜收益在后复权价下跨除权日连续,写法正确;划掉 seed 7、11(相关度表判为废品,distinct 0.011 和 0.037)和 seed 8(正向隔夜收益均值近似隔夜波动,与波动控制 |ρ| 0.39),剩 9 个。没给 4,是因为方向只有美股文献支持,A 股既没有文献也没有 train 证据,而且一字板的跳空会主导 20 日均值。R1 通过(合理度 3):去掉 20 日价格平滑在本 head 的 train 和 valid 上都更好,窗口越短越好;但在另外两个 head 上是 +0.02 和 -0.06,增益约 1 个标准误。R2、R4 合理度 2:去掉的部件只是不起作用,预期达不到 +0.1 的替换门槛。R3 合理度 2:说 A 项是噪声、与残差 |ρ| 只有 0.24 矛盾,head 实际交易的主要是 A 项。"
+ }
+}

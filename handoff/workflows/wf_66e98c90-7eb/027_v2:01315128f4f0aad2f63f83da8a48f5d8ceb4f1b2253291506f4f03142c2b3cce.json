@@ -1,0 +1,55 @@
+{
+ "type": "result",
+ "key": "v2:01315128f4f0aad2f63f83da8a48f5d8ceb4f1b2253291506f4f03142c2b3cce",
+ "agentId": "aebf3927e08644da6",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s802_train.yaml",
+  "n_heads": 12,
+  "kept": [
+   1,
+   2
+  ],
+  "dropped": [
+   {
+    "id": 3,
+    "reason": "Its band, cross_quantile_q25(signedpower(core of #2), 241), means a stock sat in the late-volume band on most days of the past year. That is #2's day_centroid(Volume) band written another way. Its ordering term takes the square of a lexicographic rank, applies two 241-day quantiles, then a 20-day ts_argmin. It does not read as measuring anything. Its |rho| is only 0.20, but the mechanism is the same, so the 1.73 train Sharpe looks like fitting on top of #2's mechanism."
+   },
+   {
+    "id": 4,
+    "reason": "Its band is still day_centroid(Volume) (0.72-0.73 with #6/#7/#5). Its ordering term, ts_reg_fvalue(..., cs_stddev_full(...), 5), regresses over 5 days on cs_stddev_full, which has the same value for every stock each day. It then takes a 241-day quantile and a 20-day argmin of that F-value. Pure numbers game."
+   },
+   {
+    "id": 5,
+    "reason": "A self-nested rewrite of #2. The top 40% of its band, cs_first_high40(ts_argmin(day_centroid(Volume),20), day_centroid(Volume)), is exactly the top 40% by volume centroid. The ordering term repeats the same structure (square, 241-day quantile, 20-day argmin). 0.83 with #7 and 0.81 with #2."
+   },
+   {
+    "id": 6,
+    "reason": "The structure cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(...),241),20), day_centroid(Volume)) nested inside itself four or five levels deep, adding no new measure. 0.80 with #2 and 0.77 with #7. A rewrite of #2, and the nesting means nothing."
+   },
+   {
+    "id": 7,
+    "reason": "Differs from #5 only in the inner cross_quantile_q25 window (241 to 10); otherwise the same. 0.83 with #5 and 0.82 with #2. A rewrite of #2/#5."
+   },
+   {
+    "id": 8,
+    "reason": "Same band and same core as #2, with a second ts_argmin wrapped around the first: the position of a position has no meaning. 0.84 with #2. A rewrite of #2."
+   },
+   {
+    "id": 9,
+    "reason": "Its band is still day_centroid(Volume) (0.73 with #8/#5/#2). The ordering term bands by back-adjusted price level day_max(High), computes day_topw_mean(Ret, High) on minutes picked by High price, bands by LimitWidth, then applies cs_regres and a 20-day argmin. Falls into the price-convention trap, and it does not read as measuring anything."
+   },
+   {
+    "id": 10,
+    "reason": "Uses only back-adjusted price levels. Two cs_first_low20 cuts on day_last(Close) and day_quantile_q25(High) put back-adjusted price ranks of about 20-40% on top. Back-adjusted prices are not real price levels (trap 3), so this selects a static price range with no mechanism. Volatility rho is 0.00, and rho with every other head is at most 0.05."
+   },
+   {
+    "id": 11,
+    "reason": "LimitWidth takes only a few values. Ranked as the y of cs_first_high20, its large tie blocks are broken by column order in the stable sort, which makes a static column-order ramp (trap 1). This is then nested many levels with LogTotalCap bands and ts_sum. Rho is 0.38 with market cap, 0.38 with liquidity and 0.34 with the known family: a re-skin of market cap plus column order."
+   },
+   {
+    "id": 12,
+    "reason": "Its core, ts_rank(neg(day_first(Open)),30), is where the opening price sits in its 30-day range, close to the reversal control (rho 0.34). It is wrapped in several LogTotalCap top-20%/bottom-5% bands and ts_sum, giving market cap rho 0.47, the highest in the table. A re-skin of the reversal and market-cap controls, 0.61 with #11; the nesting adds no mechanism."
+   }
+  ]
+ }
+}

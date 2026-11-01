@@ -1,0 +1,58 @@
+{
+ "type": "result",
+ "key": "v2:6f855fe760f18471c812dac436cad24683e5e733dda500c291072e4cfa0702f3",
+ "agentId": "ab40d0a997d9c07d9",
+ "result": {
+  "path": "/Users/wxy/Desktop/Partura/research/coldstart_C07/verify/s802_all.yaml",
+  "n_heads": 12,
+  "kept": [
+   2
+  ],
+  "dropped": [
+   {
+    "id": 1,
+    "reason": "day_mean(in_delta(Volume,30)) 等于尾盘 30 根减开盘 30 根的原始成交股数,机制与 #2 相同(日内成交时点)但未归一化,量级由成交股数主导(流动性 0.41、已知族 0.43、与 #2 0.59),是带流动性尺度的重复。"
+   },
+   {
+    "id": 3,
+    "reason": "分段是 #2 整个表达式的 241 日 q25(同一成交重心信号的一年持续度);组内排序 ts_argmin(q25_241(q25_241(...)),20) 是分位套分位再取 argmin,无机制,慢阶梯序列大量并列、由列序定名次(陷阱 1)。"
+   },
+   {
+    "id": 4,
+    "reason": "分段仍是 day_centroid(Volume) 前 40%(与 #6 0.73);组内排序是对 cs_stddev_full(...) 这个截面处处相同的市场标量做 ts_reg_fvalue,并用后复权 day_min(High),属数字游戏。"
+   },
+   {
+    "id": 5,
+    "reason": "分段同为 day_centroid(Volume) 前 40%,组内只是把 #2 内层换成 cs_first_high40(ts_argmin(centroid,20),centroid),与 #7 0.83、#2 0.81,是 #2 换写法。"
+   },
+   {
+    "id": 6,
+    "reason": "#2 的模块自我嵌套五六层,最外分段仍是 day_centroid(Volume) 前 40%,与 #2 0.80,嵌套无新含义,重复。"
+   },
+   {
+    "id": 7,
+    "reason": "与 #5 只差内层 cross_quantile_q25 窗口 241→10,分段相同,与 #5 0.83、#2 0.82,是 #2 换写法。"
+   },
+   {
+    "id": 8,
+    "reason": "在 #2 组内排序外再套 ts_argmin(·,20)(最小值位置的最小值位置,无含义),与 #2 0.84,重复。"
+   },
+   {
+    "id": 9,
+    "reason": "分段仍是 day_centroid(Volume) 前 40%(与 #8/#5/#2 0.73);组内排序由 day_hurst(Close)、后复权 day_max(High)、day_topw_mean(Ret,High)、LimitWidth 拼成的 cs_regres 残差取 argmin,无机制且依赖后复权价位(陷阱 3)。"
+   },
+   {
+    "id": 10,
+    "reason": "只比较 day_last(Close) 与 day_quantile_q25(High) 的截面排名,两者都是后复权价位(陷阱 3),截面上不代表真实价格;train 0.61 对 valid 2.79 也不像稳定机制。"
+   },
+   {
+    "id": 11,
+    "reason": "只由 LimitWidth 与 LogTotalCap 组成:rank(LimitWidth) 只有几档、并列由列序打破(陷阱 1),cs_last_low05(·,LogTotalCap) 在方向 -1 下把总市值最小 5% 送进多头(市值换皮,市值/流动性各 0.38)。"
+   },
+   {
+    "id": 12,
+    "reason": "ts_rank(neg(day_first(Open)),30) 近于反转控制(0.34),外层全是 LogTotalCap 分段与 ts_sum,cs_last_low05(·,LogTotalCap) 在方向 -1 下把最小 5% 市值送进多头(市值 0.47),反转加市值换皮。"
+   }
+  ]
+ }
+}
