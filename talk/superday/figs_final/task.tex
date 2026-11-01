@@ -1,0 +1,58 @@
+% Slide 5 (v2): input tensor -> expression x -> daily signal matrix -> signal card.  Store: 5,207 names x 241 minutes x 8 fields (C01 PLAN 2.1).
+% Cube: front face = stocks (10 rows of 0.18 in) x days (10 columns of 0.20 in); depth = minutes, vector (0.85, 0.55).
+\begin{tikzpicture}[grid, yscale=0.90]
+  \def\dx{0.85}\def\dy{0.55}
+  % ---------------- cube (one field; 8 fields in all)
+  \foreach \i in {1,...,9} {
+    \draw[guide] (0.45+\i*0.2,-2.90) -- (0.45+\i*0.2,-1.10);                 % day lines, front
+    \draw[guide] (0.45+\i*0.2,-1.10) -- ++(\dx,\dy);                        % day lines, top
+    \draw[guide] (0.45,-2.90+\i*0.18) -- (2.45,-2.90+\i*0.18);              % stock lines, front
+  }
+  \foreach \f in {0.25,0.5,0.75} {
+    \draw[guide] (0.45+\f*\dx,-1.10+\f*\dy) -- (2.45+\f*\dx,-1.10+\f*\dy);  % minute lines, top
+    \draw[guide] (2.45+\f*\dx,-2.90+\f*\dy) -- (2.45+\f*\dx,-1.10+\f*\dy);  % minute lines, side
+  }
+  % slab: day t, all stocks x all minutes
+  \fill[accent!25] (1.85,-2.90) rectangle (2.05,-1.10);
+  \fill[accent!25] (1.85,-1.10) -- (2.05,-1.10) -- ++(\dx,\dy) -- (1.85+\dx,-1.10+\dy) -- cycle;
+  \draw[accent] (1.85,-2.90) rectangle (2.05,-1.10);
+  \draw[accent] (1.85,-1.10) -- (1.85+\dx,-1.10+\dy) -- (2.05+\dx,-1.10+\dy) -- (2.05,-1.10);
+  % cube outline
+  \draw[ink] (0.45,-2.90) rectangle (2.45,-1.10);
+  \draw[ink] (0.45,-1.10) -- ++(\dx,\dy) -- (2.45+\dx,-1.10+\dy) -- (2.45,-1.10);
+  \draw[ink] (2.45+\dx,-1.10+\dy) -- (2.45+\dx,-2.90+\dy) -- (2.45,-2.90);
+  % axis labels
+  \node[ann, rotate=90, anchor=south] at (0.40,-2.00) {stocks $i$ \,·\, 5,207};
+  \node[ann, anchor=north west] at (0.45,-2.95) {days $t$};
+  \node[annl, anchor=north] at (1.95,-2.95) {$t$};
+  \path (2.45,-2.90) -- (2.45+\dx,-2.90+\dy) node[ann, midway, sloped, below] {minutes · 241};
+  \node[ann, anchor=south west] at (0.45,-0.50) {one cube per field (8 fields)};
+  % ---------------- expression x collapses the slab into column t
+  \draw[arrl] (2.95,-0.50) .. controls (3.8,0.05) and (5.7,0.05) .. (6.40,-1.05);
+  \node[annl, anchor=south, font=\nodesize] at (4.60,-0.08) {$x:\ \mathbb{R}^{S\times D\times M}\to\mathbb{R}^{S\times D}$};
+  \node[ann, anchor=north] at (4.60,-0.30) {minutes collapse};
+  % ---------------- signal matrix s_{i,t}: stocks x days
+  \foreach \i in {1,...,9} {
+    \draw[guide] (4.90+\i*0.2,-2.90) -- (4.90+\i*0.2,-1.10);
+    \draw[guide] (4.90,-2.90+\i*0.18) -- (6.90,-2.90+\i*0.18);
+  }
+  \fill[accent!25] (6.30,-2.90) rectangle (6.50,-1.10);
+  \draw[accent] (6.30,-2.90) rectangle (6.50,-1.10);
+  \draw[ink] (4.90,-2.90) rectangle (6.90,-1.10);
+  \node[ann, anchor=south west] at (4.90,-1.08) {$s_{i,t}$}; \node[ann, rotate=90, anchor=south] at (4.85,-2.00) {stocks $i$};
+  \node[ann, anchor=north west] at (4.90,-2.95) {days $t$};
+  \node[annl, anchor=north] at (6.40,-2.95) {$t$};
+  % ---------------- timing on the way to the book
+  \draw[arr] (6.90,-2.00) -- (8.75,-2.00);
+  \node[anni, anchor=south] at (7.825,-1.97) {$t$ close $\to$ $t{+}1$ open};
+  \node[ann, anchor=north] at (7.825,-2.03) {15-min VWAP};
+  % ---------------- signal card
+  \draw[ink] (8.75,-2.90) rectangle (11.633,-1.10);
+  \foreach \y in {-1.46,-1.82,-2.18,-2.54} { \draw[rulec] (8.75,\y) -- (11.633,\y); }
+  \node[anchor=west, font=\nodesize, inner sep=0] at (8.88,-1.28) {\mediumfont signal card};
+  \foreach \y/\f/\w/\c in {-1.64/thesis/{PI (Opus 5.5)}/accent, -2.00/{expression $x$}/{AlphaCube GP}/ink,
+                           -2.36/evidence/{code + ledger}/ink, -2.72/provenance/code/ink} {
+    \node[anchor=west, font=\nodesize, text=\c, inner sep=0] at (8.88,\y) {\f};
+    \node[anchor=east, font=\notesize, text=sec, inner sep=0] at (11.50,\y) {\w};
+  }
+\end{tikzpicture}
