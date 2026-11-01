@@ -1,0 +1,560 @@
+% Superday Topic B -- principles and results part, version 6 (v5 + a C08 status page).  XeLaTeX:  latexmk -xelatex principles_v6.tex
+% Layout spec: talk/superday/OUTLINE.md (binding for v5).  Experiment facts: research/coldstart_C01..C07 PLAN.md and RESULT.md; C08 is running (research/coldstart_C08/STATUS.md) and has no result here.
+\documentclass[t,20pt]{beamer}
+\geometry{paperwidth=13.333in,paperheight=7.5in}
+
+% Metropolis inner / outer / colour themes; fonts are set below (Fira Sans + Fira Math from the TeX tree).
+\useinnertheme[sectionpage=none,subsectionpage=none]{metropolis}
+\useoutertheme[progressbar=none,numbering=none]{metropolis}
+\usecolortheme{metropolis}
+\usefonttheme{professionalfonts}
+
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\setsansfont{FiraSans}[Extension=.otf, UprightFont=*-Book, ItalicFont=*-BookItalic,
+  BoldFont=*-SemiBold, BoldItalicFont=*-SemiBoldItalic]
+\setmainfont{FiraSans}[Extension=.otf, UprightFont=*-Book, ItalicFont=*-BookItalic,
+  BoldFont=*-SemiBold, BoldItalicFont=*-SemiBoldItalic]
+\setmonofont{FiraMono}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Medium]
+\newfontfamily\mediumfont{FiraSans}[Extension=.otf, UprightFont=*-Medium, ItalicFont=*-MediumItalic]
+\setmathfont{FiraMath-Regular.otf}
+\newfontfamily\cjkfont{FandolHei-Regular.otf}   % only for one Chinese file name in a source note
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,decorations.markings}
+\usepackage{array,booktabs,colortbl}
+\usepackage{fancyvrb}
+
+% ------------------------------------------------------------------ colours (OUTLINE.md)
+\definecolor{ink}{HTML}{2E2E2E}
+\definecolor{sec}{HTML}{6B6B6B}
+\definecolor{rulec}{HTML}{C8C8C8}
+\definecolor{accent}{HTML}{1F5A96}
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{frametitle}{fg=ink,bg=white}
+\setbeamercolor{alerted text}{fg=accent}
+\setbeamercolor{structure}{fg=ink}
+\arrayrulecolor{rulec}
+\setlength{\heavyrulewidth}{0.9pt}
+\setlength{\lightrulewidth}{0.9pt}
+
+% ------------------------------------------------------------------ sizes (points are literal: the page is 13.333 x 7.5 in)
+\newcommand\titlesize{\fontsize{32}{38}\selectfont}
+\newcommand\secsize{\fontsize{16}{20}\selectfont}
+\newcommand\nodesize{\fontsize{16}{19}\selectfont\hyphenpenalty=10000\exhyphenpenalty=10000}
+\newcommand\notesize{\fontsize{14}{17}\selectfont\hyphenpenalty=10000\exhyphenpenalty=10000}
+\newcommand\pnsize{\fontsize{12}{14}\selectfont}
+\newcommand\expr[1]{{\ttfamily\fontsize{14}{17}\selectfont\detokenize{#1}}}   % expression in mono, 14 pt, inside tables
+
+% ------------------------------------------------------------------ grid
+\setbeamersize{text margin left=0.85in,text margin right=0.85in}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+% Frame title: a fixed-height box, baseline 0.92 in from the top on every page (strut fixes the baseline).
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \vbox to 1.30in{%
+    \vskip 0.50in
+    \hbox{{\mediumfont\titlesize\color{ink}\rule{0pt}{0.42in}\insertframetitle}}%
+    \vss}%
+}
+% Page number: bottom right, 12 pt, mid-gray, right edge on the right text margin.
+\setbeamertemplate{footline}{%
+  \hbox to \paperwidth{\hfill{\pnsize\color{sec}\insertframenumber}\hskip 0.85in}%
+  \vskip 0.36in}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+% ------------------------------------------------------------------ text helpers
+\newcommand\key[1]{{\mediumfont\color{accent}#1}}
+\newcommand\lead[1]{{\mediumfont #1}}
+\newcommand\illus{{\notesize\itshape\color{sec}illustrative}}
+\newcommand\file[1]{{\ttfamily\detokenize{#1}}}
+\newcommand\sub[1]{\par\vspace{5pt}{\raggedright\secsize\color{sec}#1\par}}
+\newenvironment{blist}{%
+  \begin{list}{\textcolor{sec}{\textbullet}}{\def\makelabel##1{##1\hfil}%
+    \setlength\leftmargin{0.34in}\setlength\labelwidth{0.2in}\setlength\labelsep{0.14in}%
+    \setlength\itemsep{16pt}\setlength\parsep{0pt}\setlength\topsep{0pt}\setlength\partopsep{0pt}%
+    \setlength\itemindent{0pt}\setlength\listparindent{0pt}\setlength\rightmargin{0pt}}}%
+  {\end{list}}
+\newcounter{nl}
+\newenvironment{nlist}{%
+  \begin{list}{\textcolor{sec}{\arabic{nl}}}{\usecounter{nl}\def\makelabel##1{##1\hfil}%
+    \setlength\leftmargin{0.40in}\setlength\labelwidth{0.26in}\setlength\labelsep{0.14in}%
+    \setlength\itemsep{26pt}\setlength\parsep{0pt}\setlength\topsep{0pt}\setlength\partopsep{0pt}%
+    \setlength\itemindent{0pt}\setlength\listparindent{0pt}\setlength\rightmargin{0pt}}}%
+  {\end{list}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand\thead[1]{\leavevmode{\mediumfont\color{sec}#1}}
+\newcommand\gap[1]{\par\vspace{#1}}
+% content top: tables and figures start on the frame's top line; a first text line or a [t] minipage is lifted onto it
+\newcommand\textfirst{\vspace*{-0.14in}}
+\newcommand\colsfirst{\vspace*{-0.37in}}
+\newcommand\colsafter{\par\vspace{-0.24in}}
+% figures sit on the text block: left edge on the left margin, width exactly the text width
+\newcommand\fig[1]{\par\noindent\makebox[\textwidth][l]{\input{#1}}\par}
+\AtBeginDocument{\hyphenpenalty=10000\exhyphenpenalty=10000\raggedright}
+
+% ------------------------------------------------------------------ figures: one line width, Stealth tips, square corners
+\tikzset{
+  x=1in, y=1in,
+  >={Stealth[length=7pt,width=5.5pt]},
+  every picture/.style={line width=0.9pt},
+  grid/.style={trim left=0in, trim right=11.633in-0.9pt},
+  box/.style={rectangle, draw=ink, line width=0.9pt, minimum height=0.68in, align=center,
+              font=\nodesize, text=ink, inner sep=4pt},
+  cb/.style={box},                                  % code part
+  lb/.style={box, draw=accent},                     % LLM / Partura part
+  pb/.style={box, draw=sec, dashed, text=sec},      % planned, not built
+  tint/.style={fill=accent!10},                     % the single 10 % accent tint per figure
+  arr/.style={->, line width=0.9pt, draw=ink},
+  arrl/.style={->, line width=0.9pt, draw=accent},
+  lab/.style={font=\nodesize, text=sec, inner sep=2pt},
+  labl/.style={font=\nodesize, text=accent, inner sep=2pt},
+  ann/.style={font=\notesize, text=sec, inner sep=1.5pt},        % 14 pt figure annotations
+  annl/.style={font=\notesize, text=accent, inner sep=1.5pt},
+  anni/.style={font=\notesize, text=ink, inner sep=1.5pt},
+  guide/.style={draw=rulec, dotted, line width=0.9pt},            % dotted alignment guides
+  mask/.style={fill=white},                                       % label background over a line
+  t10/.style={fill=accent!10}, t20/.style={fill=accent!20}, t28/.style={fill=accent!28}, t35/.style={fill=accent!35},
+}
+
+\begin{document}
+
+% right-aligned numeric column type (defined outside frames)
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% ================================================================== 1 Title
+\begin{frame}[plain]
+\begin{tikzpicture}[remember picture,overlay]
+  \node[anchor=base west, inner sep=0, align=left, text=ink]
+    at ($(current page.north west)+(0.85in,-2.45in)$)
+    {\mediumfont\titlesize Partura: an LLM research team\\[2pt]\mediumfont\titlesize that steers a symbolic alpha miner};
+  \node[anchor=base west, inner sep=0, text=sec]
+    at ($(current page.north west)+(0.85in,-3.45in)$)
+    {Principles, the prototype flow, results C01–C07 (C08 running), limitations};
+  \draw[rulec] ($(current page.north west)+(0.85in,-3.85in)$) -- ++(11.633in,0);
+  \node[anchor=base west, inner sep=0, text=ink]
+    at ($(current page.north west)+(0.85in,-4.45in)$) {Xiangyu Wang};
+  \node[anchor=base west, inner sep=0, text=sec, font=\secsize]
+    at ($(current page.north west)+(0.85in,-4.90in)$) {Trexquant Superday \,·\, Topic B \,·\, 2026-10-31};
+  \node[anchor=base east, inner sep=0, text=sec, font=\pnsize]
+    at ($(current page.south east)+(-0.85in,0.36in)$) {1};
+\end{tikzpicture}
+\end{frame}
+
+% ================================================================== 2 Outline
+\begin{frame}{Outline}
+\textfirst
+\begin{nlist}
+  \item \lead{Principles} \,—\, pages 3–9
+    \sub{Search is cheap, belief is expensive · tokens · task · signal card · searcher · architecture · roles}
+  \item \lead{Prototype: input → agent decision → audit → output} \,—\, pages 10–13
+    \sub{The flow · input and decision · audit · output}
+  \item \lead{Results} \,—\, C01–C07 finished, C08 running \,—\, pages 14–19
+    \sub{Verdict rule · eight experiments · C05 · C06 · C07 · C08 (running)}
+  \item \lead{Limitations and conclusion} \,—\, pages 20–21
+    \sub{Known limitations · what the evidence supports so far}
+\end{nlist}
+\end{frame}
+
+
+% ================================================================== 3 Two speeds
+\begin{frame}{Search is cheap, belief is expensive}
+\textfirst
+LLMs should not write thousands of formulas. They should form beliefs\\
+and change \key{where a cheap searcher looks}.
+\gap{0.30in}
+\fig{figs_v5/loop.tex}
+\end{frame}
+
+% ================================================================== 4 Tokens buy beliefs
+\begin{frame}{Tokens should buy beliefs, not candidates}
+\fig{figs_v5/cost.tex}
+\gap{0.30in}
+Spend tokens only where an LLM adds value: \key{reading the batches, forming beliefs,}\\
+\key{and writing small missions for the searcher}.
+\end{frame}
+
+% ================================================================== 5 Task specification
+\begin{frame}{Task specification}
+\fig{figs_v5/task.tex}
+\gap{0.16in}
+\lead{Signal}\quad $s_{i,t} = x(\mathcal{D}_{\le t})_i$ \quad {\secsize\color{sec}one number per stock $i$ and day $t$, known after the close of day $t$}
+\gap{0.10in}
+\lead{Return}\quad $r_{i,t+1} = P_{i,t+2}/P_{i,t+1} - 1$ \quad {\secsize\color{sec}$P$: first-15-minute VWAP; missing if limit-up at the open}
+\gap{0.10in}
+{\secsize\color{sec}Given: Claude agents (Opus 5.5, Opus 5, Sonnet 5, Haiku 5.5) under a finite token budget; AlphaCube GP;\\
+long-only top decile of residuals on five controls, 15 bp per side; \textcolor{accent}{the search sees 2018-01-02 to 2023-08-07 only}.}
+\end{frame}
+
+% ================================================================== 6 Signal card
+\begin{frame}{A finished output is a signal card}
+\begingroup\secsize
+\renewcommand\arraystretch{1.45}%
+\begin{tabular}{@{}L{2.0in}L{6.0in}L{3.3in}@{}}
+\toprule
+\thead{Field} & \thead{Content} & \thead{Filled by} \\
+\midrule
+\lead{Thesis} & mechanism, counterparty, falsifiable prediction, condition under which it fails & \textcolor{accent}{PI (Opus 5.5)}; scored by the auditor (C06) \\
+\lead{Implementation} & expression $x$; sign and half-life fixed on train; signal after the close of $t$, trade at the open of $t+1$ & searcher (GP) + reward code \\
+\lead{Evidence} & train / valid score; one test read (net excess, $t$); residual read on the five controls; turnover; $|\rho|$ to the known family & deterministic code \\
+\lead{Provenance} & mission file, round, seed, code hashes, ledger entry & code (\file{evidence.json}, ledger) \\
+\midrule
+\multicolumn{3}{@{}l@{}}{\illus\quad the known family as a card: thesis “volatile intraday turnover marks illiquid, speculative names”;} \\[-4pt]
+\multicolumn{3}{@{}l@{}}{\phantom{\illus}\quad $x$ = \file{cross_mean(day_std(Amt), 30)}, sign $-1$; evidence and provenance written by code} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.36in}
+Done = all four fields filled \key{and the one test read logged in the ledger}.
+\end{frame}
+
+% ================================================================== 7 Searcher as a black box
+\begin{frame}{The searcher is a black box with three handles}
+\textfirst
+Partura never edits AlphaCube. It reaches the search only through \key{three ports}.
+\gap{0.22in}
+\fig{figs_v5/searcher.tex}
+\gap{0.22in}
+Same GP in every arm: reward \file{long_neutral} (five controls, 15 bp); depth 2–4.\\
+M: budget 192, population 48. Mission runs: population 32, 96 or 128 evaluations.
+\end{frame}
+
+% ================================================================== 8 Current design
+\begin{frame}{Current design: the main search runs untouched}
+\fig{figs_v5/arch.tex}
+\end{frame}
+
+% ================================================================== 9 Roles
+\begin{frame}{Who reads what, and what each may not do}
+\begingroup\secsize
+\renewcommand\arraystretch{1.16}%
+\begin{tabular}{@{}L{1.90in}L{1.15in}L{3.70in}L{4.38in}@{}}
+\toprule
+\thead{Role} & \thead{Model} & \thead{Reads} & \thead{Writes; may not} \\
+\midrule
+\lead{Locate tool} & code & M's batches, train and valid & heads, commonality, ablation \\
+\textcolor{accent}{\lead{Anatomist}} & Opus 5 & locate output & alpha subtrees; literature questions \\
+\textcolor{accent}{\lead{Librarian}} & Sonnet 5 & the questions & papers before 2023-08-08 only \\
+\textcolor{accent}{\lead{PI}} & Opus 5.5 & anatomy, literature, own notes & E, R, N missions; never edits M \\
+\textcolor{accent}{\lead{Checker}} & Haiku 5.5 & PI's files & checks, literature dates \\
+\textcolor{accent}{\lead{Auditor (C06)}} & Opus 5.5 & mission, heads, known traps & novelty and soundness scores only \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.26in}
+Partura reads only its own seed's locate output and earlier missions.\\
+Never other seeds, other arms, or test-period numbers.\\
+\key{No agent scores its own mission}: scores are code (C05) or a separate auditor (C06).
+\end{frame}
+
+
+% ================================================================== P1 Prototype: the flow (page 10)
+\begin{frame}{Prototype: input → agent decision → audit → output}
+\textfirst
+Each stage writes a file that the next stage reads. The outlined boxes are LLM steps.
+\gap{0.20in}
+\fig{figs_v5/flow.tex}
+\gap{0.22in}
+{\fontsize{18}{22}\selectfont
+\begin{blist}
+  \item \lead{One command per round:} \file{workflows/c06_round.js} (laptop, all seeds); \file{scripts/server/c06_conductor.sh} (GPU server, per seed).
+  \item \lead{Every step leaves a file;} a restart resumes at the first missing one.
+\end{blist}}
+\gap{0.06in}
+{\notesize\color{sec}Example: seed 806, round 1, arm C (C06). Sources: workflows/c06\_round.js; scripts/server/c06\_conductor.sh; scripts/c06\_sync.sh; scripts/c06\_final.py (header); research/coldstart\_C06/partura/s806/r1/.\par}
+\end{frame}
+
+% ================================================================== P2 Prototype: input and decision (page 11)
+\begin{frame}{Input and decision: a real example}
+\textfirst
+\lead{Locate output, seed 806, round 1:} the heads table is empty; top row shown.
+\gap{0.12in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.15}%
+\begin{tabular}{@{}R{0.85in}R{0.60in}R{1.25in}R{1.95in}L{6.20in}@{}}
+\toprule
+\thead{Mean diff.} & \thead{p} & \thead{Candidates} & \thead{Mean score, with / without} & \thead{Subtree (excerpt)} \\
+\midrule
++0.80 & 0.000 & 18 & −0.67 / −1.47 & \expr{add(LimitWidth, day_cov(Vwap, Ret))} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.28in}
+\lead{PI plan, round 1:} one \key{E} slot keeps a core; one \key{N} slot is a new idea.
+\gap{0.12in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.10}%
+\begin{tabular}{@{}L{0.75in}L{2.45in}L{5.75in}R{1.85in}@{}}
+\toprule
+\thead{Slot} & \thead{Core or idea} & \thead{One-line hypothesis (translated)} & \thead{Seeds: in $\to$ kept} \\
+\midrule
+\textcolor{accent}{\lead{E}} & \expr{day_cov(Vwap, Ret)}, kept & Only the timing term of the core is alpha: a day whose main move comes late gives it back under T+1 & 14 $\to$ 5 \\
+\textcolor{accent}{\lead{N}} & intraday skewness & Lottery-like, attention-driven buying in stocks with skewed minute returns; they earn less later & 15 $\to$ 12 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.14in}
+{\notesize\color{sec}Mean diff. = mean score with minus without the subtree. Score = the worse of train and valid residual long-only Sharpe; 0.5 or more is a discovery. Hypotheses translated from the PI's Chinese and shortened.\\
+Sources: research/coldstart\_C06/partura/s806/r1/loc.md (commonality, row 1); missions.yaml and missions\_final.yaml (slots E and N).\par}
+\end{frame}
+
+% ================================================================== P3 Prototype: audit (page 12)
+\begin{frame}{Audit: a real example}
+\textfirst
+As the averaging window grows, four E seeds track liquidity more closely.
+\gap{0.12in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.05}%
+\begin{tabular}{@{}L{0.90in}L{3.40in}L{2.70in}R{1.90in}L{1.60in}@{}}
+\toprule
+\thead{Seed} & \thead{Divided by} & \thead{Window} & \thead{$|\rho|$ with liquidity} & \thead{Outcome} \\
+\midrule
+\lead{1} & mean(Vwap) $\times$ var(Ret) & one day & 0.35 & kept \\
+\lead{3} & mean(Vwap) $\times$ var(Ret) & 5-day mean & 0.52 & \textcolor{accent}{struck} \\
+\lead{5} & std(Vwap) $\times$ std(Ret) & 10-day linear decay & 0.63 & \textcolor{accent}{struck} \\
+\lead{4} & std(Vwap) $\times$ std(Ret) & 20-day mean & 0.73 & \textcolor{accent}{struck} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.14in}
+\key{Auditor's finding, slot E: the PI treated Vwap as the bar's closing price.}
+\gap{0.04in}
+{\fontsize{18}{22}\selectfont
+\begin{blist}
+  \item Vwap is the average price traded inside each minute bar, not its close: $\theta$ is its position in the bar (0 = previous close, 1 = close).
+  \item PI, with $\theta=1$: $\mathrm{day\_cov}\cdot M/\bar P \approx Q/2 - R\delta$. Auditor: $\approx(\theta-\tfrac12)\,Q - R\delta$, a non-linear liquidity trait that linear neutralisation cannot remove.
+\end{blist}}
+\gap{0.04in}
+{\notesize\color{sec}Slot E: 14 seeds in, 5 kept; 9 struck, four of them also fail $|\rho| \ge 0.5$. Slot N: 15 in, 12 kept; 3 struck. Rule: $|\rho| \ge 0.5$ with a control means the seed is that control written another way. The trend is the auditor's reading (rows mix two normalisations).\\
+Sources: research/coldstart\_C06/partura/s806/r1/ (corr\_1.md, audit\_1.yaml, audit\_record.json). Auditor's analysis, not a test.\par}
+\end{frame}
+
+% ================================================================== P4 Prototype: output (page 13)
+\begin{frame}{Output: what runs and how it is judged}
+\textfirst
+\fig{figs_v5/outflow.tex}
+\gap{0.16in}
+\key{No head passed the discovery bar} in this example round (arm C, seed 806, round 1).
+\gap{0.10in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.10}%
+\begin{tabular}{@{}L{1.70in}R{2.60in}R{1.60in}R{2.40in}R{2.00in}@{}}
+\toprule
+\thead{Slot} & \thead{Novelty / soundness} & \thead{Seeds kept} & \thead{Candidates scored} & \thead{Heads found} \\
+\midrule
+\textcolor{accent}{\lead{E}} & 3 / 3 & 5 & 77 & 0 \\
+\textcolor{accent}{\lead{N}} & 4 / 4 & 12 & 62 & 0 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.02in}
+{\fontsize{18}{22}\selectfont
+\begin{blist}\setlength\itemsep{9pt}
+  \item \lead{Discovery bar:} the worse of train and valid residual long-only Sharpe; 0.5 or more counts.
+  \item \lead{Later rounds did add heads:} seed 806's rounds 2 and 3 list four extra heads in \file{final.json} (c06s806Cr2a twice, Cr2b, Cr3a), all in arm C's library.
+  \item \lead{Judged on test:} fused per seed, read against A, the agent-free arm (page 14).
+\end{blist}}
+\gap{0.06in}
+{\notesize\color{sec}Arms A and B5 not shown. Sources: research/coldstart\_C06/final.json ('missions', 'extra\_heads'); scripts/c06\_final.py (header).\par}
+\end{frame}
+
+% ================================================================== 14 Verdict rule (page 14)
+\begin{frame}{Verdict rule, fixed before any run}
+\textfirst
+\lead{Primary:} per seed, each arm's heads are fused (equal-weight z-rank) into one residual book; its test net Sharpe is paired with A's on the same seed (8 pairs).
+\gap{0.18in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.30}%
+\begin{tabular}{@{}L{3.4in}L{8.05in}@{}}
+\toprule
+\thead{Verdict} & \thead{Condition (one-sided Wilcoxon signed-rank, $\alpha = 0.05$)} \\
+\midrule
+\textcolor{accent}{\lead{Partura is better}} & $p(B > A) < 0.05$ and median of $B - A$ above 0 \\
+\lead{Partura is worse} & $p(B < A) < 0.05$ and median of $B - A$ below 0 \\
+\lead{Cannot tell} & otherwise \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.18in}
+\lead{Valid head:} test-segment net excess $> 0$ and $t \ge 2.0$. Heads are de-duplicated greedily on residuals: a candidate with $\rho \ge 0.7$ or $\rho \le -0.5$ to a kept head is dropped.
+\gap{0.12in}
+{\notesize\color{sec}A is plain GP on the same seeds, with extra evaluations close to Partura's (C05: 4,371 for A, 4,891 for B). The test segment is read once per ledger; no run is repeated because its result looks bad.\\
+Reported, never in the verdict: forward 2026, B vs.\ B0, valid heads by arm and mission type. PLAN committed 2026-10-28 (ET), before any run; 14 dated revisions; RESULT §5: none changed a comparison rule.\\
+Sources: C05 RESULT header, §2, §5; C06 RESULT §3; scripts/c06\_final.py header (de-duplication).\par}
+\end{frame}
+
+% ================================================================== 15 Eight experiments (page 15)
+\begin{frame}{Eight experiments, one table}
+\textfirst
+\begingroup\fontsize{16}{16.5}\selectfont
+\renewcommand\arraystretch{1.00}%
+\begin{tabular}{@{}L{1.25in}L{4.85in}L{2.45in}L{2.55in}@{}}
+\toprule
+\thead{Experiment} & \thead{Design, one line} & \thead{Primary verdict} & \thead{Test-period key number} \\
+\midrule
+\lead{C01} & AlphaCube alone vs.\ with Partura's guidance files; 3 rounds, 8 seeds & \textcolor{accent}{Partura is worse} & valid heads: A 19, B 13 \\
+\lead{C02} & Partura v2: hypotheses tested directly, designed first population, GP refinement; 8 seeds & \textcolor{accent}{Partura is worse} & new valid heads: A 7, B 2 \\
+\lead{C03} & as C02, reward = residual on liquidity, volatility, reversal, known family; 16 seeds & Cannot tell & valid heads: A 0, B 0 \\
+\lead{C04} & both arms get daily fields; market cap added to the controls; long leg only; 16 seeds & Cannot tell & median B $-$ A $-$0.17\newline p(B worse) 0.11 \\
+\lead{C05} & main search untouched; Partura adds E, R, N missions; 8 seeds & Cannot tell & median B $-$ A +0.08\newline p(B better) 0.42 \\
+\lead{C06} & C05 + independent auditor scores every mission before it runs & Cannot tell & median C $-$ A +0.01\newline p(C better) 0.42 \\
+\lead{C07} & fixed yardstick; LLM only verifies GP heads; 8 seeds & \textcolor{accent}{Cannot tell (leans V)} & median V $-$ A +0.11\newline p 0.062 \\
+\lead{C08} & Partura generates missions under the fixed yardstick; permissive auditor; 8 seeds & \textcolor{accent}{running} & no result yet;\newline 46 of 48 slots passed audit \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.04in}
+{\notesize\color{sec}Sources: RESULT.md §1–§2 of research/coldstart\_C0x. C01, C02: valid heads (net excess $> 0$, $t \ge 2$); C02 uncorrelated only. C04–C07: fused-book test Sharpe, 16, 8, 8, 8 seed pairs; C07 five non-zero pairs.\\
+C08: audit\_record.json of 8 seeds $\times$ 3 rounds (2026-11-01); round 3 GP missions running on the servers; no RESULT file.\par}
+\end{frame}
+
+% ================================================================== 16 C05 headline and selection (page 16)
+\begin{frame}{C05: better in selection, not out of sample}
+\textfirst
+\lead{Primary verdict on the test segment:} \key{cannot tell}, as pre-registered.
+\gap{0.06in}
+\fig{figs_v5/selection.tex}
+\gap{0.10in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.05}%
+\begin{tabular}{@{}L{4.00in}L{3.30in}L{3.80in}@{}}
+\toprule
+\thead{Measure, B against A} & \thead{Test (verdict)} & \thead{Forward 2026 (report only)} \\
+\midrule
+Median difference, B $-$ A & +0.08 & $-$0.39 \\
+One-sided $p$ (B worse) & 0.63 & 0.039 \\
+Seeds where B is higher & 5 of 8 & 2 of 8 \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.03in}
+{\notesize\color{sec}Test 2023-08-08 to 2025-12-31; forward 2026 is 0.67 years and report only. One-sided $p$ (B better) on test is 0.42. Bars: fused residual-book Sharpe, mean of 8 seeds.\\
+Sources: C05 RESULT §1, §2, §4 (Partura chose its missions from train and valid output only).\par}
+\end{frame}
+
+% ================================================================== 17 C06 auditor calibration (page 17)
+\begin{frame}{C06: the auditor's rejects did better}
+\textfirst
+\lead{Verdict, C against A:} \key{cannot tell}, as pre-registered (median +0.01; $p$ 0.42). Same shape as C05: higher in selection (1.62 against 0.94), level on test (0.52 against 0.44).
+\gap{0.14in}
+\begingroup\secsize
+\renewcommand\arraystretch{1.25}%
+\begin{tabular}{@{}L{3.50in}L{1.70in}L{1.80in}L{1.90in}L{1.90in}@{}}
+\toprule
+\thead{Seeds, by auditor decision} & \thead{In-sample score} & \thead{Test mean} & \thead{Forward (report)} & \thead{Test above 0} \\
+\midrule
+Accepted: 469 seeds & −1.13 & −0.91 & −0.83 & 15\% \\
+Rejected: 162 seeds & −0.61 & −0.53 & −0.73 & 34\% \\
+{\notesize\color{sec}\quad of which struck (auditor or table), 138} & & {\notesize\color{sec}−0.59} & {\notesize\color{sec}−0.66} & \\
+{\notesize\color{sec}\quad of which dropped on rewrite, 24} & & {\notesize\color{sec}−0.19} & {\notesize\color{sec}−1.12} & \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.18in}
+Seed-round pairs (24): accepted better in 3; one-sided $p$ (accepted better) = 0.999.
+\gap{0.10in}
+Many rejected seeds were struck automatically: $|\rho| \ge 0.5$ with a control.
+\gap{0.12in}
+{\notesize\color{sec}Seeds are GP starting points, not finished factors, each read as its own factor (direction and half-life chosen on train).\\
+Sources: research/coldstart\_C06/RESULT.md §1, §2, §4, §5. Forward column: report only.\par}
+\end{frame}
+
+% ================================================================== 18 C07 headline (page 18)
+\begin{frame}{C07: fixed yardstick, LLM as verifier}
+\textfirst
+\lead{Primary verdict on the test segment:} \key{cannot tell}, as pre-registered.
+\gap{0.16in}
+\noindent\begin{minipage}[t]{6.30in}\begingroup\secsize
+\renewcommand\arraystretch{1.22}%
+\begin{tabular}{@{}L{2.55in}L{1.45in}L{1.90in}@{}}
+\toprule
+\thead{V\_tr against A} & \thead{Test (verdict)} & \thead{Forward (report)} \\
+\midrule
+Median V $-$ A & +0.11 & +0.25 \\
+One-sided $p$ (V better) & 0.062 & 0.031 \\
+Seeds V higher / lower & 4 / 1, 3 tied & 5 / 0 \\
+Fused book, A / V\_tr & $-$0.52 / $-$0.09 & $-$0.22 / +0.14 \\
+\bottomrule
+\end{tabular}\endgroup
+\end{minipage}\hfill
+\begin{minipage}[t]{5.00in}\begingroup\secsize
+\renewcommand\arraystretch{1.22}%
+\begin{tabular}{@{}L{1.70in}R{0.65in}R{1.05in}R{1.05in}@{}}
+\toprule
+\thead{Single heads} & \thead{Count} & \thead{Test mean} & \thead{Forward} \\
+\midrule
+Kept by V\_tr & 9 & $-$0.13 & +0.13 \\
+Dropped & 59 & \textcolor{accent}{+0.40} & +0.38 \\
+\bottomrule
+\end{tabular}\endgroup
+\end{minipage}
+\gap{0.14in}
+{\fontsize{18}{22}\selectfont Of 68 heads, V\_tr kept 9; judged one at a time, the kept ones \key{did worse}. Seed 807 kept none (book 0, against A's $-$0.22); seed 808 kept 1 of 37 (book +0.07, against $-$1.26).\par}
+\gap{0.08in}
+{\fontsize{18}{22}\selectfont \key{Hypothesis, not a test:} much of what C01–C06 kept may be non-linear exposure to the controls; equal-weight fusion of many heads may cancel their own signal and leave a shared exposure.\par}
+\gap{0.05in}
+{\notesize\color{sec}Design: rank, smooth, then non-linear neutralisation; M and A rerun without LLM; Opus 5.5 keeps or drops each head. Primary: V\_tr against A, 8 pairs, as C05. Candidates: 68, against about 200 in C05. Seventh read of the test segment. A verifier v2 written after this read (PLAN revision 1) is exploratory; output not reported.\\
+Sources: research/coldstart\_C07/RESULT.md §1–§4 (readings in §4 are RESULT's inferences); PLAN.md §2–§3.\par}
+\end{frame}
+
+% ================================================================== C08 status (added in v6; no result yet)
+\begin{frame}{C08: Partura proposes again, on the fixed yardstick}
+\textfirst
+\lead{Question:} with the same extra compute, do Partura's missions (P) give a better library than plain GP (A), now that the yardstick is fixed? \key{No result yet.}
+\gap{0.14in}
+\noindent\begin{minipage}[t]{7.30in}\begingroup\secsize
+\renewcommand\arraystretch{1.22}%
+\begin{tabular}{@{}L{0.95in}L{3.05in}R{1.05in}R{0.75in}R{0.95in}@{}}
+\toprule
+\thead{Round} & \thead{Flow} & \thead{Slots E / N} & \thead{Passed} & \thead{To plain GP} \\
+\midrule
+1 & full: anatomy, literature, PI and auditor Opus 5.5 (seed 808 lean) & 7 / 9 & 16 / 16 & 0 \\
+2 & lean: PI and auditor Sonnet, one audit & 9 / 7 & 15 / 16 & 1 \\
+3 & lean & 11 / 5 & 15 / 16 & 1 \\
+\midrule
+All & 8 seeds $\times$ 3 rounds & 27 / 21 & \key{46 / 48} & 2 \\
+\bottomrule
+\end{tabular}\endgroup
+\end{minipage}\hfill
+\begin{minipage}[t]{4.10in}\begingroup\fontsize{18}{22}\selectfont
+\lead{Seeds kept} after strikes: 476 of 592.\par\gap{0.06in}
+\lead{R groups} passed: 30 of 30.\par\gap{0.06in}
+\lead{Two slots failed:} one scored novelty 1, soundness 1 (seed 804, round 2); one kept 3 of 12 seeds after the $|\rho|$ strikes (seed 803, round 3).\par
+\endgroup\end{minipage}
+\gap{0.16in}
+{\fontsize{18}{22}\selectfont \lead{Still to run:} round 3 GP missions $\rightarrow$ in-sample dry run $\rightarrow$ one read of the test segment (its eighth read, a development set) $\rightarrow$ P against A, 8 pairs, one-sided Wilcoxon. Confirmation only on data after 2026-09-16.\par}
+\gap{0.05in}
+{\notesize\color{sec}Auditor rule: block only maths problems and plain duplicates; auto-strike a seed at $|\rho| \ge 0.7$ to a head or $\ge 0.8$ to a control. The strict shadow auditor (seeds 801, 803, 805, round 1) scored all six slots 3 or 4, so it would also have passed them. Rounds 2–3 went lean when the LLM quota ran low (PLAN revision 1); 803's round-3 finalisation and 808's round-3 plan and audit ran in a cloud session (revision 2).\\
+Sources: research/coldstart\_C08/PLAN.md §1–§3, revisions 1–2; partura/s80x/r1–r3/audit\_record.json; s801/s803/s805 r1 shadow.yaml.\par}
+\end{frame}
+
+% ================================================================== 19 Known limitations (page 19)
+\begin{frame}{Known limitations}
+\textfirst
+\begin{blist}
+  \item \lead{Test segment read seven times.} C01–C06 each read it; C07 is the seventh read. C08's PLAN calls it a development set, and confirmation waits for data after 2026-09-16.
+  \item \lead{Low power.} Eight seed pairs; the smallest one-sided $p$ is $1/256$. Forward 2026 is only 0.67 years.
+  \item \lead{Fixed information schedule.} Round $k$ sees M's first $k$ batches: not true asynchrony. Literature dates are spot-checked only.
+  \item \lead{Yardstick unchanged in C06.} The LLM auditor may over- or under-reject. C05's E reward counted the family in the controls, unlike its library rule (fixed in C06). The convex-transform leak stays until C07.
+  \item \lead{Survivorship; A-shares, long-only.} The store has no delisted names; T+1 and limit-up names cannot be bought. Both arms share this.
+\end{blist}
+\end{frame}
+
+% ================================================================== 20 What the evidence supports (page 20)
+\begin{frame}{What the evidence supports so far}
+\textfirst
+\begin{nlist}\setlength\itemsep{18pt}
+  \item \lead{No win on the primary metric.} Partura never beat plain GP on its pre-registered metric: two \key{worse} (C01, C02), five \key{cannot tell} (C03–C07). \key{C08} is running: 46 of 48 mission slots passed the permissive audit; no result yet.
+  \item \lead{The floor held in C05.} With the main search untouched, the fused test book was not worse than A: 0.44 for both.
+  \item \lead{One construction survived.} C04's feature, daily return scaled by limit width, came from Partura; 12 of its 14 GP descendants had positive net excess on test. Refinement reversed Partura's sign; the family's forward mean was 0.04.
+  \item \lead{Gatekeeping has not helped.} C06's auditor rejects did better out of sample. C07, with a fixed yardstick, is the \key{first} comparison to lean toward the LLM (median +0.11, p 0.062); its verifier only removed heads.
+\end{nlist}
+\gap{0.14in}
+{\notesize\color{sec}Cost, one line: LLM output tokens, C05 arm B 13.21 M; C06 arm C 16.91 M. M, A and B0 used no LLM tokens.\\
+Sources: C05 RESULT §2 and C06 RESULT §6 (token totals); C04 RESULT (feature and forward mean); C07 RESULT §1, §4.\par}
+\end{frame}
+
+\end{document}
