@@ -239,57 +239,44 @@
 \begin{blist}\setlength\itemsep{8pt}
   \item \lead{Budget:} 256 evaluations per seed per round in each arm. A: 2 GP runs $\times$ 128. P: 2 missions $\times$ 96, R $\le$ 16, locate $\le$ 48.
   \item \lead{Yardstick:} rank, smooth, 5 controls with squares and cubes; top decile, long-only, 15 bp.
-  \item \lead{Verdict:} P against A, 8 paired seeds, one-sided Wilcoxon, $\alpha$ 0.05; test read once.
+  \item \lead{Verdict:} P against A over 8 paired seeds, fixed before the run; test period read once.
 \end{blist}
-\src{Scored evaluations count candidates actually scored; they differ by 2\%. LLM tokens are a separate cost. Forward 2026: report only. Source: research/coldstart\_C08/PLAN.md §2–§3 (committed before any run); final.json.}
+\src{Scored evaluations count candidates actually scored; they differ by 2\%. LLM tokens are a separate cost. Test: one-sided Wilcoxon on the 8 pairs; forward 2026 is report only. Source: research/coldstart\_C08/PLAN.md §2–§3 (committed before any run); final.json.}
 \end{frame}
 
 % ================================================================== 11 Result
 \begin{frame}{C08: Partura's missions beat extra plain GP in 7 of 8 seeds}
 \textfirst
-\noindent\begin{minipage}[t]{3.60in}\vspace{0pt}
-{\secsize\color{sec}median P $-$ A, test segment}\par
-\bigmetric{+0.23}\par\vspace{0.02in}
-\body{one-sided $p$ = 0.012: \key{P is better}}
+\noindent\begin{minipage}[t]{3.40in}\vspace{0pt}\raggedright
+\bigmetric{7 / 8}\par\vspace{0.04in}
+\body{seeds won by Partura}
 \end{minipage}\hfill
-\begin{minipage}[t]{3.60in}\vspace{0pt}
-{\secsize\color{sec}mean fused book, A / P}\par
-\bigmetric{$-$0.33 / +0.16}\par\vspace{0.02in}
-\body{evaluations 4,438 / 4,525}
+\begin{minipage}[t]{3.40in}\vspace{0pt}\raggedright
+\bigmetric{+0.23}\par\vspace{0.04in}
+\body{median paired Sharpe gain}
 \end{minipage}\hfill
-\begin{minipage}[t]{3.60in}\vspace{0pt}
-{\secsize\color{sec}forward 2026, report only}\par
-\bigmetric{+0.54}\par\vspace{0.02in}
-\body{median, 7 of 8 seeds, $p$ = 0.020}
+\begin{minipage}[t]{4.00in}\vspace{0pt}\raggedright
+\bigmetric{$-$0.33 $\to$ +0.16}\par\vspace{0.04in}
+\body{mean fused-book Sharpe, A $\to$ P}
 \end{minipage}
-\gap{0.16in}
+\gap{0.20in}
 \fig{figs_final/seeds8.tex}
-\src{Fused residual-book net Sharpe on the test segment, per seed. 152 of 155 heads reproduce. Source: research/coldstart\_C08/RESULT.md §1–§2; final.json.}
+\src{Test segment 2023-08 to 2025-12, fused residual-book net Sharpe per seed. Pre-specified one-sided Wilcoxon: $p$ = 0.012. Forward 2026 (report only): 7 of 8 seeds, median +0.54. 152 of 155 heads reproduce. Source: research/coldstart\_C08/RESULT.md §1–§2; final.json.}
 \end{frame}
 
 % ================================================================== 12 Where it helped
 \begin{frame}{Where did the extra budget help?}
 \textfirst
 \fig{figs_final/cmp3.tex}
-\gap{0.30in}
-{\secsize\color{sec}\lead{804, 805:} extra GP added nothing; Partura's heads held. \enspace \lead{803, 806, 807:} GP's extra heads hurt the book; Partura's hurt less. \enspace \lead{P's median book:} +0.05.\par}
+\gap{0.26in}
 \takeaway{The observed edge is where extra search went, not a high-Sharpe alpha.}
-\src{C08 shows that the extra budget did better through Partura than through plain GP, not that Partura beats the base search. Seed-level readings are after the result, not tests.}
+\gap{0.14in}
+\body{\lead{Development evidence, not independent confirmation:} earlier iterations informed this design using the same test period.}
+\src{By seed: 804, 805 — extra GP added nothing, Partura's heads held; 803, 806, 807 — GP's extra heads hurt the book, Partura's less. P's median book +0.05. One-sided Wilcoxon: P $-$ A $p$ = 0.012, P $-$ M $p$ = 0.098. The 8 pairs are search runs on one market history.}
 \end{frame}
 
-% ================================================================== 13 How to read p
-\begin{frame}{How to read $p = 0.012$}
-\textfirst
-\fig{figs_final/reads.tex}
-\gap{0.34in}
-{\fontsize{20}{26}\selectfont\color{accent}\itshape C08 is the first design that produced a statistically significant paired improvement under its pre-specified within-study test. Because earlier designs repeatedly used the same test period, I treat it as a promising development result, not independent confirmation.\par}
-\gap{0.24in}
-{\secsize\color{sec}What would confirm it}\par\vspace{0.10in}
-\fig{figs_final/next.tex}
-\src{The 8 pairs measure run-to-run search noise on one market history, not 8 independent markets. 7 wins in 8 gives one-sided $p$ between 0.008 and 0.098, depending on the size of the one loss. Forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and was read before.}
-\end{frame}
 
-% ================================================================== 14 Takeaways
+% ================================================================== 13 Takeaways
 \begin{frame}{What the evidence supports}
 \textfirst
 \begin{nlist}\setlength\itemsep{20pt}
@@ -297,8 +284,11 @@
   \item \lead{Keep the LLM out of the main search.} When it steered GP directly (C01–C04), it never beat plain GP.
   \item \lead{Fix the referee before judging the agent.} A leaky yardstick rewarded the wrong things.
   \item \lead{Use the LLM as a critic.} It caught real errors; it failed at predictive gatekeeping.
-  \item \lead{Seven iterations, one promising development result.} Fresh data decides.
 \end{nlist}
+\gap{0.34in}
+{\mediumfont\fontsize{30}{36}\selectfont\color{accent}Seven iterations, one promising result. Fresh data decides.\par}
+\gap{0.14in}
+{\secsize\color{sec}Next: one read on data after 2026-09-16 \enspace·\enspace a random filter with the same head count \enspace·\enspace new seeds, one fixed flow\par}
 \end{frame}
 
 % ================================================================== Backup
@@ -348,6 +338,17 @@ heads M / A / P & 2/2/8 & 10/12/17 & 0/1/2 & 1/1/3 & 1/1/5 & 1/8/9 & 3/6/9 & 5/3
 \src{GPU seconds: A 26,294, P 24,421. Source: research/coldstart\_C08/final.json (per\_seed, evaluations, gpu\_seconds); partura/s80x/r1–r3/audit\_record.json.}
 \end{frame}
 
+% ================================================================== Backup statistics
+\begin{frame}{Backup: the test period was read eight times}
+\textfirst
+\fig{figs_final/reads.tex}
+\gap{0.34in}
+{\fontsize{20}{26}\selectfont\color{accent}\itshape C08 is the first design that produced a statistically significant paired improvement under its pre-specified within-study test. Because earlier designs repeatedly used the same test period, I treat it as a promising development result, not independent confirmation.\par}
+\gap{0.24in}
+{\secsize\color{sec}What would confirm it}\par\vspace{0.10in}
+\fig{figs_final/next.tex}
+\src{The 8 pairs measure run-to-run search noise on one market history, not 8 independent markets. 7 wins in 8 gives one-sided $p$ between 0.008 and 0.098, depending on the size of the one loss. Forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and was read before.}
+\end{frame}
 \begin{frame}{Backup: C08 heads, one by one}
 \textfirst
 \begingroup\secsize

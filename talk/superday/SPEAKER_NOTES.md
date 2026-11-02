@@ -1,4 +1,4 @@
-# Speaker notes · 讲稿(中英对照)— `final.tex`, 14 main pages, ~18 min
+# Speaker notes · 讲稿(中英对照)— `final.tex`, 13 main pages, ~16.5 min
 
 Each page: target time, what is on the slide, then the **English script** (what to say) and **中文** (same content, for
 preparation). The figures carry short labels; the explanation is in the script. Backup pages are for Q&A only — see
@@ -12,10 +12,10 @@ preparation). The figures carry short labels; the explanation is in the script. 
 ## P1 · Title / 标题 (0:20)
 
 **EN.** I'm going to talk about Partura, an LLM research team that steers a symbolic alpha miner. The short version: seven
-iterations, one promising result — and I'll be precise about what "promising" means.
+iterations, and one promising result — and what it took to get there.
 
-**中文.** 今天讲 Partura:一个 LLM 研究团队,去引导一个符号化的因子挖掘器。一句话:七次迭代,一个有希望的结果 —— 我会讲清楚
-「有希望」具体指什么。
+**中文.** 今天讲 Partura:一个 LLM 研究团队,去引导一个符号化的因子挖掘器。一句话:七次迭代,一个有希望的结果 —— 以及走到这一步
+靠的是什么。
 
 ---
 
@@ -190,7 +190,7 @@ any round can be replayed.**
 
 ---
 
-## P10 · Comparable extra budget, rules fixed before the run / 可比的额外预算,规则事先定死 (1:10)
+## P10 · Comparable extra budget, rules fixed before the run / 可比的额外预算,规则事先定死 (1:00)
 
 *On the slide:* bars of scored evaluations — M 4,272 (shared), A 4,438, P 4,525 — and GPU seconds; three rules.
 
@@ -198,114 +198,107 @@ any round can be replayed.**
 
 **EN.** The budget is matched by design: each arm gets 256 evaluations per seed per round. A spends them as two GP runs of 128;
 P as two missions of 96, up to 16 direct R evaluations and up to 48 for the locate tool. The scored counts differ by two
-percent, and Partura used less GPU time. The yardstick and the verdict were committed before any C08 run: P against A,
-eight paired seeds, one-sided Wilcoxon at five percent, test read once.
+percent, and Partura used less GPU time. The yardstick and the comparison — P against A over eight paired seeds — were fixed
+before any C08 run, and the test period is read once.
 
 **中文.** 预算按设计匹配:每组每个种子每轮 256 次评估。A 花在两次 128 的 GP 上;P 花在两个 96 的任务、至多 16 次 R 直接评估和至多
-48 次定位评估上。实际打分次数相差 2%,Partura 的 GPU 时间反而更少。尺子和判定在 C08 任何运行之前提交:P 对 A,8 对种子,单侧
-Wilcoxon,5%,测试段只读一次。
+48 次定位评估上。实际打分次数相差 2%,Partura 的 GPU 时间反而更少。尺子和比较方式(P 对 A,8 对种子)在 C08 任何运行之前就定好,
+测试段只读一次。
 
 ---
 
 ## P11 · Result / 结果 (1:30)
 
-*On the slide:* three headline numbers; per-seed bars, A outlined and P tinted, P − A under each seed.
+*On the slide:* three numbers — 7 / 8 seeds, median paired Sharpe gain +0.23, mean fused-book Sharpe −0.33 → +0.16 — and the
+per-seed bars (A outlined, P tinted). p and the forward period are in the footnote; do not read them out.
 
-*页面上:* 三个主数字;逐种子柱状图(A 空心、P 浅蓝),每个种子下面写 P − A。
+*页面上:* 三个数字 —— 8 个种子赢 7 个、配对夏普增益中位数 +0.23、融合书均值 −0.33 → +0.16 —— 以及逐种子柱状图(A 空心、P 浅蓝)。
+p 值和前推段在脚注里,不用念。
 
-**EN.** And this is the result. Partura's missions beat the same extra budget spent on plain GP in **seven of eight seeds**:
-**median paired difference +0.23, one-sided p = 0.012**. The mean fused book goes from −0.33 to +0.16, and the 2026 forward
-period points the same way. Look at where the gaps are: the big ones are seeds where plain GP's book fell to about −1, while
-Partura's stayed near zero or above.
+**EN.** And this is the result, in three numbers. Partura's missions beat the same extra budget spent on plain GP in **seven of
+eight seeds**. The **median paired gain is +0.23 Sharpe**. And the **mean fused book goes from −0.33 to +0.16**. Look at where
+the gaps come from: the big ones are seeds where plain GP's book fell to about −1, while Partura's stayed near zero or above.
+The 2026 forward period points the same way.
 
-**中文.** 这是结果。在**8 个种子里有 7 个**,Partura 的任务胜过把同样额外预算花在普通 GP 上:**配对差中位数 +0.23,单侧 p =
-0.012**。融合书均值从 −0.33 到 +0.16;2026 前推段方向相同。大的差距出现在普通 GP 的组合跌到 −1 左右、而 Partura 停在 0 附近或以上
-的种子。
-
----
-
-## P12 · Where did the extra budget help? / 额外预算在哪里起了作用 (1:50)
-
-*On the slide:* three rows — P − A, P − M, A − M — with the median, wins and losses, p, and what each comparison means; one
-line on the seed-level pattern.
-
-*页面上:* 三行(P − A、P − M、A − M):中位差、胜负、p 值、各自的含义;一行逐种子的情形。
-
-**EN.** Three comparisons, one per row. **P against A: +0.23, seven wins one loss, p = 0.012** — the pre-specified test, and
-significant. P against M — Partura against no extra search at all: +0.24, but p = 0.098, not significant. A against M — extra
-plain GP against none: zero, no clear gain. So what C08 shows is that **the extra budget did better in Partura's hands than in
-GP's**, not that Partura beats the base search. Seed by seed: where extra GP found nothing new, 804 and 805, Partura's heads
-held; where GP's extra heads hurt the book, 803, 806 and 807, Partura's hurt less. P's median book is only +0.05. **The observed
-edge is where extra search went, not a high-Sharpe alpha** — consistent with "search is cheap, belief is expensive".
-
-**中文.** 三个比较,一行一个。**P 对 A:+0.23,7 胜 1 负,p = 0.012** —— 事先约定的检验,显著。P 对 M(Partura 对比完全不加额外
-搜索):+0.24,但 p = 0.098,不显著。A 对 M(额外普通 GP 对比不加):0,没有明确改善。所以 C08 说明的是**额外预算交给 Partura 比交给
-GP 好**,不是 Partura 胜过基础搜索。逐种子看:额外 GP 什么也没加的种子(804、805),Partura 的 head 站住了;GP 的额外 head 拖累组合
-的种子(803、806、807),Partura 拖累更小。P 的组合中位数只有 +0.05。**观察到的优势在额外搜索去了哪里,而不是高夏普因子** —— 与
-「搜索便宜、信念昂贵」一致。
+**中文.** 这是结果,三个数字。在**8 个种子里有 7 个**,Partura 的任务胜过把同样额外预算花在普通 GP 上;**配对夏普增益的中位数是
++0.23**;**融合书均值从 −0.33 到 +0.16**。看差距从哪来:大的差距出现在普通 GP 的组合跌到 −1 左右、而 Partura 停在 0 附近或以上的
+种子。2026 年前推段方向相同。
 
 ---
 
-## P13 · How to read p = 0.012 / 怎么理解 p = 0.012 (1:40)
+## P12 · Where did the extra budget help? / 额外预算在哪里起了作用 (2:00)
 
-*On the slide:* the test segment with eight reads (C01–C08) and, dashed, fresh data after 2026-09-16; the statement; four dashed
-boxes for the confirming tests.
+*On the slide:* three rows — P − A, P − M, A − M — with the median, wins and losses, and what each says; the takeaway; one
+line on the evidence status. p values are only in the footnote.
 
-*页面上:* 测试段被读了 8 次(C01–C08),虚线框是 2026-09-16 之后的新数据;统一口径那句话;四个虚线框是能确认结果的检验。
+*页面上:* 三行(P − A、P − M、A − M):中位差、胜负、各自的含义;结论句;一行证据定位。p 值只在脚注里。
 
-**EN.** Now the honest part. The same test segment was read by every study, and C08's is the eighth read — the earlier reads
-shaped its design. So: *C08 is the first design that produced a statistically significant paired improvement under its
-pre-specified within-study test. However, because earlier designs repeatedly used the same test period, I treat this as a
-promising development result rather than independent confirmation.* One more caveat: **the eight seed pairs measure uncertainty
-from stochastic search runs, but they are not eight independent market histories.** Four things would confirm it, shown dashed
-because they are planned: one read on fresh data after September 2026, a random filter with the same number of heads, new seeds
-with one fixed flow, and GPU and tokens on one ledger.
+**EN.** Three benchmarks, one per row. **Against extra plain GP, Partura is ahead: +0.23, seven wins and one loss.** Against
+no extra search at all, Partura is also positive, +0.24, but five wins and three losses — **the evidence there is still
+insufficient.** And extra plain GP against no extra search: zero, no clear gain. So what C08 shows is that the extra budget did
+better in Partura's hands than in GP's — not yet that Partura beats the base search. Seed by seed, where extra GP found nothing
+new, Partura's heads held, and where GP's extra heads hurt the book, Partura's hurt less. **The observed edge is where extra
+search went, not a high-Sharpe alpha.**
 
-**中文.** 下面是诚实的部分。同一个测试段被每个研究都读过,C08 是第 8 次,之前的读数影响了它的设计。所以:*C08 是第一个在事先约定
-的研究内检验下得到显著配对改进的设计。但因为之前的设计反复使用了同一个测试期,我把它当作有希望的开发期结果,而不是独立确认。*
-还有一点:**8 对种子衡量的是随机搜索运行之间的不确定性,不是 8 段独立的市场历史。** 有四件事能确认它(虚线表示还没做):在 2026 年
-9 月之后的新数据上读一次;同样 head 数的随机筛选对照;固定流程的新种子;GPU 和 token 记在同一本账上。
+Then, briefly, and only here: **this is development evidence, not independent confirmation. The statistical evidence is
+modest — eight seed pairs on one market history, and earlier iterations informed this design using the same test period.**
+
+**中文.** 三个基准,一行一个。**对比额外的普通 GP,Partura 领先:+0.23,7 胜 1 负。** 对比完全不加额外搜索,Partura 也为正(+0.24),
+但 5 胜 3 负 —— **这方面的证据还不足。** 额外普通 GP 对比不加:0,没有明确改善。所以 C08 说明的是额外预算交给 Partura 比交给 GP
+好 —— 还不能说 Partura 胜过基础搜索。逐种子看:额外 GP 什么也没加的种子,Partura 的 head 站住了;GP 的额外 head 拖累组合的种子,
+Partura 拖累更小。**观察到的优势在额外搜索去了哪里,而不是高夏普因子。**
+
+然后,简短地、只在这里说一次:**这是开发期证据,不是独立确认。统计证据并不强 —— 只有一段市场历史上的 8 对种子,而且之前的迭代
+用同一个测试期影响过这个设计。**
 
 ---
 
-## P14 · What the evidence supports / 结论 (1:00)
+## P13 · What the evidence supports / 结论 (1:00)
 
-**EN.** Five takeaways. Search is cheap, belief is expensive: in C08 the gain came from where extra search went, not from one
-strong factor. Keep the LLM out of the main search. Fix the referee before judging the agent. Use the LLM as a critic — it
-caught real errors, but it failed at predictive gatekeeping. And: seven iterations, one promising development result; fresh
-data decides. Thank you.
+*On the slide:* four takeaways; then, large, "Seven iterations, one promising result. Fresh data decides."; one line on the
+next tests.
 
-**中文.** 五条结论。搜索便宜、信念昂贵:C08 的收益来自额外搜索去了哪里,而不是某一个强因子。不让 LLM 进主搜索。先修好裁判,再评判
-agent。把 LLM 当批评者 —— 它抓到了真实的错误,但在预测性把关上失败了。七次迭代,一个有希望的开发期结果;新数据说了算。谢谢。
+*页面上:* 四条结论;下面大字「七次迭代,一个有希望的结果。新数据说了算。」;一行下一步的检验。
+
+**EN.** Four takeaways. Search is cheap and belief is expensive — in C08 the gain came from where extra search went, not from
+one strong factor. Keep the LLM out of the main search. Fix the referee before judging the agent. And use the LLM as a critic:
+it caught real errors, but it failed at predictive gatekeeping. Next comes one read on data after September 2026, a random
+filter with the same number of heads, and new seeds. Seven iterations, one promising result. **Fresh data decides.** Thank you.
+
+**中文.** 四条结论。搜索便宜、信念昂贵 —— C08 的收益来自额外搜索去了哪里,而不是某一个强因子。不让 LLM 进主搜索。先修好裁判,
+再评判 agent。把 LLM 当批评者:它抓到了真实的错误,但在预测性把关上失败了。下一步是在 2026 年 9 月之后的数据上读一次、同样 head
+数的随机筛选对照、新种子。七次迭代,一个有希望的结果。**新数据说了算。** 谢谢。
 
 ---
 
 ## Timing check / 时间核对
 
-0:20 + 1:10 + 1:50 + 0:50 + 1:00 + 1:20 + 1:00 + 2:00 + 1:20 + 1:10 + 1:30 + 1:50 + 1:40 + 1:00 = **18:00**, leaving about
-2 minutes. If running long, shorten P4 (one sentence), P7 (only the C01–C04 line) and P9 (Input → Output only).
+0:20 + 1:10 + 1:50 + 0:50 + 1:00 + 1:20 + 1:00 + 2:00 + 1:20 + 1:00 + 1:30 + 2:00 + 1:00 = **16:20**, leaving about
+3.5 minutes. If running long, shorten P4 (one sentence), P7 (only the C01–C04 line) and P9 (Input → Output only).
 
-合计约 18 分钟,留约 2 分钟余量。超时就压缩 P4(一句话)、P7(只讲 C01–C04 那句)和 P9(只讲输入和输出)。
+合计约 16 分 20 秒,留约 3.5 分钟余量。超时就压缩 P4(一句话)、P7(只讲 C01–C04 那句)和 P9(只讲输入和输出)。
+
+## If someone asks about the p-value / 被问到 p 值时
+
+Go to the backup page "the test period was read eight times" and say: *C08 is the first design that produced a statistically
+significant paired improvement under its pre-specified within-study test (one-sided p = 0.012). Because earlier designs
+repeatedly used the same test period, I treat it as a promising development result rather than independent confirmation.*
+Details in `QA.md` §H.
+
+翻到备用页「the test period was read eight times」,说:*C08 是第一个在事先约定的研究内检验下得到显著配对改进的设计(单侧
+p = 0.012)。但因为之前的设计反复使用了同一个测试期,我把它当作有希望的开发期结果,而不是独立确认。* 细节见 `QA.md` §H。
 
 ## What changed from the previous version / 与上一版相比
 
-- P2: M feeds each library through its own arrow; "held equal" became "same … / comparable GP budgets".
-- P3: ring kept; the cost-scaling chart is back on the same page; "0 LLM tokens" (GPU is not free); takeaway is the chain
-  belief → evaluations → evidence → revised belief.
-- P6 is new: who decides what.
-- P8: the middle column is "diagnosis, after the read"; the takeaway names the VWAP error.
-- P9: test values only exist after the final read.
-- P10: nominal budget 256 per seed per round in each arm.
-- P12: three rows instead of a triangle; direction is P against A.
-- P13: seed pairs are not independent markets.
-- P14: softer wording ("failed at predictive gatekeeping", "promising development result").
+- The p-value page left the main deck (now the backup "the test period was read eight times"); its caveat is one line on P12,
+  and its next steps are one line on P13.
+- P11 leads with three numbers — 7 / 8 seeds, +0.23, −0.33 → +0.16; p and forward are in the footnote.
+- P12 shows wins and losses, not p; P − M is "evidence still insufficient"; the bottom line states development evidence.
+- P10's rule bullet no longer shows α; the test name is in the footnote.
+- The script reads no p-value anywhere; the statistical caveat is said once, at the end of P12.
 
-- P2:M 用两条独立箭头进入两个库;「保持相同」改为「相同… / GP 预算可比」。
-- P3:保留环图,成本增长图回到同一页;「0 个 LLM token」(GPU 不是免费的);结论改为 信念 → 评估 → 证据 → 修正信念 的链条。
-- P6 新增:谁决定什么。
-- P8:中间一列改为「读后的诊断」;结论句点名 VWAP 错误。
-- P9:测试段数值只在最终判读后才存在。
-- P10:名义预算每组每种子每轮 256。
-- P12:三角形改为三行;方向是 P 对 A。
-- P13:种子对不是独立的市场。
-- P14:措辞更稳(「预测性把关失败」「有希望的开发期结果」)。
+- p 值那一页移出主讲(现为备用页);它的局限说明变成 P12 的一行,下一步变成 P13 的一行。
+- P11 先讲三个数字(8 个赢 7 个、+0.23、−0.33 → +0.16);p 值和前推段放进脚注。
+- P12 只写胜负、不写 p;P − M 写「证据还不足」;底部一行写明是开发期证据。
+- P10 的规则不再写 α,检验方法放进脚注。
+- 讲稿全程不念 p 值;统计上的保留只在 P12 末尾说一次。

@@ -32,10 +32,11 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
   formulas over a minute-level cube of A-share data at zero token cost. Partura reads what the miner found, forms beliefs about
   where the alpha comes from, and turns them into missions that redirect the miner's extra budget. I ran eight pre-registered
   experiments, each comparing Partura against giving the same extra budget to plain GP. The first seven were worse or
-  inconclusive; the eighth beat plain GP in 7 of 8 seeds, p = 0.012, on a development set.
+  inconclusive; the eighth beat plain GP in 7 of 8 seeds, median +0.23 Sharpe — development evidence, still to be confirmed
+  on fresh data.
 - **A-中:** 围绕遗传规划挖掘器 AlphaCube 的 LLM 研究团队。挖掘器零 token 在分钟数据立方体上搜公式;Partura 读它的产出、形成
   「alpha 从哪来」的信念、派任务改变额外预算的去向。八个事先约定的实验都和「同样额外预算给普通 GP」比;前七次更差或分不出,
-  第八次 8 胜 7、p = 0.012(开发集)。
+  第八次 8 个种子赢 7 个、中位 +0.23(开发期证据,待新数据确认)。
 
 **A2. Q: What is the main claim, precisely? / 你的主张具体是什么?**
 - **A-EN:** That spending a fixed extra search budget through Partura's missions produced a better out-of-sample library than
