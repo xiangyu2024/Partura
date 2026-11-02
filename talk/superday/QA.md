@@ -47,9 +47,9 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
 
 **A3. Q: Why does "alpha found" not prove the LLM helped? / 为什么「找到 alpha」不能证明 LLM 有用?**
 - **A-EN:** Because a capable searcher with the same data and compute might find the same or better. Attribution needs a
-  counterfactual: same engine, same seeds, same paid evaluations, with and without the agent, judged on data the agent never
-  saw. Every study used that design.
-- **A-中:** 同样数据和算力的搜索器也可能找到。归因需要反事实:同引擎、同种子、同评估次数,有无 agent 对比,在 agent 没见过的
+  counterfactual: same engine, same seeds, comparable paid evaluations (nominally equal by design), with and without the agent,
+  judged on data the agent never saw. Every study used that design.
+- **A-中:** 同样数据和算力的搜索器也可能找到。归因需要反事实:同引擎、同种子、可比的评估次数(按设计名义相等),有无 agent 对比,在 agent 没见过的
   数据上判读。
 
 **A4. Q: What does "search is cheap, belief is expensive" mean operationally? / 「搜索便宜、信念昂贵」落到操作上是什么?**
@@ -261,8 +261,10 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
 
 **D10. Q: Why seeds as the unit of replication? / 为什么以种子为重复单位?**
 - **A-EN:** GP is stochastic; the variance of a whole research run across seeds is the noise we must beat. Pairing A and P on
-  the same seed and the same main search M removes the shared part of that noise.
-- **A-中:** GP 是随机的,整个研究流程在种子间的方差就是要战胜的噪声;同种子、同 M 配对消掉共有部分。
+  the same seed and the same main search M removes the shared part of that noise. Note what the pairs are not: they measure
+  run-to-run search noise on one market history, not eight independent markets or periods.
+- **A-中:** GP 是随机的,整个研究流程在种子间的方差就是要战胜的噪声;同种子、同 M 配对消掉共有部分。注意:8 对衡量的是同一段
+  市场历史上搜索运行之间的噪声,不是 8 个独立的市场或时期。
 
 **D11. Q: Why 8 seeds? / 为什么 8 个种子?**
 - **A-EN:** Compute: each seed is a full three-round study with LLM calls. With 8 pairs the smallest attainable one-sided
@@ -315,10 +317,11 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
 
 **E5. Q: Why is the main search untouched? / 为什么主搜索不让碰?**
 - **A-EN:** C01–C04: when the LLM steered GP inside a fixed budget, its mistakes crowded out exploration — e.g. in C04 its ban
-  removed the family that later held on test (discoveries 53 vs 173). Keeping M untouched guarantees a floor: P's library
-  always contains M's heads.
+  removed the family that later held on test (discoveries 53 vs 173). Keeping M untouched keeps M's discoveries in P's library.
+  It does not guarantee the fused book is no worse — fusion can dilute, and in C08 P's book was below M's in three seeds — but it
+  removes the C01–C04 failure of crowding out search.
 - **A-中:** C01–C04 里 LLM 在固定预算内指挥 GP,错误挤掉探索(C04 的禁令删掉了后来在测试段站住的那一族,发现 53 对 173);
-  M 不动等于保底。
+  M 不动让 M 的发现始终在 P 的库里,但不保证融合后的组合不更差(C08 里有 3 个种子 P 低于 M);它消除的是「挤掉探索」这个失败。
 
 **E6. Q: What does the auditor do in C08? / C08 里审计员做什么?**
 - **A-EN:** It sees only the plan, a correlation table computed by code, the locate output and earlier rounds' finals — not the
@@ -432,9 +435,11 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
   —— 同样的信息,LLM 挑得比死规则差。
 
 **F11. Q: What did C05 get right? / C05 做对了什么?**
-- **A-EN:** The floor held: with M untouched, Partura's book was not worse than A's on test (0.44 vs 0.44). That architecture is
-  kept in C08.
-- **A-中:** 保底成立:M 不动时 Partura 的组合不比 A 差;这个架构保留到 C08。
+- **A-EN:** It kept M's discoveries available: with M untouched, Partura's test book tied A's (0.44 vs 0.44). That is not a
+  guarantee — fusion can dilute, and in C08 P's book was below M's in three seeds — but it removed the C01–C04 problem of the
+  LLM crowding out search. That architecture is kept in C08.
+- **A-中:** M 不动让 M 的发现始终可用:C05 测试段 Partura 与 A 打平(0.44 对 0.44)。这不是保底保证(融合会稀释;C08 有 3 个种子
+  P 低于 M),但消除了 C01–C04「LLM 挤掉探索」的问题;这个架构保留到 C08。
 
 **F12. Q: C06 design and result? / C06 设计与结果?**
 - **A-EN:** C05 plus an independent auditor (Opus 5.5) scoring novelty and soundness 1–5 before any mission ran; seeds struck
@@ -501,9 +506,11 @@ engineering, and adversarial follow-ups. Numbers come from each study's PLAN/RES
   按同样提示和读取限制完成;在结果之前记录。
 
 **G5. Q: Is the budget really matched? / 预算真的匹配吗?**
-- **A-EN:** Scored evaluations: A 4,438, P 4,525 (+2%), including P's direct R and locate evaluations. GPU seconds: A 26,294,
-  P 24,421. LLM tokens are not matched — A has none — and are reported separately.
-- **A-中:** 评估次数 A 4,438、P 4,525(+2%,含 R 与定位);GPU 秒 A 26,294、P 24,421;token 不匹配(A 没有),单独报告。
+- **A-EN:** By design, yes: each arm gets 256 evaluations per seed per round — A as two GP runs of 128, P as two missions of 96
+  plus up to 16 direct R evaluations and up to 48 locate evaluations. Actually scored: A 4,438, P 4,525 (+2%), so "comparable",
+  not identical. GPU seconds: A 26,294, P 24,421. LLM tokens are not matched — A has none — and are reported separately.
+- **A-中:** 按设计是:每组每种子每轮 256 次 —— A 是两次 128 的 GP,P 是两个 96 的任务 + 至多 16 次 R + 至多 48 次定位。实际打分
+  A 4,438、P 4,525(+2%),所以是「可比」而非完全相同;GPU 秒 A 26,294、P 24,421;token 不匹配(A 没有),单独报告。
 
 **G6. Q: The headline result? / 主结果?**
 - **A-EN:** **P better, median +0.23, p = 0.012, 7 wins 1 loss** (802, −0.12). Mean fused-book test Sharpe A −0.33, P +0.16.

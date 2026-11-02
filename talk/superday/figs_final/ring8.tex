@@ -1,6 +1,6 @@
-% P3: two speeds, two directions (after the v5 loop figure, updated to C08).  Outer slow ring = one round:
-% code reads M, the LLM forms beliefs, writes missions and audits them, GP runs them, heads join the library.
-% Inner fast ring = GP evaluations at 0 tokens.  Token split by role: illustrative.
+% P3: two speeds, two directions (after the v5 loop figure, updated to C08), plus the cost argument at the right.
+% Outer slow ring = one round; inner fast ring = GP evaluations at 0 LLM tokens (GPU time is not zero).
+% Right: cumulative LLM tokens over rounds, per design -- shapes illustrative, not measured.
 \begin{tikzpicture}[grid]
   \def\R{1.80}
   \begin{scope}[shift={(3.52,-1.98)}]
@@ -9,7 +9,7 @@
           mark=at position 0.70 with {\arrow{Stealth[length=6pt,width=5pt]}}}]
       (90:0.78) arc[start angle=90, end angle=-270, radius=0.78];
     \foreach \a in {0,4,...,356} { \draw[sec] (\a:0.78) -- (\a:0.85); }
-    \node[align=center, font=\notesize, inner sep=0] at (0,0) {{\mediumfont GP}\\0 tokens};
+    \node[align=center, font=\notesize, inner sep=0] at (0,0) {{\mediumfont GP}\\0 LLM\\tokens};
     \tikzset{ring/.style={minimum width=1.22in, text width=1.14in, minimum height=0.58in}}
     \node[cb, box, ring, fill=white] (rd) at (120:\R) {read M,\\locate};
     \node[lb, box, ring, t10] (fb) at (60:\R) {form\\beliefs};
@@ -24,25 +24,22 @@
     \draw[arr]  (rm) to[bend left=22] (al);
     \draw[arr]  (al) to[bend left=22] (rd);
     \draw[guide, draw=sec] (rm.north east) -- (-95:0.90);
-    % the two directions
     \node[labl, anchor=west] at (-22:2.12) {belief $\to$ search};
     \node[lab, anchor=east] at (152:2.30) {search $\to$ belief};
   \end{scope}
-  % ---- legend and token meter (right)
-  \def\mx{7.55}
-  \draw[arrl] (\mx,-0.20) -- (\mx+0.34,-0.20);
-  \node[anni, anchor=west] at (\mx+0.45,-0.20) {outer ring: one lap = one round};
-  \foreach \i in {0,...,7} { \draw[sec] (\mx+0.03+\i*0.045,-0.56) -- ++(0,0.10); }
-  \node[anni, anchor=west] at (\mx+0.45,-0.51) {inner ring: one tick = one GP evaluation};
-  \node[ann, anchor=west] at (\mx,-1.02) {LLM tokens per round, by step \enspace\itshape illustrative};
-  \draw[accent, t10] (\mx,-1.24) rectangle (\mx+0.38,-2.02);
-  \draw[accent, t20] (\mx,-2.02) rectangle (\mx+0.38,-2.80);
-  \draw[accent, t35] (\mx,-2.80) rectangle (\mx+0.38,-3.40);
-  \foreach \y/\a/\w in {-1.63/{form beliefs}/{anatomist, librarian: round 1},
-                        -2.41/{write missions}/{PI},
-                        -3.10/{audit}/{auditor: maths, duplicates}} {
-    \node[anchor=west, align=left, inner sep=0, font=\nodesize] at (\mx+0.55,\y) {\a\\[-1pt]{\notesize\color{sec}\w}};
-  }
-  \draw[ink] (\mx-0.10,-3.40) -- (\mx+0.48,-3.40);
-  \node[anchor=west, inner sep=0, font=\nodesize] at (\mx,-3.78) {run missions: {\mediumfont 0 tokens}};
+  % ---- right: legend, then the cost argument
+  \def\mx{7.40}
+  \draw[arrl] (\mx,-0.12) -- (\mx+0.34,-0.12);
+  \node[anni, anchor=west] at (\mx+0.45,-0.12) {outer ring: one lap = one round};
+  \foreach \i in {0,...,7} { \draw[sec] (\mx+0.03+\i*0.045,-0.46) -- ++(0,0.10); }
+  \node[anni, anchor=west] at (\mx+0.45,-0.41) {inner ring: one tick = one GP evaluation};
+  \def\Y{-3.55}
+  \node[ann, anchor=south west] at (\mx,-1.02) {LLM tokens, cumulative \enspace\itshape illustrative};
+  \draw[->, ink] (\mx,\Y) -- (11.55,\Y);
+  \draw[->, ink] (\mx,\Y) -- (\mx,-1.05);
+  \foreach \x/\l in {8.09/R1, 9.47/R2, 10.85/R3} { \node[ann, anchor=north] at (\x,\Y-0.04) {\l}; }
+  \draw[ink] (\mx,\Y) -- (8.35,-1.15);
+  \node[anchor=north west, align=left, inner sep=0, font=\nodesize] at (8.52,-1.13) {LLM writes each formula\\[-1pt]{\notesize\color{sec}tokens grow with candidates}};
+  \draw[accent, line width=1.4pt] (\mx,\Y) -- (\mx,-3.22) -- (8.78,-3.22) -- (8.78,-2.89) -- (10.16,-2.89) -- (10.16,-2.56) -- (11.40,-2.56);
+  \node[anchor=south east, align=right, inner sep=0, font=\nodesize] at (11.40,-2.47) {{\color{accent}\mediumfont Partura}\\[-1pt]{\notesize\color{sec}tokens grow with rounds}};
 \end{tikzpicture}

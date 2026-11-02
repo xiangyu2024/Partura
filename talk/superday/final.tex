@@ -152,17 +152,18 @@
 \gap{0.30in}
 \fig{figs_final/bench.tex}
 \gap{0.22in}
+\body{\lead{Same:} data, operators, GP engine, seeds. \enspace\lead{Comparable:} GP budgets, 4,438 vs 4,525 evaluations.}
 \takeaway{The baseline is a capable searcher, not “no research”.}
-\src{8 paired seeds. C08: 4,438 scored evaluations for A, 4,525 for P.}
+\src{8 paired seeds. The budget accounting is on page 10.}
 \end{frame}
 
 % ================================================================== 3 Search is cheap
 \begin{frame}{Search is cheap; belief is expensive}
 \textfirst
 \fig{figs_final/ring8.tex}
-\gap{0.06in}
-\takeaway{Tokens buy beliefs that redirect thousands of cheap evaluations, not candidates.}
-\src{Every score is computed in code; no role grades its own work. Token split by step is illustrative.}
+\gap{0.12in}
+\takeaway{One belief $\to$ many GP evaluations $\to$ evidence $\to$ a revised belief.}
+\src{“Cheap” means no LLM tokens; GP still costs GPU time (C08: 24,000–26,000 GPU seconds per arm). Every score is computed in code; no role grades its own work.}
 \end{frame}
 
 % ================================================================== 4 Task
@@ -180,7 +181,30 @@
 \src{Partura cannot ban, reweight or edit M. Per round: two GP slots of 96 evaluations, up to 16 R variants. Schematic.}
 \end{frame}
 
-% ================================================================== 6 Why
+% ================================================================== 6 Roles
+\begin{frame}{Who decides what: agents only at decision points}
+\textfirst
+\begingroup\secsize
+\renewcommand\arraystretch{1.38}%
+\begin{tabular}{@{}L{3.30in}L{3.30in}L{4.50in}@{}}
+\toprule
+\thead{Decision} & \thead{Who} & \thead{What it adds; what it may not do} \\
+\midrule
+\lead{Where is the structure?} & locate tool (code); anatomist, round 1 & turns heads and ablations into leads \\
+\lead{Which mechanism?} & PI; librarian, round 1 & a falsifiable claim; papers before 2023-08-08 \\
+\lead{Where to search next?} & PI & E, R, N missions with seeds \\
+\lead{Is the plan broken?} & auditor & blocks maths errors and duplicates; does not predict returns \\
+\lead{Is the plan admissible?} & checker + code & operators, formats, literature dates \\
+\lead{Did it work?} & code only & no agent scores its own work \\
+\bottomrule
+\end{tabular}
+\endgroup
+\gap{0.18in}
+\takeaway{Each role exists for one decision; more agents is not better.}
+\src{C08 rounds 2–3 dropped the anatomist and librarian to save cost. Round and flow are confounded, so this is not evidence that fewer agents work better. Models: PI and auditor Opus 5.5 in round 1, Sonnet in rounds 2–3; anatomist Opus 5; librarian Sonnet 5; checker Haiku 5.5.}
+\end{frame}
+
+% ================================================================== 7 Why
 \begin{frame}{Why the final design looks like this}
 \textfirst
 \fig{figs_final/evo.tex}
@@ -189,38 +213,38 @@
 \src{Each design was pre-registered and judged against plain GP on the same seeds. Designs changed after reading earlier results: not a performance series.}
 \end{frame}
 
-% ================================================================== 7 Three failures
+% ================================================================== 8 Three failures
 \begin{frame}{Three failures that set C08's rules}
 \textfirst
 \fig{figs_final/fail3.tex}
 \gap{0.22in}
-\takeaway{A reliable critic, an unreliable gatekeeper.}
-\src{C05: fused book, mean of 8 seeds. C06: GP starting seeds read singly; the auditor did catch a real error (VWAP read as the minute close). C07: single heads. Sources: research/coldstart\_C05..C07/RESULT.md.}
+\takeaway{The auditor caught a real VWAP derivation error, but its predictive filtering failed.}
+\src{Diagnoses are inferences after each read, not isolated tests. C05: fused book, mean of 8 seeds. C06: GP starting seeds read singly. C07: single heads, after the yardstick was fixed. Sources: research/coldstart\_C05..C07/RESULT.md.}
 \end{frame}
 
-% ================================================================== 8 One round
+% ================================================================== 9 One round
 \begin{frame}{One round, end to end}
 \textfirst
 \fig{figs_final/flow8.tex}
 \gap{0.26in}
 \takeaway{Every arrow is a file on disk; any round can be replayed.}
-\src{Chosen as the last round run, not by result. Files: loc.md, missions.yaml, corr\_1.md, audit\_1.yaml, evidence.json in research/coldstart\_C08/partura/s808/r3/.}
+\src{Test values come from the final read, after all rounds; agents never saw them. Chosen as the last round run, not by result. Files: loc.md, missions.yaml, corr\_1.md, audit\_1.yaml, evidence.json in research/coldstart\_C08/partura/s808/r3/.}
 \end{frame}
 
-% ================================================================== 9 Budget and rules
-\begin{frame}{Same extra budget, rules fixed before the run}
+% ================================================================== 10 Budget and rules
+\begin{frame}{Comparable extra budget, rules fixed before the run}
 \textfirst
 \fig{figs_final/budget.tex}
-\gap{0.32in}
-\begin{blist}\setlength\itemsep{10pt}
-  \item \lead{Yardstick:} rank, smooth, remove 5 controls with their squares and cubes; top decile, long-only, 15 bp.
-  \item \lead{Verdict:} P against A, 8 paired seeds, one-sided Wilcoxon, $\alpha = 0.05$.
-  \item \lead{Test} 2023-08 to 2025-12, read once; \lead{forward} 2026, report only.
+\gap{0.26in}
+\begin{blist}\setlength\itemsep{8pt}
+  \item \lead{Budget:} 256 evaluations per seed per round in each arm. A: 2 GP runs $\times$ 128. P: 2 missions $\times$ 96, R $\le$ 16, locate $\le$ 48.
+  \item \lead{Yardstick:} rank, smooth, 5 controls with squares and cubes; top decile, long-only, 15 bp.
+  \item \lead{Verdict:} P against A, 8 paired seeds, one-sided Wilcoxon, $\alpha$ 0.05; test read once.
 \end{blist}
-\src{PLAN committed before any C08 run. LLM tokens are a separate cost, not counted here. Source: research/coldstart\_C08/PLAN.md §2–§3; final.json.}
+\src{Scored evaluations count candidates actually scored; they differ by 2\%. LLM tokens are a separate cost. Forward 2026: report only. Source: research/coldstart\_C08/PLAN.md §2–§3 (committed before any run); final.json.}
 \end{frame}
 
-% ================================================================== 10 Result
+% ================================================================== 11 Result
 \begin{frame}{C08: Partura's missions beat extra plain GP in 7 of 8 seeds}
 \textfirst
 \noindent\begin{minipage}[t]{3.60in}\vspace{0pt}
@@ -243,16 +267,17 @@
 \src{Fused residual-book net Sharpe on the test segment, per seed. 152 of 155 heads reproduce. Source: research/coldstart\_C08/RESULT.md §1–§2; final.json.}
 \end{frame}
 
-% ================================================================== 11 Three comparisons
-\begin{frame}{Three comparisons: the edge is in budget allocation}
+% ================================================================== 12 Where it helped
+\begin{frame}{Where did the extra budget help?}
 \textfirst
-\fig{figs_final/tri.tex}
+\fig{figs_final/cmp3.tex}
 \gap{0.30in}
-\takeaway{The value is in where the extra search goes, not in a high-Sharpe factor.}
-\src{C08 shows that the extra budget did better through Partura than through plain GP, not that Partura beats the base search. Readings after the result, not tests.}
+{\secsize\color{sec}\lead{804, 805:} extra GP added nothing; Partura's heads held. \enspace \lead{803, 806, 807:} GP's extra heads hurt the book; Partura's hurt less. \enspace \lead{P's median book:} +0.05.\par}
+\takeaway{The observed edge is where extra search went, not a high-Sharpe alpha.}
+\src{C08 shows that the extra budget did better through Partura than through plain GP, not that Partura beats the base search. Seed-level readings are after the result, not tests.}
 \end{frame}
 
-% ================================================================== 12 How to read p
+% ================================================================== 13 How to read p
 \begin{frame}{How to read $p = 0.012$}
 \textfirst
 \fig{figs_final/reads.tex}
@@ -261,18 +286,18 @@
 \gap{0.24in}
 {\secsize\color{sec}What would confirm it}\par\vspace{0.10in}
 \fig{figs_final/next.tex}
-\src{With 8 pairs, 7 wins gives one-sided $p$ between 0.008 and 0.098, depending on the size of the one loss. Forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and was read before.}
+\src{The 8 pairs measure run-to-run search noise on one market history, not 8 independent markets. 7 wins in 8 gives one-sided $p$ between 0.008 and 0.098, depending on the size of the one loss. Forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and was read before.}
 \end{frame}
 
-% ================================================================== 13 Takeaways
+% ================================================================== 14 Takeaways
 \begin{frame}{What the evidence supports}
 \textfirst
-\begin{nlist}\setlength\itemsep{22pt}
-  \item \lead{Search is cheap; belief is expensive.} Partura helped by choosing where extra search goes.
-  \item \lead{Keep the LLM out of the main search.} Steering GP directly never beat plain GP.
+\begin{nlist}\setlength\itemsep{20pt}
+  \item \lead{Search is cheap; belief is expensive.} In C08 the gain came from where extra search went, not from one strong factor.
+  \item \lead{Keep the LLM out of the main search.} When it steered GP directly (C01–C04), it never beat plain GP.
   \item \lead{Fix the referee before judging the agent.} A leaky yardstick rewarded the wrong things.
-  \item \lead{Critic, not gatekeeper.} It caught real errors; its keep/drop calls did worse.
-  \item \lead{Seven iterations, one promising result.} Fresh data decides.
+  \item \lead{Use the LLM as a critic.} It caught real errors; it failed at predictive gatekeeping.
+  \item \lead{Seven iterations, one promising development result.} Fresh data decides.
 \end{nlist}
 \end{frame}
 
@@ -391,7 +416,7 @@ without it & 38 & +0.13 & 23 \\
 \body{Partura added E, R, N missions beside an untouched M. It won selection in 7 of 8 seeds and tied on test (median +0.08, $p$ 0.42).}
 \gap{0.08in}
 \body{Its extra heads were the weakest one by one: test Sharpe 0.32, against 0.80 for A's.}
-\takeaway{Carried into C08: never trust in-sample gains; the floor held because M was untouched.}
+\takeaway{Carried into C08: never trust in-sample gains. Leaving M untouched kept its discoveries in every library; it does not guarantee the fused book.}
 \src{Post-read inference: the LLM optimised a leaky reward better (convex transforms rebuilt volatility). Fused residual-book Sharpe, mean of 8 seeds. Source: research/coldstart\_C05/RESULT.md §1–§4.}
 \end{frame}
 
@@ -439,27 +464,6 @@ rejected & 162 & \textcolor{accent}{$-$0.53} & \textcolor{accent}{34\%} & $-$0.7
 \src{The book improved mostly by holding fewer heads. Seventh read of the test segment. Source: research/coldstart\_C07/PLAN.md §2, RESULT.md §1–§4.}
 \end{frame}
 
-\begin{frame}{Backup: an LLM only where judgement is the bottleneck}
-\textfirst
-\body{Everything that can be measured is measured in code. The LLM is used where a choice has to be made from evidence.}
-\gap{0.16in}
-\begingroup\secsize
-\renewcommand\arraystretch{1.40}%
-\begin{tabular}{@{}L{2.45in}L{4.20in}L{4.55in}@{}}
-\toprule
-\thead{Decision} & \thead{LLM role} & \thead{Referee in code} \\
-\midrule
-\lead{Where is the alpha?} & round 1: anatomist reads the locate output & heads table, subtree commonality, ablation \\
-\lead{What to search next} & PI writes E, R, N missions with seeds & admissibility check; library ban $|\rho| \ge 0.7$ \\
-\lead{Is the plan broken?} & auditor: maths errors and duplicates only & correlation table; auto-strike rules \\
-\lead{Did it work?} & none & fixed yardstick, paired seeds, ledgered read \\
-\bottomrule
-\end{tabular}
-\endgroup
-\gap{0.18in}
-\takeaway{Roles are hypotheses about division of labour; C08 dropped two of them.}
-\src{C08 rounds 2–3 ran without the anatomist and librarian, with Sonnet as PI and auditor (PLAN revision 1). Models: PI and auditor Opus 5.5 in round 1; checker Haiku 5.5.}
-\end{frame}
 
 \begin{frame}{Backup: the searcher's three handles}
 \fig{figs_final/searcher.tex}
