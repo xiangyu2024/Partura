@@ -128,6 +128,7 @@
 \begin{document}
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
+% ================================================================== 1 Title
 \begin{frame}[plain]
 \begin{tikzpicture}[remember picture,overlay]
   \node[anchor=base west, inner sep=0, align=left, text=ink]
@@ -144,128 +145,82 @@
 \end{tikzpicture}
 \end{frame}
 
+% ================================================================== 2 The question
 \begin{frame}{Finding an alpha is not evidence that the LLM helped}
 \textfirst
-\body{A good backtest answers “was something found?” The question here is \key{“did the LLM make search better than search alone?”}}
-\gap{0.26in}
-\begin{tikzpicture}[grid]
-  \tikzset{px/.style={rectangle, draw=ink, minimum width=5.40in, minimum height=1.10in, align=center, font=\nodesize, inner sep=6pt}}
-  \node[px] at (2.80,-0.60) {\mediumfont A: plain GP\\[2pt]{\notesize\color{sec}the extra budget goes to more agent-free search}};
-  \node[px, draw=accent, fill=accent!10] at (8.83,-0.60) {\mediumfont P: GP + Partura\\[2pt]{\notesize\color{sec}the same extra budget goes to the LLM's missions}};
-  \draw[arr] (2.80,-1.15) -- (2.80,-1.62);
-  \draw[arrl] (8.83,-1.15) -- (8.83,-1.62);
-  \node[draw=ink, minimum width=11.43in, minimum height=0.66in, align=center, font=\nodesize] at (5.82,-1.98)
-    {same data, operators, GP engine, seeds and paid evaluations \;$\rightarrow$\; compare the libraries out of sample, seed by seed};
-\end{tikzpicture}
-\gap{0.20in}
+\body{The question is not “was something found?” but \key{“did the LLM make search better than search alone?”}}
+\gap{0.30in}
+\fig{figs_final/bench.tex}
+\gap{0.22in}
 \takeaway{The baseline is a capable searcher, not “no research”.}
-\src{Both arms share the main search M (untouched by any agent). C08: 4,438 paid evaluations for A, 4,525 for P; 8 paired seeds.}
+\src{8 paired seeds. C08: 4,438 scored evaluations for A, 4,525 for P.}
 \end{frame}
 
+% ================================================================== 3 Search is cheap
 \begin{frame}{Search is cheap; belief is expensive}
 \textfirst
-\fig{figs_final/cost.tex}
-\gap{0.10in}
-\takeaway{Tokens should buy beliefs that move thousands of cheap evaluations, not candidates.}
-\src{An LLM writing formulas one by one competes with GP at GP's game. Shapes are illustrative, not measured.}
+\fig{figs_final/ring8.tex}
+\gap{0.06in}
+\takeaway{Tokens buy beliefs that redirect thousands of cheap evaluations, not candidates.}
+\src{Every score is computed in code; no role grades its own work. Token split by step is illustrative.}
 \end{frame}
 
-\begin{frame}{Two layers, two directions, one referee in code}
-\textfirst
-\body{The agent proposes where to look; the searcher reports what it found and what failed. \lead{Neither side grades itself.}}
-\gap{0.20in}
-\fig{figs_final/loop8.tex}
-\gap{0.12in}
-\takeaway{Reasoning guides search. Search revises reasoning. Code measures both.}
-\end{frame}
-
+% ================================================================== 4 Task
 \begin{frame}{The task: one formula, one daily signal}
 \fig{figs_final/task.tex}
 \gap{0.06in}
 \body{\lead{Signal} $s_{i,t}=x(\mathcal{D}_{\le t})_i$;\quad \lead{target} $r_{i,t+1}=P_{i,t+2}/P_{i,t+1}-1$, $P$ = first-15-minute VWAP.}
-\src{About 5,200 A-share stocks, 8 minute fields, 241 bars a day, 6 daily fields. Search sees 2018-01-02 to 2023-08-07 only. Book: top-decile residual long-only, 15 bp per side.}
+\src{About 5,200 A-share stocks, 8 minute fields, 241 bars a day, 6 daily fields. Search sees 2018-01-02 to 2023-08-07 only.}
 \end{frame}
 
+% ================================================================== 5 Final design
 \begin{frame}{The final design: the main search runs untouched}
+\textfirst
 \fig{figs_final/arch8.tex}
-\src{Partura cannot ban, reweight or edit M. Each round: two GP slots of 96 evaluations, up to 16 R variants. Schematic.}
+\src{Partura cannot ban, reweight or edit M. Per round: two GP slots of 96 evaluations, up to 16 R variants. Schematic.}
 \end{frame}
 
+% ================================================================== 6 Why
 \begin{frame}{Why the final design looks like this}
 \textfirst
 \fig{figs_final/evo.tex}
-\gap{0.14in}
-\body{\lead{C01–C04:} whenever the LLM steered GP inside a fixed budget, its mistakes crowded out exploration: twice worse, twice inconclusive.}
-\takeaway{So in C08 the main search is never touched by an agent; the LLM only spends the extra budget.}
-\src{Every design was pre-registered and judged against plain GP on the same seeds; designs changed after reading earlier results, so this is not a performance series. Details: backup pages. Sources: RESULT.md §1 of each study.}
+\gap{0.30in}
+\takeaway{C01–C04: an LLM steering GP inside a fixed budget crowded out exploration. So in C08, no agent touches M.}
+\src{Each design was pre-registered and judged against plain GP on the same seeds. Designs changed after reading earlier results: not a performance series.}
 \end{frame}
 
+% ================================================================== 7 Three failures
 \begin{frame}{Three failures that set C08's rules}
 \textfirst
-\noindent\begin{minipage}[t]{3.62in}\vspace{0pt}\raggedright
-{\secsize\color{sec}C05: selection is not alpha}\par\vspace{0.06in}
-\bigmetric{1.52 $\to$ 0.44}\par\vspace{0.06in}
-\body{Partura's book led on valid (A 0.94) and tied on test (A 0.44).}\par\vspace{0.16in}
-\textcolor{accent}{\lead{$\to$ C08:} paired seeds, one ledgered read, same compute.}
-\end{minipage}\hfill
-\begin{minipage}[t]{3.62in}\vspace{0pt}\raggedright
-{\secsize\color{sec}C06: the strict gate was backwards}\par\vspace{0.06in}
-\bigmetric{$-$0.91 / $-$0.53}\par\vspace{0.06in}
-\body{Test Sharpe of seeds the auditor accepted / rejected (469 / 162).}\par\vspace{0.16in}
-\textcolor{accent}{\lead{$\to$ C08:} the auditor keeps its maths checks, loses its say on predictive quality.}
-\end{minipage}\hfill
-\begin{minipage}[t]{3.62in}\vspace{0pt}\raggedright
-{\secsize\color{sec}C07: the yardstick leaked}\par\vspace{0.06in}
-\bigmetric{$-$0.13 / +0.40}\par\vspace{0.06in}
-\body{Heads an LLM filter kept / dropped, after the leak was fixed.}\par\vspace{0.16in}
-\textcolor{accent}{\lead{$\to$ C08:} rank first, non-linear neutralisation; the LLM proposes, it does not filter.}
-\end{minipage}
-\gap{0.16in}
-\takeaway{The LLM was a reliable critic (it caught VWAP read as the minute close) but an unreliable gatekeeper.}
-\src{C05: fused-book Sharpe, mean of 8 seeds. C06: GP starting seeds read singly. C07: the leaks were a convex transform that rebuilt volatility and linear neutralisation that left U- and S-shaped exposure. Sources: research/coldstart\_C05..C07/RESULT.md.}
+\fig{figs_final/fail3.tex}
+\gap{0.22in}
+\takeaway{A reliable critic, an unreliable gatekeeper.}
+\src{C05: fused book, mean of 8 seeds. C06: GP starting seeds read singly; the auditor did catch a real error (VWAP read as the minute close). C07: single heads. Sources: research/coldstart\_C05..C07/RESULT.md.}
 \end{frame}
 
-\begin{frame}{One round, end to end: seed 808, round 3}
+% ================================================================== 8 One round
+\begin{frame}{One round, end to end}
 \textfirst
 \fig{figs_final/flow8.tex}
-\gap{0.16in}
-\begingroup\secsize
-\renewcommand\arraystretch{1.12}%
-\begin{tabular}{@{}L{1.20in}L{10.10in}@{}}
-\toprule
-\lead{Input} & subtree \expr{ts_mean(day_centroid(Volume), 20)} alone scores +1.28; it is a necessary part of a +0.83 head \\
-\lead{Decision} & E slot keeps it as the core (drift, instability, bucketing around it); N slot: shape of the minute-volume distribution \\
-\lead{Audit} & E novelty 3, soundness 4, 11 of 12 seeds kept; N 4 / 4, 10 of 12 kept (one seed is liquidity: $|\rho|$ 0.80) \\
-\lead{Output} & E found 3 heads; test Sharpe +0.50, +0.39, $-$0.43. N found none \\
-\bottomrule
-\end{tabular}
-\endgroup
-\src{Files: loc.md $\to$ missions.yaml $\to$ corr\_1.md, audit\_1.yaml $\to$ evidence.json. Chosen as the last round run, not by result. “Day centroid” = where in the day a stock's volume trades, 0 = open, 1 = close. Sources: research/coldstart\_C08/partura/s808/r3/ (loc.md, missions\_final.yaml, audit\_record.json); final.json.}
+\gap{0.26in}
+\takeaway{Every arrow is a file on disk; any round can be replayed.}
+\src{Chosen as the last round run, not by result. Files: loc.md, missions.yaml, corr\_1.md, audit\_1.yaml, evidence.json in research/coldstart\_C08/partura/s808/r3/.}
 \end{frame}
 
+% ================================================================== 9 Budget and rules
 \begin{frame}{Same extra budget, rules fixed before the run}
 \textfirst
-\begingroup\secsize
-\renewcommand\arraystretch{1.32}%
-\begin{tabular}{@{}L{1.20in}L{5.60in}R{2.10in}R{2.05in}@{}}
-\toprule
-\thead{Arm} & \thead{What the extra budget buys} & \thead{Scored evaluations} & \thead{GPU seconds} \\
-\midrule
-\lead{M} & main search, 4 batches per seed; shared by both arms & 4,272 & 19,835 \\
-\lead{A} & 2 plain GP runs per round, 3 rounds & 4,438 & 26,294 \\
-\textcolor{accent}{\lead{P}} & 2 GP missions per round chosen by Partura, plus R and locate & 4,525 & 24,421 \\
-\bottomrule
-\end{tabular}
-\endgroup
-\gap{0.22in}
+\fig{figs_final/budget.tex}
+\gap{0.32in}
 \begin{blist}\setlength\itemsep{10pt}
-  \item \lead{Yardstick:} daily rank, then smooth; residual on 5 controls, their squares and cubes; top-decile long-only, 15 bp.
-  \item \lead{Primary:} P against A, fused-book test Sharpe, 8 paired seeds, one-sided Wilcoxon, $\alpha = 0.05$.
-  \item \lead{Test} 2023-08-08 to 2025-12-31, read once. \lead{Forward} 2026-01-01 to 2026-09-16, report only.
+  \item \lead{Yardstick:} rank, smooth, remove 5 controls with their squares and cubes; top decile, long-only, 15 bp.
+  \item \lead{Verdict:} P against A, 8 paired seeds, one-sided Wilcoxon, $\alpha = 0.05$.
+  \item \lead{Test} 2023-08 to 2025-12, read once; \lead{forward} 2026, report only.
 \end{blist}
-\src{Evaluations summed over 8 seeds; P counts its direct R and locate evaluations too. LLM tokens are a separate cost, not counted here. Sources: research/coldstart\_C08/PLAN.md §2–§3 (committed before any run); final.json.}
+\src{PLAN committed before any C08 run. LLM tokens are a separate cost, not counted here. Source: research/coldstart\_C08/PLAN.md §2–§3; final.json.}
 \end{frame}
 
+% ================================================================== 10 Result
 \begin{frame}{C08: Partura's missions beat extra plain GP in 7 of 8 seeds}
 \textfirst
 \noindent\begin{minipage}[t]{3.60in}\vspace{0pt}
@@ -288,51 +243,36 @@
 \src{Fused residual-book net Sharpe on the test segment, per seed. 152 of 155 heads reproduce. Source: research/coldstart\_C08/RESULT.md §1–§2; final.json.}
 \end{frame}
 
+% ================================================================== 11 Three comparisons
 \begin{frame}{Three comparisons: the edge is in budget allocation}
 \textfirst
-\begingroup\secsize
-\renewcommand\arraystretch{1.32}%
-\begin{tabular}{@{}L{4.70in}R{1.55in}R{1.20in}L{3.60in}@{}}
-\toprule
-\thead{Comparison (test segment)} & \thead{Median diff.} & \thead{W / L} & \thead{Result} \\
-\midrule
-\textcolor{accent}{\lead{P against A}}: extra budget to Partura vs to GP & +0.23 & 7 / 1 & $p$ = 0.012 \\
-P against M: Partura vs no extra search & +0.24 & 5 / 3 & $p$ = 0.098, not significant \\
-A against M: GP vs no extra search & 0.00 & 2 / 3 & no clear improvement \\
-\bottomrule
-\end{tabular}
-\endgroup
-\gap{0.20in}
-\body{\lead{Where plain GP found nothing new} (804, 805: A = M), Partura's missions added heads: +1.40 and +1.07 against A.}\par\vspace{0.06in}
-\body{\lead{Where GP's extra heads hurt the book} (803, 806, 807: $-$0.37 to $-$0.48 against M), Partura's hurt less or helped.}
-\gap{0.12in}
-\takeaway{The value is allocation of extra search, not a high-Sharpe factor: P's median book is +0.05.}
-\src{C08 shows that the extra budget did better through Partura than through plain GP, not that Partura beats the base search. Single heads: median +0.07; the densest in-sample family (the volume centroid) did not hold: 17 heads, median +0.03. Readings after the result, not tests.}
+\fig{figs_final/tri.tex}
+\gap{0.30in}
+\takeaway{The value is in where the extra search goes, not in a high-Sharpe factor.}
+\src{C08 shows that the extra budget did better through Partura than through plain GP, not that Partura beats the base search. Readings after the result, not tests.}
 \end{frame}
 
+% ================================================================== 12 How to read p
 \begin{frame}{How to read $p = 0.012$}
 \textfirst
-\body{The number is the correct nominal value for this study's pre-specified test on its 8 pairs. It is \key{not} an independent confirmation:}
-\gap{0.14in}
-\begin{blist}\setlength\itemsep{10pt}
-  \item the same test segment had been read seven times before, by C01–C07, and their results shaped C08's design;
-  \item 8 pairs: 7 wins gives $p$ between 0.008 and 0.098 depending on the size of the one loss;
-  \item forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and had also been read before.
-\end{blist}
-\gap{0.18in}
-{\fontsize{19}{24}\selectfont\color{accent}\itshape C08 is the first design that produced a statistically significant paired improvement under its pre-specified within-study test. Because earlier designs repeatedly used the same test period, I treat it as a promising development result, not independent confirmation.\par}
-\gap{0.16in}
-\body{\lead{What would confirm it:} freeze C08 and read once on data after 2026-09-16; a random filter with the same head count; new seeds; GPU and tokens on one ledger.}
+\fig{figs_final/reads.tex}
+\gap{0.34in}
+{\fontsize{20}{26}\selectfont\color{accent}\itshape C08 is the first design that produced a statistically significant paired improvement under its pre-specified within-study test. Because earlier designs repeatedly used the same test period, I treat it as a promising development result, not independent confirmation.\par}
+\gap{0.24in}
+{\secsize\color{sec}What would confirm it}\par\vspace{0.10in}
+\fig{figs_final/next.tex}
+\src{With 8 pairs, 7 wins gives one-sided $p$ between 0.008 and 0.098, depending on the size of the one loss. Forward 2026 agrees (7 of 8, $p$ 0.020) but is 0.67 years and was read before.}
 \end{frame}
 
+% ================================================================== 13 Takeaways
 \begin{frame}{What the evidence supports}
 \textfirst
-\begin{nlist}\setlength\itemsep{18pt}
-  \item \lead{Search is cheap; belief is expensive.} Partura's value showed up where it should: in deciding where extra search goes, not in single high-Sharpe formulas.
-  \item \lead{Keep the LLM out of the main search.} Steering GP directly (C01–C04) never beat plain GP.
-  \item \lead{Fix the referee before judging the agent.} Under a leaky yardstick the LLM optimised the leak (C05) and its gate looked wrong (C06).
-  \item \lead{Critic, not gatekeeper.} It reliably found errors; its keep/drop calls did worse.
-  \item \lead{Status:} after seven iterations, one promising result on a development set. Fresh data decides.
+\begin{nlist}\setlength\itemsep{22pt}
+  \item \lead{Search is cheap; belief is expensive.} Partura helped by choosing where extra search goes.
+  \item \lead{Keep the LLM out of the main search.} Steering GP directly never beat plain GP.
+  \item \lead{Fix the referee before judging the agent.} A leaky yardstick rewarded the wrong things.
+  \item \lead{Critic, not gatekeeper.} It caught real errors; its keep/drop calls did worse.
+  \item \lead{Seven iterations, one promising result.} Fresh data decides.
 \end{nlist}
 \end{frame}
 
@@ -536,6 +476,15 @@ rejected & 162 & \textcolor{accent}{$-$0.53} & \textcolor{accent}{34\%} & $-$0.7
   \item \lead{Process changes in C08.} Rounds 2–3 lean (cost); 803's round-3 finalisation and 808's round-3 plan and audit were run in a cloud session by fresh agents (PLAN revision 2).
   \item \lead{Data.} No delisted names; limit-up-at-open entries excluded from the label; A-share long-only.
 \end{blist}
+\end{frame}
+
+% ================================================================== Backup cost
+\begin{frame}{Backup: tokens buy beliefs, not candidates}
+\textfirst
+\fig{figs_final/cost.tex}
+\gap{0.10in}
+\body{An LLM writing formulas one by one pays per candidate and competes with GP at GP's game; Partura pays once per round.}
+\src{Shapes are illustrative, not measured. Measured LLM output tokens: C05 arm B 13.21 M; C06 arm C 16.91 M.}
 \end{frame}
 
 \end{document}
