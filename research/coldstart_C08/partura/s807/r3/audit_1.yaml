@@ -1,0 +1,73 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 5]
+    reasons: '核心 `day_std(Ret)` 是本种子第 2 次用作 E 核心(第 1 次是 r2),符合 §2「每个核心至多 2 个 E 位」的上限,本轮之后不能再用。核心自身与
+      5 个控制的 |ρ| 都 < 0.8(最高是 vol 0.722,corr_1.json「slot a core」),满足 E 位的额外门槛。
+
+      本位三条机制,核对 ops_ext.py / dt_cross.py 源码后,算子组合与假说描述一致、核心均原样嵌入:
+      (1) `cross_regbeta(x, y, d)` 在 common.py:643 `rolling_ols` 里确实是 `y~alpha+beta*x`,种子 1-3、11
+      把 y=`day_std(Ret)`(核心原样)、x=滞后 1 日的 `day_mean(Ret)` 或 `day_signed_ratio(Ret, Amt)`,是标准的「用 t-1
+      冲击解释 t 日波动响应斜率」杠杆效应构造,没有用到 t 日之后的信息,不是前视;
+      (2) `day_max(High)`/`day_min(Low)` 构造 Parkinson 区间波动,`sub(sub(log(day_max(High)), log(day_min(Low))),
+      log(day_std(Ret)))` 字面就是区间法减收益法的 log 差,种子 6 的 `cross_regres(log(day_std(Ret)),
+      区间波动, 120)` 按 rolling_ols(x=log(day_std(Ret)), y=区间波动) 取残差,与假说「今天的区间跨度相对自己历史上区间~已实现波动关系多出多少」一致;
+      (3) `cs_last_high05/low05/high10/cs_first_high40` 的 docstring(ops_ext.py:369-411)与假说逐一对应
+      ——高 05/10 排除、低 05 反向排除、first_high40 变「加分」——种子 7-10 把 y 换成第 1 轮核心的 120 日自身 z 分数
+      `cross_zscore(ts_var(LogFloatCap, 20), 120)`,是对 heads[4]/[7](GP 自己拼出的 cs_last_high05 排除筛,+0.88/+0.62)这个机制能不能换一个
+      y 仍然成立的直接检验,算子骨架(ts_var 对比 pow_2_5∘pow_2_5)与库里的 head 不同,不是换皮。
+      相关度表(corr_1.md/json)显示全部种子与 8 个 head 的原始 |ρ| 都 < 0.42,大多 < 0.2,残差更低,不是任何 head
+      或控制的影子——除了种子 4、5。
+
+      种子 4(`cross_mean(sub(sub(log(day_max(High)), log(day_min(Low))), log(day_std(Ret))), 60)`)与 vol
+      控制(`cross_mean(day_std(Ret), 20)`)的原始 |ρ| = 0.872,触发 §3 自动划线(≥0.8);种子 5 是同一构造、窗口
+      120,|ρ| = 0.796,严格说没过 0.8 这条线,但和种子 4 是完全同一个公式换窗口、同一种失败模式——简单的 log 差没能把波动水平那部分减掉,这条
+      seed 本质上还是在量「波动水平」,和假说里「这类结构奖励的残差化去不掉」的论证对不上,按「重复」单独划掉。改成时序回归残差的种子 6 在同一个机制上
+      |ρ| 降到 0.059,证明问题出在「简单减法」这步实现,不是机制本身不合理,所以种子 6 保留。划完还剩 10 个种子,远高于 ≥4 的门槛。
+
+      如果这位有 alpha:(1)(3) 杠杆效应与排除筛泛化,最可能来自 A 股下跌后次日波动的不对称放大、以及「用极端波动把最不可靠名字筛出多头」这个排除性清洗机制本身,不依赖
+      LogFloatShares 这一个特定 y;(2) 区间法 vs 收益法波动缺口(种子 6),最可能来自买卖价差/跳价造成的微结构噪声,与简单波动水平正交的那部分。'
+    revise: '通过。建议 PI 在定稿时去掉种子 4、5(与 vol 控制几乎是同一个量),只保留回归残差版种子 6 代表这条机制;其余 10 个种子不用改。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '逐条核对了 loc.md 的 8 个 head、「共性」表(20 条)与「机械核心卡」(29 条):`day_at_max_ratio`、`day_at_min_ratio`、`day_flat_ratio`
+      三个算子在这 3 轮、546 个候选里一次都没出现过;`LimitWidth` 只在 `cs_median(LimitWidth)`/`signedpower(cs_median(LimitWidth))`(核心卡第
+      22、25 位)里出现过,那是「市场当天的典型带宽」这个横截面常数(cs_median 对每只股票取的是同一个全市场当日值),不是本位「这只股票自己有没有被锁住」的逐股特征,两者不是同一个东西;也不是第
+      1 轮(跨天成交 CV)、第 2 轮(日内 q75/q25、Gini)两个 N 位的换皮——那两个度量的都是「某统计量在时间或分钟上有多离散」,这里是「价格被涨跌停带宽行政性锁死的频率」,维度不同。
+
+      核对 ops_ext.py 源码:`day_at_max_ratio`/`day_at_min_ratio`(580-603 行)按「等于当日最大/最小值的分钟占比」实现,`day_flat_ratio`(82-94
+      行)按「与前一分钟相同的占比」实现,都有 n>1 / 分母 clamp 保护,没有除以近零或溢出风险;`cs_bucket_demean`/`cs_bucket_zscore`(463-496
+      行)按 x 的十分位分桶,bucket 字段用 `LimitWidth`(种子 6、7)和 `LogFloatCap`(种子 10)分开检验,和假说描述一致。全部种子都是当日分钟数据的当日聚合,与已有的
+      `day_std(Ret)` 等 day_* 算子同样的时序对齐,没有前视问题。相关度表(corr_1.md/json)显示与 8 个 head 的原始 |ρ| 全部 ≤
+      0.27,与 5 个控制的原始 |ρ| 最高是种子 8(`day_flat_ratio@60`)的 liq 0.62、known 0.55,都明显低于 0.8 的自动划线,且这个相关恰恰印证了假说——日内报价冻结本来就该和流动性/成交波动相关,残差列(0.26)显示控制掉之后还剩不少。
+
+      corr_1.json 里种子 1、3、4、5、12 的 `gate` 标 False(`distinct` 在 0.28–0.49 之间,即当天名字之间同值打平较多)。我核对了这正是
+      diagnose.py `distinct_fraction` 文档自己写的场景——「级数少、靠符号顺序打破平局」;而 rules.md §4 明确把「并列靠股票列序打破」排除在数学问题之外(列序携带板块
+      / 交易所信息)。涨跌停锁死本身就应该让大多数正常交易日的 `day_at_max_ratio(Close)` 聚在 1/n 附近,这是机制本身决定的,不是数值伪影,所以我没有据此划掉;列出来供
+      PI 参考,不作为划线理由。没有找到真正符合 §4(前视 / 数值伪影 / 定义坏掉)的问题,12 个种子全部保留。
+
+      如果这位有 alpha:最可能来自涨跌停触及后的注意力冲击与散户彩票偏好(追涨易封板的名字),使「最近多久被行政性锁死」这个慢变量携带与已有波动
+      / 流动性控制不同轴的、可预测的横截面信息。'
+    revise: '—'
+R:
+  - head: 'cs_last_high05(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 241), day_std(Ret))'
+    soundness: 5
+    reasons: '核对 loc.md 拆解表:knockout 外层 `pow_2_5`(只留 `pow_2_5(LogFloatShares)`)分数 0.878→0.83,necessity
+      仅 +0.05,与 why 描述一致,确认外层幂变换几乎是死重;window 行 `cross_zscore@241->120` 分数 0.878→1.47(增益
+      +0.59),也与 why 一致。5 个变体把「去掉死重的幂变换层(1 层/0 层)」与「窗口 120/90/60」分开和叠加测试,方向清楚、没有重复设计。corr_1.json
+      显示这 5 个变体与原 head 本身的 |ρ| 在 0.67–0.85(窗口差得最多的那个最低),正是 R 组「替换路径」(ρ≥0.5)该有的相关度结构,不是和库里其它
+      head 撞车。没有发现数学问题。'
+  - head: 'cs_last_high05(cross_zscore(cross_zscore(cross_zscore(pow_2_5(pow_2_5(LogFloatShares)), 241), 241), 241), day_std(Ret))'
+    soundness: 5
+    reasons: '该 head 与上一条 +0.88 的 head 共享同一个 `pow_2_5(pow_2_5(LogFloatShares))` 子树,只是外层多套了两层
+      `cross_zscore(241)`;直接对比 loc.md heads 表两行(+0.88→+0.62)可见多套两层 z-score 是负贡献,这是可以直接核验的事实,不是编造的「necessity」。3
+      个变体分别测「单层 z-score 在窗口 120 下是否还保留+0.59 的窗口增益」「2 层嵌套在窗口 241/120 下的分数」,系统地定位退化梯度在哪一步最陡,方法干净。corr_1.json
+      显示这 3 个变体与原 head 的 |ρ| 在 0.32–0.79,同样符合替换路径该有的相关度结构。没有发现数学问题。'
+summary: '两个任务位都通过:E 位(day_std(Ret),本核心最后一次 E 位)划掉种子 4、5(区间-实现波动的简单 log 差在窗口 60/120 都几乎等同于 vol
+  控制,|ρ|=0.872/0.796),保留回归残差版种子 6 及其余 9 个种子;N 位(涨跌停封板频率,day_at_max_ratio/day_at_min_ratio/day_flat_ratio)12
+  个种子全部保留,corr 表里的 gate=False 标记是「正常交易日大量打平」而非数值伪影,按 §4 的列序例外不作为划线理由;R 组两条(头 +0.88 与 +0.62
+  的窗口/嵌套深度清理)合理度都给 5 分。'

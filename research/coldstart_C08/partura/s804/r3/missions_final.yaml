@@ -1,0 +1,134 @@
+seed: 804
+round: 3
+slots:
+- type: E
+  core: ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10)
+  hypothesis: '【核心,与上一轮的关系】`ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10)`——本轮共性表第2名(均值差+1.40,p
+    0.000,530个已评分候选里13个含它),逐字取自核心卡列表,合法。它是上一轮(第2轮)位a核心`sub(ts_var(ts_mean(day_distinct_ratio(Vwap),
+    20), 10), LogFloatCap)`去掉外层“减LogFloatCap”之后剩下的部分。上一轮这个位被判创新度1、合理度1,退回重写:审计算出的corr表显示那个核心与市值控制LogFloatCap的原始秩|ρ|=1.00——不是接近1,是完全重合,原因是把一个几乎处处为0、只在罕见长尾时刻跳动的二阶量,和一个连续展布好几个量级的市值变量直接相减,输出的排序几乎完全听市值的,等于市值控制换了个写法混进了y位。审计给出的两条修复路径,第一条是“不要让LogFloatCap直接参与y位的相减——把它挪到筛选位(x
+    position)”。本轮严格按这条路径重做:核心保持“纯粒度不稳定性”的原始形式,y位完全不再和LogFloatCap做任何算术组合;本位种子里如果要用到市值或自由流通信息,只通过cs_last_high*/cs_first_*的筛选位(x位)接入——那是按分块归属(tie
+    block)排除的排序操作,不是数值运算,不会出现量级压制的问题。
+
+
+    【机制】day_distinct_ratio(Vwap)是当天分钟VWAP“不同取值数/有效分钟数”的比值:数值越低说明价格发现越粗(停牌、封板、或低价股在最小价格变动单位上的天然粗糙)。ts_mean(·,20)把这个日度比率平滑成“最近一个月的正常颗粒度水平”,ts_var(·,10)再测这把尺子本身在最近10天里有没有突然跳动——这是一个二阶量(“安静程度”有没有变),不是一阶的“安静不安静”。两个候选触发源:(1)涨跌停封板当天分钟成交冻结,distinct_ratio骤降,Seasholes
+    & Wu (2007)发现上海涨停当天放量、是强烈的注意力事件,带来之后一两天可预测的净买入;(2)Harris (1991)证明价格离散度随价位和波动升高、随市值和成交频率降低,所以颗粒度的“正常水平”本身随规模变化——但本位测的不是水平,是水平的不稳定性,和规模是两件不同的事:一只大盘股的颗粒度常年很高很稳定,ts_var依然很小;只有颗粒度真的发生过跳变,ts_var才会大。
+
+
+    【外围怎么实现,和已见过的不同】共性表里含这个子树的13个候选,文本拿不到,但可以反推至少6个就是上一轮那个失败核心(多了一层“减LogFloatCap”)的严格超集,其余写法未知。本位种子全部不做算术减LogFloatCap:用cs_last_high10/20、cs_last_low10/20、cs_first_high20、cs_first_low20做筛选位,筛选变量覆盖四类——ListAge(上市年龄,排除新股颗粒度本身噪声大的名字)、cross_valid_count(近期有效交易天数,排除频繁停牌名字)、LogFloatCap与sub(LogTotalCap,
+    LogFloatCap)(市值与自由流通缺口,按审计的建议放在筛选位而非算术位)、cross_mean(day_zero_ratio(Ret), 20)(零收益频率,round1文献员已给Lesmond-Ogden-Trzcinka
+    1999背书)、LimitWidth(涨跌幅带宽,检验效应是否集中在某类监管板块的价格网格上)。另外两个种子做交叉验证:换到Close字段重新算一遍再相减,检验效应是不是Vwap成交量加权特有、还是颗粒度这个统计量本身的效应;以及在核心外再加一层ts_mean(·,5)短窗平滑,检验抓的是“单日跳变”还是“最近持续不稳定”。
+
+
+    【为什么和控制不是一回事】5个控制里,流动性看成交额水平、波动看分钟收益标准差、20日反转看收益累计水平、已知族看成交额的30日标准差、市值直接是对数市值——没有一个度量“颗粒度这把尺子本身最近有没有突然变过”。本轮种子把市值/自由流通信息严格限制在排序安全的筛选位,不参与任何数值运算,核心本身与市值的关系只能通过筛选体现,不会再出现上一轮|ρ|=1.00那种算术支配。
+
+
+    【为什么样本外还会在】涨跌停制度、集合竞价规则、以及价格发现在停牌/封板时被机械打断,都是监管结构性事实,训练段和验证段都适用,不依赖某一段行情;Harris
+    (1991)的离散度-市值-价位关系是跨市场、跨时期稳健的横截面规律。
+
+
+    【给审计的数学说明】核心不含任何新的除法;day_distinct_ratio、ts_mean、ts_var都是项目里已经大量使用、coverage/distinct正常的算子(round1/round2的corr表已反复验证)。核心裸排是废品(loc.md对近亲核心的sufficiency测试给出-5.07,这是并列块分布导致,不是前视/数值伪影/定义坏掉,§4明确这类“嵌套深、裸排差”不是问题),所以本位所有种子都配了筛选位或额外时间平滑,没有裸排种子。cs_last_*/cs_first_*的筛选位用整块(tie
+    block)逻辑按分块归属排除,不受核心本身数值尺度影响,不会重演上一轮的问题。没有前视:Vwap、Close在当天收盘前已知;没有除以近零的新分母。'
+  literature:
+  - title: Stock Price Clustering and Discreteness
+    authors: Lawrence Harris
+    year: '1991'
+    url: https://ideas.repec.org/a/oup/rfinst/v4y1991i3p389-415.html
+    treatment: 价格离散度/聚集随价位和波动升高、随市值和成交频率降低;借用为解释核心的“正常水平”为何与规模相关,但本位测的是水平的不稳定性(二阶量),和规模是两件事,市值信息只放进排序安全的筛选位
+  - title: Predictable Behavior, Profits, and Attention
+    authors: Mark S. Seasholes; Guojun Wu
+    year: 2007-12
+    url: https://ideas.repec.org/a/eee/empfin/v14y2007i5p590-610.html
+    treatment: 上海涨停当天放量、是强烈的注意力事件,带来之后几天可预测的买入行为;借用为day_distinct_ratio(Vwap)骤降对应的封板/冻结时段是本核心捕捉到的触发事件之一
+  seeds:
+  - cs_last_high10(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), ListAge)
+  - cs_last_low10(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), ListAge)
+  - cs_last_high20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), cross_valid_count(day_last(Close),
+    60))
+  - cs_last_high20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)
+  - cs_last_low20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LogFloatCap)
+  - ts_mean(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), 10)
+  - cs_last_high20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), cross_mean(day_zero_ratio(Ret),
+    20))
+  - sub(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), ts_var(ts_mean(day_distinct_ratio(Close),
+    20), 10))
+  - cs_last_high10(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), LimitWidth)
+  - cs_first_low20(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), ListAge)
+  - cs_last_high20(ts_mean(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10), 5),
+    ListAge)
+- type: E
+  core: day_kurt(Ret)
+  hypothesis: '【核心】`day_kurt(Ret)`——本轮核心卡第12名(均值差+0.95,p 0.000,530个已评分候选里19个含它),逐字取自定位输出的共性表/核心卡列表,合法。这是分钟收益Ret在单日内的超额峰度(第4阶标准矩减3,源码`_kurt`:`mean((x-mean)^4)
+    / mean(var)^2 - 3`),衡量“今天的分钟收益分布有多肥尾”——少数分钟出现远超常态的跳动、其余分钟波澜不惊,峰度就高;分布接近正态,峰度接近0。这个核心没有在任何已有head、任何控制里出现过,也不是任何已有head的子树。
+
+
+    【机制与文献】A股个人投资者占比长期很高,且多数股票事实上难以卖空(融券门槛高、标的有限)。Chen, Ding & Zhao (2019-10,《Applied
+    Economics》)用高频数据在中国股市构造“已实现峰度”,报告一个“已实现峰度之谜”:简单的风险补偿理论预测高峰度(肥尾)股票未来收益应该更高(投资者厌恶尾部风险,要求补偿),但中国市场高频数据的结果恰好相反——高峰度股票之后跑输;作者用双重排序和横截面回归证明散户的彩票偏好是关键机制:效应在散户持股比例更高、不可卖空的股票上更强,在彩票偏好强的时期更显著。这与round1文献员已给审计背书的Bali-Cakici-Whitelaw
+    MAX效应、Birru & Wang名义股价幻觉是同一条“散户追逐近期异常走势,之后均值回归式跑输”的机制家族,但测的是分布形状(肥尾),不是单日最大收益或股价水平,是独立的维度。方法论上借用Amaya,
+    Christoffersen, Jacobs & Vasquez (2015,《Journal of Financial Economics》)用日内高频数据构造已实现偏度/峰度、再检验下一期横截面收益的框架——他们在周频上聚合日度已实现矩,本位把同一思路下沉到日频再做窗口化,比他们的颗粒度更细。
+
+
+    【为什么和控制不是一回事】5个控制里,波动控制是`cross_mean(day_std(Ret), 20)`——分钟收益的二阶矩(标准差)。峰度是标准化的四阶矩,两只股票可以有完全相同的方差、却有截然不同的尾部形状(一个连续温和波动,一个绝大多数时间纹丝不动、偶尔一笔巨震)。残差口径已经扣掉对波动秩及其平方、三次方的线性/U形/S形暴露,峰度作为四阶形状统计量不是波动的单调函数,独立信息大概率留存。20日反转是收益水平的累计,已知族是成交额离散度,市值是对数市值——都不度量“分钟收益分布的形状”。
+
+
+    【外围怎么实现,和已见过的不同】530个候选里含这个核心的19个,共性表能反推出的写法、以及c08s804Pr2a_I0_open_search(round2位a审计失败后转的普通GP,初始种群继承了这个核心)实际跑出的最优结果,全部是单日取值上的纯截面重整:`sigmoid`/`sigmoid(sigmoid(·))`包装,或`cs_mask_top_replace_mean_neg`截尾,没有一个做过跨日的时间窗口聚合。本位全部种子改用nd,ts族算子(`ts_mean`/`ts_max`/`ts_stddev`/`ts_rank`)在5–60日窗口上聚合day_kurt(Ret),把“单日峰度”这个噪声不小的统计量(基于约240个分钟收益估计的四阶矩,单日估计误差大,一次孤立的极端新闻事件就能把当天峰度推得很高)变成“最近持续的肥尾程度”或“肥尾程度本身有没有变得不稳定”——后者(`ts_stddev(ts_mean(day_kurt(Ret),
+    5), 20)`)是本轮第2轮笔记更新里“二阶量比一阶量更可能有alpha”这条结论的直接延伸:把同一个“测一测这把尺子本身是否在变”的逻辑用在一个全新核心上做复验,而不是只在day_distinct_ratio这一个核心上反复挖。另外用`sub(day_kurt(Ret),
+    mul(day_skew(Ret), day_skew(Ret)))`粗略剔除偏度对峰度的机械贡献(Pearson不等式:超额峰度≥偏度²−2,分布越偏,峰度越容易被动抬高),把“两侧对称的肥尾”和“单侧被偏度带起来的肥尾”分开,这个组合也没人试过。两个筛选位种子(ListAge、cross_valid_count)排除新股/频繁停牌名字——它们单日分钟收益样本量小或结构异常,四阶矩估计本身不稳,这是在清理估计噪声,不是在挑数据。LimitWidth筛选位种子检验效应是否集中在某类涨跌幅带宽的板块。
+
+
+    【一个要坦白说明的交叉混淆,不影响合理度】封板当天如果先冻结后打开,分钟收益会呈现“绝大多数分钟≈0、少数分钟跳变”的形态,这本身也会机械推高当天峰度——round2位b(LimitWidth贴版强度)测的部分现象可能和这里有重叠。但这不是§4里的数学问题(没有一条覆盖“两个机制可能部分重叠”),而是需要样本外证据才能分清的经验问题;即使重叠,两条渠道(连续跳跃/尾部风险的彩票偏好定价,以及涨跌停贴版的注意力效应)预测的方向是一致的,不是互相矛盾、必须二选一才能解释清楚的情况。
+
+
+    【为什么样本外还会在】A股个人投资者长期占比高、融券门槛高、T+1使得冲高当天无法立即卖出,这些是贯穿训练段和验证段的制度性事实,不是某段行情的特例;Chen,
+    Ding & Zhao的“已实现峰度之谜”样本跨越多年中国市场数据,并显式与散户持股比例、卖空约束这些结构性变量挂钩,不是某一年行情特有的形状。
+
+
+    【数学说明】day_kurt(Ret)是已经在引擎里大量跑过的既有算子(coverage/distinct在已归档的530个候选里正常,round2转成普通GP后又独立跑了几十次,没有被引擎的数值哨兵拒绝过)。`_kurt`内部的除法在整天分钟收益方差精确为0时(停牌/一字板全天冻结)给NaN而不是inf(分子mean(x^4)此时同样精确为0,0/0=NaN),NaN按coverage门槛正常过滤,不会以爆炸数值支配截面;而且score和审计的相关度表都是先转横截面秩再比较,单只股票的数值大小本身不影响排序意义上的信息。没有前视:Ret在当天收盘前已知。ts_mean/ts_max/ts_stddev/ts_rank都是项目里已反复验证的nd,ts滚动算子;ListAge、cross_valid_count、LimitWidth都是前两轮已验证过coverage/distinct正常的筛选变量。'
+  literature:
+  - title: A lottery-preference-based explanation of realized kurtosis puzzle in Chinese
+      stock market
+    authors: Guojin Chen; Jie Ding; Xiangqin Zhao
+    year: 2019-10
+    url: https://doi.org/10.1080/00036846.2019.1613510
+    treatment: 高频数据构造的“已实现峰度”在中国股市方向为负(与简单风险补偿理论相反),源于散户的彩票偏好,在高散户持股比例、不可卖空的股票中更强;借用为核心方向预期为负(近期分钟收益分布越肥尾,之后收益越低),且该效应应在散户主导的A股样本上更稳健
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Diego Amaya; Peter Christoffersen; Kris Jacobs; Aurelio Vasquez
+    year: '2015'
+    url: https://doi.org/10.1016/j.jfineco.2015.02.009
+    treatment: 提供了用日内高频数据构造已实现偏度/峰度、再在横截面上检验下一期收益的标准方法论(周频聚合);借用为本位把同一思路下沉到日频(直接用day_kurt(Ret)),时间窗口化是对其“已实现矩跨期聚合”步骤的沿用
+  seeds:
+  - ts_mean(day_kurt(Ret), 5)
+  - ts_mean(day_kurt(Ret), 10)
+  - ts_mean(day_kurt(Ret), 20)
+  - ts_mean(day_kurt(Ret), 60)
+  - ts_max(day_kurt(Ret), 20)
+  - ts_max(day_kurt(Ret), 60)
+  - ts_stddev(day_kurt(Ret), 20)
+  - ts_stddev(ts_mean(day_kurt(Ret), 5), 20)
+  - sub(day_kurt(Ret), mul(day_skew(Ret), day_skew(Ret)))
+  - ts_mean(sub(day_kurt(Ret), mul(day_skew(Ret), day_skew(Ret))), 20)
+  - cs_last_high10(ts_mean(day_kurt(Ret), 20), ListAge)
+  - cs_last_high20(ts_mean(day_kurt(Ret), 10), cross_valid_count(day_last(Close),
+    60))
+  - cs_first_low20(ts_mean(day_kurt(Ret), 20), LimitWidth)
+R:
+- head: cs_last_high20(cs_last_high10(sub(ts_var(ts_mean(day_distinct_ratio(Vwap),
+    20), 10), LogFloatCap), ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares,
+    10)), 60), 60)), sub(LogTotalCap, LogFloatCap))
+  why: loc.md本轮自己的拆解没有给出比原head更好的变体(“比原head好的拆解变体:没有”),但round2审计在检验一个几乎相同的子结构(`sub(ts_var(ts_mean(day_distinct_ratio(Vwap),
+    20), 10), LogFloatCap)`单独作为E核心)时给出了一条可以直接复核的量化证据:这个y位的直接算术组合与市值控制LogFloatCap的原始秩|ρ|=1.00——不是中度相关,是完全重合,说明这一步基本只是把市值控制换了个写法混进了y位(round2/audit_1.yaml
+    slot a原话)。head a自己的y位内层正是同一个子结构,没有理由预期它在head a里的表现会不一样——head a外层的两层cs_last_high筛选,大概率一部分作用就是在压住/筛掉这个y位里混进的多余市值信息,而不是在利用它。这是“部件烂”的具体依据,不是猜测。三个变体只替换这一处部件,其余算子、窗口、筛选带宽逐字保留原head,改动范围最小:variant
+    1把y位内层的“减LogFloatCap”直接去掉,只留纯粹的颗粒度不稳定性,其余结构原样保留,测“去掉这个部件,score是涨是跌”;variant 2把“减LogFloatCap”换成同样位置的`cs_last_high20`排序筛选(排序安全,不做算术),测“市值信息要不要在这里体现,只是体现方式换成筛选位”是否比完全去掉更好,这正是round2审计给出的第一条修复建议的直接应用;variant
+    3在variant 1的基础上,把外层的自由流通缺口筛选`sub(LogTotalCap, LogFloatCap)`换成更直接的`LogFloatCap`筛选,测外层筛选变量本身是否也有改进空间。三个变体都没有引入新的除法、新的前视或新的面板常数风险,用到的算子(`ts_var`/`ts_mean`/`day_distinct_ratio`/`cs_last_high10`/`cs_last_high20`/`ts_max`/`mul`)全部是原head已经在用的、coverage/distinct已验证正常的算子。
+  variants:
+  - cs_last_high20(cs_last_high10(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10),
+    ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60),
+    60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high10(cs_last_high20(ts_var(ts_mean(day_distinct_ratio(Vwap),
+    20), 10), LogFloatCap), ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares,
+    10)), 60), 60)), sub(LogTotalCap, LogFloatCap))
+  - cs_last_high20(cs_last_high10(ts_var(ts_mean(day_distinct_ratio(Vwap), 20), 10),
+    ts_max(ts_max(mul(ts_var(LogFloatShares, 10), ts_var(LogFloatShares, 10)), 60),
+    60)), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,176 @@
+seed: 802
+round: 3
+slots:
+- type: E
+  core: day_mean(in_delta(Volume, 30))
+  hypothesis: '核心 = day_mean(in_delta(Volume, 30)),本组第 1 轮 E 位的核心,本实验对它的第 2 次、也是最后一次
+    E 使用(规则:每个核心全实验至多 2 个 E 位)。
+
+
+    代数关系(第 1 轮 analysis.md 已证,本轮重述以保持 missions.yaml 自足):in_delta(Volume, 30) 在 241
+    根分钟线上把头尾两个 30 分钟块相减、中间 181 分钟被精确相消丢掉,day_mean 再除以 241,整条表达式恒等于 (最后 30 分钟成交股数和
+    − 最前 30 分钟成交股数和) / 211 —— 只看头尾两点的块差。这和本种子另一个核心 day_centroid(Volume)(全部 241 根分钟连续加权的一阶矩)在构造上是两种不同的量,不是同一个东西换了写法:一个是两点差分,一个是连续分布的重心。当前快照
+    16 个 head 里仍有 3 个(score +1.51 / +0.81 / +0.70)直接建立在这个核心之上,说明这条线索稳定,没有在第 1、2 轮被挖干。
+
+
+    为什么这轮把第 2 个 E 名额投在这个核心而不是继续挖 day_centroid(Volume):day_centroid(Volume) 现在是整份快照里挖得最深的核心
+    —— 16 个 head 里有 11 个(8 个来自 M、3 个来自我们自己第 2 轮)直接建立在它之上。GP 的库禁令(与库里任一 head 日度秩 |ρ|
+    ≥ 0.7 就拒)下,继续在它外面长新种子撞到这 11 个近亲 head 之一的概率已经明显抬高;day_mean(in_delta(Volume, 30))
+    只支撑 4 个 head,外围空间还远没有饱和。把最后一个"深挖已验证核心"的机会放在没挖满的核心上,而不是挖得最满的核心上。
+
+
+    本轮外围(全新,第 1 轮 13 个种子 —— 持续性 / 自身异常 / 价格定性 / 竞价拆分 —— 里完全没有出现过):和 A 股涨跌停"磁吸 / 锁死"机制交互。day_at_max_ratio(Close)、day_at_min_ratio(Close)(Partura
+    ops_ext.py,已读源码)分别是"当日 241 根分钟 Close 恰好等于当日最高 / 最低值的分钟数占比" —— 正常股票这个比例在 1/240
+    附近,被涨停 / 跌停锁死一段时间的股票会显著偏高,直接、无歧义地读出"这一天有没有、有多久被钉在价格区间的某一端"。价格限制下的磁吸效应(Kim & Rhee,
+    1997,对东京证交所价格限制表现的研究;这里借用的是"接近 / 触及限价本身会系统性改变当日成交的时间分布"这个机制,不是对其具体数值结论的直接复现)说明价格被钉在某一端会扭曲成交的日内分布形状。(最后
+    30 分钟 − 最前 30 分钟)这个块差测的正是"成交在日内两端怎么分配" —— 如果其中一端恰好被限价锁死,块差的经济含义就从 Admati & Pfleiderer(1988)信息驱动框架下的"持续性时点画像",变成了"限价机制制造的机械性尾部效应",是两种不同的
+    alpha 来源,外围的目的是把它们分开。
+
+
+    (1) 条件乘积,测块差本身在有无限价锁死时是否仍然成立:mul(core, day_at_max_ratio(Close)) 测"头尾块差 × 当天被锁在最高点的程度",mul(core,
+    day_at_min_ratio(Close)) 对称地测锁在最低点;两者相减后再乘块差(数学上等于 mul(core, sub(day_at_max_ratio(Close),
+    day_at_min_ratio(Close)))),给出一个方向性的"锁多头 vs 锁空头"净交互。
+
+
+    (2) 正交化,检验块差本身的 alpha 是不是限价锁死的副产品:cs_regres(core, day_at_max_ratio(Close))、cs_regres(core,
+    day_at_min_ratio(Close)) —— 如果去掉与锁死程度的线性关系之后块差仍然有效,说明核心本身不依赖限价机制,是更稳健的来源。
+
+
+    (3) 持续性与 regime 变化:cross_mean(mul(core, ·), 20) 测"是否习惯性地在涨停 / 跌停日尾盘放量"这个结构性画像(这类股票可能是散户活跃、容易被反复炒作涨跌停的票,是一个慢变的股票特征);cross_delta(mul(core,
+    ·), 5) 测这种交互是不是最近才出现的新现象(regime 切换),而不是一贯如此;两者合起来给出 Heston, Korajczyk & Sadka(2010)框架下"日内固定分段的收益存在跨天持续性"这个大方向支持的时间尺度分解。
+
+
+    样本外还会在的理由:A 股涨跌停限制写在交易所规则里,幅度(10% / 20% / 创业板科创板 20% / ST 股 5%)历史上基本稳定,不随某一段行情的强弱改变,是比"某一类股票当前的交易行为"更底层、更不容易漂移的制度性约束。数学上:day_at_max_ratio
+    / day_at_min_ratio 要求至少两根有效分钟(n > 1)才有定义,被锁死的情形天然分钟计数充足,不会出现除零或近零分母爆点(ops_ext.py
+    源码里两者都没有裸除法,分母是 minute 计数并 clamp(min=1));cs_regres 内部对近零方差有 EPS 保护;10 个种子里没有一个用裸
+    div()。
+
+
+    诚实的风险披露:这条外围对这个核心是第一次试,不像本轮位 b 那样已经有 round2 GP 自由探索撞出来的"预告"证据,如果 0 个 head 产出,更可能是信号强度不够(涨跌停事件本身在样本里出现频率有限,扣完
+    15bp 和残差化之后信息量不够),而不是机制判断错误。'
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, Pfleiderer
+    year: '1988'
+    url: https://ideas.repec.org/a/oup/rfinst/v1y1988i1p3-40.html
+    treatment: 日内成交形状的信息驱动基准理论 -> 用作对照组:如果块差的 alpha 在限价锁死区间消失(cs_regres 之后归零),说明它更接近机械性尾部效应而非信息驱动的持续性画像
+  - title: 'Price Limit Performance: Evidence from the Tokyo Stock Exchange'
+    authors: Kim, Rhee
+    year: '1997'
+    url: https://www.jstor.org/stable/2329502
+    treatment: 价格限制下的磁吸效应:接近/触及限价本身系统性改变成交的日内分布 -> 把 day_at_max_ratio/day_at_min_ratio(Close)
+      当作与核心独立的限价锁死机制去交互、正交化
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Heston, Korajczyk, Sadka
+    year: 2010-08
+    url: https://ar5iv.arxiv.org/html/1005.3535
+    treatment: 日内固定分段的收益存在跨天自相关持续性 -> 支持对锁死交互做 20 日持续性 / 5 日 regime 变化这类时间尺度分解是有依据的方向
+  seeds:
+  - mul(day_mean(in_delta(Volume, 30)), day_at_min_ratio(Close))
+  - mul(day_mean(in_delta(Volume, 30)), sub(day_at_max_ratio(Close), day_at_min_ratio(Close)))
+  - cs_regres(day_mean(in_delta(Volume, 30)), day_at_max_ratio(Close))
+  - cross_mean(mul(day_mean(in_delta(Volume, 30)), day_at_max_ratio(Close)), 20)
+  - cross_mean(mul(day_mean(in_delta(Volume, 30)), day_at_min_ratio(Close)), 20)
+  - cross_delta(mul(day_mean(in_delta(Volume, 30)), day_at_max_ratio(Close)), 5)
+  - cross_delta(mul(day_mean(in_delta(Volume, 30)), day_at_min_ratio(Close)), 5)
+  - cross_mean(mul(day_mean(in_delta(Volume, 30)), sub(day_at_max_ratio(Close), day_at_min_ratio(Close))),
+    20)
+- type: E
+  core: day_quantile_q25(Close)
+  hypothesis: '核心 = day_quantile_q25(Close),本轮定位共性表第 1 行(均值差 +1.32,p=0.000,11/514
+    个已评分候选含它),机械核心卡第 12 项。本实验对它的第 1 次、也是本种子仅剩的一次 E 机会(第 3 轮是最后一轮)——一个和前两轮核心(day_mean(in_delta(Volume,30))、day_centroid(Volume))完全不同维度的信号:前两者都是"当日成交量在
+    241 根分钟上怎么分布"(时点类,字段是 Volume/Amt),这一个是"当日 Close 价格分布的下四分位数"(水平类,字段是 Close),是本种子迄今第一个不建立在成交量日内分布之上的核心。
+
+
+    定义:day_quantile(x, 0.25) 取当日 241 根分钟 Close 的下四分位数(torch.nanquantile,已读 AlphaCube
+    源码 alphacube/operators/dt_day.py)。同一天内复权因子是常数,这个值本质上是当日价格水平的一个稳健代理(比 day_last(Close)
+    更不受尾盘单笔极端报价影响)。按天在全市场截面上排序,约等于规则 §4 明确认可的"复权价格的截面排序 ≈ 自某基期以来的累计收益,是长周期动量/反转信号"——但这不是它唯一的信息来源:不同股票的名义股价水平同时还携带了与累计收益无关的信息,即历史上选择的面值
+    / 是否拆股 / 配股,这正是"名义股价错觉"(nominal price illusion)文献研究的对象。
+
+
+    机制(借用的是文献的机制,不是对具体数值结论的直接复现):Birru & Wang(2016)发现名义股价本身(不只是它背后代表的基本面)系统性影响投资者行为——同一家公司,股价名义水平更低时,投资者倾向把它当作"更便宜、上涨空间更大"对待;Kumar(2009)发现这类低名义价、高波动的"彩票型"股票存在持续的超额彩票需求,并伴随随后偏低的风险调整收益。两篇文献共同支持的机制是:day_quantile_q25(Close)
+    作为名义价格水平的代理,其截面排序里除了长期动量/反转那部分,还叠加了一层"名义价格错觉 / 彩票偏好"驱动的、不随某一段行情变化的行为性定价偏差。
+
+
+    但名义价格和两个明显的混淆变量机械相关,外围的任务是把它们分开:
+
+
+    (1) 和分钟级价格网格粗糙度的分歧。day_distinct_ratio(Close)(ops_ext.py,已读源码,文档原文:"on a price:
+    how many price levels the day visited -- coarse for low-priced stocks on a one-tick
+    grid")直接测的就是"当日 Close 访问过多少个不同价位、除以分钟数"。同样的最小报价单位(如 0.01 元)下,股价越低,相对跳动的绝对价位格数越少,价格网格天生更粗——这是一个纯机械的分母效应(Harris,
+    1994,最小报价单位系统性放大低价股的相对买卖价差 / 报价粒度),和"名义价格错觉"这种行为性机制不是一回事,但两者高度共线。mul(core, day_distinct_ratio(Close))
+    直接测两者的乘积交互;cs_regres(core, day_distinct_ratio(Close)) 去掉网格粗糙度能解释的那部分,剩下更纯粹的"价格水平本身"效应;cs_regres(day_distinct_ratio(Close),
+    core) 做反方向正交化,检验网格粗糙度里有没有不能用价格水平解释的部分(比如停牌/半停牌造成的粗糙,而非单纯低价造成的粗糙)。
+
+
+    (2) 和市值的分歧(名义股价 ≠ 市值:同样市值下股本越大则每股价格越低,两者机械相关但不是一回事)。cs_regres(core, LogFloatCap)
+    去掉市值能解释的那部分名义价格;再叠加 (1) 的网格正交化,cs_regres(mul(core, day_distinct_ratio(Close)),
+    LogFloatCap) 与双层正交化版本 cs_regres(cs_regres(core, day_distinct_ratio(Close)), LogFloatCap),检验"名义价格效应"在同时去掉网格粗糙度和市值之后是否仍然存在——如果仍然存在,更接近行为性的价格错觉,而不是机械的规模/粒度效应。
+
+
+    (3) 变化而非水平:cross_mean(·, 20) / cross_delta(·, 5) 的持续性 / regime 版本,测的是这个价格网格交互是稳定特征,还是最近才出现(比如最近连续缩量导致网格变粗)。
+
+
+    样本外还会在的理由:名义价格错觉/彩票偏好是投资者认知层面的行为模式,不依赖某一段行情的强弱;报价单位(tick size)是交易所规则,长期稳定。数学上:day_distinct_ratio
+    要求至少两根有效分钟(n > 1)才有定义,没有除零;day_quantile 用 torch.nanquantile,对缺失值安全;cs_regres 内部方差分母有
+    EPS 保护;10 个种子里没有一个用裸 div()。
+
+
+    诚实的风险披露:核心本身的截面排序大概率带有相当一部分长期动量/反转色彩(规则 §4 已说明这不算问题,但也不是全新现象),审计更可能把创新度打在"快照里确实没人直接用
+    Close 的分位数做核心"这一点上,而不是"机制闻所未闻"。这也是本种子两轮 E 位里第一次完全脱离 Volume/Amt 字段的尝试;如果 0 个 head
+    产出,最可能的原因是行为性价格错觉在扣 15bp 成本、残差化市值/反转/流动性控制之后信息量不够,而不是设计判断错误。受什么启发:round2 的 E 位(核心
+    day_centroid(Volume))在我们完全没有设计这个方向的情况下,GP 自由生长出的 3 个 head 里有 2 个用到了 day_zero_ratio(Close)/day_centroid(Volume)
+    的交互(score +0.83、+0.81,见 loc.md 共性表第 15、18 行),说明 Close 价格分布这条线索已经被 GP 自己摸到、证明过有信息量——这轮把它从"GP
+    偶然撞上"升级为"PI 主动设计的核心",用更直接的操作(分位数本身,而不是停滞比例)正面触碰同一层信息。'
+  literature:
+  - title: Nominal Price Illusion
+    authors: Birru, Wang
+    year: '2016'
+    url: https://doi.org/10.1016/j.jfineco.2016.01.027
+    treatment: 名义股价本身(非仅背后基本面)系统性影响投资者行为与定价 -> 用 day_quantile_q25(Close) 作为名义价格水平的代理,预期方向偏空(名义价越低,后续经风险调整收益越低)
+  - title: Who Gambles in the Stock Market?
+    authors: Kumar
+    year: '2009'
+    url: https://doi.org/10.1111/j.1540-6261.2009.01483.x
+    treatment: 低名义价、高波动的彩票型股票存在持续的彩票需求与随后偏低收益 -> 支持名义价格效应的方向,并支持对它做持续性(cross_mean)而非仅截面水平的提取
+  - title: Minimum Price Variations, Discrete Bid/Ask Spreads, and Quotation Sizes
+    authors: Harris
+    year: '1994'
+    url: https://doi.org/10.1093/rfs/7.1.149
+    treatment: 最小报价单位机械性放大低价股的相对价格粒度/价差 -> 用 day_distinct_ratio(Close) 把这个机械混淆因素从名义价格效应中正交化出去
+  seeds:
+  - mul(day_quantile_q25(Close), day_distinct_ratio(Close))
+  - cs_regres(day_quantile_q25(Close), day_distinct_ratio(Close))
+  - cs_regres(day_distinct_ratio(Close), day_quantile_q25(Close))
+  - cross_mean(mul(day_quantile_q25(Close), day_distinct_ratio(Close)), 20)
+  - cs_regres(day_quantile_q25(Close), LogFloatCap)
+  - cross_mean(cs_regres(day_quantile_q25(Close), LogFloatCap), 20)
+  - cs_regres(mul(day_quantile_q25(Close), day_distinct_ratio(Close)), LogFloatCap)
+  - mul(day_quantile_q25(Close), cross_delta(day_distinct_ratio(Close), 5))
+  - cross_delta(mul(day_quantile_q25(Close), day_distinct_ratio(Close)), 5)
+  - cs_regres(cs_regres(day_quantile_q25(Close), day_distinct_ratio(Close)), LogFloatCap)
+R:
+- head: cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+  why: '本轮拆解(loc.md/loc.json r_candidates)把这个 head 里重复出现两次的 cross_quantile_q25(signedpower(cs_first_high40(...)),
+    241) 外层包装中的第一处(ts_argmin 的输入位置)去掉,子树评分到 +1.8165(train +1.82,valid +1.87),比原 head(+1.6408)高
+    +0.1757(loc.json r_candidates 字段,kind=knockout,gain=0.1757)——两个嵌套的 241 日滚动 25
+    分位数是在对一个已经被同款算子处理过的量再做一次重复操作,证据显示这层包装多余、甚至有害,不是必要机制。
+
+
+    原 head 里这同一个"cross_quantile_q25(signedpower(...), 241)"包装结构在另一处(外层 cs_first_high40
+    的第二个参数位置)完整出现,拆解没有单独测过那一处,但两处在结构上完全对称——同一个子树、同一种多余操作。额外提交一个把两处都去掉的版本,检验这个证据能不能叠加。谨慎披露:round2
+    的 R 里曾测过同一个 head 的上一代版本"knockout + window 20->10"叠加,结果比单独 knockout 更差(1.42 < 1.64,见
+    r3/R_prev.json 第 1、2 行)——说明独立看起来合理的两处改动不一定能无脑叠加。这次的双重 knockout 改的是结构对称的同一种操作(不是
+    knockout + window 的异质组合),风险应该更低,但不预设它必然优于单独 knockout。'
+  variants:
+  - cs_first_high40(ts_argmin(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 20), cross_quantile_q25(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 241))
+  - cs_first_high40(ts_argmin(signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))), 20), signedpower(cs_first_high40(ts_argmin(cross_quantile_q25(signedpower(day_centroid(Volume)),
+    241), 20), day_centroid(Volume))))
+audit:
+  attempts: 1
+  file: audit_1.yaml

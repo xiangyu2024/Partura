@@ -1,0 +1,85 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: >
+      核心 div(day_first(Amt), day_sum(Amt))(ATT,开盘第一分钟成交额占全天的比例)同时满足 E 核心的两个资格:
+      它是 loc.md 共性表第 15 行(均值差 +0.88,p=0.001,477 个候选里 16 个命中)的子树,也是本轮快照里 +1.12 head
+      (c08s806Pr2b_Nb)的直接子树。核心与 5 个控制的 |ρ| 全部 ≤0.28(liq .251 / vol .176 / rev .139 / known .28 /
+      size .093,见 corr_1.json slot a core),远低于 E 核心的 0.8 硬门槛。12 个种子与库里 7 个 head 的最大 |ρ| 都落在
+      0.20–0.57(最高是 seed3 cross_tail_mean_q75,0.573),没有一个碰到 §3 的 0.7 自动划掉线,控制列最高是 seed4
+      (cross_tail_mean_q25)的 known=0.761、liq=0.744,接近但没到 0.8,按 §4「与控制中度相关不是问题」不构成划掉理由,
+      没有种子需要划掉。
+      对照 r1/r2 的 audit_record.json:ATT 此前只以 4 种外围出现过——cross_mean(ATT,20)(r1)、mul(log(O),ATT)(r1)、
+      mul(ATT,abs_(log(O)))(r2)、cross_corr(ATT,log(O),20)(r2),从未被单独深挖它自身的水平/稳定性/变化率。本位的 12
+      个外围(cross_ema 两个半衰期、tail_mean 两侧尾部、stddev、madz、delta、乘 day_std(Ret)、两种 bucket_rank、与日内
+      振幅质心的 corr、cs_last_low05 排除诊断)无一与这 4 种重复,是真正没问过的轴:『开盘关注度集中到什么程度』这件事
+      本身是否跨日可持续,而不是它和隔夜跳空的交互。loc.md 的拆解已经证明 ATT*|O| 这个子树单独敲掉符号门后分数从
+      +1.12 掉到 -0.21(必要性 +1.34),但也显示子树本身(ATT*|O|,不带符号门)sufficiency 为 -1.04(train),
+      说明需要先弄清楚 ATT 本身的结构,才能判断信息来自水平还是它与隔夜方向的绑定——这正是本位要问的。
+      逐个算子核对(ops_ext.py / alphacube dt_cross.py):cross_tail_mean_q75/q25 是窗口内 75%/25% 分位以上/以下的
+      条件均值(_tail_mean,NaN 需要 ≥2 个有效日);cross_stddev/cross_madz 是滚动标准差/稳健 MAD-z;cross_delta(x,d)=
+      x[t]-x[t-d];cross_corr 是滚动相关;cs_bucket_rank 按控制变量十分桶后桶内百分位;cs_last_low05 用
+      cross_valid_count 做最低 5% 排除——全部与假设文字描述一致,没有发现超出 ATT 已知的『零成交给 NaN』之外的新除零
+      或饱和路径,窗口选择(10/20/40/60)之间互相呼应、不是随意拼凑。
+      如果本位有 alpha,最可能来自:ATT 的水平、波动或变化率本身就是『这只股票惯常把多少当日信息放在集合竞价』的稳定
+      特质,不需要隔夜跳空做中介——机制由 Admati-Pfleiderer(1988)的信息聚集均衡与 Heston-Korajczyk-Sadka(2010)的
+      钟表周期持续性支持。
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 7, 9]
+    reasons: >
+      §3 的确定性规则(与某个 head 日度秩 |ρ|≥0.7 自动划掉)命中 3 个种子:seed4 `mul(ATT,pow_2(O))`(无符号门)
+      max|ρ|=0.739、seed7 `cross_mean(mul(is_gt(O,0),ATT),20)`(只留涨侧关注度水平,无大小权重)max|ρ|=0.802、
+      seed9 `cross_mean(mul(is_gt(O,0),mul(ATT,day_std(Ret))),20)`(涨侧×当天波动)max|ρ|=0.828(corr_1.json)。
+      三者比对的都是同一个 +1.12 head:is_gt(O,0) 把 O 限定为正之后,abs_(O)*O ≡ O*O,所以原 head 实际等价于
+      cross_mean([O>0]*ATT*O²,20)(R 组对这个 head 的两个简化 variant 也独立印证了这一点)。seed7 是它去掉 O² 权重后
+      的子集,seed9 是把 O² 换成 day_std(Ret) 后的子集,seed4 是去掉符号门后的子集——三者都只是在已经证实的『涨侧确认』
+      结构上做局部削减,不是新机制,GP 库禁令本来也会拒,划掉与 PI 自己把它们叫作『必要性诊断』的定位一致(诊断可以
+      解释为什么划,但不能因此豁免划)。划掉后剩 7 个种子(1/2/3/5/6/8/10),仍 ≥4,位通过。
+      逐个核对剩下种子:n1/n2(seed1/2,is_lt 镜像,分别用 abs_(O)*O 与 pow_2(O) 两种权重)把符号门整体换成跌侧,
+      abs_(O)*O 在 O<0 时取负、pow_2(O) 恒正,干净地把『方向』和『大小』拆开,是该结构严格的符号镜像,不是重新设计;
+      n3(seed3)= 涨侧 O² 能量 - 跌侧 O² 能量,纯粹的差,没有除法或对数,无数值问题;n5(seed5)=cross_corr(ATT,|O|,20)
+      与 n8(seed8)=cross_corr(ATT,昨日日内收益,20)都是库里已经用过的 cross_corr 结构(+0.50 head、本轮 slot a
+      seed11)换第二个变量,是全新的『特质/滞后』轴而不是同日交互,相关度表显示 n8 的 max|ρ|=0.099,证实它和库里任何
+      head 都不像;n6(seed6,跌侧 ATT 水平)与被划掉的 n7 镜像但本身 max|ρ|=0.386、n10(seed10,跌侧 ATT×day_std(Ret))
+      与被划掉的 n9 镜像但本身 max|ρ|=0.44,均未触及 0.7 线,保留。没有发现前视(O 用的是 cross_delay(Close,1),与
+      已接受的 +1.12 head 同一种隔夜定义)、除零爆点或退化定义。
+      如果本位有 alpha,最可能来自:An-Huang-Li(2022)证明过的中国隔夜异象方向不对称本身——跌侧被开盘关注度确认的
+      隔夜跳空,是续性(呼应 Blume-Easley-O'Hara 的放量确认论点)还是像有限注意力文献预测的那样更快被修正,这是对已
+      有 +1.12 head 的一次干净的对称性检验,不是同一个东西换皮。
+    revise: '—'
+R:
+  - head: 'cross_mean(mul(is_gt(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 0), mul(mul(div(day_first(Amt), day_sum(Amt)), abs_(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), log(div(day_first(Open), cross_delay(day_last(Close), 1))))), 20)'
+    soundness: 4
+    reasons: >
+      is_gt(O,0) 掩码把 O 限定为正之后,abs_(O)≡O,所以『去掉 abs_(O) 只留符号+大小项』与『去掉最外层单独的 log(O)
+      只留大小项』这两个 variant 在代数上收敛成同一个函数 mask(O>0)*ATT*O(线性,不再是平方)——相关度表里两个
+      variant 的 max|ρ|(0.981)与 5 个控制的数值逐位相同(liq .287/vol .357/rev .234/known .333/size .02),独立
+      印证了这一点。PI 把它们写成两个不同的选项有一点误导(实际只有一种可去的冗余,不是两种),但背后的诊断是对的:
+      loc.md 的 knockout 显示去掉其中任一冗余因子,score 都从 +1.12 升到 +1.26(train +1.26/valid +1.75,同向),
+      与原 head 的 ρ 足够高(≈0.98≥0.5,应替换而不是新收录),known 残差 |ρ|=0.333<0.5,满足替换的数值门槛。机制
+      (『隔夜跳空的大小信息在这条链里被算了两次』)说得通,没有数学问题。
+  - head: 'cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30)), cross_mean(day_std(Amt), 30))'
+    soundness: 4
+    reasons: >
+      拆解给出的两处修复各自独立验证:外层把分桶控制 cross_mean(day_std(Amt),30) 换成当天的 day_std(Amt)(必要性
+      -0.18,score +1.01→+1.19,train/valid 同向),内层 cross_ema(day_centroid(Amt),20) 半衰期 20→10(score
+      +1.01→+1.36,train +1.29→+1.50,valid +1.01→+1.36,同向)。两个 variant 分别对应这两处修复,与 loc.md
+      的数字一一对应;相关度表显示两者与原 head ρ 都 ≥0.5(0.942/0.996),known 残差 |ρ| 都 ≤0.02<0.5,满足替换的
+      数值门槛。机制上『用今天而不是 30 日平滑后的成交波动分桶』『用更快的半衰期追踪成交质心』都说得通,没有数学
+      问题;唯一可惜的是两处修复没有被合并测试(半衰期 10 + day_std(Amt) 同时换),留了一个可能更好的候选没测,
+      但这不是挡的理由。
+  - head: 'cs_bucket_rank(cs_bucket_rank(cross_ema(day_centroid(Amt), 20), cross_mean(cross_ema(day_centroid(Amt), 20), 30)), cross_mean(cross_ema(day_centroid(Amt), 20), 30))'
+    soundness: 4
+    reasons: >
+      与上一条共享同一个『内层半衰期太慢』的部件问题:window 行把半衰期从 20 改到 10,score 从 +0.96(train
+      +0.96/valid +1.64)涨到 +1.07(train +1.07/valid +1.69),增益 +0.11,刚过 §2 的 +0.1 门槛,且 train/valid
+      改善方向一致(不是单边样本内过拟合),机制与上一条同构,合理。variant 与原 head ρ=0.981≥0.5、known 残差
+      |ρ|=0.009<0.5,满足替换的数值门槛,没有数学问题;但增益贴着阈值下限,PI 或下游若重算分数出现任何随机性,
+      这一条最先掉出替换资格,值得留意,不作为本轮挡的理由。
+summary: 'slot a(ATT 单独结构,12 种子全留)与 slot b(ATT×隔夜方向不对称,划掉 3 个与 +1.12 head 高相关的子集种子后剩 7 个)都通过;3 个 R 简化机制均合理,R1 的两个 variant 代数上其实是同一个函数,已在 reasons 标出,不影响替换资格。'

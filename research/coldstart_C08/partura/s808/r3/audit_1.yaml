@@ -1,0 +1,16 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [12]
+    reasons: 'E 位,核心 ts_mean(day_centroid(Volume),20) 是 head +0.83 的子树(cs_rank 之内),源码核对:day_centroid = sum(t*|x|)/sum|x|/(T-1),tot>0 才有值,有界 [0,1],无下溢/近零除/前视问题;ts_mean 20 日只有热身期缺失。核心与控制 liq 0.48 / vol 0.42 / known 0.51 / size 0.13,均 < 0.8,E 位条件满足;与 head(+0.83 那条)原始 0.70、残差 0.75,说明核心本身离该 head 很近,但外围换成二阶处理(种子 3 ts_std 0.38、种子 4 autocorr 0.20、种子 5 漂移 0.40、种子 6 cross_regbeta 0.15、种子 9 ts_corr 0.05、种子 10 0.18、种子 11 0.30)与全部 head 的 |ρ| 都 < 0.5,是对核心的实质性新用法(库里只把它当秩差的减项或 tail 输入)。种子 1(0.67)、种子 8(0.67,残差 0.75)仍接近 +0.83 head,但未过 0.7 线,按宽松原则保留,只是几乎是核心的换皮,期望不高。种子 7(known 0.46,liq 0.44)可留。种子 12 ts_rank(.,120) 在表中标为废品(未过确定性门槛),划掉。其余 11 个剩余。若有 alpha:最可能来自成交时点(尾盘集中/开盘集中)的慢变持股人与执行结构,以及其漂移/不稳定度(种子 3、5、9、11),且 train/valid 同号(+1.75/+1.28),不是单窗口常数。创新度只给 3 因为核心已在库中并与某 head 0.70 相关,外围虽新但半数种子仍在核心的同一轴上。'
+    revise: '—'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 9]
+    reasons: 'N 位:day_gini(Volume) 与 day_es_ratio_hi(Volume) 是分钟成交量分布形状(集中度、右尾),库里无任何以 day_gini / day_es_ratio / day_at_max_ratio 为原子的 head,与 10 个 head 的原始 |ρ| 最大 0.54(种子 10)、多数 < 0.5,是新的量分布矩,不是 day_centroid 的换皮(质心是一阶矩)。源码核对:day_gini 对 |x| 排序、(2Σ i v_i/(n·tot)−(n+1)/n),tot 有 clamp 且 tot>0 才有值,有界无爆点;day_es_ratio_hi 在分位近零时记 NaN,不会被锁停日的 1e4 爆点支配。种子 1 ts_mean(day_gini(Volume),60) 与 liq 控制 |ρ| 0.80(≥ 0.8 自动划掉;也说明基尼大半是流动性/稀疏成交的另一种读法),划掉;种子 9 ts_max(day_at_max_ratio(Volume),99) 表中标废品(绝大多数日是 1/240 并列,面板近乎常数/靠并列),划掉。种子 11 对 liq 0.71 / known 0.62 / size 0.51 偏高但在 bucket_demean 里已部分去除,不到线,保留;种子 3(liq 0.54)、种子 2(liq 0.48)可留,新尺子已去掉对 liq 的非线性暴露。与 head 的 |ρ| 都 < 0.7,剩 10 个种子。若有 alpha:最可能来自散户脉冲式交易 vs 机构拆单的持股人结构(高基尼/厚右尾对应彩票偏好与过度定价),以及基尼的时序稳定度/与量加权收益的联动(种子 5、6、7、8、12),这些去掉了水平上与流动性的重叠。弱点:水平型种子与流动性高度共线,收益可能主要来自二阶(ts_std / ts_corr / regbeta)种子。'
+    revise: '—'
+R: []
+summary: 'a 位是对已入库核心 day_centroid(Volume) 的二阶处理(新外围、核心本身偏近旧 head),b 位是新的成交量分布形状(基尼/右尾),两位均无数学问题,放行;划掉 a12、b1(liq 0.80)、b9(废品)。'

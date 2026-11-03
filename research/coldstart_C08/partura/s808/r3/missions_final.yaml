@@ -1,0 +1,79 @@
+seed: 808
+round: 3
+slots:
+- type: E
+  core: ts_mean(day_centroid(Volume), 20)
+  hypothesis: '核心是『20 日平均的成交量日内时间重心』:day_centroid(Volume) 是当天分钟成交量在 0(开盘)~1(收盘)上的质心,ts_mean
+    20 日平滑后是个股习惯性的成交时点。 本种子的定位显示 cs_rank(ts_mean(day_centroid(Volume),20)) 单独就有 +1.28(train
+    +1.75 / valid +1.28),且在 head +0.83 里是必要部件(去掉后 -0.09), 同时它出现在 30 个候选里,是共性表里最稳的原子之一;它在库里目前只被当作『另一个量的秩差的减项』(sub(cs_rank(wstd-kurt),
+    cs_rank(核心)))或 cross_tail_mean 的输入, 从没被拿来做时间序列层面的处理。机制:成交重心偏后(尾盘集中)的股票由机构收盘定价/指数调仓/尾盘拆单主导,偏前的由散户开盘情绪与隔夜消息主导,
+    这是个股的执行结构特质,慢变、不依赖行情(Admati-Pfleiderer 1988 的日内成交分布理论)。本轮的外围全部换成库里没有的『对核心做二阶处理』:
+    (1)重心的漂移(20 日 减 120 日,种子 5)和不稳定度(ts_std,种子 3;自相关,种子 4;ts_rank,种子 12),问的是『习惯』的变化而不是水平;
+    (2)用分桶把核心放进别的字段里比较(LogFloatShares 分桶、day_distinct_ratio 分桶,种子 1、8)——和已知的 cs_rank
+    减法完全不同的去混淆方式; (3)与长窗口回归链路结合(种子 6、11:对 Open-Ret 协同或波动做 beta,借用本种子唯一两个独立 head 的
+    cross_regbeta 骨架),(4)尾部统计与时序相关(种子 7、9)。 已见过的含该核心的外围只有 cs_rank 单包、sub/add 与 cs_rank
+    的两腿组合、ts_max 包装,上述写法均不在其中。 为什么样本外还会在:成交时点结构由市场微结构(集合竞价、尾盘指数/基金调仓习惯、散户占比)决定,是慢变量;且本核心
+    train/valid 同号(+1.75/+1.28),不靠单一窗口常数。'
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, A.R.; Pfleiderer, P.
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 成交量日内分布反映知情/流动性交易的聚集时点,用其时序漂移与稳定度刻画交易者结构变化
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Llorente, G.; Michaely, R.; Saar, G.; Wang, J.
+    year: '2002'
+    url: https://doi.org/10.1093/rfs/15.4.1005
+    treatment: 量与收益的动态关系随信息交易比重分化,用长窗口回归链路把成交时点接到价量协同上
+  seeds:
+  - cs_bucket_rank(ts_mean(day_centroid(Volume), 20), LogFloatShares)
+  - sub(cs_rank(ts_mean(day_centroid(Volume), 20)), cs_rank(ts_mean(day_centroid(Amt),
+    120)))
+  - ts_std(ts_mean(day_centroid(Volume), 20), 60)
+  - cross_autocorr_s1(ts_mean(day_centroid(Volume), 20), 60)
+  - sub(ts_mean(day_centroid(Volume), 20), ts_mean(day_centroid(Volume), 120))
+  - cross_regbeta(day_cov(Open, Ret), ts_mean(day_centroid(Volume), 20), 241)
+  - cross_tail_mean_q25(ts_mean(day_centroid(Volume), 20), 120)
+  - cs_bucket_demean(ts_mean(day_centroid(Volume), 20), day_distinct_ratio(Ret))
+  - ts_corr(ts_mean(day_centroid(Volume), 20), day_wmean(Ret, Volume), 60)
+  - cs_last_high10(day_zero_ratio(Open), ts_mean(day_centroid(Volume), 20))
+  - ts_regbeta(ts_mean(day_centroid(Volume), 20), ts_mean(day_wstd(Ret, Volume), 20),
+    120)
+- type: N
+  hypothesis: 新 idea:『成交量分布形状』作为算法/机构交易占比的代理。day_gini(Volume) 是当天分钟成交量的基尼系数(0 = 全天均匀,→1
+    = 集中在少数几分钟,有界、无量纲,源码里专门避免了除近零爆点), day_es_ratio_hi(Volume) 是 95% 分位以上分钟的均值除以该分位(右尾形状,分位为零的日子记缺失而不是爆点)。VWAP/TWAP
+    拆单的机构资金把量摊平(低基尼), 散户与事件驱动的资金是脉冲式的(高基尼 / 高尾比);个股的这种形状是慢变的交易者结构特质,时间序列平均后接近一个『持股人结构』变量。
+    灵感来自本种子前三批 M 的现象:库里的 head 大量依赖 day_centroid(Volume)(成交时点)和 day_wstd(Ret, Volume)(量加权波动),说明分钟成交量的『分布』携带截面信息,
+    但时点只是分布的一阶矩,形状(集中度、尾部、峰值位置)库里从未出现。算子实现:种子用 ts_mean/ts_std 把日度形状变成慢变量, 并分别用 cs_bucket_rank
+    对市值/换手分桶去混淆、用 ts_corr/ts_regbeta 看形状与量加权收益的联动(脉冲日是否伴随同向收益)、用 cross_autocorr_s1
+    看形状是否稳定。 与库的不同:库里没有任何以 day_gini / day_es_ratio / day_at_max_ratio 作原子的 head 或候选;与控制的差别:流动性控制是成交额水平的排名,基尼是尺度无关的形状。
+    为什么样本外还会在:持股人结构与交易方式(机构拆单 vs 散户脉冲)变化缓慢,且 A 股散户占比高、脉冲式交易带来的短期过度定价/彩票偏好是长期存在的行为现象,不依赖某段行情。
+  inspired_by: 本种子第 1-3 批 M 与前两轮 head 中 day_centroid(Volume)、day_wstd(Ret, Volume)
+    反复出现的现象(成交量日内分布携带信息);文献:Admati-Pfleiderer 1988、Kumar-Lee 2006 散户情绪
+  literature:
+  - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+    authors: Admati, A.R.; Pfleiderer, P.
+    year: '1988'
+    url: https://doi.org/10.1093/rfs/1.1.3
+    treatment: 成交量日内分布结构;用基尼/尾比把一阶矩(时点)扩展到分布形状
+  - title: Retail Investor Sentiment and Return Comovements
+    authors: Kumar, A.; Lee, C.M.C.
+    year: '2006'
+    url: https://doi.org/10.1111/j.1540-6261.2006.00860.x
+    treatment: 散户交易的系统性与个股持股人结构,作为形状变量的经济解释
+  seeds:
+  - ts_mean(day_es_ratio_hi(Volume), 99)
+  - cs_bucket_rank(ts_mean(day_gini(Volume), 60), LogFloatCap)
+  - sub(cs_rank(ts_mean(day_gini(Volume), 60)), cs_rank(ts_mean(day_gini(Amt), 20)))
+  - ts_std(day_gini(Volume), 120)
+  - ts_corr(day_gini(Volume), day_wmean(Ret, Volume), 60)
+  - ts_regbeta(day_es_ratio_hi(Volume), day_wmean(Ret, Volume), 120)
+  - cross_autocorr_s1(day_gini(Volume), 60)
+  - cross_tail_mean_q75(day_es_ratio_hi(Volume), 120)
+  - cs_bucket_demean(ts_mean(day_gini(Volume), 60), ts_mean(day_centroid(Volume),
+    20))
+  - cross_regbeta(day_gini(Volume), day_wstd(Ret, Volume), 241)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
