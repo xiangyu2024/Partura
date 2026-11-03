@@ -19,6 +19,16 @@
 
 ---
 
+## 新增页 · AlphaCube 与 GP(0:45)(PPT 第 2 页;下面各节的 P 编号沿用旧版,在 PPT 上各 +1)
+
+**EN.** First, the engine Partura steers. AlphaCube is a genetic-programming miner. *(left)* A formula is a tree, read bottom to top: minute bars go in, a day operator collapses each stock's 241 minutes into one number, a time operator works across days, and a cross-sectional rank compares stocks. *(right)* GP starts from random trees, scores every tree with one fixed fitness, the residual long-only Sharpe, and breeds the fitter ones by swapping subtrees and mutating operators, fields and windows. The trees that pass, after deduplication, are what I'll call heads. *(blue line)* It's fast, cheap and blind: it finds what scores, not why it works. That's where an LLM might help.
+
+**中文.** 先讲 Partura 引导的引擎。AlphaCube 是一个遗传规划挖掘器。左边:一个公式就是一棵树,从下往上读——分钟数据进来,日内算子把每只股票 241 根分钟 bar 压成一个数,时间算子跨天处理,截面排名在股票之间比较。右边:GP 从随机树出发,用一个固定的 fitness(残差纯多头夏普)给每棵树打分,让分高的树交叉(交换子树)和变异(换算子、字段、窗口)。过了门槛、去重之后留下的树,就是后面说的 head。蓝线:它快、便宜,但是盲的——它找到能拿分的东西,不知道为什么有效。这正是 LLM 可能帮上忙的地方。
+
+**过渡:** But finding an alpha with such a system is not evidence that an LLM helped.
+
+---
+
 ## P2 · 找到 alpha 不等于 LLM 有用(1:10)
 
 **EN.** First, the question has to be the right one. If I put an LLM into a pipeline and the backtest looks good, that tells me something was found. It doesn't tell me the LLM helped. A good search algorithm alone might have found the same thing.
@@ -201,7 +211,7 @@ Four: use the LLM to challenge research hypotheses, but don't let it decide pred
 
 ## 时间与压缩
 
-逐页时间合计 17:15,给现场留约 3 分钟余量:
+逐页时间合计 17:15(加上新增的 AlphaCube 页约 18:00),给现场留约 3 分钟余量:
 
 | 页 | P1–2 | P3 | P4–6 | P7–8 | P9–10 | P11–12 | P13 | 合计 |
 |---|---|---|---|---|---|---|---|---|

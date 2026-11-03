@@ -1,0 +1,165 @@
+% Superday Topic B -- principles and results part, version 5.  XeLaTeX:  latexmk -xelatex principles_v5.tex
+% Layout spec: talk/superday/OUTLINE.md (binding for v5).  Experiment facts: research/coldstart_C01..C07 PLAN.md and RESULT.md; C08 is running (research/coldstart_C08/STATUS.md) and has no result here.
+\documentclass[t,20pt]{beamer}
+\geometry{paperwidth=13.333in,paperheight=7.5in}
+
+% Metropolis inner / outer / colour themes; fonts are set below (Fira Sans + Fira Math from the TeX tree).
+\useinnertheme[sectionpage=none,subsectionpage=none]{metropolis}
+\useoutertheme[progressbar=none,numbering=none]{metropolis}
+\usecolortheme{metropolis}
+\usefonttheme{professionalfonts}
+
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\setsansfont{FiraSans}[Extension=.otf, UprightFont=*-Book, ItalicFont=*-BookItalic,
+  BoldFont=*-SemiBold, BoldItalicFont=*-SemiBoldItalic]
+\setmainfont{FiraSans}[Extension=.otf, UprightFont=*-Book, ItalicFont=*-BookItalic,
+  BoldFont=*-SemiBold, BoldItalicFont=*-SemiBoldItalic]
+\setmonofont{FiraMono}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Medium]
+\newfontfamily\mediumfont{FiraSans}[Extension=.otf, UprightFont=*-Medium, ItalicFont=*-MediumItalic]
+\setmathfont{FiraMath-Regular.otf}
+\newfontfamily\cjkfont{FandolHei-Regular.otf}   % only for one Chinese file name in a source note
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,decorations.markings}
+\usepackage{array,booktabs,colortbl}
+\usepackage{fancyvrb}
+
+% ------------------------------------------------------------------ colours (OUTLINE.md)
+\definecolor{ink}{HTML}{2E2E2E}
+\definecolor{sec}{HTML}{6B6B6B}
+\definecolor{rulec}{HTML}{C8C8C8}
+\definecolor{accent}{HTML}{1F5A96}
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{frametitle}{fg=ink,bg=white}
+\setbeamercolor{alerted text}{fg=accent}
+\setbeamercolor{structure}{fg=ink}
+\arrayrulecolor{rulec}
+\setlength{\heavyrulewidth}{0.9pt}
+\setlength{\lightrulewidth}{0.9pt}
+
+% ------------------------------------------------------------------ sizes (points are literal: the page is 13.333 x 7.5 in)
+\newcommand\titlesize{\fontsize{32}{38}\selectfont}
+\newcommand\secsize{\fontsize{16}{20}\selectfont}
+\newcommand\nodesize{\fontsize{16}{19}\selectfont\hyphenpenalty=10000\exhyphenpenalty=10000}
+\newcommand\notesize{\fontsize{14}{17}\selectfont\hyphenpenalty=10000\exhyphenpenalty=10000}
+\newcommand\pnsize{\fontsize{12}{14}\selectfont}
+\newcommand\expr[1]{{\ttfamily\fontsize{14}{17}\selectfont\detokenize{#1}}}   % expression in mono, 14 pt, inside tables
+
+% ------------------------------------------------------------------ grid
+\setbeamersize{text margin left=0.85in,text margin right=0.85in}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+% Frame title: a fixed-height box, baseline 0.92 in from the top on every page (strut fixes the baseline).
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \vbox to 1.30in{%
+    \vskip 0.50in
+    \hbox{{\mediumfont\titlesize\color{ink}\rule{0pt}{0.42in}\insertframetitle}}%
+    \vss}%
+}
+% Page number: bottom right, 12 pt, mid-gray, right edge on the right text margin.
+\setbeamertemplate{footline}{%
+  \hbox to \paperwidth{\hfill{\pnsize\color{sec}\insertframenumber}\hskip 0.85in}%
+  \vskip 0.36in}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+% ------------------------------------------------------------------ text helpers
+\newcommand\key[1]{{\mediumfont\color{accent}#1}}
+\newcommand\lead[1]{{\mediumfont #1}}
+\newcommand\illus{{\notesize\itshape\color{sec}illustrative}}
+\newcommand\file[1]{{\ttfamily\detokenize{#1}}}
+\newcommand\sub[1]{\par\vspace{5pt}{\raggedright\secsize\color{sec}#1\par}}
+\newenvironment{blist}{%
+  \begin{list}{\textcolor{sec}{\textbullet}}{\def\makelabel##1{##1\hfil}%
+    \setlength\leftmargin{0.34in}\setlength\labelwidth{0.2in}\setlength\labelsep{0.14in}%
+    \setlength\itemsep{16pt}\setlength\parsep{0pt}\setlength\topsep{0pt}\setlength\partopsep{0pt}%
+    \setlength\itemindent{0pt}\setlength\listparindent{0pt}\setlength\rightmargin{0pt}}}%
+  {\end{list}}
+\newcounter{nl}
+\newenvironment{nlist}{%
+  \begin{list}{\textcolor{sec}{\arabic{nl}}}{\usecounter{nl}\def\makelabel##1{##1\hfil}%
+    \setlength\leftmargin{0.40in}\setlength\labelwidth{0.26in}\setlength\labelsep{0.14in}%
+    \setlength\itemsep{26pt}\setlength\parsep{0pt}\setlength\topsep{0pt}\setlength\partopsep{0pt}%
+    \setlength\itemindent{0pt}\setlength\listparindent{0pt}\setlength\rightmargin{0pt}}}%
+  {\end{list}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand\thead[1]{\leavevmode{\mediumfont\color{sec}#1}}
+\newcommand\gap[1]{\par\vspace{#1}}
+% content top: tables and figures start on the frame's top line; a first text line or a [t] minipage is lifted onto it
+\newcommand\textfirst{\vspace*{-0.14in}}
+\newcommand\colsfirst{\vspace*{-0.37in}}
+\newcommand\colsafter{\par\vspace{-0.24in}}
+% figures sit on the text block: left edge on the left margin, width exactly the text width
+\newcommand\fig[1]{\par\noindent\makebox[\textwidth][l]{\input{#1}}\par}
+\AtBeginDocument{\hyphenpenalty=10000\exhyphenpenalty=10000\raggedright}
+
+% ------------------------------------------------------------------ figures: one line width, Stealth tips, square corners
+\tikzset{
+  x=1in, y=1in,
+  >={Stealth[length=7pt,width=5.5pt]},
+  every picture/.style={line width=0.9pt},
+  grid/.style={trim left=0in, trim right=11.633in-0.9pt},
+  box/.style={rectangle, draw=ink, line width=0.9pt, minimum height=0.68in, align=center,
+              font=\nodesize, text=ink, inner sep=4pt},
+  cb/.style={box},                                  % code part
+  lb/.style={box, draw=accent},                     % LLM / Partura part
+  pb/.style={box, draw=sec, dashed, text=sec},      % planned, not built
+  tint/.style={fill=accent!10},                     % the single 10 % accent tint per figure
+  arr/.style={->, line width=0.9pt, draw=ink},
+  arrl/.style={->, line width=0.9pt, draw=accent},
+  lab/.style={font=\nodesize, text=sec, inner sep=2pt},
+  labl/.style={font=\nodesize, text=accent, inner sep=2pt},
+  ann/.style={font=\notesize, text=sec, inner sep=1.5pt},        % 14 pt figure annotations
+  annl/.style={font=\notesize, text=accent, inner sep=1.5pt},
+  anni/.style={font=\notesize, text=ink, inner sep=1.5pt},
+  guide/.style={draw=rulec, dotted, line width=0.9pt},            % dotted alignment guides
+  mask/.style={fill=white},                                       % label background over a line
+  t10/.style={fill=accent!10}, t20/.style={fill=accent!20}, t28/.style={fill=accent!28}, t35/.style={fill=accent!35},
+}
+
+\begin{document}
+\setcounter{framenumber}{1}
+\begin{frame}{AlphaCube: genetic programming on the minute cube}
+\vspace{-4pt}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.47\textwidth}
+\sub{A formula is a tree, read bottom to top}
+\vspace{10pt}
+\begin{tikzpicture}[nd/.style={draw=rulec,line width=0.9pt,rounded corners=3pt,inner sep=6pt,font=\ttfamily\fontsize{15}{18}\selectfont},
+  lab/.style={font=\notesize\color{sec},anchor=west},ar/.style={-{Stealth[length=6pt]},line width=0.9pt,color=sec}]
+\node[nd,draw=accent] (a) at (0,0) {cs\_rank};
+\node[nd] (b) at (0,-1.2) {cross\_tail\_mean\_q75(·, 120)};
+\node[nd] (c) at (0,-2.4) {day\_wmean};
+\node[nd] (r) at (-0.9,-3.6) {Ret};
+\node[nd] (v) at (0.9,-3.6) {Volume};
+\draw[ar] (r)--(c); \draw[ar] (v)--(c); \draw[ar] (c)--(b); \draw[ar] (b)--(a);
+\node[lab] at ($(v.east)+(0.25,0)$) {241 minute bars};
+\node[lab] at ($(c.east)+(0.25,0)$) {one number per stock-day};
+\node[lab] at ($(b.east)+(0.25,0)$) {over 120 days};
+\node[lab] at ($(a.east)+(0.25,0)$) {across stocks};
+\end{tikzpicture}
+\end{column}
+\begin{column}{0.49\textwidth}
+\sub{GP breeds trees}
+\vspace{12pt}
+{\nodesize
+\begin{blist}
+\item \lead{Population} of random trees from the operator grammar (depth 2--4)
+\item \lead{Score} each tree with one fixed fitness: residual long-only Sharpe, worse of train and valid
+\item \lead{Breed} the fitter trees: crossover swaps subtrees, mutation changes an operator, field or window
+\item \lead{Keep} trees scoring $\ge 0.5$, deduplicated, as \emph{heads}
+\end{blist}}
+\vspace{14pt}
+{\notesize\color{sec}One main-search batch: population 48, 192 evaluations, zero LLM tokens. Later batches ban trees close to earlier heads (rank $|\rho|\ge 0.7$ or the same skeleton).\par}
+\end{column}
+\end{columns}
+\vfill
+{\fontsize{20}{25}\selectfont\key{Fast, cheap, and blind: it finds what scores, not why it works.}\par}
+\vspace{8pt}
+{\notesize\color{sec}Example: the upside term of the page-19 signal card. Sources: partura/steer.py, scripts/server/c07\_m.sh.\par}
+\vspace{4pt}
+\end{frame}
+\end{document}
