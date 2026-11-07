@@ -1,0 +1,32 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 8, 11]
+    reasons: '创新度 4。相关度表：放行的 11 个 seed 中，纯换手率尾部 seed 2 cs_first_low20(TRV,TRV) 与所有 head 的原始 |rho| 为 0.12、交易信号残差为 0.13；seed 4、5、10 的原始 |rho| 为 0.27、0.31、0.29，残差为 0.17、0.16、0.21；全部放行 seed 的交易信号残差与任一 head 的 |rho| 都不超过 0.43（最高为 seed 12，对 head 3，0.431；其次 seed 7，对 H1 族，0.416）。与旧 head 最像的是 seed 3（原始 0.63，对 head 4 cs_first_low20(cross_mean(LogFloatCap,60),cross_mean(Amt,60))）、seed 12（原始 0.66，对 head 3）、seed 13 与 14（原始 0.55 与 0.52，对 head 4）。它们是把 Amt 尾换成换手率、或叠了一层，残差分别为 0.26、0.43、0.16、0.13，都不是同一个东西。seed 4 与 seed 9 与流动性控制的 |rho| 为 0.72、与已知族为 0.70，低于 0.8 的自动线；它们的交易信号残差与 head 的 |rho| 只有 0.17 与 0.30，不判为控制的换写法。合理度 4。逐算子核对：TRV = sub(log(cross_mean(day_sum(Volume),60)), LogFloatShares)；day_sum 对全 NaN 的日子返回 NaN，cross_mean 用 nanmean 跳过停牌日，所以停牌不会把 60 日均量压成 0；log 对 |x| 不大于 EPS 返回 NaN，不产生 ±inf；cs_first_low20 与 cs_last_low10 经 _lexi，对连续的 x 精确给出 20% 与 10% 切点；cs_bucket_rank 的十分位与 1e-4 的打破并列按设计；窗口都不超过 60 日，没有除法，没有前视。风险（不挡）：复牌不久的名字，其 60 日均量只由少数有效日决定，是估计噪声，换手率尾会收到它们；seed 10 的 cs_last_low10 把最冷的 10% 沉底，可部分缓解。如果它有 alpha，最可能来自：按流通股数归一的换手率（不是成交额水平）所定义的冷落、低关注溢价，在流通市值一侧的超额收益。自动划掉（表中规则，不是我的判断）：seed 1（市值 |rho| 0.85）、seed 8（流动性 0.83、已知族 0.81、市值 0.89）、seed 11（市值 0.84）。我没有额外划掉任何 seed，剩 11 个。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 12, 13]
+    reasons: '创新度 4。新变量与库里 head 不同：名义价格 NOMP（seed 1、6、7）、限售比例 FLTR（seed 2、7）、60 日波动的高尾与低尾（seed 3、8、9）、大盘象限（seed 9、10、11）、板块切片 LimitWidth（seed 15）、60 日动量的 cap 分层（seed 4、10、14）。放行的 seed 中，除 seed 4 的原始 |rho| 为 0.65 外，其余为 0.08 到 0.46（seed 6 为 0.11，seed 8 为 0.08，seed 15 为 0.36）；交易信号残差多在 0.09 到 0.31（seed 1 为 0.14，seed 3 为 0.09，seed 6 为 0.10，seed 8 为 0.09，seed 9 为 0.12，seed 15 为 0.09）。名义价格（未复权的 log 价格）与库里 head 2、3 的复权价格尾不是同一个量；seed 6 与市值控制的 |rho| 为 0.004，与任一 head 的残差为 0.10。扣分的几处：seed 10、14（60 日动量，对 H1 族 head 的残差为 0.48、0.56）与 head 10 的 60 日市值变化同源，只算部分新；seed 4 的残差为 0.70，与 H1 族的 60 日动量同源。它未达到明显是同一个东西的程度，不划掉，只标注。合理度 4。逐算子核对：cs_first_low20、cs_first_high20、cs_first_high40 的标记是 _lexi 的整块带，对连续的 x 精确到 20% 与 40%；FLTR = sub(LogTotalCap, LogFloatCap) 对完全流通的股票为 0，构成一个并列块，高尾带子只取到非零的那一块，符合整块规则，不是问题；NOMP = LogFloatCap 减 LogFloatShares，就是 log 价格，没有除法；窗口全部不超过 60 日，无前视。风险（不挡，请 PI 核对）：seed 15 的板块带依赖整块规则。20% 的板块（STAR 全期为 0.20，创业板 2020-08-24 起才为 0.20）只有整块落在最高 40% 之内，即 0.10 的主板占比超过 60% 时才进带子。LimitWidth 只有 0.10、0.20、0.30 三个取值（tradability.board_limit 不标 ST），所以带子可能为空或只剩北交所。若 2019-07 前宇宙里没有 BSE 前缀的名字，那段带子为空，输出就是市值秩，残差在那段恒为零。表中 seed 15 的市值 |rho| 为 0.77，说明带子大体不为空，因此放行；建议 PI 按年报告带子非空的日子占比。如果它有 alpha，最可能来自：死尾（面值退市风险、解禁抛压、名义低价股）与大盘低波、动量象限在流通市值一侧的定价差。自动划掉（表中规则）：seed 5（市值 |rho| 0.85）、seed 12（对 head 8 的原始 |rho| 为 0.85）、seed 13（对 head 8 的原始 |rho| 为 0.87）。seed 12 与 13 是 head 8 的换皮，bucket 变量换成慢变量后，y 的 cs_last_low10 仍然支配秩。我没有额外划掉任何 seed，剩 12 个。'
+R:
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, day_last(High)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。变体逐个核对：ts_quantile_q75(day_last(High),10) 是 10 日平滑，窗口不超过 10 日；名义价格 NOMP 替代复权价；叠 Amt60 尾；叠 FLTR 高尾（cs_first_high20，方向为负时把标记名字退出多头端，与 r1 的做法一致）；ListAge 尾改为 40%。ListAge 对 2018-01-02 之前已在册的名字是 10000 加天数（dailyfields._list_age），同一天内这些名字的值并列，_lexi 的整块规则不会把它拆开，所以 20% 与 40% 的尾只含真正的新上市名字。机制清楚，无除法，无前视。如果它有 alpha，最可能来自：次新与低价壳名字被排除后，剩下的小市值名字的超额收益。'
+  - head: 'cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1))'
+    soundness: 4
+    reasons: '合理度 4。变体只在 H1 外层叠一层 _lexi 的 20% 尾（ListAge，或平滑价格，或两者），窗口不超过 10 日，无除法。方向为负，cs_first 把被标记的名字抬到最前，即退出多头端，与快照里 H1 的方向一致。外层台阶与内层平滑都是快照里已有的结构，变体只增加排除，逻辑清楚，无前视。如果它有 alpha，最可能来自：20% 到 30% 市值带内去掉次新与低价名字之后的超额收益。'
+  - head: 'cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt), 60))'
+    soundness: 4
+    reasons: '合理度 4。方向为正，所以排除要用 cs_last_low20（_lexi(y,x,-1,0.2,-1)，最低 20% 沉到最底），方向正确；变体 3 把标记换成 TRV，与 slot a 同一构造，无除法；窗口 60 日。变体 1 与 2 的平滑价格尾与 ListAge 尾都只是把新上市与低价名字移出多头端。如果它有 alpha，最可能来自：次新排除后，Amt 尾在市值一侧更干净的超额收益；或换成换手率后选出的名字不同，即 slot a 的假设。'
+  - head: 'cs_first_low20(cross_mean(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))'
+    soundness: 4
+    reasons: '合理度 4。变体 1 叠 ListAge 尾，变体 2 叠市值最小 20% 尾。变体 2 的 x 是 LogFloatCap，它的标记就是市值台阶本身，与 size 控制重合，机制是排除壳名字，而不是新的排序；它不是数学问题，但会与 H1 类的市值带相近。方向为负，与 cs_first 一致。无除法，窗口 60 日，无前视。如果它有 alpha，最可能来自：成交额尾去掉壳与次新之后的邻带超额收益。'
+  - head: 'cs_bucket_rank(cs_last_low10(neg(LogFloatCap), LogFloatCap), day_sum(Amt))'
+    soundness: 4
+    reasons: '合理度 4。变体把 cs_bucket_rank 的分层变量换成 60 日与 20 日平滑的成交额，分层用秩的十分位，无除法，窗口不超过 60 日，无前视。机制：分层变量是慢变量，桶不再逐日翻动。注意 slot b 的 seed 12、13 显示，把桶变量换成慢变量后，与 head 8 的原始 |rho| 仍达 0.85 与 0.87，说明秩主要由 y 的 cs_last_low10 支配，变体的改进很可能只来自桶的稳定性，不是新机制；合理度不因此扣分。如果它有 alpha，最可能来自：市值十分位内对成交额水平分层后，桶稳定下的超额收益。'
+  - head: 'cs_bucket_rank(cs_last_low10(neg(LogFloatCap), LogFloatCap), LogFloatCap)'
+    soundness: 4
+    reasons: '合理度 4。head 5 的输出是十分位内 y 的秩加 1e-4 的全局秩打破；外层 cs_first_low20 对它再排序，窗口 60 日以内，无除法，无前视。ListAge 尾的机制是排除次新名字，方向为负，与 cs_first 一致。如果它有 alpha，最可能来自：市值十分位内沉底之后的邻带，去掉次新名字后的超额收益。'
+summary: '两位都通过：a 位放行 11 个 seed，b 位放行 12 个 seed，各自只按表中规则划掉 3 个，无数学问题；R 六组的合理度均为 4；风险点是 b 位 seed 15 的板块带定义与 seed 4 的残差 0.70，均未划掉，需 PI 核对。'

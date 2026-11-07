@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [13, 14, 15]
+    reasons: '核心 P = ts_quantile_q75(day_close(Low), 10) 不是新对象:它是 H1 = div(cs_last_low20(A, P), A) 里的断点变量,相关度表里 P 与 H1 的原始 |ρ| 为 0.40、残差 0.56;P 与五个控制的 |ρ| 为 liq 0.46 / vol 0.00 / rev 0.07 / known 0.43 / size 0.42,全部低于 0.8,E 位核心检查通过。新颖性给 3:seed 1-7 把 P 的断点单独拿出来做成 V 形(1-3)与锯齿(4-7),这种形状在 H1、H2 里只以断点的形式出现过、没有被单独检验;H 腿与 A 腿的写法(seed 8-11、16)与 H2 的原始 |ρ| 为 0.21-0.67、残差 0.27-0.61,其中 seed 10、11、16 的残差 0.61 说明 H 腿并没有摆脱 H2 的重叠,但都在 0.7 的库禁令线以下,放行。合理度给 4:逐个算子核对过,ts_quantile 与 ts_delay 都是因果窗口,cs_rank 与 cs_last_low 只用同一天截面,P 用的是当日收盘分钟的 Low(收盘后可知),没有前视;除法只出现在有界份额里,没有近零分母;cs_last_low 的带按整个并列块切,不靠列序。划掉的种子:13 与 14 为重复,y 分别就是 20 日反转控制 div(day_last(Close), ts_delay(day_last(Close), 20)) 与波动控制 cross_mean(day_std(Ret), 20) 套上 P 的断点,与对应控制的 |ρ| 为 0.66,残差后与 H2 的 |ρ| 为 0.70 与 0.69,等于在奖励空间里复现 H2;15 为数值伪影,表中门槛为废品,取值个数比例 0.436(门槛 0.5),截面上近半单元格是重复取值,我无法从表中判断并列的来源,按 §4 的面板近似常数处理。其余 13 个种子保留。如果它有 alpha,最可能来自 P 分位上的断点:最低价格的 15-25% 股票(ST、面值退市风险与散户彩票偏好)在价位上的定价跳变,而不是成交量;若有效,应当在 seed 1-7 的某个断点位置上看到在 train 上也站得住的结果。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 13, 16]
+    reasons: '新颖性给 3:N 位里真正的新信息是收盘分钟份额(seed 2),它与库里三个 head 的原始 |ρ| 只有 0.18,另外 seed 11(首分钟份额 10 日对 60 日的偏离,0.17)与 seed 14(首分钟份额与总额的 60 日相关,0.24)也几乎无关。O 腿(首分钟份额)的 seed 3、5、7、9、10、15 与 H3 的首分钟项 sub(cross_mean(sub(div(day_first(Volume), cross_delay(day_last(Volume), 1)), 1), 60), ...) 高度重叠:原始 |ρ| 为 0.62-0.68,残差后 0.57-0.67,也就是说它们主要复现 H3 的首分钟成交强度,只是分母与平滑不同或加了分桶。整个位不是 H3 的复制,所以给 3。合理度给 4:O、C 都是 day_first(Amt) 或 day_last(Amt) 除以 day_sum(Amt),取值在 [0,1],没有爆点;day_first 与 day_last 是当日第一、最后有效分钟,收盘后可知;cross_mean、cross_med、cross_ema、cross_corr、cross_stddev 都是因果窗口,没有前视。注意一点:seed 6 用原始末分钟额作分母 div(day_first(Amt), day_last(Amt)),若某只股票的末分钟额恰为 0 会得到 inf,60 日窗口里超过一半为 inf 时中位数会被支配;表中无法核实这一点,不划,请流水线先统计 day_last(Amt) 等于 0 的占比。seed 8 的 log 比(+1 偏移)同样依赖末分钟额,但有界。划掉的种子:1 与 16 按自动规则划(与 H3 的原始 |ρ| 分别为 0.72 与 0.78,均 ≥ 0.7);13 为数值伪影,表中门槛为废品,取值个数比例 0.363,60 日的整数计数平均只落在有限格点上,截面大半并列。其余 13 个保留。seed 8 的流动性与 known 控制 |ρ| 为 0.72 与 0.73,是流动性的一种写法,但低于 0.8 的自动线,保留,并提醒它的残差可能只剩很少。如果它有 alpha,最可能来自收盘分钟份额 C 与 O 减 C 所反映的集合竞价与基准价成交的机构构成,而不是 O 腿;O 腿若有效,则是 H3 首分钟成交项的那一部分。'
+R:
+  - head: 'div(cs_last_low20(pow_2_5(day_wmean(Volume, Volume)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_wmean(Volume, Volume)))'
+    soundness: 3
+    reasons: 'Volume 换成 Amt 的理由成立:同样的股数在低价股上对应的金额更小,股数里混着的价格水平确实会被去掉。算子链逐个核对过:day_wmean(Amt, Amt),再 pow_2_5,再 cs_last_low20 的断点,最后除以同一个水平。无前视(P 与 wmean 都是当日或过去窗口);A 的量级约 1e7 到 1e24,远离 float32 的溢出与下溢界,没有近零分母。扣分的地方:H1 原式把截面秩 ry(0 到 1 之间)除以 A 本身。A 跨越好几个数量级时,非断点部分的值 ry/A 不是 A 的单调函数,在 Gaussian 近似下是对数流动性的单峰(驼峰)函数,实际作用的更像流动性的非单调形状,而不是 rationale 里说的成交量腿。这是 H1 原本就有的结构,R1 没有处理它。这不是数学错误(秩有界、分母不近零),所以合理度给 3 而不是 1。变体 1、4、5 与 H1 的原始 |ρ| 分别为 0.84、0.84、0.81,是替换候选;这里只评合理度。'
+  - head: 'ts_quantile_q25(cs_last_low20(neg(day_quantile_q75(Volume)), day_last(Close)), 10)'
+    soundness: 4
+    reasons: '合理度给 4。断点用的是 day_last(Close) 或 P 的截面秩,y 用的是分钟量 75 分位取负(变体里换成 25 分位、Amt 或 pow),最后 ts_quantile_q25 对 10 日做持续性。逐个算子核对:neg 与 cs_last_low{10,20,40} 只做同一天截面的秩与断点,没有除以水平,所以没有 H1 的 ry/A 结构;ts_quantile 是因果窗口;变体 4 的 pow_2_5 只是单调变换,截面秩不变。机制清楚:在低价区间持续停留,加上薄分钟的量级,对应低价股的定价断点与散户主导的薄盘。没有数学问题。'
+  - head: 'sub(cross_mean(sub(div(day_first(Volume), cross_delay(day_last(Volume), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60))'
+    soundness: 4
+    reasons: '原 head 的烂部件判断成立:day_first(Volume) 除以前一日末分钟 Volume,分母是单分钟量,可以接近 0,60 日均值会被极端日主导,属于 §4 的数值伪影风险(未实测,仅为估计)。变体 1(截面中位数)、变体 3(log 比,+100 股偏移)、变体 4 与 5(首分钟量占当日总量的有界份额)都消除了这一风险,逐个核对过:cross_med、cross_mean、log、add 与 cross_delay 都是因果的,没有前视。变体 2 用 +1000 股偏移,分母为零的问题消失,但偏移与股票规模无关:对薄股,分母近似为 1000,比值退化成首分钟量的 1/1000,成了量级项而不是比值;它与原 head 的原始 |ρ| 为 0.98,基本是复制。ID 项量级约 1e-3,在各变体里都去掉了,与 rationale 中它在 sub 里基本不起作用的说法一致。没有数学问题;变体 2 的偏移设计值得注意,但不影响这一组的合理度。'
+summary: 'PROD W01 种子 911 第 2 轮审计(未读 notebook,按 §3、§4 打分):E 位(核心 P)创新 3、合理 4,划 13、14、15 后剩 13 个;N 位创新 3、合理 4,划 1、13、16 后剩 13 个;R1 合理 3,R2 与 R3 合理 4;两位都没有前视问题。读取越界说明:我误跑了一次全库 grep,输出预览到了 research/alpha_distillation/B01_reverse_guidance.md 的前几行,还触及了 scripts/ 下几份未列名的代码文件(如 idea_final.py、forward_read.py),越出了 §5 的读取范围;这些内容没有用于打分。'
