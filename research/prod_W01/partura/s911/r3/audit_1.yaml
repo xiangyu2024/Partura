@@ -1,0 +1,32 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 8, 12, 15]
+    reasons: '核心 day_es_ratio_hi(Amt) 合格。它是 head cross_corr(div(day_first(Amt), ES), ES, 60) 的 Y 腿子树,符合 E 的核心定义。相关度表:核心对 13 个 head 的原始 |ρ| 最高 0.108,残差最高 0.098;对五个控制的 |ρ| 为 liq 0.297、vol 0.010、rev 0.013、known 0.252、size 0.132,全部低于 0.8,核心检查通过。PI 写的「与流动性、市值、金额波动几乎正交」只部分成立:liq 0.30 与 known 0.25 是中度相关,远低于门槛但不是几乎为零,记录在此。算子核对:day_es_ratio_hi 在 partura/ops_ext.py:665 定义,经 _es_ratio(:647)取尾部均值除以 95% 分位,分位绝对值不超过 1e-8 时返回 NaN,因此取值大于 1 且没有爆点。day_first、day_last 取当日首末有效分钟。cs_rank 是截面掩码排序(nd_cs.py 调用 common.rank),不是 nanrank_last,不落进 §4 的停牌排序陷阱。cross_corr 是 60 日滚动 Pearson(dt_cross.py:193,经 common.rolling_pair_reduce,分母加 EPS=1e-9)。cross_delay 是日轴后移一天,滞后用法只用前一日已知的量。cross_regbeta、cross_mean、cross_ema 都是因果窗口,没有前视。新颖性给 4:核心本身已在 head 1 里,但外围 X 腿是新的。未划掉的种子与 13 个 head 的原始 |ρ| 多在 0.1 到 0.5 之间(a2 0.35、a3 0.38、a4 0.15、a5 0.26、a6 0.30、a9 0.47、a10 0.46、a13 0.43、a14 0.38),只有 a7(centroid 版)的 0.64 偏高;X 腿是隔夜与日内跳空绝对值、分钟收益波动、净买入压力、收益尾部形状、收盘分钟额与份额、时间重心、滞后首分钟额与差分耦合。保留算子名的骨架与库里 13 个 head 都不同,库禁令不会拒绝它们。合理度给 4。划掉的种子:1 为 cross_corr(abs_(开盘跳空), ES, 60),与 cross_corr(div(O), skew, 60) 的原始 |ρ| 为 0.728,≥0.7,自动划;12 为 cross_regbeta(O, ES, 60),与同一个 head 为 0.83,自动划;15 为 sub(cs_rank(cross_corr(first, ES, 60)), cs_rank(cross_mean(ES, 60))),与 head 1 的原始 |ρ| 为 0.716,自动划。8 为 cross_corr(day_es_ratio_hi(Volume), ES, 60),判为重复:ES 对尺度不变,而 Amt 约等于 Volume 乘分钟价格(docs/design.md 把 Amt/Volume 当价格用),日内价格变化不大时两者的尖峰分钟集合几乎相同,相关主要由日内价格路径决定。这一点由定义推出,未实测,但它正是 PI 想避开的机械重叠,与「价格无关的代理」的说法不符,划掉。其余 12 个保留。a9 与 a10 的算子集合相同但滞后方向相反,是两个不同的量,保留。a11 与 cross_corr(div(O), skew, 60) 的原始 |ρ| 为 0.693,离 0.7 很近,残差 0.642,保留但需留意。如果它有 alpha,最可能来自尖峰与开盘端成交集中之间的耦合去掉机械重叠以后剩下的部分:滞后结构(a9、a10)、收盘端与开盘端的差(a11),或净买入压力与尖峰的同步(a4)。若有效,应在滞后版与收盘版上也站得住。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [14, 15]
+    reasons: '新颖性给 4。N 位的 16 个种子里,绝大多数与库里 13 个 head 的原始 |ρ| 很低:b7 0.08、b2 0.13、b12 0.13、b16 0.17、b13 0.19、b1 0.23、b8 0.28、b10 0.28、b11 0.39、b6 0.46、b3 0.47、b9 0.48、b4 0.54。最高的 b5 cross_corr(div(O), day_gini(Amt), 60) 为 0.682,与 cross_corr(div(O), day_skew(Amt), 60) 相近,残差 0.606;gini 是有界的集中度量,skew 是三阶矩,不是同一个量的换写,保留,并标注为这一位最接近的一例。新方向是收盘端镜像(b1、b2、b10、b11)、时间重心(b3、b4)、形状(b5、b6)、价格耦合(b7、b8、b9、b16)和量价(b12、b13)。合理度给 4。逐个算子核对:div 的分母全是 day_sum(Amt) 或 cross_mean(day_sum(Amt), 20),取值在 [0,1] 或为有界比值,没有近零分母;day_centroid、day_gini、day_zero_ratio、day_signed_ratio 在 partura/ops_ext.py 里都做了总额为零时的保护(返回 NaN 或 clamp);day_skew 的标准差为零时得到 NaN(0/0),不是爆点;cross_delay 是日轴后移,cross_mean、cross_med、cross_ema、cross_corr 都是因果窗口;b13 的 LMSW 形式用的是 RT 与 AV 的前一日值对 RT 的当日值,没有前视。两处机制弱点,都不是数学问题:b11 的「未成交订单顺延到次日开盘」在 A 股不成立(普通限价委托当日有效、收盘后不自动顺延),它更可能反映两个时段成交集中由同一批投资者决定的慢变量;b3 的首分钟额同时出现在 centroid 的分子与分母里(首分钟额变大必然把质心拉向开盘),b5 的 gini 也含首分钟份额,这两个是机械重叠而不是独立 alpha,放行。划掉的种子:14 为 sub(cross_corr(O, sum, 60), cross_corr(C, sum, 60)),与 cross_corr(div(O), day_sum(Amt), 60) 的原始 |ρ| 为 0.844,≥0.7,自动划,它本质上是这个 head 减去收盘端版本;15 为 cs_bucket_demean(cross_corr(div(O), RT_intraday, 60), LogFloatCap),判为 b7 的重复:b7 与 b15 对最像的 head 的残差都是 0.083、原始 |ρ| 分别为 0.076 与 0.074,对五个控制的 |ρ| 几乎相同(rev 0.069 与 0.068,known 0.032 与 0.031,size 0.001 与 0.009),分桶去均值没有改变截面排序,而新尺子已用 LogFloatCap 的 1、r、r²、r³ 残差去掉了大部分尺寸效应,所以划掉。其余 14 个保留。如果它有 alpha,最可能来自收盘端与时间重心的结构性差异:在集合竞价与尾盘集中成交的股票,成交时间结构是慢变量,与价格本身的关系是间接的;若价格腿(b7 至 b9、b16)都站不住而收盘与重心腿站得住,信息就在成交时间结构里。'
+R:
+  - head: 'cross_corr(div(day_first(Amt), cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)), day_es_ratio_hi(Amt), 60)'
+    soundness: 4
+    reasons: '原 head 的内层分母 c = cross_corr(div(O), day_skew(Amt), 60) 是 60 日相关系数,取值在 [-1, 1] 并穿过 0。common.py:175 的 div 没有保护,c 接近 0 或变号时 day_first/c 爆点且翻符号,60 日 Pearson 被这些点支配,这正是 §4 的「除以近零的量」,数学问题在原 head 里是真的。PI 的数字与快照一致:原 head 为 train +1.47 / valid +1.61(loc.md),内层 cross_corr(div(O), skew, 60) 为 +1.16 / +2.02(loc.md 中对应的 head 一致);去掉外层 div 的 cross_corr(day_first(Amt), ES, 60) 为 +1.88 / +2.22(PI 的样本内拆解,我未复算)。变体 1 去掉分母,变体 2 把分母换成 c+2,取值在 [1, 3],两者都没有近零分母,逻辑正确。两个变体与原 head 的 |ρ| 高达 0.93,若通过会按规则替换原 head,这是流水线的事,不影响合理度。合理度给 4。'
+  - head: 'cross_corr(div(day_first(Amt), day_es_ratio_hi(Amt)), day_es_ratio_hi(Amt), 60)'
+    soundness: 4
+    reasons: '作分母的 ES 满足 ES > 1(分位非零时,尾部值都大于分位),分母不近零,所以 head 1 本身没有 R1 那样的近零问题。R2 的诊断是另一回事:首分钟额是重尾量(开盘竞价集中的日子可以大一个数量级),Pearson 被少数日子支配,这个机制清楚。变体 log(add(first, 1)) 与 sqrt(first) 都是单调稳健化,log 对零返回 log(1)=0,没有 -inf;窗口 75 也是合理的扫参。PI 说 knockout 的分数 1.88 比原 head 的 1.79 高 +0.09,按较差的一腿比较(score = min(train, valid)),数字自洽。合理度给 4。'
+  - head: 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), LogFloatCap)'
+    soundness: 4
+    reasons: '该 head 的 train +0.70 / valid +1.86(loc.md 一致)。O 是首分钟额占全天额的份额,取值在 [0,1]。变体 1(cross_med)与变体 4(cross_ema,半衰期 40)是对异常日的稳健版本;变体 3(120 窗口)是低换手版本;变体 5 把分桶变量换成流动性十分位,用来检验是否依附市值。变体 2 取 log(O),common.py:211 的 log 对 |x|≤1e-9 返回 NaN(不是 -inf),cross_mean 忽略 NaN,没有数学问题。PI 明确说窗口与分桶的扫参是「依据缺失下的扫参」,写得诚实。机制(份额的均值在异常日被拉偏)说得通。合理度给 4。'
+  - head: 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(div(day_last(Amt), day_sum(Amt)), 60))'
+    soundness: 4
+    reasons: '该 head 的 train +0.63 / valid +1.59(loc.md 一致)。两项都是 [0,1] 份额的 60 日均值,差值是开盘端与收盘端的水平差,水平量与市值、流动性共线的担心成立。变体 1(120 窗口)与变体 2(LogFloatCap 分桶去均值)是标准的窗口与中性化检验,逐个核对:cross_mean 与 cs_bucket_demean 都没有近零分母和 -inf 问题。PI 说这里没有拆解数据,依据只有 train/valid 落差,这个依据偏弱,但机制清楚,检验是对的。合理度给 4。'
+  - head: 'cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 1000)), 60)'
+    soundness: 4
+    reasons: '该 head 的 train +0.97 / valid +2.57(loc.md 一致)。烂部件判断成立:分母的 1000 股偏移与股票规模无关,对末分钟很薄的股票,比值退化成首分钟股数的 1/1000,是量级项而不是比值。变体 1、2(300、3000)是对常数的扫参,若 score 对常数敏感,就说明读的是水平;变体 3 用前一日全天总股数作分母,有界、无近零。变体 3 有一个前提要写明:它依赖停牌分钟为 NaN(docs/design.md 的停牌掩码约定),这样前一日总量在停牌日是 NaN 而不是 0;若停牌分钟是有限的 0,复牌日会出现 +inf,流水线需先核对。按 design.md 的约定它不构成数学问题。合理度给 4。'
+  - head: 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)'
+    soundness: 4
+    reasons: '该 head 的 train +1.16 / valid +2.02(loc.md 一致)。变体只改窗口(60 到 90),理由是换手更低、valid 富余 +0.86 可以承受 train 的变化。门槛 1.16 + 0.1 = 1.26 与 PI 写的一致。PI 说同族的 ES 版本在窗口 30 与 120 两侧掉分,这是样本内读数,我未复算。窗口变长不引入前视,逻辑正确。合理度给 4。'
+summary: 'PROD W01 种子 911 第 3 轮独立审计(按 missions.yaml 本身打分)。读过 rules.md、missions.yaml、corr_1.json、loc.md 的 heads 表、前两轮的审计记录、算子源码与 docs/design.md;没有读 notebook.md;没有计算 2023-08-08 之后的任何读数。E 位(核心 ES)创新 4、合理 4,划 1、8、12、15 后剩 12 个,通过;N 位创新 4、合理 4,划 14、15 后剩 14 个,通过;R1 至 R6 合理度均为 4。未发现前视或数值伪影造成的数学问题。两件要注意的事:8 与 15 按重复划掉,8 的依据是由定义推出、未实测;R5 变体 3 与 N 位的 b12、b13 的数值安全依赖停牌分钟为 NaN 的约定(docs/design.md),若流水线里停牌分钟是有限的 0,请先核对。'

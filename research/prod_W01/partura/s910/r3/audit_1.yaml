@@ -1,0 +1,44 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 7, 9, 12]
+    reasons: '相关度表(train,corr_1.json 逐行核对)。核心就是 head 4 cs_first_low20(cross_mean(LogFloatCap,60),cross_mean(day_sum(Amt),60)) 本身;对五个控制的 |ρ| 最大为市值 0.408(流动性 0.20、波动 0.27、反转 0.02、已知族 0.20),满足 E 位「核心对每个控制 <0.8」。自动划掉:种子 1、7、9、12 对核心的原始 |ρ| 为 0.728、0.751、0.770、0.748,≥0.7 库禁令线,按表划掉;没有种子对控制 ≥0.8。剩 10 个:2、3、4、5、6、8、10、11、13、14。合规检查:14 个种子都原样含核心;外围算子集合两两不同(low/high 与 40 层数);与已见过的含核心候选不同:第 2 轮 R 的 cs_last_low20(核心,ListAge)、cs_last_low20(核心,ts_quantile_q75(day_last(High),10)),以及本轮 R7 变体 1 的 cs_first_low20(核心,sub(LogFloatCap,LogFloatShares))(与种子 3 只差 20% 与 40% 的带宽,见 R7 的说明)。创新度 3:核心是快照里已有的 head,新的只是 40% 台阶的轴(60 日波动、名义价格、60 日涨幅、限售比例、流通股本的变化与水平、60 日偏度、注意力褪去 log(V60)-log(V241)、成交额 gini)。台阶在残差空间里确实不同:残差 |ρ| 对全部 head 的最大值为 0.533(种子 5,对 Pr1b 那一支,其末层 ts_delta(log(LogFloatCap),60) 与种子 5 的 60 日对数价格变化近似同源)和 0.539(种子 8,对核心本身),都低于 0.6。但种子 2 的 60 日波动台阶对波动控制的 |ρ| 为 0.578、种子 14 的 gini 对流动性为 0.503、种子 11 的注意力褪去对流动性与波动为 0.33–0.35,这几个台阶都落在控制的族内,而且全部仍是核心的台阶换皮,所以只给 3,不给 4。合理度 4:逐算子核对。cs_first/last_low/high40 经 _lexi,带是 x 的整块(最多 40% 宽),输出是 核心秩 + 1[带],所以核心的秩在带内外都保留,核心的排序没有被改写。种子 13 是两层嵌套,外层对内层的复合重新取秩(ry ∈ (0,1]),不溢出。ts_delta(LogFloatShares,60) 对股本不变的名字是精确 0 的并列(同一个 float32 值),种子 8 的带只含真正变了股本的一小块,窄于 40% 是设计。种子 5、6、8 的覆盖率 0.942 来自窗口首 60 天的热身 NaN,不是系统缺失。cross_mean 用 nanmean 带部分窗口(首 60 天)。种子 11 的 cross_mean(·,241) 在 2018 年内是不足 241 日的部分均值,前 240 天的 log(V60)-log(V241) 有偏;这是 caveat 不是数学问题,2022 年以后不受影响。day_std、day_gini、day_skew 都有界(skew 的标准化残差 |z| ≤ √n),没有除以近零。无前视(日频叶子与收盘前量价,标签 t+1 开盘 VWAP 起算)。如果它有 alpha,最可能来自:核心「冷落的大票」在某一慢变量一侧的子集(低波、低价、低换手,或股本解禁一侧)的条件化收益,而不是台阶本身;其次是注意力褪去(种子 11)与 60 日涨幅(种子 5、6)的分层。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 5, 6, 12]
+    reasons: 'N 位。尾部变量全部是快照里没有的信息源:流通股本的 20 日与 60 日差分(种子 1、2、10、11)、限售比例与净发行的差分(种子 3、4、14)、报价冻结比例 day_flat_ratio(种子 5、10、12)、零收益比例 day_zero_ratio(种子 6)、成交额 gini(种子 7)、20 日最大单日涨幅 cross_max(ts_delta(log(day_last(Close)),1),20)(种子 8、13)、60 日偏度(种子 9)。自动划掉:种子 2 对市值控制 |ρ| 0.845(≥0.8);种子 5 对 cs_first_low20(cs_first_low20(LogFloatCap,sub(log(V60),FS)),sub(LogFloatCap,FS)) 原始 |ρ| 0.801;种子 6 对同一 head 0.781;种子 12 对 cs_first_low20(cs_first_low20(LogFloatCap,sub(log(cross_mean(cross_mean(day_sum(Volume),60),3)),FS)),ListAge) 0.753。这四个都是按表的规则划掉,不是我的判断。剩 10 个:1、3、4、7、8、9、10、11、13、14。创新度 4:新信息源。对快照 22 个 head 的原始 |ρ| 最大值,保留种子里除种子 7 外都在 0.65 以下,种子 7 对核心为 0.689(仍低于 0.7 线);交易信号残差对 head 的最大值:种子 1 为 0.165,3 为 0.135,4 为 0.168,7 为 0.236,8 为 0.126,9 为 0.106,10 为 0.194,都远低于 0.5。种子 11、13、14 的残差为 0.45–0.48,与库里次新外层的 head 同族,但它们的内层尾是新的,不算重复。合理度 4:逐算子核对。cs_first_high20/low20 经 _lexi,带是整块,最多 20% 宽。ts_delta(LogFloatShares,60) 对股本不变的名字是精确 0 的并列(同一个 float32 值),带子只含真正变了股本的一小块,窄于 20% 是设计;种子 1、10、11 依赖这一点。若数据源的 FloatShares 有逐日抖动,这个并列块会消失,PI 需要报告 ts_delta(LogFloatShares,60) 的零比例。数值伪影风险(不挡,请 PI 复核):ts_delta(sub(LogTotalCap,LogFloatCap),60)(种子 3、14)与 ts_delta(add(sub(LogTotalCap,LogFloatCap),LogFloatShares),60)(种子 4)是 float32 日频平面上的差分。LogTotalCap 与 LogFloatCap 在 float64 里取 log 后转为 float32,对数值约 21–24,相邻 float32 的间距 2^-19 约 1.9e-6;比值没有变的名字在差分后得到精确 0 或 ±1 ulp 的舍入噪声。合成检验(固定股本比、随机游走价格,不是真实数据)里约 2/3 为精确 0,其余为 ±1 ulp。真实数据中股本比发生变化的名字占比我没有核实,所以无法判断噪声是否主导了带子。如果变化名字占比低于约 20%(种子 3、14 的低带)或高于约 20%(种子 4 的高带),带子的一部分由舍入决定,届时应划掉。现在不划,只标注。cs_rank 的并列不是平均秩:nd_cs 的 cs_rank 调用 common.rank,并列按列序(stable argsort)打破,PI 计划 missions.yaml 的 N 位想法里「cs_rank 之和在并列处按平均秩」的说法不对。种子 10 中对零块的 cs_rank 是列序秩,即板块信息,§4 明确不算问题,但它的 alpha 很可能来自板块而不是股本。种子 7 的 day_gini 对 |Amt| 有界;种子 9 的 day_skew 有界;cross_max 忽略 NaN;窗口全部 ≤60 日;无除法;无前视。如果它有 alpha,最可能来自:股本结构事件(解禁与增发抛压、流通股增加与净发行)的定价,以及报价质量与彩票效应(冻结、零收益、单日最大涨幅)在小市值一侧的超额收益;种子 11、13、14 里的超额部分可能只是次新的已知效应。'
+R:
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, add(log(cs_first_low20(LogFloatCap, sub(log(cross_mean(day_sum(Volume), 60)), LogFloatShares))), LogFloatShares)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。逐算子核对:变体 1 的内层 cs_first_low20(LogFloatCap, sub(log(V60),FS)) 以 log(V60/FS)(换手率的对数)为标记,带是 20% 整块;其输出的秩 ∈ (0,2],秩 ≥ 1/n > 0,取 log 后不出现 −inf;外层 cs_first_low20(LogFloatCap, log(X)) 对 log(X) 排序,log 单调,不改变 X 的次序。窗口 60 日,无除法,无前视。原 head 的 add(log(X),LogFloatShares) 把秩的对数与对数股本相加,量纲不同,但不是数学问题(排序变量只要有限即可),变体 1 拿掉它。变体 2–5 只换内层标记为 60 日波动、60 日对数价格变化、报价冻结比例、名义价格,逻辑同样清楚。如果它有 alpha,最可能来自嵌套切带之后剩下的小市值、非换手尾的名字的超额收益。'
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, day_last(High)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。变体 cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, day_last(High)))), ListAge) 的内层是低价尾的秩,log 有界(秩 ≥ 1/n),外层 ListAge 的 20% 带只含真正的次新名字(启动日已在册的名字共享 10000 加天数的并列块,整块规则不会把它拆开)。day_last(High) 是名义价格,§4 已说明它不算问题。无除法,无前视。如果它有 alpha,最可能来自低价壳与次新排除后,小市值名字的超额收益。'
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, day_sum(Volume)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。内层 cs_first_low20(LogFloatCap, day_sum(Volume)) 的标记是逐日成交量,不是 60 日均量,所以带子逐日翻转。这是换手成本的问题,PI 需要看,但不是 §4 的数学问题。log 有界,ListAge 外层同 R2。无除法,无前视。如果它有 alpha,最可能来自逐日低成交量的小市值名字的超额收益,它与 60 日均量版本的差别在时间尺度。'
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, add(log(cross_mean(day_sum(Volume), 241)), sub(log(cross_mean(day_sum(Volume), 241)), LogFloatShares))), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。尾部 add(log(V241),sub(log(V241),FS)) = 2·log V241 − log FS = log V241 + log(V241/FS),是成交量水平与换手率两项之和,不是单一量,这是设计选择,不是数学问题。V241 是 cross_mean(·,241),nanmean 不产生 NaN,但数据从 2018-01-02 起,2018 年内前 240 天是不足 241 日的部分均值,嵌套带的尾在这一段有偏,这是热身期偏差,记为 caveat。head 已在库里并通过验证,R 变体只在它外面加一层嵌套带,log 有界,无除法,无前视。如果它有 alpha,最可能来自两项叠加后、切带之后剩下的小市值名字的超额收益。'
+  - head: 'cs_first_high20(LogFloatCap, sub(sub(LogTotalCap, LogFloatCap), LogFloatCap))'
+    soundness: 4
+    reasons: '合理度 4。head 的标记 sub(sub(LogTotalCap,LogFloatCap),LogFloatCap) = log TotalCap − 2·log FloatCap,即限售比例(FLTR)减去流通市值的对数,并不是纯限售比例。排序对量纲不敏感,不是数学问题,但 PI 写的「限售比例族」是简化说法。变体在外层用 ListAge 最低 20% 抬到最前,带子只含真正次新的名字,逻辑清楚。无除法,无前视。如果它有 alpha,最可能来自限售比例高、流通市值小一侧去掉次新之后的超额收益。'
+  - head: 'cs_first_high20(LogFloatCap, sub(LogTotalCap, LogFloatCap))'
+    soundness: 4
+    reasons: '合理度 4。FLTR = sub(LogTotalCap,LogFloatCap) 对全流通的股票精确为 0(同一 float32 值),是并列块,高尾带子取非零的部分,符合整块规则。变体在外层用 ListAge 最低 20% 抬到最前,带子只含真正的次新名字。无除法,无前视。如果它有 alpha,最可能来自去掉次新之后,限售比例高尾的超额收益。'
+  - head: 'cs_first_low20(cs_first_low20(LogFloatCap, sub(log(cross_mean(day_sum(Volume), 60)), LogFloatShares)), sub(LogFloatCap, LogFloatShares))'
+    soundness: 4
+    reasons: '合理度 4。变体 1 把内层换成核心 cs_first_low20(cross_mean(LogFloatCap,60),cross_mean(day_sum(Amt),60)),外层保留名义价格尾;变体 2 把外层名义价格换成 60 日均值。两者都是 60 日窗口,无除法,无前视。名义价格 = log FloatCap − log FloatShares 就是对数价格,没有问题。注意变体 1 与槽 a 种子 3 的外围只差 20% 与 40% 的带宽,两者若都进入候选池,PI 收录时应查它们之间的 |ρ|(库禁令 0.7)。如果它有 alpha,最可能来自冷落大票内部,按名义价格(低价)一侧分层的超额收益。'
+  - head: 'cs_first_low20(LogFloatCap, sub(LogFloatCap, LogFloatShares))'
+    soundness: 4
+    reasons: '合理度 4。变体把排序变量与标记都换成 60 日均值:cross_mean(LogFloatCap,60) 与 cross_mean(sub(LogFloatCap,FS),60),即 60 日平滑的对数市值与对数价格,带子不再逐日翻转。无除法,无前视。与原 head 的 |ρ| 为 0.961,属于替换类(R 规则处理),不影响合理度。如果它有 alpha,最可能来自名义价格低尾的慢状态,即低价小票的定价。'
+  - head: 'cs_first_low20(cross_mean(day_sum(Amt), 60), cross_mean(day_es_ratio_lo(Amt), 60))'
+    soundness: 4
+    reasons: '合理度 4。day_es_ratio_lo(Amt) = 左尾 5% 分钟的均值 / 5% 分位数。q05 > 0 时取值 [0,1](分子的分钟都不超过分位数),q05 ≈ 0 时给 NaN,不会出现 ±inf。变体把排序变量换成 60 日对数市值。覆盖率 0.982,缺失来自 q05 = 0 的薄股,不是系统缺失。无除法爆点,无前视。如果它有 alpha,最可能来自左尾成交分散(低成交分钟多)一侧的超额收益,在市值分层之后的部分。'
+  - head: 'cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1))'
+    soundness: 4
+    reasons: '合理度 4。H1 的两个部件要分开看:(a) 排序变量 cross_fangzheng(cross_fangzheng(·,3),3) 是 3 日均值加 3 日标准差两层,是真正的平滑;(b) 切带变量 ts_quantile_q75(ts_quantile_q75(LogFloatCap,1),1) 是恒等。rolling_windows 是含当天的因果窗口,d=1 时 0.75 分位数就是 LogFloatCap 本身。所以 H1 的切带用的是逐日原始市值。missions.yaml 的 H1 说明(R10 的 why)里「排序变量保持 H1 的平滑市值」只对排序变量成立,切带变量那一层是恒等。这不是数学问题,但标签要改。变体 1 把切带变量换成 cs_first_low20(原始市值,60 日换手率尾) 的秩,是嵌套带,秩 ∈ (0,2] 有界;变体 2 再叠 ListAge 尾。无除法,窗口 ≤60 日,无前视。如果它有 alpha,最可能来自市值最小 20% 之外的那一带,在它内部去掉换手率最低的一组之后的超额收益。'
+summary: '槽 a(E,核心 head 4)创新度 3、合理度 4,按自动线划掉 1、7、9、12,剩 10;槽 b(N)创新度 4、合理度 4,按自动线划掉 2、5、6、12,剩 10;R 十组合理度均 4;两个任务位都过门槛,未发现前视或须划掉的数学问题。需 PI 复核:槽 b 的 3、4、14 号的 float32 差分舍入(若变化名字占比低则应划掉)、cs_rank 并列按列序而非平均秩、H1 切带变量为恒等、241 日均值在 2018 年为部分窗口、R7 变体 1 与槽 a 种子 3 只差 20%/40% 带宽。'

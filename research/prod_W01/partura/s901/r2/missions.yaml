@@ -1,0 +1,94 @@
+seed: 901
+round: 2
+slots:
+  - type: E
+    core: 'day_argmax(Amt)'
+    hypothesis: >-
+      核心 day_argmax(Amt) 是当天成交额最大的那一分钟在 241 根分钟棒里的位置(0 到 240,取不到时为缺失),回答的问题是钱最集中在哪一刻出现。
+      它是本种子第 1、2 批共性表里唯一均值为正的子树:296 个已评分候选里含它的 4 个均值 +0.32,不含的 -1.42(差 +1.74,p 0.0004);
+      紧随其后的是 day_argmax(Volume)(9 个,-0.64 对 -1.42,p 0.004),说明读数的是成交的时点,而不是某个价格形状。
+      机制:一天里成交额的峰值落在开盘那一棒(隔夜信息与散户盘前挂单、Barber 与 Odean 2008 的注意力买入集中在开盘)、尾盘那一棒(指数与被动资金、基金的收盘定价需求)
+      还是盘中某处,取决于这只票的持有人结构,这是几个月不变的慢指纹(Admati 与 Pfleiderer 1988 的日内成交量模式;Heston、Korajczyk、Sadka 2010 的日内半小时周期)。
+      问题是单日的 argmax 噪声极大,而且是离散整数,直接用等于没有试过它。本任务因此把外围放在五种机制各不相同的处理上,全部原样含核心,
+      外围不用 M 在含该核心的候选里已经见过的写法(我读不到那 4 个候选的外围,若有重合,机械采样器会按 c05_periphery_seen 拒绝)。
+      (1)日聚合方式:cross_mean(20)、半衰期 15 日的 cross_ema、cross_med(中位数,对偶发的峰值错位稳健)、cross_tail_mean_q75(最晚的四分之一天的均值)。
+      (2)频率化:is_lt(day_argmax(Amt), 15) 与 is_gt(day_argmax(Amt), 225) 取 30 日均值,即最近 30 天里峰值落在前 15 分钟或后 15 分钟的天数占比,有界在 0 到 1,不再是一个被偶发盘中峰值拉动的平均位置。
+      (3)相对自己:cross_zscore(.,60) 与短窗(10 日)减长窗(60 日),问的是这只票最近的出峰时点是否偏离它自己的常态;cross_stddev(.,30) 问出峰时点是否稳定(事件驱动的票是不稳定的)。
+      (4)与同日别的时点错配:峰值分钟减最高价所在分钟 day_argmax(High)、减成交量峰值所在分钟 day_argmax(Volume)、减成交额重心 day_centroid(Amt) 乘 240,问钱最集中的一刻是否也是价格走到极值的一刻(高潮买入或高潮卖出),这是核心单独看不到的。
+      (5)分桶内比较:cs_bucket_rank(.,LogFloatCap) 与按已知族 cross_mean(day_std(Amt),30) 的十分位分桶,在同规模、同成交波动的票之间比出峰时点,去掉出峰时点本身与规模、流动性的重叠。
+      与库的差别:库里没有 head(0 个),所以对照物只有 5 个控制;出峰时点是日内时点量,不是价格、波动、流动性、20 日反转、市值或已知族的函数(第 1 轮相关表里 day_centroid(Amt) 的 20 到 60 日平均与流动性、已知族的 |ρ| 约 0.58,到不了 0.8,而本任务的频率版与分桶版更低)。
+      为什么样本外还会在:持有人结构不随一两个季度换手,峰值时点是这种结构的结果;最坏的情形是它只是风格暴露,那样新尺子去掉的线性、平方、三次项之外还剩多少是实验要回答的问题。
+      已知风险:停牌日若 Amt 取 0 而不是缺失,argmax 会返回 0(开盘棒),把停牌多的票推向早出峰一端,我无法在本机核对;频率版与均值版都会受到它的影响。
+      数学上:所有种子只含有界或整数量(位置 0 到 240、0 到 1 的频率、z 分数),没有除以近零的量;cross_zscore 的分母是 60 日标准差加 EPS,出峰位置常年不变的票会被推到爆点(种子 7 已知),
+      其余种子没有这个风险;没有前视,全部只用当天及以前的数据。
+    literature:
+      - source: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price variability, Review of Financial Studies'
+        year: '1988'
+      - source: 'Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock returns, Journal of Finance'
+        year: '2010'
+      - source: 'Barber and Odean, All that glitters: the effect of attention and news on the buying behavior of individual and institutional investors, Review of Financial Studies'
+        year: '2008'
+    seeds:
+      - 'cross_mean(day_argmax(Amt), 20)'
+      - 'cross_ema(day_argmax(Amt), 15)'
+      - 'cross_med(day_argmax(Amt), 30)'
+      - 'cross_tail_mean_q75(day_argmax(Amt), 40)'
+      - 'cross_mean(is_lt(day_argmax(Amt), 15), 30)'
+      - 'cross_mean(is_gt(day_argmax(Amt), 225), 30)'
+      - 'cross_zscore(day_argmax(Amt), 60)'
+      - 'sub(cross_mean(day_argmax(Amt), 10), cross_mean(day_argmax(Amt), 60))'
+      - 'cross_stddev(day_argmax(Amt), 30)'
+      - 'cross_mean(sub(day_argmax(Amt), day_argmax(High)), 20)'
+      - 'cross_mean(sub(day_argmax(Amt), day_argmax(Volume)), 20)'
+      - 'cross_mean(sub(day_argmax(Amt), mul(day_centroid(Amt), 240)), 20)'
+      - 'cs_bucket_rank(cross_mean(day_argmax(Amt), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cross_mean(day_argmax(Amt), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(cross_mean(is_lt(day_argmax(Amt), 15), 30), LogFloatCap)'
+      - 'cs_bucket_rank(cross_ema(day_argmax(Amt), 15), cross_mean(day_std(Amt), 30))'
+  - type: N
+    hypothesis: >-
+      想法:日内成交的时点指纹(质心、开盘一棒的占比、尾盘 30 分钟的占比、成交额随时间的倾斜)与持有人结构的几个结构变量纠缠在一起,
+      而 5 个控制里没有一个是结构变量:LogFloatShares(流通股本,等于规模减对数名义价)、LogTotalCap 减 LogFloatCap(非流通市值占比,即限售与大股东持股)、ListAge(上市年限)、LogFloatCap 减 LogFloatShares(对数名义价)。
+      所以裸的时点统计里有一部分只是在读这些结构变量,新尺子的多项式去不掉它们;把每个时点统计放到同结构十分位里做 z 分数(cs_bucket_zscore),只留下同类里比同类更早或更晚成交的部分,
+      这才是相同结构下持有人构成不同的信号。
+      受这一批两处现象启发。其一,第 1 批共性表里 sub(LogFloatCap, LogFloatShares) 含它的 10 个均值 -0.84 对 -1.41(p 0.04),本种子第 1 轮 E 位里最好的 5 个全部含 LogFloatShares,说明名义价与股本轴上有信息而且没有被控制吃掉。
+      其二,本批日内量里最突出的两类是 day_argmax(Amt)(+1.74)与 day_wmean(Ret, Amt)(+0.74),前者是时点,后者是钱流向的方向。
+      我另读了其他种子第 2 轮快照(规则 5 允许),其中时点类统计在分桶或回归掉股本之后排名更高;这是别处的样本内读数,不当作本种子的证据。
+      每个种子都是同一件事的一个选择:先选时点统计,再选结构轴,统一写成 cs_bucket_zscore(统计, 结构轴)。
+      时点统计:20 日平均的成交额质心 day_centroid(Amt);开盘棒占全天成交额 day_first(Amt) 除以 day_sum(Amt)(第 0 根在 A 股钟面上带着开盘集合竞价,未在本机核对);
+      尾盘 30 分钟占比 in_slice(Amt, 211, 240);成交额对时间的 Pearson 倾斜 day_corr(in_index(Amt), Amt),比质心对单分钟尖峰稳健;
+      成交额质心减成交量质心(价格加权的时点差);质心的 30 日标准差(时点不稳定,事件驱动);day_gini(Amt)(成交是否集中在少数分钟);
+      重分钟的方向 day_wmean(Ret, Amt) 减 day_mean(Ret)(第 1 轮是 120 日平均,train 约 0 而 valid 约 +1,这里改成 40 日并放进同类内);尾盘 30 分钟的净买入占比 day_signed_ratio。
+      与库的差别:库里没有 head;5 个控制都不是结构变量,统计本身也不是价格、波动、流动性、20 日反转、市值或已知族的函数。
+      第 1 轮的 N 位只做了裸的 120 日平均,没有一个放进同结构里比较,结构轴没有被碰过。
+      为什么样本外还会在:持有人构成(散户占比、被动资金、限售股东)与上市年限变化缓慢;同类内比较去掉的是结构轴上随风格轮换的那一段,留下的是同类里持有人更偏向散户或机构的相对读数。
+      最坏的情形是结构变量的暴露本来就是信号,去掉它之后什么也不剩,那样这个位的结果会清楚地告诉第 3 轮不要再做结构分桶。
+      数学上:cs_bucket_zscore 在桶内除以桶内总体标准差加 EPS,桶内几乎常数时会放大噪声,ListAge 在新股占多数的日子里分桶有并列,并列靠列序打破,携带板块信息,属规则 4 列出的非问题;
+      day_first(Amt) 与 day_sum(Amt) 在算子内分母为 0 给缺失,没有除以近零的量;in_slice 的下标是 0 到 240 之内;cross_stddev 对停牌日只用有限的天。
+      没有前视。
+    inspired_by: '本种子第 1、2 批:sub(LogFloatCap, LogFloatShares)(10 个,-0.84 对 -1.41,p 0.04)与 day_argmax(Amt)、day_wmean(Ret, Amt)(+1.74、+0.74);第 1 轮 E 位最好的候选带 LogFloatShares;第 1 轮 N 位的重分钟方向在 valid 约 +1 而 train 约 0,尚未在同类内比较过'
+    literature:
+      - source: 'Birru and Wang, Nominal price illusion, Journal of Financial Economics'
+        year: '2016'
+      - source: 'Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock returns, Journal of Finance'
+        year: '2010'
+      - source: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price variability, Review of Financial Studies'
+        year: '1988'
+    seeds:
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(day_corr(in_index(Amt), Amt), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_bucket_zscore(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), ListAge)'
+      - 'cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), ListAge)'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 30), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_stddev(day_centroid(Amt), 30), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(day_gini(Amt), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 40), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 30), LogFloatShares)'
+R: []

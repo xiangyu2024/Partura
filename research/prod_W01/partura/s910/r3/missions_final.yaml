@@ -1,0 +1,188 @@
+seed: 910
+round: 3
+slots:
+- type: E
+  core: cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt), 60))
+  hypothesis: 想法:在「冷落的大票」这一本书(head 4,方向 +1)上,按一根与「冷」正交的慢变量再切一层 40% 的限定 / 沉底,看哪一根轴能把它变得更干净。(1)现象:核心
+    = head 4 `cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60))`(+1.34,train +1.34 / valid +2.50,方向 +1,半衰期 0)。多头端 = 60 日成交额最低 20% 的尾部里按 60
+    日市值从大到小排的一端,即「成交额很低而市值相对不低」的被冷落的大票。拆解事实:敲掉 60 日平滑 −0.63(日度标记逐日翻转,成本吃光),窗口 30 /
+    120 不敏感,所以是一个慢状态;第 2 轮 R 把标记换成换手率(TRV)后只剩 +0.36,说明来源是成交额水平与市值的交叉,不是换手率。同一轮 R 里,在这本书上再沉底一层
+    20% 的次新(ListAge)升到 +1.42(train +1.42 / valid +3.30),沉底 10 日平滑的复权价格低尾是 +1.24(与原
+    head 的日度秩 |ρ| 只有 0.39),说明这本书能再切、切完分数仍在 1.2 以上,且切的轴不同,选出的名字就不同。(2)本位的做法:核心原样固定,外围只加一层
+    40% 宽的 `cs_first_low40 / cs_first_high40 / cs_last_low40 / cs_last_high40`(把某根轴的最低
+    / 最高 40% 整体抬到最前或沉到最底,其余按核心的秩排),轴取 10 类、核心从没用过的慢变量:60 日波动 VOL60(低波 = 防御型,「冷 + 低波」是红利
+    / 国企式低估值票的画像)、名义价格 NOMP = sub(LogFloatCap, LogFloatShares)(低价)、60 日涨幅(近期输家 / 赢家)、限售比例
+    sub(LogTotalCap, LogFloatCap)(解禁压力)、60 日流通股本变化 ts_delta(LogFloatShares, 60)(刚解禁
+    / 增发)、流通股本水平、60 日偏度、成交额对自身 241 日均值的衰减(注意力在褪去)、分钟报价冻结比例 day_flat_ratio(薄报价);另有一个两层
+    40% 交集(低波 ∩ 低价)。为什么是 40% 不是 20%:二层 20% 与核心的日度秩 |ρ| 在 0.8–0.9(第 2 轮 R 里沉底 20% 次新实测
+    0.82),会被库禁令挡掉;40% 的层只改动核心排序的一部分,|ρ| 在 0.3–0.7,极性取「抬到最前的那组与核心多头端相反」的一侧更容易落在 0.7
+    以下,所以对波动、价格、涨幅两个极性都放了种子。(3)与库里已有的不同:这个核心此前没有做过 E,R 里只试过沉底 20% 的次新与价格两个外围,40% 宽的限定
+    / 沉底和下面这些轴都没有被任何候选用过;种子的算子骨架(含窗口)互不相同,也不等于任何 head 的骨架。轴里除 VOL60 与成交额衰减分别与波动、流动性两个控制同族外,其余都不是
+    5 个控制之一(控制是流动性、波动、20 日反转、已知族、市值);VOL60 在这里只充当 40% 台阶的指示量,台阶不在控制的低阶多项式里,切完之后的书与
+    head 4 的差别是「条件化」,不是换写法。(4)数学上没有问题:窗口 ≤ 60 日(只有「注意力褪去」一个种子用 241 日 cross_mean,它是
+    nanmean,不会缺失,库里 head 用 241 日窗口已经验证过覆盖率);不含除法;log 只作用在成交额的均值上(正数);`ts_delta(LogFloatShares,
+    60)` 大多数名字恒为 0(并列块),_lexi 的整块规则使沉底的带只含真正变化了的那一小块,窄于 40% 是设计;无前视(日频叶子与收盘前量价,标签
+    t+1 开盘 VWAP 起算);不含 ts_spearman 与 nt_*。(5)为什么样本外还会在:冷落公司溢价(neglected-firm effect)与流动性溢价是跨市场、跨时期记录的异常,不依赖某一年的行情;被冷落的大票叠上低波、低价、非次新,就是
+    A 股「低估值红利型」的典型画像,其定价修复由估值与现金回报驱动,而不是由 2022–2023 的微盘行情驱动。风险:valid 约为 train 的两倍,train(2018–2021)一侧是约束,本位正是要看哪一根轴能把
+    train 抬高。
+  seeds:
+  - cs_first_high40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), cross_mean(day_std(Ret), 60))
+  - cs_first_low40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), sub(LogFloatCap, LogFloatShares))
+  - cs_first_high40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), sub(LogFloatCap, LogFloatShares))
+  - cs_first_low40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), ts_delta(log(day_last(Close)), 60))
+  - cs_first_high40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), ts_delta(log(day_last(Close)), 60))
+  - cs_last_high40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), ts_delta(LogFloatShares, 60))
+  - cs_last_low40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), cross_mean(day_skew(Ret), 60))
+  - cs_first_low40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), sub(log(cross_mean(day_sum(Amt), 60)), log(cross_mean(day_sum(Amt), 241))))
+  - cs_first_low40(cs_first_low40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), cross_mean(day_std(Ret), 60)), sub(LogFloatCap, LogFloatShares))
+  - cs_first_high40(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), cross_mean(day_gini(Amt), 60))
+- type: N
+  hypothesis: 想法:给「小市值里排掉一类死尾」这个已验证的写法补两类库里还没有的死尾数据:股本结构随时间的变化(解禁、增发、转股)与分钟级报价质量(薄报价、冻结、极值),并让
+    GP 在它们的组合上长。(1)现象:本组 22 个 head 里,方向 −1 的绝大多数是「小市值 + 排掉一类死尾」:次新(ListAge)、低价(day_last(High))、低成交量(day_sum(Volume))、限售比例高(sub(LogTotalCap,
+    LogFloatCap),第 2 轮冒出的新一族,3 个 head,最好 +1.50 = sub(sub(LogTotalCap, LogFloatCap),
+    LogFloatCap))。限售比例这一族来自此前没人用过的股本结构叶子,说明股权结构是还没挖干净的数据源;但至今用的都是它的水平(静态),没有人用它随时间的变化,也没有人用分钟级的报价质量。(2)本位把死尾扩到这两类,骨架沿用库内成功的
+    `cs_first_high20 / cs_first_low20(LogFloatCap, 尾部变量)` 单层(方向由评估选:−1 = 排除尾部后取最小市值,+1
+    = 取尾部里市值最大的一端),并用 ListAge 外层(第 1 轮 R 已验证能把 train 从 +0.63 抬到 +1.42 的补丁)做四个两层种子。尾部变量:(A)供给冲击:ts_delta(LogFloatShares,
+    60) 与 20 日版本(流通股本增加 = 解禁 / 增发 / 转股,价格无关,因为股本是对数股数)、ts_delta(sub(LogTotalCap, LogFloatCap),
+    60) 的最低尾(限售比例下降 = 刚解禁)、ts_delta(add(sub(LogTotalCap, LogFloatCap), LogFloatShares),
+    60) = 总股本的 60 日增长(净发行 net issuance);(B)报价质量:cross_mean(day_flat_ratio(Close),
+    60)(分钟报价不动的比例 = 薄报价 / 封板)、cross_mean(day_zero_ratio(Ret), 60)(收益恰好为 0 的分钟占比)、cross_mean(day_gini(Amt),
+    60)(一天里成交额集中在少数分钟 = 一笔单子就能推动价格);(C)极值:cross_max(ts_delta(log(day_last(Close)),
+    1), 20)(20 日内最大单日涨幅 = MAX 彩票效应)、cross_mean(day_skew(Ret), 60);(D)复合:ΔS 与 flat
+    的 cs_rank 之和,取最高 20%(多种死尾的并集)。(3)与库里已有的不同:库里的尾部变量只有:市值、成交额(流动性)、复权价格、次新、限售比例水平、名义价格;这里的尾部变量全部是新的信息源(随时间的股本变化、分钟级报价),不是已有尾部的换写法;算子骨架(含窗口
+    60 / 20 / 1)互不相同,也不等于任何 head 的骨架(已逐个核对)。独立于市值的尾部会使输出与市值秩的 |ρ| 约 0.58,集中在小市值的尾部更低,低于
+    0.8 的自动划掉线;ListAge 外层的两层种子预计与第 1 轮的次新类 head 有 0.5–0.7 的相关,是预期内的。(4)数学上没有问题:窗口
+    ≤ 60 日(不用 120 日以上的回看:第 1 轮 120 日回看的两个种子因覆盖率 0.89 被划掉);不含除法;ts_delta(…, 1) 对停牌后复牌的第一天给
+    NaN(停牌日的收盘价缺失),所以 MAX 不会读到跨停牌的大缺口;股本差分在大多数名字上恒为 0(并列块),_lexi 整块规则使带只含真正变化了的那一小块,窄于
+    20% 是设计,不是缺陷;cs_rank 之和在并列处按平均秩,无数值伪影;无前视(日频叶子与收盘前量价,标签 t+1 开盘 VWAP 起算);不含 ts_spearman
+    与 nt_*。(5)为什么样本外还会在:增发 / 净发行异常(net issuance anomaly)与解禁的负超额收益是跨国、跨时期记录的现象,而且被制度日历(IPO
+    锁定期、定增 12–36 个月)驱动,不依赖某一段行情;薄报价与 MAX 彩票是机制性的流动性 / 操纵风险与散户偏好,不依赖 2022–2023 的微盘行情。风险:这些尾部变量的有效性未经检验(本位就是检验),若尾部与市值无关,单层种子的
+    train 一侧会像第 1 轮 R 里「名义价格尾」那样偏弱,这也是 ListAge 外层种子存在的原因。
+  inspired_by: 批 2:限售比例尾(sub(LogTotalCap, LogFloatCap) 与 sub(sub(LogTotalCap, LogFloatCap),
+    LogFloatCap) 的 3 个 head,最好 +1.50)说明股本结构叶子是新数据源;批 1:次新 / 低价 / 低成交量三类死尾叠 ListAge
+    把 train 抬到 +1.42 的写法;至今没有 head 用到股本随时间的变化或分钟级报价质量
+  seeds:
+  - cs_first_high20(LogFloatCap, ts_delta(LogFloatShares, 60))
+  - cs_first_low20(LogFloatCap, ts_delta(sub(LogTotalCap, LogFloatCap), 60))
+  - cs_first_high20(LogFloatCap, ts_delta(add(sub(LogTotalCap, LogFloatCap), LogFloatShares),
+    60))
+  - cs_first_high20(LogFloatCap, cross_mean(day_gini(Amt), 60))
+  - cs_first_high20(LogFloatCap, cross_max(ts_delta(log(day_last(Close)), 1), 20))
+  - cs_first_high20(LogFloatCap, cross_mean(day_skew(Ret), 60))
+  - cs_first_high20(LogFloatCap, add(cs_rank(ts_delta(LogFloatShares, 60)), cs_rank(cross_mean(day_flat_ratio(Close),
+    60))))
+  - cs_first_low20(cs_first_high20(LogFloatCap, ts_delta(LogFloatShares, 60)), ListAge)
+  - cs_first_low20(cs_first_high20(LogFloatCap, cross_max(ts_delta(log(day_last(Close)),
+    1), 20)), ListAge)
+  - cs_first_low20(cs_first_low20(LogFloatCap, ts_delta(sub(LogTotalCap, LogFloatCap),
+    60)), ListAge)
+R:
+- head: cs_first_low20(cs_first_low20(LogFloatCap, add(log(cs_first_low20(LogFloatCap,
+    sub(log(cross_mean(day_sum(Volume), 60)), LogFloatShares))), LogFloatShares)),
+    ListAge)
+  why: 这个 head(+1.50,train +1.50 / valid +2.21)里 `add(…, LogFloatShares)` 是烂部件:拆解里敲掉它(把
+    add(log(X), LogFloatShares) 换成 log(X))分数从 +1.50 升到 +2.04(train +2.04 / valid +2.28),必要性
+    −0.54。读法:敲掉后的结构是「嵌套带」:内层 X = cs_first_low20(LogFloatCap, 尾部) 的秩 + 尾部抬升,外层 cs_first_low20(LogFloatCap,
+    log(X)) 再把 X 最低的 20%(= 尾部之外最小的那批名字)整体抬走,方向 −1 取最低 = 留下「尾部里市值小的名字」加上「被抬走那批之上的一带」,即
+    H1 的切带再加上一类被选中的微盘子集。第 1 个变体就是这个敲掉后的版本(原样取自拆解);第 2–5 个变体是同一结构里换「被留下的微盘子集」的定义(内层尾部变量):60
+    日波动低尾(平稳的微盘)、60 日涨幅低尾(跌透的微盘)、报价冻结比例低尾(报价活跃的微盘)、名义价格低尾(低价微盘),看「冷落(低换手)」这一类是不是唯一好的子集。全部窗口
+    ≤ 60 日,无除法,log 作用在 (0, 2] 的秩上,不会出 ±inf。
+  variants:
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, sub(log(cross_mean(day_sum(Volume),
+    60)), LogFloatShares)))), ListAge)
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, cross_mean(day_std(Ret),
+    60)))), ListAge)
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, ts_delta(log(day_last(Close)),
+    60)))), ListAge)
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, cross_mean(day_flat_ratio(Close),
+    60)))), ListAge)
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, sub(LogFloatCap,
+    LogFloatShares)))), ListAge)
+- head: cs_first_low20(cs_first_low20(LogFloatCap, day_last(High)), ListAge)
+  why: head 3(+1.42,train +1.42 / valid +2.62)只在最后一层排除了价格尾与次新尾,它的小市值排序里还含有最小的那一批壳名字。上一条
+    head 的拆解显示,把换手率尾放进嵌套带(先抬尾部、再把尾部之外最小的 20% 抬走)并叠 ListAge 之后分数从 +1.50 升到 +2.04(嵌套内层单独只有
+    +0.86);这里把同一招用在价格尾上:内层 cs_first_low20(LogFloatCap, day_last(High)) 的秩再被 cs_first_low20(LogFloatCap,
+    ·) 当作切带变量。无除法,窗口只有 log 与 day_last,无前视。
+  variants:
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, day_last(High)))),
+    ListAge)
+- head: cs_first_low20(cs_first_low20(LogFloatCap, day_sum(Volume)), ListAge)
+  why: head(+1.44,train +1.44 / valid +2.17)与上面两条同类:低成交量尾(日度 day_sum(Volume),逐日值)在最后一层被排除,小市值里最小的那批没有被切带处理。变体把低成交量尾放进嵌套带。无除法,无窗口。
+  variants:
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, day_sum(Volume)))),
+    ListAge)
+- head: cs_first_low20(cs_first_low20(LogFloatCap, add(log(cross_mean(day_sum(Volume),
+    241)), sub(log(cross_mean(day_sum(Volume), 241)), LogFloatShares))), ListAge)
+  why: head(+1.58,train +1.58 / valid +2.62,半衰期 0)里 `add(log(V241), sub(log(V241),
+    LogFloatShares))` = 2·log(241 日均量) − log(流通股本),拆解显示敲掉任何一块都不超过 +1.28,说明这个尾部变量整体是有用的、烂的是它外面没有切带。变体把整个尾部变量放进嵌套带(内层
+    cs_first_low20(LogFloatCap, 尾部) 外面再套一层 log 与切带)。cross_mean 是 nanmean,241 日窗口不会缺失(原
+    head 已验证覆盖率),无除法。
+  variants:
+  - cs_first_low20(cs_first_low20(LogFloatCap, log(cs_first_low20(LogFloatCap, add(log(cross_mean(day_sum(Volume),
+    241)), sub(log(cross_mean(day_sum(Volume), 241)), LogFloatShares))))), ListAge)
+- head: cs_first_high20(LogFloatCap, sub(sub(LogTotalCap, LogFloatCap), LogFloatCap))
+  why: 限售比例族最好的 head(+1.50,train +1.50 / valid +2.58,半衰期 5)。烂部件:没有排除次新(新上市的名字限售比例高,和这个尾部大量重叠,但并不相同:定增股东
+    / 老股东限售的老股不是次新),而次新在库里 12 个 head 中出现过并把 train 抬高。变体在最外层沉底 / 抬走 ListAge 最低 20%(方向
+    −1,cs_first_low20 把次新抬到最前即退出多头端)。无除法,无窗口。
+  variants:
+  - cs_first_low20(cs_first_high20(LogFloatCap, sub(sub(LogTotalCap, LogFloatCap),
+    LogFloatCap)), ListAge)
+- head: cs_first_high20(LogFloatCap, sub(LogTotalCap, LogFloatCap))
+  why: 限售比例族的最简版本(+1.19,train +1.19 / valid +2.51,半衰期 0)。烂部件同上:没有排除次新;另外半衰期 0 的 train
+    最弱。变体在最外层抬走 ListAge 最低 20%。无除法,无窗口。
+  variants:
+  - cs_first_low20(cs_first_high20(LogFloatCap, sub(LogTotalCap, LogFloatCap)), ListAge)
+- head: cs_first_low20(cs_first_low20(LogFloatCap, sub(log(cross_mean(day_sum(Volume),
+    60)), LogFloatShares)), sub(LogFloatCap, LogFloatShares))
+  why: head(+0.60,train +0.60 / valid +1.42,方向 +1)= 名义价格最低 20% 的尾部里,按「换手率最低的 20% 尾部
+    + 市值」排。第 2 轮 R 已经证明换手率(TRV)作为标记是烂部件:head 4 把标记换成 TRV 后从 +1.34 掉到 +0.36,而成交额(Amt)标记是
+    +1.34。变体 1 把内层换成 head 4 的写法(60 日市值 + 60 日成交额最低 20% 的尾部),外层保留名义价格尾;变体 2 再把外层名义价格换成
+    60 日平滑(名义价格逐日随股价波动,尾部边缘的名字会逐日进出,第 2 轮 head 4 的拆解已经证明慢状态是必要的)。窗口 ≤ 60 日,无除法。
+  variants:
+  - cs_first_low20(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), sub(LogFloatCap, LogFloatShares))
+  - cs_first_low20(cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_sum(Amt),
+    60)), cross_mean(sub(LogFloatCap, LogFloatShares), 60))
+- head: cs_first_low20(LogFloatCap, sub(LogFloatCap, LogFloatShares))
+  why: head(+0.79,train +0.79 / valid +1.63,方向 +1,半衰期 5)= 名义价格最低 20% 的尾部里市值最大的一端。烂部件:名义价格
+    = 对数市值 − 对数流通股本,而对数市值每天随股价波动,尾部边缘的名字逐日进出;head 4 的拆解已经证明 60 日平滑是必要的(敲掉 −0.63)。变体把两处都换成
+    60 日均值(排序变量与标记变量)。窗口 60 日,无除法。
+  variants:
+  - cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(sub(LogFloatCap, LogFloatShares),
+    60))
+- head: cs_first_low20(cross_mean(day_sum(Amt), 60), cross_mean(day_es_ratio_lo(Amt),
+    60))
+  why: head(+0.72,train +0.72 / valid +1.21,方向 +1,半衰期 5)= es_ratio_lo(Amt) 最低 20%
+    的尾部里按 60 日成交额排。烂部件:排序变量是 60 日成交额,而成交额是 5 个控制之一(流动性),它的秩的多项式暴露已被去掉,排序里能留下的只有尾部台阶;head
+    4 说明同一个尾部(成交额的尾部)里按市值排才是好的写法(+1.34)。变体把排序变量换成 60 日市值。窗口 60 日,无除法;day_es_ratio_lo
+    在分位数近零时给 NaN,不是 ±inf。
+  variants:
+  - cs_first_low20(cross_mean(LogFloatCap, 60), cross_mean(day_es_ratio_lo(Amt), 60))
+- head: cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1))
+  why: H1(+1.85,train +1.85 / valid +2.58)的切带把市值最小的 20% 整体抬走,方向 −1 取最低 = 市值 20–30%
+    分位的一带。上面 head(+1.50)的拆解显示「切带之外保留一类被选中的微盘」能把分数抬到 +2.04:被选中的是换手率最低 20% 的微盘。变体 1
+    把这个做法放进 H1 的切带变量(把切带变量从 ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1) 换成「它的
+    cs_first_low20 与换手率最低尾部」),排序变量保持 H1 的平滑市值;变体 2 再在最外层抬走 ListAge 最低 20%(第 2 轮 R:H1
+    + ListAge = +1.95,只差 0.005 到替换线,train +1.95)。窗口 ≤ 60 日,无除法。
+  variants:
+  - cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), cs_first_low20(ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1),
+    1), sub(log(cross_mean(day_sum(Volume), 60)), LogFloatShares)))
+  - cs_first_low20(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), cs_first_low20(ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1),
+    1), sub(log(cross_mean(day_sum(Volume), 60)), LogFloatShares))), ListAge)
+audit:
+  attempts: 1
+  file: audit_1.yaml

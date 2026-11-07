@@ -1,0 +1,124 @@
+seed: 908
+round: 2
+slots:
+  - type: E
+    core: 'div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))'
+    hypothesis: >-
+      核心 C = div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)) = 当天成交额里落在最后 30 个分钟列(in_slice 含两端,第 211..240 列 =
+      14:31..15:00,含收盘那一列)的份额,0..1 的有界比例,分母是当天总额,所以对金额水平免疫。
+      证据(只来自本种子 train / valid):库里分数最高的 head = cross_mean(C, 20),+1.81(train +1.94 / valid +1.81),方向 -1(尾盘占比低者做多);
+      C 本身(日度)只有 +0.28(train +0.98 / valid +0.28),20 日平均把它抬了 1.5;窗口 10 / 15 / 20 / 40 = +1.53 / +1.19 / +1.81 / +1.31(起伏不单调,
+      说明估计量本身有噪声);把除以 day_sum(Amt) 拿掉 -1.80(必要性 +3.6,比例是必需的);Amt 换 Volume +1.70(同一件事)。
+      对照同一个数据立方体里'成交时间重心'潜变量的经验(同一把尺子、纯 train/valid):cross_mean(day_centroid(Amt), 20) +1.34,
+      在 LogFloatShares 十分位内 z-score 后 +1.57,取 20 日最小值 ts_min(., 20) +0.96(与 20 日均值版不是同一排序),
+      兄弟种子 905 里 cross_zscore(cross_mean(day_centroid(Amt), 20), 240) 为 +0.90(train +1.26 / valid +0.90)—— 去掉水平、只读相对自身一年历史的变化也有信号。
+      这些说明同一个潜变量'活动落在收盘端 / 靠后'至少有四种读法(平均水平 / 极端日 / 相对自身历史 / 在股本分组内);本种子库里 centroid 的平均版(分桶)、ts_min 版、cs_first_low40 版同时是 head,
+      说明至少这几种读法的日度秩相关低于 0.7,各自独立过线。
+      这一位把同样的读法搬到 C 上:C 目前被看过的外围只有 cross_mean(., 10 / 15 / 20 / 40) 与 Volume 替换(都是同一个骨架),下面 16 个种子的外围都不是这个骨架:
+      (a) 极端日与分位:cross_max / cross_min(., 20)、cross_quantile_q75(., 30)、cross_tail_mean_q75(., 30)、cross_semistd_pos(., 30) —— 问的是'20~30 天里最晚的那些天'而不是平均;
+      (b) 水平免疫的变化:cross_zscore(cross_mean(C, 20), 240 / 120);
+      (c) 耦合(有界、无量纲、60 日窗口每天只换 1/60 的样本,对水平型控制天然近似正交):cross_corr(C, day_es_ratio_hi(Amt) / day_skew(Amt) / day_sum(Amt) / 开盘 30 分钟份额, 60) ——
+      读的是'尾盘占比高的日子,是不是同时是成交尖峰日 / 放量日 / 开盘占比也高的日子';兄弟种子 911 里同构的 cross_corr(首分钟额, day_es_ratio_hi(Amt), 60) 在纯 train/valid 上是 +1.88(train +1.88 / valid +2.22);
+      (d) 截面条件化:在 LogFloatShares / 开盘加权价位十分位内 z-score、cs_first_low40(., LogFloatShares)(只在股本最小的 40% 内交易 C,本种子 centroid 的同型版 +0.85)、
+      以 ListAge 为被解释变量的 ts_quantile_q75(cs_regres(ListAge, C), 20)(注意 ListAge 对窗口开始前已上市的股票是同一个哨兵值,老股内部按 C 排序,新股在下);
+      (e) 收盘份额减开盘份额的 20 日均值差(日内 U 形的不对称)。
+      与库里 head 的差别:库里的收盘份额 head 是 20 日算术平均,秩相关预计与 (a) 约 0.5~0.7、(b) (c) 低于 0.3、(d) 0.6~0.85、(e) 约 0.7;
+      其中靠近 0.7 的种子可能被相关度表划掉,留下的是真正不同的读法。
+      为什么样本外还在:尾盘占比高来自收盘集合竞价附近的被动 / 指数 / ETF 申赎、基金窗口修饰与散户追涨,这些是由 T+1、涨跌停、收盘集合竞价和指数规则决定的结构性流量,
+      并且是股票的慢性质(20~60 日估计才稳),不依赖某一段行情;尺子已经去掉流动性、波动、20 日反转、已知族与市值的线性 / U 形 / S 形暴露。
+      数学上:C 在当天总额为 0 或停牌时为 NaN(day_sum 的比例),没有近零分母;cross_* 为因果滚动窗口,cross_zscore 在窗口常数时输出 0(见 ops_ext 的 sd > 1e-6 * scale 保护),
+      cross_corr 窗口内常数时无定义,不会伪造数值。没有使用 ts_rank / cross_rank / in_rank_rolling(当天缺失返回 0 的已知行为)。
+    literature:
+      - source: Cushing and Madhavan, Stock returns and trading at the close, Journal of Financial Markets
+        year: 2000
+    seeds:
+      - 'cross_max(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+      - 'cross_min(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+      - 'cross_quantile_q75(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)'
+      - 'cross_tail_mean_q75(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)'
+      - 'cross_semistd_pos(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)'
+      - 'cross_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), 240)'
+      - 'cross_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), 120)'
+      - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), day_skew(Amt), 60)'
+      - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), day_sum(Amt), 60)'
+      - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), div(day_sum(in_slice(Amt, 0, 30)), day_sum(Amt)), 60)'
+      - 'cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), day_wmean(Open, Amt))'
+      - 'cs_first_low40(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), LogFloatShares)'
+      - 'ts_quantile_q75(cs_regres(ListAge, div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))), 20)'
+      - 'sub(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), cross_mean(div(day_sum(in_slice(Amt, 0, 30)), day_sum(Amt)), 20))'
+  - type: N
+    hypothesis: >-
+      新 idea:库里的 head 全都读'日内成交时间结构的水平'(重心、尾盘占比的 20 日平均、价位分桶),没有一个读耦合 ——
+      即同一只股票的两个日内统计量在最近 60 个交易日里是否同升同降。本位检验'开盘端参与 × 全天成交尖峰形状'的 60 日滚动相关,
+      并把同样的构造镜像到收盘端与时间重心端。
+      机制与实现:day_first(Amt) = 第 0 列(09:30 那一列,含开盘集合竞价)的成交额;day_es_ratio_hi(Amt) = 当天 Amt 超过 95% 分位的那些分钟的均值除以该分位(右尾厚度;
+      分位近 0 时为 NaN,不放大近零分母),day_skew(Amt) = 分钟成交额的偏度。cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60) = 最近 60 天里'开盘那一列越大的日子,
+      全天成交越尖'的相关系数:开盘列一大就会落进当天 Amt 的右尾集合,所以这个相关读的是'开盘竞价在全天成交尖峰里的权重' —— 机械上有这层依赖,这正是想读的东西
+      (开盘端由隔夜信息驱动的机构 / 知情资金主导,还是尖峰来自盘中事件),它是股票的慢性质。相关系数有界(-1..1)、无量纲,60 日窗口每天只换 1/60 的样本,
+      所以与水平型控制(流动性、波动、市值、已知族 cross_mean(day_std(Amt), 30))天然近似正交,不会像 cross_mean(日度统计) 那样被尺子吃掉。
+      证据:本种子库里没有耦合型 head;兄弟种子 911(同一个数据立方体、同一把尺子)的存档里,以下逐字相同的表达式在纯 train / valid 上的分数为
+      cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60) = +1.88(train +1.88 / valid +2.22);
+      cross_corr(div(day_first(Volume), day_es_ratio_hi(Volume)), day_es_ratio_hi(Volume), 60) = +1.75(train +1.77 / valid +1.75);
+      cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60) = +1.16(train +1.16 / valid +2.02);
+      开盘份额减收盘末列份额的 60 日均值差 = +0.63(train +0.63 / valid +1.59);开盘份额在 LogFloatCap 十分位内去均值 = +0.70(train +0.70 / valid +1.86)。
+      这些读数 train 与 valid 同号且量级相当(+1.88 / +2.22,+1.77 / +1.75,+1.16 / +2.02),没有'只靠一段行情'的迹象。
+      与库里已有 head 的不同:库里读的是'收盘端占比的水平'和'重心水平',这里读的是'开盘端 × 尖峰'的耦合,以及用同样耦合构造去读收盘端(day_last(Amt) = 第 240 列)与时间重心
+      (day_centroid(Amt) 对尖峰形状的耦合),Y 腿再换成 day_skew / day_gini / day_kurt。
+      为什么样本外还在:开盘集合竞价参与度与尖峰形状的耦合反映的是投资者构成(机构 / 知情 vs 散户 / 事件驱动),由集合竞价制度和 T+1 决定,是慢性质;
+      Admati-Pfleiderer 的日内模式理论把集中成交归因于流动性交易者与知情交易者的时间选择,这是同一个机制的横截面版本。
+      数学检查:day_first(Amt) 为第 0 列,停牌日为 NaN;分母只出现 day_sum(Amt)(与 head 1 同一个比例,停牌日 NaN 而非近零)和 day_es_ratio_hi(≥1 且分位近 0 时置 NaN);
+      没有任何 1 / x 的近零构造,没有 ts_rank 一类'缺失返回 0'的算子;cross_corr 在窗口内某一腿常数时无定义。
+    literature:
+      - source: Admati and Pfleiderer, A theory of intraday patterns - volume and price variability, Review of Financial Studies
+        year: 1988
+    inspired_by: 本种子第 1 轮 head 1(cross_mean(C, 20) +1.81)说明'日内时间结构的慢性质'有 alpha,而且 C 日度只有 +0.28 —— 该潜变量要靠跨日聚合才读得出来;
+      本轮 M 第 2 批没有产生 head,库里全是水平型读法。兄弟种子 911 的存档显示跨日聚合的最有效形态不是平均而是 60 日滚动相关,本位把它移植到本种子并加上收盘端 / 重心端镜像。
+    seeds:
+      - 'cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)'
+      - 'cross_corr(div(day_first(Volume), day_es_ratio_hi(Volume)), day_es_ratio_hi(Volume), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_last(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_last(Amt), day_skew(Amt), 60)'
+      - 'cross_corr(day_first(Amt), day_centroid(Amt), 60)'
+      - 'cross_corr(day_first(Amt), day_gini(Amt), 60)'
+      - 'cross_corr(day_first(Amt), day_kurt(Amt), 60)'
+      - 'cross_corr(day_centroid(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_centroid(Volume), day_skew(Volume), 60)'
+      - 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(div(day_last(Amt), day_sum(Amt)), 60))'
+      - 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), LogFloatCap)'
+      - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 60)'
+R:
+  - head: 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+    why: >-
+      窗口曲线不单调(10 / 15 / 20 / 40 = +1.53 / +1.19 / +1.81 / +1.31),说明 20 日的最优部分是噪声,25 / 30 没试过;切片边界从没被动过:211..240 含收盘那一列(第 240 列),
+      不知道是最后一列、最后 15 分钟还是整个最后一小时在起作用;估计量只试过算术平均(没试 EMA)。变体只动这些部件(切片起点 / 终点、窗口、均值换 EMA、Amt 换 Volume 叠 30 日),比例结构不动。
+    variants:
+      - 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 25)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 211, 239)), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 226, 240)), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 181, 240)), day_sum(Amt)), 20)'
+      - 'cross_ema(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 15)'
+      - 'cross_mean(div(day_sum(in_slice(Volume, 211, 240)), day_sum(Volume)), 30)'
+  - head: 'sub(sub(day_centroid(Ret), day_centroid(Volume)), day_centroid(Volume))'
+    why: >-
+      未加权版 sub(day_centroid(Ret), day_centroid(Volume)) 只有 +0.63,多减一份 day_centroid(Volume) 升到 +0.93(train +0.93 / valid +1.42),说明 Volume 重心那条腿的权重在起作用,
+      而且 train 是瓶颈(valid 高 0.5)。权重 1:-2 之外的 1:-1.5 与 1:-3 没试过,第二条腿换 Amt 重心没试过,没有任何平滑(其他 centroid head 靠 5~30 日平均抬分)。变体只动这三处。
+    variants:
+      - 'sub(sub(day_centroid(Ret), day_centroid(Volume)), day_centroid(Amt))'
+      - 'sub(day_centroid(Ret), mul(day_centroid(Volume), 3))'
+      - 'sub(day_centroid(Ret), mul(day_centroid(Volume), 1.5))'
+      - 'cross_mean(sub(sub(day_centroid(Ret), day_centroid(Volume)), day_centroid(Volume)), 5)'
+  - head: 'cs_regres(cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), LogFloatShares), LogFloatShares)'
+    why: >-
+      窗口曲线 10 / 20 / 40 = +1.09 / +1.58 / +1.31,中间 25 / 30 没试;Amt 换 Volume +1.54(几乎等价);兄弟种子 903 里 cross_mean(day_centroid(Amt), 30) 单独就有 +1.72,而 20 日版单独是 +1.34,
+      提示 30 日窗口对 centroid 更稳。变体只动窗口(25 / 30)与 Volume,外面的分桶 z-score 与回归不动。
+    variants:
+      - 'cs_regres(cs_bucket_zscore(cross_mean(day_centroid(Amt), 30), LogFloatShares), LogFloatShares)'
+      - 'cs_regres(cs_bucket_zscore(cross_mean(day_centroid(Volume), 30), LogFloatShares), LogFloatShares)'
+      - 'cs_regres(cs_bucket_zscore(cross_mean(day_centroid(Amt), 25), LogFloatShares), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 30), LogFloatShares)'
