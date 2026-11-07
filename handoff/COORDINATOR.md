@@ -2,6 +2,17 @@
 
 _最后更新:2026-10-07 18:40 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
+## ⏱ 现状快照(2026-11-07 12:25 EST;最新,先读这段)—— 生产第 1 波(PROD W01)在两台服务器上跑
+
+- **代码**:C01–C08 两条分叉的线(云端 `claude/charming-babbage-d2h3x4`、本机 `c05-async`)已合进 `main`;生产在工作目录 **`~/Desktop/Partura-prod`(main)**,
+  `~/Desktop/Partura` 仍检出 `c05-async`,别动它。
+- **做什么**:`research/prod_W01/PLAN.md`(含修订 1:R 收录关掉,照 C08 实际跑的样子)—— C08 的骨架(新尺子、主 AlphaCube + Partura 三轮派任务、宽松审计),
+  全程精简流程:PI Sonnet 5.5、审计和跑命令 Haiku 5.5,Opus 只在总领。种子 901–908 新服务器、909–912 原服务器。运行手册 `research/prod_W01/RUNBOOK.md`。
+- **在跑**(11-07 12:18 EST 起):两台的 `prod_conductor.sh <seed>`(先主 AlphaCube 4 批,第 k 轮等第 k 批与计划文件)+ 守护(原服务器 screen `prod_keeper`,新服务器 **tmux** `prod_keeper`)。
+  进度:`bash scripts/prod_sync.sh status`;第 k 轮哪些种子能跑 Partura:`bash scripts/prod_sync.sh ready k`;每轮用 Workflow `workflows/prod_round.js`,args `{round, seeds}`。
+- **数据只到 2026-09-16**(两台都是):生产只能在历史上挖;确认性检验和实盘要等用户更新数据。
+- 新服务器上跑着用户大量其他服务(数据中转、网站、加密货币归档):不碰;根分区只剩 60 GB,只写 docker 数据盘。原服务器 `/root/autodl-tmp` 只剩 123 GB。
+
 ## ⏱ 现状快照(2026-10-08 上午 PDT;最新,先读这段)—— 新任务:风险控制(R001)
 
 **用户 2026-10-08 的要求**:给 AlphaCube / Partura 加 risk control —— 不强制满仓、做组合优化、对风险高的股票主动降权;识别风险和因子失效;
