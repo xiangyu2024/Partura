@@ -62,7 +62,7 @@ done
 ```
 
 `prod_env.sh` 先 `source` 该服务器自己的 `tmp/c05_env.sh`(路径、python、GPU / 内存设置、日频叶子),再设:
-`PARTURA_C0X=PROD`、`PARTURA_STUDY_DIR=prod_W01`、`PARTURA_RANK_FIRST=1`、`PARTURA_NEUTRAL_POWERS=1,2,3`、`C06_CTRL_STRIKE=0.8`、`PARTURA_R_ADDITIONS=1`、`TMPDIR`。
+`PARTURA_C0X=PROD`、`PARTURA_STUDY_DIR=prod_W01`、`PARTURA_RANK_FIRST=1`、`PARTURA_NEUTRAL_POWERS=1,2,3`、`C06_CTRL_STRIKE=0.8`、`PARTURA_R_ADDITIONS=0`(PLAN 修订 1)、`TMPDIR`。
 **两台之间不得有别的差别。**
 
 ### 1.3 验证(只读)
@@ -103,6 +103,11 @@ hsh old "cd $OLDHOME && source tmp/prod_env.sh && mkdir -p research/prod_W01 log
 调度对每个种子:在后台起主 AlphaCube(`prod_m.sh`:4 批,每批只按本种子自己的历史禁;已完成的批不重跑);
 第 k 轮 **等 M 第 k 批完成** → 定位(`loc/s<seed>_P_r<k>.READY`)→ **等计划文件 `arms/s<seed>_P_r<k>.yaml`** → 执行任务 → `arms/s<seed>_P_r<k>.DONE`;
 三轮之后等 M 链 `m/s<seed>.DONE`,然后 `arms/s<seed>.ALLDONE`。M 链中途死掉(磁盘守护、超时、重启),调度会在等待时重新起它,最多 6 次(`m/s<seed>.starts`)。
+
+
+> **2026-11-07 实际开跑时的修正(总领)**:新服务器**没有 `screen`**,守护改用 tmux:
+> `tmux new-session -d -s prod_keeper "cd $NEWHOME && source tmp/prod_env.sh && scripts/server/prod_keeper.sh $NEWSEEDS"`(原服务器照用 screen)。
+> 两台的磁盘守护分别是原服务器的 screen `c01_guard`、新服务器的 tmux `c01_guard`。
 
 ## 3. 每一轮(k = 1, 2, 3)
 
