@@ -1,0 +1,167 @@
+seed: 903
+round: 3
+slots:
+- type: E
+  core: div(day_open(Open), cross_delay(day_close(Close), 1))
+  hypothesis: |-
+    核心 G = div(day_open(Open), cross_delay(day_close(Close), 1)) = 今天第一个开盘价 / 昨天收盘价(后复权),即「隔夜跳空比」:
+    收盘后到次日开盘之间到达的消息造成的价格冲击。它在今天 09:30 就已知(分母是昨天收盘),没有前视。
+    G 是库里 H2 cross_corr(day_centroid(Amt), G, 60)(+1.45,train +1.45 / valid +2.40)、H5(+0.92 / +2.66)、H7(+0.71)的共同子树,
+    也是机械核心卡第 32 条(富集 +0.75,p 0.035,含它的候选 11 个)。本种子第一次拿 G 当核心(E 位 0 次)。
+
+    已读到的事实(都在 train + valid 内):
+    (1) 这一族的赢家全是「日内成交时点」与「隔夜消息冲击」的 60 日时间序列相关,而不是 G 或质心的水平:G 单独 -3.94,质心单独 +0.41,合起来 +1.45。
+    (2) 起作用的是隔夜消息,不是日内涨跌:把 cross_delay(day_close(Close),1) 去掉(隔夜跳空换成日内涨幅 open/close)分数从 +1.45 翻到 -1.18
+        (train -0.59 / valid -1.18);Amt 换 Volume、Open 换 Close 都保持 +1.44 / +1.37;窗口 30 / 60 / 120 = +0.99 / +1.45 / +0.96。
+    (3) 它是个股内部的时间序列相关(每只票自己减自己的均值),所以深市 15:00 含收盘集合竞价、沪市没有造成的「水平」制度差在相关里被抵消,
+        不是交易所哑变量;水平族(H1)做不到这一点。另一个事实:H2 / H5 / 一条 +0.74 的 open/open 变体都是 valid 高于 train(1.45 -> 2.40,0.92 -> 2.66,0.74 -> 1.83)。
+    (4) 被 G 耦合的一侧「对消息做出反应的是什么」,整个种子只试过质心(含 Volume 质心互换、Open 换 Close 互换);log 成交额在 H6 里是与质心耦合的,
+        没有与 G 耦合过;日内收益和(day_sum(Ret))也只与质心耦合过,没有成 head,说明不是随便什么日度量都行。G 固定,本轮把「被耦合的对象」整体换掉。
+
+    机制读法:隔夜好消息到达后,这只票的投资者怎么反应,是一个持续的个股特征(参与者结构):注意力驱动的散户在开盘集中涌入(开盘集合竞价占比高、
+    成交额放大、冲击后涨停锁死),机构分批执行、尾盘集合竞价参与。Berkman 等(2012)记录了高注意力股票在开盘的买盘压力;Barber and Odean(2008)记录了
+    个人投资者对注意力事件的买入;Lou, Polk and Skouras(2019)把隔夜与日内收益分开。60 日的相关把这种反应函数估成每只票的一个数。
+
+    外围(都是 60 日窗口,换手低,15 bp 扛得住),六族:
+    (1) 另一种时点度量(替代质心):开盘集合竞价分钟成交额占比 div(day_first(Amt), day_sum(Amt))、尾盘 30 分钟占比 day_sum(in_slice(Amt,211,240))/day_sum(Amt)、
+        只含午后连续竞价的质心 day_centroid(in_slice(Amt,121,239))(质心 H11 单独是 head)、只含上午的质心、最大成交额分钟 day_argmax(Amt)。
+        这五个与 H2 的度量对象相近,预期有 1-3 个对 H2 的日度秩 |ρ| >= 0.7 被表划掉,保留的就是真的换了写法的。
+    (2) 活动量对冲击的反应:log 日成交额与 G、与 |G-1|(消息强度)的相关。放量日是不是冲击日(信息驱动 vs 噪声驱动,Foster and Viswanathan 1993)。
+    (3) 冻结 / 锁板对冲击的反应:day_zero_ratio(Ret)(零收益分钟占比)、day_at_max_ratio(Close)(收盘价钉在当天最高的分钟占比)与 G 的相关:
+        正相关 = 向上跳空的日子越容易封死涨停。库里的 head 全是时点,没有一个读「封板」本身;共性表里 day_flat_ratio(Vwap) 的富集 +0.56(p 0.13,弱)、
+        ts_autocorr_s1(day_flat_ratio(Vwap),5) +0.96(p 0.028),冻结状态在 M 的候选里有一点分,这是本族唯一的样本内依据。
+    (4) 价格反应:全日 close/open 与 G 的相关、前 30 分钟收益和与 G 的相关(跳空后延续还是回补)。
+    (5) G 自己的二阶:cross_autocorr_s1(G,60)(隔夜冲击的持续性)、cross_mean(is_gt(G,1.04),60)(大幅高开的频率,事件型,注意力 / 博彩偏好)、
+        隔夜累计收益减日内累计收益(Lou, Polk and Skouras 的拉锯,慢版)。
+    (6) 范围与冲击:全日 High/Low 范围与 |G-1| 的相关(波动对消息强度的反应)。
+
+    和库不同:库里所有含 G 的 head 的另一侧都是质心(或 Volume 质心的互换)。这里被耦合的对象是成交额占比、成交额水平、冻结 / 锁板、价格反应,
+    只有 (1) 族与 H2 的度量对象相近。预期 (2)-(6) 对任一 head 的日度秩 |ρ| 在 0.1-0.5,对五个控制 < 0.4(相关统计本身是个股内部的二阶量,
+    不带流动性 / 波动 / 市值的水平);新尺子的 15 列残差还会去掉线性、U 形、S 形暴露。
+    样本外为什么在:(a) 参与者结构(谁在开盘涌入)比风格轮动稳定;(b) 时间序列相关把水平差(交易所、板块、市值)抵消;(c) 同族的耦合型 head(H2 / H5 / H6 / H7)在 train 与 valid
+    都 >= +0.71,而且 H2 / H5 / H7 是 valid > train,不是单个时期的产物。已知风险:Pearson 相关被涨跌停跳空日支配(+-10% / 20% 的一天在 60 日窗口里是 20-30 倍标准差),
+    停牌复牌后第一天的「跳空」是多日收益;day_zero_ratio 等在流动性极好的票上接近常数(相关为 NaN,这些票排在中间);一字板日 close/open = 1,
+    在 (4) 族里把相关拉向 0。
+  literature:
+  - cite: 'Berkman, Koch, Tuttle and Zhang, Paying attention: overnight returns and the hidden cost of buying at the open, Journal of Financial and Quantitative Analysis'
+    year: '2012'
+  - cite: 'Barber and Odean, All that glitters: the effect of attention and news on the buying behavior of individual and institutional investors, Review of Financial Studies'
+    year: '2008'
+  - cite: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected returns, Journal of Financial Economics'
+    year: '2019'
+  - cite: 'Foster and Viswanathan, Variations in trading volume, return volatility, and trading costs: evidence on recent price formation models, Journal of Finance'
+    year: '1993'
+  seeds:
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_centroid(in_slice(Amt, 121, 239)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_centroid(in_slice(Amt, 1, 120)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_argmax(Amt), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(log(day_sum(Amt)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(log(day_sum(Amt)), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_corr(day_zero_ratio(Ret), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_at_max_ratio(Close), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(div(day_close(Close), day_open(Open)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_sum(in_slice(Ret, 1, 30)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(div(day_max(High), day_min(Low)), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_autocorr_s1(div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_mean(is_gt(div(day_open(Open), cross_delay(day_close(Close), 1)), 1.04), 60)
+  - sub(cross_mean(log(div(day_open(Open), cross_delay(day_close(Close), 1))), 60), cross_mean(log(div(day_close(Close), day_open(Open))), 60))
+- type: E
+  core: day_centroid(Amt)
+  hypothesis: |-
+    核心 day_centroid(Amt) = 当天成交额在分钟轴上的质心(0 = 全在 09:30 竞价,1 = 全在 15:00),本种子唯一站得住的 alpha 来源,这是它的第 2 个(也是最后一个)E 位。
+    上一轮 E 的结果(5 个 head,是我预测概率的两倍以上)教会的事:赢的不是质心的水平或离散度,而是质心与「当天别的量」的 60 日时间序列相关:
+    质心 vs 隔夜跳空 G(H2 +1.45,H5 +0.92,H7 +0.71)、质心 vs log 日成交额(H6 +0.73);质心 vs 日内收益和、vs 全市场平均质心、cross_stddev、
+    cross_semistd_neg、cross_autocorr_s1 都没有成 head。它们共同的特点是「个股内部的相关」,把交易所 / 板块 / 市值带来的水平差抵消,
+    因此深沪收盘集合竞价的制度差(水平型 head 的最大隐患)不进入这一族。
+
+    已见过的被耦合量(Z)只有两类:价格冲击型(G 及其变体)和成交额水平(log 日成交额)。本轮把 Z 换成「当天成交额分布自己的形态与状态」,
+    六族,都是 60 日相关(换手低):
+    (1) 形态:day_es_ratio_hi(Amt)(右尾:高于 95% 分位的分钟均值 / 该分位)、day_skew(Amt)、day_gini(Amt)(有界、不被单个分钟支配)。
+        成交额扎堆的日子(算法单 / 事件日)是扎在开盘还是扎在尾盘?质心与扎堆程度的相关为负 = 扎堆发生在开盘(散户 / 注意力 / 抢板),为正 = 扎在尾盘(机构、
+        收盘集合竞价);60 日相关把「这只票的扎堆通常在哪一端」估成一个数,同样的度量在水平上是看不出来的。
+    (2) 稀薄与冻结:day_zero_ratio(Amt)(零成交分钟占比)、day_zero_ratio(Ret)(零收益分钟占比,涨跌停锁死时接近 1)。锁板日成交几乎全在锁板前,质心偏早;
+        质心与冻结占比的相关刻画「这只票的冻结日是早封板还是晚封板」。
+    (3) 价格行为:全日 High/Low 范围、day_signed_ratio(Ret, Amt)(上涨分钟的成交额占比减下跌分钟的)、day_centroid(Ret)(价格变动的质心;钱与价格变动是否同步)、
+        day_hurst(Ret)(日内价格的持续性,共性表里 day_hurst(Ret) 富集 +1.43,p 0.019,含它的 4 个候选均值 +0.37 对 -1.06)、day_topw_mean(Ret, Volume)(最重的 10% 分钟的平均收益)。
+    (4) 滞后(前一日的量对今日时点):cross_delay(log 成交额, 1)、cross_delay(close/open, 1)。T+1 制度下前一日的放量 / 日内大涨之后,今天的资金是更早还是更晚进场,
+        是个股特有的「追」的习惯;上一轮的耦合都是同日的,没有滞后项。
+    (5) 去掉全市场共同部分:cs_demean(log 日成交额) 与全市场平均 log 成交额(cs_mean)。H6 把个股量与质心的相关做成了 head,但全市场放量日(行情日)里所有票的
+        成交额和质心一起动,这部分与个股特性无关;去掉后的相关度量个股自己对量的反应,另一端是质心对全市场量的 beta。
+
+    和库不同:库里含质心的 head 要么是水平(慢均值、EMA 差、午后质心、Volume 质心的中位数),要么耦合到价格冲击或成交额水平;这里被耦合的是成交额分布的形态、冻结状态、价格行为、
+    滞后量。预期对 H2 / H6 的日度秩 |ρ| 在 0.1-0.5(上轮同族种子对 head 的最大 |ρ| 都 <= 0.25),对五个控制 < 0.4。
+    样本外为什么在:参与者结构决定「扎堆发生在哪一端」,是持续的个股特征;60 日窗口 + 个股内部相关 -> 低换手、不依赖水平差;耦合型 head(H2 / H5 / H6 / H7)在 train 与 valid 都 >= +0.71。
+    已知风险:day_skew / day_es_ratio_hi 与质心在开盘集合竞价那一分钟上有机械关系(开盘大单让质心偏早、让偏度偏大),相关为负可能主要是「开盘集合竞价占比的稳定性」,
+    这仍是个股特性,但与 H2 的信息有重叠;day_es_ratio_hi 在分位接近 0 时给 NaN;day_hurst 在 Ret 全 0 时没有定义。
+  literature:
+  - cite: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price variability, Review of Financial Studies'
+    year: '1988'
+  - cite: 'Andersen, Return volatility and trading volume: an information flow interpretation of stochastic volatility, Journal of Finance'
+    year: '1996'
+  - cite: 'Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock returns, Journal of Finance'
+    year: '2010'
+  seeds:
+  - cross_corr(day_centroid(Amt), day_es_ratio_hi(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_skew(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_gini(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_zero_ratio(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_zero_ratio(Ret), 60)
+  - cross_corr(day_centroid(Amt), div(day_max(High), day_min(Low)), 60)
+  - cross_corr(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)
+  - cross_corr(day_centroid(Amt), day_centroid(Ret), 60)
+  - cross_corr(day_centroid(Amt), day_hurst(Ret), 60)
+  - cross_corr(day_centroid(Amt), day_topw_mean(Ret, Volume), 60)
+  - cross_corr(day_centroid(Amt), cross_delay(log(day_sum(Amt)), 1), 60)
+  - cross_corr(day_centroid(Amt), cross_delay(div(day_close(Close), day_open(Open)), 1), 60)
+  - cross_corr(day_centroid(Amt), cs_demean(log(day_sum(Amt))), 60)
+  - cross_corr(day_centroid(Amt), cs_mean(log(day_sum(Amt))), 60)
+R:
+- head: cross_corr(day_centroid(Amt), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  why: |-
+    烂的部件是两条腿的「原始值」。Pearson 相关对离群点敏感:跳空比 G 的分布里有涨跌停(+-10% / 20%)和停牌复牌的多日收益,在 60 日窗口里几个这样的日子就能定下相关的符号;
+    而且 G 和质心里都有全市场共同的日度成分(大盘隔夜大涨的那天所有票一起高开、一起提前成交),这部分对每只票的相关贡献的是同一个市场相关,不是个股特性。
+    依据:拆解里窗口 30 / 60 / 120 = +0.99 / +1.45 / +0.96(估计噪声限制,60 日已是三个里最好的);把隔夜换成日内涨幅翻成 -1.18(个股隔夜消息是关键,大盘隔夜是共同成分);
+    train +1.45 低于 valid +2.40(推测:train 段更长,离群日更多地稀释了估计,未验证)。
+    变体 1:两腿都按当天截面去均值(个股相对市场的时点与个股相对市场的跳空);2:只去 G 的市场均值;3:两腿都取当天截面秩(Spearman 式,离群点只算一个名次);
+    4:只把 G 取秩;5:G 在当天截面 1% / 99% 缩尾;6:质心只含连续竞价(去掉 09:30 与 15:00 两个竞价点,检验 H2 对两个竞价点是否有依赖)。
+    这些都保持「质心 vs 隔夜冲击」不变,与原 head 日度秩预期 >= 0.6,是替换而不是新 head。
+  variants:
+  - cross_corr(cs_demean(day_centroid(Amt)), cs_demean(div(day_open(Open), cross_delay(day_close(Close), 1))), 60)
+  - cross_corr(day_centroid(Amt), cs_demean(div(day_open(Open), cross_delay(day_close(Close), 1))), 60)
+  - cross_corr(cs_rank(day_centroid(Amt)), cs_rank(div(day_open(Open), cross_delay(day_close(Close), 1))), 60)
+  - cross_corr(day_centroid(Amt), cs_rank(div(day_open(Open), cross_delay(day_close(Close), 1))), 60)
+  - cross_corr(day_centroid(Amt), cs_winsor(div(day_open(Open), cross_delay(day_close(Close), 1))), 60)
+  - cross_corr(day_centroid(in_slice(Amt, 1, 239)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+- head: sub(cross_ema(day_centroid(Amt), 5), cross_ema(day_centroid(Amt), 60))
+  why: |-
+    烂的部件是短腿的半衰期(5 天太短,噪声大)。拆解:短腿半衰期 2 / 5 / 10 = +0.56 / +0.96 / +1.06(单调上升,10 天处 train +1.06 / valid +1.32,差原 head 约 +0.10,在 R 的 +0.1 门槛上下);
+    短腿单独 +0.63(train +1.66 / valid +0.63)、长腿单独 +0.05,把长腿去掉(换成当天质心)-6.39,说明「短减长」里长腿是必要的基线、短腿要有足够的平滑。
+    所以沿半衰期网格继续走:短腿 15 / 60(进入 +1.06 之后的下一格)、短腿 10 配更慢的长腿 120(基线更稳)、20 / 90(整体变慢)。
+    风险:短腿越长,差越接近质心水平,对已知族的 |ρ| 会升(门 < 0.5),所以只走到 20。
+  variants:
+  - sub(cross_ema(day_centroid(Amt), 15), cross_ema(day_centroid(Amt), 60))
+  - sub(cross_ema(day_centroid(Amt), 10), cross_ema(day_centroid(Amt), 120))
+  - sub(cross_ema(day_centroid(Amt), 20), cross_ema(day_centroid(Amt), 90))
+- head: cross_corr(day_centroid(Amt), log(day_sum(Amt)), 60)
+  why: |-
+    烂的部件与 H2 相同:两条腿是原始值,全市场放量日(行情日、停牌日、IPO 日)里所有票的 log 成交额和质心一起动,相关的一部分是「对大盘的 beta」而不是个股对量的反应。
+    依据:score +0.73 但 train +1.19 / valid +0.73(valid 偏低;推测与 2022-2023 全市场放量日更密有关,未验证);同族的 H2 对隔夜跳空是 +1.45;上一轮 E 里质心对「全市场平均质心」的相关没有成 head,
+    说明全市场共同部分本身没有 alpha,可以去掉。变体 1:两腿都去当天截面均值;2:只去成交额腿的市场均值;3:两腿取截面秩(成交额取原值 day_sum(Amt),
+    秩下与取 log 等价)。预期与原 head 日度秩 >= 0.6,是替换。
+  variants:
+  - cross_corr(cs_demean(day_centroid(Amt)), cs_demean(log(day_sum(Amt))), 60)
+  - cross_corr(day_centroid(Amt), cs_demean(log(day_sum(Amt))), 60)
+  - cross_corr(cs_rank(day_centroid(Amt)), cs_rank(day_sum(Amt)), 60)
+- head: div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), day_centroid(Amt))
+  why: |-
+    上一轮 R 的结果:这个 head 的 6 个放慢变体分数 +0.77-+1.83(原 +0.60),全部是「分母放慢」带来的增益,但 6 个的 |ρ_known| 都是 0.56-0.62,过不了 R 的已知族门(< 0.5),
+    所以一个都没替换。上一轮 R1 里用 cs_regres(秩, 已知族秩) 做的中性化,把 H1 同类变体的 |ρ_known| 压到 0.04-0.06,分数 +1.38-+1.51(窗口 20 的被收为替换)。
+    表里 day_centroid(Amt) 单日值与这个 head 的日度秩 |ρ| = 0.98:分子 day_autocorr_n1(平滑后价格的一阶自相关)在截面上几乎不改变排序,真正起作用的是 1/质心。
+    所以修的部件是「没有对已知族做中性化」:对分母放慢后的最好的两个写法(分母 30 日均值、20 日均值)和「分子分母都放慢」各做一次 cs_regres 中性化。
+    预期 |ρ_known| < 0.1,分数 1.5-1.9,与原 head 的 |ρ| 0.8-0.9,是替换(分数比原 head 高 0.9 以上)。
+  variants:
+  - cs_regres(cs_rank(div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), cross_mean(day_centroid(Amt), 30))), cs_rank(cross_mean(day_std(Amt), 30)))
+  - cs_regres(cs_rank(div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), cross_mean(day_centroid(Amt), 20))), cs_rank(cross_mean(day_std(Amt), 30)))
+  - cs_regres(cs_rank(div(cross_mean(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), 30), cross_mean(day_centroid(Amt), 30))), cs_rank(cross_mean(day_std(Amt), 30)))

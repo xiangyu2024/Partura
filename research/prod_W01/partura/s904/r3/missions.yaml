@@ -1,0 +1,100 @@
+seed: 904
+round: 3
+slots:
+  - type: E
+    core: 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)'
+    hypothesis: |-
+      核心 C = M3 第 3 批第一名 head 整体:cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241),score +1.27(train +1.46 / valid +1.27,sign +1,hl 0)。
+      读法:Z = pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)) 是「日内最高价方差^1.5」做 30 日线性衰减再平方,极端重尾,窗口里基本由最近几次日内振幅暴增主导;cross_corr(LogFloatCap, Z, 241) 是一年窗口里市值水平与这个暴增量的相关,重尾下约等于「这只票最大的几次振幅暴增发生时,它的市值在一年区间里处于什么位置」。
+      证据全部来自本组定位表:Z 单独 -1.09 / -0.57,day_var(High) 单独 -1.30 / -0.45,所以 alpha 在耦合而不在波动水平;窗口 120 塌(train +0.09 / valid -0.32)、482 活(+0.51 / +1.10);High 换 Low 仍 +1.16;拿掉 pow_2 / pow_1_5 仍有 +0.99 / +0.77,不是某个幂次的偶然。
+      M3 在这一族里已经有 3 个 head(C、双层 pow_2_5 版、X 换成滞后分钟成交额离散度的一个),彼此的日度秩相关都在 0.7 以下(否则库禁令不会放行),但 GP 的库禁令(日度秩 |ρ| ≥ 0.7,或骨架相同)把 C 周围的近邻和小修饰全部封死。所以本位不动 C 的内部,也不再往这一族里加近邻,回答另一个问题:C 能不能和库里原料完全不同、且已在 train 与 valid 同时过线的信号做「与」。
+      外围是什么:乘法或取小的秩组合,而不是加权和。快照里见过的外围是 Pr2a(核心为 H)的加权和 add(mul(rank(H), 0.35), mul(rank(伙伴), 0.65))和一个 H 与伙伴的两腿乘积(+0.83,没有成为 head),没有任何含 C 的组合。为什么不用加权和:若两条腿互相独立,等权秩和与每条腿的秩相关 = 1/sqrt(2) = 0.707,恰在禁令线 0.7 之上;C 与 H 都是库里的 head,任何加权和至少与其中一个 ≥ 0.7(两个比重的平方和为 1),必被拒绝。mul(cs_rank(a), cs_rank(b)) 对独立的两条腿与每条腿的相关约 0.655,取小 2*min(rank a, rank b) 约 0.61,三腿乘积约 0.49;以上是独立假设下的解析值,不是测量,相关度表会给出真实数。这就是外围要换成「与」的原因:它是库里 head 的非线性交互,不在任何一个已有 head 的线性邻域里。
+      三类种子。(1)两腿乘积 / 取小:C 配 H = ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)(分钟成交量集中度与 VWAP 峰度的 50 日耦合,train +0.97 / valid +0.92,原料是分钟成交量与成交额加权价,与 C 的日内最高价方差 + 流通市值完全不同);C 配三条已知伙伴 —— P1 = 重分钟(成交额最大 10%)收益的 60 日 z 值再 EMA(train +0.12 / valid +1.04)、Psr = 上涨分钟成交额占比净值的慢 z 值(-0.44 / +0.56)、PAA = 重分钟成交额的慢 z 值;以及价位项 P2(隔夜缺口减 |价位项| 的 60 日均值,+0.29 / +0.65)、P3(价位项取反,-0.01 / +0.73)。这些伙伴都是「valid 强、train 弱」,C 的 train 强,乘积的 train 靠 C 撑、valid 两者都强。伙伴与库里 Pr2a 三个 head 里的伙伴是同一类,但乘积对该 head 的相关约 0.655 * 0.88 = 0.58,不触线。(2)三腿:mul(mul(C, H), P1) 与线性三腿 0.36 C + 0.34 H + 0.30 P(P2 或 P3,与库里所有 head 都不同源),各腿比重都不超过 0.36,与每条腿的相关约 0.6。(3)分段:cs_first_high20(C, H) 只在 H 最强的 20% 里按 C 排序,cs_first_high20(H, C) 反过来;让「与」以段内排序的形式出现,与每条腿的秩相关约 0.5 到 0.56。
+      数学检查:每条腿都过 cs_rank(0, 1],缺失保持缺失,乘积 / 取小没有除法,不会有近零分母的爆点;覆盖率取最小腿的覆盖(H 0.998,C 受 241 日窗口热身限制,热身期只占训练段开头),没有用到当天收盘之后的数据。C 内部的浮点行为(Z 的量级、窗口方差)已经被评分流水线实际算过并给出 +1.27,本位不改它。
+      为什么样本外还会在:两个祖先各自在 train 与 valid 都过线(C 1.46 / 1.27,H 0.97 / 0.92),原料互不相干(日内最高价方差 + 流通市值水平 vs 分钟成交量集中度 + VWAP 峰度),「与」要求两个独立证据同时成立,单个祖先在某一年的偶然高点不够;全部是 50 到 241 日的慢变量,秩乘积换手低,扣 15 bp 之后还能剩。风险:C 与 H 若本身有 0.4 以上的相关,乘积对祖先的相关会越过 0.7,被相关度表划掉;乘积的头部比单腿更集中(前 10% 要两条腿同时靠前),净夏普有更大的波动。
+    seeds:
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60)))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Amt, Amt), 60), 60)))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_mean(cs_winsor(sub(log(div(day_first(Open), ts_delay(day_last(Close), 1))), abs_(div(cs_robust_z(day_mean(Low)), day_first(Open))))), 60)))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), sub(1, cs_rank(log(div(cs_robust_z(day_mean(Low)), day_first(Open))))))'
+      - 'mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(ts_regbeta(day_gini(Amt), day_kurt(Close), 100)))'
+      - 'mul(mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50))), cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60)))'
+      - 'sub(add(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50))), abs_(sub(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)))))'
+      - 'sub(add(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60))), abs_(sub(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60)))))'
+      - 'sub(add(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30))), abs_(sub(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)))))'
+      - 'sub(add(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Amt, Amt), 60), 60))), abs_(sub(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Amt, Amt), 60), 60)))))'
+      - 'add(add(mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), 0.36), mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.34)), mul(cs_rank(cross_mean(cs_winsor(sub(log(div(day_first(Open), ts_delay(day_last(Close), 1))), abs_(div(cs_robust_z(day_mean(Low)), day_first(Open))))), 60)), 0.3))'
+      - 'add(add(mul(cs_rank(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)), 0.36), mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.34)), mul(sub(1, cs_rank(log(div(cs_robust_z(day_mean(Low)), day_first(Open))))), 0.3))'
+      - 'cs_first_high20(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241), ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50))'
+      - 'cs_first_high20(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241))'
+  - type: N
+    hypothesis: |-
+      主题:有效的是「协动」,不是「水平」。把这一批的证据放在一起读。
+      (1)库里 7 个 head 的核心全是两个日频统计量在 50 到 241 日窗口里的协动:C = corr(市值水平, 日内最高价方差的重尾暴增量, 241)(M3 的 3 个 head 同族,第三名把第一项换成滞后的分钟成交额不同取值占比);H = regbeta(成交量集中度 gini, VWAP 峰度, 50)(及它的 3 个混合)。
+      (2)把这些 head 拆开的单腿几乎全垮:Z 单独 -1.09 / -0.57,day_var(High) 单独 -1.30 / -0.45,H 的两半分别 -2.76 与 -3.38(score,第 2 轮笔记)。
+      (3)前两轮我写的一阶、水平型种子(隔夜缺口 / 日内漂移的慢 EMA、重分钟收益的慢 z 值、封板频率的水平)最好只有 +0.29,没有一个过线;重分钟收益的慢 z 值只在混合里当伙伴才有用。
+      猜想(未验证):新尺子对 5 个控制(流动性、波动、20 日反转、已知族、市值)取线性 + 二次 + 三次的日度残差,一阶的慢水平量大多是这几个控制的非线性函数(波动水平、成交额水平、价格水平),被残差化掉;两个统计量的协动是二阶量,对任何一条腿的水平近似正交,残差化之后还在。本位按这个猜想造种子,并放一组一阶对照来检验它。
+      A 组,杂交:把两个已验证家族的原料互换,看「协动」这个形式能否迁移。(1)cross_corr(LogFloatCap, 暴增量, 241),暴增量 = 原始峰度 day_kurt(Vwap)+3 的 1.5 次幂、30 日衰减、再平方:C 的状态腿 + H 的尾部腿;(2)cross_corr(LogFloatCap, 30 日衰减的 day_gini(Volume), 241):状态腿 + 成交量集中度;(3)cross_corr(LogFloatCap, ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), 241):H 的斜率序列与市值路径的协动(二阶的二阶);(4)cross_corr(cross_ema(day_distinct_ratio(Close), 30), 暴增量, 241):价格网格粗细(价位的无量纲代理)作状态腿,M3 第三名的思路换成 Close 与 Ret。
+      B 组,去掉价格量纲:M3 的暴增量 Z 带着价格水平的 6 次方(day_var(High) 是价格平方单位,后复权价格的排序约等于累计收益),我并不知道 head 的 alpha 来自「协动」还是来自「价格水平的幂次」。pow_3(day_std(Ret)) 与 pow_1_5(day_var(·)) 是同一个幂次,但 Ret 是比值,没有价格量纲。种子的状态腿分别用 LogFloatCap、log(后复权收盘价)、20 日 EMA 的日内收益(动量状态)、ListAge(时间,即暴增在窗口里是否上升)。判读:LogFloatCap / log 价这两个若 ≥ 0.5,说明是协动;若塌而 A 组活,说明 C 里的价格幂次是关键;若全塌,说明 C 读的是价格水平本身(长期反转 / 低价效应)。
+      C 组,带符号的日频协动:ts_corr(day_sum(Ret), day_std(Ret), 120)(当天涨跌与当天分钟波动,杠杆效应的个股版);ts_corr(day_kurt(Vwap), day_sum(Ret), 120)(价格尖峰出现在上涨日还是下跌日);ts_corr(day_gini(Volume), day_sum(Ret), 120)(成交量集中在涨日还是跌日);以及 gini(Volume) 的 30 日衰减与暴增量的 241 日相关(慢对慢)。第 2 轮 N 的 centroid / signed_ratio 配对没有进前 5,说明配对不能随便选;这里的配对用 H 的两条腿(gini、kurt)加有符号的收益,是 H 在「方向」上的补集。
+      D 组,一阶对照(我预测都 < 0.3,用来检验上面的猜想):12-1 动量 sub(log(ts_delay(day_last(Close), 20)), log(ts_delay(day_last(Close), 240)))(跳过 20 日反转),离 52 周高点的对数距离(George-Hwang 2004),资本利得悬置(Grinblatt-Han 2005,按成交量加权的 241 日均价作参照价;Volume 是未复权股数、Close 是后复权价,窗口 241 日内送转造成的权重失真很小),上行 / 下行半离差之比 (pos - neg) / (pos + neg)(Patton-Sheppard 2015)。若其中任何一个 ≥ 0.5,猜想就错了一半:一阶量里还有活的。
+      与库里不同的原因:库里 7 个 head 的原料是日内最高价方差 + 市值水平、分钟成交量集中度 + VWAP 峰度、重分钟收益 / 成交额的慢 z 值;A 组是这些原料的新配对(预计与 C 或 H 的日度秩相关 0.3 到 0.6,相关度表给真实数),B、C 组换了原料或去掉了价格量纲,D 组是日频后复权价格的比值,与它们预计 0.2 到 0.5。与控制的关系:协动量对波动 / 流动性 / 市值的水平近似正交,这是整个猜想的内容;D 组与 20 日反转有一定相关,尺子已去掉其线性 / U 形 / S 形暴露。
+      数学检查:全部是当日收盘后已知的量,无前视;day_kurt 是超额峰度,值域下界 -2,+3 后为正,才能做 1.5 次幂;日内全天价格不动(封板 / 停牌)的日子峰度为 NaN 或落在下界,成对窗口的统计会跳过 NaN;pow_3(day_std(Ret)) 非负;log 只作用在正的后复权收盘价;D 组里的除法分母(窗口均值、两个半离差之和)在停牌 / 常数窗口为 0 时给 NaN 或 inf,由评分流水线的覆盖率 / 并列门槛处理,不会产生系统性的爆点;所有输出是连续值(不用 ts_argmax 这类只有 241 个取值的离散量);窗口热身期只占样本开头的零头。
+      为什么样本外还会在:协动型特质由交易这只票的参与者结构决定(散户 / 机构、涨跌停与 T+1 制度),不依赖某一年的行情;全部是 60 到 241 日的慢变量,换手低,扣 15 bp 之后能剩;如果种子与 C 或 H 度量的其实是同一件事,相关度表会直接划掉,留下来的就是新的。
+    inspired_by: 'M 第 3 批 3 个 head 与 M 第 2 批 H 的共同形式:两个日频统计量的 50 到 241 日协动(corr / regbeta),而它们的单腿 sufficiency 全部为负(Z -1.09 / -0.57,day_var(High) -1.30 / -0.45,H 两半分别 -2.76 与 -3.38);前两轮一阶水平型种子最好只有 +0.29'
+    seeds:
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(add(day_kurt(Vwap), 3)), 30)), 241)'
+      - 'cross_corr(LogFloatCap, ts_decay_linear(day_gini(Volume), 30), 241)'
+      - 'cross_corr(LogFloatCap, ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), 241)'
+      - 'cross_corr(cross_ema(day_distinct_ratio(Close), 30), pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'cross_corr(log(day_last(Close)), pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'cross_corr(cross_ema(day_sum(Ret), 20), pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'cross_corr(ListAge, pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'ts_corr(day_sum(Ret), day_std(Ret), 120)'
+      - 'ts_corr(day_kurt(Vwap), day_sum(Ret), 120)'
+      - 'ts_corr(day_gini(Volume), day_sum(Ret), 120)'
+      - 'ts_corr(ts_decay_linear(day_gini(Volume), 30), pow_2(ts_decay_linear(pow_3(day_std(Ret)), 30)), 241)'
+      - 'sub(log(ts_delay(day_last(Close), 20)), log(ts_delay(day_last(Close), 240)))'
+      - 'sub(log(day_last(Close)), log(cross_max(day_last(Close), 241)))'
+      - 'sub(log(day_last(Close)), log(div(cross_sum(mul(day_wmean(Close, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241))))'
+      - 'div(sub(cross_semistd_pos(day_last(Close), 120), cross_semistd_neg(day_last(Close), 120)), add(cross_semistd_pos(day_last(Close), 120), cross_semistd_neg(day_last(Close), 120)))'
+R:
+  - head: 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)), 0.65))'
+    why: |-
+      烂的部件是 0.35 / 0.65 的权重和伙伴那一腿的形状。0.35 这个权重当初是为了躲开 GP 的库禁令(与 H 的秩相关 < 0.7)选的,不是 head 自己的最优。依据是本组拆解表:拿掉 H 的 0.35(H 权重升到 1)得 +1.23(train +1.23 / valid +1.52,增益 +0.43);拿掉伙伴的 cs_rank 得 +1.08;swap Vwap -> Close 得 +0.98;swap Volume -> Amt 得 +0.92;伙伴单独 sufficiency 是 -0.44 / +0.56(train 为负),所以伙伴那一腿拖 train。变体因此在已验证的方向上叠加:H 权重升到 1 再配「伙伴不取秩」、「H 里 Vwap 换 Close」、「H 与伙伴同时换 Amt」,以及把伙伴的权重从 0.65 降到 0.45。
+    variants:
+      - 'add(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)), 0.65))'
+      - 'add(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), mul(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30), 0.65))'
+      - 'add(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Close), 50)), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)), 0.65))'
+      - 'add(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)), 0.45))'
+      - 'add(cs_rank(ts_regbeta(day_gini(Amt), day_kurt(Close), 50)), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Amt), 60), 30)), 0.65))'
+  - head: 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_2_5(pow_2_5(day_var(High))), 30)), 241)'
+    why: |-
+      烂的部件是 pow_2_5(pow_2_5(·)) 这一串:它把 day_var(High)(后复权价格平方单位,高价股很大)抬到约 6.25 次幂再平方,Z 的动态范围极大,cross_corr 里 dy^2 的和在 float32 里逼近溢出,最高价的票可能被推成相关 0 或 NaN,这是数值脆弱,不是机制。依据是本组拆解表:拿掉内层 pow_2_5 得 +0.78(train +0.78 / valid +1.42,增益 +0.18);swap High -> Low 只有 +0.33;窗口 241 -> 482 为 +0.69 / +0.83。变体沿「去掉一层幂次」的方向走:单层 pow_2_5 配 241 / 482 窗口,以及衰减窗口 30 -> 45。
+    variants:
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_2_5(day_var(High)), 30)), 241)'
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_2_5(day_var(High)), 30)), 482)'
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_2_5(day_var(High)), 45)), 241)'
+  - head: 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)'
+    why: |-
+      烂的部件是「单一字段、单一窗口」的估计量:High 版 +1.27,Low 版 +1.16,两者是同一个机制的两次含噪读数;窗口曲线(train / valid)120:+0.09 / -0.32,241:+1.46 / +1.27,482:+0.51 / +1.10,峰很尖,241 不像是稳定的最优。依据是本组拆解表(窗口与 swap 两行)。变体只做降噪:High 与 Low 两个读数相加、窗口 300、衰减窗口 45。预计增益有限(score 已经是库里最高,取最大值的赢家诅咒),所以只给 3 个。
+    variants:
+      - 'add(cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241), cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(Low)), 30)), 241))'
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 300)'
+      - 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 45)), 241)'
+  - head: 'cross_corr(ts_delay(ts_med(day_distinct_ratio(Amt), 30), 50), pow_2(ts_decay_linear(pow_2_5(day_var(High)), 30)), 241)'
+    why: |-
+      烂的部件是 X 腿上的 ts_delay(·, 50) 和 Z 里的 pow_2_5。X 是分钟成交额的不同取值占比的 30 日中位数再滞后 50 日,滞后一个粗糙的网格量没有机制上的理由;Z 里的 pow_2_5 比 M3 第一名用的 pow_1_5 极端(同族 pow_1_5 版 +1.27,pow_2_5 双层 +0.60,单层 pow_2_5 +0.78)。该 head 本身没有拆解行,依据来自同族的拆解行。变体:Z 换成 pow_1_5;去掉 ts_delay。
+    variants:
+      - 'cross_corr(ts_delay(ts_med(day_distinct_ratio(Amt), 30), 50), pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)'
+      - 'cross_corr(ts_med(day_distinct_ratio(Amt), 30), pow_2(ts_decay_linear(pow_2_5(day_var(High)), 30)), 241)'
+  - head: 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60))), 0.65))'
+    why: |-
+      烂的部件是 H 腿的单一 50 日窗口,以及伙伴那一腿里重复的 cs_rank(无作用)。依据是本组拆解表:H 窗口 50 -> 100 为 +0.98(train +0.98 / valid +1.53,与原 head 的 +0.97 持平但 valid 更高),Volume -> Amt 为 +0.93;H 窗口 25 掉到 +0.64,说明 H 腿的 train 随窗口变化,50 是 train 的峰;伙伴腿 train 只有 +0.12 / valid +1.04。变体因此在 train 约束的那一侧微调:H 腿 100 日 + Amt、H 腿 100 日 + 伙伴 z 窗口 90、H 腿 75 日 + 权重 0.4 / 0.6。预计难以达到 +1.07(增益 +0.1),给 3 个。
+    variants:
+      - 'add(mul(cs_rank(ts_regbeta(day_gini(Amt), day_kurt(Vwap), 100)), 0.35), mul(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60)), 0.65))'
+      - 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 100)), 0.35), mul(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 90), 90)), 0.65))'
+      - 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 75)), 0.4), mul(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60)), 0.6))'

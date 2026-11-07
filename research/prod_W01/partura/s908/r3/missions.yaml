@@ -1,0 +1,119 @@
+seed: 908
+round: 3
+slots:
+- type: E
+  core: 'day_centroid(Amt)'
+  hypothesis: >-
+    核心 day_centroid(Amt) = 当天成交额在 241 格分钟轴上的重心 sum(t*|Amt|)/sum(|Amt|)/240(0 = 全在开盘集合竞价,1 = 全在收盘),总额为 0 时 NaN,
+    取值在 [0,1],没有近零分母。这是本种子的第 2 个也是最后一个 E 位(第 1 轮 E 位用过一次,出 3 个 head;第 2 轮 E 位核心是尾盘份额 C,不占这个核心的额度)。
+    证据(只来自 train / valid):本种子库里已有 3 个重心 head,全部是 cross_mean(centroid, 20) 的股本分桶读法(分桶 z-score +1.58、cs_first_low40 +0.85、ts_min 20 日 +0.96);
+    含重心的候选 77 个,均分 -0.25 对 -1.07(p≈0)。同一个数据立方体、同一把尺子上,兄弟种子对重心做过的外围(逐字取自它们 loc 的 train / valid 读数,
+    同一表达式的分数与种子无关,只有库禁令因种子而异):903 的 cross_corr(重心, 隔夜跳空, 60) +1.45(train +1.45 / valid +2.40,滞后 2 日 +0.92 / 滞后 30 日 +0.71 同号,
+    重心对 log 总额 +0.73);906 的 cs_bucket_rank(cross_mean(重心,20), cross_mean(day_q_stat_std(Ret),30)) +2.08(波动率十分位内排名);903 的 cs_regres(cs_rank(重心20日均), cs_rank(日额波动30日均)) +1.51;
+    905 的 sub(重心20日均, 0.5*重心240日均) +1.47(半衰期 20,相对自身一年历史的变化)与 sub(cross_ema(重心,5), cross_ema(重心,60)) 的同型读法 +0.96;901 的重心在 (log市值 - 2*log流通股本) 十分位内 z-score +1.63。
+    本位把它们作为 16 个种子放进来,外围与本种子已见的全不同(已见 = 股本十分位 z-score / cs_first_low40 / ts_min / ListAge 当 Y 的 q75 / 与 Volume 重心相减),分四类:
+    (a) 重心 × 价格 / 成交信息的 60 日耦合(种子 1-4、12-14):cross_corr(重心, 隔夜跳空 = 当日首个开盘价 / 前一日末分钟收盘价) 读的是"消息大小 / 方向与成交时间的同步性"——
+    若负相关,跳空上行的日子成交更早(知情 / 机构在开盘消化消息),若正相关则是追涨(散户尾盘跟进);这是股票的慢性质(60 日窗口每天只换 1/60 样本),
+    相关系数有界无量纲,对水平型控制(流动性、波动、市值、已知族)天然近似正交,这是它能过新尺子的结构性原因。种子 2 用 |跳空|(消息的大小),种子 3 用日内收益,
+    种子 4 用 log 总额,种子 12 用相对成交量(当日总额 / 20 日均),种子 13 用符号化的成交额净流向 day_signed_ratio(Ret, Amt),种子 14 用分钟收益波动 day_std(Ret);
+    (b) 慢变量的条件化(种子 5、6、9、10、16):在波动率十分位 / 价位-股本十分位 / 总市值与流通市值十分位内排名,或对已知族控制 cs_regres——这是已见的股本分桶之外的另外几条"同类股票互比"轴;
+    (c) 相对自身历史(种子 7、11):重心 20 日均减半个一年均值、EMA 5 对 EMA 60——去掉股票的永久水平,只读近期偏移;
+    (d) 把"最长一段成交不动"并进来(种子 8、15):day_flat_run_max(Amt) 的单位是分钟(0..240),远大于重心的 0..1,所以种子 8 实际排序主要由 30 日平均的零成交连续段长度决定,
+    重心只起打破并列的作用——我如实写在这里,不把它说成重心的功劳;ListAge 对 2018-01-02 前已上市的股票是同一个哨兵值 10000+d,cs_first_low20(., ListAge) 实质是"把次新股整块排到一端",
+    即剔除次新股,不是上市龄的连续读法。种子 15 是不带 flat-run 的 cs_first_low20(重心 20 日均, ListAge),用来分开"剔除次新股"与"重心"各自的贡献。
+    为什么样本外还在:重心早 / 晚来自谁在交易(开盘集合竞价与机构执行 vs 尾盘追涨与指数 / ETF 被动流量),由 T+1、涨跌停、收盘集合竞价和指数规则决定的结构性流量,是股票的慢性质(20-60 日估计才稳),
+    不依赖某一段行情;耦合型读法对跳空的响应是"开盘信息消化方式"的横截面差异。Berkman 等(2012)与 Lou-Polk-Skouras(2019)记录了隔夜 / 日内收益的横截面持续性,与跳空日的成交时间位置属同一机制族。
+    数学检查:跳空 = day_open(Open) / cross_delay(day_close(Close), 1) 中分母是前一交易日末分钟收盘价(后复权,非零),停牌日 NaN;cross_corr 经 rolling_pair_reduce 实现,
+    窗口内一条腿常数或有效对不足 2 时输出 0 而不是 NaN(新股有效对很少时是近似噪声,新股占比小);没有 ts_rank / cross_rank / in_rank_rolling,故不触发"缺失返回 0"的已知行为;
+    cs_bucket_rank / cs_bucket_zscore 在桶内 n≥2 才输出;day_flat_run_max 取值是整数分钟数。
+  literature:
+  - source: Berkman, Koch, Tuttle and Zhang, Paying Attention - Overnight Returns and the Hidden Cost of Buying at the Open, Journal of Financial and Quantitative Analysis
+    year: 2012
+  - source: Lou, Polk and Skouras, A tug of war - Overnight versus intraday expected returns, Journal of Financial Economics
+    year: 2019
+  seeds:
+  - cross_corr(day_centroid(Amt), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_centroid(Amt), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_corr(day_centroid(Amt), sub(div(day_close(Close), day_open(Open)), 1), 60)
+  - cross_corr(day_centroid(Amt), log(day_sum(Amt)), 60)
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_q_stat_std(Ret), 30))
+  - cs_regres(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_std(Amt), 30)))
+  - sub(cross_mean(day_centroid(Amt), 20), mul(0.5, cross_mean(day_centroid(Amt), 240)))
+  - cs_first_low20(cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 30), ListAge)
+  - cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), LogTotalCap)
+  - sub(cross_ema(day_centroid(Amt), 5), cross_ema(day_centroid(Amt), 60))
+  - cross_corr(day_centroid(Amt), div(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 60)
+  - cross_corr(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)
+  - cross_corr(day_centroid(Amt), day_std(Ret), 60)
+  - cs_first_low20(cross_mean(day_centroid(Amt), 20), ListAge)
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), LogFloatCap)
+- type: N
+  hypothesis: >-
+    新 idea:把"开盘端参与 × 全天形状"的 60 日耦合从形状腿(尖峰、峰度、基尼——库里已有 9 个这样的 head,它们之间的日度秩相关多在 0.4-0.8,库禁令下再沿形状腿走基本只会撞墙)
+    搬到"价格信息腿"和"相邻时段腿",并另放一小撮完全不同的慢统计量。本种子第 2 轮 N 位的结果是:X 腿 = 首列额(day_first(Amt),第 0 列,含开盘集合竞价)的耦合全活
+    (cross_reg_fvalue(首列额, ES(Volume), 60) +2.10、cross_corr(首列额, 峰度, 60) +1.95、与重心 +1.20、与基尼 +0.80),X 腿 = 末列额或重心的镜像基本死
+    (只有 cross_corr(重心, ES(Amt)) +0.80);所以 X 腿固定在首列额 / 首列份额,换 Y 腿。
+    Y 腿三类。(1) 价格信息:隔夜跳空 = day_open(Open) / cross_delay(day_close(Close), 1)(种子 1)、|跳空|(种子 2、3)、尾盘份额 × 跳空(种子 4)、尾盘份额 × |日内收益|(种子 5)、首列额 × 分钟收益波动 day_std(Ret)(种子 8)、前一日总额(种子 7)、相对成交量(种子 9)。
+    读的是"开盘那一列的参与度是否随消息的大小 / 方向同升同降"——开盘集合竞价参与度对隔夜消息的反应系数是投资者构成(知情 / 机构 vs 事件驱动散户)的慢性质,不是某一段行情。
+    兄弟种子 903 对重心做同型耦合(跳空腿)得 +1.45(train +1.45 / valid +2.40),说明跳空腿在这把尺子上能活;这里换成首列额 / 首列份额 / 尾盘份额 / 末列额。
+    (2) 相邻时段:cross_corr(首列额, 末列额, 60)(种子 6)读的是"两端集合竞价是不是同一批参与者",cross_corr(首列额, 开盘后 30 分钟总额, 60)(种子 13)读的是"开盘列对随后半小时的带动"。
+    (3) 另外三个非耦合的慢统计量:首列份额与尾盘份额的 60 日标准差(种子 10、11)——参与度的稳定性而不是水平(库里的份额 head 全是均值);
+    day_flat_run_max(Amt) 与 day_flat_run_max(Close) 的 30 日均值(种子 14、15)与剔除次新股的版本(种子 16)——最长一段零成交 / 价格不动的连续分钟数,
+    本种子共性表里 day_flat_run_max(Close) 含它的候选 7 个均值差 +1.17(p 0.013)、inv(day_flat_run_max(Close)) 4 个 +1.41(p 0.018),
+    第 2 轮 E 位的 head 是 cs_regres(C, inv(day_flat_run_max(Low))) +1.01;兄弟种子 905 里剔除次新股的 30 日平均零成交段 +2.25(train +2.41 / valid +2.25)。
+    它读的是稀疏成交 / 价格粘滞(最小变动价位相对价格偏大、涨跌停封板、停牌复牌),与流动性控制的关系是非线性的,线性 / U 形 / S 形暴露被尺子去掉后是否还剩多少,正是本位要测的。
+    种子 12 是兄弟种子 911 的 cross_corr(首列额 / ES(Amt), ES(Amt), 60) +1.79 的逐字移植,作为"形状腿还剩多少"的对照(多半与库里 head 撞 ρ 被划掉)。
+    为什么样本外还在:首列 / 尾列的参与结构由开盘 / 收盘集合竞价制度与 T+1 决定,是慢性质;相关系数有界无量纲、60 日窗口每天只换 1/60 样本,所以对水平型控制近乎正交;
+    价格粘滞与零成交段由最小价位、涨跌停、停牌制度决定,同样是结构性的。
+    数学检查:所有分母要么是 day_sum(Amt)(停牌日 NaN)要么是前一日末分钟收盘价(后复权,非零);cross_corr 在窗口内某腿常数或有效对不足 2 时输出 0(不是 NaN),新股窗口内有效对少时近似噪声,占比小;
+    种子 12 的 ES(Amt) 分母是 95% 分位,|分位| ≤ 1e-8 时 ES 置 NaN,但分位很小的薄股票日会放大比值,这是已知风险,不据此挡;
+    机械成分要写明:种子 9 的相对成交量 = 当日总额 / 20 日均,首列是总额的一部分,所以相关里有"份额"的机械正向成分(被分母 20 日均削掉了水平);种子 6、13 两腿都含当日活跃度,共同的当日活跃度波动会推高相关,读的是超出共同波动之外的配对;
+    day_flat_run_max 取值为整数分钟数,cross_mean 后取值连续;没有 ts_rank / cross_rank / in_rank_rolling。
+  literature:
+  - source: Lou, Polk and Skouras, A tug of war - Overnight versus intraday expected returns, Journal of Financial Economics
+    year: 2019
+  - source: Barclay and Hendershott, Price discovery and trading after hours, Review of Financial Studies
+    year: 2003
+  inspired_by: 本种子第 2 轮 N 位:9 个 head 全部以首列额为 X 腿(+2.10 / +1.95 / +1.20 / +0.80 ...),末列额 / 重心为 X 腿的镜像基本死;形状腿之间互相 ρ 高,继续沿形状腿走会撞库禁令,
+    所以这一轮换 Y 腿(价格信息、相邻时段)并加入份额稳定性与零成交 / 价格粘滞这两类库里没有的慢统计量(共性表 day_flat_run_max(Close) +1.17)。
+  seeds:
+  - cross_corr(day_first(Amt), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(day_first(Amt), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)
+  - cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), abs_(sub(div(day_close(Close), day_open(Open)), 1)), 60)
+  - cross_corr(day_first(Amt), day_last(Amt), 60)
+  - cross_corr(day_first(Amt), cross_delay(day_sum(Amt), 1), 60)
+  - cross_corr(day_first(Amt), day_std(Ret), 60)
+  - cross_corr(day_first(Amt), div(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 60)
+  - cross_stddev(div(day_first(Amt), day_sum(Amt)), 60)
+  - cross_stddev(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 60)
+  - cross_corr(div(day_first(Amt), day_es_ratio_hi(Amt)), day_es_ratio_hi(Amt), 60)
+  - cross_corr(day_first(Amt), day_sum(in_slice(Amt, 1, 30)), 60)
+  - cross_mean(day_flat_run_max(Amt), 30)
+  - cross_mean(day_flat_run_max(Close), 30)
+  - cs_first_low20(cross_mean(day_flat_run_max(Amt), 30), ListAge)
+R:
+- head: 'cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Volume), 60)'
+  why: 拆解表里 Volume->Amt 的 ES 腿 +2.18(比原 +2.10 高 0.08,差 0.02 才到替换门槛 +2.20),窗口 30 / 60 / 120 = +0.52 / +2.10 / +1.58,60 附近的曲线起伏大(估计噪声),
+    45 / 50 / 75 / 90 没试过;F 值只依赖 r 的平方,所以对符号不敏感。变体只动 Y 腿口径(Volume 换 Amt)和窗口,X 腿首列额与 F 值结构不动。这是样本内的参数挑选,不是机制证明,预期命中率不高。
+  variants:
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Amt), 60)
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Amt), 75)
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Amt), 90)
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Volume), 75)
+- head: 'cross_corr(day_first(Amt), day_kurt(Amt), 60)'
+  why: 窗口 30 / 60 / 120 = train +0.59 / +1.95 / +0.98,valid +2.90 / +2.10 / +2.23:valid 一路更高,train 是瓶颈且对窗口敏感(曲线在 60 处尖),说明 60 的 train 里有一份是估计噪声;
+    50 / 75 / 90 与 Volume 口径的峰度(Amt 换 Volume +1.67)没有按同窗口配对试过。变体只动窗口和 Y 腿口径。
+  variants:
+  - cross_corr(day_first(Amt), day_kurt(Amt), 75)
+  - cross_corr(day_first(Amt), day_kurt(Amt), 50)
+  - cross_corr(day_first(Amt), day_kurt(Volume), 60)
+- head: 'cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 20)'
+  why: 第 2 轮 R 已把切片起点 211 换到 196(+1.92 替换);窗口 10 / 20 / 40 在 196 切片上 = +1.76 / +1.92 / +1.65,中间没有 25 / 30 的读数;切片起点 201 / 190 没试,
+    尾部窗口拉长到 45 分钟是第 2 轮的改进方向(226 起点 +0.80,196 起点 +1.92,181 起点 +1.50),这是一条夹在中间的窄峰,继续窄扫只是挑噪声,所以只放 3 个。
+  variants:
+  - cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 25)
+  - cross_mean(div(day_sum(in_slice(Amt, 201, 240)), day_sum(Amt)), 20)
+  - cross_ema(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 15)

@@ -1,0 +1,108 @@
+seed: 902
+round: 3
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: |-
+    核心:day_centroid(Volume)(一天里成交量的重心,按 241 根分钟归一到 [0,1],0 = 全在开盘、1 = 全在收盘)。
+
+    样本内证据(只用 train / valid):(1) 共性表里含它的候选 22 个,均值 +0.44,不含的 -1.08(p < 0.001),核心卡第 3 行;但 abs_、pow_1_5、cs_scale 这几个包装是单调变换,等于同一个信号,所以有效样本远小于 22,它说明的是「这个量的水平形态已经在 +0.44 附近,差一点过 0.5」。(2) 本种子现有 5 个 head 里 4 个是同一条轴:日内成交时点——尾盘 30 分钟份额 L(方向 -1,score +1.23,train +2.21 / valid +1.23)、竞价份额 C(+0.89 / +0.56,方向 +1)、开盘后 30 分钟份额 F(+0.59,+1)、开盘 30 分钟净买入占比(+0.62,+1);符号一致:成交越前置越好、越后置越差。质心恰好是这几个份额的线性组合(大致 0.44·L - 0.43·F - 0.5·C),所以它的水平(慢均值 / 慢 EMA)与 head 1 的日度秩相关很可能 ≥ 0.7,会被库禁令拒掉。本位因此故意不放水平形态(只放 2 个换了「分组」写法的水平版作对照),放的是「质心随时间怎么变、和什么一起变」。
+
+    机制:质心不只是一个静态的持有人结构特征,它在每只股票身上对新闻和冲击的反应速度不同。T+1、涨跌停、不能做空的 A 股里,好消息日(高开)买盘是开盘就抢(成交前置)还是被动追涨(成交后置),放量日多出来的成交落在开盘还是尾盘,都是「谁在交易」的指纹:前置 = 提前挂单的机构 / 程序化 / 知情方,后置 = 盘中情绪和尾盘被动资金。这些「共动」统计量对股票的任何固定常数都不变——特别是深市有收盘集合竞价(最后一根含 14:57-15:00 的大额成交)、沪市主板没有,使 L 和质心的水平里带着交易所哑变量;相关系数、短减长、桶内去均值不带这个常数。这是本位最重要的稳健性设计:如果 head 1 的 alpha 主要是交易所哑变量,这些写法就不会出分;出了分就是时点信息本身。
+
+    算子怎样实现(16 个种子,骨架互不相同,六组):(a) 与冲击共动(60 天滚动相关 / 回归):cross_corr(质心, 隔夜缺口 / 日内收益 / 日收益 / log 成交量),cross_regbeta(|缺口| → 质心);缺口 = 当日开盘价 / 昨收 - 1,收益均经 cs_winsor 去掉新股首日等爆点,当日收盘后才可知,无前视。(b) 变化:cross_ema(质心, 5) - cross_ema(质心, 60)(短减长)、cross_madz(cross_mean(质心, 10), 120)(相对自己历史)、cross_stddev(质心, 60)、质心的一阶自相关(习惯是否稳定)。(c) 价格时钟 vs 成交时钟:day_centroid(Ret)(|分钟收益| 的重心)减质心,以及 day_centroid(Amt) 减质心(= 用成交量加权的日内价格漂移)。(d) 正交化:cs_regres 把质心的慢均值秩对 L 的慢均值秩回归取残差(质心里 L 解释不了的部分,即开盘段 / 午间段的成交);质心与 day_gini(Volume)(成交集中度)的秩差。(e) 对照:BoardCode 桶内去均值(列序 = 交易所 / 板块块,去掉交易所哑变量)、流动性十分位内排名、cs_rank 后慢 EMA。
+
+    和库里已有的为什么不同:库里 5 个 head 全是「份额的慢均值 / 慢 EMA / 十分位去均值 / ts_max」,即水平。本位的主体(a)(b)(c)是相关、差分、离散度、双时钟差,对水平几乎不相关(预期对 head 的 |ρ| 在 0.1-0.5);(d) 的残差对 L 的日度秩相关由构造接近 0。没有一个种子是 head 的窗口改动;对 5 个控制:质心是形状量,不含 Amt / Volume 的水平,对流动性、波动的相关预期 < 0.4,60 天相关再进一步去水平。
+
+    样本外为什么还会在:(i) 机制来自交易制度(T+1、涨跌停、散户为主的连续竞价、机构在开盘集合竞价和尾盘调仓),不是某段行情的风格;(ii) 共动与变化量对股票固定的常数(交易所、板块、上市年龄造成的永久差)不变,所以不会随 2022 年之后的板块轮动变号;(iii) 60 天滚动窗口天然是慢信号(日度重叠 59/60),成本 15 bp 吃不掉;(iv) 同一个想法的邻居(质心与冲击共动、短减长)在本批之外的独立搜索里也独立地出现过较高的 train 与 valid 同号分数——这是样本内的旁证,不是对本种子的检验。已知风险:相关系数 60 点的标准误约 0.13,个别股票的估计很噪;方向由评估自己选;若冲击变量(缺口)被涨跌停日支配,相关会被少数日子决定,已用 cs_winsor 缓解。
+  literature:
+  - cite: Admati, Pfleiderer (1988), A theory of intraday patterns, Review of Financial Studies
+    year: '1988'
+  - cite: Llorente, Michaely, Saar, Wang (2002), Dynamic volume-return relation of individual stocks, Review of Financial Studies
+    year: '2002'
+  - cite: Pagano, Schwartz (2003), A closing call's impact on market quality at Euronext Paris, Journal of Financial Economics
+    year: '2003'
+  seeds:
+  - 'cross_corr(day_centroid(Volume), cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60)'
+  - 'cross_corr(day_centroid(Volume), cs_winsor(sub(div(day_last(Close), day_first(Open)), 1)), 60)'
+  - 'cross_corr(day_centroid(Volume), cs_winsor(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 60)'
+  - 'cross_corr(day_centroid(Volume), log(day_sum(Volume)), 60)'
+  - 'cross_regbeta(abs_(cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), day_centroid(Volume), 60)'
+  - 'sub(cross_ema(day_centroid(Volume), 5), cross_ema(day_centroid(Volume), 60))'
+  - 'cross_madz(cross_mean(day_centroid(Volume), 10), 120)'
+  - 'sub(cross_mean(day_centroid(Ret), 40), cross_mean(day_centroid(Volume), 40))'
+  - 'cs_regres(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)))'
+  - 'cross_stddev(day_centroid(Volume), 60)'
+  - 'sub(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cross_mean(day_gini(Volume), 30)))'
+  - 'cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 40)'
+  - 'cross_mean(cs_bucket_demean(day_centroid(Volume), BoardCode), 40)'
+  - 'cross_ema(cs_bucket_rank(day_centroid(Volume), cross_mean(day_sum(Amt), 20)), 30)'
+  - 'cross_corr(day_centroid(Volume), cross_delay(day_centroid(Volume), 1), 60)'
+  - 'cross_ema(cs_rank(day_centroid(Volume)), 20)'
+- type: N
+  hypothesis: |-
+    机制:当日信息被吸收的时间结构。把一天的成交看作三个钟:成交钟(钱在哪个时段成交:C 竞价份额、F 开盘后 30 分钟份额、L 尾盘 30 分钟份额)、方向钟(净买入占比 day_signed_ratio(Ret, Amt) 在哪个时段为正)、价格钟(日高 / 日低在哪个分钟创出)。本种子现有 head 全在第一个钟的「份额」读数上,而且每个份额都带着本股票固定的结构常数(流动性斜率:L 的慢 EMA 对已知族 ρ ≈ -0.47;交易所:深市最后一根含收盘集合竞价,沪市主板没有)。本位在三个方向上读「份额之外」的信息:(1) 合成与残差——「早完成」指数(C、F、早盘净买入的慢均值秩之和减 L 的慢均值秩)、尾盘份额扣掉早盘份额后的残差:各份额单独是 head,但各自的特异噪声(交易所、流动性斜率)在加总里相互抵消一部分,对任一单个 head 的日度秩相关预期 0.5-0.7(仍在库禁令 0.7 之下);(2) 带方向的份额——份额乘以该段的净买入占比(F×早盘净买入、L×尾盘净买入):同样 20% 的尾盘成交,是被动卖出还是尾盘抢筹,含义相反,水平份额把两者混在一起;(3) 对冲击的反应与日内持续性——份额与 log 成交额 / |日收益| / 缺口的 60 天共动(放量日多出来的成交落在开盘还是尾盘),早盘净买入与其后全天净买入的 60 天相关(早盘的方向是被机构全天执行延续,还是被日内交易者当天反手),以及价格钟与成交钟的同步度 cross_corr(day_centroid(Ret), day_centroid(Volume), 60)(|分钟收益| 的重心与成交量重心是否同步:价格在成交集中的时段动,还是成交与价格错开)、日高 - 日低时点(价格钟)和成交集中度 day_gini(Volume)(另两条轴的探针,先验较弱,各 1-2 个)。
+
+    算子怎样实现:份额 L = div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))、F = 同式的 in_slice(Amt, 1, 30)、C = div(day_first(Amt), day_sum(Amt));S1 = day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))、S9 = 同式的 211-240;合成 = sub(add(add(cs_rank(cross_mean(C, 30)), cs_rank(cross_mean(F, 30))), cs_rank(cross_mean(S1, 30))), cs_rank(cross_mean(L, 30)));残差 = cs_regres(cs_rank(cross_mean(L, 30)), cs_rank(cross_mean(F, 30)));带方向份额 = cross_ema(mul(F, S1), 30)(或 cross_mean 40)与 cross_mean(mul(L, S9), 40) 及其差;共动 = cross_corr / cross_regbeta(份额, log(day_sum(Amt)) 或 cs_winsor 后的 |日收益| / 缺口, 60);持续性 = cross_corr(S1, 31-240 分钟净买入占比, 60)。所有分钟段只用当日已发生的数据;缺口 = 当日开盘价 / 昨收 - 1,当日收盘后才可知,无前视;份额的分母是全天成交额(停牌日已掩码),共动用 60 天窗口、相关系数有 EPS 保护;不含 ts_rank / cross_rank / in_rank_rolling。
+
+    和库里已有的为什么不同:库里 5 个 head 是单一份额的慢均值 / EMA / 十分位去均值 / ts_max;本位没有一个种子是它们的窗口改动,骨架全不相同。合成与残差:对每个单个 head 预期 |ρ| 0.5-0.7(由 4 个成分平均、各占 1/4,而不是其中一个);带方向份额:乘上符号变量后,截面排序由 S1 / S9 的符号和大小决定,对份额水平的日度秩相关预期 < 0.4;共动与持续性:相关系数对水平不变,预期 < 0.4。对 5 个控制:份额类 ρ 与流动性、已知族约 0.4-0.5,共动类 < 0.2,均低于 0.8 自动线。
+
+    样本外为什么还会在:(i) 开盘集合竞价与尾盘的参与者构成来自交易制度(T+1、涨跌停、散户连续竞价、机构开盘 / 收盘调仓),2018-2023 没变;(ii) 份额 / 共动 / 持续性都是持有人结构的慢特征(30-60 天窗口,日度重叠);(iii) 合成的目的是把单个份额里随交易所 / 板块 / 流动性变化的特异成分平均掉,留下共同的「提前完成」成分;(iv) 带方向份额与共动类对固定常数不变。已知风险:L 与 log 成交额的共动里有分母的机械成分(总额大 → 份额小),但「放量时尾盘份额跟着变多少」本身就是目标量,不是缺失值或爆点;合成类种子可能对某个 head 的 |ρ| 贴近 0.7,由相关度表处理。
+  inspired_by: 'M 第 1-3 批 + 本种子第 2 轮共 491 个已评分候选:5 个 head 里 4 个是日内成交时点的份额 / 方向读数(L 尾盘份额 -1,score +1.23,train +2.21 / valid +1.23;C 竞价份额 +;F 开盘后 30 分钟份额 +;开盘 30 分钟净买入占比 +);拆解里 head 1 去掉 cs_rank 后升到 +1.74(train +1.74 / valid +1.93)但对已知族 ρ = -0.54,说明份额里带着一个流动性斜率;共性表核心卡里 day_centroid(Volume) 的均值差 +1.52。结论:alpha 在「成交的时间结构」这条轴上,而不在任何一个份额的水平上,所以本位去读份额之间、份额与方向 / 冲击之间的关系。'
+  literature:
+  - cite: Heston, Korajczyk, Sadka (2010), Intraday patterns in the cross-section of stock returns, Journal of Finance
+    year: '2010'
+  - cite: Cushing, Madhavan (2000), Stock returns and institutional trading at the close, Journal of Financial Markets
+    year: '2000'
+  - cite: Gao, Han, Li, Zhou (2018), Market intraday momentum, Journal of Financial Economics
+    year: '2018'
+  seeds:
+  - 'sub(add(add(cs_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 30)), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 30))), cs_rank(cross_mean(day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), 30))), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)))'
+  - 'sub(add(cs_rank(cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 40)), cs_rank(cross_mean(day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), 40))), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 40)))'
+  - 'cs_regres(cs_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 30)))'
+  - 'cross_mean(mul(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240))), 40)'
+  - 'cross_ema(mul(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 30)'
+  - 'sub(cross_mean(mul(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 40), cross_mean(mul(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240))), 40))'
+  - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), log(day_sum(Amt)), 60)'
+  - 'cross_regbeta(log(day_sum(Amt)), div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 60)'
+  - 'cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cs_winsor(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 60)'
+  - 'cross_corr(div(day_first(Amt), day_sum(Amt)), abs_(cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 60)'
+  - 'cross_corr(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60)'
+  - 'cross_regbeta(abs_(cs_winsor(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1))), div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 60)'
+  - 'cross_corr(day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), day_signed_ratio(in_slice(Ret, 31, 240), in_slice(Amt, 31, 240)), 60)'
+  - 'sub(cross_mean(day_argmax(High), 40), cross_mean(day_argmin(Low), 40))'
+  - 'cross_mean(day_gini(Volume), 40)'
+  - 'cross_corr(day_centroid(Ret), day_centroid(Volume), 60)'
+R:
+- head: 'cross_ema(cs_rank(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))), 20)'
+  why: |-
+    烂部件是 cs_rank 与份额里没处理的流动性斜率。依据(loc 拆解,全是样本内):去掉 cs_rank 的 cross_ema(L, 20) 升到 +1.74(train +1.74 / valid +1.93),必要性 -0.51,即 cs_rank 把份额的大小信息丢了,每天的尾盘份额极端值(尾盘抢筹或停滞)被压成等间距的秩;但去掉之后对已知族 ρ 变成 -0.54(≥ 0.5 门槛,所以拆解的「R 候选」栏为空);head 本身及其邻居(窗口 10 / 40、换 Volume)的 ρ 是 -0.44 ~ -0.50,贴着门槛。份额 L 的慢 EMA 与 liq 约 0.5、与 known 约 0.5(先前同族种子相关度表)。所以修法是保留大小信息、同时把流动性斜率显式投影掉:用 cs_regres 对已知族慢均值的秩取残差、或在流动性十分位内去均值 / z 分数,使 ρ_known 回到 0.5 以下;另有两个变体处理交易所哑变量(BoardCode 桶内去均值——列序 = 交易所 / 板块块;去掉收盘集合竞价那一根、分母也只取连续竞价 0-239 根);一个换 Volume;一个把半衰期缩到 10(拆解里 10 > 20)。
+  variants:
+  - 'cross_ema(cs_regres(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cs_rank(cross_mean(day_std(Amt), 30))), 20)'
+  - 'cross_ema(cs_regres(cs_rank(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))), cs_rank(cross_mean(day_std(Amt), 30))), 20)'
+  - 'cross_ema(cs_bucket_demean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cross_mean(day_sum(Amt), 20)), 20)'
+  - 'cross_ema(cs_bucket_zscore(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cross_mean(day_sum(Amt), 20)), 20)'
+  - 'cross_ema(cs_bucket_demean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), BoardCode), 20)'
+  - 'cross_ema(cs_regres(div(day_sum(in_slice(Amt, 211, 239)), day_sum(in_slice(Amt, 0, 239))), cs_rank(cross_mean(day_std(Amt), 30))), 20)'
+  - 'cross_ema(cs_regres(div(day_sum(in_slice(Volume, 211, 240)), day_sum(Volume)), cs_rank(cross_mean(day_std(Amt), 30))), 20)'
+  - 'cross_ema(cs_bucket_demean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), LogFloatCap), 10)'
+- head: 'cross_mean(cs_bucket_demean(div(day_first(Amt), day_sum(Amt)), LogFloatCap), 60)'
+  why: |-
+    烂部件是矩形窗口。依据:train 是卡住的一边(train +0.89 / valid +1.64),而窗口 30 / 60 / 120 的 train 是 +0.32 / +0.89 / +0.43——不单调,说明 60 的 train 有运气成分,窗口本身是脆弱点;市值十分位去均值是必要的(去掉后 train 0.29,必要性 +0.59),所以保留分组去均值、换掉矩形窗口(cross_ema 半衰期 30)与分组变量(流动性十分位、z 分数、对市值秩的线性回归残差)。
+  variants:
+  - 'cross_ema(cs_bucket_demean(div(day_first(Amt), day_sum(Amt)), LogFloatCap), 30)'
+  - 'cross_mean(cs_bucket_demean(div(day_first(Amt), day_sum(Amt)), cross_mean(day_sum(Amt), 20)), 60)'
+  - 'cross_mean(cs_bucket_zscore(div(day_first(Amt), day_sum(Amt)), LogFloatCap), 60)'
+  - 'cross_ema(cs_regres(div(day_first(Amt), day_sum(Amt)), cs_rank(LogFloatCap)), 40)'
+- head: 'cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 30)'
+  why: |-
+    烂部件是「裸的矩形均值」。依据:head 1 同样是份额,cs_rank 加慢 EMA 把它从 0.28(裸日度秩)抬到 1.23;head 4(开盘后 30 分钟份额)目前只有裸的 30 日均值(score +0.59,train +0.59 / valid +1.52,train 是卡住的一边),窗口 15 / 60 都更差(+0.47 / +0.25),换成 head 1 的处理(先秩后 EMA)、head 2 的处理(市值十分位去均值)、对已知族斜率的回归残差,各一个。
+  variants:
+  - 'cross_ema(cs_rank(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt))), 20)'
+  - 'cross_mean(cs_bucket_demean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), LogFloatCap), 30)'
+  - 'cross_ema(cs_regres(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), cs_rank(cross_mean(day_std(Amt), 30))), 20)'
+- head: 'cross_ema(cs_rank(cross_mean(day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), 30)), 20)'
+  why: |-
+    烂部件是只读开盘 30 分钟这一个窗口。依据:窗口 20 → 10 降到 +0.50、20 → 40 降到 +0.19(衰减很快),Amt 换 Volume 基本不变(+0.63);knockout 去 cs_rank 或去 cross_mean 都更差(+0.38 / +0.16),说明净买入占比只在「开盘后 30 分钟」这一段有信息、且需要先平均再取秩。把分钟段放宽到开盘后 60 分钟(信息被吸收的时间可能不止 30 分钟),其余结构不变,看是否增加了信息量而不是噪声。
+  variants:
+  - 'cross_ema(cs_rank(cross_mean(day_signed_ratio(in_slice(Ret, 1, 60), in_slice(Amt, 1, 60)), 30)), 20)'
