@@ -7,7 +7,8 @@
 # Restart-safe like C07's / C08's: finished pieces are skipped, running ones adopted (c05_round.py).  One difference from C07's conductor:
 # if the M chain dies while this script is waiting (a disk-guard kill, a timeout, a reboot), it is started again here -- at most
 # PROD_M_STARTS times (default 6 = the first start and 5 restarts, the keeper's limit), counted in m/s<seed>.starts (delete the file to
-# allow more).  Without this a dead M chain would leave the seed waiting for ever with its conductor "alive".
+# allow more).  Without this a dead M chain would leave the seed waiting for ever with its conductor "alive".  When the chain has used
+# its starts, the conductor still finishes every round whose M batch exists and exits 7 where it needs a batch that will not come.
 #   source tmp/prod_env.sh; scripts/server/prod_conductor.sh <seed>
 S=${1:?seed}
 cd ${PARTURA_HOME:?}
@@ -17,17 +18,22 @@ LOG=$D/conductor_s$S.log
 say() { echo "[prod s$S] $* $(date +%F_%T)" >> $LOG; }
 POLL=${PROD_POLL_S:-30}; POLL_M=${PROD_POLL_M_S:-60}            # (seconds; the tests shorten them)
 m_alive() { pgrep -f "[p]rod_m.sh $S\$" > /dev/null; }
+GAVE_SAID=""
 ensure_m() {                                                    # 0 = the M chain is done or running; 1 = gave up
   [ -e $D/m/s$S.DONE ] && return 0
   m_alive && return 0
+  [ -e $D/m/s$S.DONE ] && return 0                              # the chain may have finished between the two checks (it touches DONE, then exits)
   n=$(cat $D/m/s$S.starts 2>/dev/null || echo 0)
-  if [ "$n" -ge "${PROD_M_STARTS:-6}" ]; then say "M chain: not running, not finished, and already started $n times -- giving up"; return 1; fi
+  if [ "$n" -ge "${PROD_M_STARTS:-6}" ]; then
+    [ -n "$GAVE_SAID" ] || say "M chain: not running, not finished, and already started $n times -- giving up"
+    GAVE_SAID=1; return 1
+  fi
   echo $((n + 1)) > $D/m/s$S.starts
   nohup bash scripts/server/prod_m.sh $S >> $D/m/s$S.out 2>&1 < /dev/null &
   say "M chain started (start $((n + 1)))"
   return 0
 }
-waitfor() { while [ ! -e "$1" ]; do ensure_m || exit 7; sleep $POLL; done; }
+waitfor() { while [ ! -e "$1" ]; do ensure_m || true; sleep $POLL; done; }       # (waiting for a plan does not need the M chain: rounds already unlocked go on)
 m_batch_done() { grep -q '"complete": true' episodes/prods${S}M${1}_I0_open_search/evidence.json 2>/dev/null; }
 ensure_m || exit 7
 for k in 1 2 3; do

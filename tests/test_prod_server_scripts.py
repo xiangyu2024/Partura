@@ -203,3 +203,17 @@ def test_prod_env_template_sets_the_study_on_top_of_the_hosts_own_env(tmp_path):
     # sourced from another directory it still finds the host's c05_env.sh next to it (the template is meant to live in <home>/tmp/)
     out = subprocess.run(["bash", "-c", f"cd / && source {home}/tmp/prod_env.sh && echo $PARTURA_C0X"], capture_output=True, text=True, env={"PATH": os.environ["PATH"]})
     assert out.stdout.strip() == "PROD"
+
+
+def test_a_given_up_m_chain_still_lets_the_rounds_with_a_batch_go_on(home):
+    h, env, procs = home
+    D = h / "research" / "prod_test"
+    (h / "failalways_prods956M3").write_text("")                # batches 1 and 2 are fine, batch 3 never comes
+    for k in (1, 2, 3):
+        push_plan(h, 956, k)
+    env = {**env, "PROD_M_STARTS": "3"}
+    p = conductor(h, env, procs, 956)
+    assert p.wait(timeout=40) == 7
+    log = (D / "conductor_s956.log").read_text()
+    assert (D / "arms" / "s956_P_r1.DONE").exists() and (D / "arms" / "s956_P_r2.DONE").exists() and not (D / "arms" / "s956_P_r3.DONE").exists()
+    assert log.count("giving up") == 1 and not (D / "arms" / "s956.ALLDONE").exists()
