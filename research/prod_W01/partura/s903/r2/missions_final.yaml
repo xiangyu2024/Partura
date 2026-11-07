@@ -1,0 +1,157 @@
+seed: 903
+round: 2
+slots:
+- type: E
+  core: day_centroid(Amt)
+  hypothesis: '核心 day_centroid(Amt) = 当天成交额在分钟轴上的质心(0 = 全在 09:30 竞价,1 = 全在 15:00),是库里两个
+    head 共有的零件: Pr1b_Nb 的 cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)),
+    30)(+1.34)和 M2 的 div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), day_centroid(Amt))(+0.60);后者来自没有任何
+    agent 参与的 M 第 2 批, 也就是说 GP 自己就会长出它(346 个候选里含它的 33 个均值 -0.06 对不含 -1.20,p 0.000)。
+
+    拆解读出的事实:单日值 day_centroid(Amt) 只有 +0.41(train +1.05 / valid +0.41);30 日均值 cross_mean(day_centroid(Amt),
+    30) 是 +1.72(train +1.72 / valid +1.83),比 head 还高 0.38(flat_run_max 的必要性 -0.38);
+    head 的窗口 15 / 30 / 60 = 1.00 / 1.34 / 0.76。读法:alpha 是一个慢特征(这只票习惯在一天的什么时候成交),日度值的噪声主要被
+    15 bp 换手成本吃掉;flat_run_max 的作用不是 alpha,而是把与已知族 cross_mean(day_std(Amt), 30) 的 |ρ|
+    压到 0.5 以下 (第 1 轮相关度表里 cross_mean(day_centroid(Amt), 60) 对 known 是 0.57、对 liq 是
+    0.56)。
+
+    已见过的含该核心的写法全是水平:各种窗口的均值 / zscore、与 Volume 或 Ret 的质心作差、被 autocorr 除。库禁令(日度秩 |ρ|
+    >= 0.7)会拒绝 一切再平滑、再加减一个零件的水平变体,所以本轮外围去读质心的动态和条件,六族: (1) 变异度:cross_stddev(质心, 60)、cross_tail_mean_q75
+    减 q25、cross_semistd_neg、cross_autocorr_s1。 习惯性时点(算法单、机构定时执行)和事件驱动时点(消息、散户)是两类票,均值读不出差别,离散度能。
+    (2) 耦合:cross_corr(质心, log(day_sum(Amt)) / day_sum(Ret) / 隔夜跳空 div(day_open(Open),
+    昨收) / cs_mean(质心), 60)。 放量日是前置还是后置、上涨日是否后置(尾盘买入)、跳空日是否前置(消息)、对全市场交易节奏的 beta;读的是质心与别的日度量的共动,不是质心的水平。
+    (3) 惊奇:cross_ema 短减长(5 对 60)、cross_madz(质心, 60)。相对自己的历史偏早 / 偏晚,天然去掉深沪尾盘集合竞价制度
+    (深市 15:00 点含收盘集合竞价,沪市没有)造成的水平差。 (4) 中性化:cs_bucket_rank(质心 30 日均值, 已知族) 在已知族十分位内重排;cs_bucket_rank(质心
+    30 日均值, 最后一分钟成交占比的 30 日均值) 在深沪集合竞价差的代理变量十分位内重排,直接回答 head 的 alpha 是不是深沪哑变量; cs_regres(秩,
+    已知族秩) 去掉 cross_stddev 对已知族的暴露,绕开 |ρ_known| < 0.5 的门。 (5) 状态:cs_flip_by_state(质心
+    30 日均值, day_sum(Amt)),全市场放量 / 缩量时质心溢价是否反号(行情热的时候散户的开盘集中可能是反向指标)。 (6) 等权秩差:sub(cs_rank(质心均值),
+    cs_rank(flat_run_max 均值))。head 里的 sub 是数值差,flat run 只在稀薄票上才有量级; 秩差让两者等权,是对 head
+    的 flat-run 部件权重的另一端。
+
+    和已有的不同:库里所有含质心的东西读的是它的水平;本轮 (1)(2)(3)(5) 读的是它随时间的离散、共动、偏离和随状态的符号,日度秩与 head 1 的
+    |ρ| 预期 0.1–0.5;(4)(6) 保留水平,预期 0.6–0.8,可能被表划掉 1–3 个。与五个控制:(1)(2) 的 liq / known
+    预期 0.3–0.6, 新尺子的 15 列残差去掉线性、U 形、S 形部分,剩下的是时点习惯本身。样本外为什么在:谁在什么时候交易(参与者结构)比风格轮动稳定,
+    动态统计不依赖交易所制度的水平差;窗口 >= 30 天,换手低。已知风险:cross_stddev 一类在稀薄票上估计噪声大,和流动性高度相关, 残差后可能只剩噪声;cs_flip_by_state
+    在状态翻转日会有换手冲击。'
+  literature:
+  - cite: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price
+      variability, Review of Financial Studies'
+    year: '1988'
+  - cite: Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock
+      returns, Journal of Finance
+    year: '2010'
+  seeds:
+  - cross_stddev(day_centroid(Amt), 60)
+  - cs_regres(cs_rank(cross_stddev(day_centroid(Amt), 60)), cs_rank(cross_mean(day_std(Amt),
+    30)))
+  - cross_corr(day_centroid(Amt), log(day_sum(Amt)), 60)
+  - cross_corr(day_centroid(Amt), day_sum(Ret), 60)
+  - cross_corr(day_centroid(Amt), div(day_open(Open), cross_delay(day_close(Close),
+    1)), 60)
+  - sub(cross_ema(day_centroid(Amt), 5), cross_ema(day_centroid(Amt), 60))
+  - cross_semistd_neg(day_centroid(Amt), 60)
+  - cross_corr(day_centroid(Amt), cs_mean(day_centroid(Amt)), 60)
+  - cs_flip_by_state(cross_mean(day_centroid(Amt), 30), day_sum(Amt))
+  - cross_autocorr_s1(day_centroid(Amt), 60)
+- type: N
+  hypothesis: '新想法:head 里的 day_centroid(Amt) 把一天所有分钟(含 09:30 开盘竞价点和 15:00 收盘点)压成一个数。压平之后至少混了三件不该混的事,
+    本轮把它拆开,每一件在库里都没有:
+
+    (a) 买卖方向。成交额按分钟收益符号分开:day_centroid(mul(Amt, is_gt(Ret, 0))) 是上涨分钟的钱的质心,is_lt 是下跌分钟的钱的质心,
+    及两者之差。is_gt / is_lt 给 0/1,乘 Amt 后 day_centroid 以绝对值为权重,零权重分钟不进质心;Ret = 0 的分钟两边都不进。
+    上涨分钟的钱比下跌分钟的钱更晚 = 价格越到尾盘越涨(尾盘抢筹);反之 = 早盘冲高后被卖。这是日内动量(Gao, Han, Li and Zhou 2018)的另一种读法,
+    A 股 T+1 下尾盘抢筹的次日走向(回吐还是延续)是方向性的、可被残差后的长多书读到的。
+
+    (b) 时段与竞价。in_slice(x, a, b) 取分钟 a 到 b(含两端;0 = 09:30 竞价,1–120 = 上午连续,121–240 =
+    下午,240 = 15:00 点, 深市该点含收盘集合竞价,沪市没有)。in_slice(Amt, 1, 239) 的质心同时去掉两个竞价点;上午质心 1–120、下午质心
+    121–239 分别读上下午内部的节奏; 下午减上午;开盘 3 分钟成交占比。head 的质心里混着深沪制度差:若连续竞价质心保住大部分分数,说明时点信息是真的;
+    若丢光,说明 head 主要是深沪哑变量。这个答案对第 3 轮是关键信息。
+
+    (c) 价格路径。day_argmax(High) 与 day_argmin(Low) 是当天最高价 / 最低价出现的分钟,两者之差是日内路径形状(先低后高
+    vs 先高后低); 下午分钟收益和减上午;最后 30 分钟收益和;day_wmean(Ret, Amt) 减 day_mean(Ret) = 钱加权收益减时间加权收益(钱是在涨的时候还是跌的时候放量);
+    day_corr(Amt, Ret) = 分钟额与分钟收益的同步性。
+
+    统一做成 30 日(个别 60 日)均值:上一轮事实是 30 日均值比单日值高 1.3 分,日度值被换手成本吃掉,所以只放慢特征。
+
+    和库不同:库里 head 1 / head 3 用的是汇总到全天的质心(及无成交停顿)。这里每个种子要么只读一部分分钟(时段)、要么按收益符号读(方向)、
+    要么读价格的时点(路径),预期与 head 1 的日度秩 |ρ| 在 0.1–0.5(整段连续质心和单边质心例外,可能 0.6–0.85,会被表划掉), 与五个控制
+    < 0.5(路径类与 20 日反转可能 0.3)。样本外为什么在:Heston, Korajczyk and Sadka 2010 在美国样本里记录了截面收益的日内时点模式,
+    机制(谁在开盘、谁在尾盘、买方还是卖方在推价格)是参与者结构,不依赖这份数据;只放 30 日以上的慢特征,换手低,15 bp 扛得住。 已知风险:Ret =
+    0 的分钟(低价股一个 tick 不动)占比大时,单边质心用的是子集;argmax 并列取第一个,一字板票的最高点时点是封板那一分钟。'
+  literature:
+  - cite: Gao, Han, Li and Zhou, Market intraday momentum, Journal of Financial Economics
+    year: '2018'
+  - cite: Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock
+      returns, Journal of Finance
+    year: '2010'
+  - cite: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected
+      returns, Journal of Financial Economics'
+    year: '2019'
+  inspired_by: 第 1–2 批 + 上一轮 Pr1b_Nb:日内成交时点的 30 日均值是目前库里最强的东西(head 1 +1.34,拆解里去掉 flat
+    run 后 +1.72), M2 的 head 里就有 day_centroid(Amt),346 个候选里含 day_centroid(Volume) 的
+    39 个均值 +0.00 对 -1.23(p 0.000); 但所有含质心的候选读的都是全天汇总的一个数,没有一个把它按收益符号、时段、价格时点拆开。
+  seeds:
+  - cross_mean(sub(day_centroid(mul(Amt, is_gt(Ret, 0))), day_centroid(mul(Amt, is_lt(Ret,
+    0)))), 30)
+  - cross_mean(day_centroid(in_slice(Amt, 1, 120)), 30)
+  - cross_mean(day_centroid(in_slice(Amt, 121, 239)), 30)
+  - cross_mean(sub(day_centroid(in_slice(Amt, 121, 239)), day_centroid(in_slice(Amt,
+    1, 120))), 30)
+  - cross_mean(div(day_sum(in_slice(Amt, 0, 2)), day_sum(Amt)), 30)
+  - cross_mean(sub(day_argmax(High), day_argmin(Low)), 30)
+  - cross_mean(day_argmax(High), 60)
+  - cross_mean(sub(day_sum(in_slice(Ret, 121, 240)), day_sum(in_slice(Ret, 0, 120))),
+    30)
+  - cross_mean(day_sum(in_slice(Ret, 211, 240)), 30)
+  - cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 30)
+  - cross_mean(day_corr(Amt, Ret), 30)
+R:
+- head: cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 30)
+  why: 部件 day_flat_run_max(Amt) 不是 alpha 的来源而是一个去相关的补丁。拆解:去掉它之后 cross_mean(day_centroid(Amt),
+    30) 是 +1.72(train +1.72 / valid +1.83),比 head 高 0.38(必要性 -0.38),但「比原 head 好的拆解变体」一栏仍为空,说明去掉后被已知族门挡掉
+    (推断:第 1 轮相关度表里 cross_mean(day_centroid(Amt), 60) 对 known 0.57、对 liq 0.56,而 flat
+    run 在稀薄票上把质心拉低、 把 |ρ_known| 压到 0.5 以下)。flat run 单独只是废品(门槛)。所以要换的不是质心,是补丁:用对已知族
+    cross_mean(day_std(Amt), 30) 的显式中性化(秩上的回归残差,或减去已知族秩的 0.4 / 0.8 倍)取代 flat run,既保住
+    +1.7 级别的质心信息, 又把 |ρ_known| 压到 0 附近(新尺子本来就去掉了对已知族的线性暴露,所以这一步不该丢分,只是过门)。变体 1–5:中性化质心(窗口
+    20 / 30 / 45,权重 回归 / 0.4 / 0.8); 窗口 15 / 30 / 60 = 1.00 / 1.34 / 0.76 在 30 附近有峰,变体
+    8–9 试 22 与 40;变体 6–7 把 flat run 的权重放到 0.5 与 2 倍, 看补丁权重与过门之间能否有更好的位置;变体 10 把均值换成半衰期
+    20 的 EMA(老值渐隐而不是硬掉出窗口)。
+  variants:
+  - cs_regres(cs_rank(cross_mean(day_centroid(Amt), 30)), cs_rank(cross_mean(day_std(Amt),
+    30)))
+  - sub(cs_rank(cross_mean(day_centroid(Amt), 30)), mul(0.4, cs_rank(cross_mean(day_std(Amt),
+    30))))
+  - sub(cs_rank(cross_mean(day_centroid(Amt), 30)), mul(0.8, cs_rank(cross_mean(day_std(Amt),
+    30))))
+  - cs_regres(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_std(Amt),
+    30)))
+  - cs_regres(cs_rank(cross_mean(day_centroid(Amt), 45)), cs_rank(cross_mean(day_std(Amt),
+    30)))
+  - cross_mean(sub(day_centroid(Amt), mul(0.5, day_flat_run_max(Amt))), 30)
+  - cross_mean(sub(day_centroid(Amt), mul(2, day_flat_run_max(Amt))), 30)
+  - cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 40)
+  - cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 22)
+  - cross_ema(sub(day_centroid(Amt), day_flat_run_max(Amt)), 20)
+- head: div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), day_centroid(Amt))
+  why: 两个部件都没有被平滑。拆解:分子 day_autocorr_n1(in_decay_linear_rolling(Close, 30)) 单独 -3.39(train
+    -2.36),分母 day_centroid(Amt) 单独 +0.41(train +1.05 / valid +0.41),合成 +0.60;把 Close
+    换 Vwap、Amt 换 Volume、窗口 15 / 60 都在 0.45–0.53,说明是结构而不是参数。 单日的质心 30 日均值后从 +0.41 变成
+    +1.72(同一轮拆解),分子是同一种日度噪声,单独 -3.39 是换手成本把它吃掉的样子,所以最该换的是把两个日度量 都放慢。另外分母是当天的质心,开盘竞价后一字封死的票质心接近
+    0,div 之后是爆点值(推断,本轮看不到数据),放慢分母(30 / 60 日均值,均值恒为正且远离 0) 同时去掉这个数值隐患。变体 1–2:只放慢分母(30
+    日均值 / 半衰期 20 EMA);变体 3–5:分子也放慢后相除,或在秩上作差; 变体 6:分母 60 日。不对「质心的日度比值」整体取均值,因为一字板的爆点会支配均值。
+  variants:
+  - div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), cross_mean(day_centroid(Amt),
+    30))
+  - div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), cross_ema(day_centroid(Amt),
+    20))
+  - div(cross_mean(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), 30), cross_mean(day_centroid(Amt),
+    30))
+  - div(cross_mean(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), 20), cross_mean(day_centroid(Amt),
+    30))
+  - sub(cs_rank(cross_mean(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), 30)),
+    cs_rank(cross_mean(day_centroid(Amt), 30)))
+  - div(day_autocorr_n1(in_decay_linear_rolling(Close, 30)), cross_mean(day_centroid(Amt),
+    60))
+audit:
+  attempts: 1
+  file: audit_1.yaml

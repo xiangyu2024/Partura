@@ -1,0 +1,125 @@
+seed: 906
+round: 2
+slots:
+  - type: E
+    core: 'cross_mean(day_centroid(Amt), 20)'
+    hypothesis: |
+      【核心 C20】cross_mean(day_centroid(Amt), 20):过去 20 个交易日里"成交额在一天中的重心"的均值(day_centroid = sum(t·|Amt_t|)/sum(|Amt_t|)/(T-1),0 = 全部成交在第 0 根(09:30 集合竞价),1 = 全部在收盘;立方体 241 根分钟格,第 0 根是集合竞价)。
+
+      证据(全部是样本内):(1) 本轮拆解里 C20 单独就是 +1.34(train +1.72 / valid +1.34),远高于含它的价位窗口 W 单独的 +0.41,并且 train 高于 valid——带类 head 的 valid 都比 train 高 0.8 ~ 2.5(像是 2022-23 行情的红利),C20 不是这样,它在 train 的 2018-2021 里更强。(2) 共性表:含 day_centroid(Amt) 的 26 个候选均分 +0.84(不含 -0.84),含 C20 的 15 个 +0.97(p 0.000);head cs_first_high40(W, C20) 的敲除里,把 C20 换成未平滑的当日重心分数从 +1.50 掉到 +0.56;Amt→Volume 互换分数不变(+1.46),窗口 10 / 40 日都在 +1.25 ~ +1.28,说明吃的是"时点"这个性质而不是某个参数。(3) 本组所有含 20 日重心的 head(1.62、1.50、1.30)方向都是 -1:多头 = 重心低 = 成交偏早盘 / 集合竞价的名字。(4) 同批其他种子(903、905、907、908 各自独立)在自己的样本内也长出了以 day_centroid 为核心的 head,说明这是立方体里一条比较普遍的来源,不是本种子的偶然。
+
+      本位要问的:C20 离开价位窗口 W 之后还站不站得住?第 1 轮的 16 个 E 种子全部把 C20 放在 W 的里面或外面(W 是 cs_first_low20(day_last(Vwap), day_last(Vwap))),快照里含 C20 的候选外围全是"cs_first/last_* 与 W 的嵌套"。这一位的种子一律不带 W,外围换成下面几类(都是库里没有的写法):
+
+      A 十分位内取排名 cs_bucket_rank(C20, X)(种子 1 ~ 4,X = 已知族 cross_mean(day_std(Amt),30) / 市值 / 波动 / 流通股本),种子 5 是 908 号种子样本内的 head 写法 cs_regres(cs_bucket_zscore(C20, 流通股本), 流通股本)。实现的机制:裸 C20 与流动性、已知族有一部分共同变化(我只能用第 1 轮相关表里种子 10 / 11 两行倒推,它们只差带的符号,倒推出 C20 与流动性 / 已知族的 |ρ| 在 0.25 ~ 0.55 之间,没有实测),并且很可能与 head cs_first_high40(W, C20) 的 |ρ| 在 0.5 ~ 0.7;在 X 的十分位内取排名,把对 X 的暴露精确去掉,留下的是"同等规模 / 同等流动性的票里,谁更偏早盘成交",这是"时点"信息本身。
+      B 对自身历史归一(种子 6、7):cross_zscore(C20, 120) 与 C20 减去 120 日均值。去掉的是每只票长期的"投资者构成"水平(机构票偏尾盘、散户票偏早盘是个稳定的截面差),留下的是"这一个月比自己的常态更偏早盘"的变化。
+      C 结构分隔(种子 8 ~ 11):cs_first/last_low20(C20, ListAge) 把上市最晚的约 20%(2018 年以后上市的次新股;样本起点已上市的老股 ListAge 并列同值,整块不进带,所以带里只有真正的新股;次新股的成交时点被上市初期的炒作支配)整块推出多头腿或整块拉进多头腿;cs_first/last_high20(C20, LogTotalCap − LogFloatCap) 对"总市值 / 流通市值"最高 20% 的限售股占比高的名字做同样的处理。两个分隔变量都不是 5 个控制之一,也不在库里。
+      D 第二个时点统计(种子 12 ~ 14):钱在哪里成交减去价格在哪里动(day_centroid(Ret) 是 |分钟收益| 的重心)的排名差;开盘集合竞价占比 div(day_first(Amt), day_sum(Amt)) 的 20 日均值与 C20 的排名差(两个独立噪声的早盘度量合成);C20 与成交集中度 day_gini(Amt) 的排名差(907 号种子样本内的结构)。
+      E 规模带 × C20(种子 15、16):本种子最强的 head 是 cs_first_low20(LogFloatCap, LogFloatCap)(+1.80),它的带是流通市值最小的 20%,而 C20 一直只配过价位带;这两条是把 C20 放进市值带里(种子 15 在市值 20% ~ 40% 的名字里按 C20 取最低;种子 16 是 head cs_first_high40(W, C20) 的市值版,带宽从 40% 改成 20%:两者共享 "C20 最高那一块被推到最前"这一部分,40% 时日度秩相关我估计会越过 0.7 的库禁线)。这是 E 里最像"把已知的成功换个变量"的一组,我预期它们分最高,但与现有 head 相关也最高,所以只放 2 个。
+
+      为什么和以前不一样:A ~ D 没有一个含价位窗口 W;A、B 去掉的是 C20 对流动性 / 已知族 / 规模的暴露,不是在 C20 外面再套一层 cs_first/last 带;C 的分隔变量(ListAge、总市值与流通市值之差)库里没有;D 的第二个统计库里没有。与 5 个控制:A 的输出在 X 的每个十分位内均匀分布,与 X 的相关接近 0;B 的 z 分数对截面水平中性。
+
+      为什么样本外还会在:成交时点反映的是持有人结构(散户 / 机构,集合竞价 / 连续竞价)与信息到达时点,是慢变的个股属性,20 日均值后只取排名,换手低,15 bp 成本吃不掉(在 head 里它们都选了半衰期 5);C20 在 train 与 valid 都显著为正且 train 更强,不依赖 valid 段的小盘行情;交易所的撮合时段规则在样本内没变。方向 -1(低重心做多)由评估在 train 上自选,我不预设。
+    literature:
+      - cite: 'Liu, Stambaugh, Yuan (2019) Size and value in China, JFE 134 (smallest 30% excluded for shell-value contamination)'
+        year: '2019'
+      - cite: 'Berkman, Koch, Tuttle, Zhang (2012) Paying attention: overnight returns and the hidden cost of buying at the open, JFQA 47'
+        year: '2012'
+    seeds:
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_std(Ret), 20))'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), LogFloatShares)'
+      - 'cs_regres(cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), LogFloatShares), LogFloatShares)'
+      - 'cross_zscore(cross_mean(day_centroid(Amt), 20), 120)'
+      - 'sub(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt), 120))'
+      - 'cs_first_low20(cross_mean(day_centroid(Amt), 20), ListAge)'
+      - 'cs_last_low20(cross_mean(day_centroid(Amt), 20), ListAge)'
+      - 'cs_first_high20(cross_mean(day_centroid(Amt), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_last_high20(cross_mean(day_centroid(Amt), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'sub(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_centroid(Ret), 20)))'
+      - 'sub(cs_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 20)), cs_rank(cross_mean(day_centroid(Amt), 20)))'
+      - 'sub(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_gini(Amt), 20)))'
+      - 'cs_last_low20(cross_mean(day_centroid(Amt), 20), cs_first_low20(LogFloatCap, LogFloatCap))'
+      - 'cs_first_high20(cs_first_low20(LogFloatCap, LogFloatCap), cross_mean(day_centroid(Amt), 20))'
+  - type: N
+    hypothesis: |
+      背景(第 1、2 批):(1) 共性表里 day_centroid(Amt) 是最强的单一子树(含它的 26 个候选均分 +0.84,不含 -0.84),C20 = cross_mean(day_centroid(Amt),20) 单独 +1.34(train +1.72 / valid +1.34);(2) 本批三个次级 head 读的也是 Amt 的日内分布而不是水平:day_gini(Amt)(集中度)、day_first(Amt)(开盘集合竞价那一根)、day_signed_ratio(Ret, Amt)(成交额按涨跌方向的分配);(3) 它们全都被塞在价位窗口 W 或市值窗口里,没人单独检验过"一天里钱在什么时候成交"这件事除了重心之外还有几个独立的坐标,也没人在去掉规模带的条件下检验。
+
+      N 要回答:重心只是日内成交额分布的一个数,分布还有哪些坐标带信息、不靠规模 / 价位带也站得住?候选坐标(全部是比例或形状,量纲无关;逐日算,再取 20 日均值,使其成为持有人结构的慢变特征,取排名后进场):
+       1 开盘集合竞价占比 div(day_first(Amt), day_sum(Amt))(第 0 根格是 09:30 集合竞价;隔夜信息、竞价挂单、一字板);
+       2 尾盘 30 分钟占比 in_slice(Amt, 211, 240)(14:31 ~ 15:00;机构收盘前调仓 / 基准跟踪 / 收盘价管理);
+       3 早盘连续竞价前 30 分钟占比 in_slice(Amt, 1, 30)(竞价之后的第一段,隔夜信息的再定价);
+       4 午后开盘 30 分钟占比 in_slice(Amt, 121, 150)(13:01 ~ 13:30;午间消息的再定价);
+       5 价格在哪里动与钱在哪里成交的时点差 day_centroid(Ret) - day_centroid(Amt)(day_centroid 取绝对值,Ret 的重心 = 价格变动集中在一天的哪一段;两者错开 = 钱在没有价格发现的时段成交);
+       6 成交时间的离散度 day_wstd(in_index(Amt), Amt)(成交是集中在一个时段还是摊开);
+       7 U 形程度 day_corr(|t - 0.5|, Amt)(成交集中在两端还是中段);
+       8 后置程度 day_corr(t, Amt)(成交额随时间的线性趋势,与重心近似,作为对照);
+       9 突发度 day_es_ratio_hi(Amt)(最高 5% 分钟的均值 / 该分位数;为空的日子是缺失而不是 1e4);
+       10、11 开盘占比与尾盘占比各自在已知族 cross_mean(day_std(Amt),30) 的十分位内取排名(去掉与已知族 / 流动性的共同变化);
+       12 开盘占比 - 尾盘占比的排名差(前置 vs 后置);
+       13 开盘占比的 5 日均值相对自己 120 日的 z 分数("这一周比自己常态更集中在开盘");
+       14 种子 5 的时点差在流通市值十分位内取排名。
+
+      算子怎么实现:占比用 div(day_sum(in_slice(Amt, a, b)), day_sum(Amt)),分子是分母的一部分所以在 [0,1] 内有界,不会出现除以近零造成的爆点(分母为 0 时 0/0 = 缺失);in_index 给出分钟在一天里的位置 t/(T-1);day_corr、day_wstd 都有 EPS 保护;所有 day_* 只用当天已收盘的分钟,cross_mean 是向后窗口,t 日收盘后已知,t+1 进场,没有前视。
+
+      与库里已有的不同:库里 13 个 head 里读 Amt 日内分布的只有 day_centroid(作为 W 嵌套的内层)、day_gini、day_first(Amt) 的水平和 day_signed_ratio,没有一个是占比、没有 in_slice 分段、没有时点差、没有 U 形 / 离散度;而且都在价位 / 市值带里。N 的种子里没有带。这些统计与 5 个控制:占比与分布形状量纲无关,不是金额水平(流动性 / 已知族是金额的 std,与它们有一部分相关但不是同一个量),10、11 与 14 又显式在十分位内去掉了它们。
+
+      为什么样本外还会在:持有人结构(散户 / 机构、竞价挂单、尾盘调仓)是慢变的个股属性;同一个性质(时点)在 C20 里已经在 train 与 valid 都成立,并且 train 更强;同批的 903、905、907、908、911 号种子各自独立地在自己的样本内找到了开盘占比 / 尾盘占比 / 重心类的 head(如 908 的尾 30 分钟占比 20 日均值 +1.81,911 的以开盘占比为部件的 head +0.6 ~ +1.8),我拿它们当作"这条来源在不同随机种子里重现"的证据,不是拿它们的数当本种子的分数;20 日均值后取排名,换手低。方向(早盘多还是尾盘多做多)由评估在 train 上自选。风险:一字板日开盘占比接近 1(真实状态,不是数值伪影),20 日均值与排名限制了它的权重;尾盘最后几分钟的撮合规则在样本内没有变。
+    inspired_by: '第 1 批 + 第 2 批:共性表里 day_centroid(Amt) 是最强的单一子树(含它 26 个候选均分 +0.84,不含 -0.84),C20 单独 +1.34(train +1.72 / valid +1.34);三个次级 head 读的是 Amt 日内分布(day_gini、day_first(Amt)、day_signed_ratio),且全被塞在价位窗口里,没人单独、去掉规模带地检验日内成交额分布的其他坐标'
+    literature:
+      - cite: 'Admati, Pfleiderer (1988) A theory of intraday patterns: volume and price variability, RFS 1'
+        year: '1988'
+      - cite: 'Heston, Korajczyk, Sadka (2010) Intraday patterns in the cross-section of stock returns, Journal of Finance 65'
+        year: '2010'
+      - cite: 'Lou, Polk, Skouras (2019) A tug of war: overnight versus intraday expected returns, JFE 134'
+        year: '2019'
+    seeds:
+      - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 20)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 121, 150)), day_sum(Amt)), 20)'
+      - 'cross_mean(sub(day_centroid(Ret), day_centroid(Amt)), 20)'
+      - 'cross_mean(day_wstd(in_index(Amt), Amt), 20)'
+      - 'cross_mean(day_corr(abs_(sub(in_index(Amt), 0.5)), Amt), 20)'
+      - 'cross_mean(day_corr(in_index(Amt), Amt), 20)'
+      - 'cross_mean(day_es_ratio_hi(Amt), 20)'
+      - 'cs_bucket_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), cross_mean(day_std(Amt), 30))'
+      - 'sub(cs_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 20)), cs_rank(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)))'
+      - 'cross_zscore(cross_mean(div(day_first(Amt), day_sum(Amt)), 5), 120)'
+      - 'cs_bucket_rank(cross_mean(sub(day_centroid(Ret), day_centroid(Amt)), 20), LogFloatCap)'
+R:
+  - head: 'cs_first_low20(LogFloatCap, LogFloatCap)'
+    why: 'cs_first_low20(LogFloatCap, LogFloatCap) 的两个槽(排序变量、带变量)都用流通市值。被推到最前的"最小 20%"在业务上是壳价值 / 退市风险污染的那一档,壳价值在业务上更接近整个上市主体的总市值,而流通市值会被限售股比例(LogTotalCap − LogFloatCap)压得很小,所以带的定义可能是这个 head 里最粗的部件;排序保持流通市值。另一方面带变量每天随股价变化,边界上的名字天天进出,变体也试平滑带变量。依据:同批 910 号种子在自己的样本内,cs_first_high20(LogFloatCap, sub(LogTotalCap, LogFloatCap)) 得 +1.19 / valid +2.51,说明总市值与流通市值的差在这类带里有信息。'
+    variants:
+      - 'cs_first_low20(LogFloatCap, LogTotalCap)'
+      - 'cs_first_low20(LogTotalCap, LogTotalCap)'
+      - 'cs_first_low20(LogTotalCap, LogFloatCap)'
+      - 'cs_first_low20(LogFloatCap, cross_mean(LogFloatCap, 20))'
+  - head: 'cs_last_low05(cs_first_low20(day_last(Vwap), day_last(Vwap)), day_centroid(Amt))'
+    why: '烂的部件是带变量 day_centroid(Amt):它是单日重心,日度噪声很大,最低 5% 里多半是"那一天成交异常"的名字,不是持续偏早盘成交的名字。依据:同批拆解里,head cs_first_high40(W, cross_mean(day_centroid(Amt), 20)) 把 20 日均值换成单日重心,分数从 +1.50 掉到 +0.56(必要性 +0.93);C20 单独 +1.34。变体用 5 日、20 日均值的重心做带变量,并放宽带宽(5% → 10% / 20%):平滑后的重心是持续性的个股特征而不是单日异常,带不必再卡得那么窄。'
+    variants:
+      - 'cs_last_low05(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_centroid(Amt), 5))'
+      - 'cs_last_low05(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_centroid(Amt), 20))'
+      - 'cs_last_low10(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_centroid(Amt), 20))'
+      - 'cs_last_low20(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_centroid(Amt), 20))'
+  - head: 'cs_first_low20(LogFloatCap, day_sum(Low))'
+    why: '带变量 day_sum(Low) 是"当日各分钟最低价之和",是价位乘一个固定的分钟数,含当天的价格水平变动,且是后复权价,混着分红送转史;它被选了最快的半衰期 0,说明每天的边界抖动可能在消耗收益。变体:(a)(b)把带变量换成 20 日 / 5 日均值,去掉单日价位噪声;(c)把后复权价位换成名义价位 Nom = LogFloatCap − LogFloatShares(流通市值 / 流通股本),去掉分红送转史的影响(同批 910 号种子的样本内 head cs_first_low20(LogFloatCap, sub(LogFloatCap, LogFloatShares)) 得 +0.79 / valid +1.63)。'
+    variants:
+      - 'cs_first_low20(LogFloatCap, cross_mean(day_sum(Low), 20))'
+      - 'cs_first_low20(LogFloatCap, cross_mean(day_sum(Low), 5))'
+      - 'cs_first_low20(LogFloatCap, sub(LogFloatCap, LogFloatShares))'
+  - head: 'sigmoid(cs_first_low20(cs_first_low20(cross_mean(day_first(Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap))), day_last(Vwap)))'
+    why: '烂的部件是 cross_mean(day_first(Amt), 20):开盘第 0 根(09:30 集合竞价)的成交额绝对值,量纲是金额,与流动性 / 已知族 cross_mean(day_std(Amt),30) 同向变化,拿到的更像"这只票大不大"而不是"钱有多少在开盘成交"。变体换成占当日成交额的比例 div(day_first(Amt), day_sum(Amt))(量纲无关,[0,1] 内有界),(a)保留 head 的其余结构,(b)去掉最外层 sigmoid(单调)与 day_last(Vwap) 带,只留 W 与开盘占比。同批 911 号种子的样本内 head 里,以 div(day_first(Amt), day_sum(Amt)) 为部件的得 +0.6 ~ +1.2(以它为部件的相关类写法最高 +1.8)。'
+    variants:
+      - 'sigmoid(cs_first_low20(cs_first_low20(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), cs_first_low20(day_last(Vwap), day_last(Vwap))), day_last(Vwap)))'
+      - 'cs_first_low20(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))'
+  - head: 'cs_last_low20(cross_mean(day_gini(Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))'
+    why: '这个 head 和 day_signed_ratio 那个 head 都被评估选了最慢的半衰期 20(方向 +1),说明信号慢而噪,20 日均值的窗口可能太短;变体把窗口拉长到 60 日(更稳,不改结构),以及把 Amt 换成 Volume(拆解里 Amt→Volume 在同族 head 上分数不变,检验这条是不是 Amt 的金额量纲污染)。'
+    variants:
+      - 'cs_last_low20(cross_mean(day_gini(Amt), 60), cs_first_low20(day_last(Vwap), day_last(Vwap)))'
+      - 'cs_last_low20(cross_mean(day_gini(Volume), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))'
+  - head: 'cs_first_low20(cross_mean(day_signed_ratio(Ret, Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))'
+    why: '同上:半衰期 20、方向 +1、分数 +0.50(刚过线),20 日均值的订单流失衡窗口太短;变体拉长到 60 日。'
+    variants:
+      - 'cs_first_low20(cross_mean(day_signed_ratio(Ret, Amt), 60), cs_first_low20(day_last(Vwap), day_last(Vwap)))'

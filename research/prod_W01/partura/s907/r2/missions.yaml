@@ -1,0 +1,129 @@
+seed: 907
+round: 2
+slots:
+- type: E
+  core: 'cross_mean(day_centroid(Volume), 30)'
+  hypothesis: >-
+    【核心】C = cross_mean(day_centroid(Volume), 30):一只票过去 30 个交易日里「成交量的重心」的均值(0 = 全部成交在 09:30 开盘竞价,1 = 全部在 15:00;立方体是 241 格:09:30 竞价 + 240 根分钟)。
+    它是慢变的交易习性:低 C = 成交前置(隔夜信息在开盘被吸收、散户开盘集中),高 C = 成交后置(机构按 VWAP 拆单、尾盘)。五个控制都是金额 / 波动 / 收益 / 市值的水平,没有一个读「什么时候成交」。
+
+    【本种子的证据,全是 train / valid】(1) 本组 Pr1b_Nb 的 5 个 head 全含 C:+1.57 / +0.99 / +0.92 / +0.78 / +0.73,方向 -1(多头 = 低重心),半衰期 5;
+    共性表里含 cs_rank(C) 的 21 个候选均分 +0.56 对 -1.03(p 0.000),含 day_centroid(Volume) 的 28 个 +0.38 对 -1.05。
+    (2) 拆解:cs_rank(C) 单独 +1.73(train +1.73 / valid +1.88);单日值 day_centroid(Volume) 只有 +0.44(train +1.09 / valid +0.44),所以增益来自 30 日平滑(日度值的噪声被 15bp 换手吃掉);
+    窗口 15 / 60 的 valid 是 +0.89 / +0.70(30 在峰上,单峰可能含噪声,所以核心固定在 30 日均值而不改窗口);Volume 换 Amt +1.55,不是单位的伪影。
+    (3) head 里的另一半不是 alpha:cross_mean(day_gini(Volume), 30) 单独 -2.02(train -2.02 / valid -1.96),必要性只有 +0.27;head 4 里的 ts_hurst(ts_autocorr_s1(day_argmax(Vwap), ·), ·) 单独 -3.53,去掉它分数 +0.99 -> +1.90(必要性 -0.92)。
+    也就是:C 的秩是源头,已见写法的外围都是「在 cs_rank(C) 里减一个别的水平量 / 噪声」。
+    (4) 另一条独立来源:M 第 2 批的 4 个 head(+1.43 / +0.99 / +0.73 / +0.72)全是 cs_first_low40(LogFloatShares 的变体, day_std(Volume)) 一族,即「day_std(Volume) 最低 40% 的票整块推到最前,其余按流通股本排」,
+    把 Volume 换成 Amt 分数塌到 -2.49,说明读的是股数而不是金额。这给了 C 一组现成的、与它无关的门变量。
+
+    【为什么外围要换成这样】库禁令是日度秩 |ρ| >= 0.7:任何「cs_rank(C) 加减一个小东西」都与 head 1 的 |ρ| 在 0.9 以上,会被整批拒绝,那样的深挖没有产出。要想既保住 C 又不被拒,外围必须改变「选哪些票进多头腿」的几何,
+    而不是再改一遍排序。三类外围(都是 head 与共性表里没有出现过的写法):
+    (A) 门 / 筛:cs_first_low40 / cs_first_low20 / cs_first_high40(C, X) 把 X 最低(或最高)的一档整块推到最前,其余按 C 排,多头腿(最低端)变成「在 X 不极端的票里取最低 C」。
+    X 取 LogFloatShares、day_std(Volume)(M2 的门)、LogFloatCap(去微盘)、day_last(Vwap)(后复权价位)、已知族 cross_mean(day_std(Amt),30)、20 日成交额。同一个门取高端与低端各放一个(种子 1 与 16、2 与 15),让评估告诉我 C 的收益住在哪一半。
+    若 X 与 C 无关,40% 的门使 |ρ(门后信号, rank(C))| 约 0.51,20% 的门约 0.59(按秩的方差算的期望值,不是实测),落在 0.7 以下。
+    (B) 反过来用 C 当门(种子 7、8):cs_first_high40(排序量, C) 把高重心的 40% 整块推到最前,多头腿只在低重心的 60% 里按排序量取,排序量取 LogFloatShares 与 M2 的整个子树。
+    (C) 带:cs_first_low20(C, C) 把重心最低的 20%(推断:这一档里有连续一字板的涨停锁死、新股连板,这些票既难买进,重心又会被机械地压到接近 0;本轮没有直接看数据)推到最前,多头腿落在 C 的 20%–30% 分位带上。
+    这不是 C 的单调改写:它与 rank(C) 的日度秩相关按公式约 0.04(实测由相关度表给)。若 C 的收益是单调的,这一带应当比最低一带稍差但更稳;若最低一档是伪影,这一带反而更好。
+    (D) 乘积(种子 9、10):mul(cs_rank(C), cs_rank(M2 的子树或 LogFloatShares)) 的最低十分位 = 两个量都低的票(合取),两个独立秩的乘积与每一个的日度秩相关按公式约 0.65,低于 0.7。
+
+    【和已见写法的区别】已见的含 C 的候选外围只有:cs_rank(·) 外面减 cross_mean(day_gini) / 减 cs_rank(ts_hurst 的嵌套) / 再套一层 cross_mean(·, 30) / 减 cs_rank(cross_mean(day_gini(Amt)))。
+    它们是同一个几何(秩的线性组合),本轮没有一个种子是 C 的线性组合。
+
+    【为什么样本外还会在】C 是参与者结构的慢变量,不是某年的风格:train 与 valid 都是 +1.7 以上、方向一致(不需要靠挑方向);门变量 LogFloatShares / LogFloatCap / day_std(Volume) / 价位是静态或极慢的,
+    门在日度上几乎不引入换手。已知风险我写在这里:(i) 15:00 那格在深市含收盘集合竞价、沪市没有,C 的水平里可能带着交易所哑变量,N 位用「去掉两个竞价格」的重心 / 尾盘占比去直接检验;
+    (ii) 门使多头腿换了人群,单个种子的分数可能掉到 0.5 以下;(iii) 带(种子 6)依赖分位点的位置,20% 是随手取的整数档(cs_first_low20 算子自带),没有按 train 调过。
+  seeds:
+  - cs_first_low40(cross_mean(day_centroid(Volume), 30), LogFloatShares)
+  - cs_first_low40(cross_mean(day_centroid(Volume), 30), day_std(Volume))
+  - cs_first_low20(cross_mean(day_centroid(Volume), 30), LogFloatCap)
+  - cs_first_low40(cross_mean(day_centroid(Volume), 30), LogFloatCap)
+  - cs_first_low20(cross_mean(day_centroid(Volume), 30), day_last(Vwap))
+  - cs_first_low20(cross_mean(day_centroid(Volume), 30), cross_mean(day_centroid(Volume), 30))
+  - cs_first_high40(LogFloatShares, cross_mean(day_centroid(Volume), 30))
+  - cs_first_high40(cs_first_low40(LogFloatShares, day_std(Volume)), cross_mean(day_centroid(Volume), 30))
+  - mul(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cs_first_low40(LogFloatShares, day_std(Volume))))
+  - mul(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(LogFloatShares))
+  - cs_first_low40(cross_mean(day_centroid(Volume), 30), cross_mean(day_std(Amt), 30))
+  - cs_first_low40(cross_mean(day_centroid(Volume), 30), cross_mean(day_sum(Amt), 30))
+  - cs_first_low20(cs_first_low20(cross_mean(day_centroid(Volume), 30), LogFloatCap), day_last(Vwap))
+  - cs_first_low40(cs_first_low20(cross_mean(day_centroid(Volume), 30), LogFloatCap), LogFloatShares)
+  - cs_first_high40(cross_mean(day_centroid(Volume), 30), day_std(Volume))
+  - cs_first_high40(cross_mean(day_centroid(Volume), 30), LogFloatShares)
+- type: N
+  hypothesis: >-
+    【新 idea】把「一天里的钱什么时候成交、价格什么时候走」按时段拆开读,并去掉两个竞价格,回答库里 5 个 head 都没回答的两个问题:(1) 成交重心的 alpha 是全天形状,还是只在某一段(开盘、午间、尾盘);
+    (2) 它是不是交易所制度的哑变量(15:00 那格在深市含收盘集合竞价、沪市没有;立方体的列序又带交易所)。库里所有含重心的 head 读的都是「含两个竞价格的全天重心」的 30 日均值,没有一个只读一段、也没有一个去掉竞价格,
+    更没有把价格一侧(隔夜 vs 日内)与成交一侧放在一起。
+
+    【算子怎么实现】全部用 in_slice(x, a, b)(含两端;0 = 09:30 竞价,1–120 上午连续,121–240 下午,240 = 15:00 点),再 day_sum / day_centroid / day_signed_ratio 压成日度值,最后 cross_mean 做 20–30 日平滑(只放慢变量:本种子的事实是单日重心 +0.44、30 日均值 +1.73)。
+    五组:
+    (a) 时段占比:尾盘 30 分钟(211–240)占全天成交量的份额;去掉收盘格的尾盘份额 in_slice(211,239) / in_slice(1,239);连续竞价前 30 分钟(1–30)份额;午间(61–180)份额;收盘格(day_last)占全天的份额。
+    (b) 无竞价重心:in_slice(Volume, 1, 239) 的重心;上午内部重心(1–120);下午内部重心(121–239)。若 C 的 alpha 是交易所哑变量,这几个应当明显塌掉;若保住,时点信息是真的。
+    (c) 波动相对成交的时点:sub(day_centroid(Ret), day_centroid(Volume))(day_centroid 取 |x| 的质量中心,所以 day_centroid(Ret) = 波动的重心):价格在成交之前还是之后动。
+    (d) 尾盘资金流:最后 30 分钟的 day_signed_ratio(Ret, Amt)(上涨分钟的成交额占比减下跌分钟的)与最后 30 分钟的收益和(尾盘抢筹 / 砸盘的习惯)。
+    (e) 隔夜 vs 日内:隔夜跳空 div(day_first(Open), cross_delay(day_last(Close), 1)) - 1 的 30 日均值与中位数、日内收益 div(day_last(Close), day_first(Open)) - 1 的 30 日均值、以及两者的秩差(Lou-Polk-Skouras 的拔河)。
+    价格是后复权的(规则明确这不是问题:除权日 Open 与前收盘同口径复权,比值就是真实的跳空);第 t 日的 Open 与第 t-1 日的 Close 都是 t 日收盘前已知。
+
+    【机制】不同参与者在一天的不同时段交易:散户与事件驱动的资金集中在开盘与脉冲分钟,机构的 VWAP / 收盘拆单摊在后半场与尾盘;隔夜与日内的收益也归属不同的客户群(隔夜 = 散户的开盘冲击,日内 = 机构的逆向),
+    它们的预期收益与被关注程度不同,且习惯稳定,所以 30 日均值的秩持久、换手低,15bp 吃不掉。这些量全是无量纲的比值或位置,不是「成交多少」,和五个控制(金额 / 波动 / 收益 / 市值)不是同一根轴。
+
+    【和库不同】库里 head 全部是全天含竞价的重心(及其与 gini / hurst 的组合);本组每个种子要么只读一段(a)(d),要么去掉竞价(b),要么把价格一侧放进来(c)(e)。
+    预期它们与 head 1 的日度秩 |ρ| 在 0.3–0.7 之间(无竞价重心、上午 / 下午内部重心可能 >= 0.7,会被表划掉),价格一侧的 |ρ| 更低。
+
+    【为什么样本外还会在】参与者结构(谁在什么时段交易)不依赖某一年的风格;只放 20–30 日以上的慢特征;方向由 train 选,valid 是第二道检验(分数取两段较差者)。
+    已知风险:(i) 收盘格与尾盘占比若主要是交易所哑变量,会与 C 同样地依赖制度而不是行为(种子 3 是它的直接读数);(ii) 隔夜跳空均值会被长期停牌后复牌的大跳空支配,所以另放一个中位数版;
+    (iii) day_signed_ratio 在薄票上噪声大,与流动性相关,残差后可能只剩噪声。
+  literature:
+  - cite: 'Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of stock returns, Journal of Finance'
+    year: '2010'
+  - cite: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected returns, Journal of Financial Economics'
+    year: '2019'
+  - cite: 'Gao, Han, Li and Zhou, Market intraday momentum, Journal of Financial Economics'
+    year: '2018'
+  - cite: 'Berkman, Koch, Tuttle and Zhang, Paying attention: overnight returns and the hidden cost of buying at the open, Journal of Financial and Quantitative Analysis'
+    year: '2012'
+  inspired_by: >-
+    M 第 1、2 批共性表与 Pr1b_Nb 的拆解:含 day_centroid(Volume) 的 28 个候选均分 +0.38 对 -1.05(p 0.000),cs_rank(C) 单独 +1.73 / valid +1.88,而日度值只有 +0.44,
+    说明收益在「30 日平均的成交时点习惯」,但库里读的全是含两个竞价格的全天重心;日度值与 30 日均值的差、Volume 换 Amt 不变(+1.55)、gini 与 hurst 搭档都是噪声,三件事合起来指向
+    「需要把重心拆成时段、并检验竞价格」。(只读的旁证:其他种子目录里 train / valid 的读数,例如 s908 的尾盘 30 分钟成交额占比 +1.81 / Volume 版 +1.70,仅用来选 idea,不涉及 2023-08-08 以后的任何数。)
+  seeds:
+  - cross_mean(div(day_sum(in_slice(Volume, 211, 240)), day_sum(Volume)), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239))), 20)
+  - cross_mean(div(day_last(Volume), day_sum(Volume)), 30)
+  - cross_mean(day_centroid(in_slice(Volume, 1, 239)), 30)
+  - cross_mean(day_centroid(in_slice(Volume, 1, 120)), 30)
+  - cross_mean(day_centroid(in_slice(Volume, 121, 239)), 30)
+  - cross_mean(div(day_sum(in_slice(Volume, 1, 30)), day_sum(in_slice(Volume, 1, 239))), 30)
+  - cross_mean(div(day_sum(in_slice(Volume, 61, 180)), day_sum(Volume)), 30)
+  - cross_mean(sub(day_centroid(Ret), day_centroid(Volume)), 30)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 30)
+  - cross_mean(day_sum(in_slice(Ret, 211, 240)), 30)
+  - cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 30)
+  - cross_med(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 30)
+  - cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 30)
+  - sub(cs_rank(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 30)), cs_rank(cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 30)))
+R:
+- head: 'sub(cs_rank(cross_mean(day_centroid(Volume), 30)), cross_mean(day_gini(Volume), 30))'
+  why: >-
+    烂部件是 cross_mean(day_gini(Volume), 30):它单独 -2.02(train -2.02 / valid -1.96),在 head 里的必要性只有 +0.27(去掉它换成日度 gini 仍有 +1.30),而 cs_rank(cross_mean(day_centroid(Volume), 30)) 单独是 +1.73(train +1.73 / valid +1.88),比 head 高 0.17。
+    拆解表里 rho_known(与已知族 cross_mean(day_std(Amt),30) 的相关):cs_rank(C) 是 -0.56,把日度 gini 当搭档的敲除变体是 -0.37,Volume 换 Amt 是 -0.38 —— 推断:gini 一项的真实作用是把对已知族的暴露压到 0.5 以下(过 R 与 head 的门),不是 alpha(推断,没有直接看到 head 自己的 rho_known)。
+    所以不换重心,换补丁:用对已知族的显式中性化代替 gini。新尺子本来就去掉了对已知族秩的线性 / 平方 / 三次暴露,所以中性化只改 |ρ_known|,不应丢分。变体 1:在秩上回归掉已知族的残差;变体 2–3:秩加 0.4 / 0.56 倍已知族秩
+    (rank(C) 与已知族秩的 ρ 约 -0.56,加 0.56 倍使协方差为 0);变体 4:Amt 版的回归残差(稳健性,Amt 版 head 为 +1.55);变体 5:回归掉 gini 的 30 日均值而不是已知族(检验 gini 的线性部分有没有用);
+    变体 6:用半衰期 20 的 cross_ema 代替 30 日硬窗口再回归掉已知族(旧值渐隐而不是掉出窗口;窗口 15 / 60 的 valid 是 +0.89 / +0.70,硬窗口的边缘效应可能是噪声的来源)。
+  variants:
+  - cs_regres(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cross_mean(day_std(Amt), 30)))
+  - add(cs_rank(cross_mean(day_centroid(Volume), 30)), mul(0.4, cs_rank(cross_mean(day_std(Amt), 30))))
+  - add(cs_rank(cross_mean(day_centroid(Volume), 30)), mul(0.56, cs_rank(cross_mean(day_std(Amt), 30))))
+  - cs_regres(cs_rank(cross_mean(day_centroid(Amt), 30)), cs_rank(cross_mean(day_std(Amt), 30)))
+  - cs_regres(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cross_mean(day_gini(Volume), 30)))
+  - cs_regres(cs_rank(cross_ema(day_centroid(Volume), 20)), cs_rank(cross_mean(day_std(Amt), 30)))
+- head: 'signedpower(cs_first_low40(LogFloatShares, signedpower(cs_first_low40(cs_quantile_q25(LogFloatShares), day_std(Volume)))))'
+  why: >-
+    烂部件是内层的 cs_quantile_q25(LogFloatShares) 与外层多余的一次 signedpower / cs_first_low40 嵌套。拆解:去掉 cs_quantile_q25(LogFloatShares)(敲除)得到 +1.32(train +1.38 / valid +1.32),比 head 的 +0.99 高 0.34,必要性 -0.34,
+    对已知族 rho_known -0.32(已经算出的变体,loc.md 的 R 候选);只留中间子树 signedpower(cs_first_low40(cs_quantile_q25(LogFloatShares), day_std(Volume))) 是 +1.38(train +1.38 / valid +2.03),高 0.39;
+    把 cs_quantile_q25 换成 abs_ 的单层写法即 head 2 的 +1.43,所以信息在「day_std(Volume) 最低 40% 整块推前,其余按流通股本排」这一层,外面套的两层是多余的。
+    变体 1 是已评分的敲除变体(去掉 cs_quantile_q25);变体 2 是中间子树(去掉最外层);变体 3 是只留单层 signedpower(cs_first_low40(LogFloatShares, day_std(Volume)))(去掉两层嵌套与 q25,共性表里含这一层的 5 个候选均分 +1.03)。
+  variants:
+  - signedpower(cs_first_low40(LogFloatShares, signedpower(cs_first_low40(LogFloatShares, day_std(Volume)))))
+  - signedpower(cs_first_low40(cs_quantile_q25(LogFloatShares), day_std(Volume)))
+  - signedpower(cs_first_low40(LogFloatShares, day_std(Volume)))

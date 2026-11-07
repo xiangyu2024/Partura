@@ -1,0 +1,107 @@
+seed: 905
+round: 2
+slots:
+- type: E
+  core: 'day_centroid(Amt)'
+  hypothesis: |-
+    【现象】本种子第 1 轮 N 位 b 产出的 2 个 head 全部来自同一个量:日内分钟成交额的重心 day_centroid(Amt)(sum(t*|x_t|)/sum|x|/(T-1),0 = 成交全在 09:30 集合竞价那一列,1 = 全在收盘;V2 的 241 列里第 0 列就是 09:30 集合竞价)。M 第 1–2 批 + 第 1 轮共 312 个已评分候选里,含它的 8 个均值 +0.09,不含的 -1.24(p 0.0003)。样本内拆解(都是 train / valid 里较差的那个):日度原值 0.41;cross_mean 窗口 2 / 3 / 6 日 = 0.69 / 0.80 / 0.85,20 日 = 1.34(train 1.72 / valid 1.34;但它与已知族的 |ρ| 是 0.51,不能当 head);反过来,用 cross_zscore 在 60 / 120 / 240 日基线上把个股自己的长期水平去掉,分数掉到 0.09 / 0.66 / 0.90,日度 z-score 是 -1.16。读法:起作用的是个股长期稳定的"成交时点"水平(一种特质),不是它的短期冲击;窗口越长越好,去水平越彻底越差。
+
+    【机制】成交额在日内的时点分布反映谁在交易。开盘集合竞价和早盘集中,是隔夜消息、机构拆单执行、信息交易者的时间;尾盘集中(重心靠后),是散户追涨、尾盘拉升、指数 / ETF / 申赎类被动流量的时间(Admati & Pfleiderer 1988:信息交易者与流动性交易者在日内的聚集不同;Heston、Korajczyk & Sadka 2010:收益在日内有稳定的周期结构;Berkman 等 2012:开盘的注意力与隔夜信息)。重心靠前的股票后续更好,重心靠后的更差(两个 head 的方向都是 -1)。散户占比高、不能卖空,这种参与者结构的差异修复很慢,所以是慢变量、低换手。
+
+    【这一位怎么试】两个 head 已经占住了"重心水平本身"(库禁令:日度秩 |ρ| ≥ 0.7 或算子骨架相同就被 GP 拒绝),而已见过的含这个核心的外围只有 cross_mean 平滑、pow_2_5、cross_zscore 这几种单调或去水平的包装。所以这一位把核心放进会改变截面排序、或加进另一条信息的结构里,每个种子原样含 day_centroid(Amt):
+    (a) 分段优先(cs_first_low20):只在最年轻(ListAge)/ 名义股价最低(sub(LogFloatCap, LogFloatShares),假设 FloatCap = 流通股本 x 名义价,未验证)/ 市值最小(LogFloatCap)的 20% 里按 20 日重心排。机制是散户主导的细分市场里"早盘信息 vs 尾盘追涨"的区分度最大;风险是分段本身给了一个台阶形的规模 / 年龄暴露,三次多项式控制去不干净,所以三个都放进去让 train / valid 分开说话,不假定它一定会在。
+    (b) 与第二条腿的秩合成:sub(rank(重心 30 日均值), rank(day_gini 的 30 日均值))(day_gini 是全天成交集中度,在 [0,1] 内,不随成交额水平变);开盘集合竞价相对份额 day_first(Amt)/(day_first+day_last) 与重心的合成(开盘信息 vs 收盘被动流量)。两条腿各占一半,与单独重心的 |ρ| 应降到 0.7 以下。
+    (c) 带方向、带价格的时点:上涨分钟的成交额重心减全体重心(买盘追涨发生在日内何时),下跌分钟版本;Amt 与 Volume 的重心之差(Amt = 价 x 量,所以这是成交量加权的日内价格漂移);重心减最长平坦段 day_flat_run_max(Amt)(稀疏成交的股票)。这些量与重心水平不是同一个东西(控制列 |ρ| 都很低)。
+    (d) 不同的聚合:ts_min(典型"最早"的日子)、cross_tail_mean_q25、cross_stddev(时点不稳定 = 事件驱动日多)、5 日对 60 日的比。
+    (e) 先去掉与流通股本(名义股价代理)和已知族 cross_mean(day_std(Amt), 30) 的暴露再用:cs_bucket_zscore(…, 已知族)、双重 cs_regres,使 |ρ_known| < 0.5 能合格。
+
+    【和库里已有的不同】库里两个 head 都是"同一个重心的平滑或去水平":3 日均值的幂变换、20 日均值的 120 日 z-score。这里没有一个是重心水平的单调改写:(a) 改变截面入选集合,(b) 加一条独立的腿,(c) 度量的是方向 / 价格 / 稀疏度与时点的交互,(d) 换聚合的统计量,(e) 是在截面里把暴露减掉。
+
+    【样本外为什么还会在】参与者结构(机构执行 vs 散户追涨)是制度性的:T+1、涨跌停、散户占比高、不能卖空、尾盘集合竞价(2018-08 起)都是长期存在的;信号是慢变量,换手低,成本不是障碍。样本内两段(train 2018–2021、valid 2022-01 到 2023-08)里重心 20 日均值的分数都是正的(1.72 / 1.34),没有符号翻转,这是它不同于 LogFloatShares 一族(train 与 valid 相反)的地方。(a) 的台阶暴露是已知风险,若只是规模效应,valid 会直接暴露。
+  literature:
+  - source: Admati & Pfleiderer, A theory of intraday patterns - volume and price variability, RFS
+    year: '1988'
+  - source: Heston, Korajczyk & Sadka, Intraday patterns in the cross-section of stock returns, JF
+    year: '2010'
+  - source: Berkman, Koch, Tuttle & Zhang, Paying attention - overnight returns and the hidden cost of buying at the open, JFQA
+    year: '2012'
+  seeds:
+  - 'cs_first_low20(cross_mean(day_centroid(Amt), 20), ListAge)'
+  - 'cs_first_low20(cross_mean(day_centroid(Amt), 20), sub(LogFloatCap, LogFloatShares))'
+  - 'cs_first_low20(cross_mean(day_centroid(Amt), 20), LogFloatCap)'
+  - 'sub(cs_rank(cross_mean(day_centroid(Amt), 30)), cs_rank(cross_mean(day_gini(Amt), 30)))'
+  - 'sub(cs_rank(cross_mean(div(day_first(Amt), add(day_first(Amt), day_last(Amt))), 20)), cs_rank(cross_mean(day_centroid(Amt), 20)))'
+  - 'cross_mean(sub(day_centroid(mul(Amt, is_gt(Ret, 0))), day_centroid(Amt)), 20)'
+  - 'cross_mean(sub(day_centroid(mul(Amt, is_lt(Ret, 0))), day_centroid(Amt)), 20)'
+  - 'cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 20)'
+  - 'cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 30)'
+  - 'ts_min(day_centroid(Amt), 40)'
+  - 'cross_tail_mean_q25(day_centroid(Amt), 60)'
+  - 'cross_stddev(day_centroid(Amt), 40)'
+  - 'sub(cross_mean(day_centroid(Amt), 5), cross_mean(day_centroid(Amt), 60))'
+  - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 40), cross_mean(day_std(Amt), 30))'
+  - 'cs_regres(cs_regres(cross_mean(day_centroid(Amt), 30), LogFloatShares), cs_rank(cross_mean(day_std(Amt), 30)))'
+  - 'cs_last_low10(cross_mean(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 20))'
+- type: N
+  inspired_by: '本种子第 1 轮 N 位 b 的两个 head 与 M 第 1–2 批的富集同指一个现象:日内成交额的时点分布(day_centroid(Amt / Volume) 含它的候选均值 +0.09 对 -1.24,p 0.0003);样本内拆解显示起作用的是个股长期稳定的时点水平(20 日均值 1.34 > 3 日 0.80 > 日度 0.41,短基线 z-score 反而掉到 0.09–0.66)。重心是整条日内成交曲线的一阶矩,这一位问:曲线的哪一段在带信息。'
+  hypothesis: |-
+    【现象】重心 day_centroid(Amt) 是成交额日内分布的一个数字摘要,把"开盘集合竞价重、午后平淡、尾盘重"的 U 形曲线压成一阶矩。它长期稳定(个股特质)、20 日均值的样本内分数 1.34,但是它没有告诉我们是曲线的哪一段在起作用:开盘集合竞价那一分钟(第 0 列)、开盘后 30 分钟、午间低谷、下午前段、最后 30 分钟、收盘集合竞价(最后一列)是由不同的参与者主导的。
+
+    【想法】把曲线拆成互不重叠的段,每一段取占全天成交额的份额(分子分母同量纲、取值在 [0,1],不随成交额水平变),再做 20 日均值得到个股的稳定特质,看哪一段与未来收益有关、方向如何:
+    1 尾盘最后 30 分钟(列 211–240)份额;2 开盘集合竞价(列 0)份额;3 收盘集合竞价(最后一列)份额;4 开盘后 30 分钟(列 1–30);5 午间低谷(列 91–150,11:00–11:30 与 13:01–13:30);6 下午前段(列 181–210,14:01–14:30);7 开盘 /(开盘 + 收盘)两个集合竞价的相对份额;8 尾盘份额的 240 日 z-score(去水平版,看冲击还是水平);9 全天成交集中度 day_gini。再加三条不是份额的腿,检验尾盘到底是谁在交易:尾盘 30 分钟成交额加权的净买入比例 day_signed_ratio(Ret, Amt)(尾盘是追涨买入还是卖出)、尾盘 30 分钟收益(尾盘拉升的强度)。
+    与重心有重叠的段(尾盘、开盘集合竞价),另外各给一个"对 cross_mean(day_centroid(Amt), 20) 取残差"的版本 cs_regres(段份额, 重心),|ρ| 对两个 head 必然很低,专门回答"这一段是否有重心之外的信息";以及对 LogFloatShares 取残差的版本(流通股本与名义股价相关,是 M 第 1 批富集过的一族,样本内读数不稳,先去掉它的暴露)。
+
+    【机制】开盘集合竞价承接隔夜消息与机构指令(信息交易),尾盘集中包含散户追涨、尾盘拉升与被动资金;集合竞价份额本身还是"谁在场"的标志。预期方向:开盘份额高、尾盘份额低的股票更好,与重心的方向一致,但不同的段对重心有不同的贡献,分开读能分出哪一段是真正的来源,也让组合比单一重心多一条独立的腿(Cushing & Madhavan 2000:收盘附近的交易与收益;Barber & Odean 2008:散户的注意力驱动买入;Bogousslavsky 2021:日内与隔夜收益的横截面)。
+
+    【算子怎样实现】份额 = div(day_sum(in_slice(Amt, a, b)), day_sum(Amt)),集合竞价份额 = div(day_first(Amt), day_sum(Amt)) 与 div(day_last(Amt), day_sum(Amt)),都在 [0,1],分母是全天成交额(停牌日整日缺失而不是 0,不产生爆点)。尾盘收益 = day_last(in_slice(Close, 211, 240)) / day_first(in_slice(Close, 211, 240)) - 1(同一天内的比值,与复权口径无关)。全部走 cross_mean 20 日(慢变量,换手低)。残差版用 cs_regres(y, x)(逐日截面 OLS 残差)。
+
+    【和库里已有的不同】库里 head 是整条曲线的一阶矩;这里是曲线的分段份额(不同的矩)、净买入方向和尾盘收益。份额与重心的相关是部分的,不是同一个量;残差版则在定义上与重心正交。
+
+    【样本外为什么还会在】份额是参与者结构的特质,制度性原因(T+1、不能卖空、收盘集合竞价规则)长期不变;窗口 20 日,换手低。样本内如果某一段只在 train 或只在 valid 有分数,min(train, valid) 会让它过不了线,不会混过去。
+  literature:
+  - source: Cushing & Madhavan, Stock returns and trading at the close, Journal of Financial Markets
+    year: '2000'
+  - source: 'Barber & Odean, All that glitters - the effect of attention and news on the buying behavior of individual and institutional investors, RFS'
+    year: '2008'
+  - source: Bogousslavsky, The cross-section of intraday and overnight returns, JFE
+    year: '2021'
+  seeds:
+  - 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+  - 'cs_regres(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), cross_mean(day_centroid(Amt), 20))'
+  - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 20)'
+  - 'cs_regres(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), cross_mean(day_centroid(Amt), 20))'
+  - 'cross_mean(div(day_last(Amt), day_sum(Amt)), 20)'
+  - 'cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 20)'
+  - 'cross_mean(div(day_sum(in_slice(Amt, 91, 150)), day_sum(Amt)), 20)'
+  - 'cross_mean(div(day_sum(in_slice(Amt, 181, 210)), day_sum(Amt)), 20)'
+  - 'cross_mean(div(day_first(Amt), add(day_first(Amt), day_last(Amt))), 20)'
+  - 'cross_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), 240)'
+  - 'cs_regres(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), LogFloatShares)'
+  - 'cross_mean(day_gini(Amt), 30)'
+  - 'cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 20)'
+  - 'cross_mean(sub(div(day_last(in_slice(Close, 211, 240)), day_first(in_slice(Close, 211, 240))), 1), 20)'
+R:
+- head: 'pow_2_5(cross_mean(day_centroid(Amt), 3))'
+  why: |-
+    烂部件是 3 日这个窗口(pow_2_5 是单调变换,对截面秩无影响,不是问题)。样本内同一个量的窗口拆解:日度 0.41、2 日 0.69、3 日 0.80、6 日 0.85、20 日 1.34(train 1.72 / valid 1.34),分数随窗口单调上升,说明信号是慢特质,3 日窗里混着大量日度噪声(也是 valid 0.80 远低于 train 1.48 的来源)。20 日以上与已知族的 |ρ| 超过 0.5(20 日 0.51,6 日 0.36,3 日 0.28),所以(1)取 10 / 14 日,留在 0.5 之内;(2)窗口取 20 / 30 日但先对已知族 cross_mean(day_std(Amt), 30) 的秩取截面残差;(3)对流通股本 LogFloatShares(名义股价的代理,M 第 1 批富集过,与重心有暴露)取残差,以及(1)(2)(3)的叠加。(2)(3) 按构造让 |ρ_known| 很低;残差会降低与原 head 的相关,但原 head 与其 20 日均值的相关在 0.8 以上,要求的 0.5 足够。
+  variants:
+  - 'cross_mean(day_centroid(Amt), 10)'
+  - 'cross_mean(day_centroid(Amt), 14)'
+  - 'cs_regres(cross_mean(day_centroid(Amt), 20), cs_rank(cross_mean(day_std(Amt), 30)))'
+  - 'cs_regres(cross_mean(day_centroid(Amt), 30), cs_rank(cross_mean(day_std(Amt), 30)))'
+  - 'cs_regres(cross_mean(day_centroid(Amt), 20), LogFloatShares)'
+  - 'cs_regres(cross_mean(day_centroid(Amt), 12), LogFloatShares)'
+  - 'cs_regres(cs_regres(cross_mean(day_centroid(Amt), 20), LogFloatShares), cs_rank(cross_mean(day_std(Amt), 30)))'
+  - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))'
+- head: 'cross_zscore(cross_mean(day_centroid(Amt), 20), 120)'
+  why: |-
+    烂部件是 cross_zscore 的 120 日基线。样本内拆解:不做 z-score 的 cross_mean(day_centroid(Amt), 20) 自身是 1.34,加上 120 日 z-score 变成 0.66,基线缩到 60 日是 0.09,放到 240 日是 0.90,对日度值直接 z-score 是 -1.16;也就是越把个股自己的长期水平减干净越差。信号是水平,z-score 把水平减掉了,只留下它的缓慢漂移。但整体不做 z-score 的水平版与已知族 |ρ| 0.51 过不了线,所以不能整个拿掉:(1)把基线拉长到 240 / 360 / 480 日(已知 240 日是 0.90),保留"去掉大部分与已知族共享的水平"的好处,同时多留一些水平;(2)内层窗口 10 / 40 日;(3)半去水平 sub(m20, 0.5 x m240);(4)z-score 与"对已知族取残差的水平"的秩合成(两条腿一条保留漂移一条保留水平);(5)先对流通股本取残差再 z-score。
+  variants:
+  - 'cross_zscore(cross_mean(day_centroid(Amt), 20), 240)'
+  - 'cross_zscore(cross_mean(day_centroid(Amt), 20), 360)'
+  - 'cross_zscore(cross_mean(day_centroid(Amt), 20), 480)'
+  - 'cross_zscore(cross_mean(day_centroid(Amt), 40), 360)'
+  - 'cross_zscore(cross_mean(day_centroid(Amt), 10), 360)'
+  - 'sub(cross_mean(day_centroid(Amt), 20), mul(0.5, cross_mean(day_centroid(Amt), 240)))'
+  - 'add(cs_rank(cross_zscore(cross_mean(day_centroid(Amt), 20), 240)), cs_rank(cs_regres(cross_mean(day_centroid(Amt), 20), cs_rank(cross_mean(day_std(Amt), 30)))))'
+  - 'cross_zscore(cs_regres(cross_mean(day_centroid(Amt), 20), LogFloatShares), 240)'
