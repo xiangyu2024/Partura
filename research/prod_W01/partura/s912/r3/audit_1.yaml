@@ -1,0 +1,26 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [15, 16]
+    reasons: '相关度表(corr_1.json)核对:核心 K = day_centroid(Volume) 对 6 个 head 的原始最大 |ρ| 为 0.125、残差 0.103;对 liq / vol / rev / known / size 分别为 0.181 / 0.156 / 0.130 / 0.195 / 0.066,E 位的核心条件满足。provenance 也核对了:loc.json 的 enrichment 与 core_cards 里 K 作为子树出现(含 K 的 7 个候选均值差 +1.73、含者 +0.44、不含 -1.29,与 PI 写的一致)。逐个种子:#15、#16 原始 |ρ| 为 0.734、0.762,对 H2(cs_last_low10(cs_last_high40(ts_skew(Ov,40), ts_var(DW(Vwap),20)), ListAge)),只是把偏度换成 K 的 40 日均值,同一套波动率带与 ListAge 筛子,按原始 |ρ| >= 0.7 自动划掉。其余放行:#1、#2、#3、#10、#14 是 K 的平滑、短长偏离、与日收益的相关与金额重心差,原始 |ρ| 在 0.08 到 0.19;#7、#8、#9 是 BoardCode 十分位内的 K 排名;#4 是 K 的 40 日标准差加 ListAge;#5、#6、#12、#13 是 K 的均值加价格水平筛子,与 H1 的原始 |ρ| 为 0.52、0.64、0.52、0.28,残差 0.61、0.54、0.44、0.48。残差的重叠来自共同的价格水平筛子(价格水平不在五个控制里),不是同一个量,不挡;#11 是 K 的截面秩与 AUC 的截面秩之差,与 liq、known 为 0.49、0.54,未到 0.8。数学核对:day_centroid 值域 [0,1],整天零量时为 NaN 而非 0;ts_mean 无最小样本(nanmean_last);ts_std(nanstd_last) 在窗内只有一个有效日时返回 0,只影响 #4 在停牌复牌首日,占比小;无前视(按 close(t) 到 close(t+1) 的约定,当日全天数据在收盘后可用);无 ts_rank、cross_rank 或 in_rank,不受 nanrank_last 补 0 影响;cs_rank、cs_bucket_rank 与 _lexi 对缺失返回 NaN。解释上两点,不构成挡的理由:(a) #7 到 #9 的 BoardCode 十分位在同一板块内按列序切段,若列序按代码排,段基本是上市批次,所以 bucket 版本变弱只能读作板块加批次的成分,不能直接读作交易所成分;(b) 带 ListAge 或价格筛子时,20% 带宽与 10% 十分位使筛子先决定哪些名字进入腿,K 只在段内排序。如果它有 alpha,最可能来自:尾盘集中的机构或基准交易与早盘散户和消息交易的份额差(A 股 T+1 与涨跌停下,散户集中的名字溢价较低),这一点由无筛子的 #1、#2、#3、#10、#14 直接检验;若只在带 ListAge 或价格筛子的写法里出现,则更可能是新股或低价段的分段效应。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [14, 15]
+    reasons: '相关度表核对:未划掉种子里对控制的最高 |ρ| 为 #7 的 known 0.392,其余在 0.35 以下。对 6 个 head 的原始 |ρ|:#9 为 0.462(与 H1,共同的价格水平与 ListAge 筛子),#2 为 0.335,#13 为 0.296,#11 为 0.275,#7 为 0.258,#8 为 0.241,其余在 0.2 以下;#14、#15 为 0.778、0.789,对 H2(同一套波动率带与 ListAge 筛子,只把偏度换成 Ov 与 Id 的相关或秩和),按原始 |ρ| >= 0.7 自动划掉。其余放行。#2、#7、#9、#11 对 H1 的残差为 0.43 到 0.57,重叠来自共同的价格水平筛子,AUC 与 Ov-Id 相关都不是 H1 的输入,不挡。数学核对:Ov 只用当日开盘与前一日收盘,Id 的滞后项只用前一日,无前视;day_first、day_last 取第一与最后一个有效分钟;AUC 的分子是 day_sum 的一部分,值域 [0, 1),+1 对股数量级可忽略;ts_corr 在两点窗口给 ±1、常数窗给 0,上市后前 60 日没有 ListAge 筛子的 #1、#4、#5、#6、#10、#12、#16 中这部分占比小;cs_rank 与 cs_mean 对缺失为 NaN,不补 0;#10 与 #16 的秩和有并列(distinct 0.81),并列靠列序打破,按 §4 不是问题;day_first 若某股某日 bar 0 缺失会换成 09:31 的量,建议核对 bar 0 覆盖率,但这不构成挡的理由。解释上的提醒:(a) 偏度的 inspired_by 数字 +1.12 / +0.56 是 r2 中未加筛子的裸 ts_skew(Ov,40) 候选的分数(已对 r2 的 missions_before 核对),库里现在的偏度 head 是加了筛子的版本,分数为 +1.49 / +1.08,互补的论据应以后者为准;(b) #12 与 H2 的原始 |ρ| 不到 0.15(表中不在前三),#13 为 0.30,PI 预计的 0.4 到 0.6 不成立,说明 H2 的截面秩主要由它的筛子决定,而不是偏度本身。两条 inspired_by 的样本内数字(Ov 与 Id 相关 +0.41 / +1.38;AUC 60 日均值 +0.35 / +1.35)已对 r2 核对,与笔记一致。如果它有 alpha,最可能来自:隔夜缺口与前一日盘中收益的接续(T+1 与涨跌停使盘中信息要跨夜才消化,接续高的名字后续有漂移,由 #1 到 #6 检验),或竞价参与份额的持续性(知情或机构挂单多的名字,由 #7 到 #13 与 #16 检验)。'
+R:
+  - head: 'cs_first_low20(cs_first_low20(ts_var(sqrt(day_durbin_watson(Vwap)), 20), log(day_last(Close))), ListAge)'
+    soundness: 3
+    reasons: '合理度 3。诊断的方向对:ts_var 的 nanstd_last 在窗内只有一个有效日或全缺时返回 0(count 被 clamp 到 1、平方和为 0),所以复牌首日的格子被算成最稳定,方向 -1 时进多头腿;这一机制成立。但两个变体各有问题。变体一:LimitWidth 只由板块前缀推出,取值为 0.10 / 0.20 / 0.30(tradability.board_limit 的 docstring 写明 ST 5% 在立方体里没有标记),根本没有 5% 的 ST 块;最低 20% 的 band 是主板 0.10 整块(占全体股票一半以上),bh 大于 0.2,band 恒空。corr_1.json 里它与原 head 的原始与残差 |ρ| 都是 1.00,是空操作,理由写错了前提。变体二:cross_valid_count(day_last(Close), 20) 的 band 有效(与原 head 的原始 |ρ| 0.989),能抓停牌与近期上市,但抓不到一字板造成的连续 20 日伪零:一字板日收盘价有效、只是 DW 为 NaN,计数不受影响;而 PI 自己的诊断里一字板正是原因之一。建议:删掉变体一;变体二的计数改为 cross_valid_count(day_durbin_watson(Vwap), 20),这样 DW 为 NaN 的停牌日与一字板日都会被计入。整组按规则不判为数学问题,保留,但变体一不应进入流水线。'
+  - head: 'cs_last_low10(cs_last_high40(ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 40), ts_var(sqrt(day_durbin_watson(Vwap)), 20)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。三个变体都可算,无前视、无除法。ListAge 带宽 10% 到 20% 的 band 非空(上市时间最短的一段);cross_valid_count(day_last(Close), 40) 的最低块可作停牌与近期上市的排除,机制说得清。两处提醒:(a) 同 R1,变体二的计数用的是收盘价的有效日,抓不到一字板造成的 ts_var(DW) 为 0 的情形,改用 cross_valid_count(day_durbin_watson(Vwap), 40) 更对口;另外 cs_last_high40 对 ts_var 的高端带只排除高波动名字,零值名字在 band 之外,会留在多头腿里,这一点 PI 应知道。(b) 偏度本身没有最小样本数,上市后前几十日的偏度由少数缺口决定,ListAge 带宽覆盖了这一点。变体与原 head 的原始 |ρ| 为 0.96 到 0.97,是替换候选,不能作为新 head 收录。'
+  - head: 'cs_first_low20(cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ts_delta(log(day_quantile(Close)), 40)), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。cs_bucket_rank 的分桶键是 40 日中位价对数变化,桶内秩均匀,长腿不会被动量推动;ts_delta、day_quantile(默认 q=0.5 的 nanquantile)都是无前视的差分与分位。窗口 10 到 20 与 Vwap / Close 的替换都可算,数学上没有问题。提醒:(a) 两个变体只差 day_quantile 的输入(Vwap 与 Close 的分钟中位数),几乎是同一个动量键,留一个即可;(b) 与 R1 相同的 ts_var 零值伪影在两个变体里都还在,窗口 20 只是减少其占比,一字板连续日没有被排除。PI 的诊断没有提到它,占比小,不构成挡的理由。'
+  - head: 'cs_first_low20(ts_var(sqrt(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), 10), ListAge)'
+    soundness: 4
+    reasons: '合理度 4。两层 ts_var 与价格筛子都可算、无前视。需要说明的是:内层 ts_var(sqrt(DW),10) 对全缺失窗的零值会作为有效值进入外层,外层方差会把零与正值的对比放大,所以两层结构里的零值伪影不是单纯的假稳定,方向可能与单层的 H4 相反,PI 的解释里应写清,但这不是数学问题。变体一的价格水平筛子(log(day_last(Close)) 最低 20%)与 H1 的原始 |ρ| 为 0.91,变体二为 0.77,二者都不能作为新 head 收录(库禁令 0.7),只能当替换候选;变体二的窗口 20 与 H4 的结构相同,机制清楚。'
+summary: 'E 位 a 通过(创新 4、合理 4,自动划掉 #15、#16,剩 14 个);N 位 b 通过(创新 4、合理 4,自动划掉 #14、#15,剩 14 个);R 合理度依次 3、4、4、4,其中 R1 的变体一是空操作(LimitWidth 没有 ST 块,与原 head 的 |ρ| 为 1.00),变体二漏掉一字板,建议改用 cross_valid_count(day_durbin_watson(Vwap), 20)。'

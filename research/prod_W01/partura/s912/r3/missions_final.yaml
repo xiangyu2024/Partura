@@ -1,0 +1,158 @@
+seed: 912
+round: 3
+slots:
+- type: E
+  core: day_centroid(Volume)
+  hypothesis: 核心 K = day_centroid(Volume):一天成交量沿 241 根分钟轴的重心(0 = 全在 09:30 开盘集合竞价那一根,1
+    = 全在收盘那一根),即成交量按时间的加权位置。它是有界、量纲无关的形状量,不吃流动性 / 市值 / 波动这类水平控制(预计与五个控制的日度秩 |ρ| 都
+    < 0.4)。样本内依据(只用 train / valid):定位共性表里含 K 的 7 个已评分候选均值差 +1.73(含者 +0.44,不含 -1.29,p
+    < 0.001),且它们都不在 head 里,所以 K 单独就在 0.4 到 0.5 附近、train 与 valid 同号(含 K 的候选没有一个出现在
+    head 里);含 day_first(Volume)、day_quantile(Amt)、day_argmax(Volume) 的候选在富集表里也靠前。也就是说,日内成交量的时间形态这一族
+    M 一直在碰,但只把它当并列键 / 门槛用(共性表里见到的只有 cs_demean(K) 这一层包装),从没有被认真平滑、筛选、复合。上一轮 N 位里同族的开盘竞价份额
+    AUC = day_first(Volume) / day_sum(Volume) 的 60 日均值已是近线信号(train +0.35 / valid +1.35,符号
+    +,hl 5);K 在机械上是 '早盘份额的反面加尾盘份额',所以本轮 E 位要回答它的内容是什么:(i) 个股的稳定交易者结构,(ii) 深沪两市收盘撮合机制不同带来的交易所成分,还是
+    (iii) 事件噪声。机制:成交量的日内分布由谁在交易决定(Admati and Pfleiderer 1988, RFS 的日内成交与价格变化理论;Heston,
+    Korajczyk and Sadka 2010, JF 的日内截面规律):以收盘价 / VWAP 为基准的机构与被动资金集中在尾盘,散户与消息交易集中在开盘和上午。重心靠后
+    = 参与者偏机构,靠前 = 偏散户和消息驱动;A 股 T+1 与涨跌停下,散户集中的名字被过度关注、长期溢价较低(与 Lou, Polk and Skouras
+    2019, JFE 的隔夜 / 盘中参与者分工同一逻辑)。这是个股慢变的结构特征,所以种子用 40 / 120 日均值、短期对长期的偏离、以及 K 的 40
+    日标准差(= 交易者结构的不稳定;角色类比库里 C 一族的 vol-of-vol,取 ListAge 排除新股,符号 -1)。算子怎样实现:全部种子原样含
+    K。外围与已见过的写法的不同:共性表里 M 只见到 cs_demean(K) 单层、无平滑无筛子;这里 (a) ts_mean 慢窗口、短对长偏离、ts_std;(b)
+    与库里 C 一族同类的排除筛子,ListAge 与价格水平 log(day_last(Close)),符号未知所以 cs_last_*(符号 +)和 cs_first_*(符号
+    -)两个方向都写,另有 C20 + ListAge 的复合(把高 vol-of-vol 的 40% 推出多头腿);(c) 交易所检验:最后一根 bar 的含义随交易所与制度而变(深沪两市的收盘撮合机制不同),K
+    里混有交易所成分,cs_bucket_rank(·, BoardCode) 把排序放进 BoardCode 十分位桶内(桶 = 某板块里按列序的一段,即同板块内部比较,不是严格的交易所中性,但足以检验成分),若
+    bucket 版本明显弱于原版,说明主要是交易所成分;(d) 与别的统计复合:K 与 AUC 的秩差(两者符号相反、若信息重合则秩差只是翻倍,若独立则相加)、K
+    与日收益的 60 日相关(尾盘集中成交的日子是不是上涨日 = 尾盘净买入)、金额重心减股数重心(= 价格在放量时段是否更高,即日内价格重心漂移,不用收益率)。与库里
+    head 的区别:6 个 head 读的是 Vwap 路径粗糙度的 vol-of-vol(C 一族,5 个)与隔夜缺口偏度(1 个),没有任何一个读 Volume
+    的日内分布;预期与 head 的日度秩 |ρ| 只来自筛子重叠(0.2 到 0.5)。样本外还会在的理由:参与者结构(机构基准交易 vs 散户与消息)和撮合制度是慢变的制度性特征,不依赖某段行情的波动或风格;形状量对水平类控制近似正交。已知风险:K
+    内含交易所成分,撮合制度若发生变化会改变其含义;上市 / 复牌后窗口不满,所以大部分种子带 ListAge 筛子;day_centroid 在停牌日是缺失而不是
+    0,ts_mean 吞掉缺失;ts_corr 在窗口只有 1 到 2 个点时退化为 0 / ±1,占比小。
+  seeds:
+  - ts_mean(day_centroid(Volume), 40)
+  - ts_mean(day_centroid(Volume), 120)
+  - sub(ts_mean(day_centroid(Volume), 10), ts_mean(day_centroid(Volume), 120))
+  - cs_first_low20(ts_std(day_centroid(Volume), 40), ListAge)
+  - cs_first_low20(cs_first_low20(ts_mean(day_centroid(Volume), 40), log(day_last(Close))),
+    ListAge)
+  - cs_last_low10(cs_last_low20(ts_mean(day_centroid(Volume), 40), log(day_last(Close))),
+    ListAge)
+  - cs_bucket_rank(ts_mean(day_centroid(Volume), 40), BoardCode)
+  - cs_last_low10(cs_bucket_rank(ts_mean(day_centroid(Volume), 40), BoardCode), ListAge)
+  - cs_first_low20(cs_bucket_rank(ts_mean(day_centroid(Volume), 40), BoardCode), ListAge)
+  - ts_corr(day_centroid(Volume), ts_delta(log(day_last(Close)), 1), 60)
+  - sub(cs_rank(ts_mean(day_centroid(Volume), 40)), cs_rank(ts_mean(div(day_first(Volume),
+    add(day_sum(Volume), 1)), 60)))
+  - cs_last_low20(ts_mean(day_centroid(Volume), 60), log(day_last(Close)))
+  - cs_first_low20(ts_mean(day_centroid(Volume), 60), log(day_last(Close)))
+  - ts_mean(sub(day_centroid(Amt), day_centroid(Volume)), 40)
+- type: N
+  hypothesis: 新 idea:跨收盘—开盘边界的信息接续度,与开盘竞价份额,是两条彼此独立、各自在 train 偏弱而 valid 很强的近线信号,把它们做成稳定的独立证据并合成。现象(这一批的
+    3 个 M 批次 + 第 2 轮两个任务):(1) E 位 Ov 任务里最好的候选是 ts_corr(Ov, ts_delay(Id, 1), 60),train
+    +0.41 / valid +1.38,符号 +,hl 5,而 Ov 的水平、偏度之外的矩、同日 Ov-Id 衔接全部没过线;Ov = log(day_first(Open))
+    - log(前收),Id = log(day_last(Close)) - log(day_first(Open))。含义:今天的隔夜缺口方向若系统性地接着昨天的盘中方向,说明盘中的信息在收盘前没吃完、由夜间和集合竞价继续消化(T+1
+    与涨跌停下的信息消化节奏,Lou, Polk and Skouras 2019, JFE 的隔夜与盘中参与者分工),这种接续度高的名字后续有漂移。(2) N
+    位 AUC = day_first(Volume) / (day_sum(Volume) + 1) 的 60 日均值,train +0.35 / valid
+    +1.35,符号 +,hl 5(竞价参与持续偏高 = 机构 / 消息驱动的挂单多)。两者读的输入不同(价格的 Open / Close 与 Volume 的第一根),与库里
+    6 个 head 的日度秩 |ρ| 在上一轮相关表里都 ≤ 0.46,且 train 偏弱 valid 偏强的形状相同,若彼此相关度低,等权秩和的 Sharpe
+    近似按 √2 抬升,足以越过 0.5。本轮种子分四组:(a) 接续度本身的改进:窗口 60 -> 120,去市场共同分量(Ov 与 Id 各减当日截面均值,只留个股特有的接续)、秩空间的相关(cs_rank
+    之后再 ts_corr,去掉离群缺口),把昨日盘中改成 '昨日收盘相对全天成交加权价的位置' log(Close) - log(day_wmean(Vwap,
+    Volume))(收盘前最后一段的净推动,检验接续是否来自尾盘),加 ListAge / 价格水平筛子(新股前几十日 ts_corr 为 0 / ±1,必须排除);(b)
+    AUC 的慢窗口 120 日和价格水平 / ListAge 筛子(第 2 轮只试过 ListAge 单层,train 没动,价格水平筛子在库里 C 一族把
+    train 抬高 +0.44,这里第一次用在 AUC 上);(c) 合成:AUC 与接续度的秩和(两者符号都 +),加价格水平筛子,以及再加隔夜偏度 ts_skew(Ov,
+    40) 的三项秩和(偏度 head 是 train 强 valid 弱 +1.12 / +0.56,另两项相反,三项互补;偏度权重 1/3 所以与偏度 head
+    的相关预计 0.4 到 0.6,在库禁令 0.7 以内);(d) 与库里筛子的复合:cs_last_high40(·, C20) + ListAge(照偏度
+    head 的写法,检验这套筛子能不能把 valid 补强的同时抬 train)。与库里不同:6 个 head 里没有一个读 Volume 的分钟分布,也没有一个是跨日的
+    '昨日盘中 → 今日隔夜' 的滞后关系;偏度 head 读的是隔夜缺口自己的形状,与接续度正交。数学检查:AUC 分子 ≤ 分母,值域 [0, 1],+1
+    对股数量级可忽略;ts_corr 无除法爆点(常数窗口返回 0);Ov 只用当日开盘与前一日收盘,Id 的滞后项只用昨日及以前,无前视;cs_rank 对缺失返回缺失(不是
+    nanrank_last 的 0),三项秩和不受规则 §4 已知算子行为影响。样本外还会在的理由:T+1 与涨跌停使盘中信息要跨夜才能吃完,这是制度性的;竞价参与是机构
+    / 消息挂单的持久特征。风险:两条信号的 train 都弱,合成可能只是平均了 valid 的强;AUC 与 ListAge / 流动性控制相关会吃掉一部分;接续度窗口不满的新股。
+  inspired_by: 本组第 2 轮的两个近线信号:Pr2a_Ea 的 ts_corr(Ov, ts_delay(Id, 1), 60) +0.41 / +1.38(hl
+    5,符号 +)与 Pr2b_Nb 的 ts_mean(AUC, 60) +0.35 / +1.35(hl 5,符号 +),两者 train 都弱 valid
+    都强;以及库里隔夜偏度 head 与它们互补(train 强 valid 弱)。
+  seeds:
+  - ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), ts_delay(sub(log(day_last(Close)),
+    log(day_first(Open))), 1), 120)
+  - cs_last_low20(ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1), 60), log(day_last(Close)))
+  - cs_last_low10(ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1), 60), ListAge)
+  - ts_corr(sub(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), cs_mean(sub(log(day_first(Open)),
+    log(ts_delay(day_last(Close), 1))))), ts_delay(sub(sub(log(day_last(Close)), log(day_first(Open))),
+    cs_mean(sub(log(day_last(Close)), log(day_first(Open))))), 1), 60)
+  - ts_corr(cs_rank(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))),
+    ts_delay(cs_rank(sub(log(day_last(Close)), log(day_first(Open)))), 1), 60)
+  - ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), ts_delay(sub(log(day_last(Close)),
+    log(day_wmean(Vwap, Volume))), 1), 60)
+  - cs_last_low20(ts_mean(div(day_first(Volume), add(day_sum(Volume), 1)), 60), log(day_last(Close)))
+  - ts_mean(div(day_first(Volume), add(day_sum(Volume), 1)), 120)
+  - cs_last_low10(cs_last_low20(ts_mean(div(day_first(Volume), add(day_sum(Volume),
+    1)), 120), log(day_last(Close))), ListAge)
+  - add(cs_rank(ts_mean(div(day_first(Volume), add(day_sum(Volume), 1)), 60)), cs_rank(ts_corr(sub(log(day_first(Open)),
+    log(ts_delay(day_last(Close), 1))), ts_delay(sub(log(day_last(Close)), log(day_first(Open))),
+    1), 60)))
+  - cs_last_low20(add(cs_rank(ts_mean(div(day_first(Volume), add(day_sum(Volume),
+    1)), 60)), cs_rank(ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1), 60))), log(day_last(Close)))
+  - add(add(cs_rank(ts_mean(div(day_first(Volume), add(day_sum(Volume), 1)), 60)),
+    cs_rank(ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))),
+    ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1), 60))), cs_rank(ts_skew(sub(log(day_first(Open)),
+    log(ts_delay(day_last(Close), 1))), 40)))
+  - cs_last_low10(add(add(cs_rank(ts_mean(div(day_first(Volume), add(day_sum(Volume),
+    1)), 60)), cs_rank(ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1), 60))), cs_rank(ts_skew(sub(log(day_first(Open)),
+    log(ts_delay(day_last(Close), 1))), 40))), ListAge)
+  - add(cs_rank(ts_mean(div(day_first(Volume), add(day_sum(Volume), 1)), 60)), cs_rank(ts_corr(sub(sub(log(day_first(Open)),
+    log(ts_delay(day_last(Close), 1))), cs_mean(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))))), ts_delay(sub(sub(log(day_last(Close)), log(day_first(Open))), cs_mean(sub(log(day_last(Close)),
+    log(day_first(Open))))), 1), 60)))
+R:
+- head: cs_first_low20(cs_first_low20(ts_var(sqrt(day_durbin_watson(Vwap)), 20), log(day_last(Close))),
+    ListAge)
+  why: 烂部件 = 没有对 '假稳定' 的名字做排除。ts_var(sqrt(DW)) 在价格整天不动的名字(连续一字板)与长期停牌的名字(窗口里有效值 ≤
+    1 个时 nanstd_last 返回 0 而不是缺失)上等于 0,落在 C 最低端,符号 -1 时正好进长腿;ListAge 只排除新股、价格筛子只排除低价股,都没有直接处理这两类。依据:这个
+    head 的 train(+1.37)远低于 valid(+2.44),train 是约束项;拆解里去掉价格筛子 train 掉 0.63、去掉 ListAge
+    掉 0.56,说明剩余的排除空间还没榨干,而第三层 LogFloatCap 筛子试过(1.01)不行,所以换成针对 '假稳定' 的变量:LimitWidth
+    最低的块(5% 涨跌幅限制的 ST 名字)与 20 日里有效日数不足的块(复牌 / 停牌)。两个变体都是在原 head 外面再加一层 cs_first_low20,与原
+    head 的相关度预计 > 0.85,可以替换。
+  variants:
+  - cs_first_low20(cs_first_low20(cs_first_low20(ts_var(sqrt(day_durbin_watson(Vwap)),
+    20), log(day_last(Close))), LimitWidth), ListAge)
+  - cs_first_low20(cs_first_low20(cs_first_low20(ts_var(sqrt(day_durbin_watson(Vwap)),
+    20), log(day_last(Close))), cross_valid_count(day_last(Close), 20)), ListAge)
+- head: cs_last_low10(cs_last_high40(ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), 40), ts_var(sqrt(day_durbin_watson(Vwap)), 20)), ListAge)
+  why: 烂部件 = ListAge 筛子的宽度和对停牌复牌的处理。拆解:去掉 ListAge 后 valid 从 +1.08 掉到 -0.69(C 筛子 +
+    偏度单独),说明被 ListAge 排掉的最年轻 10% 名字正是 valid 里的破坏者(新股连续涨停使缺口序列极端);nanskew_last 没有最小样本数,停牌复牌后
+    40 日窗口也只由几个缺口决定,ListAge 管不到。变体:(1) ListAge 带宽 10% -> 20%;(2) 再加一层 '40 日有效日数不足'
+    的排除(cross_valid_count(day_last(Close), 40) 的最低块);(3) 偏度窗口 50(窗口 20 掉到 0.65、80
+    掉到 0.22,40 附近的邻域没试过)。保留原结构不动,与原 head 的相关预计 > 0.8。
+  variants:
+  - cs_last_low20(cs_last_high40(ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), 40), ts_var(sqrt(day_durbin_watson(Vwap)), 20)), ListAge)
+  - cs_last_low10(cs_last_low10(cs_last_high40(ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), 40), ts_var(sqrt(day_durbin_watson(Vwap)), 20)), cross_valid_count(day_last(Close),
+    40)), ListAge)
+  - cs_last_low10(cs_last_high40(ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close),
+    1))), 50), ts_var(sqrt(day_durbin_watson(Vwap)), 20)), ListAge)
+- head: cs_first_low20(cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ts_delta(log(day_quantile(Close)),
+    40)), ListAge)
+  why: 烂部件 = ts_var 窗口 10 与取 Close 的 quantile。拆解里窗口 10 -> 20 把 score 从 +0.96 提到 +1.06,Close
+    -> Vwap(ts_delta 里的 day_quantile)到 +1.00,两项都是单变量改动且方向一致;上一轮加价格筛子的版本相关度只有 0.38(太远,不能替换),所以这次不再动筛子,只做窗口与价格路径的两项改动,保证相关度
+    > 0.5。
+  variants:
+  - cs_first_low20(cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 20), ts_delta(log(day_quantile(Vwap)),
+    40)), ListAge)
+  - cs_first_low20(cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 20), ts_delta(log(day_quantile(Close)),
+    40)), ListAge)
+- head: cs_first_low20(ts_var(sqrt(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), 10),
+    ListAge)
+  why: 烂部件 = 两层窗口都是 10 且没有价格筛子。上一轮 R 的同类变体(窗口 20 + 价格筛子)score +1.46 但与原 head 的相关度只有
+    0.478,没能替换;这次只加价格筛子、窗口保持 10(变体一),或只把内层窗口改 20 并加价格筛子(变体二),改动更小,与原 head 的相关度预计在
+    0.55 到 0.75。价格筛子在库里 C 一族(H1)里 train 贡献 +0.44。
+  variants:
+  - cs_first_low20(cs_first_low20(ts_var(sqrt(ts_var(sqrt(day_durbin_watson(Vwap)),
+    10)), 10), log(day_last(Close))), ListAge)
+  - cs_first_low20(cs_first_low20(ts_var(sqrt(ts_var(sqrt(day_durbin_watson(Vwap)),
+    20)), 10), log(day_last(Close))), ListAge)
+audit:
+  attempts: 1
+  file: audit_1.yaml

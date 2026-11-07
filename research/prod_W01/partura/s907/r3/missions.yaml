@@ -1,0 +1,88 @@
+seed: 907
+round: 3
+slots:
+- type: E
+  core: cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30)
+  hypothesis: '【核心】Z = cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30)。day_first(Volume) 是每天第一个有效格(09:30 格,含开盘集合竞价撮合量)的成交量;cs_mask_top_replace_mean_neg 把当天截面上最低 10% 的值换成截面均值(每天一次,只动最薄的票);cross_zscore(·, 30) 把它换成「相对这只票自己过去 30 个交易日」的标准化,跨票的水平差(流动性、市值)被去掉,只剩「今天的开盘成交量对这只票是不是反常」。
+
+    【本种子的证据,全是 train / valid】M 第 3 批的 3 个 head 都是 Z 外面套 cross_max 的链:cross_max×3 为 +1.46(train +1.46 / valid +1.78,方向 +1,半衰期 5)、×5 为 +1.24 / +1.34、带 q25(Amt) 的变体 +0.92 / +2.26。拆解:去掉 cross_zscore 掉到 +0.34(必要性 +1.12);去掉 cs_mask_top_replace_mean_neg 为 +0.96(必要性 +0.49);末层 cross_max 窗口 @15 为 +0.74、@60 为 +1.25(@30 是 +1.46,不是单调,窗口不要当成可以调的旋钮);Volume 换 Amt +0.95。Z 本身(当天值)的充分性是 -2.29(train),所以收益不在当天的反常,而在「过去一两个季度里出现过反常」的记忆。共性表:含 Z 的 10 个候选均分 +0.43 对不含的 -1.02(p 0.001),含 cross_max(Z, 30) 的 6 个 +1.03 对 -1.02(p 0.0002)。
+
+    【为什么外围换成这样】已见的含 Z 的外围全是同一件事:把 Z 的最大值取一遍又一遍(cross_max 套 2、3、5 层,窗口 15 / 30 / 60)。那是一个统计量(窗口内最大 z),库禁令 |ρ| >= 0.7 会拒绝它的一切窗口改写,所以本轮不动窗口,换「记忆的统计量」,回答:记忆里重要的是 (a) 最大的一次(已知)、(b) 反常的总量(cross_sum(mul(is_gt(Z, 阈值), Z)) 是超过阈值的 z 之和,连续值,不是次数)、(c) 上四分位的平均强度(cross_tail_mean_q75)、(d) 每个月都有的下限(cross_min(cross_max(Z, 30), 90) 和 cross_med(cross_max(Z, 30), 90):不是一次性的尖峰,而是反复出现)、(e) 持续多日的反常(先 5 日平滑再取最大)、(f) 反常的反面(cross_min(Z):最冷的一次,即断崖式缩量)、(g) 平均与二阶矩(cross_ema、cross_mean(pow_2(Z)))。每个种子对应其中一种,预期与 M3 的三个 head 的 |ρ| 在 0.3–0.7(取最大值的几个会更高,可能被表划掉)。另有 3 个种子把 Z 的记忆和库里独立的来源拼起来:cs_first_high40(·, day_std(Volume)) 用 M2 的活跃度门(day_std(Volume) 最高 40% 里取 Z 记忆最强的票)、cs_first_low40(·, LogFloatShares) 取小流通股本、乘积用 C 的反向秩(开盘集中 × 有过开盘反常)。注意避免整数并列:所有种子都是连续值(次数型的统计量改写成「超过阈值的 z 之和」),以免被截面并列门槛挡掉。
+
+    【机制】开盘集合竞价是隔夜信息(公告、消息、榜单)被散户和游资集中消化的时刻;一只票 09:30 格成交量远超它自己的惯常水平,是「有人突然在关注它」的事件(水平差已被 z 去掉)。事件之后的关注 / 资金接力(post-event attention drift)持续数周到数月,所以 60–90 日的事件记忆比单日反常稳,也是慢变量,换手低,15bp 吃得下。五个控制读的是水平(金额、波动、市值)和 20 日反转,不读「相对自己的反常的记忆」。
+
+    【为什么样本外还会在】关注事件的后续效应来自散户 / 游资的参与结构,不是某一年的风格;3 个 head 的 train 与 valid 同向且 valid 不低于 train(+1.46 / +1.78,+1.24 / +1.34,+0.92 / +2.26),不靠挑方向。已知风险(都来自读代码):(i) cs_mask_top_replace_mean_neg 把最薄的 10% 的开盘量换成截面均值——对常年很薄、偶尔才进最薄 10% 的票,这会制造假的巨大 z(涨停封死的开盘量也很小),所以 Z 的最大值里可能有一部分读的是「偶尔被封死或停牌边缘」而不是放量;但去掉 mask 仍有 +0.96,说明放量本身是真的;(ii) day_first 取第一个有效格,09:30 格缺失会落到 09:31 格,口径略有混杂;(iii) 长期停牌后复牌的第一天对 30 日历史是巨大 z,会把后面 60–90 日的秩推高(cross_zscore 在窗口有效天数 <2 时给 NaN,所以不会由填充决定,但复牌放量会进来);(iv) valid 区间(2022-01 ~ 2023-08)是小盘 / 散户风格强的阶段,valid 不低于 train 不能证明跨风格稳健。'
+  seeds:
+  - cross_tail_mean_q75(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90)
+  - cross_sum(mul(is_gt(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 2), cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30)), 90)
+  - cross_sum(mul(is_gt(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 1.5), cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30)), 60)
+  - cross_min(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90)
+  - cross_ema(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 40)
+  - cross_mean(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 10), 90)
+  - cross_med(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 30), 90)
+  - cross_min(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 30), 90)
+  - cross_max(cross_mean(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 5), 90)
+  - sub(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90), cross_min(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90))
+  - cs_first_high40(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90), day_std(Volume))
+  - cs_first_low40(cross_tail_mean_q75(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90), LogFloatShares)
+  - mul(cs_rank(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 90)), sub(1, cs_rank(cross_mean(day_centroid(Volume), 30))))
+  - cross_mean(pow_2(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30)), 90)
+- type: N
+  hypothesis: '【新 idea】把 M 第 3 批发现的「开盘成交量反常 + 长窗口最大值」从「一个时段、一个统计量」推广成「谁在哪个时段制造了成交量冲击」,并加上互补读数「与市场同涨同跌、同放同缩的程度」(指数 / 被动资金的踪迹)。回答库里没有回答的两个问题:(1) 成交量反常的记忆是只在开盘格(散户 / 游资消化隔夜信息)有效,还是在全天、开盘后 30 格、尾盘 29 格(机构、ETF、指数调仓)、收盘格、午间也有,方向是否相反;(2) 反常的是「量」还是「形」(尾盘占比、开盘占比的反常,即 Pr2b_Nb 的 head 的日度子树的反常)。
+
+    【算子怎么实现】每个种子 = 聚合(cross_zscore(时段读数, 30), 窗口)。时段读数:day_sum(Volume)(全天)、day_sum(in_slice(Volume, 1, 30))(开盘后 30 格)、day_sum(in_slice(Volume, 211, 239))(尾盘 29 格,不含收盘格)、day_last(Volume)(收盘格)、day_sum(in_slice(Volume, 61, 180))(午间)、尾盘占比 div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239)))、开盘格占比 div(day_first(Volume), day_sum(Volume))。聚合:cross_max(·, 60)(窗口内最大 z)、cross_tail_mean_q75(·, 90)(上四分位的平均)、cross_min(·, 60)(最冷的一次,即缩量断崖)。cross_zscore 把每只票换成相对自己过去 30 日,所以水平差(流动性、市值)被去掉,和五个控制、以及库里读「水平 / 习惯」的 head(重心、尾盘占比、M2 的门)不是同一根轴。最后两个种子是「共同运动」读数:日收益与全市场等权日收益的 60 日相关(cs_mean 把当天截面均值铺回每只票,cross_corr 在日轴上滚动),以及日成交量与全市场平均成交量的 60 日相关:指数 / 被动资金主导的票随市场同涨同放,散户 / 游资主导的票按自己的消息走(与 T / C 的「前置成交」是同一个参与者问题的另一种读法)。
+
+    【为什么和库不同】库里 17 个 head 中读「相对自己的反常」的只有 M 第 3 批的 3 个,而且只用了 09:30 一格;其余是水平 / 习惯(重心、尾盘占比、M2 的门、静态价位)。没有一个读全天、尾盘、午间的反常记忆,也没有一个读共同运动。预期:开盘 30 格的两个种子与 M3 head 的 |ρ| 在 0.5–0.75(可能被表划掉 1–2 个);其他时段与所有 head 的 |ρ| < 0.4(z 去掉了水平,与 T / C 的 |ρ| 预期 0.1–0.3);共同运动读数与流动性 / 波动控制可能有 0.3–0.5 的相关(大票同步性高),不会到 0.8。
+
+    【机制】不同参与者在不同时段交易,所以「谁突然来了」可以由时段读出:开盘 = 隔夜消息的散户 / 游资;尾盘 = 机构基准、ETF 申赎、指数调仓;全天 = 综合关注;缩量断崖 = 关注撤退。事件的后续影响(关注的接力或衰退)持续数周到数月,所以长窗口(60–90 日)的事件记忆是慢变量,换手低;这和 M3 head 的拆解一致(末层窗口 @15 / @30 / @60 为 +0.74 / +1.46 / +1.25:长窗口比短窗口好,30 到 60 略降)。共同运动低的票是特质(非指数)资金主导,与 T / C 的参与者故事同向。
+
+    【为什么样本外还会在】参与者结构不依赖某一年的风格;方向由 train 选,valid 为第二道检验(分数取较差者);事件记忆用的是相对自己的 z,不是水平。已知风险:(i) 长期停牌后复牌的第一天对 30 日历史是大 z,会把后 60 日的秩推高(窗口有效天数 <2 时 cross_zscore 给 NaN,不会由填充决定);(ii) 尾盘窗口 211–239 在深市含 14:57 之后无连续竞价的几格(推断,未核对),z 是相对自己的,所以交易所差异被大部分抵消;(iii) 与市场的相关在大票上高、在波动大的票上低,与流动性 / 波动控制可能部分重合,残差后可能只剩一部分;(iv) valid 区间是小盘 / 散户风格强的阶段。'
+  inspired_by: M 第 3 批:3 个 head(+1.46 / +1.24 / +0.92)全是 cross_max 链套 cross_zscore(开盘 09:30 格成交量, 30);拆解里 cross_zscore 必要性 +1.12、末层窗口 @15 / @30 / @60 为 +0.74 / +1.46 / +1.25,单日 Z 的充分性 -2.29。再结合 Pr2b_Nb 的尾盘占比(+1.79)与 Pr1b_Nb 的重心:本种子的收益来自参与者结构,而库里「相对自己的反常」只读了开盘一格。
+  seeds:
+  - cross_max(cross_zscore(day_sum(Volume), 30), 60)
+  - cross_max(cross_zscore(day_sum(in_slice(Volume, 1, 30)), 30), 60)
+  - cross_max(cross_zscore(day_sum(in_slice(Volume, 211, 239)), 30), 60)
+  - cross_max(cross_zscore(day_last(Volume), 30), 60)
+  - cross_max(cross_zscore(day_sum(in_slice(Volume, 61, 180)), 30), 60)
+  - cross_max(cross_zscore(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239))), 30), 60)
+  - cross_max(cross_zscore(div(day_first(Volume), day_sum(Volume)), 30), 60)
+  - cross_tail_mean_q75(cross_zscore(day_sum(Volume), 30), 90)
+  - cross_tail_mean_q75(cross_zscore(day_sum(in_slice(Volume, 1, 30)), 30), 90)
+  - cross_tail_mean_q75(cross_zscore(day_sum(in_slice(Volume, 211, 239)), 30), 90)
+  - cross_tail_mean_q75(cross_zscore(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239))), 30), 90)
+  - cross_min(cross_zscore(day_sum(Volume), 30), 60)
+  - cross_min(cross_zscore(day_sum(in_slice(Volume, 211, 239)), 30), 60)
+  - cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), cs_mean(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1)), 60)
+  - cross_corr(day_sum(Volume), cs_mean(day_sum(Volume)), 60)
+  literature:
+  - cite: Gervais, Kaniel and Mingelgrin, The high-volume return premium, Journal of Finance
+    year: '2001'
+  - cite: 'Barber and Odean, All that glitters: the effect of attention and news on the buying behavior of individual and institutional investors, Review of Financial Studies'
+    year: '2008'
+  - cite: 'Morck, Yeung and Yu, The information content of stock markets: why do emerging markets have synchronous stock price movements?, Journal of Financial Economics'
+    year: '2000'
+R:
+- head: cross_mean(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239))), 20)
+  why: 这个 head 是尾盘 29 格占「开盘后到 14:59」的比例的 20 日均值,方向 -1(多头 = 尾盘占比低)。可疑部件是切片边界和分母:(1) 分母 in_slice(Volume, 1, 239) 里含开盘后 30 格,所以尾盘占比和「前置成交」(重心 C)混在一起 —— 与 head 1 的 |ρ| 只有 0.6,说明它不是 C 的改写,但也说明它和 C 共有一部分;换分母(下午、去掉开盘 30 格)可以分出「尾盘相对下午」与「尾盘相对全天」哪个才是 alpha。(2) 切片末端 239:深市 14:57 起是收盘集合竞价,最后几格没有连续竞价成交(推断,未直接检查数据),沪市在 2018 年中前后才有收盘集合竞价(审计员在第 2 轮提过,未核实起始日),所以「尾盘 29 格」在两个交易所的有效格数不同,变体 1 把两端截到 236,是对交易所哑变量的直接检验。(3) 尾盘长度(15 / 29 / 45 / 59 格)是随手取的,变体 4–6 检验。依据:拆解表里换成 Amt +1.81、窗口 10 / 40 为 +1.60 / +1.59(平坦),所以信号是稳定的习惯而不是窗口的峰;日度子树本身 +0.49(train +1.02 / valid +0.49),20 日均值才 +1.79;第 2 轮相关度表里它的 liq / known 秩相关各 0.45。变体 7 用「尾盘占比 - 开盘后 30 格占比」,把前置成交和后置成交放进同一个读数(与 C 方向一致)。全部是同一习惯的不同口径,不是新来源。
+  variants:
+  - cross_mean(div(day_sum(in_slice(Volume, 211, 236)), day_sum(in_slice(Volume, 1, 236))), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 121, 239))), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 31, 239))), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 181, 239)), day_sum(in_slice(Volume, 1, 239))), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 226, 239)), day_sum(in_slice(Volume, 1, 239))), 20)
+  - cross_mean(div(day_sum(in_slice(Volume, 196, 239)), day_sum(in_slice(Volume, 1, 239))), 20)
+  - cross_mean(sub(div(day_sum(in_slice(Volume, 211, 239)), day_sum(in_slice(Volume, 1, 239))), div(day_sum(in_slice(Volume, 1, 30)), day_sum(in_slice(Volume, 1, 239)))), 20)
+- head: cross_max(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30), 30), 30)
+  why: 这个 head 是 Z 链(cross_max×3),可疑部件是 day_first(Volume) 这一格本身:它是单格(开盘集合竞价撮合量),噪声大,而且单格在 09:30 缺失时会落到 09:31。依据:拆解表里 cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 30) 的充分性是 -2.29(train),也就是单日读数几乎没有信息,信息在长窗口的最大值记忆里;去掉 mask 仍有 +0.96;Amt 版 +0.95;末层窗口 @15 / @60 为 +0.74 / +1.25。所以替换部件:变体 1 把 z 的基准窗口从 30 改 60(更稳的「自己的惯常」);变体 2、3 把单格换成开盘后 30 格 / 5 格的成交量(更宽的读数,噪声小);变体 4 把水平换成占全天的比例(去掉整天放量的混杂,只看开盘集中度的反常)。依据都来自拆解,不是新来源。
+  variants:
+  - cross_max(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_first(Volume)), 60), 30), 30)
+  - cross_max(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_sum(in_slice(Volume, 0, 29))), 30), 30), 30)
+  - cross_max(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(day_sum(in_slice(Volume, 0, 4))), 30), 30), 30)
+  - cross_max(cross_max(cross_zscore(cs_mask_top_replace_mean_neg(div(day_first(Volume), day_sum(Volume))), 30), 30), 30)
+- head: signedpower(cs_first_low40(LogFloatShares, day_std(Volume)))
+  why: 这个 head 是 signedpower(cs_first_low40(LogFloatShares, day_std(Volume))):day_std(Volume) 最低 40% 的票整块推到最前,其余按流通股本排。可疑部件是门变量 day_std(Volume)(当天值):拆解里整个门结构的必要性 +1.97(把 cs_first_low40 整个敲掉得 -0.54),门本身单独 -1.87(train -0.20 / valid -1.87),Volume 换 Amt 塌到 -2.49;门是一天的读数,40% 分位线附近的票每天进出,会带来换手并把门的噪声带进多头腿。替换成 5 / 20 / 60 日均值或半衰期 10 日的 cross_ema,让门变慢。这是替换部件,不是新来源;M2 里分数最高的两个 head 选的是半衰期 20(另两个选 5 和 0,分数低),说明慢一点更好,门也该慢。
+  variants:
+  - signedpower(cs_first_low40(LogFloatShares, cross_mean(day_std(Volume), 5)))
+  - signedpower(cs_first_low40(LogFloatShares, cross_mean(day_std(Volume), 20)))
+  - signedpower(cs_first_low40(LogFloatShares, cross_mean(day_std(Volume), 60)))
+  - signedpower(cs_first_low40(LogFloatShares, cross_ema(day_std(Volume), 10)))

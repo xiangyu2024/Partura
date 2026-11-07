@@ -1,0 +1,49 @@
+# 相关度表:种子 901,P 组,第 3 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 6 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.37 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.62 | 0.18 | 0.16 | 0.13 | 0.19 | 0.07 | `day_centroid(Amt)` |
+| slot a seed 1 | 过 | 0.20 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.11 | 0.13 | 0.12 | 0.19 | 0.16 | 0.06 | `cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30)` |
+| slot a seed 2 | 过 | 0.18 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.06 | 0.20 | 0.15 | 0.09 | 0.21 | 0.04 | `cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120)` |
+| slot a seed 3 | 过 | 0.08 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 2` | 0.02 | 0.12 | 0.08 | 0.07 | 0.13 | 0.10 | `cross_corr(ts_delay(day_centroid(Amt), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)` |
+| slot a seed 4 | 过 | 0.04 | `ts_stddev(signedpower(day_argmax(Amt)), 40)` | 0.08 | 0.06 | 0.02 | 0.09 | 0.08 | 0.02 | `sub(cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60), cross_corr(day_centroid(Amt), sub(div(day_last(Close), day_first(Open)), 1), 60))` |
+| slot a seed 5 | 过 | 0.27 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.17 | 0.19 | 0.20 | 0.08 | 0.20 | 0.09 | `cross_corr(day_centroid(Amt), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60)` |
+| slot a seed 6 | 过 | 0.20 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.15 | 0.11 | 0.14 | 0.01 | 0.12 | 0.09 | `cross_corr(day_centroid(Amt), sub(div(day_last(Close), day_first(Open)), 1), 60)` |
+| slot a seed 7 | 过 | 0.22 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.07 | 0.21 | 0.23 | 0.15 | 0.24 | 0.01 | `cross_corr(day_centroid(Amt), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1), 60)` |
+| slot a seed 8 | 过 | 0.29 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.14 | 0.23 | 0.25 | 0.13 | 0.26 | 0.04 | `cross_corr(day_centroid(Amt), div(day_last(Close), ts_delay(day_last(Close), 5)), 60)` |
+| slot a seed 9 | 过 | 0.20 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.08 | 0.17 | 0.20 | 0.08 | 0.19 | 0.01 | `cross_corr(day_centroid(Amt), div(day_last(Close), ts_delay(day_last(Close), 20)), 90)` |
+| slot a seed 10 | 过 | 0.20 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.12 | 0.11 | 0.17 | 0.04 | 0.13 | 0.04 | `cross_corr(day_centroid(Amt), log(day_sum(Amt)), 120)` |
+| slot a seed 11 | 过 | 0.14 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.12 | 0.09 | 0.07 | 0.01 | 0.09 | 0.06 | `cross_corr(day_centroid(Amt), day_std(Ret), 60)` |
+| slot a seed 12 | 过 | 0.24 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.13 | 0.22 | 0.24 | 0.02 | 0.26 | 0.11 | `cross_corr(day_centroid(Amt), day_centroid(Ret), 60)` |
+| slot a seed 13 | 过 | 0.13 | `cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), ` | 0.10 | 0.08 | 0.29 | 0.02 | 0.11 | 0.16 | `cross_corr(day_centroid(Amt), cs_mean(day_centroid(Amt)), 90)` |
+| slot a seed 14 | 过 | 0.35 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.25 | 0.22 | 0.25 | 0.01 | 0.25 | 0.14 | `cross_corr(day_centroid(Amt), day_kurt(Amt), 60)` |
+| slot a seed 15 | 过 | 0.54 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.38 | 0.54 | 0.24 | 0.01 | 0.54 | 0.14 | `cross_corr(day_centroid(Amt), day_gini(Amt), 60)` |
+| slot a seed 16 | 过 | 0.23 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.17 | 0.13 | 0.16 | 0.00 | 0.14 | 0.07 | `cross_corr(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)` |
+| slot b seed 1 | 过 | 0.08 | `cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), ` | 0.09 | 0.17 | 0.14 | 0.25 | 0.18 | 0.13 | `cross_corr(log(day_sum(Amt)), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60)` |
+| slot b seed 2 | 过 | 0.11 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 2` | 0.08 | 0.04 | 0.01 | 0.05 | 0.03 | 0.16 | `cross_corr(ts_delay(log(day_sum(Amt)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60)` |
+| slot b seed 3 | 过 | 0.12 | `cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), ` | 0.06 | 0.22 | 0.12 | 0.15 | 0.22 | 0.23 | `cross_corr(log(day_sum(Amt)), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 241)` |
+| slot b seed 4 | 过 | 0.24 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.11 | 0.33 | 0.21 | 0.07 | 0.35 | 0.05 | `cross_corr(log(day_sum(Amt)), day_std(Ret), 60)` |
+| slot b seed 5 | 过 | 0.08 | `cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), ` | 0.13 | 0.14 | 0.11 | 0.13 | 0.15 | 0.06 | `cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), day_std(Ret), 60)` |
+| slot b seed 6 | 过 | 0.13 | `cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), ` | 0.11 | 0.18 | 0.07 | 0.02 | 0.16 | 0.13 | `cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 60)` |
+| slot b seed 7 | 过 | 0.12 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.10 | 0.10 | 0.08 | 0.04 | 0.13 | 0.01 | `cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), log(day_sum(Amt)), 60)` |
+| slot b seed 8 | 过 | 0.19 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.10 | 0.14 | 0.16 | 0.03 | 0.17 | 0.01 | `cross_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)` |
+| slot b seed 9 | 过 | 0.21 | `cs_bucket_zscore(cross_mean(div(cs_bucket_zscore(cross_mean(` | 0.13 | 0.40 | 0.14 | 0.02 | 0.34 | 0.23 | `cross_corr(day_signed_ratio(Ret, Amt), sub(div(day_last(Close), day_first(Open)), 1), 60)` |
+| slot b seed 10 | 过 | 0.15 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.11 | 0.31 | 0.26 | 0.04 | 0.34 | 0.10 | `cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), cs_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 120)` |
+| slot b seed 11 | 过 | 0.16 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.09 | 0.31 | 0.34 | 0.23 | 0.34 | 0.13 | `cross_mean(day_corr(Ret, Amt), 60)` |
+| slot b seed 12 | 过 | 0.09 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 2` | 0.10 | 0.02 | 0.02 | 0.10 | 0.02 | 0.02 | `cross_corr(day_sum(Amt), day_wmean(Ret, Amt), 60)` |
+| slot b seed 13 | 过 | 0.12 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.04 | 0.08 | 0.15 | 0.00 | 0.10 | 0.06 | `cross_autocorr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60, 1)` |
+| R 1 variant 1 | 过 | 0.76 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.82 | 0.34 | 0.31 | 0.20 | 0.36 | 0.09 | `cs_bucket_zscore(cross_mean(cross_mean(day_centroid(Amt), 5), 5), LogFloatShares)` |
+| R 1 variant 2 | 过 | 0.77 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.84 | 0.35 | 0.30 | 0.19 | 0.37 | 0.12 | `cs_bucket_zscore(cross_mean(cross_mean(day_centroid(Amt), 5), 5), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))` |
+| R 1 variant 3 | 过 | 0.76 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.82 | 0.36 | 0.32 | 0.20 | 0.39 | 0.12 | `cross_mean(cross_mean(day_centroid(Amt), 5), 5)` |
+| R 2 variant 1 | 过 | 0.96 | `cs_bucket_rank(cross_mean(day_argmax(Amt), 20), day_max(Clos` | 0.92 | 0.47 | 0.30 | 0.14 | 0.48 | 0.15 | `cs_bucket_rank(cross_mean(day_argmax(Amt), 20), LogFloatShares)` |
+| R 2 variant 2 | 过 | 0.96 | `cs_bucket_rank(cross_mean(day_argmax(Amt), 20), day_max(Clos` | 0.92 | 0.48 | 0.30 | 0.14 | 0.48 | 0.16 | `cs_bucket_zscore(cross_mean(day_argmax(Amt), 20), LogFloatShares)` |
+| R 2 variant 3 | 废品 | 0.96 | `cs_bucket_rank(cross_mean(day_argmax(Amt), 20), day_max(Clos` | 0.93 | 0.50 | 0.31 | 0.14 | 0.50 | 0.17 | `cross_mean(day_argmax(Amt), 20)` |
+| R 3 variant 1 | 过 | 0.96 | `ts_stddev(signedpower(day_argmax(Amt)), 40)` | 0.98 | 0.25 | 0.15 | 0.07 | 0.24 | 0.15 | `cs_bucket_zscore(ts_stddev(signedpower(day_argmax(Amt)), 40), LogFloatShares)` |
+| R 3 variant 2 | 过 | 0.96 | `ts_stddev(signedpower(day_argmax(Amt)), 40)` | 0.98 | 0.31 | 0.15 | 0.07 | 0.30 | 0.32 | `add(ts_stddev(signedpower(day_argmax(Amt)), 30), ts_stddev(signedpower(day_argmax(Amt)), 50))` |
+| R 3 variant 3 | 过 | 0.88 | `ts_stddev(signedpower(day_argmax(Amt)), 40)` | 0.90 | 0.33 | 0.14 | 0.04 | 0.32 | 0.31 | `cross_mean(ts_stddev(signedpower(day_argmax(Amt)), 40), 20)` |
+| R 4 variant 1 | 过 | 0.96 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.97 | 0.47 | 0.41 | 0.15 | 0.49 | 0.10 | `cs_bucket_zscore(cross_mean(cs_bucket_zscore(cross_mean(day_centroid(Amt), 5), LogFloatShares), 20), LogFloatShares)` |
+| R 4 variant 2 | 过 | 0.56 | `cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), sub(sub(` | 0.87 | 0.28 | 0.21 | 0.14 | 0.29 | 0.10 | `cs_bucket_zscore(div(cs_bucket_zscore(cross_mean(day_centroid(Amt), 5), LogFloatShares), day_sum(Amt)), LogFloatShares)` |
+| R 5 variant 1 | 过 | 0.98 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 2` | 0.98 | 0.44 | 0.20 | 0.19 | 0.43 | 0.32 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))` |
+| R 5 variant 2 | 过 | 0.95 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 2` | 0.98 | 0.42 | 0.24 | 0.16 | 0.41 | 0.22 | `cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 25), LogFloatShares)` |
