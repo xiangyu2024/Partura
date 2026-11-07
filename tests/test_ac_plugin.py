@@ -606,7 +606,13 @@ def test_idea_search_builds_each_arms_hooks_from_that_arms_own_name():
     calls = [n for n in ast.walk(tree)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
              and n.func.attr == "arm_hooks"]
-    assert len(calls) == 1, f"expected exactly one ac_plugin.arm_hooks(...) call, found {len(calls)}"
+    # C05 added one more call: the E-mission graft fill builds a side generator from the CONTROL hooks (a literal
+    # "control", never the running arm's).  Any such extra call must name "control"; exactly one call builds the
+    # running arm's hooks from the loop variable.
+    extra = [n for n in calls if n.args and isinstance(n.args[0], ast.Constant)]
+    assert all(n.args[0].value == "control" for n in extra), "an extra arm_hooks call may only build the control hooks"
+    calls = [n for n in calls if n not in extra]
+    assert len(calls) == 1, f"expected exactly one ac_plugin.arm_hooks(arm, ...) call, found {len(calls)}"
     call = calls[0]
     assert isinstance(call.func.value, ast.Name) and call.func.value.id == "ac_plugin"
     # the arm is passed, not named: arm_hooks(arm, ...) with arm the loop variable, never a literal

@@ -517,12 +517,17 @@ def test_the_script_wires_mains_guidance_stream_and_the_arguments_the_plugin_nee
     tree = _script_tree()
     want = ast.dump(ast.parse("(SEED * 2654435761) & 0xFFFFFFFF", mode="eval").body)
     made = [c for c in ast.walk(tree) if isinstance(c, ast.Call) and ast.unparse(c.func) == "random.Random"]
+    # C05's graft fill has its own stream, random.Random(gseed) -- a separate generator for E-mission seeds, never the
+    # guidance stream; exactly one Random is built from main's seed formula
+    made = [c for c in made if ast.unparse(c.args[0]) != "gseed"]
     assert len(made) == 1 and ast.dump(made[0].args[0]) == want                    # hook_rng = random.Random(<main's seed>)
     reseeds = [c for c in ast.walk(tree) if isinstance(c, ast.Call) and ast.unparse(c.func) == "hook_rng.seed"]
     assert len(reseeds) == 1 and ast.dump(reseeds[0].args[0]) == want              # ... reseeded at the start of every arm
     (state,) = [c for c in ast.walk(tree) if isinstance(c, ast.Call) and ast.unparse(c.func) == "ac_plugin.set_scorer_state"]
     assert [ast.unparse(a) for a in state.args] == ["ctx", "KIND", "SPLIT"] and {k.arg: ast.unparse(k.value) for k in state.keywords} == {"known": "known_z"}
-    (arm_call,) = [c for c in ast.walk(tree) if isinstance(c, ast.Call) and ast.unparse(c.func) == "ac_plugin.arm_hooks"]
+    # the running arm's call (C05's graft fill adds a second call that builds the literal "control" hooks)
+    (arm_call,) = [c for c in ast.walk(tree) if isinstance(c, ast.Call) and ast.unparse(c.func) == "ac_plugin.arm_hooks"
+                   and not (c.args and isinstance(c.args[0], ast.Constant))]
     assert {k.arg: ast.unparse(k.value) for k in arm_call.keywords} == {
         "parts": "PARTS", "risky": "risky", "ext": "EXT", "opw": "OPW", "idea_ops": "IDEA_OPS", "boost": "BOOST",
         "accept": "guidance_accept", "nt_twins": "'nt_twins' in FIXES"}
