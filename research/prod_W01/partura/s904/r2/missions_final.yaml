@@ -1,0 +1,116 @@
+seed: 904
+round: 2
+slots:
+- type: E
+  core: ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)
+  hypothesis: 核心 H = ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50),快照里唯一的 head(score
+    +0.92,train +0.97,valid +0.92,sign +1,hl 5,M 第 2 批)。 它读的是同一只股票过去 50 天里「当天成交量在分钟上有多集中(gini)」与「当天分钟
+    VWAP 路径有多尖(kurt)」的回归斜率,是一个慢变的个股特质(trait), 不是任何一天的水平:两半单独都崩(gini(Volume) 单独 -2.76,kurt(Vwap)
+    单独 -3.38),只有耦合有效;Volume 换成 Amt 基本不变(+0.88),说明读的是资金集中而不是成交股数的口径。 这一轮不动核心内部。理由:消融显示它站在一条窄脊上
+    —— 窗口 25 为 +0.04,窗口 100 的 train 掉到 +0.54(valid 升到 +1.52),Vwap 换 Close 的 train
+    掉到 +0.32, M 自己的 day_kurt(Open) 邻居(11 个)平均只有 -1.12。往核心里面改字段 / 窗口是 R 组的事(GP 的库禁令也会因为算子骨架相同直接拒绝)。
+    E 位只在核心外面长,外围刻意换成快照里没有出现过的两类。 (1)与慢变伙伴做秩混合:cs_rank(H) 与 cs_rank(伙伴) 相加、相减或相乘。伙伴取本种子第
+    1 轮里已有正向证据、机制与 H 无关的慢信号 —— P1 = cross_ema(cross_zscore(day_topw_mean(Ret, Amt),
+    60), 30)(重分钟收益相对自身 60 日历史,第 1 轮 E 里 train +0.09 / valid +1.08); P2 = cross_mean(cs_winsor(隔夜缺口
+    - |Low 价位项|), 60)(第 1 轮 N 最好的一个,+0.29 / +0.65); P3 = log(cs_robust_z(day_mean(Low))
+    / day_first(Open)),sign 为 -1,故用相减(-0.01 / +0.73)。 这些伙伴的形状都是「valid 强、train 弱」,H
+    是 train / valid 一致的形状,两类信号强弱的区间不同,混合后取 min(train, valid) 才有机会双过线。 权重刻意让伙伴占 0.65-0.7:等权的秩混合与
+    H 的日度秩相关约 0.71,会被库禁令(>= 0.7)拒绝,偏向伙伴一侧(约 0.55)的才是新信号而不是 H 的改写; mul(rank, rank)
+    是「两者同时高」的 AND 逻辑,不是加权平均(与 H 的相关约 0.65)。 (2)分段:cs_first_low40 / high40 / low20
+    / high20(H, X),X 取 LogFloatCap、ListAge、60 日波动、已知族 30 日成交额离散度。让长仓的顶部只从某一段里挑、段内按
+    H 排序, 检验 H 的信息是否集中在小盘 / 次新 / 低波动 / 低流动性的那一段(特质型信号在散户占比高、信息少的票里通常更有空间)。与 H 的日度秩相关约
+    0.5,不会被库禁令挡住; 新尺子已去掉 X 的线性、U 形、S 形暴露,留下的是「段内 H」以及阶跃里超出三次多项式的部分,不是 size 控制换了个名字。
+    数学上:全部是当日收盘后已知的整日分钟序列经 50-60 日窗口得到的量,无前视;cs_rank 把 H 的重尾 beta(除以窗口内 gini 的方差,方差小时很大)压到
+    (0, 1], 不会有爆点支配截面;rolling_ols 在 var_x <= 1e-9 时给 NaN 而不是 inf;混合的覆盖率由最长的 60 日窗口决定,热身期只占训练段的零头。
+    为什么样本外还会在:若 H 的内容是个股「资金集中 - 价格路径」耦合这一结构性足迹,它由交易这只票的参与者构成决定,不依赖某一年的行情; 伙伴是另一类、与
+    H 低相关的慢信号,混合降低对单一区间的依赖;分段版把 H 放到它最可能有效的地方。若所有混合都不如 H(<= 0.5),说明 H 与这类伙伴不可加,本身也是信息。
+  seeds:
+  - add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret,
+    Amt), 60), 30)), 0.65))
+  - add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cross_mean(cs_winsor(sub(log(div(day_first(Open),
+    ts_delay(day_last(Close), 1))), abs_(div(cs_robust_z(day_mean(Low)), day_first(Open))))),
+    60)), 0.65))
+  - sub(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(log(div(cs_robust_z(day_mean(Low)),
+    day_first(Open)))), 0.65))
+  - add(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), add(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret,
+    Amt), 60), 30)), cs_rank(cross_mean(cs_winsor(sub(log(div(day_first(Open), ts_delay(day_last(Close),
+    1))), abs_(div(cs_robust_z(day_mean(Low)), day_first(Open))))), 60))))
+  - mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret,
+    Amt), 60), 30)))
+  - mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), cs_rank(cross_mean(cs_winsor(sub(log(div(day_first(Open),
+    ts_delay(day_last(Close), 1))), abs_(div(cs_robust_z(day_mean(Low)), day_first(Open))))),
+    60)))
+  - mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), sub(1, cs_rank(log(div(cs_robust_z(day_mean(Low)),
+    day_first(Open))))))
+  - cs_first_low40(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), LogFloatCap)
+  - cs_first_high40(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), LogFloatCap)
+  - cs_first_high20(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), LogFloatCap)
+  - cs_first_low40(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), cross_mean(day_std(Ret),
+    60))
+  - cs_first_low20(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), cross_mean(day_std(Amt),
+    30))
+- type: N
+  hypothesis: 涨跌停「封板足迹」(lock-event footprint)是一个慢变的个股特质。A 股有 10% / 20% / 5% 的涨跌幅限制加
+    T+1,一部分票反复出现触板后价格被钉死在日内极值的日子 (涨停封板:价格冲到极值后水平推到收盘;一字板:整天一个价),这是游资 / 题材交易的足迹,个股的封板频率和强度很稳定,50
+    天的窗口就够读出来。 线索来自本批唯一的 head H = ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)
+    的消融:两半单独崩(-2.76 / -3.38),只有 50 天耦合有效;Volume 换成 Amt 不变; Vwap 换成 Close 时 train 掉到
+    +0.32 而 valid 仍有 +1.02;窗口 25 崩、50 和 100 活。封板日恰好让 gini(Volume)(量堆在触板前的几分钟,之后几乎没有量)和
+    kurt(Vwap)(路径先动后被钉死,形成一个尖峰)同时极端,所以 50 天的协方差很可能由少数封板日主导。这是猜想,不是已验证的机制;本位就是检验它,并给下一轮留对照。
+    算子怎样实现:day_at_max_ratio(Close) 是一天里价格停在当日最高价的分钟占比(封板读近 1,普通日约 1/240),day_at_min_ratio
+    是对应的最低价(跌停封板), day_flat_run_max(Close) 是最长的一段静止分钟占比,day_flat_ratio(Vwap) 是静止分钟占比;它们都是比例、无量纲,不依赖价格水平;停牌与不足两根有效分钟的日子是
+    NaN,不填充。 种子分三组。 (a)直接度量封板:at_max 的 50 日均值与半衰期 30 的 EMA,at_max 与 at_min 的双边和、方向差,最长静止段的均值,上四分位日的均值(强度而不是频率),
+    以及用 cs_last_low05(..., ListAge) 剔除最次新 5% 的版本(新股连续一字板是已知的混杂)。 (b)耦合:保留 H 的形式,把
+    y 位的 kurt(Vwap) 换成明确的封板度量(at_max / at_min / 最长静止段 / flat_ratio),x 位仍是 gini;以及
+    ts_corr 的无尺度版。若它们与 H 一样有效,说明 H 的内容就是封板。 (c)对照组:不含任何封板量的耦合 —— day_centroid(Amt)(成交的时间重心,gini
+    / kurt 这类与顺序无关的统计丢掉的信息)对 day_sum(Ret) 与 day_signed_ratio(Ret, Amt) 的斜率 / 相关, gini
+    对 AR(1) 系数的 t 值,以及 H 的残差版 ts_regres 的 EMA。若(c)和(b)同样好而(a)很差,说明 H 的耦合形式可以迁移到别的变量对,而不是封板。
+    与库里不同的原因:库里只有 H;(a)组不含 gini 也不含 kurt,度量的是事件的频率而不是两个分布统计量的协动;(b)(c)的 y 位不是 kurt(Vwap),算子骨架与
+    H 不同, 与 H 的相关由相关度表给出,>= 0.7 的会被划掉。数学上:全部只用当日收盘后已知的分钟序列,无前视;窗口均值的分母是有效天数,不会除近零量;
+    比例量在 [0, 1] 内,没有爆点;ts_regbeta 在 x 方差 <= 1e-9 时给 NaN。 为什么样本外还会在:涨跌停幅度和 T+1 是制度,不是某一年的行情,事件型足迹由参与者结构决定;窗口
+    50-60 日的慢变量秩 EMA 换手低,扣 15 bp 后还剩得下。
+  inspired_by: 本批(M 第 2 批)唯一 head ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)
+    的消融:gini(Volume) 单独 -2.76、kurt(Vwap) 单独 -3.38,Volume 换 Amt +0.88,Vwap 换 Close
+    的 train +0.32 / valid +1.02,窗口 25 为 +0.04、100 的 train 为 +0.54;同批含 day_kurt(Open)
+    的 ts_regbeta 邻居平均 -1.12;以及第 1 轮 N 位的纯隔夜缺口 / 日内漂移种子没有一个进入前 5 名(前 5 名的下限是 -0.21,靠的是
+    GP 嫁接进来的价位项)。
+  seeds:
+  - cross_ema(day_at_max_ratio(Close), 30)
+  - cross_tail_mean_q75(day_at_max_ratio(Close), 60)
+  - ts_regbeta(day_gini(Volume), day_at_max_ratio(Close), 50)
+  - ts_regbeta(day_gini(Volume), day_flat_run_max(Close), 50)
+  - ts_corr(day_gini(Volume), day_at_max_ratio(Close), 50)
+  - ts_regbeta(day_gini(Amt), day_at_min_ratio(Close), 50)
+  - ts_regbeta(day_gini(Volume), day_flat_ratio(Vwap), 50)
+  - ts_regbeta(day_centroid(Amt), day_sum(Ret), 60)
+  - ts_corr(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)
+  - ts_reg_tvalue(day_gini(Volume), day_ar1_coefficient(Ret), 60)
+  - cross_ema(ts_regres(day_gini(Volume), day_kurt(Vwap), 50), 20)
+R:
+- head: ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)
+  why: 烂的部件是「单一的 50 日 OLS 窗口」,以及 beta = cov / var_x 里小方差日让估计很吵。依据是本组的窗口拆解:窗口 25 为
+    +0.04(train +0.25),50 为 +0.97 / +0.92, 100 为 train +0.54 / valid +1.52 —— train
+    在 50 处成峰、valid 随窗口上升,说明 50 不是稳定的最优,而是噪声下的一个点。 Volume 换 Amt 基本不变(+0.88),所以 x 的口径不是烂部件;Vwap
+    换 Close 的 train 掉到 +0.32,所以 y 不要整个换成 Close。 变体因此只动窗口(40-150)、对两个窗口的 beta 取和、对原始
+    beta 先做 EMA、x 取 Volume 与 Amt 的 gini 之和、y 取 Vwap 与 Close 的 kurt 之和, 再加三个诊断(ts_corr、t
+    值去掉 beta 里的尺度项;skew 替换 kurt)。
+  variants:
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 60)
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 75)
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 40)
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 90)
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 120)
+  - ts_regbeta(day_gini(Amt), day_kurt(Vwap), 60)
+  - ts_regbeta(day_gini(Amt), day_kurt(Vwap), 75)
+  - add(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), ts_regbeta(day_gini(Volume),
+    day_kurt(Vwap), 100))
+  - cross_ema(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), 10)
+  - cross_ema(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50), 30)
+  - ts_regbeta(add(day_gini(Volume), day_gini(Amt)), day_kurt(Vwap), 60)
+  - ts_regbeta(day_gini(Volume), add(day_kurt(Vwap), day_kurt(Close)), 60)
+  - ts_regbeta(day_gini(Volume), day_kurt(Vwap), 150)
+  - ts_corr(day_gini(Volume), day_kurt(Vwap), 60)
+  - ts_reg_tvalue(day_gini(Volume), day_kurt(Vwap), 60)
+  - ts_regbeta(day_gini(Volume), day_skew(Vwap), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml
