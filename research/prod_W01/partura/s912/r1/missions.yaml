@@ -1,0 +1,86 @@
+seed: 912
+round: 1
+slots:
+  - type: E
+    core: 'ts_var(sqrt(day_durbin_watson(Vwap)), 10)'
+    hypothesis: >-
+      核心 C = ts_var(sqrt(day_durbin_watson(Vwap)), 10) 是 vol-of-vol。机制与算子:day_durbin_watson 在价格水平上(不去均值)定义为 sum(minute diff^2) / sum(x^2),
+      对 Vwap 就是 分钟 Vwap 变动的均方 / 价格^2,即当日日内已实现方差的无量纲版本;sqrt 之后是日内已实现波动率 rv_t;
+      ts_var(rv, 10) 是 rv 在最近 10 个交易日里的方差,度量 波动率本身有多不稳定 (对风险大小的不确定性)。
+      文献口径:Baltussen, van Bekkum, van der Grient (2018, JFQA) 记录到 vol-of-vol 高的股票未来收益更低;A 股散户偏好彩票型、事件驱动型股票,会把这个方向放大。
+      它是股票的持续性特征(事件驱动 / 机制切换型 vs 平稳型),不依赖某一段行情,所以样本外还应在。
+      和库里 head 的区别:这批唯一的 head 是 cs_first_high40(ts_var(DW,1), C),它只把 C 当成 40% 分位的门槛;门槛的排序键 ts_var(day_durbin_watson(Vwap), 1) 窗口为 1,方差恒为 0,
+      整张面板是常数,所有并列都按股票列序(交易所 / 板块)打破。loc 拆解里把这个常数键换成 DW 本身,train 从 +0.58 掉到 -1.75,说明 head 的内容是 门槛 x 板块列序,
+      并不是 vol-of-vol 的连续排序。本轮 E 把 C 当连续信号来试,外围全部不是 分位门槛 + 常数键:
+      (1) 去掉水平效应,问 同样波动水平下谁更不稳定:cs_bucket_rank(C, 10 日平均 rv)、sub(cs_rank(C), cs_rank(10 日平均 rv)),
+      以及在市值 / 成交额 / 20 日对数涨幅的 decile 内排序(三个 cs_bucket_rank);
+      (2) 看自身历史:C 相对 10 日前的 rank 变化、C 相对 40 日窗口方差的 rank 差、ts_rank(C, 60),即 不确定性在上升还是回落;
+      (3) 用 Low 路径的同构量做 rank 差,看 成交价路径 与 低点路径 的 vol-of-vol 分歧;
+      (4) 把 head 里靠列序隐含的板块显式化:add(cs_rank(C), BoardCode) 做 板块优先、板块内按 C 排序;cs_last_low10 / cs_first_low20 配 ListAge 按两个方向排除最新上市的名字。
+      这些都是连续 rank 构造,和 head 的日度秩相关度预期明显低于 0.7;分母里没有任何除法,避免近零量的爆点。
+      如果有 alpha,最可能来自:同一波动水平下稳定的名字被低估、不稳定的名字被高估(风险不确定性溢价),以及 BoardCode / ListAge 带来的板块与新股结构。
+    seeds:
+      - 'cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ts_mean(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), LogFloatCap)'
+      - 'cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ts_mean(day_sum(Amt), 20))'
+      - 'sub(cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), cs_rank(ts_mean(sqrt(day_durbin_watson(Vwap)), 10)))'
+      - 'add(cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), BoardCode)'
+      - 'cs_last_low10(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ListAge)'
+      - 'sub(cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), cs_rank(ts_delay(ts_var(sqrt(day_durbin_watson(Vwap)), 10), 10)))'
+      - 'ts_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), 60)'
+      - 'sub(cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), cs_rank(ts_var(sqrt(day_durbin_watson(Low)), 10)))'
+      - 'sub(cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10)), cs_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 40)))'
+      - 'cs_first_low20(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ListAge)'
+      - 'cs_bucket_rank(ts_var(sqrt(day_durbin_watson(Vwap)), 10), ts_delta(log(day_last(Close)), 20))'
+  - type: N
+    hypothesis: >-
+      新想法:把一天的价格形成拆成 隔夜(集合竞价 + 夜间消息,Open 相对前收)与 盘中(连续竞价,Close 相对 Open)两段,看这两段收益的 方向分歧 和 衔接方式。
+      机制:A 股 T+1,连续竞价时段由散户 / 噪声交易主导,集合竞价与隔夜缺口更多反映机构与消息;Lou, Polk, Skouras (2019, JFE) 记录到隔夜与盘中的收益各自有持续性、
+      且方向相反(拔河),French and Roll (1986) 也指出盘中单位时间方差远高于非交易时段(噪声交易)。我们只用 Open / Close 两个现成字段,不用分钟路径。
+      算子实现:隔夜 Ov = log(day_first(Open)) - log(ts_delay(day_last(Close), 1)),盘中 Id = log(day_last(Close)) - log(day_first(Open))(用后复权价格,Ov 与 Id 相加是日对数收益);
+      (a) 水平:ts_mean(Ov, 20)、隔夜减盘中的 20 / 40 日均值差,以及先 cs_rank 再 ts_mean 的稳健版本(新股涨停连板会让原始对数收益在截面上出现极端值,先取 rank 就限制了影响);
+      (b) 衔接:ts_corr(Ov, Id, 40) 与 ts_regbeta(Ov, Id, 40)(隔夜缺口是否在盘中被回补:负 = 缺口被噪声交易者过度推高后回落,正 = 缺口被延续),
+      以及 sign(Ov) x (盘中截面 rank - 0.5) 的 20 日均值(今天的缺口方向 与 盘中相对表现 是否同向,无除法、无窗口退化),另有 昨日盘中 与 今日缺口 的同类版本;
+      (c) 形状:ts_skew(Ov, 40),以及 方差落在 隔夜 还是 盘中 的 rank 差 sub(cs_rank(ts_std(Ov, 20)), cs_rank(ts_std(Id, 20)))(盘中方差占比高 = 噪声交易活跃);
+      (d) 两个带 ListAge 的变体,把最新上市的名字按两个方向推出排序,避开新股首日 / 连板造成的伪极端。
+      与库里的 head 和 5 个控制不同:head 是 日内分钟 Vwap 路径的 vol-of-vol 门槛 x 列序,控制是流动性 / 波动 / 20 日反转 / 成交额波动 / 市值;
+      这里的信号是 日内两段收益的 差与衔接,与 20 日总收益(反转控制)只在 Ov + Id 的和上重叠,差与衔接不在其中;不含任何分钟级算子。
+      样本外还应在的理由:T+1 与散户主导连续竞价是制度结构,机构 / 散户在两个时段的参与比重不依赖某段行情;ts_corr / ts_regbeta 变体在上市或复牌后的前 40 日窗口不满,
+      那一小部分股日由少数点决定,ListAge 变体和 EMA 平滑会削弱它,其余变体没有这个问题。
+      如果有 alpha,最可能来自 隔夜(机构 / 消息)收益的持续性与盘中(噪声)收益的反转,表现为 Ov - Id 的差或缺口回补 / 延续倾向。
+    inspired_by: >-
+      第 1 批唯一的 head(cs_first_high40(ts_var(day_durbin_watson(Vwap), 1), ts_var(sqrt(day_durbin_watson(Vwap)), 10)))里,信息只来自 日内成交价路径粗糙度(DW)的跨日不稳定性
+      这一个 噪声 / 不确定性 的度量;112 个已评分候选里凡含 sqrt(day_durbin_watson(Vwap)) 的均值差 +1.44,而含 day_var(Open)、day_sum(Open) 这类价格水平量的候选均值差为负(-0.29、-0.40)。
+      也就是 这一批显示 盘中 噪声交易 的状态比价格水平更有信息。隔夜 / 盘中拆分是用现成 Open / Close 字段把 盘中噪声 与 隔夜信息 分开、且和该 head 不共享任何分钟路径算子的最便宜的另一个切口。
+    seeds:
+      - 'ts_mean(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 20)'
+      - 'sub(ts_mean(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 20), ts_mean(sub(log(day_last(Close)), log(day_first(Open))), 20))'
+      - 'sub(ts_mean(cs_rank(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))), 20), ts_mean(cs_rank(sub(log(day_last(Close)), log(day_first(Open)))), 20))'
+      - 'ts_mean(cs_rank(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))), 10)'
+      - 'sub(ts_mean(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 40), ts_mean(sub(log(day_last(Close)), log(day_first(Open))), 40))'
+      - 'ts_corr(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), sub(log(day_last(Close)), log(day_first(Open))), 40)'
+      - 'ts_regbeta(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), sub(log(day_last(Close)), log(day_first(Open))), 40)'
+      - 'ts_mean(mul(sign(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))), sub(cs_rank(sub(log(day_last(Close)), log(day_first(Open)))), 0.5)), 20)'
+      - 'ts_mean(mul(sign(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))), sub(cs_rank(ts_delay(sub(log(day_last(Close)), log(day_first(Open))), 1)), 0.5)), 20)'
+      - 'ts_skew(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 40)'
+      - 'sub(cs_rank(ts_std(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 20)), cs_rank(ts_std(sub(log(day_last(Close)), log(day_first(Open))), 20)))'
+      - 'cs_first_low20(sub(ts_mean(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1))), 20), ts_mean(sub(log(day_last(Close)), log(day_first(Open))), 20)), ListAge)'
+      - 'cs_last_low10(sub(ts_mean(cs_rank(sub(log(day_first(Open)), log(ts_delay(day_last(Close), 1)))), 20), ts_mean(cs_rank(sub(log(day_last(Close)), log(day_first(Open)))), 20)), ListAge)'
+R:
+  - head: 'cs_first_high40(ts_var(day_durbin_watson(Vwap), 1), ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+    why: >-
+      烂部件 = 第一个参数 ts_var(day_durbin_watson(Vwap), 1):窗口为 1 的方差恒等于 0(DW 缺失的格子也是 0),整张面板是常数,loc 拆解里它自己作为子树也被标成 门槛废品。
+      它在 head 里唯一的作用是让 cs_first_high40 的并列全部按股票列序打破(列序对应交易所与板块)。依据:把它换成 DW 本身,train 从 +0.58 掉到 -1.75(必要性 +2.33),
+      说明 head 的收益来自 列序对应的板块排序,而不是这个量的数值。变体把隐含的列序键换成显式的 BoardCode / LimitWidth / ListAge(这些键内部的并列仍按列序打破),
+      并成对地改 门槛窗口(5 / 20)、门槛宽度(40% 改 20%)、去 sqrt、Vwap 换 Close,以及把板块顺序反过来作为对照,看 head 的收益究竟来自 板块偏好 还是 vol-of-vol 门槛。
+    variants:
+      - 'cs_first_high40(BoardCode, ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(LimitWidth, ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(neg(BoardCode), ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(ListAge, ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(neg(ListAge), ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(BoardCode, ts_var(sqrt(day_durbin_watson(Vwap)), 20))'
+      - 'cs_first_high40(BoardCode, ts_var(sqrt(day_durbin_watson(Vwap)), 5))'
+      - 'cs_first_high20(BoardCode, ts_var(sqrt(day_durbin_watson(Vwap)), 10))'
+      - 'cs_first_high40(BoardCode, ts_var(day_durbin_watson(Vwap), 10))'
+      - 'cs_first_high40(BoardCode, ts_var(sqrt(day_durbin_watson(Close)), 10))'

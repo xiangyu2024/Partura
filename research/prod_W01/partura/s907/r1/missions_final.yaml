@@ -1,0 +1,63 @@
+seed: 907
+round: 1
+slots:
+- type: N
+  hypothesis: '静态账本特征:V2 立方体里 Open/High/Low/Close/Vwap 是后复权价,而 Amt、Volume、FloatCap、FloatShares
+    是未复权的原始量。 这个「价格空间错位」让三个静态量可以直接读出来,而五个控制(流动性、波动、20 日反转、成交额离散度、市值,全是金额/收益/市值的排名)没有一个单独携带它们:
+    (1) 名义股价 P = FloatCap/FloatShares(账本版,等于 LogFloatCap 减 LogFloatShares),或 day_sum(Amt)/day_sum(Volume)(成交版,未复权日
+    VWAP); (2) 复权因子 F = 后复权收盘价 / 名义价格 = 上市以来累计的分红送转倍数(只在除权日才跳变,跨票从 2.5 倍到上百倍; 成交版用
+    day_wmean(Vwap, Volume)(复权的成交量加权均价)除以未复权日 VWAP,账本版用 day_last(Close) 除以 FloatCap/FloatShares);
+    (3) 自由流通比 = LogFloatCap 减 LogTotalCap(限售股/大股东控盘程度)。 另有两个组合:F 与 P 的秩之差(老牌高分红但股价不高的票)、在同市值十分位内的
+    P 与 F(cs_bucket_rank 对 LogFloatCap,去掉规模内的交互)。 机制:P 携带 A 股散户对低价股的彩票型偏好、1 元面值退市规则与相对
+    tick 价差,是持久的投资者构成信息; F 是长期分红送转的累计,代表成熟、有可分配盈利的公司,且只在除权日才变;自由流通比携带控盘/国资/解禁压力。 这些量的秩极持久,每天换手近零,15bp
+    成本几乎吃不到它们,而 M 第 1 批里的快变量(日内当天量)被成本吃光。 和库不同:库里还没有 head,与之最近的现象是 day_std(Volume)(原始股数)那一族好
+    0.99,而 Volume 与 Amt 之差正是名义价格 P, 五个控制都用金额,市值虽然等于 P 乘股数,但对市值的线性、U 形、S 形暴露被去掉后,剩下的恰是同市值下价与股数的分工(cs_bucket_rank
+    的种子直接读它);这里把 P、F、流通比分开、干净地读出来,而不是让它们混在 day_std(Volume) 的量级(流动性)里。 样本外为什么还会在:三者都是制度/账本性质(面值退市、除权规则、股改遗留的限售结构、分红历史),不是某一年的风格暴露,
+    且持续时间比 12 到 24 个月的风格轮动长;方向由训练期选定,若只是风格则验证期会翻转,这是被检验的内容。'
+  inspired_by: M 第 1 批:含 day_std(Volume) 的 53 个候选均值比不含的好 0.99(p<0.001),而 Volume 与
+    Amt 之差就是名义股价,五个控制不含它; 另有 day_var(in_skew_full/in_mean_full(Open/Volume)) 一簇共 49+9+6+4
+    个候选,它们对日内常数求方差,只剩浮点噪声与并列(列序), 却比其余候选好约 0.9 个夏普 —— 说明这一批里名次主要由换手成本决定,需要秩持久的真实特征。
+  seeds:
+  - sub(LogFloatCap, LogFloatShares)
+  - div(day_last(Close), div(FloatCap, FloatShares))
+  - cross_mean(day_last(Close), 20)
+  - sub(cs_rank(div(day_last(Close), div(FloatCap, FloatShares))), cs_rank(sub(LogFloatCap,
+    LogFloatShares)))
+  - sub(LogFloatCap, LogTotalCap)
+  - cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)
+  - cs_bucket_rank(div(day_last(Close), div(FloatCap, FloatShares)), LogFloatCap)
+  - add(cs_rank(sub(LogFloatCap, LogTotalCap)), cs_rank(div(day_last(Close), div(FloatCap,
+    FloatShares))))
+  - cs_bucket_rank(sub(LogFloatCap, LogTotalCap), LogFloatCap)
+- type: N
+  hypothesis: '成交时刻与形态指纹:同样多的成交额,在一天里什么时候、以多大的突发性成交,指向边际交易者是谁 (散户追涨杀跌与彩票型脉冲,还是机构按
+    VWAP 或尾盘拆单)。五个控制度量的都是「成交多少」(金额水平、金额离散度、波动、市值), 这里全部改用无量纲、有界的日内形状量,再用 cross_mean
+    做 30 日平滑成「习性」(一只票的交易习惯跨月很稳定,所以秩持久、换手低): day_centroid(Volume)=成交量重心(0 开盘到 1 收盘);day_gini(Volume)=成交的集中度(Gini,0
+    到 1); div(day_first(Volume), day_sum(Volume))=开盘集合竞价(09:30 那一格)占全天成交的份额; day_distinct_ratio(Close)=一天访问过多少个不同价位(低价股在一档
+    tick 上价位粗糙,是 tick 约束的读数); day_corr(Close, Volume)=价量相关(放量时价格在涨还是在跌);day_corr(Volume,
+    abs_(Ret))=量与波动的耦合; day_signed_ratio(Ret, Amt)=按成交额加权的上涨净占比;sub(div(day_wmean(Close,
+    Volume), day_mean(Close)), 1)=成交量加权价相对时间加权价(钱是在高位还是低位成交); day_skew(Ret)=日内收益偏度(彩票特征);day_es_ratio_hi(Volume)=成交量右尾形状;
+    以及重心的短长窗差(10 日对 60 日,时刻习惯在漂移)和重心与 Gini 的秩之差。 机制:散户为主的票成交集中在开盘与脉冲分钟、价格粘在 tick 上、量价追涨耦合;机构为主的票成交摊在全天、跟随
+    VWAP。 两类持有人的预期收益与被忽视程度不同,且习性稳定;这与流动性/波动/市值是不同的轴(它们只管数量,形状量是比值)。 和库不同:库里没有 head;M
+    第 1 批没有给这些形状量任何非噪声证据,这里是它们的第一次直接检验,且全部用 30 日平滑把快变量变成慢变量。 样本外为什么还会在:投资者构成(散户对机构)是结构性的、不依赖某一年的风格;若它只是
+    2018 到 2021 的某种风格,方向在训练期选定后验证期会翻转, 分数取两段较差者,这正是检验。除 Gini 与价位粗糙度可能与流动性相关外,其余形状量与已知族的相关预期很低。'
+  inspired_by: M 第 1 批:day_var(in_skew_full/in_mean_full(Open/Volume)) 一簇(共 68 个候选)对日内常数求方差,等于只剩浮点噪声与并列,
+    却比其余候选好约 0.9 个夏普,说明名次主要被换手成本决定;另外含 day_std(Volume) 的 53 个候选好 0.99,但它是金额族(流动性)的近亲,
+    会被已知族与控制吃掉,因此改用与数量无关的日内形状比值,并用 cross_mean 平滑到 30 日。
+  seeds:
+  - cross_mean(day_centroid(Volume), 30)
+  - cross_mean(div(day_first(Volume), day_sum(Volume)), 30)
+  - cross_mean(day_distinct_ratio(Close), 30)
+  - cross_mean(day_corr(Close, Volume), 30)
+  - cross_mean(day_corr(Volume, abs_(Ret)), 30)
+  - cross_mean(day_signed_ratio(Ret, Amt), 30)
+  - cross_mean(sub(div(day_wmean(Close, Volume), day_mean(Close)), 1), 30)
+  - cross_mean(day_skew(Ret), 30)
+  - cross_mean(day_es_ratio_hi(Volume), 30)
+  - sub(cross_mean(day_centroid(Volume), 10), cross_mean(day_centroid(Volume), 60))
+  - sub(cs_rank(cross_mean(day_centroid(Volume), 30)), cs_rank(cross_mean(day_gini(Volume),
+    30)))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

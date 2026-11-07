@@ -1,0 +1,100 @@
+seed: 909
+round: 2
+slots:
+- type: E
+  core: cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap)))
+  hypothesis: |-
+    核心 C1 = cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap)))。逐个算子读:day_first(Volume) 是当天第一个有效分钟的成交量,V2 立方体第 0 列是 09:30 开盘集合竞价,所以它就是『开盘集合竞价的成交股数』(该列缺失时退到首个连续竞价分钟,是测量上的小毛病,不是数学问题);day_quantile(inv(Vwap)) 是当天各分钟 1/Vwap 的中位数,价格字段是后复权价,它的截面高位 20% 不是『名义低价股』,而是后复权价最低的 20% ——自基期以来累计收益最差的长期输家(长周期的反转 / 动量排序,5 个控制里的 20 日反转管不到);cs_first_high20(y, x) = rank(y) + 1(x 处在截面最高 20% 的整块并列内),也就是把这批长期输家整体抬到全市场最前面,段内再按集合竞价成交量排序,其余股票按同一个成交量排序排在后面。合起来的意思是『长期输家里,开盘集合竞价参与度最高(或最低)的那些』。
+
+    证据:这个核心是 M 第 2 批 3 个 head 里 2 个的共同子树(第 3 个 head 把 Volume 换成常数 1);拆解里它自身得分 +0.85(train +0.85 / valid +2.44);head 1 里把它换成别的东西得 -2.43(必要性 +3.5);Volume→Amt 与 Vwap→Close 两个替换都保持分数(+1.22 / +1.10),说明信息在『长期输家 × 开盘参与度』这个结构里,不在某个具体字段上。
+
+    库里三个 head 在核心外面做的事情是同一类:把核心当『闸门』,再叠一个『当天的排序变量』——head 1 套两层 cs_last_high40(abs_(day_min(Ret)), ·),head 2 套 cs_last_high40(day_quantile(inv(Vwap)), ·),head 3 把 Volume 换成常数。cs_last_high40 把核心最高 40%(长期输家 ∪ 集合竞价量最大的非输家)整体压到最后,取多头书的方向后,书是这 40% 段内按另一个当日变量排序的头部或尾部。这类『整块闸门』的排序对核心本身高度相关,任何再套一层同样闸门的写法都会被库禁令(日度秩 |ρ| ≥ 0.7)拒掉,所以本位的 15 个种子改变的是别的东西,分五类:
+    (a) 时间维度:cross_mean(C1, 10),用 10 日平均的『段位 + 参与度』代替单日值,把一天里集合竞价量的噪声和分位线上的进出抹掉。
+    (b) 同伴内中性:cs_bucket_rank(C1, LogFloatCap) 与 cs_bucket_rank(C1, 30 日波动),在同规模 / 同波动十分位内比较核心,书不再集中在某个规模或波动的角落(新尺子只去掉对控制的线性、U 形、S 形暴露,不去掉『段内』结构)。
+    (c) 反过来用核心:库里的 head 把 C1 当闸门;这里把 C1 当『排序变量』,闸门换成一个 20–30 日的慢变量 X:cs_first_high20(C1, X) = rank(C1) + 1(X 处在截面最高 20%),cs_first_low20 / cs_first_low40 取最低 20% / 40%。方向取 +1 时多头书是『X 段 ∩ 长期输家 ∩ 集合竞价量大』(取 −1 时是它的反面,方向由 train 选),与库里 head 的组成不同。X 取:OS30(第二条线索,开盘 30 分钟成交额占比的 30 日均值,= head 4 的 cross_mean(C2, 30))、20 日平均的『最坏分钟跌幅』(持续的暴跌倾向,head 1 用的是当日值)、30 日波动(取低波 40% 段)、成交额加权买卖压力 day_signed_ratio(Ret, Amt) 的 20 日平均、20 日平均的隔夜跳空;对 OS30 与暴跌倾向各放高段、低段两个方向,因为全局符号只能整体翻转,翻不出『只取低 X 段』。
+    (d) 排除屏:cs_last_high20(C1, 20 日暴跌倾向)、cs_last_high20(C1, 20 日报价冻结占比 day_zero_ratio(Ret))、cs_last_low20(C1, ListAge),即不让暴跌倾向最高的 20%、报价冻结最多的 20%、上市最晚的 20% 进书。
+    (e) 连续混合:rank(C1) + 0.5 × rank(OS30)、rank(C1) - 0.5 × rank(20 日暴跌倾向),不是整段抬升,而是把第二个变量按半个权重掺进来。
+    种子里所有整块抬升 / 压底的宽度都 ≥ 20%:按独立假设粗算,20% 的整块位移会把排序对未位移版本的日度秩相关降到约 0.59(10% 约 0.69,贴着 0.7 的库禁令),所以不做 10% 的屏。
+
+    为什么样本外还会在:核心里的两个量都是市场结构性的——长期输家(后复权价最低)与开盘集合竞价参与度(散户的限价单集中在集合竞价,A 股散户占比高),前者是 De Bondt-Thaler 一脉的长周期反转,后者在 Lee-Swaminathan 2000 的『过去收益 × 成交量』交互里被当作情绪 / 关注度度量;它们不依赖某一年的行情。需要诚实交代的一点:库里 4 个 head 的 valid 都是 train 的 2 到 4 倍(+1.10/+2.41,+0.99/+2.76,+0.66/+2.11,+0.58/+1.51),分数取两者较差的,所以 train(2018–2021,含 2018 年的单边下跌)是紧约束。因此 (d) 里的三个排除屏被放进来——它们去掉的是最容易在下跌市里出大亏损的名字(暴跌倾向高、报价冻结、新股),目的是抬 train 的下端,而不是 valid;这是推断,没有数据证实。
+  seeds:
+  - cross_mean(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), 10)
+  - cs_bucket_rank(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), LogFloatCap)
+  - cs_bucket_rank(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_std(Ret), 30))
+  - cs_first_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30))
+  - cs_first_low20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30))
+  - cs_first_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(abs_(day_min(Ret)), 20))
+  - cs_first_low20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(abs_(day_min(Ret)), 20))
+  - cs_first_low40(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_std(Ret), 30))
+  - cs_first_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_signed_ratio(Ret, Amt), 20))
+  - cs_first_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 20))
+  - cs_last_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(abs_(day_min(Ret)), 20))
+  - cs_last_high20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), cross_mean(day_zero_ratio(Ret), 20))
+  - cs_last_low20(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap))), ListAge)
+  - add(cs_rank(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap)))), mul(cs_rank(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30)), 0.5))
+  - sub(cs_rank(cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap)))), mul(cs_rank(cross_mean(abs_(day_min(Ret)), 20)), 0.5))
+  literature:
+  - ref: De Bondt, Thaler 1985, Does the stock market overreact? (Journal of Finance)
+    year: '1985'
+  - ref: Lee, Swaminathan 2000, Price momentum and trading volume (Journal of Finance)
+    year: '2000'
+  - ref: Gervais, Kaniel, Mingelgrin 2001, The high-volume return premium (Journal of Finance)
+    year: '2001'
+- type: E
+  core: day_wmean(is_lt(in_index(Amt), 0.125), Amt)
+  hypothesis: |-
+    核心 C2 = day_wmean(is_lt(in_index(Amt), 0.125), Amt)。逐个算子读:in_index(Amt) 给每个有成交额的分钟位置 t/240,is_lt(·, 0.125) 标出 t < 30 的分钟(第 0 列的开盘集合竞价加开盘后 29 分钟),day_wmean(·, Amt) 用 Amt 加权,所以 C2 = 当天成交额里落在开盘 30 分钟的份额(0 到 1,有界,分母是全天成交额,停牌日为 NaN,不会除近零)。库里的 head 4 只做了一件事:cross_mean(C2, 30)(+0.58,valid +1.51;窗口 15 日 +0.52、60 日 +0.47,单日值只有 +0.13,说明信号是 30 日左右的持续成分,不是某一天的事)。下文 OS30 = cross_mean(C2, 30)。
+
+    为什么我认为这是一条值得深挖的线:本种子里两次独立的命中都落在『开盘时段』——M 第 2 批 3 个 head 的共同核心读的是开盘集合竞价成交量,Nb 的 head 读的是开盘 30 分钟成交额占比,两者都用到了第 0 列。机制假设(未经数据证实):散户的限价单集中在集合竞价与开盘后的几分钟,机构的算法单(VWAP / TWAP)把成交摊到全天,所以一只股票 30 日平均的开盘占比越高,越像是散户 / 消息驱动的持仓结构,越低越像机构算法在做;Admati-Pfleiderer 1988 给出自主选择交易时点的交易者在开盘与收盘扎堆的理论,Barber-Odean 2008 说明散户买入集中在引起注意的股票上。
+
+    head 4 与任何只换平滑核的外围(cross_ema、cross_med、别的窗口)日度秩相关都会 ≥ 0.7,会被库禁令拒绝;所以本位的 13 个种子都改变排序结构,而不是改平滑,分五类:
+    (a) 段内排序:cs_first_high20(OS30, 后复权价倒数) 把长期输家(后复权价最低 20%)整体抬到最前、段内按开盘占比排;cs_first_low40(OS30, 同一量) 取相反的长期赢家段;cs_first_low40(OS30, LogFloatCap) 取最小 40% 的小票段;cs_first_high40(OS30, 20 日暴跌倾向) 取暴跌倾向最高 40% 的段;cs_first_high40(OS30, 20 日平均开盘集合竞价量) 取集合竞价量最大的 40% 段(把两条线索接起来,但不带 C1 的价格段)。
+    (b) 排除屏:cs_last_high20(OS30, 暴跌倾向)、cs_last_low20(OS30, ListAge),即不让暴跌倾向最高 20%、上市最晚 20% 的股票进书。
+    (c) 带方向的版本:head 4 里 C2 是没有符号的占比;cross_mean(mul(C2, 开盘跳空), 30) 与 cross_mean(mul(C2, 日内收益), 30) 把它变成『开盘集中度加权的隔夜方向 / 日内方向』,日内收益 = Close 末值 / Open 首值 - 1,隔夜跳空 = Open 首值 / 昨收 - 1,价格是后复权价,除权日连续,分母不是近零量。对应 Berkman 等 2012(高关注度股票隔夜上涨、开盘后回落)与 Lou-Polk-Skouras 2019(隔夜与日内是两类持续的资金)。
+    (d) 动态:cross_mean(C2, 10) - cross_mean(C2, 60)(近期相对长期的开盘占比加速),cross_ema(cross_zscore(C2, 60), 10)(相对自己历史的异常开盘占比,cross_zscore 的 sd 用相对阈值,常数窗口记 0),cross_stddev(C2, 30)(开盘占比的波动:事件驱动 vs 稳定,与水平的秩相关预计只有 0.3-0.5)。
+    (e) 两头占比:cs_first_high20(OS30, 30 日平均的收盘前 30 分钟成交额占比),即开盘与收盘都集中的股票(盘中冷清)。
+    整块抬升 / 压底的宽度都 ≥ 20%(按独立假设粗算,20% 的整块位移把排序对未位移版本的日度秩相关降到约 0.59,10% 约 0.69,贴着 0.7 的库禁令)。
+
+    为什么样本外还会在:开盘集中度是持续的结构特征(30 日平均才有信号),机制由投资者构成和执行方式决定,不依赖某一年的行情;分段与带方向的版本检验的是『这个特征在哪类股票上、对哪种方向的开盘行为有效』,检验失败也会很干净地告诉我们它只是 head 4 的一个整体水平效应。诚实交代:head 4 的 valid 是 train 的 2.6 倍,train 是紧约束;排除屏(b)与暴跌倾向段(a)优先于别的分段,因为它们针对的是下跌市里的大亏损。
+  seeds:
+  - cs_first_high20(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), day_quantile(inv(Vwap)))
+  - cs_first_low40(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), day_quantile(inv(Vwap)))
+  - cs_first_low40(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), LogFloatCap)
+  - cs_first_high40(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), cross_mean(abs_(day_min(Ret)), 20))
+  - cs_last_high20(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), cross_mean(abs_(day_min(Ret)), 20))
+  - cs_last_low20(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), ListAge)
+  - cross_mean(mul(day_wmean(is_lt(in_index(Amt), 0.125), Amt), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 30)
+  - cross_mean(mul(day_wmean(is_lt(in_index(Amt), 0.125), Amt), sub(div(day_last(Close), day_first(Open)), 1)), 30)
+  - sub(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 10), cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 60))
+  - cross_ema(cross_zscore(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 60), 10)
+  - cross_stddev(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30)
+  - cs_first_high40(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), cross_mean(day_first(Volume), 20))
+  - cs_first_high20(cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 30), cross_mean(day_wmean(is_gt(in_index(Amt), 0.875), Amt), 30))
+  literature:
+  - ref: 'Admati, Pfleiderer 1988, A theory of intraday patterns: volume and price variability (Review of Financial Studies)'
+    year: '1988'
+  - ref: 'Barber, Odean 2008, All that glitters: the effect of attention and news on the buying behavior of individual and institutional investors (Review of Financial Studies)'
+    year: '2008'
+  - ref: 'Berkman, Koch, Tuttle, Zhang 2012, Paying attention: overnight returns and the hidden cost of buying at the open (Journal of Financial and Quantitative Analysis)'
+    year: '2012'
+  - ref: 'Lou, Polk, Skouras 2019, A tug of war: overnight versus intraday expected returns (Journal of Financial Economics)'
+    year: '2019'
+R:
+- head: cs_last_high40(abs_(day_min(Ret)), cs_last_high40(abs_(day_min(Ret)), cs_first_high20(mul(day_first(Volume), 1), day_quantile(inv(Vwap)))))
+  why: head 1 的每个部件在拆解里都是必要的(knockout 必要性 +1.4 到 +3.5),所以这里不是『删部件』而是换最弱的一环。依据是 loc 里唯一比原 head 好的拆解变体:Volume→Amt(+1.22 对 +1.10;train +1.22 / valid +2.74)——按股数计的集合竞价成交量随名义股价机械变化,按金额计则不会,这是最弱的一环;Vwap→Close 持平(+1.10),说明价格字段本身不是弱点。其余变体动的是同一个 head 里两层 cs_last_high40 的切法:各切 40%,书最后只剩 40% 段里的一部分,可能切得太宽(v3、v4 各把一层缩到 20%);『最坏分钟跌幅』用 1 分钟 Ret 容易被最小价位档的跳动支配(v5 改成 5 分钟窗口的最大跌幅,v6 改成 20 日平均,把单日噪声去掉)。所有变体都保持 head 的骨架,只改一处,以便与原 head 的得分直接比较。
+  variants:
+  - cs_last_high40(abs_(day_min(Ret)), cs_last_high40(abs_(day_min(Ret)), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Vwap)))))
+  - cs_last_high40(abs_(day_min(Ret)), cs_last_high40(abs_(day_min(Ret)), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Close)))))
+  - cs_last_high20(abs_(day_min(Ret)), cs_last_high40(abs_(day_min(Ret)), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Vwap)))))
+  - cs_last_high40(abs_(day_min(Ret)), cs_last_high20(abs_(day_min(Ret)), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Vwap)))))
+  - cs_last_high40(abs_(day_min(in_pct(Close, 5))), cs_last_high40(abs_(day_min(in_pct(Close, 5))), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Vwap)))))
+  - cs_last_high40(cross_mean(abs_(day_min(Ret)), 20), cs_last_high40(cross_mean(abs_(day_min(Ret)), 20), cs_first_high20(mul(day_first(Amt), 1), day_quantile(inv(Vwap)))))
+- head: cross_mean(day_wmean(is_lt(in_index(is_lt(in_index(Amt), 0.125)), 0.125), Amt), 30)
+  why: head 4 的 30 日窗口已经检验过(15 日 +0.52,60 日 +0.47,都比 30 日 +0.58 差),单日值只有 +0.13,所以平滑本身不是烂部件。烂的候选是两个手写常数:0.125 这个阈值(≈开盘 30 分钟,是种子里随手写的)与硬窗口 cross_mean(旧的尖峰在第 31 天悬崖式掉出)。变体因此分三组:(1) 阈值:0.0625(开盘 15 分钟)、0.25(开盘 60 分钟)、0.004(只有第 0 列的开盘集合竞价)、0.0125(集合竞价加头 2 分钟);(2) 一对对照把 head 的信息拆成两半:只含集合竞价占比的 0.004,与剔除集合竞价后只含连续竞价开盘 29 分钟占比(C2 减集合竞价占比),看信号到底来自集合竞价还是来自开盘后的连续交易;(3) cross_ema(C2, 20) 把硬窗口换成指数衰减(半衰期 20 日,有效长度约 29 日),让旧尖峰逐渐淡出而不是掉崖。
+  variants:
+  - cross_mean(day_wmean(is_lt(in_index(Amt), 0.0625), Amt), 30)
+  - cross_mean(day_wmean(is_lt(in_index(Amt), 0.25), Amt), 30)
+  - cross_mean(day_wmean(is_lt(in_index(Amt), 0.004), Amt), 30)
+  - cross_mean(day_wmean(is_lt(in_index(Amt), 0.0125), Amt), 30)
+  - cross_mean(sub(day_wmean(is_lt(in_index(Amt), 0.125), Amt), day_wmean(is_lt(in_index(Amt), 0.004), Amt)), 30)
+  - cross_ema(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 20)

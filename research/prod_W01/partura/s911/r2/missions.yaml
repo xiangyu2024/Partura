@@ -1,0 +1,119 @@
+seed: 911
+round: 2
+slots:
+  - type: E
+    core: 'ts_quantile_q75(day_close(Low), 10)'
+    hypothesis: >-
+      核心 P = ts_quantile_q75(day_close(Low), 10) 是后复权价格水平(收盘分钟的 Low 取 10 日 75 分位),它在截面上的排序约等于
+      「基期以来的累计收益 + 起始名义价位」,是换手极低的慢变量;但它单独不赚钱(拆解里 P 自身 sufficiency 为 train -1.30 / valid -0.44)。
+      已有两个 head 是独立发现的同一个骨架:M2 的 div(cs_last_low20(A, P), A) 与 Pr1b 的
+      ts_quantile_q25(cs_last_low20(neg(day_quantile_q75(Volume)), day_last(Close)), 10),即
+      cs_last_low20(某个成交量量, 价格水平):价格水平最低的 20% 整体压到最低(秩 -1),其余按成交量量排。
+      两个关键观察:(1) 同一批里连成交量都不用、y 换成纯价格 neg(day_quantile_q75(Low)) 的兄弟
+      ts_quantile_q25(cs_last_low20(neg(day_quantile_q75(Low)), day_last(Open)), 5) 也有 train +0.22 / valid +2.04,
+      说明起作用的是 P 分位上的「断点」,不是成交量;(2) 当 y 本身也是价格(如上面那个兄弟)时,函数 秩(y) - 1[P 在最低 20%] 是价格秩上的锯齿:在 20% 分位两侧各有一个端点,最低值落在 P 秩刚好低于 20% 的名字,
+      最高值落在刚好高于 20% 的名字,P 的两个极端(最低价、最高价)反而落在中间,所以它读的是价格水平的非单调 / 带状暴露(第二个十分位附近);这是我对两个 head 的一个推断,不是已测结论,本位的种子就是为了直接检验它。
+      新尺子只去掉对流动性、波动、20 日反转、已知族、市值的线性 / U / S 形暴露,P 不在控制里,三次多项式也拟合不了 20% 处的断点,所以这个暴露能活下来。
+      本位只做三件事,全部保持 P 原样在内:(a) 把带状 / 断点直接写出来,不借助任何成交量:neg(abs_(sub(cs_rank(P), c))) 取 c = 0.15 / 0.25 / 0.35(V 形,最高处就是 P 秩在 c 附近的十分位),
+      锯齿 cs_last_low{10,20,40}(neg(P), P) 在不同断点位置的版本,以及 cross_ema 平滑版;(b) 把成交量那一腿换成「与水平无关的」日内集中度 H = day_wmean(Amt, Amt) / day_sum(Amt)(Herfindahl,
+      不是流动性控制,也不是已有 head 里按 1/A 重排的写法),用 cs_bucket_rank(·, P) 在价格十分位内排名、乘积符号翻转 mul(sub(cs_rank(P), 0.2), cs_rank(H))、select_where 分组翻转三种方式,
+      检验「成交量腿在价格最低 20% 内外方向相反」这个交互;(c) 对照与迁移:cs_last_low20(H, P) 把 head 1 锯齿骨架里的成交量腿换成无水平的 H;用 P 做垃圾屏 cs_last_low20(y, P) 去掉最低价格组,y 取 20 日反转 / 低波动,
+      以及 P 的带状在市值十分位内排名 cs_bucket_rank(·, LogFloatCap)(看带状是不是市值的代理)和 10 日 vs 120 日价格水平之差(慢动量)。
+      与库里已有 head 的区别:已有 head 都以成交量量为排序主体(M2 还除以它,令非 G 组按 1/A 倒排),这里种子要么完全没有成交量,要么用无水平的集中度,与 head 的秩相关应明显低于 0.7(见相关度表);
+      外围(abs_ / sub 常数 / 锯齿 neg(P) / 分桶 / select_where / mul 交互)与快照里含 P 的 15 个候选的写法(cs_last_low20(A 族, P) 及其包装)都不同。
+      样本外还会在的理由:低价 / 长期累计跌幅大的股票是 A 股散户彩票偏好与垃圾股定价的制度性集中地,带状的两侧(最差十分位含 ST 与退市风险,第二个十分位是「便宜但没坏」)
+      的定价差异来自投资者结构与退市制度(2020 年底起面值退市规则收紧了价格左尾),不依赖某一年的风格。风险:三个 head 的 valid 都明显高于 train(valid +2.3 到 +3.2,train +0.8 到 +1.2),
+      说明 2022 年之后这个暴露更强,样本外可能更接近 valid 而不是 train;所以放了多个断点位置和平滑版本,看哪个在 train 上也站得住。
+    seeds:
+      - 'neg(abs_(sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.15)))'
+      - 'neg(abs_(sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.25)))'
+      - 'neg(abs_(sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.35)))'
+      - 'cs_last_low20(neg(ts_quantile_q75(day_close(Low), 10)), ts_quantile_q75(day_close(Low), 10))'
+      - 'cs_last_low10(neg(ts_quantile_q75(day_close(Low), 10)), ts_quantile_q75(day_close(Low), 10))'
+      - 'cs_last_low40(neg(ts_quantile_q75(day_close(Low), 10)), ts_quantile_q75(day_close(Low), 10))'
+      - 'cross_ema(cs_last_low20(neg(ts_quantile_q75(day_close(Low), 10)), ts_quantile_q75(day_close(Low), 10)), 20)'
+      - 'cs_bucket_rank(pow_2_5(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Low), 10))'
+      - 'cs_bucket_rank(div(day_wmean(Amt, Amt), day_sum(Amt)), ts_quantile_q75(day_close(Low), 10))'
+      - 'mul(sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.2), cs_rank(div(day_wmean(Amt, Amt), day_sum(Amt))))'
+      - 'select_where(is_lt(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.2), cs_rank(div(day_wmean(Amt, Amt), day_sum(Amt))), neg(cs_rank(div(day_wmean(Amt, Amt), day_sum(Amt)))))'
+      - 'cs_bucket_rank(neg(abs_(sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), 0.15))), LogFloatCap)'
+      - 'cs_last_low20(neg(div(day_last(Close), ts_delay(day_last(Close), 20))), ts_quantile_q75(day_close(Low), 10))'
+      - 'cs_last_low20(neg(cross_mean(day_std(Ret), 20)), ts_quantile_q75(day_close(Low), 10))'
+      - 'sub(cs_rank(ts_quantile_q75(day_close(Low), 10)), cs_rank(ts_quantile_q75(day_close(Low), 120)))'
+      - 'cs_last_low20(div(day_wmean(Amt, Amt), day_sum(Amt)), ts_quantile_q75(day_close(Low), 10))'
+  - type: N
+    hypothesis: >-
+      开盘 / 收盘集合竞价参与度的慢变量。机制:A 股一天的成交由三类流组成:开盘第一分钟(通常含集合竞价撮合量,隔夜信息与挂单的集中撮合)、盘中连续竞价(散户与高频主导)、
+      收盘最后一分钟(基准价 / 指数基金 / 机构收盘价成交)。一只股票每天把多大份额的成交额放在开盘分钟、多大份额放在收盘分钟,反映的是机构 / 信息交易者与散户在它身上的构成,
+      是结构性的、变化很慢的性质,与总成交额的水平(流动性控制)和按分钟的波动无关。算子实现:O = day_first(Amt) / day_sum(Amt)(开盘分钟份额)、
+      C = day_last(Amt) / day_sum(Amt)(收盘分钟份额)、H = day_wmean(Amt, Amt) / day_sum(Amt)(整天成交额在分钟间的集中度,Herfindahl),分母是当天总额所以三个量都是 0 到 1 的份额,
+      与水平无关;再用 60 日 cross_mean / cross_med / cross_ema / cross_stddev 累积成慢变量(换手远低于单日量),并给出 O 与 C 的差和比、对数比(抗收盘分钟成交极小的爆点)、
+      在流动性十分位内排名(cs_bucket_rank 对 cross_mean(day_sum(Amt), 60))、在市值十分位内去均值、10 日与 60 日的偏离(开盘份额突然抬升 = 事件)、O 与当日总额的 60 日相关等写法。
+      还放了一个对照种子 cross_mean(day_at_max_ratio(Close), 60)(当日收盘价被钉在最高价的时间份额,涨停锁定接近 1),用来判断 head 3 的真实来源:
+      head 3 里 day_first(Volume) / 前一日 day_last(Volume) 在 60 日均值里被「收盘分钟成交极小」的日子主导(比值可以到几十至几百,这是估计,未实测),这既可能是开盘 / 收盘的构成差异,也可能只是涨跌停封板日的计数,
+      两类种子一起评估即可区分。为什么是新的:库里的 head 3 用的是「首分钟股数 / 前一日末分钟股数」的比值再取 60 日均值(重尾,由极端日决定),这里全部用当日总额做分母的有界份额,
+      与 head 3 的秩相关应明显低于 0.7;共性表里没有任何含 day_first(Amt)、day_last(Amt) 或 day_sum(Amt) 做分母的子树,日内形状量(day_centroid(Volume) 等)出现过 7 到 12 次但没有富集,
+      这里不是单日形状,而是 60 日累积的份额。灵感:第 1 批 Pr1b 里我的隔夜 / 日内收益种子 94 个全部 ≤ -0.13,而 GP 把其中一个把 Open 换成 Volume 之后变成 head 3(score +0.82),
+      说明有信息的是首末分钟的成交量,不是首末分钟的价格。样本外还会在的理由:集合竞价制度、T+1、基准价成交与机构占比都是制度性的,份额的横截面差异是慢变量,不依赖某一年的行情;
+      风险是沪深两所的收盘撮合安排不同且历史上有过变化,C 在交易所之间可能不可比,所以放了在市值 / 流动性分桶内的写法,并且不依赖 C 单独成立。
+    inspired_by: >-
+      第 1 批 Pr1b:隔夜 / 日内收益种子 94 个全部 ≤ -0.13,其中一个种子被 GP 把 Open 换成 Volume 后成为 head 3
+      sub(cross_mean(sub(div(day_first(Volume), cross_delay(day_last(Volume), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60))(score +0.82,valid +2.56);
+      head 3 的 ID 收益项按数量级估计(日均约 1e-3,对比成交量比值减 1 的 60 日均值通常在 1 以上)比成交量比值小两到三个量级,所以我判断实际起作用的是首末分钟成交量的比值(未单独测过)。
+    seeds:
+      - 'cross_mean(div(day_first(Amt), day_sum(Amt)), 60)'
+      - 'cross_mean(div(day_last(Amt), day_sum(Amt)), 60)'
+      - 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(div(day_last(Amt), day_sum(Amt)), 60))'
+      - 'cross_mean(div(day_wmean(Amt, Amt), day_sum(Amt)), 60)'
+      - 'cross_ema(div(day_first(Volume), day_sum(Volume)), 30)'
+      - 'cross_med(div(day_first(Amt), day_last(Amt)), 60)'
+      - 'sub(cs_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 60)), cs_rank(cross_mean(div(day_last(Amt), day_sum(Amt)), 60)))'
+      - 'cross_mean(log(div(add(day_first(Amt), 1), add(day_last(Amt), 1))), 60)'
+      - 'cross_stddev(div(day_first(Amt), day_sum(Amt)), 60)'
+      - 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), LogFloatCap)'
+      - 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 10), cross_mean(div(day_first(Amt), day_sum(Amt)), 60))'
+      - 'cross_mean(day_centroid(Amt), 60)'
+      - 'cross_mean(day_at_max_ratio(Close), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_sum(Amt), 60)'
+      - 'cs_bucket_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(day_sum(Amt), 60))'
+      - 'div(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), add(cross_mean(div(day_last(Amt), day_sum(Amt)), 60), 0.001))'
+R:
+  - head: 'div(cs_last_low20(pow_2_5(day_wmean(Volume, Volume)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_wmean(Volume, Volume)))'
+    why: >-
+      烂的部件是 Volume(股数):股数与名义价格强负相关,低价股天然股数大,所以 A = pow_2_5(day_wmean(Volume, Volume)) 里混着价格水平,而价格水平本来是 cs_last_low20 的另一条腿。
+      依据:拆解里 Volume->Amt 的变体 score +1.45(train +1.45 / valid +3.34),比原 head 的 +1.19 高 0.27,train 是瓶颈(原 train +1.19、valid +3.16);
+      拆解里 P 的窗口(5 / 20)和 Low->High 都是 +1.14 到 +1.17,不敏感,所以这些不动。
+      变体:Amt 化本身(已测);Amt 化后再动 train 薄弱处的三个参数:断点大小(cs_last_low10 / low40)、分母幂(原 2.5 -> 3,
+      拆解里幂降到 1 时 train 从 +1.19 掉到 +0.69,valid 掉到 -0.50,方向是越大越好,两点外推)、P 换成 ts_quantile_q75(day_close(Open), 40)(共性表里含该子树的 cs_last_low20 组合均值差 +1.70,窗口 40);
+      最后一个把分钟成交额的刻画由 wmean 换成 head 2 用的 Q75(跨 head 嫁接)。
+    variants:
+      - 'div(cs_last_low20(pow_2_5(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_wmean(Amt, Amt)))'
+      - 'div(cs_last_low10(pow_2_5(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_wmean(Amt, Amt)))'
+      - 'div(cs_last_low40(pow_2_5(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_wmean(Amt, Amt)))'
+      - 'div(cs_last_low20(pow_3(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Low), 10)), pow_3(day_wmean(Amt, Amt)))'
+      - 'div(cs_last_low20(pow_2_5(day_wmean(Amt, Amt)), ts_quantile_q75(day_close(Open), 40)), pow_2_5(day_wmean(Amt, Amt)))'
+      - 'div(cs_last_low20(pow_2_5(day_quantile_q75(Amt)), ts_quantile_q75(day_close(Low), 10)), pow_2_5(day_quantile_q75(Amt)))'
+  - head: 'ts_quantile_q25(cs_last_low20(neg(day_quantile_q75(Volume)), day_last(Close)), 10)'
+    why: >-
+      烂的部件有两处:(1) y = neg(day_quantile_q75(Volume)) 里的股数同样混着价格水平(Volume->Amt 只 +0.04,所以不是主要毛病,但在 Amt 口径下才能和 head 1 的 Amt 化版本对齐比较);
+      (2) 断点位置与 y 的分位从未被测过:拆解只动了窗口(5 / 20:+0.81 / +0.74)与 Close->Vwap(+0.84),都是噪声级;score 的瓶颈是 train(+0.83,valid +2.25)。
+      变体:Amt 化之后再动 cs_last_low 的断点大小(10 / 40)、断点用的价格(day_last(Close) 换成 head 1 的平滑价格水平 P)、
+      y 的刻画(Q75 换成 Q25 即「薄分钟」水平,以及换成 head 1 的 A 族 pow_2_5(day_wmean(Amt, Amt)))。
+    variants:
+      - 'ts_quantile_q25(cs_last_low10(neg(day_quantile_q75(Amt)), day_last(Close)), 10)'
+      - 'ts_quantile_q25(cs_last_low40(neg(day_quantile_q75(Amt)), day_last(Close)), 10)'
+      - 'ts_quantile_q25(cs_last_low20(neg(day_quantile_q75(Amt)), ts_quantile_q75(day_close(Low), 10)), 10)'
+      - 'ts_quantile_q25(cs_last_low20(neg(pow_2_5(day_wmean(Amt, Amt))), day_last(Close)), 10)'
+      - 'ts_quantile_q25(cs_last_low20(neg(day_quantile_q25(Amt)), day_last(Close)), 10)'
+  - head: 'sub(cross_mean(sub(div(day_first(Volume), cross_delay(day_last(Volume), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60))'
+    why: >-
+      烂的部件是比值本身的重尾:day_first(Volume) / 前一日 day_last(Volume) 的分母是单分钟成交量,在封板日 / 清淡日可以接近 0,比值可到几十至几百(估计,未实测),60 日 cross_mean 被极端日主导;
+      第二项 ID 收益 cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60) 数量级约 1e-3,比第一项小两到三个量级,在 sub 里基本不起作用(拆解里去掉 -1、去掉 delay 都是 +0.80 到 +0.82,
+      但这只说明它们不重要,没有单独测过比值的稳健化)。变体:中位数(去掉极端日)、分母加平滑常数 1000 股、对数比、
+      以及把分母换成当日总量的有界份额(开盘份额;开盘份额减收盘份额),判断 head 的信息来自极端日、来自开盘 / 收盘构成,还是两者兼有。
+    variants:
+      - 'cross_med(sub(div(day_first(Volume), cross_delay(day_last(Volume), 1)), 1), 60)'
+      - 'cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 1000)), 60)'
+      - 'cross_mean(log(div(add(day_first(Volume), 100), add(cross_delay(day_last(Volume), 1), 100))), 60)'
+      - 'cross_mean(div(day_first(Volume), day_sum(Volume)), 60)'
+      - 'sub(cross_mean(div(day_first(Volume), day_sum(Volume)), 60), cross_mean(div(day_last(Volume), day_sum(Volume)), 60))'
