@@ -1,0 +1,37 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 7, 8, 9, 11, 12]
+    reasons: >-
+      创新度 3。核心 C = cross_mean(day_centroid(Volume), 30) 本身就是 head 1（sub(cs_rank(C), cross_mean(day_gini(Volume), 30))）的主项，相关度表里 slot a core 对 head 1 的原始 |ρ| 为 0.96，所以 C 不是新的。16 个种子新在门：cs_first_low40 / cs_first_high40 / cs_first_low20(C, X) 把 X 的一档整块推到最前，多头腿换成「X 不极端的票里取最低 C」。未划掉的种子（3、4、5、6、10、13、14、15、16）对 head 1 的原始 |ρ| 为 0.43–0.68（种子 6 为 0.10），与 5 个控制的最大 |ρ| 为 0.75（种子 4 对 size）。这不是换写，但核心 C 不新，所以给 3 而不是 4。
+      合理度 4。逐个核对算子。cs_first_low40 / cs_first_high40 / cs_first_low20 在 ops_ext.py 里都经过 _lexi：对 x 取整块并列（tie block）的 (lo, hi] 带，带内 y 的秩加 1，文档与代码一致。门的期望值（X 与 C 无关时，40% 门的 |ρ| 约 0.51，20% 门约 0.585）按方差公式核对过，PI 写的 0.59 是四舍五入差；mul(rank C, rank S) 与 rank C 的 0.65 也对；种子 6 的带与 rank C 的 |ρ| 约 0.04 也对。没有 ts_rank / cross_rank / in_rank_rolling（nanrank_last 陷阱不涉及），没有 ts_spearman 与 nt_*。前视：按 backtest/engine.py 的 T→T+1 约定（t 日收盘定仓），全天量在定仓时已知，不是前视。
+      风险，不挡：(i) C 的第 240 格（15:00）含收盘集合竞价。我记得沪市收盘集合竞价是 2018 年 8 月起才实施的，训练段前半段两所不一致，C 的水平可能含交易所乘时间的哑变量，这就是 PI 的风险 (i)，请 PI 核对起始日。(ii) 种子 6 的 20% 带若 C 在 0 处有大块并列（整天只在 09:30 格成交的票），带边界会由列序决定，请数一下并列块大小。(iii) 门的 X 与 C 的截面相关未给，门后多头腿换人的幅度需要 PI 看。
+      划掉的 7 个都是确定性规则：1、2、9 与 M2 的股本 / day_std 门头的 |ρ| 为 0.71–0.79；7、8、11、12 与 head 1 的 |ρ| 为 0.72–0.74；其中 11（known 0.83、liq 0.80）与 12（known 0.83、liq 0.82）还触发了控制的 0.8 线。它们都是 M2 或 head 1 的门结构换成 C 排序，属于重复。
+      如果它有 alpha，最可能来自：成交时点习惯（机构 VWAP 拆单、尾盘集中，对比开盘集中的散户）在门内的人群选择。门把多头腿限制在 X 不极端的那一半票里，若 C 的收益只在大盘或小盘一侧成立，门会把它放大。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 7, 13]
+    reasons: >-
+      创新度 4。库里 10 个 head 读的都是成交时点（centroid、gini、门）、价位和股本结构，没有一个读收益的时段分布，也没有隔夜与日内的拔河。收益侧的种子（10 尾盘符号金额比、11 尾盘收益和、12 隔夜跳空、14 日内收益、15 拔河）与库里所有 head 都是新东西。成交侧的时段份额与分段重心（1、2、3、5、6、8）对 head 1 的原始 |ρ| 为 0.33–0.65，是同一大类（成交时点）里的新度量，不是换写，所以给 4 而不是 5。对 5 个控制的最大 |ρ| 为 0.59（种子 14 对 rev），都不到 0.8。
+      合理度 4。逐个核对算子。in_slice(x, a, b) 在 dt_in.py 里是 x[:, a:b+1] 切片，不是掩码，所以 day_centroid(in_slice(...)) 是切片内部的相对重心（0 为切片第一格），与 PI 说的「内部重心」一致。day_first / day_last 取第一个 / 最后一个有限值，缺格时会落到相邻格，这是定义细节，不挡。div 是裸除法，分母是 day_sum(Volume) 或 day_sum(Amt) 等；零分母只出 NaN 或 inf，inf 进截面秩前会被 isfinite 过滤，最多让该票当天无效。cross_delay 是日轴平移，停牌日的 NaN 不会跨日串接。day_centroid(Ret) 的 |Ret| 对限价锁死日只剩少数 bar，定义上可算，噪声大，PI 已记。
+      划掉 13（定义坏掉）：gate 已标废品，截面 distinct 0.484，即约一半票的 cross_med 值并列。§4 允许列序打破，但这里并列的是近半截面的同一个值，排序主要由并列（也就是列序）决定，属于「面板几乎是常数」，划掉。
+      自动划掉的 4 与 7：4 对 head 1 的原始 |ρ| 为 0.963，去掉 0 格和 240 格几乎不改重心，实际就是 C 的重复，所以 PI 预期的「无竞价重心」检验会塌成 C；7 对 head 1 为 0.841，前 30 分钟份额即开盘集中度，与 centroid 同向。
+      需 PI 核对但不挡：(a) 1 与 2 只差 240 格与 0 格，控制轮廓在 0.01 以内（size 差 0.03），对 head 1 的 |ρ| 为 0.598 与 0.608。这是 (a) 的排除检验本身，所以保留；但若 train 上 ρ(1, 2) ≥ 0.9，二者等价，应只留其一。(b) 1、2、3、10、11、14、15 用到了 14:31–15:00 的量或价。按 T→T+1 约定它们不是前视，但 15:00 格的量与收盘价是同一场收盘竞价形成的，实盘只能用 14:30 前的信息，结论要按这个口径读。(c) 61–180 被标成「午间」，实际是 10:31–11:30 与 13:01–14:00，不影响数学。(d) 12 的隔夜跳空依赖后复权 Open 与前收盘在除权日的复权基准一致，未核对数据。
+      如果它有 alpha，最可能来自：不同参与者的时段与隔夜、日内偏好（散户的开盘与脉冲成交，机构的 VWAP 与尾盘拆单；隔夜与日内收益归属不同客户群，即 Lou-Polk-Skouras 式的拔河）。这些习惯是慢变量，换手低，15bp 吃不掉。
+R:
+  - head: 'sub(cs_rank(cross_mean(day_centroid(Volume), 30)), cross_mean(day_gini(Volume), 30))'
+    soundness: 4
+    reasons: >-
+      合理度 4。变体 1、2、3、4、6 都是在秩上对已知族 K = cross_mean(day_std(Amt), 30) 做中性化：变体 1 与 4 是截面 OLS 残差（cs_regres 已核对代码），变体 3 的 0.56 与 PI 给出的协方差零点一致（-ρ ≈ 0.56），变体 2 的 0.4 是部分中性化，变体 6 是半衰期 20 的 EMA 版本。新尺子已经对 K 的秩、平方、三次做了残差，所以这些变体在奖励层面几乎等价于 cs_rank(C) 本身（PI 给的 +1.73），gini 项只是对 K 的一个敞开对冲，不是 alpha 来源，替换的理由成立。机制清楚：成交时点是 alpha，已知族暴露是要去掉的部分。
+      需 PI 注意：变体 5 cs_regres(rank C, rank gini30) 对原 head 的原始 |ρ| 为 0.994，只是换了权重，不是新东西。如果它的分数高 0.1 以上，会替换 head 1 为一个近似相同的 head，应当当作权重搜索看待。变体 6 的 cross_ema(·, 20) 是日轴 EMA，跳过缺失日，算子语义正确。
+      如果它有 alpha，最可能来自：C 的成交时点信息在去掉已知族暴露后仍在；gini 的线性部分（PI 说单独 -2.02）是要去掉的那一块。
+  - head: 'signedpower(cs_first_low40(LogFloatShares, signedpower(cs_first_low40(cs_quantile_q25(LogFloatShares), day_std(Volume)))))'
+    soundness: 3
+    reasons: >-
+      合理度 3。外层算子语义正确（cs_first_low40 的带与 +1 的 shift；signedpower 对正值单调，对排名是 no-op）。问题在内层 cs_quantile_q25：它不是分位数值，而是 cs_quantile 算子返回的布尔旗标（x >= 每日第 75 百分位，即 LogFloatShares 最大的 25% 为 1；名字里的 q25 不是下 25%）。旗标的秩在 75% 的票上并列，_pct_rank 按股票列序打破，所以 head 3 的内层（以及变体 2）对这 75% 的票的排序主要是列序，即交易所与板块。§4 把「并列靠列序打破」列为不是问题，所以不挡；但请 PI 知道 head 3 的 +0.99 里有一部分是板块排序，而不是 day_std 门或股本的信号。
+      变体 1（去掉 cs_quantile_q25）与变体 3（单层）没有并列，算子干净。变体 3 signedpower(cs_first_low40(LogFloatShares, day_std(Volume))) 与库里已有的 M2 head signedpower(cs_first_low40(abs_(LogFloatShares), day_std(Volume)))（+1.43）完全相同：LogFloatShares ≥ 0，abs_ 是恒等，相关度表的 |ρ| 为 1.000。若 R 把 head 3 替换成变体 3，库里会有两个相同的 head，请 PI 删掉变体 3，或在收录前去重。这一点不改变本组合理度的打分。
+      如果它有 alpha，最可能来自：day_std(Volume) 最低 40% 整块推前、其余按流通股本排的那一层（M2 已见，+1.43）；外层与 Q 层的贡献要么是列序，要么是冗余。
+summary: '本轮 a 通过（创新 3、合理 4，自动划掉 1、2、7、8、9、11、12，剩 9 个）；b 通过（创新 4、合理 4，划掉 4、7（自动）与 13（定义坏掉），剩 12 个）；R 两组保留（R1 合理 4；R2 合理 3，内层 cs_quantile_q25 是布尔旗标，75% 并列按列序，变体 3 与 M2 head 重复）。无前视、无 ts_spearman 与 nt_*、无 nanrank 陷阱。需 PI 核对：沪市收盘集合竞价起始日与 15:00 格的哑变量；种子 6 的 C 并列块；ρ(b1, b2)。'

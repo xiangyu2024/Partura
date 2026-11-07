@@ -1,0 +1,124 @@
+seed: 902
+round: 2
+slots:
+- type: E
+  core: div(day_first(Amt), day_sum(Amt))
+  hypothesis: '核心:集合竞价(第 0 根,09:30 标签)成交额占全天成交额的比例 div(day_first(Amt), day_sum(Amt)),有界在
+    [0,1]、不带量纲(不是 Amt 的水平,也不是分钟 Amt 的离散度)。
+
+    证据(全部是样本内):它是 M 两批 + 本种子第 1 轮能看到的候选里,train 与 valid 都为正、且 valid 很高的一个簇。共性表里含它的候选
+    13 个,均值差 +1.02(p 0.001);第 1 轮 Pr1a 里它的 15 / 20 / 30 日平滑写法拿到 score +0.21 / +0.14
+    / +0.15,拆开是 train +0.11~+0.21、valid +1.19~+1.45 —— 符号一致,但 train 只有 0.1~0.2,是 score
+    = min(train, valid) 里卡住的那一边;改平滑窗口(15、20、30、再叠 30)train 都停在 0.1~0.2,所以限制不在换手成本(平滑越慢成本越低,train
+    没变),而在 train 段里这个量的截面排序里混了不属于 alpha 的成分。
+
+    alpha 的来源假设:09:25 的集合竞价是一天里唯一把隔夜信息(公告、外盘、政策)和提前下好的单(基金申赎、程序化、游资竞价抢筹)在同一个价格上撮合的时刻,
+    其余时间是散户盯盘追涨杀跌的连续竞价。一只股票的"成交有多大比例是在竞价里完成的"是一个缓慢变化的持有人结构 / 关注度特征,竞价占比高 = 成交由提前下单者(机构
+    / 游资)主导, 占比低 = 由盘中情绪主导;前者的定价更接近信息,后者容易被日内情绪推过头、之后回吐。这是一个慢特征(换手低,15 bp 不吃光)。
+
+    本轮要试的外围处理(与第 1 轮见过的"cross_mean 叠 cross_mean"完全不同,共 16 个种子,八类写法):(1) 换聚合方式:cross_ema(半衰期而不是窗口)、cross_med(中位数,忽略一字板日的爆发)、cross_tail_mean_q75(只看自己占比最高那几天的均值)、cross_stddev(占比的稳定性:稳定的机构式参与
+    vs 突发的游资式参与);(2) 相对自己的历史:cross_zscore(C, 60) 再平均、以及 20 日均值减 120 日均值(竞价参与度是在升还是在降),去掉
+    train 里不是 alpha 的"这只股票一贯的竞价占比水平"(板块、上市年龄、做市结构造成的永久差异);(3) 同类内比较:cs_bucket_rank
+    / cs_bucket_demean 在 LogFloatCap 十分位内、ListAge 十分位内、以及 20 日成交额(流动性)十分位内排名(5 个控制已经去掉了对市值的线性
+    / 二次 / 三次暴露,但没有去掉"在同市值股票里的相对竞价占比"这种交互);(4) 条件在方向上:C 在高开日的均值减 C 在低开日的均值(竞价里放量的方向
+    —— 带符号的竞价压力);(5) 筛选:cs_first_low40 / cs_first_high40 把前 40% 小市值 / 大市值股票里的竞价占比排在前面(只在一个市值段里做);(6)
+    排除机械成分:cs_last_high10(C, 当日高开幅度) 把当日高开最极端的 10%(涨停开盘的一字板,竞价占比机械地高 / 低)排到最后再平均;(7)
+    日度排名后再平均 cross_mean(cs_rank(C), 40),不让个别爆发日支配;(8) 与收盘集合竞价占比做差(开盘 vs 收盘的成交构成)。
+
+    和库里已有的为什么不同:库里目前没有 head(0 个),所以不会和 head 重复。对 5 个控制:C 是比例,不含 Amt 水平(流动性控制),不含 Amt
+    的分钟离散度(已知族 cross_mean(day_std(Amt), 30) 是水平 × 离散度,C 是第 0 根的份额);对市值只以同类内排名的形式使用。外围与"已见过的含该核心的候选"不同:已见过的全是
+    cross_mean 套 cross_mean(15/20/30),本轮没有一个种子只是换窗口。
+
+    样本外为什么还会在:机制来自 A 股的撮合制度(集合竞价 + 连续竞价 + T+1 + 散户为主的连续竞价),这在 2018~2023 没有变;同一个符号在
+    train 与 valid 都是正的;外围里相对自己历史、同类内排名、排除一字板这几类写法,目的正是去掉 train 里随时间变的结构性成分(2020-08
+    创业板改 20% 涨跌幅、2021 年风格极端),而不是调参。
+
+    已知风险:日内第 0 根若当天没有成交(Amt 缺失),day_first 取到第一根有效值,这时 C 退化为开盘第一分钟占比,仍有定义;C 本身有界,不会除零爆点(day_sum(Amt)
+    为 0 的停牌日已被掩码)。'
+  seeds:
+  - cross_ema(div(day_first(Amt), day_sum(Amt)), 30)
+  - cross_mean(cross_zscore(div(day_first(Amt), day_sum(Amt)), 60), 20)
+  - sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 20), cross_mean(div(day_first(Amt),
+    day_sum(Amt)), 120))
+  - cs_bucket_rank(cross_mean(div(day_first(Amt), day_sum(Amt)), 30), LogFloatCap)
+  - cross_med(div(day_first(Amt), day_sum(Amt)), 40)
+  - cross_tail_mean_q75(div(day_first(Amt), day_sum(Amt)), 60)
+  - cross_stddev(div(day_first(Amt), day_sum(Amt)), 40)
+  - sub(cross_mean(mul(div(day_first(Amt), day_sum(Amt)), is_gt0(sub(div(day_first(Open),
+    ts_delay(day_last(Close), 1)), 1))), 40), cross_mean(mul(div(day_first(Amt), day_sum(Amt)),
+    is_gt0(neg(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)))), 40))
+  - sub(cross_mean(cs_rank(div(day_first(Amt), day_sum(Amt))), 30), cross_mean(cs_rank(div(day_last(Amt),
+    day_sum(Amt))), 30))
+  - cross_mean(cs_bucket_demean(div(day_first(Amt), day_sum(Amt)), LogFloatCap), 30)
+  - cross_mean(cs_last_high10(div(day_first(Amt), day_sum(Amt)), sub(div(day_first(Open),
+    ts_delay(day_last(Close), 1)), 1)), 30)
+  - cross_mean(cs_bucket_rank(div(day_first(Amt), day_sum(Amt)), cross_mean(day_sum(Amt),
+    20)), 30)
+- type: N
+  hypothesis: '机制:一天里的成交"在什么时间段完成"与各时间段的买卖压力 —— 按参与者类型拆开成交构成。第 1 轮和 M 两批里唯一在 train
+    与 valid 都为正的簇是"第 0 根(集合竞价)占全天成交额的比例"(E 位在深挖),它说明新尺子下留得下来的信息是成交在日内时间轴上的构成(一个比例、有界、不带量纲),而不是任何量的水平。这个位把同一个视角推广到其他时间段:A
+    股 09:30 开盘集合竞价之后的前 30 分钟(隔夜信息被连续竞价消化)、中间 120 分钟(盘中散户的主要时段、午前午后的沉闷期)、最后 30 分钟(机构
+    / 基金的调仓、指数基金与 ETF 申赎、被动资金和"尾盘抢筹"集中的时段;创业板 / 科创板与深市有收盘集合竞价,沪市主板是连续竞价到 15:00)。文献依据:Heston-Korajczyk-Sadka
+    (2010) 发现个股收益在日内的半小时周期性、说明参与者的日内交易节奏是稳定的个股特征;Gao-Han-Li-Zhou (2018) 的日内动量:开盘半小时收益预测最后半小时收益,尾盘是机构调仓和知情交易的时段;Cushing-Madhavan
+    (2000) 说明尾盘成交里机构占比高。
+
+    算子怎样实现(15 个种子,骨架互不相同,四组):(1) 构成份额:最后一根(收盘)占全天成交额的比例 div(day_last(Amt), day_sum(Amt))、最后
+    30 分钟份额 div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))、开盘后 30 分钟份额(in_slice(Amt,
+    1, 30),不含第 0 根集合竞价)、中间段份额(in_slice(Amt, 61, 180));都用 cross_mean / cross_ema 取
+    30-40 日的慢均值,不放进水平;(2) 构成的形状:去掉集合竞价和最后一根之后的成交额重心 day_centroid(in_slice(Amt, 1,
+    239))(成交是前重还是后重)、最后 30 分钟份额减开盘后 30 分钟份额、前 5 分钟份额减最后 5 分钟份额(开收盘强度对比);(3) 分段的买卖压力:day_signed_ratio(Ret,
+    Amt) 只在最后 30 分钟 / 开盘后 30 分钟内取(分段的净买入占比,有界在 [-1,1]),以及两者之差(尾盘净买入 - 早盘净买入:早盘卖、尾盘买的分歧);分段收益
+    day_last(in_pct(Close, 30)) 与 day_first(in_pct(Close, 30))(最后半小时与开盘半小时的收益,即日内动量的两端);(4)
+    相对性写法:自己历史 cross_zscore(份额的 5 日均值, 120)(尾盘份额相对自己长期水平的异常)、市值十分位内排名 cs_bucket_rank(·,
+    LogFloatCap)、日度排名后再平均 cs_rank。
+
+    和库里已有的为什么不同:库里目前没有 head(0 个),不存在重复问题。对 5 个控制:全部是份额、比例、带符号占比或收益,不含 Amt / Volume
+    的水平(流动性控制)、不含分钟 Amt 的标准差(已知族 cross_mean(day_std(Amt), 30) 受第 0 根和最后一根的巨大成交额支配,是"水平
+    × 离散度",份额则去掉了水平);分段收益不是 20 日反转(只覆盖一个半小时,且均值取的是日内收益而不是累计收益);全程不含 ts_rank / cross_rank
+    / in_rank_rolling(避开缺失日返回 0 的已知行为),也没有除以近零量:份额分母是全天成交额(停牌日已掩码),分段买卖压力分母是该段成交额,有界。与
+    E 位不同:E 位只用第 0 根的份额、保留核心的家族,这个位不含该核心,看的是别的时间段。
+
+    样本外为什么还会在:机制来自交易制度(T+1、涨跌停、散户为主的连续竞价、机构在尾盘调仓),而不是某一段行情的风格;份额是持有人结构的慢特征(30-40 日窗口换手低);相对自己历史和同类内排名这两类写法是针对
+    train / valid 之间的结构性变化(2020-08 创业板改 20% 涨跌幅;2022 年之后北向与机构占比变化)。已知风险:最后一根在沪深两市的含义不同(深市是
+    14:57~15:00 的收盘集合竞价,沪市主板是连续竞价),这是个横截面的板块差异,可能让收盘份额主要在区分交易所 —— 用市值十分位内排名和日度排名两种写法部分缓解,但不能消除;若
+    in_slice 的分钟下标与数据网格有 1 根偏差,只会让份额窗口平移一分钟,不影响定义。'
+  inspired_by: 本种子第 1 轮 + M 前两批共 325 个已评分候选:共性表第 4、5 行 —— cross_mean(div(day_first(Amt),
+    day_sum(Amt)), 15) 与 div(day_first(Amt), day_sum(Amt)) 的均值差 +1.03 / +1.02(p 0.009
+    / 0.001),Pr1a 里它的平滑写法是 train +0.11~+0.21、valid +1.19~+1.45(train 与 valid 都为正);同一批里
+    overnight-intraday 的收益拆分与"放量日 / 缩量日"的收益条件化(第 1 轮两个位的其余 27 个种子)无一进入前 5(分数 < 0.1
+    / < 0.4)。结论:留得下来的是成交构成这种份额类特征,所以把它推广到其他时间段。
+  literature:
+  - cite: Heston, Korajczyk, Sadka (2010), Intraday patterns in the cross-section
+      of stock returns, Journal of Finance
+    year: '2010'
+  - cite: Gao, Han, Li, Zhou (2018), Market intraday momentum, Journal of Financial
+      Economics
+    year: '2018'
+  - cite: Cushing, Madhavan (2000), Stock returns and institutional trading at the
+      close, Journal of Financial Markets
+    year: '2000'
+  seeds:
+  - cross_mean(div(day_last(Amt), day_sum(Amt)), 30)
+  - cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30)
+  - cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 30)
+  - cross_mean(div(day_sum(in_slice(Amt, 61, 180)), day_sum(Amt)), 40)
+  - cross_mean(day_centroid(in_slice(Amt, 1, 239)), 40)
+  - sub(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 30), cross_mean(div(day_sum(in_slice(Amt,
+    1, 30)), day_sum(Amt)), 30))
+  - cross_mean(day_last(in_pct(Close, 30)), 30)
+  - cross_mean(day_first(in_pct(Close, 30)), 30)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    30)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), 30)
+  - cross_mean(sub(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 30)
+  - cross_mean(sub(div(day_sum(in_slice(Amt, 1, 5)), day_sum(Amt)), div(day_sum(in_slice(Amt,
+    236, 240)), day_sum(Amt))), 30)
+  - cross_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 5),
+    120)
+  - cs_bucket_rank(cross_mean(div(day_last(Amt), day_sum(Amt)), 30), LogFloatCap)
+  - cross_ema(cs_rank(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
