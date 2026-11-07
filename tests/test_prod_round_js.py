@@ -79,13 +79,23 @@ def test_prompts_do_not_mention_what_production_does_not_have():
             assert w not in c["prompt"], (c["label"], w)
 
 
-def test_the_pi_does_not_read_what_the_audit_must_not_and_the_auditor_does_not_read_the_notebook():
+def test_the_prompts_state_the_train_test_split_and_the_auditor_scores_the_plan_itself():
+    # PLAN 修订 4: no file-reading limits in production; the one hard rule is the train / test split
     d = run({"round": 1, "seeds": [901]})
     pi = next(c["prompt"] for c in d["calls"] if c["label"].endswith(":pi"))
     au = next(c["prompt"] for c in d["calls"] if c["label"].endswith(":audit"))
     assert "notebook.md" in pi and "audit_1.yaml" not in pi
-    assert "不读** " in au and "notebook.md" in au.split("你要读")[0]
+    for p in (pi, au):
+        assert "train / test 切分" in p and "2023-08-07" in p
+    assert "按 missions.yaml 本身给" in au.split("你要读")[0]
     assert "sed -n '1,/^## 共性/p'" in au                                                                # only the heads table of loc.md
+
+
+def test_stage_runs_only_that_agent():
+    # PLAN 修订 2: fetch / corr / finish are scripts/prod_round.sh; the workflow runs only the PI or only the auditor
+    for st in ("pi", "audit"):
+        d = run({"round": 2, "seeds": [901, 902], "stage": st})
+        assert sorted(c["label"] for c in d["calls"]) == [f"prod r2 s901:{st}", f"prod r2 s902:{st}"]
 
 
 def test_resume_starts_at_the_named_stage():
