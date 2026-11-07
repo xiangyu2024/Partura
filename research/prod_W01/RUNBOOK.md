@@ -118,7 +118,19 @@ bash scripts/prod_sync.sh status            # 每个种子:M 已完成的批、r
 bash scripts/prod_sync.sh ready 1           # 第 1 轮哪些种子的定位输出已经 READY(退出码 1 = 还有没好的)
 ```
 
-对 READY 的种子,在 Claude Code 里跑 Workflow(脚本 `workflows/prod_round.js`):
+**修订 2 起(PLAN 修订 2)的做法**:确定性的三步由总领直接跑,工作流只跑 PI 和审计员:
+
+```bash
+bash scripts/prod_round.sh fetch 2 "901 903"           # 取定位输出(多个种子并行)
+# Workflow({scriptPath: <prod_round.js 的副本>, args: {"round": 2, "seeds": [901, 903], "stage": "pi"}})
+bash scripts/prod_round.sh corr 2 "901 903"            # 相关度表(服务器上算,约 5–10 分钟,自动等)
+# Workflow({..., args: {"round": 2, "seeds": [901, 903], "stage": "audit"}})
+bash scripts/prod_round.sh finish 2 "901 903"          # 定稿 → 检查 → 推送;每个种子一行 OK / FAILED
+```
+
+Workflow 工具只接受当前会话能读的脚本路径:`~/Desktop/Partura-prod` 不在会话目录里时,把 `workflows/prod_round.js` 复制到工具上次返回的 Script file 路径再用,或整段内联。
+
+修订 2 之前的做法(一个工作流一路做完,每步一个子代理;仍可用,但每种子每轮多花约 16 万 token):
 
 ```
 Workflow({scriptPath: "/Users/wxy/Desktop/Partura-prod/workflows/prod_round.js", args: {"round": 1, "seeds": [901, 902, 903]}})
@@ -142,6 +154,7 @@ Workflow({scriptPath: ".../workflows/prod_round.js", args: {"round": 1, "seeds":
 每轮做完,把笔记本上的工作文件提交:`git add research/prod_W01/partura && git commit`。
 
 预算(PLAN §2):每种子每轮 ≤ 30 万 token(PI ≤ 20 万,其余 ≤ 10 万);W01 合计 ≤ 1,100 万,超出就停下看原因。
+第 1 轮实际约 59 万 / 种子(PI 20 万、审计 21.5 万、三个跑命令的子代理 16 万),修订 2 之后预计约 40 万;实数记在 `research/prod_W01/TOKENS.md`。
 
 ## 4. 监控
 
