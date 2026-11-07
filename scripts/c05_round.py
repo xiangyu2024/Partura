@@ -11,6 +11,10 @@ Every GP run is banned from the arm's library: M batches 1..round + the arm's ow
 $PARTURA_C0X=C06 (research/coldstart_C06/PLAN.md §2.3): mission mode for C06's arm C -- files under research/coldstart_C06, missions
 named c06s<seed>C..., M still C05's; an E slot's reward no longer adds the core's family to the controls (the library ban keeps
 the search off the family); the R files' additions are library members too.
+
+$PARTURA_C0X=PROD (research/prod_W01/PLAN.md), $PARTURA_STUDY_DIR=prod_W01: the production study.  Same as C08's arm P (arm letter
+P, missions named prods<seed>Pr<round>{a,b}) but the main AlphaCube is its own (prods<seed>M<batch>).  Every study switch is in
+partura/study.py.
 """
 import glob
 import json
@@ -23,12 +27,14 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT))
 import c05_lib  # noqa: E402
+from partura import study  # noqa: E402
 
-STUDY = os.environ.get("PARTURA_C0X", "C05")
-PFX = STUDY.lower()
-MPFX = "c07" if STUDY in ("C07", "C08") else "c05"                     # whose main AlphaCube: C06 reuses C05's, C07 runs its own
-D, EP = ROOT / "research" / f"coldstart_{STUDY}", ROOT / "episodes"
+STUDY = study.name("C05")
+PFX = study.prefix(STUDY)
+MPFX = study.m_prefix(STUDY)                                           # whose main AlphaCube: C06 reuses C05's, C08 C07's, PROD runs its own
+D, EP = ROOT / "research" / study.dirname(STUDY), ROOT / "episodes"    # coldstart_<C0X>; PROD: $PARTURA_STUDY_DIR (prod_W01)
 ARMS = D / "arms"
 PY = os.environ.get("PY", sys.executable)
 MODE = sys.argv[1]
@@ -239,7 +245,7 @@ elif MODE == "mission":
             iid = f"E{j}"
             base["ideas"].append({"id": iid, "hypothesis": s.get("hypothesis", "B0: mechanical core"), "seeds": list(s.get("seeds") or [])[:16],
                                   "grammar": {}, "reward": "long_neutral"})
-            extra = ["--neutral-extra", str(ff)] if STUDY == "C05" else []         # C06 PLAN §2.3: the E reward is everyone's reward
+            extra = ["--neutral-extra", str(ff)] if study.neutral_extra(STUDY) else []   # C06 PLAN §2.3: the E reward is everyone's reward
             jobs.append((tag, iid, "steer", seed, ["--parts", "seeds", "--seed-share", "1.0", "--must-contain", core, "--periphery-seen", str(seen),
                                                     *extra, "--graft-fill", "32", "--ban-library", str(lf)]))
         elif s.get("seeds"):

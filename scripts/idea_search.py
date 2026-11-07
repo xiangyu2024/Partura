@@ -51,6 +51,7 @@ import yaml  # noqa: E402
 from partura import books as bk  # noqa: E402
 from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401  (registers the extension operators before the registry is built)
+from partura import study  # noqa: E402
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
 from partura.steer import DISCOVERY_MIN_PERIOD, PAIRED, REWARDS, Guidance, RewardContext, is_discovery  # noqa: E402
@@ -64,7 +65,7 @@ def opt(name, default=None):
 
 
 IDEA = argv[0]
-if os.environ.get("PARTURA_STUDY_DIR") in ("coldstart_C05", "coldstart_C06", "coldstart_C07"):    # scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
+if study.scheduling_env():    # coldstart_C05 / C06 / C07 and PROD; scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
     os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1",
                       PARTURA_PANEL_CACHE_GB=str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)))))
 GPATH = opt("--guidance", "guidance/B01.yaml")

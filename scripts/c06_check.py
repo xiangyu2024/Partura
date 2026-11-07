@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(os.environ["ALPHACUBE_ROOT"]) / "src"))
 import yaml  # noqa: E402
 
 from partura import ops_ext  # noqa: E402,F401
+from partura import study  # noqa: E402
 from partura.steer import Guidance  # noqa: E402
 from alphacube.expression import is_valid_root  # noqa: E402
 from alphacube.parser import parse  # noqa: E402
@@ -39,8 +40,9 @@ from alphacube.plugins import load_plugins  # noqa: E402
 load_plugins(["partura.ac_plugin"])
 S, K = int(sys.argv[1]), int(sys.argv[2])
 FINAL = "--finalize" in sys.argv
-P = ROOT / "research" / f"coldstart_{os.environ.get('PARTURA_C0X', 'C06')}" / "partura" / f"s{S}"
-CTRL_STRIKE = float(os.environ.get("C06_CTRL_STRIKE", "0.5"))   # C08 (permissive audit): only a near-copy of a control is struck
+STUDY = study.name("C06")
+P = ROOT / "research" / study.dirname(STUDY) / "partura" / f"s{S}"     # coldstart_<C0X>; PROD: $PARTURA_STUDY_DIR (prod_W01)
+CTRL_STRIKE = float(os.environ.get("C06_CTRL_STRIKE", study.ctrl_strike_default(STUDY)))   # C08 (permissive audit): only a near-copy of a control is struck
 BANNED = re.compile(r"\b(ts_spearman|nt_[A-Za-z0-9_]+)\s*\(")
 G0 = Guidance.load(ROOT / "guidance" / "C05_base.yaml")
 issues = []

@@ -15,6 +15,9 @@
 
 $PARTURA_C0X=C06 (research/coldstart_C06/PLAN.md): the same tools for C06's arm C -- its files under research/coldstart_C06, its
 missions named c06s<seed>C..., M still C05's; R also takes in a good variant that is a different thing from its head (an addition).
+
+$PARTURA_C0X=PROD, $PARTURA_STUDY_DIR=prod_W01 (research/prod_W01/PLAN.md): the production study -- C08's arm P with its own main
+AlphaCube (prods<seed>M<batch>); the switches are in partura/study.py (R additions: $PARTURA_R_ADDITIONS, default on).
 """
 import glob
 import json
@@ -36,6 +39,7 @@ import numpy as np  # noqa: E402
 from partura import books as bk  # noqa: E402
 from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401
+from partura import study  # noqa: E402
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
 from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residual, signal_input  # noqa: E402
@@ -45,10 +49,10 @@ MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
 os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
 if MODE == "corr":      # C06: short and small -- the third GPU way (the GP runs only ever take two), a small share of the card, no run slot
     os.environ.update(PARTURA_GPU_WAYS="3", PARTURA_GPU_RESERVE_GB="1", PARTURA_GPU_MIN_GB="1")
-STUDY = os.environ.get("PARTURA_C0X", "C05")                 # C06 reuses C05's M; its own missions are c06s...
-D = PARTURA_ROOT / "research" / f"coldstart_{STUDY}"
-PFX = STUDY.lower()
-MPFX = "c07" if STUDY in ("C07", "C08") else "c05"           # whose main AlphaCube: C06 reuses C05's, C08 reuses C07's (the new rule)
+STUDY = study.name("C05")                                    # C06 reuses C05's M; its own missions are c06s...
+D = PARTURA_ROOT / "research" / study.dirname(STUDY)         # coldstart_<C0X>; PROD: $PARTURA_STUDY_DIR (prod_W01)
+PFX = study.prefix(STUDY)
+MPFX = study.m_prefix(STUDY)                                 # whose main AlphaCube: C06 reuses C05's, C08 reuses C07's (the new rule), PROD runs its own
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = "20180102", "20230807", "20220101"
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
@@ -223,7 +227,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
                 b = max(ok, key=lambda r: r["score"])
                 repl.append({"head": hd, **{k: b[k] for k in ("expr", "sign", "hl", "score", "train", "valid")}})
         adds = []
-        if STUDY == "C06":                                     # C06 PLAN §2.3: better, but a different thing from its head -> a head of its own
+        if study.r_additions(STUDY):                           # C06 PLAN §2.3: better, but a different thing from its head -> a head of its own
             lib_z = [traded(h)[:cut:5] for h in heads]
             for r in sorted(out, key=lambda r: -(r.get("score") or -9)):
                 if not (r.get("gate") and r.get("rho_head") is not None and r["rho_head"] < 0.5 and r["score"] >= r["head_score"] + 0.1
