@@ -1,0 +1,127 @@
+seed: 902
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:隔夜—日内分离。A 股是 T+1、有涨跌停、没有盘后交易的市场:隔夜收益 G = Open_t / Close_{t-1} -
+    1 (Open_t 是 09:30 集合竞价成交价,即 day_first(Open))累积了收盘后到开盘前的全部公开信息、公告和集合竞价里的订单;日内收益
+    I = Close_t / Open_t - 1 则几乎全部来自连续竞价,那里以散户为主(追涨杀跌、T+1 约束下的日内回吐)。两段收益的持续性并不相同:Lou-Polk-Skouras
+    (2019) 在美股发现过去的隔夜收益预测未来的隔夜收益、过去的日内收益预测未来的日内收益("tug of war"),而二者之和(即总收益)几乎没有预测力;French-Roll
+    (1986) 则说明闭市期间的方差主要来自信息到达、开市期间的方差有一部分是交易噪声。所以 alpha 的来源假设是:不是"涨过多少",而是"这些涨幅是在谁定价的时段里完成的"。
+
+
+    算子怎样实现:G = sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1),I = sub(div(day_last(Close),
+    day_first(Open)), 1),都是日频;随后全部用 cross_*(沿天轴)做 40-60 天的慢窗口聚合。15 个种子分五组,每组一个不同的统计量,骨架互不相同:(1)
+    水平:G 的均值、G-I 的均值(窗口 40/60,含 cs_winsor、中位数 cross_med、EMA 半衰期 20 三种稳健写法);(2) 频率:G>0
+    的天数占比减去 I>0 的天数占比(有界,不受一字涨停日支配);(3) 交互:sign(G)*I 的均值及其除以 |I| 之和的标准化形式(日内是在延续还是在回吐隔夜缺口),cross_corr(G,
+    I, 60);(4) 比例:隔夜带符号位移占总位移的比例,rank(std(G)) - rank(std(I))(French-Roll 的信息到达份额),G
+    的左尾均值;(5) 其他:集合竞价那一根的成交额占全天比例 day_first(Amt)/day_sum(Amt),G 按 LimitWidth 标准化(涨停幅度
+    10%/20% 不同板块的缺口可比),以及在 LogFloatCap 十分位内去均值的写法。
+
+
+    和库里已有的为什么不同:库里目前没有任何 head(第 1 批 77 个候选 0 个达到 0.5,共性表为空),所以不存在与 head 重复的问题。对 5
+    个控制:G-I、频率差、交互项、比例都是"两段收益的差或带符号交互",总收益(= G + I,即 20 日反转控制的主成分)在 G-I 里被抵消、在交互与比例里根本不出现,所以对
+    20 日反转控制是近乎正交的构造;没有任何一个用到 Amt 的水平或日内 Amt 离散度(已知族);全部是收益率比或有界统计量,不带股价或市值的量纲;波动率只以排名差或有界比例的形式进入。
+
+
+    样本外为什么还会在:机制来自制度而不是风格——T+1、无盘后交易、集合竞价规则和散户为主的连续竞价在 2022-2023 都没有变;种子用 40-60 天窗口,换手低,扣
+    15 bp 后不容易被成本吃掉;winsor、频率、中位数、LimitWidth 标准化这些写法专门针对 2020-08 创业板改 20% 涨跌幅、一字涨停日把
+    G 推到极值这类会随年份变化的结构性偏差。已知风险:一字涨停日 G = +10%、I = 0,会让 G-I 的水平版被"热门股"支配,因此特意放了稳健版;集合竞价那一根是否总有成交额取决于数据,若缺失
+    day_first 会取到第 1 根,该种子退化为开盘第 1 分钟占比,但仍然有定义。'
+  inspired_by: 第 1 批:77 个已评分候选、0 个 head、共性表为空——没有任何子树显著抬高均值差,说明新尺子把水平类写法都吃掉了(流动性、波动、20
+    日反转、Amt 标准差族、市值被取残差),剩下的只能是控制回归之后还留得下来的成分:收益的拆分与条件化。
+  literature:
+  - cite: 'Lou, Polk, Skouras (2019), A tug of war: overnight versus intraday expected
+      returns, Journal of Financial Economics'
+    year: '2019'
+  - cite: 'French, Roll (1986), Stock return variances: the arrival of information
+      and the reaction of traders, Journal of Financial Economics'
+    year: '1986'
+  seeds:
+  - cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40)
+  - sub(cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40),
+    cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 40))
+  - sub(cross_mean(cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1)), 60), cross_mean(cs_winsor(sub(div(day_last(Close), day_first(Open)), 1)),
+    60))
+  - sub(cross_mean(is_gt0(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1)), 60), cross_mean(is_gt0(sub(div(day_last(Close), day_first(Open)), 1)), 60))
+  - cross_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),
+    sub(div(day_last(Close), day_first(Open)), 1)), 40)
+  - cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1), 60)
+  - sub(cs_rank(cross_stddev(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1), 40)), cs_rank(cross_stddev(sub(div(day_last(Close), day_first(Open)), 1),
+    40)))
+  - cross_mean(div(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    30)
+  - cross_mean(div(day_first(Amt), day_sum(Amt)), 20)
+  - div(cross_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40),
+    add(cross_sum(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),
+    40), cross_sum(abs_(sub(div(day_last(Close), day_first(Open)), 1)), 40)))
+  - cross_ema(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1)), 20)
+  - div(cross_sum(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1)), sub(div(day_last(Close), day_first(Open)), 1)), 40), cross_sum(abs_(sub(div(day_last(Close),
+    day_first(Open)), 1)), 40))
+  - sub(cross_med(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40),
+    cross_med(sub(div(day_last(Close), day_first(Open)), 1), 40))
+  - cross_tail_mean_q25(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1),
+    60)
+- type: N
+  hypothesis: '机制:成交量条件下的价格变动 —— 区分"信息驱动的价格变动"和"流动性 / 噪声驱动的价格变动"。信息交易者的价格变动通常伴随较小的成交量并且持续,噪声交易者(散户追涨杀跌、情绪、对冲需求)造成的价格变动往往放量并随后回吐
+    (Campbell-Grossman-Wang 1993; Llorente-Michaely-Saar-Wang 2002: 高成交量日的收益在信息不对称小的股票上反转、在信息不对称大的股票上延续;Gervais-Kaniel-Mingelgrin
+    2001: 高成交量溢价)。总收益只是两类变动之和,所以把它按成交量拆开之后,"差"这一部分与 20 日反转控制天然正交,alpha 的来源假设是"这个月的涨跌里有多少是缩量完成的"。
+
+
+    算子怎样实现(16 个种子,骨架互不相同,分三个尺度):(1) 日频 ts_* 层,ret_1d / vol_1d / amt_1d 为内置日频宏:按自身
+    20/60 天成交量的 ts_rank 分放量日 / 缩量日,放量日收益和减缩量日收益和(`greater` / `less` 做掩码)、只取放量日、只取缩量日;连续版:成交量加权均值减等权均值
+    (= cov(V,R)/mean V)、ts_corr(ret, vol)、Llorente 交互项 corr(R_t, R_{t-1} * 相对成交量_{t-1})、带符号的异常成交量
+    (OBV 式);(2) 分钟层:全天成交量最大的 10% 分钟的平均收益 day_topw_mean(Ret, Volume) 及其减去全天均值;"聪明钱"式的价格冲击:按
+    |Ret|/sqrt(Volume)(单位成交量引起的价格变动,Kyle lambda 的分钟代理)最大的 10% 分钟的 Vwap 除以全天 VWAP;收盘价相对全天
+    VWAP;分钟 corr(Close, Volume);(3) 资金流向与价格的分歧:day_signed_ratio(Ret, Amt)(上涨分钟成交额占比减下跌分钟占比)的
+    40 天均值;当日资金流向排名减当日收益排名的 20 天均值(净买入压力大但价格没怎么涨 = 吸筹);前一天的资金流向对当天收益的 60 天相关;另有第 (1)
+    组连续版按 LogFloatCap 十分位去均值的写法。
+
+
+    和库里已有的为什么不同:库里没有任何 head(第 1 批 77 个候选无一达到 0.5),不存在重复。对 5 个控制:这些统计量是"条件收益之差"、相关系数、比率,不含
+    Amt 的水平或离散度(已知族),也不含 Volume 或 Amt 的水平(流动性控制);波动率只以排名、相关系数、有界比例的形式进入;总收益被差分掉(20
+    日反转);市值只作为十分位内去均值的包装出现。分钟层用到的 day_topw_mean、day_signed_ratio 是 Partura 扩展算子(见
+    partura/ops_ext.py 的定义),把''重度分钟''''净买入压力''直接写成一个节点。
+
+
+    样本外为什么还会在:A 股成交仍以散户为主这一结构在 2018-2023 没有变,信息交易与噪声交易的区分不会因为 2022 年的行情切换而消失;种子主要是
+    20-60 天窗口的慢信号,日频种子对"相对于自身历史"的成交量排名做条件,所以不依赖整个市场的成交量水平(2022-2023 市场成交量大幅变化)。已知风险:分钟层种子读取的是第
+    0 根(集合竞价)的大成交量,很可能让重度分钟里几乎总包含开盘那根;放量日掩码用 ts_rank 的阈值,窗口内成交量并列时阈值附近有少量并列。'
+  inspired_by: 第 1 批:77 个已评分候选、0 个 head、共性表为空——没有任何子树显著抬高均值差,说明新尺子把水平类写法都吃掉了(流动性、波动、20
+    日反转、Amt 标准差族、市值被取残差),剩下的只能是控制回归之后还留得下来的成分:收益的拆分与条件化。
+  literature:
+  - cite: Campbell, Grossman, Wang (1993), Trading volume and serial correlation in
+      stock returns, Quarterly Journal of Economics
+    year: '1993'
+  - cite: Llorente, Michaely, Saar, Wang (2002), Dynamic volume-return relation of
+      individual stocks, Review of Financial Studies
+    year: '2002'
+  - cite: Gervais, Kaniel, Mingelgrin (2001), The high-volume return premium, Journal
+      of Finance
+    year: '2001'
+  seeds:
+  - sub(ts_sum(mul(greater(ts_rank(vol_1d, 20), 0.5), ret_1d), 20), ts_sum(mul(less(ts_rank(vol_1d,
+    20), 0.5), ret_1d), 20))
+  - ts_sum(mul(greater(ts_rank(amt_1d, 60), 0.8), ret_1d), 60)
+  - ts_sum(mul(less(ts_rank(vol_1d, 60), 0.3), ret_1d), 60)
+  - sub(div(ts_sum(mul(vol_1d, ret_1d), 20), ts_sum(vol_1d, 20)), ts_mean(ret_1d,
+    20))
+  - ts_corr(ret_1d, vol_1d, 40)
+  - ts_corr(ret_1d, mul(ts_delay(ret_1d, 1), ts_delay(sub(div(vol_1d, ts_mean(vol_1d,
+    20)), 1), 1)), 60)
+  - cross_mean(day_topw_mean(Ret, Volume), 20)
+  - cross_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_mean(sub(cs_rank(day_signed_ratio(Ret, Amt)), cs_rank(ret_1d)), 20)
+  - ts_mean(mul(sign(ret_1d), sub(div(vol_1d, ts_mean(vol_1d, 20)), 1)), 40)
+  - cross_mean(day_corr(Close, Volume), 20)
+  - cross_mean(day_signed_ratio(Ret, Amt), 40)
+  - ts_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), ret_1d, 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

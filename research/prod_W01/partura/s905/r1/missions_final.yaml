@@ -1,0 +1,114 @@
+seed: 905
+round: 1
+slots:
+- type: N
+  inspired_by: M 第 1 批(109 个已评分候选,0 个 head):唯一富集的子树全是 LogFloatShares 一族(含它 26 个,均值
+    -0.56;不含的均值 -0.96;pow_2 / inv / pow_3 只是它的单调变换)
+  hypothesis: '【现象】M 第 1 批没有 head。不含 LogFloatShares 的候选均值 -0.96,含它的 -0.56;LogFloatShares
+    本身(及 pow_2 / inv 这类单调变换)的换手几乎为零,所以这一族的负分不是被 15bp 成本打死的,而是毛超额本身不为正、或 train 选定的方向到
+    valid 翻了(这是推断,批 1 没有给出分期数字)。
+
+    【它读到的是什么】控制里已有 LogFloatCap 的 1/2/3 次秩。若 FloatCap = FloatShares x 当日名义收盘价(这是一个待核实的假设),则
+    LogFloatCap - LogFloatShares = log(名义股价)。残差化掉市值之后,「LogFloatShares 越大」剩下的主要就是「同市值下名义股价越低」。名义股价不是任何一个控制(不是市值、流动性、波动、20
+    日反转、Amt 离散度),所以这里不再借道 LogFloatShares,直接用 P = sub(LogFloatCap, LogFloatShares)
+    写名义股价。
+
+    【机制】名义价格错觉:散户把低价股当成「更便宜、上行空间更大」的彩票(Birru & Wang 2016),这种需求在情绪高涨时更强(Stambaugh,
+    Yu & Yuan 2012),短期难套利(只能多头、涨跌停与最小报价单位)。推论:名义股价的溢价方向会随市场状态走,这是它在 train / valid
+    之间符号不稳的一个候选解释,不是已经证实的结论。
+
+    【算子怎样实现,以及三种稳住符号的办法】
+
+    (1) 同伴相对:cs_bucket_rank(P, x) 只在同一个 x 十分位里比名义股价,x 取 LogFloatCap / 当日成交额 / 20 日波动。残差化只去掉了对控制秩的
+    1-3 次多项式暴露,P 里仍混着的规模与流动性形状会被同伴内排序去掉。
+
+    (2) 状态加权:mul(cs_rank(P), cs_state_rank(s, d) - 0.5) 与 cs_flip_by_state(P, g)。状态用全市场平均
+    log 后复权价的滚动分位(趋势)、全市场成交额的滚动分位(热度),让价格溢价的符号随状态走。状态变量变化慢,换手有限。
+
+    (3) 配对一条慢的、个股自身的腿,用秩相加:20 日分钟收益偏度的反号(彩票偏好的另一半)、5 日成交额相对自身 120 日的冲击、与 120 日高点的距离、累计复权因子
+    log(后复权价 / 名义价)(高送转 / 高分红历史)、log(总市值 / 流通市值)(限售股占比)。看价格水平能否被一条不随风格翻转的腿稳住。
+
+    【和库里已有的不同】库里 0 个 head;M 已见的只是 LogFloatShares 的单调重写与它和随机树的拼接。这里是名义股价本身、同伴相对排序、状态加权符号、配对腿,没有一个是单调重写。
+
+    【样本外为什么还会在】名义价格错觉与散户彩票偏好是制度性的、长期的(最小报价单位、T+1、不能卖空);P 的变化极慢,(1)(3) 是低换手构造,(2) 的状态变量也是慢变量,成本不是主要障碍;状态加权如果只是拟合
+    train,会在 valid 直接暴露,不会混过去。'
+  literature:
+  - source: Birru & Wang, Nominal price illusion, JFE
+    year: '2016'
+  - source: 'Stambaugh, Yu & Yuan, The short of it: investor sentiment and anomalies,
+      JFE'
+    year: '2012'
+  seeds:
+  - sub(LogFloatCap, LogFloatShares)
+  - cs_bucket_rank(sub(LogFloatCap, LogFloatShares), cross_mean(day_sum(Amt), 20))
+  - mul(cs_rank(sub(LogFloatCap, LogFloatShares)), sub(cs_state_rank(log(day_last(Close)),
+    120), 0.5))
+  - mul(cs_rank(sub(LogFloatCap, LogFloatShares)), sub(cs_state_rank(day_sum(Amt),
+    60), 0.5))
+  - cs_flip_by_state(sub(LogFloatCap, LogFloatShares), log(day_last(Close)))
+  - cs_flip_by_state(sub(LogFloatCap, LogFloatShares), day_sum(Amt))
+  - add(cs_rank(sub(LogFloatCap, LogFloatShares)), cs_rank(neg(cross_mean(day_skew(Ret),
+    20))))
+  - add(cs_rank(sub(LogFloatCap, LogFloatShares)), cs_rank(cross_zscore(cross_mean(day_sum(Amt),
+    5), 120)))
+  - add(cs_rank(sub(LogFloatCap, LogFloatShares)), cs_rank(div(day_last(Close), cross_max(day_last(Close),
+    120))))
+  - add(cs_rank(sub(LogFloatCap, LogFloatShares)), cs_rank(sub(log(day_last(Close)),
+    sub(LogFloatCap, LogFloatShares))))
+  - add(cs_rank(sub(LogFloatCap, LogFloatShares)), cs_rank(sub(LogTotalCap, LogFloatCap)))
+- type: N
+  inspired_by: M 第 1 批:所有高换手的分钟微观结构候选都在 -0.96 附近(成本),只有零换手的水平型候选不在地板上;已知族 cross_mean(day_std(Amt),
+    30) 本身是水平量
+  hypothesis: '【现象】批 1 里 -0.96 的均值说明失败的主因是换手而不是没有信息:分钟级的日度量就算再做半衰期 <= 20 的 EMA,十分位多头书每天仍在换名单,15bp
+    x 双边换手把毛超额吃光。唯一不在地板上的是慢到几乎不动的水平量。
+
+    【想法】把「个股相对自己的历史」的慢冲击当作信号:时间序列标准化(cross_zscore(x, 120) 或 10 日均值 / 120 日均值)的变化量。理由有二。
+
+    (a) 它对截面上的静态风格几乎免疫:个股的流动性水平、Amt 离散度水平、波动水平、规模都被除掉(只剩「相对自己是否异常」),所以和 5 个控制的截面秩相关会很低,也没有水平型风格因子在
+    train / valid 之间翻符号的问题(批 1 的 LogFloatShares 一族就是这样翻的)。
+
+    (b) 已知族(日内分钟成交额的离散度 30 日均值)是水平量:它说明「成交额日内集中 / 分散」携带信息,但这个水平多半吸收了股票长期的交易风格差异(机构拆单、做市、散户)。如果信息来自参与者结构的变化,那么这个量相对自己基线的冲击(同一只股票最近
+    10 天比自己过去 120 天更集中 / 更分散、更偏开盘 / 更偏尾盘)应当携带同源但与水平正交的信息;控制只拿走了水平,没拿走冲击。
+
+    【算子怎样实现】cross_zscore(cross_mean(day_std(Amt), 10), 120) 是已知族的个股内标准化冲击;day_gini(Amt)
+    与 day_centroid(Amt) 是尺度无关的形状量(集中度、成交额重心在日内的位置),day_kurt(Amt) 是尖峰度,它们不随成交额水平变;成交额冲击
+    cross_zscore(cross_mean(day_sum(Amt), 5), 120) 与 20 / 120 日比;分钟波动与日内振幅的冲击;偏度的
+    20 日减 120 日;与 120 日高点的距离、120 日窗口里的分位(自身价格位置);60 日隔夜缺口均值。窗口:短端 5 / 10 / 20 日,基线
+    60 / 120 日,保证换手不会像日度原始量那样高。
+
+    【和库里已有的不同】库里 0 个 head;M 已见的分钟型候选是日度水平量的随机组合,这里是个股内时间序列标准化的慢冲击,构造方式和已知族的水平量正交。
+
+    【样本外为什么还会在】散户占比高且难以卖空的市场里,个股的关注度 / 参与者结构冲击导致的错误定价要慢慢修复(Barber & Odean 2008;Gervais,
+    Kaniel & Mingelgrin 2001 的高成交量溢价;George & Hwang 2004 的 52 周高位锚定;Lou, Polk & Skouras
+    2019 的隔夜 / 日内分解),这些是行为与制度原因而不是某一年的风格;个股内标准化使信号不依赖静态风格,换手由长窗口控制。如果只是在 train 里拟合,valid
+    会直接否掉。'
+  literature:
+  - source: 'Barber & Odean, All that glitters: the effect of attention and news on
+      the buying behavior of individual and institutional investors, RFS'
+    year: '2008'
+  - source: Gervais, Kaniel & Mingelgrin, The high-volume return premium, JF
+    year: '2001'
+  - source: George & Hwang, The 52-week high and momentum investing, JF
+    year: '2004'
+  - source: 'Lou, Polk & Skouras, A tug of war: overnight versus intraday expected
+      returns, JFE'
+    year: '2019'
+  seeds:
+  - cross_zscore(cross_mean(day_std(Amt), 10), 120)
+  - div(cross_mean(day_std(Amt), 10), cross_mean(day_std(Amt), 60))
+  - cross_zscore(cross_mean(day_gini(Amt), 10), 120)
+  - cross_zscore(cross_mean(day_centroid(Amt), 20), 120)
+  - cross_zscore(cross_mean(day_kurt(Amt), 10), 120)
+  - cross_zscore(cross_mean(day_sum(Amt), 5), 120)
+  - div(cross_mean(day_sum(Amt), 20), cross_mean(day_sum(Amt), 120))
+  - cross_zscore(cross_mean(day_std(Ret), 10), 120)
+  - cross_zscore(cross_mean(div(sub(day_max(High), day_min(Low)), day_mean(Vwap)),
+    10), 120)
+  - sub(cross_mean(day_skew(Ret), 20), cross_mean(day_skew(Ret), 120))
+  - div(day_last(Close), cross_max(day_last(Close), 120))
+  - cross_rank(day_last(Close), 120)
+  - cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
