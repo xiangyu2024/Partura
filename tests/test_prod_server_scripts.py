@@ -198,7 +198,7 @@ def test_prod_env_template_sets_the_study_on_top_of_the_hosts_own_env(tmp_path):
     assert out.returncode == 0, out.stderr
     e = dict(l.split("=", 1) for l in out.stdout.splitlines() if "=" in l)
     assert (e["PARTURA_C0X"], e["PARTURA_STUDY_DIR"], e["PARTURA_RANK_FIRST"], e["PARTURA_NEUTRAL_POWERS"]) == ("PROD", "prod_W01", "1", "1,2,3")
-    assert e["C06_CTRL_STRIKE"] == "0.8" and e["PARTURA_R_ADDITIONS"] == "1" and e["PY"] == "/x/python"     # the host's own settings survive
+    assert e["C06_CTRL_STRIKE"] == "0.8" and e["PARTURA_R_ADDITIONS"] == "0" and e["PY"] == "/x/python"     # the host's own settings survive
     assert e["TMPDIR"] == str(home / "tmp" / "sys_tmp") and (home / "tmp" / "sys_tmp").is_dir()
     # sourced from another directory it still finds the host's c05_env.sh next to it (the template is meant to live in <home>/tmp/)
     out = subprocess.run(["bash", "-c", f"cd / && source {home}/tmp/prod_env.sh && echo $PARTURA_C0X"], capture_output=True, text=True, env={"PATH": os.environ["PATH"]})

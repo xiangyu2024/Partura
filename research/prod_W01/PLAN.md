@@ -42,3 +42,9 @@ C08 在开发集上是 C01–C08 里 Partura 第一次赢过多跑普通 GP 的�
 
 `research/prod_W01/`:每种子每轮的工作文件、`library.json`(全库 head 与样本内统计)、`RESULT.md`(规模、样本内表现、token 账、只作描述的测试段 / 前推段读数),
 服务器上的全库融合信号面板;交接写进 `handoff/COORDINATOR.md` 顶部。
+
+## 修订 1(2026-11-07 10:40 PT,总领;开跑之前)
+
+实现时查出:C08 的 PLAN 写了「R 收录」(R 找到更好但不同的变体时作为新 head 收进库),但代码只对 C06 打开,**C08 实际跑的时候没有收录,只有替换**。
+生产照 C08 实际跑的样子:`PARTURA_R_ADDITIONS=0`(`scripts/server/prod_env.sh`)。§1 里「R 收录的 head」一句作废。理由:生产用经过验证的配置。
+
