@@ -1,0 +1,78 @@
+seed: 911
+round: 3
+slots:
+  - type: E
+    core: 'day_es_ratio_hi(Amt)'
+    hypothesis: '核心 ES = day_es_ratio_hi(Amt):一天 241 个分钟成交额里,高于当日 95% 分位的那些分钟的均值除以该分位,是无量纲的右尾形状(接近 1 = 没有尖峰,越大 = 尖峰越极端)。分子分母同量纲,所以它与流动性 / 市值 / 金额波动这三个水平型控制应当几乎正交(未实测,相关度表会给出)。ES 单日版不赚钱(拆解里 sufficiency 为 train -3.81 / valid -5.40,换手吃光了),它的价值全在第 2 轮 Pr2b 里作为「耦合」的 Y 腿:含它的 7 个候选平均 +0.97、不含的平均 -0.98(p 0.000,共性表第一名);head cross_corr(div(day_first(Amt), ES), ES, 60) 是 train +1.80 / valid +1.79,train 与 valid 持平(13 个 head 里其余多数是 valid 远高于 train,价格水平族尤其如此);拆解把外层 div 拿掉得到 cross_corr(day_first(Amt), ES, 60) 的 train +1.88 / valid +2.22,说明起作用的是「60 日窗口里,首分钟(含开盘集合竞价撮合)成交额大的日子,是否也是全天成交额尖峰最极端的日子」这个相关本身;窗口 30 时 train 掉到 +0.37、窗口 120 时 valid 掉到 +0.69,60 在两头之间。我的读法有两层,而且要诚实地分开:(1) 部分耦合是机械的——首分钟一旦很大就落在 ES 的尖峰集合里,所以 corr(首分钟额, ES) 在读「开盘竞价在全天尖峰里的权重」,也就是开盘端成交的结构性集中程度(机构 / 信息交易者挂单集中在竞价,散户分散在盘中),它是股票的慢性质,不是每天的随机事件;(2) 另一部分是真耦合——尖峰是否由开盘信息驱动。两层都有机制,但库里所有可见的含 ES 候选(前五名与 head)的 X 腿都是 day_first(Amt) 的某种写法,没人试过把 X 腿换掉,所以没法分辨 alpha 究竟住在机械重叠里还是真耦合里。本位的任务就是保持 ES 原样做 Y 腿,只换外围,让数据分辨:(a) X 换成日内时序另一端和重心:收盘分钟额 day_last(Amt)(深市有收盘集合竞价、沪市没有,所以顺带检验交易所差异)、收盘份额、时间重心 day_centroid(Amt)、全天总额 day_sum(Amt);(b) X 换成不机械落在尖峰集合里的价格端信息代理:隔夜跳空绝对值、日内收益绝对值、分钟收益波动 day_std(Ret)、净买入压力 day_signed_ratio(Ret, Amt)、分钟收益绝对值的右尾形状 day_es_ratio_hi(abs_(Ret))、Volume 口径的 ES;(c) 滞后版 cross_corr(day_first(Amt), cross_delay(ES, 1), 60) 与 cross_corr(cross_delay(day_first(Amt), 1), ES, 60):如果开盘集中是慢性质,隔一天的耦合应当几乎一样强,如果是当日事件则会消失;(d) 估计量与组合:回归系数 cross_regbeta、开盘端减收盘端的耦合差、耦合减去 ES 自身的 60 日水平(cs_rank 之差)、以及 cross_mean(ES, 60) 水平版作对照,检验是耦合还是水平。这些外围与快照里已见写法的差别:已见的都是 cross_corr(div(day_first(Amt), ·), ·, 60) 一型,X 腿全是首分钟额;这里 X 腿是别的量,外围算子集合(abs_ / sub / div(Close, Open) / cross_delay / cross_regbeta / cs_rank / day_std 等)与已见候选都不同;与库里 13 个 head 的秩相关,首分钟额 X 腿的(如 cross_regbeta 那条)可能偏高,其余应明显低于 0.7(相关度表)。样本外还会在的理由:开盘集合竞价的制度、T+1 与涨跌停下机构 / 散户的成交构成、两所收盘安排都是制度性的,一只股票成交时间结构的集中度是慢变量(60 日窗口两天之间只换 1/60 的样本,换手很低,15 bp 吃不掉);相关系数无量纲有界,不依赖某一年的市场水平。风险:valid(2022 年后)比 train 强是这批 head 的普遍形态,本核心的 head 恰好持平,说明它受风格影响小;但价格端 X 腿大概率无效——第 1 轮 N 位 99 个评分里 94 个 ≤ -0.13,我写的隔夜 / 日内价格种子(含价格对价格的 cross_corr)全部在其中——所以这一类放的是检验而不是押注。'
+    seeds:
+      - 'cross_corr(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(abs_(sub(div(day_last(Close), day_first(Open)), 1)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_std(Ret), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_signed_ratio(Ret, Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_es_ratio_hi(abs_(Ret)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_last(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_centroid(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_es_ratio_hi(Volume), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_first(Amt), cross_delay(day_es_ratio_hi(Amt), 1), 60)'
+      - 'cross_corr(cross_delay(day_first(Amt), 1), day_es_ratio_hi(Amt), 60)'
+      - 'sub(cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60), cross_corr(day_last(Amt), day_es_ratio_hi(Amt), 60))'
+      - 'cross_regbeta(div(day_first(Amt), day_sum(Amt)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(div(day_last(Amt), day_sum(Amt)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_mean(day_es_ratio_hi(Amt), 60)'
+      - 'sub(cs_rank(cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60)), cs_rank(cross_mean(day_es_ratio_hi(Amt), 60)))'
+      - 'cross_corr(day_sum(Amt), day_es_ratio_hi(Amt), 60)'
+  - type: N
+    hypothesis: '成交日类型学:一只股票的成交日分哪几种,在 60 日里各占多大比重、与价格怎么联动。第 2 轮 Pr2b 的 N 位在开盘端发现了一整族:60 日滚动 cross_corr(首分钟成交额(或其占全天份额), 全天成交额的形状 / 总额),8 个 head、14 个过线,最好的两个 train 与 valid 都很接近(+1.80 / +1.79、+1.47 / +1.61),不像价格水平族那样靠 valid 撑分。我对这一族的解释是,相关系数把「开盘竞价承载了多少全天成交」做成了无量纲、有界、变化很慢的股票性质(每天只换 1/60 的样本)。本位把这个思路对称地推广到三个还没人碰过的方向,每个方向都用 Amt 口径或价格口径的已有算子实现:(1) 收盘端镜像:cross_corr(day_last(Amt), day_skew(Amt), 60)、cross_corr(L, day_sum(Amt), 60)(L = day_last(Amt)/day_sum(Amt) 是收盘分钟份额,O 是 day_first(Amt)/day_sum(Amt) 开盘分钟份额),以及开盘端耦合减收盘端耦合的差;据我所知深市有 14:57 起的收盘集合竞价、沪市没有,所以收盘端是否像开盘端一样有信息是真问题,第 2 轮的水平版里 O - C 只有 +0.63,说明 C 腿有东西但弱;(2) 时间维:cross_corr(day_first(Amt), day_centroid(Amt), 60)、cross_corr(day_sum(Amt), day_centroid(Amt), 60)——大额开盘是否把全天成交重心前移、放量日是早放量还是晚放量;day_centroid 是成交额在 241 分钟上的质心(0 = 全在开盘,1 = 全在收盘),与首分钟额、总额的水平无关;再加上形状量 day_gini(Amt)、day_zero_ratio(Amt)(零成交分钟占比,薄盘度)作为 Y 腿,这两个与 ES / skew 的相关度应低于尖峰族内部的相关度;(3) 量价耦合:开盘份额 O 与隔夜跳空 / 日内收益 / 跳空绝对值的相关(跳空 = day_first(Open) / 前收 - 1,日内收益 = day_last(Close) / day_first(Open) - 1,前收 = cross_delay(day_last(Close), 1)),收盘份额与日内收益的相关,开盘份额与净买入压力 day_signed_ratio(Ret, Amt) 的相关,开盘份额与前一日收盘份额的滞后相关(未成交的订单是否顺延到次日开盘,T+1 制度下有意义),放量与日收益的相关 cross_corr(RT, AV, 60)(RT = day_last(Close) / 前收 - 1),以及 Llorente-Michaely-Saar-Wang(2002)的「量价动态」:收益对前一日 收益 × 异常成交量 的 60 日相关(投机性成交带动动量、对冲性成交带动反转),AV = 当日总额 / 20 日均额。算子怎么实现:所有价格量都只用 day_first(Open)、day_last(Close) 与 cross_delay(day_last(Close), 1) 三个当日收盘前已知的量,前视不存在;所有被相关的量都是比值或份额,没有近零分母(份额的分母是全天总额,AV 的分母是 20 日均额);cross_corr 在窗口内缺失时对子集取相关,停牌日不会制造伪值。为什么和库里 13 个 head 不同:库里的 cross_corr head 全是首分钟额对(ES / skew / sum)的耦合,这里的 Y 腿是重心、基尼、零成交占比、收益、异常成交量,X 腿含收盘份额与价格量,与首分钟额 + 尖峰族的秩相关应低于 0.7(相关度表可验证)。为什么样本外还会在:这些是集合竞价制度、T+1、涨跌停和两所收盘安排下的成交构成性质,不是某年的行情;LMSW 的机制(信息不对称越大,量越能预测收益延续)来自 2002 年的美股文献,A 股散户占比更高,我推断这条机制不会更弱(这是推断,未测)。诚实的风险:第 1 轮 N 位 99 个评分里 94 个 ≤ -0.13,我写的隔夜 / 日内价格种子(含价格对价格的 cross_corr(ON, ID, 120))全部在其中,所以纯价格耦合大概率死,本位的赌注在「量 × 量」与「量 × 价」的混合;若价格腿的种子全部低于 0,而收盘端 / 重心种子活着,说明信息在成交时间结构里而不是在价格里。'
+    inspired_by: '第 2 轮 Pr2b_Nb(8 个新 head、14 个过线):60 日 cross_corr(首分钟成交额 / 其份额, 全天成交额的形状或总额) 一族,最好的 train +1.80 / valid +1.79 且 train 与 valid 比价格水平族平衡;同一批里 O - C(开盘份额减收盘份额的 60 日均值)的 head 只有 +0.63;第 1 轮 N 位里隔夜 / 日内价格种子(含 cross_corr(ON, ID, 120))全部 ≤ -0.13。'
+    seeds:
+      - 'cross_corr(day_last(Amt), day_skew(Amt), 60)'
+      - 'cross_corr(div(day_last(Amt), day_sum(Amt)), day_sum(Amt), 60)'
+      - 'cross_corr(day_first(Amt), day_centroid(Amt), 60)'
+      - 'cross_corr(day_sum(Amt), day_centroid(Amt), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_gini(Amt), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_zero_ratio(Amt), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 60)'
+      - 'cross_corr(div(day_last(Amt), day_sum(Amt)), sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'cross_corr(cross_delay(div(day_last(Amt), day_sum(Amt)), 1), div(day_first(Amt), day_sum(Amt)), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), div(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), mul(cross_delay(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 1), cross_delay(div(day_sum(Amt), cross_mean(day_sum(Amt), 20)), 1)), 60)'
+      - 'sub(cross_corr(div(day_first(Amt), day_sum(Amt)), day_sum(Amt), 60), cross_corr(div(day_last(Amt), day_sum(Amt)), day_sum(Amt), 60))'
+      - 'cs_bucket_demean(cross_corr(div(day_first(Amt), day_sum(Amt)), sub(div(day_last(Close), day_first(Open)), 1), 60), LogFloatCap)'
+      - 'cross_corr(day_signed_ratio(Ret, Amt), div(day_first(Amt), day_sum(Amt)), 60)'
+R:
+  - head: 'cross_corr(div(day_first(Amt), cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)), day_es_ratio_hi(Amt), 60)'
+    why: '烂的部件是外层 div(day_first(Amt), c),其中 c = cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60) 是取值在 [-1, 1] 的相关系数,会穿过 0:除以它会在 c 接近 0 的日子产生爆点并在 c 变号时翻转符号,60 日 cross_corr 再被这些极端值支配(规则 §4 的除以近零量)。依据:拆解里 knockout 外层 div 得 cross_corr(day_first(Amt), ES, 60) 的 train +1.88 / valid +2.22,比原 head 的 +1.47 高 +0.41(原 head 的内层相关单独做 sufficiency 是 +1.16 / +2.02,也就是内层本身没有错,错在拿它当分母)。变体 1 是该 knockout;变体 2 保留内层相关但把分母限制在 [1, 3](c + 2),检验保留耦合信息是否比整个拿掉更好。'
+    variants:
+      - 'cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(div(day_first(Amt), add(cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60), 2)), day_es_ratio_hi(Amt), 60)'
+  - head: 'cross_corr(div(day_first(Amt), day_es_ratio_hi(Amt)), day_es_ratio_hi(Amt), 60)'
+    why: '这个 head 的 train +1.80 / valid +1.79 已经持平,没有明显烂的部件;能动的只有两处:(1) 首分钟成交额是重尾量(开盘竞价集中的日子比平常大一个数量级),Pearson 相关被少数几天支配,而拆解里 knockout div 得到 +1.88 / +2.22,比原 head 的 +1.79 只高 +0.09,够不到 R 的 +0.1 门槛,说明去掉 div 后还有一点余地,稳健化可能补上;(2) 窗口 30 时 train +0.37、120 时 valid +0.69,60 附近两侧都有损失,中间值(75)没测过。变体:首分钟额取 log(add(·, 1)) 与 sqrt 的稳健化(都保持 ES 为 Y 腿),以及 knockout 版本在窗口 75 上的值。'
+    variants:
+      - 'cross_corr(log(add(day_first(Amt), 1)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(sqrt(day_first(Amt)), day_es_ratio_hi(Amt), 60)'
+      - 'cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 75)'
+  - head: 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), LogFloatCap)'
+    why: '该 head train +0.70 / valid +1.86,瓶颈是 train(2018-2021)。烂的部件候选有三个,每个一个变体:(1) cross_mean 对份额取算术平均,份额在开盘异常日(涨停、复牌、公告)有重尾,60 日均值被少数日子带偏,换成 cross_med 与 log 份额;(2) 60 日窗口换手偏高,换成 120 日与 40 日 EMA 看慢一点 / 近一点哪个对 train 更好(拆解没测过该 head,这是依据缺失下的扫参,不是已测结论);(3) 分桶变量 LogFloatCap 换成 60 日平均成交额(流动性十分位),看 head 的作用是不是依附于市值。每个变体都保持份额 O = day_first(Amt)/day_sum(Amt) 与 cs_bucket_demean 的结构。'
+    variants:
+      - 'cs_bucket_demean(cross_med(div(day_first(Amt), day_sum(Amt)), 60), LogFloatCap)'
+      - 'cs_bucket_demean(cross_mean(log(div(day_first(Amt), day_sum(Amt))), 60), LogFloatCap)'
+      - 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 120), LogFloatCap)'
+      - 'cs_bucket_demean(cross_ema(div(day_first(Amt), day_sum(Amt)), 40), LogFloatCap)'
+      - 'cs_bucket_demean(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(day_sum(Amt), 60))'
+  - head: 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(div(day_last(Amt), day_sum(Amt)), 60))'
+    why: '该 head train +0.63 / valid +1.59,瓶颈是 train;结构是开盘份额 60 日均值减收盘份额 60 日均值,两项都是水平,和市值 / 流动性可能有残余共线。没有拆解数据,依据只有 train / valid 的落差。变体 1 把两项的窗口同时拉到 120(低换手对 train 的成本有利);变体 2 在市值十分位内去均值(与第 2 轮 head cs_bucket_demean(cross_mean(O, 60), LogFloatCap) 同一思路,但作用在差上)。'
+    variants:
+      - 'sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 120), cross_mean(div(day_last(Amt), day_sum(Amt)), 120))'
+      - 'cs_bucket_demean(sub(cross_mean(div(day_first(Amt), day_sum(Amt)), 60), cross_mean(div(day_last(Amt), day_sum(Amt)), 60)), LogFloatCap)'
+  - head: 'cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 1000)), 60)'
+    why: '烂的部件是分母里的常数 1000:它与股票规模无关,对末分钟成交很薄的股票分母 ≈ 1000,比值退化成首分钟股数的 1/1000(量级项而不是比值);这个式子是第 2 轮 R 对更早 head 的替换,与被替换的原 head 秩相关 0.98,基本是同一个量,偏移的设计问题第 2 轮审计员也指出过。变体 1、2 是常数扫参(300、3000,看 score 对常数是否敏感,敏感就说明读的是首分钟股数水平);变体 3 把分母换成前一日全天总股数(有界、无近零、无规模无关常数),保持 60 日均值与前一日分母的滞后结构。'
+    variants:
+      - 'cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 300)), 60)'
+      - 'cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 3000)), 60)'
+      - 'cross_mean(div(day_first(Volume), cross_delay(day_sum(Volume), 1)), 60)'
+  - head: 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)'
+    why: '该 head train +1.16 / valid +2.02,瓶颈是 train。同族的 ES 版本在窗口 30 / 120 两侧都掉分(train 在 30 上掉、valid 在 120 上掉),对 skew 版本窗口的影响没测过。变体取 90 日窗口:valid 富余 +0.86 可以承受一些下降,窗口拉长换手更低,看 train 能否抬到 +1.26 以上(R 的门槛是 head + 0.1)。'
+    variants:
+      - 'cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 90)'
