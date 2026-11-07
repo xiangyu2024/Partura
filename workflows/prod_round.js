@@ -1,7 +1,7 @@
 export const meta = {
   name: 'prod-round',
   description: 'PROD W01 一轮 Partura(精简流程,每个种子独立):取定位输出 → PI(Sonnet 5.5)写任务 → 相关度表 → 审计(Haiku 5.5,1 次)→ 定稿 + 检查 + 推送',
-  whenToUse: 'args = {round: 1|2|3, seeds: [901, ...], from?: {seed: "fetch"|"pi"|"corr"|"audit"|"finish"}}。research/prod_W01/PLAN.md;规则 research/prod_W01/rules.md',
+  whenToUse: 'args = {round: 1|2|3, seeds: [901, ...], stage?: "pi"|"audit", from?: {seed: "fetch"|"pi"|"corr"|"audit"|"finish"}}。修订 2 起用 stage:总领先 scripts/prod_round.sh fetch,再 stage "pi",再 prod_round.sh corr,再 stage "audit",再 prod_round.sh finish。research/prod_W01/PLAN.md;规则 research/prod_W01/rules.md',
   phases: [
     { title: 'Fetch', detail: '从种子所在服务器取本轮的定位输出(只是一条命令,Haiku)' },
     { title: 'Plan', detail: 'PI(Sonnet 5.5):本轮的 E / N / R 与研究笔记' },
@@ -14,6 +14,7 @@ const ROOT = '/Users/wxy/Desktop/Partura-prod'
 const K = args.round
 const SEEDS = args.seeds
 const FROM = args.from || {}                       // resume: {seed: stage} -- start that seed at the stage (its earlier files are on disk)
+const ONLY = args.stage                            // 修订 2: 'pi' | 'audit' = run only that agent; fetch / corr / finish are scripts/prod_round.sh
 const M = { pi: 'claude-sonnet-5-5', audit: 'claude-haiku-5-5', run: 'claude-haiku-5-5' }
 const D = `${ROOT}/research/prod_W01`
 const PY = '/Users/wxy/.venvs/alphacube/bin/python'
@@ -25,6 +26,7 @@ const NUM = { type: 'number' }
 if (![1, 2, 3].includes(K)) throw new Error(`args.round must be 1, 2 or 3; got ${JSON.stringify(K)}`)
 if (!Array.isArray(SEEDS) || SEEDS.length === 0 || !SEEDS.every(s => Number.isInteger(s) && s >= 901 && s <= 912)) throw new Error(`args.seeds must be a list of seeds 901..912; got ${JSON.stringify(SEEDS)}`)
 for (const s of Object.keys(FROM)) if (!STAGES.includes(FROM[s])) throw new Error(`args.from[${s}] must be one of ${STAGES.join(', ')}`)
+if (ONLY !== undefined && !['pi', 'audit'].includes(ONLY)) throw new Error(`args.stage must be "pi" or "audit"; got ${JSON.stringify(ONLY)}`)
 
 const PI_SCHEMA = {
   type: 'object',
@@ -128,7 +130,7 @@ function auditPrompt(S) {
 - 相关度表 ${P}/r${K}/corr_1.md(细节在 corr_1.json):每个表达式与快照里每个 head、与 5 个控制的 |ρ|(train);
 - 快照里的全部 heads(主 AlphaCube 的 + 本种子之前任务的)—— 这就是「已有因子库」。只需要 loc.md 开头的 heads 表:\`sed -n '1,/^## 共性/p' ${P}/r${K}/loc.md\`,不用读它后面的共性表与拆解;
 - 之前各轮的 ${P}/r*/missions_final.yaml 与 audit_record.json(若有):以前试过什么、挡过什么;
-- 看不懂的算子去读源码(${ROOT}/partura/ops_ext.py、$HOME/Desktop/AlphaCube-steering/src/alphacube/)。
+- 看不懂的算子去读源码(${ROOT}/partura/ops_ext.py、$HOME/Desktop/AlphaCube-steering/src/alphacube/):**先 \`grep -rn "def <算子名>"\` 找到定义,只读那一段**(sed -n 起,止),不要整个文件读。
 
 对每个任务位判断:
 - **创新度**(1–5):和库里已有的 head 比,是不是本质上不同的东西或实质性的改进?相关度表的数是证据之一,但低相关不等于新(换个控制变量的写法也可能和 head 都不相关)。
@@ -190,12 +192,25 @@ async function runSeed(S) {
   if (!fin) return { ...out, failed: 'finish' }
   const text = fin.output || ''
   out.finalized = (text.split('\n').find(l => l.startsWith('FINALIZED')) || '').slice(0, 300)
-  out.pushed = /^PUSHED /m.test(text) && fin.exit_code === 0
+  out.pushed = /^PUSHED /m.test(text)               // prod_finish.py prints PUSHED only on success; the agent may not see the exit code
   log(`种子 ${S} 第 ${K} 轮:${out.pushed ? '已推送' : '未推送'}。${out.finalized || text.slice(-200)}`)
   if (!out.pushed) out.failed = 'finish'
   if (!out.pushed) out.detail = text.slice(-600)
   return out
 }
 
-const results = await parallel(SEEDS.map(S => () => runSeed(S)))
-return { round: K, results: results.map((r, i) => r || { seed: SEEDS[i], failed: 'error' }) }
+async function runStage(S) {
+  const tag = `prod r${K} s${S}`
+  if (ONLY === 'pi') {
+    const pi = await agent(piPrompt(S), { label: `${tag}:pi`, phase: 'Plan', model: M.pi, schema: PI_SCHEMA })
+    if (!pi) return { seed: S, failed: 'pi' }
+    if (pi.check_exit_code !== 0) return { seed: S, failed: 'pi-check', detail: pi.summary }
+    return { seed: S, plan: { slots: pi.slots.map(s => s.type), n_R: pi.n_R }, summary: pi.summary }
+  }
+  const aud = await agent(auditPrompt(S), { label: `${tag}:audit`, phase: 'Audit', model: M.audit, schema: AUDIT_SCHEMA })
+  if (!aud) return { seed: S, failed: 'audit' }
+  return { seed: S, audit: { slots: aud.slots.map(s => ({ slot: s.slot, novelty: s.novelty, soundness: s.soundness, struck: s.struck_seeds })), R: aud.R, summary: aud.summary } }
+}
+
+const results = await parallel(SEEDS.map(S => () => (ONLY ? runStage(S) : runSeed(S))))
+return { round: K, stage: ONLY || 'all', results: results.map((r, i) => r || { seed: SEEDS[i], failed: 'error' }) }

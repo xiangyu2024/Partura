@@ -1,0 +1,81 @@
+seed: 904
+round: 1
+slots:
+  - type: E
+    core: 'day_topw_mean(Ret, Amt)'
+    hypothesis: >-
+      核心 H = day_topw_mean(Ret, Amt):每天成交额最大的约 10% 分钟(约 24 个;A 股集中在开盘几分钟、收盘几分钟和消息脉冲)里的
+      平均分钟收益,即「钱真正成交的时候价格在往哪走」,是大资金净推动方向(吸筹 / 派发、追涨 / 杀跌)的日内读数。它既不是日收益,
+      也不是波动或成交额水平,度量对象与 20 日反转、流动性、波动、市值四个控制不同。
+      快照共性表里含 H 的候选有 56 个且明显更好(均值差 +0.65,p=0.0015),但表里反复出现的外围几乎都是同一类:
+      ts_reg_tvalue(H, ListAge, 30)(H 与时间下标的相关,即 H 的变化趋势)、abs_ / pow_05 变换、ts_sum(·, 40)。它们做的全是 H 的时间序列
+      形状;从表里看不到把 H 当作「持续存在的水平」、对波动或自身历史做标度、与当天整体方向对照、改读分布尾部、或把 H 与日收益的联动当对象。
+      这一轮外围刻意全换:
+      (1)水平 + 长半衰期平滑 cross_ema / cross_mean(30 / 60 / 241 日):压掉日噪声(15 bp 成本下换手是第一杀手),留下个股长期稳定的大单方向;
+      (2)标度:除以慢波动 cross_mean(day_std(Ret), 60) 或当日资金加权波动 day_wstd(Ret, Amt),变成「单位波动的大单推动」,
+      避免高波动股的数值大小主导排序;cross_zscore 读「相对自己的历史」;
+      (3)对照整天:H - day_mean(Ret)(重分钟比平均分钟多走了多少)、H * sign(day_sum(Ret))(大单方向与当天方向一致 / 背离)、H - day_wmean(Ret, Amt);
+      (4)分布形状:cross_tail_mean_q25 / q75(H 最差 / 最好四分之一天的均值)、ts_rank;
+      (5)联动:ts_corr(H, day_sum(Ret), 50) 及其滞后一天版本,读的是重分钟方向对当天 / 次日收益的传导强度(类似价格冲击,衡量大单的信息含量而非方向);
+      (6)条件化:cs_bucket_rank 在同一波动十分位内排名;cs_flip_by_state 用慢市场状态(cross_ema(day_sum(Ret), 60) 的全市场均值相对近 241 日中位数)
+      决定方向,承载「大单方向在上涨 / 下跌市里含义不同」。
+      数学上无前视(只用当日收盘后已知的整日分钟序列);分母用 60 日平均波动或资金加权波动,不会除以近零;停牌 / 缺失日保持 NaN 不填充。
+      为什么样本外还在:大单方向由机构拆单、散户跟风以及 T+1、涨跌停这类制度性约束决定,不是某一年的行情;慢平滑版换手低,扣 15 bp 之后还剩得下;
+      标度版和波动控制近似正交,新尺子去掉控制的非线性暴露之后留下的是「方向」而不是「波动大小」。
+    seeds:
+      - 'cross_ema(day_topw_mean(Ret, Amt), 60)'
+      - 'cross_ema(day_topw_mean(Ret, Amt), 241)'
+      - 'cross_mean(day_topw_mean(Ret, Amt), 30)'
+      - 'cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 15)'
+      - 'cross_ema(div(day_topw_mean(Ret, Amt), cross_mean(day_std(Ret), 60)), 30)'
+      - 'cross_ema(div(day_topw_mean(Ret, Amt), day_wstd(Ret, Amt)), 60)'
+      - 'cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60)'
+      - 'cross_ema(mul(day_topw_mean(Ret, Amt), sign(day_sum(Ret))), 60)'
+      - 'ts_corr(day_topw_mean(Ret, Amt), day_sum(Ret), 50)'
+      - 'ts_corr(ts_delay(day_topw_mean(Ret, Amt), 1), day_sum(Ret), 50)'
+      - 'cross_ema(ts_rank(day_topw_mean(Ret, Amt), 20), 30)'
+      - 'cross_tail_mean_q25(day_topw_mean(Ret, Amt), 60)'
+      - 'cross_tail_mean_q75(day_topw_mean(Ret, Amt), 60)'
+      - 'cs_bucket_rank(cross_ema(day_topw_mean(Ret, Amt), 60), cross_mean(day_std(Ret), 60))'
+      - 'cs_flip_by_state(cross_ema(day_topw_mean(Ret, Amt), 60), cross_ema(day_sum(Ret), 60))'
+      - 'cross_ema(sub(day_topw_mean(Ret, Amt), day_wmean(Ret, Amt)), 60)'
+  - type: N
+    hypothesis: >-
+      把「收盘到收盘」收益拆成两段并读它们的慢变量:隔夜缺口 G = log(今日首分钟 Open / 昨日 Close)(集合竞价与隔夜消息的一次性定价,机构 / 信息驱动),
+      和日内漂移 I = log(今日 Close / 今日首分钟 Open)(连续竞价,散户 / 噪声驱动)。制度上 A 股隔夜不能交易、T+1、涨跌停,隔夜信息只能在开盘一次定价,
+      日内则是散户博弈,这种分工不依赖某一年的行情。文献背景:Lou-Polk-Skouras(2019)「隔夜 vs 日内」两段收益各自有持续性且方向相反;
+      Berkman 等(2012)隔夜收益里的注意力效应。
+      算子实现:G = log(div(day_first(Open), ts_delay(day_last(Close), 1))),I = log(div(day_last(Close), day_first(Open))),都是只用当日收盘后已知的量、
+      不含常数、不除以近零量的日频序列;停牌 / 首日 NaN 不填充;涨停一字板的极端缺口用 sign 或 cs_winsor 抑制,避免一两个爆点支配截面。
+      种子分四组:
+      (a)慢水平:cross_ema(G, 60 / 241)、cross_ema(I, 60)、两段之差 G - I(「谁在拉锯」);
+      (b)稳健版:cross_mean(cs_winsor(G), 60)、cross_mean(sign(G), 60)(上跳缺口比例 - 下跳缺口比例)、sign(G) - sign(I);
+      (c)联动 / 接力:ts_corr(G, I, 50)、sign(G) * sign(I) 的 60 日均值、方向对齐的日内收益 sign(G) * I:读的是缺口之后日内是继续还是回补,
+      即隔夜信息的真假与散户对缺口的反应,它是个股的行为习性而不是收益水平;
+      (d)标度 / 异常:G 除以 60 日波动、cross_zscore(G, 60)、快慢 EMA 之差、缺口的下四分之一尾部均值(隔夜暴跌风险)。
+      与库里不同的原因:快照里没有任何 head,共性表里与本想法最近的只有 cross_ema(day_sum(Ret), 241) 一族(只含日内那一半,不含缺口,也不含两半的对立与联动);
+      缺口一半和它与日内的关系整批 124 个候选没有出现。它与 20 日反转控制只是部分相关(一个是 60 日以上的慢分量,一个是总收益),
+      与波动 / 流动性 / 市值控制的度量对象不同,新尺子再把对它们的线性、U 形、S 形暴露去掉。
+      为什么样本外还在:慢变量(60 - 241 日)换手低,15 bp 之后能剩;sign 型度量对厚尾稳健;机制来自市场微观结构的分工,不是某一年的行情。
+    inspired_by: >-
+      第 1 批共性表里 cross_ema(day_sum(Ret), 241)(8 个候选,均值差 +0.43,p=0.097)及其 pow_05 版(+0.47,p=0.068):慢速累计的分钟收益求和比
+      快变量好。day_sum(Ret) 只覆盖开盘之后的连续竞价那一半,不含隔夜缺口;同批含 day_topw_mean(Ret, Amt) 的候选很多(常在开盘处成交额最大),
+      说明「开盘附近的定价」也被 GP 反复触碰。缺口一半以及两半的对立 / 联动整批都没有出现,所以这个想法是共性表里「慢速收益构成」现象的缺失部分。
+    seeds:
+      - 'cross_ema(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)'
+      - 'cross_ema(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 241)'
+      - 'cross_ema(log(div(day_last(Close), day_first(Open))), 60)'
+      - 'cross_ema(sub(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open)))), 60)'
+      - 'cross_ema(sub(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open)))), 241)'
+      - 'cross_mean(cs_winsor(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 60)'
+      - 'cross_mean(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 60)'
+      - 'cross_mean(sub(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), sign(log(div(day_last(Close), day_first(Open))))), 60)'
+      - 'cross_mean(mul(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), sign(log(div(day_last(Close), day_first(Open))))), 60)'
+      - 'cross_mean(cs_winsor(mul(sign(log(div(day_first(Open), ts_delay(day_last(Close), 1)))), log(div(day_last(Close), day_first(Open))))), 60)'
+      - 'ts_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 50)'
+      - 'cross_ema(ts_corr(log(div(day_first(Open), ts_delay(day_last(Close), 1))), log(div(day_last(Close), day_first(Open))), 20), 30)'
+      - 'cross_ema(div(log(div(day_first(Open), ts_delay(day_last(Close), 1))), cross_mean(day_std(Ret), 60)), 60)'
+      - 'cross_ema(cross_zscore(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), 30)'
+      - 'sub(cross_ema(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 15), cross_ema(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 241))'
+      - 'cross_tail_mean_q25(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)'
+# R:本轮快照里没有 head,没有可去烂部件的对象。

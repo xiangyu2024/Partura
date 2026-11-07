@@ -107,7 +107,7 @@ for S in ${3:-$($HOSTS seeds)}; do
     push)  ok=""                                        # atomic (temp name, then mv); each try re-reads the file; md5 checked
            [ -s $P/missions_final.yaml ] || { echo "$S: no missions_final.yaml"; RC=1; continue; }
            want=$(md5 -q $P/missions_final.yaml)
-           have=$(rsh "$H" "md5sum < $R/arms/s${S}_${ARM}_r$K.yaml 2>/dev/null | cut -c1-32; true")   # empty = no plan there yet
+           have=$(rsh "$H" "{ md5sum < $R/arms/s${S}_${ARM}_r$K.yaml; } 2>/dev/null | cut -c1-32; true")   # empty = no plan there yet ({ } so a missing file prints nothing)
            have=$(echo $have | tr -d ' -')
            if [ "$have" = "$want" ]; then echo "$S pushed ($want) (already on the server)"; continue; fi
            if [ -n "$have" ] && [ "$have" != "d41d8cd98f00b204e9800998ecf8427e" ] && [ -z "$FORCE" ]; then

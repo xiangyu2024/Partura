@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 H = day_topw_mean(Ret, Amt)(ops_ext.py:635,按 |Amt| 取当日前 10% 分钟的 Ret 均值,只用当日收盘后已知的分钟序列,无前视)。corr_1.json 中 H 与五个控制的日度秩 |ρ| 为 liq 0.033、vol 0.025、rev 0.141、known 0.034、size 0.030,远低于 0.8。快照 heads 为 0 个,库禁令无对象,故创新度按控制与机制判:H 度量的对象与五个控制不同,给 4 而非 5,因为它与 day_wmean(Ret, Amt) 同属「成交额加权分钟收益」一族,只是取尾部不同。合理度 4:逐个算子核对——cross_ema、cross_mean、cross_zscore、cross_tail_mean_q25/q75、ts_rank、ts_corr、ts_delay、cs_bucket_rank、cs_flip_by_state、day_wmean、day_mean、day_sum、day_std、day_wstd 均为因果窗口(rolling_windows 左侧补 NaN),无前视;16 个种子的外围与 PI 写明的六类机制一致。逐个审:种子 5、6 为除法,分母分别是 60 日平均日内波动与当日资金加权波动。div 不加保护(common.py:175),但全平盘日 0/0 得 NaN、有限的 inf 被 cross_ema 的 isfinite 掩码丢掉;单笔成交日的近零分母会产生有限的大值,记为风险,不构成 §4 的爆点支配,保留。种子 1 与 2 外围算子集合相同、只差半衰期 60 与 241,按 E 规则属同一骨架,但窗口是计划中刻意的不同时域,按放行原则保留。种子 4(rev 0.51)与 13(vol 0.63)与控制中度相关,未达 0.8,保留。种子 15 的 cs_flip_by_state 在前 241 个交易日是展开窗口的分位,热身期约占训练段四分之一,是需留意的风险,但不是「主要由热身期决定」。打分注记:种子 13 的 known 0.516、种子 1 与 2 约 0.50,按 §1 的发现口径会被判不合格,这是打分问题,不作为审计理由。核心的来源(共性表里 56 个候选)按规则我不读共性表,未核实。如果它有 alpha,最可能来自 H 的结构成分:PI 自己写明成交集中在开盘与收盘几分钟,所以 H 的大部分样本是首尾几根 bar 的分钟收益,alpha 更可能是尾盘拉抬或开盘定价的延续与反转,而不是盘中大单方向本身,这一点可在结果出来后检验。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7, 8, 9]
+    reasons: '隔夜缺口 G = log(day_first(Open) / ts_delay(day_last(Close), 1)) 与日内漂移 I = log(day_last(Close) / day_first(Open)) 的定义正确:ts_delay(nd_ts.py:113)为纯平移,停牌与首日自然为 NaN,不填充;只用开盘时已知的第一分钟价与前一日收盘,无前视。log 实为 log|x|(common.py:211),此处比值为正,无影响。控制:保留种子中五个控制的 |ρ| 最大为种子 16 的 vol 0.512,其余 ≤ 0.41,未达 0.8。创新度 4:快照无 head,控制中没有对应对象,G/I 的隔夜—日内分解与 H 的分钟加权不重合;文献(Lou-Polk-Skouras 2019;Berkman 等 2012)方向已知,但在库禁令与控制的意义下是新的。合理度 4:机制清楚(隔夜信息只能在开盘一次定价,日内是连续竞价,T+1 与涨跌停使分工制度化);算子逐个核对,cs_winsor、cross_ema、cross_mean、cross_zscore、cross_tail_mean_q25、ts_corr 与 div(分母为 60 日平均波动)均实现了所写的量,窗口合理。划掉种子 7、8、9:它们是 sign(G) 或 sign(I) 的 60 日均值。sign 只取 {-1, 0, 1},60 日均值只有 121 个取值格点,截面上大部分名字与他人并列,排序由股票列序决定。门槛表 gate=False,distinct 0.039 至 0.055。这是 §4 的「面板几乎是常数」数值伪影,不是 §3 允许的「偶尔并列靠列序打破」,故划掉。种子 10 同样含 sign(G) 但乘上连续的 I,distinct 0.999,保留。种子 1、2、6 与 16 都是 G 或 G 的尾部的 60 日水平,与种子 1 对象相近,但窗口与加权方式不同,按放行原则保留。inspired_by 中对共性表的描述未核实(共性表不在我的读取范围)。如果它有 alpha,最可能来自隔夜缺口的一次性定价在日内被继续或回补的行为习性(sign(G)·I 与 ts_corr(G, I) 一族);慢水平 cross_ema(G, 60/241) 更像个股长期的隔夜信息敏感度。'
+R: []   # 本轮快照里没有 head,无 R 组
+summary: '两个位均通过:a 位创新 4、合理 4,保留全部 16 个种子;b 位创新 4、合理 4,划掉 7、8、9(sign(G) 族截面退化,distinct 0.04 至 0.06)后剩 13 个;本轮无 R 组。'

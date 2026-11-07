@@ -1,0 +1,66 @@
+seed: 911
+round: 1
+slots:
+  - type: E
+    core: 'cross_scale(LogFloatCap, 241)'
+    hypothesis: >-
+      核心 cross_scale(LogFloatCap, 241) = LogFloatCap_t / (过去 241 个交易日 LogFloatCap 之和,缺失日不计)。它实际度量的是两件事,
+      并且都是「相对自己历史」的慢变量:(1) 上市不满 241 个交易日的股票,分母只有上市以来的几天,值约等于 1/上市天数,所以截面上「越新越靠前」,
+      这是一个按股票自身上市天数算出来的上市龄通道(次新股),不是样本起点的数值热身问题,样本起点的热身只影响 2018 年最初几周;
+      (2) 上市满 241 天的股票,值 ≈ (1/241)×(现在的对数流通市值 / 一年均值),即一年尺度的市值漂移(价格趋势加解禁带来的流通股本扩张),变得很慢。
+      快照里含该核心的 7 个候选平均 -0.06,不含的平均 -1.56,p = 0.0001,是 98 个候选里最清楚的一个富集,说明新尺子下真正起作用的是这个慢通道,而不是日内统计量。
+      这一轮外围要试的是:核心排出来的头部既包含次新股也包含大幅涨过的老股,里面混着买不到 / 追不得的名字,所以外围只做「把核心排出的头部洗干净、并给它配一个独立的第二条线索」,
+      用的都是 M 的候选里没有出现过的算子家族:(a) 上市天数 ListAge 与连板冻结(day_flat_ratio、day_at_max_ratio)的排除屏 select_where / cs_last_*,
+      剔除上市头 15 日的连续一字板和近几日被封死的名字;(b) 在流动性十分位或市值十分位内部排(cs_bucket_rank),让头部成分不再被某一档独占;
+      (c) 把核心的秩与一个独立线索的秩相加减:低波动、金额加权的上涨分钟占比(day_signed_ratio)、近 20 日涨停停留时长(day_at_max_ratio)、总股本 / 流通股本之比 LogTotalCap - LogFloatCap(限售股占比,即未来解禁供给压力);
+      (d) 带状态的写法 cs_flip_by_state:次新股溢价在市场活跃期与冷清期方向不同。这些外围与 M 见过的写法不同:共性表(出现 ≥ 5 次的子树)里与该核心同现的都是 day_* 日内统计量与 cross_scale 的随机组合,没有 ListAge、select_where 屏、cs_last_* 排除屏、cs_bucket_rank 分桶、限售占比这类写法。
+      样本外还会在的理由:新股上市后流通盘小、研究覆盖少、散户炒新,以及限售股解禁的日历是制度性的、每年重复的供给冲击,这条通道靠制度而不是靠某一年的行情;
+      主要风险是 2023 年全面注册制带来新股定价与首日涨幅的变化,所以外围里放了与上市龄无关的第二条线索和限售占比,避免全押在上市龄上。
+    seeds:
+      - 'select_where(is_lt(ListAge, 15), -1, cross_scale(LogFloatCap, 241))'
+      - 'cs_last_high10(cross_scale(LogFloatCap, 241), cross_mean(day_flat_ratio(Close), 3))'
+      - 'cs_last_high10(cross_scale(LogFloatCap, 241), cross_max(day_at_max_ratio(Close), 2))'
+      - 'cs_bucket_rank(cross_scale(LogFloatCap, 241), LogFloatCap)'
+      - 'cs_bucket_rank(cross_scale(LogFloatCap, 241), cross_mean(day_sum(Amt), 60))'
+      - 'cross_ema(cross_scale(LogFloatCap, 241), 10)'
+      - 'sub(cs_rank(cross_scale(LogFloatCap, 241)), cs_rank(cross_mean(day_std(Ret), 20)))'
+      - 'add(cs_rank(cross_scale(LogFloatCap, 241)), cs_rank(cross_mean(day_signed_ratio(Ret, Amt), 20)))'
+      - 'sub(cs_rank(cross_scale(LogFloatCap, 241)), cs_rank(sub(LogTotalCap, LogFloatCap)))'
+      - 'cs_regres(cross_scale(LogFloatCap, 241), cross_mean(day_sum(Amt), 60))'
+      - 'cs_flip_by_state(cross_scale(LogFloatCap, 241), day_sum(Amt))'
+      - 'cs_last_low10(cross_scale(LogFloatCap, 241), cross_mean(day_sum(Amt), 60))'
+      - 'sub(cs_rank(cross_scale(LogFloatCap, 241)), cs_rank(cross_mean(day_at_max_ratio(Close), 20)))'
+      - 'select_where(is_lt(ListAge, 15), -1, cs_bucket_rank(cross_scale(LogFloatCap, 241), LogFloatCap))'
+  - type: N
+    hypothesis: >-
+      隔夜 vs 日内收益的「客户群」分解:把一天的收益拆成 隔夜 ON = day_first(Open) / 前一日 day_last(Close) - 1 与 日内 ID = day_last(Close) / day_first(Open) - 1,
+      在 60 到 120 个交易日上累积(cross_mean / cross_ema / cross_med)。机制:A 股隔夜(集合竞价加夜间消息)主要反映机构与信息交易者的持仓调整,
+      日内主要是散户的追涨杀跌与随后的回吐(T+1、涨跌停、散户占成交额约六到八成),所以「收益主要来在隔夜」的股票持续有机构需求,
+      「收益主要来在日内」的股票是被散户情绪抬起来、之后回吐(Lou-Polk-Skouras 2019 的 tug of war 在美股成立,A 股的客户结构更极端)。
+      这个划分和五个控制度量的东西不同:20 日反转与波动、金额波动族度量的是总收益的大小和方向,而不是同一份收益在一天里的哪一段发生;
+      去掉对控制的线性 / U / S 形暴露后仍剩下「同样总收益,来源不同」这一维。算子怎样实现:ON 与 ID 只用 Open、Close 两个日频聚合,
+      cross_delay(day_last(Close), 1) 取前收,前视不存在(开盘价与前收都在当日收盘前已知);除法只用价格(不近零),并且在 cross_mean 之后,单日跳变被 60 日窗口摊薄;
+      变体里还放了只看符号的版本 is_gt(ON, 0)(对涨停一字板的巨大隔夜跳空不敏感)、中位数版本 cross_med、下尾均值 cross_tail_mean_q25(ON, 60)(坏消息跳空是否被压住)、
+      跳空与日内之间的 cross_corr(跳空被日内回补的程度)、以及对市值十分位去均值的 cs_bucket_demean。
+      为什么是新的:共性表(出现 ≥ 5 次的子树)里没有含 day_first(Open) 或前收的子树,日内统计量 day_centroid(Volume)、day_pos_ratio(Volume)、day_wstd(Low, Open) 出现了 7 到 12 次却都没有显著富集(均值差 +0.28、+0.10、-0.79,p 均 > 0.1),
+      我的解读是单日、日内形状的统计量在 15 bp 成本下输给了换手(不是没有信息);这里换成 60 日以上累积的慢变量,同样的日内信息只留下客户群那一维,换手只有日度统计量的几分之一。
+      样本外还会在的理由:T+1、涨跌停、个人投资者占比、集合竞价制度没有变,客户群的构成是结构性的,不依赖于某一年的风格;
+      风险是隔夜与日内两个分量的符号在不同行情下可能换向、以及大幅跳空事件主导均值,所以放了符号版本和中位数 / 分位版本。
+    inspired_by: >-
+      第 1 批:日内形状统计量(day_centroid(Volume)、day_pos_ratio(Volume)、day_wstd(Low, Open))在 7 到 12 个候选里出现却全部不富集,
+      而显著富集(p < 0.05)的两个子树 cross_scale(LogFloatCap, 241)、abs_(LogFloatShares) 都是慢变量(换手低),cross_scale(day_wstd(Low, Open), 241) 也偏高(+0.95,p 0.12)——我的解读是在 15 bp 下损失的主要是换手;
+      于是取一条日度 Open / Close 里 M 还没碰过的新信息(隔夜 vs 日内),做成 60 日以上的慢变量。
+    seeds:
+      - 'cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'sub(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60))'
+      - 'cross_ema(sub(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 40)'
+      - 'cross_med(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 90)'
+      - 'cross_mean(is_gt(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 0), 60)'
+      - 'sub(cross_mean(is_gt(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 0), 90), cross_mean(is_gt(sub(div(day_last(Close), day_first(Open)), 1), 0), 90))'
+      - 'cs_bucket_demean(sub(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60)), LogFloatCap)'
+      - 'sub(cs_rank(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)), cs_rank(cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60)))'
+      - 'div(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60), add(cross_stddev(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60), 0.002))'
+      - 'cross_tail_mean_q25(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_mean(sub(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 20)'
+      - 'cs_regres(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60))'
+      - 'cross_corr(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 120)'

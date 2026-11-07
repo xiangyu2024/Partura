@@ -1,0 +1,120 @@
+seed: 903
+round: 1
+slots:
+- type: E
+  core: day_open(Open)
+  hypothesis: '核心 day_open(Open) = 每天第一个有效开盘价(后复权尺度),它在股票之间的排序约等于从基期起的累计收益。 第 1 批里含它的候选
+    76/117(均值 -0.27 对 -1.35,p 0.000),唯一的 head 读的是它的"截面水平": 最低 10% 抬到当日均值,再排除 day_centroid(Open)
+    最高的 5%。消融显示单独的水平(sufficiency -1.35,方向 -1)是输的, 抬尾部之后才赢,所以真正有用的是水平在截面上的某种形状,而不是价格自己的时间序列。
+    已见过的 76 个候选都只在同一天的截面上读这个叶子,没有一个读它自己的历史。 同一个后复权价格还能读出三件事: (a) 离自己 1 年新高/新低有多远(52
+    周高点锚定,George & Hwang 2004); (b) 6/12 个月趋势、跳过最近一个月的动量及其加速度(Jegadeesh & Titman 1993);
+    (c) 长周期动量与反转随市场状态翻向(Cooper, Gutierrez & Hameed 2004)。 实现:cross_rank / cross_zscore
+    / cross_max / cross_min / cross_mean / cross_delay 在 60-241 天窗口里读核心(慢信号,15 bp
+    扛得住); cs_flip_by_state 用核心自己的 60/120 天涨幅的市场均值做状态,让"位置"信号在两种市场里取相反符号; cs_first_high20
+    / cs_last_low20 把已见的"抬尾部水平"当入场门槛,门内/门外再按时间序列位置排; cs_bucket_rank 把时间序列位置放进水平十分位内重新排名(与水平正交);
+    混合种子里时间序列位置的权重是水平的 2 倍(预期日度秩相关 0.3-0.5,低于库禁令 0.7)。 和已有的不同:这些种子的排序是"相对自己的历史",与截面水平的日度秩相关预期
+    0.1-0.4; 库禁令(|rho| >= 0.7)会拒绝一切只是重塑水平的候选,所以 GP 在核心外面只能去长时间序列 / 状态 / 门槛这类结构, 和已见的
+    {cs_mask_top_replace_mean_neg, cs_last_high05, pow_3, day_centroid, cross_valid_count}
+    这套外围明显不同。 样本外为什么还在:锚定与动量的行为机制(对近期高点的参照、反应不足)在 2004 年前后的美国样本里就有, 与本样本无关,是独立于这份数据的先验;窗口
+    >= 60 天,换手低;新尺子已去掉对流动性、波动、20 日反转、Amt 族、市值的线性 / U 形 / S 形暴露, 剩下的是"位置"而不是风格。已知风险:A
+    股的 12-1 动量历史上偏反转,方向由评估自己挑;所有窗口都 >= 60 天以避开 20 日反转控制。'
+  literature:
+  - cite: George and Hwang, The 52-week high and momentum investing, Journal of Finance
+    year: '2004'
+  - cite: Jegadeesh and Titman, Returns to buying winners and selling losers, Journal
+      of Finance
+    year: '1993'
+  - cite: Cooper, Gutierrez and Hameed, Market states and momentum, Journal of Finance
+    year: '2004'
+  seeds:
+  - cross_rank(day_open(Open), 241)
+  - cross_rank(day_open(Open), 120)
+  - div(day_open(Open), cross_max(day_max(High), 241))
+  - div(day_open(Open), cross_min(day_min(Low), 241))
+  - div(cross_mean(day_open(Open), 20), cross_mean(day_open(Open), 241))
+  - div(cross_delay(day_open(Open), 20), cross_delay(day_open(Open), 241))
+  - sub(log(day_open(Open)), log(cross_delay(day_open(Open), 120)))
+  - sub(log(div(day_open(Open), cross_delay(day_open(Open), 60))), log(div(cross_delay(day_open(Open),
+    60), cross_delay(day_open(Open), 120))))
+  - cs_flip_by_state(cross_rank(day_open(Open), 241), div(day_open(Open), cross_delay(day_open(Open),
+    60)))
+  - cs_flip_by_state(cs_mask_top_replace_mean_neg(day_open(Open)), div(day_open(Open),
+    cross_delay(day_open(Open), 120)))
+  - cs_first_high20(cross_rank(day_open(Open), 241), cs_mask_top_replace_mean_neg(day_open(Open)))
+  - cs_last_low20(cross_rank(day_open(Open), 241), cs_mask_top_replace_mean_neg(day_open(Open)))
+  - add(cs_rank(cs_mask_top_replace_mean_neg(day_open(Open))), mul(2, cs_rank(div(day_open(Open),
+    cross_max(day_max(High), 241)))))
+  - cs_bucket_rank(div(day_open(Open), cross_max(day_max(High), 241)), cs_mask_top_replace_mean_neg(day_open(Open)))
+  - add(mul(cs_state_rank(day_sum(Amt), 60), cs_rank(cross_rank(day_open(Open), 241))),
+    mul(sub(1, cs_state_rank(day_sum(Amt), 60)), cs_rank(cs_mask_top_replace_mean_neg(day_open(Open)))))
+- type: N
+  hypothesis: '新想法:一只股票的成交"在一天里什么时候发生"是一个持续的个股特征,反映谁在交易它。 机制:日内成交量的时间分布由参与者类型决定(Admati
+    & Pfleiderer 1988); 散户的反应式买卖集中在开盘,机构的执行与指数 / ETF 申赎偏向尾盘,隔夜收益与日内收益之间的拉锯(Lou, Polk
+    & Skouras 2019; Bogousslavsky 2021)正是这两类人的足迹。五个控制(流动性、波动、20 日反转、day_std(Amt) 一族、市值)都不含"时间"这一维:
+    day_std(Amt) 把分钟打乱后只看分散度,day_centroid 保留了先后顺序。 实现:day_centroid(Amt / Volume /
+    Ret) 给每天的质心(0 = 全在开盘,1 = 全在收盘); cross_mean(., 20-120) 把它平滑成慢信号,cross_zscore 或"短均值减长均值"只取相对自己历史的偏离,这样去掉了不同交易所尾盘集合竞价制度造成的水平差;
+    in_slice 取开盘后 30 分钟 / 尾盘 30 分钟的成交额占全天比例及其差; day_corr(in_index(Amt), Amt) 给另一种加权的"后置程度";
+    sub(day_centroid(Amt), day_centroid(Ret)) 看钱比价格走得早还是晚; 隔夜对数收益(log(day_open(Open))
+    减前一天 log(day_close(Close)))与日内对数收益的 60 日均值之差,是同一件事在价格上的写法。 和库不同:库里唯一的 head 是价格水平的截面形状,而这些是日内时间轴上的统计量,预期与
+    head 的日度秩相关 < 0.2,与五个控制 < 0.3; 它们也不是 head 那个 5% 排除屏的变体,而是把质心本身当信号。 样本外为什么还在:参与者结构(谁在开盘交易、谁在尾盘交易)比风格轮动稳定;20-120
+    天平均使换手低; 只取偏离时不依赖交易所制度的水平差。已知风险:早盘停牌的股票缺失分钟使质心偏后,平均后被稀释,且 head 的屏已处理这种极端情形。'
+  literature:
+  - cite: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price
+      variability, Review of Financial Studies'
+    year: '1988'
+  - cite: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected
+      returns, Journal of Financial Economics'
+    year: '2019'
+  - cite: Bogousslavsky, The cross-section of intraday and overnight returns, Journal
+      of Financial Economics
+    year: '2021'
+  inspired_by: 第 1 批:day_centroid(Amt) 是含它的候选均值最高的子树之一(10 个候选,含 +0.04 对不含 -0.71,p
+    0.0006), sqrt(day_centroid(Amt)) 也有 +0.69;head 自己也靠 cs_last_high05(., sqrt(day_centroid(Open)))
+    这个 5% 排除屏才从 0.29 升到 0.63。 日内质心在这一批里只被当作"排除屏的变量",从来没有被当作信号本身,也没有被平滑成慢信号。
+  seeds:
+  - cross_mean(day_centroid(Amt), 60)
+  - cross_mean(day_centroid(Amt), 20)
+  - cross_zscore(day_centroid(Amt), 120)
+  - sub(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt), 120))
+  - cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 60)
+  - cross_mean(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), 60)
+  - cross_mean(div(day_sum(in_slice(Amt, 211, 239)), day_sum(Amt)), 60)
+  - cross_mean(day_corr(in_index(Amt), Amt), 60)
+  - cross_mean(day_centroid(Ret), 60)
+  - cross_mean(sub(day_centroid(Amt), day_centroid(Ret)), 60)
+  - cross_mean(sub(log(day_open(Open)), cross_delay(log(day_close(Close)), 1)), 60)
+  - sub(cross_mean(sub(log(day_close(Close)), log(day_open(Open))), 60), cross_mean(sub(log(day_open(Open)),
+    cross_delay(log(day_close(Close)), 1)), 60))
+R:
+- head: cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), sqrt(day_centroid(Open)))
+  why: 两个部件值得换。部件 1,屏变量 sqrt(day_centroid(Open)):sqrt 对排序是空操作(拆解里把它换成 day_centroid(Open),分数
+    +0.63 -> +0.63,必要性 -0.00), 所以结构其实是 cs_last_high05(核心, day_centroid(Open));而这个屏本身不小(只留抬尾核心
+    0.29 / 0.85,加上屏变成 0.63 / 1.13), 问题是它用价格路径的质心去间接代理"当天交易状态异常"(推断:价格质心主要由哪些分钟缺失决定,早盘停牌或晚开的股票质心偏晚),
+    屏的宽度(5%)与屏的对象都没被试过;同一批里 centroid(Amt) 版本也出现在最好的一组候选里,说明屏的对象是"异常交易状态"而不是 Open 本身。
+    变体直接测量这些状态:冻结报价 day_flat_ratio、涨跌停锁死 day_at_max_ratio / day_at_min_ratio、零收益分钟
+    day_zero_ratio、次新 cross_age、成交量质心,并试 10% / 20% 宽度与两端同时屏。 部件 2,抬尾部 cs_mask_top_replace_mean_neg(day_open(Open)):它把最低
+    10% 抬到当日"均值", 而重尾价格水平的均值落在哪个分位是不固定的、每天不同(拆解显示去掉它方向翻转,必要性 +1.84,所以它是载体,但块落在哪、多宽从未被试过)。
+    变体先对价格取 log / sqrt / pow_2 / winsor 再抬(改变块的落点),连抬两次(块变宽),或改抬高端。
+  variants:
+  - cs_last_high05(cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_open(Open))),
+    sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(log(day_open(Open))), sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(sqrt(day_open(Open))), sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(pow_2(day_open(Open))), sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(cs_winsor(day_open(Open))), sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean(day_open(Open)), sqrt(day_centroid(Open)))
+  - cs_last_high10(cs_mask_top_replace_mean_neg(day_open(Open)), sqrt(day_centroid(Open)))
+  - cs_last_high20(cs_mask_top_replace_mean_neg(day_open(Open)), sqrt(day_centroid(Open)))
+  - cs_last_low05(cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), sqrt(day_centroid(Open))),
+    sqrt(day_centroid(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), day_flat_ratio(Open))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), day_zero_ratio(Ret))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), day_at_max_ratio(Close))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), day_at_min_ratio(Close))
+  - cs_last_low05(cs_mask_top_replace_mean_neg(day_open(Open)), cross_age(day_open(Open)))
+  - cs_last_high05(cs_mask_top_replace_mean_neg(day_open(Open)), day_centroid(Volume))
+  - cs_last_high05(cs_last_low05(cs_mask_top_replace_mean_neg(day_open(Open)), cross_age(day_open(Open))),
+    sqrt(day_centroid(Open)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

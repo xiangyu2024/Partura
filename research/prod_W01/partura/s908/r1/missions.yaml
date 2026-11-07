@@ -1,0 +1,117 @@
+seed: 908
+round: 1
+slots:
+  - type: E
+    core: 'day_centroid(Amt)'
+    hypothesis: >-
+      核心 day_centroid(Amt) = 当天成交额在 241 格分钟轴上的重心 sum(t*|Amt|)/sum(|Amt|)/(T-1)
+      (0 = 全部成交在开盘集合竞价,1 = 全部在收盘;定义见 ops_ext.py 的 docstring)。
+      证据(只来自 M 第 1 批 + 本组定位,train/valid):含它的已评分候选 26/86,均分 -0.25 对不含的 -1.51(p 约 0);
+      单独用它(方向 = 早盘成交重者做多,半衰期 20)train +1.05 / valid +0.41,只差 valid 一点没到 0.5;
+      head1 把它与 ListAge 做回归残差后取 10 日 q75 到 +0.75;拆解里 q75 窗口 5 / 10 / 20 = +0.51 / +0.75 / +0.90
+      (越平滑越好),Amt 换成 Volume 为 +0.82。
+      机制:重心早 = 信息(隔夜消息、竞价缺口)在开盘被先行资金(机构执行、知情者)消化完;重心晚 = 尾盘追涨、
+      尾盘拉升和收盘附近的指数 / ETF 申赎流量,这些成交是被动或情绪化的,次日回吐。
+      它是股票层面慢变的交易风格(半衰期 20 最好、窗口越长越好),所以值得做的外围工作有三件:
+      (a) 把它估得更准(时间轴上换不同的平滑 / 稳健分位 / 下尾估计量);
+      (b) 去掉它与别的股票属性的混杂;
+      (c) 分清是'水平'还是'变化'在起作用。
+      已见外围 = ts_quantile_q75 套 cs_regres(ListAge, .) 套 pow_3。注意 dailyfields.py 里 ListAge 对 2018-01-02 已上市的全部股票取
+      10000 + 天数(一个并列块),只有此后的新股才是真实上市天数,所以 head1 的实质是'老股 vs 次新股分组,老股内部按 centroid^3 排序',
+      ListAge 在那里当被解释变量 Y。本组 14 个种子一个都不用 ts_quantile_q75 / pow_3 / ListAge 作 Y:
+      时间轴估计量用 cross_mean / cross_ema / cross_med / cross_quantile_q25;去混杂方向相反(centroid 作 Y 对 ListAge 回归,或在
+      ListAge / 流通股本 / 价格水平的十分位桶内做 cs_bucket_zscore,即同类股票互比,而不是把 ListAge 排在前面);
+      cross_zscore 与'短窗减长窗'是证伪用的:若水平才是 alpha,去掉水平的写法应当明显变差;
+      另外三个把买入分钟(Ret>0)与卖出分钟(Ret<0)的成交额重心拆开,或用 Amt 与 Volume 重心之差
+      (= 以成交量加权的日内价格趋势,按 Cov(时间, 价格)/均价 估计量级约 1e-3,远大于 float32 舍入的 1e-7,不是数值伪影)。
+      为什么样本外还在:早 / 晚成交的差别来自谁在交易(知情 / 机构 vs 情绪 / 被动流量),这是市场结构而非某一段行情;
+      train 与 valid 里它独立站得住(+1.05 / +0.41);新尺子已经去掉了流动性、波动、反转、已知族与市值的线性 / U 形 / S 形暴露,
+      而定位里 centroid 单独与已知族的日度秩相关只有约 -0.19。预计与 head1 的 |ρ| 在 0.3-0.65,不会被库禁令一刀切掉。
+    seeds:
+      - 'cross_mean(day_centroid(Amt), 20)'
+      - 'cross_ema(day_centroid(Amt), 10)'
+      - 'cross_med(day_centroid(Amt), 30)'
+      - 'cross_quantile_q25(day_centroid(Amt), 20)'
+      - 'cross_zscore(day_centroid(Amt), 40)'
+      - 'sub(cross_mean(day_centroid(Amt), 5), cross_mean(day_centroid(Amt), 60))'
+      - 'cs_bucket_zscore(day_centroid(Amt), ListAge)'
+      - 'cs_regres(day_centroid(Amt), ListAge)'
+      - 'cross_mean(cs_bucket_zscore(day_centroid(Amt), ListAge), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), LogFloatShares)'
+      - 'cs_bucket_zscore(day_centroid(Amt), day_wmean(Open, Amt))'
+      - 'sub(day_centroid(mul(Amt, is_gt0(Ret))), day_centroid(Amt))'
+      - 'sub(day_centroid(Amt), day_centroid(mul(Amt, is_lt0(Ret))))'
+      - 'cross_ema(sub(day_centroid(Amt), day_centroid(Volume)), 20)'
+  - type: N
+    hypothesis: >-
+      新 idea:被奖励的潜变量是'一天里的活动落在什么时候'(日内时间结构),重心只是它的一个估计量;
+      用其他估计量、其他被加权的量、以及买卖方向,检验这个结构本身,而不依赖 day_centroid(Amt) 这一种写法。
+      机制与实现:
+      (1) 爆发时点 day_topw_mean(in_index(Amt), Amt) = 成交额最大的 10% 分钟的平均时间位置,
+      只看大单式爆发何时发生,不被分散在全天的小成交稀释(重心会被分散量压向 0.5);
+      day_corr(in_index(Amt), Amt) = 时间与成交额的皮尔逊相关,即'后重 / 前重'的方向性度量,量纲与重心不同。
+      (2) 价格发现时点 day_centroid(Ret) = |Ret| 的重心,即价格波动发生在早还是晚;
+      与 Volume 重心之差 = 价格动在没有量时(尾盘薄成交拉动)还是有量时(开盘吸收);
+      day_topw_mean(in_index(Amt), Ret) = 涨跌幅最大的 10% 分钟出现在什么时间。
+      (3) 参与度:开盘 30 分钟成交额占比、最后 30 分钟占比(in_slice 取 0..30 与 211..240 格),
+      以及下午半场内部的重心(in_half(., False),只看 13:00 后是否向收盘加速)。
+      (4) 买卖方向的时间差:上涨分钟成交量重心 - 下跌分钟成交量重心,= 买盘集中在晚、卖盘集中在早的程度;
+      day_corr(in_index(Close), Close) = 日内价格路径对时间的线性度。
+      (5) 其中几个加了跨日平滑 / 对自身历史标准化,因为已知这个结构慢变。
+      与已见的差别:head1 = ListAge 残差 + centroid^3 + q75;head2 = 价格十分位桶内 z-score。
+      本组没有一个种子带 ListAge、pow_3 或桶标准化,也不含 day_centroid(Amt);
+      量纲上是比例 / 相关 / 位置,不是价格或额的水平,所以与流动性、市值控制的秩相关预计很低。
+      为什么样本外还在:机构与知情资金倾向在开盘和大波动时段集中成交,散户情绪流倾向在尾盘和冲高时段,
+      这种'谁在何时交易'的结构由制度(涨跌停、T+1、收盘集合竞价、指数申赎)决定,不依赖某一年的风格;
+      Heston-Korajczyk-Sadka(2010)已记录日内同一时段的截面收益模式会持续数周,时间位置本身带信息。
+    literature:
+      - source: 'Heston, Korajczyk, Sadka, Intraday Patterns in the Cross-Section of Stock Returns, Journal of Finance'
+        year: 2010
+    inspired_by: >-
+      第 1 批:含 day_centroid(Amt) 的候选 26/86,均分 -0.25 对 -1.51,p 约 0,是批里最强的富集;
+      head1 以它为核心,Volume 版比 Amt 版更好(+0.82 对 +0.75),窗口越长越好;
+      启发:被奖励的更可能是'活动的时间位置'这个潜变量,重心只是其中一种估计。
+    seeds:
+      - 'day_topw_mean(in_index(Amt), Amt)'
+      - 'day_corr(in_index(Amt), Amt)'
+      - 'day_centroid(Ret)'
+      - 'sub(day_centroid(Ret), day_centroid(Volume))'
+      - 'day_topw_mean(in_index(Amt), Ret)'
+      - 'div(day_sum(in_slice(Amt, 0, 30)), day_sum(Amt))'
+      - 'div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt))'
+      - 'day_centroid(in_half(Amt, False))'
+      - 'sub(day_centroid(mul(Volume, is_gt0(Ret))), day_centroid(mul(Volume, is_lt0(Ret))))'
+      - 'cross_mean(day_corr(in_index(Amt), Amt), 20)'
+      - 'cross_ema(day_topw_mean(in_index(Amt), Amt), 20)'
+      - 'cross_mean(sub(day_centroid(Ret), day_centroid(Volume)), 20)'
+      - 'day_corr(in_index(Close), Close)'
+      - 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+R:
+  - head: 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 10)'
+    why: >-
+      拆解给出三处可疑:窗口(5 / 10 / 20 = +0.51 / +0.75 / +0.90,单调,10 偏短,20 已是 +0.15 的增益);
+      Amt(换成 Volume 为 +0.82,更高);pow_3(去掉后 +0.66,必要性仅 +0.09,不是核心);
+      ts_quantile_q75 这个估计量本身没被消融过。变体把有效的改动叠在一起并继续拉长窗口,
+      再单独试去掉 pow_3、换中位数 / 均值估计量;全部保持 cs_regres(ListAge, centroid) 不动。
+    variants:
+      - 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 20)'
+      - 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Volume))), 20)'
+      - 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Volume))), 30)'
+      - 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Volume))), 40)'
+      - 'ts_quantile_q75(cs_regres(ListAge, day_centroid(Volume)), 20)'
+      - 'ts_quantile_q50(cs_regres(ListAge, pow_3(day_centroid(Volume))), 20)'
+      - 'ts_mean(cs_regres(ListAge, pow_3(day_centroid(Volume))), 20)'
+      - 'ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Volume))), 50)'
+  - head: 'cs_bucket_zscore(day_quantile_q25(High), day_wmean(Open, Amt))'
+    why: >-
+      拆解里两个子树单独都很差(-1.35 / -1.33),组合才有 +0.58;High->Low、Open->Close 各自只降到 +0.49,
+      说明水平量与分桶量两个叶子都不是烂的。没被检验的是外层的选择:桶内 z-score(受最高价格桶的重尾支配)
+      对桶内秩 / 去均值,分桶量的权重(Amt 对 Volume 对等权),以及 q25 这个分位。
+      变体只改这些选择,其余结构不动。
+    variants:
+      - 'cs_bucket_rank(day_quantile_q25(High), day_wmean(Open, Amt))'
+      - 'cs_bucket_demean(day_quantile_q25(High), day_wmean(Open, Amt))'
+      - 'cs_bucket_zscore(day_quantile_q25(High), day_wmean(Open, Volume))'
+      - 'cs_bucket_zscore(day_quantile_q25(High), day_mean(Open))'
+      - 'cs_bucket_zscore(day_quantile_q75(High), day_wmean(Open, Amt))'
+      - 'cs_bucket_zscore(day_median(High), day_wmean(Open, Amt))'

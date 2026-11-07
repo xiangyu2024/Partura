@@ -1,0 +1,70 @@
+seed: 909
+round: 1
+slots:
+  - type: N
+    hypothesis: |-
+      机制(lottery 偏好 / 收益分布形状):A 股散户占比高、融券受限、有涨跌停,投资者对"彩票型"收益形状(右尾厚、正偏度、偶发的大幅上冲)出价过高(Kumar 2009;Boyer-Mitton-Vorkink 2010 预期特质偏度;Bali-Cakici-Whitelaw 2011 MAX;Amaya 等 2015 已实现偏度)。所以在波动水平相同的股票里,分布形状越像彩票未来收益越低;形状最不像彩票(偏度低、右尾薄、下行半偏差占比高、很少被封涨停)的股票未来收益更高。本位是纯多头,只拿"最不像彩票"的那一端。形状是股票的持续性特质,30 到 60 个交易日平均就稳定,所以信号变化慢、日换手低,15 bp 成本吃不掉它。
+      算子怎样实现:先在每一天的分钟数据里量形状,再用 cross_mean 在 30-60 日上平均。分钟层:5/10/15 分钟涨幅 in_pct(Close, d) 或 in_pct(Vwap, d)(用滚动涨幅而不是 1 分钟 Ret,避开买卖价差跳动与首根集合竞价;另放 1 个直接用 1 分钟 Ret 的 day_skew 作对照)的 day_skew、day_kurt;右尾与左尾 day_es_ratio_hi/lo 之差(尾部形状);day_max+day_min(上冲与下探的不对称,对大量零收益的分钟稳健);day_max 对 day_std 的比(用 60 日均值之比,避免逐日除近零);day_pos_ratio(上涨窗口占比,不看幅度:负偏股票是"小涨多、大跌少");day_gini(波动是否集中在少数几个窗口)。日线层:ts_skew;ts_max/ts_std;上行与下行半偏差 cross_semistd_pos/neg 的对称化比 (pos-neg)/(pos+neg)(分母只在两者同为 0 时为 0,此时是 NaN,不会逐日爆点)与它们的秩差;涨停/跌停"钉死"时间占比之差 day_at_max_ratio - day_at_min_ratio(A 股最极端的彩票事件)。
+      与库和控制的区别:库里目前没有 head。5 个控制全是水平量(成交额水平、波动水平、20 日总收益反转、Amt 日内离散度、市值),本组全是尺度无关的形状量(偏度、峰度、比值、占比),不是另一种写法的波动或成交额。残差化还会去掉形状里与波动、反转的线性、U 形、S 形耦合,留下"同样波动下更像不像彩票"。
+      样本外为什么还在:彩票偏好来自市场结构(散户主导、卖空受限、涨跌停制度),不依赖某一年的行情;形状用长窗口平均,估计噪声小;方向和半衰期只在 train 上选,valid 只复核。信号慢,换手低,成本对它不是致命的。
+    inspired_by: |-
+      M 第 1 批:90 个已评分候选整体均值约 -1.14,0 个 head;含 neg(LogFloatShares) 子树的 27 个候选均值 -0.60,其余 63 个 -1.38。静态日频字段(换手几乎为 0)明显好于其余,提示主要失败模式是 15 bp 成本对高换手信号的拖累,而不是没有横截面信息。共性表里只有 LogFloatShares 一族富集,没有任何分钟收益形状类的子树。所以本位全用 30-60 日平均的慢变量,度量分钟层面的收益形状。
+    literature:
+      - ref: 'Kumar 2009, Who gambles in the stock market? (Journal of Finance)'
+        year: '2009'
+      - ref: 'Boyer, Mitton, Vorkink 2010, Expected idiosyncratic skewness (Review of Financial Studies)'
+        year: '2010'
+      - ref: 'Bali, Cakici, Whitelaw 2011, Maxing out: stocks as lotteries and the cross-section of expected returns (Journal of Financial Economics)'
+        year: '2011'
+      - ref: 'Amaya, Christoffersen, Jacobs, Vasquez 2015, Does realized skewness predict the cross-section of equity returns? (Journal of Financial Economics)'
+        year: '2015'
+      - ref: 'Bollerslev, Li, Zhao 2020, Good volatility, bad volatility, and the cross section of stock returns (Journal of Financial and Quantitative Analysis)'
+        year: '2020'
+    seeds:
+      - 'cross_mean(day_skew(in_pct(Close, 5)), 60)'
+      - 'cross_mean(day_skew(in_pct(Close, 15)), 30)'
+      - 'cross_mean(day_skew(in_pct(Vwap, 10)), 60)'
+      - 'cross_mean(day_kurt(in_pct(Close, 5)), 60)'
+      - 'cross_mean(day_es_ratio_hi(in_pct(Close, 5)), 60)'
+      - 'sub(cross_mean(day_es_ratio_hi(in_pct(Close, 5)), 60), cross_mean(day_es_ratio_lo(in_pct(Close, 5)), 60))'
+      - 'div(cross_mean(day_max(in_pct(Close, 5)), 60), cross_mean(day_std(in_pct(Close, 5)), 60))'
+      - 'cross_mean(add(day_max(in_pct(Close, 5)), day_min(in_pct(Close, 5))), 60)'
+      - 'div(sub(cross_semistd_pos(day_last(Close), 60), cross_semistd_neg(day_last(Close), 60)), add(cross_semistd_pos(day_last(Close), 60), cross_semistd_neg(day_last(Close), 60)))'
+      - 'sub(cs_rank(cross_semistd_pos(day_last(Close), 30)), cs_rank(cross_semistd_neg(day_last(Close), 30)))'
+      - 'ts_skew(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 50)'
+      - 'cross_mean(day_pos_ratio(in_pct(Close, 5)), 60)'
+      - 'cross_mean(day_gini(in_pct(Close, 5)), 60)'
+      - 'cross_mean(day_skew(Ret), 60)'
+      - 'sub(cross_mean(day_at_max_ratio(Close), 60), cross_mean(day_at_min_ratio(Close), 60))'
+      - 'div(ts_max(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 50), ts_std(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 50))'
+  - type: N
+    hypothesis: |-
+      机制(时段结构 / clientele):一天里的收益和成交额落在哪个时段,反映是谁在交易:隔夜与开盘集合竞价承载消息和机构的预先挂单,盘中是散户噪声与流动性交易,尾盘是调仓和被动资金。Lou-Polk-Skouras 2019 的 tug of war 显示,个股的隔夜收益与日内收益各有持续的 clientele 结构,且能在月到季度尺度上预测横截面;Berkman 等 2012 发现高关注度股票隔夜上涨、开盘后回落,开盘买入有隐性成本,说明隔夜与日内是两类不同的资金。总收益 = 隔夜 + 日内,20 日反转控制只看二者之和,而本位看的是二者的差异与"钱在什么时候、往哪个方向交易"。
+      算子怎样实现:隔夜收益 day_first(Open)/ts_delay(day_last(Close),1)-1(Open 的第 0 列是 09:30 集合竞价,Close 是后复权价格,除权日连续),日内收益 day_last(Close)/day_first(Open)-1,各做 60 日 cross_mean(慢的 cross_ema 版本半衰期 30-60 日),或二者的秩差 / 比值差;收盘相对成交均价的"尾盘推拉" day_last(Close)/day_wmean(Close,Volume)(VWAP 用成交量加权平均价),最后 30 分钟涨幅(in_delay(Close,30) 取 30 分钟前的收盘价);成交额在一天里的重心 day_centroid(Amt),尾盘 30 分钟与开盘 30 分钟成交额占比 day_wmean(is_gt(in_index(Amt),0.875),Amt) 与 is_lt(...,0.125);价格相对时间的相关 day_corr(in_index(Close),Close)(盘中是涨势还是回落);放量方向配对:day_signed_ratio(in_pct(Close,5),Amt)(按成交额加权的上涨占比减下跌占比)、day_wmean(Ret,Amt)-day_mean(Ret)(成交额加权收益减等权收益)、day_topw_mean(in_pct(Close,1),Volume)(最放量 10% 分钟的平均涨幅)、day_corr(Amt,in_pct(Close,5)),以及开源证券"聪明钱"式的 Q 值:按 |分钟涨幅|/sqrt(成交量) 选出最"聪明"的分钟,取这些分钟的 Vwap 均值除以全天 VWAP;全部用 cross_mean 在 60 日上平均。
+      与库和控制的区别:库里目前没有 head。5 个控制是水平量(成交额水平、波动水平、20 日总收益反转、Amt 日内离散度、市值),本组是"时间分解"和"方向与放量的配对",对象不同:总收益被拆成隔夜、日内、尾盘三段,成交额只看分布在一天里的位置而不是水平,分钟方向只看谁在放量时买卖。残差化后线性、U 形、S 形的水平暴露已被去掉。
+      样本外为什么还在:clientele(谁在隔夜、谁在盘中、谁在尾盘交易)是持续的结构,A 股散户占比高,日内模式在年度尺度上稳定;60 日平均把噪声压下去,信号慢、换手低、成本不致命;方向与半衰期只在 train 选,valid 复核。
+    inspired_by: |-
+      M 第 1 批:90 个已评分候选整体均值约 -1.14,0 个 head;含 neg(LogFloatShares) 子树的 27 个候选均值 -0.60,其余 63 个 -1.38。静态字段(换手几乎为 0)好于其余,提示成本拖累是主要失败模式,慢变量占优。共性表里没有出现任何按交易时段拆分(隔夜 / 日内 / 尾盘)或按分钟方向与放量配对的子树,这一块还没有被试过。所以本位用 60 日平均的时段结构量。
+    literature:
+      - ref: 'Berkman, Koch, Tuttle, Zhang 2012, Paying attention: overnight returns and the hidden cost of buying at the open (Journal of Financial and Quantitative Analysis)'
+        year: '2012'
+      - ref: 'Lou, Polk, Skouras 2019, A tug of war: overnight versus intraday expected returns (Journal of Financial Economics)'
+        year: '2019'
+    seeds:
+      - 'cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'sub(cs_rank(cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)), cs_rank(cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 60)))'
+      - 'cross_ema(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open))), 30)'
+      - 'cross_mean(div(day_last(Close), day_wmean(Close, Volume)), 60)'
+      - 'cross_mean(day_centroid(Amt), 60)'
+      - 'cross_mean(day_wmean(is_gt(in_index(Amt), 0.875), Amt), 60)'
+      - 'cross_mean(day_wmean(is_lt(in_index(Amt), 0.125), Amt), 60)'
+      - 'cross_mean(sub(div(day_last(Close), day_last(in_delay(Close, 30))), 1), 60)'
+      - 'cross_mean(day_corr(in_index(Close), Close), 60)'
+      - 'cross_mean(day_signed_ratio(in_pct(Close, 5), Amt), 60)'
+      - 'cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)'
+      - 'cross_mean(day_topw_mean(in_pct(Close, 1), Volume), 60)'
+      - 'cross_mean(div(day_topw_mean(Vwap, div(abs_(in_pct(Close, 1)), sqrt(Volume))), day_wmean(Vwap, Volume)), 60)'
+      - 'cross_mean(day_corr(Amt, in_pct(Close, 5)), 60)'
+      - 'cross_ema(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+R: []

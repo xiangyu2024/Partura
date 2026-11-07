@@ -1,0 +1,311 @@
+{
+ "seed": 908,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods908M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 10)",
+   "sign": 1.0,
+   "hl": 20.0,
+   "score": 0.746987,
+   "train": 1.461507,
+   "valid": 0.746987,
+   "src": "prods908M1_I0_open_search"
+  },
+  {
+   "expr": "cs_bucket_zscore(day_quantile_q25(High), day_wmean(Open, Amt))",
+   "sign": 1.0,
+   "hl": 5.0,
+   "score": 0.577538,
+   "train": 0.728173,
+   "valid": 0.577538,
+   "src": "prods908M1_I0_open_search"
+  }
+ ],
+ "n_archived": 86,
+ "enrichment": [
+  {
+   "subtree": "cs_regres(ListAge, day_centroid(Amt))",
+   "n_with": 5,
+   "mean_with": 0.1037,
+   "mean_without": -1.2069,
+   "effect": 1.3106,
+   "p": 0.0071
+  },
+  {
+   "subtree": "day_centroid(Amt)",
+   "n_with": 26,
+   "mean_with": -0.251,
+   "mean_without": -1.512,
+   "effect": 1.261,
+   "p": 0.0
+  },
+  {
+   "subtree": "cs_regres(ListAge, pow_3(day_centroid(Amt)))",
+   "n_with": 8,
+   "mean_with": -0.0002,
+   "mean_without": -1.2467,
+   "effect": 1.2465,
+   "p": 0.0018
+  },
+  {
+   "subtree": "pow_3(day_centroid(Amt))",
+   "n_with": 12,
+   "mean_with": -0.2146,
+   "mean_without": -1.2793,
+   "effect": 1.0647,
+   "p": 0.0021
+  },
+  {
+   "subtree": "cs_regres(ListAge, LogFloatShares)",
+   "n_with": 4,
+   "mean_with": -0.3482,
+   "mean_without": -1.1689,
+   "effect": 0.8207,
+   "p": 0.0741
+  },
+  {
+   "subtree": "day_max(Ret)",
+   "n_with": 5,
+   "mean_with": -1.5502,
+   "mean_without": -1.1048,
+   "effect": -0.4454,
+   "p": 0.8919
+  }
+ ],
+ "ablation": [
+  {
+   "head": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 10)",
+   "head_score": 0.746987,
+   "src": "prods908M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "cs_regres(ListAge, pow_3(day_centroid(Amt)))",
+     "expr": "cs_regres(ListAge, pow_3(day_centroid(Amt)))",
+     "coverage": 0.9993,
+     "distinct": 0.9956,
+     "gate": true,
+     "score": -0.3654,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -0.3654,
+     "valid": -0.325,
+     "rho_known": -0.0395
+    },
+    {
+     "kind": "sufficiency",
+     "what": "pow_3(day_centroid(Amt))",
+     "expr": "pow_3(day_centroid(Amt))",
+     "coverage": 0.9993,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": 0.4087,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": 1.0541,
+     "valid": 0.4087,
+     "rho_known": -0.1943
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_centroid(Amt)",
+     "expr": "day_centroid(Amt)",
+     "coverage": 0.9993,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": 0.4087,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": 1.0541,
+     "valid": 0.4087,
+     "rho_known": -0.1943
+    },
+    {
+     "kind": "knockout",
+     "what": "cs_regres(ListAge, pow_3(day_centroid(Amt)))",
+     "expr": "ts_quantile_q75(ListAge, 10)",
+     "coverage": 0.9993,
+     "distinct": 0.0968,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "pow_3(day_centroid(Amt))",
+     "expr": "ts_quantile_q75(cs_regres(ListAge, day_centroid(Amt)), 10)",
+     "coverage": 0.9993,
+     "distinct": 0.9977,
+     "gate": true,
+     "score": 0.6583,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": 1.2953,
+     "valid": 0.6583,
+     "rho_known": -0.1145,
+     "necessity": 0.0887
+    },
+    {
+     "kind": "swap",
+     "what": "Amt->Volume",
+     "expr": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Volume))), 10)",
+     "coverage": 0.9993,
+     "distinct": 0.9972,
+     "gate": true,
+     "score": 0.8222,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": 1.503,
+     "valid": 0.8222,
+     "rho_known": -0.1217
+    },
+    {
+     "kind": "window",
+     "what": "ts_quantile_q75@10->5",
+     "expr": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 5)",
+     "coverage": 0.9993,
+     "distinct": 0.9913,
+     "gate": true,
+     "score": 0.5088,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": 1.1012,
+     "valid": 0.5088,
+     "rho_known": -0.0866
+    },
+    {
+     "kind": "window",
+     "what": "ts_quantile_q75@10->20",
+     "expr": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 20)",
+     "coverage": 0.9993,
+     "distinct": 0.9968,
+     "gate": true,
+     "score": 0.8956,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": 1.6103,
+     "valid": 0.8956,
+     "rho_known": -0.1705,
+     "rho_head": 0.9588
+    }
+   ]
+  },
+  {
+   "head": "cs_bucket_zscore(day_quantile_q25(High), day_wmean(Open, Amt))",
+   "head_score": 0.577538,
+   "src": "prods908M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile_q25(High)",
+     "expr": "day_quantile_q25(High)",
+     "coverage": 0.9993,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -1.3469,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.3469,
+     "valid": -0.4046,
+     "rho_known": 0.4221
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_wmean(Open, Amt)",
+     "expr": "day_wmean(Open, Amt)",
+     "coverage": 0.9993,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -1.3345,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.3345,
+     "valid": -0.3973,
+     "rho_known": 0.4228
+    },
+    {
+     "kind": "swap",
+     "what": "High->Low",
+     "expr": "cs_bucket_zscore(day_quantile_q25(Low), day_wmean(Open, Amt))",
+     "coverage": 0.9993,
+     "distinct": 0.9993,
+     "gate": true,
+     "score": 0.4935,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": 0.6254,
+     "valid": 0.4935,
+     "rho_known": -0.0135
+    },
+    {
+     "kind": "swap",
+     "what": "Open->Close",
+     "expr": "cs_bucket_zscore(day_quantile_q25(High), day_wmean(Close, Amt))",
+     "coverage": 0.9993,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": 0.4856,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": 0.6828,
+     "valid": 0.4856,
+     "rho_known": -0.017
+    }
+   ]
+  }
+ ],
+ "paid": 12,
+ "core_cards": [
+  {
+   "core": "cs_regres(ListAge, day_centroid(Amt))",
+   "source": "enrichment",
+   "effect": 1.3106,
+   "p": 0.0071,
+   "n_with": 5
+  },
+  {
+   "core": "day_centroid(Amt)",
+   "source": "enrichment",
+   "effect": 1.261,
+   "p": 0.0,
+   "n_with": 26
+  },
+  {
+   "core": "cs_regres(ListAge, pow_3(day_centroid(Amt)))",
+   "source": "enrichment",
+   "effect": 1.2465,
+   "p": 0.0018,
+   "n_with": 8
+  },
+  {
+   "core": "pow_3(day_centroid(Amt))",
+   "source": "enrichment",
+   "effect": 1.0647,
+   "p": 0.0021,
+   "n_with": 12
+  },
+  {
+   "core": "cs_regres(ListAge, LogFloatShares)",
+   "source": "enrichment",
+   "effect": 0.8207,
+   "p": 0.0741,
+   "n_with": 4
+  }
+ ],
+ "r_candidates": [
+  {
+   "head": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 10)",
+   "head_score": 0.746987,
+   "variant": "ts_quantile_q75(cs_regres(ListAge, pow_3(day_centroid(Amt))), 20)",
+   "kind": "window",
+   "what": "ts_quantile_q75@10->20",
+   "score": 0.8956,
+   "gain": 0.1486
+  }
+ ],
+ "missions_before": [],
+ "seconds": 497
+}

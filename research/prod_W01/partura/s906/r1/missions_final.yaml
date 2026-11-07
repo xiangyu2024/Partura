@@ -1,0 +1,145 @@
+seed: 906
+round: 1
+slots:
+- type: E
+  core: cs_first_low20(day_last(Vwap), day_last(Vwap))
+  hypothesis: '【核心 W】cs_first_low20(day_last(Vwap), day_last(Vwap)):把「复权价位排名最低的 20%」整体
+    +1 推到最前,其余按价位排序;因此取值最低的一端(多头腿,方向由评估在 train 上自选)恰是价位排名约 20%–30% 的名字——跳过最便宜的一档(壳价值
+    / 退市风险 / 极端长期输家),只取「便宜但不是最烂」的一档。
+
+    证据(第 1 批):(1) 拆解里 Vwap→Close、High→Low 互换分数不变(+0.72/+3.15 对 +0.73/+3.17),两处把外层嵌套换成内层
+    2 层写法的敲除分数也不变(+0.72,必要性 +0.00),说明信息是「价位带」本身,不是日内价量细节;嵌套深度只是写法。我用合成截面展开 head:它的多头腿是价位排名
+    18%–30%;拆解里只留 2 层子树(+0.32/+2.25)的多头腿同样是 18%–30%、尾部排序不同,5 节点子树(+0.39/+1.68)的多头腿在
+    30%–50%——三者在 train 与 valid 都为正,所以信息是「偏低价位并排除最低一档」这一整片、不是单个尖峰,而且尾部排序经新尺子的残差回归会改变分数(同一条多头腿,+0.32
+    对 +0.72)。W 与 head 的日度秩相关约 0.4(合成截面),不是 head 的改写。(2) 含 day_last(Vwap) 的 47 个候选均分
+    +0.13,不含的 −1.13;含 W 的 8 个候选均分 +0.49。
+
+    这个位要试的外围 = 「在这一档里再去垃圾、并检验窗口是否只是规模的影子」。价位 20%–40% 这一档约 1000 只,里面仍混着:(a) 彩票型投机(20
+    日平均的分钟最大涨幅 MAX、分钟收益偏度;散户追涨后均值回归,Bali-Cakici-Whitelaw 2011);(b) 被持续砸盘或持续承接的名字(订单流失衡
+    day_signed_ratio(Ret, Amt));(c) 成交额集中度 / 时间重心(day_gini、day_centroid 作用在 Amt 上:尾盘与事件驱动的机构资金
+    vs 开盘冲动的散户);(d) 隔夜跳空的 20 日均值。算子实现三种:① 排除:cs_first_high20 / cs_first_low20(W, Z)
+    把 Z 的极端 20% 推到多头腿的反方向,W 的窗口不变、只踢掉 Z 极端的名字;② 段内重排:cs_last_low20(Z, W) 与 cs_first_low20(Z,
+    W) 以 W 取值最低的 20%(价位 20–40%)为段、段内按 Z 排,两个方向都放进去,让评估在 train 上自选;③ 规模中性:cs_bucket_rank(W,
+    LogFloatCap 或 20 日成交额) 在市值 / 流动性十分位内取 W 的分位,检验窗口是否独立于规模与流动性。
+
+    为什么和以前不一样:快照里已见的写法(head 与共性表里含价位核心的子树)外围都是同一个 cs_first_low20 的同构嵌套 / pow_2 包裹(只换
+    High / Vwap),共性表里没有一个引入第二个变量;本位的外围全是「窗口 ∩ 第二个变量」,与 head 的日度秩相关我估计在 0.25–0.5(合成截面),不会被库禁令拒绝。
+
+    为什么样本外还会在:价位带与彩票偏好都是慢变的行为渠道;所有 Z 都是 20 日均值后只取排名(个别爆点、偏度的极端值不会支配截面),换手低,15bp 成本吃不掉;窗口位置沿用
+    head 已选的 20–30%,没有为 train 另调常数。'
+  literature:
+  - cite: 'Bali, Cakici, Whitelaw (2011) Maxing out: stocks as lotteries and the cross-section
+      of expected returns, JFE 99'
+    year: '2011'
+  - cite: Liu, Stambaugh, Yuan (2019) Size and value in China, JFE 134 (smallest 30%
+      excluded for shell-value contamination)
+    year: '2019'
+  seeds:
+  - cs_first_high20(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_max(Ret),
+    20))
+  - cs_last_low20(cross_mean(day_max(Ret), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_first_high20(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_skew(Ret),
+    20))
+  - cs_last_low20(cross_mean(day_skew(Ret), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low20(cross_mean(day_signed_ratio(Ret, Amt), 20), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_first_low20(cross_mean(day_signed_ratio(Ret, Amt), 20), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_first_low20(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_signed_ratio(Ret,
+    Amt), 20))
+  - cs_last_low20(cross_mean(day_gini(Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_first_low20(cross_mean(day_gini(Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low20(cross_mean(day_centroid(Amt), 20), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_first_low20(cross_mean(day_centroid(Amt), 20), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_last_low20(cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_first_low20(cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_bucket_rank(cs_first_low20(day_last(Vwap), day_last(Vwap)), LogFloatCap)
+  - cs_bucket_rank(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_sum(Amt),
+    20))
+  - cs_first_high20(cs_first_low20(day_last(Vwap), day_last(Vwap)), cross_mean(day_gini(Amt),
+    20))
+- type: N
+  hypothesis: '背景(第 1 批):head 的信息在股票的「价位」,不在日内细节(Vwap→Close、High→Low 互换分数不变;含 day_last(Vwap)
+    的候选均分 +0.13,不含的 −1.13)。但后复权价位 = 名义股价 × 累计复权因子,是两个很不同的东西,而 5 个控制里只有市值(LogFloatCap)一个相关量,这两条渠道都没被去掉:
+
+    渠道 A,名义股价 Nom = LogFloatCap − LogFloatShares = log(流通市值 / 流通股本)(立方体日频字段,当天已知):散户的「名义价格错觉
+    / 低价偏好 / 彩票偏好」(Birru-Wang 2016;Kumar 2009)与最小报价单位的渠道;
+
+    渠道 B,累计复权因子 F = log(day_last(Vwap)) − Nom:后复权价与名义价之比,等于历史分红送转的累积——分红 / 送转史长的公司是现金流型、股东回报型,是慢变的质量代理,控制里没有。
+
+    算子怎么实现:对 Nom、F 与后复权价位先取日度排名,再用 head 已验证有效的「推一档到最前 / 最后」算子(cs_first_low20、cs_last_low10
+    / 20,多头腿落在取值最低的一端)、绝对距离窗口 abs_(sub(cs_rank(x), c))、cs_bucket_rank(F 在名义价位十分位内的分位
+    = 对名义价位中性的 F;反之亦然)取各自的带通形态与单调形态;另有几个交叉门(用名义价位最低 20% 当门、段内按后复权价排,或反之;head 的 20%–30%
+    窗口里再按 Nom 或 F 排除 / 排序),直接回答「head 的窗口到底是名义价位窗口、分红史窗口,还是两者的交点」。
+
+    与库里已有的不同:head 与共性表里的子树只读 Vwap / High 的价位(及价位的嵌套),没有读 LogFloatCap / LogFloatShares
+    的,也没有把后复权价与名义价分开的;与控制不同:Nom 只含价位、市值还含股本,二者的排名相关我预计在 0.3–0.5(没有实测),F 与市值的相关更低,都应远低于
+    0.8;控制的线性 / U 形 / S 形暴露去不掉 Nom 或 F 的带通形态。
+
+    数学性:全部是正数的对数差与排名,没有除法、没有近零分母;F 用到的后复权价只含当日及以前的分红送转(后复权 = 以过去为基准向后累乘,规则文件的口径),不含未来信息;停牌日
+    day_last 为 NaN,排名里自动缺失。
+
+    为什么样本外还会在:名义价位与分红史都是慢变量,排名几乎不动、换手极低;低价偏好与分红 / 质量偏好是行为与基本面渠道,不依赖 train 区间特有的价格形态。可证伪的预测:若
+    head 的窗口是名义价位效应,则 Nom 的窗口种子应接近或超过 head 而 F 种子无信号;若是分红史效应则相反;若交叉门最好,则窗口是两者的交点。'
+  inspired_by: 第 1 批:head 的 Vwap→Close、High→Low 互换分数不变(+0.72/+3.15),含 day_last(Vwap)
+    的 47 个候选均分 +0.13、不含 −1.13:信息在股票的价位本身;后复权价位混合了名义股价与累计分红送转两个渠道,而控制只有市值。
+  literature:
+  - cite: Birru, Wang (2016) Nominal price illusion, JFE 119
+    year: '2016'
+  - cite: Kumar (2009) Who gambles in the stock market?, Journal of Finance 64
+    year: '2009'
+  seeds:
+  - cs_first_low20(sub(LogFloatCap, LogFloatShares), sub(LogFloatCap, LogFloatShares))
+  - cs_rank(sub(LogFloatCap, LogFloatShares))
+  - cs_rank(sub(log(day_last(Vwap)), sub(LogFloatCap, LogFloatShares)))
+  - cs_first_low20(sub(log(day_last(Vwap)), sub(LogFloatCap, LogFloatShares)), sub(log(day_last(Vwap)),
+    sub(LogFloatCap, LogFloatShares)))
+  - cs_first_low20(day_last(Vwap), sub(LogFloatCap, LogFloatShares))
+  - cs_first_low20(sub(LogFloatCap, LogFloatShares), day_last(Vwap))
+  - cs_last_low20(sub(LogFloatCap, LogFloatShares), day_last(Vwap))
+  - cs_bucket_rank(sub(log(day_last(Vwap)), sub(LogFloatCap, LogFloatShares)), sub(LogFloatCap,
+    LogFloatShares))
+  - cs_bucket_rank(sub(LogFloatCap, LogFloatShares), sub(log(day_last(Vwap)), sub(LogFloatCap,
+    LogFloatShares)))
+  - cs_last_low20(sub(LogFloatCap, LogFloatShares), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_first_high20(cs_first_low20(day_last(Vwap), day_last(Vwap)), sub(log(day_last(Vwap)),
+    sub(LogFloatCap, LogFloatShares)))
+R:
+- head: pow_2(cs_first_low20(cs_first_low20(cs_first_low20(day_last(Vwap), day_quantile(High)),
+    day_quantile(High)), cs_first_low20(cs_first_low20(cs_first_low20(day_last(Vwap),
+    day_quantile(High)), day_quantile(High)), cs_first_low20(cs_first_low20(day_last(Vwap),
+    day_quantile(High)), day_quantile(High)))))
+  why: 依据是拆解:Vwap→Close、High→Low 互换分数不变,两处把外层嵌套换成内层 2 层写法的敲除分数也不变(+0.72,必要性 +0.00)——信息只在「复权价位排名的一个带」里,三层
+    cs_first_low20 嵌套只是同一动作的冗余写法。我在合成截面上展开 head:它的多头腿 = 价位排名 18%–30%,取值顺序(价位五档)是 2、4、5、1、3
+    的怪序;拆解里只留 2 层子树的多头腿同样是 18%–30%、取值顺序是 2、3、4、5、1(最便宜的一档 1 被推到取值最顶),分数却只有 +0.32/+2.25,整个
+    head 是 +0.72/+3.15——同一条多头腿,分数差在「尾部排序」(新尺子对 5 个控制取残差,尾部怎么排决定被拟合掉的部分)。所以烂的部件是:(a)
+    尾部排序是嵌套的副产品、没被选过,变体把窗口 [20%,30%] 固定,换成单调尾部(cs_last_low10 / 20 + 价位)、反向价位尾部(neg)、以市值为尾部与反市值为尾部(cap
+    是控制,窗口内部与市值的交互不被控制的多项式去掉)、以 20 日成交额及其反向为尾部;(b) 窗口位置与宽度也是副产品、没被调过,变体用「到中心排名的绝对距离」abs_(sub(cs_rank(day_last(Vwap)),
+    c)) 把中心 c 在 12%–45% 上扫描(对称尾部),另有 20%–40% 宽窗口与 40%–60% 窗口;(c) 窗口边缘由最后一分钟 Vwap 定义,边界处每天抖动,变体用
+    5 日均价位平滑。
+  variants:
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.12))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.17))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.22))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.25))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.3))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.35))
+  - abs_(sub(cs_rank(day_last(Vwap)), 0.45))
+  - cs_last_low10(day_last(Vwap), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low10(neg(day_last(Vwap)), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low10(LogFloatCap, cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low10(neg(LogFloatCap), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low10(cross_mean(day_sum(Amt), 20), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low10(neg(cross_mean(day_sum(Amt), 20)), cs_first_low20(day_last(Vwap),
+    day_last(Vwap)))
+  - cs_last_low20(day_last(Vwap), cs_first_low20(day_last(Vwap), day_last(Vwap)))
+  - cs_last_low20(day_last(Vwap), cs_first_low40(day_last(Vwap), day_last(Vwap)))
+  - cs_first_low20(cross_mean(day_last(Vwap), 5), cross_mean(day_last(Vwap), 5))
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,125 @@
+seed: 910
+round: 1
+slots:
+- type: N
+  hypothesis: 想法:『台阶(step)泄漏』的系统扫描。(1)现象(批 1):两个 head 都是 cs_first_low20(y, x) 这种字典序算子——x
+    的最低 20% 整体加 1 抬到最上面,其余按 y 的秩排。head 1 里 y≈x≈LogFloatCap(外壳 cross_fangzheng / ts_quantile(…,1)
+    敲掉后分数不变,+1.82 / +1.85);共性表里 9 个入选子树全含 LogFloatCap,而这几个子树(平滑过的纯市值)单独当信号的充分性得分是
+    −4.8 到 −5.0(train −3.3 到 −3.6)。读法:信息不在『市值水平』里而在『台阶』里——新尺子只去掉 5 个控制的秩的一次/二次/三次多项式暴露,一个台阶(锯齿状的秩)不是低阶多项式,残差里还留着它,长腿落在台阶紧邻的一带(按构造推断:head
+    1 方向 −1、取最低输出,多头端落在市值 20–30% 分位)。(2)机制:A 股小市值溢价是真的,但最小的一档被壳价值(IPO 管制)和 ST/退市风险污染(Liu,
+    Stambaugh, Yuan 2019《Size and value in China》为此把最小 30% 剔除),所以多头最好落在『剔掉壳尾之后的下一档』;台阶的作用就是把壳尾搬离多头端、把长腿定位在紧邻的一档。台阶没有理由恰好在
+    20%,也不必只放在市值上。(3)算子怎么实现:当 y = x = LogFloatCap 时,cs_first_high* 与 cs_last_low*
+    恒等于市值秩本身(没有台阶),只有 cs_first_low20/40 与 cs_last_high05/10/20/40 是非平凡台阶;把 y 换成 neg(LogFloatCap)
+    后,cs_last_low05/10 变成切点 5% / 10% 的台阶。A 组(台阶位置):cs_last_low05 / cs_last_low10(neg(cap),
+    cap) 放 5%、10% 切点,cs_first_low40(cap, cap) 放 40%,cs_last_high40(cap, cap) 放 60%,另有一个
+    40% 与 10% 的两台阶叠加;台阶两侧(最高端 / 最低端)都是多头候选,方向由评估自己选。B 组:同一招用到其它控制变量的『慢变』版本(60 日成交额、60
+    日波动、120 日动量、复权价格水平)——这些控制被去掉的只是平滑部分,台阶部分去不掉;必须取慢变量,否则残差逐日翻转,15bp 成本吃光(批 1 里含 Amt
+    / High / Low 一类快变子树的候选均值 −1.3 左右、不含市值子树的候选均值 −0.5 到 −0.8,我推断是这个原因,尚未单独验证)。C 组:台阶变量与排序变量分开(head
+    2 的做法),但台阶换成慢变量并把被标记的 40% 整体抬到最上面:60 日成交额最低 40%(不流动)、60 日波动最高 40%、60 日偏度最高 40%、60
+    日内收在日内最高点的贴近度最高 40%(涨停贴近)、120 日涨幅最低 40%,排序仍用 LogFloatCap;前三个标记(不流动、高波动、涨停贴近)集中在小市值,使多头端落在『小市值里流动、低波动、不贴涨停的那部分』。(4)与库里已有的不同:同一个
+    y=x=cap 的锯齿秩 s_a = r − 1[r>a],两个切点 a、b 之间的日度秩相关由 0.0833 − a(1−a)/2 − b(1−b)/2
+    + (1−max(a,b)) − (1−a)(1−b) 除以 0.0833 给出,与 head 1(a=20%)的 |ρ|:切点 10% 约 0.46、5%
+    约 0.24、40% 约 0.04、60% 约 0.44;与市值控制 |ρ| = |1−6a(1−a)|,切点 5% 约 0.72、10% 约 0.46、40%
+    约 0.44、60% 约 0.44,都 <0.8(合成截面模拟已核对);与 head 2 更低。C 组是 rank(cap) + 1[x 的 40%] 型,用合成截面模拟:标记集中在小市值时与市值控制的
+    |ρ| 约 0.05–0.2,标记与市值无关时约 0.4–0.5,与 head 1 的 |ρ| <0.1,与 head 2 <0.4(标记比例过小才会逼近市值本身,所以统一用
+    40%)。它们不是 head 1 / head 2 换写法:台阶位置不同、台阶变量不同,选出的是不同的一带。(5)样本外为什么还会在:台阶是机械结构,切点不是用样本内路径拟合出来的;壳尾污染是制度性的(IPO
+    审核制)而不是某段行情的偶然;全用慢变量,换手低,成本不是问题;如果只是 2022 年微盘股行情的副产品,这些书在 train 段会偏弱,min(train,
+    valid) 的评分会把它们筛掉。最可能撑住的是 A 组的 5% / 10% 切点和 C 组的『不流动 40% 标记』。
+  inspired_by: 批 1:两个 head 都是 cs_first_low20(y, x) 的台阶结构;head 1 的外壳(cross_fangzheng、ts_quantile(…,1))敲掉后分数不变,共性表前
+    9 个子树全含 LogFloatCap,而纯市值子树的充分性得分为 −4.8…−5.0;head 2 用价格水平做台阶、市值排序;含 Amt / High
+    / Low 的快变子树候选均值 −1.3 左右(推断是换手高、成本吃光)
+  seeds:
+  - cs_last_low10(neg(LogFloatCap), LogFloatCap)
+  - cs_last_low05(neg(LogFloatCap), LogFloatCap)
+  - cs_first_low40(LogFloatCap, LogFloatCap)
+  - cs_last_high40(LogFloatCap, LogFloatCap)
+  - cs_last_low10(cs_first_low40(LogFloatCap, LogFloatCap), LogFloatCap)
+  - cs_first_low20(cross_mean(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))
+  - cs_last_high20(cross_mean(day_std(Ret), 60), cross_mean(day_std(Ret), 60))
+  - cs_first_low40(day_last(Close), day_last(Close))
+  - cs_first_low40(LogFloatCap, cross_mean(day_sum(Amt), 60))
+  - cs_first_high40(LogFloatCap, cross_mean(day_std(Ret), 60))
+  - cs_first_high40(LogFloatCap, cross_mean(day_skew(Ret), 60))
+  - cs_first_high40(LogFloatCap, cross_mean(day_at_max_ratio(Close), 60))
+- type: E
+  core: cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1))
+  hypothesis: 核心:head 1 整体(H1,score +1.85,train +1.85 / valid +2.58)。H1 的多头端(方向 −1,取最低输出)是市值
+    20–30% 分位的一带,即『剔掉壳尾之后的下一档小市值』;它的外壳(cross_fangzheng、ts_quantile(…,1))被敲掉后分数不变,所以可动的只有外围。这一带并不干净:次新股、近期停牌过的、高波动/高偏度的彩票型股票、近
+    60 日收盘贴近涨停的、近 60 日有极端日涨幅的、近 60 日涨跌幅处在两端的,都是 H1 这一带里的『子集』;新尺子只洗掉 5 个控制的秩的线性/U/S
+    暴露,洗不到带内的子集。这次的外围写法:cs_first_high40 / cs_first_low40(H1, X)——把 X 标记的那 40% 整体 +1
+    抬到最上面,H1 的多头端(最低输出)自动排除它们,带内其余名字的次序不变;两层叠加(例如先排除次新、再排除高偏度,或同时排除 60 日涨幅的两端、或先排除次新再排除不流动)形成一串排除。X
+    一律是慢变量(ListAge、60 日有效交易日数、60 日波动 / 偏度 / 最大日涨幅 / 涨停贴近度 / 涨幅、10 日平均的成交额异常度、20 日净买入占比),因为
+    H1 的价值来自低换手,逐日翻转的标记会把 15bp 成本吃回去。与快照里已见过的写法的区别:快照里含 H1 的候选只有它自己,没有任何外壳;这里的外围算子集合是
+    {cs_first_*、cross_mean、day_skew / day_std / day_at_max_ratio、ts_max、ts_delta、cross_valid_count、ListAge
+    …},完全不同。与库里已有 head 的区别:用合成截面模拟(rank(H1) + 1[X 标记] 再取秩):标记比例 40% 时 |ρ(种子, H1)|
+    ≈ 0.50–0.54,两层叠加(20%+40% 或 20%+20%)≈ 0.34–0.45,而标记比例 ≤20% 会升到 0.68–0.9,所以单层一律用
+    40%,ListAge 与 cross_valid_count 这类并列饱和、标记比例很小的变量只放在两层叠加里;选出的名字因此确实不同(被排除的那 40%
+    不再进多头)。H1 与 head 2 的台阶不同,模拟 |ρ| 约 0.1;H1 与市值秩的相关约 0.04,所以核心不是控制的换写。为什么样本外还会在:带本身来自
+    IPO 审核制下的壳价值(制度性);被标记的几类(次新、停牌、彩票型、两端极端涨跌)是文献里反复被记录为低回报或高风险的名字,排除它们只改善多头端的夏普,不依赖
+    2022 年行情;标记用的变量是慢变量,换手不会因此爆。
+  seeds:
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_std(Ret),
+    60))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_skew(Ret),
+    60))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), ts_max(ts_delta(log(day_last(Close)),
+    1), 60))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_at_max_ratio(Close),
+    60))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), ts_delta(log(day_last(Close)),
+    60))
+  - cs_first_low40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), ts_delta(log(day_last(Close)),
+    60))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(cross_zscore(day_sum(Amt),
+    60), 10))
+  - cs_first_high40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_signed_ratio(Ret,
+    Amt), 20))
+  - cs_first_low40(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_sum(Amt),
+    60))
+  - cs_first_high40(cs_first_low20(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), ListAge),
+    cross_mean(day_skew(Ret), 60))
+  - cs_first_low20(cs_first_high20(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), ts_delta(log(day_last(Close)),
+    60)), ts_delta(log(day_last(Close)), 60))
+  - cs_first_high40(cs_first_low20(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_valid_count(day_last(Close),
+    60)), cross_mean(day_std(Ret), 60))
+  - cs_first_high40(cs_first_high20(cs_first_low20(cross_fangzheng(cross_fangzheng(ts_quantile_q75(ts_quantile_q75(LogFloatCap,
+    1), 1), 3), 3), ts_quantile_q75(ts_quantile_q75(LogFloatCap, 1), 1)), cross_mean(day_at_max_ratio(Close),
+    60)), ts_max(ts_delta(log(day_last(Close)), 1), 60))
+R:
+- head: cs_first_low20(LogFloatCap, day_last(High))
+  why: head 2 = cs_first_low20(LogFloatCap, day_last(High)),score +0.63(train +0.63
+    / valid +1.95),是库里最弱的 head,弱在 train 一侧。拆解依据:(i)把 High 换成 Low 分数不变(+0.62 / +1.91),所以『哪个价格字段』不是来源,来源是价格水平台阶(复权价格最低
+    20% 的名字被搬到最上面)与市值排序;day_last(High) 只取最后一分钟的 High,是个逐日噪声版的价格水平,标记集合会逐日轻微翻转,这是烂部件之一;(ii)排序用的
+    LogFloatCap 是逐日值,而共性表里 ts_quantile_q75(LogFloatCap, 10)(均值差 +2.13,p 0.005,9 个候选)和
+    cross_fangzheng(LogFloatCap, 3)(+1.82,p 0.008,4 个候选)这类带平滑的市值子树的候选平均分明显更高,说明平滑后的排序更稳;(iii)台阶宽度
+    20% 与再叠一层排除(次新)没有试过。变体都是替换这三处部件:平滑排序变量、平滑或延长价格标记变量、改台阶宽度、换排序变量、加一层 ListAge 排除。全部是
+    head 2 的小改,没有数学问题:价格为后复权正值,无除法;ListAge 与 cross_valid_count 是有界整数。
+  variants:
+  - cs_first_low20(ts_quantile_q75(LogFloatCap, 10), day_last(High))
+  - cs_first_low20(cross_fangzheng(LogFloatCap, 3), day_last(High))
+  - cs_first_low20(LogFloatCap, cross_mean(day_last(High), 20))
+  - cs_first_low20(LogFloatCap, ts_quantile_q75(day_last(High), 10))
+  - cs_first_low20(ts_quantile_q75(LogFloatCap, 10), cross_mean(day_last(High), 20))
+  - cs_first_low20(LogFloatCap, cross_min(day_last(Low), 60))
+  - cs_first_low40(LogFloatCap, day_last(High))
+  - cs_first_low20(cs_first_low20(LogFloatCap, day_last(High)), ListAge)
+  - cs_first_low20(ts_quantile_q75(LogFloatCap, 10), day_last(Close))
+  - cs_first_low20(LogFloatCap, day_last(Vwap))
+  - cs_first_low20(LogFloatShares, day_last(High))
+  - cs_first_low20(LogTotalCap, day_last(High))
+audit:
+  attempts: 1
+  file: audit_1.yaml

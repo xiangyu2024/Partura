@@ -1,0 +1,98 @@
+seed: 901
+round: 1
+slots:
+- type: E
+  core: day_last(Close)
+  hypothesis: 核心 day_last(Close) 是后复权收盘价的水平。后复权价在股票间的排序约等于 IPO 价 乘以 上市以来的累计复权收益,是一个逐日几乎不变的慢特征,所以排名的换手接近
+    0,15 bp 成本基本不扣。第 1 批 94 个候选里含它的 22 个均值 -0.85,不含的 -1.71(差 +0.86,p 0.0004);含 day_var(Low)(这个量本质上也是价格水平的平方
+    乘以 日内波动)的 46 个也高出 +0.62。这批里系统性不亏的结构是慢变的价格水平,而不是某个日内形状:15 bp 之下,换手高的候选几乎都是纯噪声的
+    -1.5,慢特征只剩真实的 alpha 能否在 train 与 valid 两段同号。M 对这个核心的写法只有 cs_demean 包一层,或 cs_flip_by_state(day_var(Low),
+    day_quantile(Ret)) 用当日市场收益分位翻转符号。本任务外围试四种机制各不相同的处理。(1)拆开水平:后复权价 = 名义价 乘以 累计复权因子,而
+    LogFloatCap - LogFloatShares = log(名义价)(流通市值 / 流通股本),所以 sub(log(day_last(Close)),
+    sub(LogFloatCap, LogFloatShares)) = log(累计复权因子) = 上市以来分红送转的累积强度(高派现 / 高送转公司),而
+    sub(LogFloatCap, LogFloatShares) 单独是低价股偏好(散户的面值错觉与彩票偏好);两者是两个不同的慢特征,过去在一个表达式里混着。(2)按桶中性:cs_bucket_rank(day_last(Close),
+    市值 / 流动性 / 名义价) 在 x 的十分位桶内排序,价格水平不再兼任规模或流动性代理,十分位书在每个桶里各取一份;新尺子对 5 个控制只去掉线性、平方、三次项,去不掉这种分桶后的非光滑结构。(3)相对自身历史:cross_max
+    的 241 日高点(52 周高点,George-Hwang 2004)、与 60 / 120 日均值的偏离、120 日时间序列秩、120 日涨幅,把 长期赢家
+    这个静态标签变成 相对自己所处的位置,窗口(60 到 241 日)与 20 日反转控制错开。(4)状态翻转:价格水平的方向可能在 2018-2021 与 2022
+    以后相反(成长 / 龙头风格轮换),这里用 平滑 的市场状态决定符号(20 日平均的市场收益、全市场成交额相对 241 日中位数),而不是 M 用的当日 day_quantile(Ret)。为什么样本外还会在:这些都是慢变的行为偏误(名义价错觉、对长期赢家的外推与均值回复、对分红送转的低估),不依赖某一段行情的短期噪声,排名换手低,成本不吃掉它;最坏的情况也只是和
+    M 的价格水平候选一样不亏不赚,不会因换手变成 -1.5。数学上:所有种子都是有界或对数量,没有除以近零的量,cross_max 与 ts_delay 的分母是后复权价,恒为正;ts_delay(120)
+    与 cross_max(241) 只在最前面的热身期缺值,占样本很小一段。
+  literature:
+  - source: George and Hwang, The 52-week high and momentum investing, Journal of
+      Finance
+    year: '2004'
+  - source: De Bondt and Thaler, Does the stock market overreact?, Journal of Finance
+    year: '1985'
+  seeds:
+  - cs_bucket_rank(day_last(Close), LogFloatCap)
+  - cs_bucket_rank(day_last(Close), cross_mean(day_std(Amt), 30))
+  - sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_rank(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), LogFloatCap)
+  - cs_bucket_rank(day_last(Close), sub(LogFloatCap, LogFloatShares))
+  - div(day_last(Close), cross_max(day_last(Close), 241))
+  - cross_rank(day_last(Close), 120)
+  - sub(log(day_last(Close)), cross_mean(log(day_last(Close)), 60))
+  - cs_bucket_rank(sub(log(day_last(Close)), cross_mean(log(day_last(Close)), 120)),
+    LogFloatCap)
+  - div(day_last(Close), ts_delay(day_last(Close), 120))
+  - cs_flip_by_state(day_last(Close), cross_mean(day_mean(Ret), 20))
+  - cs_flip_by_state(day_last(Close), day_sum(Amt))
+  - cs_flip_by_state(cs_bucket_rank(day_last(Close), LogFloatCap), cross_mean(day_mean(Ret),
+    20))
+- type: N
+  hypothesis: 想法:把日内分钟数据压成 股票层面的慢特质,即 20 到 120 日平均的、有界而无量纲的日内统计,每个回答一个行为问题:谁在交易(成交额的日内重心
+    day_centroid)、往哪边交易(day_signed_ratio 的买压占比,day_wmean(Ret, Amt) 减 day_mean(Ret)
+    的 重分钟方向,day_topw_mean(Ret, Volume) 最重 10% 分钟的平均收益)、价格对量怎样响应(day_corr(Ret, Volume)
+    的日内量价同步,cross_corr(日成交量, 收盘价) 的 40 日量价相关,day_autocorr(Ret, 1) 的一阶自相关)、收益在一天的什么时段兑现(隔夜
+    day_first(Open) 对前收,日内 收盘对开盘,最后 30 分钟 in_slice(Close, 0, 210) 到收盘,开盘后 30 分钟)、尾部形状(day_skew,上行与下行半标准差
+    cross_semistd_pos / cross_semistd_neg 的归一化差,成交额的 Gini)。机制:A 股散户主导、T+1、涨跌停;散户的注意力与追涨集中在开盘与盘中(Berkman
+    等 2012 的隔夜收益与开盘买入成本),机构的指数与 VWAP 算法交易集中在尾盘(Heston、Korajczyk、Sadka 2010 的日内半小时周期),隔夜与日内收益分别主要由两类人决定(Lou、Polk、Skouras
+    2019,tug of war),买压不平衡对次日收益的预测见 Chordia、Roll、Subrahmanyam 2002。每个量是一个稳定的 谁在交易这只股票
+    的指纹,几个月不变,所以只要有 alpha,它是慢的。为什么这样做:第 1 批里 15 bp 成本下失分的主因是换手,含 day_last(Close) 这种慢水平的候选均值
+    -0.85,而直接用当日日内形状的候选最差(day_es_ratio_hi 含 5 个,均值 -1.89;day_flat_run_max 含 5 个,均值
+    -1.85),没有一个日内统计被做成 慢特质;日内信息有没有 alpha 在这批里没有被公平地检验。这里先把日内统计在 60 到 120 日上平均、必要时先做截面秩再平均(对重尾稳健),让换手降到价格水平的量级,再看有没有
+    alpha。与库的差别:第 1 批 heads 为 0 个;这批每个量都不是价格水平、波动、流动性、20 日反转、市值或已知族 cross_mean(day_std(Amt),
+    30) 的函数(都是无量纲比例、相关、秩、时段拆分,与波动水平和成交额水平无关),也不含 M 的 9 个子树;与控制的重叠是中度的,新尺子已经去掉了对它们的非线性暴露。为什么样本外还会在:这些指纹是市场结构(散户占比、T+1、涨跌停、机构执行)的结果,在
+    2018 到 2023 年里结构没有断裂,符号靠结构而不是某一段行情。数学上:全部有界、或用相对量;没有除以近零的量(day_signed_ratio、day_centroid、day_gini、day_topw_mean
+    在算子内已处理分母为 0,div 的分母是后复权价或半标准差之和,为零时给 NaN 而不是爆点);cross_corr 用 Volume 与 Close,不用
+    Amt 的平方,避免 float32 溢出;停牌日 NaN,滚动均值只用有限的天。
+  inspired_by: 第 1 批:含 day_last(Close) 与 day_var(Low) 这类慢变水平的候选均值高出 0.6 到 0.9,而当日用日内形状统计的候选(day_es_ratio_hi、day_flat_run_max)是最差的;15
+    bp 成本下的失分是换手,不是日内信息没有内容,日内统计从没被做成慢特质来检验。
+  literature:
+  - source: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected
+      returns, Journal of Financial Economics'
+    year: '2019'
+  - source: 'Berkman, Koch, Tuttle and Zhang, Paying attention: overnight returns
+      and the hidden cost of buying at the open, Journal of Financial and Quantitative
+      Analysis'
+    year: '2012'
+  - source: Heston, Korajczyk and Sadka, Intraday patterns in the cross-section of
+      stock returns, Journal of Finance
+    year: '2010'
+  - source: Chordia, Roll and Subrahmanyam, Order imbalance, liquidity, and market
+      returns, Journal of Financial Economics
+    year: '2002'
+  seeds:
+  - cross_mean(day_signed_ratio(Ret, Amt), 120)
+  - cross_ema(day_centroid(Amt), 60)
+  - cross_corr(day_sum(Volume), day_last(Close), 40)
+  - cross_mean(cs_rank(day_corr(Ret, Volume)), 120)
+  - cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)
+  - cross_mean(day_topw_mean(Ret, Volume), 120)
+  - cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open),
+    ts_delay(day_last(Close), 1)), 1)), 120)
+  - cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)
+  - cross_mean(sub(div(day_last(Close), day_last(in_slice(Close, 0, 210))), 1), 120)
+  - cross_mean(sub(div(day_last(in_slice(Close, 0, 30)), day_first(Open)), 1), 60)
+  - cross_mean(day_autocorr(Ret, 1), 120)
+  - cross_mean(day_skew(Ret), 120)
+  - cross_mean(day_gini(Amt), 120)
+  - div(sub(cross_semistd_pos(day_last(Close), 60), cross_semistd_neg(day_last(Close),
+    60)), add(cross_semistd_pos(day_last(Close), 60), cross_semistd_neg(day_last(Close),
+    60)))
+  - sub(cross_mean(day_signed_ratio(Ret, Amt), 20), cross_mean(day_signed_ratio(Ret,
+    Amt), 120))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
