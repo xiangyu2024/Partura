@@ -10,6 +10,10 @@ prod_final.py.  Source tmp/prod_env.sh first.
         the two existing champions (copied from the old host into runs/prod_W01/two_level/champions/) are checked against
         their recorded books first; then in-sample / test / forward / combined books of every signal and the paired daily
         differences the plan names.  Ledgered (research/prod_W01/ledger_prod.json).  -> research/prod_W01/two_level.{json,md}
+    python scripts/prod_two_level.py overlay [--again]
+        research/prod_W01/OVERLAY_PLAN.md: each champion and C_WP_ng as two "family factors" (daily z-scores, oriented on the
+        training period), weighted by AlphaCube's between-family lstsq on the first 1359 days; paired with the champion
+        itself.  Ledgered.  -> research/prod_W01/overlay.{json,md}
 
 AlphaCube's scripts are used unmodified ($ALPHACUBE_ROOT/scripts).  The book convention is research/two_level's
 (partura.books.books, scripts/two_level_forward.py).
@@ -45,7 +49,7 @@ import prod_lib  # noqa: E402
 
 argv = sys.argv[1:]
 MODE = argv[0] if argv else ""
-if MODE not in ("build", "read"):
+if MODE not in ("build", "read", "overlay"):
     raise SystemExit(__doc__)
 if study.name("") != "PROD" or not steer.rank_first():
     raise SystemExit("source tmp/prod_env.sh first (PARTURA_C0X=PROD, rank first)")
@@ -273,6 +277,121 @@ def read():
           f"combined {q['oos']['ann']:+.1%} (t {t_oos:+.1f}) -> {res['verdict']}", flush=True)
     print(f"[tl] wrote {out_json}, {out_md}", flush=True)
 
+def overlay():
+    out_json, out_md = D / "overlay.json", D / "overlay.md"
+    if out_json.is_file() and "--again" not in argv:
+        raise SystemExit(f"{out_json} exists: the overlay read has been done; --again to read once more (ledgered again)")
+    from alphacube.metrics import long_short_weights, portfolio_returns, zscore_rows
+    from combine_two_level import blend, fit_weights
+    view, dates, end, tgt = view_and_label()
+    ix = lambda d: int(np.searchsorted(dates, d))             # noqa: E731
+    us, ho, fw, oos = slice(0, SPLIT), slice(SPLIT, ix("20260101")), slice(ix("20260101"), len(dates)), slice(SPLIT, len(dates))
+    SEG = {"insample": us, "test": ho, "forward": fw, "oos": oos}
+    fit_target = tgt.copy()
+    fit_target[SPLIT:] = np.nan
+
+    def oriented(sig):
+        ic = dg.ic_row(sig[us], tgt[us], target_ranks=dg.rank_rows(tgt[us]))
+        return (1.0 if not np.isfinite(ic["rank_ic"]) or ic["rank_ic"] >= 0 else -1.0) * sig
+
+    def daily(sig, hl_lo, hl_ls):
+        sm_lo, sm_ls = bk.smoothed(sig, hl_lo), bk.smoothed(sig, hl_ls)
+        return {"excess": bk.long_book(long_short_weights(sm_lo, bk.TOP_FRAC), sm_lo, tgt)[0],
+                "ls": portfolio_returns(long_short_weights(sm_ls, bk.TOP_FRAC), tgt, bk.COST)[0]}
+
+    def stats(x):
+        f = x[np.isfinite(x)]
+        if f.size < 20 or not f.std() > 0:
+            return {"ann": float("nan"), "ir": float("nan"), "t": float("nan"), "n": int(f.size)}
+        return {"ann": float(f.mean() * 252), "ir": float(f.mean() / f.std() * np.sqrt(252)), "t": float(f.mean() / f.std() * np.sqrt(f.size)), "n": int(f.size)}
+
+    def rankcorr(a, b, sl, step=5):
+        cs = []
+        for d in range(sl.start, sl.stop, step):
+            m = np.isfinite(a[d]) & np.isfinite(b[d])
+            if m.sum() > 100:
+                cs.append(np.corrcoef(np.argsort(np.argsort(a[d, m])), np.argsort(np.argsort(b[d, m])))[0, 1])
+        return float(np.mean(cs))
+
+    zw = zscore_rows(oriented(np.load(W / "C_WP_ng.npy").astype(np.float64)))
+    res = {"plan": f"research/{DIRNAME}/OVERLAY_PLAN.md", "view": [str(dates[0]), end], "segments": {k: [str(dates[v.start]), str(dates[v.stop - 1])] for k, v in SEG.items()},
+           "insample": {}, "signals": {}, "paired": {}, "own_hl": {}, "fixed_ratio": {}}
+    SIG, OWN_HL = {"W": zw}, {"手写库冠军": 20.0, "挖掘冠军": 10.0}
+    with slot():
+        mem = MemoryGuard(self_limit_gb=int(os.environ.get("PARTURA_SELF_LIMIT_GB", 60)), cgroup_limit_gb=int(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 80))).start()
+        for c, tag in (("手写库冠军", "O_H"), ("挖掘冠军", "O_X")):
+            zc = zscore_rows(oriented(np.load(W / "champions" / f"signal_{c}_20260916.npy").astype(np.float64)))
+            if zc.shape != zw.shape:
+                raise SystemExit(f"{c}: shape {zc.shape} != {zw.shape}")
+            w = fit_weights([zc, zw], fit_target, us, "lstsq")                  # the between-family layer, training period only
+            SIG[c], SIG[tag] = zc, blend([zc, zw], w)
+            res["insample"][tag] = {"weights": [float(w[0]), float(w[1])], "w_ratio": float(w[1] / w[0]) if w[0] else float("nan"),
+                                    "rank_corr_W_champion": rankcorr(zw, zc, us)}
+            for r in (0.25, 0.5, 1.0):
+                SIG[f"{tag}@{r:g}"] = blend([zc, zw], np.array([1.0, r]))
+            print(f"[ov] {tag}: weights {c} {w[0]:.4g}, W {w[1]:.4g} (W / champion {res['insample'][tag]['w_ratio']:.3f}); "
+                  f"in-sample daily rank corr W vs {c} {res['insample'][tag]['rank_corr_W_champion']:.3f}", flush=True)
+        Ledger(LEDGER).record("holdout", 2, f"PROD {DIRNAME} overlay O_H / O_X = champion + C_WP_ng (OVERLAY_PLAN.md): test 20230808..20251231", "prod_two_level overlay")
+        Ledger(LEDGER).record("forward", 2, f"PROD {DIRNAME} overlay O_H / O_X: forward 20260101..{end}", "prod_two_level overlay")
+        KEEP = ("long_ann", "long_sharpe", "long_mdd", "long_turnover", "ls_ann", "ls_sharpe", "ls_mdd")
+        DAILY = {}
+        for name in ("手写库冠军", "O_H", "挖掘冠军", "O_X", "W"):
+            b = bk.books(SIG[name], tgt, us, SEG)
+            L, S_ = b["by_rank"]["long"], b["by_rank"]["ls"]
+            res["signals"][name] = {"hl_long": L["hl"], "hl_ls": S_["hl"],
+                                    "long": {k: {m: float(v[m]) for m in KEEP if m.startswith("long")} for k, v in L["splits"].items()},
+                                    "ls": {k: {m: float(v[m]) for m in KEEP if m.startswith("ls")} for k, v in S_["splits"].items()}}
+            DAILY[name] = daily(SIG[name], L["hl"], S_["hl"])
+            x = res["signals"][name]["long"]
+            print(f"[ov] {name:6s} 纯多头 净超额 / 夏普(hl {L['hl']:g}): 样本内 {x['insample']['long_ann']:+.1%} / {x['insample']['long_sharpe']:.2f} | "
+                  f"测试 {x['test']['long_ann']:+.1%} / {x['test']['long_sharpe']:.2f} | 前推 {x['forward']['long_ann']:+.1%} / {x['forward']['long_sharpe']:.2f} | "
+                  f"合并 {x['oos']['long_ann']:+.1%} / {x['oos']['long_sharpe']:.2f}", flush=True)
+        for tag, c in (("O_H", "手写库冠军"), ("O_X", "挖掘冠军")):
+            res["paired"][f"{tag}-{c}"] = {k: {s: stats((DAILY[tag][k] - DAILY[c][k])[sl]) for s, sl in SEG.items() if s != "insample"} for k in ("excess", "ls")}
+            hl = OWN_HL[c]                                                           # robustness: the champion's own half-life for both
+            do, dc = daily(SIG[tag], hl, hl), daily(SIG[c], hl, hl)
+            res["own_hl"][f"{tag}-{c}"] = {"hl": hl, **{s: stats((do["excess"] - dc["excess"])[sl]) for s, sl in SEG.items() if s != "insample"}}
+            for r in (0.25, 0.5, 1.0):
+                dr = daily(SIG[f"{tag}@{r:g}"], hl, hl)
+                res["fixed_ratio"][f"{tag}@{r:g}-{c}"] = {"hl": hl, **{s: stats((dr["excess"] - dc["excess"])[sl]) for s, sl in SEG.items() if s != "insample"}}
+        mem.stop()
+
+    def verdict(key):
+        q_ = res["paired"][key]["excess"]
+        t_, f_ = q_["oos"]["t"], q_["forward"]["ann"]
+        return "成立" if t_ >= 2 else "方向一致、证据不够" if f_ > 0 and t_ >= 1 else "没有延续" if f_ < 0 else "证据弱"
+    res["verdict"] = {k: verdict(k) for k in res["paired"]}
+    out_json.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    out_md.write_text(overlay_report(res), encoding="utf-8")
+    for k, v in res["paired"].items():
+        q = v["excess"]
+        print(f"[ov] {k}: test {q['test']['ann']:+.1%} (t {q['test']['t']:+.1f}) | forward {q['forward']['ann']:+.1%} (t {q['forward']['t']:+.1f}) | "
+              f"combined {q['oos']['ann']:+.1%} (t {q['oos']['t']:+.1f}) -> {res['verdict'][k]}", flush=True)
+    print(f"[ov] wrote {out_json}, {out_md}", flush=True)
+
+
+def overlay_report(res):
+    p = lambda x: "—" if x is None or x != x else f"{x:+.1%}"            # noqa: E731
+    f2 = lambda x: "—" if x is None or x != x else f"{x:.2f}"             # noqa: E731
+    t1 = lambda q: f"{p(q['ann'])}(t {q['t']:+.1f})"                      # noqa: E731
+    L = [f"# PROD W01:W01 的两层合成信号叠加到现成冠军上(规则见 `{res['plan']}`)", "",
+         f"W = C_WP_ng;O_H = 手写库冠军 ⊕ W,O_X = 挖掘冠军 ⊕ W(逐日 z 分数,族间 lstsq 权重只在 {res['segments']['insample'][0]} ~ {res['segments']['insample'][1]} 拟合)。", "",
+         "## 样本内的事实(描述)", "", "| 叠加 | 冠军权重 | W 权重 | W / 冠军 | W 与冠军逐日秩相关(样本内) |", "|---|---|---|---|---|"]
+    for k, x in res["insample"].items():
+        L.append(f"| {k} | {x['weights'][0]:.4g} | {x['weights'][1]:.4g} | {x['w_ratio']:.3f} | {x['rank_corr_W_champion']:.3f} |")
+    L += ["", "## 各信号(纯多头 = 净超额 / 超额夏普)", "", "| 信号 | hl | 样本内 | 测试段 | 前推段 | 合并段 | 合并段超额回撤 | 多空夏普 合并段 |", "|---|---|---|---|---|---|---|---|"]
+    for n, x in res["signals"].items():
+        lo = x["long"]
+        L.append(f"| {n} | {x['hl_long']:g} | {p(lo['insample']['long_ann'])} / {f2(lo['insample']['long_sharpe'])} | {p(lo['test']['long_ann'])} / {f2(lo['test']['long_sharpe'])} | "
+                 f"{p(lo['forward']['long_ann'])} / {f2(lo['forward']['long_sharpe'])} | {p(lo['oos']['long_ann'])} / {f2(lo['oos']['long_sharpe'])} | {p(lo['oos']['long_mdd'])} | {f2(x['ls']['oos']['ls_sharpe'])} |")
+    L += ["", "## 主判据:叠加 − 冠军(纯多头逐日净超额,同一天相减)", "", "| 比较 | 测试段 | 前推段 | 合并段 | 多空 合并段 | 按规则 |", "|---|---|---|---|---|---|"]
+    for k, v in res["paired"].items():
+        L.append(f"| **{k}** | {t1(v['excess']['test'])} | {t1(v['excess']['forward'])} | {t1(v['excess']['oos'])} | {t1(v['ls']['oos'])} | {res['verdict'][k]} |")
+    L += ["", "稳健性(描述):两边都用冠军自己的半衰期;以及固定权重比 W : 冠军。", "", "| 比较 | hl | 测试段 | 前推段 | 合并段 |", "|---|---|---|---|---|"]
+    for k, v in list(res["own_hl"].items()) + list(res["fixed_ratio"].items()):
+        L.append(f"| {k} | {v['hl']:g} | {t1(v['test'])} | {t1(v['forward'])} | {t1(v['oos'])} |")
+    return "\n".join(L) + "\n"
+
 
 def report(res):
     p = lambda x: "—" if x is None or x != x else f"{x:+.1%}"            # noqa: E731
@@ -315,4 +434,4 @@ def report(res):
 
 
 if __name__ == "__main__":
-    build() if MODE == "build" else read()
+    {"build": build, "read": read, "overlay": overlay}[MODE]()
