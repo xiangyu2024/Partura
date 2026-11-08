@@ -2,7 +2,19 @@
 
 _最后更新:2026-10-07 18:40 PDT,Opus 5.5 主会话。每到一个里程碑更新这一页。_
 
-## ⏱ 现状快照(2026-11-07 12:25 EST;最新,先读这段)—— 生产第 1 波(PROD W01)在两台服务器上跑
+## ⏱ 现状快照(2026-11-07 19:35 EST;最新,先读这段)—— PROD W01:Partura 三轮全部推送,等新服务器 6 个种子跑完再汇总
+
+- **进度**:12 个种子 × 3 轮的计划都已推送(全部过审)。ALLDONE:902、903、909–912;901、904–908 的第 3 轮任务在新服务器上跑。
+  原服务器 909–912 的证据已用 `prod_gather.sh` 搬到新服务器(40 份 evidence,符合预期)。新服务器上正在对 6 个已完成种子做样本内试跑
+  (`logs/prod_final_dry6.log`;开头:M 14 个 head、P 133 个 head(去重前)、替换生效 29 个)。
+- **下一步**:12 个都 ALLDONE → `prod_final.py --dry-run`(全部)→ 看库大小 / 复现率 → 真跑(测试段 / 前推段只作描述,记账)→ 取回 final*.json / md → `RESULT.md` → 报告用户。
+- **运行中改过的**(PLAN 修订 2–4):确定性三步由总领跑 `scripts/prod_round.sh`,工作流只跑 PI / 审计(`args.stage`);`nanrank_last` 缺失返回 0 写进 rules §4;
+  **修订 4(用户)**:生产不限制读文件,唯一硬规矩是 train / test 切分。token 账 `research/prod_W01/TOKENS.md`:子代理合计约 1,796 万。
+- **给 W02 的记录** `research/prod_W01/NEXT_WAVE.md`:修订 4 后种子扎堆到成交重心一族(建议整波库禁令);市值切段 head(910);`cross_corr` 空窗口返回 0;E 位口径按种子。
+- Workflow 工具不接受 Partura-prod 下的 scriptPath:把 `workflows/prod_round.js` 复制到工具返回过的 Script file 路径再用(RUNBOOK §3)。
+- 资源采样器两台都在跑(30 小时):`logs/prod_memwatch.tsv`(GPU、容器 / 整机内存、我们作业的匿名内存)。
+
+## ⏱ 现状快照(2026-11-07 12:25 EST;已被上面那段更新)—— 生产第 1 波(PROD W01)在两台服务器上跑
 
 - **代码**:C01–C08 两条分叉的线(云端 `claude/charming-babbage-d2h3x4`、本机 `c05-async`)已合进 `main`;生产在工作目录 **`~/Desktop/Partura-prod`(main)**,
   `~/Desktop/Partura` 仍检出 `c05-async`,别动它。
