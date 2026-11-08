@@ -66,8 +66,7 @@ def opt(name, default=None):
 
 IDEA = argv[0]
 if study.scheduling_env():    # coldstart_C05 / C06 / C07 and PROD; scheduling only (C05 PLAN revision 2): ~3 GB of the card per run
-    os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1",
-                      PARTURA_PANEL_CACHE_GB=str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6)))))
+    os.environ.update(PARTURA_REPROMOTE="1", **study.host_caps())      # 4 slots, 2 ways, cache <= 24 GB unless the host says more
 GPATH = opt("--guidance", "guidance/B01.yaml")
 BUDGET, POP = int(opt("--budget", 192)), int(opt("--population", 48))
 ARMS = opt("--arms", "steer,control").split(",")

@@ -18,7 +18,7 @@ Pure stdlib: importable on the laptop, on the servers and in the tests without t
 from __future__ import annotations
 
 import os
-from typing import Mapping, Optional
+from typing import Dict, Mapping, Optional
 
 LEGACY = ("C05", "C06", "C07", "C08")                  # the studies whose scripts predate this module
 FOLLOWS = {"PROD": "C08"}                              # whose behaviour a non-legacy study copies at every switch
@@ -96,5 +96,17 @@ def scheduling_env(env: Optional[Mapping[str, str]] = None) -> bool:
     return env.get("PARTURA_STUDY_DIR") in ("coldstart_C05", "coldstart_C06", "coldstart_C07") or env.get("PARTURA_C0X") == "PROD"
 
 
+def host_caps(env: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
+    """The C05 scheduling numbers (4 run slots, 2 GPU ways, a panel cache of at most 24 GB), with a host's own override.
+    Scheduling only, no numbers: the slots and the GPU ways decide what waits, the in-memory panel cache only saves
+    recomputation.  A host with more memory than the first server (the second server: 1 TB) sets $PARTURA_HOST_SLOTS /
+    $PARTURA_HOST_GPU_WAYS / $PARTURA_HOST_PANEL_CACHE_GB in its own tmp/ env; unset = exactly the old values.  The
+    panel cache is still min(cap, $PARTURA_PANEL_CACHE_GB or 6), as before."""
+    env = os.environ if env is None else env
+    cap = float(env.get("PARTURA_HOST_PANEL_CACHE_GB") or 24.0)
+    return {"PARTURA_SLOTS": env.get("PARTURA_HOST_SLOTS") or "4", "PARTURA_GPU_WAYS": env.get("PARTURA_HOST_GPU_WAYS") or "2",
+            "PARTURA_PANEL_CACHE_GB": str(min(cap, float(env.get("PARTURA_PANEL_CACHE_GB", 6))))}
+
+
 __all__ = ["LEGACY", "FOLLOWS", "name", "follows", "is_legacy", "dirname", "prefix", "m_prefix", "neutral_extra", "r_additions",
-           "ctrl_strike_default", "scheduling_env"]
+           "ctrl_strike_default", "scheduling_env", "host_caps"]

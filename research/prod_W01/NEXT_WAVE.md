@@ -26,3 +26,29 @@ LogTotalCap 不在 5 个控制里。终判时和「小总市值」尺子(K002)�
 
 901 的审计员问:`day_centroid(Amt)` 的 E 位在别的种子已用过多次,这条按整波算还是按种子算。总领定:**按种子**(`c06_check.py` 就是这样执行的;种子之间本波可见是修订 4 之后才有的)。
 W02 若采用 §1 的 (a)(整波库禁令),这条可以改成整波口径。
+
+## 5. 新服务器的并发:内存几乎没用上,卡在写死的 4 个运行位(2026-11-07 21:55 EST,用户提出「往内存上限多堆」)
+
+W01 新服务器 8 个种子(01:18 → 09:45 服务器时间,约 8.5 小时)的实测:
+
+| 项 | 数 |
+|---|---|
+| 任务(GP 搜索 + 证据) | 80 个,运行合计 24.6 小时 |
+| 等运行位(`[guard] got run slot … after`) | 100 次,合计 **54.4 小时**;908 r3b 等了 70 分钟、只跑 17 分钟 |
+| 等 GPU 锁(2 路) | 265 次,合计 13.6 小时 |
+| 我们的匿名内存峰值 | 55 GB;整机 1007 GB,别人的服务约 240–280 GB,可用约 765 GB |
+| 显存峰值 | 32.0 / 32.6 GB(已满) |
+| 回落到 CPU 的批 | 2 |
+
+原因:`idea_search.py` / `c05_round.py` / `c05_locate.py` 把运行位写死成 4、GPU 路写死成 2、进程内面板缓存封顶 24 GB,
+新服务器 `tmp/c05_env.sh` 里的 `PARTURA_SLOTS=6`、`PARTURA_PANEL_CACHE_GB=64` 都被压回去了。
+
+改法(已提交,只管排队,不改任何数):`partura/study.py` 的 `host_caps()`,主机可在自己的 `tmp/host_caps.sh` 里设
+`PARTURA_HOST_SLOTS` / `PARTURA_HOST_GPU_WAYS` / `PARTURA_HOST_PANEL_CACHE_GB`;不设 = W01 的 4 / 2 / 24,逐位不变。
+`scripts/server/prod_env.sh` 若见到 `tmp/host_caps.sh` 就读它。
+
+W02 新服务器建议:`PARTURA_HOST_SLOTS=8`、`PARTURA_HOST_PANEL_CACHE_GB=32`,GPU 路不动(显卡已满,第 3 路只会把批挤到 CPU)。
+内存账:8 个任务 × 至多约 40 GB ≈ 320 GB,加别人的约 280 GB,约 600 GB / 1007 GB;`PARTURA_CGROUP_LIMIT_GB=600`(整机匿名内存)仍是闸门,
+超了新任务就排队。预期:排队的 54 小时大部分消失,瓶颈变成那张卡,整波墙钟大约 8.5 → 5 小时(估计,W02 实测)。
+原服务器容器只有 96 GB,不动(4 位)。下一步要看的:memwatch 加一列 GPU 利用率,判断卡是否真的满载;若 GPU 锁里有大段 CPU 活,
+可以把它挪到锁外再加一路。

@@ -11,9 +11,12 @@
 #                                                  this off -- see partura/study.py r_additions).  Set 0 for C08-as-it-ran.
 #   TMPDIR=$PARTURA_HOME/tmp/sys_tmp               PROD only: temp files of python / numpy / torch go to the data disk, not the (small) root
 #                                                  partition (PLAN section 3: the new host's root partition is never written to)
-# Nothing else here may differ between the two hosts.
+# Nothing else here may differ between the two hosts.  Scheduling only (no number depends on it): a host may keep its own
+# tmp/host_caps.sh next to this file with PARTURA_HOST_SLOTS / PARTURA_HOST_GPU_WAYS / PARTURA_HOST_PANEL_CACHE_GB
+# (partura/study.py host_caps; unset = 4 slots, 2 GPU ways, a panel cache of at most 24 GB, as W01 ran).
 _d=$(dirname "${BASH_SOURCE[0]:-$0}"); [ -f "$_d/c05_env.sh" ] || _d=tmp
 source "$_d/c05_env.sh"
+if [ -f "$_d/host_caps.sh" ]; then source "$_d/host_caps.sh"; fi
 unset _d
 export PARTURA_STUDY_DIR=prod_W01 PARTURA_C0X=PROD PARTURA_RANK_FIRST=1 PARTURA_NEUTRAL_POWERS=1,2,3 C06_CTRL_STRIKE=0.8 PARTURA_R_ADDITIONS=0
 mkdir -p "${PARTURA_HOME:?}/tmp/sys_tmp" && export TMPDIR="$PARTURA_HOME/tmp/sys_tmp"

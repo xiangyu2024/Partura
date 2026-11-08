@@ -103,9 +103,9 @@ def gp(tag, idea, guidance, arm, seed, budget, extra):
     cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('C05_JOB_MINUTES', 720)}m", PY, "-u", "scripts/idea_search.py", idea,
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
-    # scheduling only (PLAN revisions 2, 6): two GPU ways, four run slots, a panel cache of at most 24 GB
-    env = {**os.environ, "PARTURA_GPU_WAYS": "2", "PARTURA_SLOTS": "4",
-           "PARTURA_PANEL_CACHE_GB": str(min(24.0, float(os.environ.get("PARTURA_PANEL_CACHE_GB", 6))))}
+    # scheduling only (PLAN revisions 2, 6): two GPU ways, four run slots, a panel cache of at most 24 GB (a host may say more:
+    # study.host_caps)
+    env = {**os.environ, **study.host_caps()}
     CMDS[tag] = (cmd, env, budget)
     eps = glob.glob(str(EP / f"{tag}_*"))
     if eps and c05_lib.finished(eps[0]) and not broken_ep(eps[0], budget):     # resumable runner (PLAN revision 7)
@@ -267,10 +267,10 @@ elif MODE == "mission":
         rq = ARMS / f"rreq_s{S}_{X}_r{K}.json"
         rq.write_text(json.dumps(plan["R"], ensure_ascii=False), encoding="utf-8")
         log = ROOT / "logs" / f"_{PFX}R_s{S}_{X}_r{K}.log"
-        RCMDS[f"R_s{S}_{X}_r{K}"] = ([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], {**os.environ, "PARTURA_GPU_WAYS": "2"}, log)
+        RCMDS[f"R_s{S}_{X}_r{K}"] = ([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], {**os.environ, "PARTURA_GPU_WAYS": study.host_caps()["PARTURA_GPU_WAYS"]}, log)
         procs.append((f"R_s{S}_{X}_r{K}", subprocess.Popen([PY, "-u", "scripts/c05_locate.py", "direct", str(S), X, str(K), str(rq)], cwd=ROOT,
                                                             stdout=log.open("w"), stderr=subprocess.STDOUT,
-                                                            env={**os.environ, "PARTURA_GPU_WAYS": "2"})))   # the same two ways as the GP runs (PLAN revision 2)
+                                                            env={**os.environ, "PARTURA_GPU_WAYS": study.host_caps()["PARTURA_GPU_WAYS"]})))   # the same two ways as the GP runs (PLAN revision 2)
     finish(S, X, K, procs)
 else:
     raise SystemExit(f"unknown mode {MODE}")

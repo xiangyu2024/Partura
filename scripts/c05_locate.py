@@ -46,7 +46,8 @@ from partura.steer import Guidance, RewardContext, neutral_basis, neutral_residu
 from partura.steer import reward as steer_reward  # noqa: E402
 
 MODE, S, ARM, K = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
-os.environ.update(PARTURA_SLOTS="4", PARTURA_GPU_WAYS="2", PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
+_caps = study.host_caps()
+os.environ.update(PARTURA_SLOTS=_caps["PARTURA_SLOTS"], PARTURA_GPU_WAYS=_caps["PARTURA_GPU_WAYS"], PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
 if MODE == "corr":      # C06: short and small -- the third GPU way (the GP runs only ever take two), a small share of the card, no run slot
     os.environ.update(PARTURA_GPU_WAYS="3", PARTURA_GPU_RESERVE_GB="1", PARTURA_GPU_MIN_GB="1")
 STUDY = study.name("C05")                                    # C06 reuses C05's M; its own missions are c06s...

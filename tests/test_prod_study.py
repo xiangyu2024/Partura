@@ -188,3 +188,23 @@ def test_c06_check_for_prod_needs_the_directory_setting(seed_dir):
     env.pop("PARTURA_STUDY_DIR", None)
     r = subprocess.run([sys.executable, str(ROOT / "scripts" / "c06_check.py"), "999", "1"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert r.returncode != 0 and "PARTURA_STUDY_DIR" in (r.stdout + r.stderr)
+
+
+def test_host_caps_unset_are_the_old_numbers_and_a_host_may_raise_them():
+    assert study.host_caps({}) == {"PARTURA_SLOTS": "4", "PARTURA_GPU_WAYS": "2", "PARTURA_PANEL_CACHE_GB": "6.0"}
+    assert study.host_caps({"PARTURA_PANEL_CACHE_GB": "64"})["PARTURA_PANEL_CACHE_GB"] == "24.0"     # the old cap
+    big = study.host_caps({"PARTURA_PANEL_CACHE_GB": "64", "PARTURA_HOST_SLOTS": "8", "PARTURA_HOST_PANEL_CACHE_GB": "32"})
+    assert big == {"PARTURA_SLOTS": "8", "PARTURA_GPU_WAYS": "2", "PARTURA_PANEL_CACHE_GB": "32.0"}
+    assert study.host_caps({"PARTURA_HOST_SLOTS": "", "PARTURA_HOST_GPU_WAYS": "3"})["PARTURA_SLOTS"] == "4"
+    assert study.host_caps({"PARTURA_HOST_GPU_WAYS": "3"})["PARTURA_GPU_WAYS"] == "3"
+
+
+def test_no_script_hard_codes_the_scheduling_numbers_any_more():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "scripts"
+    for f in ("idea_search.py", "c05_round.py", "c05_locate.py"):
+        src = (root / f).read_text()
+        assert not re.search(r'PARTURA_SLOTS[="\': ]+"4"', src), f
+        assert not re.search(r'"PARTURA_GPU_WAYS": "2"|PARTURA_GPU_WAYS="2"', src), f
+        assert "host_caps" in src, f
