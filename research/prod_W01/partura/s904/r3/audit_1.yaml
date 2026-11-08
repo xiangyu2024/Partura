@@ -1,0 +1,57 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 5, 6, 7, 8, 15, 16]
+    reasons: |-
+      核心 C = cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241),即快照里 M3 首个 head(+1.27)。E 位条件:核心是 head 整体,合规;与五个控制的原始 |ρ| 为 liq 0.232、vol 0.155、rev 0.015、known 0.226、size 0.067,均 < 0.8,通过。r1、r2 的 E 核心分别是 day_topw_mean(Ret,Amt) 与 ts_regbeta(day_gini(Volume),day_kurt(Vwap),50),C 是本轮第 1 个 E 位。16 个候选原样包含 C(已机械核对)。外围与 M 已见的含 C 候选是否重复,本次没有核对(只读了 loc 的 heads 表);笔记称没有含 C 的组合,未独立核实。
+      自动划掉(原始 |ρ| ≥ 0.7 与某个 head):1(0.712,与 C)、5(0.702,与 C)、6(0.706,与 C)、7(0.714,与 C)、8(0.733,与 Pr2a 族 head)、15(0.732,与 C)、16(0.725,与 H)。个人划掉:无。剩 2、3、4、9、10、11、12、13、14 共 9 个,≥ 4,通过。
+      2、3、4 是 C 与伙伴的乘积,9–12 是同一批伙伴的 2·min(取小),两者都是「两腿同时高」的 AND,对同一对腿的排序应当接近。它们的原始最大 |ρ| 在 0.59–0.69,不是同一个东西,按「只挡数学问题与明显重复」放行;PI 若要省种子,可删 10、11、12。
+      创新度 3:核心本身是库里 head;外围是 C 与 H、以及 r1/r2 已用过的伙伴(P1、P2、P3、Pr2a 的 signed_ratio 伙伴)的组合,只有 day_topw_mean(Amt,Amt) 这一伙伴是新的。种子与库里 head 的原始 |ρ| 在 0.59–0.69,不是换写法,但新信息的来源也不新。
+      合理度 4:逐个算子核对。cs_rank 每腿在 (0,1];sub(add(a,b),abs_(sub(a,b))) 等于 2·min(a,b),正确;13、14 的线性权重和为 1;无除法,无前视。以下四点不据此挡,请 PI 知悉:
+      (一)P3 = log(|z|/Open)。log 取绝对值,|x| ≤ 1e-9 时给 NaN(common.py:211–213),所以 P3 是截面中位价附近的 V 形(两端都高),不是单调的价位项。14 的「1 − rank(P3)」实际奖励的是接近中位价的票。
+      (二)P2 = 隔夜对数缺口减 |z|/Open,两项量纲不同,低价票由价位项主导(13 含 P2;r2 已指出同一问题)。
+      (三)cross_corr 的 rolling_pair_reduce 用 count ≥ 1 的部分窗口(rolling_windows 左补 NaN),2018 年头 240 个交易日的相关是由不足 241 个点算的;覆盖率 0.998 掩盖了这一点。
+      (四)day_kurt 无零方差守卫(common.py:418–422),Vwap 全天不动的日子给 NaN 或 −2。9、13、14 含 H 腿,会受影响(与 r2 的问题相同,至今未计数)。
+      另外,C 的 Z 近似 std(High)^6(价格量纲),LogFloatCap 近似对数价,所以 C 的截面大致量的是 241 日价格路径的一致性(近似 12 个月趋势强度),而不是日内振幅。§4 允许后复权价格的这种读法,但这是 alpha 的最可能来源;控制集里没有 12 个月动量,不会去掉它。
+      如果它有 alpha,最可能来自:2、3、4 = C 的价格路径一致性与 P1 / P_sr / 大成交额水平同时高;9–12 = 同上的取小交集;13 = C 与 H(50 日量集中与峰度的协动)加 P2 价位项的线性和;14 = 同上,但 P3 换成接近中位价的 V 形项。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [13]
+    reasons: |-
+      核心无(N 位)。自动划掉:无。最大 head 原始 |ρ| 为 0.449(seed 15,与 Pr2a 族 head),最大控制 |ρ| 为 0.481(seed 15,rev),都不到线。
+      个人划掉:13。理由是定义问题:12-1 动量的 ts_delay(·,240) 让前 240 个交易日系统性无值,覆盖 0.785,流水线已标废品(其余 15 个覆盖 0.997–0.999)。这是热身期造成的系统缺口,不是信号本身;PI 若要检验一阶动量,缩短滞后后重提。剩 15 个,通过。
+      创新度 4:库里 7 个 head 与本位种子的原始 |ρ| 最大 0.449,控制最大 0.481。状态腿 × 振幅或分布形状的 241 日协动(1–8)、日频量价与杠杆协动(9–11)、半离差(16)、价位锚(14–15)都不是库里已有的原料。5、6 与 C 同族(振幅换成收益标准差的 3 次幂),与 C 的原始 |ρ| 为 0.447 与 0.377,不是同一个东西。14、15 是文献里已有的因子(George–Hwang、Grinblatt–Han),对库是新的,对文献不是。
+      合理度 4:机制清楚。协动是二阶量,对一阶水平残差化之后仍在,与 PI 的猜想一致,且 B 组、D 组给了可检验的对照。算子按 docstring 实现:cross_corr / ts_corr 走 rolling_pair_reduce;cross_ema 跳过缺失日;cross_max、day_wmean、day_distinct_ratio 无除零;day_gini 有 tot > 0 守卫(ops_ext.py:150–151);cross_semistd_pos 对收盘价的日对数变化取半离差(ops_ext.py:751–776),与 PI 描述一致;ts_regbeta 有 1e-9 守卫。无前视。
+      未核实、因此不据此挡的三点:(一)day_kurt 无零方差守卫,Vwap 全天不动的日子给 NaN 或 −2(取决于浮点残差)。seed 1(kurt+3 取下界 1)与 seed 10(ts_corr(kurt, 日收益))会受影响;若计数显示这类日子占比大,seed 10 要重算,本位合理度降为 3。(二)seed 8 的 cross_corr(ListAge, Z′, 241):若 ListAge 是逐日递增的上市天数,它就是 Z′ 对日历时间的 241 日相关(振幅是否抬升),不是上市年龄的截面效应;若 ListAge 有截断或平台,截面含义会变,PI 需确认 ListAge 的定义。(三)cross_corr 样本开头的部分窗口(同 a 位第三点)。
+      另外:5 与 6 的状态腿分别是 LogFloatCap 与 log 收盘价,只差流通股本路径(送转、解禁),是 B 组对照,预计高度相关但不是同一式子,保留。14 与 15 都是 241 日价位锚,种子间相关表未给;若要分开检验,先算两者的相关。
+      如果它有 alpha,最可能来自:1 = 价位分布峰度与市值路径的协动;2 = 成交集中度与市值路径的协动;3 = H 斜率序列与市值路径的协动(二阶);4 = 价位网格粗细(微观结构)与振幅^6 的协动;5 = 振幅^6 与市值路径的协动(若 5 活而 6 死,是 LogFloatCap 的股本变化;两者都活而 C 死,是收益尺度);6 = 同上,状态换成对数价;7 = 近 20 日收益状态与振幅^6 的协动;8 = 振幅^6 的 241 日时间趋势;9 = 日收益与日波动的同期相关(杠杆);10 = 峰度与日收益的同期相关(上一条风险);11 = 量集中与日收益的同期相关;12 = 量集中慢值与振幅^6 的协动;14 = 距 52 周高点的对数距离;15 = 距 241 日成交量加权成本线的对数距离;16 = 收盘对数收益的上行与下行半离差之比。
+R:
+  - head: 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cross_ema(cross_zscore(day_signed_ratio(Ret, Volume), 60), 30)), 0.65))'
+    soundness: 4
+    reasons: |-
+      机制清楚:0.35 权重是为躲库禁令选的(PI 自己说明),变体检验的是权重、伙伴取秩与 H 字段,都是在已有 head 上的参数级检验。算子组合正确实现,ts_regbeta、cross_zscore、cross_ema、cs_rank 均无除零。
+      注意变体 2(伙伴不取秩)不只是去掉秩:cross_zscore 的输出是个股自身的时间 z 值,截面 sd 约 1,乘 0.65 后与 cs_rank(H)(sd 约 0.29)相加时伙伴实际占主导。变体改变的是两腿的相对权重,解读时要与「去掉秩」分开。变体 3(H 的 kurt 换成 Close)沿用 kurt 常数日的问题(见 slot b)。样本内拆解数字本次未核对。
+  - head: 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_2_5(pow_2_5(day_var(High))), 30)), 241)'
+    soundness: 4
+    reasons: |-
+      数值依据成立,可按代码核对:M 的 pow_2_5(pow_2_5(·)) 对 day_var 的幂次为 std(High) 的 25 次幂,cross_corr 的 dx² 约为 std 的 50 次幂。若按 float32 计算(cross_ema 的注释说明生产输入为 float32),std 约 6 元以上时溢出,约 0.12 元以下时下溢;这比它的单层版(dx² 约 std 的 20 次幂)严重得多。所以「去掉一层幂次」的方向对。下溢那一端覆盖的票数取决于后复权价格的量纲,PI 可以计数。
+      变体 1(单层 pow_2_5)与变体 3(衰减 45)机制清楚;变体 2(482 日窗口)是窗口检验,合理。算子无问题。
+  - head: 'cross_corr(LogFloatCap, pow_2(ts_decay_linear(pow_1_5(day_var(High)), 30)), 241)'
+    soundness: 3
+    reasons: |-
+      窗口敏感性是合理的检验对象,变体 2(300 日窗口)与变体 3(衰减 45)机制清楚,算子无问题。
+      但变体 1(High 版 + Low 版相加)与原 head 的日度秩 |ρ| 为 1.00(表中)。这说明 High 与 Low 两个读数的排序几乎相同,相加没有降噪作用,「两次含噪读数」的前提在表中不成立。变体 1 不可能满足「score ≥ 原 head + 0.1」,是浪费,但不是数学问题,组保留。合理度 3:机制对两个有效变体成立,但组内最主要的「降噪」变体与理由相反。
+  - head: 'cross_corr(ts_delay(ts_med(day_distinct_ratio(Amt), 30), 50), pow_2(ts_decay_linear(pow_2_5(day_var(High)), 30)), 241)'
+    soundness: 4
+    reasons: |-
+      机制清楚,变体设计直接检验「滞后有没有机制」。变体 2 去掉 ts_delay(·,50),与原 head 的 |ρ| 掉到 0.10 以下(表中不在前三),说明滞后不是小修饰;此时它是另一条信号,若 score ≥ 0.69 且与库里 |ρ| < 0.7,可按收录规则入库。变体 1 把 Z 的 pow_2_5 换成 pow_1_5,理由同 R2 的数值依据(与原 head 的 |ρ| 0.93,改动小)。
+      算子 ts_med、day_distinct_ratio、ts_delay 无问题,无前视。
+  - head: 'add(mul(cs_rank(ts_regbeta(day_gini(Volume), day_kurt(Vwap), 50)), 0.35), mul(cs_rank(cs_rank(cross_ema(cross_zscore(day_topw_mean(Ret, Amt), 60), 60))), 0.65))'
+    soundness: 4
+    reasons: |-
+      cs_rank(cs_rank(x)) 与 cs_rank(x) 的排序相同,双重秩确为无作用,三个变体都去掉了它,这是对的。窗口 50 → 100 与 Volume → Amt 的依据是样本内的窗口与字段曲线(样本内数字本次未核对),机制清楚。
+      三个变体都是参数级的(窗口、伙伴 z 窗口、权重、Amt 替换),算子无除零,无前视。
+summary: 'slot a 通过(创新 3、合理 4;划掉 1、5、6、7、8、15、16 共 7 个,剩 9 个);slot b 通过(创新 4、合理 4;划掉 13,剩 15 个);R 合理度依次 4、4、3、4、4。PI 跑之前需计数:day_kurt 在 Vwap 全天不动日的取值(影响 H 腿与 b1、b10);cross_corr 样本开头的部分窗口;ListAge 的定义;P2、P3 的量纲与 V 形。审计只用样本内的分数、相关度表与仓库代码,未计算 2023-08-08 之后的任何读数。'
