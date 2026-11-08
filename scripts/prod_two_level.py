@@ -63,6 +63,22 @@ SPLIT = 1359                                   # the first 1359 days = 2018-01-0
 FP_DAYS, FP_SYMBOLS = 250, 512                 # build_champion.py's training fingerprints
 CHAMPS = ("手写库冠军", "挖掘冠军")
 POOLS = ("WM", "WP")
+VARIANTS = ("_ng", "")          # TWO_LEVEL_PLAN.md correction 3: _ng = no small-family gate (the main criterion); "" = AlphaCube as is
+MAIN, LITERAL = ("C_WP_ng", "C_WM_ng"), ("C_WP", "C_WM")
+
+
+def pick_families_no_gate(rows, fp, cluster, max_families, max_members):
+    """build_champion.pick_families without the small-family quality gate (TWO_LEVEL_PLAN.md correction 3); everything else
+    as there: clusters on the training fingerprints, members by training fitness, families by their best member's."""
+    from select_factors import cluster_by_correlation, fitness, pairwise_abs_corr
+    labels = cluster_by_correlation(pairwise_abs_corr(fp), cluster)
+    fams = []
+    for fam in np.unique(labels):
+        idx = sorted(np.flatnonzero(labels == fam).tolist(), key=lambda j: -fitness(rows[j]))
+        fams.append((idx[:max_members], fitness(rows[idx[0]])))
+    fams.sort(key=lambda t: -t[1])
+    print(f"{len(rows)} 个健康因子 -> {labels.max() + 1} 族,不设小族门槛,取前 {max_families}", flush=True)
+    return [f[0] for f in fams[:max_families]]
 
 
 def opt(name, default=None):
@@ -156,17 +172,18 @@ def build():
         cols = np.linspace(0, S_ - 1, num=min(FP_SYMBOLS, S_)).astype(int)
         fp = np.asarray(build_train_fingerprints(d / "panels", [int(r_["i"]) for r_ in rows], slice(SPLIT - FP_DAYS, SPLIT), cols,
                                                  d / f"fp_train_{FP_DAYS}x{FP_SYMBOLS}.npy"))
-        fams = pick_families(rows, fp, 0.7, 100, 60)
-        t1 = time.time()
-        sig = ac_build(d, rows, fams, fit_target, slice(0, SPLIT))
-        np.save(W / f"C_{name}.npy", sig.astype(np.float32))
-        fam_rows = [{"members": [int(rows[j]["i"]) for j in idx], "expressions": [rows[j]["expression"] for j in idx],
-                     "fitness_best": float(abs(float(rows[idx[0]]["rank_ic_train"])) - 0.14 * float(rows[idx[0]]["turnover_train"]))} for idx in fams]
-        (W / f"C_{name}.families.json").write_text(json.dumps(fam_rows, ensure_ascii=False, indent=1), encoding="utf-8")
-        summary["pools"][name] = {"signals": len(exprs), "healthy": len(rows), "families": len(fams), "members": sum(len(f) for f in fams),
-                                  "largest_family": max((len(f) for f in fams), default=0), "seconds_build": time.time() - t1}
-        print(f"[tl] C_{name}: {len(exprs)} signals, {len(rows)} healthy, {len(fams)} families, {summary['pools'][name]['members']} members "
-              f"({time.time() - t1:.0f}s)", flush=True)
+        for v in VARIANTS:
+            fams = pick_families_no_gate(rows, fp, 0.7, 100, 60) if v == "_ng" else pick_families(rows, fp, 0.7, 100, 60)
+            t1 = time.time()
+            sig = ac_build(d, rows, fams, fit_target, slice(0, SPLIT))
+            np.save(W / f"C_{name}{v}.npy", sig.astype(np.float32))
+            fam_rows = [{"members": [int(rows[j]["i"]) for j in idx], "expressions": [rows[j]["expression"] for j in idx],
+                         "fitness_best": float(abs(float(rows[idx[0]]["rank_ic_train"])) - 0.14 * float(rows[idx[0]]["turnover_train"]))} for idx in fams]
+            (W / f"C_{name}{v}.families.json").write_text(json.dumps(fam_rows, ensure_ascii=False, indent=1), encoding="utf-8")
+            summary["pools"][name + v] = {"signals": len(exprs), "healthy": len(rows), "families": len(fams), "members": sum(len(f) for f in fams),
+                                          "largest_family": max((len(f) for f in fams), default=0), "seconds_build": time.time() - t1}
+            print(f"[tl] C_{name}{v}: {len(exprs)} signals, {len(rows)} healthy, {len(fams)} families, {summary['pools'][name + v]['members']} members "
+                  f"({time.time() - t1:.0f}s)", flush=True)
     (W / "build.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[tl] built ({time.time() - t0:.0f}s) -> {W}", flush=True)
 
@@ -199,7 +216,7 @@ def read():
 
     res = {"plan": f"research/{DIRNAME}/TWO_LEVEL_PLAN.md", "view": [str(dates[0]), end], "segments": {k: [str(dates[v.start]), str(dates[v.stop - 1])] for k, v in SEG.items()},
            "build": json.loads((W / "build.json").read_text(encoding="utf-8")), "check": {}, "signals": {}, "paired": {}, "fixed_hl": {}}
-    SIG = {f"C_{n}": oriented(np.load(W / f"C_{n}.npy").astype(np.float64)) for n in POOLS}
+    SIG = {f"C_{n}{v}": oriented(np.load(W / f"C_{n}{v}.npy").astype(np.float64)) for v in VARIANTS for n in POOLS}
     with slot():
         mem = MemoryGuard(self_limit_gb=int(os.environ.get("PARTURA_SELF_LIMIT_GB", 60)), cgroup_limit_gb=int(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 80))).start()
         # ---- the champions: are they, on this host's label, the signals research/two_level read?  (their numbers are known already)
@@ -220,8 +237,8 @@ def read():
                   f"forward {got['forward']:+.1%} vs {want['forward']:+.1%} -> {'PASS' if ok else 'FAIL'}", flush=True)
             if ok:
                 SIG[c] = s
-        Ledger(LEDGER).record("holdout", 2, f"PROD {DIRNAME} two-level C_WM / C_WP (TWO_LEVEL_PLAN.md): test 20230808..20251231, description + the plan's paired rule", "prod_two_level")
-        Ledger(LEDGER).record("forward", 2, f"PROD {DIRNAME} two-level C_WM / C_WP: forward 20260101..{end}", "prod_two_level")
+        Ledger(LEDGER).record("holdout", 4, f"PROD {DIRNAME} two-level C_WM / C_WP, with and without the small-family gate (TWO_LEVEL_PLAN.md): test 20230808..20251231, description + the plan's paired rule", "prod_two_level")
+        Ledger(LEDGER).record("forward", 4, f"PROD {DIRNAME} two-level C_WM / C_WP (_ng and as is): forward 20260101..{end}", "prod_two_level")
         KEEP = ("long_ann", "long_sharpe", "long_mdd", "long_turnover", "ls_ann", "ls_sharpe", "ls_mdd")
         DAILY = {}
         for name, sig in SIG.items():
@@ -235,20 +252,24 @@ def read():
             print(f"[tl] {name:6s} 纯多头 净超额 / 夏普(hl {L['hl']:g}): 样本内 {x['insample']['long_ann']:+.1%} / {x['insample']['long_sharpe']:.2f} | "
                   f"测试 {x['test']['long_ann']:+.1%} / {x['test']['long_sharpe']:.2f} | 前推 {x['forward']['long_ann']:+.1%} / {x['forward']['long_sharpe']:.2f} | "
                   f"合并 {x['oos']['long_ann']:+.1%} / {x['oos']['long_sharpe']:.2f}", flush=True)
-        pairs = [("C_WP", "C_WM")] + [(a, c) for a in ("C_WP", "C_WM") for c in CHAMPS]
+        pairs = [MAIN, LITERAL] + [(a, c) for a in MAIN + LITERAL for c in CHAMPS]
         for a, c in pairs:
             if a in DAILY and c in DAILY:
                 res["paired"][f"{a}-{c}"] = {k: {s: stats((DAILY[a][k] - DAILY[c][k])[sl]) for s, sl in SEG.items() if s != "insample"} for k in ("excess", "ls")}
         for hl in (5, 10, 20):                                                        # the plan's robustness line: one common half-life
-            da, dm = daily(SIG["C_WP"], hl, hl), daily(SIG["C_WM"], hl, hl)
+            da, dm = daily(SIG[MAIN[0]], hl, hl), daily(SIG[MAIN[1]], hl, hl)
             res["fixed_hl"][str(hl)] = {s: stats((da["excess"] - dm["excess"])[sl]) for s, sl in SEG.items() if s != "insample"}
         mem.stop()
-    q = res["paired"]["C_WP-C_WM"]["excess"]
+    def verdict(pair):
+        q_ = res["paired"]["-".join(pair)]["excess"]
+        t_, f_ = q_["oos"]["t"], q_["forward"]["ann"]
+        return "成立" if t_ >= 2 else "方向一致、证据不够" if f_ > 0 and t_ >= 1 else "没有延续" if f_ < 0 else "证据弱"
+    q = res["paired"]["-".join(MAIN)]["excess"]
     t_oos, fw_ann = q["oos"]["t"], q["forward"]["ann"]
-    res["verdict"] = ("成立" if t_oos >= 2 else "方向一致、证据不够" if fw_ann > 0 and t_oos >= 1 else "没有延续" if fw_ann < 0 else "证据弱")
+    res["verdict"], res["verdict_literal"] = verdict(MAIN), verdict(LITERAL)
     out_json.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     out_md.write_text(report(res), encoding="utf-8")
-    print(f"[tl] C_WP − C_WM: test {q['test']['ann']:+.1%} (t {q['test']['t']:+.1f}) | forward {fw_ann:+.1%} (t {q['forward']['t']:+.1f}) | "
+    print(f"[tl] {MAIN[0]} − {MAIN[1]}: test {q['test']['ann']:+.1%} (t {q['test']['t']:+.1f}) | forward {fw_ann:+.1%} (t {q['forward']['t']:+.1f}) | "
           f"combined {q['oos']['ann']:+.1%} (t {t_oos:+.1f}) -> {res['verdict']}", flush=True)
     print(f"[tl] wrote {out_json}, {out_md}", flush=True)
 
@@ -260,10 +281,11 @@ def report(res):
     L = [f"# PROD W01:两层合成重测(规则见 `{res['plan']}`)", "",
          f"视窗 {res['view'][0]} ~ {res['view'][1]};训练段切在 {b['split_day']}(选族、权重、方向、半衰期都只用它)。"
          f"测试段 {res['segments']['test'][0]} ~ {res['segments']['test'][1]},前推段 {res['segments']['forward'][0]} ~ {res['segments']['forward'][1]}。", "",
-         "| 池子 | head(去重前) | 不同表达式 | 健康 | 族 | 入选成员 | 最大族 |", "|---|---|---|---|---|---|---|"]
-    for n in POOLS:
-        x = b["pools"].get(n, {})
-        L.append(f"| {n} | {b['heads_before_dedup'][n]} | {b['distinct'][n]} | {x.get('healthy')} | {x.get('families')} | {x.get('members')} | {x.get('largest_family')} |")
+         "| 信号 | head(去重前) | 不同表达式 | 健康 | 族 | 入选成员 | 最大族 |", "|---|---|---|---|---|---|---|"]
+    for v in VARIANTS:
+        for n in POOLS:
+            x = b["pools"].get(n + v, {})
+            L.append(f"| C_{n}{v}{'(无小族门槛)' if v else '(原样)'} | {b['heads_before_dedup'][n]} | {b['distinct'][n]} | {x.get('healthy')} | {x.get('families')} | {x.get('members')} | {x.get('largest_family')} |")
     if b["not_computed"]:
         L.append(f"\n在全视窗上算不出来、没进池子的表达式:{len(b['not_computed'])} 个。")
     L += ["", "## 冠军核对(过了才和冠军比)", "", "| 冠军 | 半衰期 本机 / 记录 | 测试段 本机 / 记录 | 前推段 本机 / 记录 | 结果 |", "|---|---|---|---|---|"]
@@ -283,12 +305,12 @@ def report(res):
     L += ["", "## 成对差(同一天相减;纯多头看逐日净超额)", "", "| 比较 | 测试段 | 前推段 | 合并段 | 多空 合并段 |", "|---|---|---|---|---|"]
     for k, v in res["paired"].items():
         e, s = v["excess"], v["ls"]
-        L.append(f"| {'**' + k + '**(主判据)' if k == 'C_WP-C_WM' else k} | {p(e['test']['ann'])}(t {e['test']['t']:+.1f}) | {p(e['forward']['ann'])}(t {e['forward']['t']:+.1f}) | "
+        L.append(f"| {'**' + k + '**(主判据)' if k == '-'.join(MAIN) else k + '(原样,对照)' if k == '-'.join(LITERAL) else k} | {p(e['test']['ann'])}(t {e['test']['t']:+.1f}) | {p(e['forward']['ann'])}(t {e['forward']['t']:+.1f}) | "
                  f"{p(e['oos']['ann'])}(t {e['oos']['t']:+.1f}) | {p(s['oos']['ann'])}(t {s['oos']['t']:+.1f}) |")
-    L += ["", "固定同一个半衰期时的 C_WP − C_WM(描述):", "", "| hl | 测试段 | 前推段 | 合并段 |", "|---|---|---|---|"]
+    L += ["", f"固定同一个半衰期时的 {MAIN[0]} − {MAIN[1]}(描述):", "", "| hl | 测试段 | 前推段 | 合并段 |", "|---|---|---|---|"]
     for hl, v in res["fixed_hl"].items():
         L.append(f"| {hl} | {p(v['test']['ann'])}(t {v['test']['t']:+.1f}) | {p(v['forward']['ann'])}(t {v['forward']['t']:+.1f}) | {p(v['oos']['ann'])}(t {v['oos']['t']:+.1f}) |")
-    L += ["", f"**按事先的规则:{res['verdict']}。**"]
+    L += ["", f"**按事先的规则(主判据 {MAIN[0]} − {MAIN[1]}):{res['verdict']}。** 原样版本({LITERAL[0]} − {LITERAL[1]}):{res['verdict_literal']}。"]
     return "\n".join(L) + "\n"
 
 
