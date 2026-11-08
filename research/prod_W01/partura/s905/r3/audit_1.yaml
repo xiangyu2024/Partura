@@ -1,0 +1,120 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |
+      【位 a：E 深挖，核心 day_centroid(Amt)；本实验第 2 个 E 位（第 1 个在 r2）】
+      核对只用了 corr_1.json、loc 的 train / valid 数和源码，没有计算 2023-08-08 之后的任何数。
+
+      新颖度 4。9 个 head 里没有一个含 cross_corr 或 cross_reg*（loc.md 的 heads 表；loc.json 里 cross_corr 出现 0 次），所以「重心与隔夜跳空的滚动相关」这一层是新的，外围也不与已见候选重合。原始 |ρ| 对 head 最高 0.50（种子 11，对 cross_tail_mean_q25(c,60)），残差最高 0.38（种子 4、11）；对 5 个控制最高 0.26（种子 11 对 known），远低于 0.8。不给 5 的理由：核心 c 本身与 cross_tail / cs_regres 族共享（核心残差 |ρ| 0.92），种子 11 有机械成分（见下）。
+      核心对五个控制的 |ρ| 为 liq 0.18、vol 0.16、rev 0.13、known 0.19、size 0.07，均 < 0.8。
+
+      合理度 4。逐个算子核对：
+      - cross_corr = rolling_pair_reduce(…, "corr")（dt_cross.py:193；common.py:621–640），因果滚动，无前视。G = div(day_open(Open), cross_delay(day_close(Close),1))：day_open 是 day_first 的别名（dt_day.py:129），即 09:30 已知的开盘价除以前一日收盘。c 在收盘后形成，信号 t 日收盘后算、t+1 执行，与所有 head 的约定一致。
+      - 没有 §4 数学问题：|corr| 由分母 sqrt(var_x·var_y)+EPS 约束在 1 以内，不会爆点；窗口内方差为 0 时返回 0 而不是 NaN；没有 ts_rank / cross_rank / in_rank_rolling，不踩 nanrank_last；cs_rank 只出现在种子 13 的外层，是截面轴（nd_cs.py:84），不在已知缺陷范围内。
+      - 定义提醒一（不挡，请 PI 核对）：「前 60 日是热身期，缺失而不是填充」与代码不符。rolling_windows 左补 NaN（common.py:433），但 rolling_pair_reduce 不要求最少有效日（count 只 clamp 到 1）。所以热身期以及刚上市、刚复牌的票是部分窗口相关：有效日为 2 时恒为 ±1，为 1 时为 0。|corr| 的上界仍是 1，但这些票会在截面两端聚集。PI 写的「约 7%」我没法核对，请 PI 给出 count<20 的截面占比，并看它们是否集中在一端（与 ListAge 相关）。
+      - 定义提醒二（不挡，r2 已提出，仍未答复）：day_first 取第一个非 NaN 分钟（dt_day.py:129；common.py:467），只有 09:30 那一列有值时才等于集合竞价。coverage 0.998–0.999 说明表达式几乎总有定义，但 col 0 的覆盖率没有报告。
+      - 机械成分（种子 11）：c = (1−s)·c_rest，其中 s 为第一分钟成交额占全天的比例（它在 c 的分子里权重为 0）。所以 corr(c, s) 的符号机械地为负，它量的是 s 的个股波动相对 c_rest 波动的大小，而不是「时点前移」。按 §3 不挡（不是同一个东西，只是部分机械重合），但它的 alpha 来源应归到集合竞价份额的稳定性。
+
+      分种子（|ρ| 为 原始 / 残差；「如果有 alpha」一句）：
+      1 cross_corr(c, G, 60)：0.29 / 0.22。隔夜消息与日内成交时点的 60 日耦合。如果有 alpha，最可能来自参与者结构（机构、知情占比）决定的跳空反应。
+      2 同 1，窗口 40：0.22 / 0.15。与 1 同骨架只差窗口，PI 若只要一个可删 2、3；审计不划（family (1) 明写了 40/60/120 的探索）。alpha 来源同 1，噪声更大。
+      3 同 1，窗口 120：0.27 / 0.18。慢版本，换手更低，alpha 来源同 1。
+      4 cross_corr(c, |G−1|, 60)：0.46 / 0.38。跳空幅度（消息冲击强度）与时点的关系。如果有 alpha，来自大冲击日的交易时点是否前移。
+      5 cross_corr(c, G 滞后一日, 60)：0.25 / 0.18。消息反应的延迟消化。如果有 alpha，来自隔夜消息在次日的延续。
+      6 cross_corr(c, log 成交额日环比, 60)：0.37 / 0.35。放量日的时点结构；liq 控制 0.10，较干净。如果有 alpha，来自放量的性质（信息 vs 流动性）。
+      7 cross_corr(c, cross_delay(day_sum(Ret),1), 60)：0.23 / 0.11。前一日涨跌后的时点变化（追涨或恐慌）。与 rev 控制 0.12 可能部分重合，残差后已降到 0.11。
+      8 cross_corr(c, G − C/O, 60)：0.11 / 0.11，五个控制全部 ≤0.07。隔夜项减日内项，与 head 和控制基本正交，是本位最独立的一条。如果有 alpha，来自隔夜与日内信息结构的个股差异。
+      9 cross_corr(c, day_signed_ratio(Ret,Amt), 60)：0.25 / 0.21。同日净买压的时点。如果有 alpha，来自买压集中在开盘还是尾盘。
+      10 cross_corr(c, day_wmean(Ret,Amt), 60)：0.32 / 0.26。成交额加权收益与时点。如果有 alpha，来自「钱经历的收益」与交易时点的关系。
+      11 cross_corr(c, div(day_first, day_sum), 60)：0.50 / 0.37（本位最高）。机械项见上；如果有 alpha，只能来自竞价份额的个股波动。
+      12 cross_corr(c(Amt)−c(Volume), G, 60)：0.13 / 0.10。成交价的日内漂移与隔夜跳空的耦合。如果有 alpha，来自价格路径与隔夜消息的交互。
+      13 cs_rank(种子 1) + cs_rank(cross_corr(c, log(day_sum(Amt)), 60))：0.43 / 0.36。两项秩和，即跳空耦合与成交额水平耦合的合成。distinct 0.80 偏低（秩和并列较多），不挡。
+      14 cross_mean(cross_corr(c,G,40),20)：0.25 / 0.19。种子 2 的 20 日平滑，换手更低，alpha 来源同 2。
+
+      划掉的种子：无。没有数学问题；没有与 head 或控制 |ρ| ≥ 0.7 / 0.8 的种子（自动规则不触发）；2、3 与 1 的窗口重复按 family (1) 的设计保留；14 是平滑版，不是重复。
+      请 PI 知悉：种子 1、2、3、14 同骨架，13 含 1；种子间 |ρ| 表里没有，请 PI 算出后决定是否留一个。
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |
+      【位 b：N 新想法，集合竞价分钟成交额与日内形态量的 60 日关系】
+      核对只用了 corr_1.json、loc 的 train / valid 数和源码，没有计算测试段读数。inspired_by 引用的 903 / 908 / 911 的 r3 数字我核对过：903 的 cross_corr(c, G, 60) 为 train 1.45 / valid 2.40；908 的 cross_corr(day_first, kurt, 60) 为 1.95 / 2.10；911 的 cross_corr(div(day_first, es), es, 60) 为 1.79 / 1.79。与文中一致。
+
+      新颖度 4。16 个种子都以 day_first(Amt)（或 Volume 版）为一端；9 个 head 里没有一个用到 day_first、cross_corr 或 cross_reg*。对 head 的原始 |ρ| 最高 0.53（种子 4），残差最高 0.41（种子 4）；对控制最高 0.36（种子 4，known；liq 0.33）。不给 5 的理由：多个种子只差字段或窗口（2 与 6、1 与 7、1 与 16），实际独立的构造约 10 个。
+
+      合理度 4。逐个算子核对：
+      - day_first = first_valid_last（dt_day.py:129；common.py:467）；day_kurt = m4/m2² − 3（common.py:418），上界约为分钟数 241，不爆点；day_es_ratio_hi 在分位数近零时为 NaN，对正的成交额 ≥ 1，作分母安全（ops_ext.py:665 起）；day_skew 的 z 有界；day_signed_ratio ∈ [−1,1]（ops_ext.py:122）；day_gini ∈ [0,1]（ops_ext.py:136）；day_std(Ret) 有界。in_slice 的列号与网格一致（col 0 = 09:30 竞价，col 121 = 13:01）。
+      - cross_reg_fvalue = rolling_ols 的 F（common.py:643–670，count>2 才输出）。对简单回归，F 是 r² 的单调函数，所以它是「|相关|」的排序版，丢了符号（种子 2、6）。这不是错误，但它的 alpha 只能来自关系强弱，不来自方向。
+      - 没有 §4 数学问题；没有 ts_rank / cross_rank / in_rank_rolling；无前视（day_first 在 09:30 已知，形态量收盘后才算）。
+      - 定义依赖（与位 a 同）：day_first / day_last 取第一 / 最后一个非 NaN 分钟；col 0 或 col 240 缺失时会退化为相邻分钟，覆盖率未报告。
+      - 机械重合：种子 1、3、4、5、7、9、10、16 的形态量（kurt、es、skew）内部含第一分钟，day_first 与形态量的相关部分由第一分钟在尖峰统计里的权重决定。PI 在假设里已承认，不挡。
+      - 疑似重复（请 PI 算种子间 |ρ| 后决定）：2 与 6 只差字段（es_ratio_hi 的 Volume 版与 Amt 版），日内价格变动小时两者应很接近；1 与 16 只差窗口（60 / 120）；7 是 1 的 Volume 版。§3 只在「明显是同一个东西」时划，表里没有种子间 |ρ|，不能确证，审计不划。
+
+      分种子（|ρ| 为 原始 / 残差；「如果有 alpha」一句）：
+      1 cross_corr(day_first, day_kurt, 60)：0.47 / 0.36。开盘竞价放量是否把日内尖峰带起来。如果有 alpha，来自竞价参与者结构（信息驱动的竞价放量 vs 盘中情绪尖峰）；有机械重合。
+      2 cross_reg_fvalue(day_first, es_ratio_hi(Volume), 60)：0.39 / 0.31。竞价额与尾部形态的关系强弱（不分方向）。如果有 alpha，来自竞价放量与尾部形态的耦合强度。与 6 可能近似重复。
+      3 cross_corr(day_first / es_ratio_hi(Amt), es_ratio_hi(Amt), 60)：0.41 / 0.35。竞价额按尾部形态归一后与尾部形态的关系。如果有 alpha，来自尾部形态的变化是否由竞价规模驱动。
+      4 cross_corr(div(day_first, day_sum), day_skew, 60)：0.53 / 0.41（本位最高）。竞价集中度与日内偏度的关系。如果有 alpha，来自开盘集中的偏态（大单开盘或尾部拉升）；known 0.36、liq 0.33，仍低于 0.8。
+      5 cross_corr(day_first, es_ratio_hi(Amt), 60)：0.48 / 0.39。竞价额与尾部放大（尖峰频率）的关系。如果有 alpha，来自开盘尖峰的频率。
+      6 cross_reg_fvalue(day_first, es_ratio_hi(Amt), 60)：0.39 / 0.31。2 的 Amt 版，与 2、5 的重复关系见上。alpha 来源同 2。
+      7 cross_corr(day_first(Volume), day_kurt(Volume), 60)：0.48 / 0.37。1 的 Volume 版，同一机制。
+      8 cross_corr(day_last, day_kurt, 60)：0.11 / 0.11，控制全部 ≤ 0.10。收盘集合竞价放量与尖峰的关系，是 1 的对照。如果有 alpha，来自收盘被动流量或尾盘拉升的尖峰。
+      9 cross_corr(day_first, kurt, 60) − cross_corr(day_last, kurt, 60)：0.48 / 0.38。开盘端减收盘端。如果有 alpha，来自开盘与收盘尖峰结构的不对称。
+      10 cross_corr(尾盘 30 分钟份额, kurt, 60)：0.47 / 0.33。尾盘放量是否造成尖峰。如果有 alpha，来自尾盘拉升或被动流量。
+      11 cross_corr(day_first, G, 60)：0.23 / 0.20，控制全部 ≤ 0.13。竞价额与隔夜跳空：隔夜消息是否带动开盘竞价放量。如果有 alpha，来自信息交易者在集合竞价的参与。本位机制最直接的一条。
+      12 cross_corr(div(day_first, day_sum), G, 60)：0.22 / 0.17。11 的去水平份额版。alpha 来源同 11。
+      13 cross_corr(day_first, cross_delay(day_sum(Amt),1), 60)：0.09 / 0.14。开盘集中与量能的日间持续性。如果有 alpha，来自量能持续。
+      14 cross_corr(day_first, day_std(Ret), 60)：0.25 / 0.14。竞价放量与日内波动的同步。如果有 alpha，来自竞价冲击推动日内波动；liq 0.28、known 0.29 是本位第二高的控制列，仍低于 0.8。
+      15 cross_corr(day_first, day_signed_ratio(Ret,Amt), 60)：0.07 / 0.04。竞价放量是否伴随净买入（知情买盘）。最弱，保留，请 PI 知悉。
+      16 cross_corr(day_first, kurt, 120)：0.40 / 0.28。1 的 120 日版，慢变量。alpha 来源同 1。
+
+      划掉的种子：无。没有数学问题；没有与 head 或控制 |ρ| ≥ 0.7 / 0.8 的种子（自动规则不触发）；重复只是疑似，表里没有种子间 |ρ|，不划。
+      请 PI 核对：2 与 6、1 与 7、1 与 16 的种子间 |ρ|；day_first 的 col 0 覆盖率。
+
+R:
+  - head: 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+    soundness: 4
+    reasons: |
+      合理度 4。in_slice 为闭区间列切片（dt_in.py:324）。网格 col 121 = 13:01，所以 196–240 = 14:16–15:00（45 分钟），181–240 = 14:01–15:00，211–240 = 14:31–15:00（与 head 一致）。分母 day_sum(Amt) 在全缺失日为 NaN（common.py:391），无除零。没有 §4 问题。
+      变体 1、2、4 与 head 的 |ρ| 为 0.89–0.95，已知族 |ρ| 0.47–0.48，过 0.5 门，是替换候选。变体 3（30 日均值）已知族 0.52，不过门，只能作为 GP 起点。变体 4（Volume 口径）与变体 1 基本重合，信息增量很小。「尾盘窗口太窄」的诊断有 908 的 196–240 样本内数（train 1.92 / valid 1.96，已核对）支撑。如果有 alpha，最可能来自尾盘 45 分钟的参与者结构，与 head 同源。
+  - head: 'cs_regres(cross_mean(day_centroid(Amt), 12), LogFloatShares)'
+    soundness: 4
+    reasons: |
+      合理度 4。cs_regres(Y, X) 是逐日截面 OLS（nd_cs.py:254），没有时间热身问题。窗口 14 / 16 / 17 的已知族 |ρ| 为 0.46 / 0.47 / 0.48（corr_1.json），离 0.5 门只差 0.02–0.04；选窗口是门内搜索，不是数学问题，但 PI 应知道门的余量很薄。与 head 的 |ρ| 为 0.92–0.97，属于替换候选。如果有 alpha，最可能来自去掉流通股本暴露后的重心慢水平。
+  - head: 'cs_first_low20(cross_mean(sub(ts_quantile_q25(cs_mask_top_replace_mean_neg(cs_first_low20(cross_mean(day_centroid(Amt), 10), ListAge)), 20), day_flat_run_max(Amt)), 30), ListAge)'
+    soundness: 4
+    reasons: |
+      合理度 4。去掉外层 ts_quantile_q25 后，sub 的第一项是 cs_mask_top_replace_mean_neg 的截面输出（nd_cs.py:240，把最低 10% 替换为行均值，无爆点），再减 day_flat_run_max（[0,1]）。没有数学问题。变体与 head 的 |ρ| 为 0.90，已知族 0.36。变体保留了 ListAge 最年轻 20% 的沉底结构，与 head 相同；那个台阶暴露是 PI 应留意的问题，但不是本 R 引入的。如果有 alpha，来自截面去尾后的时点水平。
+  - head: 'sub(cross_mean(day_centroid(Amt), 20), mul(0.5, cross_mean(day_centroid(Amt), 240)))'
+    soundness: 4
+    reasons: |
+      合理度 4。sub(c20, 0.35·c240)。240 日基线在 cube 起点后的前 240 天是部分窗口，与 head 同源，不新增问题。系数 0.35 是样本内扫描（0 / 0.5 / 1 的分数）选出的，属于选择偏差，但不是数学问题。与 head 的 |ρ| 为 0.99，几乎同一个信号，只改了系数，替换门需要 score ≥ +0.1，难度不大。如果有 alpha，来自水平与长基线的部分去水平。
+  - head: 'cross_tail_mean_q25(day_centroid(Amt), 60)'
+    soundness: 4
+    reasons: |
+      合理度 4。cross_tail_mean_q25（ops_ext.py:311）在有效日 < 2 时为 NaN，没有问题。60 日窗口的 q25 尾部只有 15 天，加长到 90 / 120 日能减少尾部估计噪声，机制清楚。与 head 的 |ρ| 为 0.84–0.90，已知族 0.35–0.37。如果有 alpha，来自更稳定估计的尾部水平。
+  - head: 'ts_quantile_q25(cs_mask_top_replace_mean_neg(day_centroid(Amt)), 20)'
+    soundness: 4
+    reasons: |
+      合理度 4。ts_quantile_q25 即 ts_quantile(q=0.25)（catalog.py:154）；40 日窗口的 q25 对 20 日的 q25 是同一部件的加长。20 日窗口里 q25 只落在 5 天上，估计噪声大，逻辑成立。与 head 的 |ρ| 为 0.78，残差 0.92，已知族 0.44。如果有 alpha，来自截面去尾后的时序低分位。
+  - head: 'ts_quantile_q25(cs_mask_top_replace_mean_neg(cs_rank(cross_mean(day_centroid(Amt), 30))), 20)'
+    soundness: 4
+    reasons: |
+      合理度 4。与上一条同部件（ts_quantile_q25 的窗口），内层是 30 日均值的截面秩。PI 的理由「40 日里有更多独立天」偏弱：输入已是 30 日平滑，40 日窗口只约有 1.3 个独立的 30 日块，但方差降低的逻辑成立，不是数学问题。与 head 的 |ρ| 为 0.88，已知族 0.43。如果有 alpha，来自 20 日 q25 噪声降低后的同一信号。
+  - head: 'cross_regres(cross_regres(ts_argmin(day_argmin(Ret), 50), ts_stddev(day_wmean(Ret, Amt), 30), 241), ts_stddev(day_wmean(Ret, Amt), 30), 241)'
+    soundness: 3
+    reasons: |
+      合理度 3（不是数学问题，但机制描述与实现不符，且有一个变体是换皮）。
+      - 算子参数顺序与诊断相反。rolling_ols(x, y, d)（common.py:643–670）的 beta = Σdx·dy / Σdx²，dx 来自第一个参数；resid 是第二个参数对第一个参数的残差。因此 cross_regres(a, b, d) = 「b 对 a 的滚动回归残差」（dt_cross.py:309）。M3 的内层 cross_regres(A, Z, 241) 是 Z（30 日成交额加权收益波动）对 A（50 日 argmin 位置）取残差，外层是 Z 对内层残差取残差。PI 写的是「argmin 位置对波动取残差」，方向相反。
+      - PI 的「外层多余、残差的残差几乎等于第一次残差」诊断与自家表不符。R8 变体 1（只保留单层）与 M3 的 |ρ| 只有 0.22（corr_1.json 的 top_heads），不是接近 1 的冗余版本；变体 1 是另一个信号，不是去冗余。
+      - 变体 3（Volume 加权）与 M3 的 |ρ| 为 1.00，是同一个 head 的换皮，没有信息增量（day_wmean 的 Amt 与 Volume 权重在日内价格变动小时几乎相同）。
+      - 数学上没有 §4 的问题：cs_regres / rolling_ols 有 var > EPS 保护；ts_argmin 输出 pct 位置（nd_ts.py:187），day_argmin 输出列号（dt_day.py:179），ties 上取第一个，零收益分钟多时会堆在 0，但不系统；没有 nanrank_last 问题。
+      - 但 241 日回归窗口在 cube 起点之后的前约 240 个交易日是部分窗口（rolling_ols 允许 count ≥ 2，count = 2 时残差恰为 0）。规则 §1 写 train 从 2018-01-02 起；若 cube 的第一天即此日，2018 年约 240 天是部分窗口 OLS。M3 的 min 分数（train 0.68，valid 0.79）正好由 train 一侧绑定，所以它可能部分来自 2018 年的部分窗口。PI 应核对 cube 起点，并看去掉 2018 年后的 train 分数。
+      - 如果有 alpha，最可能来自「成交额加权收益波动」与「极端分钟时点」的二阶关系。变体 1（单层）若有 alpha，是另一个机制（波动相对极端分钟位置的残差），应单独评估，不应当作冗余版本。
+
+summary: 'a 位（E，核心 day_centroid(Amt)，本实验第 2 个 E）14 个种子全部放行，新颖度 4、合理度 4；b 位（N）16 个种子全部放行，新颖度 4、合理度 4；R 1–7 合理度 4，R 8 合理度 3（算子参数顺序与诊断相反，且 241 日窗口的 2018 部分窗口需核对）；未见 §4 数学问题；请 PI 核对 day_first 的 col 0 覆盖、cross_corr 小样本窗口的截面占比与种子间 |ρ|。'

@@ -1,0 +1,172 @@
+seed: 901
+round: 3
+slots:
+- type: E
+  core: day_centroid(Amt)
+  hypothesis: 核心 day_centroid(Amt) 是当天成交额沿 241 根分钟棒的重心(0 = 全在开盘,1 = 全在收盘),回答的是钱在一天的什么时候成交。
+    库里 6 个 head 全部是这座矿的「水平」读法:cross_mean(day_centroid(Amt), 5 或 20) 再按 LogFloatShares
+    或名义价分桶、 尾盘 30 分钟占比、day_argmax(Amt) 的 20 日均值与 40 日标准差;它们读的都是一只票的重心位置在横截面上的高低(早盘成交的票做多)。
+    按 GP 库禁令(日度秩 |ρ| ≥ 0.7 或同骨架),重心水平的任何写法(换平滑窗口、换分桶轴、换聚合方式)几乎都会被拒,继续深挖水平没有产出空间, 所以本任务把外围放在「耦合」上:cross_corr(day_centroid(Amt),
+    X, d) 是这只票自己最近 d 天里,成交的时点与另一个日度序列 X 同升同降的程度。 皮尔逊相关对重心做仿射变换不变,数学上丢掉了重心的水平,所以与水平型
+    head 在构造上不重叠,它回答的是另一个问题:这只票的早盘或尾盘成交是被什么驱动的。 具体分六路,全部原样含核心。 (1) 隔夜信息:X 取隔夜缺口 day_first(Open)
+    / 前一日收盘 - 1(窗口 30、120 日),取前一日的重心对今天缺口(ts_delay 1 日,没有前视), 以及缺口耦合减去日内收益耦合(隔夜与日内两类信息的拆分);早盘成交在好消息高开日偏早、坏消息低开日偏晚,说明早盘成交是事件型的信息成交,
+    对应 Admati 与 Pfleiderer 1988 的信息交易集中在开盘,以及 Berkman 等 2012 的隔夜价差与开盘买入。 (2) 价格漂移:X
+    取当日收盘到收盘收益、开盘到收盘收益、前一日收益、5 日与 20 日价格比,问钱的时点是否随价格走势同向。 (3) 活跃度:X 取 log(day_sum(Amt))(120
+    日)和 day_std(Ret)(60 日),成交时点由当日活跃度还是由波动驱动。 (4) 与价格运动时点同步:X 取 day_centroid(Ret)(|Ret|
+    的重心),钱是否追着价格波动走。 (5) 与全市场同步:X 取 cs_mean(day_centroid(Amt))(当日全市场平均重心,只用当天截面),同步高说明是机械的指数
+    / 被动型成交,不同步说明是个股自己的特异成交。 (6) 日内分布形状:X 取 day_kurt(Amt)、day_gini(Amt)(成交集中度)和 day_signed_ratio(Ret,
+    Amt)(上涨分钟的成交占比减下跌分钟的成交占比),问成交的时点和成交的集中度、方向是否绑在一起。 为什么和库里已有的不同:相关系数在 [-1, 1],对重心水平不敏感,与水平型
+    head 的横截面秩只会通过「重心更不稳的票相关更噪」这类弱途径相关; 与 5 个控制的关系也只能通过窗口内的共同波动进入,不是流动性 / 波动 / 市值
+    / 20 日反转 / 已知族的换写。 为什么样本外还会在:耦合系数反映的是这只票的交易者构成(事件型的散户与消息交易者,对机械的指数与算法成交)和信息到达方式,这些变化缓慢;
+    窗口 30 到 120 日把单日噪声平均掉;最坏的情形是它只是水平型信号的弱化版,那样会被库禁令拒绝或在新尺子下得不到分,不会伪装成新 head。 我另读了其他种子第
+    2 轮快照里的样本内读数(规则 5 允许),其中核心为 day_centroid(Amt) 的耦合型写法在别处的样本内是强的,这不当作本种子的证据,只用来选了「耦合」这条路;
+    本任务的具体伙伴序列和窗口与那些种子的写法并不相同。 数学上:cross_corr 在窗口内重心或伙伴序列为常数时给缺失;缺口与收益的分母是前一日或当日开盘的后复权价,恒为正;log(day_sum(Amt))
+    在停牌日是缺失; day_centroid(Ret) 在 |Ret| 全为 0 的日(一字板)是缺失;cs_mean 只用当天截面;ts_delay 只取过去;没有除以近零的量,没有前视。
+  literature:
+  - source: 'Admati and Pfleiderer, A theory of intraday patterns: volume and price
+      variability, Review of Financial Studies'
+    year: '1988'
+  - source: 'Berkman, Koch, Tuttle and Zhang, Paying attention: overnight returns
+      and the hidden cost of buying at the open, Journal of Financial and Quantitative
+      Analysis'
+    year: '2012'
+  seeds:
+  - cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 30)
+  - cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 120)
+  - cross_corr(ts_delay(day_centroid(Amt), 1), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - sub(cross_corr(day_centroid(Amt), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 60), cross_corr(day_centroid(Amt), sub(div(day_last(Close), day_first(Open)),
+    1), 60))
+  - cross_corr(day_centroid(Amt), sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_corr(day_centroid(Amt), sub(div(day_last(Close), day_first(Open)), 1), 60)
+  - cross_corr(day_centroid(Amt), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 1), 60)
+  - cross_corr(day_centroid(Amt), div(day_last(Close), ts_delay(day_last(Close), 5)),
+    60)
+  - cross_corr(day_centroid(Amt), div(day_last(Close), ts_delay(day_last(Close), 20)),
+    90)
+  - cross_corr(day_centroid(Amt), log(day_sum(Amt)), 120)
+  - cross_corr(day_centroid(Amt), day_std(Ret), 60)
+  - cross_corr(day_centroid(Amt), day_centroid(Ret), 60)
+  - cross_corr(day_centroid(Amt), cs_mean(day_centroid(Amt)), 90)
+  - cross_corr(day_centroid(Amt), day_kurt(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_gini(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)
+- type: N
+  hypothesis: 想法:不看「什么时候成交」,看「成交与价格怎样耦合」。库里 6 个 head 全部是成交时点的水平,这个位刻意避开时点量(种子里没有 day_centroid、day_argmax、in_slice
+    的时点占比), 改读逐股的量价耦合系数:一只票自己最近 60 到 241 天里,两个日度序列(成交额、收益、波动、隔夜缺口、日内收益)同升同降的程度。 皮尔逊相关无量纲、有界、丢掉两个序列各自的水平,是一个换手低、与流动性
+    / 波动 / 市值 / 反转的水平暴露很弱的慢特质。 五个子机制,每个种子是其中一个选择。 (1) 信息型还是流动性型成交:Llorente、Michaely、Saar
+    与 Wang 2002 指出,成交额伴随的价格变动在信息型交易的票上延续、在对冲 / 流动性型交易的票上反转; cross_corr(log(day_sum(Amt)),
+    日收益, d) 与昨日成交额对今日收益的 cross_corr(ts_delay(log(day_sum(Amt)), 1), 日收益, d)(只用过去,没有前视)是这个区分的逐股指纹,
+    Gervais、Kaniel 与 Mingelgrin 2001 的高成交量溢价是同一条线上的横截面版本。窗口取 60、120、241 日。 (2) 杠杆与反杠杆:cross_corr(日收益,
+    day_std(Ret), 60) 为负是常规的杠杆效应(跌时波动升),为正是投机 / 彩票型(涨时波动升); cross_corr(log(day_sum(Amt)),
+    day_std(Ret), 60) 是成交额与波动的耦合,本批共性表里 day_var(High) 的 7 个候选均值 -0.36 对 -1.20(p 0.047),说明波动的结构里有信息。
+    (3) 缺口被抹平还是延续:cross_corr(隔夜缺口, 日内收益, 60) 为负说明高开会被日内回吐(追开盘的散户被反向交易),为正说明信息延续; Lou、Polk
+    与 Skouras 2019 把隔夜与日内收益拆给两类投资者,Berkman 等 2012 讲开盘买入的成本; cross_corr(昨日分钟资金方向 day_signed_ratio(Ret,
+    Amt), 今日缺口, 60) 与 cross_corr(day_signed_ratio(Ret, Amt), 日内收益, 60) 问资金方向是否被价格确认。
+    (4) 与市场同步的程度:cross_corr(日收益, cs_mean(日收益), 120) 是逐股的市场相关,低的票是特质型。 (5) 分钟层面:cross_mean(day_corr(Ret,
+    Amt), 60) 是每天分钟收益与分钟成交额相关的 60 日平均,cross_corr(day_sum(Amt), day_wmean(Ret, Amt),
+    60) 是成交额与资金加权收益的日度耦合。 此外 cross_autocorr(日收益, 60, 1) 是 Lo 与 MacKinlay 式的逐股日收益一阶自相关(同样是耦合系数,只是伙伴序列是自己滞后一日)。
+    其中日收益 = day_last(Close) / ts_delay(day_last(Close), 1) - 1,缺口 = day_first(Open)
+    / ts_delay(day_last(Close), 1) - 1,日内收益 = day_last(Close) / day_first(Open) -
+    1。 与库的差别:库里没有一个 head 含相关系数,也没有一个读收益,全部是成交额的时点量。与 5 个控制:耦合系数不含任何序列的水平,和流动性 / 市值几乎无关;
+    与 20 日反转控制(20 日收益的秩)只通过收益序列的共同波动进入;与波动控制中等相关是可以预期的,新尺子会去掉线性、平方和三次暴露。 为什么样本外还会在:耦合是交易者构成(信息交易者对流动性交易者)与信息到达方式的结果,这类结构变化缓慢;窗口
+    60 到 241 日。 但我明确的预期是这一位多半没有 head:60 日窗口里相关系数的抽样噪声约 0.13,横截面离散里很大一部分是噪声,换手会被 15
+    bp 扣成负夏普; 它的价值是回答「与时点无关的慢耦合能不能在这把尺子上不亏」,并且把第三个位从时点矿上挪开。 数学上:相关系数在窗口内任一序列为常数时给缺失;分母是前一日收盘
+    / 当日开盘的后复权价,恒为正;log(day_sum(Amt)) 在停牌日缺失;ts_delay 只取过去; cs_mean 只用当天截面;day_corr
+    在分钟数不足时缺失;没有除以近零的量,没有前视。
+  inspired_by: 本批共性表:day_wmean(Ret, Amt)(13 个,-0.65 对 -1.19,p 0.025)与 sub(day_wmean(Ret,
+    Amt), day_mean(Ret))(8 个,+0.59,p 0.036)说明成交与方向的关系里有信息; day_var(High)(7 个,-0.36
+    对 -1.20,p 0.047)说明波动的结构有信息;第 1 轮 N 位把方向做成 120 日平均,train 约 0、valid 约 +1,水平型的方向读法不稳,
+    第 3 轮改用耦合系数(去水平)重读同一个量价关系
+  literature:
+  - source: Llorente, Michaely, Saar and Wang, Dynamic volume-return relation of individual
+      stocks, Review of Financial Studies
+    year: '2002'
+  - source: Gervais, Kaniel and Mingelgrin, The high-volume return premium, Journal
+      of Finance
+    year: '2001'
+  - source: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected
+      returns, Journal of Financial Economics'
+    year: '2019'
+  seeds:
+  - cross_corr(log(day_sum(Amt)), sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_corr(ts_delay(log(day_sum(Amt)), 1), sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_corr(log(day_sum(Amt)), sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 241)
+  - cross_corr(log(day_sum(Amt)), day_std(Ret), 60)
+  - cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), day_std(Ret),
+    60)
+  - cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1), 60)
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), log(day_sum(Amt)),
+    60)
+  - cross_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_corr(day_signed_ratio(Ret, Amt), sub(div(day_last(Close), day_first(Open)),
+    1), 60)
+  - cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), cs_mean(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1)), 120)
+  - cross_mean(day_corr(Ret, Amt), 60)
+  - cross_corr(day_sum(Amt), day_wmean(Ret, Amt), 60)
+  - cross_autocorr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60,
+    1)
+R:
+- head: cs_last_high40(cross_mean(cross_mean(day_centroid(Amt), 5), 5), LogFloatShares)
+  why: score +0.64 在六个 head 里最低,train +0.64 是约束项(valid +1.47)。烂的部件是最外层的 cs_last_high40:它是字典序的「分段」写法,
+    只把 LogFloatShares 最高的 40% 作为一个整体处理,段内的重心不再比较;而同一个内层 cross_mean(cross_mean(day_centroid(Amt),
+    5), 5) 在共性表里含它的 4 个候选均值 +1.00(对 -1.19,p 0.0006),按 LogFloatShares 做 cs_bucket_zscore
+    的邻居 cs_bucket_zscore(cross_mean(day_centroid(Amt), 5), LogFloatShares) 拆解里自身 score
+    是 +1.17。所以换成 cs_bucket_zscore(同桶 z 分数), 或者换桶的轴,或者干脆去掉分桶。
+  variants:
+  - cs_bucket_zscore(cross_mean(cross_mean(day_centroid(Amt), 5), 5), LogFloatShares)
+  - cs_bucket_zscore(cross_mean(cross_mean(day_centroid(Amt), 5), 5), sub(sub(LogFloatCap,
+    LogFloatShares), LogFloatShares))
+  - cross_mean(cross_mean(day_centroid(Amt), 5), 5)
+- head: cs_bucket_rank(cross_mean(day_argmax(Amt), 20), day_max(Close))
+  why: score +0.69,train +0.69 约束(valid +1.42)。烂的部件猜在分桶轴 day_max(Close):它是当日最高价,是一个随行情涨跌每天都在变的价格水平,
+    桶本身每天换成员,不是稳定的结构;同族里表现最好的分桶轴是 LogFloatShares(r2 N 位的 top 5 里 cs_bucket_zscore
+    配 LogFloatShares 的 3 个均 ≥ +1.5)。 并且 cs_bucket_rank 只留桶内百分位,丢掉桶内的离散程度,cs_bucket_zscore
+    保留。所以换轴、换 rank 为 zscore,并给一个无分桶的对照。
+  variants:
+  - cs_bucket_rank(cross_mean(day_argmax(Amt), 20), LogFloatShares)
+  - cs_bucket_zscore(cross_mean(day_argmax(Amt), 20), LogFloatShares)
+  - cross_mean(day_argmax(Amt), 20)
+- head: ts_stddev(signedpower(day_argmax(Amt)), 40)
+  why: score +0.82 但窗口很窄:拆解里 ts_stddev 窗口改 20 日得 +0.05、改 80 日得 -0.48(valid 是约束项),只有
+    30 到 40 日附近站得住;去掉 signedpower 是 -0.47。 烂的部件是「单一窗口的标准差」:它对出峰位置的稳定性只看一段,所以尝试把窗口两端平均(30
+    与 50 的标准差相加)、 再套一层 20 日平滑,以及像其他 head 一样按 LogFloatShares 做同桶 z 分数。
+  variants:
+  - cs_bucket_zscore(ts_stddev(signedpower(day_argmax(Amt)), 40), LogFloatShares)
+  - add(ts_stddev(signedpower(day_argmax(Amt)), 30), ts_stddev(signedpower(day_argmax(Amt)),
+    50))
+  - cross_mean(ts_stddev(signedpower(day_argmax(Amt)), 40), 20)
+- head: cs_bucket_zscore(cross_mean(div(cs_bucket_zscore(cross_mean(day_centroid(Amt),
+    5), LogFloatShares), day_sum(Amt)), 20), LogFloatShares)
+  why: score +1.09。拆解显示烂的部件是 div(..., day_sum(Amt)):把分桶后的 z 分数除以当日成交额,量纲不统一(z 分数可正可负、成交额是水平),
+    去掉它的两个变体在拆解里已经比原 head 高(+1.49、+1.30,增益 +0.40 与 +0.21),直接收两个。
+  variants:
+  - cs_bucket_zscore(cross_mean(cs_bucket_zscore(cross_mean(day_centroid(Amt), 5),
+    LogFloatShares), 20), LogFloatShares)
+  - cs_bucket_zscore(div(cs_bucket_zscore(cross_mean(day_centroid(Amt), 5), LogFloatShares),
+    day_sum(Amt)), LogFloatShares)
+- head: cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)),
+    20), LogFloatShares)
+  why: score +1.56(train +1.78,valid +1.56)。拆解里分桶轴 LogFloatShares 的必要性很强(去掉分桶的 knockout
+    是 -0.17), 第 1 号 head 的经验是把分桶轴换成名义价与股本的组合 sub(sub(LogFloatCap, LogFloatShares),
+    LogFloatShares) 能让同一个内层从 +1.34 升到 +1.63, 所以对尾盘占比试同一个轴;平滑窗口 20 日附近是峰(10 日 +0.48、40
+    日 +1.25),试 25 日。
+  variants:
+  - cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)),
+    20), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))
+  - cs_bucket_zscore(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)),
+    25), LogFloatShares)
+audit:
+  attempts: 1
+  file: audit_1.yaml

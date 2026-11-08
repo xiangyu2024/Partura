@@ -1,0 +1,52 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12, 13]
+    reasons: |-
+      位 a 是 E 深挖,核心 day_centroid(Amt)。它是快照里 21 个 head 的子树(已在 loc.md 核对)。本实验此前的 E 核心是 W(第 1 轮)与 C20 = cross_mean(day_centroid(Amt),20)(第 2 轮),本位的核心是另一个节点,第一次作为 E 核心,未超每核心至多 2 个 E 位的上限。核心的原始 |ρ| 最大 0.51(低于库禁令的 0.7),与 5 个控制的 |ρ| 为 0.07–0.19(低于 0.8)。每个候选都原样包含核心。抽查 r1、r2 的 missions_final,含该核心的候选外围都是 cs_* 与 cross_mean 的带、排除、阶跃,没有与本位外围相同的。
+
+      创新度 4:我核对过快照 31 个 head,全部是一阶写法(日内量的水平或 20 日均值,外面套带、阶跃、排除),没有任何 cross_corr / cross_reg_* / cross_autocorr / cross_stddev 节点。保留的 14 个种子与 head 的原始 |ρ| 最大 0.34(种子 4),残差最大 0.30;与 5 个控制的 |ρ| 最大 0.36(种子 11 与 size),都不是换写法,所以不给 1。不给 5,因为核心本身是 C 的一阶 head 的子树,新的只是外围的二阶结构。
+
+      划掉的种子:
+      - 12 sub(cross_ema(C,5), cross_ema(C,60)):原始 |ρ| = 0.72,与 cs_bucket_rank(cross_mean(C,20), cross_mean(C,241)) 那条 head 的日度秩相关达到库禁令的 0.7。它也不是二阶的,而是 C 的两个 EMA 之差,和 PI 写的「二阶里最接近一阶的一条」不符。
+      - 13 cs_first_low20(cross_mean(sub(C, day_flat_run_max(Amt)),30), ListAge):原始 |ρ| = 0.90,与 cs_first_high20(cs_first_low20(cross_mean(C,...)...)) 系列 head 几乎是同一个东西,是 R2 的换皮。
+
+      其余 14 个种子不划。核对过的算子(读了源码):cross_delay 向过去平移(dt_cross.py:150),无前视;cross_autocorr(x, d, shift) 的参数是窗口在前、滞后在后,种子 10 的 (C, 60, 1) 写法正确;cross_reg_fvalue 在满窗口时等于 58·ρ²/(1−ρ²),是 |ρ| 的单调变换,不分正负;day_centroid 的分母有 tot>0 护栏;cs_first_low20 等排除只做截面排名,无时序泄漏。
+
+      不挡但要记的两点:(1) 种子 2 是今开对 t−2 收盘的两日价差,不是隔夜跳空。PI 把它放进「隔夜跳空」组是文字错误,不影响合理度。种子 1 与种子 14(ListAge 包装)、种子 1 与 9(F 与 corr 对同一对变量)高度相关,但不是同一表达式,不划。(2) PI 写「前 60 个交易日是部分窗口……不填充,缺失就是缺失」与代码不符:rolling_pair_reduce 用窗口内有效点数计算,没有最少点数,有 2 个有效点时相关恰为 ±1。这影响 train 开头 60 个交易日(约 6%)以及新上市股票的前约 60 个交易日,后者的极端值可能进入多头腿顶部。不是结果的主要来源,所以不挡;若后续要改,应加最少有效点数或 ListAge 排除。
+
+      如果它有 alpha,最可能来自:60 日内成交时点与隔夜跳空、尾部形态、时点自身持续性之间的慢变协动,即持有人或交易者构成(处置效应、追涨型竞价挂单、程序化与习惯性交易的时点固定性),以及知情交易的分批进场。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7]
+    reasons: |-
+      位 b 是 N 新想法。16 个种子与快照 head 的原始 |ρ| 最大 0.45(种子 12),残差最大 0.35(种子 12、15);与 5 个控制的 |ρ| 最大 0.48(种子 10:known 0.48、liq 0.46),都低于 0.8,没有自动划掉的。
+
+      创新度 4:快照里没有二阶节点;day_first(Amt) 只出现在一条一阶 head(sigmoid(... cross_mean(day_first(Amt),20) ...),+0.54)里。这些种子与库里 head 的原始 |ρ| 都在 0.45 以下,不是换写法。
+
+      划掉种子 7:cross_corr(div(day_first(Amt), day_skew(Amt)), day_es_ratio_hi(Amt), 60)。分母 day_skew 是有符号的标准化三阶矩,会穿过 0;div 是 torch.divide,没有护栏(对照 day_es_ratio_hi 里有 1e-8 的护栏)。skew 接近 0 时该值无界,而 60 日 Pearson 对单日爆点极敏感,属于 §4 的「除以近零的量造成的爆点」数值伪影。这一条的依据是数学上无界,不是我测到了它支配截面:我没有在 train 上量 |day_skew| 的频率,PI 若要确认可以先量。其余 15 个种子不划。
+
+      不挡但要记的几点:(1) 种子 1–11、13–16 的 day_first(Amt) 是 yuan 水平,60 日 Pearson 直接作用在原始水平上,一天的开盘集合竞价额若是别的天的数十倍,它就会决定整个窗口的 ρ。这是估计量的统计脆弱,不是 §4 的伪影,不挡。(2) 种子 15 是种子 4 外面包了 cs_last_low20(..., ListAge),种子 16 是种子 1 外面包了同样的排除,只在最年轻 20% 上不同,与被包的种子高度相关但不是同一表达式,不划。种子 4 与 13、种子 1 与 5 是同一对变量的 F 与 corr 写法,同理不划。(3) 种子 12 的 +1000 地板是任意的,Volume 的单位(股或手)任务里没有说明;只要上一日尾分钟量不接近 0,地板不起作用。
+
+      如果它有 alpha,最可能来自:开盘集合竞价额(隔夜信息被一次撮合的那部分)与当日成交结构(爆发度、峰度、偏度、基尼)在 60 日内的协动,即信息事件中知情交易的分批进场(Easley-O'Hara),信息被慢慢吸收、价格随后继续漂移。
+R:
+  - head: 'cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)'
+    soundness: 4
+    reasons: |-
+      in_slice(x, a, b) 是 x[:, a:b+1](dt_in.py:324,闭区间)。轴长 T=241(in_expand 默认 N=241,cross_mean(...,241) 的用法也是这个轴),所以 211..240 对应 14:31–15:00 共 30 根,与 PI 的文字一致。day_sum 全 NaN 时返回 NaN(_sum 有 isfinite 检查),分母为 0 时得 NaN,不会给伪值;20 日均值只用过去,没有前视。机制是尾盘集中度(指数调仓、收盘前的程序化与机构交易),来源明确。切口位置是窗口选择,不是数学问题。变体的起点是样本内挑的,过拟合要 PI 自己留意,但不影响合理度。合理度 4。
+  - head: 'cs_first_high20(cs_first_low20(cross_mean(day_centroid(Amt), 20), ListAge), cross_mean(day_centroid(Amt), 20))'
+    soundness: 4
+    reasons: |-
+      稀疏成交的日子,重心由几笔成交决定,是噪声,这个诊断有依据。day_flat_run_max 的定义(ops_ext.py:415)是最长连续相等分钟数除以有限分钟数,值域 [0,1],与重心同单位,sub 不存在量纲错配。它与流动性相关,PI 用它做减项相当于把非流动性那部分从时点信号里拿掉,机制说得通。变体 a–d 的方向与原 head 一致。合理度 4。
+  - head: 'cross_mean(sub(sub(sub(day_centroid(Ret), day_centroid(Amt)), day_centroid(Amt)), day_centroid(Amt)), 20)'
+    soundness: 3
+    reasons: |-
+      算子上没有问题:两个重心都在 [0,1];Ret 整日为 0 时 day_centroid 给 NaN(tot>0 护栏),不会给 0。问题在机制。Cret − 3·Camt 的 1:3 权重是 PI 用样本内消融(充分性 0.61 → 0.88 → 1.20)挑出来的,变体 4、5、6 又把权重继续往 Camt 推。PI 自己的说法是 Ret 项「只是在里面捣乱」、纯 −C20 更好,所以这一组的机制实际收敛到 C20 本身:相关度表 R 3 的三个变体与 C20 系列 head 的原始 |ρ| 为 0.99–1.00。「价格时点与成交时点错位」本身是能说清的机制,但这组具体权重说不清为什么是 3、4、5 或 6,只是样本内找出来的。不是数学问题,所以不压到 2。合理度 3。
+  - head: 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt), 241))'
+    soundness: 4
+    reasons: |-
+      分组变量 cross_mean(day_centroid(Amt),241) 接近个股常数;cs_bucket_rank(ops_ext.py:239) 是在十个分组内部排名,等于「在长期时点习惯相近的票里比较近期时点的偏移」,机制清楚,也与 PI 的「桶太稳定」诊断相符。前 241 日是有效点的均值,不是 NaN 填充,约占 train 的 24%,影响的是估计精度,不是结果主要由热身期决定。变体缩到 120、60 日是合理的参数探索。合理度 4。
+summary: 'a 位(E,核心 day_centroid(Amt))划掉 12、13,创新 4、合理 4;b 位(N)划掉 7(除以会过零的 day_skew),创新 4、合理 4;R 四组合理度依次 4、4、3、4。'

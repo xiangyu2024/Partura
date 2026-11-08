@@ -1,0 +1,229 @@
+seed: 906
+round: 3
+slots:
+- type: E
+  core: day_centroid(Amt)
+  hypothesis: '【核心 day_centroid(Amt)】= sum(t·|Amt_t|)/sum(|Amt_t|)/(T−1):一天里成交额的重心(0
+    = 全部在 09:30 集合竞价,1 = 全部在收盘)。
+
+
+    证据(全部是样本内):(1) 共性表里含它的 136 个候选均值 +0.61,不含 −0.95(均值差 +1.56,p 0.000);(2) 本轮快照 31
+    个 head 里 21 个读它,其中 15 个含 20 日均值 C20 = cross_mean(day_centroid(Amt), 20);C20 单独
+    +1.34(train +1.72 / valid +1.34),最好的 head 是 C20 外加 ListAge 排除与高 C20 排除(+2.36,train
+    +2.36 / valid +2.38);(3) 这 31 个 head 没有一个含 cross_corr / cross_reg_* / cross_autocorr
+    / cross_stddev(我在三轮的 loc.md 里 grep 过):全是一阶写法,即日度量的水平或 20 日均值,外面套带、阶跃或排除。
+
+
+    一阶这条路上,同一核心的外围已经被前两轮取得很满(第 2 轮 C20 的 E 位 47 个过线、13 个入 head;价位窗口 W 的 E 位 28 个过线、7
+    个入 head),再套一层"C20 外面的带"的边际收益由库禁令(与任一 head 日度秩相关 ≥ 0.7 即拒绝)来裁,基本不会再有新的 head。本位于是不碰一阶:核心留在里面,外围换成二阶,问的是重心的"协动结构"——同一只票最近
+    60 个交易日里,日内成交时点与另一个日度量怎样一起变。
+
+
+    二阶的几组(都读 day_centroid(Amt) 本身,不取均值):
+
+    (A) 重心 × 隔夜跳空 div(day_first(Open), cross_delay(day_last(Close), 1)) 的 60 日相关或回归
+    F 值(种子 1、2、9、14;种子 3 换成跳空绝对值):隔夜信息到达之后,这只票的成交是在开盘就完成(重心低)还是拖到午后 / 尾盘,取决于持有人构成与对新信息的反应方式(处置效应:盈利方马上兑现、亏损方迟迟不卖;追涨型散户在竞价和开盘后立即进场)。相关的符号和强弱是慢变的持有人结构,不是某一天的事件。
+
+    (B) 重心 × 当日成交的爆发度 / 峰度 / 波动 / 成交额规模(种子 4、5、7、15):重心偏离常态的日子是不是也是爆发日——知情交易分批进场(Easley-O''Hara)还是例行成交。
+
+    (C) 重心 × 开盘集合竞价额(种子 6),重心 × Ret 的重心(种子 8:钱在哪里成交 vs 价格在哪里动,60 日同步程度)。
+
+    (D) 重心自身的持续性与稳定性(种子 10 cross_autocorr(...,60,1)、种子 11 cross_stddev(...,60)):"总在同一时段成交"的票(机构程序化
+    / 固定习惯)与时点飘忽的票。
+
+    (E) 近期偏离常态(种子 12:5 日与 60 日 EMA 之差,二阶里最接近一阶的一条)和一阶写法一条(种子 13)。
+
+
+    算子怎样实现它:cross_corr / cross_reg_fvalue / cross_autocorr 都是逐股的 60 日滚动,[−1,1] 内有界或
+    F 值(取排名后进场),量纲无关,与金额水平(流动性、已知族 cross_mean(day_std(Amt),30))没有线性关系;所有 day_* 只用当日已收盘的分钟,cross_delay
+    只取过去,t 日收盘后已知,t+1 进场,没有前视。前 60 个交易日是部分窗口(约占 train 的 6%),不填充,缺失就是缺失。day_es_ratio_hi
+    的分母是当日 95% 分位数、护栏只有 1e-8,极薄的票可能出现个别爆点天(Pearson 对它敏感):所以爆发度这一组同时放了峰度(种子 7)和 gini(在
+    N 位),这两个没有分位数分母;如果信号在它们上也在,就不是除以近零造成的伪影。
+
+
+    已知的样本内读数(同批其他种子的 loc.md;表达式相同则分数相同,不是对本种子的拟合):种子 1 = 903 号种子 +1.45(train +1.45
+    / valid +2.40,方向 −1);种子 2 +0.92(+0.92 / +2.66);种子 4 = 908 号种子 +0.80(+0.80 / +1.72);种子
+    5 +0.73(train +1.19 / valid +0.73);种子 6 = 908 号 +1.20(+1.20 / +1.77);种子 12 = 903
+    号 +0.96(+0.96 / +1.05);种子 13 = 905 号 +2.25(train +2.41 / valid +2.25),它是一阶写法(把
+    day_flat_run_max(Amt) 从重心里减掉、30 日均值、最新上市的 20% 整块推出多头腿),放进来是为了看一阶写法能不能过库禁令,过不了会被相关度表划掉。其余(3、7、8、9、10、11、14、15)是同一结构换伴侣
+    / 换形式,我没有读数。
+
+
+    为什么和以前不一样:前两轮这个核心的外围全是 cs_first_* / cs_last_* / cs_bucket_* 的"带"与 cross_mean;本位外围是时间序列的二阶矩(协动、持续性、稳定性),快照里没有一个这样的节点;与
+    5 个控制:协动与持续性是相关系数 / 自相关,不是金额水平;与现有 head:一阶均值与二阶协动是不同的量,日度秩相关预计偏低(相关度表会给实数,≥ 0.7
+    的种子会被划掉)。
+
+
+    为什么样本外还会在:持有人结构(散户 / 机构、竞价挂单习惯)是慢变的个股属性,60 日协动再取排名,换手低,15 bp 成本吃不掉;已知读数里 train
+    与 valid 都是正的,方向 −1 的几条 valid 高于 train(这个特征和本组带类 head 一样,是 2022–23 红利的嫌疑),所以我不押某一条,押的是"二阶协动里有独立于一阶重心的信息"。交易所竞价与连续竞价规则在样本内没有变。方向由评估在
+    train 上自选。
+
+    '
+  literature:
+  - cite: Odean (1998) Are investors reluctant to realize their losses? Journal of
+      Finance 53
+    year: '1998'
+  - cite: Easley, O'Hara (1987) Price, trade size, and information in securities markets,
+      JFE 19
+    year: '1987'
+  - cite: 'Berkman, Koch, Tuttle, Zhang (2012) Paying attention: overnight returns
+      and the hidden cost of buying at the open, JFQA 47'
+    year: '2012'
+  seeds:
+  - cross_corr(day_centroid(Amt), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 60)
+  - cross_corr(day_centroid(Amt), div(day_first(Open), cross_delay(cross_delay(day_last(Close),
+    1), 1)), 60)
+  - cross_corr(day_centroid(Amt), abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 60)
+  - cross_corr(day_centroid(Amt), day_es_ratio_hi(Amt), 60)
+  - cross_corr(day_centroid(Amt), log(day_sum(Amt)), 60)
+  - cross_corr(day_first(Amt), day_centroid(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_kurt(Amt), 60)
+  - cross_corr(day_centroid(Amt), day_centroid(Ret), 60)
+  - cross_reg_fvalue(day_centroid(Amt), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 60)
+  - cross_autocorr(day_centroid(Amt), 60, 1)
+  - cross_stddev(day_centroid(Amt), 60)
+  - cs_first_low20(cross_corr(day_centroid(Amt), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 60), ListAge)
+  - cross_corr(day_centroid(Amt), day_std(Ret), 60)
+- type: N
+  hypothesis: '【一句话】本种子 31 个 head 全是一阶写法(日内量的水平或均值,外面套带 / 阶跃 / 排除),二阶量——同一只票的两个日内描述量在最近
+    60 个交易日里怎样协动——一个也没有;N 位把"开盘集合竞价额 × 当日成交结构"的 60 日协动放进来。
+
+
+    背景(第 1–3 批与本组两轮):(1) 快照 31 个 head 里 21 个读 day_centroid(Amt)、14 个读 LogFloatCap、8
+    个读 Vwap 价位,0 个含 cross_corr / cross_reg_* / cross_autocorr / cross_stddev。(2) 31
+    个 head 的 valid 平均比 train 高 0.86(最大 +2.6,集中在带 / 阶跃类),是 2022–23 行情的红利嫌疑;重心类里 C20
+    本身 train +1.72 / valid +1.34 不依赖它,但一阶写法被库禁令占满。(3) 同批其他种子在各自的样本内独立地长出同一类二阶 head,且
+    train ≈ valid:908 号种子 cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Volume),
+    60) +2.10(train +2.14 / valid +2.10)、cross_corr(day_first(Amt), day_kurt(Amt),
+    60) +1.95(+1.95 / +2.10);911 号种子 cross_corr(div(day_first(Amt), day_es_ratio_hi(Amt)),
+    day_es_ratio_hi(Amt), 60) +1.79(+1.80 / +1.79)、cross_corr(div(day_first(Amt),
+    day_sum(Amt)), day_skew(Amt), 60) +1.16;三者都是方向 +1。908 号种子还试过窗口:60 日是峰,30 日 train
+    掉到 +0.52 / +0.59,120 日 +1.58 / +0.98,所以窗口不是随手选的。注意这些是同一份样本内数据上的独立搜索重复找到同一结构,不是样本外证据。
+
+
+    机制:day_first(Amt) 是第 0 根格(09:30 集合竞价)的成交额,隔夜信息由挂单者一次性撮合;day_es_ratio_hi / day_kurt
+    / day_skew / day_gini 刻画当天其余分钟的成交是不是被少数几根大单分钟支配(爆发)。逐股 60 日滚动相关(或回归 F 值)问的是:这只票开盘撮合额大的日子,全天是不是也跟着爆发。协动强
+    = 成交由信息事件驱动(竞价建仓之后继续分批进场的知情交易,Easley-O''Hara 的知情交易概率渠道;信息被缓慢吸收,价格随后继续漂移),协动弱 =
+    竞价额主要是例行挂单(被动 / 习惯性挂单)与全天结构无关。它是两个量的相关系数:量纲无关,与金额水平(流动性、已知族 cross_mean(day_std(Amt),30))没有线性关系,新尺子去掉的是对
+    5 个控制的线性 / U 形 / S 形暴露,去不掉这个"协动"。
+
+
+    算子怎样实现:种子 1–11 是 908 / 911 号种子样本内的 head 与其拆解里的同构写法(cross_corr 与 cross_reg_fvalue,峰度
+    / 偏度 / es_ratio / gini 做伴侣,Amt 与 Volume 各一条做对照);种子 12 是 911 号种子的另一条思路(开盘量对前一日最后一分钟量的比例的
+    60 日均值,+0.97,train +0.97 / valid +2.57,方向 +1);种子 13–16 是我加的:同一协动换伴侣(峰度的 F 值、日波动),以及把本组最可靠的一个修饰——最新上市
+    20% 整块排除(ListAge;本组 C20 外加这一层 +1.34 → +1.80,最佳 head 的必要性 +1.02;905、909、910、912
+    号种子的 head 里也都出现)——用在协动上(cs_last_low20 把这些名字推到多头腿之外;方向 +1 时 cs_last_low,方向 −1 时才用
+    cs_first_low)。所有 day_* 只用当日已收盘的分钟,cross_delay 只取过去,t 日收盘后已知,t+1 进场,没有前视。
+
+
+    数学上要核对的点,我自己先列出来:(a) cross_corr 有界;cross_reg_fvalue 在相关接近 ±1 时可以很大,但进场前取截面排名,极端值只是排到端点,不会支配截面;(b)
+    day_es_ratio_hi 的分母是当日 95% 分位数、护栏只有 1e-8,极薄的票可能有个别爆点天,Pearson 对它敏感——所以 11 条里 es_ratio
+    做伴侣的有 6 条,另 5 条用峰度 / 偏度 / gini(没有分位数分母),这些上也成立才说明不是除以近零的伪影;(c) day_first 取当日第一个非缺失值,个别票个别日
+    09:30 缺失会取到 09:31 那根,这样的天很少,也不是 0;(d) 前 60 个交易日是部分窗口(约占 train 的 6%),不填充。
+
+
+    为什么和库里不一样:库里没有一个二阶节点;这些量与 C20、尾盘占比等一阶量的日度秩相关预计偏低(均值与协动是不同的量),相关度表会给实数。为什么样本外还会在:60
+    日协动是慢变的个股属性(持有人 / 交易者类型),取排名后换手低,15 bp 成本吃不掉;已知读数 train 与 valid 同号且接近,不像带类 head
+    那样靠 valid;竞价规则在样本内没变。方向由评估在 train 上自选(已知的都是 +1)。
+
+    '
+  inspired_by: 本组 31 个 head 无一含二阶节点(cross_corr / cross_reg_* / cross_autocorr / cross_stddev),31
+    个 head 的 valid 平均比 train 高 0.86;同批 908 号种子(+2.10 / +1.95)与 911 号种子(+1.79)在开盘集合竞价额
+    × 当日成交爆发度的 60 日协动上独立长出 train ≈ valid 的 head
+  literature:
+  - cite: Easley, O'Hara (1987) Price, trade size, and information in securities markets,
+      JFE 19
+    year: '1987'
+  - cite: 'Admati, Pfleiderer (1988) A theory of intraday patterns: volume and price
+      variability, RFS 1'
+    year: '1988'
+  - cite: Barclay, Hendershott (2003) Price discovery and trading after hours, RFS
+      16
+    year: '2003'
+  seeds:
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Amt), 60)
+  - cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Volume), 60)
+  - cross_reg_fvalue(day_first(Volume), day_es_ratio_hi(Volume), 60)
+  - cross_corr(day_first(Amt), day_kurt(Amt), 60)
+  - cross_corr(day_first(Amt), day_es_ratio_hi(Amt), 60)
+  - cross_corr(div(day_first(Amt), day_es_ratio_hi(Amt)), day_es_ratio_hi(Amt), 60)
+  - cross_corr(day_first(Amt), day_skew(Amt), 60)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), day_skew(Amt), 60)
+  - cross_corr(day_first(Amt), day_gini(Amt), 60)
+  - cross_corr(day_first(Volume), day_kurt(Volume), 60)
+  - cross_mean(div(day_first(Volume), add(cross_delay(day_last(Volume), 1), 1000)),
+    60)
+  - cross_reg_fvalue(day_first(Amt), day_kurt(Amt), 60)
+  - cross_reg_fvalue(day_first(Amt), day_std(Ret), 60)
+  - cs_last_low20(cross_corr(day_first(Amt), day_kurt(Amt), 60), ListAge)
+  - cs_last_low20(cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Amt), 60), ListAge)
+R:
+- head: cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), 20)
+  why: 烂的部件有两处。(1) 尾盘窗口的切口:in_slice(Amt, 211, 240) 是 14:31 起的 30 分钟,这一刀是任意的,既把收盘集合竞价(最后
+    3 根)和收盘前半小时的连续竞价混在一起,又可能漏掉从 14:15 就开始的收盘前调仓。依据:本组拆解里窗口 20→10 / 40 日分数都掉(+1.53
+    / +1.31),说明信息在"占比"这个性质而不在均值窗口;同批 908 号种子在样本内试了起点 196(45 分钟)得 +1.92(train +1.92
+    / valid +1.96),比 211 起点的 +1.81(+1.94 / +1.81)高 0.11,Volume 版本也是 196 起点 +1.86(train
+    +1.86 / valid +2.05)对 211 起点 +1.70(+1.91 / +1.70),越靠前越好,所以变体把起点依次前移(196、181、166),并试最后
+    15 分钟(226)看窄的一端是不是更差。(2) 没有排除最新上市的名字:本组 C20 加 ListAge 排除 +1.34 → +1.80,再加高值排除到
+    +2.36,同一个修饰(最新 20% 整块推出多头腿,方向 −1 用 cs_first_low20)加在尾盘占比上(变体 4、5、6),变体 6 还仿照最佳
+    head 的结构再加一层"尾盘占比最高 20% 排除"。方向与原 head 相同,所以与原 head 的日度秩相关应当 ≥ 0.5,通过了就是替换而不是新
+    head。
+  variants:
+  - cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 20)
+  - cross_mean(div(day_sum(in_slice(Amt, 181, 240)), day_sum(Amt)), 20)
+  - cross_mean(div(day_sum(in_slice(Amt, 166, 240)), day_sum(Amt)), 20)
+  - cs_first_low20(cross_mean(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)),
+    20), ListAge)
+  - cs_first_low20(cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)),
+    20), ListAge)
+  - cs_first_high20(cs_first_low20(cross_mean(div(day_sum(in_slice(Amt, 196, 240)),
+    day_sum(Amt)), 20), ListAge), cross_mean(div(day_sum(in_slice(Amt, 196, 240)),
+    day_sum(Amt)), 20))
+  - cross_mean(div(day_sum(in_slice(Amt, 226, 240)), day_sum(Amt)), 20)
+- head: cs_first_high20(cs_first_low20(cross_mean(day_centroid(Amt), 20), ListAge),
+    cross_mean(day_centroid(Amt), 20))
+  why: 烂的部件是里面的 C20 对稀疏成交的名字不干净:重心是 sum(t·|Amt_t|)/sum|Amt_t| 的比例,一天里只有寥寥几根有成交额的票,重心由几笔成交决定,是噪声;day_flat_run_max(Amt)
+    量的正是"连续多少根成交额相同(多半是 0)",是 Lesmond-Ogden-Trzcinka 的零成交 / 零收益流动性度量的分钟版。依据:905 号种子在样本内,cs_first_low20(cross_mean(day_centroid(Amt),
+    30), ListAge) 是 +2.07(train +2.31 / valid +2.07),把重心换成 sub(day_centroid(Amt),
+    day_flat_run_max(Amt)) 后是 +2.25(+2.41 / +2.25),加 0.18;本组拆解里窗口 40 日的 +1.92 / 10
+    日的 +1.76 说明窗口也还有空间,905 号种子的 30 日在单层带里比 20 日(本组 +1.80)好 0.27,变体 c、d 把窗口换成 30。变体
+    a、b 把 flat-run 减项放进内层(b 同时放进外层的高值排除),方向仍是 −1,与原 head 的相关预计 ≥ 0.5。
+  variants:
+  - cs_first_high20(cs_first_low20(cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)),
+    20), ListAge), cross_mean(day_centroid(Amt), 20))
+  - cs_first_high20(cs_first_low20(cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)),
+    30), ListAge), cross_mean(sub(day_centroid(Amt), day_flat_run_max(Amt)), 30))
+  - cs_first_high20(cs_first_low20(cross_mean(day_centroid(Amt), 30), ListAge), cross_mean(day_centroid(Amt),
+    30))
+  - cs_first_high20(cs_first_low20(cross_mean(day_centroid(Amt), 30), ListAge), cross_mean(day_centroid(Amt),
+    20))
+- head: cross_mean(sub(sub(sub(day_centroid(Ret), day_centroid(Amt)), day_centroid(Amt)),
+    day_centroid(Amt)), 20)
+  why: 烂的部件是 day_centroid(Ret) 这一项的权重:它单独的分数是 −2.89(train −1.77 / valid −2.89),和 Amt
+    重心方向相反;本组拆解里按链累加 Amt 的次数分数单调上升,sufficiency 0.61(1 个)→ 0.88(2 个)→ 1.20(3 个),敲除第
+    3 个 Amt 项掉 0.40(必要性 +0.40)——这条 head 越往"纯 −Amt 重心"靠越好,Ret 项只是在里面捣乱(纯 C20 单独是 +1.34,train
+    比这条高)。908 号种子样本内 sub(day_centroid(Ret), mul(day_centroid(Volume), 3)) +1.25 对
+    mul(..., 1) 的 +0.63,权重也是越大越好。变体把 Amt 的权重从 3 提到 4、5、6(用 mul 写),窗口保持 20 日;方向仍是 +1,与原
+    head 的相关预计接近 1,通过了就是替换。
+  variants:
+  - cross_mean(sub(day_centroid(Ret), mul(day_centroid(Amt), 4)), 20)
+  - cross_mean(sub(day_centroid(Ret), mul(day_centroid(Amt), 5)), 20)
+  - cross_mean(sub(day_centroid(Ret), mul(day_centroid(Amt), 6)), 20)
+- head: cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt),
+    241))
+  why: 烂的部件是分桶变量 cross_mean(day_centroid(Amt), 241):它是个股一整年的平均重心,几乎是个股的常数属性,分十桶之后桶内排的是"同一类长期时点习惯的票里,近
+    20 日谁更偏早盘",桶太稳定,而 241 日窗口让桶边界一年才动一次、前 241 个交易日是部分窗口(约占 train 的 24%)。依据:本组拆解里这条
+    head 是 +1.18(train +1.18 / valid +1.32),半衰期 20;C20 单独 +1.34 都比它高,说明这个分桶在扣分而不是加分。变体把桶变量窗口缩到
+    120 日 / 60 日,桶更灵活、热身期更短;方向与原 head 相同(−1),与原 head 的相关预计 ≥ 0.5。
+  variants:
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt),
+    120))
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt),
+    60))
+audit:
+  attempts: 1
+  file: audit_1.yaml

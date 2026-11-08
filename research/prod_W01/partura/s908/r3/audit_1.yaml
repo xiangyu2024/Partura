@@ -1,0 +1,69 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 6, 7, 8, 9, 10, 15, 16]
+    reasons: |-
+      核心 day_centroid(Amt) 对 5 个控制的 |ρ| 为 liq .18 / vol .16 / rev .13 / known .19 / size .07,均 < 0.8,核心门槛通过。本核心在 r1 用过一次 E 位,本轮是第 2 个也是最后一个,允许。16 个外围都原样含 day_centroid(Amt)。
+      算子核对:day_centroid = sum(t*|x|)/sum(|x|)/240(ops_ext.py:155),零额 / 停牌给 NaN;cross_delay(day_close,1) 为前一交易日末分钟收盘价(后复权,rules §4 已豁免);day_open 为第 0 格,即 09:30 集合竞价格(dt_in.py:314 与 legacy/minute_grid.py 注释);cross_corr 为因果 60 日窗口,只用当天及以前的数据,无前视。
+      纠正一处:missions 中把 day_flat_run_max 写成"整数分钟数 / 0..240"、并说它主导 seed 8 的排序,与代码不符。ops_ext.py:415-432 返回最长相同段除以有限分钟数,取值 [0,1],与重心同尺度。seed 8 仍按下面的自动规则划掉。
+      自动划掉(与某个 head 的日度秩 |ρ| ≥ 0.7;全部与 cs_regres(cs_bucket_zscore(cross_mean(重心,20), LogFloatShares), LogFloatShares) 是同一个量,即重心 20 日均的截面位置,只换了分桶 / 回归 / 减历史均值的写法):
+      5 raw .91(cs_bucket_rank,波动率十分位);6 raw .87、残差 .97(cs_regres of ranks);7 raw .92(重心 20 日均减半个 240 日均);8 raw .73;9 raw .99(分桶变量 LogFloatCap - 2*LogFloatShares 无经济含义,但不是数学问题);10 raw .97(LogTotalCap 分桶);15 raw .81(cs_first_low20(重心20日均, ListAge));16 raw .98(LogFloatCap 分桶)。
+      保留 8 个(1,2,3,4,11,12,13,14),每个与库 head 的 raw |ρ| ≤ .64、与各控制的 |ρ| ≤ .26:
+      1 cross_corr(重心, 隔夜跳空)。raw .31(vs cross_corr(首列额,gini)),残差 .25。新的 Y 腿(价格信息)。如果它有 alpha,最可能来自开盘消化隔夜消息时的成交时点差异。
+      2 cross_corr(重心, |跳空|)。raw .64(vs cross_corr(首列额,重心)),残差 .61。与该 head 共享重心腿,但 Y 腿是 |跳空| 而不是首列额,写法不同;离 0.7 线近,放行并标注。如果它有 alpha,最可能来自消息大小与成交时点的同步(大消息日是否更早成交)。
+      3 cross_corr(重心, 日内收益)。raw .22,残差 .21。如果它有 alpha,最可能来自日内价格路径与成交时点的耦合(尾盘拉升日是否靠后放量)。
+      4 cross_corr(重心, log 总额)。raw .52(vs cross_corr(首列额,重心)),残差 .49;liq 控制 |ρ| .10,不是流动性的换写。如果它有 alpha,最可能来自放量日的成交时点是否后移。
+      11 sub(EMA5(重心), EMA60(重心))。raw .50(vs 分桶 cs_regres head),残差 .52;rev 控制 .26 是本位最大但 < .5。X 是时间偏移而不是水平,与库里的水平读法不同。如果它有 alpha,最可能来自重心的近期迁移(去掉永久水平后只读变化)。
+      12 cross_corr(重心, 相对成交量)。raw .50(vs cross_corr(首列额,重心)),残差 .46。X 腿是放量程度。如果它有 alpha,最可能来自放量期成交时点的变化。
+      13 cross_corr(重心, 符号化净流向 day_signed_ratio(Ret,Amt))。raw .28,残差 .26。这个 X 腿库里没有。如果它有 alpha,最可能来自买卖净压与成交时点的配对。
+      14 cross_corr(重心, 分钟收益波动)。raw .31,残差 .29;vol 控制 .07。如果它有 alpha,最可能来自波动发生在早盘还是尾盘的时点结构。
+      创新度 4:库里对重心只有水平、分桶、ts_min 读法,以及 cross_corr(重心, ES(Amt)) 一个耦合;本位的隔夜跳空、净流向、相对量、时间偏移这些 Y 腿库里没有。合理度 4:逐个算子核对无数学问题,机制清楚。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12, 14, 15]
+    reasons: |-
+      本位 N 的 X 腿固定在首列额 / 首列份额 / 尾段份额,Y 腿换成价格信息、相邻时段与非耦合的慢统计量。
+      算子核对:day_first 取第一个非 NaN 值(common.py first_valid_last),即第 0 格 09:30 集合竞价格;in_slice(x,a,b) = x[:, a:b+1],两端含,211..240 为 30 格(14:31-15:00),1..30 为 9:31-10:00(dt_in.py:324);log 在 |x| ≤ EPS 时为 NaN(common.py),不会出现 -inf;cross_corr 在窗口内一腿常数或无有效对时输出 0 而非 NaN(common.py rolling_pair_reduce)。这是小风险,本审计不据此挡(PI 称新股占比小,本审计未逐日核对)。
+      cs_first_low20(y, ListAge):ListAge 老股为同一个 10000+d 块(dailyfields.py:213 与 ops_ext.py:782-788),次新股落在最低 20% 内时整块被平移到秩顶端(ops_ext.py _lexi)。seed 16 的多头腿因此会在次新股段内按 flat-run 排序。这是设计内行为,不是数学问题,但见下面的 alpha 来源。
+      纠正一处:day_flat_run_max 返回的是最长相同段除以有限分钟数,取值 [0,1](ops_ext.py:415-432),不是分钟数,与 missions 的描述不符。这不影响 seed 14 / 15 的判定(判定来自 gate),但影响 seed 16 的机制叙述。
+      划掉:
+      12 cross_corr(div(首列额, ES(Amt)), ES(Amt), 60)。与 head cross_corr(首列额, 峰度, 60) raw .79、残差 .81,自动划掉(≥ 0.7),与 PI 的预期一致。
+      14 cross_mean(day_flat_run_max(Amt), 30)。gate 未过(distinct .08,九成以上截面并列,排序主要由列序决定),属于 §4 的面板几乎是常数;另 liq .78 / known .74,几乎就是流动性控制本身。
+      15 cross_mean(day_flat_run_max(Close), 30)。gate 未过(distinct .26,七成以上截面并列),同属 §4 的面板几乎是常数。
+      保留 13 个(1,2,3,4,5,6,7,8,9,10,11,13,16):
+      1 cross_corr(首列额, 隔夜跳空)。raw .30(gini),残差 .29。如果它有 alpha,最可能来自开盘集合竞价参与对隔夜消息的反应(投资者构成)。
+      2 cross_corr(首列额, |跳空|)。raw .36(kurt),残差 .36。如果它有 alpha,最可能来自开盘参与与消息大小的同步。
+      3 cross_corr(首列份额, |跳空|)。raw .46(kurt),残差 .41。与 2 相比 X 腿是份额,去掉了规模水平。如果它有 alpha,最可能来自同一机制、剔除规模后的部分。
+      4 cross_corr(尾段份额, 隔夜跳空)。raw .23(gini),残差 .18。如果它有 alpha,最可能来自尾盘参与与隔夜消息的同步。
+      5 cross_corr(尾段份额, |日内收益|)。raw .26(vs cross_corr(重心, ES(Amt))),残差 .18。如果它有 alpha,最可能来自尾盘参与与日内波动幅度的同步。
+      6 cross_corr(首列额, 末列额)。raw .17,残差 .12。如果它有 alpha,最可能来自两端集合竞价是否由同一批参与者构成。
+      7 cross_corr(首列额, 前一日总额)。raw .20(gini),残差 .31(高于原始)。如果它有 alpha,最可能来自开盘参与对前一日成交水平的持续性。
+      8 cross_corr(首列额, 分钟收益波动)。raw .20(kurt),残差 .15;liq / known 控制 .28。如果它有 alpha,最可能来自开盘参与与日内波动的同步。
+      9 cross_corr(首列额, 相对成交量)。raw .35(vs 重心 head),残差 .30。存在机械成分(首列额是 day_sum 的一部分),但 raw .35 不足以判为同一个东西。如果它有 alpha,最可能来自开盘参与相对自身 20 日量能的放大。
+      10 cross_stddev(首列份额, 60)。raw .65(vs cs_bucket_demean(首列份额 60 日均, LogFloatCap)),残差 .78,是本位残差最高的一个。标注:std 与 mean 是不同统计量,raw 在 .7 线以下,放行。如果它有 alpha,最可能来自开盘参与份额的稳定性(参与者结构是否稳定),而不是水平。
+      11 cross_stddev(尾段份额, 60)。raw .46(vs cross_mean(尾段份额 196..240, 20) head),残差 .42;liq .46 是本位控制中最高但 < .5。如果它有 alpha,最可能来自尾盘参与的稳定性。
+      13 cross_corr(首列额, 开盘后 30 格额)。raw .48(vs cross_corr(首列额, 重心)),残差 .45。如果它有 alpha,最可能来自开盘列对随后半小时的带动。
+      16 cs_first_low20(cross_mean(day_flat_run_max(Amt),30), ListAge)。raw .46(vs cs_first_low40(...) head),残差 .28;liq .64 / known .61 / size .55 偏高但 < .8。如果它有 alpha,最可能来自次新股段本身的上市龄效应,而不是价格粘滞;审计认为这一点需要 PI 在后续结果里单独检验。
+      创新度 4:库里的首列额 head 的 Y 腿是 kurt / gini / 重心 / ES,本位的隔夜跳空、|跳空|、末列额、前日总额、日内波动、相对量、早盘半小时额都是新 Y 腿。合理度 4:机制清楚,算子核对无数学问题。
+R:
+  - head: 'cross_reg_fvalue(day_first(Amt), day_es_ratio_hi(Volume), 60)'
+    soundness: 3
+    reasons: |-
+      4 个变体(Y 腿 Amt / Volume,窗口 60 / 75 / 90)数学上无问题。rolling_ols 的 fvalue = ESS/(MSE+EPS),对 r² 单调(F = r²(n-2)/(1-r²)),截面秩即 |r| 的秩,1/(1-r²) 的放大不影响秩,reward 按截面秩计。
+      扣分点:F 丢掉符号,高 F 的股票不分正负相关都进多头,与 head 的方向 +1 在机制上说不清,但这不是数学问题,放行。首列额是水平量,60 日 Pearson 受个别大额日影响,也放行。
+      变体 1(Amt,60)与 head raw ρ .99,只是 Y 口径的换写,分数够 +0.1 时就是替换。合理度 3。
+  - head: 'cross_corr(day_first(Amt), day_kurt(Amt), 60)'
+    soundness: 3
+    reasons: |-
+      3 个变体(窗口 75 / 50,以及 kurt(Volume))数学上无误。扣分点:day_kurt 对单个爆点敏感(dt 库的 day_gini 文档自己写着 kurt 会被一笔主导),60 日 Pearson 的时间序列也由少数极端日决定;窗口 50 / 60 / 75 之间 train 从 +0.59 到 +1.95 的跳动显示估计噪声大。这是稳健性弱点,不是 §4 的数学问题,放行。
+      变体 3 与 head raw ρ 1.00,基本是重复变体。合理度 3。
+  - head: 'cross_mean(div(day_sum(in_slice(Amt, 196, 240)), day_sum(Amt)), 20)'
+    soundness: 4
+    reasons: |-
+      3 个变体(均值窗口 25;切片 201..240 即最后 40 分钟、窗口 20;EMA 半衰期 15)。份额有界于 [0,1],分母 day_sum 在非停牌日非零,无数学问题。机制清楚:尾盘参与份额是股票的慢性质,由收盘集合竞价与指数 / ETF 申赎决定。
+      变体与 head raw ρ .93 至 .99,是窗口与平滑方式的微调,替换需要分数改善 +0.1 以上。合理度 4。
+summary: |-
+  seed 908 r3 审计。slot a(E,核心 day_centroid(Amt),本核心第 2 个也是最后一个 E 位)通过:创新度 4、合理度 4,保留 8 个(1,2,3,4,11,12,13,14),划掉 8 个(5,6,7,8,9,10,15,16,均为与库 head raw |ρ| ≥ 0.7 的重心截面读法)。slot b(N)通过:创新度 4、合理度 4,保留 13 个,划掉 3 个(12 自动 ρ .79;14、15 因面板近乎常数未过 gate)。R 三组合理度 3 / 3 / 4,全部保留。纠正:day_flat_run_max 返回 [0,1] 的比例而非分钟数,missions 中的描述有误;cross_corr 窗口无有效对时输出 0 而非 NaN,作为小风险记录,未据此挡。
