@@ -477,6 +477,10 @@ class PanelSet:
                 if str(self.device).startswith("cuda") and not self._refresh_gpu_cap():
                     dev = "cpu"
                 panels, errs = self._evaluate([todo[n] for n in still], still, device=dev)
+                # hand the card's cached blocks back before the way is released: an idle process otherwise keeps GBs the next
+                # holder of a way needs (W02L, 2026-11-09: 13 locates kept up to 3.6 GB each, and stage 0 fell back to the CPU)
+                if str(dev).startswith("cuda") and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             for i, n in enumerate(still):
                 if errs.get(i) or panels[i] is None:
                     for alias in by_key[keys[n]]:
