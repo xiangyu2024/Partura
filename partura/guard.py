@@ -92,10 +92,12 @@ def exclusive(name: str, poll: float = 2.0, announce: bool = True) -> Iterator[N
 
 
 @contextlib.contextmanager
-def slot(n_slots: Optional[int] = None, poll: float = 3.0) -> Iterator[int]:
-    """One of N process slots: bounds how many Partura runs exist at once."""
+def slot(n_slots: Optional[int] = None, poll: float = 3.0, name: Optional[str] = None) -> Iterator[int]:
+    """One of N process slots: bounds how many Partura runs exist at once.  $PARTURA_SLOT_NAME (or ``name``) gives a group of
+    runs its own N slots (W02L: the rounds do not queue behind stage 0's long-lived workers); default "slot" as before."""
     n = int(n_slots or os.environ.get("PARTURA_SLOTS", 2))
-    files = [open(lock_dir() / f"slot{i}.lock", "a+") for i in range(n)]
+    name = name or os.environ.get("PARTURA_SLOT_NAME") or "slot"
+    files = [open(lock_dir() / f"{name}{i}.lock", "a+") for i in range(n)]
     got, said, waited = None, False, 0.0
     try:
         while got is None:

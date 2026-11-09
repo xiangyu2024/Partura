@@ -113,7 +113,7 @@ def corr_rows(a, b):
     return float(np.nanmean(c))
 
 
-with slot():
+with slot(name="slot"):                                       # its own slots: the rounds use $PARTURA_SLOT_NAME
     mem = MemoryGuard(self_limit_gb=float(os.environ.get("PARTURA_SELF_LIMIT_GB", 150)),
                       cgroup_limit_gb=float(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 850))).start()
     t0 = time.time()
