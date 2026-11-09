@@ -356,13 +356,25 @@ class PanelSet:
             kw["workdir"] = self.workdir
         return CubeEngine(self.view, device=device, **kw)
 
+    def _run(self, dev: str, exprs: List[object], chunk_bytes: Optional[int] = None
+             ) -> Tuple[List[Optional[np.ndarray]], Dict[int, str]]:
+        """``_engine(dev).evaluate``; a CUDA out-of-memory while the engine is being BUILT (its tradability mask goes to the
+        card first) becomes an out-of-memory error on every expression, so the ladder below handles it like any other
+        (W02L, 2026-11-09: 8 of 11 correlation jobs died right there while the card was full)."""
+        try:
+            res = self._engine(dev, chunk_bytes=chunk_bytes).evaluate(exprs, tolerant=True)
+        except torch.OutOfMemoryError as exc:
+            if not str(dev).startswith("cuda"):
+                raise
+            return [None] * len(exprs), {i: f"OutOfMemoryError: {exc}" for i in range(len(exprs))}
+        return list(res.panels), dict(res.errors)
+
     def _evaluate(self, exprs: List[object], names: List[str], device: Optional[str] = None
                   ) -> Tuple[List[Optional[np.ndarray]], Dict[int, str]]:
         """One batch on ``device`` (default: the configured one), with the retry ladder for memory."""
         dev = device or self.device
         t0 = time.perf_counter()
-        res = self._engine(dev).evaluate(exprs, tolerant=True)
-        panels, errs = list(res.panels), dict(res.errors)
+        panels, errs = self._run(dev, exprs)
         self.timings.append({"names": list(names), "device": str(dev), "seconds": round(time.perf_counter() - t0, 1)})
         retry = [i for i in sorted(errs) if _is_oom(errs[i])]
         if retry and str(dev).startswith("cuda"):
@@ -372,12 +384,12 @@ class PanelSet:
                 if not self.quiet:
                     print(f"[panels] {names[i]}: GPU memory; retrying alone with chunk {small >> 20} MiB",
                           flush=True)
-                r1 = self._engine(self.device, chunk_bytes=small).evaluate([exprs[i]], tolerant=True)
-                if r1.errors.get(0) is None and r1.panels[0] is not None:
-                    panels[i] = r1.panels[0]
+                p1, e1 = self._run(self.device, [exprs[i]], chunk_bytes=small)
+                if e1.get(0) is None and p1[0] is not None:
+                    panels[i] = p1[0]
                     errs.pop(i, None)
                 else:
-                    errs[i] = f"{errs[i]} | retry alone: {r1.errors.get(0)}"
+                    errs[i] = f"{errs[i]} | retry alone: {e1.get(0)}"
         # Last rung: what the GPU could not hold even alone goes to the BOUNDED CPU engine,
         # one expression at a time.  (ND-face ts_* operators take the whole panel at once and
         # cannot be chunked on the GPU; on the CPU that is just RAM.)
