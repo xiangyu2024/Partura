@@ -50,6 +50,13 @@ _caps = study.host_caps()
 os.environ.update(PARTURA_SLOTS=_caps["PARTURA_SLOTS"], PARTURA_GPU_WAYS=_caps["PARTURA_GPU_WAYS"], PARTURA_REPROMOTE="1")      # scheduling only (PLAN revision 2: a GP run holds up to ~13 GB of the card)
 if MODE == "corr":      # C06: short and small -- the third GPU way (the GP runs only ever take two), a small share of the card, no run slot
     os.environ.update(PARTURA_GPU_WAYS="3", PARTURA_GPU_RESERVE_GB="1", PARTURA_GPU_MIN_GB="1")
+LOC_DEV = os.environ.get("PARTURA_LOCATE_DEVICE", "cuda") if MODE != "corr" else "cuda"
+if LOC_DEV == "cpu":    # W02L: a locate on the CPU -- no card, no GPU way, $PARTURA_LOCATE_SLOTS at a time, $PARTURA_LOCATE_CPU_THREADS each
+    os.environ.pop("PARTURA_RANK_DEVICE", None)                      # (29 locates queued on 2 GPU ways, and the card was full anyway)
+    os.environ.pop("PARTURA_REWARD_DEVICE", None)
+    os.environ["PARTURA_CPU_THREADS"] = os.environ.get("PARTURA_LOCATE_CPU_THREADS", "6")
+    if os.environ.get("PARTURA_LOCATE_SLOTS"):
+        os.environ["PARTURA_SLOTS"] = os.environ["PARTURA_LOCATE_SLOTS"]
 STUDY = study.name("C05")                                    # C06 reuses C05's M; its own missions are c06s...
 D = PARTURA_ROOT / "research" / study.dirname(STUDY)         # coldstart_<C0X>; PROD: $PARTURA_STUDY_DIR (prod_W01)
 PFX = study.prefix(STUDY)
@@ -122,7 +129,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot(name=os.environ.get("
     if MODE == "corr" and os.environ.get("PARTURA_CORR_GPU_LOCK"):
         # W02L: the auditor's table takes ways of its own -- it is small, and it waited behind every GP search's batches
         os.environ["PARTURA_GPU_LOCK"] = os.environ["PARTURA_CORR_GPU_LOCK"]
-    ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0.12 if MODE == "corr" else 0.3, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
+    ps = PanelSet(STORE, START, END, warmup=60, device=LOC_DEV, gpu_fraction=(0.12 if MODE == "corr" else 0.3) if LOC_DEV == "cuda" else None, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
                   daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec, known_spec = G.spec["pool"][-1], G.spec["pool"][0]
