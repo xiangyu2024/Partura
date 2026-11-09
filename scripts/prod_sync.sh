@@ -19,7 +19,8 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 PYL=${PYL:-/Users/wxy/.venvs/alphacube/bin/python}; [ -x "$PYL" ] || PYL=python3
 HOSTS="$PYL $REPO/scripts/prod_hosts.py"
 DIR=$($HOSTS dir) || exit 1                        # prod_W01
-L=$REPO/research/$DIR; ARM=P; EV=prod; SL=${PROD_SYNC_SLEEP:-10}
+L=$REPO/research/$DIR; ARM=P; EV=${PROD_ENV:-prod};   # the server env tmp/<EV>_env.sh (W02L: w02l)
+ SL=${PROD_SYNC_SLEEP:-10}
 # every remote call is retried (the old server's ssh gateway drops connections now and then); a fetched file must be non-empty
 rsh() { local H="$1"; shift; for i in 1 2 3 4 5; do $H "$@" && return 0; sleep $SL; done; return 1; }
 host() { $HOSTS ssh "$1"; }

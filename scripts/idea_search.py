@@ -20,7 +20,7 @@ known pool.  Nothing in AlphaCube is edited and nothing in it is monkeypatched: 
 not a different experiment: with ``$PARTURA_AC_FIXES`` unset it proposes, accepts and scores what the monkeypatching
 version of this script did, draw for draw (``scripts/plugin_acceptance.py`` compares two evidence files).
 
-The search sees 20180102..20230807 (train + valid); the test period is not opened.
+The search sees train + valid of $PARTURA_VIEW (partura/study.py view: w01 = 20180102..20230807, w02 = 20180102..20251231); the test period is not opened.
 
     python scripts/idea_search.py <idea_id> [--guidance guidance/B01.yaml] [--budget 192] [--population 48]
                                   [--arms steer,control] [--seed 0] [--boost 8] [--tag e1] [--reward KIND]
@@ -96,7 +96,7 @@ if PARTS - {"seeds", "hood", "priors"}:
 BAN_LIB, BAN_RHO = opt("--ban-library"), float(opt("--ban-rank-corr", 0.7))
 CORE, PERI_SEEN, NEUTRAL_EXTRA = opt("--must-contain"), opt("--periphery-seen"), opt("--neutral-extra")
 GRAFT_FILL = int(opt("--graft-fill", 0))
-START, END, SPLIT = "20180102", "20230807", "20220101"
+START, END, SPLIT = study.view()                             # $PARTURA_VIEW: w01 (default) or w02 (PROD W02L)
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None      # a host without the D-major mirror reads the store itself
@@ -181,6 +181,7 @@ with slot():
         ctls = [aux["liq"], nq["n_vol"], nq["n_rev"], aux["known"]]
         if os.environ.get("PARTURA_NEUTRAL_SIZE"):   # C04: size (log float cap) regressed out as well
             ctls.append(ps.compute({"n_size": "LogFloatCap"})["n_size"])
+        ctls += study.extra_controls(dates, PARTURA_ROOT)   # PROD W02L ruler B: the two champions ($PARTURA_EXTRA_CONTROLS; unset = none)
         if NEUTRAL_EXTRA:                            # C05 E missions: the core's family, as traded (sign x smoothed)
             fam = json.loads(Path(NEUTRAL_EXTRA).read_text(encoding="utf-8"))
             FP = ps.compute({f"f{i}": f["expr"] for i, f in enumerate(fam)})
@@ -303,6 +304,14 @@ with slot():
             except Exception as exc:                         # noqa: BLE001
                 print(f"[idea] library member dropped ({type(exc).__name__}): {str(x)[:80]}", flush=True)
     SKEL_BAN = {skel(t) for t in LIB}
+    if os.environ.get("PARTURA_SKELETON_BAN_FILE"):          # PROD W02L: the skeletons of a whole library, refused without being
+        n0 = len(SKEL_BAN)                                   # rank-ban exemplars (a JSON list of expressions); unset = as before
+        for x in json.loads(Path(os.environ["PARTURA_SKELETON_BAN_FILE"]).read_text(encoding="utf-8")):
+            try:
+                SKEL_BAN.add(skel(_p(x["expr"] if isinstance(x, dict) else x)))
+            except Exception:                                # noqa: BLE001
+                pass
+        print(f"[idea] skeleton ban file: +{len(SKEL_BAN) - n0} skeletons", flush=True)
     core_t = _p(CORE) if CORE else None
     core_key = core_t.key() if core_t is not None else None
     core_ops = _ops(core_t) if core_t is not None else _Counter()
@@ -411,6 +420,9 @@ with slot():
             gp.update(initial_population=list(seeds), seed_keep=min(len(seeds), max(1, int(POP * SEED_SHARE))), seed_max_depth=9)
         if LIB:
             gp.update(ban_rank_corr=BAN_RHO, ban_exemplars=list(LIB))
+            if os.environ.get("PARTURA_EXEMPLAR_CACHE"):   # PROD W02L: an exemplar's rank fingerprint is computed once and kept
+                gp.update(exemplar_cache=os.environ["PARTURA_EXEMPLAR_CACHE"],   # on disk (AlphaCube's ExemplarCache, keyed by
+                          exemplar_cache_gb=float(os.environ.get("PARTURA_EXEMPLAR_CACHE_GB", 40)))   # the view); unset = as before
         import shutil
         shutil.rmtree(ep_dir / arm, ignore_errors=True)       # a shorter rerun must not read the longer run's last checkpoint
         err = None

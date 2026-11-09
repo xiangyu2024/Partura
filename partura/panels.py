@@ -26,6 +26,7 @@ reads panels from here.  Deliberate choices:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -437,7 +438,11 @@ class PanelSet:
                   f"batches of {self.batch}", flush=True)
         for b0 in range(0, len(uniq), self.batch):
             chunk = uniq[b0:b0 + self.batch]
-            with guard.exclusive("gpu", announce=not self.quiet):
+            # A view REQUESTED on the CPU never touches the card, so it takes no GPU way (W02L, 2026-11-09: on the 1 TB host
+            # CPU workers run beside the two GPU ones).  A view requested on the GPU keeps the lock even when it fell back
+            # to the CPU -- holding the way is when it looks at the card again (below) -- exactly as before.
+            lock = contextlib.nullcontext() if str(self._requested) == "cpu" else guard.exclusive("gpu", announce=not self.quiet)
+            with lock:
                 # another study may have produced it while we were waiting for the card
                 still = []
                 for n in chunk:

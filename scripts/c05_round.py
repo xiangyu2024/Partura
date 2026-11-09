@@ -58,9 +58,38 @@ def library(S, X, K):
         if f.is_file():
             R = json.loads(f.read_text(encoding="utf-8"))
             lib += [{**r, "src": f.name} for r in R["replacements"] + R.get("additions", [])]
+    if os.environ.get("PARTURA_WAVE_BAN") == "1":            # PROD W02L: one library ban for the whole wave (W01 NEXT_WAVE.md
+        lib += wave_heads(S)                                  # section 1 (a)) -- every other stream's heads too; unset = as before
+        seen, uniq = set(), []
+        for h in lib:
+            if h["expr"] not in seen:
+                seen.add(h["expr"])
+                uniq.append(h)
+        lib = uniq
     f = ARMS / f"lib_s{S}_{X}_r{K}.json"
     f.write_text(json.dumps(lib, ensure_ascii=False, indent=1), encoding="utf-8")
     return f, lib
+
+
+def wave_heads(S):
+    """Every OTHER stream's heads so far: its snapshot batches (finished episodes), its finished missions, its R replacements
+    and additions."""
+    out = []
+    for ep in sorted(glob.glob(str(EP / f"{MPFX}s*M*_I0_open_search"))) + sorted(glob.glob(str(EP / f"{PFX}s*")) ):
+        name = Path(ep).name
+        if name.startswith(f"{MPFX}s{S}M") or name.startswith(f"{PFX}s{S}"):
+            continue
+        if (Path(ep) / "evidence.json").is_file() and c05_lib.finished(ep):
+            try:
+                out += c05_lib.heads([ep])
+            except SystemExit:
+                pass
+    for f in sorted(ARMS.glob("s*_R.json")):
+        if f.name.startswith(f"s{S}_"):
+            continue
+        R = json.loads(f.read_text(encoding="utf-8"))
+        out += [{**r, "src": f.name} for r in R.get("replacements", []) + R.get("additions", [])]
+    return out
 
 
 class Done:

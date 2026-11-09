@@ -208,3 +208,21 @@ def test_no_script_hard_codes_the_scheduling_numbers_any_more():
         assert not re.search(r'PARTURA_SLOTS[="\': ]+"4"', src), f
         assert not re.search(r'"PARTURA_GPU_WAYS": "2"|PARTURA_GPU_WAYS="2"', src), f
         assert "host_caps" in src, f
+
+
+def test_view_default_is_w01_and_w02_is_the_new_split():
+    from partura import study
+    assert study.view({}) == ("20180102", "20230807", "20220101")
+    assert study.view({"PARTURA_VIEW": "w02"}) == ("20180102", "20251231", "20230808")
+
+
+def test_extra_controls_unset_is_empty_and_aligns_by_date(tmp_path):
+    import json
+    import numpy as np
+    from partura import study
+    assert study.extra_controls(["20200102"], tmp_path, {}) == []
+    np.save(tmp_path / "c.npy", np.arange(12, dtype=np.float32).reshape(3, 4))
+    (tmp_path / "d.json").write_text(json.dumps({"dates": ["20200102", "20200103", "20200106"]}))
+    env = {"PARTURA_EXTRA_CONTROLS": "c.npy", "PARTURA_EXTRA_CONTROLS_DATES": "d.json"}
+    (x,) = study.extra_controls(["20200103", "20200106"], tmp_path, env)
+    assert x.tolist() == [[4, 5, 6, 7], [8, 9, 10, 11]]

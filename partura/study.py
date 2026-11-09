@@ -18,7 +18,7 @@ Pure stdlib: importable on the laptop, on the servers and in the tests without t
 from __future__ import annotations
 
 import os
-from typing import Dict, Mapping, Optional
+from typing import Dict, List, Mapping, Optional
 
 LEGACY = ("C05", "C06", "C07", "C08")                  # the studies whose scripts predate this module
 FOLLOWS = {"PROD": "C08"}                              # whose behaviour a non-legacy study copies at every switch
@@ -108,5 +108,41 @@ def host_caps(env: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
             "PARTURA_PANEL_CACHE_GB": str(min(cap, float(env.get("PARTURA_PANEL_CACHE_GB", 6))))}
 
 
+# (start, end, split) of what the search, the locate tool and the R evaluation see.  w01 (default): train 2018 ~ 2021, valid
+# 2022-01 ~ 2023-08-07 -- C05 .. C08 and PROD W01.  w02 (the user's split of 2026-11-08, PROD W02L): train 2018-01-02 ~
+# 2023-08-07, valid 2023-08-08 ~ 2025-12-31; 2026 is the test and is never in the view.
+VIEWS = {"w01": ("20180102", "20230807", "20220101"), "w02": ("20180102", "20251231", "20230808")}
+
+
+def view(env: Optional[Mapping[str, str]] = None):
+    """$PARTURA_VIEW (w01 / w02); unset = w01, exactly as before."""
+    env = os.environ if env is None else env
+    v = env.get("PARTURA_VIEW") or "w01"
+    if v not in VIEWS:
+        raise SystemExit(f"PARTURA_VIEW must be one of {sorted(VIEWS)}, got {v!r}")
+    return VIEWS[v]
+
+
+def extra_controls(dates, root, env: Optional[Mapping[str, str]] = None) -> List:
+    """Signals added to the neutral basis after the five controls (PROD W02L ruler B: the two champions).
+    $PARTURA_EXTRA_CONTROLS = comma list of .npy panels (relative to ``root``), all on the dates listed under "dates" in the
+    json $PARTURA_EXTRA_CONTROLS_DATES; each is aligned to ``dates`` (a day the file does not have is an error).  Unset: []."""
+    env = os.environ if env is None else env
+    names = [x.strip() for x in (env.get("PARTURA_EXTRA_CONTROLS") or "").split(",") if x.strip()]
+    if not names:
+        return []
+    import json
+    from pathlib import Path
+    import numpy as np
+    cd = [str(d) for d in json.loads((Path(root) / env["PARTURA_EXTRA_CONTROLS_DATES"]).read_text(encoding="utf-8"))["dates"]]
+    pos = {d: j for j, d in enumerate(cd)}
+    want = [str(d) for d in dates]
+    missing = [d for d in want if d not in pos]
+    if missing:
+        raise SystemExit(f"extra controls: {len(missing)} view days not in {env['PARTURA_EXTRA_CONTROLS_DATES']} (first {missing[0]})")
+    take = np.array([pos[d] for d in want])
+    return [np.asarray(np.load(Path(root) / n, mmap_mode="r"), np.float64)[take] for n in names]
+
+
 __all__ = ["LEGACY", "FOLLOWS", "name", "follows", "is_legacy", "dirname", "prefix", "m_prefix", "neutral_extra", "r_additions",
-           "ctrl_strike_default", "scheduling_env", "host_caps"]
+           "ctrl_strike_default", "scheduling_env", "host_caps", "VIEWS", "view", "extra_controls"]

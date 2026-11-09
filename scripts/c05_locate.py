@@ -55,7 +55,7 @@ D = PARTURA_ROOT / "research" / study.dirname(STUDY)         # coldstart_<C0X>; 
 PFX = study.prefix(STUDY)
 MPFX = study.m_prefix(STUDY)                                 # whose main AlphaCube: C06 reuses C05's, C08 reuses C07's (the new rule), PROD runs its own
 EP = PARTURA_ROOT / "episodes"
-START, END, SPLIT = "20180102", "20230807", "20220101"
+START, END, SPLIT = study.view()                             # $PARTURA_VIEW: w01 (default) or w02 (PROD W02L)
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
@@ -132,7 +132,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
     pool_sig = dg._zrank(bk.smoothed(float(pool_spec["sign"]) * np.asarray(aux["pool"], np.float64), float(pool_spec["hl"])))
     known_z = dg._zrank(float(known_spec["sign"]) * np.asarray(aux["known"], np.float64))
     ctx = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=pool_sig, halflives=(0.0, 5.0, 20.0))
-    ctx.neutral_Q = QF = neutral_basis([aux["liq"], aux["n_vol"], aux["n_rev"], aux["known"], aux["n_size"]])
+    ctx.neutral_Q = QF = neutral_basis([aux["liq"], aux["n_vol"], aux["n_rev"], aux["known"], aux["n_size"]] + study.extra_controls(dates, PARTURA_ROOT))
     labelled = np.isfinite(tgt)
     kz = known_z[:cut:5]
 

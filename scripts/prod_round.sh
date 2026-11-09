@@ -10,7 +10,7 @@
 STAGE=${1:?fetch|corr|finish}; K=${2:?round}; SEEDS=${3:?seeds}
 REPO=$(cd "$(dirname "$0")/.." && pwd); cd "$REPO" || exit 1
 PY=/Users/wxy/.venvs/alphacube/bin/python
-export PARTURA_C0X=PROD PARTURA_STUDY_DIR=prod_W01 C06_CTRL_STRIKE=0.8 ALPHACUBE_ROOT=$HOME/Desktop/AlphaCube-steering
+export PARTURA_C0X=PROD PARTURA_STUDY_DIR=$($PY scripts/prod_hosts.py dir) C06_CTRL_STRIKE=0.8   # prod_W01 unless $PROD_HOSTS says otherwise ALPHACUBE_ROOT=$HOME/Desktop/AlphaCube-steering
 export PYTHONPATH=$HOME/Desktop/AlphaCube-steering/src:$REPO
 LOG=$REPO/tmp/prod_round; mkdir -p $LOG
 
