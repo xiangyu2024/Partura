@@ -394,6 +394,23 @@ with slot():
     import contextlib as _ctx
     gpu_lock = exclusive("gpu") if GP_DEV == "cuda" else _ctx.nullcontext()   # one of the GPU ways for the whole search (a CPU search takes none)
     gpu_lock.__enter__()
+    if GP_DEV == "cuda":
+        # W02L 2026-11-09: holding a way is not holding the memory -- a search that started while the others filled the card
+        # died creating its CUDA state ("out of memory"), and so did its immediate rerun (9 searches lost).  Wait, asking
+        # nvidia-smi (no CUDA context of our own), until the card has this search's share free, up to an hour.
+        import subprocess as _sp
+        _need = float(os.environ.get("PARTURA_GP_GPU_FRACTION", 0.40))
+        for _w in range(120):
+            try:
+                _u, _t = (float(v) for v in _sp.run(["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+                                                       capture_output=True, text=True, timeout=30).stdout.split("\n")[0].split(","))
+            except Exception:                         # noqa: BLE001  (no nvidia-smi: nothing to wait for)
+                break
+            if _t - _u >= _need * _t + 1024:
+                break
+            if _w == 0:
+                print(f"[idea] card has {(_t - _u) / 1024:.1f} GiB free, this search needs {_need * _t / 1024 + 1:.1f}: waiting", flush=True)
+            time.sleep(30)
     if GP_DEV == "cuda" and torch.cuda.is_available():
         # $PARTURA_GP_GPU_FRACTION: a search holds its way and this share of the card for the whole search, so ways x fraction
         # must stay under 1 (W02L, 2026-11-09: 4 ways x 0.40 left the card short and whole searches came back with 0 valid)
