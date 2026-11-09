@@ -115,6 +115,9 @@ with (contextlib.nullcontext() if MODE == "corr" else slot()):
     def P_(s):
         return parse(s, strict=True, coerce_daily=True, n_minutes=241, allow_general=True)
 
+    if MODE == "corr" and os.environ.get("PARTURA_CORR_GPU_LOCK"):
+        # W02L: the auditor's table takes ways of its own -- it is small, and it waited behind every GP search's batches
+        os.environ["PARTURA_GPU_LOCK"] = os.environ["PARTURA_CORR_GPU_LOCK"]
     ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0.12 if MODE == "corr" else 0.3, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
                   daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
