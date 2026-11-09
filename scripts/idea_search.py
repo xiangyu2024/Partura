@@ -395,7 +395,9 @@ with slot():
     gpu_lock = exclusive("gpu") if GP_DEV == "cuda" else _ctx.nullcontext()   # one of the GPU ways for the whole search (a CPU search takes none)
     gpu_lock.__enter__()
     if GP_DEV == "cuda" and torch.cuda.is_available():
-        torch.cuda.set_per_process_memory_fraction(0.40)
+        # $PARTURA_GP_GPU_FRACTION: a search holds its way and this share of the card for the whole search, so ways x fraction
+        # must stay under 1 (W02L, 2026-11-09: 4 ways x 0.40 left the card short and whole searches came back with 0 valid)
+        torch.cuda.set_per_process_memory_fraction(float(os.environ.get("PARTURA_GP_GPU_FRACTION", 0.40)))
     evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "search_device": GP_DEV, "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "seed_share": SEED_SHARE,
                 "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""),
