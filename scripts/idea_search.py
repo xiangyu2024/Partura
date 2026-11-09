@@ -150,8 +150,19 @@ with slot():
     from partura import ac_plugin
     FIXES = sorted(ac_plugin.fixes())
     print(f"[idea] plugins loaded: {', '.join(load_plugins(['partura.ac_plugin']))}; opt-in plugin fixes: {FIXES or 'none'}", flush=True)
+    # PROD W02L ($PARTURA_GP_CPU_FALLBACK=1): when every GPU way is taken at the start, the whole search runs on the CPU
+    # (the 1 TB / 96-core host) instead of queueing for the card -- same reward, same budget, numpy reward.  Unset = as before.
+    from partura import guard as _guard
+    GP_DEV = "cuda"
+    _fb = os.environ.get("PARTURA_GP_CPU_FALLBACK", "")
+    if _fb == "force" or (_fb == "1" and not _guard.way_free("gpu")):
+        GP_DEV = "cpu"
+        for _v in ("PARTURA_RANK_DEVICE", "PARTURA_REWARD_DEVICE"):
+            os.environ.pop(_v, None)
+        torch.set_num_threads(int(os.environ.get("PARTURA_GP_CPU_THREADS", 6)))
+    print(f"[idea] search device: {GP_DEV}", flush=True)
     # ---- the reward's context, on the grid the GP will use (same view: start, end, warm-up)
-    ps = PanelSet(STORE, START, END, warmup=60, device="cuda", gpu_fraction=0, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
+    ps = PanelSet(STORE, START, END, warmup=60, device=GP_DEV, gpu_fraction=0 if GP_DEV == "cuda" else None, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
                   daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec = G.spec["pool"][-1]
@@ -375,11 +386,12 @@ with slot():
         print(f"[idea] C05: {len(seeds) - n0} grafted seeds carry the core ({tries} trees drawn)", flush=True)
 
     from partura.guard import exclusive
-    gpu_lock = exclusive("gpu")                               # one of the GPU ways for the whole search: a sweep may share the card, two may not
+    import contextlib as _ctx
+    gpu_lock = exclusive("gpu") if GP_DEV == "cuda" else _ctx.nullcontext()   # one of the GPU ways for the whole search (a CPU search takes none)
     gpu_lock.__enter__()
-    if torch.cuda.is_available():
+    if GP_DEV == "cuda" and torch.cuda.is_available():
         torch.cuda.set_per_process_memory_fraction(0.40)
-    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
+    evidence = {"idea": idea, "reward": KIND, "threshold": THR, "screen_base": SCREEN_BASE, "score_scale": "paired_ir_sized" if KIND in PAIRED else "long_sharpe", "code": CODE, "reward_device": os.environ.get("PARTURA_REWARD_DEVICE", ""), "search_device": GP_DEV, "budget": BUDGET, "population": POP, "seed": SEED, "boost": BOOST, "period": [START, END, SPLIT],
                 "guidance": GPATH, "parts": sorted(PARTS), "halflives": list(HLS), "plugin_fixes": FIXES, "seed_share": SEED_SHARE,
                 "env_opw": os.environ.get("PARTURA_ENV_OPW", ""), "rho_reject": os.environ.get("PARTURA_RHO_REJECT", ""),
                 "daily_fields": os.environ.get("PARTURA_DAILY_FIELDS", ""), "neutral_size": bool(os.environ.get("PARTURA_NEUTRAL_SIZE")),
@@ -428,7 +440,7 @@ with slot():
         err = None
         try:
             run_mining(STORE, mirror_root=MIRROR, start=START, end=END, warmup=60, label="open_vwap15_buyable", horizon=1, miner="gp",
-                       budget=BUDGET, seed=SEED, device="cuda", pool="mse", pool_capacity=10, dedup=0.95, min_coverage=0.9,
+                       budget=BUDGET, seed=SEED, device=GP_DEV, pool="mse", pool_capacity=10, dedup=0.95, min_coverage=0.9,
                        min_scored_days=0.5, cost_per_side=0.0015, checkpoint_every=1, rolling_block=0, block_combine=False,
                        combine_methods=(), smooth_halflives=(), allow_resource_risk=True, workdir=str(PARTURA_ROOT / "tmp"),
                        out_root=str(ep_dir), run_id=arm, save_values=False, gp_params=gp,

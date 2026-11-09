@@ -42,6 +42,20 @@ def lock_dir() -> Path:
     return d
 
 
+def way_free(name: str) -> bool:
+    """True if one of the ``name`` ways is free right now (taken and released at once: a probe, not a reservation)."""
+    ways = max(1, int(os.environ.get(f"PARTURA_{name.upper()}_WAYS", "1")))
+    for i in range(ways):
+        with open(lock_dir() / (f"{name}.lock" if i == 0 else f"{name}{i + 1}.lock"), "a+") as cand:
+            try:
+                fcntl.flock(cand, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            fcntl.flock(cand, fcntl.LOCK_UN)
+            return True
+    return False
+
+
 @contextlib.contextmanager
 def exclusive(name: str, poll: float = 2.0, announce: bool = True) -> Iterator[None]:
     """Block until this process holds ``name``; release on exit."""

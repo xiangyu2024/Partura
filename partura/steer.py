@@ -426,6 +426,19 @@ def neutral_basis(controls) -> "np.ndarray":
     import numpy as np
     from . import diagnose as dg
     powers = [int(x) for x in os.environ.get("PARTURA_NEUTRAL_POWERS", "1").split(",")]
+    cache = os.environ.get("PARTURA_BASIS_CACHE")             # PROD W02L: the basis depends only on the controls and the powers,
+    path = None                                               # so it is kept on disk (a CPU search spent ~17 min rebuilding it)
+    if cache:
+        import hashlib
+        from pathlib import Path
+        h = hashlib.sha1(repr(powers).encode())
+        for c in controls:
+            a = np.ascontiguousarray(np.asarray(c, np.float64))
+            h.update(repr(a.shape).encode())
+            h.update(a.tobytes())
+        path = Path(cache) / f"basis_{h.hexdigest()[:20]}.npy"
+        if path.is_file():
+            return np.load(path)
     zs = [dg._zrank(np.asarray(c, np.float64)) ** k for c in controls for k in powers]
     D, S = zs[0].shape
     Q = np.zeros((D, S, len(zs) + 1), np.float32)
@@ -438,6 +451,11 @@ def neutral_basis(controls) -> "np.ndarray":
         X = np.column_stack([np.ones(int(ok.sum()))] + [z[t][ok] for z in zs])
         q, _ = np.linalg.qr(X)
         Q[t, ok] = q.astype(np.float32)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + f".{os.getpid()}.tmp.npy")
+        np.save(tmp, Q)
+        os.replace(tmp, path)
     return Q
 
 

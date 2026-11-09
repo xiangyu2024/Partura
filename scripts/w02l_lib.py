@@ -2,13 +2,13 @@
 batches" the production round machinery reads, so that scripts/server/prod_conductor.sh, c05_locate.py and c05_round.py run
 unchanged.  Server; reads only stage 0's in-sample results (train 2018-01-02 ~ 2023-08-07, valid 2023-08-08 ~ 2025-12-31).
 
-    python scripts/w02l_lib.py build --ruler A|B [--max-heads 8] [--min-heads 1] [--first-seed 2001] [--per-stream 3]
+    python scripts/w02l_lib.py build --ruler B [--max-heads 8] [--first-seed 2001] [--per-stream 3]      (re-run as stage 0 goes on)
 
   - a batch's "heads" = its members that are discoveries under the ruler (gate passed, score >= 0.5, |rho| to the known family
-    < 0.5), best score first, at most --max-heads; members using ts_spearman never are (C01 revision 4)
-  - a batch with fewer than --min-heads heads gets no round
-  - streams: the eligible batches, theme by theme (themes with most heads first; inside a theme, most heads first), cut into
-    runs of --per-stream; stream j is seed first_seed + j, its round k reads batches 1..k (W01: M batches 1..k)
+    < 0.5), best score first, at most --max-heads; a batch with none gets its 3 best gated members by score as "material"
+    (PLAN revision 1); members using ts_spearman never are (C01 revision 4)
+  - streams: consecutive batch numbers (B001-B003 -> seed 2001, ...); a stream is built as soon as stage 0 has scored every
+    member of its three batches; its round k reads batches 1..k (W01: M batches 1..k); streams built earlier are left alone
   - per stream and k: episodes/prods<seed>M<k>_I0_open_search/evidence.json (arms.control.heads / candidates, complete) and
     control/checkpoints/archive_gen001.csv (every member with its score: the locate tool's enrichment table), and
     research/prod_W02L/m/s<seed>.DONE (there is no M chain to start)
@@ -33,7 +33,7 @@ def opt(name, default):
 
 assert sys.argv[1] == "build"
 RULER = opt("--ruler", "B")
-MAXH, MINH, FIRST, PER = opt("--max-heads", 8), opt("--min-heads", 1), opt("--first-seed", 2001), opt("--per-stream", 3)
+MAXH, FIRST, PER = opt("--max-heads", 8), opt("--first-seed", 2001), opt("--per-stream", 3)
 FORCE = "--force" in sys.argv
 
 rows = [json.loads(x) for f in sorted(glob.glob(str(D / "stage0" / "chunks" / "*.jsonl"))) for x in open(f, encoding="utf-8") if x.strip()]
@@ -41,8 +41,7 @@ batches = {b["batch"]: b for b in json.loads((D / "struct" / "batches.json").rea
 members = list(csv.DictReader(open(D / "struct" / "members.csv", encoding="utf-8")))
 scored = {(r["lib"], int(r["i"])): r for r in rows}
 missing = [m for m in members if (m["lib"], int(m["i"])) not in scored]
-if missing:
-    raise SystemExit(f"stage 0 not finished: {len(missing)} of {len(members)} expressions have no result")
+print(f"stage 0: {len(members) - len(missing)} of {len(members)} expressions scored", flush=True)
 
 by_batch = defaultdict(list)
 for r in rows:
@@ -55,32 +54,30 @@ def head(r):
             "rho_known": r["rho"]["known"], "rho_H": r["rho"]["H"], "rho_X": r["rho"]["X"], "lib": r["lib"], "i": r["i"]}
 
 
-heads = {}
-for b, rs in by_batch.items():
-    hs = [r for r in rs if r.get(f"discovery_{RULER}") and "ts_spearman" not in r["expression"]]
-    hs.sort(key=lambda r: -r[RULER]["score"])
-    heads[b] = [head(r) for r in hs[:MAXH]]
-eligible = [b for b in heads if len(heads[b]) >= MINH]
-MATERIAL = []
-if len(eligible) < 24:                                        # PLAN section 4: too few batches with heads for the pilot -> the batches
-    for b, rs in by_batch.items():                            # without one get their 3 best gated members with score > 0 as "material"
-        if heads[b]:                                          # (a starting point for the PI and the locate tool; never counted as a
-            continue                                          # W02L head)
-        ms = sorted([r for r in rs if r.get("gate") and r[RULER]["score"] > 0 and "ts_spearman" not in r["expression"]],
-                    key=lambda r: -r[RULER]["score"])[:3]
-        if ms:
-            heads[b] = [{**head(r), "material": True} for r in ms]
-            MATERIAL.append(b)
-    eligible = [b for b in heads if len(heads[b]) >= MINH]
-theme_heads = defaultdict(int)
-for b in eligible:
-    theme_heads[batches[b]["theme"]] += len(heads[b])
-order = sorted(eligible, key=lambda b: (-theme_heads[batches[b]["theme"]], batches[b]["theme"], -len(heads[b]), b))
-streams = [order[j:j + PER] for j in range(0, len(order), PER)]
-
-out = []
+heads, MATERIAL = {}, []
+for b, rs in by_batch.items():                                # PLAN revision 1: discoveries if any, else the 3 best by score (material)
+    ok = [r for r in rs if r.get("gate") and "ts_spearman" not in r["expression"]]
+    hs = sorted([r for r in ok if r.get(f"discovery_{RULER}")], key=lambda r: -r[RULER]["score"])[:MAXH]
+    if hs:
+        heads[b] = [head(r) for r in hs]
+    else:
+        heads[b] = [{**head(r), "material": True} for r in sorted(ok, key=lambda r: -r[RULER]["score"])[:3]]
+        MATERIAL.append(b)
+# PLAN revision 1: streams = consecutive batch numbers (B001-B003 -> first seed, ...); a stream is built once all three of its
+# batches are fully scored by stage 0 -- streams already built are left alone
+allb = sorted(batches)
+streams = [allb[j:j + PER] for j in range(0, len(allb), PER)]
+complete = {b for b in allb if len(by_batch.get(b, [])) == sum(1 for m in members if m["batch"] == b)}
+prev = json.loads((D / "streams.json").read_text(encoding="utf-8")) if (D / "streams.json").is_file() else {"streams": []}
+out = list(prev["streams"])
+built_now = []
 for j, bs in enumerate(streams):
     seed = FIRST + j
+    if any(x["seed"] == seed for x in out) and not FORCE:
+        continue                                              # built earlier
+    if not all(b in complete for b in bs):
+        continue                                              # stage 0 has not finished one of its batches yet
+    built_now.append(seed)
     for k, b in enumerate(bs, 1):
         ep = EP / f"prods{seed}M{k}_I0_open_search"
         if (ep / "evidence.json").is_file() and not FORCE:
@@ -106,10 +103,12 @@ for j, bs in enumerate(streams):
                 w.writerow([c["expr"], c.get("score", "")])
     (D / "m").mkdir(parents=True, exist_ok=True)
     (D / "m" / f"s{seed}.DONE").touch()
-    out.append({"seed": seed, "batches": bs, "themes": [batches[b]["theme"] for b in bs], "heads": [len(heads[b]) for b in bs]})
+    out = [x for x in out if x["seed"] != seed] + [{"seed": seed, "batches": bs, "themes": [batches[b]["theme"] for b in bs],
+                                                    "heads": [len(heads[b]) for b in bs], "material": [b in MATERIAL for b in bs]}]
 
-(D / "streams.json").write_text(json.dumps({"ruler": RULER, "max_heads": MAXH, "min_heads": MINH, "per_stream": PER, "material_batches": MATERIAL,
-                                            "eligible_batches": len(eligible), "streams": out}, ensure_ascii=False, indent=1), encoding="utf-8")
+out.sort(key=lambda x: x["seed"])
+(D / "streams.json").write_text(json.dumps({"ruler": RULER, "max_heads": MAXH, "per_stream": PER, "rule": "PLAN revision 1",
+                                            "streams": out}, ensure_ascii=False, indent=1), encoding="utf-8")
 (D / "library_all.json").write_text(json.dumps([{"expr": m["expression"]} for m in members], ensure_ascii=False), encoding="utf-8")
-print(f"ruler {RULER}: {sum(len(h) for h in heads.values())} heads ({len(MATERIAL)} batches on material) in {sum(1 for h in heads.values() if h)} batches; "
-      f"{len(eligible)} eligible (>= {MINH}); {len(streams)} streams of <= {PER} (seeds {FIRST}..{FIRST + len(streams) - 1})")
+print(f"ruler {RULER}: built now {built_now or 'nothing'}; streams built {len(out)} of {len(streams)}; "
+      f"next waiting for stage 0: {[FIRST + j for j, bs in enumerate(streams) if not all(b in complete for b in bs)][:3]}")

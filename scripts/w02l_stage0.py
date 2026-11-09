@@ -4,7 +4,7 @@ it), and scored in sample under the user's split of 2026-11-08 -- train 2018-01-
 The label after 2025-12-31 is blanked before anything is scored: no statistic of 2026 is computed here.
 
     source tmp/prod_env.sh
-    python scripts/w02l_stage0.py <members.csv> <outdir> [--device cuda|cpu] [--batch 8]
+    python scripts/w02l_stage0.py <members.csv> <outdir> [--device cuda|cpu] [--batch 8] [--steal-min M]
 
 Workers share one queue: chunk k (8 expressions, in members.csv order) is claimed by creating <outdir>/claims/<k> (atomic),
 written to <outdir>/chunks/<k>.jsonl when done; a claim whose worker is no longer alive is released at start, so any number
@@ -73,13 +73,28 @@ for c in (OUT / "claims").iterdir():                          # release the clai
         pass
 
 
+STEAL = float(sys.argv[sys.argv.index("--steal-min") + 1]) if "--steal-min" in sys.argv else 0.0
+
+
 def claim(k):
     if (OUT / "chunks" / f"{k}.jsonl").is_file():
         return False
     try:
         fd = os.open(OUT / "claims" / str(k), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        return False
+        # --steal-min M (a GPU worker): a chunk a CPU worker has held for more than M minutes is computed here as well -- the
+        # straggler that keeps a whole stream waiting; whichever finishes first writes the (identical) result, the other one
+        # finds the output there and its work is wasted, nothing else
+        c = OUT / "claims" / str(k)
+        try:
+            held_by_cpu = c.read_text().split()[1] == "cpu"
+            age_min = (time.time() - c.stat().st_mtime) / 60
+        except (OSError, IndexError):
+            return False
+        if not (STEAL and DEV.startswith("cuda") and held_by_cpu and age_min > STEAL):
+            return False
+        c.write_text(f"{os.getpid()} {DEV} stolen\n")
+        return True
     os.write(fd, f"{os.getpid()} {DEV}\n".encode())
     os.close(fd)
     return True
@@ -140,9 +155,23 @@ with slot():
           f"train {cut}, valid {vend - cut} days (to {dates[vend - 1]}); {len(chunks)} chunks", flush=True)
 
     n_done = 0
-    for k, ch in enumerate(chunks):
-        if not claim(k):
+
+    def next_chunk():
+        """The first chunk this worker may take (scanning from the start every time, so a stealing worker always takes the
+        earliest straggler); None when there is nothing to take now."""
+        for k in range(len(chunks)):
+            if claim(k):
+                return k
+        return None
+
+    while True:
+        k = next_chunk()
+        if k is None:
+            if not STEAL or all((OUT / "chunks" / f"{j}.jsonl").is_file() for j in range(len(chunks))):
+                break
+            time.sleep(60)                                    # a stealing worker waits for a chunk to become stale
             continue
+        ch = chunks[k]
         t1 = time.time()
         exprs = list(ch.expression)
         P, err = {}, {}
@@ -178,7 +207,9 @@ with slot():
             lines.append(out)
         ps._mem.clear()                                       # PanelSet keeps every panel it computed in memory (44 MB each); they
         del P                                                 # are on disk in the panel cache already -- a worker would grow by ~40 GB
-        tmp = OUT / "chunks" / f".{k}.jsonl.tmp"
+        if (OUT / "chunks" / f"{k}.jsonl").is_file():           # the other worker finished first (a stolen chunk)
+            continue
+        tmp = OUT / "chunks" / f".{k}.{os.getpid()}.jsonl.tmp"
         tmp.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines), encoding="utf-8")
         tmp.rename(OUT / "chunks" / f"{k}.jsonl")
         n_done += 1
