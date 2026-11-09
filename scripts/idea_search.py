@@ -155,6 +155,11 @@ with slot():
     from partura import guard as _guard
     GP_DEV = "cuda"
     _fb = os.environ.get("PARTURA_GP_CPU_FALLBACK", "")
+    # W02L 2026-11-09: a CPU search took hours where the card takes 40 min, and with 12 run slots on 4 ways nearly every search
+    # found the ways busy at its start -- tmp/gp_no_cpu_fallback (a runtime switch: running conductors keep their env) turns
+    # "1" off, so a search waits for the card batch by batch like any other; "force" still forces the CPU.
+    if _fb == "1" and (PARTURA_ROOT / "tmp" / "gp_no_cpu_fallback").exists():
+        _fb = ""
     if _fb == "force" or (_fb == "1" and not _guard.way_free("gpu")):
         GP_DEV = "cpu"
         for _v in ("PARTURA_RANK_DEVICE", "PARTURA_REWARD_DEVICE"):
