@@ -4,7 +4,11 @@ it), and scored in sample under the user's split of 2026-11-08 -- train 2018-01-
 The label after 2025-12-31 is blanked before anything is scored: no statistic of 2026 is computed here.
 
     source tmp/prod_env.sh
-    python scripts/w02l_stage0.py <members.csv> <outdir> [--device cuda|cpu] [--batch 8] [--steal-min M]
+    python scripts/w02l_stage0.py <members.csv> <outdir> [--device cuda|cpu] [--batch 8] [--steal-min M] [--defer-spearman | --spearman-only]
+
+--defer-spearman: a chunk is scored without its members that use ts_spearman (30 of 5583, all mined; on this host they do not fit
+on the card and take hours each on the CPU, holding up whole batches -- and they can never be a head or material anyway);
+--spearman-only: one expression per job, every ts_spearman member not in any chunk file yet -> <outdir>/chunks/sp<k>.jsonl.
 
 Workers share one queue: chunk k (8 expressions, in members.csv order) is claimed by creating <outdir>/claims/<k> (atomic),
 written to <outdir>/chunks/<k>.jsonl when done; a claim whose worker is no longer alive is released at start, so any number
@@ -60,6 +64,17 @@ os.environ.update(PARTURA_SLOTS=_caps["PARTURA_SLOTS"], PARTURA_GPU_WAYS=_caps["
 
 rows = pd.read_csv(IN)[["lib", "i", "expression", "batch"]].sort_values(["batch", "lib", "i"], kind="stable").reset_index(drop=True)
 chunks = [rows.iloc[k:k + BATCH] for k in range(0, len(rows), BATCH)]
+SP_DEFER, SP_ONLY = "--defer-spearman" in sys.argv, "--spearman-only" in sys.argv
+is_sp = rows.expression.str.contains("ts_spearman", regex=False)
+if SP_ONLY:                                                   # the deferred members, one per job, unless a chunk file has them
+    have = {(x["lib"], int(x["i"])) for f in (OUT / "chunks").glob("*.jsonl")
+            for x in (json.loads(ln) for ln in open(f, encoding="utf-8") if ln.strip())}
+    sp = rows[is_sp & ~rows.apply(lambda r: (r.lib, int(r.i)) in have, axis=1)]
+    chunks = [sp.iloc[[j]] for j in range(len(sp))]
+
+
+def tag(k):
+    return f"sp{k}" if SP_ONLY else str(k)
 (OUT / "claims").mkdir(parents=True, exist_ok=True)
 (OUT / "chunks").mkdir(parents=True, exist_ok=True)
 for c in (OUT / "claims").iterdir():                          # release the claims of workers that are gone
@@ -77,15 +92,15 @@ STEAL = float(sys.argv[sys.argv.index("--steal-min") + 1]) if "--steal-min" in s
 
 
 def claim(k):
-    if (OUT / "chunks" / f"{k}.jsonl").is_file():
+    if (OUT / "chunks" / f"{tag(k)}.jsonl").is_file():
         return False
     try:
-        fd = os.open(OUT / "claims" / str(k), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        fd = os.open(OUT / "claims" / tag(k), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         # --steal-min M (a GPU worker): a chunk a CPU worker has held for more than M minutes is computed here as well -- the
         # straggler that keeps a whole stream waiting; whichever finishes first writes the (identical) result, the other one
         # finds the output there and its work is wasted, nothing else
-        c = OUT / "claims" / str(k)
+        c = OUT / "claims" / tag(k)
         try:
             held_by_cpu = c.read_text().split()[1] == "cpu"
             age_min = (time.time() - c.stat().st_mtime) / 60
@@ -167,11 +182,13 @@ with slot(name="slot"):                                       # its own slots: t
     while True:
         k = next_chunk()
         if k is None:
-            if not STEAL or all((OUT / "chunks" / f"{j}.jsonl").is_file() for j in range(len(chunks))):
+            if not STEAL or all((OUT / "chunks" / f"{tag(j)}.jsonl").is_file() for j in range(len(chunks))):
                 break
             time.sleep(60)                                    # a stealing worker waits for a chunk to become stale
             continue
         ch = chunks[k]
+        if SP_DEFER:
+            ch = ch[~ch.expression.str.contains("ts_spearman", regex=False)]
         t1 = time.time()
         exprs = list(ch.expression)
         P, err = {}, {}
@@ -207,11 +224,11 @@ with slot(name="slot"):                                       # its own slots: t
             lines.append(out)
         ps._mem.clear()                                       # PanelSet keeps every panel it computed in memory (44 MB each); they
         del P                                                 # are on disk in the panel cache already -- a worker would grow by ~40 GB
-        if (OUT / "chunks" / f"{k}.jsonl").is_file():           # the other worker finished first (a stolen chunk)
+        if (OUT / "chunks" / f"{tag(k)}.jsonl").is_file():      # the other worker finished first (a stolen chunk)
             continue
-        tmp = OUT / "chunks" / f".{k}.{os.getpid()}.jsonl.tmp"
+        tmp = OUT / "chunks" / f".{tag(k)}.{os.getpid()}.jsonl.tmp"
         tmp.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines), encoding="utf-8")
-        tmp.rename(OUT / "chunks" / f"{k}.jsonl")
+        tmp.rename(OUT / "chunks" / f"{tag(k)}.jsonl")
         n_done += 1
         print(f"[s0] chunk {k} ({len(lines)} expr, {time.time() - t1:.0f}s); this worker {n_done} chunks in {time.time() - t0:.0f}s", flush=True)
 print("[s0] queue empty", flush=True)

@@ -39,7 +39,8 @@ FORCE = "--force" in sys.argv
 rows = [json.loads(x) for f in sorted(glob.glob(str(D / "stage0" / "chunks" / "*.jsonl"))) for x in open(f, encoding="utf-8") if x.strip()]
 batches = {b["batch"]: b for b in json.loads((D / "struct" / "batches.json").read_text(encoding="utf-8"))["batches"]}
 members = list(csv.DictReader(open(D / "struct" / "members.csv", encoding="utf-8")))
-scored = {(r["lib"], int(r["i"])): r for r in rows}
+scored = {(r["lib"], int(r["i"])): r for r in rows}                # one row per member (a re-scored one counts once)
+rows = list(scored.values())
 missing = [m for m in members if (m["lib"], int(m["i"])) not in scored]
 print(f"stage 0: {len(members) - len(missing)} of {len(members)} expressions scored", flush=True)
 
@@ -67,7 +68,13 @@ for b, rs in by_batch.items():                                # PLAN revision 1:
 # batches are fully scored by stage 0 -- streams already built are left alone
 allb = sorted(batches)
 streams = [allb[j:j + PER] for j in range(0, len(allb), PER)]
-complete = {b for b in allb if len(by_batch.get(b, [])) == sum(1 for m in members if m["batch"] == b)}
+# a batch is complete when every member that can matter is scored: ts_spearman members are deferred to the end of stage 0
+# (scripts/w02l_stage0.py --defer-spearman) and can never be a head or material (above), so a batch does not wait for them
+need = defaultdict(set)
+for m in members:
+    if "ts_spearman" not in m["expression"]:
+        need[m["batch"]].add((m["lib"], int(m["i"])))
+complete = {b for b in allb if need[b] <= {(r["lib"], int(r["i"])) for r in by_batch.get(b, [])}}
 prev = json.loads((D / "streams.json").read_text(encoding="utf-8")) if (D / "streams.json").is_file() else {"streams": []}
 out = list(prev["streams"])
 built_now = []
