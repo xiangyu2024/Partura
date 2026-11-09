@@ -103,7 +103,11 @@ import c05_lib  # noqa: E402
 
 import contextlib  # noqa: E402
 
-with (contextlib.nullcontext() if MODE == "corr" else slot()):
+if MODE != "corr" and os.environ.get("PARTURA_LOCATE_GPU_LOCK"):
+    # W02L: a locate is minutes of work that the next PI waits for -- it takes run slots and GPU ways of its own instead of
+    # queueing behind 40-minute GP searches ($PARTURA_LOCATE_SLOT_NAME, $PARTURA_LOCATE_GPU_LOCK)
+    os.environ["PARTURA_GPU_LOCK"] = os.environ["PARTURA_LOCATE_GPU_LOCK"]
+with (contextlib.nullcontext() if MODE == "corr" else slot(name=os.environ.get("PARTURA_LOCATE_SLOT_NAME") or None)):
     mem = MemoryGuard(self_limit_gb=int(os.environ.get("PARTURA_SELF_LIMIT_GB", 34)), cgroup_limit_gb=int(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 70))).start()
     t0 = time.time()
     from alphacube.plugins import load_plugins
