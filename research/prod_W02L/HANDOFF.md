@@ -12,7 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 1 | 2051 2053 | PI 在跑 | PI 完 → `prod_round.sh corr 1 "2051 2053"` → 审计 → finish |
+| 2 | 2026 | PI 在跑 | PI 完 → `prod_round.sh corr 2 "2026"` → 审计 → finish |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
