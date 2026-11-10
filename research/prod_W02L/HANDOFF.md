@@ -13,6 +13,8 @@
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
 | 1 | 2044 2045 2046 2047 2049 | 相关度表在算(PI 已过 c06_check) | `prod_round.sh corr 1 "2044 2045 2046 2047 2049"` |
+| 1 | 2048 | PI 在写(这一批全没过闸门，从零设计 N 位) | 看 `partura/s2048/r1/missions.yaml` + `c06_check.py 2048 1`;缺就重跑工作流 stage `pi` |
+| 2 | 2030 2038 | PI 在写 | 同上，`round: 2` |
 | 2 | 2007 | 相关度表在算(最慢) | `PROD_HOSTS=research/prod_W02L/hosts.json PROD_ENV=w02l bash scripts/prod_round.sh corr 2 "2007"`(服务器上已起的会自己算完，再跑一次只是取回) |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
