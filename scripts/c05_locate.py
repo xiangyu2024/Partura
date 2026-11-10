@@ -63,6 +63,14 @@ PFX = study.prefix(STUDY)
 MPFX = study.m_prefix(STUDY)                                 # whose main AlphaCube: C06 reuses C05's, C08 reuses C07's (the new rule), PROD runs its own
 EP = PARTURA_ROOT / "episodes"
 START, END, SPLIT = study.view()                             # $PARTURA_VIEW: w01 (default) or w02 (PROD W02L)
+WARMUP = 60
+if MODE == "corr" and os.environ.get("PARTURA_CORR_START"):
+    # W02L: the auditor's table reads train only, every 5th day.  A recent stretch of train ($PARTURA_CORR_START to the last train
+    # day, with $PARTURA_CORR_WARMUP days of warm-up for the 241-day windows) is ~2.5x less work and card memory than the whole
+    # view -- the full view sent most expressions to the CPU and a table took 3 hours; ~100 sampled days are plenty for a screen
+    import datetime as _dt
+    START, WARMUP = os.environ["PARTURA_CORR_START"], int(os.environ.get("PARTURA_CORR_WARMUP", 260))
+    END = (_dt.datetime.strptime(SPLIT, "%Y%m%d") - _dt.timedelta(days=1)).strftime("%Y%m%d")
 STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_factor_compute")
 MIRROR = os.environ.get("PARTURA_MIRROR", "/root/autodl-tmp/AlphaCube/mirror")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
@@ -129,7 +137,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot(name=os.environ.get("
     if MODE == "corr" and os.environ.get("PARTURA_CORR_GPU_LOCK"):
         # W02L: the auditor's table takes ways of its own -- it is small, and it waited behind every GP search's batches
         os.environ["PARTURA_GPU_LOCK"] = os.environ["PARTURA_CORR_GPU_LOCK"]
-    ps = PanelSet(STORE, START, END, warmup=60, device=LOC_DEV, gpu_fraction=(0.12 if MODE == "corr" else 0.3) if LOC_DEV == "cuda" else None, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
+    ps = PanelSet(STORE, START, END, warmup=WARMUP, device=LOC_DEV, gpu_fraction=(0.12 if MODE == "corr" else 0.3) if LOC_DEV == "cuda" else None, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,
                   daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     pool_spec, known_spec = G.spec["pool"][-1], G.spec["pool"][0]
@@ -294,7 +302,7 @@ with (contextlib.nullcontext() if MODE == "corr" else slot(name=os.environ.get("
             print(f"[corr] {min(i + 8, len(exprs))}/{len(exprs)} ({time.time() - t0:.0f}s)", flush=True)
         res = [{**q, **rows.get(q["expr"], {"error": "did not compute"})} for q in req]
         qf.with_name(qf.stem + "_corr.json").write_text(json.dumps({"heads": len(hz), "rows": res}, ensure_ascii=False, indent=1), encoding="utf-8")
-        L = [f"# 相关度表:种子 {S},{ARM} 组,第 {K} 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)", "",
+        L = [f"# 相关度表:种子 {S},{ARM} 组,第 {K} 轮(train {dates[0]} ~ {dates[cut - 1]} 每 5 天一天;|ρ| 不分方向;不是评分)", "",
              f"快照里 {len(hz)} 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|"
              f"(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。", "",
              "| 位置 | 门槛 | 与 head 最大 \\|ρ\\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
