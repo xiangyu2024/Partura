@@ -61,7 +61,7 @@ def head(r):
     s = r[RULER]
     h = {"expr": r["expression"], "sign": s["sign"], "hl": s["hl"], "score": s["score"], "train": s["train"], "valid": s["valid"],
          "rho_known": r["rho"]["known"], "rho_H": r["rho"]["H"], "rho_X": r["rho"]["X"], "lib": r["lib"], "i": r["i"]}
-    if HEADR != RULER and HEADR in r:
+    if HEADR != RULER and "score" in r.get(HEADR, {}):        # D is skipped (no score) where B < stage 0's D_MIN
         h.update({f"score_{HEADR}": r[HEADR]["score"], f"train_{HEADR}": r[HEADR]["train"], f"valid_{HEADR}": r[HEADR]["valid"]})
     return h
 
@@ -139,4 +139,4 @@ out.sort(key=lambda x: x["seed"])
                                             "streams": out}, ensure_ascii=False, indent=1), encoding="utf-8")
 (D / "library_all.json").write_text(json.dumps([{"expr": m["expression"]} for m in members], ensure_ascii=False), encoding="utf-8")
 print(f"ruler {RULER}: built now {built_now or 'nothing'}; streams built {len(out)} of {len(streams)}; "
-      f"next waiting for stage 0: {[FIRST + j for j, bs in enumerate(streams) if not all(b in complete for b in bs)][:3]}")
+      f"next waiting for stage 0: {[FIRST + j for j, bs in enumerate(streams) if FIRST + j not in {x['seed'] for x in out} and not all(b in complete for b in bs)][:3]}")
