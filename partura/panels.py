@@ -97,6 +97,17 @@ def parse_research(src: str, n_minutes: int = 241):
         return parse(src, strict=False, coerce_daily=True, n_minutes=n_minutes, allow_general=True)
 
 
+def _semantics_salt(expr_key: str) -> str:
+    """AlphaCube's cache salt for expressions using an operator whose semantics changed (the Hurst operators,
+    2026-11): those panels get a new cache entry instead of the stale one.  "" for every other expression (their
+    keys are unchanged) and for an AlphaCube without the salt."""
+    try:
+        from alphacube.operators.dt_day import semantics_salt
+    except ImportError:
+        return ""
+    return semantics_salt(expr_key)
+
+
 def _drop_page_cache(path: Path) -> None:
     try:
         fd = os.open(str(path), os.O_RDONLY)
@@ -291,7 +302,7 @@ class PanelSet:
     def _cache_path(self, expr_key: str) -> Optional[Path]:
         if not self.cache_dir:
             return None
-        h = hashlib.sha1(f"{self.view_id_for(expr_key)}|{expr_key}".encode()).hexdigest()[:16]
+        h = hashlib.sha1(f"{self.view_id_for(expr_key)}|{expr_key}{_semantics_salt(expr_key)}".encode()).hexdigest()[:16]
         return self.cache_dir / f"{h}.npy"
 
     # -- labels -----------------------------------------------------------
