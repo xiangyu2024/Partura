@@ -19,6 +19,7 @@
 每批的 token 记到 `TOKENS.md`。
 
 然后循环:`bash scripts/w02l_pending.sh` 列出新 READY 的流 → `prod_round.sh fetch` → PI → corr → audit → finish。
+**fetch 必须先于派 PI**(11-10 漏过一次:PI 要么拒绝，要么只凭上一轮快照写计划;后者要删掉 missions.yaml 和 notebook 新加的一节再重派)。
 
 ## 第 0 步结束以后
 
