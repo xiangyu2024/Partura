@@ -12,10 +12,11 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 1 | 2044 2045 2046 2047 2049 | 审计在跑(表已到本地) | 看 `audit_1.yaml`;有就 `finish 1 "<流>"`,没有就重跑 stage `audit` |
-| 1 | 2048 | PI 在写(重跑;这一批全没过闸门，从零设计 N 位) | 看 `partura/s2048/r1/missions.yaml` + `c06_check.py 2048 1`;缺就重跑工作流 stage `pi` |
-| 2 | 2030 2038 | PI 在写(重跑;2038 半截计划挪成 missions.partial_killed.yaml) | 同上，`round: 2` |
-| 2 | 2007 | 审计在跑(第三次:一次被带偏、一次额度中断) | 看 `partura/s2007/r2/audit_1.yaml`;有就 `finish 2 "2007"`,没有就重跑 stage `audit` |
+| 1 | 2048 | 相关度表在算 | `prod_round.sh corr 1 "2048"`(服务器上已起的会自己算完，再跑一次只是取回) |
+| 2 | 2030 2038 | 相关度表在算 | `prod_round.sh corr 2 "2030 2038"` |
+| 1 | 2050 2052 | PI 在写 | 看 `partura/s<流>/r1/missions.yaml` + `c06_check.py <流> 1`;缺就重跑工作流 stage `pi` |
+| 2 | 2037 | PI 在写 | 同上，`round: 2` |
+| 3 | 2006 | PI 在写 | 同上，`round: 3` |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
