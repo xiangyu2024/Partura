@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 3, 4, 5, 6, 13]
+    reasons: '核心即快照 head 1 本身 ts_max(cs_demean(day_corr(Ret, Volume)), 120)。相关度表:核心与 5 个控制的 |ρ| 最大 0.12(known),远低于 E 位的 0.8 门槛,核心门槛通过。自动划掉 1–6 与 13:它们与 head 1 的原始日度秩 |ρ| 为 0.75 / 1.00 / 1.00 / 0.95 / 0.96 / 0.97 / 0.96,均 ≥ 0.7,与 GP 库禁令同一量,属于 §3 的自动划掉,不是数学问题;这几个都是 head 1 去掉 σ 或加 cs_regres 残差后的同一个量。剩 7–12 共 6 个,≥ 4,通过。逐个:(7) add(ts_max, ts_min) 与 head 1 的 |ρ| = 0.67,度量的是 120 日同步度上下尾的不对称,不是 head 本身,放行。(8) (ts_max - ts_mean)/ts_std 与 head 1 为 0.67,形状上是标准化极值;分子用 cs_demean 后的序列、分母用未去均值的 day_corr 的 ts_std,口径不一致,但 ts_std 不设最小样本,而比值的上界由 sqrt(n-1) 控制,n=1 时 0/0 为 NaN,没有爆点,放行。(9) cs_rank(head 1) 减 cs_rank(Amt 版同构 head),与所有 head 的 |ρ| 最大只有 0.07,两个 day_corr 在截面上高度接近,差值接近噪声,这是有效性上的弱点,不是数学问题,放行。(10) head 1 乘 120 日价格变动的符号,与 vol 控制 0.31、rev 0.21 中等相关,未到 0.5,放行。(11) head 1 乘 60 日 cs_demean 后的符号化成交额失衡,与 vol 0.29、rev 0.29、size 0.21,放行。(12) cs_rank(head 1) 减 cs_rank(120 日价格变动),与 vol 0.28、rev 0.21,放行。数学检查:cs_rank 走 nd_cs.py 的 _common_rank,无效值输出 NaN 而不是 0,不触发 nanrank_last 的停牌记 0 陷阱;day_last 取当日最后有效分钟收盘,ts_delta、ts_mean 只回看;没有前视。新颖度给 3:整个位是 head 1 的 ts_max 族外围的形状变换,核心已在库里,只有 9 与 11 的交互形式有一定新意,不给 4。如果有 alpha,最可能来自:第 11 项的买压符号交互(被价格没有反映的净买压),其次第 9 项的按股数与按金额同步之差;第 7、8 项与 head 1 的 0.67 相关,若有 alpha 更可能只是 head 1 的尾部形状,库禁令之后要留意它们是否只剩残差。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: 'N 位。12 个种子全部保留,无一与任何 head 的原始日度秩 |ρ| ≥ 0.7(最高 0.67,为种子 8 与 head 2;种子 9 与 head 1 为 0.65;种子 1 与种子 5 与 head 1 均为 0.63),与 5 个控制的 |ρ| 最大 0.24(种子 3 与 size)。划掉 0 个,12 ≥ 4,通过。新颖度 4:12 个种子换的是 day_corr 的原料对与分钟变换(abs_(Ret)、in_delay / in_delta 的分钟领先滞后与变化、Close 与 Vwap 对 Volume),残差与 head 的 |ρ| 在 0.2–0.6 之间,骨架是库里没有的(两库 day_corr(F, F) 不带 abs_ / in_delay / in_delta 的变换),不是 head 窗口的改写。逐个放行:(1) abs_(Ret) 与 Volume 的同步,与 head 1 为 0.63,读的是波动与放量的同步而不是方向,放行;(2) ts_min 版,与所有 head 的 |ρ| 为 0.33,放行;(3) 与 in_delay(Volume,1) 的领先,0.32,放行;(4) in_delay(Ret,1) 与 Volume,0.46,放行;(5) 与 in_delta(Volume,1) 的变化同步,0.63,放行;(6) Close 与 Volume,0.25,放行;(7) Vwap 与 Volume,0.23,放行;(8) abs_ 与 Amt 的两级极值,0.67,放行;(9) abs 版减 head 1 的差,0.65,放行;(10) ts_min 版的 in_delta,0.26,放行;(11) abs 与 in_delta,0.56,放行;(12) Close 与 in_delay(Volume,1),0.26,放行。算子核对:in_delay 与 in_delta 都只沿分钟轴回看(in_delta 的实现沿第二维差分,是对的),第一分钟为 NaN;day_corr 对 NaN 按有效点计算;abs_ 是 torch.abs;没有 ts_rank / cross_rank,不触发 nanrank_last。需要注意的一点:day_corr 在某条序列全天常数时返回 0 而不是 NaN(dt_day.py 的 corr = cov / (sqrt(var_x var_y) + EPS)),涨跌停锁定日的 Ret 与 abs_(Ret) 会被填成 0。这是 head 1 与 head 2 本身也有的定义特征,不是本位独有,且 ts_max 对 0 的敏感度低,不构成「定义坏掉」,故不挡;但 ts_min 的种子 2 与 10 对 0 填充更敏感,实现后应检查全天常数日的比例。合理度 4:每个种子的机制(追涨杀跌式的分钟领先、放量时的极端波动、变化量与收益的同步)都能说清。如果有 alpha,最可能来自:种子 4 与 5(分钟领先与量变化的同步,与 head 的相关 0.46 与 0.63,残差里更可能含新信息)与种子 1 的 abs 版(放量时是否大幅波动);种子 6 与 7 的价格水平与成交量同步最可能只是日内趋势的代理。'
+R:
+  - head: 'ts_max(cs_demean(day_corr(Ret, Volume)), 120)'
+    soundness: 4
+    reasons: 'R 组只评合理度。6 个变体的算子都是 NaN 安全的:cs_demean、cs_rank(走 _common_rank,无效值输出 NaN)、ts_mean(day_corr, 5) 只回看,ts_max 窗口 90–180 都是向后看,没有前视,也没有 nanrank_last 的陷阱。变体 1 把两种原料的相关相加,与 head 1 的 |ρ| 为 1.00,等于在截面排序上几乎不变,若被替换则是写法变化,不是新信息,但数学上没有问题,放行。变体 2(嵌套 40 再 120)与 head 2 为 0.88,变体 3 的 180 日窗口与 head 2 为 0.84,变体 4 的截面排序与 head 1 为 0.95,都是同一机制的窗口或变换。变体 5(先 5 日均值再极值)与 head 1 为 0.43,只改平滑,机制清楚,合理。变体 6 用 day_corr(Ret, Vwap),与 head 1 的 |ρ| 残差 0.12,但与 known 控制为 0.48、与 size 为 0.43,接近 0.5 的门槛,这是 R 的替换判据问题,不是数学问题。合理度 4:整组都是对 head 1 的同一原料的窗口、平滑、排序与原料替换,机制说得通。'
+  - head: 'ts_max(ts_max(day_corr(Ret, Amt), 40), 120)'
+    soundness: 4
+    reasons: 'R 组只评合理度。6 个变体同样是 NaN 安全与向后看的算子组合,没有前视。变体 1 的 cs_demean 加 160 日窗口与 head 2 为 0.88;变体 2 的嵌套 20 再 160 为 0.84;变体 3 的 90 日窗口与 head 1 为 0.88(与 head 2 为 0.87 区间内);变体 4 的 cs_rank 与 head 2 为 0.95;变体 5 只把内层改成 cs_demean 后的 40 日,与 head 2 为 0.88;变体 6 把 Amt 与 Volume 的相关相加后取 160 日,与 head 2 为 0.88。这些变体与拆解表里的结论一致(外层窗口 60 与 120 同分,240 掉分),机制是同一个慢极值的窗口与原料的微调,没有新机制。合理度 4:机制清楚,算子组合与说明一致;唯一的弱点是多数变体与 head 2 高度相关,对替换判据的信息增量有限,不是数学问题。'
+summary: '两个任务位都通过且无数学问题。a(E,核心为 head 1)划掉 1–6 与 13 共 7 个,余 7–12 共 6 个,新颖度 3、合理度 4;b(N)12 个种子全保留,新颖度 4、合理度 4。两组 R 合理度均为 4。'

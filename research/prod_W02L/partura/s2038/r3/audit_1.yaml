@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 5, 8]
+    reasons: '门槛与规则核对:E 核心 C = sub(day_wmean(Ret,Amt), day_mean(Ret)) 与 5 个控制的日度秩 |ρ| 为 liq 0.03、vol 0.04、rev 0.17、known 0.03、size 0.02(corr_1.md 的 slot a core 行),远低于 0.8,E 位的核心门槛通过。C 是 loc.md 共性表里记录过的子树。库核对:struct/members.csv 的 5583 条里 day_wmean 出现 0 次,C 不是库里已有的写法。创新度 4:逐算子核对 ops_ext.py 的 day_wmean(分母 clamp,全无成交为缺失)与 day_mean,C 恒等于 cov(Ret,|Amt|)/mean(|Amt|),是有符号的资金流方向。它与 liq / vol / known / size 的日度秩 |ρ| 都在 0.17 以下,最像的 head ts_decay_linear(day_open(Volume),5) 残差只有 0.09,不是换写法。合理度 4:机制清楚(单向母单分批执行的足迹,Kyle 1985、Lillo-Farmer 2004),算子实现与描述一致:cs_first_low20 / cs_first_low40 / cs_last_low10 经 _lexi 的整块并列判断只把段内整块排到顶端或底端,输出无并列;cross_ema、cross_zscore、cross_tail_mean_q75、cross_stddev 都是因果的日轴窗口;cs_regres 是逐日截面 OLS 残差。数学问题只有一处:种子 8 的 cross_semistd_pos 减 cross_semistd_neg。_semistd 只在相邻两日都为正时计算 log 比(要求 x>0 且 prev>0),C 是有符号量,约一半日子被掩码掉,输出是符号掩码后的对数变化而不是 C 的上下半方差,属于定义坏掉,划掉。种子 4、5 与快照里 ts_min(ts_min(ts_regres(cross_quantile_q25(day_autocorr_n1(Volume)...)))) 的原始 |ρ| 为 0.72 与 0.73,达到 0.7 的自动划掉线,按规则划掉。其余种子与 head 的原始 |ρ| 最高 0.53(种子 1)、与控制最高 0.64(种子 10 的 size),都不过线,保留。划掉后剩 11 个,过线。留意但不挡:种子 6 的分母 cross_stddev(C,60)+1e-6 只在 C 近乎常数时才接近零,而那时分子也近乎为零,不构成爆点;种子 1、2、10 的段变量 ListAge 为整数时,段可能比 20% 窄,_lexi 的设计只会收窄不会错位。如果它有 alpha,最可能来自大额成交集中在上涨或下跌分钟的方向性,在慢平滑之后保留下来的持续部分,而不是某一段的风格。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '门槛与规则核对:N 位无 E 门槛。日度秩 |ρ| 与快照 head 的最大值为种子 6 的 0.67,低于 0.7;与 5 个控制的最大值为种子 5 的 liq 0.68,低于 0.8,没有自动划掉的种子。创新度 3:段结构(cs_first_low20 等整块阶跃)不在 5 个控制的 1 到 3 次秩多项式里,这是库里没有的部分;但种子 2、5、6、12 本质上是 day_last(Amt) 的水平或其平滑在段内的排序,与 liq 的日度秩 |ρ| 分别为 0.49、0.68、0.46、0.45,与第 1 轮 GP 长出的 +0.48 结构同族,这部分只能算换外围,所以创新度给 3 而不是 4。种子 1、4、11 是有界的无量纲比值或秩,新意更强。合理度 4:机制清楚(收盘集合竞价与小股本段的相对参与度,Kyle 冲击随深度反比放大)。逐算子核对:day_signed_ratio 有界于 [-1,1],分母为零时缺失;cs_bucket_rank 与 cs_bucket_zscore 是同桶内相对;cross_mean / cross_ema / cross_zscore / cross_max 都是因果日轴窗口;种子 1 的 div(day_last(Amt), add(day_sum(Amt),1)) 因 day_last 不超过 day_sum 而有界于 [0,1],分母 +1 对 1e6 量级的成交额无影响。数学问题只有一处:种子 8 的 div(day_open(Amt), add(day_last(Amt),1)) 外面套 cross_ema(·,30)。分母只用绝对值 +1 防零,而 day_last(Amt) 在收盘分钟无成交的薄股上可以为零(r2 的审计已指出停牌日可能取 0 而非缺失),此时比值约等于开盘分钟成交额本身(1e5 到 1e7 元),内层 cross_ema 把这一单日爆点保留 30 日以上,使段内排序被爆点支配,属于数值伪影,划掉。留意但不挡:(i) 种子 5 的 cs_first_low20(day_last(Amt), sub(LogFloatShares, LogFloatCap)) 与第 2 轮 audit_record.json 的 seeds_all 中的同名种子完全相同,若该式在第 2 轮已评分,这里属于重复;本审计不据此划掉,但 PI 应核对是否重复计算;(ii) 种子 1 与种子 10 只差窗口与段宽(60 与 20 日、20% 与 40%),不算重复。划掉后剩 11 个。如果它有 alpha,最可能来自收盘或开盘集合竞价成交额的相对强度在小股本段内的集中,也就是段内的参与度,而不是全截面的成交额水平。'
+R:
+  - head: 'div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1))'
+    soundness: 4
+    reasons: '无数学问题。原 head 的分母是 20 日均总额加 1,量级 1e6 以上,无爆点。拆解中的变体 1 去掉分母的 20 日平滑,改成当日 day_sum(Amt)+1:当日成交额很小时没有相对下界,比值可以很大,但它没有内层 EMA,每天先在截面上转成排名,单日爆点只占一个秩位,不会被 EMA 放大,所以不是数学问题;变体 1 与原 head 的日度秩 |ρ| 为 0.83、残差 0.92,属于替换而不是新收录,这一点 PI 已按规则处理。变体 2 把分子换成当日开盘成交额、分母保留 20 日平滑,比值有界且稳定,机制最清楚。变体 3 至 5 是同一比值放进小股本段或同桶内,都是已有算子的正常用法。如果它有 alpha,最可能来自开盘竞价成交额相对全天成交额的近期常态的偏离,即竞价参与度的相对强度。'
+  - head: 'ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)'
+    soundness: 3
+    reasons: '无数学问题:log 是对 |x| 取对数,|x| 不超过 EPS 时为缺失;cross_regbeta 的斜率在方差近零时为缺失,不会爆点。但它的机制说不清:取绝对值丢掉斜率的符号,ts_max 只保留 70 日的峰值,而且拆解表明回归可以敲掉。变体 1 ts_max(ts_max(log(day_last(Amt)),20),50) 与 liq 控制的日度秩 |ρ| 为 0.86、与 known 为 0.85(corr_1.md 的 R 2 variant 1 行),本质上是流动性水平的复写,不是新东西,PI 若想收录应当看到这一点。变体 2 把它放进小股本段,变体 3 用收盘额占比代替对数,都没有引入新的数学问题。说不清机制不是挡的理由,所以给 3。如果它有 alpha,最可能来自 70 日内成交额峰值所携带的活跃度信息,而不是开盘与收盘的联动。'
+  - head: 'ts_min(ts_regres(cross_quantile_q25(day_autocorr_n1(Volume), 15), day_durbin_watson(Ret), 30), 50)'
+    soundness: 3
+    reasons: '无数学问题。ts_regres 的 X 为分钟收益的 Durbin-Watson,在收益常数的日子会除零,输出为缺失而不是爆点;外层 ts_min 把窗口从 50 放大到 100 是慢化,机制上是取窗口内的最差值,说明的是持续的低值而不是单日的极端。变体 1 与变体 2 只差 Volume 与 Amt,而两者的全部相关度数字逐位相同(原始 0.65、残差 0.61、各控制 0.01 至 0.09),说明 Volume 与 Amt 的日内一阶自相关在截面上的排序几乎一样,字段替换没有改变信号。这不是数学问题,但 PI 不应把变体 2 当成独立的第二个候选,也应当核对它是不是同一个量。如果它有 alpha,最可能来自成交量路径的持续性(母单切分的节奏)在截面分位上的极端程度,而且 Durbin-Watson 去掉了它与收益的部分线性关系。'
+summary: 'a 位通过(创新 4、合理 4,划掉种子 4、5、8,其中 4、5 为与 head 原始 |ρ| 0.7 以上的自动划掉、8 为定义坏掉,剩 11 个);b 位通过(创新 3、合理 4,划掉种子 8 为数值伪影,剩 11 个,留意种子 5 与第 2 轮同名的重复问题);R 三组全部放行(合理度 4、3、3),R1 变体 1 为替换、R2 变体 1 与流动性控制高度相关、R3 两个变体的相关度数字逐位相同,都需要 PI 留意。'

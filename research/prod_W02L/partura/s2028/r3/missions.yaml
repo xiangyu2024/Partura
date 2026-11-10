@@ -1,0 +1,53 @@
+seed: 2028
+round: 3
+slots:
+- type: E
+  core: cross_ema(day_gini(Amt), 60)
+  hypothesis: 核心 G = cross_ema(day_gini(Amt), 60):个股当天 241 根分钟成交额的基尼系数(成交额挤在少数几分钟的程度,尺度不变:成交额乘常数不变),再做 60 日 EMA 变成慢变量。证据(只用 2025-12-31 以前):定位共性表里含 G 的 6 个已评分候选均值差 +1.86、p 0.000(含 +0.00 / 不含 -1.86),是 175 个候选里最强的富集;上一轮 E 位 T 里 cs_last_low10(G, day_close(Low)) 是 +0.17(train)/ +0.44(valid),没有过线,但它是本流唯一一个『不含 day_kurt(Volume)、也不是 head 1 近亲』的正分写法。G 从没被当过核心深挖(只在 T 位的外围里出现过),库里 day_gini 只出现在不含 cross_ema 的骨架里(库骨架被禁)。机制:成交额集中度高 = 当天交易由少数大单 / 事件驱动(信息交易者或散户事件追逐),集中度低 = 算法按 VWAP 摊平(机构执行、被动资金)。持续的摊平者是机构持仓盘,持续的挤堆者是被事件和彩票型资金驱动的票;这是持有人结构的慢变量,不是流动性水平(尺度不变),所以对 5 个控制的残差里仍有东西。本轮外围与以前不同:上一轮的外围全部是 cs_last_low10 阶跃带(Low 价位)加慢 EMA;本轮 16 个种子不用任何 cs_last_* 阶跃把 G 压成档位,而是 (1)用截面回归 / 分桶去均值把 G 对市值、价位、G 的成交量版去掉(cs_regres、cs_bucket_demean),分离『G 的独立信息』与风格;(2)G 的自身动态(与 241 日 EMA 的比、20 日变化、z 分数);(3)G 放进耦合(滞后 1 日的 G 对市场相对收益的 120 日相关 / 斜率,无前视);(4)G 作为门控变量去选市值(cs_first_low40 / cs_first_high40 以 G 为 x),即把 head 1 里『价位门控市值』的角色对调,检验阶跃×市值倾斜是否只是代理了成交形状。(5)与 day_kurt(Volume) 的名次差、与 day_std(Ret) 之比,检验是否被『成交形状 / 波动』两个已知方向分解掉。数学检查:day_gini 对整天无成交为缺失不是 inf;cross_ema 是尾随 EMA、窗口 60 / 241,无前视;耦合种子用 cross_delay(·,1)。除法种子的分母 cross_ema(day_std(Ret),60) 与 241 日 EMA(G) 恒正,不近零(基尼在 0.3 ~ 0.9)。为什么样本外还会在:成交分布由执行方式和持有人结构决定,慢变量;T 位里 valid 比 train 好(+0.44 对 +0.17),说明没有被 2023 年以前的成本挤掉;但我预期不高。
+  seeds:
+  - cs_regres(cross_ema(day_gini(Amt), 60), LogFloatCap)
+  - cs_regres(cross_ema(day_gini(Amt), 60), log(day_last(Close)))
+  - sub(cross_ema(day_gini(Amt), 60), cross_ema(day_gini(Volume), 60))
+  - sub(cs_rank(cross_ema(day_gini(Amt), 60)), cs_rank(cross_ema(day_kurt(Volume), 60)))
+  - div(cross_ema(day_gini(Amt), 60), cross_ema(day_gini(Amt), 241))
+  - mul(cross_ema(day_gini(Amt), 60), cs_rank(LogTotalCap))
+  - cs_bucket_demean(cross_ema(day_gini(Amt), 60), LogFloatCap)
+  - cs_bucket_demean(cross_ema(day_gini(Amt), 60), day_close(Low))
+  - cross_corr(cross_delay(cross_ema(day_gini(Amt), 60), 1), cs_demean(ts_delta(log(day_last(Close)), 1)), 120)
+  - div(cross_ema(day_gini(Amt), 60), cross_ema(day_std(Ret), 60))
+  - cs_first_low40(LogTotalCap, cross_ema(day_gini(Amt), 60))
+  - cs_first_high40(LogTotalCap, cross_ema(day_gini(Amt), 60))
+  - cross_regbeta(cross_delay(cross_ema(day_gini(Amt), 60), 1), cs_demean(day_sum(Ret)), 120)
+  - ts_delta(cross_ema(day_gini(Amt), 60), 20)
+  - cross_zscore(cross_ema(day_gini(Amt), 60), 241)
+  - cs_regres(cross_ema(day_gini(Amt), 60), cross_ema(day_gini(Volume), 60))
+- type: N
+  hypothesis: 新 idea:分钟收益的一阶自相关(用 day_durbin_watson(Ret),DW ≈ 2(1 - ρ1),ρ1<0 是买卖价差反弹 / 做市商库存压力,ρ1>0 是延续 / 拆单冲击),做 60 日 EMA 成慢变量。灵感:B084 批的 ts_regres(…, day_durbin_watson(Ret)) 与 cross_quantile_q25(pow_3(day_mean(Volume)), ·) 都是『成交量的底』类,说明这批在读不活跃的票;但它们在尺子上全部是 -1.5 以下(成交量水平被流动性 / 市值控制吃掉)。DW 是无量纲的微观结构量,不含成交量水平,库里它只是被当作 ts_regres 的回归元,从没被当主信号,也没有被慢化、分桶去均值或放进状态。机制:分钟收益负自相关强的票,价格里含有被买卖价差和库存冲击推开又弹回的成分,日频收盘价里的『噪声部分』大,Amihud 式缺口大;长期持有它们要求的补偿(流动性溢价)与成交量水平不同,它是按交易成本结构而非规模排序。反方向(正自相关,拆单延续)则是知情大单的踪迹。两个方向我都让尺子的方向自己选(sign 可取 ±1)。算子实现:16 个种子里 (a)慢水平(60 日 EMA、与 241 日的差、z 分数);(b)去风格:对 LogFloatCap、日成交额基尼、log 成交量均值做 cs_regres,或 cs_bucket_demean;(c)与波动之比;(d)下尾 / 波动(cross_tail_mean_q25、cross_stddev);(e)滞后耦合(DW 的滞后 z 分数对当日市场相对收益的 120 日相关);(f)门控(cs_first_low40 以市值,cs_last_high10 以价位)和与 G 的名次差。和库不同:库没有以 DW 为叶子的主信号,也没有 cross_ema(DW) / cross_zscore(DW) 骨架(库骨架被禁,这些都新)。数学检查:DW 的分母是收益平方和,近零(停牌 / 无成交)时是缺失或爆点;cross_ema 是 60 日慢均值,极端值被平均;cross_tail_mean_q25 对下尾取均值,也不依赖单日极值。无前视:当天分钟收益在当天收盘后算,t+1 交易。除以 cross_ema(day_std(Ret),60) 的分母恒正。为什么样本外还会在:微观结构的自相关由交易制度(T+1、涨跌停、集合竞价)与做市结构决定,变化慢;我预期被市值 / 流动性控制吃掉的风险大。
+  inspired_by: B084 批(成交量的底:pow_3(day_mean(Volume))、ts_regres(…, day_durbin_watson(Ret)))里被当回归元、从未当主信号的 day_durbin_watson(Ret)
+  seeds:
+  - cross_ema(day_durbin_watson(Ret), 60)
+  - cs_regres(cross_ema(day_durbin_watson(Ret), 60), LogFloatCap)
+  - cs_regres(cross_ema(day_durbin_watson(Ret), 60), cross_ema(day_gini(Amt), 60))
+  - sub(cross_ema(day_durbin_watson(Ret), 20), cross_ema(day_durbin_watson(Ret), 241))
+  - cs_bucket_demean(cross_ema(day_durbin_watson(Ret), 60), LogFloatCap)
+  - cross_zscore(day_durbin_watson(Ret), 120)
+  - div(cross_ema(day_durbin_watson(Ret), 60), cross_ema(day_std(Ret), 60))
+  - cross_corr(cross_delay(cross_zscore(day_durbin_watson(Ret), 60), 1), cs_demean(day_sum(Ret)), 120)
+  - cs_regres(cross_ema(day_durbin_watson(Ret), 60), log(cross_mean(day_mean(Volume), 20)))
+  - cross_tail_mean_q25(day_durbin_watson(Ret), 60)
+  - cross_stddev(day_durbin_watson(Ret), 120)
+  - cs_first_low40(cross_ema(day_durbin_watson(Ret), 60), LogTotalCap)
+  - cs_last_high10(cross_ema(day_durbin_watson(Ret), 60), day_close(Low))
+  - sub(cs_rank(cross_ema(day_durbin_watson(Ret), 60)), cs_rank(cross_ema(day_gini(Amt), 60)))
+R:
+- head: div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Volume), 3), 20))
+  why: head 1 的分母 EMA 窗口:拆解里 20→10 是 +0.92(比 +0.87 高),窗口曲线没走到头;Low→High、Volume→Amt 各自持平(+0.87 / +0.86),组合没试过。上一轮 R 已排除:去阶跃、换 LogFloatCap 都崩;分母去 +3 持平。本轮只沿慢分母的窗口、价位字段和成交形状字段继续。
+  variants:
+  - div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Volume), 3), 10))
+  - div(cs_first_low40(LogTotalCap, day_close(High)), cross_ema(add(day_kurt(Volume), 3), 10))
+  - div(cs_first_low40(LogTotalCap, day_close(High)), cross_ema(add(day_kurt(Volume), 3), 5))
+  - div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Volume), 3), 5))
+  - div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Amt), 3), 10))
+  - div(cs_first_low40(LogTotalCap, day_close(High)), cross_ema(add(day_kurt(Amt), 3), 10))
+  - div(cs_first_low40(LogTotalCap, day_close(Low)), sqrt(cross_ema(add(day_kurt(Volume), 3), 10)))
+  - div(cs_first_low40(LogTotalCap, day_close(Vwap)), cross_ema(add(day_kurt(Volume), 3), 10))

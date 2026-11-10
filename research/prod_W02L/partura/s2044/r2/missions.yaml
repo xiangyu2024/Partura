@@ -1,0 +1,79 @@
+seed: 2044
+round: 2
+slots:
+- type: E
+  core: 'ts_max(cs_demean(day_corr(Ret, Volume)), 120)'
+  hypothesis: '【读数】第 1 轮 R 与本轮 loc 的事实:单看 day_corr(Ret, Volume)(量价同步度 c)两段都亏(-3.39 / -2.98),套 120 日滑动最大值后才转正;
+    ts_max(cs_demean(c), 120) = +0.61(train +0.61 / valid +0.93,hl 5);Volume 换 Amt、窗口 240 都在 +0.5 ~ +0.6,说明读到的是「过去半年里个股最极端的一次量价同步」这一慢变量,不依赖某个具体窗口。
+    第 1 轮 E 位围绕 c 做 EMA / 回归斜率 / 标准化极值全部亏(最好 -0.86),所以 alpha 不在 c 的水平或耦合斜率里,而在「极值」这个形状里。
+    【我的读法(推理)】X = ts_max(cs_demean(c), 120) 约等于 μ_i + σ_i · g(120),σ_i 是 c 的逐日抖动(由流动性、成交连续性决定),与已知波动 / 流动性控制相关的部分会被新尺子去掉,但残渣里可能仍混着「σ 的估计噪声」。
+    本位把核心 X 原样保留,在外面做四类处理来分开「极值里的事件信息」与「σ 的残渣」,每个种子都原样含 X:
+    (1) 对 σ 的回归残差:cs_regres(X, ts_std(c, 120))、cs_regres(X, 120 日平均日内波动 ts_mean(day_std(Ret), 120))、cs_regres(X, 120 日平均对数成交额 ts_mean(log(day_sum(Amt)), 120))、cs_regres(X, 日内波动的 120 日最大值)——显式回归掉与 X 相伴的波动 / 流动性水平,残余是「同步度峰值高、而波动 / 流动性并不高」的票;
+    (2) 峰值相对平均水平:X 减去 c 的 120 日均值(ts_mean)、X 减 c 的 EMA、X 加 c 的 120 日最小值(上下尾对称性)——σ 在相减里抵消,只剩事件强度;
+    (3) 两种原料的错位:X 的名次减同一构造用 Amt 的名次(Volume 与 Amt 的差别是价格加权,差出来的是「按股数同步、而不按金额同步」,与低价 / 高价股的参与者结构有关);X 乘 120 日收益符号(峰值同步 + 价格趋势方向的交互);X 与 60 日平均符号化成交额失衡(day_signed_ratio)的乘积(同步度峰值 + 净买入方向)。
+    【为什么与快照里已见过的写法不同】已见过含 X 的外围只有 ts_max 的窗口改写(120 / 240 / 60)与 Volume→Amt 的字段替换;含 c 的第 1 轮候选外围是 EMA、回归斜率。本位外围是截面回归残差、与均值 / 最小值 / 名次的差、与趋势和买入失衡的乘积,均不是窗口改写,算子骨架逐个对过两库,不在其中。
+    【为什么样本外还会在】c 的极端值来自参与者构成(机构拆单程序、被事件驱动的放量日),是慢变量;head 在 train / valid 两段的成绩同号(+0.61 / +0.93),换手低(窗口 120 日),不依赖某一段行情;回归掉波动 / 流动性之后,若分数仍在,说明来源是极值本身而不是水平残渣。
+    【如果有 alpha,最可能来自】(1) 的残差类与 (2) 的 X - 均值(σ 去掉后仍然为正,说明是事件强度);(3) 的名次差最可能与 X 本身相关过高被划掉。
+    【数学检查】所有分母是 ts_std(c, 120),窗口内全常数才为 0,c 逐日抖动 ~ 0.06,无近零爆点;cross / cs 回归在回归元方差为 0 时返回 NaN,不是爆点;未使用 ts_rank / cross_rank,不触发 nanrank_last 缺失记 0;没有用到当天收盘之后的数据(day_ 聚合只用当天分钟,滞后都在 ts_ 外层)。'
+  seeds:
+  - 'cs_regres(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_std(day_corr(Ret, Volume), 120))'
+  - 'cs_regres(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_mean(day_std(Ret), 120))'
+  - 'cs_regres(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_mean(log(day_sum(Amt)), 120))'
+  - 'cs_regres(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_max(day_std(Ret), 120))'
+  - 'sub(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_mean(cs_demean(day_corr(Ret, Volume)), 120))'
+  - 'sub(ts_max(cs_demean(day_corr(Ret, Volume)), 120), cross_ema(cs_demean(day_corr(Ret, Volume)), 120))'
+  - 'add(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_min(cs_demean(day_corr(Ret, Volume)), 120))'
+  - 'div(sub(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_mean(cs_demean(day_corr(Ret, Volume)), 120)), ts_std(day_corr(Ret, Volume), 120))'
+  - 'sub(cs_rank(ts_max(cs_demean(day_corr(Ret, Volume)), 120)), cs_rank(ts_max(cs_demean(day_corr(Ret, Amt)), 120)))'
+  - 'mul(ts_max(cs_demean(day_corr(Ret, Volume)), 120), sign(ts_delta(log(day_last(Close)), 120)))'
+  - 'mul(ts_max(cs_demean(day_corr(Ret, Volume)), 120), cs_demean(ts_mean(day_signed_ratio(Ret, Amt), 60)))'
+  - 'sub(cs_rank(ts_max(cs_demean(day_corr(Ret, Volume)), 120)), cs_rank(ts_delta(log(day_last(Close)), 120)))'
+  - 'cs_regres(ts_max(cs_demean(day_corr(Ret, Volume)), 120), ts_max(cs_demean(day_corr(Close, High)), 120))'
+- type: N
+  hypothesis: '【新想法】把「过去半年里最极端的一次分钟级耦合」(慢极值)从 Ret–Volume 同步度搬到别的日内耦合统计量上。
+    【读数】本流 loc 的事实:day_corr(Ret, Volume) 与 day_corr(Ret, Amt) 一族,套 ts_max 120 日后两段都 +0.58 ~ +0.61,而它们的水平 / EMA / 回归斜率 / 标准化极值读法(第 1 轮)全亏,说明可迁移的是「慢极值」这个结构,而不是 Ret–Volume 这一对原料;
+    B131 富集表里 day_corr(Close, Volume) 的含它的候选均值差 +0.55,也提示别的原料对里有信息。
+    【机制与算子实现】每个种子都是 ts_max(cs_demean(日内耦合统计量), 120) 或其对称版本,换的是耦合统计量里的原料,骨架因为原料外面套了 abs_ / in_delay / in_delta 而与两库里 day_corr(F, F) 的骨架不同:
+    (a) day_corr(abs_(Ret), Volume):波动 – 成交量的同步度(混合分布假说:信息到达同时抬高波动与成交量),不读方向,只读「放量时是否大幅波动」;
+    (b) day_corr(Ret, in_delay(Volume, 1)) 与 day_corr(in_delay(Ret, 1), Volume):分钟级领先 / 滞后——量跟着前一分钟的收益走(追涨杀跌,散户注意力)或量领先收益(知情交易);
+    (c) day_corr(Ret, in_delta(Volume, 1)):收益与成交量变化(而不是水平)的同步度,去掉成交量日内 U 形分布的共同成分;
+    (d) day_corr(Close, Volume) 与 day_corr(Vwap, Volume):价格水平(日内趋势)与成交量的同步度,放量时价格是否持续在高位;
+    (e) 对称与不对称:ts_min 版(最极端的一次反向同步)、abs 版减 Ret 版(波动同步强而方向同步弱 = 对冲 / 做市式成交,而不是方向性交易)。
+    【为什么和库里已有的不同】两库 5583 条表达式的骨架(抽掉字段、常数、窗口)都被拒绝;day_corr(F, F) 一族的所有字段对替换已在库里,而 day_corr(abs_(F), F)、day_corr(F, in_delay(F, 1))、day_corr(F, in_delta(F, 1)) 的骨架多了一层逐分钟变换,不在两库里;
+    读数上它们读的是不同的统计量(波动同步、领先滞后、变化同步),与 Ret–Volume 的日度秩相关预计在 0.3 ~ 0.6,不会被 0.7 的库禁令挡。
+    【为什么样本外还会在】慢极值把「最近半年有没有发生过一次极端的参与者行为」压成一个低换手的个股特征(同族换手 0.03 ~ 0.05);极端的方向 / 波动 / 领先滞后耦合反映的是机构拆单、事件驱动散户参与这类慢变量,不依赖某段行情;train / valid 同号是 head 已有的经验证据。
+    【如果有 alpha,最可能来自】(a) 与 (c):它们把方向与成交量的日内形状拿掉,和 Ret–Volume 的 head 相关较低,又保留「极端日」结构;(b) 的领先版若有信息,来自知情交易。
+    【数学检查】耦合是相关系数,有界在 [-1, 1],没有除近零的爆点;in_delay / in_delta 只用同一天内更早的分钟,没有前视;不含 ts_rank / cross_rank,不触发 nanrank_last 缺失记 0;停牌日 day_corr 为缺失,ts_max 对窗口内缺失按忽略处理,新股窗口不满的名字只占截面很小一部分。'
+  inspired_by: 'B130 / B131 里 day_corr(F, F) 的 ts_max 慢极值(第 1 轮 R 把窗口拉长后 +0.58 ~ +0.61)和 B131 富集表里 day_corr(Close, Volume) 的 +0.55;换原料对而不是换外围'
+  seeds:
+  - 'ts_max(cs_demean(day_corr(abs_(Ret), Volume)), 120)'
+  - 'ts_min(cs_demean(day_corr(abs_(Ret), Volume)), 120)'
+  - 'ts_max(cs_demean(day_corr(Ret, in_delay(Volume, 1))), 120)'
+  - 'ts_max(cs_demean(day_corr(in_delay(Ret, 1), Volume)), 120)'
+  - 'ts_max(cs_demean(day_corr(Ret, in_delta(Volume, 1))), 120)'
+  - 'ts_max(cs_demean(day_corr(Close, Volume)), 120)'
+  - 'ts_max(cs_demean(day_corr(Vwap, Volume)), 120)'
+  - 'ts_max(ts_max(day_corr(abs_(Ret), Amt), 40), 120)'
+  - 'sub(ts_max(cs_demean(day_corr(abs_(Ret), Volume)), 120), ts_max(cs_demean(day_corr(Ret, Volume)), 120))'
+  - 'ts_min(cs_demean(day_corr(Ret, in_delta(Volume, 1))), 120)'
+  - 'ts_max(cs_demean(day_corr(abs_(Ret), in_delta(Volume, 1))), 120)'
+  - 'ts_max(cs_demean(day_corr(Close, in_delay(Volume, 1))), 120)'
+R:
+- head: 'ts_max(cs_demean(day_corr(Ret, Volume)), 120)'
+  why: 'cs_demean 的必要性仅 +0.10(拆解表),窗口 120 与 240 同分,换 Amt 不变;烂的是单一原料与单层极值,试把两种原料合并、把极值改成 60 日与 120 日的两级、名次化。'
+  variants:
+  - 'ts_max(cs_demean(add(day_corr(Ret, Volume), day_corr(Ret, Amt))), 120)'
+  - 'ts_max(ts_max(cs_demean(day_corr(Ret, Volume)), 40), 120)'
+  - 'ts_max(cs_demean(day_corr(Ret, Volume)), 180)'
+  - 'ts_max(cs_rank(day_corr(Ret, Volume)), 120)'
+  - 'ts_max(cs_demean(ts_mean(day_corr(Ret, Volume), 5)), 120)'
+  - 'ts_max(cs_demean(day_corr(Ret, Vwap)), 120)'
+- head: 'ts_max(ts_max(day_corr(Ret, Amt), 40), 120)'
+  why: '拆解表:外层 ts_max 120→60 同分(+0.58),→240 掉到 +0.37;内层 40 日的必要性只有 +0.06,烂的是内层多余的一层极值和未去市场均值。'
+  variants:
+  - 'ts_max(cs_demean(day_corr(Ret, Amt)), 160)'
+  - 'ts_max(ts_max(cs_demean(day_corr(Ret, Amt)), 20), 160)'
+  - 'ts_max(cs_demean(day_corr(Ret, Amt)), 90)'
+  - 'ts_max(cs_rank(day_corr(Ret, Amt)), 120)'
+  - 'ts_max(ts_max(cs_demean(day_corr(Ret, Amt)), 40), 120)'
+  - 'ts_max(cs_demean(add(day_corr(Ret, Amt), day_corr(Ret, Volume))), 160)'

@@ -1,0 +1,15 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [11, 14]
+    reasons: '核心 sub(day_wmean(Ret, Amt), day_mean(Ret)) 在快照 9 个 head 中最大原始 |ρ| 为 0.08(最像的是 in_sustain_stddev 一族的 head),对 5 个控制的 |ρ| 最大 0.17(rev),核心本身不是控制,过核心检查。它是 loc.md 共性表第 1 行(均值差 +2.27,含它的候选 9 个),属于定位输出的子树,合规。库里 day_wmean、day_topw_mean、mul(Amt, Amt) 在 struct/members.csv 的 5584 条中出现 0 次,这一族在库里不存在,新颖度给 4。数学:day_wmean 用 |w| 加权,分母 sum|w| 为 0 时返回缺失(_day 的 sw>0 掩码),无前视;cross_ema、cross_zscore、cross_tail_mean_q25/q75、ts_quantile_q75、cross_corr 都是同一股票沿日轴的因果窗口(窗口末端是当天),没有用到未来数据;replace_small_with_nan(is_gt(ListAge, 120)) 是正确的 0/1 门控。未发现定义坏掉或数值伪影。划掉两个重复:#11 cross_ema(cs_bucket_demean(core, LogFloatCap), 120) 与 #6 cs_bucket_demean(cross_ema(core, 120), LogFloatCap) 只是先去分桶均值还是先平滑的顺序不同,度量几乎相同,留 #6;#14 cross_ema(core 减 cross_ema(core, 241), 20) 与 #5 cross_ema(core, 20) 减 cross_ema(core, 241) 的差别只是慢 EMA 再被 20 日平滑一次,截面上几乎相同,留 #5。#8 div 的分母 cross_ema(day_std(Ret), 60) 在长期一字板的新股上可能为 0,但分子同日同样为 0 会得到缺失,而奖励是截面排名、单点不会支配排序,所以不算数学问题,保留。PI 笔记里「分母为正、不会除以近零」这一句说得过满,但不影响放行。如果它有 alpha,最可能来自大额成交分钟的涨跌方向是否比等权收益更持续,即机构拆单的方向持续性带来的慢变信号;它与成交额水平、波动、反转、已知族、市值控制的相关都低。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7]
+    reasons: 'N 位,无核心要求。库里没有 day_wmean、day_topw_mean 与 Amt 平方加权(members.csv 0 次),N 位的加权凸化在库里不存在,新颖度给 4。相关度表:各种子对快照 head 的最大原始 |ρ| 在 0.04 到 0.56 之间,最高的是 #3 与 cross_ema(pow_05(day_autocorr_n1(Close)), 120) 的 0.56(低于 0.7 的自动划掉线,但说明 #3 与 #10 和自相关 head 有一定共线,保留);对 5 个控制的最大 |ρ| 为 0.42(#3 对流动性),均未到 0.8。数学:A^2 加权的分钟级量级约 1e12 到 1e18,求和在 float32 范围内;day_wmean 的分母 sum|w| 以 1e-30 钳位且 sw>0 才有值,无近零除;day_topw_mean 取 |w| 前 10% 分钟的等权均值,无前视。#7 的表达式是 div(A2W 减 AW, replace_small_with_nan(is_gt(day_std(Ret), 0.0001)))。is_gt 返回 0 或 1,replace_small_with_nan 只把 0 变成 NaN,所以除数恒为 1,并不是 PI 笔记里说的「除以滚动日内波动做 t 值化」,它实际只是屏蔽一字日,与 #1 cross_ema(A2W 减 AW, 60) 度量同一个量,划掉作重复。#5 用的是 Volume 平方而不是 Amt 平方,偏离 N 位的文字假说,但不是数学问题也不是重复,放行。#11 cross_corr 与 #12 是同一组差的不同组合,不划。如果它有 alpha,最可能来自收盘集合竞价或大单分钟的方向冲击(A^2 把权重集中到最大的少数分钟),即执行者冲击方向的信息,与成交额水平和波动控制都无关。'
+R:
+  []
+summary: '两个任务位都通过:a 位划掉 2 个重复种子(#11、#14),剩 14 个;b 位划掉 1 个重复种子(#7,除数实为恒为 1 的掩码),剩 11 个。核心与所有控制的 |ρ| 均 <0.8,种子对 head 的 |ρ| 均 <0.7。没有数学层面的前视或定义坏掉问题。本轮没有 R 组。'

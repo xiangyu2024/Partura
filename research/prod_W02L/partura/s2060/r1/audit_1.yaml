@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: [1, 2, 5, 6, 8, 13]
+    reasons: '核心 day_ar1_coefficient(Volume) 与五个控制的 |ρ| 为 liq 0.50、vol 0.28、rev 0.25、known 0.50、size 0.17,均 < 0.8,E 位门槛过。核心自己与 head 的原始 |ρ| 为 0.71,这是子树与整体的关系,不作为划种子依据。自动划掉(head |ρ| ≥ 0.7):seed 1 cross_ema(·,40) 0.80;seed 2 cross_mean(·,60) 0.80;seed 5 cs_bucket_demean(cross_mean(·,20),LogFloatCap) 0.90;seed 6 cs_bucket_demean(cross_ema(·,30),…) 0.75;seed 8 cross_semistd_neg(·,60) 0.702(边界值,按规则划);seed 13 cross_tail_mean_q25(·,60) 0.76。剩 8 个:seed 3 cross_zscore(·,120) head 0.37、rev 0.33;seed 4 sub(cross_mean(·,10),cross_mean(·,120)) head 0.60、rev 0.44;seed 7 cs_bucket_zscore(·,20 日对数成交额) head 0.56、size 0.42;seed 9 cross_autocorr(·,60,1) 0.14;seed 10 cross_corr(·,day_sum(Ret),60) 0.08;seed 11 cross_corr(·,day_std(Ret),60) 0.14;seed 12 mul(cross_zscore(·,60),sign(20 日均收益)) 0.07;seed 14 cross_mean(sub(ar1(Volume),ar1(Ret)),40) head 0.54、known 0.69(低于 0.8,保留)。创新度 4:核心与三个 head 共享同一节点,新意只能来自外围;剩下的种子里 9–12 与 head 的 |ρ| ≤ 0.14、与控制 ≤ 0.15,度量的是量持续性与价格或波动的滚动关系,head 与库都没有这个读法;3、4、7 是同一核心的慢窗口、相对自身历史、十分位内去均值版本,与 head 的 |ρ| 在 0.37 到 0.60 之间,结构确实不同。合理度 3:机制写得清楚(量的日内一阶持续性反映算法拆单与参与者结构,窗口 20 到 120 日,全部 cross_* 为 trailing,无前视,算子实现与描述一致)。扣分的两点:(1) 计划里「C 是 [-1,1] 内的相关型系数」的数学描述不对,day_ar1_coefficient 是 OLS 斜率 phi = cov / var,只用 var < 1e-8 守卫,理论上无界;raw 尺度的 cross_mean、cross_zscore、cs_bucket_zscore 种子可能被个别重尾分钟拉动,但我没有看到它主导截面的证据,所以不据此挡,只提醒结果出来后要核实。(2) 分钟成交量有强日内 U 形(开盘、收盘放量),241 点的 AR(1) 很大程度读的是日内形态与集合竞价分钟,in_slice(·,11,230) 只去掉两端,「连续性」未必是它真正读的东西。如果它有 alpha,最可能来自开收盘时段结构的慢变成分(日内形态的横截面差异),而不是量的连续性本身。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [3]
+    reasons: '本位的 E/N 判定:N 位。自动划掉:seed 3 cross_mean(sub(ar1(sign(Ret)×Volume),ar1(Volume)),20) 与 head 0.88,同时与 liq 0.78、known 0.79 很近(低于 0.8 的控制门槛,但 head 门槛已足够划掉)。其余 12 个保留:与三个 head 的最大原始 |ρ|:seed 1、2、4、5、6、7、9、10、11、12 在 0.00 到 0.16 之间;seed 13 为 0.40;seed 8 为 0.65。控制最大值:seed 8 liq 0.54、known 0.51;seed 13 liq 0.33;其余 ≤ 0.16。创新度 4:核心对象换成了带方向的成交流 sign(Ret)×Volume,被测对象与三个 head(全部为无符号 Volume 的 ar1 包装)不同,相关表上存活的 12 个种子中 10 个与 head 的 |ρ| ≤ 0.16,与控制也低;seed 13(与 head 0.40)与 seed 8(与 head 0.65、liq 0.54)是较近的两个,但它是 ar1(S) 与 ar1(Ret) 之差,读的是方向持续性相对价格弹跳,也算有新结构。合理度 4:机制清楚(方向性订单流的持续性,对应 Lillo-Farmer 的订单流长记忆与 Chordia-Subrahmanyam 的订单失衡;sign(Ret)×Volume 是 tick-rule 式的符号化代理)。算子实现核对过:sign(0)=0 不产生 NaN,day_ar1 与 day_autocorr 的守卫正常,cross_corr 与 cross_autocorr 为 trailing,无前视。两点记在这里但不扣分:(a) 零收益分钟在低价或低流动性票中很多,S 的自相关里会掺入静默分钟或 tick-size 成分;存活种子与 liq 的 |ρ| 多在 0.10 以下,不是主导。(b) seed 13 的 day_hurst 在 241 点上的 R/S 估计噪声大,权重低,但不是数学错误。如果它有 alpha,最可能来自知情或拆单的方向性流的持续性(机构参与的慢变结构),而不是无符号量的连续性。'
+R:
+  - head: 'ts_decay_linear(cs_rank(ts_decay_linear(day_ar1_coefficient(Volume), 5)), 5)'
+    soundness: 3
+    reasons: '只打合理度。原 head 的 day_ar1_coefficient 核心有与 slot a 相同的 U 形日内形态风险,不重复计扣。八个变体的数学检查:变体 1、2、3、6、7 无数学问题;变体 4 中 cs_rank 是截面秩(nd_cs.py 的 rank,与 valid_mask 相关),不走 nanrank_last 的时间轴路径,不触发 §4 的停牌陷阱;变体 5 与 slot a seed 3 完全相同,变体 2 与 8 与已被划掉的 seed 1、2 相同。这些是重复评估,不是合理度问题,不影响通过;它们在收录条件(与已知族 |ρ| < 0.5、与原 head |ρ| 的替换或收录)上多半挡不住,属于浪费的评估位,可以删去。组整体通过。'
+summary: '规则确定性检查后:slot a(E,核心 day_ar1_coefficient(Volume))创新 4、合理 3,划掉 6 个,剩 8 个,通过;slot b(N,带符号成交流)创新 4、合理 4,划掉 1 个(seed 3,与 head 0.88),剩 12 个,通过;R 组合理 3,通过。未发现确定的数学问题(前视、数值伪影主导、定义坏掉)。需在结果里核实:PI 对 day_ar1_coefficient 的 [-1,1] 描述有误,且 AR(1) 可能主要读日内 U 形与开收盘分钟。'

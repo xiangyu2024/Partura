@@ -1,0 +1,86 @@
+seed: 2038
+round: 3
+slots:
+  - type: E
+    core: 'sub(day_wmean(Ret, Amt), day_mean(Ret))'
+    hypothesis: >-
+      核心 C = day_wmean(Ret, Amt) - day_mean(Ret):日内「成交额加权的分钟收益」减「等权分钟收益」。它是分钟收益与分钟成交额的协方差(除以均值成交额),
+      等价于「钱是在涨的分钟还是跌的分钟成交的」:正值 = 大额成交集中在上涨分钟(主动买盘 / 知情单向母单的分钟版指纹),负值 = 大额成交在下跌分钟。
+      它是日值、有界(量级约 1e-3)、分母是成交额之和(全无成交则缺失),无前视、无爆点。
+      证据(只用 train / valid):loc 共性表里含 C 的 17 个已评分候选均值 -1.18,不含的 -2.38(p 0.000);含 cross_mean(C,120) 的 11 个均值差 +1.39;
+      上一轮 N 位里 `cs_mask_top_replace_mean_neg(cs_bucket_rank(cross_mean(C,241), LogFloatCap))` 拿到 +0.23(train +0.23 / valid +0.24,两段同号),
+      是本流除阶跃筛子外最干净的正分,且水平量(Amt 一族)之外的东西 —— C 没有量纲,不带流动性水平。
+      这次要试的外围和快照里已见过的写法(cross_mean 平滑 + cs_bucket_rank(LogFloatCap) + cs_mask_top_replace_mean_neg)很不一样,分四类:
+      (a) 段筛子:cs_first_low20 / cs_last_low10 / cs_first_low40 用 LogFloatShares、ListAge 作段变量(种子 1~3、10)—— 本流已有的最强读数是 LogFloatShares 最小 20% 段内排序(+0.48),
+      但那里排序的量是水平型的 day_last(Amt),这里换成无量纲的资金流方向,检验段效应是否独立于 Amt 水平;
+      (b) 不再取均值而取尾部 / 离散度:cross_tail_mean_q75、上下尾之差、半标准差之差(种子 4、5、8)—— 读「偶发的强单向日」而不是均值方向,机制是母单拆分在少数日集中出现;
+      (c) 信息比率 / 相对自身常态:均值除以波动、z 分数的 EMA(种子 6、7)—— 持续而稳定的单向流比偶发爆发更可能是知情交易;
+      (d) 同伴内 / 线性中性化的另一种变量:对 LogFloatShares 做十分位同伴或线性残差(种子 9、11、12),上一轮只对 LogFloatCap 做过。
+      为什么和库里已有的不同:两个库 5583 条表达式里没有 day_wmean / day_signed_ratio / cs_first_* / cs_bucket_* 任何一个(库全是 day_open / day_last / day_autocorr 一族的分钟序列统计),
+      所以含 C 的写法不可能与库里 head 度量同一个东西;C 与 Amt 水平、波动、反转的日度秩相关预期都很低。
+      为什么样本外还会在:单向母单(机构被拆成连续子单、日内追价)的资金流方向与随后几周收益的关系是执行成本的机械后果(Kyle 1985 的分批知情交易 / Lillo-Farmer 2004 的订单流长记忆),
+      不依赖某一段风格;慢平滑(60~120 日)压低换手,15 bp 下才扛得住。风险:valid 段之外的市场状态变化,以及 C 在小盘股上被涨跌停分钟扭曲。
+    seeds:
+      - 'cs_first_low20(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), LogFloatShares)'
+      - 'cs_first_low20(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), ListAge)'
+      - 'cs_last_low10(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), ListAge)'
+      - 'cross_tail_mean_q75(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)'
+      - 'sub(cross_tail_mean_q75(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), cross_tail_mean_q25(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120))'
+      - 'div(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), add(cross_stddev(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), 0.000001))'
+      - 'cross_ema(cross_zscore(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), 20)'
+      - 'sub(cross_semistd_pos(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), cross_semistd_neg(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120))'
+      - 'cs_bucket_zscore(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), LogFloatShares)'
+      - 'cs_first_low40(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), LogFloatShares)'
+      - 'cs_regres(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), LogFloatShares)'
+      - 'cross_ema(cs_first_low20(sub(day_wmean(Ret, Amt), day_mean(Ret)), LogFloatShares), 40)'
+      - 'cs_first_low20(cs_bucket_rank(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), LogFloatCap), LogFloatShares)'
+      - 'ts_decay_linear(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)'
+  - type: N
+    hypothesis: >-
+      想法:「自由流通股稀缺的段」里读资金参与度。把股票按 LogFloatShares(流通股本)、或总股本 / 流通股本之差(受限股占比)、或名义价(LogFloatShares - LogFloatCap = -log 价)切段,
+      只在稀缺段(小股本 / 高受限占比 / 高价)里按一个无量纲的参与度量排序,段外的票垫底。算子实现:cs_first_low20 / cs_first_high20 / cs_first_low40(y, x) 把 x 的最低(最高)20% / 40% 整块排在所有其它票之上、段内按 y 的截面排名排序,
+      其余票仍保持互不相同的值,所以整本多头书只会从稀缺段的上端长出来。
+      证据(只用 train / valid):本流第 1 轮 GP 自己长出 `cs_first_low20(day_last(Amt), LogFloatShares)` = +0.48(train +0.75 / valid +0.48),离 0.5 的线差 0.02,与已知族 ρ 0.44;
+      第 2 轮对它的 E 位(核心 day_last(Amt))因核心与流动性控制近似而没通过审计,所以这条线的变体从未被系统试过 —— 第 2 轮同名的 GP 候选是随机树,没带种子。
+      这次的不同在于:(i) 段内排序的量不再是水平型的 day_last(Amt)(它与流动性控制 ρ 高),换成 5 族无量纲 / 相对量:收盘集合竞价占全天成交额的比例(种子 1)、收盘分钟成交额相对自身 120 日常态的 z 分数(种子 3)、
+      开盘竞价与收盘竞价成交额之比(种子 8)、成交额加权的涨跌方向(种子 4)、收盘分钟额的 20 日最大(种子 12,水平型对照);(ii) 段变量换成股本 / 受限股占比 / 名义价三种(种子 5、6、7),
+      弄清承重的是「小股本」还是「高价」还是「受限股多」;(iii) 种子 9 嵌套两层段(股本最小段内再取次新股),种子 10 把段放宽到 40%,种子 11 在段内用 cross_ema 平滑后的排序量。
+      为什么和库里已有的不同:两个库的 5583 条表达式没有任何日频字段叶子(LogFloatShares / LogTotalCap / ListAge 零次),也没有 cs_first_* 段算子;
+      新尺子扣掉的是控制及两个冠军的 1~3 次秩多项式,阶跃(段内 vs 段外)不在被扣的函数空间里,所以段结构是库里仅有的、没被冠军和控制覆盖的东西。
+      为什么样本外还会在:小自由流通股的票供给稀缺,同样的资金参与度对价格的冲击更大(Kyle 的冲击随深度反比放大),而且卖空受限 / 散户占比高,尾盘参与度是机构被动调仓与短线资金的足迹;
+      股本结构变化缓慢,段成员稳定,换手低,15 bp 下扛得住。诚实的风险:+0.48 是 70 个候选里挑出来的最大值,可能是运气;如果无量纲量全部 < 0 而水平型(种子 12)最好,就说明承重的只是 Amt 水平与小股本的交叉,不是参与度,第 4 轮之后不再押。
+      数学检查:day_last(Amt) / day_sum(Amt) 先加 1 防分母为 0(成交额量级 1e6 以上,不会成为爆点);cs_first_* 以整块并列为界,输出无并列无缺失;全部为 t 日收盘后可知的日内统计与日频字段,无前视。
+    inspired_by: '本流第 1 轮 GP 产出的 cs_first_low20(day_last(Amt), LogFloatShares) = +0.48(train +0.75 / valid +0.48,ρ 已知族 0.44),以及本批 B114 一族 cross_quantile_q25(day_autocorr_n1(F), 15) 全部被新尺子压成负分、说明水平型的微观结构量是流动性代理'
+    seeds:
+      - 'cs_first_low20(cross_mean(div(day_last(Amt), add(day_sum(Amt), 1)), 60), LogFloatShares)'
+      - 'cs_first_low20(cross_ema(day_last(Amt), 20), LogFloatShares)'
+      - 'cs_first_low20(cross_zscore(day_last(Amt), 120), LogFloatShares)'
+      - 'cs_first_low20(cross_ema(day_signed_ratio(Ret, Amt), 60), LogFloatShares)'
+      - 'cs_first_low20(day_last(Amt), sub(LogFloatShares, LogFloatCap))'
+      - 'cs_first_high20(day_last(Amt), sub(LogFloatShares, LogFloatCap))'
+      - 'cs_first_high20(cross_mean(div(day_last(Amt), add(day_sum(Amt), 1)), 60), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_first_low20(cross_ema(div(day_open(Amt), add(day_last(Amt), 1)), 30), LogFloatShares)'
+      - 'cs_first_low20(cs_first_low20(day_last(Amt), LogFloatShares), ListAge)'
+      - 'cs_first_low40(cross_mean(div(day_last(Amt), add(day_sum(Amt), 1)), 20), LogFloatShares)'
+      - 'cs_first_low20(cross_ema(cs_rank(day_last(Amt)), 40), LogFloatShares)'
+      - 'cs_first_low20(cross_max(day_last(Amt), 20), LogFloatShares)'
+R:
+  - head: 'div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1))'
+    why: '拆解:敲掉分母里的 cross_mean(day_sum(Amt), 20)、改成当日 day_sum 使必要性 +0.46(分母越快越好),敲掉 +1 无变化,说明分母的 20 日平滑是烂部件;head 分数 -0.23 两段同号但水平型,故再试加段筛子与同伴内相对。'
+    variants:
+      - 'div(cross_mean(day_open(Amt), 5), add(day_sum(Amt), 1))'
+      - 'div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1))'
+      - 'cs_first_low20(div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1)), LogFloatShares)'
+      - 'cs_bucket_rank(div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1)), LogFloatShares)'
+      - 'cs_first_low20(div(cross_mean(day_open(Amt), 5), add(day_sum(Amt), 1)), LogFloatShares)'
+  - head: 'ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)'
+    why: '上一轮拆解:回归是多余的,敲掉后分数相同,承重的是 day_last(Amt) 的长窗口峰值;log 是 log|x|,斜率在方差近零时爆点。换成不会爆点的收盘额占比并加段筛子。'
+    variants:
+      - 'ts_max(ts_max(log(day_last(Amt)), 20), 50)'
+      - 'cs_first_low20(ts_max(ts_max(log(day_last(Amt)), 20), 50), LogFloatShares)'
+      - 'ts_max(ts_max(div(day_last(Amt), add(day_sum(Amt), 1)), 20), 50)'
+  - head: 'ts_min(ts_regres(cross_quantile_q25(day_autocorr_n1(Volume), 15), day_durbin_watson(Ret), 30), 50)'
+    why: '拆解:外层 ts_min 窗口 50 -> 100 增益 +0.58(慢更好),外层 regres 敲掉后更差;把慢窗口与 Volume->Amt 的互换组合。'
+    variants:
+      - 'ts_min(ts_regres(cross_quantile_q25(day_autocorr_n1(Volume), 15), day_durbin_watson(Ret), 30), 100)'
+      - 'ts_min(ts_regres(cross_quantile_q25(day_autocorr_n1(Amt), 15), day_durbin_watson(Ret), 30), 100)'

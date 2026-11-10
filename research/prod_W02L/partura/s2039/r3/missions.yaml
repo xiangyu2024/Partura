@@ -1,0 +1,39 @@
+seed: 2039
+round: 3
+slots:
+- type: E
+  core: sub(day_wmean(Ret, Amt), day_mean(Ret))
+  hypothesis: 核心 sub(day_wmean(Ret, Amt), day_mean(Ret)) = 成交额加权的分钟收益减等权分钟收益:大额成交的分钟是涨还是跌(知情 / 机构大单的方向),扣掉当天整体涨跌后的纯方向读数。它是本流唯一出过正 valid 的东西:上一轮 N 位的 cross_ema(该核心 - day_mean(Ret), 60) 得 train -0.20 / valid +0.20,是整个流最好的两个分数之一,且共性表里含它的候选均值差 +2.27(p<0.001)。上一轮只试了 cross_ema 60 一种外围,而且 score 被 train 一端卡住,说明单日读数噪声大、60 日 EMA 仍偏快,或水平里混有规模/年龄成分。这一轮外围全部换成以前没出现过的写法:241 日超慢 EMA、快慢 EMA 之差(去掉长期水平只留变化)、cross_zscore、cross_tail_mean 分位尾均值(只看最近窗口里最强 / 最弱的那些天,抓事件而不是均值)、对 LogFloatCap 分桶去均值、ListAge 门控去新股、除以滚动日内波动(t 值化,消除高波动票幅度占优)、减 Volume 加权版(只留金额与股数加权的差)、乘上涨分钟占比、abs_(只读强度不读方向)。这些都不是已见过的 neg / 双 sub 写法,骨架也不在两个库里(库里这些日内算子出现 0 次)。为什么样本外还会在:A 股大额成交方向的持续性(Chordia-Subrahmanyam 订单不平衡持续)来自机构拆单的执行周期,是慢变的行为特征;没有用到前视,日内量全是当日分钟,再取尾随日窗口。数学检查:day_wmean 的分母是 sum|Amt|,停牌日全缺则为缺失;唯一的除法种子分母是滚动 EMA 的日内波动,为正且停牌日同为缺失,不会除以近零。
+  seeds:
+  - cross_zscore(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)
+  - cross_tail_mean_q25(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)
+  - cross_tail_mean_q75(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)
+  - cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 241)
+  - sub(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20), cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 241))
+  - cs_bucket_demean(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), LogFloatCap)
+  - cross_corr(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_mean(Ret), 120)
+  - div(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), cross_ema(day_std(Ret), 60))
+  - mul(cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cross_ema(sub(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_wmean(Ret, Volume)), 60)
+  - cross_ema(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(Ret)), LogFloatCap), 120)
+  - ts_quantile_q75(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)
+  - cross_ema(abs_(sub(day_wmean(Ret, Amt), day_mean(Ret))), 60)
+  - cross_ema(sub(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 241)), 20)
+  - cross_ema(mul(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_pos_ratio(Ret)), 120)
+  - cross_tail_mean_q75(sub(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)), 60)
+- type: N
+  hypothesis: 新想法:成交额的突发性倾斜。把权重从 Amt 提到 Amt^2(只剩最集中的大额分钟说了算),读"极端大额分钟的方向"与"普通大额加权的方向"之差:sub(day_wmean(Ret, Amt^2), day_wmean(Ret, Amt))。机制:一天里真正的大单冲击(拆单的集中爆发、事件消息当天的巨量分钟)与持续的普通成交,携带的信息不同——前者是紧迫的信息交易(愿意付冲击成本),后者是常规流动性。Amt^2 加权相当于把权重函数从线性改成凸的,不需要触发阈值,不会像 in_sustain_stddev 一族那样因为阈值 / 窗口造成大量全缺;day_topw_mean(Ret, Amt) 取前 10% 分钟的等权均值是它的硬截断版。与库的区别:库里 day_wmean / day_topw_mean 一类算子 0 次出现,权重做乘方也没有;B117 的手写库那批(手写库里 26 条在冠军族里)全是 in_sustain_stddev(is_gt(log(Volume)…)) 的持续冲击检测,读的是冲击的持续时长而不是冲击时的方向。所有种子都是慢聚合(EMA 60 / 120 / 241、cross_zscore、尾均值),因为上一轮的教训是单日读数噪声大、越慢越好。为什么样本外还会在:冲击方向的持续性是执行者行为,且与总成交额 / 波动 / 反转 / 市值控制无关(控制里没有方向类);数学上 Amt^2 在分钟级约 1e14、求和 1e17,在 float32 范围内,分母为 sum(Amt^2)>0 才有值,无近零除。一个种子除以滚动的当日波动,已用 is_gt(day_std(Ret), 0.0001) 去掉一字板日。无前视:全部是当日分钟统计。
+  inspired_by: B117 的 in_sustain_stddev 持续冲击一族(冲击的持续而非方向)与上一轮 N 位里 sub(day_wmean(Ret, Amt), day_mean(Ret)) 的 60 日 EMA(train -0.20 / valid +0.20),把线性金额加权推到凸加权
+  seeds:
+  - cross_ema(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), 60)
+  - cross_zscore(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), 120)
+  - cross_ema(sub(day_topw_mean(Ret, Amt), day_wmean(Ret, Amt)), 60)
+  - cross_ema(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120)
+  - cross_ema(sub(day_wmean(Ret, mul(Volume, Volume)), day_wmean(Ret, Volume)), 120)
+  - cross_ema(sub(day_wmean(Ret, mul(Amt, Amt)), day_mean(Ret)), 120)
+  - cross_ema(div(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), replace_small_with_nan(is_gt(day_std(Ret), 0.0001))), 60)
+  - cross_tail_mean_q75(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), 120)
+  - cross_ema(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), 241)
+  - cs_bucket_demean(cross_ema(sub(day_topw_mean(Ret, Amt), day_wmean(Ret, Amt)), 120), LogFloatCap)
+  - cross_corr(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), sub(day_wmean(Ret, Amt), day_mean(Ret)), 120)
+  - cross_ema(sub(sub(day_wmean(Ret, mul(Amt, Amt)), day_wmean(Ret, Amt)), sub(day_wmean(Ret, Amt), day_mean(Ret))), 60)

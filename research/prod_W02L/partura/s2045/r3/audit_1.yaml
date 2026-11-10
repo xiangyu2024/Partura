@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 1
+    soundness: 3
+    struck_seeds: [7, 9, 15, 16]
+    reasons: '创新度 1 的理由:相关度表里核心 ts_std(S60,50) 与 head 1 的原始 |rho| 为 0.96、残差 |rho| 为 0.96;保留的 12 个种子与 head 1 的残差 |rho| 全部在 0.71 到 0.96 之间(种子 1 为 0.93,3、4、6、12、13 为 0.92 到 0.93)。奖励本身已经对 5 个控制做逐日截面残差(线性、平方、三次),外围再做一次 cs_regres(log(C+1), log(已知族+1)) 或 cs_bucket 去均值,是在同一个 C 上换写法,没有给奖励加新成分。原始 |rho| 0.42 到 0.78 只说明排序变了,奖励上的内容没有变。假设里「残差化后留下的剩余部分」与表中 0.93 的残差相关直接矛盾。S120、S90、S180 等不同窗口的变体才是 head 1 之外真正不同的东西,那部分归 R 组评估,这里不放行。合理度 3 的理由:数学检查通过(cs_regres 的 beta 有 var>EPS 守卫;log 的输入是非负的 C 加 1,恒为正;cs_bucket_zscore 桶内少于 2 只为缺失并带 EPS;cs_bucket_rank 用 argsort 实现,不触发 nanrank_last;没有 ts_rank、cross_rank、nt_*、ts_spearman)。但假设把 cross_delta(Amt,30) 写成「30 分钟变化」「成交额加速度」,实际 dt 算子 cross_delta 是沿日轴的 30 日差(同一分钟时点相对 30 个交易日前,见 operators/dt_cross.py),机制描述与算子不符,所以只给 3。 如果它有 alpha,最可能来自 C 相对已知族的剩余部分,但表中显示这部分几乎就是 head 1 已经携带的部分。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: '创新度 4 的理由:与 head 1 的残差 |rho| 为种子 8 的 0.17、9 的 0.14、10 的 0.21、11 的 0.40、12 的 0.29、13 的 0.63、14 的 0.51;种子 1 到 4、7 在 0.71 到 0.77;Volume 版种子 5、6 为 0.88、0.83。原始 |rho| 最高 0.59(种子 14),对 5 个控制最高 0.47(种子 11 对已知族),没有自动划掉的种子。loc.json 的 258 个已评分候选里没有 abs_(Ret) 或 Ret 与 day_cov 的组合,所以新意是真的。种子 8 到 10 的 ts_corr 与 ts_regbeta 是两个 S 的时间序列同步,与 head 1 在奖励里几乎不重叠,是最有新意的部分。不给 5:Volume 版与 cs_regres 写法和奖励内的残差重叠。合理度 3 的理由:数学检查通过(abs_ 无除法;log 的输入是 cross_stddev(非负)加 1,恒为正;cs_regres 有守卫;ts_corr 分母带 EPS 且值界于 -1 到 1;cs_bucket_* 不触发 nanrank_last)。有一处风险:种子 10 的 ts_regbeta 回归元是 log(S_absRet+1),120 日方差只有 >EPS 守卫,若某只票的 S 近乎常数会出现大 beta,但表中没有看到它支配截面,不作为问题。机制描述有误:cross_delta(Amt,30) 是 30 日差,不是 30 分钟变化或加速度,所以「放量加速时价格是否同向变动」的叙述与算子实际计算的「同一分钟的 30 日差与 |Ret| 日内分布的协方差」不符,给 3。种子 8 到 10 的 ts_corr 解释不依赖加速度,可以保留。 如果它有 alpha,最可能来自价格波动与成交额在时段分布上的时间同步(事件或信息驱动的票),其次是同一分钟 30 日成交额变化与收益强度的同向性。'
+R:
+  - head: 'add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50))'
+    soundness: 4
+    reasons: '合理度 4 的理由:十二个变体都是同一写法的参数替换(S 窗口 90、120、180;外层窗口 20 到 60;已知族换成 241 日方差或 day_mean 版;桶内去均值与 zscore 代替回归;ts_mean 平滑;嵌套回归加市值),数学检查同 slot a,全部窗口只向后看(cross_delta、cross_stddev、ts_std 都是沿日轴的过去值),没有前视。与 head 1 的原始 |rho| 为 0.14 到 0.35(变体 4 最高 0.35),与第 2 轮 R 读数里 S120 变体的 rho_head 0.14 一致,说明窗口改变确实改变了信号。这一组能回答「哪个部件烂」,保留。注意:变体的 cs_regres 写法与奖励内的截面残差重叠,收益主要来自窗口而不是回归本身。 如果它有 alpha,最可能来自 S 窗口 120 或 90 带来的更慢脉冲结构记忆,相对已知族的剩余差。'
+summary: 'slot a 创新度 1(与 head 1 在奖励内残差 |rho| 0.71 到 0.96,奖励已做截面残差),不通过,按规则改为普通 GP;slot b 通过(创新 4、合理 3,无划掉);R 组合理 4 保留。两处假设文本把 cross_delta(·,30) 写成 30 分钟或加速度,实为 30 日差,需改正。'

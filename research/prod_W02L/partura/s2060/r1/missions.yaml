@@ -1,0 +1,62 @@
+seed: 2060
+round: 1
+slots:
+  - type: E
+    core: 'day_ar1_coefficient(Volume)'
+    hypothesis: |-
+      机制:核心 C = day_ar1_coefficient(Volume),当天分钟成交股数序列的一阶自回归系数,读的是「量的持续性」:C 高 = 成交均匀、连续(算法 / 机构按计划拆单、流动性提供者稳定),C 低 = 成交以孤立脉冲出现(散户 / 事件冲击、间歇性挂单)。它无量纲(对 Volume 做倍数变换不变),所以不是成交额水平的另一种写法。
+      本批的证据:3 个 head 全是 C 的包装,分数 -3.05 / -3.11 / -3.17,train 与 valid 同号都亏,而且把 Volume 换成 Amt(-3.11 对 -3.05)、5 日平滑改 2 或 10 日、去掉 cs_rank / sigmoid / pow_2 / ts_min 都落在 -3.0 到 -3.3 之间,没有任何一个部件是必要的(必要性在 -0.04 到 +0.15)。富集表里含 ts_decay_linear(C, 5) 的候选均值 -3.18,不含 -3.36。解读(推断,没有毛收益数):C 在样本里有稳定的横截面排序力(库里同族的 ts_mean(day_ar1_coefficient(...), 15) 样本内秩 IC 约 -0.05),但被日度 ar1 的噪声(单日 241 个点估一个系数)与 5 日窗口的高换手吃光;head 们只是在同一个噪声日信号外面套单调变换,换手没有降,所以分数全部卡在 -3。Window 5 → 10 的 train 分反而更差(-3.03)、valid 更好,说明瓶颈不是窗口一个数,而是需要把日信号变成慢变的个股属性。
+      这一位在核心外面换成五类与以前 head 完全不同的外围(以前只有 ts_decay_linear + cs_rank / sigmoid / pow 的单调壳,这里一个都不用):(a) 慢聚合:cross_ema(C, 40)、cross_mean(C, 60) —— 同一个信号,有效换手低一个量级;(b) 相对自己的历史:cross_zscore(C, 120)、10 日均值减 120 日均值 —— 回答「这只票最近量变得更脉冲还是更连续」,去掉持久的个股水平(水平被流动性、市值控制吃掉),留下变化;(c) 在股本 / 流动性十分位内比较:cs_bucket_demean / cs_bucket_zscore(C 的慢均值, LogFloatCap 或 20 日成交额水平) —— 去掉 C 与市值、成交额之间的残余关系(新尺子只去掉对控制排名的低阶多项式暴露,十分位内去均值把更高阶、交互项也去掉);(d) 持续性的滚动关系 / 不稳定性:cross_corr(C, 当日收益或波动, 60)、cross_semistd_neg(C, 60)、cross_autocorr(C, 60, 1) —— 读「放量持续的日子价格怎么动」与「持续性本身是否稳定」,窗口长,换手低;(e) 与收益 ar1 的差、与近期趋势方向相乘:量的持续性相对价格持续性的超额,放量脉冲与方向的配对。
+      为什么和库里已有的不同:库里的 day_ar1_coefficient 全部是 ts_mean / ts_stddev(·, 15) 或裸写,算子骨架 ts_mean(day_ar1_coefficient(F)) 被拒;这里全部是 cross_*(日轴 EMA / 均值 / z 分数 / 滚动相关)和 cs_bucket_* 外壳,骨架不同;库里也没有 C 的「相对自己历史」「十分位内」「与价格的滚动关系」读法。与 3 个 head 的区别是:head 的外围只有 5 日线性衰减,换手几乎没降,本位的种子把有效窗口拉到 20 到 120 日。
+      为什么样本外还会在:成交连续性是参与者构成与交易算法普及度的结构属性(机构 / 量化占比高的票成交更平滑),数十日内排序稳定;高持续性票的价格冲击小、信息更慢扩散,文献里有「成交量聚类 / 长记忆 / 订单拆分」对应的持续溢价(Lillo-Farmer 的订单流长记忆、Chordia-Subrahmanyam 的量聚类),不依赖某一段行情。慢聚合后 15 bp 成本吃得下。
+      数学检查:C 是 [-1, 1] 内的相关型系数,没有除以近零量造成的爆点;Volume 全为 0(停牌)时系数 NaN 不是无穷,不会主导截面;cross_zscore 的分母是 120 日标准差,只在 C 常数时为 0 且此时分子也为 0;全部只用 t 日收盘及以前,无前视;窗口最长 120 日,热身期只占前 120 日,不主导。
+    seeds:
+      - 'cross_ema(day_ar1_coefficient(Volume), 40)'
+      - 'cross_mean(day_ar1_coefficient(Volume), 60)'
+      - 'cross_zscore(day_ar1_coefficient(Volume), 120)'
+      - 'sub(cross_mean(day_ar1_coefficient(Volume), 10), cross_mean(day_ar1_coefficient(Volume), 120))'
+      - 'cs_bucket_demean(cross_mean(day_ar1_coefficient(Volume), 20), LogFloatCap)'
+      - 'cs_bucket_demean(cross_ema(day_ar1_coefficient(Volume), 30), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(day_ar1_coefficient(Volume), 20), cross_mean(log(day_sum(Amt)), 20))'
+      - 'cross_semistd_neg(day_ar1_coefficient(Volume), 60)'
+      - 'cross_autocorr(day_ar1_coefficient(Volume), 60, 1)'
+      - 'cross_corr(day_ar1_coefficient(Volume), day_sum(Ret), 60)'
+      - 'cross_corr(day_ar1_coefficient(Volume), day_std(Ret), 60)'
+      - 'mul(cross_zscore(day_ar1_coefficient(Volume), 60), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cross_tail_mean_q25(day_ar1_coefficient(Volume), 60)'
+      - 'cross_mean(sub(day_ar1_coefficient(Volume), day_ar1_coefficient(Ret)), 40)'
+  - type: N
+    hypothesis: |-
+      机制:带方向的成交流持续性。本批的 3 个 head 与库里同族读的都是无符号成交量的一阶自回归(量的大小是否连续),它与成交额水平、流动性高度相关,分数卡在 -3。这一位换成有符号版本:S = sign(Ret) × Volume,把每分钟的成交股数按该分钟收益方向标上正负(上涨分钟的量为正、下跌为负,是不需要逐笔数据的净买卖压代理),再读 S 在日内的自相关。S 的自相关高 = 同方向的买(卖)压连续出现 = 订单拆分 / 知情方向性交易(Lillo-Farmer 的订单流长记忆,Chordia-Subrahmanyam 的订单失衡持续性);低或为负 = 买卖交替、做市商库存回补式的来回成交。与无符号 ar1 的区别:无符号 ar1 只回答「量连不连续」,有符号 ar1 回答「方向连不连续」;两者之差 sub(ar1(S), ar1(Volume)) 去掉了量的持续性这一共同部分,只留下方向的持续性。
+      算子实现:mul(sign(Ret), Volume) 逐分钟构成 S,day_ar1_coefficient / day_autocorr(·, k) 在日内取滞后 1、5、10 的自相关(1 与 10 的差是方向记忆的期限结构),日轴上取 cross_mean / cross_ema(20 到 40 日)或 cross_zscore(120) 变成慢变个股属性;另有与价格 ar1(sub(…, ar1(Ret)):微观结构上收益的负 ar1 是买卖价差弹跳)的对比、十分位内去均值、以及方向持续性与当日收益的 60 日滚动相关。部分种子用 in_slice(·, 11, 230) 去掉开收盘集合竞价附近的分钟,避免异常的开收盘成交主导自相关。
+      受本批启发:3 个 head 与它们全部拆解变体(Volume→Amt 几乎不变,-3.11 对 -3.05)说明无符号量的持续性是一个被反复读取、没有增量的量;富集表里唯一正的是 C 本身与它的 cs_rank,别的外围都无益。这个位不再改外围,改成改变被测的对象:从「量的连续」换到「方向的连续」。
+      为什么和库里不同:库里 day_autocorr / day_ar1_coefficient / day_durbin_watson 的对象只有 Ret、Volume、Amt 及其占比的 in_slice,没有任何一条的被测序列是 sign(Ret) × 量(含 mul(sign(·), ·) 的带符号流的 0 条);带符号流的 ar1 与无符号 ar1 的日度秩相关预计中等(流动性好、量连续的票两者都高,但方向部分独立),与 Ret 的 ar1(价差弹跳)也不同,因为后者没有量权重。种子也避开 ts_mean(day_ar1_coefficient(·)) 的库骨架。
+      为什么样本外还会在:方向性订单流的持续性反映知情交易者 / 机构拆单的参与程度,是结构属性,数十日内稳定;持续的单边流意味着信息扩散慢、价格延续,对应动量 / 惯性溢价,这在 A 股的机构参与度上有跨时段的证据。窗口 20 到 120 日聚合使换手低,15 bp 成本吃得下。风险:S 的符号由 sign(Ret) 决定,与当日涨跌幅相关,可能与 20 日反转控制中度相关;新尺子会去掉线性、U 形、S 形暴露,剩下的看运气。
+      数学检查:sign(Ret) 在价格不动的分钟为 0,S 取 0,相当于该分钟不参与方向流,不会产生 NaN 或爆点;自相关系数在 [-1, 1],无除以近零量的爆点;整天停牌时 S 全为 0 或缺失,系数 NaN,不是无穷;只用 t 日收盘及以前,无前视;窗口最长 120 日,热身期不主导。
+    inspired_by: 'B001 批:3 个 head 全是 day_ar1_coefficient(Volume) 的单调包装,分数 -3.05 / -3.11 / -3.17,Volume→Amt 几乎不变、各部件必要性≈0 —— 无符号成交量持续性被反复读取而无增量,这里换成方向性成交流的持续性。'
+    seeds:
+      - 'cross_mean(day_ar1_coefficient(mul(sign(Ret), Volume)), 20)'
+      - 'cross_ema(day_autocorr(mul(sign(Ret), Volume), 1), 40)'
+      - 'cross_mean(sub(day_ar1_coefficient(mul(sign(Ret), Volume)), day_ar1_coefficient(Volume)), 20)'
+      - 'cross_zscore(day_autocorr(mul(sign(Ret), Volume), 5), 120)'
+      - 'cross_mean(day_autocorr(mul(sign(Ret), Volume), 10), 40)'
+      - 'cross_mean(day_ar1_coefficient(mul(sign(Ret), Amt)), 30)'
+      - 'cross_mean(sub(day_autocorr(mul(sign(Ret), Volume), 1), day_autocorr(mul(sign(Ret), Volume), 10)), 30)'
+      - 'cross_mean(sub(day_ar1_coefficient(mul(sign(Ret), Volume)), day_ar1_coefficient(Ret)), 30)'
+      - 'cross_corr(day_ar1_coefficient(mul(sign(Ret), Volume)), day_sum(Ret), 60)'
+      - 'cs_bucket_demean(cross_mean(day_autocorr(mul(sign(Ret), Volume), 1), 30), LogFloatCap)'
+      - 'cross_mean(day_ar1_coefficient(mul(sign(in_slice(Ret, 11, 230)), in_slice(Volume, 11, 230))), 20)'
+      - 'cross_zscore(day_ar1_coefficient(mul(sign(Ret), Volume)), 120)'
+      - 'cross_mean(day_hurst(mul(sign(Ret), Volume)), 40)'
+R:
+  - head: 'ts_decay_linear(cs_rank(ts_decay_linear(day_ar1_coefficient(Volume), 5)), 5)'
+    why: '拆解:5 日线性衰减叠两层、cs_rank 包装都不必要(去 cs_rank +0.04、去内层衰减 +0.06,窗口 5→10 的 valid -3.08 略好),说明分数被日度 ar1 的高换手拖住;去掉烂部件 = 拉长平滑窗口 / 改成慢聚合、去掉单调壳、在市值十分位内去均值、用 in_slice 去开收盘集合竞价。'
+    variants:
+      - 'ts_decay_linear(day_ar1_coefficient(Volume), 40)'
+      - 'cross_ema(day_ar1_coefficient(Volume), 40)'
+      - 'ts_decay_linear(day_ar1_coefficient(in_slice(Volume, 11, 230)), 20)'
+      - 'ts_decay_linear(cs_rank(day_ar1_coefficient(Volume)), 20)'
+      - 'cross_zscore(day_ar1_coefficient(Volume), 120)'
+      - 'cs_bucket_demean(ts_decay_linear(day_ar1_coefficient(Volume), 20), LogFloatCap)'
+      - 'sub(ts_decay_linear(day_ar1_coefficient(Volume), 5), ts_decay_linear(day_ar1_coefficient(Volume), 60))'
+      - 'cross_mean(day_ar1_coefficient(Volume), 60)'

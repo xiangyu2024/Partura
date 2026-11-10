@@ -1,0 +1,43 @@
+# 相关度表:种子 2061,P 组,第 1 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.23 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.76 | 0.01 | 0.01 | 0.04 | 0.02 | 0.01 | `day_pdf_quantile_single(Ret, Volume, 0.95, True)` |
+| slot a seed 1 | 过 | 0.62 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.70 | 0.15 | 0.08 | 0.05 | 0.17 | 0.12 | `cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)` |
+| slot a seed 2 | 过 | 0.49 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.61 | 0.14 | 0.07 | 0.03 | 0.16 | 0.11 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)` |
+| slot a seed 3 | 过 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.34 | 0.00 | 0.01 | 0.04 | 0.00 | 0.01 | `cross_zscore(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)` |
+| slot a seed 4 | 过 | 0.55 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.51 | 0.00 | 0.02 | 0.13 | 0.01 | 0.02 | `sub(cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 10), cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120))` |
+| slot a seed 5 | 过 | 0.22 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.27 | 0.07 | 0.07 | 0.07 | 0.07 | 0.05 | `cross_mean(sub(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_pdf_quantile_single(Ret, Volume, 0.05, True)), 60)` |
+| slot a seed 6 | 过 | 0.30 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.31 | 0.08 | 0.10 | 0.05 | 0.10 | 0.00 | `cross_ema(sub(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_pdf_quantile_single(Ret, Volume, 0.5, True)), 60)` |
+| slot a seed 7 | 过 | 0.04 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.03 | 0.12 | 0.01 | 0.01 | 0.12 | 0.06 | `cross_corr(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_sum(Ret), 60)` |
+| slot a seed 8 | 过 | 0.06 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.10 | 0.04 | 0.03 | 0.04 | 0.04 | 0.07 | `cross_corr(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_std(Ret), 60)` |
+| slot a seed 9 | 过 | 0.62 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.80 | 0.22 | 0.09 | 0.06 | 0.23 | 0.01 | `cs_bucket_demean(cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60), LogFloatCap)` |
+| slot a seed 10 | 过 | 0.70 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.77 | 0.20 | 0.14 | 0.07 | 0.22 | 0.08 | `cs_bucket_demean(cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 40), sub(LogFloatCap, LogFloatShares))` |
+| slot a seed 11 | 过 | 0.10 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.16 | 0.32 | 0.01 | 0.06 | 0.27 | 0.10 | `cross_semistd_neg(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)` |
+| slot a seed 12 | 过 | 0.00 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.01 | 0.00 | 0.03 | 0.00 | 0.01 | 0.00 | `cross_autocorr(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60, 1)` |
+| slot a seed 13 | 过 | 0.33 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.46 | 0.23 | 0.06 | 0.08 | 0.17 | 0.12 | `cross_tail_mean_q25(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)` |
+| slot a seed 14 | 过 | 0.10 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.12 | 0.33 | 0.40 | 0.15 | 0.35 | 0.07 | `cross_mean(mul(day_pdf_quantile_single(Ret, Volume, 0.95, True), sign(cross_mean(day_sum(Ret), 20))), 60)` |
+| slot b seed 1 | 过 | 0.17 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.10 | 0.47 | 0.44 | 0.05 | 0.51 | 0.00 | `cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 40)` |
+| slot b seed 2 | 过 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.11 | 0.41 | 0.29 | 0.01 | 0.42 | 0.03 | `cross_ema(day_pdf_quantile_single(in_index(Volume), Volume, 0.25, True), 60)` |
+| slot b seed 3 | 过 | 0.17 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.10 | 0.47 | 0.43 | 0.04 | 0.50 | 0.00 | `cross_mean(day_pdf_quantile_single(in_index(Amt), Amt, 0.5, True), 40)` |
+| slot b seed 4 | 过 | 0.05 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.02 | 0.02 | 0.08 | 0.15 | 0.03 | 0.00 | `cross_zscore(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 120)` |
+| slot b seed 5 | 废品 | 0.06 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.04 | 0.35 | 0.44 | 0.10 | 0.38 | 0.14 | `cross_mean(sub(day_pdf_quantile_single(in_index(Volume), Volume, 0.75, True), day_pdf_quantile_single(in_index(Volume), Volume, 0.25, True)), 40)` |
+| slot b seed 6 | 过 | 0.08 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.01 | 0.02 | 0.14 | 0.29 | 0.04 | 0.02 | `sub(cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 10), cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 60))` |
+| slot b seed 7 | 废品 | 0.02 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.01 | 0.02 | 0.02 | 0.02 | 0.01 | 0.03 | `cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.9, False), 40)` |
+| slot b seed 8 | 废品 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.12 | 0.43 | 0.38 | 0.03 | 0.46 | 0.03 | `cross_mean(day_pdf_quantile_single(in_index(in_slice(Volume, 11, 230)), in_slice(Volume, 11, 230), 0.5, True), 40)` |
+| slot b seed 9 | 废品 | 0.05 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.6, True), ` | 0.08 | 0.07 | 0.15 | 0.22 | 0.08 | 0.02 | `cross_mean(sub(day_pdf_quantile_single(in_index(Amt), Amt, 0.5, True), day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True)), 40)` |
+| slot b seed 10 | 过 | 0.06 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.06 | 0.02 | 0.06 | 0.02 | 0.02 | 0.10 | `cross_corr(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), day_sum(Ret), 60)` |
+| slot b seed 11 | 过 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.10 | 0.49 | 0.42 | 0.05 | 0.52 | 0.01 | `cs_bucket_demean(cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 40), LogFloatCap)` |
+| slot b seed 12 | 过 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.08 | 0.50 | 0.48 | 0.06 | 0.54 | 0.04 | `cross_mean(day_centroid(Volume), 40)` |
+| slot b seed 13 | 过 | 0.07 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.6, True), ` | 0.10 | 0.15 | 0.24 | 0.28 | 0.16 | 0.10 | `cross_ema(sub(day_centroid(Amt), day_centroid(Volume)), 60)` |
+| R 1 variant 1 | 过 | 0.63 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.80 | 0.15 | 0.10 | 0.06 | 0.17 | 0.08 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)` |
+| R 1 variant 2 | 过 | 0.56 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.72 | 0.15 | 0.09 | 0.04 | 0.17 | 0.09 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 80)` |
+| R 1 variant 3 | 过 | 0.49 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.61 | 0.14 | 0.07 | 0.03 | 0.16 | 0.11 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)` |
+| R 1 variant 4 | 过 | 0.62 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.70 | 0.15 | 0.08 | 0.05 | 0.17 | 0.12 | `cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)` |
+| R 1 variant 5 | 过 | 0.16 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),` | 0.34 | 0.00 | 0.01 | 0.04 | 0.00 | 0.01 | `cross_zscore(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)` |
+| R 2 variant 1 | 过 | 0.56 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.72 | 0.09 | 0.02 | 0.02 | 0.11 | 0.11 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), 80)` |
+| R 2 variant 2 | 过 | 0.56 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.72 | 0.09 | 0.03 | 0.03 | 0.11 | 0.10 | `cross_mean(day_pdf_quantile_single(Ret, Amt, 0.8, True), 60)` |
+| R 2 variant 3 | 过 | 0.56 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.65 | 0.07 | 0.02 | 0.03 | 0.10 | 0.16 | `cross_ema(day_pdf_quantile_single(Ret, Amt, 0.8, True), 60)` |
+| R 2 variant 4 | 过 | 0.49 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), ` | 0.62 | 0.07 | 0.01 | 0.01 | 0.09 | 0.14 | `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), 120)` |
