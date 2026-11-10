@@ -459,6 +459,54 @@ def neutral_basis(controls) -> "np.ndarray":
     return Q
 
 
+def band_basis(controls, bands) -> "np.ndarray":
+    """Ruler D (PROD W02L): ``neutral_basis(controls)`` plus, per day, dummies of the deciles of each of ``bands``
+    (9 columns each).  A step tilt in one of the bands -- e.g. only the smallest-cap decile -- which the polynomial
+    basis cannot remove, is removed too.  Moved here from scripts/w02l_backtest.py (same arithmetic); kept on disk
+    under $PARTURA_BASIS_CACHE like neutral_basis."""
+    import numpy as np
+    from . import diagnose as dg
+    powers = [int(x) for x in os.environ.get("PARTURA_NEUTRAL_POWERS", "1").split(",")]
+    cache = os.environ.get("PARTURA_BASIS_CACHE")
+    path = None
+    if cache:
+        import hashlib
+        from pathlib import Path
+        h = hashlib.sha1(("bands|" + repr(powers)).encode())
+        for c in list(controls) + ["|"] + list(bands):
+            if isinstance(c, str):
+                h.update(c.encode())
+                continue
+            a = np.ascontiguousarray(np.asarray(c, np.float64))
+            h.update(repr(a.shape).encode())
+            h.update(a.tobytes())
+        path = Path(cache) / f"bandbasis_{h.hexdigest()[:20]}.npy"
+        if path.is_file():
+            return np.load(path)
+    zs = [dg._zrank(np.asarray(c, np.float64)) ** k for c in controls for k in powers]
+    bz = [dg._zrank(np.asarray(b, np.float64)) for b in bands]
+    D, S = zs[0].shape
+    Q = np.zeros((D, S, 1 + len(zs) + 9 * len(bz)), np.float32)
+    for t in range(D):
+        ok = np.ones(S, bool)
+        for z in zs + bz:
+            ok &= np.isfinite(z[t])
+        if ok.sum() < 50:
+            continue
+        cols = [np.ones(int(ok.sum()))] + [z[t][ok] for z in zs]
+        for b in bz:
+            v = b[t][ok]
+            d = np.searchsorted(np.quantile(v, np.linspace(0.1, 0.9, 9)), v, side="right")
+            cols += [(d == j).astype(np.float64) for j in range(1, 10)]
+        Q[t, ok] = np.linalg.qr(np.column_stack(cols))[0]
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + f".{os.getpid()}.tmp.npy")
+        np.save(tmp, Q)
+        os.replace(tmp, path)
+    return Q
+
+
 def neutral_residual(sm, Q) -> "np.ndarray":
     """The z-rank of ``sm`` with the daily projection on ``Q`` removed.  A missing value is filled with the mean rank (0)
     for the projection and missing again in the result; a name without the controls is missing too.  Deterministic,

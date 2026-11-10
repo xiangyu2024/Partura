@@ -14,6 +14,12 @@ unchanged.  Server; reads only stage 0's in-sample results (train 2018-01-02 ~ 2
     research/prod_W02L/m/s<seed>.DONE (there is no M chain to start)
   - research/prod_W02L/streams.json, research/prod_W02L/library_all.json (every library expression: the skeleton ban)
 Refuses to overwrite an existing episode unless --force.
+
+User decision 2026-11-10: --head-ruler (default D) judges the heads: discovery under ruler D (stage 0's discovery_D, B plus
+per-day decile dummies of size, liquidity and price), best D score first; --ruler still gives the scores the episodes carry
+and the order of the material.  Stage 0's rows are read from stage0/chunks and then stage0/rescore (a rescore row wins), and a
+batch counts as complete only when each of its rows is up to date for the head ruler (scored under it if gated, re-gated
+under diagnose.levels_ok if the old gate rejected it).
 """
 import csv
 import glob
@@ -33,10 +39,12 @@ def opt(name, default):
 
 assert sys.argv[1] == "build"
 RULER = opt("--ruler", "B")
+HEADR = opt("--head-ruler", "D")
 MAXH, FIRST, PER = opt("--max-heads", 8), opt("--first-seed", 2001), opt("--per-stream", 3)
 FORCE = "--force" in sys.argv
 
-rows = [json.loads(x) for f in sorted(glob.glob(str(D / "stage0" / "chunks" / "*.jsonl"))) for x in open(f, encoding="utf-8") if x.strip()]
+rows = [json.loads(x) for sub_ in ("chunks", "rescore") for f in sorted(glob.glob(str(D / "stage0" / sub_ / "*.jsonl")))
+        for x in open(f, encoding="utf-8") if x.strip()]                  # a rescore row comes later and wins
 batches = {b["batch"]: b for b in json.loads((D / "struct" / "batches.json").read_text(encoding="utf-8"))["batches"]}
 members = list(csv.DictReader(open(D / "struct" / "members.csv", encoding="utf-8")))
 scored = {(r["lib"], int(r["i"])): r for r in rows}                # one row per member (a re-scored one counts once)
@@ -51,14 +59,17 @@ for r in rows:
 
 def head(r):
     s = r[RULER]
-    return {"expr": r["expression"], "sign": s["sign"], "hl": s["hl"], "score": s["score"], "train": s["train"], "valid": s["valid"],
-            "rho_known": r["rho"]["known"], "rho_H": r["rho"]["H"], "rho_X": r["rho"]["X"], "lib": r["lib"], "i": r["i"]}
+    h = {"expr": r["expression"], "sign": s["sign"], "hl": s["hl"], "score": s["score"], "train": s["train"], "valid": s["valid"],
+         "rho_known": r["rho"]["known"], "rho_H": r["rho"]["H"], "rho_X": r["rho"]["X"], "lib": r["lib"], "i": r["i"]}
+    if HEADR != RULER and HEADR in r:
+        h.update({f"score_{HEADR}": r[HEADR]["score"], f"train_{HEADR}": r[HEADR]["train"], f"valid_{HEADR}": r[HEADR]["valid"]})
+    return h
 
 
 heads, MATERIAL = {}, []
 for b, rs in by_batch.items():                                # PLAN revision 1: discoveries if any, else the 3 best by score (material)
     ok = [r for r in rs if r.get("gate") and "ts_spearman" not in r["expression"]]
-    hs = sorted([r for r in ok if r.get(f"discovery_{RULER}")], key=lambda r: -r[RULER]["score"])[:MAXH]
+    hs = sorted([r for r in ok if r.get(f"discovery_{HEADR}")], key=lambda r: -r[HEADR]["score"])[:MAXH]
     if hs:
         heads[b] = [head(r) for r in hs]
     else:
@@ -74,7 +85,17 @@ need = defaultdict(set)
 for m in members:
     if "ts_spearman" not in m["expression"]:
         need[m["batch"]].add((m["lib"], int(m["i"])))
-complete = {b for b in allb if need[b] <= {(r["lib"], int(r["i"])) for r in by_batch.get(b, [])}}
+def current(r):
+    """Is stage 0's row up to date for the head ruler and the levels gate (user decision 2026-11-10)?"""
+    if "error" in r or "ts_spearman" in r["expression"]:
+        return True
+    if r.get("gate"):
+        return HEADR in r
+    return "levels" in r or r.get("coverage", 0.0) < 0.9
+
+
+complete = {b for b in allb if need[b] <= {(r["lib"], int(r["i"])) for r in by_batch.get(b, [])}
+            and all(current(r) for r in by_batch.get(b, []))}
 prev = json.loads((D / "streams.json").read_text(encoding="utf-8")) if (D / "streams.json").is_file() else {"streams": []}
 out = list(prev["streams"])
 built_now = []

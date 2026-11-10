@@ -198,9 +198,9 @@ class ParturaScorer:
         panel = np.asarray(panel)[self._warmup:]
         out = {**self.base.score(panel, gated=gated), **{c: float("nan") for c in self.columns}}
         if np.isfinite(out["fit"]):
-            dist = dg.distinct_fraction(panel)
-            out["p_dist"] = dist
-            if gated and not dist >= 0.5:
+            ok, lv = dg.levels_ok(panel)                   # user decision 2026-11-10: discrete factors with
+            out["p_dist"] = lv["distinct"]                 # enough levels and few boundary ties pass too
+            if gated and not ok:
                 out["fit"] = -np.inf
         if not np.isfinite(out["fit"]):
             self.gate += 1

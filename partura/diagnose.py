@@ -146,6 +146,45 @@ def distinct_fraction(panel: np.ndarray, step: int = 5, min_names: int = 30) -> 
     return float(np.median(out)) if out else 0.0
 
 
+def levels_ok(panel: np.ndarray, step: int = 5, min_names: int = 30, top_frac: float = TOP_FRAC,
+              min_levels: int = 20, max_tie_share: float = 0.2):
+    """Whether a factor's cross-sections carry enough distinct levels for a decile book (user decision 2026-11-10).
+
+    The old gate was ``distinct_fraction >= 0.5`` alone, which also rejected sound discrete factors -- a minute
+    index has ~200 levels over ~4500 names (fraction 0.04).  The real hazard is the one ``distinct_fraction``'s
+    docstring names: the book has a fixed size and ties at its boundary go by symbol order
+    (``alphacube.metrics.long_short_weights``), so a large tie group straddling the decile cut puts names in the
+    book by their code.  Passes when the old rule passes, or when the median day has at least ``min_levels``
+    distinct values AND at most ``max_tie_share`` of the top or bottom decile book is filled from a tie group
+    that straddles its cut (median over the sampled days, the worse of the two ends).
+
+    Returns (ok, {"distinct": the old fraction, exactly distinct_fraction(panel), "levels": median distinct
+    count, "tie_share": median boundary tie share})."""
+    fr, lv, ts = [], [], []
+    for t in range(0, panel.shape[0], step):
+        row = panel[t]
+        row = row[np.isfinite(row)]
+        n = row.size
+        if n < min_names:
+            continue
+        s = np.sort(row)
+        u = int(np.count_nonzero(np.diff(s))) + 1
+        fr.append(u / n)
+        lv.append(u)
+        k = max(1, int(np.floor(n * top_frac)))
+        sh = 0.0
+        for lo, hi, v in ((n - k, n, s[n - k]), (0, k, s[k - 1])):
+            inside = int(np.count_nonzero(s[lo:hi] == v))
+            if int(np.count_nonzero(s == v)) > inside:
+                sh = max(sh, inside / k)
+        ts.append(sh)
+    if not fr:
+        return False, {"distinct": 0.0, "levels": 0.0, "tie_share": 1.0}
+    info = {"distinct": float(np.median(fr)), "levels": float(np.median(lv)), "tie_share": float(np.median(ts))}
+    ok = info["distinct"] >= 0.5 or (info["levels"] >= min_levels and info["tie_share"] <= max_tie_share)
+    return bool(ok), info
+
+
 def metric_row(panel: np.ndarray, target: np.ndarray, *, sign: float = 1.0,
                cost: float = COST_PER_SIDE, cap: Optional[float] = TURNOVER_CAP,
                top_frac: float = TOP_FRAC, periods: int = 252,
@@ -361,6 +400,6 @@ def rank_corr_matrix(panels: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float
 
 
 __all__ = ["COST_PER_SIDE", "TURNOVER_CAP", "TOP_FRAC", "ic_series", "rank_ic_series", "sign_from",
-           "rank_rows", "ic_row", "distinct_fraction", "nanmean_quiet",
+           "rank_rows", "ic_row", "distinct_fraction", "levels_ok", "nanmean_quiet",
            "metric_row", "neutralise", "conditional_ic", "decay", "by_year", "smoothing_sweep",
            "extreme_day_dependence", "pair_rank_corr", "rank_corr_matrix"]

@@ -6,6 +6,8 @@ polynomial ruler cannot remove, is removed too) -- each with its own direction a
 has computed them already.
 
     source tmp/w02l_env.sh; python scripts/w02l_backtest.py <file with one expression per line> > out.md
+    ... --d-jsonl research/prod_W02L/d_scores.jsonl: ruler D only, one JSON line per expression not in that file yet
+    (scripts/w02l_report.py judges the heads under D from it; user decision 2026-11-10)
 """
 import os
 import sys
@@ -26,7 +28,7 @@ from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
-from partura.steer import Guidance, RewardContext, neutral_basis  # noqa: E402
+from partura.steer import Guidance, RewardContext, band_basis, neutral_basis  # noqa: E402
 from partura.steer import reward as steer_reward  # noqa: E402
 
 START, END, SPLIT = "20180102", "20251231", "20230808"
@@ -64,27 +66,28 @@ pool_sig = dg._zrank(bk.smoothed(float(pool_spec["sign"]) * np.asarray(aux["pool
 ctl5 = [aux["liq"], aux["n_vol"], aux["n_rev"], aux["known"], aux["n_size"]]
 
 
-def band_basis(ctls, bands):
-    """ruler B's basis (powers $PARTURA_NEUTRAL_POWERS) plus, per day, dummies of the deciles of each of ``bands``"""
-    powers = [int(x) for x in os.environ.get("PARTURA_NEUTRAL_POWERS", "1").split(",")]
-    zs = [dg._zrank(np.asarray(c, np.float64)) ** k for c in ctls for k in powers]
-    bz = [dg._zrank(np.asarray(b, np.float64)) for b in bands]
-    D, S = zs[0].shape
-    Q = np.zeros((D, S, 1 + len(zs) + 9 * len(bz)), np.float32)
-    for t in range(D):
-        ok = np.ones(S, bool)
-        for z in zs + bz:
-            ok &= np.isfinite(z[t])
-        if ok.sum() < 50:
-            continue
-        cols = [np.ones(int(ok.sum()))] + [z[t][ok] for z in zs]
-        for b in bz:
-            v = b[t][ok]
-            d = np.searchsorted(np.quantile(v, np.linspace(0.1, 0.9, 9)), v, side="right")
-            cols += [(d == j).astype(np.float64) for j in range(1, 10)]
-        Q[t, ok] = np.linalg.qr(np.column_stack(cols))[0]
-    return Q
-
+DJ = Path(sys.argv[sys.argv.index("--d-jsonl") + 1]) if "--d-jsonl" in sys.argv else None
+if DJ is not None:
+    have = {json.loads(x)["expr"] for x in open(DJ, encoding="utf-8") if x.strip()} if DJ.is_file() else set()
+    todo = [e for e in dict.fromkeys(exprs) if e not in have]
+    c = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=pool_sig,
+                      halflives=(0.0, 5.0, 20.0))
+    c.neutral_Q = band_basis(ctl5 + [champ["H"], champ["X"]], [aux["n_size"], aux["liq"], aux["price"]])
+    for k in range(0, len(todo), 8):
+        part = todo[k:k + 8]
+        P = ps.compute({f"e{i}": e for i, e in enumerate(part)})
+        with open(DJ, "a", encoding="utf-8") as fh:
+            for i, e in enumerate(part):
+                if f"e{i}" not in P:
+                    fh.write(json.dumps({"expr": e, "error": str(ps.errors.get(f"e{i}", "?"))[:200]}, ensure_ascii=False) + "\n")
+                    continue
+                r = steer_reward(np.asarray(P[f"e{i}"], np.float64), c, "long_neutral")
+                fh.write(json.dumps({"expr": e, "D": {"score": float(r["score"]), "sign": float(r["sign"]), "hl": float(r["hl"]),
+                                                      "train": float(r["train"]["long_sharpe"]), "valid": float(r["valid"]["long_sharpe"]),
+                                                      "train_ann": float(r["train"]["long_ann"]), "valid_ann": float(r["valid"]["long_ann"]),
+                                                      "turnover": float(r["train"]["long_turnover"])}}, ensure_ascii=False) + "\n")
+        print(f"[dscore] {min(k + 8, len(todo))} / {len(todo)}", flush=True)
+    sys.exit(0)
 
 ctx = {}
 for name, ctls in (("raw", None), ("A", ctl5), ("B", ctl5 + [champ["H"], champ["X"]]), ("D", None)):

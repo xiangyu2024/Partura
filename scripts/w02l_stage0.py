@@ -19,6 +19,16 @@ direction and half-life by train pure-long net Sharpe, score = the worse of trai
   A  residual on the five controls (liquidity, volatility, 20-day reversal, the known Amt family, LogFloatCap), powers 1 / 2 / 3
   B  the same plus the two champions' signals (handwritten, mined) as controls -- what the champions do not already have
 plus |rho| of the traded signal's daily ranks (train, every 5th day) with the known family and with each champion.
+
+User decisions of 2026-11-10:
+  D  B plus per-day decile dummies of LogFloatCap, liquidity and price (partura.steer.band_basis): a head is now judged
+     under D (discovery_D; scripts/w02l_lib.py --head-ruler, default D)
+  the gate is partura.diagnose.levels_ok (coverage >= 0.9 still): the old distinct fraction >= 0.5, or >= 20 distinct
+     levels with at most 20 % of the decile book filled from a tie group straddling its cut
+--rescore [--follow]: bring the rows already written up to date -- a gated row without D gets D, a row the old distinct
+     gate rejected is gated again (and scored if it passes) -- into <outdir>/rescore/<same name>.jsonl (the chunk files
+     are left as they are; readers take the rescore row).  Any number of rescore workers share the files by claims in
+     <outdir>/rescore_claims/; --follow keeps going every 10 minutes until every chunk file exists and is rescored.
 """
 import json
 import os
@@ -43,7 +53,7 @@ from partura import ops_ext  # noqa: E402,F401
 from partura import study  # noqa: E402
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
-from partura.steer import Guidance, RewardContext, neutral_basis  # noqa: E402
+from partura.steer import Guidance, RewardContext, band_basis, neutral_basis  # noqa: E402
 from partura.steer import reward as steer_reward  # noqa: E402
 
 assert os.environ.get("PARTURA_RANK_FIRST") == "1" and os.environ.get("PARTURA_NEUTRAL_POWERS") == "1,2,3", "source tmp/prod_env.sh first"
@@ -58,6 +68,7 @@ STORE = os.environ.get("PARTURA_STORE", "/root/autodl-tmp/qmt_daily_data/fast_fa
 MIRROR = os.environ.get("PARTURA_MIRROR")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
 RHO, THR = 0.5, 0.5
+RESCORE, FOLLOW = "--rescore" in sys.argv, "--follow" in sys.argv
 G = Guidance.load(PARTURA_ROOT / "guidance" / "C05_base.yaml")
 _caps = study.host_caps()
 os.environ.update(PARTURA_SLOTS=_caps["PARTURA_SLOTS"], PARTURA_GPU_WAYS=_caps["PARTURA_GPU_WAYS"], PARTURA_REPROMOTE="1")
@@ -146,7 +157,8 @@ with slot(name="slot"):                                       # its own slots: t
     pool_spec, known_spec = G.spec["pool"][-1], G.spec["pool"][0]
     aux = ps.compute({"frozen": "cross_max(day_zero_ratio(Ret), 15)", "age": "cross_valid_count(day_last(Close), 241)",
                       "liq": "cross_mean(day_sum(Amt), 30)", "pool": pool_spec["expr"], "known": known_spec["expr"],
-                      "n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))", "n_size": "LogFloatCap"})
+                      "n_vol": "cross_mean(day_std(Ret), 20)", "n_rev": "div(day_last(Close), ts_delay(day_last(Close), 20))", "n_size": "LogFloatCap",
+                      "price": "day_last(Close)"})
     cd = [str(d) for d in json.loads((PARTURA_ROOT / CHAMP_DATES).read_text(encoding="utf-8"))["dates"]]
     pos = {d: j for j, d in enumerate(cd)}
     assert all(d in pos for d in dates), "champion dates do not cover the view"
@@ -163,11 +175,91 @@ with slot(name="slot"):                                       # its own slots: t
                           halflives=(0.0, 5.0, 20.0))
         c.neutral_Q = neutral_basis(ctls)
         ctx[name] = c
+    c = RewardContext(tgt, tr, va, untradable=untradable, liq=np.asarray(aux["liq"], np.float64), pool=pool_sig, base=pool_sig,
+                      halflives=(0.0, 5.0, 20.0))
+    c.neutral_Q = band_basis(ctl5 + [champ["H"], champ["X"]], [aux["n_size"], aux["liq"], aux["price"]])
+    ctx["D"] = c
     ref = {"known": zr(float(known_spec["sign"]) * np.asarray(aux["known"], np.float64))[:cut:5],
            "H": zr(champ["H"])[:cut:5], "X": zr(champ["X"])[:cut:5]}
     labelled = np.isfinite(tgt)
     print(f"[s0] {DEV} worker ready in {time.time() - t0:.0f}s: {len(dates)} days x {tgt.shape[1]} names ({dates[0]} ~ {dates[-1]}); "
           f"train {cut}, valid {vend - cut} days (to {dates[vend - 1]}); {len(chunks)} chunks", flush=True)
+
+    def judge(out, panel, names=None):
+        """Gate and rulers of one expression's panel, into ``out`` (returned).  ``names``: score only these rulers of an
+        already gated row (a rescore adding D)."""
+        if names is None:
+            ok, lv = dg.levels_ok(panel[:vend])
+            out.update(coverage=float(np.isfinite(panel[labelled]).mean()), distinct=lv["distinct"], levels=lv["levels"],
+                       tie_share=lv["tie_share"])
+            out["gate"] = bool(out["coverage"] >= 0.9 and ok)
+            if not out["gate"]:
+                return out
+        for name in (names or list(ctx)):
+            rw = steer_reward(panel, ctx[name], "long_neutral")
+            out[name] = {"score": float(rw["score"]), "sign": float(rw["sign"]), "hl": float(rw["hl"]),
+                         "train": float(rw["train"]["long_sharpe"]), "valid": float(rw["valid"]["long_sharpe"]),
+                         "train_ann": float(rw["train"]["long_ann"]), "valid_ann": float(rw["valid"]["long_ann"]),
+                         "turnover": float(rw["train"]["long_turnover"])}
+        if names is None:
+            z = zr(out["A"]["sign"] * panel[:cut:5])
+            out["rho"] = {k2: corr_rows(z, v) for k2, v in ref.items()}
+        for name in ("A", "B", "D"):
+            if name in out:
+                out[f"discovery_{name}"] = bool(out[name]["score"] >= THR and abs(out["rho"]["known"]) < RHO)
+        return out
+
+    if RESCORE:
+        RS, RC = OUT / "rescore", OUT / "rescore_claims"
+        RS.mkdir(exist_ok=True)
+        RC.mkdir(exist_ok=True)
+        for c in RC.iterdir():                                # claims of rescore workers that are gone
+            try:
+                os.kill(int(c.read_text().split()[0]), 0)
+            except (ValueError, IndexError, ProcessLookupError, FileNotFoundError):
+                if not (RS / c.name).is_file():
+                    c.unlink(missing_ok=True)
+            except PermissionError:
+                pass
+        while True:
+            files = sorted((OUT / "chunks").glob("*.jsonl"))
+            for f in files:
+                if (RS / f.name).is_file():
+                    continue
+                try:
+                    fd = os.open(RC / f.name, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                except FileExistsError:
+                    continue
+                os.write(fd, f"{os.getpid()}\n".encode())
+                os.close(fd)
+                t1 = time.time()
+                rs = [json.loads(x) for x in open(f, encoding="utf-8") if x.strip()]
+                full = [j for j, r in enumerate(rs) if "error" not in r and not r.get("gate") and "levels" not in r
+                        and r.get("coverage", 0.0) >= 0.9]
+                addd = [j for j, r in enumerate(rs) if "error" not in r and r.get("gate") and "D" not in r]
+                if full or addd:
+                    P = ps.compute({f"v{j}": rs[j]["expression"] for j in full + addd})
+                    for j in full + addd:
+                        panel = np.asarray(P[f"v{j}"], np.float64)
+                        if j in full:
+                            rs[j] = judge({k2: rs[j][k2] for k2 in ("lib", "i", "expression", "batch")}, panel)
+                        else:
+                            judge(rs[j], panel, names=["D"])
+                        rs[j]["rescored"] = "2026-11-10 levels gate + ruler D"
+                    ps._mem.clear()
+                    del P
+                tmp = RS / f".{f.stem}.{os.getpid()}.jsonl.tmp"
+                tmp.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in rs), encoding="utf-8")
+                tmp.rename(RS / f.name)
+                print(f"[s0 rescore] {f.name}: {len(full)} re-gated ({sum(rs[j].get('gate', False) for j in full)} pass), "
+                      f"{len(addd)} given D, {time.time() - t1:.0f}s", flush=True)
+            main_done = all((OUT / "chunks" / f"{k}.jsonl").is_file() for k in range(len(chunks)))
+            left = [f for f in (OUT / "chunks").glob("*.jsonl") if not (RS / f.name).is_file()]
+            if not FOLLOW or (main_done and not left):
+                break
+            time.sleep(600)
+        print("[s0 rescore] done", flush=True)
+        sys.exit(0)
 
     n_done = 0
 
@@ -207,20 +299,7 @@ with slot(name="slot"):                                       # its own slots: t
                 out["error"] = err.get(j, "did not compute")
                 lines.append(out)
                 continue
-            panel = np.asarray(P[f"v{j}"], np.float64)
-            out.update(coverage=float(np.isfinite(panel[labelled]).mean()), distinct=float(dg.distinct_fraction(panel[:vend])))
-            out["gate"] = bool(out["coverage"] >= 0.9 and out["distinct"] >= 0.5)
-            if out["gate"]:
-                for name, c in ctx.items():
-                    rw = steer_reward(panel, c, "long_neutral")
-                    out[name] = {"score": float(rw["score"]), "sign": float(rw["sign"]), "hl": float(rw["hl"]),
-                                 "train": float(rw["train"]["long_sharpe"]), "valid": float(rw["valid"]["long_sharpe"]),
-                                 "train_ann": float(rw["train"]["long_ann"]), "valid_ann": float(rw["valid"]["long_ann"]),
-                                 "turnover": float(rw["train"]["long_turnover"])}
-                z = zr(out["A"]["sign"] * panel[:cut:5])
-                out["rho"] = {k2: corr_rows(z, v) for k2, v in ref.items()}
-                out["discovery_A"] = bool(out["A"]["score"] >= THR and abs(out["rho"]["known"]) < RHO)
-                out["discovery_B"] = bool(out["B"]["score"] >= THR and abs(out["rho"]["known"]) < RHO)
+            judge(out, np.asarray(P[f"v{j}"], np.float64))
             lines.append(out)
         ps._mem.clear()                                       # PanelSet keeps every panel it computed in memory (44 MB each); they
         del P                                                 # are on disk in the panel cache already -- a worker would grow by ~40 GB
