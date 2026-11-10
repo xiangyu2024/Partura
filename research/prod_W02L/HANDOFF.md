@@ -1,6 +1,6 @@
 # W02L 交接(接手先读这个，再读 PROGRESS.md 最上面一节)
 
-更新于 2026-11-10 03:30 EST(服务器 11-10 16:30)。
+更新于 2026-11-10 05:40 EST(服务器 11-10 18:40)。
 
 ## 现在在哪
 
@@ -12,7 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 2 | 2026 | PI 在跑 | PI 完 → `prod_round.sh corr 2 "2026"` → 审计 → finish |
+| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
