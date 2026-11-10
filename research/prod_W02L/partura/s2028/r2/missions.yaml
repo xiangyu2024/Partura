@@ -1,0 +1,129 @@
+seed: 2028
+round: 2
+slots:
+- type: E
+  core: 'day_kurt(Volume)'
+  hypothesis: |-
+    核心 K = day_kurt(Volume):个股当天 241 根分钟成交量的超额峰度。它是尺度不变量(成交量乘任何常数,K 不变),所以不含「成交量有多大」这个水平 / 流动性的量纲;K 高 = 当天成交挤在少数几分钟(事件、大单、集合竞价堆量),K 低 = 成交摊得平(算法拆单、机构按 VWAP 执行)。
+
+    证据(全部是 2025-12-31 以前的读数):(1) 本流唯一的真 head `div(cs_first_low40(LogTotalCap, day_close(Low)), day_kurt(Volume))` score +0.73(train +0.73 / valid +0.82);拆解里去掉 K、只剩阶跃×市值,变成 +0.02 / +0.56,所以 K 一个部件把 train 抬了约 0.7;但 K 单独是 -4.93(sufficiency),所以 K 的水平本身不是信息、是「条件下的 K」或「K 的动态」。(2) 库 5583 条里 day_kurt(Volume) 只出现 19 次,最像样的是 `ts_quantile_q75(pow_2(·), 30)`、`cross_sum(pow_2(·), 15)`、`ts_quantile_q50(·, 20)`(库自己 train 尺子下约 0.41 / 0.22 / 0.05,而裸 K 是 -10.03)—— 慢一点就从 -10 回到 0 附近,说明噪声是主因;19 条里有几条把 K 与价格水平量(day_last(High)、day_quantile_q25(Open))做滚动回归,但没有一条把 K 与日收益、|收益|、隔夜缺口做滚动相关 / 回归,也没有一条把 K 放到自己的历史里标准化。
+    另一件由定义得出的事:day_kurt 是「超额」峰度(原始峰度 - 3,代码 `div(mean(x^4), var^2) - 3`),取值下界 -2,成交摊得很平的票可以为负或接近 0;head 里 A / K 的比值在这类票上会翻号或爆点,这个疑点我另在 R 组里直接检验(把分母换成原始峰度 K + 3,并给一个不做除法的写法)。本位的种子一律不用 K 作分母。
+
+    假设:K 的水平被流动性与持有人结构吃掉(所以单独是 -4.9);K 的「时间序列行为」才是慢变量里的信息 —— (a) 相对自己常态的惊奇(cross_zscore);(b) 昨天的成交形状对今天收益 / 隔夜缺口的滞后耦合(Llorente、Michaely、Saar、Wang 2002:成交量与随后收益的耦合方向由信息不对称决定,投机性成交接延续、对冲性成交接反转;这里把「成交量」换成「成交分布的形状」);(c) K 与 |收益| / 收益的同日共动(Gervais、Kaniel、Mingelgrin 2001:放量吸引注意力);(d) K 与价格跳变峰度 day_kurt(Ret) 的共动(量与价同时「成团」是信息驱动,只有量成团是流动性 / 大单);(e) 形状的不稳定度。这些读法都是 120 日左右的慢量,15 bp 下可交易。
+
+    算子怎样实现:16 个种子全部原样含 K。RZ = cross_zscore(K, 60) 是今天的 K 对自己 60 日的 z 分数(无量纲,sd 约 1),所以 cross_regbeta(RZ 滞后 1 日, 当日市场相对收益, 120) 的斜率 = corr × σ_r,不带 1 / σ_x 的量纲。这一点是刻意的:另一条流(2013)里出 head 的 `cross_regbeta(含成交额水平的回归元, day_sum(Ret), 120)` 是带成交额水平量纲的斜率,其 alpha 有一部分可能来自 1 / σ_Amt 这个小盘 / 低流动性的量纲;K 的 z 分数里没有这个量纲,所以这里若有 head,来源只能是耦合方向、不是小盘尾部。种子分五组:(A)慢水平与去水平(1 ~ 5:cross_ema 60;对 LogFloatCap 做截面回归残差;对价位 log(day_close(Low)) 做残差;20 日对 241 日的差;自己历史 z 分数的 EMA);(B)滞后耦合(6 ~ 8、16:对市场相对收益的斜率 / 相关 / t 值,日内收益版,隔夜缺口版);(C)同日共动(9、10:对 |收益| 与对带符号收益);(D)形状对形状(11、12:K 与 day_kurt(Ret) 的名次相关;名次空间里 K 与 day_kurt(Amt) 的差);(E)稳定性 / 持续性与状态(13 ~ 15:K 名次的 120 日标准差;K 名次的一阶自相关;市场波动状态翻转符号)。滚动耦合的种子乘 M = replace_small_with_nan(is_gt(ListAge, 120)),把上市 120 个交易日内的票置缺失。
+
+    和库 / 快照的区别:快照里含 K 的候选只有 head 1 一族(外围是 cs_first_low40 / cs_last_high05 阶跃带和 `div(·, K)` 比值,以及 `div(·, -5)` 的对照),没有一个种子用 K 的动态;库里 K 的 19 条没有耦合读法(见上)。本位与 head 1 的差别:不要阶跃带、不要市值、不除以 K,只读 K 自己的时间序列行为;因此与 head 1 的日度秩相关预计只来自 K 水平的那一小部分(预计 |ρ| 0.1 ~ 0.5)。
+
+    为什么样本外还会在:成交形状取决于谁在交易(算法执行的机构 vs 事件 / 散户)和 T+1、集合竞价、涨跌停制度,是慢变量;耦合读数用 120 日窗口,变化慢;文献都在 2023-08 以前。预期并不高:K 单独是 -4.9,慢化后最多回到 0 附近;我押的是 z 分数滞后耦合有可能比水平多出信息。
+
+    数学检查:(a) 无前视:滞后耦合里的 x 是 K 的 1 日滞后(昨天收盘已知),y 是今天的收益,窗口尾随,t 日收盘后算、t + 1 交易;隔夜缺口 = day_first(Open) / ts_delay(day_last(Close), 1) - 1 在 t 日开盘已知。(b) 数值:K 是比值型统计量,分钟成交量方差为 0(整天无成交、停牌)时 day_kurt 为缺失,不是 inf;cross_zscore 对近常数窗口给 0(代码里有相对 1e-6 的保护),不会产生 ±1 的浮点噪声;cross_corr / cross_regbeta 在窗内有效对少时可能给 ±1,所以乘 M(ListAge 掩码);K 本身量级是几到几十,不触发 1e-9 的 EPS 问题(不像收益量级的偏度)。(c) 定义:cross_* 在窗口未满时是扩张窗口,样本首个月所有票都在用少量点估计,这对全部种子一视同仁,不是某一类的偏置;名次类种子(cs_rank)在并列时靠列序打破,K 是连续量,并列极少。已在合成立方体上把 16 个种子全部算过(无 inf)。没有用任何 2026 年数据。
+  inspired_by: 'loc 的拆解:head 1 里 day_kurt(Volume) 把 score 从 +0.02 抬到 +0.73,但单独是 -4.93;库里 K 只有 19 条且无耦合读法'
+  literature:
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 成交量与随后收益的耦合方向由信息不对称决定;种子 6 ~ 8、16 把「成交量」换成「成交分布形状的 z 分数」
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常放量吸引注意力、随后收益溢价;种子 9、10 读形状与收益的同日共动
+  - title: All that glitters - the effect of attention and news on the buying behavior of individual and institutional investors
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 散户的买入集中在引起注意的日子,机构不是;K 的水平 / 动态是这种参与者构成的慢代理
+  seeds:
+  - cross_ema(day_kurt(Volume), 60)
+  - cs_regres(cross_ema(day_kurt(Volume), 60), LogFloatCap)
+  - cs_regres(cross_ema(day_kurt(Volume), 60), log(day_close(Low)))
+  - sub(cross_ema(day_kurt(Volume), 20), cross_ema(day_kurt(Volume), 241))
+  - cross_ema(cross_zscore(day_kurt(Volume), 120), 20)
+  - mul(cross_regbeta(cross_delay(cross_zscore(day_kurt(Volume), 60), 1), cs_demean(ts_delta(log(day_last(Close)), 1)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_corr(cross_delay(cross_zscore(day_kurt(Volume), 60), 1), cs_demean(ts_delta(log(day_last(Close)), 1)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_reg_tvalue(cross_delay(cross_zscore(day_kurt(Volume), 60), 1), cs_demean(day_sum(Ret)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_corr(cross_zscore(day_kurt(Volume), 60), abs_(cs_demean(ts_delta(log(day_last(Close)), 1))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_corr(cross_zscore(day_kurt(Volume), 60), cs_demean(ts_delta(log(day_last(Close)), 1)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_corr(cs_rank(day_kurt(Volume)), cs_rank(day_kurt(Ret)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cross_ema(sub(cs_rank(day_kurt(Volume)), cs_rank(day_kurt(Amt))), 60)
+  - mul(cross_stddev(cs_rank(day_kurt(Volume)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_autocorr(cs_rank(day_kurt(Volume)), 120, 1), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cs_flip_by_state(cross_ema(day_kurt(Volume), 60), cs_mean(day_std(Ret)))
+  - mul(cross_corr(cross_delay(cross_zscore(day_kurt(Volume), 60), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+- type: E
+  core: 'day_close(Low)'
+  hypothesis: |-
+    核心 T = day_close(Low):当天最后一分钟的最低价,价格是后复权的(规则 §4:不是数学问题)。后复权价位在股票之间的排序约等于「从数据起点以来的累计表现 × 起点价位」,所以它是一个极慢的状态变量:低档位 = 长期输家 / 边缘化 / ST 与退市候选(「垃圾」),高档位 = 长期幸存者。
+
+    证据与疑点(全部是 2025-12-31 以前的读数,我如实写在这里):(1) loc 共性表里含 T 的 22 个已评分候选均值 -1.16、不含的 -2.09,差 +0.93、p 0.014,是本流共性表里唯一 p < 0.05 的子树;但这 22 个大半是我第 1 轮 GP 位自己的后代,不是独立证据。(2) head 1 的 `cs_first_low40(LogTotalCap, T)`(把 T 最低的 40% 整体排到最前、其内按市值排序)单独 +0.02 / +0.56(train / valid);T 单独 -2.35;把 Low 换成 High 几乎不变(+0.75)—— 所以起作用的不是「Low」,而是「价位档位 × 市值」这个交互。(3) 疑点:总领在 PROGRESS.md 里指出,阶跃算子 `cs_first_low40` 等于把一组票整体抬到最前,尺子只扣控制排名的 1 / 2 / 3 次项,扣不掉「档位阶跃」,所以 head 1 可能是尺子的盲区而不是新信号。本位的设计就是对这个疑点的直接检验:种子里同时放阶跃 / 排除版本(5 个)、连续版本(乘积、残差、同伴内去均值 / 标准化,5 个)、换掉市值的版本(6 个)。读法:若连续版本和阶跃版本都不行、只有 head 1 那一种写法行,说明是阶跃的伪影;若同伴内的连续版本(种子 8、9、14)也到 0 附近以上,说明「同价位同伴内的相对市值 / 相对形状」是真的交互。
+
+    机制(如果有 alpha):Asness、Frazzini、Israel、Moskowitz、Pedersen(2018,「Size matters, if you control your junk」)—— 小市值溢价在扣掉垃圾股之后才干净地出现:垃圾小票(长期输家)拖累小盘因子。A 股 2020 年起的退市新规把垃圾股的折价从模糊变成可执行,小市值里「没被边缘化」的部分是稳定的。长期输家的价位档位(T 的低分位)正是这种垃圾的一个慢代理;纯多头书只能做多,所以「把低档位票排除出多头书」是对纯多头最直接的改进(这也是 cs_last_low* 版本的写法)。长期反转(DeBondt 与 Thaler 1985)是反方向的假设(长期输家反弹),种子里两个方向都有(first / last、low / high),方向交给 train 选。
+
+    算子怎样实现:16 个种子全部原样含 T(T 的分位决定档位)。(A)阶跃 / 排除(1 ~ 5):`cs_last_low10 / low20(LogTotalCap, T)` = 价位最低的 10% / 20% 被压到最底(排除版),`cs_first_high40`、`cs_last_high40`(顶部档位的对称版本)、`cs_first_low20`(head 1 的 40% 改 20%);(B)连续(6 ~ 8):名次乘积 `mul(cs_rank(LogTotalCap), cs_rank(T))`、市值名次对价位名次的截面回归残差 `cs_regres`、市值在同价位十分位内的去均值 `cs_bucket_demean`;(C)换掉市值(9 ~ 16):用流通比例 `sub(LogFloatCap, LogTotalCap)`(= log(流通股 / 总股本),价格相消,纯股本结构)、名义股价 `sub(LogFloatCap, LogFloatShares)`、成交集中度 `cross_ema(day_gini(Amt), 60)`、日内收益偏度 `cross_ema(day_skew(Ret), 60)`、成交重心 `cross_ema(day_centroid(Amt), 60)`、K 的慢水平(与另一位的核心 K 搭起来)作为被档位处理的主信号,处理方式是排除版、同伴内标准化版。
+
+    和库 / 快照的区别:库 5583 条里 day_close(Low) 只出现 6 次,cs_first_* / cs_last_* / cs_bucket_* 这三类算子 0 次(它们是 Partura 加的算子)。快照里含 T 的候选(loc 收录的 49 个已评分候选里有 22 个)外围都是 `cs_first_low40(·, T)`、`cs_last_high05(·, T)` 与除以 -5 / K,主信号几乎都是 LogTotalCap;本位的外围(low10 / low20 排除、high40 对称、连续乘积 / 残差 / 同伴内去均值、换掉主信号)全是第 1 轮没出现过的写法。
+
+    为什么样本外还会在:价位档位是极慢变量(换手极低,15 bp 几乎不构成负担),来源是制度性的(退市新规、垃圾股的持续折价),不依赖某一段行情;文献 2018 年的结论是跨国家、跨时期稳定的。但我给的概率不高:档位阶跃可能只是小盘 / 反转风格的另一种写法,train 与 valid 的符号也可能不一致。
+
+    数学检查:(a) 无前视:T 是当日分钟数据,档位用当日截面名次,t 日收盘后算、t + 1 交易。(b) 数值:cs_first_* / cs_last_* 在 x 的并列块上整块处理,输出取 y 的序数名次再平移,不会有 NaN 或并列;主信号的分母都不含近零除法;cs_bucket_* 在桶内不足 2 只时给缺失。(c) 定义:这些档位操作在「档位边界」附近会让个别票名次大幅跳变,抬高换手,这是已知的代价(别的流的 R 组里分桶版普遍变差 0.4 ~ 3),所以我把分桶版只放 3 个、其余用 cross_ema 先把主信号做慢。已在合成立方体上把 16 个种子全部算过(无 inf)。没有用任何 2026 年数据。
+  inspired_by: 'loc 共性表 day_close(Low)(p 0.014)与 head 1 的拆解(Low→High 不变、阶跃 × 市值是关键、去掉 K 后 +0.02);总领 PROGRESS.md 对「阶跃带是尺子盲区」的疑点'
+  literature:
+  - title: Size matters, if you control your junk
+    authors: Clifford S. Asness, Andrea Frazzini, Ronen Israel, Tobias J. Moskowitz, Lasse H. Pedersen
+    year: '2018'
+    treatment: 小市值溢价在扣掉垃圾股后才干净;种子 1 ~ 2、9 ~ 16 把低价位档位当垃圾的慢代理做排除 / 同伴内处理
+  - title: Does the stock market overreact?
+    authors: Werner F. M. DeBondt, Richard H. Thaler
+    year: '1985'
+    treatment: 长期输家随后反弹(相反方向的假设);种子 3、4 的对称档位让 train 选方向
+  - title: Quality minus junk
+    authors: Clifford S. Asness, Andrea Frazzini, Lasse H. Pedersen
+    year: '2019'
+    treatment: 垃圾股的持续折价是跨市场现象;支持「排除垃圾」作为纯多头书的改进
+  seeds:
+  - cs_last_low10(LogTotalCap, day_close(Low))
+  - cs_last_low20(LogTotalCap, day_close(Low))
+  - cs_first_high40(LogTotalCap, day_close(Low))
+  - cs_last_high40(LogTotalCap, day_close(Low))
+  - cs_first_low20(LogTotalCap, day_close(Low))
+  - mul(cs_rank(LogTotalCap), cs_rank(day_close(Low)))
+  - cs_regres(cs_rank(LogTotalCap), cs_rank(day_close(Low)))
+  - cs_bucket_demean(LogTotalCap, day_close(Low))
+  - cs_bucket_zscore(sub(LogFloatCap, LogTotalCap), day_close(Low))
+  - cs_last_low10(sub(LogFloatCap, LogFloatShares), day_close(Low))
+  - cs_last_low10(cross_ema(day_gini(Amt), 60), day_close(Low))
+  - cs_last_low10(cross_ema(day_skew(Ret), 60), day_close(Low))
+  - cs_last_low20(cross_ema(day_centroid(Amt), 60), day_close(Low))
+  - cs_bucket_zscore(cross_ema(day_gini(Amt), 60), day_close(Low))
+  - cs_last_low10(cross_ema(day_kurt(Volume), 60), day_close(Low))
+  - cs_last_low10(cs_regres(cross_ema(day_std(Ret), 60), LogFloatCap), day_close(Low))
+R:
+- head: 'div(cs_first_low40(LogTotalCap, day_close(Low)), day_kurt(Volume))'
+  why: |-
+    检验 head 的分数是否来自分母 day_kurt(Volume) 的符号翻转 / 近零爆点。day_kurt 是超额峰度(原始峰度 - 3,取值在 [-2, +无穷)):原始峰度接近 3 或小于 3 的票(成交摊得很平)分母接近 0 或为负,A / K 在这些票上翻号或取极端值,而 sign = -1 的多头书取的正是比值最低的那一端(K 为小负数、A 为正的票比值为负,落在最前)。loc 里 Low→High、Volume→Amt 都不变(+0.75 / +0.74)与这个解释相容,也与真实效应相容,所以直接分开:
+    a. 分母换成原始峰度 add(K, 3)(>= 1,不翻号也不近零);b. 完全不做除法:sub(A, cs_rank(K)),K 只以名次进入(0 ~ 1),检验「A 小且 K 大」这个组合本身有没有分数;c. d. 在 a 的基础上把分母做慢(cross_ema 20 / cross_mean 60,不再受每日噪声支配);e. 去掉阶跃,市值用连续名次 cs_rank(LogTotalCap)(检验阶跃是否必要);f. LogTotalCap 换成控制变量 LogFloatCap(检验是不是总股本与流通股本之差);g. 档位宽度 40% 改 20%;h. 只把原分母做慢 cross_ema(K, 20)(与 c 配对,区分「慢」与「安全分母」)。
+    读法:a、b 保持 head 水平(± 0.3)= 效应是真的、不是分母伪影;a、b 崩掉(< -1)而原 head 在 +0.7 = 分数来自 K 的符号翻转 / 近零爆点;c 比 a 好 0.3 以上 = 慢是杠杆。
+    数学:所有变体都没有对近零量的除法:分母要么 >= 1(a、c、d、e),要么是原 head 的分母(f、g、h,其中原分母的近零问题正是本组要量的对象),b 没有除法;无前视。
+  variants:
+  - 'div(cs_first_low40(LogTotalCap, day_close(Low)), add(day_kurt(Volume), 3))'
+  - 'sub(cs_first_low40(LogTotalCap, day_close(Low)), cs_rank(day_kurt(Volume)))'
+  - 'div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Volume), 3), 20))'
+  - 'div(cs_first_low40(LogTotalCap, day_close(Low)), cross_mean(add(day_kurt(Volume), 3), 60))'
+  - 'div(cs_rank(LogTotalCap), add(day_kurt(Volume), 3))'
+  - 'div(cs_first_low40(LogFloatCap, day_close(Low)), day_kurt(Volume))'
+  - 'div(cs_first_low20(LogTotalCap, day_close(Low)), day_kurt(Volume))'
+  - 'div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(day_kurt(Volume), 20))'
+- head: 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 30))'
+  why: |-
+    窗口杠杆已有读数:最外层 ts_max 30→60 是 -0.19(train -0.19 / valid +0.09),比原 head 的 -0.67 好 0.48(loc R 候选;ρ 与原 head 0.76);30→15 没过闸门(不同值比例 0.48,原 head 只有 0.50,60 日版 0.53 过线:并列主要来自停牌 / 不动的票,窗口越长越少);所以「慢」是承重的,沿同一个方向继续走,并换掉两个怀疑的部件。
+    这条链读的是 day_mean(Ret)(盘中分钟收益均值,不含隔夜)相对当日市场的最大涨幅(sign +1:近期相对涨幅最大的票继续跑赢,不是库里 MAX / 彩票的方向);ts_max(ts_max(·, 10), 30) 等价于一个 39 日窗口的最大值,窗口加长只是把「近期」拉长。
+    a. b. c. 最外层窗口 90 / 120 / 241;d. 内两层窗口 10 → 20 且最外层 120;e. 内两层窗口 10 → 5 且最外层 60(反方向:更短的内层);f. 最外层 ts_max 换成半衰期 60 日的 cross_ema(平滑掉每次新高的跳);g. 换成 120 日 ts_mean;h. 把 cs_demean 换成 cs_rank(名次空间,去掉离群日对最大值的支配),最外层 120。
+    数学:无除法,无前视;pow_2 作用在 ts_max 之后的值上,pow_1_5 作用在 >= 0 的量上。
+  variants:
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 90))'
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 120))'
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 241))'
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 20), 2)), 20)), 10), 120))'
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 5), 2)), 5)), 10), 60))'
+  - 'pow_1_5(cross_ema(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 60))'
+  - 'pow_1_5(ts_mean(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), 2)), 10), 2)), 10)), 10), 120))'
+  - 'pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_rank(sub(ts_max(cs_rank(day_mean(Ret)), 10), 2)), 10)), 10), 120))'

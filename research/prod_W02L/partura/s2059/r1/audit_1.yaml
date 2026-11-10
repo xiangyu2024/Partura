@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: []
+    reasons: '相关度表(corr_1.md):seed 1/2/4/11 与 head cross_min(day_max(nt_cs_regres(High, Low)), 15) 的原始|ρ| 为 0.48–0.60,残差 0.43–0.49,与 vol 控制 0.46–0.63、liq 0.31–0.53、known 0.32–0.52 也都偏高,是这个 head 的日轴换写法,并且与 vol 控制度量的是同一类量(日内区间相对价格水平的残差)。seed 3/6/7 与 head |ρ| ≤ 0.19(seed 3 残差 0.30、rev 0.33 为主)。seed 5 的 regbeta 与 head ≤ 0.17。seed 8/9/10/12 的影线比与 head 为 0.03–0.08、与 5 个控制 ≤ 0.20,这一块是批里真正新的部分。算子核对:cs_regres(Y,X) 是逐日截面 Y~a+bX 的 OLS 残差(nd_cs.py:254);seed 1–4、11 写的是 cs_regres(day_min(Low), day_max(High)),即 Low 对 High 回归,与 missions 正文写的 cs_regres(day_max(High), day_min(Low))(High 对 Low)方向相反,正文与种子不一致,需要 PI 改正。cross_regbeta/cross_regres 是 rolling_ols 的 y~a+bx(common.py:643),cross_regbeta(day_min(Low), day_max(High)) 确为 High 对 Low,与正文一致。seed 1/2/3/11 用原始后复权价、没有 log 或 cs_rank 压缩,正文说「种子里用 log 或 cs_rank 压缩」对这几个不成立,截面 OLS 会被高价股主导(seed 4 用 log,没有这个问题)。影线比 log(div(sub(day_max(High), day_mean(Vwap)), sub(day_mean(Vwap), day_min(Low)))) 在 Vwap 等于日高时分子为 0、log(0) = -inf;正文写「分子也为 0 得 NaN、不是无穷」只对 0/0 成立,需要加下限。没有验证它是否主导截面,暂不划。不划任何种子:没有种子与 head 的 |ρ| ≥ 0.7 或与控制 ≥ 0.8;seed 1 与 seed 2 只差窗口(60/120),可能接近重复,但表里没有种子间 ρ,不凭推断划掉。如果它有 alpha,最可能来自:影线不对称(买盘冲高后被卖出、恐慌下杀后被承接)里与价格水平无关的慢变部分;其次是 60–120 日的日内区间残差(但这部分大概率被 vol 控制吃掉)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7, 8, 9]
+    reasons: '相关度表:seed 1–6、11、12 与三个 head 的原始|ρ| 为 0.01–0.33(最高的是 seed 6 hi(Ret) 与 High/Low head 的 0.33,残差 0.13),与控制 ≤ 0.34;size 控制在 seed 5、6、12 上为 0.32–0.34,是这批里最大的一组。seed 10(Amt 的尾部差)与 liq 0.76、known 0.68、size 0.57,低于 0.8 的自动线,不划;但它基本是流动性形状的量,去掉控制后剩下的是什么需要留意。算子核对:day_es_ratio_lo/hi(ops_ext.py:647–676)是尾部分钟均值除以该分位数,不是「日内最极端分钟的收益占全天的比例」,正文描述有误;分母只挡 |q| ≤ 1e-8,近零但非零的分位数(分钟收益几乎全为零的日子)会放大,但种子用 40–60 日均值,没有证据它主导截面,不划。划掉 seed 7、8、9:cross_semistd_neg/pos(ops_ext.py:751)要求 x > 0 且前一日 x > 0,计算的是 log(x_t/x_{t-1}) 的下 / 上半偏差;x 取 day_sum(Ret) 是日收益之和,不是价格,正负不定,这三个种子实际计算的是「日收益和的相邻日对数比,只在连续两天都为正的日子上」,是定义坏掉(§4),它们 0.01–0.03 的 ρ 与之吻合。修法是改用日收盘价序列。seed 1–6、10–12 保留。如果它有 alpha,最可能来自:日内收益尾部形状的不对称,下尾厚度的风险补偿(lo 比)或上尾的彩票需求(hi 比),符号交给 GP 定。'
+R: []
+summary: '两个 N 位都通过:a 创新 3 / 合理 3、不划种子;b 创新 4 / 合理 4、划 7、8、9(day_sum 上的半标准差定义坏掉)。需要 PI 在执行前改正两处:a 的 cs_regres 方向与正文相反、a 的 1/2/3/11 缺 log 压缩;b 的 day_es_ratio 描述有误。无 R 组。'

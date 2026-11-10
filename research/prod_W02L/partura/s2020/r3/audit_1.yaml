@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7, 8]
+    reasons: '核心 day_es_ratio_lo(Close) 与各控制的原始 |ρ|:liq 0.07 / vol 0.35 / rev 0.21 / known 0.11 / size 0.00,全部 < 0.8,E 位的核心门槛通过;核心在 head 1 里是 sigmoid(sigmoid(·)) 包着的子树、在 head 2 里是 sigmoid(·) 包着的子树,满足「核心必须是快照 head 子树」。14 个种子中划掉 2 个:seed 7(cross_regbeta(es_lo, cross_delay(centroid,1), 241),与 head 1 的原始 |ρ| 0.79,即同一对变量的回归方向对调,是重复);seed 8(cross_reg_tvalue(cross_delay(cs_demean(centroid),1), es_lo, 241),与 head 1 的原始 |ρ| 0.95,是同一回归的 t 值版,是重复)。另外没有种子与任何控制的 |ρ| 达到 0.8(最高是 seed 11 的 vol 0.66、seed 12 的 vol 0.64)。剩 12 个,≥ 4,通过。与库里 loc.json 的 174 条含 day_ 或 cross_ 的候选逐字比对,划完后的 12 个种子都不在其中,外围不与已见候选相同。创新度给 4:核心虽是 head 的组成部分,但大多数种子不用 centroid 作解释端:seed 1(es_lo 与 es_hi 的左右尾耦合)、seed 2(Close 与 Vwap 的尾形差)、seed 6(es_lo 的自回归斜率)、seed 3 / 10 / 13(昨日 gini 集中度 / 收益 gini,作解释端)、seed 4 / 5(昨日买卖方向比 signed_ratio 与昨日收益 day_sum(Ret))、seed 14(昨日 wstd 波动)、seed 11 / 12(es_lo 的慢 EMA 与尾部均值,单量参照)都是库里没有的骨架。合理度给 4:数学上,各 day_* 算子只用当日分钟数据,books 按次日超额收益计分,cross_delay 天数为正,cross_delta / cross_corr 都是同日或过去的量,无前视;cross_regbeta(x,y,d) 按 common.py 的 rolling_ols 是 y 对 x 的斜率,种子的读法与假设一致;es_ratio 在收盘价为正时取值 (0,1],分母不接近零,无爆点;没有 ts_rank / cross_rank / in_rank_rolling,没有 nanrank 陷阱;没有 nt_* 与 ts_spearman。需要注意:seed 11 与 12 的 vol 相关 0.6 以上,慢版的 es_lo 有一部分是区间 / 波动的代理,不是纯形状;这不够挡,只在合理度里记一笔。如果它有 alpha,最可能来自下探形状的个股慢性质与左右尾的耦合(seed 1、6、11、12),或昨日成交集中度 / 买卖方向对今日下探深度的预测(seed 3、4、10)。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [11, 12]
+    reasons: '核心 day_centroid(in_slice(Amt,1,240)) 与各控制的原始 |ρ|:liq 0.16 / vol 0.19 / rev 0.14 / known 0.18 / size 0.01,全部 < 0.8,通过;它是 head 1 与 head 2 的解释端子树。12 个种子中划掉 2 个:seed 11(cross_regbeta(cross_delay(centroid,2), es_lo, 241),与 head 2 的原始 |ρ| 0.97,是 head 的滞后 2 日写法,重复);seed 12(cross_regbeta(cross_delay(cs_demean(centroid),1), es_lo, 482),与 head 1 的原始 |ρ| 0.76,是 head 1 的 482 日窗口版,重复)。剩 10 个,≥ 4,通过。与 loc.json 候选逐字比对无命中。创新度给 3,而不是 4:剩下的回归种子(1–6 与 10,共 7 个)的解释端都是滞后一日的 centroid(多数带横截面去均值,与 head 1 的解释端相同),只换了被解释端(偏度、topw、wstd、at_min、es_hi、开收盘收益、收益 gini),这是「同一个时点 - 结果斜率」的家族,不是新的解释端;被解释端确实是库里没有的(库里 day_centroid 出现 0 次),所以不给 1 或 2,但也不算实质新。最接近快照的是 seed 3(wstd(Ret,Amt),原始 |ρ| 0.60,与 head 1,size 0.23),需要在 GP 库禁令里留意。合理度给 4:各算子数学上有定义;centroid 是 [0,1] 有界量;cross_delta 3 在 seed 8 里是同日的 3 日差,不是前视;day_topw_mean 取 Amt 前 10% 分钟的 Ret 均值,定义清楚;开收盘的 gap 用 cross_delay 取前收盘,无前视。一个需要留意的点(不构成挡的理由):seed 4 的 day_at_min_ratio(Close) 用的是精确相等计数,低价股的 tick 网格会让并列低点更多,这个量与价位相关(价位不在 5 个控制里),它可能是 tick 伪影而不是低点停留的信息。如果它有 alpha,最可能来自成交重心偏晚(拆单、尾盘才到的订单)对下一步价格结果(偏度、尾部、尾盘反应、收益形态)的个股敏感度差(seed 1、2、5、6、7),或对 Amt 与 Ret 的时点同步的慢性质(seed 3、9、10)。'
+R:
+  - head: 'cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1), sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)'
+    soundness: 4
+    reasons: '数学上 head 无问题:cross_delay 天数为正,cs_demean 是截面去均值,sigmoid 是 es_lo 的单调变换(es_lo 在 (0,1) 内,双层 sigmoid 只压缩比例,不引入爆点)。8 个变体都是对窗口、去均值方式、滞后天数、切片、被解释端口径(Low 替代 Close)与 t 值的敏感性检验,机制清楚,与「这个 head 是 241 附近的尖峰还是稳定结构」这个问题直接对应,没有落进 §4 的陷阱。变体 4 与 5(|ρ| 0.99 / 1.00)与原 head 几乎同秩,是 sensitivity 检验里预期的结果,不是重复,但收录或替换的门槛(|ρ| < 0.5 或替换 ≥ +0.1)会把它们挡在外面,这是流水线的事。'
+  - head: 'cross_regbeta(cross_delay(cs_demean(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1)), 1), sigmoid(day_es_ratio_lo(Close)), 241)'
+    soundness: 3
+    reasons: '数学上无问题:双重 cs_demean 与双重 cross_delay 是合法的有限滞后,总滞后 2 日,无前视。但计划的表述与列出的变体不一致:计划说要「去掉外层一层 delay / demean」「两者合并」,实际列出的 4 个变体里,变体 3 与 4 仍保留两层,只改窗口(变体 4)或把 Amt 换成 Volume 加窗口(变体 3),并没有去掉任何一层;只有变体 1(Volume 单层)是真正的去层检验。变体 1 与快照某个 head 的原始 |ρ| 为 1.00,是同一个量在 Volume 口径下的重写,对「叠加是烂部件」这个假设没有区分力。这些不是数学错误,但原计划想检验的「叠加有害」只被部分地检验了,所以合理度给 3(及格,不加分)。'
+summary: '两个 E 位都通过:a 划掉 7、8(与 head 1 的重复)剩 12 个种子,创新 4、合理 4;b 划掉 11、12(与 head 2 与 head 1 窗口版的重复)剩 10 个种子,创新 3、合理 4。核心与各控制的 |ρ| 均 < 0.8;无前视,无 nanrank / ts_rank 陷阱,无禁用算子。R 组 1 合理 4;R 组 2 合理 3(数学无误,但计划表述的「去掉一层」在变体里只被部分检验,变体 1 与快照某个 head 的 |ρ| 为 1.00)。'

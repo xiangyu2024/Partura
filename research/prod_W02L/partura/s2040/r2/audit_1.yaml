@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [9]
+    reasons: '位 a 为 E 深挖,核心 cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))),这是共性表第一名(loc.md,均值差 +1.70,5 个候选)。核心定义核对:cs_bucket_demean(ops_ext.py:463)按 day_cov 十分位去均值、保留单位,桶内不足 2 只记缺失;day_cov(dt_day.py:216)有效点数 < 2 记缺失;无除以近零。相关度表(corr_1.md):核心与头的原始最大 |rho| = 0.34(ts_stddev 那个 head),残差 0.37;与控制 liq 0.04 / vol 0.68 / rev 0.29 / known 0.10 / size 0.16,均 < 0.8,E 核心检查通过。创新度 3:核心的波动成分与 vol 控制 0.68 相当高,真正新的是「同一量价协方差桶里的相对波动」,不是波动本身,所以不给 4。合理度 4:无前视,无定义问题。划掉 #9 cross_argmax(core,120):corr_1.json 中 gate=False、distinct=0.059,即 120 个取值要分给约 5000 只股票,截面绝大部分是并列,排序主要由列序决定。§4 允许的列序打破只适用于并列占少数的情形,这里并列占主导,属于数值伪影,划掉。其余放行:#3 cross_hurst 与 #6 semistd 差的覆盖率为 0.85 / 0.845(gate=False),来源是窗口内任一缺失即整窗 NaN,是选择偏差而不是缺失值填充主导结果,保留。#10 cross_mean(cross_rank(core,241),20) 碰到 §4 的 nanrank_last 已知行为:停牌日 core 为 NaN,cross_rank 返回 0,停牌票会被推到低端。这是真实陷阱,但对纯多头十分位的影响主要落在底部,并不主导顶部书,审计认为它不足以划掉,保留;PI 应在停牌日把输出还原为 NaN。#1 cross_mean(core,120) 与 vol 控制 0.73、#2 cross_stddev 与 vol 0.48:PI 笔记说不押水平均值,但计划里仍放了一个水平均值种子,这是计划内部不一致,不是数学问题,放行。如果它有 alpha,最可能来自:同类股票里相对波动的持续性与对市场压力的敏感度,即持有人结构的慢变属性;其次是 #8、#12、#13 的时间形状读数。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '位 b 为 N 新想法,成交量节奏 VT = day_std(in_logchg(Volume,1))。库里没有:members.csv 中含 in_logchg 的表达式数为 0,所以原语与骨架都是新的。但 VT 与 head 3 共用同一个分钟级对数量变化原语(head 的事件计数就是它),其残差 |rho| 与 head 为 0.55(#1)、0.46(#3),说明它与 head 共享一个底层量,只是统计量不同(标准差而非阈值计数)。与流动性控制的原始 |rho| 为 0.74(#1)、0.72(#3)、0.74(#12 day_gini)、0.52(#9),这已经接近流动性的写法,所以创新度给 3,不给 4。自动划掉 #10 cross_mean(cs_bucket_demean(VT, day_std(Ret)), 60):与 head 的原始 |rho| = 0.72 ≥ 0.7,且与流动性控制 0.80 ≥ 0.8,双重触发;同时它与 #1 只差窗口(60 对 120),是重复。合理度 4:in_logchg(ops_ext.py:58)对零成交量分钟返回 NaN;day_signed_ratio(ops_ext.py:122)分母为零返回缺失;cs_bucket_demean 不足 2 只返回缺失;没有日轴 cross_rank 陷阱;全部是当日分钟加过去日度值,无前视。风险备注而非数学问题:薄股单笔极小成交量会让 |log 变化| 达到约 9,可能放大 day_std,但未到支配截面的程度,放行。#14 与 #15 的 signed_ratio 只差窗口,不算重复;#13 cross_hurst 覆盖 0.851(gate=False),理由同位 a 的 #3,保留。如果它有 alpha,最可能来自:成交节奏反映的持有人结构(拆单与做市 相对 脉冲式散户与事件交易)的慢变属性;但 0.74 的流动性暴露说明大部分 alpha 可能只是流动性,这是下一步要在残差上检验的地方。'
+R:
+  - head: 'ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), 20)'
+    soundness: 3
+    reasons: '数学上可算,没有前视:in_forward_valid_part(dt_in.py:1036)是严格前向的 backward fill,只取当前分钟之前的有效值;in_mean_full / in_stddev_full 与 day_last(Close) 一样是当日数据,日界一致。定义上没有 §4 的问题。合理度给 3 而不是 4,原因在机制层面:阈值取的是当天自己的 mean 加减 1 个标准差,所以 up+down 的计数期望比例基本由分布形状决定(约 0.2 到 0.4 的分钟),跨日、跨股的变化很小;head 的主要变化来自 intraday 收益 乘 一个近似常数加一个形状项,「成交量跳变事件计数」这个名字高估了第二项的含义。拆解里收益项必要性为负(-0.72)也与此一致。PI 的变体(a)-(e)(窗口 60/120、取符号、计数取秩、收益与计数各取秩、桶内去均值)能检验这一点,计划合理,只是对机制的描述应改成「收益乘形状项」。'
+summary: '位 a(E,核心为共性表第一名)与位 b(N,成交量节奏)均通过:a 创新 3 / 合理 4,划掉 #9(cross_argmax,distinct 0.059,并列主导);b 创新 3 / 合理 4,自动划掉 #10(与 head 0.72、与流动性 0.80);剩余种子分别为 15 与 15 个,≥4。R 组合理度 3(无数学问题,但事件计数近似常数,机制描述应改为收益乘形状项)。两处 gate=False 的 Hurst / semistd 保留,a 的 nanrank 陷阱(#10)要求 PI 停牌日还原为 NaN。'

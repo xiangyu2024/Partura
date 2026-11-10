@@ -1,0 +1,105 @@
+seed: 2030
+round: 1
+slots:
+- type: E
+  core: 'cs_demean(sub(day_mean(Ret), 0.5))'
+  hypothesis: >-
+    核心 R = cs_demean(sub(day_mean(Ret), 0.5)):每只股票每天「盘中分钟收益均值」相对全市场的位置(Ret 第 0 根恒为 0,所以不含隔夜跳空;sub 一个常数在 cs_demean 下是空操作)。
+    B088 的 8 个成员和本快照的 3 个 head 全是同一个原子 R,外面只套「硬滚动最大值 + pow_2 + 嵌套」:库只读了 R 路径的上端极值,从没读过它的其它形状。
+    拆解表给出的线索不在信息里、而在持有时间里:R 本身 train / valid −4.33 / −3.69(符号 −1,换手极高,成本吃光),一层 ts_max(40) −1.41,嵌套 ts_max 两层 −0.42,外层窗口再拉到 60 则 −0.12(valid +0.01)。
+    分数随窗口 / 层数单调变好、而与已知族的 ρ 一直 −0.3 ~ −0.45 不变,说明这条链上被尺子留下的差别主要是「换手」而不是「读到了更好的东西」;R 的路径里有信息(原样秩 IC 约 −0.045)但还没有被慢而正交地读出来。
+    本轮的假设:新尺子已经去掉了股票层面的波动 / 规模 / 流动性 / 反转 / 已知族 / 冠军暴露,剩下的只能来自股票「自己和自己比」的路径形状。
+    所以外围不再用「最大值」读 R,而是换成 12 种互不相同的形状统计,窗口都在 60 ~ 120 日,慢到 15 bp 下换手低:
+    (1) 漂移:cross_ema(R, 60) —— 盘中相对收益的累积,即 Lou–Polk–Skouras(2019)「隔夜 / 日内拔河」里日内一侧(散户资金流压力,累积后倾向回吐);
+    (2) 下端极值:嵌套 ts_min 与上端对称(库 5583 条里 R 上没有这条链),读恐慌日 / 抛压出清;
+    (3) 上下极值之和(偏度代理)与「总和扣掉最大与最小」(去掉彩票日的稳健漂移);
+    (4) 连续性:跑赢市场日的 EMA 占比,与 Da–Gurun–Warachka(2014)的信息离散度 ID = sign(累计收益) × (跌日占比 − 涨日占比),青蛙效应:渐进式信息引起的动量强于跳跃式;
+    (5) 极值时点:最大 / 最小日在窗口中的位置的 EMA,以及两者之差(先跌后涨还是先涨后跌),极端日的新旧;
+    (6) 持续性:R 的一阶自相关;(7) 盈亏比:正部分之和 ÷ 负部分之和的绝对值(无量纲,不随波动水平单调);
+    (8) 「跳跃 vs 漂移」:cs_rank(120 日最大) − cs_rank(120 日均值),同样的总收益,靠一次大涨还是靠许多小涨;(9) 极值新鲜度:30 日最大 − 120 日最大(最大值是不是最近才创的)。
+    它们和 head 的不同:head 是同一个硬最大值反复嵌套,都是「水平 × 波动」类;这里的统计量全部在股票自己的路径内做对比(占比 / 时点 / 差 / 比 / 自相关),和波动、规模、流动性控制的单调关系弱,所以不会被尺子整块去掉。
+    库 5583 条里以 R 为底的 49 条全是 ts_max / pow_2 / cs_demean 的嵌套,没有一条在 R 上用 ts_min、cross_min、cross_sum / cross_mean、is_gt / is_lt、cross_argmax、自相关或盈亏比(cross_ema 是新增算子,库里 0 次);12 个种子的骨架我用库的 skeleton_key 逐个对照过两个库的骨架集(没有一个在库里)。
+    为什么样本外还会在:来源是 A 股散户主导的日内资金流压力与「连续 vs 跳跃」的信息吸收差异,这两条机制与行情阶段无关,2018 ~ 2025 年结构不变;窗口 60 ~ 120 日、EMA 半衰期 20 ~ 120 日,换手比库里的 head 更低,不依赖某一段行情。
+    数学检查:(a) 无前视:所有窗口是含当天的尾随窗口,t 日收盘后算、t+1 才交易;(b) 数值:R 量级约 1e-5 ~ 1e-4(分钟均值),盈亏比的分母是 120 日负部分之和的绝对值(典型 1e-3),eps 取 1e-7 只在整窗无跌日时起作用,不会成为爆点;
+    is_gt / is_lt 在缺失日返回 0(停牌日既非涨也非跌),cross_ema 跳过缺失并重新归一,频率类种子外面都套 EMA 以保持取值连续(避免只有约 121 档取值被 distinct 门槛判废);(c) 窗口 ≤ 120,热身期占全历史 < 6%。
+  seeds:
+  - 'cross_ema(cs_demean(sub(day_mean(Ret), 0.5)), 60)'
+  - 'ts_min(ts_min(cs_demean(sub(day_mean(Ret), 0.5)), 40), 30)'
+  - 'add(cross_max(cs_demean(sub(day_mean(Ret), 0.5)), 90), cross_min(cs_demean(sub(day_mean(Ret), 0.5)), 90))'
+  - 'sub(sub(cross_sum(cs_demean(sub(day_mean(Ret), 0.5)), 120), cross_max(cs_demean(sub(day_mean(Ret), 0.5)), 120)), cross_min(cs_demean(sub(day_mean(Ret), 0.5)), 120))'
+  - 'cross_ema(is_gt(cs_demean(sub(day_mean(Ret), 0.5)), 0), 60)'
+  - 'mul(sign(cross_sum(cs_demean(sub(day_mean(Ret), 0.5)), 120)), sub(cross_ema(is_lt(cs_demean(sub(day_mean(Ret), 0.5)), 0), 120), cross_ema(is_gt(cs_demean(sub(day_mean(Ret), 0.5)), 0), 120)))'
+  - 'cross_ema(cross_argmax(cs_demean(sub(day_mean(Ret), 0.5)), 120), 20)'
+  - 'sub(cross_ema(cross_argmax(cs_demean(sub(day_mean(Ret), 0.5)), 120), 20), cross_ema(cross_argmin(cs_demean(sub(day_mean(Ret), 0.5)), 120), 20))'
+  - 'cross_autocorr_s1(cs_demean(sub(day_mean(Ret), 0.5)), 120)'
+  - 'div(cross_sum(mul(cs_demean(sub(day_mean(Ret), 0.5)), is_gt(cs_demean(sub(day_mean(Ret), 0.5)), 0)), 120), add(abs_(cross_sum(mul(cs_demean(sub(day_mean(Ret), 0.5)), is_lt(cs_demean(sub(day_mean(Ret), 0.5)), 0)), 120)), 0.0000001))'
+  - 'sub(cs_rank(cross_max(cs_demean(sub(day_mean(Ret), 0.5)), 120)), cs_rank(cross_mean(cs_demean(sub(day_mean(Ret), 0.5)), 120)))'
+  - 'sub(cross_max(cs_demean(sub(day_mean(Ret), 0.5)), 30), cross_max(cs_demean(sub(day_mean(Ret), 0.5)), 120))'
+- type: N
+  hypothesis: >-
+    机制:股票自己和自己比,按成交量状态拆开收益。B088 这一批(以及整个库)读收益时从不区分「这一天有没有成交量」:同样一个大涨日,放量 3 倍的和缩量的是两件事。
+    Gervais–Kaniel–Mingelgrin(2001)的高成交量收益溢价:异常放量日代表信息 / 被关注,之后的收益更高;Llorente–Michaely–Saar–Wang(2002)的动态量价关系:
+    在投机性交易主导的股票里,放量的价格变动倾向于延续,在对冲性交易主导的股票里倾向于反转,所以「量与收益的相关」本身是一个股票层面的信息含量读数。
+    这条线的好处是它们都是股票内部的状态对比,天然把波动、规模、流动性这类「股票层面的水平」减掉(AV 用股票自己 60 日平均成交额归一,高低量日各自对本股比较),和新尺子的 5 个控制与两个冠军的单调 / 多项式暴露几乎正交。
+    算子怎样实现:AV = day_sum(Amt) ÷ cross_mean(day_sum(Amt), 60)(异常放量比,含当天、用的都是当天收盘前已知的数);RC = cs_demean(ts_delta(log(day_last(Close)), 1))(整日含隔夜的相对市场对数收益;B088 的 R 只读盘中)。
+    11 个种子:(1)高量日(AV > 1.5)的 120 日平均相对收益;(2)缩量日(AV < 0.7)的平均相对收益;(3)两者之差(同一只股票内部的放量 − 缩量对比);(4)上涨日(RC > 0)的成交额占比,即累积 / 派发;
+    (5)AV 与 RC 的 120 日相关(Llorente 式的量价关系);(6)量加权相对收益减等权相对收益(日频的「资金流经历的收益」,与按分钟成交额加权的日内 day_wmean 不同,这里按天、用异常放量比加权);
+    (7)近 60 日最大异常放量(事件强度);(8)与(9)异常放量 × 相对收益的 60 日最大 / 最小(带成交量确认的 MAX 与下端);(10)缩量日的最大相对收益(无量上涨,噪音型的 MAX);
+    (11)滞后一日的 AV 与当日 RC 的相关:这只股票自己「放量之后次日」的历史反应,是延续还是反转。
+    和库里已有的不同:库里与此最近的是手写的 5 日窗口 ts_corr(cs_rank(day_sum(Amt)), cs_rank(日收益))(量价相关,窗口短、换手高、没有自身归一);库里没有一条把 day_sum(Amt) 用自己的 60 日均值归一成异常放量比,也没有一条用成交量状态去切分日度收益求条件均值 / 最大值;批内的 MAX 链只在 R 上叠最大值。
+    11 个种子的骨架逐个对照过两个库的骨架集,都不在其中。它们不是 B088 的换写法:读的是量价条件关系而不是极值水平。
+    为什么样本外还会在:来源是投资者注意力与知情交易的差别(放量日的价格信息含量不同),与行情阶段无关;A 股散户占比高,量价关系比成熟市场更强也更稳;窗口 60 ~ 120 日,换手低。预期不高:新尺子去掉了流动性、已知成交额族和两个冠军,这批读数里和成交额水平相关的部分会被拿走,剩下的是「状态对比」。
+    数学检查:(a) 无前视:AV、RC 都只用当天及以前的数据,滞后项用 ts_delay;窗口含当天;(b) 数值:除数 cross_mean(day_sum(Amt), 60) 在停牌满 60 日的票为缺失,引擎对不可交易日置缺失,不产生爆点;
+    比值类种子的分母是「事件数 + 1」或「成交额之和」(大于 0),量级 1e8 ~ 1e11 在 float32 内;is_gt / is_lt 在缺失日返回 0,cross_sum 把缺失日当 0,对事件求和是对的;
+    种子 7 ~ 11 取值连续,种子 1 ~ 3 的分子是连续收益之和,不会落到只有约 121 档的离散取值上。
+  inspired_by: 'B088(8 个库因子):cs_demean(day_mean(Ret)) 上反复嵌套的 ts_max,与 pow_2;现象:分数随窗口和嵌套层数单调改善(−1.41 → −0.42 → −0.12),而批内没有一条把收益按成交量状态切开'
+  literature:
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 种子 1 ~ 3、7 的异常放量日定义与「放量日收益更高」的检验
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 种子 5、11 的量与收益相关(延续 vs 反转)
+  seeds:
+  - 'div(cross_sum(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), is_gt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 1.5)), 120), add(cross_sum(is_gt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 1.5), 120), 1))'
+  - 'div(cross_sum(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), is_lt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 0.7)), 120), add(cross_sum(is_lt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 0.7), 120), 1))'
+  - 'sub(div(cross_sum(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), is_gt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 1.5)), 120), add(cross_sum(is_gt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 1.5), 120), 1)), div(cross_sum(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), is_lt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 0.7)), 120), add(cross_sum(is_lt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 0.7), 120), 1)))'
+  - 'div(cross_sum(mul(day_sum(Amt), is_gt(cs_demean(ts_delta(log(day_last(Close)), 1)), 0)), 120), cross_sum(day_sum(Amt), 120))'
+  - 'cross_corr(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), cs_demean(ts_delta(log(day_last(Close)), 1)), 120)'
+  - 'sub(div(cross_ema(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), div(day_sum(Amt), cross_mean(day_sum(Amt), 60))), 60), cross_ema(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 60)), cross_ema(cs_demean(ts_delta(log(day_last(Close)), 1)), 60))'
+  - 'cross_max(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 60)'
+  - 'cross_max(mul(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), cs_demean(ts_delta(log(day_last(Close)), 1))), 60)'
+  - 'cross_min(mul(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), cs_demean(ts_delta(log(day_last(Close)), 1))), 60)'
+  - 'cross_max(mul(cs_demean(ts_delta(log(day_last(Close)), 1)), is_lt(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 0.8)), 60)'
+  - 'cross_corr(ts_delay(div(day_sum(Amt), cross_mean(day_sum(Amt), 60)), 1), cs_demean(ts_delta(log(day_last(Close)), 1)), 120)'
+R:
+- head: 'pow_2(ts_max(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 30))'
+  why: >-
+    烂部件 = 外层最大值的窗口太短、且是单个观测的硬最大。依据:拆解表里外层 30 → 60 把分数从 −0.40 拉到 −0.12(增益 +0.28,valid 由 −0.38 到 +0.01),
+    外层 30 → 15 则退到 −0.62,单调说明差在换手 / 单点噪声,不在 R 里的信息。变体:外层窗口 90 与 120(换成 cross_max 以免整块 (D, S, 窗口) 进内存);
+    把外层硬最大替换成 120 日里内层 40 日最大序列的上四分位均值 / 75% 分位数(对单点不敏感);或替换成 120 日均值(检验「极值」本身是否是烂的)。
+  variants:
+  - 'pow_2(cross_max(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 90))'
+  - 'pow_2(cross_max(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 120))'
+  - 'cross_tail_mean_q75(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 120)'
+  - 'cross_quantile_q75(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 120)'
+  - 'cross_mean(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 120)'
+- head: 'pow_2(ts_max(pow_2(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 30)), 10), 20)), 30))'
+  why: >-
+    烂部件 = 最外层 30 日窗口(以及硬最大)。依据:拆解表外层 30 → 60 增益 +0.04(−0.19 → −0.15,train −0.03),
+    外层 30 → 15 退到 −0.52;内层 pow_2 的敲除几乎不改分数(+0.01),说明承重的是嵌套最大的总记忆,不是 pow_2。变体:外层 90 / 120 日;替换为上四分位均值。
+  variants:
+  - 'pow_2(cross_max(pow_2(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 30)), 10), 20)), 90))'
+  - 'pow_2(cross_max(pow_2(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 30)), 10), 20)), 120))'
+  - 'cross_tail_mean_q75(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 30)), 10), 20), 120)'
+- head: 'pow_2(ts_max(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), -0.5)), 10), -0.5)), 30), 30))'
+  why: >-
+    烂部件 = 外层窗口短,以及中间多余的第二次 cs_demean(对 10 日最大再做一次截面去均值,再 ts_max 两层)。依据:外层 30 → 60 增益 +0.25(−0.43 → −0.19);
+    拆解里去掉 sub 常数几乎无影响(+0.00),说明常数是空操作、承重的是嵌套窗口。变体:外层 90 / 120;去掉中间的 cs_demean(直接 10 → 30 → 30 嵌套最大);外层替换为上四分位均值。
+  variants:
+  - 'pow_2(cross_max(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), -0.5)), 10), -0.5)), 30), 90))'
+  - 'pow_2(cross_max(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), -0.5)), 10), -0.5)), 30), 120))'
+  - 'pow_2(ts_max(ts_max(ts_max(cs_demean(sub(day_mean(Ret), -0.5)), 10), 30), 30))'
+  - 'cross_tail_mean_q75(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), -0.5)), 10), -0.5)), 30), 120)'

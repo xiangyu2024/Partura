@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: '核心 C = day_locate(in_slice(Amt,2,237), day_argmax(in_slice(High,2,237))),即连续竞价切片内 High 最高那一分钟的成交额。种子与三个 head 的原始 |ρ| 最大 0.25(seed 10,对 ts_pearson head),残差最大 0.15(seed 7),且 head 读的是 day_argmin(Low) 的时刻,变量不同,不是同一个东西。核心对控制的 |ρ|:liq 0.72、known 0.73、vol 0.28、rev 0.25、size 0.49,均 < 0.8,通过核心门槛。核心在 loc.json 的 core_cards 中出现过,是合法核心。核对算子:两个 in_slice 切片相同,day_argmax 给切片内下标 0..235,day_locate 按同一下标取值,下标对齐;cs_bucket_rank 保留 NaN 并只在十分位内部排名;cross_regres(x,y,d) 按 rolling_ols 是 y 对 x 的 OLS 残差,所以 cross_regres(day_mean, C, 120) 是 C 去掉 120 日滚动回归上的日均成交额后的残差,与 PI 的叙述一致;cross_zscore、cross_corr、cross_stddev 都是日轴滚动统计,窗口全部 >= 30 日,无前视。cs_rank 走 rank 的 stable 排序,NaN 保留,不会像 nanrank_last 那样把缺失当 0。限制:argmax High 在一字涨停日并列取第一个分钟,C 实际读的是首次封到最高价那一分钟,这类日子的机制与「买入高潮」不同。这是机制说明的偏差,不是数学问题,不挡。第 9 颗 cross_mean(cs_rank(C),241) 原始 liq |ρ| = 0.82 >= 0.8,按规则自动划掉。第 1、2 颗只差窗口(120 对 241),度量同一件事,属于冗余,但不是重复表达式,保留。第 3 颗 known 0.60、liq 0.59 偏高但未到 0.8,保留。第 4 颗、第 5 颗的 liq 分别为 0.16、0.32,不用划。核心无 head 子树关系,但在共性 / 核心卡里已有记录,计划可通过。如果它有 alpha,最可能来自:高点那一刻的成交额相对于自己 120 日历史或同流动性档的异常,即承接 / 派发结构。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: 'AP = day_argmax(in_slice(Amt,2,237)) 是连续竞价内成交额最大分钟的下标,变量不同于三个 head(head 全部读 day_argmin(Low) 的时刻)。对 head 的原始 |ρ| 最大 0.26(seed 10,对 ts_quantile_q75 head),残差最大 0.33(同一颗),其余多在 0.02–0.22。最需要注意的是控制相关:seed 1、2、3、5、9、12 与 liq 或 known 的 |ρ| 在 0.50–0.59 之间,说明「成交额峰值时刻」与流动性水平有实质共变;这没有达到 0.8 的自动划掉门槛,残差与 head 仍低,不算同一个度量,保留,但奖励端要看到它们靠的是去掉流动性之后的部分。seed 10 cs_rank(centroid(Amt) − centroid(Volume)) 与控制几乎无关(liq 0.03、vol 0.05、known 0.02),但对 head 的残差 0.33 说明它与 argmin(Low) 一族有部分共同成分,保留。算子核对:day_centroid 的分母 T−1 = 235 与 in_slice 切片的 236 根分钟一致,所以 AP − 235×centroid 单位一致;day_argmax 并列取最小下标,cs_rank 的并列靠下标打破、NaN 保留,无 0 填充;所有 cross_* 窗口均 >= 60 日,无前视;cross_corr(AP, cs_mean(AP), 120) 中 cs_mean 是截面均值,是合法的市场时点对比。风险提示:若某些停牌分钟在数据里是 0 而不是 NaN,day_argmax 会给出 0 的假峰值;rules §4 对 nanrank_last 的描述说明停牌日为 NaN,所以这不构成挡的理由,但 implementer 应核实。seed 12(argmax Volume 的 241 日均值)与 Amt 峰值同源,属于冗余,保留。无种子满足自动划掉条件,无数学问题。如果它有 alpha,最可能来自:订单流类型(指数 / ETF 申赎 / 拆单窗口 / 事件驱动)在一天中集中落地的时点,这是慢变的个股属性,而不是某一段行情。'
+R:
+  - head: 'ts_pearson(mul(day_argmin(Low), 0.5), 40)'
+    soundness: 4
+    reasons: 'ts_pearson(X, d) 按 nd_ts.py 的定义是「每只股票的窗口与所有其他股票窗口的 Pearson 相关,对 j 取均值」,即同步性指标,与 PI 的叙述一致。mul(day_argmin(Low), 0.5) 中的 0.5 对 Pearson 是严格的 no-op(Pearson 对正缩放不变),所以「乘数必要性 +0.00」是恒成立的,不是实证发现,不算问题;真正的变化只有窗口与 pow_05 的非线性。6 个变体与原 head 的 |ρ| 为 0.69–0.91(变体 1 为 0.78,变体 6 为 0.76),属于替换候选;与已知族 |ρ| 为 0.23–0.29,远低于 0.5。窗口在 15–30 之间调节,选择依据是 train / valid 分数,未触及 2026 年,符合规则。无前视,无数学问题。如果它有 alpha,最可能来自:低点时刻的跨股同步性在较短窗口里的变化,即个股日内结构与市场的错位。'
+summary: 'a 位通过(划掉第 9 颗,liq |ρ| 0.82);b 位通过(无划除);R 组合理度 4 分保留;两位的创新度与合理度均 4,划完后种子数 11 与 12,均 >= 4;两位的核心 / 种子无数学问题;核心 C 在 loc.json 的 core_cards 中有记录,种子字符串与 loc.json 中已记录的候选无完全重合。'

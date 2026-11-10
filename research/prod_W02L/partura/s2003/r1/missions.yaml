@@ -1,0 +1,111 @@
+seed: 2003
+round: 1
+slots:
+  - type: E
+    core: 'day_q_stat_std(Vwap)'
+    hypothesis: |-
+      机制:三个 head(以及库里 46 条含 day_q_stat_std(Vwap) 的挖掘库表达式)都把 Q = day_q_stat_std(Vwap) 当「底」。Q 是当天 241 根分钟 Vwap 价格水平序列的 1–20 阶自相关,做成 Ljung-Box Q 统计量序列后取的标准差。我读源码并用合成价格路径核实了它的行为(没有用任何市场数据):纯随机游走下 Q ≈ 1000 ± 300,与当天价格相对极差的相关约 0.8;把价格乘 3 或把波动放大 10 倍都不改变它(无量纲);往路径里加分钟噪声(买卖价差弹跳)它下降(噪声 0.4% / 分钟时约 390);叠加 3% 的单边趋势它上升(约 1460);常数路径(一字板、半天停牌)给 0。所以 Q 是「日内低频摆动 / 分钟噪声」的比值(方差比、价格发现的信噪比),不是波动率,也不是价格水平。
+      批里的现象:共性表里含 day_q_stat_std(Vwap) 的 7 个候选均值差 +0.54(p 0.13),不含的 3 个更差。但在三个 head 里 Q 被 log(add(Q, ·))、乘 ts_hurst、再 log 压成一个很窄的带(按量级估计:log Q ≈ 7 ± 0.5,再取 log ≈ 1.9 ± 0.07;而 ts_hurst(尾盘量比, 20) 在 0.5–1 之间,相对波动约 ±14%),所以 head 的截面次序主要由 Hurst 决定(拆解表:去掉最外层 ×Hurst 因子,head 2 掉 0.49),head 的分数检验不了 Q 本身。库里读 Q 的方式只有水平类(ts_mean(log(add(Q, day_std(Vwap))), 50)、ts_quantile_q75、ts_std、裸 Q),没有一条读它「相对自己的常态」「与当天涨跌方向的关系」「在同价位 / 同流动性的票之间的相对位置」。
+      本位的假设:如果 Q 里有 alpha,它不在水平(水平 = 流动性 + 价位档 + 波动状态,尺子会剥掉),而在三处。(a) 信息流的连续性:平滑、单边的日内路径(Q 高且方向一致)是机构分批建仓 / 信息缓慢扩散的指纹,对应 Hou-Moskowitz 的价格延迟溢价和 Da-Gurun-Warachka 的「连续信息动量」。(b) 相对自己常态的异常摆动 / 噪声比。(c) 同价位档(最小变动价位对分钟噪声的约束)、同流动性、同波动之后剩下的噪声比。
+      算子怎样实现:每个种子原样带 day_q_stat_std(Vwap),外围一律换成快照里没出现过的读法(快照里围绕它的只有 log(add(·, day_std(·)))、乘 ts_hurst、ts_mean(50)、ts_argmin)。(1) 相对自己:cross_zscore(Q, 60);cross_ema(cross_zscore(Q, 120), 10);10 日均值减 120 日均值。(2) 与方向的关系:Q 乘 sign(当天日内收益)的 30 日均值;Q 的 z 分数乘近 20 日方向的符号;Q 与当天收益、前一日 Q 与当天收益的 60 日滚动相关(个股自己的「平滑日是否伴随上涨」的性质,与水平正交)。(3) 控制相关维度后的残差:cs_bucket_zscore 在名义股价十档(sub(LogFloatCap, LogFloatShares) 即 log 名义价)和已知成交额族十档内;cs_regres 先对分钟收益波动、再对流通市值取截面残差;cs_regres 对「价格不变分钟占比」day_flat_ratio(Vwap)(停滞度)取残差,留下的是趋势而不是停滞。(4) 稳定性:40 日标准差、与前一日 Q 的 40 日相关、下四分位尾均值。(5) 与成交量路径的同步:Q(Vwap) 的 z 分数减 Q(Volume) 的 z 分数、两条 Q 的 60 日滚动相关(价格路径持续而成交路径也成团 = 订单流在分批执行)。水平类的种子一个都没放。
+      为什么和已有的不同:我用库里 5583 条的算子骨架(research/prod_W02L/struct/members.csv)逐个核对了这 16 个种子,骨架都不在库里。种子与三个 head 的关系是「同一个子树、不同的外围」,而 head 的次序由 Hurst 决定,预计日度秩相关低;多数种子去掉了水平,预计与 5 个控制的 |ρ| 也低。
+      为什么样本外还会在:信息扩散速度与参与者类型(机构分批 vs 散户噪声交易)是个股的慢变性质,种子都在 30–120 日窗口上读,换手低;方向类依赖「连续信息」这一行为偏差,不依赖某一段行情。风险:Q 与当天涨跌幅度有关,方向类种子会带进一点 20 日反转(控制之一),预计中度相关(≤ 0.5),尺子会剥掉线性部分。
+      数学检查:一字板 / 停牌日 Q = 0(常数路径,算子里分母下限 1e-4,自相关记 0),不是 NaN,所以平均类种子会把涨跌停频率混进来;本位大部分种子是 z 分数、相关、分桶、残差,对这类零值不敏感(cross_zscore 对常数窗口记 0)。种子里没有 log(Q) 或除以 Q。ts_delay 取前一个交易日,停牌则为 NaN。cross_corr 窗口里有效对数很少时(新上市、刚复牌)给 0 或 ±1,只影响头几天。cs_bucket_zscore 分母带 EPS,桶内至少 2 只才有值。day_flat_ratio 有界 [0, 1]。无前视:Q 只用 t 日收盘前的分钟,t+1 才交易。窗口 ≤ 120,热身期不主导。
+    literature:
+      - title: 'Stock market prices do not follow random walks: evidence from a simple specification test'
+        authors: Andrew W. Lo, A. Craig MacKinlay
+        year: '1988'
+        treatment: 方差比 = 低频方差 / 高频方差;Q 的无量纲摆动 / 噪声比是同一类对象,但这里不直接算方差比,而是读 Ljung-Box 路径形态,并读它相对自己、方向、价位档的变化
+      - title: Market frictions, price delay, and the cross-section of expected returns
+        authors: Kewei Hou, Tobias J. Moskowitz
+        year: '2005'
+        treatment: 价格对信息反应慢的股票有溢价;这里用日内价格路径的平滑 / 噪声比当「反应速度」的读数,并在名义价与流动性十档内比较
+      - title: 'Frog in the pan: continuous information and momentum'
+        authors: Zhi Da, Umit G. Gurun, Mitch Warachka
+        year: '2014'
+        treatment: 连续的小幅同向变动比离散跳跃带来更强的延续;这里只借「平滑 × 方向」的读法(种子 6、7),不做月度信息离散度
+    seeds:
+      - 'cross_zscore(day_q_stat_std(Vwap), 60)'
+      - 'cross_ema(cross_zscore(day_q_stat_std(Vwap), 120), 10)'
+      - 'sub(cross_mean(day_q_stat_std(Vwap), 10), cross_mean(day_q_stat_std(Vwap), 120))'
+      - 'cross_corr(day_q_stat_std(Vwap), day_sum(Ret), 60)'
+      - 'cross_corr(ts_delay(day_q_stat_std(Vwap), 1), day_sum(Ret), 60)'
+      - 'mul(cross_zscore(day_q_stat_std(Vwap), 60), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cross_mean(mul(day_q_stat_std(Vwap), sign(day_sum(Ret))), 30)'
+      - 'cs_bucket_zscore(cross_mean(day_q_stat_std(Vwap), 30), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(day_q_stat_std(Vwap), 30), cross_mean(day_std(Amt), 30))'
+      - 'cs_regres(cs_regres(cross_mean(day_q_stat_std(Vwap), 30), cross_mean(day_std(Ret), 30)), LogFloatCap)'
+      - 'cs_regres(cross_mean(day_q_stat_std(Vwap), 30), cross_mean(day_flat_ratio(Vwap), 30))'
+      - 'cross_stddev(day_q_stat_std(Vwap), 40)'
+      - 'cross_corr(day_q_stat_std(Vwap), ts_delay(day_q_stat_std(Vwap), 1), 40)'
+      - 'cross_tail_mean_q25(day_q_stat_std(Vwap), 40)'
+      - 'sub(cross_zscore(day_q_stat_std(Vwap), 60), cross_zscore(day_q_stat_std(Volume), 60))'
+      - 'cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 60)'
+  - type: N
+    hypothesis: |-
+      机制:收盘价相对当天成交均价的偏离(「尾盘价格压力」)以及它在次日开盘的回吐,是「尾盘一分钟」这个对象的价格侧读数。批里的现象:B007 的三个 head 全部以尾盘一分钟成交量 day_last(Volume) 为底(除以 day_max(Low) 后取 20 日 R/S Hurst),读的是「尾盘成交是不是一个持续的状态」(拆解表:去掉最外层的 ×ts_hurst(div(day_last(Volume), day_max(Low)), 20) 因子,head 2 损失 0.49、head 3 损失 0.13)。本位把同一个时点从成交量一侧搬到价格一侧。定义三个日度量:G = log(收盘价 / 当天成交量加权均价)(收盘被推高为正、压低为负);GAP = log(开盘价 / 前一日收盘价)(隔夜缺口);V = 尾盘一分钟成交量相对自己 20 日的 z 分数。假设:个股的「收盘被推离当天均价」有稳定的个体性,来源是收盘集合竞价与收盘价形成的规则(深市含集合竞价、沪市是最后一分钟,是个股的固定属性)、指数 / ETF / 基金的收盘调仓与考核、以及尾盘拉抬 / 打压行为;它的强度、与尾盘放量的联动、以及前一日的偏离在次日开盘是否回吐(回吐 = 非基本面的价格压力;Hillion-Suominen、Comerton-Forde-Putniņš),是一个与水平量(流动性、市值、成交额族)无关、有界、慢变的个体特征。
+      算子怎样实现(G、GAP、V 的写法:log(div(day_last(Close), day_wmean(Vwap, Volume)))、log(div(day_first(Open), ts_delay(day_last(Close), 1)))、cross_zscore(day_last(Volume), 20);day_wmean(Vwap, Volume) 就是当天的成交量加权均价,与 Close 同单位,不依赖 Amt 的量纲):(1) 水平与平滑:G 的 20 日均值、半衰期 20 的 EMA、5 日均值相对 120 日自己历史的 z 分数、5 日对 60 日的差。(2) 与尾盘放量的联动:G × V 的 20 日均值、G 与 V 的 60 日相关、sign(G) × V 的 20 日均值(「放量往哪边推」)。(3) 次日回吐:前一日 G 与当日 GAP 的 60 日滚动相关;前一日 G × 当日 GAP 的 20 日均值。注意两者共享 log C(t−1)(G(t−1) = log C(t−1) − log VW(t−1),GAP(t) = log O(t) − log C(t−1)),所以收盘价里的噪声越大,这个相关越负,这正是要读的东西,不是估计的毛病。(4) 隔夜对尾盘:GAP 的 60 日均值减 G 的 60 日均值(「隔夜拉升 vs 尾盘拉升」,借 Lou-Polk-Skouras 的拉锯读法,不做它的月度组合)。(5) 分布:G 的 40 日标准差、上下四分位尾均值之和(拉抬与打压的幅度不对称)、G 与当天日内收益的 60 日相关、G 与同日 GAP 的 60 日相关。(6) 条件:G 的 20 日均值在已知成交额族十档内 / 流通市值十档内 z 分数。
+      为什么和已有的不同:head 读的是尾盘「量」的路径形态(Hurst × 水平),本位读的是尾盘「价」,骨架与 5583 条全部不重合(逐条核对过)。手写库里 Close − 成交均价只在 2 条表达式里出现,而且是短窗口的截面排名乘积(Alpha101 风格);库里没有任何一条读它的 20–60 日均值、相对自己历史的 z 分数、与尾盘放量异常的联动、或前一日偏离与次日开盘缺口的滚动相关。挖掘库里 day_last(Volume) 出现 115 次,全是量的一侧。
+      为什么样本外还会在:收盘价形成机制(集合竞价规则、T+1、基金考核日、指数调仓)是制度性的,个股在这上面的特征(是否常被尾盘推离均价、是否次日回吐)是慢变的个体属性;种子读 20–120 日窗口,换手低。预期的弱点:G 的均值类种子与 20 日反转有关(G 约等于当天下午的漂移,与日内收益同号),预计与反转控制中度相关(≤ 0.5),尺子会剥掉线性部分;更有希望的是回吐类(种子 8、9)与联动类(种子 5–7),它们读的是相关结构而不是水平。
+      数学检查:G 的比值在 (0, ∞) 内、接近 1,log 后在 0 附近(±1% 量级),没有近零分母;一字板日 G = 0、GAP 可非零。V 是 20 日 z 分数,有界(|V| ≤ √19),常数窗口记 0;day_last(Volume) 在没有成交时可能为 0,不会产生 0 作分母(只有 cross_zscore 内部的 std + EPS)。没有 cross_regbeta(窗口内方差很小时斜率会爆),只用有界的相关与均值。ts_delay 取前一个交易日,停牌为 NaN;cross_corr 窗口里有效对数少时给 0 或 ±1,只影响头几天。G 用的是 t 日收盘及以前的数据,GAP(t) 用 t 日开盘和 t−1 日收盘,前一日 G(t−1) 与 GAP(t) 的相关窗口只用已发生的配对,无前视;t+1 才交易。cs_bucket_zscore 分母带 EPS。窗口 ≤ 120,热身期不主导。
+    inspired_by: 'B007 批:三个 head 的底都是尾盘一分钟成交量 day_last(Volume)(含它的候选 7 / 10,+0.44,p 0.19),去掉最外层 ts_hurst(div(day_last(Volume), day_max(Low)), 20) 因子的必要性:head 2 +0.49、head 3 +0.13;本位把「尾盘一分钟」从量搬到价。'
+    literature:
+      - title: Stock returns and trading at the close
+        authors: David Cushing, Ananth Madhavan
+        year: '2000'
+        treatment: 收盘前最后几分钟的成交量与收盘价形成相关;这里只取「收盘价相对当天均价的偏离」与「尾盘量异常」两个读数,不做指数成分股的专门识别
+      - title: The manipulation of closing prices
+        authors: Pierre Hillion, Matti Suominen
+        year: '2004'
+        treatment: 收盘价可被尾盘交易推离基本面价值并在次日回吐;这里用前一日偏离与次日开盘缺口的滚动相关来读个股的「回吐倾向」
+      - title: Measuring closing price manipulation
+        authors: Carole Comerton-Forde, Talis J. Putniņš
+        year: '2011'
+        treatment: 用收盘价偏离及其次日反转衡量收盘价噪声;这里借这个读法,但只做成无量纲的相关与均值,不做事件识别
+      - title: 'A tug of war: overnight versus intraday expected returns'
+        authors: Dong Lou, Christopher Polk, Spyros Skouras
+        year: '2019'
+        treatment: 隔夜收益与日内收益的持续性方向相反;种子 13 只借「GAP 均值减 G 均值」这个差
+    seeds:
+      - 'cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 20)'
+      - 'cross_ema(log(div(day_last(Close), day_wmean(Vwap, Volume))), 20)'
+      - 'cross_zscore(cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 5), 120)'
+      - 'sub(cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 5), cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 60))'
+      - 'cross_mean(mul(log(div(day_last(Close), day_wmean(Vwap, Volume))), cross_zscore(day_last(Volume), 20)), 20)'
+      - 'cross_corr(log(div(day_last(Close), day_wmean(Vwap, Volume))), cross_zscore(day_last(Volume), 20), 60)'
+      - 'cross_mean(mul(sign(log(div(day_last(Close), day_wmean(Vwap, Volume)))), cross_zscore(day_last(Volume), 20)), 20)'
+      - 'cross_corr(ts_delay(log(div(day_last(Close), day_wmean(Vwap, Volume))), 1), log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)'
+      - 'cross_mean(mul(ts_delay(log(div(day_last(Close), day_wmean(Vwap, Volume))), 1), log(div(day_first(Open), ts_delay(day_last(Close), 1)))), 20)'
+      - 'cross_stddev(log(div(day_last(Close), day_wmean(Vwap, Volume))), 40)'
+      - 'cs_bucket_zscore(cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_zscore(cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 20), LogFloatCap)'
+      - 'sub(cross_mean(log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60), cross_mean(log(div(day_last(Close), day_wmean(Vwap, Volume))), 60))'
+      - 'add(cross_tail_mean_q75(log(div(day_last(Close), day_wmean(Vwap, Volume))), 40), cross_tail_mean_q25(log(div(day_last(Close), day_wmean(Vwap, Volume))), 40))'
+      - 'cross_corr(log(div(day_last(Close), day_wmean(Vwap, Volume))), day_sum(Ret), 60)'
+      - 'cross_corr(log(div(day_last(Close), day_wmean(Vwap, Volume))), log(div(day_first(Open), ts_delay(day_last(Close), 1))), 60)'
+R:
+  - head: 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 50)'
+    why: |-
+      三个部件有拆解表依据。(1) 内层 add(·, day_std(Vwap)):去掉它从 −1.49 升到 −1.06(增益 +0.43,本批最大的单项增益);它是价格单位的量(按后复权价估计,从 0.01 量级到几十),加在 log 之后、乘 Hurst 之前,实际只起「防 log(0)」的作用,去掉它本位记为 ΔA。(2) 外层窗口 50:25 日 −1.24(+0.25),100 日 −1.77,单调说明越短越好,所以把 ΔA 与短窗口叠加(25 / 15 日)。(3) Hurst 窗口:head 1 的内层用 40,本位试把两处都换成 40。另外三个变体用来分辨「Q 到底有没有贡献」:去掉 day_std(Vwap)(只留 log Q)、去掉外层 log 和加法结构(只剩 log(add(Q, S)) × H)、只剩 ts_mean(H, 25)。三个变体的差就是 Q 的边际贡献。数学上:一字板日 Q = 0,所以 log(day_q_stat_std(Vwap)) 在这些日是 NaN(不是 −inf),变体 4 因此覆盖率略低,其余变体保持 add(·, day_std(Vwap)) 的保护;ts_hurst 对窗口内缺失日的行为与原 head 完全相同(窗口内常数给 NaN,缺失日在最早一天 → NaN,第二早一天 → −inf,其余只用缺失之前的前缀)。
+    variants:
+      - 'ts_mean(mul(log(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 25)'
+      - 'ts_mean(mul(log(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 15)'
+      - 'ts_mean(mul(log(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 40))), ts_hurst(div(day_last(Volume), day_max(Low)), 40)), 25)'
+      - 'ts_mean(mul(log(mul(log(day_q_stat_std(Vwap)), ts_hurst(div(day_last(Volume), day_max(Low)), 20))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 25)'
+      - 'ts_mean(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 25)'
+      - 'ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 25)'
+  - head: 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Volume))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), day_std(Volume))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 50)'
+    why: |-
+      烂部件是 Volume 叶子(股数口径):拆解表里把 Volume 整条换成 Amt 后,score 从 −1.57 升到 −1.03(train −1.03 / valid −0.35,增益 +0.54),valid 只有 −0.35 是整批最好的读数。原因的推断:股数 = 额 / 名义价,名义价是 5 个控制之外的一个维度(增加噪声);day_std(Amt) 又接近已知成交额族,所以 Amt 版的 train 仍是瓶颈。本组以 Amt 版为底,试窗口(30 / 80 日)、去掉内层加法(同 head 2 的 ΔA)、Hurst 窗口 40,以及 ΔA + 40 + 30 日的叠加。注意同一 head 的 25 日窗口在 Volume 版里更差(−2.03),所以窗口方向要用 Amt 版重新试,不照搬 head 2。数学上:day_std(Amt) 是金额量级(按量级估计 1e5–1e9)的正数,加在 log 之后(log Q ≈ 7)相比起来远大于 log Q,所以 log(add(·, day_std(Amt))) 实际由 day_std(Amt) 主导(这是已知族的写法,不是新问题);Hurst 部分行为同 head 2。
+    variants:
+      - 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 20)), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 20)), 30)'
+      - 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 20)), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 20)), 80)'
+      - 'ts_mean(mul(log(mul(log(add(day_q_stat_std(Vwap), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 20))), ts_hurst(div(day_last(Amt), day_max(Low)), 20)), 50)'
+      - 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 40)), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 40)), 50)'
+      - 'ts_mean(mul(log(mul(log(add(day_q_stat_std(Vwap), day_std(Amt))), ts_hurst(div(day_last(Amt), day_max(Low)), 40))), ts_hurst(div(day_last(Amt), day_max(Low)), 40)), 30)'
+  - head: 'ts_mean(mul(log(ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 40)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 50)), day_max(Volume)), 50)'
+    why: |-
+      烂部件是乘数 day_max(Volume)。依据:拆解表里单独的 Hurst 块 log(ts_mean(…, 50)) 只有 −2.08,去掉 day_max(Volume) 乘数掉到 −2.14(必要性 +0.91),只留乘数和外层的子树 −1.29,几乎等于整个 head(−1.23);另外 log 包装本身无关紧要(拆掉它 −1.18,必要性 −0.05)。再对照另一条流(2001)的快照:day_max(Volume) 单独的 score 是 −1.11(两段 −1.10 / −1.11),比整个 head 还高 0.12。所以 head 1 的次序主要由乘数 day_max(Volume)(股数口径的日内峰值,重尾、水平量,与流动性和已知成交额族相关)决定,Hurst 块几乎没有贡献。本组把水平从乘数里拿掉:换成无量纲的「峰值 / 均值」尖峰度 div(day_max(Volume), day_mean(Volume)),和压住重尾的 log(day_max(Volume))。预计后一个仍带水平,前一个与已知族的相关会明显低于 0.5,但分数更低;这组的价值是量出「Hurst 块在去掉水平之后还剩多少」。数学上:day_mean(Volume) 在有成交的日子 > 0,整天无成交是 0 / 0 = NaN;day_max(Volume) 有成交时 log 为正有限。Hurst 部分行为同 head 2。
+    variants:
+      - 'ts_mean(mul(log(ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 40)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 50)), div(day_max(Volume), day_mean(Volume))), 50)'
+      - 'ts_mean(mul(log(ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 40)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 50)), log(day_max(Volume))), 50)'

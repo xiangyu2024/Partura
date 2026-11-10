@@ -1,0 +1,15 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [14]
+    reasons: '核心 day_kurt(Volume) 合规:它不是快照 head 的子树,但在定位输出的共性表(enrichment)里,含它的 36 个候选均值 -1.37 对不含的 -2.33(p 0.000),与 loc.json 核对一致;核心与 5 个控制的 |ρ| 为 liq 0.23、vol 0.02、rev 0.02、known 0.20、size 0.12,全部 < 0.8,E 位核心检查通过。与 6 个 head 的原始 |ρ| 最大 0.16(最像 day_max(pow_1_5(pow_2(nt_ts_kurt(Vwap,30))))),残差 0.21,head 全是 nt_ts_kurt 价格路径矩一族,与成交量形状不是同一个量,创新度给 4(库里 36 个候选用它的写法是单日值直接回归,这里是平滑、差分、带收益方向的外围,是新的外围)。自动划掉规则下没有种子触发:head 最大 0.175 < 0.7,控制最大 0.51 < 0.8。种子 1、2、3、9、11、12 与 liq 的 |ρ| 在 0.27~0.51、与 known 在 0.19~0.42,靠近流动性 / 已知族但未到自动划掉线,且是平滑或桶内版本,不判重复,放行。种子 4、5、10 是 cross_zscore 版,与 head 残差几乎为零,是相对自身历史的脉冲,与 13 的 20 日减 120 日差分不同,保留。种子 14 cross_corr(day_kurt(Volume), day_kurt(in_delta(Vwap,1)), 120) 划为重复:corr 对称,它与本流 r1 N 位种子 13 cross_corr(day_kurt(in_delta(Vwap,1)), day_kurt(Volume), 60) 是同一对算子,只改了窗口 60 到 120,是已见过的外围。种子 6、7 同一对算子、窗口 60 与 241,属于同一任务内的窗口变体,不划。数学上 cross_corr、cs_bucket_demean、cross_tail_mean_q75 的定义已核对;cross_regbeta 按 rolling_ols 为 y 对 x 的斜率(分母为 x 的方差,此处即日收益方差),停牌或涨跌停锁死的票可能让分母接近零,但截面按排名进尺子,单点爆值不会支配截面,不挡。没有前视(只用当天收盘后已知的日量与日收益)。如果它有 alpha,最可能来自带方向的 cross_corr / cross_regbeta 版(放量是买方事件还是卖方事件),其次是同市值桶内去均值版。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '这是 N 位,没有核心约束。与 6 个 head 的原始 |ρ| 最大 0.10(seed 4、11、10),残差最大 0.08;head 全是分钟轴 nt_ts_kurt 一族,日轴的事件时钟与量冲击×收益骨架与之无关,创新度给 4。与控制:rev 0.45(seed 10)、0.41(seed 1)、0.33(seed 3),vol 0.46(seed 4)、0.44(seed 11),liq 0.37(seed 11);都在 0.5 以下,没有达到「同一个量」的程度,残差 |ρ| 也都 < 0.08。cross_argmax 的定义已核对(common.py:516):pct 时值 = (距今天数+1)/有效天数,越小越新鲜,与 PI 的「新鲜度」解释一致,没有前视。种子 1、2、3、13 在 corr 表里 gate 为 False(distinct 0.014~0.042,levels 只有约 30~60 个),是 argmax 窗口天数决定的粗分档;§4 明确把并列靠列序打破排除在挡的理由之外,所以不划,只在此记录。cross_zscore(day_sum(Amt),20) 这类分母近零的爆点同样只影响排名后的极值,不支配截面。种子 4 与 11(桶内版)、4 与 5(Amt 与 Volume)、4 与 12(raw 收益与符号)是同一骨架的变换,不是重复,保留。种子 6 与 14 都是 cross_corr(收益, 量),一个窗口 60 一个 241、一个原始量一个 zscore,保留。数学上没有前视,没有定义坏掉的迹象;log(day_sum(Volume)) 对停牌日为 -inf,依赖上游停牌掩码,未在本审计中核对该掩码,只作提示。如果它有 alpha,最可能来自成交量新鲜度与量冲击×收益的交互(注意力驱动与买卖方事件的漂移,Barber-Odean、Gervais-Kaniel-Mingelgrin 一类机制),其次是日轴 argmax 的差(量峰与收益峰的先后)。'
+R:
+  []
+summary: 'a 位通过:创新 4、合理 4,划掉种子 14(与 r1 种子 13 同一对算子只改窗口);b 位通过:创新 4、合理 4,无划掉;本轮无 R 组。'

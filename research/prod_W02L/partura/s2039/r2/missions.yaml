@@ -1,0 +1,96 @@
+seed: 2039
+round: 2
+slots:
+  - type: E
+    core: 'day_first(cross_sum(log(Amt), 3))'
+    hypothesis: >-
+      核心是本流 B116 批里的 head(与 day_open(...) 同值):每天第一分钟(开盘集合竞价那一分钟)成交额的对数,
+      再对最近 3 天同一位置求和(cross_sum 在日轴上滚动,所以是 3 日的开盘分钟成交额),读的是"开盘时钱有多重"。
+      拆解表读数:本核心 train -1.41 / valid -0.74(valid 反而更好);cross_sum 窗口 3 -> 6 时 valid 从 -0.74 到 -0.39、2 日 -0.66,
+      越慢 valid 越好;换成 Volume 反而更差(valid -2.33),说明承重的是"金额"而不是股数,即带价格的资金规模。
+      问题:这个读数的主要内容是一个个股的成交额水平(流动性),而流动性已被尺子的控制去掉了,剩下的是它与流动性的差。
+      这次要试的外围是把"水平"拆成三种去水平的读法,核心原样保持不动:
+      (1) 相对本股自己:sub(核心, cross_ema(核心, 120)) 与 cross_zscore(核心, 60)、与自己 20 日前的差(cross_delay),
+      读的是"开盘关注度的异常"(Barber-Odean 注意力:散户在开盘集合竞价被异常事件吸引,过度关注的股票随后被高估)。
+      (2) 相对本股当天:sub(核心, day_mean(cross_sum(log(Amt), 3)))、减 q75、减当天最后一分钟,即开盘一分钟对全天平均 / 上四分位 /
+      收盘分钟的对数比(= 开盘金额占比的对数读法,隔夜信息 + 散户集中度,与总成交额水平正交);
+      cs_bucket_demean(核心, 当天均值)用分位桶而不是回归去掉水平(算子库里 cs_bucket_* 出现 0 次);
+      ts_regres(核心, 当天均值, 60) 是对水平的滚动回归残差。
+      (3) 对价格:sub(核心, day_first(cross_sum(log(Volume), 3))) = 开盘分钟 VWAP 的 3 日对数(与成交量对数之差),是个价位读数
+      (低价股效应),库里批 B116 只有成交额叶子 87%,没人把额与量相减。
+      另有 cs_bucket_demean 对 LogFloatCap(分位桶内去市值)、对 ListAge 门、以及 cross_corr(核心, day_mean(Ret), 60)
+      (开盘关注度高的日子与日均收益是否同向)。
+      和库里已有的不同:快照里含这个核心的只有 head 自身与 day_first / day_open 两个别名;库 5583 条里 sub / cross_ema / cross_zscore /
+      cs_bucket_demean / cross_delay / ts_regres(核心作 y,当天均值作 x)的外围都没有出现(只有 ts_regres 以 day_quantile_q75 作 y 的
+      head 1,是另一个子树);ListAge、LogFloatCap 叶子在库里 0 次。
+      为什么样本外还会在:开盘集合竞价的成交额反映隔夜信息与散户注意力,这是 A 股的结构特征(涨跌停与 T+1 使开盘成为定价最集中的一分钟),
+      且在 valid 比 train 好,没有随样本外衰减的迹象;去掉水平之后留下的是"异常开盘强度",不依赖流动性或市值。
+      数学检查:log(Amt) 在 Amt=0 的分钟为缺失,cross_sum 用 nansum;没有除以近零的量;全部是尾随窗口,无前视;
+      sub 的两项都在同一日同一时点,没有未来数据。
+    seeds:
+      - 'sub(day_first(cross_sum(log(Amt), 3)), cross_ema(day_first(cross_sum(log(Amt), 3)), 120))'
+      - 'cross_zscore(day_first(cross_sum(log(Amt), 3)), 60)'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), cross_delay(day_first(cross_sum(log(Amt), 3)), 20))'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), day_mean(cross_sum(log(Amt), 3)))'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), day_quantile_q75(cross_sum(log(Amt), 3)))'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), day_last(cross_sum(log(Amt), 3)))'
+      - 'cs_bucket_demean(day_first(cross_sum(log(Amt), 3)), day_mean(cross_sum(log(Amt), 3)))'
+      - 'ts_regres(day_first(cross_sum(log(Amt), 3)), day_mean(cross_sum(log(Amt), 3)), 60)'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), day_first(cross_sum(log(Volume), 3)))'
+      - 'cs_bucket_demean(day_first(cross_sum(log(Amt), 3)), LogFloatCap)'
+      - 'mul(sub(day_first(cross_sum(log(Amt), 3)), day_mean(cross_sum(log(Amt), 3))), replace_small_with_nan(is_gt(ListAge, 120)))'
+      - 'cross_corr(day_first(cross_sum(log(Amt), 3)), day_mean(Ret), 60)'
+      - 'cross_ema(sub(day_first(cross_sum(log(Amt), 3)), day_mean(cross_sum(log(Amt), 3))), 60)'
+      - 'sub(day_first(cross_sum(log(Amt), 3)), day_first(cross_sum(log(Amt), 20)))'
+      - 'cs_bucket_demean(sub(day_first(cross_sum(log(Amt), 3)), cross_ema(day_first(cross_sum(log(Amt), 3)), 120)), LogFloatCap)'
+  - type: N
+    hypothesis: >-
+      新想法:成交额在一天里"何时"发生、"哪个方向"发生,而不是总量多少。
+      机制:机构大单拆单多发生在开盘冲击与收盘集合竞价之间的连续竞价里,散户与事件驱动成交集中在开盘;个股成交额的时间重心
+      (day_centroid:0 = 全在开盘、1 = 全在收盘)、集中度(day_gini)、成交额加权的收益与带符号的成交额占比(day_signed_ratio:上涨分钟的成交额占比
+      减下跌分钟的占比,没有逐笔数据时的净买入压力代理)读的是"钱在什么价格上、什么时点上动",是总成交额水平和波动控制之外的信息
+      (控制里只有总成交额 / 波动 / 反转 / 市值与 Amt 日标准差的 30 日均值)。
+      算子怎样实现:day_centroid / day_gini / day_signed_ratio / day_wmean / day_wstd / day_topw_mean / day_es_ratio_hi 是为这件事新加的日内算子;
+      库里 5583 条表达式里这些算子 0 次出现(我 grep 了 members.csv),所以骨架全是新的。因为 B116 的教训是慢的聚合承重(开盘金额 3 日和 6 日,窗口越长 valid
+      越好),所有种子都用 cross_ema / cross_zscore / cross_tail_mean 在 60~120 日上聚合;分钟比例统计的单日噪声很大,慢聚合把它变成个股的"交易风格常态"。
+      受启发于:B116(开盘分钟成交额的 3 日和,valid 好于 train;换 Volume 更差,说明资金规模与时点是承重的)与其 87% 的 Amt 叶子;
+      Chordia-Subrahmanyam 2004(订单不平衡的持续性)、Heston-Korajczyk-Sadka 2010(成交量的日内周期性)。
+      为什么样本外还会在:(a) 交易风格(拆单 / 事件 / 散户)是个股的慢变特征,会跨年存在;(b) A 股 T+1 与涨跌停使开盘与收盘成为结构性重心,不会随样本外消失;
+      (c) 与流动性 / 波动水平无关,所以尺子里的控制吃不掉它。
+      数学检查:day_centroid 对 Amt 分母是日总额,停牌日为缺失(tot>0 才有值);day_signed_ratio 在 [-1,1],没有近零除;
+      div(day_wstd(Ret,Amt), day_std(Ret)) 的分母是日内分钟收益标准差,一字板 / 全天不动日在 day_std=0 时会出现 0/0 或 inf,
+      已在种子里用 replace_small_with_nan(is_gt(day_std(Ret), 0.0001)) 去掉;其余种子不含除法。无前视:全部是当日分钟的统计,再取尾随日窗口。
+    inspired_by: 'B116:day_first(cross_sum(log(Amt), 3)) 与 day_open 的开盘分钟成交额(valid 比 train 好,Amt 叶子 87%,Volume 版更差)'
+    seeds:
+      - 'cross_ema(day_centroid(Amt), 60)'
+      - 'cross_zscore(day_centroid(Amt), 120)'
+      - 'cross_ema(day_gini(Amt), 60)'
+      - 'sub(cross_ema(day_centroid(Amt), 20), cross_ema(day_centroid(Amt), 120))'
+      - 'cross_ema(day_signed_ratio(Ret, Amt), 60)'
+      - 'cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)'
+      - 'cross_ema(day_topw_mean(Ret, Amt), 120)'
+      - 'cross_ema(div(day_wstd(Ret, Amt), replace_small_with_nan(is_gt(day_std(Ret), 0.0001))), 60)'
+      - 'cross_corr(day_centroid(Amt), day_wmean(Ret, Amt), 60)'
+      - 'cross_ema(sub(day_centroid(Amt), day_centroid(Volume)), 60)'
+      - 'cross_tail_mean_q25(day_gini(Amt), 60)'
+      - 'mul(cross_ema(day_centroid(Amt), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+      - 'cross_ema(day_signed_ratio(Ret, Volume), 120)'
+      - 'cs_bucket_demean(cross_ema(day_centroid(Amt), 60), LogFloatCap)'
+      - 'cross_ema(day_es_ratio_hi(Amt), 60)'
+R:
+  - head: 'sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt, 3)), 50)))'
+    why: '拆解表:窗口 50 -> 100 把 score 从 -1.07 提到 -0.55(train -0.21 / valid -0.55),25 则变差到 -2.41,说明回归窗口越长越好,50 日的滚动回归斜率噪声是烂部件;abs_ 去掉后变差 4.8,是承重的。所以只拉长窗口,保留 abs_ 与两个叶子。'
+    variants:
+      - 'sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt, 3)), 150)))'
+      - 'sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt, 3)), 241)))'
+      - 'sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt, 3)), 100)))'
+      - 'sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 6)), day_last(cross_sum(Amt, 6)), 100)))'
+  - head: 'day_first(cross_sum(log(Amt), 3))'
+    why: '拆解表:cross_sum 窗口 3 -> 6 valid 从 -0.74 到 -0.39(train -1.36),2 日更差,说明 3 日求和太短、噪声烂;train 是被卡的一段,两段的拖后腿者不同。依据是窗口变体,所以变体只动窗口 / 加一层日轴慢聚合,不换叶子(换 Volume 更差)。'
+    variants:
+      - 'day_first(cross_sum(log(Amt), 10))'
+      - 'day_first(cross_sum(log(Amt), 20))'
+      - 'day_first(cross_sum(log(Amt), 60))'
+      - 'cross_ema(day_first(cross_sum(log(Amt), 3)), 20)'
+      - 'cross_ema(day_first(cross_sum(log(Amt), 3)), 60)'
+      - 'day_first(cross_ema(log(Amt), 20))'

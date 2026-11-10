@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 day_ar1_coefficient(High) 是 head 1、head 2 的最内层子树。门槛:核心对 3 个 head 的最大原始 |ρ| 为 0.153;核心对 5 个控制的 |ρ| 为 liq 0.23 / vol 0.02 / rev 0.00 / known 0.20 / size 0.11,全部 <0.8,过 E 位门槛。创新度 3:核心与 head 同族,新的部分是外围。外围中 seed 4-15 与三个 head 的原始秩 |ρ| 在 0.00-0.40(相关度表),不是 head 的换写法;seed 1、2、3、12 彼此是同一 20-40 日窗口的不同平滑核,互相近似,但与 head 的 |ρ| 不高,按 §3 只在明显同度量时判 1 分,这里不判。无 seed 触发自动划除(原始 |ρ| 与 head 最大 0.40 < 0.7;与控制的最大 |ρ| 为 seed 2、seed 12 对 liq 的 0.57 < 0.8)。数学检查:全部候选只用当日 High 的 241 根分钟与历史日度值,无前视;cross_zscore、cross_regres、cross_regbeta、cross_corr 的窗口都是按天的时间序列窗口(已对照 ops_ext.py 与 dt_cross.py 定义),无横截面混用。seed 7、13 以 ar1(Low) 或 cross_stddev 作分母,分母近零时有符号翻转和爆点风险;但价格水平 AR(1) 系数按定义通常接近 1,爆点是否主导截面未经数据核对,审计员不能据此认定定义坏掉,放行。合理度 4:phi 是分钟价格水平的平滑度,即趋势路径相对分钟噪声的比值,这一机制清楚;慢平滑版本(seed 1-3、12)换手应低于 ts_max 链。如果它有 alpha,最可能来自日内买卖价差反弹与机构拆单趋势的相对强度(慢变的股票特征)。若结果只是 liq 的换写法,其 liq 残差后应当消失,这是需要核查的地方。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4]
+    reasons: '划除 seed 4:cross_mean(day_durbin_watson(Close), 20)。依据 dt_day.py 定义,DW = 分钟一阶差平方和 / 分钟价格平方和,即按价格平方归一化的分钟已实现方差,是 vol 的换写法;相关度表中 vol 控制 |ρ| 为 0.99 ≥ 0.8,按自动规则划除。其余 seed 的创新度:快照 3 个 head 全部是 day_ar1_coefficient 的 ts_max 链,而本位的 方差比(VR)、效率比、Hurst、lag-30 自相关 属于 ar1 族之外的度量,对 head 的原始 |ρ| 最大 0.38,对控制的最大 |ρ| 为 0.68(seed 11 对 liq,Vwap 版 VR)。seed 10 的 signed day_corr(Close, in_index(Close)) 对 rev 为 0.55,中度相关,不是同一东西,放行。创新度 4 的依据是本位的度量不同于库中已有的 AR(1) 链,但 seed 1、2 与 seed 11 同为 VR 的不同滞后或不同价格字段,若截面秩 |ρ| 较高则应视为重复,我这里无 seed 间的 ρ 数据,未划除,只标注。数学检查:VR 与效率比的分母为 0 时产生 NaN,不产生爆点;in_index 与 day_corr 的常数日有 NaN 处理;cross_regres 的方向已对照 rolling_ols 定义为 y 对 x 回归取残差,seed 12 的 y 是 VR、x 是 vol,方向正确。Hurst 对价格水平而非收益做 R/S 是非标准定义,输出集中在 1 附近,截面差异来自路径平直度,不是系统性算不出,不构成定义坏掉。合理度 4。如果它有 alpha,最可能来自日内 bid-ask bounce 的强度(VR 低则反弹多、流动性提供者主导)或价格路径的平直度(知情或机构持续流);两者都是慢变的股票特征。'
+R:
+  - head: 'ts_max(ts_max(ts_max(ts_max(day_ar1_coefficient(High), 5), 30), 5), 40)'
+    soundness: 3
+    reasons: '三个变体均无数学问题:ts_max 是按天的滚动最大值,NaN 被跳过;Low 与 Vwap 替换 High 不改变 ar1 的算法类别,无前视。变体 1(Low + 窗口 80)与 变体 2(外层改为 cross_mean 且 Low)与快照 head 的最大 |ρ| 分别为 0.65 与 0.78,属于替换分支。机制:部件烂在 ts_max 极值链的换手(由单日最大值决定,换手高),这一说法机制清楚;但「换 High 为 Low 增益 +0.73」与「窗口 40 到 80 增益 +0.31」是在 train / valid 上挑出来的,不是机制本身,审计只看合理度,给 3。提示:ts_max 对 ar1 的单日尾部敏感,若 phi 有爆点则链会被单日支配;审计员无数据,无法据此挡,PI 可在 loc 中核对 phi 分布。'
+  - head: 'ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(High), 5), 30), 60), 5)'
+    soundness: 3
+    reasons: '机制与数学同 R 组 1:cross_med 为按天的 60 日滚动中位数,无横截面混用;变体 3(Vwap 替换)与快照 head 的最大 |ρ| 为 0.57,属替换分支。注意两点但不据此挡:(a) 变体 1 与 R 组 3 的变体 1 是同一表达式,需去重;(b) 变体 1 与变体 2 对 head 3(Close 版)的 |ρ| 为 0.83-0.85,即替换后会与 Close 版 head 同族,替换不增加信息,这属于创新问题,R 组只评合理度,不挡。合理度 3。如果它有 alpha,最可能来自与 R 组 1 相同的价差反弹与趋势的相对强度。'
+  - head: 'ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Close), 5), 30), 60), 5)'
+    soundness: 3
+    reasons: '变体 1(Low, 窗口 10)与 R 组 2 的变体 1 字符串完全相同,是重复,只保留一个。变体 2(Vwap, 窗口 10)与原 head 的 |ρ| 为 0.55 左右,机制同 R 组 2 的 Vwap 变体(Vwap 分钟价格已是逐笔成交的均价,买卖价差反弹少,用它替换 Close 是有说法的)。无数学问题。合理度 3。如果它有 alpha,最可能来自 Vwap 与 Close 上 ar1 的差异所反映的反弹成分。'
+summary: '本轮两位通过:slot a(创新 3 / 合理 4,无划除,核心门槛过);slot b(创新 4 / 合理 4,划除 seed 4 即 day_durbin_watson(Close),与 vol 控制 |ρ| 0.99 自动划除)。R 三组合理度均为 3;R 组 2 变体 1 与 R 组 3 变体 1 为同一表达式,需去重。'

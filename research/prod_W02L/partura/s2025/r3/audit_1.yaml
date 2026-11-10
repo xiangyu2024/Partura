@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: '新颖度 4:13 条的原始最大 |ρ| 为 0.03–0.30(最近的是 cross_stddev(day_pdf_quantile_bilateral_half_width(…,0.9,median),20),0.289),残差 |ρ| 0.07–0.47;未触自动划掉(原始 <0.7,控制 <0.8,最大控制是 seed 11 的 liq 0.37)。这是库里没有的结构:库里 pdf 系只读单个 n 的量,本位是两个 n(或两种权重)的差,与单量的相关很低。给 4 而不是 5,因为仍是同一算子族的参数变体。合理度 3:逐个核对 legacy_specialized_dt.py 第 314–362 行的 day_pdf_quantile_bilateral_half_width。归一化(min-max,除数带 eps,有界)、中心(prob 模式取成交量峰值分钟)、按距离累计到 ≥ n 都与 idea 描述一致;但最后一步取的是 raw_idx 的最小与最大分钟号,x_min、x_max 分别是这两个分钟上的归一化收益,半宽 = |x_max − x_min| / 2(再截到 0.5)。也就是说它不是窗口内归一化收益的半极差,而是窗口两个端点分钟的收益差。idea 文字里「极值是否落在放量窗口内」的机制因此没有被实现。这不是 §4 的数学问题(无前视、无除零爆点、非常数面板,gate 全部通过,distinct ≥ 0.987),按 §3 放行,但合理度只能给 3。如果它有 alpha,最可能来自:n=0.9 的窗口几乎覆盖全日,端点就是开盘 / 收盘附近分钟的单分钟归一化收益,差分后读的是这些端点结构随时间的慢变化,而不是极端价格被放量撑着。这个误读影响整个 pdf 系(库里的 M3 cross_mean / cross_stddev 等),建议 PI 修正假设文字并在结论里注明。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [3, 5, 6, 8, 9, 10]
+    reasons: '核心 ts_stddev(day_std(in_topk_masked(in_slice(Volume,11,240),in_slice(Ret,11,240),5)),160) 就是快照里的 head M1 本身(允许的整 head 核心)。核心与 5 个控制的 |ρ|:liq 0.09、vol 0.40、rev 0.02、known 0.13、size 0.40,全部 <0.8,通过 E 位的控制门槛。核心算子核对:in_topk_masked(x,y,p) 的 k = (有效分钟数+1)//p,p=5 即约前 20% 的放量分钟,与 idea 一致;day_std 与 ts_stddev 是 nanstd 类,无数值问题。新颖度 3:外围都是对核心本身的对照或变换。seed 1、2 的残差 |ρ| 对 head 为 0.52、0.51,保留下来的是核心减全天版本(cs_rank 差 / cs_regres),与核心的关系很近;seed 4 把核心与 pdf 系的 cross_stddev(…,160) 相加,原始 |ρ| 0.66,接近 0.7 的自动线;seed 7 是核心的 60 日变化,与核心的原始 |ρ| 0.23,是较新的一个。合理度 4:保留的外围算子逐个核对。cross_delay(x,d) 是按日后移 d 天(dt_cross.py 第 150 行),cs_regres 是逐日截面 OLS 残差(nd_cs.py 第 254 行),cs_rank 与 sub 无歧义。划掉的种子:3(对 M1 原始 |ρ| 0.92)、5(0.80)、8(0.80)、9(0.79),都是 ≥0.7 的自动划掉;6 与 10 是门槛未过的数值伪影(gate False):10 的 distinct 为 0.076,面板几乎是常数;6 为 ts_rank(…,241) 的排名,distinct 0.17,截面大量并列,我没有逐层查清来源,但按 §4 的数值伪影划掉。剩 1、2、4、7 共 4 个,满足「划完还剩 ≥4」的下限。如果它有 alpha,最可能来自:放量分钟收益离散度的不稳定性(信息流的间歇性),在去掉整体波动率或与全天离散度对照之后剩下的部分。'
+R:
+  - head: 'ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 5)), 160)'
+    soundness: 4
+    reasons: '变体只改放量分钟占比 p 与日尺度窗口。in_topk_masked 的分母 p 按 k = (有效分钟数+1)//p 计,p=7 约前 14%、p=4 约前 25%,与 head 的前 20% 是同一口径,机制不变。窗口 120 / 200 / 240 只改 nanstd 的日尺度,计算逐日、无数值问题。原始 |ρ| 与 head 为 0.90–1.00,其中 variant 4、5 为 1.00,几乎是同一信号,能否替换只能靠 score 门槛判定,不是新结构。合理度 4。如果有 alpha,来自与 head 相同的放量分钟离散度的 std 结构;窗口 / 占比的峰值是否更尖,需要 score 来回答。'
+  - head: 'cross_mean(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume, 2, 240), 0.9), 20)'
+    soundness: 3
+    reasons: '变体改 cross_stddev 的窗口为 10 / 5 日、以及改用 Amt 权重。算子组合按描述实现(cross_stddev 为日轴滚动的 nanstd,cross_mean 同理)。但底层 pdf 量按源码是窗口两个端点分钟归一化收益之差的一半(见 slot a 的核对),不是窗口内的半极差,why 里用 median 版得到的「变异性读法更好、窗口更短更好」是在这个量上推出的,机制叙述建立在误读之上,因此合理度 3。variant 3(cross_mean 的 Amt 版,原始 |ρ| 0.97)与 head 几乎是同一信号,只能靠 score 门槛替换,不是新结构。5 日窗口的 std 对单日端点收益非常噪,机制上要靠 score 说话。如果它有 alpha,最可能来自端点分钟(窗口边缘)单分钟收益结构的慢变化,而不是 why 所说的极值离散度。'
+summary: 'a 通过(新颖 4、合理 3,13 条全保留);b 通过(新颖 3、合理 4,划 6 条剩 4 条,正好是下限);R1 合理 4;R2 合理 3 但保留;主要发现:day_pdf_quantile_bilateral_half_width 取的是窗口端点分钟的收益差而不是半极差(legacy_specialized_dt.py 第 350–362 行),影响整个 pdf 系与 slot a、R2 的机制叙述,建议 PI 修正文字。'

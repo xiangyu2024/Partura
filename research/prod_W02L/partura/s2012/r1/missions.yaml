@@ -1,0 +1,91 @@
+seed: 2012
+round: 1
+slots:
+  - type: E
+    core: 'day_ar1_coefficient(Volume)'
+    hypothesis: |-
+      事实(来自快照拆解):三个 head 是同一个对象的三种平滑,即 |φ|,φ = day_ar1_coefficient(Volume) = 当天 241 根分钟成交量对前一分钟的 AR(1) 斜率(pow_2(pow_05(·)) 等于取绝对值)。拆解里衰减窗 2 / 5 / 10 / 40 的分数都在 -3.2 到 -2.95,Volume 换 Amt 是 -3.02 到 -3.05(原分数 -2.99 到 -3.02),sigmoid / pow / cs_rank 这些保序外层拿掉最多只差 0.09:承重的不是外层,是 φ 的截面水平。结构表里这一批 14 个成员有 8 个就在挖掘冠军自己的第 4 族里(BATCHES.md 的 8(1)),未去控制时训练段净夏普 0.9 到 2.2、rank IC 约 -0.05、换手 0.03 到 0.26;去掉 5 个控制和两个冠军以后 train / valid 都是 -3。也就是说 φ 的水平已经是控制的一部分(流动性、成交额离散度、冠军本身),水平里没有剩下的东西。
+      假设:如果 φ 里还有 alpha,它在「相对这只股票自己的常态」里,不在水平里。一只票的分钟成交突然变得更连续(算法 / 机构拆单、持续建仓)或更脉冲(注意力事件、散户集中涌入),是参与者构成的切换,持续数周,控制看不到,因为控制全是水平量。
+      算子怎样实现:每个种子都原样带着核心 φ,外围只做两件事:去掉这只股票自己的水平,或在时间序列里用另一个同期的日序列把 φ 解释掉再取残差。(a) 日轴标准化:cross_zscore / cross_madz(φ, 60 或 120),或快 EMA 减慢 EMA,即 φ 最近几天对自己 60 到 120 日常态的偏离。(b) 时间序列残差 cross_regres(x, φ, 60)(第一个参数是解释变量):φ 对同期 day_gini(Volume) 的残差,把「成交集中在少数几分钟」(分布形状)和「集中在连续的几分钟」(时间依赖)分开;φ 对 |当日收益|、当日收益的残差,把价格动作带来的成交聚集拿掉。(c) 滚动相关与斜率:φ 与 |当日收益| 的 60 日相关,φ 对前一日收益的 40 日相关,φ 对当日收益的 60 日斜率:持续的成交是不是发生在大波动 / 上涨日。(d) 与近 20 日收益符号相乘:异常的持续性在趋势里还是趋势外。(e) cross_autocorr(φ, 60, 1):φ 自己的日间持续性。(f) cs_bucket_demean 以 sub(LogFloatCap, LogFloatShares)(约等于 log 价格)十分位去均值,去掉最小变动价位造成的价格档效应。(g) 减去同样标准化过的 day_std(Ret):把和价格波动共享的那一块拿掉。
+      为什么和以前不同:快照里所有含 φ 的写法是保序包装加 ts_decay_linear / ts_min / ts_quantile_q75(库里还有 ts_mean / ts_stddev 之类),全部是水平或水平的平滑。这里的外围全是「相对自身历史」或「时间序列残差」,与三个 head 的日度秩 |ρ| 预计远低于 0.7,与已知成交额族、流动性、市值这些控制也预计 < 0.5(水平已被减掉)。所有种子的骨架都已逐个对照 members.csv 的 4100 个骨架,没有一个在库里(只有核心 φ 单独的骨架在库里,而它只作子树)。种子里用的 cross_zscore / cross_madz / cross_ema / cross_regres / cs_bucket_demean 与日频字段叶子,库里的表达式没有这样用 φ 的。
+      为什么样本外还会在:来源是参与者结构的慢变(算法拆单 / 机构建仓对散户脉冲)在成交时间依赖上留下的变化,不依赖某一段行情;窗口取 60 到 120 日,EMA 3 到 5 日先压掉日度噪声,名次能保持几周,15 bp 成本下换手可以承受。诚实预期:出 head 的概率不高(约 5%),这个位检验的是「水平已被冠军吃光,剩下的是变化量」这一说法;不出就说明连变化量也没有。
+      数学检查:φ 在当天无成交或分钟成交量几乎不动(方差 ≤ 1e-8)时是 NaN,不填充;φ 有界(多在 0 到 1),cross_zscore 的分母是 60 日 std 加 1e-9,只有 φ 整段不动才会放大,而那时 φ 本身是 NaN;cross_madz 分母 MAD 为 0 时是 NaN;cross_regres 只在解释变量窗口方差 > 1e-9 时出值,day_gini 在 [0,1)、day_sum(Ret) 的 60 日方差远大于此。种子里不用 ts_rank / cross_rank(当天缺失时返回 0 的已知行为),cs_rank 是截面排序。无前视:φ 只用 t 日分钟,日轴窗口含 t 日及以前,t+1 交易;最长热身 120 日,其余窗口 ≤ 60。
+    seeds:
+      - 'cross_zscore(day_ar1_coefficient(Volume), 60)'
+      - 'cross_zscore(cross_ema(day_ar1_coefficient(Volume), 5), 120)'
+      - 'cross_madz(day_ar1_coefficient(Volume), 60)'
+      - 'sub(cross_ema(day_ar1_coefficient(Volume), 5), cross_ema(day_ar1_coefficient(Volume), 60))'
+      - 'cross_regres(day_gini(Volume), day_ar1_coefficient(Volume), 60)'
+      - 'cross_regres(abs_(day_sum(Ret)), day_ar1_coefficient(Volume), 60)'
+      - 'cross_regres(day_sum(Ret), day_ar1_coefficient(Volume), 60)'
+      - 'cross_corr(day_ar1_coefficient(Volume), abs_(day_sum(Ret)), 60)'
+      - 'cross_corr(day_ar1_coefficient(Volume), ts_delay(day_sum(Ret), 1), 40)'
+      - 'mul(cross_zscore(cross_ema(day_ar1_coefficient(Volume), 3), 60), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cross_regbeta(day_sum(Ret), day_ar1_coefficient(Volume), 60)'
+      - 'cross_autocorr(day_ar1_coefficient(Volume), 60, 1)'
+      - 'sub(cross_zscore(day_ar1_coefficient(Volume), 60), cross_zscore(day_gini(Volume), 60))'
+      - 'cs_bucket_demean(cross_zscore(cross_ema(day_ar1_coefficient(Volume), 3), 60), sub(LogFloatCap, LogFloatShares))'
+      - 'sub(cs_rank(cross_zscore(cross_ema(day_ar1_coefficient(Volume), 3), 60)), cs_rank(cross_zscore(cross_ema(day_std(Ret), 3), 60)))'
+  - type: N
+    hypothesis: |-
+      机制:订单流方向的长记忆。大单被拆成许多小单,在几分钟到几天里同方向执行,所以带符号成交量 s_t · V_t 的自相关长期为正,这是机构 / 算法拆单的指纹;散户的脉冲成交方向近似随机。批里的 φ = day_ar1_coefficient(Volume) 只读幅度的依赖,不带方向,而且幅度的依赖和日内 U 形、流动性混在一起,所以和控制(以及冠军)共享水平,新尺子下 -3。新想法是把方向加进来,并且读「方向持续性相对幅度持续性的超额」,把幅度那一块(也就是 φ 的水平)减掉,留下纯方向记忆:拆单没完成的母单,后面还有价格压力(Chordia-Subrahmanyam 的持续单边失衡预测后续收益)。
+      算子怎样实现:s = sign(Ret)(分钟收益方向,收益为 0 的分钟记 0),SV = mul(sign(Ret), Volume)。(1) 日内:day_ar1_coefficient(SV),以及先把成交量除以尾随 20 分钟均量(in_mean_rolling,因果窗口)去掉 U 形的版本;sub(φ(SV), φ(Volume)) 与时间序列回归残差 cross_regres(φ(Volume), φ(SV), 60)(第一个参数是解释变量)都是「方向持续性 - 幅度持续性」。(2) 日间:cross_autocorr(day_signed_ratio(Ret, Volume), 40, 1) 是净买压的日间持续性,即多日母单;再与 20 日净买压水平相乘。(3) 日内冲击的持久度:day_corr(in_delay(SV, 1), Ret),上一分钟的带符号成交能不能预测本分钟收益,连续是知情 / 永久冲击,反转是流动性需求。(4) 成交量突变的方向 day_signed_ratio(Ret, in_logchg(Volume, 1)),以及成交最重的 10% 分钟的平均收益 day_topw_mean(Ret, Volume)。(5) 同一个统计量换到有符号的底:day_ar1_coefficient(Ret)、day_ar1_coefficient(abs_(Ret))(分钟波动的聚集)、day_ar1_coefficient(in_logchg(Volume, 1))(成交量变化的 AR1,即噪声占比,不含水平)。外面统一用 cross_mean / cross_ema(20 日)聚合,有的再做 60 日标准化。
+      为什么和已有的不同:库里 day_ar1_coefficient 的输入只有原始字段、字段的分钟切片、份额、zscore / regres 这几种;没有一个把 sign(Ret) 乘进去,没有用 in_mean_rolling 去 U 形,没有用 in_logchg 做底,更没有「方向持续性减幅度持续性」。day_signed_ratio / day_topw_mean / in_logchg 是 Partura 后加的算子,库里没有。种子的骨架已逐个对照 members.csv 的 4100 个骨架,都不在库里。和三个 head 的差别:head 是 |φ_Volume| 的水平,这里是方向和差分;和控制的差别:控制是流动性 / 波动 / 反转 / 市值 / 成交额离散度的水平,方向持续性不是它们的函数(会共享一部分,因为成交稀疏时 Ret = 0、SV = 0 带噪声,尺子会把线性、U 形、S 形暴露去掉)。
+      为什么样本外还会在:拆单习惯是参与者类型的慢变属性(算法 / 机构 vs 散户),不依赖某一段行情;持续建仓的母单没做完就还有价格压力,是几周的慢过程,20 日聚合以后名次稳定,15 bp 成本下换手可以承受。风险:净买压水平(第 2、4 类里一部分种子)和 20 日反转相关,尺子会去掉线性、平方、立方暴露;持续性类的种子不带水平,所以这一类应该更干净。
+      数学检查:SV 有大量 0(无成交或收益为 0 的分钟),day_ar1_coefficient 只在方差 > 1e-8 时出值,Volume 以股为单位,方差远大于此;整天无成交是 NaN,不填充。AV = Volume / in_mean_rolling(Volume, 20) 的分母含当前分钟,只有最近 20 分钟全无成交才是 0,此时分子也是 0,得到 NaN 而不是无穷;首分钟 AV 恒为 1,是已知的常数项,不影响斜率。day_corr、day_signed_ratio 有界,cross_autocorr 遇常数窗口给 NaN;in_logchg 要求正值,零成交分钟给 NaN 而不是负无穷。无前视:in_delay 向过去移位,in_mean_rolling 是因果窗口(没有用居中窗口的 in_local_mean);所有量只用 t 日分钟,日轴窗口含 t 日及以前,t+1 交易;热身期最长 120 日。
+    inspired_by: 'B034 批:14 个成员全是同一个无符号的 |φ_Volume| 的平滑,换成 Amt 分数不变(-3.05)、窗口 2 到 40 不变,说明统计量读的是依赖结构不是量纲;批里没有任何一个带方向的底,而且 8 个成员已经在挖掘冠军自己的第 4 族里,水平被冠军吃光。'
+    literature:
+      - title: The long memory of the efficient market
+        authors: Fabrizio Lillo, J. Doyne Farmer
+        year: '2004'
+        treatment: 订单流符号的长记忆来自大单拆分;这里用带符号成交量 sign(Ret) * Volume 的日内 AR(1) 斜率及其与无符号成交量 AR(1) 之差近似
+      - title: Order imbalance and individual stock returns Theory and evidence
+        authors: Tarun Chordia, Avanidhar Subrahmanyam
+        year: '2004'
+        treatment: 持续的单边订单失衡预测之后的收益;这里用 day_signed_ratio 的日间自相关与 20 日净买压水平的乘积
+      - title: The high-volume return premium
+        authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+        year: '2001'
+        treatment: 成交量突变伴随的价格方向有后续漂移;这里用 day_signed_ratio(Ret, in_logchg(Volume, 1)) 与 day_topw_mean(Ret, Volume) 近似
+    seeds:
+      - 'day_ar1_coefficient(mul(sign(Ret), Volume))'
+      - 'day_ar1_coefficient(mul(sign(Ret), div(Volume, in_mean_rolling(Volume, 20))))'
+      - 'cross_mean(day_ar1_coefficient(mul(sign(Ret), Volume)), 20)'
+      - 'cross_zscore(cross_ema(day_ar1_coefficient(mul(sign(Ret), div(Volume, in_mean_rolling(Volume, 20)))), 5), 60)'
+      - 'sub(day_ar1_coefficient(mul(sign(Ret), Volume)), day_ar1_coefficient(Volume))'
+      - 'sub(cross_ema(day_ar1_coefficient(mul(sign(Ret), Volume)), 20), cross_ema(day_ar1_coefficient(Volume), 20))'
+      - 'cross_regres(day_ar1_coefficient(Volume), day_ar1_coefficient(mul(sign(Ret), Volume)), 60)'
+      - 'cross_autocorr(day_signed_ratio(Ret, Volume), 40, 1)'
+      - 'mul(cross_mean(day_signed_ratio(Ret, Volume), 20), cross_autocorr(day_signed_ratio(Ret, Volume), 40, 1))'
+      - 'day_corr(in_delay(mul(sign(Ret), Volume), 1), Ret)'
+      - 'cross_mean(day_signed_ratio(Ret, in_logchg(Volume, 1)), 20)'
+      - 'cross_mean(day_topw_mean(Ret, Volume), 20)'
+      - 'cross_zscore(cross_ema(day_ar1_coefficient(Ret), 5), 120)'
+      - 'cross_ema(day_ar1_coefficient(abs_(Ret)), 20)'
+      - 'cross_ema(day_ar1_coefficient(in_logchg(Volume, 1)), 20)'
+      - 'day_ar1_coefficient(in_logchg(Volume, 1))'
+R:
+  - head: 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 5))))), 5)'
+    why: |-
+      烂的部件是底 |φ_Volume|(φ = day_ar1_coefficient(Volume))本身,不是外壳。依据:这个 head 在拆解里窗口 2 / 5 / 10 分别是 -3.17 / -3.02 / -2.95,Volume 换 Amt 是 -3.03,拿掉 sigmoid 是 -3.02(+0.00),拿掉 pow_2 约 +0.07,拿掉 cs_rank 约 +0.03;外壳和字段都不承重,而 φ 的水平正是控制与冠军(这一批 14 个成员有 8 个在挖掘冠军第 4 族里)已经吃掉的那一块。变体保持这个 head 的 5 + 5 平滑和保序外壳不动,一次只换底,所以分数的变化可以直接归到底上:(1) 去 U 形的底 Volume / 尾随 20 分钟均量,以及 Volume 减尾随均量;(2) 成交量变化的 AR1(in_logchg,不含水平);(3) 带符号成交量 sign(Ret) * Volume 的 AR1,及其去 U 形版本;(4) 方向持续性减幅度持续性;(5) 价格底 Ret 与 abs_(Ret) 的 AR1;(6) 日轴标准化的 φ,以及对 day_gini(Volume) 做时间序列回归后的 φ 残差。
+    variants:
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(div(Volume, in_mean_rolling(Volume, 20))), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(sub(Volume, in_mean_rolling(Volume, 20))), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(in_logchg(Volume, 1)), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(mul(sign(Ret), Volume)), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(mul(sign(Ret), div(Volume, in_mean_rolling(Volume, 20)))), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(sub(day_ar1_coefficient(mul(sign(Ret), Volume)), day_ar1_coefficient(Volume)), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(Ret), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(abs_(Ret)), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(cross_zscore(day_ar1_coefficient(Volume), 60), 5))))), 5)'
+      - 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(cross_regres(day_gini(Volume), day_ar1_coefficient(Volume), 60), 5))))), 5)'
+  - head: 'ts_decay_linear(sigmoid(pow_2(pow_2(pow_2(cs_rank(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40)))))), 5)'
+    why: |-
+      这个 head 是三个里分数最好(-2.99)、平滑最长(40 日,换手最低)的一个,拆解里窗口 5 -> 2 / 10 是 -3.07 / -3.20,Volume 换 Amt 是 -3.05,sigmoid 与 pow_2 的拿掉只差 0.05 到 0.09:外壳不承重,承重的是 |φ_Volume| 的截面水平,它和流动性、成交额离散度、市值共享。去掉的办法是在这些量的十分位内去均值或取名次,而不是只靠尺子的线性 / 平方 / 立方残差(桶内去均值把各个十分位里的整体水平差也拿掉了)。变体保留 40 日平滑,只在 head 的平滑之后加一层桶内去均值 / 桶内名次,桶的变量依次是:流通市值、约等于 log 价格(sub(LogFloatCap, LogFloatShares))、已知成交额族、20 日成交额(流动性)、总市值与流通市值之差(限售 / 非流通比例,即 sub(LogTotalCap, LogFloatCap))。
+    variants:
+      - 'ts_decay_linear(cs_bucket_demean(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), LogFloatCap), 5)'
+      - 'ts_decay_linear(cs_bucket_demean(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), sub(LogFloatCap, LogFloatShares)), 5)'
+      - 'ts_decay_linear(cs_bucket_demean(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), cross_mean(day_std(Amt), 30)), 5)'
+      - 'ts_decay_linear(cs_bucket_demean(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), cross_mean(day_sum(Amt), 20)), 5)'
+      - 'ts_decay_linear(cs_bucket_demean(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), sub(LogTotalCap, LogFloatCap)), 5)'
+      - 'ts_decay_linear(cs_bucket_rank(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40), cross_mean(day_std(Amt), 30)), 5)'

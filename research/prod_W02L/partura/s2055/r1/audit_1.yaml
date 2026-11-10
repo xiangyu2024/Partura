@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [7]
+    reasons: '创新度 3。三个 head 都是「分钟局部自相关的日内矩」同一个对象。R 变体(同窗口、只把 nt_ 换成 in_autocorr)与原 head 的原始 |ρ| 为 0.53–0.93,说明 nt_ts_autocorr_s1 与 in_autocorr 是同一度量、只换了算子名。本位的新东西是窗口(10 / 30 分钟)、字段(Vwap、Close 变化)和矩(偏度、标准差、正比例)。相关度表:seed 2(Ret、3 分钟、ts_mean 20)原始 |ρ| 0.42 但残差 0.64,与 head 3 仍是同一族;seed 5 原始 0.68、残差 0.64,与 head 2(Open)接近;seed 3、4 残差 0.52、0.50 仍偏高;seed 1、6、8、9 与全部 head 的残差 ≤0.36,是真正的新参数区域。因为有一半种子不是同一个量,所以给 3 而不是 1;但「库里没有 in_autocorr 的日内矩」只是算子名层面的新意,不是机制层面的新意。控制:最大 |ρ| 为 seed 7 的 liq 0.34、seed 5 的 liq 0.29,都低于 0.8,未触发自动划掉。合理度 3。机制(局部持续性以稀疏爆发的形式出现,对应拆单或关注度脉冲)说得清。逐个算子核对:in_autocorr 调用 rolling_pair_reduce,协方差除以 sqrt(方差乘积)+EPS(EPS=1e-9),所以平盘窗口(涨跌停锁死、低价股的平盘分钟)返回精确 0 而不是缺失;day_pos_ratio 把 0 计为非正,seed 7 的 distinct 0.505 有一部分就是这个约定造成的。两个风险需要 PI 核对:(1) d=3、d=10 的窗口只有 2 到 3 对样本,值落在离散集合上,day 矩度量的主要是符号模式频率;(2) d=30 的 seed 4、8、9 在每日前 29 分钟是部分窗口(count 2 起就是精确 ±1),约占日内 12%,可能主导日内四阶矩。这两条目前不是已确认的数学问题(无 NaN 注入、无除零爆点),按 §3 放行,只记为风险,不据此划种子。划掉 seed 7:与 head 2(Open)的原始 |ρ| 0.79,达到库禁令 0.7 门槛,且 day_pos_ratio 的 0 计数混入了平盘伪影,属于重复。剩 9 个种子(≥4)。若它有 alpha,最可能来自:个股分钟收益的局部依赖在日内的尾部与偏度形状(大单拆分或关注度脉冲的个股特征),而不是平盘分钟或热身期的符号统计。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [8]
+    reasons: '创新度 4。对象是价量局部依赖 in_corr(Ret, in_pct(Amt 或 Volume, 1), w),与三个 head 的价格自相关不同。相关度表:原始 |ρ| 与 head 的最大值只有 seed 1 的 0.27 和 seed 4 的 0.54(seed 4 为 5 分钟 Volume 版本);残差与 head 的 |ρ| 在 seed 2(0.08)、3(0.12)、5(0.05)、9(0.08)上基本不相关,不是换皮。控制:seed 4 的 liq 0.37、known 0.31,seed 1 的 liq 0.28、known 0.25,都低于 0.8。扣掉 1 分,是因为价量相关是常见对象,只是在 head 里没出现。另一个问题是 seed 1 与 seed 10 共用同一个内层统计 day_kurt(in_corr(Ret, in_pct(Amt,1),15)),只差外层平滑(ts_quantile_q75 20 对 cross_mean 15);代码里 cross_mean 与 ts_mean 都是 axis=0 的 rolling nanmean,所以它们是近重复。相关度表没有给种子之间的 |ρ|,我不凭推断划掉,请 PI 核对。合理度 3。机制(价量同向的一侧性成交聚集)说得清。逐个算子核对:in_pct(Amt,1) 只对精确 0 的基数返回 NaN,对接近 0 的成交额基数没有下限,停牌后首分钟或极薄成交会产生很大的 in_pct 值;Pearson 对单个爆点不稳健,15 分钟窗口的相关值近似由爆点的符号决定,day_kurt 又会放大它。这是「除以近零的量」类的数值伪影,但目前没有证据说它主导了截面排序(liq 控制 0.28 到 0.37 提示它可能与薄成交相关)。不是已确认的数学问题,按 §3 放行,记为风险,请 PI 量化爆点在日内的占比。另外 seed 4 用 5 分钟窗口的 Volume 版本只有 5 对样本,矩的统计接近噪声分布,机制论述偏弱,但不是数学错误。划掉 seed 8:相关度表 gate=False、distinct 0.085,面板几乎是常数(day_pos_ratio 作用在 in_corr 上),属于「面板几乎是常数」的数学问题。剩 9 个种子(≥4)。若它有 alpha,最可能来自:价格与成交同向聚集(知情或指数化的一侧流)在日内的尖峰程度,而不是薄成交的爆点计数。'
+R:
+  - head: 'ts_quantile_q75(pow_2(day_kurt(nt_ts_autocorr_s1(Low, 3))), 30)'
+    soundness: 3
+    reasons: '合理度 3。把禁用的 nt_ 换成标准 in_autocorr 是必要的修正;缩短到 15 天窗口与 PI 给出的 30 到 15 窗口增益 +0.48 一致,是合理的。但 Low 是价格水平而不是收益,水平序列的滞后一分钟 Pearson 主要反映日内趋势,不是收益的持续性,与 head 所声称的「局部持续性」机制不符;R 的四个变体(相关度表 R 1 variant 1 到 4)与原 head 的原始 |ρ| 为 0.85 到 0.93,说明只换了算子,没有换对象。pow_2 作用在 kurt 上,kurt 下界是 -2,所以 pow_2 在 kurt 小于 0 时是非单调的。以上都不是数学问题(无 NaN、无除零爆点、定义可算),按 §3 放行。若它有 alpha,最可能来自 Low 水平的日内趋势强度分布,而不是收益的持续性。'
+  - head: 'cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)'
+    soundness: 3
+    reasons: '合理度 3。换成 in_autocorr(Ret,3,1) 同样是对的(禁用算子须去掉)。变体的 quantile(R 2 variant 2)、q50(variant 3)和 sigmoid(variant 4)比 sum 稳:sigmoid 有界,是实质性的改进。注意 cross_sum 与 cross_mean 在同窗口下排序完全相同,PI 说的「sum 被单日极端值主导」对 mean 同样成立,所以换 quantile 的理由成立,但与 sum 这个聚合本身无关。变体 cross_sum(...,30) 仍在求日和,这一条没有修正。in_autocorr(Ret,3,1) 的 3 点 Pearson 同样有平盘零约定和 ±1 饱和的问题,与 slot a 的风险相同。不是数学问题,按 §3 放行。若它有 alpha,最可能来自 Ret 的三分钟符号模式在日内的尾部累积,即短期成交方向的集中程度。'
+summary: '两个 N 位都过(a:创新 3、合理 3,剩 9 个种子;b:创新 4、合理 3,剩 9 个种子),各划 1 个种子(a7 重复于 head 2,b8 面板近常数);两个 R 组合理度都是 3,放行。需要 PI 核对的风险(均未确认为数学问题,未据此划种子):d=30 种子的日前 29 分钟热身期占比(a4、a8、a9、b3、b5);b 位 in_pct(Amt/Volume) 对近零基数的爆点;a 位平盘分钟返回 0 的约定;b1 与 b10 共享内层统计、近重复。另请注意:库禁令按骨架判,in_autocorr 与 nt_ts_autocorr_s1 的骨架不同,所以 nt_ 到 in_autocorr 的改写不会被挡,这一块的新意只能靠审计判断。'

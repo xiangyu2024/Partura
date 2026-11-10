@@ -1,0 +1,26 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 L1 = day_ar1_coefficient(in_logchg(Volume,1)) 的相关度:与 6 个 head 的最大原始 |ρ| 为 0.25(最像 head 6 的 cs_rank 支),残差 0.19;与控制 liq 0.23 / vol 0.18 / rev 0.12 / known 0.24 / size 0.10,都远低于 0.8。库 5583 条骨架(research/prod_W02L/struct/members.csv)中含 in_logchg 的为 0,所以这个核心是库里没有的结构。创新度 4 而非 5:它仍是「对一条量序列取 AR1」这一族写法,只换了变换,且与流动性、已知族各有约 0.24 的重合。合理度 4:算子链核对过——in_logchg 在成交量不大于 0 处给 NaN 而不是填充;day_ar1_coefficient 有 var 门槛(1e-8),|φ| 在 Cauchy-Schwarz 下接近 1 以内,没有除以近零,也没有前视。机制说明需要修正一处:对数差分不能去掉日内 U 形的斜率,平滑的 U 形在差分里是慢变的同向漂移,会把 φ 往正向推,所以 L1 是「约 −0.5 × 瞬时噪声占比」与「U 形斜率份额」的混合,解释要写成两项。核心合规:核心不是 6 个 head 的子树(head 里只有 AR1(Volume) 与 AR1(Close)),按 missions 它应来自共性表或核心卡;我按任务指令没有读共性表,此项请流水线核对,我没有据此划种子。外围:15 个种子都原样含 L1;与第 1 轮已评分的含 L1 候选(cross_autocorr_s1(L1,60)、ts_quantile_q75(L1,100)、sub(cross_mean(L1,20),cross_mean(L1,120)))的算子集合都不相同。种子逐个核对:a1 与 a12、a14 共用 cross_autocorr_s1(L1,120) 基底,但外层算子不同(EMA / 次新排除 / 分桶排序),不是重复;a4 与 a10 的控制 profile 接近(liq 0.11/0.10,known 0.11/0.10),但对象不同(20 日滞后相关 vs 5 日差分的 120 日自相关),差异超过 0.01,不划。a5、a8 的同期收益耦合可能夹带一字板计数,但控制残差可以去掉一部分,不划。241 日窗口在次新票有效对很少时会退化为 ±1 或 0,影响面应较小,不足以主导。如果它有 alpha，最可能来自 L1 的慢变成分(个股的成交碎片化与日内形态,即参与者结构),而不是 L1 的水平;a12 与 a14 两个探针可以区分它是否只是次新或流动性。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '12 个种子与 6 个 head 的最大原始 |ρ| 为 0.37(b6,最像 head 1),全部低于 0.7;与 5 个控制的最大 |ρ| 为 0.31(b6 与 size),低于 0.8。创新度 4:成交额冲击与收益的领先 / 同期耦合在 6 个 head 中没有对应物(head 全是 AR1 水平),对 5 个控制也没有一个超过 0.35;库 5583 条骨架中 day_signed_ratio、day_centroid、day_wmean、cross_zscore、cs_bucket_* 均为 0 次,cross_delay 包在 cross_corr 里的只有 1 条(我核对了 members.csv)。合理度 4:机制(信息不对称 → 放量日收益的延续 / 反转,Llorente 等 2002;高成交量溢价,Gervais 等 2001;订单失衡对次日收益,Chordia 与 Subrahmanyam 2004)说得清。算子链逐个核对:cross_zscore 用 60 日窗(含当天),当天值收盘后已知,无前视;cross_delay 只取更早的值;cross_corr 与 cross_regbeta 的分母没有除以近零(EPS 1e-9,样本方差量级远大于它);log 对 |x| ≤ 1e-9 给 NaN 而非 −inf,cross_delta(log(Amt)) 不会带入无穷。不挡但需注意的几处:(a) day_signed_ratio 的分母把零收益分钟计入,流动性差、平盘分钟多的票比值被压向 0,b5 / b6 / b11 的截面里夹带一部分流动性;(b) b3 是同期相关而不是「下一日」预测,作为探针保留;(c) b6、b7 是失衡水平与带符号的放量均值,PI 也写成了对照,规则只允许以数学问题或重复划种子,所以保留;(d) 一字涨停日成交额小、收益约 +10%,耦合可能主要在数涨停次数,与波动 / 反转控制相关,留给残差检验。划掉 b8:它与 b1 的 x、y、窗口完全相同,只把相关换成 OLS 斜率(斜率 = corr × sd(y)/sd(x),z 是 60 日标准化,sd(ret)/sd(ret·z) 的比值在 1 附近、随票变化有限),两者与 6 个 head 和 5 个控制的 |ρ| 逐项相差不超过 0.01(b1 / b8:head 0.10/0.09,残差 0.08/0.08,liq 0.11/0.11,vol 0.06/0.07,rev 0.02/0.01,known 0.10/0.10,size 0.06/0.07),是同一个秩,留 b1 即可。b12 与 b2 不是重复:b12 在已知族十分位内排序后 known |ρ| 由 0.16 降到 0.00,是另一个对象。如果它有 alpha，最可能来自放量与收益方向的一年期耦合(信息不对称的慢变属性,机构与散户的延续 / 反转性质),而不是 day_signed_ratio 的水平;若 b6 / b7 这类水平种子的得分与耦合类相当,说明来源是流动性或收益方向本身。'
+R:
+  - head: 'cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 100), cross_mean(day_std(Amt), 30))'
+    soundness: 4
+    reasons: '5 个变体中 1 至 4 只改窗口(100 改为 200 / 241 日)、估计量(均值或 EMA)并保留 pow_05 源头,变体 5 改源头为 L1 并保留 200 日分位数。算子核对:ts_quantile_q75(·,200) 因果,热身约 200 至 241 日(占 train 前约一年),不是主导;cs_bucket_demean 按 cross_mean(day_std(Amt),30) 的日截面十分位去均值,分桶少于 2 只给 NaN,没有除法。机制:水平类 head 的承重部件是慢(窗口越长越好,PI 的拆解与此一致),慢的 AR1(Volume) 状态对应参与者结构的慢变属性,说得通;分桶去均值剪掉与已知族共享的水平。与原 head 的 |ρ| 为 0.72 至 0.82(变体 5 为 0.42),是同一对象的慢版本,替换与否由流水线判,审计不以此划组。合理度 4。'
+  - head: 'cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)), 30)'
+    soundness: 4
+    reasons: '源头换成 L1 = day_ar1_coefficient(in_logchg(Volume,1)),窗口 120 与 241,另加 EMA(半衰期 40)。cross_autocorr_s1 即 cross_autocorr(x,d,1),是 d 日滚动相关 x_t 与 x_{t−1},因果。机制:L1 的自相关衡量瞬时噪声占比的持续性,与 E 位的核心一致,说得清。变体与已知族的 |ρ| 为 0.19 至 0.26,与原 head 的 ρ 为 0.26 至 0.35,不是换皮。无数学问题,合理度 4。'
+  - head: 'ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)'
+    soundness: 4
+    reasons: '唯一变体是 R 第 1 组的方向(200 日分位数 + 成交额族分桶去均值)换成 pow_2 源头。pow_2 对负的 AR1 非单调,但分钟成交量水平的日内 AR1 通常为正,在正区间 pow_2 单调,影响有限;若负值占比在数据里很高,这一条需要重算。与 R 第 1 组变体 1 方向相同,近似重复,但 R 组只按合理度判,不划。机制同 R 第 1 组:承重部件是慢,说得通。合理度 4。'
+  - head: 'pow_2(day_ar1_coefficient(Close))'
+    soundness: 3
+    reasons: '变体 1、2 对价格水平做 AR(1):这是近单位根回归,φ 的截面主要反映日内价格路径的平滑度(跳动、趋势与 tick 量化的比例),机制没有说清;EMA 只解决估计噪声,不解决内容。变体 1 与流动性控制的 |ρ| 为 0.43,与已知族 0.35,与流动性的重合在 R 组里最大。变体 3 对分钟对数收益做 AR1,即买卖价差弹跳的 Roll 式读数,机制清楚,但它与 AR1(Close) 不是同一个东西,被混在同一组里。算子核对:in_logchg(Close,1) 对价格不大于 0 处给 NaN,cross_ema 因果,没有数学问题,所以不挡;合理度只给 3。'
+summary: '两个任务位都通过(a:创新 4、合理 4,15 个种子全留;b:创新 4、合理 4,划掉重复的 b8,剩 11 个);R 四组全部保留(合理度 4、4、4、3)。核心 L1 不在 head 的子树里,我按指令没读共性表,请流水线核对该条。'

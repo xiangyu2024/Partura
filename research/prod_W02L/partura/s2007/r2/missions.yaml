@@ -1,0 +1,149 @@
+seed: 2007
+round: 2
+slots:
+- type: E
+  core: day_close(in_kurt_full(Amt))
+  hypothesis: '机制与证据:
+
+    (1) 核心 K = day_close(in_kurt_full(Amt)):当天 241 根分钟成交额的超额峰度(数值上等于 day_kurt(Amt);分母是方差的平方,Amt 的水平和价位都被除掉,无量纲;上界 n−3 = 238,常数日 0/0 给 NaN,不会爆点)。它读「一天的成交是平稳铺开,还是挤在几根里(开盘
+    / 收盘集合竞价、事件、大单)」。
+
+    (2) 快照给的证据与缺口。快照里只有 head 3 含 K,而且是被乘进去的:cross_max(mul(K, X), 5),X 是 40 日收盘棒成交额标准差的三次方。拆解表:K 单独(窗口 5 的 cross_max)−3.79,但与已知族的 ρ 只有 0.23(整条
+    head 的 ρ −0.76 是 X 带来的);X 单独 −0.48,乘上 K 反而 −0.58。所以快照没有证明 K 自己有 alpha,只证明了两件事:K 不是成交额离散度(已知族控制)的换皮;「5 日最大值」这种最快的聚合把它做成了满换手的噪声(库里原式 day_kurt(Amt)
+    日换手 0.81、训练净夏普 −9.9)。没人把它放慢过:库里含 day_kurt(Amt) 的 6 条是原样、5 日差分、30 日标准差、3 日均值之类,没有一条是 120 日以上的聚合、分桶或耦合。本任务只问一件事:把 K 放慢、去掉混进来的成分之后,它有没有独立于水平的
+    alpha。
+
+    (3) 经济含义:稳定铺开(K 低)的成交是被拆单的机构 / 算法执行(Kyle 1985:知情者平滑下单;Barclay-Warner 1993:隐身交易;Keim-Madhavan 1997:机构在小盘里拆单以压低冲击),挤成几根(K 高)的是事件驱动、散户追涨或集合竞价集中。这是参与者结构的指纹,几个季度不变,不依赖某一段行情。
+
+    (4) 算子怎样实现(15 个种子都原样带着 K):(i)慢聚合:cross_mean / cross_med(241,中位数版防个别日的大单)、cross_tail_mean_q75(241)、cross_stddev(120)、20 日均值减 241 日均值(参与者结构的最近变化);(ii)同伴内:cs_bucket_zscore(慢均值,
+    LogFloatCap) 与 cs_bucket_zscore(慢均值, sub(LogFloatCap, LogFloatShares))(名义价位),在市值或价位十分位内比较,而不是对全市场比较(本波别的流里,同伴内标准化是读数最好的写法之一);(iii)耦合:K 与当日收益、成交额冲击
+    ts_scale(day_sum(Amt), 30)、隔夜跳空绝对值的 241 日相关,昨天的 K 对今天收益的 241 日回归斜率(爆量之后的反应),K 与自身滞后一天的 120 日相关(持续性);(iv)价量对照:K 减 Ret 分钟序列峰度的 241 日均值(只有量爆、价不爆
+    vs 价量同爆)、K 与 Ret 峰度的 241 日相关、K × sign(日收益) 的 241 日均值(上涨日爆量 vs 下跌日爆量)。
+
+    (5) 与库里已有的不同:15 个种子的骨架逐个对照 members.csv 的 5583 个骨架,没有一个在库里;cs_bucket_zscore、LogFloatShares、cross_tail_mean_q75 在 5583 条里一次都没出现;in_kurt_full
+    只出现 4 次,作用在 Amt 上的只有 head 3 这一次。与三个 Amt 的 head(都由 X 主导,与已知族 ρ 约 −0.8)预计日度秩相关低于 0.5。W01 里用到 day_kurt(Amt) 的只是把它当耦合伙伴(与成交额质心、开盘棒成交额配对),本任务配对的是收益、成交额冲击、隔夜跳空绝对值与价格峰度,不同。
+
+    (6) 样本外为什么还会在:参与者结构慢变,241 日均值的名次几个月内稳定,半衰期 20 下换手低,15 bp 吃不掉;(ii)的同伴内写法去掉了「小盘本来就更尖」的混入。如实写风险:K 一部分是流动性代理(薄的票更尖),尺子去掉了线性 / U 形 / S 形暴露,门槛型暴露去不掉;K
+    主要由开盘与收盘集合竞价那两根的相对大小决定,上交所 2018-08 以前没有收盘集合竞价,训练段最早约一年(窗口 241)的读数混着这个制度变化;如果这一类 train 偏弱、valid 为正,取 min 就到不了 0.5。
+
+    (7) 数学检查:K 有界(下界 −2,上界 238),没有近零分母;常数日 / 停牌日给 NaN,不是填充。cross_corr / cross_regbeta 的分母是窗口内偏差平方和(K 的约 1e3~1e5,ts_scale(day_sum(Amt), 30) 约 0.03、隔夜跳空绝对值约
+    0.01,乘积的平方根都远大于 EPS = 1e-9)。sign(day_sum(Ret)) 取 −1 / 0 / 1。所有量只用 t 日及以前的数据,ts_delay(·, 1) 只向过去移,t+1 才交易;不用 ts_rank / cross_rank,所以 nanrank_last
+    的停牌补 0 不适用;热身期最多 241 日。'
+  literature:
+  - title: Continuous auctions and insider trading
+    authors: Albert Kyle
+    year: '1985'
+    treatment: 知情交易者把订单摊平以隐藏信息,所以平稳铺开的成交带有知情 / 执行信息;这里用分钟成交额的低峰度近似
+  - title: 'Stealth trading and volatility: Which trades move prices?'
+    authors: Michael Barclay, Jerold Warner
+    year: '1993'
+    treatment: 价格变化主要来自中等规模、隐身的成交;这里用成交额的超额峰度读成交是铺开还是集中
+  - title: 'Transactions costs and investment style: An inter-exchange analysis of institutional equity trades'
+    authors: Donald Keim, Ananth Madhavan
+    year: '1997'
+    treatment: 机构在小盘里拆单以压低冲击;这里用 K 的 241 日慢均值近似持有人 / 执行结构
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: '2001'
+    treatment: 放量之后的收益有溢价;这里用昨天的 K 对今天收益的滚动回归斜率近似爆量后的反应
+  seeds:
+  - cross_mean(day_close(in_kurt_full(Amt)), 241)
+  - cross_stddev(day_close(in_kurt_full(Amt)), 120)
+  - cross_med(day_close(in_kurt_full(Amt)), 241)
+  - sub(cross_mean(day_close(in_kurt_full(Amt)), 20), cross_mean(day_close(in_kurt_full(Amt)), 241))
+  - cs_bucket_zscore(cross_mean(day_close(in_kurt_full(Amt)), 241), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_close(in_kurt_full(Amt)), 120), sub(LogFloatCap, LogFloatShares))
+  - cross_corr(day_close(in_kurt_full(Amt)), ts_scale(day_sum(Amt), 30), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), day_sum(Ret), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241)
+  - cross_regbeta(ts_delay(day_close(in_kurt_full(Amt)), 1), day_sum(Ret), 241)
+  - cross_tail_mean_q75(day_close(in_kurt_full(Amt)), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), ts_delay(day_close(in_kurt_full(Amt)), 1), 120)
+  - cross_mean(sub(day_close(in_kurt_full(Amt)), day_close(in_kurt_full(Ret))), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), day_close(in_kurt_full(Ret)), 241)
+  - cross_mean(mul(day_close(in_kurt_full(Amt)), sign(day_sum(Ret))), 241)
+- type: N
+  hypothesis: '机制:B020 批(cross_decay_linear 一族,32 条)里,过了尺子的每一条都是「收盘棒成交额平滑量的标准差」一类,而同一个平滑量本身 day_close(cross_decay_linear(Amt, 30)) 在新尺子下只有 −3.52(与已知族
+    ρ 0.95):水平被控制吃掉,留下来的是变动性。变动性还越慢越好(外层 ts_std 窗口 20 → 40 → 80:−0.91 → −0.56 → −0.39;嵌套头 −0.69 → −0.39 → −0.07,valid +0.14)。但留下来的东西与已知族 ρ 仍是
+    −0.77 ~ −0.82(它本质上是「成交额水平 × 变动」),所以不能当 head。本任务把「变动性胜过水平」这条搬到已经无量纲的量上:先用比值 / 重心 / 基尼 / 相关把水平除掉,再在 120 日窗口上取标准差,读的是「交易模式的不稳定性」,不再带成交额水平。
+
+    经济含义:稳定的交易模式(成交额冲击小、成交重心固定、集中度固定、隔夜与日内的方差配比固定)属于结构稳定的持有人(机构、长期资金),不稳定的属于事件驱动、投机或持有人在换手的股票。文献:交易活动的变动性被定价(Chordia-Subrahmanyam-Anshuman 2001:成交额
+    / 换手的变异系数对收益为负且在控制水平之后仍在);对风险水平的不确定性被定价(Baltussen 等 2018);日内成交 / 收益的时点模式是持久的个股属性(Heston 等 2010);隔夜与日内的方差配比对应参与者构成(Lou 等 2019);与市场同步性的变化对应信息环境的变化(Morck
+    等 2000)。
+
+    算子怎样实现(16 个种子,五组):(a) 成交额冲击 A = ts_scale(day_sum(Amt), 30)(今天额占最近 30 日额之和,约 0.03,无量纲)的变动:cross_stddev(A, 120)、cross_stddev(cross_stddev(A,
+    10), 120)(冲击的聚集性)、cross_stddev(A, 30) − cross_stddev(A, 241)(变动性的近远差);(b) 成交时点与集中度:cross_stddev 作用在 day_centroid(Amt)(成交重心)、day_centroid(pow_2(in_slice(Ret,
+    1, 240)))(方差重心)、day_gini(Amt)、day_es_ratio_hi(Amt)、day_zero_ratio(Ret)(价格不动的分钟占比)、day_signed_ratio(Ret, Amt)(净买入占比)、day_durbin_watson(Ret)(分钟收益的跳动
+    / 动量度量)、收盘价对当日成交额加权均价的比值;(c) 方差配比:隔夜跳空的 120 日标准差占「隔夜 + 日内两个标准差之和」的份额(分母是两个非负数之和,0/0 给 NaN,不会爆点);(d) 耦合的不稳定性:cross_stddev(cross_corr(A, 日收益,
+    60), 120)(价量关系是否稳定)、cross_stddev(cross_corr(日收益, cs_mean(日收益), 60), 120)(与市场同步性是否稳定);(e) 同伴内:把 (a)、(b) 里最有代表性的两个放在市值或名义价位十分位内做 z 分数(cs_bucket_zscore),去掉「小盘本来就更不稳定」的混入。
+
+    为什么和库里已有的不同:库里 cross_stddev(day_…) 有 133 条,但内层全是 Amt / Ret 的水平量或 day_corr / day_cov;内层为 day_centroid、day_gini、day_es_ratio_hi、day_signed_ratio、day_zero_ratio、ts_scale(day_sum(Amt))、嵌套
+    cross_corr 的,在 5583 条里逐个核对都是 0 条;cs_bucket_zscore 与 LogFloatShares 也是 0 条。16 个种子的骨架逐个对照 members.csv 的全部骨架,没有一个在库里(两个骨架在库里的写法——开盘 / 尾盘 30 分钟份额的标准差、day_skew
+    / day_corr 的标准差——已换掉)。与本批 head 的区别:head 是「成交额水平 × 变动」(与已知族 ρ −0.8),这里的内层都已无量纲,预计与三个 Amt head 的日度秩相关低于 0.5。
+
+    为什么样本外还会在:持有人结构与交易模式慢变,120 日标准差的估计误差约 6%(1/√(2n)),名次几周内稳定,半衰期 20 下换手低,15 bp 吃不掉;机制不依赖某段行情。风险(如实):不稳定性与流动性 / 市值 / 波动相关,尺子去掉线性 / U 形 / S 形暴露,门槛型暴露去不掉;训练段最早约
+    120 日的读数混着上交所 2018-08 以前没有收盘集合竞价的制度差异;如果 train 偏弱、valid 为正,取 min 到不了 0.5。
+
+    数学检查:所有内层量有界或是比值(A ∈ (0, 1];重心 ∈ [0, 1];基尼 ∈ [0, 1];zero_ratio ∈ [0, 1];signed_ratio ∈ [−1, 1];DW(Ret) 在分母 ≤ 1e-8 或日内方差 < 1e-8(冻结日)时给 NaN,Ret
+    的平方和约 1e-5 ~ 1e-3,远大于 1e-8;收盘价 / 加权均价约 1 ± 0.01),cross_stddev 没有除法;cross_corr ∈ [−1, 1],窗口内没有有效对时返回 0 而不是缺失(已知算子行为,只出现在停牌 / 新股窗口);cs_mean
+    是当日全截面均值(只用当日已知收益);day_centroid(pow_2(in_slice(Ret, 1, 240))) 的 Ret² 约 1e-6,只用来算重心(比值),不进相关 / 回归;ts_delay 只向过去移;不用 ts_rank / cross_rank,nanrank_last
+    不适用;热身期最多 120 + 60 日。'
+  inspired_by: B020 批(cross_decay_linear 一族,32 条):过了尺子的全是收盘棒成交额平滑量的标准差,平滑量本身(水平)−3.52、与已知族 ρ 0.95,窗口越长越好(外层 ts_std 20 → 40 → 80:−0.91 → −0.56
+    → −0.39;嵌套头到 −0.07 / valid +0.14),但留下的东西与已知族 ρ 仍 −0.8:变动性胜过水平,却仍带着成交额水平。
+  literature:
+  - title: Trading activity and expected stock returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+    year: '2001'
+    treatment: 成交额 / 换手的变异系数对收益为负且在控制水平之后仍在;这里用无量纲成交额冲击 A 的 120 日标准差及其变体近似
+  - title: 'Unknown unknowns: Uncertainty about risk and stock returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    treatment: 对风险水平的不确定性被定价;这里把「变动的变动」(种子 2)用在成交额冲击上
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 日内时点模式是持久的个股属性;这里用成交 / 方差重心与集中度的 120 日标准差近似其稳定性
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜与日内各自持续;这里用隔夜标准差占两段标准差之和的份额近似
+  - title: 'The information content of stock markets: Why do emerging markets have synchronous stock price movements?'
+    authors: Randall Morck, Bernard Yeung, Wayne Yu
+    year: '2000'
+    treatment: 个股与市场的同步性反映信息环境;这里用同步性(60 日相关)的 120 日标准差近似其变化
+  seeds:
+  - cross_stddev(ts_scale(day_sum(Amt), 30), 120)
+  - cross_stddev(cross_stddev(ts_scale(day_sum(Amt), 30), 10), 120)
+  - sub(cross_stddev(ts_scale(day_sum(Amt), 30), 30), cross_stddev(ts_scale(day_sum(Amt), 30), 241))
+  - cross_stddev(day_centroid(Amt), 120)
+  - cross_stddev(day_centroid(pow_2(in_slice(Ret, 1, 240))), 120)
+  - cross_stddev(day_gini(Amt), 120)
+  - cross_stddev(day_es_ratio_hi(Amt), 120)
+  - div(cross_stddev(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120), add(cross_stddev(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 120), cross_stddev(day_sum(Ret), 120)))
+  - cross_stddev(cross_corr(ts_scale(day_sum(Amt), 30), day_sum(Ret), 60), 120)
+  - cross_stddev(cross_corr(day_sum(Ret), cs_mean(day_sum(Ret)), 60), 120)
+  - cs_bucket_zscore(cross_stddev(day_centroid(Amt), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_stddev(ts_scale(day_sum(Amt), 30), 120), sub(LogFloatCap, LogFloatShares))
+  - cross_stddev(day_zero_ratio(Ret), 120)
+  - cross_stddev(day_signed_ratio(Ret, Amt), 120)
+  - cross_stddev(day_durbin_watson(Ret), 120)
+  - cross_stddev(div(day_close(Close), day_wmean(Close, Amt)), 120)
+R:
+- head: ts_std(day_close(cross_decay_linear(Amt, 30)), 40)
+  why: 烂的部件是「Amt 水平」。day_close(cross_decay_linear(Amt, 30)) 本身 −3.52、与已知族 ρ 0.95;外层 ts_std 把水平乘上变动,ρ 仍是 −0.82,所以即使分数过 0.5,也会被判「与已知族 |ρ| ≥ 0.5
+    不合格」。拆解表:窗口 40 → 80 −0.56 → −0.39(ρ −0.77),20 日 −0.91;Amt 换成 Volume(去掉价位)ρ 降到 0.56,但分数 −1.55。变体不是只换字段,而是把水平除掉:(a) 收盘棒平滑额的标准差除以全天平滑额的标准差(两者带同一个水平,比值无量纲;窗口
+    120 / 241);(b) 对数后取标准差(加 1 防 log(0));(c) Volume 版窗口 120 / 241(看更长窗口能否把 ρ 压到 0.5 以下)。全是有限量,分母是正的标准差(只有全天额在窗口内恒为常数时为 0,停牌股给 NaN / inf 由覆盖率门槛处理),窗口
+    ≤ 241,无前视。
+  variants:
+  - div(ts_std(day_close(cross_decay_linear(Amt, 30)), 120), ts_std(day_sum(cross_decay_linear(Amt, 30)), 120))
+  - div(ts_std(day_close(cross_decay_linear(Amt, 30)), 241), ts_std(day_sum(cross_decay_linear(Amt, 30)), 241))
+  - ts_std(log(add(day_close(cross_decay_linear(Amt, 30)), 1)), 120)
+  - ts_std(day_close(cross_decay_linear(Volume, 30)), 120)
+  - ts_std(day_close(cross_decay_linear(Volume, 30)), 241)
+- head: abs_(ts_std(ts_std(day_close(cross_decay_linear(Amt, 30)), 10), 40))
+  why: 烂的部件同上,是嵌套头里的 Amt 水平:ts_std(day_close(cross_decay_linear(Amt, 30)), 10) 本身 −1.21(ρ −0.82),再套一层 ts_std 并拉长到 80 日才到 −0.07(valid +0.14,ρ −0.77),说明承重的是「水平的波动的波动」。Volume
+    版 ρ −0.57(分数 −1.89,窗口 40)。变体:(a) 收盘棒与全天的嵌套标准差之比(无量纲,窗口 120);(b) Volume 版窗口 120。分母是正的嵌套标准差,窗口 ≤ 120 + 10,无前视。
+  variants:
+  - div(ts_std(ts_std(day_close(cross_decay_linear(Amt, 30)), 10), 120), ts_std(ts_std(day_sum(cross_decay_linear(Amt, 30)), 10), 120))
+  - abs_(ts_std(ts_std(day_close(cross_decay_linear(Volume, 30)), 10), 120))

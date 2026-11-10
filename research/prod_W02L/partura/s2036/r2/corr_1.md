@@ -1,0 +1,46 @@
+# 相关度表:种子 2036,P 组,第 2 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.17 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.07 | 0.47 | 0.07 | 0.03 | 0.43 | 0.44 | `day_quantile_q75(Vwap)` |
+| slot a seed 1 | 过 | 0.12 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.10 | 0.05 | 0.56 | 0.00 | 0.10 | 0.17 | `cs_first_low20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))` |
+| slot a seed 2 | 过 | 0.11 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.06 | 0.05 | 0.18 | 0.57 | 0.01 | 0.07 | `cs_first_low20(cross_mean(day_sum(Ret), 20), day_quantile_q75(Vwap))` |
+| slot a seed 3 | 过 | 0.21 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.17 | 0.09 | 0.28 | 0.12 | 0.12 | 0.06 | `cs_first_low20(cross_mean(day_sum(Ret), 120), day_quantile_q75(Vwap))` |
+| slot a seed 4 | 过 | 0.20 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.09 | 0.48 | 0.11 | 0.04 | 0.49 | 0.34 | `cs_first_low20(cross_mean(day_sum(Amt), 60), day_quantile_q75(Vwap))` |
+| slot a seed 5 | 过 | 0.07 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.07 | 0.09 | 0.13 | 0.01 | 0.07 | 0.18 | `cs_first_low20(ListAge, day_quantile_q75(Vwap))` |
+| slot a seed 6 | 过 | 0.09 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.07 | 0.04 | 0.29 | 0.30 | 0.07 | 0.04 | `cs_first_low20(cross_zscore(day_quantile_q75(Vwap), 241), day_quantile_q75(Vwap))` |
+| slot a seed 7 | 过 | 0.04 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.02 | 0.22 | 0.14 | 0.20 | 0.17 | 0.27 | `cs_first_low40(cross_delta(day_quantile_q75(Vwap), 60), day_quantile_q75(Vwap))` |
+| slot a seed 8 | 过 | 0.24 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.07 | 0.54 | 0.60 | 0.01 | 0.55 | 0.28 | `cs_first_high20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))` |
+| slot a seed 9 | 过 | 0.17 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.12 | 0.05 | 0.58 | 0.01 | 0.00 | 0.37 | `cs_last_high20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))` |
+| slot a seed 10 | 过 | 0.03 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.06 | 0.29 | 0.11 | 0.41 | 0.24 | 0.35 | `cs_last_high40(cross_mean(day_sum(Ret), 20), day_quantile_q75(Vwap))` |
+| slot a seed 11 | 过 | 0.24 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.08 | 0.32 | 0.43 | 0.38 | 0.35 | 0.15 | `sub(cs_rank(day_quantile_q75(Vwap)), cs_rank(cross_mean(day_quantile_q75(Vwap), 241)))` |
+| slot a seed 12 | 过 | 0.07 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.07 | 0.10 | 0.21 | 0.40 | 0.12 | 0.14 | `div(day_quantile_q75(Vwap), cross_max(day_quantile_q75(Vwap), 241))` |
+| slot a seed 13 | 过 | 0.09 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.07 | 0.18 | 0.12 | 0.02 | 0.16 | 0.01 | `cs_bucket_zscore(day_quantile_q75(Vwap), LogFloatCap)` |
+| slot a seed 14 | 过 | 0.03 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.08 | 0.02 | 0.12 | 0.00 | 0.03 | 0.27 | `cs_bucket_demean(day_quantile_q75(Vwap), LogFloatCap)` |
+| slot a seed 15 | 过 | 0.22 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.12 | 0.14 | 0.42 | 0.00 | 0.16 | 0.17 | `cs_first_low20(cross_stddev(day_sum(Ret), 60), day_quantile_q75(Vwap))` |
+| slot a seed 16 | 过 | 0.04 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.01 | 0.10 | 0.06 | 0.10 | 0.08 | 0.10 | `cs_first_low20(cross_corr(day_sum(Ret), day_sum(Amt), 60), day_quantile_q75(Vwap))` |
+| slot b seed 1 | 过 | 0.21 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.07 | 0.37 | 0.07 | 0.15 | 0.39 | 0.26 | `cs_first_low20(cross_mean(day_std(Volume), 60), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 2 | 过 | 0.19 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.09 | 0.10 | 0.16 | 0.40 | 0.11 | 0.03 | `cs_first_low20(cross_mean(day_sum(Ret), 20), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 3 | 过 | 0.18 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.09 | 0.13 | 0.22 | 0.00 | 0.14 | 0.07 | `cs_first_low20(cross_delta(cross_mean(day_sum(Amt), 20), 60), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 4 | 过 | 0.23 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.11 | 0.20 | 0.53 | 0.15 | 0.23 | 0.12 | `cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 5 | 过 | 0.06 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.05 | 0.03 | 0.10 | 0.05 | 0.04 | 0.08 | `cs_first_low40(cross_mean(day_sum(Ret), 5), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 6 | 过 | 0.38 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.26 | 0.25 | 0.32 | 0.16 | 0.24 | 0.15 | `cs_first_low20(cross_stddev(day_sum(Ret), 120), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 7 | 过 | 0.07 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.03 | 0.06 | 0.04 | 0.05 | 0.05 | 0.04 | `cs_first_low20(cross_corr(day_sum(Ret), day_sum(Volume), 60), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 8 | 过 | 0.42 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.21 | 0.70 | 0.15 | 0.21 | 0.68 | 0.40 | `cs_first_low20(cross_mean(day_sum(Amt), 60), div(day_last(Close), cross_max(day_last(Close), 120)))` |
+| slot b seed 9 | 过 | 0.19 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.09 | 0.08 | 0.15 | 0.49 | 0.09 | 0.03 | `cs_first_low20(cross_mean(day_sum(Ret), 20), div(cross_mean(day_last(Close), 20), cross_max(day_last(Close), 241)))` |
+| slot b seed 10 | 过 | 0.02 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.07 | 0.01 | 0.15 | 0.15 | 0.00 | 0.18 | `cs_first_low20(ListAge, div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 11 | 过 | 0.03 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.04 | 0.09 | 0.00 | 0.15 | 0.12 | 0.27 | `cs_first_low20(BoardCode, div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 12 | 过 | 0.08 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.10 | 0.09 | 0.35 | 0.23 | 0.11 | 0.07 | `cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_min(day_last(Close), 241)))` |
+| slot b seed 13 | 过 | 0.06 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.06 | 0.05 | 0.11 | 0.01 | 0.06 | 0.08 | `sub(cs_rank(div(day_last(Close), cross_max(day_last(Close), 241))), cs_rank(cross_mean(day_sum(Ret), 5)))` |
+| slot b seed 14 | 过 | 0.24 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.13 | 0.18 | 0.49 | 0.12 | 0.20 | 0.14 | `cross_mean(cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close), 241))), 20)` |
+| slot b seed 15 | 过 | 0.19 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.08 | 0.28 | 0.71 | 0.22 | 0.32 | 0.01 | `cs_first_high20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| slot b seed 16 | 过 | 0.20 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95,` | 0.05 | 0.14 | 0.30 | 0.71 | 0.17 | 0.09 | `cs_last_low20(cross_mean(day_sum(Ret), 20), div(day_last(Close), cross_max(day_last(Close), 241)))` |
+| R 1 variant 1 | 过 | 0.60 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.49 | 0.25 | 0.08 | 0.04 | 0.25 | 0.02 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 360)` |
+| R 1 variant 2 | 过 | 0.54 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.43 | 0.23 | 0.05 | 0.04 | 0.23 | 0.02 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 480)` |
+| R 1 variant 3 | 过 | 0.66 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.55 | 0.28 | 0.10 | 0.04 | 0.28 | 0.01 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 300)` |
+| R 2 variant 1 | 过 | 0.61 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.50 | 0.25 | 0.07 | 0.04 | 0.25 | 0.01 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 360)` |
+| R 2 variant 2 | 过 | 0.54 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.44 | 0.23 | 0.05 | 0.03 | 0.23 | 0.01 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 480)` |
+| R 2 variant 3 | 过 | 0.66 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.56 | 0.28 | 0.10 | 0.04 | 0.28 | 0.00 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 300)` |
+| R 2 variant 4 | 过 | 0.85 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, ` | 0.79 | 0.35 | 0.16 | 0.03 | 0.35 | 0.04 | `cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 180)` |

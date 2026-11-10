@@ -1,0 +1,118 @@
+seed: 2012
+round: 2
+slots:
+- type: E
+  core: inv(ListAge)
+  hypothesis: '事实(来自快照与流水线代码,不是推测):(1) 141 个已评分候选里含 inv(ListAge) 的 15 个,均值 -1.78 对 -2.76(p < 0.001);本流第 1 轮 N 位的前 5 名(-0.97 ~ -1.11)全是 mul(inv(ListAge), X),X 换成 ts_quantile_q75(day_sum(Ret), 30) / cs_winsor(day_es_ratio_hi(Open)) / day_es_ratio_hi(Close) / ts_rank(cross_stddev(LogTotalCap, 15), 1) 分数几乎不变,而且五个的方向(missions_before 里的 sign)全是 -1。(2) ListAge 的定义(dailyfields._list_age):从首个生命周期日起算的交易日数;2018-01-02 已经在市的股票统一加 10000 的哨兵,所以它们的 ListAge 彼此相同(逐日并列,按列序打破),只有 2018 年以后上市的股票有区分度。(1)(2)合起来读:X 恒正时,mul(inv(ListAge), X) 在老股票(并列块)上是 c*X(c 约 1e-4),在新股票上是 X/age(大得多),方向 -1 取最小的一端,即「老股票在前、按 X 升序」。所以 inv(ListAge) 在这里起的是成熟度闸(把 2018 年后上市的新股挡在多头书之外),不是在挑新股;X 是什么几乎无关(四个不同的 X 在同一档)。读到的现象:去掉新股这块垃圾尾部,不含该子树的候选均值 -2.76,含它的最好一批升到 -1.0,而且这个位置的候选两段都还是负的,说明闸有用但闸之后的排序没有 alpha 或被换手吃掉。
+
+
+    假设:闸还有可挖的地方。(a) 闸的宽度与别的垃圾标记叠加是否更好;(b) 闸之后的排序变量 Y 现在是日度噪声大的量(day_es_ratio_hi 每天都变),换手吃掉分数,换成 20 ~ 60 日的慢聚合应当更好;(c) 在成熟股票内部哪一类 Y 有 alpha:反彩票 / 尾部形状、名义价位、限售比例、隔夜 - 日内结构。
+
+
+    算子怎样实现:核心 inv(ListAge) 在每个种子里原样出现,作为 cs_last_high{10,20,40}(Y, inv(ListAge)) 的闸变量(把最新上市的 10 / 20 / 40% —— 按整块并列 —— 压到所有名字之下,其余保持 Y 的顺序;每个名字仍有有限值,书仍对整个市场计量),或作为 mul(inv(ListAge), X) 的因子。A 组 5 个:闸 x 慢的反彩票 / 尾部形状 Y(Y 取 neg,使 +1 = 成熟股票在前且 Y 高):60 日或 20 日平均的 day_es_ratio_hi(Open) / (Close)(每日 cs_winsor 先截尾)、60 日 q75 的日收益、右尾加左尾的 es 比(价格路径的偏度)。B 组 4 个:Y 固定为 A 组第 1 个,在年龄闸里再套一个别的垃圾标记,每个只加一个,用来读每个标记的边际:冻结报价 cross_max(day_zero_ratio(Ret), 15)(流水线自己的「冻结」标记,最高 20%)、名义价位最低 10%(sub(LogFloatCap, LogFloatShares) 约等于 log 价格,面值退市区的垃圾)、限售比例最高 10%(sub(LogTotalCap, LogFloatCap),解禁供给)、BSE(LimitWidth 最高并列块)。C 组 2 个:乘积形,方向留给书(-1 = 老股票按 X 升序在前),X 换成 60 日慢聚合。D 组 4 个:换 Y 为隔夜 - 日内差(与 N 位的统计量相同,这里加年龄闸,N 位不加,两位的差就是闸的 A/B)和名义价位;方向不知道的 Y 两个方向各给一个(闸会让 -1 方向的书变成新股在前,所以不能靠书翻号)。
+
+
+    为什么和已见过的不同:已见过的含该核心的候选,外围全是 mul(inv(ListAge), 单个分钟统计量)(ts_quantile_q75 / cs_winsor / day_es_ratio_hi / ts_rank / cross_stddev),Y 全是日度噪声量。这里用的 cs_last_*(库 5583 条里 0 条用过,Partura 后加的算子)、cross_mean 的 20 ~ 60 日慢聚合、日频字段叶子 LogFloatCap / LogTotalCap / LogFloatShares / LimitWidth(库里 0 条用过)和第二个垃圾标记,都是已见过的外围里没有的。与 6 个 head 的日度秩 |ρ| 预计很低:heads 全是 φ = day_ar1_coefficient 的平滑 / 分位,种子里没有 φ。与 5 个控制:Y 是尾部形状 / 价位 / 隔夜 - 日内,不是它们的水平;年龄闸把一批名字整体压低,与流动性 / 市值控制的相关也低。
+
+
+    为什么样本外还会在:新股的垃圾尾部是制度结构:一字板连续涨停之后的回落、上市首年的散户投机、限售股解禁(Field-Hanka 2001)、IPO 的长期弱势(Ritter 1991),不依赖某一段行情;闸变量和日频字段几乎不动,Y 取 20 ~ 60 日聚合以后也慢,换手很低,15 bp 成本占比小。诚实预期:闸的收益在快照里已经拿到了(-2.7 到 -1.0),这个位要检验的是剩下的 1.5 个点里有多少来自「慢」和「更多垃圾标记」,出 head(>= 0.5)的概率很低(约 3%),更可能的结果是分数在 -0.8 到 -0.3 之间,各标记的边际读数是主要产出。
+
+
+    数学检查:inv(ListAge) 在上市首日(ListAge = 0)是 +inf,每只新股一天:cs_last_* 内部用 isfinite 判断,把它当缺失,cs_rank 把它排在最前(与「最新」一致),它当天也没有可买的下一日标签,一只股票一天不能支配横截面。哨兵造成的并列块在 cs_last_* 里按整块处理(不是列序打破);mul 形种子里老股票取值差异极小但有序,秩保序,量级 1e-4,没有下溢。day_es_ratio_hi / lo 在分位数近 0 或没有分钟超过分位时给 NaN(算子文档),cross_mean 只对有限值取平均;cs_winsor 每天按 1% / 99% 截断;day_zero_ratio 在 [0, 1];LimitWidth 只取 0.1 / 0.2 / 0.3;LimitWidth 最高的那块并列(BSE)若在某一天不足 5% 才会进带,不足或不存在时带为空,不是错误。无前视:ListAge 与日频字段都只含当日及以前,窗口因果(最长 60 日),t 日信号 t + 1 交易。'
+  seeds:
+  - cs_last_high40(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60)), inv(ListAge))
+  - cs_last_high20(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 20)), inv(ListAge))
+  - cs_last_high10(neg(cross_mean(cs_winsor(day_es_ratio_hi(Close)), 60)), inv(ListAge))
+  - cs_last_high40(neg(ts_quantile_q75(day_sum(Ret), 60)), inv(ListAge))
+  - cs_last_high40(neg(cross_mean(cs_winsor(add(day_es_ratio_hi(Open), day_es_ratio_lo(Open))), 60)), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60)), cross_max(day_zero_ratio(Ret), 15)), inv(ListAge))
+  - cs_last_high40(cs_last_low10(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60)), sub(LogFloatCap, LogFloatShares)), inv(ListAge))
+  - cs_last_high40(cs_last_high10(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60)), sub(LogTotalCap, LogFloatCap)), inv(ListAge))
+  - cs_last_high40(cs_last_high05(neg(cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60)), LimitWidth), inv(ListAge))
+  - mul(inv(ListAge), cross_mean(cs_winsor(day_es_ratio_hi(Open)), 60))
+  - mul(inv(ListAge), ts_quantile_q75(day_sum(Ret), 60))
+  - cs_last_high40(sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 60), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 60)), inv(ListAge))
+  - cs_last_high40(neg(sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 60), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 60))), inv(ListAge))
+  - cs_last_high40(sub(LogFloatCap, LogFloatShares), inv(ListAge))
+  - cs_last_high40(neg(sub(LogFloatCap, LogFloatShares)), inv(ListAge))
+  literature:
+  - title: The expiration of IPO share lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: '2001'
+    treatment: 解禁前后的超额收益为负;这里用限售比例 sub(LogTotalCap, LogFloatCap) 与年龄闸近似解禁供给
+  - title: The long-run performance of initial public offerings
+    authors: Jay R. Ritter
+    year: '1991'
+    treatment: IPO 之后的长期弱势;这里用 inv(ListAge) 的成熟度闸把新股挡在多头书外
+  - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    treatment: 彩票型(极端上涨)股票未来收益低;这里用 day_es_ratio_hi 的 20 ~ 60 日均值的反号近似反彩票
+- type: N
+  hypothesis: '机制:A 股的价格形成分两段。隔夜(昨收 -> 今开)由开盘集合竞价、夜间累积的消息和机构 / 算法在开盘前后的指令决定;日内(开盘 -> 收盘)是连续竞价,散户成交占大头。两段的预期收益符号相反而且各自持续(Lou-Polk-Skouras 2019 的 tug of war;Berkman 等 2012:被关注的股票在开盘被散户买进,隔夜强、日内弱;Hendershott 等 2020:隔夜与日内补偿的是不同的风险 / 参与者),French-Roll 1986 说日内方差里有一大块是交易噪声而不是信息。一只票的「隔夜 - 日内」差、日内对隔夜缺口的反应方向、隔夜方差占总方差的比例,是它的参与者结构(机构 / 知情 vs 散户 / 噪声)和信息到达方式的慢变特征,不是行情水平。
+
+
+    算子怎样实现:ON = sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1) 是隔夜收益,ID = sub(div(day_last(Close), day_open(Open)), 1) 是日内收益(价格是后复权,除权日连续)。统计量全部在日轴上用 60 ~ 120 日窗口:1、2、13、14 号是「隔夜均值 - 日内均值」(1、2 用每日 cs_winsor 截尾后的均值,13 号只用符号,14 号用中位数,三种对一字板 / 极端缺口的敏感度不同);3、4 号是两段各自的均值;5 号 cross_regbeta(ON, ID, 120) 是日内收益对隔夜缺口的斜率(负 = 缺口当天被回补,正 = 延续);6 号是两段符号同向的天数比;7 号是隔夜标准差占「隔夜 + 日内」标准差之和的比例(French-Roll 的方差比,是比值,与总波动的相关预计较低);8 号是缺口绝对值占该板涨跌停幅度(LimitWidth)的平均比例,把创业板 / 科创板 / 北交所的缺口量纲统一;9、15 号对板块(BoardCode)或名义价位(sub(LogFloatCap, LogFloatShares))的十分位去均值,去掉板块 / 价位档带来的整体差;10 号是「近 20 日的隔夜 - 日内差」对自己 120 日常态的 z 分数(变化量);11、12 号是「昨天的日内收益」与「今天的隔夜缺口」的相关 / 斜率(隔夜是否反转昨天的日内行情,散户日内过度反应、机构隔夜纠正的指纹)。方向都不预设,由书按 train 选。
+
+
+    为什么和已有的不同:库 5583 条里没有隔夜 / 日内拆分(按 day_open 与 ts_delay 同现搜过,只有 2 条且无关);快照里的 6 个 head 是 φ(分钟成交量 / 成交价的 AR(1) 斜率)的水平平滑;5 个控制是流动性、波动、20 日总收益反转、成交额离散度、市值的水平量,两个冠军是分钟微观结构的合成。ON - ID 与总收益 ON + ID 近似正交(只在两段的横截面离散度不等时才有相关,而日内均值的离散度更大,所以它偏向负的总收益,会被 20 日反转控制吃掉一部分,残差里留下的是拆分本身),方差占比是比值,与总波动的相关预计较低。用到的 LimitWidth / BoardCode / 名义价位是日频字段叶子,库里 0 条用过。
+
+
+    为什么样本外还会在:来源是参与者结构(机构 / 算法 vs 散户)与信息到达方式,是慢变的结构特征,不依赖某一段行情;窗口 60 ~ 120 日,秩的名次保持几周到几个月,换手低,15 bp 成本下可承受。诚实预期:快照里所有分数 > -1.5 的候选都是慢的,这一位的所有种子也是慢的,所以成本不是主要失败方式;主要风险是:(a) 拆分与 20 日反转控制相关(预计 0.3 ~ 0.6,没有到 0.8),残差后信号弱;(b) 隔夜均值里混着一字板 / 次新股连续涨停的缺口(cs_winsor 与符号版本部分缓解,E 位的年龄闸是对照);(c) 这个 A 股样本里隔夜 / 日内的符号可能在 train 与 valid 之间翻转,min 取小会把它压成负。出 head 的概率约 5%,最可能的形态是 7 号(方差占比)或 11 / 12 号(隔夜纠正日内),因为它们不含收益水平。
+
+
+    数学检查:ON、ID 是价格比,价格恒正,停牌日 day_open / day_last 为 NaN,不填充;上市首日 ts_delay 为 NaN,所以 ON 缺失,不会把首日的 +44% 当缺口;涨停连板的缺口 ON = 涨停幅度、ID = 0 是真实值,不是数值问题,cs_winsor 与符号版本限制它的影响。cross_regbeta / cross_corr 只在窗口内有足够有限值且解释变量方差为正时出值,否则 NaN;7 号分母是两个标准差之和,只有两个都为 0 时才是 NaN(那时已经是停牌);LimitWidth 恒正(0.1 / 0.2 / 0.3);BoardCode 的十分位按序数秩切(整块并列按列序打破,即每个板块内部再按交易所列序分段),是任意但确定的分段,只用来去均值。无前视:t 日的 ON 用 t 日开盘和 t - 1 日收盘,ID 用 t 日开盘和收盘,窗口因果(最长 120 日),t 日信号 t + 1 交易。'
+  inspired_by: B035 批(ts_quantile_q75(day_ar1_coefficient(·), 40 ~ 50))的拆解:最好的成员是价格对象 φ(Vwap)(valid -0.80,窗口 20 / 40 / 80 的 valid 为 -0.98 / -0.80 / -0.47,越慢越好),成交量对象 φ(Volume) 最好 -1.99;共性表里富集的子树都是价格 / 收益的日度摘要(ts_delay(day_sum(Ret), 1) +0.49、ts_quantile_q75(day_sum(Ret), 30) +0.32、day_es_ratio_hi(Open) +1.07),不是成交量对象;第 1 轮的教训:凡是 > -1.5 的候选都是慢的(窗口长 / 日频字段),分数主要由换手决定。所以第 2 轮转向「价格路径的慢变结构」,而隔夜 vs 日内是价格路径最直接的一刀。
+  literature:
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜与日内收益各自持续且符号相反;这里用 60 ~ 120 日的隔夜均值 - 日内均值(及符号 / 中位数版本)近似
+  - title: 'Paying attention: Overnight returns and the hidden cost of buying at the open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jordan Zhang
+    year: '2012'
+    treatment: 被关注的股票开盘被散户买入,隔夜强、日内弱;这里用日内对隔夜缺口的斜率 / 反转昨日日内的相关近似
+  - title: 'Stock return variances: The arrival of information and the reaction of traders'
+    authors: Kenneth R. French, Richard Roll
+    year: '1986'
+    treatment: 日内方差含大量交易噪声;这里用隔夜标准差占两段标准差之和的比例近似信息 / 噪声结构
+  - title: 'Asset pricing: A tale of night and day'
+    authors: Terrence Hendershott, Dmitry Livdan, Dominik Rosch
+    year: '2020'
+    treatment: 隔夜与日内收益对应不同风险 / 参与者;这里用两段分开的 60 ~ 120 日均值与其差近似
+  seeds:
+  - sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 60), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 60))
+  - sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 120), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 120))
+  - cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 120)
+  - cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 120)
+  - cross_regbeta(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_open(Open)), 1), 120)
+  - cross_mean(mul(sign(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), sign(sub(div(day_last(Close), day_open(Open)), 1))), 120)
+  - div(cross_stddev(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120), add(cross_stddev(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120), cross_stddev(sub(div(day_last(Close), day_open(Open)), 1), 120)))
+  - cross_mean(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth), 120)
+  - cs_bucket_demean(sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 60), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 60)), BoardCode)
+  - cross_zscore(sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 20), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 20)), 120)
+  - cross_corr(ts_delay(sub(div(day_last(Close), day_open(Open)), 1), 1), sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_regbeta(ts_delay(sub(div(day_last(Close), day_open(Open)), 1), 1), sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120)
+  - sub(cross_mean(sign(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 120), cross_mean(sign(sub(div(day_last(Close), day_open(Open)), 1)), 120))
+  - sub(cross_med(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120), cross_med(sub(div(day_last(Close), day_open(Open)), 1), 120))
+  - cs_bucket_demean(sub(cross_mean(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 120), cross_mean(cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 120)), sub(LogFloatCap, LogFloatShares))
+R:
+- head: ts_quantile_q75(day_ar1_coefficient(Vwap), 40)
+  why: 烂的部件有两处,依据都在拆解表里:(1) 窗口:q75 的窗口 20 / 40 / 80 的 valid 是 -0.98 / -0.80 / -0.47,train 在 40 最好(-1.69),说明窗口越长越慢越好,成本(换手)吃掉的分数没有被窗口 40 拿回来;(2) 输入:φ 单独是 -3.09,q75 之后 -1.69,Vwap 换 Close 是 -2.57,说明价格对象有信息,但 φ 是对「价格水平」做 AR(1),开盘 / 收盘集合竞价附近的跳变和名义价位(最小变动价位占比)会把它拉向噪声。变体:窗口 120;去掉首尾 20 / 30 分钟(in_slice)再做 AR(1);对板块(BoardCode)或名义价位十分位去均值;价格持续性减成交量持续性;中位数代替 q75。每个变体只改一处,分数变化直接归到该处。
+  variants:
+  - ts_quantile_q75(day_ar1_coefficient(Vwap), 120)
+  - ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 20, 220)), 40)
+  - ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 120)
+  - cs_bucket_demean(ts_quantile_q75(day_ar1_coefficient(Vwap), 40), BoardCode)
+  - cs_bucket_demean(ts_quantile_q75(day_ar1_coefficient(Vwap), 120), sub(LogFloatCap, LogFloatShares))
+  - ts_quantile_q75(sub(day_ar1_coefficient(Vwap), day_ar1_coefficient(Volume)), 40)
+  - ts_quantile_q50(day_ar1_coefficient(Vwap), 120)
+- head: ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 50), 50)
+  why: 烂的部件是外层窗口太短:拆解里外层 q75 的窗口 25 / 50 / 100 是 -1.77 / -1.80 / -1.36(train -1.21),越长越好;内层 q75(φ(Volume), 50) 已经是 -2.02,第二层的作用是进一步降换手。变体把外层窗口加长到 150,并把内层也加长到 100,看慢到什么程度还有收益。
+  variants:
+  - ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 50), 150)
+  - ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 100), 150)
+- head: ts_quantile_q75(day_ar1_coefficient(Volume), 50)
+  why: 烂的部件是窗口:拆解里窗口 25 / 50 / 100 是 -2.57 / -1.99 / -1.65,单调越长越好(与 head 2 同一现象),变体直接把窗口拉到 150,检验单调性有没有拐点。
+  variants:
+  - ts_quantile_q75(day_ar1_coefficient(Volume), 150)

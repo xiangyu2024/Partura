@@ -1,0 +1,108 @@
+seed: 2008
+round: 1
+slots:
+  - type: E
+    core: 'day_durbin_watson(Vwap)'
+    hypothesis: >-
+      核心 day_durbin_watson(Vwap):未去均值的 Durbin-Watson = Σ(ΔVwap)²/ΣVwap²,即当天 241 根分钟 VWAP 路径的相对已实现方差
+      (价格尺度在分子分母里约掉;分钟 VWAP 的 tick 量化与买卖价弹跳会抬高它),每天一个值。本批 18 个候选和 3 个素材 head 全都只读它的「水平」
+      (log、ts_sum 10、两三层 cross_fangzheng、241 日窗口);新尺子去掉波动、流动性、20 日反转、Amt 离散度、市值和两个冠军之后,水平版全是负分(−1.35 ~ −2.59),
+      因为水平就是波动,已被控制吃掉。批内证据说明承重的不是水平:head3 拆掉内层 cross_fangzheng(= 10 日 mean + std,混进了水平)后从 −2.59 升到 −1.69(+0.91),
+      剩下的就是 ts_std(log DW, 40);窗口 20 / 80 的 train / valid 互相翻转(−1.60/−2.11 对 −0.63/−2.30),说明 40 日窗口读的是噪声;head1 把窗口拉到 241 是批里最好(−1.35)。
+      我的信念:这个状态变量里被控制吃掉的是水平,可能还剩 alpha 的是它的「时间序列形状」和「与别的日频量的协动」。
+      本位的外围就是读这条路径的形状:(1) 偏度 / 上冲下落的不对称(ts_skew、cross_semistd_pos 减 cross_semistd_neg;spike 型对平稳型);
+      (2) 持续性(cross_autocorr:噪声底型是个股的持久属性,信息冲击型是瞬时的,两者的定价不同);
+      (3) 相对自己一年常态的偏离(cross_ema 快慢差)与相对变异(cross_stddev ÷ cross_mean,即单位波动的波动率的波动);
+      (4) 与别的日频量的协动:与 log 成交额的相关 / F 值(信息驱动的粗糙 = 量价同动,噪声驱动的粗糙 = 量价脱钩)、与日内收益的相关(杠杆)、与 |隔夜跳空| 的相关(新闻到达 vs 盘中噪声);
+      (5) 同市值同伴内的相对位置(cs_bucket_demean / cs_bucket_zscore,用 LogFloatCap 分桶;控制只扣加性的 1~3 次秩多项式,同伴内相对量是交互项,不在扣除范围),
+      以及一个只在小市值尾部做 / 一个排除上市最短 10% 的变体。
+      与库的区别:库里 341 条含 day_durbin_watson 的表达式几乎都是用 log / ts_sum / cross_fangzheng / sigmoid / pow_3 / ts_min / cross_max 这类「水平型」算子包它;
+      只有个别随机长出来的深层嵌套(不到 4%)把 DW 塞进 cross_corr / ts_regbeta 里,且没有一条是以 Vwap 路径的偏度 / 持续性 / 与成交额或跳空的协动为主体,
+      也没有 ts_skew、cross_autocorr、cross_reg_fvalue、cross_semistd_*、cs_bucket_* 作用在它上面(已逐条核对骨架:seeds 的骨架都不在两个库的 5583 条里);
+      外围算子集合也全部不同于已见的 {cross_fangzheng, ts_sum, log, ts_std}。
+      样本外还会在的理由:形状与协动量是无量纲的比较,不随波动水平漂移;持续性、同伴内相对位置是个股的慢属性(窗口 60~241 日,换手低,15 bp 成本友好);
+      对应的文献机制在 2023-08 以前:风险不确定性(vol-of-vol)溢价(Baltussen、van Bekkum、Van der Grient,JFE 2018)、混合分布假说下的量价协动(Clark 1973;Tauchen-Pitts 1983)、
+      波动率的杠杆与不对称。预期多数 seeds 与三个素材 head 的 |ρ| 低于 0.7(形状量与水平量的截面相关通常 0.2~0.5)。
+    seeds:
+      - 'ts_skew(log(day_durbin_watson(Vwap)), 120)'
+      - 'sub(cross_semistd_pos(day_durbin_watson(Vwap), 120), cross_semistd_neg(day_durbin_watson(Vwap), 120))'
+      - 'cross_autocorr(log(day_durbin_watson(Vwap)), 120, 1)'
+      - 'cross_autocorr(cross_ema(log(day_durbin_watson(Vwap)), 3), 241, 10)'
+      - 'sub(cross_ema(log(day_durbin_watson(Vwap)), 5), cross_ema(log(day_durbin_watson(Vwap)), 120))'
+      - 'div(cross_stddev(day_durbin_watson(Vwap), 120), cross_mean(day_durbin_watson(Vwap), 120))'
+      - 'cross_hurst(log(day_durbin_watson(Vwap)), 120)'
+      - 'cross_corr(day_durbin_watson(Vwap), day_sum(Ret), 120)'
+      - 'cross_corr(day_durbin_watson(Vwap), log(day_sum(Amt)), 120)'
+      - 'cross_reg_fvalue(log(day_sum(Amt)), log(day_durbin_watson(Vwap)), 120)'
+      - 'cross_corr(day_durbin_watson(Vwap), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 120)'
+      - 'cs_bucket_demean(cross_mean(log(day_durbin_watson(Vwap)), 120), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_stddev(log(day_durbin_watson(Vwap)), 120), LogFloatCap)'
+      - 'cs_first_low20(cross_autocorr(log(day_durbin_watson(Vwap)), 120, 1), LogFloatCap)'
+      - 'cs_last_low10(ts_skew(log(day_durbin_watson(Vwap)), 120), ListAge)'
+      - 'ts_kurt(log(day_durbin_watson(Vwap)), 241)'
+  - type: N
+    hypothesis: >-
+      想法:分钟价格路径的粗糙度 = 扩散(真实波动,已被波动控制与冠军吃掉)+ 微观结构噪声(买卖价弹跳、tick 量化,噪声底约与 (tick / 名义价格)² 成正比)。
+      噪声占比与名义股价是个股的慢属性,刻画的是「散户主导、最小变动价位占价格比重大、难以套利」,而不是波动:
+      (a) 弹跳强度 = DW(Close) 对 DW(Vwap) 的比(取 log 相减):分钟 Close 是该分钟最后一笔,在买卖价之间跳;分钟 Vwap 把该分钟内的成交平均掉,
+      所以两条路径共享同一个扩散方差,比值里波动约掉,只剩噪声占比;另一个口径是 5 分钟变化的方差对 1 分钟变化方差的比(方差比,<1 即反转型噪声);
+      (b) 名义股价 = LogFloatCap − LogFloatShares(流通市值 ÷ 流通股本;立方体里 Close / Vwap 是后复权价,无法给出名义价格,这两个日频叶子是唯一来源;两个库一个都没用过日频叶子);
+      (c) 两者的交互:相对价格隐含的噪声底的「超额粗糙」(cs_regres / cs_bucket_demean)、在最低价 10% 之外做弹跳强度(低价尾部是面值退市线附近的垃圾股)、
+      每只股票自己的「粗糙度对价格的弹性」(cross_corr / cross_regbeta:价格下跌时粗糙度是否抬高,抬高 = tick 噪声底支配)。
+      灵感来自本批现象:在 B022 里 Vwap→Close 互换对 head1 几乎无影响(−1.35→−1.48),对 head3 变差(−2.59→−3.40);含 Volume 版 DW 的候选均值比含 Vwap 版的低 0.5(不显著),
+      说明 DW(Vwap) 读到的不只是波动,价格路径本身的特性在起作用;DW 作用在 Close 与 Vwap 两条路径上的差,就是在把「波动」与「弹跳 / tick 噪声」分开。
+      与库的区别:库里 day_durbin_watson 要么单独作用于一条价格 / 量路径(Close / Open 版共 71 条,都是水平型用法),要么外面套水平型算子,
+      没有一条把两条价格路径的 DW 相减或相除(仅有 ret 版与成交量版相加的 6 条);
+      两个库一条日频叶子都没用过,所以没有任何表达式含 LogFloatCap − LogFloatShares;方差比 div(day_var(in_delta(Vwap,5)), day_var(in_delta(Vwap,1))) 的骨架也不在库里(已逐条核对,seeds 骨架全部不在 5583 条里)。
+      与控制的关系:弹跳强度里波动约掉,所以不是波动控制;我预期名义股价与市值控制的秩相关在 0.3~0.5(未核实),和流动性 / 反转 / Amt 离散度更远;预期各控制的 |ρ| 全部低于 0.8。
+      样本外还会在的理由:tick 大小是交易所规则(0.01 元固定),噪声占比 / 名义价格是由规则决定的慢变量,不靠某段行情;低价股的彩票偏好与散户占比是 A 股的结构性事实
+      (名义价格错觉:Birru-Wang 2016 在美股,A 股低价股同理),弹跳强度对应有效价差的成本溢价(Amihud-Mendelson 1986;Roll 1984),均早于 2023-08。
+      这些量变化慢(60~241 日窗口或日频叶子本身),换手低,15 bp 成本下仍可交易。
+    inspired_by: 'B022:head1 / head3 中 Vwap→Close 互换的得失不一致(−1.35→−1.48;−2.59→−3.40);含 Vwap 版 DW 的候选略好于含 Volume 版(−3.0 对 −3.8 左右,不显著);最稳的部分是慢速的窗口 / 离散度而不是水平'
+    seeds:
+      - 'cross_mean(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 60)'
+      - 'cross_mean(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 241)'
+      - 'cross_ema(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 40)'
+      - 'cross_mean(sub(log(day_durbin_watson(Open)), log(day_durbin_watson(Vwap))), 120)'
+      - 'cross_mean(div(day_durbin_watson(Close), day_durbin_watson(Vwap)), 120)'
+      - 'cross_mean(div(day_var(in_delta(Vwap, 5)), day_var(in_delta(Vwap, 1))), 120)'
+      - 'sub(LogFloatShares, LogFloatCap)'
+      - 'cs_regres(cross_mean(log(day_durbin_watson(Vwap)), 120), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_demean(cross_mean(log(day_durbin_watson(Vwap)), 120), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_regres(sub(LogFloatShares, LogFloatCap), cross_mean(log(day_durbin_watson(Vwap)), 120))'
+      - 'cs_last_low10(cross_mean(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 120), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 120), LogFloatCap)'
+      - 'cross_corr(sub(LogFloatCap, LogFloatShares), log(day_durbin_watson(Vwap)), 241)'
+      - 'cross_regbeta(log(day_durbin_watson(Vwap)), sub(LogFloatCap, LogFloatShares), 241)'
+      - 'cs_first_low20(cross_mean(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 120), LogFloatCap)'
+      - 'cross_mean(sub(log(day_var(in_delta(Vwap, 5))), log(day_var(in_delta(Vwap, 1)))), 120)'
+R:
+  - head: 'ts_std(cross_fangzheng(log(day_durbin_watson(Vwap)), 10), 40)'
+    why: >-
+      烂部件 = 内层 cross_fangzheng(·, 10)(10 日 mean + std,把水平混了进来)和不稳的 40 日窗口。loc 拆解:拆掉内层后 −2.59 → −1.69(+0.91);
+      窗口 20 / 80 的 train / valid 互相翻转(40 日读到的是噪声)。变体:拆内层并拉长窗口(40 / 120 / 241),用 EMA(5) 平滑代替 fangzheng,
+      以及 loc 已评分的三个邻居(窗口 20 / 80;去掉 log)。
+    variants:
+      - 'ts_std(log(day_durbin_watson(Vwap)), 40)'
+      - 'ts_std(log(day_durbin_watson(Vwap)), 120)'
+      - 'ts_std(log(day_durbin_watson(Vwap)), 241)'
+      - 'ts_std(cross_ema(log(day_durbin_watson(Vwap)), 5), 120)'
+      - 'ts_std(cross_fangzheng(log(day_durbin_watson(Vwap)), 10), 20)'
+      - 'ts_std(cross_fangzheng(log(day_durbin_watson(Vwap)), 10), 80)'
+  - head: 'cross_fangzheng(cross_fangzheng(ts_sum(log(day_durbin_watson(Vwap)), 10), 10), 241)'
+    why: >-
+      cross_fangzheng = mean + std,把「水平」和「离散度」加在一起;loc 拆解:拆掉内层 fangzheng 几乎无损(−1.35 → −1.40),只有最外层 241 日窗口承重(120 / 482 都差 0.6~0.7)。
+      变体把 241 日窗口里的 mean 与 std 分开,看承重的是哪一半。
+    variants:
+      - 'cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 241)'
+      - 'cross_mean(ts_sum(log(day_durbin_watson(Vwap)), 10), 241)'
+      - 'cross_stddev(log(day_durbin_watson(Vwap)), 241)'
+  - head: 'div(cross_hurst(ts_sum(log(day_durbin_watson(Vwap)), 10), 30), add(day_hurst(nt_ts_quantile_q75(High, 30)), pow_2(cs_sum(day_autocorr_n1(Amt)))))'
+    why: >-
+      烂部件:(1) 分母含环境已禁用的 nt_ts_quantile_q75,且 pow_2(cs_sum(...)) 是每天全市场同一个常数(拆掉 −0.02,惰性);
+      (2) 分子里的 ts_sum 10(拆掉后整条从 −2.50 升到 −2.12)。只留分子并去掉 ts_sum,拉长 Hurst 窗口(loc:窗口 15 / 60 均差于 30 但 train / valid 互换,不稳)。
+    variants:
+      - 'cross_hurst(log(day_durbin_watson(Vwap)), 30)'
+      - 'cross_hurst(log(day_durbin_watson(Vwap)), 60)'
+      - 'cross_hurst(log(day_durbin_watson(Vwap)), 120)'
+      - 'div(cross_hurst(log(day_durbin_watson(Vwap)), 60), day_hurst(Vwap))'

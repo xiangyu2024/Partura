@@ -1,0 +1,44 @@
+# 相关度表:种子 2021,P 组,第 1 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.61 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.72 | 0.46 | 0.01 | 0.07 | 0.42 | 0.42 | `day_max(High)` |
+| slot a seed 1 | 过 | 0.24 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.06 | 0.32 | 0.34 | 0.45 | 0.33 | 0.19 | `div(day_max(High), cross_mean(day_max(High), 241))` |
+| slot a seed 2 | 过 | 0.12 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.06 | 0.13 | 0.10 | 0.43 | 0.14 | 0.24 | `div(day_max(High), cross_max(day_max(High), 241))` |
+| slot a seed 3 | 过 | 0.24 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.09 | 0.30 | 0.33 | 0.46 | 0.31 | 0.19 | `div(sub(day_max(High), cross_min(day_min(Low), 241)), sub(cross_max(day_max(High), 241), cross_min(day_min(Low), 241)))` |
+| slot a seed 4 | 过 | 0.17 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.06 | 0.15 | 0.30 | 0.75 | 0.18 | 0.07 | `cross_zscore(day_max(High), 60)` |
+| slot a seed 5 | 过 | 0.25 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.05 | 0.33 | 0.38 | 0.49 | 0.35 | 0.15 | `cross_zscore(day_max(High), 241)` |
+| slot a seed 6 | 过 | 0.26 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.07 | 0.34 | 0.38 | 0.41 | 0.36 | 0.18 | `div(cross_ema(day_max(High), 5), cross_ema(day_max(High), 60))` |
+| slot a seed 7 | 废品 | 0.30 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.06 | 0.38 | 0.31 | 0.24 | 0.38 | 0.22 | `div(sub(day_max(High), cross_delay(day_max(High), 241)), cross_mean(day_max(High), 241))` |
+| slot a seed 8 | 过 | 0.40 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.49 | 0.19 | 0.01 | 0.02 | 0.20 | 0.45 | `sub(log(day_max(High)), sub(LogFloatCap, LogFloatShares))` |
+| slot a seed 9 | 过 | 0.18 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.48 | 0.04 | 0.03 | 0.02 | 0.02 | 0.01 | `cs_bucket_demean(sub(log(day_max(High)), sub(LogFloatCap, LogFloatShares)), LogFloatCap)` |
+| slot a seed 10 | 过 | 0.41 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.69 | 0.25 | 0.07 | 0.05 | 0.22 | 0.05 | `cs_bucket_demean(log(day_max(High)), LogFloatCap)` |
+| slot a seed 11 | 过 | 0.37 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.67 | 0.23 | 0.07 | 0.05 | 0.20 | 0.01 | `cs_bucket_rank(day_max(High), LogFloatCap)` |
+| slot a seed 12 | 过 | 0.12 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.09 | 0.12 | 0.14 | 0.08 | 0.13 | 0.16 | `cross_corr(day_max(High), day_sum(Amt), 60)` |
+| slot a seed 13 | 过 | 0.05 | `ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)` | 0.02 | 0.02 | 0.00 | 0.04 | 0.01 | 0.05 | `cross_hurst(day_max(High), 60)` |
+| slot a seed 14 | 过 | 0.26 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.05 | 0.32 | 0.23 | 0.04 | 0.31 | 0.17 | `sub(div(day_max(High), cross_mean(day_max(High), 60)), div(day_max(High), cross_mean(day_max(High), 241)))` |
+| slot b seed 1 | 过 | 0.17 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.05 | 0.17 | 0.29 | 0.55 | 0.19 | 0.00 | `sub(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 20), ts_sum(sub(div(day_last(Close), day_first(Open)), 1), 20))` |
+| slot b seed 2 | 过 | 0.13 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.07 | 0.15 | 0.21 | 0.26 | 0.17 | 0.05 | `sub(ts_med(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40), ts_med(sub(div(day_last(Close), day_first(Open)), 1), 40))` |
+| slot b seed 3 | 过 | 0.17 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.03 | 0.18 | 0.05 | 0.01 | 0.17 | 0.13 | `ts_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 50)` |
+| slot b seed 4 | 过 | 0.16 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.03 | 0.17 | 0.04 | 0.01 | 0.15 | 0.12 | `ts_regbeta(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40)` |
+| slot b seed 5 | 过 | 0.06 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.03 | 0.08 | 0.06 | 0.01 | 0.12 | 0.00 | `div(ts_std(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), add(ts_std(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), ts_std(sub(div(day_last(Close), day_first(Open)), 1), 30)))` |
+| slot b seed 6 | 过 | 0.14 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.06 | 0.18 | 0.24 | 0.20 | 0.19 | 0.02 | `cs_regres(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 20), ts_sum(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20))` |
+| slot b seed 7 | 过 | 0.09 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.08 | 0.11 | 0.11 | 0.14 | 0.11 | 0.10 | `ts_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50)` |
+| slot b seed 8 | 过 | 0.29 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.04 | 0.43 | 0.45 | 0.04 | 0.45 | 0.06 | `ts_quantile_q25(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50)` |
+| slot b seed 9 | 废品 | 0.12 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.03 | 0.14 | 0.00 | 0.04 | 0.13 | 0.06 | `ts_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), sign(sub(div(day_last(Close), day_first(Open)), 1))), 30)` |
+| slot b seed 10 | 废品 | 0.06 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.02 | 0.01 | 0.12 | 0.47 | 0.03 | 0.01 | `ts_mean(sub(day_argmin(Low), day_argmax(High)), 20)` |
+| slot b seed 11 | 过 | 0.05 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.01 | 0.04 | 0.03 | 0.01 | 0.03 | 0.03 | `ts_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(day_argmin(Low), day_argmax(High)), 30)` |
+| slot b seed 12 | 过 | 0.07 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.08 | 0.10 | 0.09 | 0.16 | 0.09 | 0.10 | `cs_regres(ts_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50), ts_mean(sub(div(day_last(Close), day_first(Open)), 1), 50))` |
+| slot b seed 13 | 过 | 0.06 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.08 | 0.09 | 0.08 | 0.16 | 0.09 | 0.06 | `div(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), ts_sum(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 30))` |
+| R 1 variant 1 | 过 | 0.69 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.27 | 0.68 | 0.39 | 0.20 | 0.68 | 0.32 | `add(cs_rank(div(day_argmin(Amt), day_max(High))), cs_rank(cross_max(day_cov(Close, Close), 15)))` |
+| R 1 variant 2 | 过 | 0.72 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.51 | 0.64 | 0.28 | 0.15 | 0.65 | 0.51 | `add(cs_rank(div(day_argmin(Amt), div(day_sum(Amt), day_sum(Volume)))), cs_rank(cross_max(day_cov(Close, Close), 15)))` |
+| R 1 variant 3 | 过 | 0.85 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.86 | 0.21 | 0.15 | 0.06 | 0.22 | 0.04 | `div(day_argmin(Amt), day_max(High))` |
+| R 1 variant 4 | 过 | 0.68 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.64 | 0.64 | 0.29 | 0.08 | 0.64 | 0.41 | `add(div(cross_mean(day_argmin(Amt), 20), day_max(High)), cross_max(day_cov(Close, Close), 15))` |
+| R 1 variant 5 | 过 | 0.30 | `add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(` | 0.31 | 0.22 | 0.54 | 0.14 | 0.26 | 0.17 | `add(cs_rank(inv(day_max(High))), cs_rank(cross_max(day_cov(Close, Close), 15)))` |
+| R 1 variant 6 | 过 | 0.25 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.10 | 0.37 | 0.58 | 0.23 | 0.39 | 0.06 | `cross_max(div(day_cov(Close, Close), pow_2(day_max(High))), 15)` |
+| R 2 variant 1 | 过 | 0.88 | `ts_quantile_q75(ts_quantile_q75(pow_1_5(add(add(day_open(Clo` | 0.44 | 0.89 | 0.16 | 0.02 | 0.86 | 0.63 | `ts_quantile_q75(ts_mean(day_argmin(Amt), 20), 5)` |
+| R 2 variant 2 | 过 | 0.98 | `ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)` | 0.98 | 0.28 | 0.04 | 0.05 | 0.27 | 0.28 | `ts_quantile_q75(ts_std(day_argmin(Amt), 20), 5)` |
+| R 2 variant 3 | 过 | 0.87 | `ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)` | 0.96 | 0.05 | 0.04 | 0.07 | 0.05 | 0.01 | `cs_bucket_demean(ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5), LogFloatCap)` |
+| R 2 variant 4 | 过 | 0.81 | `ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)` | 0.95 | 0.05 | 0.11 | 0.12 | 0.03 | 0.09 | `cs_bucket_demean(ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5), day_sum(Amt))` |

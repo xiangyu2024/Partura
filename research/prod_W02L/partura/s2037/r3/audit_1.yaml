@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 3, 4, 7, 8, 13]
+    reasons: '创新度 3。核心 S = energy_ratio_topm_minus_q(delete_open_close(Volume),50,5,False) 是快照里 cross_stddev(S,150) 等 head 的子树,本身过控制门槛(liq 0.55、known 0.50、size 0.40)。自动划掉的 5 个:种子 1、2、3、4、13 与 head cross_corr(S,day_sum(Amt),60) 的原始 |ρ| 分别为 0.91、0.80、0.92、0.92、0.85,都 ≥0.7。其中 cross_reg_tvalue(种子 3)在固定样本数下是 cross_corr 的单调变换(t = r·sqrt(df/(1-r²))),截面秩与 cross_corr 相同,所以「放大高协动票」的说法在排序上不成立;cross_regbeta(种子 1、2)是 r·sd(被解释量)/sd(解释量) 的形式,|ρ| 0.91 与之一致。两个数学划掉:种子 7、8 是 cross_semistd_pos/neg 作用在符号可正可负的 cross_corr 上,内部做 log(x/prev) 且只保留正正相邻日(dt 源码 _semistd),覆盖率只有 0.877(gate False),近零分母产生爆点,属于 §4 的定义坏掉。剩下 8 个:种子 5(cross_cov 原始成交额量纲,|ρ| 0.63)、6(cross_regalpha,0.53,liq 0.73)、9(两个 corr 的乘积,0.29)、10(与 day_sum(Vwap) 协动,0.55)、11(残差化 day_std(Ret) 后协动,0.65)、12(0.56)、14(EMA 后协动,0.58)、15(EMA 后协动,0.64)与 head 的 |ρ| 在 0.3 到 0.65 之间,不是同一个量。14、15 只是对两条序列先做 EMA 再求相关,和 head 的差异主要是平滑,这部分创新度只到中等,整体仍给 3。核对中发现计划的一处误述:cross_regbeta 的分母是第一个参数(这里是 Amt)的 60 日方差,不是 S 的方差,「S 整段不动时返回 NaN」的说法也应改为 Amt 方差不足时才 NaN;对 log(Amt) 的种子影响不大,对原始 Amt 的种子则截距与斜率都依赖成交额的元量纲。种子 6 的 cross_regalpha 在原始成交额量纲下,截距 = mean(S) − beta·mean(Amt),其中 beta·mean(Amt) 近似 r·sd(S)·mean(Amt)/sd(Amt),即成交额变异系数的倒数,所以它主要读的是成交额稳定性(liq |ρ| 0.73,接近 0.8 的门槛),「截距」只是外推的说法。这不是数学问题,保留但要知道它的 alpha 可能落在流动性一侧。数学上核心与保留种子都是有界或分母有正下界的量(energy_ratio 分母 +1e-12,cross_corr 有界,rolling_ols 分母 var>EPS),没有前视。如果它有 alpha,最可能来自成交团块与活跃度在 60 到 120 日尺度上的协动(参与者构成、拆单方式这类慢变量),其次是与成交额稳定性(种子 6)或价格水平(种子 10)的耦合。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5]
+    reasons: '创新度 4。快照里 day_argmax 的三个 head 分别是 ts_sum(day_argmax(Volume),50)(score −1.64)、neg(ts_var(abs_(day_argmax(Ret)),40))(−2.09)、cross_cov(day_var(Low),day_argmax(Close),60)(−2.32),它们都是 argmax 的单变量写法或只与 Close 配对。本位把 argmax 与 S(Volume/High/Low/Amt)、与 day_sum(Amt)、与其他 argmax 做 60 日协动,相关度表里除种子 5 外原始 |ρ| 全部 ≤0.38、残差 ≤0.32,控制 |ρ| 全部 ≤0.31。种子 5 即 cross_corr(day_var(Low),S(Volume),60),原始 |ρ| 0.73,按自动规则划掉。受启发来源 B111 本次没有在快照里核对到,不影响打分。数学核对:day_argmax 在整行 NaN 时返回 NaN,全 0 行返回 0(取首个最大值,dt_day.py),两者都有限;cross_corr 有界;cross_regbeta 分母是解释量 argmax 的 60 日方差,argmax 整段不变时为 NaN,不是爆点;热身期为 NaN;只用当日及以前的分钟数据,无前视。两处需要记下但不构成挡的理由:(1) 计划说停牌日 argmax 取 0,这只在停牌分钟是 0 填充时成立,若是 NaN 填充则为 NaN,本次没能核对数据约定。如果是 0 填充,停牌日 S 也会同时为 0(0/1e-12),停牌段会拉高 Volume 类种子(1、7、8、10、11、12)的相关。不过这些种子与 liq 控制的 |ρ| 只有 0.03 到 0.20,说明停牌效应没有主导,因此不划,但建议 PI 核对。(2) 种子 6、14 的 day_var(Low) = day_std(Low)^2 是原始价格的方差,量纲是价格的平方,截面排序会偏向高价股,而价格水平不在 5 个控制里。快照里的 cross_cov(day_var(Low),day_argmax(Close),60) 已经有同样的问题,不算数学问题。如果它有 alpha,最可能来自日内极值时点与成交团块、成交额在 60 日尺度上的协动(开盘集中的信息冲击与尾盘集中的再平衡比例随活跃度变化),其次是价格水平的耦合(种子 6、14)。'
+R:
+  - head: 'cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), day_sum(Amt), 60)'
+    soundness: 4
+    reasons: '合理度 4。8 个变体只改谱参数(m 30/80、q 6/8/12)、窗口(75)、规模侧(day_sum(Amt) 换成 day_sum(delete_open_close(Volume)),或对 LogFloatCap 做 60 日回归残差)。数学上 energy_ratio 在 m>q 时有界,cross_corr 有界,cross_regres 取末日残差,没有爆点、没有前视。与原 head 的原始 |ρ| 为 0.69 到 0.99,残差 |ρ| 0.65 到 0.98;与控制的 |ρ| 多数 ≤0.35(变体 6 liq 0.22、变体 7 liq 0.19、变体 5 liq 0.29)。这是对谱参数与窗口平台的稳健性检验,机制与原 head 是同一条线(成交团块与成交额协动),变体只检验它是否依赖具体参数,不是数学问题。LogFloatCap 残差化把市值从规模侧剥掉,机制清楚。'
+summary: '总体放行。slot a 创新 3、合理 4,自动划掉 1、2、3、4、13(与 head 原始 |ρ| ≥0.7)和 7、8(semistd 作用在符号可正可负的相关序列上,覆盖率 0.877,数学问题),剩 8 个种子;slot b 创新 4、合理 4,划掉种子 5(|ρ| 0.73),剩 13 个种子;R 组合理 4。计划中两处需要 PI 更正或核对:regbeta 分母写成了 S 的方差(实际是解释量 Amt 的方差),以及停牌日 day_argmax 取 0 的前提(需核对数据是 0 填充还是 NaN 填充)。'

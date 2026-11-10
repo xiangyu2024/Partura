@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: '新颖度 4：核心 |φ| 与快照三个 head 同源，但 16 个种子的外围结构是新的。种子 1–6、8–10、12 与三个 head 的原始 |ρ| 在 0.01–0.16 之间；种子 7（0.32）、11（0.40）、16（0.47）是 |φ| 的残差或水平差；13–15 是分桶去均值，原始 |ρ| 为 0.44–0.67，与 head 同原料但去掉了水平。与五个控制的最高值：种子 14 的流动性 0.74、种子 15 的流动性 0.65，未达 0.8。核心本身：与 head 原始 |ρ| 0.667、残差 0.906，与 liq 0.504、known 0.51、vol 0.26、rev 0.246、size 0.142，全部低于 0.8，满足 E 位门槛；核心是 head 1、2、3 的子树；16 个种子都原样含核心；外围（cross_*、cs_mean、sub、cs_bucket_demean 等）与 B037 的 9 个候选（外围含 ts_min / sigmoid / ts_decay_linear）都不相同。合理度 4：算子逐个核对。pow_05 是符号根，pow_2 是普通平方，pow_2(pow_05(x)) 确为 |x|。cross_regbeta(x,y,d) 是 rolling_ols 的 y 对 x 的 beta（y = alpha + beta*x），所以种子 1–6 的 cross_regbeta(cs_mean(C), C, d) 是股票 C 对全市场均值的滚动暴露，方向正确；分母是市场均值的方差，不随个股爆点。cross_regres 取的是 C 对市场的残差。cs_rank 经 rank() 把缺失保持为 NaN，不触发 nanrank_last 的 0 陷阱；窗口只用当日及以前的数据，无前视。种子 9 划掉，理由是数学问题：cross_semistd_pos/neg（ops_ext.py:751 的 _semistd）的域是正数序列，其 ok 条件 (x>0)&(prev>0) 作用在可正可负的回归残差上，只保留两日残差都为正的样本，log(x/prev) 在 prev 接近零时爆点，平方和被这些日子主导（prev 只要是残差尺度的 5%，单个 log 项的平方约为 9，典型 g² 在 0.1 量级），这是 §4 的「除以近零的量造成的爆点支配了截面」。种子 9 与三个 head 与五个控制的 |ρ| 全部在 0.02 以下，与纯噪声一致。其余 15 个保留；种子 1–3 是同一 beta 的三个窗口，不同量，保留。不挡的注意点：M_t = cs_mean(|φ|) 是原始均值而非名次，|φ| 的日内 spike 会让 M_t 有噪声，但不是爆点；|φ| 是原始分钟成交的 AR(1)，含日内 U 型，「流动性」标签偏松。如果这个位有 alpha，最可能来自：股票对全市场日内成交形态（U 型、尾盘集中度）的共同暴露，即 Chordia 等 2000 与 Pástor-Stambaugh 2003 那类共性风险。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '新颖度 4：16 个种子是 cs_rank 的成交量名次与波动 / 收益名次在 60–120 日窗口上的耦合（相关、beta、t 值、残差、自相关、不对称之差），与三个 head 的原始 |ρ| 为 0.01–0.30（最高 seed 1 的 0.298、seed 10 的 0.271），与五个控制最高 0.32（seed 11 与流动性）。head 都是 |φ| 的水平外壳，这一组是协动量，本质不同。notebook 说库内类似结构多为 3–20 日的手写式与价格类，我没有在库中逐条核对，以 notebook 为依据。合理度 4：机制清楚（混合分布假说、追涨与注意力的量价不对称、Llorente 等 2002 的跨期量价），算子核对无误：cross_corr 与 cross_regbeta 的分母都有 EPS 保护，相关是有界量；cross_regres(volRank, stdRetRank, 60) 确为「波动名次中成交量解释不了的残差」，与 notebook 描述一致；cross_delay 只取滞后一日；cross_zscore（ops_ext.py:208）的分母有 sd 下限保护；cs_rank 保留 NaN；day_sum、day_gini 在空日返回 NaN，停牌票不会得到有限的零名次。无前视。不划种子：16 个都能对应 idea 的四组之一，没有数学问题；seed 2 与 seed 10 是同一个回归的 beta 与 t 值，seed 1 与 seed 2 是同一对变量的相关与 beta，它们可能高度相关，但不是同一个量，保留。三处解读注意，不挡：（1）seed 7、8 的 cross_regbeta(乘积, 当日收益) 是 Llorente 的 c 的单变量近似，没有 r_{t-1} 的斜率项，估出的是 b 与 c 的混合，notebook 写「估这个 c」不准确；（2）day_sum(Ret) 是分钟 Ret 的和，notebook 称之为「日收益」，它不含隔夜跳空（合成数据里 Ret 定义为 close/open-1），解读时要写清；（3）各控制的相关都低于 0.33，说明这组不是水平代理。如果这个位有 alpha，最可能来自：成交量与波动 / 收益的协动度（投资者构成与信息交易占比的慢变指纹），或追涨不对称（seed 15：corr(vol,ret) 减 corr(vol,|ret|)）。'
+R:
+  - head: 'ts_min(cs_rank(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume)))))), 5)'
+    soundness: 4
+    reasons: '合理度 4：head 1 是 ts_min(cs_rank(sigmoid(sqrt|φ|)), 5)，12 个变体每个只换一处。变体 1–10 把 cs_rank 换成 cs_bucket_demean，分桶键依次为成交额 20 日均值、流通市值、20 日波动、30 日成交额波动、上市年龄，窗口 5 或 50；变体 11–12 换成对全市场 cs_mean 的 60 日回归残差，窗口 5 或 50。算子核对：cs_bucket_demean(y,x)（Partura-prod/partura/ops_ext.py:463）是 y 减去 x 同一十分位内的均值，只减不除，桶内不足 2 只为 NaN，没有爆点；cross_regres(cs_mean(sig), sig, 60) 的残差没有 log 与除法；ts_min 是日轴上的 nanmin，忽略缺失。上市年龄的哨兵值 10000 造成大量并列，按列序打破，§4 明确不算问题。无前视。变体与原 head 的原始 |ρ| 为 0.46–0.99，变体 1、3、5、7、9 在 0.85 以上，这正是替换判定预期的情形（ρ ≥ 0.5 才替换），不是挡理由。如果它有 alpha，最可能来自：去掉截面水平（流动性、规模、成交额、上市年龄）之后，|φ| 的慢变部分；窗口 50 的变体最能检验这一点。'
+summary: '槽 a 通过（新颖 4、合理 4，划掉种子 9，余 15 个，唯一的数学问题是种子 9 的半方差算子，对残差取 log 比值且 prev 接近零时爆点）；槽 b 通过（新颖 4、合理 4，无划掉，三处解读注意不挡）；R 组合理 4 保留。'

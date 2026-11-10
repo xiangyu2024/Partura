@@ -1,0 +1,57 @@
+seed: 2006
+round: 3
+slots:
+- type: E
+  core: cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60)
+  hypothesis: 2 个 head 的拆解给了一个没被用过的线索:M3 批里最像 head 的是 cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241)(含它的 9 个候选均分 -0.47,不含 -2.65,p<0.001;单独 +0.14,valid +0.89),它是日内分钟成交额方差 day_cov(Amt, Amt) 取 3 日最大再取 241 日「均值 + 标准差」,近似 = 成交额的名义水平 × 集中度。M3 的 heads(得分 ~0,valid +0.8~+0.9)的得分几乎都来自它;而把它往外再包一层「标准差的标准差」时单独得分最高:cross_stddev(ts_stddev(L, 5), 60) = +0.33(train +0.33 / valid +1.14),比含它的 head 本身还好,说明承重的是 L 的「波动的波动」(去掉外层 ts_std 反而 +0.41)。核心取这个已被证明能单独存活的子树 C = cross_stddev(ts_stddev(L,5),60)。快照里含 C 的外围只有 ts_std(·,50) 与 ts_std 链(都是继续做时间标准差);本位的外围完全不同,做的是「去掉大小、只留不稳定度」:(1) 同伴内标准化:cs_bucket_zscore(C, LogFloatCap / 对数名义价格 sub(LogFloatCap, LogFloatShares) / 已知族 K30 / 嵌套两层)。本种子的 head 1 在 W=200 时从 -0.21 到 +0.03 靠的就是再套一层 LogFloatCap 分桶,说明新尺子里残余的失败来自「市值 / 成交额水平非线性暴露」,分桶比尺子的三次多项式去除得更彻底;(2) 去水平:div(C, L)(不稳定度相对自己的水平 = 变异系数)、cs_regres(cs_rank(C), cs_rank(L)) 取对水平回归后的残差、div(C, cross_mean(day_cov(Amt, Amt), 241)) 用均值去尺度;(3) 时间形态:减 120 日均值(不稳定度在加剧还是缓和)、cross_med、cross_ema / cross_mean 平滑;(4) 取 log 再分桶(分桶 zscore
+    不是秩变换,对重尾敏感,log 改变桶内形状)。为什么不是库里已有的:库里 5583 条的骨架都没有 cs_bucket_* 与日频叶子,也没有 div(·, 自己的水平) 或 cs_regres 去水平的版本;外围算子集合 {cs_bucket_zscore, cs_bucket_rank, div, cs_regres, cs_rank, cross_ema, cross_med, log, 日频叶子} 与已见写法 {ts_std} 完全不同。机制与样本外:日内分钟成交额的分布形状(方差)随 241 日的起伏,读的是「交易是否受注意力冲击 / 题材脉冲驱动」:成交额忽大忽小的票是散户 / 题材型,在 A 股做多头腿时这类票的容量与被追逐程度随时间波动,持续的高不稳定度意味着长期被炒作、估值被推高后续收益偏低(彩票偏好 / 注意力的持久属性,Barber-Odean、Bali-Cakici-Whitelaw 的 MAX / 彩票效应的成交额版本);分母慢变量使换手低,15bp 成本吃不掉。风险:train 一直是瓶颈(M3 的 head train ~0 / valid +0.9),可能有体制依赖;分桶键如果与 C 本身高度同源,残差会很小。数学检查:无前视(窗口只向后);cross_max 的窗口 3 与 cross_fangzheng 241 日窗口前 240 天不满,引擎按已有天数计算,头一年是热身噪声但不是爆点;div(C, L) 中 L 为 241 日均值 + 标准差,停牌票全缺失时为 NaN 而不是近零;div 的分母 cross_mean(day_cov(Amt, Amt), 241) 同理。cs_regres 先取 cs_rank,无爆点。
+  seeds:
+  - cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), cross_mean(day_std(Amt), 30)), LogFloatCap)
+  - div(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241))
+  - cross_ema(cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), LogFloatCap), 20)
+  - cs_regres(cs_rank(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60)), cs_rank(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241)))
+  - sub(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), cross_mean(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), 120))
+  - cross_mean(cs_bucket_zscore(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), LogFloatCap), 20)
+  - cs_bucket_zscore(log(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60)), LogFloatCap)
+  - cs_bucket_zscore(div(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), cross_mean(day_cov(Amt, Amt), 241)), LogFloatCap)
+  - cs_bucket_zscore(cross_med(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), 60), LogFloatCap)
+  - cs_bucket_rank(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60), sub(LogFloatCap, LogFloatShares))
+- type: N
+  hypothesis: 批里的现象(M3 + 共性表):day_cov(Amt, Amt) 子树在 11 个含它的候选里均分 -0.70 对 -2.68(+1.98,p<0.001),说明「日内分钟成交额的离散度」这个读数有 alpha;但它的原始写法是方差 = 成交额水平² × 集中度²,水平部分正是新尺子要扣掉的流动性 / 市值暴露,heads 能到 ~0 是因为多层时间聚合把水平慢变量的影响稀释,train 仍然差。新想法:把「水平」与「形状」拆开,只读形状:变异系数 CV = day_std(Amt) / day_mean(Amt) 与 CV² = day_cov(Amt, Amt) / 均值²(无量纲,日内成交额有多集中在少数几分钟 = 脉冲交易 / 算法拆单程度的代理),再用不同的无量纲形状量:峰均比 day_max(Amt) / day_mean(Amt)、分钟成交额一阶自相关 day_autocorr_n1(Amt)(成交的持续性 / 拆单)、CV(Amt) 减 CV(Volume)(差别 = 价格分钟间变化与成交量的交互,即成交价位的离散)、CV 的 120 日波动、20 日对 241 日的变化、日内 CV 与量价协方差归一(第 1 轮 R 已有无量纲 P,这里放进分桶)。所有形状量先在 120 ~ 241 日取慢统计量(cross_mean / cross_fangzheng / cross_stddev / cross_max),再在 LogFloatCap(日频叶子)/ 对数名义价格 / 已知族 K30 的十分位内标准化,最后个别再嵌套一层市值分桶。为什么和库里不同:库里 5583 条表达式里没有任何一条把 day_cov / day_std 除以 day_mean 的均值去尺度(全部是原始方差、协方差),没有 cs_bucket_*,没有日频叶子;所以这是库里没有的「去水平、只读形状」。分母用 add(day_mean(Amt), 1) 避免停牌日 0/0(成交额的单位是元,+1 可忽略)。与 M3 head 的区别:M3 head 是 3 日最大方差的 241 日 mean+std(随水平变),这里是 CV(无量纲,与水平正交),日度秩相关预期 < 0.5。机制:脉冲式成交(集中在少数分钟)的票是散户 / 题材 / 事件驱动,慢变量读的是这类票的持续属性;已知长周期换手与彩票
+    / 注意力效应(Baker-Wurgler 情绪型股票)会让这类票的多头腿净超额偏低或偏高,持续在样本外。风险:去掉水平后可能没有 alpha(第 1 轮 R:除以自己的收盘棒均额 -3.14,说明在那个对象上水平承重),这是本位要检验的:若形状版明显差于 M3 水平版,说明 M3 的 alpha 在水平上、与新尺子扣掉的重合。数学检查:无前视;分母 +1 防 0;CV 在分钟全缺失的日子为 NaN(cross_mean 忽略);窗口不满头一年为热身噪声;CV² 值域可达几十但不是 inf,排序不被爆点支配(分桶 z 分数在重尾时桶内由极端值主导,已在 R 里的类似写法对 sqrt / log 不敏感,所以不另处理)。
+  inspired_by: M3 批共性表里的 day_cov(Amt, Amt)(日内成交额离散度,+1.98,p<0.001)与 cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241) 一族 heads;把其中的水平与形状拆开,只读形状
+  seeds:
+  - cs_bucket_zscore(cross_mean(div(day_cov(Amt, Amt), mul(add(day_mean(Amt), 1), add(day_mean(Amt), 1))), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_fangzheng(div(day_std(Amt), add(day_mean(Amt), 1)), 241), LogFloatCap)
+  - cs_bucket_zscore(cross_stddev(div(day_std(Amt), add(day_mean(Amt), 1)), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(div(day_max(Amt), add(day_mean(Amt), 1)), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_autocorr_n1(Amt), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(sub(div(day_std(Amt), add(day_mean(Amt), 1)), div(day_std(Volume), add(day_mean(Volume), 1))), 120), LogFloatCap)
+  - cs_bucket_zscore(sub(cross_mean(div(day_std(Amt), add(day_mean(Amt), 1)), 20), cross_mean(div(day_std(Amt), add(day_mean(Amt), 1)), 241)), LogFloatCap)
+  - cs_bucket_zscore(cross_max(div(day_std(Amt), add(day_mean(Amt), 1)), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(div(day_std(Amt), add(day_mean(Amt), 1)), 120), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_mean(div(day_std(Amt), add(day_mean(Amt), 1)), 120), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cs_bucket_zscore(cross_mean(div(day_std(Amt), add(day_mean(Amt), 1)), 120), cross_mean(day_std(Amt), 30)), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Amt, Open), mul(add(day_mean(Amt), 1), add(day_mean(Open), 1))), 120), LogFloatCap)
+R:
+- head: sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatCap))
+  why: 拆解里 ts_regres 窗口 200→400 增益 +0.29(+0.33,valid +1.55),R 前一轮 W=400 在 K30 单层分桶上也是最好(-0.12,ρ_head 0.58);外层 LogFloatCap 分桶使 -0.21→+0.03,说明还有「水平暴露」的残余。本组沿两条线再改:(a)窗口 300/400 配合双层分桶;(b)第二层键换成对数名义价格 / ListAge / LogFloatShares / BoardCode / LogTotalCap,或加第三层;(c)sqrt 压缩重尾、Open→Close。不改核心部件承重的 abs_ 与 ts_regres(去掉它们 -2.0~-2.5)。
+  variants:
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 400)), cross_mean(day_std(Amt), 30)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 300)), cross_mean(day_std(Amt), 30)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 400)), cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogFloatShares)))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), sub(LogFloatCap, LogFloatShares)))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), ListAge))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatShares))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), day_std(Amt)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 400)), day_std(Amt)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), LogFloatCap), cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatCap), ListAge))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatCap), sub(LogFloatCap, LogFloatShares)))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(sqrt(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 400))), cross_mean(day_std(Amt), 30)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Close), day_last(Amt), 400)), cross_mean(day_std(Amt), 30)), LogFloatCap))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), BoardCode))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogTotalCap))

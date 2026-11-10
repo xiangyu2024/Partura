@@ -1,0 +1,115 @@
+seed: 2004
+round: 1
+slots:
+  - type: E
+    core: 'day_cov(Ret, Volume)'
+    hypothesis: |-
+      机制(推断,标明哪些没在数据上逐项量过)。核心 C = day_cov(Ret, Volume) = 当天 241 根分钟里 Ret 与 Volume 的协方差 Σ(R−R̄)(V−V̄)/241。
+      两件已知的事实(Partura 以前的 F106 实测):第一根分钟的 Ret 在 100% 的股票-日上恰好为 0(不含隔夜跳空),每个有值的股票-日都是 241 根有效分钟。
+      一件 A 股常识(本机没有重新量):第一根(开盘集合竞价)和最后一根(收盘集合竞价)的成交量是普通分钟的十几倍。三者合起来的推断:
+      协方差的求和里,最后一根的 (R_last−R̄)(V_last−V̄) 一项大约是其余 239 根噪声项总和的几倍,开盘那一项只是 −R̄(V0−V̄)(很小)——
+      所以 C 主要读的是「收盘集合竞价那一分钟的涨跌 × 那一分钟的放量」,即**尾盘集合竞价的推价方向与力度**,而不是通常说的「量价同步的连续竞价订单流」。
+      这也解释了本批的现象:富集表里含 C 的 7 个候选均值差 +1.16(p 0.002);同批里含 C 的成员大多是 C 的**慢速时间序列统计**(ts_skew / ts_max / ts_pearson / ts_med,窗口 40),快照 head 是 ts_skew(C, 40)、拆解里窗口 80 最好——
+      罕见的大幅尾盘推价日才是信息,不是每天的水平。N 位用去掉两根集合竞价的版本直接检验这个推断,这一位在 C 本身上深挖。
+
+      为什么它可能是 alpha 的来源:尾盘集合竞价的推价有明确的行为主体——游资拉尾盘 / 砸盘、指数与 ETF 申赎、机构收盘价考核。哪些股票经常被推、往哪边推、推完第二天开盘怎么走(被隔夜回吐=做价型 / 流动性型;被确认=信息型),
+      是个股的**慢变量**(几十天内相当稳定),和事件本身的方向无关。这个慢变量在做多十分位上有选股意义的理由:被反复做价的票次日隔夜回吐、长期成本高;而「推价后第二天跳空确认」的票是有真实买盘的票。
+
+      这一位要试的外围(和快照里见过的写法很不一样:快照里 C 只被一个单一的时间序列统计量处理——ts_skew / ts_max / ts_pearson / ts_med / ts_quantile——而且都保留着 C 的水平,
+      C ∝ 波动 × 量能离散度,这一部分正好是新尺子要扣掉的流动性 / 波动控制,所以头部分数全是负的):
+      (a) **去水平**——cross_zscore(C, 60) 把每只票换成「相对自己 60 天的异常」,再 cross_ema 半衰期 20–30 天累积;C ÷ day_mean(Volume) 去掉量能水平(单位变成收益);
+      「净 / 总」比 cross_mean(C,20) ÷ cross_mean(|C|,120) 只留方向占比。
+      (b) **关系型**(W01 里样本内最好的一类结构是两个日度量的 60 日滚动关系,窗口长所以换手低、对水平型控制先天近似正交):cross_corr(C, 隔夜跳空)、cross_corr(昨天的 C, 今天的隔夜跳空)
+      (「尾盘推价是否被第二天开盘回吐」的个股倾向,负 = 回吐型,正 = 确认型)、C 与昨日日内收益 / 当日成交额 / 当日波动的 60 日相关。全部无量纲。
+      (c) **横截面处理**:价格桶内去均值(sub(LogFloatCap, LogFloatShares) = log 名义价,前提是「流通市值 = 流通股本 × 价」;这个前提没有在本机验证,只作分桶变量);
+      低流通股本优先 cs_first_low40;cs_mask_top_replace_mean / _neg(长仓十分位避开最极端 10% 的封板 / 做价型名字,方向未知所以两个符号各一条);对近 20 日收益做秩回归取残差(去掉与反转控制的重叠);
+      C 与趋势位置的符号交互(sign(cross_zscore(day_last(Close), 60)):量价背离 vs 量价确认)。
+      (d) **尾部不对称**:对 C 的 120 日 z 分数取 60 日上四分位尾部均值 + 下四分位尾部均值(正 = 大额正向推价日比大额反向日更极端)——是快照头部 ts_skew 的另一种读法(尾部均值,不是三阶矩;窗口也不同),不是同一个统计量。
+      (e) **状态**:cs_flip_by_state(·, day_sum(Amt)) 让符号随市场成交额所处位置翻转(热市 / 冷市里尾盘推价的含义可能相反)。
+
+      和库不同:库里 5583 条表达式没有 cross_zscore / cross_ema / cs_bucket_* / cs_first_* / cs_flip_by_state,没有日频字段叶子;
+      本计划 16 个种子的算子骨架与 5583 条库骨架逐条比对(skeleton_key,与 members.csv 同规则)全部不重复。与三个 head 的区别:head 是原始 C 或价格×C 的单一统计量,这里全部是去水平后的相对量或关系量。
+      为什么样本外还会在:慢(半衰期 20–60 天,换手低)、无量纲(去掉水平,而水平正是被控制扣掉的那一块)、依赖的是尾盘集合竞价的制度和参与者结构而不是某段行情。
+      已知风险:训练段 2018 年 8 月前沪市(约)没有收盘集合竞价(最后一根不是竞价),训练段头几个月机制略不同;方向和半衰期由 train 定,valid 可能反过来——所以 mask 条目两个符号都给。
+    seeds:
+      - 'cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 30)'
+      - 'cross_mean(div(day_cov(Ret, Volume), day_mean(Volume)), 40)'
+      - 'cross_corr(ts_delay(day_cov(Ret, Volume), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(day_cov(Ret, Volume), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(day_cov(Ret, Volume), ts_delay(day_sum(Ret), 1), 60)'
+      - 'cross_corr(day_cov(Ret, Volume), day_sum(Amt), 60)'
+      - 'cross_corr(day_cov(Ret, Volume), day_std(Ret), 60)'
+      - 'cross_mean(cs_bucket_demean(div(day_cov(Ret, Volume), mul(day_std(Ret), day_std(Volume))), sub(LogFloatCap, LogFloatShares)), 60)'
+      - 'cs_first_low40(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 20), LogFloatShares)'
+      - 'cs_mask_top_replace_mean(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 30))'
+      - 'cs_mask_top_replace_mean_neg(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 30))'
+      - 'mul(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 20), sign(cross_zscore(day_last(Close), 60)))'
+      - 'cs_regres(cs_rank(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 30)), cs_rank(cross_mean(day_sum(Ret), 20)))'
+      - 'div(cross_mean(day_cov(Ret, Volume), 20), cross_mean(abs_(day_cov(Ret, Volume)), 120))'
+      - 'cs_flip_by_state(cross_ema(cross_zscore(day_cov(Ret, Volume), 60), 20), day_sum(Amt))'
+      - 'add(cross_tail_mean_q75(cross_zscore(day_cov(Ret, Volume), 120), 60), cross_tail_mean_q25(cross_zscore(day_cov(Ret, Volume), 120), 60))'
+  - type: N
+    hypothesis: |-
+      新 idea:把「连续竞价里的订单流方向」和「收盘集合竞价那一下」拆开读,再读订单流方向的**持续性**。
+      现象来源(本批 B010,58 条 day_cov 家族):批里的成员全是 day_cov(Ret, Volume) / day_cov(Volume, Volume) 一类的全天协方差。
+      推断(与 E 位同一条,本机没有逐项量过):第一根的 Ret 恒为 0、第一根和最后一根是集合竞价、成交量是普通分钟的十几倍,所以这些全天协方差几乎只读到两根集合竞价,
+      其余 239 根连续竞价分钟里的量价方向被它们盖住了。微观结构文献里最该有信息的恰恰是连续竞价里的有符号订单流:机构大单被拆成许多小单,
+      有符号成交量因此在时间上自相关(个股层面表现为「某只票的买卖方向在连续几天里持续」);噪声交易者没有这种持续性。本批没有任何成员单独读过这一块。
+
+      算子怎么实现:in_slice(x, 1, 239) 取下标 1..239(去掉第 0 根与最后一根,下标闭区间,已按 AlphaCube 源码核对),在切片上用无量纲的 day_corr(Ret, Volume)(量价相关)、day_signed_ratio(Ret, Volume)
+      (上涨分钟成交量占比 − 下跌分钟占比,取值 [−1,1])和单位化的 day_cov;再用日轴算子读它们:
+      (1) 水平:cross_mean(·, 60) / cross_ema(cross_zscore(·, 60), 30)(个股相对自己,去水平);
+      (2) **持续性**:cross_autocorr(·, 60, 1) 与 cross_autocorr(·, 120, 1)(日间一阶自相关:机构拆单 → 正,噪声交易 → 约 0);
+      分钟级持续性 day_autocorr(mul(sign(Ret), Volume), 1)(分钟间的有符号成交量自相关,取 40 日均值);持续性 × 方向的乘积(「持续地买」);
+      (3) **集合竞价那一下单读**:mul(day_last(Ret), div(day_last(Volume), day_sum(Volume))) = 最后一根的涨跌 × 它占全天成交量的份额(无量纲,单位是收益 × 份额),
+      以及它与次日隔夜跳空的 60 日相关;
+      (4) **拆分的度量**:cross_corr(全天 day_cov(Ret, Volume), 连续竞价 day_cov, 60) = 全天协方差有多大比例由集合竞价决定(个股层面的慢变量);
+      连续竞价量价相关的 z 分数 − 集合竞价推价的 z 分数;
+      (5) 横截面处理沿用 W01 里有效的写法:名义价桶内 z 分数(sub(LogFloatCap, LogFloatShares) 只作分桶变量,「流通市值 = 流通股本 × 价」的前提未在本机验证)、低流通股本优先 cs_first_low40、去掉极端 10% 的 cs_mask_top_replace_mean_neg。
+
+      和库不同:库里没有 day_cov / day_corr 作用在 in_slice 切片上,没有 day_autocorr(mul(sign(Ret), Volume)),没有 mul(day_last(Ret), 成交份额),没有日频字段叶子,也没有 cross_zscore / cross_ema / cs_bucket_* / cs_first_*;
+      15 个种子的骨架与 5583 条库骨架逐条比对(skeleton_key)全部不重复。和 E 位的区别:E 位在核心 C(≈ 集合竞价那一下)上深挖,这一位读的是 C 里被盖住的那一块和它的持续性;两个位的结果合起来可以回答「alpha 在集合竞价还是在连续竞价」。
+      为什么样本外还会在:持续性和相关度都是无量纲的个股层面慢变量(窗口 60–120 日),机构拆单留下的订单流自相关是微观结构的稳定特征,不依赖某段行情;
+      水平量的版本用 cross_zscore 去掉了与流动性 / 波动控制重合的水平。已知风险:minute 级 sign(Ret) 在 Ret = 0 的平盘分钟(低流动性票多)取 0,持续性读数会向 0 缩;持续性可能与流动性控制仍有中度相关(|ρ| 多半 < 0.5),新尺子会再去掉一部分。
+    inspired_by: 'B010(day_cov(F,F) 批,58 条):富集表 day_cov(Ret, Volume) 均值差 +1.16(p 0.002),头部全是它的慢速分布统计(ts_skew / ts_max / ts_pearson);第一根 Ret 恒为 0 且首尾两根是集合竞价,所以全天协方差主要读集合竞价,连续竞价订单流没被读过'
+    seeds:
+      - 'cross_ema(cross_zscore(day_cov(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60), 30)'
+      - 'cross_mean(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60)'
+      - 'cross_ema(cross_zscore(day_signed_ratio(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60), 30)'
+      - 'cross_autocorr(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60, 1)'
+      - 'cross_autocorr(day_signed_ratio(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 120, 1)'
+      - 'cross_mean(day_autocorr(mul(sign(in_slice(Ret, 1, 239)), in_slice(Volume, 1, 239)), 1), 40)'
+      - 'cs_bucket_zscore(cross_mean(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60), sub(LogFloatCap, LogFloatShares))'
+      - 'cross_corr(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(day_cov(Ret, Volume), day_cov(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60)'
+      - 'cross_mean(mul(day_last(Ret), div(day_last(Volume), day_sum(Volume))), 40)'
+      - 'cross_corr(ts_delay(mul(day_last(Ret), div(day_last(Volume), day_sum(Volume))), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'sub(cross_zscore(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60), cross_zscore(mul(day_last(Ret), div(day_last(Volume), day_sum(Volume))), 60))'
+      - 'cs_first_low40(cross_autocorr(day_signed_ratio(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60, 1), LogFloatShares)'
+      - 'mul(cross_mean(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 40), cross_autocorr(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60, 1))'
+      - 'cs_mask_top_replace_mean_neg(cross_mean(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 60))'
+R:
+  - head: 'ts_skew(day_cov(Ret, Volume), 40)'
+    why: |-
+      烂部件有两个。(1) 内层 day_cov(Ret, Volume) 被首尾两根集合竞价盖住(推断:第一根 Ret 恒为 0、首尾两根成交量是普通分钟的十几倍),skew 读到的是「少数几天的尾盘推价」而不是订单流;
+      拆解表的依据:Volume→Amt 只到 −0.82(valid −0.09),把窗口 40→20 变成 −1.67(valid −0.47),40→80 才 −0.63(valid +0.05)——越长越好、换底几乎不变,说明分数来自罕见大日子的稀疏估计,窗口短时三阶矩噪声主导。
+      (2) 三阶矩本身对单个极端日很敏感。变体:换成去掉集合竞价的连续竞价版(in_slice 1..239)的协方差 / 相关(验证 (1));换成 ÷ 成交量均值的无量纲版本;只读最后一根的「涨跌 × 成交份额」;长窗口 + cross_ema 平滑;mask 掉极端 10%。
+    variants:
+      - 'ts_skew(day_cov(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 40)'
+      - 'ts_skew(day_cov(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 80)'
+      - 'ts_skew(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), 80)'
+      - 'ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 80)'
+      - 'ts_skew(mul(day_last(Ret), div(day_last(Volume), day_sum(Volume))), 80)'
+      - 'cross_ema(ts_skew(day_cov(Ret, Volume), 80), 10)'
+      - 'cs_mask_top_replace_mean(ts_skew(day_cov(Ret, Volume), 80))'
+      - 'cs_mask_top_replace_mean_neg(ts_skew(day_cov(Ret, Volume), 80))'
+  - head: 'day_cov(Volume, Volume)'
+    why: |-
+      day_cov(Volume, Volume) 是分钟成交量的方差 = 量能水平² × 离散度,方向 −1(做多量能小的),分数 −1.16(train −1.10 / valid −1.16),两段一样差。
+      拆解表的依据:Volume→Amt(把股数换成金额,水平更重)掉到 −3.75(train −2.98),越带水平分越差,与「分数被水平拖累」一致;水平正是新尺子里的流动性控制要扣掉的,扣完只剩换手成本(原式换手高)。
+      去掉烂部件 = 去掉水平:÷ day_mean(Volume)² 得到成交量变异系数的平方(无量纲的「脉冲程度」,首尾两根集合竞价会主导它,所以另给一个去掉两根的版本),再取 40 日均值,或对自己 120 日历史做 z 分数。
+    variants:
+      - 'div(day_cov(Volume, Volume), pow_2(day_mean(Volume)))'
+      - 'cross_mean(div(day_cov(Volume, Volume), pow_2(day_mean(Volume))), 40)'
+      - 'cross_mean(div(day_cov(in_slice(Volume, 1, 239), in_slice(Volume, 1, 239)), pow_2(day_mean(in_slice(Volume, 1, 239)))), 40)'
+      - 'cross_ema(cross_zscore(day_cov(in_slice(Volume, 1, 239), in_slice(Volume, 1, 239)), 120), 20)'

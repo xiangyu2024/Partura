@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [2, 6]
+    reasons: '位 a 是 E 深挖,核心 day_sum(in_topk_masked(Ret, Volume, 20)) 是快照 head cross_mean(div(core, day_sum(Volume)), 20) 的子树,满足 E 的核心条件;核心对 5 个控制的最大 |ρ| 为 known 0.63、liq 0.59、size 0.49,均 < 0.8,通过。核心本身与快照 head ts_decay_linear(day_sum(Volume), 5) 的原始 |ρ| 为 0.92(残差 0.96),它的水平本质与成交量 head 是同一件事;但外围全部是去水平写法(除以 60 日均量、对数差、对数 z 分数、回归残差、分桶),16 个种子对快照 head 的原始 |ρ| 最大为 0.57(seed 7),没有一条与 head 同义,故创新度给 3。合理度 4:机制清楚(上冲分钟与下杀分钟的成交量不对称,是订单流不平衡的代理)。算子逐个核对:in_topk_masked(x, y, p) 中 k = (有效分钟数 + 1) // p,p = 20 即前 5%,第 4 个参数 False 即后 5%,与计划一致;log 在 |x| <= 1e-9 时给 NaN(源码 common.py),不会 -inf;div 是裸 torch.divide 没有保护,但分母都是 60 或 120 日均量或 60 日均绝对收益之外的正数量,未见除以近零;全部 cross_* 为回看窗口(rolling_reduce 沿时间轴),无前视;无 ts_rank / cross_rank 日轴,不碰 nanrank_last。一字板日分钟收益全为 0 时前 5% 的选择是 torch.topk 的平局顺序,只影响少数锁板日,不主导截面,不作为数学问题挡。划掉 seed 2 与 seed 6:它们与 R 组 variant 3、variant 4 逐字相同(计划内重复;R 已直接评估,不必让 GP 再跑一遍)。另,exact 检查:16 个种子在 struct/members.csv 中 0 个逐字命中。剩 14 个种子 >= 4。如果它有 alpha,最可能来自:(a) 上冲分钟与下杀分钟成交量的不对称在多日里持续(订单流方向),或 (b) 相对自身 60 日成交量水平的 z 分数 / 回归残差读出的放量异常。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '位 b 是 N 新想法,输入是 in_topk_masked(Volume, Ret, 5)(成交量最大 20% 分钟的收益之和)及其与成交量最小 20% 分钟的差。创新度 3:没有 seed 对快照 head 的原始 |ρ| 超过 0.46(最大为 seed 1 与 head 的 0.46),也没有与库外骨架逐字命中;但 seed 1、2、4、6、9、16 与 20 日反转控制的 |ρ| 为 0.61 到 0.67,因为重量分钟收益之和近似当日日内收益,其 20 日均值近似 20 日反转,这几条的 alpha 必须从残差看。seed 14(cross_stddev 40 日)与波动控制的 |ρ| 为 0.72,接近 0.8 线但不算同一个东西,保留。种子 1 到 16 都未触发自动划掉规则(无 head |ρ| >= 0.7,无控制 |ρ| >= 0.8)。合理度 4:机制清楚(重量分钟与轻量分钟的收益差或比,是有信息成交与对冲成交的代理,参见 Easley-OHara、Llorente 等 2002)。算子核对:in_topk_masked(Volume, Ret, 5) 的 key 是成交量、值是收益,k = (有效分钟 + 1) // 5,即前 20%,与计划一致;无 ts_rank / cross_rank 日轴。除数 day_std(Ret)(seed 3、4)与 cross_mean(abs_(day_sum(Ret)), 60)(seed 9)在 div 中无保护,但 0/0 只发生在分钟收益全为 0 的一字板日,此时分子也为 0,得 NaN;比值的其余情形受 Cauchy-Schwarz 限制,|sum of k 个收益| <= sqrt(k * n) * rms,分母为 std,比值只在分钟收益几乎为常数时才爆,不会主导截面,因此不挡。计划里「算子保护处理」的说法与源码不符(div 无保护),但不影响结论。如果它有 alpha,最可能来自:(a) 重量分钟的收益里有相当一部分来自开盘与收盘集合竞价附近(隔夜缺口与尾盘行为),(b) 放量方向在多日里的持续性。'
+R:
+  - head: 'cross_mean(div(day_sum(in_topk_masked(Ret, Volume, 20)), day_sum(Volume)), 20)'
+    soundness: 4
+    reasons: '分子是快照 head 的核心(前 5% 分钟的成交量之和),分母换成 60 或 120 日均量基线,去掉了「分母含分子」的问题,机制成立;cross_mean(·, 20) 与 40 的平滑窗口都是回看,无前视;分母 cross_mean(day_sum(Volume), 60 或 120) 在可交易股票上为正,停牌日为缺失,无近零除数。variant 5 保留了成交量水平(原始 |ρ| 0.69 对 ts_decay_linear(day_sum(Volume), 5)、残差 0.89),与计划自己判定的烂部件(水平)同源,这一条最弱,但没有数学问题,不挡。variant 3 与 slot a 的 seed 2 逐字相同,variant 4 与 seed 6 逐字相同,属于计划内重复。'
+  - head: 'cross_mean(div(day_sum(in_topk_masked(Ret, Volume, 50)), day_sum(Volume)), 20)'
+    soundness: 4
+    reasons: '与第 1 组同样的去分母思路,变体 1 与 2 的 50 分位核心(前 2% 分钟)在 241 分钟上 k = (n + 1) // 50 约为 4 到 5 个分钟,样本数少、平局(零收益分钟)敏感度高于前 5%,这是机制上的弱点,不是数学问题。variant 2 取对数差、variant 3 取 120 日对数 z 分数,都无数学问题。平滑窗口 40 与计划拆解里「窗口 20 到 40 变好」的读数一致。'
+  - head: 'cs_bucket_zscore(ts_max(ts_std(ts_decay_linear(day_sum(Amt), 50), 10), 10), cross_mean(day_sum(Amt), 30))'
+    soundness: 4
+    reasons: '去掉外层 ts_max 的理由成立(拆解里去掉后增益 +0.18),variant 1 与 4 把 ts_std 保留在水平单位上,variant 2 取对数标准差、variant 3 除以 ts_decay_linear 的水平,三种去水平写法互相独立,机制(平滑成交额的波动是否异常)说得通;ts_decay_linear、ts_std、cs_bucket_zscore 都只用到当天及以前的数据,无前视。注意两点而非数学问题:variant 4(窗口 10 改 20)与原 head 的原始 |ρ| 为 0.94,本质是同一个 head,只能算替换的参数微调,若要替换需真的超出 +0.1 分;variant 1 与原 head |ρ| 为 0.73,也属于很近的写法。'
+summary: '两个任务位都通过(a 为 E,14 个种子保留;b 为 N,16 个种子保留),a 划掉 2 个与 R 变体逐字重复的种子;R 三组都放行;无数学问题挡位。需记下的事实:源码里 div 没有保护(计划的「算子保护」说法不对,但分母都为正或 0/0 只得 NaN,不影响结论);N 位 seed 1、2、4、6、9、16 与 20 日反转控制 |ρ| 0.61 到 0.67;E 核心与成交量 head 原始 |ρ| 0.92。'

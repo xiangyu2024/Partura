@@ -1,0 +1,117 @@
+seed: 2020
+round: 2
+slots:
+  - type: N
+    hypothesis: |-
+      名称:价格运动与成交在日内时钟上的同步性,一年尺度读数(及方向不对称版本)。
+      事实(都来自本流快照与第 1 轮的结果):(1) 本流第 1 轮 N 位的最好一条 `cross_corr(day_centroid(abs_(abs_(in_slice(Ret, 1, 240)))), day_centroid(in_slice(Amt, 1, 240)), 241)` = +0.10(train +0.10 / valid +0.38,半衰期 0);同一对对象把窗口改成 60 日,分数是 −0.82(train −0.09 / valid −0.82)。E 位最好的 `cross_corr(day_skew(Open), day_centroid(Amt), 241)` 也是 241 日窗口(−0.12 / 两段 −0.12、+0.31),同一族的 60 日版本都在 −0.3 ~ −0.6。也就是说在这个底上,窗口从 60 拉到 241 是 +0.9 以上的杠杆,两段都不再是负的大数;第 1 轮没有人去试比 241 更慢、也没有人换过「同步」以外的读法(带方向的、回归斜率的、t 值的、去掉开收盘的),这一位就做这件事。(2) 本批 B059 的 3 个 head 全是「某个日度量 × `day_argmin(Amt / Vwap / Ret)` 这个日内时钟」的 15 ~ 50 日协方差 / 回归,拆解里窗口越长越好(`ts_cov` 30→60:−1.93→−1.45;`cross_regalpha` 15→30 的 train −1.19→−0.72);时钟类读数在本流是「慢了才有分」。(3) 控制与冠军去掉的是水平暴露;同步性是两个有界(0 ~ 1)时点的相关或斜率,无量纲、不随成交额水平缩放,所以不会被流动性 / 市值 / 波动的多项式剪掉。
+
+      机制:设 P_t = `day_centroid(abs_(in_slice(Ret, 1, 240)))` 是第 t 天价格运动(|分钟收益|)的重心,A_t = `day_centroid(in_slice(Amt, 1, 240))` 是成交额的重心,都在 [0, 1],0 = 全在开盘、1 = 全在收盘(in_slice(·, 1, 240) 去掉第 0 根集合竞价)。个股一年内逐日的 corr(P, A) 回答「这只票的价格是在成交放出来的时候动的吗」:有信息的价格运动与成交同时发生(Admati 与 Pfleiderer 1988 的集中交易理论、Easley 与 O'Hara 的知情交易),相关高 = 价格主要由有成交支持的信息驱动;相关低 = 价格在没有成交的时段被几笔小单推着走(薄盘、做市商报价漂移、涨停板附近的撮合),这类价格运动之后更容易回吐。它是读「价格的成色」,与流动性的水平无关,与波动的水平无关。长窗口(241 日以上)把它变成个股慢性质,日换手接近 0,15 bp 成本基本吃不到。
+      算子怎样实现(14 个种子,每个都是 P、A 或它们的方向拆分版本,不用 ts_spearman / nt_*):
+      (1) 同一对象读更慢、读斜率与 t 值:`cross_corr(P, A, 480)`(两年);`cross_regbeta(A, P, 241)`(P 对 A 的斜率;cross_regbeta(x, y, d) 是 y 对 x 的斜率);`cross_reg_tvalue(A, P, 241)`。三者与 corr(241) 的差别在于对 A 的离散度归一的方式不同,斜率保留「A 变化一单位 P 跟着变多少」。
+      (2) 带方向:U = `day_centroid(add(R, abs_(R)))` 只在上涨分钟有质量(下跌分钟 add(R, |R|) = 0)、D = `day_centroid(sub(abs_(R), R))` 只在下跌分钟有质量;`sub(cross_corr(U, A, 241), cross_corr(D, A, 241))` = 上涨的时点与成交同步的程度减去下跌的同步程度。上涨有成交支持而下跌没有,是下跌只是噪声的指纹(以后会被买回);反过来是上涨没有成交支持。`cross_mean(sub(UA, DA), 241)` 里 UA = `day_centroid(mul(in_slice(Amt, 1, 240), is_gt(in_slice(Ret, 1, 240), 0)))`(上涨分钟的成交额重心)、DA 同理取 is_lt,差 = 买盘集中的时点减卖盘集中的时点,一年的平均 = 个股的资金流是不是习惯在收盘前才进来;`cross_corr(UA, DA, 241)` = 买方与卖方成交的时点是否同步(同步 = 双向换手 / 做市类成交,不同步 = 单边行情推动)。
+      (3) 与带符号的日度量的同步:`cross_regbeta(P, day_sum(Ret), 241)` 与 `cross_regbeta(A, day_sum(Ret), 241)` = 当天收益对「价格运动的时点 / 成交的时点」的斜率:上涨的日子是不是价格晚动、成交晚放(越晚越涨 = 收盘前持续吸筹)。`cross_corr(P, abs_(gap), 241)` 里 gap = `sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)`(前一日收盘用 cross_delay 取正滞后,无前视):大缺口的日子里价格是不是更早动完(消息在开盘就被消化)还是整天消化。
+      (4) 两个时点的相对关系:`cross_mean(sub(P, A), 241)`(价格比成交早还是晚)与 `cross_stddev(sub(P, A), 241)`(错位的稳定程度);`cross_ema(cross_corr(P, A, 120), 120)`(换一种慢法:对 120 日相关再取 120 天半衰期的 EMA,不用更长的硬窗口);`cs_bucket_zscore(cross_corr(P, A, 241), LogFloatCap)`(流通市值十分位内标准化,去掉任意形状的市值暴露;本流第 1 轮 R 里按市值分桶是最好的一条写法,−1.22);去开收盘:`cross_corr(day_centroid(abs_(in_slice(Ret, 31, 210))), day_centroid(in_slice(Amt, 31, 210)), 241)` 只在盘中 31 ~ 210 分钟读时点,避免开收盘两端的 U 形同时主导两个重心造成的机械同步。
+      为什么和库里不同:两个库 5583 条里没有一条含 `day_centroid`(0 条,按 libs_train.csv 的表达式文本逐条查过),也没有一条是 day_argmax / day_argmin / 重心类时点读数的 241 日相关或斜率(`cross_corr(·, day_argmax / day_argmin)` 共 2 条,搭档是价格类日度量);库里最接近的是含 `day_corr(Ret 类量, Amt 类量)` 的 58 条(同一天内、分钟之间的相关,读的是「分钟上的量价同步」),它在一天之内求相关,我这里先把每天压成一个时点再在日轴上求一年的相关 / 斜率,是另一个量(日内波动与成交额的分钟共动随流动性水平变化很大,一年的时点同步不是水平的函数)。与 B059 的 3 个 head 的差别:它们是日度量与 day_argmin 的短窗口协方差,不含价格运动 / 成交的重心;预计与快照 6 个 head(3 个 B059 的时钟类、3 个 |偏度| 的改写)的日度秩 |ρ| 都 < 0.3。
+      为什么样本外还会在:读的是个股的成交结构与信息环境(散户为主 / 机构为主、薄盘 / 厚盘、有信息的成交占比),这些变得慢(以季度计),不依赖某段行情;成色低的价格运动回吐、成色高的延续,是微观结构的稳定性质而不是一次套利。诚实预期:第 1 轮同一对象的最好分数是 +0.10 / +0.38,距离 0.5 还差 0.4,train 比 valid 弱 0.3 说明 2018 ~ 2023 年间这条关系对成本更敏感;出 head(两段 ≥ 0.5 且与已知族 |ρ| < 0.5)的概率约 6%。最可能的失败方式:(a) 241 日相关的估计误差(约 0.065)与截面真实离散度相当,名次近似随机;(b) 与波动 / 流动性控制中度相关(开收盘集中度高的票两个重心都靠近两端)。
+      数学检查:day_centroid 在分钟权重和为 0(停牌、整天无成交 / 无价格运动)时为 NaN 而不是 0,值域 [0, 1] 有界;所有窗口是 t 日及以前的滚动,cross_delay 的天数为正,无 cross_shift / in_local_mean,无前视;cross_corr / cross_regbeta 的自变量与因变量都是有界的时点(或有界的日收益),没有除以近零量的爆点,方差低于 1e-9 时 cross_regbeta 返回 NaN 而不是极大值;cross_corr 对不满窗(2 个有效点)可能给 ±1(已知,只发生在上市头几天,可交易掩码已排除);视窗从 2018-01-02 起,头 241 日的窗口是扩张窗口,噪声大但只占 train 的第一年,不主导整段;不用 ts_rank / cross_rank / in_rank_rolling,没有 nanrank 陷阱;输出连续取值,不是取值档位少的离散信号。
+    inspired_by: 'B059(`day_argmin(F)` 一族,heads 都是日度量与 day_argmin 时钟的协方差 / 回归,窗口越长越好)与本流第 1 轮 N 位的最好结果(价格运动重心与成交额重心的相关,241 日窗口 +0.10 / +0.38,60 日窗口 −0.82)'
+    seeds:
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240)), 480)'
+      - 'cross_regbeta(day_centroid(in_slice(Amt, 1, 240)), day_centroid(abs_(in_slice(Ret, 1, 240))), 241)'
+      - 'cross_reg_tvalue(day_centroid(in_slice(Amt, 1, 240)), day_centroid(abs_(in_slice(Ret, 1, 240))), 241)'
+      - 'sub(cross_corr(day_centroid(add(in_slice(Ret, 1, 240), abs_(in_slice(Ret, 1, 240)))), day_centroid(in_slice(Amt, 1, 240)), 241), cross_corr(day_centroid(sub(abs_(in_slice(Ret, 1, 240)), in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240)), 241))'
+      - 'cross_mean(sub(day_centroid(mul(in_slice(Amt, 1, 240), is_gt(in_slice(Ret, 1, 240), 0))), day_centroid(mul(in_slice(Amt, 1, 240), is_lt(in_slice(Ret, 1, 240), 0)))), 241)'
+      - 'cross_regbeta(day_centroid(abs_(in_slice(Ret, 1, 240))), day_sum(Ret), 241)'
+      - 'cross_regbeta(day_centroid(in_slice(Amt, 1, 240)), day_sum(Ret), 241)'
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 241)'
+      - 'cross_mean(sub(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240))), 241)'
+      - 'cross_stddev(sub(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240))), 241)'
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 31, 210))), day_centroid(in_slice(Amt, 31, 210)), 241)'
+      - 'cross_corr(day_centroid(mul(in_slice(Amt, 1, 240), is_gt(in_slice(Ret, 1, 240), 0))), day_centroid(mul(in_slice(Amt, 1, 240), is_lt(in_slice(Ret, 1, 240), 0))), 241)'
+      - 'cross_ema(cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240)), 120), 120)'
+      - 'cs_bucket_zscore(cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240)), 241), LogFloatCap)'
+    literature:
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: Anat Admati, Paul Pfleiderer
+        year: '1988'
+        treatment: 集中交易理论:有信息的交易者与流动性交易者会把成交集中在同一时段,价格变动与成交同时放大;这里把「价格运动的重心」和「成交额的重心」各压成每天一个时点,读个股一年内两者的同步程度
+      - title: Intraday Patterns in the Cross-section of Stock Returns
+        authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+        year: '2010'
+        treatment: 个股的日内收益与成交在一天里的特定时段有跨日的稳定模式;这里不读收益本身,读时点结构的一年尺度稳定性
+
+  - type: N
+    hypothesis: |-
+      名称:资金流的方向与它的时钟(按时段拆开的净买入、对收益的价格冲击斜率、以成交时点为条件的跨日收益动态、日内极值时钟),全部做成 120 ~ 241 日的个股慢性质。
+      事实:(1) 本批 B059 的 3 个 head 全部是「日度量 × day_argmin(Amt / Vwap / Ret)」的 15 ~ 50 日协方差或回归,`day_argmin` 是当天最小值所在的分钟,也就是一个日内时钟;拆解里窗口越长越好(`ts_cov` 30→60 +0.48)。(2) 本流第 1 轮 N 位的最好分数来自 241 日窗口(+0.10 / +0.38),其他流(同一批工作的别的种子,读的是 2025-12-31 前的 loc 文件)里:「个股 120 日内、当天收益对一个量价交互变量的斜率」(`cross_regbeta(含成交额的交互变量, day_sum(Ret), 120)`,Llorente 等 2002 的量-收益动态的写法)有 4 条分数 +0.76 ~ +1.04、train 与 valid 都过 0.5(是真 head);241 日窗口的成交额加权收益减等权收益的均值(量价协方差的一年平均)是 +0.07 / +0.40,没过线但同方向。共同点:都读「收益与成交的耦合」,不读水平,窗口 ≥ 120 日。本位把耦合的两端换成本流的底:成交的方向(day_signed_ratio)与成交的时钟(day_centroid / day_argmax / day_argmin),这些在库里是空白(见下)。
+      机制与读数(15 个种子,不用 ts_spearman / nt_*):
+      (a) 按时段拆开的净买入 `day_signed_ratio(in_slice(Ret, a, b), in_slice(Amt, a, b))` = 该时段内「上涨分钟成交额占比 − 下跌分钟成交额占比」,值域 [−1, 1](flat 分钟只进分母),是不用逐笔数据的净买入压力。收盘前 30 分钟(211 ~ 240)减开盘后 30 分钟(1 ~ 30)的一年均值:`cross_mean(sub(收盘段净买入, 开盘段净买入), 241)`;只取收盘段;下午减上午的 90 天半衰期 EMA;以及 `cs_bucket_zscore(·, LogFloatCap)` 的分桶版本。机制:A 股开盘段的成交主要是对隔夜消息与追涨,收盘段更多是机构的收盘价调仓与有信息的建仓(尾盘资金),一个票长期在收盘段净流入、在开盘段净流出,是被持续吸筹的指纹;一年的平均让它是慢变量。
+      (b) 价格冲击:`cross_regbeta(day_signed_ratio(in_slice(Ret, 1, 240), in_slice(Amt, 1, 240)), day_sum(Ret), 241)` = 当天收益对当天净买入占比的斜率(cross_regbeta(x, y, d) 是 y 对 x 的斜率),一年窗口。它是 Kyle 1985 的 λ 的日度近似(价格对订单流的敏感度,Hasbrouck 2009 用同类回归估有效成本):λ 高 = 同样的净买入推动更大的价格(知情交易占比高或盘口薄);λ 是斜率,不是水平,与成交额水平正交。另一个是滞后版本:`cross_regbeta(cross_delay(day_signed_ratio(...), 1), day_sum(Ret), 241)` = 昨天的净买入对今天收益的预测斜率(正 = 资金流延续,负 = 反转),以及收盘 − 开盘段净买入差的滞后版本。
+      (c) 以成交时点为条件的跨日收益动态(Llorente、Michaely、Saar、Wang 2002 的 r(t) = a + (b + c·v(t−1))·r(t−1) 里把「成交量」换成「成交的时点」):`cross_regbeta(mul(cross_delay(day_sum(Ret), 1), cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1)), day_sum(Ret), 241)`:截面去均值的成交重心(cs_demean 去掉全市场当天的共同位置,留下「比别的票更晚放量」)乘以昨天的收益,回归今天的收益,斜率 > 0 = 昨天收盘前放量的那天涨跌会延续(收盘前的成交是有信息的)。同形的有价格运动重心的 120 日版本;`cross_regbeta(cross_delay(cs_demean(成交重心), 1), day_sum(Ret), 241)` 是不带昨天收益的一阶版本。它与其他种子的差别是 x 全部有界、不随成交额水平缩放。
+      (d) 日内极值时钟(B059 的对象):`cross_mean(sub(day_argmax(in_slice(Ret, 1, 240)), day_argmin(in_slice(Ret, 1, 240))), 241)` = 一天里最大涨分钟出现的时点减最大跌分钟出现的时点的一年均值(正 = 习惯先跌后涨 = 回调被买回;负 = 先冲后砸);`cross_corr(day_argmin(Ret 片段), day_argmax(Ret 片段), 241)` = 最大跌分钟与最大涨分钟是否聚在同一时段(聚在一起 = 买卖盘价差弹跳 / 薄盘毛刺);`cross_mean(sub(day_argmax(Vwap), day_argmin(Vwap)), 241)` = 日内价格高点时点减低点时点(日内趋势方向);`cross_regbeta(day_sum(Ret), day_argmin(in_slice(Ret, 1, 240)), 241)` = 最大跌分钟的时点对当天收益的斜率;`cross_corr(day_argmax(in_slice(Ret, 1, 240)), day_centroid(in_slice(Amt, 1, 240)), 241)` = 最大涨分钟的时点与成交重心的同步。
+      为什么和库里不同:5583 条表达式里没有一条含 `day_signed_ratio` 或 `day_centroid`(各 0 条,逐条查过);没有一条含 `cross_delay(day_sum(Ret), ·)`(0 条),没有一条含 `cross_regbeta(…, day_sum(Ret), …)`(0 条;库里共 69 条 cross_regbeta,逐条查过都不以 day_sum(Ret) 作因变量);同时含 day_argmax 与 day_argmin 的 49 条(抽查的前几条是对分钟成交量局部均值做 in_slice_from_start / in_slice_to_end 再取价格的手写式)里,没有一条的 day_argmax / day_argmin 以 in_slice(Ret, …) 作输入(0 条),也没有「最大涨分钟时点 − 最大跌分钟时点」的 241 日平均。与快照 4 个 head 的差别:B059 的 head 的时钟读的是「最低成交额 / 最低价所在的分钟」且窗口 ≤ 50 日,我读的是收益极值与成交的方向,窗口 120 ~ 241 日。预计与快照 6 个 head 的日度秩 |ρ| 都 < 0.3。
+      为什么样本外还会在:(a)(b) 是个股持续的微观结构性质(谁在什么时候买、价格对订单流有多敏感),Kyle λ 与资金流方向在文献里是长期定价的因素,不靠某段行情;(c) 读成交时点与收益延续的关系,是知情交易的时间指纹;(d) 是价格路径的稳定习惯。窗口 ≥ 120 日,日换手接近 0。诚实预期:本位的底在其他流里已有两类到过线,但那是量价交互;本位把一端换成方向与时钟,最好分数大约在 −0.3 ~ +0.3,出 head 的概率约 5%;最可能的失败:(1) 240 日窗口里个股的 λ / 斜率估计噪声大于截面真实离散(斜率的标准误约 √(1/241)/σ_x);(2) 时钟类(d)读数的取值被「整天不动」的票拉向 0 并与波动相关;(3) (a) 收盘 − 开盘净买入的截面排序主要是 A 股开盘涨停 / 一字板的票(净买入几乎恒为 0 或 1),与流动性控制相关。
+      数学检查:day_signed_ratio 的分母是该时段成交额之和,为 0(停牌)时 NaN,值域 [−1, 1] 有界;day_centroid 权重和为 0 时 NaN,值域 [0, 1];day_argmax / day_argmin 在 in_slice(Ret, 1, 240) 内返回 0 ~ 239 的位置,有界;整天价格不动(一字板)时两者都返回 0(并列取第一个),差 = 0,是「没有信息」的中性值,不是爆点,也不被除;停牌的票分钟全是 NaN 时返回 NaN;全部窗口是 t 日及以前,cross_delay 天数为正(1),没有 cross_shift / in_local_mean,x 是 t − 1 日的量、y 是 t 日收益,无前视;cross_regbeta 方差低于 1e-9 时 NaN;mul(cross_delay(day_sum(Ret), 1), cs_demean(重心)) 的方差量级 ~ 1e-6 · 241 远大于 1e-9,不会被 EPS 截掉;不用 ts_rank / cross_rank / in_rank_rolling,没有 nanrank 陷阱;视窗从 2018-01-02 起,头一年的窗口是扩张窗口,噪声大但不主导。
+    inspired_by: 'B059(`day_argmin(F)` 一族:日内时钟与日度量的协方差 / 回归,慢窗口有分)、本流第 1 轮 N 位(241 日窗口 +0.10 / +0.38)与其他流里到过线的「收益与成交的 120 日回归耦合」'
+    seeds:
+      - 'cross_mean(sub(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 241)'
+      - 'cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 241)'
+      - 'cross_ema(sub(day_signed_ratio(in_slice(Ret, 121, 240), in_slice(Amt, 121, 240)), day_signed_ratio(in_slice(Ret, 1, 120), in_slice(Amt, 1, 120))), 90)'
+      - 'cs_bucket_zscore(cross_mean(sub(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 241), LogFloatCap)'
+      - 'cross_regbeta(day_signed_ratio(in_slice(Ret, 1, 240), in_slice(Amt, 1, 240)), day_sum(Ret), 241)'
+      - 'cross_regbeta(cross_delay(day_signed_ratio(in_slice(Ret, 1, 240), in_slice(Amt, 1, 240)), 1), day_sum(Ret), 241)'
+      - 'cross_regbeta(cross_delay(sub(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), day_signed_ratio(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30))), 1), day_sum(Ret), 241)'
+      - 'cross_regbeta(mul(cross_delay(day_sum(Ret), 1), cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1)), day_sum(Ret), 241)'
+      - 'cross_regbeta(mul(cross_delay(day_sum(Ret), 1), cross_delay(cs_demean(day_centroid(abs_(in_slice(Ret, 1, 240)))), 1)), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1), day_sum(Ret), 241)'
+      - 'cross_mean(sub(day_argmax(in_slice(Ret, 1, 240)), day_argmin(in_slice(Ret, 1, 240))), 241)'
+      - 'cross_corr(day_argmin(in_slice(Ret, 1, 240)), day_argmax(in_slice(Ret, 1, 240)), 241)'
+      - 'cross_mean(sub(day_argmax(Vwap), day_argmin(Vwap)), 241)'
+      - 'cross_regbeta(day_sum(Ret), day_argmin(in_slice(Ret, 1, 240)), 241)'
+      - 'cross_corr(day_argmax(in_slice(Ret, 1, 240)), day_centroid(in_slice(Amt, 1, 240)), 241)'
+    literature:
+      - title: Continuous Auctions and Insider Trading
+        authors: Albert Kyle
+        year: '1985'
+        treatment: 价格对净订单流的斜率 λ 衡量知情交易与盘口厚度;这里用当天收益对当天「上涨分钟成交额占比 − 下跌分钟成交额占比」的一年滚动斜率近似,不需要逐笔数据
+      - title: Dynamic Volume-Return Relation of Individual Stocks
+        authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+        year: '2002'
+        treatment: 成交量把收益的跨日自相关分成「投机性(信息)交易的延续」与「对冲性交易的反转」;这里把条件变量从成交量换成成交的日内时点,在个股 120 ~ 241 日窗口里估系数
+      - title: A Tug of War, Overnight versus Intraday Expected Returns
+        authors: Dong Lou, Christopher Polk, Spyros Skouras
+        year: '2019'
+        treatment: 收益在一天里的不同时段(隔夜 / 日内)有各自持续的个股层面成分;这里读的是日内不同时段的资金流方向与极值时钟的一年平均
+
+R:
+  - head: 'cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 30), LogFloatCap)'
+    why: |-
+      head 的 cross_ema 半衰期 30 日,第 1 轮 R 里已见到「慢一点就变好」:30→60 日是 −1.22→−1.05(拆解),单日 → 90 日 EMA 是 −3.12→−1.52;对 |偏度| 这个底而言分数几乎只由换手决定(两段分数一样:−1.22 / −1.11)。部件问题是平滑不够慢,而分桶(流通市值十分位内标准化)是有用的部件(第 1 轮 R 里按波动分桶是 −1.76,按市值分桶是最好的 −1.22)。这里只动平滑:半衰期 120、240、以及 241 日硬窗口均值,分桶不变。
+    variants:
+      - 'cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 120), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 240), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_mean(abs_(day_skew(Open)), 241), LogFloatCap)'
+  - head: 'pow_05(ts_cov(sigmoid(day_argmin(Vwap)), cs_mask_top_replace_mean_neg(day_durbin_watson(Amt)), 30))'
+    why: |-
+      两个烂部件。(1) 窗口:拆解里 ts_cov 30→60 是 −1.93→−1.45(+0.48)、30→15 也变好(+0.19),train 与 valid 的差大,窗口越长越稳,所以这里再往 120 走。(2) `sigmoid(day_argmin(Vwap))`:day_argmin 返回 0 ~ 240 的分钟位置,sigmoid 在位置 ≥ 17 时在 float32 里已经饱和为 1.0(位置 11 ~ 16 与 1 的差只有 1e-5 ~ 1e-7),所以这个量几乎只剩「日内最低价出现在开盘前几分钟内」的指示,大半个日子是常数,ts_cov 对一个几乎恒为 1 的序列取协方差,是数值上很脆弱的部件;拆解里去掉 sigmoid 两段都变好(train −1.06→−0.38,valid −1.93→−1.51)。把它换成显式的「日内低点出现在开盘后 30 分钟内」指示 `is_lt(day_argmin(Vwap), 31)`(0 / 1,方差有定义),或者直接用 day_argmin 本身。机制:开盘就见全天低点 = 低开高走,一年里这类日子与 Amt 的 Durbin-Watson(成交额自相关的负担)共动的强度。
+    variants:
+      - 'pow_05(ts_cov(sigmoid(day_argmin(Vwap)), cs_mask_top_replace_mean_neg(day_durbin_watson(Amt)), 60))'
+      - 'pow_05(ts_cov(sigmoid(day_argmin(Vwap)), cs_mask_top_replace_mean_neg(day_durbin_watson(Amt)), 120))'
+      - 'pow_05(ts_cov(is_lt(day_argmin(Vwap), 31), cs_mask_top_replace_mean_neg(day_durbin_watson(Amt)), 120))'
+      - 'pow_05(ts_cov(day_argmin(Vwap), day_durbin_watson(Amt), 120))'
+  - head: 'cross_regalpha(day_sum(Volume), day_argmin(Ret), 15)'
+    why: |-
+      拆解表里窗口 15→30 是 train −1.19→−0.72 但 valid −1.29→−1.75,15→7 两段都变差(−2.41),说明窗口越长 train 越好,估计噪声是烂部件(15 个点估一个回归截距)。这里把窗口依次拉到 60、120、241,看 valid 是否也跟着变好(其他流与本流第 1 轮的事实:241 日窗口两段才都不再是负的大数)。机制不变:day_argmin(Ret) 是当天最大跌分钟的位置,对成交量水平回归得到的截距 = 「成交量很小时,最大跌分钟的位置」。
+    variants:
+      - 'cross_regalpha(day_sum(Volume), day_argmin(Ret), 60)'
+      - 'cross_regalpha(day_sum(Volume), day_argmin(Ret), 120)'
+      - 'cross_regalpha(day_sum(Volume), day_argmin(Ret), 241)'
+  - head: 'ts_sum(cross_cov(ts_regalpha(day_sum(Vwap), day_skew(Volume), 10), day_argmin(Amt), 15), 50)'
+    why: |-
+      拆解表:`Vwap->Close` 是 −1.12→−0.77(+0.35,train 与 valid 都变好:−0.77 / −0.51),这是这个 head 里唯一一个两段同时变好的单点替换(Volume->Amt 几乎不变 −1.08,ts_sum 窗口 25 / 100 都不如 50)。day_sum(Vwap) 是一天里 241 个分钟 Vwap 的和,与 day_sum(Close) 几乎是同一个水平量,Close 的水平更干净(没有成交额加权的内生噪声)。在新底 Close 上试三个邻近部件:cross_cov 窗口 15→30、ts_regalpha 窗口 10→20、以及把 day_skew(Volume) 换成 day_skew(Amt)(这个替换在 Vwap 上持平,不单独动)。
+    variants:
+      - 'ts_sum(cross_cov(ts_regalpha(day_sum(Close), day_skew(Volume), 10), day_argmin(Amt), 15), 50)'
+      - 'ts_sum(cross_cov(ts_regalpha(day_sum(Close), day_skew(Volume), 10), day_argmin(Amt), 30), 50)'
+      - 'ts_sum(cross_cov(ts_regalpha(day_sum(Close), day_skew(Volume), 20), day_argmin(Amt), 15), 50)'
+      - 'ts_sum(cross_cov(ts_regalpha(day_sum(Close), day_skew(Amt), 10), day_argmin(Amt), 15), 50)'

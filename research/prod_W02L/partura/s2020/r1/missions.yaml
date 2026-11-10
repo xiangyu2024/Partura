@@ -1,0 +1,110 @@
+seed: 2020
+round: 1
+slots:
+  - type: E
+    core: 'day_skew(Open)'
+    hypothesis: |-
+      机制:核心 C = day_skew(Open),当天 241 根分钟 Open(后复权价)序列的偏度。偏度对价格的水平和尺度不变,只读「这一天的价格路径,大部分时间在自己均值的下方还是上方」:C > 0 = 大部分时间偏低、只有短暂冲高(冲高回落;或早盘急跌后横盘、尾盘拉升);C < 0 = 大部分时间偏高、只有短暂下探(瞬间跳水又被买回;或早盘冲高后横盘、尾盘跳水)。它读的是「一天的价格是怎么走出来的」,不是涨跌多少。依据在本批拆解表里:C 及其所有变体与已知成交额族的 rho 全在 −0.03 ~ −0.02,说明它与新尺子的 5 个控制天然正交,若它有 alpha 不会被控制与冠军吃掉。
+      问题也在拆解表里:单日的 C 太快,原始日换手 0.88、原始净夏普 −15.4(批内成员表,train),新尺子下半衰期 20 之后仍是 −3.08 / −3.12;去掉 abs_ 只保留符号反而更差(−4.84 / −3.72);Open 换 Close 几乎不变(−2.87 / −3.25),因为两条分钟序列是同一条路径错一分钟。pow_2 / abs_ / abs_(pow_2(abs_)) 在日内截面上是单调改写,分数逐位相同(−3.0783),所以快照里的 3 个 head 其实是同一个量。因此这一位不再给 C 套单调变换,而是把「路径形状」当成个股的慢性质,并读它与别的日度量的关系。库里含 day_skew 的 261 条、213 个骨架,外围只有 abs_ / cross_mean / cross_stddev / ts_decay_linear / ts_stddev / cross_quantile_q25 这类原始算子,没有一条用 Partura 建库之后才有的 cross_ema / cross_zscore / cross_tail_mean / cs_bucket_zscore / cs_regres(两个库 5583 个骨架里这些算子出现 0 次),库里 cross_corr(day_skew, ·) 有 61 条,全是挖掘库的一串写法,搭档是价格 / 成交量的日均值、偏度及其乘积,窗口多为 10 日、外面套 cross_quantile_q75;没有 C 与日收益、缺口、成交额水平、成交额时点配对的,cross_corr(day_skew, day_skew) 的骨架库里有,我没有用。已见过的含 C 的外围集合只有 {abs_}、{pow_2, abs_}、{pow_2}、{},下面每个种子的外围都含至少一个它们没有的算子,没有一个是同一个集合。
+      种子五组:
+      (a) 慢速的个股性质(种子 1、2、3):cross_ema(C, 40)(40 日半衰期,不用硬窗口,老的冲高日慢慢淡出)、cross_zscore(C, 120)(减去个股自己 120 日的水平,持久的截面水平被去掉,留下「最近比平时更偏」的事件成分)、abs_(cross_ema(C, 30))(先平滑再取绝对值:个股是不是长期朝同一个方向偏,与种子 1 的差别只在符号)。机制:路径不对称来自个股的盘口厚度与参与者构成(散户的追涨脉冲、机构的均匀拆单、盘后消息的集中兑现),这些变化慢,名次在数周内保持,日换手低,15 bp 吃得下;单日 C 的 −15.4 是因为它每天都在换名次。
+      (b) 尾部倾向(种子 4、5、6):cross_tail_mean_q75(C, 60) = 过去 60 日里最偏的四分之一天的平均,读「冲高回落的日子有多极端」;q25 对应「瞬间跳水」;两者相加是上下两尾的不对称(偏度的偏度)。与日均值不同:均值被中间的普通日稀释,尾部均值只看事件日。类比文献里好波动 / 坏波动的半方差不对称(Bollerslev, Li, Zhao)与彩票型最大值(Bali, Cakici, Whitelaw):上冲型的事件日是散户彩票需求的指纹。
+      (c) 路径形状与别的日度量的 60 日滚动关系(种子 7、8、9、10、11、12):cross_corr(C, day_sum(Ret), 60) 读「这只票涨的那些天是冲高回落型还是走出来维持型」;cross_corr(C, 缺口, 60)(缺口 = 开盘 ÷ 前一日收盘 − 1,前一日收盘用 cross_delay 取滞后一天,无前视)读缺口是被回吐(高开 + 正偏)还是被延续,是 Lou, Polk, Skouras 的隔夜 − 日内拉锯的路径版;cross_corr(cross_delay(C, 1), day_sum(Ret), 60) 读昨天的形状对今天收益的个股层面可预测性(滞后,无前视);cross_regbeta(C, log(day_sum(Amt)), 60) 是成交额对路径不对称的弹性(AlphaCube 的 cross_regbeta(x, y, d) 是 y 对 x 的斜率);cross_reg_fvalue(C, day_first(Amt), 60) 是开盘第一根成交额与路径形状的关联强度;cross_corr(C, day_centroid(Amt), 60) 是路径形状与成交时点的同步。这是本环境里样本内最好的一类结构(W01 的 head 里 cross_corr / cross_regbeta / cross_reg_fvalue 的两个日度量 60 日滚动关系很多):水平型控制对它先天近似正交,窗口长所以换手低。这里的底是路径形状(库里没有),不是 W01 已经被封的 Amt 时点或缺口本身。
+      (d) 价格形状里没有成交量支撑的那一块(种子 13、15):cross_regres(day_skew(Amt), C, 60) 是 C 对当天成交额偏度回归后的残差(cross_regres(x, y, d) 是 y 对 x 回归,所以成交额偏度放第一位),再取 30 日 EMA(残差本身是日度量);cs_regres 是截面上同样的事(各自先取 30 日 EMA)。机制:价格路径的偏移如果伴随成交额脉冲(day_skew(Amt) 大),是信息或事件;没有脉冲的价格偏移是薄盘噪声,会回吐。残差读的就是后者。
+      (e) 去掉持久水平:cs_bucket_zscore(cross_ema(C, 30), LogFloatCap)(流通市值十分位内标准化。小盘与大盘的路径偏度分布不同,tick 约束让低价小盘的路径更阶梯;控制里的市值只去掉线性 / 平方 / 三次暴露,十分位内标准化去掉的是任意形状的暴露,所以与控制不是同一个操作);mul(cross_ema(C, 20), sign(cross_mean(day_sum(Ret), 20)))(顺趋势的形状:上升趋势里负偏 = 大部分时间在高位、回调很快被买回,是买盘有承接的路径)。
+      为什么样本外还会在:(a)(e) 读的是参与者构成与盘口深度这类慢变的结构属性;(b) 读的是散户彩票需求留下的事件指纹,行为偏差不依赖某段行情;(c)(d) 的相关 / 斜率 / 残差是无量纲的,每只票用自己的 60 日历史做对照,不依赖截面静态风格,不容易在风格切换时整体翻号。预期上它不是高概率:C 两段都亏 3.1 说明毛超额在单日尺度上约为 0(亏的是换手成本,推断,没有毛收益数),这一位检验的是「慢下来之后有没有毛超额」。最可能的失败:(a) 慢下来之后仍与成本持平;(c) 在 60 日窗口里估得太吵。
+      数学检查:day_skew 在整天价格不动(停牌 / 一字板)时分母为 0,得 NaN 而不是 0 或无穷,cross_ema 把缺失日跳过(不当 0),cross_zscore 分母带 EPS;cross_corr 与 cross_regbeta 在窗口里有效对太少时可能给 0 或 NaN(已知,只影响长期停牌的票,可交易掩码已排除);cross_regres 取的是窗口最后一天的残差,所以外面套了 cross_ema;没有除法的分母是近零的量(种子 8 的缺口分母是前一日收盘价,正数)。无前视:全部只用 t 日收盘及以前的数据,cross_delay 的天数为正,没有 cross_shift / in_local_mean。最长窗口 120 日,热身期不主导。
+    seeds:
+      - 'cross_ema(day_skew(Open), 40)'
+      - 'cross_zscore(day_skew(Open), 120)'
+      - 'abs_(cross_ema(day_skew(Open), 30))'
+      - 'cross_tail_mean_q75(day_skew(Open), 60)'
+      - 'cross_tail_mean_q25(day_skew(Open), 60)'
+      - 'add(cross_tail_mean_q75(day_skew(Open), 60), cross_tail_mean_q25(day_skew(Open), 60))'
+      - 'cross_corr(day_skew(Open), day_sum(Ret), 60)'
+      - 'cross_corr(day_skew(Open), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(cross_delay(day_skew(Open), 1), day_sum(Ret), 60)'
+      - 'cross_regbeta(day_skew(Open), log(day_sum(Amt)), 60)'
+      - 'cross_reg_fvalue(day_skew(Open), day_first(Amt), 60)'
+      - 'cross_corr(day_skew(Open), day_centroid(Amt), 60)'
+      - 'cross_ema(cross_regres(day_skew(Amt), day_skew(Open), 60), 30)'
+      - 'cs_bucket_zscore(cross_ema(day_skew(Open), 30), LogFloatCap)'
+      - 'cs_regres(cross_ema(day_skew(Open), 30), cross_ema(day_skew(Amt), 30))'
+      - 'mul(cross_ema(day_skew(Open), 20), sign(cross_mean(day_sum(Ret), 20)))'
+    literature:
+      - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+        authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+        year: '2015'
+        treatment: 日内高频收益的已实现偏度对下期收益有负向预测;这里读的是价格路径(不是收益)的偏度,并取 30 到 120 日的慢聚合
+      - title: 'Maxing Out: Stocks as Lotteries and the Cross-Section of Expected Returns'
+        authors: Turan Bali, Nusret Cakici, Robert Whitelaw
+        year: '2011'
+        treatment: 极端上冲事件是散户的彩票需求;这里用 cross_tail_mean_q75 取过去 60 日里最偏的四分之一天
+      - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+        authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+        year: '2020'
+        treatment: 上行与下行半方差的不对称有各自的溢价;这里把偏度的上尾均值与下尾均值相加,读上冲与下探倾向的不对称
+      - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+        authors: Dong Lou, Christopher Polk, Spyros Skouras
+        year: '2019'
+        treatment: 隔夜与日内收益各自持续;这里用路径偏度与缺口的 60 日滚动相关读缺口被回吐还是被延续
+  - type: N
+    hypothesis: |-
+      机制:价格运动在一天里的时点轮廓(timing of price movement)。B058 批读的是价格路径的「值分布」(偏度),这一位读的是它的「时间分布」:当天的价格运动集中在开盘附近、午后还是尾盘,上涨集中在哪里、下跌集中在哪里。时点携带的信息是:开盘附近集中的运动是隔夜公开信息被知情者在开盘后兑现(价格发现),尾盘集中的运动是被动资金、机构调仓与收盘价管理这类订单流驱动,日内均匀的运动是持续的对冲与做市成交。这些是参与者构成的结构属性,个股层面持续(Heston, Korajczyk, Sadka 2010:同一半小时的收益和成交在随后几十个交易日里延续;Admati 与 Pfleiderer 1988:知情交易与流动性交易的时点集中)。
+      批里的启发(都是 B058 成员表和拆解表上的事实):(1) Open / High 口径的 abs_(day_skew) 与已知族 rho 约 −0.03,与控制完全正交,但原始日换手 0.88、原始净夏普 −15.4;(2) Amt / Volume 口径的换手 0.79、−8.6;(3) 唯一慢的成员 ts_decay_linear(abs_(day_skew(Amt)), 20)(日换手 0.13)原始是 +0.77,但它在新尺子下没有进前三,说明成交额口径的慢聚合被控制吃掉了,而价格口径的形状信息是正交的却太快。偏度把「值的不对称」压成一个数,这里把同样的日内形状换成时间轴上的读数,并全部慢聚合:每个读数都是 [0, 1] 之内或无量纲的比值,与成交额水平、波动水平天然低相关。
+      实现(在分钟轴上用 in_slice(Ret, 1, 240) 去掉第 0 根集合竞价,让轮廓只描述连续竞价;第 121 根含午休缺口,只占约 1/240 权重):day_centroid(abs_(r)) = |r| 的重心(0 = 全在开盘,1 = 全在收盘);add(r, abs_(r)) 只保留上涨分钟(的两倍)、sub(abs_(r), r) 只保留下跌分钟,它们的重心之差 = 「涨在后、跌在前」还是反过来,是 B058 偏度的时间轴、带方向的版本;day_gini(abs_(r)) 是运动集中在少数分钟的程度;day_argmax(abs_(r)) 是最大一分钟运动的时点;尾盘 30 分钟占当天 |r| 的比重。再与别的日度量做 60 日滚动关系:cross_corr(重心, 缺口, 60)(缺口用 cross_delay 取前一日收盘,无前视)、cross_corr(重心, log(day_sum(Amt)), 60)、cross_regbeta(day_sum(Ret), 重心, 60)(AlphaCube 的 cross_regbeta(x, y, d) 是 y 对 x 的斜率:当天涨幅每高一点,运动的重心移动多少)、cross_corr(价格重心, 成交额重心, 60)(价格运动与成交同步 = 价格在成交时动,是信息驱动;不同步 = 量没有推动价格)。成交额重心只放在对照里,不是主角:W01 的 head 把 day_centroid(Amt) 这一族封得很满,这里的主角是价格运动的时点,种子 9、10、11 里的成交额重心用 in_slice(Amt, 1, 240) 同样去掉了集合竞价那一根(W01 的 Amt 重心用的是含第 0 根的整天,重心很可能主要由开盘竞价那一根的成交额占比决定,这是我的推断,这里读的是连续竞价里的时点)。
+      为什么和已有的不同:(1) 库里 day_centroid / day_gini / cross_ema / cs_bucket_zscore / cross_zscore 出现 0 次(它们是库建好之后 Partura 加的算子),我把本位 16 个种子的骨架逐一与 members.csv 的 5583 个骨架比过,没有一个重复;(2) 手写库里最近的是 day_sum(abs_(in_slice(Ret, a, b)))(L1155–1157,首 30 分钟 / 尾 30 分钟 / 中段的绝对收益)和 cross_mean(div(day_last(in_slice(Close...)), ...), 20) 这类时段收益,它们是原始日度量或时段收益的 20 日均值,读的是运动的大小,不是重心、集中度和占比的无量纲时点;(3) 与 W01 已封的 day_centroid(Amt) 家族不同:价格运动重心与成交额重心不是同一个量(放量不一定动价),种子 9、10、11 就是读它们的差、相关和残差。为什么样本外还会在:时点轮廓是参与者构成的结构属性,Heston 等人记录了持续数十个交易日;滚动相关与 EMA 让换手低;所有读数无量纲,不随成交额水平与市值的风格切换而翻号。最可能的失败:(a) 价格运动的重心被开盘第 1 根分钟的波动主导(去掉第 0 根后仍可能);(b) 60 日滚动相关估得太吵;(c) 与已知成交额族 rho 仍高,被控制吃掉(预计较低:重心与比值都是无量纲的)。
+      数学检查:day_centroid 在 sum|r| = 0(整天不动)时为 NaN(代码里 tot > 0 才有值);day_gini 在 n ≤ 1 或 sum|r| = 0 时 NaN;尾盘占比的分母 day_sum(abs_(r)) 只有整天不动(停牌 / 一字板)时才为 0,这时分子也是 0,div 得 0 ÷ 0 = NaN 而不是 inf,cross_mean 按 nanmean 跳过缺失日(种子 12、13);sub(abs_(r), r) 与 add(r, abs_(r)) 是非负的,重心有定义;cross_corr 窗口内有效对不足时可能返回 0(已知,只影响停牌多的票)。无前视:Ret 与 Amt 都是当天的分钟数据,收盘后才用;cross_delay 只用滞后,没有 cross_shift / in_local_mean。窗口最长 120 日,热身期不主导。
+    inspired_by: 'B058 批:abs_(day_skew(F)) 的 Open / High 口径与已知族 rho −0.03(完全正交)但日换手 0.88、原始净夏普 −15.4;Amt / Volume 口径 −8.6;唯一慢的成员 ts_decay_linear(abs_(day_skew(Amt)), 20) 原始 +0.77 却没有进新尺子的前三。价格路径的形状信息正交但太快,成交额口径的慢聚合被控制吃掉;这一位把形状从值轴挪到时间轴,读价格运动的时点轮廓,并全部慢聚合。'
+    seeds:
+      - 'cross_mean(day_centroid(abs_(in_slice(Ret, 1, 240))), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_centroid(abs_(in_slice(Ret, 1, 240))), 20), LogFloatCap)'
+      - 'cross_ema(sub(day_centroid(add(in_slice(Ret, 1, 240), abs_(in_slice(Ret, 1, 240)))), day_centroid(sub(abs_(in_slice(Ret, 1, 240)), in_slice(Ret, 1, 240)))), 30)'
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), log(day_sum(Amt)), 60)'
+      - 'cross_regbeta(day_sum(Ret), day_centroid(abs_(in_slice(Ret, 1, 240))), 60)'
+      - 'sub(cross_ema(day_centroid(abs_(in_slice(Ret, 1, 240))), 10), cross_ema(day_centroid(abs_(in_slice(Ret, 1, 240))), 120))'
+      - 'cross_mean(day_gini(abs_(in_slice(Ret, 1, 240))), 20)'
+      - 'cross_mean(sub(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240))), 30)'
+      - 'cross_corr(day_centroid(abs_(in_slice(Ret, 1, 240))), day_centroid(in_slice(Amt, 1, 240)), 60)'
+      - 'cs_regres(cross_mean(day_centroid(abs_(in_slice(Ret, 1, 240))), 30), cross_mean(day_centroid(in_slice(Amt, 1, 240)), 30))'
+      - 'cross_mean(div(day_sum(in_slice(abs_(Ret), 211, 240)), day_sum(in_slice(abs_(Ret), 1, 240))), 30)'
+      - 'cross_mean(sub(div(day_sum(in_slice(abs_(Ret), 211, 240)), day_sum(in_slice(abs_(Ret), 1, 240))), div(day_sum(in_slice(abs_(Ret), 1, 30)), day_sum(in_slice(abs_(Ret), 1, 240)))), 30)'
+      - 'cross_ema(day_argmax(abs_(in_slice(Ret, 1, 240))), 40)'
+      - 'cross_reg_fvalue(day_centroid(abs_(in_slice(Ret, 1, 240))), day_first(Amt), 60)'
+      - 'cs_bucket_zscore(cross_ema(day_centroid(abs_(in_slice(Ret, 1, 240))), 20), cross_mean(day_std(Ret), 20))'
+    literature:
+      - title: 'Intraday Patterns in the Cross-Section of Stock Returns'
+        authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+        year: '2010'
+        treatment: 同一半小时的收益与成交在随后数十个交易日里延续,个股的日内时点模式是持续的;这里用价格运动的重心、集中度与尾盘占比的 20 到 40 日慢聚合近似
+      - title: 'A Theory of Intraday Patterns: Volume and Price Variability'
+        authors: Anat Admati, Paul Pfleiderer
+        year: '1988'
+        treatment: 知情交易与流动性交易在日内时点上集中,价格波动与成交量的时点同步由此而来;这里用价格运动重心与成交额重心的差、相关与截面残差近似
+      - title: 'A Tug of War: Overnight Versus Intraday Expected Returns'
+        authors: Dong Lou, Christopher Polk, Spyros Skouras
+        year: '2019'
+        treatment: 隔夜与日内收益各自持续;这里用价格运动重心与缺口的 60 日滚动相关读开盘附近的价格发现与缺口的关系
+      - title: Market Intraday Momentum
+        authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+        year: '2018'
+        treatment: 开盘半小时收益预测尾盘半小时收益;这里用上涨与下跌的运动重心之差(涨在后、跌在前)读日内方向与时点的关系
+R:
+  - head: 'abs_(day_skew(Open))'
+    why: |-
+      烂的部件有两处,依据都在本批拆解表里。(1) 单日取值太快:它是日度量,原始日换手 0.88、原始净夏普 −15.4;新尺子下半衰期 20 之后仍是 −3.08 / −3.12,两段几乎一样,说明毛超额约为 0(推断,没有毛收益数),亏的是换手成本。pow_2 / abs_ 的嵌套是单调改写,分数逐位相同(−3.0783),不单独做变体;Open 换 Close 几乎不变(−2.87 / −3.25),也不做。(2) 平滑的方式:快照里只有半衰期 20 的排名 EMA(尺子自带),没有在表达式里先对原始值做慢平滑、做自己历史的 z 分数、取尾部均值、对水平分桶的写法。变体逐块拿掉:(1)(2)(3) 换平滑(cross_mean 20 / 60 日、cross_ema 半衰期 90 日);(4) 减去自己 120 日水平(cross_zscore);(5) 只看最偏的四分之一天(cross_tail_mean_q75);(6) 近 20 日对 120 日的比值(绝对偏度是上升还是回落);(7)(8) 在流通市值十分位 / 波动十分位内标准化;(9) 去掉当天成交额偏度可解释的部分(cs_regres);(10)(11)(12) 只用上午 / 下午的路径,或下午减上午(in_slice(Open, 1, 120) 与 in_slice(Open, 121, 240),午休前后各 120 根);(13) 把价格路径换成每分钟高低差的路径 sub(High, Low),读成交波动的脉冲而不是价位的偏。数学上都有界:均值、EMA、z 分数、分桶、残差都不含近零的分母;变体 6 的分母是 120 日绝对偏度的 EMA,为正,在整天不动的票上为 NaN;day_skew 在整天价格不动时是 NaN。无前视。
+    variants:
+      - 'cross_mean(abs_(day_skew(Open)), 20)'
+      - 'cross_mean(abs_(day_skew(Open)), 60)'
+      - 'cross_ema(abs_(day_skew(Open)), 90)'
+      - 'cross_zscore(abs_(day_skew(Open)), 120)'
+      - 'cross_tail_mean_q75(abs_(day_skew(Open)), 60)'
+      - 'div(cross_ema(abs_(day_skew(Open)), 20), cross_ema(abs_(day_skew(Open)), 120))'
+      - 'cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 30), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 30), cross_mean(day_std(Ret), 20))'
+      - 'cs_regres(cross_ema(abs_(day_skew(Open)), 30), cross_ema(abs_(day_skew(Amt)), 30))'
+      - 'cross_ema(abs_(day_skew(in_slice(Open, 121, 240))), 30)'
+      - 'cross_ema(abs_(day_skew(in_slice(Open, 1, 120))), 30)'
+      - 'cross_ema(sub(abs_(day_skew(in_slice(Open, 121, 240))), abs_(day_skew(in_slice(Open, 1, 120)))), 30)'
+      - 'cross_ema(abs_(day_skew(sub(High, Low))), 30)'

@@ -1,0 +1,92 @@
+seed: 2010
+round: 3
+slots:
+- type: E
+  core: cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)
+  hypothesis: '机制:核心 A = cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1) = 两个交易日前「14:30 以前」的累计分钟收益(量级 1e-3 ~ 3e-2,每天一个数,取值有界,无近零分母)。本流第 2 轮 E 位唯一的 head 是 cross_corr(尾盘 30 分钟 DW, A, 241) = +0.51(train +0.70 / valid +0.51,半衰期 5);拆解:去掉一层 cross_delay(滞后 1 天)降到 +0.19,再加一层(滞后 3 天)是 +0.36,A 单独(只当截面信号)是 −5.35,所以 A 不是自己有 alpha,而是「它与某个同日路径统计的 241 日时间序列相关」里读到的东西;共性表里含 A 的 6 个候选均值 −0.71 对 −2.34(差 +1.63,p 0.002),含 A 的一层滞后版本 13 个、+1.26。我的读法:alpha 来自「个股对两天前收益的反应系数」这个慢变特征(情绪 / 持仓被动再平衡在 T+2 才进入价格路径的粗糙度),而 DW(尾盘)只是被试过的第一个搭档;滞后结构 +0.19 / +0.51 / +0.36 的非单调也可能只是估计噪声,所以本位把搭档整体换掉来检验。
+
+
+    本位要试的外围(不再是「尾盘 DW 的同日 Pearson 相关」):(a) 换成别的当天微观结构搭档:尾盘已实现波动 day_std(Ret)、尾盘成交额占全天份额、Close 版尾盘 DW、整天无关的盘中 DW(31 ~ 210)、开盘 30 分钟 DW、14:30 前收益的 AR(1)(种子 1、2、3、9、10、11);(b) 换成当天收益本身作搭档:尾盘收益、开盘 30 分钟收益、全天绝对收益、隔夜缺口(种子 4、5、6、8、12),读的是「两天前的涨跌对今天价格行为的传导」;(c) 换耦合写法:cross_regbeta(A, cs_rank(D), 241)(把 A 当回归元,A 的量级远大于 rolling_ols 的绝对阈值 1e-9)、双边 cs_rank、对 A 取 sign、cross_cov 再除以均值(种子 4、7、9、13)。
+
+
+    为什么和以前不一样:快照里含 A 的 6 个候选全是 cross_corr(DW(尾盘), A 的变形, 241 或 120 / 482),外围只是滞后层数与耦合函数(corr / cov);没有一个换掉 DW 搭档,没有回归斜率、sign、cs_rank 或「除以均值」的写法。库的 5583 条表达式里 cross_delay 只与 1 条同现,cross_corr / cross_regbeta 与 in_slice 的日轴耦合几乎没有;种子骨架(day_std、成交额份额、Close 的 DW、AR(1) 等搭档的组合)都不在库里。与 10 个 head 的区别:其余 head 读 DW / AR(1) 的水平与离散度,A 本身不读水平,读的是跨日时序耦合。
+
+
+    为什么样本外还会在:读的是个股对过去收益的反应系数,是持仓结构(散户 / 机构占比、T+1 下的持仓年龄)这类慢变量,窗口 241 ~ 482 日,名次几个月不变,换手低;不依赖某段行情的方向,因为相关系数去掉了均值与幅度。风险(事先写明):相关估计误差约 0.06,与截面离散度相当;滞后 2 的非单调可能是噪声,那样换搭档后整体会掉到 −1 以下。
+
+
+    数学检查:全部是日轴窗口 241 的相关 / 协方差 / 回归斜率,无除以近零量(cross_cov 再除的是窗口内正均值,0 / 0 只给 NaN);A 在上市后前两日是 NaN,为窄缺失;cross_corr 在窗口无有效对时返回 0 或 NaN,只影响新股 / 复牌;无前视:A 是两天前的收盘前数据,搭档全是 t 日收盘及以前的数据,t+1 才交易。'
+  seeds:
+  - cross_corr(day_std(in_slice(Ret, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(div(day_sum(in_slice(Amt, 211, 240)), day_sum(Amt)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(day_durbin_watson(in_slice(Close, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_regbeta(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))), 241)
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), day_sum(in_slice(Ret, 211, 240)), 241)
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), day_sum(in_slice(Ret, 1, 30)), 241)
+  - cross_corr(cs_rank(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))), 241)
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), abs_(day_sum(Ret)), 241)
+  - div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), day_durbin_watson(in_slice(Vwap, 1, 30)), 241), cross_mean(day_durbin_watson(in_slice(Vwap, 1, 30)), 241))
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), day_ar1_coefficient(in_slice(Ret, 1, 210)), 241)
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), day_durbin_watson(in_slice(Vwap, 31, 210)), 482)
+  - cross_corr(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 241)
+  - cross_corr(sign(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), day_durbin_watson(in_slice(Vwap, 211, 240)), 241)
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Llorente, Michaely, Saar, Wang
+    year: '2002'
+    treatment: 成交 / 微观结构状态与后续收益的延续或回吐;这里把状态换成尾盘价格路径粗糙度等,收益换成滞后两天的收益
+- type: N
+  hypothesis: '机制:个股分钟收益的一阶自相关 a = day_ar1_coefficient(in_slice(Ret, 1, 210)) 刻画当天价格路径是「价差弹跳 / 回头」(a < 0,流动性提供者在赚钱的票)还是「顺势延续」(a > 0,知情 / 程序化拆单的票);把 a(或尾盘的 a)与「滞后几天的收益」做 241 日时间序列相关,读的是「前几天涨跌之后,今天的盘中价格路径是更趋于回头还是更趋于延续」,即库存风险 / 流动性提供的慢变状态(Campbell-Grossman-Wang 1993:库存风险使价格反转;Nagel 2012:短期反转是流动性提供者的补偿)。另一个来源是本流第 2 轮 E 位的唯一 head,尾盘 DW 对滞后 1 / 2 / 3 天收益的相关为 +0.19 / +0.51 / +0.36:滞后结构本身像是信号,所以种子 4、5 直接读「滞后 2 天相关 − 滞后 1 天相关」与「滞后 2 天相关 − 滞后 1、3 天的均值」,即反应曲线的形状,而不是某一个滞后的水平。
+
+
+    启发:B030 是 day_ar1_coefficient(F) 的裸对象批,价格水平字段(Vwap / Close / High / Low)的 AR(1) ≈ 1,读数是数值伪影,本位只用收益字段 Ret(AR(1) 取值在 ±0.3 内,量级正常),这是该批里唯一有意义的一类;快照 221 个已评分候选里「含 in_slice(Ret, 1, 210) 的日累计收益」的 45 个,均值 −1.56 对 −2.48(差 +0.92,p 0.000),而含 day_ar1_coefficient(Ret) 的候选一个都没有。
+
+
+    算子怎样实现:a 与 A / L1 / L3(滞后 2 / 1 / 3 天的 14:30 前收益)、尾盘收益 T、尾盘 DW(D)做 cross_corr / cross_regbeta(a 或 cs_rank(a) 做回归元,量级 1e-1 远大于 1e-9 的阈值)、sign 条件均值(种子 10)、cs_rank 双边版(种子 11,去掉大盘共同成分)、窗口 241 / 482 日。
+
+
+    为什么和库里已有的不同:库的 5583 条表达式中,day_ar1_coefficient 几乎全部作用在 Volume / High / Close 等水平或成交量字段,并外包 sigmoid / pow / ts_decay_linear 等保序包装;作用在 Ret 上并与滞后收益做时间序列相关的一条没有;「滞后相关的差」(反应曲线形状)也没有。种子骨架逐个对照过库的骨架。与 10 个 head 的区别:head 读价格水平字段 AR(1) / DW 的水平或离散度,这里读收益路径的自相关与跨日反应曲线。与五个控制的区别:20 日反转读收益的累计,这里是路径的自相关系数与滞后收益的耦合,水平与幅度已被相关去掉。
+
+
+    为什么样本外还会在:来源是流动性提供与库存风险这类持续的市场结构(价差、投资者结构),不是某段行情;窗口 241 ~ 482 日,名次几个月不变,换手低。风险:估计误差约 0.06;a 与波动 / 流动性水平的交互不会被尺子去掉;种子 4、5 是两个相关的差,噪声翻倍,可能比单个相关更差,但这是对「滞后结构是否真有形状」的直接检验。
+
+
+    数学检查:a 在收益平方和大于 1e-8 时才有定义(约 2e-4 的日内波动都满足),极少数停牌 / 涨跌停封死日为 NaN,是窄缺失;所有相关 / 斜率只在窗口内有有效对时有值;sign 条件均值只做乘法与均值,无除法;无前视:a 是 t 日 14:30 前 / 尾盘数据,滞后收益只用 cross_delay,t+1 才交易。'
+  inspired_by: B030 的 day_ar1_coefficient(Ret) 裸对象(收益路径的一阶自相关)与本流第 2 轮 E 位唯一的 head:尾盘 DW 对滞后两天收益的相关(+0.51)在滞后 1 / 2 / 3 天上读数 +0.19 / +0.51 / +0.36,滞后结构本身像是信号
+  seeds:
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 241)
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - sub(cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241), cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 241))
+  - sub(cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241), mul(add(cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 241), cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 1), 241)), 0.5))
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), day_durbin_watson(in_slice(Vwap, 211, 240)), 241)
+  - cross_regbeta(cs_rank(day_ar1_coefficient(in_slice(Ret, 1, 210))), day_sum(in_slice(Ret, 211, 240)), 241)
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), cross_delay(day_ar1_coefficient(in_slice(Ret, 211, 240)), 1), 241)
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), cross_delay(cross_delay(day_sum(Ret), 1), 1), 482)
+  - cross_mean(mul(day_ar1_coefficient(in_slice(Ret, 1, 210)), sign(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1))), 241)
+  - cross_corr(cs_rank(day_ar1_coefficient(in_slice(Ret, 1, 210))), cs_rank(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), 241)
+  - cross_corr(day_ar1_coefficient(in_slice(Ret, 1, 210)), day_std(in_slice(Ret, 211, 240)), 241)
+  literature:
+  - title: Return Reversals and Liquidity Provision (Evaporating Liquidity)
+    authors: Stefan Nagel
+    year: '2012'
+    treatment: 短期反转是流动性提供者的补偿;这里用分钟收益 AR(1) 的符号刻画个股的价差弹跳 / 趋势,并看它与滞后收益的耦合
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Campbell, Sanford Grossman, Jiang Wang
+    year: '1993'
+    treatment: 库存风险使价格反转;分钟收益自相关为负的个股是有流动性提供者的票
+R:
+- head: cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  why: 烂的部件候选有三个,依据在本流第 2 轮拆解里:(1) 耦合的搭档收益窗口 in_slice(Ret, 1, 210) 没有被检验过(拆解只改了滞后层数:1 层 +0.19,3 层 +0.36,2 层 +0.51,以及 Vwap→Close +0.33、窗口 482 +0.28),我怀疑 14:30 前这一段是不是承重,所以变体 1、2 换成整天收益与开盘 30 分钟;(2) 耦合的函数形式:Pearson 相关对尾部敏感,cross_cov 的 valid 为 +0.70 而 train 为 +0.25,所以试 log(D)、cs_rank 双边、只对 A 取 cs_rank、sign(A)、cov 除以 D 的标准差(变体 3、4、9、10、11);(3) 尾盘窗口:30 分钟的 DW 噪声大,试最后 1 小时与最后 15 分钟(变体 6、7),以及把滞后 2 天换成滞后 2 ~ 4 天的三日和(变体 8,读的是「慢扩散」而不是单日)与窗口 360(变体 5)。数学上全部有界:相关系数 [-1, 1],cov ÷ std 的分母是窗口内 D 的标准差(正),0 / 0 只给 NaN;log 只作用于 D(量级 1e-8 ~ 1e-5,大于 log 的下限 1e-9 的少数高价股为 NaN,窄缺失);无前视。预期:满足「比原 head 好 0.1」的概率很低,大多数变体与 head 的 ρ > 0.7。
+  variants:
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 240)), 1), 1), 241)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 30)), 1), 1), 241)
+  - cross_corr(log(day_durbin_watson(in_slice(Vwap, 211, 240))), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))), cs_rank(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), 241)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 360)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 181, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 226, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), ts_sum(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 3), 241)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), sign(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), 241)
+  - div(cross_cov(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241), cross_stddev(day_durbin_watson(in_slice(Vwap, 211, 240)), 241))
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cs_rank(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1)), 241)

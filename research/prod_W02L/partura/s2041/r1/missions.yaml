@@ -1,0 +1,49 @@
+seed: 2041
+round: 1
+slots:
+  - type: E
+    core: 'day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0)))'
+    hypothesis: >-
+      Three batch heads all keep only the minutes where the 241-minute rolling z-score bucket of Close is in an extreme tail (label 4 = price above mean+1.28 sigma, label 0 = below) and then sum or average the raw Volume, and all score about -1.5 to -1.8; the raw level of Volume is what the ruler removes (liquidity control), so the level is the rotten part and the core (volume that trades while price is stretched to the upper tail) may still carry information. Mechanism: volume at stretched-high prices is chasing or distribution volume (retail momentum chasing, large holders unloading into strength); its share of the day total, its imbalance against the lower-tail share, and its deviation from the stock's own 20-day normal are level-free measures of how much of the day's trading happened under price stress. The seeds wrap the core with the day-total volume as a denominator, a lower-tail or neutral-bucket benchmark, a cross-day mean/zscore against the stock's own history, and a direction-conditioned (Ret>0 / Ret<0) split. The library only has the raw day_sum/day_mean of this tail volume (and an Amt/Vwap variant); ratios, differences against opposite tail and across-day z-scores were never tried, so the new thing is the cross-sectionally comparable normalisation, not a different tail. Out of sample it should persist because tail-volume share is a behavioural trait (who trades when price is extended) that is slow-moving and cross-day averaging reduces noise; the ratio forms have no look-ahead (all minute data are same-day) and a guarded denominator.
+    seeds:
+        - 'div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), 20)'
+        - 'cross_mean(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), 5)'
+        - 'sub(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), div(day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05))))'
+        - 'div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), cross_mean(add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05)), 20))'
+        - 'cross_zscore(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), 20)'
+        - 'div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'sub(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_roll_labels(Close, 241), 2), Volume, create_like(in_slice(Close, 1, 1), 0))))'
+        - 'div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(eq(in_roll_labels(Close, 241), 3), Volume, create_like(in_slice(Close, 1, 1), 0))), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(is_gt(Ret, 0), Volume, create_like(in_slice(Close, 1, 1), 0))), create_like(in_slice(Close, 1, 1), 1e-05))), 10)'
+        - 'div(day_mean(select_where(select_where(is_lt(Ret, 0), eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close, 1, 1), 0)), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'sub(cross_mean(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), 5), cross_mean(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), 40))'
+        - 'div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Amt, create_like(in_slice(Close, 1, 1), 0))), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(sub(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), div(day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_mean(Volume), create_like(in_slice(Close, 1, 1), 1e-05)))), 10)'
+  - type: N
+    hypothesis: >-
+      The batch is entirely about volume under extreme price buckets and all negative; the lesson is that conditioning volume on price level is just liquidity. New idea: measure the micro-structure of how price and volume co-move inside the day rather than the level - intraday price-volume correlation (day_corr(Amt,Ret), lagged correlation of price change with volume), return autocorrelation (momentum vs bounce within the day), intraday range position of the close (close-low over high-low), skew of minute returns, and drawdown from the high at the close, each averaged over 5-20 days to cut noise. Mechanism: positive price-volume correlation reveals informed or trend-chasing trading, negative autocorrelation reveals liquidity-provision bounce, and close position in the range reveals end-of-day demand; all are scale-free, so the ruler's liquidity / volatility controls are not trivially re-measured. Library-wise these are shape statistics, not conditional volume sums, so they are structurally different from every batch member. They should persist because the behavioural pricing of order-flow pressure is slow-moving and cross-day means give stable signals.
+    inspired_by: 'batch 1 of stream 2041: all three heads (and the whole 26-candidate set) are Volume or Amt sums selected by in_roll_labels buckets of Close or Vwap, scoring -1.5 to -4.1; the Volume to Amt swap is far worse (-3.9), which says the level is a liquidity read and a different, scale-free statistic of the same price-bucket tail structure is needed'
+    seeds:
+        - 'div(day_sum(select_where(is_gt(in_zscore_rolling(Vwap, 60), 1), Amt, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Amt), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(day_corr(in_delta(Vwap, 5), Volume), 20)'
+        - 'cross_mean(day_corr(in_pct(Close, 5), in_shift(Volume, 5)), 20)'
+        - 'day_corr(Ret, in_shift(Ret, 1))'
+        - 'cross_mean(day_autocorr(Ret, 1), 20)'
+        - 'div(day_std(select_where(is_lt(in_argmax(Close, 30), 0.5), Ret, create_like(in_slice(Close, 1, 1), 0))), add(day_std(Ret), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(day_skew(Ret), 20)'
+        - 'cross_mean(day_corr(Vwap, in_index(Close)), 20)'
+        - 'cross_mean(day_corr(Amt, Ret), 10)'
+        - 'cross_mean(sub(day_max(Close), day_close(Close)), 10)'
+        - 'cross_mean(div(sub(day_close(Close), day_min(Close)), add(sub(day_max(Close), day_min(Close)), create_like(in_slice(Close, 1, 1), 1e-05))), 10)'
+        - 'cross_mean(day_corr(in_zscore_rolling(Volume, 30), Ret), 20)'
+R:
+  - head: 'day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0)))'
+    why: 'raw Volume level is the rotten part (liquidity control removes it; Volume->Amt swap falls to -3.96 so it is unit-dependent); replace by level-free ratios of the lower-tail volume to the day total and the stock own 20-day normal, keeping the tail selector that knockout shows is not hurting'
+    variants:
+        - 'div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05)))'
+        - 'cross_mean(div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), 20)'
+        - 'cross_zscore(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), 20)'
+        - 'div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), cross_mean(add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05)), 20))'
+        - 'sub(div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), div(day_sum(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05))))'
+        - 'cross_mean(div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0))), add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05))), 5)'

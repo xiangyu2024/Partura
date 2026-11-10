@@ -1,0 +1,119 @@
+seed: 2021
+round: 1
+slots:
+  - type: E
+    core: 'day_max(High)'
+    hypothesis: >-
+      Core = day_max(High), the daily high of the BACK-ADJUSTED price (adjusted price = raw price x cumulative adjustment factor fac, where fac is the
+      running product of dividends and bonus-share adjustments since listing; across stocks its rank is roughly raw price x payout history x
+      vintage-of-listing, a very slow-moving stock characteristic). Why this is the core and not day_argmin(Amt): in this batch (B061, 16 members around
+      pow_1_5(day_argmin(Amt))) the three material heads score -2.20 / -2.50 / -2.90; the least bad one, head 1, carries two price-level terms, div(., day_max(High))
+      (sufficiency -2.22, equal to the whole head) and cross_max(day_cov(Close, Close), 15), which in CNY^2 is proportional to adjusted price squared times intraday
+      variance, so it is also a price level (sufficiency -2.41); the pure clock-time head 3 (variance of the trough minute) is the worst at -2.90, and knocking the
+      power out of head 1 (plain day_argmin(Amt) instead of pow_1_5(day_argmin(Amt))) moves its score from -2.20 to -0.92 (train -0.48), which lets the price-level terms
+      compete in the sum, while knocking out the cov term changes nothing (+0.01).
+      So the part of this batch that looks like signal is a price level, and 7 of the 16 members that hold the clock-time itself already sit in the champion's family 22,
+      which the ruler removes. None of the 7 controls (liquidity, volatility, 20-day reversal, known Amt family, LogFloatCap, two champions) is a price level
+      or a payout history, so this is a slow characteristic the ruler does not subtract. The slot keeps the level and grows OUTSIDE it in four directions, none
+      of which the snapshot has seen (the heads wrap it in ts_quantile_q75 chains, divide an argmin by it, or add cross_max(day_cov)):
+      (1) the level against its OWN history with day-axis operators on 60 / 241-day windows (ratio to the 1-year mean, distance to the 52-week high, position in the
+      1-year range, z-score, fast/slow EMA ratio, 12-month change, 60-vs-241 spread, Hurst exponent): dividing the level by its own past strips the listing-price base
+      and the vintage, leaving the long-horizon price path (52-week-high anchoring, 6-12 month reversal), a horizon that the 20-day reversal control does not cover;
+      (2) the level decomposed with daily-field leaves: LogFloatCap - LogFloatShares is the log of the RAW nominal price (FloatCap / FloatShares), so
+      log(day_max(High)) - (LogFloatCap - LogFloatShares) is the log adjustment factor = cumulative payout / bonus-share history (high-payout stocks), which is neither
+      price, size nor liquidity; no library expression uses a daily-field leaf at all;
+      (3) the level made size-neutral inside the expression: cs_bucket_demean / cs_bucket_rank on LogFloatCap compares a stock's price with same-size peers (nominal-price /
+      low-price preference of retail investors that is not the size effect);
+      (4) the level against money flow: cross_corr(level, day_sum(Amt), 60) = does the price rise on rising turnover.
+      Why it may survive out of sample: these are slow, persistent attributes (the decile book turns over a few percent a day, so the 15 bp cost is small), the mechanisms
+      (nominal-price illusion, 52-week-high anchoring, payout / dividend preference) are structural rather than sample-specific, and the objective takes the worse of
+      train and valid, which filters out the "train ~ 0, valid positive" slow low-price tilt that lab findings warn about. Math notes: all divisions have strictly positive
+      denominators (price levels, ranges, means of prices); windows are NaN-aware, newly listed stocks (about 7 percent of the cross-section) have short expanding
+      windows, so the 60-day variants are preferred where listing age could dominate.
+    literature:
+      - {source: 'George and Hwang, The 52-week high and momentum investing, Journal of Finance', year: 2004}
+    seeds:
+      - 'div(day_max(High), cross_mean(day_max(High), 241))'
+      - 'div(day_max(High), cross_max(day_max(High), 241))'
+      - 'div(sub(day_max(High), cross_min(day_min(Low), 241)), sub(cross_max(day_max(High), 241), cross_min(day_min(Low), 241)))'
+      - 'cross_zscore(day_max(High), 60)'
+      - 'cross_zscore(day_max(High), 241)'
+      - 'div(cross_ema(day_max(High), 5), cross_ema(day_max(High), 60))'
+      - 'div(sub(day_max(High), cross_delay(day_max(High), 241)), cross_mean(day_max(High), 241))'
+      - 'sub(log(day_max(High)), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_demean(sub(log(day_max(High)), sub(LogFloatCap, LogFloatShares)), LogFloatCap)'
+      - 'cs_bucket_demean(log(day_max(High)), LogFloatCap)'
+      - 'cs_bucket_rank(day_max(High), LogFloatCap)'
+      - 'cross_corr(day_max(High), day_sum(Amt), 60)'
+      - 'cross_hurst(day_max(High), 60)'
+      - 'sub(div(day_max(High), cross_mean(day_max(High), 60)), div(day_max(High), cross_mean(day_max(High), 241)))'
+  - type: N
+    hypothesis: >-
+      Idea: split each day's price change into the OVERNIGHT part (previous close to today's first open, i.e. the call auction and the news that arrived while the
+      market was closed) and the INTRADAY part (open to close, the continuous session, dominated by retail trading), and read how the two behave over 20-50 days.
+      Overnight return ON = day_first(Open) / ts_delay(day_last(Close), 1) - 1; intraday return ID = day_last(Close) / day_first(Open) - 1 (prices are back-adjusted
+      with the same factor within a day and the factor is applied consistently across the ex-date, so ON is a clean total-return gap). Mechanisms the seeds implement:
+      (a) tug of war: sub(ts_sum(ON), ts_sum(ID)) and robust medians: persistently strong overnight and weak intraday returns mean that informed / institutional flow arrives
+      before the open while retail intraday trading is noise that reverts (Lou, Polk and Skouras 2019 find both components persist but with opposite sign of premium;
+      Aboody et al. 2018 tie overnight returns to firm-specific sentiment);
+      (b) gap follow-through vs gap fade: ts_corr(ON, ID) and ts_regbeta(ID, ON) and the frequency with which gap and session share a sign: a stock whose opening gaps are
+      followed through is being repriced on information, one whose gaps fade is being pushed around by opening orders;
+      (c) the information share of the closed market: std(ON) / (std(ON) + std(ID)) and the drift-consistency ratio sum(ON) / sum(|ON|), scale-free, so not a volatility level;
+      (d) a purged version: cs_regres(sum(ON), sum(total return)) removes the 20-day reversal exposure inside the expression, and cs_regres(mean ON, mean ID) keeps only
+      the part of the overnight drift that the session does not explain;
+      (e) clock-time of the price path (carried over from the batch's argmin theme, where the batch's clock-time of the volume trough was the weak part): the day's low
+      occurring after the day's high, averaged over 20 days, and its correlation with the gap.
+      Why it differs from the library and the heads: the library (5583 expressions) is minute-structure statistics (in_slice, day_std, argmin of Amt ...), it has no expression
+      that builds ON and ID across the day axis and compares them, and none of the heads or controls (liquidity, volatility, 20-day total-return reversal, Amt
+      dispersion family, size, two champions) is a split of the return by session. Correlation with the 20-day reversal control is partial, because the difference ON - ID is
+      not the total return ON + ID. Why it may persist out of sample: the retail-vs-institution split of the trading day is structural in A-shares (T+1, call
+      auction orders from institutions, retail intraday churn), the signals are 20-50 day averages with slow turnover, and no divisor can explode (ratio seeds divide by sums of
+      absolute values or standard deviations of non-degenerate windows; a stock locked at the limit all window is NaN or a ratio of zeros, which the NaN-aware ops drop).
+      No look-ahead: ON uses only the open of day t and the close of day t-1, ID only day t.
+    inspired_by: 'B061: the batch is clock-time features (pow_1_5(day_argmin(Amt)), day_open(Close) in head 2) and its best members carry price-level terms; the clock-time of the volume trough was the weakest part (head 3, -2.90), so the new idea moves the clock from volume to the price path: how much of the move arrives before the open versus during the session'
+    literature:
+      - {source: 'Lou, Polk and Skouras, A tug of war: overnight versus intraday expected returns, Journal of Financial Economics', year: 2019}
+      - {source: 'Aboody, Even-Tov, Lehavy and Trueman, Overnight returns and firm-specific investor sentiment, Journal of Financial and Quantitative Analysis', year: 2018}
+    seeds:
+      - 'sub(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 20), ts_sum(sub(div(day_last(Close), day_first(Open)), 1), 20))'
+      - 'sub(ts_med(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40), ts_med(sub(div(day_last(Close), day_first(Open)), 1), 40))'
+      - 'ts_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 50)'
+      - 'ts_regbeta(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40)'
+      - 'div(ts_std(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), add(ts_std(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), ts_std(sub(div(day_last(Close), day_first(Open)), 1), 30)))'
+      - 'cs_regres(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 20), ts_sum(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20))'
+      - 'ts_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50)'
+      - 'ts_quantile_q25(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50)'
+      - 'ts_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), sign(sub(div(day_last(Close), day_first(Open)), 1))), 30)'
+      - 'ts_mean(sub(day_argmin(Low), day_argmax(High)), 20)'
+      - 'ts_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(day_argmin(Low), day_argmax(High)), 30)'
+      - 'cs_regres(ts_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 50), ts_mean(sub(div(day_last(Close), day_first(Open)), 1), 50))'
+      - 'div(ts_sum(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 30), ts_sum(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 30))'
+R:
+  - head: 'add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(day_cov(Close, Close), 15))'
+    why: >-
+      Two rotten parts, both read off the knockout table. (1) pow_1_5(day_argmin(Amt)): replacing it by the plain day_argmin(Amt) moves the score from -2.20 to -0.92
+      (train -0.48), a gain of 1.28; the power stretches a 0..240 minute index so that, inside a plain add() of terms in different units, the argmin term swamps the
+      price-variance term for most stocks, i.e. the sum is not the balanced mixture it looks like. Variants put the two terms on a common footing with cs_rank (rank sum),
+      smooth the noisy daily index by its 20-day mean, or drop the clock term entirely (price-level U-shape: cs_rank(inv(High)) + cs_rank(cov term)) to see which half carries
+      the score. (2) day_max(High) as the price denominator is the BACK-ADJUSTED high, so it carries the payout factor, not the nominal price retail sees; one
+      variant swaps it for the raw price proxy day_sum(Amt) / day_sum(Volume) (Amt and Volume are unadjusted, so the ratio is raw price up to a constant unit). The cov
+      term cross_max(day_cov(Close, Close), 15) is a passenger (knockout +0.01) and its CNY^2 units leak the price level; one variant divides it by High squared
+      to make it scale-free.
+    variants:
+      - 'add(cs_rank(div(day_argmin(Amt), day_max(High))), cs_rank(cross_max(day_cov(Close, Close), 15)))'
+      - 'add(cs_rank(div(day_argmin(Amt), div(day_sum(Amt), day_sum(Volume)))), cs_rank(cross_max(day_cov(Close, Close), 15)))'
+      - 'div(day_argmin(Amt), day_max(High))'
+      - 'add(div(cross_mean(day_argmin(Amt), 20), day_max(High)), cross_max(day_cov(Close, Close), 15))'
+      - 'add(cs_rank(inv(day_max(High))), cs_rank(cross_max(day_cov(Close, Close), 15)))'
+      - 'cross_max(div(day_cov(Close, Close), pow_2(day_max(High))), 15)'
+  - head: 'ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)'
+    why: >-
+      The variance of the (stretched) trough-minute index over 20 days is the weakest head (-2.90 in both train and valid): with zero-trade minutes the argmin of Amt is the first
+      empty minute, so the index is mostly a liquidity level and its variance is a function of it, which the liquidity and size controls then remove; the knockout of the power
+      changes nothing (-0.10). Variants take the level or the spread of the index instead of the variance of its power, and neutralise the whole head inside size or
+      liquidity deciles so the shared level is taken out inside the expression.
+    variants:
+      - 'ts_quantile_q75(ts_mean(day_argmin(Amt), 20), 5)'
+      - 'ts_quantile_q75(ts_std(day_argmin(Amt), 20), 5)'
+      - 'cs_bucket_demean(ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5), LogFloatCap)'
+      - 'cs_bucket_demean(ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5), day_sum(Amt))'

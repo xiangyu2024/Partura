@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心门槛：day_skew(Volume) 与快照 3 个 head 的最大日度秩 |ρ| 为 0.065，与 5 个控制为 liq 0.27 / vol 0.01 / rev 0.03 / known 0.22 / size 0.11，都远低于 0.8；库里裸核心（X 库 B053）train 净夏普 -8.6，承重的一定在外围。创新：15 个种子的骨架（抽掉字段、常数、窗口，连非字段常数也抽掉）与 5583 条库表达式一条都不相同；库里 48 条含 day_skew(Volume) 且含 cross_corr / cross_reg 的表达式，没有一条含隔夜跳空 div(day_open, cross_delay(day_close,1)) 或日内涨跌项，所以「块状度与价格动作的关系」是库里没有的结构，给 4。与快照 head 的相似度：最近的是种子 10（cross_ema(cross_corr(skew, 收盘/前收, 20), 30)，原始 |ρ| 0.51、残差 0.43），其余种子原始 0.03–0.36、残差 0.02–0.26，都没到 0.7 的划线。与控制：种子 8（liq 0.56、known 0.47）与种子 13（rev 0.50）的原始秩与控制 ≥0.5，按表注是控制写法的风险；但两者残差 0.05 / 0.06 都低，离 0.8 的划线远，不划。去重：种子 1 与 6 只差 1 日滞后，种子 1 与 3、种子 4 与 12 只差 ListAge 筛选；这些日度秩应当很接近，但我没有种子间的相关数，不以「重复」划掉，PI 若要精简可先去 6 与 12。数学：全部因果（cross_delay 只向过去；cross_corr / cross_reg / cross_ema / cross_zscore 的窗口含当天但不含未来）；除法只有开收盘比（不近零）与 cross_zscore 的 sd 保护；_skew 在常数日为 0/0 得 NaN。定义注意：只有全空（停牌）的日子 day_skew 才是 NaN；有缺失分钟但未全空的日子，是用剩余分钟算的小样本偏度，PI 笔记里「有效分钟不足即缺失」需要核一下。ListAge（dailyfields._list_age，哨兵 10000）：样本起点已在册的股票同日并列且都在 10000 以上，cs_last_low20 的整块带（ops_ext._rank_block）只会排掉样本起点之后上市的新股，占比不超过两成时整批排掉，超过时只排最年轻的若干整块；2019 年种子 3、12 排掉的就是这批新股，不是「最年轻的两成」。「次新股上市初期」的机制仍成立，但范围要改写。如果它有 alpha，最可能来自块状成交的参与者构成（放量的是追涨的散户、事件驱动的机构还是砸盘的卖方）在 60–120 日里的稳定差异，外加次新股上市初期的结构。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '数学：cs_bucket_zscore 每桶 n≥2 且 sd+EPS 保护（ops_ext 第 482 行起）；log 对 |x|≤1e-9 为 NaN；day_gini、day_es_ratio_hi 在总量为 0 或分位数近零时为 NaN；全部因果，无 cross_shift、ts_rank、nt_*。分桶变量 cross_ema(log(day_sum(Volume)) − LogFloatShares, 20) 的单位只差一个常数，不改变分位；它与 log(Amt) − LogFloatCap 同义（价格相消）。新颖：库里 0 条含 cs_bucket、LogFloat*、ListAge、cross_ema、cross_zscore、day_gini、day_es_ratio、cross_tail；14 个种子的骨架也都不在库里。但 W01 检查表（struct/check_w01_heads.csv 第 3 行）已有 cs_bucket_zscore(…, LogFloatCap − 2·LogFloatShares) 的头，所以「分桶标准化 + 日频字段」这一手法并不新；新的是换手分桶与体量形状统计的组合。相关度表只对快照 3 个 head 与 5 个控制算了数，W01 的头没有算，PI 需要补这张表；我在这里给 4，前提是它与 W01 的头不同源。与快照 head 的残差 0.02–0.12，不同源。与控制：原始秩 |ρ| 在 liq 与 size 上 0.4–0.7 的有种子 1、2、3、8、9、10、11、12、14（种子 2 的 liq、size 都是 0.71，known 0.62），与笔记「与控制近似正交」的说法不符，只有分桶后再取残差才能保证正交；种子 6（cross_zscore 后分桶）与全部控制 |ρ| ≤ 0.04，最干净。种子 2 应被 PI 当作规模 / 流动性代理的候选看待，但未到 0.8 的换写法线，不划。定义风险（需 PI 先核，不构成数学问题）：(i) es_ratio 在 q95 为零时为 NaN，而薄盘票正是 q95 最可能为零的票，种子 3、13 的薄盘一端可能由缺失决定；(ii) day_argmax（种子 12）并列时取最早分钟（torch.argmax 的约定），薄盘票并列多，可能是 tie 规则的伪影；(iii) day_kurt（种子 10）在单笔大单的日子接近样本数量级，EMA 之后排名由少数尖峰决定；(iv) 种子 4、14 的 ListAge 筛同 a 位所述。如果它有 alpha，最可能来自去掉薄盘假象之后的块状度：同一换手档内成交更集中在少数分钟（大单、事件冲击）的票，在未来一段时间的相对表现。'
+R:
+  - head: 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    soundness: 3
+    reasons: '合理度 3，无数学问题：signedpower 默认 e=2 即 sign(x)·x²，单调，不改排序；cross_delta(day_quantile(Vwap), 3) 是 3 日元价差，单票内的 10 日相关对尺度不敏感；241 日 q75 的 warm-up 只影响样本最前一年。机制证据弱：拆解表自己承认 10 日相关的标准误约 0.3，q75 在用尾部选择给噪声定标，但没有证明 head 的主要信号来自这一层。变体信息量低：去掉 High 乘数的变体（variant 6）与原 head 的日度秩 |ρ| 为 0.98；全部 8 个变体与原 head 的 |ρ| 为 0.82–0.98，只是窗口与平滑的微调。所以「High 水平把价格趋势混进来」即使成立，也只能解释一个很小的分数差，这个 R 组测不出「High 是烂部件」。这是设计上的问题，不是 §4 的陷阱，所以打 3 而不是 2。如果它有 alpha，最可能来自短期价格变化与块状成交的同步程度相对于本票自身一年历史的高低（近期价量同步处在自身高位）。'
+  - head: 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    soundness: 3
+    reasons: '合理度 3。无数学问题，但 day_sum(Open) 有一处定义风险：它是有效分钟开盘价之和，3 日差分既含元价差（约 241 × 平均开盘价的变化，单票内相关对尺度不敏感），又混入有效分钟数的变化；某日缺几根分钟或半天停牌，sum 会整段跳动，3 日差分就把缺分钟当成了价格变化。这不是前视也不是除零，但若此类日子不少，这个头的排名就由数据缺失决定，即 §4 的「定义坏掉」。我无法在不读数据的情况下判断频率，PI 应先核对 train 与 valid 段 Open 有效分钟数的分布。与 R1 同机制（3 日价格变化与块状度的相关，只把价格代理从 Vwap 中位数换成开盘分钟和），变体与原头的 |ρ| 为 0.75–0.86，测的是同一个东西的微调。如果它有 alpha，最可能来自与 R1 相同的短期价量同步；但在缺分钟的影响排除之前，不能说它比 R1 多出什么。'
+summary: '两个任务位都通过（a 位 E：创新 4、合理 4；b 位 N：创新 4、合理 4），29 个种子均未划掉（骨架与 5583 条库表达式都不同，与快照 head 最大 |ρ| 0.51、与控制最大 0.71，均未到自动划掉线）；R 组两个 head 的合理度各为 3（无数学问题，但变体与原 head 的日度秩 |ρ| 为 0.75–0.98，几乎是同一信号）；PI 在执行前需核实：ListAge 哨兵使「最年轻两成」在早年只是样本起点后的新股，es_ratio 与 day_argmax 的薄盘伪影，W01 分桶族与 N 位的重叠（相关度表未覆盖 W01 头），以及 Open 与 Volume 的有效分钟数分布。'

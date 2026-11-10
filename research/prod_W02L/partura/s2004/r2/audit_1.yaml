@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [13]
+    reasons: '核心 D = div(day_cov(Ret,Volume),day_mean(Volume)) 不是快照 head 的子树,但在 loc.json 的共性表(enrichment)里有记录:含 D 的 5 个存档候选,效应 +1.03,p 0.012,来源合法。与快照的最大原始 |ρ| 为 0.11(day_cov(Volume,Volume)),对 head 1 只有 0.05;对五个控制最大 0.15(rev),远低于 0.8。恒等式 D = Σ R·V/ΣV − mean(R) 核对过(day_cov 除以 n、day_mean 为 V̄),D 有界(σ_R·√240 以内),停牌日 0/0 得 NaN(div 即 torch.divide),无爆点。15 个种子都原样含 D;能读到的两个已见过的含 D 候选(r1 的 cross_mean(D,40)、R_prev 的 ts_skew(D,80))外围算子集合都不相同。对 head 1 的最大原始 |ρ| 为 0.36(seeds 6、10、15),残差最大 0.35;控制最大 0.63(seed 12 对 size),均低于自动划掉门槛。创新度 4:D 是 head 1 去掉 V̄ 水平后的读数;R_prev 里 ts_skew(D,80) 分数为 +0.09(train +0.09 / valid +0.90),head 为 −0.64(−0.64 / −0.08),两者 ρ_head 0.45。注意:计划前提说上一轮 ts_skew(D,80) 已「换成」快照 head,但 R_prev.json 的 replacements 与 additions 都为空,notebook 也写「没有进库」,快照里 head 1 仍是原式,这是计划的事实错误,不影响打分。合理度 4:cs_demean、cs_rank(NaN 安全,输出 NaN 而非 0)、cs_robust_z(有 EPS)、cs_regres(有方差保护)、cross_ema(因果半衰期)都核对过;没有 ts_rank、cross_rank、in_rank_rolling,不踩 nanrank_last 的 0 填充陷阱。划掉 seed 13:cs_flip_by_state(seed 1, day_sum(Amt)) 的逐日截面排序就是 seed 1 排序乘上每天的 ±1 符号(符号由市场状态决定),与 seed 1 的逐日截面秩相关恰为 ±1。表里它对 head 的 |ρ| 只有 0.01(seed 1 是 0.35),由此推断表的指标是有符号的跨天平均,翻号在平均中抵消,所以表看不出这种重复;GP 在核心外面长,本来就能在 seed 1 外包一层状态翻号,单独占一个种子没有增加覆盖。保留 seed 12:乘 (0.5 − size 秩) 使它对 size 的 |ρ| 为 0.63,表图例把 ≥0.5 叫控制的换写;但它的排序是 skew 与 size 的乘积,残差对 head 1 只有 0.02,不等于 size 本身,按放行原则不挡。保留 seed 1 与 R1 variant 3:同骨架,只差窗口 120 与 80,是窗口扫描。如果它有 alpha,最可能来自:剥掉全市场共同部分后,120 日里放量推价日的分布不对称(个股层面的慢变量)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: 'N 位,无核心。15 个种子对快照 head 的最大原始 |ρ| 为 0.47(seed 15 对 head 2 cross_quantile_q50(cross_corr(day_sum(High),day_cov(Volume,Amt),15),241)),残差最大 0.42(仍低于 0.7);对五个控制最大 0.36(seed 14 对流动性),均低于 0.8,无自动划掉。骨架核对(用库的 skeleton 列同一规则,可解析的 5168 条里 5099 条一致,其余是与本计划无关的比较算子 0 常数):15 个种子与 4 个 R 变体的骨架都不在 5583 条库骨架里,也与 head 2 的骨架不同。创新度 4:读的是收益(day_sum(Ret) 或收盘到收盘)与 VA = day_sum(Volume)/20 日均量的关系,并做截面去均值或取中位数、四分位,和 head 2 的「价位和 × 成交额协方差」不是同一对象;head 2 与它们的最大 |ρ| 只有 0.47。合理度 4:VA 的分母是包含当天的 20 日均值,所以 VA 落在 [0,20] 之内,不爆点;cross_regbeta 的方差有 EPS 保护;ts_delay 只用昨天的量,无前视;cross_quantile 是滚动 nanquantile,不踩 nanrank 陷阱。两点说明但不挡:seed 10 是收益对 VA 的 15 日回归斜率(Kyle 式价格冲击),与流动性控制 0.33 重叠,若有 alpha 更可能是非流动性溢价,而不是计划写的信息读法;b seed 13 的机制最弱(D 与日内波动的时间相关),但不是数学问题。如果它有 alpha,最可能来自:个股放量时收益同向或反向的稳定倾向(Karpoff 一类价量关系),241 日中位数滤掉了少数事件日。'
+R:
+  - head: 'ts_skew(day_cov(Ret, Volume), 40)'
+    soundness: 4
+    reasons: '合理度 4。承重部件是 ÷ day_mean(Volume)。day_cov(Ret,Volume) 数值上等于 V̄_t × D_t,所以 head 的三阶矩被放量日(含全市场放量日)的 V̄ 抬着走;除以 V̄ 后只剩放量时点与方向。R_prev.json 的数字与 PI 说法一致:in_slice 80 日版 −0.56 / −0.08(第 2 行),÷均量 80 日版 +0.09 / +0.90(第 4 行),40 日 in_slice 版与 head 的 ρ 为 0.98(第 1 行)。六个变体(120 / 241 窗口、cs_demean、cs_winsor、cross_ema 慢化、in_slice 去首尾两根)都是合法的算子组合:无前视,D 有界,不除以近零。计划前提的「换成」问题见 E 位理由。如果有 alpha,最可能来自:去掉成交量水平之后,放量分钟里价格动作的分布形状(三阶矩)。'
+  - head: 'cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 241)'
+    soundness: 4
+    reasons: '合理度 4。PI 的诊断成立:day_sum(High) 是 241 乘价位,15 日窗口里它与成交协方差的相关主要读的是价格趋势,这是数学事实(趋势序列与任何序列的短窗口相关都被趋势主导),不是猜测。变体 1 把价格换成收益 day_sum(Ret) 并把 cov 除以 Ā,去掉价位尺度;变体 2 的 cov/(V̄·Ā) 有界(两个变异系数各不超过 √(n−1)),无爆点;变体 3 是 mean 版本,与 head 的 ρ 为 0.96,是换聚合而不是新东西,但数学无误;变体 4 用 Vwap 均值和 30 日窗口。算子核对:cross_corr 是 rolling_pair_reduce 的滚动相关,cross_quantile 是滚动 nanquantile,无 nanrank 陷阱。如果有 alpha,最可能来自:剥离价位趋势后,价量相关在典型 15 日窗口里的稳定方向。'
+  - head: 'add(add(-0.5, ts_cov(day_ar1_coefficient(Amt), cross_cov(cross_min(day_skew(Open), 15), mul(day_autocorr_n1(High), day_std(Low)), 10), 20)), ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 10))'
+    soundness: 3
+    reasons: '合理度 3(不挡,但有保留)。承重部件 ts_regbeta(neg(day_cov(Low,Close)), cross_regalpha(day_quantile(Vwap),day_quantile(High),15), 10) 的量纲不干净:rolling_ols 中 beta = cov(x,y)/var(x),x = −day_cov(Low,Close) 随价格平方变化,y = alpha 是两个价格中位数回归的截距、随价格一次变化,所以 beta 的量纲是 1/价格,截面排序里掺入了价位倾斜。它不属于 §4 的三类数学问题(后复权价格本身不算问题),所以不打 1 或 2;但计划把它读成「10 日价量关系」,实际读的是价位倾斜,机制没有核对。ts_cov 链与 day_ar1 的变体算子核对无误,窗口设置正常。如果有 alpha,最可能来自:低价位与日内价差的关系,而不是计划写的 Low 与 Close 的协方差。'
+summary: 'a 位划掉 seed 13(与 seed 1 逐日截面秩只差每天的符号,属于重复),14 个种子通过;b 位 15 个全留并通过;R1 4、R2 4、R3 3 全部保留;计划前提「ts_skew(D,80) 已换成快照 head」与 R_prev.json 不符,且表的 |ρ| 指标对逐日翻号有盲区。'

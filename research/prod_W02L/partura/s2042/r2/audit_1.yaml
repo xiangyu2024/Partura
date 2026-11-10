@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 5, 6, 8, 9]
+    reasons: '相关度表:核心 maxH 0.022、残差 0.037,控制最大为 rev 0.159,过 E 位的控制门槛。自动划掉的 1,2,5,6,8,9 与 head 的原始 |ρ| 为 0.89 / 0.81 / 0.81 / 0.90 / 0.72 / 1.00(9 是 head 本身加 ListAge 掩码)。剩下的 3,4,7,10,11,12 与 head 的原始 |ρ| 为 0.36 / 0.27 / 0.59 / 0.64 / 0.62 / 0.44,与任何控制都低于 0.8(最大为 seed 4 的 rev 0.31、seed 10 的 size 0.29)。剩 6 个,过 ≥4。创新度 3:外围换成了截面排名后再均值(3)、241 日均值减 30 日均值(4)、按 shares 分桶的去均值(7)、乘上成交方向占比(10)、winsor 后 EMA(11)、60 与 20 日 EMA 之差(12),结构上确有变化;但全部仍是同一个峰度加权日收益在 241 日尺度上的平均,与 head 的相关 0.27 至 0.64 说明大部分是同一东西的换写,不到 4。合理度 4:逐个核对——cs_rank 是截面排序无前视;cross_ema、cross_decay_linear、cross_mean 都是尾随窗口且跳过 NaN;核心权重 2*kurt+4 在 kurt >= -2 下非负,全程没有除法;seed 10 的 day_signed_ratio 分母有 clamp;seed 4、12 是两段窗口相减,无数值问题;未用 cross_rank / ts_rank,不受 nanrank_last 的停牌问题影响。唯一需要记下的风险是峰度权重可以到几百,单日尖峰可能主导 241 日均值;这不是数学问题(没有除以近零量),放行,结果出来后看是否由少数日子决定。如果它有 alpha,最可能来自峰度加权后的日收益中期漂移(尖峰日的涨跌被放大后的慢动量,不是普通 12 个月动量);seed 4 与 12 则可能来自去掉近期反转后的中期动量或快慢 EMA 之差。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 10, 11, 12]
+    reasons: '相关度表:保留的 3,4,5,6,7,8,9 与 7 个 head 的原始 |ρ| 为 0.45 / 0.38 / 0.08 / 0.59 / 0.44 / 0.22 / 0.31,均低于 0.7,不自动划掉;与 5 个控制的最大 |ρ| 为 0.56(seed 5 的 rev 0.557、seed 7 的 vol 0.563),无一达到 0.8。划掉的 1,2,10,11,12 属于数学问题(定义坏掉):这些种子用 is_gt(day_sum(Ret),0) 计上涨日占比。is_gt 对 NaN 比较得 False 再转成 0(AlphaCube operators/common.py 的 is_gt 定义),而 tradability.py 注释写明停牌日整窗都是 NaN,所以停牌日被计成下跌日,并占据 cross_mean / cross_ema 的分母。停牌多的票上涨占比被系统性压低,结果由停牌天数决定。seed 1 与 2 还把这个有偏均值与只对有效日取均的 cross_mean(day_sum) 相乘,两者分母口径不一致。修法:在 is_gt 结果上加 mul(day_sum(Ret),0) 以保留 NaN,或者先按有效日计比例后再取均。剩 7 个,过 ≥4。创新度 4:7 个 head 全部是峰度、ts_std、cross_sum(kurt) 族,没有上涨日占比、日收益 t 值、MAX、偏度或 12 至 1 个月动量;剩下的种子与 head 的最大 |ρ| 为 0.59,与控制的最大 |ρ| 为 0.56,都没有到重复的程度。合理度 4:逐个核对——seed 3 的 div 没有分母保护,但 nanstd_last 对单个有效点返回 0(不是 NaN),产生的 inf 会被 cs_bucket_zscore 的 isfinite 过滤掉,不会外泄;真正的风险是只有 2 至 3 个有效点且收益几乎相同时的有限大值,这一点要记下。PI 笔记里「NaN 而非 inf」的说法不对,以此为准。seed 4 的分母加了 0.0005 保护;seed 5、7、8、9 的 cross_mean、cross_max、ts_skew、cs_rank 都跳过 NaN;seed 6 的 day_pos_ratio 在全 NaN 日返回 NaN,无偏。注意:3 至 9 都没有 ListAge 掩码,上市短窗口内的新股会按少量点计算,这不是数学问题,放行。如果它有 alpha,最可能来自日收益形状里的慢信号:注意力不足下的连续信息动量(3、4、6),彩票需求(7、8 的 MAX 与偏度),12 至 1 个月的截面动量(5),以及截面排名上的持续赢家(9)。'
+R:
+  - head: 'cs_bucket_zscore(ts_std(day_kurt(Low), 120), LogFloatCap)'
+    soundness: 4
+    reasons: '数学上干净:ts_std 与 cs_winsor、cross_ema、add、cs_bucket_rank 都是 NaN 安全的,没有除以近零量的写法(ts_std 的分母来自 nanstd_last,cs_bucket_zscore 带 EPS)。10 个变体只改窗口(240、360、480)、分桶变量(LogFloatShares、cap 减 shares)、字段(High)、聚合(cross_ema 包一层)与排名桶,机制一致:个股当日分钟路径形态的年度波动度,慢、换手低。合理度 4。提示(不属于合理度):相关度表里 R1 的变体与快照中的 M1 head(neg(cross_sum(ts_decay_linear(ts_std(day_kurt(Low),50),10),241)),方向 -1)原始 |ρ| 为 0.72 至 0.87,与 M1 度量的是同一族,R 的 0.7 收录门槛对其中一部分可能不过。如果它有 alpha,最可能来自路径形态不稳定度的截面差异(尖刺出现频率的变化,反映参与者轮换),不是来自峰度的水平。'
+  - head: 'cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), sub(LogFloatCap, LogFloatShares))'
+    soundness: 4
+    reasons: '数学上干净:add(day_kurt(X),4)、add(day_kurt(Low),add(day_kurt(High),4)) 在 kurt >= -2 下非负,只做乘法没有除法;sqrt 取绝对值;cross_mean 尾随窗口跳过 NaN。6 个变体只换峰度的字段(High、Vwap)、权重形式(单倍、sqrt)或窗口(360),cs_bucket_zscore 按 cap 减 shares 分桶的结构不变,与原 head 的核心相同。合理度 4:机制是日收益乘以日内路径尖刺度,去掉权重在 head 的拆解里是必要部件(从 +0.66 掉到 -0.29),所以换字段和权重形式是测同一机制的不同实现。与原 head 的最大 |ρ| 为 0.77 至 0.96,说明实质是同一信号的换写;这属于 R 收录的判断(替换规则),不是合理度的问题。如果它有 alpha,最可能来自尖刺日涨跌被放大后的中期漂移(与 head 同源);High 字段的变体更可能读的是上影线与冲高的信号。'
+summary: 'slot a(E,核心为 head 的子树)自动划掉 1,2,5,6,8,9,余 6 个种子,创新 3、合理 4 通过;slot b(N)划掉 1,2,10,11,12(is_gt 把停牌 NaN 计作下跌日,定义坏掉),余 7 个种子,创新 4、合理 4 通过;两个 R 组合理度均为 4。'

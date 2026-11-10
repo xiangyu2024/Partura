@@ -1,0 +1,26 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 C = cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,11,230),10),60),20) 不是快照 head 的子树,但它是 loc.md 共性表第 1 条(富集均值差 +1.50),来源合规。核心与 head 的原始 |ρ| 最大 0.43(对 ts_stddev(Q5,15)),残差 0.38;对 liq 0.10、vol 0.27、rev 0.18、known 0.13、size 0.04,全部 <0.8,E 条件通过。16 个外围全部原样含核心(已逐条核对)。自动划掉:无(种子与 head 的最大原始 |ρ| 0.41,与控制最大 0.27)。逐个看种子,未发现与库内 head 或控制度量同一对象的种子;种子 7(cross_corr)与种子 5(cross_regbeta)同为 C 与 day_sum 的配对,一个取相关、一个取斜率,截面秩不同,不划。创新度 3:输入仍是同一条 Q10 日序列(与 round 1 的 Q10 位同一统计量,与 head 的 |ρ| 0.43 说明未脱离),新的是 C 对状态量的回归斜率、残差与相关这一层外围,不是换写法所以不给 1,但对象没有换,不给 4。合理度 4:算子逐个核对。cross_regbeta(x,y,d) 是 y~alpha+beta*x 的时间轴滚动 OLS(dt_cross.py 调 common.rolling_ols,axis=0),这里 y=C、x 为状态量,斜率即 C 对状态的敏感度,与写法一致;cross_ema 因果、按 0.5^(1/d) 的半衰期,缺失日跳过;cross_zscore 含当日、有 sd 下限守卫;ts_delay 按日滞后;没有前视。两点需 PI 核对但不挡:(一)种子 3、4(day_skew、day_kurt)在多数分钟收益为 0 的稀疏日由非零分钟数主导(单个非零时 skew 约 √n、kurt 约 n−3),若数据构造里无成交分钟收益记 0 则不成立;(二)Q 的自相关分母含 1e-8,低波动票的 Q 近似随方差平方变化,C 的 60 日 z 分数去掉水平但保留自身波动的变化分量,与 vol ρ 0.27 相符。另外假设里「x 全部不是 day_std」不准确:种子 9–11、13–16 含 day_std(不同切片、窗口或滞后),其中 cross_regbeta(day_std(11..230),C,120) 是第 1 轮最好的 E(−0.42),本轮只换了窗口(60、250)与切片(121..230),PI 应确认 60、250 窗口版本不在第 1 轮已见过的候选里。如果它有 alpha,最可能来自序列相关强度对分钟波动的慢敏感度,即 C 的慢状态在不同波动水平下的稳定耦合。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: 'N 位的对象(放量分钟的带符号收益、放缩量之差、量价同期与 lead-lag 相关)不在库内 head 中:头部全是 |·| 或离散度(B080 族与 Q 族),本位种子与 head 的原始 |ρ| 最大 0.28、残差最大 0.16。与控制:种子 1、4、12、15 对 rev 的 |ρ| 为 0.51–0.57,即 20 日反转的一部分被重写;vol 0.3–0.5 与 known 0.3–0.4 的种子较多;种子 16(abs 收益大的分钟里的成交量)liq 0.67、known 0.70,度量的是成交量水平。但全部 <0.8,按 §3 不算同一个东西,不划。核对算子:in_topk_masked(x,y,p) 按 x 取最大 floor((n+1)/p) 个位置(有效分钟 230 时 k=23),读 y;mul(Volume,-1) 取最小量分钟;种子 7 为 day_corr(Volume[11..239],Ret[12..240]),即量领先收益,种子 8 为 Volume[12..240] 对 Ret[11..239],即收益领先量,两个切片等长、方向正确;cross_ema 因果。创新度 4:带符号的条件收益与 lead-lag 量价相关库里没有,与 heads 的重叠低;但 rev 相关说明一部分是反转的重写,未到 5。合理度 4:机制(放量方向与关注度冲击后的短期过度反应、回吐)说得通,算子实现与描述一致。三点标记,不构成挡的理由:(一)第 240 分钟即 15:00 那根常含收盘集合竞价,在每日成交量前 10% 里往往占大头,所以不少种子实际取到的是尾盘竞价收益,解释应分开写成「尾盘集合竞价偏离的次日回吐」,PI 需核对该根在数据里是否量最大;(二)dt_day.day_corr 在收益或成交量方差为零时返回 0(EPS 分母)而非缺失,一字板或平盘日会以 0 进入种子 6–9 的均值与截面秩,需看覆盖率;(三)种子 14 用 Amt 替代 Volume 选分钟,与种子 1 的选择集几乎相同,但窗口不同(40 对 20),保留。如果它有 alpha,最可能来自放量分钟的方向性(信息驱动放量的延续与流动性驱动放量的回吐),或收盘竞价段的反转。'
+R:
+  - head: 'ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 10), 45)'
+    soundness: 4
+    reasons: '四个变体的算子都能按定义核对:cross_regbeta(day_std, ts_stddev(Q10,45), 120) 是 y 对 day_std 的时间轴滚动斜率,合理;ts_stddev(cross_zscore(Q10,60),45)、ts_stddev(cs_rank(Q10),45)、cross_ema(ts_stddev(Q10,45),20) 都是同一 Q10 的标准化与平滑,无前视、无数值问题。合理度 4。注意:变体 4 对原 head 的原始 |ρ| 为 0.73,替换后几乎等同原 head,变体 2、3 的 |ρ| 为 0.50–0.54,PI 在判断替换时应看到这一点。'
+  - head: 'ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230)), 15)'
+    soundness: 4
+    reasons: '外层变体与第 1 组同形:cross_regbeta(day_std, ts_stddev(Q20,15), 120)、ts_stddev(cross_zscore(Q20,60),45)、ts_stddev(cs_rank(Q20),60)、cross_ema 平滑版。day_q_stat_std 默认 max_lag=20 在 220 个分钟上可算,自相关分母 denom>1e-8 时才取值,缺失即 NaN,不是 0。合理度 4。'
+  - head: 'ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 5), 15)'
+    soundness: 4
+    reasons: 'Q5 只有 5 个滞后,抽样噪声大,变体用截面标准化或截面秩后再取慢离散度,方向与 head 的拆解理由一致。四个变体均无前视、无数值伪影。合理度 4。'
+  - head: 'ts_mean(div(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), add(day_mean(abs_(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10))), create_like(day_mean(abs_(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10))), 1e-06))), 20)'
+    soundness: 3
+    reasons: '头部的分母 day_mean(|topk Ret|)+1e-6 没有实际下限(典型 1e-3 量级),在前 10% 放量分钟收益几乎全为 0 的稀疏日,std 除以近零量会形成爆点,ts_mean(·,20) 不截断,这是 §4 的除以近零量问题,PI 须对分母做截断或改为有界形式后再谈替换。变体 1 的 day_mean(topk Ret)/(day_mean(|topk Ret|)+1e-6) 有界(|·|≤1),数值上没有问题;但它与 b 位种子 5 的 day_sum 比值在同一选择集上是同一个量(只差 20 对 40 日窗口),若采纳应注明重复。变体 2 的截面标准化后慢 EMA 合理。变体 3 的分母换成全分钟平均绝对收益,size 控制 ρ 0.44,实际是 topk 离散度对规模的代理,机制说得通但需要注意。合理度 3(头部有 §4 的除以近零问题,变体 1、2 没有)。'
+summary: 'a 位(E,核心 C 来自共性表第 1 条)3/4 通过,b 位(N)4/4 通过,两位均无种子划掉;R 组 4 个,前三组合理度 4,B080 比值一组 3(分母无截断,变体 1 与 b 位种子 5 重复);PI 需核对:第 240 分钟是否为收盘竞价大量、day_corr 零方差日、day_skew/day_kurt 稀疏日、60/250 窗口是否已在第 1 轮出现过。'

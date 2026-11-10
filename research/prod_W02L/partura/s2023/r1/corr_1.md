@@ -1,0 +1,49 @@
+# 相关度表:种子 2023,P 组,第 1 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 废品 | 0.92 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.92 | 0.64 | 0.21 | 0.19 | 0.67 | 0.56 | `day_quantile_q75(Volume)` |
+| slot a seed 1 | 过 | 0.35 | `ts_max(day_quantile_q75(Volume), 40)` | 0.17 | 0.33 | 0.39 | 0.15 | 0.35 | 0.10 | `cross_ema(cross_zscore(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 120), 30)` |
+| slot a seed 2 | 过 | 0.38 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.16 | 0.32 | 0.45 | 0.25 | 0.35 | 0.05 | `cross_zscore(cross_mean(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 20), 241)` |
+| slot a seed 3 | 过 | 0.31 | `ts_max(day_quantile_q75(Volume), 40)` | 0.12 | 0.38 | 0.37 | 0.05 | 0.39 | 0.11 | `sub(log(add(cross_mean(day_quantile_q75(Volume), 60), 100)), log(add(cross_mean(day_quantile_q75(Volume), 241), 100)))` |
+| slot a seed 4 | 过 | 0.25 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.11 | 0.26 | 0.41 | 0.17 | 0.29 | 0.00 | `cs_bucket_zscore(cross_ema(cross_zscore(day_quantile_q75(Volume), 120), 30), LogFloatCap)` |
+| slot a seed 5 | 过 | 0.08 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.21 | 0.11 | 0.28 | 0.04 | 0.06 | 0.35 | `cross_stddev(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 120)` |
+| slot a seed 6 | 过 | 0.25 | `ts_max(day_quantile_q75(Volume), 40)` | 0.26 | 0.65 | 0.21 | 0.07 | 0.58 | 0.58 | `cross_mean(div(day_quantile_q75(Volume), add(day_median(Volume), 100)), 241)` |
+| slot a seed 7 | 过 | 0.09 | `ts_max(day_quantile_q75(Volume), 40)` | 0.09 | 0.31 | 0.25 | 0.03 | 0.23 | 0.32 | `cross_mean(div(day_quantile_q75(Volume), add(day_mean(Volume), 100)), 241)` |
+| slot a seed 8 | 过 | 0.36 | `ts_max(day_quantile_q75(Volume), 40)` | 0.38 | 0.04 | 0.20 | 0.06 | 0.06 | 0.09 | `cross_regbeta(log(day_std(Ret)), log(add(day_quantile_q75(Volume), 100)), 241)` |
+| slot a seed 9 | 过 | 0.09 | `ts_max(day_quantile_q75(Volume), 40)` | 0.04 | 0.10 | 0.10 | 0.01 | 0.09 | 0.16 | `cross_corr(day_quantile_q75(Volume), abs_(day_sum(Ret)), 241)` |
+| slot a seed 10 | 过 | 0.05 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.03 | 0.15 | 0.09 | 0.06 | 0.13 | 0.09 | `cross_corr(day_quantile_q75(Volume), day_sum(Ret), 241)` |
+| slot a seed 11 | 过 | 0.20 | `ts_max(day_quantile_q75(Volume), 40)` | 0.19 | 0.16 | 0.23 | 0.18 | 0.17 | 0.00 | `div(cross_sum(mul(sign(day_sum(Ret)), day_quantile_q75(Volume)), 120), add(cross_sum(day_quantile_q75(Volume), 120), 100))` |
+| slot a seed 12 | 过 | 0.12 | `ts_max(day_quantile_q75(Volume), 40)` | 0.06 | 0.17 | 0.25 | 0.27 | 0.17 | 0.05 | `sub(cross_zscore(day_quantile_q75(Volume), 120), cross_zscore(day_last(Close), 120))` |
+| slot a seed 13 | 过 | 0.30 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.08 | 0.30 | 0.33 | 0.16 | 0.32 | 0.12 | `cross_ema(sub(cross_zscore(day_quantile_q75(Volume), 60), cross_zscore(abs_(day_sum(Ret)), 60)), 60)` |
+| slot a seed 14 | 过 | 0.27 | `ts_max(day_quantile_q75(Volume), 40)` | 0.11 | 0.30 | 0.02 | 0.00 | 0.29 | 0.10 | `cross_corr(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), day_std(Ret), 241)` |
+| slot a seed 15 | 过 | 0.12 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.07 | 0.10 | 0.06 | 0.08 | 0.09 | 0.14 | `cross_regbeta(day_sum(Ret), sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 241)` |
+| slot b seed 1 | 过 | 0.24 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.09 | 0.48 | 0.40 | 0.06 | 0.47 | 0.21 | `cross_mean(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), 241)` |
+| slot b seed 2 | 过 | 0.23 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.11 | 0.48 | 0.39 | 0.05 | 0.46 | 0.22 | `cross_mean(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret, is_lt(Volume, day_quantile_q75(Volume)))), 241)` |
+| slot b seed 3 | 过 | 0.28 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.04 | 0.46 | 0.29 | 0.07 | 0.45 | 0.34 | `cross_mean(div(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret, is_lt(Volume, day_quantile_q75(Volume)))), add(day_std(Ret), 0.000001)), 241)` |
+| slot b seed 4 | 过 | 0.26 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.12 | 0.52 | 0.44 | 0.10 | 0.51 | 0.24 | `cross_ema(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_mean(Ret)), 120)` |
+| slot b seed 5 | 过 | 0.28 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.08 | 0.29 | 0.29 | 0.11 | 0.30 | 0.35 | `cross_mean(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))), 241)` |
+| slot b seed 6 | 过 | 0.06 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.28 | 0.38 | 0.28 | 0.06 | 0.35 | 0.24 | `cross_mean(sub(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))), day_signed_ratio(Ret, Volume)), 241)` |
+| slot b seed 7 | 过 | 0.24 | `ts_max(day_quantile_q75(Volume), 40)` | 0.38 | 0.12 | 0.00 | 0.04 | 0.09 | 0.21 | `cross_mean(div(day_wstd(Ret, is_gt(Volume, day_quantile_q75(Volume))), add(day_std(Ret), 0.000001)), 241)` |
+| slot b seed 8 | 过 | 0.05 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.06 | 0.01 | 0.22 | 0.01 | 0.03 | 0.27 | `cross_mean(div(day_wmean(abs_(Ret), is_gt(Volume, day_quantile_q75(Volume))), add(day_wmean(abs_(Ret), is_lt(Volume, day_quantile_q75(Volume))), 0.000001)), 241)` |
+| slot b seed 9 | 过 | 0.25 | `ts_max(day_quantile_q75(Volume), 40)` | 0.17 | 0.19 | 0.01 | 0.12 | 0.17 | 0.20 | `cross_mean(div(sub(day_wmean(Close, is_gt(Volume, day_quantile_q75(Volume))), day_min(Close)), add(sub(day_max(Close), day_min(Close)), 0.0001)), 241)` |
+| slot b seed 10 | 过 | 0.09 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.11 | 0.32 | 0.40 | 0.04 | 0.31 | 0.02 | `cs_bucket_zscore(cross_mean(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret, is_lt(Volume, day_quantile_q75(Volume)))), 241), LogFloatCap)` |
+| slot b seed 11 | 过 | 0.09 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.07 | 0.08 | 0.02 | 0.01 | 0.08 | 0.22 | `cross_corr(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_mean(Ret), 241)` |
+| slot b seed 12 | 过 | 0.08 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.05 | 0.04 | 0.16 | 0.41 | 0.03 | 0.05 | `cross_ema(cross_zscore(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))), 120), 60)` |
+| slot b seed 13 | 过 | 0.23 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.14 | 0.51 | 0.38 | 0.05 | 0.49 | 0.25 | `cross_ema(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret, is_lt(Volume, day_quantile_q75(Volume)))), 240)` |
+| slot b seed 14 | 过 | 0.00 | `ts_max(day_quantile_q75(Volume), 40)` | 0.15 | 0.20 | 0.20 | 0.05 | 0.19 | 0.10 | `cross_regbeta(day_mean(Ret), day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), 241)` |
+| slot b seed 15 | 过 | 0.21 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.10 | 0.42 | 0.39 | 0.04 | 0.41 | 0.18 | `cross_mean(day_wmean(Ret, mul(is_gt(Volume, day_quantile_q75(Volume)), is_gt(Volume, cross_mean(Volume, 20)))), 241)` |
+| slot b seed 16 | 过 | 0.25 | `ts_stddev(day_quantile_q75(Volume), 10)` | 0.06 | 0.27 | 0.29 | 0.10 | 0.27 | 0.33 | `cross_mean(day_signed_ratio(Ret, mul(Volume, mul(is_gt(Volume, day_quantile_q75(Volume)), is_gt(Volume, cross_mean(Volume, 20))))), 241)` |
+| R 1 variant 1 | 过 | 0.18 | `ts_max(day_quantile_q75(Volume), 40)` | 0.26 | 0.31 | 0.45 | 0.04 | 0.34 | 0.42 | `ts_max(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 40)` |
+| R 1 variant 2 | 过 | 0.97 | `ts_max(day_quantile_q75(Volume), 40)` | 0.94 | 0.69 | 0.19 | 0.03 | 0.71 | 0.57 | `ts_mean(day_quantile_q75(Volume), 40)` |
+| R 1 variant 3 | 过 | 0.12 | `ts_max(day_quantile_q75(Volume), 40)` | 0.12 | 0.37 | 0.41 | 0.02 | 0.37 | 0.38 | `ts_mean(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 40)` |
+| R 1 variant 4 | 过 | 0.93 | `ts_max(day_quantile_q75(Volume), 40)` | 0.85 | 0.61 | 0.09 | 0.01 | 0.63 | 0.57 | `cross_ema(day_quantile_q75(Volume), 60)` |
+| R 2 variant 1 | 过 | 0.11 | `ts_max(day_quantile_q75(Volume), 40)` | 0.24 | 0.12 | 0.20 | 0.13 | 0.07 | 0.28 | `div(ts_stddev(day_quantile_q75(Volume), 60), add(ts_mean(day_quantile_q75(Volume), 60), 100))` |
+| R 2 variant 2 | 过 | 0.14 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.21 | 0.03 | 0.32 | 0.11 | 0.02 | 0.28 | `ts_stddev(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 60)` |
+| R 2 variant 3 | 过 | 0.10 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.23 | 0.09 | 0.29 | 0.05 | 0.04 | 0.35 | `ts_stddev(log(add(day_quantile_q75(Volume), 100)), 120)` |
+| R 3 variant 1 | 过 | 0.98 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.99 | 0.51 | 0.17 | 0.08 | 0.54 | 0.39 | `sub(0.5, abs_(ts_regres(div(day_cov(Close, Open), pow_2(day_mean(Close))), day_quantile_q75(Volume), 50)))` |
+| R 3 variant 2 | 过 | 0.41 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.37 | 0.06 | 0.05 | 0.07 | 0.04 | 0.10 | `sub(0.5, abs_(ts_regres(log(day_cov(Close, Open)), log(add(day_quantile_q75(Volume), 100)), 50)))` |
+| R 3 variant 3 | 过 | 0.32 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.28 | 0.04 | 0.09 | 0.09 | 0.01 | 0.12 | `sub(0.5, abs_(ts_regres(div(day_cov(Close, Open), pow_2(day_mean(Close))), sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 100)))` |
+| R 3 variant 4 | 过 | 0.16 | `sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q` | 0.12 | 0.09 | 0.06 | 0.06 | 0.07 | 0.10 | `sub(0.5, abs_(ts_regres(log(day_cov(Close, Open)), sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 241)))` |

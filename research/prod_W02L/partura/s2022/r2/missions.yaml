@@ -1,0 +1,95 @@
+seed: 2022
+round: 2
+slots:
+- type: E
+  core: 'day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))'
+  hypothesis: >-
+    机制与证据:核心 C = 在连续竞价时段(in_slice 2..237,去掉开盘和收盘集合竞价)里先找到全天最高价出现的那一分钟,再读那一分钟的成交额。
+    也就是「价格被推到当天最高点的那一刻,有多少钱在成交」:放量冲高 = 买入高潮 / 派发(追涨盘被对手盘接走),缩量冲高 = 没有承接的虚拉。
+    定位表里含 C 的候选有 36 条,均值 -1.45,不含的 -2.44,差 +0.99(p 0.000),是本流富集最强、样本最多的子树;
+    含 C 的候选里第 1 轮的 N 位最好做到 -0.36(train / valid 都 -0.36,两段一致,没有 train 好 valid 差),说明 C 这个读数本身比 argmin(Low) 的时刻值干净,
+    扣不掉的主要是外围的写法。第 1 轮见过的外围只有一种:pow_05(div(C, day_mean(Amt)+1)) 再套 cross_mean 120,或者与低点处成交额的差;
+    它们分子分母都是同一天的量,所以读到的混着「今天整体放不放量」。
+    本轮外围全部换成「相对这只股票自己、或相对同流动性档的股票」的写法,让 C 里的水平(流动性、市值)被去掉,剩下的才是「高点处的异常成交」:
+    (i) cs_bucket_rank(y, x):在 x(day_mean(Amt) 或 LogFloatCap)的十分位内部给 y 排名,不用回归就把对成交额 / 市值的暴露去掉;
+    (ii) cross_regres(A, C, 120):每只股票 120 日内 C 对全天平均成交额回归的残差,即「同样的日成交额下,高点处多出来的钱」;
+    (iii) cross_zscore:相对自己 120 日历史的标准化,再做 EMA 压住换手;
+    (iv) 与当天收益 / 与全天成交额的 120 日相关 cross_corr:放量冲高是否伴随涨日(动量延续)还是跌日(派发);
+    (v) cross_stddev(cs_rank(C),120):高点处成交是否稳定,不稳定 = 消息驱动;(vi) 20 日均值减 241 日均值的变化,和 cs_rank 版本去掉日效应。
+    为什么和已有的不同:库里与 C 同骨架的都是 pow_05(div(C, A+1)) 再 cross_mean / cross_ema 的写法,分母同一天;
+    cs_bucket_rank / cross_regres / cross_zscore / cross_corr / cross_stddev 包 C 这一族我逐条想过,骨架不同,且它们读的是「相对自身历史 / 相对同档股票」的异常,而不是水平。
+    为什么样本外还会在:承接结构(谁在高点接货)是慢变的参与者构成属性,不依赖某段行情;窗口全部 ≥ 60 日(只有一个 20 日对 241 日的变化项),成本压得住。
+    数学检查:C 是某一分钟的成交额,≥ 0;in_slice 切掉两个集合竞价,所以不被竞价那根的巨额成交污染;cs_bucket_rank 保留 NaN;
+    cross_regres / cross_corr 在窗口内恒定时给 NaN 而不是爆点;分母都 +1 或由回归结构保证;没有 sign / is_gt / is_lt;无前视(收盘后算,次日交易)。
+    我对这个位出 head 的预期很低(见笔记),价值是验证「相对化之后高点处成交额还剩不剩信息」。
+  literature:
+  - title: Trading volume and serial correlation in stock returns
+    authors: John Campbell, Sanford Grossman, Jiang Wang
+    year: '1993'
+    treatment: 放量带来的价格变动之后更容易反转(流动性供给);这里读价格极值那一刻的成交额,并用相对化去掉整体流动性
+  - title: High-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: '2001'
+    treatment: 异常成交量的股票之后有溢价;这里的「异常」是相对自己历史 / 同流动性档的高点处成交额
+  seeds:
+  - 'cross_mean(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), day_mean(in_slice(Amt, 2, 237))), 120)'
+  - 'cross_mean(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), day_mean(in_slice(Amt, 2, 237))), 241)'
+  - 'cross_ema(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), LogFloatCap), 60)'
+  - 'cross_mean(cross_regres(day_mean(in_slice(Amt, 2, 237)), day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), 120), 30)'
+  - 'cross_ema(cross_zscore(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), 120), 30)'
+  - 'cross_corr(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), day_sum(Ret), 120)'
+  - 'cross_corr(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), day_mean(in_slice(Amt, 2, 237)), 120)'
+  - 'cross_stddev(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))), 120)'
+  - 'cross_mean(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))), 241)'
+  - 'sub(cross_mean(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))), 20), cross_mean(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))), 241))'
+  - 'cross_mean(div(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), add(cross_mean(day_mean(in_slice(Amt, 2, 237)), 60), 1)), 60)'
+  - 'cross_mean(sub(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237)))), cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))))), 120)'
+- type: N
+  hypothesis: >-
+    机制:不看「价格极值出现在几点」(第 1 轮 B064 的 day_argmin(Low) 时刻值,换手效应主导、没有信息),而看「成交最集中的那一分钟出现在几点」,
+    以及它和价格极值、成交重心的相对位置。一天里成交最重的一分钟是大单 / 事件 / 被动资金(指数、ETF 申赎、基金经理的拆单窗口)集中落地的时刻,
+    是比价格极值更稳定的「订单流类型」指纹:机构型、被动型股票的峰值成交常落在固定时段(开盘后半小时、尾盘),事件驱动型的股票忽早忽晚。
+    批里的线索:定位表里 day_argmin(sub(day_argmin(Low), Volume)) 富集 +1.06(p 0.045)。这个子树把一个日度标量 day_argmin(Low) 减去分钟成交量,
+    于是 day_argmin 实际找的是成交量最大的那一分钟(标量只是平移),也就是「成交量峰值时刻」;含它的候选 -1.12 对 -2.18,
+    是第二个批(Volume 一族)里最强的一条线索,但它出现的写法都是 cross_cov 套 pow_1_5(Low) 这类换手很高、含价格水平的结构,没有人干净地读它。
+    算子怎样实现:AP = day_argmax(in_slice(Amt, 2, 237))(连续竞价里成交额最大的分钟,去掉两个集合竞价;右端点含在内)。
+    (1) 水平:cross_mean(cs_rank(AP), 120 / 241) 与 EMA(cs_rank 先去掉当天全市场一起的尾盘放量的日效应);
+    (2) 与价格极值的先后:AP 减最低点 / 最高点时刻(名次差、除以 235 的归一化差、绝对值差)——放量发生在价格触底之前(恐慌卖出)还是触底之后(承接),
+    是 Wyckoff「卖出高潮」在分钟尺度上的写法;(3) 与成交重心的差:AP − 235 × day_centroid(Amt),成交是一个尖峰还是均匀铺开;
+    (4) Amt 重心与 Volume 重心的差:每分钟成交额 = 价格 × 成交量,所以两个重心之差读的是「日内价格水平随时间的升降」,不依赖收盘价;
+    (5) 规律性:峰值时刻的 120 日 cross_stddev 与 cross_corr(与最低点时刻、与全市场峰值时刻均值的相关)。
+    为什么和已有的不同:库里 5583 条没有一条是「成交额最大分钟的时刻」做主角(day_argmax 全部用在 High / Low / Ret 上);
+    上一轮同一流的 N 位读的是极值分钟处的成交额(day_locate),这里反过来,读成交额极值处的时刻,变量不同。
+    为什么样本外还会在:订单流类型是慢变的个股属性,取决于投资者结构,而非某段行情;全部是 60 日以上的慢统计(cs_rank 后取平均),换手低,成本不吃掉。
+    数学检查:day_argmax 并列取最小下标,在连续竞价切片内只有停牌 / 无成交日才全零(全零日 argmax 为 0 的并列 = 噪声,但这些日子占比小,且 cs_rank 平均后被稀释);
+    cs_rank 保留 NaN;除法只除常数 235;无 sign / is_gt / is_lt;无前视(收盘后算,次日交易)。
+    我对这个位出 head 的预期很低,但它换了一个变量,是本流到目前最不同的一条线。
+  inspired_by: '第 2 批(Volume 一族)定位表里 day_argmin(sub(day_argmin(Low), Volume)) 富集 +1.06(p 0.045):它实际是成交量峰值时刻,第 1 批给出的结论是时刻值要慢、要去 log 才不被换手吃掉'
+  literature:
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 一天里特定时段的成交 / 收益模式跨期持续;这里用成交额峰值出现的时段作为个股订单流类型的指纹
+  seeds:
+  - 'cross_mean(cs_rank(day_argmax(in_slice(Amt, 2, 237))), 120)'
+  - 'cross_mean(cs_rank(day_argmax(in_slice(Amt, 2, 237))), 241)'
+  - 'cross_ema(cs_rank(day_argmax(in_slice(Amt, 2, 237))), 60)'
+  - 'cross_mean(sub(cs_rank(day_argmax(in_slice(Amt, 2, 237))), cs_rank(day_argmin(in_slice(Low, 2, 237)))), 120)'
+  - 'cross_mean(sub(cs_rank(day_argmax(in_slice(Amt, 2, 237))), cs_rank(day_argmax(in_slice(High, 2, 237)))), 120)'
+  - 'cross_mean(div(sub(day_argmax(in_slice(Amt, 2, 237)), day_argmin(in_slice(Low, 2, 237))), 235), 241)'
+  - 'cross_corr(day_argmax(in_slice(Amt, 2, 237)), day_argmin(in_slice(Low, 2, 237)), 120)'
+  - 'cross_stddev(cs_rank(day_argmax(in_slice(Amt, 2, 237))), 120)'
+  - 'cross_mean(sub(day_argmax(in_slice(Amt, 2, 237)), mul(day_centroid(in_slice(Amt, 2, 237)), 235)), 120)'
+  - 'cross_mean(cs_rank(sub(day_centroid(in_slice(Amt, 2, 237)), day_centroid(in_slice(Volume, 2, 237)))), 120)'
+  - 'cross_corr(day_argmax(in_slice(Amt, 2, 237)), cs_mean(day_argmax(in_slice(Amt, 2, 237))), 120)'
+  - 'cross_mean(cs_rank(day_argmax(in_slice(Volume, 2, 237))), 241)'
+R:
+- head: 'ts_pearson(mul(day_argmin(Low), 0.5), 40)'
+  why: '拆解表:乘数不承重(必要性 +0.00);窗口缩到 20 日增益 +0.24(-2.02 对 -2.26),说明 40 日窗口不是最优,且 0.5 是无用部件;去掉乘数、窗口 15 / 20 / 25 / 30 试单调性'
+  variants:
+  - 'ts_pearson(day_argmin(Low), 20)'
+  - 'ts_pearson(day_argmin(Low), 15)'
+  - 'ts_pearson(day_argmin(Low), 25)'
+  - 'ts_pearson(day_argmin(Low), 30)'
+  - 'ts_pearson(mul(day_argmin(Low), 0.5), 25)'
+  - 'ts_pearson(pow_05(day_argmin(Low)), 20)'

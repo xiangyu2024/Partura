@@ -1,0 +1,60 @@
+seed: 2051
+round: 1
+slots:
+  - type: N
+    hypothesis: >-
+      想法:分钟价格路径上的「跳跃 / 尖峰强度」,经多日平滑后读成个股的慢属性。本批 3 个 head 与 18 个候选全都是 nt_ts_kurt(价, 10/30)(分钟轴上的滚动峰度)再 day_max / day_skew,
+      全部在新尺子下为负(-0.58 ~ -2.95)。批内证据:换价格字段几乎不救(Low->High -0.58->-0.51;Vwap->Close 在窗口 30 上 -2.95->-4.22),窗口 5/20/60 都更差且 train / valid 互相翻转,
+      说明「滚动窗口峰度的日内极值」读到的主要是窗口边缘与量化噪声,而不是跳跃本身;承重的可能是「当天分钟收益分布是否厚尾」这个更干净的量。
+      本位用不含 nt_ 的算子直接度量:(1) 当天分钟收益的整日峰度 day_kurt(in_delta(Vwap,1))、偏度、5 分钟对数收益的峰度;(2) 分钟价格相对滚动 30 分钟均值 / 标准差的最大 / 最小 z 值
+      (in_zscore_rolling / in_madz 的 day_max / day_min):上冲幅度与下探幅度,以及两者的不对称(彩票型 MAX 效应的日内版);(3) 期望损失比 day_es_ratio_hi / lo(尾部均值与全体均值之比,不依赖窗口);
+      (4) 波动的爆发度 = 滚动 10 分钟标准差的日内最大 / 均值;(5) 与成交量峰度的协动(价格跳跃是否伴随放量,信息型对噪声型)。所有量都外面套 cross_mean / cross_ema / cross_stddev 20~60 日平滑,
+      再必要时做同市值桶内去均值(cs_bucket_demean,控制只扣加性的 1~3 次秩多项式,桶内相对量是交互项)。
+      与库的区别:库里这一族是 nt_ts_kurt 的滚动窗口峰度 + day_max / day_skew;本位的种子没有一个含 nt_ts_kurt,骨架是「整日分布矩 / 滚动 z 的极值 / es 比 + 多日平滑」,
+      且多日平滑(cross_*)在本批里一个都没有——批内全是单日值经 EMA 半衰期进尺子。不含滚动峰度窗口,所以不受批内窗口翻转的伤。
+      样本外还会在的理由:A 股散户对「有尖峰」的彩票型股票的偏好(Bali-Cakici-Whitelaw MAX,Barberis-Huang 彩票偏好)是结构性的;多日平滑后换手低,15bp 成本下可做;
+      厚尾 / 尖峰频率是个股的慢属性(信息到达与流动性供给方式),不靠某一段行情。预期与波动 / 流动性控制中度相关(0.3~0.6),新尺子扣掉线性与非线性暴露后剩下的是形状。
+    inspired_by: 'B 批 head1~3:nt_ts_kurt(Low/Vwap,10/30) 的 day_max / day_skew 全部为负,窗口 5/20/60 与字段互换都不稳,train / valid 互相翻转,说明窗口版读的是噪声,厚尾本身尚未被干净地度量'
+    seeds:
+      - 'cross_mean(day_kurt(in_delta(Vwap, 1)), 20)'
+      - 'cross_mean(day_skew(in_delta(Vwap, 1)), 60)'
+      - 'cross_mean(day_kurt(in_logchg(Vwap, 5)), 40)'
+      - 'cross_mean(day_max(in_zscore_rolling(Vwap, 30)), 20)'
+      - 'cross_mean(day_min(in_zscore_rolling(Vwap, 30)), 20)'
+      - 'sub(cross_mean(day_max(in_zscore_rolling(Vwap, 30)), 20), cross_mean(abs_(day_min(in_zscore_rolling(Vwap, 30))), 20))'
+      - 'cross_mean(day_max(in_madz(Vwap, 30)), 20)'
+      - 'cross_mean(day_es_ratio_hi(in_delta(Vwap, 1)), 20)'
+      - 'cross_mean(sub(day_es_ratio_hi(in_delta(Vwap, 1)), day_es_ratio_lo(in_delta(Vwap, 1))), 60)'
+      - 'cross_stddev(day_kurt(in_delta(Vwap, 1)), 60)'
+      - 'cross_mean(div(day_max(in_stddev_rolling(in_delta(Vwap, 1), 10)), day_mean(in_stddev_rolling(in_delta(Vwap, 1), 10))), 20)'
+      - 'cs_bucket_demean(cross_mean(day_kurt(in_delta(Vwap, 1)), 40), LogFloatCap)'
+      - 'cross_corr(day_kurt(in_delta(Vwap, 1)), day_kurt(Volume), 60)'
+      - 'cross_ema(sub(day_kurt(in_delta(Low, 1)), day_kurt(in_delta(High, 1))), 30)'
+  - type: N
+    hypothesis: >-
+      想法:当天价格极值出现的「时刻」与日内路径的直线程度,读成知情交易的节奏。本批候选只看价格窗口的高阶矩(峰度)和它的日内最大值 / 偏度,完全不含「极值在什么时候」这一维;
+      本位把时间维引进来:(1) 当天 Vwap 最高点与最低点在分钟轴上的位置 day_argmax / day_argmin 及其差(尾盘创日高 = 知情买盘延续到收盘,上午冲高回落 = 派发型),多日平滑;
+      (2) 成交额重心 day_centroid(Amt) 与最高点位置之差:放量发生在价格创高之前还是之后;(3) 当天 Vwap 与分钟序号的相关 day_corr(Vwap, in_index(Vwap))(日内趋势的直线程度,
+      越直越像单向知情流,越弯越像噪声往返),以及量价相关 day_corr(Vwap, Amt);(4) 最高点对最低点的 High / Low 版本、最大值占时比 day_at_max_ratio(高位停留时间);
+      (5) 与上述同样的量在同市值桶内去均值,以及与当天收益的协动。全部套 cross_mean / cross_corr 20~60 日平滑。
+      与库的区别:库里 day_argmax / day_argmin 一族存在但极少作用在价格路径上并以多日均值读成慢属性;本批 head 为 nt_ts_kurt(矩),与时间位置无关;
+      本位的种子也不含 nt_ts_kurt,骨架是「极值位置 / 重心 / 路径相关 + 多日平滑」,核对过不是本批任何 head 的写法。
+      样本外还会在的理由:A 股涨跌停与 T+1 让「尾盘强势」承载隔夜持有意愿(日内收尾位置与次日开盘跳空的关系是长期被记录的行为现象);
+      知情交易的日内节奏由市场结构决定,不靠某段行情;位置类量是无量纲的,不随波动水平漂移,被波动控制吃掉的部分少;20~60 日平滑换手低。
+      预期与 20 日反转控制有中度相关(尾盘位置与当日收益相关),新尺子扣掉线性 / 非线性暴露后看剩余。
+    inspired_by: 'B 批:Close/Vwap/Low/High 互换结果不一致(Vwap->Close 在窗口 30 恶化 -2.95->-4.22,Low->High 基本持平),说明价格路径的「位置 / 形状」信息与矩不同,本批没有任何候选读时间位置'
+    seeds:
+      - 'cross_mean(day_argmax(Vwap), 20)'
+      - 'cross_mean(day_argmin(Vwap), 20)'
+      - 'cross_mean(sub(day_argmax(Vwap), day_argmin(Vwap)), 20)'
+      - 'cross_mean(sub(day_argmax(High), day_argmin(Low)), 40)'
+      - 'cross_mean(day_centroid(Amt), 20)'
+      - 'sub(cross_mean(day_argmax(Vwap), 20), cross_mean(day_centroid(Amt), 20))'
+      - 'cross_mean(day_corr(Vwap, in_index(Vwap)), 20)'
+      - 'cross_mean(day_corr(Vwap, Amt), 40)'
+      - 'cross_mean(day_at_max_ratio(Vwap), 20)'
+      - 'cross_mean(day_at_min_ratio(Vwap), 20)'
+      - 'cs_bucket_demean(cross_mean(day_argmax(Vwap), 20), LogFloatCap)'
+      - 'cross_corr(day_argmax(Vwap), day_sum(Ret), 60)'
+      - 'cross_ema(sub(day_argmax(Vwap), day_centroid(Amt)), 30)'
+      - 'cross_mean(day_corr(Vwap, in_index(Vwap)), 60)'

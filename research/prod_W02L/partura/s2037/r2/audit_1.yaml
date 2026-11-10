@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 4, 9, 12, 13]
+    reasons: '核心 = 快照 head cross_corr(S(50,5), day_sum(Amt), 60)(prods2037Pr1a_Ea,train +0.60 / valid +0.76)本身。corr_1.json 中核心对 5 个控制的 |ρ|:liq 0.26、vol 0.04、rev 0.01、known 0.29、size 0.04,均低于 0.8,E 门槛通过。14 个种子都原样包含核心。自动划掉(原始 |ρ| 对核心 head ≥ 0.7):1(cross_ema 20,0.83)、4(sub 与 cross_corr(S,Ret),0.71)、9(add 与 ts_delay,0.94)、12(cross_mean 20,0.90)、13(div 除以 cross_stddev,0.95)。余 9 个(2、3、5、6、7、8、10、11、14),远高于 4。数学核对:cross_corr 经 rolling_pair_reduce 为因果日轴 60 日窗口;cross_zscore 与 cross_madz 有 EPS 与常数窗口保护;cross_regres 在回归元方差近零时为 NaN;log 在 |x| < EPS 时返回 NaN 而非 -inf;ts_delay 是日轴滞后一天,无前视;没有 ts_rank、cross_rank、in_rank_rolling,不触发 nanrank_last。div 是裸除法无 EPS,但 13 已自动划掉,余下种子的分母都是 60 日标准差或 60 日均值,未见近零爆点。新颖性 4:种子 2(cross_stddev(核心,60),与 head |ρ| 0.04)、8(核心减去 cross_corr(day_gini(Volume), Amt, 60),|ρ| 0.19,与 liq / size 约 0.43)、6 与 7(对 day_std(Ret) 或 log 成交额做 120 日回归的残差,与 head |ρ| 0.62 / 0.59,残差后与各控制 |ρ| 不超过 0.11)是本质上不同的读法。3、5、10、11、14 与核心 |ρ| 在 0.49 到 0.69 之间,是同一相关的 z 分数、尾均值、EMA 与差分的换写,但不是同一个度量,放行。合理度 4:各算子组合与各自说法一致,没有落进 §4 的陷阱。边界:S 与 cross_corr 沿用核心已有的 fft_with_nan_handling 位置掩码与 pad_to_pow2=False 的批内 M(legacy quirk),核心 head 已在快照里承受这一点,不单独作为挡的理由。如果它有 alpha,最可能来自:S 的水平与波动被扣掉之后,60 日团块度与成交额、与被价格动作回归后残差之间的慢协动(种子 6、7、8);其余主要是核心的换写。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 3, 4, 13, 14]
+    reasons: 'N 想法:成交形状读数(day_gini、day_centroid、energy_ratio_n、day_zero_ratio、day_at_max_ratio、day_es_ratio_hi)与规模或价格量(Amt、log Amt、day_std(Ret)、day_sum(Ret)、gini(|Ret|))之间的耦合。自动划掉(原始 |ρ| ≥ 0.7 对核心 head):1(gini(Volume) 与 Amt,0.77)、3(gini(Amt) 与 log Amt,0.72)、4(cross_regbeta,0.75)、14(day_es_ratio_hi,0.75)。数学问题划掉 13:corr_1.json 中 gate False、distinct 0.102,面板几乎是常数(day_at_max_ratio 在 Volume 上多数日子落在 1/n 的离散档,截面只剩少数几个值),属 §4 的「面板几乎是常数」。余 9 个(2、5、6、7、8、9、10、11、12),远高于 4。控制 |ρ|:最大为种子 6 与 8 的 liq 0.52 / 0.53、known 0.53,均低于 0.8,通过。新颖性 4:2(centroid 与 Amt,head |ρ| 0.29)、5(energy_ratio_n(0.9) 与 Amt,0.30)、7(zero_ratio(Ret) 与 Amt,0.29)、10(centroid 与 sum(Ret),0.09)、12(gini 与 log 成交额回归残差的 EMA,0.17)、11(gini(Volume) 与 gini(|Ret|),0.46)度量的都不是 head 那个东西;6、8、9 是同一耦合在 |Ret| 基尼、EMA、波动上的推广,与 head |ρ| 为 0.56 到 0.65,但读的是不同对象,放行。合理度 4:逐个核对:day_gini 的分母 tot 有 clamp 且缺失分钟排在末尾不计入;day_centroid 的分母有 clamp,缺失分钟权重为 0;day_zero_ratio 与 day_at_max_ratio 对缺失分钟按有限值计;day_es_ratio_hi 在分位数近零时为 NaN 而不是爆点;cross_corr 为因果 60 日窗口,无前视。边界:种子 5 的 energy_ratio_n 与核心共用 fft_with_nan_handling 的位置掩码(legacy quirk),缺分钟日的谱读数会偏向缺失度量,这是 PI 应当核对的边界,不单独挡。如果它有 alpha,最可能来自:成交在日内的时间分布(集中在何时、几分钟集中)与成交额的慢耦合,即拆单、被动或大单节奏在 60 日内的同步性;以及收益离散与成交集中之间的失配(种子 11)。'
+R:
+  - head: 'cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), day_sum(Amt), 60)'
+    soundness: 4
+    reasons: '6 个变体:窗口 90、cross_ema 10 外壳、谱参数 (50,3)、(100,5)、(50,8),以及 log 成交额 90 日。全部是因果日轴算子或只改谱参数,输入仍是原始 Volume,无除法,没有 ts_rank 等 nanrank_last 路径。(100,5) 中 m=100 小于谱宽 236,满足 m 大于 q;(50,3) 与 (50,8) 在同一谱上取不同的排名段,无数学问题。log(day_sum(Amt)) 在 |x| < EPS 时为 NaN,由窗口算子跳过,不是 -inf。变体与原 head 的 |ρ| 在 0.80 到 0.97 之间,这是变体之间的关系,不是数学问题,合理度不因此扣分。合理度 4。'
+  - head: 'cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)'
+    soundness: 4
+    reasons: '5 个变体:cross_stddev 窗口 180 与 150、cross_ema 10 包 cross_stddev(·,120)、谱参数 (50,3) 与 (100,5) 各配 120 日窗口。全部是因果日轴的标准差或 EMA 外壳,输入是原始 Volume 的谱比例 S,分母在 S 上只做 std 不做除法,没有近零爆点。窗口 180 的热身期占样本约 9 个月,是 NaN 而不是填充值,对 2018 到 2023 年训练段的影响有限,不主导结果。与原 head 的 |ρ| 在 0.70 到 0.78 之间,属于变体间的关系,不是数学问题。合理度 4。'
+summary: '两个位都过:a 位(E,核心为快照 head cross_corr(S,Amt,60))划掉 1、4、9、12、13 共 5 个,余 9 个,创新度 4、合理度 4;b 位(N)自动划掉 1、3、4、14,13 因面板几乎是常数划掉,余 9 个,创新度 4、合理度 4;R 两组合理度均为 4。边界项 S 系列的位置掩码与批内 M 为既有 legacy quirk,待 PI 核对。'

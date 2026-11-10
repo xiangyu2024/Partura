@@ -1,0 +1,62 @@
+seed: 2051
+round: 2
+slots:
+  - type: E
+    core: 'day_kurt(Volume)'
+    hypothesis: >-
+      核心 day_kurt(Volume) = 当天分钟成交量分布的峰度:越大说明当天的量集中在少数几分钟(事件 / 大单 / 脉冲式成交),越小说明量铺得均匀(被动、做市式成交)。
+      本批证据:含它的 36 个候选均值 -1.37 对不含 -2.33(p<0.001),是批内最稳的富集部件;批内最好的非 nt 候选(第 1 轮 Pr1a,
+      cross_corr(day_kurt(Δ²Vwap), day_kurt(Volume), 241))也靠它,但只有 +0.09。库里含它的写法几乎全是「单日值直接进 ts_/cross_ 的
+      sum / quantile / regalpha / pow / mul」(单日值换手 0.81、净夏普 -10,纯噪声被成本吃掉),没有一个先做足够长的平滑再读成慢属性,
+      更没有把它和收益方向、市值桶、自身历史做交互。本位的外围全换成这三类:(1) 长窗口平滑(cross_mean / cross_ema 40~120 日),把脉冲式成交读成个股的慢属性
+      (机构 / 事件型票与散户均匀型票的差别,Easley-O'Hara 的知情交易者 / 订单流毒性思路,2002);(2) 与自身历史的偏离 cross_zscore(今天比自己平时更脉冲 =
+      有新信息到达,Gervais-Kaniel-Mingelgrin 的高成交量收益效应,2001),再平滑;(3) 与当日收益 day_sum(Ret) 的 cross_corr / cross_regbeta:脉冲放量伴随上涨
+      还是下跌,区分「买方事件」与「卖方事件」,这是带方向的量,不是控制里的流动性 / 波动 / 反转;(4) 同市值桶内去均值 cs_bucket_demean,
+      避免被 LogFloatCap 的非线性暴露吃掉。新尺子已经去掉流动性、波动、反转与市值的线性 / U 形 / S 形暴露,峰度是无量纲形状量,与总成交量水平关系弱;
+      平滑后换手低,15bp 成本下可做。样本外还会在的理由:成交脉冲性反映个股参与者结构(机构 vs 散户占比),是慢变的结构性属性,不依赖某段行情。
+      预期:多数纯平滑版仍被 volume 相关控制部分吃掉,最有机会的是带方向的 cross_corr / cross_regbeta 版和桶内版。
+    seeds:
+      - 'cross_mean(day_kurt(Volume), 60)'
+      - 'cross_ema(day_kurt(Volume), 40)'
+      - 'cross_mean(day_kurt(Volume), 120)'
+      - 'cross_zscore(day_kurt(Volume), 60)'
+      - 'cross_ema(cross_zscore(day_kurt(Volume), 60), 20)'
+      - 'cross_corr(day_kurt(Volume), day_sum(Ret), 60)'
+      - 'cross_corr(day_kurt(Volume), day_sum(Ret), 241)'
+      - 'cross_regbeta(day_sum(Ret), day_kurt(Volume), 60)'
+      - 'cs_bucket_demean(cross_mean(day_kurt(Volume), 60), LogFloatCap)'
+      - 'cs_bucket_demean(cross_ema(cross_zscore(day_kurt(Volume), 60), 20), LogFloatCap)'
+      - 'cross_stddev(day_kurt(Volume), 60)'
+      - 'cross_tail_mean_q75(day_kurt(Volume), 60)'
+      - 'sub(cross_mean(day_kurt(Volume), 20), cross_mean(day_kurt(Volume), 120))'
+      - 'cross_corr(day_kurt(Volume), day_kurt(in_delta(Vwap, 1)), 120)'
+  - type: N
+    inspired_by: >-
+      B2 批:含 day_min(cross_argmax(Volume, 30)) 的候选均值 -1.27 对 -2.13(p 0.046),含 day_argmax(Volume) 的 4 个候选 -0.67 对 -2.13(p 0.006);
+      两者都是「量的峰值位置 / 距今多久」,而不是量的大小或矩;第 1 轮所有想法都在分钟轴内部找形状,没有人动过日轴上的「事件距今多久」这一维
+    hypothesis: >-
+      想法:成交量冲击事件的「新鲜度」与事件当日的方向 = 日频的量价事件漂移。批内线索是 cross_argmax(Volume, 30)(过去 30 日里成交量最大的那一天距今几日)出现在富集候选里,
+      而库里所有含它的写法都先 day_min / day_close 压成一个数、再被 ts_ / cross_ 拿去做回归,没有人把它当成「事件时钟」去读。
+      本位用日轴算子直接实现:(1) cross_argmax(day_sum(Amt), d) / cross_argmax(day_sum(Volume), d):最近一次放量日离今天多远(新鲜度),放量冲击后价格漂移随时间衰减
+      (Gervais-Kaniel-Mingelgrin 高成交量收益溢价 2001;Barber-Odean 的注意力驱动买入 2008 —— 放量吸引散户注意,持续数日到数周);(2) 方向:放量事件日的收益由
+      cross_argmax 的位置给出,无法直接索引,因此用 cross_corr(day_sum(Ret), 当日量的日轴冲击) 与 cross_regbeta(day_sum(Ret), 量冲击, d) 作为「量冲击与收益同向度」,
+      以及量冲击 × 收益的日度乘积再做长窗口均值 cross_mean(mul(day_sum(Ret), cross_zscore(day_sum(Amt), 20)), d);(3) 以对数换手 sub(log(day_sum(Volume)), LogFloatShares)
+      代替成交量水平,去掉股本规模的机械差异;(4) 与市值桶内去均值。与库的区别:库里没有以 day_sum(Amt / Volume) 为底、以 cross_zscore / cross_argmax /
+      「冲击×收益」为骨架的东西,批内是分钟轴形状量(峰度、argmax 位置)加 ts_ 滚动,骨架完全不同;它也不是 20 日反转控制 —— 反转用的是收益水平,本位用的是量冲击与收益的交互。
+      样本外还会在的理由:注意力与信息消化速度是结构性的,放量后的反应不足 / 过度反应由散户占比与 T+1、涨跌停制度决定,不靠某段行情;
+      日轴量冲击平滑后换手低。预期:纯新鲜度版与流动性控制中度相关;交互版(冲击×收益)最可能在去控制后留下东西,约 25% 概率出 head。
+    seeds:
+      - 'cross_argmax(day_sum(Amt), 30)'
+      - 'cross_argmax(day_sum(Volume), 60)'
+      - 'cross_argmax(day_sum(Ret), 30)'
+      - 'cross_mean(mul(day_sum(Ret), cross_zscore(day_sum(Amt), 20)), 60)'
+      - 'cross_mean(mul(day_sum(Ret), cross_zscore(day_sum(Volume), 20)), 120)'
+      - 'cross_corr(day_sum(Ret), day_sum(Amt), 60)'
+      - 'cross_corr(day_sum(Ret), day_sum(Volume), 120)'
+      - 'cross_regbeta(day_sum(Ret), cross_zscore(day_sum(Amt), 20), 60)'
+      - 'cross_corr(day_sum(Ret), sub(log(day_sum(Volume)), LogFloatShares), 60)'
+      - 'cross_zscore(sub(log(day_sum(Volume)), LogFloatShares), 60)'
+      - 'cs_bucket_demean(cross_mean(mul(day_sum(Ret), cross_zscore(day_sum(Amt), 20)), 60), LogFloatCap)'
+      - 'cross_ema(mul(sign(day_sum(Ret)), cross_zscore(day_sum(Amt), 30)), 40)'
+      - 'sub(cross_argmax(day_sum(Amt), 30), cross_argmax(day_sum(Ret), 30))'
+      - 'cross_corr(cross_zscore(day_sum(Amt), 20), day_sum(Ret), 241)'

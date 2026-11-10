@@ -1,0 +1,87 @@
+seed: 2037
+round: 1
+slots:
+- type: E
+  core: energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False)
+  hypothesis: '机制(只用本批快照里的数字):三个 head 都是 cross_stddev(S, 20),S = energy_ratio_topm_minus_q(delete_open_close(Volume), m, q, False):对当天分钟成交量(去掉开盘 / 收盘几根)做 FFT,按功率排序,取排名 q..m 的谱线能量占总能量的比例。q=5 时被去掉的通常是直流分量加最低频的两对谐波(日内 U 形的主体),所以 S 读的是「U 形之外,成交量在中频上有多大的团块」,无量纲、只依赖时间形状(拆解表里 Volume 换 Amt 分数基本不变:−0.86→−0.90、−0.98→−0.92)。核心取 S(50, 5),是 head 2 的内层子树;它单独与已知族 ρ = 0.52,低于 0.8。
+
+
+    库里 S 家族 18 条只有三种外壳:原值、cross_mean(·, 20)、cross_stddev(·, 20),全是日轴上的「水平」或「二阶矩」。拆解表给出三条事实:(1) 只有离散度活下来(原值 −4.1;20 日均值与 Ret 底的版本都进不了前三);(2) 总体偏慢更好(cross_stddev 窗口 20→40:(50,5) 从 −0.98 到 −0.58,(50,10) 从 −1.69 到 −1.08;(20,5) 的 train 也从 −0.86 到 −0.61,只有它的 valid 反而变差 −0.81→−1.44;缩到 10 在 (20,5)、(50,5) 上更差),说明承重的是 S 在时间上的不稳定,而 15 bp 成本下的换手是主要损耗;(3) 离散度与已知成交额族的 ρ 在 −0.30 ~ −0.45,接近 0.5 的上限,即 head 有一部分是已知族的亲戚。
+
+
+    本位把同一个 S 序列读成别的东西,外围只用日轴(慢)算子,窗口 60 ~ 120 日、EMA 半衰期 10 ~ 20 日:
+
+    (a) 自我相对:cross_zscore / cross_madz / 快慢 EMA 之差,即「近期的团块度相对这只股票自己的常态」,把持续的个股水平(与流动性相关)扣掉;
+
+    (b) 扣掉当日价格动作后的团块:cross_regres(day_std(Ret) 或 |day_sum(Ret)| 或 log(day_sum(Amt)), S, 60)(S 对它们回归的残差)再做 EMA / 均值 / 标准差,以及回归斜率 cross_regbeta。成交团块若伴随价格大动,多是信息性成交,会被尺子里的波动控制吃掉;没有价格动作的团块更像机械成交(算法拆单、被动 / 指数资金、大宗),是尺子之外可能留下的部分;
+
+    (c) 与价格的协动:cross_corr(S, 当日收益 / 前一日收益 / |当日收益| / log 成交额, 60),即团块出现在上涨日还是下跌日、追涨之后还是放量日;
+
+    (d) 稳健离散度:变异系数(std / mean,去掉水平)、75% 与 25% 分位尾均值之差、上行 / 下行半离差。
+
+
+    为什么和已有的不同:库里与这个核心有关的写法只有上面三种外壳,没有回归残差、z 分数、相关、尾均值、半离差;16 个种子的骨架全部不在两个库的 5583 个骨架里(已逐个对照 struct/members.csv 的骨架集)。(b)(c) 引入了当日收益 / 成交额,(a)(d) 去掉了水平,所以与三个 head 的日度秩相关预期都低于 0.7。
+
+    为什么样本外还会在:来源是「谁在交易」的慢变量(算法拆单 vs 散户脉冲、被动资金占比),是持股结构与执行方式的指纹,不依赖某段行情;每个种子要么以这只股票自己为参照,要么窗口 ≥ 60 日,换手低。我对它的信心不高,最可能的失败是读数仍是流动性 / 已知族的亲戚,被控制吃掉。
+
+
+    数学检查:S 落在 (0, 1),分母是整天的总功率(停牌日成交全空则为 NaN),没有除以近零的爆点;cross_zscore 的分母是 60 日标准差 + EPS,只在 S 整段不动时放大,而那种情形 S 本身是 NaN;cross_regres / cross_regbeta 在回归元方差近 0 时返回 NaN;变异系数的分母 cross_mean(S, 60) 是 (0, 1) 内的 60 日均值,不会接近 0。所有窗口 ≤ 120 日,热身期是 NaN,不是填充值。无前视:只用 t 日收盘及以前的数据,t+1 才交易;ts_delay(day_sum(Ret), 1) 是滞后一天,不是超前。'
+  seeds:
+  - cross_ema(cross_zscore(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 20)
+  - cross_ema(cross_madz(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 120), 20)
+  - cross_ema(cross_regres(day_std(Ret), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 20)
+  - cross_mean(cross_regres(abs_(day_sum(Ret)), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 30)
+  - cross_stddev(cross_regres(day_std(Ret), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 60)
+  - cross_regbeta(day_std(Ret), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), day_sum(Ret), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), ts_delay(day_sum(Ret), 1), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), abs_(day_sum(Ret)), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), log(day_sum(Amt)), 60)
+  - cross_ema(cross_regres(log(day_sum(Amt)), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 20)
+  - div(cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), cross_mean(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60))
+  - sub(cross_tail_mean_q75(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), cross_tail_mean_q25(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60))
+  - cross_semistd_pos(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)
+  - cross_semistd_neg(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)
+  - sub(cross_ema(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 10), cross_ema(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 120))
+- type: N
+  hypothesis: "批里的现象(B109,18 条,全部来自手写库):energy_ratio_topm_minus_q 这个谱算子只被喂过两个底,Volume 和有符号的 Ret(各 9 条),外壳只有原值 / 20 日均值 / 20 日标准差。Ret 底没有一条进入前三;Volume 底里只有 20 日标准差存活,而且越慢越好(窗口 20→40 把 (50,5) 从 −0.98 推到 −0.58)。没有任何一条把它喂给 |Ret|、振幅或异常成交量路径,也没有把两个谱读数放进同一个表达式里互相比较。\n\n机制:同一个无量纲的谱读数 S[x] = 「去掉最强 5 根谱线(通常是直流分量与最低频两对谐波)之后,排名 5 ~ 50 的谱线占总能量的比例」,在两条路径上各读一次:\n - S_V = S[Volume]:成交量路径在中频上的团块度;\n - S_R = S[|Ret|]:价格运动(波动)路径在中频上的团块度。\n成交稀薄的股票两者都高(一天只有几笔成交,成交量与 |收益| 都是「零加少数尖峰」),所以各自的水平主要是稀薄度,这正是新尺子用流动性 / 已知成交额族去掉的东西。但两者的差与协动把共同的稀薄度约掉,读的是失配:成交量成团而价格没有跟着动(被盘口挂单吸收:算法拆单、冰山、被动 / 指数资金、大宗),还是价格跳动而成交没有成团(薄盘口跳价、散户投机)。前者是机构 / 被动参与的指纹,后者是散户 / 彩票型需求的指纹,都是慢变量;方向我不预设,由 GP 按 train 定。\n\n算子怎样实现(16 个种子,骨架全部不在库里,已逐个对照 struct/members.csv 的 5583 条骨架):\n (1) 差:sub(S_V, S_R) 外套 cross_ema 20 / cross_mean 60 / cross_stddev 60 / cross_ema(cross_zscore(·, 60), 20);\n (2) 协动与失配回归:cross_corr(S_V, S_R, 60)、cross_regres(S_R, S_V, 60)(S_V 扣掉 S_R 以后的残差)再 EMA、cross_regbeta(S_R, S_V, 60)、两个 60 日均值之比 cross_mean(S_R, 60) / cross_mean(S_V, 60);\n (3) 新底:S_R 单独(60 日均值 / 60 日标准差)、振幅路径 (High − Low) / Vwap 的谱读数、异常成交量路径 Volume / cross_mean(Volume, 20) 的谱读数(把日内 U 形除掉,直接读异常那部分的团块度)以及它与 S_R 的差;\n (4) 另一个谱读数:energy_ratio_n(·, 0.9, False)(累计到 90% 能量需要多大比例的谱线,即有效带宽),Volume 与 |Ret| 之差,60 日均值 / 120 日稳健 z 再 EMA。\n\n为什么和已有的不同:库里没有任何表达式把谱算子喂给 |Ret| / 振幅 / 异常成交量,也没有两个谱读数的差、回归、相关或比值;与三个 head 的区别不止是换了一个外壳,而是读的对象从「成交量自己的团块」变成了「成交量相对价格运动的失配」。S_R 一条腿被减掉,所以与三个 head 的日度秩相关预期低于 0.7。\n为什么样本外还会在:这是参与者构成与盘口深度的慢属性(窗口 60 ~ 120 日,EMA 半衰期 20 日,换手低);两条腿都无量纲,与价格水平和市值无关,不是某段行情的产物。我对它的信心不高,最可能的失败是 S_R 并没有把 S_V 里的稀薄度约干净,差仍带着流动性。\n\n数学检查:所有谱读数落在 [0, 1];涨跌停封死或整天不动的日子 |Ret| 全为 0,S_R 恰好等于 0(分子分母都是 0,分母带 1e-12,所以是 0 而不是 NaN),这是真实状态而不是伪影,但这些日子会在 60 日均值里留下零;唯一的除法是两个 60 日均值之比,分母 cross_mean(S_V, 60) 是 (0, 1) 内的均值,远离 0;cross_zscore / cross_madz 的分母在序列不动时放大,但那种情形序列本身是 NaN。所有窗口 ≤ 120 日,热身期是 NaN,不是填充值。无前视:只用 t 日收盘及以前的数据,t+1 才交易。"
+  inspired_by: B109(T15,手写库 18 条)里 energy_ratio_topm_minus_q 只被喂过 Volume 与有符号 Ret,外壳只有原值 / 20 日均值 / 20 日标准差;Ret 底全部落选、Volume 底只有标准差存活且越慢越好;没有任何一条用 |Ret| / 振幅 / 异常成交量做底,也没有两个谱读数互相比较。
+  seeds:
+  - cross_ema(sub(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False)), 20)
+  - cross_mean(sub(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False)), 60)
+  - cross_stddev(sub(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False)), 60)
+  - cross_ema(cross_zscore(sub(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False)), 60), 20)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), 60)
+  - cross_ema(cross_regres(energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60), 20)
+  - cross_regbeta(energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)
+  - cross_mean(energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), 60)
+  - cross_mean(energy_ratio_topm_minus_q(delete_open_close(div(sub(High, Low), Vwap)), 50, 5, False), 60)
+  - cross_mean(energy_ratio_topm_minus_q(delete_open_close(div(Volume, cross_mean(Volume, 20))), 50, 5, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(div(Volume, cross_mean(Volume, 20))), 50, 5, False), 60)
+  - cross_ema(sub(energy_ratio_topm_minus_q(delete_open_close(div(Volume, cross_mean(Volume, 20))), 50, 5, False), energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False)), 20)
+  - div(cross_mean(energy_ratio_topm_minus_q(delete_open_close(abs_(Ret)), 50, 5, False), 60), cross_mean(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60))
+  - cross_mean(sub(energy_ratio_n(delete_open_close(Volume), 0.9, False), energy_ratio_n(delete_open_close(abs_(Ret)), 0.9, False)), 60)
+  - cross_ema(cross_madz(sub(energy_ratio_n(delete_open_close(Volume), 0.9, False), energy_ratio_n(delete_open_close(abs_(Ret)), 0.9, False)), 120), 20)
+R:
+- head: cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 20, 5, False), 20)
+  why: 烂部件是 cross_stddev 的 20 日窗口:拆解里窗口 20→40 在 train 上从 −0.86 变到 −0.61(valid 反而更差 −1.44),说明 train 与 valid 对窗口的偏好不一致,窗口太短时 S 的标准差估计噪声大、名次抖动换手高。变体只把窗口拉长到 60 / 120 日,谱算子与参数 (20, 5) 不变。
+  variants:
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 20, 5, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 20, 5, False), 120)
+- head: cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 20)
+  why: 三个 head 里最接近 0 的一条,烂部件是 20 日窗口:窗口 20→40 把分数从 −0.98 推到 −0.58(train −0.37),缩到 10 更差(−1.10),单调。变体继续拉长到 60 / 90 / 120 日;另一组替换谱参数(去掉前 3 根而不是前 5 根、把谱宽 m 从 50 放到 100;手写库网格只试过 q ∈ {5, 10}、m ∈ {20, 50}),窗口固定 60 日;还有一个在标准差外面再加 20 日 EMA,把名次抖动平滑掉。
+  variants:
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 90)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 120)
+  - cross_ema(cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 20), 20)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 3, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 100, 5, False), 60)
+- head: cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 20)
+  why: 烂部件仍是 20 日窗口这一点本身:窗口 20→40 把分数从 −1.69 推到 −1.08,但缩到 10 也比 20 好(−1.53),说明这条 head 对窗口的偏好不单调,20 日恰好是最差的点(train −1.69,valid −0.91);所以变体取 60 / 90 / 120 日三个更长的窗口,另加一个 20 日 EMA 的版本,看慢的方向是否继续有效。
+  variants:
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 60)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 90)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 120)
+  - cross_ema(cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 20), 20)

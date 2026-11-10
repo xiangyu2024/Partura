@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [4]
+    reasons: '核心 C = cross_regalpha(day_quantile(Vwap), day_quantile(High), 15) 原样取自快照 head 6 的 ts_regbeta 第二参数,是合规的 E 核心。相关度表 slot a core 行:对 9 个 head 原始 |ρ| 最大 0.06,对 5 个控制最大 0.08,远低于 0.8 门槛。数学核对:cross_regalpha 是 rolling_ols(axis=0) 的 alpha(dt_cross.py:304),day_quantile 默认 q=0.5(dt_day.py:154),C 是日内价位中位数的 15 日滚动回归截距,无除零;ts_regbeta 对 -cov(Low,Close) 做 60/120/241 日滚动斜率。种子未用 ts_rank / cross_rank / in_rank_rolling(无 nanrank_last 陷阱),cs_rank 走 _common_rank 而不是 nanrank_last;无 ts_spearman、无 nt_*;无前视。价位尺度(后复权)按 §4 不算问题。创新度 3:种子 1-3、6-16 都是 head 6 承重子项 ts_regbeta(neg(day_cov(Low,Close)), C, w) 的窗口或包装变体。相关度表中它们对 9 个 head 的原始 |ρ| 为 0.04-0.31、残差 0.09-0.34,不是同一个对象;但 R_prev 已显示去掉 ts_cov 链后 w=60 得 0.893、w=30 得 0.068,所以是已知有效项的邻域延伸,不是全新对象。剔除种子 4:add(day_ar1_coefficient(Amt), ts_regbeta(..., C, 60)) 与 R_prev 中已评分的 add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(..., C, 60))(score 0.893)只差一个常数 -0.5,对截面秩无影响,是重复。剩余 15 个种子。如果它有 alpha,最可能来自:日内价位中位数的 15 日回归偏移 C 与 -cov(Low,Close) 对 C 的 60 日回归斜率,即个股价位尺度上的慢变量,不是 5 个控制中的任何一个。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2]
+    reasons: '核心 D = div(day_cov(Ret,Volume), day_mean(Volume)) 在定位共性表(loc.md 共性区第 20 行,40 个成员)中出现,作为共性子树的 E 核心合规;这是 D 的第 2 个 E 位,未超过每核心 2 个的上限。相关度表 slot b core 行:对 9 个 head 原始 |ρ| 0.12,对控制最大为 rev 0.17。数学核对:D 有界(cov ≤ σ_R σ_V,σ_V/V̄ ≤ √240),唯一的除数 day_mean(Volume) 只在整日无量时为 0,此时分子同为 0,给 NaN,没有近零分母爆点;上轮覆盖率 0.9988。ts_skew / ts_kurt 是滚动 241 日矩,截面秩之后不会被单个极端值支配。种子 12(cs_flip_by_state)的市场状态在头 241 天用不完整窗口(_trailing_rank 按有限值计数),只影响 2018 年约一年,不是主导,放行。创新度 4:种子对快照 head 的原始 |ρ| 为 0.22-0.40,最近的是 cross_quantile_q50 族而不是 head 4;D 去掉了 C 的量级(÷ 均量),上轮 ts_skew(C,40) 为 -0.64,换成 ts_skew(D,241) 为 +0.68,这是实质性改进而非换写法。对控制:种子 6(kurt)对 size 0.45、种子 16 对 size 0.67 与 liq 0.42 偏高,但 0.67 未到 0.8 的自动划掉门槛;种子 16 更像 size 倾斜的 skew,按 §3 只能因数学问题或重复划掉,故放行并在此记录。剔除种子 1、2:ts_skew(D,241) 与 ts_skew(D,120) 与 R_prev 中已评分的候选逐字相同(score 0.675 与 0.557),是重复;同时也违反 E 外围不得与已见候选相同的要求。剩余 14 个种子。如果它有 alpha,最可能来自:放量分钟里价格涨跌的三阶矩,即成交量加权分钟收益与等权收益之差的 241 日偏度,反映个股放量大涨与大跌日的不对称频率,这是慢变量,不是 5 个控制中的任何一个。'
+R: []
+summary: '位 a 通过(创新 3、合理 4,剔 4 号,余 15 个,核心 C 为 head 6 子树);位 b 通过(创新 4、合理 4,剔 1、2 号,余 14 个,核心 D 为共性子树);本轮无 R 组。另报:R_prev 中 score 0.893 的变体(add(add(-0.5, ar1(Amt)), ts_regbeta(neg(day_cov(Low,Close)), C, 60)),对原 head 6 的 ρ -0.39、对已知族 -0.16、对其余 head 原始 |ρ| 不超过 0.16)按 §2 的收录条件应被收录为 head,但 additions 为空,请总领核对。'

@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 3:与三个 head(day_skew(nt_ts_kurt(Low,10))、day_max(nt_ts_kurt(Vwap,10))、day_max(nt_ts_kurt(Vwap,30)))的原始 |ρ| 最高为 0.27(seed 4,对 day_max(nt_ts_kurt(Vwap,10))),单看原始值低。但残差 |ρ| 在 seed 1、3、4、5、8、10、12 处为 0.45–0.59,即去掉五个控制后这几条仍与 nt_ts_kurt 尾部形状的 head 残差同向,属于同族换写法(整日矩 / 滚动 z 极值 / es 比)。残差 |ρ| 低于 0.4 的 seed 2、6、7、9、11、13、14 才是真正的新方向。不取 4 分的原因之一:奖励对每个表达式已做半衰期 20 的 EMA,这里的 cross_mean(…,20) 与之叠加成双重平滑,「多日平滑是新的」这一点本身打折。合理度 4:机制是彩票型偏好 / MAX 效应加上信息到达的厚尾程度,分钟收益的尖峰与尾部形状是个股的慢属性,说得通。逐算子核对:in_delta、in_logchg 为因果差分;in_zscore_rolling 为尾随窗口、分母 std+EPS 且 z 有界(至多 sqrt(29));in_madz 有 MAD>0 守卫且因果;day_kurt / day_skew 标度不变;day_es_ratio_hi / lo 在分位数近零时记 NaN;cross_* 只沿日轴。无前视,无 nt_*,无 nanrank_last。定义上记两处但都不构成「主要由它决定」:(a) rolling_windows 对开盘前 29 分钟是部分窗口,nanstd_last 对全 NaN 窗口返回 0 而不是 NaN,所以盘中停牌的股票在 seed 11 的 div(day_max(in_stddev_rolling),day_mean(in_stddev_rolling)) 分母里混入零,使比值偏高;(b) day_es_ratio 在分位数为 0 的平盘日记 NaN,把流动性最差的平盘日系统性地移出截面。两者都只影响停牌或平盘日子,seed 11 的 liq / vol 相关为 0.02 / 0.21,没有支配截面,不挡。如果它有 alpha,最可能来自:厚尾与跳跃频率在散户彩票偏好下的定价,以及残差空间里仍与 head 同向的那部分尾部形状。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6]
+    reasons: '创新度 4:14 个种子对三个 head 的原始 |ρ| 全部不超过 0.15,残差 |ρ| 不超过 0.19,「时间位置」这一维(argmax / argmin / 成交额重心 / 路径直线度 / 高点停留比)在 head 里没有出现,与 head 本质不同。与控制有中度重合:seed 7 对 20 日反转 0.56(day_corr(Vwap,in_index(Vwap)) 经 20 日平均后近似 20 日累计日内漂移方向,与反转控制同向,是控制的换写法嫌疑),seed 3 对反转 0.51,seed 2 对反转 0.48,seed 10 对流动性 0.54,seed 5 对成交额波动控制 0.48。这些都低于 0.8 的自动划线,也不是明显在度量同一个东西,按原则放行;它们的 alpha 大概率会被反转 / 流动性残差化吃掉,是下一轮要看的重点。划掉 seed 6:sub(cross_mean(day_argmax(Vwap),20),cross_mean(day_centroid(Amt),20)) 的相关度表与 seed 1 cross_mean(day_argmax(Vwap),20) 逐位相同(liq 0.07、vol 0.06、rev 0.33、known 0.08、size 0.01,残差 0.07);原因是 day_argmax 的量纲是 0..240 分钟号,day_centroid 是 0..1 的比例,相减后 centroid 只在 argmax 接近的股票之间打破次序,等于换了写法的 seed 1,属于「重复」,规则允许划。顺带注意:seed 1 在表里标「废品」而 seed 6 标「过」,两者排序基本相同,尺子的通过与否在这里有噪声,不影响划分。seed 13 cross_ema(sub(argmax,centroid),30) 同样带有 argmax 的量纲问题,但平滑方式不同(rev 0.22 对 seed 1 的 0.33),不划,留待残差读数。合理度 4:机制是知情交易的日内节奏与尾盘强势承载隔夜持有意愿,说得通;逐算子核对 day_argmax / day_argmin(分钟号 0..240,并列取首次)、day_centroid(Amt)(|Amt| 加权,归一化到 [0,1])、day_at_max_ratio / day_at_min_ratio(n>1 守卫)、day_corr(count≥2 守卫)、in_index(Vwap)、cross_mean / cross_ema / cross_corr(日轴),无前视(全部是同日收盘后可得的数据,并且只在之后交易),无 nt_*,无 nanrank_last。定义上记一处:day_corr 在价格完全不动的日子(如锁死)返回 0 而非 NaN(协方差为 0 时分母只有 EPS),seed 7、8、14 的这些日子被记成「没有趋势」而不是缺失,会把锁死股票拉向中间,但不是主导因素。如果它有 alpha,最可能来自:收盘前后价格高低点的时刻分布与放量时刻的错配(信息型与噪声型的区分),或涨停锁死时首次触板的时刻(day_argmax 在平顶上取首次)。'
+R: []
+summary: '两位都是 N 位,均通过审计:a 位创新度 3、合理度 4,14 个种子全保留;b 位创新度 4、合理度 4,划掉 seed 6(与 seed 1 的相关度表逐位相同,属重复),余 13 个种子;本轮无 R 组。两位都没有命中数学陷阱(无前视,无 nt_*,无 nanrank_last);记下的定义问题是停牌日 nanstd_last 填 0、平盘日 es_ratio 记 NaN、平盘日 day_corr 记 0,均不构成主导。'

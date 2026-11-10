@@ -1,0 +1,44 @@
+# 相关度表:种子 2010,P 组,第 1 轮(train 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 3 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.69 | `ts_sum(day_durbin_watson(Low), 20)` | 0.11 | 0.13 | 0.69 | 0.30 | 0.17 | 0.12 | `day_durbin_watson(Vwap)` |
+| slot a seed 1 | 过 | 0.48 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.44 | 0.09 | 0.03 | 0.03 | 0.07 | 0.41 | `div(cross_stddev(day_durbin_watson(Vwap), 241), cross_mean(day_durbin_watson(Vwap), 241))` |
+| slot a seed 2 | 过 | 0.50 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.49 | 0.03 | 0.01 | 0.03 | 0.04 | 0.31 | `div(cross_stddev(ts_sum(day_durbin_watson(Vwap), 5), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 5), 241))` |
+| slot a seed 3 | 过 | 0.73 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.54 | 0.20 | 0.47 | 0.02 | 0.23 | 0.31 | `cross_autocorr(day_durbin_watson(Vwap), 120, 1)` |
+| slot a seed 4 | 过 | 0.72 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.69 | 0.20 | 0.30 | 0.04 | 0.20 | 0.17 | `cross_autocorr(day_durbin_watson(Vwap), 241, 5)` |
+| slot a seed 5 | 过 | 0.52 | `ts_sum(day_durbin_watson(Low), 20)` | 0.74 | 0.14 | 0.53 | 0.32 | 0.19 | 0.11 | `div(cross_mean(day_durbin_watson(Vwap), 20), cross_mean(day_durbin_watson(Vwap), 241))` |
+| slot a seed 6 | 过 | 0.47 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.47 | 0.03 | 0.35 | 0.43 | 0.07 | 0.10 | `sub(log(cross_mean(day_durbin_watson(Vwap), 10)), log(cross_mean(day_durbin_watson(Vwap), 120)))` |
+| slot a seed 7 | 过 | 0.41 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.40 | 0.07 | 0.41 | 0.39 | 0.11 | 0.03 | `cross_zscore(cross_mean(day_durbin_watson(Vwap), 10), 241)` |
+| slot a seed 8 | 过 | 0.17 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.13 | 0.09 | 0.15 | 0.15 | 0.11 | 0.04 | `sub(log(cross_semistd_pos(cross_mean(day_durbin_watson(Vwap), 5), 120)), log(cross_semistd_neg(cross_mean(day_durbin_watson(Vwap), 5), 120)))` |
+| slot a seed 9 | 过 | 0.50 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.35 | 0.12 | 0.13 | 0.04 | 0.13 | 0.33 | `sub(log(cross_tail_mean_q75(day_durbin_watson(Vwap), 120)), log(cross_tail_mean_q25(day_durbin_watson(Vwap), 120)))` |
+| slot a seed 10 | 过 | 0.23 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.17 | 0.05 | 0.05 | 0.00 | 0.02 | 0.29 | `div(cross_max(day_durbin_watson(Vwap), 60), cross_mean(day_durbin_watson(Vwap), 60))` |
+| slot a seed 11 | 过 | 0.37 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.40 | 0.05 | 0.08 | 0.01 | 0.04 | 0.35 | `sub(log(cross_mean(day_durbin_watson(Close), 60)), log(cross_mean(day_durbin_watson(Vwap), 60)))` |
+| slot a seed 12 | 过 | 0.82 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.66 | 0.22 | 0.71 | 0.02 | 0.25 | 0.25 | `cross_quantile_q75(day_durbin_watson(Vwap), 120)` |
+| slot b seed 1 | 过 | 0.30 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.35 | 0.37 | 0.07 | 0.02 | 0.33 | 0.00 | `cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 60)` |
+| slot b seed 2 | 过 | 0.19 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.20 | 0.47 | 0.02 | 0.03 | 0.42 | 0.20 | `cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 211, 240))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 60)` |
+| slot b seed 3 | 过 | 0.29 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.31 | 0.43 | 0.01 | 0.04 | 0.37 | 0.08 | `cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 211, 240)))), 120)` |
+| slot b seed 4 | 过 | 0.30 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.36 | 0.37 | 0.07 | 0.01 | 0.33 | 0.00 | `cross_ema(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 30)` |
+| slot b seed 5 | 过 | 0.23 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.31 | 0.52 | 0.01 | 0.02 | 0.47 | 0.16 | `cross_mean(div(day_durbin_watson(in_slice(Vwap, 1, 30)), add(day_durbin_watson(in_slice(Vwap, 1, 30)), day_durbin_watson(in_slice(Vwap, 211, 240)))), 60)` |
+| slot b seed 6 | 过 | 0.36 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.21 | 0.25 | 0.16 | 0.01 | 0.21 | 0.45 | `cross_stddev(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 120)` |
+| slot b seed 7 | 过 | 0.36 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.36 | 0.27 | 0.10 | 0.02 | 0.24 | 0.14 | `cross_mean(sub(log(day_durbin_watson(in_slice(Close, 1, 30))), log(day_durbin_watson(in_slice(Close, 31, 210)))), 60)` |
+| slot b seed 8 | 过 | 0.10 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.06 | 0.15 | 0.01 | 0.01 | 0.15 | 0.02 | `cross_corr(day_durbin_watson(in_slice(Vwap, 1, 30)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)` |
+| slot b seed 9 | 废品 | 0.13 | `ts_sum(day_durbin_watson(Low), 20)` | 0.04 | 0.11 | 0.10 | 0.00 | 0.10 | 0.11 | `cross_reg_tvalue(day_durbin_watson(in_slice(Vwap, 1, 30)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)` |
+| slot b seed 10 | 过 | 0.23 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.11 | 0.17 | 0.16 | 0.02 | 0.17 | 0.04 | `cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), day_sum(in_slice(Ret, 1, 210)), 120)` |
+| slot b seed 11 | 过 | 0.09 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.07 | 0.18 | 0.06 | 0.02 | 0.16 | 0.03 | `cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), abs_(day_sum(in_slice(Ret, 1, 210))), 120)` |
+| R 1 variant 1 | 过 | 0.94 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.91 | 0.13 | 0.43 | 0.05 | 0.15 | 0.39 | `cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241)` |
+| R 1 variant 2 | 过 | 0.48 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.50 | 0.07 | 0.00 | 0.03 | 0.08 | 0.25 | `div(cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 10), 241))` |
+| R 1 variant 3 | 过 | 0.41 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.28 | 0.09 | 0.10 | 0.00 | 0.07 | 0.41 | `cross_semistd_pos(ts_sum(day_durbin_watson(Vwap), 10), 241)` |
+| R 1 variant 4 | 过 | 0.98 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.95 | 0.09 | 0.57 | 0.05 | 0.12 | 0.41 | `cross_fangzheng(ts_sum(day_durbin_watson(High), 10), 241)` |
+| R 1 variant 5 | 过 | 0.24 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.25 | 0.12 | 0.08 | 0.02 | 0.12 | 0.06 | `cross_autocorr(ts_sum(day_durbin_watson(Vwap), 10), 241, 20)` |
+| R 1 variant 6 | 过 | 0.38 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.40 | 0.00 | 0.01 | 0.01 | 0.01 | 0.22 | `div(cross_max(ts_sum(day_durbin_watson(Vwap), 10), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 10), 241))` |
+| R 1 variant 7 | 过 | 0.52 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.53 | 0.13 | 0.01 | 0.05 | 0.13 | 0.24 | `sub(log(cross_tail_mean_q75(ts_sum(day_durbin_watson(Vwap), 10), 241)), log(cross_tail_mean_q25(ts_sum(day_durbin_watson(Vwap), 10), 241)))` |
+| R 2 variant 1 | 过 | 0.96 | `ts_sum(day_durbin_watson(Low), 20)` | 0.59 | 0.17 | 0.93 | 0.21 | 0.24 | 0.25 | `ts_sum(day_durbin_watson(High), 20)` |
+| R 2 variant 2 | 过 | 0.97 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.94 | 0.10 | 0.56 | 0.06 | 0.12 | 0.39 | `cross_fangzheng(ts_sum(day_durbin_watson(High), 20), 241)` |
+| R 2 variant 3 | 过 | 0.08 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.35 | 0.05 | 0.07 | 0.09 | 0.06 | 0.07 | `sub(log(ts_sum(day_durbin_watson(High), 20)), log(ts_sum(day_durbin_watson(Low), 20)))` |
+| R 2 variant 4 | 过 | 0.18 | `cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)` | 0.11 | 0.11 | 0.05 | 0.01 | 0.11 | 0.12 | `cross_mean(sub(log(day_durbin_watson(High)), log(day_durbin_watson(Low))), 120)` |
+| R 3 variant 1 | 过 | 0.75 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.68 | 0.24 | 0.38 | 0.29 | 0.26 | 0.08 | `cross_zscore(ts_sum(day_durbin_watson(Volume), 20), 120)` |
+| R 3 variant 2 | 过 | 0.71 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.65 | 0.29 | 0.43 | 0.27 | 0.32 | 0.08 | `div(cross_mean(day_durbin_watson(Volume), 20), cross_mean(day_durbin_watson(Volume), 120))` |
+| R 3 variant 3 | 过 | 0.68 | `sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))` | 0.65 | 0.33 | 0.42 | 0.36 | 0.36 | 0.11 | `sub(cross_ema(day_durbin_watson(Volume), 5), cross_ema(day_durbin_watson(Volume), 60))` |

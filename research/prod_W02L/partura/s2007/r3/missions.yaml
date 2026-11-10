@@ -1,0 +1,78 @@
+seed: 2007
+round: 3
+slots:
+- type: E
+  core: day_close(in_kurt_full(Amt))
+  hypothesis: '机制与证据:
+
+    (1) 核心 K = day_close(in_kurt_full(Amt)),当天 241 根分钟成交额的超额峰度(无量纲,有界,与已知族 rho 0.20 左右)。这是对 K 的第 2 个(也是最后一个)E 位。
+
+    (2) 第 2 轮 E 位的结果(只用 train/valid):前 5 名里有读数为正的是 cross_corr(K, |隔夜跳空|, 241):score +0.37(train +0.37 / valid +0.64),是本流目前最好的;同批另一个含 K 的耦合 cross_corr(K, 滞后 K 的 Ret 峰度, 120) -0.04。慢聚合与同伴内(第 2 轮种子 1-6)没进前 5,说明 K 单独的水平不承重,承重的是「成交挤在几根里」与「价格跳」同时出现的耦合。本轮把这个耦合换成不同的外围,而不是重复第 2 轮已经出现的外围(第 2 轮只试了与 |跳空|、日收益、成交额冲击、Ret 峰度的 241 日相关,各一次)。
+
+    (3) 经济含义:成交挤成几根(K 高)又伴随大的价格跳,是信息事件(公告、新闻)被集中消化;耦合 241 日稳定为正的票,是信息驱动的交易者占比高、事件之后价格调整更快的票;耦合为负的票,是价格跳发生在没有集中成交的时候(薄成交下的噪声跳)。这是持有人 / 信息环境结构,慢变,换手低。
+
+    (4) 外围怎样实现(12 个种子,全都原样含 K):(i) 领先滞后:昨天的 K 对今天的 |跳空|(ts_delay(K,1)),以及 K 对昨天的 |跳空|;(ii) 回归斜率 cross_regbeta(K, |跳空|, 241)(用 K 解释 |跳空|,度量的是量级而不是秩);(iii) 替换伙伴:|日收益|、带符号跳空、日内 |收盘/开盘-1| 幅度;(iv) 隔夜 vs 日内:K 与 |跳空| 的相关减去 K 与 |日收益| 的相关(信息在隔夜还是在日内被吸收);(v) 同伴内:在市值或名义价位十分位内做 z 分数;(vi) 稳定性:60 日相关的 120 日均值 / 标准差;(vii) 乘积 K × |跳空| 的 241 日均值(按强度而非相关)。
+
+    (5) 与库里已有的不同:库里 in_kurt_full 只出现 4 次、作用在 Amt 上只有 1 次;cross_corr / cross_regbeta 的伙伴是跳空的写法在 5583 条里是 0 条;种子逐个核对骨架不在库里(以 c06 检查为准)。
+
+    (6) 样本外为什么还会在:耦合在 241 日窗口估计,名次几个月内稳定,半衰期 20 下换手低;机制是持有人 / 信息环境结构,不依赖某段行情。风险(如实):train 的最早约一年混着 2018-08 之前上交所没有收盘集合竞价的制度差异(K 受收盘棒集中度影响);第 2 轮同形态 train 与 valid 差 0.27,取 min 需要两段都到 0.5。
+
+    (7) 数学检查:K 有界 [-2, 238],常数日给 NaN;|跳空| 约 0.01,窗口 241 的偏差平方和约 0.02 >> EPS=1e-9,cross_regbeta 的 var_x 是 K 的偏差平方和(1e3 以上);cross_corr 无有效对返回 0(停牌 / 新股,已知行为);ts_delay 只向过去移,当天的 |跳空| 用当天开盘与昨日收盘,t 日收盘后已知,t+1 才交易;不用 ts_rank / cross_rank。'
+  seeds:
+  - cross_corr(ts_delay(day_close(in_kurt_full(Amt)), 1), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241)
+  - cross_regbeta(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), abs_(day_sum(Ret)), 241)
+  - sub(cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241), cross_corr(day_close(in_kurt_full(Amt)), abs_(day_sum(Ret)), 241))
+  - cs_bucket_zscore(cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241), LogFloatCap)
+  - cs_bucket_zscore(cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 241), sub(LogFloatCap, LogFloatShares))
+  - cross_mean(cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60), 120)
+  - cross_corr(day_close(in_kurt_full(Amt)), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), ts_delay(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 1), 241)
+  - cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_last(Close), day_first(Open)), 1)), 241)
+  - cross_stddev(cross_corr(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60), 120)
+  - cross_mean(mul(day_close(in_kurt_full(Amt)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 241)
+- type: N
+  hypothesis: '机制:第 2 轮 E 位里,读数为正的外围是「成交集中度 与 价格跳 的耦合」,不是集中度本身。本任务把这条搬到不含 K 的、各自独立的成交 / 订单流度量上,并加一条没人试过的新机制:隔夜跳空的方向与日内订单流的方向是否一致(跳空被订单流确认 / 反转)。
+
+    经济含义:(a)「跳空 × 订单流同向」:隔夜新信息使开盘价跳空,若当天成交额加权的净买卖方向与跳空同向(day_signed_ratio(Ret, Amt) = 按成交额加权的涨跌分钟占比),说明信息被持续消化,价格延续;反向则是过度反应被纠正(跳空回补)。241 日窗口的相关 / 斜率 / 一致率估计出这只票是「延续型」还是「回补型」,这是个股的持久属性(参与者构成与信息环境),对应隔夜 - 日内两段收益符号不同的文献(Lou-Polk-Skouras 2019;Berkman 等 2012 的隔夜 / 日内分解)。(b)「|跳空| 与 成交额冲击 / 基尼 / 尾部占比 / 零收益占比 / 分钟 DW 的耦合」:跳空是否带来相应的成交反应,衡量信息被注意与处理的强度(Kim-Verrecchia 1994:信息事件引发成交增加)。(c) 滞后项:昨天订单流对今天跳空的相关(订单流是否提前泄露隔夜信息)。
+
+    算子怎样实现(14 个种子):S = div(day_first(Open), ts_delay(day_last(Close), 1)) - 1(带符号跳空,约 0.01 量级);G = abs_(S);F = day_signed_ratio(Ret, Amt)(在 [-1, 1],分母是成交额之和,0/0 给 NaN);cross_corr / cross_regbeta 241 日;cross_mean(sign(S) × F, 241)、cross_mean(sign(S) × sign(日收益), 241) 是一致率(取值有界,没有除法);两个同伴内版本(市值十分位 / 名义价位十分位内 z 分数);一个差:跳空与订单流相关 减 跳空与日收益相关。
+
+    为什么和库里已有的不同:day_signed_ratio 是 ops_ext 新算子,库里 0 条;cross_corr 伙伴是隔夜跳空的写法库里没有;带符号跳空 × 订单流的一致率这类写法 0 条;不含 day_centroid(Amt)(W01 领地,已避开)与 K(上面 E 位的核心)。
+
+    为什么样本外还会在:延续型 / 回补型是持有人与信息环境的结构,慢变;241 日窗口估计的名次几个月内稳定,半衰期 20 下换手低,15 bp 吃不掉;机制不依赖某段行情。风险(如实):延续 / 回补强度与波动、流动性相关,尺子去掉线性 / U 形 / S 形暴露,门槛型暴露去不掉;训练段最早约 241 日混着收盘集合竞价上线前的制度差异;第 2 轮的 train 与 valid 常一边 0 一边 -0.7。
+
+    数学检查:S 与 G 是价格比值,分母是昨日收盘价(正),无近零分母;F 有界;cross_corr 分母是窗口内偏差平方和的平方根(S 的约 0.02 开方,远大于 EPS=1e-9);cross_regbeta 的 var_x 是 S 的偏差平方和(约 0.02 >> 1e-9);cross_corr 无有效对返回 0(停牌窗口,已知行为);day_zero_ratio(Ret) 在 [0, 1],day_durbin_watson(Ret) 在分母 <= 1e-8(冻结日)给 NaN;所有量只用 t 日及以前的数据,滞后项只向过去移;不用 ts_rank / cross_rank,nanrank_last 不适用。'
+  inspired_by: 第 2 轮 E 位(核心 K)最好读数 cross_corr(K, |隔夜跳空|, 241) = +0.37(train +0.37 / valid +0.64):成交集中度与价格跳的耦合有正读数;B021 批(day_close(in_relative_distance_m(F)) 一族)里最好的变体都是越慢越好。
+  seeds:
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), ts_scale(day_sum(Amt), 30), 241)
+  - cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_signed_ratio(Ret, Amt), 241)
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_gini(Amt), 241)
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_es_ratio_hi(Amt), 241)
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_zero_ratio(Ret), 241)
+  - cross_corr(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_durbin_watson(Ret), 241)
+  - cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_sum(Ret), 241)
+  - cs_bucket_zscore(cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_signed_ratio(Ret, Amt), 241), LogFloatCap)
+  - cross_regbeta(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_signed_ratio(Ret, Amt), 241)
+  - cross_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241)
+  - sub(cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_signed_ratio(Ret, Amt), 241), cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_sum(Ret), 241))
+  - cross_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_signed_ratio(Ret, Amt)), 241)
+  - cross_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), sign(day_sum(Ret))), 241)
+  - cs_bucket_zscore(cross_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), sign(day_sum(Ret))), 241), sub(LogFloatCap, LogFloatShares))
+R:
+- head: ts_std(mul(day_close(in_relative_distance_m(Amt)), ts_min(pow_3(day_durbin_watson(Open)), 1)), 40)
+  why: 烂的部件是窗口太短和 pow_3。拆解表:窗口 40 -> 80 由 -1.14 到 -0.55(增益 +0.59),20 日 -2.71,说明越慢越好;去掉 pow_3 +0.17、去掉 ts_min 约 0,去掉整个乘法项(只留 in_relative_distance_m 的 ts_std)-0.75(+0.39)。变体沿着这三条往上推:窗口 120 / 160 / 241,去 pow_3,只留 D 的 ts_std 取 80 / 160。全是 ts_std 与乘法,无除法;窗口 <= 241,无前视。
+  variants:
+  - ts_std(mul(day_close(in_relative_distance_m(Amt)), ts_min(pow_3(day_durbin_watson(Open)), 1)), 120)
+  - ts_std(mul(day_close(in_relative_distance_m(Amt)), ts_min(pow_3(day_durbin_watson(Open)), 1)), 160)
+  - ts_std(mul(day_close(in_relative_distance_m(Amt)), ts_min(pow_3(day_durbin_watson(Open)), 1)), 241)
+  - ts_std(mul(day_close(in_relative_distance_m(Amt)), ts_min(day_durbin_watson(Open), 1)), 120)
+  - ts_std(day_close(in_relative_distance_m(Amt)), 80)
+  - ts_std(day_close(in_relative_distance_m(Amt)), 160)
+- head: abs_(ts_std(ts_min(pow_3(day_durbin_watson(Open)), 1), 50))
+  why: 烂的部件是窗口:ts_std 窗口 50 -> 100 由 -1.45 到 -1.23(train 转 +0.24),25 日 -2.63,方向一致地越慢越好;Open -> Close 增益 +0.13。变体:窗口 150 / 241,以及 Close 版窗口 100 / 150。纯 ts_std 与 abs_,无除法,无前视。
+  variants:
+  - abs_(ts_std(ts_min(pow_3(day_durbin_watson(Open)), 1), 150))
+  - abs_(ts_std(ts_min(pow_3(day_durbin_watson(Open)), 1), 241))
+  - abs_(ts_std(ts_min(pow_3(day_durbin_watson(Close)), 1), 100))
+  - abs_(ts_std(ts_min(pow_3(day_durbin_watson(Close)), 1), 150))

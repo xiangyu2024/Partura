@@ -1,0 +1,113 @@
+seed: 2029
+round: 2
+slots:
+- type: E
+  core: cross_semistd_pos(day_mean(Volume), 120)
+  hypothesis: '事实(快照,不是我的推测):本流不靠阶跃、也不靠成交额水平的唯一线索,来自第 1 轮 N 位里的成交量增长上下行半标准差一族。记 P120 = cross_semistd_pos(day_mean(Volume), 120)(日对数量增长的上行半标准差,即放量脉冲的强度),N241 = cross_semistd_neg(day_mean(Volume), 241)(下行半标准差的一年版)。该族评分前 5 名里只有一条为正:`sub(log(sub(log(P120), log(sub(log(P120), log(N241))))), log(N241))`,score +0.41(train +0.60 / valid +0.41);其余四条(两个半标准差都用 120 日窗口)是 −0.31 ~ −0.42,最简单的 120 / 120 对数比是 −0.33。共性表里含 `log(sub(log(P120), log(N120)))` 的 9 个候选比不含的好 +0.80(p 0.024)。所以这一族里唯一有利的差别是:下行腿换成更长的 241 日窗口之后分数由负转正。库里 5583 条表达式一条都没用过 cross_semistd_*(它是 Partura 的扩展算子),这是个空白。我的读法(没有读数核对):那条 +0.41 的值大约是 −log N241(一年里量下降日的波动越小 = 成交越「稳」、越少被关注)加上一个关于不对称大小的小修正,所以它多半是第 1 轮六个 head 同一个「安静股」主题的连续版本 —— 但不用成交额水平、不用阶跃。
+
+
+    本位假设:核心 P120 是「关注度被事件点燃」的那一腿(放量脉冲有多猛);alpha 若存在,在它相对基线(下行腿、自己的长期均值、总体量增长波动)的大小,而不在放量本身的水平。算子怎样实现(外围三组,核心 P120 原样放在每个种子里):(i) 基线腿换窗口:log P120 − log N241,log P120 − log N60(短期脉冲对一年期 / 一季度下行基线);(ii) 只留形状:不对称对自己 241 日均值去均值(cross_mean,「不对称的冲击」);对总体量增长波动 log cross_stddev(ts_delta(log(量), 1), 120) 做逐日截面回归取残差(cs_regres);乘 120 日平均收益的符号做状态交互(Llorente 型:放量伴随上涨与下跌读法相反);在流通市值十档内 / 活跃度(Z3 = 三层 ts_std(日均成交额))十档内标准化(cs_bucket_zscore);(iii) 借第 1 轮 head 的教训,把不对称放进阶跃带当「带内排序变量」:cs_last_low10 / low05(不对称, Z3 或 Z2) 把 Z3 最低一档(与 head 1 / 3 同一个被标记集合)沉到底部,cs_first_low40 / low20 则让最低 40% / 20% 整体排前面;还有一个用 cs_bucket_rank(Z3, LogFloatCap) 把带改成「同市值十档里最低的」。带内排序是与水平无关的量增长不对称,而六个 head 的带内排序是水平 / 市值(−Z2、−LogFloatCap),所以这些种子与六个 head 的日度秩 |ρ| 应当低(只共享被标记的那 10% 名字,预计 0.2 ~ 0.5)。
+
+
+    为什么和库里 / head 不同:库里 0 条用 cross_semistd_*,0 条用 cs_last_* / cs_first_* / cs_bucket_*;六个 head 是成交额水平的嵌套 std 加阶跃,本位的排序变量是无量纲的量增长形状。15 个种子的算子骨架逐条核过,都不在两库 5583 条的骨架里,也不在任何已出 head 的骨架里。
+
+
+    为什么样本外还会在:窗口 120 / 241 日,变量每天变动极小,换手低;来源是注意力 / 参与者结构这类慢变量(高成交量溢价,Gervais–Kaniel–Mingelgrin 2001;注意力驱动的个人投资者买入,Barber–Odean 2008),不依赖某一段行情。数学检查:log 的输入是半标准差(正数,下行腿在窗内全无下降日时为 0 → 框架的 log 返回 NaN,不填充);零成交日的对数增长是 NaN,窗口按可用日算(n ≥ 3);cs_regres 是逐日截面回归残差;sign(cross_mean(day_sum(Ret), 120)) 只用当日及以前;cs_last_* / cs_first_* 的带只收整块并列,Z3 在窗内有效点很少的新股上用少量点估计(已知:滚动算子没有最少样本数),这类票的带位置不稳,但不是系统性缺失;没有 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0;没有用到当天收盘之后的数据。'
+  literature:
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 放量脉冲之后的超额收益;这里不看某一天的放量,读 120 日窗口里放量脉冲(上行半标准差)相对下行基线的强度
+  - title: 'All that glitters: the effect of attention and news on the buying behavior of individual and institutional investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 注意力事件主要驱动个人投资者的买入;不对称与带内排序是这种慢变参与者结构的代理
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 放量伴随的收益在信息型交易为主的票上延续、在对冲型交易为主的票上反转;用 120 日收益符号做状态交互
+  seeds:
+  - sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241)))
+  - sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 60)))
+  - sub(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 120))), cross_mean(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 120))), 241))
+  - cs_regres(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), log(cross_stddev(ts_delta(log(day_mean(Volume)), 1), 120)))
+  - mul(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), sign(cross_mean(day_sum(Ret), 120)))
+  - cs_bucket_zscore(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), LogFloatCap)
+  - cs_bucket_zscore(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241)))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), ts_std(ts_std(day_mean(Amt), 40), 40))
+  - cs_last_low05(neg(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 120)))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241)))), cs_bucket_rank(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), LogFloatCap))
+  - cs_first_low40(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_first_low40(neg(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241)))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_first_low20(sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 241))), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+- type: E
+  core: ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)
+  hypothesis: '事实(快照拆解表):第 1 轮 E 位(核心 Z3 = ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))出了 6 个 head(+1.35 ~ +0.65),形状全是 `cs_last_low10(y, x)`,方向 −1:x 是嵌套成交额标准差的水平(Z2 / Z3 / Z5,或它的 log),cs_last_low10 把 x 最低的 10%(整块并列)沉到所有人下面,其余按 y 的秩排。尺子只扣控制的 1 / 2 / 3 次秩多项式,最低一档的指示扣不掉,所以这是个「最低一档的名字」的阶跃。拆解:(a) head 1 里 log(ts_std^4) 一项数值上是死的(40→20、40→80、整体换成 Z3 都是 +1.35,train +1.44 / valid +1.35 逐位相同),y 实际是 −Z2 的水平;(b) 同一个 x、把 y 换成 log(ts_std^4)(按原方向读,带内从「水平越高越靠前」变成「水平越低越靠前」)是 −0.10(head 2 是 −0.35),head 3 去掉 y 里的 −LogFloatCap 是 −1.19(valid +0.44),head 4 同样是 −0.14;y 整体的必要性 +1.45 / +1.44 / +2.19 / +0.97;(c) 拆解表只动过 y 里的窗口和 log,没有动过 x(被标记集合)的定义和带宽。也就是说四个被拆解的 head 的带内排序都是「同一个最低档里水平 / 市值更大的排前面」,即最低一档里最不极端的那些;六个 head 的被标记集合都是嵌套成交额标准差水平的最低 10%(Z2 / Z3 / Z5 互相高度相关,我没有读数)。两个解释:H_a 阶跃指示本身承重(最低一档成交额变异的票:被忽视 / 休眠的小票,Merton 1987 的投资者认知假说、Arbel–Strebel 1982 的被忽视效应,新兴市场零交易日的流动性溢价 Lesmond 等 1999 / Bekaert 等 2007),带内排序只是微调;H_b 带内位置承重(「安静但还在交易」的那一档,最极端的休眠票是垃圾)。
+
+
+    本位设计(核心 Z3 原样当 x 或放在 x 里,被标记集合固定为 Z3 最低 10%):只换带内排序 y,换成和 −Z2 / −LogFloatCap 不同、含义各异的变量,正反两个方向都放:名义价 LogFloatCap − LogFloatShares;120 日平均收益(动量 / 反转,尺子只控制 20 日反转);换手 log(ts_mean(日均成交额, 60)) − LogFloatCap;日内成交集中度 cross_mean(day_gini(Amt), 60);60 日零成交分钟占比 cross_mean(day_zero_ratio(Volume), 60)(休眠度的直接度量);成交重心 cross_mean(day_centroid(Amt), 60)。再改带宽(cs_last_low05 / low20)、改成大段条件(cs_first_low40:最低 40% 里按 y 排前面)、改带的定义(cs_bucket_rank(Z3, LogFloatCap):同市值十档内最低的),以及一个把次新股从带里排除的版本(select_where(is_gt(ListAge, 120), Z3, 1e12),检验被标记集合是不是靠新股热身期的少量点估计撑起来的)。
+
+
+    可检验的区分:若 H_a,多数种子都应 ≥ 0.4(带内排序无关紧要);若 H_b,只有「水平更高 / 更活跃排前面」的种子好 —— 在 cs_last_low10(y, ·) 里即 y = 零成交占比、y = −换手、y = 基尼(分布越均匀越活跃)—— 而同一变量反方向(y = 换手)会差。为什么与 head 不同:带内排序变量不同,日度秩 |ρ| 只来自共享的 10% 名字(预计 0.2 ~ 0.5,低于 0.7 的禁令线);库里 0 条用 cs_last_* / cs_first_* / cs_bucket_* / day_zero_ratio / day_gini / day_centroid。为什么样本外还会在:被标记集合是慢变的(Z3 是三层 40 日窗口,集合每天几乎不变,换手低),不依赖某一段行情;但我保留怀疑:这是尺子的盲区(最低一档指示在 1 / 2 / 3 次多项式残差里仍然存在),若多数种子都过线,说明承重的是最低一档的指示本身,这些 head 本质上是同一个「小票尾部溢价」,不是各自独立的新 alpha。
+
+
+    数学检查:y 是日值树,cs_last_* / cs_first_* 的输出是 y 的秩加 ±1,不含 NaN、无并列(并列由列序打破,§4 豁免);day_zero_ratio 是当日零成交分钟的占比(0 ~ 1),day_gini 有界,不会被一次极端值支配;select_where 的常数 1e12 比任何 Z3 都大,只把上市不满 120 日的票踢出最低一档;ListAge 的 10000 哨兵(2018-01-02 前已上市)只落在 > 120 一侧,不影响;没有 ts_rank / cross_rank,不触发 nanrank_last;没有用到当天收盘之后的数据。'
+  literature:
+  - title: A simple model of capital market equilibrium with incomplete information
+    authors: Robert C. Merton
+    year: '1987'
+    treatment: 投资者认知假说:少被关注的股票要求更高的收益;最低一档成交额变异的票是被忽视的代理
+  - title: The neglected and small firm effects
+    authors: Avner Arbel, Paul Strebel
+    year: '1982'
+    treatment: 被忽视效应独立于规模;带的定义里加了「同市值十档内最低」的版本来分开两者
+  - title: A new estimate of transaction costs
+    authors: David A. Lesmond, Joseph P. Ogden, Charles A. Trzcinka
+    year: '1999'
+    treatment: 零收益 / 零成交日占比作为流动性代理;60 日零成交分钟占比是它的分钟版
+  - title: 'Liquidity and expected returns: lessons from emerging markets'
+    authors: Geert Bekaert, Campbell R. Harvey, Christian Lundblad
+    year: '2007'
+    treatment: 新兴市场里零收益占比的流动性溢价;休眠度的直接度量
+  seeds:
+  - cs_last_low10(sub(LogFloatCap, LogFloatShares), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(sub(LogFloatCap, LogFloatShares)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(cross_mean(day_sum(Ret), 120), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(cross_mean(day_sum(Ret), 120)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(sub(log(ts_mean(day_mean(Amt), 60)), LogFloatCap), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(sub(log(ts_mean(day_mean(Amt), 60)), LogFloatCap)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(cross_mean(day_gini(Amt), 60), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(cross_mean(day_zero_ratio(Volume), 60), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(cross_mean(day_centroid(Amt), 60), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low20(neg(cross_mean(day_sum(Ret), 120)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low05(neg(sub(log(ts_mean(day_mean(Amt), 60)), LogFloatCap)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_first_low40(cross_mean(day_sum(Ret), 120), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_first_low40(sub(log(ts_mean(day_mean(Amt), 60)), LogFloatCap), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low10(neg(cross_mean(day_sum(Ret), 120)), cs_bucket_rank(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), LogFloatCap))
+  - cs_last_low10(cross_mean(day_zero_ratio(Volume), 60), cs_bucket_rank(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), LogFloatCap))
+  - cs_last_low10(cross_mean(day_zero_ratio(Volume), 60), select_where(is_gt(ListAge, 120), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 1000000000000))
+R:
+- head: cs_last_low10(sub(log(ts_std(cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40)), 40)), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40))
+  why: 烂的部件:内层 cs_last_low10(sub(log(Z3), LogFloatCap), Z2) 的输出外面又套了一层 ts_std(·, 40) 和 log —— 对一个阶跃输出取 40 日标准差。拆解表:内层子树本身 +0.26;去掉最外层 ts_std(knockout,变体 1)+1.35(比原 head +0.82 高 +0.53);保留 ts_std 但去掉 log(变体 2)+1.24(+0.42)。必要性为负(−0.53 / −0.42):这两层让分数变差。
+  variants:
+  - cs_last_low10(sub(log(cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40))), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40))
+  - cs_last_low10(sub(ts_std(cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40)), 40), LogFloatCap), ts_std(ts_std(day_mean(Amt), 40), 40))
+- head: cs_last_low10(sub(log(ts_std(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), 40)), LogFloatCap), log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)))
+  why: 变体 1(去掉 ts_std 外面的 log)是拆解表里的 knockout:+1.23(比原 head +1.00 高 +0.23,必要性 −0.23),log 在这里反而有害。变体 2 / 3 只改带宽(cs_last_low05 / low20),判断固定的 10% 是不是自由参数:拆解表动过的是 y 里的窗口和 log,没有动过 x(被标记集合)的带宽。
+  variants:
+  - cs_last_low10(sub(ts_std(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), 40), LogFloatCap), log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)))
+  - cs_last_low05(sub(log(ts_std(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), 40)), LogFloatCap), log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)))
+  - cs_last_low20(sub(log(ts_std(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), 40)), LogFloatCap), log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)))
+- head: cs_last_low10(sub(log(ts_std(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  why: 最好的 head(+1.35)。拆解表里 log(ts_std^4) 一项是死的(窗口 40→20 / 40→80、整体换成 Z3 都是 +1.35),y 实际是 −Z2 的水平。拆解表没有动过的自由参数是带宽(固定 10%)。变体把它改成 5% / 20% / 40%:若更好,带宽是烂部件;若 40% 仍然保持,说明信号不只靠最低一档。
+  variants:
+  - cs_last_low05(sub(log(ts_std(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low20(sub(log(ts_std(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+  - cs_last_low40(sub(log(ts_std(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))
+- head: cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40))
+  why: 第二好的 head(+1.09)。y = log(ts_std^3) − Z2 里,log 里面的层数是死的(把 ts_std^3 换成 Z2,分数仍是 +1.09),但去掉 log 本身会掉到 +0.78;x = Z2 的带宽同样没被拆解过。变体改成 5% / 20%。
+  variants:
+  - cs_last_low05(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40))
+  - cs_last_low20(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40)), ts_std(ts_std(day_mean(Amt), 40), 40))

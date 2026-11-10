@@ -1,0 +1,94 @@
+seed: 2013
+round: 3
+slots:
+- type: E
+  core: 'cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120)'
+  hypothesis: >-
+    事实:第 2 轮 N 位出了 9 个 head(+0.53 ~ +0.87),都是 cross_regbeta(x, cross_regbeta(x, day_sum(Ret), 120), 120)(对自己的斜率再回归一次),
+    其中最小的 cross_regbeta(mul(day_sum(Amt), cross_delay(φ, 1)), day_sum(Ret), 120) 本身就是 +0.57(train +1.17;核心 B,φ = day_ar1_coefficient(Volume),
+    共性表里含 B 的 5 个候选均值 +0.24 对 -1.71,p 0.001)。B 的数值是一个个股的"慢斜率"(120 日窗口,一年内每日一个值),
+    而 head 对它的所有处理只有"对它自己再做一次 120 日回归"(嵌套 regbeta)。
+    假设:alpha 不在 B 的水平,而在 B 的"变化 / 稳定性 / 相对自己历史的位置":耦合刚刚加强的票(B 相对自己 60 日的 z 分数、20 日增量)与耦合一贯强的票对后续收益含义不同
+    (前者是新信息在被吸收,后者是慢性特征);同时 B 里仍带成交额量纲 1/sd(x),所以另外几项把它对市值 / 流动性做截面回归去掉水平。
+    外围(都与头部不同,头部只有嵌套回归):(i) 相对自己的历史 cross_zscore / sub(B, cross_mean) / div(B, cross_stddev)(信噪比);(ii) 变化 cross_delta(B, 20)、
+    cross_decay_linear(B, 20)、cross_ema;(iii) 尾部 cross_min / cross_tail_mean_q75(B 在近 60 日里最强 / 最弱的状态);
+    (iv) 截面回归去水平:cs_regres(B, LogFloatCap) 与 cs_regres(B, 20 日平均成交额);(v) 对比:B(滞后 φ)减去同一结构用当日 φ 或不含 φ 的 cross_regbeta(day_sum(Amt), day_sum(Ret), 120),
+    读"φ 的滞后加权带来的增量耦合";(vi) 对市场层 cs_mean(B) 的时序回归残差:个股自己的耦合偏离全市场耦合的部分。
+    算子:cross_* 全部只用 t 日及以前;cs_regres(Y, X) 是每日截面上 Y 对 X 的残差;B 里 cross_delay(φ,1) 是昨日的 φ,无前视。
+    为什么和库 / 以前不同:快照里含 B 的外围只有"嵌套 regbeta"与更换窗口,没有一个是对 B 取"相对历史 / 变化 / 尾部 / 截面残差";库里 φ 228 次出现,没有一次进入回归后再取时间变换。
+    为什么样本外还会在:B 的 train / valid 同号(+1.17 / +0.57),机制(成交的自相关结构与收益的耦合)属于持仓结构 / 信息环境的慢属性;
+    对它做"变化"的处理换手更高是主要风险,所以种子里一半是慢平滑(decay_linear 20 / ema / 截面残差)。
+  literature:
+    - {source: 'Llorente, Michaely, Saar, Wang, Dynamic volume-return relation of individual stocks, RFS', year: 2002}
+    - {source: 'Campbell, Grossman, Wang, Trading volume and serial correlation in stock returns, QJE', year: 1993}
+  seeds:
+    - 'cross_zscore(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 60)'
+    - 'sub(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_mean(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 60))'
+    - 'div(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_stddev(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 60))'
+    - 'cross_delta(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 20)'
+    - 'cs_regres(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), LogFloatCap)'
+    - 'cs_regres(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_mean(day_sum(Amt), 20))'
+    - 'cross_min(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 60)'
+    - 'cross_decay_linear(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 20)'
+    - 'cross_tail_mean_q75(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 60)'
+    - 'sub(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_regbeta(mul(day_sum(Amt), day_ar1_coefficient(Volume)), day_sum(Ret), 120))'
+    - 'sub(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_regbeta(day_sum(Amt), day_sum(Ret), 120))'
+    - 'cross_regres(cs_mean(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120)), cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 120)'
+    - 'cross_ema(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), 10)'
+    - 'mul(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120), cross_zscore(day_sum(Amt), 60))'
+- type: N
+  hypothesis: >-
+    新 idea:全市场共同状态下的个股耦合——"个股自己的成交 / 收益对全市场同一量的敏感度"(commonality beta),以及它在成交异常日 / 下跌日的条件版本。
+    inspired_by 是本流的现象:14 个 head 都是"个股自己 120 日窗口里收益对一个成交量度量的斜率",且 y 去掉市场均值(cs_demean)略好;第 1 轮 R 里"回归掉全市场均值"是少数有效的处理;
+    本流还没有任何 head 把"全市场的量"(cs_mean 作回归元)放进斜率——回归元都是个股自己的成交量度量。
+    机制(四类):(a) 条件市场 beta:cross_regbeta(mul(cs_mean(D), 滞后成交额 z 分数), D, 120),个股收益对"市场收益 × 自己放量程度"的敏感度——放量的票被市场收益"带"得更多是信息交易 / 杠杆资金的指纹,与 Karpoff / Llorente 的量价关系是同类但回归元是市场层 × 个股层的交互;
+    (b) 下跌 / 上涨 beta 的不对称 sub(downside beta, upside beta)(Ang-Chen-Xing 2006 的下行风险溢价,A 股没有融券,下行 beta 的补偿更清晰),用 is_lt / is_gt 截断市场收益实现;
+    (c) 流动性协动 Chordia-Roll-Subrahmanyam 2000:个股成交额 z 分数对全市场平均成交额 z 分数的斜率(cross_regbeta(cs_mean(Z), Z, 120)),流动性协动高的票对流动性冲击的暴露大,要求更高回报;
+    (d) 收益 → 未来成交额的"注意力响应"斜率 cross_regbeta(cross_delay(D, 1), Z, 120)(昨日收益对今日成交额 z 分数的回归)和它的 corr / 波动版本。
+    算子怎样实现:cs_mean(x) 是当日全市场平均(截面均值,每日一个数广播到每只票),cross_regbeta(x, y, d) 对每只票在 d 日窗口里做 y ~ x 的时序回归,所以市场层变量作回归元就得到每只票的"市场敏感度";
+    cross_delay(·,1) 保证只用昨日;截面均值里含当日全部股票收盘数据,是当日收盘后才知道的量,但信号在当日收盘后才使用,不违背"只用 t 日收盘及以前"。
+    为什么和库不同:库里 cs_mean 作回归元的只有 0 到个位数次(第 1 轮已核对),没有 cross_regbeta(cs_mean(·), ·) 配成交额 z 分数;head 全是个股自己的量作回归元。
+    它们对 5 个控制的暴露:市场 beta 与波动 / 流动性有关,但尺子已去掉线性 / 平方 / 立方;条件和不对称版本更靠近交互项。
+    为什么样本外还会在:beta 是慢变量(120 日窗口),换手低,是 head 的同类"慢斜率"家族(train / valid 同号);机制(下行风险溢价、流动性协动)有 2000 年前后起的跨市场证据,不依赖单一区间。
+    风险:市场 beta 是波动 / 规模的强函数,可能被控制吃掉;市场回归元在 120 日窗口内变化小的区间斜率估计噪声大。
+  inspired_by: '本流 B037-B039 + 前两轮 14 个 head:所有 head 都是"个股自己的量对收益的 120 日斜率",y 去市场更好;没有一个把全市场层的量当回归元'
+  literature:
+    - {source: 'Chordia, Roll, Subrahmanyam, Commonality in liquidity, JFE', year: 2000}
+    - {source: 'Ang, Chen, Xing, Downside risk, RFS', year: 2006}
+  seeds:
+    - 'cross_regbeta(mul(cs_mean(day_sum(Ret)), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), day_sum(Ret), 120)'
+    - 'cross_regbeta(mul(cs_mean(day_sum(Ret)), cross_delay(cross_zscore(day_sum(Volume), 60), 1)), cross_regres(cs_mean(day_sum(Ret)), day_sum(Ret), 120), 120)'
+    - 'cross_regbeta(mul(is_lt(cs_mean(day_sum(Ret)), 0), cs_mean(day_sum(Ret))), day_sum(Ret), 120)'
+    - 'sub(cross_regbeta(mul(is_lt(cs_mean(day_sum(Ret)), 0), cs_mean(day_sum(Ret))), day_sum(Ret), 240), cross_regbeta(mul(is_gt(cs_mean(day_sum(Ret)), 0), cs_mean(day_sum(Ret))), day_sum(Ret), 240))'
+    - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_mean(day_sum(Ret))), day_sum(Ret), 120)'
+    - 'cross_regbeta(cross_delay(day_sum(Ret), 1), cross_zscore(day_sum(Amt), 60), 120)'
+    - 'cross_corr(cross_delay(day_sum(Ret), 1), day_sum(Amt), 120)'
+    - 'cross_regbeta(cross_delay(abs_(day_sum(Ret)), 1), cross_zscore(day_sum(Amt), 60), 120)'
+    - 'cross_regbeta(cs_mean(cross_zscore(day_sum(Amt), 60)), cross_zscore(day_sum(Amt), 60), 120)'
+    - 'cross_regbeta(cs_mean(cross_zscore(day_sum(Volume), 60)), cross_zscore(day_sum(Volume), 60), 240)'
+    - 'cross_reg_tvalue(cs_mean(day_sum(Ret)), cs_demean(day_sum(Ret)), 120)'
+    - 'cross_regbeta(cs_mean(day_sum(Amt)), cross_regres(cs_mean(day_sum(Amt)), day_sum(Amt), 60), 120)'
+    - 'cross_corr(cs_mean(cross_zscore(day_sum(Amt), 60)), day_sum(Ret), 120)'
+    - 'cross_regbeta(mul(cs_mean(day_sum(Ret)), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120)'
+R:
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), cs_demean(day_sum(Ret)), 120)'
+    why: '被解释变量 cs_demean(day_sum(Ret)) 保留了极端收益(涨跌停日)的杠杆,斜率估计被少数极端日主导;x 里的 cs_mask_top_replace_mean_neg 在 head 1 拆解里 valid 掉到 -0.24(脆弱部件),Volume 换 Amt 在拆解里 valid 更好(+1.26)。变体:y 做稳健化、x 换 Amt、窗口 180。'
+    variants:
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Amt)))), cs_robust_z(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), cs_winsor(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Amt)))), cs_demean(day_sum(Ret)), 180)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), cs_rank(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(day_sum(Amt))), cs_winsor(cs_demean(day_sum(Ret))), 120)'
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1))), day_sum(Ret), 240)'
+    why: '拆解里去掉 cross_delay(day_sum(Amt),1) 这一项反而更好(+1.09 对 +1.13 持平、valid +1.28 更高),说明它冗余;y 没去市场,第 2 轮 R 的证据是 cs_demean 的 y 更好。变体:去掉冗余项、y 去市场 / 稳健化。'
+    variants:
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_demean(day_sum(Ret)), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1))), cs_demean(day_sum(Ret)), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1))), cs_robust_z(day_sum(Ret)), 180)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_winsor(day_sum(Ret)), 180)'
+  - head: 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), day_sum(Ret), 120)'
+    why: 'head 4 的 y 同样没去市场;x 里的 day_sum(Amt) 是当日(未滞后)成交额,与 y 同日,斜率里混入同日量价同步性。变体:y 去市场、x 的水平项滞后一日、窗口 240。'
+    variants:
+      - 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_demean(day_sum(Ret)), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_winsor(day_sum(Ret)), 120)'

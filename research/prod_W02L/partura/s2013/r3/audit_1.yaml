@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 6, 8, 9, 12, 13]
+    reasons: '位 a 是 E 深挖,核心 B = cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120) 本身就是快照里的 head(prods2013Pr2b_Nb,+0.57),E 核心合法。核心与 5 个控制的 |ρ| 为 liq 0.24 / vol 0.10 / rev 0.06 / known 0.25 / size 0.26,全部 < 0.8,通过。核心在 r1(核心是 pow_2(pow_05(φ)))和 r2(核心是 Z)里都不是 E 核心,这是 B 的第一个 E 位。自动划掉:seed 5、6、8、13 与快照 head 的原始 |ρ| 为 0.89 / 0.96 / 0.93 / 0.89,seed 9 为 0.73,均 ≥ 0.7(库禁令同一量)。seed 12 划掉为数学问题:corr_1.json 里 gate=False、coverage=0.0、distinct=0.0、max_head=NaN,整条表达式全 NaN(pipeline 也标为废品),属于「系统性算不出」,§4 定义坏掉;我没有复现 NaN 的具体来源,只据 pipeline 测得的覆盖率。划完剩 seed 1、2、3、4、7、10、11、14,共 8 个,≥ 4。创新度:快照 22 个 head 中凡含 φ 的,除核心本身外都是 cross_regbeta(…, cross_regbeta(…)) 的嵌套回归,没有一个对 B 做相对自己历史的标准化、变化、尾部或截面残差;剩余种子与 head 的原始 |ρ| 多在 0.2–0.4(seed 3、11 为 0.65/0.66),和控制的 |ρ| 都低,所以不是换皮,给 4 而不是 5,因为外层变换的对象仍是一个已入库的 head。合理度:每一个算子核对过(cross_zscore、cross_delta、cross_decay_linear、cross_ema、cross_min、cross_tail_mean_q75 都是按每只票的时间轴、只用 t 日及以前;cs_regres 是每日截面残差,不引入前视;cross_zscore 分母有 EPS 与常数窗口保护)。seed 10 用的是同日 φ_t(而不是滞后的 φ),不是前视(信号在收盘后使用),但它把同日量价的共动混进了斜率,这是机制上的风险,不是数学问题,保留。seed 3 的 div(core, cross_stddev(core,60)) 没有 EPS 保护(common.py 的 div 直接 torch.divide),但奖励是截面秩、gate 覆盖 0.999,单票爆点只占一个秩位,不构成 §4 的「爆点支配截面」,保留。seed 1 与 seed 2 都是对核心做「自身 60 日标准化」(cross_zscore 与 sub 减均值),结构上很近,但两者的截面秩不同(一个做了按票的尺度),原始 |ρ| 都是 0.36,我不以「重复」划掉,PI 之后可以择一。如果它有 alpha,最可能来自:耦合相对自己历史的偏离与变化(新信息被吸收的速度,呼应 Llorente 等的动态量-收益关系),而不是 B 的水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5]
+    reasons: '位 b 是 N 新想法,通过 N 的要求(本轮 N 位通过,满足「3 轮里至少 1 个 N 通过」)。快照 22 个 head 的回归元全部是个股自己的量(Amt、Volume、Ret、φ、zAmt 等),没有一个用 cs_mean 作回归元;所以「全市场层的量 / 收益作为回归元」这个方向在库里是空的。控制 |ρ| 大多很低(liq/vol/rev/known/size 多在 0.0–0.3),seed 14 的 liq / known 为 0.29、seed 11 的 size 为 0.29、seed 1 的 liq 为 0.22,都不到 0.8。自动划掉:seed 5 = cross_regbeta(mul(cross_delay(day_median(Amt),1), cs_mean(Ret)), Ret, 120),与 head cross_max(ts_std(day_close(Amt),40),10) 的原始 |ρ| 为 0.735 ≥ 0.7;它的 liq 控制 |ρ| 为 0.78,略低于 0.8,不另计。划完剩 13 个,≥ 4。算子核对:rolling_ols(x,y) 是 y ~ alpha + beta·x,所以 cross_regbeta(x,y) = y 对 x 的斜率,这与 PI 的写法一致;cs_mean 是每日截面均值并广播(nanmean,停牌票不计);is_lt 返回 0/1;cross_delay 保证滞后;cross_corr、cross_reg_tvalue 都是 120/240 日时间窗口。没有前视(cs_mean(Ret_t) 在 t 日收盘后已知,信号在收盘后使用)。seed 12 的机制最弱:cross_regres(x=市场量, y=个股量, 60) 的残差与市场量在 60 日窗内正交,随后 120 日的斜率主要由窗外的 60 天决定;它不是数学问题,保留为合理度 3 的成员,但不是这个位的主力。seed 9 与 seed 10 是同一个结构(个股 z 分数对市场 z 分数的回归),只是 Amt/Volume 与 120/240 窗口不同,结构上近似重复;没有实测两者的相互 |ρ|,所以不划,PI 可以择一。如果它有 alpha,最可能来自:流动性协动与市场 beta 的条件暴露(Chordia-Roll-Subrahmanyam 2000 的流动性协动,Ang-Chen-Xing 2006 的下行 beta),以及收益对市场放量的注意力响应(seed 6–8),这些是慢变量,换手低。'
+R:
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), cs_demean(day_sum(Ret)), 120)'
+    soundness: 4
+    reasons: '变体只动 y(cs_robust_z / cs_winsor / cs_rank / cs_demean 窗口 180)与 x 的量纲(Volume 换 Amt),算子都在截面上逐日定义,cs_robust_z 有 EPS,cs_winsor 只截 1%/99%,无前视、无除以近零。机制清楚:涨跌停日的极端 y 支配斜率,稳健化是直接的处理。cs_mask_top_replace_mean_neg 这一部件在 PI 的拆解里脆弱,但 variant 1、3 保留它、variant 5 去掉了它,覆盖了这个问题;没有 §4 的陷阱(cs_rank 是截面秩,不是 ts_rank / cross_rank 的 nanrank_last 路径)。如果它有效,来源是 y 的去极值,而非 x 的结构。'
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1))), day_sum(Ret), 240)'
+    soundness: 3
+    reasons: '变体去掉冗余项、y 去市场 / 稳健化、窗口 180,都是数学上合法的。注意 x 是三个滞后量的乘积,其中 median(Amt) 与 Amt 都是水平量,所以 x 的量纲约为成交额的平方,个股斜率大致随 1/成交额² 变化,截面排序会部分跟随规模 / 流动性。pipeline 测得的 liq 控制 |ρ| 为 0.11–0.17,没有到 0.8,不是 §4 的「定义坏掉」,保留;但它的机制说不清是「耦合」还是「规模」,给 3。'
+  - head: 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), day_sum(Ret), 120)'
+    soundness: 3
+    reasons: '变体 1(y 去市场、240 窗口)与变体 2(x 的水平项滞后一日)数学上合法,变体 2 处理了 PI 指出的同日量价同步性。变体 3(cs_winsor(Ret), 120)与原 head 的 |ρ| 为 0.98,几乎是同一个因子只截了 y 的尾部,机制上没有新内容,但也不是数学问题,保留。x 中 day_sum(Amt) 为当日量、与 y 同日,这在 head 里的同日耦合是已知的,给 3。'
+summary: 'slot a(E,核心 = 快照 head Pr2b_Nb 的 φ 耦合)通过:创新 4 / 合理 4,划掉 6 个(5、6、8、9、13 因与 head |ρ| ≥ 0.7;12 全 NaN 覆盖 0),剩 8 个;slot b(N,市场层 cs_mean 作回归元,库里空白)通过:创新 4 / 合理 4,划掉 1 个(5,|ρ| 0.735),剩 13 个;R 三组保留(R1 合理 4,R2 3,R3 3)。无前视、无 §4 陷阱命中;两处值得 PI 留意但未划:seed 1/2 近似、seed 9/10 近似重复(未实测相互 |ρ|),seed 10 的同日 φ_t 有同日共动混入。'

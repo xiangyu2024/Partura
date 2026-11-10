@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: [1, 3, 13]
+    reasons: '机制与数学检查。核心 A = cross_delay(cross_delay(day_sum(in_slice(Ret,1,210)),1),1),是两天前 14:31 以前的累计收益,t 日可得,无前视。外围全部是 241 日(或 120 / 482 日)的 cross_corr / cross_regbeta / cross_cov 加有界变换。div 的分母是 std(DW) 或 cross_mean(DW);DW 非负,cross_cov 除以 cross_mean 等于 DW 加权的 (A 减均值) 的平均,有界,无爆点。未见数学问题。相关度表(corr_1.md, slot a):种子 1、3、13 与 head(Pr2a)的原始 |ρ| 分别为 0.81、0.87、0.74,按规则自动划掉。种子 3 还与快照已有候选 cross_corr(DW(Close,211-240), A, 241) 完全相同,属重复,一并划掉。其余 10 个种子与 head 的 |ρ| 为 0.05 到 0.62,与 5 个控制的 |ρ| 均不超过 0.20;核心 A 与控制的 |ρ| 均不超过 0.15,过线。创新度 4:外围换了搭档和函数形式(尾盘成交额份额、开盘 30 分钟、整天收益、隔夜缺口、cs_rank 双边、sign、cov 除以均值、cross_regbeta、滞后 3 天、尾盘 1 小时与 15 分钟、昨日 AR(1)),库里 cross_delay 只与 1 条同现,这些写法没有出现过。合理度 3:机制说得通但偏弱。PI 笔记称 A 单独的分数为 -5.35,我未核对;若有 alpha,最可能来自个股对两天前收益的反应系数这一慢变持仓特征(T+1 下的持仓结构、换手低)。种子 4、7、9 与 head 的 |ρ| 在 0.5 到 0.6,是这一机制的近邻,不是重复,保留。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [1]
+    reasons: '机制与数学检查。a = day_ar1_coefficient(in_slice(Ret,1,210)) 是个股分钟收益的一阶自相关,OLS 形式,分母为 var 加 1e-8,有界(|a| 约不超过 1);收益全零或停牌日为 NaN,属窄缺失。与滞后收益、尾盘收益、DW 的耦合用 cross_corr、cross_regbeta(a 作回归元,var 远大于 EPS=1e-9)、sign 条件均值、cs_rank 双边。滞后一律用 cross_delay,无前视。相关度表(slot b):种子 1 与 slot a 种子 10 是同一对表达式(corr 对称),同一轮两个 GP 位重复,划掉 slot b 的种子 1,slot a 的 E 位保留它。其余 11 个种子与 head 的 |ρ| 为 0.04 到 0.55,与控制 |ρ| 不超过 0.23,无自动划掉。创新度 4:快照与库里没有对收益路径做 AR(1) 再与滞后收益耦合的写法,种子 6 与 head 的 |ρ| 仅 0.19。种子 4、5 与 head 的 |ρ| 为 0.38、0.55,是 head 滞后结构的差分,近邻但不重复,保留。合理度 3:机制是 Campbell-Grossman-Wang 1993 与 Nagel 2012 的库存风险与流动性提供:分钟收益自相关为负的票是价差弹跳、有流动性提供者的票,其反转强度是慢变的个股性格。若有 alpha,最可能来自价差弹跳强度的慢变差异。但 241 日的时间序列相关在日度估计误差约 0.06 的量级上,且 AR(1) 的日内估计对停牌和涨跌停的样本很敏感,机制偏弱,给 3。'
+R:
+  - head: 'cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), 241)'
+    soundness: 3
+    reasons: '只评合理度。原 head 与各变体都是有界量:相关系数的取值在 [-1,1];variant 10 的 cross_cov 除以 cross_stddev(DW),等于 corr 乘以 std(A),分母为正,无爆点;log 只作用于 DW,|x| 不超过 1e-9 的为 NaN,窄缺失。未见数学问题。variant 1 与 head 的 ρ 为 0.97,是窗口延长的近邻,替换价值取决于能否过 +0.1 线,不取决于合理度。variant 10 的排序会被 A 的波动拉动,但与 vol 控制的 |ρ| 为 0.08,不是重复。机制继承 head:核心 A 的 241 日耦合,机制本身偏弱(见 slot a 的理由),所以合理度给 3,不给 4。'
+summary: 'slot a 通过(创新 4、合理 3,划掉种子 1、3、13 共 3 个,余 10 个);slot b 通过(创新 4、合理 3,划掉种子 1 这一处重复,余 11 个);R 组合理 3 保留。未发现数学问题之外的挡理由;唯一的硬伤是同轮两个位的种子重复与种子 3 与库内候选重复,已划掉。'

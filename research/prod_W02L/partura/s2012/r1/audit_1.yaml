@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:15 个种子对三个 head 的原始 |ρ| 为 0.10 到 0.64(最高种子 4 为 0.64,种子 2 为 0.56,种子 14 为 0.51),残差后为 0.03 到 0.39;对五个控制的最大 |ρ| 为 0.43(种子 14 与 rev、种子 4 与 rev),全部低于 0.7 与 0.8 的自动线,没有自动划掉。种子 15 的相关度行为 OOM 缺失,我无法按规则核实,故未划;但流水线补算之前不应进 GP。新在哪:members.csv(5583 条)里没有 cross_ema 与 day_ar1 同现的表达式;cross_zscore、cross_regres 与 day_ar1 同现的只有 B161、B226 两条,它们的 AR 底是 signedpower(Ret) 与 Open,不是 Volume;B034 的 14 个成员全是水平包装。所以「φ 相对自身历史的偏离 / 时间序列残差」在库里没有对应物,novelty 给 4。机制与数学:cross_regres(x, y, d) 经 rolling_ols 是 y 对 x 的滚动残差,与计划写法一致;cross_madz 在 MAD 为 0 时为 NaN,种子 3 覆盖率 0.981 低于其他种子的 0.999 即由此而来,不是系统问题;cross_zscore 有 sd 保护;cs_rank 是 NaN 安全的截面排序(common.rank),不是 nanrank_last 那条已知缺陷;所有窗口因果,无前视。种子 1 与种子 3 是同一个 60 日标准化只换了尺度估计,我判为稳健性诊断而非重复,保留。种子 4 原始 |ρ| 0.64 接近 0.7 线,需留意。种子 8 与 s2011 r1 的 E 种子 cross_corr(day_ar1_coefficient(Volume), abs_(day_sum(Ret)), 60) 完全相同,属跨流重复,不在划掉的三类理由之内,未划,交 PI 决定。E 位核心与五个控制的 |ρ| 最大 0.51,低于 0.8。如果 φ 的变化量有 alpha,最可能来自参与者结构的慢变(算法拆单与机构建仓对散户脉冲的切换),表现为同一只票的 φ 相对 60 日常态的偏离在数周内持续。位通过。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 6, 15]
+    reasons: '自动划掉:6 号(与 head 原始 |ρ| 0.92,与流动性 0.84、已知族 0.83,两条都过 0.8 线)与 15 号(与 head 原始 |ρ| 0.725,过 0.7 线)。按重复划掉 5 号:它是 sub(φ(sign*V), φ(V)),原始 |ρ| 0.59 未过自动线,但残差 |ρ| 与 head 为 0.74,因为它含 head 核心的 -φ(V),残差基本就是 head 的残差,是 head 的换皮。其余 13 个保留。新在哪:members.csv 里 sign( 只出现在 9 条表达式中且都不在 day_ar1 之内,in_logchg、day_signed_ratio、day_topw_mean 库里各 0 条,方向底对库是新的。novelty 给 4 而不是 5:同一个 AR(1) 统计量换底,b14(残差 0.47)、b2(0.40)、b10(0.37) 仍有可观重叠,换底若只是换了外形,会回到 head 的残差。数学:day_ar1_coefficient 是去均值的 OLS 斜率(cov/var),SV 的整体净买压水平不进斜率;in_logchg 零成交分钟为 NaN 而非 -inf;day_signed_ratio 分母是 |Δlog 成交量| 之和,输出在 [-1,1];in_delay 不跨日;in_mean_rolling 因果含当前分钟,div 在 0/0 时为 NaN 而非 inf。两个小问题不挡:day_corr 对常数序列返回 0 而非 NaN(b10 在涨跌停锁定日 Ret 全为 0 时),是中性填充;day_topw_mean 的阈值含并列,若某票当天 90% 以上分钟成交为 0 则退化为日均收益(b12),非主导。机制:b1、b3、b4 是拆单的符号持续性(Lillo-Farmer),但 φ(SV) 在符号与成交量独立时近似 ρ_s 乘 φ(V),所以 b1 可能混着 φ 的水平,b7(对 φ(V) 做时间序列残差)是去掉这一混入的版本,机制最干净;b8、b9 是净买压的日间持续性(Chordia-Subrahmanyam);b10 的 alpha 最可能来自上一分钟带符号成交对本分钟收益的预测,但也最容易混入买卖价反弹;b12 与 20 日反转的 |ρ| 为 0.62,未过 0.8 线;b13、b14、b16 的 AR(1) 作用在 Ret、|Ret|、成交量对数变化上,机制较弱(|Ret| 的持续性预测的是波动而非方向),但不是数学问题,放行。种子 3 与 s2011 r1 的 N 种子 cross_mean(day_ar1_coefficient(mul(sign(Ret), Volume)), 20) 完全相同,同上,属跨流重复,未划,交 PI 决定。'
+R:
+  - head: 'ts_decay_linear(sigmoid(pow_2(pow_2(cs_rank(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 5))))), 5)'
+    soundness: 3
+    reasons: '算子实现正确:cs_rank、ts_decay_linear、sigmoid 与 pow 外壳保持不变;div 为 torch.divide,分母 in_mean_rolling(Volume, 20) 含当前分钟,分子为零时结果为 NaN 而非 inf;sub 与 sign 无问题;day_ar1_coefficient 的方差阈值 1e-8 只在分钟收益标准差约 1e-4 以下时触发,A 股分钟收益通常远高于此,不构成问题。问题在于「一次只换底、分数变化可以直接归到底上」的说明与表达式不符:head 中 φ 外面套着 pow_2(pow_05(·))(即 |φ|),这 10 个变体全部去掉了这一层,等于在换底之外还从「取绝对值」换成了「带符号」。所以分数变化要拆成两部分,无法全归到底上;要分离,需要一个只去掉折叠、底不变的对照。这不是数学问题,放行,给 3。另外变体 2(sub(Volume, MA20))与原 head 的原始 |ρ| 为 0.96,变体 1 为 0.85,这些变体的截面秩与 head 基本一致,检验力有限。'
+  - head: 'ts_decay_linear(sigmoid(pow_2(pow_2(pow_2(cs_rank(ts_decay_linear(pow_2(pow_05(day_ar1_coefficient(Volume))), 40)))))), 5)'
+    soundness: 4
+    reasons: '算子实现正确:ts_decay_linear(pow_2(pow_05(φ)), 40) 保留 |φ| 折叠与 40 日平滑,只在其后加 cs_bucket_demean 或 cs_bucket_rank,与 why 的写法一致;cs_bucket_demean 在每个 x 十分位内减均值、桶内不足 2 只为 NaN,实现正确;分桶变量 LogFloatCap、sub(LogFloatCap, LogFloatShares)、LogTotalCap 与 cross_mean(day_std(Amt), 30)、cross_mean(day_sum(Amt), 20) 都是因果的,无前视。外壳 sigmoid、pow_2、cs_rank 整体去掉,与 why 中「外壳不承重」的分解一致,可以接受。机制清楚:若 |φ| 的水平被控制(规模、价格、成交额)吃掉,去掉十分位内的均值后应当掉分;若不掉分,说明水平里有非控制的部分。两点提醒,不挡:变体 1(LogFloatCap 桶)与原 head 的原始 |ρ| 为 0.97,几乎就是 head 本身,检验力很弱;变体 3、4、6 的 |ρ| 为 0.56 到 0.58,才是有信息的变化。cs_bucket_demean 之后 reward 还会再做一次残差化,等于两次去水平,这是有意的设计,可以接受。'
+summary: 'PROD W02L s2012 第 1 轮审计:a 位(E,核心 φ 的时间序列标准化与残差)novelty 4、soundness 4,通过,种子 15 相关度缺失未核实;b 位(N,带符号的 φ 底)novelty 4、soundness 4,通过,划掉 5(head 换皮)、6 与 15(自动),剩 13 个;R 组 1 合理度 3(底与 |φ| 折叠同时改变,归因不成立,但不是数学问题),R 组 2 合理度 4;种子 8 与 3 与 s2011 r1 跨流重复,未划;骨架对照未发现碰撞(本审计用复刻的骨架抽象,只能说未发现)。'

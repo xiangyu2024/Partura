@@ -1,0 +1,35 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2]
+    reasons: '数学与前视：只用 cross_delay（只向过去）与 rolling_windows（左填 NaN 的因果窗口）；书的目标是次日超额收益（books.py），所以种子 5、13 用的当日 X 与当日收益在收盘后即可得，不构成前视。regbeta 与 reg_tvalue 的分母 var_x 有 EPS=1e-9 保护（common.py rolling_ols），X 的量级是价位乘偏度，远高于此；无 ts_rank、cross_rank、nt_*、ts_spearman。核心 mul(day_mean(High), day_skew(Volume)) 是快照 M1 头（train +0.68、score +0.03）的子树，符合 E 位要求；X 在本流此前没有过 E 位（r1 的核心是 day_skew(Volume)）。与五个控制的 |ρ| 为 liq 0.36、vol 0.05、rev 0.04、known 0.34、size 0.38，远低于 0.8。14 个保留种子都原样含核心；loc.json 中可见的 39 个含 X 的表达式没有一个含收益项，外围与这些已见候选不重合（174 条候选全集未在本地逐条核对）。
+
+划掉种子 2：cross_reg_tvalue(X 滞后一日, Ret, 120) 与种子 3 cross_corr(X 滞后一日, Ret, 120) 窗口相同。rolling_ols 中 t = r·sqrt((n−2)/(1−r²))，n 相同时与 r 严格单调，截面秩一致，只有缺日较多的股票上 n 不同才有差异。相关度表这两行几乎一样（与 head 0.09、残差 0.12，与五个控制 0.00–0.03，只有 liq 0.03 对 0.02），是同一个排序。留种子 3。
+
+创新 4：快照 6 个 head 都是 X 与价格 3 日变化的相关再取尾部统计；本位的 15 个种子是「昨天的 X 对今天收益的回归」或同类 120 日关系，变量对不同。与 head 的日度秩 |ρ|：保留种子 1、3、4、6–10、12–15 为 0.04–0.14；种子 5（0.41，最像 cross_quantile_q75 系 head）与种子 11（0.43，最像 day_sum(Open) 那一支头）偏高，但都在 0.7 的线之下。与控制：保留种子最大的是种子 12 的 size 0.38（ListAge 门与小市值部分重合，但它与 head 的原始与残差 |ρ| 都是 0.04）与种子 13 的 vol 0.34。给 4 不给 5：新的是 X 与收益这一对变量，但 14 个保留种子大多是同一对变量的不同统计量（beta、t、corr、cov、EMA），信息上是一对变量的几种读法。
+
+合理度 4：机制是块状成交（放量分钟偏度）乘价位，反映放量是否集中在少数分钟；它与次日收益的 120 日回归斜率反映这类成交背后参与者构成的慢变差异。问题（非数学，不挡）：（1）斜率类种子（1、4–7、9–12、15）的截面秩主要由 1/价位 决定（var(X) 随 High 的平方增长）。后复权价位本身不算问题，但残差只去掉对五个控制的暴露，去不掉价位水平，PI 计划的无尺度版对照要保留。（2）种子 12 的 ListAge 门：cross_age 只把首日就有值的股票设为 10000 哨兵，首日停牌后复牌的股票会从复牌日起算年龄，被当作新股排到底部。这是定义偏差，占比我无法从本地核出，PI 需要核。（3）120 与 241 日窗口在 2018 年为扩张窗口，只影响 train 的前一年，不足以主导结果。如果它有 alpha，最可能来自块状成交背后的知情或机构流在 60–120 日里对次日收益敏感度的稳定差异；其次是低价股的 1/价位 效应。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '数学：S = |Ret|/√Volume 中零成交分钟得 0/0 = NaN 被排除，有价格变动却零量得 inf；day_topw_mean 先用 isfinite 排除非有限值，再以 nanquantile 取 90% 分位（ops_ext.py），无爆点进入选择。day_topw_mean(|Ret|,Volume)/day_mean(|Ret|) 的上界为 n/k ≈ 10（选中部分的绝对收益和不超过总和），不会爆；day_wstd/day_std 的比值上界约 √(n/4) ≈ 8；cross_zscore 有 sd > 1e-6 乘尺度的保护（ops_ext.py）；cross_ema 跳过缺失日、不当作 0。全部因果：当日量价收盘可得，目标是次日收益；种子 9 的 sign(day_sum(Ret)) 同为当日收盘量。无 ts_rank、cross_rank、in_rank_rolling、nt_*、ts_spearman。定义上 day_topw_mean、day_wmean、day_wstd、cross_ema、cross_zscore 与 cs_last_* 都是 Partura 扩展算子（ops_ext.py），库里不会直接出现；loc.json 可见的表达式里也没有 day_topw 项。
+
+创新 4：按冲击选最大 10% 分钟这一步是新的。快照 head 的最大日度秩 |ρ|：种子 3 为 0.45（最像 M1 的 cross_mean 头），种子 5、13 为 0.30，其余 0.26 及以下。与控制：种子 10（size 0.59，wstd/std 比，是市值的一种写法）、14（size 0.45）、4（size 0.41）、11（size 0.39）偏高，但都在 0.8 之下。给 4 不给 5：种子 4 与 14 只换了权重（Volume 对 Amt）与窗口，种子 1 与 2 只差分母（wmean 对 mean），14 个种子里有几组是同一想法的换写法，不是 14 个独立的新东西。
+
+合理度 4：14 个种子都落在 N 位的想法之内，没有明显换皮。机制是冲击最大的那一小撮分钟（|Ret|/√V 最高的 10%）里，成交价相对当日 VWAP 的位置（Q 族），或这些分钟的平均收益（种子 3、13），反映知情或拆单流把价格推向哪一侧；慢化到 60–120 日后换手低。非数学的风险（不挡）：（1）薄票上 top 集合由小手成交和买卖价跳动主导，S 的排名就是薄票的排名，PI 需检查 train 中 Q 的截面是否集中在最薄的一段；（2）day_topw 按并列包含：若 90% 分位恰好等于并列值，入选集会超过 10%，在 90% 以上分钟价格不动的极端薄票上 topw 退化为全日均值，Q 退化为 mean 与 wmean 之比，与冲击无关，这类票的占比未核；（3）种子 5、6、7、13 的 topw(Ret,Volume) 与 day_sum(Ret) 有部件与整体的机械重叠（选中分钟占 24/241，收益同向），这是「放量分钟决定一天方向」这个概念本身，不是 bug，但高相关不能当独立证据；（4）种子 11 的 cs_last_low10 用 ListAge，与 a 位种子 12 同样受 cross_age 首日停牌问题影响。
+
+不划种子的说明：种子 1 与 2 的 size 控制是 0.18 对 0.04，不算重复；种子 6 与 7（corr 与 beta）在相关度表上的数字几乎相同，都是 0.02–0.06 的小数，秩并不完全相同，留着。如果它有 alpha，最可能来自冲击最大的那一小撮分钟里，知情或拆单流把成交价推向的一侧（相对 VWAP）在慢变的 60–120 日里对次日收益的稳定含义；其次是薄票的定价偏差。'
+R:
+  - head: 'signedpower(cross_tail_mean_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    soundness: 3
+    reasons: '无数学问题：signedpower 单调，不改秩；cross_delta(day_quantile(Vwap), 3) 的尺度不影响单票内的 10 日相关；241 日尾部均值的前 240 日为扩张窗口，只影响 2018 年 train。合理度只到 3：10 日相关的标准误约 0.3（PI 自己的估计），用 q75 尾部均值挑出「同步最强的四分之一天」，挑出的很可能是噪声的上尾；X 里 High 的乘数会把价位的时间变化混进相关，但 High 的 10 日变化远小于偏度的变化，影响有限。变体与原头的日度秩 |ρ|：窗口 150 / 180 / 200 为 0.92 / 0.91 / 0.95，上下尾之和 0.88，EMA 平滑 0.92，只有上下尾之差低到 0.35，ListAge 门为 0.69（带 cross_age 首日停牌问题）。绝大多数变体只改窗口与平滑，测不出 High 是不是烂部件。如果它有 alpha，最可能来自短期价量同步处在该股自身一年历史高位的时刻。'
+  - head: 'signedpower(cross_tail_mean_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 10), 120))'
+    soundness: 3
+    reasons: '无数学问题：day_sum 在全无效分钟的日子返回 NaN（common.py _sum），不会制造假的 0 跌幅。定义风险：day_sum(Open) 是有效分钟开盘价之和，3 日差分同时含价格变化与有效分钟数的变化；分钟缺失或盘中停复牌的 stock-day 上 Δ 会跳动，而 10 日相关对这类尖峰敏感。这类日子的占比我没有读数据无法估计，round-1 审计员已提出，PI 需核；若占比小，就不构成「主要由缺失值决定」，所以不挡。变体与原头的日度秩 |ρ|：窗口 150 为 0.93、180 为 0.91，EMA 为 0.91，上下尾之和为 0.83，ListAge 门为 0.71。这组变体与 R1 是同一机制，只换了价格代理（开盘和对中位数）。合理度 3。如果它有 alpha，最可能来自与 R1 相同的短期价量同步；但在缺分钟的影响排除之前，不能说它比 R1 多出什么。'
+  - head: 'signedpower(cross_quantile_q75(cross_corr(cross_delta(cross_corr(cross_delta(day_quantile_q75(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    soundness: 3
+    reasons: '无数学问题：cross_delta 与 cross_corr 都是因果的（rolling_windows 左填 NaN），相关系数在 [-1, 1] 之内。合理度只到 3：外层是单点分位（cross_quantile_q75，噪声大），内层是「10 日相关的 3 日变化」再与 X 做 10 日相关；这个相关的变化与 X 的同步说不清机制。嵌套深不是挡的理由，但也不能算机制清楚。窗口叠加：前约 260 个交易日都是扩张窗口，只影响 2018 年 train。变体 1（tail_mean 替换 q75、窗口不变）与原头的日度秩 |ρ| 为 0.88，只替换了最外层统计，没有去掉被怀疑的部件（内层第二个 cross_corr）。如果它有 alpha，最可能来自 10 日相关本身的变化与 X 同步出现的动量，但这一机制需要 PI 单独论证。'
+summary: '两个任务位都通过：a 位 E（核心 mul(day_mean(High), day_skew(Volume))）创新 4、合理 4，划掉种子 2（与种子 3 同一排序），余 14 个；b 位 N 创新 4、合理 4，不划，余 14 个。R 三组合理度均 3（无数学问题，变体多为窗口与平滑的微调）。PI 执行前需核：ListAge 的 cross_age 把首日停牌后复牌的股票当成新股（a 位种子 12、b 位种子 11、R1 变体 6、R2 变体 5）；day_sum(Open) 的有效分钟数变化（R2）；薄票上 day_topw 的并列与退化（b 位 Q 族）；斜率类的 1/价位 尺度（a 位）。'

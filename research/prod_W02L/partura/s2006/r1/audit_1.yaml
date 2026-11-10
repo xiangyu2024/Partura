@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:核心 day_cov(Amt, Open) 与 head 1 的原始 |ρ| 0.081,与五个控制都在 0.11 以下,过 E 位的核心门槛(控制 |ρ| < 0.8)。P 类种子与 head 1 的原始 |ρ| 在 0.02 ~ 0.28 之间,最高的是 a7 cross_mean(abs_(P),60) 的 0.28(残差 0.39);与控制最近的是 a7 对 vol 0.63、a6 对 vol 0.57、a2 对 vol 0.56,都低于 0.8 的自动划掉线,没有种子被自动划掉。a14 与 head 1 的日度秩 |ρ| 只有 0.003(与 head 3 为 0.08);它的机制是 head 1 去尺度后的 20 日均值,与 R 组第 3 个变体同式,但不是换皮,保留。数学核对(读了 dt_day.py、common.py、dt_cross.py、nd_ts.py、ops_ext.py):P 的分母是正的 Ā·P̄,整日无成交时得 NaN 而不是 0 或 inf;cross_* 沿日轴向后取窗口,cross_ema 跳过缺失日,没有前视;没有用 ts_rank、cross_rank、in_rank_rolling,没有触发 nanrank_last 的 0 陷阱;没有禁用算子。PI 需要注意的放行项(不挡):(i) a6 的 cross_stddev 对全 NaN 窗口返回 0(用合成数据实测,common.py 的 nanstd_last),上市前股票日会得到 0;steer.py 的 long 版不剔除不可交易日,方向 −1 时这些票会占满多头十分位,稀释该方向的书(偏低估,不造假阳性),+1 方向不受影响;(ii) a10 的 cross_corr 对全 NaN 窗口同样返回 0(实测),有效对为 2 时返回 ±1,影响上市后约前 10 个交易日;(iii) 只有 a8 对 MV(日内涨跌)取了回归残差,a1 至 a7、a9、a12、a13 的 alpha 可能只是日内涨跌方向的慢变平均,而新尺子的五个控制里没有 MV,PI 应确认是否需要把它列入控制。如果它有 alpha,最可能来自:成交额加权价相对等权价的溢价 P 的跨日一致性,即知情买入追高或高位派发让成交偏在价格高位,是几周尺度的慢变参与者结构;若只剩 P 的幅度(a6、a7),最可能只是日内波动的代理。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:b 类种子与三个 head 的原始 |ρ| 最高 0.203(b3 对 head 1),多数在 0.1 以下;残差最高是 b8 对 head 1 的 0.385;与控制最高是 b8 对 rev 0.48、b12 对 size 0.30、b2 对 vol 0.30,都低于 0.8,没有自动划掉。创新度 4 的理由:回归元换成市场当天平均的对数活跃度 cs_mean(log(add(day_mean(Amt),1))),残差的 abs 与 b1 至 b14 的 abs_(ts_regres) 写法在 B016 批里的回归元都是个股自己的量;这个截面均值回归元是新的(PI 的 grep 结果,本步没有重核骨架)。数学核对:没有除法;log(add(·,1)) 的 +1 对 CNY 量级无影响;ts_regres / ts_regbeta 的 var_x > EPS 守护对市场对数活跃度的方差(约 1e-2)不会触发;cs_mean 只用当天有效值;没有 rank 操作;回归窗口的热身由 research.py 的 warmed_view 预加载前置数据后再裁掉(research.py:82-88),样本起点没有伪热身。PI 需要注意的放行项:(i) b6 的 cross_stddev 与 a6 同样的 0 填充问题(上市前残差为 NaN,窗口全 NaN 时返回 0),只在 −1 方向稀释多头书;(ii) b10 的 ts_corr 与 a10 同样的全 NaN 返回 0 和 2 点返回 ±1;(iii) b12 的 log(add(day_last(Amt),1)) 对单分钟成交额为 0 的票给 log(1)=0,远低于正常票的 log 值(约 11 到 16),残差绝对值会被零成交分钟主导;PI 自己写单分钟额「常为 0 或极小」,b12 的 liq 0.296、size 0.298 与此一致;R 组的 R10 同此问题;(iv) 上市后前约 10 个交易日回归窗口的有效对很少,count = 2 时残差精确为 0,影响面小;(v) b13、b14 的 15 分钟尾盘头与相邻流 2002、2005 是否同一个东西,快照只含本流 3 个 head,本步无法核对,交给 GP 库禁令。如果它有 alpha,最可能来自:特异的成交活跃度冲击(注意力或消息的痕迹,冲击退潮后价格压力回吐),以及它对市场成交额的载荷(流动性共同性,被指数或被动资金托着的票)。'
+R:
+  - head: 'sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 50)))'
+    soundness: 4
+    reasons: '10 个变体只改了窗口(150、250)、去尺度(除以 cross_mean(day_last(Amt),100)、除以尾盘 15 分钟和、除以 100 日尾盘额均值)、回归元(day_mean、cs_mean、day_sum、day_cov(Ret,Amt))、残差的 20 日平均、已知族十分位内标准化、全对数版。数学上:变体 3 的分子与分母都正比于成交额水平,比值无量纲,分母整窗为 0 时得 inf,被 np.isfinite 排除;250 窗口的热身由 warmed_view 预加载,样本起点没有伪值;变体 8 的 cs_bucket_zscore 对分桶变量的 NaN 已守护;变体 9 的 day_cov(Ret,Amt) 量纲一致。PI 需要注意:变体 10(全对数版)与 b12 同样有零成交分钟的 log(0+1)=0 问题,它的 abs 残差可能由零成交分钟主导。备注(不计入合理度):变体 1 对已知族的 |ρ| 0.60,变体 7 为 0.86,都过不了 R 组验收的已知族门槛 0.5,这是门槛的事,不是合理度的事。'
+summary: '两个任务位都放行(a: 创新 4、合理 4;b: 创新 4、合理 4),没有种子被划掉;R 组合理度 4。风险不挡但需 PI 修或确认:nanstd_last 与 cross_corr 把全 NaN 窗口填成 0(a6、b6、a10、b10),b12 与 R10 的 log(0+1) 零成交编码,以及 a1 至 a7 等 P 类种子没有去掉日内涨跌 MV。'

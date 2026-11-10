@@ -1,0 +1,124 @@
+seed: 2016
+round: 2
+slots:
+  - type: E
+    core: 'sub(day_topw_mean(Ret, Amt), day_mean(Ret))'
+    hypothesis: |-
+      机制。核心 T = sub(day_topw_mean(Ret, Amt), day_mean(Ret)):当天成交额最大的 10% 分钟(约 24 根)的平均分钟收益,减全天所有分钟的平均分钟收益。成交额集中的分钟是大额订单(机构、知情资金)留下的足迹(Barclay-Warner 1993「中等规模交易承载价格影响」、Chakravarty 2001、Campbell-Ramadorai-Schwartz 2009:大额成交预示后续收益)。T > 0 = 钱最重的那几分钟比普通分钟更偏多。单日 T 噪声很大、日度换手极高(本流 R 的经验:单日量纲的统计量在 15 bp 成本下净夏普 −3 ~ −5),所以只可能在「慢变的持续性」里有 alpha;本位固定核心 T,只在外围把它变成慢、稳、无尺度的读数。
+
+      本流证据(只用 train / valid):(i) 快照里含 T 的 7 个候选均值 −1.96,不含的 −2.69(差 +0.73,p 0.054);(ii) 第 1 轮 N 位最好的两条之一是 cross_corr(cross_mean(T, 60), 日收益, 60),score −0.71(train −0.71 / valid −0.70),两段几乎同分(它与已知族的相关度这里没有读数);它没进 head,但在那一位里是两段最均衡的一条。这说明 T 的慢读法有结构,但那一条的外围(先 60 日平均再与日收益耦合)只是其中一种。本轮预期「持续性 / 相对自己的历史」比「水平」好,没有把握的部分用多种外围去试。
+
+      外围五类(16 个种子都原样含 T;每个种子的整树骨架都对照过两个库 5583 条骨架,也与第 1 轮种子的骨架逐个对照过,没有重复,种子之间骨架也互不相同):
+      1. 持续性而非水平:均值 /(标准差 + 1e-4)(种子 1)= 大额分钟的方向是否稳定的 t 值;窗口内最大值 cross_max(2)= 最强的一次知情买入;下四分位均值 cross_tail_mean_q25(3)= 最差的那些天里大额分钟是否仍偏多。
+      2. 相对自己的历史:cross_zscore(20 日均值, 241 日)(4)、cross_ema(T, 60)(5)、短(20 日)减长(241 日)(13)—— 近期出现的异常大额偏向。
+      3. 去掉别的来源:对 60 日平均日收益做截面回归取残差(6)(T 的慢均值与中期动量共线,而奖励的控制里只有 20 日反转);除以分钟波动率的 60 日均值(15)(无尺度,波动大的票不再占便宜);先取截面秩再平均(14)(个别极端日不支配)。
+      4. 与价格新闻的耦合(反应函数):T 与当日收益(11)、与隔夜跳空(12)的 120 日相关;T 乘当日方向的符号(10)= 大额分钟是顺着当天走势(跟风)还是逆着(逆势吸筹)。
+      5. 分段与卫生:新上市(ListAge 最低 10%,7);名义股价的最低 10% 与最高 5%(8;这里的名义价格 = LogFloatCap − LogFloatShares = 对数名义价格,不是后复权价格);冻结盘口(分钟价平占比最高的 10%,16);市值十分位内标准化(9)。cs_last_* 是「分段开关」:奖励按训练段选符号,+1 时被选中的一带被排除,−1 时反而只在这一带里交易,两种读法都会被覆盖,所以我不预设方向。
+
+      为什么和库里已有的不同:day_topw_mean、cross_zscore、cross_tail_mean_*、cross_ema、cs_last_*、cs_bucket_*、ListAge、LogFloatCap 在两个库 5583 条表达式里出现 0 次(统计过 members.csv);快照 6 个 head 都是价格或成交额的水平(后复权开盘 / 收盘价的分位、成交额的幂与倒数),与 T 没有共同子树。T 里成交额只被用来「选分钟」,不进入读数的量纲,所以读数是收益量纲的差,与流动性 / 市值 / 成交额水平一族不同源,预计与这些控制的 |ρ| 低(< 0.3);与 20 日反转可能有些共线,种子 6、13 对冲。
+
+      为什么样本外还会在:(a) 大额分钟的方向偏置是资金结构(机构 vs 散户)的慢变特征,不是某一段行情的产物;(b) 读数全部取 60 ~ 241 日窗口,日换手低,15 bp 成本不是主要损耗;(c) 不含任何价格或成交额的水平,与两个冠军(Amt 水平一族)不同源。风险:T 与 20 日反转 / 日内动量共线(6、13 对冲);一字涨跌停日分钟收益全 0,T = 0,多涨停的票读数被拉向中间;阈值是当天 Amt 的 90% 分位,零成交分钟多时入选的分钟数偏离 24 根。
+
+      数学检查:无前视,全部只用 t 日收盘前的分钟数据与 t−1 收盘价,t+1 才交易。T 本身没有除法(两个均值之差);种子 1 的分母 cross_stddev(T) 加了 1e-4(在合成立方体上不加会出现 ±inf,已修),种子 15 的分母是分钟波动率的 60 日均值(恒正);种子 11、12 的 cross_corr 在窗口内一方逐位不变时为 0 / 缺失,不会无穷。没有用 ts_rank / cross_rank / in_rank_rolling,nanrank_last 陷阱不涉及。窗口全部 ≤ 241 日,热身期不主导。已在合成立方体上把 16 个种子都跑过:覆盖率 96 ~ 97%,每日不同值个数接近股票数(无大面积并列,也没有 inf)。
+    literature:
+      - title: 'Stealth trading and volatility: Which trades move prices?'
+        authors: 'Michael J. Barclay, Jerold B. Warner'
+        year: '1993'
+        treatment: '中等规模(而非最大)交易承载大部分价格影响;这里用「成交额最大的 10% 分钟的收益倾向」读大额订单的方向'
+      - title: 'Stealth-trading: Which traders'' trades move stock prices?'
+        authors: 'Sugato Chakravarty'
+        year: '2001'
+        treatment: '中等规模交易主要来自机构;大额分钟的方向是机构方向的代理'
+      - title: 'Caught on tape: Institutional trading, stock returns, and earnings announcements'
+        authors: 'John Y. Campbell, Tarun Ramadorai, Allie Schwartz'
+        year: '2009'
+        treatment: '机构的大额成交预示后续收益;这里把「大额分钟偏多」做成慢的持续性读数'
+    seeds:
+      - 'div(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120), add(cross_stddev(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120), 0.0001))'
+      - 'cross_max(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120)'
+      - 'cross_tail_mean_q25(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120)'
+      - 'cross_zscore(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 20), 241)'
+      - 'cross_ema(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60)'
+      - 'cs_regres(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60), cross_mean(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 60))'
+      - 'cs_last_low10(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120), ListAge)'
+      - 'cs_last_high05(cs_last_low10(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60), sub(LogFloatCap, LogFloatShares)), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120), LogFloatCap)'
+      - 'cross_mean(mul(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), sign(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1))), 60)'
+      - 'cross_corr(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_corr(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'sub(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 20), cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 241))'
+      - 'cross_mean(cs_rank(sub(day_topw_mean(Ret, Amt), day_mean(Ret))), 120)'
+      - 'div(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60), cross_mean(day_std(Ret), 60))'
+      - 'cs_last_high10(cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60), cross_mean(day_flat_ratio(Close), 20))'
+  - type: N
+    hypothesis: |-
+      机制:把每只股票每天的收益拆成两段 —— 隔夜(昨收 → 今开)GAP = day_first(Open) / 昨日收盘 − 1,与日内(今开 → 今收)INTRA = day_last(Close) / day_first(Open) − 1 —— 再看这两段在 60 ~ 241 日里的慢变关系。A 股个人投资者占成交的大头、T+1,隔夜价格变动主要由消息与关注度(散户情绪、开盘集合竞价追涨)定价,日内则更多是机构 / 套利资金的吸收与修正。文献的共同点是两段收益的信息含量不同、各自有持续性:Lou-Polk-Skouras 2019(隔夜与日内预期收益的拉锯)、Berkman 等 2012(开盘买入的关注度成本)、Aboody 等 2018(隔夜收益与公司层面的投资者情绪,隔夜偏高后续反转)、Hendershott-Livdan-Rösch 2020。奖励的 20 日反转控制只看加总收益,不区分两段,所以这一拆分是日频价格里还没被控制吸掉的一块。16 个种子是同一拆分的不同读法:
+      (1) 拉锯差:INTRA − GAP 的 120 日均值(种子 1)与它的稳定性 均值 /(标准差 + 1e-3)(2);
+      (2) 反应函数(跳空之后日内是顺势还是回吐):INTRA 与 GAP 的 120 日相关(3)与回归斜率(4)、INTRA 乘 GAP 符号的 60 日均值(5)、尾盘 30 分钟收益与 GAP 的相关(6)、成交额加权的日内分钟收益与 GAP 的相关(13)、成交额加权的价格位置(day_signed_ratio)对 GAP 的斜率(14);
+      (3) 尾部:日内最差四分之一日子的均值(7)、最大四分之一的隔夜跳空均值(8)(追高的跳空与日内吃回);
+      (4) 相对自己的历史:近 20 日日内均值相对 241 日分布的 z 值(9)、成交额加权日内收益减跳空的 EMA(12)、日内除以(|跳空| + 0.5%)的 60 日均值(15);
+      (5) 分段与卫生:新上市(ListAge 最低 10%)排到最后(10)、市值十分位内标准化(11)、名义股价(LogFloatCap − LogFloatShares)最低 10% / 最高 5% 排到最后(16)。奖励按训练段选符号,筛子的方向由此决定(+1 排除、−1 只在这一带里交易),两种读法都会被覆盖。
+
+      证据(本流,train / valid):B046 / B047 是后复权价格与成交额的水平一族,给出的结论是「水平读法一律为负,只有两个量的耦合接近随机」—— 耦合 cross_reg_tvalue(价格分位, 成交量峰度, 30)为 −1.30,而它的两个部件单独为 −2.38 / −4.93;第 1 轮 R 把价格水平换成日收益后升到 −0.84 ~ −0.89。第 1 轮 N 位里最好的几条都是「慢的、有界的、分钟分布统计」(−0.71),其中 241 日窗口版本 valid(−0.31 ~ −0.61)好于 train(−1.14)。教训:放弃水平,去读两段动态的拆分与耦合。
+
+      为什么和库里已有的不同:两个库 5583 条里含「今开 / 昨收」跳空的只有 17 条(都是 ts_delay 写法、并与秩 / 乘积混在一起),没有一条把日内与隔夜拆开做差 / 耦合 / 符号乘积;cross_zscore、cross_tail_mean_*、cross_ema、cs_bucket_*、cs_last_*、ListAge、LogFloatCap、day_wmean、day_signed_ratio 在库里出现 0 次。16 个种子的整树骨架逐个对照过 5583 条骨架,也与第 1 轮种子逐个对照,无一重复,种子之间骨架也互不相同。与快照 6 个 head(价格 / 成交额水平的幂与倒数)无共同子树。与 5 个控制:GAP 与 INTRA 是收益量纲,与 20 日反转可能有一定共线(预计 |ρ| 0.2 ~ 0.4),与流动性 / 市值 / 成交额族关系弱。
+
+      为什么样本外还会在:隔夜 vs 日内是 A 股投资者结构(散户主导、T+1、集合竞价)的结构性差异,不是某一段行情的产物;窗口 60 ~ 241 日,日换手很低,15 bp 成本不是主要损耗;读数不含价格 / 成交额的水平。风险:(a) 与 20 日反转共线,残差很小;(b) 一字涨跌停日 GAP = ±限幅、INTRA = 0,涨停多的票读数被拉向「隔夜很高、日内为 0」;(c) 开盘价是集合竞价价格,GAP 含开盘一根棒内的噪声;(d) 斜率类(4、14)在 GAP 方差很小的窗口里会放大噪声。
+
+      数学检查:无前视 —— GAP 用的是昨日收盘(cross_delay(·, 1)),INTRA 用当日首根开盘与最后收盘,全部在 t 日收盘前已知,t+1 才交易。价格是后复权序列:GAP 用同一序列的 Open(t) 与 Close(t−1),后复权在除权日连续,所以比值是真实的跳空,不是除权造成的假跳空。分母:day_first(Open)、昨日收盘都是正价格;种子 2 的分母 cross_stddev + 1e-3、种子 15 的分母 |GAP| + 5e-3 防近零;斜率 4 / 14 的分母是 GAP 的 120 日方差,只在窗口内跳空逐位不变(停牌是缺失、不是 0)时才为 0,得缺失而不是无穷。没有用 ts_rank / cross_rank / in_rank_rolling,nanrank_last 陷阱不涉及。窗口 ≤ 241 日,热身期不主导。已在合成立方体上把 16 个种子都跑过:覆盖率 96 ~ 97%,每日不同值个数接近股票数,没有 inf。
+    inspired_by: 'B046 / B047(后复权价格、成交额水平一族):水平读法一律为负,只有耦合形式(cross_reg_tvalue(价格, 成交量峰度, 30) = −1.30,部件单独 −2.38 / −4.93;R 里换成日收益后 −0.84 ~ −0.89)接近随机;以及第 1 轮 N 位(Pr1b_Nb)最好的几条都是慢的、有界的分钟分布统计,241 日窗口版本 valid 好于 train'
+    literature:
+      - title: 'A tug of war: Overnight versus intraday expected returns'
+        authors: 'Dong Lou, Christopher Polk, Spyros Skouras'
+        year: '2019'
+        treatment: '隔夜与日内收益各自有持续性、信息含量不同;这里把两段拆开做差 / 耦合 / 符号乘积'
+      - title: 'Paying attention: Overnight returns and the hidden cost of buying at the open'
+        authors: 'Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang'
+        year: '2012'
+        treatment: '隔夜收益由关注度驱动、开盘买入的成本;这里把隔夜跳空作为散户关注度的代理'
+      - title: 'Overnight returns and firm-specific investor sentiment'
+        authors: 'Eli Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman'
+        year: '2018'
+        treatment: '隔夜收益偏高后续反转;这里读 INTRA − GAP 与跳空之后日内的顺势 / 回吐'
+      - title: 'Asset pricing: A tale of night and day'
+        authors: 'Terrence Hendershott, Dmitry Livdan, Dominik Rösch'
+        year: '2020'
+        treatment: '隔夜与日内的风险溢价不同;这里用相对自己历史的 z 值与尾部读数'
+    seeds:
+      - 'cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120)'
+      - 'div(cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120), add(cross_stddev(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120), 0.001))'
+      - 'cross_corr(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_regbeta(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), sign(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1))), 60)'
+      - 'cross_corr(day_sum(in_slice(Ret, 211, 240)), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_tail_mean_q25(sub(div(day_last(Close), day_first(Open)), 1), 120)'
+      - 'cross_tail_mean_q75(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_zscore(cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 20), 241)'
+      - 'cs_last_low10(cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120), ListAge)'
+      - 'cs_bucket_zscore(cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120), LogFloatCap)'
+      - 'cross_ema(sub(day_wmean(Ret, Amt), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 60)'
+      - 'cross_corr(day_wmean(Ret, Amt), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_regbeta(day_signed_ratio(sub(Close, day_first(Open)), Amt), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_mean(div(sub(div(day_last(Close), day_first(Open)), 1), add(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 0.005)), 60)'
+      - 'cs_last_high05(cs_last_low10(cross_mean(sub(sub(div(day_last(Close), day_first(Open)), 1), sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 120), sub(LogFloatCap, LogFloatShares)), sub(LogFloatCap, LogFloatShares))'
+R:
+  - head: 'cross_reg_tvalue(day_quantile_q25(Open), day_kurt(Volume), 30)'
+    why: |-
+      烂的部件有两个:(1) 回归元是后复权价格水平(day_quantile_q25(Open) 的截面序 ≈ 自基期以来的累计收益,窗口内是趋势,非平稳);(2) 被回归量 day_kurt(Volume) 重尾,少数尖峰日有高杠杆。依据:拆解表里两个部件单独分别 −2.38 / −4.93,耦合 −1.30;第 1 轮 R 把价格水平换成日收益之后,cross_reg_tvalue(日收益, day_gini(Volume), 60) = −0.84、cross_corr(日收益, day_gini(Amt), 60) = −0.89,比原 head 好 0.4 ~ 0.5、与已知族 |ρ| ≤ 0.23、与原 head |ρ| 约 0.2,说明耦合形式是对的,烂的是价格水平那一半。本轮继续换第二个部件:把重尾的峰度换成有界、无尺度的分钟分布读数 —— 成交额重心 day_centroid(Amt)、成交额加权符号占比 day_signed_ratio(Ret, Amt)、日收益率的右 / 左尾形状 day_es_ratio_hi / lo、大额分钟倾向 T、成交额加权波动 day_wstd、冻结盘口占比 day_flat_ratio;新闻变量取日收益 / 隔夜跳空 / 日内收益;一个变体只改窗口(120 日)。统计量统一用 cross_corr(有界,不再用与它秩等价的 t 值 / 斜率);分母不含近零量,窗口 60 或 120。
+    variants:
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_centroid(Amt), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_signed_ratio(Ret, Amt), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_gini(Amt), 120)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_es_ratio_hi(Ret), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_es_ratio_lo(Ret), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 120)'
+      - 'cross_corr(sub(div(day_last(Close), day_first(Open)), 1), day_gini(Amt), 60)'
+      - 'cross_corr(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), day_gini(Amt), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_wstd(Ret, Amt), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_flat_ratio(Close), 60)'
+  - head: 'sub(day_kurt(Ret), day_quantile_q25(Open))'
+    why: |-
+      烂的部件:(1) 后复权价格水平项 day_quantile_q25(Open)(量级比 day_kurt(Ret) 大,差式被它支配;head 分数 −2.35 与价格单独的 −2.38 几乎一样);(2) 单日 day_kurt(Ret) 噪声大、换手高(单独 −3.81,其中 train −2.76)。依据:第 1 轮 R 里「kurt 的 30 日均值 + 价格带筛子」得 −0.80,但那一条奖励选了 sign −1,等于在价格两端带里按高 kurt 选股,而不是「排除两端」,所以不能当作筛子有用的证据。这里两个变体都去掉价格项:变体 1 只留 30 日平均的 kurt(取负)—— 检验是不是平滑本身就解决了换手;变体 2 先取截面秩再 60 日平均,去掉极端 kurt 的支配。分母不含近零量(峰度对尺度不变,上界约为分钟数)。
+    variants:
+      - 'neg(cross_mean(day_kurt(Ret), 30))'
+      - 'neg(cross_mean(cs_rank(day_kurt(Ret)), 60))'

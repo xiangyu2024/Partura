@@ -1,0 +1,85 @@
+seed: 2023
+round: 2
+slots:
+- type: E
+  core: day_sum(Ret)
+  hypothesis: '机制:核心 C = day_sum(Ret),当天 241 根分钟收益之和,即 t 日的日收益(收盘后可得,t+1 才交易)。本批共性表里含 C 的 10 个候选均值 -1.38,不含 -2.19(差 +0.81,p 0.008),是本批仅次于 Volume q75 的显著核心;快照里含 C 的候选只有 ts_min(C,5)、ts_delay(signedpower(C^2),10)、cs_rank 套 ts_min 这类「对 C 的短窗口水平滤波」,没有一个读 C 与市场收益之间的关系。
+
+    这一位不问「C 有多大」,问「这只票的日收益序列相对大盘日收益(cs_mean(C),全市场当日截面均值)是什么样的」。做法:用 cross_regbeta / cross_regalpha / cross_corr / cross_regres 把个股日收益对市场日收益做 120 到 241 日滚动回归,取
+
+    (1) 市场 beta(种子 2、13),(2) 滚动 alpha(种子 3),(3) 与市场的相关(种子 4、14;种子 8、12 对市场滞后一天的相关与回归即反应迟缓 / 滞后 beta,Hou 与 Moskowitz 2005 的延迟度量),(4) 上涨市与下跌市的 beta 之差(种子 7,Ang、Chen 与 Xing 2006 的下行风险;种子 13 只回归在市场下跌日的暴露),(5) 去市场后残差的偏度(种子 15,Boyer、Mitton 与 Vorkink 2010 的特质偏度),(6) 个股自身日收益的偏度 / 自相关(种子 1、5、6),(7) 上涨日均收益减下跌日均收益及上行半方差占比(种子 10、11,Barndorff-Nielsen、Kinnebrock 与 Shephard 2010 的有符号波动)。
+
+    为什么与已见写法不同:快照里没有任何候选把 C 与 cs_mean(C) 放进 cross_regbeta / cross_regalpha / cross_corr / cross_regres,也没有半方差占比 / 滞后 beta(两个库 5583 条的骨架与这些种子的骨架已逐个对照,零重复;ts_kurt 版 骨架撞库已删除)。控制里的 20 日反转是 C 的 20 日和,vol 是 day_std(Ret),本质是水平量;beta / 相关 / 偏度 / 自相关是无量纲的关系量,先天与 5 个控制近乎正交,所以不应被新尺子残差掉。
+
+    为什么样本外还会在:A 股散户占比高,低 beta / 低相关 / 对市场反应迟缓 / 正特质偏度是被反复记录的横截面特征(低 beta 异常、彩票偏好),由杠杆约束与博彩偏好驱动,不是某段行情的风格;120 到 241 日窗口使排名慢变,换手低,15 bp 不会吃掉。方向由尺子在训练段选。
+
+    数学检查:cs_mean 是当日截面均值,全部同日,无前视;cross_* 只回看含当天;cross_regbeta 对市场方差近 0(窗口内市场不动)只在极端窗口出现,这里市场日收益有 120 日以上的真实波动;种子 11 分母加 1e-6(日收益平方均值量级 1e-4);偏度 / 相关 / 回归不含 ts_rank / cross_rank,不碰 nanrank_last 停牌返回 0 的问题;没有用 ts_spearman / nt_*;停牌日 C 为 0 或 NaN,窗口内有效点数不足时返回 NaN,已在合成数据上逐个跑通(覆盖率 0.96 以上,不同值占比 1.0)。
+
+    最可能的失败:beta / 相关与波动、市值控制仍重叠,残差后什么也不剩;或者低 beta 的毛超额在 2018 到 2023 的 A 股里为负、两段分数都在 -1.5 到 -0.5。'
+  seeds:
+  - ts_skew(day_sum(Ret), 241)
+  - cross_regbeta(day_sum(Ret), cs_mean(day_sum(Ret)), 241)
+  - cross_regalpha(day_sum(Ret), cs_mean(day_sum(Ret)), 241)
+  - cross_corr(day_sum(Ret), cs_mean(day_sum(Ret)), 120)
+  - cross_autocorr(day_sum(Ret), 241, 1)
+  - cross_autocorr(day_sum(Ret), 120, 2)
+  - sub(cross_regbeta(day_sum(Ret), cs_mean(mul(day_sum(Ret), is_gt(day_sum(Ret), 0))), 241), cross_regbeta(day_sum(Ret), cs_mean(mul(day_sum(Ret), is_lt(day_sum(Ret), 0))), 241))
+  - cross_regbeta(day_sum(Ret), ts_delay(cs_mean(day_sum(Ret)), 1), 241)
+  - cross_regres(day_sum(Ret), cs_mean(day_sum(Ret)), 120)
+  - sub(cross_mean(mul(day_sum(Ret), is_gt(day_sum(Ret), 0)), 241), cross_mean(mul(neg(day_sum(Ret)), is_lt(day_sum(Ret), 0)), 241))
+  - div(cross_mean(mul(pow_2(day_sum(Ret)), is_gt(day_sum(Ret), 0)), 241), add(cross_mean(pow_2(day_sum(Ret)), 241), 0.000001))
+  - cross_corr(day_sum(Ret), ts_delay(cs_mean(day_sum(Ret)), 1), 241)
+  - cross_regbeta(day_sum(Ret), mul(cs_mean(day_sum(Ret)), is_lt(cs_mean(day_sum(Ret)), 0)), 241)
+  - cross_corr(pow_2(day_sum(Ret)), cs_mean(pow_2(day_sum(Ret))), 120)
+  - ts_skew(cross_regres(day_sum(Ret), cs_mean(day_sum(Ret)), 60), 241)
+- type: N
+  hypothesis: '机制:把分钟收益拆成上涨分钟和下跌分钟,读它们大小的「不对称」。在第 1 轮 N 位的 83 个评分候选里,唯一两段都为正的是 cross_mean(day_wmean(Ret, log(Ret)), 241):分数 +0.44(train +0.44,valid +1.01)。log(Ret) 对负收益是 NaN(被 day_wmean 排除),所以它就是「上涨分钟的平均涨幅(权重 |log Ret| 近似均匀)」的 241 日均值,和放量无关。我的推断:它读的是上行分钟的平均幅度,一半来自价格最小变动单位(名义价越低,一个 tick 对应的分钟收益越大),一半来自上行 / 下行不对称。这两者在新尺子里不被市值 / 波动 / 流动性控制吃掉(名义价和市值不同)。
+
+    这一位用 6 种读法把它拆开并外推(全部 241 日或 120 日半衰期慢聚合):
+
+    (1) 上行均幅与下行均幅分开(种子 1、2):day_wmean(Ret, is_gt(Ret,0)) 与 is_lt;
+
+    (2) 两者之和与比值(种子 3、4):和 = 上下不对称、与 tick 效应相消,比值无量纲;种子 3 若好而种子 1 差,说明 alpha 在不对称,不在 tick 大小;
+
+    (3) 上涨分钟占比、零收益分钟占比(种子 5、6):后者是价格离散度 / 流动性的直接读数,检验「tick 效应」假设;
+
+    (4) 上行均幅除以日波动(种子 7):去掉波动尺度;
+
+    (5) 上行半方差占比(种子 8)、上行与下行标准差之差(种子 9),即有符号波动(Barndorff-Nielsen、Kinnebrock 与 Shephard 2010;Patton 与 Sheppard 2015 发现下行半方差预测更低的未来收益);
+
+    (6) 成交量加权的版本(种子 10、11)、减当日均收益(种子 12)、市值十分位内标准化(种子 13)、只取上 10% 大涨分钟(种子 14)、权重换成 log|Ret| 与 sqrt|Ret|(种子 15、16)。
+
+    为什么与库里 / heads 不同:3 个 B067 heads 与 B068 的 heads 都是日内分位数 / 中位数 / 协方差的水平量,没有任何一个按分钟收益的正负号切分;两个库 5583 条里 is_gt(Ret, 0) 出现 0 次,day_pos_ratio / day_wstd / day_zero_ratio 骨架已逐个对照,零重复。与第 1 轮 N 位的区别:那一轮用成交量 q75 做阈值(放量分钟),这里用收益的符号做阈值,不涉及 Volume 任何水平,是对那个唯一正信号的机制拆解。
+
+    为什么样本外还会在:最小变动价位与价格离散度是市场微观结构的稳定特征,不随行情风格变;上行 / 下行半方差不对称是被文献记录的风险溢价来源,散户主导的 A 股里「彩票偏好」使上行大波动被高估,收益为负,是行为性的而非某段行情。241 日慢聚合使名次稳定,换手低。
+
+    数学检查:day_wmean 对 is_gt / is_lt 的 0/1 权重取 |w|,当天无上涨分钟(停牌)权重和为 0 给 NaN 而不是 0;Ret 第 0 根恒为 0 不计入;分母 day_std(Ret)+1e-6(量级 1e-3)、1e-6 与日平方和 +1e-9(量级 1e-5),不爆;种子 15 的 log(|Ret|) 在 Ret=0 时为 -inf 被 day_wmean 当非有限值排除;无前视(只用当天分钟,cross_* 回看含当天,t+1 才交易);不含 ts_rank / cross_rank,不碰 nanrank_last;没有 ts_spearman / nt_*;合成数据上全部评估通过,覆盖率 0.97。
+
+    最可能的失败:效应主要是名义价(tick)效应,被价格相关控制 + 冠军吸收,残差后为负;或者是 train 弱 valid 强的行情差异(第 1 轮读数的 train +0.44 vs valid +1.01 提示这种可能),使较差者仍低于 0.5。'
+  inspired_by: 第 1 轮 N 位唯一两段都为正的候选 cross_mean(day_wmean(Ret, log(Ret)), 241)(+0.44,train +0.44 valid +1.01)与本批共性表里 day_sum(Ret) / day_std(Ret) 的富集;推断它读的是上涨分钟均幅(tick 效应 + 上下行不对称)
+  seeds:
+  - cross_mean(day_wmean(Ret, is_gt(Ret, 0)), 241)
+  - cross_mean(day_wmean(Ret, is_lt(Ret, 0)), 241)
+  - cross_mean(add(day_wmean(Ret, is_gt(Ret, 0)), day_wmean(Ret, is_lt(Ret, 0))), 241)
+  - cross_mean(div(day_wmean(Ret, is_gt(Ret, 0)), sub(0.000001, day_wmean(Ret, is_lt(Ret, 0)))), 241)
+  - cross_mean(day_pos_ratio(Ret), 241)
+  - cross_mean(day_zero_ratio(Ret), 241)
+  - cross_mean(div(day_wmean(Ret, is_gt(Ret, 0)), add(day_std(Ret), 0.000001)), 241)
+  - cross_mean(div(day_sum(mul(pow_2(Ret), is_gt(Ret, 0))), add(day_sum(pow_2(Ret)), 0.000000001)), 241)
+  - cross_mean(sub(day_wstd(Ret, is_gt(Ret, 0)), day_wstd(Ret, is_lt(Ret, 0))), 241)
+  - cross_mean(day_wmean(Ret, mul(Volume, is_gt(Ret, 0))), 241)
+  - cross_mean(sub(day_wmean(Ret, mul(Volume, is_gt(Ret, 0))), day_wmean(Ret, mul(Volume, is_lt(Ret, 0)))), 241)
+  - cross_ema(sub(day_wmean(Ret, is_gt(Ret, 0)), day_mean(Ret)), 120)
+  - cs_bucket_zscore(cross_mean(day_wmean(Ret, is_gt(Ret, 0)), 241), LogFloatCap)
+  - cross_mean(day_wmean(Ret, is_gt(Ret, day_quantile(Ret, 0.9))), 241)
+  - cross_mean(day_wmean(Ret, log(abs_(Ret))), 241)
+  - cross_mean(day_wmean(Ret, sqrt(abs_(Ret))), 241)
+R:
+- head: cs_demean(cross_mean(cross_regbeta(day_autocorr_n1(High), day_median(Close), 241), 30))
+  why: 拆解:去掉 cross_regbeta 掉到 -2.53(必要性 +1.42),去掉 cross_mean 只 +0.04(几乎不承重),High 换 Low / Close 换 Vwap / cross_mean 窗口 15 / 60 都在 -1.08 到 -1.19,说明承重的是 cross_regbeta(日内高价的 1 阶自相关对日中位价的 241 日回归斜率)而不是 30 日平滑与具体字段。烂的部件:day_median(Close) 作为回归自变量是后复权价格水平(与累计收益挂钩),斜率被价格尺度支配;变体 1 用 cross_corr 去尺度(无量纲相关),变体 2 把自变量换成日收益 day_sum(Ret),变体 3 用 cross_regres 残差,变体 4 把外层 cross_mean 换成半衰期 30 日的 cross_ema,变体 5 去掉不承重的 cross_mean。
+  variants:
+  - cs_demean(cross_mean(cross_corr(day_autocorr_n1(High), day_median(Close), 241), 30))
+  - cs_demean(cross_mean(cross_regbeta(day_autocorr_n1(High), day_sum(Ret), 241), 30))
+  - cs_demean(cross_mean(cross_regres(day_autocorr_n1(High), day_median(Close), 241), 30))
+  - cs_demean(cross_ema(cross_regbeta(day_autocorr_n1(High), day_median(Close), 241), 30))
+  - cross_regbeta(day_autocorr_n1(High), day_median(Close), 241)

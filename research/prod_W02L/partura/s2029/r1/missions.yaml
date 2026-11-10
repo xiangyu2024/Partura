@@ -1,0 +1,96 @@
+seed: 2029
+round: 1
+slots:
+  - type: E
+    core: 'ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)'
+    hypothesis: |-
+      事实(快照拆解表,不是我的推测):三个 head 是同一个对象的几种包装:A = day_mean(Amt)(日均分钟成交额,单位是元)的 40 日标准差反复叠加(ts_std 三到四层,外加一个 ts_max)。纯叠 std 时层数越多分数越好:A 本身 −3.47,一层 −0.77,两层 −0.43(valid +0.56),三层 −0.29;带一个 ts_max 的 head 2 / 3 是 −0.11 / −0.21,不再单调;最好的 head 1(四层夹一个 ts_max)−0.03。Amt 换成 Volume 后 valid 从 −0.03 / −0.11 / −0.21 掉到 −2.40 / −2.42 / −2.66,三个 head 一致。外层窗口 40→80:head 2 从 −0.11 升到 +0.10(train / valid 都是 +0.10),head 1 持平,40→20 都变差。库里这一族的原样符号是 −1(越稳越买,rank IC −0.025 ~ −0.041),新尺子下 head 的方向却是 +1:原样的边际是流动性 / 规模 / 已知族的暴露,被尺子剥掉之后剩下的是符号相反的小量。
+
+      我的读法(由量纲推出来,没有用读数核对):核心 C = ts_std(ts_std(ts_std(A, 40), 40), 40) 的量纲是「元」,它的排名约等于 log L + log κ3,L 是成交额水平,κ3 是第三阶的相对变异。截面上 log L 的离散度远大于 log κ3,所以 C 的排名大部分是流动性的换写法(同类的「两层标准差套成交额分位数」在别的流的相关度表里与流动性 0.76、与已知族 0.74)。尺子只扣 1 / 2 / 3 次秩多项式,扣不干净,剩下的是水平残渣加 κ3 里与水平无关的那一小部分。纯叠 std 时「层数越多越好」恰好符合这一点:每多一层,水平在方差里的占比下降。第二条推理:三个 40 日窗口叠起来对一只新股的「记忆」约 120 个交易日;新股上市初期的涨跌幅放开、随后连续一字板(成交额近 0)再开板放出巨量,成交额的变异极大,所以 C 排名顶部可能集中着次新股,这时 head 读到的是「上市多久」而不是活跃度的不稳定性。这一条没有任何读数支持,所以种子里放了方向相反的一对上市天数处理来检验它。
+
+      本位假设:如果 C 里有 alpha,它在「相对自己水平的第三阶不稳定性」里,也就是活跃度的体制切换(参与者构成在机构持股与题材散户之间换挡),而且去掉次新股之后仍然在。算子怎样实现:每个种子都原样带着核心 C,外围只做六件事,每件都是快照里没有的。(1) 比值,把水平除掉:C ÷ 二阶 ts_std(ts_std(A, 40), 40)(活跃度的波动本身稳不稳);C ÷ A 的 120 日均值;C ÷ cross_mean(day_std(Amt), 30)(日间变异对日内离散度,分母是已知族的算子形式);C ÷ 二阶的 120 日均值。(2) 换手口径:log C − LogFloatCap(成交额变异按流通市值折算)。(3) 截面处理:对 log 成交额水平回归取残差;对换手水平 log(日均成交量) − LogFloatShares 回归取残差;在 120 日成交额均值的十档内做 z 分数;比值再对名义价 sub(LogFloatCap, LogFloatShares) 取残差。(4) 上市天数:cs_last_low10(·, ListAge) 把最新上市的约 10% 排到最后,cs_first_low20(·, ListAge) 反过来把最新的 20% 排在最前,后者是诊断:它若比前者好,alpha 在次新股而不在活跃度。(5) 动态:log C 减 60 日前的 log C(体制切换的加速度);比值乘以 6 个月趋势的符号(下跌途中的不稳定与上涨途中的不稳定读法相反)。(6) 价格通道:Amt 版 C 除以 Volume 版 C,约等于名义价格,用来检验「Amt 比 Volume 好」是不是价位暴露。
+
+      为什么和以前不同:快照里围绕这个核心的外围只有 ts_max / ts_std / ts_mean(10) / ts_delay / ts_skew,全都保留成交额的元量纲,没有除法、对数差、截面回归、日频叶子(LogFloatCap / LogFloatShares / ListAge)。15 个种子的算子骨架逐条核过,都不在两库 5583 条里;比值类与 head 的秩相关在设计上不共享水平。为什么样本外还会在:来源是参与者结构和上市阶段这类慢变量,窗口 40 ~ 120 日,换手低(库里同族成员的换手只有 0.02 ~ 0.05),不依赖某一段行情。数学检查:C 在窗口内有停牌日时按可用日算,不填充;log 的输入是元量纲(1e4 以上),不触到 EPS;比值的分母是 120 日均值(> 0)或二阶 std(平稳活跃度的股票接近 0 的情形极少,且这些股票本来就该排在端点);cs_first / cs_last 只收整块并列;没有 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0;没有用到当天收盘之后的数据。
+    literature:
+      - title: Trading activity and expected stock returns
+        authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+        year: '2001'
+        treatment: 成交额 / 换手率的变异系数与预期收益负相关;这里不直接取变异系数,而把水平除掉后读第三阶相对变异
+      - title: The long-run performance of initial public offerings
+        authors: Jay R. Ritter
+        year: '1991'
+        treatment: 新上市股票的成交与收益形态与成熟股票系统性不同;用 ListAge 的两个相反方向的筛子检验 C 的排名顶部是否被次新股占据
+    seeds:
+      - 'div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_std(ts_std(day_mean(Amt), 40), 40))'
+      - 'div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120))'
+      - 'div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), cross_mean(day_std(Amt), 30))'
+      - 'sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap)'
+      - 'cs_regres(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), log(ts_mean(day_mean(Amt), 120)))'
+      - 'cs_regres(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), sub(log(ts_mean(day_mean(Volume), 120)), LogFloatShares))'
+      - 'cs_bucket_zscore(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120))'
+      - 'cs_last_low10(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120)), ListAge)'
+      - 'cs_first_low20(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120)), ListAge)'
+      - 'sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), log(ts_delay(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 60)))'
+      - 'mul(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120)), sign(cross_mean(day_sum(Ret), 120)))'
+      - 'div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_std(ts_std(ts_std(day_mean(Volume), 40), 40), 40))'
+      - 'cs_regres(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120)), sub(LogFloatCap, LogFloatShares))'
+      - 'div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), cross_mean(ts_std(ts_std(day_mean(Amt), 40), 40), 120))'
+      - 'cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap), ListAge)'
+  - type: N
+    hypothesis: |-
+      机制:成交额 = 成交量 × 价格,所以 A = day_mean(Amt) 的变异 = 量的变异 + 价的变异 + 两者的协变。快照里的证据:三个 head 把 Amt 换成 Volume 后 valid 从 −0.03 / −0.11 / −0.21 掉到 −2.40 / −2.42 / −2.66,去掉「价」这一半后什么都没有了。所以成交额变异里带 alpha 的部分,要么是价位 / 规模一类的水平暴露(尺子要剥掉的那部分),要么是「量与价怎样一起动」。本位绕开水平,读两件与规模、价位都无关的事,底都换成 Volume 并用日频叶子 LogFloatShares 折成换手率。
+      (a) 换手率口径的活跃度不稳定。换手率的对数 T = log(day_mean(Volume)) − LogFloatShares,无量纲;两库 5583 条一个日频叶子都没用过,所以这条在库里是盲区。读 T 的二阶变异(40 / 40、60 / 60 两层叠),长窗口一阶标准差,量增长的上行与下行半标准差之比(放量爆发 vs 缩量衰退的不对称),以及「异常放量日」(量的对数超过自己 60 日均值的 0.7,即约 2 倍)与「异常缩量日」(低于一半)在 120 日里出现的频率,频率与标准差不同:它数事件,不被一两次极端日主导。依据:Chordia-Subrahmanyam-Anshuman(2001)报告换手 / 成交额的变异与预期收益负相关;A 股有卖空约束(Miller 1977),题材脉冲型的散户交易会把定价推偏,脉冲的反复出现是慢变的参与者结构。
+      (b) 量价耦合。放量是否伴随上涨:日轴上量的对数增长 ts_delta(log(day_mean(Volume)), 1) 与当日收益 day_sum(Ret)、与前一日收益、前一日量增长与当日收益的 120 日相关与回归斜率;带符号的异常放量(上涨日的放量减去下跌日的放量,60 日均值);量水平与后复权价的 120 日相关(趋势里放量);量增长波动与收益波动之比。依据:Llorente-Michaely-Saar-Wang(2002):放量伴随的收益在信息不对称强的股票上延续、在对冲型交易为主的股票上反转,这是个股的持续属性,所以 120 日窗口的耦合有慢变的内容。用 Volume 而不是 Amt,是因为 Amt 的对数增长里已经含有当日收益本身,与收益的相关是机械的。
+      (c) 直接拆解快照里的现象:log(ts_std(Amt, 40) / ts_std(Volume, 40)) 约等于名义价格加量价耦合的修正,再对 sub(LogFloatCap, LogFloatShares)(名义价格的对数)做截面回归取残差,留下的是成交额变异里扣掉价位之后的量价耦合部分。
+      为什么和库里不同:三个 head 都是成交额水平的嵌套标准差,与上面这些在设计上不共享水平(换手率口径、事件频率、相关与斜率都是无量纲量)。14 个种子的算子骨架逐条核过,都不在两库 5583 条里。为什么样本外还会在:这些量刻画的是个股的参与者结构(谁在交易、以什么方式交易),窗口 60 ~ 120 日,变动慢;若有 alpha,最可能来自 (a) 的二阶变异 / 异常放量频率(题材散户占比,与已知成交额族、流动性不是同一个维度),其次是 (b) 的带符号异常放量。数学检查:log(day_mean(Volume)) 在零成交日是 NaN(框架的 log 对 |x| ≤ EPS 返回 NaN),不填充,窗口按可用日算;LogFloatShares 是日频叶子,第 d 天的值是收盘时点可知的;cross_corr 在有效点太少时缺失;is_gt / is_lt 的阈值是对数差,无量纲;用到的信息都在当日收盘之前;没有 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0。
+    inspired_by: 'B085:Amt 换成 Volume 后三个 head 的 valid 都掉 2 分以上(成交额变异里「价」那一半是承重的);纯叠 std 层数越多越好(−0.77 → −0.43 → −0.29)而且 valid 多为正(+0.56 / +0.58)、train 多为负,说明水平被剥掉之后剩下的是慢变的参与者结构,不是水平'
+    literature:
+      - title: Dynamic volume-return relation of individual stocks
+        authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+        year: '2002'
+        treatment: 量与前一日收益的交互项的符号区分信息型与对冲型交易;这里用日轴的量增长与收益的 120 日相关 / 斜率做个股层面的持续度量
+      - title: Risk, uncertainty, and divergence of opinion
+        authors: Edward M. Miller
+        year: '1977'
+        treatment: 卖空约束下分歧大的股票被高估;用换手率的不稳定与异常放量频率近似分歧的反复出现
+    seeds:
+      - 'ts_std(ts_std(sub(log(day_mean(Volume)), LogFloatShares), 40), 40)'
+      - 'cross_stddev(cross_stddev(sub(log(day_mean(Volume)), LogFloatShares), 60), 60)'
+      - 'cross_stddev(sub(log(day_mean(Volume)), LogFloatShares), 120)'
+      - 'sub(log(cross_semistd_pos(day_mean(Volume), 120)), log(cross_semistd_neg(day_mean(Volume), 120)))'
+      - 'cross_mean(is_gt(sub(log(day_mean(Volume)), ts_mean(log(day_mean(Volume)), 60)), 0.7), 120)'
+      - 'cross_mean(is_lt(sub(log(day_mean(Volume)), ts_mean(log(day_mean(Volume)), 60)), -0.7), 120)'
+      - 'cross_corr(ts_delta(log(day_mean(Volume)), 1), day_sum(Ret), 120)'
+      - 'cross_corr(ts_delta(log(day_mean(Volume)), 1), ts_delay(day_sum(Ret), 1), 120)'
+      - 'cross_corr(ts_delay(ts_delta(log(day_mean(Volume)), 1), 1), day_sum(Ret), 120)'
+      - 'cross_corr(log(day_mean(Volume)), day_last(Close), 120)'
+      - 'cross_regbeta(ts_delta(log(day_mean(Volume)), 1), day_sum(Ret), 120)'
+      - 'cross_mean(mul(sign(day_sum(Ret)), sub(log(day_mean(Volume)), ts_mean(log(day_mean(Volume)), 60))), 60)'
+      - 'div(cross_stddev(ts_delta(log(day_mean(Volume)), 1), 120), cross_stddev(day_sum(Ret), 120))'
+      - 'cs_regres(sub(log(ts_std(day_mean(Amt), 40)), log(ts_std(day_mean(Volume), 40))), sub(LogFloatCap, LogFloatShares))'
+R:
+  - head: 'ts_max(ts_std(ts_std(day_mean(Amt), 40), 40), 40)'
+    why: |-
+      烂的部件是「成交额的元量纲」:每一层 ts_std 都带着 A = day_mean(Amt) 的绝对水平,排名里流动性水平占主导(同类嵌套 std 在别的流的相关度表里与流动性 0.76、与已知族 0.74),尺子扣掉多项式之后剩下水平残渣加噪声。依据:拆解表里 A 本身 −3.47、一层 −0.77、两层 −0.43,层数越多水平占比越小分数越好;外层 ts_max 窗口 40→80 为 +0.10(train / valid 都是 +0.10)、40→20 为 −0.16,越慢越好。变体把量纲除掉(除以 120 日均值 / 除以一阶 std / 减 LogFloatCap / 对水平回归取残差),并把外层窗口拉到 80 ~ 120。
+    variants:
+      - 'ts_max(div(ts_std(ts_std(day_mean(Amt), 40), 40), ts_mean(day_mean(Amt), 120)), 80)'
+      - 'ts_max(div(ts_std(ts_std(day_mean(Amt), 40), 40), ts_std(day_mean(Amt), 40)), 80)'
+      - 'ts_max(sub(log(ts_std(ts_std(day_mean(Amt), 40), 40)), LogFloatCap), 80)'
+      - 'ts_max(cs_regres(log(ts_std(ts_std(day_mean(Amt), 40), 40)), log(ts_mean(day_mean(Amt), 120))), 80)'
+      - 'ts_max(div(ts_std(ts_std(day_mean(Amt), 40), 40), ts_mean(day_mean(Amt), 120)), 120)'
+  - head: 'ts_max(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), 40)'
+    why: |-
+      同一个烂部件(元量纲)。这个 head 在拆解表里是 −0.21;去掉第三层 ts_std(退回 head 2 的形状)反而是 −0.12(+0.09),去掉 ts_max 是 −0.29(ts_max 只帮 +0.08),外层 ts_max 40→20 为 −0.32、40→80 为 −0.26,都更差,说明多出来的结构没有带来信息,分数主要由三层 std 的水平残渣决定。变体把量纲除掉、外层窗口取 80,并保留 ts_max 以便和原 head 同口径比较。
+    variants:
+      - 'ts_max(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_mean(day_mean(Amt), 120)), 80)'
+      - 'ts_max(div(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40), ts_std(ts_std(day_mean(Amt), 40), 40)), 80)'
+      - 'ts_max(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), LogFloatCap), 80)'
+      - 'ts_max(cs_regres(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), log(ts_mean(day_mean(Amt), 120))), 80)'
+  - head: 'ts_std(ts_std(ts_max(ts_std(day_mean(Amt), 40), 40), 40), 40)'
+    why: |-
+      最好的 head(−0.03,train +0.15 / valid −0.03),烂的部件仍是元量纲。拆解表里去掉 ts_max 是 −0.29、去掉内层 ts_std 是 −0.28(两者都有必要,各 +0.26),外层窗口 40→80 为 −0.04、→20 为 −0.30,所以不动结构,只动量纲:除以 120 日均值、在 ts_max 里面先做 40 日变异系数(ts_std ÷ ts_mean,无量纲)、减 LogFloatCap、对水平回归取残差。
+    variants:
+      - 'div(ts_std(ts_std(ts_max(ts_std(day_mean(Amt), 40), 40), 40), 40), ts_mean(day_mean(Amt), 120))'
+      - 'ts_std(ts_std(ts_max(div(ts_std(day_mean(Amt), 40), ts_mean(day_mean(Amt), 40)), 40), 40), 40)'
+      - 'cs_regres(log(ts_std(ts_std(ts_max(ts_std(day_mean(Amt), 40), 40), 40), 40)), log(ts_mean(day_mean(Amt), 120)))'
+      - 'sub(log(ts_std(ts_std(ts_max(ts_std(day_mean(Amt), 40), 40), 40), 40)), LogFloatCap)'

@@ -1,0 +1,105 @@
+seed: 2024
+round: 1
+slots:
+  - type: E
+    core: 'day_quantile_q75(Ret)'
+    hypothesis: |-
+      批里的现象(B070,11 条):其中 10 条的外层含左支 abs_(cs_mean(ts_pearson(day_quantile_q75(Ret), 5))) 或 abs_(cs_scale(...)),这是「全市场当天的平均两两共动度」,对每只股票是同一个数,逐日截面排序把它整个丢掉。真正对排序起作用的只有右支:ts_pearson(day_quantile_q75(Ret), 5),即每只股票的上四分位分钟收益序列和其余全部股票同一序列的 5 日滚动相关的均值(nd_ts.py 的 ts_pearson 对 j≠i 的 corr(i,j) 取均值)。拆解表读法:单独 ts_pearson(Q, 5) -2.89(train -2.89 / valid -2.85);abs_(cs_scale(·)) 版 -2.35,拿掉 abs_ 退到 -2.95(必要性 +0.52),说明「共动强度的绝对值」比带符号的共动度好;窗口 2 / 5 / 10 是 -2.15 / -2.43 / -2.02,没有单调结构。members.csv 里这批有实际排序内容的成员(1967 / 2019 / 2051)的原始(未平滑)换手 0.32–0.44,说明主要问题是 5 个观测点估一个相关系数的噪声(独立序列的 5 点相关系数标准差约 0.5,而我估计股票之间持续的共动特征的离散度只有 0.15–0.2),换手把成本吃光;我对库里这一批的读法是:共动度可能是一个慢变的股票属性,但 5 日窗口把它估成了噪声。
+      机制:共动度(synchronicity,Morck–Yeung–Yu 2000)是一个持续性很强的股票属性:高共动 = 股价主要由市场 / 指数 / 资金面驱动(大票、指数与 ETF 持仓、国家队持仓),低共动 = 价格里装的是公司特质信息或散户情绪(Jin–Myers 2006:R² 低的股票暴跌风险更高,信息不透明)。它既不是波动也不是流动性水平(是相关系数,无量纲),新尺子对 5 个控制和两个冠军只去线性 / 平方 / 立方的排名暴露,留下的是「共动属性本身」以及它和尺寸、年龄的非线性交互,后者用分桶标准化(cs_bucket_zscore)去掉。本位只固定核心 day_quantile_q75(Ret)(日内分钟收益的上四分位,比日收益更不受单个极端分钟影响,也不像日收益那样是 20 日反转控制的原料),外围全部重写成「便宜的收缩估计 + 长窗口 + 平滑」。
+      收缩(shrink)的做法:ts_pearson 是 O(N²d) 的,5220 只股票一天一个 5220×5220 的矩阵;但对每只股票 i 它等于 (N·corr(x_i, z̄)·sd(z̄) − 1)/(N−1),其中 z̄ 是全体股票标准化序列的均值,sd(z̄) 对同一天所有股票是同一个正数。所以按逐日截面排序,i 的「平均两两相关」与 corr(x_i, z̄) 排序完全相同,而 z̄ 用 cs_mean(Q) 近似(截面等权的市场序列,单一因子收缩,Ledoit–Wolf 的做法)只需要 O(N·d)。这样 cross_corr(Q, cs_mean(Q), d) 是 ts_pearson 的廉价版,窗口可以放到 60 / 120(ts_pearson 的成本随窗口 d 线性增长,而且每天一个 5220×5220 的矩阵,长窗口放不起)。我保留一个精确版种子(第 14 个)用来核对「收缩版 ≈ 精确版」。
+      算子怎样实现(每个种子原样带 day_quantile_q75(Ret)):(a) cross_corr(Q, cs_mean(Q), 60 / 120) 是长窗口共动度;abs_(·) 是「共动强度」(对应 abs_ 的 +0.52),cross_ema 做 20→40 日半衰期的慢速平滑,换手低;(b) 短减长 sub(corr_20, corr_120) 和 cross_zscore(corr_20, 120) 读「相对自己常态的脱钩」;(c) cross_regbeta(cs_mean(Q), Q, 120) 是对市场上四分位的 beta(带波动尺度,作对照);(d) 上下尾不对称:sub(corr(Q25 对 cs_mean(Q25)), corr(Q75 对 cs_mean(Q75))) 读「下跌尾部比上涨尾部更同步」(Ang–Chen–Xing 2006 的下行风险溢价、Hong–Tu–Zhou 2007 的不对称相关),cross_corr(Q, cs_mean(Q25), 60) 读自己的上涨是否发生在市场下跌时(逆周期 / 对冲型);(e) cross_tail_mean_q25 / cross_stddev 读共动度的下尾和不稳定性;(f) cs_bucket_zscore(·, LogFloatCap / ListAge / LogFloatShares) 在市值 / 上市年限 / 流通股本十分位内标准化,去掉共动度和规模的任意形状的关系。
+      为什么和已有的不同:库里 ts_pearson 一共 49 条(B070 11 条,其余零散),cross_corr 里没有一条是「对 cs_mean 的相关」;5583 条骨架里没有 cross_corr(·, cs_mean(·), d) 这一类,我用 skeleton_key 逐个对过,16 个种子都不在骨架库里。与三个 head 比:它们都是 5 日窗口的原始值(head 2 就是 -ts_pearson(Q, 5),head 1 是它的绝对值,head 3 是 -day_last(Amt) 的流动性);这里的长窗口把 5 日估计里的噪声平均掉,我估计与 head 2 的日度秩相关约 0.3–0.4(5 点估计的信噪比约 0.16,平方根量级),低于 0.7 的禁令线。
+      为什么样本外还会在:来源是股票共动属性的持续性(R² / synchronicity 的月度持续性很高),不依赖某一段行情;窗口 60–120 日加 EMA,名次在数周内几乎不变,15 bp 成本下留得住。风险:(1) 共动度与市值强相关(大票同步),但这里用分桶标准化的种子检验非线性部分,线性 / 平方 / 立方部分已被尺子去掉;(2) 本批原始读数都是负的,若共动度根本不带溢价,结果就是负,这是个可以被证伪的位。
+      数学检查:无前视,全部只用 t 日收盘及以前的数据;cs_mean(Q) 是当天截面均值,与个股序列同一天对齐;cross_corr 在窗口内序列为常数时分母只剩 EPS=1e-9,分子为 0,得 0 而不是爆点(底层 rolling_pair_reduce);Q 的量级约 1e-3,sqrt(var_x·var_y) 约 1e-6(流动性差的股票约 1e-7),远大于 EPS=1e-9,没有近零分母;cross_regbeta 在市场序列方差小于 EPS 时返回 NaN,而 60–120 日窗口内 var_x≈1e-4;窗口左侧补 NaN,前期用已有天数估计,最长回看 140 日(cross_zscore 的 20+120),scorer 另有 lead-in 行预热,不主导;无 ts_spearman / nt_* 算子。
+    literature:
+      - title: 'The information content of stock markets: why do emerging markets have synchronous stock price movements?'
+        authors: Randall Morck, Bernard Yeung, Wayne Yu
+        year: '2000'
+        treatment: 股票与市场的共动度(R²)低 = 价格里含更多公司特质信息;这里把它当作持续的股票属性,用长窗口、相关系数而不是 R² 的对数几率来读,并且用上四分位分钟收益而不是日收益
+      - title: 'Downside risk'
+        authors: Andrew Ang, Joseph Chen, Yuhang Xing
+        year: '2006'
+        treatment: 下行共动(与市场下跌时的相关)带溢价;这里用下四分位与上四分位分钟收益对市场同一分位数的相关之差来近似不对称共动
+      - title: Honey, I shrunk the sample covariance matrix
+        authors: Olivier Ledoit, Michael Wolf
+        year: '2004'
+        treatment: 把 N×N 成对相关收缩到单因子(市场)目标,用 cross_corr(x, cs_mean(x)) 代替 ts_pearson 的全部两两相关
+    seeds:
+      - 'cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60)'
+      - 'cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 120)'
+      - 'abs_(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60))'
+      - 'cross_ema(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 40)'
+      - 'sub(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 120))'
+      - 'cross_regbeta(cs_mean(day_quantile_q75(Ret)), day_quantile_q75(Ret), 120)'
+      - 'cross_zscore(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 120)'
+      - 'cs_bucket_zscore(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), LogFloatCap)'
+      - 'cs_bucket_zscore(abs_(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60)), ListAge)'
+      - 'sub(cross_corr(day_quantile_q25(Ret), cs_mean(day_quantile_q25(Ret)), 60), cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60))'
+      - 'cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q25(Ret)), 60)'
+      - 'cross_tail_mean_q25(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 120)'
+      - 'cross_stddev(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 120)'
+      - 'cross_ema(ts_pearson(day_quantile_q75(Ret), 20), 30)'
+      - 'cs_bucket_zscore(cross_ema(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 40), LogFloatShares)'
+      - 'cs_bucket_zscore(sub(cross_corr(day_quantile_q25(Ret), cs_mean(day_quantile_q25(Ret)), 60), cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60)), LogFloatCap)'
+  - type: N
+    hypothesis: |-
+      机制:相关度状态(correlation regime)决定「同一个持有特征」的溢价符号,把它写进表达式里。批里 11 条中 10 条的外层含左支 abs_(cs_mean(ts_pearson(day_quantile_q75(Ret), 5))) 或 abs_(cs_scale(...)),它是「全市场当天的平均两两共动度」,对全体股票是同一个数,在逐日截面排序下被整个丢掉(这批里有 5 条整式对每只股票每天都是同一个数,只剩并列次序即股票列序,原始 rank IC 0.010–0.013、换手 0.011–0.014,那是交易所与板块的并列效应,不是信号)。GP 在这批里反复造出这一支,说明「平均相关度」这个量有用武之地,但 sub(常数, x) 的文法用不上它:一个逐日常数只有当它作为权重或开关,去调节两个截面信号的权重或符号,才进得了排序。库里没有这样的表达式:5583 条里 cs_flip_by_state / cs_state_rank 一次都没有出现(W01 的 head 里只有 1 条用过 cs_flip_by_state,而且是用市值差作状态)。
+      理论依据:平均两两相关是有信息的市场状态,Pollet–Wilson(2010)的平均相关预测市场收益,Driessen–Maenhout–Vilkov(2009)有相关性风险溢价;在高相关状态(宏观 / 流动性驱动、压力期),个股收益主要被共同因子决定,与共同因子同步的股票(指数、ETF、国家队持仓,易被机构换手)和脱钩的股票(特质信息、散户情绪)的相对表现与低相关状态(信息驱动、选股时期)不同(Morck–Yeung–Yu 2000:低共动股票的价格里装的是更多特质信息)。所以我把「共动度」这个持有特征乘上「相关度状态」的符号。尺子是逐日残差,对 5 个控制和两个冠军的暴露在每个截面上都被去掉,不能靠翻转控制本身得分,所以被翻转的 y 必须是控制之外的特征:共动度、上下尾不对称、成交量共动度(Chordia–Roll–Subrahmanyam 2000 的流动性共同性,对数 z 分数,无量纲)、上市年限 ListAge(次新股是风险偏好的指标,风险偏好高时跑赢)。
+      状态怎么算(cheap,不用 N² 的 ts_pearson):G1 = div(cross_stddev(cs_mean(Q), 20), cs_mean(cross_stddev(Q, 20))) 是「市场序列波动 / 个股平均波动」,在等相关模型下约等于平均两两相关的平方根(σ_m² ≈ σ̄²(1/N + ρ̄)),等价于隐含相关度指数的做法;G2 = cs_mean(cross_corr(Q, cs_mean(Q), 20)) 是各股与市场的平均相关;G3 就是这批里原来的常数 cs_mean(ts_pearson(Q, 5))(只留一个种子做对照,N² 贵);下尾版(用 Q25)是「下跌时的平均相关」。市场趋势状态用 cross_mean(cs_mean(day_sum(Ret)), 20 / 60)(Cooper–Gutierrez–Hameed 2004 的市场状态)作对照。cs_flip_by_state(y, g) 在 g 的截面均值(这里就是 g 本身)高于它过去 241 天的中位数时取 +rank(y),否则取 -rank(y)(ops_ext.py 里的定义);cs_state_rank(g, 120) 取 g 在过去 120 天内的分位数,作为两个信号的连续权重。
+      种子(共 14 个):(1)–(3) 共动度 corr(Q, cs_mean(Q), 60) 按三个相关度状态翻转;(4) 上下尾共动不对称按 G1 翻转;(5) 自己上涨对市场下跌的相关(逆周期型)按 G1 翻转;(6) 与 (1) 同,状态换成市场 20 日趋势;(7) 下尾平均相关作状态、120 日共动度;(8) 先 EMA 平滑的共动度按 G1 翻转(换手更低);(9) 市值分桶标准化的共动度按 G1 翻转;(10) 成交量共动度按 G1 翻转;(11)(12) 用 cs_state_rank 做连续权重混合两个不同特征(不是翻转;如果与翻转结果相似,说明是状态在起作用而不是权重形状);(13) ListAge 按 G1 翻转(次新股 / 老股的轮动);(14) 状态换成 60 日市场趋势。
+      为什么和已有的不同:与三个 head 比,它们的内容是 ts_pearson(Q, 5) 的共动度本身或 -day_last(Amt) 的流动性,这里用的是「状态 × 特征」的交互;与库比,没有 cs_flip_by_state / cs_state_rank / cross_corr(·, cs_mean(·), d) 的骨架,14 个种子的骨架我都用 skeleton_key 与 5583 条的骨架集核对过,没有重复;与控制比,y 是共动度、尾部不对称、成交量共动度这类相关系数,与流动性 / 波动 / 反转 / 市值的水平无关。
+      为什么样本外还会在:来源是「风险偏好 / 相关度状态」的持续性(平均相关度的月度自相关很高),状态一个月内最多翻几次,翻转之间持有的名次是慢变的(60–120 日窗口 + EMA 的共动度);ruler 的半衰期 20 日 EMA 会把翻转处的换手抹平。风险:(1) 翻转处整本书从顶部十分位换到底部十分位,成本在翻转日集中;若状态在中位数附近来回,换手会很大,这是个可以被证伪的位;(2) 若共动度在两个状态下溢价同号,翻转版会比不翻转差,拆解会直接读出来(cs_flip_by_state 文档里写明了这一点)。
+      数学检查:无前视,状态用到的是 t 日及以前的数据,cs_flip_by_state 的中位数窗口是过去 241 天,cs_state_rank 的分位数窗口是过去 120 天,都是因果的;状态当天缺失(g 全缺)时输出 NaN 而不是静默的低状态;窗口左侧补 NaN,前期的分位数用已有天数估计,scorer 另有 lead-in 行预热,热身期不主导;G1 的分母 cs_mean(cross_stddev(Q, 20)) 是 5000 只股票个股波动的均值,不会近零;cross_corr 的分母只在窗口内序列为常数时是 EPS 的量级,此时分子也为 0,得 0;成交量共动度用 cross_zscore(day_sum(Volume), 60)(不取对数,0 成交量不会产生 -inf);没有 ts_spearman / nt_* 算子。
+    inspired_by: 'B070 批:11 条里 10 条的外层含左支 abs_(cs_mean(ts_pearson(day_quantile_q75(Ret), 5))) 或 abs_(cs_scale(...)),它是对全体股票同一个数的「市场平均共动度」,被逐日截面排序丢掉;5 条整式是常数,只剩股票列序的并列次序(原始 rank IC 0.012,换手 0.011);abs_ 在 abs_(cs_scale(·)) 里贡献 +0.52(必要性),说明共动强度本身有信息。'
+    literature:
+      - title: Average correlation and stock market returns
+        authors: Joshua M. Pollet, Mungo Wilson
+        year: '2010'
+        treatment: 平均相关度是有信息的市场状态;这里把它写成状态变量去调节股票层面的共动度特征
+      - title: 'The price of correlation risk: evidence from equity options'
+        authors: Joost Driessen, Pascal J. Maenhout, Grigory Vilkov
+        year: '2009'
+        treatment: 相关性风险有溢价;状态高低对应相关性风险的高低
+      - title: Commonality in liquidity
+        authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+        year: '2000'
+        treatment: 个股的成交活动与市场整体成交活动的共同变动;这里用 cross_zscore 后的成交量与市场平均的 60 日相关来读
+      - title: Market states and momentum
+        authors: Michael J. Cooper, Roberto C. Gutierrez Jr., Allaudeen Hameed
+        year: '2004'
+        treatment: 同一个截面特征的溢价符号取决于市场状态(涨 / 跌);这里换成相关度状态,并以市场趋势状态作对照
+    seeds:
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), cs_mean(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20)))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), cs_mean(ts_pearson(day_quantile_q75(Ret), 5)))'
+      - 'cs_flip_by_state(sub(cross_corr(day_quantile_q25(Ret), cs_mean(day_quantile_q25(Ret)), 60), cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60)), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q25(Ret)), 60), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), cross_mean(cs_mean(day_sum(Ret)), 20))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 120), cs_mean(cross_corr(day_quantile_q25(Ret), cs_mean(day_quantile_q25(Ret)), 20)))'
+      - 'cs_flip_by_state(cross_ema(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 40), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cs_bucket_zscore(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), LogFloatCap), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cross_corr(cross_zscore(day_sum(Volume), 60), cs_mean(cross_zscore(day_sum(Volume), 60)), 60), div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'add(mul(cs_state_rank(div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))), 120), cs_rank(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60))), mul(sub(1, cs_state_rank(div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))), 120)), cs_rank(sub(cross_corr(day_quantile_q25(Ret), cs_mean(day_quantile_q25(Ret)), 60), cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60)))))'
+      - 'add(mul(cs_state_rank(cs_mean(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20)), 120), cs_rank(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60))), mul(sub(1, cs_state_rank(cs_mean(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20)), 120)), cs_rank(cross_corr(cross_zscore(day_sum(Volume), 60), cs_mean(cross_zscore(day_sum(Volume), 60)), 60))))'
+      - 'cs_flip_by_state(ListAge, div(cross_stddev(cs_mean(day_quantile_q75(Ret)), 20), cs_mean(cross_stddev(day_quantile_q75(Ret), 20))))'
+      - 'cs_flip_by_state(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60), cross_mean(cs_mean(day_sum(Ret)), 60))'
+R:
+  - head: 'sub(abs_(cs_scale(ts_pearson(day_quantile_q75(Ret), 5))), cross_argmax(cs_sum(cross_product(cross_stddev(day_var(High), 60), 60)), 5))'
+    why: |-
+      烂的部件有两个。(1) 右支 cross_argmax(cs_sum(...), 5):cs_sum 把整个截面加成一个逐日标量,cross_argmax 再对这个标量序列取 5 日内的位置,对每只股票是同一个数,逐日排序里不起作用;拆解表里「去掉右支」(knockout)和「只留右支」(sufficiency)都是门槛废品,「只留左支」abs_(cs_scale(ts_pearson(Q, 5))) 是 -2.35,比整个 head 的 -2.43 还好。(2) 窗口 5:5 个观测点估相关系数噪声太大,窗口 2 / 5 / 10 是 -2.15 / -2.43 / -2.02,本批的 R 候选也是窗口 10(+0.41)与窗口 2(+0.28);原始换手 0.32(members.csv)说明成本把分数吃掉了,所以变体沿「更长窗口 + 跨日平滑 + 廉价收缩」走:abs_ 保留(必要性 +0.52);cs_scale 在排序里无作用(去掉后 -0.08),但它给每天的截面除以当天截面和,一旦配上跨日平均就把「当天截面和近零的日子」放大,所以变体一律去掉 cs_scale,只保留 abs_。变体都是把右支整个去掉后的左支:(a) 窗口 10 / 20 + 跨日均值 / EMA;(b) 在市值十分位内标准化;(c) 把 N² 的 ts_pearson 换成对市场均值的相关(单因子收缩),作为同一信号的廉价版。分母:cross_corr 在窗口内序列为常数时得 0,没有近零分母,cross_mean / cross_ema 无分母;热身期最长 60 日。
+    variants:
+      - 'cross_mean(abs_(ts_pearson(day_quantile_q75(Ret), 5)), 60)'
+      - 'cross_ema(abs_(ts_pearson(day_quantile_q75(Ret), 10)), 40)'
+      - 'abs_(ts_pearson(day_quantile_q75(Ret), 10))'
+      - 'cross_mean(abs_(ts_pearson(day_quantile_q75(Ret), 20)), 20)'
+      - 'cs_bucket_zscore(cross_mean(abs_(ts_pearson(day_quantile_q75(Ret), 10)), 60), LogFloatCap)'
+      - 'abs_(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 60))'
+      - 'abs_(cross_ema(cross_corr(day_quantile_q75(Ret), cs_mean(day_quantile_q75(Ret)), 20), 40))'
+  - head: 'sub(abs_(cs_mean(ts_pearson(day_quantile_q75(Ret), 5))), day_last(Amt))'
+    why: |-
+      左支 abs_(cs_mean(...)) 是逐日常数,在排序里不起作用(拆解:去掉左支任何一层都是 -3.83,与整个 head 的 -3.87 相同),所以这个 head 就是 -day_last(Amt):最后一根分钟棒的成交额水平,是流动性 / 规模的代理(已知成交额族与流动性控制要去掉的东西)。依据:拆解表里把 Amt 换成 Volume 好 2.26(-3.87 → -1.61),说明价格 / 规模的尺度是负担;最后一根棒的成交额只在水平上有信息,不是「尾盘行为」。变体把水平去掉:(a) 相对自己 20 日的日均成交额(把「最后一根」变成无量纲);(b) 最后一根成交量相对全天成交量的 40 日均值;(c) 对自己 60 日历史的 z 分数;(d) 在流通股本十分位内标准化。分母:div 的分母是 20 日或 40 日的日成交总量 / 额均值,只在整个窗口停牌时为 0,此时分子也为 0 得 NaN,没有近零爆点;cross_zscore 自带近常数窗口的保护。
+    variants:
+      - 'div(day_last(Amt), cross_mean(day_sum(Amt), 20))'
+      - 'div(cross_mean(day_last(Volume), 40), cross_mean(day_sum(Volume), 40))'
+      - 'cross_zscore(day_last(Volume), 60)'
+      - 'cs_bucket_zscore(cross_mean(day_last(Volume), 20), LogFloatShares)'

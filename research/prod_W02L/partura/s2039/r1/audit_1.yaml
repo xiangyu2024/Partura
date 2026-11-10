@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [2, 8, 16]
+    reasons: '核心 day_autocorr_n1(Close) 是 head 1 的子树, 核心门通过: 核心与 liq / vol / rev / known / size 的 |ρ| 为 0.21 / 0.02 / 0.00 / 0.18 / 0.05, 均 < 0.8; 16 个种子都原样含核心, 外围两两不同 (a15 只比 a1 多一个 ListAge>120 门)。自动划掉 (确定性规则, 同意): 2 (ts_mean 60, 与 head 2 的原始 |ρ| 0.725)、16 (ts_decay_linear 120, 与 head 2 的 0.723)、8 (cross_zscore 120, 与 head 1 的 0.851, 残差 0.28, 实质是 head 1 的自身 z 分数换皮)。剩余 13 个。其余种子与 head 的最大原始 |ρ|: 1 0.65、3 0.63、4 0.69、5 0.63、6 0.63、7 0.44、9 0.68、10 0.28、11 0.10、12 0.34、13 0.69、14 0.69、15 0.66, 多数最像 head 2 (Open 链); 与 head 1 的 |ρ| 在 0.02 到 0.44 之间, 不是 head 1 的换皮。新意给 3 而非 1: 同一统计量 ρ_Close 的慢时间聚合 (半衰期 60 到 120 日的 EMA、241 日均值、120 日 zscore、尾均值差、与收益和成交额的 120 日相关) 在 5583 条库里没有出现 (cross_ema、cross_zscore、cs_winsor、cross_tail_mean、day_flat_ratio 均为 0 次); 但 ρ_Close 的短窗口时间聚合库里已有 10 条 (如 ts_var 10、ts_max 40、cross_quantile_q25 15), 所以新的是慢度与一字板屏蔽, 不是新对象。合理度 4: 无前视 (cross_ 与 ts_ 都是尾随窗口; cross_zscore 含当日但只用当日值); 数值上 |ρ|<1 (day_autocorr 的分母 sqrt(var_t·var_lag+1e-8) 由 Cauchy-Schwarz 保证 |cov| 不超过它), 所以 log(1−ρ+0.0001) 的真数恒正; 一字板日 (day_flat_ratio >= 0.95) 的 ρ 在 var=0 时恰为 0 (已读 dt_day.py 的 day_autocorr 源码), 屏蔽正确; cs_rank 走 common.rank, NaN 保持 NaN, 不踩 nanrank_last 的陷阱。需 PI 核实 (不划掉): a9 的 cross_stddev 对全 NaN 窗口返回 0 而非 NaN (nanstd_last 的 clamp 与零填充), 上市前的股票日会得到有限的 0, 只要 reward 的截面剔除无控制值的股票日就不进书, 请确认。如果它有 alpha, 最可能来自个股走势效率的慢变状态 (机构拆单与算法对零散来回成交的比例) 及其稳定性, 而不是单日读数。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [9, 10]
+    reasons: 'N 位, 15 个种子。新意: 5583 条库里 in_pct、in_logchg、cross_ema、cs_winsor、cross_zscore、day_flat_ratio、day_zero_ratio 都是 0 次; ts_delta 上的 cross_stddev 比 (日度 VR) 0 次; 绝对收益滞后乘积的日均值比 0 次 (只有 day_corr(abs_(in_delay(Ret,1)), Volume) 类 24 条, 是相关不是矩比)。但 1 分钟 VR_k 是 Ret 自相关的多滞后组合 (VR_k − 1 = 2·Σ_{j<k}(1−j/k)·ρ_j), 与 head 2 的原始 |ρ| 为 0.60 到 0.63、残差后 0.63 到 0.69, 与 head 3 的 |ρ| 更低, 所以它是同一个弹跳对象的多尺度读法, 不是新对象; 只有日度 VR (12、13) 与所有 head 的 |ρ| 都 ≤ 0.11, 是真正不同的对象。综合给 3。自动划掉: 无 (槽内原始 |ρ| 最大 0.63, 与控制最大 0.69, 都 < 0.8)。合理度: 1 分钟 bipower 比 (9、10) 划掉, 理由是定义坏掉 (§4): 在 iid 高斯分钟收益、零收益占比为 1−p 的模型下, E|r_t||r_{t−1}| / E[r_t²] 的期望是 (2/π)·p, 即结果由分钟收益非零的占比决定, 不是跳跃占比。我用同样的定义 (乘积均值 / 平方均值) 做了 iid 合成模拟 (scratchpad 中 audit_sim_2039.py), p=1、0.8、0.6、0.4、0.2 时得 0.634、0.505、0.384、0.250、0.119, 与 (2/π)p 吻合; 0.63 的「扩散参照」只在 p=1 成立。day_flat_ratio 的文档写明流动股有 20% 到 50% 的分钟不动, 所以这个偏差是常态。9、10 与流动性控制的原始 |ρ| 为 0.64、0.69 (全槽最高), 与已知族为 0.58、0.62。5 分钟 bipower (11) 有同一偏差但弱得多: 解析上比值为 (2/π)(E√N)²/(5p), N 服从 Bin(5,p), p=0.5 时约 0.59、p=0.2 时约 0.41, 与流动性 |ρ| 0.42, 保留。VR 类 (1 到 8、12、13) 在同一模拟中 VR15 约 0.92 到 0.95 且与 p 无关, 机制成立。b14 (cross_ema 的 ρ_Ret 水平) 与 head 3 原始 |ρ| 0.58, 是 head 3 同一统计量的水平读法而非稳定性读法, 保留。需核实 (不划掉): 仓库里 Ret 的定义只有合成数据的 close/open−1 (synthetic.py:127), 真实 Ret 取自 QMT 的 ret 列 (qmt_ingest.py:60), 定义未在仓库内验证; 若它是 bar 内收益而不是相邻分钟收益, VR 分母 day_var(Ret) 与分子 day_var(in_pct(Close,k)) 的口径不一致, 偏差随弹跳强度变化, 请 PI 确认, 或把分母改为 day_var(in_pct(Close,1))。b3 的 |VR−1| 不分方向, 纯多头 top decile 只买偏离最大的一端, 说不清哪一端有 alpha, 放行并提示。b7 的 cross_stddev 有与 a9 相同的上市前零值问题 (请确认); b12、b13 有 ListAge 门, 上市前为 NaN, 不受影响。241 日窗口在样本前一年是部分窗口 (热身), 对 train 影响有限, 不扣分。如果它有 alpha, 最可能来自日内价格噪声占比的多尺度结构 (弹跳与持续冲击的比例及其期限结构, 即机构拆单与信息融入速度的差异), 纯多头只能吃到其中一端。'
+R:
+  - head: 'pow_05(day_autocorr_n1(Close))'
+    soundness: 4
+    reasons: '四个变体 (cross_ema 20 / 60 / 120、ts_mean 241) 都是同一 ρ_Close 的慢聚合, 数学上正确, 无前视、无数值问题。与 head 1 的原始 |ρ| 为 0.45、0.40、0.38、0.37, 与 head 2 为 0.77、0.67、0.62、0.60; v1 与 head 2 的 0.77 超过收录条件 (与库里所有 head 的 |ρ| < 0.7), 只能作为替换候选。这组保留了一字板 ρ=0 的伪影 (没有 day_flat_ratio 屏蔽), 但这一伪影只占约 1% 到 3% 的股日, 不主导排序, 不扣分。合理度 4。'
+  - head: 'ts_min(ts_min(inv(ts_std(pow_05(day_autocorr_n1(Ret)), 10)), 10), 10)'
+    soundness: 3
+    reasons: '六个变体的结构 (去 pow_05、拉长窗口) 数学上合理, 无前视; inv(ts_std) 在标准差为 0 时得 inf, metrics.rank_rows 把 inf 当缺失剔除, 只是覆盖问题, 不是进书问题。但分钟收益 Ret 直接用了 ρ 的 1e-8 地板 (day_autocorr 的分母 sqrt(var·var+1e-8)): 按 241 个分钟的离差平方和算, 分钟波动约 8e-4 (日波动约 1.2% 以下) 时 ρ 被压到 0.84 倍, 5e-4 时约 0.5 倍 (我用同一公式复核了 8e-4 处的 0.84); 按日波动 2% 推算一般分钟波动约 1.3e-3, 压缩集中在低波动一侧。这是有界、可量化的偏差 (不是除以近零), 不构成数学问题, 但变体 1、2、3、4、6 都保留了这个地板, 分数受其影响; 只有变体 5 (mul(Ret,100)) 去掉了, 应作为对照读。合理度 3。'
+  - head: 'ts_min(inv(ts_std(pow_05(day_autocorr_n1(Open)), 10)), 10)'
+    soundness: 4
+    reasons: 'ρ_Open 是价格水平的 ρ, 离差平方和远大于 1e-8, 地板无影响 (同 Close)。inv(ts_std) 的覆盖问题同 R2, 不构成进书问题。变体 3 ts_min(ts_std(pow_05(ρ_Open),20),20) 去掉 inv 后数值越大越不稳定, 与 head 2 的稳定性读法符号相反 (拆解表里它用的方向是 −1), 写计划时必须写明方向, 否则按 head 2 的 +1 评估时测的不是原意; 这是规格问题, 不是数学问题。变体 1、2 无问题。与 head 2 的原始 |ρ| 为 0.75、0.81、0.74 (变体 2 超过 0.7, 若分数好 0.1 以上可作替换候选)。合理度 4。'
+summary: '2039 第 1 轮: 槽 a (E, 核心 day_autocorr_n1(Close)) 新意 3 / 合理度 4, 划掉 2、8、16, 剩 13 个, 通过; 槽 b (N, 多尺度方差比与跳跃占比) 新意 3 / 合理度 4, 划掉 9、10 (1 分钟 bipower 在模型下约为 (2/π)·p, 读的是成交活跃度而非跳跃), 剩 13 个, 通过; R 三组合理度 4 / 3 / 4 (R2 保留 1e-8 地板, 变体 5 作对照)。'

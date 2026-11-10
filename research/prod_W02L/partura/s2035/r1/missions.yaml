@@ -1,0 +1,105 @@
+seed: 2035
+round: 1
+slots:
+- type: N
+  hypothesis: |-
+    机制:一年期「净分红」= 现金分红 − 股本扩张,一个公司行为变量。它读的是价格空间里的一个楔子:库里没有任何一条表达式把「后复权价」与「原始价」的差读出来。
+
+    【B103 批里的现象(数字都来自本轮 loc)】批里 18 条全是挖掘库的 day_sum(Volume) / day_sum(Amt) 水平类,三个素材 head 是 −1.34 / −1.52 / −1.67(train −1.19 / −1.24 / −1.45,valid −1.34 / −1.52 / −1.67)。方向与半衰期靠 train 定,两段一样差,形状是「毛超额约为 0、亏的是换手成本」(推断,没有毛收益数)。拆解里唯一有信息的梯度:把 Volume 换成 Amt,inv(day_sum(Volume)) 从 −1.40(与已知族 ρ 0.67)掉到 −3.47(ρ 0.89),第三个 head 从 −1.73(ρ 0.70)掉到 −4.10(ρ 0.92);窗口 10 到 5 / 20、去掉 ts_max 各层都只动 0.3 以内。富集表里含 day_sum(Amt) 的 5 个候选均值 −2.96,不含的 −1.51。读法:5 个控制与已知族都是成交额口径,Amt 版本被吃掉;Volume 是原始股数,比 Amt 多出来的只有价格空间(Amt = Volume × 原始价)。所以这一批指出的方向不是再改写量的水平,而是价格空间本身,并且是它里面慢、连续、有文献的那一块。
+
+    【新变量】生产 store 里 Open / High / Low / Close / Vwap 是后复权价,Amt 与 Volume 是原始成交额与股数(AlphaCube docs/design.md §11.5、docs/可交易回测.md §3 第 1 条:Vwap ÷ (Amt ÷ Volume) 在同一只票同一天的每个分钟是同一个数,跨股票从 2.5 到 113)。这个数就是复权因子 AF(后复权价 ÷ 原始价)。除权除息日 AF 跳升:现金分红 D 时 ΔlogAF = −log(1 − D ÷ 前收盘) ≈ 分红收益率;送转 k 倍时 ΔlogAF = log k,但总股本同时升 k 倍。所以 logAF 的增量之和 = 现金分红收益率 + log(送转倍数);再减去总股本的对数增量(送转抵消;定向增发、配股、转债转股为负;回购注销为正),得到「净分红」= 现金分红收益率 − 总股本增长。这是 Boudoukh 等(2007)的净分红收益率(分红 + 回购 − 增发)在只用价量与日频字段时的可观测版本,也是发行异象(Pontiff-Woodford 2008、Daniel-Titman 2006)的反面。
+
+    【算子怎样实现它】两种互相独立的读法,两个读法给出的结果不一致就说明数据有问题:
+    (1) 价量口径 Zv = sub(log(day_last(Close)), LogTotalCap)。推导:log Close_adj = log AF + log P_raw,LogTotalCap = log(P_raw × 总股本 TS),相减得 log AF − log TS。
+    (2) 分钟口径 Lm = log(day_median(div(Vwap, div(Amt, Volume)))) = log AF(分钟比值逐分钟恒定,日中位数对 Vwap 缺失的分钟和零成交分钟稳健);log TS = LogFloatShares + (LogTotalCap − LogFloatCap)(同一天同一价格相减,价格抵消),Za = Lm − log TS。这里有意拿 Amt ÷ Volume 去比后复权 Vwap:design.md §11.5 禁止的是把 Amt ÷ Volume 当价格用,这里正是借它与复权价的差读出 AF。
+    最后 cross_sum(cross_delta(Z, 1), 241) = 一年窗口内净分红增量之和(等于 Z_t − Z_{t−241})。写成日增量之和而不是 cross_delta(Z, 241),是因为 cross_sum 用部分窗口,头 241 行不会变 NaN,覆盖率 ≥ 90% 的闸门不被窗口前缀吃掉。
+
+    【种子分工】1 Zv 一年窗口(基线);2 Za(同一个量的分钟口径,与 1 应当几乎同分);3 Zv 两年窗口(更稳的派息政策);4 用 LogFloatCap(分红 − 流通股扩张,把限售股解禁的供给也算进去);5 只有 AF(现金分红 + 送转,不扣股本):对照,看送转污染;6 端点做 5 日平均(防价量日期错位的端点噪声);7 在流通市值十分位内标准化(与同体量的比);8 cross_min 120 日(最近半年里最差的一年期净分红,偏好稳定派息者);9 AF 增量 − 2 × 总股本增量(把稀释罚得更重);10 把 |日增量| ≥ 0.15 的跳变置 0,只留现金分红量级的跳变(防股本数据更新滞后于 AF 造成的假尖峰);11 当前一年期净分红 − 过去两年平均(派息提高 / 初次派息)。
+
+    【与库的差别】5583 条库表达式里日频字段叶子(LogFloatCap / LogTotalCap / LogFloatShares / LimitWidth / BoardCode / ListAge)出现 0 次,也没有一条做 Vwap ÷ (Amt ÷ Volume);全部种子的算子骨架逐个对照过 members.csv 的 5583 个骨架,没有重复(骨架里带日频字段或复权楔子,Zv 的骨架是 cross_sum(cross_delta(sub(log(day_last(F)), DF)))),也没有一个种子用 ts_spearman 与 nt_*。与 3 个 head(成交量水平)机制上无关;与 5 个控制(流动性、波动、20 日反转、成交额离散度、流通市值)只有间接关系(大市值、低波动股分红多),新尺子已把对它们的线性、U 形、S 形暴露去掉。
+
+    【为什么样本外还会在】(i) 净分红 / 股本增发的溢价是跨国、跨期都被记录的结果,渠道是融资约束、管理层择时与现金回流;A 股 2018–2025 年监管持续鼓励分红,分红是缓变的公司政策,一年内名次几乎不动。(ii) 信号只在除权日跳变,日更换手极低,15 bp 吃得下;这正是本批所有 head(成交股数每天一变)的反面。(iii) 没有任何参数在样本内调过(窗口取一年 / 两年 / 半年)。
+
+    【事先写下的风险】(a) 股本更新滞后于 AF 时,高送转股会出现几周的假尖峰(种子 10 专门防);(b) 分红率与低波动、大市值共线,控制去掉之后剩余的 alpha 可能不够;(c) A 股红利风格集中在 2022–2024 年,valid 可能比 train 有利,所以 score 取较差的 train;(d) 非派息股占 35–45%,浮点噪声排在下端,但头部十分位是有量级差的连续值,不受影响;(e) 价量口径若与原始收盘价有一天错位,端点噪声约 ±1%(种子 6 防)。
+
+    【数学检查】无前视:AF 只含 t 日及以前的除权事件(后复权),并且无论前复权还是后复权,窗口内的差分只含窗口内的事件;市值与股数是当日值;t 日收盘后算出,t+1 交易。数值:log 的输入都是正数(后复权价、市值、AF);Volume = 0 的分钟比值为 NaN 或 inf,被日中位数忽略;非事件日的增量是 0(上下 1e-7 的浮点噪声),所以面板不是常数;窗口全是部分窗口,前几行不是 NaN。
+  inspired_by: B103 批:Volume 口径远好于 Amt 口径(inv(day_sum(Volume)) −1.40 / ρ_known 0.67 对 inv(day_sum(Amt)) −3.47 / 0.89;第三个 head −1.73 / 0.70 对 −4.10 / 0.92);富集表含 day_sum(Amt) 的 5 个候选均值 −2.96 对 −1.51。股数口径多出来的是价格空间,这里读价格空间里的复权因子楔子。
+  seeds:
+  - cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241)
+  - cross_sum(cross_delta(sub(log(day_median(div(Vwap, div(Amt, Volume)))), add(LogFloatShares, sub(LogTotalCap, LogFloatCap))), 1), 241)
+  - cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 482)
+  - cross_sum(cross_delta(sub(log(day_last(Close)), LogFloatCap), 1), 241)
+  - cross_sum(cross_delta(log(day_median(div(Vwap, div(Amt, Volume)))), 1), 241)
+  - cross_sum(cross_delta(cross_mean(sub(log(day_last(Close)), LogTotalCap), 5), 1), 241)
+  - cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241), LogFloatCap)
+  - cross_min(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241), 120)
+  - sub(cross_sum(cross_delta(log(day_median(div(Vwap, div(Amt, Volume)))), 1), 241), mul(2.0, cross_sum(cross_delta(add(LogFloatShares, sub(LogTotalCap, LogFloatCap)), 1), 241)))
+  - cross_sum(select_where(is_lt(abs_(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1)), 0.15), cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 0.0), 241)
+  - sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241), cross_mean(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 241), 482))
+  literature:
+  - title: 'On the importance of measuring payout yield: implications for empirical asset pricing'
+    authors: Boudoukh, Michaely, Richardson, Roberts
+    year: '2007'
+    treatment: 净分红收益率(分红 + 回购 − 增发)预测收益;这里用复权因子楔子 logAF 的增量减总股本的对数增量近似,一年窗口
+  - title: Share issuance and cross-sectional returns
+    authors: Pontiff, Woodford
+    year: '2008'
+    treatment: 股本增发预测低收益;这里把总股本增长作为楔子的减项,种子 9 加重稀释的权重
+  - title: Market reactions to tangible and intangible information
+    authors: Daniel, Titman
+    year: '2006'
+    treatment: 复合发行量(股本扩张去掉分红 / 送转后的部分)预测收益;种子 4 用流通股口径把解禁也算进去
+- type: N
+  hypothesis: |-
+    机制:分红日历(预期除权窗口)。Hartzmark 与 Solomon(2013,JFE,The dividend month premium)记录:一只股票在「按它往年派息月份预测会派息」的月份里平均超额收益显著为正,原因是追求股息的投资者在派息之前集中买入形成价格压力,而不是对股息本身的补偿。A 股派息按年度、时点高度规律(年报披露、股东大会、预案公告,除权除息以 6–8 月为主),一年前同一窗口里有没有除权跳变是对未来一两个月会不会除权的强预测;民间说的「抢权」(除权日之前的拉升)是同一机制。
+
+    【与 B103 批的关系】本批 head 的信息只有「Volume 口径好于 Amt 口径」:股数比成交额多出来的是价格空间。这一位读的是价格空间里复权因子楔子的**时点**,同一个楔子 slot 1 读的是**水平**(一年净分红收益率);两个机制不同(水平 = 派息政策的风险溢价与质量;时点 = 预期除权前的价格压力),放在两个位上可以分开读出哪一个有用。批里的数字:三个素材 head −1.34 / −1.52 / −1.67,Volume 换 Amt 掉到 −3.47 / −4.10(ρ_known 0.89 / 0.92)。
+
+    【算子怎样实现它】净分红日增量 Iv = cross_delta(sub(log(day_last(Close)), LogTotalCap), 1):log Close_adj = log AF + log P_raw,LogTotalCap = log(P_raw × 总股本),相减是 log AF − log 总股本,所以 Iv 在除权日 = 现金分红收益率(送转的 AF 与股本跳变抵消,增发为负),其余日子 0(± 1e-7 浮点噪声)。AF 是后复权价 ÷ 原始价,Vwap ÷ (Amt ÷ Volume) 在同一只票同一天每个分钟恒定(AlphaCube docs/design.md §11.5、docs/可交易回测.md §3)。窗口差 cross_sum(Iv, 242) − cross_sum(Iv, 202) 恰是 (t−242, t−202],即一年前同一时点往后 40 个交易日里的净分红,预测的是 (t, t+40] 内的除权。只用 202 日以前的事件;cross_sum 用部分窗口,头 202 行退化为全 0 并列(约 10% 的天数)而不是 NaN,所以覆盖率闸门不被前缀吃掉。
+    种子:1 / 2 / 3 预测窗口 40 / 60 / 20 日,加 0.05 × 一年期净分红做并列拆分(没有它,没有预期除权的股票的排序由 1e-7 的浮点噪声决定,每天重排,换手爆炸;0.05 × 一年期净分红 ≥ 1e-4,压得过噪声);4 不加拆分项(对照:纯时点);5 减去最近 40 日已发生的除权(买即将除权的,避开刚除权的,把除权后的价格压力与填权问题分开);6 分钟口径的 AF 楔子(Za = log AF − log 总股本,与价量口径应一致);7 只用 AF(含送转,检验「抢权」里高送转惯性:有些公司年年送转);8 在流通市值十分位内标准化;9 预测窗口的秩与一年期净分红的秩各占一半(不靠噪声拆并列)。
+
+    【与库的差别】5583 条库表达式里日频字段叶子出现 0 次;「同一序列两个窗口长度的差」(sub(cross_sum(x, 242), cross_sum(x, 202)))这个骨架没有出现,全部种子的算子骨架逐个对照过 members.csv 的 5583 个骨架,没有重复;没有种子用 ts_spearman 与 nt_*。与 3 个 head(成交股数水平)无关;与 5 个控制(流动性、波动、20 日反转、成交额离散度、流通市值)没有机制关系:除权时点由公司的派息政策与股东大会日程决定,不由流动性或波动决定。
+
+    【为什么样本外还会在】日历规律来自制度而不是行情:年报披露截止日(4 月 30 日)、股东大会、除权在预案通过后两个月内;派息公司把派息时点当政策,惯性强(Hartzmark–Solomon 同样发现用往年预测有效);价格压力机制是行为性的,不依赖某段行情或风格;没有任何参数在样本内调过(窗口 20 / 40 / 60 日只是预测视野,一年 = 242 / 202 是日历决定的)。
+
+    【事先写下的风险】(a) 换手:预测窗口天天滑动,即将除权的集合每月更替约 1/6 到 1/3,换手比 slot 1 高得多,15 bp 可能吃掉毛超额,这是最可能的失败方式;(b) 若抢权发生在预案公告(3–4 月)而不是除权之前,窗口会错位;(c) 派息集中在 6–8 月,其余月份里「预测除权」的名单只有约 10% 的股票,头部十分位里其余部分靠 0.05 项拆开的是一年期派息股;(d) 同 slot 1 的股本更新滞后;一年按 242 个交易日,年间交易日数差 ±3,对 40 日窗口影响小。
+
+    【数学检查】无前视:只用 t−202 日以前的增量(更早的事件);t 日收盘后算出,t+1 交易。数值:log 的输入都是正数(后复权价、总市值);没有除法;窗口差 ≥ 20 日;非事件日增量 0,面板不是常数(一年期派息股的面板有量级差)。
+  inspired_by: B103 批:Volume 口径远好于 Amt 口径(−1.40 / ρ_known 0.67 对 −3.47 / 0.89),差的是价格空间;这里读价格空间里的复权因子楔子的时点(slot 1 读水平)。
+  seeds:
+  - add(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 202)), mul(0.05, cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242)))
+  - add(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 182)), mul(0.05, cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242)))
+  - add(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 222)), mul(0.05, cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242)))
+  - sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 202))
+  - sub(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 202)), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 40))
+  - sub(cross_sum(cross_delta(sub(log(day_median(div(Vwap, div(Amt, Volume)))), add(LogFloatShares, sub(LogTotalCap, LogFloatCap))), 1), 242), cross_sum(cross_delta(sub(log(day_median(div(Vwap, div(Amt, Volume)))), add(LogFloatShares, sub(LogTotalCap, LogFloatCap))), 1), 202))
+  - add(sub(cross_sum(cross_delta(log(day_median(div(Vwap, div(Amt, Volume)))), 1), 242), cross_sum(cross_delta(log(day_median(div(Vwap, div(Amt, Volume)))), 1), 202)), mul(0.05, cross_sum(cross_delta(log(day_median(div(Vwap, div(Amt, Volume)))), 1), 242)))
+  - cs_bucket_zscore(add(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 202)), mul(0.05, cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242))), LogFloatCap)
+  - add(cs_rank(sub(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242), cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 202))), cs_rank(cross_sum(cross_delta(sub(log(day_last(Close)), LogTotalCap), 1), 242)))
+  literature:
+  - title: The dividend month premium
+    authors: Samuel M. Hartzmark, David H. Solomon
+    year: '2013'
+    treatment: 预期派息月份的超额收益;这里用一年前同一窗口里的净分红(窗口差 cross_sum)预测未来 20 / 40 / 60 日的除权
+R:
+- head: inv(day_sum(Volume))
+  why: 毛超额约为 0:方向与半衰期在 train 上选出,train −1.19 / valid −1.34 两段一样差,亏在半衰期 5 的换手。拆解的证据:(1) Volume 换 Amt 掉到 −3.47(ρ_known 0.89),被控制吃掉的是 Amt 口径的水平,留下的只有价格空间(股数 = 成交额 ÷ 原始价);(2) 窗口、去 ts_max 各层都只动 0.3 以内,没有结构。烂部件 = 每天一变的成交股数水平(噪声)和里面仍带的成交额水平。变体:1、2 慢化成 20 / 60 日均值;3 到 5 显式去掉成交额水平,只留股数口径多出来的价格空间 cs_regres(log Volume, log Amt) 并 20 / 120 日平滑;6 股数换手率(log Volume − LogFloatShares)的 60 日均值;7 在成交额十分位内标准化;8 log(Volume ÷ Amt) = −log 原始价的 60 日均值(名义价位)。
+  variants:
+  - cross_mean(inv(day_sum(Volume)), 20)
+  - cross_mean(inv(day_sum(Volume)), 60)
+  - cs_regres(log(day_sum(Volume)), log(day_sum(Amt)))
+  - cross_mean(cs_regres(log(day_sum(Volume)), log(day_sum(Amt))), 20)
+  - cross_mean(cs_regres(log(day_sum(Volume)), log(day_sum(Amt))), 120)
+  - cross_mean(sub(log(day_sum(Volume)), LogFloatShares), 60)
+  - cs_bucket_zscore(cross_mean(inv(day_sum(Volume)), 20), cross_mean(log(day_sum(Amt)), 20))
+  - cross_mean(sub(log(day_sum(Volume)), log(day_sum(Amt))), 60)
+- head: inv(ts_max(inv(day_sum(Volume)), 10))
+  why: = 10 日最低成交股数(−1.67,三个里最差)。拆解:去掉 ts_max 变成 inv(inv(day_sum(Volume)))(−1.40)反而好 0.27,去掉里层 inv(变成 inv(ts_max(day_sum(Volume), 10)))(−1.43)好 0.24,窗口 5 / 20 不变(−1.70 / −1.77)。烂部件 = 10 日极值:极值保留当天噪声。变体:对极值做 20 日平滑;用价格空间残差 cs_regres(log Volume, log Amt) 取 10 日最小再 20 日平滑。
+  variants:
+  - cross_mean(inv(ts_max(inv(day_sum(Volume)), 10)), 20)
+  - cross_mean(ts_min(cs_regres(log(day_sum(Volume)), log(day_sum(Amt))), 10), 20)
+- head: ts_max(ts_max(inv(inv(day_sum(Volume))), 10), 10)
+  why: inv(inv(x)) = x,所以这是 19 日最大成交股数(方向 −1,−1.52);拆解:换成最小(去一个 inv)−1.79 更差,换 Amt 后 train −2.25 / valid −0.87 且与已知族 ρ −0.95。烂部件 = 绝对股数水平(与控制共线,峰值本身并不差)。变体:峰值相对自己 120 日均量(去水平),以及对数峰值的 120 日 z 分数。
+  variants:
+  - div(ts_max(day_sum(Volume), 20), cross_mean(day_sum(Volume), 120))
+  - cross_zscore(log(ts_max(day_sum(Volume), 20)), 120)

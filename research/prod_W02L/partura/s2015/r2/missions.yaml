@@ -1,0 +1,115 @@
+seed: 2015
+round: 2
+slots:
+- type: E
+  core: sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60))
+  hypothesis: '机制:第 1 轮 N 位的 70 次评估里,只有一条在新尺子(去掉 5 个控制和两个冠军)下 train 与 valid 同时为正:核心 A = sub(cross_semistd_neg(Q, 60), cross_semistd_pos(Q, 60)),Q = day_quantile_q25(Amt)(安静分钟的成交额)。A 的读数是 train +0.28 / valid +0.05,方向 −1(多头买 A 小的一端 = 上行半标准差大于下行半标准差的票),半衰期 5;它与 5 个控制的原始 |ρ| 只有 liq 0.15 / vol 0.22 / rev 0.15 / known 0.18 / size 0.01,与 3 个 head 的原始 |ρ| 0.10、残差 0.04。所以它不是水平(neg 单独与 liq 0.54、known 0.48、size 0.42 相关,是水平的代理),也不是离散度(上一轮 E 位的两层 cross_stddev 深挖最好 −0.47,没有一条为正),而是「日度对数变化的偏度」:安静分钟的成交额在 60 天里是上跳式(参与一次性涌入、慢慢回落,A < 0)还是下跳式(参与断崖式撤出、慢慢爬回,A > 0)。同批里把规模除掉的兄弟 neg / (neg + pos) 是 −0.51(train +0.05),说明承重的是「差」,并且带着规模。
+
+
+    这一位的赌注:A 里有真信号,但 60 日窗口里只有少数几次跳,估计噪声大,valid 只有 +0.05(2023 年以后更弱),所以外围要回答五个问题。(a) 降噪:同一个潜变量「参与的跳跃偏度」可以在分钟成交额分布的不同位置读到,把中位数(种子 1)、q75 放量端(种子 2)、Volume 口径(种子 4)与 A 相加,是三个相关但噪声不完全相同的估计量取平均。(b) 承重的是什么:种子 3 = A − A(q75) 是「薄端的跳跃偏度减放量端的」,即广泛参与对少数分钟事件;种子 5 = A − A(Volume 的 q25),Amt 的对数变化 ≈ Volume 的对数变化 + 价格的对数变化,所以差读的是价格通道。两条的 train / valid 谁正,直接告诉我们 A 是参与还是价格。(c) 期限:种子 6 / 7 加 20 日与 120 日窗口版本,种子 8 加上前一个不重叠的 60 日窗口(共 120 日有效样本),种子 9 取 A 自己 60 日的变化(偏度正在改善还是恶化)。(d) 规模:种子 10 = A × (neg + pos) = neg² − pos²,半方差之差,给大跳更多权重,是上一轮失败的比率版的反面。(e) 桶内与状态:种子 11 / 12 在流动性(cross_mean(day_sum(Amt), 30))与流通市值十分位内标准化 / 取秩,每个桶里分布对齐,十分位书在各桶持仓相同,比线性残差更彻底;种子 13 乘上自身近 20 日涨跌的符号(参与上跳伴随上涨 = 追涨式注意力,伴随下跌 = 恐慌式抛售,若两者后续相反,A 的符号应随之翻转,Llorente 等 2002 的「成交量–收益」动态关系的写法);种子 14 用 cs_flip_by_state 按全市场成交额的状态翻转 A(热市买上跳、冷市反过来),如果 A 与状态无关这一条会明显比 A 差,这本身就是检验。
+
+
+    算子怎样实现:cross_semistd_neg / pos(x, d) 是 x 日度对数变化 log(x[t] / x[t−1]) 的下行 / 上行半标准差,sqrt(mean(min(g, 0)²)) 与 sqrt(mean(max(g, 0)²)),只用 x > 0 且前一日 > 0 的日子,至少 3 天;day_quantile_q25 / day_median / day_quantile_q75 是当天 241 根分钟成交额的分位。每个种子都原样含核心 A;外围全部是「怎么降噪 / 怎么拆 / 怎么标准化」,快照里含 A 的候选共 4 个(A 自己加 3 个 N 位 GP 的变异,例如把 A 嵌进 cs_first_low20 再套 cross_autocorr_s1 / cross_product 的那条),这些外围一个也没用。
+
+
+    为什么和库里的不同:两个库的 5583 条表达式里没有任何 cross_semistd_*(0 条)、没有 cs_bucket_*、没有 cs_flip_by_state、没有对数变化(cross_delta(log(·)))的写法,骨架都是新的;与 3 个 head 的相关度应当极低(A 对 head 的原始 |ρ| 0.10)。与已知族、流动性、市值的相关度也低(A 本身 ≤ 0.22)。
+
+
+    为什么样本外还会在:来源是「参与上跳的偏度」,一个无量纲的形状量,不乘水平;窗口 60 日、半衰期 5,日换手低,15 bp 成本付得起。文献两个方向都有:Gervais 等 2001 发现放量日之后的收益为正(可见度 / 注意力假说),Barber–Odean 2008 说注意力事件推动散户净买入、之后有反转;A 在 train 与 valid 的方向属于前者。风险:后者在小票里更强,valid 的 +0.05 说明这一读数很薄,外围若不能把它抬到 0.5 以上,结论就是「参与的跳跃偏度有一点点信号,不够」。
+
+
+    数学检查:无前视,所有窗口止于 t 日,t+1 才交易。Q 在极薄的票上可为 0,这些日子被半标准差跳过(不是填充),有效日少于 3 天时 NaN,是窄缺失;所有 sub / add / mul 都没有除以近零的量;种子 8 的 cross_delay 与种子 9 的 cross_delta 在最初 60 日为 NaN,热身期只有 2018 年头几个月;sign(cross_sum(day_sum(Ret), 20)) 只取 −1 / 0 / +1,cross_sum 把缺失日记为 0 是对收益增量的正确做法;种子 14 的状态是全市场同一个数,按 t 日及以前的 241 日中位数算,不含未来;cs_bucket_* 并列按代码顺序打破(已知行为,带板块信息)。没有用 ts_rank / cross_rank / in_rank_rolling,所以 nanrank_last 的陷阱不适用。'
+  seeds:
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_median(Amt), 60), cross_semistd_pos(day_median(Amt), 60)))
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q75(Amt), 60), cross_semistd_pos(day_quantile_q75(Amt), 60)))
+  - sub(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q75(Amt), 60), cross_semistd_pos(day_quantile_q75(Amt), 60)))
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q25(Volume), 60), cross_semistd_pos(day_quantile_q25(Volume), 60)))
+  - sub(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q25(Volume), 60), cross_semistd_pos(day_quantile_q25(Volume), 60)))
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q25(Amt), 20), cross_semistd_pos(day_quantile_q25(Amt), 20)))
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q25(Amt), 120), cross_semistd_pos(day_quantile_q25(Amt), 120)))
+  - add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), cross_delay(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), 60))
+  - cross_delta(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), 60)
+  - mul(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), add(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)))
+  - cs_bucket_zscore(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_rank(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), LogFloatCap)
+  - mul(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sign(cross_sum(day_sum(Ret), 20)))
+  - cs_flip_by_state(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), day_sum(Amt))
+  literature:
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常放量之后的收益为正(可见度 / 注意力):这里把「放量」换成安静分钟成交额的上跳偏度,用 A 的符号读它,多个分位 / 窗口取平均降噪
+  - title: 'All That Glitters: The Effect of Attention and News on the Buying Behavior of Individual and Institutional Investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 注意力事件推动散户净买入、随后反转:对立假说,种子 13 / 14 用自身涨跌方向与市场成交状态检验 A 是否随之翻转
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 成交量与收益的跨期关系取决于对冲交易还是信息交易(随价格方向与信息不对称而变):种子 13 把 A 乘以自身近 20 日涨跌的符号
+- type: N
+  hypothesis: '机制:上一轮 N 位给出的唯一线索是「变化的形状」:Q 的日度对数变化的下行 / 上行半标准差之差(核心 A)在新尺子下 train +0.28 / valid +0.05,而同一批里的水平(neg 单独与 liq 0.54)、离散度(cross_stddev 两层,最好 −0.47)和相关 / 自相关(−0.5 以下)都没有。这一位把这个「变化的形状」透镜用到别的通道上,并加一个第二块想法「参与广度」。两块都是无量纲的,不乘水平。
+
+
+    第一块,换通道。不同的活动序列在「跳」的时候含义不同:(a) 总量通道:day_sum(Amt) / day_sum(Volume)(整天的成交,含放量分钟,事件驱动)与 day_max(Amt)(当天最大的一根分钟成交额,单笔大单 / 新闻)的上跳偏度;(b) 价格通道:day_std(Ret) 的波动跳升对回落的不对称(波动聚集与杠杆效应的写法,和波动控制的差别是它不含水平);(c) 形状通道:day_gini(Amt) 成交集中度、day_centroid(Amt) 成交重心(0 = 开盘,1 = 收盘)在日度上的跳跃偏度:参与者构成切换(机构拆单 VWAP 对散户尾盘脉冲)时,这两个量会成跳;(d) 通道之间的差:Q 的偏度减波动的偏度(种子 7)、减总量的偏度(种子 8),分别扣掉「价格在跳」和「事件在跳」,留下「安静时段的广泛参与在跳」。
+
+
+    第二块,参与广度。同一只股票放量端(q75)的增长是事件(新闻 / 涨停)、薄端(q25)的增长是广泛参与(持续的资金流入 / 做市商与机构进场),两者对后续收益的含义可能不同:种子 9 / 10 是薄端与总量的「近 20 日均值对近 120 日均值」的对数比(参与趋势),种子 11 是薄端的增长减放量端的增长(增长是否集中在事件上);种子 12 / 13 / 14 是日度对数变化的 60 日相关:薄端对总量、薄端对放量端,以及两者之差,相关高 = 跳同时出现在整个分布上(广泛参与),相关低 = 只有少数分钟在跳(事件)。
+
+
+    算子怎样实现:cross_semistd_neg / pos(x, d) 对正值序列的日度对数变化取下 / 上半标准差(x > 0 且前一日 > 0,至少 3 天),sub 取差;增长 = log(cross_mean(x, 20)) − log(cross_mean(x, 120));cross_corr(cross_delta(log(x), 1), cross_delta(log(y), 1), 60) 是两个对数变化序列的 60 日 Pearson 相关;这些通道全部来自 day_* 算子,当天一个数。
+
+
+    为什么和库里的不同:两个库的 5583 条表达式里 cross_semistd_* 出现 0 次,cross_delta(log(·)) 出现 0 次,day_gini(Amt)、day_centroid(Amt) 出现 0 次(它们是 Partura 后加的算子;库里含 day_max(Amt) 的 20 条都是取值、幂变换、ts_ 平滑或回归,没有一条取对数变化的形状);「对数增长之差」、「对数变化的 60 日相关」这些写法也都不在库里;所以骨架全是新的。与 3 个 head 的相关度:无量纲、不含水平,预期原始 |ρ| ≤ 0.3;与 5 个控制:偏度与相关把水平差掉了,预期 ≤ 0.3,风险最大的是种子 3(day_std(Ret) 的偏度,可能与 vol 控制的残差相关)和种子 10(总量增长,可能与 liq 有关)。
+
+
+    为什么样本外还会在:每一条都有一个行为 / 微观结构上的机制,而不是对某段行情的拟合:参与的跳跃偏度 = 注意力与信息到达的节奏(Hong–Stein 1999 的信息渐进扩散:新闻先在一部分人里传,成交慢慢扩散,上跳偏度大 = 一次性涌入再回落;下跳偏度大 = 参与断崖),广度 = 参与者构成(Llorente 等 2002:成交量与收益的关系取决于是对冲交易还是信息交易)。窗口 20 到 120 日,半衰期的选择交给奖励,换手低,15 bp 付得起。风险:偏度在 60 日窗口里估计噪声大,总量通道可能被冠军(Amt 族)吃掉;如果这一位一个正的也不出,结论是「Q 的偏度那一点点信号不能推广到别的通道」。
+
+
+    数学检查:无前视,窗口都止于 t 日。半标准差要求 x > 0 且前一日 > 0,day_std(Ret) 在停牌日为 0 的日子被跳过,不是填充;day_gini 与 day_centroid 在当天成交为 0 时 NaN;log(cross_mean(·, 20)) 在整窗为 0 时 NaN(|x| ≤ 1e-9 返回 NaN),是窄缺失;cross_corr 有界在 [−1, 1],有效配对少时会放大(已知行为,按小样本提醒,不是定义坏掉);没有除以近零的量,没有 ts_rank / cross_rank / in_rank_rolling。'
+  inspired_by: B043 批 + 第 1 轮 N 位:Q = day_quantile_q25(Amt) 的离散度(B043 的全部候选)读到的是水平,换成对数变化的下行 − 上行半标准差(A)才是第一条两段非负的(train +0.28 / valid +0.05,与控制与 head 的 |ρ| ≤ 0.22);把这一透镜搬到别的活动通道,并加薄端 vs 放量端的参与广度
+  seeds:
+  - sub(cross_semistd_neg(day_sum(Amt), 60), cross_semistd_pos(day_sum(Amt), 60))
+  - sub(cross_semistd_neg(day_sum(Volume), 60), cross_semistd_pos(day_sum(Volume), 60))
+  - sub(cross_semistd_neg(day_std(Ret), 60), cross_semistd_pos(day_std(Ret), 60))
+  - sub(cross_semistd_neg(day_max(Amt), 60), cross_semistd_pos(day_max(Amt), 60))
+  - sub(cross_semistd_neg(day_gini(Amt), 60), cross_semistd_pos(day_gini(Amt), 60))
+  - sub(cross_semistd_neg(day_centroid(Amt), 60), cross_semistd_pos(day_centroid(Amt), 60))
+  - sub(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_std(Ret), 60), cross_semistd_pos(day_std(Ret), 60)))
+  - sub(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_sum(Amt), 60), cross_semistd_pos(day_sum(Amt), 60)))
+  - sub(log(cross_mean(day_quantile_q25(Amt), 20)), log(cross_mean(day_quantile_q25(Amt), 120)))
+  - sub(log(cross_mean(day_sum(Amt), 20)), log(cross_mean(day_sum(Amt), 120)))
+  - sub(sub(log(cross_mean(day_quantile_q25(Amt), 20)), log(cross_mean(day_quantile_q25(Amt), 120))), sub(log(cross_mean(day_quantile_q75(Amt), 20)), log(cross_mean(day_quantile_q75(Amt), 120))))
+  - cross_corr(cross_delta(log(day_quantile_q25(Amt)), 1), cross_delta(log(day_sum(Amt)), 1), 60)
+  - cross_corr(cross_delta(log(day_quantile_q25(Amt)), 1), cross_delta(log(day_quantile_q75(Amt)), 1), 60)
+  - sub(cross_corr(cross_delta(log(day_quantile_q25(Amt)), 1), cross_delta(log(day_sum(Amt)), 1), 60), cross_corr(cross_delta(log(day_quantile_q75(Amt)), 1), cross_delta(log(day_sum(Amt)), 1), 60))
+  literature:
+  - title: A Unified Theory of Underreaction, Momentum Trading, and Overreaction in Asset Markets
+    authors: Harrison Hong, Jeremy C. Stein
+    year: '1999'
+    treatment: 信息在投资者之间渐进扩散:成交活动的上跳 / 下跳偏度与跳是否扩散到整个分布(广度)读的是扩散的节奏
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 成交量增长是否与收益同方向取决于交易动机;这里用薄端 / 放量端 / 总量三个层次的对数变化相关与增长之差区分广泛参与与事件
+  - title: Liquidity Risk and Expected Stock Returns
+    authors: Lubos Pastor, Robert F. Stambaugh
+    year: '2003'
+    treatment: 流动性的变化(而非水平)有风险溢价:这里用成交额的对数变化形状与增长近似流动性变化
+R:
+- head: ts_std(cross_stddev(day_quantile_q25(Amt), 60), 50)
+  why: 烂的部件是「Q25 这一个分位」:本流 122 个已评分候选的共性表里,中位数口径的离散度更好(cross_stddev(day_median(Amt), 60) 含 / 不含 −1.22 / −1.87,均值差 +0.65,p 0.001;day_median(Amt) 本身 +0.59,p 0.001),而 head 1 的 train 是 −0.30、valid +0.62,train 段的读数被 q25 的稀疏成交噪声拖累的可能性是有的。变体 1 把 q25 换成中位数;变体 2 把两个分位的 60 日离散度相加再取 50 日标准差。第 1 轮的结果(12 个去水平的变体全部比各自的原 head 差,差 0.3 到 2.1)告诉我们水平是有信息的,所以这里不去水平,只换分位。数学上无除法,窗口不变。
+  variants:
+  - ts_std(cross_stddev(day_median(Amt), 60), 50)
+  - ts_std(add(cross_stddev(day_quantile_q25(Amt), 60), cross_stddev(day_median(Amt), 60)), 50)
+- head: ts_std(cross_stddev(day_quantile_q25(Amt), 60), 40)
+  why: 同一个部件(q25 的分位选择),理由与证据同上(中位数口径的 60 日离散度在共性表里更好);窗口 40 不动(20 / 40 / 80 的分数是 −0.56 / −0.42 / −0.44,窗口不承重)。变体 1 换成中位数,变体 2 取两个分位之和。无除法,无近零分母。
+  variants:
+  - ts_std(cross_stddev(day_median(Amt), 60), 40)
+  - ts_std(add(cross_stddev(day_quantile_q25(Amt), 60), cross_stddev(day_median(Amt), 60)), 40)
+- head: ts_std(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 10)
+  why: 烂的部件是 Q25 的选择(而不是最外层 ts_std,第 1 轮把 ts_std 换成去水平的写法全部更差):共性表里 cross_stddev(cross_stddev(day_median(Amt), 60), 60) 含 / 不含 −1.08 / −1.88(均值差 +0.80,p 0.0001,17 条),两个分位之和(add(C2(q25), C2(median)))+0.73(p 0.004,9 条),比 q25 单独的 +0.66 都好一点。变体 1 换成中位数的两层离散度,变体 2 / 3 是两个分位的两层离散度相加后再取 10 日标准差,或先取 10 日标准差再相加。无除法。
+  variants:
+  - ts_std(cross_stddev(cross_stddev(day_median(Amt), 60), 60), 10)
+  - ts_std(add(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), cross_stddev(cross_stddev(day_median(Amt), 60), 60)), 10)
+  - add(ts_std(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 10), ts_std(cross_stddev(cross_stddev(day_median(Amt), 60), 60), 10))

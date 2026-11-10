@@ -1,0 +1,58 @@
+seed: 2042
+round: 2
+slots:
+- type: E
+  core: mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4)))
+  hypothesis: 核心 = 当日收益 day_sum(Ret) 乘以 (2*day_kurt(Low)+4),是第 1 轮唯一的 head(score +0.66,train +0.66 / valid +1.00) cs_bucket_zscore(cross_mean(核心,241), sub(LogFloatCap,LogFloatShares)) 的内核。拆解表说明它是必要的:去掉乘上的峰度权重 (只剩 day_sum(Ret))分数从 +0.66 掉到 -0.29;去掉名义价格分桶掉到 -0.57;Low 换成 High 反而升到 +0.68 / valid +1.37;窗口 120 / 482 是 +0.29 / +0.32。所以信号是「峰度加权的日收益、慢平均、在名义价格十分位内标准化」。机制:day_kurt(Low) 大 = 分钟最低价路径有尖刺(下影线 / 洗盘冲击), 这种日子的涨跌是尖峰日的涨跌,带权后 241 日平均读的是「由跳跃 / 冲击日贡献的动量」,不同于平滑漂移的普通 12 个月动量(尺子只控 20 日反转与已知成交额族, 没有控中期动量)。名义价格分桶去掉 A 股低价股 / 高价股的参与者结构差(散户彩票偏好 vs 机构持仓),这部分是水平,不是核心要的信号。 本轮的外围和第 1 轮 / 现有 head 不同:第 1 轮同核心的候选外围都是 cross_mean(·,241) + 十分位 zscore(分桶变量只有名义价格), 这里换了(1)聚合器:cross_ema / cross_decay_linear / 先 cs_rank 再平均,(2)去掉最近 30 日(排除短期反转,动量文献的 skip-month), (3)除以自身 241 日波动(信息比率式,变成 t 值而非水平),(4)桶内 rank 而非 zscore、桶变量换成股本 / 上市年龄,(5)再乘第二个动量质量权重(成交额方向占比)。 其中好几个与 head 的算子骨架不同(cs_bucket_rank / cross_ema / sub / div / cross_stddev),不会被库禁令挡。 为什么样本外还会在:valid 段(2023-08 ~ 2025-12)分数比 train 高(+1.00 对 +0.66),不是只在一段;来源是参与者结构(跳跃日的涨跌被过度解读 / 慢扩散), 变化慢;窗口 120 ~ 241 日、桶内相对值,换手低,15bp 下不会被吃掉。预期不高:是在冠军之外残差里的动量变体,若与动量重叠就是失败。 数学检查:无前视(全是尾随窗口,t 收盘后算);峰度权重 2*kurt+4 >= 0(day_kurt >= -2),不会出现近零分母;除以 cross_stddev 的种子 分母是 241 日日收益的标准差,停牌票窗内点少时为 NaN 而非 inf;cs_bucket_zscore 对桶内 0 方差有保护(沿用 head 里已跑通的实现)。
+  seeds:
+  - cs_bucket_zscore(cross_ema(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 120), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_decay_linear(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 200), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(cs_rank(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4)))), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(sub(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 30)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(div(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), cross_stddev(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_rank(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(cross_ema(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 150), LogFloatShares)
+  - cs_bucket_zscore(cross_ema(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 200), ListAge)
+  - mul(cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), sub(LogFloatCap, LogFloatShares)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cs_bucket_zscore(cross_mean(mul(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), day_signed_ratio(Ret, Amt)), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_ema(cs_winsor(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4)))), 180), sub(LogFloatCap, LogFloatShares))
+  - sub(cs_bucket_zscore(cross_ema(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 60), sub(LogFloatCap, LogFloatShares)), cs_bucket_zscore(cross_ema(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 20), sub(LogFloatCap, LogFloatShares)))
+- type: N
+  hypothesis: '想法:「信息离散度 / 路径平滑度」调制的慢动量 + 彩票需求(MAX)—— 新点在于只用日收益序列自己的形状(正收益日占比、日收益 t 值、最大单日涨幅、偏度), 不再用分钟路径的峰度。机制:Da-Gurun-Warachka(2014,Frog in the Pan)—— 信息是一点一点连续到达的个股(涨 / 跌日比例悬殊,路径平滑),投资者注意不足,动量更强、更久; 信息是跳跃式到达的个股动量弱甚至反转。Bali-Cakici-Whitelaw(2011)MAX 效应 —— 近期出现极端单日涨幅的票被彩票偏好者追高,之后跑输,在低价股里更明显 (所以放到名义价格桶内)。算子怎样实现: cross_mean(is_gt(day_sum(Ret),0),241) 是上涨日占比,减 0.5 后乘 241 日平均日收益 = sign(累计收益) × (上涨日占比 - 下跌日占比) 的连续版 FIP; cross_mean(day_sum(Ret),241) / cross_stddev(day_sum(Ret),241) 是日收益的 t 值型动量(收益除以自身波动,去掉水平); neg(cross_max(day_sum(Ret),60)) 是 MAX;neg(ts_skew(day_sum(Ret),241)) 是收益偏度(彩票); 再加「去掉最近 30 日」版动量,以及日内 day_pos_ratio(Ret) 的分钟级平滑度。 和库不同:库 5583 条 + head 里,没有一条以「上涨日占比」is_gt(day_sum(Ret),0) 做聚合、也没有 cross_max / cross_stddev 作用在 day_sum(Ret) 上、cs_bucket_* 与这类聚合 同现的也没有;第 1 轮 E / N 位全部围绕 day_kurt 分钟路径形状,这个位换成「日收益序列的形状」,是不同的信息源(日度离散度而非日内路径)。 为什么样本外还会在:行为金融机制(注意力不足、彩票偏好)的持续性来自 A 股散户占比,慢变;种子都是 120 ~ 241 日的慢量、桶内相对值,换手低。 预期不高:与 12 个月动量 / 反转 / 波动有重叠,尺子控的是 20 日反转与波动,所以 t 值型与 FIP 型与波动的重叠被去掉后还剩多少是未知数。 数学检查:无前视(全是尾随窗口);is_gt 输出 0/1,上涨日占比在 0 ~ 1,减 0.5 后可正可负,乘积不会爆;除以 cross_stddev(day_sum(Ret),241):分母是 241 日日收益标准差, 正常票 ~ 0.01 量级,停牌 / 新股窗内点少时 NaN 而非 inf;种子加 ListAge 掩码处理新股;day_std(Ret) 加 0.0005 防近零。'
+  inspired_by: 第 1 轮 head cs_bucket_zscore(cross_mean(day_sum(Ret) × 峰度权重, 241), 名义价格) 的拆解:去掉权重后 -0.29、去掉名义价格桶 -0.57,说明起作用的是「日收益的慢平均 × 个股当日形状、桶内」,而非峰度本身;日收益序列自己的形状(离散度、MAX)没人试过
+  seeds:
+  - cs_bucket_zscore(mul(cross_mean(day_sum(Ret), 241), sub(cross_mean(is_gt(day_sum(Ret), 0), 241), 0.5)), sub(LogFloatCap, LogFloatShares))
+  - mul(mul(cross_mean(day_sum(Ret), 241), sub(cross_mean(is_gt(day_sum(Ret), 0), 241), 0.5)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cs_bucket_zscore(div(cross_mean(day_sum(Ret), 241), cross_stddev(day_sum(Ret), 241)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(div(day_sum(Ret), add(day_std(Ret), 0.0005)), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(sub(cross_mean(day_sum(Ret), 241), cross_mean(day_sum(Ret), 30)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), sub(day_pos_ratio(Ret), 0.5)), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(neg(cross_max(day_sum(Ret), 60)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(neg(ts_skew(day_sum(Ret), 241)), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(cs_rank(day_sum(Ret)), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_ema(is_gt(day_sum(Ret), 0), 180), sub(LogFloatCap, LogFloatShares))
+  - mul(sub(cross_mean(is_gt(day_sum(Ret), 0), 241), 0.5), cross_stddev(day_sum(Ret), 241))
+  - cs_bucket_rank(sub(cross_mean(is_gt(day_sum(Ret), 0), 120), cross_mean(is_gt(day_sum(Ret), 0), 20)), LogFloatCap)
+R:
+- head: cs_bucket_zscore(ts_std(day_kurt(Low), 120), LogFloatCap)
+  why: 拆解表:ts_std 窗口 60 / 120 / 240 为 -0.42 / +0.23 / +0.64(valid +0.75),单调变好,说明 120 日窗口还偏短(换手); 去掉 ts_std 是 -3.5,所以 ts_std 是必要部件但窗口是烂的;分桶变量 LogFloatCap 与控制里的市值是同一个量,桶内残差部分被尺子再去一遍,可换成名义价格; Low 换 High 是 +0.15,不比 Low 好。
+  variants:
+  - cs_bucket_zscore(ts_std(day_kurt(Low), 360), LogFloatCap)
+  - cs_bucket_zscore(ts_std(day_kurt(Low), 480), LogFloatCap)
+  - cs_bucket_zscore(ts_std(day_kurt(Low), 240), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(ts_std(day_kurt(Low), 360), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(ts_std(day_kurt(Low), 240), LogFloatShares)
+  - cs_bucket_zscore(ts_std(day_kurt(High), 240), LogFloatCap)
+  - cs_bucket_zscore(ts_std(cs_winsor(day_kurt(Low)), 240), LogFloatCap)
+  - cs_bucket_zscore(cross_ema(ts_std(day_kurt(Low), 120), 120), LogFloatCap)
+  - cs_bucket_zscore(ts_std(add(day_kurt(Low), day_kurt(High)), 240), LogFloatCap)
+  - cs_bucket_rank(ts_std(day_kurt(Low), 240), LogFloatCap)
+- head: cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Low), 4))), 241), sub(LogFloatCap, LogFloatShares))
+  why: 拆解表:Low 换 High 为 +0.68(train)/ +1.37(valid),比原 head 好;窗口 482 的 valid 是 +0.99 但 train +0.32;去掉重复的 add(…,4) 项(单倍峰度加常数)是 +0.28 / +0.85, 说明双倍峰度加 4 的权重形式不是最优,烂部件是权重的形式。变体换权重形式(单倍 / 平方根)与 High / Vwap。
+  variants:
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(High), add(day_kurt(High), 4))), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Vwap), add(day_kurt(Vwap), 4))), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(High), 4)), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(High), 4))), 241), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(High), add(day_kurt(High), 4))), 360), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(mul(day_sum(Ret), sqrt(add(day_kurt(Low), 4))), 241), sub(LogFloatCap, LogFloatShares))

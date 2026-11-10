@@ -1,0 +1,78 @@
+seed: 2055
+round: 1
+slots:
+  - type: N
+    hypothesis: >-
+      Mechanism: an informed or herding order flow shows up as short bursts in which consecutive one-minute returns move together
+      (strong local first-order autocorrelation) while the rest of the day is noise. The day-level fourth moment (day_kurt) or
+      skew of the minute series in_autocorr(Ret, d, 1) measures how episodic that persistence is, which a plain day_autocorr
+      (the average persistence, already in the library) averages away. A stock whose persistence comes in rare, sharp bursts
+      is one where a large trader is working an order slowly or where retail attention flares and fades; the price impact of
+      that flow is only partly reflected on the day and keeps unwinding over the next days. The multi-day smoother (a rolling
+      upper quantile or a rolling mean of the daily statistic) keeps the stock-specific habit and drops one-off days.
+      Implementation: in_autocorr is a rolling-window Pearson correlation of the minute series with itself shifted by one minute,
+      computed by the standard operator (not an nt_* operator); day_kurt / day_skew / day_std / day_pos_ratio collapse the minute
+      axis; ts_quantile_q75 / ts_mean / cross_mean smooth over days. Seeds vary the window length (3 / 10 / 30 minutes), the
+      price field (Ret, Close change, Vwap change) and whether the quantity is a tail moment, a skew or a signed fraction.
+      Why it is not already in the library: the library's heads and candidates in this batch all reach the autocorrelation through
+      the banned nt_ts_autocorr_s1 operator wrapped in pow_2 and a sigmoid or one fixed smoother; no library expression uses
+      in_autocorr under the day moments, and the skeletons differ. Why it could survive out of sample: the sign and size of
+      local persistence is a slow-moving property of who trades the stock (order-splitting institutions, retail-heavy names),
+      not of a single regime, and the new ruler removes its linear, U and S loading on liquidity, volatility, reversal and the
+      size control.
+    inspired_by: 'structure batch 1 (kurtosis of the short-window lag-1 autocorrelation of price fields, smoothed over 15-30 days); all three heads share day_kurt over a minute autocorrelation'
+    seeds:
+      - 'ts_quantile_q75(day_kurt(in_autocorr(Ret, 10, 1)), 20)'
+      - 'ts_mean(day_kurt(in_autocorr(Ret, 3, 1)), 20)'
+      - 'cross_mean(day_skew(in_autocorr(Ret, 10, 1)), 20)'
+      - 'ts_quantile_q75(day_skew(in_autocorr(Ret, 30, 1)), 30)'
+      - 'ts_mean(day_std(in_autocorr(Ret, 10, 1)), 20)'
+      - 'ts_quantile_q75(day_kurt(in_autocorr(in_pct(Vwap, 1), 10, 1)), 20)'
+      - 'ts_mean(day_pos_ratio(in_autocorr(Ret, 10, 1)), 20)'
+      - 'ts_quantile_q75(day_kurt(in_autocorr(in_pct(Close, 1), 30, 1)), 30)'
+      - 'cross_mean(day_kurt(in_autocorr(Ret, 30, 1)), 10)'
+      - 'ts_mean(day_skew(in_autocorr(in_pct(Vwap, 1), 3, 1)), 30)'
+  - type: N
+    hypothesis: >-
+      Mechanism: the minute-level co-movement of price change and trading intensity. When volume surges and price moves in the
+      same direction at the same time (a positive local correlation of the minute return with the minute change in turnover
+      amount), the day is dominated by aggressive one-sided flow; when they decouple, the volume is two-sided churn. The
+      day-level skew / kurtosis / mean of in_corr(Ret, in_pct(Amt, 1), d) measures how often and how sharply the stock
+      enters the one-sided-flow state. Averaging over days and taking an upper quantile gives a persistent stock trait: names
+      where large, directional trades arrive in clusters (informed or index-driven flow) versus names whose volume is
+      noise. This is a different object from the batch's autocorrelation of the price alone and from the library's whole-day
+      day_corr(Volume, Vwap): the dependency is local in time (rolling window on the minute axis), the second leg is a volume
+      change rather than a volume level, and the day-level step uses higher moments instead of a mean, so the stock is graded
+      on how clustered the state is. Implementation: in_pct(Amt, 1) is the minute turnover change rate (NaN-safe on a zero base),
+      in_corr is the rolling-window Pearson correlation of two minute series, day_kurt / day_skew / day_mean collapse the minute
+      axis, ts_quantile_q75 / ts_mean smooth over days. Seeds vary window (5 / 15 / 30), the volume leg (Amt, Volume), and
+      the day statistic. Why it may survive out of sample: attribution of volume to direction is a structural property of
+      the order book and participant mix, and the ruler strips the liquidity, volatility, reversal, size and champion loadings
+      that a volume-based signal would otherwise be.
+    inspired_by: 'structure batch 1 (heads are day-moment of a local minute dependence statistic smoothed over days); this takes the same shape but replaces self-dependence of price by price-volume dependence'
+    seeds:
+      - 'ts_quantile_q75(day_kurt(in_corr(Ret, in_pct(Amt, 1), 15)), 20)'
+      - 'ts_mean(day_skew(in_corr(Ret, in_pct(Amt, 1), 15)), 20)'
+      - 'ts_mean(day_mean(in_corr(Ret, in_pct(Amt, 1), 30)), 20)'
+      - 'ts_quantile_q75(day_kurt(in_corr(Ret, in_pct(Volume, 1), 5)), 30)'
+      - 'cross_mean(day_skew(in_corr(Ret, in_pct(Volume, 1), 30)), 20)'
+      - 'ts_quantile_q75(day_std(in_corr(Ret, in_pct(Amt, 1), 15)), 20)'
+      - 'ts_mean(day_kurt(in_corr(Ret, in_pct(Amt, 1), 5)), 30)'
+      - 'ts_quantile_q75(day_pos_ratio(in_corr(Ret, in_pct(Amt, 1), 30)), 20)'
+      - 'ts_mean(day_skew(in_corr(in_pct(Vwap, 1), in_pct(Amt, 1), 15)), 20)'
+      - 'cross_mean(day_kurt(in_corr(Ret, in_pct(Amt, 1), 15)), 15)'
+R:
+  - head: 'ts_quantile_q75(pow_2(day_kurt(nt_ts_autocorr_s1(Low, 3))), 30)'
+    why: 'The fixed 30-day upper-quantile window and the nt_ operator are the weak parts: the window ablation 30 to 15 gained +0.48 (train and valid); pow_2 is only a monotone transform on a positive kurtosis. Replace the nt_ op with the standard in_autocorr and shorten the window.'
+    variants:
+      - 'ts_quantile_q75(pow_2(day_kurt(in_autocorr(Low, 3, 1))), 15)'
+      - 'ts_quantile_q75(day_kurt(in_autocorr(Low, 3, 1)), 15)'
+      - 'ts_quantile_q75(pow_2(day_kurt(in_autocorr(Low, 3, 1))), 10)'
+      - 'ts_mean(pow_2(day_kurt(in_autocorr(Low, 3, 1))), 15)'
+  - head: 'cross_sum(pow_2(day_kurt(nt_ts_autocorr_s1(Ret, 3))), 15)'
+    why: 'Window 15 to 30 gained +0.30; the sum over days is dominated by single extreme days (kurtosis squared). Replace the nt_ op and take a robust rolling quantile instead of a sum.'
+    variants:
+      - 'cross_sum(pow_2(day_kurt(in_autocorr(Ret, 3, 1))), 30)'
+      - 'ts_quantile_q75(pow_2(day_kurt(in_autocorr(Ret, 3, 1))), 30)'
+      - 'ts_quantile_q50(day_kurt(in_autocorr(Ret, 3, 1)), 30)'
+      - 'cross_mean(sigmoid(day_kurt(in_autocorr(Ret, 3, 1))), 30)'

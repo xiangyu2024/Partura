@@ -1,0 +1,126 @@
+seed: 2042
+round: 1
+slots:
+- type: E
+  core: 'day_kurt(Low)'
+  hypothesis: |-
+    核心读的是什么:day_kurt(Low) = 当天 241 根分钟最低价「水平序列」的超额峰度,mean((x-mu)^4)/sigma^4 - 3。它对价格尺度和平移都不变(无量纲);一天单边漂移时接近 -1.2,区间震荡再加一两次远离的刺(下影线 / 洗盘)时为大正数,两点分布取下限 -2,所以 add(day_kurt, 4) 恒 >= 2,拿它做分母不会出现近零爆点;停牌或一价到底 -> 方差 0 -> NaN,该日在后面的均值里被跳过。
+
+    批里的证据只有「慢」,没有「峰度读到了东西」:B124(59 条,全是 day_kurt 的外壳)里 day_kurt(Low) 的富集 +0.75(p 0.031),快照里含它的两个 head 都是套了 ts_std 的慢写法(都是 -1.63);同一批里的裸水平写法(day_kurt(Low) / day_kurt(Vwap) / inv / log / pow_3 一类)在库自己的尺子下是 -15 ~ -45;拆解表里 ts_std 窗口 25 / 50 / 100 为 -1.84 / -1.63 / -1.27,单调。这 59 条没有一条做过下面四件事:(1) 带方向:全是无符号的形状量;(2) 先在当日截面上排名 / 去均值再做时间聚合:原始 day_kurt 的时间波动里大部分是「全市场同一天的路径形态」(大趋势日所有票一起变低),ts_std / ts_sum 量到的是个股对市场形态日的暴露,不是它自己的;(3) 同伴内标准化:整个库 5583 条里 cs_bucket_* 0 次、日频叶子 LogFloatCap / LogFloatShares / ListAge 0 次;(4) 与另一个形状量对比:库里含 day_kurt 的 190 条中,同一条里读两个不同字段峰度的只有 1 条(还含被禁的 ts_spearman),与 cross_ema 同现 0 条,与 day_sum(Ret) 同现 0 条。
+
+    这个位在核心外面试四条机制,种子分四组(骨架互不相同,我用库的 skeleton_key 对 5583 条逐个核过,都不在库里):
+    A 带方向的「信息型漂移」(种子 1-5、14、15):日内收益除以 (day_kurt(Low)+4),即平滑单边路径上的涨跌当作信息推动(拆单的机构 / 知情交易者,Kyle 1985;Barclay-Warner 1993 的隐蔽交易),冲上去又掉回来的尖峰上的涨跌当作噪声 / 流动性冲击(Campbell-Grossman-Wang 1993:非信息性价格变动会反转);再取 60-241 日的均值 / EMA,得到个股持续的「漂移质量」。它与 12 个月动量有交集,但尺子只控 20 日反转,没有控中期动量。变体换成成交额加权收益 day_wmean(Ret, Amt)、成交额方向占比 day_signed_ratio(Ret, Amt)、截面排名乘积(对市场整体涨跌稳健)、形状与收益的 60 日相关(尖峰日是涨还是跌)。
+    B 影线不对称(种子 6-8):Low 路径的峰度读下影线 / 向下洗盘,High 的读上影线,「低 - 高」是个股持续的上下影线倾向(威廉影线类因子的分钟版);先用 cs_rank / cs_winsor / cs_robust_z 压住极端日(峰度的上界约等于分钟数 241,一天的极端值会主导均值)。
+    C 相对自己的历史(种子 9、10):cross_zscore、快慢 EMA 之差读的是形态的「变化」,把个股持续的水平拿掉 —— 水平正是新尺子里流动性、波动、市值三个控制会吃掉的部分。
+    D 同伴内标准化(种子 11-13):在名义价格(sub(LogFloatCap, LogFloatShares) = log(流通市值 / 流通股本) = log 股价)或已知成交额族的十分位内取 z 分数 / 去均值,放在 241 日均值「之后」,不放在日频之前(日频之前的桶边界跳变会加换手,邻流 2009 的 cs_bucket_demean 读数 -2.6 ~ -5.2 就是这样;放在慢聚合之后,邻流 2008 的 cs_bucket_zscore(cross_stddev(·, 120), LogFloatCap) 是该流最好的一档)。
+
+    和以前不一样的地方:外围算子集合(cs_rank / cs_bucket_* / cross_ema / cross_zscore / day_sum(Ret) / day_signed_ratio / ListAge 掩码等)和这一批里含 day_kurt(Low) 的 13 个成员(外围是 ts_std、ts_decay_linear、cross_sum、ts_pearson、sigmoid、ts_kurt、ts_quantile_q50、cs_demean、inv、log、cross_mean(,3) 一类)没有一个相同;更重要的是做的事不同:加方向、先截面再时间、同伴内、新股掩码。
+
+    为什么样本外还会在:来源是「谁在交易这只票」这一类持续的个股属性(机构拆单对散户追涨杀跌、影线倾向、盘口深度),A 股参与者结构 2018-2025 年变化慢;窗口 60-241 日、全是排名 / 比值 / 相关,换手低,15 bp 下不会被成本吃掉;不依赖某段行情。预期并不高:批内没有任何正分,新尺子又把波动、流动性、市值、已知成交额族、反转和两个冠军都去掉了。
+
+    数学检查:(a) 无前视:所有输入是当天分钟,所有窗口是尾随窗口(cross_* / ts_* 都用截至当日的数据),t 日收盘后算、t+1 才交易。(b) 数值:除法的分母一律是 add(day_kurt, 4) >= 2;cross_corr 有界;cross_zscore 自带 EPS 与常数窗口保护;cs_robust_z 带 EPS;cs_winsor 截在 1% / 99%;day_signed_ratio 在 [-1, 1];涉及相关的种子乘 replace_small_with_nan(is_gt(ListAge, 120)),上市 120 个交易日内置缺失(cross_corr 对窗内点数没有下限,两点相关恒为 +-1,新股和复牌后的短窗口会出这种值;数据首日已上市的票 ListAge = 10000,不受影响)。(c) 定义:没有会系统性算不出的写法;本机用合成立方体(60 只 x 320 日 x 241 分钟,含停牌与未上市)把 15 个种子全算过,都能算、无 inf、每日取值离散度 1.0(只检查运行时错误,不是任何分数)。没有用任何 2026 年数据。
+  seeds:
+  - 'cross_mean(div(day_sum(Ret), add(day_kurt(Low), 4)), 241)'
+  - 'cross_ema(mul(day_signed_ratio(Ret, Amt), inv(add(day_kurt(Low), 4))), 120)'
+  - 'mul(cross_ema(cross_corr(day_kurt(Low), day_sum(Ret), 60), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cross_mean(mul(cs_rank(day_kurt(Low)), sub(cs_rank(day_sum(Ret)), 0.5)), 241), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_mean(mul(sign(day_sum(Ret)), neg(cs_rank(day_kurt(Low)))), 241)'
+  - 'mul(cross_mean(sub(cs_rank(day_kurt(Low)), cs_rank(day_kurt(High))), 241), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_ema(cs_winsor(sub(day_kurt(Low), day_kurt(High))), 120)'
+  - 'cross_ema(cs_robust_z(sub(day_kurt(Low), day_kurt(Vwap))), 90)'
+  - 'cross_ema(cross_zscore(day_kurt(Low), 120), 40)'
+  - 'sub(cross_ema(cs_rank(day_kurt(Low)), 30), cross_ema(cs_rank(day_kurt(Low)), 240))'
+  - 'cs_bucket_zscore(cross_mean(cs_rank(day_kurt(Low)), 241), sub(LogFloatCap, LogFloatShares))'
+  - 'cs_bucket_demean(cross_ema(ts_std(cs_rank(day_kurt(Low)), 60), 90), cross_mean(day_std(Amt), 30))'
+  - 'cs_bucket_zscore(cross_mean(div(day_sum(Ret), add(day_kurt(Low), 4)), 241), sub(LogFloatCap, LogFloatShares))'
+  - 'cross_mean(div(day_wmean(Ret, Amt), add(day_kurt(Low), 4)), 241)'
+  - 'mul(cross_ema(div(day_sum(Ret), add(day_kurt(Low), 4)), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  literature:
+  - title: Continuous auctions and insider trading
+    authors: Albert S. Kyle
+    year: '1985'
+    treatment: 知情交易者把订单摊开,价格沿单边平滑累积;用平滑度(峰度低)给日内涨跌分类,种子 1-5、14、15
+  - title: 'Stealth trading and volatility: Which trades move prices?'
+    authors: Michael J. Barclay, Jerold B. Warner
+    year: '1993'
+    treatment: 信息集中在中等规模、分散到全天的成交里,价格变动沿路径逐步发生,对应低峰度的平滑路径
+  - title: Trading volume and serial correlation in stock returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 非信息性(流动性)价格变动会反转,对应冲上去又回来的高峰度路径上的涨跌,在种子里被折价
+  - title: Order imbalance and individual stock returns - theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 个股订单不平衡持续、能预测之后收益;成交额方向占比 day_signed_ratio 的种子 2 与它同一思路
+- type: N
+  hypothesis: |-
+    现象:B124 里「价格路径的峰度」与「成交量路径的峰度」的富集符号相反 —— day_kurt(Low) +0.75(p 0.031)、day_kurt(Vwap) +0.46、day_kurt(High) +0.39,而 day_kurt(Volume) -0.17、day_kurt(Amt) -1.47(p 都不显著)。价格形状有读数、成交量形状没有;更重要的是 59 条里没有一条把两者放在一起(同一条里读两个不同字段峰度的只有 1 条,含被禁的 ts_spearman;day_kurt 与 cross_corr 同现 1 条;所有价格字段的峰度都只配常数或自己的时间统计量)。这个位问的是:价格路径上的尖峰 / 洗盘,有没有成交量的突发作支撑。
+
+    机制:一天里价格路径出现偏离并伴随成交量突发,是信息驱动的价格发现(Karpoff 1987 的价格变动与成交量关系;Llorente-Michaely-Saar-Wang 2002:带量的价格变动延续,对冲性 / 不带量的反转;Gervais-Kaniel-Mingelgrin 2001 的高成交量溢价);价格偏离而成交量路径平淡 = 薄盘口里的小单冲击,属流动性噪声,会被回吐。一只票这两类日子的占比取决于盘口深度和参与者构成,是持续的个股属性,不是某天的事件。所以要量的是「价格形状」和「成交形状」的耦合 / 差,而不是任何一个的水平(水平就是新尺子里流动性与已知成交额族控制要吃掉的部分)。
+
+    算子怎样实现(种子 15 个,骨架互不相同,都不在库的 5583 个骨架里,我用库的 skeleton_key 逐条核过):
+    (1) 时间维耦合:cross_corr(day_kurt(价格字段), day_kurt(量字段), 60-120) 再用 cross_ema / cross_mean 慢平滑(种子 1-3、14、15);价格字段取 Vwap / High / Close,量字段取 Volume / Amt,种子 15 拿 day_kurt(Ret) 看收益尾部与成交量尾部是否同步;
+    (2) 截面排名差 / 乘积 / 残差:cs_rank(day_kurt(价格)) - cs_rank(day_kurt(量)),先在当日截面上排名(去掉「全市场同一天价格或成交形状一起变」的共同成分),再取 120-241 日均值(种子 4-7、9、12);其中 6 在名义价格十分位内标准化,9、12 是当日截面 cs_regres 残差(价格形状排名里与成交形状排名无关的部分);
+    (3) 个股自己的回归残差:ts_regres / cross_regres(价格峰度 对 成交量峰度,60-120 日),取「量的形状解释不了的价格形状」,再慢平滑(种子 8、13);
+    (4) 对数比:log(day_kurt(价格)+4) - log(day_kurt(量)+4),无需截面排名,只用对数把峰度的长右尾压平(种子 10、11)。
+
+    和库不一样:库 5583 条里 day_kurt(Volume) 19 条、day_kurt(Amt) 6 条,读成交量形状的共 25 条,其中与价格字段的峰度同现的 0 条;读两个不同字段峰度的只有 1 条(含被禁的 ts_spearman);cs_rank 与 day_kurt 同现 6 条、cs_regres 与 day_kurt 同现 2 条,都只作用在单个形状量上;cs_bucket_* 0 条、cs_winsor / cs_robust_z 0 条、cross_ema 与 cross_zscore 0 条;日频叶子 0 条。批里的 59 条没有一条在算「价格形状相对成交形状」。
+
+    为什么样本外还会在:盘口深度、参与者构成(机构 / 散户占比、做市与程序化交易)是慢变量,耦合和差读的是这些慢变量的指纹;全部种子窗口 60-241 日、取排名或相关,换手低;不依赖某一段行情。预期:价格形状与成交形状之差与流动性控制相关(volume 形状是稀疏成交的函数),所以对流动性 / 已知成交额族的 |rho| 预计 0.3-0.6,尺子会吃掉一部分;最可能留下的是时间维耦合与回归残差(种子 1-3、8、13、14),因为它们对每只票自己的水平不敏感。
+
+    数学检查:(a) 无前视:所有输入是当天分钟,窗口全是尾随窗口,t 日收盘后算、t+1 才交易。(b) 数值:log(day_kurt+4) 的真数 >= 2;cross_corr 有界,窗内点数没有下限,两点相关恒为 +-1,所以时间维耦合与回归残差的种子(1-3、8、13-15)都乘了 replace_small_with_nan(is_gt(ListAge, 120)),上市 120 个交易日内置缺失,其余种子先做当日截面排名再取 120-241 日均值;cs_regres 是当日截面 OLS,不会有近零除法;cs_rank 取百分位。(c) 定义:本机合成立方体(含停牌与未上市)上 15 个种子全算过,无 inf,每日取值离散度 1.0;没有用任何 2026 年数据。
+  inspired_by: 'B124(59 条 day_kurt 外壳)的富集:价格路径峰度 Low +0.75 / Vwap +0.46 / High +0.39 为正,成交量路径峰度 Volume -0.17 / Amt -1.47 为负;批内 0 条把价格形状与成交形状放在同一个表达式里'
+  seeds:
+  - 'mul(cross_ema(cross_corr(day_kurt(Vwap), day_kurt(Volume), 60), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cross_mean(cross_corr(day_kurt(High), day_kurt(Amt), 60), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cross_corr(day_kurt(Close), day_kurt(Volume), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_mean(sub(cs_rank(day_kurt(Vwap)), cs_rank(day_kurt(Volume))), 241)'
+  - 'cross_ema(sub(cs_rank(day_kurt(High)), cs_rank(day_kurt(Amt))), 120)'
+  - 'cs_bucket_zscore(cross_mean(sub(cs_rank(day_kurt(Vwap)), cs_rank(day_kurt(Volume))), 241), sub(LogFloatCap, LogFloatShares))'
+  - 'cross_mean(mul(cs_rank(day_kurt(Vwap)), cs_rank(day_kurt(Volume))), 241)'
+  - 'mul(cross_ema(ts_regres(day_kurt(Vwap), day_kurt(Volume), 60), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_mean(cs_regres(cs_rank(day_kurt(Vwap)), cs_rank(day_kurt(Volume))), 241)'
+  - 'cross_mean(sub(log(add(day_kurt(Vwap), 4)), log(add(day_kurt(Volume), 4))), 241)'
+  - 'cross_ema(sub(log(add(day_kurt(Close), 4)), log(add(day_kurt(Amt), 4))), 120)'
+  - 'mul(cross_ema(cs_regres(cs_rank(day_kurt(High)), cs_rank(day_kurt(Amt))), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cross_mean(cross_regres(day_kurt(High), day_kurt(Volume), 120), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cs_bucket_demean(cross_ema(cross_corr(day_kurt(Vwap), day_kurt(Amt), 60), 60), cross_mean(day_std(Amt), 30)), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(cross_ema(cross_corr(day_kurt(Ret), day_kurt(Volume), 60), 60), replace_small_with_nan(is_gt(ListAge, 120)))'
+  literature:
+  - title: The relation between price changes and trading volume - a survey
+    authors: Jonathan M. Karpoff
+    year: '1987'
+    treatment: 价格变动与成交量的正相关是信息到达的指纹;这里把它搬到「路径形状」的层面看耦合
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 带量的价格变动延续、不带量(对冲性)的反转;种子里用价格峰度与成交量峰度的差 / 耦合区分两类日子
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 成交量突发会带来可预测的收益,支持「有量支撑」一类的状态有定价
+R:
+- head: 'ts_std(day_kurt(Low), 50)'
+  why: |-
+    三个烂部件,都有拆解表的依据:(a) 窗口太短 —— ts_std 窗口 25 / 50 / 100 为 -1.84 / -1.63 / -1.27,单调变好,说明分数被换手成本压着;这里放 120 / 150 / 241 看曲线是否继续上升(120 是下面几个变体共同的对照锚);(b) 原始 day_kurt 的时间标准差里有一大块是「全市场同一天的路径形态」(趋势日所有票一起变低),先 cs_rank / cs_demean 再做时间 std,才是个股自己的形态不稳定;(c) 水平:标准差会随形态水平变化,同伴内标准化(名义价格 sub(LogFloatCap, LogFloatShares) 十分位、LogFloatCap 十分位)放在 120 日 std「之后」,邻流 2008 在 cross_stddev(log DW, 120) 上用同样做法,读数 -0.73,它的两层嵌套后代 -0.06,是该流最好的一档;(d) 新股窗口(ListAge 掩码)与除以自身均值的变异系数(day_kurt+4 >= 2,分母安全)各一个。
+    全部变体都比原 head 慢、对市场形态日不敏感或在同伴内;读数看 120 日锚对 cs_rank / cs_demean / bucket / CV / 掩码五个相对变化。
+  variants:
+  - 'ts_std(day_kurt(Low), 150)'
+  - 'ts_std(day_kurt(Low), 241)'
+  - 'ts_std(day_kurt(Low), 120)'
+  - 'ts_std(cs_rank(day_kurt(Low)), 120)'
+  - 'ts_std(cs_demean(day_kurt(Low)), 120)'
+  - 'ts_std(cs_rank(day_kurt(Low)), 241)'
+  - 'cross_ema(ts_std(day_kurt(Low), 60), 120)'
+  - 'cs_bucket_zscore(ts_std(day_kurt(Low), 120), sub(LogFloatCap, LogFloatShares))'
+  - 'cs_bucket_zscore(ts_std(day_kurt(Low), 120), LogFloatCap)'
+  - 'div(ts_std(day_kurt(Low), 120), add(ts_mean(day_kurt(Low), 120), 4))'
+  - 'mul(ts_std(day_kurt(Low), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+- head: 'neg(cross_sum(ts_decay_linear(ts_std(day_kurt(Low), 50), 10), 241))'
+  why: |-
+    拆解表:去掉 ts_decay_linear 反而 +0.12(-1.51,说明这一层多余),去掉 ts_std 为 -1.95(+0.32,ts_std 承重),去掉外层 cross_sum 为 -1.84(+0.21,慢聚合承重)。所以留下 ts_std + cross_sum,把里面的 50 日窗口拉到 100,或先截面排名 / 去均值再取 std(去掉全市场同一天形态的共同成分),或把 cross_sum(241) 换成半衰期 120 的 cross_ema(更平滑、旧日按指数衰减而不是硬截断)。四个变体都是在不改变「个股形态不稳定」这条主线的情况下去掉烂部件。
+  variants:
+  - 'neg(cross_sum(ts_std(cs_rank(day_kurt(Low)), 50), 241))'
+  - 'neg(cross_sum(ts_std(day_kurt(Low), 100), 241))'
+  - 'neg(cross_ema(ts_std(day_kurt(Low), 50), 120))'
+  - 'neg(cross_sum(ts_std(cs_demean(day_kurt(Low)), 100), 241))'

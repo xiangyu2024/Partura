@@ -1,0 +1,88 @@
+seed: 2045
+round: 1
+slots:
+  - type: E
+    core: 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)'
+    hypothesis: |-
+      事实(来自本批 loc 拆解表,不是推测):head 1 = add(ts_quantile_q50(X, 40), C),其中 X = day_cov(Amt, cross_delta(Amt, 30)),C = ts_std(cross_stddev(X, 60), 50) 就是本位核心。拆解读数:C 单独 +0.47(train +0.47 / valid +1.26);q50 项单独 -3.15;X 本身 -4.19;只留 cross_stddev 一层(去掉最外层 ts_std)-0.03;把 q50 项敲掉(换成它里面的 X 本身,即 add(X, C))后整体从 +0.40 变成 +0.58(必要性 -0.18);Amt 换成 Volume 掉到 -2.02;q50 的窗口 20 / 80 基本不动(+0.48 / +0.39)。读法:一阶量(X 的水平、X 的一阶离散度)在新尺子下没有 alpha,承重的只有外面再套一层的「二阶离散度」C;而且 valid(+1.26)明显好于 train(+0.47),不像只在 train 上拟合出来的。库里 5583 条里这个骨架族(day_cov(Amt, ·) 外面套 cross_stddev / ts_std)有二十多条,但全是原始量级(单位 Amt^2)的绝对量;用 cs_bucket_rank / cs_regres / cross_zscore / 除以一阶离散度把 C 做成相对量的,库里 0 条(这几个算子库里本身 0 条)。
+
+      机制(推断,没有读数核对):X = Var_m(A_d) - Cov_m(A_d, A_{d-30}),即当日分钟成交额的日内方差减去与 30 日前同一分钟形状的协方差(m 为分钟、A 为分钟成交额)。当天成交被少数分钟垄断(大宗、事件、涨跌停日的日内形态突变)时 X 骤增;cross_stddev(X, 60) 是 60 日里这类脉冲的强度,再对它做 50 日 ts_std,读的是脉冲进入 / 离开 60 日窗口造成的跳变:C 大 = 近 110 日内出现过强度很大的成交分布突变,相当于一个带衰减的「脉冲记忆」。C 的单位是 Amt^2,所以它与成交额水平、一阶离散度(已知族 cross_mean(day_std(Amt), 30))同向;新尺子只去掉控制的秩的 1 / 2 / 3 次多项式暴露,留下的 +0.47 / +1.26 是水平之外的部分。本位要回答的是:承重的到底是「脉冲记忆相对这只票正常量级的大小」(相对量),还是水平本身残留的非线性。
+
+      算子怎样实现(核心 C 原样放进每个种子,外围五组):(i) 相对量:C 除以一阶离散度的平方 add(pow_2(cross_mean(day_std(Amt), 30)), 1)(正是已知族,量纲同为 Amt^2)、除以自己一年的分钟成交额方差 cross_mean(day_cov(Amt, Amt), 241)、除以不带 ΔAmt 的同构二阶离散度(库里 day_cov(Amt, Amt) 版,与已知族 |rho| 约 0.8)——后者把「ΔAmt 带来的新部分」和「已知的一阶部分」分开;(ii) 非参数去量级:cs_bucket_rank(C, ·) 在已知族 / 流动性 / 流通市值 / 波动 / 20 日收益的十分位内取秩,对每个控制的暴露按构造为 0(比线性残差在尾部更干净);(iii) 回归取残差:log C 对 log 已知族、log 流动性做逐日截面回归;(iv) 对自己的历史:cross_zscore(C, 60)、C 除以 120 日前的 C(脉冲记忆在升还是在降);(v) 状态与筛选:乘 20 日收益的秩(放量脉冲且上涨 vs 下跌)、sub 一阶离散度的秩、排除流动性最低 20% 后再按 C 排(脉冲在极小票里多是噪声,cs_last_low20)。
+
+      为什么和库里 / head 不同:head 1 是 add(水平项, C),C 以绝对量原样和 q50 水平项相加;本位 15 个种子都把 C 换成相对量 / 桶内秩 / 残差 / 自己历史的 z 分数,整棵树的算子骨架逐条核过,都不在两库 5583 条的骨架里,也不与任何流已出 head 的骨架相同;外围算子集合(如 {div, pow_2, cross_mean, day_std}、{cs_bucket_rank, cross_mean, day_std}、{cs_regres, log, add})与快照里含 C 的候选(只有 head 1,外围 {add, ts_quantile_q50, day_cov, cross_delta})都不同。种子对 head 1 的日度秩 |rho| 预计 0.3 到 0.8,最贴近 C 的(排除最低 20%、对市值分桶)可能被表划掉,其余是实质性的重排。
+
+      为什么样本外还会在:C 的窗口是 30 + 60 + 50 日的嵌套,每天变动很小,换手低,成本不是病;来源是事件 / 关注度冲击的持续性(参与者结构在冲击之后慢速回归),不依赖某一段行情;valid 好于 train,说明它不是只在 train 里找到的形态。
+
+      数学检查:除数一律 +1(Amt 以元计,+1 不改变任何有量级的票,只防 0 / 0);log 的输入 C >= 0,C = 0 时 log 返回 NaN 而不是 -inf,不污染排序;cs_regres / cs_bucket_rank / cs_rank 对 NaN 安全,不触发 nanrank_last 的停牌记 0(没有用 ts_rank / cross_rank);所有窗口只用当日及以前的数据(cross_delta / cross_delay 向前看,cross_zscore 含当日但不含未来);停牌日在 cross_* 输入处被掩成 NaN,不是 0。如果它有 alpha,最可能来自「脉冲记忆」相对一阶离散度的残差,组 (ii) 的桶内秩是最干净的检验。
+    literature:
+      - title: Trading activity and expected stock returns
+        authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+        year: '2001'
+        treatment: 成交额 / 换手的变异度与预期收益有截面关系;这里不读一阶变异度(已知族与控制已吃掉),读它的二阶离散度在去掉一阶量级之后的残差
+    seeds:
+      - 'cs_bucket_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), cross_mean(day_mean(Amt), 60))'
+      - 'cs_bucket_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), LogFloatCap)'
+      - 'cs_bucket_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), cross_mean(day_std(Ret), 30))'
+      - 'cs_bucket_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), cross_mean(day_sum(Ret), 20))'
+      - 'div(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), add(pow_2(cross_mean(day_std(Amt), 30)), 1))'
+      - 'div(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), add(cross_mean(day_cov(Amt, Amt), 241), 1))'
+      - 'div(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), add(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 1))'
+      - 'cs_regres(log(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)), log(add(cross_mean(day_std(Amt), 30), 1)))'
+      - 'cs_regres(log(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)), log(add(cross_mean(day_mean(Amt), 60), 1)))'
+      - 'cross_zscore(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), 60)'
+      - 'div(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), add(cross_delay(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), 120), 1))'
+      - 'sub(cs_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)), cs_rank(cross_mean(day_std(Amt), 30)))'
+      - 'mul(cs_rank(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)), cs_rank(cross_mean(day_sum(Ret), 20)))'
+      - 'cs_last_low20(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), cross_mean(day_mean(Amt), 60))'
+  - type: N
+    hypothesis: |-
+      想法:对「无量纲的日内统计量」施加同一套「二阶离散度」外壳 ts_std(cross_stddev(·, 60), 50),看 alpha 到底需不需要 Amt^2 的量级。
+      事实(本批 loc 拆解表,不是推测):本批 3 个 head 中分数最高的 head 1,承重的是外壳里的二阶离散度 C = ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50)(单独 +0.47,train +0.47 / valid +1.26),而带 Amt^2 量级的一阶部分(day_cov 本身 -4.19、q50 水平项 -3.15)在新尺子下是死的;Amt 换 Volume 掉到 -2.02。head 2 是同一外壳的 241 日年度版(单独的 cross_stddev(cross_max(day_cov(cross_delta(Amt, 241), Amt), 3), 241) 是 -0.18 / +0.87)。批内共性表里 day_close(High)、day_kurt(High) 这类价格侧子树没有富集信号(均值差 +0.02 / -0.00)。所以已知的只有:成交额分布的二阶离散度有信号,价格侧没有。
+
+      机制(推断,没有读数核对):机构的 VWAP / TWAP / POV 执行使一只票的日内成交分布日复一日稳定(分钟形状的相关、成交重心的位置、集中度都稳定);事件驱动或游资式的成交则让分布在「稳定」与「突变」之间切换。「分布统计量的波动的波动」是参与者结构在两种状态之间切换的慢变标记,而且只要统计量是有界的,它与成交额水平、流动性、市值天然正交,不需要靠尺子去扣。本位把核心外壳原样套在 12 个有界 / 无量纲的日内统计量上:(A) 分钟成交额形状与自己的滞后形状的相关 day_corr(Amt, cross_delay(Amt, 1 / 5 / 30))、与形状变化的相关 day_corr(Amt, cross_delta(Amt, 30 / 241))(head 1 把 day_corr 换回 day_cov 就是 head 1 的一阶对应,这里去掉量级);(B) 先把分钟成交额除以当日均值再做 head 1 的 day_cov 外壳,即把当日总量剥掉、只留日内分配形状;(C) 日内集中度与时点:day_kurt(Amt)、day_gini(Amt)(Gini 有界,不被单个极端值主导)、day_centroid(Amt)(成交重心在 0 到 1 之间的位置);(D) 量价耦合的稳定性:day_corr(Amt, abs_(Ret))、day_corr(Amt, Ret)(后者与 20 日反转控制有关,预计是最差的一类);(E) 一层、窗口 120 的慢版 cross_stddev(day_corr(Amt, cross_delay(Amt, 1)), 120)。
+
+      为什么和库里 / head 不同:库里 day_corr 只出现在一阶离散度里(cross_stddev(day_corr(Ret, Volume), 20) 一类,窗口 20,手写库),day_kurt(Amt) 只在一阶用法里出现,day_gini / day_centroid 库里 0 条;没有一条带「cross_stddev(·, 60) 再 ts_std(·, 50)」的二阶外壳。12 个种子整棵树的骨架逐条核过,都不在两库 5583 条的骨架里,也不与任何已出 head 的骨架相同。它们与 head 1 的区别是底:head 1 的底带 Amt^2 量级,这里的底全是 [-1, 1] 或 [0, 1] 的有界量,所以与 head 1 的日度秩相关预计 < 0.4,与已知族 / 流动性控制 < 0.5(靠底的有界性,而不是靠尺子扣)。
+      为什么样本外还会在:嵌套窗口 110 到 180 日,换手很低;来源是参与者构成(算法执行 vs 事件驱动)这类慢变量,不依赖某一段行情。数学检查:day_corr 在分钟序列恒定时分母为 0 + EPS、返回 0,只在整日零成交时发生,而停牌日在 cross_* 输入处被掩成 NaN,不会把 0 灌进 cross_stddev;day_gini 对 |x| 取值,总量为 0 时返回 NaN;day_centroid 有界在 [0, 1];day_kurt 对尖峰敏感(分钟成交额的峰度很大)但外面套两层 std 后读的是它的变异度,且不经除法,无爆点;所有窗口只用当日及以前的数据(cross_delay / cross_delta 向前看),没有用到收盘之后的数据;不用 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0。如果它有 alpha,最可能来自与成交额水平正交的「参与者结构在稳定与突变之间切换的频繁程度」,种子 2、3(形状相关的稳定性)和 8(成交重心的稳定性)是首选。
+    inspired_by: 'B133(day_cov(F, cross_delta(F)) 一族)的拆解:head 1 里只有二阶离散度外壳 C 有分数(+0.47 / +1.26),带 Amt^2 量级的一阶部分(-4.19 / -3.15)为负;head 2 是同一外壳的 241 日版'
+    literature:
+      - title: 'Unknown unknowns: uncertainty about risk and stock returns'
+        authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+        year: '2018'
+        treatment: 波动率的波动(对风险的不确定性)与截面收益有关;这里把「波动的波动」从价格波动换成日内成交分布统计量的二阶离散度,且取有界底以剥离量级
+    seeds:
+      - 'ts_std(cross_stddev(day_corr(Amt, cross_delta(Amt, 30)), 60), 50)'
+      - 'ts_std(cross_stddev(day_corr(Amt, cross_delay(Amt, 30)), 60), 50)'
+      - 'ts_std(cross_stddev(day_corr(Amt, cross_delay(Amt, 1)), 60), 50)'
+      - 'ts_std(cross_stddev(day_cov(div(Amt, day_mean(Amt)), cross_delta(div(Amt, day_mean(Amt)), 30)), 60), 50)'
+      - 'ts_std(cross_stddev(day_corr(Amt, cross_delta(Amt, 241)), 60), 50)'
+      - 'ts_std(cross_stddev(day_kurt(Amt), 60), 50)'
+      - 'ts_std(cross_stddev(day_gini(Amt), 60), 50)'
+      - 'ts_std(cross_stddev(day_centroid(Amt), 60), 50)'
+      - 'ts_std(cross_stddev(day_corr(Amt, abs_(Ret)), 60), 50)'
+      - 'ts_std(cross_stddev(day_corr(Amt, Ret), 60), 50)'
+      - 'cross_stddev(day_corr(Amt, cross_delay(Amt, 1)), 120)'
+      - 'ts_std(cross_stddev(day_corr(Amt, cross_delay(Amt, 5)), 120), 60)'
+R:
+  - head: 'add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50))'
+    why: |-
+      烂部件:ts_quantile_q50 水平项,以及外壳的窗口(60 / 50)可能不是最优。依据(loc 拆解表):把 q50 项敲掉(换成它里面的 X 本身)整体 +0.40 -> +0.58(必要性 -0.18);q50 项单独 -3.15、X = day_cov 本身 -4.19,外壳 C 单独 +0.47(train +0.47 / valid +1.26);q50 窗口 20 / 80 是 +0.48 / +0.39,几乎不动。拆解表只动过 q50 的窗口和 Amt 字段,没有动过 C 里的窗口(60 / 50)与滞后(30)。变体:(a) 保留 q50 水平项(它压低与已知族的相关)、q50 窗口取较好的 20,同时把外壳放慢(外层 100;120 / 100);(b) 去掉水平项、只动外壳:窗口 120 / 100、60 / 100、120 / 50、60 / 25,滞后 10 / 60 / 241。滞后 241 就是 head 2 的年度滞后放进 head 1 的外壳。所有变体只改窗口 / 滞后 / 去掉水平项,数学上都是 head 1 自己的子结构,无新的除法或对数。
+    variants:
+      - 'add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 20), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 100))'
+      - 'add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 20), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120), 100))'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120), 100)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 100)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120), 50)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 25)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 60)), 60), 50)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 10)), 60), 50)'
+      - 'ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 241)), 60), 50)'
+  - head: 'ts_sum(cross_stddev(cross_max(day_cov(cross_delta(Amt, 241), Amt), 3), 241), 5)'
+    why: |-
+      烂部件:cross_max(·, 3)(必要性 -0.16:去掉它 -0.24 -> -0.08,valid 不动 +0.86)以及年度窗口 / 年度滞后(train -0.24 与 valid +0.85 差 1.1,train 弱)。依据:拆解表里 sufficiency 的 cross_stddev(cross_max(...), 241) 为 -0.18(train -0.18 / valid +0.87),去 cross_max 为 -0.08 / +0.86,ts_sum 窗口 2 / 10 为 -0.16 / -0.40;同一批里 head 1 用 30 日滞后和 60 / 50 的窗口,train 为 +0.40。变体把 head 1 的短滞后、短窗口和 head 2 的结构互换,让 train 段的读数有机会抬起来;都只改滞后 / 窗口 / cross_max 窗口,数学上没有新的除法或对数。
+    variants:
+      - 'ts_sum(cross_stddev(cross_max(day_cov(cross_delta(Amt, 30), Amt), 3), 241), 5)'
+      - 'ts_sum(cross_stddev(cross_max(day_cov(cross_delta(Amt, 241), Amt), 3), 120), 5)'
+      - 'ts_std(cross_stddev(cross_max(day_cov(cross_delta(Amt, 241), Amt), 3), 60), 50)'
+      - 'ts_sum(cross_stddev(cross_max(day_cov(cross_delta(Amt, 241), Amt), 10), 241), 5)'

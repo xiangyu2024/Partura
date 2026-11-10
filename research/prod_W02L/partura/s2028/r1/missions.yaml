@@ -1,0 +1,108 @@
+seed: 2028
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:B082(26 条,全部来自挖掘库)是同一条链:25 条含 cs_demean(sub(day_mean(Ret), 常数))(常数在 cs_demean 下是空操作),再套 ts_max 与 pow_2;26 条的唯一字段叶子都是 day_mean(Ret)(Ret 的第 0 根恒为 0,所以它是盘中分钟收益的均值,不含隔夜跳空);0 条含除法或标准化。库自己的 train 统计里它们的秩 IC 几乎全在 −0.03 ~ −0.06(近期最大的相对涨幅越高,未来收益越低),换手约 0.03:这就是 MAX / 彩票效应(Bali–Cakici–Whitelaw 2011)。但 ts_max 的水平同时随波动、市值、涨跌幅宽度抬高,新尺子里的波动、市值、流动性三个控制会把这部分吃掉。我的押注是:把尺度拿掉之后剩下的是收益分布的「形状」(右尾对左尾、偏度),这是散户彩票偏好(Barberis–Huang 2008;Boyer–Mitton–Vorkink 2010 的预期特质偏度;Kumar 2009)和崩盘风险(Chen–Hong–Stein 2001)被定价的对象,而不是波动本身。A 股散户占比高,涨跌停制度又把右尾变成可预期的事件,所以形状应当有定价。
+
+
+    算子怎样实现:RR = cs_demean(ts_delta(log(day_last(Close)), 1)) 是收盘到收盘(含隔夜)的市场相对对数收益,B082 读的是盘中、不含隔夜。种子读 RR 的形状而不是水平:ts_skew(40 / 60 / 120 日,其中一条先 cs_winsor、一条外面套 cross_ema)、ts_kurt、四分位偏度(Bowley)、上 / 下四分位尾均值的不对称指数、max 与 min 的不对称指数、上 / 下半偏差之比(cross_semistd_pos / neg)。4 条把日收益除以板块涨跌幅宽度 LimitWidth(再 cs_winsor)后读偏度或滚动最大值:10% 板、20% 板、ST 的同样涨幅不是同一件事(K002 的涨停筛子成立,正是因为按板块限幅来认);两条用 B082 自己的叶子 day_mean(Ret)(盘中)做对照,看成立的是盘中还是整日。max / σ 只留 2 条当对照(C02 旧尺子下,除以自身波动的 MAX 比原始 MAX 更差:train −0.67 对 −0.38),主力是偏度与不对称指数 —— 同一批旧读数里它们最好:日收益 40 日偏度 train 0.47 / valid 0.54,与已知族 ρ 0.18,是这一族离线最近的一条。
+
+
+    和库里已有的不同:库(5583 条)里 ts_skew 只出现 23 次,全部作用在分钟结构量或价格水平上,没有一条作用在日收益上;cross_semistd_*、cross_tail_mean_*、cs_winsor 都是 0 次;LimitWidth / ListAge 等 6 个日频叶子 0 次。16 个种子的骨架互不相同,也都不在库的骨架集里(我用库的 skeleton_key 逐个对照过)。它们不是 B082 的换写法:全是无量纲的形状量,不随波动水平单调变化。
+
+
+    为什么样本外还会在:来源是散户持股结构与涨跌停制度,2018 ~ 2025 年基本不变(2020 年创业板改 20% 已被 LimitWidth 吸收);形状量用 40 ~ 120 日窗口,变化慢,15 bp 下换手低;不依赖某段行情。预期并不高:旧尺子(没有去掉两个冠军)下最好的日收益偏度只有 0.47,新尺子只会更低,所以我预期它是「离线更近」,不是直接越线。
+
+
+    数学检查:(a) 无前视:ts_delta(x, 1) = x[t] − x[t−1](ts_delay 令 res[t] = x[t−d]);cs_demean 只用当天截面;所有窗口是尾随窗口;t 日收盘后算,t+1 才交易。(b) 数值:ts_skew、ts_kurt 等对窗内有效值直接算、没有最少样本数,新股窗口没填满时会用 3 ~ 5 个点估偏度,所以多数种子乘 M = replace_small_with_nan(is_gt(ListAge, 120)),上市 120 个交易日内置缺失(数据首日已上市的票 ListAge = 10000,不受影响);除法的分母都加了小常数,不会出现 0/0 或 inf。(c) 定义:cs_winsor 把每日截面截在 1% / 99%,新股首日等无涨跌幅限制的大涨幅被压成上限,不会支配截面。本机用合成立方体把 16 个种子全算过:都能算、无 inf、每日取值离散度 1.0。没有用任何 2026 年数据。'
+  inspired_by: B082(26 条挖掘库成员):cs_demean(day_mean(Ret)) 上的 ts_max / pow_2 链,库自带 train 秩 IC −0.03 ~ −0.06 —— 日收益右尾的 MAX 效应;批内无任何一条做过标准化、读过日收益(含隔夜)或用过 LimitWidth
+  seeds:
+  - mul(ts_skew(cs_demean(ts_delta(log(day_last(Close)), 1)), 40), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_skew(cs_winsor(cs_demean(ts_delta(log(day_last(Close)), 1))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_ema(ts_skew(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), 20), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_skew(cs_winsor(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - ts_skew(cs_demean(day_mean(Ret)), 60)
+  - mul(ts_kurt(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(sub(add(cross_quantile_q75(cs_demean(ts_delta(log(day_last(Close)), 1)), 120), cross_quantile_q25(cs_demean(ts_delta(log(day_last(Close)), 1)), 120)), mul(2, cross_quantile_q50(cs_demean(ts_delta(log(day_last(Close)), 1)), 120))), sub(cross_quantile_q75(cs_demean(ts_delta(log(day_last(Close)), 1)), 120), cross_quantile_q25(cs_demean(ts_delta(log(day_last(Close)), 1)), 120))), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(add(cross_tail_mean_q75(cs_demean(ts_delta(log(day_last(Close)), 1)), 120), cross_tail_mean_q25(cs_demean(ts_delta(log(day_last(Close)), 1)), 120)), sub(cross_tail_mean_q75(cs_demean(ts_delta(log(day_last(Close)), 1)), 120), cross_tail_mean_q25(cs_demean(ts_delta(log(day_last(Close)), 1)), 120))), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(add(ts_max(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), ts_min(cs_demean(ts_delta(log(day_last(Close)), 1)), 60)), add(sub(ts_max(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), ts_min(cs_demean(ts_delta(log(day_last(Close)), 1)), 60)), 0.0001)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(cross_semistd_pos(day_last(Close), 120), add(cross_semistd_neg(day_last(Close), 120), 0.0001)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(sub(cross_semistd_pos(day_last(Close), 60), cross_semistd_neg(day_last(Close), 60)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_max(cs_winsor(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_mean(cross_max(cs_winsor(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 20), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_ema(cross_max(cs_winsor(div(ts_delta(log(day_last(Close)), 1), LimitWidth)), 10), 30), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(ts_max(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), add(cross_stddev(cs_demean(ts_delta(log(day_last(Close)), 1)), 60), 0.0001)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - div(ts_max(cs_demean(day_mean(Ret)), 60), add(ts_std(cs_demean(day_mean(Ret)), 60), 0.000001))
+  literature:
+  - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    treatment: 批的现象本身(MAX 效应);这里拿掉尺度只留形状,再用板块涨跌幅宽度归一
+  - title: Expected idiosyncratic skewness
+    authors: Brian Boyer, Todd Mitton, Keith Vorkink
+    year: '2010'
+    treatment: 预期特质偏度被高估,后续收益低;种子 1 ~ 6、16 用日收益的偏度 / 峰度 / 尾部不对称来读
+  - title: 'Stocks as lotteries: The implications of probability weighting for security prices'
+    authors: Nicholas Barberis, Ming Huang
+    year: '2008'
+    treatment: 概率加权下偏好右尾,解释为什么形状而非水平被定价
+  - title: 'Forecasting crashes: trading volume, past returns, and conditional skewness in stock prices'
+    authors: Joseph Chen, Harrison Hong, Jeremy C. Stein
+    year: '2001'
+    treatment: 左尾(崩盘)形状;种子 7 ~ 11 的四分位偏度、尾均值不对称、上下半偏差之比
+  - title: Who gambles in the stock market?
+    authors: Alok Kumar
+    year: '2009'
+    treatment: 散户的彩票偏好,支持在散户占比高的 A 股里读右尾形状
+- type: N
+  hypothesis: '机制:B082 每天做 cs_demean,把个股收益里的市场部分整个扔掉;这一批(以及整个库)只读「去掉市场之后剩下什么」,没有一条读「这只股票怎么跟市场联动」:库 5583 条里没有任何一条把截面均值 cs_mean 当 ts_corr / ts_regbeta 的变量用。联动结构有四个被文献定价的维度:(1) 同步性 / R²(Morck–Yeung–Yu 2000):同步性高说明价格由市场、指数、机构的一篮子交易驱动,个股特质信息少;低则是散户与消息驱动。(2) 上下行不对称(Ang–Chen–Xing 2006 的下行 beta;Bollerslev–Li–Zhao 2020 的半 beta):市场下跌日跌得更多的票要求补偿。(3) 价格延迟(Hou–Moskowitz 2005):对滞后一日的市场收益仍有反应,说明信息扩散慢、被忽视,要求溢价。(4) 开盘缺口的同步性:集合竞价是指数产品和机构程序单集中成交的地方,缺口跟着市场走的票和缺口自成一格的票是两类持有人(Lou–Polk–Skouras 2019 的隔夜 / 日内分工)。
+
+
+    算子怎样实现:RET = ts_delta(log(day_last(Close)), 1),MKT = cs_mean(RET) 是当日等权市场收益(同一天所有股票取同一个数)。种子 1 ~ 2 是 60 / 120 日滚动相关 ts_corr(其中 2 先对 RET 做 cs_winsor);种子 3 是 beta,ts_regbeta(MKT, RET, d) 的第一个参数是自变量;种子 4 是特质占比(ts_regres 的残差标准差除以总标准差,约 sqrt(1 − R²));种子 5 是 40 日相关减 120 日相关(同步性的变化);6 ~ 7 把市场滞后一日(ts_delay)做延迟度量;8 ~ 10 是市场跌超 1% 的日子与涨超 1% 的日子里个股相对市场的平均超额(抗跌 vs 跟涨);11 ~ 12 是下行半 beta 减上行半 beta、下行日相关(零膨胀写法,是含截距 OLS 的近似:零点会稀释斜率,但对所有股票一视同仁,排序有效);13 ~ 15 把同样的联动换到 B082 自己的叶子 day_mean(Ret)(盘中)和隔夜缺口 G = day_first(Open) / ts_delay(day_last(Close), 1) − 1 上。
+
+
+    和库里已有的不同:联动类在库里 0 / 5583;15 个种子的骨架互不相同,都不在库的骨架集里(用库的 skeleton_key 逐个对照过)。不是控制的换皮:控制是波动、市值、流动性、已知成交额族和 20 日反转;联动统计是相关、斜率、条件均值。beta(种子 3、7)与总波动有关,我预计与波动控制的 |ρ| 在 0.4 ~ 0.6,但相关系数、特质占比、不对称的差是比值或差,不随波动水平单调。
+
+
+    为什么样本外还会在:联动结构取决于持有人构成(指数 / 机构 / 散户)以及 T+1、涨跌停制度,都是慢变量,窗口 40 ~ 120 日,15 bp 下换手低。已有证据:旧研究 C01 的价格同步性族(ts_pearson,价格序列与全市场的平均相关)在旧尺子样本内是最强的一族,但做风格中性化后几乎消失 —— 所以这里最大的风险是联动统计本质上是市值 / 流动性风格;这一次直接用新尺子(已去掉 5 个风格控制与两个冠军)来看剩下什么。多空方向我不预设,由 train 选。
+
+
+    数学检查:(a) 无前视:cs_mean(RET) 用当天截面,t 日收盘已知;ts_delay(MKT, 1) 是 t−1 日的市场;窗口是尾随窗口;t+1 才交易。(b) 数值:ts_corr 的分母是 sqrt(var_x × var_y) + 1e-9,窗内有效点只有 2 ~ 3 个时会给 ±1,所以乘 M 去掉上市 120 个交易日内的票;ts_regbeta 在自变量方差和 ≤ 1e-9 时给缺失,日收益 60 日窗内的平方和约 1e-2 量级,不会触发;除法的分母加了 0.0001 以避免 0/0。is_lt / is_gt 对缺失返回 0,但乘上缺失的 RET 仍是缺失,所以停牌日同时从两个序列里退出。(c) 市场用等权全 A,小市值占主导,这是口径选择(与市值加权的差别正是规模暴露),不是数学问题。本机用合成立方体把 15 个种子全算过:都能算、无 inf、每日取值离散度 1.0。没有用任何 2026 年数据。'
+  inspired_by: B082:每天 cs_demean 把个股收益里的市场部分整个扔掉;库里 0 / 5583 条把截面均值当回归 / 相关变量 —— 被扔掉的那一半(个股与市场怎么联动)整个没有被读过
+  seeds:
+  - mul(ts_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(cs_winsor(ts_delta(log(day_last(Close)), 1)), cs_mean(ts_delta(log(day_last(Close)), 1)), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_regbeta(cs_mean(ts_delta(log(day_last(Close)), 1)), ts_delta(log(day_last(Close)), 1), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(div(ts_std(ts_regres(cs_mean(ts_delta(log(day_last(Close)), 1)), ts_delta(log(day_last(Close)), 1), 60), 60), add(ts_std(ts_delta(log(day_last(Close)), 1), 60), 0.0001)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(sub(ts_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)), 40), ts_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)), 120)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(ts_delta(log(day_last(Close)), 1), ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_regbeta(ts_delay(cs_mean(ts_delta(log(day_last(Close)), 1)), 1), ts_delta(log(day_last(Close)), 1), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_mean(mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), -0.01), sub(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(cross_mean(mul(is_gt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0.01), sub(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(sub(cross_mean(mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), -0.01), sub(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)))), 120), cross_mean(mul(is_gt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0.01), sub(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)), 1)))), 120)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(sub(ts_regbeta(mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), cs_mean(ts_delta(log(day_last(Close)), 1))), mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), ts_delta(log(day_last(Close)), 1)), 120), ts_regbeta(mul(is_gt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), cs_mean(ts_delta(log(day_last(Close)), 1))), mul(is_gt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), ts_delta(log(day_last(Close)), 1)), 120)), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), ts_delta(log(day_last(Close)), 1)), mul(is_lt(cs_mean(ts_delta(log(day_last(Close)), 1)), 0), cs_mean(ts_delta(log(day_last(Close)), 1))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(day_mean(Ret), cs_mean(day_mean(Ret)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), cs_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), cs_mean(cs_winsor(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 120), replace_small_with_nan(is_gt(ListAge, 120)))
+  literature:
+  - title: 'The information content of stock markets: why do emerging markets have synchronous stock price movements?'
+    authors: Randall Morck, Bernard Yeung, Wayne Yu
+    year: '2000'
+    treatment: 同步性 / R² 反映特质信息含量;种子 1 ~ 5、13 ~ 15
+  - title: Downside risk
+    authors: Andrew Ang, Joseph Chen, Yuhang Xing
+    year: '2006'
+    treatment: 下行 beta 要求补偿;种子 8 ~ 12 的市场下跌日 / 上涨日不对称
+  - title: Good volatility, bad volatility, and the cross section of stock returns
+    authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+    year: '2020'
+    treatment: 半 beta(按市场涨跌分开的 beta);种子 11 的近似写法
+  - title: Market frictions, price delay, and the cross-section of expected returns
+    authors: Kewei Hou, Tobias J. Moskowitz
+    year: '2005'
+    treatment: 对滞后市场收益的反应度量价格延迟;种子 6、7
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜与日内是两类参与者;种子 14、15 读开盘缺口与市场缺口的同步性

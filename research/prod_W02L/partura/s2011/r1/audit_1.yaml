@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度4。核心 C0 = day_ar1_coefficient(Volume) 自己与流动性 liq 0.50、已知族 known 0.51 相关(相关度表的「≥0.5 换写法」标记),所以新意只能来自外围的耦合。15 个种子与三个 head 的原始秩 |ρ| 在 0.04–0.27 之间(最像的是 a13 与 cross_autocorr_s1 head 的 0.27、a8 与 ts_decay_linear head 的 0.25),残差 |ρ| 最大 0.37(a14);与 5 个控制的 |ρ| 除 a15 的 size 0.75 外都低于 0.5。库里 228 条含 C0 的表达式里,没有一条把 C0 与 day_sum(Ret)、abs_、Close、Amt 做滚动相关或回归,C0 的 ts_std 与 q75 减 q25 形式在库里也无命中,所以耦合是新对象。合理度4。机制是「成交持续性与当日涨跌同步」,即 Llorente 等(2002)量价关系在个股时间序列上的版本,说得通。逐个算子核对:cross_corr、cross_regbeta、cross_zscore、cross_mean、ts_std 都沿日轴(dt_cross.py;ops_ext.py:208);cross_delay 按日平移(dt_cross.py:150);cs_first_low40 是字典序门槛而非掩码(ops_ext.py:357);cross_regbeta 的分母 var(C0) 由 EPS=1e-9 守护,只有 C0 在整个窗口内几乎不变时才爆,这种情形少见,不算数值伪影;无前视(窗口都截止于 t,t+1 才交易);无禁用算子(ts_spearman、nt_*);a7 的分母是前收盘价、恒正,无爆点;热身不超过 120 日。不是数学问题、但要记下的风险:sumRet 与 |ret| 被一字涨停日(约 +10%)主导的可能(a1–a4、a6、a11、a12);a15 的 size 0.75 来自门槛函数,三次 size 残差去不掉阶跃,所以它的分数可能只是小盘门槛;a6 与 s2012 的 a 位种子字面相同,但不是 head 也不是控制,不划,只记录。核心与每个控制的 |ρ| 都低于 0.8(最大为 known 0.51),E 位门槛通过。无种子划掉:没有 |ρ|≥0.7 或控制 |ρ|≥0.8 的种子,没有数学问题,骨架与外围都与库无命中。如果它有 alpha,最可能来自成交持续性与收益的同步(量价关系),或限制套利的小盘区间;若 a15 领先,来源多半是门槛而非耦合。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 5, 6, 14]
+    reasons: '创新度4。库里 5583 条里 sign(Ret)、in_logchg、cross_zscore、cs_bucket_rank、cs_first_low40、cross_ema 的用法计数都是 0,带符号成交流是新对象。幸存种子(3、4、7、8、9、10、11、12、13、15)与三个 head 的原始秩 |ρ| 在 0.02–0.31 之间(最大的是 3 与 ts_decay_linear head 的 0.31),残差与 head 的 |ρ| 最大 0.28(3);与控制的 |ρ| 除 10 的 size 0.75 外都在 0.31 以下。没给 5,因为新的主要是买卖方向的代理(分钟收益符号),不是新的信息源。合理度4。机制是订单流符号持续性(Lillo 与 Farmer 2004、Toth 等 2015),分钟收益符号乘成交量是常见的方向近似。算子核对:mul、sign、day_ar1_coefficient(OLS 斜率,dt_day.py:336)、cross_mean 与 cross_ema(ops_ext.py:172)沿日轴、cross_zscore 为自身 120 日的时间序列 z 分数(ops_ext.py:208)、in_delay 沿分钟轴平移 1 分钟(dt_in.py:266),无前视。b8 的 day_corr 在整天为常数时返回 0 而非缺失(dt_day.py:228,corr = cov/(sqrt(varx·vary)+EPS)),这是定义上的中性值,在 60 日均值里不主导截面,不是数学问题。划掉 1、2、5、6、14:b1 与 head 的原始 |ρ| 为 0.703(自动线);b5、b6、b14 为 0.915、0.932、0.928(b5 另有 liq 0.815),都是对 Volume 或 Amt 做对数差分或减去同分钟 20 日均值后的 AR1,与 head 是同一个水平对象。PI 笔记说的「去季节、去 U 形」在相关度表里不成立,这一点要记下。b2 的原始 |ρ| 为 0.696(与 head 2 为 0.693),差 0.004 落在自动线之下,但它就是 b1 把 Volume 换成 Amt、把 cross_mean 换成 cross_ema 的换皮,且 PI 笔记称 Volume 与 Amt 互换分数不变(B031 的拆解也一样),判为重复划掉;这一条是判断划掉,不是自动划掉。剩 10 个,远高于 4。b12 与 s2012 的 N 位种子字面相同,不划,只记录。如果它有 alpha,最可能来自成交加权的日内方向持续(日内动量或反转结构,sign(分钟收益) 的 AR1 不一定是拆单指纹),或 b10 的小盘门槛区间;若 b10 领先,来源多半是门槛。'
+R:
+  - head: 'cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)), 30)'
+    soundness: 3
+    reasons: '合理度3(R 组只评合理度)。没有数学问题:pow_05 是带符号开方(common.py 的 pow_),cross_autocorr_s1 即 cross_autocorr(x, d, 1),沿日轴的滚动相关(dt_cross.py);6 个变体都保留同一个对象(日度 AR1 的 30–60 日日轴自相关),只改估计量的平滑(变体 1、2)、换源头(变体 3、4、5)或做 z 分数(变体 6)。机制只有「估计量吵、源头被日内 U 形污染」,说得通但单薄。loc.json 的拆解显示窗口 15、30、60 的分数为 −1.72、−1.80、−1.94,Amt 互换 −1.74,去掉 pow_05 为 −1.80,几乎不动,说明分数不由估计量决定;变体 1、2 的好处大概只来自平滑,不是新信息。给 3 分,不高。'
+  - head: 'ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 50)'
+    soundness: 4
+    reasons: '合理度4。机制清楚:head 2 的水平与已知成交额族的 |ρ| 为 0.76(C0 自己为 0.51),窗口越长分数越好(25、50、100 日为 −2.57、−1.98、−1.65),说明承重的是慢的流动性水平。变体对准这一点:变体 1–3 用 cs_bucket_demean 与 cs_bucket_rank 在已知族或流通市值的十分位内去均值、排序(ops_ext.py:463、239,桶内不足 2 只为 NaN,不产生爆点);变体 4–6 改读水平之外的二阶量(q75 减 q25、100 日标准差、60 日截面 std);变体 7 把源头换成对数差分的 AR1。算子都按定义实现,无前视、无禁用算子。没到 5 分:变体 1–3 只在分桶内去掉水平,二阶量为什么承载信息(变体 4–6)PI 没有给出机制。'
+summary: '位 a(E,核心 C0)与位 b(N)都通过:a 创新4、合理4,15 个种子全留;b 创新4、合理4,划掉 1、2、5、6、14(其中 2 为判断划掉的换皮),留 10 个。R1 合理3、R2 合理4 都保留。无数学问题;骨架比对 5583 条库与外围比对都无命中。'

@@ -1,0 +1,71 @@
+seed: 2040
+round: 2
+slots:
+- type: E
+  core: cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt)))
+  hypothesis: '核心 `cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt)))`(共性表第一名,均值差 +1.70,p 0.003,5 个候选)。读法:当天分钟收益的标准差,减去同一天「分钟最低价与对数成交额的协方差」十分位里同伴的均值。day_cov(Low, log(Amt)) 的量级由价格水平乘以日内量价同向程度决定,所以十分位把「价位相近、日内量价趋势相近」的股票分到一起,核心读的是「相对同伴的日内波动」,即同类股票里谁今天更躁。
+
+
+    快照里的事实:第 1 轮 N 位的最好候选 `cross_autocorr_s1(cs_bucket_demean(day_std(Ret), day_signed_ratio(Low, Ret)), 241)` 是本流唯一为正的分数(train +0.26 / valid +0.58),同一个骨架的另两个变体也在 +0.14 ~ +0.21,而含该核心的 5 个候选均值 −0.57,比其余 −2.27 好 1.7。第 1 轮 E 位的 `day_cov(Ret, log(Amt))` 外围(慢均值、对自己历史标准化)全部是 −0.45 以下。所以有信息的是「相对同伴的波动」这个状态变量被读成「它自己时间序列的形状」,而不是它的水平均值。已见过的写法几乎全是 `cross_autocorr_s1(核心, 241)`(一阶自相关)。
+
+
+    本轮外围(16 个种子,核心都原样在内,全部不用一阶自相关,也不用已见过的 `cross_mean(… , 60)` 条件乘积):读它在时间上的其他形状。(a) 水平和离散:120 日均值、120 日标准差(波动的波动)、绝对值的 120 日均值(「相对同伴有多不寻常」,取自 cs_bucket_demean 文档里建议的折叠);(b) 持续性换成别的度量:Hurst 指数(241 日)、与 5 日前自己的 241 日相关(长滞后而不是滞后 1)、对自己 241 日历史取 z 分数 / 分位后做 20 / 60 日均值;(c) 尾部与不对称:上 / 下半标准差之差、241 日上四分位尾部均值、波动峰值离现在多久(argmax);(d) 对外部变量的敏感度:对自己的收益的相关(杠杆效应:收益下跌时相对波动是否升高)、对全市场日度波动的回归斜率(压力敏感度)、与量价耦合 `day_cov(Ret, log(Amt))` 的 120 日相关;(e) 趋势:20 日均值减 241 日均值、20 日与 120 日均值的回归残差、「水平秩 × 离散秩」两个秩相乘。
+
+
+    机制与为什么样本外还在:相对同伴的波动是持有人结构(散户占比高、涨跌停与打板资金)的慢变属性,同类股票里「躁」的一直躁;从它的时间形状读(持续、波动的波动、对压力的敏感度)而不是水平读,是因为水平被流动性 / 波动 / 市值控制吃掉(第 1 轮 R 位的所有水平变体都在 −1.5 一带,印证了这点),而形状信息在控制里没有。和以前不同:不再套一阶自相关,换成 Hurst、长滞后相关、尾部、回归斜率这些没有出现在已见候选里的度量。不押的:水平均值(看第 1 轮 R 结果,多半是控制的换写法)。前视检查:全部是对到当天为止的日度值做滚动窗口,没有未来信息;day_cov(Low, log(Amt)) 在成交额为零的分钟被记为缺失,桶内不足 2 只记缺失,不会产生爆点。'
+  seeds:
+  - cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120)
+  - cross_stddev(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120)
+  - cross_hurst(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 241)
+  - cross_corr(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), ts_delta(log(day_last(Close)), 1), 120)
+  - cross_regbeta(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), cs_mean(day_std(Ret)), 120)
+  - sub(cross_semistd_pos(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120), cross_semistd_neg(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120))
+  - cross_tail_mean_q75(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 241)
+  - sub(cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 20), cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 241))
+  - cross_argmax(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120)
+  - cross_mean(cross_rank(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 241), 20)
+  - cross_corr(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), day_cov(Ret, log(Amt)), 120)
+  - cross_mean(cross_zscore(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 241), 60)
+  - mul(cs_demean(cs_rank(cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 60))), cs_demean(cs_rank(cross_stddev(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 60))))
+  - cross_mean(abs_(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt)))), 120)
+  - cross_corr(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), cross_delay(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 5), 241)
+  - cross_regres(cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 20), cross_mean(cs_bucket_demean(day_std(Ret), day_cov(Low, log(Amt))), 120), 241)
+- type: N
+  hypothesis: '新想法:「成交量节奏」VT = `day_std(in_logchg(Volume, 1))`,即当天相邻分钟成交量对数变化的标准差(成交量自己的波动,而不是价格的波动,`in_logchg` 对涨跌对称,不会像 in_pct 那样被倍数跳升的右尾支配;成交量为零的分钟记缺失)。它度量的是成交是平稳持续的(机构拆单、做市)还是脉冲式的(散户情绪、事件驱动、涨停板上的开关)。机制:同样的价格波动,成交量节奏越乱说明交易由非连续的、信息或情绪驱动的参与者主导,而且这种参与者结构是慢变的;把它相对「同样价格波动的同伴」去均值(`cs_bucket_demean(VT, day_std(Ret))`),就得到「在价格风险相同的股票里,谁的成交更脉冲」。
+
+
+    怎样用算子实现:种子分三类。(a) 相对价格波动的去均值再慢聚合(cs_bucket_demean / cs_bucket_zscore 按价格波动或流通市值十分位)、秩差(成交量节奏秩减价格波动秩)再对自己历史标准化,120 / 60 / 20 日均值;(b) 时间形状:与自己价格波动的 120 日相关与回归斜率(成交量节奏是否随价格波动同步,即成交是否「响应」价格)、120 日标准差、Hurst、20 日对 241 日的加速度、一阶自相关;(c) 方向性的量价响应:`day_signed_ratio(in_logchg(Volume, 1), Ret)` = 绝对收益里发生在放量分钟的份额减去发生在缩量分钟的份额,在 [−1, 1] 内,衡量价格变动是不是在放量中完成(知情交易的特征),取 120 / 20 日均值与同伴去均值版本。
+
+
+    和库里的不同:库里的成交量读数是水平(day_mean / day_first 的 log Volume)、`in_forward_valid_part` 的事件计数(B119,手写)、以及量价协方差 `day_cov(Ret, ·)`;成交量变化率的标准差、与价格波动的秩差、signed_ratio 的放量份额在两个库的 5583 个骨架里都没有(我对照过 members.csv 的骨架,0 重合)。与已见的区别:第 1 轮 N 位的正分来自「同伴去均值的价格波动 + 慢的形状」,这里把被读的变量从价格波动换成成交量节奏,同一个思路迁到一个控制里没有的变量上(控制是流动性水平、波动水平、反转、已知成交额族、市值、两个冠军)。
+
+
+    为什么样本外还在:成交结构是持有人结构的慢变属性;去均值 + 窗口 ≥ 60 日让日换手很低,15 bp 的成本不吃掉毛超额;相对价格波动去均值后与波动控制的暴露被压低。风险:VT 与成交额水平相关(小票成交稀疏则脉冲多),可能仍与流动性控制有相关,但这类暴露被新尺子的三次多项式残差去掉。前视检查:全部用当天分钟数据与过去日度数据,没有未来信息;day_signed_ratio 分母为零(整天无成交)记缺失;秩差、z 分数在窗口内标准差为零时记缺失,不出现除以近零的爆点(用秩与 cs_bucket_*,不用裸除法)。'
+  inspired_by: B118 / 第 1 轮 N 位的最好候选 cross_autocorr_s1(cs_bucket_demean(day_std(Ret), day_signed_ratio(Low, Ret)), 241)(train +0.26 / valid +0.58,本流唯一正分)和 B119 的成交量跳变计数:慢的、同伴去均值的、读成交量节奏的状态变量。
+  seeds:
+  - cross_mean(cs_bucket_demean(day_std(in_logchg(Volume, 1)), day_std(Ret)), 120)
+  - cross_autocorr_s1(cs_bucket_demean(day_std(in_logchg(Volume, 1)), day_cov(Low, log(Amt))), 241)
+  - cross_mean(sub(cs_rank(day_std(in_logchg(Volume, 1))), cs_rank(day_std(Ret))), 120)
+  - cross_mean(cross_zscore(sub(cs_rank(day_std(in_logchg(Volume, 1))), cs_rank(day_std(Ret))), 241), 20)
+  - cross_corr(day_std(in_logchg(Volume, 1)), day_std(Ret), 120)
+  - cross_regbeta(day_std(in_logchg(Volume, 1)), day_std(Ret), 120)
+  - cross_stddev(cs_bucket_demean(day_std(in_logchg(Volume, 1)), day_std(Ret)), 120)
+  - cross_autocorr_s1(day_std(in_logchg(Volume, 1)), 241)
+  - cross_mean(cs_bucket_zscore(day_std(in_logchg(Volume, 1)), LogFloatCap), 120)
+  - cross_mean(cs_bucket_demean(day_std(in_logchg(Volume, 1)), day_std(Ret)), 60)
+  - sub(cross_mean(day_std(in_logchg(Volume, 1)), 20), cross_mean(day_std(in_logchg(Volume, 1)), 241))
+  - cross_mean(day_gini(Volume), 120)
+  - cross_hurst(day_std(in_logchg(Volume, 1)), 241)
+  - cross_mean(day_signed_ratio(in_logchg(Volume, 1), Ret), 120)
+  - cross_mean(day_signed_ratio(in_logchg(Volume, 1), Ret), 20)
+  - cross_mean(cs_bucket_demean(day_signed_ratio(in_logchg(Volume, 1), Ret), day_std(Ret)), 120)
+R:
+- head: ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), 20)
+  why: head 是「日内收益(收盘 / 开盘 − 1)× 成交量跳变事件计数(相对前一有效分钟的对数量变化超过当日 ±1 个标准差的分钟数)」的 20 日均值,分数 −2.28。拆解表给了两条线索:窗口 20 → 40 变好 0.85(−1.43),说明 20 日太快,换手吃掉了毛收益;日内收益这一项的击倒是 −1.56 / valid −0.33(必要性 −0.72),即收益项本身有一定贡献、事件计数项拖后腿。第 1 轮 R 位显示单纯加慢水平读数不行(多数 −1.5 以下),所以这里不只是加窗口:变体组合是 (a) 窗口 60 / 120;(b) 把收益取符号(去掉收益大小的重尾,只留方向 × 事件强度);(c) 把事件计数转成截面秩,去掉计数的量纲和重尾;(d) 收益与计数各取秩再相乘(两个去均值的有界信号相乘);(e) 在日内成交额水平十分位里去均值(去掉流动性这个已被控制的暴露)。依据是拆解里 `sub(div(day_last(Close), day_first(Open)), 1)` 与事件计数的必要性符号相反,说明烂的是量纲不匹配 / 重尾,不是核心思路。
+  variants:
+  - ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), 60)
+  - ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), 120)
+  - ts_mean(mul(sign(sub(div(day_last(Close), day_first(Open)), 1)), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), 60)
+  - ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), cs_rank(add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))))))), 60)
+  - ts_mean(cs_bucket_demean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))))), day_mean(log(Amt))), 60)
+  - ts_mean(mul(cs_rank(sub(div(day_last(Close), day_first(Open)), 1)), cs_rank(add(day_sum(is_gt(sub(log(Volume), in_forward_valid_part(log(Volume))), add(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume))))))), day_sum(is_lt(sub(log(Volume), in_forward_valid_part(log(Volume))), sub(in_mean_full(sub(log(Volume), in_forward_valid_part(log(Volume)))), in_stddev_full(sub(log(Volume), in_forward_valid_part(log(Volume)))))))))), 60)

@@ -1,0 +1,75 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: |-
+      核心与门槛:核心 K = cs_bucket_zscore(cross_ema(day_first(Volume),20), cross_mean(day_sum(Volume),30)) 在 loc.md 机械核心卡(第 90 行与第 98 行)里出现,是合法的核心来源。每个种子字面包含 K(a14 的 K 位于第二参数)。相关度表:K 对 5 个控制的最大 |ρ| 是 size 0.32、vol 0.12,全部低于 0.8,过 E 门槛;K 对快照 head 的原始 |ρ| 0.31(最像 cross_sum(day_first(Volume),60)),残差 0.40。
+
+      创新度 4:快照 head 全是竞价量的 3/5/60 日合计(水平)。K 是 20 日半衰期 EMA 之后按 30 日成交量分桶的截面 z,去掉了流动性水平(K 对 liq 只有 0.10),不是 head 的换写法。扣掉的一点:残差 0.40 说明它与 head 仍共享一部分竞价量信息,所以不给 5。
+
+      合理度 4:逐个算子核对。cross_ema 是因果半衰期 EMA,跳过缺失日(ops_ext.py:172)。cs_bucket_zscore(y,x) 按 x 的十分位分桶后做桶内标准化(ops_ext.py:482),分桶变量是过去 30 日的成交量均值,只用到当日及以前。cross_mean、cross_zscore、cross_decay_linear、cross_tail_mean_q75、cross_argmax、cross_regres、cross_reg_tvalue、cross_corr 都是沿日轴的窗口运算(dt_cross.py、ops_ext.py)。day_first(Volume) 在 V2 网格上取第 0 格,即 09:30 集合竞价(synthetic.py、dt_in.py:314 的注释),与第 1 轮的口径一致。无前视:K 只用 t 日收盘前可知的数据。
+
+      数学检查:种子 12 cross_argmax(K,60) 划掉。argmax 位置除以窗口长度只有约 60 个离散取值,截面几乎全是并列块;相关度工具给出 distinct 0.033 并判 gate=false(废品)。十分位书的排列由并列块的顺序决定,属于 §4「面板几乎退化」。其余 13 个种子数学上无问题。a7 的 day_last(Volume) 取第 240 格(15:00 的连续 bar),它是不是「收盘集合竞价」取决于网格与数据,这只是解释上的小问题,不构成数学问题。
+
+      其余种子的一句机制(「如果它有 alpha,最可能来自哪里」):
+      a1 cross_zscore(K,60):竞价注意力相对自身 60 日水平的冲击。
+      a2 K 减 K 的 120 日均值:同上,去掉持续水平后的版本。
+      a3 K 的 40 日线性衰减:慢注意力积累(与 a13 同核,平滑核不同,保留)。
+      a4 K 乘开盘跳空方向的衰减:带量跳空之后的方向延续。
+      a5 K 与跳空 G 的 60 日相关:竞价量与跳空同步性。
+      a6 K 对日内收益的 90 日回归 t 值:竞价注意力与当日连续段表现的关系。
+      a7 K 减收盘 bar 版本:竞价与尾盘的参与差。
+      a8 K 的 60 日标准差:注意力分歧的稳定程度。
+      a9 K 乘 20 日均收益的 120 日 z:注意力买入发生在上涨之后。
+      a10 K 的 20 日均值除以 60 日标准差加 1:慢变的注意力偏向与稳定性。
+      a11 K 的 60 日上四分位均值:持续高注意力的票。
+      a13 K 的 40 日均值:同 a3 的慢平滑。
+      a14 K 对总量 EMA 的 60 日回归残差:竞价量中超出总成交的部分(竞价份额)。
+
+      注:相关度表只覆盖快照的 6 个 head。W01 库不在表内,GP 的库禁令在运行时会按 0.7 再拦一次。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 7]
+    reasons: |-
+      门槛:保留种子对快照 head 的原始 |ρ| 最大 0.54(b6,对 div(ts_sum(R·VWAP,60),...) 这一 head),对 5 个控制的最大 |ρ| 是 0.46(b6 的 vol),全部未到 0.7 / 0.8 的自动划线。
+
+      划掉 4:b4 = cross_corr(ts_delay(R·ZV,1), R, 120) 与 b1 = cross_reg_tvalue(ts_delay(R·ZV,1), R, 120) 是同一对变量、同一窗口。rolling OLS 的 t = r·sqrt(n−2)/sqrt(1−r²),对固定 n 是 r 的严格单调函数,两者的日截面秩相同。这与第 1 轮划 b6 的理由相同,保留 t 值版本 b1。
+
+      划掉 7:b7 = sub(div(cross_sum(R·Amt,60), cross_sum(Amt,60)), cross_mean(R,60)) 与 R 组 head 3 的变体 2 是同一个表达式。ts_sum 与 cross_sum 在日轴上都是 rolling_reduce(nansum_last, axis=0)(nd_ts.py:142、dt_cross.py:218),ts_mean 与 cross_mean 同理。相关度表两行逐位相同(0.48 / 0.32;liq 0.23、vol 0.33、rev 0.20、known 0.23、size 0.02)。保留 R 组那一条,b7 作为重复划掉。
+
+      创新度 4:快照 6 个 head 是竞价量的水平合计与 VWAP 加权收益,没有一个含「滚动条件反应函数」(量价条件下的滚动 OLS / 相关)。保留种子对 head 的残差 |ρ| 最大 0.37(b8),其余多在 0.2 以下。对 5 个控制的最大值是 b6 的 vol 0.46,与 vol 有重叠但不到 0.8。
+
+      合理度 4:算子核对。ts_delay 沿日轴后移一天(nd_ts.py:113)。ZV = cross_zscore(log(1+day_sum(Volume)),60) 是自身 60 日 z(ops_ext.py:208),log 的参数为 1 + 成交量,避开了 EPS 问题。cross_reg_tvalue(x,y,d) 是 y 对 x 的滚动 OLS t 值(dt_cross.py:314),cross_regbeta 是斜率,cross_corr 是滚动相关,与假设的描述一致。
+      前视:标签是 open_vwap15 时,target[t] = VWAP(t+2)/VWAP(t+1) − 1(label.py:122-151),目标从 t+1 开盘后算起,不含 t 日收盘之后的量价;所以 b6、b8、b9 没有用 ts_delay 的同日信号也不构成前视。若改成 close 标签,目标从 t 收盘后算起,同样无前视。注:种子说明里写的「x 全部后移一日」对 b6、b8、b9 并不成立,但这不是问题,只是描述不准。
+      分母:只有 ZV 的 std+EPS 与 cross_zscore 的标准化,没有近零除数。
+
+      其余保留种子的一句机制(「如果它有 alpha,最可能来自哪里」):
+      b1 lag(R·ZV) 对 R 的 120 日 t 值:昨日放量收益的延续或回吐,是个股慢变的反应特性。
+      b2 lag(sign(R)·ZV) 对 R 的 120 日斜率:同上,用方向符号。
+      b3 lag(ZV) 与 R 的 90 日相关:放量之后收益方向的稳定性。
+      b5 lag(is_gt(ZV,1)·R) 对 R 的 120 日 t 值:只看放量日的收益延续。
+      b6 放量日收益的 40 日 EMA:放量日的收益偏信息交易。与 vol 控制有 0.46 的相关,请 PI 在 train 上看它的份额。
+      b8 同期 ZV 对 R 的 60 日 t 值:个股的量价同期冲击斜率。注意这是同期关系,机制要靠「冲击的慢变性」支撑,不是滞后预测。
+      b9 同期 ZV 对 |R| 的 120 日 t 值:价格冲击强度的慢变量(与 liq 控制只有 0.04)。
+      b10 lag(下跌日·ZV) 与 R 的 120 日相关:下跌放量之后是反弹还是续跌。
+      b11 lag(I·ZV) 对隔夜 G 的 120 日 t 值:昨日日内放量与今日开盘跳空的关系。
+      b12 lag(G·ZV) 对日内 I 的 120 日 t 值:昨日隔夜放量与今日日内反应的关系(与 head 的残差 |ρ| 只有 0.02)。
+      b13 lag(I·ZV) 对 R 的 120 日斜率:昨日日内放量对今日收益的敏感度。
+R:
+  - head: 'ts_stddev(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 80)'
+    soundness: 2
+    reasons: |-
+      合理度 2,原因只在变体 3。变体 3 = div(cross_semistd_neg(R,80), cross_stddev(R,80)) 把日收益 R 直接喂给 cross_semistd_neg。这个算子的定义是「正数 x 的日对数变化的下行半方差」(ops_ext.py:751-761),ok = (x>0)&(prev>0) 只保留两天收益都为正的日子(约四分之一的日子),g = log(R_t/R_{t-1}) 不是下行波动。它的分子由被掩掉的日子决定,属于 §4「定义坏掉」。变体 3 必须删掉。
+      删掉变体 3 之后其余四个变体都合理:v1 短窗口 / 长窗口波动比(分母是 120 日波动,近零只出现在长期锁死或停牌的票上,排序后只影响极少数票);v2 规模桶内标准化波动(数学没问题,但与 head 的原始 |ρ| 0.99,实质上是换皮,去水平只改数值);v4 隔夜跳空波动比总波动(合理);v5 去截面均值后的波动(与 head 0.97,也近似换皮,但不是数学问题)。如果 PI 只能整组接受或拒绝,变体 3 存在即整组不过,请 PI 按变体删除后再提交。
+  - head: 'cross_sum(day_first(Volume), 5)'
+    soundness: 4
+    reasons: |-
+      合理度 4。变体 1 是份额的 30 日 EMA,变体 2 是 20 日份额减 240 日份额,变体 3 是 20 日份额按规模桶标准化,变体 4 是 60 日份额按总量桶标准化。算子核对:cross_sum、cross_ema、cs_bucket_zscore 都是因果的;分母是当日总成交量的窗口和,0/0 为 NaN,没有近零除数;变体 2 的 240 日热身期相对 2018 年起算的 train 不大。机制是竞价份额相对水平的慢变异常,说得通,与 head 的残差都在 0.2 到 0.6 之间,不是换皮。
+  - head: 'div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), div(day_sum(Amt), day_sum(Volume))), 60), ts_sum(div(day_sum(Amt), day_sum(Volume)), 60))'
+    soundness: 4
+    reasons: |-
+      合理度 4。变体 1 是成交额加权的 60 日平均收益(分母 ts_sum(Amt,60) 为正,没有近零除数);变体 2 是成交额加权收益减去自身 60 日简单平均收益,即成交额加权相对等权的超额,机制清楚;变体 3 是 log(1+成交量) 加权的 120 日收益减 120 日均值。原 head 的权重是 VWAP 价格水平,拆解表已说明这一权重不携带成交信息,变体 1 与 3 把权重换成了成交额 / 成交量,方向对。注:变体 1 与原 head 的原始 |ρ| 是 0.81(会按规则替换原 head),这是换权重的结果,不影响合理度。
+summary: 'a 通过(划 12 号 argmax 废品种子,a 的 E 核心 K 合法、门槛过);b 通过(划 4 号与 R3v2 完全重复的 7 号,以及与 b1 同对同窗口的 4 号 corr 版);R 组 1 合理度 2(只删变体 3,其余四个可用),R 组 2、3 合理度 4;全部种子无 ts_spearman 与 nt_* 算子,无前视。'

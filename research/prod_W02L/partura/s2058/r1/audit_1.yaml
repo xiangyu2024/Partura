@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [1]
+    reasons: '相关度表:E 核心 day_std(pow_2(Ret)) 与快照 head cross_mean(day_std(pow_2(Ret)),3) 的原始 |ρ| 为 0.84(它本来就是这个 head 的子树,合规);核心与 5 个控制的最大 |ρ| 为 vol 0.66,低于 0.8,E 位核心门槛通过。12 个种子都原样包含核心;种子与 head 的原始 |ρ| 为 0.23–0.61,残差 |ρ| 为 0.06–0.51,没有任何一个触发 0.7 / 0.8 的自动划掉。算子核对:cross_ema 为日轴半衰期 EMA,replace_small_with_nan 阈值 1e-8 对方差量级不误伤,cs_bucket_rank / cs_winsor / cross_zscore / cross_max / cs_demean 的实现与描述一致;没有用到 nanrank_last 相关的日轴 / 滚动排序算子,不触发 §4 的停牌陷阱。novelty 给 3:种子用了方差平方归一、分桶、长短 EMA 差、时间 zscore 等改变排序结构的写法,不是单纯换写法。但有一个需要记录的事实:seed 1/2/3/10 的 div(核心, pow_2(day_var)) 与 vol 控制的 |ρ| 为 0.62–0.71,而核心本身为 0.66,归一并没有去掉波动水平;只有时间 zscore 的 seed 9(vol 0.08)真正去掉了它。soundness 给 3:计算本身无误,但 PI 的机制描述有错。day_std(pow_2(Ret)) 约为 σ²·sqrt(κ−1),day_var(Ret) 为 σ²,所以 div(核心, pow_2(day_var)) 约为 sqrt(κ−1)/σ²,不是 PI 说的无量纲厚尾度;它仍带 1/σ²,实际接近低波动信号。若它有 alpha,最可能来自两处:去掉线性波动后残留的 κ 部分(跳跃 / 彩票厚尾),或 zscore、分桶版本里控制去不掉的板块 / 规模内结构;前一支在 1/σ² 主导时多半只是低波动异象。划掉的种子:1 号与 R1 变体 8 字面完全相同(cross_ema(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),60)),属重复,去掉种子、保留 R 的直接评估。8 号的 cs_demean 在截面秩上不起作用(逐日常数平移经 EMA 后仍是常数平移),等价于 cross_ema(log(core+1e-9),120),与库里任何 head 不重复,保留并只注明。注:相关度表只列了 5 个控制,规则里的两个冠军信号不在表中,这部分新颖性我无法核对,未据此打分。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 3, 7, 8]
+    reasons: '相关度表:三个 head 的原始 |ρ| 为 0.06–0.46,残差 |ρ| 为 0.04–0.12;控制最高的是 1 号的 vol 0.50 与 rev 0.48,均低于 0.8。LimitWidth 按源码核对(AlphaCube-steering 的 dailyfields.derive 调用 tradability.board_limit):它是板块常数,主板 0.10、科创板 0.20、创业板在 2020-08-24 之后为 0.20、北交所 0.30,不是每日变化的字段。ST 的 5% 板宽不在立方体里,ST 涨停时 ret/LimitWidth 只有 0.5,is_gt(·,0.8) 会漏掉它;这是定义上的偏差,不是系统性算不出,不挡。PI 写的「0.05~0.3」「每只票当天的板宽」与源码不符,建议更正叙述。novelty 给 4:日频、按板宽归一的极端收益与三个 head(全是分钟平方或成交量的日内离散)不是同一维度,残差相关很低;只有 vol / rev 的原始部分重合,不是换写法。soundness 给 4:算子组合逐个核对通过(day_last 取当日收盘、ts_delay 取前一日、div 按板宽归一、is_gt 阈值、cross_mean / cross_ema / cross_max / cross_zscore 的窗口),只用当日收盘,无前视;机制(涨停附近的追涨 / 彩票偏好、MAX 效应、短期过度反应)说得清楚。划掉的种子:2、3、7、8 都是 is_gt / is_lt 的 0/1 计数在 60–120 日窗口上的均值或差;流水线门槛把它们判为废品(覆盖率 ≥0.9 且 distinct ≥0.5 不满足),面板主要是并列的 0,截面排序由列序打破,符合 §4 的「面板几乎是常数」数值伪影,不是信号。保留 4 号:cs_demean 在截面秩上不起作用,它等价于 cross_ema(ret/LW,120),与 1 / 6 号同族但窗口不同,不算重复。保留 10 号(cross_zscore(·,60)):对 vol 0.05、对 head 0.06,是本位新颖性最高的一支。若它有 alpha,最可能来自涨跌停附近的追涨 / 彩票偏好(MAX 效应)与短期过度反应;也可能只是板块尺度的截面倾斜,PI 需要留意板块暴露。'
+R:
+  - head: 'cross_mean(day_std(pow_2(Ret)), 3)'
+    soundness: 4
+    reasons: '窗口扫描(2 / 6 / 10 / 20 / 60 / 120 的均值与 EMA),数学无误,没有陷阱。机制是「3 日窗口被短期噪声主导,拉长平滑」,说得通,PI 的 3→6 增益 +0.30 是流水线观察到的事实。注意:R1 的第 8 个变体 cross_ema(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),60) 与 slot a 的种子 1 字面相同,已在 slot a 中去掉种子;变体 1 与 2 对 head 的原始 |ρ| 为 0.85 / 0.77,只是换窗口的同一个东西,不会成为新 head,但 R 只评合理度。'
+  - head: 'day_std(pow_2(Volume))'
+    soundness: 3
+    reasons: '数学无误,变体(窗口均值、EMA、方差平方归一、分桶)的算子组合都能实现描述。机制是「成交量的日内二阶离散度平滑后当流动性 / 换手变动性的代理」,能说通但较弱:变体 1 对 head 的原始 |ρ| 为 0.91,残差 0.93,平滑之外几乎没有新内容;变体 2、3 的流动性控制相关 0.47–0.51,说明它大部分是流动性的换皮。给 3,不挡。'
+summary: 'a 位通过(去掉与 R1 变体 8 字面重复的种子 1,剩 11 个种子,核心对控制的最大 |ρ| 0.66);b 位通过(去掉 2、3、7、8 四个门槛废品 / 常数面板种子,剩 5 个);两个 R 组合理。主要问题:a 位的「无量纲厚尾度」机制描述有误,除以的是方差平方,结果仍含 1/σ²,vol 相关 0.62–0.71 没有降下来,建议 PI 在笔记中更正;b 位 LimitWidth 是板块常数而非日频变化量,ST 的 5% 板宽不在立方体里,也需更正叙述。相关度表未包含两个冠军控制,这部分未核对。'

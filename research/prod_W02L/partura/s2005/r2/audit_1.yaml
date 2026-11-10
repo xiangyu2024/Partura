@@ -1,0 +1,74 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      核心与快照的关系:day_cov(Amt, Low) 是快照里两个 head 的子树(cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30), ...) 与 cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15), ts_min(pow_3(ts_std(day_close(Amt), 50)), 1)), 5)),合规。16 个种子逐条核对都原样含核心。核心对 5 个控制的 |ρ| 为 0.005–0.03,远低于 0.8;核心对快照 head 的原始 |ρ| 最大 0.054。
+
+      相关度(corr_1.json,train 每 5 天取一天):16 个种子对快照 head 的原始 |ρ| 在 0.14–0.62 之间,最大的是种子 10(0.615,对 TS 头),没有 ≥0.7 的。对 5 个控制的原始 |ρ| 最大 0.598(种子 10 对 liq),没有 ≥0.8。原始相关里有一大部分是流动性(种子 1、3、4、7、9、10 对 liq 为 0.42–0.60),但去掉控制之后,残差 |ρ| 对快照 head 只有 0.06–0.14(种子 10 为 0.22),所以新颖性在残差层面成立。
+
+      创新度 4:快照里这个核心只出现在 cross_max 链里,是未归一的水平量(表达式里没有一条无量纲化)。外围把它换成相关系数,或相对 VWAP-TWAP 缺口 cov/(mean·mean) = rho·CV_A·CV_L,并把窗口拉到 20–241 日。去控制后与 head 的残差都很小,是另一个量。扣的一点:16 个种子共用一个核心、同一类聚合(均值、EMA、尾部、差分、z 分数),是一族变体。
+
+      合理度 4:逐个算子核对。day_cov 在有效点不足 2 个时返回 NaN;相关系数形式分母 day_std(Amt)*day_std(Low) 为 0 时得 NaN,由 Cauchy–Schwarz 保证有界;relgap 形式只在整天无成交时为 0/0。cross_tail_mean_q25/q75(ops_ext.py 的 _tail_mean)要求至少 2 个有限日,不足返回 NaN,不是 0;cross_ema 按半衰期做因果加权、缺失日跳过;cross_zscore 包含当日。全部无前视(t 日收盘后才用,t+1 交易)。
+
+      两处非挡的注意:(a) 种子 9 的 cross_mean / cross_stddev 没有 EPS,新上市票在 241 日窗口里只有 1–3 个有效日时 std 接近 0,比值爆点;截面排序若排除非有限值则影响很小,但种子 9 应补 ListAge 闸(种子 11、12 已有)。(b) 241 日窗口在数据起点附近是扩张窗口(rolling_windows 左补 NaN,nanmean 对部分窗口照常计算);若数据从 2018-01-02 起,约一年的热身段会参与统计。§4 的热身问题只在它主导结果时才算,这里不算,但 PI 应确认数据起点。
+
+      冠军的缺口:相关度表只列了 5 个控制,没有两个冠军的 |ρ|。PI 第 1 轮笔记与 DESIGN.md 都说 day_cov(Amt, Low) 属于冠军的成交额主力族。本审计无法从表里核对种子对冠军的残差;创新度是在快照 head 与 5 个控制的口径下给的。冠军的 |ρ| 应补进相关度表后再开 GP。
+
+      逐个种子:无划掉。种子 2 与 15 都是 day_cov/(mean·mean) 的 120–241 日平滑,只是聚合不同(2:原始 0.142 / 残差 0.091;15:0.168 / 0.099),不是重复,保留。
+
+      如果它有 alpha,最可能来自:成交额在价格路径上集中在高价分钟还是低价分钟的慢变执行 / 持有人风格(VWAP 择时一类);次要来源是低流动性票上相关系数的噪声,残差化之后应已吸收大部分。
+
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [2, 13, 14]
+    reasons: |-
+      结构:N 位不带核心。16 个种子读价格水平的三个慢变部分:名义价 sub(LogFloatCap, LogFloatShares)(tests/test_daily_fields_store.py 确认 LogFloatCap = log(FloatCap 平面);名义价是精确的前提是 FloatCap = 收盘价 × 流通股本 同日口径,PI 需确认)、后复权价 log(day_last(Close))、复权因子 log F = 两者之差、限售比 LogTotalCap − LogFloatCap,以及分桶、低价 / 高市值 / 年轻票排除式版本。
+
+      创新度 3:新在显式读价格水平和日频叶子(库里 6 个日频叶子没有出现过,PI 的说法可信),但信号与快照 head 的价格水平通道重合。去控制后的残差 |ρ| 对快照 head 很高:种子 2(log 复权价)对 head `cross_mean(day_cov(Close, Ret), 3)` 0.904;种子 15 0.792;种子 9 0.641;种子 3(log F)0.577;种子 14 0.575;种子 6 0.571;种子 16 0.548。原始 |ρ| 上 `cross_sum(cross_sum(neg(cross_mean(day_cov(Close, Ret), 10)), 30), 3)` 对种子 2 为 0.801。也就是说 head 里 P0(后复权价)那一项去控制后主要就是 log 复权价。新的部分在于把它拆成名义价与复权因子,以及限售比;其中种子 4、7 对 head 的残差只有 0.055、0.072,这两条是真的新。真正新的部分占少数,给 3。
+
+      合理度 4:数学无误。log 对 |x|≤1e-9 返回 NaN,其余的量都为正;cs_bucket_* 按 10 分位分桶,桶内不足 2 只为 NaN;cs_last_low05 / low10 / high20 是 _lexi 的排除式(被排除的票压到底部,其余保持秩序),按 ops_ext.py 定义正确;log(day_last(Close)) 用后复权收盘,复权因子只含过去的除权,无前视;Amt、Volume 为原始值,day_sum(Amt)/day_sum(Volume) 是名义 VWAP。机制(低价溢价与散户彩票偏好、派现 clientele、解禁供给)说得通,换手低,15 bp 成本留得住。
+
+      需要 PI 改口的一点(不挡):§4 的列序并列规则不挡。但 PI 笔记说 tie 只出现在极少的并列价格上,与相关度表不符。distinct 是同日唯一值 / 有值票数的中位数:种子 1(名义收盘价)0.68,约 1/3 的票同日与别的票同值(名义收盘价按 0.01 元跳动,低价段更密);种子 4、7(限售比)0.73 / 0.75(股数比很多恰为 1);种子 5 为 0.95(分桶去均值打破了部分并列)。这些票的排序由列序(交易所 / 板块)决定。依规则不挡。种子 13(分钟算的名义 VWAP)distinct 为 1.0,但它的 corr 行与种子 1 几乎相同(五个控制值相差不超过 0.001),说明日频叶子与分钟名义价一致,这是 PI 想要的数据核对,表本身已经完成了。
+
+      逐个种子:
+      - 2 划掉(自动规则):与快照 head cross_sum(cross_sum(neg(cross_mean(day_cov(Close, Ret), 10)), 30), 3) 的原始 |ρ| 0.801 ≥ 0.7。
+      - 13 划掉(重复):与种子 1 同 head(cross_max(day_cov(Ret, Close), 60))、同残差 0.316、五个控制值几乎相同,是同一个信号的分钟版本。
+      - 14 划掉(重复):60 日均值的 log F 加上日内收盘 / VWAP 缺口。log F 的截面离散远大于日内缺口;与种子 3 的原始 |ρ| 0.435 对 0.437、残差 0.575 对 0.577、liq 0.17、known 0.182、size 0.451 对 0.45,几乎相同。
+      - 5 保留:水平与种子 1 相同(size |ρ| 0.02,分桶去均值几乎不改秩),但它把种子 1 的同价并列改由桶均值打破(distinct 0.95),是有差别的表达式,不算重复。与 1 近似,PI 应知道。
+      - 15 保留但是边界:原始 |ρ| 0.682,贴近 0.7 门槛。相关度表是 train 每 5 天取一天的子样本,0.7 边界读数的抽样误差约 ±0.05,不能据此断定它过线;残差 0.792 与 head 高度重合。这是 N 位最大的风险点。
+      - 其余保留。
+
+      如果它有 alpha,最可能来自:慢变的价格水平属性(名义价低的票的散户偏好与最小报价单位占比带来的流动性溢价;复权因子代表的派现与送转历史,即持有人结构;限售比例代表的解禁供给)。对 log 复权价的读数更可能只是 head 的 P0 通道,而不是新信息。
+
+R:
+  - head: 'cross_mean(day_cov(Close, Ret), 3)'
+    soundness: 4
+    reasons: |-
+      恒等式已核对:Close = P0(1+S_t)、S 为累计收益时,∑S_t r_t = (S_n² + ∑r_t²)/2,得 day_cov(Close, Ret) = (P0/n)[RV/2 + R(R/2 − Sbar)],与 PI 的式子一致。去价格水平的变体 3 的分母是 day_var(Ret) = RV/n − (R/n)²(样本方差),比值约为 1/2 + R(R/2 − Sbar)/RV。由 Cauchy–Schwarz 有 R²/RV ≤ n,|Sbar·R|/RV 同阶有界,所以 PI 说的「没有爆点」在通常情形成立。只有分钟收益近乎常数(方差远小于均值的平方)时才会爆,实际少见;可在分母加一个相对 EPS 作保护,不挡。变体 1、2(120 / 241 日窗口)、变体 4、5(按流通市值或名义价十分位去均值)都是窗口与标准化的正常变换。变体 1、2 的原始 |ρ| 对现有 head 为 0.92 / 0.88,是替换候选,由 R 规则与 GP 决定。机制是「慢窗口的价格水平 × 方向性尾盘集中度」,说得通。合理度 4。
+
+  - head: 'cross_max(day_cov(Ret, Close), 60)'
+    soundness: 4
+    reasons: |-
+      变体 1(241 日 cross_max)与变体 2(上四分位尾部均值)只改窗口与统计量,无前视,无数学问题;cross_tail_mean_q75 不足两个有限日时返回 NaN。变体 3 除以 day_mean(Close) 之后仍含 RV 项(vol 控制的 |ρ| 为 0.617,残差后为 0.21),所以去水平的同时把波动带进来,靠 vol 控制的残差去掉,这是 R 规则下的正常设计。原式的 cross_max 把符号平衡的耦合量取最大的那一天,是水平与极端日的通道;变体把它换成尾部均值的频率与幅度,机制说得通。合理度 4。
+
+  - head: 'cross_sum(cross_sum(neg(cross_cov(cross_min(neg(cross_min(cross_mean(day_cov(Low, Ret), 60), 15)), 15), mul(day_autocorr_n1(High), day_std(Low)), 10)), 60), 60)'
+    soundness: 3
+    reasons: |-
+      数学上无问题:变体 2 用 cross_corr(窗口 60)去掉了 cov 的价格尺度(原式的 cross_cov 乘的是 day_autocorr_n1(High)·day_std(Low),带价格尺度)。但 cross_corr 在某一序列的窗口内为常数时返回 0 而不是 NaN(rolling_pair_reduce 为 cov/(√(var·var)+EPS)),常数窗口的 0 会进入外层 cross_sum,被当成零相关。链深 4 层(两层 cross_min、cross_cov / cross_corr、两层 cross_sum),机制(60 日均值下端 min 链上,高点自相关与低点波动的时间序列协方差)说不清楚。按 §3 说不清机制不是挡的理由,但也给不出 4。变体 1 对原 head 的原始 |ρ| 为 0.488(残差 0.487),变体 2 为 0.26(残差 0.261)。若有 alpha,最可能来自 High 的日间自相关与 Low 波动的同步性,但表里没有直接证据。
+
+  - head: 'cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30), cross_mean(day_std(Amt), 30))'
+    soundness: 3
+    reasons: |-
+      相关度表:变体 1 对 known 的 |ρ| 为 0.54、对 liq 为 0.53,仍是成交额水平通道;变体 2 对 known 为 0.45;变体 3 对 known 为 0.008、对 liq 为 0.03,与原 head 的原始 |ρ| 为 0.12,是真正去了水平的版本。变体 1、2 的 cs_bucket_zscore 只去掉股数十分位之间的水平差,桶内 Volume·Low 的水平仍在,而 cross_max 链仍是极值通道;变体 1 也没有达到 R 规则自己设的 rho_known < 0.5 的目标。数学无问题(分母是桶内标准差加 EPS;变体 3 的 relgap 有界)。变体 3 的机制(成交量相对价格路径的缺口,241 日均值,按股数十分位 z 分数)说得通。给 3 是因为变体 1、2 的「去掉成交额水平」说法不成立。若有 alpha,变体 3 最可能来自成交量相对价格路径的时段性;变体 1、2 更可能只是原 head 的水平通道换了分桶变量。
+
+  - head: 'cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15), ts_min(pow_3(ts_std(day_close(Amt), 50)), 1)), 5)'
+    soundness: 3
+    reasons: |-
+      变体 1、2 是 div(ts_std(day_close(Amt), W), ts_std(day_sum(Amt), W)),W = 120 / 241。两个标准差同量纲,比值无量纲,分母只在窗口内全天成交额为常数时为 0 得 NaN,数学无问题;原 head 好的那一半 ts_std(day_close(Amt), 50) 单独为 −0.52(与第 1 轮 audit 的数字一致)。变体 1 对原 head 的原始 |ρ| 为 0.215(残差 0.202),变体 2 为 0.173(残差 0.169)。待核对项(第 1 轮 audit 已提出,仍未解决):day_close(Amt) 取全天最后一个非 NaN 值。如果存储对无成交分钟用 0 而不是 NaN,流动性差的票尾盘常为 0,分子就成了「尾盘是否成交」的流动性指标,而不是 PI 说的尾盘成交额相对波动。我在仓库里没有找到真实存储的 NaN 约定,无法排除这一点,所以在核对前给 3。若有 alpha,最可能来自尾盘最后一根的成交占比与其波动所反映的收盘集中执行;若是零约定,则来自不交易的小票。
+
+summary: |-
+  a 位(E,核心 day_cov(Amt, Low))通过:创新度 4、合理度 4,16 个种子全留(待补两项:种子 9 缺 ListAge 闸;两个冠军的 |ρ| 未入相关度表)。b 位(N,价格水平三分)通过:创新度 3、合理度 4,划掉 2(自动,原始 |ρ| 0.801)、13 与 14(与种子 1、3 重复),剩 13 个;种子 15 贴近 0.7 门槛,残差 0.79 与 head 高度重合,是风险点。R 五组:cross_mean(day_cov(Close, Ret), 3) 为 4;cross_max(day_cov(Ret, Close), 60) 为 4;嵌套 cross_cov 链为 3(机制说不清,数学无问题);cs_bucket_demean 链为 3(变体 1、2 的去水平说法不成立);TS 链 R 组为 3(day_close(Amt) 的无成交约定未核对)。相关度表是 train 每 5 天取一天的子样本(即 shrink 口径),阈值 0.7 / 0.8 的边界读数有约 ±0.05 的抽样误差,本审计未重算该表。PI 笔记中「tie 只出现在极少的并列价格上」与表中名义价 distinct 0.68 不符,需修改。

@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [15, 16]
+    reasons: '核心 A = r_t/r_{t-1} 是 head 1 的子树(位于 cs_rank 的第一个参数),核心与五个控制的日度秩 |ρ| 为 0.006–0.024,对 3 个 head 的原始 |ρ| 最大 0.061,通过核心门槛。外围全部是对 A 求位置统计(cross_med、cs_median 去均值、cross_zscore、条件中位数),种子 1–14 与 head 的原始 |ρ| 为 0.03–0.12(seed 13 为 0.236,seed 14 为 0.111),与五个控制的 |ρ| 最大 0.155(seed 13,流动性),不是 head 或控制的换写。novelty 4。合理度 4:机制清楚,在 e_t/r_{t-1} 关于 0 对称时 A 的中位数是 φ 的稳健估计;cross_med 是低中位数,A 的 +inf 只占序列端点、不会传播;cross_zscore 的 z 包含当日值,由 Samuelson 不等式 |z| 不超过 √240,有界;全部是尾随窗口,t 日收盘后才交易,无前视。划掉 15、16:它们是 cross_stddev(cs_rank(A, 上涨日掩码), 60 / 120),与 R 变体 2、3 逐秩相同(R 变体只是对同一量取 1/(x+1e-4),秩反号),相关度表两行的原始 |ρ|(0.504 / 0.348)、残差与五个控制列逐项一致,属于重复。保留 seed 12:它与 seed 2 很接近,但全截面中位数在市场级涨跌停日会跳动,不能断定是重复。注记(不挡,未达 §4 主导):cs_rank 传入的是 create_valid_mask 而不是 isfinite,因此 A=+inf(r_{t-1}=0 且 r_t>0)与 A 为 NaN(r_{t-1} 缺失且 r_t>0,即复牌后的第一个上涨日)都被计入秩并排到最高端(按 torch 排序约定 NaN 排在末尾;本机无 torch,未实跑,此为由代码推断)。这影响 seed 13、14 与 head 族,但只出现在平盘日与复牌次日,截面主要仍由位置统计决定。seed 10 的子集是 |r_{t-1}| 小于 60 日波动的日子,在平盘多的票上可能由 ±inf 的符号决定,不挡,但是 train 段最需要检查的一个。如果它有 alpha,最可能来自价位离散化与平盘后回弹决定的个股 φ 差异(流动性代理),以及 φ 的慢变差异;流动性控制的 |ρ| 0.155(seed 13)只是部分吸收。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '16 个种子全部是 cs_demean / cs_rank / cs_bucket_demean 之后的滞后相关、回归斜率、方差比与上下行不对称斜率,不含 A 的成分。对 3 个 head 的原始 |ρ| 最大 0.071(seed 13,corr60 减 corr241),残差 |ρ| 最大 0.12(seed 13);与五个控制的 |ρ| 最大 0.215(seed 10,流动性),其次 0.209(seed 10,known 族)、0.193(seed 9,流动性)、0.175(seed 10,市值),均低于 0.8 的门槛。seed 1 与 2、seed 3 与 4、seed 6 是同一估计量的不同窗口或宇宙,属于不同估计量,不算重复。novelty 4:相对收益的滞后相关与斜率,与 head(日度秩的 A 离散度)和五个控制都不是同一个量。库里最近的是 B097 的比值秩滞后(10 日窗口),对象是比值而非相对收益、窗口也短;这里只按相关度表核对,库级说法未重核。合理度 4:无前视(cross_delay 天数为正,LogFloatCap、ListAge 为当日已知);cross_corr 的相关系数分母有 EPS 守卫且有界,cross_regbeta 的斜率在方差不超过 EPS 时为缺失;seed 9 的 cross_stddev(cross_sum(X2,5),120) 除以 √5 乘 cross_stddev(X2,120),数学上是方差比的平方根;seed 10 的正负部分解用 mul(is_gt(·,0),·) 实现,NaN 保留;seed 15 的同伴组分解 R − X2 正确。注记:流动性与市值相关在 0.15–0.21 之间,买卖价反弹与流动性供给是最可能吃掉这一项的机制,是最大的失败面。如果它有 alpha,最可能来自同伴相对收益的慢速序列相关(反应不足与价格延迟),在流动性差、价位离散的票上更强。'
+R:
+  - head: 'div(1, add(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 0)), 20), 0.0001))'
+    soundness: 4
+    reasons: '只评合理度。head 1 的 8 个变体都是单部件改动,数学上成立,无前视。变体 2、3 的 cross_stddev 与 head 中的 ts_stddev 在代码里是同一个 rolling nanstd、沿日轴运算(nd_ts.py 与 dt_cross.py 中两者都调用 rolling_reduce 与 nanstd_last),所以它们只是把窗口换成 60、120;"改用 cross_stddev" 的描述会误导,但不是数学问题。变体 4(cs_bucket_demean)与变体 8(IPO 掩码)是新增部件,不是去掉或替换,与变体的定义有出入;变体 8 与 head 的秩相关为 1.00(只把 ListAge 不超过 250 的票置为 NaN),对 head 没有增加信息,不是数学问题。变体 7 是唯一把 cs_rank 的有效域改回默认 isfinite(去掉上涨日掩码)的变体,也因此是唯一不把 A=+inf 计入最高秩的变体;head 与变体 1–6、8 都保留了 +inf 与复牌次日 NaN 被置顶的数值注记,why 没有提到这一点,但它不是 §4 的主导项。变体 2、3 与 seed 15、16 逐项相同。合理度 4:单部件拆解与 why 的假设一一对应(窗口、上涨日掩码、市值去均值、IPO 屏蔽),未覆盖的只有 NaN 置顶。'
+summary: '位 a 通过(创新 4、合理 4):划掉 15、16 两个与 R 变体 2、3 逐秩相同的种子,剩 14 个;位 b 通过(创新 4、合理 4),16 个全留,本轮的 N 位达到 3 轮要求中的一次通过;R 组合理度 4。没有种子因原始 |ρ| 达到 0.7 或控制 |ρ| 达到 0.8 而自动划掉(种子中原始 |ρ| 最大 0.504 为 seed 15,已按重复划掉;种子中控制 |ρ| 最大 0.215)。数值注记不挡:cs_rank 的有效域不含 isfinite,+inf 与复牌次日 NaN 被置顶,集中在 head 族与 seed 13、14。'

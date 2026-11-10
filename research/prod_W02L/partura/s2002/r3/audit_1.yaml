@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '核心 day_es_ratio_lo(Vwap) 的来源核实无误:loc.md 共性表第 8 行(+1.08,p 0.000,含它的 23 个候选均值 -1.22、不含 -2.30),它不是快照里任何 head 的子树,但属于共性表子树,符合 E 位的核心来源。算子核对:day_es_ratio_lo 即 ops_ext.py:676 调 _es_ratio(q=0.05, 低尾)(ops_ext.py:647-661),取严格小于日内分位的分钟均值再除以分位;k=0 或分位近零返回 NaN,不返回 inf;Vwap 为正价,分母无近零问题;全部 cross_* 日轴窗口是尾随的,分钟只用当天数据,信号在收盘后用于 t+1 交易,无前视;没有 ts_spearman 或 nt_*。相关度表:15 个种子对 9 个 head 的原始 |ρ| 最大 0.54(种子 12),没有越过 0.7 的库禁令线;核心本身对 5 个控制的 |ρ| 最大 0.32(vol),远低于 0.8。种子 1、9、6、14 与 vol 的 |ρ| 为 0.72、0.78、0.69、0.70,接近但未到 0.8 的自动划线;这些种子在去掉控制的残差后与 head 仍有 0.24–0.33(种子 1、9),说明 vol 只解释一部分,不是 vol 的换写,放行。划掉种子 10 cross_mean(sub(day_es_ratio_lo(Vwap), day_es_ratio_lo(Close)), 20):原始 |ρ| 0.52 未过线,但它对 head ts_mean(mul(day_max(Volume), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 30) 的残差 |ρ| 高达 0.70,去掉 5 个控制后与快照里的成交量 Hurst 件度量的是同一个量(Vwap 与 Close 的尾部之差就是成交量加权位置的度量),按重复划掉。其余种子 1-9、11-15 是同一核心的不同日轴读法(均值、离散、z 分数、尾部均值、自相关、与同日收益的相关、与高尾之差、与符号乘),窗口或外围不同,不构成重复;种子 6、15 是对种子 1、3 做 LogFloatCap 十档去均值,会改变跨档排序,不算重复。如果它有 alpha,最可能来自:日内低尾深度(分钟价被抛压打穿后又收回的程度)的慢性质,即个股在深处接单是否稳定,在 20-60 日的均值与离散里体现,而不是某一天的偶然深度。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '位 b 是 N 位,核心为隔夜收益 O = log(今开) - log(昨收) 与日内收益 I = log(今收) - log(今开) 的拆解,12 个种子全部是这两段的日轴读法(均值、回归斜率、相关、离散比、尾部、滞后相关、差值)。算子核对:day_first 即 dt_day.py:132 的首个有效分钟值,今开在当日收盘后才用,信号在 t+1 交易,无前视;ts_delay(day_last(Close),1) 取上一交易日收盘,停牌日为 NaN 而不是 0 填充;cross_mean、cross_corr(dt_cross.py:193)、cross_regbeta(dt_cross.py:299)、cross_stddev(dt_cross.py:290)、cross_tail_mean_q25(ops_ext.py:311)都对窗口内有限值计算;没有禁用算子与 ts_hurst。种子 7 的分母为 cross_stddev(I,60) + 1e-4:I 的 60 日截面标准差通常在 0.01 到 0.03 之间,1e-4 的地板不到 1%;只有长期一字锁板票的 I 方差接近零,会被推到顶端,但信号按截面秩使用,不构成支配截面的爆点,不挡。除权日的后复权昨收与今开口径一致,不产生假跳空。相关度表:原始 |ρ| 最大 0.63(种子 8,cross_tail_mean_q25(O,60)),最像的是 day_q_stat_std(Volume) 嵌套的那个 head;没有越过 0.7,也没有控制 |ρ| 达到 0.8;与 known 最大 0.52(种子 8),与 vol 最大 0.47(种子 8)。库里没有把隔夜与日内两段分开做日轴累积的 head,快照里的 head 全是成交量 / 成交额的 Hurst 嵌套,所以 novelty 给 4。种子 4(cross_corr(O,I,120))、5(cross_regbeta(O,I,60))、7(stddev 比)都是 O 与 I 的共变结构,但估计量不同(相关、斜率、标准差比),不是同一个量的换写,不划。机制是 Lou、Polk 与 Skouras(2019)的隔夜 / 日内拔河:隔夜段是散户与情绪的反应,日内段是机构与做市的执行,两段可以符号相反。风险是隔夜水平可能残留小盘或 20 日反转的成分,但已由 5 个控制的残差吸收;在这一点上 soundness 给 4。如果它有 alpha,最可能来自:跳空之后是回吐还是接力的个股倾向(客户群结构与 T+1 制度带来的隔夜风险承担差异),在 60-120 日的读数里稳定体现。'
+R: []
+summary: '位 a(E,核心 day_es_ratio_lo(Vwap),来自共性表第 8 行)通过,novelty 4、soundness 4,划掉种子 10(残差与成交量 Hurst 件 |ρ| 0.70,重复);位 b(N,隔夜与日内收益拆解)通过,novelty 4、soundness 4,无划除;本轮 missions.yaml 没有 R 组,R 为空。'

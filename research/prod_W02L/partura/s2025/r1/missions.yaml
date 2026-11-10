@@ -1,0 +1,113 @@
+seed: 2025
+round: 1
+slots:
+- type: E
+  core: sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)))
+  hypothesis: |-
+    机制:核心 C 就是 head 1(分数 −2.26,方向 −1,半衰期 20)原样:sub(day_std(放量前 10% 分钟的收益), day_std(静默后 10% 分钟的收益)),in_slice 取第 11..240 分钟,每边约 23 个分钟。它读的是「放量时价格是否比静默时动得更凶」,即价格对成交活跃度的弹性。解释(Clark 1973 的混合分布假说):信息到达同时抬高成交量与波动;如果放量分钟的价格反而不比静默分钟更激烈,说明放量主要是被深度吸收的拆单 / 机构执行(价格冲击小),反过来则是薄盘里被推着走。
+
+    批里的证据(loc.md 拆解表,新尺子):(1) 只留放量腿 −4.06、只留静默腿 −2.49,两腿之差 −2.26 比任何一条腿都好,承重的是「相对差」不是水平;(2) Volume→Amt 互换几乎不变(−2.19),起作用的是「按活跃度给分钟排序」,不是股数;(3) 同一对象的 ts_stddev 窗口 10 / 20 / 40 为 −3.21 / −2.42 / −1.37,越慢越好,说明尺子在罚日度噪声造成的换手,而 C 每天只由 2 × 23 个分钟收益决定,噪声很大。
+
+    这个 E 位要回答的问题:把 C 的日度噪声和它里面的乘性波动水平拿掉之后,个股持续的「价格–成交弹性」里,还有没有尺子没吃掉的东西。外围只做四类,快照里只出现过 sub / ts_stddev 两种包装,下面的写法都不在里面:
+    (1) 相对自己的常态 / 变化量:cross_zscore(C, 60)、快 EMA 减慢 EMA、C 减自己 180 日均值、先 EMA 5 再做 120 日 z 分数。每只股票以自己的历史做对照,读的是「最近的弹性相对它自己的常态是否异常」。
+    (2) 去掉波动的乘性暴露:C 约等于「波动水平 × 弹性」,尺子只扣控制秩的 1 / 2 / 3 次加性项,扣不掉乘性的波动暴露。所以写成 div(C, add(σ放量, σ静默))(落在 [−1, 1] 的归一化弹性)与 div(C, day_std(全天分钟收益))(无量纲),把波动水平从分子里除掉,只留弹性本身。
+    (3) 与自己其他日序列的关系:cross_regres(day_std(Ret 全天), C, 60) 是 C 对当日全天波动做 60 日回归后的残差(C 里总体波动解释不了的部分;注意 cross_regres(x, y) 是 y 对 x 的回归残差,这里 y = C);cross_corr(C, day_sum(Ret), 60) 与 cross_corr(C, log(day_sum(Amt)), 60) 读弹性在涨日 / 放量日是否更高(杠杆效应 / 追涨);C 的 z 分数与 20 日趋势符号相乘。
+    (4) 慢聚合与分布形状:cross_ema(C, 120)、cross_mean(C, 180)、cross_stddev(C, 60)(弹性自己的不稳定度,类比 head 2 的 ts_stddev,但这里不含波动水平那一半)、cross_tail_mean_q75(C, 120)(弹性偏高那几天的平均),以及一个名义价格十分位内的 z 分数 cs_bucket_zscore(·, sub(LogFloatCap, LogFloatShares))。最后这个的理由:静默腿含买卖价弹跳噪声,弹跳噪声正比于 tick / 价格,而名义价格不在 5 个控制里;桶内标准化把这一半去掉,与不去桶的种子对照,就能分出「价格 / tick 代理」与「真弹性」。
+
+    为什么和库里已有的不同:库里与核心有关的 14 条(B073)全是对放量 / 静默分钟收益做 std 或 mean 约化,外面只套 ts_mean / ts_stddev / ts_rank / rank / 一个 ts 标准化(都是单个 head 的「水平」读法);没有一条做日轴 z 分数、对其他日序列的回归残差或滚动相关、乘性归一化、尾部均值或桶内标准化。这些写法的算子骨架已逐个对照 members.csv 的 5583 个骨架,没有一个相同。预期它们与 head 1 的日度秩 |ρ| 在 0.1 ~ 0.65(去掉水平与噪声之后,与单日版本的相关明显下降;最慢的几个种子最高),与 5 个控制的 |ρ| 预计 < 0.5。
+
+    为什么样本外还会在(如果真有 alpha):来源是个股的价格冲击弹性,取决于参与者构成(机构拆单 vs 散户追涨)与盘口深度,是慢变的结构属性;每只股票用自己的历史做对照,不依赖某一段行情;聚合窗口全部在 60 ~ 180 日,名次在数周内保持,15 bp 成本下不至于被换手吃掉。主要风险:(a) 弹性与流动性 / 价格代理太近,被控制吃掉;(b) 本批 13 个已评分候选的均值约 −3.3,最好的三个也只有 −2.3 ~ −2.5,train 与 valid 都为负,所以先验上本位置的期望分数仍为负,价值在于看「去水平、去噪声」能把分数推到哪里。
+
+    数学检查:C 自身没有除法;σ 的下界是 0(分钟收益全为 0,例如停牌 / 涨跌停锁死),此时 C 有限。归一化分母 add(σ放量, σ静默) 与 day_std(全天) 只有在两边全为 0 时才为 0,那时分子也是 0,得 NaN 而不是爆点;而且 σ放量 ≤ √10 × σ全天(10% 子集围绕自己均值的方差不超过围绕全体均值的方差的 10 倍),所以 div(C, σ全天) 有界(绝对值 ≲ 3.2)。σ静默 = 0(静默分钟全是零收益)出现在较不活跃的票上(loc 里该单腿的不同值占比 0.878,即约 12% 的格子并列,多半就是 0),它们在 div(C, add(·)) 上并列在顶端(= 1),这是一种真实的「静默时价格不动」状态而不是数值伪影,并列靠股票列序打破(规则允许);慢 EMA 之后并列大幅减少。cross_regres 的方差阈值 1e-9 对量级 1e-3 的输入没有问题(60 日 Σdx² ≈ 1e-5)。无前视:所有量只用 t 日的分钟数据与 t 日及以前的日序列,t + 1 日才交易。热身期:窗口 ≤ 180,前 59 ~ 179 个交易日为 NaN,不主导 train(约 1350 个交易日)。
+  seeds:
+  - cross_zscore(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 120)
+  - sub(cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 10), cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 120))
+  - cross_ema(div(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), add(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)))), 60)
+  - cross_mean(div(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), day_std(in_slice(Ret, 11, 240))), 60)
+  - cross_regres(day_std(in_slice(Ret, 11, 240)), sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - cross_corr(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), day_sum(Ret), 60)
+  - cross_corr(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), log(day_sum(Amt)), 60)
+  - mul(cross_zscore(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60), sign(cross_mean(day_sum(Ret), 20)))
+  - cross_stddev(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - cross_tail_mean_q75(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 120)
+  - sub(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), cross_mean(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 180))
+  - cs_bucket_zscore(cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60), sub(LogFloatCap, LogFloatShares))
+  - cross_mean(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 180)
+  - cross_zscore(cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 5), 120)
+- type: N
+  hypothesis: |-
+    机制:放量分钟里价格怎么动,暴露的是谁在交易。批里的现象(B073;loc.md 与 members.csv):(1) 14 个成员全是「放量前 10% 分钟的收益」的 std 或 mean 约化,外面套 ts_mean / ts_stddev / ts_rank / 标准化;(2) 单日读数全被换手压垮:day_std(放量分钟收益)日换手 0.62、库口径训练夏普 −5.0,唯一读方向的 day_mean 日换手 0.85、夏普 −7.9;只有 20 日平滑后的 std 活了下来(日换手 0.06 ~ 0.09、夏普 +1.3 ~ +2.3,未去控制,rank IC 约 −0.05)。也就是说在这一批里,成败由换手 / 噪声决定,不是「方向没有信息」:23 个分钟收益的日均值几乎全是噪声,批里的 day_mean 一族从来没有被平滑过(没有 ts_mean(day_mean(·)) 这样的成员),它的慢聚合没有人试过;(3) 新尺子下三个素材 head 都在 −2.3 ~ −2.5,Volume 换 Amt 几乎不变,所以对象是「按活跃度挑出来的分钟」本身。方向、形状、放量之后价格去哪、放量发生在一天的什么位置,这四件事批里一条都没读。
+
+    新想法:在同一个对象(放量前 10% 分钟的收益 T = in_topk_masked(Volume, Ret, 10),静默腿 B 是最低 10%)上,读五类不依赖波动水平的量,全部做 20 ~ 120 日的慢聚合:
+    (a) 形状 / 彩票性:cross_mean(day_skew(T), 60)、放量偏度减静默偏度、放量分钟峰度。偏度、峰度无量纲,与波动控制的水平脱钩;高频已实现偏度负向预测截面收益(Amaya et al. 2015:投资者偏好彩票型的正偏度,把它买贵)。放量分钟的偏度比全分钟的偏度更集中地反映大单推动的方向。
+    (b) 方向与资金流:day_signed_ratio(T, 放量分钟的成交量)= 放量分钟里涨分钟的成交量占比减跌分钟的占比(净买压);day_pos_ratio(T) − day_pos_ratio(B)= 涨分钟占比在放量时比静默时多多少(成交量与方向的联动);day_wmean(T, 放量分钟成交量)除以全天分钟收益 std(无量纲);day_corr(Volume, Ret) 与 day_corr(Volume, |Ret|)(成交量与带符号收益 / 幅度的日内相关)。依据:Chordia & Subrahmanyam (2004) 订单失衡预测之后的收益;Llorente et al. (2002) 投机性成交伴随收益延续、对冲性成交伴随反转。方向类的老问题是与 20 日反转近(尺子会扣掉对反转秩的线性 / U 形 / S 形暴露),所以全部用 60 日以上的聚合,读的是个股持续的特性而不是最近一周的涨跌。
+    (c) 放量之后价格去哪:mul(in_topk_masked(in_delay(Volume, 1), Ret, 10), sign(in_delay(Ret, 1))) = 放量那一分钟之后下一分钟的收益,乘以放量那一分钟收益的符号。正 = 放量后延续(信息性成交,价格冲击是永久的);负 = 放量后回吐(流动性冲击,供给方得到补偿)。取日均值、再除以全天 std(无量纲)、或取其中「延续」的比例(day_pos_ratio),再做 60 ~ 120 日聚合。依据:Campbell, Grossman & Wang (1993),放量时一阶自相关更负;这是它的分钟级、个股持续特性版本。注意内层用的是 t − 1 分钟的成交量与 t 分钟的收益,都在同一天收盘之前,t + 1 日才交易,不是前视。
+    (d) 放量发生在一天的什么位置:day_centroid(放量分钟的成交量)(放量集中在开盘附近还是尾盘,0 = 开盘,1 = 收盘),以及它减去全天成交量的重心(放量比平时更靠前 / 靠后)。day_centroid 在 W01(旧尺子,未对冠军取残差)里出过大分 head(成交额重心),但库里没有任何一条读「放量分钟自己」的重心。
+    (e) 另一种选分钟的办法:不按成交量、按价格冲击 |Ret| / sqrt(Volume) 选最高的 20% 分钟(「聪明钱」的选法),取这些分钟的成交量加权 Vwap 除以全天成交量加权 Vwap,记为 Q。Q > 1 = 价格冲击大的分钟发生在当天更高的价位(净推升),Q < 1 = 集中在低价位(净打压)。库里没有按价格冲击选分钟,day_wmean 也是 0 次出现。
+
+    为什么和库里已有的不同:库里读放量分钟的写法只有 std / mean / |mean| / 收益份额 / 放量分钟第一个与最后一个价格之比,全是单日水平或离散度的读法;以上五类的算子骨架(skew / kurt / pos_ratio / signed_ratio / wmean / centroid / 延迟一分钟的放量掩码 / 价格冲击掩码 + 外面的日轴聚合)已逐个对照 members.csv 的 5583 个骨架,没有一个相同。与控制相比:偏度、峰度、比例、相关、重心、Q 都是无量纲量,波动 / 成交额水平 / 市值被除掉了;与已知成交额离散度一族相比,它们读的是「价格在放量时做了什么」而不是「成交额在日内的绝对离散」。
+
+    为什么样本外还会在(如果真有 alpha):来源是参与者类型(机构拆单 vs 散户追涨;信息性 vs 流动性成交)在放量分钟的价格路径上留下的指纹,是慢变的个股特性;所有种子都用 60 日以上聚合(Q 是 20 / 60 日),名次在数周内保持,15 bp 成本下留得下来;「放量后延续 / 回吐」是价格冲击是否永久的微观结构性质,不依赖某段行情。风险:(i) 方向类与 20 日反转 / 流动性近,被控制吃掉;(ii) 日度噪声大,即使 60 日平均,换手仍可能压过信号(批里未平滑的 day_mean 一族就是这样);(iii) 重心类可能与 W01 的 head 太像,被整波库禁令拒绝(这是预期内的)。我的先验:最可能出分的是无方向的 (c) 与 (d),最不可能的是 (a) 的峰度。
+
+    数学检查:day_skew / day_kurt 的分母是放量分钟收益的 std,为 0(23 个分钟收益全为 0)时得 NaN 而不是无穷;非零个数很少时偏度、峰度有界(≲ 4.4 与 ≲ 23),不会爆点。day_signed_ratio ∈ [−1, 1];day_pos_ratio ∈ [0, 1];day_corr 有界;day_centroid ∈ [0, 1]。day_wmean 的权重和为 0 时得 NaN;除以全天 std 时,std 为 0(分钟收益全为 0)的日子分子也是 0,得 NaN。Q 的分母是全天成交量加权的 Vwap(正),Q 在 1 附近(约 ±3%);价格冲击 |Ret| / sqrt(Volume) 在 Volume = 0 的分钟是 0/0 = NaN(这些分钟不入选),不会出现支配截面的爆点。无前视:所有量只用 t 日分钟数据,t + 1 日才交易;(c) 里的 t − 1 与 t 分钟都在同一日内。热身期:窗口 ≤ 120 日,前 19 ~ 119 个交易日为 NaN,不主导 train。
+  inspired_by: B073(放量前 10% 分钟的收益被约化成 std / mean):14 个成员全读『离散度或均值』,唯一读方向的 day_mean 是批内换手最高(0.85)、库口径夏普最差(−7.9)的一类且从未被平滑,std 类经 20 日平滑后换手只有 0.06–0.09;方向 / 形状 / 放量之后价格去向 / 放量发生的时刻,批里没有一条读。
+  literature:
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 放量时一阶自相关更负(流动性提供者被补偿);这里用分钟级版本:放量那一分钟之后下一分钟的收益乘以放量分钟收益的符号
+  - title: Does Realized Skewness Predict the Cross-Section of Equity Returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: '2015'
+    treatment: 日内收益的已实现偏度负向预测之后收益(彩票偏好);这里只取放量分钟的偏度,以及放量减静默的偏度差
+  - title: 'Order Imbalance and Individual Stock Returns: Theory and Evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡预测之后收益;这里用放量分钟里涨分钟成交量占比减跌分钟成交量占比(day_signed_ratio)近似净买压
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 投机性成交伴随收益延续、对冲性成交伴随反转;这里用成交量与带符号收益的日内相关 day_corr(Volume, Ret) 与放量后延续比例近似
+  seeds:
+  - cross_mean(day_skew(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 60)
+  - cross_mean(sub(day_skew(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_skew(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - cross_mean(sub(day_pos_ratio(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_pos_ratio(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - cross_ema(day_signed_ratio(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10), in_topk_masked(in_slice(Volume, 11, 240), in_slice(Volume, 11, 240), 10)), 60)
+  - cross_mean(div(day_wmean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10), in_topk_masked(in_slice(Volume, 11, 240), in_slice(Volume, 11, 240), 10)), day_std(in_slice(Ret, 11, 240))), 60)
+  - cross_mean(day_mean(mul(in_topk_masked(in_delay(in_slice(Volume, 11, 240), 1), in_slice(Ret, 11, 240), 10), sign(in_delay(in_slice(Ret, 11, 240), 1)))), 60)
+  - cross_mean(div(day_mean(mul(in_topk_masked(in_delay(in_slice(Volume, 11, 240), 1), in_slice(Ret, 11, 240), 10), sign(in_delay(in_slice(Ret, 11, 240), 1)))), day_std(in_slice(Ret, 11, 240))), 120)
+  - cross_mean(day_pos_ratio(mul(in_topk_masked(in_delay(in_slice(Volume, 11, 240), 1), in_slice(Ret, 11, 240), 10), sign(in_delay(in_slice(Ret, 11, 240), 1)))), 60)
+  - cross_mean(day_centroid(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Volume, 11, 240), 10)), 60)
+  - cross_mean(sub(day_centroid(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Volume, 11, 240), 10)), day_centroid(in_slice(Volume, 11, 240))), 60)
+  - cross_mean(div(day_wmean(in_topk_masked(div(abs_(in_slice(Ret, 11, 240)), sqrt(in_slice(Volume, 11, 240))), in_slice(Vwap, 11, 240), 5), in_topk_masked(div(abs_(in_slice(Ret, 11, 240)), sqrt(in_slice(Volume, 11, 240))), in_slice(Volume, 11, 240), 5)), day_wmean(in_slice(Vwap, 11, 240), in_slice(Volume, 11, 240))), 20)
+  - cross_ema(div(day_wmean(in_topk_masked(div(abs_(in_slice(Ret, 11, 240)), sqrt(in_slice(Volume, 11, 240))), in_slice(Vwap, 11, 240), 5), in_topk_masked(div(abs_(in_slice(Ret, 11, 240)), sqrt(in_slice(Volume, 11, 240))), in_slice(Volume, 11, 240), 5)), day_wmean(in_slice(Vwap, 11, 240), in_slice(Volume, 11, 240))), 60)
+  - cross_mean(day_kurt(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 60)
+  - cross_mean(day_corr(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240)), 60)
+  - cross_mean(day_corr(in_slice(Volume, 11, 240), abs_(in_slice(Ret, 11, 240))), 60)
+R:
+- head: ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 20)
+  why: 烂的部件有两个。(1) 窗口:拆解表里 ts_stddev 窗口 10 / 20 / 40 = −3.21 / −2.42 / −1.37,train 与 valid 同时单调变好(窗口 40 的变体 +1.05 已是 R 候选);尺子在罚日度噪声造成的换手,慢是承重的,所以继续走 60 / 80 / 120 / 160 / 241 日,看这个趋势在哪里拐头。(2) 水平:ts_stddev(σ放量) 正比于波动水平(σ放量 的量级),这是乘性暴露,尺子的加性多项式扣不掉;变体用变异系数 ts_stddev / ts_mean(60、120 日)把水平除掉,只留「放量腿离散度的相对不稳定度」。数学:ts_stddev 与 ts_mean 都有界;分母 ts_mean(σ放量) 只有在窗口内 σ放量 全为 0(长期停牌)时才为 0,此时分子也是 0,得 NaN;窗口 241 的前 240 个交易日为 NaN,不主导 train(约 1350 天)。
+  variants:
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 60)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 80)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 120)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 160)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 241)
+  - div(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 60), ts_mean(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 60))
+  - div(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 120), ts_mean(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 120))
+- head: sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)))
+  why: 烂的部件:单日噪声。head 1 每天只由 2 × 23 个分钟收益决定,拆解表里同一对象越慢越好,所以直接对 head 1 本身做慢聚合(ts_mean 40 / 120 / 241 日、cross_ema 半衰期 60 日),不改变它的含义;另一个变体换成归一化弹性 div(C, add(σ放量, σ静默)) 的 60 日均值(落在 [−1, 1],去掉乘性的波动水平)。数学:只有均值与一次除法,分母 add(σ放量, σ静默) 为 0 时两边都是 0,得 NaN;无前视;窗口 241 的前 240 个交易日为 NaN。
+  variants:
+  - ts_mean(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 40)
+  - ts_mean(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 120)
+  - ts_mean(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 241)
+  - cross_ema(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), 60)
+  - ts_mean(div(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))), add(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)))), 60)
+- head: day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False))
+  why: 烂的部件:噪声,以及静默腿里与流动性相连的「静默分钟零收益」并列(σ静默 的不同值占比 0.878)。变体:ts_mean(σ静默, 60 / 120)与 ts_stddev(σ静默, 60)(把单日噪声和并列平均掉,看慢版本的读数),以及 60 日均值的 div(σ静默, day_std(全天分钟收益))(静默腿占全天波动的份额,去掉波动水平)。数学:σ静默 ≤ √10 × σ全天,所以比值有界(≲ 3.2);分母只有全天分钟收益全为 0 时才为 0,此时分子也是 0,得 NaN。无前视。
+  variants:
+  - ts_mean(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)), 60)
+  - ts_mean(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)), 120)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)), 60)
+  - ts_mean(div(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10, False)), day_std(in_slice(Ret, 11, 240))), 60)

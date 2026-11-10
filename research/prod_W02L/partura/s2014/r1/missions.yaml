@@ -1,0 +1,116 @@
+seed: 2014
+round: 1
+slots:
+  - type: E
+    core: 'day_quantile_q25(High)'
+    hypothesis: |-
+      机制:核心 day_quantile_q25(High) 是一天里分钟最高价的 25% 分位。引擎里 Open / High / Low / Close / Vwap 是后复权价(规则 §4;AlphaCube docs/design.md §11.5 实测:Close / (Amt / Volume) 跨股票 2.5 ~ 113,每只票内部变异系数只有 1% ~ 2%,所以是一只票一个的复权因子)。所以核心 = 后复权价格水平 adjP = 未复权价 P × 累计复权因子 F × 每只票的基期常数 c(F 从基期起累乘每一次分红与送转股;t 日的 F 只含 t 日及以前的事件,没有前视;c 是供应商基期带来的个股常数)。
+      批里的现象正是这个量:含 q25(High) / q25(Vwap) 的成员(连同 add、signedpower 的包装)训练段 rank IC 约 −0.011、日换手 0.0137、库口径夏普 0.524,逐条对照 members.csv 几乎逐位相同,是同一张价格水平面板的拷贝;新尺子下含 q25(High) 的 7 条候选均值 −3.38(不含的 −2.66,p 0.89)。后复权价格水平把「真实价格 P」「分红送转累计 F」「基期常数 c」和「上市以来的累计收益」混在一起,新尺子只去掉对 5 个控制和两个冠军的暴露,混合体没有分。
+      只有日频叶子能把它拆开:LogFloatCap − LogFloatShares = log(流通市值 / 流通股本) = log P(未复权价;股本单位只差一个常数,不改变排序)。两个库 5583 条表达式没有一条读过六个日频叶子(逐条核对 members.csv 的 expression 与 leaves 列:LogFloatCap、LogTotalCap、LogFloatShares、LimitWidth、BoardCode、ListAge 的出现次数都是 0),所以库、也就是两个冠军,摸不到 P,也摸不到 adjP / P。
+      本轮三条假设,每条的每个种子都原样含核心:
+      (a) 水平 log F + log c = log(核心) − log P:慢变的个股属性,主要是上市以来分红与送转的累积强度。两个渠道:现金分红(价值 / 质量 / 红利,Fama-French 1988)与送转股(小盘成长、题材炒作);Lintner(1956)的分红黏性说明派现习惯长期不变。符号由训练段定,所以两个渠道谁占优不需要事先知道;同规模、同价格十分位内标准化的版本用来分辨它是不是规模 / 价格的代理。
+      (b) 变化:log F 的 120 / 241 日增量(先用 20 日均值压掉单日噪声)≈ 过去半年 / 一年的分红加送转强度,在除权日跳变,是动态量,接近「滚动股息率」,不含常数 c,也不依赖上市年龄。
+      (c) 总收益动量:核心的对数的 120 / 241 日变化(241 日版减去最近 20 日,跳过最近一个月)是后复权价算出来的 6 ~ 12 个月累计收益。新尺子只控制 20 日反转,更长的动量没有被控制(Jegadeesh-Titman 1993);A 股的方向由训练段定。
+      算子怎样实现:sub(log(核心), sub(LogFloatCap, LogFloatShares)) 得 log F + log c;cross_mean 做平滑、cross_delta 做增量;cs_bucket_zscore / cs_bucket_rank / cs_bucket_demean / cs_regres 做同规模、同真实价格的分桶中性;cs_bucket_rank(核心, P) 与 cs_bucket_rank(P, 核心) 是不做减法的另一种写法(P 同桶里 adjP 的排名、adjP 同桶里 P 的排名),用来核对减法实现;sub(·, sub(LogTotalCap, LogFloatCap)) 把非流通股比例加进来做交互。
+      为什么和已见的外围不同:快照里含核心的候选(ts_std / ts_stddev / ts_med / cross_autocorr_s1 / cross_quantile_q50 / signedpower / cs_scale 套 ts_delta 的链 / add(核心, day_close(Ret)))全是只用一个价格叶子的时间序列变换,没有一个读日频叶子,也没有一个把价格拆成两部分;外围算子集合(sub 两个 log、LogFloatCap、LogFloatShares、cross_delta、cs_bucket_*)与它们完全不交。
+      为什么样本外还会在:(a)(b)(c)都是慢变量,价格水平面板的库口径日换手只有 0.0137,15 bp 成本吃不掉;(a)(b)的来源是公司的派现与送转习惯(黏性,Lintner 1956)和上市以来的送转历史,是持久的个股属性,不依赖某段行情;(c)窗口 ≥ 120 日,换手也低。风险也要写明:(a)的水平里含个股常数 c,样本内可能只是风格(年龄、规模、板块)的代理;train 与 valid 的符号若不一致,score = min(train, valid) 本来就会给负分,所以这个风险由尺子自己挡。
+      数学检查:log 的输入是正的价格,算子 log 对 |x| ≤ 1e-9 返回缺失,价格远大于它;LogFloatCap、LogFloatShares 在 float32 下的绝对误差约 1e-6,而 F 的动态部分在 1e-2 以上,不被淹没;没有除以近零的量(分桶的 z 分数分母是桶内标准差);没有用到 t 日收盘之后才知道的数,后复权因子只累积到 t 日。面板:log F 对从未分红 / 次新的股票接近 0,但并列只在噪声量级,不是常数面板;停牌日一切为空;cross_delta 的 241 日窗口使前 241 个交易日为空,与 head 2 里 cross_fangzheng(·, 241) 的窗口同量级,不是热身期主导。已知限制:流通股本更新若滞后于价格,送转日前后会有几天的 log P 偏差,所以(b)先做 20 日均值。
+    literature:
+      - title: Distribution of Incomes of Corporations Among Dividends, Retained Earnings, and Taxes
+        authors: John Lintner
+        year: '1956'
+        treatment: 公司派现是黏性的、向目标分红率慢速调整;这里用后复权因子的水平 log F 与它的 120 / 241 日增量近似累积的派现与送转强度
+      - title: Dividend yields and expected stock returns
+        authors: Eugene F. Fama, Kenneth R. French
+        year: '1988'
+        treatment: 股息率预测收益;这里用 log F 的 120 / 241 日增量(分红加送转)近似滚动股息率,方向由训练段定
+      - title: Returns to buying winners and selling losers
+        authors: Narasimhan Jegadeesh, Sheridan Titman
+        year: '1993'
+        treatment: 3 ~ 12 个月动量;这里用后复权价(核心)的对数在 120 / 241 日的变化,减去最近 20 日以跳过反转控制已覆盖的一个月
+    seeds:
+      - 'sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares))'
+      - 'cross_mean(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), 20)'
+      - 'cross_delta(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), 241)'
+      - 'cross_delta(cross_mean(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), 20), 120)'
+      - 'cs_bucket_zscore(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), LogFloatCap)'
+      - 'cs_bucket_zscore(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(day_quantile_q25(High), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), day_quantile_q25(High))'
+      - 'sub(cross_delta(log(day_quantile_q25(High)), 241), cross_delta(log(day_quantile_q25(High)), 20))'
+      - 'cs_bucket_demean(cross_delta(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), 241), LogFloatCap)'
+      - 'cross_delta(log(day_quantile_q25(High)), 120)'
+      - 'cs_regres(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), LogFloatCap)'
+      - 'cs_bucket_rank(cross_delta(cross_mean(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), 20), 241), sub(LogFloatCap, LogFloatShares))'
+      - 'sub(sub(log(day_quantile_q25(High)), sub(LogFloatCap, LogFloatShares)), sub(LogTotalCap, LogFloatCap))'
+  - type: N
+    hypothesis: |-
+      机制:未复权价格 P 的水平,以及它通过 0.01 元最小变动价位带来的摩擦。分钟价格字段是后复权价,价格水平在截面上只反映累计收益,真实价格 P 只能从日频叶子读出来:P = exp(LogFloatCap − LogFloatShares)(流通市值 / 流通股本;股本单位只差一个常数,不改变排序)。两个库能解析的 5583 条表达式没有一条读过日频叶子(逐条核对过 members.csv),库与两个冠军都看不到 P。
+      批里的现象有三条:(1) q25(High) / q25(Vwap) 的几条拷贝在库口径下训练夏普 0.524、日换手 0.0137,新尺子下含 q25(High) 的 7 条候选均值 −3.38 —— 它们量的是复权后的价格水平,不是真实价格;(2) day_quantile_q25(Ret) 单独过不了门槛(消融表:不同值占比 0.4955):分钟收益被最小变动价位量化,一半的格子并列在「整数个 tick」上,而「几个 tick」是 P 的函数,不是波动的函数;(3) 项目文档 AlphaCube docs/可交易回测.md §21.4 对三个风格的单独打分:未复权低价风格(原样,没有任何中性化)的纯多头夏普,训练段(2018-01 ~ 2023-08)+0.98,2023-08 ~ 2025-12 为 +0.44,日换手 2.0%;低流动性、低波动是另外两个,而新尺子的控制是流动性、波动、反转、已知成交额族、市值,价格是唯一没被控制的风格。
+      三条假设:
+      (a) 价格水平本身(低价效应):名义价格低的股票散户占比高、被当作彩票(Kumar 2009),最小变动价位占价格的比例大、买卖价差被离散化(Harris 1994),低价股的收益特征早有记录(Blume-Husic 1973)。A 股符号由训练段定。不去掉规模 / 流动性 / 波动的版本多半被控制吃掉,所以种子里放「同规模、同成交额、同波动、同总市值、同流通股本十分位内的价格秩」cs_bucket_rank(P, X):每个桶里价格都有完整排序,而与桶变量无关。
+      (b) tick 计数:log(|q25(Ret)| + 1e-6) 加 log P = log(下四分位分钟涨跌的元数),约等于「一个下跌分钟动几个 tick」。接近 1 表示价格被钉在最小变动价位上(买卖价差反弹主导),远大于 1 表示波动主导。它把 P 与波动绑在一起,但与单独的波动不同:同样的分钟波动,在 5 元的股票上是 5 个 tick,在 50 元的股票上是 50 个。
+      (c) 同价格分桶的 tick 统计:当天零收益分钟占比、与上一分钟价格相同的分钟占比、当天走过的不同价位占比、q25(Ret) 及其日间标准差,在 P 的十分位内做秩或 z 分数。同一价格档位的 tick 粗细相同,桶内的差别才是「相对 tick 它有多活跃」,这是活跃度 / 流动性的另一种读法,不再被价格档位污染。
+      算子怎样实现:P = sub(LogFloatCap, LogFloatShares) 直接当信号;cs_bucket_rank(P, X) / cs_regres(P, X) 做桶内价格;add(log(add(abs_(day_quantile_q25(Ret)), 0.000001)), P) 做 tick 计数,cross_mean 做 20 日平滑;day_zero_ratio / day_flat_ratio / day_distinct_ratio(都是 ops_ext 的算子,当天比例,有界 [0, 1])配 cross_mean 与 cs_bucket_rank / cs_bucket_zscore 做桶内 tick 统计。
+      为什么和已有的不同:库里没有一条读日频叶子,所以没有任何库表达式能写出 P 或按 P 分桶;W01 的 head 里 P(或 P − LogFloatShares)只作为筛子 / 分桶键出现,y 是量能类(cs_first_low20(y, P) 一类),没有把 P 当信号,也没有把 tick 统计放进同价格档比较;这里的骨架全部不在两个库里。与 5 个控制比:价格与市值只是相关(P 与 LogFloatCap 之间有 LogFloatShares),桶内版本把市值 / 成交额 / 波动都分开了;与批里 3 个 head 比:head 读的是复权价格面板与成交额的 25% 分位,没有真实价格。
+      为什么样本外还会在:价格水平与 tick 摩擦是缓慢变化的个股属性(价格面板日换手约 2%,15 bp 成本不构成负担),机制是 0.01 元的最小变动价位与散户的名义价格偏好,只要最小变动价位和投资者结构不变就存在,不依赖某段行情。风险:P 的低价端含 ST / 退市风险股,方向与分数由 train 和 valid 各自检验,score = min(train, valid)。
+      数学检查:log 的输入是 |q25(Ret)| + 1e-6 ≥ 1e-6,远大于算子 log 的 1e-9 缺失线;|q25(Ret)| = 0 的股票(整天不动)取 −13.8 加 log P,是有界值而不是 −inf;所有比例类算子的分母是当天有限分钟数,当天不足两分钟的股票给缺失;cs_bucket_* 在任一输入缺失时输出缺失,cs_bucket_rank 的桶内并列用全局秩 × 1e-4 打破;没有除以近零的量;无前视(LogFloatCap / LogFloatShares 是 t 日的日频字段,分钟统计只用 t 日及以前)。P 在 float32 下的绝对误差约 1e-6,而价格档位之间差 0.1 以上,不被淹没。
+    inspired_by: 'B040 批:(1) q25(High) / q25(Vwap) 拷贝的价格水平面板(库口径训练夏普 0.524、日换手 0.0137),新尺子下含 q25(High) 的 7 条均值 −3.38;(2) day_quantile_q25(Ret) 的不同值占比 0.4955 过不了门槛,分钟收益被 tick 量化;(3) head 3 的回归量是 q25(Low) 平方的全市场和,也是价格水平。价格水平反复是这一批的承重量,却只出现在后复权空间里。'
+    literature:
+      - title: Price, Beta, and Exchange Listing
+        authors: Marshall E. Blume, Frank Husic
+        year: '1973'
+        treatment: 价格水平与风险收益特征的关系;这里用 P 本身以及同规模 / 成交额 / 波动 / 总市值 / 流通股本十分位内的 P 秩,检验价格水平在新尺子下是否还有信息
+      - title: Minimum Price Variations, Discrete Bid-Ask Spreads, and Quotation Sizes
+        authors: Lawrence Harris
+        year: '1994'
+        treatment: 最小变动价位占价格的比例决定买卖价差下限与报价深度;这里用 tick 计数 log|q25(Ret)| + log P 与同价格分桶的零收益 / 同价 / 不同价位占比近似「相对 tick 的活跃度」
+      - title: Who Gambles in the Stock Market?
+        authors: Alok Kumar
+        year: '2009'
+        treatment: 低价、高偏度股票是散户的彩票型需求;这里用 P 的低价端与同价格桶内的 q25(Ret) 及其日间标准差近似
+    seeds:
+      - 'sub(LogFloatCap, LogFloatShares)'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), cross_mean(day_sum(Amt), 20))'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), cross_mean(day_std(Ret), 20))'
+      - 'cs_regres(sub(LogFloatCap, LogFloatShares), LogFloatCap)'
+      - 'add(log(add(abs_(day_quantile_q25(Ret)), 0.000001)), sub(LogFloatCap, LogFloatShares))'
+      - 'cross_mean(add(log(add(abs_(day_quantile_q25(Ret)), 0.000001)), sub(LogFloatCap, LogFloatShares)), 20)'
+      - 'cs_bucket_rank(cross_mean(day_std(Ret), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(cross_mean(day_zero_ratio(Ret), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(cross_mean(day_flat_ratio(Close), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_zscore(cross_mean(day_distinct_ratio(Close), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(cross_mean(day_quantile_q25(Ret), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(cross_stddev(day_quantile_q25(Ret), 20), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogTotalCap)'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatShares)'
+R:
+  - head: 'ts_std(day_quantile_q25(Ret), 10)'
+    why: |-
+      烂部件有两个。(1) 窗口:拆解表里 ts_std 的窗口 20 / 10 / 5 得分 −1.19 / −1.13 / −0.88,越短越好,5 日版已比原 head 好 +0.26(loc 的 R 候选),趋势还没到头,所以再试 3 日。(2) 尺度:ts_std 是下四分位分钟收益的绝对标准差,正比于波动水平,而波动水平正是新尺子要吃掉的控制;真正想量的是「波动率的不稳定程度」,即波动的变异系数(Baltussen 等 2018 的 vol-of-vol 用日已实现波动的标准差除以均值),所以除以同窗口均值的绝对值;另外 q25(Ret) 被 tick 量化(不同值占比 0.4955),变体按真实价格 P 的十分位做 z 分数去掉格点粗细,或先对自己的 60 日历史做 z 分数再取 5 日标准差。数学:除数 |ts_mean(q25(Ret), 5)| 只在 5 天的 q25 全为 0(整段不动)时为 0,此时分子也是 0,0 / 0 得缺失而不是无穷;q25 的符号几乎总为负,只有强趋势日才为正,符号混杂的窗口里均值可能接近 0、变异系数取很大的值,但那只影响截面两端的排名,不会产生无穷;分桶 z 分数的分母是桶内标准差。
+    variants:
+      - 'ts_std(day_quantile_q25(Ret), 5)'
+      - 'ts_std(day_quantile_q25(Ret), 3)'
+      - 'div(ts_std(day_quantile_q25(Ret), 5), abs_(ts_mean(day_quantile_q25(Ret), 5)))'
+      - 'cs_bucket_zscore(ts_std(day_quantile_q25(Ret), 5), sub(LogFloatCap, LogFloatShares))'
+      - 'ts_std(cross_zscore(day_quantile_q25(Ret), 60), 5)'
+  - head: 'ts_sum(cross_fangzheng(cross_max(day_quantile_q25(Amt), 3), 241), 5)'
+    why: |-
+      烂部件是外层的 cross_max(·, 3) 与 ts_sum(·, 5),以及「水平」。拆解表:拿掉 cross_fangzheng 得 −3.77(必要性 +2.56),拿掉 cross_max 只差 0.04(−1.25),ts_sum 窗口 2 / 5 / 10 得 −1.12 / −1.20 / −1.37;所以承重的只有 241 日的 cross_fangzheng,而它在 AlphaCube 里的定义是 cross_mean + cross_stddev(均值加标准差,不是方差),把「静默分钟成交额的一年水平」与「一年波动」加在一起,水平那一半是流动性控制的近亲。变体:(1) 去掉两层包装;(2) 把均值与标准差拆开,看哪一半承重;(3) 变异系数 std / mean,无量纲,只留「静默分钟成交额是否稳定」;(4) 按市值、成交额水平的十分位做 z 分数,去掉水平。数学:变异系数的分母是一年的均值,q25(Amt) 在极少数停牌多的股票上一年均值为 0,得到缺失;241 日窗口与原 head 相同,前 241 个交易日为空(原 head 同样)。
+    variants:
+      - 'cross_stddev(day_quantile_q25(Amt), 241)'
+      - 'cross_mean(day_quantile_q25(Amt), 241)'
+      - 'div(cross_stddev(day_quantile_q25(Amt), 241), cross_mean(day_quantile_q25(Amt), 241))'
+      - 'cs_bucket_zscore(cross_fangzheng(day_quantile_q25(Amt), 241), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_fangzheng(day_quantile_q25(Amt), 241), cross_mean(day_sum(Amt), 60))'
+  - head: 'ts_max(log(cross_regbeta(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Amt), 10)), 20)'
+    why: |-
+      烂部件是短的 ts_max 窗口、signedpower 和「幅度」。拆解表:ts_max 窗口 10 / 20 / 40 得 −2.05 / −1.22 / −0.54,训练和验证两段同时单调变好,是整张表里最干净的趋势,所以窗口继续拉到 60 与 120(120 日用 cross_max,避开 ts_* 的整块内存);拿掉 signedpower 比原 head 好 0.20(−1.02),与 40 日窗口合并试 40 / 60。另外读内核:cs_sum(signedpower(q25(Low))) 是全市场的当日常数(后复权价的平方和,平方放大,由后复权价最高的少数几只票支配);cross_regbeta(x, y, 10) 是 y 对 x 的 10 日回归斜率 cov(x, y) / var(x),y = 收盘分钟成交额 day_last(Amt),x 对所有股票是同一条序列,所以不同股票的 beta 只差 cov(x, y),随收盘分钟成交额的幅度同比例放大;算子 log 取 |beta|,符号被丢掉;于是整个 head 读的主要是「最近一段时间收盘分钟成交额的峰值幅度」,接近流动性水平。一个变体把 beta 换成相关系数 cross_corr(无量纲,只留与全市场序列的同步性),检验承重的是幅度还是同步。数学:窗口 60 / 120 的 ts_max / cross_max 只取已有值;cross_corr 的分母含 1e-9,日成交额量级下影响可忽略;beta 的方差阈值 EPS 与原 head 相同;log 的缺失线 1e-9 远小于 beta 的量级(0.01 ~ 1)。
+    variants:
+      - 'ts_max(log(cross_regbeta(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Amt), 10)), 60)'
+      - 'cross_max(log(cross_regbeta(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Amt), 10)), 120)'
+      - 'ts_max(log(cross_regbeta(cs_sum(day_quantile_q25(Low)), day_last(Amt), 10)), 40)'
+      - 'ts_max(log(cross_regbeta(cs_sum(day_quantile_q25(Low)), day_last(Amt), 10)), 60)'
+      - 'ts_max(cross_corr(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Amt), 10), 40)'

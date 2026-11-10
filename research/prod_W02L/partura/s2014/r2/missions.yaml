@@ -1,0 +1,112 @@
+seed: 2014
+round: 2
+slots:
+- type: N
+  hypothesis: '机制:公司的资本动作(现金分红、送转股、增发、限售股解禁)在日线上留下一条只有「总收益价」与「流通市值」放在一起才看得见的缝。分钟字段 Close 是后复权价(AlphaCube docs/design.md §11.5:Close / (Amt / Volume) 跨股票 2.5 ~ 113、每只票内部变异系数 1% ~ 2%,即每只票一个后复权因子 F),它的日变化是含分红的总收益。LogFloatCap = log(流通市值) = log(未复权收盘价 × 流通股本),存储文档 §1.1 写明「第 d 天的平面存的是收盘时点可知的东西、没有隐式 shift」,它的日变化是价格收益加流通股本的变化。两者相减:Δlog(后复权 Close) − ΔLogFloatCap = Δlog F − Δlog(流通股本)。平日这是同一个价格的涨跌互相抵消,恒为 0;除权除息日:现金分红使 F 上跳 D/P 而股本不变,得 +D/P(股息率);送转股使 F 与流通股本同比例上升,抵消得 0;增发、限售股解禁使流通股本上升而 F 不变,得负。逐日增量求和 = 过去一年的「净派现 − 摊薄」,即 net payout yield 减 net issuance(Boudoukh 等 2007 的净派现收益率;Pontiff-Woodgate 2008 与 Fama-French 2008 把净股本发行列为最稳健的异象之一;限售股解禁的抛压见 Field-Hanka 2001)。第二条独立的腿:LogTotalCap − LogFloatCap = log(总股本 / 流通股本),价格项相消、只剩股本结构,水平 = 未流通股比例(国资、新股、定增锁定),它的逐日增量求和 = 一年内的解禁释放(负)。
+
+
+    算子怎样实现:S1 = cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241)。cross_delta(·, 1) 取逐日增量;cross_sum 在窗口里对有值的天求和,窗口不满时也给值。不用 cross_delta(·, 241),原因来自第 1 轮的事实:第 1 轮 E 位里 4 个 cross_delta(·, 241) 种子(以 log F 为内容)在相关度表里覆盖率只有 0.85,低于 0.9 的门槛被判废品,所以 log F 增量这条路从来没被打过分;覆盖率靠严格滞后会掉 14 个点,逐日增量求和没有这个问题,前 241 天用较短的窗口。另有按规模 / 波动 / 成交额 / 真实价格(sub(LogFloatCap, LogFloatShares))十分位做中性的版本、半衰期 60 / 120 日的指数衰减版(cross_ema,连续量)、|增量| 求和(「资本动作频度」,含送转炒作)、解禁腿的增量求和与水平(以及对规模回归后的残差)、两腿的秩相加。
+
+
+    和库、快照的不同:两个库 5583 条表达式没有一条读过日频叶子(第 1 轮已逐条核对),所以库、也就是两个冠军,看不到流通股本与市值,摸不到分红与摊薄。快照 6 个 head 全是分钟分位数、滚动协方差、成交额分布一族。第 1 轮 E 位的 log F 增量取的是 q25(High)(分钟最高价的 25% 分位,日内噪声约 1% ~ 2%,与一年期股息率同量级,事件信号被噪声盖住),本轮换成收盘价,增量干净。第 1 轮 N 位试过的是价格水平 P 与 tick 摩擦(水平量、没有事件),全部不好;这里读的是事件流,不是水平。
+
+
+    为什么样本外还会在:(1)派现习惯很黏(Lintner 1956),解禁日程由发行时的承诺决定,都与某段行情无关;(2)一年窗口的事件流变化很慢(只在除权日和解禁日跳变),日换手很低,15 bp 成本吃不掉(第 1 轮已看到最不差的子树全是慢的日频量);(3)弱旁证:2028 流本波的 head 是「低后复权价档里挑总市值大的」,按我的读法是偏价值 / 偏红利的股票,派现是比它更直接的价值 / 红利度量(PROGRESS 里认为那个 head 更可能是尺子对阶跃带的盲区,所以这只是弱旁证,不当作依据)。风险要写明:分红股集中在大市值、低波动、低换手,这些已被 5 个控制与两个冠军去掉一部分;2023-08 以后红利风格大涨而 2018 ~ 2023 风格混杂,train 与 valid 的符号若不一致 score(取较差的那个)会是负数,这个风险由尺子自己挡。
+
+
+    数学检查:(1)无前视:两个叶子都是收盘时点可知,没有 shift 到未来。(2)float32:LogFloatCap 在 21 ~ 30 量级,float32 精度约 2 ~ 4e-6,一年增量求和的噪声不超过 5e-5,而年度股息率 5e-3 ~ 5e-2,高两三个数量级。(3)无事件的股票(估计约三成)取值落在数值噪声里,排名在中间;十分位多头书取的是两端(大派现或大摊薄),两端由事件决定;门槛里的 distinct 比例靠这些噪声通过,这不影响两端。解禁腿的增量求和同样事件稀疏(另一条流的相关度表里 log(总股本 / 流通股本) 的 241 日差 distinct 比例 0.63、60 日差 0.29 被门槛判废品,所以这里只写 241 日求和,不写 60 日以内的求和,也不对它做分桶 z 分数,那会把无事件的票压成十个值;对它只用回归残差,残差是连续量);水平腿(distinct 0.73)、指数衰减版与分桶 / 回归版是连续量。主种子的 distinct 靠 241 日窗口里约六成以上的票有分红或股本事件(估计,本机未验证)通过;若不够,指数衰减版与分桶版是后备。(4)没有除法,log 的输入是正的后复权价,|x| ≤ 1e-9 的缺失线远在价格之下。(5)送转后若流通股本更新比价格晚几天,会出现 ±log(1+r) 的几天假象,占样本不到 1%,逐日求和后窗口一过自动抵消。(6)停牌日增量为空,事件落在停牌期会被漏掉,罕见。(7)前 241 个交易日窗口较短,只占样本约 12%,不是热身期主导。'
+  inspired_by: B040 / B041 两批里反复出现的是「后复权价格水平」这一个混合体(q25(High)、day_close(High) 一族),第 1 轮已证明它拆不出东西;本流 loc 富集表里最不差的子树全是慢变的日频叶子量(sub(LogTotalCap, LogFloatShares) +0.92、sub(LogTotalCap, LogFloatCap) +0.61、sub(LogFloatCap, LogFloatShares) +0.38),原因是慢,不是水平;后复权价与未复权价之差 F 的「增量」是分红 / 送转 / 摊薄事件,这一条第 1 轮因为 241 日严格滞后的覆盖率门槛从没被打过分。另有一条弱旁证:2028 流本波的 head(低后复权价档内挑总市值大的,按我的读法偏价值 / 偏红利;PROGRESS 认为它更可能是尺子对阶跃带的盲区)
+  literature:
+  - title: 'On the importance of measuring payout yield: implications for empirical asset pricing'
+    authors: Jacob Boudoukh, Roni Michaely, Matthew Richardson, Michael R. Roberts
+    year: '2007'
+    treatment: 净派现收益率(分红加回购减发行)比股息率更能预测收益;这里用后复权收盘价日对数收益与流通市值日对数变化的差,逐日增量求和近似一年的净派现减摊薄
+  - title: Share issuance and cross-sectional returns
+    authors: Jeffrey Pontiff, Artemiza Woodgate
+    year: '2008'
+    treatment: 净股本发行与未来收益负相关;这里用流通股本的变化(增发、解禁使其上升)作负向腿,送转因与价格同比例变动而抵消
+  - title: The expiration of IPO share lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: '2001'
+    treatment: 限售股解禁前后的异常下跌;这里用 log(总股本 / 流通股本) 的水平与它的逐日增量求和近似未流通股比例与一年内的解禁释放
+  - title: Distribution of incomes of corporations among dividends, retained earnings, and taxes
+    authors: John Lintner
+    year: '1956'
+    treatment: 派现习惯黏性:一年的事件流在样本期内持续,所以信号慢、换手低
+  seeds:
+  - cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241)
+  - cross_ema(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 120)
+  - cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), LogFloatCap)
+  - cs_bucket_rank(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), cross_mean(day_std(Ret), 20))
+  - cs_regres(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), LogFloatCap)
+  - cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), cross_mean(day_sum(Amt), 60))
+  - cs_bucket_rank(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), sub(LogFloatCap, LogFloatShares))
+  - cross_ema(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 60)
+  - cross_sum(abs_(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1)), 241)
+  - cross_sum(cross_delta(sub(LogTotalCap, LogFloatCap), 1), 241)
+  - sub(LogTotalCap, LogFloatCap)
+  - cs_bucket_rank(sub(LogTotalCap, LogFloatCap), LogFloatCap)
+  - cs_regres(cross_sum(cross_delta(sub(LogTotalCap, LogFloatCap), 1), 241), LogFloatCap)
+  - add(cs_rank(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241)), cs_rank(cross_sum(cross_delta(sub(LogTotalCap, LogFloatCap), 1), 241)))
+- type: N
+  hypothesis: '机制:已实现收益的不对称(偏度、彩票偏好)。散户对「可能暴涨」的股票愿意多付钱(Kumar 2009;Bali-Cakici-Whitelaw 2011 的 MAX 效应;Amaya 等 2015 的已实现偏度:已实现偏度高的股票未来收益低),A 股的散户占比让这条更强;对称的另一端是崩盘型(下行半离差占主导)的股票,承担了被偏好者让出来的风险溢价。度量用半方差(Barndorff-Nielsen 等 2010):日度后复权收盘价的对数收益里,上行半离差与下行半离差之比。
+
+
+    算子怎样实现:cross_semistd_pos(x, d) 与 cross_semistd_neg(x, d) 是 ops_ext 里的新算子,对正数序列 x 取日对数变化 g,返回 sqrt(mean(max(g,0)^2)) 与 sqrt(mean(min(g,0)^2)),分母是窗口里所有有值的天(不只是上行或下行的天),所以两者可直接比。不对称指数 A = (pos − neg) / (pos + neg) 落在 [−1, 1],无量纲,与波动水平无关,所以 5 个控制里的波动控制与流动性控制没有直接暴露;分母只在窗口内价格完全不动(停牌或整段涨跌停锁死)时为 0,此时分子也是 0,得缺失,不会爆。A 与对数比 log(pos / neg) 是同一个单调变换,所以只写一个。x 取 day_close(Close)(后复权收盘价,日对数变化 = 含分红的总收益),另试成交量加权日均价 day_wmean(Close, Amt)(去掉收盘集合竞价的噪声)与 day_first(Open)(开盘到开盘,换一个采样点)。窗口 60 / 120 / 241 三档;按波动、规模、成交额十分位做中性的版本(cs_bucket_rank / cs_bucket_zscore);cross_ema 平滑;60 日减 241 日(近期偏度相对长期偏度的变化)。另一条日内的腿:day_es_ratio_hi(Ret) − day_es_ratio_lo(Ret) = 分钟收益右尾与左尾的形状差(95% 分位以上的均值 / 该分位,减去 5% 分位以下的均值 / 该分位),取 60 / 241 日均值,并与日度 A 的秩相加。
+
+
+    和库、快照的不同:5583 条库表达式用的是 day_skew、ts_skew 这类三阶矩(对单个极端值敏感、分母是方差的 1.5 次方),没有一条用半离差,也没有一条读后复权收盘价的日度路径不对称;这两个算子(cross_semistd_*、day_es_ratio_*)在库里出现次数是 0,骨架逐个核对过不在库里。快照里的 head(B040 的 ts_std(q25(Ret), 5)、B041 的 ts_cov / ts_med 一族)都只度量分钟收益的左尾,没有一个有右尾那一端,也没有一个在日度路径上比较涨跌的幅度;这一批里反复出现的是「下尾」,而被定价的是「两尾的差」。
+
+
+    为什么样本外还会在:(1)彩票偏好是持久的行为偏差,不依赖某段行情;(2)窗口 60 ~ 241 日的半离差变化慢,换手低;(3)指数无量纲,不是波动水平的换写。风险要写明:A 与 20 日反转、与近期是否有大涨日会有相关(新尺子去掉了 20 日反转的线性、U 形、S 形暴露);牛市与熊市里不对称的符号未必相同,train 与 valid 符号相反时 score 为负;涨跌停制度把单日涨跌幅封在 ±10%(创业板 / 科创板 ±20%,ST ±5%),上行半离差被上限截断,这是各只票各自一个常数,不影响指数的符号。
+
+
+    数学检查:(1)无前视:只用到截至 t 日收盘的价格。(2)分母 pos + neg 为 0 只在价格窗口内完全不动,此时得缺失;没有对近零量做除法。(3)半离差用窗口内所有有值的天做分母,至少 3 天才有值,前几天缺失,占比可忽略。(4)day_es_ratio 在分位数接近 0 时算子本身返回缺失(不是 1e4 一类的爆点),缺失的天不进均值。(5)指数有界,没有溢出。'
+  inspired_by: B040 的 day_quantile_q25(Ret) 一族与 B041 的 ts_cov(day_quantile_q25(Ret), day_close(Ret), 50) 一族(loc 里 head 1、4、5、6 全是它们的变体)都只度量分钟收益的左尾(25% 分位的波动、与收盘分钟收益的协方差),没有一条有右尾那一端,也没有一条在日度路径上比较涨幅与跌幅的幅度;被定价的是两尾的差,不是单一尾巴
+  literature:
+  - title: 'Maxing out: stocks as lotteries and the cross-section of expected returns'
+    authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+    year: '2011'
+    treatment: 极端上涨日多的股票未来收益低;这里用日度上行与下行半离差之比的指数度量涨跌幅度的不对称,而不是单个最大值
+  - title: Does realized skewness predict the cross-section of equity returns?
+    authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+    year: '2015'
+    treatment: 已实现偏度与未来收益负相关;这里用半离差比(对单个极端日不敏感、无量纲)替代三阶矩
+  - title: 'Measuring downside risk: realised semivariance'
+    authors: Ole E. Barndorff-Nielsen, Silja Kinnebrock, Neil Shephard
+    year: '2010'
+    treatment: 已实现半方差把上行与下行的波动分开;这里的 cross_semistd_pos / neg 是日度对数收益的半离差
+  - title: Who gambles in the stock market?
+    authors: Alok Kumar
+    year: '2009'
+    treatment: 散户的彩票型需求集中在低价、高偏度的股票;这里的不对称指数是这类需求的价格痕迹
+  seeds:
+  - div(sub(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)), add(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)))
+  - div(sub(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60)), add(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60)))
+  - div(sub(cross_semistd_pos(day_close(Close), 241), cross_semistd_neg(day_close(Close), 241)), add(cross_semistd_pos(day_close(Close), 241), cross_semistd_neg(day_close(Close), 241)))
+  - div(sub(cross_semistd_pos(day_wmean(Close, Amt), 120), cross_semistd_neg(day_wmean(Close, Amt), 120)), add(cross_semistd_pos(day_wmean(Close, Amt), 120), cross_semistd_neg(day_wmean(Close, Amt), 120)))
+  - div(sub(cross_semistd_pos(day_first(Open), 120), cross_semistd_neg(day_first(Open), 120)), add(cross_semistd_pos(day_first(Open), 120), cross_semistd_neg(day_first(Open), 120)))
+  - cs_bucket_rank(div(sub(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)), add(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120))), cross_mean(day_std(Ret), 20))
+  - cs_bucket_zscore(div(sub(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)), add(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120))), LogFloatCap)
+  - cs_bucket_rank(div(sub(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)), add(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120))), cross_mean(day_sum(Amt), 60))
+  - cross_ema(div(sub(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60)), add(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60))), 20)
+  - sub(div(sub(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60)), add(cross_semistd_pos(day_close(Close), 60), cross_semistd_neg(day_close(Close), 60))), div(sub(cross_semistd_pos(day_close(Close), 241), cross_semistd_neg(day_close(Close), 241)), add(cross_semistd_pos(day_close(Close), 241), cross_semistd_neg(day_close(Close), 241))))
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 60)
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 241)
+  - add(cs_rank(div(sub(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)), add(cross_semistd_pos(day_close(Close), 120), cross_semistd_neg(day_close(Close), 120)))), cs_rank(cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 120)))
+R:
+- head: ts_med(ts_cov(day_quantile_q25(Ret), day_close(Ret), 50), 40)
+  why: 烂部件是协方差的尺度和 ts_med 的窗口。拆解表(本轮 loc):ts_med 窗口 20 / 40 / 80 得 -1.35 / -1.48 / -1.27(80 日验证段 -0.50,比原 head 的 -0.76 好),只留 ts_cov 本身 -1.76,说明外层的中位数在平滑而不是造信号;ts_cov = 相关系数 × 两个标准差,量级正比于波动的平方,是波动控制的近亲,真正想量的是「25% 分位分钟收益与收盘分钟收益的同步程度」,所以换成无量纲的相关系数(cross_corr 与 cross_med 套),并把窗口拉到 80 ~ 120(120 日用 cross_med 避开 ts_* 的整块内存);另一个变体按波动十分位做 z 分数去掉水平。数学:cross_corr 的分母是 sqrt(var_x var_y) + 1e-9,日度分位数收益与收盘分钟收益都是 1e-3 ~ 1e-2 量级,方差 1e-6 ~ 1e-4,分母远大于 1e-9,影响可忽略;窗口 120 的前几十天用较短窗口,不是缺失。
+  variants:
+  - cross_med(ts_cov(day_quantile_q25(Ret), day_close(Ret), 50), 120)
+  - cross_med(cross_corr(day_quantile_q25(Ret), day_close(Ret), 50), 80)
+  - cross_corr(day_quantile_q25(Ret), day_close(Ret), 120)
+  - cs_bucket_zscore(ts_med(ts_cov(day_quantile_q25(Ret), day_close(Ret), 50), 80), cross_mean(day_std(Ret), 20))
+- head: ts_std(day_quantile_q25(Ret), 5)
+  why: 烂部件是尺度。拆解表:窗口 2 / 5 / 10 得 -1.89 / -0.88 / -1.10,第 1 轮 3 日版 -1.17,5 日已是窗口最优,再调窗口没有空间;训练 -0.43 而验证 -0.88,验证段更差。ts_std(q25(Ret), 5) 是下四分位分钟收益的绝对标准差,正比于波动水平,而波动水平正是新尺子要吃掉的控制;想量的是「尾部的不稳定相对总体波动有多大」,所以除以 60 日平均日波动、按规模十分位和波动十分位做 z 分数各试一次,再试上尾与下尾的不稳定程度之差(右尾减左尾)与 cross_ema 平滑。数学:day_std(Ret) 的 60 日均值只在整段停牌时为 0,此时分子也是 0,得缺失;分桶 z 分数的分母是桶内标准差加 EPS;q75(Ret) 与 q25(Ret) 同为一天里分钟收益的分位数,没有除以近零的量。
+  variants:
+  - div(ts_std(day_quantile_q25(Ret), 5), cross_mean(day_std(Ret), 60))
+  - cs_bucket_zscore(ts_std(day_quantile_q25(Ret), 5), LogFloatCap)
+  - cs_bucket_zscore(ts_std(day_quantile_q25(Ret), 5), cross_mean(day_std(Ret), 20))
+  - sub(ts_std(day_quantile_q75(Ret), 5), ts_std(day_quantile_q25(Ret), 5))
+  - cross_ema(ts_std(day_quantile_q25(Ret), 5), 10)

@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '核心 C = sub(day_skew(放量前10%分钟收益), day_skew(静默后10%分钟收益)) 不在快照 6 个 head 的表里(heads 表 0 处),但在 loc.md 共性表中出现 4 处(与 notebook 第 1 轮 N 位记录的 cross_mean(C,241) 一致),按规则 2 视为来源合规(共性表外围未逐行核对)。创新度:corr_1 表里核心对 6 个 head 的原始 |ρ| 最大 0.047(ts_stddev(σT,80)),对 5 个控制最大 0.06(liq),残差 0.08;它是偏度差,不是任何 head(波动水平、成交量和、VW 水平)或控制的同一个量,给 4(C 本身第 1 轮已作为 N 位出现过,但不在库里)。合理度逐个算子核对:day_skew 对 230 个分钟取前后各 (230+1)//10 = 23 个,是总体偏度,|g1| 上界 (n-2)/sqrt(n-1) 约 4.48,有界(common.py _skew);全零分钟给精确 0 时 x_std=0 得 NaN,覆盖 0.954,不是伪影;in_topk_masked 的并列由 torch.topk 次序打破,只影响零成交分钟很多的薄票,那些日子静默腿多半全零而 NaN,未量化但不系统;cross_* 是 241 天扩张窗口(rolling_windows 左补 NaN),训练头约 240 天都是部分窗口,比 notebook 说的「约一个月」长,但不是主导结果;(e) 的大盘收益是 t 日收盘后才确定(不是收盘前),信号 t+1 交易,无前视;其余无前视。种子 13 的 mul(C, is_lt(M,0)) 在非下跌日补 0 而非 NaN,cross_mean 得到 p_d*mean_d - p_u*mean_u,混入 (p_d-p_u)*mean_u 的水平项,不是 §4 的数学问题(结果未主要由填充决定),保留,建议改为 cross_sum 之比得到条件均值差。种子 10 的 raw |ρ| 0.709 对 day_sum(in_slice(Volume,2,237)) ≥ 0.7,按表自动划掉。种子 7、8、14 对同一 head 的 raw |ρ| 为 0.69/0.65/0.69,对 size 与 liq 为 0.5 至 0.64(与流动性控制重叠大),但未到划掉门槛,也不是同一个量,放行并标注。如果它有 alpha,最可能来自偏度差的时间结构:a11（均值除以标准差）与 a1（对市场偏度状态的载荷）(读可靠性与耦合,而不是水平)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '15 个种子的原始 |ρ| 对 6 个 head 最大 0.335(种子 7,对 cross_mean(FL,20)),对 5 个控制最大 0.40(种子 12,liq/known),无任何自动划掉。创新度:FO、FL、FM 是 day_wmean 的分时段成交量加权收益;快照里只有 head 5 = cross_mean(FL,20) 读 FL 的水平,本批 15 个全部读窗口之间的关系(相关、斜率、时差、对全市场同步、钱加权减等权、时段 std 比),与 head 的 raw |ρ| 不超过 0.34,给 4。部分重叠要标注:种子 7 与 head 5 的残差 |ρ| 为 0.41(共享 FL 水平),种子 9 是 7 的差分形式;它们不是同一个量。合理度:day_wmean 的权重取 |Volume|,停牌窗口分母为 0 时得 NaN(ops_ext.py day_wmean),不是零填充;cross_corr / cross_regbeta / cross_reg_tvalue 在窗口常数时由 rolling_ols / rolling_pair_reduce 的 EPS 下限给 0 或 NaN,不爆点;cs_mean 作用在 day 折叠后的 (D,S) 面板上,是真截面均值(axes.py),不是退化;无前视:种子 3、4、5、6 的 delay 只用 t-1 日,种子 14 的同日量是 t 日收盘后才算、t+1 才交易。需要 PI 注意的两点(不挡):种子 2 的 cross_regbeta(FO,FM) 算的是 FM 对 FO 的斜率,与文字「开盘资金流对中段的斜率」方向相反,两者都是合法量;种子 15 的分母只有在整窗 FO 恒定时才为 0,而且是排名型影响。如果它有 alpha,最可能来自种子 3、4 的尾盘资金流对次日收益的 241 日系数(隔夜桥与信息性成交的慢特质),其次是种子 12 的收盘与开盘同步之差。'
+R:
+  - head: 'ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10)), 80)'
+    soundness: 4
+    reasons: '5 个变体都没有数学问题:v3 的 log 在 |σ|≤1e-9 时返回 NaN(common.py log 的 EPS 守卫),不产生 -inf,ts_std 跳过 NaN;v4 的 cross_ema 半衰期 10 跳过缺失日(ops_ext.py cross_ema),也没问题;v2 把放量腿放宽到前三分之一后机制从极端分钟变成较活跃分钟,说得通。与原 head 的原始 |ρ|:v1 0.81、v2 0.80、v5 0.81、v3 0.65、v4 0.63,都 ≥0.5,若过分数门则是替换而不是收录。v3 与流动性控制 |ρ| 0.00,是去掉水平后的乘性变异,机制清楚。'
+  - head: 'cross_mean(div(day_sum(mul(in_slice(Ret, 191, 240), in_slice(Volume, 191, 240))), day_sum(in_slice(Volume, 191, 240))), 20)'
+    soundness: 4
+    reasons: '4 个变体都是 FL(尾盘 50 分钟成交量加权收益)的更慢均值、EMA 或标准差,没有算子陷阱。div 的分母为 0 时分子也为 0,得 NaN 而不是 inf。v4 cross_stddev(·,241) 读的是变异性,与第 1 轮 R 的结论(变异性类越慢越好)一致。与原 head 的原始 |ρ|:v1 0.44、v2 0.34、v3 0.44;v4 最像的是 ts_mean(σT-σB,40),0.43。'
+  - head: 'day_sum(in_slice(Volume, 2, 237))'
+    soundness: 4
+    reasons: 'v1 sub(log(day_sum(Volume)), LogFloatShares) 中 LogFloatShares 是股本的对数(dailyfields.py),相减得到与价位无关的对数换手率,机制清楚;log 对 |x|≤1e-9 返回 NaN(停牌),不产生 -inf。与流动性控制的 |ρ| 为 liq 0.33、vol 0.46、size 0.34,都低于 0.5。v2 cross_mean(day_sum(Volume),120) 是原 head 的慢化版,与原 head 的原始 |ρ| 0.88,与流动性控制 0.61:它只是「水平慢化」的诊断,只能是替换,不是新 head;不是数学问题,合理度 4。'
+summary: 'a 通过(创新 4、合理 4,按表划掉种子 10,剩 13 个);b 通过(创新 4、合理 4,无划掉,剩 15 个);R 三组合理度均 4,无数学问题。PI 需注意:种子 a13 的零填充使均值差混入水平项(建议改条件均值);a7、a8、a14 与流动性和规模控制的 |ρ| 0.5 至 0.64 重叠;b2 的回归方向与文字相反;b7 与 head 5 的残差 |ρ| 0.41;cross_* 的扩张窗口热身比 notebook 说的长。'

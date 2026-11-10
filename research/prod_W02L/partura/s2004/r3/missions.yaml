@@ -1,0 +1,43 @@
+seed: 2004
+round: 3
+slots:
+- type: E
+  core: cross_regalpha(day_quantile(Vwap), day_quantile(High), 15)
+  hypothesis: 核心 C = cross_regalpha(day_quantile(Vwap), day_quantile(High), 15),原样取自快照 head 6(M2 批,score -0.75)里 ts_regbeta(neg(day_cov(Low, Close)), C, 10) 的第二个参数。C 是「日内 Vwap 分位价对 High 分位价」的 15 日滚动回归截距:在回归斜率之外,Vwap 相对 High 的成交价偏低多少(价格尺度上的收盘前成交重心 vs 最高价的偏移),是个慢变量。【本轮依据,读数来自上一轮 R 位,不是推断】去掉 head 6 里有害的 ts_cov(ar1, cross_cov 链, 20) 项并只把 ts_regbeta 的窗口拉长:regbeta 窗口 10 -> 30 / 60 时(其它不变)score 0.07 / 0.89;60 日版本 train 0.89 valid 0.91、与已知族 ρ -0.16、与原 head ρ -0.39;cross_regalpha 窗口 15 -> 60 的两个版本反而 -0.40 / -0.07,所以承重的是「C(15 日截距)在 60 日窗口里与 -cov(Low,Close) 的回归斜率」,不是越慢越好。这是本流里目前样本内最好、两段几乎相等的读数,它没有被收录为 head(R 位记录里 additions 为空),所以 GP 仍可在它外面长。【机制(推断)】ts_regbeta(y, C, 60) = 过去 60 日里,个股每日「-cov(Low, Close)」(日内最低价与收盘价的协动,后复权价位尺度 ≈ 价位 × 日内低点到收盘的修复幅度)对 C 的敏感度。斜率读的是「当 Vwap 相对 High 偏低(下跌尾盘 / 低位成交)时,下影 / 收盘修复是否更大」,即日内被抛压打到低位后买盘接回的弹性(流动性提供者补偿的个股版本),是个股特有的稳定行为参数,每日换手低;和 5 个控制不是同一个度量(控制只有水平 / 波动 / 反转 / 成交额离散度 / 市值,而这里是两个日内量之间的 60 日回归系数,不是量的水平)。【和库的区别】库里 B011 的 29 条全是 cross_cov(cross_min(neg(day_cov(F,F)),15), mul(day_autocorr_n1(High), day_std(Low)),10) 外壳,没有一条让 ts_regbeta 窗口超过 15 或脱离 cross_cov 链;这里的外围是:(i) 窗口 60 / 120 / 241 与 ar1 项(day_ar1_coefficient(Amt),成交额的日内自回归 = 活跃度持续性)的加和 / 秩加和;(ii) 把 -cov(Low, Close) 换成 -cov(Ret, Close) 或无量纲版(÷ 均价乘积,去掉价位尺度,检验承重的是不是价位);(iii) 回归斜率换成相关 / 截距 / 秩空间 / 剥离全市场的 C / 去 60 日均值的 C(检验是不是全市场共同的 Vwap-High 偏移在带着走);(iv) 慢 EMA、不同窗口之差(60 日斜率减 241 日斜率 = 斜率的变化)。种子均原样含 C 和 regbeta 里 -cov(Low,Close)。【样本外为什么还会在】读数是慢的回归系数而不是水平;train 与 valid 同为 0.9,不是一段行情的产物。已知风险:价位尺度仍可能是承重的(那就是后复权价位的长周期反转 / 动量,规则 4 不算问题,但会让相关度表里与 head 8/9 / 价位类控制的 ρ 抬高)。
+  seeds:
+  - ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)
+  - ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 120)
+  - ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 241)
+  - add(day_ar1_coefficient(Amt), ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60))
+  - add(day_ar1_coefficient(Amt), ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 120))
+  - ts_regbeta(neg(day_cov(Ret, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)
+  - ts_regbeta(neg(div(day_cov(Low, Close), mul(day_mean(Low), day_mean(Close)))), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)
+  - ts_corr(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)
+  - ts_regalpha(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)
+  - ts_regbeta(neg(day_cov(Low, Close)), cs_demean(cross_regalpha(day_quantile(Vwap), day_quantile(High), 15)), 60)
+  - ts_regbeta(cs_rank(neg(day_cov(Low, Close))), cs_rank(cross_regalpha(day_quantile(Vwap), day_quantile(High), 15)), 60)
+  - cross_ema(ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60), 20)
+  - ts_regbeta(neg(day_cov(Low, Close)), sub(cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), cross_mean(cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60)), 120)
+  - sub(ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60), ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 241))
+  - add(cs_rank(day_ar1_coefficient(Amt)), cs_rank(ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 120)))
+  - ts_regbeta(ts_delay(neg(day_cov(Low, Close)), 1), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 120)
+- type: E
+  core: div(day_cov(Ret, Volume), day_mean(Volume))
+  hypothesis: 核心 D = div(day_cov(Ret, Volume), day_mean(Volume)),等于当天「成交量加权分钟收益」减「等权分钟收益」(恒等式 cov(R,V)/mean(V) = ΣR_tV_t/ΣV_t - mean(R_t)):放量分钟里价格涨还是跌,单位是收益,有界(≲ 15σ_R),停牌日 0/0 -> NaN,没有近零分母的爆点。这是 D 的第 2 个(也是最后一个)E 位。【本轮依据,读数来自上一轮 R 位】ts_skew(D, 120) = +0.56(train 0.56 / valid 0.79),ts_skew(D, 241) = +0.68(train 0.68 / valid 1.07),与已知族 ρ 0.02 / 0.08,与快照 head 4 的 ρ 0.34 / 0.24(<0.5,有别于该 head),已经过 gate;去 in_slice 首尾两根的 120 日版本 0.51 / 0.63(所以不是集合竞价);cs_demean 后的 80 日偏度只有 0.10 / 0.96,winsor 后 -0.13 / 0.61,说明偏度依赖未被剥掉的极端日 / 全市场共同日(推断:读的是个股参与全市场放量大涨 / 大跌日的程度,即对市场放量冲击的共偏度),cross_ema 慢化 120 日偏度 0.43 / 0.72。这三类读数都是 train 与 valid 同号为正、窗口越长越好(80 -> 120 -> 241:0.10 -> 0.56 -> 0.68 的 train),是目前本流最干净的线索;上一轮 GP(Pr2a)只在 D 外面试了截面处理 / 水平平滑 / 尾部均值(best -0.01),从没有让 GP 在 ts_skew(D, 长窗口) 附近生长。这些 R 读数没有被收录为 head,所以 GP 仍可在它们之上生长。【机制】D 的 241 日偏度 = 过去一年里大幅放量上涨日是否比大幅放量下跌日更多更极端(信息事件 / 注意力事件脚印,Gervais-Kaniel-Mingelgrin 2001 的 high-volume premium 的三阶矩版本);三阶矩是低频、低换手的个股属性,15 bp 成本下活得下来;与水平型控制(流动性、波动、市值、Amt 离散度)先天近似正交。【外围】都与上一轮 GP 看过的不同(它们是 cross_tail / cross_ema / cs_demean 的水平写法):(i) 偏度 120 / 241 / 极端值之和(ts_max + ts_min)/ 峰度;(ii) 用 60 日滚动均值去趋势后的偏度、用最近 60 日平均绝对值归一的偏度(消除波动状态的变化对三阶矩的污染);(iii) 先 5 日平均再取偏度(降噪);(iv) 对偏度做秩空间回归去掉自身离散度(ts_std(D, 241))或 120 日动量(只留下方向特征);(v) 偏度的变化(减 60 日前)、EMA、120 与 241 的秩加和(多尺度);(vi) 偏度 x 市值反向交互与 cs_flip_by_state 状态翻转;(vii) D 与日收益的 241 日相关(协偏度式读法)。种子均原样含 D。【样本外为什么还会在】三阶矩、慢变量、无量纲,在 train(2018-2023)与 valid(2024-2025)上同号;不靠某一段行情。已知风险:valid 一向比 train 好 0.2-0.4,所以 train 仍是约束,偏度对 head 4 的 ρ 若抬到 0.5 以上(窗口短 / 去趋势后)相关度表可能划掉几个。
+  seeds:
+  - ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241)
+  - ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 120)
+  - ts_skew(sub(div(day_cov(Ret, Volume), day_mean(Volume)), cross_mean(div(day_cov(Ret, Volume), day_mean(Volume)), 60)), 241)
+  - ts_skew(div(div(day_cov(Ret, Volume), day_mean(Volume)), cross_mean(abs_(div(day_cov(Ret, Volume), day_mean(Volume))), 60)), 241)
+  - ts_skew(cross_mean(div(day_cov(Ret, Volume), day_mean(Volume)), 5), 241)
+  - ts_kurt(div(day_cov(Ret, Volume), day_mean(Volume)), 241)
+  - add(ts_max(div(day_cov(Ret, Volume), day_mean(Volume)), 241), ts_min(div(day_cov(Ret, Volume), day_mean(Volume)), 241))
+  - cross_ema(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241), 60)
+  - cs_regres(cs_rank(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241)), cs_rank(ts_std(div(day_cov(Ret, Volume), day_mean(Volume)), 241)))
+  - cs_regres(cs_rank(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241)), cs_rank(cross_mean(day_sum(Ret), 120)))
+  - sub(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241), ts_delay(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241), 60))
+  - cs_flip_by_state(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241), day_sum(Amt))
+  - add(cs_rank(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 120)), cs_rank(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241)))
+  - ts_skew(cs_rank(div(day_cov(Ret, Volume), day_mean(Volume))), 241)
+  - ts_corr(div(day_cov(Ret, Volume), day_mean(Volume)), day_sum(Ret), 241)
+  - mul(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241), sub(0.5, cs_rank(LogFloatCap)))

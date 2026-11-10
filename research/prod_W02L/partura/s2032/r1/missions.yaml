@@ -1,0 +1,76 @@
+seed: 2032
+round: 1
+slots:
+  - type: E
+    core: 'day_first(Volume)'
+    hypothesis: |-
+      机制:核心 C = day_first(Volume),即开盘集合竞价那一列(第 0 分钟:9:15-9:25 挂单、9:25 一次撮合,后面 241 格里的第一格)的成交量。它同时装着两样东西:(1) 这只股票平时的关注度 / 流动性水平,慢变,占截面方差的绝大部分;(2) 前一晚到开盘前的新信息、散户集中挂单的强度,快变,只占很小一块。
+      批里的 3 个 head(cross_sum(C, 60 / 5 / 3),score -1.12 / -1.15 / -1.20)读的是 (1):拆解表里窗口 2 / 6 / 10 / 30 几乎同分(-1.16 ~ -1.38),没有最优窗口;换成 Amt 之后与已知族 rho 在 -0.79 ~ -0.89;窗口 120 时最优方向翻号(-1 变 +1)。这说明它们是 liq / known 两个控制的水平,新尺子拿掉水平后只剩成本。所以本位不再读水平,只读 C 的"去水平"形态,分四组,每组各自对应一个可以独立成立的机制:
+      (a) 注意力冲击(种子 1-3):C 相对本股自己 60 / 120 日历史的 z 分数(cross_zscore,先取 log 压住放量日的重尾),再用 cross_ema 带上 10-20 日的慢平滑;种子 3 用 cross_tail_mean_q75 只读"最近 60 日里最猛的四分之一天"的强度。机制:散户的注意力买盘集中在开盘集合竞价挂出(Barber-Odean 2008 的注意力买入;Berkman-Koch-Tuttle-Zhang 2012 的开盘价压力),竞价量相对自己的常态突然放大 = 注意力被抢走,之后回吐;z 分数去掉了让所有水平因子长得一样的持久截面水平。
+      (b) 竞价占全天的比例(种子 4-7、15):div(C, day_sum(Volume))(EMA 30 日)、它的 60 日 z 分数、C 对"开盘后 30 分钟连续竞价量"之比、C 在"全天总量同一十分位"内的标准化(cs_bucket_zscore,键是 30 日平均总量)、以及 60 日滚动回归 cross_regres(log 全天量, log 竞价量) 的残差。机制:有多少交易被攒到开盘一次撮合、而不是在盘中分散成交,反映的是隔夜信息 vs 日内流动性的相对分量;比例和残差都是无量纲的,量级被除掉了(与 head 的 rho 应远低于 0.7,见相关表)。
+      (c) 竞价量与隔夜跳空配对(种子 8-12、14):G = 开盘价 / 前收 - 1(后复权,不含分红缺口)。cross_ema(G * 竞价量 z 分数)(带量的跳空累积)、sign(G) * z 分数、log 竞价量与 G 的 60 日相关、|G| 对竞价量的 60 日回归 t 值(这只股票的"竞价价格冲击斜率":大跳空是带量还是不带量)、日内收益对竞价量的 90 日回归 t 值、以及只在竞价量 z > 1.5 的放量日累积跳空(select_where)。机制:带量的跳空(知情 / 机构)与不带量的跳空(散户噪声)后续的路径不同,让股票自己的历史说话,方向交给奖励定,不是我先验押注。
+      (d) 开盘 vs 收盘的参与倾向、爆发性(种子 13、16):log(C+1) - log(day_last(Volume)+1) 的 30 日 EMA(开盘重 = 消息驱动,收盘重 = 被动 / 机构调仓),以及 60 日变异系数(竞价量有多不规则)。
+      为什么与以前不一样:快照里已见过的含 C 的外围只有 {cross_sum}、{cross_sum, cross_sum} 和库里一条 {ts_reg_tvalue, cs_mask_top_replace_mean, sqrt, cross_sum, day_quantile, cross_quantile_q50};我的 16 个种子外围没有一个含 cross_sum,全是 cross_ema / cross_zscore / cross_tail_mean / cs_bucket_zscore / cross_regres / cross_reg_tvalue / cross_corr / select_where 的组合。我用 AlphaCube 的骨架函数核对过:16 个种子的骨架没有一个在两个库 5583 条的骨架集里,cross_zscore / cross_ema / cs_bucket_* 在库里出现 0 次;库里 33 条含 day_first(Volume / Amt) 的表达式全是原始算子包法(ts_* / cross_sum / cross_argmin),没有一条把竞价量与跳空配对,也没有一条拿它除以全天量。
+      为什么样本外还会在:集合竞价制度(9:15-9:25、一次撮合、T+1、涨跌停)2018 年以来没变;散户 / 机构在竞价阶段的行为差异是结构性的,不靠某一年的行情。去水平之后的信号与 liq / known 的重合应当很小,这是它不被两个冠军吃掉的前提;如果相关表显示种子对控制的 rho 仍然很高,说明去水平没去干净,这是我最担心的失败方式。诚实预测:出 head 的概率很低(见笔记)。
+    seeds:
+      - 'cross_ema(cross_zscore(day_first(Volume), 60), 10)'
+      - 'cross_ema(cross_zscore(log(add(day_first(Volume), 1)), 120), 20)'
+      - 'cross_tail_mean_q75(cross_zscore(day_first(Volume), 60), 60)'
+      - 'cross_ema(div(day_first(Volume), day_sum(Volume)), 30)'
+      - 'cross_ema(cross_zscore(div(day_first(Volume), day_sum(Volume)), 60), 10)'
+      - 'cross_ema(div(day_first(Volume), day_sum(in_slice(Volume, 1, 30))), 20)'
+      - 'cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume), 30))'
+      - 'cross_corr(log(add(day_first(Volume), 1)), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_ema(mul(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), cross_zscore(day_first(Volume), 60)), 20)'
+      - 'cross_reg_tvalue(day_first(Volume), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60)'
+      - 'cross_ema(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), cross_zscore(log(add(day_first(Volume), 1)), 60)), 30)'
+      - 'cross_reg_tvalue(log(add(day_first(Volume), 1)), sub(div(day_last(Close), day_first(Open)), 1), 90)'
+      - 'div(cross_stddev(day_first(Volume), 60), cross_mean(day_first(Volume), 60))'
+      - 'cross_ema(select_where(is_gt(cross_zscore(day_first(Volume), 60), 1.5), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 0), 30)'
+      - 'cross_ema(cross_regres(log(add(day_sum(Volume), 1)), log(add(day_first(Volume), 1)), 60), 15)'
+      - 'cross_ema(sub(log(add(day_first(Volume), 1)), log(add(day_last(Volume), 1))), 30)'
+  - type: N
+    hypothesis: |-
+      机制:隔夜 - 日内拉锯(overnight-intraday tug of war)。把一天的价格变动拆成两段:隔夜段 G = 开盘价 / 前收 - 1(前一天收盘后到集合竞价撮合之间到达的信息,偏消息 / 机构 / 知情),日内段 I = 收盘 / 开盘价 - 1(连续竞价,偏散户 / 噪声 / 流动性)。Lou-Polk-Skouras (2019) 发现隔夜收益有持续性、日内收益与之相反,是两类参与者的拉锯;Berkman-Koch-Tuttle-Zhang (2012) 发现被注意力推高的开盘价随后在日内回吐。这里不押这两篇的方向,而是做成"个股自己的反应函数":同一只股票的日内段平均是延续还是回吐隔夜段,回吐有多频繁,隔夜段占全部价格变动的份额多大,隔夜跳空的尾部是否不对称,以及今天的隔夜段是否在反转昨天的日内段。
+      算子怎么实现:G = sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1),I = sub(div(day_last(Close), day_first(Open)), 1);全部无量纲、与成交量水平无关,所以不会被 liq / known / size 吃掉,只与 rev(20 日反转)和 vol 有轻度重叠。种子分四组:(A) 两段的差与各自的慢 EMA(种子 1-3,cross_ema(G - I, 30)、cross_ema(G, 40)、cross_ema(I, 40),让 GP 看到是哪一段在带信号);(B) 反应函数:I 对 G 的 60 日回归 t 值、120 日回归 β、60 日相关、回吐频率(cross_ema(G*I<0, 30))、回吐幅度(cross_ema(-G*I, 30))(种子 4-8);(C) 价格发现的份额与形状:隔夜绝对变动占隔夜 + 日内绝对变动的份额(40 日)、隔夜跳空上下尾均值之和(60 日 q75 + q25,隔夜彩票型偏度)、开盘价相对开盘后 15 / 30 分钟连续成交均价的偏离的 EMA(开盘冲击 overshoot)、开盘后 30 分钟与其余时段的收益之差(种子 9-13);(D) 跨日:G 与昨天 I 的 90 日相关、G 乘昨天 I 的 EMA,即"隔夜反转昨天的日内"(种子 14-15)。
+      受启发的现象与为什么新:批 B094 的 8 个成员都在读集合竞价那一列;拆解表里 Volume 版和 Amt 版的最优方向相反、与已知族的 rho 差到 -0.8 以上,而 day_first(Low) / day_first(Vwap) 版本(竞价价格)只是后复权价格水平。也就是说整批只把竞价当"水平"读,没有人把竞价价格与前收盘(隔夜)、与随后的连续竞价(日内)配对。我查了两个库里含 day_first(Open) 的 109 条表达式:G 只出现在 cross_mean(G, 20)、cross_stddev(G, 20) 和它们的条件翻转写法(select_where)里,以及一条挖掘库的 cross_corr(G, 收盘 / 下半场开盘价, 20);WorldQuant 式手写形态里是 ts_corr(开盘价, 全天量, 10) 一类。没有一条把 G 与整段日内收益 I 配成"同一只股票的反应函数"(回归 t 值 / β、回吐频率与幅度),也没有隔夜份额、隔夜尾部不对称、开盘冲击和"隔夜反转昨天日内";cross_ema / cross_zscore / cross_reg_tvalue 在这类表达式上的包法两个库里出现 0 次,15 个种子的骨架都不在库的骨架集里(我用 AlphaCube 的骨架函数核对过)。种子 2(cross_ema(G, 40))与库里 cross_mean(G, 20) 是近亲,我放它只是为了让 GP 看到单独的隔夜段,不指望它出 head。
+      为什么样本外还会在:T+1、涨跌停、集合竞价撮合、散户占比高,这些制度性原因决定隔夜与日内参与者构成不同,2018 年以来没变;个股层面"跳空是被延续还是被回吐"主要由持有人结构与盘口厚度决定,是慢变量,窗口取 40-120 日也不会换手太快(种子本身带 EMA / 长窗口,换手低,扣 15 bp 之后才有机会)。诚实预测:G 与 I 的单日值本身很吵,单靠慢平滑未必有毛超额,出 head 概率低,但这一位的价值在于第一次把 B094 的竞价价格用在"配对"而不是"水平"上。
+    inspired_by: 'B094 批(day_first(F) 在 cross_sum 里求和的 8 个成员):Volume / Amt / Low / Vwap 四种竞价读数里,价格口径只是水平、量口径被已知族吃掉(Volume→Amt 后最优方向翻号、与已知族 rho -0.79 ~ -0.89),没有成员把竞价价格与前收盘或随后的连续竞价配对'
+    seeds:
+      - 'cross_ema(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 30)'
+      - 'cross_ema(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 40)'
+      - 'cross_ema(sub(div(day_last(Close), day_first(Open)), 1), 40)'
+      - 'cross_reg_tvalue(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'cross_regbeta(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 120)'
+      - 'cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1), 60)'
+      - 'cross_ema(is_lt(mul(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 0), 30)'
+      - 'cross_ema(neg(mul(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), day_first(Open)), 1))), 30)'
+      - 'div(cross_mean(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 40), add(cross_mean(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 40), cross_mean(abs_(sub(div(day_last(Close), day_first(Open)), 1)), 40)))'
+      - 'add(cross_tail_mean_q75(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60), cross_tail_mean_q25(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60))'
+      - 'cross_ema(sub(div(day_first(Open), day_mean(in_slice(Close, 1, 30))), 1), 30)'
+      - 'cross_ema(sub(div(day_first(Open), day_mean(in_slice(Close, 1, 15))), 1), 20)'
+      - 'cross_ema(sub(sub(div(day_last(in_slice(Close, 1, 30)), day_first(Open)), 1), sub(div(day_last(Close), day_last(in_slice(Close, 1, 30))), 1)), 30)'
+      - 'cross_corr(ts_delay(sub(div(day_last(Close), day_first(Open)), 1), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 90)'
+      - 'cross_ema(mul(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close), day_first(Open)), 1), 1)), 30)'
+R:
+  - head: 'cross_sum(day_first(Volume), 60)'
+    why: '烂部件是"60 日合计的绝对量级":拆解里窗口 30 / 60 / 120 的最优方向在 120 处翻号(-1 变 +1),Volume 换 Amt 后与已知族 rho -0.89,说明它读的是 liq / known 的水平而不是时序信号。变体把量级拿掉:除以全天量(份额)、对自己一年历史标准化、短 20 日对长 120 日的对数差(竞价参与度的趋势)、总量十分位内标准化、流通股本十分位内标准化(换手式)。'
+    variants:
+      - 'div(cross_sum(day_first(Volume), 60), cross_sum(day_sum(Volume), 60))'
+      - 'cross_zscore(cross_mean(day_first(Volume), 20), 240)'
+      - 'sub(log(add(cross_mean(day_first(Volume), 20), 1)), log(add(cross_mean(day_first(Volume), 120), 1)))'
+      - 'cs_bucket_zscore(cross_mean(day_first(Volume), 60), cross_mean(day_sum(Volume), 60))'
+      - 'cs_bucket_zscore(cross_mean(day_first(Volume), 60), LogFloatShares)'
+  - head: 'cross_sum(day_first(Volume), 5)'
+    why: '烂部件是"5 日合计"本身:窗口 5 改成 2 / 10 分数几乎不变(-1.16 / -1.38),说明没有时序最优点,排名是被竞价量的水平定的;换 Amt 后最优方向翻号、与已知族 rho -0.82。变体:快慢 EMA 之差(竞价参与度的 MACD)、总量同桶内排名、份额、对自己一年历史标准化。'
+    variants:
+      - 'sub(cross_ema(log(add(day_first(Volume), 1)), 5), cross_ema(log(add(day_first(Volume), 1)), 60))'
+      - 'cs_bucket_rank(cross_sum(day_first(Volume), 5), cross_sum(day_sum(Volume), 5))'
+      - 'div(cross_sum(day_first(Volume), 5), cross_sum(day_sum(Volume), 5))'
+      - 'cross_zscore(cross_sum(day_first(Volume), 5), 250)'
+  - head: 'cross_sum(day_first(Volume), 3)'
+    why: '烂部件是水平:3 日合计与 2 / 6 日几乎同分(-1.16 / -1.17),Amt 版与已知族 rho -0.79。变体用 liq 控制自己的分桶键(30 日平均成交额)做非参数的流动性中性、3 日份额减 60 日份额(份额的趋势)、3 日对 60 日的比值(相对激增,3 日窗口包含在 60 日窗口里所以比值在 [0, 1],不会爆)。'
+    variants:
+      - 'cs_bucket_zscore(cross_sum(day_first(Volume), 3), cross_mean(day_sum(Amt), 30))'
+      - 'sub(div(cross_sum(day_first(Volume), 3), cross_sum(day_sum(Volume), 3)), div(cross_sum(day_first(Volume), 60), cross_sum(day_sum(Volume), 60)))'
+      - 'div(cross_sum(day_first(Volume), 3), cross_sum(day_first(Volume), 60))'

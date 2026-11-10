@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [14, 16]
+    reasons: '创新度 4:核心 day_hurst(Low) 是快照 head pow_2(ts_max(day_hurst(Low),30)) 的子树,但 16 个种子的外层是 60–120 日的均值 / EMA / 分位 / 尾部均值 / 与收益耦合 / Low-High 差 / 截面回归残差。相关度表里 16 个种子中有 12 个与 head 的原始 |ρ| 在 0.03–0.36 之间;最高的是 seed 10、11、15 与 seed 16(0.59、0.61、0.50、0.74),其中 10、11、15 是同一个 cross_max(day_hurst(Low),60) 加不同截面中性化,与 head 的残差相关 0.57–0.65,但构造不同(截面回归 / 截面分桶 / 尾部排序),不是换写法。控制:核心与 5 个控制的 |ρ| 都 ≤ 0.04。合理度 4:hurst 的日内形状(趋势日 vs 震荡日)作为机构拆单持续性的代理,机制清楚。逐算子核对:cross_mean / cross_max / cross_quantile / cross_tail_mean_q75 / cross_ema / cross_zscore 都是 NaN 安全的窗口统计(cross_ema 跳过缺失日);ts_regbeta(rolling_ols,var_x > EPS 守卫)、cross_corr(rolling_pair_reduce,分母带 EPS)、cs_regres(var > EPS 守卫)的分母都有保护;cs_bucket_zscore 与 cs_last_low10 用 tie-block 百分位(_lexi / _rank_block),不走 nanrank_last,避开 §4 的停牌陷阱;分母 cross_mean(day_hurst(Close),60) 量级 0.5 左右,不近零。day_hurst 本身只在分钟 NaN 时截断 R(见 slot b 的同类问题),若分钟价按前值填充则几乎不触发;这一点我没有核实到数据层面,作为风险记下,不构成挡的理由。划掉两个:seed 16 的 cross_mean(mul(day_hurst(Low),day_pos_ratio(Volume)),60) 与 Amt 族 head 的原始 |ρ| = 0.74 ≥ 0.7,按库禁令同一量自动划掉(它还与流动性控制的 |ρ| 0.73 很近);seed 14 的 cross_ema(day_hurst(Low),60) 与 seed 1 的 cross_mean(day_hurst(Low),60) 是同一 60 日序列的半衰期加权与等权平均,截面秩在结构上几乎重合,属于重复(这是结构判断;相关度表没有测两者的相互 |ρ|,若 PI 要复核可直接算)。剩 14 个种子,≥ 4。如果它有 alpha,最可能来自:高 hurst 的股票在一年内反复出现趋势日,反映机构持续推进的订单流;但 seed 10、11、15 三个 cs 中性化版本若真有收益,更可能只是 cross_max(day_hurst(Low),60) 本身的收益,而不是中性化带来的新东西。'
+  - slot: b
+    novelty: 4
+    soundness: 1
+    struck_seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    reasons: '创新度 4:cross_hurst(x,d) 用在日频序列上,库里 day_hurst 只在分钟路径上出现(单日、被 ts_max / cross_med 极值链处理),这一结构是新的。相关度表里 N 种子与 head 的最高原始 |ρ| 为 0.03–0.45;与控制的最高 |ρ| 为 liq 0.47、known 0.45、size 0.53(seed 10 cross_hurst(day_pos_ratio(Volume),120)),都在 0.8 以下,没有自动划掉的种子。合理度 1,数学问题:dt_cross.py 的 cross_hurst(约第 443–466 行)用 demean.cumsum 之后只取 valid_cs 的最大和最小来算 R,而 torch.cumsum 对 NaN 是传播的,所以 R 只在窗口内第一个缺失日之前的前缀上计算;S 却用整个窗口里有效日的平方和除以 d-1。结果是:窗口里只要有一个缺失日(日频输入在停牌日为 NaN,引擎注释写明停牌日保持 NaN),R 就被截成前缀,RS 被系统性压低,压低幅度取决于缺失日在窗口中的位置。我用同样逻辑的纯 Python 复刻在一条随机游走上测过:窗口第 30 位缺一天时 R 从 60.9 降到 25.4、RS 从 52.5 降到 22.2(log 之后 Hurst 差约 0.2);第 0 位缺失则整窗口 NaN。停牌后的约 120 个交易日里,所有 16 个种子都受影响,读数因此主要由停牌日历决定,而不是价格路径的持续性。PI 笔记里写的核对只覆盖了 S < 1e-9 的分支,没有覆盖这一截断。16 个种子共用同一个算子,所以逐个划掉与整位划掉是同一个问题,这里全部列出。如果它有 alpha,在现在的实现里最可能来自停牌频率或停牌在窗口中的位置,也就是缺失值结构,而不是 Hurst 的持续性。建议 PI 在跑前修正 cross_hurst(例如对有效日单独计算 R 与 S,或要求窗口内无缺失);修正后这一位需要重新审计,本轮不再重审。另外提醒总领:替换为普通 GP 的这一位仍能调用同一个 cross_hurst 算子,GP 同样可能找到这个缺失值结构,是跑前必须处理的风险。'
+R:
+  - head: 'pow_2(ts_max(day_hurst(Low), 30))'
+    soundness: 4
+    reasons: '合理度 4:变体只改窗口(30 -> 60 / 90 / 120 / 241)、换 Close / High 路径、换成 cross_quantile 分位读法,都是同一类 per-day hurst 的极值读法,没有数学问题。ts_max 是逐日滚动的,不经过 cross_hurst 的截断,也没有 nanrank_last 陷阱;pow_2 是单调变换,按秩打分下与原式等价,这一点与 GP 的奖励口径一致,不算问题。机制:一年内反复出现的趋势日反映机构持续推进,慢窗口比短窗口更能过滤噪声;这与 PI 的 train/valid 证据(30 -> 60 改善)方向一致,但那是拟合依据而不是数学问题。注意:241 日窗口(R1 变体 4 与 R2 变体 3)前 240 日是热身期,样本若从 2018-01-02 开始又无前史,会损失约 12% 的训练样本;不构成挡的理由。'
+  - head: 'ts_max(day_hurst(Vwap), 50)'
+    soundness: 3
+    reasons: '合理度 3:变体把 Vwap 换成 Close / Open,并拉长窗口到 100 / 120 / 241。没有数学问题:day_hurst 逐日计算,ts_max 与 cross_mean / cross_quantile 都是 NaN 安全的。但 Close、Open、Vwap、High、Low 的分钟路径 R/S 高度共线(同一天的同一种形状量,只换了价格序列),所以这组替换更像同一度量的小改,而不是独立的去烂;"成交加权引入噪声"是 PI 对同一批 train/valid 分数的事后归因,不是机制本身。给 3 分,不因此挡。'
+summary: 'a 位(E,核心 day_hurst(Low))通过:创新 4、合理 4,划掉 seed 16(与 Amt 族 head 原始 |ρ| 0.74,自动划)与 seed 14(与 seed 1 同一 60 日序列的加权 / 等权平均,重复),剩 14 个。b 位(N,cross_hurst)不通过:合理度 1,cross_hurst 的 R 在窗口有缺失日时截成前缀而 S 用全部有效日,读数主要由停牌位置决定,16 个种子共用同一算子,需修正后重审;替换为普通 GP 后仍有同一风险,总领需知。R1(pow_2(ts_max(day_hurst(Low),30)))合理度 4,R2(ts_max(day_hurst(Vwap),50))合理度 3,都没有数学问题。r1、r2 的 N 位已经各自通过,三轮内至少一个 N 通过的要求已满足。'

@@ -1,0 +1,114 @@
+seed: 2001
+round: 2
+slots:
+- type: E
+  core: day_q_stat_std(Volume)
+  hypothesis: '机制:核心 C = day_q_stat_std(Volume),当天 241 根分钟成交股数序列的 Ljung-Box Q 统计量(滞后 1 到 20 分钟)的标准差,读的是「分钟成交量的日内自相关有多强」。它是相关量,与尺度无关,所以送转 / 拆股造成的股数水平跳变不影响它。
+
+
+    本批(B002、B003)的证据:
+
+    (1) 富集:含 C 的 42 个已评分候选均值 -1.60,不含的 -2.98(均值差 +1.38,p < 0.001);heads 全是 ts_quantile_q75 的嵌套链。
+
+    (2) 平滑越深越好,而且很快饱和:拆解表的 sufficiency 行,1 层 -2.32,2 层 -1.73,3 层 -1.31 到 -1.75,4 层 -1.25,5 层 -0.69,6 层 -0.73,7 层 -0.67;在 5 层以上敲掉一层只差 -0.05 到 +0.01。这条链读的是 C 的「数百个交易日的长期水平」,一个随年份才缓慢变化的股票特征,换手约 1% / 天,成本不是问题,问题在毛超额。
+
+    (3) 方向翻转:这些链在库里的原始尺子下方向是 -1(原始 rank IC -0.02 到 -0.04,原始净夏普 +1.0 到 +1.5),在新尺子(去掉 5 个控制 + 2 个冠军)下方向翻成 +1,分数 -0.67 / -0.40、-0.69 / -0.69、-0.75 / -0.56(train / valid)。读法:C 的长期水平里有预测力的部分(分钟成交量日内黏性强 = 市值大、流动性好、成交形状稳定的股票)已经被控制吃掉;去掉之后,水平本身的毛超额不为正。
+
+    (4) 这些链彼此的日度秩相关预计 >= 0.9(没有实测),再叠平滑层、换窗口、换分位数、换 Amt 都会与 head 的 |rho| >= 0.7 或同骨架,被库禁令拒绝;所以这一位不再给 C 套 ts_quantile 或别的单股滤波。
+
+
+    这一位要试的:C 的水平被控制吃掉了,就读 C 在控制之外的三种形态,每一种都慢(窗口 30 到 241 日;W02L 第 1 轮里别的流分数最高的几个式子大多是 241 日均值,或 120 日离散度加流通市值十分位标准化,同一类):
+
+    (a) 桶内水平(种子 1 到 4):在流通市值十分位、60 日成交额十分位、名义股价十分位(sub(LogFloatCap, LogFloatShares) = log(流通市值 / 流通股本) = log 名义股价,假设未在本机验证,只当分桶变量)内做 z 分数或去均值,或对 log 成交额做截面回归取残差。比较的是「同样大、同样活跃的股票里,谁的成交量序列更黏」。
+
+    (b) 水平的变化(种子 5、6、13):log C 的 60 日均值减 241 日均值,或 20 日均值相对自己 241 日的 z 分数。读的是「这只票的成交序列正在变黏 / 变散」。机制:持有期长的机构(拆单执行,成交序列平滑)进入时 C 上升、离开时下降;变化量把控制共享的水平差分掉了。
+
+    (c) 离散度与关系(种子 7 到 12、14):log C 的 120 日标准差(特征不稳定 = 参与者构成在切换);C 与 day_std(Ret)、C 与 day_q_stat_std(Ret)、与日成交额的 120 日滚动相关或对数弹性(成交量黏性随波动、随成交额放大的程度:消息驱动的黏性对执行驱动的黏性);对 |Ret| 的 Q 统计量做截面回归取残差(去掉「信息到达引起的一般聚集」,留下成交量独有的黏性);对成交额离散度(已知族的原料)取残差。(c) 的水平被差分、相关系数或回归去掉了,与 head 的秩相关应当 < 0.5。
+
+
+    为什么和已见过的不同:快照里含 C 的候选,外围算子都是单股时间序列滤波(ts_quantile_q75、ts_sum、ts_stddev、ts_var、ts_delay、ts_delta、ts_skew、ts_hurst、ts_autocorr_s1、ts_argmax,以及 3 日 cross_mean);这里的外围是截面分桶与截面回归(cs_bucket_zscore、cs_bucket_demean、cs_regres)、两个日度量的滚动关系(cross_corr、cross_regbeta)、跨窗口差(sub 两个 cross_mean)、cross_zscore,没有一个与它们是同一个集合。所有种子的算子骨架(抽掉字段、常数、窗口)已逐个与 struct/members.csv 的 5583 条对照,没有重复,也不与 6 个 head 同骨架。预期风险最大的是种子 1 到 4(水平仍在,与 head 的秩相关可能接近 0.7),其余种子的水平已被差分或相关系数去掉。
+
+
+    为什么样本外还会在:C 的结构来源(机构拆单执行 / 做市与算法交易占比 / 投资者构成)变化以年计,窗口 60 到 241 日后名次稳定,15 bp 下换手低,分数由毛超额决定,不靠频繁调仓;(a) 把市值与流动性的暴露用分桶拿掉,不依赖某个风格的行情;(b) 的变化量用每只票自己做对照,不依赖截面静态风格;(c) 的关系量是无量纲的相关与弹性。最可能的失败:(a) 与 head 的秩相关 >= 0.7 被表划掉;(b)(c) 的 60 到 120 日窗口估得太吵;或者 C 在控制之外根本没有 alpha。三种情况下这一位都不出 head,下一轮不再用这个核心。
+
+
+    数学检查:Q 统计量是非负量的标准差,正常日 > 0,log 在近 0 处给 NaN 而不是负无穷;Q 只用当天分钟,cross_* 一律只回看(窗口 >= 20 日)、cross_delay 的天数为正,无前视;cs_regres(Y, X) 是 Y 对 X 的截面残差,参数顺序按这个写;cross_regbeta(x, y, d) 是 y 对 x 的滚动回归斜率,种子里 x 是 log 成交额 / log 波动,y 是 log C,斜率是弹性,不是带量纲的水平;cs_bucket_zscore 带 EPS 保护;cross_corr / cross_regbeta 窗口里有效对太少时可能返回 0(已知缺陷,只影响新股与长期停牌票,可交易掩码已排除);没有用 ts_rank / cross_rank(日轴),不碰 nanrank_last 的停牌返回 0。'
+  seeds:
+  - cs_bucket_zscore(cross_mean(cross_mean(day_q_stat_std(Volume), 20), 241), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_q_stat_std(Volume), 120), cross_mean(day_sum(Amt), 60))
+  - cs_regres(cross_mean(log(day_q_stat_std(Volume)), 120), cross_mean(log(day_sum(Amt)), 120))
+  - cs_bucket_demean(cross_mean(day_q_stat_std(Volume), 241), sub(LogFloatCap, LogFloatShares))
+  - sub(cross_mean(log(day_q_stat_std(Volume)), 60), cross_mean(log(day_q_stat_std(Volume)), 241))
+  - cs_bucket_zscore(sub(cross_mean(day_q_stat_std(Volume), 30), cross_mean(day_q_stat_std(Volume), 241)), LogFloatCap)
+  - cs_bucket_zscore(cross_stddev(log(day_q_stat_std(Volume)), 120), LogFloatCap)
+  - cross_corr(day_q_stat_std(Volume), day_std(Ret), 120)
+  - cross_regbeta(log(day_std(Ret)), log(day_q_stat_std(Volume)), 120)
+  - cross_corr(day_q_stat_std(Volume), day_q_stat_std(Ret), 120)
+  - cs_regres(cross_mean(log(day_q_stat_std(Volume)), 120), cross_mean(log(day_q_stat_std(abs_(Ret))), 120))
+  - cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 120)
+  - cross_zscore(cross_mean(day_q_stat_std(Volume), 20), 241)
+  - cs_regres(cross_mean(log(day_q_stat_std(Volume)), 241), cross_mean(log(day_std(Amt)), 241))
+- type: N
+  hypothesis: '机制:把每只票自己的日内成交形状除掉之后,「放量能持续多少分钟」是个慢变的参与者构成指纹。
+
+
+    背景(B002 / B003):B002 的 heads 是 day_q_stat_std(Volume) 的深嵌套平滑;B003 与手写库 L#7 到 L#17(B071)是同一个统计量作用在 Volume 或 Amt 占当天总量的比例上。分钟成交量序列的 Ljung-Box Q 主要由两件事决定:(i) 这只票稳定的日内 U 形成交分布(开盘收盘放量、午间缩量,一条几乎每天相同的确定性形状,随市值、流动性、股价一起变);(ii) 真正的成交聚集,即放量一旦出现能延续多久。(i) 是控制变量的化身,(ii) 才可能是 alpha。证据:这些链原始方向 -1、原始 rank IC -0.02 到 -0.05(库里原始净夏普 +1.0 到 +1.5),新尺子下方向翻成 +1、分数 -0.4 到 -0.75,即有预测力的部分是与控制共享的那一块(i)。5583 条库式子里没有一条把 Q 统计量用在「已除去自己同分钟基线」的序列上:day_q_stat_std 的操作数只有叶子、in_slice 占比、in_zscore_rolling 占比、pow_2(Ret) 之类。
+
+
+    做法:div(Volume, cross_mean(Volume, 20)) 把每个分钟格子除以同一分钟自己过去 20 个交易日(含当天)的均值(cross_mean 作用在分钟立方体的日轴上,每只票每个分钟有自己的基线),得到「相对自己正常水平的放量倍数」序列;U 形被除掉,留下事件性放量。再取 day_q_stat_std,即滞后 1 到 20 分钟的 Ljung-Box Q 的标准差:倍数序列的黏性。最后取 120 到 241 日均值,变成慢变特征(其他流第 1 轮里分数最高的式子同样是 241 日均值型)。
+
+
+    为什么会有 alpha(三条可检验的链):
+
+    (1) 订单拆分:机构大单被拆成小单,在数小时内持续成交(Lillo 与 Farmer 2004;Bouchaud 等 2004,订单方向的长记忆),放量连续出现,Q 高;散户的单笔冲击、对倒、偶发大单是孤立尖峰,Q 低。长期 Q 高 = 拆单型参与者占比高,是持仓行为的慢变指纹,而不是流动性水平。
+
+    (2) 注意力扩散:新闻、涨停、话题引起的放量在 A 股散户市场往往延续一整天,Q 高;长期被事件反复吸引注意的股票之后收益偏低(Barber 与 Odean 2008 的注意力购买)。
+
+    (3) 带符号版本(种子 4、5、7):mul(sign(Ret), 倍数) 是带方向的订单流代理(不用逐笔数据),它的 Q 是「同方向持续成交」的强度;种子 7 把它与无符号版本相减,得到方向性延续超过纯放量聚集的部分。符号随机交替的 U 形不会推高带符号序列的自相关,所以种子 5(原始股数乘符号)本身已经近似去季节。
+
+    方向由尺子在训练段选,我不预设。
+
+
+    和已有的不同:(a) 与 head 链不同:操作数不是原始 Volume,同一统计量作用在去过 U 形的序列上,与 head 的秩相关预期 < 0.5;(b) 与 B071 手写式不同:那里的操作数是 Volume 占当天总量的比例,仍含 U 形,这里是自己 20 日同分钟基线的倍数,并且慢 4 到 12 倍;(c) 与第 1 轮 N 位(放量分钟里的价格签名)不同:那一位读价格,这一位读成交量序列自己的结构。种子里还有三种不同的去季节办法(除以 20 日均值、除以 20 日中位数、对数一阶差分 in_logchg)、两种统计量(Q 统计量、5 分钟滞后自相关)、截面处理(流通市值分桶、对 |Ret| 的 Q 取残差)和时序形态(水平、离散度、变化、与波动的滚动相关)。骨架已逐个与 5583 条库及 6 个 head 对照,没有重复。
+
+
+    为什么样本外还会在:读的是参与者构成与执行方式,变化以年计;241 日均值换手低;Q 是相关量,不受送转 / 拆股的股数水平跳变影响(Volume 是未复权原始股数,基线与当天同尺度,比值抵消,这一点对本位很重要);带符号版本不依赖某段行情的方向。最可能的失败:倍数序列的尖峰让每天的 Q 很吵(241 日均值平均掉大半,种子 12 用 log 压缩尾部);与波动控制相关(放量与波动同时出现),新尺子会去掉线性、U 形、S 形暴露;若不出 head,下一轮不再押这个统计量。
+
+
+    数学检查:基线为 0(20 日全停牌)时 div 给 NaN(不是无穷),Q 对 NaN 做配对掩码,全天无成交的日子得 NaN 而不是 0,热身期是训练段开头 20 日,占比 < 2%,不主导;log(倍数) 在倍数为 0 时给 NaN,只影响种子 12;sign(Ret) 在 Ret = 0 时为 0,表示该分钟无方向流量,不是缺失;cross_mean 与 cross_med 只回看含当天的 20 日,t 日收盘后可得,t+1 才交易,无前视;in_logchg 只在当天分钟轴上取差;cs_regres(Y, X) 是 Y 对 X 的截面残差,参数顺序按这个写;cs_bucket_zscore 带 EPS 保护;没有用 ts_rank / cross_rank。'
+  inspired_by: B002 的三个 heads(day_q_stat_std(Volume) 的 ts_quantile_q75 深嵌套链:原始方向 -1、原始 IC -0.02 到 -0.05,新尺子下翻成 +1 而且分数 -0.4 到 -0.75)与 B003 / 手写库 B071 里 L#7 到 L#17(同一个 Q 统计量作用在 Volume / Amt 占当天总量的比例上);反推出 Q 的水平主要是与控制共享的 U 形成交分布,可能的 alpha 在去掉 U 形之后的放量聚集里
+  seeds:
+  - cross_mean(cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 20), 241)
+  - cross_mean(day_q_stat_std(div(Volume, cross_med(Volume, 20))), 241)
+  - cross_ema(day_q_stat_std(div(Amt, cross_mean(Amt, 20))), 120)
+  - cross_mean(day_q_stat_std(mul(sign(Ret), div(Volume, cross_mean(Volume, 20)))), 241)
+  - cross_mean(cross_mean(day_q_stat_std(mul(sign(Ret), Volume)), 20), 241)
+  - cs_bucket_zscore(cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 120), LogFloatCap)
+  - sub(cross_mean(day_q_stat_std(mul(sign(Ret), div(Volume, cross_mean(Volume, 20)))), 241), cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 241))
+  - cross_stddev(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 120)
+  - cs_regres(cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 120), cross_mean(day_q_stat_std(abs_(Ret)), 120))
+  - cross_mean(day_autocorr(div(Volume, cross_mean(Volume, 20)), 5), 241)
+  - cross_mean(day_q_stat_std(in_logchg(Volume, 1)), 241)
+  - cs_bucket_zscore(cross_mean(day_q_stat_std(log(div(Volume, cross_mean(Volume, 20)))), 120), cross_mean(day_sum(Amt), 60))
+  - cross_corr(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), day_std(Ret), 120)
+  - sub(cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 60), cross_mean(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 241))
+R:
+- head: ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 40), 50), 40)
+  why: 这条 5 层嵌套链的 -0.69(train -0.69 / valid -0.69)里,平滑层已经饱和(5 层以上敲掉一层只差 -0.05 到 +0.01),烂的不是平滑,而是被平滑的东西:(i) 叶子 day_q_stat_std(Volume) 的水平由股票稳定的 U 形成交分布决定,与控制共享,新尺子下毛超额不为正(原始方向 -1、新尺子方向 +1);(ii) 链的输出没有按市值或流动性分组,秩相关由大小盘差异决定;(iii) 最外层用 q75 是否有必要没验证过。变体分三类:换叶子(去掉 U 形:除以自己 20 日同分钟基线;带符号;每天先在流通市值十分位内标准化)、对链的输出分组(流通市值十分位 z 分数、对 log 成交额取截面残差)、换最外层分位数(q50、q25)。每个变体只动一个部件。
+  variants:
+  - ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 40), 40), 40), 50), 40)
+  - ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(mul(sign(Ret), div(Volume, cross_mean(Volume, 20)))), 40), 40), 40), 50), 40)
+  - ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(cs_bucket_zscore(day_q_stat_std(Volume), LogFloatCap), 40), 40), 40), 50), 40)
+  - cs_bucket_zscore(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 40), 50), 40), LogFloatCap)
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 40), 50), 40), cross_mean(log(day_sum(Amt)), 120))
+  - ts_quantile_q50(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 40), 50), 40)
+  - ts_quantile_q25(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 40), 50), 40)
+- head: ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 50), 40), 40), 50), 40)
+  why: 7 层链的 -0.67(train -0.67 / valid -0.40)是本快照最好的,但拆解里 7 层比 5 层只好 0.02,多出的两层没有信息;train 比 valid 差 0.27,说明某一段里大小盘或流动性的暴露没去干净。变体:对链的输出做流通市值十分位 z 分数(去掉大小盘差异,留下同市值内的比较);叶子换成去过 U 形的版本(与上面同一思路,试 7 层的深度是否改变结论)。
+  variants:
+  - cs_bucket_zscore(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 50), 40), 40), 50), 40), LogFloatCap)
+  - ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(div(Volume, cross_mean(Volume, 20))), 40), 40), 50), 40), 40), 50), 40)
+- head: ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 50), 40), 40), 20)
+  why: 拆解表里这个 head 的最外层窗口 20 改成 40 得到 -0.62,比原 head 好 0.13(定位工具列为 R 候选):最外层 q75 的窗口 20 比内层的 40 / 50 短,链的最后一步读得偏快,是这条链里最像烂部件的地方。直接评估这个变体,若与已知族 |rho| < 0.5 且仍与原 head 相关 >= 0.5,则替换。
+  variants:
+  - ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume), 40), 40), 50), 40), 40), 40)

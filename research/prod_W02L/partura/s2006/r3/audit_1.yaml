@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:核心 C = cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5), 60) 与快照 head 的原始 |ρ| 最大 0.68(最像的是 M3 的 head 4 ts_std(C, 50),残差 0.47;head 3 ts_sum 与 head 1 等更低),与 5 个控制的 |ρ| 为 liq 0.62 / vol 0.16 / rev 0.01 / known 0.63 / size 0.34,全部低于 0.8,过 E 位的核心门槛。种子最大原始 |ρ| 为 0.67(种子 13),没有种子达到 0.7;与控制的最大值为核心的 0.63(known),种子中最大为种子 13 的 0.61(known),全部低于 0.8,没有自动划掉。创新度 3 而不是 4:C 是 head 4 的子树,两者只差一层时间标准差,是同一个 day_cov(Amt, Amt) 对象的同一条链,ρ 0.68 接近拒绝线;但它不是换写法,残差 0.47 说明外层去掉后仍有可分部分,所以不降到 1 或 2。合理度 4:逐个算子核对——cross_max 窗口 3 取日内方差的 3 日最大,cross_fangzheng(x, 241) 在引擎里定义为 cross_mean + cross_stddev(已核对源码),ts_stddev 5 日,cross_stddev 60 日,全部向后看、无前视;分母类(种子 5 的 X_fangzheng,种子 11 的 cross_mean(day_cov, 241))只在整段零成交时出现 0/0,得 NaN 而不是爆点;log(C)(种子 10)在 C 恰为 0 时为 -inf,被 cs_bucket_zscore 的有限掩码滤掉。风险:C 的水平与成交额方差成正比,即与成交额水平的平方成正比,所以 liq 0.62 与 known 0.63 是结构性的;种子 1 至 4、6、9、10、12、13 通过同伴分桶把水平去掉。热身:cross_fangzheng 241 加上 ts_std 5 与 cross_stddev 60 使训练段开头约一年多的行为部分窗口读数,是热身噪声而非爆点,也不主导结果,记为风险不划掉。种子 6(cross_ema(bucket, 20))与种子 9(cross_mean(bucket, 20))对同一个分桶序列做 20 日 EMA 与均值,高度相近但不相同,本轮不以重复划掉,留给 GP 的库禁令处理。种子字串均不在 loc.json 已见候选中。如果它有 alpha,最可能来自:成交额方差的波动水平读出的注意力冲击 / 题材脉冲的持续性,即彩票型、被炒作型股票的长期溢价偏低,在去掉水平之后仍留下的那部分。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:12 个种子与快照 head 的原始 |ρ| 最大 0.59(种子 5,day_autocorr_n1 的 120 日均值,对 ts_sum(cross_fangzheng(cross_max(day_cov(Amt, Amt), 3), 241), 5)),其余在 0.15 至 0.53 之间;与控制的 |ρ| 最大为种子 10 的 size 0.64(对数价格分桶)、种子 5 的 liq 0.57 与 known 0.55,全部低于 0.7 与 0.8,没有自动划掉。创新度 4:CV = day_std / (day_mean + 1) 与 CV 平方是无量纲的形状量,对水平承重的 head(day_cov(Amt, Amt) 系)的 |ρ| 多在 0.2 以下(种子 1 为 0.21,种子 2 为 0.16,种子 3 为 0.18),与已知族的 |ρ| 多在 0.01 至 0.19,说明度量的确是另一个对象(分布形状,而不是水平)。不给 5:种子 5 与 liq 0.57 / known 0.55 偏近,种子 10 与 size 0.64 偏近,这些是控制变量的部分重合。合理度 4:逐个算子核对——day_cov(Amt, Amt) 是总体协方差(除以 n),除以 (mean+1)² 得 CV²;day_std、day_mean、day_max 都是同日分钟的统计量;day_autocorr_n1 即引擎 day_autocorr(x, 1),按日内分钟的一阶自相关;cross_mean、cross_stddev、cross_max、cross_fangzheng 的窗口都向后看;CV(Amt) − CV(Volume) 是两个同日量相减;没有前视。停牌日的 Amt 为 NaN(停牌掩码约定,见 scripts/ls_anatomy.py 的注释与 docs/design.md 的停牌掩码段),所以 +1 不会把停牌票推成 CV = 0,也不产生 0/0 伪影。+1 对价格分母(种子 12 的 mean Open + 1)有价格水平相关的偏置,但不是爆点,不划掉。需要注意的是 CV 对分钟粒度与 100 股手数的离散化敏感,低价股的离散化随价格水平变化,与对数价格的共同来源是本批的主要混淆,这是需要在结果里检查的项,不是挡的理由。如果它有 alpha,最可能来自:日内成交集中度(脉冲式、题材或算法拆单型交易)的持续属性,即注意力与彩票偏好带来的长期溢价差。'
+R:
+  - head: 'sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatCap))'
+    soundness: 3
+    reasons: '合理度 3。核心 abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), W)) 是同日量价协方差对收盘棒成交额的 W 日滚动回归残差的绝对值,经已知族与市值的同伴分桶。15 个变体只改窗口(300 / 400)、分桶键(LogTotalCap、BoardCode、ListAge、LogFloatShares、流通市值、日标准差)、嵌套层数、sqrt 压缩与 Close 替换 Open,机制不变。逐个算子核对:ts_regres 即 rolling_ols 的残差,引擎对窗口不满的行仍给出值,所以 W = 400 的前约 400 行是部分窗口读数,占训练段的相当比例;拆解里 300 / 400 的增益有一部分可能来自热身段的读数形状,这是风险而非数学问题;cs_bucket_zscore 的 10 分位与有限掩码没有爆点;sqrt(abs_) 只是压缩尾部;BoardCode 与 ListAge 的并列靠股票列序打破,规则 §4 明确这不是问题;外层的常数 0.5 对截面排序没有影响。合理度 3 的理由是机制清楚度不高:abs_ 残差的大小(相对同伴)读的是收盘参与的异常程度,说得通但不强,而且全部变体同属一个族;没有数学问题,所以不压到 2。如果它有 alpha,最可能来自:收盘时段异常成交流(尾盘集中成交、被动或指数相关流)的强度相对同伴的持续偏离。'
+summary: 'a 位(E,核心 C = head 4 子树)创新 3 / 合理 4、b 位(N,CV 形状量)创新 4 / 合理 4,两位都放行且无种子划掉;R 组合理 3,无数学问题,放行;挡的只有热身与 CV 离散化两项风险,均不属于 §4 的数学问题。'

@@ -1,0 +1,111 @@
+seed: 2019
+round: 1
+slots:
+  # ------------------------------------------------------------------------------------------------------------------
+  # 位 a:E 深挖,核心 = day_skew(Volume)(本批富集最强的子树)
+  # ------------------------------------------------------------------------------------------------------------------
+  - type: E
+    core: 'day_skew(Volume)'
+    hypothesis: |-
+      【核心】day_skew(Volume) = 一天 241 根分钟成交量的偏度,即当天成交是否集中在少数几分钟(块状成交:大单、事件、开收盘附近的脉冲)。
+      无量纲、不含价格水平。本批证据:25 个已评分候选里含它的 14 个均值 -1.39,不含的 -2.87(差 +1.47,p 0.0001);
+      把它换成价格偏度 day_skew(Vwap) / day_skew(High) 反而更差(-0.83 / -1.35),所以承重的是"成交量分布的块状性",不是偏度这个统计量。
+      【以前见过的外围】批里含它的候选全是同一个壳:cross_corr(价格 3 日变化, 价格水平 x skew, 10 日窗口) 外面套 cross_quantile_q75(…,241) 或 cross_mean,
+      最外层 signedpower 是单调变换(不改变排序)。这个壳有两处问题:10 日窗口的相关系数标准误约 0.3,全靠 241 日 q75 的尾部选择压噪声;
+      mul(day_mean(High), …) 把价格水平趋势混进来(价格变化与 High 水平天然同向),拆解表里敲掉 skew 之后分数掉到 -2.7,说明信息在 skew 而不在这个壳。
+      【这次换成的外围,每一种都是库里 5583 条表达式从没用过的算子组合】
+      (A)关系型特征:60 / 120 日的 cross_corr / cross_reg_tvalue / cross_regbeta,把"块状成交"与价格动作配对:同日隔夜跳空 div(day_open(Open), cross_delay(day_close(Close),1))、
+      同日日内涨跌 div(day_close(Close), day_open(Open))、前一日的块状度对今日跳空(cross_delay,因果)、块状度对跳空幅度 abs_(…-1)。
+      机制:块状成交出现在上涨日还是下跌日,是"谁在放量"的痕迹(追涨的散户、事件驱动的机构、恐慌抛售),这种交易者构成是每只票的持久特征,几个月不变,换手低。
+      相关 / t 值对每只票自己的水平不变,不是规模、流动性、波动率水平的换皮,新尺子(对控制及冠军取残差)去掉的是水平暴露,去不掉这种关系暴露;
+      60 日窗口的噪声比批里的 10 日小一个量级,不再需要 q75/241 的尾部选择。
+      (B)自身历史标准化:cross_ema(cross_zscore(day_skew(Volume), 60), 10) = 这只票这段时间比它自己平常更块状,即注意力 / 事件冲击的持续度;
+      cross_zscore 去掉持久的截面水平(薄盘票天生块状),留下的是变化。
+      (C)方向化累积:cross_ema(skew x sign(日内涨跌), 20)、cross_mean(skew x 日内收益, 30):块状成交伴随上涨(吸筹)还是下跌(派发)的净累积,符号由 train 定。
+      (D)分布位置:cross_tail_mean_q25(skew, 120) = 这只票最平稳的时候有多平稳;q75 - q25 的宽度 = 块状度的波动。
+      (E)日频字段 ListAge:cs_last_low20(…, ListAge) 把最年轻的两成排出多头书。次新股上市初期成交结构由打新 / 炒新资金主导(涨跌幅规则也不同),块状度含义不同;
+      库里的 5583 条一个日频字段都没用,冠军也没有。
+      【为什么样本外还会在】机制是"持久的参与者构成"与"注意力冲击",不是某段行情;所有平滑都在 20-120 日,换手低,扣 15bp 后不被成本吃掉;
+      关系型统计与水平类控制近似正交。预期是部分种子拿到不错的 train 但 valid 不稳,故种子里同时放了关系型(A)、自身标准化(B)、方向化(C)、分布位置(D)四类互不相同的机制。
+      【数学自查】全部因果:只用 cross_delay(向过去),没有 cross_shift / ts_shift;唯一的比值是开盘 / 收盘价,不会除以近零;
+      没有 ts_rank / cross_rank / in_rank_rolling(所以没有当天缺失返回 0 的 nanrank_last 问题);没有 ts_spearman / nt_*;
+      day_skew(Volume) 在停牌日(有效分钟不足)是缺失,不是被填成 0。
+    seeds:
+      - 'cross_corr(day_skew(Volume), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)'
+      - 'cross_reg_tvalue(day_skew(Volume), div(day_close(Close), day_open(Open)), 60)'
+      - 'cs_last_low20(cross_corr(day_skew(Volume), div(day_open(Open), cross_delay(day_close(Close), 1)), 60), ListAge)'
+      - 'cross_ema(cross_zscore(day_skew(Volume), 60), 10)'
+      - 'cross_ema(mul(day_skew(Volume), sign(sub(day_close(Close), day_open(Open)))), 20)'
+      - 'cross_corr(cross_delay(day_skew(Volume), 1), div(day_open(Open), cross_delay(day_close(Close), 1)), 60)'
+      - 'cross_corr(day_skew(Volume), abs_(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)'
+      - 'cross_tail_mean_q25(day_skew(Volume), 120)'
+      - 'cross_reg_tvalue(day_skew(Volume), div(day_open(Open), cross_delay(day_close(Close), 1)), 120)'
+      - 'cross_ema(cross_corr(day_skew(Volume), div(day_close(Close), cross_delay(day_close(Close), 1)), 20), 30)'
+      - 'sub(cross_quantile_q75(day_skew(Volume), 120), cross_quantile_q25(day_skew(Volume), 120))'
+      - 'cs_last_low20(cross_ema(cross_zscore(day_skew(Volume), 60), 10), ListAge)'
+      - 'cross_mean(mul(day_skew(Volume), sub(div(day_close(Close), day_open(Open)), 1)), 30)'
+      - 'cross_corr(day_skew(Volume), div(day_close(Close), day_open(Open)), 40)'
+      - 'cross_regbeta(day_skew(Volume), div(day_close(Close), day_open(Open)), 60)'
+  # ------------------------------------------------------------------------------------------------------------------
+  # 位 b:N 新想法 —— 薄盘假象:成交量形状统计要先在"同样换手的同类"里读
+  # ------------------------------------------------------------------------------------------------------------------
+  - type: N
+    hypothesis: |-
+      【想法】成交量分布的形状统计(偏度、基尼、高尾比、峰度)有一块机械成分:一天只成交几手的薄盘票,分钟成交量几乎必然是块状的
+      (0 与少数几根大单),这与信息无关。把"块状"读成信息脉冲 / 注意力冲击之前,必须先扣掉"这只票有多薄"。
+      批里的所有候选都是把块状度(day_skew(Volume))的原始水平直接放进相关系数,没有一个对"这只票有多薄"做过条件。
+      【实现】用日频字段构造"同类":换手率的对数 = log(day_sum(Volume)) - LogFloatShares(流通股本),取 20 日 EMA 抹掉单日噪声;
+      在同一换手十分位内用 cs_bucket_zscore(形状, 换手) 把形状标准化 => 每个换手桶里输出分布相同,对换手水平没有暴露,留下的是"同样的换手下,谁的成交更块状 / 更集中 / 尾部更重"。
+      形状本身也先取 cross_ema(·, 20) 让信号变慢(换手低)。其它的同类维度各放一个:规模同类 LogFloatCap、流动性同类 log(day_sum(Amt))、
+      非流通比例同类 LogTotalCap - LogFloatCap(限售股 / 大股东持股占比);另有一条线性版本 cs_regres(秩, 秩)用来和分桶做对照;
+      以及 cs_last_low20(…, ListAge) 把最年轻的两成排出多头书(次新股上市初期成交结构被打新、炒新资金主导)。
+      【为什么和库里 / 控制不同】库里 5583 条只有 8 个分钟字段,一个日频字段也没用,也没有任何 cs_bucket_* 筛选;冠军同理。
+      换手率 = 成交额 / 流通市值,恰好是两个控制(流动性、规模)的交互项;新尺子分别对两个控制取 1 / 2 / 3 次的残差,去不掉交互项,
+      更去不掉"桶内离散度相差数倍"这种异方差,所以分桶标准化后的信号和各控制的线性 / U 形 / S 形暴露都近似正交,和控制、冠军不是同一个东西。
+      【为什么样本外还会在】薄盘假象是结构性的(取决于股本和换手,不取决于某段行情);一旦扣掉它,剩下的块状度更接近真正的"交易者构成 / 事件冲击"信号,
+      而这类信号随股东结构缓慢变化;20 日 EMA 使换手率低,15bp 成本不会吃掉信号。
+      对照设计:同一形状分别用换手桶 / 规模桶 / 流动性桶 / 非流通比例桶 / 线性残差,GP 能看出是哪一种同类条件在起作用。
+      【数学自查】全部因果,无 cross_shift / ts_shift;log 对非正数返回缺失而不是 -inf(AlphaCube 的 log 带 EPS 保护);
+      没有除以近零的量(只有 sub 与 log);没有 ts_rank / cross_rank / in_rank_rolling;没有 ts_spearman / nt_*;
+      换手率面板在停牌日为缺失,不被填充。cs_bucket_zscore 每天各桶内各自标准化,桶内取值少于 2 个的会是缺失而非爆点(算子在桶内用 +EPS)。
+    inspired_by: 'B055 批:day_skew(Volume) 在 14/25 候选里,含它的均值 -1.39,不含 -2.87(差 +1.47,p 0.0001),而价格偏度 day_skew(Vwap) / day_skew(High) 反而为负(-0.83 / -1.35),说明承重的是成交量的块状分布;同时批里每个候选都把块状度的原始水平直接放进 10 日相关系数,没有一个对"这只票有多薄"(换手、规模、流通结构)做条件。'
+    seeds:
+      - 'cs_bucket_zscore(cross_ema(day_skew(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_gini(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_es_ratio_hi(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_last_low20(cs_bucket_zscore(cross_ema(day_skew(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20)), ListAge)'
+      - 'cs_bucket_demean(cross_ema(day_skew(Volume), 30), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_zscore(day_skew(Volume), 60), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_skew(Volume), 20), cross_ema(log(day_sum(Amt)), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_skew(Volume), 20), sub(LogTotalCap, LogFloatCap))'
+      - 'cs_regres(cs_rank(cross_ema(day_skew(Volume), 20)), cs_rank(cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20)))'
+      - 'cs_bucket_zscore(cross_ema(day_kurt(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_gini(Volume), 20), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_ema(day_argmax(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_es_ratio_hi(Volume), 20), LogFloatCap)'
+      - 'cs_last_low20(cs_bucket_zscore(cross_ema(day_gini(Volume), 20), cross_ema(sub(log(day_sum(Volume)), LogFloatShares), 20)), ListAge)'
+R:
+  - head: 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    why: |-
+      拆解表里的证据:(1) 窗口长度 train / valid 不一致:q75@120 train -0.02 / valid -0.19,q75@482 train -0.93 / valid +0.10,
+      @241 居中,说明 q75 的尾部选择 + 10 日窗口的噪声是烂的部件,而不是相关这个思路(敲掉 q75 整层 -0.45,敲掉相关窗口里的价格变化项 -0.83,都更差);
+      (2) 10 日窗口相关系数的标准误约 0.3,q75 是在用尾部选择补偿它,换成 20 / 40 日窗口或 cross_tail_mean_q75 / cross_ema 应当更稳;
+      (3) mul(day_mean(High), …) 里的 High 水平没有单独被敲过(loc 敲的是整个 mul 或换成 day_mean(High)),
+      去掉它只留 day_skew(Volume) 可以检验它是不是只在往里混价格水平趋势;High -> Low 的互换 valid +0.17(高于原 +0.11)。
+    variants:
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 20), 241))'
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 40), 241))'
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 180))'
+      - 'signedpower(cross_tail_mean_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+      - 'signedpower(cross_ema(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 10), 60))'
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), day_skew(Volume), 10), 241))'
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_quantile(Vwap), 3), mul(day_mean(Low), day_skew(Volume)), 10), 180))'
+      - 'signedpower(cross_quantile_q75(cross_reg_tvalue(cross_delta(day_quantile(Vwap), 3), mul(day_mean(High), day_skew(Volume)), 20), 241))'
+  - head: 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 10), 241))'
+    why: |-
+      同一个壳(Open 的 3 日变化 x High 水平 x skew,10 日相关,q75/241)。拆解里已有的最好改动是 q75@120(-0.29 -> -0.18,增益 +0.11,train -0.09 / valid -0.18),
+      说明慢平滑过长;同样的两个烂部件:10 日相关窗口太吵,q75 尾部选择在补偿噪声。换成更长的相关窗口 + 不同的慢平滑。
+    variants:
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 10), 120))'
+      - 'signedpower(cross_quantile_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 20), 180))'
+      - 'signedpower(cross_tail_mean_q75(cross_corr(cross_delta(day_sum(Open), 3), mul(day_mean(High), day_skew(Volume)), 10), 120))'

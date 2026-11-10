@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 3, 8, 9, 10, 13, 16]
+    reasons: '核心 day_q_stat_std(div(in_slice(Volume,11,230), in_sum(...))) 是 ts_stddev(core,15) 的子树(corr_1.md slot a core 原始最大 |ρ| 0.511,与 5 个控制最大 0.455 即 liq,均 < 0.8,核心门槛通过)。自动划掉:种子 1(与 head |ρ| 0.735,liq 0.796)、3(0.760)、9(0.741)、10(0.899)、13(0.706),均 >= 0.7 的库禁令线。种子 8、16 的表写 废品(distinct 0.066 / 0.036,面板近似离散或近常数,ρ 与所有 head 与控制几乎都为 0 或只是量化噪声),按 §4 数值伪影划掉。剩 9 个种子(2,4,5,6,7,11,12,14,15),远高于 4 的下限。创新度给 3 而不是 4:核心已是 6 个 head 的共同底座,留下的种子大多只是对同一个 persistence 水平做 z 分数、变异系数、比值、EMA 的换写法;真正与 head 与控制都拉开的是种子 6(cross_corr 与 cs_mean,head 0.041)和 15(成交量与收益 Q 统计量的 60 日共动,head 0.236)。种子 2(cross_zscore 120,head 0.146)、5(CV,0.184)、14(比值,0.144)是自我归一化的新读法,但归一化之后仍是同一变量。合理度给 4:逐个算子核对,day_q_stat_std(dt_day.py:397)是 1..20 滞后 Ljung-Box 累计 Q 的标准差,分母 in_sum 为零时得 NaN 而非爆点;cross_argmax(种子 16)走 nanargmax_last 而不是 §4 的 nanrank_last,不踩 0 填充陷阱;cross_zscore、cs_bucket_zscore、cross_tail_mean 都是窗口算子,无前视;窗口 60-120 日与 EMA 半衰期合理。唯一需要留意的是种子 12(liq 0.717)与种子 11(liq 0.40,vol 0.40)的部分信号可能只是流动性的换皮,但未过 0.8 线,放行。如果它有 alpha,最可能来自机构拆单的持续节律(成交份额的自相关结构慢变、算法执行的股票属性),其次来自小票零成交分钟造成的节律差异(种子 2、14 的水平检验可分开两者)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [15]
+    reasons: '种子 15 cross_ema(day_wstd(Ret,Volume),20) 与 vol 控制 |ρ| 0.88 >= 0.8,自动划掉(其余种子与 head 最大 |ρ| 0.43 或与控制的 |ρ| 均 < 0.8,保留 14 个)。创新度 4:这一批用的 day_topw_mean(ops_ext.py:635)、day_signed_ratio(:122)、day_centroid(:155,按 T-1 归一)、day_gini(:136)、day_corr(in_index(Volume), ·)、day_wstd 都在 ops_ext 的 NEW_OPERATORS 元组里,是后加算子,旧库的骨架不太可能含它们;相关度表里 6 个 head 中最像的一个(|ρ| 0.43)与这些种子的残差 |ρ| 只有 0.06 到 0.08,即去掉控制之后几乎与 head 无关。注意 topw(Ret,Volume) 与 vol 控制有 0.52 左右的相关,即「放量分钟的收益」里相当一部分是成交量趋势,奖励靠残差化后剩下的部分。合理度 4:逐个核对,day_topw_mean 取前 10% |Volume| 分钟的收益均值,ties 全部计入,k 为零时 clamp 为 1,没有除以零;day_signed_ratio 分母是 sum|Amt/Volume|,只在 Ret 为 0 的分钟计入分母,会把平盘日往 0 拉,属于微小偏置,不是数学问题;day_centroid 与 day_gini 的分母都有 clamp;in_index 只是 t/(T-1)。需要 PI 确认的一点:day_corr(AlphaCube dt_day.py:231)在 x 或 y 日内为常数时方差为 0、分子为 0,由 EPS 保护得到 0 而不是 NaN;因此 day_corr(in_index(Volume), Volume) 依赖停牌掩码把停牌日的 Volume 置为 NaN(count < 2 才得 NaN),否则全天零成交的股票日会得到一个固定的 0,与停牌相关。种子 11 day_gini(Volume) 与 liq 控制 0.786 很近,是流动性的换写法之一,但仍低于 0.8 线,放行并标记。种子 6(bucket 版)与种子 1 只差一层 LogFloatCap 分桶标准化,保留。种子 14 用 in_slice(11,230) 去掉开盘与尾盘集合竞价棒,与种子 1 的 topw 事件集合不同,不算重复,保留。如果它有 alpha,最可能来自「放量时的价格行为」对应的订单流信息(有信息的放量延续、对冲式放量反转),或者来自尾盘与日内时点的机构调仓节律(种子 8-10、13 的时点族)。'
+R:
+  - head: 'ts_stddev(day_q_stat_std(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume, 11, 230)))), 15)'
+    soundness: 4
+    reasons: '5 个变体只改窗口(45、60)、加 EMA(20)、做变异系数(分母 cross_mean(core,30))、分桶(LogFloatCap)。数学检查:分母 cross_mean 是 Ljung-Box 累计 Q 的截面均值,不是零附近量;Q 统计量在白噪声下有抽样下限(约 20 个滞后的 chi-square 型累计和),不会压到 0,所以 div 不会因为近零分母爆点;ts_stddev 对常数窗口返回 0,不爆;cross_ema 与 cs_bucket_zscore 没有前视。窗口拉长是 PI 从拆解里看到的单调趋势(7/15/30 日 -2.95/-1.78/-1.41),机制合理(节律的波动估计太噪、换手吃成本)。如果它有 alpha,最可能来自成交节律的慢变波动(同 slot a 的解释)。'
+  - head: 'add(ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230)), 15), ts_stddev(day_q_stat_std(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume, 11, 230)))), 15))'
+    soundness: 3
+    reasons: '5 个变体只保留 Ret 支并拉长窗口、加 EMA、分桶。数学没有问题:5 个变体都没有除法,ts_stddev 对常数窗口为 0,cross_ema 与 cs_bucket_zscore 对缺失值有保护。但机制说得不够清楚:分钟收益的 Ljung-Box Q 主要反映买卖价差反弹(bid-ask bounce)与抽样噪声,20 个滞后的累计 Q 在收益序列上绝大部分是噪声底座;PI 的依据是拆解里 Ret 支单独比整个和式好 0.45,这是经验证据,不是机制证据。按 §3 只挡数学问题,所以放行,但只给 3。如果它有 alpha,最可能来自流动性差的股票上的买卖价差反弹(与 liq 控制 0.17 的残差),而不是信息。'
+summary: 'slot a 通过(创新 3、合理 4,划掉 7 个,剩 9 个);slot b 通过(创新 4、合理 4,只划掉 15,剩 14 个);R 组 2 个放行(合理 4 与 3)。两处需要 PI 确认:slot b 的 day_corr(in_index(Volume),Volume) 依赖停牌 NaN 掩码,R 组第二支只剩 bid-ask 反弹式的机制。'

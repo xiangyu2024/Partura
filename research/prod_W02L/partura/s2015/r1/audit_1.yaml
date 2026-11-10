@@ -1,0 +1,83 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [6]
+    reasons: |-
+      位 a(E)。核心 C2 = cross_stddev(cross_stddev(day_quantile_q25(Amt),60),60),是快照 head 3 的子树。
+      门槛核对:
+      - 核心与 5 个控制的 |ρ|:liq 0.759、vol 0.137、rev 0.021、known 0.741、size 0.398,全部 < 0.8,过。liq 离 0.8 只差 0.04,记一笔。
+      - 14 条候选全部原样含 C2。每条的骨架(抽掉字段、常数、窗口)与两库 5583 条骨架逐一对照,14 条都不在库内。
+      - 自动划掉:第 6 条与 head 1 的原始 |ρ| 0.87(≥0.7),划掉。其余与 head 的原始 |ρ| ≤ 0.57,与控制的 |ρ| ≤ 0.56,无其他自动划掉项。
+      数学检查(对照源码 dt_cross、dt_day、nd_cs、nd_ts 与 ops_ext 的 cs_bucket_*、cross_zscore):
+      - 无前视:cross_* 用 rolling_windows(左填充),窗口止于 t;cs_bucket_* 只用 t 日截面;cross_zscore 含当日,t 收盘后已知;交易在 t+1。
+      - 没有用 ts_rank、cross_rank、in_rank_rolling,所以 2026-11-07 的 nanrank_last 陷阱不适用;cs_rank 走 common.rank 的 argsort 路径。
+      - 数值:C2/(C2+x) 与 C2/cross_mean(Q,60) 的分母只在整窗全 0 时为 0,此时 NaN 是窄缺失(拆解表覆盖率 0.9995);C2/(C2+x) 有界于 [0,1]。cross_zscore 的 |z| ≤ √(n−1)(Samuelson 不等式),无爆点。cs_bucket_zscore 的 EPS 对 RMB 量级无影响。
+      - 定义:C2 需约 118 个交易日,cross_zscore(·,120) 约 238 日,训练段从 2018 年起算,热身在 2018 年底前结束,不主导结果。
+      - 继承性质(head 也有,不挡):cross_stddev 在窗口只剩 1 个有效日时输出 0(nanstd_last 的 count 下限为 1)。
+      创新度 3 的理由:核心本身就是 head 1 的对象(原始 |ρ| 0.96、残差 0.89),E 位的新内容只能在外围。a1 至 a5 去掉 5 个控制后与 head 1 的残差 |ρ| 为 0.79–0.84,是同一个东西换了去水平的写法;a8 至 a14 中 a9 至 a12、a14 的残差 ≤ 0.56,a10 仅 0.05,是实质不同的对象。整位不给 4 以上,也不给 1。
+      逐条(每条末句是「若有 alpha,最可能来自」):
+      1. div(C2, add(C2,I1)):C2 占 C2+I1 的份额。原始 0.35、残差 0.79(对 head 1)、liq 0.18。若有 alpha,来自「二阶不稳定占一阶波动的比例」这个相对量,不是 head 的 ts_std 层。
+      2. div(C2, cross_mean(Q,60)):C2 以自身 60 日均值为单位。原始 0.16、残差 0.82、known 0.35。若有 alpha,来自慢变的 vol-of-vol 的相对尺度,而非流动性水平。
+      3. cs_bucket_zscore(C2, cross_mean(day_sum(Amt),30)):流动性十分位内标准化。liq 0.02、原始 0.56、残差 0.84。若有 alpha,来自同一流动性档内谁的不稳定更高。
+      4. cs_bucket_demean(第 1 条, LogFloatCap):市值十分位内去均值。size 0.06、原始 0.46、残差 0.79。若有 alpha,来自同市值档内的比率信号。
+      5. cs_bucket_rank(C2, cross_mean(day_std(Amt),30)):已知族十分位内的百分位。known 0.02、原始 0.57、残差 0.84。若有 alpha,来自同一已知族档内的相对不稳定。
+      7. cross_zscore(C2,120):C2 相对本股 120 日常态的 z。原始 0.44、残差 0.56、liq 0.14。若有 alpha,来自「本股不稳定偏离自身常态」的异常,而非横截面水平。
+      8. cross_delta(C2,40):C2 的 40 日变化。原始 0.33、残差 0.47。若有 alpha,来自二阶不稳定的抬升或回落,即流动性状态切换的方向。
+      9. sub(cs_rank(C2), cs_rank(C2_ret)):流动性不稳定的截面秩减价格不稳定的截面秩。原始 0.52、残差 0.24、liq 0.56、known 0.51。若有 alpha,来自两类不稳定错配的股票(流动性在变而价格平稳)。
+      10. sub(cs_rank(C2_Amt), cs_rank(C2_Volume)):Amt 口径与 Volume 口径的秩差。原始 0.31、残差 0.05、size 0.01。若有 alpha,来自名义价格(量乘价)通道,这一条不在 5 个控制里。
+      11. div(C2, add(C2, C2_q75)):薄端与厚端二阶离散度的份额。原始 0.35、残差 0.19。若有 alpha,来自不稳定出在安静分钟还是放量分钟。
+      12. div(C2, add(C2, C2_median)):同第 11 条,厚端改用中位数。原始 0.35、残差 0.18。若有 alpha,同第 11 条。注意:日中位成交额连续一百多个交易日为 0 的极薄票,C2_median 为 0,比值成 1 并列在顶部,只影响极薄票,需看覆盖率。
+      13. mul(份额, sign(cross_mean(Q,20) − cross_mean(Q,120))):不稳定份额乘流动性趋势方向。原始(对 head 2)0.05、残差 0.42、vol 0.33。若有 alpha,来自流入与枯竭两种状态下不稳定的非对称。sign 只取 −1、0、1,截面排序是三段拼接,数学上无问题。
+      14. div(C2, add(C2, C2_20/20)):60/60 与 20/20 两级离散度的期限结构份额。原始 0.23、残差 0.56、liq 0.13。若有 alpha,来自长期持续切换与近期脉冲的区分。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [13]
+    reasons: |-
+      位 b(N)。15 条候选。第 13 条与 liq 控制的 |ρ| 0.85(≥0.8),自动划掉。其余与控制的 |ρ| ≤ 0.54,与 head 的原始 |ρ| ≤ 0.42。
+      骨架:15 条都不在库内(同一规则复算)。
+      数学检查:
+      - 无前视:ts_delta 是 x[t] − x[t−1](ts_delay 为滞后,ts_shift 才是前视,本位没有用);cross_delta、cross_autocorr 只用 t 及以前;ts_regbeta、cross_regres 是 rolling_ols(x,y),即 y 对 x 的 α + βx,窗口止于 t。
+      - 变量方向:ts_regbeta(市场变化, 个股变化) 是个股对市场的 β,与意图相符;cross_regres(市场水平, 个股 log Q) 的残差是扣掉 β·市场后的个股部分,与意图相符。
+      - 对数:log(Q) 在 |Q| ≤ 1e-9 时为 NaN,被窗口跳过,不是填充。日 Q 的量级为 0 或数十元以上,对数不会爆。
+      - 半标准差:需 x > 0 且前一日 > 0,至少 3 天,无数值问题。
+      - 比率:Q25/Q75 与 Q25/median 在 [0,1] 内。0/0 只在 Q75 或 median 为 0 时出现,是窄缺失。第 14 条对日中位为 0 的日子 NaN 且被跳过,极薄票的有效天数会变少,需看覆盖率。
+      - 小样本(提醒,不挡):rolling_pair_reduce 的 corr 与 cross_corr 没有最小配对数门槛。有效配对只有 2 个时输出 ±1,只有 1 个时输出 0。ts_regbeta 在有效日很少时 var_x 变小,β 会放大。第 5、6、8、9、10、11 条的窗口含 NaN(上市初期、长期停牌、Q=0 日),会受影响。规模未知(本机不跑数据),建议流水线在覆盖检查里加有效配对数的分布。nanstd_last 同理(有效 1 日时 std 为 0)。
+      创新度 4:每一簇都是新对象(方向不对称、共性、耦合、持续性、形状),对 head 的残差 |ρ| 为 0.01–0.36(第 11 条最大),不是 head 的换皮。
+      合理度 4:机制清楚(Chordia、Roll、Subrahmanyam 2000 的流动性共性;Acharya、Pedersen 2005 的流动性 β;Brunnermeier、Pedersen 2009 的流动性螺旋),算子实现与意图一致。扣分的只是小样本问题,未到数学问题的程度。
+      近亲提示(不挡):第 4 条与第 7 条的控制谱几乎相同(liq 0.36 / 0.34、size 0.46 / 0.42)。两者都是个股流动性偏离市场的 60 日波动,只差市场项的处理(截面去均值 vs 滚动 β)。规则不许因此划掉,但请 PI 核对二者的互相关。
+      逐条(每条末句是「若有 alpha,最可能来自」):
+      1. cross_semistd_neg(Q,60):Q 对数变化的下行半标准差。原始 0.42、残差 0.13、liq 0.54。若有 alpha,来自流动性骤降(做市撤出、无人接盘)的幅度,它与激增对收益的含义不同。
+      2. sub(neg, pos):下行减上行。原始 0.10、残差 0.04。若有 alpha,来自骤降与激增的不对称。
+      3. div(neg, neg+pos):下行占比。原始 0.15、残差 0.04。若有 alpha,同第 2 条但按比例而非按差;二者秩不同,不是重复。
+      4. cross_stddev(cs_demean(log Q), 60):个股相对截面的流动性偏离的 60 日 std。原始 0.24、残差 0.07、size 0.46。若有 alpha,来自特质流动性波动。
+      5. ts_regbeta(d 市场, d 个股, 60):个股对市场流动性变化的 β。原始 0.24、残差 0.08、liq 0.40。若有 alpha,来自对市场流动性冲击的敏感度(流动性风险溢价)。
+      6. ts_corr(同第 5 条的两个输入):同步相关。原始 0.03、残差 0.11、vol 0.31。若有 alpha,来自个股与市场流动性的同步程度。
+      7. cross_stddev(cross_regres(cs_mean(log Q), log Q, 60), 60):扣掉 β·市场后残差的 60 日 std。原始(对 head 2)0.26、残差 0.04、size 0.42。若有 alpha,来自 β 修正后的特质流动性波动,与第 4 条是近亲。
+      8. cross_corr(Q, day_std(Ret), 60):流动性水平与日内波动的 60 日相关。原始 0.27、残差 0.18、known 0.30。若有 alpha,来自流动性与波动的耦合强度(流动性螺旋)。
+      9. cross_corr(Δlog Q, |day_sum(Ret)|, 60):流动性变化与绝对价格变动的相关。原始 0.01、残差 0.03。若有 alpha,来自价格冲击驱动的流动性变化,但信号可能很弱。
+      10. cross_autocorr(Δlog Q, 60, 1):流动性变化的一阶自相关。原始 0.01、残差 0.02。若有 alpha,来自 Q 的测量噪声水平(负相关),或状态持续性(正相关)。
+      11. cross_autocorr(log Q 对 60 日均值的偏离, 120, 5):偏离的 5 日滞后持续性。原始(对 head 1)0.24、残差 0.36、liq 0.07。若有 alpha,来自流动性偏离的慢变持续性,即状态切换的速度。
+      12. cross_stddev(Q25/Q75, 60):安静与放量分钟之比的 60 日 std。原始 0.14、残差 0.01、liq 0.20。若有 alpha,来自成交是否均匀的不稳定。
+      14. cross_stddev(Q25/median, 60):同第 12 条,参照改为中位数。原始 0.38、残差 0.12、liq 0.50、known 0.46。若有 alpha,同第 12 条。注意中位数为 0 的日子被跳过,极薄票有效天数少,需看覆盖率。
+      15. cross_zscore(cross_mean(Q25/Q75, 20), 120):20 日形状均值相对自身 120 日常态的 z。原始(对 head 2)0.14、残差 0.20、liq 0.26。若有 alpha,来自形状相对自身常态的异常。它与第 13 条(已划)同族,但 z 化后 liq 从 0.85 降到 0.26,是尺子要的去水平形式,不是重复。
+R:
+  - head: 'ts_std(cross_stddev(day_quantile_q25(Amt), 60), 50)'
+    soundness: 4
+    reasons: |-
+      烂部件是 I1 = cross_stddev(Q,60) 的水平(拆解表:与已知族 ρ −0.91)。
+      五个变体逐个核对:(1) div(I1, cross_mean(Q,60)) 是变异系数,分母只在整窗全 0 时为 0,此时 NaN,比值有界(std/mean ≤ √59);(2) cross_stddev(log Q, 60):Q=0 的日子 NaN 且被跳过,不是填充,对数量级 0 到 20,无爆点;(3) cs_bucket_zscore 按已知族十分位,桶内 z,无数值问题;(4) ts_std(cross_semistd_neg(Q,60), 50):无数值问题;(5) cross_stddev(cross_zscore(Q,60), 50):cross_zscore 的 |z| ≤ √59,无爆点。
+      合理度 4。注意:变体 3 与原 head 的原始 |ρ| 为 0.61、残差 0.95,是同一个 head 换了控制的写法。R 只评合理度,这一点留给 PI 与尺子判断。若有 alpha,来自去掉水平后的相对波动。
+  - head: 'ts_std(cross_stddev(day_quantile_q25(Amt), 60), 40)'
+    soundness: 4
+    reasons: |-
+      同一个水平问题,窗口改为 40。三个变体:(1) 变异系数,同上,比值有界;(2) cs_bucket_rank 按已知族十分位,百分位无数值问题;(3) ts_std(cross_stddev(Q25/Q75, 60), 40):比值在 [0,1] 内,0/0 仅在 Q75 为 0 时出现,是窄缺失。
+      合理度 4。变体 2 与原 head 的残差 |ρ| 为 0.93,同上留给尺子判断。若有 alpha,来自去水平后的安静分钟波动。
+  - head: 'ts_std(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 10)'
+    soundness: 4
+    reasons: |-
+      烂部件是最外层 ts_std(·,10):C2 是慢变量,对它取 10 日标准差读到的主要是斜率与噪声。四个变体:(1) ts_std(C2/(C2+I1), 10):比值在 [0,1] 内,分母只在双零时 NaN;(2) cs_bucket_zscore 按市值十分位,无数值问题;(3) cross_madz(C2, 60):MAD 为 0 时输出 NaN(有守卫),分母为 1.4826·MAD 加 1e-6·|中位数|,不是除以零;(4) 对数上的两级离散度再取 10 日 std,Q=0 的日子被跳过。
+      合理度 4。变体 2 与原 head 的残差 |ρ| 为 0.89,同上留给尺子判断。若有 alpha,来自 C2 的斜率与去掉乘性水平后的二阶不稳定。
+summary: '两个任务位都过审:位 a 创新 3、合理 4,划掉第 6 条(与 head 1 原始 |ρ| 0.87);位 b 创新 4、合理 4,划掉第 13 条(liq |ρ| 0.85);三个 R 组合理度均为 4,未发现数学问题;位 a 的核心与 head 1 是同一对象,a1 至 a5 去控制后与 head 1 残差 0.79 至 0.84;位 b 有六条依赖小样本相关或回归,需流水线补有效配对数的检查。'

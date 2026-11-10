@@ -1,0 +1,144 @@
+seed: 2012
+round: 3
+slots:
+- type: E
+  core: inv(ListAge)
+  hypothesis: '事实(全部来自快照与流水线代码,不含任何 2026 年数字):
+
+    (1) 本流第 2 轮 E 位(同一个核心 inv(ListAge))108 次评估里最好的三个——score -0.33(train -0.33 / valid +0.59)、-0.37(-0.37 / +0.39)、-0.42(-0.42 / +0.61)——外壳完全一样:cs_last_high40(cs_last_high20(Y, LogFloatCap), inv(ListAge)),意思是「把 2018 年以后上市的名字(年龄闸)和流通市值最高 20% 的名字(大市值闸)都压到所有名字之下,其余按 Y 排」。而它们的 Y 互不相干(慢的 -LogFloatShares、日内 Durbin-Watson × 去重价位比、慢的 -at_max_ratio(Open)),我自己第 2 轮的种子(只带年龄闸,或年龄闸 + 一个别的垃圾标记)全部在 -0.42 以下。所以 valid 的正收益看起来来自外壳而不是 Y。
+
+    (2) 我的读法:三个 Y 有一个共同点,都是名义价位 / 价位格点的代理。LogFloatShares 在去掉市值的线性、二次、三次暴露以后应当主要剩下价位(LogFloatCap - LogFloatShares = log 价格);价位越高,最小变动价位占价格的比例越小,日内价格格点越细(DW × 去重价位比越高,钉在同一价位上的时间占比 at_max_ratio 越低)。
+
+    (3) 三个的 train 都是负数、valid 都是正数,拖低 min 的是 train。
+
+
+    假设:外壳里混着两件事。(a) 两个闸是「清理样本」:新股与解禁供给(Ritter 1991 的 IPO 长期弱势;Field-Hanka 2001 的限售股解禁)是制度性的,两段都该有贡献。(b) 大市值闸是相对流通市值的阶梯函数,控制里的 LogFloatCap 只去掉了排名的 1 / 2 / 3 次多项式,阶梯留有残余,等价于押「非大盘相对全市场等权」,这是行情依赖的押注,可能只在 valid 的行情里赚钱。这一位的 16 个种子把这两件事拆开,并给闸之后的排序换成新的对象:
+
+    A 组(种子 1、4、10、15、16;Y = 隔夜跳空强度)——另一个 E 位里的主线对象 |隔夜跳空| / LimitWidth 的 241 日平均(平方版)放进同一个外壳:种子 4 只有年龄闸、种子 1 = 年龄闸 + 大市值闸、种子 16 用「同一流通市值十分位内标准化」代替阶梯,三者两两之差分别读出「大市值闸的边际」和「它是不是市值阶梯」;种子 10 把年龄闸收窄到「最年轻的 10%」(high40 在哨兵并列块的作用下,实际是把 2018 年以后上市的所有名字都压下去,上市多年的也算,占比随时间上升),读闸的宽度;种子 15 把 241 日平均换成半衰期 60 天的 cross_ema。
+
+    B 组(种子 2、3)——第二个闸换成非规模的:cross_max(day_zero_ratio(Ret), 3) 最高 20%(近 3 天里分钟收益恰好为 0 的占比最大 = 冻结 / 不活跃的名字),与 sub(LogTotalCap, LogFloatCap) 最高 10%(总市值对流通市值的对数差 = 限售比例,解禁供给的代理)。如果 B 组比 A 组的种子 1 好或差不多,说明大市值闸不是必要的、也就不是市值押注。
+
+    C 组(种子 5、6、11、12、13、14)——名义价位 / 格点的纯形式(不再混别的 Y):log 价格两个方向、价格格点的 120 日平均(去重价位比,高 = 细)、静止分钟占比 -flat_ratio(Close)、零收益分钟占比 -zero_ratio(Ret)、不经平滑的 -LogFloatShares。检验(2):如果价位格点真是共同来源,这几个应当和 R2 的三个最好值同档或更好,并且彼此排序一致(格点细 = 价位高)。
+
+    D 组(种子 7、8、9)——12 个月平均日收益(cross_mean(日收盘收益, 241),后复权)的两个方向,以及对流通市值十分位去均值的反向版本:控制里只有 20 日反转,长于 20 日的反转 / 动量不在控制里(De Bondt-Thaler 1985 的长期反转)。
+
+
+    算子怎样实现:核心 inv(ListAge) 在每个种子里原样出现,作为 cs_last_high40 / cs_last_high10 的闸变量(把最新上市的名字——按整块并列处理——压到所有名字之下,每个名字仍有有限值,书仍对整个市场计量);第二个闸 cs_last_high20 / cs_last_high10 同理;Y 是闸里被排序的量。
+
+
+    为什么和已见过的不同:已见过的含该核心的候选,外壳的第二个闸只有 LogFloatCap 一种,Y 全是价位格点或分钟统计量的一两个。这里第二个闸有三种(大市值、冻结 / 不活跃、解禁供给)加一种「没有闸、用桶内标准化」,年龄闸有两种宽度,Y 引入了库里 0 条出现过的对象:LimitWidth 归一化的隔夜跳空(库 5583 条里 LimitWidth、cs_last_*、cross_ema、cross_zscore、日频字段叶子都是 0 条;隔夜跳空比 div(day_open(Open), ts_delay(day_last(Close), 1)) 也是 0 条)。种子的算子骨架已逐个对照 5583 个库骨架,没有碰撞;外围算子集合与我能看到的 24 种已见外围逐个核对,没有重复。
+
+
+    为什么样本外还会在:年龄闸、冻结闸、解禁闸是交易规则与上市制度的产物,不依赖某一段行情;Y 是 120 ~ 241 日的慢统计或日频字段(几乎不动),换手极低,15 bp 的成本占比小。诚实预期:出 head(>= 0.5)的概率约 3%;更现实的产出是「min 分数比 -0.33 好 0.1 ~ 0.3」和把 train 与 valid 的差缩小,各组之间的差是主要读数。
+
+
+    数学检查:inv(ListAge) 在上市首日(ListAge = 0)是 +inf,cs_last_* 内部用 isfinite 当缺失,一只股票一天不会支配截面;老股票的哨兵并列块按整块处理,不是列序打破。Y 里的除法只有 / LimitWidth(只取 0.1 / 0.2 / 0.3,不会近零)与 / ts_delay(day_last(Close), 1)(后复权价格,为正);cross_mean / cross_ema 对缺失天不计、对窗口不足的前期取已有天数(没有 NaN 热身);cs_bucket_zscore 内部加 EPS 且桶不足 2 个名字给 NaN;pow_2 作用在 [0, 数倍] 的比值上,不会溢出;日频字段与窗口都只含当日及以前,t 日信号 t + 1 交易,没有前视。'
+  literature:
+  - title: The long-run performance of initial public offerings
+    authors: Jay R. Ritter
+    year: '1991'
+    treatment: IPO 之后的长期弱势;这里用 inv(ListAge) 的年龄闸把 2018 年后上市的名字压到多头书之外
+  - title: The expiration of IPO share lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: '2001'
+    treatment: 解禁前后的超额收益为负;这里用 sub(LogTotalCap, LogFloatCap)(限售比例)最高 10% 做第二个闸
+  - title: Does the stock market overreact?
+    authors: Werner F. M. De Bondt, Richard Thaler
+    year: '1985'
+    treatment: 3 ~ 5 年的长期反转;这里用 12 个月平均日收益的两个方向近似(控制里只有 20 日反转)
+  - title: Tick size, share prices, and stock splits
+    authors: James J. Angel
+    year: '1997'
+    treatment: 名义价位决定相对最小变动价位;这里用 log 价格与价位格点的 120 日平均(去重价位比、静止分钟占比)近似
+  seeds:
+  - cs_last_high40(cs_last_high20(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), cross_max(day_zero_ratio(Ret), 3)), inv(ListAge))
+  - cs_last_high40(cs_last_high10(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), sub(LogTotalCap, LogFloatCap)), inv(ListAge))
+  - cs_last_high40(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), inv(ListAge))
+  - cs_last_high40(cs_last_high20(sub(LogFloatCap, LogFloatShares), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(sub(LogFloatCap, LogFloatShares)), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(cs_bucket_demean(cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 241), LogFloatCap)), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 241)), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 241), LogFloatCap), inv(ListAge))
+  - cs_last_high10(cs_last_high20(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(cross_mean(day_distinct_ratio(Close), 120), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(cross_mean(day_flat_ratio(Close), 120)), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(cross_mean(day_zero_ratio(Ret), 120)), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(neg(LogFloatShares), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(cross_ema(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 60), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_bucket_zscore(cross_mean(pow_2(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), LogFloatCap), inv(ListAge))
+- type: E
+  core: div(day_open(Open), ts_delay(day_last(Close), 1))
+  hypothesis: '事实(全部来自快照,不含 2026 年数字):
+
+    (1) 本流第 2 轮 N 位(隔夜 vs 日内)的最好候选是 cross_mean(div(abs_(隔夜跳空), LimitWidth), 120):score -0.38(train -0.38 / valid +0.22,方向 +1,半衰期 0),其中隔夜跳空 = div(day_open(Open), ts_delay(day_last(Close), 1)) - 1,LimitWidth 是流水线给的涨跌停幅度(主板 0.1、创业板 2020-08-24 起 0.2、科创板 0.2、北交所 0.3)。GP 在它上面长出的 cross_mean(div(signedpower(div(abs_(跳空), LimitWidth)), LimitWidth), 120) 是 -0.19(train -0.19 / valid -0.16):整个流 3 轮里唯一一个不带任何闸、两段都在 -0.2 附近的对象(第 1 轮最好 -0.97,第 2 轮 E 位带闸最好 -0.33)。signedpower 默认指数 2,即比值的平方,说明极端跳空(接近涨跌停开盘)加权更重更好;再多除一次 LimitWidth 的 div(div(.)) 版本 -0.80、减去 day_es_ratio_hi(Vwap) 的版本 -0.74 都更差。带符号的跳空均值(60 / 120 日)和「隔夜 - 日内」差没有进入前 5(<= -0.80)。
+
+    (2) 与控制的关系(R2 相关度表,同一个种子 120 日版):对 5 个控制的日度秩 |ρ| 流动性 0.40 / 波动 0.37 / 反转 0.01 / 已知族 0.42 / 市值 0.04,都低于 0.5,不是控制的换写。
+
+    (3) 库 5583 条里 LimitWidth 0 条,隔夜跳空比 0 条;快照里 29 个含它的候选平均 -1.37 对不含的 -2.37。
+
+
+    假设:LimitWidth 归一化的隔夜跳空强度,衡量的是「信息通过休市渠道(公告、新闻、外盘)进入价格的频率与幅度」,以这个板块允许的最大波动为单位,使主板、创业板、科创板、北交所可比;它不是日内波动(控制里的波动与成交额离散度读的是交易时段的东西)。机制有三条文献线:隔夜收益与日内收益由不同的参与者决定且各自持续(Lou-Polk-Skouras 2019);散户在开盘集中买入高关注度股票(Berkman-Koch-Tuttle-Zhang 2012;Aboody 等 2018 把隔夜收益读为个股情绪);休市渠道的信息强度是股票的稳定特征,所以 241 日的慢统计应当比 120 日更干净,换手更低。这一位的 16 个种子沿着已经读到的方向外推,每个只改一处:
+
+    - 强度的形状(种子 1、2、3、4、5、12、14):平方(1)、立方(2)、半衰期 60 的 cross_ema(3)、不取幂的 241 日均值(4)、中位数 = 典型跳空而不是极端(5)、上四分位日的均值(12)、再除一次 LimitWidth 复现 GP 的 -0.19 但窗口改 241(14)。窗口加长到 241 是因为:快照里 > -1.5 的候选几乎都是 120 日以上的慢量,同一波里目前最好的几个读数(种子 2009 的 cross_mean(·, 241) 一族,train / valid 都在 0 附近)也是 241 日窗口。
+
+    - 方向拆分(种子 8、9):只取上跳 (g - 1)+ 与只取下跳 (g - 1)- 各除 LimitWidth,读哪一侧有 alpha、符号是什么(书会按 train 自己选方向)。
+
+    - 跳空与同日日内的关系(种子 6、7、11、10):跳空与同日日内收益的 241 日相关(6)、跳空的一阶自相关(7)、跳空方向 × 同日日内收益(11,继续还是回吐)、隔夜强度占隔夜加日内强度之和的比例(10)——Berkman 等的「隔夜强、日内弱」机制的直接检验。
+
+    - 相对自己的变化与中性化(种子 13、15、16):20 日强度相对自己 241 日的 z 值(13,新闻流突然增多);同一流通市值十分位内标准化(15)、同一成交额离散度(控制里的已知族)十分位内去均值(16)——去掉与规模 / 流动性的共线部分以后还剩什么。
+
+
+    算子怎样实现:核心 div(day_open(Open), ts_delay(day_last(Close), 1)) 在每个种子里原样出现(分钟立方体先折成日开盘价与前一日收盘价,后复权价格,除权日连续);abs_ / sub / div / pow_2 / pow_3 / cs_winsor 做成日度强度量,cross_mean / cross_ema / cross_med / cross_tail_mean_q75 / cross_zscore / cross_corr / cross_autocorr 沿日轴做慢聚合。多数种子在聚合之前先做 cs_winsor(每天按 1% / 99% 截尾),原因是新股上市第 2 ~ 5 天(创业板、科创板无涨跌停)的跳空可达 LimitWidth 的数倍,平方 / 立方以后会让上市不到一年的名字在 241 日窗口里支配整个截面。
+
+
+    为什么和已见过的不同:已见过的含该核心的候选(R2 的 N 位 15 个种子加 GP 后代)全是 120 日以内的窗口、大多不除 LimitWidth、带符号均值与「隔夜 - 日内」差占一半以上;这里没有一个与我能看到的它们的外围算子集合重复(已逐个核对),窗口、幂次、方向拆分、同日关系、桶内标准化都是新的。库里没有同骨架的表达式(逐个对照了 5583 个库骨架);与 9 个 head 的日度秩 |ρ| 预计很低(heads 全是 day_ar1_coefficient 的平滑 / 分位或价格 AR(1),种子里没有)。
+
+
+    为什么样本外还会在:涨跌停幅度是制度规则,按板块给定,归一化后的强度只取决于信息到达的节奏;241 日平均几乎是股票的稳定特征,换手极低(R2 的最好读数半衰期是 0 ~ 5 天,不靠 20 日 EMA 压换手),15 bp 成本占比可以忽略。诚实预期:出 head(>= 0.5)的概率约 3%;更可能的结果是平方 / 立方 + 241 日的种子把 min 推到 -0.2 ~ 0.0 附近,train 仍是拖后腿的一段(R2 里 train -0.19 ~ -0.38、valid -0.16 ~ +0.22),方向拆分与同日关系各组之间的差是主要读数。
+
+
+    数学检查:LimitWidth 只取 0.1 / 0.2 / 0.3(不会近零);ts_delay(day_last(Close), 1) 为后复权价格(正),停牌日若没有收盘价则当日跳空为 NaN,被 cross_* 当缺失,不会产生跨多日的假跳空;pow_2 / pow_3 作用在截尾后的非负比值上,不会下溢或溢出;cross_zscore 有 std + EPS 且对近常数窗口返回 0;cross_mean / cross_ema 对窗口不足的前期取已有天数,没有 NaN 热身;没有任何一个除法的分母可能近零(只有 LimitWidth 与正价格);面板不是常数(强度量连续取值)。无前视:当日开盘价与前一日收盘价都在当日开盘时已知,聚合窗口因果,t 日信号 t + 1 交易。'
+  literature:
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜与日内收益各自持续、来自不同参与者;这里用 LimitWidth 归一化的隔夜跳空强度的 241 日慢统计近似
+  - title: 'Paying attention: Overnight returns and the hidden cost of buying at the open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jordan Zhang
+    year: '2012'
+    treatment: 高关注度股票开盘被买入、隔夜强日内弱;这里用跳空与同日日内收益的相关 / 方向 × 日内收益近似
+  - title: Overnight returns and firm-specific investor sentiment
+    authors: Menachem Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman
+    year: '2018'
+    treatment: 隔夜收益是个股情绪的读数;这里用 20 日强度相对自己 241 日的 z 值近似情绪的突变
+  seeds:
+  - cross_mean(pow_2(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth))), 241)
+  - cross_mean(pow_3(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth))), 241)
+  - cross_ema(pow_2(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth))), 60)
+  - cross_mean(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241)
+  - cross_med(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241)
+  - cross_corr(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), cs_winsor(sub(div(day_last(Close), day_open(Open)), 1)), 241)
+  - cross_autocorr(cs_winsor(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 241, 1)
+  - cross_mean(cs_winsor(div(div(add(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1))), 2), LimitWidth)), 241)
+  - cross_mean(cs_winsor(div(div(sub(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), 2), LimitWidth)), 241)
+  - div(cross_mean(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 120), add(cross_mean(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 120), cross_mean(cs_winsor(div(abs_(sub(div(day_last(Close), day_open(Open)), 1)), LimitWidth)), 120)))
+  - cross_mean(cs_winsor(mul(sign(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), div(sub(div(day_last(Close), day_open(Open)), 1), LimitWidth))), 241)
+  - cross_tail_mean_q75(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241)
+  - cross_zscore(cross_mean(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 20), 241)
+  - div(cross_mean(pow_2(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth))), 241), LimitWidth)
+  - cs_bucket_zscore(cross_mean(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth)), 241), LogFloatCap)
+  - cs_bucket_demean(cross_mean(pow_2(cs_winsor(div(abs_(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1)), LimitWidth))), 241), cross_mean(day_std(Amt), 30))
+R:
+- head: ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 120)
+  why: 烂的部件有两处,依据都在本轮拆解表里。(1) 窗口:拆解表里 q75 的窗口 60 / 120 / 240 的 score 是 -1.62 / -1.54 / -1.38,valid 都在 -0.5 ~ -0.6,train 随窗口变长单调变好(R2 的 R 组里对 φ(Volume) 头同一类窗口加长一路到 -0.79 ~ -0.88 也没有拐点),流水线自己给的 R 候选就是 240。(2) 长仓里的垃圾尾部:这个头 train -1.54、valid -0.53,差 1.0;而本流第 2 轮 E 位里同一个外壳 cs_last_high40(cs_last_high20(Y, LogFloatCap), inv(ListAge)) 把三个互不相关的 Y 都推到 train -0.33 ~ -0.42 / valid +0.4 ~ +0.6,说明外壳本身有贡献。变体:v1 只把窗口改 240(自动候选,作为基线);v2 = v1 + 年龄闸;v3 = v1 + 年龄闸 + 大市值闸;v4 = v1 + 年龄闸 + 冻结 / 不活跃闸。v2 - v1、v3 - v2、v4 - v2 分别是各闸的边际,分数变化可以直接归到闸上;同一个 Y 与 E 位里的 Y 无关,因此也是「外壳的收益是不是与 Y 无关」的对照。无数学问题:in_slice(Vwap, 30, 210) 是分钟 30 ~ 210 的价格,日内 AR(1) 因果,窗口 240 的 q75 对缺失天不计。
+  variants:
+  - ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 240)
+  - cs_last_high40(ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 240), inv(ListAge))
+  - cs_last_high40(cs_last_high20(ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 240), LogFloatCap), inv(ListAge))
+  - cs_last_high40(cs_last_high20(ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 240), cross_max(day_zero_ratio(Ret), 3)), inv(ListAge))
+- head: ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 50), 50)
+  why: 烂的部件是窗口与垃圾尾部。上一轮 R 组已读到:外层窗口 150 / 内 100 + 外 150 的 score 是 -0.88 / -0.79(原头 -1.80),增益 +0.9 ~ +1.0,但与已知族的 |ρ| 是 0.53 / 0.51(>= 0.5)所以没有收录——这个对象的水平被流动性类控制吃掉一部分。变体保留 100 + 150 的慢窗口,各加一个闸:v5 = 年龄闸;v6 = 年龄闸 + 大市值闸。闸把一批名字整体压到底,是对排名的非线性改动,看它能否把 |ρ_known| 拉到 0.5 以下并继续提分。无数学问题:嵌套 ts_quantile_q75 对缺失天不计,day_ar1_coefficient(Volume) 对停牌日给 NaN。
+  variants:
+  - cs_last_high40(ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 100), 150), inv(ListAge))
+  - cs_last_high40(cs_last_high20(ts_quantile_q75(ts_quantile_q75(day_ar1_coefficient(Volume), 100), 150), LogFloatCap), inv(ListAge))

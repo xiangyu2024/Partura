@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新 4:库存(struct/members.csv 与 inputs/libs_train.csv)里 day_wmean、cross_sum(mul(...)) 的成交量加权均价骨架 0 次命中,也没有"现价相对成交量加权长窗均价"的骨架。快照三个 head 与 14 个种子的原始 |ρ| 全在 0.12 以下,残差 |ρ| 全在 0.08 以下。控制方面:种子 3(60 日窗)与 20 日反转原始 |ρ| 0.77,种子 6 为 0.70,种子 13 为 0.61。这是中高相关,按 §4(与控制中度相关不是挡的理由)不划;但去掉的是 20 日反转,60 至 241 日的中期价格相对均值效应不在五个控制里,残差后可能仍留着,这一点留给 PI 的结果判断。合理 4:机制是 Grinblatt-Han 资本利得悬置,算子逐个核对:Σ(VWAP_k·V_k)/ΣV_k 确为换手加权参考价,现价与它的相对位置无前视,分母在整窗停牌时为 0/0=NaN 而非爆点,cross_ema 版本的换手衰减近似说得通。种子 11(add(x, abs_(x)) = 2·max(x,0))在确定性闸门里已判废品(distinct 0.35,约 65% 的截面并列为 0),但并列靠列序打破在 §4 明确不算问题,本审计不据此划除,由闸门处理。如果它有 alpha,最可能来自持有人浮盈/浮亏的处置效应锚定,或 60 至 241 日的中期价格相对成交量加权均价的反转/动量。'
+  - slot: b
+    novelty: 3
+    soundness: 3
+    struck_seeds: [12]
+    reasons: '创新 3:三个快照 head 都是日内协方差的 20 至 40 日 F 值,本位种子对 head 的原始 |ρ| 最大 0.21(种子 11),残差 |ρ| 全在 0.26 以下,与 head 不是同一个东西。但 day_corr(Volume, Vwap)、day_corr(Volume, Low) 这两个特征在库里已有 4 至 6 个成员(ts_quantile、cross_stddev 写法,如 X,7、X,12、X,14、X,2000),所以特征本身不新,新的是慢聚合写法。控制方面:种子 7 至 12 与流动性、已知族的原始 |ρ| 在 0.33 至 0.41,属中度,按 §4 不挡。合理 3:机制是 Llorente 等的量价同向/对冲成交类型,说得通,但日内 day_corr(Volume, Low) 的大部分方差来自日内漂移方向乘以成交量的时点分布,机制链较长,不挡。PI 需要知道:(1)种子 13、14 在一字板日(当日高低价相同)的区间归一化分母 +0.0001 使值落在 0,而不是缺失,对长期一字涨停的票有系统偏置,应查它们的覆盖与一字板占比;(2)种子 1 至 5 的 day_corr 在一字板日返回 0(分母 1e-9 兜底),同样是非缺失的填充,但幅度可能较小;(3)种子 7 至 10 的 cross_regbeta 斜率与 1/Var(Ret) 成正比,PI 笔记里"斜率有界"的说法不成立,但覆盖率 0.999 的票分母不近零,只是按波动率缩放,残差会吸收一部分,不挡。种子 12:数学问题。select_where(is_gt(day_sum(Ret), 0), corr, 0) 是 torch.where 直接取 0 填充非上涨日,不是缺失;cross_mean 把这些 0 当真值计入。结果 = (N_up·m_up − N_down·m_down)/n = ½(p+q)·(m_up − m_down) + ½(p − q)·(m_up + m_down),其中 p、q 为 120 日上涨日与下跌日占比。后一项是"上涨日占比减下跌日占比"乘以平均量价相关,即 120 日涨跌天数的趋势信号,与拟测的"涨日均值减跌日均值"不是同一个量;这个混入项与主项同量级,不是可忽略的写法差异,故划除。其余 14 个种子保留。'
+R:
+  - head: 'ts_decay_linear(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 20), 5)'
+    soundness: 4
+    reasons: '变体用更慢的聚合(cross_ema 40、60 日,cross_mean 120 日)替换 5 日线性衰减,是降噪方向的标准做法,无数学问题。变体 4 用 ts_corr 替换 F(F 是 |corr| 的单调函数),把符号加回来,写法干净。F、t 值都是比率,对 Amt 与 Volume 的尺度不敏感。拆解表的 F 层与已知族 rho 0.01 至 0.08,与已知族无关。机制只是降噪、不是 alpha 论证,但不是错的。'
+  - head: 'ts_min(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 40), 5)'
+    soundness: 3
+    reasons: '变体 1 至 4 尺度无问题(F、t 值、log(1+F) 与 cross_tail_mean_q25 均有定义,cross_tail_mean_q25 在 partura/ops_ext.py 为下四分位以下的条件均值)。变体 5 cross_ema(ts_regbeta(day_std(High), day_cov(Volume, Low), 40), 60) 的斜率 = cov(V,L)/var(day_std(High)),量纲约为成交量水平,未归一化,截面排序会被成交量规模支配,等同于流动性代理;执行时建议剔除该变体。其余变体保留,组评 3。'
+  - head: 'ts_min(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 20), 5)'
+    soundness: 3
+    reasons: '变体都是 F(day_std(Volume), day_cov(·, ·), d) 的慢聚合或换价格底/换窗口,F 层与 ts_min 外层的替换没有数学问题。机制(成交量离散度与量价协方差的耦合)是描述性的,说得通但没有给出方向,故给 3。变体 2 的 cross_tail_mean_q25 无问题。'
+summary: 'a 位(CGO 资本利得悬置,创新 4、合理 4)无划除,通过;b 位(量价水平耦合,创新 3、合理 3)划除种子 12(0 填充使均值差混入上涨/下跌天数占比的数学问题),剩 14 个,通过;R 三组合理度均 >= 3(4、3、3),R2 变体 5 量纲问题建议剔除;提示:a 位种子 3 与 20 日反转的 |ρ| 0.77 较高,b 位种子 13、14 与 1 至 5 的 day_corr 在一字板日取 0 填充,需 PI 查一字板占比。'

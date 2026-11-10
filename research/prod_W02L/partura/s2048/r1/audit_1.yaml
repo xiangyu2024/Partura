@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7, 8]
+    reasons: '快照里 0 个 head,所以「与 head 的 |ρ|」全部为 0,无可比对象;与 5 个控制的 |ρ| 最大值是 rev 0.63(seed 3,H/cross_max(H,60))与 rev 0.53(seed 2,H/cross_max(H,120)),其余都在 0.5 以下,远低于 0.8 的自动划掉线。新颖性给 4:「收盘价相对自己一年高点的比值 H/cross_max(H,w)」不在 head 和控制里,PI 说库里 cross_max(day_close(...)) 的写法只嵌在多层结构里(我没有重核 5583 条的结构表,只按相关度表和 PI 声明判)。合理度给 4:George-Hwang 52 周高点 + 锚定 / 处置效应有明确机制;逐个核对算子:cross_max / cross_min 是 day 轴滚动(rolling_reduce axis=0),窗口 241 即 241 个交易日,全部只用 t 日及以前的后复权收盘价,无前视;除数是 cross_max 或 cross_min 的正价格,不是近零量;seed 5 的分母 (max-min) 在一字板票上可能为 0,但只影响极少数票,不主导排序。热身期:w=241 时 2018 年前一年的值为 NaN,占 train+valid 约 1/8 的样本,不是主导,不挡。划掉 7、8:cross_argmax 默认 pct=True,corr_1.json 显示 gate=false,distinct 仅 0.157 与 0.274,大量并列被列序打破,这是 §4「面板几乎是常数 / 数值伪影」一类的定义问题,不是 alpha 问题,按规则划掉。其余 12 个种子保留,≥ 4。补充:seed 1 与 seed 2、seed 3 只是窗口不同,彼此高度相似,但它们不是与 head 或控制的重复,不作为划掉理由,只提醒 GP 初代多样性会偏低。如果它有 alpha,最可能来自:价格接近一年高点的票,对利好反应不足、之后收益更高(锚定),而不是 rev 控制那种短期反转。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '快照里 0 个 head,与 head 的 |ρ| 全部为 0。与控制的 |ρ| 最大值:known 0.41(seed 9)、liq 0.40(seed 9)、vol 0.46(seed 13,vol 的 |ρ| 在 seed 13 最高,但 seed 13 的 rev 只有 0.04),seed 13 的 known 为 0.25;隔夜与日内的均值类(seed 1-8)与 rev 的 |ρ| 在 0.05-0.19 之间,不接近 0.8。seed 11-14 的 rev、known 都很低(0.00-0.20),说明它们主要不是控制的换写。新颖性给 4:隔夜 ON = Open_t / Close_{t-1} - 1 与日内 ID = Close_t / Open_t - 1 的拆分,在 corr 表里对控制的相关明显低于同族的日内收益分布矩,PI 说库里没有 cross_delay(day_close) 与 day_open 的组合(我没有重核 5583 条结构表,只按 PI 声明与相关度表判)。合理度给 4:Lou-Polk-Skouras 拔河机制(机构夜里交易、零售盘中交易)有依据;逐个核对算子:cross_delay(day_close(Close),1) 是前一日收盘,day_open(Open) 是当日开盘,ON 在 t 日开盘即确定,ID 在 t 日收盘确定,信号算在 t 日收盘之后,无前视;后复权价在同一除权日同时调整,ON 不含除权缺口;除数是正价格,不是近零量。cross_regbeta / cross_corr 在窗口内常数时为 NaN 或 0,不是爆点(corr_1.json 中 seed 12、14 的 coverage 0.999,无问题)。热身期只有 1 个交易日,不主导。全部 14 个种子保留,无数学问题、无重复。如果它有 alpha,最可能来自:隔夜与日内两段由不同参与者决定(隔夜由机构集合竞价主导,日内由零售连续竞价主导),隔夜收益的持续性(隔夜动量)与日内的回吐(日内反转)之差,是慢变的结构属性。'
+R: []
+summary: '两个 N 位都通过:无 head 可比、与控制的 |ρ| 均未触及 0.8,定义无数学问题;a 位划掉 seed 7、8(cross_argmax 并列过多,gate 失败),剩 12 个种子;b 位 14 个种子全部保留;无 R 组。'

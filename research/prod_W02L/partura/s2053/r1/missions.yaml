@@ -1,0 +1,38 @@
+seed: 2053
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:日内成交量峰值出现在几点,是一个按股票持续的「交易者构成 / 信息到达节奏」特征。峰值早(开盘一小时内)= 隔夜信息、散户与追价主导的开盘冲击;峰值晚(尾盘)= 指数基金 / 机构按收盘价调仓、保守的执行算法(VWAP 末段加量)。这个量在本批 9 个成员(B157,结构核心 day_argmax(in_local_mean(in_slice(Volume, a, b), 5)))里是日内分钟序号(整数 0-236),截面上只有 200 多个不同值,第 0 步全部被「不同取值比例 ≥ 0.5」的闸门挡掉,不是因子退化而是离散:没有人测过它的 alpha。本位的做法是在日轴上平滑(cross_mean / cross_ema 取 10-30 天均值),把一天一个的整数变成每只股票的「习惯性峰值时刻」连续量,闸门可过,并且天然低换手(窗口长),在 15bp 成本下对纯多头书有利。
+
+    为什么和库里不同:库里该核心只以日内整数形式出现、没有过尺子,也没有任何日轴平滑版本;种子里用的日轴算子(cross_mean / cross_ema / cross_zscore / cross_stddev / cross_corr)与峰值时刻的组合,不在 5583 条库表达式的骨架里。另外几个种子用 day_centroid(成交量的时间重心,连续)、和 |Ret| 峰值时刻的差(量与价的峰值是否同步:同步 = 消息驱动,错开 = 流动性驱动)、峰值时刻的 60 日稳定性(cross_stddev),读的是节奏的稳定性而不是水平。
+
+    为什么样本外还会在:它度量的是投资者结构与交易执行方式(散户 vs 机构、指数基金的收盘调仓),这是慢变的结构特征,不靠某一段行情;时刻本身与流动性水平、波动、市值、20 日反转这几个控制天然几乎正交(控制读的是水平 / 收益,不读时刻),所以新尺子去掉控制的非线性暴露之后剩下的就是它。没有前视:in_slice(Volume, 2, 237) 只用当天分钟、日轴窗口只用过去天数。种子均不含 ts_spearman / nt_*。风险:峰值时刻有并列(靠列序打破)、停牌日值缺失,窗口均值缓解;如果杂音大,cross_zscore / cross_stddev 种子提供对照。'
+  inspired_by: B157(T30)里 L911/L928/L945:day_argmax(in_local_mean(in_slice(Volume, a, b), 5)) 成交量峰值时刻,因整数离散(取值比例 0.035-0.053)被闸门全部挡掉;改在日轴上平滑成连续量
+  seeds:
+  - cross_mean(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), 20)
+  - cross_ema(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), 10)
+  - cross_zscore(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), 60)
+  - cross_mean(day_centroid(Volume), 20)
+  - cross_mean(sub(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmax(in_local_mean(abs_(in_slice(Ret, 2, 237)), 5))), 20)
+  - cross_zscore(sub(day_centroid(Volume), day_centroid(abs_(Ret))), 40)
+  - cross_corr(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmax(in_local_mean(abs_(in_slice(Ret, 2, 237)), 5)), 60)
+  - cross_mean(day_argmax(in_local_mean(in_slice(Volume, 16, 226), 5)), 30)
+  - cross_stddev(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), 20)
+  - cross_ema(sub(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmax(in_local_mean(abs_(in_slice(Ret, 2, 237)), 5))), 5)
+- type: N
+  hypothesis: '机制:成交量峰值之后「多久、多深」衰减,读的是冲击的消化速度。取平滑后的分钟量 S(5 分钟局部均值,避开单笔噪声),T_after = 峰值之后的第一个低谷时刻(day_argmin(in_slice_to_end(S, 峰值时刻))),T_before = 峰值之前的低谷时刻(本批 L912-L947 的成员);T_after - 峰值 = 峰值后的衰减时长,峰值 - T_before = 放量上冲时长,二者差 = 冲击的对称性。S 峰值后的最低值 / 峰值 = 衰减深度(1 = 没有衰减,量一直维持,0 = 完全消退)。慢衰减 / 高持续 = 知情者分批吃货、信息逐步扩散(信息扩散慢则后续有漂移);快衰减 = 一次性的流动性冲击或事件脉冲(多为反转)。
+
+    为什么和库里不同:库里只有日内整数形式(三种:峰值、峰值前低谷、峰值后低谷),全部被取值比例闸门挡掉,没有人拿它们做差、做比、做日轴平滑;本位的差 / 比 / 相关 / 稳定性是新的构造。做差之后两个整数变成一个范围较宽的整数,再日轴平均 10-20 天后连续。比值种子(day_max(S) / 峰值后最低量)是无量纲的,所以与成交量水平(流动性控制)、市值天然正交;分母是峰值后的窗口最小值,在 S 已经 5 分钟平滑且量为股数、停牌日整天缺失(NaN)的情况下不会取到 0 附近造成爆点,偶发的 0 会被日轴平均和截面排名吸收,不由它主导。
+
+    为什么样本外还会在:冲击消化速度与信息扩散速度、做市深度、持仓者结构相关,是股票的慢变特征;窗口取 10-60 天所以换手低,15bp 成本下纯多头书可存活。没有前视:峰值与低谷都是当日完整分钟序列算出的日度量,放进日轴窗口只用过去与当天,当天收盘后才有这个值,与本库其它日度因子同口径。种子均不含 ts_spearman / nt_*。'
+  inspired_by: B157(T30)里 L912-L947:峰值前低谷 / 峰值后低谷时刻(day_argmin(in_slice_from_start/to_end(平滑量, 峰值时刻))),同样因离散被挡;改成时长差、深度比并做日轴平滑
+  seeds:
+  - cross_mean(sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))), 20)
+  - cross_mean(sub(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))))), 20)
+  - cross_mean(sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))))), 20)
+  - cross_zscore(sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))), 60)
+  - cross_ema(div(day_max(in_local_mean(in_slice(Volume, 2, 237), 5)), day_min(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))))), 10)
+  - cross_mean(div(day_min(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_max(in_local_mean(in_slice(Volume, 2, 237), 5))), 20)
+  - cross_stddev(sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))), 30)
+  - cross_corr(sub(day_argmin(in_slice_to_end(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)))), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))), sub(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))))), 60)
+  - cross_mean(sub(day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5)), day_argmin(in_slice_from_start(in_local_mean(in_slice(Volume, 2, 237), 5), day_argmax(in_local_mean(in_slice(Volume, 2, 237), 5))))), 10)

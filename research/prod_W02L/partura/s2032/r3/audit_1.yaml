@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 1
+    soundness: 3
+    struck_seeds: [13, 14]
+    reasons: '相关度表:核心 day_wstd(Amt, Vwap) 与 known 控制的日度秩 |ρ| = 0.85、与 liq 的 |ρ| = 0.84,都 ≥ 0.8,按 §3 的 E 规则这一位不过(核心与每个控制 |ρ| < 0.8 是通过条件)。核心与快照 head ts_std(day_last(Amt), 50) 的原始 |ρ| = 0.75,它度量的是日内成交额加权的离散度,与 known 族 cross_mean(day_std(Amt), 30) 是同一个东西、只是换了写法,所以创新度给 1。算子核对:cs_quantile_q75 对应 catalog 里的 cs_quantile(x, 0.75),默认 return_bool=True,返回的是逐股票逐日的 0/1 旗子(当天该股的 day_wstd 处于截面前 75% 为 1),不是笔记里说的「截面 q75 后对所有股票是同一个数」的市场标量。因此「市场成交集中度状态」的机制描述不成立:Q 实际是个股自己的截面分位旗子。cross_regbeta(x, y) 是 y 对 x 的滚动 OLS 斜率(common.py 的 rolling_ols 为 y ~ alpha + beta x),所以种子是个股收益(或其他个股序列)对这个旗子的时序斜率。合理度不给 1:没有数学错误(旗子非常数,约 75% 为 1;没有前视;未用禁用算子),只是机制的文字描述与算子实际计算的东西不符,按 §3 不挡。如果它有 alpha,最可能来自日内成交额分散度的截面位置与个股收益的时序关系,即 known / liq 族的暴露,而不是市场状态。划掉的种子:13 的 |ρ| 与 head ts_std(day_last(Amt), 50) 为 0.74(≥0.7 自动划掉;它本身就是对核心回归,与库禁令重复);14 与同一 head 的 |ρ| 为 0.74 且与 known 的 |ρ| 为 0.80(双重触发)。其余 14 个种子保留。这一位因核心控制 |ρ| 不过而不通过,PI 之后按一次普通 GP 处理。未核对核心是否为快照 head 的子树或共性表成员(按指令不读共性表),但这不改变上面的结论。'
+  - slot: b
+    novelty: 3
+    soundness: 3
+    struck_seeds: [3, 9]
+    reasons: '新颖性:A = day_last(Amt) / day_sum(Amt) 是无量纲的收盘一格成交占比,与快照里 head 的绝对量(ts_std(day_last(Amt), 50)、ts_regbeta(day_last(Amt), ...))不是同一个量。相关度表中原始 |ρ| 最高 0.42(seed 2 对 ts_std(day_last(Amt), 50)),残差 |ρ| 最高 0.39(seed 5),均不触发 0.7。但与 liq 的 |ρ| 在 seed 2 与 seed 10 为 0.56、seed 5 与 seed 8 为 0.42–0.43,与 known 的 |ρ| 在 seed 10 为 0.52,说明一部分信号仍是流动性水平的写法,所以给 3 而不是 4。合理度:算子核对:cs_quantile_q50(A) 同样返回逐股票 0/1 旗子(A 是否位于截面中位以上),不是「当天截面中位的收盘占比」这一市场标量。所以「市场收盘状态 M」的描述不成立;种子实际是个股收盘占比对它自己截面位置旗子的时序回归 / 相关 / 残差。这是描述错误,不是数学错误,也没有前视(day_last 为当日最后有效分钟,用于次日信号的约定由流水线管),合理度给 3。如果它有 alpha,最可能来自收盘一格占比的个股持续性(它在截面中的相对位置随时间的模式),与尾盘集中、流动性水平有关,而不是市场级的收盘集中调仓。划掉的种子:3 与 seed 1 是同一对变量在同一 60 日窗口上的两种输出:rolling_ols 的 tvalue = beta / se,在单变量带截距的 OLS 中 t = r·sqrt(n−2)/sqrt(1−r²),同 n 时对 r 单调,截面排序近乎相同(个股间 n 因 NaN 略有差别时排序仅有极小扰动),属于重复,划掉。9 的 sub(A, cs_quantile_q50(A)) 是把 0/1 旗子从收盘占比里减掉:对旗子为 1 的股票近似 A − 1,为 0 的股票近似 A,「偏离市场中位数」根本没有算出来,结果被旗子开关主导,属于定义坏掉的数学问题,划掉。其余 10 个种子保留(≥ 4)。位通过:创新 3、合理 3、划完还剩 10 个种子。'
+R:
+  - head: 'cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)), 60)'
+    soundness: 3
+    reasons: '数学上可算,未见前视或数值问题。cs_bucket_zscore(y, x)(ops_ext.py:482)以 x 的十个分位桶做桶内 z 分数;内层以桶内 z 分数作为外层的分桶键,是合法的(只是绕),PI 拆解说去掉内层 train 仍 +0.05、valid +0.68,内层确实冗余。cs_quantile_q75(day_wstd(Amt, Close)) 同样是逐股票布尔旗子,而不是市场分散度 beta;rolling_ols 下 cross_regbeta(x = 成交量 z, y = Q) 是 Q 对成交量 z 的滚动斜率。变体 2(t 值)与变体 5(相关)对同一对变量,与原 head 的 |ρ| 均为 0.98,是同一个东西换写法,若作为 R 替换只会是换皮。变体 3(Q50 替换 Q75)与变体 1、4(窗口 90)不是重复,可以评估。合理度 3:机制说明与算子不符(旗子不是市场状态),但信号本身合法。如果有 alpha,最可能来自成交量水平在截面分桶后与日内成交额离散度旗子的时序关系。'
+  - head: 'ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10)'
+    soundness: 3
+    reasons: '无数学问题:day_durbin_watson 是尺度不变的统计量(分子为相邻分钟差的平方和,分母为价格平方和),无前视;窗口 10 只有 10 个点、噪声大(PI 已注),但这是窗口选择问题,不是定义坏掉。收盘一格成交额对 Open 分钟路径粗糙度的机制说不清,按 §3 说不清机制不是挡的理由。变体 30、40、60 与原 head 的 |ρ| 分别为 0.47、0.41、0.34,与 Close 变体为 0.57,不是重复,可以评估。合理度 3。如果有 alpha,最可能来自收盘集中成交额与日内价格离散度的共同的日间水平变化,而不是独立的 alpha 来源。'
+  - head: 'ts_std(ts_std(day_last(Amt), 50), 50)'
+    soundness: 4
+    reasons: '变体 1 是 ts_std / ts_mean 的变异系数,分子分母同量纲,去掉了量级,机制清楚(收盘一格成交额的相对波动)。唯一要核对的是分母 ts_mean(day_last(Amt), 50) 在截面里是否出现接近零的个股,会造成 §4 的除以近零爆点;这是数值检查项,不构成挡的理由,建议评估前检查分母下界或做截面 winsorize。变体 2 与 3 是收盘占比的离散度,定义正常,也没有前视。合理度 4。如果有 alpha,最可能来自收盘一格相对成交的波动状态,与流动性的时序变化有关。'
+summary: 'slot a 不通过(核心与 known / liq 的 |ρ| 为 0.85 / 0.84,创新度 1,E 规则不过;划 13、14),改为普通 GP;slot b 通过(创新 3、合理 3;划 3、9,剩 10 个种子)。关键发现:cs_quantile_q75 / cs_quantile_q50 返回的是逐股票布尔旗子而不是市场标量,两位的「市场状态」机制描述均不成立,请 PI 知悉;R 三组合理度为 3 / 3 / 4,未见数学问题。'

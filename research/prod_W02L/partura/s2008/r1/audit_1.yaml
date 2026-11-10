@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '创新度 4。相关度表里 16 个候选对三个 head 的原始 |ρ| 多数 ≤ 0.33，交易残差 |ρ| 多数 ≤ 0.25；接近 0.5 的只有 a-5（残差 0.48，对 head1）、a-6（0.50，对 head3）、a-13（0.47，对 head3），以及已划掉的 a-12（0.55，对 head1）。偏度、不对称、持续性、EMA 偏离、Hurst、峰度这些外围结构在三个 head 里没有对应物，库里的骨架由流水线再拦。合理度 4。逐个核对算子：ts_skew、ts_kurt 是按日轴滚动的 nanskew / nankurt；cross_semistd_pos/neg 作用在 DW 的日对数变化上（与水平无关）；cross_autocorr(x,d,s) 是 x_t 与 x_{t-s} 的滚动相关；cross_ema 是半衰期 EMA 且跳过缺失日；cross_hurst 是日轴 R/S；cross_delay 与 in_delta 都向后看；所有输入都是当天收盘前可得的量，没有前视，没有 nt_* 或 ts_spearman。覆盖率多数在 0.99 以上（a-7 为 0.92）。划掉 a-12：它是 cross_mean(logDW,120) 按市值桶去均值，E 位的想法明说「读水平是死的」，桶内化没有把 head1 的水平信号拿掉（与 head1 原始 0.63、残差 0.55），是 head1 的换皮。不挡但要注意：a-6 残差 0.503 贴着门槛，若要收紧先删它；a-10 的 cross_reg_fvalue 是 F 值，与 a-9 同窗口同有效集，只差一个单调变换，即无符号的 |a-9|，只能读量价的强弱，读不出假设要的同动或脱钩方向；a-14 的 cs_first_low20 在市值最低 20% 上加了一个整段阶跃（+1 的 rank 偏移），三次多项式的 size 控制扣不掉这个阶跃，若它有 alpha 很可能来自小市值分段而非 DW 形状，读数时要单独看。核心 DW(Vwap) 的 vol |ρ| 为 0.69，低于 0.8，核心检查通过。如果它有 alpha，最可能来自持续性（a-3、a-4）、偏度与不对称（a-1、a-2、a-15、a-16）或相对偏离（a-5），而不是来自水平。剩 15 个种子（≥4），通过。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8, 9, 16]
+    reasons: '创新度 4。两条路径的 log 差（b-1 至 b-5）与 head1 原始 |ρ| 0.27–0.32，交易残差 0.17–0.23；名义价格直接读法（b-7）原始 0.14、残差 0.09，与市值控制 |ρ| 仅 0.02，不是同一个量；方差比（b-6）原始 0.14、残差 0.24，但与流动性控制 |ρ| 0.65、已知族 0.58，有一部分是流动性，记在风险里。合理度 4。机制：DW(Close) 是分钟最后一笔成交价，DW(Vwap) 是分钟成交均价；两者的扩散部分相同，取 log 差后扩散近似约掉，剩下的是买卖价弹跳与 tick 量化的超额粗糙；Vwap 与 Close 的采样偏移对纯扩散近似是常数，不改变截面秩。方差比 var(5 分钟变化)/var(1 分钟变化) 在随机游走下约为 5，弹跳会把它压低；分母为 0 时得 NaN 而不是爆点，单步变化时比值有界。名义价格 LogFloatCap 减 LogFloatShares 等于 log(流通市值/流通股本) = log 价格，前提是 FloatCap 用的是不复权价格，这一条 PI 需要在数据上核对一次，本审计没有验证。算子核对：b-14 的 cross_regbeta(x,y,d) 返回的是 y 对 x 的斜率（rolling_ols(x,y) 的 beta），所以 cross_regbeta(logDW, lnP) 算的是 d lnP / d logDW，不是假设里的「粗糙度对价格的弹性」，参数对调即可，符号解释也要反过来；保留但要标注。b-13 是两条趋势序列的 241 日相关，容易被共同趋势主导，记为风险，不挡。b-7 同日约 32% 并列（distinct 0.68），按规则 §4 由列序打破，列序是板块信息，不算问题。b-4（Open 版）近似是 b-1 的 Close 版（分钟 Open 近似为前一分钟的收盘），只是窗口不同，保留。b-15 与 a-14 同类，是市值最低 20% 的整段阶跃。划掉 b-8、b-9：二者都是 cross_mean(logDW(Vwap),120) 的价格残差 / 价格分桶去均值，与 head1 原始 0.68 / 0.66、交易残差 0.54 / 0.47，控制谱几乎一样（vol 0.74 / 0.65），是 head1 的换皮；而且 Vwap 路径的粗糙度是扩散，不是 N 位想法里说的买卖价噪声（噪声在 Close 与 Vwap 的差里），不符合这一位的想法。划掉 b-16：与 b-6 是同一个方差比，只是对数化后再取 120 日均值，控制谱完全一样（liq 0.65 / 0.65，known 0.58 / 0.58），重复。剩 13 个种子（≥4），通过。如果它有 alpha，最可能来自 Close 与 Vwap 的弹跳差（b-1、b-2、b-3、b-5），或名义价格本身（b-7、b-11、b-12、b-15，即排除低价或小市值尾部的版本）。'
+R:
+  - head: 'ts_std(cross_fangzheng(log(day_durbin_watson(Vwap)), 10), 40)'
+    soundness: 4
+    reasons: '合理度 4。变体只动窗口与内层（去掉内层 fangzheng、窗口 20/40/80/120/241、先做 EMA(5) 平滑），外层都是 ts_std，即按日轴的 nanstd，与缺失日的计数无关，不是 ts_sum 那种计数偏差；log 在近一字板或停牌日返回 NaN，只减少样本，不当作 0 进入。算子组合实现了「时间序列离散度」这个说法。v1（ts_std(logDW,40)）与原 head 的原始 |ρ| 0.78、残差 0.75，就是 loc 已经算过的「拆内层」版本（−1.69），重测只是复核，不是新读数。v5、v6 是 loc 已评分的窗口邻居（20、80），结论会和 loc 相同。机制（离散度 / 波动的波动）说得通，无数学问题，放行。'
+  - head: 'cross_fangzheng(cross_fangzheng(ts_sum(log(day_durbin_watson(Vwap)), 10), 10), 241)'
+    soundness: 3
+    reasons: '合理度 3。mean / std 拆分的算子实现没有错（cross_mean、cross_stddev 是按 241 日滚动的 nanmean / nanstd），但内层的 ts_sum 用的是 nansum_last：缺失日（停牌、近一字板 log 为 NaN、上市前）不计入，而不是按权重跳过，所以 10 日和会随缺失天数变化（少一个负的 log DW 项，和就变大）。head1 本身与 R2 变体 1、变体 2 都混进了这个计数量：对缺失日多的票，水平被抬高，mean 与 std 读到的有一部分是停牌 / 一字板的频率。这是「缺失值填充」影响结果的一种，但在多数票里它不主导，所以不判为定义坏掉，放行。变体 3（cross_stddev(logDW,241)）不经过 ts_sum，是干净的离散度读数，若要判「离散度承重」应以它为准。建议下一轮把内层 ts_sum 换成 ts_mean 后再拆 mean / std，否则 std-only 与 mean-only 的比较混了计数。'
+  - head: 'div(cross_hurst(ts_sum(log(day_durbin_watson(Vwap)), 10), 30), add(day_hurst(nt_ts_quantile_q75(High, 30)), pow_2(cs_sum(day_autocorr_n1(Amt)))))'
+    soundness: 3
+    reasons: '合理度 3。原 head 的分母含被禁算子 nt_ts_quantile_q75（规则 §1 禁 nt_*），pow_2(cs_sum(day_autocorr_n1(Amt))) 是逐日常数（惰性，loc 拆掉只变 −0.02），R 组拆掉这两项的做法是对的。v1 至 v3 直接读 cross_hurst(logDW(Vwap), 30/60/120)。问题：(1) 30 点的 R/S Hurst 小样本偏差大，估计器噪声占比高（loc 已见 train 与 valid 翻转），覆盖率 0.92 至 0.975 也比其他候选低（窗口含缺失日时 R/S 为 NaN）；(2) v4 div(cross_hurst(logDW,60), day_hurst(Vwap)) 被流水线判废品（覆盖率 0.829，gate False），把 60 日与当天 241 分钟两个时间尺度混在一起，应删掉；(3) 原 head 自身含被禁的 nt_ 算子，这是快照里的遗留问题，需要 PI 说明它是怎么进库的，不是本次审计要挡的。机制（粗糙路径的持续性）说得通，无数学问题，放行。'
+summary: '槽 a（E）与槽 b（N）均通过（各划掉 1 与 3 个种子，剩 15 与 13 个）；R 三组保留，R2 的 ts_sum 计数偏差需先修再读 std-only / mean-only，R3 删 v4；快照三个 head 的新尺子分数全为负，与规则 §1「heads 是过了尺子的成员」不符，需 PI 说明。'

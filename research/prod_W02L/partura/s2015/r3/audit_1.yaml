@@ -1,0 +1,92 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6]
+    reasons: |-
+      位 a(E)。核心 day_zero_ratio(Volume)(当天有效分钟里成交量恰为 0 的比例)。
+
+      核心门槛:
+      - 来源合法:快照 head 1 = div(day_zero_ratio(Volume), ...) 含该核心,是 head 的子树。
+      - 与 5 个控制的原始 |ρ|:liq 0.727 / vol 0.177 / rev 0.150 / known 0.718 / size 0.552,全部 < 0.8,过。
+      - 与快照 head 的原始 |ρ| 最大 0.651(cs_mask_top_replace_mean 族),残差 0.565;都 < 0.7。
+
+      自动划掉:
+      - seed 6 = div(cross_mean(zero,60), cross_mean(q25(Amt),60)):与 liq 原始 |ρ| 0.915 ≥ 0.8,几乎就是流动性本身(分母是成交额水平),按规则划掉。
+      - 其余 11 条:与 head 原始 |ρ| 最大 0.585(seed 1),与控制最大 0.753(seed 7 的 liq),都未触发 0.7 / 0.8。
+
+      gate 标签:corr 表里 gate=false 的是旧口径(distinct >= 0.5)。partura/diagnose.py 的 levels_ok(2026-11-10 用户定)已改为「distinct >= 0.5,或中位日水平数 >= 20 且桶边界并列份额 <= 0.2」。核心本身 distinct 0.027 对应的是约 100 个以上水平,不是常数;并列靠列序打破,按 rules §4 不算问题。所以 gate 标签不作为挡的依据。tie_share 需要数据才能算,本审计不划;流水线应在 levels_ok 下重判 seed 4 与 seed 11。
+
+      创新度 4:核心原子 day_zero_ratio 是新算子,库内骨架是否为 0 条以 PI 笔记为准(本审计未重核)。核心虽是 head 1 的分子,但外围与 head 1 的 A 分母组合方式不同,相关度表里与 head 的原始 |ρ| 都在 0.6 以下。
+
+      数学核对:cs_rank 用 common.py 的 rank,NaN 排到最后并且用 index 打破并列(stable),不是 nanrank_last 陷阱;cross_* 窗口止于 t,无前视;cs_flip_by_state 的市场状态是 t 日及以前的 241 日中位数(ops_ext.py:562),因果;cross_corr 的分母 sqrt(var*var)+1e-9,方差为 0 时给 0,不爆;cs_bucket_zscore 的桶内 std 很小时 z 值最多约 sqrt(桶大小),有界。
+
+      逐条(末句是「若有 alpha,最可能来自」):
+      1. add(cs_rank(cross_mean(zero_Vol,20)), cs_rank(A_amt)):原始 0.585(M2 族),残差 0.39,liq 0.675。留。若有 alpha,来自无成交占比的秩与成交额半标准差差的秩之和,两者各自的贡献。
+      2. mul(cs_rank(cross_mean(zero_Vol,60)), cs_rank(A_amt)):原始 0.562,残差 0.37。与 1 是加与乘、窗口 60 与 20 的不同写法,不是同一对象,留。若有 alpha,来自两项都高的票(乘法偏向两者同时成立)。
+      3. cross_mean(zero_Vol,20) - cross_mean(zero_Vol,120):原始 0.145,残差 0.19,liq 0.195。低相关,留。若有 alpha,来自无成交占比的期限结构(间歇交易在加剧还是缓解)。
+      4. cs_bucket_zscore(cross_mean(zero_Vol,20), cross_mean(day_sum(Amt),30)):原始 0.239,残差 0.44,liq 0.162。留。若有 alpha,来自同一流动性桶内的相对无成交占比(去掉桶的水平)。注意:高流动性桶里多数值为 0,桶 std 接近 0,但 z 值有界,不是爆点;gate 标签 distinct 0.44 与此无关。
+      5. cross_mean(zero_Ret - zero_Vol,20):原始 0.438,残差 0.845(与 M2 头的残差高度相关),liq 0.326。留,但要注意它的控制后残差与 M2 同向。若有 alpha,来自「有成交但价格不动」(封死或钉住)而不是无成交本身。
+      6. 划掉(见上)。
+      7. cross_stddev(zero_Vol,60):原始 0.589,liq 0.753,known 0.711,size 0.709。都 < 0.8,留。若有 alpha,来自无成交占比的 60 日不稳定性(间歇交易的波动聚集);与流动性中等相关,若它只是流动性的波动代理,在尺子下会变薄。
+      8. cross_corr(zero_Vol, day_std(Ret),60):原始 0.281,残差 0.15,liq 0.382。留。若有 alpha,来自无成交与日内波动的共动(无成交与波动同时出现时)。
+      9. cs_flip_by_state(cross_mean(zero_Vol,20), day_sum(Amt)):原始 0.085,残差 0.16。留。若有 alpha,来自间歇交易的信号在热市与冷市方向相反。
+      10. mul(cross_mean(zero_Vol,60), A_median(Amt)):原始 0.226,残差 0.17。留。A 的 q25 换成 median 与 head 1 分母的 A 同源,但外围是乘法、与 head 的相关很低。若有 alpha,来自无成交占比按薄端偏度加权。
+      11. cross_max(zero_Vol,60):原始 0.579,liq 0.732,留。gate 标签 distinct 0.041(旧口径),截面并列较多;若边界并列份额超过 levels_ok 的 0.2,这一条应在流水线里失败。若有 alpha,来自过去 60 日内出现过无成交分钟这一个历史二值化(与 1..10 的平滑读数不同)。
+      12. add(cs_rank(cross_mean(zero_Vol,60)), cs_rank(log(cross_mean(day_sum(Amt),20)) - log(cross_mean(day_sum(Amt),120)))):原始 0.407,残差 0.43,liq 0.347。留。第二项是成交额增长,与流动性控制只有水平相关,不是同一对象。若有 alpha,来自间歇交易的秩加上流动性的增长。
+
+      结论:核心与外围都说得通,无数学问题。唯一挡掉的是 seed 6(流动性换写法)。
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 9, 12]
+    reasons: |-
+      位 b(N)。假设:日内分钟「相等性」原子(day_flat_run_max、day_flat_ratio、day_distinct_ratio)读出的价格发现连续性,是 head 之外的暴露。
+
+      自动划掉:
+      - seed 1 = cross_mean(day_flat_run_max(Volume),60):与 M2 头原始 |ρ| 0.729 ≥ 0.7,按规则划掉。
+      - seed 9 = mul(cs_rank(cross_mean(flat_run_max(Vol),60)), cs_rank(cross_mean(distinct(Close),60))):与 M2 头原始 |ρ| 0.780 ≥ 0.7,划掉。
+      - 与控制的 |ρ| 全部 < 0.8(最大 liq 0.745,见 seed 1,已在上一条划掉;其余最大 0.534)。
+
+      重复划掉:
+      - seed 12 = cross_mean(sub(flat_run_max(Ret), flat_run_max(Vol)),60)。cross_mean 对差是线性的,与 seed 4 = sub(cross_mean(flat_run_max(Ret),20), cross_mean(flat_run_max(Vol),20)) 是同一个线性对象,只差窗口(60 与 20)。按「重复」划掉,保留 seed 4。
+
+      剩余 9 条(2,3,4,5,6,7,8,10,11),>= 4,位通过。
+
+      门槛:
+      - 与 5 个控制的 |ρ| 全部 < 0.8,过。核心 N 位不要求核心门槛。
+
+      创新度 3:原子是新的(day_flat_run_max / day_flat_ratio / day_distinct_ratio 库内骨架是否为 0,以 PI 笔记为准,本审计未重核)。多数存活种子的原始 |ρ| 在 0.1–0.41 之间,但控制后残差与 M2 头的 |ρ| 偏高:seed 2 为 0.867,seed 3 为 0.75,seed 7 为 0.852,seed 10 为 0.818。说明这一位的控制后信号里有一块与 M2 头同向,所以不给 4。
+
+      合理度 4:机制(tick 格点、停滞段、价格被钉)说得清,算子实现与机制对得上。数学核对:
+      - day_flat_run_max 为 run/n,n>1 才有值,结果在 [0,1];day_distinct_ratio 的 n>1 保护,有界;day_flat_ratio 有 n>0 保护;cross_mean / cross_stddev / cross_delta 窗口止于 t,无前视。
+      - cross_corr(seed 6)分母 sqrt(var*var)+1e-9,方差为 0 的票给 0,不爆。
+      - 注意:day_flat_ratio(Ret) 在价格停滞是连续成段时,与 day_zero_ratio(Ret) 近似相等,所以 seed 3 与 slot a seed 5 的原子同源(不是重复,但要知道)。
+
+      逐条(末句是「若有 alpha,最可能来自」):
+      2. cross_mean(day_distinct_ratio(Close),20):原始 0.409,残差 0.867(与 M2 残差高度相关),liq 0.38。留。若有 alpha,来自低价股的 tick 约束(价位数 / 分钟数),与波动耦合。注意:五个控制里没有价格水平,若 alpha 是价位效应则不会被去掉。
+      3. cross_mean(day_flat_ratio(Ret),20):原始 0.371,残差 0.75,liq 0.533,known 0.467。留。若有 alpha,来自价格停滞的占比(封板或停牌前后的粘性报价)。与 slot a seed 5 的 zero_Ret 同源。
+      4. sub(cross_mean(flat_run_max(Ret),20), cross_mean(flat_run_max(Vol),20)):原始 0.447,残差 0.67,liq 0.186。留。若有 alpha,来自最长价格停滞段减最长成交相等段(成交值相等通常是整手或零成交的断档)。
+      5. cross_stddev(flat_run_max(Vol),60):原始 0.32,残差 0.12,liq 0.43。留。若有 alpha,来自断档长度的 60 日不稳定性。
+      6. cross_corr(zero_Vol, zero_Ret, 60):原始 0.576,liq 0.486,known 0.465,size 0.641(中度,未过 0.8)。留。若有 alpha,来自「无成交」与「价格不动」在同一票上同时出现的程度(封板与停牌的共动)。
+      7. cs_bucket_zscore(cross_mean(distinct(Close),20), LogFloatCap):原始 0.396,残差 0.852(与 M2 残差高度相关)。留,但标注:它的控制后残差近似 M2。若有 alpha,来自市值桶内的价位数相对水平(去掉小票的格点效应)。
+      8. cross_delta(cross_mean(flat_ratio(Ret),20),60):原始 0.155,残差 0.19。留。若有 alpha,来自价格停滞占比的 60 日变化(停滞在加剧还是缓解)。
+      10. sub(cs_rank(cross_mean(distinct(Close),60)), cs_rank(cross_mean(flat_ratio(Ret),60))):原始 0.341,残差 0.818(与 M2 残差高度相关)。留,但标注同 7。若有 alpha,来自价位数的秩减去价格停滞占比的秩。
+      11. cs_flip_by_state(cross_mean(flat_run_max(Vol),20), day_sum(Amt)):原始 0.101,残差 0.19。留。若有 alpha,来自断档长度在热市与冷市方向相反。状态是 t 日及以前的 241 日中位数(ops_ext.py:562),因果。
+
+      结论:位 b 通过。N 位要求「3 轮里至少 1 个通过」,本轮即满足一次。
+
+R:
+  - head: 'div(day_zero_ratio(Volume), add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt), 60)), sub(cross_semistd_neg(day_quantile_q25(Volume), 60), cross_semistd_pos(day_quantile_q25(Volume), 60))))'
+    soundness: 3
+    reasons: |-
+      (R 组只评合理度)head 1 = div(day_zero_ratio(Volume), add(sub(cross_semistd_neg(q25(Amt),60), cross_semistd_pos(q25(Amt),60)), sub(cross_semistd_neg(q25(Volume),60), cross_semistd_pos(q25(Volume),60))))。8 个变体都保留 zero_Vol 分子与 A_amt 分母,只改窗口、平滑、或 Volume 项。
+
+      数学:分母 A = neg − pos 是有符号量(上行与下行半标准差之差),A 过零时 zero/A 从 +∞ 跳到 −∞,排序在 A=0 处不连续。这是 §4「除以近零的量」一类。变体 7(分母只剩 A_amt)与变体 8(Volume 项换成 median 口径)同样如此。R 的理由文本说「不引入新的除法点」,这是对的,但原有的符号翻转问题也没有被删掉。
+
+      但不挡:head 1 的 train +0.59 / valid +1.21 说明这个结构在尺子下能用,爆点没有主导到让结果不可用,所以按「只挡数学问题」放行,合理度给 3(不是 4,因为变体继承了这个问题,而删部件没有解决它)。变体的「去掉 Volume 项仍 +0.53」「cross_semistd_neg@60->120 +0.77」等数字是 PI 的拆解结论,本审计未独立核分数。
+
+      相关度:8 个变体与 head 的原始 |ρ| 0.35–0.62,与已知族 |ρ| 0.24–0.37(< 0.5),都过门槛。前视与热身:窗口止于 t,最长 240 日,训练从 2018 年起算,热身不主导。
+
+summary: 'slot a 通过(划掉 seed 6,流动性换写法);slot b 通过(划掉 seed 1、9 为 ρ 自动,seed 12 为与 seed 4 的线性重复);R 组 soundness 3 放行,符号翻转分母是共同风险。gate 标签是旧口径,levels_ok 下需重判 seed 4 / 11。'

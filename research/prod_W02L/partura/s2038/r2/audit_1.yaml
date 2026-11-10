@@ -1,0 +1,26 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '门槛(确定性规则已可判定,独立于下面的分数):E 位的核心 day_last(Amt) 与控制的原始 |ρ| 为 liq 0.813、known 0.812(相关度表 slot a core 行),都 ≥ 0.8,按 §3 「E 位还要求核心与每个控制的 |ρ| < 0.8」不通过;按规则改为一次普通 GP。创新度 3:核心本身几乎就是流动性控制(15:00 那根成交额 ≈ liq / known 的水平量,与二者 |ρ| 都是 0.81),新的只有段结构:cs_first_low20 / cs_first_high20 / cs_first_low40 / cs_last_low10 经 _lexi 做整块并列的阶跃,阶跃不在控制的 1~3 次秩多项式残差之内,所以非线性的段内暴露不会被扣掉。但段内排序量 day_last(Amt) 加 LogFloatShares 段正是第 1 轮已探索过的结构(第 1 轮 +0.48 那一条,r1 missions_final 里 day_last(Amt) 出现 34 次),本轮是同结构换外围,不算新。合理度 4:机制清楚(收盘集合竞价的机构 / 被动成交,Pagano–Schwartz;段内深度浅、同样成交额信息量更大,Kyle)。逐个核对算子:cs_first_low20(y, LogFloatShares) 的 rank+1 阶跃输出无并列;sub(LogFloatShares, LogFloatCap) = -log 价格,所以种子 4 是最高价 20%、种子 5 是最低价 20%,与种子说明一致;cross_mean / cross_ema / cross_zscore / cross_max 都是因果的日轴窗口;day_last、day_sum 无前视;除法只有种子 2(分母 day_sum+1,有界在 [0,1])。无数学问题。划掉的种子:无。没有一条与任一 head 的原始 |ρ| ≥ 0.7(最高是种子 5 的 0.67),也没有一条与控制 |ρ| ≥ 0.8(最高是种子 9 的 liq 0.72、known 0.72)。留意但不挡:种子 12 是两段收盘成交额的元量差(不是比率),排序仍由绝对量级主导,偏向大成交额票;种子 2 在停牌日若 day_last 取 0 而非缺失,会被推到低端,但停牌票的占比不足以主导截面,按 §4 不算定义坏掉。如果它有 alpha,最可能来自收盘竞价的机构成交在小股本段内的相对强度,而不是全截面的成交额水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 4:day_signed_ratio、day_wmean、day_pos_ratio 这些订单流状态量不在 6 个 head 里,也不在 5 个控制里。相关度表里 seed 1(0.23)、2(0.18)、3(0.26)、4(0.31)、8(0.44)、10(0.24)、11(0.16)、13(0.19)、14(0.35)的原始 head |ρ| 都低,控制列也大多在 0.37 以下;它们度量的是新东西,不是换写法。扣掉一分的原因是 seed 5、6、9、12 属于 day_autocorr_n1(Volume) 的同一族,和失败的 head 同源(与 head 的原始 |ρ| 为 0.66 / 0.58 / 0.36 / 0.58),这几条的新意只在同伴内中性化的读法上。合理度 4:机制(大单拆分在分钟序列上的持续性与方向性,Lillo–Farmer;知情单向成交,Kyle;知情概率随规模和流动性变化,Easley 等)在算子上落实。cs_bucket_rank / cs_bucket_zscore / cs_bucket_demean 在代码里确实是同桶内相对(ops_ext.py:239、463、482 核对),桶内不足 2 人输出 NaN;cs_regres 是逐日截面 OLS 残差(nd_cs.py:254);day_signed_ratio 有界于 [-1,1],分母为成交额之和、为 0 时缺失;day_wmean 分母 clamp 到 1e-30,无爆点;cross_* 窗口全部因果。无前视。划掉的种子:无。没有一条与快照 head 的原始 |ρ| ≥ 0.7(最高 seed 7 的 0.68、seed 5 的 0.66),也没有一条与控制 |ρ| ≥ 0.8(最高 seed 7 的 liq 0.79)。留意但不挡:(i) seed 7 的 liq 0.79 离 0.8 线很近,它是 day_autocorr_n1(Amt) 的 EMA 加上 LogFloatShares 桶内标准化,实际上是同伴内的流动性水平;(ii) seed 14 的 day_pos_ratio 把 Ret 为零的分钟计为非上涨,若这些零值来自未成交或价格不动的分钟,它会把流动性带进来,而且残差层面与 head 的 |ρ| 高达 0.72(相关度表 slot b seed 14 行),这一条 PI 应看一眼它的 liq 贡献再决定是否保留;(iii) day_autocorr_n1 在常数序列(如停牌日成交量全 0 的日子)上输出 0 而不是 NaN(dt_day.py 的 denom 下限为 1e-4,invalid 只在无有效配对时触发),种子 5、6、9、12 的 60 日均值会被这些 0 拉向中位,需要确认掩码是否已把停牌日设为 NaN。种子 10 与种子 1 是同一信号的两种运算顺序(先桶内排序再 60 日平均,对先 60 日平均再桶内排序),是 PI 设计的顺序对照,不是重复。如果它有 alpha,最可能来自知情机构分批单在同规模同伴内表现出的方向性与持续性共现(种子 9 的积),而不是成交额的水平。'
+R:
+  - head: 'cross_quantile_q25(cross_quantile_q25(ts_min(cross_max(day_autocorr_n1(Volume), 60), 50), 15), 15)'
+    soundness: 3
+    reasons: '无数学问题。变体 1 去掉三层外壳后留下 cross_max(day_autocorr_n1(Volume),60),它单独的 train +0.53 与 valid -0.19 与 PI 拆解一致(见 loc 拆解表)。day_autocorr_n1 的分母为 sqrt(var*var+1e-8),常数序列输出 0 而非 NaN,需确认掩码(见 slot b 的留意项 iii),但这不是爆点。变体 2、3 把同一个极大值放进同规模或小股本段内,均是已有算子的正常用法;变体 4 在同规模桶内先排序再取 60 日均值,机制最清楚。60 日最大值的极值统计机制说不清,但说不清不是挡的理由。如果它有 alpha,最可能来自成交量路径持续性在同规模同伴内的相对水平。'
+  - head: 'signedpower(div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1)))'
+    soundness: 4
+    reasons: '无数学问题。开盘竞价成交额相对全天成交额 20 日常态的比值,机制清楚(开盘集中成交的份额及其偏离常态的程度)。变体 1 用 5 日均的开盘成交额除以 20 日均的全天成交额加 1,分母非负且远离零,无除零与爆点;变体 2、3 是同一比值放进小股本段 / 规模同伴,都是已有算子的正常使用。day_open 为当天首根分钟线,20 日均值为因果窗口,无前视。signedpower(·,2) 对正比值是单调变换,不改变排序。如果它有 alpha,最可能来自开盘竞价份额的偏离携带的散户与机构比例信息。'
+  - head: 'ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)'
+    soundness: 3
+    reasons: '无数学问题。核对源码:log 是对 |x| 取对数,只在 |x| ≤ EPS 时为 NaN,所以 PI 所说的「log 取了绝对值」是对的;rolling_ols 的 beta = cov / var_x,var_x ≤ EPS 时为 NaN,不会无界爆点,只是 10 点斜率噪声较大。取绝对值后符号丢失,ts_max 只保留极值,这是机制上的弱点,但说不清机制不是挡的理由,且排序是逐日截面秩,单个爆点只占一个秩位。变体 1 与 2 把同一形状放进小股本段或同规模同伴内,没有引入新的数学问题。如果它有 alpha,最可能来自开盘与收盘竞价成交额联动强度的极端日所携带的信息。'
+  - head: 'ts_decay_linear(day_open(Volume), 5)'
+    soundness: 4
+    reasons: '无数学问题。变体 1 是开盘竞价成交量占全天成交量的份额(分母 day_sum(Volume)+1,非负),再做 5 日线性衰减,是有界的无量纲量,机制清楚(开盘竞价的散户份额及其变化)。变体 2 是水平版本,与 liq 控制相关,PI 用规模桶内相对去掉水平,说得通。ts_decay_linear 与 day_open 都是因果的,无前视。如果它有 alpha,最可能来自开盘段交易集中度的变化,而不是成交量水平。'
+summary: 'E 位 a 的核心 day_last(Amt) 与 liq、known 的原始 |ρ| 为 0.813 / 0.812,不过 §3 的 E 门槛,按规则改为一次普通 GP;N 位 b 通过(创新 4、合理 4,无划掉),留意 seed 7 的 liq 0.79、seed 14 的残差与 head 0.72 以及 day_autocorr 常数日输出 0 的确认项;四组 R 均无数学问题,合理度 3 至 4,全部放行。'

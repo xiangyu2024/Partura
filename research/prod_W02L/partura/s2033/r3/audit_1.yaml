@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 2
+    soundness: 4
+    struck_seeds: [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    reasons: '位 a 是 E 位,核心 C = cross_corr(cs_bucket_demean(r_t, LogFloatCap), cs_bucket_demean(r_{t-1}, LogFloatCap), 241),是快照 head 1(div(C, 前一日后复权收盘),原始 |ρ| 0.934、残差 0.938)的子树;5 个控制的最大 |ρ| 0.169(known),核心过 E 的控制门槛(< 0.8)。核心在第 2 轮 E 位已经用过一次(r2 的 slot a 核心字符串完全相同),所以本位是这个核心的第 2 个、也是最后一个 E 位,在 ≤ 2 的上限之内。划种子:日度秩 |ρ| ≥ 0.7 的种子共 12 个(1、3、4、5、6、7、8、9、10、11、12、13,与 head 1 的 |ρ| 0.864–1.000;相关度表 corr_1.json 的 max_head 字段),这些都是 C 乘 1 − cs_rank(P)、cs_rank(C)、C ÷ P 之类的换写法,与 head 1 度量同一个东西,按 §3 自动划掉。剩下种子 2(add(cs_rank(C), neg(cs_rank(P))),|ρ| 0.64)与 种子 14(add(cs_rank(C), cs_rank(LogFloatShares − LogFloatCap)),|ρ| 0.647),两者与 head 的 |ρ| 都低于 0.7,控制最大 0.29(种子 2 的 size),不是数学问题,也不是重复,保留。剩 2 个 < 4,按 §3 本位不通过(由确定性规则改为一次普通 GP)。novelty 给 2:多数种子是换写法(接近 1 档),但剩下两个确实与 head 不同(|ρ| 约 0.64、控制低),所以不是 1,也谈不上 3 以上;这个分数不影响通过结果(种子数规则已经挡下)。soundness 4:核心机制清楚(同伴相对的一阶序列相关),外围的 cs_rank 是 NaN 安全的(common.rank 把缺失置为 NaN,不是 0,所以 §4 的 nanrank_last 陷阱不适用),cross_corr 241 日是 dt_cross 的 rolling_pair_reduce 沿日轴的尾随窗口,没有前视。唯一需要留意的是 C ÷ P 的尺度(低价股被放大),但按 §4 这是后复权价位的合法读法,不是数值伪影。如果它有 alpha,最可能来自:C 的序列相关与长周期价位位置的交互(PI 的假设);但外围里能给增量的只可能是种子 2 与 14,其余 12 个都是 head 1 的重写。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6]
+    reasons: '位 b 是 N 位,14 个种子。与快照 10 个 head 的最大日度秩 |ρ| 为 0.125–0.466(种子 1 inv(day_close) 0.446,种子 2 cs_bucket_demean(log close, LogFloatCap) 0.466),残差最大 0.63;五个控制的最大 |ρ| 为 0.466(种子 1 的 liq),没有一个 ≥ 0.8,按自动规则都不划。已核对:种子 1 与 2 的与 head 的最像者是 amount 分位 / 回归一族,不是价位位置,所以价位位置类在快照里没有对应物。novelty 4:价位位置(距 2 年高点 / 低点、482 / 241 日 z 分数、未复权价)与 10 个 head(全是 amount 分位、regbeta、日收益标准差)度量的不是同一个东西。PI 说库里 5583 条没有这类长窗口价位位置,这一条我没有独立核对(没有逐条查库),只核对了快照与相关度表。划种子 6:div(day_close, cross_delay(day_close, 482)) 的覆盖率 0.488,尺子 gate 不过(corr_1.json gate false),482 日滞后的缺失是系统性的(与 slot a 种子 4 同样的形式),按 §4 属于「定义坏掉」,不是数值小问题,划掉。其余 13 个保留:cross_max / cross_min / cross_mean / cross_zscore 与 cs_rank 都是 NaN 安全的(dt_cross 与 ops_ext 的 rolling_reduce 只取有限值的窗口,cs_bucket_demean 对桶内不足 2 只的给 NaN),窗口 482 / 241 的热身期只影响 2018–2019 年,不会主导结果。soundness 4:每个种子的机制说得通(长周期位置 / 52 周高点锚定 / 低价偏好),算子实现与说明一致,没有 §4 陷阱;注意一处未核实的前提:种子 8、12、13 的「未复权价」读法依赖 LogFloatCap 是用未复权价算的;dailyfields.py 与 steering_and_daily_fields.md 说明 Close 是后复权、FloatCap ÷ Close 不是股数,这与「FloatCap 用未复权价算」一致,但我没有核对存储构建的代码,所以这一点只是合理推测,不影响打分。如果它有 alpha,最可能来自:长周期价位位置对应的行为偏差(散户对深跌小盘股和 52 周高点的参与 / 反应不足,A 股退市与 ST 约束),而不是数值巧合;若种子 8、12、13 有效,则更像低价偏好。'
+R:
+  - head: 'div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_delay(day_close(Close), 1))'
+    soundness: 4
+    reasons: '合理度只评这一组。12 个变体各只改一处或两处(窗口 90 / 120 / 160 / 200;Vwap 替代 Close;分母滞后 5 日、不滞后、20 日均值、sqrt;C 换成 LogTotalCap;C 的外层加 cs_bucket_demean(·, LogFloatCap);C > 0 的符号掩码),没有数学问题。相关度表:变体 4、5、6(分母不滞后或 5 日滞后,与 head |ρ| 1.00)只改分母的时间对齐、排序几乎不变,这是换写法,不会通过替换门槛(需要 score ≥ head + 0.1 且与原 head ρ ≥ 0.5 才替换),但不影响合理度;变体 10 的 C > 0 掩码覆盖率 0.499、尺子 gate 不过,这是有意的符号选择(只保留 C 为正的票),不是缺失值伪影,不构成 §4 的问题,不划。变体 3 用 day_close(Vwap),覆盖率 1.0,字段合法。变体 9 的外层 LogFloatCap 去均值与变体 1 的 ρ 0.75 不同,可以保留。如果有 alpha,最可能来自:窗口长短(90–241 日的 C 相关)与分母的价位尺度是否稳定,也就是 head 本身承重的部件;R 组的目的是找到这一部件的更好写法,符合规则。'
+summary: 'slot a 按规则不通过(12 个种子与 head 1 的日度秩 |ρ| ≥ 0.7 自动划掉,剩 2 个 < 4,novelty 2、soundness 4,改为一次普通 GP);slot b 通过(novelty 4、soundness 4,划掉种子 6 因覆盖率 0.488、定义系统缺失,剩 13 个);R 组 soundness 4,无数学问题。'

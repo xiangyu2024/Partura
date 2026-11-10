@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 S(50,5) 是 head 2 cross_stddev(S(50,5),20) 的子树(corr_1.json:核心对三个 head 的原始 max |ρ| 为 0.13、残差 0.06;对控制 liq 0.57、vol 0.00、rev 0.03、known 0.52、size 0.35,均低于 0.8,E 门槛通过)。16 个种子都原样含核心,且没有一个与库里含该核心的 cross_mean(S,20)、cross_stddev(S,20)、S 原值相同。自动划掉:对 head 的原始 |ρ| 最大为 a13 0.66、a5 0.64(均低于 0.7);对控制最大为 a12、a14、a15 的 liq 0.70(低于 0.8);无自动划掉。数学核对(逐个读源码):energy_ratio_topm_minus_q 的输出在 [0,1],分母 total+1e-12 在 S 有定义的日子不接近零;cross_zscore、cross_madz、cross_regres、cross_regbeta、cross_corr、cross_ema、尾均值、semistd 都是日轴因果窗口且含当天,ts_delay 按日轴滞后一天,无前视;a10、a11 的 log(day_sum(Amt)) 在 Amt 为 0 时为 NaN 并由窗口算子跳过;a14、a15 的 log 差只在 S>0 时计算;没有 ts_rank、cross_rank、in_rank_rolling,不触发 nanrank_last;停牌日 Volume 为 NaN,S 随之为 NaN。机制需要更正的一处:fft_with_nan_handling 不去均值,分子去掉前 5 根谱线(含直流),分母是全部功率(含直流),所以 S 是中频功率占总功率的比例,近似等于中频方差占比乘以 CV²/(1+CV²),对成交量的水平相对离散度很敏感,不只是「U 形之外的团块」。这解释了它与 liq 与 known 族的中度相关,但这不是挡的理由。新颖性 4:struct/members.csv 的 90 条 energy_ratio 表达式里,没有一条的外壳含 cross_regres、cross_regbeta、cross_corr、cross_zscore 或 cross_madz;a3、a4、a6–a11 对 S 做了与收益、成交额、波动的回归或相关,a1、a2 是自我相对的 z 分数,都是本质上不同的读法。a5、a12–a15 是 head 的时间离散度的换写(原始 |ρ| 0.51–0.66,未达 0.7),其中 a12、a14、a15 与 known 族的 |ρ| 约 0.67–0.68、接近控制,这些拉低了新颖性,但不是同一个东西。合理度 4:各算子组合与各自的说法一致,没有落进 §4 的陷阱;a6 的 regbeta 量纲是 S 对 day_std 的斜率,截面排序大部分由 1/σ(day_std) 决定,PI 解读时要注意。如果它有 alpha,最可能来自:S 的水平与波动被剥离之后,它与成交额和收益的协动(a7–a10)以及残差(a3、a4)里留下的「谁在交易」的慢变量;也可能只是 head 的换写(a5、a12–a15)。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [10, 11]
+    reasons: 'N 想法:同一个谱读数在 Volume 与 |Ret| 两条路径上的失配(差、协动、回归、比值),外加振幅路径与异常成交量路径。新颖性 4:struct/members.csv 的 90 条 energy_ratio 表达式里,没有一条的输入含 abs_(Ret)、High、Low、Vwap 或 div(Volume, ·),所以 |Ret|、振幅、异常量路径都是库里没有的;与三个 head 的原始 |ρ| 都不高(b1–b9、b14–b16 的最大值为 b3 的 0.53,b5 为 0.25,b8 为 0.13,b14 为 0.10)。但 b8、b13、b15 与流动性的 |ρ| 为 0.75、0.68、0.79,与 known 族为 0.68、0.61、0.74;b1、b2 与流动性约 0.5。这几条更像流动性或已知族的换写,新意主要在 b1–b7、b9、b14、b16 上。自动划掉:b11 与流动性的 |ρ| 为 0.83(≥0.8),划掉。数学问题划掉 b10:Vwap 字段在有成交量但没有 Vwap 的分钟上为 NaN(docs/design.md 第 10 节记录生产数据中此类分钟占 5.5%,科创板更多)。energy_ratio_topm_minus_q 经 fft_with_nan_handling 按位置掩码(col < valid_points,LEGACY QUIRK 1):NaN 变成内部零洞,同等数量的尾部有效分钟被丢掉;零块的台阶泄漏会把中频能量抬高,所以 S 更像缺失分钟数的度量,而不是振幅路径(方向未在数据上核实)。相关度表也支持这一点:b10 与 size 的 |ρ| 为 0.64、与 liq 为 0.59。边界风险,放行并标注:b12、b13 的 div(Volume, cross_mean(Volume,20)) 是 torch.divide 且无 EPS;分子为 0 且 20 日窗口同一分钟全为 0 时得 NaN,走同样的位置截断。rolling_windows 含当天,所以比值上界为 20,不会爆点;这只在超薄股的分钟零成交模式上触发,不能认定它主导截面,因此放行但标注,合理度因此给 3。其余种子只用 Volume、|Ret|、Ret、Amt 的谱与日轴算子,无 NaN 路径(假设分钟 Ret 无缺失,PI 请核对)。机制上,sub(S_V,S_R) 同样受直流在分母的影响:S_V 与 S_R 都近似中频占比乘以 CV²/(1+CV²),相减能约掉共同的稀薄度,方向对;S_R 在涨跌停封死日为 0(topm 的 1e-12 分母),这是真实状态,不是伪影。如果它有 alpha,最可能来自:成交量离散度与 |Ret| 离散度的失配,即有量无价的拆单或被动成交与有价无量的薄盘口跳动之间的慢状态差;也可能只是流动性的变形(b8、b13、b15)。'
+R:
+  - head: 'cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 20, 5, False), 20)'
+    soundness: 4
+    reasons: '变体为窗口 60 与 120 日,谱参数 (20,5) 不变,输入只用原始 Volume,无 NaN 路径,m>q 满足。变体与快照三个 head 的原始 |ρ| 最大值为 0.70(60 日)与 0.59(120 日),与 known 族为 0.43 与 0.38。拉长窗口不改 S 的定义(分母仍含直流),不是数学问题;热身期 120 日约占样本 6%,不主导。合理度 4。'
+  - head: 'cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), 20)'
+    soundness: 4
+    reasons: '变体为窗口 60、90、120 日、EMA20 外壳、谱参数 (50,3) 与 (100,5)。全部是因果日轴算子或只改谱参数,输入仍是原始 Volume,无 NaN 路径;(100,5) 中 m=100 小于谱宽 236,满足 m>q。与快照三个 head 的原始 |ρ| 最大值为 0.54–0.67,与 known 族为 0.27–0.48。数学上无问题;窗口方向与 PI 的拆解一致,本审计不重算分数。合理度 4。'
+  - head: 'cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 10, False), 20)'
+    soundness: 4
+    reasons: '变体为窗口 60、90、120 日与 EMA20 外壳。输入是原始 Volume,无 NaN 路径,均为因果日轴算子;与快照三个 head 的原始 |ρ| 最大值为 0.48–0.64,与 known 族为 0.17–0.30。窗口 120 的热身期约占样本 6%,不主导。数学上无问题。合理度 4。'
+summary: '两个位都过:a 位(E,核心 S(50,5))16 条全保留,novelty 4、soundness 4;b 位(N)划掉 b10(Vwap 缺分钟导致的位置截断)与 b11(流动性 |ρ| 0.83 自动划掉),余 14 条,novelty 4、soundness 3(b12、b13 有零成交分钟的边界风险,放行并标注);R 三组合理度均 4。关键发现:energy_ratio_topm_minus_q 的分母含直流,S 近似是 CV 型度量,PI 把它读作「U 形之外的团块」需要修正。'

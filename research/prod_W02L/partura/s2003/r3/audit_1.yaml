@@ -1,0 +1,47 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [13]
+    reasons: |-
+      创新度 4。15 个种子对快照 9 个 head 的原始 |ρ|:除 seed 13 外最大 0.38(seed 9,对 cross_mean(day_max(Ret), 60));对 5 个控制的原始 |ρ|:liq 最高 0.34(seed 1、8)、vol 最高 0.28(seed 9、12)、rev 最高 0.05(seed 3、15)、known 最高 0.35(seed 1)、size 最高 0.42(seed 11),都低于 0.5,不是控制的换写法。这组种子度量的是个股与全市场等权日收益 / 成交额的同期与滞后相关(市场序列 cs_mean 是全部有效股票的当日均值),9 个 head 没有一个读横截面联动(尾盘量 Hurst、Q 水平、day_max(Ret) 彩票类),5 个控制也没有。members.csv 的 5583 条 skeleton 里,cross_corr 作用在 ts_delta(log(day_last(...))) 上的为 0 条,cross_semistd 为 0 条,cross_valid_count 为 0 条。注意:相关度表只报了 5 个控制,§1 的奖励另外去掉两个冠军信号,表里没有它们的 |ρ|,这一项我无法核对,创新度只按 5 个控制与库结构判断。
+
+      合理度 4。逐个核对源码(Partura ops_ext.py、AlphaCube-steering operators/dt_cross.py、common.py、nd_cs.py):cross_corr 是 rolling_pair_reduce(分母加 EPS;有效配对为 1 时记 0,恰为 2 时给 ±1,只影响新上市 / 复牌的窗口);cross_regbeta 是 rolling_ols 的 beta = cov(x,y)/var(x),这里 x 为市场、y 为个股,所以 seed 4 是个股对市场的 beta,方向正确;cs_regres 是当天截面 OLS 残差,无前视;cross_delay 与 ts_delta 按日轴、不跨缺口;cs_mean 包括自身(权重约 1/5220,可忽略)。无数学问题。
+
+      风险(不挡):(a) seed 11 用 log(day_last(Volume)),源码的 log 对 |x| ≤ EPS 给 NaN,尾盘一分钟零成交的日子被丢掉,对流动性差的票是选择偏差;它与 LogFloatCap 的 |ρ| 达 0.42,更像指数 / 收盘集合竞价的大盘股共性,尺子去掉的是线性 / U 形 / S 形部分。(b) seed 3、4、12、15 的 cs_regres 是在原始水平上做 OLS(day_std(Amt) 是厚尾水平),斜率被大市值票主导;seed 15 对 known 族的秩相关仍有 0.22(原 seed 1 为 0.35),中和只是部分的。(c) seed 8 引用的 Ang–Hodrick–Xing–Zhang 2006 讲的是特质波动率的截面溢价,不是 |r| 与 |m| 的联动,文献支撑偏弱,机制本身可以放行。(d) 热身:rolling_windows 对前 240 行做 NaN 左填充,若数据从 2018-01-02 起且生产评分不裁前段,train 前一年的 cross_corr 是扩张窗口的小样本相关;我在生产评分路径里没有找到裁剪的证据,请 PI 确认。(e) PI 的数学检查写「log 对非正输入给 NaN」不准确:源码对负数取 log|x|;这里的输入都是正的,不影响结论。
+
+      如果它有 alpha,最可能来自:同市值、同流动性下,个股与全市场等权收益 / 成交额的联动强度(持有人结构与指数、基金资金流形成的慢变特质);其次是下行 / 上行联动的不对称(seed 5)与价格延迟(seed 6)。
+
+      种子:划 13。表已自动划掉(|ρ| 0.88 对 head ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241),gate 覆盖率 0.854)。我也按「度量同一个东西」划掉:cs_demean 只减去每天的全市场平均 log 量,之后做的仍是同一个尾盘量 Hurst;cross_mean 用 nanmean,只跳过 NaN、不跳过 −inf,所以继承了 head 的 −inf 传播。其余 14 个保留。seeds 1、2、3(同一相关的 shrink 与残差版)按 r2 的先例不算重复。
+
+      通过条件:创新 4 ≥ 3,合理 4 ≥ 3,划完剩 14 ≥ 4;N 位不做核心检查。判定:通过。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      创新度 4。14 个种子对快照 head 的原始 |ρ| 最大 0.41(seed 7,对 cross_mean(day_max(Ret), 60)),其余 ≤ 0.40;对 5 个控制的原始 |ρ| 最大:vol 0.40(seed 7)、0.39(seed 10)、0.38(seed 9),liq 0.32(seed 7)、known 0.33(seed 7)、rev 0.22(seed 7),都低于 0.5。库里 cross_autocorr 只有两处且对象不同:L767 day_mean(cross_autocorr(Ret, 2, 1)) 是 2 日窗口,L773 作用在 Close、窗口 20;没有 cross_semistd(0 条),没有方差比,没有 241 日的日收益自相关。本位对象在库里没有。注意:seed 14(整日成交额日变化的一阶自相关)对 head ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241) 的 |ρ| 为 0.40。两者都读成交持续性,但它读的是整日成交额、不是尾盘量的 R/S,不是换写法。
+
+      合理度 4。逐个核对源码:cross_autocorr(x, d, k) = cross_corr(x[k:], x[:-k], d),因果;VR 用 cross_stddev(cross_delta(log C, q), 241) / (√q · cross_stddev(r, 241)),√5 与 √20 常数正确。严格说它是 √VR − 1 而不是 VR − 1,但 √ 单调,秩不变。_semistd 是窗口内对数变化正 / 负部分的平方均值再开方,分母是同一个有效日数,所以 P 与 N 可比;P + N = 0 只在整窗口不动时出现,给 NaN。cross_sum 把缺失当 0。div 无 EPS,唯一的 inf 路径是 seed 7、8 的分母 cross_sum(|r|, 241) 为 0 而首尾都有价(一年内几乎没有有效日收益),这种票应当极少,截面 rank 下会被钉在一端,不主导,记为风险。无数学问题。
+
+      机制与文献(Lo–MacKinlay 1988 方差比、Avramov–Chordia–Goyal 2006 自相关、Da–Gurun–Warachka 2014 连续信息、Bollerslev–Li–Zhao 2020 好 / 坏波动)都是标准对象。风险:(a) VR(20) 在 241 日上抽样噪声大:Lo–MacKinlay 同方差原假设下方差比的标准误约 √[2(2q−1)(q−1)/(3qT)],q = 20、T = 241 时约 0.32,q = 5 时约 0.14(对标准差比约减半),所以截面离散很可能主要是噪声,seed 6 要看 valid 段是否稳定。(b) seed 2(lag-5 自相关)的标准误约 1/√241 ≈ 0.064,与所有控制及 head 的 |ρ| 都 ≤ 0.05,信号基本淹在抽样噪声里,不挡,但期望要低。(c) seeds 7、9、10 不只是形状:路径效率的分子是 241 日净对数涨跌,(P − N)/(P + N) 与 N/σ 随 μ/σ 单调,这几个种子近似是 241 日漂移 / 波动比(Sharpe 型),与 12 个月动量同源,而 12 个月动量不在控制表里,尺子不会去掉它。这是「机制说的是形状、读的是漂移」的偏差,不是数学问题,放行;PI 解读时应与动量比较。(d) 热身问题同 slot a。
+
+      如果它有 alpha,最可能来自:成交持续性与价格路径的慢变结构(seed 1、3、4、14);其次是 241 日漂移相对波动的非线性(seed 7、9、10);最后才是厚尾程度(seed 11、12)。
+
+      种子:不划。自动划除项:无(表里 slot b 14 个种子全部「过」);数学问题:无;与 head 的重复:无(最高 0.41)。seeds 1、3、4 是同一相关的 shrink 与残差版,按 r2 先例不算重复。
+
+      通过条件:创新 4 ≥ 3,合理 4 ≥ 3,划完剩 14 ≥ 4。判定:通过。
+R:
+  - head: 'ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)'
+    soundness: 3
+    reasons: |-
+      合理度 3(条件放行,与 r2 对同类 ts_hurst 的判断一致)。代码核对(AlphaCube-steering/src/alphacube/operators/nd_ts.py 的 ts_hurst;common.py 的 nanmean_last、nanmedian_last、rolling_windows):
+      - −inf 的来源:cumsum 在窗口内第一个 NaN 之后全为 NaN,若只剩最老一天有值,则 r_d = 0,log(0) = −inf。ts_mean 用 nanmean,只跳过 NaN,−inf 会传播整个 241 日窗口。R_prev 里 241 版 head 的覆盖率 0.9126 与此一致:约 9% 的单元是非有限值。这是「近一年有缺口的票被排到最低」的筛子,属于 §4「结果主要由缺失值决定」的边缘情形。
+      - 未被任何变体覆盖的问题:窗口内任一非最老位置的 NaN(不只是第二老)都会截断 cumsum,R/S 的极差只用缺口之前的前缀计算,而 s_d 用的是全部有效日,所以有缺口的窗口读数偏低,且依赖缺口位置。9 个变体没有一个处理这一点,R 的 why 只讨论了 −inf。
+      - 变体 1–3(cross_med、cross_quantile_q75、cross_tail_mean_q75):median 与 quantile 把 −inf 当最低值参与排序,在 −inf 少于一半时稳定;tail_mean 用 isfinite 掩码排掉 −inf 日,不传播。合理。变体 4–5(cross_ema 半衰期 120 / 241):按 docstring 跳过非有限值,合理。变体 6–7(Hurst 窗口 25 / 30):合理。变体 8–9(log 与 cs_demean):表里 gate 失败(覆盖率 0.854),log(0) = NaN 把零成交日变成内部 NaN,触发上面的截断,正是要排除的那类,按表应删掉。
+      - 所有变体都是因果的(cross_* 窗口含当天,当天收盘后可得,t+1 交易;cs_demean 是当天截面),无前视。
+      - 热身:外层 241 日在前 240 行是扩张窗口,R 的 why 已说明(变体 5),可接受,但同样依赖数据起点是否裁剪。
+      PI 应在 train 上比较 head 与变体 1–3 的差(R 的 why 已给出读法),并单独看有缺口票的子集,确认 −inf 与截断两项各自贡献多少。
+      判定:放行(合理度 3 ≥ 3)。
+summary: 'Both N slots pass (slot a drops seed 13 as a duplicate of the head, leaving 14; slot b strikes nothing, leaving 14), and the R group passes conditionally at soundness 3 because ts_hurst truncates the R/S range at any interior NaN, which none of the nine variants addresses.'

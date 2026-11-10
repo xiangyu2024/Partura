@@ -1,0 +1,37 @@
+seed: 2048
+round: 2
+slots:
+- type: E
+  core: cs_first_low20(LogTotalCap, ListAge)
+  hypothesis: 机制。库里的结构批里最显著的共性子树是 cs_first_low20(LogTotalCap, ListAge):把上市最短的 20% 次新股整体置顶,其内部按总市值排名。次新股溢价(IPO 彩票偏好、注册制前后的新股炒作与上市初期的参与者构成)是由 ListAge 这个日频字段决定的结构属性,不是某段行情;置顶是阶跃而不是线性暴露,所以尺子里 5 个控制(含市值的线性/平方/立方)去不掉它,这是核心含 +0.93 均值差(p 0.039)的原因。但核心本身的毛排序里,次新股内部按市值排只是一个粗读数,非次新股部分按市值排基本是市值控制。这一次的外围处理不再给核心再叠市值,而是:(1) 用价格路径状态(现价/一年高点,George-Hwang 锚定;后复权基期在比值里抵消)来换掉非次新部分的排序(add / sub 核心,或把核心当 y 放进 cs_first_low20/high20 的第二层状态带里),(2) 用慢的日内/隔夜拆分(Lou-Polk-Skouras)在次新股带内部重排,(3) cross_ema 把阶跃平滑成慢信号,降换手。与以前不同:本流第1轮的锚定/隔夜种子都是单独使用,没有一个和次新带组合;核心外围此前未被试过(快照里含核心的 4 个候选都是 cross_min 或无外围)。为什么样本外还会在:ListAge 带随时间自然更替,次新股制度(涨跌停放宽、注册制)改变的是幅度不是方向;锚定比值只用 t 日收盘及以前的价格,无前视;cs_first 在并列块上整块判断,不会按列序随意切带。数学检查:比值分母是正的后复权最高价,不是近零量;ListAge 为日频整数,最低 20% 的带由整块并列决定,带可能比 20% 窄但不会为空常数面板;核心外加比值后量纲不同(核心在 (0,2],比值在 (0,1]),但只是加权差,不产生爆点;无前视。如果有 alpha,最可能来自次新股带的内部排序与带外的锚定读数。
+  seeds:
+  - cs_first_low20(LogTotalCap, ListAge)
+  - add(cs_first_low20(LogTotalCap, ListAge), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - sub(cs_first_low20(LogTotalCap, ListAge), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(cs_first_low20(LogTotalCap, ListAge), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_high20(cs_first_low20(LogTotalCap, ListAge), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(div(day_close(Close), cross_max(day_close(Close), 241)), cs_first_low20(LogTotalCap, ListAge))
+  - cross_ema(cs_first_low20(LogTotalCap, ListAge), 60)
+  - cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 60))
+  - cs_first_low40(cs_first_low20(LogTotalCap, ListAge), LogTotalCap)
+  - add(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 120))
+  - cs_first_high20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 60))
+  - cs_last_low20(cs_first_low20(LogTotalCap, ListAge), div(day_close(Close), cross_max(day_close(Close), 120)))
+- type: N
+  hypothesis: 机制。本流第1轮 Pr1a 的最好候选是 cs_first_low20(LogTotalCap, day_es_ratio_hi(inv(cross_max(Close, 241)))),净夏普 +0.38/+0.38(train/valid 都为正,是本流仅有的正读数),它的结构是「用一个价格路径状态 x 划出最低 20% 的带并整体置顶,带内按总市值排」。而本流其余候选(单独的锚定比值、隔夜日内均值)都是负的。这说明被奖励的是「条件」而不是单个读数:状态(离一年高点多远)× 规模的交互,即深度回撤的大市值股票(机构持仓为主,回撤后均值回复,而非小票的垃圾股)与靠近高点的小市值票,两种带的行为不同。尺子去掉的是对市值、反转、波动的线性/平方/立方暴露,而分带置顶是阶跃,去不掉。算子怎样实现:用 cs_first_low20 / cs_first_high20 / cs_first_low40 / cs_last_* 这些带算子,x = 现价 / 一年(或半年)内高点 (day_close(Close) 对 cross_max,无量纲,后复权基期抵消),y 换成总市值、流通股本、慢的日内收益均值、隔夜减日内之差;并把角色互换(用市值划带、带内按锚定比值排)。与库里已有的不同:库里 5583 条没有这种「锚定比值划带 + 内部另一变量排序」的写法(两个库的骨架已被禁,我选的外层 cs_first_*(单字段, 价格路径比值) 骨架不是库里的);第1轮 N 位是把比值单独读,这一次是条件交互。为什么样本外还会在:规模×回撤的交互来自参与者结构(机构 vs 散户)和融资融券约束,是慢变的;比值只用 t 日收盘及以前的后复权价格;x 在窗口内换手低(一年高点只在新高时变),所以带的成员更替慢。数学检查:分母 cross_max / cross_min 是正价格,不除近零;cs_first_* 的带由并列整块判断,一年窗口内未满的热身期为 NaN(train 起点附近),不主导;不用 argmax,没有并列过多的问题。如果有 alpha,最可能来自深度回撤带中大市值(或慢的日内强度更高)的票的修复。
+  inspired_by: 本流 r1 Pr1a 最好候选 cs_first_low20(LogTotalCap, day_es_ratio_hi(inv(cross_max(Close, 241)))) 净夏普 +0.38/+0.38(唯一正读数);批 M1 里 cs_first_low20(LogTotalCap, ListAge) 的富集(+0.93)
+  seeds:
+  - cs_first_low20(LogTotalCap, div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(LogFloatShares, div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low40(LogTotalCap, div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_high20(LogTotalCap, div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(LogTotalCap, div(day_close(Close), cross_max(day_close(Close), 120)))
+  - cs_first_low20(LogTotalCap, div(day_close(Close), cross_min(day_close(Close), 241)))
+  - cs_first_low20(cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 60), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(sub(cross_mean(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 120), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 120)), div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(div(cross_delay(day_close(Close), 20), cross_max(day_close(Close), 241)), LogTotalCap)
+  - cs_first_low20(div(day_close(Close), cross_max(day_close(Close), 241)), LogTotalCap)
+  - cs_first_high20(LogTotalCap, div(cross_max(day_close(Close), 20), cross_max(day_close(Close), 241)))
+  - cs_last_high20(LogTotalCap, div(day_close(Close), cross_max(day_close(Close), 241)))
+  - cs_first_low20(LogTotalCap, day_es_ratio_hi(inv(cross_max(Open, 241))))
+R: []

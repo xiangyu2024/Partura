@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2]
+    reasons: '创新度 4。核心 day_quantile_q25(High) 属于库里已有的价格水平族（loc.json 富集表 n=7，含 / 不含的均值 -3.38 / -2.66，p 0.89，无证据），但 14 个种子都用了库里未读过的日频叶子 LogFloatCap、LogFloatShares（PI 称两库 5583 条逐条核对为零，我未在仓库复核），把复权价拆成 log P 与 log F + log c，这是库里没有的信息。相关度表：核心与 3 个 head 的原始 |ρ| 最大 0.44（头 2），残差 0.09；种子 11 与头 3 的残差 |ρ| 为 0.36 最高，其余种子残差均在 0.17 以下；与 5 个控制的最大 |ρ| 为 0.49（种子 14 的 size），没有任何种子划到自动划掉的门槛。合理度 4。逐算子核对：cross_delta 为 x_t - x_(t-d)（dt_cross.py:174）；cross_mean、cross_max、cross_stddev 为按日滚动（dt_cross.py:223、233、290）；cross_fangzheng = cross_mean + cross_stddev（dt_cross.py:499）；cs_regres 为截面 OLS 残差（nd_cs.py:254）；cs_bucket_demean / zscore / rank 经 _pct_rank，缺失输出缺失，不经 nanrank_last（ops_ext.py:231、238、462、481），所以不触发 §4 的 nanrank 陷阱；种子 9 的 241 减 20 日算式等于 x_(t-20) - x_(t-241)，正确。全部为因果窗口，没有前视，数学问题未见。划分：种子 2 与种子 1 重复（五控制 |ρ| 与头 |ρ| 差均不超过 0.008），划掉。种子 3、9、10、13 的 cross_delta(·,241) 前 241 日为空，覆盖率 0.852 未过 gate（废品），空的部分约占 15%，不是主导，按 §4 不算定义坏掉，不划；但种子 3、10 没有做 (b) 自己写的 20 日均值，送转日 LogFloatShares 滞后造成的端点偏差没有压掉，记为质量风险。如果它有 alpha，最可能来自 (b) 的分红加送转累计强度（Lintner 1956 的派现黏性），或 (c) 的 6 到 12 个月总收益动量（Jegadeesh-Titman 1993，跳过最近一个月），而不是水平 (a) 里的个股常数 c。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8, 9, 13]
+    reasons: '创新度 4。P = LogFloatCap - LogFloatShares 是日频叶子给出的未复权价，两个库没有任何表达式读过日频叶子（PI 称逐条核对，我未复核），所以 P 族与分钟字段的复权价面板不是同一个东西。相关度表：P 族（种子 1、2、4、5、14、15、16）原始与头的 |ρ| 不超过 0.53，与控制的 |ρ| 最大为种子 16 的 0.56（size），其余不超过 0.34。微观摩擦族（种子 6、7、9 到 12）与流动性控制的 |ρ| 贴近但低于 0.8，最大为种子 10 的 0.70，不自动划。合理度 4。逐算子核对：day_zero_ratio、day_flat_ratio、day_distinct_ratio 为当天有限分钟上的比例，值域 [0,1]（ops_ext.py:82、273、607）；cs_bucket_* 任一输入缺失则输出缺失，桶内并列以全局秩 1e-4 打破（ops_ext.py:238-256、462-495）；abs_(q25 Ret) + 1e-6 保证 log 不取到 0（common.py:211 的缺失线为 1e-9）；日频与分钟统计都只用当日及以前的数，因果。划分：种子 8 = cs_bucket_rank(cross_mean(day_std(Ret),20), P)，就是 vol 控制在 P 桶内的秩，与 vol 控制的 |ρ| 为 0.90，超过 0.8 的门槛，按规则自动划掉。种子 13 是头 1 的换皮：cross_stddev 与 ts_std 是同一函数（dt_cross.py:290、nd_ts.py:152，都是 nanstd_last 滚动），种子 13 只是把窗口改成 20 再按 P 分桶，与头 1 的原始 |ρ| 为 0.65、残差 0.71，划掉。种子 9 与种子 10 重复（都是“分钟不动”的比例，五控制 |ρ| 差不超过 0.03，与头的 |ρ| 为 0.54 对 0.57），保留价格口径的种子 10，划掉种子 9。需要 PI 在跑前核对两件事，但它们不是划种子的理由：(i) day_flat_ratio 的 docstring 写停牌日为 1.0，与 §4 所说的停牌日为缺失相悖；若面板里停牌日是有限价格，种子 10、11、12 会把停牌票推向一端；(ii) PI 把 log(|q25|+1e-6) + log P 说成“接近 1 表示价格钉在 tick 上”，这其实是元数的对数，与 tick 数只差常数 log 100，不改变排序，结论不受影响，但解释要改。如果它有 alpha，最可能来自最小变动价位造成的价格档位摩擦（同一价位上的 tick 活跃度）以及低价彩票需求（Kumar 2009），而不是流动性或规模。注意：不分桶的原样低价风格，AlphaCube 的 可交易回测.md §21.4 已测过（训练段夏普约 +0.98），所以种子 1 的增量只能来自分桶中性化。'
+R:
+  - head: 'ts_std(day_quantile_q25(Ret), 10)'
+    soundness: 4
+    reasons: '合理度 4。ablation 表（loc.json）核对：窗口 20 / 10 / 5 得 -1.19 / -1.13 / -0.88，与 PI 写的一致；ts_std 与 cross_stddev 是同一函数，变体 1、2 只改窗口。变体 3 的分母 |ts_mean(q25 Ret,5)| 在 q25 几乎总为负（PI 所说，未复核）时远离 0，接近 0 的只是少数强上涨窗口，不足以支配截面，不是 §4 的数值伪影；但跑前请看变体 3 顶端十分位的构成，若顶端由分母近零的票占满，就要改。变体 5 的 cross_zscore 有相对尺度保护（ops_ext.py:207-228）。如果它有 alpha，最可能来自下四分位分钟收益的波动稳定性。'
+  - head: 'ts_sum(cross_fangzheng(cross_max(day_quantile_q25(Amt), 3), 241), 5)'
+    soundness: 4
+    reasons: '合理度 4。ablation 核对：拿掉 cross_fangzheng 得 -3.77、必要性 2.56；拿掉 cross_max 必要性 0.04；ts_sum 窗口 2 / 5 / 10 得 -1.12 / -1.20 / -1.37，与 PI 所写一致。cross_fangzheng = cross_mean + cross_stddev（dt_cross.py:499），变体 1、2 是它的两半。变体 3 的分母是 241 日均值的 q25 成交额，正数，只有几乎不交易的票才接近 0，那是真实的流动性，不是伪影。风险记在这里：ablation 显示头 2 与已知族的 ρ 约为 -0.81，变体 1、2 与已知族的 |ρ| 为 0.80，会在 |ρ_known| 小于 0.5 的条件上被挡，这是设计的结果，不是合理度问题。如果它有 alpha，最可能来自 Amt 水平与稳定性的组合，也就是已知族的一个写法。'
+  - head: 'ts_max(log(cross_regbeta(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Amt), 10)), 20)'
+    soundness: 3
+    reasons: '合理度 3，没有数学问题。cs_sum(signedpower(q25 Low)) 是同一天的截面常数（ablation 标注不同值占比 0.0002），x 的方差大于 EPS 时 rolling_ols 给出 beta = cov / var_x（common.py:643-686），所以 beta 只随 y_i 的 10 日协方差而变；log 取 |beta|，丢掉了符号（common.py:211）。ablation 核对：ts_max 窗口 10 / 20 / 40 得 -2.05 / -1.22 / -0.55，去掉 signedpower 得 -1.02，与 PI 所写一致。只给 3 的理由：机制只能说到“该股收盘分钟成交额与一个市场级的平方价格和的 10 日协方差的幅度”，它既含成交额的波动水平，也含对该价格指数的同步性，PI 读成“峰值幅度 / 流动性”只对一半；ablation 中 log(cross_regbeta) 与已知族的 ρ 为 -0.64，去掉 signedpower 或把 Low 换成 High 后为 -0.85；变体 3、4 与已知族的 |ρ| 为 0.83、0.80（corr 表），大概率会被挡。如果它有 alpha，最可能来自成交额的波动水平，即已知族。'
+summary: 'a、b 两个任务位均通过（创新 4、合理 4）；a 划种子 2，b 划种子 8、9、13，各剩 13 个种子；R1 4、R2 4、R3 3；没有命中 §4 的数学陷阱。跑前请 PI 核对停牌日是否为缺失、LogFloatCap 与 LogFloatShares 是否为未复权价（steering 文档 §1.4 支持，未在数据上复核）。另：我读过 可交易回测.md §21.4 的表（含标为测试的列，文档未标注起止）与 steering 文档 §1.4 的一个 2026 年示例（只用于字段定义），评分未使用这些数字。'

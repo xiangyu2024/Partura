@@ -1,0 +1,53 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: |-
+      创新度 4。核心 Q = day_q_stat_std(Vwap) 出现在 head 2、head 3 里(head 1 不含),子树原样保留。16 个种子对快照 6 个 head 的原始 |ρ| 最大 0.23(seed 4),残差最大 0.15(seed 2、seed 9),没有一个原始 |ρ| 达到 0.5。对 5 个控制的原始 |ρ|:liq 最高 0.43(seed 4)、known 最高 0.40(seed 4)、size 最高 0.27(seed 16)、vol 最高 0.15(seed 11)、rev 最高 0.04,都低于 0.5,不是控制的换写法。库里(members.csv,5583 条)第一参数是 Q 的 cross_corr 只有一条,而且 Q 取的是 High 不是 Vwap;含 Q(Vwap) 的 46 条全是水平类,PI 的说法成立。注意:corr 表只报了 5 个控制,§1 的奖励另外去掉两个冠军信号,这两项的 |ρ| 表里没有,我无法核对,创新度只依据库结构和 5 个控制的表。
+
+      合理度 3。逐个算子核对:cross_* 是日轴因果滚动(含当天,t+1 交易),ts_delay 取前一日,无前视。cross_corr 的实现是 rolling_pair_reduce(分母加 EPS):窗口有效配对为 1 时记 0,恰为 2 时给 ±1(只影响新股与复牌窗口)。day_q_stat_std 对常数路径(一字板)给 Q = 0 而不是 NaN(rho_k 的分母是 1e-4 时 rho 为 0,Q 为 0)。风险:Q = 0 是「定义不了」的填充值,按第一轮合成路径的量级(约 1000 ± 300),它低约 3 个标准差;真实分布我没有核对。Pearson 相关对单个离群点极敏感,15–30 日窗口里只要有一个一字板日,相关的符号就主要由这一天的 Volume 特征决定。表里 seeds 1–8 与 liq 的 |ρ| 0.29–0.43 与这一解释一致(一字板频率与流动性同向)。这属于 §4「定义坏掉 / 结果主要由填充值决定」的范围,但没有证据它主导结果(平滑到 60–241 日后会被摊薄),所以不挡,记为风险,请 PI 在 train 上比较含一字板日与不含的窗口的相关分布。PI 笔记说「零值对这类种子不敏感」只对均值与 z 分数类外围成立,对 cross_corr 不成立。
+
+      种子:不划。没有 |ρ| 达到 0.7(head)或 0.8(控制)的自动划除项;没有数学问题(除上面的风险);没有与 head 的重复。seeds 3、4、5、6、11 是同一 corr(Q, Q(Volume)) 的不同窗口与平滑,表达式不同,不算重复。外围是否与第一轮 69 个已评分候选重复,我只能对照第一轮 16 个种子和库,无法查到那 69 个。
+
+      如果它有 alpha,最可能来自:参与者构成(机构分批执行时价格路径平滑、成交规则同步,与噪声交易的耦合不同)的慢变个股特质;其次才是一字板频率(流动性)。
+
+      通过条件:创新 4 ≥ 3,合理 3 ≥ 3,划完剩 16 ≥ 4;E 位核心与 5 个控制的原始 |ρ| 最大 0.07 < 0.8。本核心在整个实验里第二个 E 位(第一轮已用一次),是最后一个允许的。判定:通过。
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      创新度 4。两个库 5583 条表达式里 LogFloatCap、LogTotalCap、LogFloatShares、LimitWidth、BoardCode、ListAge 出现 0 次(members.csv 逐条核对,与 PI 笔记一致);库里也没有 cross_ema、day_gini、day_centroid。快照 6 个 head 全是 Hurst 或 day_max(Ret) 一族。保留的 5 个种子(1、2、10、12、13)对 head 的原始 |ρ| 为 0.20–0.31,残差 0.11–0.21。对控制:seed 1 与 size 0.42(liq 0.01);seed 2 与 liq 0.34、known 0.30(size 0.05);seed 10 各控制都在 0.03 以下;seed 12、13 与 size 0.51、0.50,接近 PI 表里「换写法」的 0.5 门槛。但它们是 log(尾盘一分钟量) − log(流通股数),是换手类量,不是市值的改写;尺子去掉 size 的线性 / U 形 / S 形部分后剩多少,表里看不出。
+
+      合理度 4。机制清楚且有文献支持:Field–Hanka 2001(解禁)、Loughran–Ritter 1995 与 Pontiff–Woodgate 2008(发行)。seeds 1–2 是限售占比 log(总市值 / 流通市值);文档(AlphaCube-steering/docs/steering_and_daily_fields.md §1.4)把 FloatCap 映射到 circulating_market_value、FloatShares 映射到 circulating_capital,但没有写 total_market_value 与 circulating_market_value 是否同一价格。如果不同价,seeds 1、2、7、8、11 的含义都会变,需要 PI 核对。seeds 3–8、10 是股本变动。算子核对:cross_delta(x, d) = x[t] − x[t−d],因果,前 d 日为 NaN(common 与 dt_cross 源码);log 对 |x| < EPS 返回 NaN 而非 inf;cross_sum 与 cross_mean 用 nan 聚合。无前视。
+
+      并列:PI 称 LogFloatShares 未变动时相邻日逐位相同,cross_delta 为精确 0(未核对数据)。并列按下标先后打破(design.md 的 stable 约定),相当于在这些股票上按列序排板块。按 §4 这不是数学问题,但 seed 10 的 gate distinct 只有 0.58,约四成的值与别的股票并列,总领读结果时要留意板块倾斜。
+
+      种子:不划。gate 已把 3–9、11 判为废品,我不再额外划。其中 4、6、7、8、9 的 distinct 为 0.22–0.44 与 0.03,是并列主导的数值伪影(§4),3、5、7、11 的 coverage 0.85 来自 241 日热身,不是数学问题。保留 1、2、10、12、13 共 5 个,≥ 4。12 与 13 是同一 X 的两种平滑(241 日均值与 60 日 EMA),近似重复但不是同一表达式,不划。
+
+      如果它有 alpha,最可能来自:限售解禁与发行、送转、增发这类股本供给变化(seed 10 的 241 日累计绝对变动主要由这些跳变决定);其次是收盘集合竞价的参与强度相对流通盘的水平(seeds 12、13)。
+
+      通过条件:创新 4 ≥ 3,合理 4 ≥ 3,划完剩 5 ≥ 4。判定:通过。N 位在本轮通过审计。
+
+R:
+  - head: 'ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 25)'
+    soundness: 3
+    reasons: |-
+      合理度 3(有数值问题,但没有证据它主导结果,条件放行)。代码核对(AlphaCube-steering/src/alphacube/operators/nd_ts.py 的 ts_hurst、dt_cross.py 的 cross_hurst、common.py 的 nanmean_last):窗口里第二老的一天缺失而最老一天有值时,累积和只剩一个有效点,极差为 0,rs = 0,log(0) = −inf。外层 ts_mean 用 nanmean(只跳过 NaN),−inf 会保留在均值里,使这个 −inf 持续整个外层长度。停牌在 design.md 里被掩成 NaN,所以这个情形会真实出现。窗口里有中间缺失时,极差只取缺失前的前缀,标准差却用全窗口,是系统性偏差。
+
+      这在 R 组里被放大:外层 80 / 120 / 241 日,−inf 的持续天数随外层长度增加。gate 的 coverage 与 cross_ema(60) 版(0.988;cross_ema 跳过非有限值,不传播 −inf)比较,80 / 120 / 241 分别少 2.9 / 4.3 / 7.5 个百分点。如果 gate 把 ±inf 计为未覆盖,241 日版大约有 7% 的股票日被推到 −inf,排序靠列序打破,沉在底端。第一轮审计员说「频率低」对 25 日版成立,对 241 日版不成立。PI 看到的「Hurst 窗口 40 时 valid 塌到 −3.36」也与这一机制一致,PI 把它当成窗口长度的效应,需要先排除这个伪影。
+
+      我没有证据它主导顶部十分位(纯多头书的收益主要由顶部决定),所以不挡,作为条件放行:(a) PI 报告每个变体中 ±inf 的占比;(b) 总领核对尺子怎样处理 ±inf(第一轮已提出,至今未答);(c) 变体 9 不是对照:cross_hurst 的累积和、NaN 与 log 的逻辑与 ts_hurst 完全相同,变体 9 与变体 2 的相关度表逐位相同(head |ρ| 0.55、残差 0.62、各控制 |ρ| 全部一致;gate 的 coverage 0.945、maxh 0.548 也相同)。计划里「cross_hurst 的缺失处理不同」的说法不对,变体 9 测不出伪影;(d) 变体 4(cross_ema)跳过非有限值,不受 −inf 传播影响,是这组里最干净的一个,但中间缺失的前缀偏差仍在。
+
+      机制:收盘一分钟量相对当日最低价的 20 日 Hurst 指数,没有清楚的经济解释。合理度只看数学问题,说不清机制不是挡的理由,不以此扣分。
+
+  - head: 'sigmoid(sigmoid(day_max(Ret)))'
+    soundness: 4
+    reasons: |-
+      合理度 4。机制是彩票偏好 / 最大收益效应(Bali–Cakici–Whitelaw 2011),写得清楚。算子核对:day_max(Ret) 的第 0 根收益恒为 0,所以 day_max ≥ 0,一字板日为 0,不出现负值。cross_mean、cross_med、cross_ema 都跳过 NaN。div(day_max(Ret), day_std(Ret)) 有界:第 0 根的 0 把比值钉住,M/σ ≤ √(2n) ≈ 22(n = 241,总体标准差口径;计划写的 √240 ≈ 15.5 略小,结论不变),分母为 0 时只发生在全 0 收益日,此时分子也为 0,torch.divide 给 NaN 不是 inf。不经过 ts_hurst,没有 −inf。B008 的三个 head 是同一个排名(sigmoid 单调);members.csv 核对:B008 的 11 条里 10 条在冠军族 41,原始净夏普 −4.88、换手 0.67,唯一例外是 pow_2(sigmoid(sigmoid(day_max(Vwap)))),原始净夏普 1.50、换手 0.014。族 41 可能已被冠军控制吸收,但这是有效性问题,不是数学问题。
+
+      表里变体 1–4 与 vol 控制的 |ρ| 0.57–0.73,换写法的程度高,尺子会剥掉大部分,这同样是有效性问题,不挡。day_max(Ret) 只看分钟收益,隔夜跳空不计入(第 0 根为 0),一字板日读数为 0,这是定义选择,不挡。
+summary: '槽 a(E,核心 day_q_stat_std(Vwap),本实验第二个也是最后一个 E 位)与槽 b(N,股本结构)通过,没有种子被审计员划掉;R 组 1(ts_hurst 外层均值)合理度 3,但 −inf 传播与变体 9 非对照两点需 PI 先报告并修正;R 组 2(day_max(Ret) 慢化)合理度 4。'

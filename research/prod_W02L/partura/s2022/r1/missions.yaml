@@ -1,0 +1,82 @@
+seed: 2022
+round: 1
+slots:
+  - type: E
+    core: 'day_argmin(Low)'
+    hypothesis: |-
+      机制与证据:快照里 3 个 head 和拆解表讲的是同一件事:把「当天最低价出现在第几分钟」day_argmin(Low)(0 到 240 的整数)取 log、乘一个常数,放进 10 日窗口的 ts_pearson(与全市场其他股票同窗口序列的平均相关)或 ts_quantile_q75。读拆解表:(1) 乘数不承重(knockout 必要性 −0.04);(2) 窗口越长越好:ts_pearson 5 / 10 / 20 日 = −2.72 / −2.49 / −2.18,q75 10 → 20 日 = −2.84 → −2.63,单调,说明得分主要由换手(15 bp 成本)决定,信息不在「10 日内的排序」,而在更慢的个股属性;(3) Low 换成 High 变差(train −2.66 / q75 −3.28),说明是「最低点」这一侧,不是泛泛的极值时刻;(4) 去掉 log 反而变好(+0.14)。(4) 的我的读法:库里的 log 是 log|x|,|x| ≤ 1e-9 给 NaN,所以 log(day_argmin(Low)) 把「最低价就在开盘集合竞价那一根」的日子当作缺失(拆解表覆盖率 0.93,约 7% 个股日)。这类日子包括开盘即全天最低、之后不再破位的强势日,以及一字板日(全天 Low 恒定,按 torch 并列取最小下标,多半落在 0;这一点我没有在本机验证)——它们恰恰是时刻信息里最极端的一部分,却被 log 丢掉。(5) ts_pearson 的符号是 −1:好的是「最低点时刻与全市场其他股票最不同步」的股票,也就是最低点由个股自己的订单流 / 消息决定、而不是跟着大盘一起下探的股票。
+      这个位的做法:核心 day_argmin(Low) 固定,外围整个换掉:全部是慢的日轴统计(窗口 60 到 241 日,或半衰期 60 日的 EMA),每个 seed 读核心的一个不同侧面。(i) 水平:长期平均的最低点时刻,用 pow_05(平方根,保留 0 的日子)而不是 log;cs_rank 版本先把每天的截面名次取出来,去掉「当天全市场一起尾盘跳水」的日子效应,再做日轴平均 / EMA。(ii) 离散度:cross_stddev,最低点是否总在同一个时段(规律性)还是忽早忽晚(消息驱动)。(iii) 与最高点的先后:(最高点时刻 − 最低点时刻)/(两者之和),有界在 [−1, 1],两者都在 0(一字板 / 全天不动)时 0/0 = NaN 自动丢掉这些日子;以及两个截面名次之差。含义是日内形态是「先涨后跌」还是「先跌后涨」占多,是 Lou–Polk–Skouras 日内 / 隔夜拉锯在分钟尺度上的近亲。(iv) 同步性:与全市场同日最低点时刻的 120 日相关(把 head 的 10 日 ts_pearson 换成对市场均值的慢相关)、对市场均值回归后残差的标准差(个股特有的「抢跑 / 滞后」)、与最高点时刻的相关、与当日收益的相关(最低点出现在下跌日还是上涨日,即日内形态是否一致)。
+      为什么和已有的不同:外围和快照里见过的写法(全是 mul(log(·), c) 外面套 10 日 ts_pearson / ts_quantile_q75)没有一个相同。库里与之最近的是 High 一侧的 cross_mean(day_argmax(High), 30)(30 日、不压缩、不去日子效应)和 day_argmin(Low) 本身 / 套 log、sigmoid 的写法(库自带的样本内读数里,日度的 day_argmin(Low) 净夏普 −12.5,30 日平均的 High 一侧 −1.5,同样是「越慢越好」);没有一条对 day_argmin(Low) 做 60 日以上的 pow_05 / cs_rank 压缩后再平均、cross_stddev、cross_corr、cross_regres 的慢统计,也没有最高点与最低点时刻的比值。我逐个把 seed 的骨架与 members.csv 的骨架集对照过,全部不在库里。去掉 log 后零值日回来,是和 head 在输入分布上的第二个差别。
+      为什么样本外还会在:来源是「一个股票的最低点通常什么时候形成」这个慢变的个股属性,背后是参与者构成和订单流类型(开盘集合竞价的承接 / 一字板属性、尾盘的被动卖出、机构的拆单节奏),不依赖某一段行情;窗口都 ≥ 60 日,名次变化慢,15 bp 成本下换手低。我对这个位出 head 的预期很低(见笔记),价值在于把「慢 + 去 log」两个差别单独量出来。
+      数学检查:pow_05 对 0 到 240 的整数是 0 到 15.5,无奇点;cs_rank 并列靠股票列序打破,最低点时刻在同一天有大量并列(每个整数约 20 只股票,0 点约占 7%),列序带来的名次偏移相对 120 日平均的跨股标准差很小;(H − L)/(H + L) 有界;cross_corr / cross_regres 在窗口内恒定时给 NaN 而不是极值;没有用 sign / is_gt / is_lt(它们对 NaN 返回 0,会把停牌日填成 0)。无前视:最低点时刻在收盘后才知道,t 日收盘后算,t+1 交易;最长窗口 241 日,热身期不主导。
+    literature:
+      - title: 'A tug of war: Overnight versus intraday expected returns'
+        authors: Dong Lou, Christopher Polk, Spyros Skouras
+        year: '2019'
+        treatment: 日内与隔夜收益各自持续、互相拉锯;这里用最低点 / 最高点的先后与最低点时刻的慢平均近似「日内形态」的持续性
+      - title: Intraday patterns in the cross-section of stock returns
+        authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+        year: '2010'
+        treatment: 收益在一天内的特定时段呈现跨期持续的截面模式;这里读的是极值出现在一天的哪个时段
+    seeds:
+      - 'cross_mean(pow_05(day_argmin(Low)), 241)'
+      - 'cross_mean(pow_05(day_argmin(Low)), 60)'
+      - 'cross_mean(cs_rank(day_argmin(Low)), 120)'
+      - 'cross_ema(cs_rank(day_argmin(Low)), 60)'
+      - 'cross_mean(cs_rank(day_argmin(Low)), 241)'
+      - 'cross_stddev(pow_05(day_argmin(Low)), 120)'
+      - 'cross_mean(sub(cs_rank(day_argmin(Low)), cs_rank(day_argmax(High))), 120)'
+      - 'cross_mean(div(sub(day_argmin(Low), day_argmax(High)), add(day_argmin(Low), day_argmax(High))), 120)'
+      - 'cross_corr(day_argmin(Low), day_argmax(High), 120)'
+      - 'cross_corr(day_argmin(Low), cs_mean(day_argmin(Low)), 120)'
+      - 'cross_stddev(cross_regres(cs_mean(day_argmin(Low)), day_argmin(Low), 60), 120)'
+      - 'cross_corr(day_argmin(Low), day_sum(Ret), 120)'
+      - 'sub(cross_mean(cs_rank(day_argmin(Low)), 20), cross_mean(cs_rank(day_argmin(Low)), 241))'
+  - type: N
+    hypothesis: |-
+      机制:一天的最低价 / 最高价那一分钟,是价格被推到极端、又被对手盘接住的地方。在这个分钟上成交了多少钱、之后价格弹回(或回落)了多少,读的是「谁在这个极端价位上承接」:(a) 低点放量并快速反弹 = 恐慌性卖盘被价值买盘 / 做市商吸收(Campbell–Grossman–Wang 的流动性供给:放量下跌之后反转;Wyckoff 的卖出高潮);(b) 低点缩量、反弹弱、收在低位 = 没有承接,下跌延续;(c) 高点放量并快速回落 = 买入高潮 / 派发。一个股票长期的这类习惯(120 到 241 日平均)是参与者构成和流动性供给结构的慢变属性,不是当日噪声。
+      批里的现象:B064 的 9 个成员全是 day_argmin 的时刻值,时刻只读「几点」,没有读「那一分钟发生了什么」。另外两点:(1) day_argmin(Low) 里 argmin = 0 的日子(开盘集合竞价那一根,也包括一字板)和最后一根(尾盘集合竞价)是集合竞价,成交额是普通分钟的好几倍,会污染「低点放量」。所以本位全部用 in_slice(·, 2, 237) 只取连续竞价时段(右端点含在内,与库里 tide 一族用同样的切法),在连续竞价里重新找最低点和最高点;(2) 批里最好的 head 窗口越长越好,所以这里全部是 120 / 241 日的慢平均。
+      算子怎样实现(AS = in_slice(Amt, 2, 237),LS / HS / CS 分别是 Low / High / Close 的同样切片):(1) 低点成交强度 = day_locate(AS, day_argmin(LS)) / (day_mean(AS) + 1),开平方压住尖峰(pow_05),再 120 日平均;高点同理;两者相减 = 「低点放量 − 高点放量」(恐慌 vs 狂热);(2) 低点后反弹 = (低点后 10 或 30 分钟的 Close − 全天最低价) / (全天最高价 − 全天最低价),落在 [0, 1],即「价格在低点之后收回了全天振幅的多少」;高点后回落同理;(3) 低点反弹 − 高点回落(看涨不对称)与两者之和(极值处的均值回复强度);(4) 低点相对成交量重心的位置:day_argmin(LS) − 235 × day_centroid(AS),低点是在大部分成交之前还是之后形成;(5) 成交额加权的价位在全天振幅里的位置:(day_wmean(CS, AS) − 最低价) / (最高价 − 最低价),即钱主要花在振幅的哪一段。
+      为什么和已有的不同:库里 5583 条表达式没有一条用 day_locate 在最低点 / 最高点的下标上取成交额或收盘价(库里的 day_locate 只出现在 F115 tide 一族的变体里(B155 / B156 等),下标是「量峰之后 / 之前的量谷」,取的是 Close 本身并做差,不是在价格极值上取成交额 / 反弹比例),也没有用 day_wmean 定位钱在振幅里的位置;我逐个把 seed 骨架与 members.csv 对照过,全部不在库里。和五个控制比:量被日均成交额除掉、价被日振幅除掉,是无量纲的比例,波动 / 流动性 / 市值的水平被除掉了。和 head 比:head 读的是「几点」,这里读的是「那一分钟之后发生了什么」。
+      为什么样本外还会在:来源是流动性供给在极端价位上的结构(谁在接),是慢变的个股属性;全部是 120 / 241 日平均,名次慢,15 bp 成本下换手低;不依赖某一段行情,恐慌被吸收 vs 被放大在牛熊市里都会出现。风险:成交强度类 seed 可能与已知成交额离散度一族相关(成交额的尖峰程度),被尺子剥掉;反弹类更可能保留信息。
+      数学检查:day_locate 在下标越界时给 NaN(最低点出现在最后 10 / 30 分钟时「低点后 10 / 30 分钟」不存在,这些日子被丢掉,窗口平均对可用日取平均,不是填 0);除以(最高价 − 最低价)只在振幅为 0(全天不动 / 一字板)时是 0/0 = NaN,而分子同样为 0,其余情形比值被定义在 [0, 1] 内,没有近零分母的爆点;day_mean(AS) + 1 里的 1 元只防全天零成交,不改变量级;pow_05 作用在非负比值上。无前视:最低点、最高点与之后的价格都在当天收盘前,整日读数在收盘后用于 t+1 交易。
+    inspired_by: 'B064 批:9 个成员都只读 day_argmin(Low) 的时刻值;ts_pearson 与 ts_quantile_q75 都是窗口越长越好;log(day_argmin(Low)) 覆盖率 0.93,把开盘集合竞价那一根的日子丢掉。'
+    literature:
+      - title: Trading volume and serial correlation in stock returns
+        authors: John Campbell, Sanford Grossman, Jiang Wang
+        year: '1993'
+        treatment: 伴随放量的价格下跌更容易反转(流动性供给方获得补偿);这里用极端价位上的成交强度与之后的反弹比例近似
+      - title: Dynamic volume-return relation of individual stocks
+        authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+        year: '2002'
+        treatment: 区分投机性成交(收益延续)与对冲性成交(收益反转);这里用低点 / 高点处的成交强度与之后价格的走向区分承接与派发
+    seeds:
+      - 'cross_mean(pow_05(div(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))), add(day_mean(in_slice(Amt, 2, 237)), 1))), 120)'
+      - 'cross_mean(pow_05(div(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), add(day_mean(in_slice(Amt, 2, 237)), 1))), 120)'
+      - 'cross_mean(sub(pow_05(div(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))), add(day_mean(in_slice(Amt, 2, 237)), 1))), pow_05(div(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High, 2, 237))), add(day_mean(in_slice(Amt, 2, 237)), 1)))), 120)'
+      - 'cross_mean(div(sub(day_locate(in_slice(Close, 2, 237), add(day_argmin(in_slice(Low, 2, 237)), 10)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), 120)'
+      - 'cross_mean(div(sub(day_locate(in_slice(Close, 2, 237), add(day_argmin(in_slice(Low, 2, 237)), 30)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), 241)'
+      - 'cross_mean(div(sub(day_max(in_slice(High, 2, 237)), day_locate(in_slice(Close, 2, 237), add(day_argmax(in_slice(High, 2, 237)), 10))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), 120)'
+      - 'cross_mean(sub(div(sub(day_locate(in_slice(Close, 2, 237), add(day_argmin(in_slice(Low, 2, 237)), 10)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), div(sub(day_max(in_slice(High, 2, 237)), day_locate(in_slice(Close, 2, 237), add(day_argmax(in_slice(High, 2, 237)), 10))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237))))), 120)'
+      - 'cross_mean(add(div(sub(day_locate(in_slice(Close, 2, 237), add(day_argmin(in_slice(Low, 2, 237)), 10)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), div(sub(day_max(in_slice(High, 2, 237)), day_locate(in_slice(Close, 2, 237), add(day_argmax(in_slice(High, 2, 237)), 10))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237))))), 120)'
+      - 'cross_mean(sub(day_argmin(in_slice(Low, 2, 237)), mul(day_centroid(in_slice(Amt, 2, 237)), 235)), 120)'
+      - 'cross_mean(div(sub(day_wmean(in_slice(Close, 2, 237), in_slice(Amt, 2, 237)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), 120)'
+      - 'cross_ema(div(sub(day_locate(in_slice(Close, 2, 237), add(day_argmin(in_slice(Low, 2, 237)), 10)), day_min(in_slice(Low, 2, 237))), sub(day_max(in_slice(High, 2, 237)), day_min(in_slice(Low, 2, 237)))), 60)'
+      - 'cross_mean(pow_05(div(day_locate(in_slice(Volume, 2, 237), day_argmin(in_slice(Low, 2, 237))), add(day_mean(in_slice(Volume, 2, 237)), 1))), 241)'
+R:
+  - head: 'ts_pearson(mul(log(day_argmin(Low)), 0.5), 10)'
+    why: |-
+      烂部件有两个。(1) 窗口太短:拆解表里 5 / 10 / 20 日的分数是 −2.72 / −2.49 / −2.18,单调变好,说明得分被换手压着,不是信息不够;所以把窗口再拉到 30 / 40 / 60 日。(2) log 把 day_argmin(Low) = 0(开盘集合竞价那一根的最低点,含一字板)的日子变成缺失(库里 log 是 log|x|,|x| ≤ 1e-9 给 NaN),拆解表里去掉 log 增益 +0.14;所以放一个不带 log 的 40 日版本,和一个用 pow_05(平方根,保留 0)的 40 日版本。ts_pearson 对窗口内常数的股票给 NaN 而不是极值,窗口 ≤ 60 日,不改变定义。
+    variants:
+      - 'ts_pearson(mul(log(day_argmin(Low)), 0.5), 30)'
+      - 'ts_pearson(mul(log(day_argmin(Low)), 0.5), 40)'
+      - 'ts_pearson(mul(log(day_argmin(Low)), 0.5), 60)'
+      - 'ts_pearson(mul(day_argmin(Low), 0.5), 40)'
+      - 'ts_pearson(mul(pow_05(day_argmin(Low)), 0.5), 40)'
+  - head: 'ts_quantile_q75(mul(log(day_argmin(Low)), 5), 10)'
+    why: |-
+      同样的两个烂部件:10 日窗口太短(窗口 10 → 20 好 +0.21),以及 log 丢掉 0 值日。q75 在整数 0 到 240 的取值上,窗口再长(≥ 40 日)会因为相邻次序统计量几乎相同而退化成几百个取值(不过「不同值 ≥ 50%」的门槛),所以只把窗口放到 20 日;另外换成带 pow_05 的版本(保留 0 值日),以及把 Low 换成 High 的 20 日版本(拆解表里 High 的 valid 段反而比 Low 好:−1.51 对 −2.84,train 更差,是一个信息型实验)。全部有界,无除法。
+    variants:
+      - 'ts_quantile_q75(mul(log(day_argmin(Low)), 5), 20)'
+      - 'ts_quantile_q75(mul(pow_05(day_argmin(Low)), 5), 20)'
+      - 'ts_quantile_q75(mul(log(day_argmin(High)), 5), 20)'

@@ -1,0 +1,93 @@
+seed: 2010
+round: 1
+slots:
+  - type: E
+    core: 'day_durbin_watson(Vwap)'
+    hypothesis: |-
+      机制:核心 C0 = day_durbin_watson(Vwap)。DW 是 Σ(ΔP)² / ΣP²(不去均值);价格在一天里几乎不动时,它等于「每分钟平方收益的均值」,所以 C0 就是用分钟 Vwap 路径算的当天已实现方差,无量纲。本批 9 个成员全是它的平滑(ts_sum 10 / 20、cross_fangzheng、嵌套求和)。拆解表读出三件事:(1) 唯一不太差的 head 是 cross_fangzheng(ts_sum(C0, 10), 241),−1.16(train −1.16 / valid −0.51);窗口 120 → −1.36,482 → −2.06,241 是局部最好。(2) ts_sum 不承重:去掉后是 −1.08,比有它还好;单独的 C0 与 ts_sum(C0, 10) 是 −3.20 与 −3.48,所以承重的是「一年窗口上的均值 + 标准差」这一层,不是 10 日平滑。(3) Vwap 换成 Close 几乎不变(−1.36,valid −0.49),所以读到的不是 Vwap 特有的微观结构,而是已实现方差在一年里的形态。已实现方差的水平是波动控制(20 日 std(Ret) 均值)的亲戚,会被奖励吃掉;没被吃掉的是它的「形态」,这是这个 E 位要试的:离散度(波动的波动;Baltussen 等 2018 报告波动不确定性高的股票后续收益偏低)、持续性(日度自相关:信息是连续流入还是一阵一阵事件驱动)、短长期限结构(最近 10~20 日相对一年是收缩还是放大)、上行与下行冲击的不对称(Patton-Sheppard 2015、Bollerslev 等 2020 的好坏波动)、分位尾部形状(高波动日均值对低波动日均值)、Close 版本与 Vwap 版本的差(买卖价差反弹噪声占比)。
+      算子怎样实现:每个种子原样带着 C0,外围只用日轴算子(cross_*,窗口 5 ~ 241 日)把「水平」换成「形态」:cross_stddev ÷ cross_mean(变异系数,水平被除掉);cross_autocorr(滞后 1 日 / 5 日);短窗均值 ÷ 长窗均值(及对数差、cross_zscore);cross_semistd_pos 与 cross_semistd_neg 的对数差;cross_tail_mean_q75 与 q25 的对数差;cross_max ÷ cross_mean;Close 版与 Vwap 版的对数差。
+      为什么和以前不一样:快照里所有含 C0 的外围都是「求和」或「均值 + 标准差」这两类水平加总(ts_sum、cross_fangzheng、二者嵌套)。没有一个把它除以自己的均值、取日度自相关、做期限结构、或拆成上行 / 下行。12 个种子的骨架逐个用 AlphaCube 的 skeleton_key 与 members.csv 里 5583 个骨架核对过,都不在两个库里。与三个 head 的区别:head 读水平(与已知成交额族 ρ −0.11 ~ 0.24,但与波动控制必然同向);这里的种子都是无量纲的形态量,水平被除掉或被差分掉。
+      为什么样本外还会在:读的是「这只股票的波动自己怎么波动」这个慢变的个股性格(参与者构成:追涨杀跌的散户脉冲对稳定的机构流;涨跌停、停牌、消息事件的频率),窗口 60 ~ 241 日,名次几个月不变,换手低。这也是本批里窗口最长的那个 head 最不差的原因:最慢的版本最不被 15 bp 成本吃掉。风险(事先写明):这一族可能仍然是波动水平的代理(例如变异系数与水平负相关),那样会被波动控制的非线性项吃掉;也可能只是噪声。
+      数学检查:C0 在一天里有效点少于 2、或整行为常数(涨跌停封板、停牌)时是 NaN,这是窄的、已知的缺失;C0 数量级约 1e-7 ~ 1e-5,大于 log 的下限 1e-9,所以 log 不会把它们变成 NaN 块;所有比值的分母都是正的均值 / 尾部均值 / 半标准差(要求 ≥3 个有效日),没有近零分母;窗口都 ≥ 5 且主要 ≥ 60 日,热身期只占样本很小的一段;无前视:全部用 t 日收盘及以前的数据,t+1 才交易。已知的算子行为:cross_corr / cross_autocorr 在窗口没有有效对时返回 0 而不是缺失,只影响刚上市 / 复牌的少数股票。
+    seeds:
+      - 'div(cross_stddev(day_durbin_watson(Vwap), 241), cross_mean(day_durbin_watson(Vwap), 241))'
+      - 'div(cross_stddev(ts_sum(day_durbin_watson(Vwap), 5), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 5), 241))'
+      - 'cross_autocorr(day_durbin_watson(Vwap), 120, 1)'
+      - 'cross_autocorr(day_durbin_watson(Vwap), 241, 5)'
+      - 'div(cross_mean(day_durbin_watson(Vwap), 20), cross_mean(day_durbin_watson(Vwap), 241))'
+      - 'sub(log(cross_mean(day_durbin_watson(Vwap), 10)), log(cross_mean(day_durbin_watson(Vwap), 120)))'
+      - 'cross_zscore(cross_mean(day_durbin_watson(Vwap), 10), 241)'
+      - 'sub(log(cross_semistd_pos(cross_mean(day_durbin_watson(Vwap), 5), 120)), log(cross_semistd_neg(cross_mean(day_durbin_watson(Vwap), 5), 120)))'
+      - 'sub(log(cross_tail_mean_q75(day_durbin_watson(Vwap), 120)), log(cross_tail_mean_q25(day_durbin_watson(Vwap), 120)))'
+      - 'div(cross_max(day_durbin_watson(Vwap), 60), cross_mean(day_durbin_watson(Vwap), 60))'
+      - 'sub(log(cross_mean(day_durbin_watson(Close), 60)), log(cross_mean(day_durbin_watson(Vwap), 60)))'
+      - 'cross_quantile_q75(day_durbin_watson(Vwap), 120)'
+    literature:
+      - title: Unknown Unknowns, Uncertainty About Risk and Stock Returns
+        authors: Guido Baltussen, Sjoerd Van Bekkum, Bart Van der Grient
+        year: '2018'
+        treatment: 波动的波动(风险的不确定性)高的股票后续收益偏低;这里用已实现方差一年窗口上的变异系数、分位尾部形状与最大值 ÷ 均值近似
+      - title: Good Volatility, Bad Volatility, and the Cross Section of Stock Returns
+        authors: Tim Bollerslev, Jia Li, Zhiyuan Zhao
+        year: '2020'
+        treatment: 已实现半方差的上行 / 下行不对称预测截面收益;这里用已实现方差序列日度对数变化的上行与下行半标准差之比近似
+      - title: Good Volatility, Bad Volatility, and the Persistence of Volatility
+        authors: Andrew Patton, Kevin Sheppard
+        year: '2015'
+        treatment: 波动的持续性取决于好 / 坏冲击;这里用已实现方差的日度自相关(滞后 1 日、5 日)近似持续性
+  - type: N
+    hypothesis: |-
+      机制:一天里「价格路径在什么时段最粗糙」。本批所有成员都在整天的 Vwap / Low / Volume 路径上读一个 DW,整天的 DW 把开盘、盘中、尾盘三段混成一个数;而三段的参与者不同:开盘半小时是隔夜信息与集合竞价后的价格发现,盘中是常规流动性交易,尾盘(含收盘集合竞价)是被动资金调仓、情绪化追价与可能的收盘价操纵(Admati-Pfleiderer 1988 的日内模式:自主型流动性交易者与知情交易者集中在开盘与收盘)。想法:把一天切成开盘 [1, 30]、盘中 [31, 210]、尾盘 [211, 240] 三段,各算一次 DW(每段内是每分钟平方收益的平均,所以三段可以直接相比,无量纲),再看「哪一段更粗糙、这个分配是否稳定、它与隔夜缺口 / 当天走势怎么联动」。
+      算子怎样实现:day_durbin_watson(in_slice(Vwap, 1, 30)) 为开盘段 O,in_slice(Vwap, 31, 210) 为盘中段 M,in_slice(Vwap, 211, 240) 为尾盘段 C;(a) 段间对数差 sub(log(O), log(M))、sub(log(C), log(M))、sub(log(O), log(C))、有界的份额 O ÷ (O + C),再用 cross_mean(60 ~ 120 日)或 cross_ema(半衰期 30 日)变成慢变的个股特征;(b) 它的稳定性 cross_stddev(·, 120);(c) 开盘段粗糙度对隔夜缺口大小 |开盘 ÷ 昨收 − 1| 的滚动相关 / t 值:「单位隔夜消息引出多少开盘价格发现」;(d) 尾盘粗糙度与当天走势(14:30 前累计收益及其绝对值)的滚动相关:尾盘的粗糙是追着当天涨跌走(追涨杀跌 / 恐慌),还是与当天走势无关(被动调仓);(e) Close 版的开盘 / 盘中对数差,与 Vwap 版对照(Close 更吃买卖价差反弹)。
+      为什么和已有的不同:库里 DW 的底只有整天(手写库统一用 in_slice(Ret, 11, 230) 掐头去尾)、或除以总量的份额;没有一个按时段切开再比,也没有把某一段的 DW 与隔夜缺口、当天走势联动起来。11 个种子的骨架逐个核对,都不在两个库的 5583 个骨架里。与三个 head 比:head 读整天 DW 的水平,这里是段间比值或联动统计,都是无量纲,波动水平被除掉。与五个控制比:流动性、波动、市值是水平量;20 日反转只有收益方向。
+      为什么样本外还会在:来源是参与者构成的慢变特征(隔夜信息密度大、机构与分析师覆盖多的票,价格发现集中在开盘;散户与被动资金占比高的票,尾盘更粗糙),不是某段行情;窗口 60 ~ 120 日,名次几个月不变,换手低。批里的现象支持「慢」:整天读数的符号在窗口之间来回翻(Low 的 ts_sum 窗口 20 取 −1、窗口 40 取 +1),只有最长的 241 日窗口没那么差。风险(事先写明):段间比值可能和成交额分布(开盘 / 尾盘放量)同向,被已知成交额族与两个冠军吃掉。
+      数学检查:各段 DW 在该段有效点少于 2 个、或整段为常数(涨跌停、停牌)时是 NaN;开盘 / 尾盘各 30 分钟,不是几乎为常数的面板;DW 数量级约 1e-7 ~ 1e-5,大于 log 的下限 1e-9,对数差不会因为下溢变成 NaN 块;O ÷ (O + C) 的分母是两个非负量的和,只在两段同时为 0 时缺失,取值落在 [0, 1],不会爆点;相关 / t 值类统计窗口 120 日,没有除以近零的量。无前视:缺口用 t 日开盘与 t−1 日收盘,尾盘与当天走势只用 t 日 14:30 以前的收益,t 日收盘后才算出信号,t+1 才交易。已知的算子行为:cross_corr 在窗口没有有效对时返回 0 而不是缺失,只影响刚上市 / 复牌的少数股票。
+    inspired_by: 'B028 批:整天读 DW(Vwap / Low / Volume),符号与半衰期随窗口来回翻(Low:窗口 20 取 −1,40 取 +1),只有 241 日窗口的 fangzheng 最不差(−1.16);整天 DW 没有按时段拆开过。'
+    literature:
+      - title: A Theory of Intraday Patterns Volume and Price Variability
+        authors: Anat Admati, Paul Pfleiderer
+        year: '1988'
+        treatment: 日内成交量与价格波动的 U 形来自自主型流动性交易者与知情交易者集中在开盘和收盘;这里用开盘 / 盘中 / 尾盘三段的 DW 之差与份额度量个股偏向哪一端
+      - title: Paying Attention Overnight Returns and the Hidden Cost of Buying at the Open
+        authors: Henk Berkman, Paul Koch, Laura Tuttle, Ying Zhang
+        year: '2012'
+        treatment: 散户的注意力在隔夜消息后推高开盘价;这里用开盘段 DW 对隔夜缺口大小的滚动相关与 t 值近似「单位消息引出的开盘价格发现」
+    seeds:
+      - 'cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 60)'
+      - 'cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 211, 240))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 60)'
+      - 'cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 211, 240)))), 120)'
+      - 'cross_ema(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 30)'
+      - 'cross_mean(div(day_durbin_watson(in_slice(Vwap, 1, 30)), add(day_durbin_watson(in_slice(Vwap, 1, 30)), day_durbin_watson(in_slice(Vwap, 211, 240)))), 60)'
+      - 'cross_stddev(sub(log(day_durbin_watson(in_slice(Vwap, 1, 30))), log(day_durbin_watson(in_slice(Vwap, 31, 210)))), 120)'
+      - 'cross_mean(sub(log(day_durbin_watson(in_slice(Close, 1, 30))), log(day_durbin_watson(in_slice(Close, 31, 210)))), 60)'
+      - 'cross_corr(day_durbin_watson(in_slice(Vwap, 1, 30)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_reg_tvalue(day_durbin_watson(in_slice(Vwap, 1, 30)), abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), day_sum(in_slice(Ret, 1, 210)), 120)'
+      - 'cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), abs_(day_sum(in_slice(Ret, 1, 210))), 120)'
+R:
+  - head: 'cross_fangzheng(ts_sum(day_durbin_watson(Vwap), 10), 241)'
+    why: |-
+      烂的部件有两个,依据都在拆解表里。(1) cross_fangzheng = 均值 + 标准差:均值是波动水平,会被波动控制吃掉、只留下噪声,而且把水平和形态混进同一个数;去掉 ts_sum 后分数不降反升(−1.16 → −1.08),说明 ts_sum 不承重,承重的是一年窗口。所以变体把「均值 + 标准差」换成纯标准差、变异系数(水平被除掉)、上行半标准差、峰值 ÷ 均值、高 / 低波动日均值的对数差、滞后 20 日(大于 10 日窗口,避免重叠窗口造成的机械自相关)的日度自相关。(2) 底的价格字段:Vwap 换 Close 几乎不变(−1.36),换 High 在姊妹 head(Low → High)上好 0.24,所以试一个 High 版;窗口 120(−1.36)与 482(−2.06)都不如 241,所以窗口不动。数学上都有界:变异系数与峰均比的分母是正的一年均值,尾部均值取对数(下限 1e-9,DW 数量级 1e-7 ~ 1e-5),半标准差要求至少 3 个有效日,无前视。
+    variants:
+      - 'cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241)'
+      - 'div(cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 10), 241))'
+      - 'cross_semistd_pos(ts_sum(day_durbin_watson(Vwap), 10), 241)'
+      - 'cross_fangzheng(ts_sum(day_durbin_watson(High), 10), 241)'
+      - 'cross_autocorr(ts_sum(day_durbin_watson(Vwap), 10), 241, 20)'
+      - 'div(cross_max(ts_sum(day_durbin_watson(Vwap), 10), 241), cross_mean(ts_sum(day_durbin_watson(Vwap), 10), 241))'
+      - 'sub(log(cross_tail_mean_q75(ts_sum(day_durbin_watson(Vwap), 10), 241)), log(cross_tail_mean_q25(ts_sum(day_durbin_watson(Vwap), 10), 241)))'
+  - head: 'ts_sum(day_durbin_watson(Low), 20)'
+    why: |-
+      烂的部件是「快」和「只看下沿」。依据:同一个式子换窗口符号就翻(窗口 20 取 −1,窗口 40 取 +1,窗口 10 取 −1),分数都在 −3 上下,是没有稳定方向的噪声;半衰期 0 的快信号每天换手大,−2.6 里很大一部分是成本。拆解里 Low → High 好 0.24(−2.39),是唯一的正增益。变体:(1) 采用已验证的 High;(2) 套上姊妹 head 里最有用的慢外层(241 日 fangzheng);(3) 把 Low 与 High 两条路径的 DW 做对数差:上沿路径与下沿路径的粗糙度之差是向上与向下冲击的不对称,无量纲、对水平免疫(Bollerslev 等 2020 的好 / 坏波动的分钟版);(4) 用 120 日均值把它变慢。都有界,无近零分母(对数的下限 1e-9,DW 数量级 1e-7 ~ 1e-5),无前视。
+    variants:
+      - 'ts_sum(day_durbin_watson(High), 20)'
+      - 'cross_fangzheng(ts_sum(day_durbin_watson(High), 20), 241)'
+      - 'sub(log(ts_sum(day_durbin_watson(High), 20)), log(ts_sum(day_durbin_watson(Low), 20)))'
+      - 'cross_mean(sub(log(day_durbin_watson(High)), log(day_durbin_watson(Low))), 120)'
+  - head: 'sqrt(ts_scale(ts_sum(day_durbin_watson(Volume), 20), 40))'
+    why: |-
+      烂的部件是「自己的基线太短、太快」。依据:去掉 ts_scale 后从 −2.60 掉到 −3.17(必要性 +0.56),说明「当前 20 日 DW(Volume) 相对自己近期常态」承重,不是水平本身;而基线窗口从 40 到 80 分数没变(−2.60 → −2.61),说明加长基线不伤;半衰期 5、每天换手大,−2.6 里有成本。变体把基线换成更长且去掉硬窗口的写法:日轴 z 分数(120 日)、短窗均值对长窗均值(20 日 ÷ 120 日)、快 EMA 减慢 EMA。都有界:z 分数的分母是窗口标准差加 EPS,窗口内整段不变时返回 0;比值的分母是正的均值;无前视。
+    variants:
+      - 'cross_zscore(ts_sum(day_durbin_watson(Volume), 20), 120)'
+      - 'div(cross_mean(day_durbin_watson(Volume), 20), cross_mean(day_durbin_watson(Volume), 120))'
+      - 'sub(cross_ema(day_durbin_watson(Volume), 5), cross_ema(day_durbin_watson(Volume), 60))'

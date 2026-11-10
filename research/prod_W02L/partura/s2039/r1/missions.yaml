@@ -1,0 +1,133 @@
+seed: 2039
+round: 1
+slots:
+- type: E
+  core: 'day_autocorr_n1(Close)'
+  hypothesis: |-
+    机制(核心):day_autocorr_n1(Close) 是当天 241 根分钟收盘价(后复权)"水平"序列的一阶自相关。因为读的是水平而不是收益,它约等于 1 - Σ(ΔP)² / (2 Σ(P-P̄)²),即"分钟总变差相对全天价格离散度"的补数,读的是全天走势的效率 / 趋势性:趋势日接近 1,区间来回、噪声(弹跳)占主导的日子明显更低。这是我的推导,不是测的。
+    读数:本批 X#1500 pow_05(day_autocorr_n1(Close)) score -2.26(train -2.26 / valid -2.17);pow_05 是保号开方(单调),所以子树 day_autocorr_n1(Close) 本身就是 -2.26,换 Vwap 为 -2.51。库自带统计换手 0.76、原始净夏普 -8.87。也就是说 head 是"一个噪声很大的日度比值统计被逐日读":两段都是负,问题不在于看错方向,在于单日可靠性低、换手把 15 bp 吃光。
+
+    这次要试的外围是三件事,核心保持不动:
+    (1) 速度:把 ρ 当成"个股的走势效率常态"而不是"当天的走势"。读法:cross_ema 半衰期 60 / 120 日、ts_mean 60 日、ts_decay_linear 120 日;日轴稳健化后再聚合(cs_winsor 先截尾、cs_rank 取日度排名再平均、log(1 - ρ) 取几何平均,因为 1 - ρ 是右偏的比值);截面减均值后再 241 日平均(去掉全市场共同漂移)。别的流的经验是慢是承重的(241 日窗口的读数最接近 0)。
+    (2) 冻结日伪影(我读 dt_day.py 的 day_autocorr 得到的):分母是 sqrt(var_t * var_lag + 1e-8),全天价格不动(一字板、整日静止)的日子分子 0、ρ 恰好是 0,是整张表的最低值(正常日 0.97 ~ 0.999)。慢均值会把"一字板天数"当成主信号。所有种子用 mul(·, replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))) 把静止分钟占比 >= 95% 的日子置缺失,只读真正在交易的日子的走势效率。在 Close(后复权水平)上这个 1e-8 地板对正常日没有影响(方差乘积远大于 1e-8)。
+    (3) 不只读水平:日度水平的慢均值与 head(同一个统计)的秩相关预计偏高(单日 ρ 的跨日稳定性高时平滑版与它接近 0.7 以上),这类种子可能被库禁令 / 相关度表划掉。所以一半种子是水平之外的读法:对自己历史的 z 分数、20 日对 241 日常态的快慢差(体制变化)、120 日标准差(效率不稳定)、日度 ρ 的一阶自相关(状态持续性,cross_autocorr_s1)、与当日收益方向 / 成交额的 120 日相关(上涨日还是放量日更趋势化)、上 / 下四分位尾均值之差(日间离散)与下四分位尾均值(区间震荡日的平均水平)。另有一个 ListAge > 120 的门,去掉上市未满 120 日的名字。
+
+    和库里已有的不同:快照里含这个核心的候选只有 pow_05(·)(日度、无聚合、无冻结日处理)。外围算子集合(cross_ema、cs_winsor、cs_rank、cross_zscore、cross_stddev、cross_autocorr_s1、cross_corr、cross_tail_mean_q25 / q75、day_flat_ratio、ListAge 门)在本批候选里一个都没出现;5583 条库表达式里 cross_ema、cross_zscore、cs_winsor、cross_tail_mean_*、day_flat_ratio 出现 0 次。16 个种子的骨架逐个对照过库的骨架集(无碰撞),外围算子集合两两不同。它们不是 head 的换写法:head 读当日的 ρ,种子读 ρ 的慢变常态 / 变化 / 不稳定 / 与方向的关系。
+
+    为什么样本外还会在(也是我对来源的信念):走势效率反映个股的参与者构成 ——机构拆单与算法(趋势性、持续冲击)对散户与做市式来回成交(噪声、弹跳)的比例(Roll 1984 的弹跳、Hasbrouck 1993 的定价误差、Lo-MacKinlay 1988 的方差比都是同一个对象的不同读法)。这是慢变的个股结构,不依赖某段行情;窗口 60 ~ 241 日,换手比 0.76 低一个量级以上。预期并不高:水平类会被已知族 / 流动性 / 波动控制吃掉,真正有机会的是"变化、不稳定、与方向的关系"那几个种子。
+
+    数学检查:(a) 无前视:ρ 只用当日 241 根分钟价,所有 cross_* / ts_* 窗口都是尾随窗口,t 日收盘后算、t+1 才交易;(b) 数值:冻结日已屏蔽,不会出现 0 值支配;log(add(sub(1, ρ), 0.0001)) 的真数 >= 1e-4 恒正;cross_corr 的两个输入都是有限实数(成交额加 1 再取对数,停牌日的 0 不会变 -inf);cross_ema / ts_mean 对缺失日取可用日;(c) 定义:ListAge 门只作用于一个种子,15 个种子不依赖它。本机用合成立方体(80 只 x 320 日 x 241 分钟,含停牌与未上市)把 16 个种子全算过:全部能算、无 inf、每日取值离散度 1.0(只检查运行时错误,不是任何分数)。没有用任何 2026 年数据。
+  seeds:
+  - 'cross_ema(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  - 'ts_mean(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 60)'
+  - 'cross_mean(cs_demean(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95)))), 241)'
+  - 'cross_ema(cs_winsor(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95)))), 60)'
+  - 'cross_ema(log(add(sub(1, mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95)))), 0.0001)), 120)'
+  - 'cross_ema(cs_rank(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95)))), 120)'
+  - 'sub(ts_mean(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 20), ts_mean(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 241))'
+  - 'cross_zscore(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  - 'cross_stddev(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  - 'cross_autocorr_s1(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  - 'cross_corr(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), day_mean(Ret), 120)'
+  - 'cross_corr(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), log(add(day_sum(Amt), 1)), 120)'
+  - 'sub(cross_tail_mean_q75(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120), cross_tail_mean_q25(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120))'
+  - 'cross_tail_mean_q25(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  - 'mul(cross_ema(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'ts_decay_linear(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_ratio(Close), 0.95))), 120)'
+  literature:
+  - title: Stock market prices do not follow random walks - evidence from a simple specification test
+    authors: Andrew W. Lo, A. Craig MacKinlay
+    year: '1988'
+    treatment: 方差比是"走势效率"的原型;这里用全天价格水平的一阶自相关作同一对象的日度读法,并读它的慢变常态而不是单日值
+  - title: A simple implicit measure of the effective bid-ask spread in an efficient market
+    authors: Richard Roll
+    year: '1984'
+    treatment: 噪声(弹跳)占主导的日子自相关低,趋势占主导的日子高;解释 ρ 读到的是噪声 / 信息比
+  - title: Assessing the quality of a security market - a new approach to transaction-cost measurement
+    authors: Joel Hasbrouck
+    year: '1993'
+    treatment: 定价误差的方差相对于有效价格方差,是效率的另一种度量;与 ρ 的补数同一个对象
+  - title: Institutional investors and the informational efficiency of prices
+    authors: Ekkehart Boehmer, Eric K. Kelley
+    year: '2009'
+    treatment: 机构持股高的股票价格更接近随机游走;支持把走势效率当作参与者构成的慢变代理
+- type: N
+  hypothesis: |-
+    机制:B115 的共同点是"日内价格 / 收益的 lag-1 序列相关":分钟价格里有多少是噪声弹跳、多少是信息驱动的持续漂移。这批里读数最好的(库自带 train 原始净夏普 +1.7 ~ +1.9、换手 0.05 ~ 0.08)全是在日度自相关外面套 10 日标准差 / 极小值的链,也就是"状态的稳定性"被慢窗口读,而日度水平本身(X#1500 的 Close 版、Ret 版)读数 -2.3 ~ -3.7。但 lag-1 只是方差比的一个点,库里的 day_autocorr / day_ar1_coefficient / day_durbin_watson / day_hurst 都在固定一个尺度上读,没有一条把"不同抽样频率下的方差比""噪声占比""跳跃占比"当对象(in_pct 与 in_logchg 在 5583 条里 0 次)。我的 idea:读多尺度的方差比 / 跳跃占比 / 去尺度的自相关,并做成慢变的个股属性。
+
+    算子怎样实现(15 个种子,骨架互不相同):
+    - 方差比 VR_k = day_var(in_pct(Close, k)) / (k * day_var(Ret)):k 分钟(重叠)收益的方差除以 k 倍 1 分钟方差(Lo-MacKinlay 1988)。1 = 随机游走,< 1 = 噪声 / 弹跳(流动性提供者的利润来源),> 1 = 趋势 / 持续冲击(拆单、追涨)。分母用 replace_small_with_nan 把全天不动或无成交的日子置缺失(否则 0 / 0)。k = 5 / 15 / 30。取 log(VR + 0.01) 让两侧对称,再用 cross_ema(·, 120) 变成个股常态。读法:水平(种子 1)、winsor 版(2)、偏离随机游走的程度 |VR - 1|(3,不分方向,Boehmer-Kelley 2009 的"效率偏离")、噪声的期限结构 log VR_30 - log VR_5(4)、截面减均值后的 241 日均值(5)、ListAge 门(6)、120 日标准差(7,对应本批 head 的"稳定性"读法,但直接读 VR)、20 日对 241 日常态的偏离(8)。
+    - 跳跃占比:Barndorff-Nielsen-Shephard 2004 的 bipower 比 day_mean(|r_t| |r_{t-1}|) / day_mean(r²),纯扩散时约为 2/π(合成立方体里量得 0.63),有跳跃时下降。1 分钟版(9、10)与 5 分钟版(11,用 in_pct(Close, 5) 与滞后 5 根的自己相乘,抗 1 分钟弹跳噪声,思路来自 Zhang-Mykland-Ait-Sahalia 2005 / Huang-Tauchen 2005 的多尺度)。
+    - 日度尺度的方差比(Lo-MacKinlay 原版,12、13):5 日 / 10 日对数收益的方差除以 k 倍日收益方差,241 日窗口,外面加 ListAge 门(窗口不足的新股);13 是 |VR - 1|。
+    - 去尺度的自相关(14、15):我读 dt_day.py 发现 day_autocorr 的分母是 sqrt(var_t * var_lag + 1e-8),Ret 的量级是 1e-3,分钟波动 σ 较小的票被压缩。我用 AR(1) φ = 0.1 的合成序列量过:σ = 8e-4 时读数是真值的 0.84 倍,5e-4 时 0.52,3e-4 时 0.21;σ >= 1.3e-3 基本无影响。所以库里全部 day_autocorr_n1(Ret) 其实带着一个"低波动被压缩"的尺度因子。种子用 mul(Ret, 100) 让地板失效,读真正的相关系数(lag 1 与 lag 3,cross_ema 120)。
+
+    和库的不同:5583 条里没有 in_pct / in_logchg、cross_ema、cs_winsor、没有给 Ret 去尺度;15 个种子的骨架逐个对照过库的骨架集(无碰撞),彼此也不相同。它们不是 head 的换写法:3 个 head 都是 lag-1 自相关(Close / Open / Ret)的日度读数或 ts_std / ts_min 链,而这里读不同抽样频率的方差比、跳跃占比、日度尺度的方差比与去尺度自相关;与 head 的相关预计中等,若 >= 0.7 由相关度表自动划掉(GP 的库禁令也会拒绝)。
+
+    为什么样本外还会在:来源是"信息融入价格的速度与噪声占比",由参与者构成(机构 / 算法 vs 散户)决定,是慢变的个股结构(Boehmer-Kelley 2009;Hou-Moskowitz 2005 的价格延迟溢价)。窗口 60 ~ 241 日,换手低,15 bp 下不会被成本吃掉(别的流的经验:慢是承重的)。每个 VR 一天只有一个估计、噪声大,120 日平均才把噪声压下去。预期不高:水平类 VR 被流动性 / 已知族吃掉的可能性大,真正有机会的是 |VR - 1|、期限结构、跳跃占比、不稳定性这些"形状"类。
+
+    数学检查:(a) 无前视:所有量只用当日及以前的分钟数据与日收盘,窗口都是尾随窗口;(b) 数值:VR 与跳跃占比的分母用 replace_small_with_nan(默认阈值 1e-8,正常的分钟收益方差约 1e-6)屏蔽全天不动的日子,不会出现 0 / 0 或爆点;log 的真数加 0.01 恒正;日度 VR 的分母是日收益方差的 k 倍,241 日窗口、ListAge 门去掉窗口不足的新股;in_pct 对前 k 分钟取缺失、day_var 只用有效分钟;(c) 定义:15 个种子在合成立方体(80 只 x 320 日 x 241 分钟,含停牌与未上市)上全部能算、无 inf、每日取值离散度 1.0;随机游走合成数据上 VR_15 中位数 0.91、跳跃占比 0.63,量级合理。没有用任何 2026 年数据。
+  inspired_by: 'B115(8 条挖掘库成员):pow_05(day_autocorr_n1(Close / Open / Ret)) 及其外面的 inv(ts_std(·, 10)) / ts_min 链,库自带 train 秩 IC 在 Ret 链上 +0.034 ~ +0.037、换手 0.05 ~ 0.08;批内没有任何一条读过多尺度方差比、跳跃占比或去尺度的自相关'
+  seeds:
+  - 'cross_ema(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01)), 120)'
+  - 'cross_ema(cs_winsor(div(day_var(in_pct(Close, 30)), mul(30, replace_small_with_nan(day_var(Ret))))), 120)'
+  - 'cross_ema(abs_(sub(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 1)), 120)'
+  - 'cross_ema(sub(log(add(div(day_var(in_pct(Close, 30)), mul(30, replace_small_with_nan(day_var(Ret)))), 0.01)), log(add(div(day_var(in_pct(Close, 5)), mul(5, replace_small_with_nan(day_var(Ret)))), 0.01))), 120)'
+  - 'ts_mean(cs_demean(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01))), 241)'
+  - 'mul(cross_ema(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01)), 120), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_stddev(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01)), 120)'
+  - 'cross_ema(sub(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01)), cross_ema(log(add(div(day_var(in_pct(Close, 15)), mul(15, replace_small_with_nan(day_var(Ret)))), 0.01)), 241)), 20)'
+  - 'cross_ema(div(day_mean(mul(abs_(Ret), abs_(in_delay(Ret, 1)))), replace_small_with_nan(day_mean(pow_2(Ret)))), 120)'
+  - 'cross_ema(cs_winsor(div(day_mean(mul(abs_(Ret), abs_(in_delay(Ret, 1)))), replace_small_with_nan(day_mean(pow_2(Ret))))), 60)'
+  - 'cross_ema(div(day_mean(mul(abs_(in_pct(Close, 5)), abs_(in_delay(in_pct(Close, 5), 5)))), replace_small_with_nan(day_mean(pow_2(in_pct(Close, 5))))), 120)'
+  - 'mul(div(pow_2(cross_stddev(ts_delta(log(day_last(Close)), 5), 241)), mul(5, pow_2(cross_stddev(ts_delta(log(day_last(Close)), 1), 241)))), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'mul(abs_(sub(div(pow_2(cross_stddev(ts_delta(log(day_last(Close)), 10), 241)), mul(10, pow_2(cross_stddev(ts_delta(log(day_last(Close)), 1), 241)))), 1)), replace_small_with_nan(is_gt(ListAge, 120)))'
+  - 'cross_ema(day_autocorr_n1(mul(Ret, 100)), 120)'
+  - 'cross_ema(day_autocorr(mul(Ret, 100), 3), 120)'
+  literature:
+  - title: Stock market prices do not follow random walks - evidence from a simple specification test
+    authors: Andrew W. Lo, A. Craig MacKinlay
+    year: '1988'
+    treatment: 方差比 VR_k 的定义与解释(< 1 噪声 / 反转,> 1 趋势);分钟尺度与日尺度两版
+  - title: Institutional investors and the informational efficiency of prices
+    authors: Ekkehart Boehmer, Eric K. Kelley
+    year: '2009'
+    treatment: 机构持股与价格效率(VR 接近 1)的关系;支持 |VR - 1| 与慢变的参与者构成
+  - title: Market frictions, price delay, and the cross-section of expected returns
+    authors: Kewei Hou, Tobias J. Moskowitz
+    year: '2005'
+    treatment: 信息融入价格的延迟被定价;VR 的期限结构是延迟的日内版本
+  - title: Power and bipower variation with stochastic volatility and jumps
+    authors: Ole E. Barndorff-Nielsen, Neil Shephard
+    year: '2004'
+    treatment: bipower 比分离连续波动与跳跃;种子 9 ~ 11 的定义
+  - title: The relative contribution of jumps to total price variance
+    authors: Xin Huang, George Tauchen
+    year: '2005'
+    treatment: 跳跃占比的相对度量;5 分钟版抗微观结构噪声
+  - title: A tale of two time scales - determining integrated volatility with noisy high-frequency data
+    authors: Lan Zhang, Per A. Mykland, Yacine Ait-Sahalia
+    year: '2005'
+    treatment: 用两个抽样尺度估计噪声占比,方差比 / 噪声期限结构的出处
+R:
+- head: 'pow_05(day_autocorr_n1(Close))'
+  why: '烂部件是"逐日读":库自带统计里这个 head 换手 0.76、原始净夏普 -8.87;拆解表里 Vwap 版同一水平(-2.51)、去掉 pow_05(单调)同一分数(-2.26),说明装饰没有承重,单日的比值统计太吵。变体只加慢聚合(cross_ema 半衰期 20 / 60 / 120、241 日均值),不改核心,直接量"慢是不是承重"。'
+  variants:
+  - 'cross_ema(pow_05(day_autocorr_n1(Close)), 20)'
+  - 'cross_ema(pow_05(day_autocorr_n1(Close)), 60)'
+  - 'cross_ema(pow_05(day_autocorr_n1(Close)), 120)'
+  - 'ts_mean(pow_05(day_autocorr_n1(Close)), 241)'
+- head: 'ts_min(ts_min(inv(ts_std(pow_05(day_autocorr_n1(Ret)), 10)), 10), 10)'
+  why: '拆解表:去掉 pow_05 反而好 0.94(-1.99,ρ_known -0.09,必要性 -0.94,即 pow_05 是烂部件);ts_min 外窗 10 -> 20 好 0.44、10 -> 5 差 0.97,方向单调越慢越好。另外 day_autocorr 的分母有 1e-8 地板,Ret 量级 1e-3,低波动票的 ρ 被压缩,乘 100 去尺度可以单独测这个伪影。变体:去 pow_05 并把外窗 / 内窗拉到 20 ~ 40、去尺度版、保留 pow_05 的外窗 40 与中窗 20。'
+  variants:
+  - 'ts_min(ts_min(inv(ts_std(day_autocorr_n1(Ret), 10)), 10), 20)'
+  - 'ts_min(ts_min(inv(ts_std(day_autocorr_n1(Ret), 20)), 10), 20)'
+  - 'ts_min(ts_min(inv(ts_std(day_autocorr_n1(Ret), 10)), 20), 20)'
+  - 'ts_min(ts_min(inv(ts_std(day_autocorr_n1(Ret), 10)), 10), 40)'
+  - 'ts_min(ts_min(inv(ts_std(day_autocorr_n1(mul(Ret, 100)), 10)), 10), 10)'
+  - 'ts_min(ts_min(inv(ts_std(pow_05(day_autocorr_n1(Ret)), 10)), 10), 40)'
+- head: 'ts_min(inv(ts_std(pow_05(day_autocorr_n1(Open)), 10)), 10)'
+  why: '拆解表:去掉 inv 好 0.28(方向翻成 -1,-2.49),外窗 10 -> 5 与 10 -> 20 各好 0.18 / 0.16,说明 inv 与 10 日窗口不是承重件,链条的长度没有被学到。变体沿用 Ret 链里"越慢越好"的线索:外窗 40、中窗与外窗都取 20,以及去 inv 的 20 / 20 版。'
+  variants:
+  - 'ts_min(inv(ts_std(pow_05(day_autocorr_n1(Open)), 10)), 40)'
+  - 'ts_min(inv(ts_std(pow_05(day_autocorr_n1(Open)), 20)), 20)'
+  - 'ts_min(ts_std(pow_05(day_autocorr_n1(Open)), 20), 20)'

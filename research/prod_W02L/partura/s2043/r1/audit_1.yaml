@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 C = day_mean(mul(replace_small_with_nan(is_gt(dV, 均值+1倍标准差)), Ret)) 是 head 1 的子树(已核对),16 个种子都原样包含 C(已核对)。外围算子集合:与库内含 C 的 8 条 B127 候选(外围为纯 C,或 abs_/cs_demean/ts_mean/ts_stddev/add/in_sustain_stddev 的组合)两两不同,16 个种子无一与之相同;骨架对全部 5583 条库无一命中。创新度 4:库里对 C 只做水平与离散度加工(ts_mean、ts_stddev、abs_、add),没有 C 与跨日收益的回归、相关、自相关,a1–a8、a11、a12 是新的读法。新尺子下核心与各控制 |ρ| ≤ 0.15,与 head 最大 |ρ| 0.05,不是换皮。合理度 4:机制是 Llorente 等(2002)的跨期延续 / 回吐。算子逐个核对:cross_regbeta(x,y) 是 y 对 x 的滚动斜率,a1–a5 用 cross_delay(C,1) 作 t−1 的回归元对 t 日收益,无前视;a6、a7 是同日关系,t 日信号对应 t+1 收益(AlphaCube 的 Label 为次日收益),也无前视;cross_* 为日轴因果窗口。a9、a10、a13–a16 是水平型(C 除以日波动、C 减当日平均分钟收益、C 的长期均值),与 head 1 的 |ρ| 0.35–0.51、与 vol / known / liq 控制 0.26–0.39,与 PI 笔记「C 水平没有 alpha」一致;但它们不是 ρ≥0.7 或控制≥0.8 的重复,也不是数学问题,按 §3 不划。如果有 alpha,最可能来自 a1–a5(昨日放量冲击收益对今日收益的 120–180 日斜率,即延续系数),其次 a11 的 C 自相关。需 PI 核实(不构成划掉理由):分钟索引 120(11:30)到 121(13:01) 跨午休,若 Ret 与 dV 是网格差分,index 121 的 Ret 与 dV 跨约 90 分钟,会进入全族 C 写法(含 head 1),建议检查 index 121 的事件频率与 Ret[121] 的量级。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '13 个种子的骨架对全部 5583 条库无一命中(用同一解析器对库内表达式本身重算,不依赖库的骨架列),与 PI 笔记一致。库里 in_sustain_mean 只出现 4 次(B224/B226/B228 一族,数据端是 Volume 而非 Ret),day_corr 出现 301 次但全是 abs/Volume 类,没有事件分钟收益与其后 5 分钟收益的配对。创新度 4。合理度 4:机制是 Hasbrouck(1991) 的永久/临时冲击与 Pástor–Stambaugh 的事件版。算子核对:in_sustain_mean(mask,data,5,1) 在每个 mask==1 的分钟取 data[j+1..j+5] 的均值(_get_rowwise_windows 的 start_offset 语义),不含事件分钟本身;day_corr 只在两序列同时有值的事件上算;延续占比 SC/mean|post5| 的绝对值不超过 1;b12 的 top-10% 由 in_top_quantile_flag 按天取分位;b7 的 cross_regbeta(imp,post5) 是 post5 对 imp 的斜率,与笔记一致;b10、b13 的 cross_delay 只用昨日量,无前视。已知混淆:买卖价差弹跳使 corr(imp,post5) 机械偏负;与流动性控制的 |ρ| 在 b1、b2、b3、b9、b12 为 0.35–0.38(笔记预期 < 0.3),b9 与 vol / known 为 0.37–0.38,说明信号部分是流动性与价差的代理。这是数据层面的风险提示,不是数学问题,不划。如果有 alpha,最可能来自两处:(i) 放量分钟的价差 / 最小报价单位相对股价的代理(b1–b4 的事件内相关 60–120 日均值),或 (ii) 慢的带符号延续(b5、b6、b11 的 SC 聚合)。'
+R:
+  - head: 'ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))), 20)'
+    soundness: 4
+    reasons: '窗口拉长的单调改进与拆解表一致(train 10/20/40 日为 −1.79/−1.09/−0.84,valid 为 −1.96/−0.21/+0.03),换手作为第一成本的机制说得通。ts_stddev 是日轴因果滚动标准差(rolling_windows 左填 NaN),无除法、无前视。241 日窗口在 2018 年头部是扩张窗口,约占 train+valid 的 12%,未主导结果,不是定义问题。去掉 cs_demean 的两个变体(窗口 40、60)与 vol 控制 0.48–0.53 相关、与原 head 的 |ρ| 为 0.77 / 0.68,本质上放大了波动暴露,但不是数学问题,不构成扣分。'
+  - head: 'ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))), 20)'
+    soundness: 4
+    reasons: '同族的 16–226 分钟版本,与 head 1 走同一条窗口单调线(拆解表 20→40 日 train −1.12→−0.78、valid −0.76→+0.13)。机制与算子同 head 1,无前视、无除法、NaN 行为与原 head 相同。'
+  - head: 'add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))), 20), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211), 5)))), 20))'
+    soundness: 4
+    reasons: '两项相加,第一项的慢化机制同 head 1;第二项的 in_sustain_stddev(mask,data,5) 用默认 start_offset=0,与原 head 一致。变体 4 的第二项取日度水平(不做时间平滑),会把换手重新放回去,与 PI 自述的「慢是第一成本」有张力,但这是可检验的假设,不是数学问题。'
+summary: '两个任务位均通过且无种子划掉(a 为 16/16,b 为 13/13),R 三组合理度均为 4;无数学问题,无 |ρ|≥0.7 或控制 |ρ|≥0.8 的自动划掉项,两个位的外围与骨架对库查重均无命中;需 PI 核实午休边界(index 120→121)上 Ret 与 dV 的定义,它影响全族而非本位独有。'

@@ -1,0 +1,103 @@
+seed: 2018
+round: 3
+slots:
+- type: E
+  core: div(day_close(Close), cross_delay(day_close(Close), 1))
+  hypothesis: |-
+    机制:核心 C = div(day_close(Close), cross_delay(day_close(Close), 1)) 是日收益的总比值(后复权收盘对前一日收盘;后复权后的比值跨除权日连续,等于真实的除权后收益)。这一位沿本流目前唯一抬离「底」的一条线深挖:价格涨跌停的事件结构。
+
+    (1) 这一线是怎么来的(只用 train / valid 的读数)。本流 267 个已评分候选里,最好的三个都含 C:第 2 轮 N 位的 cross_max(收益 − LimitWidth, 60) = +0.31 / +0.10,cross_max(cross_max(收益 / LimitWidth, 60), 60) = +0.75 / 0.00,第 2 轮 E 位的 regalpha / 波动 = +0.09 / +0.06。前两个读的是「60 到 120 日里最近有没有碰到本板涨停」(收益 − LimitWidth 对涨停股约为 0,对其余股为负;LimitWidth 随板块取 10% / 20% / 30%,所以主板与创业板、科创板的涨停可比)。窗口越长 train 越好(60 日 0.31 → 120 日 0.75),valid 在 60 日最好、120 日为 0、241 日为 −0.32。含 C 的 65 个候选均值 −1.13,不含 −2.4(富集 +1.26,p < 0.001),而含 day_skew 的候选均值 −2.7 到 −3.5。所以信号如果有,在「涨停事件」,而不在 C 的其他写法;最大值只是事件的一个统计量,这一位换掉统计量。
+
+    (2) 机制与文献。涨跌停是 A 股最显眼的事件:限幅会延迟价格发现、使涨停之后的几天继续同向(Kim & Rhee 1997 对价格限幅的研究;Bali、Cakici & Whitelaw 2011 的 MAX 是同一类「极端日」读数,但美股方向相反),T+1 与散户 / 短线资金的跟风让事件带有持续性与可预期的衰减。max 读不到的几件事,正是本位 13 个种子的外围(Z = 日收益 / LimitWidth):
+    (a) 频率与新近度:cross_ema(is_gt(收益 / LimitWidth, 0.95), 20 / 30 / 60) 是涨停事件的指数衰减强度(半衰期 20 ~ 60 日),同时含次数与新近度;is_gt 对缺失给 0,EMA 的尾部让取值连续(旧事件的权重按 0.5^(天数 / 半衰期) 衰减但不为 0),不是离散计数,过得了「不同值 ≥ 50%」的闸门。种子 1、2。
+    (b) 上市初期的污染:科创板与 2020-08 后的创业板上市头 5 日不设涨跌幅,LimitWidth 对这些日子失真(上一轮审计员指出的口径问题)。种子 2、5、13 用 is_gt(ListAge, 5) 把上市头 5 日排除;ST(5%)不在 LimitWidth 里,0.95 的阈值使 ST 的涨停不被计入,这是有意保守。
+    (c) 对称与方向:跌停强度(种子 4)与涨停减跌停(种子 3),以及上 / 下四分位的均值之和(种子 7,日收益 / LimitWidth 的偏度式读数,cross_tail_mean_q75 与 q25 取窗口内尾部的条件均值)。
+    (d) 封板质量(炸板):盘中最高价触及涨停但收盘没有封住,是「买盘不足以撑到收盘」(种子 8,触及的 EMA 强度减去收盘封住的 EMA 强度;种子 9 是封住 / 触及的比,分母加 0.01)。
+    (e) 事件之后:昨天涨停、今天的开盘溢价(种子 10)与收益(种子 11)的 60 日 EMA,读的是短线资金接力的强弱(A 股常说的涨停次日溢价)。
+    (f) 极端相对典型:cross_max(Z, 120) / (cross_stddev(Z, 120) + 0.01)(种子 12)与 Z 的四次方均值(种子 13,pow_2 两次),前者是无量纲的「跳」,后者把涨停日权重推到平方外。种子 6 是 Z 的上四分位均值。
+
+    (3) 为什么和库里、和 head 不同。我 grep 过两个库的 5583 条表达式:LimitWidth、ListAge、BoardCode、cross_ema、cross_tail_mean 一次都没出现;is_gt / is_lt 出现 792 次,但作用在分钟轴的掩码上(in_slice、delete_open_close 一类),没有一条对日涨跌幅做事件指示,更没有「事件指示的指数衰减强度」;本流 7 个 head 全是 day_skew(分钟内价格形状)一族,上一轮同类种子(cross_max(Z, 60) 等)与 head 的日度秩 |ρ| 不超过 0.25。本位 13 个种子与已见过的含 C 候选的外围(cross_max / sub / LimitWidth 一类)都不同,新增的算子有 is_gt、is_lt、cross_ema、cross_tail_mean_q75 / q25、select_where、ListAge。
+
+    (4) 为什么样本外还会在,以及最可能的失败方式。机制是制度性的(±10% / 20% 限幅、T+1、散户与短线资金占比高),不依赖某一段行情;种子的半衰期取 20 ~ 60 日,换手低,15 bp 成本拖累小。但是数据已经给了警告:同一族 train 强(0.75)而 valid 为 0,最可能的原因是 2023 年下半年起监管收紧、对炒作的惩罚加重,事件溢价变弱。这一位的价值就在于它直接检验:新近度 / 频率(a)、去上市初期(b)、封板质量(d)能否让 valid 抬起来;评分是 min(train, valid),所以只有两段都有才算。失败方式:事件强度与波动控制的相关偏高(预计 0.3 ~ 0.55,低于 0.8 的划线),被尺子去掉线性 / U 形 / S 形暴露后剩得少;种子 10、11 是稀疏事件,噪声大。
+
+    (5) 数学检查。C 只用 t 日与 t−1 日收盘,日频字段 LimitWidth / ListAge 是 t 日已知量,cross_delay(·, 1) 只往回看,无前视(t 日收盘后算出,t+1 才交易)。第 1 天 C 为 NaN,is_gt / is_lt 对 NaN 给 0,EMA 把这一天当作无事件。分母:种子 9 的分母 cross_ema(触及) + 0.01 不会为 0;种子 12 的 cross_stddev(Z, 120) + 0.01,Z 的典型标准差约 0.2 ~ 0.4,一字板全窗口为常数时分母是 0.01、分子为 0 或常数,不会出现爆点。select_where(ListAge > 5, 收益 − LimitWidth, −1.0) 把上市初期排到最低,不进最大值。已在一个本地合成立方体上(60 只 × 320 日,CPU,无真实数据)逐个确认 13 个种子都能算出、覆盖率约 0.97 以上;事件类种子在把阈值降到 0.25 后不同值比例为 1.0。
+  literature:
+  - source: 'Kim & Rhee, Price limit performance: Evidence from the Tokyo Stock Exchange, Journal of Finance'
+    year: '1997'
+  - source: 'Bali, Cakici & Whitelaw, Maxing out: Stocks as lotteries and the cross-section of expected returns, Journal of Financial Economics'
+    year: '2011'
+  - source: 'Barberis & Huang, Stocks as lotteries: The implications of probability weighting for security prices, American Economic Review'
+    year: '2008'
+  seeds:
+  - cross_ema(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 20)
+  - cross_ema(mul(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), is_gt(ListAge, 5)), 60)
+  - sub(cross_ema(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 30), cross_ema(is_lt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), -0.95), 30))
+  - cross_ema(is_lt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), -0.95), 30)
+  - cross_max(select_where(is_gt(ListAge, 5), sub(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), -1.0), 120)
+  - cross_tail_mean_q75(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 120)
+  - add(cross_tail_mean_q75(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 120), cross_tail_mean_q25(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 120))
+  - sub(cross_ema(is_gt(div(sub(div(day_max(High), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 30), cross_ema(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 30))
+  - div(cross_ema(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 30), add(cross_ema(is_gt(div(sub(div(day_max(High), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 30), 0.01))
+  - cross_ema(mul(cross_delay(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 1), sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1)), 60)
+  - cross_ema(mul(cross_delay(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1)), 60)
+  - div(cross_max(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 120), add(cross_stddev(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 120), 0.01))
+  - cross_mean(mul(is_gt(ListAge, 5), pow_2(pow_2(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth)))), 120)
+- type: N
+  hypothesis: |-
+    机制:一类「今天的收益对昨天某个状态的 120 日响应」的读数 —— 每只股票自己估计的、可预测性的强度与符号。结构上沿用本流第 1 轮 E 位最好的写法(cross_regbeta(状态量, 日度路径量, 120)),但把状态量换成 B054 与前两轮都没碰过的变量。
+
+    inspired_by 的现象见下;种子分四组(R1 = 日收益 = div(day_close(Close), cross_delay(day_close(Close), 1)) − 1,MKT = cs_mean(R1)):
+    (A)对昨天大盘的响应(信息扩散速度):斜率 ts_regbeta(cs_mean(cross_delay(R1, 1)), R1, 120)(种子 1)、t 值(种子 2)、先对当天大盘回归取残差再对昨天大盘回归(种子 3,Hou & Moskowitz 2005 的价格延迟思路:慢吸收大盘信息的股票,收益里有对昨天大盘的响应)、只取大盘为负的那一半(种子 13)。机制:信息扩散慢的股票有延迟溢价(Lo & MacKinlay 1990;Chordia & Swaminathan 2000 是成交量版)。
+    (B)对昨天市场情绪的响应(新数据):x = 昨天全市场涨停占比 cs_mean(is_gt(R1 / LimitWidth, 0.95))(种子 4)、同日的涨停占比(种子 5)、昨天跌停占比(种子 14)、昨天全市场的日内振幅(种子 6)。机制:炒作情绪好的日子,对情绪敏感的股票跟随;LimitWidth 是库里一次都没出现过的叶子。
+    (C)对自己昨天的响应:昨天隔夜缺口(种子 7)、昨天日内振幅(种子 8)、昨天收盘位置 CLV = (收盘 − 最低) / (最高 − 最低 + 0.0001)(种子 9)、昨天收益 = 一阶自回归(种子 10)、昨天起的 5 日累计收益(种子 11)、扣掉大盘后的特质一阶自回归(种子 12)。机制:读的是「反转 / 延续」的个股性格,窗口 120 日是慢变量。
+
+    为什么和库里、和 head 不同:库里 cross_regbeta 有 69 条、ts_regbeta 有 30 条,但它们的 x、y 都是分钟统计量(day_q_stat_std、day_var、nt_* 一类)的组合;我 grep 过:x 或 y 是 cross_delay / ts_delay 的滚动回归、相关一条没有,以 cs_mean(跨股票均值)当 ts_regbeta / ts_corr / ts_cov 的 x 的一条没有,「昨天的状态对今天的日收益」的写法库里没有;本流 7 个 head 全是 day_skew(分钟内价格形状)与其嵌套相关。第 2 轮同族种子(ts_corr / ts_regbeta 配当天大盘,隔夜 / 日内的同日相关)与 head 的日度秩 |ρ| 最高 0.31;本位全部读「昨天 → 今天」的滞后关系或情绪占比,预计更低。
+
+    为什么样本外还会在:窗口 120 日(每天只换 1/120 的样本),慢变量,换手低;机制(信息扩散、散户情绪、反转 / 延续性格)是结构性的。本流已有的教训:单量的日度路径比值没有 alpha(第 1 轮 N 位全部 ≤ −0.81),两个日度量的关系类读数相对最好(第 1 轮 E 位 −0.39),所以这一位 14 个种子全是「关系类」,没有一个是单量的比值。最可能的失败方式:120 日回归斜率的估计噪声大(每个窗口只有 120 个点),截面排名里噪声占主导,train / valid 不一致;种子 1、2、3 彼此高度相关(同一个 x),所以实际独立的种子约 10 个;一阶自回归类(种子 10、12)与流动性的相关可能偏高(买卖价差反弹),预计 0.2 ~ 0.4,不到 0.8 的划线。
+
+    数学检查:所有 x、y 只用 t 日及以前的数据(cross_delay 的天数为正),t 日收盘后算出,t+1 才交易;ts_regbeta / cross_regbeta 在窗口内 x 的方差为 0 时给 NaN(var_x > EPS 的保护),涨停占比与大盘收益每天都在变,不会是常数;CLV 的分母加了 0.0001(最高 − 最低是后复权价的量级,一字板日分子分母都是 0,CLV = 0);select_where(大盘为负, 大盘, 0.0) 里的 0.0 是浮点常数,和 cs_mean 同为浮点。已在一个本地合成立方体上(60 只 × 320 日,CPU,无真实数据)确认 14 个种子都能算出、覆盖率约 0.97;涨停占比类种子在合成数据里没有涨停事件(x 为常数,NaN),这是合成数据的缘故,真实数据里全市场每天都有涨停。
+  inspired_by: B054(33 个成员,signedpower(cross_quantile_q75(cross_corr(day_skew(High), mul(day_mean(High), day_skew(High)), 10), 241)) 一族)与本流的定位表:(i) 含 day_skew 的候选均值 −2.7 ~ −3.5,含日度收益路径 C 的 65 个候选均值 −1.13(富集 +1.26,p < 0.001),分钟内形状读数是烂部件、日度路径才有东西;(ii) B054 的 head 是「两个量的滚动相关再嵌套」,说明这一类结构本身有读数,只是它们读的变量(分钟偏度)是坏的;(iii) 第 1 轮 E 位最好的一族是 cross_regbeta(状态量, 日度路径量, 120)。所以把「两个量的滚动关系」搬到日度路径上:今天收益对昨天状态的响应。
+  literature:
+  - source: Hou & Moskowitz, Market frictions, price delay, and the cross-section of expected returns, Review of Financial Studies
+    year: '2005'
+  - source: Lo & MacKinlay, When are contrarian profits due to stock market overreaction?, Review of Financial Studies
+    year: '1990'
+  - source: Chordia & Swaminathan, Trading volume and cross-autocorrelations in stock returns, Journal of Finance
+    year: '2000'
+  seeds:
+  - ts_regbeta(cs_mean(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - ts_reg_tvalue(cs_mean(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - ts_regbeta(cs_mean(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1)), ts_regres(cs_mean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 60), 120)
+  - ts_regbeta(cs_mean(cross_delay(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - ts_regbeta(cs_mean(is_gt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), 0.95)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - ts_regbeta(cs_mean(cross_delay(sub(div(day_max(High), day_min(Low)), 1), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(sub(div(day_max(High), day_min(Low)), 1), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(div(sub(day_close(Close), day_min(Low)), add(sub(day_max(High), day_min(Low)), 0.0001)), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(cross_sum(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 5), 1), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_regbeta(cross_delay(sub(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), cs_mean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1))), 1), sub(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), cs_mean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1))), 120)
+  - ts_regbeta(select_where(is_lt(cs_mean(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1)), 0), cs_mean(cross_delay(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 1)), 0.0), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+  - ts_regbeta(cs_mean(cross_delay(is_lt(div(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), LimitWidth), -0.95), 1)), sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 120)
+R:
+- head: cross_mean(cross_stddev(day_skew(Open), 10), 241)
+  why: 拆解表里 Open→Close 把 −0.88 提到 −0.50(+0.38,train −0.50 / valid −0.30,两段都比 Open 好),说明有用的是「日内价格形状的 10 日不稳定性在 241 日上的慢平均」,字段换成收盘更好;其余部件(10 日离散窗口、241 日平均窗口、平均的形式)没有试过 Close 版。变体:Close 配更长的平均窗口 360、离散窗口 20 / 5、换 Low、用指数加权代替硬窗口。
+  variants:
+  - cross_mean(cross_stddev(day_skew(Close), 10), 360)
+  - cross_mean(cross_stddev(day_skew(Close), 20), 241)
+  - cross_mean(cross_stddev(day_skew(Close), 5), 241)
+  - cross_mean(cross_stddev(day_skew(Low), 10), 241)
+  - cross_ema(cross_stddev(day_skew(Close), 10), 120)
+- head: ts_stddev(day_skew(Vwap), 160)
+  why: 拆解表里 ts_stddev 窗口 160→320 把 −0.71 提到 −0.48(+0.23,train −0.28 / valid −0.48),窗口放长两段同时变好;Vwap→Close 在 160 日上是 −0.88(更差)。烂部件是硬窗口的长度:继续放到 241 / 480,Close 配 320,再试对 160 日结果做半衰期 60 的指数平滑。
+  variants:
+  - ts_stddev(day_skew(Vwap), 241)
+  - ts_stddev(day_skew(Vwap), 480)
+  - ts_stddev(day_skew(Close), 320)
+  - cross_ema(ts_stddev(day_skew(Vwap), 160), 60)
+- head: cross_mean(day_skew(Ret), 160)
+  why: 这是本流最好的 head(−0.39,train −0.39 / valid −0.14);拆解表里窗口 320 的 valid 变成 +0.19 但 train 掉到 −0.47,80 日 −0.58。部件问题是 train 与 valid 此消彼长:试 241 日、半衰期 120 的指数加权(软窗口)、以及「160 日均值减 480 日均值」(偏度水平的变化,去掉长期的底)。
+  variants:
+  - cross_mean(day_skew(Ret), 241)
+  - cross_ema(day_skew(Ret), 120)
+  - sub(cross_mean(day_skew(Ret), 160), cross_mean(day_skew(Ret), 480))

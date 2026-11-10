@@ -1,0 +1,68 @@
+seed: 2005
+round: 3
+slots:
+- type: E
+  core: ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50)
+  hypothesis: 机制:成交额的「二阶不稳定性」。day_cov(Amt, Amt) 是一天里分钟成交额的方差(日内成交额的离散度,尺度 = 成交额的平方);cross_stddev(·, 60) 是它在 60 日里的波动,即「日内放量程度」这件事自己有多不稳;外面再套 ts_std(·, 50) 是这个 60 日波动在 50 日里的变化,即成交结构的「政权切换」有多频繁(时而平静、时而突发性放量)。本批证据(只用
+    train / valid):三个 head(+0.62 / +0.56 / +0.44,train 与 valid 都为正,valid 更高)全部含这个子树;拆解里单独的 ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50) 就是 +0.56 / +1.02,而 head 的另一半(ts_quantile 的 day_cov(Amt, Amt) 水平)单独是
+    -3.75、去掉它分数不变,所以承重的只有这个子树;去掉 cross_stddev 掉到 +0.01,去掉外层 ts_std 掉到 +0.26,两层都必要;Amt 换成 Volume 掉到 -2.13,说明承重的是以「元」计的尺度(价格乘股数)或价格加权的成交结构,而不是股数的不稳定性。这一轮要试的外围(和快照里见过的「add(水平项, 核心)」全然不同,所有种子都不再加 day_cov(Amt,
+    Amt) 水平项):(1) 非参数的去水平:在已知族 cross_mean(day_std(Amt), 30) 的十分位内、流通市值十分位内、名义价十分位内标准化,或除以已知族的平方(得到无量纲的相对不稳定性);(2) 自比:除以自己 50 日均值(变异系数)、除以 241 日的常态方差、与自己 241 日 z 分数、与 60 日前的差(不稳定性是在上升还是下降);(3) 价格与股数分解:核心除以同一结构的
+    Volume 版,比值约等于价格尺度的平方,检验承重的是名义价位(上一轮本流 N 位的价格水平假设)还是成交结构;(4) 小盘优先(cs_first_low40)与新股压底(cs_last_low10)的闸。为什么和库里不同:库里含 day_cov(Amt, Amt) 的候选全是原始尺度的加法组合(水平项加核心),没有一条把核心去水平、自比、分桶或做价量分解;去水平之后与 head 的秩相关应明显下降(这些种子的价值在于另一个量,不是同一个量换写法)。为什么样本外还会在:来源是一个慢变的个股属性,即资金参与的突发性(题材股
+    / 游资票的间歇性放量,Gervais-Kaniel-Mingelgrin 的高成交额溢价一类机制),换手低(60 日与 50 日的双层窗口,日度秩几乎不动),15 bp 成本留得住;三个 head 在 valid 段比 train 还好(+0.93 / +1.03 / +0.84),说明它不是样本内的一段行情。风险:核心的大部分可能只是成交额水平(尺度 = Amt 的平方),去水平之后消失,这正是本位要检验的;若去水平的种子全部落在
+    -1 以下,则结论是「承重的是水平而非不稳定性」,这个核心就不再用。数学检查:无前视,只用 t 日收盘及以前;种子里的分母(ts_mean(cross_stddev(...)))、(已知族的平方)、(Volume 版核心)只在窗口内整段停牌或成交额恒定时为 0,此时分子也为 0 得 NaN,不会爆点;cross_zscore 的分母是 241 日标准差,新股窗口内有效日不足时返回 NaN;排序靠截面秩,不受尺度溢出影响(Amt
+    的平方在 float32 约 1e18 量级仍远低于上界)。
+  seeds:
+  - cs_bucket_zscore(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), LogFloatCap)
+  - div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_mean(cross_stddev(day_cov(Amt, Amt), 60), 50))
+  - div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), cross_mean(day_cov(Amt, Amt), 241))
+  - div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), mul(cross_mean(day_std(Amt), 30), cross_mean(day_std(Amt), 30)))
+  - cross_zscore(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 241)
+  - sub(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_delay(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 60))
+  - cs_last_low10(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ListAge)
+  - div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_std(cross_stddev(day_cov(Volume, Volume), 60), 50))
+  - cs_bucket_zscore(div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_std(cross_stddev(day_cov(Volume, Volume), 60), 50)), LogFloatCap)
+  - cs_bucket_demean(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), sub(LogFloatCap, LogFloatShares))
+  - cs_first_low40(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), LogFloatCap)
+  - ts_rank(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 120)
+  - cross_ema(div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_mean(cross_stddev(day_cov(Amt, Amt), 60), 50)), 20)
+  - cs_bucket_zscore(cross_zscore(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 120), cross_mean(day_std(Amt), 30))
+  - sub(cross_zscore(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), 241), cross_zscore(ts_std(cross_stddev(day_cov(Volume, Volume), 60), 50), 241))
+- type: N
+  hypothesis: 机制:同一个「二阶不稳定性」的想法,换到成交结构的「形状」上,不再读以元计的水平。受本批启发:本批最有 alpha 的子树 ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50) 含两层:内层是日内成交额离散度,外层是它的不稳定性;但 day_cov(Amt, Amt) 的尺度是成交额的平方(与 Volume 版相差 2.7 个单位的分数),不能区分「结构在变」与「规模大」。这里用无尺度的日内形状量(基尼系数
+    day_gini、偏度 day_skew、峰度 day_kurt、成交额重心 day_centroid、最大分钟的位置 day_at_max_ratio、上端期望损失比 / 下端 day_es_ratio_hi / lo)替换内层,外层保持「60 日波动再取 50 日波动」。算子:day_* 把分钟成交额压成日度的形状数,cross_stddev 取 60 日波动,ts_std 取 50 日的波动;全部是日度序列的慢聚合。另外给两个相邻的对象:(a)
+    收益的波动之波动(ts_std(cross_stddev(day_std(Ret), 60), 50))与成交额的波动之波动的相关(cross_corr 版,读「放量是否伴随价格剧烈」的耦合,没有尺度);(b) 价格尺度版 day_cov(Close, Close) 与 day_cov(Ret, Amt),把核心的 Amt 换成价格或收益,检验承重的是价格尺度、成交额还是二者的耦合;还有变异系数版与不动日占比版。为什么和库里不同:两个库
+    5583 条表达式的骨架全部是 day_cov / day_std 类的水平量加 cross_max / cross_mean 类的聚合;没有一条是对形状量(基尼、偏度、峰度、重心、最大位置)做「cross_stddev 再 ts_std」的二阶聚合(骨架不同);二阶不稳定性在整个库里只出现在 day_cov(Amt, Amt) 这一种尺度量上。为什么样本外还会在:若来源是资金参与的突发性,则形状量的不稳定性是同一个慢属性的无尺度版本,不依赖成交额的绝对规模,控制(流动性、市值、成交额已知族)吃不掉;窗口
+    60 与 50 日,日度秩变化慢,成本低。风险:形状量噪声大,二阶聚合后信噪比可能太低(峰度、最大位置尤其);如果全部在 -1 以下,说明本批的 alpha 确实依赖尺度,而不是不稳定性。数学检查:无前视;day_kurt / day_skew 在分钟数不足时返回 NaN;day_gini 对全零成交额返回 NaN;cross_corr 窗口内一个序列为常数时返回 NaN 或 0,不是爆点;种子
+    10 的分母 ts_mean(cross_stddev(day_gini(Amt), 60), 50) 为正的量,不接近零;Amt 的平方在 float32 不溢出。
+  inspired_by: M3 批:三个 head(+0.62 / +0.56 / +0.44)全含 ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50);去掉外层 ts_std 掉到 +0.26、去掉 cross_stddev 掉到 +0.01、Amt 换 Volume 掉到 -2.13,而水平项 day_cov(Amt, Amt) 单独 -3.75,说明承重的是成交额二阶不稳定性(且带以元计的尺度)
+  seeds:
+  - ts_std(cross_stddev(day_gini(Amt), 60), 50)
+  - ts_std(cross_stddev(day_skew(Amt), 60), 50)
+  - ts_std(cross_stddev(day_kurt(Amt), 60), 50)
+  - ts_std(cross_stddev(day_centroid(Amt), 60), 50)
+  - ts_std(cross_stddev(day_es_ratio_hi(Amt), 60), 50)
+  - ts_std(cross_stddev(day_at_max_ratio(Amt), 60), 50)
+  - ts_std(cross_stddev(day_std(Ret), 60), 50)
+  - ts_std(cross_stddev(day_cov(Ret, Amt), 60), 50)
+  - ts_std(cross_stddev(day_cov(Close, Close), 60), 50)
+  - div(ts_std(cross_stddev(day_gini(Amt), 60), 50), ts_mean(cross_stddev(day_gini(Amt), 60), 50))
+  - cross_corr(cross_stddev(day_std(Amt), 60), cross_stddev(day_std(Ret), 60), 120)
+  - ts_std(cross_stddev(day_zero_ratio(Ret), 60), 50)
+  - ts_std(cross_stddev(day_std(Amt), 60), 50)
+  - ts_std(cross_stddev(day_es_ratio_lo(Amt), 60), 50)
+R:
+- head: add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50))
+  why: 外层 ts_std 与内层 cross_stddev 的窗口是承重部件(去掉任一层都掉到 +0.0 ~ +0.26),水平项 ts_quantile_q50(day_cov(Amt, Amt), 1) 单独 -3.75、去掉分数不变,是多余部件。本流前两轮的规律是越慢越好(窗口 60 -> 120 -> 241 在多个 head 上变好 0.1 ~ 0.6),变体把内外窗口推慢并去掉水平项;分母无,无数学风险。
+  variants:
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt), 120), 100))
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt), 60), 100))
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt), 120), 50))
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt), 30), 50))
+  - ts_std(cross_stddev(day_cov(Amt, Amt), 60), 120)
+  - ts_std(cross_stddev(day_cov(Amt, Amt), 120), 241)
+- head: add(ts_quantile_q50(day_cov(Amt, Amt), 40), ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50))
+  why: 同上:ts_quantile_q50(day_cov(Amt, Amt), 40) 是多余部件(拆解里 knockout 必要性约 0),窗口 60 / 50 的慢化是改善方向;变体只改窗口,不引入新算子。
+  variants:
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 40), ts_std(cross_stddev(day_cov(Amt, Amt), 120), 100))
+  - add(ts_quantile_q50(day_cov(Amt, Amt), 40), ts_std(cross_stddev(day_cov(Amt, Amt), 60), 100))

@@ -1,0 +1,120 @@
+seed: 2016
+round: 1
+slots:
+  - type: E
+    core: 'day_quantile_q25(Open)'
+    hypothesis: |-
+      机制:核心 day_quantile_q25(Open) 是当天分钟开盘价的 25% 分位,约等于名义股价水平。这一批给出的证据(拆解表与批内成员的训练期统计):
+      (1) 核心单独做纯多头书:方向 −1、半衰期 5,train −1.61 / valid −2.38。批内成员 day_quantile_q25(Open) 的训练期日换手只有 0.014,15 bp 成本一年不到 1 个点,所以这 −1.6 不是成本拖出来的。
+      (2) 奖励按 train 在两个方向里取较好的那个,取定之后仍是 −1.61,所以另一个方向的 train 更差:价格对控制取残差之后,最高十分位与最低十分位都跑输等权基准,收益只能在中间带里。三个 head(abs_、sub、回归元)都是把价格水平当连续的单调量读,读不出这种「两头亏、中间好」的形状。
+      (3) Open 换 Close 同分(−2.38),所以是价格水平本身,不是某根分钟取样的噪声。
+      结论:核心的信息不是「谁价格高」(分数),而是「价格带」(状态)。本位只把它当状态变量用,有三种用法:
+      (a) 筛子 cs_last_low / cs_last_high:价格最低与最高的两端永远排到多头书之外,多头书只在中间带里按另一个慢信号 Y 选股。筛子的变量除了原价格,还有「价格对流通市值回归后的残差」cs_regres(cs_rank(核心), cs_rank(LogFloatCap))(同样市值下股价与股本结构异常的两端;因为 LogFloatCap − LogFloatShares = log 价格,它近似是流通股本相对市值的极端值),以及再对已知成交额族 cross_mean(day_std(Amt), 30) 取残差的版本。这样筛子对准的是奖励真正量到的那部分价格信息(去掉市值与流动性之后的价格),而不是原始价格。
+      (b) 分桶 cs_bucket_zscore / cs_bucket_demean:把 Y 放到名义价格十分位内标准化,去掉价格带对 Y 的整体平移。
+      (c) 非单调:neg(abs_(价格到中心的距离)) 与 Y 用 cs_robust_z 做连续的加和(不用秩相加,避免秩和的大量并列)。
+      Y 取三类「彩票型 / 尾部风险」属性,全部慢(窗口 20~60 日)、无尺度:
+      (i) 分钟已实现符号跳跃 RSJ = day_signed_ratio(Ret, pow_2(Ret)) = Σ r²·sign(r) / Σ r² = (上行半方差 − 下行半方差) / 总方差,有界 [−1, 1];40~60 日均值取负,即买负偏、卖正偏(Amaya 等 2015 的方向);
+      (ii) 20 日日收益最大值 MAX 取负(Bali 等 2011);
+      (iii) 日收益下行半标准差与上行半标准差的归一化差 (SD⁻ − SD⁺) / (SD⁻ + SD⁺),60 日,有界。
+      方向按文献先验写成「越大越想买」;MAX 与 RSJ 各放一个反向种子(第 15、16 个)做对冲。筛子的方向不会被奖励翻转:奖励按 train 取较好的符号,筛子起作用时 +1 优于 −1(−1 会把被筛掉的票放到多头书最前面)。
+      为什么价格带要和这类属性放在一起:Kumar(2009)指出彩票型偏好集中在低价、小盘、高偏度的股票,不同名义价格带的持有人结构不同,所以同一个 Y 的溢价在各价格带里不可比;分桶 / 筛子把「价格带的持有人结构」与「彩票溢价」分开。另外低价票一个 tick 占价格的 0.3%~1%,分钟收益被 tick 离散化,RSJ 与分钟峰度类统计被机械地拉平;价格十分位内标准化把这部分扣掉。
+      为什么和库里已有的不同:(1) 两个库 5583 条表达式里,cs_last_*、cs_bucket_*、cross_semistd_*、day_signed_ratio、cross_ema / cross_zscore、日频叶子 LogFloatCap 的出现次数全是 0(我统计了 members.csv 的骨架),所以这里的外围算子集合与以前看到的完全不同;16 个种子的整树骨架逐个对照过 5583 条骨架,没有重复。(2) 快照三个 head 里价格只作「被排序的分数」,这里价格只出现在筛子 / 分桶的第二个参数,输出的排序由 Y 决定;与三个 head 的日度秩 |ρ| 预计很低(< 0.3)。(3) 与控制:Y 对波动与 20 日反转有暴露(MAX 型预计与波动控制 |ρ| 0.6~0.8,可能被表里划掉几个),新尺子去掉的只是对这些控制秩的线性 / 平方 / 立方暴露,RSJ 与半标准差归一差是有界比值,与波动水平相关较弱。
+      为什么样本外还会在:(1) 价格带两端亏损在 train 与 valid 同向且 valid 更重(−1.61 / −2.38),不是某一段行情;(2) 名义价格带与持有人结构相关(散户彩票需求、1 元面值退市规则下的低价票、高价次新与小股本高价票),是慢变的结构;(3) 筛子变量是价格的日内分位,日换手 1.4%,Y 窗口 ≥ 20 日,15 bp 成本吃不掉。风险:(a) 筛子被市值控制的三次项吸收一部分;(b) Y 的方向先验可能错,已用反向种子对冲;(c) 彩票型属性与波动控制共线,残差可能很小;(d) MAX 在涨停处饱和(主板 10% / 创业板科创板 20%),部分变成「板块与涨停事件」的指示。
+      数学检查:无前视,全部只用 t 日收盘前的分钟数据与 t−1 收盘价,t+1 才交易。RSJ 的分母 Σ r² 为 0 只在全天无波动 / 停牌,此时得 NaN 而不是无穷,且分子的绝对值不超过分母,有界。半标准差归一差的分母 SD⁻ + SD⁺ 为 0 只在窗口内价格不变,此时分子也为 0,得 NaN。MAX 的分母是前一日收盘价(正数),停牌后第一天前收为空得 NaN。cs_last_* 的带按整块并列划分,名义价格是连续量几乎无并列;cs_bucket_zscore 的桶内标准差为 0 只在桶内 Y 全相等,最低成员数 2。所有窗口 ≤ 60 日,热身期不主导;面板覆盖率在合成数据上 95%~97%,每日不同值个数与股票数相同。
+    literature:
+      - title: 'Who Gambles in the Stock Market?'
+        authors: Alok Kumar
+        year: '2009'
+        treatment: 彩票型偏好集中在低价、小盘、高偏度股票;这里把名义价格带当作持有人结构的代理,在价格带内读彩票属性
+      - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+        authors: Turan G. Bali, Nusret Cakici, Robert F. Whitelaw
+        year: '2011'
+        treatment: 近期日收益最大值越高未来收益越低;这里作为 Y 之一,放进价格筛子 / 价格分桶
+      - title: 'Does realized skewness predict the cross-section of equity returns?'
+        authors: Diego Amaya, Peter Christoffersen, Kris Jacobs, Aurelio Vasquez
+        year: '2015'
+        treatment: 分钟级已实现偏度与后续收益负相关;这里用有界的符号跳跃 RSJ 作 Y
+    seeds:
+      - 'cs_last_high05(cs_last_low10(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40)), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high10(cs_last_low20(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40)), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high05(cs_last_low05(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 60)), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high05(cs_last_low10(neg(cross_max(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 20)), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high05(cs_last_low10(div(sub(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60)), add(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60))), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high10(cs_last_low10(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40)), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap))), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)))'
+      - 'cs_last_high10(cs_last_low10(neg(cross_max(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 20)), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap))), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)))'
+      - 'cs_last_high10(cs_last_low10(div(sub(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60)), add(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60))), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap))), cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)))'
+      - 'cs_last_high10(cs_last_low10(cs_bucket_zscore(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40)), day_quantile_q25(Open)), cs_regres(cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)), cs_rank(cross_mean(day_std(Amt), 30)))), cs_regres(cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)), cs_rank(cross_mean(day_std(Amt), 30))))'
+      - 'cs_bucket_zscore(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40)), day_quantile_q25(Open))'
+      - 'cs_bucket_zscore(div(sub(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60)), add(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60))), day_quantile_q25(Open))'
+      - 'cs_bucket_demean(cross_ema(neg(day_signed_ratio(Ret, pow_2(Ret))), 30), day_quantile_q25(Open))'
+      - 'add(cs_robust_z(neg(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40))), cs_robust_z(neg(abs_(cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap))))))'
+      - 'add(cs_robust_z(div(sub(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60)), add(cross_semistd_neg(day_last(Close), 60), cross_semistd_pos(day_last(Close), 60)))), mul(0.5, cs_robust_z(neg(abs_(cs_demean(log(day_quantile_q25(Open))))))))'
+      - 'cs_last_high05(cs_last_low10(cross_max(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 20), day_quantile_q25(Open)), day_quantile_q25(Open))'
+      - 'cs_last_high05(cs_last_low10(cross_mean(day_signed_ratio(Ret, pow_2(Ret)), 40), day_quantile_q25(Open)), day_quantile_q25(Open))'
+  - type: N
+    hypothesis: |-
+      机制:资金加权的价格接受度(money-weighted price acceptance)。
+      批里的现象(B046):整批里唯一接近随机基准的成员是耦合型 cross_reg_tvalue(day_quantile_q25(Open), day_kurt(Volume), 30),−1.30(train −1.27 / valid −1.30);它的两个部件单独分别是 −2.38 与 −4.93,把 Open 换 Close、Volume 换 Amt、窗口换 15 或 60 日,分数都在 −1.2 ~ −1.5。也就是说分数不在字段上,也不在价格水平或峰度本身(那两样要么被控制吸收,要么单边亏损),而在「价格路径与成交行为是否同步」这件事上。但这个耦合是在 30 个日度点上做 OLS t 值:回归元是非平稳的价格水平、被回归量重尾,估计很吵,t 值又被少数尖峰日的杠杆支配。
+      我把同一类对象搬到日内分钟轴上去估:每天 241 根分钟棒,成交额落在价格路径的哪一边。
+      定义(day_signed_ratio(x, y) = Σ|y|·sign(x) / Σ|y|,有界 [−1, 1]):
+      A = day_signed_ratio(Close − 锚, Amt) = 成交额落在锚上方的份额 − 落在锚下方的份额;锚取当日首根开盘价 day_first(Open)、昨日收盘价 cross_delay(day_last(Close), 1)、当日分钟收盘价中位数 day_median(Close)。
+      T = 同样的量但用 Close 当权重(Close 在一天内几乎不变,所以近似于分钟数的份额,即时间加权)。
+      A − T = 「钱比时间更偏向锚上方多少」,近似等于分钟成交额(按日均值归一)与价格位置 sign(Close − 锚) 的日内协方差。价格走高时自然有更多分钟在锚上方,这一项被 T 减掉;留下的是成交强度是否更集中在锚上方,就是 head 里「价格 × 成交行为」耦合的无尺度版本,而且每天用约 240 个点估,不是 30 个。
+      另外两个同类读数:VWAP 与 TWAP 的相对价差 (day_wmean(Close, Amt) − day_mean(Close)) / day_mean(Close);放量分钟(成交额最大的 10% 分钟)的平均收益减全天分钟平均收益 day_topw_mean(Ret, Amt) − day_mean(Ret)。
+      算子怎样实现(16 个种子分五组):(a) 20~120 日聚合 cross_mean / cross_ema(慢,换手低);(b) A − T 的差(去路径形状);(c) 相对自己历史的异常 cross_zscore(cross_mean(·, 20), 120) 与短减长;(d) 日轴尾部均值 cross_tail_mean_q25 / q75(「最极端的卖方接受日 / 买方接受日」的平均强度,而不是平均水平);(e) 与日收益的 60 日相关 cross_corr(A, 日收益)(资金接受度与价格走向是否一致,不一致 = 压力被吸收),以及在 LogFloatShares / LogFloatCap 十分位内标准化 cs_bucket_zscore(去掉与股本结构的共线)。另有路径效率 day_signed_ratio(Ret, Ret) = Σ r / Σ |r|(净变动 ÷ 总路径,Kaufman 效率比的符号版)作时间加权对照。
+      为什么有 alpha:机构与被动资金的大单分批执行,价格冲击是渐进吸收的(Kyle 型),订单失衡对后续收益有预测力(Chordia 与 Subrahmanyam 2004)。成交额一贯落在锚上方、而价格并未一次反映,意味着持续的买方压力在吸收供给;反过来,散户追涨在高位放量则是反转来源。符号交给奖励按 train 选。这是慢变的持有人结构 / 执行习惯,不依赖某一段行情。
+      为什么和库里已有的不同:库里 Amt 都是「水平 / 尺度」量(day_cov(Amt, ·)、cross_max 链、ts_std(day_close(Amt))),被流动性控制与已知成交额族吃掉;这里 Amt 只当权重,输出是有界份额,不含成交额水平,与这两个控制的 |ρ| 应当很低。5583 条表达式里 day_signed_ratio、day_wmean、day_topw_mean、cross_tail_mean_*、cross_zscore、cross_ema、cs_bucket_*、LogFloatShares 的出现次数全是 0,16 个种子的整树骨架逐个对照过 5583 条骨架,没有重复。与上一波的 head 家族(成交额时间重心 day_centroid(Amt)、开盘棒 × 隔夜跳空耦合、尾盘最后 30 分钟占比)也不同:它们读「成交发生在一天里的什么时间」,这里读「成交发生在价格的什么位置」。与 20 日反转控制:A 与当日涨跌同向,控制只去掉对 20 日收益秩的线性 / 平方 / 立方暴露,A − T、分桶、与日收益相关这几类进一步去掉路径形状。
+      为什么样本外还会在:来源是执行习惯与持有人结构,变化慢;窗口 ≥ 20 日、多数 60 日,秩在数周内稳定,成本低;批里耦合型成员 train 与 valid 同分(−1.27 / −1.30),说明这一类同步性在两段里是同一回事。风险:(1) 与 20 日反转共线;(2) 一字板与涨跌停日 Close = 锚,A = 0 且 T = 0,这些日子被平均稀释,涨停多的票排在中间;(3) Amt 加权受开盘集合竞价棒的巨量支配,A 在开盘锚下可能主要读开盘棒;(4) 符号先验不明,靠奖励选。
+      数学检查:无前视,只用 t 日分钟数据与 t−1 收盘价,t+1 才交易。day_signed_ratio 的分母 Σ|y| 为 0 只在停牌,此时得 NaN 而不是无穷;输出有界,没有近零分母造成的爆点。VWAP−TWAP 价差的分母 day_mean(Close) 是价格水平,恒正。cross_zscore 的分母是窗口内标准差 + EPS,A 在窗口内逐位不变时内核返回 0(已修),不爆。cross_corr 在窗口内某一方逐位不变时为 0 或空,不会无穷。所有窗口 ≤ 120 日,热身期不主导;在合成数据上 16 个种子的面板覆盖率 95%~97%,每日不同值个数与股票数相同。
+    inspired_by: 'B046(day_quantile_q25(Open) 一族):唯一接近随机基准的成员是 cross_reg_tvalue(day_quantile_q25(Open), day_kurt(Volume), 30)(−1.30,train −1.27 / valid −1.30),两个部件单独分别 −2.38 / −4.93,换字段(Open→Close、Volume→Amt)与窗口(15 / 60)都在 −1.2~−1.5:分数来自价格路径与成交行为的同步,不来自水平或峰度本身。本位把这种同步搬到日内分钟轴(资金加权的价格接受度),每天约 240 个点估计,取代 30 个日度点上的 OLS t 值。'
+    literature:
+      - title: 'Order imbalance and individual stock returns: Theory and evidence'
+        authors: Tarun Chordia, Avanidhar Subrahmanyam
+        year: '2004'
+        treatment: 订单失衡对后续个股收益有预测力;这里用成交额落在价格锚上下方的份额作为无需逐笔数据的失衡代理
+      - title: 'Good volatility, bad volatility, and the cross section of stock returns'
+        authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhi Zhao
+        year: '2020'
+        treatment: 把已实现方差按收益符号拆成上行 / 下行半方差;这里把同一种拆分用在成交额权重上(钱落在哪一侧)
+    seeds:
+      - 'cross_mean(day_signed_ratio(sub(Close, day_first(Open)), Amt), 60)'
+      - 'cross_mean(day_signed_ratio(sub(Close, cross_delay(day_last(Close), 1)), Amt), 60)'
+      - 'cross_mean(day_signed_ratio(sub(Close, day_median(Close)), Amt), 60)'
+      - 'cross_mean(div(sub(day_wmean(Close, Amt), day_mean(Close)), day_mean(Close)), 60)'
+      - 'cross_mean(sub(day_signed_ratio(sub(Close, day_first(Open)), Amt), day_signed_ratio(sub(Close, day_first(Open)), Close)), 60)'
+      - 'cross_ema(sub(day_signed_ratio(sub(Close, cross_delay(day_last(Close), 1)), Amt), day_signed_ratio(sub(Close, cross_delay(day_last(Close), 1)), Close)), 40)'
+      - 'cross_zscore(cross_mean(day_signed_ratio(sub(Close, day_first(Open)), Amt), 20), 120)'
+      - 'sub(cross_mean(day_signed_ratio(sub(Close, day_first(Open)), Amt), 20), cross_mean(day_signed_ratio(sub(Close, day_first(Open)), Amt), 120))'
+      - 'cs_bucket_zscore(cross_mean(day_signed_ratio(sub(Close, cross_delay(day_last(Close), 1)), Amt), 60), LogFloatShares)'
+      - 'cs_bucket_zscore(cross_mean(sub(day_signed_ratio(sub(Close, day_first(Open)), Amt), day_signed_ratio(sub(Close, day_first(Open)), Close)), 60), LogFloatCap)'
+      - 'cross_mean(day_signed_ratio(sub(Close, day_first(Open)), Volume), 120)'
+      - 'cross_mean(day_signed_ratio(Ret, Ret), 60)'
+      - 'cross_tail_mean_q25(day_signed_ratio(sub(Close, cross_delay(day_last(Close), 1)), Amt), 60)'
+      - 'cross_tail_mean_q75(day_signed_ratio(sub(Close, day_first(Open)), Amt), 60)'
+      - 'cross_corr(day_signed_ratio(sub(Close, day_first(Open)), Amt), sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 60)'
+R:
+  - head: 'cross_reg_tvalue(day_quantile_q25(Open), day_kurt(Volume), 30)'
+    why: |-
+      烂的部件是统计量本身而不是字段。依据(拆解表):两个部件单独分别 −2.38 / −4.93,耦合 −1.30;Open→Close(−1.26)、Volume→Amt(−1.22)、窗口 15(−1.44)/ 60(−1.51)全部落在 −1.2 ~ −1.5,说明分数不依赖用哪个价格或成交字段。统计量里有两处脆弱:(1) 回归元是价格水平,30 日内主要是趋势,非平稳;(2) 被回归量 day_kurt(Volume) 重尾,少数尖峰日有高杠杆,t 值被它们支配。变体:t 值换成有界的相关系数;day_kurt 换成有界的 day_gini(没有尖峰杠杆);价格水平换成日收益(平稳)。分母都不是近零量:cross_corr / OLS 在回归元逐位不变时返回 0 或空;输出会被奖励转成排名,极端 t 值不影响排序之外的东西。
+    variants:
+      - 'cross_corr(day_quantile_q25(Open), day_kurt(Volume), 30)'
+      - 'cross_reg_tvalue(day_quantile_q25(Open), day_gini(Volume), 30)'
+      - 'cross_corr(day_quantile_q25(Open), day_gini(Volume), 60)'
+      - 'cross_reg_tvalue(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_gini(Volume), 60)'
+      - 'cross_corr(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), day_gini(Amt), 60)'
+  - head: 'sub(day_kurt(Ret), day_quantile_q25(Open))'
+    why: |-
+      烂的部件是 day_kurt(Ret) 这一项与两项直接相减。依据:head 分数 −2.35 与 day_quantile_q25(Open) 单独的 −2.38 几乎一样(换 Close −2.31),说明差式被价格水平(量级更大)支配;day_kurt(Ret) 单独 −3.81,其最优方向是 −1,而 head 里它以 +1 进入,与自己的最优方向相反(价格项则与自己的最优方向一致),这一项是拖累。变体:先各自取截面稳健 z 分数再相减(去掉量级支配);把 kurt 取负、取 30 日均值(与它自己的最优方向一致、变慢),把价格水平换成非单调的「靠近中心」或放进筛子。所有除法与取对数的对象是正的价格或有界量。
+    variants:
+      - 'sub(cs_robust_z(neg(day_kurt(Ret))), cs_robust_z(day_quantile_q25(Open)))'
+      - 'add(cs_robust_z(neg(cross_mean(day_kurt(Ret), 30))), cs_robust_z(neg(abs_(cs_demean(log(day_quantile_q25(Open)))))))'
+      - 'cs_last_high05(cs_last_low10(neg(cross_mean(day_kurt(Ret), 30)), day_quantile_q25(Open)), day_quantile_q25(Open))'
+  - head: 'abs_(day_quantile_q25(Open))'
+    why: |-
+      烂的部件是 abs_ 所保留的单调性。依据:价格水平单调读法 train −1.61 / valid −2.38,批内成员的训练期日换手只有 0.014,成本一年不到 1 个点,所以亏损不是成本;奖励按 train 取两个方向里较好的,取定后仍是 −1.61,另一个方向更差,所以价格的最高与最低十分位(对控制取残差之后)都跑输等权基准,收益在中间带,单调函数读不出。变体:把 abs_(价格)换成「到中心的距离取负」neg(abs_(价格 − 中心)),中心分别取对数价格的截面均值、价格秩对市值秩回归后的残差(同样市值下股价偏离)、再对已知成交额族取残差,以及一个偏离 0.5 的秩中心。取对数的对象是正价格,cs_regres 在回归元截面方差为 0 时返回 0 的残差。
+    variants:
+      - 'neg(abs_(cs_demean(log(day_quantile_q25(Open)))))'
+      - 'neg(abs_(cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap))))'
+      - 'neg(abs_(cs_regres(cs_regres(cs_rank(day_quantile_q25(Open)), cs_rank(LogFloatCap)), cs_rank(cross_mean(day_std(Amt), 30)))))'
+      - 'neg(abs_(sub(cs_rank(day_quantile_q25(Open)), 0.45)))'

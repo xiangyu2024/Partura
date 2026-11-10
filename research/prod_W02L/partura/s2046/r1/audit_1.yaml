@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: [12, 15]
+    reasons: '位 a 是 E 深挖,核心 day_var(Low)。核心门槛:核心与 liq 0.52、known 0.49、size 0.36、vol 0.26、rev 0.13 的 |ρ| 都 < 0.8,过门槛。核心本身是 head 2 与 head 3 的子树(与 head 2 原始 |ρ| 0.58),这是 E 位的设计,不算重复。划掉的两个种子:第 12 个 div(cross_cov(ts_max(day_last(Amt),20), day_var(Low),241), cross_stddev(day_var(Low),241)) 与 head 2 原始 |ρ| 0.73 >= 0.7,自动划掉(即 sigma_A 乘 rho 的那一半)。第 15 个 cross_regbeta(cross_delay(day_var(Low),1), day_sum(Ret),120) 划为数学问题(数值伪影):cross_regbeta(x,y,d) 是 rolling_ols 中 y 对 x 的斜率 beta = cov/var_x,x 是首参数;这里 x 是未去量纲的 P 平方量纲 day_var(Low),var_x 跨票相差数个数量级(大盘高价股与低价低波股之间),截面秩由 1/var_x 支配,相关 rho 只决定符号,等于在排 P 的水平。第 11 个 cross_corr(ts_max(day_last(Amt),20), day_var(Low),241) 是 head 2 内层 cross_cov 去掉尺度后的 rho,与 head 2 原始 |ρ| 0.46、残差 0.48,未到 0.7,放行,但注明它是同一度量的换写法的一部分。其余种子与 head 的原始 |ρ| 基本都在 0.3 以下、残差在 0.28 以下,种子 1、2、3 之间是同一回归信号的 beta / corr / t 三种尺度,彼此只差波动率缩放,不算重复,放行。创新度 4:外围是对 z 分数化的滞后收益做的个股耦合统计(响应系数、自相关、符号交互),与库里 head 不是同一个东西。合理度 3(不是数学问题,放行):机制说得清(个股自己的参与者结构决定量价耦合),但算子没有做到报告里说的「去水平」。S = cross_zscore(log(day_var(Low)),60) 的 60 日窗口里,log day_var(Low) 近似 = 2 log P + log V,60 日内价格的漂移会直接进入 S(约等于 2 倍的 P 相对 60 日均值的偏离),它不是日间的小变动;报告里「S 几乎全是 V」的读法在 60 日尺度上不成立。种子 13 sub(cross_mean(log day_var(Low),20), cross_mean(log day_var(Low),241)) 同样几乎全是 2 倍的 20 日 / 241 日价格比对数,是价格趋势。种子 14 cs_last_high05 是按价格平方量纲的 P 水平沉底,是价格水平的排除筛。如果它有 alpha,最可能来自:价格相对 60 日(或 241 日)均值的偏离(短期反转或趋势)叠加在个股量价耦合上,而不是 V 的日内路径本身。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [16]
+    reasons: '位 b 是 N 新想法,核心 B = day_var(replace_small_with_nan(Amt)) / pow_2(day_mean(replace_small_with_nan(Amt))),即只在有成交分钟上算的 CV^2,去掉了成交额水平。它与 head 1 ts_sum(day_var(Amt),50) 不是同一个量:种子 1-14 与 head 1 的原始 |ρ| 在 0.00-0.23 之间,残差在 0.28 以下,与 5 个控制的原始 |ρ| 都 <= 0.27,没有任何一个种子踩到 0.7 或 0.8 的自动线。种子 15(含零分钟的 241 日均 log B)与 head 原始 |ρ| 0.53、与流动性控制 0.65、规模 0.58、已知族 0.56,它实际上是有成交分钟占比(流动性)的近亲,但没到 0.8,不是换写法,放行并注明。划掉的种子 16:cross_regbeta(cross_delay(day_var(Amt),1), day_sum(Ret),120) 的回归元是未去量纲的成交额平方(元^2),beta 的截面秩同样由 1/var_x 支配(跨票数个数量级),与位 a 的种子 15 是同一类数值伪影;notebook 自己也把它叫作量纲诊断,不是 alpha 候选。创新度 4。合理度 3(不是数学问题,放行):数学上干净,分子分母量纲一致,log 对 B <= 1e-9 记缺失,n <= 241 时 CV^2 有界,z 分数与 cs_demean 都在同日或滞后一日,没有前视。但机制有混淆:CV^2 对分钟成交额的日内 U 型剖面(开盘、尾盘集中)非常敏感,这个剖面本身随市况变化,所以 B 度量的可能是日内集中度,而不是脉冲或参与者结构;另外成交分钟少的票 B 的估计噪声大,与流动性有共线的风险。这些是「说不清、有混淆」,不是数学问题。如果它有 alpha,最可能来自:日内成交集中度(U 型剖面)的变化对次日收益的持续性响应。N 位通过,满足「3 轮里至少 1 个 N 位通过」的要求。'
+R:
+  - head: 'ts_sum(day_var(Amt), 50)'
+    soundness: 3
+    reasons: '三个变体放行、两个需要注意,组分 3。v1 ts_sum(B,100) 与 v2 ts_sum(B,241):B 有界(n <= 241 时 CV^2 <= n-1),累计数学干净,但机制同位 b 的日内 U 型混淆。v3 div(ts_sum(day_var(Amt),241), ts_sum(day_var(Amt),20)):分子分母同为元^2 量纲,比值仍是成交额 regime(与已知族 |ρ| 0.45、vol 0.53),水平没有去掉;div 是裸 torch.divide 无守门,若停牌日成交额记为 0 而非缺失,20 日和为 0 时输出 inf,需要确认停牌掩码给的是 NaN。v4 cs_regres(log(ts_sum(day_var(Amt),100)), log(ts_sum(day_mean(Amt),100))) 是截面残差,干净,4。v5 ts_sum(day_var(Amt),241) 数学无问题,但与原 head 的 |ρ| 0.80、已知族 0.79,仍保留水平,是换窗口,未做到 R 的目标,按放行的原则算 3。v6 div(ts_sum(day_var(Amt),100), pow_2(ts_sum(day_mean(Amt),100))) 量纲相消,无量纲,4。'
+  - head: 'ts_max(cross_cov(ts_max(day_last(Amt), 20), day_var(Low), 241), 20)'
+    soundness: 3
+    reasons: '组分 3。v1 ts_max(cross_corr(ts_max(day_last(Amt),20), day_var(Low),241),20) 与 v2 (窗口 120) 是 rho,尺度相消,数学干净;内层 ts_max(day_last(Amt),20) 取单分钟成交额的 20 日最大值,机制说不清,但不是数学问题。v4 把 day_var(Low) 换成 log 版的相关,干净。v3 ts_max(cross_regbeta(day_var(Low), ts_max(day_last(Amt),20),241),20):回归首参数 day_var(Low) 是未去量纲的 P 平方量纲,beta 的截面秩由 1/var_x 支配,与位 a 的种子 15 同一类数值伪影,应当从该组删去此变体;其余三个变体放行。'
+  - head: 'ts_min(ts_reg_fvalue(day_std(High), ts_std(pow_2_5(day_var(Low)), 20), 20), 5)'
+    soundness: 3
+    reasons: '组分 3。ts_reg_fvalue 的 F = ess/mse,对回归元的尺度不敏感(beta 缩放,ess 与 mse 不变),所以 v1、v2、v4 去掉 pow_2_5 或改窗口是干净的,pow_2_5 只改变 ts_std 的量纲,不改 F。若 20 日 day_var(Low) 为常数(涨跌停锁死 / 零方差),rolling_ols 的 var_x > EPS(1e-9) 守门会让 beta 为 NaN、F 为 NaN,不是爆点(已在 common.py 与 dt_cross.py 核对)。v3 的 t 值同理。机制(高价波动的日间水平与价格路径离散度 20 日波动的拟合优度)说不清,但不是数学问题,放行。'
+summary: '位 a(E,核心 day_var(Low))通过:创新 4、合理 3,划掉 12(与 head 2 的 |ρ| 0.73)与 15(P 量纲 beta 的数值伪影),剩 13 个。位 b(N)通过:创新 4、合理 3,划掉 16(成交额平方量纲 beta 的数值伪影),剩 15 个。R 三组合理度均 3;R2 的 v3 应删,R1 的 v3 需确认停牌日是 NaN 而非 0。核心与控制的 |ρ| 都未触发 0.8 线,种子与 head 的 |ρ| 都未触发 0.7 线(除已划掉的 12)。'

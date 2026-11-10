@@ -1,0 +1,45 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      创新度 4。核心 day_q_stat_std(Vwap) 与三个 head 的原始 |ρ| 最大 0.06(最像 head B,即 Low 版),残差 0.02。16 个种子与 head 的原始 |ρ| 最大 0.27(a16),其次 0.22(a10)、0.21(a14);对 head 的残差全部不超过 0.09。与 5 个控制的原始 |ρ|:没有一个达到 0.5(即没有控制的换写法),最高的是 a7 与 20 日反转 0.44、a16 与流动性 0.37 和已知族 0.35、a14 与流动性 0.29。16 个种子的骨架都不在两库 5583 条的骨架集合里(逐条核过)。三个 head 都只读 Q 的水平(log(add(Q, ·))),种子全部读的是相对自身历史(a1–a3)、方向(a6、a7)、名义价与已知族分桶内的位置(a8、a9)、残差(a10、a11)、稳定性(a12–a14)和相关结构(a4、a5、a13、a15、a16),与 head 不是同一个读法。注意:表里只有 5 个控制,两个冠军信号不在表中;a15、a16 用到 Q(Volume),与挖掘冠军族(族 18、87、71)可能重合,这只能由尺子的冠军残差来判,审计在本表里无法核对。如果它有 alpha,最可能来自 a7、a8、a9(方向与名义价分桶内的 Q 相对位置),或 a16(两条 Q 的同步)。
+
+      合理度 4。逐个核对算子:cross_* 是日轴的因果滚动(窗口含当天,t 日收盘可得,t+1 交易),cs_bucket_zscore 与 cs_regres 是当日截面,ts_delay 取前一日;没有 ts_rank、cross_rank、in_rank_rolling,因此不触发 nanrank_last 的停牌记 0 问题。Q 是自相关型统计量(dt_day.py 中 rho = cov / denom),对价格缩放不变,与 PI 的合成路径检验一致。小问题(不挡):一字板日 Q 记为 0 而非 NaN(denom 的下限使 rho 为 0),这些日会拉低均值类种子的截面;缺分钟的日子 T 固定而有效对数变少,Q 的口径在这些日不一致;cross_corr 在有效对数恰为 2 时给 ±1。这些都只影响少数股票日或新上市、刚复牌的头几天,不是主导项。机制:信息流的连续性与慢扩散(Hou-Moskowitz、Da-Gurun-Warachka)说得清楚,可以接受。
+
+      种子:不划。没有数学问题;没有骨架与库重复;没有 |ρ| 达到 0.7(head)或 0.8(控制)的自动划除项。a1、a2、a3 是同一读法的三个窗口,a7 的 0.44 接近反转控制,都保留,由尺子处理。
+
+      通过条件:创新 4 ≥ 3,合理 4 ≥ 3,划完剩 16 ≥ 4;E 位核心与 5 个控制的原始 |ρ| 最大 0.074 < 0.8;核心是三个 head 的子树(head A、B、C 都含);本实验内其他流没有以 day_q_stat_std(Vwap) 作 E 核心。判定:通过。
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      创新度 4。G = log(收盘 / 当日成交量加权均价) 不在三个 head 里:三个 head 都读尾盘一分钟的量,库中 day_wmean(Vwap, ·) 为 0 条。16 个种子对 head 的原始 |ρ| 最大 0.39(b10,残差 0.19),其余不超过 0.15(b15)。对 5 个控制:大多数低于 0.15;b10 cross_stddev(G, 40) 与波动控制 0.63、流动性 0.45、已知族 0.47,按表例属于波动的换写法,但未到 0.8 的自动划除线,按放行原则保留;PI 应预期它的分数会被尺子的波动残差大幅剥掉。b1、b11、b12 的均值类与 20 日反转相关 0.45 到 0.48,接近换写法线,这是 G 作为收盘漂移的自然结果,保留。把 G 的 20–60 日读法、与尾盘放量的联动、次日回吐三类合起来看,对象是新的。如果它有 alpha,最可能来自 b8、b9(前一日偏离与次日开盘缺口的回吐),或 b5–b7(尾盘放量与偏离的联动),而不是 b1–b4 的均值类。
+
+      合理度 4。算子核对:G 的分子与分母都是后复权价,比值消去复权因子;day_wmean 以成交量为权,权和为 0 时为 NaN;log 的输入约为 1,不触及 |x|≤EPS。GAP = log(O_t / C_{t-1}) 只用 t 日开盘与 t-1 日收盘,回吐类的相关窗口只用已发生的配对,无前视。V 用 cross_zscore(day_last(Volume), 20),含当天,收盘后可得。没有 nanrank 陷阱。小问题(不挡):一字板日 G = 0 而 GAP 可非零,均值类会混入涨跌停日;停牌日为 NaN,不影响。机制:收盘价被推离当日均价的个体性(收盘规则、基金考核),加上次日回吐(Hillion-Suominen、Comerton-Forde 与 Putnins),说得清楚。
+
+      种子:不划。没有数学问题,没有骨架重复,没有自动划除项。
+
+      通过条件:创新 4 ≥ 3,合理 4 ≥ 3,划完剩 16 ≥ 4。判定:通过。N 位在本轮通过审计。
+
+R:
+  - head: 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 50)'
+    soundness: 4
+    reasons: |-
+      合理度 4。六个变体的结构都正确,并且都去掉了外层的 add(·, day_std(Vwap))。PI 笔记把这一项说成「只起防 log(0) 的作用」,这不对:day_std(Vwap) 是后复权价的元单位,而 log 之后的内层值只在 5 左右(约 log(Q) × H,log Q 约 6.9、H 约 0.75)。设计文档 §11.5 说后复权价与原始价之比跨股票从 2.5 到 113,所以这一项相对内层值跨股票差别很大。head B 去掉它的 +0.43 正是它的量级证据。变体 1–6 全部去掉它,是对的修正。内层 add(Q, day_std(Vwap)) 保留,Q 约 10^3 且无量纲,远大于 day_std(Vwap),无害。变体 4 的 log(day_q_stat_std(Vwap)) 在一字板日给 NaN(common.py 的 log 对 |x| ≤ EPS 返回 NaN),覆盖率略低,PI 的说明正确。
+      继承的已知行为(不挡):ts_hurst 在窗口中第二老的一天缺失、而最老的一天有值时返回 -inf;框架的 log 按 |x| 计算,对 -inf 给 +inf;若 ts_mean 只跳过 NaN,这些 ±inf 会留在 50 日均值里。这种情况频率低、与 head 共有,也不是「主要由它决定」,所以不挡。请总领核对 ruler 对 ±inf 的处理。
+  - head: 'ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Volume))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), day_std(Volume))), ts_hurst(div(day_last(Volume), day_max(Low)), 20)), 50)'
+    soundness: 1
+    reasons: |-
+      合理度 1(数学问题:数值伪影,量纲使 Q 项失效)。每个变体都含 add(Q, day_std(Amt)) 或 log(add(Q, day_std(Amt)))。Amt 是原始(未复权)成交额,按笔记自己的估计,分钟成交额的截面标准差在 1e5 到 1e9 之间;Q 约 1e3 且无量纲。所以 Q / day_std(Amt) 在绝大多数股票日是 1e-6 到 1e-2,log(add(Q, S)) = log(S) + O(Q/S),Q 的贡献在数值上可以忽略。变体 1–5 都是这样:整组实际是 log(成交额截面水平) × Hurst,即已知族 cross_mean(day_std(Amt), 30) 的水平读法。表里变体 1 与流动性控制 0.70、已知族 0.71 同时高度相关,符合这一判断。因此 PI 说的「Q 的边际贡献」(变体 4、5、6 之差)按构造为零,这组消融无法得出结论;「Volume 换成 Amt」的比较只能说明成交额水平的变化。原 head C 的 day_std(Volume) 是股数量级,同样让 Q 项失效,与笔记第 3 点「head C 是流动性水平」的判断一致。需要的是 Q 与 Amt 同量级的写法,由 PI 重新提议,不在本次审计内改写。
+  - head: 'ts_mean(mul(log(ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Vwap), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 40)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 50)), day_max(Volume)), 50)'
+    soundness: 3
+    reasons: |-
+      合理度 3。两个变体的乘数本身没有数学问题:div(day_max(Volume), day_mean(Volume)) 的值域是 [1, 241](日内最大值不超过当日总和,即不超过分钟数乘日均值),day_mean 为 0 时是 NaN 而非 inf;log(day_max(Volume)) 对零成交日为 NaN。没有爆点。
+      但两个变体都保留了 Hurst 块里的外层 add(M1, day_std(Vwap)),也就是 R 组 B 所说的元单位项:它相对 M1(约 5)在典型股票上是 0.1 到 0.2,复权因子大的股票更大。这是与原 head A 共有的伪影,变体与原 head 的比较里会抵消,所以乘数的比较仍然有效;但 Hurst 块的读数不能解释为 Hurst(笔记说 Hurst 块「几乎没有贡献」,在这个变体里无法下结论)。不挡,给 3。
+      另外两点:变体 1 与流动性控制 |ρ| 0.56、已知族 0.49,更像「稀疏成交」的流动性读法,PI 只预测了已知族;变体 2 的 log(day_max) 是水平项(与 head A 的残差 0.64),是流动性的换写法。若要读乘数,建议去掉外层 add 后重提,与 R 组 B 的做法一致。
+summary: '6 个 R 组变体(head B,Low 版)通过(合理度 4);head C 的 Amt 版 5 个变体删除(合理度 1:Q 项在数值上失效,消融按构造为零);head A 的 day_max 乘数版通过(合理度 3,但保留了元单位项,PI 解读 Hurst 块时需注意)。槽 a(E,核心 day_q_stat_std(Vwap))与槽 b(N,尾盘价格压力)均通过,没有种子被划。三个原 head 的主要驱动之一都是外层 add 的元单位项,head B 去掉它增益 +0.43。'

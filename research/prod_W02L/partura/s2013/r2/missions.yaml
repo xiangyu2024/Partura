@@ -1,0 +1,155 @@
+seed: 2013
+round: 2
+slots:
+  - type: E
+    core: 'cross_zscore(day_sum(Volume), 60)'
+    hypothesis: |
+      事实(本流快照 + 第 1 轮结果):第 1 轮 N 位(99 次评估)出了 4 个 head(score +0.76 ~ +1.04,train 与 valid 同号同量级),全部是同一个形状:
+      cross_regbeta(x, day_sum(Ret), 120),即个股自己 120 日里「当日收益对一个成交活跃度量 x 的回归斜率」(cross_regbeta 的第一个参数是回归元、第二个是被解释变量,
+      已按 AlphaCube 源码核对:y ~ alpha + beta * x),x 由昨日的 day_median(Amt)、day_sum(Volume) 与 cross_zscore(day_sum(Volume), 60) 的乘积搭成。
+      拆解表(loc.md):15 个 knockout(把 x 的一个部件拿掉)里 14 个仍在 +0.34 ~ +0.99,唯一的例外是 head 1 拿掉 cs_mask_top_replace_mean_neg(valid -0.37、train 仍 +0.50),
+      而 head 2 里同一个部件拿掉几乎不变(+0.99 对 +1.01),说明那个部件是脆弱的装饰;最简版 cross_regbeta(day_sum(Amt), day_sum(Ret), 120) 仍是 +0.49(train +0.94);
+      窗口 60 / 120 / 240 的分数在 +0.56 ~ +1.08。所以信号来自「斜率」这个统计量本身,不是某一种乘积写法。
+      核心 Z = cross_zscore(day_sum(Volume), 60)(今日成交量相对自己 60 日的 z 分数):快照 158 个已评分候选里含它的 22 个平均 -0.50,不含的 -2.04(p < 0.001),
+      head 4 含它(滞后一日),head 3 含它的 Amt 版本。它是无量纲、「相对自己」的量,自己没有成交额的水平乘子。
+
+      假设:四个 head 的 x 都带成交额 / 成交量的水平乘子(head 1、2:昨日成交额中位数 × 成交量名次;head 3、4:成交额 / 成交量的水平 × 滞后惊奇),斜率 beta = corr(x, r) * sd(r) / sd(x) 因此同时带两样东西:(a) 耦合的方向(这只票放量时是不是在涨),(b) 1 / sd(x) 这个量纲因子——
+      它是成交额水平的函数,新尺子只去掉对控制(流动性 / 市值 / 波动 / 已知成交额族)的线性、平方、立方暴露,量纲因子与别的量的交互项去不掉,所以 head 里有多少是 (a)、多少是 (b) 并不知道。
+      这一位把 x 换成纯惊奇 Z(sd 约为 1,量纲没有了),beta 只剩 corr 与 sd(r):如果分数还在,alpha 来自耦合方向本身;如果掉光,来自量纲 / 水平。机制上 (a) 是「放量日是买盘主导还是卖盘主导」:
+      A 股融券受限,Karpoff 1987 的量价正相关关系更强;Gervais、Kaniel 与 Mingelgrin 2001 的高成交量收益溢价、Llorente、Michaely、Saar 与 Wang 2002 的「成交量区分信息交易与对冲交易」都说,
+      放量时价格是延续还是回吐是个股的慢属性(持仓结构、信息环境、散户占比),不是当天的行情。
+
+      算子怎样实现(16 个种子每个都原样含 Z):cross_delay(Z, k) 取滞后 k 日的惊奇(只用 t-k 日及以前);cross_regbeta / cross_corr / cross_reg_tvalue(x, y, d) 在个股自己的 d 日窗口里估
+      斜率 / 相关 / t 值。外围做了头部没做过的四件事:(i) 滞后阶数与平滑:lag 1 / lag 2(两层 cross_delay)/ 滞后一日的 5 日均 / 同日 / 60 日斜率再取 20 日均值;(ii) 被解释变量 y:全天收益换成下午段收益
+      (in_slice(Ret, 121, 240),下标闭区间)、成交额加权的分钟收益 day_wmean(Ret, Amt)、cs_demean 去掉全市场同日同向的部分、对全市场均值收益 60 日回归后的残差(个体收益)、秩空间、日内波动 day_std(Ret)、
+      净买入占比 day_signed_ratio(Ret, Amt);(iii) 统计量:斜率 / 相关 / t 值(三者换掉 1 / sd(x) 以外的尺度);(iv) 方向交互:mul(滞后惊奇, sign(滞后收益)),读「上涨之后放量」与「下跌之后放量」是否对应不同的后续收益;
+      另外留一个带水平的对照(mul(day_max(Amt), 滞后 Z),水平用最大一分钟成交额而不是 head 用的日总额 / 中位数),用来读水平量纲还剩多少。
+
+      为什么和以前不同:快照里已知含 Z 的 head(head 4)的外围是「滞后成交额中位数 × 滞后成交量 × 惊奇 → 对 day_sum(Ret) 回归 120 日」;我的种子外围是 cross_corr / cross_reg_tvalue / cs_demean / cross_regres / in_slice 收益 /
+      sign 交互 / 秩空间,没有 mul(水平, 惊奇) 这个乘子(只有一个对照种子有)。两个库 5583 条里 cross_zscore 出现 0 次,day_sum(Ret) 出现 7 次、进入滚动回归 / 相关 / 协方差的只有 1 条
+      (15 日 cross_cov,另一个参数是价格协方差的滚动最大值,不是成交量惊奇),我也逐个核对过骨架:没有一个种子的算子骨架(抽掉字段、常数、窗口)与 5583 条中任何一条相同。
+      与 4 个 head 的差别:无水平乘子、y 与统计量不同;与五个控制的差别:惊奇的斜率是「相对自己的耦合」,不是水平,控制的暴露与它基本无关(Z 本身对流动性控制的日度秩相关应当很低)。
+
+      为什么样本外还会在:耦合方向是持仓结构与信息环境的慢属性,120 日滚动估计逐日变化很小,十分位书换手低;第 1 轮 4 个 head 在 train 与 valid 同号同量级,说明这条线不依赖某一段行情。
+      诚实预期:纯惊奇版本(没有水平因子)大概率比 head 差,但 y 换成去市场后的个体收益或相关系数版本可能留住大部分;最可能的失败方式是 120 个观测的相关系数估计误差(约 0.09)与截面离散度相当,
+      名次大半是噪声(换手被 15 bp 吃掉)。
+
+      数学检查:所有窗口只含 t 日及以前,滞后用 cross_delay,无前视;cross_zscore 的分母是 std + EPS,且窗口方差为 0 时返回 0(不会出 +-1 的浮点噪声);回归元 Z 的方差约 1,
+      cross_regbeta 的分母 var_x > EPS 才给值,否则 NaN,不会除以近零的量;in_slice 下标闭区间且避开第 0 根;输出连续取值,不同值 >= 50%;最长回看 120 + 60 日,
+      视窗从 2018-01-02 开始、没有更早的热身行,头几十日是不满窗(cross_* 在不满窗时只用已有的天),早期估计噪声大但只占 train 头几个月,不决定结果;不用 ts_rank / cross_rank,不用 ts_spearman / nt_*。
+    literature:
+      - {ref: 'Karpoff, The relation between price changes and trading volume', year: 1987}
+      - {ref: 'Gervais, Kaniel, Mingelgrin, The high-volume return premium', year: 2001}
+      - {ref: 'Llorente, Michaely, Saar, Wang, Dynamic volume-return relation of individual stocks', year: 2002}
+    seeds:
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_sum(Ret), 120)'
+      - 'cross_corr(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_sum(Ret), 120)'
+      - 'cross_reg_tvalue(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cross_delay(cross_zscore(day_sum(Volume), 60), 1), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cross_mean(cross_zscore(day_sum(Volume), 60), 5), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cs_demean(cross_zscore(day_sum(Volume), 60)), 1), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_sum(in_slice(Ret, 121, 240)), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_wmean(Ret, Amt), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_std(Ret), 120)'
+      - 'cross_regbeta(cross_zscore(day_sum(Volume), 60), day_sum(Ret), 120)'
+      - 'cross_regbeta(mul(day_max(Amt), cross_delay(cross_zscore(day_sum(Volume), 60), 1)), day_sum(Ret), 120)'
+      - 'cross_mean(cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_sum(Ret), 60), 20)'
+      - 'cross_regbeta(cs_rank(cross_delay(cross_zscore(day_sum(Volume), 60), 1)), cs_rank(day_sum(Ret)), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), cross_regres(cs_mean(day_sum(Ret)), day_sum(Ret), 60), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_sum(Volume), 60), 1), day_signed_ratio(Ret, Amt), 120)'
+      - 'cross_regbeta(mul(cross_delay(cross_zscore(day_sum(Volume), 60), 1), sign(cross_delay(day_sum(Ret), 1))), day_sum(Ret), 120)'
+  - type: N
+    hypothesis: |
+      机制:把第 1 轮在成交活跃度「水平」上找到的东西——个股自己 120 日里「当日收益对昨日成交活跃度的回归斜率」——换成活跃度的「构成」:当天的成交是连成一片还是一阵一阵,
+      集中在几分钟里还是铺开,发生在上午还是尾盘,净流向是买还是卖。构成变量与水平不是一回事,控制们(流动性 / 成交额离散度 / 市值)对水平的线性 / 平方 / 立方暴露去掉之后,构成与收益的耦合还剩下。
+      批里的现象(B037 / B038,17 个成员):全部是 phi = day_ar1_coefficient(Volume)(当天 241 根分钟成交量对前一分钟的 AR(1) 斜率,= 成交的连续程度 / 拆单)的水平外壳,
+      换外壳(sigmoid / pow / cs_rank / ts_decay_linear)、换字段(Volume 换 Amt)分数几乎不动(-2 ~ -3),只有窗口更慢才更好(ts_quantile_q75 窗口 50、ts_decay_linear 窗口 30 是 B038 里
+      仅有的三条未去控制 Sharpe 超过 2 的,train rank IC -0.043 ~ -0.049、换手 0.03 ~ 0.04);同一个对象一旦不当水平、而是当「回归元 / 残差」就明显好于所有水平写法:第 1 轮 E 位 103 次评估里最好的
+      是 +0.12(train +0.66 / valid +0.12),cross_autocorr(cross_regres(cs_mask_top_replace_mean(|phi|), phi, 60), 60, 1);第 1 轮 R 位 12 个变体里最好的两个是 ts_min(cross_regres(cs_mean(·), ·, 60), 5 / 50)
+      = -1.05 / -1.65,其余 10 个分桶去均值的变体在 -2.21 ~ -4.02。第 1 轮 N 位的 4 个 head 则是同一个思路的成交额版本:收益对昨日成交额的斜率。
+      把两件事合起来:phi 本身的水平是死的,但 phi 对收益的「耦合」没有人试过。
+
+      经济学:Admati 与 Pfleiderer 1988、Barclay 与 Warner 1993 的拆单 / 隐蔽交易(stealth trading):知情机构把大单拆成连续的小单,成交连续(phi 高)、不突发(gini 低)的日子里价格漂移,
+      之后继续漂移;噪声 / 对冲流量则是一阵一阵、之后回吐(Llorente、Michaely、Saar 与 Wang 2002 的 c 系数:放量日的收益延续还是回吐区分信息交易与对冲交易)。
+      个股对「昨日成交构成」的当日收益斜率是持仓结构与交易者构成的慢属性,不是某一天的行情。
+
+      算子怎样实现(16 个种子,两组):
+      A 组(无量纲,12 个):x = 昨日的构成量 cross_delay(·, 1) —— day_ar1_coefficient(Volume)(连续性)、day_gini(Volume)(突发性,0 = 铺开、接近 1 = 集中在少数分钟)、
+      day_centroid(Amt)(成交额的时间重心,0 开盘、1 收盘)、day_signed_ratio(Ret, Amt)(上涨分钟的成交额份额减下跌分钟的份额,[-1, 1])、day_zero_ratio(Volume)(无成交分钟占比)、
+      day_hurst(Volume)(成交量的长记忆)、day_wmean(Ret, Amt)(成交额加权的分钟收益);y = day_sum(Ret);统计量用 cross_regbeta / cross_corr / cross_reg_tvalue,窗口 120;一个是市场中性版(cs_demean 去掉当日全市场共同的 phi 与收益)。
+      另一个是「收益延续」交互:mul(滞后的 phi, 滞后收益) 作回归元(Llorente 的 c 系数,条件变量由原来的成交量换成 phi),读的是「成交连续的日子之后收益是延续还是回吐」。
+      B 组(带水平,4 个):x = 昨日 day_median(Amt) 或当日 day_sum(Amt) 乘以昨日的构成量(phi / gini / centroid)——保留 head 里反复出现的水平部件(滞后的成交额中位数,4 个 head 里有 3 个含它),
+      只把头部里的「成交量名次 / 成交量惊奇」这一个乘子换成「构成」,读构成这个新乘子有没有增量。
+
+      为什么和库里不同:5583 条里 day_ar1_coefficient(Volume) 出现 228 次,绝大多数是水平外壳(sigmoid / pow / 分位 / ts_decay_linear / ts_min),只有 6 条把它放进相关 / 协方差 / 回归(配的是开盘价 / 价格协方差 / Amt 的自相关,没有一条配收益);
+      day_gini / day_centroid / day_signed_ratio / day_zero_ratio / day_wmean / cross_zscore 在 5583 条里一次都没有出现;day_sum(Ret) 出现 7 次、进入滚动回归 / 相关 / 协方差的只有 1 条(15 日 cross_cov,配价格协方差)。
+      我把 16 个种子的算子骨架(抽掉字段、常数、窗口)逐个对照了两个库的骨架,没有一个相同。与 4 个 head 的差别:head 的回归元全是成交额 / 成交量的水平或水平的惊奇,
+      A 组的回归元是无量纲的构成量,B 组只共享滞后的成交额中位数这一个乘子;与五个控制的差别:构成量不是水平的函数(同一个成交额水平下 phi / gini / 重心可高可低)。
+
+      为什么样本外还会在:持仓结构与交易者构成慢变,120 日窗口的斜率逐日变化小,换手低;第 1 轮 4 个 head 在 train 与 valid 同号同量级;机制(拆单 / 信息交易的延续 vs 噪声交易的回吐)不依赖某一段行情。
+      诚实预期:出 head 的概率约 8%,A 组更可能落在 -1.0 ~ 0 之间,B 组更可能过线但也更可能与 head 1 / 2 的日度秩相关 >= 0.7 被表自动划掉;
+      主要失败方式:单只股票 120 个观测的斜率估计误差与截面离散度相当,名次大半是噪声。
+
+      数学检查:窗口只含 t 日及以前,构成量全部来自当天分钟、再滞后一日(cross_delay),无前视;day_ar1_coefficient 在当天分钟成交量方差近 0 时是 NaN,不填充;
+      day_gini 在总量为 0 时 NaN;day_signed_ratio 与 day_wmean 的分母是当天成交额合计(clamp 1e-30,合计为 0 给 NaN),不会出现个股爆点;cross_regbeta 在 var_x <= EPS 时给 NaN;
+      day_zero_ratio 的取值在 [0, 1] 内连续、不是计数型,输出经回归后仍是连续数,不同值 >= 50%;最长回看 120 + 60 日,头几十日不满窗(只用已有的天),不决定结果;
+      不用 ts_rank / cross_rank,不用 ts_spearman / nt_*。
+    inspired_by: 'B037 / B038(17 个成员,全是 phi = day_ar1_coefficient(Volume) 的水平外壳):换外壳 / 换字段分数不动,窗口越长越好,phi 当回归元 / 残差(第 1 轮 E 位最好 +0.12、R 位最好 -1.05)好过所有水平写法;第 1 轮 N 位 4 个 head 是「收益对昨日成交额的斜率」——phi 的水平是死的,phi 对收益的耦合没有人试过。'
+    literature:
+      - {ref: 'Admati, Pfleiderer, A theory of intraday patterns', year: 1988}
+      - {ref: 'Barclay, Warner, Stealth trading and volatility', year: 1993}
+      - {ref: 'Llorente, Michaely, Saar, Wang, Dynamic volume-return relation of individual stocks', year: 2002}
+    seeds:
+      - 'cross_regbeta(cross_delay(day_ar1_coefficient(Volume), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cross_zscore(day_ar1_coefficient(Volume), 60), 1), day_sum(Ret), 120)'
+      - 'cross_corr(cross_delay(day_ar1_coefficient(Volume), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(day_gini(Volume), 1), day_sum(Ret), 120)'
+      - 'cross_reg_tvalue(cross_delay(day_centroid(Amt), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 120)'
+      - 'cross_corr(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(day_zero_ratio(Volume), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(day_hurst(Volume), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(day_wmean(Ret, Amt), 1), day_sum(Ret), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_ar1_coefficient(Volume), 1), cross_delay(day_sum(Ret), 1)), day_sum(Ret), 120)'
+      - 'cross_regbeta(cross_delay(cs_demean(day_ar1_coefficient(Volume)), 1), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(day_gini(Volume), 1)), day_sum(Ret), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(day_centroid(Amt), 1)), day_sum(Ret), 120)'
+      - 'cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), day_sum(Ret), 120)'
+R:
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(cross_delay(day_sum(Volume), 1)))), day_sum(Ret), 120)'
+    why: |
+      烂部件有三处,依据都来自 loc.md 的拆解表和第 1 轮 R 的结果。(1) day_sum(Volume) 这一处:拆解里 Volume 换 Amt = +1.11(train +1.11 / valid +1.31),比原 head +1.01 好 0.10,
+      窗口 120 换 240 = +1.04(valid +1.30),两个单独的改动都是正的,还没有人把它们叠起来。(2) cs_mask_top_replace_mean_neg:拿掉后 +0.99(train +0.99 / valid +1.03),几乎不变,
+      说明这个部件是装饰,可以拿掉让式子变短。(3) 被解释变量 day_sum(Ret) 含全市场同日同向的部分:第 1 轮 R 位里,对全市场均值做 60 日回归残差的变体(-1.05、-1.65)是 12 个里最好的两个,
+      cs_bucket_demean 的 10 个变体在 -2.21 ~ -4.02(4 个比原 head -2.98 还差),说明「去掉全市场共同部分」有用而「分桶」没用(桶边界跳变增加换手);cs_demean(day_sum(Ret)) 是同一件事最便宜的写法。
+      变体每个只改这几处里的一处或两处,分数变化可以直接归到被换掉的部件上。数学:所有窗口只含 t 日及以前;cs_demean 只在当天截面上做。
+    variants:
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(cross_delay(day_sum(Amt), 1)))), day_sum(Ret), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(cross_delay(day_sum(Amt), 1)))), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(cross_delay(day_sum(Amt), 1)))), day_sum(Ret), 180)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cross_delay(day_sum(Amt), 1))), day_sum(Ret), 120)'
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), day_sum(Ret), 120)'
+    why: |
+      拆解表:原 head train +1.15 / valid +1.04,valid 是短板;窗口 120 换 60 = +1.08(train +1.08 / valid +1.21,两侧拉平),换 240 = +1.03,Volume 换 Amt = +0.91(valid +1.26,train +0.91 变成短板),
+      说明这个 head 对窗口不敏感。烂的部件是被解释变量里全市场同日同向的部分(第 1 轮 R 位里对全市场均值回归残差的变体最好,分桶最差),另外一个是窗口:90 日介于 60 与 120 之间,
+      读窗口是否单调。变体只改 y 或窗口一处,分数变化可直接归到那一处。
+    variants:
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Volume)))), day_sum(Ret), 90)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_mean_neg(day_sum(Amt)))), day_sum(Ret), 60)'
+  - head: 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Volume), 1), cross_delay(cross_zscore(day_sum(Volume), 60), 1))), day_sum(Ret), 120)'
+    why: |
+      loc.md 的 R 候选已经给了两条线索:窗口 120 换 240 增益 +0.21(+0.97),Volume 换 Amt 增益 +0.10(+0.86),两个都是正的,这个 head(+0.76,train +1.13 / valid +0.76)的短板在 valid 一侧;
+      还没有人把两个叠起来,也没有人试窗口 180 与去掉市场共同部分(cs_demean(day_sum(Ret)))。三个变体各改一处或两处,可以直接归因。
+    variants:
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt), 1), cross_delay(cross_zscore(day_sum(Amt), 60), 1))), day_sum(Ret), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Volume), 1), cross_delay(cross_zscore(day_sum(Volume), 60), 1))), cs_demean(day_sum(Ret)), 240)'
+      - 'cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Volume), 1), cross_delay(cross_zscore(day_sum(Volume), 60), 1))), day_sum(Ret), 180)'
+  - head: 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), day_sum(Ret), 120)'
+    why: |
+      拆解表:3 个 knockout 在 +0.37 ~ +0.66,Amt 换 Volume = +0.16(Amt 是对的字段),三个窗口(60 / 120 / 240 = +0.76 / +0.94 / +0.66)里 120 最好,没有明显的烂部件;能动的有两处:(1) 被解释变量里全市场同日同向的部分(cs_demean 去掉),
+      (2) z 分数的窗口 60(换 120 读「相对自己多久」)。每个变体只改一处。
+    variants:
+      - 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 60), 1)), cs_demean(day_sum(Ret)), 120)'
+      - 'cross_regbeta(mul(day_sum(Amt), cross_delay(cross_zscore(day_sum(Amt), 120), 1)), day_sum(Ret), 120)'

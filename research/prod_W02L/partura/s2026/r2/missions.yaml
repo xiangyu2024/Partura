@@ -1,0 +1,58 @@
+seed: 2026
+round: 2
+slots:
+- type: E
+  core: 'day_flat_run_max(in_slice(Ret, 11, 230))'
+  hypothesis: >-
+    核心 C = day_flat_run_max(in_slice(Ret, 11, 230)):每天第 11~230 分钟里「收益连续等于上一分钟」的最长一段占有效分钟的比例,
+    即最长的一段停滞(没有任何价格变动)有多长。它读的是非同步交易 / 报价停滞(Lo-MacKinlay 1990;Lesmond 等 1999 的零收益日思想,
+    这里改成日内最长连续零收益段),不是成交额水平:day_flat_ratio 只数个数,最长连续段读的是「成团」的停滞,例如被涨跌停锁死或
+    整段无人成交。证据:loc 共性表里含它的 17 个候选均值 -1.28,不含 -2.76(差 +1.48,p<0.001),是本批最强的子树;第 1 轮 E 位的最好候选
+    (+0.19,train +0.36 / valid +0.19,是本组最接近过线的)就是 mul(cross_corr(尾部差, C, 120), C),说明 C 本身有残差信息。
+    第 1 轮的外围全是围绕 φ_R(AR1 系数)的相关与尾部均值,并且都乘了 ListAge 掩码;这次外围和它们很不同:核心单独做
+    慢聚合(EMA / 零均值化 / 离散度 / 持续性)、对流动性与价格水平(sub(LogFloatCap, LogFloatShares) = 对数股价)做回归取残差
+    (读「在同样成交额、同样股价下还停滞多久」,即机械的 tick 成分被拿掉后剩下的信息缺口)、与当日收益符号的 120 日滚动相关
+    (停滞日之后价格是补涨还是补跌,Bekaert 等 2007 的零收益 + 流动性溢价,价格延迟,Hou-Moskowitz 2005)、以及停滞段与停滞个数之差
+    (成团程度)。样本外还会在,是因为机制是微观结构的持续特征(涨跌停 / 机构持仓 / 做市深度),不是某一段行情;慢聚合压低换手,
+    对流动性的回归残差把已被控制吃掉的水平再去一遍。数值上 C 在 [0,1],无除零(n>1 才有值),没有前视,每日截面取值离散。
+  seeds:
+    - 'cross_ema(day_flat_run_max(in_slice(Ret, 11, 230)), 60)'
+    - 'sub(cross_ema(day_flat_run_max(in_slice(Ret, 11, 230)), 10), cross_ema(day_flat_run_max(in_slice(Ret, 11, 230)), 120))'
+    - 'cross_ema(cross_zscore(day_flat_run_max(in_slice(Ret, 11, 230)), 120), 40)'
+    - 'cross_regres(log(day_sum(in_slice(Amt, 11, 230))), day_flat_run_max(in_slice(Ret, 11, 230)), 60)'
+    - 'cross_ema(cross_regres(log(day_sum(in_slice(Amt, 11, 230))), day_flat_run_max(in_slice(Ret, 11, 230)), 120), 20)'
+    - 'cross_ema(cs_regres(cross_ema(day_flat_run_max(in_slice(Ret, 11, 230)), 20), sub(LogFloatCap, LogFloatShares)), 40)'
+    - 'cross_regres(day_flat_ratio(in_slice(Ret, 11, 230)), day_flat_run_max(in_slice(Ret, 11, 230)), 120)'
+    - 'sub(day_flat_run_max(in_slice(Ret, 11, 230)), day_flat_ratio(in_slice(Ret, 11, 230)))'
+    - 'cross_ema(sub(day_flat_run_max(in_slice(Ret, 11, 230)), day_flat_ratio(in_slice(Ret, 11, 230))), 60)'
+    - 'cross_corr(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret, 11, 230)), 120)'
+    - 'cross_corr(day_flat_run_max(in_slice(Ret, 11, 230)), day_std(in_slice(Ret, 11, 230)), 241)'
+    - 'cross_stddev(day_flat_run_max(in_slice(Ret, 11, 230)), 120)'
+    - 'cross_autocorr(day_flat_run_max(in_slice(Ret, 11, 230)), 120, 1)'
+    - 'cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret, 11, 230))), 60)'
+    - 'cross_tail_mean_q25(day_flat_run_max(in_slice(Ret, 11, 230)), 120)'
+- type: N
+  hypothesis: >-
+    新 idea:日内「上半场 vs 下半场」的收益微观结构不对称。库里 day_ar1_coefficient / day_durbin_watson 全部作用在整段
+    in_slice(·, 11, 230) 上(本流 loc 的 6 个 head 与全部拆解都是这样),而知情交易集中在上午、下午更多是噪声与被动再平衡
+    (Admati-Pfleiderer 1988 的日内集中;Heston-Korajczyk-Sadka 2010 的日内周期)。把 220 分钟拆成 11~120 与 121~230 两段,
+    各算一个一阶自相关系数(或 DW / 最长停滞段),取「上午减下午」的差:差里同时去掉了每只票共有的 tick 与价格弹跳水平
+    (两半共享),留下的是「价格发现在哪个半场完成」。若上午持续(AR1 为正)、下午回吐(为负),说明信息在上午已被吸收且下午有噪声,
+    反之说明价格延迟到下午才消化。再做 60~120 日的慢聚合(EMA / 离散度 / 零均值化)与对当日收益的滚动相关。
+    与库里已有的不同:库里 444 条含 day_ar1 的表达式作用对象基本是原始字段,没有按半场拆开再做差的;外层 cross_ema、cross_zscore
+    在 5583 条里是 0 次,所以骨架全是新的。样本外还会在,是因为知情交易集中在上午、下午被动流多是 A 股结构性特征(T+1、
+    午后 ETF / 指数基金申赎),不依赖某段行情。数值上差是两个有界系数之差,无除零,每日取值离散,不含前视。
+  inspired_by: >-
+    本流 B076 / B077 里 day_ar1_coefficient 与 day_durbin_watson 的各种 head 全部是整段 11~230 的系数;
+    拆解显示承重的是慢聚合而不是系数水平,所以把「水平」用半场差消掉再慢聚合,是 B076 / B077 现象的直接下一步。
+  seeds:
+    - 'cross_ema(sub(day_ar1_coefficient(in_slice(Ret, 11, 120)), day_ar1_coefficient(in_slice(Ret, 121, 230))), 60)'
+    - 'cross_ema(cross_zscore(sub(day_ar1_coefficient(in_slice(Ret, 11, 120)), day_ar1_coefficient(in_slice(Ret, 121, 230))), 120), 40)'
+    - 'cross_ema(sub(day_durbin_watson(in_slice(Ret, 11, 120)), day_durbin_watson(in_slice(Ret, 121, 230))), 60)'
+    - 'cross_ema(sub(day_flat_run_max(in_slice(Ret, 11, 120)), day_flat_run_max(in_slice(Ret, 121, 230))), 60)'
+    - 'cross_stddev(sub(day_ar1_coefficient(in_slice(Ret, 11, 120)), day_ar1_coefficient(in_slice(Ret, 121, 230))), 120)'
+    - 'cross_regres(day_ar1_coefficient(in_slice(Ret, 11, 120)), day_ar1_coefficient(in_slice(Ret, 121, 230)), 60)'
+    - 'cross_corr(sub(day_ar1_coefficient(in_slice(Ret, 11, 120)), day_ar1_coefficient(in_slice(Ret, 121, 230))), day_sum(in_slice(Ret, 11, 230)), 120)'
+    - 'sub(cross_ema(day_ar1_coefficient(in_slice(Ret, 11, 120)), 20), cross_ema(day_ar1_coefficient(in_slice(Ret, 121, 230)), 20))'
+    - 'cross_ema(sub(day_ar1_coefficient(div(in_slice(Volume, 11, 120), in_sum(in_slice(Volume, 11, 120)))), day_ar1_coefficient(div(in_slice(Volume, 121, 230), in_sum(in_slice(Volume, 121, 230))))), 60)'
+    - 'cross_ema(sub(day_corr(in_delay(in_slice(Ret, 11, 120), 1), in_slice(Ret, 11, 120)), day_corr(in_delay(in_slice(Ret, 121, 230), 1), in_slice(Ret, 121, 230))), 60)'

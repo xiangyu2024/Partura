@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [7, 11, 12]
+    reasons: '按确定性规则本位不通过:核心 S = cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60) 是 head 1 的子树,形式上合规,但 E 位通过条件要求核心与每个控制的日度秩 |rho| < 0.8,相关度表里核心对流动性为 0.832、对已知族为 0.85,两项都不过。按 §3 本位改为一次普通 GP,下面的种子只是这次 GP 的初代候选,不当作 E 位。划掉的种子:7 与 6 是同一个信号(6 = log((M+1)/(A+1)),7 = M/(A+1),M 为 ts_max(S,100),A 为 ts_mean(S,100);两者是单调等价,截面秩相同,相关表里两者的控制与 head 数值完全一致),划 7 留 6;11 覆盖率 0.559(ts_skew 在 120 日窗口上大比例算不出),12 覆盖率 0、distinct 0(ts_kurt 全部算不出),按 §4 都是定义坏掉。其余 13 个种子的原始 |rho| 与 head 最高为 0.43(种子 8),对控制最高 0.28(种子 8 对流动性与已知族),没有达到 0.7 或 0.8 的自动划掉线;残差 |rho| 最高 0.65(种子 2),种子 14、15 为 0.60 与 0.62,接近重复但未到 0.85 的划线,保留。创新度给 3 不给 4:外壳的写法(log、变异系数、ts_max/ts_mean、ts_skew 之外的 cs_regres 与 cs_bucket_rank)是新的,但核心本身就是已知族的近亲,新意主要在外围。合理度 4:数学检查通过,除数全部是 add(·,1),分母 ts_mean(S) 与 cross_mean(day_cov(Amt,Amt),241) 都非负,不会爆点;log 的输入恒为正(log 在 |x| 小于 EPS 时返回 NaN,不返回 -inf);cs_regres(Y, X) 的方向正确(对 log 水平逐日截面回归取残差);cs_bucket_rank 与 cs_rank 只在当日截面比较;不用 ts_rank、cross_rank,不触发 nanrank_last,无 nt_* 与 ts_spearman。如果它有 alpha,最可能来自 S(成交分布日内方差与 30 日前形状协方差之差)的二阶波动,即脉冲记忆相对自身常态的不稳定程度;种子 1 到 5 最能分辨这一点。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '本位是 N 位,无核心约束。外壳 S 与成交水平(cross_mean(day_mean(Amt),30)、cross_stddev(day_mean(Amt),60) 等)做时间序列相关、回归、残差,这是 head 与 5 个控制都没有的「S 与水平的时序关系」。相关度表里保留的 11 个种子,原始 |rho| 与 head 最高 0.34(种子 10),对 5 个控制最高 0.34(种子 5 对波动),残差 |rho| 最高 0.31(种子 10),没有自动划掉的。创新度给 4 不给 5:S 本身仍是 head 1 的外壳,脉冲变量的水平没有变。合理度 4,逐个算子核对:ts_corr 是对称的相关,分母有 EPS 守卫,不爆;log 的输入都是 S 或水平加 1,恒正;cross_delta(S,60) 只看过去。一处描述与实现不符,不是数学问题,不挡:ts_regbeta(x, y, d) 与 ts_regres(x, y, d) 在 rolling_ols 里实现的是 y ~ alpha + beta*x,所以种子 3、4、5、7、11 算的是 log 水平对 log S 的斜率与残差,而假设写的是 log S 对 log 水平的弹性,方向相反。若要按假设实现,应把两个参数对调,请 PI 注意。种子 12 为 ts_corr(S, S 的 60 日差分, 120),gate 失败(distinct 0.002,输出几乎为常数),按 §4 属面板几乎常数,划掉。如果它有 alpha,最可能来自脉冲驱动票(S 与成交水平脱钩)的信息含量;种子 8(S 与 cross_stddev(day_mean(Amt),60) 的相关)与种子 5(log S 对 log 水平的残差)最能分辨这一点。'
+R:
+  - head: 'add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50))'
+    soundness: 4
+    reasons: '8 个变体都是 head 1 的 S 外壳放慢到 120 日、去掉 q50 水平项、或把外壳换成变异系数 / 对已知族与水平的截面残差 / 桶内秩 / 秩差的写法。数学检查通过:除数一律 add(·,1),分子分母都非负(ts_mean(S120) 与 cross_mean(day_cov(Amt,Amt),241) 都 >= 0),不爆点;log 输入加 1;cs_regres(Y,X) 方向正确;cs_bucket_rank、cs_rank 只在当日截面比较,无前视;不用 ts_rank、cross_rank,不触发 nanrank_last,无 nt_* 与 ts_spearman。机制清楚:去掉量级(log、变异系数、截面残差)或放慢外壳。变体 7、8 的 cs_rank 秩差与变体 1 到 6 的写法不同,不重复。如果有 alpha,最可能来自 S120 外壳的相对波动(去掉量级之后剩下的那部分)。'
+summary: '本轮 slot a 按确定性规则不通过(核心对流动性 0.832、对已知族 0.85,均 >= 0.8),改为普通 GP,种子划掉 7、11、12 后余 13 个;slot b 通过(划掉 12,余 11,创新 4、合理 4;描述与 ts_regbeta、ts_regres 的参数方向不符已注明,不挡);R 组合理 4 保留。没有因数学问题整体挡下的位。'

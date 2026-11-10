@@ -1,0 +1,46 @@
+# 相关度表:种子 2011,P 组,第 2 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 6 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.25 | `ts_decay_linear(sigmoid(cs_rank(ts_decay_linear(pow_2(sigmoi` | 0.19 | 0.23 | 0.18 | 0.12 | 0.24 | 0.10 | `day_ar1_coefficient(in_logchg(Volume, 1))` |
+| slot a seed 1 | 过 | 0.29 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.26 | 0.21 | 0.01 | 0.03 | 0.20 | 0.06 | `cross_ema(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), 60)` |
+| slot a seed 2 | 过 | 0.10 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.13 | 0.01 | 0.09 | 0.03 | 0.02 | 0.01 | `sub(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 241), cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 60))` |
+| slot a seed 3 | 过 | 0.30 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.19 | 0.22 | 0.11 | 0.00 | 0.22 | 0.04 | `cross_hurst(day_ar1_coefficient(in_logchg(Volume, 1)), 60)` |
+| slot a seed 4 | 过 | 0.13 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.10 | 0.11 | 0.00 | 0.02 | 0.11 | 0.04 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delay(day_ar1_coefficient(in_logchg(Volume, 1)), 20), 241)` |
+| slot a seed 5 | 过 | 0.18 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.13 | 0.18 | 0.06 | 0.03 | 0.17 | 0.10 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), day_sum(Ret), 241)` |
+| slot a seed 6 | 过 | 0.07 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.05 | 0.05 | 0.06 | 0.01 | 0.05 | 0.02 | `cross_corr(cross_delay(day_ar1_coefficient(in_logchg(Volume, 1)), 1), day_sum(Ret), 241)` |
+| slot a seed 7 | 过 | 0.24 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.17 | 0.12 | 0.00 | 0.01 | 0.12 | 0.06 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), day_ar1_coefficient(Volume), 241)` |
+| slot a seed 8 | 过 | 0.40 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.28 | 0.35 | 0.02 | 0.02 | 0.34 | 0.16 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), abs_(day_sum(Ret)), 241)` |
+| slot a seed 9 | 过 | 0.25 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.12 | 0.31 | 0.04 | 0.01 | 0.30 | 0.25 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delta(log(day_sum(Amt)), 1), 241)` |
+| slot a seed 10 | 过 | 0.12 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.08 | 0.10 | 0.04 | 0.00 | 0.10 | 0.02 | `cross_autocorr_s1(cross_delta(day_ar1_coefficient(in_logchg(Volume, 1)), 5), 120)` |
+| slot a seed 11 | 过 | 0.23 | `ts_decay_linear(sigmoid(cs_rank(ts_decay_linear(pow_2(sigmoi` | 0.23 | 0.10 | 0.24 | 0.25 | 0.12 | 0.05 | `cross_zscore(cross_mean(day_ar1_coefficient(in_logchg(Volume, 1)), 5), 241)` |
+| slot a seed 12 | 过 | 0.20 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.16 | 0.23 | 0.03 | 0.01 | 0.23 | 0.24 | `cs_last_low10(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), ListAge)` |
+| slot a seed 13 | 过 | 0.33 | `cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)), 30)` | 0.40 | 0.21 | 0.08 | 0.04 | 0.18 | 0.29 | `sub(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), cross_autocorr_s1(day_ar1_coefficient(Volume), 120))` |
+| slot a seed 14 | 过 | 0.27 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.21 | 0.01 | 0.01 | 0.03 | 0.01 | 0.11 | `cs_bucket_rank(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), cross_mean(day_std(Amt), 30))` |
+| slot a seed 15 | 过 | 0.23 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.20 | 0.15 | 0.05 | 0.00 | 0.14 | 0.00 | `cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delay(day_sum(Ret), 1), 241)` |
+| slot b seed 1 | 过 | 0.10 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.08 | 0.11 | 0.06 | 0.02 | 0.10 | 0.06 | `cross_corr(cross_delay(mul(day_sum(Ret), cross_zscore(log(day_sum(Amt)), 60)), 1), day_sum(Ret), 241)` |
+| slot b seed 2 | 过 | 0.21 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.17 | 0.17 | 0.19 | 0.02 | 0.16 | 0.03 | `cross_corr(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), day_sum(Ret), 241)` |
+| slot b seed 3 | 过 | 0.28 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.21 | 0.21 | 0.23 | 0.09 | 0.20 | 0.00 | `cross_corr(cross_zscore(log(day_sum(Amt)), 60), day_sum(Ret), 241)` |
+| slot b seed 4 | 过 | 0.09 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.07 | 0.04 | 0.10 | 0.01 | 0.05 | 0.04 | `cross_corr(cross_delay(cross_delta(log(day_sum(Amt)), 1), 1), day_sum(Ret), 241)` |
+| slot b seed 5 | 过 | 0.05 | `pow_2(day_ar1_coefficient(Close))` | 0.07 | 0.03 | 0.01 | 0.01 | 0.01 | 0.03 | `cross_corr(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 241)` |
+| slot b seed 6 | 过 | 0.37 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.27 | 0.16 | 0.28 | 0.25 | 0.19 | 0.31 | `cross_ema(day_signed_ratio(Ret, Amt), 60)` |
+| slot b seed 7 | 过 | 0.27 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.13 | 0.26 | 0.26 | 0.08 | 0.25 | 0.10 | `cross_mean(mul(cross_zscore(log(day_sum(Amt)), 60), sign(day_sum(Ret))), 120)` |
+| slot b seed 8 | 过 | 0.09 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.08 | 0.11 | 0.07 | 0.01 | 0.10 | 0.07 | `cross_regbeta(cross_delay(mul(day_sum(Ret), cross_zscore(log(day_sum(Amt)), 60)), 1), day_sum(Ret), 241)` |
+| slot b seed 9 | 过 | 0.26 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.23 | 0.16 | 0.17 | 0.04 | 0.18 | 0.03 | `cross_corr(day_centroid(Amt), cross_delay(day_sum(Ret), 1), 241)` |
+| slot b seed 10 | 过 | 0.06 | `ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)` | 0.06 | 0.06 | 0.02 | 0.01 | 0.05 | 0.04 | `cross_corr(cross_delay(sub(day_wmean(Ret, Amt), day_mean(Ret)), 1), day_sum(Ret), 241)` |
+| slot b seed 11 | 过 | 0.04 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.05 | 0.09 | 0.04 | 0.02 | 0.07 | 0.08 | `cross_corr(cross_delay(mul(day_signed_ratio(Ret, Amt), cross_zscore(log(day_sum(Amt)), 60)), 1), day_sum(Ret), 241)` |
+| slot b seed 12 | 过 | 0.15 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.15 | 0.01 | 0.13 | 0.01 | 0.00 | 0.07 | `cs_bucket_rank(cross_corr(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), day_sum(Ret), 241), cross_mean(day_std(Amt), 30))` |
+| R 1 variant 1 | 过 | 0.82 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.79 | 0.08 | 0.13 | 0.13 | 0.04 | 0.23 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 200), cross_mean(day_std(Amt), 30))` |
+| R 1 variant 2 | 过 | 0.78 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.73 | 0.08 | 0.15 | 0.12 | 0.04 | 0.22 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 241), cross_mean(day_std(Amt), 30))` |
+| R 1 variant 3 | 过 | 0.72 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.66 | 0.09 | 0.21 | 0.13 | 0.04 | 0.17 | `cs_bucket_demean(cross_mean(pow_05(day_ar1_coefficient(Volume)), 241), cross_mean(day_std(Amt), 30))` |
+| R 1 variant 4 | 过 | 0.76 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.70 | 0.09 | 0.21 | 0.14 | 0.04 | 0.18 | `cs_bucket_demean(cross_ema(pow_05(day_ar1_coefficient(Volume)), 120), cross_mean(day_std(Amt), 30))` |
+| R 1 variant 5 | 过 | 0.42 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.35 | 0.00 | 0.05 | 0.13 | 0.02 | 0.20 | `cs_bucket_demean(ts_quantile_q75(day_ar1_coefficient(in_logchg(Volume, 1)), 200), cross_mean(day_std(Amt), 30))` |
+| R 2 variant 1 | 过 | 0.31 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.23 | 0.23 | 0.07 | 0.01 | 0.23 | 0.04 | `cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120)` |
+| R 2 variant 2 | 过 | 0.35 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.28 | 0.26 | 0.03 | 0.02 | 0.26 | 0.05 | `cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 241)` |
+| R 2 variant 3 | 过 | 0.26 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.21 | 0.19 | 0.03 | 0.03 | 0.19 | 0.04 | `cross_ema(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 60), 40)` |
+| R 3 variant 1 | 过 | 0.82 | `cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(` | 0.79 | 0.07 | 0.12 | 0.13 | 0.04 | 0.23 | `cs_bucket_demean(ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 200), cross_mean(day_std(Amt), 30))` |
+| R 4 variant 1 | 过 | 0.44 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.72 | 0.43 | 0.10 | 0.07 | 0.35 | 0.23 | `cross_ema(day_ar1_coefficient(Close), 60)` |
+| R 4 variant 2 | 过 | 0.40 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.66 | 0.40 | 0.12 | 0.07 | 0.33 | 0.23 | `cross_ema(day_ar1_coefficient(Close), 120)` |
+| R 4 variant 3 | 过 | 0.50 | `ts_decay_linear(sigmoid(ts_quantile_q75(pow_05(day_ar1_coeff` | 0.59 | 0.32 | 0.04 | 0.06 | 0.27 | 0.00 | `cross_ema(day_ar1_coefficient(in_logchg(Close, 1)), 60)` |

@@ -1,0 +1,37 @@
+seed: 2014
+round: 3
+slots:
+  - type: E
+    core: 'cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241)'
+    hypothesis: '日频叶子上的『净派现 - 摊薄』事件流 S1 = 241 日内 log(后复权收盘) - LogFloatCap 的累计变化(价格项相消,剩 log 复权因子 - log 流通股本:现金分红使其上跳,增发/解禁使其下降),库里 5583 条没有任何日频叶子,所以核心本身不在库里。前两轮 S1 的 6 个写法(裸 S1、cs_regres 对市值、按成交额分桶 z 分数、ema120、重复 cross_sum)最好 -0.59(train -0.59、valid +0.25),问题在 train:2018-2023 红利风格混杂,事件流的符号随市场状态变。这一轮外围换成全新的机制:(a) cs_flip_by_state 按全市场成交额/波动的状态在 +rank 与 -rank 之间翻转,直接表达『派现在一种市场里被奖励、在另一种里被惩罚』,这是 train/valid 同号所需要的;(b) cross_zscore / 减长半衰期 ema,把『一年累计』变成『相对本股自己历史的异常』,去掉个股常数(分红惯性、规模);(c) 对 ListAge、总/流通市值差回归或分桶,把新股解禁和年龄风格剥掉;(d) 减去解禁腿 U 作为净值。这些外围(flip/zscore/ListAge/剔除 U)在已见候选里都没有出现。样本外还会在的理由:派现黏性、净发行异象、解禁抛压是持久的行为/制度效应,而 cs_flip_by_state 与 ListAge 中性化把以前被风格吃掉的部分去掉。'
+    seeds:
+      - 'cs_flip_by_state(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), day_sum(Amt))'
+      - 'cs_flip_by_state(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), day_std(Ret))'
+      - 'cross_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), 120)'
+      - 'sub(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), cross_ema(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), 120))'
+      - 'cs_regres(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), ListAge)'
+      - 'cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), ListAge)'
+      - 'cs_regres(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), sub(LogTotalCap, LogFloatCap))'
+      - 'cross_ema(cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), ListAge), 20)'
+      - 'add(cs_rank(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241)), cs_rank(cross_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), 60)))'
+      - 'cs_flip_by_state(cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), ListAge), day_sum(Amt))'
+      - 'cross_ema(cs_flip_by_state(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), day_std(Ret)), 20)'
+      - 'sub(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), cross_sum(cross_delta(sub(LogTotalCap, LogFloatCap), 1), 241))'
+      - 'cs_bucket_zscore(cross_ema(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), 1), 241), 20), cross_mean(day_std(Ret), 60))'
+  - type: E
+    core: 'day_gini(Low)'
+    hypothesis: '核心 day_gini(Low):一天内分钟最低价序列的基尼系数(相对离散度,无量纲,不随复权价水平缩放,所以不是价格水平也不是波动水平的换写)。上轮 cross_semistd_pos(day_gini(Low), 241) 是本流所有评分里最接近线的(train -0.01、valid +0.12),说明 gini 的『时间序列上行半离差』里有东西,但只试了 semistd 和嵌套 semistd 两种外围。本轮外围换成:(a) cross_zscore / madz / 短减长 ema 的『相对自己历史的异常』(去掉个股常数,留下状态变化);(b) 下行半离差与上下半离差之差(不对称,不同于只取 pos);(c) 与 day_gini(High) / day_gini(Close) 之差(日内路径上端相对下端的集中度:下影线结构);(d) cs_flip_by_state 按市场波动状态翻转符号,处理 train/valid 方向可能相反的问题;(e) 对规模、成交额、波动做分桶 z 分数或回归残差,以满足新尺子对控制的残差化。这些外围都不同于已见的 cross_semistd_pos 与嵌套 semistd。样本外还会在的理由:日内低价的离散度反映下探的集中与持续(流动性冲击/恐慌性下探的频率),是微观结构层面的状态量,而库里读它的只有分位数类统计。'
+    seeds:
+      - 'cross_zscore(day_gini(Low), 60)'
+      - 'cross_ema(day_gini(Low), 20)'
+      - 'sub(day_gini(Low), day_gini(High))'
+      - 'cross_semistd_neg(day_gini(Low), 241)'
+      - 'sub(cross_semistd_pos(day_gini(Low), 241), cross_semistd_neg(day_gini(Low), 241))'
+      - 'cs_bucket_zscore(day_gini(Low), LogFloatCap)'
+      - 'cs_flip_by_state(cross_ema(day_gini(Low), 60), day_std(Ret))'
+      - 'cross_corr(day_gini(Low), day_sum(Ret), 60)'
+      - 'cross_madz(day_gini(Low), 120)'
+      - 'sub(cross_ema(day_gini(Low), 10), cross_ema(day_gini(Low), 120))'
+      - 'cs_regres(cross_mean(day_gini(Low), 60), cross_mean(day_std(Ret), 60))'
+      - 'cross_ema(sub(day_gini(Low), day_gini(Close)), 30)'
+      - 'cs_bucket_zscore(cross_ema(day_gini(Low), 30), cross_mean(day_sum(Amt), 60))'

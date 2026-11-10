@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 AV30 = day_sum(Amt) ÷ 自身 30 日均值,在定位共性表里有原样子树(核心合规)。核心与 5 个控制的 |ρ| 最大为 rev 0.48,低于 0.8 门槛。12 个种子与快照 6 个 head 的原始 |ρ| 最大 0.62(种子 3 对 R 系 head pow_2(ts_max(...cs_demean(sub(day_mean(Ret),0.5))...)),残差 0.42),其余原始最大 0.45 以内,残差都在 0.42 以内;种子 1 与 12 的残差只有 0.16 与 0.19。对 vol 控制,种子 3、9、11 的 |ρ| 为 0.40–0.50,是波动相关的一部分,但没到 0.8,不挡。种子 3 是 cross_ema(AV·盘中相对收益,60),与第 1 轮 AV×RC 极值族是同一乘积的均值版本,统计量不同(均值 vs 最大),放行。种子 7 的 cross_max(AV,60) 减 EMA 与第 1 轮的 60 日最大异常放量有亲缘,但窗口与中心化不同,放行。种子 1/2/12 用的是 cross_corr 的量价联动,与 head 的残差都低于 0.35,是新的读法。算子核对:cross_corr、cross_ema、cross_stddev、cross_autocorr_s1、cross_tail_mean_q75、ts_skew 都是日轴滚动、缺失跳过;cross_argmax 用 nanargmax_last 而不是 nanrank_last,本位没有 ts_rank / cross_rank / in_rank,§4 的停牌记 0 陷阱不触发;无前视(窗口含当天,t 日收盘后算,t+1 交易)。两处定义瑕疵,但都达不到「主要由它决定」,不挡,记在这里:(a) 种子 6 的 cross_argmax 把窗口内位置(含缺失槽位)除以有效点数,停牌多或上市不久的票数值会被放大,上界略大于 1;(b) 种子 9 的 is_gt 对缺失日返回 0(不是缺失),停牌日被计为「非放量日」,停牌多的票被轻微压低。如果它有 alpha,最可能来自注意力驱动的放量(Barber–Odean 型买入后均值回归),以及放量与盘中价格同向的延续(Llorente 型量价关系)。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [5, 9]
+    reasons: '开盘占比 OS = day_first(Amt) ÷ day_sum(Amt) 与开盘相对量 OR = day_first(Amt) ÷ 自身 30 日均值,都是把规模拿掉后读开盘分钟。快照里 abs_(ts_std(day_first(Amt),50)) 与 cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Volume)),60) 是同一原子(day_first)的水平与自相关版本,本位多数种子对它们的残差 |ρ| 在 0.4–0.65 之间。新颖度给 3 而不是 4,理由是:无量纲化后确实不是同一个量(种子 1、6、7、8、11、12 残差大多在 0.5 以下,6 只有 0.04),但种子 2、3、4、10 对 abs_ts_std head 的残差在 0.41–0.58,仍有一部分是它的换写。划掉两个种子:种子 9(cross_stddev(day_first(Volume)÷day_sum(Volume),100))与种子 2(cross_stddev(OS,100))的相关画像逐位相同(raw 0.28、残差 0.546,各控制 0.16/0.20/0.05/0.09/0.36 相同),是同一个开盘集中度的成交量写法,重复,划掉;种子 5(cross_autocorr_s1(OS,60))与 head cross_autocorr_s1(ar1(Amt)−first(Volume),60) 的 raw |ρ| 为 0.687、残差 0.65,同算子同窗口同一开盘分钟量的自相关,度量同一个东西,划掉。剩余 10 个种子。数学核对:day_first 只用当天第 1 分钟,t 日收盘后才算,t+1 交易,无前视;分母 day_sum(Amt) 与 cross_mean(day_first(Amt),·) 对停牌票为缺失而不是 0,无近零除数(集合竞价首分钟成交额为正);种子 6 的昨日 OS 只滞后一日,无前视;种子 3、8、12 的 30 日均值分母为正量,cross_max / 分位数不会爆点。种子 11(cross_corr(first(Amt), day_sum(Amt),100))是两个成交额水平的共动,与 liq 控制 0.145、与 head 残差 0.47,保留。如果它有 alpha,最可能来自开盘集合竞价后第一分钟的散户订单积压与隔夜消息消化(开盘集中度的动态变化),而不是 Amt 的水平。'
+R: []
+summary: '槽 a 通过(新颖 4、合理 4,12 个种子全留,核心合规、控制 |ρ| 最大 0.48);槽 b 通过(新颖 3、合理 4,划掉种子 5 与 9 后剩 10 个);计划没有 R 组,R 为空;两处定义瑕疵(a6 的 argmax 归一、a9 与 b 的缺失记 0)未达到主要决定,不挡。'
