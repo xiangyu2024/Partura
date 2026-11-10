@@ -1,6 +1,6 @@
 # W02L 交接(接手先读这个，再读 PROGRESS.md 最上面一节)
 
-更新于 2026-11-09 22:30 EST(服务器 11-10 11:30)。
+更新于 2026-11-10 03:30 EST(服务器 11-10 16:30)。
 
 ## 现在在哪
 
@@ -12,7 +12,9 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
+| 1 | 2041 | 审计在跑 | 审计完 `prod_round.sh finish 1 "2041"` |
+| 2 | 2017 2022 2032 2036 | PI 已写好，相关度表在跑 | `prod_round.sh corr 2 "<流>"` → 审计 → finish |
+| 3 | 2001 2021 | PI 已写好，相关度表排在 r2 后面 | `prod_round.sh corr 3 "2001 2021"` → 审计 → finish |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
@@ -43,17 +45,28 @@
 - 不杀不是自己起的进程。
 - 2026 test 只按预先写好的规则读一次。
 
-## 另一件事：同学的因子引擎 factor-compute(2026-11-09 晚，用户要求，未完成)
+## 另一件事：同学的因子引擎 factor-compute(用户 11-09 晚要求；代码已改完，待向用户汇报)
 
-- 位置：服务器 `bkxehsw/programs/factor-compute`,是 hwja222 的 git 仓库(私有远端，由他那边的会话维护)。**不要在他的工作区里改、也不要切分支**;要改就克隆到 `c02_partura/` 下另开分支，并且不推他的远端。
-- 已查清:
-  - 他的引擎是旧版 AlphaCube 的分叉，和我们 main 有 30 多个文件不同;他独有 `_finite_span.py`、`dt_semantic.py`,我们独有 `plugins.py`、`dailyfields.py`。
-  - 他读的 store 和我们的 `bkxehsw/data/alpha-research/fast_factor_compute` 是同一种格式(qmt-v2-fast-factor-store-1)。
-  - 我们 5583 条库因子在他的引擎上全部能解析，都是日频输出，也都没有触发未来函数检查。
-  - Partura head 用的插件算子(`cs_last_low10`、`cs_first_low40`、`cross_zscore` 等，来自 `partura/ops_ext.py`)他没有。
-  - 他的 `run()` 慢的可能原因(待实测确认):一次只算一个因子(没有公共子式复用);分块固定 3 只股票 × 20 天;只用 CPU、1 个线程。
-- 在跑：服务器 `Partura/tmp/fc_probe/speed.log`(`speed_probe.py`)。2024 上半年 16 条库因子，比三种跑法：照他的 `run()` 跑、批量加自动分块(CPU 16 线程)、显卡;并核对前两种的数值是否一致。
-- 下一步:
-  1. 克隆一份，把 `run()` 改成批量 evaluate + 自动分块 + 可选 cuda;
-  2. 并入 ops_ext 算子；
-  3. 抽样对比他的引擎和我们的引擎，列出数值有差的因子(他修过 FFT、Hurst 等算子)。
+- 位置：他的仓库在服务器 `bkxehsw/programs/factor-compute`(hwja222 的，**不要在里面改、不要切分支**)。
+- 我们的改动放在克隆里:`c02_partura/factor-compute-fast`,分支 `claude/fast-batch`,提交 5dcbdec。push 地址已设成 DISABLED,不推他的远端。
+- 接口：和我们一致。输入是 名字→表达式 JSON,读同一种 store(qmt-v2-fast-factor-store-1),输出是 (天, 股票) float32 npy 加 meta。
+- 能不能算我们的因子：
+  - 他原版能解析库里 5583 条，但 Partura 计划里的式子 2782 条有 1491 条不行(缺 49 个插件算子和日频字段)。
+  - 克隆里加了 `operators/partura_ext.py`(ops_ext 原样搬过来)、`alphacube/dailyfields.py` 和 adapter 的日频叶子，现在 **8365/8365 全部能解析**。
+  - `run()` 端到端冒烟测试通过:4 条，带日频字段，结果 COMPLETE。
+- 速度：服务器在负载下测，2024 上半年 117 天 × 5220 只股票。
+  - 他原来的 `run()`:一次一条、3 只 × 20 天分块、1 线程，约 824 秒/条。
+  - 改成批量 evaluate + 自动分块 + 16 线程后，约 84 秒/条，约快 10 倍。
+  - 再关掉「有限值策略」每次调用都做的 NaN/inf 计数(数值逐位相同)又快 2.1 倍，约 40 秒/条，和我们自己的引擎(48 秒/条)相当。
+  - 显卡：测速脚本 `tmp/fc_probe/speed.log` 的 C 段，待看。
+- 数值：抽样 72 条，他的引擎(克隆) vs 我们的 AlphaCube。
+  - 57 条一致或只有浮点尾差。
+  - 2 条只在开头热身期不同(他那边窗口不满给 NaN)。
+  - 剩下的差异来自他刻意加的「有限值策略 v1」(common.py 末尾):
+    - 相关系数去掉了 +EPS,方差为 0 时给 NaN;
+    - where / 比较的条件是 NaN 时结果给 NaN;
+    - rank 不计无效值;
+    - Hurst 只用连续段。
+  - 差得最多的两条:L380(两条日内价格滚动极值的相关，截面秩相关 0.86)、X2278(对相关再做 signedpower 放大，0.52)。
+  - 他的修正更严谨。但我们库里的因子是在我们的语义下挑出来的，换到他的引擎上个别因子会变。
+- 探针脚本都在 `Partura/tmp/fc_probe/`:compare_probe / speed_probe / count_probe / smoke_run。
