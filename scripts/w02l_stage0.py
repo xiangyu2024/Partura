@@ -69,6 +69,8 @@ MIRROR = os.environ.get("PARTURA_MIRROR")
 MIRROR = MIRROR if MIRROR and os.path.isdir(MIRROR) else None
 RHO, THR = 0.5, 0.5
 RESCORE, FOLLOW = "--rescore" in sys.argv, "--follow" in sys.argv
+D_MIN = 0.2       # ruler D only where B >= D_MIN: D removes more than B, and of 2792 gated rows 5 have B >= 0.2 (2026-11-10); D
+                  # on this oversubscribed host costs about a minute per row
 G = Guidance.load(PARTURA_ROOT / "guidance" / "C05_base.yaml")
 _caps = study.host_caps()
 os.environ.update(PARTURA_SLOTS=_caps["PARTURA_SLOTS"], PARTURA_GPU_WAYS=_caps["PARTURA_GPU_WAYS"], PARTURA_REPROMOTE="1")
@@ -196,6 +198,9 @@ with slot(name="slot"):                                       # its own slots: t
             if not out["gate"]:
                 return out
         for name in (names or list(ctx)):
+            if name == "D" and out.get("B", {}).get("score", -9.0) < D_MIN:
+                out["D"] = {"skipped": f"B < {D_MIN}"}
+                continue
             rw = steer_reward(panel, ctx[name], "long_neutral")
             out[name] = {"score": float(rw["score"]), "sign": float(rw["sign"]), "hl": float(rw["hl"]),
                          "train": float(rw["train"]["long_sharpe"]), "valid": float(rw["valid"]["long_sharpe"]),
@@ -206,7 +211,7 @@ with slot(name="slot"):                                       # its own slots: t
             out["rho"] = {k2: corr_rows(z, v) for k2, v in ref.items()}
         for name in ("A", "B", "D"):
             if name in out:
-                out[f"discovery_{name}"] = bool(out[name]["score"] >= THR and abs(out["rho"]["known"]) < RHO)
+                out[f"discovery_{name}"] = bool("score" in out[name] and out[name]["score"] >= THR and abs(out["rho"]["known"]) < RHO)
         return out
 
     if RESCORE:
@@ -237,6 +242,10 @@ with slot(name="slot"):                                       # its own slots: t
                 full = [j for j, r in enumerate(rs) if "error" not in r and not r.get("gate") and "levels" not in r
                         and r.get("coverage", 0.0) >= 0.9]
                 addd = [j for j, r in enumerate(rs) if "error" not in r and r.get("gate") and "D" not in r]
+                for j in [j for j in addd if rs[j]["B"]["score"] < D_MIN]:   # no panel needed
+                    judge(rs[j], None, names=["D"])
+                    rs[j]["rescored"] = "2026-11-10 levels gate + ruler D"
+                addd = [j for j in addd if "D" not in rs[j]]
                 if full or addd:
                     P = ps.compute({f"v{j}": rs[j]["expression"] for j in full + addd})
                     for j in full + addd:

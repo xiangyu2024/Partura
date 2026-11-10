@@ -1,6 +1,6 @@
 # W02L 交接(接手先读这个，再读 PROGRESS.md 最上面一节)
 
-更新于 2026-11-10 05:40 EST(服务器 11-10 18:40)。
+更新于 2026-11-10 12:00 EST(服务器 11-11 01:00)。
 
 ## 现在在哪
 
@@ -12,7 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
+| 2 | 2023 | 审计在跑 | 审计完 `prod_round.sh finish 2 "2023"` |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
@@ -22,30 +22,41 @@
 
 ## 第 0 步结束以后
 
-1. `--spearman-only` 补算 30 条 `ts_spearman`;
+1. `--spearman-only` 补算 30 条 `ts_spearman`,然后再跑一次 `w02l_stage0.py ... --rescore`(给这些行补 D 和新闸门);
 2. 重跑 MAKEUP.md 里的搜索;
 3. 建剩下 32 条流;
 4. 全部轮次结束后建 W02L 库，按 PLAN §7:两层合成并集 vs C(L∪X),拟合到 2025-12-31,test 2026 只读一次并记账;
 5. 写 RESULT.md。
 
+## 用户 11-10 定下的四件事(都已实现，在跑)
+
+1. **head 改按尺子 D 判。**D = B + 每天市值 / 流动性 / 价位十分位哑变量。
+   - 第 0 步(`w02l_stage0.py`)新增 D 和 discovery_D。D 只对 B ≥ 0.2 的算(D_MIN):2792 条过闸门的里只有 5 条 B ≥ 0.2;服务器超载时 D 约 1 分钟一行。
+   - 自动建流(`w02l_lib.py --head-ruler D`,默认)按 discovery_D 选 head;素材排序和证据里的分数仍是 B。
+   - 一个批次要等它的行都补算完(`current()`)才建流，所以新流会等补算进程。
+   - 报告(`w02l_report.py`)按 `research/prod_W02L/d_scores.jsonl` 判 head。
+     - 这个文件由 `w02l_backtest.py --d-jsonl` 写;`w02l_report.py --collect-d <文件>` 列出还缺 D 的候选(B ≥ 0.3、|ρK| < 0.5)。
+     - 11-10 在算 81 个,`tmp/bt_new/dscore.log`。
+   - GP 搜索的奖励仍是 B(改奖励等于重跑)。
+2. **同学的引擎加了 `--semantics alphacube` 开关**(克隆 `factor-compute-fast`,分支 claude/fast-batch,提交 1fcee88)。
+   - `src/ac_reference` 是我们的 AlphaCube 加 Partura 算子;`unified_calculation_ac.run` 同一套输入输出。
+   - 6 条逐位等于我们的引擎(含 L380、X2278),8365 条全能解析。默认仍是 fork。
+3. **第 0 步和 GP 打分的闸门换成 `diagnose.levels_ok`。**
+   - 规则：原来的「不同取值比例 ≥ 0.5」,或者每天 ≥ 20 个不同值且十分位分界上靠代码顺序进组的不超过 20%。
+   - 加后一条的原因：组合大小固定，并列按代码顺序取，见 `alphacube.metrics.long_short_weights`。
+   - 旧行用 `w02l_stage0.py ... --rescore --follow` 补算，写到 `stage0/rescore/`,原文件不动，读的时候以 rescore 为准。
+   - 跟到第 0 步结束;`--spearman-only` 跑完后要再跑一次 `--rescore`。
+   - 正在跑的 6 个第 0 步进程是旧代码(没杀),它们新写的行由 `--follow` 补。
+4. **Hurst 修正并回 AlphaCube**(本机 AlphaCube-steering 分支 partura-steering 提交 4639d9f,已同步到服务器 vendor;没推远端)。
+   - `day_hurst`:首尾 NaN 修剪，中间有缺口或 inf 给 NaN。
+   - `cross_hurst`:窗口必须完整。
+   - `ALPHACUBE_LEGACY_HURST=1` 恢复旧行为。
+   - Partura 面板缓存和 rankban 指纹缓存对用到这两个算子的表达式加了盐(`dt_day.semantics_salt`),不会再读到旧值。
+   - 11-10 之前第 0 步对含 Hurst 的成员是旧语义打的分(day_hurst 148 条、cross_hurst 25 条)。
+
 ## 等用户定的
 
-1. head 规则加第二判据：残差 ρ 或尺子 D(D = B + 市值 / 流动性 / 价位十分位哑变量，2028 阶跃带在 D 下 −3.66)。
-2. 加第 0 步进程。
-3. GP 分钟维度的设计改动。
-4. AlphaCube「所有限制」那一批。
-5. 省 token:第 3 轮只做前两轮有起色的流；审计只在用了 E 位或 R 组时做。
-   - 现在每个流-轮约 50 万 token,累计约 3,500 万。
-6. 第 0 步闸门的「不同取值比例 ≥ 0.5」会误挡离散值因子(11-10 发现)。
-   - 已打分 3562 条里，有 691 条覆盖率够、只因这一项被挡(L 148、X 543)。其中 327 条带 argmax/argmin、指示函数、符号或分桶。
-   - 2053 的第 1 批 B157(日内成交量峰值的分钟序号)9 条全军覆没，比例 0.035–0.053,覆盖率 0.999。我在它的 loc.md 末尾补了总领注释，让 PI 照常出题。
-   - 可选改法：改成每天截面至少 N 个不同值(比如 20),或者看前 10% 里的并列比例。
-7. AlphaCube 的 `cross_hurst` 有缺失日 bug(11-10 由 2016 r3 审计发现，已核实)。
-   - 问题:cumsum 碰到第一个缺失日之后全是 NaN,所以极差 R 只用了缺失日之前那一段;S 却用全部有效日，分母固定 d−1。读数会随停牌位置变。
-   - 同学的引擎已经修了：窗口 d 天必须全部有值，否则给 NaN。完整窗口上两边数值相同。
-   - 2016 r3 的 b 位(cross_hurst N 位)因此被审计否掉，转成普通 GP。
-   - 库里用到 cross_hurst 的有 25 条，过闸门 11 条，没有一条是发现。day_hurst 也被同学改过(只用连续段),用到它的有 148 条。
-   - W02L 为了前后口径一致，先不改。要不要把同学的修正并回 AlphaCube,和第 1 项引擎口径一起定。
+(暂无。)
 
 ## 规矩(用户定的，别破)
 
