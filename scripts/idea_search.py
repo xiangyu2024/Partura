@@ -166,6 +166,12 @@ with slot():
             os.environ.pop(_v, None)
         torch.set_num_threads(int(os.environ.get("PARTURA_GP_CPU_THREADS", 6)))
     print(f"[idea] search device: {GP_DEV}", flush=True)
+    # W02L 2026-11-09: a search waiting for its GPU way already held a CUDA context (~0.9 GB, made by the setup below); 8 waiting
+    # searches and 11 correlation jobs held ~14 GB of the 32 doing nothing, and the ones computing fell to the CPU.
+    # $PARTURA_GPUQ_WAYS = n: only n searches at a time get past this point (those holding a way and the next in line); the
+    # lock is held until the process exits.  Unset = as before.
+    if GP_DEV == "cuda" and os.environ.get("PARTURA_GPUQ_WAYS"):
+        _guard.exclusive("gpuq").__enter__()
     # ---- the reward's context, on the grid the GP will use (same view: start, end, warm-up)
     ps = PanelSet(STORE, START, END, warmup=60, device=GP_DEV, gpu_fraction=0 if GP_DEV == "cuda" else None, cache_dir=str(SHARED_CACHE), mirror_root=MIRROR,
                   workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15", label_buyable=True, batch=8,

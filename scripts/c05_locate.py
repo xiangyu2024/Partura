@@ -122,7 +122,11 @@ if MODE != "corr" and os.environ.get("PARTURA_LOCATE_GPU_LOCK"):
     # W02L: a locate is minutes of work that the next PI waits for -- it takes run slots and GPU ways of its own instead of
     # queueing behind 40-minute GP searches ($PARTURA_LOCATE_SLOT_NAME, $PARTURA_LOCATE_GPU_LOCK)
     os.environ["PARTURA_GPU_LOCK"] = os.environ["PARTURA_LOCATE_GPU_LOCK"]
-with (contextlib.nullcontext() if MODE == "corr" else slot(name=os.environ.get("PARTURA_LOCATE_SLOT_NAME") or None)):
+# W02L: a correlation job holds a CUDA context from its start (~0.65 GB); $PARTURA_CORR_SLOT_NAME caps how many run at once
+# ($PARTURA_CORR_SLOTS, default 4) so the queued ones hold nothing.  Unset = no slot, as before.
+_corr_slot = slot(n_slots=int(os.environ.get("PARTURA_CORR_SLOTS") or 4), name=os.environ["PARTURA_CORR_SLOT_NAME"]) \
+    if MODE == "corr" and os.environ.get("PARTURA_CORR_SLOT_NAME") else contextlib.nullcontext()
+with (_corr_slot if MODE == "corr" else slot(name=os.environ.get("PARTURA_LOCATE_SLOT_NAME") or None)):
     mem = MemoryGuard(self_limit_gb=int(os.environ.get("PARTURA_SELF_LIMIT_GB", 34)), cgroup_limit_gb=int(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 70))).start()
     t0 = time.time()
     from alphacube.plugins import load_plugins
