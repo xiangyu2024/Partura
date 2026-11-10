@@ -12,7 +12,6 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 3 | 2021 | 审计在跑 | 审计完 `prod_round.sh finish 3 "2021"` |
 | 3 | 2001 | 相关度表在跑 | `prod_round.sh corr 3 "2001"` → 审计 → finish |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
