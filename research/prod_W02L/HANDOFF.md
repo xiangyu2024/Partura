@@ -12,7 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 1 | 2044 2045 2046 2047 2049 | PI 在写 | 看 `partura/s<流>/r1/missions.yaml` 是否存在且 `python scripts/c06_check.py <流> 1` 通过;缺的重跑工作流 stage `pi` |
+| 1 | 2044 2045 2046 2047 2049 | 相关度表在算(PI 已过 c06_check) | `prod_round.sh corr 1 "2044 2045 2046 2047 2049"` |
 | 2 | 2031 2035 | 相关度表在算 | `PROD_HOSTS=research/prod_W02L/hosts.json PROD_ENV=w02l bash scripts/prod_round.sh corr 2 "2031 2035"`(服务器上已起的会自己算完，再跑一次只是取回) |
 | 2 | 2007 2010 2011 2020 2025 2028 | 相关度表在算(2007 最慢) | 同上，`corr 2 "<这些流>"` |
 
