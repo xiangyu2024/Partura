@@ -61,6 +61,7 @@
 - `day_pdf_quantile_bilateral_half_width`:2025 r3 审计说它取的是窗口端点分钟的收益差，不是半极差(AlphaCube `operators/legacy_specialized_dt.py` 约 350–362 行)。所以 pdf 系的机制叙述不成立，值本身是确定的。没核实、没改。
 - 种子解析器(`partura/steer.py` 的 tokenizer)不认带引号的参数(如 `'median'`、`'rank'`),PI 只能用默认的 `'prob'`(2025 r3)。
 - `cs_quantile_q75 / q50` 输出的是逐股票的 0/1 旗子，不是市场标量(2032 r3 审计);有 PI 把它当「市场状态」写机制。
+- `day_pdf_quantile_single(..., left=False)`:右尾分支对降序的累计量做 `searchsorted`(AlphaCube `operators/legacy_specialized_dt.py` 305–307 行)。11-10 本机核实：输出退化成当日第一或最后一分钟的值(n=0.05 时取最后一分钟，n≥0.5 时多半取第一分钟)。2061 r1 审计发现。没改(改了会变语义);库里含 `False` 的成员要单独核对。
 
 ## 等用户定的
 
