@@ -12,11 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 1 | 2048 | 相关度表在算 | `prod_round.sh corr 1 "2048"`(服务器上已起的会自己算完，再跑一次只是取回) |
-| 2 | 2030 2038 | 相关度表在算 | `prod_round.sh corr 2 "2030 2038"` |
-| 1 | 2050 2052 | PI 在写 | 看 `partura/s<流>/r1/missions.yaml` + `c06_check.py <流> 1`;缺就重跑工作流 stage `pi` |
-| 2 | 2037 | PI 在写 | 同上，`round: 2` |
-| 3 | 2006 | PI 在写 | 同上，`round: 3` |
+| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
