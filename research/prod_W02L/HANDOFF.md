@@ -55,6 +55,12 @@
    - Partura 面板缓存和 rankban 指纹缓存对用到这两个算子的表达式加了盐(`dt_day.semantics_salt`),不会再读到旧值。
    - 11-10 之前第 0 步对含 Hurst 的成员是旧语义打的分(day_hurst 148 条、cross_hurst 25 条)。
 
+## 审计顺带发现、还没处理的(低优先级)
+
+- `day_pdf_quantile_bilateral_half_width`:2025 r3 审计说它取的是窗口端点分钟的收益差，不是半极差(AlphaCube `operators/legacy_specialized_dt.py` 约 350–362 行)。所以 pdf 系的机制叙述不成立，值本身是确定的。没核实、没改。
+- 种子解析器(`partura/steer.py` 的 tokenizer)不认带引号的参数(如 `'median'`、`'rank'`),PI 只能用默认的 `'prob'`(2025 r3)。
+- `cs_quantile_q75 / q50` 输出的是逐股票的 0/1 旗子，不是市场标量(2032 r3 审计);有 PI 把它当「市场状态」写机制。
+
 ## 等用户定的
 
 (暂无。)
