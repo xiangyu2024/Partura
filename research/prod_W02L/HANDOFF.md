@@ -15,7 +15,7 @@
 | 1 | 2044 2045 2046 2047 2049 | 相关度表在算(PI 已过 c06_check) | `prod_round.sh corr 1 "2044 2045 2046 2047 2049"` |
 | 1 | 2048 | PI 在写(这一批全没过闸门，从零设计 N 位) | 看 `partura/s2048/r1/missions.yaml` + `c06_check.py 2048 1`;缺就重跑工作流 stage `pi` |
 | 2 | 2030 2038 | PI 在写 | 同上，`round: 2` |
-| 2 | 2007 | 相关度表在算(最慢) | `PROD_HOSTS=research/prod_W02L/hosts.json PROD_ENV=w02l bash scripts/prod_round.sh corr 2 "2007"`(服务器上已起的会自己算完，再跑一次只是取回) |
+| 2 | 2007 | 审计在跑(第一次被用户的引擎消息带偏，没做，已重跑) | 看 `partura/s2007/r2/audit_1.yaml`;有就 `finish 2 "2007"`,没有就重跑 stage `audit` |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
@@ -45,3 +45,18 @@
 - 服务器上文件只能放在 `c02_partura` 和 `bkxehsw` 里。
 - 不杀不是自己起的进程。
 - 2026 test 只按预先写好的规则读一次。
+
+## 另一件事：同学的因子引擎 factor-compute(2026-11-09 晚，用户要求，未完成)
+
+- 位置：服务器 `bkxehsw/programs/factor-compute`,是 hwja222 的 git 仓库(私有远端，由他那边的会话维护)。**不要在他的工作区里改、也不要切分支**;要改就克隆到 `c02_partura/` 下另开分支，并且不推他的远端。
+- 已查清:
+  - 他的引擎是旧版 AlphaCube 的分叉，和我们 main 有 30 多个文件不同;他独有 `_finite_span.py`、`dt_semantic.py`,我们独有 `plugins.py`、`dailyfields.py`。
+  - 他读的 store 和我们的 `bkxehsw/data/alpha-research/fast_factor_compute` 是同一种格式(qmt-v2-fast-factor-store-1)。
+  - 我们 5583 条库因子在他的引擎上全部能解析，都是日频输出，也都没有触发未来函数检查。
+  - Partura head 用的插件算子(`cs_last_low10`、`cs_first_low40`、`cross_zscore` 等，来自 `partura/ops_ext.py`)他没有。
+  - 他的 `run()` 慢的可能原因(待实测确认):一次只算一个因子(没有公共子式复用);分块固定 3 只股票 × 20 天;只用 CPU、1 个线程。
+- 在跑：服务器 `Partura/tmp/fc_probe/speed.log`(`speed_probe.py`)。2024 上半年 16 条库因子，比三种跑法：照他的 `run()` 跑、批量加自动分块(CPU 16 线程)、显卡;并核对前两种的数值是否一致。
+- 下一步:
+  1. 克隆一份，把 `run()` 改成批量 evaluate + 自动分块 + 可选 cuda;
+  2. 并入 ops_ext 算子；
+  3. 抽样对比他的引擎和我们的引擎，列出数值有差的因子(他修过 FFT、Hurst 等算子)。
