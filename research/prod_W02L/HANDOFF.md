@@ -12,7 +12,7 @@
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| 2 | 2023 | 审计在跑 | 审计完 `prod_round.sh finish 2 "2023"` |
+| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
 
 每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
 工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
@@ -46,6 +46,7 @@
    - 加后一条的原因：组合大小固定，并列按代码顺序取，见 `alphacube.metrics.long_short_weights`。
    - 旧行用 `w02l_stage0.py ... --rescore --follow` 补算，写到 `stage0/rescore/`,原文件不动，读的时候以 rescore 为准。
    - 跟到第 0 步结束;`--spearman-only` 跑完后要再跑一次 `--rescore`。
+   - 11-10 12:20 起 4 个补算进程在跑(PARTURA_THREADS=4,日志 `stage0/rescore_w*.log`)。
    - 正在跑的 6 个第 0 步进程是旧代码(没杀),它们新写的行由 `--follow` 补。
 4. **Hurst 修正并回 AlphaCube**(本机 AlphaCube-steering 分支 partura-steering 提交 4639d9f,已同步到服务器 vendor;没推远端)。
    - `day_hurst`:首尾 NaN 修剪，中间有缺口或 inf 给 NaN。
