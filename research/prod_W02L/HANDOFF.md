@@ -62,6 +62,7 @@
 - 种子解析器(`partura/steer.py` 的 tokenizer)不认带引号的参数(如 `'median'`、`'rank'`),PI 只能用默认的 `'prob'`(2025 r3)。
 - `cs_quantile_q75 / q50` 输出的是逐股票的 0/1 旗子，不是市场标量(2032 r3 审计);有 PI 把它当「市场状态」写机制。
 - `day_pdf_quantile_single(..., left=False)`:右尾分支对降序的累计量做 `searchsorted`(AlphaCube `operators/legacy_specialized_dt.py` 305–307 行)。11-10 本机核实：输出退化成当日第一或最后一分钟的值(n=0.05 时取最后一分钟，n≥0.5 时多半取第一分钟)。2061 r1 审计发现。没改(改了会变语义);库里含 `False` 的成员要单独核对。
+- `in_regres(Ret, in_mean_full(Ret), 20)`:因变量当天是常数，残差恒为 0(本机实测约 1e-12),标准化以后只剩浮点噪声。库里有 34 条(全是这个写法);11-10 已算 D 的候选里没有它们。已写进 rules.md §4,PI 和审计员都会看到。**建库(PLAN §7)时要把这 34 条标成定义坏掉**;另外要查冠军合成有没有用到它们。2062 r1 审计发现。
 
 ## 等用户定的
 
