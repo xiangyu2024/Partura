@@ -1,0 +1,33 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      E 位,核心 day_cov(Ret, Low)。相关度表:核心与快照 3 个 head 的原始 |ρ| 最大 0.22(最像 head 2 add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low)),它本身就含这个核心;残差 |ρ| 0.32);与 5 个控制的 |ρ| 最大 0.20,过 E 位 < 0.8 的门槛。11 个种子全部原样含核心 day_cov(Ret, Low),外围都不含 Amt 与 add,与 head 1、3 没有骨架重合。原始 |ρ| 最大 0.49(seed 4,对 quantile 类 head),残差 |ρ| 最大 0.40(seed 1、7,对 head 2),都低于 0.7 的库禁令线。seed 1、4、5、7、8、11 对 liquidity 与 known 族的 |ρ| 在 0.45–0.61,是这一位最需要盯的重叠,但都低于 0.8,不触发自动划掉。
+      创新度 3:核心只作为子树出现在 head 2 里,单独拿出来做去量纲、价位分组、慢化是新的做法;但 seed 1、4、7 的流动性相关说明一部分内容接近流动性 / 已知族的水平代理,所以不给 4。
+      合理度 4:机制清楚(日内收益与分钟价格水平的协方差,读的是大涨大跌的分钟是否出现在日内高价位,即尾盘拉升或早盘冲高回落的结构,与日内动量文献一致)。逐个算子核对:day_cov 在有效分钟少于 2 时输出 NaN;div 的分母 day_mean(Low) 为正价格水平、day_std(Ret) 为 0 时分子也为 0,得 NaN 而非爆点;cross_mean / cross_zscore / cs_bucket_* / cross_corr 只用到 t 日及以前的数据;最长窗口 120 日,热身期不主导。两处描述不准但不是数学问题:seed 7 的 div(·, day_std(Ret)) 得到的是 corr · σ_Low,仍带价格量纲,与 PI 写的「无量纲」不符;seed 1、4、8 的原始 day_cov 也带价格量纲,只靠每日截面排序和残差化消掉。这不构成 §4 的「定义坏掉」,不划。
+      划掉:无。没有种子 raw |ρ| ≥ 0.7 或控制 |ρ| ≥ 0.8,没有完全相同的表达式;seed 4、5、8、11 是 seed 1、2 的 cs_bucket / robust_z 包装,表达式不同,按规则不作为重复划掉。剩 11 个种子(≥ 4)。
+      如果它有 alpha,最可能来自:日内价格路径与收益的同步性(尾盘拉升与早盘冲高回落的参与者结构),而不是流动性本身。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      N 位。相关度表:三个快照 head 全是 order-free 的单点统计(pow_05(day_var(nt_ts_min(Volume, 30))) 与 day_quantile 类,加一个 Low 的 Hurst),时间顺序信息是空白。原始 |ρ| 最大 0.61(seed 4,对 quantile 类 head)、0.53(seed 6)、0.50(seed 5),都低于 0.7;与 5 个控制的 |ρ| 最大 0.71(seed 4,liq)、0.69(seed 6,liq)、0.68(seed 5,liq),都低于 0.8,不触发自动划掉。残差 |ρ| 最大 0.54(seed 2,对 pow_05(day_var(nt_ts_min(Volume, 30))))和 0.43(seed 7,对 add(day_quantile(...))),是重叠最需要注意的两个,但不过控制门槛。在 Partura-prod 的研究文件里搜 day_centroid 没有命中,新算子 day_centroid / day_gini / in_index 在库里没有可见的先例。
+      创新度 4:读的是日内时间维度(成交与绝对变动的重心、集中度、量与价的时间错位),快照里没有;扣掉一分是因为 seed 4、5、6 的流动性相关偏高(gini(|Ret|) 在很大程度上是零变动分钟占比的代理,即流动性的一种写法),残差化后可能剩得不多。
+      合理度 4:机制清楚(日内成交与波动的时间形状反映参与者构成:指数与被动资金偏尾盘集中,消息与散户偏开盘集中;量价时间错位反映谁先动)。逐个核对:day_centroid 在日总量为 0 时输出 NaN(tot > 0 门);day_gini 要求有效分钟 n > 1 且总和 > 0;in_index 只在有限值分钟输出 t / (T − 1),无前视;窗口均不超过 120 日。两处要注意,但不是 §4 的问题:(1) day_centroid(Ret) 与 day_gini(Ret) 作用在 |Ret| 上(算子内部取了绝对值),测的是绝对变动的时点分布,不是有符号的「价在前量在后」,PI 的叙述应改为绝对变动的时点;(2) day_corr 在某日序列为常数时输出 0 而不是 NaN(分母只加了 EPS,方差为 0 时 cov / EPS = 0)。seed 6 的 day_corr(in_index(Volume), Volume) 与 seed 7 的 day_corr(in_index(Ret), abs_(Ret)) 在整天成交量或 |Ret| 完全不变的日子会以 0 进入 cross_mean,这会把均值拉向 0,但只发生在极少数整天不动的票上,不构成「结果主要由缺失值填充决定」,不划。
+      划掉:无。没有 raw |ρ| ≥ 0.7 或控制 |ρ| ≥ 0.8,没有完全相同的表达式;seed 8 是 seed 1 的 cs_bucket_zscore 包装,表达式不同,按规则不划。剩 11 个种子(≥ 4)。
+      通过 §3 的条件:创新度 4 ≥ 3,合理度 4 ≥ 3,划完剩 11 ≥ 4。它也是本流 3 轮里第一个通过审计的 N 位。
+      如果它有 alpha,最可能来自:日内成交与绝对变动的时点分布(尾盘集中的被动 / 指数资金与开盘集中的消息与散户资金),以及量与价的时间错位。
+R:
+  - head: 'add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low))'
+    soundness: 4
+    reasons: |-
+      R 组只评合理度。快照原式含 nt_ts_min / nt_ts_med,属于禁用算子族;六个变体全部去掉了 nt_。变体 2、3 用的 cs_rank 对缺失输出 NaN(已核 common.py 的 rank:无效项最后回填 NaN),没有 §4 的 nanrank 问题。Low 换 High 的增益有快照候选支撑:loc.json 的 r_candidates 显示 head 分数 −1.327 → −0.876,增益 +0.451(train / valid 分数,不是 2026 年数据)。
+      变体 1 的描述与实际表达式错配:in_min_rolling(Amt, 5) 之后再套 day_min,数学上等于 day_min(Amt)(5 分钟滚动最小值的全天最小值就是全天最小值),因此它没有实现文字里说的「换成普通 ts_ 算子」(那会是跨日的平滑),而是把 Amt 项降成了单日最小值,实际是另一个想法。这是描述与实现不一致,不是数学问题,不删整组;建议 PI 把变体 1 的说明改为「单日最小值加 High 协方差」再对照。
+      变体 4、5、6 数学上有界:分母 day_mean(High) 为正价格水平,变体 6 的 sub(day_cov(Ret, High), day_cov(Ret, Low)) 是无分母的协方差差(即 cov(Ret, High − Low)),窗口均不超过 20 日,无前视。
+      合理度 4:Low 换 High 的增益说明价格口径有效;head 中 Amt 项量级远大于协方差,加和后秩由 Amt 决定,变体 2、3 用 cs_rank 分别取秩再相加,是对量纲错配的正确修补方向。
+      R 组放行。
+summary: 'a(E,核心 day_cov(Ret, Low))创新 3 / 合理 4,b(N)创新 4 / 合理 4,两位都无种子划掉并通过审计;R 组合理 4 放行;无数学问题挡位,只记录了 seed 7 的「无量纲」描述不准、R 变体 1 的描述与实现错配、day_corr 常数日输出 0 三处描述 / 填充问题。'

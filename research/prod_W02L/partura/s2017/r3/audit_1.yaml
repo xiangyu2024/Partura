@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 4。E 核心 cross_zscore(day_quantile_q25(Volume),60) 与快照 9 个 head 的原始 |ρ| 最大 0.28(最像 prods2017M2 的 Close 比值 head),残差 0.14;与五个控制的 |ρ| 为 liq 0.02、vol 0.18、rev 0.43、known 0.05、size 0.03,都未到 0.5,不是任何 head 或控制的换写法。注意:同一核心在本流第 2 轮 N 位里 GP 已探索过(外围是 cs_normalize / cross_semistd_pos / cross_quantile_q25),新的是 E 外围(cross_mean / cross_ema / cross_tail_mean_q75 / cross_max / cs_flip_by_state 等),而不是核心本身。合理度 4。机制清楚:安静分钟成交底板相对自身 60 日历史的抬升,读的是基础关注度 / 机构执行节奏的慢变化。逐个算子核对:day_quantile_q25 即 day_quantile(x,0.25),当天分钟 nanquantile;cross_zscore 是逐股票 60 日时间窗的 z(含当天、只用当天及以前数据,窗口近似常数时置 0 保护);cs_flip_by_state 的状态是截面均值 cross_delta(log(day_quantile(Close)),60) 与 241 日 trailing rank 的比较,确是市场级状态,与「按市场 60 日趋势状态翻符号」一致;cross_tail_mean_q75、cross_max、cross_corr、cs_bucket_zscore(LogFloatCap)、cs_regres(对 5 日波动 z)、cs_winsor(cross_decay_linear) 都是合法的时间或截面算子,无前视。13 个种子都原样包含核心,与自身核心的控制 |ρ| 均远低于 0.8;种子 1、2、11、13 与核心只差平滑窗口,不算重复。扣分点(不挡):常规 suspended 日 Volume 为 0(common.py 注释),分位取 0、z 取大负值,停牌多的票会被系统性推到低端,这与规则 §4 的 nanrank_last 是同一类缺失值填充;但它只影响底部,纯多头十分位基本不取,PI「不是爆点」的判断成立。如果它有 alpha,最可能来自:安静分钟底板在 60 日内的抬升与股票基础关注度或机构慢速建仓相关,而不是 Volume 水平本身(水平的流动性暴露已被 liq 相关 0.02 排除)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 7, 10, 11]
+    reasons: '创新度 4。N 位的新量是 day_quantile_q25(Volume) / (day_mean(Volume)+1),即安静分钟成交底板相对当天均值的形状比;快照 head 原始 |ρ| 最大 0.31(seed 9,与 M2 的 Close 比值 head,残差 0.26),seed 1 只有 0.11。与控制:seed 1 的 liq 0.09、vol 0.17、rev 0.23、known 0.10、size 0.03。划掉的 4 个种子(2、7、10、11)与控制 |ρ| 超过 0.8:seed 2 liq 0.86 / known 0.81,seed 7 liq 0.82 / known 0.76,seed 10 liq 0.83,seed 11 liq 0.82,这是未做 z 化的水平版本,与流动性几乎是同一个量(换写法),按规则自动划掉。z 化或做差后的版本(1、3、5、6、8、9、12)与 liq 基本在 0.3 以下。seed 4(未 z 的 cross_mean(ratio,40) 再做 LogFloatCap 分桶标准化)与 liq 0.54、known 0.48,是部分流动性的换写法,但未过 0.8 的线,不单独划,只在此记录。合理度 4。数学:分母 +1 保护,对非负成交量有 mean 大于等于 0.75 乘以 q25,因此比值有界(约 4/3 以内),不会爆点;q25 对 q75 的 log 比也有界;cross_zscore、cross_mean、cross_delta、cross_semistd_pos、cross_corr 都是逐股票时间窗、无前视;cs_bucket_zscore(LogFloatCap)、cs_regres 是截面算子。机制:成交的均匀程度(分单或算法执行与脉冲式注意力的差别)是慢变的投资者结构特征,Kyle 与 Barber-Odean 一族的说法说得通,窗口(60、40、20、120 日)合理。扣分点(不挡):停牌日 Volume 为 0,比值为 0,停牌多的票同样会被推到底部,影响只在底部,与 a 位同类。如果它有 alpha,最可能来自:持续成交的票被机构慢速建仓、脉冲型的票被注意力追高后回吐,即形状而不是水平。'
+R: []
+summary: 'a 位通过(创新 4、合理 4,无自动划掉,13 个种子全部保留;核心与五个控制的 |ρ| 最大 0.43);b 位通过(创新 4、合理 4,按控制 |ρ| ≥ 0.8 自动划掉 2、7、10、11,余 8 个 ≥ 4);本轮无 R 组;两位都只有停牌零填充这一项需要 PI 在数据层核对,不构成挡的理由。'

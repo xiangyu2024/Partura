@@ -1,0 +1,35 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 2
+    soundness: 1
+    struck_seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    reasons: |-
+      整位不通过,理由是数学问题(§4 定义坏掉 / 数值伪影)。
+      核心 C = day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(...)), create_like(in_regres(...), 1e-06))))。
+      in_regres(x, y, d) = rolling_ols(x, y, d, axis=-1)["resid"],即 y ~ alpha + beta*x 的分钟轴滚动残差(AlphaCube operators/dt_in.py、common.py rolling_ols)。这里 y = in_mean_full(Ret),同一天所有分钟取同一个值(当日均值)。窗口内 y 没有变化,所以 dy 恒为 0,cov = 0,beta = 0,alpha = 窗口内 y 的均值 = 当日均值,resid = y − alpha ≡ 0。精确算术下 Z 恒为 0,与数据无关。
+      数值检查(scratch/chk2.py,只用随机数,不是市场数据,也不涉及 2026 年):float32 下 resid 的绝对值最大 7e-12,89% 的分钟恰为 0(Ret 中位绝对值约 7e-4);float64 下最大 2.7e-20。Z = resid/(std + 1e-6) 的分母被 1e-6 的地板主导,于是 Z 只是舍入残差的约 1e6 倍,day_kurt(Z) 量的是舍入误差的峰度形状,而不是分钟尾部。
+      corr_1.json 佐证:核心在每日截面上的 distinct(不同值 / 有值票数,中位)只有 0.116,而其他种子是 0.999–1.0;覆盖率 0.855,其他种子 0.999。
+      所有 11 个种子都以 C 为输入(外层是 cross_zscore / cross_ema / cs_bucket / cross_regres / cross_corr / cross_stddev / cs_regres 等),所以下游都继承这个定义问题,全部划掉。种子 5(cs_bucket_demean(cross_mean(C,20), LogFloatCap))与 head 1 的日度秩 |ρ| = 1.00,自动划掉的规则也成立。
+      快照里的三个 head(ts_mean(C,20)、ts_mean(day_skew(Z),20)、rank(day_pdf_tail_sum_m(abs_(Z), Volume, 10, False)))全部建在同一个 Z 上,所以它们也是这个舍入残差的汇总。PI 笔记里「标准化分钟收益的形状有信息、只是换手吃掉」的解读不成立,需要总领知道。
+      novelty 给 2:测的对象是同一族 Z 的统计量,外层算子只是重新聚合;但定义坏掉已经足以不通过,novelty 不影响结论。
+      如果它有 alpha,最可能来自:日内价格的舍入结构与股价档位 / 当日均值收益的量级有关(即规模或价格档位效应,不是日内尾部行为),这类 alpha 不是市场机制,应被 size 控制和 Z 的定义问题一起排除。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: |-
+      通过。
+      新颖:day_es_ratio_hi / day_es_ratio_lo、day_topw_mean、day_wstd 这三类算子在两库(inputs/libs_train.csv,5583 条)里出现次数为 0。快照 3 个 head 的日度秩 |ρ| 最大只有 0.20(seed 4,对 rank(day_pdf_tail_sum_m)),残差 |ρ| 最大 0.30(seed 4),不是换皮。
+      合理(逐个算子核对):day_es_ratio_hi 是超过 95% 分位的分钟收益均值除以该分位;day_es_ratio_lo 是低于 5% 分位的均值除以该分位(分位为负,比值仍为正);二者都无量纲,分位接近 0 时给 NaN(算子已处理),不是 1e4 量级的爆点。sub(hi, lo) 度量右尾相对左尾的厚度差。day_topw_mean(Ret, Volume) 取成交量前 10% 分钟的收益均值,再减全天均值,即放量分钟的方向偏离。day_wstd(Ret, Volume) / day_std(Ret) 的分子和分母随同一个波动同比缩放,比值不会因分母趋近 0 而爆炸;分母为 0(停牌)时为 NaN。所有计算只用 t 日收盘及以前的数据,t+1 交易,无前视。没有 ts_spearman 或 nt_*。窗口最长 60 日,热身不主导。
+      种子 9 划掉:cross_mean(mul(sign(day_sum(Ret)), day_kurt(Z)), 40) 含 day_kurt(Z),Z 是舍入残差(见 slot a 的理由),数学问题。剩 11 个种子,≥ 4。
+      种子 12(sub(day_es_ratio_hi(abs_(Ret)), day_es_ratio_lo(Ret)))混合了绝对收益与带号收益,机制比其他种子说不清,但不是数学问题,放行。种子 11(cross_corr(asymmetry, day_sum(Ret), 60))的机制也偏弱,同样放行。
+      控制:种子 6 与 vol 的 |ρ| 0.51、种子 7 与 size 的 |ρ| 0.51、种子 4 与 size 的 |ρ| 0.37,都低于 0.8,不划;这些中度相关不是挡的理由。
+      风险(不挡):hi / lo 比值在低价票上可能受价格档位和 tick 网格影响(分钟收益量化),所以部分信号可能是规模或价格档位效应,需要在打分时看残差而不是原始值。
+      如果它有 alpha,最可能来自:右尾相对左尾的期望缺口的 60 日均值(彩票偏好 / MAX 效应);其次是放量分钟的方向偏离(订单流中的知情部分)。
+R:
+  - head: 'ts_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20)'
+    soundness: 1
+    reasons: |-
+      与 slot a 的核心 C 相同的数学问题:in_regres(Ret, in_mean_full(Ret), 20) 精确为 0,Z 只是舍入残差。R 的 5 个变体(ts_mean 60、cross_ema 30、cross_zscore 120、cs_bucket_zscore、cross_regres 对 day_std)全部保留这一核心,换外围不能修复定义;变体分数的任何改善只说明舍入残差的聚合方式不同。整组删掉。
+summary: slot a 不通过(核心 C 对所有种子都是 0 的舍入残差,定义坏掉,11 个种子全划,R 组删掉);slot b 通过(划种子 9,它含同一个坏核心);另外 inputs/libs_train.csv 里有 34 条表达式含同样的 in_regres(Ret, in_mean_full(Ret)) 模式,快照的 3 个 head 也全建在这个 Z 上,需要总领核查这批库的 kurt / skew / pdf-tail 族是否大多是数值伪影。

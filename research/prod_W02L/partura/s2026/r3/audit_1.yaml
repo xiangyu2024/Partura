@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 3, 5, 7, 8, 9, 10, 12]
+    reasons: '位 a 是 E 深挖,核心 K = mul(C, mul(C, S)),C = day_flat_run_max(in_slice(Ret,11,230)),S = day_sum(in_slice(Ret,11,230))。核心与五个控制的 |ρ| 最大 0.11(rev),远低于 0.8,E 位的核心门槛通过。核心是快照 head 1(cross_mean(K,241),+0.83)的直接子树,来源合法;该 head 本身就是 K 的 241 日均值,所以核心对象不是新的,新的只能是外围。创新度取 3:核心已在库里以 head 形式出现,外围换成了符号侧、截面标准化、线性衰减、事件强度的差分与成交额残差等;但 corr_1.md 显示外围与 head 1 的原始 |ρ| 分别为 seed 4 0.35、seed 6 0.14、seed 11 0.69、seed 13 0.15、seed 14 0.13,确实不是同一个东西。被划的 9 个种子:seed 1、2(K 的 cross_ema 120 / 250)、seed 3(K 取正侧的 241 日均值)、seed 5(cs_regres 对 head 180 日均值)、seed 7(LimitWidth 版)、seed 8(分母版)、seed 9(尾部差)、seed 10(signedpower 版)、seed 12(带 ListAge 掩码的 head)全部与 head 1 的 |ρ| 在 0.79 到 1.00 之间,按规则自动划掉,理由是重复。剩余 5 个种子(4、6、11、13、14),≥ 4 的门槛通过。各剩余种子的「如果它有 alpha,最可能来自哪里」:seed 4 只取 K 的负侧,可能来自跌停封死后的恐慌卖压;seed 6 对 K 做日截面 zscore 后取 60 日 EMA,可能来自封板强度相对自身常态的偏离;seed 11 对 K 做 120 日线性衰减加权,可能来自近期封板权重更大的平滑;seed 13 为 EMA30 减 EMA250,可能来自封板强度的短期突变;seed 14 为 log 成交额对 K 的 120 日均值做滚动回归取残差,可能来自成交额中不由封板解释的部分(游资活跃度与成交异常)。seed 11 的 |ρ| 0.69 贴近 0.7 的自动划线,我按规则保留,但记录为边界。数学上无问题:log 对 |x| 小于 EPS 返回 NaN 而不是 -inf(AlphaCube-steering common.py:211),所以停牌日的成交额为零不会注入 -inf;除法只出现在 seed 6 的 cross_zscore 内部,分母是日截面标准差,不接近零。判定:位 a 通过。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 3, 4, 5, 6, 7, 11, 12, 13]
+    reasons: '位 b 是 N 新想法(上午拉升、下午封死的时序分解,并加 LimitWidth 事件版与成交量版)。逐个种子对 head 1 的原始 |ρ|:seed 1 0.92、2 0.94、3 0.90、4 0.92、5 0.87、6 0.88、7 0.83、11 0.79、12 0.87、13 0.93,都 ≥ 0.7,按规则自动划掉。这 10 个种子只是把 head 1 的 C 与 S 切到不同的时段或换成 LimitWidth 事件版,度量的是同一个东西(换了写法),所以它们的失败是数据给出的,不是我主观压分的。剩余 3 个种子:seed 8(cross_corr(C 后半段, S 前半段, 120),|ρ| 0.58)、seed 9(Volume 后半段的停滞 × S 前半段,|ρ| 0.41)、seed 10(day_zero_ratio(Volume) × S,|ρ| 0.48),残差 |ρ| 都在 0.5 以下,都是 head 1 的度量之外的量。剩余 3 < 4,位 b 不通过(门槛是划完还剩 4 个种子),按规则改为一次普通 GP。创新度取 3,因为剩下的三个种子确有新的度量(成交量停滞、零成交占比、相关),但原 N 想法的主体(时序切分 C 与 S)实际上是 head 的窗口平移。数学上:seed 8 的 cross_corr 在 120 日窗上有界,近常数序列可能给出噪声相关,但不主导截面,不构成定义坏掉;seed 9 的 Volume 停滞算子(day_flat_run_max)在整数手数的量上会产生重复成交量,是度量问题而不是数学问题。如果 seed 9 或 10 有 alpha,最可能来自:seed 9 来自后半场成交的重复量(无价格变动的小单成交堆积),seed 10 来自后半场或全天零成交分钟占比与日内收益的乘积(流动性锁死与方向的交互)。位 b 不通过。'
+R:
+  - head: 'cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret, 11, 230)))), 241)'
+    soundness: 4
+    reasons: 'R 组的 8 个变体都是对 head 1 的代数改写:窗口 241 换成 EMA 120 / 241,C 三次方,LimitWidth 除法,signedpower 压缩(外层与 K 内层),ListAge > 250 的掩码,C 的后半段版。数学上没有问题:除数是 LimitWidth,由 dailyfields.py 的 board_limit 给出 0.05 / 0.10 / 0.20,不为零;replace_small_with_nan(is_gt(ListAge,250)) 只把新股置为 NaN;signedpower 与 EMA 都有界。变体 1、2、7 与 head 的 |ρ| 为 0.91、0.87、1.00(EMA 与掩码版几乎是同一个东西),变体 3、4、5、6、8 与 head 的 |ρ| 在 0.97 到 0.99 之间。这些变体是否替换由评估的分数决定(须超过 head + 0.1),不由审计决定。合理度 4:去掉等权平均与板块差异的想法是清楚的(LimitWidth 的规范化对 10% 与 20% 板是合理的),没有落进 §4 的任何陷阱。'
+summary: '位 a 通过(核心 K 与控制 |ρ| 均 < 0.8;9 个种子因与 head 1 的 |ρ| ≥ 0.7 被划,剩 5 个);位 b 不通过(10 个种子被划,剩 3 < 4),按规则改为普通 GP;R 组合理度 4,保留。无数学问题被挡。'

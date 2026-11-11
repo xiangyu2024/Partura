@@ -1,0 +1,35 @@
+seed: 2054
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:大单方向的知情交易痕迹。本批三个 head 的内核都是「价格分钟序列与收益的日内 R² / 相关」再叠价位的 sigmoid(sqrt(Close)),全部为负分(-0.37 ~ -0.45,train 与 valid 都负),说明价位口径下的日内形态没有毛超额,亏在换手。换一个读法:同一个分钟收益,用成交量加权与等权的差(量大的分钟涨还是跌)。day_wmean(Ret, Volume) - day_mean(Ret) = 成交量与分钟收益的协方差 / 平均量,读的是「资金集中涌入的那些分钟价格往哪走」;持续在放量分钟上涨的票有被动方在吃单,机构建仓拆单留下的是这种痕迹,而且是慢变的参与者属性,20 到 60 日平滑后名次稳定、换手低。同族的读法还有量大分钟的收益与量小分钟收益之差(in_topk_masked(Ret, Volume, k) 取成交量最大的 k 分钟的收益)、day_corr(Ret, Volume) 的 60 日滚动均值、成交额加权 Vwap 对收盘价的偏离。为什么和库不同:库里最近的是 day_signed_ratio(Ret, 放量分钟的 Volume) 与 in_topk_masked(Ret, Amt, 20) 这类单日读数;这里全部加 20 到 60 日的 cross 平滑,并用 cs_bucket_zscore 在流通市值分桶内取 z 分数,去掉规模暴露;种子骨架都与两个库的 5583 个骨架逐个不同(由库禁令在 GP 里再次保证)。为什么样本外还会在:机制是微观结构里「放量方向」的知情度,不依赖某段行情;最可能的失败方式是被流动性 / 反转控制吃掉,那样这一位不出 head。数学检查:Volume 为 0 的停牌日 day_wmean 分母为 0 得 NaN 而不是爆点;Ret 为分钟收益有界;无前视,全部只用 t 日及以前数据,最长窗口 60 日。'
+  inspired_by: 'batch 1 的 3 个 head:in_r2(signedpower(Vwap), pow_1_5(Ret), w) 一族,拆解表里 Close 换 Vwap 变差(-0.37 -> -0.70),说明价位口径不是 alpha 来源,换用成交量加权的收益读法'
+  seeds:
+  - cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 60)
+  - cross_ema(day_corr(Ret, Volume), 20)
+  - cross_mean(day_corr(Ret, Amt), 60)
+  - cross_mean(sub(day_mean(in_topk_masked(Ret, Volume, 20)), day_mean(Ret)), 20)
+  - cross_mean(div(sub(day_wmean(Vwap, Volume), day_last(Close)), day_last(Close)), 20)
+  - cs_bucket_zscore(cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 30), LogFloatCap)
+  - cs_bucket_zscore(cross_ema(day_corr(Ret, Volume), 30), LogFloatCap)
+  - cross_regbeta(day_sum(Volume), day_sum(Ret), 60)
+  - cross_corr(day_wmean(Ret, Volume), day_mean(Ret), 60)
+  - cross_zscore(cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 5), 60)
+  - cross_mean(div(day_wmean(Ret, Amt), day_std(Ret)), 40)
+- type: N
+  hypothesis: '机制:日内动量 / 反转的持续性,读的是「开盘一小时与尾盘一小时的收益关系」。短周期里开盘段的价格由隔夜信息和散户情绪决定,尾盘段由机构调仓和收盘集合竞价前的资金决定;同一只股票这两段是同向还是反向,是个股参与者构成的稳定属性(散户主导的票尾盘回吐开盘冲动,机构主导的票尾盘延续趋势)。算子实现:in_slice(Ret, a, b) 取分钟段,day_sum 求段收益,cross_corr / cross_regbeta 在 60 到 120 日窗口里估计两段收益的滚动关系,窗口长所以换手低;也用 cross_mean(mul(开盘段收益, 尾盘段收益)) 这种符号一致性读法。为什么与库和本批 head 不同:head 全部是价位(Close/Vwap/High)的分钟级 R²,本任务只用收益、分钟切片和日度段收益的滚动关系,骨架里没有 signedpower / in_r2 / nt_ 类;也不含价位 sigmoid。为什么样本外还会在:参与者构成是慢变量,两段之间的关系是结构性的,在不同行情下符号相对稳定;失败方式是被 20 日反转控制吃掉(段收益里含短期反转),那样不出 head。数学检查:in_slice 的下标在 0..241 内,窗口只用当天已发生的分钟;段收益有界;cross_corr 对窗口内近常数序列可能返回 0,只影响停牌多的票,可交易掩码已排除;无前视,t 日收盘后才用,t+1 交易。'
+  inspired_by: 'batch 1 的 head 都靠分钟价格与收益的日内关系(in_r2 / nt_ts_corr 内层),但都亏;改读日内不同时段的收益之间的关系,把价位与 R² 拿掉'
+  seeds:
+  - cross_corr(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230)), 60)
+  - cross_corr(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230)), 120)
+  - cross_regbeta(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230)), 60)
+  - cross_mean(mul(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230))), 30)
+  - cross_mean(mul(sign(day_sum(in_slice(Ret, 11, 60))), day_sum(in_slice(Ret, 181, 230))), 30)
+  - cross_corr(day_sum(in_slice(Ret, 11, 120)), day_sum(in_slice(Ret, 121, 230)), 60)
+  - cross_regbeta(day_sum(in_slice(Ret, 11, 120)), day_sum(in_slice(Ret, 121, 230)), 90)
+  - cross_corr(day_sum(in_slice(Ret, 11, 30)), day_sum(in_slice(Ret, 31, 211)), 60)
+  - cross_mean(mul(sign(day_sum(in_slice(Ret, 11, 30))), day_sum(in_slice(Ret, 31, 211))), 40)
+  - cross_corr(day_sum(in_slice(Ret, 11, 60)), cross_delay(day_sum(in_slice(Ret, 181, 230)), 1), 60)
+  - cross_regres(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230)), 60)
+  - cs_bucket_zscore(cross_corr(day_sum(in_slice(Ret, 11, 60)), day_sum(in_slice(Ret, 181, 230)), 60), LogFloatCap)

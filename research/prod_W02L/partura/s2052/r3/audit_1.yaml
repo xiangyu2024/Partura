@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [11]
+    reasons: '核心 C = day_max(Ret)。核心的 admissibility 已核对:loc.md 共性表(均值差 +0.98,16 个候选)与核心卡第 13 条都有它,不是凭空选的;快照 9 个 head 中没有 day_max 类 head,与 head 的最大 |ρ| = 0.30(最像的是潮汐 head),残差后 0.27;与 5 个控制的最大 |ρ| = 0.53(vol),低于 0.8,E 核心门槛通过。外围 12 个种子:第 11 个 cross_decay_linear(sub(day_max(Ret), day_wmean(Ret, Amt)), 30) 与 vol 控制 |ρ| = 0.85(≥ 0.8),按确定性规则划掉。其余保留。最接近阈值的是第 7 个 cross_cov(day_max(Ret), day_sum(Amt), 60),与 known 0.76、liq 0.73,低于 0.8 所以不划,但它基本是成交额水平的协方差,是本位最需要盯的一条;第 10 个 cross_quantile(day_max(Ret), 0.9, 60) 与 vol 0.69,保留。其余 seeds 都是除以日内 std 或 LimitWidth、对波动的残差、5 对 60 日差、z 分数、与成交额的 cov / corr 这类写法,与 head 的最大 |ρ| 在 0.13–0.43 之间,与库里已见的 cross_mean(day_max(Ret), 5)、cross_ema(...)、mul(ListAge, day_max) 外围不同。算子核对:day_max 是日内最大值;div 无保护,但分子分母同量纲,day_std 只有在整日收益几乎不变时才接近 0,那时分子也接近 0,不会因分母近零而爆点;停牌日 day_std 为 NaN 而非 0,与笔记一致。cross_regres 的 y 不是常数,没有触发 in_regres 的恒零残差陷阱;没有用 ts_rank / cross_rank,没有 nanrank_last 的停牌归零问题。数学上没有问题。创新度给 4:彩票偏好 MAX 效应本身有文献,库里只试过 cross_mean(day_max,5) 一类外围,这里的相对自身历史、净于波动、LimitWidth 归一化、跳动与成交额的 cov 是没出现过的读法。如果它有 alpha,最可能来自「相对自身历史的跳动异常」(种子 3、4、10)和「LimitWidth 归一化后跨 10% / 20% 板块可比」(种子 6),而不是单纯的跳动水平;毛超额为零则本位全负。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [3, 8, 9, 10, 12]
+    reasons: '快照 9 个 head 全是潮汐、放量时点、ar1 与 cs 拼接,没有一个是价格水平相对 250 日区间的位置。相关度表里,保留种子的最大 head |ρ| 在 0.12–0.38(种子 1 为 0.22,种子 2 为 0.36,种子 5 为 0.38,种子 6 为 0.29,种子 11 为 0.17),与 head 不是换皮。与控制:种子 5(div(day_open, cross_mean(day_open,120)))与 rev 0.54、种子 1 与 rev 0.38,与 20 日反转有中度重合,但视野是 120 / 250 日,不是同一个度量;与 vol / liq / known 最大 0.53,未达 0.8。创新度给 4:库里没有用 ts_max / ts_min 做「现价 / 区间极值」位置比的写法,也没有距高点天数;价格水平锚定与处置效应是另一个慢变量。算子核对:day_open = day_first(非 NaN 首值),是日标量;ts_max / ts_min / cross_mean 的分母在后复权正价格上不会近零;div 无保护但分母恒正,无爆点。后复权价在截面上是累计收益的排序,按 §4 不是问题。250 日热身只影响 train 的开头,不影响 valid。划掉的五个:(3) ts_rank(day_open(Open), 250) 与 (12) sub(cross_rank(day_open,250), cross_rank(day_open,20)):两者都走 nanrank_last,当天 day_open 缺失时返回 0,停牌日被推到窗口最低;gate 测得 distinct 比例分别为 0.185 与 0.423,结果主要由这个伪影决定,按 §4 是定义坏掉,划掉。(8) cross_argmax(day_open, 250) 与 (9) cross_argmin(day_open, 250):gate 未过,distinct 比例 0.163 与 0.114,面板大量并列,定义上接近退化,按 §4 的数值伪影划掉。(10) div(day_last(Close), ts_max(day_last(Close), 250)) 与种子 1 div(day_open(Open), ts_max(day_open(Open), 250)) 是同一个 250 日高点比,只把 Open 换成 Close,按构造是重复,划掉。注:这一条是按构造判断,没有直接算两者的 ρ。剩下 7 个(1、2、4、5、6、7、11)的 ρ 与 gate 都过。如果它有 alpha,最可能来自「离 250 日高点的距离」(锚定 / 处置效应,种子 1、7)或「离 120 日均线的偏离」(种子 5),慢变量换手低;毛超额为零则本位全负。'
+summary: 'slot a(E, core day_max(Ret)): novelty 4, soundness 4, 划掉 1 个(第 11 个,vol 控制 |ρ|=0.85)、剩 11 个,通过;slot b(N, 长周期价格位置): novelty 4, soundness 4, 划掉 5 个(第 3、8、9、10、12 个:两个 nanrank 伪影 / gate 未过的 ts_rank 与 cross_rank,两个 gate 未过的 argmax / argmin,一个与种子 1 重复),剩 7 个,通过。本轮无 R 组(missions.yaml 中没有 R 段),R 为空。'
+R: []

@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [14]
+    reasons: '创新度 4。核心 g = select_where(is_lt(abs_(cross_delta(log(day_last(Close)),1)),0.15), cross_delta(sub(log(day_last(Amt)),LogTotalCap),1), 0.0) 对 9 个 head 的最大原始 |ρ| 为 0.042（残差 0.063，最像 inv(day_sum(Volume))），对 5 个控制全部 ≤ 0.02（corr_1.md 的 slot a core 行）；它在 loc.md 共性表里以 8 个候选、均值差 +1.20 出现，满足 E 位的核心来源要求。16 个外围种子里，大多数对 head 的最大原始 |ρ| 在 0.26–0.36（最像 inv(day_sum(Volume))），对控制的 |ρ| 多在 0.2–0.3，说明是同一个门控增量换了读法，不是换皮成别的 head。种子 11、12（cross_quantile_q75 / cross_tail_mean_q25 的 120 与 241）对 liq 为 0.55 / 0.52、对 known 为 0.52 / 0.47，与流动性和已知成交额族有较强共线；它们未到 0.8 的自动划掉线，划掉理由也不属于数学问题或重复，故保留，但在奖励里是最先会被残差吃掉的两个。种子 14 = ts_sum(g,360) 与种子 1 = cross_sum(g,360) 同走 rolling_reduce(·, nansum_last, axis=0) 同一路径，corr_1.md 中两行的每一个数都相同，判为重复，划掉 14（保留 1）。合理度 4。无前视：g 只用当日收盘分钟（day_last(Close)）与当日分钟成交额（day_last(Amt)）与 LogTotalCap，所有外围都是因果窗口（cross_sum / cross_ema / cross_zscore / cross_regbeta 的 d 都是过去的天数，cross_zscore 含当日但不含未来）。门 is_lt 对 NaN 返回 0，不会把 NaN 扩散成整面板缺失（覆盖 0.998、distinct 0.994）；log 在 |x| ≤ EPS 时返回 NaN，不产生 -inf。机制是收盘集合竞价的机构化参与度的慢变化（Gompers–Metrick 2001 的机构持股路径），门去掉涨跌停日的尖峰，说得通。如果它有 alpha，最可能来自 cross_sum 长窗口读到的收盘竞价参与度的一年尺度趋势（机构份额的缓慢迁移），而不是单日门控的尖峰。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: '创新度 4。N 位的核心是收盘与开盘两个竞价分钟成交额的对数差（log(day_last(Amt)) − log(day_first(Amt))）及其与分钟收益的乘积、回归，本身不是任何 head 的子树（9 个 head 都不含 day_first(Amt) 与 day_last(Amt) 的对数差）。存活种子与 9 个 head 的最大原始 |ρ| 在 0.05–0.12（corr_1.md 中 slot b seed 1、2、3、5、6、7、8、10、11、12），对 5 个控制的 |ρ| 基本 ≤ 0.1，只有 slot b seed 3 对 size 0.22、seed 4 对 liq 0.47 与 known 0.50 偏高。种子 4 = cross_mean(log(day_last(Amt)) − log(day_first(Amt)),120) 与 inv(ts_max(inv(day_sum(Volume)),10)) 的原始 |ρ| 为 0.47，与流动性、已知族的共线接近 0.5，但它是两个竞价分钟的相对强度（比值的对数）而不是水平，与库里的 Volume 水平 head 不同构；未到 0.8 的线，不是数学问题或重复，保留。种子 9 = cross_mean(mul(day_first(Ret), cross_zscore(sub(log(day_first(Amt)),LogTotalCap),60)),60) 在 corr_1.json 中 distinct = 0.0（覆盖 0.999 但几乎不变），与所有 head 与控制的 |ρ| 都是 NaN、门 gate = false，属于面板几乎是常数的数值伪影 / 定义坏掉（rules §4），是数学问题，划掉。其余种子不因这一条被划。合理度 4。前视核对：day_first 与 day_last 都是当日的竞价分钟（开盘 9:30 分钟与收盘 15:00 分钟），收盘分钟收益（day_last(Ret)）与当日收盘参与度在当日收盘后已知，与 cross_* 的因果窗口一起不含未来数据；log 的 EPS 保护使 Amt 为零的日子变成 NaN，不是 -inf。一个定义上的近似（不挡）：day_first / day_last 取的是 first_valid / last_valid，对开盘或收盘无成交的票会落到后面的分钟，并非严格的竞价分钟；这只影响少数停牌或冷门票，不是系统性的算不出。机制：开盘与收盘两个竞价的参与度之差读的是相对强度，收盘分钟收益乘参与度的 z 分数读的是价格不敏感的买单（参与度与价格冲击的 Kyle 型关系），说得通。如果它有 alpha，最可能来自收盘竞价相对开盘竞价的参与度变化与它的价格冲击（同样的参与度推动多少价格）这两个结构量，而不是两个竞价各自的水平。'
+R:
+  - head: 'ts_stddev(ts_stddev(day_sum(Amt), 20), 30)'
+    soundness: 4
+    reasons: '合理度 4。无数学问题：变体都是因果的 ts_stddev / ts_mean / div 组合，log 对零成交有 EPS 保护。机制叙述清楚：成交额（或换手）的波动是注意力冲击与流动性不确定的度量，把原 head 的裸 Amt 水平换成 log(day_sum(Amt))、或换成 sub(log(day_sum(Amt)),LogTotalCap) 的换手水平，是去掉水平部件的合理替换，对应的 variant 3、4、7 与 known 族 |ρ| 只有 0.02–0.10（corr_1.md 的 R 1 行），这一条的机制与数据一致。提醒（不挡）：variant 1 与 variant 2（ts_stddev(…,60) 与 …,120，raw Amt）对 liq 与 known 的 |ρ| 为 0.80 / 0.76，与 known 族几乎是同一个水平量，所以 R 组的「去掉水平」理由只对 log / 换手版本成立，对这两个变体不成立，它们过不了 R 的替换门槛（与已知族 |ρ| < 0.5）。variant 5 = div(ts_stddev(…,60), ts_mean(day_sum(Amt),60)) 的除法没有保护，若某票 60 日成交额均值为 0（而不是 NaN 掩码）会出 inf；只要停牌日是 NaN 而不是 0，就不成为系统性问题，故不挡。'
+summary: 'a 位 E 通过（划 14，与 1 同路径逐行相同；种子 11、12 与 liq / known 的 |ρ| 约 0.5，保留并标注），b 位 N 通过（划 9，distinct 0.0 的常数面板），R 组合理度 4；R 的 variant 1、2 与已知族 |ρ| 约 0.75–0.80，过不了 R 的替换门槛。'

@@ -1,0 +1,63 @@
+seed: 2062
+round: 1
+slots:
+  - type: E
+    core: 'day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06))))'
+    hypothesis: |-
+      机制:核心 C 是「当天分钟收益(减去滚动回归的常数部分后)除以当天分钟波动」的峰度,也就是已经按自己当天波动归一化过的日内尾部厚度:少数几个分钟的跳动是否远大于日内常态。归一化之后它不含波动水平,只含形状,所以对波动、流动性、市值三个水平控制先天低相关。依据在本批拆解表里:三个 head 都是这一族,方向都是 −1,分数 −1.74 到 −4.22,其中以 C 为底的峰度 head 最好(−1.74,train −1.35 / valid −1.74),把 20 日均值拉到 10 日或 40 日只在 −2 上下变动(−1.98 / −2.33)。我的推断(没有毛收益数):形状本身两段都稳定地亏、窗口改了分数几乎不动,说明毛超额约为 0 或很小,亏的主要是换手成本,而且这个底每天重新估一次、噪声很大。所以这一位不改核心,只换外围:让核心变慢、变成个股自己的对照、或把它里面混进的水平 / 方向拆出来。
+      以前见过的含 C 的外围只有 ts_mean(20 / 10 / 40) 这一种(整体是一个等权滚动均值)。这里的种子外围全是别的算子家族:cross_zscore(自己 120 日 z 分数,个股自己做对照,只读「最近比自己平时更尾部」)、cross_ema(指数衰减,近期权重高)、短均值减长均值(尾部厚度的变化)、cs_bucket_zscore / cs_bucket_demean(在成交额、市值十分位内比较,拿掉尾部厚度与规模的共同部分)、cross_regres(对日内波动取 60 日滚动残差,读「同样的波动下尾部是否更厚」)、cross_corr(尾部厚度与当日收益 / 前一日收益的 60 日滚动相关:厚尾是否伴随下跌,是惊吓型还是追涨型)、乘以过去 20 日收益方向的符号(分开跌时厚尾与涨时厚尾)、cross_stddev(尾部厚度自己的波动,即「尾部是否时有时无」,换手慢)、cs_regres(对同族的偏度取截面残差,只留峰度里与偏度无关的部分)。
+      为什么和库里不同:本批库里的 head 全部是 ts_mean(day_kurt / day_skew(Z), 20) 或 day_pdf_tail_sum_m 的写法;两个库 5583 条的骨架已逐个与种子对照(这里的外围含 cross_zscore / cross_ema / cross_corr / cross_regres / cs_bucket_* / cross_stddev 与 day_std(Ret)、day_sum(Ret)、day_sum(Amt) 等,骨架都带这些东西,与 ts_mean(day_kurt(Z)) 的骨架不同)。
+      为什么样本外还会在:这类 alpha 的来源是「个股的日内尾部事件」这种行为与微观结构特征(散户脉冲、大单拆单、涨跌停附近的挤兑)的慢变属性,名次在数周里保持;窗口 60 到 120 日、EMA、自身 z 分数都降低换手,15 bp 下才有可能活下来;相关与回归类种子的机制是惊吓型与追涨型分开,不依赖某段行情。风险:纯形状信号两段都为负,这一位大概率仍出不了 head;若所有种子都亏在换手,下一轮不再押 C,转 N。
+      数学检查:分母 in_stddev_full + 1e-6 在整天不动(停牌 / 封板)时为 0 + 1e-6,分子也为 0,所以 Z 为 0 而不是爆点;day_kurt 对常数行给 NaN 或 0,不会炸;cross_regres / cross_corr 窗口里有效对太少时可能返回 0(已知缺陷),只影响长期停牌票,奖励的可交易掩码已排除不满 0.9 × 241 的新股与封板票。无前视:全部只用 t 日收盘及以前的数据,t+1 才交易;最长窗口 120 日,热身期不主导。
+    seeds:
+      - 'cross_zscore(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 120)'
+      - 'cross_ema(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 30)'
+      - 'sub(cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 10), cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 60))'
+      - 'cs_bucket_zscore(cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20), cross_mean(day_sum(Amt), 30))'
+      - 'cs_bucket_demean(cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20), LogFloatCap)'
+      - 'cross_regres(day_std(Ret), day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 60)'
+      - 'cross_corr(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), day_sum(Ret), 60)'
+      - 'cross_corr(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), cross_delay(day_sum(Ret), 1), 60)'
+      - 'mul(cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cross_stddev(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 60)'
+      - 'cs_regres(cross_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20), cross_mean(day_skew(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20))'
+  - type: N
+    hypothesis: |-
+      机制:左右尾的不对称与「尾部事件发生时的成交量」。本批 head 读的是标准化分钟收益的整体峰度 / 偏度 / 绝对值尾部加权和,三个都是单一统计量、都亏。这一位换一个分解:把当天分钟收益的右尾与左尾分开看,用库里没有的尾部期望缺口比 day_es_ratio_hi / day_es_ratio_lo(超过 95% 分位的分钟的均值 ÷ 该分位;低于 5% 分位的同理),它们无量纲,在分位近 0 的日子给缺失而不是 1e4 的爆点。右尾比左尾更尖 = 日内有一次向上的冲击但没有对应的向下冲击(涨停前的拉升、事件性买盘);反之是砸盘型。在日轴取 20 到 60 日均值使其成为个股的慢变属性。再叠一层成交量:day_topw_mean(Ret, Volume) 是最重 10% 成交量的分钟的平均收益,和全天均值 day_mean(Ret) 的差,读的是资金实际成交的那几分钟价格往哪走;day_wstd(Ret, Volume) ÷ day_std(Ret) 读价格是否主要在放量分钟里动。最后一类把 head 里的标准化形状和方向相乘:尾部厚度 × 当天收益符号(下跌日的厚尾 vs 上涨日的厚尾),是日度的惊吓 / 追涨分解。
+      批里的启发:本批三个 head 方向都是 −1、分数全负、窗口改动几乎不动分数,说明单一形状统计量没有毛超额;但三个 head 都带 −1 的方向,而且三个里最差的(−4.22)是「绝对值尾部 × 成交量」型,最好的(−1.74)是峰度,说明形状里有信息但被换手吃掉。我的想法是把「形状」换成「左右不对称」与「成交量配对」,让信号的符号随日内事件而变,同时用 20–60 日均值降换手。
+      为什么和已有的不同:种子用 day_es_ratio_hi / lo、day_topw_mean、day_wstd 等库建成后才加的 Partura 算子,库里一条也没有;骨架已逐个对照两个库的 5583 条,没有重复。库里最近的是 head 里的 day_skew(Z) 与 day_pdf_tail_sum_m(|Z|, Volume, ...):它们是标准化后的整体三阶 / 四阶矩与成交量加权的绝对尾部和,这里是左右两个尾部各自的期望缺口之差,以及放量分钟的方向偏离,统计量不同;Z 也不用(种子直接用 Ret,不做滚动回归标准化)。
+      为什么样本外还会在:右尾 vs 左尾的不对称对应投机性彩票偏好(Bali 等的最大日收益 MAX 效应与 Boyer 等的特质偏度)在 A 股散户占比高的市场里持续存在,是行为偏好而非某段行情;放量分钟的方向偏离对应订单流的知情部分(Chordia 与 Subrahmanyam);20–60 日平均让名次在数周里保持。风险:不对称量与 20 日反转控制相关,奖励会剔除线性 / U 形 / S 形暴露,剩下的看运气;若 es_ratio 本身极端噪声,60 日均值也救不了,这一位出不了 head。
+      数学检查:day_es_ratio_hi / lo 在分位近 0 时为 NaN(算子已处理,没有 1e4 爆点);两者之差在两侧都有值时才有定义;day_std(Ret) 作分母在整天不动时分子也为 0,得 NaN;day_topw_mean 在成交极稀时退化为全天均值,不出错;无前视:只用 t 日及以前的数据,t+1 才交易;窗口 ≤ 120 日,热身期不主导。
+    inspired_by: '本批三个 head(day_kurt / day_skew / day_pdf_tail_sum_m 作用在标准化分钟收益上):方向全为 −1、窗口改动几乎不动分数,说明单一形状统计量没有毛超额;这一位换成左右尾不对称与放量分钟的方向。'
+    literature:
+      - title: Maxing Out Stocks and Expected Returns
+        authors: Turan Bali, Nusret Cakici, Robert Whitelaw
+        year: '2011'
+        treatment: 单日极端高收益带来彩票偏好、随后收益偏低;这里用日内右尾期望缺口减左尾期望缺口(day_es_ratio_hi − day_es_ratio_lo)的 20 到 60 日均值近似
+      - title: Order imbalance and individual stock returns Theory and evidence
+        authors: Tarun Chordia, Avanidhar Subrahmanyam
+        year: '2004'
+        treatment: 订单失衡预测随后收益;这里用放量分钟的平均收益相对全天的偏离 day_topw_mean(Ret, Volume) − day_mean(Ret) 近似
+    seeds:
+      - 'cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)'
+      - 'cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 60)'
+      - 'cross_zscore(cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 10), 120)'
+      - 'cross_mean(day_es_ratio_hi(Ret), 60)'
+      - 'cross_mean(day_es_ratio_lo(Ret), 60)'
+      - 'cross_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 40)'
+      - 'cross_mean(div(day_wstd(Ret, Volume), day_std(Ret)), 40)'
+      - 'cs_bucket_zscore(cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 30), cross_mean(day_sum(Amt), 30))'
+      - 'cross_mean(mul(sign(day_sum(Ret)), day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06))))), 40)'
+      - 'cross_mean(mul(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), sign(day_topw_mean(Ret, Volume))), 40)'
+      - 'cross_corr(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), day_sum(Ret), 60)'
+      - 'cross_mean(sub(day_es_ratio_hi(abs_(Ret)), day_es_ratio_lo(Ret)), 40)'
+R:
+  - head: 'ts_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20)'
+    why: |-
+      烂的部件是「每天重新估一次、再等权滚动 20 日」这个换手过高的聚合,依据在拆解表:ts_mean 窗口 20 改 10 / 40 分数只在 −1.7 到 −2.3 之间动,train 与 valid 都亏,说明亏的不是某个窗口的噪声,而是核心形状在 15 bp 下毛超额太薄,所以只换聚合方式与对照,不换核心。变体:60 日均值(降换手)、30 日 EMA、自身 120 日 z 分数、对成交额十分位内 z 分数、对日内波动取 60 日滚动回归残差。数学上都有界,无前视。
+    variants:
+      - 'ts_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 60)'
+      - 'cross_ema(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 30)'
+      - 'cross_zscore(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 120)'
+      - 'cs_bucket_zscore(ts_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 20), cross_mean(day_sum(Amt), 30))'
+      - 'cross_regres(day_std(Ret), day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(in_regres(Ret, in_mean_full(Ret), 20)), create_like(in_regres(Ret, in_mean_full(Ret), 20), 1e-06)))), 60)'

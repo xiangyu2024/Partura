@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 5]
+    reasons: '相关度表(corr_1.md):核心 cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241) 与快照 5 个 head 的原始 |ρ| 最大 0.24(最像 cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)),残差最大 0.14;与五个控制 liq 0.14 / vol 0.08 / rev 0.03 / known 0.15 / size 0.06,远低于 0.8 的自动划掉门槛,不是控制变量的换写法。创新度 4:不与任何 head 或控制度量同一个东西;外围的 ema / zscore / 对照减法 / winsor 与 robust_z / 价格桶去均值 / delta / 尾部均值写法在库里的已见骨架里没有出现。不给 5 是因为核心子树本身在本批 6 个候选里已见过(均值 -1.00,不含 -2.29)。合理度 4:逐个核对算子。day_open 是当日第一个非空分钟值(dt_day.py:142);pow_3 是 LogFloatCap 的三次方;cross_reg_fvalue 是 241 日滚动 OLS 的 F 值(dt_cross.py:319);全部只用当天及以前的数据,无前视;热身约一年,在 train 段内;F 值分母近零时的爆点已由 winsor / robust_z / 掩顶 / ema 处理。机制文字的小偏差:单变量 F 值非负,度量的是开盘成交额与市值三次方联动的强度,不带方向,而假设写成「跟着市值涨跌走」(带方向)。这不是数学问题,但若外围要把它当方向信号,应当用带符号的量;交给 GP 去验证。种子划掉:第 4 个 cs_winsor(core) 与第 5 个 cs_robust_z(core)。cs_robust_z 是每天的正仿射变换 (x-med)/(1.4826 MAD),截面秩与核心逐日相同;cs_winsor 只截 1% / 99% 尾部,被截的票仍在十分位的极端组内,书的成员不变。相关度表中这两个种子的全部 |ρ|(head 与控制)与核心逐位相同(0.245 / 0.14 / 0.14 / 0.08 / 0.03 / 0.15 / 0.06),是重复,划掉。保留其余 10 个。第 6 个 cs_mask_top_replace_mean_neg 把底部 10% 替换为均值,会改变底部成员的排位,保留。如果它有 alpha,最可能来自:开盘首分钟成交额与市值三次方的联动强度所代表的开盘参与度结构;其次是它与 Amt 水平的残余联动(liq 0.14)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9, 11]
+    reasons: '相关度表:N 位 div(day_open(Amt), day_sum(Amt)) 系列与快照 head 的原始 |ρ| 最大 0.34(seed 2, cross_ema(...,40)),残差最大 0.21;与控制最大为 known 0.43 与 liq 0.38(均为 seed 7),低于 0.8,无自动划掉。创新度 4:份额是无量纲比例,与 5 个 head 与 5 个控制都不是同一个量;库里 day_open(Amt) 的已见写法全部把它当 F 值的因变量或除以价格,没有一条除以 day_sum(Amt) 取份额(loc.md 本批证据)。合理度 4:逐个核对。day_sum 是当日分钟成交额之和(dt_day.py:87);div 为逐元素除法(common.py:175);份额落在 [0,1] 且在市交易日分母为正,无爆点;day_open 为当日第一个非空分钟,复牌日首分钟放量但份额有界;窗口 10 至 120 日,无前视。机制是参与者构成(散户 / 短线资金的开盘集中度),与 Barber-Odean 注意力驱动买入后反转的叙事一致,说得通。种子划掉:第 9 个 cross_mean(div(day_open(Volume), day_sum(Volume)), 60) 与第 1 个 cross_mean(div(day_open(Amt), day_sum(Amt)), 60) 的相关度表几乎逐位相同(head 0.285 对 0.287,liq 0.223 对 0.221,vol 0.258 对 0.257,known 0.292 对 0.290,size 0.068 对 0.068,残差 0.152 对 0.150),量份额与额份额的日截面秩几乎相同,是重复,划掉。第 11 个 cross_corr(share, day_open(Ret), 60):相关度表记录 gate=false、distinct=0.0,三个 head 与五个控制全部 NaN,面板是常数,属于「面板几乎是常数」的数值伪影(§4),划掉。其余 9 个保留(≥4)。如果它有 alpha,最可能来自:开盘首分钟成交额占全天比例的慢变化(散户 / 追涨强度);若有,更可能出现在 40 至 60 日慢均值,或第 4 个种子(Amt 份额减 Volume 份额)的价格加权差里。'
+R:
+  - head: 'cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)'
+    soundness: 4
+    reasons: 'day_pdf_quantile_single 在 legacy_specialized_dt.py:291 按累计成交量的 pdf 找到 q 分位的分钟,读出该分钟的 x;_make_pdf_and_x(legacy_specialized_dt.py:236-256)把 x 做当日 minmax 缩放,分母加 eps,全天价格不动时得 0 而非爆点,停牌为 NaN。机制是尾盘集中成交时的分钟收益在当日收益区间内的位置(压力方向),说得通,无数学问题。窗口 60 / 120 / 240 单调的拆解是窗口选择问题,不是定义问题。文字偏差:假设里写「价格相对当日区间的位置」,实际是分钟收益相对当日收益区间的位置,不影响判断。变体与原 head 的 |ρ| 0.55 至 0.89,属于替换型,与合理度无关。'
+  - head: 'cross_argmax(day_ar1_coefficient(Volume), 241)'
+    soundness: 3
+    reasons: 'day_ar1_coefficient 为日内分钟量的 AR(1) 系数(dt_day.py:367),定义清楚。cross_argmax 经 nanargmax_last(common.py:516-526):下标按窗口位置计,pct 时分母取有效个数;只有窗口中间存在停牌缺口时,(下标+1)/有效数才会略失真,前导缺失(新股)不会越界。这是小幅度量偏差,不是「结果主要由它决定」的定义坏掉,但 pipeline 应确认 head 的分数不由停牌票主导。机制是峰值位置的时间距离,经济叙事偏弱,报告自己也称其为离散噪声,故给 3。变体 cross_mean(day_ar1_coefficient(Volume), 120) 与 cross_ema(...,60) 与 liq 的 |ρ| 为 0.70 至 0.73、与已知族 0.67 至 0.71(相关度表 R 2 variant 1 至 3),按 §2 不能收录,基本是流动性代理;「日内成交量持续性的慢水平」可以讲,但与流动性控制高度重合,这一点不是数学问题,只记在这里。'
+summary: 'slot a 通过(创新 4、合理 4,划去 4、5 号后剩 10);slot b 通过(创新 4、合理 4,划去 9、11 号后剩 9,第 9 号与第 1 号是重复、第 11 号是常数面板);R 两组合理度分别 4 与 3,均保留。两个 E/N 位都未用到 2026 年数据,全部依据 corr_1.md、loc.md 与 corr_1.json 中的 train / valid 读数。'
