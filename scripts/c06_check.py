@@ -33,7 +33,7 @@ import yaml  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401
 from partura import study  # noqa: E402
 from partura.steer import Guidance  # noqa: E402
-from alphacube.expression import is_valid_root  # noqa: E402
+from alphacube.expression import contains_lookahead, is_valid_root  # noqa: E402
 from alphacube.parser import parse  # noqa: E402
 from alphacube.plugins import load_plugins  # noqa: E402
 
@@ -63,7 +63,15 @@ def expr_ok(e, where):
         issues.append(f"{where}: not a daily-valued tree reading a field: {e[:100]}")
     elif BANNED.search(e):
         issues.append(f"{where}: uses an operator the environment bans (ts_spearman / nt_*): {e[:100]}")
+    elif contains_lookahead(t) and not FINAL:                  # GP silently drops such seeds; R would score them.
+        issues.append(f"{where}: uses a look-ahead operator (cross_shift / ts_shift / in_local_mean); "   # at finalize they are
+                      f"use cross_delay / ts_delay instead: {e[:100]}")                                    # struck instead (below)
     return t
+
+
+def lookahead(e):
+    t, _ = tree(e)
+    return t is not None and contains_lookahead(t)
 
 
 def prev_final(k):
@@ -181,7 +189,7 @@ for s, j in zip(slots, "ab"):
     nov, snd = int(a.get("novelty") or 0), int(a.get("soundness") or 0)
     struck_by_auditor = {int(x) for x in a.get("struck_seeds") or []}
     seeds = s.get("seeds") or []
-    kept = [e for i, e in enumerate(seeds) if i + 1 not in struck_by_auditor and not disguised(e)]
+    kept = [e for i, e in enumerate(seeds) if i + 1 not in struck_by_auditor and not disguised(e) and not lookahead(e)]
     core_bad = s["type"] == "E" and max(((corr.get(s["core"]) or {}).get("controls") or {}).values() or [0]) >= CTRL_STRIKE
     ok = nov >= 3 and snd >= 3 and len(kept) >= 4 and not core_bad
     rec = {"slot": j, "type": s["type"], "core": s.get("core"), "novelty": nov, "soundness": snd, "seeds": len(seeds),
@@ -200,7 +208,9 @@ for r in spec.get("R") or []:
     ok = int(a.get("soundness") or 0) >= 3
     record["R"].append({"head": r["head"], "soundness": int(a.get("soundness") or 0), "pass": ok, "variants": len(r.get("variants") or [])})
     if ok:
-        final_R.append(r)
+        vs = [v for v in r.get("variants") or [] if not lookahead(v if isinstance(v, str) else str(v.get("expr", v)))]
+        if vs:
+            final_R.append({**r, "variants": vs})
 final = {"seed": S, "round": K, "slots": final_slots, "R": final_R, "audit": {"attempts": n, "file": audits[-1].name}}
 (P / f"r{K}" / "missions_final.yaml").write_text(yaml.safe_dump(final, allow_unicode=True, sort_keys=False), encoding="utf-8")
 (P / f"r{K}" / "audit_record.json").write_text(json.dumps(record, ensure_ascii=False, indent=1), encoding="utf-8")
