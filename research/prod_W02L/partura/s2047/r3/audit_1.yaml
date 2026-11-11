@@ -1,0 +1,25 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '位 a 是 E 深挖,核心 cross_delay(day_min(Ret), 1)(昨日最差一分钟收益)。核心检查:它在 loc.md 共性表里是子树(+0.98,24 个候选,p 0.000),12 个种子全部原样包含它,且它不是控制。与 5 个控制的 |ρ| 为 liq 0.14、vol 0.54、rev 0.21、known 0.17、size 0.12,全部 < 0.8,通过。与 head 的原始 |ρ| 为 0.47(低于 0.7 库禁令),但它的残差 |ρ| 为 0.94:head 是 20 日半衰期的 EMA,滞后一天几乎不改变它,所以核心作为「水平」信号本身就是 head 的换皮。这一点只说明核心单独不能当因子用;12 个种子的 120 日配对统计量与 head 的残差 |ρ| 为 0.04 到 0.42,都不是 head 的写法,不挡。
+逐个种子:1 号 cross_mean(mul(lag, gap), 120) 与 2 号 cross_cov、3 号 cross_corr(lag, gap) 都是同一对变量(昨日尖刺 × 今日隔夜跳空)的 120 日共动读数,按 cov / corr / 乘积均值写法不同,截面上的缩放不同,不是重复,保留;相关度表里 1 号 与 known 0.21、size 0.14,2 号 与 size 0.26,均低于门槛。4 号 cross_corr(lag, day_max(Ret))、5 号 与 day_std(Ret)、6 号 与 cross_zscore(day_sum(Volume), 60)、11 号 与 day_centroid(Amt) 都是尖刺与日内形态 / 量能的配对,与 head 残差 0.07 到 0.24,保留。7 号 cross_corr(lag, day_min(Ret))是尖刺自身的持续性,与 head 的残差 0.24,保留。8 号 cross_regbeta(lag, day_min) 与 7 号是同一对变量的斜率写法,与 7 号的关系与 2 号、3 号一样(scale 不同),按前轮审计的先例保留,不划。9 号 cross_corr(lag, day_sum(Ret) / cross_mean(day_std(Ret), 20)) 的分母是 20 日平均分钟波动,只有连续 20 日平盘的票才会近零,截面上很少,不构成 §4 的数值伪影,保留。10 号 cross_corr(lag, day_argmin(Low)) 注意:平盘 / 一字板日 argmin 返回 0(前轮审计已注明的偏差),占 120 日的一小部分,不构成定义坏掉,保留,PI 应留意。12 号 sub(lag, cross_mean(day_min, 20)) 是尖刺相对自身 20 日均值的惊奇版,与 head 残差 0.42,是同一机制的不同读法,保留。前视:只用 cross_delay(昨日)与 t 日开盘、t-1 日收盘,无前视。
+创新度 4:12 个种子全部是 cross_delay(day_min(Ret),1) 与 gap / 日内形态 / 量能的配对,与 head 残差最大 0.42,与控制最大 0.24(liq / known 处),库里 head 没有一个是这种滞后尖刺的 120 日配对读数。前轮 y = day_sum(Ret) 的 train 正、valid 负 的结果被本位刻意换掉,是新的 y,故不算重复。
+合理度 4:机制清楚,T+1 制度下昨日恐慌卖出者当天无法再卖,隔夜价是第一次出清;尖刺的持续与回补强度取决于流动性提供者深度与隔夜持有者构成。
+如果它有 alpha,最可能来自:昨日尖刺之后隔夜回补还是延续的参与者构成(逆向流动性提供者 vs 被 T+1 锁住的卖家),以及尖刺之后波动聚集的强度。风险是估计误差与 train-valid 符号切换,不是挡的理由。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '位 b 是 N 新想法,读数是隔夜跳空 gap = log(今开 / 昨收)与昨日事件的 120 日配对、以及 gap 自身的分布读数。被 B139 批共性表的隔夜跳空均值子树(+1.12,p 0.006)启发,与快照里 head 的写法不属同一类。相关度表:与 head 的原始 |ρ| 最大 0.17(第 8 号),残差最大 0.28(第 5 号),与控制最大 0.44(第 5 号的 liq / known),都低于 0.7 与 0.8 的门槛。
+逐个种子:1 号 cross_corr(gap, lag day_sum(Ret)) 与 2 号 cross_regbeta(lag day_sum, gap) 是同一对变量的相关与斜率写法,按前轮审计的先例保留,不算重复。3 号 cross_corr(gap, lag log(收 / 最低))、4 号 与 lag day_max(Ret)、8 号 与 lag cross_zscore(day_sum(Amt), 60)、9 号 与 lag day_centroid(Amt)、10 号 与 lag day_argmin(Low):都是昨日的事件与今日隔夜的配对,互不重复,保留。10 号的 argmin 平盘日偏差同 a 位,注意即可。5 号 cross_tail_mean_q25(gap, 120) 与 6 号 该值除以 cross_stddev(gap, 120):gap 的左尾读数,与 liq 0.43、vol 0.40、known 0.44 相关,是较高但未过自动门槛的相关,度量的是隔夜下跳的厚度而不是流动性水平,保留。6 号的分母是 120 日 gap 标准差,只在 120 日全部无跳空时才近零,实际很少,不构成数值伪影。7 号 cross_autocorr(gap, 120, 1) 是隔夜跳空是否成串,与控制几乎无关(liq 0.01),保留。11 号 cross_regbeta(cs 去均值的 lag day_sum, gap) 与 12 号 cross_corr(cs 去均值的 gap, lag day_sum, 60):cs_mean 是 t 日截面均值,只用到当日收盘后的全部股票数据,不是前视;去掉全市场跳空后剩下个股特有的隔夜反应,保留。前视:lag 全部是 cross_delay,gap 用 t 日开盘与 t-1 日收盘,无前视;分母是价格或 120 日标准差,无近零除数。
+创新度 4:与 head 残差最大 0.28、与控制最大 0.44,库里的 head 没有以隔夜跳空为一方的滚动配对,gap 的左尾与自相关读数也没有出现在快照中。不是换写法的同一个东西。
+合理度 4:机制清楚,隔夜与日内的分工由投资者构成决定(机构隔夜持有、散户日内交易),T+1 是制度性约束;经济含义是「前一天的结果在第二天开盘怎样被重新定价」。风险是 120 日相关的估计误差大,以及复牌后的多日跳空污染窗口,这不是挡的理由。
+如果它有 alpha,最可能来自:隔夜回补系数(昨日尖刺与隔夜跳空的反向关系)所反映的隔夜持有者构成,以及隔夜下跳尾部厚度所反映的被套卖压。'
+R:
+  - head: 'cross_corr(day_min(High), day_mean(Amt), 60)'
+    soundness: 3
+    reasons: '12 个变体全部是合法的 cross_corr 写法:窗口 35 / 40 / 50 / 75、Close 替换 High、max / std / Volume / log 替换 Amt 或价位量、High 换 Close 与 max(High)、收盘价替换,没有除零、前视或 NaN 主导的问题。day_min(High) 与 day_mean(Amt) 都是后复权价格水平与成交额的水平,§4 明确把后复权价格列为不是问题的情形,所以水平本身不挡。机制(低点价位与成交额的 60 日共动)说不清楚,很可能主要抓的是价格趋势与放量同步,而且变体与 head 的残差 |ρ| 在 0.64 到 0.91 之间,只是同一个趋势耦合的微调,PI 前轮已验证窗口变化的结果更差。但这是合理度的问题,不是数学问题,按放行原则保留。'
+summary: '位 a(E,核心 cross_delay(day_min(Ret), 1))与位 b(N,隔夜跳空与昨日事件的配对)都过审计,均未划种子(两个位的种子都无数学问题、无与控制 / head 的自动门槛冲突,corr 与 regbeta、cov 的写法变体按前轮先例保留);a 位的核心作为单独水平信号与 head 残差 0.94,但 12 个种子的残差只有 0.04 到 0.42,不挡;R 组 cross_corr(day_min(High), day_mean(Amt), 60) 合理度 3,12 个变体全部放行。'

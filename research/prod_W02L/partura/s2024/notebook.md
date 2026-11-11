@@ -61,3 +61,19 @@
 - 位 a:E,核心 C = day_q_stat_std(div(in_slice(Volume,11,230), in_sum(...)))(16 种子)。外围全部不用 ts_stddev:EMA / 分桶标准化 / z 分数 / 对 cs_mean 的相关 / Volume-Amt 节律之差 / 与 Ret 节律的相关。预测:产出 head 概率约 8%;大概率分数在 -1.5 ~ -0.4;最可能的好者是 cross_ema(C,40) 与分桶标准化版(种子 1 / 3 / 13)。若水平类仍全在 -1 以下而 ts_stddev 30 日版更好,则有用的是「变动」。
 - 位 b:N,放量分钟的收益与成交的日内时点(day_topw_mean / day_signed_ratio / day_centroid / day_corr(in_index) / day_gini,全是库里没有的 ops_ext 算子,16 种子)。预测:head 概率约 6%;若有,最可能来自 day_signed_ratio 与 topw 一族(买盘压力的慢变版)或 centroid 一族(尾盘成交)。可证伪:topw 全差而时点一族好。
 - R:2 组(10 个变体)。M2 head 把窗口拉到 45 / 60 + EMA,Ret 支单独 + 长窗口。预测:有 1–3 个变体比原 head 好 0.1 以上(窗口趋势是单调的),但与已知族 |ρ| 是否 < 0.5 不确定,若变好,它们与原 head 的 ρ 会 ≥ 0.5,即替换而不是新增。
+
+## 第 3 轮(PI,2026-11-11)
+
+### 上一轮预测对不对
+- 位 a(E,核心 C = day_q_stat_std(份额),外围不用 ts_stddev):预测「head 概率 8%,多数在 -1.5 ~ -0.4」——对,0 过线;最好的是批外的 div(cross_stddev(C,60), cross_decay_linear(...)) -0.12,是「慢变量的离散度 / 水平」,不是我写的水平类种子。
+- 位 b(N,放量收益与成交时点):预测 6%——对,0 过线。
+- R:预测 1–3 个变体变好——对一半:变异系数版 -0.93(比原 head 好 0.85,但 ρ_known 只 -0.22,没替换也没收录是因为没到 score +0.1 之外的门槛逻辑以外的原因,待核),Ret 支窗口 30 -1.30 好 0.48,均与已知族 |ρ| 有差异。
+
+### 对本种子 alpha 来源的信念
+- 三批全读完:M1(共动度 / 尾盘占比)、M2(成交量节律)、M3(放量后的冲击)。全部 head 都是负分(-1.78 ~ -3.42),所有轮最好 -0.12;差距主要是换手,慢变化(长窗口、EMA、离散度 / 水平)单调变好。
+- 我的信念:这条流没有明显的 alpha 来源,事先过线概率每位 5%。最值得赌的是 M3 的核心 C(放量后 5 分钟收益离散度):与已知族相关低(只有这一支不是流动性 / 成交额的重述),换手问题可以用慢变外围解决。
+
+### 本轮任务和事先预测
+- 位 a:E,核心 C = day_mean(in_sustain_stddev(is_gt(Volume, 均值+标准差), Ret, 5, 1, 1))(14 个种子),外围全是 cross_ema / zscore / 短减长 / 除以 day_std(Ret) / 对 cs_mean 与 day_std(Ret) 的 cross_corr / 分桶标准化。预测:head 概率 6%;最好者最可能是 cross_ema(C,40) 或 div(C, cross_mean(C,60))(与批里 head 相关 0.5–0.7),分数 -1.5 ~ -0.5。
+- 位 b:N,价格分布的尾部形状与卡住程度(day_es_ratio_hi/lo、day_at_max_ratio、day_distinct_ratio、day_flat_run_max、day_zero_ratio,慢变 + 分桶),15 个种子。预测:head 概率 5%;若有,最可能是 es_ratio 右减左的分桶版(彩票性偏好)。day_distinct_ratio / day_zero_ratio 与价格 / 流动性控制可能相关 >0.8 被划掉。
+- R:2 组 8 个变体(尾盘占比放慢 / 换尾盘 20 分钟份额;M3 比值改 day_std 分母 + 短窗口)。预测:1 个变体比原 head 好 0.1 以上,概率 40%;过 0.5 线概率 <5%。

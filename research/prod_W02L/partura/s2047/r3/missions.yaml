@@ -1,0 +1,67 @@
+seed: 2047
+round: 3
+slots:
+- type: E
+  core: 'cross_delay(day_min(Ret), 1)'
+  hypothesis: '核心:cross_delay(day_min(Ret), 1) = 昨日的最差一分钟收益(日内下探尖刺,只用 t-1 日及以前,无前视)。依据:共性表里含它的 24 个已评分候选均值 -1.57,不含的 -2.55,差 +0.98(p 0.000),是本流所有结构批里 p 最小的子树之一;而 day_min(Ret) 自己的水平是死的(头部 -2.82,全库水平 head 都被控制吃掉)。本流第 1 轮最好的候选(-0.20 ~ -0.32,train 为正、valid 为负)全部是同一种外围:把它当回归元去回归 day_sum(Ret)(cross_regbeta / cross_reg_tvalue / cross_corr,120 日)。我的判断是:承重的是『昨日尖刺』这个滞后事件本身,而不是 y = day_sum(Ret);而 valid 翻号说明 y = 日内收益这一读法在 2023 年之后失效(日内回补被套利掉)。
+
+本轮的外围和快照里已见过的完全不同:不再用 y = day_sum(Ret) 的回归,而是让昨日尖刺与『今天的别的东西』配对,读它的反应函数——(1) 今天的隔夜跳空 gap = log(今开 / 昨收)(昨日恐慌之后第二天开盘是被回补还是继续砸:T+1 制度下恐慌卖出的人当天无法再卖,隔夜价是第一次出清,这是 A 股特有的机制);(2) 今天的上尖刺 day_max(Ret)、今天的分钟波动 day_std(Ret)(尖刺之后波动聚集 vs 平复,波动聚集的强度是个股流动性提供者深度的读数);(3) 今天的成交量惊奇、成交额重心、最低价出现时刻(尖刺之后资金怎样回来);(4) 自身的持续性(昨日尖刺对今日尖刺的 120 日斜率 / 相关);(5) 用 cross_mean(乘积) / cross_cov 的写法(不是回归):读的是『昨日尖刺 × 今日隔夜跳空』的 120 日平均,两者符号相反时为正,是回补强度的直接度量。以及一个对照(种子 12):昨日尖刺减去自己 20 日均值的惊奇版。
+
+算子实现:cross_corr / cross_cov / cross_regbeta 是成对剔除缺失日的 120 日滚动统计量,输出无量纲(相关)或收益量级(协方差),是慢变的个股属性,换手低;gap 的分母是昨日收盘价,恒正;day_std(Ret) 只作为 y 出现、不作分母(一字板日 day_std 为 0 时相关仍有定义,只是该日方差为零被统计量自己处理),所以没有除近零爆点;gap 对一字板日有定义(Open 有值)。种子 9 里用 20 日平均波动当分母而不是当日 day_std。
+
+为什么和库里已有的不同:库里与 day_min(Ret) 配对的 cross_* 全部是 y = day_sum(Ret)(或 day_max(High) 这类水平),没有一个把昨日尖刺与隔夜跳空、上尖刺、波动、成交量惊奇、成交额重心、最低价时刻配对,也没有『尖刺 × 跳空』的乘积均值写法;外围的算子集合(cross_mean/cross_cov 套 mul、cross_corr 配 gap)和以前含该核心的候选不同。
+
+为什么样本外还会在:第 2 天的隔夜回补取决于流动性提供者(做市式的逆向机构)的深度与 T+1 约束下被迫卖家的构成,这是市场结构而不是风格,不随 2023 年之后的因子拥挤翻号;与波动 / 流动性 / 反转 / 市值控制的关系是配对统计量,尺子扣掉的是它们的线性 / U / S 型暴露,配对相关本身与控制的水平无机械关系。风险(预先承认):120 日相关的估计误差约 0.09,与截面离散度相当;train 好 valid 差的老毛病可能仍在,所以种子故意把 y 换成非日内收益的量。'
+  seeds:
+  - 'cross_mean(mul(cross_delay(day_min(Ret), 1), log(div(day_first(Open), cross_delay(day_last(Close), 1)))), 120)'
+  - 'cross_cov(cross_delay(day_min(Ret), 1), log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), day_max(Ret), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), day_std(Ret), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), cross_zscore(day_sum(Volume), 60), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), day_min(Ret), 120)'
+  - 'cross_regbeta(cross_delay(day_min(Ret), 1), day_min(Ret), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), div(day_sum(Ret), cross_mean(day_std(Ret), 20)), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), day_argmin(Low), 120)'
+  - 'cross_corr(cross_delay(day_min(Ret), 1), day_centroid(Amt), 120)'
+  - 'sub(cross_delay(day_min(Ret), 1), cross_mean(day_min(Ret), 20))'
+- type: N
+  hypothesis: '机制:A 股 T+1 下的『隔夜反应函数』。隔夜跳空 gap = log(今开 / 昨收) 是昨天一整天信息与被 T+1 锁住的卖压的第一次出清价。个股的 gap 对昨天发生的事(昨日日内收益、昨日收盘距最低价的回升幅度 log(收 / 最低)、昨日上尖刺、昨日成交额惊奇、昨日成交额重心、昨日最低价出现的时刻)的 120 日滚动相关 / 斜率,就是个股自己的『隔夜回补系数』:负 = 昨日越强今日越被隔夜回吐(逆向资金充足、散户昨日追涨被隔夜套利者反向),正 = 延续(信息驱动)。这是一个慢变的、无量纲的个股属性,变量是参与者构成(隔夜持有者是机构还是散户),不是价格水平或波动水平。另有 gap 自己的分布读数:下尾均值 ÷ 标准差(隔夜下跳的尾部相对常态的厚度)、一阶自相关(隔夜跳空是否成串)。
+
+依据 / 批里的现象:本流 B139 批共性表里富集最高的子树之一就是隔夜跳空的 120 日均值 cross_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)(差 +1.12,p 0.006,4 个候选),第 2 轮 E 位把 gap 与『同日』日内收益配对,但没有一个种子把 gap 与『昨日的』事件配对,也没有看 gap 的分布形状;第 1 轮里最好的候选全是对滞后量的回归——这说明滞后一天的配对结构是有东西的,y 的选择则是还没试过的。
+
+算子实现:cross_corr(x, y, 120) / cross_regbeta(x, y, 120) 的 x 是 cross_delay(昨日量, 1)、y 是今日 gap,窗口内缺失日成对剔除;cross_tail_mean_q25 / cross_stddev / cross_autocorr 对 gap 的 120 日序列做分布读数;种子 12 先把 gap 减去当日截面均值(去掉全市场跳空)再配对,使它成为纯个股特有的隔夜反应。gap 的分母是昨日收盘价(恒正),log(收 / 最低) 的分母是最低价(恒正),种子里没有除以当日 day_std 或近零量;日内路径量 day_argmin / day_centroid 只作配对一方,对一字板日的偏差(argmin 为 0)只影响 120 日窗口里很小的一部分。
+
+为什么和库里已有的不同:库里没有任何以隔夜跳空为 y 的滚动配对统计量;第 1 轮的回归(滞后价位量 × day_sum(Ret))的 y 是日内收益,第 2 轮的 gap 配对是同日日内收益;这里 x 是昨日的事件、y 是隔夜跳空,经济含义是『前一天的结果在第二天开盘怎样被重新定价』,与之前所有读数不同。
+
+为什么样本外还会在:隔夜 / 日内由投资者构成决定(Lou-Polk-Skouras 一类的隔夜收益研究,A 股机构隔夜建仓、散户日内交易的分工),T+1 是制度性的、不会因风格切换消失;读数是慢窗口的配对统计量,换手低;与波动 / 流动性 / 市值控制没有机械关系。风险:估计误差大;gap 对停牌复牌后的多日跳空有污染(复牌首日,窗口里占比小)。'
+  inspired_by: 'B139 批共性表:隔夜跳空 120 日均值 cross_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120) 富集 +1.12(p 0.006);第 1 轮最好的候选全是对滞后量的 120 日回归,但 y 都是日内收益'
+  seeds:
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(day_sum(Ret), 1), 120)'
+  - 'cross_regbeta(cross_delay(day_sum(Ret), 1), log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)'
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(log(div(day_last(Close), day_min(Low))), 1), 120)'
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(day_max(Ret), 1), 120)'
+  - 'cross_tail_mean_q25(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)'
+  - 'div(cross_tail_mean_q25(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120), cross_stddev(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120))'
+  - 'cross_autocorr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120, 1)'
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(cross_zscore(day_sum(Amt), 60), 1), 120)'
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(day_centroid(Amt), 1), 120)'
+  - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cross_delay(day_argmin(Low), 1), 120)'
+  - 'cross_regbeta(cross_delay(sub(day_sum(Ret), cs_mean(day_sum(Ret))), 1), log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120)'
+  - 'cross_corr(sub(log(div(day_first(Open), cross_delay(day_last(Close), 1))), cs_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))))), cross_delay(day_sum(Ret), 1), 60)'
+R:
+- head: 'cross_corr(day_min(High), day_mean(Amt), 60)'
+  why: '拆解表里两个成分单独 -2.37 / -3.47、组合 -0.71,承重的是『日内最低高价与成交额的滚动相关』这个关系。第 2 轮 R:窗口 45 的 train -0.13 / valid -0.64(窗口 60 是 -0.71),241 日窗口与原 head 的 ρ 只有 0.31 但更差(-0.85);成分换 cs_rank 更差(-1.41),成分换成 zscore / 滞后 ρ 很高、没有改善。所以窗口本身已大致排完,剩下可疑的烂部件是两个序列的偏态与具体价位量:Amt 是极右偏的、day_min(High) 是后复权价格水平,Pearson 相关被极端日支配。本轮试:更细的窗口(35 / 40 / 50 / 75)、对两侧取 log、换成同类的价位量(Close 最低、最高价最高、收盘价)、把成交额的水平换成最大值 / 标准差 / 成交量。'
+  variants:
+  - 'cross_corr(day_min(High), day_mean(Amt), 35)'
+  - 'cross_corr(day_min(High), day_mean(Amt), 40)'
+  - 'cross_corr(day_min(High), day_mean(Amt), 50)'
+  - 'cross_corr(day_min(High), day_mean(Amt), 75)'
+  - 'cross_corr(day_min(Close), day_mean(Amt), 45)'
+  - 'cross_corr(day_min(High), day_max(Amt), 45)'
+  - 'cross_corr(day_min(High), day_std(Amt), 45)'
+  - 'cross_corr(day_min(High), day_mean(Volume), 45)'
+  - 'cross_corr(day_min(High), log(day_mean(Amt)), 45)'
+  - 'cross_corr(log(day_min(High)), log(day_mean(Amt)), 45)'
+  - 'cross_corr(day_max(High), day_mean(Amt), 45)'
+  - 'cross_corr(day_last(Close), day_mean(Amt), 45)'
