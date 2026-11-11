@@ -1,0 +1,60 @@
+seed: 2066
+round: 1
+slots:
+  - type: N
+    hypothesis: >-
+      成交在一天里的「时间重心」。day_centroid(Amt) 是当天 241 根分钟成交额沿分钟轴的质心(0 = 全在开盘,1 = 全在收盘,ops_ext.day_centroid),
+      读的是「钱什么时候来」,而本批库里的候选(in_cov(Ret, Close, 30) 一族)读的是价格与收益的分钟协方差,两个库里都没有任何一条用到质心类算子
+      (它们是 ops_ext 新增的,库的 5583 条骨架里没有),所以不是同一个量。机制:尾盘集中的成交是机构调仓 / 基金申赎 / 被动资金按收盘价成交的足迹,
+      开盘集中的成交是隔夜信息与散户集合竞价追涨;长期偏尾盘的股票是机构持有度高、信息消化慢的票,这是一个持仓结构代理而不是成交额水平
+      (质心无量纲,与成交额水平、波动控制的相关应当不高)。再用 day_centroid(Ret)(价格波动发生在何时)作差:钱的重心晚于价格重心 =
+      价格已定、资金后到的吸筹形态。算子实现:cross_mean / cross_ema 把日度质心平滑成持仓状态变量,cross_zscore 取相对自身历史的异常,
+      cs_bucket_rank / cs_bucket_zscore 在流动性或市值十分位内比较,去掉「大票尾盘成交多」的规模暴露但不假设线性。
+      样本外还会在的理由:它测的是持有人结构,是慢变量,换手低于分钟类因子,不靠某一段时间的行情形态;风险是它可能被流动性控制吃掉,所以种子里一半用分桶配平。
+    inspired_by: 'S2066 第 1 批:10 个候选全是 in_cov(Ret, Close, w) 一族,Close->Vwap 后 train/valid 符号翻转,说明价格位置协方差的稳定性差;换成成交时间结构这个正交维度'
+    seeds:
+      - 'cross_mean(day_centroid(Amt), 10)'
+      - 'cross_zscore(day_centroid(Amt), 20)'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 10), cross_mean(day_mean(Amt), 20))'
+      - 'cs_bucket_zscore(cross_ema(day_centroid(Volume), 5), LogFloatCap)'
+      - 'sub(cross_mean(day_centroid(Amt), 5), cross_mean(day_centroid(Ret), 5))'
+      - 'cross_mean(sub(day_centroid(Amt), day_centroid(Ret)), 10)'
+      - 'cs_bucket_demean(cross_zscore(day_centroid(Amt), 20), cross_mean(day_gini(Amt), 20))'
+      - 'cross_ema(day_centroid(Ret), 10)'
+      - 'cs_bucket_rank(cross_zscore(day_centroid(Ret), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cross_ema(sub(day_centroid(Amt), day_centroid(Ret)), 10), cross_mean(day_mean(Amt), 20))'
+  - type: N
+    hypothesis: >-
+      资金加权的买卖方向。day_signed_ratio(Ret, Amt)(ops_ext)= 上涨分钟成交额占比减下跌分钟成交额占比,范围 [-1, 1],只看符号和金额,
+      不看收益大小;它是不需要逐笔数据的净买入压力代理。与库里 in_cov(Ret, Close, 30) 的区别:协方差读的是收益大小与价格水平的共动
+      (价格尺度、趋势段主导),这里完全不受价格水平和收益幅度影响,只问「钱是在涨的时候进还是跌的时候进」。机制:A 股散户主导,
+      上涨时放量追入、下跌时放量出逃的票,是情绪化资金主导,随后回吐;反过来,钱在下跌分钟里被吸走(下跌放量但收得住)的票是有人承接。
+      用 day_pos_ratio(Ret)(只数分钟个数的涨跌比例)作对照:金额加权与个数加权的差,是大单的方向,与小单噪声分开。实现:
+      cross_mean / cross_ema 做多日平滑,cross_zscore 取相对自身历史的偏离(去掉持续的截面水平),
+      cs_bucket_rank 在流动性十分位内比较。样本外还会在的理由:行为金融里的情绪回吐与承接是结构性的,
+      且该量对价格水平 / 波动不敏感,不容易被波动与反转控制吃掉;风险是与 20 日反转相关(上涨日买入占优),
+      所以种子里含与收益个数比例对照的变体。
+    inspired_by: 'S2066 第 1 批:in_cov(Ret, Close, 30) 的 Close->Vwap 在 train 同样为负,说明价格方向与分钟内位置的关系是真的,但被价格水平尺度污染;用符号加权去掉尺度'
+    seeds:
+      - 'cross_mean(day_signed_ratio(Ret, Amt), 10)'
+      - 'cross_ema(day_signed_ratio(Ret, Amt), 5)'
+      - 'cross_zscore(day_signed_ratio(Ret, Amt), 20)'
+      - 'cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 5), cross_mean(day_mean(Amt), 20))'
+      - 'cs_bucket_demean(cross_zscore(day_signed_ratio(Ret, Amt), 20), LogFloatCap)'
+      - 'sub(cs_rank(cross_mean(day_signed_ratio(Ret, Amt), 10)), cs_rank(cross_mean(day_pos_ratio(Ret), 10)))'
+      - 'cross_mean(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Volume)), 10)'
+      - 'cross_mean(day_signed_ratio(Ret, Amt), 20)'
+      - 'cs_bucket_zscore(cross_ema(day_signed_ratio(Ret, Volume), 10), cross_mean(day_mean(Amt), 20))'
+      - 'cross_zscore(cross_mean(day_signed_ratio(Ret, Amt), 5), 40)'
+R:
+  - head: 'pow_2(day_mean(nt_cs_normalize(in_cov(Ret, Close, 30))))'
+    why: '部件 nt_cs_normalize(逐分钟截面标准化)是烂的:拆解里 Close->Vwap 在 train/valid 符号翻转,说明 in_cov(Ret, Close) 的横截面主要是价格水平尺度;而 sufficiency 表明去掉外层 pow_2 并无改善。用对尺度不敏感的 in_corr 替换协方差,并试成交额 / 成交量取代价格水平。'
+    variants:
+      - 'pow_2(day_mean(in_corr(Ret, Close, 30)))'
+      - 'day_mean(in_corr(Ret, Close, 30))'
+      - 'day_mean(in_corr(Ret, Close, 15))'
+      - 'day_mean(in_corr(Ret, Vwap, 30))'
+      - 'pow_2(day_mean(in_corr(Ret, Amt, 30)))'
+      - 'day_mean(in_corr(Ret, Amt, 30))'
+      - 'day_mean(in_corr(Ret, Volume, 15))'
+      - 'sigmoid(abs_(day_mean(in_corr(Ret, Close, 30))))'

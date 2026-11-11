@@ -1,0 +1,42 @@
+round: 3
+seed: 2049
+slots:
+- core: sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241))
+  hypothesis: 'E 位(核心 C 的第 2 个也是最后一个 E 位)。核心 C = 成交量加权参考价 - 等权参考价(241 日),即 B145 积木 day_cov(Volume, Low)=mean(V)*(Vwap_V-Vwap_T) 搬到日轴:钱成交在价格路径高处还是低处(成本峰值偏高 = 近期高位换手、新进者被套,处置效应 / 被套盘机制,窗口 241 日换手低)。它是快照共性表里均值差最大的核心(含它 16~55 个候选均分约 -0.5 ~ -1.0,不含约 -2.1 ~ -2.4,p 0.000)。第 2 轮的 E 位只换了「除以均价 / 波动」「减自身慢均值」「乘价格偏离 / 耦合」这类单股内部的外围,12 个全部卡在 train -0.19、valid +0.68,几乎同一个数,说明差别没有改变截面排序,而 train 与 valid 的分歧是体制问题(valid 为正、train 为负),不是量纲问题。
+
+    本轮外围完全换到「截面内条件化 + 体制翻转 + 时间轴相对位置」三类,都是第 2 轮没有用过的算子集合:(1)cs_bucket_zscore / cs_bucket_demean / cs_bucket_rank:把核心(或除以 241 日均价后的相对值)放在同市值十分位(LogFloatCap)、同波动十分位、同上市年限十分位、同流动性十分位内比较,只留「相对同类股票的成本位置」,去掉市值 / 板块 / 次新带来的整体差异(处置效应在小盘散户股和大盘机构股里强度不同,同类内比才干净);(2)cs_flip_by_state(·, day_sum(Amt) / day_mean(Ret)):用市场成交额 / 市场收益所处位置的状态(高于或低于 241 日中位)翻转符号,直接检验 train 负 valid 正是不是「热市里被套盘继续压价,冷市里反弹」的体制依赖(如果单纯失效而不是反号,翻转版会明显更差,这本身就是检验);(3)cross_zscore / cross_tail_mean_q25 / q75:核心相对自己 60~120 日历史的标准化位置,以及时间轴上的下 / 上尾均值,问的是「成本位置的极端值」而不是平均水平。
+
+    实现机制:C 是价格单位(后复权价高的股票绝对值大),除以 cross_mean(day_close(Close),241) 得到相对成本偏离;之后全部是截面内 / 状态 / 时间位置的变换,不改变成本机制本身。与库不同:库里没有 day_wmean / cs_bucket_* / cs_flip_by_state / cross_zscore 作用在成交量加权价格差上的骨架,两个库的 5583 条骨架里没有这些组合;外围算子集合与第 2 轮(cross_stddev、cross_corr、cross_ema、乘价格偏离)完全不同。样本外还会在:来源是处置效应 / 被套盘行为偏差,慢变、低换手(241 日聚合,扣 15bp 不致命),同类内比较是更干净的同一机制;第 2 轮核心在 valid 为正。失败方式:被冠军吃掉,或体制翻转变差。数学:分母均带下限;停牌日 day_wmean 为 NaN 被慢聚合跳过;bucket 内少于 2 只给 NaN;无前视(只用 t 日及以前)。'
+  seeds:
+  - cs_bucket_zscore(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), LogFloatCap)
+  - cs_bucket_zscore(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), LogFloatCap)
+  - cs_bucket_demean(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), cross_mean(day_std(Ret), 120))
+  - cs_bucket_rank(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), ListAge)
+  - cs_bucket_zscore(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), cross_mean(day_sum(Amt), 60))
+  - cs_flip_by_state(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), day_sum(Amt))
+  - cs_flip_by_state(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), day_mean(Ret))
+  - cross_zscore(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), 120)
+  - cross_zscore(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), 60)
+  - cross_tail_mean_q25(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), 120)
+  - cross_tail_mean_q75(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), 120)
+  - cs_winsor(cs_bucket_demean(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), LogFloatCap))
+  - sub(cs_bucket_zscore(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), LogFloatCap), cs_bucket_zscore(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume), 241)), cross_mean(day_wmean(Vwap, Volume), 241)), add(cross_mean(day_close(Close), 241), 0.0001)), BoardCode))
+  type: E
+- hypothesis: 'N 位。机制:信息时间波动率比。day_wstd(Ret, Volume) 是成交量加权的分钟收益波动(价格在放量分钟里怎么动),day_std(Ret) 是等权波动(含大量安静分钟)。二者之比衡量「一天的价格波动有多少发生在放量分钟」:比值高 = 价格变动由成交活跃时段(知情交易、信息消化、机构分批)驱动,价格发现型波动,倾向慢漂移(Easley-O''Hara 的知情交易概率思路:知情者在放量时出手);比值低 = 波动来自稀疏 / 薄成交分钟的买卖价差跳动,属流动性噪声,倾向反转。120~241 日慢聚合把单日噪声压低,保留个股的微观结构属性。变体:只在下跌分钟 / 上涨分钟上看放量波动占比(放量下跌 = 恐慌抛售的信息含量,B147 下行半标准差批启发)、放量最大 10% 分钟的平均收益(day_topw_mean,事件研究)、左 / 右尾期望损失比的差(day_es_ratio_lo / hi 相减,尾部形状不对称)、与日收益的耦合、近期相对一年常态的变化、成交额加权对成交量加权的比。
+
+    为什么与库不同:B147 库(及本流 B146)读的是分钟收益的下行 / 上行半标准差比(等权矩,select_where 之后 day_std),从不加权;第 1、2 轮 N 位读的是价格路径位置(Vwap 差)和订单流方向(涨跌分钟成交量差),都是一阶量(位置 / 方向);本位读的是二阶量(波动)在成交量时间轴上的分配,算子 day_wstd / day_topw_mean / day_es_ratio_* 不在库骨架里。与已知成交额族(成交额的截面 / 日内离散度)也不同:那是成交量自身的分布,这里是收益波动按成交量的权重。预计与波动控制 |rho| 0.2~0.5(比值已去量纲,分母含 day_std(Ret))。样本外还会在:微观结构信息含量是个股的结构属性(做市深度、散户占比),慢变。失败方式:比值被成交量集中在开盘 / 尾盘的个股差异吃掉(与流动性控制重叠),或退化为波动代理。数学:分母加 0.0001 下限,Ret 为分钟收益量级 1e-3,分母 std 近零(一字板)时比值可能偏大但不爆(加下限 + 慢聚合平滑);day_es_ratio_* 在分位近零日为 NaN(已定义,不是爆点);无前视。'
+  inspired_by: B147 下行半标准差 / 总标准差 head(div(day_std(neg Ret), day_std(Ret)),score -3.08,去掉分母后 +1.81 改善)与 B146 涨跌分钟半方差族:都只用等权分钟矩;启发是把波动按成交量权重分配(放量分钟的波动 vs 全部分钟),并与 B145 的成交量加权 vs 等权思想一致
+  seeds:
+  - cross_ema(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), 120)
+  - cross_mean(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), 241)
+  - cross_ema(sub(day_wstd(Ret, Volume), day_std(Ret)), 60)
+  - cross_ema(div(day_wstd(select_where(is_lt(Ret, create_like(Ret, 0)), Ret, create_like(Ret, 0)), Volume), add(day_wstd(Ret, Volume), 0.0001)), 120)
+  - cross_ema(div(day_topw_mean(Ret, Volume), add(day_std(Ret), 0.0001)), 60)
+  - cross_mean(day_es_ratio_lo(Ret), 120)
+  - cross_ema(sub(day_es_ratio_lo(Ret), day_es_ratio_hi(Ret)), 120)
+  - cross_ema(sub(div(day_wstd(select_where(is_gt(Ret, create_like(Ret, 0)), Ret, create_like(Ret, 0)), Volume), add(day_std(select_where(is_gt(Ret, create_like(Ret, 0)), Ret, create_like(Ret, 0))), 0.0001)), div(day_wstd(select_where(is_lt(Ret, create_like(Ret, 0)), Ret, create_like(Ret, 0)), Volume), add(day_std(select_where(is_lt(Ret, create_like(Ret, 0)), Ret, create_like(Ret, 0))), 0.0001))), 120)
+  - cross_corr(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), day_sum(Ret), 120)
+  - sub(cross_ema(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), 20), cross_ema(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), 240))
+  - cross_ema(mul(div(day_wstd(Ret, Volume), add(day_std(Ret), 0.0001)), div(day_wstd(Ret, Amt), add(day_wstd(Ret, Volume), 0.0001))), 90)
+  - cross_ema(div(day_wstd(Ret, Volume), add(cross_mean(day_wstd(Ret, Volume), 60), 0.0001)), 60)
+  type: N

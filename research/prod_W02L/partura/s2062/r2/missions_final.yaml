@@ -1,0 +1,35 @@
+seed: 2062
+round: 2
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 机制:日内成交额的时间与集中度结构,即「资金怎么成交」。day_gini(Amt) 是当天分钟成交额的基尼系数(尖峰集中 = 高),day_centroid(Amt)
+    是成交额的时间重心(越晚越靠近尾盘)。均匀、低基尼的成交是机构按算法(TWAP / VWAP)拆单的特征,尖峰型是散户与消息驱动的特征;尾盘重心偏晚对应被动基金调仓与收盘定价型交易。这些是持股结构的慢变指纹,在日轴取
+    20 到 60 日均值后换手低。算子怎么实现:cross_mean(day_gini(Amt), 40) 等是直接版本;cross_regres(day_gini(Amt),
+    day_std(Ret), 60) 去掉波动对尖峰的机械影响;day_centroid(Amt) − day_centroid(abs_(Ret)) 读成交时间与价格变动时间是否错位;day_gini(abs_(Ret))
+    是价格变动本身的集中度;cs_bucket_demean(·, LogFloatCap) 是规模内相对值;cs_regres(cross_mean(day_distinct_ratio(Close),
+    20), LogFloatCap) 读价格栅格粗细(低价股 tick 占比大)。为什么和库里不同:库里的 Amt 族是汇总量(day_sum / day_median
+    / 日均),本批 head 全是对标准化收益的形状统计量;day_gini / day_centroid / day_distinct_ratio 是 Partura
+    后加的算子,库里没有出现,两个库全部骨架已逐个禁止,GP 只能向新结构长。为什么样本外还会在:机构与散户的执行风格差异是结构性的、持续多年的(Chordia
+    与 Subrahmanyam 的订单流、Barber 与 Odean 对散户行为的研究),不依赖某段行情,窗口 20 到 60 日使名次慢变。只用 t 日及以前的数据,无前视。数学检查:day_gini
+    在全天成交为 0 的停牌日是缺失或 0,聚合只覆盖有效日;day_centroid 在成交极稀时由少数分钟决定,故用 40 日均值而非单日;窗口 ≤ 241
+    日热身可忽略;不涉及除以近零量。
+  inspired_by: 本批 candidates 里最强的共性是 day_median(Amt) 与 day_at_max_ratio(Vwap)(日内成交额
+    / 价格停留结构,均值差 +1.7 到 +1.95),而 head 的形状统计量全部亏损;上一轮 Pr1a 的正分候选也全是 Amt 与停留结构的回归。这一位把「成交额结构」扩展到集中度(基尼)和时间重心。
+  seeds:
+  - cross_mean(sub(day_centroid(Amt), day_centroid(abs_(Ret))), 40)
+  - cross_regres(day_gini(Amt), day_std(Ret), 60)
+  - cross_corr(day_gini(Amt), day_sum(Ret), 60)
+  - cs_bucket_demean(cross_mean(day_gini(Amt), 30), LogFloatCap)
+  - cross_regbeta(day_gini(Amt), day_median(Amt), 241)
+  - cross_mean(day_gini(abs_(Ret)), 40)
+  - sub(cross_mean(day_gini(Amt), 10), cross_mean(day_gini(Amt), 60))
+  - cs_regres(cross_mean(day_distinct_ratio(Close), 20), LogFloatCap)
+  - cross_stddev(day_centroid(Amt), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

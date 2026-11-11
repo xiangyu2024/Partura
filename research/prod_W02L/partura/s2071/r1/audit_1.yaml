@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 11]
+    reasons: '相关度表:核心 div(sub(day_max(High),day_min(Low)),day_open(Open)) 与快照 head 的原始 |ρ| 最大 0.645(ts_mean(mul(core,day_sum(abs_(Ret))),20)),残差 0.335;与控制 vol 0.526、liq 0.312、rev 0.262、known 0.323、size 0.017,都 < 0.8,核心过 E 位的控制门槛。核心是 head 1 的子树,12 个种子都原样包含核心。外围多数是 range/open 自身的时序动态(ts_mean 5 与 60 的比值、ts_mean 5 减 40、ts_rank 60、ts_skew 40、ts_corr 与 day_sum(Amt)、ts_corr 与日内涨跌、ts_decay_linear 与 ts_min 等),留下的种子与任一 head 原始 |ρ| 多在 0.04–0.21(种子 10 为 0.368,种子 12 为 0.264),与 vol 控制多在 0.02–0.17(种子 10 为 0.31,种子 12 为 0.22)。head 全是 range 乘日内波动的水平,这里换成了 range 相对自身历史的压缩/扩张与分布形状,实质上不同。扣分点:种子 2、4、10、12 与 20 日反转控制的 |ρ| 在 0.45–0.55,说明一部分信号可能是反转的换皮,所以创新度给 4 而不是 5。自动划掉:种子 1(ts_std(core,20))与 head 原始 |ρ| 0.84、vol 0.66;种子 11(ts_min(core,20))与 head 0.763、vol 0.63,按 ≥ 0.7 的库禁令规则划掉。种子 3(ts_rank(core,60))pipeline 标为废品(distinct 0.038),原因是 pct 秩在 60 天窗口上只有约 60 档的离散化,会造成大量并列,但这不是数学错误,面板也不是常数,不挡。另外 ts_rank 底下的 nanrank_last 在当天缺失时返回 0 而非缺失,停牌票会被推到低端,对多头十分位影响很小,不构成挡的理由。前视检查:所有外围只用 day_* 聚合与 ts_mean/ts_std/ts_corr/ts_rank 的过去窗口,没有 ts_shift、cross_shift 或 in_local_mean。剩 10 个种子,满足 ≥ 4。如果它有 alpha,最可能来自:range 相对自身历史的收缩或扩张(注意力冲击之后的回归,或收缩后的吸筹),而不是波动水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 6, 9]
+    reasons: '相关度表:b1 CLV ts_mean((Close-Low)/(High-Low),20) 与 head 原始 |ρ| 0.042、残差 0.16,但与 20 日反转 0.54;b3 ts_mean(day_skew(Ret),20) 原始 0.263、残差 0.174,与流动性 0.136、size 0.15,都不高;b5 隔夜缺口均值 原始 0.168,与 known 0.25、liq 0.253;b7 效率 ts_mean(|Close-Open|/range,20) 原始 0.046,与全部控制 |ρ| ≤ 0.12,是这一批最干净的一个;b8 ts_mean(day_kurt(Ret),20) 原始 0.313、残差 0.501,但与 size 0.374 偏高;b10 ts_mean(day_corr(Ret,Amt),20) 原始 0.271,与 rev 0.557 偏高。整体上这些是路径形状(收盘位置、隔夜与日内分离、效率、高阶矩、量价相关),与 head 的「range 乘日内波动水平」不是同一个东西,创新度给 4。扣分点:b1 与 b10 的反转暴露偏高,b8 的 size 暴露偏高,需要在结果里提防它们只是换皮。自动划掉:b4 ts_mean(day_max(Ret),20)与 head 原始 |ρ| 0.934、vol 控制 0.853,按库禁令和控制规则划掉;b6 ts_std(隔夜缺口,20)与 head 0.707,按 ≥ 0.7 规则划掉;b9 与 a10 表达式完全相同(ts_corr(range/open,(Close-Open)/Open,20)),是跨位重复,在 b 位划掉、保留 a 位。b2 ts_mean(sub(day_argmax(High),day_argmin(Low)),20) pipeline 标为废品(distinct 0.41):argmax/argmin 是分钟列索引,多只票 High 或 Low 在同分钟并列时取首个,会偏向早盘,是有偏的度量,但它不是常数面板,也不是系统算不出,按规则不挡,结果里要单独看。定义提醒:b1 与 b7 的分母 High-Low 在一字板日为 0,torch.divide 得到 NaN(不是 0),若 ts_mean 跳过 NaN,一字板日被剔除,是选样偏差,不是挡的理由;b10 的 day_corr 在 Ret 或 Amt 为常数的日子返回 0(dt_day.py:231-245),这些日子会把均值拉向中间,也不挡。b5 用 ts_delay(day_close,1) 取过去收盘,无前视。剩 7 个种子,满足 ≥ 4。如果它有 alpha,最可能来自:收盘位置或隔夜与日内的分离(散户追涨与机构隔夜交易的差异),或效率(趋势日与震荡日的区别)。'
+R: []
+summary: '2071 r1 审计通过:a 位(E,核心 range/open 的时序动态)剩 10 个种子,b 位(N,路径形状)剩 7 个,两位创新度与合理度均为 4;未发现数学问题;本轮无 R 组。'

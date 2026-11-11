@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [1, 2, 5, 6, 7, 8, 9, 13]
+    reasons: '核心 S = ts_std(day_corr(Ret,Volume),40) 与快照 head ts_min(S,5) 的日度秩 |ρ|=0.98(残差 0.99),即核心本身就是 head 的子树、几乎是同一条序列;E 位允许这样(规则 §2),所以新性只能来自外围。外围 13 个种子中,1(cross_ema(cs_demean(S),120),原始 0.92 对 cross_fangzheng(S,241))、2(ts_mean(S,120),0.85 对同一 head)、5(cs_regres 剥极值,0.89 对 ts_min(S,5))、6(cs_regres 剥日内波动,0.96)、7(cs_bucket_demean 成交额十分位,0.96)、8(0.73 对 cross_fangzheng)、9(sub(cs_rank(S), cs_rank(ts_mean(day_std(Ret),40))),0.71 对 ts_min(S,5))、13(ts_mean(cs_demean(S),241),0.94 对 cross_fangzheng)原始 |ρ| 都 ≥ 0.7,按规则划掉,理由是只是 head 的换皮。剩下 3(cross_zscore(S,241),0.66 对 ts_min(S,5))、4(sub(S, ts_delay(S,60)),0.51)、10(mul(S, sign(ts_delta(log(day_last(Close)),120))),对所有 head 最大 0.12)、11(cross_corr(S, day_std(Ret),120),0.21,vol 控制 0.01)、12(cross_semistd_pos(S,120),0.24),共 5 个,≥ 4,通过。其中 10、11、12 与快照全部 head 的原始 |ρ| 都 ≤ 0.24,是真正的新外形;3、4 仍是 S 的变换。创新度给 3 而不是 4:核心对应的信号就是已有的 ts_min(S,5) head,新的只是外围。合理度给 3 的原因:cross_fangzheng 在 dt_cross.py:506-507 的实际定义是 cross_mean(x,d) + cross_stddev(x,d),即 241 日均值加标准差,不是计划里写的「241 日方差」;所以「alpha 与 σ 有关而不是 μ」这句在 head 层面对不上,head 里 μ 分量仍在。核心本身没有数学问题:ts_std 的 40 日窗口,停牌日 c 缺失被忽略,没有除以近零量,没有 ts_shift / cross_shift / ts_rank / cross_rank / in_regres 的写法;外围用的都是 ts_delay 或当期截面操作。核心与五个控制的 |ρ| 最大 0.24(known 0.19,liq 0.18),远低于 0.8,E 位的控制条件通过。如果有 alpha,最可能来自 (b) 的 cs_regres 与 cs_bucket_demean 对 σ 去掉极值与流动性之后的残差,以及 seed 11 的 S 与日内波动的共动。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [11]
+    reasons: '新想法是把 day_corr 的两个参数取同一字段的分钟滞后,即同一序列的日内自相关。in_delay 在 dt_in.py:266 是右移取过去分钟,没有前视。快照 9 个 head 里没有任何 day_corr 带 in_delay;本地 AlphaCube 目录下的 csv / json / txt 文件里也 grep 不到 day_corr(...in_delay...)。我没有找到 5583 条的完整库文件,所以这条只是本地核对,不是全库证明。原始 |ρ| 对快照 head 的最大值:1 为 0.41,2 为 0.29,3 为 0.33,4 为 0.21,5 为 0.31,6 为 0.47,7 为 0.58,8 为 0.46,9 为 0.35,10 为 0.51,12 为 0.29,都低于 0.7。seed 11 = ts_max(cs_demean(day_corr(Volume,in_delay(Volume,1))),120) 减去 ts_max(cs_demean(day_corr(Ret,Volume)),120),对 head ts_max(cs_demean(day_corr(Ret,Volume)),120) 的原始 |ρ| 为 0.74,是 head 的差分换皮,按规则划掉。控制列上,seed 6(liq 0.58,known 0.54)、7(liq 0.68,known 0.64)、8(liq 0.64,known 0.58,size 0.40)偏向流动性与已知族的写法,但没到 0.8 的规则线,也不是 head 的重复,保留,只在这里标注。创新度 4:原料(同一序列的日内滞后自相关)与库里已有的量价同步 day_corr(F,F) 不同;seed 2、4、9、12 与 head 的 |ρ| 在 0.2 到 0.35 之间。合理度 4:机制清楚(Roll 买卖价差反弹给负自相关,知情拆单给正自相关,慢极值把它压成个股特征)。算子逐个核对:day_corr(dt_day.py:231)有界,有效点不足时给 NaN;ts_max 忽略缺失;day_durbin_watson(dt_day.py:304)对常数行给 NaN;没有 ts_rank / cross_rank,没有 ts_shift / cross_shift。两点要注意但不构成数学问题:seed 8 的 day_durbin_watson 是 sum((Δx)^2)/sum(x^2),分母随成交量水平变化,不是标准 DW 的方差比,实际主要是流动性代理(与 liq 控制 0.64 一致);day_corr 在成交量近常数的票上可能是噪声。如果有 alpha,最可能来自 seed 1、2、4、9、12 所代表的日内延续性在慢极值下的稳定个股特征(买卖价差与拆单节奏),而不是成交量本身。'
+R:
+  - head: 'cross_fangzheng(ts_std(day_corr(Ret, Volume), 40), 241)'
+    soundness: 3
+    reasons: 'R 组是 head 的参数与原料变体(σ 窗口 20 / 60 / 300、两种原料相加、先做 5 日平滑、截面去均值)。数学上都干净:cs_demean、ts_mean、ts_std、add 没有除以近零量,也没有前视算子。相关度表里 6 个变体与原 head 的原始 |ρ| 都在 0.97 到 1.00,残差 0.96 到 1.00,所以替换条件 ρ ≥ 0.5 必然成立,真正决定去留的是变体 score 是否 ≥ 原 head + 0.1(原 head 为 -0.45),这一步由流水线直接判,审计不预判。合理度只给 3:诊断依据是「烂的是单一原料与 40 日 σ 窗口」,但 cross_fangzheng 的实际定义是 241 日均值加标准差(dt_cross.py:506-507),不是方差,诊断把 μ 分量漏掉了;窗口 20 / 60 / 300 只是对 σ 窗口的扫描,没有对均值分量的说明。cs_demean 与 ts_mean(S,5) 的改动小,机制上没有说不通的地方,所以不压到 2。'
+summary: '位 a(E,核心 ts_std(c,40))划掉 8 个种子、剩 5 个,创新 3 合理 3,通过;位 b(N,day_corr 与 in_delay 的日内自相关慢极值)划掉 1 个、剩 11 个,创新 4 合理 4,通过;R 组合理 3 保留。关键发现:cross_fangzheng 在算子层面是 241 日均值加标准差,不是计划里写的方差,位 a 与 R 的机制叙述需要按这个修正。'

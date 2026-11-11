@@ -1,0 +1,83 @@
+seed: 2072
+round: 1
+slots:
+- type: E
+  core: ts_hurst(day_last(Volume), 20)
+  hypothesis: '机制:核心 C = ts_hurst(day_last(Volume), 20) 是"每天最后一分钟成交股数"这条日序列在 20 日窗口里的
+    Hurst 指数(持续性):大 = 收盘集合竞价量这个行为本身有记忆(同一批尾盘参与者——指数 / 被动再平衡、尾盘规避隔夜风险的机构——反复出现),小 =
+    每天独立、随机。它是无量纲的"形状"读数,水平被 Hurst 的 R/S 规范化除掉,所以与流动性、成交额水平这些水平型控制天然不共线。依据在本批:3 个
+    head 都是 ts_mean(mul(log(add(day_last(Volume), day_std(Vwap))), ts_hurst(...)),
+    50) 的变体,拆解里 ts_hurst(...) 单独当信号时是 head 里最好的部分(-0.78 / -0.78 / -1.25,sufficiency
+    行),而外面的 log(add(Volume, 日内 Vwap 波动)) 水平项是拖累(去掉它 knockout 后 head 1 的必要性为正、水平子树自己
+    -1.6),也就是 alpha 的候选来源在 Hurst 这一块,不在水平乘子和 ts_mean@50 平滑。三个 head 全亏,说明已见过的外围(mul
+    水平、ts_mean 50 日)错了,而不是 Hurst 没东西。
+
+    这次要试的外围(全部是本批没见过的写法):(a) 慢聚合与自身历史对照:cross_mean(C, 60)、cross_zscore(C, 120)、C 的
+    10 日均值除以 120 日均值——持续性本身的变化,而非水平;(b) 流通市值十分位内标准化 cs_bucket_zscore(·, LogFloatCap)——去掉大小盘混在
+    Hurst 里的差异;(c) 差:C 减去收益的 Hurst(ts_hurst(day_sum(Ret), 20)),即"量的记忆比价格的记忆强多少",把共同的采样噪声消掉;(d)
+    C 对成交额的 Hurst 做 cs_regres 残差(去掉量/额共有的部分);(e) C 乘 20 日趋势的符号:有记忆的尾盘量 × 已有趋势方向 =
+    趋势里有人持续建仓。
+
+    为什么与已有的不同:本批所有含 C 的外围是 {mul, log, add, day_std(Vwap), ts_mean} 的组合;种子用 cross_zscore
+    / cs_bucket_zscore / cs_regres / 差 / 符号门,不含 mul(log(add(Volume, day_std(Vwap))))
+    水平项,也不含 ts_mean@50。库禁令会再拒绝骨架重复的。
+
+    为什么样本外还会在:Hurst 窗口 20 日再叠 60 到 120 日聚合,名次变化慢,15 bp 成本吃得下;机制是参与者构成的结构属性(谁在收盘集合竞价里反复出现),不依赖某段行情;若被已知成交额族吃掉就不会出
+    head,下一轮不再押这个核心。
+
+    数学检查:Volume >= 0,最后一分钟无成交时该日为 0,20 日窗口全为常数时 Hurst 为 NaN 或固定值(涨停 / 停牌票,已被可交易掩码排除,不是结果的主要来源);cross_zscore
+    对近常数窗口有保护;差与残差都是有界量,没有除以近零的爆点。无前视:只用 t 日收盘及以前,t+1 交易;最长窗口 120 日,热身期不主导。'
+  seeds:
+  - cross_zscore(ts_hurst(day_last(Volume), 20), 120)
+  - cs_bucket_zscore(cross_mean(ts_hurst(day_last(Volume), 20), 20), LogFloatCap)
+  - sub(ts_hurst(day_last(Volume), 20), ts_hurst(day_sum(Ret), 20))
+  - cross_mean(sub(ts_hurst(day_last(Volume), 20), ts_hurst(day_sum(Ret), 20)), 60)
+  - cs_regres(ts_hurst(day_last(Volume), 20), ts_hurst(day_sum(Amt), 20))
+  - mul(ts_hurst(day_last(Volume), 20), sign(cross_mean(day_sum(Ret), 20)))
+  - div(cross_mean(ts_hurst(day_last(Volume), 20), 10), cross_mean(ts_hurst(day_last(Volume),
+    20), 120))
+  - cross_ema(ts_hurst(day_last(Volume), 20), 10)
+  - cs_bucket_zscore(cross_zscore(ts_hurst(day_last(Volume), 20), 120), sub(LogFloatCap,
+    LogFloatShares))
+  - cross_corr(ts_hurst(day_last(Volume), 20), day_sum(Ret), 60)
+  - cross_mean(abs_(sub(ts_hurst(day_last(Volume), 20), 0.5)), 60)
+- type: N
+  hypothesis: '机制:成交量在一天里的"时间形状"——成交重心在开盘还是收盘(day_centroid(Volume),0 = 全在开盘、1 = 全在收盘)、成交集中度(day_gini(Volume),0
+    = 匀摊、1 = 几分钟装下全天)。直觉(Admati-Pfleiderer 的日内成交量集中;Jain-Joh 1988 的日内量形状):知情或机构大单不会匀摊,常压在开盘价发现和尾盘;重心偏晚
+    / 集中度高的票是"有一次性事件冲击或尾盘行为"的票,重心靠前的是隔夜信息被开盘消化的票。两个量都无量纲、有界,只读分钟轴上的"何时",与成交额水平、波动水平、市值几乎无关,和已知的
+    day_last(Volume) 水平链也不同(那读的是最后一分钟的量水平,这里读的是整条分钟曲线的形状)。每天取一次噪声大,所以在日轴取 20 到 120
+    日聚合或用自己 120 日的 z 分数,让换手低。
+
+    算子怎么实现:day_centroid(Volume)(Partura 后加的算子,库里没有)、day_gini(Volume);变体:用 Amt 代替 Volume;重心之差
+    sub(day_centroid(Volume), day_centroid(abs_(Ret))) = 成交相对波动偏早还是偏晚(量价时间错位:成交跟着价格走还是价格后于成交);集中度对波动的
+    cs_regres 残差;流通市值十分位内标准化;当日重心相对自己 60 日均值的偏离。
+
+    批里的启发:本批 3 个 head 全是 day_last(Volume)(收盘一分钟的量)与 ts_hurst 的组合,且都亏;说明读"量分布的某一个点"本身已经被水平吃掉,而读完整曲线的形状是未见过的一块。head
+    3 里的 in_max(Ret) 与 day_quantile 也说明分钟内的分布位置信息被批里关心,但都是价格侧,量侧的时间形状没人试过。
+
+    为什么与已有的不同:骨架 cross_mean(day_centroid(F), d) / cross_mean(day_gini(F), d) / sub(day_centroid(Volume),
+    day_centroid(abs_(Ret))) 不在两个库的 5583 个骨架里(day_centroid、day_gini 是 Partura 后加的);库里最近的是
+    day_last / day_open(取某一个分钟点)与 day_std / day_skew 类(位置无关的离散度),它们都丢掉了"何时"这个信息。
+
+    为什么样本外还会在:成交时间形状是个股由投资者结构(散户占比、机构占比、指数成分)决定的慢变指纹,不依赖某段行情;慢聚合让 15 bp 成本吃得下;文献方向稳定(尾盘量集中与机构再平衡、信息交易时间选择)。风险:被已知成交额族或流动性控制吃掉(集中度与换手相关);桶内标准化和残差就是为此。
+
+    数学检查:day_centroid 与 day_gini 在整天无成交时为 NaN 不是无穷;分母 sum|x| 钳到 1e-30;取值在 [0, 1] 内没有爆点;sub
+    两个重心都在 [0, 1];无前视:只用 t 日收盘及以前的分钟数据,t+1 交易;最长窗口 120 日,热身期不主导。'
+  inspired_by: B 批 3 个 head 全是 day_last(Volume)(收盘一分钟量)× ts_hurst 且全亏;读量分布的单个点被水平吃掉,整条分钟曲线的时间形状(重心
+    / 集中度)是未见过的一块。
+  seeds:
+  - cross_mean(day_centroid(Volume), 60)
+  - cross_mean(day_gini(Volume), 60)
+  - cross_zscore(day_centroid(Volume), 120)
+  - cross_mean(sub(day_centroid(Volume), day_centroid(abs_(Ret))), 60)
+  - cs_bucket_zscore(cross_mean(day_centroid(Volume), 20), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_gini(Volume), 60), sub(LogFloatCap, LogFloatShares))
+  - cs_regres(cross_mean(day_gini(Volume), 60), cross_mean(day_std(Ret), 60))
+  - sub(cross_mean(day_centroid(Volume), 10), cross_mean(day_centroid(Volume), 120))
+  - cross_mean(div(day_gini(Volume), day_gini(Amt)), 60)
+  - cross_ema(sub(day_gini(Volume), day_gini(abs_(Ret))), 20)
+  - cross_mean(mul(day_centroid(Volume), sign(day_sum(Ret))), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

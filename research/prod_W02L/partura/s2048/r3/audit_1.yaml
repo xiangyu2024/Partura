@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [5, 6, 10]
+    reasons: '位 a 是 E 位，核心 C = cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241)。核心是快照 head cs_first_low20(cs_first_low20(LogTotalCap, ListAge), C) 的子树，合规。相关度表：核心与 head 的最大 |ρ| 0.42（残差 0.44），与五个控制的最大 |ρ| 0.39（liq），低于 0.8 的核心门槛。创新度 3：外围把 Y 换成 LogFloatShares、LogFloatCap、LogTotalCap 带宽 40%、隔夜收益、收盘相对一年高点、振幅、限售占比（sub(LogTotalCap, LogFloatCap)），加上 cs_bucket_demean 与隔夜嵌套带；这些是「同一个 C 带 × 一个新读数」，不是 head 的换写法（不划为 1），但仍落在 r2 的 cs_first 族内（r2 的 head 全是这个族），所以给 3 而不是 4。自动划掉：种子 5 cs_bucket_demean(LogTotalCap, C) 与 size 控制 |ρ| 0.857 ≥ 0.8；种子 6 与 head 0.74 ≥ 0.7；种子 10 与 head 0.71 ≥ 0.7。剩 9 个（1,2,3,4,7,8,9,11,12），≥ 4，通过。合理度 4：C 是 241 日截面平均的日内收益，分母为正的开盘价，无近零爆点，C 在热身后几乎无并列，cs_first_low20 的带按整块判断，带是真实的 20%；种子 4 的隔夜读数用 cross_delay(close, 1)，取的是过去值；无前视，没有触发 §4 的任何陷阱。机制（A 股日内透支、隔夜为正，一年平均日内收益最差的 20% 是被开盘价透支的票）说得清，且有 Lou-Polk-Skouras 的隔夜/日内拆分支撑。如果有 alpha，最可能来自阶跃带本身：低 C 票整体置顶后，在其余票里按市值排序得到的小市值老股暴露，而不是次新股（r2 的拆解已表明 ListAge 可去）。'
+  - slot: b
+    novelty: 3
+    soundness: 3
+    struck_seeds: [1, 2, 3, 4, 5, 8, 11, 12]
+    reasons: '位 b 是 N 位，字段是 LimitWidth 与 BoardCode。创新度 3：库里 5583 条的 members.csv 中 LimitWidth、BoardCode 出现 0 次，cs_first / cs_last / cs_bucket 也一次都没有，字段与算子组合在库里是新的。但带变量的实际效果大多退化，这一点从相关度表的数字看得出。LimitWidth（board_limit）只有三个值：0.10（主板，及 2020-08-24 前的创业板）、0.20（科创板与注册制后的创业板）、0.30（北交所）；0.10 占绝大多数，所以 low20 / low40 的带必为空，high20 的带至多只剩北交所一块。BoardCode 的主板块同样占多数，low20 带为空。种子 1、2、5、11（LogTotalCap 带）的 |ρ| 与五个控制的数字完全一致（head 0.445，size 0.866），即它们是裸市值排序；种子 3、4 与 E 位的裸核心 C 数字一致到小数点后三位（head 0.424，size 0.078），即等同于 C 本身。自动划掉：1、2、5、11 与 size 控制 |ρ| 0.866 ≥ 0.8；8 与 head 0.762、12 与 head 0.825 ≥ 0.7。另外 3、4 因带为空或只剩北交所，表达式的排序与 E 位核心重复，按「重复」划掉。剩 6、7、9、10，4 个，恰好 ≥ 4，通过。合理度 3：机制说得通（板块制度决定的参与者结构、涨跌停幅度与彩票式博弈），但算子组合没有实现它：cs_bucket_* 的分桶按序数秩，LimitWidth 的并列由列序打破，所以 cs_bucket_demean(LogTotalCap, LimitWidth) 与 cs_bucket_zscore(C120, LimitWidth) 的 10 个桶是列序切块，而不是板块，「板块内去中心化」只是近似（列序携带的是交易所 / 板块信息，按规则不构成挡的理由，但它不是板块本身）；种子 9 的 BoardCode 带为空，实际是裸的一年高点比值；种子 10 的 high20 带只剩北交所，实际是 60 日振幅排序（与 vol 控制 |ρ| 0.675，未达 0.8）。这些是「定义与机制对不上」，不是数学问题，所以合理度给 3。如果有 alpha，最可能来自 6、7 在列序分组内的去中心化读数（市值、日内收益相对分组均值的偏离），以及 9、10 的裸锚定 / 振幅读数，而不是来自板块制度带。'
+R:
+  - head: 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+    soundness: 3
+    reasons: '机制：慢窗口的日内读数更稳、换手更低（PI 拆解里窗口 482 比 241 高 +0.18，属于 PI 的数字，审计未复算）；去掉 ListAge 的变体 4 也说得通（loc 里 ListAge 的 knockout 只掉 0.05）。与原 head 的 |ρ|：变体 1 0.73、变体 2 0.71、变体 3 0.77、变体 4 0.61、变体 5 0.73，都 ≥ 0.5，若分数达标则为替换；与已知族 |ρ| 都在 0.26 以下，不触发已知族限制。变体 5 把收盘换成 VWAP，读的仍是同一个日内读数，不是新的。风险：窗口变长会缩短训练段的有效样本（训练 2018-01 起算，482 约少 2 年，723 约少近 3 年，360 约少 1.4 年，训练段总共约 5.6 年），所以变体的训练分数与原 head 不在同一个起点上比较，增益里有一部分可能来自样本起点不同，而不是窗口本身。这不构成 §4 的「结果主要由热身期决定」，但替换前应在同一起点（如 2021 起）上重算比较。数学上 cross_mean、Vwap / Close 与 open 的比值分母都为正价格，无前视。合理度 3。'
+summary: '位 a（E，核心 C）与位 b（N，LimitWidth / BoardCode 带）均通过：a 创新 3、合理 4，划掉 5、6、10，剩 9 个；b 创新 3、合理 3，划掉 1、2、3、4、5、8、11、12，剩 6、7、9、10 共 4 个（恰好达标）；b 的带多为空或只剩北交所，实际退化为市值 / 裸 C / 裸锚定 / 振幅读数，机制未被算子实现；R 组合理度 3，窗口变长的样本起点混杂，替换前需同起点比较。'

@@ -1,0 +1,74 @@
+seed: 2030
+round: 3
+slots:
+- type: E
+  core: 'day_ar1_coefficient(Amt)'
+  hypothesis: >-
+    核心 = 分钟成交额的日内一阶自回归系数 day_ar1_coefficient(Amt)(无量纲,取值约 -1~1,不含价格水平):一只票当天分钟成交额「接力」的程度,
+    高 = 成交额一波接一波(算法拆单 / 机构分批执行的指纹,Easley-Lopez de Prado-O'Hara 2012 的成交量时钟思路),低 = 孤立脉冲(散户事件冲击)。
+    本流唯一过正的 head(+0.22,train +0.57 / valid +0.22)是 cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Volume)), 60),
+    即「日内接力度的日间自相关」;其对应的 ts_mean 外围(40 日均值)是 -1.10,单用 ts_mean(ar1) 是 -3.40,说明水平读法没用,有用的是它随时间的『持续性 / 变化』。
+    本轮核心固定为 ar1(Amt) 本身,外围换成此前没试过的写法:(1) 二阶矩与变化:cross_stddev(ar1,100)、ar1 相对自身 120 日均值的偏离再做 10 日 EMA(接力度「突然升高」= 有人开始建仓)、
+    高于自身均值的天数占比;(2) 联动:与盘中相对收益 cs_demean(day_mean(Ret)) 的 100 日 cross_corr(接力日价格是否同向 = 知情流),与分钟收益自己的 ar1 的 cross_corr(成交额接力与价格反转 / 动量是否同步),
+    与开盘集中度 day_first(Amt)/day_sum(Amt) 的 cross_corr;(3) 与成交量版的差:ar1(Amt)-ar1(Volume) 刚好把价格路径的自相关分离出来,再做 60 日 EMA 或自相关;(4) 与前日收益的乘积(接力度加权的收益漂移)。
+    与库里已有的不同:库里 ar1(Amt) 只出现在 (a) sub(ar1, day_first(Volume)) 的 ts_mean / cross_autocorr_s1 里,而 sub 另一项是成交量水平(排序几乎由首分钟成交量决定,即规模暴露混入);
+    本轮的种子全部是不带水平项的纯接力度,并读它的离散度、变化、与价格的联动,外围算子(cross_stddev / cross_corr / cross_ema 偏离 / is_gt 占比 / mul 收益)在已见候选里都没出现过。
+    样本外还会在的理由:日内成交额的接力来自订单拆分执行这一结构性行为(机构规模与拆单习惯变化缓慢),A 股机构 / 量化占比持续上升;读它的二阶矩与联动是无量纲的,
+    新尺子去掉了流动性 / 波动 / 市值 / 已知族 / 冠军的线性与非线性暴露后,剩下的是「谁在交易」而不是「交易多少」;窗口 60~120 日 + 半衰期 5 日,换手低。
+    数学检查:无前视(day_ar1 只用当天分钟,t 日收盘后算);ar1 的分母是分钟成交额方差,停牌 / 一字板日为缺失而非 0;cross_corr 窗口内有效点不足时为缺失;is_gt 对缺失为 0,
+    取值连续,不会被 distinct 门槛判废;乘 Ret 的种子无除法。
+  seeds:
+  - 'cross_stddev(day_ar1_coefficient(Amt), 100)'
+  - 'cross_corr(day_ar1_coefficient(Amt), cs_demean(day_mean(Ret)), 100)'
+  - 'cross_ema(sub(day_ar1_coefficient(Amt), cross_mean(day_ar1_coefficient(Amt), 120)), 10)'
+  - 'cross_autocorr_s1(day_ar1_coefficient(Amt), 60)'
+  - 'cross_ema(sub(day_ar1_coefficient(Amt), day_ar1_coefficient(Volume)), 60)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_ar1_coefficient(Volume)), 60)'
+  - 'cross_corr(day_ar1_coefficient(Amt), day_ar1_coefficient(Ret), 100)'
+  - 'cross_ema(mul(day_ar1_coefficient(Amt), cs_demean(ts_delta(log(day_last(Close)), 1))), 60)'
+  - 'cross_tail_mean_q75(day_ar1_coefficient(Amt), 120)'
+  - 'cross_corr(day_ar1_coefficient(Amt), div(day_first(Amt), day_sum(Amt)), 100)'
+  - 'cross_ema(is_gt(day_ar1_coefficient(Amt), cross_mean(day_ar1_coefficient(Amt), 60)), 60)'
+  - 'cross_stddev(sub(day_ar1_coefficient(Amt), cross_ema(day_ar1_coefficient(Amt), 20)), 100)'
+- type: N
+  hypothesis: >-
+    机制:日内成交量 / 成交额分钟序列的『形状统计量』(峰度、偏度、量价同步度、领先滞后、峰值时点、Ljung-Box 聚集度)刻画当天交易是均匀的程序化流还是少数几分钟的集中冲击;
+    Admati-Pfleiderer(1988)的日内成交量模式与 Easley-Lopez de Prado-O'Hara(2012)的成交量同步知情交易概率都指向:知情 / 机构流与散户情绪流在分钟形状上可分。
+    做法:用 AlphaCube 的 day_* 分钟聚合算子把每天的形状压成一个日度值,再用 cross_ema(60) / cross_stddev(100) / 短长 EMA 之差读它的『稳定特征』(本流 head 已显示 day_ar1_coefficient(Amt) 的时间自相关有读数,
+    所以形状统计量的持续性是有信息的),种子:day_kurt(Volume) 的 60 日 EMA(尖峰度)、day_skew(Amt) 的 60 日 EMA、day_corr(Volume, abs_(Ret))(量与波动同步度)、day_corr(Amt, Ret)(量价同向度)、
+    day_corr(Volume, in_delay(Ret, 1))(上一分钟收益对本分钟成交量的拉动,即追涨强度)、day_durbin_watson(Volume)、day_q_stat_std(Volume)(多滞后聚集度)、day_argmax(Volume) 的 60 日 EMA(放量高峰一般在开盘还是尾盘)、
+    day_argmax(Amt) 的 100 日标准差(高峰时点是否稳定)、day_kurt(Volume) 的 20 日与 120 日 EMA 之差(尖峰度趋势)。
+    与库里已有的不同:库里与分钟成交量有关的是 in_sustain_stddev(is_gt(in_boxcox(Volume) ...)) 一族(批 B090,手写库,用分钟内持续阈值超越;本流此族 score -1.5 以下)和 day_first / ar1 水平差;
+    没有一条用 day_kurt / day_skew / day_corr / day_argmax / day_q_stat_std / day_durbin_watson 把分钟形状压成无量纲日度量再做日间 EMA / 标准差。骨架逐个不在两库中。
+    样本外还会在的理由:日内成交形状来自市场微结构与参与者结构(程序化 vs 事件驱动),随时间变化慢;全部为无量纲统计量,规模被消掉,与新尺子里去掉的流动性 / 市值 / 波动控制不是同一个量;
+    窗口 60~120 日 + 半衰期 5 日,换手低。
+    数学检查:无前视(分钟聚合只用当天 t 日分钟);day_corr 的分钟窗口内常数(停牌 / 一字板)得缺失而非 0;day_argmax 取整数分钟序号,60 日 EMA 后连续,
+    直接取 argmax 的种子都套 cross_ema / cross_stddev,不会因离散档位被判废;in_delay 取的是前一分钟的值。
+  inspired_by: 批 B090 的 in_sustain_stddev(is_gt(in_boxcox(Volume),...)) 分钟成交量结构一族(得分很差,说明用阈值硬读分钟成交量不可取),以及本流 head cross_autocorr_s1(day_ar1_coefficient(Amt)...) 显示日内成交额形状有可读信息
+  seeds:
+  - 'cross_ema(day_kurt(Volume), 60)'
+  - 'cross_ema(day_skew(Amt), 60)'
+  - 'cross_ema(day_corr(Volume, abs_(Ret)), 60)'
+  - 'cross_ema(day_corr(Amt, Ret), 60)'
+  - 'cross_ema(day_corr(Volume, in_delay(Ret, 1)), 60)'
+  - 'cross_ema(day_durbin_watson(Volume), 60)'
+  - 'cross_ema(day_q_stat_std(Volume), 60)'
+  - 'cross_ema(day_argmax(Volume), 60)'
+  - 'cross_stddev(day_argmax(Amt), 100)'
+  - 'sub(cross_ema(day_kurt(Volume), 20), cross_ema(day_kurt(Volume), 120))'
+  - 'cross_stddev(day_kurt(Volume), 100)'
+  - 'cross_autocorr_s1(day_corr(Volume, abs_(Ret)), 60)'
+R:
+- head: 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Volume)), 60)'
+  why: >-
+    sub 的第二项 day_first(Volume) 是量级(千~百万)而 ar1 在 -1~1,差几乎等于首分钟成交量水平,规模暴露混入;拆解表里同族 ts_mean 版 Volume->Amt 的替换就有 +0.5 的改善(-1.10 -> -0.57),
+    说明水平项是烂部件。变体:去掉水平项(只留 ar1 的自相关)、水平项换成无量纲的 day_first(Amt)/day_sum(Amt) 开盘占比、或换成首分钟成交量相对自己 30 日均值;窗口 60 -> 100 / 120。
+  variants:
+  - 'cross_autocorr_s1(day_ar1_coefficient(Amt), 60)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Volume)), 100)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Volume)), 120)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), day_first(Amt)), 60)'
+  - 'cross_autocorr_s1(day_first(Volume), 60)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Volume), day_first(Volume)), 60)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), div(day_first(Volume), cross_mean(day_first(Volume), 30))), 60)'
+  - 'cross_autocorr_s1(sub(day_ar1_coefficient(Amt), div(day_first(Amt), day_sum(Amt))), 60)'

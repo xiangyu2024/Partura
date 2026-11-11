@@ -1,0 +1,73 @@
+seed: 2048
+round: 3
+slots:
+- type: E
+  core: 'cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241)'
+  hypothesis: >-
+    机制。本流唯一成功的 head 族(r2 的 E 位,6 个 head,score +0.6~+1.07)形如 cs_first_low20(Y, C),
+    其中 C = cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241) 是过去一年的平均日内收益(收盘/开盘-1)。
+    拆解表给出关键事实:把 Y 里的 ListAge 拿掉(knockout)分数几乎不变(+1.02 对 +1.07),把 C 单独拿出来是 -4.39;
+    所以 alpha 来源不是次新股,而是「C 最低的 20% 的票被整体置顶,其余票按 Y 排序」这个阶跃交互,方向 -1 意味着多头腿是
+    C 不在最低 20% 带里、且 Y(总市值)偏小的老股。经济解释:A 股日内收益长期为负、隔夜收益为正(Lou-Polk-Skouras 2019
+    的隔夜/日内拆分,以及 A 股开盘跳涨后回落的散户集合竞价追涨),一年平均日内收益最差的 20% 是持续被开盘价「透支」的炒作票(开盘冲高、
+    日内回吐),它们是被挖出的雷区;避开雷区后在剩余票里做小市值多头,是一个由持续的参与者结构(散户集合竞价追涨)决定的阶跃。
+    阶跃不会被 5 个控制的线性/平方/立方暴露去掉,换手低(C 是 241 日均值)。本次的外围处理与 r2 已见过的写法很不一样:
+    r2 的所有 head 都是「cs_first_low20(次新股·市值 的两层核, C 或 C 的变体)」,即 C 只当带变量、Y 只当(次新股·市值)。这次
+    (1) 换 Y:流通股本、流通市值、总市值与流通市值之差(限售股占比)、一年高点比值、慢的隔夜收益、慢的日振幅(High/Low,彩票偏好,Bali-Cakici-Whitelaw 2011);
+    (2) 换带的宽度和方向(low40 / high20 / last_*),并用两层嵌套的带(先按隔夜读数划一层,再按 C 划一层)把「隔夜透支」和「日内回吐」
+    两个角度分开;(3) 用 cs_bucket_demean 取代阶跃,检验是不是「带」而不是「连续暴露」在起作用。数学检查:C 是价格比值的
+    均值,分母 day_open 是正价格,无近零爆点;cs_first_* 的带由并列整块判断,C 在 241 日热身后每天几乎无并列;ListAge 与
+    LogTotalCap 是日频字段,无前视;cross_delay 取的是过去值。如果有 alpha,最可能来自「避开持续被开盘价透支的票」后的小市值老股
+    (低估值、低关注),以及在带外按另一读数(振幅)排序产生的与市值不同的暴露。
+  seeds:
+  - 'cs_first_high20(LogFloatShares, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(LogFloatCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low40(LogTotalCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(cross_mean(sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 241), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_bucket_demean(LogTotalCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(cs_first_high20(LogTotalCap, cross_mean(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1), 241)), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(div(day_close(Close), cross_max(day_close(Close), 241)), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(cross_mean(div(sub(day_max(High), day_min(Low)), day_close(Close)), 120), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_last_low20(LogTotalCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(sub(LogTotalCap, LogFloatCap), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_high20(LogTotalCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  - 'cs_first_low20(cross_mean(div(sub(day_max(High), day_min(Low)), day_close(Close)), 60), cs_first_low20(cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241), LogTotalCap))'
+- type: N
+  hypothesis: >-
+    机制。涨跌停幅度是交易所按板块设定的制度属性(主板 10%、创业板/科创板 20%、ST 5%,数据里是日频字段 LimitWidth 与 BoardCode),
+    不同板块的投资者构成与「彩票式」博弈空间不同(Kumar 2009;Bali-Cakici-Whitelaw 2011 的极端收益偏好),所以同一个读数(小市值、
+    日内回吐、振幅)在不同板块的定价不同。本流 r2 的成功 head 把「阶跃带 × 另一变量排序」作为被奖励的结构,但带变量一直是
+    ListAge 或慢的日内收益;本轮的新想法是把带变量换成板块/涨跌幅制度:用 cs_first_*/cs_last_* 以 LimitWidth 或
+    BoardCode 划带(并列整块判断,因此带是「整个板块」而不是任意切点),带内/带外按总市值、流通股本、慢日内收益、一年高点比值、
+    慢振幅排序,或用 cs_bucket_demean/zscore 在板块内部去中心化。与库里已有的不同:库里 5583 条没有一条以 LimitWidth / BoardCode
+    为带变量(两个库的骨架已被禁,而这些种子的外层骨架是 cs_*(字段读数, 日频制度字段));与 r2 的 head 也不同,它们的带是
+    ListAge 或 C。为什么样本外还会在:板块制度是缓慢变化的(2020 年创业板注册制把涨跌幅放宽到 20% 是一次性、之后稳定的结构变化),
+    以它划出的参与者群体稳定;阶跃不会被 5 个控制的线性/平方/立方暴露去掉;不依赖任何一段行情。数学检查:LimitWidth / BoardCode 是日频
+    离散字段,并列块巨大,带可能比 20% 窄甚至为空(此时只剩 y 的排序,不会是常数面板,因为 y 保持序数排名);cs_bucket_* 在桶内不足
+    2 只时返回 NaN;分母只有正价格;无前视。如果有 alpha,最可能来自某一板块内部的小市值/日内回吐读数,而不是板块本身。
+  inspired_by: >-
+    本批(M1-M3)和 r2 E 位的共同现象:cs_first_low20(LogTotalCap, ListAge) 在 48 个候选中富集(+2.11,p 0.000),
+    且拆解显示 ListAge 可去掉、起作用的是「阶跃带 × 排序」;LimitWidth/BoardCode 是同类的日频制度字段,库里从未被用作带变量。
+  seeds:
+  - 'cs_first_high20(LogTotalCap, LimitWidth)'
+  - 'cs_first_low20(LogTotalCap, LimitWidth)'
+  - 'cs_first_low40(cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241), LimitWidth)'
+  - 'cs_first_high20(cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241), BoardCode)'
+  - 'cs_first_low20(LogTotalCap, BoardCode)'
+  - 'cs_bucket_demean(LogTotalCap, LimitWidth)'
+  - 'cs_bucket_zscore(cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 120), LimitWidth)'
+  - 'cs_first_low20(LogFloatShares, LimitWidth)'
+  - 'cs_first_low20(div(day_close(Close), cross_max(day_close(Close), 241)), BoardCode)'
+  - 'cs_first_high20(cross_mean(div(sub(day_max(High), day_min(Low)), day_close(Close)), 60), LimitWidth)'
+  - 'cs_last_high20(LogTotalCap, BoardCode)'
+  - 'cs_first_low20(cs_first_high20(LogTotalCap, LimitWidth), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+R:
+- head: 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 241))'
+  why: '拆解里 window cross_mean@241->482 比原 head 高 +0.18(+1.25/+1.27),说明 241 日窗口偏短(更慢的日内读数更稳、换手更低);
+    且 ListAge 的 knockout 只掉 0.05,是可去的部件。变体沿这两个方向走:窗口更长,去掉或替换 ListAge。'
+  variants:
+  - 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 482))'
+  - 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 723))'
+  - 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 360))'
+  - 'cs_first_low20(LogTotalCap, cross_mean(sub(div(day_close(Close), day_open(Open)), 1), 482))'
+  - 'cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_close(Vwap), day_open(Open)), 1), 482))'

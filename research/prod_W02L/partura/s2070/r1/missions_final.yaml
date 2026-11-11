@@ -1,0 +1,71 @@
+seed: 2070
+round: 1
+slots:
+- type: E
+  core: day_quantile_q75(mul(High, Ret))
+  hypothesis: 'Core = per-day upper-quartile of minute return scaled by the minute
+    high (price level), i.e. how strong the upside tail of intraday minute returns
+    is, with high-priced stocks magnified. The upside-tail mass of intraday returns
+    captures lottery/attention-driven buying pressure (Bali-Cakici-Whitelaw MAX effect:
+    stocks with extreme up days underperform; here we use the 75th pct of minutes,
+    a much more stable intraday cousin). The head as found is a raw daily series;
+    its score is weak because the daily value is noisy and carries a price-level component.
+    This round the periphery changes the TIME structure rather than the swap-of-field
+    seen in the snapshot (only High->Low): (a) de-noise by trailing mean / decay,
+    (b) standardise by the stock''s own trailing volatility of the core (ts_mean/ts_std
+    = signal-to-noise of the tail, not its level), (c) demean against the stock''s
+    own 40d history (abnormal tail instead of structural tail, which removes the persistent
+    price-level part), (d) conditional on money flow via ts_corr with daily Amt (tail
+    strength that comes with trading, vs. empty tails), (e) tail asymmetry vs the
+    q25 tail. These mechanisms (own-history normalisation, tail-vs-flow co-movement,
+    asymmetry) are unseen in the snapshot, which only tried High->Low. Out of sample
+    the lottery/attention premium is a documented behavioural effect that persists
+    since it is driven by retail demand, which remains large in A shares.
+
+    '
+  seeds:
+  - div(ts_mean(day_quantile_q75(mul(High, Ret)), 10), ts_std(day_quantile_q75(mul(High,
+    Ret)), 20))
+  - sub(day_quantile_q75(mul(High, Ret)), ts_mean(day_quantile_q75(mul(High, Ret)),
+    40))
+  - ts_rank(day_quantile_q75(mul(High, Ret)), 20)
+  - ts_skew(day_quantile_q75(mul(High, Ret)), 20)
+  - ts_corr(day_quantile_q75(mul(High, Ret)), day_sum(Amt), 20)
+  - ts_decay_linear(sub(day_quantile_q75(mul(High, Ret)), ts_mean(day_quantile_q75(mul(High,
+    Ret)), 20)), 5)
+  - ts_regres(day_quantile_q75(mul(High, Ret)), day_std(Ret), 20)
+- type: N
+  hypothesis: 'Volume-weighted return skew (informed one-sided flow). Per day, take
+    the third moment of minute return multiplied by minute volume (day_skew(mul(Ret,
+    Volume))): when large prints are systematically on the up side the distribution
+    is right-skewed; this is a flow-asymmetry measure, distinct from the snapshot''s
+    price-level quantile (High*Ret) and its Close*Close autocorrelation Q-statistic.
+    Smoothing it over days (ts_mean / ts_decay_linear) and comparing it with the stock''s
+    own history isolates persistent one-sided institutional trading, which is slow
+    to be arbitraged (Easley-O''Hara style informed-flow persistence) and so should
+    survive out of sample. Variants also use day_corr(Ret, Volume) (price-volume co-movement)
+    and the Amt-weighted-vs-plain mean return gap (where the money traded relative
+    to the equal-weight path), which are different operators from anything in the
+    batch.
+
+    '
+  inspired_by: 'batch 1: day_quantile_q75(mul(High, Ret)) and day_q_stat_std(mul(Close,
+    Close)) show that intraday distribution shape statistics of minute returns / price
+    carry signal, but both are weak and level-contaminated; we switch to flow-weighted
+    shape.'
+  seeds:
+  - ts_mean(day_skew(mul(Ret, Volume)), 20)
+  - ts_decay_linear(day_skew(mul(Ret, Amt)), 10)
+  - sub(ts_mean(day_skew(mul(Ret, Volume)), 10), ts_mean(day_skew(mul(Ret, Volume)),
+    60))
+  - ts_mean(day_corr(Ret, Volume), 20)
+  - ts_mean(day_corr(Ret, Amt), 40)
+  - div(ts_mean(day_skew(mul(Ret, Volume)), 20), ts_std(day_skew(mul(Ret, Volume)),
+    20))
+  - ts_mean(day_kurt(mul(Ret, Volume)), 20)
+  - ts_rank(day_skew(mul(Ret, Amt)), 20)
+  - ts_decay_linear(day_corr(Ret, Volume), 10)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

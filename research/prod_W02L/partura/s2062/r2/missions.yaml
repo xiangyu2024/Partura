@@ -1,0 +1,36 @@
+seed: 2062
+round: 2
+slots:
+- type: E
+  core: day_median(Amt)
+  hypothesis: 机制:day_median(Amt) 是每只股票当天分钟成交额的中位数,即「典型一分钟」的资金流量,不受尖峰分钟影响(和 day_sum / day_mean 不同)。本批快照里含它的 7 个候选均值比不含的好 1.95 分(p<0.001),上一轮 Pr1a 里「中位成交额对别的量做全样本回归斜率」的写法已经出现样本内外都为正的候选(+0.32,valid +0.54),说明 alpha 来源是稳定的流动性 / 参与度结构,而不是形状统计量。上一轮外围全是 cross_regbeta(·, ·, 241) 的长窗口斜率;这一位换成五类不同的外围:(1) 中位数与均值之比 = 当日成交是否被少数尖峰分钟主导,是均匀的机构式执行还是散户尖峰,日轴取 20 到 60 日均值;(2) 对 day_mean(Amt) / day_std(Ret) 做滚动回归取残差(cross_regres / cross_regalpha),读「同样波动与总量下典型分钟更厚还是更薄」;(3) 与 day_std(Ret)、day_sum(Ret) 的滚动相关,读流动性和价格变动的耦合方向;(4) 短长均值之差 = 流动性趋势,以及滚动标准差 = 流动性稳定性;(5) 用 cs_bucket_demean / cs_regres 对 LogFloatCap 做同规模内去均值(尺子已去掉对市值的线性与非线性暴露,这里是在写法上让信号读的是规模内的相对厚度)。全部用 Amt 与 Ret,字段是当日收盘后即知,只用 t 日及以前,无前视(用 cross_delay 而非 shift)。和库的区别:库里的 Amt 一族头部是汇总型(day_sum / 日均),没有以「中位数 / 均值之比」或「对均值回归的残差」作为主体的写法,两个库全部骨架已被禁,GP 只能长出新骨架。样本外还会在:典型分钟的成交厚度是持股结构(机构 vs 散户)的慢变指纹,换手低,且不依赖某段行情;风险是和 Amt 控制(流动性)相关,新尺子会去掉线性 / U 形 / S 形暴露,剩下的看这些关系型写法。数学检查:除以 day_mean(Amt)+1 不会爆点(Amt 以元计),停牌日为 0 或缺失,窗口 ≤ 241 日热身可忽略。
+  seeds:
+  - cross_mean(div(day_median(Amt), add(day_mean(Amt), 1)), 20)
+  - cross_mean(div(day_median(Amt), add(day_mean(Amt), 1)), 60)
+  - cross_regres(day_median(Amt), day_mean(Amt), 60)
+  - cross_regalpha(day_median(Amt), day_std(Ret), 60)
+  - cross_regbeta(day_median(Amt), day_std(Ret), 60)
+  - cross_corr(day_median(Amt), day_std(Ret), 60)
+  - cross_corr(day_median(Amt), day_sum(Ret), 60)
+  - sub(cross_mean(day_median(Amt), 10), cross_mean(day_median(Amt), 60))
+  - cross_stddev(day_median(Amt), 60)
+  - cross_zscore(day_median(Amt), 120)
+  - cs_bucket_demean(cross_mean(day_median(Amt), 20), LogFloatCap)
+  - cs_regres(cross_mean(day_median(Amt), 30), LogFloatCap)
+- type: N
+  hypothesis: 机制:日内成交额的时间与集中度结构,即「资金怎么成交」。day_gini(Amt) 是当天分钟成交额的基尼系数(尖峰集中 = 高),day_centroid(Amt) 是成交额的时间重心(越晚越靠近尾盘)。均匀、低基尼的成交是机构按算法(TWAP / VWAP)拆单的特征,尖峰型是散户与消息驱动的特征;尾盘重心偏晚对应被动基金调仓与收盘定价型交易。这些是持股结构的慢变指纹,在日轴取 20 到 60 日均值后换手低。算子怎么实现:cross_mean(day_gini(Amt), 40) 等是直接版本;cross_regres(day_gini(Amt), day_std(Ret), 60) 去掉波动对尖峰的机械影响;day_centroid(Amt) − day_centroid(abs_(Ret)) 读成交时间与价格变动时间是否错位;day_gini(abs_(Ret)) 是价格变动本身的集中度;cs_bucket_demean(·, LogFloatCap) 是规模内相对值;cs_regres(cross_mean(day_distinct_ratio(Close), 20), LogFloatCap) 读价格栅格粗细(低价股 tick 占比大)。为什么和库里不同:库里的 Amt 族是汇总量(day_sum / day_median / 日均),本批 head 全是对标准化收益的形状统计量;day_gini / day_centroid / day_distinct_ratio 是 Partura 后加的算子,库里没有出现,两个库全部骨架已逐个禁止,GP 只能向新结构长。为什么样本外还会在:机构与散户的执行风格差异是结构性的、持续多年的(Chordia 与 Subrahmanyam 的订单流、Barber 与 Odean 对散户行为的研究),不依赖某段行情,窗口 20 到 60 日使名次慢变。只用 t 日及以前的数据,无前视。数学检查:day_gini 在全天成交为 0 的停牌日是缺失或 0,聚合只覆盖有效日;day_centroid 在成交极稀时由少数分钟决定,故用 40 日均值而非单日;窗口 ≤ 241 日热身可忽略;不涉及除以近零量。
+  inspired_by: 本批 candidates 里最强的共性是 day_median(Amt) 与 day_at_max_ratio(Vwap)(日内成交额 / 价格停留结构,均值差 +1.7 到 +1.95),而 head 的形状统计量全部亏损;上一轮 Pr1a 的正分候选也全是 Amt 与停留结构的回归。这一位把「成交额结构」扩展到集中度(基尼)和时间重心。
+  seeds:
+  - cross_mean(day_gini(Amt), 40)
+  - cross_mean(day_centroid(Amt), 40)
+  - cross_mean(sub(day_centroid(Amt), day_centroid(abs_(Ret))), 40)
+  - cross_regres(day_gini(Amt), day_std(Ret), 60)
+  - cross_corr(day_gini(Amt), day_sum(Ret), 60)
+  - cs_bucket_demean(cross_mean(day_gini(Amt), 30), LogFloatCap)
+  - cross_regbeta(day_gini(Amt), day_median(Amt), 241)
+  - cross_mean(day_gini(abs_(Ret)), 40)
+  - sub(cross_mean(day_gini(Amt), 10), cross_mean(day_gini(Amt), 60))
+  - cross_zscore(day_centroid(Amt), 120)
+  - cs_regres(cross_mean(day_distinct_ratio(Close), 20), LogFloatCap)
+  - cross_stddev(day_centroid(Amt), 60)
+R: []

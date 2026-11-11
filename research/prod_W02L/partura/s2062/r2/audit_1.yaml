@@ -1,0 +1,43 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [9]
+    reasons: |-
+      E 门槛不过(按 §3 由确定性规则判定,不是审计员的分数):核心 day_median(Amt) 与 liq 控制的 |ρ| = 0.902、与 known 族 0.883,均 ≥ 0.8(corr_1.json, slot a core)。故本位改为一次普通 GP,11 个种子保留。
+
+      创新度 3:核心本身就是流动性控制的近似(0.90),这一点扣分。但外层种子的变化是真实的:种子 3、4、6、7、8、10、12 与 liq 的 |ρ| 在 0.01–0.31 之间,与 5 个控制都不高;种子 4 cross_regalpha(day_median(Amt), day_std(Ret), 60) 与 vol 为 0.70 但与 liq 仅 0.01,是 alpha 截距而非水平。库里 day_median(Amt) 只在 cross_corr(day_median(Amt), ·, ·) 里出现 1 次,cross_regbeta / cross_regalpha / cross_regres / cross_stddev / cs_regres / cs_bucket_demean 与 day_median 的组合在 libs_train.csv 里出现 0 次。与库里 head 的原始 |ρ| 最大 0.40(种子 9,已划),其余 ≤ 0.23。种子 1、2(median/(mean+1) 的 20/60 日均值)与 liq 0.75 / 0.72,是流动性换写法,但未到 0.8 不划。
+
+      合理度 4,逐个算子核对:day_median(x) = C._median(x) 取当日分钟中位(dt_day.py:97),无前视。div(day_median, add(day_mean, 1)) 无量纲,分母 ≥ 1(Amt 以元计),不爆点。cross_mean / cross_stddev / cross_zscore(120) 为 d 日时间轴聚合(dt_cross.py:223, 290;ops_ext.py:208)。cross_corr(·, ·, 60) 为 60 日时间轴滚动相关(dt_cross.py:193),尺度不变。cross_regbeta / cross_regalpha / cross_regres 是 rolling_ols(x, y, 60),即 y ~ alpha + beta·x(common.py:643),窗口 60 日,热身不主导。注意方向:cross_regres(day_median(Amt), day_mean(Amt), 60) 的残差是 day_mean 对 day_median 的回归残差,与 PI 叙述「同样总量下典型分钟更厚还是更薄」的方向相反。这不是数学问题,但机制要按算子实际方向读:它度量的是「给定典型分钟厚度,总量偏离多少」。cross_regbeta(median, std, 60) 的斜率在 Amt 量级上可能对方差很小的票放大,但是截面 rank 化后只影响排序尾部,不构成定义坏掉。cs_regres(·, LogFloatCap) 是线性截面残差(nd_cs.py:254),与 PI 写的「同规模内去均值」不同(那个是 cs_bucket_demean,种子 11 用的是对的),但仍是去规模的写法,不是问题。
+
+      如果它有 alpha,最可能来自:典型分钟成交额的慢变水平,以及它与价格波动 / 总量的关系(种子 4、5 的 regalpha / regbeta 截距与斜率),而不是 liq 水平本身(liq 水平已被尺子去掉)。种子 1、2 更像流动性的换写法,alpha 来源最弱。
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 10]
+    reasons: |-
+      划掉的种子(确定性规则):
+      - 种子 1 cross_mean(day_gini(Amt), 40):与 liq 控制 |ρ| = 0.802 ≥ 0.8(corr_1.json 0.802;corr_1.md 显示 0.80)。
+      - 种子 2 cross_mean(day_centroid(Amt), 40):与 head cross_mean(day_pdf_tail_sum_m(Ret, Volume, 50, False, 'rank'), 20) 的原始 |ρ| = 0.721 ≥ 0.7(重复,也是 centroid 与 pdf_tail 族共同成分最强的一条)。
+      - 种子 10 cross_zscore(day_centroid(Amt), 120):与 head day_pdf_tail_sum_m(Ret, Volume, 50, False) 的原始 |ρ| = 0.703 ≥ 0.7。
+      剩 9 个种子(3、4、5、6、7、8、9、11、12),≥ 4。
+
+      创新度 4:day_gini、day_centroid、day_distinct_ratio 在两库 libs_train.csv 里出现 0 次;存活种子与快照 6 个 head 的原始 |ρ| 最大 0.33(种子 3 对 cross_mean(day_pdf_tail_sum_m(…,'rank'),20) 一类),其余 ≤ 0.24;与控制的最大 |ρ| 为种子 7 的 liq 0.61,都低于 0.8。残差 |ρ| 最大为种子 3 的 0.30。这不是换皮。扣 1 分的原因:成交额时间重心族与 pdf_tail 族有共同成分(种子 2、10 的 0.70 以上),存活种子是否仍含这部分,要看打分时的残差,不是审计能判的。
+
+      合理度 4,逐个算子核对(ops_ext.py):
+      - day_gini(x):对 |x| 在分钟轴升序后算基尼(ops_ext.py:136),缺失分钟排到末尾后补 0;全天成交为 0 或有效分钟 ≤ 1 时为 NaN。无除以近零问题,停牌日为缺失。
+      - day_centroid(x):sum(t·|x|)/sum(|x|)/(T−1)(ops_ext.py:155),tot 下限 1e-30,全天为 0 时为 NaN。时间重心在 [0,1],无量纲。
+      - day_distinct_ratio(Close):不同价格数 / 有效分钟数(ops_ext.py:607)。一字板全天一个价,值约 1/241 ≈ 0.004,这是真实的「价格没有动」,不是缺失或伪影;低价股栅格粗也会压低它。
+      - sub(day_centroid(Amt), day_centroid(abs_(Ret))) 度量「成交时间」与「价格变动时间」的错位(种子 3),机制清楚。
+      - cross_mean / cross_stddev / cross_zscore 的 d 日时间轴聚合,无前视(均用 t 日及以前)。
+      - cross_regres(day_gini(Amt), day_std(Ret), 60)、cross_corr(day_gini(Amt), day_sum(Ret), 60):60 日 rolling_ols / 相关,方向与种子 4、5 的机制一致。
+      - cross_regbeta(day_gini(Amt), day_median(Amt), 241)(种子 7):241 日窗口,train 2018–2023 约 5.6 年,头约一年为热身 NaN;这不是「可忽略」,但不主导结果、不是定义坏掉,放行。
+      - cs_bucket_demean(cross_mean(day_gini(Amt),30), LogFloatCap)(种子 6)是规模十分位内去均值,与 PI 叙述一致。
+      - cs_regres(cross_mean(day_distinct_ratio(Close),20), LogFloatCap)(种子 11):线性截面残差(nd_cs.py:254),与 PI 的「规模内」叙述不完全一致,但是去规模的写法,放行。
+      无 ts_spearman / nt_* / 前视算子(无 shift)。
+
+      如果它有 alpha,最可能来自:成交额的时间结构(尖峰 vs 均匀拆单的持股指纹、尾盘集中的被动调仓),以及成交时间与价格变动时间的错位(种子 3)。种子 8 cross_mean(day_gini(abs_(Ret)),40)(价格变动集中度)与 liq 0.705 相关,alpha 更可能是流动性的换写法。
+R: []
+summary: 'slot a 不通过(核心 day_median(Amt) 与 liq / known 的 |ρ| 0.90 / 0.88 ≥ 0.8,E 门槛不过,划种子 9,改普通 GP);slot b 通过(划种子 1、2、10,剩 9;新算子族、与 head 与控制均不重复);无 R 组;数学上两位都无问题,无前视。'

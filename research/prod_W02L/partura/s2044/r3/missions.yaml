@@ -1,0 +1,46 @@
+seed: 2044
+round: 3
+slots:
+  - type: E
+    core: 'ts_std(day_corr(Ret, Volume), 40)'
+    hypothesis: '【读数】第 3 个结构批 B132(ts_std(day_corr(F,F)) 一族)的快照事实:核心 S = ts_std(day_corr(Ret, Volume), 40) 是 c = day_corr(Ret, Volume)(量价同步度)的 40 日滚动标准差,即「同步度的不稳定程度」。S 单独两段都亏(-2.14),但外面套 cross_fangzheng(S, 241)(241 日方差)得 -0.45(train -0.45 / valid -0.38),是本流最接近 0.5 线的 B132 head;去掉 S 只留 cross_fangzheng(c, 241) 是 -0.59(S 必要性 +0.14);Volume 换 Amt 不变(-0.46);窗口 120 / 482 为 -1.15 / -0.75。前两轮的事实:ts_max(cs_demean(c), 120) 这类「慢极值」+0.6,而把 σ(极值里的抖动)约掉或回归掉的写法(标准化极值、减均值、加 ts_min)全部更差,说明 alpha 与 c 的离散程度 σ 有关,而不是 μ。S 就是 σ 的直接度量。【本位要试的外围(与已见过的写法不同)】快照里含 S 的外围只有 cross_fangzheng、ts_max、ts_min(都是对 S 再取一层时间序列二阶矩或极值)。本位改成:(a) 慢水平与相对水平:cross_ema(cs_demean(S), 120)、ts_mean(S, 120)、cross_zscore(S, 241)(S 相对自己一年历史的位置,即「同步度最近比平时更不稳」)、sub(S, ts_delay(S, 60))(S 的变化);(b) 对相邻因素做显式剥离:cs_regres(S, ts_max(cs_demean(c), 120))(剥掉 head1 的慢极值,看 σ 里与极值无关的部分)、cs_regres(S, ts_mean(day_std(Ret), 120))(剥掉日内波动)、cs_bucket_demean(S, ts_mean(log(day_sum(Amt)), 60))(在成交额十分位内比较,去流动性)、cs_bucket_demean(cross_ema(S, 60), sub(LogFloatCap, LogFloatShares))(在非流通市值占比十分位内比较);(c) 名次差与交互:sub(cs_rank(S), cs_rank(ts_mean(day_std(Ret), 40)))、mul(S, sign(ts_delta(log(day_last(Close)), 120)))(σ 与价格趋势方向交互);(d) S 与自己波动的共动与上行半标准差:cross_corr(S, day_std(Ret), 120)、cross_semistd_pos(S, 120)(S 向上冲高的幅度,只看不稳定的上尾)。每个种子都原样含 S,骨架逐个对过两库的 B132 / B131 表达式,没有一个是 cross_fangzheng / ts_max / ts_min 的外壳。【机制】c 的逐日抖动取决于成交连续性与参与者构成:机构程序化拆单的票 c 稳定、散户 / 事件驱动参与的票 c 忽大忽小;S 在持续一年的低换手尺度上是这种参与者结构的代理,属于慢变量。【为什么样本外还会在】cross_fangzheng(S, 241) 在 train / valid 两段同号(-0.45 / -0.38),换手极低(241 日窗口),靠的是参与者结构而非某段行情;本位的外围去掉波动 / 流动性 / 趋势的线性成分,看剩下的是不是 σ 本身。【数学检查】S 是 ts_std,窗口 40 内 c 全部缺失 / 常数才为 0(停牌日 c 缺失被忽略);没有除以近零量(用回归与名次差代替比值);cross_regres / cs_regres 回归元方差为 0 时给 NaN;没有 ts_shift / cross_shift,滞后只用 ts_delay;不含 ts_rank / cross_rank(不触发 nanrank_last 缺失记 0)。【如果有 alpha,最可能来自】(b) 的 cs_regres 与 cs_bucket_demean(σ 去掉流动性与极值后仍在,说明是参与者结构)和 (a) 的 cross_zscore(S 的相对变化)。'
+    seeds:
+      - 'cross_ema(cs_demean(ts_std(day_corr(Ret, Volume), 40)), 120)'
+      - 'ts_mean(ts_std(day_corr(Ret, Volume), 40), 120)'
+      - 'cross_zscore(ts_std(day_corr(Ret, Volume), 40), 241)'
+      - 'sub(ts_std(day_corr(Ret, Volume), 40), ts_delay(ts_std(day_corr(Ret, Volume), 40), 60))'
+      - 'cs_regres(ts_std(day_corr(Ret, Volume), 40), ts_max(cs_demean(day_corr(Ret, Volume)), 120))'
+      - 'cs_regres(ts_std(day_corr(Ret, Volume), 40), ts_mean(day_std(Ret), 120))'
+      - 'cs_bucket_demean(ts_std(day_corr(Ret, Volume), 40), ts_mean(log(day_sum(Amt)), 60))'
+      - 'cs_bucket_demean(cross_ema(ts_std(day_corr(Ret, Volume), 40), 60), sub(LogFloatCap, LogFloatShares))'
+      - 'sub(cs_rank(ts_std(day_corr(Ret, Volume), 40)), cs_rank(ts_mean(day_std(Ret), 40)))'
+      - 'mul(ts_std(day_corr(Ret, Volume), 40), sign(ts_delta(log(day_last(Close)), 120)))'
+      - 'cross_corr(ts_std(day_corr(Ret, Volume), 40), day_std(Ret), 120)'
+      - 'cross_semistd_pos(ts_std(day_corr(Ret, Volume), 40), 120)'
+      - 'ts_mean(cs_demean(ts_std(day_corr(Ret, Volume), 40)), 241)'
+  - type: N
+    hypothesis: '【新想法】慢极值结构迁移到「日内自相关」这类微观结构统计量上。【读数】本流前两轮的事实:day_corr(Ret, Volume) / day_corr(Ret, Amt) 套 ts_max 120 日后两段都 +0.58 ~ +0.61(head),而 Ret–Vwap、Ret–Volume 的水平 / EMA / 斜率版全亏,换成 abs_(Ret)、Close 等原料的慢极值也没有出 head;B131 的 day_durbin_watson(Ret)(日内收益一阶自相关的变形)出现在 14 条候选里但套回归后全是负分。可迁移的只有「慢极值」这个外形,而原料对要换成一个机制不同的量。【机制与算子实现】每个种子是对「当天 241 根分钟的某个自相关统计量」取 ts_max(cs_demean(·), 120) 及其对称 / 平滑版本。(a) day_corr(Ret, in_delay(Ret, 1)):收益的一阶自相关(Roll 买卖价差反弹:负;知情交易拆单延续:正);它的 120 日最大值 = 过去半年里「最不被买卖价差反弹淹没、或延续最强」的一天,对应流动性好 / 机构拆单的名字;(b) day_corr(Ret, in_delay(Ret, 5)):5 分钟尺度的延续(拆单的节奏比 1 分钟慢);(c) day_corr(Volume, in_delay(Volume, 1)) 与 day_durbin_watson(Volume):成交量聚集度(成交是否连续、有无突发爆量),直接对应前面推测的「成交连续性」;(d) day_corr(abs_(Ret), in_delay(abs_(Ret), 1)):波动聚集;(e) 与已有 head 的差:sub(ts_max(cs_demean(day_corr(Volume, in_delay(Volume, 1))), 120), ts_max(cs_demean(day_corr(Ret, Volume)), 120))。【为什么和库里已有的不同】两库骨架全是 day_corr(F, F) 的字段对替换,没有一条在 day_corr 的一个参数里套 in_delay(同一字段滞后),day_corr 的两个参数是同一字段的自相关,统计量不是量价同步而是单一序列的内部结构,与已有 head 的日度秩相关预计 0.1 ~ 0.4(过不了 0.7 库禁令的担心很小);in_delay 只取同一天更早的分钟,没有前视。【为什么样本外还会在】成交连续性与买卖价差反弹属于市场微观结构的稳定属性(个股的这类属性按月、按年变化很慢),慢极值把它压成低换手的个股特征;同族 head 的换手 0.03 ~ 0.05;train / valid 同号是 head 的经验证据,新原料需要自己验证。【数学检查】自相关系数有界在 [-1, 1],没有除以近零量的爆点;停牌日(分钟全缺失 / 常数)day_corr 为缺失,ts_max 忽略缺失;day_durbin_watson(Volume) 对全常数的成交量序列无定义,给缺失;不含 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0;没有用到当天收盘之后的数据。【如果有 alpha,最可能来自】(c) 成交量聚集度的慢极值(与 head 日度秩相关低,又延续「成交连续性」的读法)和 (a)。'
+    inspired_by: 'B130 / B131 / B132 里 day_corr(F, F) 的慢极值(ts_max 120 日 +0.6)和 ts_std(c, 40) 的 -0.45:共同点是「成交 / 同步度的连续性」;把原料换成单一序列的日内自相关'
+    seeds:
+      - 'ts_max(cs_demean(day_corr(Ret, in_delay(Ret, 1))), 120)'
+      - 'ts_min(cs_demean(day_corr(Ret, in_delay(Ret, 1))), 120)'
+      - 'cross_ema(cs_demean(day_corr(Ret, in_delay(Ret, 1))), 120)'
+      - 'ts_max(cs_demean(day_corr(Ret, in_delay(Ret, 5))), 120)'
+      - 'ts_max(cs_demean(day_corr(Volume, in_delay(Volume, 1))), 120)'
+      - 'ts_min(cs_demean(day_corr(Volume, in_delay(Volume, 1))), 120)'
+      - 'cross_ema(cs_demean(day_corr(Volume, in_delay(Volume, 1))), 120)'
+      - 'ts_max(cs_demean(day_durbin_watson(Volume)), 120)'
+      - 'ts_max(cs_demean(day_corr(abs_(Ret), in_delay(abs_(Ret), 1))), 120)'
+      - 'ts_max(ts_max(day_corr(Ret, in_delay(Ret, 1)), 40), 120)'
+      - 'sub(ts_max(cs_demean(day_corr(Volume, in_delay(Volume, 1))), 120), ts_max(cs_demean(day_corr(Ret, Volume)), 120))'
+      - 'ts_max(cs_demean(day_durbin_watson(Ret)), 120)'
+R:
+  - head: 'cross_fangzheng(ts_std(day_corr(Ret, Volume), 40), 241)'
+    why: '拆解表:窗口 120 / 482 为 -1.15 / -0.75 都比 241 差,Volume 换 Amt 不变(-0.46),去掉内层 ts_std 只差 0.14;烂的是单一原料与 40 日 σ 窗口,试合并两种原料、改 σ 窗口、对 σ 先做平滑。'
+    variants:
+      - 'cross_fangzheng(ts_std(day_corr(Ret, Volume), 60), 241)'
+      - 'cross_fangzheng(ts_std(day_corr(Ret, Volume), 20), 241)'
+      - 'cross_fangzheng(ts_std(day_corr(Ret, Volume), 40), 300)'
+      - 'cross_fangzheng(ts_std(add(day_corr(Ret, Volume), day_corr(Ret, Amt)), 40), 241)'
+      - 'cross_fangzheng(ts_mean(ts_std(day_corr(Ret, Volume), 40), 5), 241)'
+      - 'cross_fangzheng(cs_demean(ts_std(day_corr(Ret, Volume), 40)), 241)'

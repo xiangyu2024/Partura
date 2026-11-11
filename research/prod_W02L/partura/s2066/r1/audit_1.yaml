@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:与 3 个 head 的原始 |ρ| 最大 0.07(seed 8 最大),残差 |ρ| 最大 0.06,无换皮关系。库里没有质心类算子(inputs/libs_train.csv 中 day_centroid、day_signed_ratio 出现次数为 0),信号本身是新的。控制列最高:seed 4 的 vol 0.45、known 0.44;seed 8 的 liq 0.41、known 0.41;seed 1 的 vol 0.42。全部低于 0.8 的自动划线,但流动性 / 波动暴露偏高,与提案「与成交额水平、波动控制的相关应当不高」不符,这是风险,不是数学问题。算子核对:day_centroid 公式与 ops_ext.py 第 155–168 行一致(权重 t/(T-1),分母为 |x| 之和);cross_mean / cross_zscore / cross_ema 为因果窗口(rolling_windows 左填 NaN,EMA 只用过去);cs_bucket_* 在当天截面内分桶,无前视;未用禁用算子。要记的解释点:第 0 列为 09:30 集合竞价(见 dt_in.py 的 in_half 注释),它进入分母但 t=0 的权重为 0,竞价成交占比高的票质心会被拉低,所以这里有一部分是开盘竞价占比的代理,而不只是持仓结构。seed 8、9 测的是价格波动时点(|Ret| 质心),与提案的「钱的重心晚于价格重心」不是同一件事,但按 §3 只能以数学问题或重复划掉,故不划。seed 1 与 2、seed 5 与 6 是同一对象的不同变换,不算重复。如果它有 alpha,最可能来自:尾盘成交集中的票是指数 / 被动 / 机构按收盘价成交的足迹,即持有人结构的慢变量;若主要是竞价占比或成交 U 型形态的代理,alpha 会被流动性控制吃掉。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:与 3 个 head 的原始 |ρ| 最大 0.06(seed 6),残差 |ρ| 在 0.01–0.09,无换皮关系。库里没有 day_signed_ratio / day_pos_ratio(libs_train.csv 出现次数为 0),信号本身是新的。扣分点在 20 日反转控制列:seed 8 为 0.61、seed 9 为 0.52、seed 2 为 0.51、seed 1 为 0.46,seed 4 为 0.34。这说明 cross_mean / cross_ema 系的几种写法在相当程度上是「过去收益的符号版」,并非换皮(没有一条达到 0.8 的自动划线,也都没到 0.7 的换皮水平),但新颖度因此给 3 而不是 4。seed 1 与 8 只是同一日度序列的 10 日与 20 日窗口,不算重复,不划。算子核对:day_signed_ratio 与 ops_ext.py 第 122–133 行一致(sum(|y|·sign(x)) / sum(|y|),零收益分钟只进分母);day_pos_ratio 第 98–105 行一致;cs_rank(nd_cs)、cs_bucket_* 为同日截面;cross_* 因果;无前视、无禁用算子。风险(不是数学问题):零收益分钟与第 0 列竞价分钟进入分母而不进分子,使 signed ratio 向 0 收缩,对「成交多的分钟占比」有隐含的流动性依赖(seed 6 流动性 0.39 即其表现)。如果它有 alpha,最可能来自:上涨分钟放量追入、下跌分钟放量出逃之后的情绪回吐,或下跌分钟里有人承接的吸筹形态;若主要是 20 日反转的符号版,alpha 会被反转控制吃掉。'
+R:
+  - head: 'pow_2(day_mean(nt_cs_normalize(in_cov(Ret, Close, 30))))'
+    soundness: 4
+    reasons: '替换变体的数学成立:in_corr 对 Close 的尺度不变(rolling_pair_reduce 为 cov / (sqrt(var_x·var_y)+EPS)),针对的问题(cov 随价格水平放大,截面主要是尺度)确实存在;变体不含 nt_*;in_corr 为因果滚动窗口(rolling_windows 左填 NaN,无前视)。Close 系变体(in_corr(Ret, Close, 15 / 30))的机制是窗口内收益与价格水平的共动,实质接近窗口内的短期趋势强度,而不是纯共动,这一点说得不够清楚,但不是数学问题。Amt / Volume 系变体的机制(收益与成交的量价共动)较清楚。方差极小的窗口(涨跌停锁定、停牌附近)分母接近 EPS,结果回到 0 而不爆,未见爆点支配截面。变体 4(Vwap 版)与流动性 0.60、known 0.59 相关,但 R 只打合理度,不据此扣分。'
+summary: '两个 N 位数学上无问题、无自动划线、均通过(a 创新 4 / 合理 4;b 创新 3 / 合理 4,因 20 日反转相关 0.46–0.61 扣创新);R 合理度 4。'

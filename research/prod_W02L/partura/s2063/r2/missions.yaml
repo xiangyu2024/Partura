@@ -1,0 +1,43 @@
+seed: 2063
+round: 2
+slots:
+  - type: E
+    core: 'day_var(Ret)'
+    hypothesis: >-
+      机制:核心 day_var(Ret) 是当天分钟收益的方差,即日内已实现波动的水平。本批富集表里它是最强的共性子树(33 个已评分候选含它,均值 -1.51 对不含的 -2.63,p<0.001),但含它的 head/候选都把它当作「水平」去读(cs_first_high20 的第一键、day_sum 的搭档),而新尺子已经把波动水平(控制)的线性、U 形、S 形暴露全部去掉,所以水平本身没有 alpha。
+      这一位只改外围,读的是波动的「时间序列形状」而不是水平:(a) 变异系数 ts_std/ts_mean = 波动是否时好时坏(vol-of-vol,与波动水平近乎正交);(b) 尖峰比 ts_max/ts_mean 与 ts_skew / ts_kurt = 波动是否由少数脉冲日构成(类彩票 MAX 效应的波动版);(c) 短长期波动之差(ema 5 对 ema 60、均值 10 对 120)= 波动期限结构,波动正在升还是在回落;(d) 波动与收益、成交量的滚动相关(cross_corr(day_var, day_sum(Ret), 60) 是杠杆效应:跌时波动放大的程度;对 day_sum(Volume) 是波动-成交耦合);(e) 自己 120 日 z 分数、市值十分位内去均值。
+      和已有的不同:快照里含核心的外围只有 cs_first_high20 / cs_last_high20 的字典序嵌套与 day_sum 搭档,没有一个用日轴的 ts_std / ts_skew / ts_kurt / cross_corr / cross_ema 去读波动序列的形状;这里没有 cs_first_*、没有 nt_,也避开了 ts_std(ts_max(ts_std(day_cov(Ret,Ret)..))) 这一已出的链式写法。
+      为什么样本外还会在:杠杆效应与波动的波动是个股的慢变结构属性(Black 1976 杠杆效应;Ang 等 2006 波动风险定价;Bali 等 MAX 彩票偏好),窗口 60 到 120 日,换手低,不依赖某段行情。数学检查:day_var 恒非负、有界不爆;分母用 ts_mean(day_var) 在整窗停牌时为 0 会得 NaN 而非爆点(窗口内至少一天有成交才有值);无前视,全部用 t 日及以前。风险:与波动控制仍有残余的非单调关系,若如此这位不产 head。
+    seeds:
+      - 'div(ts_std(day_var(Ret), 60), ts_mean(day_var(Ret), 60))'
+      - 'sub(ts_mean(day_var(Ret), 10), ts_mean(day_var(Ret), 120))'
+      - 'div(ts_max(day_var(Ret), 60), ts_mean(day_var(Ret), 60))'
+      - 'ts_skew(day_var(Ret), 60)'
+      - 'ts_kurt(day_var(Ret), 120)'
+      - 'cross_corr(day_var(Ret), day_sum(Ret), 60)'
+      - 'cross_corr(day_var(Ret), day_sum(Volume), 60)'
+      - 'cross_corr(day_var(Ret), cross_delay(day_var(Ret), 5), 60)'
+      - 'cross_mean(cross_zscore(day_var(Ret), 120), 10)'
+      - 'sub(cross_ema(day_var(Ret), 5), cross_ema(day_var(Ret), 60))'
+      - 'cs_bucket_demean(div(ts_std(day_var(Ret), 60), ts_mean(day_var(Ret), 60)), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_corr(day_var(Ret), day_sum(Ret), 120), sub(LogFloatCap, LogFloatShares))'
+  - type: E
+    core: 'ts_delta(LogFloatShares, 50)'
+    hypothesis: >-
+      机制:核心 ts_delta(LogFloatShares, 50) 是流通股本在 50 个交易日内的对数变化,即供给冲击:限售股解禁、增发、可转债转股使其上升,回购注销使其下降。本批富集表里它是第二强的共性子树(25 个候选含它,-1.09 对不含的 -2.56 ... 均值差 +1.09,p<0.001),且它是一个日频字段叶子上的变换,与分钟价量统计几乎无关,所以与波动 / 流动性 / 反转这些控制天然近乎正交。上一轮 N 位只把它放在 cs_last_high20 的第二键,没有单独研究它。
+      这一位只改外围:(a) 去掉市值与价位混杂:在名义股价十分位(sub(LogFloatCap, LogFloatShares))、上市年限 ListAge、板块 BoardCode 内标准化,保留纯供给变化的横向差异;(b) 多周期对比:50 日变化减 250 日变化 = 供给冲击是新近的还是长期的;(c) 近期最大一次供给冲击 ts_max(·,120),事件型(解禁日期往往集中);(d) 与动量或波动的交互:乘上过去 60 日收益的符号,等价于「涨后解禁」对「跌后解禁」不同方向;除以近期波动,等于把供给冲击按个股噪声调整;(e) 与收益的滚动相关,看供给增加是否伴随价格下跌(承接力)。
+      和已有的不同:快照里含核心的外围全是 cs_first_high20 / cs_last_high20 对 day_var(Ret)、day_sum(Open) 的字典序嵌套,没有一个对核心做分组标准化、多周期差、事件最大值、符号交互或滚动相关;这些外围算子集合与以往不同。
+      为什么样本外还会在:净发行异常(Pontiff & Woodford 2008;Loughran & Ritter)说明供给扩张的股票长期跑输,A 股解禁 / 增发的定价压力有大量证据;日频慢变,换手极低,适合 15 bp 成本。数学检查:LogFloatShares 是对数水平,ts_delta 是差分,不爆;无前视(ts_delta 是当前减过去);股本字段更新有阶梯性,大量股票长期为 0,并列靠列序打破(携带板块信息,规则允许),不是定义坏掉。风险:供给变化大量为 0,有效差异的票少,覆盖率偏低,覆盖不足则无头。
+    seeds:
+      - 'cs_bucket_demean(ts_delta(LogFloatShares, 50), ListAge)'
+      - 'sub(ts_delta(LogFloatShares, 50), ts_delta(LogFloatShares, 250))'
+      - 'ts_max(ts_delta(LogFloatShares, 50), 120)'
+      - 'cs_bucket_zscore(ts_delta(LogFloatShares, 50), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_bucket_demean(ts_delta(LogFloatShares, 50), BoardCode)'
+      - 'mul(ts_delta(LogFloatShares, 50), sign(cross_mean(day_sum(Ret), 60)))'
+      - 'div(ts_delta(LogFloatShares, 50), cross_mean(day_std(Ret), 20))'
+      - 'cross_corr(ts_delta(LogFloatShares, 50), day_sum(Ret), 120)'
+      - 'sub(ts_delta(LogFloatShares, 50), cross_mean(ts_delta(LogFloatShares, 50), 250))'
+      - 'cross_ema(ts_delta(LogFloatShares, 50), 20)'
+      - 'cs_bucket_zscore(ts_max(ts_delta(LogFloatShares, 50), 120), ListAge)'
+      - 'sub(ts_delta(LogFloatShares, 50), cross_mean(day_sum(Ret), 50))'

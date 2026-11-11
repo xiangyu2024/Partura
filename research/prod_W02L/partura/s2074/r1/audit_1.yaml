@@ -1,0 +1,27 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: |-
+      核心 day_close(neg(Volume)) 是 head pow_2(day_close(neg(Volume))) 的子树(pow_2 单调,同一信号)。核心与各控制的 |ρ|:liq 0.56、vol 0.19、rev 0.18、known 0.60、size 0.46,都 < 0.8,E 位的核心条件通过。
+      种子与 head 的原始 |ρ| 最高 0.47(seed 1、13),均 < 0.7;与控制的 |ρ| 最高 0.40(seed 2 的 size),均 < 0.8;没有触发自动划掉的情形。
+      残差 |ρ| 与 head 的情况:seed 1 为 0.08,seed 12 为 0.07,seed 8 为 0.50(相关度表里最高,但对 head 的原始 |ρ| 只有 0.12,按 §3 不是同一个东西),其余 0.04–0.38。外围加的是慢变换(120 日截面 z、60 日占比、10/120 日比、与收益或波动的 60 日滚动相关、趋势方向交互),它们去掉核心的水平后与 head 的交易信号不同,不是换写法。
+      创新度给 3 而不是 4:核心 C 本身已在库中,外围仍是同一批量的变形,慢变换之外没有新的结构。
+      合理度给 4:机制是尾盘集合竞价的参与者构成(指数与被动再平衡、尾盘规避隔夜风险的机构),这是慢变的结构属性。逐个核对算子:day_close、neg、div、day_sum、cross_zscore、cross_mean、cross_corr、cross_regres、cross_regbeta、cs_regres、cross_ema、cs_bucket_zscore、sign 都只用 t 日及以前的值,无前视。div(C, day_sum(Volume)) 的 NaN 只在成交为零时出现,不是爆点;seed 4 的 120 日均值分母对正常流动的票不接近零。PI 预测毛超额可能为 0,这是经济风险,不是数学问题。
+      如果它有 alpha,最可能来自收盘集合竞价参与者构成的慢变差异(指数与被动再平衡的占比、尾盘的集中资金行为),而不是 C 的水平。
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [4]
+    reasons: |-
+      种子 4(cross_mean(div(day_var(in_logchg(Close, 15)), mul(15, day_var(in_logchg(Close, 1)))), 60))与 head day_quantile_q25(in_rank(pow_2_5(neg(Ret)))) 的原始 |ρ| 为 0.704,达到 0.7 的自动划掉线,库禁令会拒绝,按规则划掉。
+      其余种子与 head 的原始 |ρ| 在 0.14–0.69 之间(最高的种子 1、2 为 0.691、0.692,低于线,保留);与控制的 |ρ| 最高 0.66(seed 3 的 liq),均 < 0.8。N 位不要求核心条件。剩 11 个种子,≥ 4。
+      创新度给 3 而不是 4:方差比是与 head 不同的量,in_logchg 的骨架在库里确实没有,但对 day_quantile_q25 head 的原始 |ρ| 在 0.64–0.69 之间(seed 1、2、5、7、11),残差 |ρ| 对这几个种子仍有 0.51–0.64,说明方差比与分钟路径形状(尾部与方差)有大片重合;对 ts_sum ar1 head 最高 0.61(seed 3)。
+      合理度给 4:方差比是 Lo-MacKinlay 的标准量。逐个核对算子:in_logchg(x, d) 用的是 x[t] 与 x[t-d],只用 t 及以前的分钟,无前视;day_var 与 day_wstd 是当天的截面统计;分母 k·day_var(1 分钟)的常数 k 只改变尺度,不改变秩;day_var 为 0 只在整天价格不动时出现,此时分子也为 0,得 NaN 而非爆点;log 只作用于正的方差比(seed 6),没有爆点。
+      种子 10(log(240·day_var(1 分钟) / day_sum(1 分钟)²))的分母是当天净收益的平方:净收益接近 0 的日子 log 会升高,但 log 把尾部压成几何均值型的尺度量,不是常数伪影,不划。种子 11 的常数 2.2 近似 sqrt(5),是全截面同一常数,不影响秩。
+      风险(PI 已写):tick 大小效应与价差、换手共线,这是经验风险,不是数学问题。
+      如果它有 alpha,最可能来自日内价格路径的噪声占比(微观结构噪声、做市商的有效价差收益),它随个股盘口深度与 tick 相对股价的比例慢变,而不是某段行情。
+R: []
+summary: 槽 a(E,核心 day_close(neg(Volume)))通过:创新 3、合理 4,无种子划掉,13 个种子保留;槽 b(N,日内方差比)通过:创新 3、合理 4,划掉种子 4(与 head 的 |ρ| 0.704),保留 11 个;无 R 组;两位都过 §3 的门槛。

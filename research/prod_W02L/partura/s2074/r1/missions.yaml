@@ -1,0 +1,50 @@
+seed: 2074
+round: 1
+slots:
+  - type: E
+    core: 'day_close(neg(Volume))'
+    hypothesis: |-
+      机制:核心 C = day_close(neg(Volume)) = 负的"当天最后一分钟成交股数"(A 股 14:57-15:00 是收盘集合竞价,最后一分钟装着收盘撮合量;方向由奖励自己定,所以 neg 只是符号)。依据在本批拆解表:head pow_2(C) 是 -1.55(train -1.18 / valid -1.55),C 本身 -1.61,与已知族 rho 0.60;换成 Amt 掉到 -3.83、rho 0.80。就是说股数口径的收盘量比金额口径少一块"成交额水平"(被流动性和已知成交额族吃掉),但两段都亏、几乎一样(-1.18 / -1.55),推断毛超额约为 0、亏的是换手(原始 C 是每天换一次的快变量)。所以单调包装(pow_2)没有用,是同一个信号。这一位把 C 拆成与水平无关、变化慢的读法,看哪一块有毛超额:
+      (a) 收盘量占当天总量的比例 div(C, day_sum(Volume)) 的 20 到 60 日均值,以及在流通市值十分位内的 z 分数:收盘集合竞价的参与者(指数基金、被动再平衡、尾盘规避隔夜风险的机构)占比是慢变的参与者构成属性,无量纲;
+      (b) C 相对自己历史的位置:cross_zscore(C, 120),10 日均值除以 120 日均值,除以 60 日均值后 EMA:收盘量的异常放大 = 尾盘有集中的资金行为,个股用自己做对照,去掉所有水平控制共有的持久截面水平;
+      (c) C 与价格的 60 日滚动关系:收盘量与当日收益、|收益|、日内波动的 60 日滚动相关;收盘量对总量的 60 日滚动回归残差与斜率;收盘量与总量在截面上的回归残差(cs_regres):尾盘放量伴随上涨(拉尾盘)还是伴随下跌(尾盘砸盘)是两种不同的知情或操纵行为,滚动相关把它写成每只票自己的慢变属性;
+      (d) 收盘量放大 × 近 20 日趋势方向:mul(cross_zscore(C,120), sign(20 日累计收益))。
+      为什么与已有的不同:本批见过的含 C 的外围只有 {pow_2},库里 5583 条骨架里没有 cross_zscore / cross_corr / cross_regbeta / cross_regres / cs_bucket_zscore / cs_regres / cross_ema 包 day_close(Volume) 的写法(逐个与 members.csv 骨架核对过思路,GP 的骨架禁令会再确认);库里最近的是 day_last(Volume) 类水平写法(B099 一带的 day_last(Amt) 链,金额口径、是水平,与本位的比例/滚动关系/桶内标准化不同)。
+      为什么样本外还会在:(a)(c) 读的是收盘集合竞价参与者构成这类慢变的结构属性,窗口 20 到 120 日,名次数周内不变,15 bp 下换手低;(b) 用个股自己的历史做对照,不靠静态风格,不易在风格切换时翻符号;(d) 机制是行为性的(尾盘追涨与尾盘抛售),不依赖某段行情。风险:(a) 与已知成交额族的残差相关仍高;(c) 60 日窗口估得太吵;这两种情况下不出 head,下一轮不再押 C。
+      数学检查:Volume >= 0,最后一分钟无成交时 C = -0 或缺失;div(C, day_sum(Volume)) 分母为 0 时分子也为 0,得 NaN 不是无穷,正常取值在 [-1, 0];cross_zscore 对近常数窗口有保护;cross_corr / cross_regres 窗口有效对太少时可能返回 0(已知缺陷,可交易掩码已排除新股与长期停牌,不是结果的主要来源)。无前视:只用 t 日收盘及以前,cross_delay 天数为正,t+1 交易;最长窗口 120 日,热身期不主导。
+    seeds:
+      - 'cross_zscore(day_close(neg(Volume)), 120)'
+      - 'cross_mean(div(day_close(neg(Volume)), day_sum(Volume)), 60)'
+      - 'cs_bucket_zscore(cross_mean(div(day_close(neg(Volume)), day_sum(Volume)), 20), LogFloatCap)'
+      - 'div(cross_mean(day_close(neg(Volume)), 10), cross_mean(day_close(neg(Volume)), 120))'
+      - 'cross_corr(day_close(neg(Volume)), day_sum(Ret), 60)'
+      - 'cross_corr(day_close(neg(Volume)), abs_(day_sum(Ret)), 60)'
+      - 'cross_regbeta(day_sum(Volume), day_close(neg(Volume)), 60)'
+      - 'cross_regres(day_sum(Volume), day_close(neg(Volume)), 60)'
+      - 'cross_corr(day_close(neg(Volume)), day_std(Ret), 60)'
+      - 'mul(cross_zscore(day_close(neg(Volume)), 120), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cs_regres(cross_mean(day_close(neg(Volume)), 20), cross_mean(neg(day_sum(Volume)), 20))'
+      - 'cross_ema(div(day_close(neg(Volume)), cross_mean(day_close(neg(Volume)), 60)), 10)'
+      - 'cs_bucket_zscore(cross_zscore(day_close(neg(Volume)), 120), sub(LogFloatCap, LogFloatShares))'
+  - type: N
+    hypothesis: |-
+      机制:日内价格路径的"方差比"(variance ratio,Lo 与 MacKinlay 1988;Hasbrouck 微观结构噪声)。若分钟价格是随机游走,k 分钟收益的方差 = k × 1 分钟收益的方差;比值 VR(k) = Var(k 分钟收益) / (k × Var(1 分钟收益)) 大于 1 = 日内价格趋势性延续(知情订单流分批消化、动量型参与者),小于 1 = 价格被买卖价差弹跳和流动性冲击拉回(噪声大、盘口薄、做市商赚钱的地方)。VR 无量纲,分子分母都是同一只票同一天的收益方差,所以波动水平、成交额水平、市值都被除掉了,与波动 / 流动性 / 市值这些水平型控制天然低相关。它是个股盘口微观结构与参与者构成的指纹(噪声占比),名次慢变:每天取一次噪声大,所以全部读数在日轴取 20 到 120 日均值或自己 120 日的 z 分数,让换手低。
+      算子怎么实现:in_logchg(Close, k) 是 k 分钟对数收益(重叠窗口),day_var 取当天方差,除以 k × day_var(in_logchg(Close, 1));变体:k = 3 / 5 / 15 / 30;用 Vwap 代替 Close(Vwap 本身已是分钟内均价,噪声更小,VR 读的是真实价格路径而非报价弹跳);分钟级 Volume 加权的版本(day_wstd);与 |日收益|² 的比(日内波动里有多少是"路径噪声"而非"净位移",即 day_var(in_logchg(Close,1)) × 分钟数 ÷ (日对数收益)² 的 20 日均值再取对数);桶内标准化;5 分钟 VR 对 1 分钟 ar1 系数 day_ar1_coefficient(Ret) 的 cs_regres 残差(去掉与已有一阶自相关写法重叠的部分)。
+      批里的启发:本批 head 之一是 ts_sum(day_ar1_coefficient(neg(Vwap)), 10),是分钟 Vwap 水平的一阶自相关系数,它与已知族的 rho 只有 -0.20、对 10 日窗口的各种改法(5 / 20 日,换 Close)在 -2.2 到 -2.5 之间稳定(train -2.19 / valid -2.01),说明日内价格路径的持续性读数与控制不共线;另一个 head 是 day_quantile_q25(in_rank(pow_2_5(neg(Ret))))(日内收益分布的左尾),也是路径形状。但水平的 ar1 系数混着价格水平与趋势,VR 是它的规范化版本:只看收益(去掉水平)、只看方差比(去掉尺度)。
+      为什么与已有的不同:骨架 div(day_var(in_logchg(F, k)), mul(k, day_var(in_logchg(F, 1)))) 以及 cross_mean / cross_zscore 包它的写法不在两个库的 5583 个骨架里(in_logchg 是 Partura 后加的算子,库里没有);库里最近的是 day_ar1_coefficient / day_hurst / day_autocorr 一类:它们读的是同一个量(收益序列的线性相关)的逐点自相关估计,VR 是多滞后自相关的加权和,而且分子分母一除,对极端分钟更稳;日度写法里 cross_mean(day_ar1_coefficient(Ret), 20) 之类库里有,本位的种子避开了纯 ar1 / hurst 的写法。
+      为什么样本外还会在:微观结构噪声占比与盘口深度、tick 大小相对股价的比例、做市商参与度挂钩,是个股慢变的结构属性,不依赖某段行情;低 VR(噪声多)的票是流动性提供者的收益来源,有流动性溢价的方向文献稳定(Amihud、Hasbrouck 2009 的有效价差);慢聚合让 15 bp 的成本吃得下。风险:被已知成交额族或波动控制吃掉(VR 与价差 / 换手相关);或者只是 tick size 效应(低价股 VR 低);桶内标准化与对数口径就是为这个。
+      数学检查:day_var(1 分钟收益) 只在整天价格不动(停牌 / 涨跌停封板)时为 0,这时分子也为 0,得 NaN 不是无穷;窗口长度(分钟数)是常数,不影响秩;VR 取值落在 (0, 数倍) 之内,没有爆点,对数后更稳;in_logchg 要求价格为正,非正得 NaN。无前视:只用 t 日收盘及以前的分钟数据,t+1 交易;最长窗口 120 日,热身期不主导。
+    inspired_by: 'B220 批:ts_sum(day_ar1_coefficient(neg(Vwap)), 10) 与已知族 rho -0.20、窗口 / 价格口径改动都稳定在 -2.2~-2.5;day_quantile_q25(in_rank(pow_2_5(neg(Ret)))) 读日内收益分布形状。日内价格路径读数与水平控制不共线,把水平 ar1 规范化成无量纲的方差比。'
+    seeds:
+      - 'cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 20)'
+      - 'cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 60)'
+      - 'cross_mean(div(day_var(in_logchg(Vwap, 5)), mul(5, day_var(in_logchg(Vwap, 1)))), 60)'
+      - 'cross_mean(div(day_var(in_logchg(Close, 15)), mul(15, day_var(in_logchg(Close, 1)))), 60)'
+      - 'cross_mean(div(day_var(in_logchg(Close, 30)), mul(30, day_var(in_logchg(Close, 3)))), 60)'
+      - 'cross_zscore(log(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1))))), 120)'
+      - 'cs_bucket_zscore(cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 60), LogFloatCap)'
+      - 'cs_bucket_zscore(cross_mean(div(day_var(in_logchg(Vwap, 15)), mul(15, day_var(in_logchg(Vwap, 1)))), 60), sub(LogFloatCap, LogFloatShares))'
+      - 'cs_regres(cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 60), cross_mean(day_ar1_coefficient(Ret), 60))'
+      - 'cross_mean(log(div(mul(day_var(in_logchg(Close, 1)), 240), pow_2(day_sum(in_logchg(Close, 1))))), 60)'
+      - 'cross_mean(div(day_wstd(in_logchg(Close, 5), Volume), mul(2.2, day_wstd(in_logchg(Close, 1), Volume))), 60)'
+      - 'sub(cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 20), cross_mean(div(day_var(in_logchg(Close, 5)), mul(5, day_var(in_logchg(Close, 1)))), 120))'
