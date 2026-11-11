@@ -1,0 +1,217 @@
+seed: 2003
+round: 3
+slots:
+- type: N
+  hypothesis: '机制。对象是「个股自己的日序列里,有多少由全市场共同成分驱动、有多少是个股特质」,在一年(241 个交易日)窗口里读。造一个单指数:r
+    = ts_delta(log(day_last(Close)), 1)(后复权日对数收益,取比值,复权基期无关),m = cs_mean(r)(全市场等权日收益,同一天对所有股票是同一个数);同样
+    v = ts_delta(log(day_sum(Amt)), 1)(成交额日变化)与 cs_mean(v)、t = ts_delta(log(day_last(Volume)),
+    1)(收盘一分钟成交量日变化)与 cs_mean(t)。每只股票只算「自己与这一条市场序列」的 241 日相关,不是两两相关:不用 ts_pearson 那种与全市场每只股票同期窗口相关的写法(O(S^2),慢),而用一个市场因子做单指数收缩,计算量
+    O(S)。
+
+
+    读法(15 个种子,6 组):(1) 收益同步性 corr(r, m)(种子 1;种子 2 乘 有效天数 / 241,把新上市 / 长停牌的短窗口噪声收缩向
+    0;种子 3 在 2 的基础上对 LogFloatCap 做截面残差;种子 15 对已知成交额族 cross_mean(day_std(Amt), 30)
+    做截面残差);对市场的 beta 再对市值取残差(4)。(2) 下行联动减上行联动 corr(r, min(m,0)) − corr(r, max(m,0))(5;下行
+    beta 溢价,Ang-Chen-Xing 2006)。(3) 价格延迟 corr(r, 昨日 m)(6)与个股领先 corr(昨日 r, m)(7)(Hou-Moskowitz
+    2005:对市场信息反应慢的票)。(4) 波动联动 corr(|r|, |m|)(8;对市场波动的敏感度,Ang-Hodrick-Xing-Zhang 2006)。(5)
+    成交额联动 corr(v, cs_mean(v))(9;12 对市值取残差)= 流动性共性(Chordia-Roll-Subrahmanyam 2000;Acharya-Pedersen
+    2005 的流动性风险溢价);成交额对市场动荡 corr(v, |m|)(10);收盘一分钟成交量的共性 corr(t, cs_mean(t))(11)。(6)
+    价格联动减成交联动(14),以及本流 R 组 head `ts_mean(Hurst(尾盘量比), 241)` 的去市场版(13):对 cs_demean(log(day_last(Volume)))(减掉当天全市场的平均
+    log 尾盘量,只留个股自己的路径)做 20 日 Hurst、再 241 日均值 —— 与 head 读同一个对象,但去掉了全市场共同的尾盘成交节奏(指数
+    / ETF 申赎日、月末季末),分数差就是这个共同成分的贡献。
+
+
+    为什么和库里已有的不同:我对两个库 5583 条表达式做了字符串检索:同时含 cross_corr / cross_regbeta / cross_cov
+    / cross_autocorr 与 cs_mean / cs_sum / cs_demean / cs_rank / cs_scale / cs_zscore
+    的只有 33 条,全是 GP 随机树(例如把 cs_sum(signedpower(...)) 当回归元),没有「个股序列对同类序列的全市场均值」这种结构;ts_delta(log(day_last(Close)),
+    1) 形式的日收益 0 条,cross_valid_count 0 条。本组全是相关系数(无量纲),不是水平:波动、成交额、市值、20 日反转、成交额离散度这
+    5 个控制与两个冠军读的都是水平或快变量。预计与快照 head(尾盘量路径的 Hurst、day_max(Ret)、Q 嵌套)的日度秩相关低于 0.3;与
+    5 个控制:收益同步性与市值 / 流动性可能 0.4~0.6(大票联动高),所以放了取残差版,不会到 0.8。
+
+
+    为什么样本外还会在:联动 / 延迟 / 流动性共性是持有人结构(指数基金与机构 vs 散户)和交易摩擦的慢变特质,不依赖某一段行情;241 日相关的秩每天几乎不动,换手近
+    0,15 bp 成本几乎不吃分数;本波尺子上最接近 0 的读数里,最好的几条(本流 R 组 241 日 Hurst 均值 −0.22,2009 流 241
+    日均值 −0.03)都是 120~241 日的慢统计,而 15~60 日窗口的耦合读数停在 −0.8 上下(本流第 2 轮 E 位),所以这里一律用 241。风险:2024
+    年起量化与指数产品占比变化可能改变联动结构(valid 段);联动与大盘股倾斜相关,尺子会去掉线性 / U 形 / S 形部分,剩下的是「同市值同流动性下谁更联动」。
+
+
+    数学检查:无前视:cs_mean(r) 与每个 cross_* 只用 t 日及以前的数据,t 日收盘后可得,t+1 交易。ts_delta(log(Close),
+    1) 在停牌复牌日是缺失(前一日缺失),不跨缺口;log 对非正输入给 NaN,不给 -inf。cross_corr 按源码在有效对数 ≤ 1 时记 0、恰为
+    2 对时给 ±1,分母加 EPS(不是 NaN,不出现 inf),只影响不足 241 日的新上市 / 长停牌的少数股票日,种子 2、3 乘 n/241 把它们压向
+    0。cross_regbeta 在 var_x ≤ EPS 时给 NaN(市场序列不会是常数)。cs_regres 是当天截面 OLS 残差,无前视。相关系数取值连续,没有并列(distinct
+    接近 1)。没有除以近零的量。种子 13 用 ts_hurst:窗口内第二老一天缺失而最老一天有值时返回 -inf(已知算子行为,与 R 组 head 同一个筛子),不主导,但该种子与
+    head 的差里含它。'
+  inspired_by: B007:本流第 2 轮 R 组读数 ts_mean(Hurst(尾盘量比), 25 → 241) 从 −1.20 升到 −0.22(train
+    −0.14 / valid −0.22),train 随外层窗口 25 → 80 → 120 → 241 单调从 −1.00 升到 −0.14:整个本流里最接近
+    0 的读数就是最慢的统计;B007 里承重的 day_last(Volume) 序列含全市场共同的成交节奏(指数 / ETF 申赎、月末季末),把共同成分显式写成单指数、读个股与它的联动,是这条线的下一步。B008:11
+    条 day_max(Ret) 一族里 10 条在冠军里(水平 / 彩票),水平类已被吸收,空地在无量纲的联动类。
+  literature:
+  - title: 'The information content of stock markets: why do emerging markets have
+      synchronous stock price movements?'
+    authors: Randall Morck, Bernard Yeung, Wayne Yu
+    year: '2000'
+    treatment: 同步性 = 个股收益与市场的联动;这里只用 241 日相关系数与市场等权序列,不做 R 平方的对数变换,也不分国家
+  - title: Market frictions, price delay, and the cross-section of expected returns
+    authors: Kewei Hou, Tobias Moskowitz
+    year: '2005'
+    treatment: 价格延迟 = 个股对滞后市场收益的反应;这里用对昨日市场的相关系数代替其 R 平方比
+  - title: Downside risk
+    authors: Andrew Ang, Joseph Chen, Yuhang Xing
+    year: '2006'
+    treatment: 下行 beta 溢价;这里用对市场下行部分与上行部分的相关系数之差,不用条件 beta
+  - title: Commonality in liquidity
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2000'
+    treatment: 个股流动性与市场流动性的联动;这里用成交额日变化与全市场平均成交额日变化的 241 日相关代替买卖价差 / 深度
+  - title: Asset pricing with liquidity risk
+    authors: Viral Acharya, Lasse Pedersen
+    year: '2005'
+    treatment: 流动性共性有风险溢价;这里只借「联动是被定价的个股特质」这一点,不估计溢价模型
+  seeds:
+  - cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241)
+  - mul(cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241), div(cross_valid_count(day_last(Close), 241), 241))
+  - cs_regres(mul(cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241), div(cross_valid_count(day_last(Close), 241), 241)), LogFloatCap)
+  - cs_regres(cross_regbeta(cs_mean(ts_delta(log(day_last(Close)), 1)), ts_delta(log(day_last(Close)),
+    1), 241), LogFloatCap)
+  - sub(cross_corr(ts_delta(log(day_last(Close)), 1), mul(0.5, sub(cs_mean(ts_delta(log(day_last(Close)),
+    1)), abs_(cs_mean(ts_delta(log(day_last(Close)), 1))))), 241), cross_corr(ts_delta(log(day_last(Close)),
+    1), mul(0.5, add(cs_mean(ts_delta(log(day_last(Close)), 1)), abs_(cs_mean(ts_delta(log(day_last(Close)),
+    1))))), 241))
+  - cross_corr(ts_delta(log(day_last(Close)), 1), cross_delay(cs_mean(ts_delta(log(day_last(Close)),
+    1)), 1), 241)
+  - cross_corr(cross_delay(ts_delta(log(day_last(Close)), 1), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241)
+  - cross_corr(abs_(ts_delta(log(day_last(Close)), 1)), abs_(cs_mean(ts_delta(log(day_last(Close)),
+    1))), 241)
+  - cross_corr(ts_delta(log(day_sum(Amt)), 1), cs_mean(ts_delta(log(day_sum(Amt)),
+    1)), 241)
+  - cross_corr(ts_delta(log(day_sum(Amt)), 1), abs_(cs_mean(ts_delta(log(day_last(Close)),
+    1))), 241)
+  - cross_corr(ts_delta(log(day_last(Volume)), 1), cs_mean(ts_delta(log(day_last(Volume)),
+    1)), 241)
+  - cs_regres(cross_corr(ts_delta(log(day_sum(Amt)), 1), cs_mean(ts_delta(log(day_sum(Amt)),
+    1)), 241), LogFloatCap)
+  - sub(cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241), cross_corr(ts_delta(log(day_sum(Amt)), 1), cs_mean(ts_delta(log(day_sum(Amt)),
+    1)), 241))
+  - cs_regres(cross_corr(ts_delta(log(day_last(Close)), 1), cs_mean(ts_delta(log(day_last(Close)),
+    1)), 241), cross_mean(day_std(Amt), 30))
+- type: N
+  hypothesis: '机制。对象是一年(241 日)窗口里个股日价格 / 成交路径的「形状」,全部是无量纲的形状统计,不是水平(波动、成交额、市值、20 日反转、成交额离散度是控制,两个冠军读的是水平与快变量)。r
+    = ts_delta(log(day_last(Close)), 1)(后复权日对数收益),v = ts_delta(log(day_sum(Amt)),
+    1)。分五组:(1) 序列相关:日收益的 1 阶 / 5 阶自相关 cross_autocorr(r, 241, k)(摩擦造成的反转或延续,Lo-MacKinlay
+    1988;Avramov-Chordia-Goyal 2006),种子 3、4 乘 有效天数 / 241 收缩,4 再对 LogFloatCap 取截面残差。(2)
+    方差比:VR(5) = std(5 日对数收益) / (根号 5 · std(r)),VR(20) 同理(>1 延续,<1 反转或买卖价差反弹);5 日版对
+    (VR − 1) 乘 n/241 收缩。(3) 路径效率:一年净对数涨跌 / 一年总变差 = cross_delta(log Close, 241) / cross_sum(|r|,
+    241)(7 带符号,8 取绝对值),读「信息是连续到达还是离散跳跃」(Da-Gurun-Warachka 2014 的 frog-in-the-pan;这里用路径效率而不是上涨日占比,因为占比只有约
+    100 个取值、并列严重,会被 distinct 闸门判废)。(4) 好坏波动不对称与尾部:上行半标准差 P 与下行半标准差 N(cross_semistd_pos
+    / neg 作用在后复权 Close 水平上 = 日对数变化的半标准差),种子 9 取 (P − N) / (P + N) ∈ [-1, 1] 再乘 n/241(Bollerslev-Li-Zhao
+    2020 的 good / bad volatility);下行半标准差占总标准差的比例(10);std(r) / mean|r|(11,峰度的稳健代理,12
+    再对 std(r) 取截面残差去掉波动水平)。(5) 聚集与噪声:cross_autocorr(|r|, 241, 1)(13,波动聚集的持续度)与成交额日变化的
+    1 阶自相关(14,成交额里「噪声 vs 慢成分」的比例;与 B007 head 读的「成交路径持续性」同类,但用相关系数读,不用 R/S)。
+
+
+    为什么和库里已有的不同:我对 members.csv 的表达式做了字符串检索:cross_semistd_* 0 条;日收益的 cross_autocorr
+    0 条(只有 2 条手写式在分钟收益 / 20 日 Close 上做自相关再取日内均值,冠军族 −1,训练净夏普 −16);字符串检索没有发现方差比、也没有一年净涨跌
+    / 总变差的写法。库里读日收益的表达式几乎都是 cross_stddev(日收益, 20) 一类的波动水平(冠军族 41 / 49),这里的 std/mean|r|、下行占比、好坏波动比是「形状」,与水平是不同的量;已核全部种子的骨架都不在两库里。
+
+
+    为什么样本外还会在:序列相关 / 方差比 / 路径连续度由持有人结构(散户日内交易 vs 机构分批执行)与做市摩擦决定,是慢变特质;全部 241 日窗口,秩日度变化小,换手近
+    0;本流与本波的读数都说明「慢」是前提。风险:效率与方差比与流动性(买卖价差反弹)相关,尺子去掉线性 / U 形 / S 形部分;涨跌停板截断日收益,20%
+    板块(创业板 / 科创板)与 10% 主板的形状不同,携带的是板块信息,不是数学问题。
+
+
+    数学检查:无前视,全部只用 t 日及以前。ts_delta(log(Close), 1) 与 cross_delta(log Close, k) 在端点缺失时为
+    NaN(不足一年的新上市股票、端点日停牌的票缺失,覆盖率约 0.9 以上),不跨缺口。VR 分母 std(r) 只有整窗口停牌(r 全缺失,结果为 NaN)或全不动时为
+    0,不造成爆点;根号 5 = 2.2360679,根号 20 = 4.472136 写成常数。cross_sum 把缺失日记为 0,分母是一年总变差,窗口里只要有成交就
+    > 0。cross_semistd_pos / neg 要求 Close > 0(后复权价为正),窗口内有效天数 < 3 为 NaN;下行半标准差为 0(窗口内没有下跌日,多见于新股连续涨停)时
+    (P − N) / (P + N) = 1,乘 n/241 压向 0 附近;P + N = 0 只在整窗口没变动时出现,给 NaN。cross_autocorr
+    按源码是两列滞后后的滚动 Pearson,有效对数 ≤ 1 记 0、分母加 EPS,只影响新上市 / 长停牌的少数股票日,种子 3、4 收缩。取值连续,没有并列。'
+  inspired_by: B009:批里 ts_sum(day_q_stat_std(·), 50) 读的是日内路径的自相关结构,Volume 叶子的候选大多落在冠军族(水平类),而
+    Close 叶子 ts_sum(day_q_stat_std(Close), 50) 原始训练净夏普 0.79 却不在冠军族:路径「形状」(不是水平)是冠军没覆盖的方向;本位把同一类形状搬到日频一年尺度(自相关
+    / 方差比 / 路径效率 / 好坏波动)。B007:慢才承重。
+  literature:
+  - title: 'Stock market prices do not follow random walks: evidence from a simple
+      specification test'
+    authors: Andrew Lo, A. Craig MacKinlay
+    year: '1988'
+    treatment: 方差比;这里用 5 日 / 20 日对数收益的 241 日标准差之比,不做显著性检验
+  - title: Liquidity and autocorrelations in individual stock returns
+    authors: Doron Avramov, Tarun Chordia, Amit Goyal
+    year: '2006'
+    treatment: 个股日收益自相关与流动性;这里只读 241 日 1 阶 / 5 阶自相关,不拆分流动性分组
+  - title: 'Frog in the pan: continuous information and momentum'
+    authors: Zhi Da, Umit Gurun, Mitch Warachka
+    year: '2014'
+    treatment: 信息连续度;这里用一年净涨跌 / 总变差代替涨跌天数占比
+  - title: Good volatility, bad volatility, and the cross section of stock returns
+    authors: Tim Bollerslev, Sophia Zhengzi Li, Bingzhao Zhao
+    year: '2020'
+    treatment: 上行 / 下行半方差;这里用日收盘价对数变化的半标准差,不用日内高频已实现半方差
+  seeds:
+  - cross_autocorr(ts_delta(log(day_last(Close)), 1), 241, 1)
+  - cross_autocorr(ts_delta(log(day_last(Close)), 1), 241, 5)
+  - mul(cross_autocorr(ts_delta(log(day_last(Close)), 1), 241, 1), div(cross_valid_count(day_last(Close),
+    241), 241))
+  - cs_regres(mul(cross_autocorr(ts_delta(log(day_last(Close)), 1), 241, 1), div(cross_valid_count(day_last(Close),
+    241), 241)), LogFloatCap)
+  - mul(sub(div(cross_stddev(cross_delta(log(day_last(Close)), 5), 241), mul(2.2360679,
+    cross_stddev(ts_delta(log(day_last(Close)), 1), 241))), 1), div(cross_valid_count(day_last(Close),
+    241), 241))
+  - div(cross_stddev(cross_delta(log(day_last(Close)), 20), 241), mul(4.472136, cross_stddev(ts_delta(log(day_last(Close)),
+    1), 241)))
+  - div(cross_delta(log(day_last(Close)), 241), cross_sum(abs_(ts_delta(log(day_last(Close)),
+    1)), 241))
+  - div(abs_(cross_delta(log(day_last(Close)), 241)), cross_sum(abs_(ts_delta(log(day_last(Close)),
+    1)), 241))
+  - mul(div(sub(cross_semistd_pos(day_last(Close), 241), cross_semistd_neg(day_last(Close),
+    241)), add(cross_semistd_pos(day_last(Close), 241), cross_semistd_neg(day_last(Close),
+    241))), div(cross_valid_count(day_last(Close), 241), 241))
+  - div(cross_semistd_neg(day_last(Close), 241), cross_stddev(ts_delta(log(day_last(Close)),
+    1), 241))
+  - div(cross_stddev(ts_delta(log(day_last(Close)), 1), 241), cross_mean(abs_(ts_delta(log(day_last(Close)),
+    1)), 241))
+  - cs_regres(div(cross_stddev(ts_delta(log(day_last(Close)), 1), 241), cross_mean(abs_(ts_delta(log(day_last(Close)),
+    1)), 241)), cross_stddev(ts_delta(log(day_last(Close)), 1), 241))
+  - cross_autocorr(abs_(ts_delta(log(day_last(Close)), 1)), 241, 1)
+  - cross_autocorr(ts_delta(log(day_sum(Amt)), 1), 241, 1)
+R:
+- head: ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  why: 'head 是本流第 2 轮 R 的替换(−0.22,train −0.14 / valid −0.22)。同一个 ts_hurst(尾盘量 / 当日最低价,
+    20),外层窗口 25 / 80 / 120 / 241 是 −1.20 / −1.11 / −1.62 / −0.22(train −1.00 / −0.77
+    / −0.66 / −0.14),拆解里 Low→High −0.18、Volume→Amt −0.63、去掉分母 −0.53,都在噪声内。我认为烂的部件有四处,每处一组变体,读法事先约定:
+
+    (1) −inf 污染:ts_hurst 在窗口内第二老一天缺失而最老一天有值时返回 −inf(极差为 0 取对数,第 2 轮审计员核过源码),ts_mean
+    把它带满整个 241 日窗口(第 2 轮审计:gate 的覆盖率,241 日版比 cross_ema 半衰期 60 的版本低 7.5 个百分点)。变体 1~3(cross_med、cross_quantile_q75、cross_tail_mean_q75)只读窗口的中位
+    / 上四分位,−inf 在下尾,不传播。读法:若它们 ≥ head + 0.1,说明 −inf 在拖累;若比 head 差 0.3 以上,说明「近一年出现过停牌缺口的票被排到最低
+    / 当缺失」这道筛子在贡献分数。
+
+    (2) 还不够慢:变体 4、5 用 cross_ema 半衰期 120 / 241(记忆比 241 日硬窗口更长,旧值淡出而不是突然掉出);train 随窗口单调变好,看还能不能更好。
+
+    (3) Hurst 窗口:变体 6、7 用 25、30 日(外层 241),看 20 是不是尖峰(外层 120 日时 Hurst 15 / 20 / 30
+    是 −1.37 / −1.62 / −1.16;第 1 轮 R 里 Hurst 窗口 40 的变体 valid 塌到 −3.36)。
+
+    (4) 重尾与市场共同成分:R/S 作用在水平序列上,尾盘一分钟成交量是重尾的,一天的巨量把整个窗口的极差拉大,变体 8 先取 log;变体 9 再 cs_demean(减掉当天全市场的平均
+    log 比值),只读个股自己的路径。
+
+    分母 day_max(Low) 不再动:拆解里去掉它 −0.31、换 High 只 +0.04,在噪声内。
+
+    数学:全部因果(窗口含当天,当天收盘后可得);log 对非正输入给 NaN;cross_med / cross_quantile / cross_tail_mean
+    用 nan 聚合,对窗口里的 −inf 稳健(只要 −inf 的天数不超过窗口的一半 / 四分之三);变体 1~3 与 4、5 不经过 ts_mean 的
+    −inf 传播(cross_ema 跳过非有限值)。变体 5 的半衰期 241 在前 241 日是扩张窗口(有定义,噪声大),不是 NaN。'
+  variants:
+  - cross_med(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  - cross_quantile_q75(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  - cross_tail_mean_q75(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  - cross_ema(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 120)
+  - cross_ema(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 25), 241)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 30), 241)
+  - ts_mean(ts_hurst(log(div(day_last(Volume), day_max(Low))), 20), 241)
+  - ts_mean(ts_hurst(cs_demean(log(div(day_last(Volume), day_max(Low)))), 20), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,226 @@
+seed: 2002
+round: 2
+slots:
+- type: E
+  core: ts_hurst(div(day_last(Volume), day_max(Volume)), 20)
+  hypothesis: "机制与证据。核心 H = ts_hurst(div(day_last(Volume), day_max(Volume)), 20)(快照\
+    \ head 1 的子树;head 1 是第 1 轮 R 替换后的版本,score −0.11,train −0.11 / valid −0.09,是本流目前所有评分里最好的一条)。\n\
+    \n快照里的事实:(a) 拆解:把 head 1 最外层再乘的那个 H 拆掉,分数从 −0.11 掉到 −0.82(必要性 +0.71);把 log(日最大成交额)\
+    \ 一项拆掉只损失 0.12,所以承重的是 H,不是水平。(b) 第 1 轮 R:把乘数里的 day_max(Volume)(股数,含后复权价位)换成 day_max(Amt)(金额),−1.08\
+    \ → −0.11,说明去掉价位暴露后 H 这一块在新尺子下接近 0,而且 train / valid 同号同量级(−0.11 / −0.09),不是「一段赚一段亏」。(c)\
+    \ 但窗口很敏感:ts_mean 25 → 12 或 50 都是 −0.50,25 日是个尖峰,−0.11 里有运气,我对 H 本身的信息量的估计就是 0\
+    \ 附近。(d) 我读了 ts_hurst 的源码:H = log(R/S) / log(d),R 是窗口内去均值累计和的极差,S 是样本标准差,对正倍数和平移不变;窗口内第二早一天缺失时返回\
+    \ −inf,最早一天缺失时返回 NaN。所以 head 里的 ts_mean(·, 25) 会把近 25 ~ 45 个交易日内停牌 / 缺失过的票整体推到最低(−inf\
+    \ 在均值里带出整个窗口),这是一道对停牌票的筛子,拆解表分不出 H 与这道筛子各占多少。\n\n本位假设:如果 H 里有 alpha,来源是「尾盘成交的参与度是不是一个持续的状态」。收盘那一根分钟线(深市含\
+    \ 3 分钟收盘集合竞价,沪市是最后一分钟连续竞价)的成交量占当天最大分钟成交量的比例,在 20 个交易日里是持续的(指数与 ETF 申赎、以收盘价为基准的机构程序单、持股结构稳定的票),还是随机尖峰(消息与散户零星成交)。单个\
+    \ 20 日窗口的 H 是个噪声很大的估计量(R/S 在小样本上偏差大,Lo 1991),而被测的对象是个股的慢属性,所以本位把 H 当成一次「噪声测量」,在日轴上用\
+    \ 60 ~ 241 日的慢窗口去读它的水平、离散度、尾部、与自己滞后值的相关、与收益的相关、以及与开盘 / 金额口径之差,而不是再叠一层 20 ~ 50\
+    \ 日的 ts_mean。\n\n算子怎样实现(15 个种子,全部原样含核心 H):\n (0) 所有种子把 H 包进 cs_winsor(每天截面按 1%\
+    \ / 99% 缩尾):−inf 被夹成当日 1% 分位的有限值,「停牌 → −inf → 整窗 −inf」这条筛子不再把票整体踢到最低;NaN 仍是 NaN,cross_*\
+    \ 的 nanmean 跳过它。于是「去掉筛子之后 H 还剩多少」可以直接和 head 1 的分数比。\n (1) 慢水平:cross_mean(cs_winsor(H),\
+    \ 120);短 40 日减长 241 日的均值差(持续性在上升还是下降)。\n (2) 估计的噪声与尾部:cross_stddev(·, 120)(参与度持续性自己的不稳定程度);下\
+    \ 25% 尾均值,上 25% 尾均值减下 25% 尾均值(最不持续的那些时期有多低、两种状态差多远);60 日均值除以(60 日标准差 + 0.05)(信噪比,0.05\
+    \ 防分母为 0)。\n (3) 对已知结构中性:cs_bucket_zscore(·, LogFloatCap)(流通市值十档内的 z 分数)、cs_bucket_zscore(·,\
+    \ cross_mean(day_std(Amt), 30))(已知成交额族十档内)、以及十档内的离散度版本。它们对 5 个控制的阶跃与非线性暴露也是中性的,所以拿到的分数是\
+    \ H 自己的。\n (4) 与收益的关系:cross_corr(·, ts_delta(log(day_last(Close)), 1), 120)(持续性高的时期价格是涨还是跌:被动资金买入\
+    \ vs 卖出);H 乘 sign(20 日对数收益)再做 60 日均值(只与方向交互,不改变水平)。\n (5) 状态的状态:cross_corr(·,\
+    \ ts_delay(·, 20), 120)(两个不重叠的 20 日窗口的 H 相关,是这个状态到底有多「慢」);cross_zscore(·, 120)(相对自己历史的异常)。\n\
+    \ (6) 口径之差:尾盘 H 减开盘 H(用 day_first(Volume) / day_max(Volume) 的同一统计,开盘一分钟含集合竞价);成交量口径的\
+    \ H 减成交额口径的 H(差来自价格在尾盘一分钟里的变动,Amt = 价 × 量)。\n\n和已有的不同:两个库里 153 条表达式含 ts_hurst(共\
+    \ 259 处,175 处窗口是 20 日),其中 107 条最外层是 ts_mean;22 条含 cross_*(几乎都是 cross_max / cross_mean\
+    \ 的平滑),0 条含 cs_winsor 或 cs_bucket_*,只有 1 条含 cross_corr。也就是库里 H 外面几乎只有 20 ~ 50\
+    \ 日的 ts_mean 平滑,没有「读 H 序列本身」的统计(离散度、尾部、与收益的相关、与自己滞后值的相关、十档内 z 分数)。15 个种子的算子骨架都不在两个库的骨架集里(我用\
+    \ skeleton_key 逐个与 4077 个骨架核对过,0 个命中)。快照里围绕 H 的外围写法全是「ts_mean + mul + log + add\
+    \ + day_max / day_std」,和本位的外围算子集合不同。它们也不是控制的换皮:H 对价位与量级不变,控制是流动性、波动、20 日反转、已知成交额族、市值;预计与\
+    \ 5 个控制的 |ρ| 都在 0.3 以下,与 head 1 的 |ρ| 水平类种子(1、3)可能在 0.7 左右被自动划掉,其余应明显低。\n\n为什么样本外还会在:来源是持股结构\
+    \ / 执行方式这种慢变性质,不依赖行情方向;60 ~ 241 日的读数名次变化慢,15 bp 成本下换手低。诚实的预期:head 1 在 train /\
+    \ valid 都是 −0.1 左右,我不预期它们能越过 0.5,押的只是慢窗口和读法不同能让这个「接近 0」的底再往上走一点。\n\n数学检查:(1) 无前视:day_last\
+    \ / day_max 只用 t 日收盘前的分钟,窗口全是尾随窗口,t+1 才交易。(2) 数值:分母 day_max(Volume) 在有成交的日子 >\
+    \ 0,整天无成交是 0 / 0 = NaN(不是 inf);ts_hurst 窗口内常数时给 NaN,缺失日给 −inf / NaN(见上),已由 cs_winsor\
+    \ 处理;cross_corr 有效点不足 2 个时返回 0,只影响新上市 / 复牌头几天;信噪比种子的分母 ≥ 0.05。(3) 热身:cross_mean\
+    \ / cross_stddev 对窗口里已有的有限值直接算(不要求满窗),前 120 ~ 241 个交易日估计用的天数较少,但不是填充也不是常数;ts_hurst\
+    \ 前 19 天为 NaN。\n"
+  literature:
+  - title: Long-term memory in stock market prices
+    authors: Andrew W. Lo
+    year: '1991'
+    treatment: 经典 R/S 在小样本上偏差大、对短程相关敏感;所以把 20 日 H 当噪声测量,用 60 ~ 241 日窗口读它的均值 / 离散度
+      / 尾部,并给出去掉停牌筛子(cs_winsor)的版本
+  - title: Stock returns and trading at the close
+    authors: David Cushing, Ananth Madhavan
+    year: '2000'
+    treatment: 收盘前后的成交与指数 / 机构调仓相关;这里只取「尾盘参与度的路径是否持续」,不做指数成分股的专门识别
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 日内特定时段的成交 / 收益模式按日持续,与机构交易的周期性有关;这里读收盘时段参与度的日间持续性并与开盘时段对照(种子 9)
+  seeds:
+  - cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 120)
+  - cross_stddev(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    120)
+  - sub(cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    40), cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    241))
+  - cs_bucket_zscore(cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120), cross_mean(day_std(Amt), 30))
+  - cross_tail_mean_q25(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120)
+  - sub(cross_tail_mean_q75(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120), cross_tail_mean_q25(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120))
+  - cross_corr(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), ts_delta(log(day_last(Close)),
+    1), 120)
+  - cross_mean(sub(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    cs_winsor(ts_hurst(div(day_first(Volume), day_max(Volume)), 20))), 60)
+  - cross_corr(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), ts_delay(cs_winsor(ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), 20), 120)
+  - cross_zscore(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    120)
+  - cross_mean(mul(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    sign(cross_delta(log(day_last(Close)), 20))), 60)
+  - sub(cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    60), cross_mean(cs_winsor(ts_hurst(div(day_last(Amt), day_max(Amt)), 20)), 60))
+  - div(cross_mean(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)), 20)),
+    60), add(cross_stddev(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 60), 0.05))
+  - cs_bucket_zscore(cross_stddev(cs_winsor(ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 120), cross_mean(day_std(Amt), 30))
+- type: N
+  hypothesis: "机制。第 1 轮 R 的一个结果让我认为这个批里真正值得保留的不是「尾盘量」,而是「对水平、尺度不变的路径形状统计」:把乘数里的股数\
+    \ day_max(Volume) 换成金额 day_max(Amt),head 1 从 −1.08 回到 −0.11;拆解里把最外层 H 拆掉掉 0.71,而水平(log\
+    \ 日最大成交额)只贡献 0.12。水平类被 5 个控制与两个冠军吃光了,形状类还剩一点。新想法是把这个原则用到库里从没读过的对象上:一只股票「相对全市场的成交活跃度」在日轴上的路径(注意力的路径),并且读的是它的动态(持续性、趋势、离散、与收益方向的耦合),不是它的水平。\n\
+    \n对象:LT = sub(log(day_sum(Amt)), LogFloatCap) = 当日成交额 / 流通市值的对数,即对数换手率(把流通盘的大小从成交里除掉,库里\
+    \ 5583 条没有任何日频字段叶子);A = cs_rank(LT) 是它当日的截面百分位,等于「相对活跃度」,市场整体放量缩量被秩吃掉;cs_demean(LT)\
+    \ 是减去当日截面均值的版本。\n为什么相信它有信息(如果有):A 股散户占比高,注意力驱动的买入是有文献的(Barber–Odean 2008;Gervais–Kaniel–Mingelgrin\
+    \ 2001 的高成交量溢价;Chordia–Subrahmanyam–Anshuman 2001 的活跃度波动与预期收益负相关;Lo–Wang 2000\
+    \ 说成交量有市场共同因子,个股剩下的是特质部分;Llorente–Michaely–Saar–Wang 2002 用「成交量 × 滞后收益」的系数区分投机性与对冲性交易)。每一种读法对应一个可检验的状态:\n\
+    \ (a) 持续性:ts_hurst(A, 60)、ts_hurst(cs_demean(LT), 60 / 120)、一个流通市值十档内 z 分数的版本。注意力是逐步累积(信息扩散慢、机构建仓)还是脉冲后回落(彩票式追涨)。R/S\
+    \ 对序列的水平与尺度不变,所以不会重新读到流动性或市值水平。\n (b) 趋势与离散:cross_ema(A, 10) − cross_ema(A, 120)(相对活跃度在抬升还是萎缩);cross_stddev(A,\
+    \ 60)(排名的抖动);十档内的 cross_stddev(LT, 120);LT 的 75% 尾均值减 25% 尾均值;ts_skew(LT, 120)。\n\
+    \ (c) 与收益方向的耦合(RET = ts_delta(log(day_last(Close)), 1)):cross_corr(A, RET, 60\
+    \ / 120)(放量时涨还是跌);cross_corr(ts_delta(A, 1), RET, 120)(活跃度变化与收益);上涨日的 A 之和减下跌日的\
+    \ A 之和(60 日);Llorente 型系数 cross_regbeta(ts_delay(cross_zscore(LT, 60), 1) × ts_delay(RET,\
+    \ 1), RET, 120)(昨日「异常成交 × 昨日收益」对今日收益的斜率,正 = 投机性、动量式交易,负 = 对冲性)。\n (d) 与市场共同活跃度的联动:cross_regbeta(cs_mean(LT),\
+    \ LT, 120)(个股换手对全市场换手的 beta,机构 / 指数型 vs 散户特质型);cross_autocorr(cs_demean(LT), 120,\
+    \ 5)(去市场后的 5 日滞后自相关)。\n全部种子的读数是日轴上 60 ~ 120 日的慢窗口,名次变化慢,15 bp 成本下换手低。\n\n和已有的不同:(1)\
+    \ 与快照 head 的不同:6 个 head 全是 ts_mean(mul(log(...), ts_hurst(尾盘量比))) 的嵌套,读的是一天内最后一分钟\
+    \ / 最大一分钟的比值;本位的对象是日频的成交额 / 流通市值,时间尺度、分母、字段都不同,16 个种子里只有 4 个用 Hurst。(2) 与库的不同:16\
+    \ 个种子的算子骨架逐个与两个库的 4077 个骨架核对过,0 个命中;库里 0 条用 LogFloatCap 这类日频叶子。库里最近的是 Alpha101\
+    \ 式的手写式(17 条在 ts_corr / ts_autocorr / ts_regbeta / ts_hurst 的第一参数里放 cs_rank /\
+    \ cs_mean / cs_demean,例如 ts_corr(cs_rank(量的变化), cs_rank(收益), 6 ~ 10)),区别有三:分子是除以流通市值的换手而不是量本身;窗口是\
+    \ 60 ~ 120 日的慢读而不是 6 ~ 10 日的快读;16 个种子里 cross_corr 只有 3 个,其余读的是 Hurst、趋势、离散、尾部、beta、滞后自相关。(3)\
+    \ 与控制的不同:控制里的流动性是水平,已知成交额族是一天之内分钟成交额的离散度的 30 日均值,本位是日与日之间相对活跃度的动态,水平被秩 / 去均值 /\
+    \ 十档内 z 分数拿掉;对 5 个控制的线性、U 形、S 形暴露本来就被尺子去掉。预期 cross_stddev(A, 60) 之类与流动性控制有 0.3\
+    \ 左右的相关,相关度表会给出;若某个种子与控制 |ρ| ≥ 0.8 会被自动划掉。\n\n为什么样本外还会在:来源是散户注意力与知情交易的结构(注意力是累积还是脉冲、成交量与收益方向是投机性还是对冲性),A\
+    \ 股这个结构在 2018 ~ 2025 年没有制度性变化;读数全是 60 ~ 120 日的慢窗口。诚实的预期:head 率只有 4% 左右,押的是别的流没读过的日频活跃度动态。\n\
+    \n数学检查:(1) 无前视:day_sum(Amt) 与 day_last(Close) 只用 t 日收盘前的分钟;RET = 收盘到收盘的对数收益,窗口全是尾随窗口,t+1\
+    \ 才交易;ts_delay(·, 1) 只用前一天。(2) 数值:day_sum(Amt) 在停牌日没有成交,引擎把停牌日的读数置空,log 在近零时给\
+    \ NaN(不是 −inf);LogFloatCap 在 float64 里取 log 后降 float32,与 log(day_sum(Amt)) 相减后量级\
+    \ −6 ~ −2,没有精度问题;没有除以近零的量(没有除法);cs_rank 秩的取值在 (0, 1]。cross_corr / cross_autocorr\
+    \ / cross_regbeta 有效点不足 2 个时返回 0,只影响新上市与复牌的头几天;ts_hurst 的窗口内第二早一天缺失会给 −inf、最早一天缺失给\
+    \ NaN,这会把近 60 ~ 120 日内停牌过的票推到最低或当缺失,所以 16 个种子里只有 4 个用 ts_hurst,其余 12 个用 NaN 跳过型的\
+    \ cross_* 算子,两组的分数差就是这道筛子的贡献。day_sum(Amt) / LogFloatCap 的日频叶子取值都是收盘时点已知的值,没有任何隐式前移。(3)\
+    \ 定义:ts_hurst 窗口内常数时给 NaN;cs_rank 当天全体缺失时整行缺失(不会发生)。没有任何读 2026 年的东西。\n"
+  inspired_by: B004 / B005 批(T01):6 个 head 里的承重部件是 ts_hurst(尾盘量比, 20),拆掉最外层 H 损失 0.71,水平项只贡献
+    0.12;第 1 轮 R 把乘数从股数换成金额后 −1.08 → −0.11(去掉价位暴露后,尺度不变的形状统计还剩一点,水平统计被控制吃掉)。
+  literature:
+  - title: 'All that glitters: the effect of attention and news on the buying behavior
+      of individual and institutional investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 个人投资者的买入由注意力驱动;这里读相对活跃度的路径形状与它和收益方向的耦合,不读水平
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常成交量的收益溢价;这里读「相对自己的趋势」(cross_ema 短减长)而不是单日放量
+  - title: Trading activity and expected stock returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+    year: '2001'
+    treatment: 成交活跃度的离散(而非水平)预测预期收益;这里用 cross_stddev / 尾均值之差 / 十档内 z 分数读离散度
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 成交量 × 滞后收益对未来收益的系数区分投机性与对冲性交易;种子 11 是它的单股滚动版本(未加滞后收益主效应)
+  - title: 'Trading volume: definitions, data analysis, and implications of portfolio
+      theory'
+    authors: Andrew W. Lo, Jiang Wang
+    year: '2000'
+    treatment: 个股成交量有市场共同因子;种子 15 / 16 读个股对共同活跃度的 beta 与去市场后的自相关
+  - title: Long-term memory in stock market prices
+    authors: Andrew W. Lo
+    year: '1991'
+    treatment: R/S 小样本偏差大;所以放了 12 个不用 Hurst 的兄弟种子,并只在 60 / 120 日窗口上读
+  seeds:
+  - ts_hurst(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 60)
+  - ts_hurst(cs_demean(sub(log(day_sum(Amt)), LogFloatCap)), 60)
+  - ts_hurst(cs_demean(sub(log(day_sum(Amt)), LogFloatCap)), 120)
+  - cs_bucket_zscore(ts_hurst(cs_demean(sub(log(day_sum(Amt)), LogFloatCap)), 60),
+    LogFloatCap)
+  - cross_stddev(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 60)
+  - sub(cross_ema(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 10), cross_ema(cs_rank(sub(log(day_sum(Amt)),
+    LogFloatCap)), 120))
+  - cross_corr(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), ts_delta(log(day_last(Close)),
+    1), 60)
+  - cross_corr(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), ts_delta(log(day_last(Close)),
+    1), 120)
+  - cross_corr(ts_delta(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), 1), ts_delta(log(day_last(Close)),
+    1), 120)
+  - sub(cross_mean(mul(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), is_gt(ts_delta(log(day_last(Close)),
+    1), 0)), 60), cross_mean(mul(cs_rank(sub(log(day_sum(Amt)), LogFloatCap)), is_lt(ts_delta(log(day_last(Close)),
+    1), 0)), 60))
+  - cross_regbeta(mul(ts_delay(cross_zscore(sub(log(day_sum(Amt)), LogFloatCap), 60),
+    1), ts_delay(ts_delta(log(day_last(Close)), 1), 1)), ts_delta(log(day_last(Close)),
+    1), 120)
+  - ts_skew(sub(log(day_sum(Amt)), LogFloatCap), 120)
+  - cs_bucket_zscore(cross_stddev(sub(log(day_sum(Amt)), LogFloatCap), 120), LogFloatCap)
+  - sub(cross_tail_mean_q75(sub(log(day_sum(Amt)), LogFloatCap), 120), cross_tail_mean_q25(sub(log(day_sum(Amt)),
+    LogFloatCap), 120))
+  - cross_regbeta(cs_mean(sub(log(day_sum(Amt)), LogFloatCap)), sub(log(day_sum(Amt)),
+    LogFloatCap), 120)
+  - cross_autocorr(cs_demean(sub(log(day_sum(Amt)), LogFloatCap)), 120, 5)
+R:
+- head: ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 25)
+  why: 三处依据来自本 head 的拆解表和第 1 轮 R 的结果,都在样本内:(1) 平滑窗口:ts_mean 25 → 12 与 50 都是 −0.50,而
+    25 是 −0.11,说明这是个尖峰,极可能含运气;没有平滑的子树(mul(log(...), H),只靠奖励里的 EMA)是 −0.07(train −0.07
+    / valid −0.01),所以我在 20 / 32 / 40 日 ts_mean 与 cross_ema 12 / 24 日上各试一次,看 −0.11
+    是尖峰还是平台;(2) 乘数 log(日最大成交额) 只贡献 0.12:换成日均成交额与日中位成交额(分钟成交额的 50% 分位),看水平项的口径是否重要;(3)
+    停牌筛子的分离:把两处 H 都换成 cs_winsor(H)(−inf 夹成有限低值),其余不动;若分数明显低于 −0.11,说明 head 1 的一部分来自「近期停牌的票被排到最低」,若持平则
+    H 本身承重。另外一个变体拿掉乘数只留 H(log(H + day_std(Vwap)) × H),一个把内外两个 H 的窗口错开成 10 / 40。数学上:全部变体与原
+    head 同一组叶子,H ≤ 0 的窗口(交替型序列)会让 log 给 NaN,与原 head 完全相同;没有除以近零的量;窗口全是尾随窗口,无前视。
+  variants:
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 20)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 32)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 40)
+  - cross_ema(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 12)
+  - cross_ema(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 24)
+  - ts_mean(mul(log(add(mul(log(add(day_mean(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_quantile(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 25)
+  - ts_mean(mul(log(add(ts_hurst(div(day_last(Volume), day_max(Volume)), 20), day_std(Vwap))),
+    ts_hurst(div(day_last(Volume), day_max(Volume)), 20)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 10)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    40)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), cs_winsor(ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20))), day_std(Vwap))), cs_winsor(ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20))), 25)
+audit:
+  attempts: 1
+  file: audit_1.yaml

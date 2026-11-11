@@ -1,0 +1,125 @@
+seed: 2019
+round: 3
+slots:
+- type: E
+  core: day_last(Volume)
+  hypothesis: '【核心】day_last(Volume) = 当天最后一根分钟 bar 的成交量。A 股 14:57 起是收盘集合竞价,最后一根 bar
+    装的就是收盘集合竞价的成交,
+
+    是指数基金 / 机构调仓 / 基金净值对齐的主要成交场所。本批共性表里它是富集最高的子树(含 13 个候选均分 +0.41,不含 -1.97,p 0.000),
+
+    本流 Pr2a 产出的三个 head(+0.70 ~ +1.05)全部含它,而且拆解里把它敲掉分数由 +1.05 掉到 +0.08(必要性 +0.97),
+
+    把 Volume 换成 Amt 还更好(+1.13):说明起作用的是"收盘集合竞价规模"这一个量,而不是 day_mean(High) × day_skew(Volume)
+    那一长串。
+
+    【库里 / head 的写法】head 全是 cross_regbeta(cross_delay(mul(cross_mean(mul(day_mean(High),
+    day_skew(Volume)), 5), day_last(Volume)), 1), day_sum(Ret), 241) 一类:
+
+    把"价位 × 块状度 × 5 日均值 × 收盘量"乘成一个很脏的复合预测变量。其中 High 水平、skew、5 日均值、嵌套的 cross_delay 都不是核心,
+
+    这次把它们全部去掉,只留核心本身,把外围换成**更干净、可以解释的收盘集合竞价读法**:
+
+    (a) 收盘量 × 最后一分钟收益(day_last(Ret))= 带方向的收盘竞价订单流,对"次日收益"做 241 日回归(收盘竞价买压 → 次日续涨还是回吐);
+
+    (b) 收盘量占全天成交的份额 div(day_last(Volume), day_sum(Volume)),去掉水平,只剩"多大比例的交易是被动 / 指数性质";
+
+    (c) 收盘量相对自己 60 日均值(异常收盘量,去水平)与 20 日去均值版;
+
+    (d) 换伙伴:隔夜缺口与日内涨跌(收盘竞价的影响是在次日开盘兑现还是盘中兑现);
+
+    (e) 开平方的尺度(sqrt)、协方差版(同时带尺度和关系)、方向反过来的回归、120 日斜率 + 60 日 EMA;
+
+    (f) 保留一个只剩 day_mean(High) 或 day_skew(Volume) 之一的版本,作为"这两个部件是不是烂部件"的诊断(种子 7、8)。
+
+    斜率 = ρ·σ_y/σ_x,x 带成交量水平时,排名里混进"1/尺度 × 符号"的交互项,新尺子对五个控制及冠军的 1/2/3 次残差去不掉这类交互项,
+
+    这是 Pr2a 三个 head 已经在 train 与 valid 同时 +0.7 ~ +1.1 的原因(我的读法);我在这里把它拆成可解释的几块,检验 alpha
+    来自"收盘集合竞价"而非 High × skew。
+
+    【为什么和以前不一样】外围里没有 mul(day_mean(High), day_skew(Volume)) 链,也没有 cross_mean(…,5) +
+    双层 cross_delay;核心之外的算子集合
+
+    (day_last(Ret)、day_sum(Volume) 份额、cross_ema 与 sqrt、cross_cov、反向回归)在已见的含该核心的候选里都没出现;库里
+    5583 条表达式没有一条把
+
+    day_last(Volume) 放进 cross_regbeta。预期与 3 个 head 的日度秩 |ρ| 有 0.3 ~ 0.6(同一个收盘量),份额
+    / 去水平版更低;被库禁令 ρ ≥ 0.7 挡掉的会是最接近 head 的几个。
+
+    【为什么样本外还会在】收盘集合竞价是交易所的制度性机制,2018-08 起规则不变,机构对收盘价的需求(指数调仓、基金净值)是慢变的结构性行为;
+
+    窗口 ≥ 120 日,换手低。风险:241 日窗口的 train 前一年是扩张窗口;最后一根 bar 可能在个别票上是 0 或缺失(停牌、涨跌停),
+
+    cross_regbeta 的 EPS 保护下不会变成 inf,但个别票排名可能被缺失处理决定,这类票占比很小。
+
+    【数学自查】全部因果:cross_delay 只向过去,今天的收益用昨天的收盘量解释,不含未来;份额版分母 day_sum(Volume) 在停牌日为 0
+    / 缺失,结果为缺失而非 inf;
+
+    不用 ts_rank / cross_rank / in_rank_rolling;不用 ts_spearman / nt_*。
+
+    '
+  seeds:
+  - cross_regbeta(cross_delay(mul(day_last(Volume), day_last(Ret)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(div(day_last(Volume), day_sum(Volume)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(day_last(Volume), 1), sub(div(day_open(Open), cross_delay(day_close(Close),
+    1)), 1), 241)
+  - cross_ema(cross_regbeta(cross_delay(day_last(Volume), 1), day_sum(Ret), 120),
+    60)
+  - cross_regbeta(cross_delay(cross_mean(day_last(Volume), 20), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(div(day_last(Volume), cross_mean(day_last(Volume), 60)),
+    1), day_sum(Ret), 241)
+  - cross_regbeta(day_sum(Ret), cross_delay(day_last(Volume), 1), 241)
+  - cross_cov(cross_delay(day_last(Volume), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(sub(day_last(Volume), cross_mean(day_last(Volume), 20)),
+    1), day_sum(Ret), 241)
+- type: N
+  hypothesis: "【想法】用\"当天成交在时间轴上的位置与方向\"(而不是成交量的块状度)作为滞后预测变量,对次日收益做 241 日慢回归,\n读\"\
+    这类资金的流向在之后是续涨还是回吐\"这个持续的行为特征。\n【来自哪里】本流三个 head 的共同点是 cross_regbeta(滞后的成交量类水平 ×\
+    \ 其它量, day_sum(Ret), 241):一个\"斜率 = ρ·σ_y/σ_x\"读数,\nx 里带成交量 / 成交额的水平,尺子对控制的 1/2/3\
+    \ 次残差去不掉\"符号 × 尺度\"的交互。但 head 里的 x 全部是 High × skew × last-minute 量这条链,\n信息只来自日内的一个点(最后一分钟)和一个形状统计(skew)。我想问:同一个回归外壳,换成**日内全程的资金方向与时间**,是否有同样的\
+    \ train / valid 双正。\n【机制】\n1. day_signed_ratio(Ret, Amt) = 上涨分钟的成交额份额 − 下跌分钟的成交额份额,是不需要逐笔数据的净买压代理(算子\
+    \ docstring 的定义)。\n   对\"次日收益\"回归:斜率为正 = 这类净买压之后续涨(知情 / 趋势资金),为负 = 回吐(流动性冲击,Campbell-Grossman-Wang\
+    \ 1993 的\"成交量条件下的反转\")。符号在个股层面稳定几个月。\n2. day_centroid(Volume) = 成交在一天中的重心(0 开盘\
+    \ ~ 1 收盘)。重心靠后的票 = 算法 / 机构执行在收盘附近放量;重心靠前 = 隔夜消息被开盘消化。\n   单独回归、与净买压相乘、与成交额(day_sum(Amt))相乘三种读法,后者给斜率带上资金规模的尺度(与\
+    \ head 同一机制,但尺度来自成交额而非 High × skew)。\n3. day_topw_mean(Ret, Volume)(最放量 10% 分钟的平均收益)、day_gini(Volume)\
+    \ 作为对照:它们要么是\"放量时刻的方向\",要么是\"块状度的另一种定义\",\n   检验信息在\"方向\"还是在\"分布形状\"。\n4. 一个无尺度对照(cross_corr)和一个\
+    \ 60 日斜率 + 60 日 EMA 的慢版本,回答尺度是否承重。\n【为什么和库 / head / 控制不同】两个库只用 8 个原始分钟字段,没有 day_signed_ratio\
+    \ / day_centroid / day_gini / day_topw_mean 这些扩展算子\n(struct/members.csv 核对过),所以库的骨架与\
+    \ 5583 条表达式都不含它们;head 的 x 是成交量 × 价位 × skew,这里的 x 是净买压 / 时间重心 / 放量时刻收益,\n对 head\
+    \ 的日度秩 |ρ| 预期 < 0.4,对五个控制(流动性 / 波动 / 反转 / 已知族 / 市值)|ρ| 预期 0.1 ~ 0.5(带成交额尺度的版本与流动性控制最高,但也不到\
+    \ 0.8)。\n【为什么样本外还会在】资金方向的持续性(而不是水平)是参与者构成的结构特征,变化慢;241 日窗口,换手低。风险:净买压是同期收益的符号函数,对\
+    \ day_sum(Ret) 的相关里有\"\n今天涨 → 今天净买压为正\"的同期成分被 cross_delay(…,1) 去掉了,留下的是次日关系,噪声大(120\
+    \ 日 r 的标准误约 0.09);带成交额尺度的版本可能退化成流动性因子。\n【数学自查】全部因果(cross_delay 只向过去);day_signed_ratio\
+    \ 在全天成交额为 0 时为缺失,不为 inf;day_centroid 分母 sum|x| 为 0 时缺失;\ncross_regbeta 有 EPS 保护;不用\
+    \ ts_rank / cross_rank / in_rank_rolling;不用 ts_spearman / nt_*。\n"
+  inspired_by: B 批 head 的共性:cross_regbeta(滞后成交量 × 其它量, day_sum(Ret), 241) 的斜率读法与 day_last(Volume)
+    的必要性;换成日内全程的净买压 / 时间重心
+  seeds:
+  - cross_regbeta(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(day_centroid(Volume), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(mul(day_centroid(Volume), day_signed_ratio(Ret, Amt)),
+    1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(mul(day_signed_ratio(Ret, Amt), day_sum(Amt)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(sub(day_wmean(Ret, Amt), day_mean(Ret)), 1), day_sum(Ret),
+    241)
+  - cross_corr(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 120)
+  - cross_ema(cross_regbeta(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret),
+    60), 60)
+  - cross_regbeta(cross_delay(mul(day_centroid(Amt), day_sum(Amt)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(cross_mean(mul(day_signed_ratio(Ret, Amt), day_sum(Amt)),
+    5), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(day_gini(Volume), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(mul(day_gini(Volume), day_sum(Amt)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(day_topw_mean(Ret, Volume), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(mul(day_topw_mean(Ret, Volume), day_sum(Amt)), 1), day_sum(Ret),
+    241)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

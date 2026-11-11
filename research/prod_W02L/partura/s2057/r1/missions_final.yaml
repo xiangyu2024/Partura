@@ -1,0 +1,79 @@
+seed: 2057
+round: 1
+slots:
+- type: N
+  hypothesis: 'Mechanism: instability of the intraday trading-time profile. The batch''s
+    heads take a nested ts_stddev (volatility of volatility of ...) of a daily sum
+    of a cross-sectional lower-quartile of Amt, i.e. they reward stocks whose low-end
+    turnover wobbles. Those heads all go through the banned nt_cs_quantile_q25 wrapper
+    and score negative after the ruler removes liquidity and size. The part worth
+    keeping is the idea that the second moment of how turnover is distributed matters,
+    not its level. Here we measure the distribution of the day directly and scale-free:
+    day_gini(Amt) (how concentrated the day''s money is in a few minutes, bounded
+    in [0,1], not dominated by one print) and day_centroid(Amt) (when in the day the
+    money trades: open-heavy vs close-heavy). A stock whose profile is stable day
+    to day is traded by a stable population (index/passive or slow institutional flow);
+    a stock whose profile keeps changing is hit by episodic, event-driven or retail-attention
+    flow. ts_stddev of the daily gini/centroid over 10-40 days measures that instability;
+    ts_mean and cross_mean give the persistent level of concentration. Because the
+    quantities are shares and ratios, they are nearly orthogonal to turnover level
+    and market cap, which the ruler residualises anyway. Implementation: day_gini
+    / day_centroid collapse the minute axis with the standard operators from ops_ext
+    (no nt_*), ts_stddev / ts_mean / cross_mean smooth over days; seeds vary Amt vs
+    Volume, gini vs centroid, level vs dispersion, and one-level vs two-level nesting
+    (the nesting mirrors the heads'' vol-of-vol shape). Why it differs from the library:
+    the library''s expressions in this batch use day_sum of a cross-sectional quantile,
+    never a within-day concentration or timing statistic, and the operator skeleton
+    is different. Why it could survive out of sample: the stable-vs-episodic composition
+    of a stock''s trading population is a slow structural property (ownership, index
+    membership), not a regime.'
+  inspired_by: 'structure batch 1 (ts_stddev nested 2-3 deep over day_sum(nt_cs_quantile_q25(Amt))):
+    the dispersion-of-turnover shape is shared by all three heads'
+  seeds:
+  - ts_stddev(day_gini(Amt), 20)
+  - ts_stddev(day_centroid(Amt), 20)
+  - ts_stddev(day_gini(Volume), 40)
+  - ts_stddev(day_centroid(Volume), 10)
+  - ts_stddev(ts_stddev(day_gini(Amt), 10), 20)
+  - ts_stddev(ts_stddev(day_centroid(Amt), 10), 50)
+  - cross_mean(day_centroid(Amt), 30)
+  - ts_stddev(day_gini(in_pct(Amt, 1)), 20)
+  - ts_mean(day_centroid(Volume), 20)
+- type: N
+  hypothesis: 'Mechanism: dead-minute share, i.e. how often the stock simply does
+    not trade or move. day_zero_ratio(Ret) is the share of minutes with an exactly
+    zero return and day_flat_ratio(Close) the share of minutes where the close equals
+    the previous one; for thinly traded or sticky-quote names these are large, for
+    actively arbitraged names near zero. The batch''s heads sit on the low end of
+    the cross-section of Amt (the lower-quartile of turnover); this is the direct
+    price-side version of the same thing, measuring how often liquidity is absent
+    rather than how much it is. Stocks with persistently many dead minutes carry an
+    illiquidity premium that is not captured by daily Amt (which can be large in a
+    few minutes), and a rising dead share signals fading attention that precedes weak
+    returns. We use both the smoothed level (ts_mean / cross_mean over 10-30 days)
+    and its day-to-day dispersion (ts_stddev), the latter echoing the heads'' nested
+    dispersion shape but on a bounded share so no near-zero denominator or scale artefact
+    exists. Implementation: day_zero_ratio and day_flat_ratio are ops_ext day collapses
+    over the minute axis (no nt_*); seeds vary the price field (Ret, Close, Vwap),
+    the smoother and whether the dead share is measured on turnover change (day_zero_ratio(in_pct(Amt,1))).
+    Why it differs from the library: no library expression collapses zero/flat minute
+    indicators; the skeleton (day_zero_ratio / day_flat_ratio under a ts smoother)
+    is new. Why it could survive out of sample: tick-size and quote stickiness is
+    structural, and the ruler already strips linear, U and S exposure to liquidity,
+    volatility and size, leaving the incremental information in how dead the tape
+    is.'
+  inspired_by: 'structure batch 1 (lower-quartile of minute Amt per stock-day, dispersed
+    over days): the thin-trading end of the intraday distribution'
+  seeds:
+  - ts_mean(day_zero_ratio(Ret), 20)
+  - ts_stddev(day_zero_ratio(Ret), 20)
+  - ts_mean(day_flat_ratio(Close), 30)
+  - ts_stddev(day_flat_ratio(Close), 20)
+  - ts_stddev(day_flat_ratio(Vwap), 40)
+  - ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 20)
+  - ts_mean(day_flat_ratio(Vwap), 10)
+  - ts_stddev(day_zero_ratio(in_logchg(Amt, 1)), 30)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,205 @@
+seed: 2036
+round: 1
+slots:
+- type: E
+  core: energy_ratio_n(delete_open_close(Volume), 0.9, False)
+  hypothesis: '核心 C0 = energy_ratio_n(delete_open_close(Volume), 0.9, False) 是每个交易日的一个数:当天分钟成交量路径(去掉
+    9:30 竞价与第一分钟、尾部 3 根)做 FFT(pad_to_pow2 = False:不补零,取整批最长有效行的 236 列,即 2 ~ 235 号分钟),功率谱从大到小累加到总能量的
+    90% 需要多少个频点,除以 236。它读的是「当天成交量有多成块 / 成团」:直流分量只占约 0.99 / (1 + CV²)(CV 是分钟成交量变异系数),要补满
+    90% 就得再取一批低频谐波(平滑的日内 U 形)或一大批频点(白噪声式的孤立尖峰)。我用 AlphaCube 里这个算子本身在合成数据(U 形 × 对数正态噪声,不是真实数据)上跑了
+    ER:CV 0.45 一带约 0.05,CV 1.3 一带约 0.5,随 CV 单调上升;n = 0.8 时 CV 在 0.5 以下的票几乎全落在 k =
+    1 ~ 3(基本只取直流分量),大量并列,这是 n = 0.8 的 head(−3.17)比 n = 0.9(−1.55)差 1.6 分的一个可能解释(推断,没有在真实数据上验证)。
+
+    批内事实(B106 拆解):三个 head 都是 cross_stddev(C0, 20),它们的窗口 20 → 40 在 train / valid 上同时变好(−1.55
+    → −1.00、−1.56 → −0.77),20 → 10 变差;Volume 换成 Amt 几乎不变(−1.46 / −1.62);cross_stddev
+    对已知成交额族的 |ρ| 0.39 ~ 0.47。库里 24 个成员的原始秩 IC:cross_mean 的 +0.035 ~ +0.037,cross_stddev
+    的 −0.040 ~ −0.023,也就是「平均成团度高」与「成团度的波动大」方向相反;后者与 Chordia–Subrahmanyam–Anshuman(2001)的发现同向:交易活跃度的波动大,预期收益反而低(这个负关系后续文献有复现也有争议,我只把它当作方向上的线索,不当作已证实的机制)。
+
+    我认为 head 里「烂」的部分有三块,E 位的外围就是逐块去掉,而不是再换窗口:(1)水平:有界的计数型统计量,std 与 mean 同升同降,cross_stddev(C0)
+    里混着成团度的水平,也就是流动性,这正是它与已知族 ρ −0.4 的原因,新尺子只扣秩的 1 ~ 3 次项,扣不掉「水平 × 离散」这类交互。所以种子 1
+    ~ 3 用 std ÷ mean、std 对 mean 的截面残差、std 在 mean 十分位内 z 分数。(2)全市场共同波动:放量日 / 节前日全市场的成团度一起升降,这是对所有股票都一样的时间序列成分,先
+    cs_rank 再取 std 才是每只股票自己的离散度(种子 16、14、15 的基础)。(3)窗口噪声与换手:20 日窗口太快,所以全部种子的聚合窗口在
+    60 到 241 日。
+
+    另外的外围写法:同伴内相对量(同市值、同成交额、同波动十分位内的成团度)、相对自己历史的位置(快慢 EMA 差、20 日均值对 241 日分布的 z 分数、60
+    日均值的 120 日变化)、与价格动作的耦合(与 |日收益| 的 120 日相关、对日内波动的回归斜率、与带符号日收益的相关)、两条路径之差(成团度的秩减去成交量变异系数
+    day_std / day_mean 的秩,即频谱形状净掉离散度;成交量成团度的秩减去 |分钟收益| 成团度的秩,即成交量成团但价格没动,是噪声型成交)。
+
+    为什么和库里不同:库里含这个核心的 24 个成员只有三种写法:裸值、cross_mean(·, 20)、cross_stddev(·, 20)。以上 16
+    个种子每一个的算子骨架都不在两个库的 5583 条里(已用 struct/members.csv 的骨架列,对两个库全部 5583 条逐个对照过)。除 cross_stddev
+    窗口外没有一个是 head 的窗口变体,所以与三个 head 的日度秩相关预期低于 0.7(去水平 / 去共同成分以后更低)。与已知成交额族:种子 4 ~
+    7 是同伴内相对量,预计低于 0.5。
+
+    为什么样本外还会在:成团度是持久的个股属性(参与者结构:机构拆单平滑、散户脉冲成团),它的「相对同伴的超额部分」与「相对自己的变化」是慢变量,窗口 60 ~
+    241 日,名次稳定,15 bp 成本不会把毛超额吃光(本波别的流的经验:最好的分数都来自 120 ~ 241 日的慢量,换手承重)。机制(投资者结构、流动性风险)不依赖某段行情;但我并不确定新尺子扣完
+    7 个控制以后还剩多少,下面的预测据此偏保守。
+
+    数学检查:C0 取值在 [1/236, 约 0.7],只在当天无成交 / 全 NaN 时缺失(覆盖率 0.9995),没有除以近零:div(std, mean)
+    的分母是 C0 的均值 ≥ 1/236;cross_zscore 的分母是 241 日 std,C0 在一段时间里恒为 1/236 的名票(极平滑)std
+    近 0,但这种票 cross_zscore 的分子也近 0,量级受 EPS 控制,不是爆点;cs_regres / cs_bucket_* 每天截面内计算。无前视:所有窗口含当天收盘及以前,t+1
+    才交易。热身期:窗口 120 ~ 241 的前若干日是不满窗口的均值 / 标准差,只占样本前部,不主导结果。算子行为的已知事实:energy_ratio_n
+    的 pad_to_pow2=False 分支会把整批的列裁到最长有效行的长度(源码旧版行为),停牌 / 缺分钟的票功率谱被截,这个行为核心自带,三个 head
+    都有,不在种子里新增。'
+  literature:
+  - title: Trading activity and expected stock returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+    year: '2001'
+    treatment: 交易活跃度(成交量 / 换手)的波动越大,预期收益越低,不被流动性水平解释;这里用成团度的 std ÷ mean、对 mean 残差、先截面秩再取
+      std 等去掉水平与共同成分后的离散度
+  - title: Illiquidity and stock returns Cross-section and time-series effects
+    authors: Yakov Amihud
+    year: '2002'
+    treatment: 非流动性溢价;成团度的水平是它的代理,所以种子用同伴内(市值 / 成交额 / 波动十分位)相对量去掉水平再读超额部分
+  seeds:
+  - div(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120),
+    cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120))
+  - cs_regres(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120), cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120))
+  - cs_bucket_zscore(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120), cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120))
+  - cs_bucket_zscore(cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120), LogFloatCap)
+  - cs_bucket_demean(cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120), cross_mean(day_sum(Amt), 60))
+  - cs_bucket_zscore(cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    60), cross_mean(day_std(Ret), 60))
+  - cs_bucket_zscore(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120), LogFloatCap)
+  - sub(cross_ema(energy_ratio_n(delete_open_close(Volume), 0.9, False), 20), cross_ema(energy_ratio_n(delete_open_close(Volume),
+    0.9, False), 240))
+  - cross_zscore(cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    20), 241)
+  - cross_delta(cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    60), 120)
+  - cross_corr(energy_ratio_n(delete_open_close(Volume), 0.9, False), abs_(day_sum(Ret)),
+    120)
+  - cross_regbeta(day_std(Ret), energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    120)
+  - cross_corr(energy_ratio_n(delete_open_close(Volume), 0.9, False), day_sum(Ret),
+    120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(delete_open_close(Volume), 0.9, False)),
+    cs_rank(div(day_std(delete_open_close(Volume)), day_mean(delete_open_close(Volume))))),
+    120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(delete_open_close(Volume), 0.9, False)),
+    cs_rank(energy_ratio_n(abs_(delete_open_close(Ret)), 0.9, False))), 120)
+  - cross_stddev(cs_rank(energy_ratio_n(delete_open_close(Volume), 0.9, False)), 120)
+- type: N
+  hypothesis: '机制:一天里不同时段由不同的参与者主导,各时段成交量路径的「成团度」(多少个频点才装下 90% 的功率)读的是这只股票的投资者结构,而一个时段内的成团度与另一个时段内的成团度之差,既去掉了对所有时段一样的水平(流动性、计数噪声),又保留了时段异质性。Admati–Pfleiderer(1988):知情交易者与流动性交易者在日内集中交易,形成时段性的量价模式;Heston–Korajczyk–Sadka(2010)发现同一时刻(半小时)的收益在日间有延续,文献给出的解释之一是日内交易行为按固定时点重复(机构执行、流动性需求)。A
+    股的具体对应:开盘第一小时 = 隔夜消息 + 散户开盘挂单,成交以脉冲为主;最后一小时 = 机构 / 指数基金的收盘调仓与拆单执行(VWAP / 收盘价算法),成交以连续铺开为主,另有「尾盘偷袭」式的孤立大单。收盘段成团度减开盘段成团度(Δ
+    = ERc − ERo)高的票,是尾盘更像「少数几笔大单」而不是铺开的执行,这是类型而不是水平,慢变。
+
+    批内现象(B106):含 energy_ratio_n(delete_open_close(Volume), ·) 的库表达式全部是整天一个数;cross_mean(·,
+    20) 的原始秩 IC 为 +0.035 ~ +0.037,cross_stddev(·, 20) 为 −0.040 ~ −0.023,三个 head 的窗口
+    20 → 40 同时变好(−1.55 → −1.00,−1.56 → −0.77),说明承重的是慢变的个股属性,整天读一个数。但整天一个数只能读到「平均成团度」,它主要是流动性(与已知族
+    ρ −0.4)。把一天切成时段,用时段之差,正是整天读法够不到的东西。
+
+    算子怎么实现:in_slice(Volume, a, b) 沿分钟轴裁出一段(右端点含在内;V2 网格:0 号是 9:30 竞价 bar,1 ~ 120 是
+    9:31 ~ 11:30,121 ~ 240 是 13:01 ~ 15:00),所以开盘段 [2, 61] ≈ 9:32 ~ 10:31,上午后段 [62,
+    120],下午前段 [121, 180] ≈ 13:01 ~ 14:00,收盘段 [181, 237] ≈ 14:01 ~ 14:57(跳过第 1 根开盘分钟和最后
+    3 根收盘集合竞价,与 delete_open_close 同一口径)。energy_ratio_n 沿分钟轴做 FFT,(种子都用 pad_to_pow2
+    = False:不补零,按这一段的实际长度做 FFT,k 除以段长),得到每个时段每天的成团度 ER。种子里:cs_rank 先把每天的两个时段的 ER 各自转成截面秩再相减,去掉全市场当天的共同变动;cross_mean(·,
+    60 ~ 241) 取慢均值;cs_bucket_rank(ERc, ERo) 是在开盘段成团度的十分位内取收盘段成团度的百分位(非参数地「净掉开盘段」);energy_ratio_band_n(high
+    = True) 取的是实信号功率谱里除直流分量外的那一半(镜像对称),读的是去掉水平之后、剩余起伏的能量集中度,energy_ratio_topm_minus_q(·,
+    4, 1) 读去掉最强频点后第 2 ~ 4 强频点的能量占比,收盘段上它就是「放量冲向收盘」这类斜坡的能量占比,不依赖水平。
+
+    为什么和已有的不同:库里的 energy_ratio_* 表达式全部作用在整天的分钟路径上(delete_open_close(Volume 或 Ret)),外面只有裸值
+    / cross_mean 20 / cross_stddev 20 三种写法;没有一条用 in_slice 把一天切成时段,更没有一条把两个时段的成团度相减、取秩差或条件取秩(已逐个对照
+    struct/members.csv 的骨架,两个库全部 5583 条里没有一条与这里 16 个种子的骨架相同;最近的 B106 ~ B109 共 90 条全是整天一个数)。与已知成交额离散度控制:种子都是两个时段的相对量,水平(日成交额)被差分掉;与流动性、波动、20
+    日反转、市值:时段之差不含价格,与反转无关,与波动无关。
+
+    为什么样本外还会在:来源是持久的投资者类型(谁在什么时段交易),不是某段行情;所有种子聚合窗口 60 ~ 241 日,名次稳定,换手低,15 bp 成本不会把毛超额吃光;差分与秩差对市场整体放量
+    / 缩量不敏感。最可能的风险:时段之差仍然与流动性存在非线性关系(小盘股成团度的昼夜差异更大),这部分尺子只扣 1 ~ 3 次秩多项式,扣不干净,所以放了
+    cs_bucket_rank / cs_bucket_zscore 的非参数版本做对照。
+
+    数学检查:60 点短段的 ER 取值在 1/60 ~ 约 0.7,有量化但不是常数:算子在每天每票独立计算,没有除以近零的量;总能量为 0(段内无成交)时是
+    NaN,不是 0 或无穷。energy_ratio_n 的已知旧版行为:pad_to_pow2=False 分支把整批的列裁到最长有效行的长度,一只在段内停牌的票的功率谱被截;这只影响停牌票,不影响排序主体。ER
+    的并列(k 是整数)用 cs_rank 的平均秩处理,再做 60 ~ 241 日均值,整数量化被平均掉。无前视:同一天的分钟数据,窗口含当天收盘及以前,t
+    + 1 才交易。热身期:窗口 60 以内的种子被 warmup = 60 覆盖;120 / 241 的前若干日是不满窗口的均值,不主导结果。'
+  inspired_by: B106 批:库里 energy_ratio_n(delete_open_close(Volume)) 一族全是整天一个数,cross_mean
+    的 IC 为正、cross_stddev 为负,窗口越慢越好,Volume 换 Amt 不变;整天的读法只给出平均成团度(主要是流动性),所以切开时段、读时段之差。
+  literature:
+  - title: A theory of intraday patterns Volume and price variability
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    treatment: 知情交易者与流动性交易者集中在特定时段交易;这里用开盘段与收盘段成交量成团度的秩差读投资者类型
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 同一时点的重复交易行为在日间留下可预测的模式;这里借「按时段重复的交易行为留下指纹」这一点,用时段成团度的慢均值与差读它
+  seeds:
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False))), 120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False))), 60)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False))), 241)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 62, 120), 0.9, False))), 120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False)), cs_rank(energy_ratio_n(in_slice(Volume,
+    62, 120), 0.9, False))), 120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 121, 180), 0.9, False))), 120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 121, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 2, 120), 0.9, False))), 120)
+  - cross_stddev(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)),
+    cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False))), 120)
+  - cs_bucket_zscore(cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Volume, 181, 237),
+    0.9, False)), cs_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False))), 120),
+    LogFloatCap)
+  - cross_mean(div(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False), energy_ratio_n(in_slice(Volume,
+    2, 61), 0.9, False)), 120)
+  - cross_mean(sub(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False), energy_ratio_n(in_slice(Volume,
+    2, 61), 0.9, False)), 120)
+  - cross_mean(sub(cs_rank(energy_ratio_band_n(in_slice(Volume, 181, 237), 0.5, True,
+    False)), cs_rank(energy_ratio_band_n(in_slice(Volume, 2, 61), 0.5, True, False))),
+    120)
+  - cross_mean(sub(cs_rank(energy_ratio_topm_minus_q(in_slice(Volume, 181, 237), 4,
+    1, False)), cs_rank(energy_ratio_topm_minus_q(in_slice(Volume, 2, 61), 4, 1, False))),
+    120)
+  - cross_mean(sub(cs_rank(energy_ratio_n(in_slice(Amt, 181, 237), 0.9, False)), cs_rank(energy_ratio_n(in_slice(Amt,
+    2, 61), 0.9, False))), 120)
+  - cross_mean(cs_bucket_rank(energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False),
+    energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False)), 120)
+  - cross_mean(cs_bucket_rank(energy_ratio_n(in_slice(Volume, 2, 61), 0.9, False),
+    energy_ratio_n(in_slice(Volume, 181, 237), 0.9, False)), 120)
+R:
+- head: cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 20)
+  why: 烂部件是窗口 20 与混进去的水平。B106 拆解:窗口 20 → 40 同时在 train / valid 变好(−1.55 → −1.00,valid
+    −1.06 → −0.97),20 → 10 变差(−1.74),方向单调,说明 20 日 std 太快,换手与噪声在吃分;Volume → Amt 不变,所以不是股数
+    / 金额口径的问题。窗口 40 的 ρ_head 0.72、ρ_known −0.47,仍带着与已知族的相关,水平(流动性)还在里面。变体:窗口拉到 80
+    / 120 / 241;std ÷ mean 去水平;std 对 mean 的截面残差;先取秩再 std(去共同成分);n = 0.9 → 0.95(提高分辨率,0.8
+    的 head 比 0.9 差 1.6 分就是量化并列的症状)。
+  variants:
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 80)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 120)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 241)
+  - div(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 120), cross_mean(energy_ratio_n(delete_open_close(Volume),
+    0.9, True), 120))
+  - cross_stddev(cs_rank(energy_ratio_n(delete_open_close(Volume), 0.9, True)), 120)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95, True), 60)
+- head: cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 20)
+  why: 与上一个 head 同一个烂部件(窗口 20、水平),这个版本的窗口 20 → 40 增益最大(+0.79,−1.56 → −0.77,valid −1.05
+    → −0.54),所以它是最值得往慢处推的一个。变体:窗口 60 / 120 / 241;std 对 mean 的截面残差(去水平);std 在 mean
+    十分位内 z 分数(非参数去水平);EMA 半衰期 60 平滑 20 日 std;n = 0.95 的版本。
+  variants:
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 60)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 241)
+  - cs_regres(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    60), cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False), 60))
+  - cs_bucket_zscore(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    60), cross_mean(energy_ratio_n(delete_open_close(Volume), 0.9, False), 60))
+  - cross_ema(cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False),
+    20), 60)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95, False), 60)
+- head: cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.8, False), 20)
+  why: 这个 head 最差(−3.17),但窗口 10 / 40 与 Volume → Amt 都几乎不动它(−3.10 / −3.03 / −3.11),所以烂的不是窗口也不是口径,而是
+    n = 0.8:合成数据(U 形 × 对数正态噪声)里,n = 0.8 时平滑的票全部落在 k = 1(只取直流分量),ER 几乎全并列,秩由并列的列序打破。变体把
+    n 提到 0.9 / 0.95 并同时拉窗口,检验「量化并列」这个解释:若 n = 0.95 的版本跟 n = 0.9 的 head 同一水平而远好于 −3.17,解释成立。
+  variants:
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.95, False), 20)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.85, False), 60)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.97, False), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

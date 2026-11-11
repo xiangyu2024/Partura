@@ -1,0 +1,234 @@
+seed: 2006
+round: 2
+slots:
+- type: E
+  core: abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100))
+  hypothesis: '批里的现象(B016 + 第 1 轮 R 组的实测,都是样本内读数):B016 的 head 是 sub(0.5, abs_(ts_regres(day_cov(Amt,
+    Open), day_last(Amt), W))),即「收盘棒成交额对当天的量价协方差做滚动回归,取最后一天残差的绝对值」。第 1 轮 R 组的结果:(1)
+    越慢越好,不分桶时 W = 50 / 100 / 150 / 250 为 −1.17 / −0.64 / −0.29(valid +0.76)/ −0.46(valid
+    +1.06);(2) 回归元几乎不起作用:换成市场当天收盘棒均额 cs_mean(day_last(Amt)) 得 −0.59,和 −0.64 一样;(3)
+    除以自己的收盘棒均额变成无量纲则崩到 −3.14,所以承重的是 |残差| 的**水平**(相对同伴),不是「相对自己的偏离」;(4) 用已知成交额族 cross_mean(day_std(Amt),
+    30) 的十分位做同伴内标准化后,与已知族的 |ρ| 从 0.6 掉到 0.01、与流动性控制从 0.6 掉到 0.03,分数反而从 −0.64 升到 −0.48(valid
+    +0.23);该 head 现在就是这个分桶版,W = 200 时 −0.21(train −0.21 / valid +1.46)。train 是瓶颈,日度单值噪声大。
+
+
+    核心取 abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),也就是上面那个每天一个值的 |残差|
+    序列 Z_t(窗口固定在 100)。本位不再动窗口(那是 R 组的事),而是在 Z_t **外面**试它的时间聚合、同伴键和动态读法,三类:
+
+    (a) 时间聚合 + 同伴内标准化:cross_mean(Z, 120 / 241)、cross_ema(Z, 60)、cross_med(Z, 120)(稳健水平)、cross_tail_mean_q25(Z,
+    120)(「最安静的日子」的水平,持续存在的收盘参与的下限)、cross_max(Z, 60)、cross_stddev(Z, 120),外面再套 cs_bucket_zscore。
+
+    (b) 换同伴键:已知成交额族(对照)、对数名义价格 sub(LogFloatCap, LogFloatShares)(= 流通市值 ÷ 流通股本的对数,库里一次都没出现的日频叶子)、复合键
+    sub(sub(LogFloatCap, LogFloatShares), LogFloatShares)、B017 批的 cross_mean(cross_min(day_cov(Low,
+    Ret), 15), 60)(价格 × 波动的「底」,把第二个批的对象当同伴键用)、120 日均额(流动性)、已知族再嵌套市值;另有一个不用分桶的线性写法
+    cs_regres(cs_rank(慢 Z), cs_rank(已知族))。
+
+    (c) 动态与耦合:均值 ÷ 标准差(无量纲,持续性)、近 20 日对 241 日之比(收盘异常是否在加剧)、相对自己 120 日历史的 z 分数的 40
+    日均值、Z 与当日成交额离散度 / 当日 |涨跌| 的 120 日相关(异常收盘流是出现在放量日 / 大波动日,还是与当天无关)。相关类种子外面乘了上市天数闸门
+    is_gt(cross_age(day_last(Amt)), 120)(次新股窗口内有效对太少,相关系数会被推到 ±1,闸门让它们落在 0 即中段)。
+
+
+    算子怎样实现:每个种子都原样含核心。聚合类写成 cs_bucket_zscore(cross_mean(核心, 120), 键),意思是「在键值相近的同伴里,谁的
+    |残差| 长期更大」;cross_stddev / cross_med / cross_tail_mean_q25 / cross_max 换的是聚合统计量;div(cross_mean,
+    cross_stddev) 里量纲抵消。
+
+
+    为什么和已见的不同:快照里含这个核心的写法,外围只有 {sub(0.5, ·), cs_bucket_zscore, cross_mean(day_std(Amt),
+    30)} 作用在单日值上。这里的外围算子 cross_mean / cross_ema / cross_med / cross_tail_mean_q25
+    / cross_max / cross_stddev / cross_zscore / cross_corr、cs_regres / cs_rank、cross_age
+    与日频叶子 LogFloatCap / LogFloatShares、B017 的 day_cov(Low, Ret) 都没有出现过。5583 条库表达式里
+    cs_bucket_* / cross_zscore / cross_ema / cross_tail_* / 任何日频叶子都是 0 条;所有种子的骨架已逐个对照两个库(都不在库里)。与已有
+    head 的区别:head 是单日 |残差| 的已知族分桶,这里是 120 ~ 241 日的聚合量,换了同伴键后分桶边界也不同,日度秩相关预期 0.4 ~
+    0.65;与控制的关系由分桶或无量纲化压低。
+
+
+    为什么样本外还会在:收盘棒含收盘集合竞价(深交所 2006 年起,上交所约 2018 年 8 月起;更早的窗口落在热身里),这是被动 / 机构按收盘价对净值申赎与基准对齐的集中成交点,也是
+    Hillion–Suominen 所说的操纵收盘价的动机点。「相对同样成交额离散度的同伴,收盘棒成交额(残差)长期偏大」读的是持续的收盘参与强度,是几个月尺度上缓慢变化的持仓结构属性:聚合窗口
+    120 ~ 241 日,换手低,15 bp 成本吃不掉;去掉水平与同伴后与 5 个控制 + 两个冠军的暴露小。风险:valid 强于 train(+1.46
+    对 −0.21)说明有体制依赖,min(train, valid) 会把只在 2023 年以后成立的东西挡掉。
+
+
+    数学检查:无前视(窗口只向后、含当天,t 日收盘后算出、t+1 才交易)。ts_regres 在窗口内有效对不足 3 个时为 NaN 或 0(两点完美拟合),只影响上市头几天(|残差|
+    落在最底部,不是爆点)。分母只出现在 div(均值, 标准差) 与 近 20 日 ÷ 241 日 两个种子,分子分母同量纲同来源,标准差只在窗口内仅 1 ~
+    2 个有效日时为 0(得 NaN),不是近零爆点。cs_bucket_zscore 在同伴不足 2 只时给 NaN;cs_regres 先对两边取 cs_rank,无量纲爆点。不用
+    ts_rank / cross_rank(当天缺失记 0 的已知问题)。引擎对窗口不满的头几天用已有日子计算(不是 0 填充),2018 年前一年是热身噪声,最长窗口
+    241 + 100 日。'
+  literature:
+  - title: Stock returns and trading at the close
+    authors: David Cushing, Ananth Madhavan
+    year: '2000'
+    treatment: 收盘时点的集中成交与按收盘价对净值的申赎;这里只取「收盘棒成交额相对同伴长期偏大」作为持续的收盘参与强度,并按成交额离散度分桶
+  - title: The manipulation of closing prices
+    authors: Pierre Hillion, Matti Suominen
+    year: '2004'
+    treatment: 收盘价是操纵与对齐的动机点;这里只用其中「收盘参与异常」的持续性,不判断动机
+  seeds:
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 241), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120), cross_mean(cross_min(day_cov(Low, Ret), 15), 60))
+  - cs_bucket_zscore(cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open),
+    day_last(Amt), 100)), 120), cross_mean(day_std(Amt), 30)), LogFloatCap)
+  - div(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), 120),
+    cross_stddev(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), 120))
+  - cross_mean(cross_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),
+    120), 40)
+  - div(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), 20), cross_mean(abs_(ts_regres(day_cov(Amt,
+    Open), day_last(Amt), 100)), 241))
+  - cs_bucket_zscore(cross_tail_mean_q25(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_med(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),
+    120), cross_mean(day_std(Amt), 30))
+  - cs_regres(cs_rank(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120)), cs_rank(cross_mean(day_std(Amt), 30)))
+  - cs_bucket_zscore(cross_ema(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),
+    60), cross_mean(day_mean(Amt), 120))
+  - mul(is_gt(cross_age(day_last(Amt)), 120), cross_corr(abs_(ts_regres(day_cov(Amt,
+    Open), day_last(Amt), 100)), day_std(Amt), 120))
+  - mul(is_gt(cross_age(day_last(Amt)), 120), cross_corr(abs_(ts_regres(day_cov(Amt,
+    Open), day_last(Amt), 100)), abs_(day_sum(Ret)), 120))
+  - cs_bucket_zscore(cross_stddev(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), 120), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_max(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),
+    60), cross_mean(day_std(Amt), 30))
+- type: N
+  hypothesis: '批里的现象(B016):16 个成员的骨架一模一样,都是「某个日度量对日度协方差做滚动回归,取最后一天残差的绝对值」,而且**被解释的量
+    y 全是 day_last(·)(收盘棒:Amt / Volume / Ret)**。整个库 85 条含 ts_regres 的表达式里,y 是开盘棒 day_first(Amt)
+    或含 in_slice 一段的 0 条,cs_bucket_* 0 条,日频叶子 0 条。第 1 轮 R 组的结果:这台「回归残差的绝对值 → 同伴内分桶
+    → 慢」的机器在 y = 收盘棒时是本种子里唯一接近 0 的东西(分桶后 W = 100 / 200 为 −0.48 / −0.21,valid +0.23
+    / +1.46,与已知族 |ρ| 0.01);回归元不承重(换成市场收盘棒均额分数不变),y 才是。
+
+
+    新想法:收盘棒只是一天里两个**价格发现的拍卖点**之一,另一个是开盘(minute 0 = 集合竞价成交)。开盘集合竞价承载隔夜信息(新闻、跳空),收盘集合竞价承载组合再平衡与基准对齐;两处「持续的异常参与」读的是不同类型的参与者(信息型
+    vs 被动型)。本位把同一台机器换到别的时点:
+
+    (1) y 换开盘棒:day_first(Amt)、day_first(Volume)、开盘 5 分钟 day_sum(in_slice(Amt, 1, 5))、开盘
+    15 分钟、全日最大一分钟 day_max(Amt);回归元用批里的 day_cov(Amt, Open) 或当天总成交额 day_sum(Amt)。
+
+    (2) 回归元换成「新闻解释的部分」:开盘棒成交额对隔夜跳空幅度 |开盘 ÷ 昨收 − 1| 回归,|残差| = 无新闻的开盘参与;收盘棒对当天 |涨跌|
+    回归,|残差| = 与当天价格变动无关的收盘参与。
+
+    (3) 窗口 100 ~ 300、同伴键换已知族(对照)/ 对数名义价格 / 复合键,以及时间聚合(cross_mean(·, 60 ~ 120))、带符号的残差聚合(cross_mean(残差,
+    60),读的是开盘参与高于还是低于回归线)、开盘减半个收盘的对比。
+
+    这是个可证伪的检验:若开盘版与收盘版同量级,说明机制是「拍卖点参与强度」;若开盘版明显更差,说明 B016 的信息是收盘特有的,下一轮在收盘上继续深挖。
+
+
+    算子怎样实现:骨架统一为 cs_bucket_zscore(abs_(ts_regres(x, y, W)), 键),其中 y、x 如上;例:cs_bucket_zscore(abs_(ts_regres(abs_(sub(div(day_first(Open),
+    ts_delay(day_last(Close), 1)), 1)), day_first(Amt), 200)), cross_mean(day_std(Amt),
+    30)) 读的是「开盘棒成交额中跳空幅度解释不了的部分的大小,在成交额离散度相近的同伴里谁长期更大」。day_first(Open) 是第 0 根(集合竞价那一根)的开盘价,ts_delay(·,
+    1) 是前一交易日。
+
+
+    为什么和已有的不同:库里 y 全是收盘棒(见上),没有开盘棒 / 开盘段 / 最大分钟的版本,没有对跳空幅度的回归,没有分桶,没有日频叶子(5583 条里这些都是
+    0);这 15 个种子的骨架已逐个对照两个库(都不在库里)。与已有 head 的区别:head 的 y 是收盘棒,这里除一个对照种子(收盘棒对 |涨跌| 回归)外
+    y 都是开盘 / 开盘段 / 最大分钟,与 head 的日度秩相关预期 0.2 ~ 0.5(两个时点的成交额都带水平,分桶后主要共享「相对离散度的强度」);与流
+    2005 的「收盘份额」类不同,这里没有任何除以日总额的份额量。
+
+
+    为什么样本外还会在:两个拍卖点的持续异常参与是参与者结构的属性(谁在开盘 / 收盘集中成交),几个月尺度上缓慢变化,窗口 100 ~ 300 日换手低;开盘版若成立,来源是隔夜信息交易的持续性(Cao–Ghysels–Hatheway
+    的开盘前价格发现),分桶去掉了成交额水平,|残差| 去掉了跳空本身。风险:开盘棒成交额与已知族共线(分桶救不回时 ρ_known 会高),开盘棒在涨停 /
+    一字板日几乎为 0 或极大;与收盘版一样可能 valid 好 train 差。
+
+
+    数学检查:无前视(只用 t 日及以前,t+1 交易;ts_delay(day_last(Close), 1) 是昨收)。day_first 在整天缺失时为
+    NaN;回归窗口按有效对剔除,有效对 < 3 时为 NaN 或 0,只影响上市头几天;|开盘 ÷ 昨收 − 1| 的分母是昨收(正的价格),没有近零分母;分桶键同上;不用
+    ts_rank / cross_rank;没有除以日总额。一字板日开盘价恒等于昨收时 |跳空| 是 0,不是爆点,只是回归元取 0。窗口最长 300 日,热身落在
+    2018 年,按已有日子计算(不是 0 填充)。'
+  inspired_by: B016 批:16 个成员的 y 全是 day_last(收盘棒);第 1 轮 R 组显示分桶 + 慢窗口后收盘棒的 |回归残差| 是本种子唯一接近
+    0 的东西(W = 100 / 200 为 −0.48 / −0.21),回归元换成市场均额分数不变、除以自己的收盘均额崩到 −3.14,承重的是 y 与同伴内的水平。
+  literature:
+  - title: 'Price discovery without trading: evidence from the Nasdaq preopening'
+    authors: Charles Cao, Eric Ghysels, Frank Hatheway
+    year: '2000'
+    treatment: 开盘前 / 开盘集合竞价阶段已经在做价格发现;这里只取「开盘棒成交额中跳空幅度解释不了的部分」的持续大小
+  - title: A closing call's impact on market quality at Euronext Paris
+    authors: Marco Pagano, Robert Schwartz
+    year: '2003'
+    treatment: 收盘集合竞价改变收盘时点的成交与价格质量;这里只用它说明收盘与开盘是两个对照的拍卖点
+  seeds:
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_first(Amt), 200)), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_first(Amt),
+    100)), 60), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(abs_(ts_regres(day_sum(Amt), day_first(Amt), 200)), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_sum(in_slice(Amt, 1, 5)),
+    200)), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_max(Amt), 200)), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_first(Amt), 200)), sub(LogFloatCap,
+    LogFloatShares))
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_first(Amt), 300)), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_zscore(abs_(ts_regres(day_sum(Amt), day_sum(in_slice(Amt, 1, 15)), 200)),
+    cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_mean(ts_regres(day_cov(Amt, Open), day_first(Amt), 200),
+    60), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_first(Volume), 200)),
+    cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(abs_(ts_regres(abs_(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1)), day_first(Amt), 200)), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(abs_(ts_regres(abs_(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1)), day_first(Amt), 120)), sub(sub(LogFloatCap, LogFloatShares), LogFloatShares))
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(abs_(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1)), day_first(Amt), 100)), 120), cross_mean(day_std(Amt), 30))
+  - sub(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_first(Amt), 200)),
+    cross_mean(day_std(Amt), 30)), mul(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt,
+    Open), day_last(Amt), 200)), cross_mean(day_std(Amt), 30))))
+R:
+- head: sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    100)), cross_mean(day_std(Amt), 30)))
+  why: 该 head 现在是 B016 骨架加已知族分桶(−0.48,train −0.48 / valid +0.23)。第 1 轮到本轮的拆解给出五个可改的部件:(a)
+    窗口 100:不分桶 W = 150 / 250 为 −0.29 / −0.46,分桶 100 → 200 为 −0.48 → −0.21(valid +1.46),拆解表里
+    loc 的 R 候选就是这个;越慢越好但没有走到头,所以试 150 / 300 / 400(窗口不满的头一年是热身,400 日可能反而更差);(b) 分桶键
+    cross_mean(day_std(Amt), 30):拆解里去掉 30 日均值、直接用 day_std(Amt) 得 −0.34(+0.13),但键每天换桶边界会增加换手,所以同时试更慢的
+    120 日均值(桶更稳);(c) 十分位内 z 分数受 |残差| 重尾支配,试 sqrt / log 压缩与十分位内秩(cs_bucket_rank);(d)
+    回归元 Open → Close 在 W = 100 分桶时 −0.43(valid +0.25)几乎不变,在 200 日再试一次;(e) 分桶后仍可能有市值暴露,试再嵌套一层
+    LogFloatCap。数学上都有界:没有近零分母,log 里加 1(|残差| 以元计,量级远大于 1),分桶不足 2 只给 NaN,无前视。
+  variants:
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 300)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 400)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 150)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)),
+    day_std(Amt)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 300)),
+    day_std(Amt)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)),
+    cross_mean(day_std(Amt), 120)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 300)),
+    cross_mean(day_std(Amt), 120)))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Close), day_last(Amt), 200)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(sqrt(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    200))), cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(log(add(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt),
+    200)), 1)), cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_rank(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 200)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open),
+    day_last(Amt), 200)), cross_mean(day_std(Amt), 30)), LogFloatCap))
+- head: cross_min(cross_min(day_cov(Low, Ret), 15), 15)
+  why: B017 的 head(−1.70,train −1.65 / valid −1.70,方向 −1)。按恒等式 Σ(P_t − P̄)(P_t − P_{t−1})
+    = (P_end − P_start)·(P_mid − P̄) + ½ΣΔP²,day_cov(Low, Ret) ≈ 名义价格 × 已实现方差的一半 +
+    一个方向项,所以式子里的名义价格水平与波动水平一起进了排序,而两者正是尺子要扣掉的控制(原始净夏普 +1.0,扣控制后 −1.7)。烂部件 = 价格 × 方差的尺度混在一起。变体:按已知族十分位、对数名义价格
+    LogFloatCap − LogFloatShares 十分位、市值十分位做同伴内标准化,把价格 / 规模从排序里拿出去,只留同伴内的「波动底」。数学上有界,没有除法,分桶不足
+    2 只给 NaN,无前视。
+  variants:
+  - cs_bucket_zscore(cross_min(cross_min(day_cov(Low, Ret), 15), 15), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_zscore(cross_min(cross_min(day_cov(Low, Ret), 15), 15), sub(LogFloatCap,
+    LogFloatShares))
+  - cs_bucket_zscore(cross_min(cross_min(day_cov(Low, Ret), 15), 15), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

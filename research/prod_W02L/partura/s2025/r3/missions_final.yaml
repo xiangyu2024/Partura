@@ -1,0 +1,113 @@
+seed: 2025
+round: 3
+slots:
+- type: N
+  hypothesis: 新 idea:「收益极值有没有成交量撑着」。day_pdf_quantile_bilateral_half_width(Ret, Volume,
+    n)(默认中心 = 成交量峰值分钟,已读源码)的实现:先把当日分钟收益做 min-max 归一到 [0,1](无量纲,不含波动水平);以成交量最大的那一分钟为中心,按分钟位置距离由近到远累加成交量占比,累计到
+    ≥ n 为止,返回这个时间窗口内归一化收益的半极差(上限 0.5)。值大 = 当日最高 / 最低收益的分钟落在围绕成交峰值、包含 n 比例成交量的时间窗口内(极端价格由放量驱动,信息型);值小
+    = 极端收益出现在离放量峰值很远、成交稀薄的时段(买卖价弹跳 / 薄盘噪声)。库里 B075 的 12 条只读单个 n=0.9 的这个量的 20 日均值 /
+    std(新尺子下 head 分数 −2.0 ~ −2.5),本组的不同:(1) 读不同 n 的差(0.9−0.5、0.9−0.7、0.95−0.8):差掉共同的日内结构,留下「极值离放量中心多远」的梯度
+    —— 窄窗口(n=0.5)已含极值的日子与要到宽窗口才含极值的日子之分;(2) 早盘 2–120 与午后 121–240 的同一量之差(极端是否随时段被量撑着);(3)
+    用成交额 Amt 做权重,以及 Volume 权重减 Amt 权重(价位加权的差别);(4) 聚合一律是 120–241 日的慢变异性(std)/ 慢均值
+    / EMA —— 本流 R 与 E 的读数都说「慢 + 变异性」才不被控制吃掉,而 B075 的 20 日窗口过快。为什么样本外还在:微结构的信息 / 噪声分解(知情交易的极端价格伴随量,噪声价格不伴随量),按股票的持续性高,不依赖某段行情;读数是
+    [0,0.5] 内的归一化量,全部是减法,没有除法,不会爆点。已知风险:单日读数在 0.5 附近饱和(n=0.9 时几乎覆盖全天),差分后分布集中,靠慢窗口放大稳定的个股差异。
+  inspired_by: 第 3 批 B075(12 条 day_pdf_quantile_bilateral_half_width(Ret, Volume,
+    0.9, 'median'/'rank'):库口径单日夏普 −21 ~ −35,20 日均值 −3.5,20 日 std −0.8 ~ −2.1,新尺子下
+    head 里 cross_stddev / cross_mean 版 −2.0 ~ −2.4,拆解里窗口 20→10 增益 +0.57、Amt 增益 +0.26:变异性读法比水平好、更短的
+    std 窗口更好)
+  seeds:
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240),
+    in_slice(Volume, 2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Volume, 2, 240), 0.5)), 120)
+  - cross_mean(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.5)), 241)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240),
+    in_slice(Volume, 2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Volume, 2, 240), 0.7)), 160)
+  - ts_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.5)), 160)
+  - cross_ema(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.5)), 120)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240),
+    in_slice(Amt, 2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Amt, 2, 240), 0.5)), 120)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 120),
+    in_slice(Volume, 2, 120), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    121, 240), in_slice(Volume, 121, 240), 0.9)), 120)
+  - cross_mean(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 120), in_slice(Volume,
+    2, 120), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 121, 240),
+    in_slice(Volume, 121, 240), 0.9)), 241)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240),
+    in_slice(Volume, 2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Amt, 2, 240), 0.9)), 120)
+  - cross_mean(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Amt,
+    2, 240), 0.9)), 241)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240),
+    in_slice(Volume, 2, 240), 0.95), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Volume, 2, 240), 0.8)), 160)
+  - ts_mean(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 11, 230), in_slice(Volume,
+    11, 230), 0.9), day_pdf_quantile_bilateral_half_width(in_slice(Ret, 11, 230),
+    in_slice(Volume, 11, 230), 0.5)), 120)
+  - cross_stddev(sub(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 120),
+    in_slice(Volume, 2, 120), 0.5), day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    121, 240), in_slice(Volume, 121, 240), 0.5)), 160)
+- type: E
+  core: ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160)
+  hypothesis: 核心 = 本流最好的 head `ts_stddev(day_std(放量前 20% 分钟收益), 160)`(−0.28,拆解:80
+    / 320 都更差,换 Amt 不变;train / valid 同号,没有被卡一端):放量分钟里价格离散度的 160 日变异性(波动率的波动率,按「在量大的时候价格是否时松时紧」)。alpha
+    的可能来源:信息到达的间歇性(Clark 混合分布:量大分钟的离散度随信息流变化,变异大 = 信息流不稳 / 被关注度忽高忽低),不是波动水平本身(核心是
+    std 的 std,已被慢窗口去掉水平)。前几轮用过的外围(第 1 轮 E 位对 σT − σB 的 cross_max / cross_sum 外壳,R
+    对该 head 的 log / EMA / 窗口 / 核心差)都是「对核心自己做时间变换或聚合」。本组外围完全不同,是「拿别的东西来对照核心」:(1) 减去
+    / 回归掉「全天分钟收益」的同样的变异性(除掉整体波动率的波动率,问放量条件有没有额外信息;用 cs_rank 差和 cs_regres 两种,不做除法,没有近零爆点);(2)
+    减去静默腿的同一量(放量与静默的变异性差);(3) 与同一加权方式下的收益分布半宽的变异性(B075 的量)秩相加 —— 两个独立估计量的混合;(4) 加上放量腿与静默腿离散度的
+    160 日相关、与当日收益和的相关(杠杆 / 同步类耦合);(5) 核心相对自己 241 日历史的位置 ts_rank,以及核心相对一个季度前的变化(新 /
+    旧信息流)。样本外还在的理由:机制是信息流稳定性,和股票的信息环境(分析师覆盖 / 散户占比)有关,持续性强;每个种子都含核心原样,核心与已知族的 |ρ|
+    只有 −0.12。
+  seeds:
+  - sub(cs_rank(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160)), cs_rank(ts_stddev(day_std(in_slice(Ret, 11, 240)), 160)))
+  - cs_regres(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160), ts_stddev(day_std(in_slice(Ret, 11, 240)), 160))
+  - add(cs_rank(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160)), cs_rank(cross_stddev(day_pdf_quantile_bilateral_half_width(in_slice(Ret,
+    2, 240), in_slice(Volume, 2, 240), 0.9), 160)))
+  - sub(ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160), cross_delay(ts_stddev(day_std(in_topk_masked(in_slice(Volume,
+    11, 240), in_slice(Ret, 11, 240), 5)), 160), 60))
+R:
+- head: ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 5)), 160)
+  why: 窗口 80 / 320 都比 160 差(−0.83 / −0.94,320 的 train 坏、valid −0.10),160 是峰;峰附近的窗口与放量分钟占比
+    p 没有测过,看峰是否更尖
+  variants:
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 5)), 120)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 5)), 200)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 5)), 240)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 7)), 160)
+  - ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 4)), 160)
+- head: cross_mean(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), 20)
+  why: 同一对象的 'median' 版本拆解:窗口 20→10 对 cross_stddev 增益 +0.57、Volume→Amt 对 cross_mean
+    增益 +0.20 / 对 cross_stddev +0.26,变异性读法更好、更短窗口更好;本 head 是 prob 中心版,这些改动没有在它上面试过
+  variants:
+  - cross_stddev(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), 10)
+  - cross_stddev(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Volume,
+    2, 240), 0.9), 5)
+  - cross_mean(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Amt,
+    2, 240), 0.9), 20)
+  - cross_stddev(day_pdf_quantile_bilateral_half_width(in_slice(Ret, 2, 240), in_slice(Amt,
+    2, 240), 0.9), 10)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,208 @@
+seed: 2017
+round: 1
+slots:
+- type: E
+  core: day_quantile(Close)
+  hypothesis: '机制。核心 C = day_quantile(Close):当天 241 根分钟收盘价的中位数,是一条不被开盘 / 尾盘尖峰带偏的稳健日度价格路径。价格字段是后复权价(规则
+    §4),所以 C 的截面名次约等于「基期价 × 上市以来累计收益」,水平本身是长周期动量 / 反转与名义价的混合体。
+
+
+    快照里的两条线索(都在 loc 的拆解表里,不是我的推测):(1) 水平的单调读法没有残差 alpha:day_quantile(Vwap) 方向 −1、半衰期
+    5,train −1.61 / valid −2.38,与已知族 ρ +0.42,库里同一个量(day_quantile(Close))的日换手只有 0.014,所以亏的不是成本;(2)
+    批里唯一好一点的 head 1 是非单调的 —— 把截面最低 10% 用截面均值替换,−2.38 变成 −0.59(valid +0.13),必要性 +1.79,Vwap
+    换成 Close 几乎不变(−0.56 / +0.16)。单调读法两头亏、只做一点非单调处理就好很多,与「这条路径里的信息是有条件的」相容。这是我的假设,批里没有直接证据(本批几乎所有成员都是单调读法)。
+
+
+    我要检验的条件是市场状态。文献依据:(a) Cooper–Gutierrez–Hameed 2004:动量的符号随市场状态翻,上涨市里延续、下跌市里反转;(b)
+    Daniel–Moskowitz 2016:熊市之后的反弹里输家猛涨(动量崩盘),符号由市场状态决定;(c) Baker–Wurgler 2006:高情绪期里小盘
+    / 高波动 / 不盈利 / 不派息的票之后跑输,低情绪期跑赢。A 股散户占比高,「追涨」与「抄底」随牛熊轮换,所以后复权价格路径的长周期变化(12 个月、6
+    个月、跳过最近 20 日的 12−1)以及水平本身的预测符号,可能随市场状态翻。奖励的方向只在 train 里按 ±1 定一次:一个随状态翻符号的溢价,在固定符号下两种状态互相抵消,这正是「水平单调读法两头亏」可能藏住它的地方。注意奖励的残差是逐日取的,控制暴露每天都被去掉,所以翻符号不是在绕过控制,只是让每天选的那一侧更对。
+
+
+    算子怎样实现:y = 核心路径的长周期读数(log(C) 的 cross_delta 60 / 120 / 241 日,一个跳过最近 20 日的 12−1,或
+    log(C) 水平本身);g = 市场状态的原料。cs_flip_by_state(y, g)(读 ops_ext.py 源码核实过):取当天 g 的截面均值,看它在自己近
+    241 日里的分位,高于中位数取 +(rank(y)−0.5)、否则取 −(rank(y)−0.5);只用尾随窗口,t 日收盘后算,t+1 才交易。g 有四种读法:①
+    等权对数价格指数的水平 log(C)(种子 1、2、10),即指数处在自己一年区间的哪一半;② 指数的 120 / 60 日变化(种子 3、4、5、6、11、14),比水平少受新股上市拉低均值的影响;③
+    上涨广度 = 20 日变化为正的股票占比 is_gt0(cross_delta(log(C), 20))(种子 7、8);④ 截面离散度 cs_stddev_full(cross_delta(log(C),
+    20))(种子 9)。种子 12、13 用 cs_state_rank 与 select_where 在两种不同的风格之间按状态切换,而不是翻同一个信号的符号:12
+    是上涨市 12 个月动量、下跌市买低水平;13 是广度高时买高水平、广度低时买 6 个月输家。种子 14 把 head 1 的「最低一档用均值替换」包在翻符号信号外面。种子
+    15 是不带状态的 12 个月变化,当对照:如果它与最好的翻转种子同分,说明状态没有贡献。
+
+
+    为什么和快照里见过的不同:见过的含 C 的外围算子集合是 {sigmoid, cs_quantile_q25}、{cs_rank}、{ts_max}、{ts_max,
+    cross_med}、{ts_spearman}、{cross_corr, cross_delta, …}、{ts_min, …},全是对水平的单调 / 短窗口读法;这里的外围含
+    cs_flip_by_state / cs_state_rank / select_where / log / 长窗口 cross_delta,没有一个与它们是同一个集合。库里
+    5583 条表达式中 cs_flip_by_state、cs_state_rank、cross_zscore、日频叶子都是 0 条;含 cross_delta(day_quantile
+    或 day_quantile_q75 (Vwap), 3 / 10) 的有 29 条,全是短窗口;长窗口(≥ 60 日)的 cross_delta 都作用在分钟字段(Open
+    / High / Low / Volume / Amt / Ret)或 day_argmax / day_var 这类日内统计量上,没有一条作用在日度对数价格上。15
+    个种子的骨架我用 skeleton_key 逐一对照过两个库能解析的表达式的骨架(5583 条里 5526 条能解析),没有重复。
+
+
+    为什么样本外还会在:来源是行为与制度,不是某段行情 —— 散户追涨杀跌随牛熊轮换(CGH 2004)、熊市反弹里的高 beta 输家(DM 2016)、情绪对不同类股票的非对称影响(BW
+    2006);状态变量是 120~241 日的慢变量,一年翻符号的次数很少,15 bp 的成本吃得下;y 是 60~241 日的路径变化,本身换手低。最可能的失败方式:(a)
+    状态在指数位于中位数附近时来回翻,换手把分数吃掉(我预计 9 号离散度与 7、8 号广度的翻转最差);(b) train 段 2018–2023 只有 5
+    年半、状态切换点太少,条件关系估不准,train 与 valid 的最优符号不一致,min 为负;(c) 12 个月变化与 20 日反转控制有相关,残差变小。
+
+
+    数学检查:无前视 —— cross_delta / cross_delay 的天数都为正,状态只用尾随窗口;数值 —— 复权价为正、log 安全,cs_flip_by_state
+    对状态没有定义的日子整行缺失(不是静默的「低」),取值是 ±(秩 − 0.5),没有除以近零量,没有爆点;热身 —— 最长窗口 241 日,库里单个 241
+    日窗口的表达式覆盖率是 0.999,热身不主导;水平类状态在最初 241 天用不满的窗口算分位,但 y 在那段时间里本来就缺失。本机用 AlphaCube
+    自带的合成立方体把这 15 个种子(以及 N 位与 R 的全部表达式)都算过,都能算、没有报错;没有碰真实数据。'
+  literature:
+  - title: Market states and momentum
+    authors: Michael Cooper, Roberto Gutierrez, Allaudeen Hameed
+    year: '2004'
+    treatment: 动量只在上涨市里为正、下跌市里为负;这里把市场状态(等权对数价格指数处在自己一年区间的哪一半、6 个月变化、广度)当作翻符号的开关
+  - title: Momentum crashes
+    authors: Kent Daniel, Tobias Moskowitz
+    year: '2016'
+    treatment: 熊市之后的反弹里输家猛涨、动量崩盘;这里用「指数 120 日变化」状态把上涨市与下跌市分开读 12 个月变化
+  - title: Investor sentiment and the cross-section of stock returns
+    authors: Malcolm Baker, Jeffrey Wurgler
+    year: '2006'
+    treatment: 情绪高低决定哪类股票之后跑赢;这里用 cs_state_rank 在两种风格之间按状态混合(种子 12、13)
+  seeds:
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 241), log(day_quantile(Close)))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 120), log(day_quantile(Close)))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 241), cross_delta(log(day_quantile(Close)),
+    120))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 120), cross_delta(log(day_quantile(Close)),
+    60))
+  - cs_flip_by_state(sub(cross_delay(log(day_quantile(Close)), 20), cross_delay(log(day_quantile(Close)),
+    241)), cross_delta(log(day_quantile(Close)), 120))
+  - cs_flip_by_state(log(day_quantile(Close)), cross_delta(log(day_quantile(Close)),
+    120))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 241), is_gt0(cross_delta(log(day_quantile(Close)),
+    20)))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 120), is_gt0(cross_delta(log(day_quantile(Close)),
+    20)))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 120), cs_stddev_full(cross_delta(log(day_quantile(Close)),
+    20)))
+  - cs_flip_by_state(cross_delta(log(day_quantile(Close)), 60), cross_mean(log(day_quantile(Close)),
+    60))
+  - cs_flip_by_state(cross_ema(cross_delta(log(day_quantile(Close)), 120), 20), cross_delta(log(day_quantile(Close)),
+    120))
+  - add(mul(cs_state_rank(cross_delta(log(day_quantile(Close)), 120), 241), cs_rank(cross_delta(log(day_quantile(Close)),
+    241))), mul(sub(1, cs_state_rank(cross_delta(log(day_quantile(Close)), 120), 241)),
+    sub(1, cs_rank(log(day_quantile(Close))))))
+  - select_where(is_gt(cs_state_rank(is_gt0(cross_delta(log(day_quantile(Close)),
+    20)), 120), 0.5), cs_rank(log(day_quantile(Close))), sub(1, cs_rank(cross_delta(log(day_quantile(Close)),
+    120))))
+  - cs_mask_top_replace_mean_neg(cs_flip_by_state(cross_delta(log(day_quantile(Close)),
+    241), cross_delta(log(day_quantile(Close)), 120)))
+  - cross_delta(log(day_quantile(Close)), 241)
+- type: N
+  hypothesis: '机制。价格趋势与成交活跃度的趋势一起读,而不是各读各的。B049 的拆解给的线索:价格水平单读的纯多头书两头都亏(−1.61 / −2.38),批里唯一好一点的是非单调的
+    head 1;单变量的单调读法没有残差,信息如果有,应该在两个变量的交互里。
+
+
+    文献依据三条:(a) Lee–Swaminathan 2000:动量与成交量一起决定后续收益,成交量高的赢家(glamour)的动量更短、之后更差,成交量低的赢家更持久;(b)
+    Gervais–Kaniel–Mingelgrin 2001:成交量异常高的股票之后收益偏高(可见度溢价);(c) Llorente–Michaely–Saar–Wang
+    2002:价量相关性区分投机性成交(收益延续)与对冲性成交(收益反转)。三者说的是同一件事:价格方向与成交量方向的「配对」是个股的状态,分别读两个变量的边际效应读不到它。奖励的控制(流动性、波动、20
+    日反转、已知成交额族、流通市值,再加两个冠军)取的是单变量的 1 / 2 / 3 次方,里面没有「价格趋势 × 成交量趋势」的交互,控制里的成交额类是水平
+    / 离散度量,也不是个股相对自己历史的成交量变化;逐日残差去掉的是控制的暴露,去不掉这个交互。
+
+
+    算子怎样实现。P = cross_delta(log(day_quantile(Close)), 120 或 241):核心路径(分钟收盘价中位数)的对数涨幅,中位数不被开收盘尖峰带偏。TO
+    = sub(log(add(day_quantile(Amt), 1)), LogFloatCap) = log(典型分钟成交额 ÷ 流通市值),即「典型分钟的换手率」:典型分钟取中位数,不被放量尖峰带偏;除以流通市值之后,价格水平与送转都被约掉(Amt
+    是不复权的原始成交额);add(·, 1) 只是在某些票的典型分钟成交额为 0 时避免 log 缺失。六类读法:① 种子 1–4,去中心化名次的乘积 (rank(P)−½)(rank(V)−½),价格趋势与成交量趋势同向时为正;V
+    分别取 TO 的 120 日变化、60 日变化、相对自己 120 日历史的 z 分数、20 日均值减 120 日均值;② 种子 5、6,名次的差与和;③ 种子
+    7、8,截面回归残差(价格趋势里成交量趋势解释不了的部分,及反过来的部分);④ 种子 9、10,桶内标准化 —— Lee–Swaminathan 的设计:价格趋势在成交量趋势十分位内的
+    z 分数,与成交量趋势在价格趋势十分位内的 z 分数(即价格涨跌之外的成交量异常);⑤ 种子 11–13,日度价格变化与换手(水平或变化)的 60 / 120
+    日滚动相关与斜率,即 Llorente 的价量关系;⑥ 种子 14、15,单变量的 z 分数(对照,用来看交互有没有增量)与 sign(价格趋势) × z
+    分数。方向由奖励在 train 里按 ±1 定,所以乘积与差各放一个。
+
+
+    为什么和已有的不同:两个库 5583 条表达式里 LogFloatCap 等日频叶子、cross_zscore、cs_bucket_zscore、作用在日度对数价格上的
+    cross_delta 都是 0 条,「价格趋势与换手趋势的配对」一条也没有;cs_regres 在库里有 72 条,但没有一条以换手或价格趋势作回归元;我用
+    skeleton_key 把 15 个种子的骨架逐一对照过两个库的骨架集(5583 条里 5526 条能解析),没有重复。它也不是控制的换皮:控制里没有任何一个是换手趋势或价量配对;换手的变化量对流动性水平控制的相关预计低(变化量不含水平)。与
+    head 的关系:head 1 是价格水平的名次(混着基期价和累计收益),这里的 P 是路径的涨幅、V 是成交量的趋势,与它的日度秩相关预计在 0.3 以下。
+
+
+    为什么样本外还会在:来源是投资者类型与注意力的结构(散户追逐高成交的赢家、机构建仓期间成交量与价格同向推进),这类结构慢变、不依赖某段行情;窗口 60~241
+    日,名次基于排序而不是数值,对尖峰不敏感,换手低。最可能的失败方式:(a) 换手趋势与两个冠军里的成交额族重合,残差为零;(b) 价量交互的符号在 train
+    与 valid 不一致(A 股的高换手赢家在不同阶段表现不同),min 为负;(c) LogFloatCap 的更新滞后在送转 / 解禁日产生台阶,换手变化有噪声;(d)
+    11–13 号滚动相关 / 斜率在 60~120 日窗口里估得吵。
+
+
+    数学检查:无前视 —— 全部只用 t 日收盘及以前,cross_delta 的天数为正,t+1 才交易;数值 —— 复权价为正、log 安全;add(·,
+    1) 保证 log 的输入 ≥ 1;cross_zscore 对近常数窗口有保护;cross_corr / cross_regbeta 在有效点太少时可能给
+    0(只影响长期停牌的票,不是结果的主要来源);cs_regres 对 X 无方差的日子返回 Y 去均值(不会出现除零);乘积与差都由名次构成,有界,没有爆点;热身:最长
+    241 日,不主导。本机用 AlphaCube 自带的合成立方体(含伪造的流通市值日频字段)把这 15 个种子都算过,都能算、没有报错;没有碰真实数据。'
+  inspired_by: B049 的拆解:价格水平单读两头亏(day_quantile(Vwap) 方向 −1,train −1.61 / valid −2.38),只有非单调的
+    head 1(最低一档用均值替换)好一点(−0.59 / +0.13,必要性 +1.79);批里含 day_quantile(Volume) 的成员(如 sqrt(cross_mean(day_quantile(Volume),
+    60)),库自带 train 日换手 0.013)是慢变量,说明「典型分钟」的成交活跃度可以当慢底来读
+  literature:
+  - title: Price momentum and trading volume
+    authors: Charles Lee, Bhaskaran Swaminathan
+    year: '2000'
+    treatment: 动量与成交量一起决定后续收益;这里用价格趋势 × 成交量趋势的名次乘积、桶内标准化来读(种子 1–4、9、10)
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan Mingelgrin
+    year: '2001'
+    treatment: 成交量异常高的股票之后收益偏高;这里用相对自己 120 日历史的换手 z 分数读(种子 3、14、15)
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 价量相关性区分投机性成交(收益延续)与对冲性成交(收益反转);这里用日度价格变化与换手的 60 / 120 日滚动相关与斜率读(种子
+      11–13)
+  seeds:
+  - mul(cs_demean(cs_rank(cross_delta(log(day_quantile(Close)), 120))), cs_demean(cs_rank(cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120))))
+  - mul(cs_demean(cs_rank(cross_delta(log(day_quantile(Close)), 241))), cs_demean(cs_rank(cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 60))))
+  - mul(cs_demean(cs_rank(cross_delta(log(day_quantile(Close)), 241))), cs_demean(cs_rank(cross_zscore(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120))))
+  - mul(cs_demean(cs_rank(cross_delta(log(day_quantile(Close)), 120))), cs_demean(cs_rank(sub(cross_mean(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 20), cross_mean(sub(log(add(day_quantile(Amt), 1)), LogFloatCap),
+    120)))))
+  - sub(cs_rank(cross_delta(log(day_quantile(Close)), 120)), cs_rank(cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120)))
+  - add(cs_rank(cross_delta(log(day_quantile(Close)), 120)), cs_rank(cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120)))
+  - cs_regres(cross_delta(log(day_quantile(Close)), 120), cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120))
+  - cs_regres(cross_delta(sub(log(add(day_quantile(Amt), 1)), LogFloatCap), 120),
+    cross_delta(log(day_quantile(Close)), 120))
+  - cs_bucket_zscore(cross_delta(log(day_quantile(Close)), 120), cross_delta(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120))
+  - cs_bucket_zscore(cross_delta(sub(log(add(day_quantile(Amt), 1)), LogFloatCap),
+    120), cross_delta(log(day_quantile(Close)), 120))
+  - cross_regbeta(cross_delta(sub(log(add(day_quantile(Amt), 1)), LogFloatCap), 1),
+    cross_delta(log(day_quantile(Close)), 1), 120)
+  - cross_zscore(sub(log(add(day_quantile(Amt), 1)), LogFloatCap), 120)
+  - mul(sign(cross_delta(log(day_quantile(Close)), 120)), cross_zscore(sub(log(add(day_quantile(Amt),
+    1)), LogFloatCap), 120))
+R:
+- head: signedpower(cs_mask_top_replace_mean_neg(day_quantile(Vwap)))
+  why: 这一组是机制检验,不是修补。head 1 的唯一承重部件是 cs_mask_top_replace_mean_neg(拆解表里去掉它 −2.38,必要性
+    +1.79):它把截面最低 10% 的值换成截面算术均值。价格分布右偏,算术均值落在价格分布的中高位(我的推断,约 70 分位,没有测),所以被换掉的一档(后复权价最低
+    = 上市以来跌得最惨的一批票)被放到中上位置、并列块内按列序排。变体改变这一档落在哪里和换多宽:log / sqrt / pow_2 把「均值」移到约中位
+    / 中高 / 更高(变体 1–3);连用两次,最低 20% 都拉到均值(4);最高一档也换掉,价格变成纯「中间带」(5);60 日均值只降换手(6);把水平换成
+    log 复权因子 = log(后复权价) − log(原始名义价)(7)、12 个月变化(8)后做同样的最低一档替换。数学:单调变换 + 截面替换,没有近零分母;无前视。预期:如果落点重要,1–3
+    的分数会不同;如果「拿掉最低一档」本身才是承重的,它们几乎一样,而 4 会更好。
+  variants:
+  - signedpower(cs_mask_top_replace_mean_neg(log(day_quantile(Vwap))))
+  - signedpower(cs_mask_top_replace_mean_neg(sqrt(day_quantile(Vwap))))
+  - signedpower(cs_mask_top_replace_mean_neg(pow_2(day_quantile(Vwap))))
+  - signedpower(cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(day_quantile(Vwap))))
+  - signedpower(cs_mask_top_replace_mean(cs_mask_top_replace_mean_neg(day_quantile(Vwap))))
+  - signedpower(cs_mask_top_replace_mean_neg(cross_mean(day_quantile(Vwap), 60)))
+  - signedpower(cs_mask_top_replace_mean_neg(sub(log(day_quantile(Vwap)), sub(LogFloatCap,
+    LogFloatShares))))
+  - signedpower(cs_mask_top_replace_mean_neg(cross_delta(log(day_quantile(Vwap)),
+    241)))
+- head: cs_rank(day_quantile(Ret))
+  why: 烂的部件是它的底和它的时间尺度。day_quantile(Ret) 单独过不了门槛(不同值占比 0.027),说明大量股票日取同一个值(最可能是 0:当天没有一半以上的分钟朝同一个方向);它非零只发生在当天一半以上的分钟严格同向时,数值约一个最小变动价位
+    ÷ 价格,所以又带着价格水平。cs_rank 对并列按列序打破(规则 §4:列序携带交易所 / 板块信息),这个 head 读到的很可能主要是板块序而不是收益;再加上它是单日读数、只靠半衰期
+    20 的 EMA 平滑。变体把「0 与 ±1 个最小变动价位」的混合变成连续的慢量:60 / 241 日平均(变体 1、2)、60 日 EMA(3)、120
+    日的符号平均 = 「多数分钟朝哪边」的方向频率,去掉 tick 尺度(4)。数学:都是均值 / 符号,没有除法;无前视。预期:如果 head 的 −1.19
+    主要来自并列的板块序,平滑后分数会更差或持平(板块序变成连续量后被抹掉);如果来自方向频率,4 会最好。
+  variants:
+  - cross_mean(day_quantile(Ret), 60)
+  - cross_mean(day_quantile(Ret), 241)
+  - cross_ema(day_quantile(Ret), 60)
+  - cross_mean(sign(day_quantile(Ret)), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

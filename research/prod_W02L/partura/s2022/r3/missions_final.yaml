@@ -1,0 +1,117 @@
+seed: 2022
+round: 3
+slots:
+- type: E
+  core: day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237)))
+  hypothesis: 机制:核心 C = 在连续竞价(in_slice 2..237,去掉两个集合竞价)里先找到全天最低价那一分钟,再读该分钟的成交额,即「价格被砸到当天最低点那一刻有多少钱在成交」。放量触底
+    = 恐慌抛售被承接(卖出高潮,流动性提供者拿到折价,之后反弹),缩量触底 = 无人接货的阴跌 / 一字类。定位表里含 C 的候选 34 条,均值 -1.57,不含
+    -2.43,差 +0.86(p 0.000),是本流富集第二强、样本第二多的子树;此前只有第 1 轮 N 位在它外面套过 pow_05(div(C, 全天均额+1))
+    再 cross_mean 120(并和高点处成交额相减),最好 -0.36,train / valid 都 -0.36,说明 C 读数本身干净,扣不掉的是外围写法里混着「今天整体放不放量」。本轮外围全部改成「相对自己历史
+    / 相对同流动性档」,同一天内分子分母不再是同一个量:(i) cs_bucket_rank(y, x) 在 x(全天均额或 LogFloatCap)十分位内部给
+    C 排名,不回归就去掉水平暴露;(ii) cross_regres(A, C, 120):每只股票 120 日内 C 对全天均额的回归残差 =「同样日成交额下触底处多出来的钱」;(iii)
+    cross_zscore:相对自己 120 日历史的标准化再 EMA;(iv) cross_corr(C, 当日收益 / 全天均额, 120):触底放量是否伴随跌日(抛售被吸收)或与成交额水平同动;(v)
+    cross_stddev(cs_rank(C), 120):触底处成交是否稳定,不稳定 = 事件驱动;(vi) 20 日均值减 241 日均值的变化(去日效应);(vii)
+    低点处名次减高点处名次:卖出高潮对买入高潮的不对称,再放进流动性十分位里。为什么和已有的不同:此前含 C 的外围只有 pow_05 div + cross_mean
+    一种,本轮用的是分档排名、回归残差、自身标准化、相关、离散度,骨架全不同;且在 R2 的 E 位对高点处成交额做过类似相对化,本轮对低点处读数,方向相反(承接
+    vs 追涨),两者相减的写法也在种子里。为什么样本外还会在:触底处谁在接货是慢变的参与者构成属性(机构 / 做市资金与散户的占比),不依赖某段行情;窗口全部
+    ≥ 60 日(只有一个 20 日对 241 日之差),换手低、成本压得住。数学检查:C 是某一分钟成交额 ≥ 0,in_slice 切掉集合竞价那两根的巨额成交;cs_bucket_rank
+    保留 NaN;cross_regres / cross_corr 窗口内恒定时给 NaN 而非爆点;除法只在带 +1 或常数的位置;没有 sign / is_gt
+    / is_lt;无前视(收盘后算、次日交易)。我对出 head 预期很低,价值是验证相对化之后触底处成交额是否还剩信息。
+  literature:
+  - title: Liquidity and market structure
+    authors: Sanford Grossman, Merton Miller
+    year: '1988'
+    treatment: 流动性提供者在抛压处接货并获补偿;这里读价格触底那一刻的成交额,相对自身历史 / 同档股票
+  - title: 'The relation between price changes and trading volume: a survey'
+    authors: Jonathan Karpoff
+    year: '1987'
+    treatment: 价格极值处的量价关系;本轮把水平去掉只留异常
+  seeds:
+  - cross_mean(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237))), day_mean(in_slice(Amt, 2, 237))), 120)
+  - cross_ema(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237))), LogFloatCap), 60)
+  - cross_mean(cross_regres(day_mean(in_slice(Amt, 2, 237)), day_locate(in_slice(Amt,
+    2, 237), day_argmin(in_slice(Low, 2, 237))), 120), 30)
+  - cross_ema(cross_zscore(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237))), 120), 30)
+  - cross_corr(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))),
+    day_sum(Ret), 120)
+  - cross_corr(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))),
+    day_mean(in_slice(Amt, 2, 237)), 120)
+  - cross_stddev(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), 120)
+  - sub(cross_mean(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), 20), cross_mean(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), 241))
+  - cross_mean(cs_bucket_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237))), LogFloatCap), 241)
+  - cross_mean(cs_bucket_rank(sub(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmax(in_slice(High,
+    2, 237))))), day_mean(in_slice(Amt, 2, 237))), 120)
+  - cross_ema(cross_regres(day_mean(in_slice(Volume, 2, 237)), day_locate(in_slice(Amt,
+    2, 237), day_argmin(in_slice(Low, 2, 237))), 60), 30)
+  - cross_mean(cross_zscore(cs_rank(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), 241), 60)
+- type: N
+  hypothesis: 机制:不读价格极值在几点(前两轮证明时刻值几乎全是换手),也不只读极值那一分钟的成交额,而读「全天成交额有多大份额发生在最低点之后」PL
+    = sum(in_slice_to_end(Amt, 最低点分钟)) / (全天成交额 + 1)。份额大 = 触底之后资金持续涌入(吸筹 / 承接),份额小
+    = 钱主要在下跌途中成交完、触底后无人问津。它是 [0,1] 的连续比值,没有整数并列问题,不同值门槛可过;最低点之后的区间被用作条件窗口,实现的算子是 in_slice_to_end(x,
+    y):保留 x 在 y 之后的分钟,其余为 NaN,day_sum 对 NaN 求和只累加有效分钟(分母 +1 避免除零)。并配成:最高点之后的份额 PH(追涨放量
+    vs 派发)的差;全天价格路径的成交加权收益 day_wmean(最低点之后的 Ret, 最低点之后的 Amt)(即最低点之后钱实际赚到什么);按流动性十分位排名;与当日收益的
+    120 日相关;120 日离散度(份额是否稳定);Volume 版本的最低点之前份额。为什么和已有的不同:库里 5583 条没有一条使用 in_slice_to_end
+    / in_slice_from_start(以极值时刻为界切分当天),定位表中所有含极值的子树都只读「时刻」或「那一分钟的值」,这里读的是「极值前后两个半天的成交结构」,变量不同;上一轮
+    N 位读成交额峰值时刻,这里读低点之后的成交份额。为什么样本外还会在:触底后的成交份额反映的是买盘承接的持久度,是微观结构层面的订单流不对称(Karpoff
+    1987 的价量关系、Grossman-Miller 的流动性供给),不依赖某段行情;全部是 60 日以上的慢统计,换手低。数学检查:in_slice_to_end
+    的下标与 day_argmin(in_slice(Low,2,237)) 同在同一切片坐标系,无错位;分母 +1;day_sum 保留全 NaN 为缺失;无
+    sign / is_gt / is_lt;无前视(收盘后算、次日交易);当天停牌 / 一字板日最低点落在 0、份额接近 1,是少数日子且被 120 日平均稀释。预期出
+    head 概率低(约 3%),但这是本流第一个换变量的 N 位。
+  inspired_by: 第 1、2 批定位表:day_locate(Amt, argmin/argmax(Low/High)) 富集 +0.86 / +1.03(p
+    0.000),说明「极值那一分钟的成交」比「极值时刻」干净;本轮把读数从一个点扩成极值前后两段的成交份额
+  literature:
+  - title: 'The relation between price changes and trading volume: a survey'
+    authors: Jonathan Karpoff
+    year: '1987'
+    treatment: 价量关系;这里用最低点之后的成交份额读承接持久度
+  seeds:
+  - cross_mean(cs_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1))), 120)
+  - cross_mean(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), 241)
+  - cross_ema(cs_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1))), 60)
+  - cross_mean(sub(cs_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1))), cs_rank(div(day_sum(in_slice_to_end(in_slice(Amt,
+    2, 237), day_argmax(in_slice(High, 2, 237)))), add(day_sum(in_slice(Amt, 2, 237)),
+    1)))), 120)
+  - cross_mean(cs_bucket_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), LogFloatCap), 120)
+  - cross_corr(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), day_sum(Ret), 120)
+  - cross_ema(cross_zscore(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), 120), 30)
+  - cross_mean(cs_rank(sub(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), div(day_sum(in_slice_to_end(in_slice(Amt,
+    2, 237), day_argmax(in_slice(High, 2, 237)))), add(day_sum(in_slice(Amt, 2, 237)),
+    1)))), 241)
+  - cross_mean(cs_rank(day_wmean(in_slice_to_end(in_slice(Ret, 2, 237), day_argmin(in_slice(Low,
+    2, 237))), in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2,
+    237))))), 120)
+  - cross_stddev(cs_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmin(in_slice(Low,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1))), 120)
+  - cross_mean(cs_bucket_rank(div(day_sum(in_slice_to_end(in_slice(Amt, 2, 237), day_argmax(in_slice(High,
+    2, 237)))), add(day_sum(in_slice(Amt, 2, 237)), 1)), day_mean(in_slice(Amt, 2,
+    237))), 120)
+R:
+- head: ts_pearson(day_argmin(Low), 20)
+  why: 拆解表:Low 换 High 增益 +0.11,说明 Low 不是承重部件;day_argmin(Low) 含两个集合竞价那两根(argmin = 0
+    的一字板 / 开盘日会扎堆),变体改成只在连续竞价里取极值时刻,并试 High 与 cs_rank 去并列
+  variants:
+  - ts_pearson(day_argmin(in_slice(Low, 2, 237)), 20)
+  - ts_pearson(day_argmin(in_slice(High, 2, 237)), 20)
+  - ts_pearson(day_argmin(High), 20)
+  - ts_pearson(cs_rank(day_argmin(in_slice(Low, 2, 237))), 20)
+  - ts_pearson(day_argmax(in_slice(High, 2, 237)), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml

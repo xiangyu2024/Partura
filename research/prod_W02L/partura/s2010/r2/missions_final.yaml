@@ -1,0 +1,190 @@
+seed: 2010
+round: 2
+slots:
+- type: E
+  core: day_durbin_watson(in_slice(Vwap, 211, 240))
+  hypothesis: '机制:核心 C = day_durbin_watson(in_slice(Vwap, 211, 240)) = 最后 30 分钟(14:30
+    ~ 15:00)分钟 VWAP 路径的 Σ(ΔP)²/ΣP²,即「尾盘 30 分钟的相对已实现方差」(价格尺度约掉,每天一个值,量级约 1e-8 ~ 1e-5;这一段整行为常数,如涨停封死或停牌,则是
+    NaN)。
+
+
+    本流的证据(都是 train / valid):(1) 第 1 轮 N 位 70 个已评分候选里分数最高的一条是 cross_corr(C, day_sum(in_slice(Ret,
+    1, 210)), 241) = +0.13(train +0.40 / valid +0.13,半衰期 5),同一骨架换成 in_forward_valid_part(High)
+    字段、窗口 120、或换搭档之后掉到 −0.23 ~ −0.53;(2) 含 C 的 9 个候选均值 −1.02,不含的 −2.75(差 +1.73,p 0.0001);(3)
+    第 1 轮同位置里 C 的「水平 / 段间比值 / 份额 / 稳定性」写法(开盘 ÷ 盘中、尾盘 ÷ 盘中的对数差,O ÷ (O + C),120 日标准差,Close
+    版,共 6 个种子)一个都没有进前 5(第 5 名是 −0.53)。所以我读到的是:这个核心的信息不在水平里,在它与「当天别的价格行为」的耦合里;耦合的写法只被试过一种,即同一天的
+    Pearson 相关。
+
+
+    本位要试的外围(不再是同日相关),实现的是四类机制:
+
+    (a) 领先 - 滞后(Llorente 等 2002 的「量 - 价跨日先后」思路,这里换成路径粗糙度):昨天尾盘的粗糙度 cross_delay(C,
+    1) 与今天收益 / 今天绝对收益 / 今天隔夜缺口的 120 ~ 241 日滚动相关与回归斜率(种子 1、2、3、6、7、12)。回归元用 log(C)
+    或 cs_rank(C),使 rolling_ols 的绝对阈值 var_x > 1e-9 不会因 C 的 1e-6 量级把斜率整体变 NaN(上一轮审计抓到过这个坑)。
+
+    (b) 带符号的条件协方差(种子 4):cross_cov(C, sign(14:30 前收益), 241) ÷ cross_mean(C, 241),读「尾盘粗糙度是出现在涨日还是跌日」(杠杆效应
+    / 追涨杀跌的分钟版)。sign 取代幅度,涨跌停带来的极端收益不起作用;cross_cov 已去均值,所以不含「一年里上涨日占比」这个动量项;再除以均值,波动水平被约掉,取值有界。
+
+    (c) 别的搭档(种子 5、8、9、10):昨日 14:30 前收益对今天尾盘粗糙度(滞后一天的杠杆效应)、尾盘成交额占全天的份额(粗糙度有没有成交量撑着:知情
+    / 被动调仓 vs 薄盘面的买卖价差弹跳)、开盘 30 分钟及盘中的粗糙度与尾盘粗糙度的联动(信息是整天持续到达还是尾盘特殊资金)。
+
+    (d) 慢变残差(种子 11):把 log(C) 对当天 14:30 前绝对收益做 120 日回归,取残差再做 60 日平均,即「同样的价格波动下尾盘多出来的粗糙度」。
+
+
+    为什么和以前不一样:快照里所有含 C 的候选外围都是 cross_corr(C, X, 120 或 241),X 是同一天的收益 / 成交额切片;没有 cross_delay(滞后)、没有回归斜率
+    / t 值 / 残差、没有 sign 条件协方差、没有除以均值的无量纲化,也没有「尾盘成交额占比」「开盘 - 尾盘联动」这样的搭档。库里 5583 条表达式中,cross_corr
+    / cross_regbeta / cross_cov / cross_reg_tvalue / cross_regres 与 in_slice 同现的只有
+    1 条(B234 的手写式,是分钟 regres 的条件均值,不是日轴耦合),与 cross_delay 同现的 1 条;12 个种子的骨架逐个用 AlphaCube
+    的 skeleton_key 与 members.csv 的 5583 个骨架核对过,都不在两个库里。与快照里 6 个 head 的区别:head 读整天或
+    10 日 DW 的水平 / 一年标准差 / AR(1) 的包装,这里读尾盘一段与收益、成交的耦合系数,水平被相关 / 协方差 / 斜率去掉。
+
+
+    为什么样本外还会在:读的是个股的慢变行为特征。尾盘半小时(含收盘集合竞价)是被动资金调仓、收盘价管理与追涨杀跌的散户集中的时段;A 股 T+1 下当天买入的人当天卖不出去,尾盘抛压只来自旧持仓,所以「涨日与跌日的尾盘粗糙度是否对称」反映的是持仓结构,不是某段行情。窗口
+    120 ~ 241 日,名次几个月不变,换手低,这是这把尺子里唯一不被 15 bp 吃满的形态(本流读数:241 日窗口 +0.13 对 120 日窗口 −0.23)。风险(事先写明):(i)
+    滚动相关的估计误差约 1/√241 = 0.06,与截面离散度相当,名次大半可能是噪声;(ii) 耦合强度可能与波动水平交互(尺子只去掉对控制的线性、平方、立方暴露,交互项去不掉)。
+
+
+    数学检查:C 在该段有效点少于 2 个或整段为常数时是 NaN,是窄的、已知的缺失;log(C) 只在 C ≤ 1e-9(尾盘几乎纹丝不动的少数高价股)时为
+    NaN,是窄缺失,不是 NaN 块;所有除法的分母都是窗口内的正均值(C 的均值、|收益| 的均值、全天成交额),0 / 0 只会得到 NaN 而不是 inf;cross_corr
+    与 cross_cov 在窗口无有效对时返回 0 或 NaN,只影响刚上市 / 复牌的少数股票;窗口 120 ~ 241 日,热身期只占样本很小一段。无前视:全部用
+    t 日收盘及以前的数据(领先 - 滞后种子只对回归元 / 搭档做 cross_delay,不做 cross_shift),t+1 才交易。'
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 个股成交量与下一期收益的关系(延续 vs 回吐)取决于信息不对称程度,是个股的稳定特征;这里把「成交量」换成尾盘价格路径粗糙度 C,用
+      cross_delay(C, 1) 对收益的滚动相关 / 斜率近似
+  - title: Studies of Stock Price Volatility Changes
+    authors: Fischer Black
+    year: '1976'
+    treatment: 收益与后续波动的负相关(杠杆效应);这里用尾盘粗糙度与当天 / 前一天收益的滚动相关和 sign 条件协方差做个股级的分钟版
+  seeds:
+  - cross_corr(cross_delay(day_durbin_watson(in_slice(Vwap, 211, 240)), 1), day_sum(Ret),
+    241)
+  - cross_regbeta(cross_delay(log(day_durbin_watson(in_slice(Vwap, 211, 240))), 1),
+    day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))),
+    1), day_sum(Ret), 120)
+  - div(cross_cov(day_durbin_watson(in_slice(Vwap, 211, 240)), sign(day_sum(in_slice(Ret,
+    1, 210))), 241), cross_mean(day_durbin_watson(in_slice(Vwap, 211, 240)), 241))
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(day_sum(in_slice(Ret,
+    1, 210)), 1), 241)
+  - cross_corr(cross_delay(day_durbin_watson(in_slice(Vwap, 211, 240)), 1), abs_(day_sum(Ret)),
+    241)
+  - cross_regbeta(cross_delay(cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))),
+    1), abs_(day_sum(Ret)), 120)
+  - cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), div(day_sum(in_slice(Amt,
+    211, 240)), day_sum(Amt)), 241)
+  - cross_corr(log(day_durbin_watson(in_slice(Vwap, 211, 240))), log(day_durbin_watson(in_slice(Vwap,
+    1, 30))), 241)
+  - cross_mean(cross_regres(abs_(day_sum(in_slice(Ret, 1, 210))), log(day_durbin_watson(in_slice(Vwap,
+    211, 240))), 120), 60)
+  - cross_corr(cross_delay(cs_rank(day_durbin_watson(in_slice(Vwap, 211, 240))), 1),
+    sub(div(day_open(Open), cross_delay(day_close(Close), 1)), 1), 241)
+- type: N
+  hypothesis: '机制:个股日内「收益在时间上的接力」,作为慢变的个股特征。把一天切成开盘 30 分钟 A = day_sum(in_slice(Ret,
+    1, 30))、盘中 M = day_sum(in_slice(Ret, 31, 210))、14:30 前 P = day_sum(in_slice(Ret,
+    1, 210))、尾盘 30 分钟 T = day_sum(in_slice(Ret, 211, 240)),估计「上午 / 盘中的方向对尾盘收益是延续还是回吐」,以及「昨日尾盘对今日开盘的传导」,用
+    120 ~ 241 日的时间序列相关、斜率、sign 条件协方差。两种力量方向相反:延续(机构拆单 / 程序化交易的足迹,信息被逐步吸收:Heston-Korajczyk-Sadka
+    2010 报告日内半小时收益在日间同一时刻持续,Gao-Han-Li-Zhou 2018 报告市场级日内动量,开盘半小时预测最后半小时)与回吐(买卖价差弹跳、散户追涨后的获利了结)。个股哪一种占优由持仓结构决定,所以是慢变的;A
+    股 T+1 下当天买入的人当天不能卖,尾盘抛压只来自旧持仓,延续系数在涨日与跌日不对称,sign 条件协方差读的就是这个方向性。
+
+
+    启发(哪一批的什么现象):本流快照 84 个已评分候选里,子树 day_sum(in_slice(Ret, 1, 210)) 出现在 17 个里,均值 −1.37
+    对不含的 −2.87(差 +1.50,p 0.000);第 1 轮 N 位里分数最高的 +0.13 是 DW(尾盘)与它的 241 日相关;但它只被当作「搭档」,从没有和尾盘收益本身配对;而第
+    1 轮的「水平 / 段间比」写法一个都没进前 5(−0.53 以下)。B028 / B029 合起来的另一个现象:B029 的 41 个成员几乎全是 day_ar1_coefficient(Volume)(与
+    High)的各种保序包装(sigmoid / pow / cs_rank / ts_decay_linear / ts_min),本流里最好的 3 个是 −2.13
+    ~ −2.34,含这些包装的候选均值 −3.1 ~ −3.4,拆解里去掉单个外壳部件分数变化都在 ±0.25 以内,只有窗口变慢才有用(ts_quantile_q75
+    窗口 25 / 50 / 100 = −2.81 / −2.33 / −1.65):路径统计的「水平」被控制吃掉,只剩「更慢」;耦合系数是另一类对象,水平是被减掉的。
+
+
+    算子怎样实现:cross_corr / cross_regbeta(预测量先于被预测量:第一个参数是回归元)在两个日度收益切片上滚动 120 ~ 241 日;cs_rank
+    版本(种子 9、10)先在截面上把 P、T 变成相对同行的名次,再做时间序列相关,把「大盘当天一起涨跌」的共同成分去掉,留下个股特有的延续;sign 条件协方差(种子
+    5、6、7)cross_cov(sign(上午方向), 尾盘收益, 241) ÷ cross_mean(|尾盘收益|, 241),方向用 sign 所以涨停等极端上午收益不起作用,cross_cov
+    已去均值所以不含「上涨日占比」这个动量项,除以平均绝对尾盘收益后无量纲、有界;种子 13 把「上午分钟收益 AR(1)(路径是在趋势还是在回头,B029 的
+    AR(1) 对象换成收益)」乘上上午方向再与尾盘收益相关;种子 12 用尾盘收益路径的 DW(≈ 2(1 − 一阶自相关))与上午收益相关;种子 14 用昨日尾盘收益与今日隔夜缺口的相关。
+
+
+    为什么和库里已有的不同:库里 5583 条表达式中,cross_corr / cross_regbeta / cross_cov / cross_reg_tvalue
+    / cross_regres 与 in_slice 同现的只有 1 条(B234 的手写式,是分钟 regres 的条件均值,不是日轴耦合),与 cross_delay
+    同现的 1 条;in_slice 在库里几乎都是掐头去尾(16 ~ 225、2 ~ 237、11 ~ 230 等),没有一个把一天切成开盘 / 盘中 / 尾盘再对两段的收益做时间序列耦合。14
+    个种子的骨架逐个用 AlphaCube 的 skeleton_key 与 members.csv 的 5583 个骨架核对过,都不在库里。与 6 个 head
+    的区别:head 读 DW / AR(1) 的水平、离散度与包装,这里完全不读 DW(除种子 12);与五个控制的区别:20 日反转只读收益方向的累计,这里是日内两个时间切片之间的耦合系数,不是水平。
+
+
+    为什么样本外还会在:来源是持仓结构与交易习惯这类慢变量(机构程序化占比、散户占比、T+1 约束下的持仓年龄),不是某段行情;窗口 120 ~ 241 日,名次几个月不变,换手低,这是这把尺子里唯一不被
+    15 bp 吃满的形态。风险(事先写明):(i) 估计误差约 1/√241 = 0.06,与截面离散度相当,名次大半可能是噪声;(ii) 原始收益的耦合含个股对大盘日内走势的
+    beta,与波动 / 市值控制有交互(cs_rank 版本去掉了大盘共同成分,用来对照);(iii) 上午方向被涨跌停封板的股票(尾盘收益恒为 0)会给出
+    NaN 或 0,只影响少数票。
+
+
+    数学检查:A、M、P、T 是各段分钟收益之和(量级 1e-3 ~ 3e-2),无近零分母;cross_regbeta 的回归元是 P 或 A(窗口内 var_x
+    约 1e-3 ~ 1e-1,远大于 rolling_ols 的绝对阈值 1e-9);sign 条件协方差的分母是窗口内平均绝对收益,只在整个窗口收益恒为 0(一字板)时为
+    0,此时分子也恰为 0,得到 NaN 而不是 inf;种子 13 中 day_ar1_coefficient 在 14:30 前收益平方和 > 1e-8(约
+    2e-4)时才有值,与 B029 里的同一算子;缺口用 t 日开盘与 t−1 日收盘(cross_delay 取前一交易日),无前视;全部用 t 日收盘及以前的数据,t+1
+    才交易。已知的算子行为:cross_corr / cross_cov 在窗口没有有效对时返回 0,只影响刚上市 / 复牌的少数股票。'
+  inspired_by: B028 / B029 与本流第 1 轮 N 位:快照 84 个已评分候选里 day_sum(in_slice(Ret, 1, 210))
+    出现在 17 个中(均值差 +1.50,p 0.000),唯一为正的 +0.13 是尾盘 DW 与它的 241 日相关;B029 的 AR(1)(Volume)保序包装最好
+    −2.13 ~ −2.34、均值 −3.1 ~ −3.4,拆解里单个外壳部件的变化在 ±0.25 以内,只有变慢有用(窗口 25 / 50 / 100 =
+    −2.81 / −2.33 / −1.65)
+  literature:
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 个股日内半小时收益在日间同一时刻持续;这里用昨日尾盘与今日开盘半小时收益的相关和 sign 条件协方差近似
+  - title: Market Intraday Momentum
+    authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+    year: '2018'
+    treatment: 市场级:开盘半小时收益预测最后半小时;这里改成个股级的时间序列耦合系数,并用 cs_rank 去掉大盘共同成分
+  seeds:
+  - cross_corr(day_sum(in_slice(Ret, 1, 210)), day_sum(in_slice(Ret, 211, 240)), 241)
+  - cross_corr(day_sum(in_slice(Ret, 1, 30)), day_sum(in_slice(Ret, 211, 240)), 241)
+  - cross_corr(cross_delay(day_sum(in_slice(Ret, 211, 240)), 1), day_sum(in_slice(Ret,
+    1, 30)), 241)
+  - div(cross_cov(sign(day_sum(in_slice(Ret, 1, 210))), day_sum(in_slice(Ret, 211,
+    240)), 241), cross_mean(abs_(day_sum(in_slice(Ret, 211, 240))), 241))
+  - div(cross_cov(sign(day_sum(in_slice(Ret, 1, 30))), day_sum(in_slice(Ret, 211,
+    240)), 241), cross_mean(abs_(day_sum(in_slice(Ret, 211, 240))), 241))
+  - div(cross_cov(sign(cross_delay(day_sum(in_slice(Ret, 211, 240)), 1)), day_sum(in_slice(Ret,
+    1, 30)), 241), cross_mean(abs_(day_sum(in_slice(Ret, 1, 30))), 241))
+  - cross_corr(day_sum(in_slice(Ret, 31, 210)), day_sum(in_slice(Ret, 211, 240)),
+    241)
+  - cross_corr(cs_rank(day_sum(in_slice(Ret, 1, 210))), cs_rank(day_sum(in_slice(Ret,
+    211, 240))), 120)
+  - cross_corr(cs_rank(day_sum(in_slice(Ret, 1, 30))), cs_rank(day_sum(in_slice(Ret,
+    211, 240))), 241)
+  - cross_corr(abs_(day_sum(in_slice(Ret, 1, 210))), abs_(day_sum(in_slice(Ret, 211,
+    240))), 241)
+  - cross_corr(day_sum(in_slice(Ret, 1, 210)), day_durbin_watson(in_slice(Ret, 211,
+    240)), 241)
+  - cross_corr(mul(day_ar1_coefficient(in_slice(Ret, 1, 210)), sign(day_sum(in_slice(Ret,
+    1, 210)))), day_sum(in_slice(Ret, 211, 240)), 241)
+  - cross_corr(cross_delay(day_sum(in_slice(Ret, 211, 240)), 1), sub(div(day_open(Open),
+    cross_delay(day_close(Close), 1)), 1), 241)
+R:
+- head: cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241)
+  why: 烂的部件有两个,依据在第 1 轮 R 结果与本轮拆解里。(1) 头 1 现在是 cross_stddev(ts_sum(DW(Vwap), 10),
+    241) = −0.15(train −0.15 / valid −0.10,与已知族 ρ −0.15),比原来的 cross_fangzheng(= 均值
+    + 标准差)好 1.0:「均值」这一项(水平,与波动同向)是拖后腿的部件,拿掉后离 0 只差 0.15;但保持「水平 vs 形态」的写法全部比它差(变异系数
+    −1.77,尾部分位对数差 −0.60,峰均比 −1.83,半标准差 −1.21,滞后 20 日自相关 −1.38),说明它读到的是「一年里已实现方差的绝对离散度」中既不是水平也不是纯形态的那一部分。(2)
+    这一部分混有两个我还没拆开的成分:一天里哪一段在贡献(整天 DW 把开盘 / 盘中 / 尾盘混成一个数),以及全市场共同的波动区制(raw 标准差里有大盘波动一起变的成分)。变体因此一次只改一个部件:(a)
+    只取尾盘 / 开盘 / 盘中的段(变体 1 ~ 3,与本轮 E / N 位的发现对照);(b) 把方差换成波动率的平方根(变体 4)以降低尖峰的权重;(c)
+    ts_sum 窗口 10 → 5 / 20,或换成 EMA(变体 5、6、10);(d) 只做部分归一化,标准差 ÷ √均值(变体 7,介于已知的 −0.15
+    与变异系数 −1.77 之间);(e) 先去掉市场共同成分再取离散度:截面名次(变体 8)与减截面均值(变体 9)。数学上都有界:均值是正的,sqrt 作用于非负量,cs_rank
+    取值 [0, 1],无近零分母;DW 数量级 1e-7 ~ 1e-5,大于 log 的下限 1e-9(本组没有用 log);无前视。
+  variants:
+  - cross_stddev(ts_sum(day_durbin_watson(in_slice(Vwap, 211, 240)), 10), 241)
+  - cross_stddev(ts_sum(day_durbin_watson(in_slice(Vwap, 1, 30)), 10), 241)
+  - cross_stddev(ts_sum(day_durbin_watson(in_slice(Vwap, 31, 210)), 10), 241)
+  - cross_stddev(sqrt(ts_sum(day_durbin_watson(Vwap), 10)), 241)
+  - cross_stddev(ts_sum(day_durbin_watson(Vwap), 5), 241)
+  - cross_stddev(ts_sum(day_durbin_watson(Vwap), 20), 241)
+  - div(cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241), sqrt(cross_mean(ts_sum(day_durbin_watson(Vwap),
+    10), 241)))
+  - cross_stddev(cs_rank(ts_sum(day_durbin_watson(Vwap), 10)), 241)
+  - cross_stddev(sub(ts_sum(day_durbin_watson(Vwap), 10), cs_mean(ts_sum(day_durbin_watson(Vwap),
+    10))), 241)
+  - cross_stddev(cross_ema(day_durbin_watson(Vwap), 5), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

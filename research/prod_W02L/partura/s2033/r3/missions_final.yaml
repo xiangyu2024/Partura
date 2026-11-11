@@ -1,0 +1,98 @@
+seed: 2033
+round: 3
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 机制:后复权收盘价的水平 = 自基期(2018 年或上市日)以来的累计收益,所以截面上它是一个超长周期(3 年以上)的动量 / 反转信号;第
+    2 轮 E 位 head(C / 前一日后复权收盘,+0.54)靠的就是除以这个水平(C 单独 -0.20),本流富集表里含 day_close(Close)
+    的 138 个候选均值 -1.29 对不含 -3.23(p 0.000),差 +1.94,是全表最强的共性子树。5 个控制只有 20 日反转,没有 1 年以上的反转
+    / 价位,所以这一维可能还留有残差。本 N 位不再带 C,直接问:长周期位置本身(没有序列相关这一部分)有没有 alpha,以及哪种刻画最稳:(a) 价位的倒数
+    / 对数;(b) 同市值十分位内的价位(cs_bucket_demean):去掉大盘股价位高的结构,留下同规模内的长期输家;(c) 距 2 年高点的比例(回撤深度)、距
+    2 年低点的比例;(d) 1 年 / 2 年累计收益与 482 / 241 日价位 z 分数,(e) 价位相对 1 年均值的偏离;(f) 未复权价 LogFloatShares
+    - LogFloatCap(低价股)与后复权累计收益的秩和 / 秩差,把「低价」与「累计输家」拆开;(g) 价位与其 20 日滞后的 482 日相关(价位路径的平滑程度)。算子:cross_max
+    / cross_min / cross_delay / cross_mean / cross_zscore 沿日轴取窗口,cs_bucket_demean
+    去市值,cs_rank 取截面秩;全部只用当日及以前的数据。为什么与库里不同:两个库的 5583 条里没有『后复权价位对自身 482 日极值 / 均值 /
+    滞后的比』这类长窗口价位位置(定位的富集表只显示 day_close(Close) 作为较大表达式的一个部件出现);快照 heads 全部是 C × 尺度或量额的回归。方向由奖励自动取最优(正负都可),所以不事先押多空。样本外还会在的理由:A
+    股长周期反转 / 低价偏好来自散户结构与退市 / ST 约束下深跌股的定价,不是样本内数值巧合。风险:价位的倒数与市值 / 流动性控制相关(深跌小盘),尺子拿走线性
+    / U 形暴露后可能剩得很薄;窗口只有 482 日(约 2 年),起始 2018 年初的前两年为热身期,数值定义上由 cross_* 的最小样本处理,训练段前段会缺失但不影响
+    2020 年之后。
+  inspired_by: 本流第 3 批 B099(inv(day_last(Amt)) 的分位数 / 求和)与前两轮结果:富集表里 day_close(Close)(后复权价位)是最强共性子树(+1.94,p
+    0.000),第 2 轮 head C / 前一日收盘中除以价位贡献约 +0.74
+  seeds:
+  - inv(day_close(Close))
+  - cs_bucket_demean(log(day_close(Close)), LogFloatCap)
+  - div(day_close(Close), cross_max(day_close(Close), 482))
+  - div(day_close(Close), cross_min(day_close(Close), 482))
+  - sub(log(day_close(Close)), log(cross_mean(day_close(Close), 241)))
+  - cs_bucket_demean(div(day_close(Close), cross_max(day_close(Close), 482)), LogFloatCap)
+  - sub(LogFloatShares, LogFloatCap)
+  - cross_zscore(day_close(Close), 482)
+  - cross_zscore(day_close(Close), 241)
+  - cs_bucket_demean(cross_zscore(day_close(Close), 482), LogFloatCap)
+  - add(cs_rank(log(day_close(Close))), cs_rank(sub(LogFloatShares, LogFloatCap)))
+  - sub(cs_rank(log(day_close(Close))), cs_rank(sub(LogFloatShares, LogFloatCap)))
+  - cross_corr(day_close(Close), cross_delay(day_close(Close), 20), 482)
+R:
+- head: div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_delay(day_close(Close),
+    1))
+  why: 拆解表:去掉 cross_corr 为 -5.00(必要性 +5.54),去掉滞后为 -2.38;窗口 241→120 为 +0.43(train +0.89,valid
+    +0.43),241→482 为 +0.35,Close→Vwap 为 +0.45,说明承重部件是 C 的符号与价位尺度的交互;烂的部件候选:窗口(241
+    日标准误大,120 / 90 / 160 是否更优)、分母的重尾尺度(未滞后 / 5 日滞后 / 平方根 / 20 日均值),以及对负 C 的票尺度反向。变体每个只改一处(两处:窗口
+    120 同时 Vwap / 5 日滞后)。
+  variants:
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 160), cross_delay(day_close(Close),
+    1))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 90), cross_delay(day_close(Close),
+    1))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Vwap), cross_delay(day_close(Vwap),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Vwap), cross_delay(day_close(Vwap),
+    1)), 1), LogFloatCap), 1), 120), cross_delay(day_close(Vwap), 1))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_delay(day_close(Close),
+    5))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), day_close(Close))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_mean(day_close(Close),
+    20))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), sqrt(cross_delay(day_close(Close),
+    1)))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogTotalCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogTotalCap), 1), 241), cross_delay(day_close(Close),
+    1))
+  - cs_bucket_demean(div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_delay(day_close(Close),
+    1)), LogFloatCap)
+  - mul(div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), cross_delay(day_close(Close),
+    1)), replace_small_with_nan(is_gt(cross_corr(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), 0)))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 120), cross_delay(day_close(Close),
+    5))
+  - div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 200), cross_delay(day_close(Close),
+    1))
+audit:
+  attempts: 1
+  file: audit_1.yaml

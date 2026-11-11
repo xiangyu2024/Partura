@@ -1,0 +1,88 @@
+seed: 2063
+round: 1
+slots:
+- type: E
+  core: day_cov(Ret, Low)
+  hypothesis: '机制:核心 C = day_cov(Ret, Low),当天分钟收益与分钟最低价(价格水平)的协方差,等于 Σ r_t (Low_t
+    − 均值)/n,读的是「大涨大跌的分钟出现在价格高位还是低位」,即日内价格路径的凸性:正 = 涨幅集中在日内后段(尾盘拉升、资金越买越贵),负 = 涨幅集中在日内前段、之后回吐。依据(本批拆解表):(1)
+    单独的 day_cov(Ret, Low) 是 −4.22 / −3.43,但 head 里它是和 day_min(...Amt...) 相加的另一半,Amt
+    项的量级比协方差大很多个数量级,相加后的秩几乎由 Amt 项决定,所以 head 的 −1.33 说明不了 C 本身的好坏;(2) 把 Low 换成 High,整个
+    head 从 −1.33 升到 −0.88(R 候选,增益 +0.45),说明协方差这一半里价格口径的选择就有明显效应;(3) C 的量纲是「收益 × 名义股价」,没有除以价位,它的截面排序把高价股和低价股的路径形状混在一起,价位本身(名义股价)是个强风格(sub(LogFloatCap,
+    LogFloatShares) = log 名义股价),这是 C 单独亏得很深的最可能原因。所以这一位只在 C 外面做三件事:a) 去量纲,除以 day_mean(Low)
+    或 day_std(Ret),变成无量纲的路径凸性;b) 在名义股价十分位内做去均值或 z 分数,把价位风格拿掉;c) 把日度读数变慢(20 到 120 日均值、自己
+    120 日 z 分数、短对长的差、与近期累计收益的滚动相关),让路径形状变成慢变的个股属性,以适应 15 bp 的换手成本。
+
+    为什么和已有的不同:快照里含 C 的唯一外围是 add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), ·),这里完全没有
+    Amt、没有 nt_、没有 add;外围算子集合含 cross_mean / cross_zscore / cs_bucket_zscore / cs_bucket_demean
+    / cs_robust_z / cross_corr / sign / sub / div,没有一个与它重合。库禁令按骨架拒绝,这些骨架(day_cov 外套
+    cross_* 和 div day_mean)我对照过库里写法没有见过的组合,个别撞上会被 GP 自己拒绝。
+
+    为什么样本外还会在:日内路径形状反映订单的执行方式,尾盘推升 / 早盘冲高后回落是机构持续建仓与散户追涨两类参与者的差别(Gao、Han、Li、Zhou 2018
+    日内动量:前段收益预测后段),是市场微观结构特征,不依赖某一段行情;无量纲化并去掉名义股价之后不再是价位风格的代理;窗口 20 到 120 日换手低。最可能的失败:协方差再去量纲之后只剩与反转
+    / 波动控制的暴露,被奖励的残差化吃掉,那么这一位不出 head,下一轮不再押 C。数学检查:day_mean(Low) 是正的价格水平不近零;day_std(Ret)
+    在整天不动(停牌 / 封板)时为 0,此时分子也为 0,得 NaN,不是无穷(只作为分母的种子已避开 0/0 之外的爆点);无前视,全部只用 t 日收盘及以前,t+1
+    才交易;最长窗口 120 日,热身期不主导。'
+  seeds:
+  - cross_mean(day_cov(Ret, Low), 20)
+  - cross_mean(div(day_cov(Ret, Low), day_mean(Low)), 20)
+  - cross_zscore(div(day_cov(Ret, Low), day_mean(Low)), 120)
+  - cs_bucket_zscore(cross_mean(day_cov(Ret, Low), 20), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(cross_mean(div(day_cov(Ret, Low), day_mean(Low)), 20), LogFloatCap)
+  - sub(cross_mean(div(day_cov(Ret, Low), day_mean(Low)), 20), cross_mean(div(day_cov(Ret,
+    Low), day_mean(Low)), 120))
+  - cross_mean(div(day_cov(Ret, Low), day_std(Ret)), 20)
+  - cross_mean(sub(day_cov(Ret, Low), day_cov(Ret, High)), 20)
+  - cross_corr(div(day_cov(Ret, Low), day_mean(Low)), day_sum(Ret), 60)
+  - mul(cross_zscore(div(day_cov(Ret, Low), day_mean(Low)), 60), sign(cross_mean(day_sum(Ret),
+    20)))
+  - cross_mean(cs_robust_z(div(day_cov(Ret, Low), day_mean(Low))), 20)
+- type: N
+  hypothesis: '机制:成交与波动在一天里「何时发生、多集中」。本批三个 head 读的都是价格水平或成交量的单点统计(day_min、day_var、day_quantile),都没有时间轴信息,且全部亏(−1.2
+    到 −2.0),说明这一批的单点读数只剩成本。这一位换一个维度:分钟轴的位置。用新增算子 day_centroid(重心,0 = 全在开盘,1 = 全在收盘)、day_gini(集中度)、in_index(分钟位置)读三类东西:(A)
+    成交的时段:day_centroid(Volume) 或 Amt 的 20 日均值 = 成交是否后置;尾盘集中成交常来自指数 / 基金被动再平衡与收盘集合竞价前的机构调仓,开盘集中则对应隔夜消息。(B)
+    成交重心减收益重心:sub(day_centroid(Volume), day_centroid(Ret)) = 量与价的时间错位,价在前量在后是知情者先动、量在后追随;价在后量在前是量先堆起来、价后走。(C)
+    集中度:day_gini(Ret)(价格变动是否由少数分钟的脉冲构成,跳跃型)、day_gini(Volume)(是否被少数大单支配),以及相减。再配合 day_corr(in_index(Volume),
+    Volume):成交量沿日内时间的趋势。全部再取 20 到 120 日平均或自己 120 日 z 分数,变成慢变的个股属性。
+
+    启发(inspired_by):批里的 head 全是静态单点统计且全亏,富集表为空(18 个已评分候选没有一个共同子树),说明没有哪个单点统计在新尺子下站得住;而
+    day_cov(Ret, Low) 拆解后换 Low 为 High 有明显增益(+0.45),说明日内的路径与时间结构里有信号,单点的水平没有。
+
+    为什么和已有的不同:day_centroid / day_gini / in_index 是库建成之后才加的 Partura 算子,库里 5583 条一条没有,骨架不会重复;最近的亲戚是手写库里
+    day_skew / day_kurt / day_std 一类只读分布形状、不读顺序的统计,而重心与 in_index 读的恰是「顺序」。(B)(C) 是两个量互相比较而不是一个量的水平,与流动性、波动、市值这些水平控制天然近乎正交。
+
+    为什么样本外还会在:日内成交曲线的形状(U 形深浅、后置程度)是参与者构成的结构属性(机构被动与指数资金偏尾盘,散户与消息偏开盘),文献里稳定(Heston、Korajczyk、Sadka
+    2010 日内重复的成交模式;Bogousslavsky 2016 低频再平衡者的尾盘行为;Gao 等 2018 日内动量),在数周内名次保持,15 bp
+    下换手低。风险:重心类与流动性有关(大票尾盘占比不同),但奖励已残差化掉线性 / U 形 / S 形暴露。数学检查:day_centroid 在日总量为 0
+    时输出 NaN,不是 0;day_gini 值域 [0,1],无爆点;day_corr 值域 [-1,1];in_index 只在对应分钟有值时有值,日内缺失的票在相关里只看有限分钟;无前视,全部只用
+    t 日收盘及以前,t+1 才交易;窗口不超过 120 日,热身期不主导。'
+  inspired_by: B1 批:三个 head 全是静态单点统计(day_min / day_var / day_quantile)且全亏(−1.2 到 −2.0),富集表为空;day_cov(Ret,
+    Low) 把 Low 换成 High 增益 +0.45(日内路径信息)。
+  seeds:
+  - cross_mean(day_centroid(Volume), 20)
+  - cross_mean(sub(day_centroid(Volume), day_centroid(Ret)), 20)
+  - cross_zscore(day_centroid(Amt), 120)
+  - cross_mean(day_gini(Ret), 20)
+  - cross_mean(sub(day_gini(Ret), day_gini(Volume)), 20)
+  - cross_mean(day_corr(in_index(Volume), Volume), 20)
+  - cross_mean(day_corr(in_index(Ret), abs_(Ret)), 20)
+  - cs_bucket_zscore(cross_mean(day_centroid(Volume), 20), sub(LogFloatCap, LogFloatShares))
+  - cross_zscore(cross_mean(sub(day_centroid(Volume), day_centroid(Ret)), 10), 120)
+  - cs_bucket_demean(cross_mean(day_gini(Volume), 20), LogFloatCap)
+  - cross_corr(day_centroid(Volume), day_sum(Ret), 60)
+R:
+- head: add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low))
+  why: 烂的部件是 day_cov(Ret, Low)(单独 −4.22 / −3.43)以及两个加数的量纲:Amt 项的量级远大于协方差,add 之后秩几乎由
+    Amt 项决定;把 Low 换成 High 已经有 +0.45 增益(−0.88),说明协方差一半的价格口径是关键。变体:(1) 换 High 并去掉 nt_
+    算子用普通 ts_ 算子;(2) 去量纲后用 cs_rank 各自取秩再相加,让两半各占一半;(3) 只留去量纲后的 High 协方差(慢);(4) 价位十分位内去均值。数学上都有界,无近零分母(day_mean(High)
+    是价格水平);无前视。
+  variants:
+  - add(day_min(in_min_rolling(Amt, 5)), day_cov(Ret, High))
+  - add(cs_rank(day_min(in_min_rolling(Amt, 5))), cs_rank(day_cov(Ret, High)))
+  - add(cs_rank(cross_mean(day_min(Amt), 20)), cs_rank(cross_mean(div(day_cov(Ret,
+    High), day_mean(High)), 20)))
+  - cross_mean(div(day_cov(Ret, High), day_mean(High)), 20)
+  - cs_bucket_demean(cross_mean(day_cov(Ret, High), 20), sub(LogFloatCap, LogFloatShares))
+  - sub(day_cov(Ret, High), day_cov(Ret, Low))
+audit:
+  attempts: 1
+  file: audit_1.yaml

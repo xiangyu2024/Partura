@@ -1,0 +1,125 @@
+seed: 2038
+round: 2
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: '想法:同伴内中性化的「订单流指纹」。把日内的订单流状态量(持续性、方向性、时间重心)放进规模 / 流动性 / 上市年龄的十分位同伴里做相对读法,而不是读水平。
+
+
+    来源(B113,60 条成员,共有结构 day_autocorr_n1(F),即分钟序列的一阶自相关):
+
+    (1) 批里原始 train 夏普最好的几条都是这个量的慢平滑:pow_2_5(cross_mean(day_autocorr_n1(Amt), 30))
+    +2.10、ts_quantile_q25(day_autocorr_n1(Volume), 20) +1.95、ts_min(day_autocorr_n1(Volume),
+    50) +1.63;但换成新尺子(扣掉 5 个控制和两个冠军)以后这一族全是负的(本流 3 个素材 head 是 -1.01 / -1.52 / -1.87)。读法:成交量路径越平滑,多半是越大、越活跃的股票(零成交分钟少、日内曲线更规则),所以这个量的水平几乎就是流动性
+    / 规模的代理,控制把它吃掉了。
+
+    (2) 拆解里唯一还有东西的子结构是 cross_max(day_autocorr_n1(Volume), 60):单独评分 -0.19(train +0.53
+    / valid -0.19),敲掉它整个 head 掉到 -3.16(必要性 +2.15);而外面再套的 ts_min(·, 50) 与两层 cross_quantile_q25
+    只是在往下拖(head -1.01)。也就是说 train 段里「成交量路径的持续性」带着一点信息,但被水平混在一起,valid 段又被水平拖负。
+
+    (3) 另外库里 5583 条表达式一个都没用 day_signed_ratio、day_wmean、cs_bucket_rank / cs_bucket_zscore(同伴内相对),所以它们既不在两个冠军里,也不在
+    5 个控制里。
+
+
+    机制:大单拆分(VWAP / TWAP 算法、机构的 meta-order)在分钟序列上留下两个指纹:(i) 持续性 —— 成交量路径的自相关高(同一笔母单被切成连续的子单,Lillo–Farmer
+    的订单流长记忆);(ii) 方向性 —— 成交额加权的上涨 / 下跌分钟占比不平衡(day_signed_ratio(Ret, Amt) = 上涨分钟成交额占比减下跌分钟占比,不需要逐笔数据,是「主力净流入」的分钟版;day_wmean(Ret,
+    Amt) - day_mean(Ret) 是同一件事的另一种写法)。两者同时出现(种子 9)才像知情的单向母单,只有持续性是流动性,只有方向性是噪声。再加(iii)
+    成交额的时间重心 day_centroid(Amt)(种子 8,越靠近收盘越晚)。
+
+
+    算子怎样实现:全部先取 40~120 日的 cross_mean / cross_ema(种子 11 先取 5 日再对自己 120 日常态做 z 分数)压低噪声(也压低换手),再用
+    cs_bucket_rank / cs_bucket_zscore / cs_bucket_demean 对 LogFloatCap、LogFloatShares、ListAge
+    或 60 日总成交额的十分位做同伴内相对(种子 1~9、11、13、14):每个十分位内部输出都是均匀的,所以输出对这些变量没有任何水平倾斜,控制能拿走的只剩跨十分位之外的东西;种子
+    12 用 cs_regres 做线性版(对数成交量的残差)对照;种子 10 是先同伴内排名、再时间平均的顺序对照;种子 14 把方向性换成不加成交额权重的上涨分钟占比
+    day_pos_ratio(Ret),检验「成交额加权」是否承重。这和上一轮的做法不同:第 1 轮的位 a 读的是日频叶子构造的累计复权因子,位 b 读的是收盘端成交额的尾部突发度,都是在「读一个量的水平
+    / 峰值」;这里读的是「同伴内的订单流相对状态」。
+
+
+    为什么样本外还会在:(a) 母单拆分是机构交易的机械特征(执行算法、考核约束),不随行情风格变;(b) 同伴内相对读法天然去掉规模 / 流动性的水平,剩下的只能是「同样大小的票里谁的资金流更像知情机构」,这是一个条件信息,不是已经被两个冠军吸收的水平因子;(c)
+    窗口 60~120 日,换手低。预期不高(本流 B113 的素材全是负分):这条路成立与否的第一个读数是种子 9(持续 × 方向)是否优于单独的持续性(种子
+    5、6)和单独的方向性(种子 1、2、4)。
+
+
+    数学检查:day_signed_ratio ∈ [-1, 1],分母是成交额之和,当天全无成交则缺失,不会爆点;cs_bucket_rank 在每个十分位里输出均匀分布,并用整体排名以
+    1e-4 的权重打破十个十分位之间的并列;cs_bucket_zscore 用总体标准差 + EPS 做分母,桶里人数 < 2 时缺失;cs_regres
+    是逐日截面 OLS 残差,无前视。无前视(全部是 t 日收盘后可知的日内统计和日频字段)。
+
+    '
+  inspired_by: B113(60 条,day_autocorr_n1(F) 一族):原始夏普最好的是 20~50 日平滑的 day_autocorr_n1(Amt
+    / Volume)(+1.6 ~ +2.1),换成新尺子后全部转负,说明水平是流动性 / 规模代理;拆解里只有 cross_max(day_autocorr_n1(Volume),
+    60)(train +0.53 / valid -0.19)还带一点信息,所以要做的是同伴内相对读法
+  literature:
+  - title: Continuous auctions and insider trading
+    authors: Albert S. Kyle
+    year: '1985'
+    treatment: 知情者的单向、分批成交是价格冲击的来源;种子里的持续性 × 方向性就是这一图景的分钟级指纹
+  - title: The long memory of the efficient market
+    authors: Fabrizio Lillo, J. Doyne Farmer
+    year: '2004'
+    treatment: 订单流符号有长记忆,来源是母单被拆成很多子单;持续性读数(day_autocorr_n1)的机制依据
+  - title: Liquidity, information, and infrequently traded stocks
+    authors: David Easley, Nicholas M. Kiefer, Maureen O'Hara, Joseph B. Paperman
+    year: '1996'
+    treatment: 知情交易概率与规模、流动性相关,所以要在同规模 / 同流动性的同伴内读,而不是读水平
+  seeds:
+  - cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 60), LogFloatCap)
+  - cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 120), LogFloatShares)
+  - cs_bucket_zscore(cross_ema(day_signed_ratio(Ret, Amt), 40), cross_mean(day_sum(Amt),
+    60))
+  - cs_bucket_rank(cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 120), LogFloatCap)
+  - cs_bucket_rank(cross_mean(day_autocorr_n1(Volume), 60), LogFloatCap)
+  - cs_bucket_rank(cross_mean(day_autocorr_n1(Volume), 60), cross_mean(day_sum(Volume),
+    60))
+  - cs_bucket_zscore(cross_ema(day_autocorr_n1(Amt), 30), LogFloatShares)
+  - cs_bucket_rank(cross_mean(day_centroid(Amt), 60), LogFloatCap)
+  - cs_bucket_rank(mul(cross_mean(day_autocorr_n1(Volume), 60), cross_mean(day_signed_ratio(Ret,
+    Amt), 60)), LogFloatCap)
+  - cross_mean(cs_bucket_rank(day_signed_ratio(Ret, Amt), LogFloatCap), 60)
+  - cs_bucket_rank(cross_zscore(cross_mean(day_signed_ratio(Ret, Amt), 5), 120), LogFloatCap)
+  - cs_regres(cross_mean(day_autocorr_n1(Volume), 60), cross_mean(log(add(day_sum(Volume),
+    1)), 60))
+  - cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Volume), 60), ListAge)
+  - cs_bucket_demean(cross_mean(day_pos_ratio(Ret), 60), LogFloatCap)
+R:
+- head: cross_quantile_q25(cross_quantile_q25(ts_min(cross_max(day_autocorr_n1(Volume),
+    60), 50), 15), 15)
+  why: loc 拆解:这个 head 的有效部分只有 cross_max(day_autocorr_n1(Volume), 60)(单独 -0.19,train
+    +0.53 / valid -0.19),敲掉它整个掉到 -3.16;外面的 ts_min(·, 50) 与两层 cross_quantile_q25 是烂的部件(充分性表里套上
+    ts_min 后 -1.40、再套 q25 后 -0.96 / -1.01,都比最里面的 -0.19 差)。变体 1 直接去掉三层外壳;变体 2~4 去掉外壳之后再把成交量路径持续性换成同伴内相对(同伴
+    = 规模十分位),或放进小股本段里,检验剩下的那点信息是不是流动性 / 规模的水平。
+  variants:
+  - cross_max(day_autocorr_n1(Volume), 60)
+  - cs_bucket_rank(cross_max(day_autocorr_n1(Volume), 60), LogFloatCap)
+  - cs_first_low20(cross_max(day_autocorr_n1(Volume), 60), LogFloatShares)
+  - cross_mean(cs_bucket_rank(day_autocorr_n1(Volume), LogFloatCap), 60)
+- head: signedpower(div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1)))
+  why: loc 拆解:分母的 20 日均值与 +1 几乎无必要性(敲掉分别 +0.07 / 0.00),窗口 10 / 40 不改变结论(-0.42 / -0.64),说明承重的是
+    day_open(Amt) 本身相对自己常态的位置;烂的部件是未平滑的单日开盘竞价成交额(一天一个竞价点,排名每天大幅翻转)以及没有任何同伴 / 段的处理(train
+    -0.41 差于 valid -0.19)。变体 1 平滑分子;变体 2 / 3 把同一个比值放进小股本段 / 规模十分位同伴内,检验第 1 轮在收盘端发现的小股本阶跃是否在开盘端也成立。
+  variants:
+  - div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1))
+  - cs_first_low20(div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1)), LogFloatShares)
+  - cs_bucket_rank(div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1)), LogFloatCap)
+- head: ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)
+  why: loc 与第 1 轮拆解:cross_regbeta 在 10 日窗口里除以收盘端 Amt 的方差,方差近零时斜率爆点,log 又取了绝对值,所以这个
+    head 读到的一部分是爆点;窗口 ts_max 链条让它很慢但 valid(-0.43)比 train(+0.11)差。烂的部件是「无界斜率的最大值」;变体把它换成放进小股本段
+    / 规模十分位同伴内的形式(第 1 轮已试过 corr、EMA、窗口,都没超过 -0.34,这一轮换结构)。
+  variants:
+  - cs_first_low20(ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)),
+    20), 50), LogFloatShares)
+  - cs_bucket_rank(ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)),
+    20), 50), LogFloatCap)
+- head: ts_decay_linear(day_open(Volume), 5)
+  why: loc:这个 head 是 -1.14(train -1.14 / valid -1.03),第 1 轮的无量纲变体 ts_decay_linear(div(day_open(Volume),
+    add(day_sum(Volume), 1)), 5) 已把它提到 -0.37(valid -0.07),说明烂的部件是水平 / 流动性暴露(它的 cs_rank
+    近似写法与 liq、known 控制的 |ρ| 约 0.65)。这一轮用另一种方式去掉水平:同伴内相对(规模十分位)与小股本段。
+  variants:
+  - cs_first_low20(ts_decay_linear(div(day_open(Volume), add(day_sum(Volume), 1)),
+    5), LogFloatShares)
+  - cs_bucket_rank(ts_decay_linear(day_open(Volume), 5), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

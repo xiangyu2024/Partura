@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 4, 5, 12, 14]
+    reasons: '位 a 是 E 深挖,核心 cross_delay(log(B),1),B = day_var(rsn(Amt)) / day_mean(rsn(Amt))^2。核心门槛通过:与 liq 0.52、known 0.46、size 0.35、vol 0.00、rev 0.01 的 |ρ| 都 < 0.8。核心的来源可查:loc.md 共性表第 1 行(均值差 +1.36)与机械核心卡都有它,它是快照 head 1 cross_corr(cross_delay(log(log(B)),1), day_var(rsn(Amt)), 120) 的内层一层,不是 head 的完整子树但属于共性表子树,符合 §2。本核心此前在第 1 轮没有 E 位(第 1 轮 E 核心是 day_var(Low)),未超过每核心 2 个 E 位的上限。划掉 5 个:4(与 head 1 原始 |ρ| 0.78)、5(0.72)、12(0.88)、14(0.84),按确定性规则划掉;1 是 head 1 的换皮(同一核心、同样的 day_var(A) 响应,只去掉一层 log 并把窗口 120 改成 240,原始 |ρ| 0.65),属于对已知 head 的重复,划掉。剩 11 个,过 ≥4 的门槛。创新 3:核心本身是 head 1 的节点,外围 2、8、11、13、15、16 仍是 head 1 的耦合形态改了响应量或统计量(残差 |ρ| 约 0.3 到 0.6),并非全新;但 3(与 head 1 残差 0.03)、7(残差 0.06)、6(0.35)、9(0.37)、10(0.31) 的响应量与耦合统计量确实换了,不是换写法,所以不压到 2。合理 4:B 的分子分母只在有成交分钟上算(replace_small_with_nan 置空无成交分钟,分母为正的有成交均值平方),无除以近零;cross_delay(·,1) 严格滞后一日,预测量都是 t-1 的信息;cross_regbeta(x,y) 实为 y 对 x 回归,分母是 var(logB) 不爆;cross_corr 与 cs_regres 的写法无问题。需要注意的两点但不挡:种子 16 的 beta 的量纲是 day_var(A) 的水平,与 liq 的 |ρ| 0.67,是水平读法的残留;种子 9 的 log day_var(Close) 含价格路径离散度与价格水平的趋势项(后复权价不是问题,按 §4 放行)。如果它有 alpha,最可能来自:个股内 120 到 241 日里,昨日成交脉冲度与今日成交离散水平、当日收益或偏度的慢耦合,即参与者结构(拆单机构与脉冲式散户)的持久特征。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2]
+    reasons: '位 b 是 N 新想法,用日内成交形状度量(day_gini、log day_es_ratio_hi、day_centroid、Volume 版 B、两种形状之差)作昨日回归元(均为 cross_delay(·,1) 严格滞后),响应为 day_var(A)、day_sum(Ret)、day_var(Ret)、log day_var(A) 等。划掉 2:cross_corr(cross_delay(day_gini,1), day_var(A), 120) 与 head 1 原始 |ρ| 0.84,按确定性规则划掉。剩 13 个,过 ≥4 的门槛。创新 4:种子 4(time centroid 与 day_var(A),原始 |ρ| 0.45、残差 0.37)与 10(centroid 与 day_sum(Ret),0.07)读的是成交在一天里的时间位置,B 与 gini 都读不到,是本质上新的一维,不是换写法。gini 与 es_ratio 系列(1 0.61、3 0.58、7 0.42、12 0.52、13 0.64)与 head 相关偏高,是同一「脉冲度」现象的别的度量,创新打了折扣,但 8(0.05)、9(0.06)、11(0.06)、14(0.08) 与 head 几乎不相关,不压到 3 以下。合理 4:day_gini 对非有限分钟排到末尾后补 0,用有效分钟数 n 与排序累计和计算 Gini,NaN 感知正确;day_centroid 是 sum(t·|x|)/sum|x| 按绝对分钟位置,缺失分钟权重为 0,无漏算;day_es_ratio_hi 在分位数近零时记 NaN、不爆;log 的输入在有成交的日子都为正;种子 14 的 log(B_amt) 减 log(B_vol) 只在两者都有定义时有值。没有前视,没有 ts_rank / cross_rank 路径,不触发 nanrank_last。种子 5 与 11 的 Volume 版 B、种子 6 与 14 的 B 减 Volume 版 B 是为了分离价格项(种子 5 的原始 |ρ| 0.65,未达 0.7),是有明确目的的对照,不算换皮。如果它有 alpha,最可能来自:日内成交分布的形态(集中在开盘还是尾盘、一阵一阵的程度)是参与者结构的慢变特征,它对个股今日成交离散度与当日收益的 120 到 241 日耦合;其中时间质心(种子 4、10)是最可能提供 head 之外增量的一维。'
+R: []
+summary: '位 a(E,核心 cross_delay(log(B),1))通过:创新 3、合理 4,划掉 1、4、5、12、14(其中 1 为 head 1 换皮),剩 11 个;位 b(N,日内形状度量)通过:创新 4、合理 4,划掉 2,剩 13 个;本轮计划没有 R 组,R 为空。'

@@ -1,0 +1,90 @@
+seed: 2045
+round: 3
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 想法:把 B133 里的『成交额脉冲聚集度 S』的价格侧版本当信号。事实(本组读数):S = cross_stddev(day_cov(Amt,
+    cross_delta(Amt, 30)), 60) 在日间的波动(ts_std 外壳)是本组唯一出过分数的东西(+0.3 到 +0.9),但它只看成交额自己的节奏;把成交额的
+    30 分钟变化与『同一分钟的价格变动』做日内协方差,读的是另一件事:放量加速时价格是否同向大幅变动(知情 / 事件冲击,价量同步),还是放量而价格不动(被动换手、对倒
+    / 做市)。算子怎么实现:day_cov(abs_(Ret), cross_delta(Amt, 30)) = 分钟绝对收益与成交额加速度的日内协方差(无方向,波动-放量耦合),day_cov(Ret,
+    cross_delta(Amt, 30)) = 带方向(放量上涨 vs 放量下跌);cross_stddev(·, 60) 与 ts_std(·, 50)
+    与 S 同一套外壳,换手低;为了不再与已知族共享 Amt^2 的量级,一律对 log 已知族做逐日截面回归残差或桶内秩(cs_regres / cs_bucket_rank
+    / cs_bucket_zscore),另有 Volume 版(股数而不是金额,与以金额为尺度的流动性控制不同)、价量次序反过来(Amt 对 cross_delta(abs_(Ret),
+    30))、价格侧与成交额侧 S 的时间序列相关与对数弹性(ts_corr / ts_regbeta,尺度无关,取消量级)。为什么和库里 / 已出 head
+    不同:库里 head 与本组所有种子都只在 Amt 与自身变化之间做协方差(day_cov(Amt, cross_delta(Amt, 30)));价格 /
+    收益对成交额加速度的日内协方差以及它的日间波动,在 B133 到 B135 批里没有一条(B134 / B135 的协方差都是 pow_2(nt_cs_rank(·))
+    与价格自身的,含禁用算子,骨架也不同),骨架逐条由库禁令核对。为什么样本外还会在:来源是微观结构(事件 / 知情交易的价量耦合日间不稳定性),换手低;分数有无取决于去掉已知族之后是否还剩东西,上一轮读数说有界底没有分数而残差写法有,所以种子都用残差
+    / 桶内秩而不是单独的相关。数学检查:abs_(Ret) 与 Ret 是分钟收益,无除法;log 输入一律 add(·,1),但 day_cov(Ret,
+    ·) 的 cross_stddev 非负,所以 add 1 后为正;ts_corr 的分母带 EPS;ts_regbeta 的 x 是对数水平,窗口 120
+    日,近常数风险有限;不用 ts_rank / cross_rank,没有 nanrank_last。如果它有 alpha,最可能来自价格对成交额加速的响应强度不稳定的票(事件驱动型)。
+  inspired_by: B133(day_cov(Amt, cross_delta(Amt, 30)) 一族,Pr1a 的 S 外壳读数)与 B134 / B135
+    的 day_cov(价格相关量, 成交额变化量) 外壳
+  seeds:
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt, 30)),
+    60), 50), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Ret, cross_delta(Amt, 30)), 60),
+    50), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_bucket_rank(ts_std(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt, 30)), 60),
+    50), cross_mean(day_std(Amt), 30))
+  - cs_bucket_rank(ts_std(cross_stddev(day_cov(Ret, cross_delta(Amt, 30)), 60), 50),
+    cross_mean(day_std(Amt), 30))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Volume, cross_delta(Volume, 30)),
+    60), 50), 1)), log(add(cross_mean(day_std(Volume), 30), 1)))
+  - cs_bucket_rank(ts_std(cross_stddev(day_cov(Volume, cross_delta(Volume, 30)), 60),
+    50), cross_mean(day_std(Volume), 30))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(abs_(Ret), 30)),
+    60), 50), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - ts_corr(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt, 30)), 60), cross_stddev(day_cov(Amt,
+    cross_delta(Amt, 30)), 60), 120)
+  - ts_corr(cross_stddev(day_cov(Ret, cross_delta(Amt, 30)), 60), cross_stddev(day_cov(Amt,
+    cross_delta(Amt, 30)), 60), 120)
+  - ts_regbeta(log(add(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt, 30)), 60),
+    1)), log(add(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 1)), 120)
+  - cs_regres(log(add(ts_mean(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt, 30)),
+    60), 50), 1)), log(add(ts_mean(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)),
+    60), 50), 1)))
+  - cs_bucket_rank(ts_mean(abs_(ts_delta(log(add(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt,
+    30)), 60), 1)), 5)), 100), cross_mean(day_std(Amt), 30))
+  - cs_regres(sub(log(add(ts_std(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt,
+    30)), 60), 50), 1)), log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt,
+    30)), 60), 50), 1))), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_bucket_zscore(log(add(ts_std(cross_stddev(day_cov(abs_(Ret), cross_delta(Amt,
+    30)), 60), 100), 1)), LogFloatCap)
+R:
+- head: add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev(day_cov(Amt,
+    cross_delta(Amt, 30)), 60), 50))
+  why: 烂部件:第 2 轮 R 读数里去掉已知族暴露的写法 cs_regres(log(1+ts_std(S120,50)), log(1+已知族)) 得 +0.66,而同一写法外层窗口放到
+    100 就掉到 -0.14,说明外层窗口 / S 窗口 / 回归对象都有调的空间;本组围绕这个赢家改外层窗口 20-60、S 窗口 90-180、回归对象(Amt^2
+    水平、市值、两者叠加)、桶内去均值 / zscore 代替回归,看哪部件是烂的。
+  variants:
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    30), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    40), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    20), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 90),
+    50), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 180),
+    50), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    50), 1)), log(add(cross_mean(day_cov(Amt, Amt), 241), 1)))
+  - cs_regres(cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt,
+    30)), 120), 50), 1)), log(add(cross_mean(day_std(Amt), 30), 1))), LogFloatCap)
+  - cs_bucket_demean(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)),
+    120), 50), 1)), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)),
+    120), 50), 1)), cross_mean(day_std(Amt), 30))
+  - ts_mean(cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)),
+    120), 50), 1)), log(add(cross_mean(day_std(Amt), 30), 1))), 20)
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    50), 1)), add(log(add(cross_mean(day_std(Amt), 30), 1)), log(add(cross_mean(day_mean(Amt),
+    30), 1))))
+  - cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120),
+    60), 1)), log(add(cross_mean(day_std(Amt), 30), 1)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

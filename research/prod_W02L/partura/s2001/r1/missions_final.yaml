@@ -1,0 +1,165 @@
+seed: 2001
+round: 1
+slots:
+- type: E
+  core: day_max(Volume)
+  hypothesis: '机制:核心 C = day_max(Volume),当天单分钟最大成交股数。三条依据都在本批的拆解表和富集表里。(1) 把 Volume
+    换成 Amt,分数从 −1.11 掉到 −3.66(train −3.25),与已知成交额离散度一族的 rho 从 0.54 升到 0.81。(2) 富集表里含
+    day_max(Amt) 的 15 个候选均值差 −0.98(p 1.0),含 day_max(Volume)、day_max(Ret) 的反而是正的(+0.36、+0.35)。股数口径比金额口径少了「成交额水平」这一块,这一块已经被流动性控制和已知族吃掉;留下的是名义股价与流通股本、峰值相对当天总量的集中度、峰值相对自己历史的冲击。(3)
+    但 C 本身是 −1.10 / −1.11(train / valid 几乎一样,方向 −1,半衰期 5):两段都稳定地亏,说明(推断,没有毛收益数)毛超额约为
+    0,亏的是换手成本。pow_1_5(C) 只是单调改写,秩上同一个信号,分数逐位相同(−1.1067),所以这一位不再给 C 套单调变换或平滑,它们与 head
+    是同一个信号,库禁令也会拒绝。这一位把 C 里的成分拆开,各用一种与水平无关的读法,看哪一块有毛超额。
+
+    (a) 峰值的集中度:div(day_max(Volume), day_sum(Volume)) 的 20 日均值;对数口径下峰值对当天总量的 60 日滚动回归残差与斜率(注意
+    AlphaCube 的 cross_regres(x, y, d) 是 y 对 x 回归,所以总量放第一位、峰值放第二位);截面上峰值对总量回归后的残差;峰值与总量的秩差。读的是「当天的量有多少压在一分钟里」:机构拆单、算法均匀成交与散户
+    / 事件冲击的脉冲式成交在这里分开。它无量纲,与流动性水平、市值、波动控制天然低相关。
+
+    (b) 峰值相对自己的历史:cross_zscore(log C, 120)、10 日对 120 日的对数均值差、除以自己 60 日均值再做 EMA。读的是「这只票最近的放量冲击」,个股用自己做对照,去掉让所有水平因子长得一样的持久截面水平。
+
+    (c) 峰值与价格的 60 日滚动关系:峰值与当日 |收益|、收益、前一日收益、日内最大分钟收益、日内分钟波动的滚动相关。峰值伴随大幅价格变动 = 消息驱动;不伴随
+    = 流动性驱动或对倒。W01 里样本内最好的一类结构正是「两个日度量的 60 日滚动关系」(cross_corr / cross_regbeta / cross_reg_fvalue):水平型控制对它先天近似正交,窗口长所以换手低。那一批的底是开盘第一分钟成交额,伙伴是隔夜缺口;这里的底是日内最大一分钟的股数,伙伴是收益与波动,有意不用缺口(用缺口会与那几个
+    head 近重复,库禁令会拒绝)。
+
+    (d) 峰值冲击 × 趋势方向:mul(cross_zscore(log C, 120), sign(20 日累计收益)):放量发生在上升段还是下跌段,把追涨型脉冲和抛售型脉冲分开。
+
+    (e) 名义股价十分位内的集中度 z 分数:cs_bucket_zscore(…, sub(LogFloatCap, LogFloatShares)),sub(LogFloatCap,
+    LogFloatShares) = log(流通市值 ÷ 流通股本),在 FloatCap = FloatShares × 当日名义价的假设下是 log 名义股价(假设没有在本机验证,只用作分桶变量)。把股数口径里的价位效应单独拿掉,检验
+    (a) 是不是价位的代理。
+
+    为什么和已有的不同:快照里见过的含 C 的外围算子集合是 {pow_1_5}、{ts_quantile_q50}、{ts_rank}、{abs_, pow_1_5,
+    ts_argmax}、{sub, ts_scale, ts_med}、{ts_mean, mul, cs_mask_top_replace_mean_neg,
+    ts_cov, ts_quantile_q50, day_skew, day_q_stat_std}。这里的外围含 cross_zscore / cross_regres
+    / cross_regbeta / cross_corr / cross_ema / cs_regres / cs_bucket_zscore / day_sum
+    / cross_delay 等,没有一个与它们是同一个集合。所有种子的算子骨架(抽掉字段、常数、窗口)都已逐个对照 members.csv 的 5583 个骨架,没有一个重复;含日频字段叶子的(种子
+    14)骨架带 DF,更不会撞。库里最近的是成交额口径、水平、反方向的 ts_regres(day_max(Amt), day_sum(Amt), 40)(B238,即总量对峰值的残差,而且会被已知成交额族吃掉),以及
+    High 口径的 ts_corr(day_max(High), day_sum(Volume), 5 / 10)(B231);这里用股数口径、对数、峰值对总量(种子
+    5、6、7),伙伴换成收益与波动(种子 8 到 12),都不是它们的改写。
+
+    为什么样本外还会在:(a)(c) 读的是参与者构成和订单执行方式这类慢变的结构属性,窗口 20 到 120 日,名次在数周内保持,15 bp 下换手低;(b)
+    每只票用自己的历史做对照,不依赖截面静态风格,不容易在风格切换时翻符号(单个水平量最容易死在符号翻转上);(d) 的机制是行为性的(追涨与抛售),不依赖某段行情。最可能的失败方式:(a)
+    与已知成交额族的残差相关仍高,被控制吃掉;(c) 在 60 日窗口里估得太吵;两种情况下这一位都不会出 head,下一轮不再押 C。
+
+    数学检查:day_max(Volume) ≥ 0,停牌或无成交日为 0 或缺失;log 在近 0 处按算子定义给 NaN(不是负无穷);div(day_max,
+    day_sum) 在分母为 0 时分子也为 0,得 NaN 而不是无穷,正常日取值落在 (0, 1];cross_zscore 对近常数窗口有保护(算作 0);cross_corr
+    / cross_regres 窗口里有效对太少时可能返回 0(已知缺陷,只影响上市不久或长期停牌的票,奖励的可交易掩码已排除不满 0.9 × 241 天的新股与封板票,不是结果的主要来源)。无前视:全部只用
+    t 日收盘及以前的数据,cross_delay 的天数都为正,t+1 才交易。最长窗口 120 日,热身期不主导。'
+  seeds:
+  - cross_zscore(log(day_max(Volume)), 120)
+  - sub(cross_mean(log(day_max(Volume)), 10), cross_mean(log(day_max(Volume)), 120))
+  - cross_ema(div(day_max(Volume), cross_mean(day_max(Volume), 60)), 10)
+  - cross_regres(log(day_sum(Volume)), log(day_max(Volume)), 60)
+  - cross_regbeta(log(day_sum(Volume)), log(day_max(Volume)), 60)
+  - cs_regres(cross_mean(log(day_max(Volume)), 20), cross_mean(log(day_sum(Volume)),
+    20))
+  - cross_corr(day_max(Volume), abs_(day_sum(Ret)), 60)
+  - cross_corr(day_max(Volume), day_sum(Ret), 60)
+  - cross_corr(day_max(Volume), cross_delay(day_sum(Ret), 1), 60)
+  - cross_corr(day_max(Volume), day_max(Ret), 60)
+  - cross_corr(day_max(Volume), day_std(Ret), 60)
+  - mul(cross_zscore(log(day_max(Volume)), 120), sign(cross_mean(day_sum(Ret), 20)))
+  - cs_bucket_zscore(cross_mean(div(day_max(Volume), day_sum(Volume)), 20), sub(LogFloatCap,
+    LogFloatShares))
+  - sub(cs_rank(cross_mean(day_max(Volume), 20)), cs_rank(cross_mean(day_sum(Volume),
+    20)))
+- type: N
+  hypothesis: '机制:放量分钟里的价格签名。每个交易日把分钟按成交股数排序,最重的 10%(约 24 分钟)是资金实际成交的地方。在这些分钟里价格做了什么、成交量怎样带动价格,是个股的订单流构成与盘口深度留下的指纹,变化慢。全部读数用
+    Ret 与 Volume 在分钟轴上构造,在日轴取 20 到 60 日均值或自己 120 日的 z 分数,变成慢变的个股属性。三组读数:
+
+    (A) 价格冲击弹性:day_wstd(Ret, Volume) ÷ day_std(Ret)(成交量加权波动 ÷ 等权波动);day_wmean(|Ret|,
+    Volume) ÷ day_mean(|Ret|);day_topw_mean(|Ret|, Volume) ÷ day_mean(|Ret|)。大于 1
+    = 价格主要在放量时动(成交带来信息,或盘口薄、成交一笔价格就动);小于 1 = 价格主要在缩量分钟里动(无量跳动、买卖价差弹跳、薄盘噪声)。分子分母同单位,所以波动水平、成交额水平都被除掉了;这是个与
+    Amihud 的 |收益| ÷ 成交额相近、但无量纲、已经按自己的波动归一化的价格冲击量。
+
+    (B) 放量时的方向:day_topw_mean(Ret, Volume) − day_mean(Ret) 是最重 10% 分钟的平均收益相对全天的偏离;day_signed_ratio(Ret,
+    Volume) = 上涨分钟的成交量占比 − 下跌分钟的占比,是不需要逐笔数据的净买入代理(Chordia 与 Subrahmanyam 的订单失衡的分钟近似)。我有意没有放
+    day_wmean(Ret, Volume) − day_mean(Ret):恒等式 Σr·v ÷ Σv − Σr ÷ n = Cov(r, v) ÷ mean(v)
+    = corr(r, v) × σ_r × CV_v,即库里手写的 cross_mean(day_corr(Ret, Volume), 20) 乘上波动与成交量离散度(正是控制里的东西),等于换皮。
+
+    (C) 放量之后:day_corr(in_delay(sign(Ret) × Volume, 1), Ret) = 上一分钟的带符号成交量与当前分钟收益的日内相关,是
+    Pástor 与 Stambaugh 的 gamma(订单流冲击后的回吐)的分钟版:正 = 订单流延续(知情),负 = 冲击后回吐(流动性提供者赚钱的地方);对
+    |Ret| 的版本区分「放量引来波动」与「放量引来方向」。day_topw_mean(sign(上一分钟 Ret) × Ret, 上一分钟 Volume)
+    = 最重 10% 的那些分钟之后,下一分钟的收益在多大程度上沿着它们的方向(延续,正)或相反(回吐,负);再除以全天 |Ret| 均值的版本是放量之后的波动溢出。in_delay
+    只向后看一分钟,t 日全天数据在收盘时都已知,无前视。
+
+    批里的启发:最好的信号在股数口径而不是金额口径(−1.11 对 −3.66,与已知族 rho 0.54 对 0.81),说明被奖励的不是量的水平,而是量的分布与价格的关系;day_max(Ret)
+    与 day_max(Volume) 的富集都为正,说明价格一侧和成交量一侧的尖峰各自有信息。这一位把两边合起来:成交量最大的那些分钟里,价格做了什么。
+
+    为什么和已有的不同:(1) 算子骨架全部不在两个库的 5583 个骨架里,逐个核对过。day_wstd / day_topw_mean / day_signed_ratio
+    / day_wmean 是库建成之后才加的 Partura 算子,库里一条也没有;(C) 里「带符号成交量滞后一分钟」与「最重分钟之后的下一分钟」的配对库里没有(day_corr
+    里带 sign 的 0 条)。(2) 库里最近的亲戚是手写的 cross_mean(day_corr(Ret, Volume), 20)、cross_mean(day_corr(Ret,
+    in_delay(Volume, 1)), 20) 与 day_corr(abs_(Ret), in_delay(Volume, k)) 的日度版(B130
+    / B200 / B224),两个冠军的构成里就有它们。这一位的种子里一条都没有,连交换 day_corr 参数顺序的写法也避开;(C) 里用的是带符号的成交量(sign(Ret)
+    × Volume),它读的是订单流的符号延续,不是无符号的量价同步。(3) W01 的 head 里 Ret 参与的很少,都是 day_min(Ret)、day_wmean(Amt,
+    Amt) 之类的单点,没有「放量分钟里的价格行为」这一族。
+
+    为什么样本外还会在:冲击弹性与订单流延续 / 回吐是盘口深度和参与者构成(机构拆单、做市商、散户脉冲)的结构属性,20 到 120 日内名次保持;高冲击弹性(价格主要在放量时动)的股票要求更高的流动性溢价,这是文献里稳定存在的溢价,不依赖某段行情;慢聚合让换手低,15
+    bp 的成本吃得下。风险:(B) 的方向类与 20 日反转控制相关(净买入近似当日涨跌),奖励会剔除线性、U 形、S 形暴露,剩下的看运气;(A)(C) 与流动性、波动控制的相关预计更低;若
+    (A) 也被已知成交额族吃掉,说明冲击弹性只是流动性的另一种写法。
+
+    数学检查:分母 day_std(Ret) 与 day_mean(|Ret|) 只在整天价格不动(停牌 / 封板)时为 0,这时分子也为 0,得 0 ÷ 0
+    = NaN 而不是无穷;day_wstd 的权重和为 0 时给 NaN;day_corr 的取值在 [−1, 1],没有爆点;day_topw_mean 在成交极稀的票里(超过
+    90% 分钟无成交)阈值为 0,退化为全天均值,不会出错;Ret 在个别分钟缺失时按有限分钟处理。无前视:全部只用 t 日收盘及以前,t+1 才交易。窗口不超过
+    120 日,热身期不主导。'
+  inspired_by: B001 批:Volume 口径远好于 Amt 口径(−1.11 对 −3.66,与已知族 rho 0.54 对 0.81);day_max(Ret)、day_max(Volume)
+    富集为正(+0.35、+0.36),day_max(Amt) 为负(−0.98)。
+  literature:
+  - title: Order imbalance and individual stock returns Theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡持续、预测之后的收益;这里用放量分钟里上涨与下跌的成交量占比 day_signed_ratio(Ret, Volume) 近似,并取
+      20 日均值
+  - title: Liquidity risk and expected stock returns
+    authors: Lubos Pastor, Robert Stambaugh
+    year: '2003'
+    treatment: gamma = 带符号成交量对次期收益的回吐系数,越负越缺流动性、预期收益越高;这里用分钟级 day_corr(in_delay(sign(Ret)
+      × Volume, 1), Ret) 的 20 日均值近似
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 投机性成交伴随收益延续、对冲性成交伴随反转;这里用最重 10% 分钟之后下一分钟的收益沿原方向延续或回吐 day_topw_mean(sign(上一分钟
+      Ret) × Ret, 上一分钟 Volume) 近似
+  - title: Illiquidity and stock returns cross-section and time-series effects
+    authors: Yakov Amihud
+    year: '2002'
+    treatment: 单位成交额引起的价格变动越大,预期收益越高;这里用无量纲、按自己波动归一化的冲击弹性 day_wstd(Ret, Volume) ÷
+      day_std(Ret) 近似
+  seeds:
+  - cross_mean(div(day_wstd(Ret, Volume), day_std(Ret)), 20)
+  - cross_zscore(cross_mean(div(day_wstd(Ret, Volume), day_std(Ret)), 10), 120)
+  - cross_mean(div(day_wmean(abs_(Ret), Volume), day_mean(abs_(Ret))), 20)
+  - cross_mean(div(day_topw_mean(abs_(Ret), Volume), day_mean(abs_(Ret))), 20)
+  - cs_bucket_zscore(cross_mean(div(day_wstd(Ret, Volume), day_std(Ret)), 20), cross_mean(day_sum(Amt),
+    30))
+  - cross_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_mean(day_signed_ratio(Ret, Volume), 20)
+  - cross_zscore(cross_mean(day_topw_mean(Ret, Volume), 10), 120)
+  - cross_mean(day_corr(in_delay(mul(sign(Ret), Volume), 1), Ret), 20)
+  - cross_mean(day_corr(in_delay(mul(sign(Ret), Volume), 1), abs_(Ret)), 20)
+  - cross_zscore(cross_mean(day_corr(in_delay(mul(sign(Ret), Volume), 1), Ret), 10),
+    120)
+  - cross_mean(day_topw_mean(mul(sign(in_delay(Ret, 1)), Ret), in_delay(Volume, 1)),
+    20)
+  - cross_mean(div(day_topw_mean(abs_(Ret), in_delay(Volume, 1)), day_mean(abs_(Ret))),
+    20)
+  - cross_zscore(cross_mean(day_topw_mean(mul(sign(in_delay(Ret, 1)), Ret), in_delay(Volume,
+    1)), 10), 120)
+R:
+- head: day_max(Volume)
+  why: 烂的部件是「C 里与控制共享的那几块水平」,依据在拆解表里:Volume 换成 Amt,分数掉到 −3.66、与已知族的 rho 从 0.54 升到
+    0.81,说明 day_max(Volume) 里有一块与成交额水平共享;而且 C 两段都稳定地亏 1.1(train −1.10 / valid −1.11,半衰期
+    5),毛超额(推断)约为 0,亏的是换手成本,所以也要换慢。pow_1_5(day_max(Volume)) 只是单调改写,秩上完全一样(分数同为 −1.1067),不单独做变体。变体逐块拿掉:(1)(2)(3)(4)
+    在已知族、流动性、名义股价、流通市值各自的十分位内去均值(cs_bucket_demean,保留量纲),看拿掉哪一块之后毛超额出现;(5) 对 30 日平均成交额取截面回归残差;(6)
+    把 20 日平滑拉到 60 日,只降换手;(7)(8) 换成无量纲的峰值占比(60 日均值;流通市值十分位内的 z 分数)。数学上都有界:均值、残差、分桶均值都不含近零分母;峰值占比在分母为
+    0 时分子也为 0,得 NaN。无前视。
+  variants:
+  - cs_bucket_demean(cross_mean(day_max(Volume), 20), cross_mean(day_std(Amt), 30))
+  - cs_bucket_demean(cross_mean(day_max(Volume), 20), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_demean(cross_mean(day_max(Volume), 20), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(cross_mean(day_max(Volume), 20), LogFloatCap)
+  - cs_regres(log(day_max(Volume)), cross_mean(log(day_sum(Amt)), 30))
+  - cross_mean(day_max(Volume), 60)
+  - cross_mean(div(day_max(Volume), day_sum(Volume)), 60)
+  - cs_bucket_zscore(cross_mean(div(day_max(Volume), day_sum(Volume)), 20), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

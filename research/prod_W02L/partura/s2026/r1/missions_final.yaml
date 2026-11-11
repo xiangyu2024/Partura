@@ -1,0 +1,262 @@
+seed: 2026
+round: 1
+slots:
+- type: E
+  core: day_ar1_coefficient(in_slice(Ret, 11, 230))
+  hypothesis: '机制。核心 C = day_ar1_coefficient(in_slice(Ret, 11, 230)):每天第 11 ~ 230
+    分钟(约 9:41 ~ 14:50,共 220 根,避开开盘集合竞价附近与尾盘)的分钟收益对上一分钟收益的 AR(1) 回归系数 φ_R。它把两种相反的力混在一起:买卖价弹跳
+    / 做市(Roll 1984,φ 为负)与信息驱动的连续单边成交 / 趋势(φ 为正)。无量纲,与波动水平无关,但它的水平强烈依赖 tick / 价格 /
+    流动性。
+
+
+    批里的证据(loc.md 拆解表,新尺子):(1) 日度原值 C 自己 −3.60(train −3.57 / valid −3.60,ρ_known −0.23);在
+    head 2 里把一个 ts_stddev(·, 15) 拆掉、只留原值,分数变差 1.09 ~ 1.15,所以承重的不是 φ 的水平,而是『对 φ 做慢的、平滑的聚合』;(2)
+    ts_stddev(C, 15) 单独 −2.54(ρ_known −0.09),比含它的 head 2(−2.78)还好 0.24;(3) 同结构的 ts_stddev
+    窗口 7 → 15 → 30 在 Volume / Amt 两个 head 上都单调变好(−3.38 → −2.74 → −2.23;−3.28 → −2.79
+    → −2.19),Volume 与 Amt 互换几乎不变,train 与 valid 同向。我的解读:15 日 std 里有很大一块是『每天用 220 个点估一个
+    φ』的抽样噪声(大小随当天活跃分钟数变,近似流动性)加上换手;有信息的部分(若有)在 φ 的多日、低频变化里,不在日度抖动里。
+
+
+    这个 E 位要回答的问题:把 φ 的水平(tick / 流动性的机械成分,会被控制吃掉)与日度抽样噪声都拿掉之后,φ 的『相对自己的偏移、持续性、与其他日序列的耦合、分布形状』里还有没有东西。快照里
+    C 只出现在 head 2(及其拆解变体)里;下面 13 个种子的外围全部不是 ts_stddev / ts_mean 换窗口(窗口阶梯留给 R 去做):
+
+    (1) 相对自己的常态(种子 1 ~ 3):cross_zscore(C, 120) 的 EMA 60;cross_madz 稳健版的 EMA 40;EMA
+    20 减 EMA 241。读『最近的 φ 相对它自己的长期状态偏了多少』,个股水平被减掉。
+
+    (2) 持续性(种子 4、5):cross_autocorr(C, 120, 1)、cross_autocorr(C, 241, 5)。φ 的体制是否成团(信息到达有持续性
+    / 机构分批执行),还是纯抽样噪声(自相关 0)。
+
+    (3) 与其他日序列的 120 日滚动相关(种子 6 ~ 9):与成交量份额的 φ_V(价格趋势日与成交平滑日是否重合)、与当日收益 day_sum(Ret)(趋势日是涨日还是跌日:上涨时平稳爬升
+    vs 下跌时平稳砸盘)、与 log 成交额(趋势日是否放量)、与当日波动 day_std(Ret)(弹跳在高波动日消失的程度,是 tick 机械成分的诊断种子);种子
+    10:cross_regres(φ_V, C, 120) 的 EMA 40(注意 cross_regres(x, y, d) 是 y 对 x 的回归残差,即
+    C 中 φ_V 解释不了的部分)。
+
+    (4) 分布形状(种子 11、12):φ 的上尾均值减中位数;上下尾均值之和减 2 倍中位数(偏度,不是离散度)。
+
+    (5) tick 机械成分对照(种子 13):每天截面上把名义价格(LogFloatCap − LogFloatShares ≈ 对数股价)对 EMA 20
+    平滑后的 φ 做线性回归取残差,再 EMA 40。用连续回归、不分桶(别的流的 R 里分桶去均值因桶边界跳变推高换手,全部变差)。
+
+
+    和库里不同:库里 444 条含 day_ar1_coefficient,其直接外层是 pow_05(128)/ ts_decay_linear(38)/ cross_med(32)/
+    cross_argmax(29)/ ts_max(25)/ sigmoid(23)等,作用对象 405 条是原始字段,只有约 25 条作用在 in_slice
+    或 div 之后;cross_zscore、cross_madz、cross_ema、cross_tail_mean_* 在 5583 条里 0 次,日频叶子(LogFloatCap、LogFloatShares、ListAge)0
+    次;cross_autocorr_s1 / cross_regres 与 day_ar1_coefficient 各只在 2 条深层随机树里同现,最近的一条是
+    B031 的 cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)), 30)(Volume 的 φ、30
+    日窗口、没有掩码),本位是 Ret 的 φ、120 ~ 241 日窗口。13 个种子的骨架都不在库的 4100 个骨架里(逐个用 skeleton_key
+    核过)。
+
+
+    为什么样本外还会在:φ 的耦合与持续性刻画的是个股的交易者构成与信息到达方式(机构拆单 / 散户追涨 / 做市商库存),是慢变的持有人结构属性,不依赖某段行情;窗口全在
+    120 ~ 241 日,换手低;种子 11、12 的尾部均值是阶梯式更新的,换手最低。我对这个核心不乐观:它最可能的结果是『最慢的这一类也到不了 0.5』,但这正是要排除的假设。
+
+
+    数学检查:(a) 无前视:全是尾随窗口,日度值在收盘后才使用、t+1 交易;cross_autocorr 用 x[t − shift] 配 x[t]。(b)
+    数值:cross_corr / cross_autocorr 的分母是 sd 之积 + 1e-9,φ 的方差量级 1e-2、day_sum(Ret) 的方差约
+    1e-4,sd 之积 ≥ 1e-3,远大于 EPS;零收益 / 涨跌停锁死日 φ 的方差 < 1e-8,为 NaN,滚动窗口跳过;种子 4 ~ 9 乘『上市满
+    130 日』的掩码 replace_small_with_nan(is_gt(ListAge, 130)),避免新股窗口只有几个点;全部种子没有除法;不用
+    ts_rank / cross_rank / in_rank_rolling(nanrank_last 缺失返回 0 的已知陷阱不适用)。(c) 定义:本机用
+    AlphaCube 的合成立方体(64 只 × 360 日 × 241 分钟,含停牌与未上市)把 13 个种子全算过(日频叶子用等价物替代):无错误、无 inf、每日取值离散度
+    1.0,只检查运行时,不是任何分数。没有读任何 2026 年数据。'
+  literature:
+  - title: A simple implicit measure of the effective bid-ask spread in an efficient
+      market
+    authors: Richard Roll
+    year: '1984'
+    treatment: 核心 C 的负值部分(买卖价弹跳);种子 9、13 用它做 tick / 价格机械成分的诊断与对照
+  - title: 'Stock market prices do not follow random walks: evidence from a simple
+      specification test'
+    authors: Andrew W. Lo, A. Craig MacKinlay
+    year: '1988'
+    treatment: 分钟级一阶自相关的方差比检验思想:φ 的水平与持续性读的是价格对信息的反应方式
+  - title: Market frictions, price delay, and the cross-section of expected returns
+    authors: Kewei Hou, Tobias J. Moskowitz
+    year: '2005'
+    treatment: 价格延迟(信息被价格吸收的速度)在截面上被定价;种子 1 ~ 5 读 φ 的相对偏移与持续性
+  - title: 'Unknown unknowns: uncertainty about risk and stock returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    treatment: 风险的不确定性(vol-of-vol)预测低收益,对应批里『φ 的不稳定度』;本位要把它与 φ 的水平 / 抽样噪声分开
+  seeds:
+  - cross_ema(cross_zscore(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), 60)
+  - cross_ema(cross_madz(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), 40)
+  - sub(cross_ema(day_ar1_coefficient(in_slice(Ret, 11, 230)), 20), cross_ema(day_ar1_coefficient(in_slice(Ret,
+    11, 230)), 241))
+  - mul(cross_autocorr(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120, 1), replace_small_with_nan(is_gt(ListAge,
+    130)))
+  - mul(cross_autocorr(day_ar1_coefficient(in_slice(Ret, 11, 230)), 241, 5), replace_small_with_nan(is_gt(ListAge,
+    130)))
+  - mul(cross_corr(day_ar1_coefficient(in_slice(Ret, 11, 230)), day_ar1_coefficient(div(in_slice(Volume,
+    11, 230), in_sum(in_slice(Volume, 11, 230)))), 120), replace_small_with_nan(is_gt(ListAge,
+    130)))
+  - mul(cross_corr(day_ar1_coefficient(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret,
+    11, 230)), 120), replace_small_with_nan(is_gt(ListAge, 130)))
+  - mul(cross_corr(day_ar1_coefficient(in_slice(Ret, 11, 230)), log(day_sum(in_slice(Amt,
+    11, 230))), 120), replace_small_with_nan(is_gt(ListAge, 130)))
+  - mul(cross_corr(day_ar1_coefficient(in_slice(Ret, 11, 230)), day_std(in_slice(Ret,
+    11, 230)), 120), replace_small_with_nan(is_gt(ListAge, 130)))
+  - cross_ema(cross_regres(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), 40)
+  - sub(cross_tail_mean_q75(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), cross_med(day_ar1_coefficient(in_slice(Ret,
+    11, 230)), 120))
+  - sub(add(cross_tail_mean_q75(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120),
+    cross_tail_mean_q25(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120)), mul(2,
+    cross_med(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120)))
+  - cross_ema(cs_regres(cross_ema(day_ar1_coefficient(in_slice(Ret, 11, 230)), 20),
+    sub(LogFloatCap, LogFloatShares)), 40)
+- type: N
+  hypothesis: '机制。B076 的 10 个库因子全读同一个对象:一个序列(分钟收益或成交量份额)在第 11 ~ 230 分钟里对自己上一分钟的 AR(1)
+    系数,再做 15 日的 ts_mean / ts_stddev —— 只有『自己对自己』的一阶依赖。N 位问下一步:价格的分钟级一阶依赖是否取决于上一分钟的『成交状态』。这是
+    Llorente–Michaely–Saar–Wang(2002)的成交量–收益动态关系:信息不对称高的股票,放量之后收益延续;对冲 / 流动性驱动的股票,放量之后收益反转;Hasbrouck(1991)是带符号成交流对价格的持续影响。把这个机制放到分钟尺度,每天取一个无量纲的相关,再做
+    120 ~ 241 日的慢聚合,得到每只票的『成交条件下的延续 / 回吐倾向』,即谁在交易(信息交易者 vs 流动性 / 对冲 / 散户追涨)。
+
+
+    算子怎样实现。令 R = in_slice(Ret, 11, 230),V = in_slice(Volume, 11, 230),A = in_slice(Amt,
+    11, 230)。U = day_corr(in_delay(R, 1), R) 是无条件的一阶相关(约等于批里的 C)。H = day_corr(in_delay(in_topk_masked(V,
+    R, p), 1), R):只保留『上一分钟属于当天放量前 1/p』的那些分钟(其余置 NaN),取这些分钟的收益与下一分钟收益的相关(p = 5 / 10
+    / 20,每天约 44 / 22 / 11 对)。H − U = 放量之后的延续相对无条件延续的增量。种子的变形:
+
+    (1) 条件变量:成交量放量(种子 1、2、4、5、11、13 用 Volume;种子 3 用 Amt)、价格冲击(上一分钟 |Ret| 最大的 1/5、1/10
+    分钟:种子 8、9,『大冲击之后是延续还是回吐』)、成交量变化率 in_pct(Volume, 1)(『突然放量』而不是『一直量大』:种子 10)。
+
+    (2) 带符号成交流:Ret × Volume(Llorente 的交互项)、Ret × Amt(滞后 2 分钟)、sign(Ret) × Volume 作为滞后项(种子
+    6、7、14),与同滞后的 U 做差。
+
+    (3) 双侧:放量侧 H 减缩量侧 L(种子 5)。缩量侧在不活跃票上收益全为 0,相关取 0,所以只放这一个。
+
+    (4) 聚合:cross_mean 120 / 241,cross_ema 60;cross_stddev 120 / 241(不稳定度版,延续批里『离散度比水平好』的发现,种子
+    11、12);cross_zscore 再 EMA 40(相对自己的常态,种子 13)。
+
+
+    和库里不同(都已逐条核对 5583 条表达式):in_topk_masked 与 in_delay 同现 0 次、与 day_corr 同现 0 次;day_corr
+    配 in_delay 与 mul 同现 0 次;in_pct、cross_zscore、cross_ema 0 次。库里有成交量与 |Ret| 的滞后相关(day_corr(abs_(in_delay(Ret,
+    k)), Volume) 及其 log / zscore 变形约 96 条),但那是『无条件、不带符号』的相关水平;本位读的是『放量 / 带符号成交之后,延续相对无条件延续的增量』。批里
+    10 条只读自己对自己。14 个种子的骨架都不在库的 4100 个骨架里(逐个用 skeleton_key 核过)。
+
+
+    为什么样本外还会在:来源是『谁在交易』的结构差异(信息交易者 vs 流动性 / 对冲交易者 vs 散户追涨),Llorente 等在美股里证明它跨股票稳定;H
+    − U 是同一只票自己的两个相关之差,tick / 价格 / 波动对 H 与 U 的共同影响相消,所以不是波动或价位的换写法;全部慢聚合(120 ~ 241
+    日),换手低。弱点我自己知道:每天只有 11 ~ 44 对,单日相关的标准误约 0.15 ~ 0.3,靠 120 日以上的平均压到 0.015 ~ 0.03;H
+    − U 里仍含『高成交分钟价格弹跳较小』的 tick 机械成分(低价股),那会让它与名义价格相关,而名义价格不在 5 个控制里。
+
+
+    数学检查:(a) 无前视:in_delay(x, d) 是 x[t − d];in_topk_masked 用当天全天成交量排序选分钟,这个日度值只在收盘后使用、t+1
+    交易;所有 cross_* 窗口尾随。(b) 数值:day_corr 的分母是 sqrt(var_x · var_y) + 1e-9,放量分钟收益的方差量级
+    1e-6 ~ 1e-5 级(两个方差之积的平方根 ≥ 1e-5),远大于 EPS,不爆;收益全为 0 的日子(涨跌停锁死 / 极不活跃)方差为 0,相关取
+    0(不是 inf,也不是 NaN),成对数少于 2 才是 NaN。(c) 定义:全部种子没有除法;不用 ts_rank / cross_rank / in_rank_rolling(nanrank_last
+    缺失返回 0 的已知陷阱不适用);mul(Ret, Volume) 最大约 1e6,float32 平方和约 1e13,不溢出;sign(Ret) 在 Ret
+    = 0 处为 0;in_pct 在上一分钟成交量为 0 时为 NaN,in_topk_masked 对 NaN 按缺失处理。本机用合成立方体(64 只 ×
+    360 日 × 241 分钟,含停牌与未上市)把 14 个种子全算过:无错误、无 inf、每日取值离散度 ≥ 0.99,只检查运行时,不是任何分数。没有读任何
+    2026 年数据。'
+  inspired_by: B076(10 条手写库成员):day_ar1_coefficient 作用在 in_slice(Ret / Volume 份额, 11,
+    230) 上,再取 15 日 ts_mean / ts_stddev —— 批里每一条都只读同一个序列对自己的一阶依赖,没有一条读『一个序列的状态怎样改变另一个序列的依赖』
+  literature:
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 机制本身:放量之后收益延续(信息交易)还是反转(对冲 / 流动性交易);这里放到分钟尺度,取每日相关再慢聚合
+  - title: Measuring the information content of stock trades
+    authors: Joel Hasbrouck
+    year: '1991'
+    treatment: 带符号成交流对价格的持续影响;种子 6、7、14 的 Ret × Volume / sign(Ret) × Volume 滞后项
+  - title: Liquidity, information, and infrequently traded stocks
+    authors: David Easley, Nicholas M. Kiefer, Maureen O'Hara, Joseph B. Paperman
+    year: '1996'
+    treatment: 信息交易占比(PIN)的截面差异;本位的 H − U 是它的一个收益侧代理
+  seeds:
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11, 230), in_slice(Ret,
+    11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11,
+    230), 1), in_slice(Ret, 11, 230))), 120)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11, 230), in_slice(Ret,
+    11, 230), 10), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11,
+    230), 1), in_slice(Ret, 11, 230))), 241)
+  - cross_ema(sub(day_corr(in_delay(in_topk_masked(in_slice(Amt, 11, 230), in_slice(Ret,
+    11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11,
+    230), 1), in_slice(Ret, 11, 230))), 60)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11, 230), in_slice(Ret,
+    11, 230), 20), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11,
+    230), 1), in_slice(Ret, 11, 230))), 241)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11, 230), in_slice(Ret,
+    11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_topk_masked(in_slice(Volume,
+    11, 230), in_slice(Ret, 11, 230), 5, False), 1), in_slice(Ret, 11, 230))), 120)
+  - cross_mean(sub(day_corr(in_delay(mul(in_slice(Ret, 11, 230), in_slice(Volume,
+    11, 230)), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11, 230),
+    1), in_slice(Ret, 11, 230))), 120)
+  - cross_ema(sub(day_corr(in_delay(mul(in_slice(Ret, 11, 230), in_slice(Amt, 11,
+    230)), 2), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11, 230),
+    2), in_slice(Ret, 11, 230))), 60)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(abs_(in_slice(Ret, 11, 230)),
+    in_slice(Ret, 11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret,
+    11, 230), 1), in_slice(Ret, 11, 230))), 120)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(abs_(in_slice(Ret, 11, 230)),
+    in_slice(Ret, 11, 230), 10), 3), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret,
+    11, 230), 3), in_slice(Ret, 11, 230))), 241)
+  - cross_mean(sub(day_corr(in_delay(in_topk_masked(in_pct(in_slice(Volume, 11, 230),
+    1), in_slice(Ret, 11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret,
+    11, 230), 1), in_slice(Ret, 11, 230))), 120)
+  - cross_stddev(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11, 230), in_slice(Ret,
+    11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11,
+    230), 1), in_slice(Ret, 11, 230))), 120)
+  - cross_stddev(sub(day_corr(in_delay(mul(in_slice(Ret, 11, 230), in_slice(Volume,
+    11, 230)), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11, 230),
+    1), in_slice(Ret, 11, 230))), 241)
+  - cross_ema(cross_zscore(sub(day_corr(in_delay(in_topk_masked(in_slice(Volume, 11,
+    230), in_slice(Ret, 11, 230), 5), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret,
+    11, 230), 1), in_slice(Ret, 11, 230))), 120), 40)
+  - cross_mean(sub(day_corr(in_delay(mul(sign(in_slice(Ret, 11, 230)), in_slice(Volume,
+    11, 230)), 1), in_slice(Ret, 11, 230)), day_corr(in_delay(in_slice(Ret, 11, 230),
+    1), in_slice(Ret, 11, 230))), 120)
+R:
+- head: ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 15)
+  why: 烂部件 = 15 日窗口。依据(loc.md 拆解表):同一个对象的 ts_stddev 窗口 7 → 15 → 30 = −3.38 → −2.74
+    → −2.23(Volume),−3.28 → −2.79 → −2.19(Amt),train 与 valid 同向,ρ_known 一直在 −0.03
+    ~ −0.09;日度 φ_V 原值是 −3.81(ρ_known 0.495),拆掉 ts_stddev 变差 1.1,说明承重的是慢与平滑。窗口阶梯 45
+    / 60 / 90 / 120 / 180 / 241 看它到哪里走平;再加两个不同的聚合:先 EMA 5 再 ts_stddev 120(滤掉日度抽样噪声,只留多日的体制变化)、上下四分位尾均值之差(稳健离散度,换手更低)。φ_V
+    的 Volume 与份额等价(AR(1) 与尺度无关,份额只是为了数值),Amt 版本是它的孪生,不重复。
+  variants:
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 45)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 60)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 90)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 120)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 180)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 241)
+  - ts_stddev(cross_ema(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 5), 120)
+  - sub(cross_tail_mean_q75(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 120), cross_tail_mean_q25(day_ar1_coefficient(div(in_slice(Volume,
+    11, 230), in_sum(in_slice(Volume, 11, 230)))), 120))
+  - cross_ema(abs_(sub(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), cross_ema(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 120))), 60)
+- head: add(ts_stddev(day_ar1_coefficient(in_slice(Ret, 11, 230)), 15), ts_stddev(day_ar1_coefficient(div(in_slice(Volume,
+    11, 230), in_sum(in_slice(Volume, 11, 230)))), 15))
+  why: 烂部件 = 15 日窗口 + 两半相加。依据:Ret 半 ts_stddev(C, 15) 单独 −2.54,比相加后的 head(−2.78)还好
+    0.24,Volume 半 −2.74,相加反而更差,两半在 15 日尺度上主要是噪声相加;只改 Ret 半的窗口(7 / 30)得 −2.89 / −2.80,没有改善,因为
+    Volume 半仍是 15 日,所以两半要一起放慢。变体:两半一起放慢到 60 / 120、Ret 半单独放慢到 120、先 EMA 5 再 ts_stddev(滤掉日度抽样噪声)的
+    120(两半)与 241(Ret 半)版本。
+  variants:
+  - add(ts_stddev(day_ar1_coefficient(in_slice(Ret, 11, 230)), 60), ts_stddev(day_ar1_coefficient(div(in_slice(Volume,
+    11, 230), in_sum(in_slice(Volume, 11, 230)))), 60))
+  - add(ts_stddev(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), ts_stddev(day_ar1_coefficient(div(in_slice(Volume,
+    11, 230), in_sum(in_slice(Volume, 11, 230)))), 120))
+  - ts_stddev(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120)
+  - add(ts_stddev(cross_ema(day_ar1_coefficient(in_slice(Ret, 11, 230)), 5), 120),
+    ts_stddev(cross_ema(day_ar1_coefficient(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume,
+    11, 230)))), 5), 120))
+  - ts_stddev(cross_ema(day_ar1_coefficient(in_slice(Ret, 11, 230)), 5), 241)
+- head: ts_stddev(day_ar1_coefficient(div(in_slice(Amt, 11, 230), in_sum(in_slice(Amt,
+    11, 230)))), 15)
+  why: 烂部件 = 15 日窗口(与 head 1 的 Volume 孪生,ρ ≈ 1:−2.74 对 −2.79)。只放一个 Amt 版的 120 日变体,用来确认
+    Volume ↔ Amt 在慢窗口上仍然等价,不重复整条阶梯。
+  variants:
+  - ts_stddev(day_ar1_coefficient(div(in_slice(Amt, 11, 230), in_sum(in_slice(Amt,
+    11, 230)))), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

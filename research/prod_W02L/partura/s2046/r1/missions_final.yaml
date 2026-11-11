@@ -1,0 +1,223 @@
+seed: 2046
+round: 1
+slots:
+- type: E
+  core: day_var(Low)
+  hypothesis: '事实(快照,只用 train / valid):核心 day_var(Low) = 一天里 241 根分钟最低价(后复权价)的方差。(1)
+    共性表里它是均值差最大的子树:含它的 9 条候选均值 -1.98,不含 -2.43(+0.44,p 0.12)。(2) head 3 里 Low 换 High
+    分数几乎不变(-1.12 -> -1.18);库里 day_var(Low / High / Close / Vwap) 的训练段 rank IC(-0.0294
+    ~ -0.0297)和日换手(0.32 ~ 0.33)几乎逐位相同,所以它读的是价格路径的离散度,不是 Low 这个字段。(3) 它单独做因子是 -2.27(train
+    -1.53 / valid -2.27),水平读法在新尺子下是死的;head 2 里 cov 子树(含它)却是整批最稳的一块:-0.94 / -0.91(train
+    / valid 几乎一样)。
+
+
+    我的读法:day_var(Low) ≈ P² x V,P 是后复权价格水平,V 是日内价格路径的相对离散度(日内趋势幅度的平方加噪声)。截面上 P 跨好几个数量级,所以截面秩
+    ≈ 价格水平(同波别的流已读到价格水平没有残差 alpha,我不押这个);但同一只票逐日变化的几乎全是 V(P 一天只动几个百分点,V 的日间波动是数量级的;这是由定义推出来的读法,没有用读数核对)。因此核心先取
+    log、再做 60 日 z 分数 S = cross_zscore(log(day_var(Low)), 60):价格水平整个消掉,剩下「今天日内价格路径比这只票平时更有方向
+    / 更不规则」的惊奇。本位押 S 和核心的三种用法,都是慢变的、个股自己的耦合系数,不是水平:
+
+    (a) 响应系数(种子 1-5、15):个股自己 120 / 241 日里,当日收益 day_sum(Ret) 对昨日 S 的 cross_regbeta
+    / cross_corr / cross_reg_tvalue(种子 3 的收益去掉全市场均值 cs_demean;种子 4、5 把 S 乘上昨日收益符号
+    sign(day_sum(Ret)),区分「上涨日的强趋势」与「下跌日的强趋势」)。机制:强趋势日之后是继续还是回吐,取决于这只票的成交里价格冲击型(流动性需求)与信息型的占比,这是个股特征,在个股内持续数月(Campbell-Grossman-Wang
+    1993、Llorente 等 2002 对成交量 - 收益关系的同类结论),不随某段行情的方向。同一波里种子 2013 第 1 轮 N 位的 4 个 head(+0.76
+    ~ +1.04,train / valid 同号)是「当日收益对滞后成交活跃度的 120 日 cross_regbeta」,说明这一类统计量在这把尺子下被奖励;那一族(别的流已提交的计划)的回归元用的是成交量
+    / 成交额 / 日内 DW / 成交 AR(1) / Gini,我没有看到有人用价格路径的惊奇。种子 15 是带价格尺度的对照(回归元不做 z 分数、不去水平):若它好于种子
+    1,说明量纲因子而不是耦合方向承重。
+
+    (b) 耦合与持续性(种子 6-10):S 的 1 阶自相关(120 日,种子 6);log day_var(Low) 与 log day_var(Amt)
+    的 120 日相关(同日、滞后 1 日,种子 7、8);与 log day_var(Ret) 的 120 日相关、241 日斜率(种子 9、10)。无量纲,读的是价格路径的离散度由成交活跃度
+    / 波动推动,还是自己漂移(trend 对 noise 的比例;混合分布假说,Clark 1973、Tauchen-Pitts 1983)。
+
+    (c) 去量纲的 head 2(种子 11、12):head 2 的 cov 子树 cross_cov(ts_max(day_last(Amt), 20),
+    day_var(Low), 241) = sigma_A x sigma_V x rho,尺度主导;种子 11 取相关系数 rho,种子 12 只除掉价格尺度
+    sigma_V、留下 sigma_A x rho。回答「稳定的 -0.9 里 rho 占多少」。
+
+    (d) 慢制度差与一个排除筛(种子 13、14):13 = 20 日均 log day_var(Low) 减 241 日均(价格路径离散度的制度变化,含 (P20
+    / P241)^2 的价格位置);14 = 把种子 2 的排名里 day_var(Low) 最高 5%(后复权价最高的一小撮票)沉到底部(cs_last_high05),这是
+    W01 以来的筛子写法,用核心本身做筛选变量。
+
+
+    为什么和快照里已见的写法不同:含该核心的已见写法只有 (i) head 2 的 ts_max(cross_cov(·, ·, 241), 20)、(ii)
+    head 3 的 ts_min(ts_reg_fvalue(day_std(High), ts_std(pow_2_5(·), 20), 20), 5)、(iii)
+    库里把价格离散度当被解释变量的 cross_regbeta(活跃度, day_var(Low), 241)。本位的外围:取 log 再 z 分数去水平、响应变量是下一段的收益
+    / 另一个离散度的对数、窗口 120、用相关系数 / t 值而不是原始协方差、sign 交互。15 个种子的算子骨架逐条与两库 5583 条的骨架核对过(抽掉字段
+    / 常数 / 窗口),没有一条在库里;15 个种子共 14 种骨架(种子 7 与 9 只差一个字段)。
+
+
+    为什么样本外还会在:来源是个股的参与者结构(价格冲击型成交 vs 信息型成交)这类慢变特征,窗口 120 ~ 241 日,半衰期由流水线按 train 定,换手低(这把尺子下慢是决定性的);不靠某一段行情的方向。最可能的失败:120
+    日相关系数的估计误差(约 0.09)与截面真实离散度相当,名次近似随机,换手把 15 bp 吃满;S 与波动 / 20 日反转控制相关(尺子只去掉线性 /
+    平方 / 立方,去不掉交互)。
+
+
+    数学检查:log 的输入 day_var(Low) 是价格平方量纲,一个 tick 的日子也有 1e-7 以上,只有价格一整天不动(锁死涨跌停 / 近冻结,方差为
+    0)的日子被 log 记缺失、不填充;day_var(Ret) 约 1e-7 ~ 1e-4,只有近乎冻结的日子(< 1e-9)同样记缺失;cross_zscore
+    窗口接近常数时记 0,不爆;回归元滞后 1 日、响应是当日收益,两者在当日收盘时都已知,标签是下一日开盘之后,无前视;不用 ts_rank / cross_rank,不触发
+    nanrank_last 的停牌记 0;cross_* 不满窗时是扩张窗口,热身期由流水线裁掉;回归元是 z 分数(方差约 1),不会被 cross_regbeta
+    的方差阈值吃掉。'
+  literature:
+  - title: A Subordinated Stochastic Process Model with Finite Variance for Speculative
+      Prices
+    authors: Peter K. Clark
+    year: '1973'
+    treatment: 价格变化的方差与信息到达(成交活跃度)同步;这里不取同日水平,取个股自己 120 / 241 日里价格路径离散度与成交 / 波动的相关与斜率,当耦合强度
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 成交量高的日子之后收益自相关会变(流动性需求引起的价格冲击会回吐);这里把「成交量」换成价格路径离散度的惊奇,看个股自己的 120 日响应斜率
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 个股层面的量 - 收益动态关系由投机性与对冲性成交的占比决定;这里读个股自己的滞后回归系数,并乘昨日收益符号区分方向
+  seeds:
+  - cross_regbeta(cross_delay(cross_zscore(log(day_var(Low)), 60), 1), day_sum(Ret),
+    120)
+  - cross_corr(cross_delay(cross_zscore(log(day_var(Low)), 60), 1), day_sum(Ret),
+    120)
+  - cross_reg_tvalue(cross_delay(cross_zscore(log(day_var(Low)), 60), 1), cs_demean(day_sum(Ret)),
+    120)
+  - cross_regbeta(cross_delay(mul(sign(day_sum(Ret)), cross_zscore(log(day_var(Low)),
+    60)), 1), day_sum(Ret), 120)
+  - cross_corr(cross_delay(mul(sign(day_sum(Ret)), cross_zscore(log(day_var(Low)),
+    60)), 1), day_sum(Ret), 241)
+  - cross_autocorr(cross_zscore(log(day_var(Low)), 60), 120, 1)
+  - cross_corr(log(day_var(Low)), log(day_var(Amt)), 120)
+  - cross_corr(cross_delay(log(day_var(Low)), 1), log(day_var(Amt)), 120)
+  - cross_corr(log(day_var(Low)), log(day_var(Ret)), 120)
+  - cross_regbeta(log(day_var(Ret)), log(day_var(Low)), 241)
+  - cross_corr(ts_max(day_last(Amt), 20), day_var(Low), 241)
+  - sub(cross_mean(log(day_var(Low)), 20), cross_mean(log(day_var(Low)), 241))
+  - cs_last_high05(cross_corr(cross_delay(cross_zscore(log(day_var(Low)), 60), 1),
+    day_sum(Ret), 120), day_var(Low))
+- type: N
+  hypothesis: '机制:head 1 ts_sum(day_var(Amt), W) 的窗口读数:W = 25 / 50 / 100 是 -3.10 /
+    -0.60 / -0.28(valid +0.24),越慢越好;Amt 换 Volume 掉到 -1.13。day_var(Amt) = 成交额水平² x
+    B,B = var / mean² 是日内成交额的相对离散度(burstiness,一阵一阵的程度)。水平那一半就是已知成交额族 cross_mean(day_std(Amt),
+    30) 的近亲,尺子已经去掉;累计 100 日比累计 25 日好,说明承重的是「这只票日内成交多脉冲」这个持久特征 B(参与者结构:机构拆单的平滑成交 vs
+    散户 / 题材的脉冲式成交),而不是当天的水平。本位直接读 B 的无量纲形式,并把它放进「慢的、个股自己的耦合系数」这一类:同波里种子 2013 第 1 轮
+    N 位的 4 个 head(+0.76 ~ +1.04,train / valid 同号)就是当日收益对滞后成交活跃度的 120 日 cross_regbeta,这类统计量在这把尺子下被奖励。
+
+
+    实现:B = div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt)))):replace_small_with_nan
+    把无成交的分钟(Amt = 0)置空,只在有成交的分钟上算,既去掉成交额水平,又去掉「有成交的分钟占比」(那是另一个流动性量)。S_B = cross_zscore(log(B),
+    60) 是「今天比这只票平时更脉冲」的惊奇,与水平无关。16 个种子分四组:
+
+    (a) 响应系数(种子 1-4、6):当日收益 day_sum(Ret) 对昨日 S_B 的 120 日 cross_regbeta / cross_corr
+    / cross_reg_tvalue(种子 3 去全市场均值 cs_demean),241 日相关(种子 4),S_B 乘昨日收益符号的版本(种子 6,区分「上涨日的脉冲」与「下跌日的脉冲」)。种子
+    5 把回归元换成含水平的 log day_var(Amt) 惊奇作对照(水平惊奇别的流已用过,放进来只问「去掉水平后还剩多少」)。
+
+    (b) 波动惊奇的响应(种子 7、8):昨日 log day_var(Ret) 的 z 分数对当日收益(波动与风险补偿 / 杠杆效应的个股系数)。
+
+    (c) 成交脉冲与波动的耦合(种子 9-12):log B 与 log day_var(Ret) 的 120 日同日相关、241 日斜率、两个方向的滞后 1
+    日相关(波动之后成交变脉冲,还是脉冲之后波动放大):混合分布假说(Clark 1973、Tauchen-Pitts 1983)的个股耦合强度。
+
+    (d) 持续性与制度(种子 13-16):S_B 的 1 阶自相关(120 日);20 日均 log B 减 241 日均;241 日均 log B 的含零分钟版本(当对照,看「有成交的分钟占比」是否承重);种子
+    16 = cross_regbeta(cross_delay(day_var(Amt), 1), day_sum(Ret), 120),回归元带成交额水平,是诊断:2013
+    的 head 里回归元带水平、斜率里有 1/sigma_x 的量纲因子,若 16 好于 1-4,说明量纲而不是耦合方向承重,下一轮回到带水平的写法。
+
+
+    为什么和库里不同:库里与 head 1 同族的成员(同批 44 条)是 ts_sum / cross_* 对 day_var(·) 的水平聚合,或 cross_cov
+    / cross_regbeta 把两个原始量纲的离散度耦合起来(如 ts_sum(cross_cov(day_var(Ret), day_quantile(High),
+    15), 50)、ts_max(log(cross_regbeta(log(day_quantile_q75(Ret)), day_var(Low), 241)),
+    20))。本位:(i) 回归元先去水平、再取 z 分数(无量纲);(ii) 响应是收益 / 波动,不是另一个原始离散度;(iii) 窗口 120 ~ 241;(iv)
+    用 replace_small_with_nan 只在有成交的分钟上算 B。16 个种子共 14 种骨架(种子 2 与 4 只差窗口、5 与 7 只差字段),逐条与两库
+    5583 条的骨架核对过(抽掉字段 / 常数 / 窗口),没有一条在库里。
+
+
+    为什么样本外还会在:burstiness 与成交 - 波动 - 收益的耦合强度是参与者结构的慢变特征(数月不变),不靠行情方向;半衰期由流水线按 train
+    定;窗口 120 ~ 241 日,换手低。最可能的失败:120 日相关的估计误差与截面离散度相当,名次近似随机;B 在薄成交的票上与流动性控制仍有共线(有成交分钟少
+    → B 估计噪声大)。
+
+
+    数学检查:B 的分母是有成交分钟的均值平方(> 0),分子只有当天有成交的分钟 >= 2 根时才有值,否则缺失、不填充;log(B) 在 B <= 1e-9
+    时记缺失(即完全等额的成交日,罕见);log day_var(Ret) 只有近乎冻结的日子(< 1e-9)记缺失;cross_zscore 窗口接近常数时记
+    0;回归元滞后 1 日、响应是当日收益,收盘时都已知,无前视;没有 ts_rank / cross_rank,不触发 nanrank_last;cross_*
+    不满窗时是扩张窗口,热身期被裁掉;回归元是 z 分数,不会被 cross_regbeta 的方差阈值吃掉。'
+  inspired_by: B136(第 1 批):head 1 ts_sum(day_var(Amt), W) 的窗口读数 25 / 50 / 100 = -3.10
+    / -0.60 / -0.28(valid +0.24),越慢越好,Amt 换 Volume 掉到 -1.13;同批非水平成员的原始 Sharpe 较好的是两个序列的耦合统计量(ts_sum(cross_cov(day_var(Ret),
+    day_quantile(High), 15), 50)  +1.61,ts_max(log(cross_regbeta(log(day_quantile_q75(Ret)),
+    day_var(Low), 241)), 20)  +1.05);head 2 的 cov 子树去掉后只变好 0.17(耦合方向不承重,尺度承重)
+  literature:
+  - title: The Price Variability-Volume Relationship on Speculative Markets
+    authors: George E. Tauchen, Mark Pitts
+    year: '1983'
+    treatment: 价格波动与成交量由同一个信息流驱动,耦合强度因人而异;这里读个股自己的 log B 与 log day_var(Ret) 的 120
+      / 241 日相关与斜率,B 是去水平的成交额脉冲度
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常成交的日子之后收益有系统差异;这里把「异常成交」换成去水平的成交脉冲惊奇 S_B,读个股自己的响应斜率
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 个股层面的滞后量 - 收益回归系数,系数的符号区分投机性与对冲性成交;种子 6 用昨日收益符号交互
+  seeds:
+  - cross_regbeta(cross_delay(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 60), 1), day_sum(Ret), 120)
+  - cross_corr(cross_delay(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 60), 1), day_sum(Ret), 120)
+  - cross_reg_tvalue(cross_delay(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 60), 1), cs_demean(day_sum(Ret)),
+    120)
+  - cross_corr(cross_delay(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 60), 1), day_sum(Ret), 241)
+  - cross_regbeta(cross_delay(cross_zscore(log(day_var(Amt)), 60), 1), day_sum(Ret),
+    120)
+  - cross_regbeta(cross_delay(mul(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 60), sign(day_sum(Ret))), 1),
+    day_sum(Ret), 120)
+  - cross_regbeta(cross_delay(cross_zscore(log(day_var(Ret)), 60), 1), day_sum(Ret),
+    120)
+  - cross_corr(cross_delay(cross_zscore(log(day_var(Ret)), 60), 1), cs_demean(day_sum(Ret)),
+    120)
+  - cross_corr(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    log(day_var(Ret)), 120)
+  - cross_regbeta(log(day_var(Ret)), log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 241)
+  - cross_corr(cross_delay(log(day_var(Ret)), 1), log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 120)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), log(day_var(Ret)), 120)
+  - cross_autocorr(cross_zscore(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    60), 120, 1)
+  - sub(cross_mean(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    20), cross_mean(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    241))
+  - cross_mean(log(div(day_var(Amt), pow_2(day_mean(Amt)))), 241)
+R:
+- head: ts_sum(day_var(Amt), 50)
+  why: 烂部件 = 成交额水平。day_var(Amt) = 水平² x 日内相对离散度,水平那一半是已知成交额族。拆解:窗口 25 / 50 / 100 =
+    -3.10 / -0.60 / -0.28(valid +0.24),越慢越好;Amt 换 Volume -1.13。变体保留「慢累计」、去掉水平:burstiness
+    的 100 / 241 日累计(只在有成交的分钟上算)、合并样本的 CV²、对 log 水平做截面回归取残差;另外加长到 241 日、做长 / 短比,检验「慢
+    + 去水平」。
+  variants:
+  - ts_sum(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt)))),
+    100)
+  - ts_sum(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt)))),
+    241)
+  - div(ts_sum(day_var(Amt), 241), ts_sum(day_var(Amt), 20))
+  - cs_regres(log(ts_sum(day_var(Amt), 100)), log(ts_sum(day_mean(Amt), 100)))
+  - ts_sum(day_var(Amt), 241)
+  - div(ts_sum(day_var(Amt), 100), pow_2(ts_sum(day_mean(Amt), 100)))
+- head: ts_max(cross_cov(ts_max(day_last(Amt), 20), day_var(Low), 241), 20)
+  why: 烂部件 = cross_cov(尺度主导的协方差,sigma_A x sigma_V x rho)。拆解:拿掉 cov 变成 ts_max(ts_max(day_last(Amt),
+    20), 20) 是 -0.78 / -0.42,比原 head 好 0.17(必要性 -0.17);而 ts_max(day_last(Amt), 20)
+    必要性 +0.47。变体把 cov 换成去尺度的 cross_corr(窗口 241 / 120)、反向的 cross_regbeta、对数价格离散度的相关,问
+    rho 这一半有没有信息。
+  variants:
+  - ts_max(cross_corr(ts_max(day_last(Amt), 20), day_var(Low), 241), 20)
+  - ts_max(cross_corr(ts_max(day_last(Amt), 20), day_var(Low), 120), 20)
+  - ts_max(cross_regbeta(day_var(Low), ts_max(day_last(Amt), 20), 241), 20)
+  - ts_max(cross_corr(ts_max(day_last(Amt), 20), log(day_var(Low)), 241), 20)
+- head: ts_min(ts_reg_fvalue(day_std(High), ts_std(pow_2_5(day_var(Low)), 20), 20),
+    5)
+  why: 烂部件 = pow_2_5 与最外层 ts_min 窗口。拆解:拿掉 pow_2_5 变好 0.23(-0.89),ts_min 窗口 5 -> 2
+    变好 0.13(-0.99),两者没有叠加过;这个 head train -0.53 是三个 head 里最好的、valid -1.12 偏差。变体:两处同时改、回归窗口
+    60、F 值换 t 值、外层改 20 日均值。
+  variants:
+  - ts_min(ts_reg_fvalue(day_std(High), ts_std(day_var(Low), 20), 20), 2)
+  - ts_min(ts_reg_fvalue(day_std(High), ts_std(day_var(Low), 20), 60), 5)
+  - ts_min(ts_reg_tvalue(day_std(High), ts_std(pow_2_5(day_var(Low)), 20), 20), 5)
+  - ts_mean(ts_reg_fvalue(day_std(High), ts_std(day_var(Low), 20), 20), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml

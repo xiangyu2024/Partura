@@ -1,0 +1,100 @@
+seed: 2037
+round: 3
+slots:
+- type: E
+  core: energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False)
+  hypothesis: 核心 = 本组第 1 轮 E 位的核心 S = energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False)(排名 5..50 的谱线占去掉最强 5 根后总能量的比例,即日内成交量 U 形之外的中频成交团块度;这个核心此前只用过 1 个
+    E 位,本轮是第 2 个也是最后 1 个)。快照事实:S 外面套 cross_corr(S, day_sum(Amt), 60) 出了 +0.60(train
+    +0.60 / valid +0.76)的 head 及四个同族(+0.41 ~ +0.56),而 S 的水平、cross_stddev、zscore、回归残差都不过线;以整个
+    head 为核心的第 2 轮 E 位(平滑 / zscore / 差类外壳)0 个过线,最好 +0.45。R 轮里 cross_corr 的 EMA 10
+    外壳、q=8、m=100、窗口 90 都在 +0.16 ~ +0.61 之间,与原 head 的 ρ 0.83 ~ 0.98,说明这个相关读数在谱参数上是平台而不是尖峰。所以承重的是「60
+    日内团块度与成交额水平同向协动」这件事,而不是 cross_corr 这个具体统计量。本位换掉统计量本身:回归斜率 cross_regbeta(Amt, S)(团块度对成交额的弹性,带
+    S 的 60 日波动)、回归 t 值(相关系数乘样本数开方再做非线性变换,放大高协动的票)、协方差 cross_cov(把两条序列各自的离散度也纳入,和相关系数不同)、回归截距
+    cross_regalpha;再有对相关系数序列取上 / 下半标准差(协动的上行 / 下行不稳定性)、与 day_sum(Vwap) 的协动(Vwap 是价格水平,检验团块度是随价格还是随活跃度起伏)、先扣掉
+    day_std(Ret) 再相关、两条序列各自 z 分数 / EMA 后再相关(去掉各自水平变化,只留日度节奏的协动)。与以前不同:前两轮含核心的外壳都是
+    cross_corr 本身或套在 cross_corr 之外的包装,从没有把 cross_corr 换成回归 / 协方差族统计量,也没有先处理成交额一侧;种子骨架都不是两库已有骨架。有界或在方差为零时为
+    NaN(cross_regbeta 的分母是 60 日 S 方差,S 整段不动时返回 NaN,不是爆点;cross_corr 有界),窗口 60 ~ 120
+    日慢,热身期是 NaN 而非填充值,无前视。样本外还会在的理由:读的是参与者构成这类慢变量(成交团块度随活跃度升降的方式),换手低,不依赖行情段;最可能的失败是统计量的差异不足以摆脱与原
+    head 的 ρ >= 0.7(库禁令会拒绝),或被已知成交额族吃掉。
+  seeds:
+  - cross_cov(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 120)
+  - cross_regalpha(day_sum(Amt), energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), 60)
+  - mul(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60), cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Vwap), 60))
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Vwap), 60)
+  - cross_corr(cross_regres(day_std(Ret), energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), 60), day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    cross_regres(day_std(Ret), log(day_sum(Amt)), 60), 60)
+  - cross_corr(cross_ema(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), 5), cross_ema(day_sum(Amt), 5), 90)
+  - cross_corr(cross_ema(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), 10), log(day_sum(Amt)), 60)
+- type: N
+  hypothesis: 来自 B111(T16,挖掘库,day_argmax 家族)的现象:该批 3 个素材 head 全是「一天中某个事件发生在第几分钟」的时间定位量(day_argmax(Volume)
+    的 50 日求和、|day_argmax(Ret)| 的 40 日方差、day_var(Low) 与 day_argmax(Close) 的 60 日协方差),说明日内「极值在何时」是库里存在、但此前没被这把尺子奖励过的一类信息;而本组第
+    1 轮的发现说明「形状读数与活跃度的 60 日协动」承重。本位把两者合起来:用日内时间定位量(成交量峰值分钟、最高价峰值分钟、收益绝对值峰值分钟、收盘价峰值分钟)作为协动的一侧,另一侧是成交团块度
+    S、日内低价方差 day_var(Low)、成交额水平或另一个定位量,做 60 日 cross_corr / cross_cov / cross_regbeta。机制:放量或高团块的日子里,成交峰值更靠近开盘还是收盘,反映信息冲击(开盘集中)与指数
+    / 机构再平衡(尾盘集中)的混合比例随活跃度的变化,是参与者构成的慢属性;day_argmax 是整数分钟位置,与 S 的谱读数、成交额性质不同,协动测的是时序结构而不是水平。和库里不同:库里只有
+    day_argmax 的 ts_sum / ts_var 单变量写法和 cross_cov(day_var, day_argmax) 一个双变量写法,没有
+    day_argmax 与 S 的耦合,也没有 day_argmax 与成交额的耦合;14 个种子的骨架都不在两库的 5583 条骨架里。cross_corr
+    有界,cross_cov 带量纲但进入尺子时取日度排名;窗口 60 日,热身期为 NaN;day_argmax 在停牌日取整数 0,属真实状态而非爆点,窗口内其余日仍有取值;无前视(日度序列因果,只用当日及以前的分钟数据)。样本外还会在的理由:时间定位量是日内结构的慢统计量,60
+    日相关把整数 argmax 平均成近连续量,换手低、与价格方向无关;风险:整数 argmax 并列多,以及与已知成交额族相关。
+  inspired_by: B111(T16,挖掘库 day_argmax 家族,素材 head 为 ts_sum(day_argmax(Volume), 50)、neg(ts_var(abs_(day_argmax(Ret)),
+    40))、cross_cov(day_var(Low), day_argmax(Close), 60))以及本组第 1 轮 cross_corr(S, day_sum(Amt),
+    60) 的耦合读法
+  seeds:
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_argmax(Volume), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(High), 50, 5, False), day_argmax(High),
+    60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_argmax(Ret), 60)
+  - cross_cov(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_argmax(Close), 60)
+  - cross_cov(day_var(Low), energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), 60)
+  - cross_corr(day_argmax(Volume), day_argmax(Close), 60)
+  - cross_corr(day_argmax(Volume), day_sum(Amt), 60)
+  - cross_corr(day_argmax(Close), day_sum(Amt), 60)
+  - cross_regbeta(day_argmax(Volume), energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_argmax(abs_(Ret)), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Amt), 50, 5, False), day_argmax(Volume),
+    60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Low), 50, 5, False), day_argmax(Close),
+    60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(High), 50, 5, False), day_var(Low),
+    60)
+R:
+- head: cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60)
+  why: 上一轮 R:q=8 得 +0.61(与原 head 增益 +0.00,ρ 0.97),q=3 / m=100 / 窗口 90 / EMA 10 都更差,所以谱参数在
+    q=5 ~ 8 平台、窗口在 60 附近。剩下没试过的烂部件候选:(1) m 与 q 的组合(m=30 / 80、q=6 / 12);(2) 窗口 75;(3)
+    day_sum(Amt) 一侧含大量市值信息,换成对 LogFloatCap 做 60 日回归后的残差,或换成 day_sum(Volume)。变体只改谱参数、窗口与规模侧,不加新外壳。
+  variants:
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 30, 8, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 80, 8, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 6, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 8, False),
+    day_sum(Amt), 75)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 8, False),
+    day_sum(delete_open_close(Volume)), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 8, False),
+    cross_regres(LogFloatCap, day_sum(Amt), 60), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    cross_regres(LogFloatCap, day_sum(Amt), 60), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 12, False),
+    day_sum(Amt), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

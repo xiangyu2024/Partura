@@ -1,0 +1,96 @@
+seed: 2052
+round: 1
+slots:
+- type: E
+  core: day_ar1_coefficient(High)
+  hypothesis: '核心 C = day_ar1_coefficient(High):当天 241 根分钟最高价「水平」(不是收益)上的 AR(1) 系数。对价格水平回归
+    x_t = c + phi x_{t-1},phi ≈ 1 - (分钟创新方差)/(当天价格水平的离散度),所以它是无量纲的「当天趋势性 / 平滑度 对 分钟噪声」之比:phi
+    高 = 当天价格走出了一条平滑的单向路径(范围大、分钟噪声小,知情 / 机构持续流),phi 低 = 价格在窄幅里来回弹(买卖价差反弹、流动性提供者主导)。它与成交额水平、市值、波动水平天然相关较低,这是我选它的原因。
+
+    本批 3 个 head 与 25 个候选的结构几乎全是 ts_max / cross_med 一串嵌套,它们的负分(约 -2)说明「取 5/30/40 日最大值」这种极值读法换手高、把噪声放大;拆解里
+    C 单独 -2.64,拆掉 ts_max 的 knockout 有时更好(例如去掉 ts_max(...,30) 后 -2.27)。快照里已见过的外围全是
+    ts_max / cross_med 的嵌套,没有一个是均值、z 分数、波动、分位、回归残差、与 Low 对照。这一位把外围整个换掉,试五类读法:(a) 慢平滑(cross_mean
+    / cross_ema / cross_decay_linear 20-30 日),把日度噪声平均掉以降低换手;(b) 相对自己历史(10 日对 60 日差、60
+    日 z 分数),去掉持久截面水平;(c) High 与 Low 两端的差(上沿平滑度减下沿平滑度):两端各自含买卖价差反弹,相减后反弹抵消,剩下的是「上冲有无持续性
+    vs 下探有无持续性」的不对称,这是 swap High->Low 在拆解中升 +0.54 / +0.73 的直接延伸;(d) 对波动做回归残差(cross_regres
+    用当天 std(Ret) 去解释 phi),去掉 phi 里 波动 机械成分;(e) 它自身的 20-40 日波动 / 下分位 / 偏度(「平滑度不稳定的票」)。样本外还会在的理由:这是微观结构层面(噪声对趋势)的持续性质,每只票的买卖价差反弹强度和机构拆单趋势强度是慢变的股票特征,不依赖某个年份的行情;外围改成慢写法后换手比
+    ts_max 链低。风险:拆解显示 C 本身两段都亏(-2.64/-2.30),毛超额可能约为 0;这一位的赌注是亏的主要是换手成本。'
+  seeds:
+  - cross_mean(day_ar1_coefficient(High), 20)
+  - cross_ema(day_ar1_coefficient(High), 20)
+  - cross_decay_linear(day_ar1_coefficient(High), 30)
+  - sub(cross_mean(day_ar1_coefficient(High), 10), cross_mean(day_ar1_coefficient(High),
+    60))
+  - cross_zscore(day_ar1_coefficient(High), 60)
+  - cross_mean(sub(day_ar1_coefficient(High), day_ar1_coefficient(Low)), 20)
+  - cross_mean(div(day_ar1_coefficient(High), day_ar1_coefficient(Low)), 20)
+  - cross_zscore(sub(day_ar1_coefficient(High), day_ar1_coefficient(Close)), 60)
+  - cross_regres(day_std(Ret), day_ar1_coefficient(High), 60)
+  - cross_corr(day_ar1_coefficient(High), day_std(Ret), 60)
+  - cross_stddev(day_ar1_coefficient(High), 30)
+  - cross_quantile(day_ar1_coefficient(High), 0.25, 40)
+  - div(cross_mean(day_ar1_coefficient(High), 20), cross_stddev(day_ar1_coefficient(High),
+    20))
+  - ts_skew(day_ar1_coefficient(High), 40)
+  - cross_regbeta(day_ar1_coefficient(Low), day_ar1_coefficient(High), 60)
+- type: N
+  hypothesis: '新 idea:不用「价格水平 AR(1)」,而是用日内价格路径的方差比 / 效率比 / 趋势相关,直接度量「当天价格是趋势还是来回弹」,再取慢的跨日聚合。启发:本批所有候选都围绕
+    day_ar1_coefficient(High) 这个「水平的平滑度」,且 swap High->Low 变好、Close->Vwap 的 valid 从
+    -2.19 升到 -0.80(Vwap 更平滑、买卖价差反弹更少),说明这批里真正起作用的变量是微观结构噪声 vs 趋势。这个量有更直接、更标准的度量:
+
+    (1) 方差比 VR_k = std(k 分钟价差) / std(1 分钟价差)(不除 sqrt k,是同一当天横截面内可比的常数缩放):VR 高 = 价格漂移
+    / 持续,VR 低 = 反弹 / 均值回复,是 Lo-MacKinlay 方差比检验的日内版本;用 in_delta 构造,不含 AR(1) 回归,骨架与库里的
+    day_ar1 / day_autocorr 类不同。
+
+    (2) 效率比 |末 - 初| / sum|分钟价差|(Kaufman 效率比):路径有多直。
+
+    (3) day_durbin_watson(Close) ≈ 2(1 - 一阶自相关)、day_hurst(Close)、day_autocorr(Close,
+    30) 的长滞后水平自相关、day_corr(Close, in_index(Close)) 的价格对时间的线性趋势相关(带符号的一款会与日内收益有关,放一个对照;abs_
+    的一款是「趋势强度」不含方向)。
+
+    全部取 10-20 日均值或 10 对 60 日差、60 日 z 分数,降低日度噪声与换手。
+
+    机制:反弹强(VR 低)的票是流动性提供者持续被补偿 / 价差宽的票,趋势强(VR 高)的票是知情流和机构拆单持续的票,两种读法都是慢变的股票特征,且无量纲,与成交额、市值、波动水平的控制先天相关低。与库里不同:这些骨架(比值
+    of 两个 std of in_delta、效率比、Hurst、DW、in_index 相关)的外围不是 ts_max 链;样本外还会在是因为微观结构噪声(买卖价差、价格最小变动单位、拆单)是结构性的,不靠某年行情。风险:与
+    High 的 AR(1) 同源,若毛超额不在这个轴上则全部为负;所以种子里放了 4 种不同度量,看哪一种与控制相关最低且分数最高。'
+  inspired_by: B001(day_ar1_coefficient 一族):swap High->Low 增益 +0.54 / +0.73,Close->Vwap
+    的 valid 从 -2.19 到 -0.80,说明价格路径的噪声 / 趋势比是机制;用方差比 / 效率比 / Hurst 直接度量而不是 AR(1) 回归。
+  seeds:
+  - cross_mean(div(day_std(in_delta(Close, 5)), day_std(in_delta(Close, 1))), 20)
+  - cross_mean(div(day_std(in_delta(Close, 15)), day_std(in_delta(Close, 1))), 20)
+  - sub(cross_mean(div(day_std(in_delta(Close, 5)), day_std(in_delta(Close, 1))),
+    10), cross_mean(div(day_std(in_delta(Close, 5)), day_std(in_delta(Close, 1))),
+    60))
+  - cross_mean(day_hurst(Close), 20)
+  - cross_mean(day_autocorr(Close, 30), 20)
+  - cross_mean(div(abs_(sub(day_last(Close), day_first(Close))), day_sum(abs_(in_delta(Close,
+    1)))), 20)
+  - cross_zscore(div(abs_(sub(day_last(Close), day_first(Close))), day_sum(abs_(in_delta(Close,
+    1)))), 60)
+  - cross_mean(abs_(day_corr(Close, in_index(Close))), 20)
+  - cross_mean(day_corr(Close, in_index(Close)), 20)
+  - cross_mean(div(day_std(in_delta(Vwap, 5)), day_std(in_delta(Vwap, 1))), 20)
+  - cross_regres(day_std(Ret), cross_mean(div(day_std(in_delta(Close, 5)), day_std(in_delta(Close,
+    1))), 5), 60)
+R:
+- head: ts_max(ts_max(ts_max(ts_max(day_ar1_coefficient(High), 5), 30), 5), 40)
+  why: swap High->Low 增益 +0.73(-2.20 到 -1.47);window 40->80 增益 +0.31;Low 与 80 日窗口叠加试,再换掉最外层
+    ts_max 为均值。部件烂在 ts_max 极值链(换手高)和 High(上沿反弹噪声)。
+  variants:
+  - ts_max(ts_max(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 5), 80)
+  - cross_mean(ts_max(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 5), 40)
+  - ts_max(ts_max(ts_max(ts_max(day_ar1_coefficient(Vwap), 5), 30), 5), 40)
+- head: ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(High), 5), 30), 60), 5)
+  why: swap High->Low 增益 +0.54;window 5->10 与 5->2 小增益;最外层 ts_max 极值读法换手高,试换成均值。
+  variants:
+  - ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 60), 10)
+  - cross_mean(cross_med(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 60), 5)
+  - ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Vwap), 5), 30), 60), 5)
+- head: ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Close), 5), 30), 60), 5)
+  why: Close->Vwap 把 valid 从 -2.19 抬到 -0.80(train 不动),Vwap 价格更平滑;再换 Low、拉长窗口。
+  variants:
+  - ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 60), 10)
+  - ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Vwap), 5), 30), 60), 10)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,256 @@
+seed: 2047
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:个股「最差一分钟收益」m_t = day_min(Ret)(t 日各分钟收益的最小值,强平 / 恐慌抛售当天留下的一根尖刺)的**动力学**,不是它的水平:尖刺是否成串出现、尖刺相对常态有多厚、上下尖刺是否对称、尖刺之后次日价格怎样反应、尖刺与全市场尖刺同步到什么程度。全部读数是
+    120 日(少数 60 日)滚动的成对 / 分布统计量,变成慢变的个股属性;窗口内缺失日一律成对剔除(cross_autocorr / cross_corr
+    / cross_regbeta / cross_tail_mean_q25 / cross_stddev 都按有效点计算)。
+
+    批里的现象(都在本批的拆解 / 富集 / 成员表里):
+
+    (1) 水平是死的:day_min(Ret) 单独 −2.77(train −2.19 / valid −2.77),含它的 12 个候选富集差 −0.01(p
+    0.80),pow_2 外壳的 4 个 −0.23;不去控制的原始读数每天换手 0.68、净夏普 −6.39。(推断,没有逐项量过)分钟收益的最小变动是「一个价位
+    ÷ 价格」,所以它的截面名次里一大块是名义价格与波动水平,这些都在控制和冠军的地盘。
+
+    (2) 动力学 / 关系比水平活:cross_hurst(day_min(Ret), 15) = −1.34(拿掉 cross_hurst 掉到 −2.77,必要性
+    +1.43),窗口 7 / 15 / 30 = −2.87 / −1.34 / −1.75(30 日的 train 是 −0.92);关系型 head cross_cov(day_min(High),
+    day_mean(Amt), w) 窗口 15 / 30 / 60 = −1.71 / −1.60 / −1.19,比它的两个水平成分(−2.37、−3.47)好
+    0.8 ~ 1.9。两个 head 都是越慢越好。
+
+    (3) 但 head 1 的承重部件未必是「持续性」:我读了 cross_hurst 的内核(并用一个 8 日窗口的小张量核对,没有用任何市场数据)。窗口里一旦出现缺失日(停牌),累计偏差在那一天之后全是缺失,R
+    只用缺失日之前的前缀、S 却用全部有限点,H 被系统性压低;缺失恰在窗口第 2 天时 R = 0,H = −inf。所以 head 1 的名次里可能有一块是「近
+    15 日没停牌」。这一位的种子一律不用 cross_hurst,持续性改用成对剔除缺失的 cross_autocorr / cross_regbeta;R
+    组把同一个对照做在 head 1 上。
+
+    读数分五组:
+
+    (a) 持续与聚集(种子 1、2):尖刺序列的 120 日一阶自相关;下尖刺与上尖刺(day_max(Ret))自相关之差。尖刺成串 = 同一批被迫卖家反复出现、盘口深度长期不足;孤立尖刺
+    = 偶发的大单 / 误单。
+
+    (b) 尖刺形状(种子 3 ~ 7):上下尖刺的归一化不对称 (M + m) ÷ (M − m)(无量纲,取值 [−1, 1])的 120 日均值,及它的未归一化对照(种子
+    4,带收益单位,用来分开「形状」与「波动水平」);下尖刺 25% 分位尾部均值 ÷ 均值(尾部集中度);标准差 ÷ 平均尖刺(尖刺是常态还是偶发);尖刺 ÷
+    当日分钟波动(极值 / σ,峰度的另一种读法)的 120 日均值。
+
+    (c) 对次日收益的反应函数(种子 8 ~ 11、16):昨日尖刺对今日收益的 120 日斜率 / 相关 / t 值,y 分别取日内收益、减去全市场平均的日内收益、含隔夜缺口的日收益;种子
+    16 是尖刺对「昨日涨跌」的相关(尖刺出现在上涨之后还是下跌之后)。这是个股自己的价格冲击回吐系数(Pástor-Stambaugh γ 的日度、尖刺版):回吐强
+    = 逆向资金充足、尖刺只是流动性冲击;不回吐 = 尖刺带信息。
+
+    (d) 与全市场尖刺的耦合(种子 12、13):个股尖刺对当日全市场平均尖刺 cs_mean(day_min(Ret)) 回归的残差的 60 日均值(扣掉市场恐慌日之后的个股特有尖刺),及这条回归的斜率(尾部
+    beta)。
+
+    (e) 与别的量的耦合(种子 14、15):下尖刺与上尖刺同日出现的相关(「事件日」型还是「单边」型);下尖刺与当日成交量惊奇(cross_zscore 60
+    日)的相关(带量的尖刺 = 恐慌 / 信息,不带量 = 薄盘)。
+
+    为什么和库里已有的不同:库里 69 条含 day_min(Ret) 的表达式中,进入 cross_corr / cross_cov / cross_autocorr
+    / cross_mean / cross_zscore / cs_mean 的各为 0 条,只有 1 条 cross_hurst(就是 head 1)和 1
+    条嵌在乱树里的 cross_reg_fvalue;19 条含 day_max(Ret) 的没有一条同时含 day_min(Ret)(上下尖刺不对称 0 条);全库
+    501 条含 cross_corr / cross_cov / cross_reg* 的里,回归元带 cross_delay 滞后的 cross_reg*
+    为 0 条,与 day_sum(Ret) 配对的只有 1 条。16 个种子的算子骨架(抽掉字段、常数、窗口)已逐个对照 members.csv 的 5583
+    个骨架,没有一个重复。与本批 3 个 head 的结构也不同:没有 Hurst、没有 Amt 水平协方差、没有对 day_var(Open) 的加和。
+
+    为什么样本外还会在:(a)(b)(e) 读的是参与者构成与盘口深度的结构属性(谁在提供流动性:做市商 / 逆向机构 / 散户限价单),名次在数月内保持,窗口
+    60 ~ 120 日,15 bp 下换手低。(c) 价格冲击回吐是流动性提供者的报酬来源(Nagel 2012、Hameed-Kang-Viswanathan
+    2010),在文献里是长期存在的溢价,个股自己 120 日的估计只做相对排序。(d) 尾部 beta / 下行 beta 有定价(Ang-Chen-Xing
+    2006、Kelly-Jiang 2014)。(b) 上下尖刺的不对称是彩票偏好的分钟版(Bali-Cakici-Whitelaw 2011 的 MAX 效应),在个人投资者占比高的市场更强(推断)。读数都是无量纲或相对自己历史的量,不随风格切换翻号
+    —— 水平量最容易死在符号翻转上。
+
+    最可能的失败方式:(1) 120 日相关 / 斜率的估计误差(约 0.09)与截面离散度相当,名次近似随机,15 bp 把换手吃满;(2) 归一化后的形状量与波动
+    / 20 日反转控制仍有非线性交互,尺子扣不掉;(3) 分钟收益的价位量化让形状量主要反映名义价格。出现这些时这个位不会出 head,下一轮改押相反的一端。
+
+    数学检查:m ≤ 0 ≤ M(Ret 第一根恒为 0),归一化不对称的分母只在整天不动(m = M = 0)时为 0,这时分子也是 0,得 NaN 而不是无穷;day_min(Ret)
+    ÷ day_std(Ret) 同理(std = 0 ⇒ 全天无变动 ⇒ m = 0),且 |m| ≤ √240 · std,有界;种子 5、6 的分母是 120
+    日平均尖刺,为 0 需要 120 天全天无波动;cross_corr 分母里的 1e-9 对 Ret 量级(方差乘积约 1e-7)不构成压扁;cross_regbeta
+    要求回归元方差 > 1e-9,120 日平方和约 1e-3;窗口不满时 cross_* 用扩张窗口,2018 年头几个月只是少量点的估计(120 / 1359
+    天)。无前视:全部只用 t 日及以前,cross_delay 的天数为正,t+1 才交易。已用 AlphaCube 的合成立方体(80 只 × 420 日
+    × 241 分钟,含停牌与未上市)把 16 个种子全算了一遍:全部能算,无 inf,覆盖率 0.97,每日截面取值离散度 1.0(只检查运行错误,不是任何分数)。'
+  inspired_by: B139 批:day_min(Ret) 水平 −2.77 且含它的 12 个候选富集差 −0.01(水平是死的);cross_hurst(day_min(Ret),
+    15) = −1.34、cross_cov(day_min(High), day_mean(Amt), w) 窗口 15 / 30 / 60 = −1.71
+    / −1.60 / −1.19(动力学 / 关系比水平好 0.8 ~ 1.9,越慢越好);cross_hurst 的内核在缺失日上的行为(R 只用前缀)提示
+    head 1 可能部分是停牌标记。
+  literature:
+  - title: 'Maxing out: stocks as lotteries and the cross-section of expected returns'
+    authors: Turan Bali, Nusret Cakici, Robert Whitelaw
+    year: '2011'
+    treatment: 极端正收益(MAX)被高估、预测之后收益为负;这里用分钟版的上下尖刺不对称 (day_max(Ret) + day_min(Ret))
+      ÷ (day_max(Ret) − day_min(Ret)) 的 120 日均值近似
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 成交活动之后的收益延续(投机性)或回吐(对冲性)是个股的稳定属性;这里用滞后一日的日内最差分钟收益对今日收益的 120 日斜率 / 相关近似
+  - title: Liquidity risk and expected stock returns
+    authors: Lubos Pastor, Robert Stambaugh
+    year: '2003'
+    treatment: gamma = 冲击之后的收益回吐系数,越负越缺流动性、预期收益越高;这里用尖刺(而非带符号成交量)对次日收益的回归系数近似
+  - title: Tail risk and asset prices
+    authors: Bryan Kelly, Hao Jiang
+    year: '2014'
+    treatment: 对市场尾部事件的暴露被定价;这里用个股最差分钟收益对全市场平均最差分钟收益的 120 日回归斜率(种子 13)与残差均值(种子 12)近似
+  seeds:
+  - cross_autocorr(day_min(Ret), 120, 1)
+  - sub(cross_autocorr(day_min(Ret), 120, 1), cross_autocorr(day_max(Ret), 120, 1))
+  - cross_mean(div(add(day_max(Ret), day_min(Ret)), sub(day_max(Ret), day_min(Ret))),
+    120)
+  - cross_mean(add(day_max(Ret), day_min(Ret)), 120)
+  - div(cross_tail_mean_q25(day_min(Ret), 120), cross_mean(day_min(Ret), 120))
+  - div(cross_stddev(day_min(Ret), 120), neg(cross_mean(day_min(Ret), 120)))
+  - cross_mean(div(day_min(Ret), day_std(Ret)), 120)
+  - cross_regbeta(cross_delay(day_min(Ret), 1), day_sum(Ret), 120)
+  - cross_corr(cross_delay(day_min(Ret), 1), day_sum(Ret), 120)
+  - cross_reg_tvalue(cross_delay(day_min(Ret), 1), sub(day_sum(Ret), cs_mean(day_sum(Ret))),
+    120)
+  - cross_regbeta(cross_delay(day_min(Ret), 1), sub(div(day_last(Close), cross_delay(day_last(Close),
+    1)), 1), 120)
+  - cross_mean(cross_regres(cs_mean(day_min(Ret)), day_min(Ret), 120), 60)
+  - cross_regbeta(cs_mean(day_min(Ret)), day_min(Ret), 120)
+  - cross_corr(day_min(Ret), day_max(Ret), 120)
+  - cross_corr(day_min(Ret), cross_zscore(day_sum(Volume), 60), 120)
+  - cross_corr(day_min(Ret), cross_delay(day_sum(Ret), 1), 120)
+- type: N
+  hypothesis: '机制:日内最低价 L = day_min(Low) 不再当价格水平用,而是当「位置」用:当天价格下探到哪里(相对昨收 / 开盘 / 当天区间
+    / 成交额加权价),收盘时从最低点收回了多少,最低点那一刻成交量多大、出现在一天的什么时候。全部量无量纲(价格之比、区间之比、以自己 20 日平均分钟波动
+    σ̄ = cross_mean(day_std(Ret), 20) 为单位的对数比),再用 60 ~ 120 日的 cross_mean / 相关 / 回归做成慢变的个股属性。
+
+    批里的现象(本批成员表 + 拆解表):本批里原始读数最好的几条都是日内低 / 高价的**水平**。cross_cov(day_min(High), day_mean(Amt),
+    30) 训练净夏普 1.10;ts_max(day_min(Close), 5) 0.57、inv(day_min(High)) 0.52、cs_normalize(day_min(Low))
+    0.51(后三条每日换手 0.01、rank IC 约 ±0.01)。去掉 5 个控制和两个冠军之后,它们的 B 分数都不高于 −2.35(进不了本批最好的
+    3 个;只有 cross_cov 那一条以 −1.60 排进 3 个 head)。后复权价格的水平在股票之间的排序 ≈ 上市以来的累计收益加名义价格(规则
+    §4:这是长周期动量 / 反转信号),换手低,所以几乎不付成本就拿到这个暴露 —— 恰好是 5 个控制和冠军吃掉的东西。同一个原子(最低价)若写成比值,就去掉水平,留下「下探多深、收在哪里、谁在下探处接货」。
+
+    读数分四组:
+
+    (A) 收盘位置与资金流(种子 1、2、3、14、15):CLV = (C − L) ÷ (H − L)(收盘在当天区间里的位置,[0, 1])的 60 日均值;Chaikin
+    资金流(2·CLV − 1 按成交股数加权的 60 日和 ÷ 成交股数 60 日和);近 20 日 CLV 相对自己 120 日的 z 分数,以及 20 日减
+    120 日;实体占区间的比 (C − O) ÷ (H − L)。
+
+    (B) 下探深度与成交加权位置(种子 4、5、6、7、12、16):log(昨收 ÷ L) ÷ σ̄、log(开盘 ÷ L) ÷ σ̄、log(收盘 ÷ L)
+    ÷ σ̄ 的 60 日均值;以开盘为基准的「上冲减下探」不对称;成交额加权价 day_wmean(Close, Amt) 高出最低价多少(log(加权价 ÷
+    L) ÷ σ̄,种子 12:成交的重心离最低点有多远,远 = 下探是短暂的尖,近 = 大量成交发生在低位;只把成交额当权重,不把 Amt ÷ Volume
+    当价格,它是未复权价,和后复权的 Low 单位不同);下探对收回的 120 日回归斜率(种子 16:当天的下探有多少在收盘前被收回 = 逆向资金的承接系数)。σ̄
+    为单位使读数与波动水平无关,并且读的是「相对随机游走预期的下探」:随机游走下 log(开盘 ÷ L) ÷ σ̄ 约 0.8 · √240 ≈ 12(合成立方体上核对为
+    12.8),更大 = 趋势 / 抛压型下探,更小 = 均值回复型。
+
+    (C) 接货处的成交与时点(种子 8、13):最低价那一分钟的成交量 ÷ 当天分钟均量的 60 日均值(放量下探 = 恐慌出清,缩量 = 无人问津);最低点出现的时刻
+    day_argmin(Low) ÷ 240 的 60 日均值(早 = 开盘抛压之后被承接,晚 = 抛压持续到尾盘)。
+
+    (D) 反应函数(种子 9、10、11):昨日下探深度(σ̄ 单位)对今日隔夜缺口(今开 ÷ 昨收 − 1)的 120 日斜率(下探之后隔夜被接回,还是继续砸);昨日
+    CLV 对今日日内收益的 120 日斜率(收盘位置的延续或回吐);CLV 的 120 日一阶自相关(接货行为的持续性)。
+
+    为什么和库里已有的不同:5583 条里 CLV 的精确写法 0 条,按 σ̄ 归一化的 log(价 ÷ L) 0 条,day_at_*_ratio / day_wmean
+    / cross_zscore / cross_ema 全是 0 条;回归元带 cross_delay 滞后的 cross_reg* 0 条。day_min(Low)
+    在库里出现 79 次,我逐条看过的都是 cs_rank / ts_rank / ts_corr 外壳下的水平用法(手写库的 alpha#3 一类);day_locate
+    在库里 42 条,我看到的是「潮汐」类按成交量局部均值定位价格,不是读最低价那一刻的成交量。本批 3 个 head(Hurst、Amt 协方差、day_var(Open)
+    之和)都不是比值形式,也不是位置读数。16 个种子的算子骨架已逐个对照 members.csv 的 5583 个骨架,没有一个重复。
+
+    为什么样本外还会在:(A)(D) 读的是「下探被承接」的程度,由逆向资金 / 机构限价单 / 做市商的在场决定,是参与者构成的结构属性,数周到数月内名次保持(Kaniel-Saar-Titman
+    2008:个人投资者在价格下跌后逆向提供流动性并获得补偿;Campbell-Grossman-Wang 1993:放量下跌之后的反转取决于流动性提供者的风险承担);(B)
+    的下探 ÷ σ̄ 是方差比型统计量(Lo-MacKinlay 1988):日内路径均值回复 = 套利 / 做市资本充足,趋势型 = 抛压没有对手盘;(D)
+    的隔夜缺口回吐是 Lou-Polk-Skouras 2019 的「隔夜 vs 日内」拉锯的个股版。60 ~ 120 日的慢聚合使换手低,15 bp 吃得下;无量纲、相对自己的量不依赖某段行情的风格。
+
+    最可能的失败方式:(1) CLV 的 60 日均值与 20 日反转控制相关偏高(日内收在高位本身是短期反转的一块),尺子去掉线性 / 平方 / 立方暴露后剩下的看运气;(2)
+    σ̄ 单位的下探量被次新 / 高波动小票的极端读数支配;(3) 单日读数噪声大,60 日均值的名次近似随机,换手吃满 15 bp。出现这些时这个位不会出 head,下一轮改押相反的一端或换成
+    (D) 组的反应函数深挖。
+
+    数学检查:H − L = 0(一字板 / 无波动日)时 H = L = C = O 是同一个浮点数,C − L 与 C − O 恰为 0,得 0 ÷ 0 =
+    NaN 而不是无穷。成交额加权价 day_wmean(Close, Amt) 在一字板日与 L 有浮点舍入差,除以恰为 0 的区间会得到 ±inf(我在合成立方体里加了
+    102 个一字板日实测到这一点,于是种子 12 改成「log(加权价 ÷ L) ÷ σ̄」,不除以区间);修改后 16 个种子在这个带一字板日的立方体上都没有
+    inf。所有「价 ÷ L」的 log 里分子分母都是正的后复权价,比值 ≥ 1(或围绕 1),log 有定义;分母 σ̄ 用 20 日平均分钟波动而不是当日
+    day_std(Ret):当日 day_std 在一字板日为 0 而分子(gap 下探,如昨收 ÷ L = 1.11)不为 0,会除出 ±inf 把整行爆点推到截面两端,σ̄
+    只有连续 20 天一字板才为 0;后复权价格在除权日前后连续,昨收与今日 L 同属一个复权口径,比值不含除权跳变;最低价那一分钟的成交量 ÷ 当天均量在均量为
+    0 时分子也为 0,NaN。无前视:全部只用 t 日全天数据(15:00 已知),滞后项 cross_delay 的天数为正,t+1 才交易。已用 AlphaCube
+    的合成立方体(80 只 × 420 日 × 241 分钟,含停牌与未上市)把 16 个种子全算了一遍:全部能算,无 inf,覆盖率 0.97,每日截面取值离散度
+    1.0(只检查运行错误,不是任何分数)。'
+  inspired_by: B139 批:最好的原始读数是日内低 / 高价的水平(cross_cov(day_min(High), day_mean(Amt),
+    30) 训练净夏普 1.10;ts_max(day_min(Close), 5)、inv(day_min(High))、cs_normalize(day_min(Low))
+    0.51 ~ 0.57,换手 0.01),去掉控制与冠军后全部低于 −2.35(水平 = 累计复权收益 + 名义价格的暴露);同一个原子写成价位的位置 /
+    比值才留下水平以外的信息。
+  literature:
+  - title: Trading volume and serial correlation in stock returns
+    authors: John Campbell, Sanford Grossman, Jiang Wang
+    year: '1993'
+    treatment: 放量下跌之后价格回吐的程度取决于流动性提供者的风险承担;这里用下探处的成交量 ÷ 当天均量(种子 8)与下探对收回的回归斜率(种子 16)近似
+  - title: Individual investor trading and stock returns
+    authors: Ron Kaniel, Gideon Saar, Sheridan Titman
+    year: '2008'
+    treatment: 个人投资者在价格下跌后逆向买入、提供流动性并获得补偿;这里用收盘位置 CLV、资金流与下探收回读「下探被承接」的程度
+  - title: Stock market prices do not follow random walks - evidence from a simple
+      specification test
+    authors: Andrew Lo, Craig MacKinlay
+    year: '1988'
+    treatment: 方差比检验区分趋势与均值回复;这里用日内下探 ÷ 随机游走基准(以 σ̄ 为单位的 log(价 ÷ L) 60 日均值)近似日内路径的趋势
+      / 回复倾向
+  - title: 'A tug of war: overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜收益与日内收益相反的持续性;这里用昨日下探深度对今日隔夜缺口的 120 日斜率(种子 9)近似个股的隔夜接回 / 继续砸
+  seeds:
+  - cross_mean(div(sub(day_last(Close), day_min(Low)), sub(day_max(High), day_min(Low))),
+    60)
+  - div(cross_sum(mul(sub(mul(2, div(sub(day_last(Close), day_min(Low)), sub(day_max(High),
+    day_min(Low)))), 1), day_sum(Volume)), 60), cross_sum(day_sum(Volume), 60))
+  - cross_zscore(cross_mean(div(sub(day_last(Close), day_min(Low)), sub(day_max(High),
+    day_min(Low))), 20), 120)
+  - cross_mean(div(log(div(cross_delay(day_last(Close), 1), day_min(Low))), cross_mean(day_std(Ret),
+    20)), 60)
+  - cross_mean(div(log(div(day_first(Open), day_min(Low))), cross_mean(day_std(Ret),
+    20)), 60)
+  - cross_mean(div(log(div(day_last(Close), day_min(Low))), cross_mean(day_std(Ret),
+    20)), 60)
+  - cross_mean(sub(div(log(div(day_max(High), day_first(Open))), cross_mean(day_std(Ret),
+    20)), div(log(div(day_first(Open), day_min(Low))), cross_mean(day_std(Ret), 20))),
+    60)
+  - cross_mean(div(day_locate(Volume, day_argmin(Low)), day_mean(Volume)), 60)
+  - cross_regbeta(cross_delay(div(log(div(cross_delay(day_last(Close), 1), day_min(Low))),
+    cross_mean(day_std(Ret), 20)), 1), sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1), 120)
+  - cross_regbeta(cross_delay(div(sub(day_last(Close), day_min(Low)), sub(day_max(High),
+    day_min(Low))), 1), day_sum(Ret), 120)
+  - cross_autocorr(div(sub(day_last(Close), day_min(Low)), sub(day_max(High), day_min(Low))),
+    120, 1)
+  - cross_mean(div(log(div(day_wmean(Close, Amt), day_min(Low))), cross_mean(day_std(Ret),
+    20)), 60)
+  - cross_mean(div(day_argmin(Low), 240), 60)
+  - cross_mean(div(sub(day_last(Close), day_first(Open)), sub(day_max(High), day_min(Low))),
+    60)
+  - cross_regbeta(div(log(div(cross_delay(day_last(Close), 1), day_min(Low))), cross_mean(day_std(Ret),
+    20)), div(log(div(day_last(Close), day_min(Low))), cross_mean(day_std(Ret), 20)),
+    120)
+R:
+- head: pow_3(cross_hurst(neg(day_min(Ret)), 15))
+  why: 烂的部件是 cross_hurst 的 R/S 在缺失日上的处理,依据有三条。(1) neg 与 pow_3 是空操作:R/S Hurst 对符号与尺度不变,pow_3
+    保序,拆解表里拿掉 neg 的读数与原 head 逐位相同(−1.34),所以这条 head 实际是 cross_hurst(day_min(Ret), 15)。(2)
+    读 cross_hurst 内核并用 8 日窗口的小张量核对(没有用市场数据):窗口里有缺失日(停牌)时累计偏差在缺失日之后全是缺失,R 只用缺失日之前的前缀、S
+    用全部有限点,H 被系统性压低;缺失恰在窗口第 2 天时 R = 0,H = −inf(排到截面最底)。(3) 窗口 7 / 15 / 30 = −2.87
+    / −1.34 / −1.75(train −2.87 / −1.34 / −0.92,valid −2.79 / −1.19 / −1.75):窗口越长
+    train 越好而 valid 掉,与「窗口越长越容易含停牌日、标记越强」吻合;也与持续性本身有信息的说法吻合,单凭这张表分不开。变体用成对剔除缺失的 cross_autocorr
+    / cross_regbeta(滞后)读同一个「尖刺序列的持续性」,窗口 30 / 60,另加扣掉全市场平均(cs_demean)与按自己分钟波动归一化的版本。若变体好过
+    head 1,说明 Hurst 的缺失日行为是烂部件,持续性本身有信息;若变体全部差得多,说明 head 1 的名次里主要是停牌 / 复牌标记。全部变体数学上有界:cross_autocorr
+    是相关系数,有效对不足时返回 0 或缺失,不会爆点;day_min(Ret) ÷ day_std(Ret) 全天无变动时 0 ÷ 0 = NaN。无前视。
+  variants:
+  - cross_autocorr(day_min(Ret), 30, 1)
+  - cross_autocorr(day_min(Ret), 60, 1)
+  - cross_autocorr(cs_rank(day_min(Ret)), 60, 1)
+  - cross_regbeta(cross_delay(day_min(Ret), 1), day_min(Ret), 60)
+  - cross_autocorr(cs_demean(day_min(Ret)), 60, 1)
+  - cross_autocorr(div(day_min(Ret), day_std(Ret)), 60, 1)
+- head: cross_cov(day_min(High), day_mean(Amt), 30)
+  why: 烂的部件是协方差里带的单位与趋势,依据:(1) cross_cov 的量纲是 价格水平 × 成交额水平;day_mean(Amt) 单独 −3.47
+    且与已知成交额族 ρ = 0.89,day_min(High) 单独 −2.37(ρ = 0.42),所以 head 的 ρ_known 里有一块是成交额水平的单位。(2)
+    拆解表:Amt → Volume 分数不变(−1.60,但 train 从 −1.47 升到 −0.88),ρ_known −0.48;窗口 15 / 30
+    / 60 = −1.71 / −1.60 / −1.19(ρ_known −0.47 / — / −0.64),越长越好;High → Low −1.50(ρ_known
+    −0.60)。同族变体的 |ρ_known| 都在 0.47 ~ 0.64,贴着 0.5 的线。(3) 两个后复权价格 / 成交量水平的 30 ~ 60 日协方差主要是「共同趋势」(价格上行期成交放大),与收益无关的那一部分尺度由水平决定。变体逐一去掉单位与趋势:cov
+    → corr(无量纲);Amt → Volume;窗口 60 / 120;两个序列都换成日度对数变化(价格变动与成交量增长的相关 / 斜率),去掉共同趋势。若变体好过原
+    head 且 ρ_known 降到 0.5 以下,说明烂的是单位 / 趋势,关系本身(价格下探与成交活动的同步)有信息。全部变体数学上有界:相关系数有 1e-9
+    保护;cross_cov 的变体量纲大但只取截面名次;log 的输入是正的后复权价与成交量均值;cross_delta 的天数为正。无前视。
+  variants:
+  - cross_corr(day_min(High), day_mean(Amt), 60)
+  - cross_corr(day_min(High), day_mean(Volume), 60)
+  - cross_cov(day_min(High), day_mean(Volume), 60)
+  - cross_cov(day_min(Low), day_mean(Volume), 60)
+  - cross_corr(day_min(High), day_mean(Volume), 120)
+  - cross_corr(cross_delta(log(day_min(High)), 1), cross_delta(log(day_mean(Volume)),
+    1), 60)
+  - cross_regbeta(cross_delta(log(day_mean(Volume)), 1), cross_delta(log(day_min(High)),
+    1), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

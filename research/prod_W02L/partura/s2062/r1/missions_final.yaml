@@ -1,0 +1,62 @@
+seed: 2062
+round: 1
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: '机制:左右尾的不对称与「尾部事件发生时的成交量」。本批 head 读的是标准化分钟收益的整体峰度 / 偏度 / 绝对值尾部加权和,三个都是单一统计量、都亏。这一位换一个分解:把当天分钟收益的右尾与左尾分开看,用库里没有的尾部期望缺口比
+    day_es_ratio_hi / day_es_ratio_lo(超过 95% 分位的分钟的均值 ÷ 该分位;低于 5% 分位的同理),它们无量纲,在分位近
+    0 的日子给缺失而不是 1e4 的爆点。右尾比左尾更尖 = 日内有一次向上的冲击但没有对应的向下冲击(涨停前的拉升、事件性买盘);反之是砸盘型。在日轴取 20
+    到 60 日均值使其成为个股的慢变属性。再叠一层成交量:day_topw_mean(Ret, Volume) 是最重 10% 成交量的分钟的平均收益,和全天均值
+    day_mean(Ret) 的差,读的是资金实际成交的那几分钟价格往哪走;day_wstd(Ret, Volume) ÷ day_std(Ret) 读价格是否主要在放量分钟里动。最后一类把
+    head 里的标准化形状和方向相乘:尾部厚度 × 当天收益符号(下跌日的厚尾 vs 上涨日的厚尾),是日度的惊吓 / 追涨分解。
+
+    批里的启发:本批三个 head 方向都是 −1、分数全负、窗口改动几乎不动分数,说明单一形状统计量没有毛超额;但三个 head 都带 −1 的方向,而且三个里最差的(−4.22)是「绝对值尾部
+    × 成交量」型,最好的(−1.74)是峰度,说明形状里有信息但被换手吃掉。我的想法是把「形状」换成「左右不对称」与「成交量配对」,让信号的符号随日内事件而变,同时用
+    20–60 日均值降换手。
+
+    为什么和已有的不同:种子用 day_es_ratio_hi / lo、day_topw_mean、day_wstd 等库建成后才加的 Partura 算子,库里一条也没有;骨架已逐个对照两个库的
+    5583 条,没有重复。库里最近的是 head 里的 day_skew(Z) 与 day_pdf_tail_sum_m(|Z|, Volume, ...):它们是标准化后的整体三阶
+    / 四阶矩与成交量加权的绝对尾部和,这里是左右两个尾部各自的期望缺口之差,以及放量分钟的方向偏离,统计量不同;Z 也不用(种子直接用 Ret,不做滚动回归标准化)。
+
+    为什么样本外还会在:右尾 vs 左尾的不对称对应投机性彩票偏好(Bali 等的最大日收益 MAX 效应与 Boyer 等的特质偏度)在 A 股散户占比高的市场里持续存在,是行为偏好而非某段行情;放量分钟的方向偏离对应订单流的知情部分(Chordia
+    与 Subrahmanyam);20–60 日平均让名次在数周里保持。风险:不对称量与 20 日反转控制相关,奖励会剔除线性 / U 形 / S 形暴露,剩下的看运气;若
+    es_ratio 本身极端噪声,60 日均值也救不了,这一位出不了 head。
+
+    数学检查:day_es_ratio_hi / lo 在分位近 0 时为 NaN(算子已处理,没有 1e4 爆点);两者之差在两侧都有值时才有定义;day_std(Ret)
+    作分母在整天不动时分子也为 0,得 NaN;day_topw_mean 在成交极稀时退化为全天均值,不出错;无前视:只用 t 日及以前的数据,t+1 才交易;窗口
+    ≤ 120 日,热身期不主导。'
+  inspired_by: 本批三个 head(day_kurt / day_skew / day_pdf_tail_sum_m 作用在标准化分钟收益上):方向全为
+    −1、窗口改动几乎不动分数,说明单一形状统计量没有毛超额;这一位换成左右尾不对称与放量分钟的方向。
+  literature:
+  - title: Maxing Out Stocks and Expected Returns
+    authors: Turan Bali, Nusret Cakici, Robert Whitelaw
+    year: '2011'
+    treatment: 单日极端高收益带来彩票偏好、随后收益偏低;这里用日内右尾期望缺口减左尾期望缺口(day_es_ratio_hi − day_es_ratio_lo)的
+      20 到 60 日均值近似
+  - title: Order imbalance and individual stock returns Theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡预测随后收益;这里用放量分钟的平均收益相对全天的偏离 day_topw_mean(Ret, Volume) − day_mean(Ret)
+      近似
+  seeds:
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 60)
+  - cross_zscore(cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 10),
+    120)
+  - cross_mean(day_es_ratio_hi(Ret), 60)
+  - cross_mean(day_es_ratio_lo(Ret), 60)
+  - cross_mean(sub(day_topw_mean(Ret, Volume), day_mean(Ret)), 40)
+  - cross_mean(div(day_wstd(Ret, Volume), day_std(Ret)), 40)
+  - cs_bucket_zscore(cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 30),
+    cross_mean(day_sum(Amt), 30))
+  - cross_mean(mul(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), sign(day_topw_mean(Ret,
+    Volume))), 40)
+  - cross_corr(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), day_sum(Ret), 60)
+  - cross_mean(sub(day_es_ratio_hi(abs_(Ret)), day_es_ratio_lo(Ret)), 40)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,197 @@
+seed: 2009
+round: 2
+slots:
+- type: E
+  core: day_wmean(Ret, div(Amt, cross_mean(Amt, 20)))
+  hypothesis: '机制:核心 W = day_wmean(Ret, AV),AV = div(Amt, cross_mean(Amt, 20)) 是「相对自己
+    20 日同分钟常态的异常成交额」,W 是按 AV 加权的分钟收益, 读的是「在这只股票今天异常活跃的那些分钟里,价格往哪边走」。因为 AV 把每个分钟除以自己
+    20 日同分钟均额,日内 U 形与开收盘竞价的固定大额被除掉了,W 只剩个股自己的异常活跃分钟(消息 / 对冲 / 拆单的脚印)。恒等式:W = 等权分钟收益
+    + cov_t(Ret, AV)/mean(AV),也就是「等权的价格走势」加上 「价格是否在异常放量的时候动」。后一项就是 Campbell-Grossman-Wang(1993)与
+    Llorente 等(2002)区分的两类成交:对冲性放量伴随反转,信息性 / 投机性放量伴随延续。 把它们按一年慢慢累计,读到的是这只股票的参与者类型偏向(谁在异常放量时交易),这是慢变的结构属性。
+
+    证据与要回答的问题:本流第 1 轮 N 位里含核心 W 的 4 个候选均分 −1.20,不含的 −2.51(均值差 +1.32,p 0.021),是共性表里均值差最大的子树(第二位是
+    log(cross_mean(C0, 120)) 的 +0.72,p 0.022); 其中 cross_mean(cross_mean(W, 20), 241)
+    为 −0.38(train −0.38 / valid −0.25);同一个外围套在不做 AV 标准化的 add(Amt, Amt) 权重上是 −0.047
+    (valid +0.20),套在 Amt / cross_mean(Close, 20) 上是 −0.025(valid +0.23)。也就是同样的外围,AV
+    倾斜让分数低了约 0.35。这个 E 位要回答:AV 倾斜部分 (异常活跃分钟的收益)本身是来源还是噪声?种子里放了三类对照:(a) 把 W 减去等权分钟收益
+    day_mean(Ret)、减去原始成交额权重 day_wmean(Ret, Amt), 只留「异常放量的那部分」;(b) 慢聚合方式换掉前一轮见过的「只套
+    cross_mean」写法:半衰期 120 日的 cross_ema、快慢 EMA 差、241 日均值减 21 日均值(跳过最近一个月, 避开新尺子已去掉的
+    20 日反转部分);(c) 分布形状:241 日里上 25% 分位均值减下 25% 分位均值(上行日与下行日的不对称)、正日占比 cross_mean(sign(W),
+    241)、 截面排名的 241 日均值 ts_mean(cs_rank(W), 241)(对极端日稳健)、每天用 AV 加权标准差标准化后再平均(日度信噪比)、W
+    与当日收益 day_sum(Ret) 的 120 日相关 (一天的涨跌有多少发生在异常放量分钟里)。
+
+    为什么和已有的不同:我看到的含 W 的候选(−0.38 与上一轮 N 位的 20 日版)外围算子都只有 cross_mean(一层或两层均值);这里的外围用了
+    cross_ema、sub、day_mean、day_wmean、cross_stddev、div、sign、cross_tail_mean_q75 / q25、cs_rank、cross_corr、day_wstd,骨架逐个核对不在两个库的
+    5583 条里(day_wmean、cross_ema、cross_tail_mean 在库里出现 0 次)。库里与 W 最近的是 B074 一族 (前 20
+    / 50 分钟的成交量加权收益、20 日窗口),没有全天、没有相对自己同分钟的标准化、没有一年尺度。
+
+    为什么样本外还会在:来源是参与者类型的慢变偏向,不依赖某段行情;外围全部是 120 到 241 日的聚合,换手低,15 bp 成本不致命(上一轮同类的 hl=0
+    候选就是不加平滑的); 用「减去等权」或「减去原始权重」的种子是在拿同一天、同一只股票的两种加权方式相减,天然去掉大盘涨跌与持久水平。风险:W 对 20 日反转的暴露(上轮
+    20 日版 ρ 0.58), 所以种子都放在 120 日以上的窗口或做了 241 减 21 的跳月;尺子本身会去掉对反转的线性、U 形、S 形暴露。
+
+    数学检查:AV 的分母 cross_mean(Amt, 20) 含当天,为 0 只在 20 日同一分钟全无成交,此时当天该分钟的 Amt 也是 0,得 NaN
+    不是无穷,day_wmean 对非有限权重整分钟忽略;AV ≤ 20, 所以没有爆点。day_wmean 的权重取绝对值、分母为权重和,和为 0 才是 NaN。第
+    1 分钟是集合竞价(Ret 恒为 0),权重上有效但收益为 0,不泄露隔夜跳空,也不制造前视。 cross_corr 的 120 日窗口内两个序列都是日度的、有界;div(W,
+    day_wstd(Ret, AV)) 的分母为 0 当且仅当整天 Ret 全 0(涨跌停封板),此时 W 也是 0,0 / 0 = NaN,不是爆点, |W|
+    / 加权标准差也被样本量上界约束(不超过约 15)。cross_tail_mean 与 cross_ema 都按有限日处理缺失,不填 0。无前视:只用 t
+    日收盘及以前,t+1 交易; 所有窗口 ≤ 241 日,热身期的部分窗口按可用日取平均,不是常数填充。'
+  literature:
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 高成交日的收益倾向反转、低成交日延续;这里把「异常放量分钟」的加权收益 W 与等权收益相减,近似分离出放量时价格的动作
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 投机性成交伴随收益延续、对冲性成交伴随反转;W 与 W 减等权收益读的是放量时价格的方向,慢聚合读的是个股的类型偏向
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常放量会带来之后的正收益(可见度效应);这里用相对自己同分钟常态的异常放量,而不是整天总量
+  seeds:
+  - cross_mean(sub(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), day_mean(Ret)),
+    241)
+  - cross_ema(sub(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), day_mean(Ret)), 120)
+  - cross_mean(sub(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), day_wmean(Ret, Amt)),
+    241)
+  - cross_ema(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 120)
+  - sub(cross_mean(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 241), cross_mean(day_wmean(Ret,
+    div(Amt, cross_mean(Amt, 20))), 21))
+  - sub(cross_ema(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 10), cross_ema(day_wmean(Ret,
+    div(Amt, cross_mean(Amt, 20))), 120))
+  - div(cross_mean(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 241), cross_stddev(day_wmean(Ret,
+    div(Amt, cross_mean(Amt, 20))), 241))
+  - cross_mean(sign(day_wmean(Ret, div(Amt, cross_mean(Amt, 20)))), 241)
+  - sub(cross_tail_mean_q75(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 241), cross_tail_mean_q25(day_wmean(Ret,
+    div(Amt, cross_mean(Amt, 20))), 241))
+  - cross_tail_mean_q25(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 241)
+  - ts_mean(cs_rank(day_wmean(Ret, div(Amt, cross_mean(Amt, 20)))), 241)
+  - cross_corr(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), day_sum(Ret), 120)
+  - cross_mean(div(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), day_wstd(Ret, div(Amt,
+    cross_mean(Amt, 20)))), 241)
+- type: N
+  hypothesis: '机制:一只股票「按成交额加权的分钟收益」day_wmean(Ret, Amt) 在一年尺度上的稳定偏向,以及它与等权收益之差、与方向性资金流、与日内时段的结构。读的是「钱在这只股票上实际赚到(或亏掉)的
+    分钟收益」:钱多的分钟(开盘后半小时、尾盘)权重大,死分钟权重小。它不是日收益(day_sum(Ret) 对每分钟等权;第 1 分钟是集合竞价,Ret 恒为
+    0,所以也不含隔夜跳空), 而是日内连续竞价段里「放量时价格往哪边走」的累计。
+
+    批里与本流上一轮的现象(两条合起来才是这个想法):(1) 本流第 1 轮 N 位(Pr1b)88 个已评分候选里最接近及格线的是 cross_mean(cross_mean(day_wmean(Ret,
+    add(Amt, Amt)), 20), 241) 一族:−0.047(train −0.047 / valid +0.202)和 −0.025(train
+    −0.025 / valid +0.229),半衰期 0,是本流迄今最好的读数(DW 水平一族 −1.8 ~ −2.7,E 位最好 −0.69); 同一外围换成相对自己
+    20 日同分钟均额的 AV 权重后降到 −0.38,窗口只有 20 日的版本与 20 日反转 |ρ| 0.58。(2) B026 的拆解表里 ts_max(day_durbin_watson(Close))
+    的窗口 20 → 40 → 80 给出 −2.73 → −1.77 → −0.92,同样是「越慢越好」。结论:新尺子对 15 bp 成本很苛刻,这一族可以站住的是慢(≥
+    120 日)、不靠半衰期平滑、换手低的状态量。上一轮这个想法是在 20 日窗口下提出的 (种子全是 cross_mean(·, 20)),GP 自己把它拉到
+    241 才出现 −0.03;这一轮把「慢」写进种子,并把这个读数拆开,看它的承重部分到底是什么。
+
+    拆成五个问题,每个对应一类种子(算子怎样实现): (a) 是不是「钱加权」本身:day_wmean(Ret, Amt) 减等权 day_mean(Ret)
+    = cov_t(Ret, Amt) / mean(Amt),价格是否在放量的时候动(信息性放量延续、对冲性放量反转,Llorente 等 2002; Gervais
+    等 2001 的高成交溢价);慢聚合用 cross_mean 241 或 cross_ema 半衰期 120,权重分别用 Amt 与 Volume。day_topw_mean(Ret,
+    Amt) 减 day_mean(Ret) 是只看成交最重的 10% 分钟的事件版。 (b) 是不是「一年的趋势」:241 日均值减 21 日均值(跳过最近一个月,避开新尺子已去掉的
+    20 日反转),与 241 日均值除以 241 日标准差(漂移的质量,类似 Da-Gurun-Warachka 2014 的连续信息: 一年里许多个小步骤累积出来的漂移会延续,少数大跳累积出来的会回吐),与
+    cross_mean(sign(·), 241)(正日占比)、ts_mean(cs_rank(·), 241)(每天截面排名的 241 日均值,对极端日稳健)。
+    (c) 是不是「谁在买」:day_signed_ratio(Ret, Amt) 是上涨分钟的成交额占比减下跌分钟的占比,净买入压力的无 tick 数据代理;慢聚合(241
+    日均值、半衰期 120 的 EMA、241 减 21)读的是持续的单边资金流 (Chordia-Subrahmanyam 2004:持续的单边失衡预测之后的收益)。零收益分钟是真实的零(最小变动价位),只进分母,所以信号里混着「零收益分钟占比」的成分,解读时要记得。
+    (d) 是不是「某个时段」:用 in_slice 把 Ret 和 Amt 取同一段(in_slice 的右端点含在内;第 0 根是集合竞价,第 1~120
+    根上午,第 121~240 根下午),在开盘后 30 分钟(1~30)、尾盘 30 分钟 (211~240)分别做成交额加权收益,再做「下午减上午」;另外
+    cross_mean(day_last(Ret), 241) 只看最后一根(尾盘集合竞价跳动)。Heston-Korajczyk-Sadka(2010)发现某个半小时的收益会在之后多日的同一时段重现,
+    Lou-Polk-Skouras(2019)发现个股的日内收益与隔夜收益各自持续;这一类种子问的是上一轮 −0.03 的承重部分是不是开收盘那几根的权重(原始
+    Amt 权重在开收盘最大,AV 权重把它们去掉了,这可能 解释了为什么原始权重 −0.03 比 AV 权重 −0.38 好,是假设,不是结论)。 (e) 先后顺序:day_wmean(Ret,
+    in_delay(Amt, 1)) 用前一分钟的成交额当权重,读的是「放量之后的下一分钟价格往哪边走」(量先价后,权重只含更早的分钟,不前视)。
+
+    为什么和已有的不同:库的 5583 条里 day_wmean、day_signed_ratio、day_topw_mean、cross_ema 一次都没出现;最近的是
+    B074(前 20 / 50 分钟的成交量加权收益 div(day_sum(mul(in_slice(Ret, 1, 20), ...)), ...), 窗口
+    20 日,净夏普 −1.4 / −0.7,控制之前),它只有开盘前几十分钟、只有 20 日、没有「减等权」「241 减 21」「尾盘 / 下午减上午」「正日占比」「日度信噪比」这些结构。
+    和五个控制比:这些量对价格水平、成交额水平、市值是无量纲的(收益与占比),对波动是除以过或减掉了,对 20 日反转是 120~241 日窗口与跳月处理;种子的
+    ρ 以相关度表为准,我的预期是对控制都 < 0.5。
+
+    为什么样本外还会在:来源是参与者类型与资金流方向这两件慢变的事(谁在放量时买、哪个时段的订单带信息),一年窗口把它们变成近似常数的个股属性,换手极低,15
+    bp 的成本摊下来很薄; 而且每个种子都是一只股票自己对自己的比较(加权减等权、下午减上午、241 减 21),大盘涨跌与持久的水平被同一天的差抵消。风险:(1)
+    趋势类种子(b)与动量 / 反转有重叠, 尺子只去 20 日反转的暴露,不去 1 年动量;(2) 开收盘那几根的权重大,读数可能主要来自开盘 / 尾盘集合竞价附近的价格动作而不是日内全天;时段种子就是为了把这一点分开。
+
+    数学检查:day_wmean 的权重取绝对值,分母是权重和,和为 0 才是 NaN;Amt 的平方不在种子里,没有溢出;cross_stddev(·, 241)
+    在分母上只有整段 241 日日度值全相同(长期停牌)才为 0, 那时分子也是 NaN;sign(0) = 0 是涨跌停封板日,不造成缺失;in_delay(Amt,
+    1) 的第一根为 NaN,day_wmean 忽略非有限权重;in_slice 在两个参数上取同一段,权重与收益逐分钟对齐。 没有 log,没有除以近零的量(上一轮审计员指出的
+    log 取绝对值折叠与这里无关)。无前视:全部是 t 日收盘及以前的数据,t+1 交易;窗口 ≤ 241 日,热身期按可用日取平均(cross_mean 与
+    cross_ema 都忽略缺失)。'
+  inspired_by: 本流第 1 轮 N 位(Pr1b)最好候选 cross_mean(cross_mean(day_wmean(Ret, add(Amt,
+    Amt)), 20), 241) 为 −0.047(valid +0.20),AV 权重版 −0.38;B026 拆解表 ts_max(day_durbin_watson(Close))
+    窗口 20 → 40 → 80 为 −2.73 → −1.77 → −0.92,越慢越好。
+  literature:
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 放量带来之后的收益;这里读的是放量分钟里价格的动作(加权减等权)
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 区分投机性(延续)与对冲性(反转)成交;day_wmean 减 day_mean 与 day_signed_ratio 的慢聚合近似
+  - title: Order imbalance and individual stock returns Theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 持续的单边失衡预测收益;day_signed_ratio(Ret, Amt) 的 241 日均值与 241 减 21 近似
+  - title: Frog in the Pan Continuous Information and Momentum
+    authors: Zhi Da, Umit G. Gurun, Mitch Warachka
+    year: '2014'
+    treatment: 连续信息累积的动量延续、离散信息累积的动量回吐;这里用正日占比与漂移除以标准差近似「累积得是否连续」
+  - title: Intraday Patterns in the Cross-Section of Stock Returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 个股某个半小时的收益在之后多日的同一时段重现;开盘后 30 分钟、尾盘 30 分钟、下午减上午的慢均值近似
+  - title: A Tug of War Overnight Versus Intraday Expected Returns
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 个股的日内收益与隔夜收益各自持续;这里的 Ret 不含隔夜跳空,日内部分的慢均值是日内一侧的持续偏向
+  seeds:
+  - cross_ema(day_wmean(Ret, Amt), 120)
+  - cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 241)
+  - cross_ema(sub(day_wmean(Ret, Volume), day_mean(Ret)), 120)
+  - sub(cross_mean(day_wmean(Ret, Amt), 241), cross_mean(day_wmean(Ret, Amt), 21))
+  - div(cross_mean(day_wmean(Ret, Amt), 241), cross_stddev(day_wmean(Ret, Amt), 241))
+  - cross_mean(sign(day_wmean(Ret, Amt)), 241)
+  - ts_mean(cs_rank(day_wmean(Ret, Amt)), 241)
+  - cross_mean(day_signed_ratio(Ret, Amt), 241)
+  - cross_ema(day_signed_ratio(Ret, Volume), 120)
+  - sub(cross_mean(day_signed_ratio(Ret, Amt), 241), cross_mean(day_signed_ratio(Ret,
+    Amt), 21))
+  - sub(cross_mean(day_wmean(in_slice(Ret, 121, 240), in_slice(Amt, 121, 240)), 241),
+    cross_mean(day_wmean(in_slice(Ret, 1, 120), in_slice(Amt, 1, 120)), 241))
+  - cross_mean(day_wmean(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 241)
+  - cross_mean(day_wmean(in_slice(Ret, 1, 30), in_slice(Amt, 1, 30)), 241)
+  - cross_mean(day_last(Ret), 241)
+  - cross_mean(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 241)
+  - cross_mean(day_wmean(Ret, in_delay(Amt, 1)), 241)
+R:
+- head: ts_max(day_durbin_watson(Close), 40)
+  why: 烂部件是窗口(记忆长度),不是 DW(Close) 本身。依据:loc.md 的拆解表里,单日 day_durbin_watson(Close) 只有
+    −4.03(换手高、成本吃掉),套 ts_max 后窗口 20 → 40 → 80 为 −2.73 → −1.77 → −0.92 (80 日版 train
+    −0.45 / valid −0.92),30 → 60 为 −2.11 → −1.19,15 → 30 为 −3.64 → −2.11:每翻一倍约好 0.9,单调,没有走平的迹象。DW(Close)
+    = Σ(ΔC)² / (ΣC² + 1e-8) 是每分钟已实现方差的 近似(价格不去均值时 ≈ 分钟收益平方的均值),取窗口内的最大值是「近一段时间里最极端的一天的方差」,换手由新最大值进入与旧最大值退出决定,窗口越长越稳。
+    上一轮的教训是:换掉水平的写法(桶内去均值)会因为桶边界跳变增加换手,反而更差(−2.6 ~ −5.2),所以这一组只动窗口与价格字段,不动结构。 这一组把窗口拉到
+    100 / 120 / 160 / 200 / 241 并保留 80 做锚点,Close 换成 Vwap(拆解表里 Close → Vwap 在 20 /
+    30 / 40 日窗口分数差在 ±0.5 以内)在 120 与 241 日各测一次, 目的是找到这条单调线的拐点,看长窗口是否仍有 alpha、还是只是在省成本。数学上:DW
+    ∈ [0, 4],ts_max 有界;分母是价格平方和,不会近零;单个错误报价最多贡献 (Δ)² / ΣC², 不会爆点;没有 log 折叠;无前视;窗口最长
+    241 日,热身期取可用日。
+  variants:
+  - ts_max(day_durbin_watson(Close), 80)
+  - ts_max(day_durbin_watson(Close), 100)
+  - ts_max(day_durbin_watson(Close), 120)
+  - ts_max(day_durbin_watson(Close), 160)
+  - ts_max(day_durbin_watson(Close), 200)
+  - ts_max(day_durbin_watson(Close), 241)
+  - ts_max(day_durbin_watson(Vwap), 120)
+  - ts_max(day_durbin_watson(Vwap), 241)
+- head: ts_sum(log(log(day_durbin_watson(Volume))), 10)
+  why: 烂部件是「水平」:它与已知成交额离散度一族共享持久的个股属性(上一轮相关度表里 ρ_known −0.63),窗口 5 / 10 / 20 分数几乎相同,说明承重的不是平滑。上一轮
+    R 把水平换成桶内去均值是错的 (−2.8 ~ −5.2,桶边界造成换手)。第 1 轮 E 位给出了更好的替代:把水平换成「慢均值的变化」。cross_stddev(log(cross_mean(C0,
+    120)), 60) 为 −0.69(train −0.69 / valid −0.37), 再套一层 cross_stddev(·, 60) 为 −0.82(valid
+    +0.34),C0 = log(log(DW(Volume))),比原 head 的 −2.23 好 1.5 分以上,且在 120 日均值之上取 60 日标准差,持久水平基本被拿掉了(平均值的
+    60 日内变化 读的是成团程度的体制切换)。这一组直接把这三个写法作为原 head 的变体评估(最后一个去掉外层 log,看 log|·| 折叠是否承重)。数学上:log
+    的实现是 log|x|,所以 C0 对 DW 在 DW = 1 处折叠(上一轮审计员已指出), cross_mean(C0, 120) 对折叠点附近的单日值是平均,不是单日支配;cross_stddev
+    对缺失日按有限日处理;窗口 ≤ 120 + 60 日;无前视。
+  variants:
+  - cross_stddev(log(cross_mean(log(log(day_durbin_watson(Volume))), 120)), 60)
+  - cross_stddev(cross_stddev(log(cross_mean(log(log(day_durbin_watson(Volume))),
+    120)), 60), 60)
+  - cross_stddev(cross_mean(log(log(day_durbin_watson(Volume))), 120), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

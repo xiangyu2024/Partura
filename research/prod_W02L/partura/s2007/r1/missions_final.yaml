@@ -1,0 +1,194 @@
+seed: 2007
+round: 1
+slots:
+- type: E
+  core: ts_scale(day_durbin_watson(Vwap), 10)
+  hypothesis: '机制与证据:
+
+    (1) 水平被尺子吃掉。day_durbin_watson 的实现是 Σ(ΔP)² / ΣP²(不去均值,AlphaCube dt_day.py),对价格
+    P 就是尺度无关的分钟已实现方差(典型 1e-6 量级),所以它的「水平」就是波动,而 5 个控制里已有 cross_mean(day_std(Ret),
+    20) 与成交额离散度一族。批里水平型的 head 全是负分(log(DW(Vwap)) −3.13、cross_sum(DW(Close), 60) −2.06),cross_sum
+    的窗口从 30 变 60 还把方向翻了过来(−3.72 方向 −1 → −2.06 方向 +1):短窗口读到的是短期波动 / 反转,长窗口才是持久水平,两者都是尺子要去掉的东西。
+
+    (2) 没被吃掉的是「冲击」。第二个 head 的核心 C = ts_scale(day_durbin_watson(Vwap), 10) 是「今天的 DW
+    占最近 10 日 DW 之和的比例」,均值约 0.1,与水平无关(拆解表里 C 与已知族的 rho 只有 0.057),读的是粗糙度相对自己近况的冲击。证据:(a)
+    拆掉 ts_scale(knockout)score 几乎不变(−2.94 → −2.88,必要性 −0.06),但 valid 从 −0.95 掉到 −2.20,方向与半衰期也变了(+1
+    / 20 → −1 / 5);(b) C 单独只有 −5.65,所以承重的不是 C 的瞬时值,而是 C 在时间上的聚合(cross_fangzheng =
+    均值 + 标准差);(c) 聚合窗口 10 → 20,score −2.94 → −2.22、valid −0.95 → −0.45,10 → 5 则变差(−3.60)。越慢、越是二阶统计越好。所以本任务把
+    C 当核心,问:C 这条序列的「时间动态」里,哪一种统计在 60 到 241 日的慢窗口上带 alpha?
+
+    (3) 经济含义(每个种子对应一种):C 的 60 日标准差 = 波动的波动 VoV(Baltussen、van Bekkum、van der Grient
+    2018:对风险水平的不确定性被定价,VoV 高的股票之后收益偏低,且在控制波动水平之后仍在);cross_semistd_pos 减 cross_semistd_neg、上尾均值、峰度
+    = 粗糙度是尖峰型(事件 / 跳跃)还是平稳型;C 与前一天 C 的相关 = 波动聚集性,信息型粗糙度会持续、噪声型当天回落;C 与当日收益、前一日收益、隔夜跳空的滚动相关
+    = 波动-收益不对称(杠杆效应 / 下跌恐慌 vs 追涨,Bekaert & Wu 2000);C 与成交额冲击 ts_scale(day_sum(Amt),
+    10)、成交量粗糙度冲击的相关 = 粗糙度是信息驱动还是噪声交易驱动(混合分布假说)。这些都是个股的持久行为特征,不是某段行情的产物。
+
+    算子怎样实现:16 个种子都原样带着 C,外围只做 (i) 二阶统计:cross_stddev(C, 60 / 241)、cross_semistd_pos
+    / neg(C, 60)、cross_tail_mean_q75(C, 60)、ts_kurt(C, 50)、cross_madz(C, 60);(ii)
+    聚集性:cross_corr(C, ts_delay(C, 1), 60);(iii) 耦合:cross_corr / cross_regbeta(C, 当日收益
+    day_sum(Ret) / 前一日收益 / 隔夜跳空 Open_t / Close_{t−1} − 1 / ts_scale(day_sum(Amt),
+    10) / ts_scale(day_durbin_watson(Volume), 10) / day_signed_ratio(Ret, Amt) / day_max(Ret),
+    60 或 241)。
+
+    为什么和库里已有的不同:该批 37 条(以及整个库里含 ts_scale(DW) 的 3 条)都是对 DW 做单层包装(cross_sum / ts_med
+    / ts_scale / sigmoid / pow)再取均值或分位。整个库里含 DW 的 341 条中,与另一条日度序列直接配对的只有零星的随机组合(例如
+    ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10),窗口只有 10),没有一条以「冲击序列 C」为一腿、在
+    60 日以上的窗口里与收益 / 隔夜跳空 / 成交额冲击做耦合,也没有一条取 C 的半方差、上尾均值或峰度(ts_kurt 只在两条随机嵌套里出现,都不是直接作用在
+    DW 序列上);cross_semistd_* 与 cross_tail_mean_q75 两个算子在 5583 条里一次都没出现。16 个种子的骨架已逐个对照
+    members.csv 的全部骨架,没有一个在库里。与三个 head(水平,或 C 的 10 日均值 + 标准差)的日度秩相关预计低于 0.5:二阶矩的窗口是
+    60 / 241 而不是 10,耦合量是相关系数,与水平无关;与成交额离散度一族也不同:那一族读日内成交额的绝对离散,这里读粗糙度相对自己近况的波动与同步性。
+
+    为什么样本外还会在:这些统计量是个股行为特征(波动不确定性、波动-收益不对称、信息 / 噪声交易构成),窗口 60 日以上,名次几周内稳定,配合半衰期 20
+    的 EMA 换手很低,15 bp 成本吃不掉;VoV 溢价在美国与别的市场的跨样本文献里都有记录。风险:VoV 与波动水平相关,尺子已经把对波动的线性 /
+    U 形 / S 形暴露去掉;C 做了「除以自己 10 日总和」,水平已经被除掉,所以残差里留下的主要是动态部分。
+
+    数学检查:DW 在日内价格为常数(或有效点不足 2 个)时给 NaN,拆解表里 ts_scale(DW(Vwap), 10) 的覆盖率 0.998;ts_scale
+    的分母是近 10 日 DW 之和(约 1e-5 量级,远大于 EPS = 1e-9;只有这 10 日几乎都冻结才会被置为 1,这时 C ≈ 0,在截面里排最低,这是窄的已知情形);C
+    约在 0 到 1 之间,量级 0.1 ± 0.05,所以 cross_corr、cross_regbeta、cross_zscore 的分母(标准差乘积约
+    1e-3)远大于 EPS,不会被缩到 0(这也是为什么没有直接对原始 DW 做相关:原始 DW 的标准差约 1e-6,标准差乘积 1e-8 会接近 EPS
+    造成人为收缩)。cross_corr 在窗口内没有有效对时返回 0 而不是缺失(已知算子行为),只在停牌 / 新股的窗口出现。无前视:只用 t 日及以前的数据,ts_delay(·,
+    1) 只向过去移;t+1 才交易。热身期最多 10 + 241 日,只有 241 窗口的 2 个种子受影响。'
+  literature:
+  - title: 'Unknown unknowns: Uncertainty about risk and stock returns'
+    authors: Guido Baltussen, Sjoerd van Bekkum, Bart van der Grient
+    year: '2018'
+    treatment: 波动的波动(对风险水平的不确定性)被定价;这里用 C 的 60 / 241 日标准差、半方差、上尾均值近似
+  - title: Asymmetric volatility and risk in equity markets
+    authors: Geert Bekaert, Guojun Wu
+    year: '2000'
+    treatment: 波动-收益不对称(杠杆效应 / 波动反馈);这里用 C 与当日 / 前一日收益、隔夜跳空的滚动相关近似
+  - title: Modeling and forecasting realized volatility
+    authors: Torben Andersen, Tim Bollerslev, Francis Diebold, Paul Labys
+    year: '2003'
+    treatment: 已实现方差用日内高频价格变动平方和估计,并具有聚集性;这里 DW(Vwap) 的分子即已实现方差,用 C 与前一天 C 的相关近似聚集性
+  seeds:
+  - cross_stddev(ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - cross_stddev(ts_scale(day_durbin_watson(Vwap), 10), 241)
+  - cross_semistd_pos(ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - sub(cross_semistd_pos(ts_scale(day_durbin_watson(Vwap), 10), 60), cross_semistd_neg(ts_scale(day_durbin_watson(Vwap),
+    10), 60))
+  - cross_tail_mean_q75(ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - ts_kurt(ts_scale(day_durbin_watson(Vwap), 10), 50)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), ts_delay(ts_scale(day_durbin_watson(Vwap),
+    10), 1), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), day_sum(Ret), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), ts_delay(day_sum(Ret), 1), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), ts_scale(day_sum(Amt), 10),
+    60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), ts_scale(day_durbin_watson(Volume),
+    10), 60)
+  - cross_regbeta(abs_(day_sum(Ret)), ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), day_signed_ratio(Ret, Amt),
+    60)
+  - cross_madz(ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - cross_corr(ts_scale(day_durbin_watson(Vwap), 10), day_max(Ret), 241)
+- type: N
+  hypothesis: '机制:这个批的 37 条都把 DW 在整个交易日上聚合成一个数。它的分子 Σ(ΔP)² 就是整天的已实现方差,于是价格变动发生在「一天的什么时点」被整个丢掉了:同样的一份方差,可能集中在隔夜(开盘跳空,公告
+    / 新闻 / 机构订单)、开盘半小时、午休后重新开盘(午休期间的信息消化)、中间的清淡时段,或尾盘(日内交易者平仓、基准跟踪、尾盘拉抬 / 砸盘、收盘集合竞价)。时点的构成是参与者结构与信息到达方式的指纹(Admati
+    & Pfleiderer 1988 的日内模式;Heston、Korajczyk、Sadka 2010 的日内收益周期性;Lou、Polk、Skouras
+    2019 的隔夜 vs 日内),是慢变的个股属性。时点份额是比值,方差的水平已经被除掉,所以和 vol 控制、成交额离散度一族天然正交的部分最大 —— 这正是水平型
+    DW(批里最好的也只有 −2.06,窗口 30 → 60 还翻了方向)被尺子吃掉之后还能剩下的东西。
+
+    算子怎样实现(都是新结构):(a) 方差重心:day_centroid(in_slice(Ret, 1, 240)) 与 day_centroid(pow_2(in_slice(Ret,
+    1, 240))),day_centroid 对 |x| 取一阶矩,0 = 全在开盘、1 = 全在收盘;V2 格点第 0 列是 09:30 集合竞价,切片
+    1..240 只取连续竞价分钟。(b) 分段份额:day_sum(in_slice(pow_2(Ret), a, b)) / day_sum(in_slice(pow_2(Ret),
+    1, 240)),(a, b) = (211, 240) 尾盘、(1, 30) 开盘、(121, 150) 午后开盘,取 30 到 40 日均值或 60 日
+    z 分数,以及「尾盘份额 − 开盘份额」。(c) 隔夜份额:gap² / (gap² + Σ 日内 r²),gap = Open_t / Close_{t−1}
+    − 1,逐日再取 40 日均值,和 60 日求和之比两个版本。(d) 上午与下午的 DW 对数比:log DW(Vwap 前 120 分钟) − log DW(Vwap
+    后 120 分钟) 的 40 日均值。(e) 耦合:cross_corr(方差重心, 隔夜跳空 / 成交额重心, 60) —— 价格是在成交活跃的时点动,还是在清淡时点被少量成交推动。(f)
+    分段收益的持续性:尾盘减开盘收益的 60 日均值、隔夜减日内收益的 60 日均值(tug-of-war)、尾盘 day_signed_ratio(Ret,
+    Amt)(尾盘净买入占比)的 60 日均值、前 30 分钟收益对后 30 分钟收益的 60 日滚动斜率(日内动量,Gao、Han、Li、Zhou 2018)。
+
+    为什么和库里已有的不同:day_centroid、day_signed_ratio 在 5583 条里一次都没出现;「pow_2(Ret) 的分段份额」「隔夜份额」「上午
+    / 下午 DW 对数比」「分段收益差」的骨架库里都没有;16 个种子的骨架已逐个对照 members.csv 的全部骨架,没有一个在库里(库里有 284 条用到
+    in_slice(Ret, …),全是同一个切片 (11, 230),作为 day_autocorr / day_corr / day_durbin_watson
+    / day_mean 等整段统计的输入;没有一条比较不同时段的份额,也没有 in_slice 与 pow_2 的组合)。和批里的 head 比:head 是整日
+    DW 的水平 / 10 日均值与标准差,这里是方差在时钟上的位置,二者度量的东西不同。(e) 里的成交额重心 day_centroid(Amt) 是已在别处出现过的特征,这里只把它作为对齐对象,而不是信号本身。
+
+    为什么样本外还会在:参与者构成与信息到达的时点结构是慢变的(几个月到几年不变),所以窗口 40 到 60 日的份额名次稳定、半衰期 20 的 EMA 下换手低,15
+    bp 成本吃不掉;机制是行为 / 微观结构性的(隔夜与日内的收益差在多个市场被记录且持续),不依赖某段行情。风险:尾盘份额可能与流动性 / 小市值相关,尺子对这类线性、U
+    形、S 形暴露都会去掉;开盘份额在涨跌停一字板上趋近 1,这是真实的行为(整天行情在开盘前已完成),不是缺失填充。
+
+    数学检查:分段份额的分子是分母的子集,0 ≤ 份额 ≤ 1;分母为 0(整天价格不动 / 停牌)时给 NaN,不是爆点,也没有除以近零的量造成的重尾。Ret²
+    约在 1e-6 到 1e-10 之间,float32 不下溢,但没有任何一个 cross_corr / cross_regbeta / cross_zscore
+    直接作用在平方后的小量上(只作用在 [0, 1] 的重心 / 份额、约 1e-2 的 gap、约 1e-2 的收益和上),避开 EPS = 1e-9 的分母。DW
+    对数比里的 DW 恒正(常数日给 NaN),log 有限。cross_corr 在窗口内没有有效对时返回 0(已知算子行为),只在停牌 / 新股窗口出现。无前视:所有量只用
+    t 日及以前的数据,ts_delay(·, 1) 向过去移;t+1 才交易。热身期最多 60 日。'
+  inspired_by: B019 批(day_durbin_watson 一族,37 条):全部把 DW 在整天上聚合成一个数,水平型 head 全是负分(最好
+    −2.06),cross_sum 窗口 30 → 60 方向翻转,DW(Vwap) 的富集 +0.13(p 0.03);整天聚合丢掉了方差在时钟上的位置。
+  literature:
+  - title: 'A theory of intraday patterns: Volume and price variability'
+    authors: Anat Admati, Paul Pfleiderer
+    year: '1988'
+    treatment: 知情与流动性交易者在一天中的集中时点不同,造成日内方差与成交量的模式;这里用方差重心与分段份额近似
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven Heston, Robert Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 同一只股票在一天中相同时段的收益有持续性;这里用分段收益差与尾盘净买入占比的 60 日均值近似
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜收益与日内收益各自持续、方向相反;这里用隔夜份额与隔夜减日内收益近似
+  - title: Market intraday momentum
+    authors: Lei Gao, Yufeng Han, Sophia Zhengzi Li, Guofu Zhou
+    year: '2018'
+    treatment: 第一个半小时收益预测最后半小时收益;这里用首 30 分钟对末 30 分钟收益的 60 日滚动斜率
+  seeds:
+  - cross_mean(sub(log(day_durbin_watson(in_slice(Vwap, 1, 120))), log(day_durbin_watson(in_slice(Vwap,
+    121, 240)))), 40)
+  - cross_mean(div(pow_2(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),
+    add(pow_2(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), day_sum(in_slice(pow_2(Ret),
+    1, 240)))), 40)
+  - cross_zscore(div(day_sum(in_slice(pow_2(Ret), 211, 240)), day_sum(in_slice(pow_2(Ret),
+    1, 240))), 60)
+  - cross_corr(day_centroid(in_slice(Ret, 1, 240)), sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), 60)
+  - cross_mean(sub(day_sum(in_slice(Ret, 211, 240)), day_sum(in_slice(Ret, 1, 30))),
+    60)
+  - cross_corr(day_centroid(in_slice(Ret, 1, 240)), day_centroid(Amt), 60)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    60)
+  - cross_mean(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_sum(in_slice(Ret,
+    1, 240))), 60)
+  - cross_regbeta(day_sum(in_slice(Ret, 1, 30)), day_sum(in_slice(Ret, 211, 240)),
+    60)
+R:
+- head: cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 10)
+  why: 烂的部件是「窗口太短、聚合里混着一个与水平相关的均值项」。拆解表:窗口 10 → 20,score −2.94 → −2.22、valid −0.95
+    → −0.45;10 → 5 变差(−3.60);拆掉 ts_scale 几乎不变(必要性 −0.06)但 valid 掉到 −2.20,说明承重的是 C
+    = ts_scale(DW(Vwap), 10) 的时间聚合,而且越慢越好。cross_fangzheng = 均值 + 标准差,C 的 10 日均值约为
+    0.1 的常数加上趋势,真正的信息在标准差(波动的波动)和不对称。变体:窗口 20 / 60(locate 已给的 20 加上更慢的 60);只留标准差、半方差(cross_stddev
+    / cross_semistd_pos),去掉均值项;ts_scale 内窗口 10 → 20。cross_stddev 与 cross_semistd 对
+    C 都有界、无近零的分母。
+  variants:
+  - cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 20)
+  - cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 60)
+  - cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 20), 20)
+  - cross_stddev(ts_scale(day_durbin_watson(Vwap), 10), 20)
+  - cross_ema(cross_stddev(ts_scale(day_durbin_watson(Vwap), 10), 20), 20)
+  - cross_semistd_pos(ts_scale(day_durbin_watson(Vwap), 10), 20)
+- head: cross_sum(day_durbin_watson(Close), 60)
+  why: 烂的部件是「水平」:DW(Close) 是分钟已实现方差,加上收盘价的买卖价差跳动(bid-ask bounce)噪声,60 日求和之后就是持久的波动水平,正好是波动
+    / 流动性控制要去掉的东西(窗口 30 → 60 方向翻转,−3.72 → −2.06;Close → Vwap 几乎不变 −2.17,说明起作用的不是价格口径)。变体把「波动水平」去掉,留下「噪声占比」:Close
+    与 Vwap 的 DW 对数差(Close 的路径比 Vwap 多出来的跳动,属于微观结构噪声,Roll 1984 的价差思想),逐日横截面回归去掉 Vwap
+    的 DW 之后的残差,以及在成交额离散度一族的十分位内去均值。log(DW) 恒有限(常数日给 NaN),cs_regres 在横截面上每天回归,无前视。
+  variants:
+  - cross_sum(sub(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))), 60)
+  - cross_sum(cs_regres(log(day_durbin_watson(Close)), log(day_durbin_watson(Vwap))),
+    60)
+  - cs_bucket_demean(cross_sum(log(day_durbin_watson(Close)), 60), cross_mean(day_std(Amt),
+    30))
+- head: log(day_durbin_watson(Vwap))
+  why: 烂的部件是「当日水平」:既是波动水平,又每天重排,换手高(sufficiency −3.20、方向 +1 / 半衰期 20 才勉强不死);Vwap →
+    Close 更差(−4.05),说明没有口径上的好处。变体去掉水平:相对自己一年水平的短期偏离、对数差去掉与 Close 共有的波动部分后做 60 日 EMA(慢、低换手)、对自己
+    241 日分布的 z 分数。全是 log(DW) 的有限函数,窗口 ≤ 241,无前视。
+  variants:
+  - sub(cross_mean(log(day_durbin_watson(Vwap)), 20), cross_mean(log(day_durbin_watson(Vwap)),
+    241))
+  - cross_ema(sub(log(day_durbin_watson(Vwap)), log(day_durbin_watson(Close))), 60)
+  - cross_zscore(log(day_durbin_watson(Vwap)), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

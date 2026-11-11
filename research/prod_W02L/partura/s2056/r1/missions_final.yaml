@@ -1,0 +1,91 @@
+seed: 2056
+round: 1
+slots:
+- type: E
+  core: day_max(cross_corr(Amt, Ret, 60))
+  hypothesis: 'Core = the peak (over 241 minute slots) of the 60-trading-day cross-day
+    correlation between turnover (Amt) and the minute return (Ret): at the time of
+    day where heavy trading most strongly coincided with price rises recently. Snapshot
+    heads are only this core alone or wrapped in cross_min(., 15), all with negative
+    scores (valid -0.65 / -0.88), so the core as a raw number is not an alpha by itself;
+    the belief is that the peak coupling is informative only RELATIVE to something.
+    The periphery tried here is new: (1) peakiness, sub / div of the peak by the mean
+    or std of the same coupling profile (a stock whose coupling is concentrated in
+    one minute is noise, one whose whole day is coupled is real pressure); (2) residualising
+    the peak against turnover level or volatility through cs_regres / cross_regres
+    so what is left is coupling not explained by liquidity; (3) the change of the
+    peak over time (cross_delta / cross_sub of its own lag), since a slow-moving correlation
+    level drifts and its change is the information; (4) the peak taken only in the
+    first or last hour through in_slice (open absorption versus closing flow) and
+    combined with the full-day peak; (5) cross-sectional standardisation against the
+    stock''s own history via cross_zscore. None of these appear in the snapshot, whose
+    only periphery is cross_min. Out of sample it should persist because it is a slow
+    cross-sectional state (volume-confirmed price pressure), and the relative forms
+    strip the level exposure that the controls already capture.'
+  seeds:
+  - div(day_max(cross_corr(Amt, Ret, 60)), day_std(cross_corr(Amt, Ret, 60)))
+  - cross_delta(day_max(cross_corr(Amt, Ret, 60)), 20)
+  - sub(day_max(cross_corr(Amt, Ret, 60)), cross_mean(day_max(cross_corr(Amt, Ret,
+    60)), 60))
+  - cross_zscore(day_max(cross_corr(Amt, Ret, 60)), 120)
+  - sub(day_max(cross_corr(Amt, Ret, 60)), day_max(in_slice(cross_corr(Amt, Ret, 60),
+    181, 240)))
+  - sub(day_max(in_slice(cross_corr(Amt, Ret, 60), 1, 60)), day_max(cross_corr(Amt,
+    Ret, 60)))
+  - mul(day_max(cross_corr(Amt, Ret, 60)), sign(cross_delta(day_sum(Close), 20)))
+  - cross_corr(day_max(cross_corr(Amt, Ret, 60)), day_sum(Amt), 60)
+- type: N
+  hypothesis: 'New idea from the batch (the day_max(cross_corr(F,F,w)) family): the
+    batch measures coupling between two intraday series per minute slot and then keeps
+    the max, which throws away the daily-level version of the same question. Here
+    the coupling is built from DAILY aggregates and chosen to separate the sign of
+    the move: over the last w trading days, the correlation between a stock''s total
+    turnover (day_sum(Amt)) and (a) its close-to-open day return, (b) its worst intraday
+    minute return (day_min(Ret)), (c) its intraday range, (d) its minute-return volatility.
+    Volume that arrives with big up-days is accumulation-type demand (positive), volume
+    that arrives with deep intraday drawdowns is forced/panic selling that is later
+    reversed (liquidity provision premium); and turnover-volatility coupling is the
+    Amihud-style price-impact slope, a known compensated characteristic. The operator
+    cross_corr over the day axis implements this as a slow rolling slope-free statistic,
+    so the construction is scale-free and does not divide by near-zero quantities.
+    It differs from the library: heads use minute-level Ret/Amt coupling and a max
+    collapse; this uses day-level aggregates and downside tail conditioning with no
+    collapse of a minute profile, and windows 40-120 (longer was better in the breakdown).
+    It should persist because panic-versus-accumulation volume asymmetry is a structural
+    liquidity-provision effect, not a one-off pattern.'
+  inspired_by: 'batch 1 (day_max(cross_corr(F,F,w)) family): the Amt-Ret coupling
+    at w=120 beat w=60 and w=30, i.e. slow volume-return coupling carries the signal,
+    not the extreme minute'
+  seeds:
+  - cross_corr(day_sum(Amt), div(day_last(Close), day_first(Open)), 60)
+  - cross_corr(day_sum(Amt), div(day_last(Close), day_first(Open)), 120)
+  - cross_corr(day_sum(Amt), day_min(Ret), 60)
+  - cross_corr(day_sum(Amt), day_min(Ret), 120)
+  - cross_corr(day_sum(Amt), day_max(Ret), 90)
+  - cross_corr(day_sum(Amt), day_std(Ret), 90)
+  - cross_corr(day_sum(Amt), sub(day_max(High), day_min(Low)), 60)
+  - cross_corr(day_std(Amt), day_min(Ret), 60)
+  - sub(cross_corr(day_sum(Amt), day_max(Ret), 90), cross_corr(day_sum(Amt), day_min(Ret),
+    90))
+  - cross_corr(day_sum(Amt), day_skew(Ret), 90)
+  - cross_corr(day_sum(Amt), cross_delay(div(day_last(Close), day_first(Open)), 1),
+    60)
+  - cross_corr(day_sum(Volume), day_min(Ret), 120)
+R:
+- head: day_max(cross_corr(Amt, Ret, 60))
+  why: 'the breakdown shows window 60->120 improves score from -0.65 to -0.42 (train
+    -0.03) while 30 is far worse: the 60-day window is too short and noisy; the max
+    over 241 minutes is the other weak part, so also test softer collapses at long
+    windows'
+  variants:
+  - day_max(cross_corr(Amt, Ret, 120))
+  - day_max(cross_corr(Amt, Ret, 180))
+  - day_max(cross_corr(Amt, Ret, 240))
+  - day_quantile_q75(cross_corr(Amt, Ret, 120))
+  - day_mean(cross_corr(Amt, Ret, 120))
+  - day_std(cross_corr(Amt, Ret, 120))
+  - day_max(cross_corr(Volume, Ret, 120))
+  - day_max(cross_corr(Amt, Ret, 90))
+audit:
+  attempts: 1
+  file: audit_1.yaml

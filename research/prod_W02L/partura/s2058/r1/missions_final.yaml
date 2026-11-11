@@ -1,0 +1,81 @@
+seed: 2058
+round: 1
+slots:
+- type: E
+  core: day_std(pow_2(Ret))
+  hypothesis: 核心 day_std(pow_2(Ret)) 是分钟收益平方的日内标准差,即波动率的波动率(收益平方序列的离散度,近似峰度 / 跳跃强度),不是波动率水平本身。
+    本批 heads(含它的 cross_mean(..., 3) 两个,train -2.4 valid -2.6)都是用 3 日短窗口直接排名,方向为负,说明
+    短窗口下它被「波动水平」与短期噪声主导,在新尺子里亏钱。这次不再让它兼任波动水平:(1)用 div(核心, pow_2(day_var(Ret))) 把 它按自身方差平方归一,得到近似
+    sqrt(峰度-1)的无量纲厚尾度,波动水平被除掉,剩下的是「收益由少数几根大分钟驱动」的程度(跳跃 / 订单冲击特征,Amihud 式 的非连续价格发现);分母用
+    replace_small_with_nan 避免近零爆点。(2)用 cross_ema 的 60~241 日长窗口把它变成慢变的股票特征,换手低、 15
+    bp 成本吃不掉;(3)用 cs_bucket_rank 按 LogFloatCap 或成交额分桶后在桶内排序,让十分位书在每个规模 / 流动性桶里各取一份,新尺子只去掉
+    控制的线性 / 平方 / 三次项,去不掉这种分桶后的非光滑结构;(4)短窗口减长窗口(5 日 EMA 减 120 日 EMA)度量厚尾度的近期变化, 是均值回复而非水平。和库里不同:库里只有「核心
+    + 3 日平均」或套 sigmoid / sqrt / neg 的单调变换(新尺子下是同一个信号);这里改变的是 归一化、窗口量级和分桶,不是单调变换。为什么样本外还会在:跳跃
+    / 彩票型厚尾特征带来的是对大涨大跌的偏好(MAX / 偏度效应),散户参与度高的票持续被高估, 是行为偏误而不是某段行情;长窗口排名换手小。数学上:分母为方差平方且
+    replace_small_with_nan 处理,没有除以近零;全部为有界日频量。
+  seeds:
+  - cross_ema(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),
+    120)
+  - cross_mean(cs_winsor(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret))))),
+    241)
+  - cross_ema(cs_bucket_rank(day_std(pow_2(Ret)), LogFloatCap), 60)
+  - cross_ema(cs_bucket_rank(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),
+    LogFloatCap), 120)
+  - cross_ema(cs_bucket_rank(day_std(pow_2(Ret)), day_sum(Amt)), 120)
+  - sub(cross_ema(day_std(pow_2(Ret)), 5), cross_ema(day_std(pow_2(Ret)), 120))
+  - cross_ema(cs_demean(log(add(day_std(pow_2(Ret)), 0.000000001))), 120)
+  - cross_zscore(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),
+    60)
+  - cross_max(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),
+    20)
+  - cross_ema(cs_bucket_rank(day_std(pow_2(Ret)), LogTotalCap), 241)
+  - cross_ema(sub(cs_rank(day_std(pow_2(Ret))), cs_rank(day_var(Ret))), 60)
+- type: N
+  hypothesis: 涨跌停板归一化的极端日收益(MAX / 彩票效应的板块可比版本)。A 股主板涨跌停 10%、创业板 / 科创板 20%、ST 5%,日频字段
+    LimitWidth 给出每只票当天的板宽。 日收益 r = Close_t / Close_{t-1} - 1(后复权收盘,当天收盘已知,无前视),除以
+    LimitWidth 得到「离涨停有多近」:r / LimitWidth 在 +1 附近表示触及涨停, 这个量在不同板块之间可比,而原始 Ret 的极值是被板块宽度机械决定的(20%
+    板天然极值更大,混入了板块信息)。机制:触及或逼近涨停的次数反映散户追涨、彩票偏好和 短期过度反应(Bali-Cakici-Whitelaw 2011 的
+    MAX 效应在 A 股被放大);用 60~120 日的 EMA / 均值把它变成慢变的「涨停倾向」特征,用 is_gt 阈值计数得到频率, 用 cs_demean
+    / 分桶处理方向。算子怎么实现:ts_delay 取前一日后复权收盘,div(LimitWidth) 归一,is_gt / is_lt 取阈值,cross_ema
+    / cross_mean 做长窗口平均。 为什么和库里不同:本批 heads 全是 Ret / Volume 的日内离散度(波动的波动),没有一个用到日频的价格限制或隔日收益;控制里的波动、反转、流动性都不按板宽归一,
+    所以板宽归一的极端度量不是它们的线性 / 平方 / 三次暴露。为什么样本外还会在:价格涨跌停制度和散户追涨的行为偏误是结构性的,不依赖某段行情;慢窗口排名换手低。
+    数学上:LimitWidth 为正的常数量级(0.05~0.3),不接近零;全部为有界日频量;热身期只丢前一日。
+  inspired_by: 第 1 批(day_std 一族,Ret / Volume 日内离散度)的 heads 全部亏钱:日内离散度被波动水平主导;换成日频的、按板块归一的极端收益是批里没有的维度。
+  seeds:
+  - cross_ema(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    60)
+  - cross_ema(cs_demean(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), LimitWidth)), 120)
+  - cross_max(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    60)
+  - cross_ema(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    241)
+  - cross_ema(cs_bucket_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth), LogFloatCap), 120)
+  - cross_zscore(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    60)
+R:
+- head: cross_mean(day_std(pow_2(Ret)), 3)
+  why: 拆解显示窗口 3->6 增益 +0.30(-2.58 -> -2.27),3 日窗口太短、被短期噪声主导;核心本身(sufficiency)-2.87,外层均值窗口是可改的部件。试更长窗口与
+    EMA。
+  variants:
+  - cross_mean(day_std(pow_2(Ret)), 10)
+  - cross_mean(day_std(pow_2(Ret)), 20)
+  - cross_mean(day_std(pow_2(Ret)), 60)
+  - cross_mean(day_std(pow_2(Ret)), 120)
+  - cross_ema(day_std(pow_2(Ret)), 20)
+  - cross_ema(day_std(pow_2(Ret)), 60)
+  - cross_ema(day_std(pow_2(Ret)), 120)
+  - cross_ema(div(day_std(pow_2(Ret)), pow_2(replace_small_with_nan(day_var(Ret)))),
+    60)
+- head: day_std(pow_2(Volume))
+  why: 无外层平滑,换手高;Volume->Amt 更差(-3.66),说明价格因素有害;试加长窗口平滑与按自身方差归一。
+  variants:
+  - cross_mean(day_std(pow_2(Volume)), 20)
+  - cross_ema(day_std(pow_2(Volume)), 60)
+  - cross_ema(div(day_std(pow_2(Volume)), pow_2(replace_small_with_nan(day_var(Volume)))),
+    60)
+  - cross_ema(cs_bucket_rank(day_std(pow_2(Volume)), LogFloatCap), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

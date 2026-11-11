@@ -1,0 +1,28 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '位 a 是 E 深挖,核心 day_sum(Ret)。核心检查:它在 loc.md 共性表里是子树(+0.98,含 48 个候选,p 0.000),且原样出现在全部 12 个种子里;与 5 个控制的 |ρ| 为 liq 0.00、vol 0.01、rev 0.18、known 0.00、size 0.04,全部 < 0.8;与快照任一 head 的原始 |ρ| 最大 0.11。核心通过。
+划掉第 10 号(数学问题):sub(cross_semistd_neg(day_sum(Ret),120), cross_semistd_pos(day_sum(Ret),120))。源码 ops_ext.py 第 751-761 行的 _semistd 只在 x>0 且前一日 x>0 时取对数比 log(x[t]/x[t-1]),它的定义对象是正的价格水平。day_sum(Ret) 是累计收益,约一半交易日为负,这些日被置为 NaN,剩下的是相邻两日收益之比的对数,不再是半标准差。覆盖率 0.996 是因为窗口里仍有 3 个以上有限点,pipeline 的门槛没有抓住这个问题。
+创新度 4:快照的 6 个 head 全部围绕 day_min(Ret)、day_min(High)-day_mean(Amt)、day_var(Open),没有任何一个含 day_sum(Ret);种子与 head 的原始 |ρ| 最大 0.35(第 8 号),残差最大 0.49(第 8 号,与 vol 0.43 有一定重叠)。gap 与日内收益相减的写法(第 1、6、7、12 号)是隔夜与日内收益的分解,快照里没有这一写法。第 1 号与 known 0.38、liq 0.36,属于较高但未过自动门槛的相关。
+合理度 4:机制清楚,隔夜 / 日内分解有文献依据(Lou-Polk-Skouras 2019 一类的隔夜与日内收益拉锯);第 3 号 cross_regbeta(x,y,d) 按 rolling_ols(x,y) 的 beta 定义(见 AlphaCube-steering/src/alphacube/operators/dt_cross.py 第 299 行),是 y=day_sum(Ret) 对 x=cs_mean(day_sum(Ret)) 的回归,与 hypothesis 写的日内市场 beta 一致。gap 只用 t 日开盘价和 t-1 日收盘价,无前视;除数全为收盘价或 120 日标准差,未见近零除数(第 9 号的分母在 120 日全为零时才会爆,实际很少)。
+如果它有 alpha,最可能来自:隔夜与日内收益的投资者构成分解,或者个股日内收益对全市场日内均值的 beta。风险是 train 与 valid 可能符号切换(hypothesis 已注明),这不是挡的理由。
+注意(不划):第 3 号与第 4 号(cross_corr(day_sum(Ret), cs_mean(day_sum(Ret)),120))在统计上相关,beta 等于 corr 乘以个股标准差再除以常数市场标准差,二者的差只在个股波动这一项。它们是两个写法,不是重复,保留。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [6, 9]
+    reasons: '位 b 是 N 新想法,读数是 60 / 120 日慢窗口的日内时间结构,与快照的 6 个 head 都不属同一类。全部种子经检查没有除以近零或前视问题,只有下列两个被划掉。
+划掉第 6 号(数学问题 / 定义坏掉):cross_mean(day_at_min_ratio(Low),120)。相关度表 gate 已标废品(distinct 0.394)。源码 ops_ext.py 第 595-603 行的 day_at_min_ratio 在一字板或平价日给出 1,在 tick 档位较粗的低价股上大量并列。结果主要由价格档位与一字板日决定,不是交易结构的读数。
+划掉第 9 号(重复):cross_mean(day_gini(Amt),120)。day_gini 的 docstring 自述是 day_std / day_mean 的不爆版本,即与已知族 cross_mean(day_std(Amt),30) 是同一个分散度量换了归一化。相关度表显示它与 known 0.66、与 liq 0.74、与 size 0.63,都很高。是同一个东西的写法变体。
+保留的理由:第 2、3、8、11 号的 day_argmin(Low) / day_argmax(High) 在平盘日返回 0(ops_ext 与 dt_day.py 第 182-192 行,torch.argmin 取首个最小值下标),所以一字板日有系统偏差。但这些日子只占 120 日的一小部分,不构成定义坏掉,保留;PI 应注意这一偏差。第 1 号与第 12 号都是 ar1(Ret) 的读数,第 12 号为 5 日均值的 120 日 z 分数,度量的是相对自身历史的变化,不是同一个写法,保留。第 7 号 ar1(Close) 对价格水平取系数,主要捕捉日内趋势持续性,与 day_sum(Ret) 可能重叠,但这不是数学问题。
+创新度 4:快照的 head 都是 day_min(Ret) 或 day_min(High) 与 day_mean(Amt) 的组合。相关度表里 head 最大原始 |ρ| 为 0.50(第 7 号),其余多在 0.1 到 0.45。慢窗口的 argmin / 价差反弹 / 成交重心写法不是库里已见的 head 形式。
+合理度 3:机制说得清(Roll 价差反弹、日内极值时间、成交重心与参与者构成)。扣掉 1 分是因为:argmin 的并列偏差是一个明确的测量问题,ar1 在价格水平上可能只是趋势持续性,而且 day_centroid 的分母有 tot 大于 0 的守卫,不是问题。这些都不触发 §4 的数学问题,所以放行。
+如果它有 alpha,最可能来自:成交额与极值的日内时间分布(参与者构成:机构收盘执行、散户开盘驱动),或买卖价差反弹这一慢变流动性成本成分。'
+R:
+  - head: 'cross_corr(day_min(High), day_mean(Amt), 60)'
+    soundness: 3
+    reasons: '7 个变体(45 / 90 日窗口、zscore 替换、一日滞后、241 日窗口、High 换 Low、cs_rank 替换)全部是合法的 cross_corr 写法,没有除零、前视或 NaN 主导问题;cross_delay 只用过去,cs_rank 是日轴的截面秩。机制(低点价格水平与成交额的 60 日共动)没有清楚的解释,很可能主要抓的是价格趋势与放量同步,但这不是数学问题,所以不挡。变体 3(zscore 替换)与原 head 的 |ρ| 为 0.75,按 R 规则属于替换情形,由流水线处理。'
+summary: '位 a(E,核心 day_sum(Ret))与位 b(N)都过审计:a 划第 10 号(semistd 把对数比用在收益上,定义坏掉),b 划第 6 号(day_at_min_ratio 退化,gate 已标废品)与第 9 号(gini 与已知族同一分散量);R 组 cross_corr(day_min(High), day_mean(Amt), 60) 合理度 3,全部放行。'

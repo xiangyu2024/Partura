@@ -1,0 +1,91 @@
+seed: 2023
+round: 3
+slots:
+- type: E
+  core: day_wmean(Ret, log(log(abs_(Ret))))
+  hypothesis: 机制:核心 C = day_wmean(Ret, log(log(abs_(Ret)))) 是本流唯一过线 head(+0.64,train
+    +0.64 / valid +1.16)的内核。log 是保护型 log|x|,所以权重 w = |ln|ln|Ret||| = ln(ln(1/|Ret|)):对
+    |Ret| 从 1e-4 到 1e-2 只在 2.2 到 1.5 之间缓慢变化,Ret=0 的分钟(|x|<=EPS)被排除。也就是 C ≈ 当天「非零分钟的近乎等权平均收益」,略偏重小幅分钟。同一个
+    head 的 log(abs_) 版本 +0.44,更平的 loglog 版本 +0.64,说明越接近『非零分钟等权』越好;我的读法是它承载的是『每个活跃分钟的平均漂移』(分钟收益均值
+    / 活跃度,含 tick 与最小变动价位效应),而不是成交加权的大幅波动。已见写法:快照里含 C 的候选只有 cross_mean(C, 120 / 241
+    / 482) 这一种外围,只改了 241 日平均的窗口。这一位不再改窗口,而是改变『对 C 的时间序列怎么读』:(1) 上涨日频率 is_gt(C,0)(种子
+    1)与中位数(10)、线性衰减(13)、EMA(6)等稳健 / 非均匀聚合;(2) 信噪比 C 均值 / C 标准差(2)、按日波动归一(9)、减去普通分钟均值
+    day_mean(Ret) 以拿掉活跃度项(7)、减 log 权重版以只留权重倾斜项(8);(3) 对市场的关系:对 cs_mean(C) 的 beta(3)、alpha(4)、60
+    日残差的 120 日均值(5,cross_regbeta / alpha / regres 的第一参数是自变量,所以市场放第一位、个股放第二位),市场下跌日条件的
+    C(11);(4) 长短窗口对比 241 日均值减 30 日均值(14,漂移的惯性对反转),C 的一阶自相关(12)。为什么与库里不同:两个库 5583 条里没有
+    log(log(abs_)) 权重,C 的所有外围骨架已与库骨架对照,无重复;与 3 个 B067 heads(Volume q75 水平量)机制无关。为什么样本外还会在:C
+    的 241 日均值在 train 与 valid 都为正(valid 更强),并非单段行情;小幅分钟等权漂移是微观结构的稳定属性,不随风格切换;慢聚合使换手低,15
+    bp 不会吃掉。数学检查:无前视(day_* 只用当天分钟,cross_* 回看含当天);分母 std+1e-6(日 std 量级 1e-3)不爆;C 对停牌日为
+    NaN(权重和 0),不是 0;不含 ts_rank / cross_rank,不碰 nanrank_last;无 ts_spearman / nt_*;种子在合成立方体上可解析、骨架与库不重复。最可能失败:这些外围只是
+    C 的重排,与 head 秩相关 ≥ 0.7 被库禁令拒绝,GP 多数候选被丢掉。
+  seeds:
+  - cross_mean(is_gt(day_wmean(Ret, log(log(abs_(Ret)))), 0), 241)
+  - cross_regbeta(cs_mean(day_wmean(Ret, log(log(abs_(Ret))))), day_wmean(Ret, log(log(abs_(Ret)))),
+    241)
+  - cross_mean(cross_regres(cs_mean(day_wmean(Ret, log(log(abs_(Ret))))), day_wmean(Ret,
+    log(log(abs_(Ret)))), 60), 120)
+  - cross_mean(sub(day_wmean(Ret, log(log(abs_(Ret)))), day_wmean(Ret, log(abs_(Ret)))),
+    241)
+  - cross_mean(mul(day_wmean(Ret, log(log(abs_(Ret)))), is_lt(cs_mean(day_wmean(Ret,
+    log(log(abs_(Ret))))), 0)), 241)
+  - cross_autocorr(day_wmean(Ret, log(log(abs_(Ret)))), 241, 1)
+  - sub(cross_mean(day_wmean(Ret, log(log(abs_(Ret)))), 241), cross_mean(day_wmean(Ret,
+    log(log(abs_(Ret)))), 30))
+- type: N
+  hypothesis: 机制:把 head 里 log(log(|Ret|)) 权重的作用拆成『小幅分钟 / 大幅分钟』两个桶。head 的权重随 |Ret|
+    缓慢下降,等于把大幅分钟(新闻、涨跌停附近冲击)的权重压低,留下小幅、安静分钟里的方向性漂移;我的假设是 alpha 来自『安静分钟里的净方向』(知情的小单慢慢累积、或
+    tick 回弹的不对称),不来自大幅冲击。用算子直接实现:阈值用当天 |Ret| 的分位数 day_quantile(abs_(Ret), q),把分钟切成小幅(<
+    q50 或 < q25,且非零)与大幅(> q90)两桶,用 day_wmean 取桶内均值(种子 1、13、2),二者之差(3)、小幅桶内只取上涨 / 下跌分钟(7、8)、桶内均值减全天均值(9)、桶内均值除以桶内平均幅度即无量纲的方向占优度(11)、与全天收益的
+    120 日相关(10);另外用 day_signed_ratio 只读方向不读幅度:按 loglog 权重、按 1/(|Ret|+1e-4) 权重、按小幅桶的指示权重(4、5、12),以及
+    1/(|Ret|+5e-4) 权重的均值(6),检验是『方向』还是『幅度』承重;种子 14 是成交额放大分钟的收益(day_wmean 以 Amt 分位数为阈值),作为『安静
+    vs 放量』的对照臂。全部 241 日或 120 日慢聚合。为什么与库 / heads 不同:heads 全是水平量(日内分位数、中位数、协方差)加一个 loglog
+    加权均值;没有任何一个按『|Ret| 分位数分桶』或『只读符号』,两个库 5583 条里 abs_(Ret) 的分位数阈值出现 0 次,骨架已逐个对照无重复。与
+    loglog head 的区别:head 是连续加权,这里是硬分桶和符号比例,对权重形状的依赖被拆开,若小幅桶好而大幅桶差则证实机制,反之则 head 的
+    alpha 来自别处(如活跃度归一)。为什么样本外还会在:安静分钟的净方向反映慢速订单流,是微观结构特征,不依赖某段行情;241 日慢聚合换手低。数学检查:分位数阈值是当天截面内逐票计算,无前视;小幅桶额外要求
+    |Ret|>1e-6,桶空时权重和为 0 给 NaN;分母 +1e-6(桶内平均幅度量级 1e-3 以上)不爆;1/(|Ret|+1e-4) 最大 1e4,有界;无
+    ts_rank / cross_rank,不碰 nanrank_last;无 ts_spearman / nt_*。最可能失败:与 loglog head
+    的残差相关过高被库禁令拒绝,或硬分桶只是更噪的 head。
+  inspired_by: 本批(B069 sigmoid(q75) 水平量)里没有新现象;灵感来自本流 loc 的唯一过线 head cross_mean(day_wmean(Ret,
+    log(log(abs_(Ret)))),241):权重 ln ln(1/|Ret|) 近乎等权并偏重小幅分钟,以及第 1 轮 +0.44 的 log(abs_)
+    版本,按「分钟 |Ret| 大小」拆开读
+  seeds:
+  - cross_mean(day_wmean(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret), 0.5)),
+    is_gt(abs_(Ret), 0.000001))), 241)
+  - cross_mean(day_wmean(Ret, is_gt(abs_(Ret), day_quantile(abs_(Ret), 0.9))), 241)
+  - sub(cross_mean(day_wmean(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret), 0.5)),
+    is_gt(abs_(Ret), 0.000001))), 241), cross_mean(day_wmean(Ret, is_gt(abs_(Ret),
+    day_quantile(abs_(Ret), 0.9))), 241))
+  - cross_mean(day_signed_ratio(Ret, log(log(abs_(Ret)))), 241)
+  - cross_mean(day_wmean(Ret, div(1, add(abs_(Ret), 0.0005))), 241)
+  - cross_mean(day_wmean(Ret, mul(is_gt(Ret, 0), is_lt(abs_(Ret), day_quantile(abs_(Ret),
+    0.5)))), 241)
+  - cross_mean(day_wmean(Ret, mul(is_lt(Ret, 0), is_lt(abs_(Ret), day_quantile(abs_(Ret),
+    0.5)))), 241)
+  - cross_mean(sub(day_wmean(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret), 0.5)),
+    is_gt(abs_(Ret), 0.000001))), day_mean(Ret)), 241)
+  - cross_corr(day_wmean(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret), 0.5)),
+    is_gt(abs_(Ret), 0.000001))), day_sum(Ret), 120)
+  - cross_mean(div(day_wmean(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret), 0.5)),
+    is_gt(abs_(Ret), 0.000001))), add(day_wmean(abs_(Ret), mul(is_lt(abs_(Ret), day_quantile(abs_(Ret),
+    0.5)), is_gt(abs_(Ret), 0.000001))), 0.000001)), 241)
+  - cross_mean(day_signed_ratio(Ret, mul(is_lt(abs_(Ret), day_quantile(abs_(Ret),
+    0.5)), is_gt(abs_(Ret), 0.000001))), 241)
+  - cross_mean(day_wmean(Ret, is_gt(Amt, day_quantile(Amt, 0.75))), 241)
+R:
+- head: cross_mean(day_wmean(Ret, log(log(abs_(Ret)))), 241)
+  why: 拆解:去掉外层 cross_mean 掉到 -3.80(必要性极强),窗口 241 到 120 / 482 掉到 +0.16 / +0.18,说明承重的是
+    241 日慢聚合与 loglog 的近乎等权权重。烂的部件猜测是:(a) 权重对 |Ret| 仍有倾斜(用完全等权的非零分钟指示替换检验);(b) 再多取一层
+    log 让权重更平;(c) 窗口 241 到 360;(d) 均值换 EMA / 中位数;(e) 除以日波动,或减去 day_mean(Ret) 拿掉活跃度项。
+  variants:
+  - cross_mean(day_wmean(Ret, is_gt(abs_(Ret), 0.000001)), 241)
+  - cross_mean(day_wmean(Ret, log(log(log(abs_(Ret))))), 241)
+  - cross_mean(day_wmean(Ret, log(log(abs_(Ret)))), 360)
+  - cross_ema(day_wmean(Ret, log(log(abs_(Ret)))), 120)
+  - cross_med(day_wmean(Ret, log(log(abs_(Ret)))), 241)
+  - cross_mean(div(day_wmean(Ret, log(log(abs_(Ret)))), add(day_std(Ret), 0.000001)),
+    241)
+  - sub(cross_mean(day_wmean(Ret, log(log(abs_(Ret)))), 241), cross_mean(day_mean(Ret),
+    241))
+audit:
+  attempts: 1
+  file: audit_1.yaml

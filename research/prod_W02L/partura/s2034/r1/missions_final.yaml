@@ -1,0 +1,237 @@
+seed: 2034
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:「最近一个月成交额相对自己的常态放出的尖峰」,而且把水平在表达式里就去掉,不靠尺子事后回归。
+
+
+    本批(B100,`day_sum(Amt)` 一族 32 条,3 个素材 head 全是负分)里的证据:
+
+    (1) 这一族在库里的原始读数(struct/members.csv,只含 train):多数成员秩 IC -0.03 到 -0.05,换手 1% 到 8%,库自己尺子下的净夏普
+    +1.3 到 +1.9,是流动性溢价的教科书形态。新尺子(去掉 5 个控制 + 2 个冠军)下全部转负:`day_sum(Amt)` 与已知族 rho 0.89,`ts_decay_linear(day_sum(Amt),
+    50)` 0.98,三个素材 head 的分数 -0.80 / -1.26 / -1.34。结论:成交额的水平就是控制的化身,水平里没有剩下的东西。
+
+    (2) 拆解表里唯一符号对得上、分数最高的是 `ts_max(day_sum(Amt), 50)`:方向 +1(买近 50 日峰值大的)、半衰期 5,分数
+    -0.50(train -0.50 / valid -0.34)。head 1 在它外面再套 ts_decay_linear,窗口 100 / 50 / 25
+    的分数是 -1.36 / -0.80 / -0.34,平滑越长越差。读法:有内容的是「最近一个月放过多大的量」这件事本身,长平滑只是把水平加了回来。
+
+    (3) 但 `ts_max(day_sum(Amt), 50)` 与已知族 rho = -0.93,尺子看到的只是剩下的 7%,而这 7% 恰好是「峰值相对水平」。所以这一位把「相对」直接写进表达式:峰值除以(或减去)自己的基线,而不是让尺子去回归。
+
+
+    为什么会有 alpha(两条可检验的链):
+
+    (a) Gervais、Kaniel 与 Mingelgrin(2001)的高成交量溢价:成交额相对自己常态显著放大的股票,因可见度上升而在随后数周有正的超额收益,溢价在小市值、低关注度的股票里最强。
+
+    (b) Barber 与 Odean(2008)的注意力:放量把散户的买入集中到引人注意的股票上,A 股散户占比高,这条链更强;方向也可能反过来(放量后的反转)。方向不预设,由尺子在训练段定。
+
+
+    算子怎样实现(每个种子由三块拼成):
+
+    (i) 度量放量的统计量:峰值(ts_max / cross_max)、上尾均值(cross_tail_mean_q75)、75 分位(cross_quantile_q75)、均值
+    / 指数均值(cross_mean / cross_ema)、偏度(ts_skew)。
+
+    (ii) 去水平的办法:对数差、除以 120 日均值或中位数、对自己 120 日历史做 cross_zscore、对 120 日对数均值做截面回归 cs_regres、在流动性十分位
+    / 流通市值十分位 / 名义股价十分位(sub(LogFloatCap, LogFloatShares) = log(流通市值 ÷ 流通股本))内标准化(cs_bucket_zscore
+    / cs_bucket_demean)。五种写法互相独立,如果有效就不依赖某一种。
+
+    (iii) 方向条件:无条件、乘以当天日内收益的符号或大小(`day_sum(Ret)` = 当天分钟收益之和),看放量是出现在上涨日还是下跌日。
+
+    窗口:峰值窗 20 到 50 日(拆解里的甜区),基线 120 日(基线必须比峰值窗长得多,否则峰值把自己的基线抬起来)。
+
+
+    和库里已有的、和 head 的不同:
+
+    (a) 本批 32 条里 ts_max / ts_quantile / ts_std 都直接作用在成交额水平上;全库 5598 条里没有把成交额除以或减去自己的
+    cross_mean / cross_med 基线(grep 核对),也没有 cross_zscore、cross_ema、cs_bucket_*(各 0
+    条),所以「相对自己常态的放量」没人读过。
+
+    (b) 16 个种子的算子骨架(skeleton_key,抽掉字段、常数、窗口)已逐个与 struct/members.csv 解析出的 4077 个不同骨架对照,全部不在其中。
+
+    (c) 种子 8、15 用日频叶子 LogFloatCap / LogFloatShares 作分桶键;库里 0 / 5598 条用过任何一个日频叶子(grep
+    核对)。
+
+    (d) 与 head 1 的区别:head 1 与已知族 rho -0.9,是水平;这里的种子除以基线、对基线回归或在水平分桶内标准化,水平不在,所以秩相关表上与三个
+    head 预计 < 0.5,与流动性 / 市值控制预计 < 0.5。
+
+
+    为什么样本外还会在:读的是事件(放量),事件每个月都发生,不依赖某一段行情的风格;峰值窗是月度量级,换手低;5 种去水平写法同时在场,真有信号时不会只在一种写法上成立;表达式是无量纲的比值
+    / z 分数 / 回归残差,不受送转拆股的水平跳变影响(Amt 是金额,本来就不受股数影响)。最可能的失败:(1)「放量」与 20 日反转和波动控制同源(放量常伴随大涨大跌),被尺子去掉
+    —— 种子 9、10 用日内收益的符号 / 大小是为了把这块显性化,看它到底是方向还是纯放量;(2)毛超额本来就是 0,和库里一样亏在 15 bp;(3)基线在新股和长期停牌股上估不准。
+
+
+    数学检查:`log` 在 |x| <= 1e-9 时给 NaN,成交额量级在 1e6 以上,取对数安全;除数是 120 日均值或中位数,可交易股票上 > 0,停牌日是缺失不是
+    0,没有除以近零的爆点;cross_zscore 对窗口内逐位不变返回 0、不是无穷;所有窗口只回看含当天,t 日收盘后可得、t+1 才交易,无前视;没有用
+    ts_rank / cross_rank(日轴),不碰 nanrank_last 把缺失当 0 的行为;`ts_skew`、`cross_*` 在窗口有效点很少时(新股)估计噪声大,热身期不到训练段的
+    9%,不主导排序;种子在合成立方体(70 只 × 300 日 × 241 分钟,含停牌与未上市)上全部能算,覆盖 97% 到 98%,每日取值几乎全不相同,无
+    inf(只是检查运行时,不是分数)。
+
+    '
+  inspired_by: B100 里 head 1 的拆解:`ts_max(day_sum(Amt), 50)` 是唯一方向为 +1 且分数最高(-0.50)的一行,外层平滑窗
+    100 / 50 / 25 对应 -1.36 / -0.80 / -0.34,说明有内容的是近一个月的放量事件;但它与已知族 rho -0.93,所以要把水平在表达式里去掉再读
+  literature:
+  - source: Gervais, Kaniel, Mingelgrin, The High-Volume Return Premium, Journal of
+      Finance 56(3)
+    year: '2001'
+  - source: Barber, Odean, All That Glitters (attention and news), Review of Financial
+      Studies 21(2)
+    year: '2008'
+  seeds:
+  - sub(log(ts_max(day_sum(Amt), 50)), log(cross_mean(day_sum(Amt), 120)))
+  - div(ts_max(day_sum(Amt), 25), cross_med(day_sum(Amt), 120))
+  - ts_max(cross_zscore(log(day_sum(Amt)), 120), 25)
+  - cross_mean(cross_zscore(log(day_sum(Amt)), 120), 20)
+  - cross_tail_mean_q75(div(day_sum(Amt), cross_mean(day_sum(Amt), 120)), 30)
+  - cs_regres(ts_max(log(day_sum(Amt)), 50), cross_mean(log(day_sum(Amt)), 120))
+  - cs_bucket_zscore(ts_max(day_sum(Amt), 50), cross_mean(day_sum(Amt), 30))
+  - cs_bucket_zscore(ts_decay_linear(div(ts_max(day_sum(Amt), 50), cross_mean(day_sum(Amt),
+    120)), 25), LogFloatCap)
+  - cross_mean(mul(cross_zscore(log(day_sum(Amt)), 120), sign(day_sum(Ret))), 20)
+  - cross_sum(mul(cross_zscore(log(day_sum(Amt)), 120), day_sum(Ret)), 20)
+  - div(cross_mean(day_sum(Amt), 10), cross_mean(day_sum(Amt), 120))
+  - cross_quantile_q75(cross_zscore(log(day_sum(Amt)), 120), 40)
+  - cross_ema(div(day_sum(Amt), cross_mean(day_sum(Amt), 120)), 10)
+  - cross_zscore(cross_ema(log(day_sum(Amt)), 5), 120)
+  - cs_bucket_demean(cross_zscore(cross_max(log(day_sum(Amt)), 25), 120), sub(LogFloatCap,
+    LogFloatShares))
+  - ts_skew(log(day_sum(Amt)), 60)
+- type: N
+  hypothesis: '机制:成交额序列与价格变动之间的关系(量能不能推动价格),以及「没有被价格解释的成交」,读成无量纲的相关、弹性、回归残差。
+
+
+    本批(B100)里的缺口:32 条成员全是成交额的单变量时间序列(水平、平滑、峰值、波动),没有一条把当天的成交额与当天的价格变动联系起来(只有手写库 L#289
+    / L#321 两条把 Amt 与 Volume 相除)。证据:
+
+    (1) 水平版全部是控制的化身:`day_sum(Amt)` 与已知族 rho 0.89,平滑版 0.98。把 Amt 换成 Volume(股数 = 金额
+    ÷ 名义价格)rho 降到 0.58 到 0.72;不带峰值的水平版分数从 -3.6 抬到 -1.4,带峰值的 head 1 却从 -0.80 掉到 -1.78,方向
+    -1:股数版只是少了一点与控制共享的水平,多出来的是名义股价,不是 alpha。
+
+    (2) head 2(`ts_min(inv(ts_std(两层平滑的 Amt, 10)), 10)`)是整个快照里 valid 最接近 0 的一个(-0.10,train
+    -1.26),拆解里去掉第二层平滑后 -0.71 / -0.32:读的是成交额水平的「漂移速度」。但它没有说这种漂移是不是伴随价格变动 —— 一次放量如果没有推动价格,说明有人在另一侧吸收;推动了价格,说明是方向性的订单流。这一对关系库里没人读过。
+
+
+    为什么会有 alpha(三条链,各自对应一组种子):
+
+    (a) 投机性成交与对冲性成交(Llorente、Michaely、Saar 与 Wang 2002):放量之后收益延续的股票,放的是知情 / 投机性成交;放量之后收益反转的股票,放的是对冲
+    / 流动性成交。做法是看「昨天的收益 × 昨天的相对成交量」能否预测今天的收益(种子 1、2、12、16)。这是个股层面的慢变特征(参与者构成),估计窗口
+    120 日。
+
+    (b) 没有被价格解释的成交(Karpoff 1987 的量价关系综述,威科夫的「努力与结果」):对 log 成交额与 log 日内波动做 60 日滚动回归,取最新一天的残差,再做
+    10 到 30 日均值。残差为正 = 成交很大但价格没怎么动,可能是知情方在悄悄吸收或派发,乘以收益符号(种子 7)区分吸筹与派发。滚动回归的截距吸收了各股自己的水平,所以残差与流动性
+    / 市值水平正交(种子 5、6、7、8、13、14)。
+
+    (c) 价格冲击弹性(Kyle 1985 的 lambda、Amihud 2002 的非流动性):log 波动对 log 成交额的 60 日回归斜率(种子
+    4、10)、波动与相对成交量的相关(种子 3)、量与收益的相关(种子 11)、对数 Amihud 残差(种子 9,先对 Amt 水平做截面回归,去掉与流动性控制共享的水平)。斜率
+    / 相关都无量纲,不是 Amt 的水平。
+
+
+    算子怎样实现:`cross_regres(x, y, d)` 是 y 对 x 的 d 日滚动回归在当天的残差,x 在前;`cross_regbeta(x,
+    y, d)` 是斜率;`cross_corr` 是滚动相关;`cross_zscore(log(day_sum(Amt)), 60)` 是当天成交额对自己
+    60 日历史的 z 分数;`day_sum(Ret)` 是当天分钟收益之和(盘中收益),`day_std(Ret)` 是当天分钟收益的标准差(日内波动);`day_wmean(Ret,
+    Amt)` 是成交额加权的分钟收益(种子 15,资金实际经历的收益 与放量的关系);`cross_delay(·, 1)` 把昨天的值放到今天对齐。种子 10、14
+    再按流通市值 / 流动性十分位分桶(cs_bucket_zscore / cs_bucket_demean),把残余的规模差去掉。
+
+
+    和库里已有的、和 head 的不同:
+
+    (a) 库里成交额基本只出现在单变量滤波里;我读过的库内 11 条在日度和上做 cross_corr / cross_regbeta / cross_regres
+    的成员,都是随机拼出的价格与量混合(例如 `cross_corr(day_sum(Close), day_max(High), 10)`),没有一条是成交额对收益
+    / 波动的滚动关系或回归残差。16 个种子的骨架逐个与 struct/members.csv 的 4077 个不同骨架对照,全部不在其中。
+
+    (b) 与 head 1 / 2 / 3(成交额水平的平滑 / 峰值 / 波动 / 股数水平)的区别:这里读的是两个量之间的关系或回归残差,不含水平,所以与它们的秩相关预计
+    < 0.3。
+
+    (c) 与波动控制(`cross_mean(day_std(Ret), 20)`)的区别:弹性、相关和残差都对波动做了条件化或配对,预计与波动控制的秩相关
+    < 0.5;如果对波动控制 >= 0.8 会被相关度表划掉,不影响其余种子。
+
+    (d) 与本波别的流不重复:2001 号流的 N 位读分钟级的放量价格签名;这里是日级的量价关系。
+
+
+    为什么样本外还会在:(a) 参与者构成与市场深度是慢变量(以年计),窗口 60 到 120 日下排名稳定,换手低,分数由毛超额决定;(b) 全是无量纲统计量(相关、斜率、z
+    分数、残差),不依赖某段行情的方向,也不受送转拆股影响;(c) 三条链互相独立,至少两条在文献里有样本外的事实;(d) 水平被滚动回归的截距或分桶吸收,尺子的
+    7 个控制 + 它们的平方三次方吃掉的部分很小,剩下的就是这个信号本身。最可能的失败:(1)日度收益噪声大,60 到 120 日的相关 / 斜率估得太吵(种子
+    1、2、12、16 最容易);(2)弹性与相关类是波动控制或 20 日反转的另一种写法(放量与大涨大跌同时出现),表上相关偏高;(3)毛超额为 0,15 bp
+    吃掉所有。
+
+
+    数学检查:`log(day_std(Ret))` 在一字板 / 停牌日 day_std = 0,log 在 |x| <= 1e-9 时给 NaN,这些日子在回归里被配对剔除,不是
+    -inf;cross_regbeta 在自变量方差 <= 1e-9 时给 NaN;`cross_corr` 在有效点不足 2 个时返回 0(已知缺陷),只影响新股与长停牌股和训练开头
+    120 日(不到训练段的 9%),不主导排序;没有用 ts_rank / cross_rank(日轴);cross_delay(·, 1) 的天数为正,今天只用昨天及以前,无前视;所有窗口只回看含当天,t
+    日收盘后可得、t+1 才交易;没有除以近零的量(除数都是对数差或 z 分数的标准差窗口,无逐位相同时 cross_zscore 返回 0);种子在合成立方体(70
+    只 × 300 日 × 241 分钟,含停牌与未上市)上全部能算,覆盖 97% 到 98%,每日取值几乎全不相同,无 inf(只是检查运行时,不是分数)。
+
+    '
+  inspired_by: B100:32 条成员只读成交额的单变量序列,没有一条把成交额与价格变动联系起来;head 2 的 valid -0.10(快照里最接近
+    0)说明成交额水平的「漂移速度」有一点东西,但它没说漂移是否伴随价格;head 3 里 Amt 与 Volume 互换时 rho 0.92 对 0.67,说明成交额与成交股数的差(名义价格)之外,量与价的关系是水平里没有的信息
+  literature:
+  - source: Llorente, Michaely, Saar, Wang, Dynamic Volume-Return Relation of Individual
+      Stocks, Review of Financial Studies 15(4)
+    year: '2002'
+  - source: Karpoff, The Relation between Price Changes and Trading Volume (survey),
+      Journal of Financial and Quantitative Analysis 22(1)
+    year: '1987'
+  - source: Amihud, Illiquidity and Stock Returns, Journal of Financial Markets 5(1)
+    year: '2002'
+  - source: Kyle, Continuous Auctions and Insider Trading, Econometrica 53(6)
+    year: '1985'
+  seeds:
+  - cross_corr(cross_delay(mul(day_sum(Ret), cross_zscore(log(day_sum(Amt)), 60)),
+    1), day_sum(Ret), 120)
+  - cross_corr(cross_zscore(log(day_sum(Amt)), 60), abs_(day_sum(Ret)), 60)
+  - cross_regbeta(log(day_sum(Amt)), log(day_std(Ret)), 60)
+  - cross_mean(cross_regres(log(day_std(Ret)), log(day_sum(Amt)), 60), 10)
+  - cross_mean(cross_regres(log(day_sum(Amt)), log(day_std(Ret)), 60), 10)
+  - cross_mean(mul(cross_regres(log(day_std(Ret)), log(day_sum(Amt)), 60), sign(day_sum(Ret))),
+    20)
+  - cross_stddev(cross_regres(log(day_std(Ret)), log(day_sum(Amt)), 60), 60)
+  - cross_corr(log(day_sum(Amt)), day_sum(Ret), 60)
+  - cross_corr(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), day_sum(Ret),
+    120)
+  - cross_mean(cross_regres(log(day_std(Ret)), log(day_sum(Amt)), 120), 30)
+  - cs_bucket_demean(cross_mean(cross_regres(log(day_std(Ret)), log(day_sum(Amt)),
+    60), 20), cross_mean(day_sum(Amt), 30))
+  - cross_regbeta(cross_zscore(log(day_sum(Amt)), 60), day_wmean(Ret, Amt), 60)
+  - cross_regbeta(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), day_sum(Ret),
+    120)
+R:
+- head: ts_decay_linear(ts_max(day_sum(Amt), 50), 50)
+  why: 拆解里 ts_max 是必要部件(去掉后 -3.18,必要性 +2.38),外层 decay 越长越差(100 / 50 / 25 对应 -1.36
+    / -0.80 / -0.34),但无论窗口多少 ts_max(day_sum(Amt), 50) 与已知族 rho 都在 -0.85 到 -0.93:烂的部件是没去掉的成交额水平。变体把水平在表达式里去掉(除以
+    / 减去 120 日基线、对基线回归、在流动性或市值十分位内标准化、对自己历史取 z 分数),外层 decay 取拆解里最好的 25。
+  variants:
+  - div(ts_decay_linear(ts_max(day_sum(Amt), 50), 25), cross_mean(day_sum(Amt), 120))
+  - ts_decay_linear(sub(log(ts_max(day_sum(Amt), 50)), log(cross_mean(day_sum(Amt),
+    120))), 25)
+  - cs_bucket_zscore(ts_decay_linear(ts_max(day_sum(Amt), 50), 25), cross_mean(day_sum(Amt),
+    30))
+  - cs_regres(ts_decay_linear(ts_max(log(day_sum(Amt)), 50), 25), cross_mean(log(day_sum(Amt)),
+    30))
+  - cs_bucket_zscore(ts_decay_linear(ts_max(day_sum(Amt), 50), 25), LogFloatCap)
+  - ts_decay_linear(ts_max(cross_zscore(log(day_sum(Amt)), 120), 50), 25)
+- head: ts_min(inv(ts_std(ts_decay_linear(ts_decay_linear(day_sum(Amt), 50), 50),
+    10)), 10)
+  why: 拆解里去掉第二层 ts_decay_linear 是唯一变好的改动(-1.26 到 -0.71,必要性 -0.55,valid -0.32),所以第二层平滑是烂部件;其余部件(ts_std
+    10 日、外层 ts_min)必要,但 ts_std 读的是平滑后成交额的绝对波动,与水平成正比,已知族 rho -0.72 到 -0.88。变体保留 10
+    日波动 + 外层极值,把绝对波动换成相对波动(对数的标准差、除以自己的水平、在流动性十分位内标准化),并去掉 inv(inv 与 ts_min 合起来等于
+    ts_max 的单调改写,`ts_max(ts_std(...), 10)` 排序相同、但不会在 std = 0 的热身日给 inf)。
+  variants:
+  - ts_max(ts_std(log(ts_decay_linear(day_sum(Amt), 50)), 10), 10)
+  - ts_max(div(ts_std(ts_decay_linear(day_sum(Amt), 50), 10), ts_decay_linear(day_sum(Amt),
+    50)), 10)
+  - ts_max(ts_std(log(ts_decay_linear(ts_decay_linear(day_sum(Amt), 50), 50)), 10),
+    10)
+  - cs_bucket_zscore(ts_max(ts_std(ts_decay_linear(day_sum(Amt), 50), 10), 10), cross_mean(day_sum(Amt),
+    30))
+- head: ts_decay_linear(day_sum(Volume), 5)
+  why: 把 Volume 换成 Amt 后 rho 升到 0.92、分数掉到 -3.61;Volume 版 rho 0.67 到 0.71 但分数 -1.34
+    到 -1.54,方向 -1。Volume = Amt ÷ 名义价格,所以 Volume 相对 Amt 多出来的只有名义股价这一块(和流通股本这一块)。烂的部件是和
+    Amt 共享的水平(那部分被流动性控制吃掉了)。变体把共享的水平去掉:对 Amt 做截面回归取残差、在流动性十分位内标准化、或换成真正的换手率 log(成交股数
+    ÷ 流通股本)。
+  variants:
+  - cs_regres(ts_decay_linear(log(day_sum(Volume)), 5), ts_decay_linear(log(day_sum(Amt)),
+    5))
+  - cs_bucket_zscore(ts_decay_linear(day_sum(Volume), 5), cross_mean(day_sum(Amt),
+    30))
+  - sub(ts_decay_linear(log(day_sum(Volume)), 5), LogFloatShares)
+audit:
+  attempts: 1
+  file: audit_1.yaml

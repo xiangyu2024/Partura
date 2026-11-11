@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [3, 5, 7, 8, 9]
+    reasons: '核心 day_last(Volume) 是 3 个 head 共有的子树(prods2019Pr2a_Ea 三个 head 都含; core_cards/0 也是它), 且 core 与控制的 |ρ| 为 liq 0.56、vol 0.19、rev 0.18、known 0.60、size 0.46, 全部 < 0.8, 核心通过。表自动划掉 3、5、7、8、9 (与 head 的原始 |ρ| 为 0.87、0.87、0.93、0.81、0.81, 均 ≥ 0.7; 这五个就是 day_last(Volume) 作为 x 的裸 regbeta 与其换写法)。保留 9 个: 1 mul(day_last(Volume), day_last(Ret)) 与所有 head |ρ| 0.06、与控制 ≤ 0.07, 是收盘竞价的带方向订单流, 真正新; 2 收盘量份额 div(day_last(Volume), day_sum(Volume)) |ρ| 0.29、残差 0.34, 去掉了水平, 分母 day_sum 包含 day_last 且成交量非负, 不会出现 x/0 得 inf 的情形 (div 是裸 torch.divide, 这一点已核); 4 隔夜跳空 (用 t-1 收盘、t 开盘, 与 head 0.11, 换了 y, size 0.51 是最高的控制相关但 < 0.8 且机制不是 size 的换写法); 10 cross_mean(day_last(Volume), 20) |ρ| 0.38; 6 的 EMA 版本 0.65、11 的去水平版本 0.68、12 反向回归 0.62、13 协方差版 0.63、14 偏离 20 日均值 0.69 这几个与 head 较近, 但都是不同的归一化或不同的统计量, 没有低于 0.7 的理由划掉; 11 的分母是 60 日收盘量均值 (裸 div, 无 EPS), 对流动性极差票的近零分母会爆, 但 beta 是逐票时序回归, 爆点只影响该票, 不是截面主导, 保留。12 的 cross_regbeta 有 var_x > EPS 保护 (已核 rolling_ols)。无前视: cross_delay 把 x 推后一天, 4 的 y 用 t-1 收盘也合法。创新度给 4 而不是 5, 因为核心本身不新 (已在三个 head 里), 新意只在外围。如果它有 alpha, 最可能来自收盘集合竞价量 (指数调仓 / 基金净值对齐的成交) 在次日隔夜或盘中的兑现方向与速度; 风险是 slope 的 x 是水平量, 可能把 liq/known 的 1/尺度交互重新带进来 (liq 0.56、known 0.60), 尺子只去掉了控制的 1/2/3 次残差, 这一点要在结果里单独检验。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '这是 N 位。相关度表里 13 个种子与 12 个 head 的原始 |ρ| 中 11 个 ≤ 0.13, 最高的是 8 (0.59, cross_regbeta(cross_delay(mul(day_centroid(Amt), day_sum(Amt)),1),...)) 与 11 (0.53, mul(day_gini(Volume), day_sum(Amt))); 与控制 |ρ| 最高 0.25 (8 与 liq), 没有 ≥ 0.8, 没有表自动划掉的种子。新意来自算子本身: day_signed_ratio、day_centroid、day_gini、day_topw_mean、day_wmean 不在任何 head 的 x 里, 而且在 loc.json 的 307 个候选池里一次都没出现 (已 grep r1-r3 的 loc.json, 0 次命中); 我没有在 5583 条全库上核对 (未读库), 只按候选池和 head 的相关度给分。合理度给 4: 所有种子都是 cross_delay(·,1) 之后再回归, 没有前视; day_signed_ratio 的分母在全天成交额为 0 时由 den>0 掩码给 NaN, 不是 inf; day_centroid、day_gini、day_wmean 都有 tot>0 或 sw>0 掩码; cross_regbeta 的 var_x > EPS 已核。机制清楚: 净买压 (up-minute 成交额份额减去 down-minute) 与时间重心, 对次日收益的斜率读作 续涨 (知情 / 趋势资金) 或 回吐 (流动性冲击), 与 Campbell-Grossman-Wang 的成交量条件反转一致。注意 3 点但不构成挡的理由: (1) 种子 10 (day_gini(Volume)) 与 11 (gini × Amt) 是 块状度 度量, 与 N 位 idea 里 "而不是成交量的块状度" 的表述不一致, 但 §3 规定种子只能因数学问题或重复划掉, 所以保留, 请 PI 知悉; (2) 种子 8 与 11 的 x 带 Amt / Volume 水平, 可能把 liq 的符号 × 尺度交互带进来 (liq 0.25 / 0.24), 与 slot a 同一风险; (3) 种子 12 的 day_topw_mean(Ret, Volume) 在 90% 分位成交为 0 的票上, thr=0 使全部分钟入选, 退化为 day_mean(Ret), 这类票占比小, 不是截面主导的定义坏掉, 不划。如果它有 alpha, 最可能来自: 日内资金方向 (day_signed_ratio) 与时间位置 (day_centroid) 的慢变参与者结构, 在 241 日窗口内的次日续涨 / 回吐关系, 而不是 High x skew 那一长串。'
+R: []
+summary: '两个任务位都通过: a (E, 核心 day_last(Volume)) 创新 4 合理 4, 表划掉 3、5、7、8、9 共五个, 剩 9 个; b (N, 日内净买压 / 时间重心) 创新 4 合理 4, 无划掉。计划里没有 R 组。主要留意: a 的 x 是水平量, 可能把 liq / known 的尺度交互带进来; b 的种子 10、11 是块状度度量, 与 idea 文字不完全一致但不是挡的理由。'

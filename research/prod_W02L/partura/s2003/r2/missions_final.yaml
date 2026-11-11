@@ -1,0 +1,178 @@
+seed: 2003
+round: 2
+slots:
+- type: E
+  core: day_q_stat_std(Vwap)
+  hypothesis: '机制。核心 Q = day_q_stat_std(Vwap)(当天 241 根分钟 Vwap 价格水平序列的 Ljung-Box Q
+    统计量在 1–20 阶上的标准差;第 1 轮我读源码并用合成价格路径核实过:无量纲,价格乘 3、波动放大 10 倍都不变,读的是日内低频摆动 / 分钟噪声的比值,即价格路径的持续性,不是波动率)。本位不读
+    Q 的水平,读它与同一天成交量序列特征的时间序列耦合:cross_corr(Q, 成交量路径统计量, d) = 这只股票最近 d 个交易日里,价格路径越平滑
+    / 持续的日子,成交量路径是否也越规则 / 越成团。理论依据是量–价动态区分信息性交易与对冲 / 噪声交易(Llorente-Michaely-Saar-Wang
+    2002):机构分批执行时价格单边平滑、成交均匀规则,耦合强;噪声交易时价格平滑与成交脉冲无关,耦合弱。耦合是个股的慢变特质(参与者构成),相关系数无量纲,与流动性、波动、反转、市值的水平无关,不是已知成交额族的换写法。
+
+
+    这一轮的依据是第 1 轮 E 位的读数,不是猜测:69 个已评分候选里最好的 5 个全是 cross_corr(Q, X, d) 一类:cross_corr(Q,
+    day_autocorr_n1(Volume), 60) 为 −0.90(train −0.90 / valid −0.77,方向 −1,半衰期 5)、cross_corr(Q,
+    day_q_stat_std(Volume), 15) 为 −0.98、嵌套相关 −1.34、cross_corr(Q, day_q_stat_std(Volume),
+    60) 为 −1.64(train −0.83 / valid −1.64)、cross_corr(Q, day_sum(Ret), 60) 为 −1.78。第
+    1 轮我押的「分桶 / 残差」类一个都没进前 5(桶边界跳变增加换手;同一波 2009 流量出过 cs_bucket_demean 变体 −2.6 ~ −5.2,与此一致)。相关类
+    −0.9 ~ −1.8 远好于该种子其余读法(−2 以下),说明里面有毛信号,但被成本吃掉:15–60 日窗口的相关系数标准误约 1/√d = 0.13 ~
+    0.26,排名每天抖动,而 15 bp 成本是分数里最大的一项。同一波里 2009 流量出同一规律:种子都是 cross_mean(·, 20),GP 自己拉到
+    241 才得到 −0.03,另一个式子 ts_max(day_durbin_watson(Close), d) 的 d = 20 → 40 → 80 为 −2.73
+    → −1.77 → −0.92,「慢」才承重。
+
+
+    本轮的做法:外围一律换成「慢化 + 换伙伴」,与第 1 轮种子里出现过的外围(cross_zscore、cross_ema 套 z 分数、短长均值差、裸 cross_corr、cs_bucket_zscore
+    / cs_regres、cross_stddev、cross_tail_mean_q25)都不同。(1) 种子 1–6、9、10:短窗口相关(15–60 日)外面再套
+    60–241 日的 cross_mean / cross_ema / cross_decay_linear / cross_med,有效样本 > 200 日,换手明显下降,个股的耦合读数变成稳定特质;cross_med
+    对相关系数的偶发 ±1(有效对数很少时)稳健。(2) 换伙伴(种子 7、8、13–16):day_ar1_coefficient(Volume) 与 day_durbin_watson(Volume)(成交的自相关
+    / 粗糙度)、day_gini(Volume)(成交集中度)、day_centroid(Volume)(成交重心在一天里的位置)、day_q_stat_std(Ret)(收益序列的自相关结构)、|日收益|(价格路径平滑与波动幅度的耦合)。这些伙伴在库里
+    5583 条里读法各不相同:day_gini、day_centroid 出现 0 次,cross_ema 出现 0 次,骨架我逐个核对过,16 个种子的骨架都不在两库里。(3)
+    种子 10:前一日的 Q 与当日成交特征的超前滞后相关(ts_delay 取前一交易日);种子 11:快耦合(半衰期 30)减慢耦合(半衰期 241),读「耦合近期增强
+    / 减弱」;种子 12:两个伙伴的耦合相加,压低单一伙伴的噪声。
+
+
+    为什么和已有的不同:三个 head 读的是尾盘分钟的量(Hurst)和 Q 的水平;库里含 Q 的 46 条绝大多数是水平类,唯一读耦合的一条是 signedpower(cross_quantile_q75(cross_corr(day_q_stat_std(High),
+    day_skew(Vwap), 10), 10)),价格叶子、伙伴、外围都不同。本位的对象是 Q(Vwap) 与成交特征之间的滚动相关再做慢平滑,不是任何一个量的水平,与
+    head 的日度秩相关预计很低(第 1 轮同类种子对 head 的 |ρ| ≤ 0.27,与 5 个控制的 |ρ| ≤ 0.37)。
+
+
+    为什么样本外还会在:参与者构成(机构分批执行 vs 散户噪声交易)是慢变的结构性属性,不依赖某一段行情;种子都套 60–241 日的平滑,换手低,风险主要是
+    valid 段的体制切换(第 1 轮 60 日窗口 train −0.83 / valid −1.64,15 日窗口两段接近,说明窗口越长越要看两段是否一致,我预期
+    day_autocorr_n1 一类伙伴比 Q(Volume) 更稳)。
+
+
+    数学检查:cross_* 全部是日轴的因果滚动(窗口含当天,当天收盘后可得,t+1 交易),ts_delay 取前一交易日;没有 ts_rank / cross_rank
+    / in_rank_rolling,不触发 nanrank_last 的停牌记 0 问题。cross_corr 按源码在窗口内有效对数 ≤ 1、或两列之一是常数时记
+    0(分母加了 EPS,不是 NaN,不会出现 inf),恰为 2 对时给 ±1,只影响新上市 / 刚复牌 / 长期停牌的少数股票日;停牌期的 0 会被外层均值带进去,把长期停牌的票拉向截面中部,这是已知的小偏差,不主导。没有除法、没有
+    log,没有除以近零的量。cross_mean / cross_ema 在前 d 天是扩张窗口(NaN 左填充,取可用日),不是 NaN,头 241 天(约
+    train 的 15%)读数噪声较大但有定义。Q 在一字板日为 0(常数路径),不是 NaN,会被均值类外围带进少量涨跌停日。'
+  literature:
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 量与后续收益自相关的耦合区分信息性交易与对冲性交易;这里把「耦合」换成价格路径持续性 Q 与成交路径统计量的滚动相关,不做收益自相关回归
+  - title: Trading volume and cross-autocorrelations in stock returns
+    authors: Tarun Chordia, Bhaskaran Swaminathan
+    year: '2000'
+    treatment: 成交量把信息扩散速度分层;这里只借「成交特征与价格延续性的关系是个股特质」这一点,没有用跨股票领先滞后
+  seeds:
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_autocorr_n1(Volume), 30), 120)
+  - cross_ema(cross_corr(day_q_stat_std(Vwap), day_autocorr_n1(Volume), 60), 40)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 15), 120)
+  - cross_ema(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 20), 60)
+  - cross_decay_linear(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 30),
+    90)
+  - cross_med(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 20), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_ar1_coefficient(Volume), 30),
+    120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_durbin_watson(Volume), 30), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_sum(Ret), 30), 241)
+  - cross_ema(cross_corr(ts_delay(day_q_stat_std(Vwap), 1), day_q_stat_std(Volume),
+    30), 60)
+  - sub(cross_ema(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 15), 30),
+    cross_ema(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 15), 241))
+  - cross_mean(add(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Volume), 20), cross_corr(day_q_stat_std(Vwap),
+    day_autocorr_n1(Volume), 20)), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_gini(Volume), 30), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_centroid(Volume), 30), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), day_q_stat_std(Ret), 30), 120)
+  - cross_mean(cross_corr(day_q_stat_std(Vwap), abs_(day_sum(Ret)), 60), 120)
+- type: N
+  hypothesis: '机制。本位读股本结构与供给压力。两个库 5583 条表达式里 6 个日频字段(LogFloatCap、LogTotalCap、LogFloatShares、LimitWidth、BoardCode、ListAge)一次都没有出现(我对
+    members.csv 的表达式逐个字段计数,全是 0),日频字段只出现在尺子的控制里(LogFloatCap 的市值水平);所以「股本结构的变化与限售占比」这个维度,两个库和由它们合成的两个冠军都没有读过。数据:docs/steering_and_daily_fields.md
+    §1.4,FloatShares = QMT daily_capital 的 circulating_capital(流通股数,只在解禁、增发、送转、回购时才变),LogTotalCap
+    − LogFloatCap = log(总股本 / 流通股本)(两个市值用同一天的同一个价格,价格相消),即限售股占比的对数。
+
+
+    子假设都有文献,机制说得清楚。(a) 解禁压力:限售股占比高 = 未来待解禁的供给大,股价在解禁前后走弱(Field-Hanka 2001, IPO lockup
+    expirations);种子 1、2(2 是对流通市值取截面残差,剥掉「小盘股限售占比高」的混杂)。(b) 已发生的供给扩张:过去 60–241 日流通股本
+    / 总股本的增长(解禁、增发、送转、期权行权)对应股票发行异象:发行多的公司后续收益低(Loughran-Ritter 1995, Pontiff-Woodgate
+    2008);种子 3–8、11,其中 5、6 只看流通股本,7、8、11 看总股本(总股本 = 限售占比对数 + 流通股本对数,代数在种子里直接写出来)。(c)
+    事件频率与累计变动:过去 241 日流通股本发生变动的天数占比(sign 取 −1/0/1,abs 后取均值)、每日变动幅度绝对值累加,种子 9、10。(d)
+    尾盘成交强度的按流通盘归一:批里 B007 的承重部件是尾盘 1 分钟成交量 day_last(Volume)(收盘集合竞价,被动 / 机构的交易窗口);把它从「股数」换成「占流通股本的比例」(log(尾盘量)
+    − LogFloatShares,单位换算只差一个常数,排名不受影响),慢均值读「这只股票收盘集合竞价的参与强度」,种子 12、13。
+
+
+    为什么和已有的不同:没有任何一条库表达式读股本结构;尺子只去掉了市值水平(LogFloatCap 的 1/2/3 次方),限售占比 = 总股本 / 流通股本,不是市值水平本身(种子
+    2 与种子 11 还对 LogFloatCap 取了截面残差)。head 都是 Hurst(尾盘量)与 day_max(Ret),日度秩相关预计接近 0。
+
+
+    为什么样本外还会在:解禁日程与发行都是规则驱动、公开的,每年新一批上市公司进入解禁周期,供给压力是结构性的;全部种子是慢变量(换手近零,15 bp 成本几乎不吃分数,分数
+    ≈ 毛超额),这是 2009 流里最好读数(−0.03)与 R 里 d = 20 → 80 单调变好的共同形状。风险:(1) 体制:2024 年起减持新规、IPO
+    节奏放缓会改变解禁的影响;(2) 并列:多数股票在窗口内流通股本没变,cross_delta 类种子在 0 处有大量并列,并列靠股票列序打破,携带板块信息,这不是数学问题但会让排名在
+    0 附近带板块倾斜,所以我同时放了连续变量的版本(种子 1、2、12、13);(3) 与市值相关:限售占比与市值(小盘 / 次新)有相关,预计与 LogFloatCap
+    控制的 |ρ| 在 0.2 ~ 0.4,尺子去掉线性 / U 形 / S 形部分。
+
+
+    数学检查:cross_delta(x, d) = x[t] − x[t−d],因果;前 d 天为 NaN(种子 3、5、7、11 为前 241 天,约占 train
+    的 15%,种子 4 为前 60 天)。没有除法;只有 log(day_last(Volume)),零成交为 NaN(log 对 |x| ≤ EPS 返回
+    NaN),不会给 inf。sign / abs_ 返回浮点(没有用 is_gt,避免整型张量在滚动窗口里填 NaN 出错)。LogFloatShares 在
+    float64 里取 log 后降 float32,变动日精度 ~1e-6,足以分辨解禁 / 增发(幅度通常 > 1%);未变动时相邻两天逐位相同,差为精确
+    0,没有噪声。FloatShares 覆盖率由 build_daily_fields.py 的 --min-coverage 0.5 保证,缺失为 NaN
+    不影响其他股票的截面。无前视:t 日的股本变动只在 t 日及之后进入窗口。'
+  inspired_by: B007:共性表里 day_last(Volume) 富集 +0.94(p 0.005),R 拆解里承重的是尾盘量的 Hurst(去掉
+    Hurst 掉 0.42),尾盘 1 分钟是收盘集合竞价,是被动 / 机构的窗口,指向「谁在持有」而不是散户;B008:批内唯一不在冠军族的成员 pow_2(sigmoid(sigmoid(day_max(Vwap))))
+    原始净夏普 1.50、换手 0.014,另外 10 条 day_max(Ret)(换手 0.67、原始净夏普 −4.9)全是快的、全在冠军里 —— 便宜且可能不被冠军覆盖的
+    alpha 只会在慢变的结构性属性里,而库里没有任何一条读股本结构。
+  literature:
+  - title: The expiration of IPO share lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: '2001'
+    treatment: 解禁前后收益与成交异动;这里不做事件研究,只用限售占比和已发生的流通股本变动当慢变量
+  - title: The new issues puzzle
+    authors: Tim Loughran, Jay R. Ritter
+    year: '1995'
+    treatment: 发行后长期低收益;这里用流通 / 总股本的 60–241 日变化当「发行强度」
+  - title: Share issuance and cross-sectional returns
+    authors: Jeffrey Pontiff, Artemiza Woodgate
+    year: '2008'
+    treatment: 净发行量是横截面收益的稳健预测量;这里用总股本对数的变化(含送转)当净发行代理
+  seeds:
+  - sub(LogTotalCap, LogFloatCap)
+  - cs_regres(sub(LogTotalCap, LogFloatCap), LogFloatCap)
+  - cross_delta(sub(LogTotalCap, LogFloatCap), 241)
+  - cross_delta(sub(LogTotalCap, LogFloatCap), 60)
+  - cross_delta(LogFloatShares, 241)
+  - cross_delta(LogFloatShares, 120)
+  - cross_delta(add(sub(LogTotalCap, LogFloatCap), LogFloatShares), 241)
+  - cross_delta(add(sub(LogTotalCap, LogFloatCap), LogFloatShares), 120)
+  - cross_mean(abs_(sign(cross_delta(LogFloatShares, 1))), 241)
+  - cross_sum(abs_(cross_delta(LogFloatShares, 1)), 241)
+  - cs_regres(cross_delta(add(sub(LogTotalCap, LogFloatCap), LogFloatShares), 241),
+    LogFloatCap)
+  - cross_mean(sub(log(day_last(Volume)), LogFloatShares), 241)
+  - cross_ema(sub(log(day_last(Volume)), LogFloatShares), 60)
+R:
+- head: ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 25)
+  why: 烂部件有三处,都有依据。(1) 外层窗口过短:拆解表里 ts_mean@25→50 为 +0.18(−1.20 → −1.01),单调变好,另一个流(2009)量出同一规律:窗口越长分数越好,最可能是换手
+    / 成本,所以把窗口推到 80 / 120 / 241 并试 cross_ema(半衰期 60)。(2) Hurst 窗口:第 1 轮 R 里 Hurst
+    窗口 40 的变体 valid 塌到 −3.36(train −1.56),窗口 20 稳定;试 15 与 30(外层 120)看稳定区间。(3) 分母 day_max(Low):拆解里去掉它只变
+    +0.09(−1.28),说明价格分母不承重而且把名义价档位带进来;换成当天总量(尾盘量占比,无量纲)与去掉分母。另外第 1 轮审计提示 ts_hurst
+    在窗口内第二老一天缺失而最老一天有值时返回 −inf,变体 9 换成 cross_hurst(不同的缺失处理)看这个伪影是否在贡献信号。
+  variants:
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 80)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 120)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)
+  - cross_ema(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 60)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 30), 120)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 15), 120)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_sum(Volume)), 20), 120)
+  - ts_mean(ts_hurst(day_last(Volume), 20), 120)
+  - ts_mean(cross_hurst(div(day_last(Volume), day_max(Low)), 20), 120)
+- head: sigmoid(sigmoid(day_max(Ret)))
+  why: B008 三个 head 是同一个信号(sigmoid 单调,排名相同):单日分钟最大收益 day_max(Ret),方向 −1,换手 0.67,train
+    −2.10 / valid −2.70。烂部件有两处。(1) 单日极值太快:一日的 max 每天大幅换位,成本吃掉毛超额;改成 60 / 120 / 241
+    日均值或 120 日中位数(稳健),看「长期彩票性」特质是否还剩东西。(2) 水平:day_max(Ret) 的水平主要是波动水平(控制之一,已被尺子剥掉);变体
+    5、6 除以当天分钟收益标准差(day_max(Ret) / day_std(Ret) ∈ [0, 约 √240 ≈ 15.5](Ret 的第 0 根恒为
+    0,所以 day_max ≥ 0;上界来自单个观测偏离均值不超过 std·√(n−1)),分母为 0 只发生在收益全 0 的日子,此时分子也为 0,得 NaN
+    不是 inf),得到无量纲的「跳跃相对波动的极端程度」,再做慢平滑。
+  variants:
+  - cross_mean(day_max(Ret), 60)
+  - cross_mean(day_max(Ret), 120)
+  - cross_mean(day_max(Ret), 241)
+  - cross_med(day_max(Ret), 120)
+  - cross_mean(div(day_max(Ret), day_std(Ret)), 120)
+  - cross_ema(div(day_max(Ret), day_std(Ret)), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

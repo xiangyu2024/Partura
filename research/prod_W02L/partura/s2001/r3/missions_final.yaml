@@ -1,0 +1,132 @@
+seed: 2001
+round: 3
+slots:
+- type: E
+  core: div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High))
+  hypothesis: '机制:核心 C = ListAge / 当日最大成交量分钟里的开高平均价(day_topw_mean(Open, High))的平方,即"上市年龄
+    ÷ 名义股价的平方"。名义股价用的是未复权价,与股票的上市历史、送转配股史绑在一起:价格低而年龄长 = 长期无送转、价格被磨低的老票;价格高而年龄短 = 新上市、高发行价。
+
+    证据(第 3 轮定位表,B003 附近的 229 个候选):含 div(ListAge, day_topw_mean(Open, *)) 一族的候选共 5
+    到 9 个,均值差 +1.0 到 +1.35,p 约 0.006,是共性表里除 Q 链外最强的一族;第 2 轮 GP 里 add(day_q_stat_std(Volume),
+    C) 一度到 train +0.66 / valid -0.04,说明 C 在 train 段有正的纯多头毛超额,valid 没有撑住,问题在外围:C 本身是"年龄
+    / 价格^2"的慢变水平,与市值控制(LogFloatCap)暴露很高,valid 里大小盘风格切换把它吃掉。
+
+    这一位要试的外围(与第 2 轮见过的"和 Q 相加"都不同):(a) 市值 / 成交额 / 名义股价分桶内标准化或回归残差,留下同样大小里"年龄 ÷ 价^2"的相对位置(种子
+    2、3、7、8、10、11、16);(b) 慢化与变化量(60 日均值、20 日对 120 日差、120 日 z 分数,种子 4、5、6),降低换手;(c)
+    与波动 / 成交额的 120 日滚动关系(种子 9、14、15),把水平差分掉,读"价格水平与活跃度、波动联动"的参与者结构;(d) 对 Q 水平的回归残差(种子
+    13、16),利用第 2 轮发现的 C 与 Q 互补部分。
+
+    为什么与已见不同:快照里含 C 的候选外围只有 add(Q, C) 与自己套 div;这里的外围是截面分桶 / 回归和滚动关系,没有一个与之相同。库里没有任何表达式用
+    ListAge 与未复权价相除(库骨架已对照),所以与 head 的秩相关应低。
+
+    为什么样本外还在:年龄与名义价是结构性的慢变量(以年计),换手低;来源是 A 股新股发行高价与长期低价股的投资者构成差异(彩票偏好、壳价值),不依赖某段行情;分桶后不再押大小盘风格。风险:C
+    是水平,valid 里可能仍与市值族共线;则不出 head,下一轮不再用这个核心。
+
+    数学检查:ListAge 为正整数(日历),分母是价格平方,价格 > 0(停牌日缺失而不是 0),无近零除法;未用 ts_rank / cross_rank;cross_*
+    只回看含当天;cs_regres(Y, X) 是 Y 对 X 的截面残差;day_topw_mean 只用当天分钟,无前视。'
+  seeds:
+  - div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High))
+  - cs_bucket_zscore(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), LogFloatCap)
+  - cs_regres(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High)),
+    LogFloatCap)
+  - cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High)),
+    60)
+  - cross_zscore(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 120)
+  - sub(cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 20), cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 120))
+  - cs_regres(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High)),
+    cross_mean(log(day_sum(Amt)), 60))
+  - cs_bucket_zscore(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), cross_mean(day_sum(Amt), 60))
+  - cs_regres(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High)),
+    cross_mean(day_std(Ret), 60))
+  - cs_bucket_demean(cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 20), sub(LogFloatCap, LogFloatShares))
+  - cs_regres(cs_regres(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), LogFloatCap), cross_mean(log(day_sum(Amt)), 120))
+  - cs_bucket_zscore(cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 20), cross_stddev(day_std(Ret), 60))
+  - cs_regres(log(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High))), cross_mean(log(day_q_stat_std(Volume)), 120))
+  - cross_corr(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open, High)),
+    day_std(Ret), 120)
+  - cross_regbeta(log(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High))), log(cross_mean(day_sum(Amt), 20)), 120)
+  - cs_regres(cross_mean(div(div(ListAge, day_topw_mean(Open, High)), day_topw_mean(Open,
+    High)), 20), cross_mean(log(day_q_stat_std(Volume)), 120))
+- type: N
+  hypothesis: '机制:信息驱动的成交聚集 vs 执行驱动的成交聚集,读的是短窗口里"成交额变动的弹性"。day_q_stat_std(Volume)
+    是当天分钟成交股数 Ljung-Box Q 的标准差(日内黏性)。cross_regbeta(log 成交额, log Q, d) 是 log Q 对 log
+    成交额的 d 日滚动回归斜率:成交额放大一倍时黏性放大多少。
+
+    灵感:第 2 轮 E 的 GP 在 Q 核心上自己长出了 cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)),
+    10),window 10 的 score -0.20(train +0.09 / valid -0.20),比同一式子 window 120 的 -0.66
+    好 0.46;而 Q 的长链水平式 (-0.4 到 -0.75) 毛超额为零。结论:Q 与成交额的关系在短窗口里比水平有用,慢窗口反而更差,与第 2 轮我自己写的"越慢越好"信念相反(第
+    2 轮 E 与 N 的种子全部是 60 到 241 日,没有一个出 head)。
+
+    做法:窗口 10 到 30 日的 cross_regbeta / cross_corr,把 Q 的水平(控制共享)差分成弹性与相关;弹性大 = 放量时成交变黏(拆单执行、大户在场),小
+    = 放量是孤立尖峰(散户事件)。变体:(1) 换自变量(Amt 的 Q、日内波动、|Ret| 的 Q);(2) 分桶 / 回归去市值(种子 9、10);(3)
+    短窗对长窗差(种子 11)与 5 日平滑(种子 12);(4) 120 日 z 分数(种子 16)检验把慢窗换成短窗后再慢化是否保留信号。
+
+    与库的不同:库里 Q 的使用都是"Q 的时序滤波"(ts_quantile / ts_var / autocorr),没有 Q 与成交额的滚动回归;第 2
+    轮 E 里只有 120 窗口的版本,骨架相同但窗口不同的候选 GP 的库禁令按骨架抽掉常数,所以此处的骨架在第 2 轮 E 的 GP 候选之外要靠外围(分桶、差、zscore)区分。
+
+    为什么样本外还在:成交额-黏性弹性读的是参与者构成对放量的反应,与市值 / 流动性水平无关(回归斜率,无量纲);短窗口使其随市场状态而更新而不是随年份漂;缺点是噪声大、换手高。预测出
+    head 概率低,主要价值是检验"短窗口是否真的好于长窗口"。
+
+    数学检查:Q 非负,日度正;log 在 0 处给 NaN 而非 -inf;cross_regbeta/corr 窗口有效对少时可能返回 0(已知缺陷,影响新股与长期停牌票,可交易掩码已排除);cross_*
+    回看含当天,无前视;cs_regres(Y, X) 是 Y 对 X 的截面残差;未用 ts_rank / cross_rank。'
+  inspired_by: B003 的 day_q_stat_std(Volume) 本体与第 2 轮 E 位 GP 自己长出的 cross_regbeta(log(day_sum(Amt)),
+    log(day_q_stat_std(Volume)), 10)(-0.20,窗口 120 的同式 -0.66),以及 ListAge 一族之外的短窗关系
+  seeds:
+  - cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 10)
+  - cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 20)
+  - cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 30)
+  - cross_corr(day_sum(Amt), day_q_stat_std(Volume), 10)
+  - cross_corr(day_sum(Amt), day_q_stat_std(Volume), 20)
+  - cross_corr(day_q_stat_std(Volume), day_std(Ret), 20)
+  - cross_corr(day_q_stat_std(Volume), day_std(Ret), 10)
+  - cross_regbeta(log(day_std(Ret)), log(day_q_stat_std(Volume)), 20)
+  - cs_bucket_zscore(cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)),
+    20), LogFloatCap)
+  - cs_regres(cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 20), cross_mean(log(day_sum(Amt)),
+    60))
+  - sub(cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 10), cross_regbeta(log(day_sum(Amt)),
+    log(day_q_stat_std(Volume)), 60))
+  - cross_mean(cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 10),
+    5)
+  - cross_corr(day_q_stat_std(Volume), day_q_stat_std(Ret), 20)
+  - cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Amt)), 20)
+  - cross_corr(day_q_stat_std(Amt), day_q_stat_std(Volume), 20)
+  - cross_zscore(cross_regbeta(log(day_sum(Amt)), log(day_q_stat_std(Volume)), 20),
+    120)
+R:
+- head: cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 40), cross_mean(log(day_sum(Amt)), 120))
+  why: 这条是本快照 R 里唯一 rho_known 为正且分数最好的 head(-0.43);拆解表里最外层窗口 40 改 80 是 -0.36(+0.07,小幅好),Volume
+    换 Amt 是 -0.58,说明窗口越长越好、Amt 叶子也有用。变体只动一个或两个部件:更长的外层窗口、Amt 叶子、回归的 Amt 窗口、再对市值 /
+    名义股价取二次残差、分桶 z。
+  variants:
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 120))
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 120), cross_mean(log(day_sum(Amt)), 120))
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Amt),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 120))
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 241))
+  - cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 60))
+  - cs_regres(cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 120)), LogFloatCap)
+  - cs_regres(cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 120)), sub(LogFloatCap,
+    LogFloatShares))
+  - cs_bucket_zscore(cs_regres(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(ts_quantile_q75(day_q_stat_std(Volume),
+    40), 40), 40), 50), 80), cross_mean(log(day_sum(Amt)), 120)), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

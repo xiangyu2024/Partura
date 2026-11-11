@@ -1,0 +1,105 @@
+seed: 2020
+round: 3
+slots:
+- type: E
+  core: day_es_ratio_lo(Close)
+  hypothesis: 核心 day_es_ratio_lo(Close) = 当天价格低于自身 5% 分位的那些分钟的均值 / 该分位,是左尾形状:当天价格路径的下探有多深、多集中(无量纲,不随价格水平变)。证据:共性表里含它的
+    38 个候选均值差 +1.68 (p<0.001),本流两个正 head(+0.79 / +0.59,train 与 valid 都 > 0.5)都把它放在
+    241 日回归的被解释端,拆解显示它的 sigmoid 层是装饰(去掉 +0.78),真正在起作用的是「昨天成交额重心(cs_demean 后)对今天左尾深度」的
+    241 日斜率。本位不再让它做回归的被解释端 + 重心这一个写法,而试它在外围的另外几种用法:(1) 左尾与右尾的耦合 / 差(day_es_ratio_hi
+    是另一个未使用的叶子算子):一年里下探与冲高是否同步,是个股的路径对称性;(2) 被解释端不变、解释端换成别的昨日日内形状量(day_gini 的成交额集中度、day_signed_ratio
+    的买卖方向、day_sum(Ret) 的昨日收益):读的是「什么样的昨日交易形态预示今天下探更深」,是一个信息消化 / 流动性冲击机制,不是水平;(3) 反过来的回归
+    / 自回归(尾部形状的持续性斜率)和 t 值版,以及市值十分位内标准化版;(4) 慢 EMA 与 25% 尾部均值(只用最糟的那部分日子)的单量版,作为没有第二个量时的参照。为什么与库里不同:库里与已出
+    head 的骨架里,es_ratio 只出现在被 sigmoid 包过的 centroid 回归里;这里的外围(gini / signed_ratio /
+    es_ratio_hi / 自回归 / Close-Vwap 差)是别的骨架,与快照 head 的秩相关预计 < 0.5。为什么样本外还会在:下探深度的个股慢性质、以及它对前一日成交形态的反应系数,是
+    241 日窗口的估计量,换手极低(净夏普几乎不吃成本),对 beta 与流动性是正交的,这是 head 在 train 与 valid 上都 > 0.5 的原因,两段不同的市场环境下同号。
+  seeds:
+  - cross_corr(day_es_ratio_lo(Close), day_es_ratio_hi(Close), 241)
+  - cross_mean(sub(day_es_ratio_lo(Close), day_es_ratio_lo(Vwap)), 241)
+  - cross_regbeta(cross_delay(day_gini(in_slice(Amt, 1, 240)), 1), day_es_ratio_lo(Close),
+    241)
+  - cross_regbeta(cross_delay(day_signed_ratio(in_slice(Ret, 1, 240), in_slice(Amt,
+    1, 240)), 1), day_es_ratio_lo(Close), 241)
+  - cross_regbeta(cross_delay(day_sum(Ret), 1), day_es_ratio_lo(Close), 241)
+  - cross_regbeta(day_es_ratio_lo(Close), cross_delay(day_es_ratio_lo(Close), 1),
+    241)
+  - cross_corr(day_es_ratio_lo(Close), day_centroid(abs_(in_slice(Ret, 1, 240))),
+    241)
+  - cs_bucket_zscore(cross_regbeta(cross_delay(day_gini(in_slice(Amt, 1, 240)), 1),
+    day_es_ratio_lo(Close), 241), LogFloatCap)
+  - cross_ema(day_es_ratio_lo(Close), 120)
+  - cross_tail_mean_q25(day_es_ratio_lo(Close), 120)
+  - cross_regbeta(cross_delay(cs_demean(day_gini(in_slice(Ret, 1, 240))), 1), day_es_ratio_lo(Close),
+    241)
+  - cross_regbeta(cross_delay(cs_demean(day_wstd(Ret, Amt)), 1), day_es_ratio_lo(Close),
+    241)
+- type: E
+  core: day_centroid(in_slice(Amt, 1, 240))
+  hypothesis: 核心 day_centroid(in_slice(Amt, 1, 240)) = 一天里成交额的重心时点(0 = 全在开盘,1 = 全在收盘),含它的
+    67 个候选均值差 +1.31 (p<0.001);本流两个正 head 里它是回归的解释端(昨天的重心,横截面去均值后),对今天的左尾深度做 241 日斜率。本位固定它做解释端,换被解释端(上一位固定被解释端、换解释端,两位互补):今天的结果量不再是左尾深度,而是别的日度结果
+    —— 日内收益(开盘到收盘)、收益偏度、最重成交分钟的平均收益 day_topw_mean(Ret, Amt)(共性表里含 day_topw_mean 的候选均值差最高
+    +2.06)、成交额加权波动 day_wstd(Ret, Amt)、日内低点停留比例 day_at_min_ratio(Close)、以及右尾 day_es_ratio_hi(Close)。机制:成交额重心偏晚
+    = 当天的信息 / 订单拖到尾盘才成交,通常是机构拆单或流动性晚到;这类股票接下来的价格反应(方向、偏度、尾部)里,对昨天重心的敏感度是一个个股慢性质 ——
+    机构订单流的粘性。与库里不同:这些写法不含 sigmoid 包裹的 es_ratio 被解释端,被解释端换成别的后骨架不同,与两个 head 的秩相关预计在
+    0.2 ~ 0.6(若 ≥ 0.7 会被相关度表划掉);另有两个只取斜率变化(cross_delta 3 日差,共性表里 +1.54)或市值十分位内 EMA
+    的版本。为什么样本外还会在:241 日窗口的回归斜率换手低,对市值与流动性正交,head 已在 train 与 valid 同时 > 0.5,说明不是某一段市场的伪影;我的预期是被解释端为收益类的写法会比尾部类差(收益更噪),这是本位要读的对比。
+  seeds:
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), day_skew(Ret),
+    241)
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), day_topw_mean(Ret,
+    Amt), 241)
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), day_wstd(Ret,
+    Amt), 241)
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), day_at_min_ratio(Close),
+    241)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    day_es_ratio_hi(Close), 241)
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1), 241)
+  - cross_corr(day_centroid(in_slice(Amt, 1, 240)), day_es_ratio_lo(Close), 241)
+  - cross_regbeta(cross_delta(day_centroid(in_slice(Amt, 1, 240)), 3), day_es_ratio_lo(Close),
+    241)
+  - cs_bucket_zscore(cross_ema(day_centroid(in_slice(Amt, 1, 240)), 120), LogFloatCap)
+  - cross_regbeta(cross_delay(day_centroid(in_slice(Amt, 1, 240)), 1), day_gini(in_slice(Ret,
+    1, 240)), 241)
+R:
+- head: cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))),
+    1), sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)
+  why: 这个 head(+0.79 / valid +0.88)的拆解:窗口 120 → +0.23、482 → -0.09、241 → +0.79,不单调,说明
+    241 附近有尖峰,中间窗口(200 ~ 360)没测过;cs_demean 与 cross_delay 各自的必要性只有 +0.29 / +0.57,是可调部件;双层
+    sigmoid 去掉分数不变(+0.78)。变体动窗口(200 / 300 / 360)、去均值的方式(改成市值十分位内标准化 cs_bucket_zscore,去掉与规模相关的重心水平)、滞后
+    2 日、去开收盘的 31 ~ 210 分钟版、被解释端改 Low、以及 t 值。必须 ≥ 原 +0.1 才替换,门槛高,这里是低成本地看窗口与去均值方式有没有明显的空间。
+  variants:
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 200)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 300)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 360)
+  - cross_regbeta(cross_delay(cs_bucket_zscore(day_centroid(in_slice(Amt, 1, 240)),
+    LogFloatCap), 1), sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 2),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 31, 210))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Low))), 241)
+  - cross_reg_tvalue(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1),
+    sigmoid(sigmoid(day_es_ratio_lo(Close))), 241)
+- head: cross_regbeta(cross_delay(cs_demean(cross_delay(cs_demean(day_centroid(in_slice(Amt,
+    1, 240))), 1)), 1), sigmoid(day_es_ratio_lo(Close)), 241)
+  why: 这个 head(+0.59,valid +0.89)的拆解:窗口 482 的 valid +1.00 但 train +0.08,120 为 -0.20,同样非单调;Amt
+    换 Volume 是 +0.72 / +1.02,两段都变好;双重 cs_demean + 双重 cross_delay 的必要性为负(去掉任一层分数变好:+0.78),说明叠加是烂部件。变体:去掉外层的一层
+    delay / demean(保留一层),Volume 口径加 360 窗口,以及两者合并。直接评估。
+  variants:
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Volume, 1, 240))), 1),
+    sigmoid(day_es_ratio_lo(Close)), 241)
+  - cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Volume, 1, 240))), 1),
+    sigmoid(day_es_ratio_lo(Close)), 360)
+  - cross_regbeta(cross_delay(cs_demean(cross_delay(cs_demean(day_centroid(in_slice(Volume,
+    1, 240))), 1)), 1), sigmoid(day_es_ratio_lo(Close)), 360)
+  - cross_regbeta(cross_delay(cs_demean(cross_delay(cs_demean(day_centroid(in_slice(Amt,
+    1, 240))), 1)), 1), sigmoid(day_es_ratio_lo(Close)), 360)
+audit:
+  attempts: 1
+  file: audit_1.yaml

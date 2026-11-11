@@ -1,0 +1,67 @@
+seed: 2047
+round: 2
+slots:
+- type: E
+  core: 'day_sum(Ret)'
+  hypothesis: |
+    核心:day_sum(Ret) = 个股当日日内(开盘到收盘)累计收益。Ret 第一根分钟收益恒为 0,所以它不含隔夜跳空。依据:本批 168 个已评分候选里,含它的 48 个均值 -1.61,不含的 -2.59,差 +0.98(p 0.000),是共性表里统计最扎实的子树;本流第 1 轮里最好的几个候选(-0.20 ~ -0.32,train 为正)全是「滞后的日内最差分钟收益对 day_sum(Ret) 的 120 日回归」。但那些候选的外围全是同一种:cross_regbeta / cross_reg_tvalue / cross_corr,回归元是滞后的某个价位量,y 是 day_sum(Ret)。我认为它们的 alpha 不在「滞后的价位量」上,而在 day_sum(Ret) 这个 y 本身,尤其在日内收益与隔夜收益的分解上。
+    这次要试的外围(和快照里已见过的全不同,不再用「滞后回归元 + 对 day_sum(Ret) 回归」这种写法):
+    (1) 隔夜与日内的拉锯。隔夜跳空 gap = log(day_first(Open) / 昨日 day_last(Close)),用 cross_mean(gap, 120) 减去 cross_mean(day_sum(Ret), 120)。文献(Lou-Polk-Skouras 2019,Berkeley-Hendershott-Bergsma 类研究)中隔夜收益长期为正、日内长期为负的个股属性可以持续,A 股的机制是散户日内追涨、机构隔夜建仓。这是 120 日的慢属性,和 20 日反转、波动、市值没有机械关系(只有当两项因同一次大涨同向时才相关,而差分把它们扣掉了一部分)。
+    (2) 日内收益对全市场日内平均收益(cs_mean(day_sum(Ret)))的 120 日 beta / 相关,即日内市场 beta。低 beta 溢价(Frazzini-Pedersen 2014)的日内版;日内 beta 与日频 beta 不同,不含隔夜跳空,更像个股在盘中对大盘情绪的敏感度。
+    (3) 日内收益的自相关 / 左尾 / 夏普 / 上下半方差之差:读的是「日内收益是不是稳定为负 / 带偏度」。
+    (4) 日内收益与隔夜跳空的关系(跳空后日内回补还是延续):cross_corr / cross_regbeta(gap, day_sum(Ret), 120)。回补强 = 隔夜跳空是情绪过度反应,日内被逆向资金回补;延续强 = 带信息。
+    (5) 日内收益与成交量惊奇的耦合,最后一组做对照。
+    实现:全部 120 或 60 日的 cross_* 成对 / 分布统计量,窗口内缺失日成对剔除。读数是无量纲(相关、斜率、均值差)或收益量级的慢变属性,换手低。gap 的分母是昨日收盘,恒正,不存在除零;Open 在一字板日有值。
+    为什么和库里已有的不同:本批已评分候选(loc 里能看到的)里含 day_sum(Ret) 的外围全是 cross_reg* / cross_corr,回归元为 cross_delay 的价位量,没有看到 cross_mean / cross_autocorr / cross_tail_mean_q25 / cross_semistd_* / 与 gap 配对的写法(只核对了 loc 可见的候选,没有逐条核对全库);库里也没有隔夜跳空与日内收益的相减。
+    为什么样本外还会在:隔夜 / 日内的分解是投资者构成(散户 vs 机构)的结构性信号,文献里在多个市场持续了十年以上;低 beta 是被杠杆约束支撑的溢价。风险:第 1 轮 train 为正、valid 为负的现象说明这一族在 2023 年之后可能有体制切换,所以种子里放了符号不同的几种读数,让 GP 自己找稳定的。
+    数学检查:全部只用 t 日及以前的数据(gap 用当日开盘价和昨日收盘价,开盘价在当日 9:30 之后才有,t 日收盘后才计算,t+1 日交易)。无除以近零的量(cross_stddev 120 日,窗口不满用扩张窗口)。
+  seeds:
+    - 'sub(cross_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 120), cross_mean(day_sum(Ret), 120))'
+    - 'cross_mean(day_sum(Ret), 120)'
+    - 'cross_regbeta(cs_mean(day_sum(Ret)), day_sum(Ret), 120)'
+    - 'cross_corr(day_sum(Ret), cs_mean(day_sum(Ret)), 120)'
+    - 'cross_autocorr(day_sum(Ret), 120, 1)'
+    - 'cross_corr(log(div(day_first(Open), cross_delay(day_last(Close), 1))), day_sum(Ret), 120)'
+    - 'cross_regbeta(log(div(day_first(Open), cross_delay(day_last(Close), 1))), day_sum(Ret), 120)'
+    - 'cross_tail_mean_q25(day_sum(Ret), 120)'
+    - 'div(cross_mean(day_sum(Ret), 120), cross_stddev(day_sum(Ret), 120))'
+    - 'sub(cross_semistd_neg(day_sum(Ret), 120), cross_semistd_pos(day_sum(Ret), 120))'
+    - 'cross_corr(day_sum(Ret), cross_zscore(day_sum(Volume), 60), 120)'
+    - 'sub(cross_mean(log(div(day_first(Open), cross_delay(day_last(Close), 1))), 60), cross_mean(day_sum(Ret), 60))'
+- type: N
+  hypothesis: |
+    机制:日内**时间结构**的慢变属性,而不是价格水平。本批的共性表里富集最高的子树里有一类全是无量纲的日内路径形状:day_ar1_coefficient(Close) +0.80(p 0.023)、day_at_max_ratio(Open) +0.77(p 0.053)、pow_2(day_argmin(High)) +0.57(p 0.035)、day_argmin(High) +0.48,而水平量(day_max(High) +0.45、day_max(Close) +0.31)富集最弱、水平 head 的得分是 -2.8。也就是说,在这一批里「一天里什么时候发生了什么」比「价格是多少」更活。本轮全部用时间位置 / 路径形状读数,读数的单位是分钟序号、比例或相关,与名义价格、市值、绝对波动无机械关系。
+    五组读数(全部 60 / 120 日慢均值,少数用相对自身历史的 z 值):
+    (a) 分钟收益一阶自相关 day_ar1_coefficient(Ret):负值 = 买卖价差反弹(Roll 1984),是价差 / 流动性成本的无量纲代理,不同于成交额或波动水平;(种子 1、7)
+    (b) 日内最低 / 最高价出现的分钟序号 day_argmin(Low) / day_argmax(High) 及其差:最低价晚出现 = 尾盘被卖压打到最低(信息交易者 / 强平),早出现 = 开盘冲击后被逆向资金回补;极值位置的时间分布是 intraday 动量的 Heston-Korajczyk-Sadka(2010)式「日内模式」的个股版;(种子 2、3、8、11)
+    (c) 成交额的日内重心 day_centroid(Amt) 及与日内收益的相关:成交集中在尾盘 = 机构按收盘价执行(VWAP / TWAP / 收盘算法),集中在开盘 = 散户和消息驱动;(种子 4、5、10)
+    (d) 成交额的日内基尼 day_gini(Amt)(成交集中度)与「价格停在最低价的时间占比」day_at_min_ratio(Low);(种子 6、9)
+    (e) 对照:种子 12 用相对自身历史的 z 值而不是水平。
+    为什么和库里已有的不同:本批 loc 里可见的含 day_argmin 的候选是 pow_2(day_argmin(High)) 这种单日读数的外裹,没有看到 cross_mean / cross_stddev / cross_corr 的慢窗口写法(只核对了 loc 可见的候选);day_centroid(Amt)、day_gini(Amt)、day_ar1_coefficient(Ret) 在库里是否出现我没有逐条核对,但与成交额 / 收益的日内时间重心配对的写法本批里没有;所有种子是 cross_* 慢窗口,而本批的头部都是单日读数。
+    为什么样本外还会在:日内成交重心和极值时间由参与者构成决定(机构 vs 散户 vs 量化算法),变化慢,120 日平均后名次稳定,换手低;买卖价差反弹是流动性成本,有文献支持的溢价(Amihud-Mendelson 1986 的价差溢价)。风险:这些读数与流动性控制(成交额)可能有非线性交互,尺子已扣掉线性 / U 形 / S 形;另一个风险是分钟序号受涨跌停 / 一字板影响(整天不动时 argmin = 0),这类日子在 120 日里占比小。
+    数学检查:day_argmin / day_argmax 是序号,整天常数时给 0,不爆;day_centroid / day_gini 对成交额为 0 的整天给缺失 / 0,不除近零;cross_stddev 的分母不出现;全部只用 t 日及以前。
+  inspired_by: 'B139 批共性表:day_ar1_coefficient(Close) 富集 +0.80(p 0.023)、day_at_max_ratio(Open) +0.77、pow_2(day_argmin(High)) +0.57,而价格水平量富集弱'
+  seeds:
+    - 'cross_mean(day_ar1_coefficient(Ret), 120)'
+    - 'cross_mean(day_argmin(Low), 120)'
+    - 'sub(cross_mean(day_argmin(Low), 120), cross_mean(day_argmax(High), 120))'
+    - 'cross_mean(day_centroid(Amt), 120)'
+    - 'cross_corr(day_centroid(Amt), day_sum(Ret), 120)'
+    - 'cross_mean(day_at_min_ratio(Low), 120)'
+    - 'cross_mean(day_ar1_coefficient(Close), 120)'
+    - 'cross_stddev(day_argmin(Low), 120)'
+    - 'cross_mean(day_gini(Amt), 120)'
+    - 'cross_zscore(cross_mean(day_centroid(Amt), 5), 120)'
+    - 'cross_corr(day_argmin(Low), day_min(Ret), 120)'
+    - 'cross_zscore(cross_mean(day_ar1_coefficient(Ret), 5), 120)'
+R:
+  - head: 'cross_corr(day_min(High), day_mean(Amt), 60)'
+    why: '拆解表:两个成分单独 -2.37 / -3.47,组合 -0.71,所以承重的是「日内最低高价与成交额的 60 日相关」这个关系;窗口 30 / 120 都更差(-0.98 / -1.13),60 是尖峰,可能是窗口过拟合,试 45 / 90 看是否平滑;Amt 换 Volume 更差 0.1;High 换 Low 持平;所以烂的部件可能是 day_mean(Amt) 的水平成分(流动性控制的地盘),换成成交额的惊奇 / 滞后 / 排名版本。'
+    variants:
+      - 'cross_corr(day_min(High), day_mean(Amt), 45)'
+      - 'cross_corr(day_min(High), day_mean(Amt), 90)'
+      - 'cross_corr(day_min(High), cross_zscore(day_mean(Amt), 60), 60)'
+      - 'cross_corr(day_min(High), cross_delay(day_mean(Amt), 1), 60)'
+      - 'cross_corr(day_min(High), day_mean(Amt), 241)'
+      - 'cross_corr(day_max(Low), day_mean(Amt), 60)'
+      - 'cross_corr(day_min(High), cs_rank(day_mean(Amt)), 60)'

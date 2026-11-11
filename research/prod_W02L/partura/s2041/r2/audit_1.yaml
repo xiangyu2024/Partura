@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 6, 11, 12, 14, 16]
+    reasons: '核心 day_gini(High) 是同一天 241 个分钟价格的 Gini(ops_ext.py 的 day_gini,只用当天分钟,无前视;有限分钟不足时返回 NaN 而不是填 0)。相关度表(corr_1.json 的 slot a core 行):与快照 head 的原始 |rho| 0.57,最像的是 cross_stddev(close/open 210 分钟比, 20),残差 0.49;与控制 liq 0.30、vol 0.46、rev 0.20、known 0.31、size 0.01,全部 < 0.8,核心过门槛。loc.md 第 23 行确实有 day_gini(High) 的共性表记录(+1.31, p 0.001, 14 个候选),统计量我没有重算。创新度给 3 而不是 1:它不是 head 的换写法(原始 0.57 远低于 0.7),测的是价格路径的分布而不是收益标准差;但它仍然是同一族的日内离散/区间幅度,残差 0.49 还与 head 相关,所以不给 4 以上。外围 16 个种子中,1(与 cross_stddev head 0.90)、6(0.83)、11(0.80)、12(0.91)、14(0.88)、16(0.72) 的原始 |rho| 均 >= 0.7,按规则划掉,它们只是 head 的滑动均值、尾部均值、EMA 换皮。其余 10 个(2、3、4、5、7、8、9、10、13、15)没有控制 >= 0.8,也没有数学问题,保留,剩 10 >= 4。种子 15 mul(gini, LimitWidth) 的合理性偏弱:LimitWidth 是板块常数,乘进去基本是在按板块排序,机制只能说成 20cm 板块的日内离散更大,这一点留给 PI 注意,但不构成数学问题。种子 8 的分母 gini(Volume)+1e-5 不会爆炸(volume 的 Gini 通常在 0.3 以上,无效日是 NaN)。如果它有 alpha,最可能来自日内价格路径离散对特质波动/彩票需求的定价(MAX / IVOL 一族),而这正是尺子的 vol 控制想扣掉的部分。'
+  - slot: b
+    novelty: 3
+    soundness: 1
+    struck_seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    reasons: '数学问题:前视。N 位的 14 个种子全部用 cross_shift(day_last(Close), 1) 当前收盘。dt_cross.py 的 cross_shift 文档写明 earlier days see later values,实际实现是 res[t] = x[t+1](res[:-d] = x[d:]),catalog.py 的 LOOKAHEAD_KERNELS 也把它列为前视算子。所以 "前收" 其实是次日收盘,(day_max(High) - 次日收盘)/次日收盘/LimitWidth 之类的所有种子在第 t 天用到了第 t 天收盘之后才知道的数据,命中 rules.md §4 的前视。hypothesis 里 "previous close is known before the day" 与实现不符。需要说明的是:相关度表里 slot b 的 |rho| 也是用这些前视表达式算的,不能当证据用。仅供总领参考(不改为重写,按规则改普通 GP):历史前收可以用 cross_delay(day_last(Close), 1)(res[t] = x[t-1]),其他流若有 N 位也用了 cross_shift 的正 d,同样要查。另外种子 9 cross_sum(is_gt(...), 20) 在 corr_1.json 里 distinct 只有 0.002、gate False,是几乎全为 0 的计数面板,属于数值伪影(面板几乎是常数),这是独立的第二条划除理由。种子 5、7 与 20 日反转控制 rev 的 |rho| 为 0.89(>= 0.8),也是自动划掉的。创新度给 3:与快照 head 的最大原始 |rho| 为 0.66(种子 8,close-to-close 涨跌幅/LimitWidth 的 20 日 cross_stddev,与 cross_stddev(close/open) head 相近但不同),其余种子与 head <= 0.55;涨跌停归一化是一种新的标度,不是 head 的换写法。如果它有 alpha,最可能来自涨跌停追板需求后的反转,但目前的版本测的是前视,无法据此判断。'
+R:
+  - head: 'cross_stddev(div(day_last(in_slice(Close, 1, 30)), day_first(in_slice(Open, 1, 30))), 20)'
+    soundness: 4
+    reasons: '6 个变体都是同日、无前视(day_last / day_first / day_close 只用当天分钟;cross_stddev 是 rolling_windows 因果窗口;分母是开盘价或 Vwap 首分钟,都是正数,没有近零除数)。机制是单笔价格噪声(bid-ask 弹跳)被 Vwap 的平均抵消,说得通。给 PI 的两点记录(不扣分):(a) 理由里 "closing auction" 的说法对 in_slice(Close,1,30) 不成立,这个窗口是开盘后约前 30 分钟,不是收盘,只有弹跳的说法站得住;(b) 变体 1、3、4 与原 head 的原始 |rho| 分别为 0.998、0.978、0.979(corr_1.json),基本是同一个秩,替换后的变化多半是噪声,应当按 R 的规则看 |rho| 与 0.5 的门槛,而不是看 score 的 +0.1。'
+summary: '第 1 次审计结果:slot a 通过(创新 3、合理 4;划掉 6 个种子,剩 10 个;核心与控制最大 |rho| 0.46 < 0.8);slot b 不通过(合理 1,前视:cross_shift(day_last(Close),1) 取的是次日收盘,14 个种子全部划掉,按规则改为一次普通 GP);R 组合理 4。'

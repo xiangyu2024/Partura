@@ -1,0 +1,47 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: |
+      核心 K = abs_(cs_demean(C31)),C31 = 第 31~210 分钟放量分钟收益的日均值。已核对:K 是快照 head #3(add 的第一项 ts_stddev(K,60))的子树,窗口 31–211 与 cs_demean、abs_ 都一致;16 个种子逐条原样包含 K。核心与 5 个控制的 |ρ| 为 liq 0.10、vol 0.21、rev 0.09、known 0.11、size 0.01,远低于 0.8。与各 head 的原始 |ρ| 最大 0.21,残差 0.18。
+
+      表格自动划掉(按 §3 规则,由流水线划,这里不重复列入 struck_seeds):种子 6(原始 |ρ| 0.75,最像 head #2)、10(0.70,最像 head #3)、15(0.74,最像 head #3)。剩 13 个,≥4。种子的控制项没有 ≥0.8 的。
+
+      创新度 3:种子是同一个对象 K 的不同读法(分位数、偏度/峰度、自相关、回归斜率、CV、尾部均值、ts_decay_linear、窗口差),不是对象本身的新东西。它们与 head 的残差 |ρ| 在 0.24–0.51 之间(留下的种子里最高的是 3 与 14 的 0.51、0.50),说明不是换皮,但 K 的时间离散度这一类已经在 head #1–#3 里。其中 2、3(vol 控制 0.51、0.55)有一部分是波动的换写。
+
+      数学检查:cross_* 都是日轴因果滚动(cross_ema 为因果指数加权),ts_* 为日轴滚动,无前视。分母(种子 1 的 cross_mean(K,241)、种子 16 的 cross_mean(|cs_demean(day_sum(Ret))|,60)、种子 4 的 cross_med)都是非负量的滚动均值或中位数,未见除以近零的爆点。in_mean_full / in_stddev_full 用了当日 31–211 分钟的全天统计(包括事件之后的分钟),但 K 是收盘后的日频聚合,不构成 §4 的前视。午休边界(分钟网格 120 附近)对 ΔV 与 Ret 的影响只在每天 1 分钟,不构成数学问题,PI 可以核实 index 119/120 与 120/121 哪个是午休断点。
+
+      合理度 4:K 是放量分钟的价格冲击幅度(截面去均值后),其慢变部分(分位、离散、自相关、对当日绝对收益的斜率)读的是个股冲击敏感性与知情/流动性供给的持续性。如果它有 alpha,最可能来自慢变的冲击敏感性(Kyle 型冲击系数里的稳定成分),其次是种子 11 那种「放量反应相对整天波动」的斜率。注意:K 是 r1 核心 C 的外层加工,C 家族本轮已占 1 个 E 位,PI 不应再把 C 家族当核心。
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [1, 2, 4, 5, 6, 7, 10, 13, 14, 16]
+    reasons: |
+      最大的问题是估计量设定。day_hurst(x) 是对 x 直接做 R/S(dt_day.py 的 _hurst_rows:cumsum(x − mean(x)) 的极差除以标准差),而 Open、Close 是价格水平叶子(@price),不是收益。我在 scratch/hurst_check.py 里用 2000 条 240 分钟的 iid 正态分钟收益随机游走(增量真实 H = 0.5)检验:价格水平上的 hurst 均值 0.82(sd 0.03),增量(Ret)上的 hurst 均值 0.53(sd 0.04)。所以 day_hurst(Open) / day_hurst(Close) 测的是价格水平的非平稳性与日内漂移相对波动,不是增量的持续性,也不是「趋势型 vs 回归型」。§4 的后复权例外不覆盖这一点(问题在估计量的设定,不在价格口径)。依据是数学问题,据此划掉用 Open/Close 水平的种子 1、2、4、5、6、7、13、14、16。
+
+      种子 1 另有重复:cross_mean(day_hurst(Open),241) 与库内 cross_sum(day_hurst(Open),241)(M2 批富集最高的成员)在无缺失的股票日上秩相同(cross_sum 用 nansum、cross_mean 用 nanmean,无缺失时只差常数 241)。两者只在有缺失日的股票上不同。
+
+      种子 10 cross_mean(day_durbin_watson(Close),241):dt_day.py 的 day_durbin_watson 实现是 Σ(Δx)² / Σx²,没有去均值、没有残差,对价格水平就是「已实现方差 / 均方价格」,不是 DW 统计量;它与 vol 控制的 |ρ| 为 0.66(corr_1.md),名义价格量级也进入了数值。定义算的不是它声称的路径持续性,划掉。
+
+      留下 6 个:3(day_hurst(Ret),对收益做 R/S,用法正确)、8(day_ar1_coefficient(Ret),OLS 用法正确)、9(day_autocorr(Ret,5))、11(cross_mean(day_centroid(Volume)))、12(cross_mean(day_gini(Volume)))、15(cross_mean(day_signed_ratio(Ret,Volume)),分母 clamp 且只在有限值上求和)。它们对 6 个 head 的残差 |ρ| 为 0.08–0.17;控制项里 12 最需要注意:gini 与 liq 控制 |ρ| 0.69、与 known 0.62、与 size 0.62,是流动性/换手集中度的换写,但没到 0.8 的自动划掉线,按规则不划,只在创新度里扣了一点;11 与 liq 0.44、known 0.45;3 与 liq 0.40;15 与 size 0.35。
+
+      创新度 4:留下的 6 个种子对 head 的残差都在 0.17 以下,与库内 heads 不同。12 的流动性换写是唯一明显的重合,但它不是 head,也不到 0.8。
+
+      合理度 3:剩下的种子机制清楚(日内收益的持续性、AR 系数、成交分布的时点、带符号的买卖压力代理),但这个位的核心假设「慢的日内路径统计 = 趋势型 vs 回归型」在 hurst 那一支上不成立(见上)。库里 cross_sum(day_hurst(Open),241) 的富集(均值差 +1.57)很可能不是持续性,而是两种东西:nansum 把缺失日当 0,于是停牌多、上市短的股票系统性地偏低(覆盖效应,§4 的「缺失值填充」类问题,PI 需自查);以及价格水平 R/S 对日内漂移相对波动的敏感度(开盘到收盘的趋势强度)。如果留下的 6 个种子有 alpha,最可能来自 8、9 的 Ret 慢自相关,或 3 的 Ret 慢持续性;若 PI 要保留「水平 hurst」的思路,应改用 log 增量或 Ret 作为输入重做。
+R:
+  - head: 'ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume, 16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))), 60)'
+    soundness: 4
+    reasons: |
+      变体是窗口 360 / 480 / 720 与 CV 形式(ts_stddev(K16,241) / cross_mean(K16,241))。ts_stddev、cross_mean 都是日轴因果滚动,CV 的分母是 K 的非负滚动均值,未见爆点;无前视。表中 R 1 变体 1 与原 head 的 |ρ| 为 0.58,符合「替换」的条件,与已知族 |ρ| 0.01–0.11,远低于 0.5。
+      注意两点(不构成数学问题):(i) 720 日窗口的热身期从 2018 年起算要到 2020 年末,480 也占去一大段,变体的 score 与 60 日原 head 不在同一段样本上算,替换判定前应在共同样本上比较;(ii) 窗口拉长与 CV 形式都不是「去掉或替换一个坏部件」,更像参数调整,PI 应知道这一点。
+  - head: 'ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))), 60)'
+    soundness: 4
+    reasons: |
+      变体是窗口 241 / 360 / 480 与 CV 形式。算子与前一组相同,无数学问题。去掉 cs_demean 后水平项包含整个市场的放量反应,与 vol 控制的 |ρ| 为 0.27–0.30(表格的 R 2 行),这是风险但不是数学问题:K 的市场部分会被残差尺子去掉一部分。已知族 |ρ| 0.00–0.15,远低于 0.5。热身期与窗口比较问题同上。
+  - head: 'add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))), 60), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211), 5)))), 60))'
+    soundness: 4
+    reasons: |
+      变体是两项同时拉到 241 / 480 日(两项窗口相同)。第一项的机制与 head #1 同(K 的慢离散度);第二项 in_sustain_stddev(mask,data,5) 用 start_offset 0,包含事件分钟本身,日频聚合下不构成前视。与已知族的 |ρ| 为 0.02–0.07,与 vol 控制最大 0.37。无数学问题。注意:480 日版热身期很长,与 60 日原 head 不在同一段样本上算(同上)。变体 4 的第二项取日度水平(不做时间平滑)会把换手带回来,与 PI 的「慢是第一成本」有张力,但这是可检验的假设,不是数学问题。
+summary: 'a 位 13/16 留下(表格自动划掉 6、10、15;我未额外划掉),创新度 3、合理度 4,过;b 位经数学检查划掉 10 个(1、2、4、5、6、7、10、13、14、16),剩 6 个,创新度 4、合理度 3,过。b 位最大问题:day_hurst 与 day_durbin_watson 对价格水平做增量统计(对 iid 随机游走 hurst 为 0.82 而非 0.53,scratch/hurst_check.py),PI 的 hurst 假设在水平上不成立,库内 cross_sum(day_hurst(Open),241) 的富集很可能是 nansum 覆盖效应;R 三组合理度均为 4,无数学问题,但 720/480 日窗口的比较需在共同样本上做。'

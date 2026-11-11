@@ -1,0 +1,229 @@
+seed: 2040
+round: 1
+slots:
+- type: E
+  core: day_cov(Ret, log(Amt))
+  hypothesis: '核心 `day_cov(Ret, log(Amt))`(head 3 的第二项):当天各分钟的收益与对数成交额的协方差。`log` 是
+    log|x|,成交额 ≤ EPS 的分钟记缺失(不是 0),所以它只读有成交的分钟。放量分钟伴随上涨为正、伴随下跌为负,读的是「钱往哪个方向放量」。
+
+
+    快照里的事实:拆解表里这一项单独是 train −3.10 / valid −1.84,但它与已知成交额族的 ρ 只有 −0.04,是本批所有部件里与已知族最不相关的。head
+    3 把它用 `add` 加在 `day_min(log(Amt))`(取值约 5~12)上,而它自己的量级只有 1e-4~1e-3,所以在那个 head 里它只起打破并列的作用,从来没有被真正读过。烂的是它的外围,不是核心:一天一个读数、没有归一化、没有平滑,日度读数的截面排名自相关很低,15
+    bp 的成本全吃在换手上(这是推断,没有这一项自己的换手读数;同一批里 `day_first(log(Amt))` / `day_min(log(Amt))`
+    的原始日换手是 0.53 / 0.35)。
+
+
+    机制:放量与收益同向的耦合是持有人结构的慢变属性,不是某一段行情。Llorente–Michaely–Saar–Wang (2002) 的结论是:信息交易主导的股票,量增加时收益延续(耦合为正);对冲
+    / 流动性交易主导的股票,量增加时收益回吐(耦合为负)。Chordia–Subrahmanyam (2004) 的订单失衡同理。这个划分用分钟数据可以直接读出来:耦合的符号
+    = 这只股票上钱是追着趋势放量(知情 / 追涨)还是逆着价格放量(提供流动性)。Campbell–Grossman–Wang (1993) 给了第二个来源:对冲型交易日的量使收益自相关为负。两者合起来的可交易含义是一个交互:近期涨幅
+    × 耦合符号。(耦合为正且近期上涨 → 继续;耦合为负且近期下跌 → 回吐上行;多头书只拿这两种组合的并集。)奖励的新尺子把控制的 1/2/3 次方都去掉了,两个去均值的秩相乘,在两者近似独立时对其中任一个的线性
+    / 平方 / 立方暴露约为零(我没有量过;耦合与 20 日收益的秩相关我预计 < 0.2),所以这类交互不会被尺子当成控制的非线性暴露去掉;它不是靠尺子的盲区,而是一个条件结构:多头书选的是「延续」与「回吐」两种情形的并集。
+
+
+    外围怎么实现(16 个种子,核心都原样在内,全部按「慢」写,窗口 ≥ 60 日,除了 E5 / E6 / E11 里短的一端):
+
+    (a) 慢聚合,三种记忆形状:均值 120 日(E1)、线性衰减 120 日(E2)、EMA 半衰期 60 日(E3)。
+
+    (b) 去量纲:除以 σ_R·σ_logA 得日内相关系数(E4);除以 σ_R 得「对数量对价格变动的弹性」(E15,单位是 log 量)。
+
+    (c) 相对自己:近 20 日均值对自己 241 日的 z 分数(E5);短均值减长均值(E6)。
+
+    (d) 桶内:按流通市值十分位内 z 分数(E7),按 60 日对数成交额十分位内 z 分数(E8);这是把水平类控制里的非线性部分也拿掉,而不只是尺子里的立方。
+
+    (e) 条件延续 / 回吐:两个截面去均值的秩相乘,耦合取 60 / 120 日均值 / 20 日 EMA,近期收益取 20 / 60 / 5 日对数收益(E9~E11);日度版本先相乘再取
+    60 日均值(E12);耦合乘以近 5 日涨跌符号再 60 日均值(E13)。
+
+    (f) 日内先后与波动日:同日耦合减去「滞后 1 分钟的量与收益的协方差」(量跟着价还是量先于价,E14);只在当日波动高于自己 20 日均值的日子累加耦合(E16;消息日)。
+
+
+    和库里已有的不同(我逐条翻了 `struct/members.csv`):库里读「分钟收益与量」耦合的有两类。手写库有 `cross_mean(day_corr(Ret,
+    Volume), 20)` 与滞后 1 分钟的变体(L#480~484,皮尔逊相关、原始量、窗口 20 日);挖掘库有 55 条 `day_cov(Ret,
+    ·)`,外面套 `ts_std` / `ts_max` 读它的波动或极值,少数读水平但窗口 ≤ 60(`ts_med(day_cov(Ret, Volume),
+    40)`、`ts_mean(day_cov(Ret, Amt), 10)`)。库里没有的:(1) `log(Amt)` 口径(全库只有 head 3 这一条);(2)
+    窗口 ≥ 60 日读耦合的水平并按去量纲 / 弹性 / 桶内标准化;(3) 近期收益与耦合的去均值秩乘积(最接近的是手写库 L#262 的 `-rank(Δ3
+    收益) × ts_corr(day_first(Open), day_sum(Volume), 10)`,那里读的是开盘价与日成交量的 10 日时序相关、方向写死、没有去均值,不是分钟级的价量耦合);(4)
+    `cross_zscore` / `cs_bucket_zscore`(这两个算子是 Partura 后加的,库里 0 次)。E14 的滞后一分钟耦合与库里
+    L#481 同一个想法,但那里窗口 20、读的是相关系数,这里是 120 日、对数量协方差的同日减滞后。我用 AlphaCube 的 `skeleton_key`(去窗口)把
+    16 个种子逐个对照了库的 5583 个骨架:0 个重合。本核心在快照里的唯一一次出现是 head 3 的 `add` 外围,上面所有外围都与它不同。
+
+
+    样本外为什么还在:(1) 来源是持有人结构(知情 / 追涨对流动性提供),变化很慢,所以全用 ≥ 60 日窗口,日换手低,15 bp 吃不掉;(2) 条件交互的来源是已发表的结论(Llorente
+    等 2002),不是样本内拟合出来的形状;(3) 除 E16 里「当日波动高于自己 20 日均值」这个相对门槛外,没有绝对阈值 / 带宽,也没有「只在某个价位
+    / 市值档」的阶跃,所以不依赖尺子的盲区。
+
+
+    数学检查:(a) 无前视:`day_cov` 只用当天分钟,收盘后可知,下一日交易;所有窗口是尾随窗口;`ts_delta(·, k)` 是 x[t] −
+    x[t−k]。(b) 数值:`day_cov` 的量级 1e-5~1e-3,float32 下相对精度没有问题;所有除法的分母都加了 1e-6 的下限(σ_R
+    通常 ≥ 5e-4,所以下限不改变正常日的取值);Ret 全天为零的封板 / 停牌日分子为 0,得到 0 而不是 inf / NaN。本机用合成立方体(80
+    只股票 × 320 日 × 241 分钟)把 16 个种子全算过:都能解析、无 inf、每日取值离散度 ≥ 0.95、覆盖率 0.78~0.98(带 60
+    日收益的几个因合成立方体只有 320 日而偏低,真实面板的热身期只占 3%)。(c) 定义:`log(Amt)` 在无成交分钟是缺失,因此 `day_cov`
+    只在有成交的分钟上算,至少 2 个有效分钟才有值;`cs_bucket_zscore` 的分桶按 x 的十分位。'
+  literature:
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 耦合的符号区分信息交易主导(延续)与对冲交易主导(回吐);这里用分钟数据直接读出耦合,并与近期收益做交互
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡对收益的预测;日内的量与收益同向程度是订单失衡的不带逐笔数据的代理
+  - title: Trading volume and serial correlation in stock returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 放量的日子里收益自相关更负(流动性提供者被补偿);这是耦合为负的那一类股票的来源
+  seeds:
+  - cross_mean(day_cov(Ret, log(Amt)), 120)
+  - cross_decay_linear(day_cov(Ret, log(Amt)), 120)
+  - cross_ema(day_cov(Ret, log(Amt)), 60)
+  - cross_mean(div(day_cov(Ret, log(Amt)), add(mul(day_std(Ret), day_std(log(Amt))),
+    0.000001)), 120)
+  - cross_zscore(cross_mean(day_cov(Ret, log(Amt)), 20), 241)
+  - sub(cross_mean(day_cov(Ret, log(Amt)), 20), cross_mean(day_cov(Ret, log(Amt)),
+    241))
+  - cs_bucket_zscore(cross_mean(day_cov(Ret, log(Amt)), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Ret, log(Amt)), add(mul(day_std(Ret),
+    day_std(log(Amt))), 0.000001)), 120), cross_mean(day_mean(log(Amt)), 60))
+  - mul(cs_demean(cs_rank(cross_mean(day_cov(Ret, log(Amt)), 60))), cs_demean(cs_rank(ts_delta(log(day_last(Close)),
+    20))))
+  - mul(cs_demean(cs_rank(cross_mean(div(day_cov(Ret, log(Amt)), add(mul(day_std(Ret),
+    day_std(log(Amt))), 0.000001)), 120))), cs_demean(cs_rank(ts_delta(log(day_last(Close)),
+    60))))
+  - mul(cs_demean(cs_rank(cross_ema(day_cov(Ret, log(Amt)), 20))), cs_demean(cs_rank(ts_delta(log(day_last(Close)),
+    5))))
+  - cross_mean(mul(cs_demean(cs_rank(day_cov(Ret, log(Amt)))), cs_demean(cs_rank(ts_delta(log(day_last(Close)),
+    1)))), 60)
+  - cross_mean(mul(day_cov(Ret, log(Amt)), sign(ts_delta(log(day_last(Close)), 5))),
+    60)
+  - cross_mean(sub(day_cov(Ret, log(Amt)), day_cov(Ret, in_delay(log(Amt), 1))), 120)
+  - cross_mean(div(day_cov(Ret, log(Amt)), add(day_std(Ret), 0.000001)), 120)
+  - cross_mean(mul(day_cov(Ret, log(Amt)), is_gt(day_std(Ret), cross_mean(day_std(Ret),
+    20))), 60)
+- type: N
+  hypothesis: '机制:集合竞价与隔夜信息。立方体的分钟轴是 241 根,第 0 根是 09:30 的开盘集合竞价那一根(这一分钟 `Ret` ≡ 0、`Close`
+    = `Open`,成交量极大;见 `research/coldstart_C03/design_r1.md`,C02 的 W2 已确认,2020 流的 PI
+    也据此切掉它)。所以 `day_first(log(Amt))`(本批 head 1,拆解里 valid −0.90 是本批 3 个 head 里最好的一个)读的是「开盘那一根的成交额」:它由隔夜累积的新闻与盘前挂单决定,而不是盘中的流动性。(注意
+    `day_first` 取当天第一个有值的分钟,而 `log` 会把成交额为 0 的分钟变成缺失,所以开盘没有成交的票会退到它第一个有成交的分钟;这只发生在最不活跃的票上,而这些票本来就被流动性控制吃掉。)
+
+
+    这个核心的问题:快照里的 head 1 是 −1.47 / −0.90,是一天一个读数(原始日换手 0.53),并且开盘这一根的成交额绝大部分是这只股票自己的活跃度水平(我估计与
+    log 成交额的截面相关 0.8 以上,没有数)。新尺子把活跃度去掉之后剩下的是我这里要读的东西:开盘这一根相对这只股票全天典型分钟的倍数,`OA = day_first(log(Amt))
+    − day_mean(log(Amt))`,无量纲、不随成交额水平单调变化。
+
+
+    为什么 OA 可能有 alpha:(1) Berkman–Koch–Tuttle–Zhang (2012):散户的买单集中在开盘,开盘注意力强的票隔夜涨、盘中跌;Barber–Odean
+    (2008):注意力驱动的买入造成价格压力、随后反转。(2) Lou–Polk–Skouras (2019):隔夜收益与日内收益各自有持续性、且来自不同的投资者(开盘拉锯),这个持续性是股票层面的慢变属性。(3)
+    A 股的开盘集合竞价有涨跌幅限制,且散户盘前挂单占比高,所以开盘倍数是「谁在隔夜推价格」的一条较干净的读数(这是我的推断,没有数)。方向我不预设:GP 用
+    train 定符号。
+
+
+    算子怎样实现(13 个种子,全部是 ≥ 60 日的慢聚合或慢的关系,不碰日度噪声):
+
+    (a) 慢水平:OA 的 60 日均值(N1)、241 日线性衰减(N2)、EMA 半衰期 60 日(N13);对自己 241 日的 z 分数再 60 日均值(N3,「开盘异常」);
+
+    (b) 桶内:OA 的 120 日均值在流通市值十分位内标准化(N4);
+
+    (c) 与隔夜 / 日内收益的耦合:OV = log(开盘价) − log(昨收),ID = log(收盘价) − log(开盘价)。开盘异常加权的隔夜漂移(N5、N6)、开盘异常加权的开盘后日内收益(N8,看开盘推高之后是延续还是回吐)、OA
+    与 OV 的 120 日相关(N7);
+
+    (d) 稳定性:OA 的 120 日标准差(N9):习惯性大开盘与零星大开盘(消息日)可能对应两种持有人,这一条没有文献依据,是一个探针;
+
+    (e) 线性占比与首尾对比:开盘一根占全天成交额的占比 120 日均值(N10,不取对数);开盘对数成交额减收盘最后一根(N11,开盘与尾盘「谁在交易」的对比;没有文献依据,是一个探针);
+
+    (f) 条件:OA 的 60 日均值 × 60 日收益,两个去均值的秩相乘(N12;注意力 × 过去赢家)。
+
+
+    和库里已有的不同(我逐条翻了 `struct/members.csv`):库里有 34 条把 `day_first` 作用在 Volume / Amt 上(B089
+    / B092 / B094 一带,例如 `cross_sum(day_first(Volume), 60)`、`ts_quantile_q75(ts_quantile_q75(day_first(Volume),
+    50), 40)`、`ts_kurt(day_first(Amt), 40)`),除 head 1 自己外全部读的是开盘一根的水平或它的时序形状,没有一条把它除以全天的典型分钟(去掉活跃度水平),除
+    head 1 外没有一条用对数,我也没有看到把开盘量与价格(隔夜缺口 / 日内收益)配对的;价格那边,手写库有大量 WorldQuant 式的 `day_first(Open)`
+    / `day_last(Close)` 缺口与日内收益(最接近的是 `ts_corr(day_first(Open), day_sum(Volume), 10)`
+    一类,配的是整日成交量,不是开盘一根)。`cross_zscore` / `cs_bucket_zscore` 库里 0 次。我用 `skeleton_key`(去窗口)把
+    13 个种子逐个对照库的 5583 个骨架:0 个重合。种子与 head 1 的 |ρ|:OA 去掉了活跃度水平、但开盘一根自己的日间波动还在,我估计 0.3~0.65,日度噪声大的种子(N8、N11)可能更高,个别被表划掉我可以接受。
+
+
+    样本外为什么还在:来源是持有人结构与盘前挂单的制度(集合竞价规则、涨跌幅限制、散户盘前挂单)而不是一段行情;全部用 ≥ 60 日窗口,换手低;没有阈值 /
+    阶跃。预期并不高:我没有这些种子的任何读数,整个批的情况是原始读数都被成本压在 −1 以下。
+
+
+    数学检查:(a) 无前视:`day_first` / `day_last` 是当天数据,OV 里的昨收用 `ts_delay(·, 1)`(res[t] =
+    x[t−1]),今天开盘价在 9:25 已知、收盘价在 15:00 已知,t 日收盘后算、t+1 日交易。(b) 数值:OA 是两个对数量之差,量级 0~3;OV
+    / ID 是对数价差,量级 1e-2;N10 的分母是全天成交额(量级 1e6~1e10)加 1,不会出现 0/0;`cross_zscore` 窗口内常数时返回
+    0 而不是 inf。本机合成立方体(80 × 320 × 241)全算过:13 个种子无 inf、每日取值离散度 ≥ 0.99、覆盖率 0.98(N12 因
+    60 日收益的热身只有 0.78,真实面板的热身期只占 3%)。(c) 定义:`day_first(log(Amt))` 的退回行为见上;OV 在停牌复牌当天为缺失(昨收缺失),不会拿跨停牌的价差当隔夜收益。'
+  inspired_by: B118(`O:log(F)` 一带 25 条,大多是 `day_<聚合>(log(Amt))`):head 1 `day_first(log(Amt))`
+    读的是开盘集合竞价那一根的成交额,拆解里 valid −0.90 是本批 head 里最好的;日度聚合的 log 成交额都是水平量,新尺子去掉水平后剩下的是「开盘相对全天典型分钟的倍数」及其与隔夜
+    / 日内收益的耦合
+  literature:
+  - title: 'Paying attention: Overnight returns and the hidden cost of buying at the
+      open'
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang
+    year: '2012'
+    treatment: 散户买单集中在开盘、注意力强的票隔夜涨盘中跌;种子 N5、N6、N8 读开盘异常与隔夜 / 盘中收益的耦合
+  - title: 'All that glitters: The effect of attention and news on the buying behavior
+      of individual and institutional investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 注意力驱动的买入造成价格压力、随后反转;N12 的开盘异常 × 过去赢家
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 隔夜与日内收益各自在股票层面有持续性;N5、N7 把开盘强度当作隔夜那一半的权重
+  seeds:
+  - cross_mean(sub(day_first(log(Amt)), day_mean(log(Amt))), 60)
+  - cross_decay_linear(sub(day_first(log(Amt)), day_mean(log(Amt))), 241)
+  - cross_mean(cross_zscore(day_first(log(Amt)), 241), 60)
+  - cs_bucket_zscore(cross_mean(sub(day_first(log(Amt)), day_mean(log(Amt))), 120),
+    LogFloatCap)
+  - cross_mean(mul(cross_zscore(day_first(log(Amt)), 120), sub(log(day_first(Open)),
+    ts_delay(log(day_last(Close)), 1))), 60)
+  - cross_mean(mul(cs_demean(sub(day_first(log(Amt)), day_mean(log(Amt)))), sub(log(day_first(Open)),
+    ts_delay(log(day_last(Close)), 1))), 120)
+  - cross_corr(sub(day_first(log(Amt)), day_mean(log(Amt))), sub(log(day_first(Open)),
+    ts_delay(log(day_last(Close)), 1)), 120)
+  - cross_mean(mul(cs_demean(sub(day_first(log(Amt)), day_mean(log(Amt)))), sub(log(day_last(Close)),
+    log(day_first(Open)))), 60)
+  - cross_stddev(sub(day_first(log(Amt)), day_mean(log(Amt))), 120)
+  - cross_mean(div(day_first(Amt), add(day_sum(Amt), 1)), 120)
+  - cross_mean(sub(day_first(log(Amt)), day_last(log(Amt))), 120)
+  - mul(cs_demean(cs_rank(cross_mean(sub(day_first(log(Amt)), day_mean(log(Amt))),
+    60))), cs_demean(cs_rank(ts_delta(log(day_last(Close)), 60))))
+  - cross_ema(sub(day_first(log(Amt)), day_mean(log(Amt))), 60)
+R:
+- head: day_first(log(Amt))
+  why: 烂的部件:(1) 一天一个读数,原始日换手 0.53(members.csv,train),15 bp 吃在换手上;(2) 水平:开盘一根的成交额与这只股票的总活跃度共线,新尺子里的流动性
+    / 已知族控制把它压成负分(−1.47 / −0.90)。变体只改这两处:变体 2、3 把开盘一根在「同流动性十分位」内标准化(去水平,留相对强度),再取
+    241 / 60 日均值(去噪声、降换手);变体 4 先取 241 日均值再在 60 日流动性十分位内标准化;变体 1 只做 60 日均值作对照,看水平自己是否有一点(它多半
+    ρ_known 过不了 0.5,是对照)。
+  variants:
+  - cross_mean(day_first(log(Amt)), 60)
+  - cross_mean(cs_bucket_zscore(day_first(log(Amt)), day_mean(log(Amt))), 241)
+  - cross_mean(cs_bucket_zscore(day_first(log(Amt)), day_mean(log(Amt))), 60)
+  - cs_bucket_zscore(cross_mean(day_first(log(Amt)), 241), cross_mean(day_mean(log(Amt)),
+    60))
+- head: day_mean(log(Volume))
+  why: 烂的部件:拆解表里把 Volume 换成 Amt 是 −2.82(比 head 的 −1.49 差 1.33),而 log Amt = log Volume
+    + log 价格,两者之差恰是名义价格。所以股数口径比金额口径好,可能是因为金额口径多带了一个对本批不利的价格项。我沿这条直线外推:s(c) = −log
+    Volume + c·log 价格(c = 0 是 head,c = −1 是已测的 Amt 版 −2.82);变体 2、3、4 取 c = 1、0.5、2,变体
+    5 取纯价格 `day_mean(log(Amt)) − day_mean(log(Volume))`(逐分钟 VWAP 的对数均值),变体 6 把 c =
+    1 取 120 日均值(价格是慢变量,日换手低);变体 1 是 head 本身的 241 日均值,看慢下来多少。方向由 train 定,不预设。
+  variants:
+  - cross_mean(day_mean(log(Volume)), 241)
+  - sub(day_mean(log(Amt)), mul(2, day_mean(log(Volume))))
+  - sub(mul(0.5, day_mean(log(Amt))), mul(1.5, day_mean(log(Volume))))
+  - sub(mul(2, day_mean(log(Amt))), mul(3, day_mean(log(Volume))))
+  - sub(day_mean(log(Amt)), day_mean(log(Volume)))
+  - cross_mean(sub(day_mean(log(Amt)), mul(2, day_mean(log(Volume)))), 120)
+- head: add(day_min(log(Amt)), day_cov(Ret, log(Amt)))
+  why: 烂的部件:`day_cov(Ret, log(Amt))`(拆解表:单独 train −3.10)。更准确地说是 `add` 的量纲:day_min(log
+    Amt) 约 5~12,协方差 1e-4~1e-3,所以 head 实际等于 `day_min(log(Amt))`(单独 −1.59,和 head 一样),协方差只打破并列。变体:先各自取截面秩再相加,让两项权重相等(变体
+    1,日度)、再取 120 日均值(变体 2)、协方差秩减最小值秩(变体 3:耦合净掉流动性下沿);变体 4 是 `day_min(log(Amt))` 的
+    241 日均值(只看最小值这一项慢下来多少)。`day_min(log(Amt))` 在有 1 手(100 股)成交的分钟里就是 log(100 × 价格),所以它一部分是价格水平、一部分是流动性下沿;这是我对它的
+    ρ_known −0.70 的解释。
+  variants:
+  - add(cs_rank(day_min(log(Amt))), cs_rank(day_cov(Ret, log(Amt))))
+  - cross_mean(add(cs_rank(day_min(log(Amt))), cs_rank(day_cov(Ret, log(Amt)))), 120)
+  - cross_mean(sub(cs_rank(day_cov(Ret, log(Amt))), cs_rank(day_min(log(Amt)))), 120)
+  - cross_mean(day_min(log(Amt)), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,131 @@
+seed: 2032
+round: 2
+slots:
+- type: E
+  core: cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30))
+  hypothesis: '机制:核心 K = cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)),即开盘集合竞价量(20 日半衰期 EMA)在「30 日均总成交量」分桶内的截面 z 分数:同等流动性的票之间,谁的开盘竞价参与相对更重。它是第 1
+    轮 E 位里唯一读到正分的核心(score +0.03,train +0.03 / valid +0.42),且因分桶已去掉了流动性水平,与 liq / known
+    控制的重合预计很低。机制假设:同一流动性档内,开盘竞价集中挂单 = 隔夜消息或散户注意力集中到开盘一次撮合,与连续竞价的分散成交行为不同;这个相对强度是慢变、低换手的股票特性。
+
+    这次要试的外围(第 1 轮的外围只有对 K 再套 cs_bucket_zscore / cross_ema):(1) 时间维度标准化与偏离:cross_zscore(K,60)、K
+    减自己 120 日均值,把持久的截面水平去掉、只留相对自己历史的变化;(2) 慢平滑与形状:cross_decay_linear、cross_mean 40、cross_stddev(K,60)
+    离散度、cross_tail_mean_q75 尾部强度、cross_argmax 峰值位置、均值 / 离散度之比;(3) 与价格配对:K 乘隔夜跳空方向
+    sign(G)、K 与 G 的 60 日相关、K 对日内收益的回归 t 值、K 乘近期收益状态的 120 日 z 分数(注意力买入发生在上涨之后);(4)
+    竞价 vs 收盘参与差:K 减同样分桶的收盘集合竞价量 day_last(Volume) 版本;(5) K 对分桶总量的回归残差。
+
+    与以前不同的原因:这些外围分别用 cross_zscore / cross_decay_linear / cross_corr / cross_reg_tvalue
+    / cross_stddev / cross_tail_mean / cross_argmax / cross_regres 与价格叶子,第 1 轮这个核心的候选里没有一个这样的外围,也不含
+    cross_sum;骨架核对见相关度表。样本外为什么还会在:分桶标准化只比较同档股票,去掉了随牛熊变化的整体成交水平;集合竞价制度自 2018 年未变,散户
+    / 机构在竞价阶段的差异是结构性的;valid 比 train 好说明它不是只吃早年行情。诚实预期:train 偏弱,能否到 0.5 看慢平滑 + 去水平后
+    train 能否抬起来。'
+  seeds:
+  - cross_zscore(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 60)
+  - sub(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), cross_mean(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 120))
+  - cross_decay_linear(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 40)
+  - cross_decay_linear(mul(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 30)
+  - cross_corr(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)
+  - cross_reg_tvalue(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), sub(div(day_last(Close), day_first(Open)), 1), 90)
+  - sub(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), cs_bucket_zscore(cross_ema(day_last(Volume), 20), cross_mean(day_sum(Volume),
+    30)))
+  - cross_stddev(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 60)
+  - mul(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), cross_zscore(cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 20), 120))
+  - div(cross_mean(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 20), add(cross_stddev(cs_bucket_zscore(cross_ema(day_first(Volume), 20),
+    cross_mean(day_sum(Volume), 30)), 60), 1))
+  - cross_tail_mean_q75(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 60)
+  - cross_mean(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 40)
+  - cross_regres(cs_bucket_zscore(cross_ema(day_sum(Volume), 20), cross_mean(day_sum(Volume),
+    30)), cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), 60)
+- type: N
+  hypothesis: '机制:成交量条件下的个股收益反应函数(Llorente-Michaely-Saar-Wang 2002 的量价信息 vs 流动性交易区分;Gervais-Kaniel-Mingelgrin
+    高量收益溢价)。对每只股票用自己过去 60-120 日的数据估计:昨天由放量支撑的价格变动(收益 R 乘成交量对自己 60 日历史的 z 分数 ZV,ZV
+    先取 log 压重尾)今天是延续还是回吐。放量日收益偏信息交易(延续),缩量日偏流动性交易(回吐);这个「延续 / 回吐倾向」是每只股票自己的慢变特性(取决于散户
+    / 机构结构、信息不对称度),截面上没有被已知因子度量。
+
+    算子实现:R = day_last(Close) / ts_delay(day_last(Close),1) - 1;ZV = cross_zscore(log(1+day_sum(Volume)),
+    60);用 cross_reg_tvalue / cross_regbeta / cross_corr(x, y, d) 做滚动回归 / 相关,x 为自变量,x
+    全部用 ts_delay 后移 1 天(昨天的量价事件解释今天的收益,无前视)。变体:(a) 放量加权乘积项对次日收益的 t 值 / β / 相关(种子 1、2、4、13);(b)
+    仅放量日(ZV>1)的收益、仅下跌日的量(种子 5、10);(c) 当天量与收益 / 振幅的同期回归(种子 8、9,价格冲击斜率);(d) 成交额加权对等权收益之差(种子
+    7);(e) 昨天日内段 I 对今天隔夜段 G 的量加权反应(种子 11、12,隔夜 - 日内拉锯加上量条件,第 1 轮没有量条件)。
+
+    为什么与库里不同:B095 的手写库里的日收益写法全部是收益的水平 / 波动 / VWAP 加权累计(head 拆解表显示 VWAP 权重只贡献 +0.09,头部只是
+    vol 水平);没有一条是「滚动回归系数 / 相关」的二阶特性,也没有用 cross_reg_tvalue 估计个股量价反应函数。输出是回归 t 值或相关系数,无量纲,与
+    liq / vol / reversal 控制天然低相关(相关度表会验证),而且都用 120 日长窗口,换手低,能吃下 15 bp 成本。为什么样本外还会在:机制来自参与者结构(流动性交易
+    vs 信息交易),不依赖某一年的风格;估计窗口长,个股特性稳定。诚实预期:单日回归噪声大,毛超额可能是零;种子彼此相关度高(同一个机制的不同写法),通过的多半是
+    t 值 / 相关版本。'
+  inspired_by: B095 手写库的 head:全部是日收益率的水平 / 波动 / 以 VWAP 价格加权的 60 日累计,拆解表显示收益本身必要、价格权重不必要,即只读收益水平;第
+    1 轮 R 里竞价份额(量的去水平形态)是唯一读到正 train 的写法,说明量的结构比价格水平有信息,于是把量与收益配对成条件反应函数。
+  seeds:
+  - cross_reg_tvalue(ts_delay(mul(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), cross_zscore(log(add(day_sum(Volume), 1)), 60)), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_regbeta(ts_delay(mul(sign(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1)), cross_zscore(log(add(day_sum(Volume), 1)), 60)), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_corr(ts_delay(cross_zscore(log(add(day_sum(Volume), 1)), 60), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 90)
+  - cross_reg_tvalue(ts_delay(mul(is_gt(cross_zscore(log(add(day_sum(Volume), 1)),
+    60), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_ema(mul(is_gt(cross_zscore(log(add(day_sum(Volume), 1)), 60), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1)), 40)
+  - cross_reg_tvalue(cross_zscore(log(add(day_sum(Volume), 1)), 60), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 60)
+  - cross_reg_tvalue(cross_zscore(log(add(day_sum(Volume), 1)), 60), abs_(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1)), 120)
+  - cross_corr(ts_delay(mul(is_lt(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 0), cross_zscore(log(add(day_sum(Volume), 1)), 60)), 1), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_reg_tvalue(ts_delay(mul(sub(div(day_last(Close), day_first(Open)), 1), cross_zscore(log(add(day_sum(Volume),
+    1)), 60)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120)
+  - cross_reg_tvalue(ts_delay(mul(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), cross_zscore(log(add(day_sum(Volume), 1)), 60)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1), 120)
+  - cross_regbeta(ts_delay(mul(sub(div(day_last(Close), day_first(Open)), 1), cross_zscore(log(add(day_sum(Volume),
+    1)), 60)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 120)
+R:
+- head: cross_sum(day_first(Volume), 5)
+  why: 第 1 轮 R 里竞价量占全天比例的 60 日版 train +0.27 / valid -0.10,说明份额比水平好;5 日窗口太短、成本大。烂的部件是水平与短窗口,改成份额的慢
+    EMA、份额相对自己一年均值的异常、规模桶内份额。
+  variants:
+  - cross_ema(div(cross_sum(day_first(Volume), 5), cross_sum(day_sum(Volume), 5)),
+    30)
+  - sub(div(cross_sum(day_first(Volume), 20), cross_sum(day_sum(Volume), 20)), div(cross_sum(day_first(Volume),
+    240), cross_sum(day_sum(Volume), 240)))
+  - cs_bucket_zscore(div(cross_sum(day_first(Volume), 20), cross_sum(day_sum(Volume),
+    20)), LogFloatCap)
+  - cs_bucket_zscore(div(cross_sum(day_first(Volume), 60), cross_sum(day_sum(Volume),
+    60)), cross_mean(day_sum(Volume), 60))
+- head: div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    div(day_sum(Amt), day_sum(Volume))), 60), ts_sum(div(day_sum(Amt), day_sum(Volume)),
+    60))
+  why: 拆解表:这个 head 是收益按 VWAP 价格水平加权的 60 日加权收益(价格加权的反转 / 动量),必要性最大的部件是收益本身(+0.74),价格权重只贡献
+    +0.09,即权重是烂部件;换成真正有信息的权重:成交额权重(成交量放大的天权重大)与成交额加权相对等权的超额。
+  variants:
+  - div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), day_sum(Amt)),
+    60), ts_sum(day_sum(Amt), 60))
+  - sub(div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    day_sum(Amt)), 60), ts_sum(day_sum(Amt), 60)), ts_mean(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 60))
+  - sub(div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    log(add(day_sum(Volume), 1))), 120), ts_sum(log(add(day_sum(Volume), 1)), 120)),
+    ts_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 120))
+audit:
+  attempts: 1
+  file: audit_1.yaml

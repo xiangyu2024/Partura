@@ -1,0 +1,201 @@
+seed: 2004
+round: 2
+slots:
+- type: E
+  core: div(day_cov(Ret, Volume), day_mean(Volume))
+  hypothesis: "核心 D = div(day_cov(Ret, Volume), day_mean(Volume))。恒等式:cov(R,V)/mean(V)\
+    \ = Σ R_t V_t / Σ V_t − mean(R_t),\n即「当天分钟收益按成交量加权的均值」减「等权均值」(单位是收益;等价写法 sub(day_wmean(Ret,\
+    \ Volume), day_mean(Ret)),种子里一律用 div 写法以便原样含核心)。\n读的是「价格是不是在放量的分钟里涨」:+ 号 = 放量时往上走(资金推价),−\
+    \ 号 = 放量时往下走(派发 / 恐慌)。因为 cov ≤ σ_R σ_V 且 σ_V / V̄ ≤ √240,D 有界(≲ 15 σ_R),\n分钟全为\
+    \ 0 的停牌日分子分母同为 0 → NaN,没有近零分母造成的爆点。\n\n【本轮依据(数字都是流水线读数;「原因」是推断,已逐条标明)】\n1. 上一轮\
+    \ R 位把快照 head ts_skew(day_cov(Ret, Volume), 40) 换成 ts_skew(D, 80):score −0.64\
+    \ → +0.09(train +0.09 / valid +0.90),与已知族 ρ −0.02,与原 head ρ 0.45。\n   这是本流里最接近线的一条。承重的是「÷\
+    \ 均量」:去掉首尾两根集合竞价(in_slice 1..239)的 ts_skew,窗口 40 时与全天版本日度秩 ρ 0.98(−0.84 / −0.30,与\
+    \ head 的 −0.64 / −0.08 同级),窗口 80 时 −0.56 / −0.08;\n   也就是首尾两根不是承重的,而同一个 80 日窗口上\
+    \ ÷ 均量把 train 从 −0.56 拉到 +0.09、valid 从 −0.08 拉到 +0.90。所以上一轮「C 主要读收盘集合竞价那一下」的推断被数据否定;\n\
+    \   起作用的是「去掉当天成交量水平之后,放量分钟里的价格动作」:原始 cov = V̄_t × D_t,三阶矩被放量日(含全市场放量日)的 V̄_t 抬着走,÷\
+    \ V̄ 之后只剩「放量的时点与方向」。\n2. 另一个流(2009,其第 2 轮 N 位)在 Amt 加权版本上独立得到同一个原语的最好读数:cross_mean(sub(day_wmean(Ret,\
+    \ Amt), day_mean(Ret)), 241) = +0.07(train +0.07 / valid +0.40),是目前各流里少数 ≥ 0 的读数。\n\
+    \   两个流从不同方向读到同一个对象,都在 0 附近、valid 好于 train。\n3. 对比:上一轮含 D 的 5 个候选平均 −1.19(已知有\
+    \ cross_mean(D, 40) 这类水平平滑写法),C 的 z 分数 + EMA、C 与 σ_R 的 60 日相关等关系 / 水平写法最好也只有 −0.25\
+    \ ~ −0.7。D 的价值在**分布形状**(三阶矩)而不是水平:去掉 σ_R 的相关版本 ts_skew(day_corr(…), 80) 是 −2.2,所以承重的是「放量时收益的**幅度**」,也就是罕见的大幅放量上涨日\
+    \ vs 大幅放量下跌日。\n\n【机制与文献】放量上涨的日子是知情买入 / 注意力事件的脚印(Gervais-Kaniel-Mingelgrin 2001\
+    \ 的 high-volume return premium;Llorente-Michaely-Saar-Wang 2002:信息不对称强的票放量收益延续,对冲性成交则反转)。\n\
+    D 的 80~241 日偏度 = 「过去一两个季度里,放量上涨的极端日是否比放量下跌的极端日更多」,是个股的慢变量(换手低,15 bp 成本下才活得下来;窗口越长越好是整个\
+    \ wave 的共同教训)。\n\n【这一位要试的外围(与快照里已见过的写法不同:已知含 D 的候选是 cross_mean(D, 40) 一类水平平滑写法,没有一条做过市场剥离\
+    \ / 秩空间 / 有界均值 / 极端日不对称)】\n(a) **剥离全市场共同部分**:cs_demean(D)(每天减截面均值)后再取 120 / 241\
+    \ 日偏度。上一轮的偏度读的是「个股自己的」还是「全市场放量大涨 / 大跌日」没法分:全市场大涨放量日所有票的 D 同时为正,偏度会被这几天主导;\n  \
+    \  剥掉之后才是个股特有的放量推价事件。这是上一轮没试过的最大变量。\n(b) **秩空间与稳健统计**:ts_skew(cs_rank(D))(日度截面秩的偏度\
+    \ = 「常在截面顶端还是底端」)、cross_mean(cs_rank(D), 241)(秩均值,不被极端值带走)、cross_mean(sigmoid(cs_robust_z(D)),\
+    \ 120)(有界影响的均值:单日极端值最多贡献 1,等于「方向占比」的连续版)、ts_max + ts_min(最大 / 最小日之和 = 极端日不对称)、\n\
+    \    尾部均值 q75 + q25(与上一轮对 C 的 z 分数做过的版本不同:这里是对剥离后的 D,窗口 120)。\n(c) **慢化与状态**:cross_ema(cs_demean(D),\
+    \ 120)(剥离市场后的慢水平,对照偏度)、ts_skew 的 EMA(30)、近 10 日 EMA 减 120 日 EMA(D 的变化)、对 60 日动量做秩回归取残差(去掉与反转\
+    \ / 动量重合)、乘 (0.5 − 市值秩)(Llorente:小市值信息不对称强才延续,大市值反转 —— 交互项不是尺子里对市值的 1/2/3 次方能去掉的)、\n\
+    \    cs_flip_by_state(随全市场成交额状态翻符号)。\n(d) 与日收益的关系 cross_corr(D, day_sum(Ret),\
+    \ 120):放量推价是否发生在大涨日(协偏度式读法)。\n\n【和库的区别 / 为什么样本外还会在】库里 5583 条没有一条是 D(÷ 均量的 vw −\
+    \ ew 收益)的剥离市场 / 秩空间读法,cs_demean、cs_rank、cs_robust_z + sigmoid、ts_max + ts_min\
+    \ 作用在这条链上的骨架都不在库里(本地逐条对 skeleton_key 核对过)。\n慢(120~241 日)、无量纲(单位是收益,与流动性 / 市值水平控制先天近似正交:上一轮\
+    \ R 位读数与已知族 ρ −0.02)、依赖的是放量上涨 vs 放量下跌的行为(信息 / 注意力事件)而不是某段行情。\n**已知风险**:上一轮 valid\
+    \ 0.90 / train 0.09,train 拖后腿(2018–2023 的大盘股抱团行情里放量推价的含义可能不同),所以 (a) 的市场剥离和 (c)\
+    \ 的市值交互都是针对 train 弱的设计,不是调参;若 train 仍然 < 0.3,说明信号本身是 2024 以后微盘行情的产物。\n偏度类种子与快照\
+    \ head 1(ts_skew(C, 40))的日度秩 ρ 可能在 0.4~0.6,窗口 ≥ 120 时预计 < 0.5。\n"
+  seeds:
+  - ts_skew(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 120)
+  - cross_ema(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 120)
+  - ts_skew(cs_rank(div(day_cov(Ret, Volume), day_mean(Volume))), 120)
+  - cross_mean(cs_rank(div(day_cov(Ret, Volume), day_mean(Volume))), 241)
+  - cross_mean(sigmoid(cs_robust_z(div(day_cov(Ret, Volume), day_mean(Volume)))),
+    120)
+  - add(ts_max(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 120), ts_min(cs_demean(div(day_cov(Ret,
+    Volume), day_mean(Volume))), 120))
+  - add(cross_tail_mean_q75(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))),
+    120), cross_tail_mean_q25(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))),
+    120))
+  - sub(cross_ema(div(day_cov(Ret, Volume), day_mean(Volume)), 10), cross_ema(div(day_cov(Ret,
+    Volume), day_mean(Volume)), 120))
+  - ts_skew(sub(div(day_cov(Ret, Volume), day_mean(Volume)), cross_mean(div(day_cov(Ret,
+    Volume), day_mean(Volume)), 20)), 120)
+  - cross_ema(ts_skew(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 120),
+    30)
+  - cs_regres(cs_rank(ts_skew(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))),
+    120)), cs_rank(cross_mean(day_sum(Ret), 60)))
+  - mul(ts_skew(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 120), sub(0.5,
+    cs_rank(LogFloatCap)))
+  - cross_corr(div(day_cov(Ret, Volume), day_mean(Volume)), day_sum(Ret), 120)
+  - ts_skew(cs_robust_z(div(day_cov(Ret, Volume), day_mean(Volume))), 120)
+- type: N
+  hypothesis: "新 idea:**「短窗口估计关系、长窗口取稳健统计」的两级关系量**,读个股价格与成交量之间的「典型联动」,并把全市场共同部分剥掉。\n\
+    \n【现象来源(本流两个批 + 上一轮结果)】\n(1) 第一批 head 2 cross_quantile_q50(cross_corr(day_sum(High),\
+    \ day_cov(Volume, Amt), 15), 241) = −0.73(train −0.73 / valid −0.30),是 M1 三个 head\
+    \ 里唯一带「慢中位数」的:\n    先在 15 日窗口里估价格与成交量离散度的相关,再取 241 日中位数。它的结构不是「一个长窗口的相关」(被几个事件日\
+    \ / 趋势主导),而是「过去一年里大多数 15 日窗口里的典型相关」。\n(2) 上一轮 N 位最好的 5 个(−0.41 ~ −0.68)全是 cross_corr\
+    \ 型的关系量(全天协方差与连续竞价协方差,含换字段的变体,60 / 241 日相关);E 位最好的两个(−0.25 与 −0.27,各自 train 与\
+    \ valid 只差 0.05 ~ 0.09)是 cross_corr / cross_reg_tvalue(C, day_std(Ret), 60)。\n\
+    \    关系量对水平型控制(流动性 / 波动 / 市值 / 已知族)先天近似正交(上一轮相关度表里这类种子对控制的 |ρ| 多在 0.2 以下),所以没被新尺子扣光。\n\
+    (3) 但 head 2 的两个变量都是**后复权价格水平**(day_sum(High) ≈ 241 × 价位,day_cov(Volume, Amt)\
+    \ ≈ 价位 × 成交量方差):推断 15 日窗口内的相关主要是「价格趋势 vs 价位 × 量能」,带着价格尺度;\n    且全市场共同的涨跌与放量会让所有股票的窗口相关同时偏向一边。这一位把这两样去掉。\n\
+    \n【算子怎样实现】\n- 价格侧用收益而不是价位:R = day_sum(Ret)(当天连续竞价分钟收益之和,不含隔夜跳空)或 CC = div(day_last(Close),\
+    \ ts_delay(day_last(Close), 1)) − 1(含隔夜的收盘到收盘收益)。\n- 成交量侧用「相对自己 20 日均量的异常量」VA\
+    \ = div(day_sum(Volume), cross_mean(day_sum(Volume), 20))(无量纲)、以及上一位的 D = div(day_cov(Ret,\
+    \ Volume), day_mean(Volume))(放量时收益的加权差)。\n- 剥离全市场:cs_demean(·)(每天减截面均值),让相关只反映「这只票相对市场的收益与相对市场的放量」是否同向。\n\
+    - 短窗口 cross_corr(X, Y, 15 / 20) → 长窗口 cross_quantile_q50(·, 241)(中位数)、q25 / q75(只看偏弱\
+    \ / 偏强一端)、cross_mean / cross_ema(平均版本做对照)、q75 − q25(关系的不稳定程度)。\n- 带滞后的版本:cross_corr(ts_delay(VA,\
+    \ 1), R, 15) = 「昨天放量是否预示今天上涨」(个股自己的延续 / 反转系数,Llorente 等 2002 的 per-stock 版本)。\n\
+    相关系数无量纲,不用除以近零的量;cross_quantile_q50 在窗口里有效日少时取可用日(前 241 日只是暖机,和 head 2 同样)。\n\n\
+    【机制:为什么可能是 alpha 来源】价量联动的符号是一个个股层面的行为特征:放量伴随上涨(追涨 / 吸筹 / 卖空受限下的知情买入)还是放量伴随下跌(恐慌\
+    \ / 被迫卖出 / 派发)。\n单个长窗口相关被少数事件日主导,短窗口 + 稳健聚合读的是「典型日」,更接近这只票的常态。文献:Karpoff 1987(价量联动),Llorente-Michaely-Saar-Wang\
+    \ 2002(放量后收益延续或反转取决于信息不对称)。\n方向(哪边好)由尺子按 train 定,所以种子里 q25 / q75 都给。\n\n【和库不同】库里没有\
+    \ cs_demean 作用在价量相关的两个变量上,没有 R / CC / VA 作为相关变量的两级写法(head 2 的骨架是 cross_quantile(cross_corr(day_sum(F),\
+    \ day_cov(F,F))),我的种子骨架都不同,已对 5583 条 skeleton_key 核对)。\n【为什么样本外还会在】慢(241 日中位数,换手低)、无量纲(价格尺度和量能水平都不进来)、市场剥离后不依赖单段行情的共同波动;依赖的是「放量时往哪边走」这个行为特征。\n\
+    【已知风险】相关类对 σ_R 可能有 0.2~0.4 的 |ρ|(波动大的票相关更稳);cross_corr 15 日窗口只有 15 个点,单个窗口噪声大,靠\
+    \ 241 日中位数压住;train 与 valid 的符号可能不同(尺子按 train 定,valid 可能反过来)。\n"
+  inspired_by: 第一批 M1 head 2(cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume,
+    Amt), 15), 241),−0.73 / −0.30,慢中位数 + 短窗口相关);上一轮 N 位最好的 5 个与 E 位最好的 2 个全是 cross_corr
+    型关系量(−0.25 ~ −0.68),对水平型控制近似正交
+  seeds:
+  - cross_quantile_q50(cross_corr(day_sum(Ret), div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20)), 15), 241)
+  - cross_quantile_q50(cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), div(day_sum(Volume), cross_mean(day_sum(Volume), 20)), 20), 241)
+  - cross_quantile_q50(cross_corr(cs_demean(day_sum(Ret)), cs_demean(div(day_sum(Volume),
+    cross_mean(day_sum(Volume), 20))), 15), 241)
+  - cross_quantile_q50(cross_corr(cs_demean(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1)), cs_demean(div(day_sum(Volume), cross_mean(day_sum(Volume), 20))), 20),
+    241)
+  - cross_quantile_q25(cross_corr(day_sum(Ret), div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20)), 15), 241)
+  - cross_quantile_q75(cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), div(day_sum(Volume), cross_mean(day_sum(Volume), 20)), 20), 241)
+  - cross_mean(cross_corr(cs_demean(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1)), cs_demean(div(day_sum(Volume), cross_mean(day_sum(Volume), 20))), 15),
+    241)
+  - cross_ema(cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    div(day_sum(Volume), cross_mean(day_sum(Volume), 20)), 15), 60)
+  - sub(cross_quantile_q75(cross_corr(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), div(day_sum(Volume), cross_mean(day_sum(Volume), 20)), 15), 241), cross_quantile_q25(cross_corr(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20)), 15), 241))
+  - cross_quantile_q50(cross_regbeta(div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20)), day_sum(Ret), 15), 241)
+  - cross_quantile_q50(cross_corr(ts_delay(div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20)), 1), day_sum(Ret), 15), 241)
+  - cross_quantile_q50(cross_corr(ts_delay(div(day_cov(Ret, Volume), day_mean(Volume)),
+    1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20), 241)
+  - cross_quantile_q50(cross_corr(div(day_cov(Ret, Volume), day_mean(Volume)), day_std(Ret),
+    20), 241)
+  - cross_quantile_q50(cross_corr(cs_demean(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1)), cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 20), 241)
+  - cross_quantile_q50(cross_corr(ts_delay(cs_demean(div(day_sum(Volume), cross_mean(day_sum(Volume),
+    20))), 1), cs_demean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)),
+    15), 241)
+R:
+- head: ts_skew(day_cov(Ret, Volume), 40)
+  why: '烂部件有三个,前两个上一轮已有实测。(1) 原始 cov = V̄_t × D_t:÷ day_mean(Volume) 把 head 换成 ts_skew(D,
+    80) 后 −0.64 → +0.09(train +0.09 / valid +0.90);去掉首尾两根(in_slice 1..239)的 80 日版本只有
+    −0.56 / −0.08(40 日版本与 head 日度秩 ρ 0.98),
+
+    所以承重的是 ÷ 均量,不是集合竞价,也不是窗口(同一个 80 日窗口上,÷ 均量让 train 差 0.65、valid 差 0.98)。
+
+    (2) 窗口:D 上的最好读数在 80,更长窗口(120 / 241)是没试过的方向(整个 wave 的共同教训:越慢越好,换手低)。
+
+    (3) 全市场共同日:全市场放量大涨 / 大跌日让所有票的 D 同时偏一侧,偏度被这几天主导;cs_demean 剥掉之后才是个股特有的放量推价。(3) 没有实测,是推断。
+
+    本组变体:更长窗口、剥离市场、秩空间、winsor 防极端、EMA 慢化、去掉首尾两根的 D(检验 ÷ 均量之后集合竞价是否有影响)。
+
+    '
+  variants:
+  - ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 120)
+  - ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 241)
+  - ts_skew(cs_demean(div(day_cov(Ret, Volume), day_mean(Volume))), 80)
+  - ts_skew(cs_winsor(div(day_cov(Ret, Volume), day_mean(Volume))), 120)
+  - cross_ema(ts_skew(div(day_cov(Ret, Volume), day_mean(Volume)), 120), 20)
+  - ts_skew(div(day_cov(in_slice(Ret, 1, 239), in_slice(Volume, 1, 239)), day_mean(in_slice(Volume,
+    1, 239))), 120)
+- head: cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 241)
+  why: '烂部件(推断,本 head 没有拆解表):两个变量都是后复权价格水平 / 价位 × 量能方差,15 日窗口里的相关主要读「价格趋势 vs 价位 ×
+    量能」,带价格尺度,并且全市场共同涨跌放量会让所有票的窗口相关同向偏移。
+
+    变体:价格换成收益并把 day_cov(Volume, Amt) ÷ day_mean(Amt) 去掉价位(单位变成股数);成交量方差换成完全无量纲的 day_cov(Volume,
+    Amt) / (V̄ Ā);聚合 q50 → 均值(检验「中位数」是不是承重的);窗口 15 → 30 并把价格代理换成 day_mean(Vwap)(检验「短窗口」是不是承重的)。
+
+    '
+  variants:
+  - cross_quantile_q50(cross_corr(day_sum(Ret), div(day_cov(Volume, Amt), day_mean(Amt)),
+    15), 241)
+  - cross_quantile_q50(cross_corr(day_sum(High), div(day_cov(Volume, Amt), mul(day_mean(Volume),
+    day_mean(Amt))), 15), 241)
+  - cross_mean(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 241)
+  - cross_quantile_q50(cross_corr(day_mean(Vwap), day_cov(Volume, Amt), 30), 241)
+- head: add(add(-0.5, ts_cov(day_ar1_coefficient(Amt), cross_cov(cross_min(day_skew(Open),
+    15), mul(day_autocorr_n1(High), day_std(Low)), 10), 20)), ts_regbeta(neg(day_cov(Low,
+    Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 10))
+  why: '烂部件有拆解表的实测。(1) add(-0.5, ·) 只是常数平移,必要性 +0.00;ts_cov(day_ar1_coefficient(Amt),
+    cross_cov(…), 20) 这一项必要性 −0.48:把它换成单独的 day_ar1_coefficient(Amt) 得到
+
+    add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(…)) = −0.27(train +0.13 /
+    valid −0.27,方向翻成 +1,与原 head 的交易信号 ρ −0.92,是另一个信号;已知族 ρ −0.10),比原 head −0.75 好
+    0.48,说明那条 cross_cov 链是噪声(换窗口 20 → 10 / 40 都不动:−0.77 / −0.75,所以不是窗口问题)。
+
+    (2) ts_regbeta(neg(day_cov(Low, Close)), cross_regalpha(…, 15), 10) 是承重部件(拆掉掉到
+    −2.25,必要性 +1.50;单独 −0.81 / valid −0.72),它的两个窗口 10 与 15 是整个式子里最短的,拆解表没有扫过;
+
+    本流和整个 wave 的共同读数是窗口越长换手越低、15 bp 下越好。变体 = 去掉烂的 cross_cov 链之后,把 regbeta / regalpha
+    窗口拉长、把 ar1 项慢化。
+
+    '
+  variants:
+  - add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(neg(day_cov(Low, Close)),
+    cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 30))
+  - add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(neg(day_cov(Low, Close)),
+    cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 60))
+  - add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(neg(day_cov(Low, Close)),
+    cross_regalpha(day_quantile(Vwap), day_quantile(High), 60), 10))
+  - add(add(-0.5, day_ar1_coefficient(Amt)), ts_regbeta(neg(day_cov(Low, Close)),
+    cross_regalpha(day_quantile(Vwap), day_quantile(High), 60), 30))
+  - add(add(-0.5, cross_mean(day_ar1_coefficient(Amt), 20)), ts_regbeta(neg(day_cov(Low,
+    Close)), cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 10))
+  - add(cross_mean(day_ar1_coefficient(Amt), 60), ts_regbeta(neg(day_cov(Low, Close)),
+    cross_regalpha(day_quantile(Vwap), day_quantile(High), 15), 30))
+audit:
+  attempts: 1
+  file: audit_1.yaml

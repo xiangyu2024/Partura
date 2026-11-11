@@ -1,0 +1,193 @@
+seed: 2013
+round: 1
+slots:
+- type: E
+  core: pow_2(pow_05(day_ar1_coefficient(Volume)))
+  hypothesis: '事实(本流快照 B037 的 9 个候选 + 拆解表):9 个候选全是同一个对象 C = |φ| 的外壳,φ = day_ar1_coefficient(Volume)(当天
+    241 根分钟成交量对前一分钟的 AR(1) 斜率;pow_2(pow_05(·)) = 取绝对值),外壳只有 sigmoid / pow / cs_rank
+    / ts_decay_linear / ts_min(窗口 ≤ 50 日)。三个素材 head 的分数 -2.98 / -3.15 / -3.15,train
+    与 valid 几乎一样(-2.98 对 -2.97)。拆解:sigmoid / pow / cs_rank 这类保序外壳拿掉最多差 0.15,Volume
+    换 Amt 不变(-2.99),唯一有明显作用的是 ts_min 的窗口:2 / 5 / 10 日 = -3.31 / -2.98 / -2.41,越慢越好。结构表里这
+    9 条在未去控制时训练段 rank IC -0.048 ~ -0.060、净夏普 0.9 ~ 2.0,去掉 5 个控制和两个冠军之后全部掉到 -3。解读:C
+    的水平(分钟成交连续 = 流动性好的活跃票)是流动性 / 成交额离散度 / 市值这些控制的函数,水平里没有剩下的东西;越慢越好说明 15 bp 的成本也在吃分数。
+
+
+    假设:C 在日轴上可以拆成三块:股票自己的水平 a_i(被控制吃掉);全市场共同的日度成交连续性状态 M_t(= 当天所有股票 C 的截面均值,宏观消息日、指数调仓、涨跌停潮时整体移动);个股特有的偏离
+    e_it。水平以外的两样是控制看不到的:(1) 股票对 M_t 的暴露 b_i(成交连续性的 commonality beta),文献上是流动性风险的一个维度:Chordia、Roll
+    与 Subrahmanyam 2000 的流动性共性,Pástor 与 Stambaugh 2003、Acharya 与 Pedersen 2005 的流动性风险溢价——在市场成交状态变差时一起变差的股票要求补偿。b_i
+    不是水平的函数(同一个流动性水平下可高可低),所以对水平的 1 / 2 / 3 次多项式控制剪不掉它,它是个股的慢属性(持仓结构:指数 / 机构成分股 vs
+    散户为主),60 ~ 180 日窗口里很稳。(2) e_it 在 60 ~ 120 日上的聚合(均值 / 波动 / 上下不对称 / 自相关):读的是这只票最近的成交连续性相对自己和市场的变化,水平被回归截距吃掉。
+
+
+    算子怎样实现(16 个种子每个都原样含核心 C):cs_mean(C) 是当天的截面均值(广播回每只股票)= M_t;cross_regbeta / cross_reg_tvalue
+    / cross_corr(M, C, d) 是个股 C 对 M 的 d 日滚动 beta / t 值 / 相关,d = 60 ~ 180;cross_regres(M,
+    C, 60) 取回归残差 e,再用 cross_mean / cross_stddev / cross_semistd_pos 与 neg 之差 / cross_autocorr
+    聚合成慢变量;cs_rank(C) 先在截面取名次、再在日轴做 20 日减 120 日的均值差或 cross_hurst,名次把全市场整体漂移去掉;cs_bucket_demean(C,
+    key) 按流动性 / 波动 / 流通市值十分位分桶去均值,是比尺子的三次多项式更彻底的非参数剔除,再取 60 日均值;最后一个种子是 beta 的名次减水平的名次。
+
+
+    为什么和以前不同:快照里 9 个候选的外围算子集合只有 ts_min / ts_decay_linear / sigmoid / pow / cs_rank,窗口
+    ≤ 50,全部是 C 自己的平滑,没有一个把另一条序列(全市场均值)引进来,没有跨日回归,没有 60 日以上的窗口。这 16 个种子的外围是 cs_mean
+    作回归元的 cross_regbeta / cross_reg_tvalue / cross_corr / cross_regres,加 cross_stddev
+    / cross_semistd / cross_autocorr / cross_hurst / cs_bucket_demean,窗口 60 ~ 180。我把种子的算子骨架(抽掉字段、常数、窗口)逐个对照了两个库
+    5583 条解析出的 4077 个不同骨架,没有一个相同;5583 条里 cs_mean 共出现在 48 条,绝大多数(36 处)是 is_gt 的阈值,只有
+    1 条(挖掘库 B039)把价格平方的截面均值放进 ts_reg_fvalue 当回归元,没有一条以 |φ| 或任何成交量量度的全市场均值做 beta /
+    相关 / 残差;也没有一条先取 cs_rank 再做日轴 hurst。预计与 3 个 head 的日度秩 |ρ| 远低于 0.7(beta / 相关 / 残差读协动与变化,不是水平),与五个控制
+    < 0.5;如果某些种子(如分桶去均值那几个)与 head 仍高于 0.7,审计表会自动划掉,剩下的足够。
+
+
+    为什么样本外还会在:b_i 是流动性风险暴露,补偿的是一种风险而不是一次套利,不依赖某一段行情;e_it 的聚合反映持仓结构和参与者构成的慢变,窗口 60
+    ~ 180 日,十分位书的换手低,15 bp 成本下能承受。诚实预期:水平类写法最慢也只到 -1.4 上下,这里把水平拿掉,最可能的结果是分数上移到 -1
+    ~ -0.3 之间但仍低于 0.5(出 head 的概率约 4%);主要失败方式:b_i 的滚动估计噪声大于截面离散,名次近似随机(换手高、被成本吃掉)。
+
+
+    数学检查:所有窗口只含 t 日及以前,φ 只用 t 日分钟,t+1 交易,无前视;φ 在当天分钟成交量方差近 0 时是 NaN,不填充;cs_mean 忽略
+    NaN;回归的自变量是全市场均值,标准差约 1e-2、方差远大于 0,分母不是个股自己的近零量,不会出现个股爆点;cross_hurst 在 S < 1e-9
+    时给 NaN;输出连续取值(没有 argmax / 离散档),满足不同值 ≥ 50% 的闸门;最长回看 180 日;视窗从 2018-01-02 开始、没有更早的热身行,头
+    d 日的滚动窗口是不满窗的(cross_mean / cross_stddev / cross_regbeta / cross_corr 在不满窗时只用已有的天,cross_hurst
+    头 59 日是 NaN),这些早期估计噪声大,但只占 train 的头几个月、不决定结果,覆盖率不受影响;不用 ts_rank / cross_rank(当天缺失返回
+    0 的已知行为),不用 ts_spearman / nt_*。'
+  seeds:
+  - cross_regbeta(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    60)
+  - cross_regbeta(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    120)
+  - cross_regbeta(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    180)
+  - cross_reg_tvalue(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    120)
+  - cross_corr(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    120)
+  - cross_regbeta(cs_mean(cross_mean(pow_2(pow_05(day_ar1_coefficient(Volume))), 5)),
+    cross_mean(pow_2(pow_05(day_ar1_coefficient(Volume))), 5), 120)
+  - cross_mean(cross_regres(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))), pow_2(pow_05(day_ar1_coefficient(Volume))),
+    60), 30)
+  - cross_stddev(cross_regres(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))),
+    pow_2(pow_05(day_ar1_coefficient(Volume))), 60), 60)
+  - cross_autocorr(cross_regres(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))),
+    pow_2(pow_05(day_ar1_coefficient(Volume))), 60), 60, 1)
+  - sub(cross_mean(cs_rank(pow_2(pow_05(day_ar1_coefficient(Volume)))), 20), cross_mean(cs_rank(pow_2(pow_05(day_ar1_coefficient(Volume)))),
+    120))
+  - cross_hurst(cs_rank(pow_2(pow_05(day_ar1_coefficient(Volume)))), 60)
+  - cross_mean(cs_bucket_demean(pow_2(pow_05(day_ar1_coefficient(Volume))), cross_mean(day_sum(Amt),
+    20)), 60)
+  - cross_mean(cs_bucket_demean(pow_2(pow_05(day_ar1_coefficient(Volume))), cross_mean(day_std(Ret),
+    20)), 60)
+  - cross_mean(cs_bucket_demean(pow_2(pow_05(day_ar1_coefficient(Volume))), LogFloatCap),
+    60)
+  - sub(cs_rank(cross_regbeta(cs_mean(pow_2(pow_05(day_ar1_coefficient(Volume)))),
+    pow_2(pow_05(day_ar1_coefficient(Volume))), 120)), cs_rank(cross_mean(cs_rank(pow_2(pow_05(day_ar1_coefficient(Volume)))),
+    120)))
+- type: N
+  hypothesis: '机制:个股「成交量 - 波动 - 收益」几条日序列之间的耦合强度与不对称,在截面名次空间里量,窗口 120 日。
+
+    批里的现象(B037):(1) 9 个候选全是 |φ|(分钟成交量的日内连续性)的水平外壳,换外壳 / 换 Amt 分数不动(-2.98 ~ -3.15),唯一的杠杆是窗口越长越好(ts_min
+    2 / 5 / 10 日:-3.31 / -2.98 / -2.41)——水平被控制吃掉,剩下的只有「慢」;(2) head 1 的 cs_rank 外壳是拆解里有用的部件(拿掉差
+    0.15),先在截面取名次(去掉全市场同日同向的共同变动)是对的方向,但批里只读名次的水平。新想法:不读任何一个活跃度度量的水平,读两个度量在名次空间里的耦合——耦合强度是个股信息环境与参与者构成的指纹,水平的多项式控制剪不掉,而
+    120 日窗口让它变慢。
+
+
+    四组读数:
+
+    (a) 混合分布假说(Clark 1973;Tauchen 与 Pitts 1983;Lamoureux 与 Lastrapes 1990):成交量和波动由同一条信息流驱动,耦合强说明价格变动主要来自信息交易,耦合弱说明成交量里噪声
+    / 流动性交易占比高(散户情绪、拆单、对冲流量)。读法:cross_corr / cross_regbeta / cross_reg_tvalue(cs_rank(day_sum(Volume)),
+    cs_rank(day_std(Ret)), 120),以及把批里的对象放进耦合:cs_rank(day_ar1_coefficient(Volume))
+    与波动 / 波幅名次的耦合,和 cs_rank(day_gini(Volume)) 与波动名次的耦合。
+
+    (b) 对带符号收益与无符号波幅的反应之差:cross_corr(成交量名次, 收益名次) 减 cross_corr(成交量名次, |收益| 名次)。上涨日放量、下跌日缩量的不对称是散户追涨与注意力的指纹(Barber
+    与 Odean 2008;Gervais、Kaniel 与 Mingelgrin 2001 的高量收益溢价)。
+
+    (c) 量价的跨日先后:cross_corr(昨日收益名次, 今日成交量名次) = 追涨;cross_corr(昨日成交量名次, 今日收益名次) = 量对后续收益的预测;Llorente、Michaely、Saar
+    与 Wang 2002 的回归 r(t) = a + (b + c·v(t-1)) r(t-1) 里成交量区分投机(信息)交易与对冲交易,c > 0 则动量、c
+    < 0 则反转,种子用 cross_regbeta(mul(滞后收益, 滞后的成交量 z 分数), 当日收益, 120) 在个股 120 日窗口里估这个 c(名次居中版本一个)。
+
+    (d) 波动里成交量解释不了的部分:cross_regres(成交量名次, 波动名次, 60) 的残差的 30 日均值与 60 日波动,cross_corr(成交量名次,
+    自己滞后一日, 120) 是成交量名次的持续性。
+
+
+    算子怎样实现:cs_rank 把当天截面名次作为输入,所以全市场同时放量 / 同时大涨大跌的共同日度变动被去掉,耦合只来自个股相对其他股票的表现;cross_corr
+    / cross_regbeta / cross_reg_tvalue / cross_regres 用 60 ~ 120 日滚动窗口把它变成慢变量;cross_delay
+    取滞后一日;cs_demean 把名次居中以便做乘积项。日度输入是 day_sum(Volume)、day_sum(Ret)(日收益)、day_std(Ret)(日内波动)、day_gini(Volume)、day_ar1_coefficient(Volume)。
+
+
+    为什么和库里不同:库里 5583 条表达式把 cs_rank 的输出放进日轴相关 / 协方差 / 回归的共 26 处(逐个数过):20 处是 3 ~ 20
+    日窗口的 ts_corr / ts_cov(WorldQuant 风格的手写式,配的是价格或日收益名次对 day_sum(Volume) 名次),6 处是
+    15 ~ 241 日的挖掘式(配的是价格、偏度、分位数一类,不是成交量对波动或 |收益| 的耦合)。没有一条用 day_std(Ret)、|day_sum(Ret)|、φ
+    或 day_gini(Volume) 的名次做耦合,也没有 60 日以上的「成交量名次 - 波动 / 收益名次」耦合;最接近的手写式窗口短一个量级(3 ~
+    20 日 对 120 日)。我把 16 个种子的算子骨架逐个对照了 4077 个不同骨架,没有一个相同。与 3 个 head(|φ| 的水平外壳)的差别是读的是协动而不是水平;与五个控制的差别是它们是水平量,耦合系数不是它们的函数(会共享一部分:流动性大的票耦合更稳定,尺子会把对水平的线性
+    / U 形 / S 形暴露去掉)。
+
+
+    为什么样本外还会在:耦合强度反映的是个股的投资者构成与信息环境(散户 / 机构、信息交易 / 噪声交易占比),是慢变属性,不靠某一段行情;120 日滚动相关逐日变化小,十分位书换手低,15
+    bp 成本下能承受。诚实预期:出 head 的概率约 6%,更可能落在 -1.2 ~ -0.3;主要失败方式:单只股票 120 个观测的相关系数估计误差(约
+    0.09)接近真实的截面离散度,名次大半是噪声;与波动 / 流动性控制共享一部分(量价耦合在小盘股上更强)。
+
+
+    数学检查:窗口只含 t 日及以前,滞后用 cross_delay(无前视);cs_rank 在截面上取名次(不用 ts_rank / cross_rank
+    的当天缺失返回 0 的行为),停牌日 day_sum 为 NaN 或 0 只会落在名次两端;相关 / 回归的自变量是名次或 z 分数(cross_zscore
+    分母 std + 1e-9),取值有界,没有除以个股自己近零量的爆点;输出连续,不同值 ≥ 50%;最长回看 120 + 60(含 z 分数)日,头几个月的不满窗估计噪声大但不决定结果,覆盖率不受影响;不用
+    ts_spearman / nt_*。'
+  inspired_by: B037(9 个候选,全是 |φ| = |day_ar1_coefficient(Volume)| 的水平外壳):拆解里外壳与字段(Volume
+    换 Amt)几乎不动分数、只有 ts_min 窗口越长越好(2 / 5 / 10 日 = -3.31 / -2.98 / -2.41),head 1 的 cs_rank
+    外壳是有用的部件(拿掉差 0.15)——水平被控制吃掉,先取截面名次是对的,剩下的杠杆是「更慢的、不是水平的量」,于是改读名次空间里两个活跃度度量的耦合。
+  seeds:
+  - cross_corr(cs_rank(day_sum(Volume)), cs_rank(day_std(Ret)), 120)
+  - cross_regbeta(cs_rank(day_sum(Volume)), cs_rank(day_std(Ret)), 120)
+  - cross_corr(cs_rank(day_sum(Volume)), cs_rank(abs_(day_sum(Ret))), 120)
+  - cross_corr(cs_rank(day_sum(Volume)), cs_rank(day_sum(Ret)), 120)
+  - cross_corr(cross_delay(cs_rank(day_sum(Ret)), 1), cs_rank(day_sum(Volume)), 120)
+  - cross_corr(cross_delay(cs_rank(day_sum(Volume)), 1), cs_rank(day_sum(Ret)), 120)
+  - cross_regbeta(mul(cross_delay(day_sum(Ret), 1), cross_delay(cross_zscore(day_sum(Volume),
+    60), 1)), day_sum(Ret), 120)
+  - cross_regbeta(mul(cross_delay(cs_demean(cs_rank(day_sum(Ret))), 1), cross_delay(cs_demean(cs_rank(day_sum(Volume))),
+    1)), cs_demean(cs_rank(day_sum(Ret))), 120)
+  - cross_mean(cross_regres(cs_rank(day_sum(Volume)), cs_rank(day_std(Ret)), 60),
+    30)
+  - cross_reg_tvalue(cs_rank(day_sum(Volume)), cs_rank(day_std(Ret)), 120)
+  - cross_corr(cs_rank(day_gini(Volume)), cs_rank(day_std(Ret)), 120)
+  - cross_corr(cs_rank(day_ar1_coefficient(Volume)), cs_rank(day_std(Ret)), 120)
+  - cross_corr(cs_rank(day_ar1_coefficient(Volume)), cs_rank(abs_(day_sum(Ret))),
+    120)
+  - cross_corr(cs_rank(day_sum(Volume)), cross_delay(cs_rank(day_sum(Volume)), 1),
+    120)
+  - sub(cross_corr(cs_rank(day_sum(Volume)), cs_rank(day_sum(Ret)), 120), cross_corr(cs_rank(day_sum(Volume)),
+    cs_rank(abs_(day_sum(Ret))), 120))
+  - cross_stddev(cross_regres(cs_rank(day_sum(Volume)), cs_rank(day_std(Ret)), 60),
+    60)
+R:
+- head: ts_min(cs_rank(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume)))))),
+    5)
+  why: 烂部件有两处,依据都来自拆解表。(1) ts_min 的 5 日窗口:2 / 5 / 10 日 = -3.31 / -2.98 / -2.41,单调变好,窗口是整张表里唯一明显起作用的部件,而
+    sigmoid / pow / cs_rank 这些保序外壳拿掉最多差 0.15,Volume 换 Amt 不变。(2) 水平本身是控制(流动性 / 成交额离散度
+    / 市值)的函数:cs_rank 只做全截面名次,保留了对这些水平的整体暴露。变体用 cs_bucket_demean 把 |φ| 在同流动性 / 同流通市值
+    / 同波动 / 同已知成交额族 / 同上市年龄十分位的股票之间去均值(非参数剔除,比尺子的三次多项式彻底),窗口各取 5 日(只换去水平这一个部件)和 50
+    日(再叠加变慢);另两个把 sigmoid 里的 |φ| 对全市场均值 cs_mean 做 60 日滚动回归残差(去掉全市场共同状态)再 ts_min。每个变体只改这一处,分数变化可以直接归到被换掉的部件上。(ListAge
+    对 2018 年以前上市的股票是哨兵值 10000,分桶只用名次,这些股票落在同一组,不做算术。)
+  variants:
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_sum(Amt), 20)), 5)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_sum(Amt), 20)), 50)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    LogFloatCap), 5)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    LogFloatCap), 50)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_std(Ret), 20)), 5)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_std(Ret), 20)), 50)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_std(Amt), 30)), 5)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    cross_mean(day_std(Amt), 30)), 50)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    ListAge), 5)
+  - ts_min(cs_bucket_demean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))),
+    ListAge), 50)
+  - ts_min(cross_regres(cs_mean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume)))))),
+    sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))), 60), 5)
+  - ts_min(cross_regres(cs_mean(sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume)))))),
+    sigmoid(pow_05(pow_2(pow_05(day_ar1_coefficient(Volume))))), 60), 50)
+audit:
+  attempts: 1
+  file: audit_1.yaml

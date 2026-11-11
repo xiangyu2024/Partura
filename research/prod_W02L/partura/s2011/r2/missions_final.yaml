@@ -1,0 +1,213 @@
+seed: 2011
+round: 2
+slots:
+- type: E
+  core: day_ar1_coefficient(in_logchg(Volume, 1))
+  hypothesis: '机制:核心 L1 = day_ar1_coefficient(in_logchg(Volume, 1)),即当天分钟成交量「对数差分」序列的一阶
+    OLS 自回归系数。对数差分去掉了日内 U 形趋势与成交量单位;若分钟成交量 = 慢变的底 + 独立的瞬时噪声,则 L1 约等于 −0.5 × 噪声占比(纯噪声
+    −0.5,没有噪声趋近 0),所以 L1 读的是「成交量路径里瞬时噪声占多大」,不是成交量水平。这和 B031 / B032 批里全部 head 的对象不同:它们都是
+    AR1(Volume) 的水平平滑,与已知成交额族 |ρ| 0.51 ~ 0.76(流动性代理),新尺子剪掉这一块之后剩 −1.7 ~ −2.7,即「没有信息
+    + 换手成本」的基线。
+
+
+    证据(第 1 轮,只用 train / valid):对 head `cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)),
+    30)`(−1.80)只换源头,L1 的 60 日自相关 `cross_autocorr_s1(L1, 60)` 得 −0.64(train −0.12 /
+    valid −0.64),与已知族 ρ −0.20、与三个 head ρ 0.08;同样的换法用「减同分钟 20 日均值」得 −2.45、「带符号成交流」−2.09、「C0
+    的 60 日 z 分数」−2.11,都在基线上。五种换源头只有 L1 明显好于基线;上一轮 N 位里分数最好的候选(−1.79,`sub(cross_mean(L1,
+    20), cross_mean(L1, 120))`)也含 L1。所以 L1 是这两批里目前唯一有迹象的底,这个位围着它长,而且不再碰 L1 的水平。
+
+
+    为什么有迹象:L1 的日度序列如果自己有一阶自相关,说明这只股票的成交结构在一段时间里单向漂移(参与者结构切换:题材 / 事件 / 机构进出 / 做市行为变化),而不是「固定特性
+    + 日度估计噪声」。前者慢变且有内容,后者只是流动性与有效分钟数。
+
+
+    算子怎样实现:(1) 二阶估计量,不碰 L1 的水平:种子 1 自相关外套半衰期 60 日的 cross_ema;种子 2 是 241 日自相关减 60 日自相关(长期持续减短期持续);种子
+    3 是 60 日 Hurst 指数;种子 4 是 20 日滞后的相关(月度持续性);种子 10 是 5 日差分的自相关;种子 11 是 5 日均值相对自己
+    241 日的 z 分数。(2) 与别的日度量做一年窗口的耦合:种子 5 ~ 9、15 是 L1 与当日涨跌 / 昨日涨跌 / |涨跌| / 成交额日变化 /
+    C0 的 241 日滚动相关,以及昨日 L1 对今日涨跌的相关(领先)。第 1 轮里 C0 与涨跌的 60 ~ 120 日耦合是该批最好的一族(−0.72
+    ~ −1.2),这里把对象换成 L1 并把窗口放到一年,换手比 60 日窗口低数倍。(3) 对「分数只是别的东西」的探针:种子 12 把上市时间最短的 10%(ListAge)排到最后再取自相关;种子
+    14 在已知成交额族十分位内排序;种子 13 减去 C0 的自相关。若这三个种子分数与种子 1 ~ 2 几乎相同,来源就不是次新股或流动性。
+
+
+    为什么和库里已有的、和以前见过的不同:5583 条库表达式里没有 in_logchg,也没有 cross_zscore / cross_ema / cross_hurst
+    套在 AR1 上的结构;库里 cross_autocorr_s1 只套在 pow_05(AR1(Volume)) 上;15 个种子的算子骨架已逐个对照 members.csv
+    里 5583 条骨架,都不在库里。定位表里已见过的含 L1 的候选只有对 L1 水平的 cross_mean 平滑与「20 日均值减 120 日均值」(上一轮
+    N 位 GP);这里的外围全是二阶量(自相关、Hurst、滞后相关、差分自相关)与一年窗口耦合,没有一个对 L1 的水平做平滑。与三个 head 的原始秩相关预计
+    < 0.3(R 位里 cross_autocorr_s1(L1, 60) 实测 0.08)。
+
+
+    为什么样本外还会在:参与者结构的 regime 持续性是慢属性;一年窗口加半衰期 20 日的 EMA 让换手很低,15 bp 成本吃不光;不依赖某段行情。已知风险:(a)
+    L1 的日度估计依赖有效分钟对数(成交量为 0 的分钟给 NaN),薄票有效对少、估计噪声大,自相关因此与流动性有关(R 位实测与已知族 |ρ| 0.20,不高),种子
+    12 / 13 / 14 是探针;(b) 次新股上市后一年内成交结构系统性漂移,自相关可能只是「次新」,种子 12 排除之;(c) 一字涨停日分钟成交量路径极平,L1
+    缺失或极端,耦合种子(5 ~ 9、15)可能在数涨停次数,会和波动 / 反转控制相关,表里要看。
+
+
+    数学检查:day_ar1_coefficient 是 OLS 斜率,有效对 ≥ 2 且分钟序列方差 > 1e-8 才出值,|φ| 有界,不是爆点;in_logchg
+    对成交量 ≤ 0 的分钟给 NaN,不下溢;cross_autocorr_s1 与 cross_corr 的分母是 sqrt(var·var) + EPS,分子分母同阶;窗口内无有效对时返回
+    0(已知行为,只影响长期停牌的票);cross_hurst 窗口标准差 < 1e-9 给 NaN;cross_zscore 窗口常数时置 0;种子里没有除法,没有除以近零的量。无前视:所有量只用
+    t 日收盘及以前,t+1 才交易,cross_delay 只取更早的值。热身期 ≤ 242 个交易日,覆盖率与 head 同量级。'
+  literature:
+  - title: The long memory of the efficient market
+    authors: Fabrizio Lillo, J. Doyne Farmer
+    year: '2004'
+    treatment: 订单流的长记忆与持续的参与者结构;这里用成交量路径噪声占比(L1)的日度序列自相关近似该结构的 regime 持续性
+  - title: Commonality in liquidity
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2000'
+    treatment: 个股流动性有持续的个体成分与共同成分;L1 的自相关里与流动性有关的部分用种子 12 ~ 14 分离
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 量价动态的延续 / 反转取决于信息不对称;种子 5 ~ 9、15 用 L1 与涨跌的一年窗口滚动相关近似
+  seeds:
+  - cross_ema(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), 60)
+  - sub(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 241), cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume,
+    1)), 60))
+  - cross_hurst(day_ar1_coefficient(in_logchg(Volume, 1)), 60)
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delay(day_ar1_coefficient(in_logchg(Volume,
+    1)), 20), 241)
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), day_sum(Ret), 241)
+  - cross_corr(cross_delay(day_ar1_coefficient(in_logchg(Volume, 1)), 1), day_sum(Ret),
+    241)
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), day_ar1_coefficient(Volume),
+    241)
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), abs_(day_sum(Ret)), 241)
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delta(log(day_sum(Amt)),
+    1), 241)
+  - cross_autocorr_s1(cross_delta(day_ar1_coefficient(in_logchg(Volume, 1)), 5), 120)
+  - cross_zscore(cross_mean(day_ar1_coefficient(in_logchg(Volume, 1)), 5), 241)
+  - cs_last_low10(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120),
+    ListAge)
+  - sub(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120), cross_autocorr_s1(day_ar1_coefficient(Volume),
+    120))
+  - cs_bucket_rank(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120),
+    cross_mean(day_std(Amt), 30))
+  - cross_corr(day_ar1_coefficient(in_logchg(Volume, 1)), cross_delay(day_sum(Ret),
+    1), 241)
+- type: N
+  hypothesis: '机制:个股层面「成交量冲击 / 买卖失衡 → 下一日收益」的动态关系,是信息不对称程度的个股特性。Llorente、Michaely、Saar
+    与 Wang(2002):信息不对称高的股票,放量日的收益倾向于延续;以对冲为主的成交,放量日的收益倾向于反转。Gervais、Kaniel 与 Mingelgrin(2001)的高成交量溢价,以及
+    Chordia 与 Subrahmanyam(2004)的订单失衡对次日收益,是同一条线。这里把它写成每只股票自己一年窗口的时间序列耦合(滚动相关),而不是截面排序,所以量的是「这只股票的量价动态属于延续型还是反转型」这一慢变属性:相关系数无量纲,不含成交额或市值水平。
+
+
+    这一批的什么现象启发了它:B031 / B032 共性表里 day_sum(Ret) 的均值差 +1.08(含它的 21 个候选均值 −1.93,不含的 −3.02),与
+    day_ar1_coefficient(Volume) 本身的 +1.16 几乎一样大。上一轮 E 位里,把 AR1(Volume) 与当日 / 昨日涨跌做
+    60 ~ 120 日滚动相关的一族(−0.72 ~ −1.2)是该批唯一明显好于水平类(−1.7 ~ −2.7)的;但 E 位核心固定为 AR1(Volume),分不开「承重的是
+    AR1 还是与涨跌的耦合」。这个 N 位把 AR1 换成最朴素的成交额冲击 / 失衡变量,只保留「与涨跌的领先 / 同期耦合」这个骨架,并把窗口放到 241
+    日:一年窗口的换手比 60 ~ 120 日低数倍,基线(没有信息的信号约 −1.7 ~ −2.1,主要是换手成本)会随之抬高。
+
+
+    算子怎样实现:成交额冲击 = log(day_sum(Amt)) 的 60 日 z 分数(今天的成交额相对这只股票自己近 60 日是否异常,去掉持久的截面水平);买卖失衡
+    = day_signed_ratio(Ret, Amt)(上涨分钟的成交额占比减下跌分钟的占比,取值 [−1, 1],没有逐笔数据时的净买入代理)。(1)
+    种子 1:昨日「涨跌 × 成交额冲击」与今日涨跌的 241 日相关,是 Llorente 回归里交互项系数的无量纲版本(放量日是否延续);种子 8 是同一对象的回归斜率版本。(2)
+    种子 2 ~ 4:昨日成交额冲击(水平 z 分数 / 日变化)对今日涨跌的领先相关,种子 3 是同期版本,种子 4 用日对数变化。(3) 种子 5、11:昨日失衡、昨日「失衡
+    × 成交额冲击」对今日涨跌的领先相关(Chordia–Subrahmanyam 的失衡延续)。(4) 种子 9:成交额重心 day_centroid(Amt)(0
+    = 开盘,1 = 收盘)与昨日涨跌的相关,尾盘集中的成交是否跟随前一日的方向。(5) 种子 10:昨日「成交额加权分钟收益减等权分钟收益」(资金经历的收益与时间平均收益之差)对今日涨跌的领先相关。(6)
+    种子 6、7、12 是对照:6 是失衡水平的 60 日 EMA,7 是「成交额冲击 × 涨跌符号」的 120 日均值(带符号的放量,没有耦合),12 是种子
+    2 在已知成交额族十分位内排序;如果水平类种子与耦合类种子得分相当,说明承重的不是耦合。
+
+
+    为什么和库里已有的不同:库里 210 条含 cross_corr 的表达式,输入都是原始日内统计量(day_skew、day_max、Ret 自身等)和 nt_
+    算子,没有一条把「昨日量冲击 / 失衡」用 cross_delay 与 day_sum(Ret) 做滚动相关;cross_zscore、day_signed_ratio、day_wmean、day_centroid
+    在库里出现 0 次(这些是 Partura 新加的算子)。12 个种子的算子骨架已逐个对照 5583 条库骨架,都不在库里。与已知成交额族(cross_mean(day_std(Amt),
+    30))不同:这里的量是相关系数,不含成交额水平;与 20 日反转控制不同:领先耦合是一年窗口里「昨日状态对今日收益」的相关,不是近期收益的排序。
+
+
+    为什么样本外还会在:信息不对称的程度(散户占比、机构分笔执行占比、公告密度)是慢变属性,半年到一年内变化很小;延续型股票的价格对大单的消化是渐进的(Bouchaud
+    等 2004),不依赖某段行情;一年窗口让换手低。已知风险:(a) 一字涨停日成交额小、收益约 +10%,耦合可能主要在数涨停次数(与波动 / 反转控制相关),要在相关度表里看残差;(b)
+    241 对观测的相关系数标准误约 0.065,只有截面差异大于估计噪声才有用;(c) day_signed_ratio 用分钟收益符号近似买卖方向,与日收益同期共线(接近
+    1),所以只用领先版本。
+
+
+    数学检查:log(day_sum(Amt)) 对成交额 ≤ 0 给 NaN(停牌日),不会是 −inf 进入 z 分数;cross_zscore 的分母是窗口标准差
+    + EPS,窗口常数时置 0;cross_corr 分母 sqrt(var·var) + EPS,窗口内无有效对时返回 0(已知行为,只影响长期停牌的票);cross_regbeta
+    只在 var(x) > EPS 时出值,种子 8 的 x 是「涨跌 × z 分数」,方差远大于 EPS;day_signed_ratio 的分母 Σ|Amt|
+    为 0 时 NaN;day_centroid 分母 Σ|x| 为 0 时 NaN。没有除以近零的量。无前视:所有量只用 t 日收盘及以前,t+1 才交易,领先耦合里的
+    cross_delay 只取更早的值,窗口含当日、不含未来。热身期 ≤ 242 个交易日。'
+  inspired_by: B031 / B032 批:共性表里 day_sum(Ret) +1.08(含它 −1.93 vs 不含 −3.02)与 AR1(Volume)
+    +1.16 同样大;上一轮 E 位里「AR1 与涨跌的滚动相关」一族(−0.72 ~ −1.2)明显好于全部水平类(−1.7 ~ −2.7);AR1(Volume)
+    的水平与已知成交额族 ρ −0.51 ~ −0.76,是流动性代理。
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 收益对「滞后收益 × 成交量」的回归系数区分投机性(延续)与对冲性(反转)成交;这里用「昨日涨跌 × 成交额冲击」与今日涨跌的 241
+      日滚动相关近似
+  - title: The High-Volume Return Premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 异常放量的股票之后收益偏高;这里用昨日成交额 z 分数与今日涨跌的个股相关(种子 2 ~ 4)近似
+  - title: Order imbalance and individual stock returns - theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡的持续预测次日收益;这里用 day_signed_ratio(Ret, Amt) 作为失衡代理(种子 5、11)
+  - title: Fluctuations and response in financial markets - the subtle nature of random
+      price changes
+    authors: Jean-Philippe Bouchaud, Yuval Gefen, Marc Potters, Matthieu Wyart
+    year: '2004'
+    treatment: 单边订单流对价格的冲击被渐进消化;解释为什么个股的量价延续型特性会持续
+  seeds:
+  - cross_corr(cross_delay(mul(day_sum(Ret), cross_zscore(log(day_sum(Amt)), 60)),
+    1), day_sum(Ret), 241)
+  - cross_corr(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), day_sum(Ret),
+    241)
+  - cross_corr(cross_zscore(log(day_sum(Amt)), 60), day_sum(Ret), 241)
+  - cross_corr(cross_delay(cross_delta(log(day_sum(Amt)), 1), 1), day_sum(Ret), 241)
+  - cross_corr(cross_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 241)
+  - cross_ema(day_signed_ratio(Ret, Amt), 60)
+  - cross_mean(mul(cross_zscore(log(day_sum(Amt)), 60), sign(day_sum(Ret))), 120)
+  - cross_corr(day_centroid(Amt), cross_delay(day_sum(Ret), 1), 241)
+  - cross_corr(cross_delay(sub(day_wmean(Ret, Amt), day_mean(Ret)), 1), day_sum(Ret),
+    241)
+  - cross_corr(cross_delay(mul(day_signed_ratio(Ret, Amt), cross_zscore(log(day_sum(Amt)),
+    60)), 1), day_sum(Ret), 241)
+  - cs_bucket_rank(cross_corr(cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1),
+    day_sum(Ret), 241), cross_mean(day_std(Amt), 30))
+R:
+- head: cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 100),
+    cross_mean(day_std(Amt), 30))
+  why: 这个 head(上一轮 R 位替换进来的,−1.70)的烂部件是窗口太短。拆解表:ts_quantile_q75 窗口 50 → 100 → 200
+    的分数是 −2.00 → −1.70 → −1.08(valid 只有 −0.13,train −1.08),单调变好,而且与已知族的 ρ 一直只有 −0.04(分桶去均值已经把成交额族的水平剪掉了);去掉
+    pow_05(必要性 +0.17)、去掉分桶中心(−0.08)都不承重;Volume 换 Amt 不变。所以承重的是「慢」:200 日窗口已经让 valid
+    接近 0,换手越低,成本拖累越小。变体继续往慢走(241 日 q75、241 日均值、半衰期 120 日 EMA),并加 200 日窗口的原变体(定位表 R
+    候选,+0.62);另有一个把源头换成 L1(日内成交量对数差分的 AR1,上一轮 R 位里 L1 的 60 日自相关得 −0.64、与已知族 ρ −0.20)的变体,放进同样的
+    200 日 q75 + 成交额族分桶去均值里。
+  variants:
+  - cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 200), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(ts_quantile_q75(pow_05(day_ar1_coefficient(Volume)), 241), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(cross_mean(pow_05(day_ar1_coefficient(Volume)), 241), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(cross_ema(pow_05(day_ar1_coefficient(Volume)), 120), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(ts_quantile_q75(day_ar1_coefficient(in_logchg(Volume, 1)), 200),
+    cross_mean(day_std(Amt), 30))
+- head: cross_autocorr_s1(pow_05(day_ar1_coefficient(Volume)), 30)
+  why: 这个 head 的水平不是烂部件(与已知族 ρ 只有 −0.03 ~ −0.08)。烂的是源头与估计量:源头 AR1(Volume) 里混着日内 U
+    形与成交频率;30 日窗口的一阶自相关估计很吵。上一轮 R 位把源头换成 L1 = day_ar1_coefficient(in_logchg(Volume,
+    1)) 之后,60 日窗口得 −0.64(train −0.12 / valid −0.64),与已知族 ρ −0.20、与 head ρ 0.08,比原
+    head(−1.80)好 +1.16;其余四种换源头(减同分钟均值、带符号流、z 分数、只加平滑)都在 −1.7 ~ −2.5 的基线上。所以这一组沿着「L1
+    + 更慢的估计量」走:窗口放到 120 / 241 日,再加 EMA 平滑(半衰期 40 日)。
+  variants:
+  - cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 120)
+  - cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 241)
+  - cross_ema(cross_autocorr_s1(day_ar1_coefficient(in_logchg(Volume, 1)), 60), 40)
+- head: ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 50)
+  why: 这个 head 的承重部件是窗口:ts_quantile_q75 窗口 25 / 50 / 100 的分数是 −2.56 / −2.00 / −1.63,单调变好;pow_2
+    不承重(去掉后 −2.02,必要性 +0.02);Volume 换 Amt 不变(−2.04)。水平与已知成交额族的 ρ 约 −0.76,那是它被挡在 head
+    之外的原因。变体把窗口放到 200 日,并在成交额族十分位内去均值(与 R 位第一组同一个办法:分桶去均值把已知族的水平剪掉,而 −0.76 正是这一块)。
+  variants:
+  - cs_bucket_demean(ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 200), cross_mean(day_std(Amt),
+    30))
+- head: pow_2(day_ar1_coefficient(Close))
+  why: 这个 head 没有自带时间平滑(拆解:子树 day_ar1_coefficient(Close) 单独 −2.44,pow_2 不承重),分数全靠书的
+    EMA;Close 价格水平的 AR1 接近 1,日度估计是一个很吵的近单位根回归系数。Close 换 Vwap 更差(−3.10),说明读的是收盘价那一档的信息。变体做三件事:加慢平滑(半衰期
+    60 日与 120 日的 EMA),把源头换成价格对数变化的 AR1(分钟收益的一阶自相关 = 买卖价差弹跳 / Roll 度量,平稳、有界,不是近单位根)。
+  variants:
+  - cross_ema(day_ar1_coefficient(Close), 60)
+  - cross_ema(day_ar1_coefficient(Close), 120)
+  - cross_ema(day_ar1_coefficient(in_logchg(Close, 1)), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

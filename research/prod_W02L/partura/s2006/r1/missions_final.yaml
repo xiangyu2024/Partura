@@ -1,0 +1,188 @@
+seed: 2006
+round: 1
+slots:
+- type: E
+  core: day_cov(Amt, Open)
+  hypothesis: '批里的现象(B016,16 个成员都是 sub(0.5, abs_(ts_regres(day_cov(F,F), day_last(F),
+    50))) 的变体,3 个 head 全是这个骨架):拆解里去掉 abs_ 的损失是 1.7 ~ 2.1(必要性 +2.06 / +1.99 / +1.73),去掉回归的损失
+    0.2 ~ 2.3;head 1 的窗口 25 / 50 / 100 是 −2.58 / −1.17 / −0.64(100 日时 valid +0.03),越慢越好;head
+    1 把 Open 换成 Close 分数不变(−1.17 → −1.19)。含核心 day_cov(Amt, Open) 的 4 个候选均分 −1.46,不含的
+    −2.30(差 +0.83,p 0.039)。
+
+
+    机制:day_cov(Amt, Open) = (1/n)·Σ(Amt_t − Ā)(Open_t − P̄) = Ā·[成交额加权均价 − 等权均价](价格单位)。它是「尺度
+    × 方向」:尺度 = σ_Amt·σ_Open(日内成交额起伏乘日内价格起伏),方向与一致性 = 相关系数 ρ(Amt, Open)。head 1 换 Open
+    为 Close 分数不变,说明 head 里这个协方差主要承担的是前一个因子(尺度),那是 5 个控制和两个冠军的地盘;本 E 位要读被尺度盖住的另一块:这一天的钱是在价格偏高还是偏低的位置成交的(量价位置溢价)、这种倾向日复一日是否一致、它是不是当天涨跌方向的机械结果。
+
+
+    算子怎样实现:P = div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))) 把核心除以 Ā·P̄,得到无量纲的「成交额加权均价相对等权均价的溢价」,不再随股价和成交额水平走。每个种子都原样带核心,分五类。(1)
+    慢变水平:cross_ema(P, 40)、cross_tail_mean_q25(P, 60)(差日子的均值)、sub(cross_mean(P,10),
+    cross_mean(P,120))(近期相对长期)。(2) 一致性与离散度:cross_ema(sign(核心), 30)(只看方向、不被幅度尾部支配;用
+    EMA 而不是均值,取值才是连续的)、div(cross_mean(P,60), cross_stddev(P,60))(P 的 t 统计量)、cross_stddev(P,60)、cross_mean(abs_(P),60)(幅度,对应批里
+    abs_ 的必要性)。(3) 去掉当天涨跌的机械成分:记 MV = (day_last(Close) − day_first(Open)) / day_first(Open)
+    为日内涨跌幅;cross_mean(ts_regres(MV, P, 60), 20) 是「P 里 60 日滚动回归对 MV 没解释的部分」的 20 日均值,cross_regbeta(MV,
+    P, 100) 是「放量位置跟着当天方向走」的程度,cross_corr(核心, day_sum(Ret), 60),cross_mean(mul(P, sign(MV)),
+    40)(放量位置与当天方向同向时为正)。(4) 相对自己 / 相对同类:cross_mean(cross_zscore(P,120), 20);cs_bucket_zscore(cross_mean(P,60),
+    cross_mean(day_std(Amt),30))(已知成交额族同一十分位内标准化,检验信息是不是该族的残余)。(5) 批内成功结构的无尺度版:cross_mean(div(abs_(ts_regres(核心,
+    day_last(Amt), 100)), cross_mean(day_last(Amt), 100)), 20) —— 保留 head 1 的 abs_
+    回归残差,窗口放到拆解里更好的 100,再除以自己 100 日尾盘单分钟成交额均值,变成相对大小,检验 head 1 的信息是不是全在尺度里。
+
+
+    为什么和已有的不同:库里含这个核心的 10 条(B013 的 cross_max(核心,5)、B018 的 cross_fangzheng / cross_max
+    嵌套、B238 的 ts_regres(核心, day_ar1_coefficient(Open), 20)、B010 的 ts_regbeta(day_sum(Volume),
+    核心, 50)、B016 的 abs_ 回归)全是有量纲的原始协方差,没有一条除以 Ā·P̄(库里唯一的 div(day_cov(·,·), ·) 是 div(day_cov(Open,
+    Volume), day_last(Open)),另一对字段、只除以价格);5583 条里没有 cross_ema / cross_zscore / sign(day_cov)
+    / cross_regbeta(MV, P)。外围算子集合(cross_ema、cross_stddev、cross_tail_mean_q25、div、mul、day_mean、sign、cs_bucket_zscore、cross_regbeta、cross_corr
+    等)与快照里已见到的含核心写法({sub, abs_, ts_regres, day_last})完全不同;所有种子的骨架已逐个对照两个库的 5583 条(都不在库里)。P
+    是无量纲的有符号量,三个 head 是有量纲的残差幅度,日度秩相关预计低。
+
+
+    为什么样本外还会在:如果有 alpha,最可能来自「成交发生在日内价格带的哪个位置」这个参与者结构:算法单(VWAP / TWAP)不会偏向某个价位,而知情买入的追高放量、或高位派发,会让成交额偏在价格高位或低位,是几周尺度上慢变的属性。种子都在
+    40 ~ 120 日上读,换手低,15 bp 成本不会把它吃掉;去掉了尺度和当天涨跌方向,5 个控制(流动性、波动、反转、已知族、市值)的暴露在构造上就小。风险:P
+    与当天涨跌方向高度相关(上涨日成交偏晚则溢价为正),所以放了回归残差版与方向交互版去分辨;如果样本内的好只来自某个行情段,min(train, valid)
+    会把它挡掉。
+
+
+    数学检查:无前视(只用 t 日分钟,t+1 才交易,所有窗口只向后)。分母 Ā·P̄ 是正的成交额均值乘价格均值,没有近零分母;整天无成交时 Ā = 0 且协方差
+    = 0,得 0/0 = NaN(缺失,不是无穷);|P| ≤ CV(Amt)·σ_Open/P̄,有界(CV(Amt) ≤ √240)。一字板日(Open
+    恒定)P 是浮点噪声级的 0,不是爆点(分母不含 σ);只有 cross_zscore 与 div(均值, 标准差) 两个种子对「连续数十天一字板」的票会放大这种噪声,只影响这几只票,其余票的次序由
+    P 本身决定。cross_corr 在窗口内有效对不足时给 0(已知行为),只影响新上市 / 复牌的头几天;不用 ts_rank / cross_rank(当天缺失记
+    0 的已知问题)。窗口最长 120 + 20,热身约占 train 的 10%,只让这些日子无值。'
+  literature:
+  - title: 'A theory of intraday patterns: volume and price variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    treatment: 日内成交的时点与价位由自由裁量交易者与知情交易者的选择决定;这里只取「成交额偏在价格高位还是低位」及其跨日一致性,去掉尺度
+  seeds:
+  - cross_ema(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 40)
+  - cross_tail_mean_q25(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))),
+    60)
+  - sub(cross_mean(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 10),
+    cross_mean(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 120))
+  - cross_ema(sign(day_cov(Amt, Open)), 30)
+  - div(cross_mean(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 60),
+    cross_stddev(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 60))
+  - cross_stddev(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 60)
+  - cross_mean(abs_(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open)))),
+    60)
+  - cross_mean(ts_regres(div(sub(day_last(Close), day_first(Open)), day_first(Open)),
+    div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), 60), 20)
+  - cross_regbeta(div(sub(day_last(Close), day_first(Open)), day_first(Open)), div(day_cov(Amt,
+    Open), mul(day_mean(Amt), day_mean(Open))), 100)
+  - cross_corr(day_cov(Amt, Open), day_sum(Ret), 60)
+  - cross_mean(mul(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))), sign(div(sub(day_last(Close),
+    day_first(Open)), day_first(Open)))), 40)
+  - cross_mean(cross_zscore(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))),
+    120), 20)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Amt, Open), mul(day_mean(Amt), day_mean(Open))),
+    60), cross_mean(day_std(Amt), 30))
+  - cross_mean(div(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), cross_mean(day_last(Amt),
+    100)), 20)
+- type: N
+  hypothesis: '批里的现象(B016):16 个成员的核心操作都是「一个日度量对另一个日度量做 50 日滚动回归,取最后一天残差的绝对值」。拆解:去掉
+    abs_ 的损失 1.7 ~ 2.1,窗口越长越好(head 1:25 / 50 / 100 = −2.58 / −1.17 / −0.64),把回归元里的价格
+    Open 换成 Close 分数不变,所以回归元里没有价格信息,只是一个「尺度匹配」的量。批里的回归元是股票自己当天的 day_cov(·,·)(有量纲,带成交额与股价水平),残差里混着系统部分(整个市场当天放量
+    / 缩量)与个股特异部分。head 1 与已知成交额族的秩相关是 −0.67,说明残差幅度带着成交额水平。
+
+
+    新想法:把回归元换成「市场当天的同一个量」cs_mean(对数活跃度),并让被解释的量也取对数。于是 ts_regres 的残差 = 个股特异的活跃度冲击(无量纲,单位是对数),ts_regbeta
+    / ts_corr = 个股成交额跟着市场成交额走的程度(流动性共同性,Chordia–Roll–Subrahmanyam 2000)。读法:冲击的幅度(abs
+    残差的均值,即 B016 的必要部件 abs_)、冲击的波动与偏度、带符号的异常特异活跃度、载荷与相关本身。预期:共同性高(成交额随市场同涨同落)的票偏机构化、被指数
+    / 被动资金托着;特异冲击大的票是注意力和消息驱动的票,Barber–Odean(2008)的结论是注意力驱动的买入之后价格压力回吐,而「特异冲击持续小」是被冷落的票。方向留给
+    train 决定。
+
+
+    算子怎样实现:LA = log(add(day_mean(Amt), 1)) 是个股当日对数活跃度(day_mean 整天缺失时给 NaN,不是 0;+1
+    只防 log(0));LC = log(add(day_last(Amt), 1)) 是批里用的收盘最后一分钟;L15 = log(add(day_sum(in_slice(Amt,
+    226, 240)), 1)) 是尾盘 15 分钟成交额(单分钟成交额常为 0 或极小,15 分钟更稳);LT = log(add(day_mean(Volume),
+    1)) − LogFloatShares 是换手率口径(股数除以流通股本)。残差 = ts_regres(cs_mean(X), X, 100)。种子分四组:(1)
+    特异冲击幅度:cross_mean(abs_(残差(LA)), 20)(核心种子,就是 B016 的「abs_ 回归残差」,回归元换成市场)、cross_ema
+    的 30 日半衰期版、cs_bucket_zscore(·, LogFloatCap)(规模十分位内)、股数口径 LV(含名义股价维度)、换手率口径 LT(控制「大票放量」与「小票放量」的差别)。(2)
+    冲击的形状:cross_stddev(残差,60)(活跃度的特异波动)、ts_skew(残差,60)(尖峰倾向)、cross_mean(残差,10)(带符号的异常特异活跃度)。(3)
+    共同性:ts_regbeta(cs_mean(LA), LA, 120)、ts_corr(cs_mean(LA), LA, 120)、换手率口径的载荷。(4)
+    B016 对象在尾盘上的推广:LC 的 100 日版、L15 的 150 日版,以及 cross_mean(abs_(ts_regres(LA, L15,
+    100)), 20)(被解释的是尾盘 15 分钟,回归元是当天总活跃度,是 head 1 的无量纲对数版)。
+
+
+    为什么和已有的不同:我对 5583 条逐个 grep 过。(a) 没有任何一条把 cs_mean / cs_demean 的结果当 ts_regres /
+    ts_regbeta / ts_corr 的回归元(含 cs_ 的 17 条 ts_corr(cs_rank(·),cs_rank(·)) 是日截面秩的相关,是另一个对象);(b)
+    没有 log(add(day_mean(·),1)) 的对数活跃度写法,没有 cross_mean(abs_(ts_regres(·))) 的平滑;(c)
+    批里 25 条 abs_(ts_regres) 的回归元全是个股自己的有量纲量;(d) LogFloatShares 做换手率分母在库里 0 次。所有种子的骨架已逐个对照两个库(都不在库里)。与三个
+    head 的关系:head 的残差是有量纲的幅度,与成交额水平高度相关;这里的残差在对数口径上去掉了水平和市场共同的部分,日度秩相关预计低。与波动控制可能有一定相关(特异活跃度的波动与收益波动同源),这由新尺子的残差化去掉。
+
+
+    为什么样本外还会在:如果有 alpha,最可能来自注意力与持仓结构:特异的成交活跃度冲击是散户注意力和消息的痕迹,冲击退潮后价格压力回吐(Barber–Odean
+    2008);共同性高的票有机构 / 被动资金托底。两者都是 60 ~ 150 日尺度上慢变的属性,换手低;而且去掉了整个市场放量缩量带来的行情依赖(cs_mean
+    就是市场成分)。风险:特异冲击与新闻日、涨跌停日重合,若只是涨跌停的替代品,min(train, valid) 与 20 日反转 / 波动控制会把它挡掉。
+
+
+    数学检查:无前视(cs_mean 只用当天截面,回归窗口只向后,含今天);LA、LC、L15 在整天缺失时是 NaN,回归时按配对有效日剔除,不是 0 填充;窗口内有效对
+    < 2 时 ts_regres / ts_regbeta 给 NaN;回归元方差是市场对数活跃度的方差(约 1e-2 量级),远大于 EPS = 1e-9,没有近零分母;ts_corr
+    窗口内有效对不足时给 0(已知行为),只影响新上市 / 复牌头几天;不用 ts_rank / cross_rank(当天缺失记 0 的已知问题);LT 里
+    LogFloatShares 缺失的票整条为 NaN(没有填充);没有除法。窗口最长 150 + 20 = 170 日,热身约占 train 的 12%,只让这些日子无值,不会主导排序。'
+  inspired_by: B016 批:16 个成员都是 sub(0.5, abs_(ts_regres(day_cov(F,F), day_last(F),
+    50)));去掉 abs_ 必要性 +1.7 ~ +2.1,窗口 25 / 50 / 100 = −2.58 / −1.17 / −0.64(head 1),Open
+    换 Close 不变;共性表 day_cov(Amt, Open)(4 个候选,+0.83,p 0.039)。
+  literature:
+  - title: Commonality in liquidity
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2000'
+    treatment: 个股流动性 / 成交活跃度与市场整体同动的程度;这里用 ts_regbeta / ts_corr 读载荷,用回归残差读特异部分
+  - title: 'All that glitters: the effect of attention and news on the buying behavior
+      of individual and institutional investors'
+    authors: Brad M. Barber, Terrance Odean
+    year: '2008'
+    treatment: 注意力驱动的买入造成价格压力;这里把「特异的活跃度冲击」当作注意力的痕迹,读它的幅度、波动与偏度
+  seeds:
+  - cross_mean(abs_(ts_regres(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt),
+    1)), 100)), 20)
+  - cross_ema(abs_(ts_regres(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt),
+    1)), 100)), 30)
+  - cs_bucket_zscore(cross_mean(abs_(ts_regres(cs_mean(log(add(day_mean(Amt), 1))),
+    log(add(day_mean(Amt), 1)), 100)), 20), LogFloatCap)
+  - cross_mean(abs_(ts_regres(cs_mean(log(add(day_mean(Volume), 1))), log(add(day_mean(Volume),
+    1)), 100)), 20)
+  - cross_mean(abs_(ts_regres(cs_mean(sub(log(add(day_mean(Volume), 1)), LogFloatShares)),
+    sub(log(add(day_mean(Volume), 1)), LogFloatShares), 100)), 20)
+  - cross_stddev(ts_regres(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt),
+    1)), 100), 60)
+  - ts_skew(ts_regres(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt),
+    1)), 100), 60)
+  - cross_mean(ts_regres(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt),
+    1)), 100), 10)
+  - ts_regbeta(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt), 1)), 120)
+  - ts_corr(cs_mean(log(add(day_mean(Amt), 1))), log(add(day_mean(Amt), 1)), 120)
+  - ts_regbeta(cs_mean(sub(log(add(day_mean(Volume), 1)), LogFloatShares)), sub(log(add(day_mean(Volume),
+    1)), LogFloatShares), 120)
+  - cross_mean(abs_(ts_regres(cs_mean(log(add(day_last(Amt), 1))), log(add(day_last(Amt),
+    1)), 100)), 20)
+  - cross_mean(abs_(ts_regres(cs_mean(log(add(day_sum(in_slice(Amt, 226, 240)), 1))),
+    log(add(day_sum(in_slice(Amt, 226, 240)), 1)), 150)), 20)
+  - cross_mean(abs_(ts_regres(log(add(day_mean(Amt), 1)), log(add(day_sum(in_slice(Amt,
+    226, 240)), 1)), 100)), 20)
+R:
+- head: sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 50)))
+  why: head 1 的拆解给出四个烂部件:(a) 50 日窗口:25 / 50 / 100 = −2.58 / −1.17 / −0.64(100 日 valid
+    +0.03),残差噪声大,越长越好;(b) abs_ 必要(+2.06),但残差是有量纲的,与已知成交额族 rho −0.67,幅度里带着成交额水平;(c)
+    协方差回归元只承担尺度(Open 换 Close −1.17 → −1.19),可以换成当天总成交额、市场成交额、或把整个式子取对数;(d) 收盘最后一分钟
+    day_last(Amt) 噪声大,可换成尾盘 15 分钟。变体:窗口 150 / 250;除以自己 100 日尾盘成交额均值去尺度;尾盘 15 分钟替换最后一分钟;回归元换成当天总成交额;回归元换成市场成交额
+    cs_mean;残差幅度取 20 日均值;已知成交额族十分位内标准化;回归元换成 day_cov(Ret, Amt);全对数版。数学上都有界:没有近零分母(去尺度的分母是尾盘成交额的
+    100 日均值),log 里加 1,缺失日按有效对剔除,无前视。
+  variants:
+  - sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 150)))
+  - sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 250)))
+  - sub(0.5, div(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), cross_mean(day_last(Amt),
+    100)))
+  - sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_sum(in_slice(Amt, 226, 240)),
+    100)))
+  - sub(0.5, abs_(ts_regres(day_mean(Amt), day_last(Amt), 100)))
+  - sub(0.5, abs_(ts_regres(cs_mean(day_last(Amt)), day_last(Amt), 100)))
+  - sub(0.5, cross_mean(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)), 20))
+  - sub(0.5, cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 100)),
+    cross_mean(day_std(Amt), 30)))
+  - sub(0.5, abs_(ts_regres(day_cov(Ret, Amt), day_last(Amt), 100)))
+  - sub(0.5, abs_(ts_regres(log(add(day_mean(Amt), 1)), log(add(day_last(Amt), 1)),
+    100)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

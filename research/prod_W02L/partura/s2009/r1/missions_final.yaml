@@ -1,0 +1,147 @@
+seed: 2009
+round: 1
+slots:
+- type: E
+  core: log(log(day_durbin_watson(Volume)))
+  hypothesis: '机制:三个 head 都是同一个核心 C0 = log(log(day_durbin_watson(Volume))) 的平滑(ts_sum
+    5 / 10、cross_fangzheng 10),窗口 5 / 10 / 20 的分数几乎相同(−2.27 / −2.23 / −2.2 一带),说明承重的不是平滑,而是
+    C0 的「水平」,也就是一只股票长期习惯的成交节奏。day_durbin_watson 的定义是 Σ(ΔV)² / ΣV²(不去均值),等于 2(1 − r1),r1
+    是未中心化的一阶自相关;在近似独立的情形下它约等于 2·CV²/(1+CV²),CV 是当日分钟成交量的变异系数。所以它读的是「当天成交有多成团 / 多不连续」。这个水平和已知成交额离散度一族相关(拆解表里
+    C0 与已知族的 rho 是 −0.52),它反映的是持久的个股属性(参与者构成、流动性、板块),奖励尺子本来就会把这部分吃掉。尺子没有吃掉的是它的「变化」:同一只股票当前的成交节奏相对自己过去
+    60 日的常态是否异常成团。这对应参与者构成的短期切换:追涨杀跌的散户脉冲取代了算法拆单的平滑成交(或相反)。构成切换留下的价格压力要在几天到几周内慢慢回吐,这个机制是行为
+    / 微观结构性的,不依赖某段行情。
+
+    算子怎样实现:每个种子都原样带着 C0,外围只做「去掉水平」或「把它和别的量对齐」:(1) cross_zscore / cross_madz(C0, 60)
+    与快 EMA 减慢 EMA、C0 减自己 60 日均值、10 日均值减 120 日均值、cross_delta:变化量。(2) cross_regres(C0,
+    day_sum(Ret) 或 abs_(day_sum(Ret)), 60):对当日收益回归后的残差,也就是价格动作解释不了的成团;cross_corr(C0,
+    day_sum(Ret) 或其滞后一天, 40):成团是否发生在上涨日 / 追涨之后。(3) mul(cross_zscore(C0,60), sign(20
+    日累计收益)):成团异常与趋势方向的交互。(4) cs_bucket_demean / cs_bucket_zscore 按市值或价格十分位去均值:消掉最小变动价位和整手交易造成的机械差异,这一版与不去桶的版本对照,本身就检验「真来源
+    vs 规模 / 价格代理」。
+
+    为什么和已有的不同:库里与这个核心有关的写法全是对 C0 做 ts_sum / cross_fangzheng / 嵌套求和,都是「水平」;没有一个库表达式做过日轴
+    z 分数、残差、与收益的滚动相关或桶内去均值,这些写法的骨架全部不在两个库里(已逐个对照 members.csv 的骨架集)。因为它们去掉了持久水平,与三个
+    head 的日度秩相关预计远低于 0.7,与已知成交额族也预计低于 0.5。
+
+    为什么样本外还会在:信号的来源是「相对自己常态的节奏切换」,每只股票用自己做对照,不依赖截面水平;构成切换到价格压力回吐是慢过程,名次在数日内保持,15 bp
+    成本下不至于被换手吃掉;为留住持续性,窗口都在 20 到 120 日。
+
+    数学检查:C0 在 DW ≤ 1(取 log 后为负再取对数)与当天无成交时是 NaN,这是已知的、窄的缺失(拆解表里覆盖率 0.9995),不是热身期填充决定的。C0
+    的左尾被 log(log) 拉长但是有限:DW 取 1.01 时约 −4.6,取 2 时约 −0.37,不是奇点,所以不会有除以近零的爆点;依然担心左尾时用
+    cross_madz、cs_winsor、EMA 这类稳健写法。cross_zscore 分母是近 60 日标准差加 EPS,只有整段时间 C0 一动不动(停牌)才会放大,那时
+    C0 本身是 NaN。无前视:只用 t 日收盘及以前的数据,t+1 才交易。所有窗口 ≤ 120 日,热身期不主导。'
+  seeds:
+  - cross_zscore(log(log(day_durbin_watson(Volume))), 60)
+  - cross_madz(log(log(day_durbin_watson(Volume))), 60)
+  - sub(cross_ema(log(log(day_durbin_watson(Volume))), 5), cross_ema(log(log(day_durbin_watson(Volume))),
+    60))
+  - cross_corr(log(log(day_durbin_watson(Volume))), day_sum(Ret), 40)
+  - cross_corr(log(log(day_durbin_watson(Volume))), ts_delay(day_sum(Ret), 1), 40)
+  - mul(cross_zscore(log(log(day_durbin_watson(Volume))), 60), sign(cross_mean(day_sum(Ret),
+    20)))
+  - sub(cross_mean(log(log(day_durbin_watson(Volume))), 10), cross_mean(log(log(day_durbin_watson(Volume))),
+    120))
+  - cross_delta(cross_mean(log(log(day_durbin_watson(Volume))), 10), 20)
+  - sub(log(log(day_durbin_watson(Volume))), cross_mean(log(log(day_durbin_watson(Volume))),
+    60))
+  - cross_regres(log(log(day_durbin_watson(Volume))), day_sum(Ret), 60)
+  - cross_regres(log(log(day_durbin_watson(Volume))), abs_(day_sum(Ret)), 60)
+  - cs_winsor(cross_zscore(log(log(day_durbin_watson(Volume))), 120))
+  - cross_stddev(log(log(day_durbin_watson(Volume))), 60)
+  - cross_zscore(cross_ema(log(log(day_durbin_watson(Volume))), 5), 120)
+- type: N
+  hypothesis: '机制:成交量路径怎样「成团」,揭示谁在交易。批里的现象是:day_durbin_watson 作用在 Volume 上比作用在 Vwap
+    上好(含 / 不含均值差 +0.93,p 0.04),Volume 换成 Amt 三个 head 的分数几乎不变(−2.25 / −2.25 / −2.31),窗口长短不重要。也就是说起作用的是「成交强度路径的形状」,不是股数、也不是价格。但原始分钟成交量路径被一条对所有股票都相同的日内
+    U 形(集合竞价、开盘半小时、尾盘放量)支配:day_durbin_watson 的分子分母都主要由这条确定性曲线决定,个股特有的成团被糊在里面。新想法:先把每个分钟除以这只股票自己过去
+    20 日同一分钟的平均成交量,div(Volume, cross_mean(Volume, 20))(cross_mean 作用在分钟级的日 × 分钟面板上,沿日轴滚动,所以得到的是每个分钟自己的
+    20 日均量;库里有 17 条用到 cross_mean(Volume, 20),全部只是「放量分钟」的阈值(Volume 大于 20 日均量加减标准差)做二值掩码,没有一条用它连续地标准化整条路径),得到「异常成交量路径」AV:均值约为
+    1,去掉了 U 形与竞价尖峰,且因为当天也在均值里,AV 有上界 20,不会爆点。再读 AV 的结构:(a) 粗糙度 day_durbin_watson(AV),比原始版本干净;(b)
+    持续性 day_autocorr(AV, 1 或 5):知情或机构的母单被拆成很多子单,异常成交会持续多个分钟,散户的噪声交易则是孤立的脉冲(Lillo &
+    Farmer 的订单流长记忆、Kyle & Obizhaeva 的母单假设);(c) 方向:day_signed_ratio(Ret, AV)、day_wmean(Ret,
+    AV)是「成交量异常的那些分钟里价格往哪边走」,把方向和持续性相乘 mul(净买入方向, 持续性)就是母单买入的脚印(Llorente et al. 2002:投机性成交伴随收益延续,对冲性成交伴随反转);(d)
+    形状:day_skew、day_gini 读异常量集中在少数几分钟的程度;(e) 多尺度:day_durbin_watson(in_mean_rolling(AV,
+    5)) 与 1 分钟版本的差 / 比,是「成团中有多少发生在 5 分钟以上的慢时间尺度」,慢尺度成团是母单、快尺度成团是噪声;(f) 带符号的 DW:day_durbin_watson(mul(sign(Ret),
+    AV)) 度量带符号订单流的粗糙度,越光滑越像持续的单边买卖。
+
+    为什么和已有的不同:库里 day_durbin_watson 的输入只有原始场(Volume / Amt / Vwap / Close 等)、Ret 的切片或整天除以总量的份额(后者仍保留
+    U 形),没有一个在日轴上对分钟面板做逐分钟标准化;以 AV 为底的 autocorr、signed_ratio、wmean、gini、skew、多尺度 DW、带符号
+    DW 的骨架,逐个对照 members.csv,都不在两个库里。和五个控制比:AV 是无量纲比值,波动 / 成交额水平 / 市值被除掉了;和已知成交额离散度一族比:它读的是「相对自己常态」而不是「日内成交额的绝对离散」。
+
+    为什么样本外还会在:来源是参与者类型(机构拆单 vs 散户脉冲)在分钟级成交路径上留下的指纹,是慢变的结构属性;所有种子都用 cross_mean(·, 20
+    到 40) 聚合,名次持续,15 bp 成本下留得下来;方向 × 持续性的版本是母单买入后价格逐步消化的漂移,不依赖某段行情。风险:方向种子与 20 日反转可能相关,尺子对反转的线性、U
+    形、S 形暴露都会剔除。
+
+    数学检查:AV 的分母是含当天的 20 日同分钟均值,为 0 只在 20 日同一分钟都无成交时,此时当天该分钟也为 0,得到 NaN 而不是无穷;AV ≤
+    20。day_durbin_watson 在 [0, 4] 内有界,day_autocorr、day_signed_ratio、day_corr 有界,没有除以近零的爆点;day_skew
+    与 day_gini 在整天无量时给 NaN。无前视:cross_mean 的窗口含当天收盘及以前,t+1 才交易。热身期只有前 19 个交易日,其余窗口
+    ≤ 60。'
+  inspired_by: B025 批:DW(Volume) 优于 DW(Vwap)、Volume 与 Amt 互换不变、窗口无关、已知成交额族的 rho −0.52;日内
+    U 形污染 DW 的读数。
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 区分投机性(与收益同向延续)与对冲性(收益反转)成交;这里用异常成交量加权的价格方向 day_signed_ratio(Ret, AV)
+      与 day_wmean(Ret, AV) 近似
+  - title: The long memory of the efficient market
+    authors: Fabrizio Lillo, J. Doyne Farmer
+    year: '2004'
+    treatment: 订单流符号的长记忆来自大单被拆成小单执行;这里用异常成交量路径的自相关 day_autocorr(AV, 1 / 5) 与带符号的 day_durbin_watson
+      近似拆单的持续性
+  - title: Order imbalance and individual stock returns Theory and evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 持续的单边订单失衡预测之后的收益;这里用方向 × 持续性的乘积
+  seeds:
+  - cross_mean(day_signed_ratio(Ret, div(Volume, cross_mean(Volume, 20))), 20)
+  - cross_mean(day_wmean(Ret, div(Amt, cross_mean(Amt, 20))), 20)
+  - cross_mean(day_corr(div(Volume, cross_mean(Volume, 20)), abs_(Ret)), 20)
+  - cross_mean(day_corr(div(Volume, cross_mean(Volume, 20)), in_delay(Ret, 1)), 20)
+  - mul(cross_mean(day_signed_ratio(Ret, div(Volume, cross_mean(Volume, 20))), 20),
+    cross_mean(day_autocorr(div(Volume, cross_mean(Volume, 20)), 1), 20))
+  - cross_mean(day_skew(div(Volume, cross_mean(Volume, 20))), 20)
+  - cross_zscore(cross_mean(day_durbin_watson(div(Volume, cross_mean(Volume, 20))),
+    5), 60)
+  - div(cross_mean(day_durbin_watson(in_mean_rolling(div(Amt, cross_mean(Amt, 20)),
+    5)), 20), cross_mean(day_durbin_watson(div(Amt, cross_mean(Amt, 20))), 20))
+  - cross_corr(day_durbin_watson(div(Volume, cross_mean(Volume, 20))), day_sum(Ret),
+    40)
+  - cross_mean(day_durbin_watson(mul(sign(Ret), div(Volume, cross_mean(Volume, 20)))),
+    20)
+R:
+- head: ts_sum(log(log(day_durbin_watson(Volume))), 10)
+  why: 烂的部件是「和已知成交额离散度一族共享的持久水平」:拆解表里核心 log(log(day_durbin_watson(Volume))) 与已知族的
+    rho 是 −0.52,加上 ts_sum 5 / 10 / 20 后是 −0.63 / −0.63 / −0.73,窗口 5 / 10 / 20 的分数几乎相同,说明平滑不承重、水平才承重,而水平正是新尺子要吃掉的。变体的做法:(1)
+    在已知族自己(cross_mean(day_std(Amt), 30))、市值、成交额水平的十分位内去均值,保留桶内的成团差异;(2) 换掉被日内 U 形污染的底:除以自己
+    20 日同分钟均量、开方稳定方差、先做 3 分钟均值去掉分钟级噪声;(3) 把对左尾敏感的 ts_sum 换成中位数 ts_med。数学上都有界,没有近零的分母(逐分钟标准化的分母为
+    0 时分子也为 0,得 NaN)。
+  variants:
+  - cs_bucket_demean(ts_sum(log(log(day_durbin_watson(Volume))), 10), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(ts_sum(log(log(day_durbin_watson(Volume))), 10), LogFloatCap)
+  - cs_bucket_demean(ts_sum(log(log(day_durbin_watson(Volume))), 10), cross_mean(day_sum(Amt),
+    20))
+  - ts_sum(log(log(day_durbin_watson(div(Volume, cross_mean(Volume, 20))))), 10)
+  - ts_sum(log(log(day_durbin_watson(sqrt(Volume)))), 10)
+  - ts_sum(log(log(day_durbin_watson(in_mean_rolling(Volume, 3)))), 10)
+  - ts_med(log(log(day_durbin_watson(Volume))), 10)
+- head: ts_sum(log(log(day_durbin_watson(Volume))), 5)
+  why: 同一个烂部件:水平与已知族共享。窗口 2 / 5 / 10 / 20 的分数几乎相同,所以不再缩短窗口,而是在已知族十分位内去均值,并把窗口拉到 40(慢变结构属性,换手更低)。
+  variants:
+  - cs_bucket_demean(ts_sum(log(log(day_durbin_watson(Volume))), 5), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(ts_sum(log(log(day_durbin_watson(Volume))), 40), cross_mean(day_std(Amt),
+    30))
+- head: cross_fangzheng(log(log(day_durbin_watson(Volume))), 10)
+  why: 拆解表里窗口 10 → 20 把分数从 −2.35 提到 −2.03,但这个变体的 rho_known 是 −0.74,所以没进 R 候选(与已知族
+    |rho| ≥ 0.5);所以保持 20 日窗口,同时去掉已知族 / 市值桶内的均值,并换成逐分钟标准化的底。cross_fangzheng 是日轴均值加标准差,都有界,没有近零的分母。
+  variants:
+  - cs_bucket_demean(cross_fangzheng(log(log(day_durbin_watson(Volume))), 20), cross_mean(day_std(Amt),
+    30))
+  - cs_bucket_demean(cross_fangzheng(log(log(day_durbin_watson(Volume))), 10), cross_mean(day_std(Amt),
+    30))
+  - cross_fangzheng(log(log(day_durbin_watson(div(Volume, cross_mean(Volume, 20))))),
+    20)
+  - cs_bucket_demean(cross_fangzheng(log(log(day_durbin_watson(Volume))), 10), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

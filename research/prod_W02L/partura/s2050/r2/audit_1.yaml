@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '核心 day_sum(Open) 合法:loc.json 中它出现在 enrichment 与 core_cards 里,不是控制、不是重复的核心(本流 r1 的 E 核心是 day_std 上行分钟,不同)。库禁令层面,它在已见候选里只出现在 cross_corr(day_std(上行), day_sum(Open), 20 / 30) 两个写法中,12 个外围与它们都不同。相关度表:核心与三个 head 的最大原始 |ρ| 为 0.18、残差 0.05;与控制 liq 0.47、known 0.43、size 0.44、vol 0.06、rev 0.03,均低于 0.8,核心过门。外围与 head 的原始 |ρ| 多在 0.10 到 0.40 之间,与 head 同一个东西的不多。划掉 seed 12 cross_stddev(div(day_sum(Open), cross_delay(day_sum(Open), 1)), 60):它是 60 日开盘价水平日变化率的截面时间标准差,也就是日收益的时间波动,与 vol 控制 0.63、与 head 最大 0.61,是 vol 控制的换写,按 §3 的「明显度量同一个东西」划掉(不是 0.8 的自动规则)。保留 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 共 11 个,远高于 4 的下限。seed 1 与 seed 5 都是 120 日水平标准化(比率与 z 分数),是同一构造的两种标准化,rank 不同,不划。seed 5 与 rev 控制 0.61、seed 9 与 rev 0.46,是中度相关而非同一个东西,不划,但残差之后 rev 的线性部分会被奖励去掉,PI 评估时应留意。创新度 4:外围的 52 周高点距离、跳月中期动量、以及水平与成交额的时序共动,在 head 与控制中都没有对应,不是换写;没有给 5,是因为核心本身与 liq、size 都在 0.44 到 0.47 之间。合理度 4:逐个算子核对。cross_delay、cross_max、cross_mean、cross_ema、cross_zscore、cross_stddev、cross_corr、cross_delta 都是因果的日轴运算(cross_delta 为 x[t] - x[t-d],cross_zscore 只用到当天及以前的窗口),无 ts_shift 与 cross_shift,无前视;cs_bucket_demean 与 cs_bucket_zscore 的分桶只由当天的 x 决定,无前视;day_sum 是分钟开盘价求和,分母都是价格水平(正数),无近零爆点;cross_mean 用 nanmean,停牌 NaN 不会变成 0。seed 2 的 cross_max(250) 与 seed 11 的 EMA250 有约一年热身,训练段从 2018-01-02 起,占 6.5 年中的一小段,不构成定义坏掉。后复权价格水平按 §4 不是问题。机制:52 周高点锚定与跳月动量都是慢变的行为机制,可以说清,且跳月动量排除了 20 日反转。如果它有 alpha,最可能来自距历史高点的锚定效应与跳月中期动量这类与 20 日反转正交的长期价格位置效应,而不是价格水平本身的截面高低。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: 'N 位把日收益拆成隔夜缺口 ON = day_first(Open) / cross_delay(day_last(Close), 1) 与日内腿 ID = day_last(Close) / day_first(Open),再做 60 日等累积。相关度表:12 个外围与三个 head 的原始 |ρ| 最大为 0.54(seed 7),其余多在 0.04 到 0.40 之间;与 vol 控制 seed 7 为 0.52、seed 2 为 0.45、seed 3 为 0.38,其余 0.4 以下;与 rev 控制最高的是 seed 10 cross_mean(sub(ON, ID), 20) 的 0.59。seed 10 的 ON 减 ID 近似等于 2 ON 减总收益,与 20 日反转有部分重合,但远低于 0.8,不划。seed 7 cross_stddev(ON, 60) 是隔夜缺口的波动,与全日波动控制只是中度相关(0.52),它度量的是隔夜这一腿的离散而不是全日波动,保留。seed 12 cs_bucket_zscore 按 Amt 分桶,与流动性控制 0.00,过。没有任何种子与 head 的原始 |ρ| 达到 0.7,也没有与任何控制达到 0.8,故自动规则下无划除。创新度 4:三个 head 全部是批内分钟 Ret 的离散度,从不切开收盘到开盘的腿;这个切分是 head 没有的结构。没有给 5,是因为本审计没有核查 5583 条库表达式里是否已有同样的隔夜或日内分解,这一点由 GP 的骨架禁库在运行时把关。合理度 4:逐个算子核对。day_first 取当天第一个有效分钟开盘价,day_last 取最后一个有效收盘价,cross_delay(·, 1) 把前一交易日的值挪到当天,全部因果,无前视。分母是前一日收盘价(正数),无近零爆点。seed 6 的 cross_regbeta(ID, ON, 60) 按 rolling_ols(x, y) 的约定是 ON 对 ID 的回归斜率,与任务正文里「gap-to-intraday sensitivity」的措辞方向相反,但这不是数学问题,只是描述。停牌恢复日的缺口会因 cross_delay 的行位移跨越多日,是小范围的定义噪声,不会主导截面结果。机制:隔夜信息流(集合竞价与机构)与日内散户交易的时段结构不同,隔夜缺口的持续性与日内反转在文献中有依据,可以说清。如果它有 alpha,最可能来自隔夜缺口在数周内的持续与日内反转之间的差,即谁在什么时段交易,而不是 Ret 的离散度水平。'
+R:
+  - head: 'cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 80)'
+    soundness: 4
+    reasons: 'R 只评合理度。原 head 是上涨分钟波动占全日波动的比,80 日均值,在快照中是 H2。变体 1 到 3 只改窗口为 160、240、120,与原 head 的原始 |ρ| 为 0.84 到 0.94,按规则是替换候选,不是新 head。逐个算子核对:is_gt(Ret, 0) 对非正分钟给 0,select_where 取正部,day_std 对带零的正部取标准差,除以 day_std(Ret)。整日涨跌停锁死时分子与分母都为 0,得到 0/0 = NaN,cross_mean 用 nanmean 忽略,不会变成 0 或 inf,与 §4 的数值伪影不符。240 日窗口的热身约占训练段前一年,训练段全长约 6.5 年,不构成主导。变体 4 去掉分母、窗口 160,与 vol 控制的 |ρ| 为 0.73,是波动水平的写法,但它的机制(上涨分钟的波动)仍然清楚,不据此挡。窗口变化本身是对 train 与 valid 的参数选择,未使用 2026 年数据。'
+summary: '本轮 a(E,核心 day_sum(Open))划掉 seed 12(与 vol 控制同一个东西),剩 11 个,创新 4、合理 4;b(N,隔夜缺口与日内腿)无划除,创新 4、合理 4;R 组 80 到 160/240/120 窗口的变体合理 4、其余变体同样放行。两个位都通过 §3 的门槛。'

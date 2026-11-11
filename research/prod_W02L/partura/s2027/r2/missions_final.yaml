@@ -1,0 +1,144 @@
+seed: 2027
+round: 2
+slots:
+- type: E
+  core: cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230), 10), 60), 20)
+  hypothesis: 机制:核心 C = cross_ema(cross_zscore(Q10, 60), 20),其中 Q10 = day_q_stat_std(Ret
+    的 11..230 分钟, 10) 是 Ljung-Box 序列相关统计量的离散度,先做 60 日滚动 z 分数再 20 日半衰期 EMA,是『Q 的慢状态』。第
+    1 轮 E 位里最好的一条(score −0.42,远好于所有 head 的 −1.2 以下)是 cross_regbeta(day_std(Ret), C,
+    120):C 对当日分钟波动的 120 日滚动斜率,即『分钟序列相关强度对波动水平的敏感度』,而不是 Q 的水平;这说明承重的是 Q 与某个状态变量的耦合。本任务把『对什么回归』换掉:x
+    取非波动的日度状态量,每个都有一个微观结构解释 —— 极大收益分钟(day_max,跳跃)、极小收益分钟(day_min)、日内偏度 / 峰度(尾部)、日收益(day_sum:序列相关在涨跌日的不对称,对应反转
+    / 趋势交易)、成交量集中度(day_gini(Volume):成交量集中时序列相关的变化)、早盘 / 午后波动、昨日波动的滞后版(ts_delay,检验是否是预测而非同期耦合),并有
+    cross_corr、cross_regres 残差、cs_regres 截面残差 + 慢 EMA、窗口 60 / 250、120 对 250 窗口的差、午后波动配
+    250 日窗口。与以前不同:第 1 轮的外围只有 cross_regbeta/cross_regres 对 day_std 的几种、cross_autocorr、嵌套的
+    zscore;这里 x 全部不是 day_std,多数是不同的状态量。为什么样本外还会在:序列相关强度对状态变量的敏感度反映做市商 / 机构拆单行为对状态的响应差异,是持续的股票特征(每个
+    x 读的是时间序列斜率,慢变化),且被慢 EMA 与 120 日窗口压低噪声;尺子已去掉对波动、流动性、反转、市值与两个冠军的线性与非线性暴露。风险:斜率是两个噪声量的比,120
+    日窗口内约有 0.09 的抽样噪声;day_kurt / day_gini 在停牌日为缺失,需要看覆盖率。
+  seeds:
+  - cross_regbeta(day_max(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(day_min(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(day_skew(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(day_kurt(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(day_sum(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(day_gini(in_slice(Volume, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_corr(day_sum(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regres(abs_(day_sum(in_slice(Ret, 11, 230))), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 60)
+  - cross_regbeta(day_std(in_slice(Ret, 11, 60)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 60)
+  - cross_regbeta(day_std(in_slice(Ret, 121, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_regbeta(ts_delay(day_std(in_slice(Ret, 11, 230)), 1), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120)
+  - cross_ema(cs_regres(cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230),
+    10), 60), 20), day_std(in_slice(Ret, 11, 230))), 20)
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 250)
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 60)
+  - sub(cross_regbeta(day_std(in_slice(Ret, 11, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 120), cross_regbeta(day_std(in_slice(Ret, 11, 230)),
+    cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230), 10), 60), 20), 250))
+  - cross_regbeta(day_std(in_slice(Ret, 121, 230)), cross_ema(cross_zscore(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 60), 20), 250)
+- type: N
+  hypothesis: 机制:Llorente-Michaely-Saar-Wang(2002)指出放量时的收益延续与否取决于交易是信息驱动还是流动性驱动:信息驱动的放量,价格变动在后续继续;流动性驱动的放量,价格会回吐。B080
+    的 head 读的是放量 10% 分钟里收益的『离散度』(日内,除以绝对均值),它们在新尺子下全为负(−2.7~−3.0)。离散度把方向吃掉了:同样是放量分钟,同向大涨和大跌被当成一回事。本任务读的是方向和量价协同本身:(a)
+    放量分钟(Volume 最大的 1/10、1/5、1/20)的带符号收益均值/总和,再取 20~60 日慢均值或截面标准化后慢 EMA(第 1 轮显示慢状态承重,快读数是噪声);(b)
+    放量减缩量分钟的收益差(把 Volume 乘 −1 取最小量分钟),去掉全日方向;(c) 带符号的放量方向纯度 sum(Ret)/sum(|Ret|);(d)
+    分钟尺度量价的同期、量领先收益、收益领先量三种相关(库里只有 |Ret| 与 Volume 的相关族,没有带符号版和 lead-lag 版);(e) 收益大的分钟里的成交量(信息冲击处的量能)。算子怎样实现:in_topk_masked(x,
+    y, p) 按 x 排名返回 y 在 x 最大 1/p 位置上的值,其余为缺失,day_mean 在有效值上取平均;mul(Volume, -1) 取最小量分钟;day_corr
+    在 11..240 的分钟上算皮尔逊相关,lead-lag 靠两个错位切片(长度相同)实现。与库的区别:库里有 day_std(topk) 的离散度及其比值(B080),有
+    day_last/day_first(topk) 的比值,有 |Ret| 与 Volume 的 day_corr;没有放量分钟的带符号均值、放缩量之差、带符号的量价相关。这些是不同的数学对象,而不是离散度的换写。为什么样本外还会在:A
+    股散户占比高,放量时的方向对应关注度冲击(Barber-Odean 2008 的关注度驱动买入)后短期过度反应、之后回吐,方向跟量的组合是行为机制而不是样本拟合;慢均值把单日噪声去掉,与第
+    1 轮得到的『慢者好』一致;这些量对波动 / 流动性控制的线性与非线性暴露已被尺子去掉,剩下的是方向信息。风险:A 股涨跌停会让放量分钟的收益被截断,放量收益与
+    20 日反转可能重叠。
+  inspired_by: B080(第 2 个结构批,9 条手写库:成交量最大的 10% 分钟里收益的离散度 day_std(in_topk_masked(Volume,
+    Ret, 10)) 及其与 day_max(Volume)/day_sum(Volume) 的差);它们在新尺子下的分数在 −2.7 ~ −3.0,对放量分钟只取了离散度
+  seeds:
+  - ts_mean(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240),
+    10)), 20)
+  - ts_mean(day_sum(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240),
+    10)), 60)
+  - cross_ema(cs_rank(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10))), 30)
+  - sub(ts_mean(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 10)), 20), ts_mean(day_mean(in_topk_masked(mul(in_slice(Volume, 11, 240),
+    -1), in_slice(Ret, 11, 240), 10)), 20))
+  - ts_mean(div(day_sum(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 10)), add(day_sum(abs_(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10))), 0.000001)), 40)
+  - ts_mean(day_corr(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240)), 40)
+  - ts_mean(day_corr(in_slice(Volume, 11, 239), in_slice(Ret, 12, 240)), 40)
+  - ts_mean(day_corr(in_slice(Volume, 12, 240), in_slice(Ret, 11, 239)), 40)
+  - cross_ema(cs_rank(day_corr(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240))),
+    30)
+  - ts_mean(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240),
+    5)), 40)
+  - ts_mean(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240),
+    20)), 40)
+  - cross_ema(cross_zscore(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10)), 60), 20)
+  - ts_mean(sub(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 10)), day_mean(in_slice(Ret, 11, 240))), 40)
+  - ts_mean(day_mean(in_topk_masked(in_slice(Amt, 11, 240), in_slice(Ret, 11, 240),
+    10)), 40)
+  - cross_ema(cross_zscore(sub(day_mean(in_topk_masked(in_slice(Volume, 11, 240),
+    in_slice(Ret, 11, 240), 10)), day_mean(in_topk_masked(mul(in_slice(Volume, 11,
+    240), -1), in_slice(Ret, 11, 240), 10))), 60), 20)
+  - ts_mean(day_mean(in_topk_masked(abs_(in_slice(Ret, 11, 240)), in_slice(Volume,
+    11, 240), 10)), 40)
+R:
+- head: ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 10), 45)
+  why: 外层 ts_stddev(45) 是把 Q 的水平与波动一起读成慢状态,拆解里窗口延长单调变好但 Q 本身(−3.6)很差;第 1 轮的 E 里最好的一条是
+    Q 慢状态对分钟波动的时间序列回归斜率(−0.42),所以把外层换成「对波动的 120 日斜率」或先做截面标准化,检验承重的是 Q 对波动的耦合而不是 Q
+    的离散度。
+  variants:
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), ts_stddev(day_q_stat_std(in_slice(Ret,
+    11, 230), 10), 45), 120)
+  - ts_stddev(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230), 10), 60), 45)
+  - ts_stddev(cs_rank(day_q_stat_std(in_slice(Ret, 11, 230), 10)), 45)
+  - cross_ema(ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 10), 45), 20)
+- head: ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230)), 15)
+  why: 同上,Q20 版:外层 ts_stddev 15 日太短(拆解里 7→15→30 单调变好),换成对波动的斜率与截面标准化。
+  variants:
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), ts_stddev(day_q_stat_std(in_slice(Ret,
+    11, 230)), 15), 120)
+  - ts_stddev(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230)), 60), 45)
+  - ts_stddev(cs_rank(day_q_stat_std(in_slice(Ret, 11, 230))), 60)
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), ts_stddev(day_q_stat_std(in_slice(Ret,
+    11, 230)), 45), 120)
+- head: ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 5), 15)
+  why: Q5 版,与上同理;Q5 只含 5 个滞后,抽样噪声更大,所以截面标准化后再取慢离散度。
+  variants:
+  - cross_regbeta(day_std(in_slice(Ret, 11, 230)), ts_stddev(day_q_stat_std(in_slice(Ret,
+    11, 230), 5), 15), 120)
+  - ts_stddev(cross_zscore(day_q_stat_std(in_slice(Ret, 11, 230), 5), 60), 45)
+  - ts_stddev(cs_rank(day_q_stat_std(in_slice(Ret, 11, 230), 5)), 60)
+  - cross_ema(ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 5), 45), 20)
+- head: ts_mean(div(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10)), add(day_mean(abs_(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10))), create_like(day_mean(abs_(in_topk_masked(in_slice(Volume, 11,
+    240), in_slice(Ret, 11, 240), 10))), 1e-06))), 20)
+  why: B080 的 head 把放量 10% 分钟收益的离散度除以其绝对均值;拆解里除法项必要性 +0.33、窗口加长更差(40 日 −3.39)。把离散度换成带符号的均值或对
+    20 日取截面标准化后的慢 EMA,看承重的是离散度还是放量方向。
+  variants:
+  - ts_mean(div(day_mean(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 10)), add(day_mean(abs_(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret,
+    11, 240), 10))), 0.000001)), 20)
+  - cross_ema(cross_zscore(ts_mean(div(day_std(in_topk_masked(in_slice(Volume, 11,
+    240), in_slice(Ret, 11, 240), 10)), add(day_mean(abs_(in_topk_masked(in_slice(Volume,
+    11, 240), in_slice(Ret, 11, 240), 10))), create_like(day_mean(abs_(in_topk_masked(in_slice(Volume,
+    11, 240), in_slice(Ret, 11, 240), 10))), 1e-06))), 20), 60), 20)
+  - ts_mean(div(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11,
+    240), 10)), add(day_mean(abs_(in_slice(Ret, 11, 240))), 0.000001)), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml

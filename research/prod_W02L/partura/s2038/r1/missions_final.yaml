@@ -1,0 +1,254 @@
+seed: 2038
+round: 1
+slots:
+- type: N
+  hypothesis: '想法:把「后复权价格」里被库当成水平读的那一块拆开,只读其中的累计复权因子 F 的变化 —— 每只股票过去 1~3 年实际派出去的现金分红与送转股,以及扣掉同期流通股增发
+    / 解禁摊薄之后的净股东回报(net payout)。
+
+
+    来源(批里的现象):B112 的 41 条成员全是 day_open(价格叶子)(9:30 竞价分钟;High / Low / Vwap 在该分钟是同一个价,所以批里
+    day_open(High)、day_open(Vwap)、pow_2(day_open(Low))、neg(day_open(High)) 的库内 train
+    统计逐位相同),再套 pow_2 / sigmoid / cross_sum(3) / cross_delta(15) 这类单调或短窗变形。规则 §4 已写明后复权价的截面排序约等于从基期起的累计收益,所以这一批读的其实只有一个量:竞价价格的后复权水平(=
+    基期价 × 终身总回报)。新尺子去掉 5 个控制和两个冠军之后它们全是负分(批内最好 −0.43,其余多在 −1 以下),而且没有一条把后复权价与名义价格放在一起看。
+
+
+    事实依据(文档,不是我的猜测):AlphaCube docs/steering_and_daily_fields.md §1.4 写明 Close 是后复权价,FloatCap
+    = circulating_market_value、FloatShares = circulating_capital(股数),例:000001.SZ 在
+    2026-09-16 约 11.70 元/股,即 FloatCap / FloatShares 是名义价格。所以 LogFloatCap − LogFloatShares
+    = log 名义收盘价,而 G = log(day_last(Close)) − (LogFloatCap − LogFloatShares) = log
+    F(t):F 只在除权除息日跳升(现金分红按 P_前收 / P_除权参考价,送转股按 1 + 送转比例),其余日子不变,里面没有任何价格涨跌。我对两个库的
+    5583 条表达式逐条数过:LogFloatCap、LogFloatShares、LogTotalCap、FloatCap 一共出现 0 次,所以 G 是库没有读过的变量。
+
+
+    算子怎样实现(14 个种子):
+
+    (1) 种子 1、2:S10 = cross_mean(G, 10)(10 日均值压住 FloatCap 与后复权收盘取价时点不一致带来的噪声),再减它在
+    241 / 482 个交易日窗口内的最小值 cross_min(S10, w)。F 近似单调,窗内最小值就是窗口起点的水平,差 = 窗口内累计分红送转(trailing
+    payout);窗口在样本起点不满时用已有历史,不产生缺失。
+
+    (2) 种子 3:cross_stddev(S10 的日差, 482) —— 除权除息跳升的大小与频率(F 的「跳跃度」),连续量,不依赖窗口起点。种子 4:净股东回报
+    = 种子 1 减去同期 LogFloatShares 的增长(同样的 10 日均值 − 窗内最小值);送转股在 G 与 LogFloatShares 两边按同一比例抵消,剩下的是
+    现金分红 − 净增发 / 解禁摊薄 / 回购注销,即流通股口径的净股东回报。种子 5:只取 −(LogFloatShares 的 241 日增长),即净发行异象的单独读法,用来分开「分红」与「摊薄」两半各自有没有分数。
+
+    (3) 种子 6 ~ 8、14:时间平滑形式 —— 种子 1 的 120 日均值、种子 4 的半衰期 60 EMA、种子 1 的截面秩 60 日均值、种子
+    4 的 482 日版截面秩 30 日 EMA(换手更低,也不让个别除权日支配排序)。
+
+    (4) 种子 9、10、13:cs_bucket_zscore / cs_bucket_demean 以 LogFloatCap 十分位分桶 —— 同市值同伴内的相对回报,是交互项,新尺子只扣市值秩的
+    1~3 次多项式,扣不掉同伴内相对量。
+
+    (5) 种子 11:除以 cross_mean(day_std(Ret), 60) + 0.0002 —— 每单位波动的分红(分钟收益 std 量级约 1e-3,常数不会压住分母)。
+
+    (6) 种子 12:S10 本身(从基期起的累计复权,「寿命」口径),作对照。
+
+
+    和库里已有的不同:库里读价格叶子的都是水平 / 短差分;读日频叶子的 0 条。这里的 F 是(后复权价 ÷ 名义价)的比,价格涨跌在比值里约掉,只剩公司行为。它也不是
+    W01 已有 head 的换写法:W01 的 head 里 LogFloatShares 出现在阶跃筛子(cs_first_* 以 ts_delta(LogFloatShares,
+    20 / 60) 的秩作增发 / 解禁筛)、名义价格 sub(LogFloatCap, LogFloatShares) 的分桶与筛子、以及 cs_regres
+    里的相加项;没有一条把名义价与后复权价相减得到累计复权因子,也没有 cross_min / 窗内差这类对分红送转的读法。
+
+
+    为什么有 alpha 且样本外还会在:(a) 现金分红与送转是管理层的可信承诺,发出去就收不回(Miller–Rock 1985 的分红信号);持续高分红
+    + 低净增发的股票对应较好的盈余质量与较少的股权摊薄(Boudoukh et al. 2007 的 net payout yield;Pontiff–Woodgate
+    2008 的净发行异象:增发多的后续收益低)。(b) A 股 2018 年起监管持续推动现金分红与回购(分红与再融资挂钩的制度),且流通股增发 / 解禁有可预期的供给压力,这两股力量在
+    train 和 valid 两段都存在,不依赖某段行情。(c) 变量慢(窗口 241 ~ 482 日,外加 120 日平滑),15 bp 成本下换手低。预期并不高:分红强度与低波动、大市值、低换手相关,新尺子会扣掉其中大部分,我预期它是「离线更近」而不是越线。
+
+
+    数学检查:(a) 无前视:G 用 t 日的后复权收盘与 t 日的名义收盘(FloatCap / FloatShares 同为收盘口径),窗口全是尾随窗口,t
+    日收盘后算、t+1 才交易。(b) 数值:除法只在种子 11(分母约 1e-3,另加 0.0002),其余全是加减,无除零、无爆点;种子 11 的 cross_mean(day_std(Ret),
+    60) 窗口在样本首日不满,但不为 0。(c) 离散度:不分红的股票在 241 日窗口里 G 差为 0,会并列,但 241 / 482 日窗口里分红股占大多数,并列的是少数(只有
+    120 日以下的窗口才会让并列占多数,所以我没有放短窗口 / 事件计数)。(d) 定义:若 FloatCap 的取价时点与后复权收盘有一天的错位,G 会带一点日内噪声,10
+    日均值已压低;极端情况下(数据源完全不一致)读到的是噪声,种子会得到接近 0 的分数而不是错的方向。没有用任何 2026 年数据,本机只用合成立方体(80
+    只 × 320 日 × 241 分钟,含 FloatCap / TotalCap / FloatShares)把 14 个种子全算了一遍:都能算、无 inf,每日取值离散度
+    0.93 ~ 1.00(只是检查运行时错误,不是任何分数)。'
+  inspired_by: B112(41 条挖掘库成员):全部是 day_open(价格叶子) —— 竞价价的后复权水平,及其 pow_2 / sigmoid
+    / cross_sum 3 / cross_delta 15 变形;High / Low / Vwap 在 9:30 竞价分钟是同一个价,批内这几条库内统计逐位相同,批里只读到一个量,没有一条把后复权价与名义价(LogFloatCap
+    − LogFloatShares)放在一起拆出累计分红送转
+  literature:
+  - title: Dividend policy under asymmetric information
+    authors: Merton H. Miller, Kevin Rock
+    year: '1985'
+    treatment: 分红是可信的信号;现金分红强度作为机制来源
+  - title: 'On the importance of measuring payout yield: implications for empirical
+      asset pricing'
+    authors: Jacob Boudoukh, Roni Michaely, Matthew Richardson, Michael R. Roberts
+    year: '2007'
+    treatment: net payout(分红 + 回购 − 发行)比单纯股息率更能预测收益;种子 4、5、7、10、14 的净口径(分红 − 发行)
+  - title: Share issuance and cross-sectional returns
+    authors: Jeffrey Pontiff, Artemiza Woodgate
+    year: '2008'
+    treatment: 净发行 / 摊薄的收益异象;种子 4、5 里扣掉 / 单独读的流通股增长
+  seeds:
+  - sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 10),
+    cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241))
+  - sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 10),
+    cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 482))
+  - cross_stddev(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_delay(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 1)), 482)
+  - sub(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241)), sub(cross_mean(LogFloatShares, 10), cross_min(cross_mean(LogFloatShares,
+    10), 241)))
+  - neg(sub(cross_mean(LogFloatShares, 10), cross_min(cross_mean(LogFloatShares, 10),
+    241)))
+  - cross_mean(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241)), 120)
+  - cross_ema(sub(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241)), sub(cross_mean(LogFloatShares, 10), cross_min(cross_mean(LogFloatShares,
+    10), 241))), 60)
+  - cross_mean(cs_rank(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241))), 60)
+  - cs_bucket_zscore(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241)), LogFloatCap)
+  - cs_bucket_demean(sub(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)), 10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)), 10), 482)), sub(cross_mean(LogFloatShares, 10), cross_min(cross_mean(LogFloatShares,
+    10), 482))), LogFloatCap)
+  - div(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), 241)), add(cross_mean(day_std(Ret), 60), 0.0002))
+  - cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)), 10)
+  - cs_bucket_zscore(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    10), LogFloatCap)
+  - cross_ema(cs_rank(sub(sub(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)), 10), cross_min(cross_mean(sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)), 10), 482)), sub(cross_mean(LogFloatShares, 10), cross_min(cross_mean(LogFloatShares,
+    10), 482)))), 30)
+- type: N
+  hypothesis: '想法:尾盘最后一根 Amt 的「突发度」—— 被动 / 机构资金在收盘集合竞价里成交的事件指纹。读它相对自己常态的峰值(burst)、两端(收盘
+    vs 开盘)峰值之差、和分布形状,不读水平。
+
+
+    来源(批里的现象):B112 里唯一 train 为正的 head 是 ts_max(ts_max(log(cross_regbeta(day_last(Amt),
+    day_open(Amt), 10)), 20), 50)(score −0.43,train +0.11 / valid −0.43)。它的拆解给出四个事实:(1)
+    把 cross_regbeta 整个敲掉,只剩 ts_max(ts_max(log(day_last(Amt)), 20), 50),分数不变(−0.43
+    对 −0.43,必要性 +0.00;这个变体 train −0.43 / valid −0.28);而 day_last(Amt) 单独是 −3.83(train
+    −3.16 / valid −3.83)。(2) 外层窗口 50 → 100,train +0.11 → +0.38,valid −0.43 → −0.53;50
+    → 25 两段都变差(−0.15 / −0.59)。(3) Amt → Volume 互换几乎无影响(−0.50)。(4) 敲掉 log,train +0.29
+    / valid −0.73。所以承重的不是回归斜率,而是「最后一根 Amt 在 70 日窗口里的峰值」这个慢状态,加上对重尾的压缩。另外要注意:AlphaCube
+    的 log 是 log(|x|)(|x| ≤ EPS 为缺失),cross_regbeta 在 10 日窗口里除以最后一根 Amt 的方差,方差接近 0 时斜率会爆点
+    —— 所以 head 读到的是「斜率绝对值的 70 日峰值」,一部分是爆点。这也是我不拿这个斜率做 E 的核心的原因(E 的候选必须原样带着它),而改用 N,把斜率里承重的部分单独写出来。
+
+
+    机制:15:00 那根分钟线含收盘集合竞价(14:57 ~ 15:00 撮合),指数 / ETF / 量化 / 机构的「收盘价成交」集中在这里;指数调样、MSCI
+    / 富时 / 中证定期调整日、ETF 申赎、大宗交易会让它在一天内放大数倍,散户主导的开盘竞价(day_open(Amt))则是另一端。单位自身常态的峰值(burst)是被动与机构需求事件的指纹;60
+    ~ 120 日窗口正好覆盖季度 / 半年度的调整周期,事件有记忆而不是单日噪声,所以才会出现「窗口越长 train 越好」。
+
+
+    算子怎样实现(14 个种子,L = day_last(Amt)、O = day_open(Amt)、T = day_sum(Amt)):
+
+    (1) 种子 1、10:峰值 / 常态 —— cross_max(L, 70) ÷ cross_mean(L, 70);峰值 ÷(60 日均值 + 1)的
+    70 日最大。无量纲,流动性水平约掉(控制能拿走的只剩与波动 / 换手的残余关系)。
+
+    (2) 种子 2、14:cross_zscore(L, 120) 的 60 日最大;cross_madz(log(L + 1), 60) 的 EMA(半衰期
+    20)—— 用标准差 / MAD 为单位的突发。
+
+    (3) 种子 3、4:收盘占比 L ÷ T 的 70 日峰值减均值;120 日上四分位尾部均值 —— 占比是自身流动性已标准化的量。
+
+    (4) 种子 5、6:两端峰值之差 cross_max(log(L + 1), 70) − cross_max(log(O + 1), 70)(机构收盘端
+    vs 散户开盘端,水平约掉);同一个峰值在 LogFloatCap 十分位桶内去均值(同市值同伴内的相对量,是交互项)。
+
+    (5) 种子 7 ~ 9:cross_stddev(log(L + 1), 60)、一阶自相关、120 日四分位比(log 相减)—— 收盘端的变化性 /
+    持续性 / 分布宽度。
+
+    (6) 种子 11 ~ 13:把 head 里承重的斜率换成有界形式 —— 斜率的截面秩的 120 日均值、秩的 60 日 EMA(不受爆点支配)、L 与
+    O 的 60 日相关(无量纲)。
+
+
+    和库里已有的不同:两个库里 day_last(Amt) 出现 120 次,都是作为叶子进复杂树(例:ts_stddev(cross_fangzheng(ts_regalpha(log(day_sum(Amt)),
+    neg(day_last(Amt)), 10), 241), 5)、cross_max(cross_max(mul(day_close(Amt), …),
+    5), 5))或与别的量做相关 / 回归;cross_tail_mean_*、cross_madz、cross_zscore 在库里 0 次;没有一条在「峰值
+    ÷ 常态」「收盘端峰值 − 开盘端峰值」「收盘占比的尾部均值」上。W01 的 head 里有 cs_bucket_demean(开盘占比均值 − 收盘占比均值,
+    LogFloatCap) 与 cs_bucket_zscore(cross_mean(尾盘 30 分钟占比, 20), …) 这类水平 / 均值版,这里读的是峰值与尾部。14
+    个种子的骨架(去窗口 / 常数 / 字段)我用库的 skeleton_key 对照过 4100 个不同骨架,都不在其中。
+
+
+    为什么样本外还会在:来源是制度性的 —— 指数 / ETF 的定期调整日历、被动资金占比的结构性增长(2018 年起北向、公募、ETF 规模持续增大),不依赖某段行情;事件有
+    1 ~ 2 个季度的记忆,换手低。预期并不高:该 head 的 valid 比 train 差,我预期好的种子是 train 与 valid 都在 −0.5
+    附近,而不是越线。若把峰值换成 burst 之后分数反而比 head 差,说明 head 读到的是流动性水平(被控制拿走),下一轮就不再押收盘端。
+
+
+    数学检查:(a) 无前视:全部是尾随窗口;t 日收盘后算、t+1 才交易(最后一根 Amt 是 15:00 那一根,当日收盘即已知)。(b) 数值:除法的分母是
+    cross_mean(L, w)(任一天 > 0 则为正;窗内全为 0 时得到 0 / 0 = 缺失,不会 inf)、T(停牌日 0 / 0 = 缺失);log
+    的自变量都 +1(Amt 单位是元,+1 可忽略);cross_zscore 分母带 EPS,常数序列得 0;种子 11、12 用 cs_rank 包住斜率,爆点只影响序而不影响量。(c)
+    定义:day_last 取最后一个非缺失分钟;若无成交分钟是缺失而不是 0,个别冷门股的「最后一根」会是更早的分钟,但比值型种子读的是「最后一笔相对自己常态的突发」,不依赖它恰好是
+    15:00;两个交易所收盘集合竞价制度的起始时点并不同步(我没有核实具体日期),早期样本里的水平差异在比值型种子里被自身常态约掉,水平型种子(5、6 的差)只在同一只股票内做差。本机用合成立方体把
+    14 个种子全算了一遍:都能算、无 inf、覆盖 0.89 ~ 0.98(最低的是 120 日 MAD 窗口在 320 日样本里的暖机)。没有用任何 2026
+    年数据。'
+  inspired_by: B112 的 head ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt),
+    10)), 20), 50) 的拆解:敲掉回归后只剩 ts_max(ts_max(log(day_last(Amt)), 20), 50),分数不变(−0.43
+    对 −0.43);day_last(Amt) 单独 −3.83;外层窗口 50 → 100 时 train +0.11 → +0.38 —— 承重的是尾盘最后一根
+    Amt 在长窗口里的峰值,而不是斜率
+  literature:
+  - title: Do demand curves for stocks slope down?
+    authors: Andrei Shleifer
+    year: '1986'
+    treatment: 指数成分调整带来的被动需求冲击;收盘端峰值事件的机制来源
+  - title: A closing call's impact on market quality at Euronext Paris
+    authors: Marco Pagano, Robert A. Schwartz
+    year: '2003'
+    treatment: 收盘集合竞价聚集大额与指数 / 机构成交;最后一根 Amt 的含义
+  - title: 'The price response to S&P 500 index additions and deletions: evidence
+      of asymmetry and a new explanation'
+    authors: Honghui Chen, Gregory Noronha, Vijay Singal
+    year: '2004'
+    treatment: 指数调整事件的价格反应与反转,事件的记忆长度
+  seeds:
+  - div(cross_max(day_last(Amt), 70), cross_mean(day_last(Amt), 70))
+  - cross_max(cross_zscore(day_last(Amt), 120), 60)
+  - sub(cross_max(div(day_last(Amt), day_sum(Amt)), 70), cross_mean(div(day_last(Amt),
+    day_sum(Amt)), 70))
+  - cross_tail_mean_q75(div(day_last(Amt), day_sum(Amt)), 120)
+  - cs_bucket_demean(cross_max(log(add(day_last(Amt), 1)), 70), LogFloatCap)
+  - cross_stddev(log(add(day_last(Amt), 1)), 60)
+  - cross_autocorr(log(add(day_last(Amt), 1)), 60, 1)
+  - sub(log(add(cross_quantile_q75(day_last(Amt), 120), 1)), log(add(cross_quantile_q25(day_last(Amt),
+    120), 1)))
+  - cross_max(div(day_last(Amt), add(cross_mean(day_last(Amt), 60), 1)), 70)
+  - cross_mean(cs_rank(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 120)
+  - cross_ema(cs_rank(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 60)
+  - cross_corr(day_last(Amt), day_open(Amt), 60)
+  - cross_ema(cross_madz(log(add(day_last(Amt), 1)), 60), 20)
+R:
+- head: ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)
+  why: 拆解显示:cross_regbeta 本身没有必要(敲掉后分数不变 −0.43 对 −0.43),而它在 10 日窗口里除以最后一根 Amt 的方差,方差接近
+    0 时斜率爆点,log 又是 log(|x|),所以读到的一部分是爆点;内层 ts_max(…,20) 也没有必要(敲掉 −0.42)。变体:(1) 回归窗口
+    10 → 20 降噪;(2) 换成无量纲的 cross_corr;(3) 在对数上做回归(弹性,不爆点);(4) 先 5 日均值再取 70 日最大(压住单日尖刺);(5)
+    外面套半衰期 10 的 EMA(降换手);(6) 用 20 日最大的 50 日均值代替嵌套最大;(7) 用上四分位尾部均值代替最大值。
+  variants:
+  - ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 20)), 20), 50)
+  - ts_max(ts_max(cross_corr(day_last(Amt), day_open(Amt), 10), 20), 50)
+  - ts_max(ts_max(cross_regbeta(log(add(day_last(Amt), 1)), log(add(day_open(Amt),
+    1)), 10), 20), 50)
+  - ts_max(cross_mean(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 5), 70)
+  - cross_ema(ts_max(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)),
+    20), 50), 10)
+  - cross_mean(ts_max(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 20), 50)
+  - cross_tail_mean_q75(log(cross_regbeta(day_last(Amt), day_open(Amt), 10)), 70)
+- head: ts_decay_linear(day_open(Volume), 5)
+  why: ts_decay_linear(day_open(Volume), 5) 读的是竞价成交股数的水平,被股价与流通股本的量纲压着(Volume 以股计,不同价位不可比);window
+    2 / 10 的拆解几乎不变(−1.18 / −1.24),说明承重的是 day_open(Volume) 的水平本身,而不是衰减窗口。变体改成无量纲的:竞价占全天比、竞价量
+    ÷ 流通股数(对数相减)、60 日 z 分数、截面秩、对数。
+  variants:
+  - ts_decay_linear(div(day_open(Volume), add(day_sum(Volume), 1)), 5)
+  - ts_decay_linear(sub(log(add(day_open(Volume), 1)), LogFloatShares), 5)
+  - ts_decay_linear(cross_zscore(day_open(Volume), 60), 5)
+  - ts_decay_linear(cs_rank(day_open(Volume)), 5)
+  - ts_decay_linear(log(add(day_open(Volume), 1)), 5)
+- head: signedpower(day_open(Amt))
+  why: signedpower(day_open(Amt)) 对正数是单调变换(秩上等同 day_open(Amt) 本身,sufficiency 与 head
+    同为 −1.30),所以 signedpower 是烂部件;水平被流动性控制拿走。变体:除以 20 日均成交额(竞价强度)、60 日 z 分数、对数竞价额
+    − LogFloatCap(竞价换手)。
+  variants:
+  - signedpower(div(day_open(Amt), add(cross_mean(day_sum(Amt), 20), 1)))
+  - cross_zscore(day_open(Amt), 60)
+  - sub(log(add(day_open(Amt), 1)), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml

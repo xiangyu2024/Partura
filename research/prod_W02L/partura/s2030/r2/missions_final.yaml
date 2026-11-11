@@ -1,0 +1,72 @@
+seed: 2030
+round: 2
+slots:
+- type: E
+  core: div(day_sum(Amt), cross_mean(day_sum(Amt), 30))
+  hypothesis: 核心 AV30 = day_sum(Amt) ÷ 自己 30 日均值(异常放量比,股票自己和自己比的成交状态;不含任何价格/收益,水平被分母消掉)。第
+    1 轮 N 位里 AV 与整日相对收益 RC 相乘后取 60 日最大(外围 = cross_max,与 AV60 配),是本流唯一接近正的一族(train/valid
+    约 +0.05~+0.30 / +0.05~+0.57,最好 +0.09),但那些候选全都是「AV×RC 的极值」;本轮不再读极值,而是把 AV30 的『路径形状』和『与盘中收益的联动』分开读出来(机制
+    = 注意力的不稳定性与量价关系的因果方向):(1) cross_stddev(AV30,120) / 自相关 / 75% 分位尾部均值 / 偏度:放量事件是持续的(机构建仓)还是脉冲式的(散户注意力冲击),Barber–Odean
+    注意力驱动买入后均值回归;(2) cross_corr(AV30, 盘中相对收益,120) 与 cross_corr(AV30, 昨日 RC,120):今日放量与盘中收益同向(Llorente
+    延续型)还是滞后一日(量跟随价格);盘中 day_mean(Ret) 不含隔夜跳空,和第 1 轮用的整日 RC 不同;(3) 放量方向加权:AV30×sign(盘中收益)
+    的 120 日和 ÷ AV30 之和,即『净放量方向』;AV30 与 |RC| 的相关(放量是不是只发生在大波动日,波动被控制掉后看剩余);(4) argmax
+    的 EMA 与 2 倍以上放量日占比:最近一次放量事件的新旧与频率。与库里已有的不同:第 1 轮 E 外围见过的写法全是 cross_max(mul(AV,·),60)
+    家族;这里的外围是自相关 / 标准差 / 相关 / 偏度 / argmax / 方向加权,12 个种子互相也完全不同,骨架逐个不在两库中(库里没有以 AV
+    为底的 cross_corr / cross_autocorr / cross_stddev)。为什么样本外还会在:A 股散户占比高、注意力冲击与量价联动的方向是行为性的,与行情阶段无关;窗口
+    100~120 日 + EMA 半衰期 5 日换手低;核心是无量纲比值,新尺子去掉的流动性 / 波动 / 已知族 / 冠军线性暴露无法直接解释它。数学检查:无前视(窗口含当天,t
+    日收盘后计算);AV30 的分母为停牌满 30 日的票缺失而非 0,不产生爆点;is_gt 在缺失日为 0,cross_corr 在窗口内有效点不足时为缺失;含
+    sign 的种子分母 + 1e-7 且分母是 120 日放量比之和(≈120),无近零除数;各种子取值连续,不会因离散档位被 distinct 门槛判废。
+  seeds:
+  - cross_corr(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), cs_demean(day_mean(Ret)),
+    120)
+  - cross_corr(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), ts_delay(cs_demean(ts_delta(log(day_last(Close)),
+    1)), 1), 120)
+  - cross_ema(mul(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), cs_demean(day_mean(Ret))),
+    60)
+  - cross_stddev(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120)
+  - cross_autocorr_s1(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120)
+  - cross_ema(cross_argmax(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120),
+    20)
+  - sub(cross_max(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 60), cross_ema(div(day_sum(Amt),
+    cross_mean(day_sum(Amt), 30)), 60))
+  - cross_tail_mean_q75(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120)
+  - cross_ema(is_gt(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 2), 60)
+  - ts_skew(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120)
+  - div(cross_sum(mul(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), sign(cs_demean(day_mean(Ret)))),
+    120), add(cross_sum(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), 120), 0.0000001))
+  - cross_corr(div(day_sum(Amt), cross_mean(day_sum(Amt), 30)), abs_(cs_demean(ts_delta(log(day_last(Close)),
+    1))), 120)
+- type: N
+  hypothesis: 机制:开盘第一分钟成交额(day_first(Amt))是集合竞价后的第一波主动流,承载散户的隔夜注意力 / 订单积压;它的『不稳定性』而非水平携带信息。本流
+    head 里最好的是 abs_(ts_std(day_first(Amt),50))(拆解表窗口 50→100 train/valid +0.39/+0.57,即得分约
+    +0.39,但那条用的是 ts_std 的水平,强烈随规模 / 流动性走,与已知族相关,过不了新尺子);另一个 head cross_autocorr_s1(day_ar1_coefficient(Amt)
+    − day_first(Volume),60) 得 +0.22。两者都说明『开盘分钟的成交额行为』是批 B089 那种 day_first(F) 家族里真正有读数的部分,而库里读它的方式全是嵌套分位数
+    / 水平。本轮用无量纲的方式读同一个现象,把规模去掉后看剩下的:(1) 开盘占比 OS = day_first(Amt) ÷ day_sum(Amt):开盘集中度的
+    60 日 EMA、100 日标准差、一阶自相关、20 日与 120 日 EMA 之差(趋势);(2) 开盘相对放量 OR = day_first(Amt)
+    ÷ 自己 30 日均值:100 日标准差 / 最大 / 75% 分位尾部均值;(3) 变异系数 cross_stddev(day_first(Amt),100)
+    ÷ cross_mean(day_first(Amt),100)(head 水平版的无量纲化)及其对整日成交额波动的比;(4) day_first(Amt)
+    与 day_sum(Amt) 的 100 日相关(开盘是否跟随全天)、昨日 OS 与盘中相对收益的相关(开盘拥挤是否预示盘中价格压力)、以成交量代替成交额的
+    OS 标准差(检验是不是价格水平的影子)。和库里已有的不同:库里 day_first 只出现在 ts_quantile 嵌套、ts_std 水平和 ar1
+    − first 的差里;没有一条把 day_first(Amt) 除以全天成交额或自己均值后读它的二阶矩 / 自相关 / 联动。骨架逐个不在两库里。为什么样本外还会在:开盘集合竞价后的第一分钟由隔夜消息与散户订单驱动,A
+    股此机制稳定;无量纲化后与 Amt 水平族区分开,窗口 100 日 + EMA 半衰期 5 日,换手低。数学检查:无前视(day_first 只用当天第 1
+    分钟,t 日收盘后才算,t+1 交易);分母 day_sum(Amt) 与 cross_mean(day_first(Amt),·) 对停牌票为缺失而非 0,无近零除数(集合竞价第一分钟成交额恒为正);OS
+    取值连续。
+  inspired_by: B089 里 day_first(F) 一族(开盘第一分钟的成交额/成交量嵌套分位数)与本流 head abs_(ts_std(day_first(Amt),50))
+    的窗口 50→100 改善 +0.39 / +0.57;库里只用水平,没有无量纲二阶矩
+  seeds:
+  - cross_ema(div(day_first(Amt), day_sum(Amt)), 60)
+  - cross_stddev(div(day_first(Amt), day_sum(Amt)), 100)
+  - cross_stddev(div(day_first(Amt), cross_mean(day_first(Amt), 30)), 100)
+  - div(cross_stddev(day_first(Amt), 100), cross_mean(day_first(Amt), 100))
+  - cross_corr(ts_delay(div(day_first(Amt), day_sum(Amt)), 1), cs_demean(day_mean(Ret)),
+    100)
+  - sub(cross_ema(div(day_first(Amt), day_sum(Amt)), 20), cross_ema(div(day_first(Amt),
+    day_sum(Amt)), 120))
+  - cross_max(div(day_first(Amt), cross_mean(day_first(Amt), 30)), 100)
+  - div(cross_stddev(day_first(Amt), 100), cross_stddev(day_sum(Amt), 100))
+  - cross_corr(day_first(Amt), day_sum(Amt), 100)
+  - cross_tail_mean_q75(div(day_first(Amt), cross_mean(day_first(Amt), 30)), 120)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,213 @@
+seed: 2018
+round: 1
+slots:
+- type: E
+  core: cross_argmax(day_quantile(Open), 60)
+  hypothesis: '机制:核心 C = cross_argmax(day_quantile(Open), 60)。day_quantile(Open) 是当天各分钟开盘价的中位数,即一条日度价格路径(后复权);cross_argmax(·,
+    60) 在日轴上取最近 60 个交易日里最高点的位置,pct 口径 = (最高点距今天数 + 1) / 窗口内有效天数,取值约在 (0, 1]:1/60 =
+    今天刚创 60 日新高,1 = 最高点在窗口最早那一天。所以 C 是「60 日高点的年龄」,有界、无量纲、对价格水平与波动水平不变(把价格乘任何正常数,argmax
+    的位置不变)。
+
+    (1) 批里的拆解说了什么(只用 train / valid 的数)。head = ts_std(C, 50),−2.18(train −1.59 / valid
+    −2.18)。把 argmax 拿掉的 ts_std(day_quantile(Open), 50) 是 −2.19,必要性只有 +0.01,但它与已知成交额族的
+    ρ 是 0.53;带 argmax 的几个变体(Open 换 Close、窗口 25、窗口 100)的 ρ_known 只有 −0.06 / −0.02 /
+    0.09。所以 argmax 这一层不是增益,它的作用是把「价格水平的波动」(已知族吃掉的那一块)换成一个与水平无关的「路径形状」读数。再看 train 列:三个
+    ts_std 窗口(25 / 50 / 100)是 −1.590 / −1.594 / −1.594,几乎逐位相同,Open 换 Close 是 −1.56,去掉
+    argmax 的两个变体是 −1.61 / −1.64;只有 valid 列在动(−1.30 到 −2.38),窗口 25 最好。我把 train 的 −1.6
+    读成这一族共同的底(扣 15 bp 之后的成本拖累,毛超额约为 0),不是信息;批里目前没有证据说明 C 本身带 alpha。所以这一位是低先验的探索:不给一个已被证实的东西加码,而是问「C
+    换一种外围读法会怎样」。
+
+    (2) head 的外围只有一个:ts_std(离散度)。批里别的成员(Ret 口径)也只是 ts_std、cross_quantile_q25、sigmoid、cs_demean、ts_quantile_q50、neg
+    这几种。这个位把外围换成五类 head 没有碰过的读法,每个种子都原样带着 C:
+
+    (a) 年龄的状态读法:cross_ema(C, 20)、cross_zscore(C, 120)(相对自己 120 日平均年龄)、cross_ema(C,
+    5) 减 cross_ema(C, 60)(高点在变新鲜还是变陈旧)。机制是 52 周高点锚定(George & Hwang 2004):投资者拿近期高点当参照价,离高点近时对好消息反应不足、离高点远时对坏消息反应过度;这里读的是「时间」距离而不是价格距离,而且是个有界的慢变量。
+
+    (b) 高点与低点的对称读法:C 减 Cmin,Cmin = cross_argmin(day_quantile(Open), 60) 是同一路径 60 日最低点的年龄。这是
+    Aroon 振荡器(Chande & Kroll 1994)的思路:最近一次极值是高点还是低点、多久以前。取 cross_ema(·, 20) 看水平,取
+    ts_std(·, 25) 看趋势相位切换的频繁程度(来回切 = 震荡),再取两个年龄的 log 比。
+
+    (c) 高点与日收益的滚动关系:cross_corr(C, R1, 60) 与 cross_regbeta(C, R1, 120),R1 = 日收盘对前一日收盘的收益(含隔夜)。创新高总是伴随上涨日,问题是创新高靠少数几个大涨日(跳变),还是靠一串小涨日慢慢爬上去;这两种来源后续的表现通常不同(注意力有限的市场里,连续的小消息被低估,集中的大消息被过度反应,Da、Gurun
+    & Warachka 2014 的 frog-in-the-pan)。窗口 60 到 120 日,变化慢。W01 里样本内最好的一类结构正是「两个日度量的
+    60 日滚动关系」,这里的底和伙伴(高点年龄 × 日收益)与那几个 head 都不同。
+
+    (d) 价格高点与成交额高点的时间关系:Camt = cross_argmax(day_sum(Amt), 60) 只取成交额 60 日峰值的「位置」,不含任何成交额水平,所以不可能是已知成交额族的改写。cross_corr(C,
+    Camt, 120)(两条锯齿线是否同时复位 = 放量创新高)、ts_std(C 减 Camt, 25)(价量峰值时差的离散度)、cross_ema(Camt
+    减 C, 20)(时差的水平;Camt 大于 C 表示成交额峰值比价格峰值更早,价格是在缩量上创的新高)。机制是量先于价(Karpoff 1987)与放量日的后续收益(Gervais、Kaniel
+    & Mingelgrin 2001):价格高点有没有被成交确认。
+
+    (e) 条件读法:cs_first_low40(ts_std(C, 25), LogFloatCap):把 ts_std(C, 25) 只在流通市值最低的
+    40% 里排序,其余排在后面,依据是套利限制越强异象越强(Stambaugh、Yu & Yuan 2015);cs_flip_by_state(cross_ema(C,
+    20), day_sum(Amt)):全市场成交额高于自己 241 日中位数时取正号、低于时取负号,依据是异象的符号随情绪状态变(Baker & Wurgler
+    2006)。如果 C 本身没有稳定的符号,翻转版会明显比 cross_ema(C, 20) 更差,这本身就是检验。
+
+    (3) 为什么和库里、和 head 不同:库里含 C 同款骨架的只有 ts_std、ts_std 套 ts_std、cross_quantile_q25 套
+    ts_std、sigmoid 与 cross_mean 等,外围算子集合与这里 13 个种子没有一个相同;cross_ema、cross_zscore、cross_argmin、cross_corr(以
+    C 为一端)、cross_regbeta(以 C 为一端)、cs_first_low40、cs_flip_by_state 这些算子都没有和 C 一起出现过。我把
+    13 个种子的算子骨架(抽掉字段、常数、窗口)逐个对照了 members.csv 的 5583 个骨架,没有一个重复;唯一与 head 同骨架的写法 ts_std(C,
+    25) 我没有放进种子(它在 R 组)。种子对 head ts_std(C, 50) 的相关预计都低于 0.7:(a)(b) 读的是水平或相位,(c)(d)
+    是 C 与另一条序列的关系,都不是 C 自己的离散度。
+
+    (4) 为什么样本外还会在:这里每一种读法都是慢变量(窗口 20 到 120 日,锯齿的年龄每天只变 1/60,没有一个读数逐日抖动),换手低,15 bp
+    的成本拖累小;机制是行为性的(锚定、注意力、套利限制),不依赖某一段行情;读的都是形状,不是水平,所以风格轮动(小盘 / 价值 / 高波)对它们的冲击比对水平类因子小。最可能的失败方式:C
+    本身的符号不稳(最近一次极值的年龄在不同年份朝不同方向),(a) 与 20 日反转控制仍然有 0.5 左右的相关,被尺子去掉之后什么都不剩;(c)(d) 在
+    60 日窗口里估得太吵。
+
+    (5) 数学检查:C 只用 t 日及以前的开盘价(分钟线内取中位数,当天收盘后才知道,t+1 才交易),无前视;窗口里有停牌日时 pct 的分母是有效天数,C
+    可能略大于 1,只影响长期停牌的票,可交易掩码已排除;day_quantile 在整天无数据时给 NaN,不是 0;cross_zscore 对近常数窗口有保护(算作
+    0);cross_corr 与 cross_regbeta 的窗口里有效对太少时可能给 0(已知缺陷,只影响上市不久的票,掩码已排除);除法只出现在 R1
+    里,分母是前一日收盘价(正数);Camt 只取位置,不含成交额水平,没有溢出。热身期:最长的链是 cross_zscore(C, 120),C 自己的窗口
+    60 日加 120 日,约 180 日,占 train + valid 约 1,960 个交易日的 9%;窗口在前 d−1 天按已有天数展开(不是缺失、不是
+    0),早期读数较噪,只会拉低这个种子的分数,不会造出信号,所以不主导结果。C 本身只有约 60 个取值,单独做根会过不了「不同值 ≥ 50%」的闸门,所以所有种子都在外面加了连续取值的外围(ts_std、cross_ema、cross_zscore、滚动相关与回归、乘
+    / 减连续量),不会因为并列而变成按列序选股。'
+  literature:
+  - source: George & Hwang, The 52-week high and momentum investing, Journal of Finance
+    year: '2004'
+  - source: Chande & Kroll, The New Technical Trader (Aroon indicator)
+    year: '1994'
+  - source: 'Da, Gurun & Warachka, Frog in the pan: continuous information and momentum,
+      Review of Financial Studies'
+    year: '2014'
+  - source: Gervais, Kaniel & Mingelgrin, The high-volume return premium, Journal
+      of Finance
+    year: '2001'
+  - source: Stambaugh, Yu & Yuan, Arbitrage asymmetry and the idiosyncratic volatility
+      puzzle, Journal of Finance
+    year: '2015'
+  - source: Baker & Wurgler, Investor sentiment and the cross-section of stock returns,
+      Journal of Finance
+    year: '2006'
+  seeds:
+  - cross_zscore(cross_argmax(day_quantile(Open), 60), 120)
+  - cross_ema(cross_argmax(day_quantile(Open), 60), 20)
+  - sub(cross_ema(cross_argmax(day_quantile(Open), 60), 5), cross_ema(cross_argmax(day_quantile(Open),
+    60), 60))
+  - cross_ema(sub(cross_argmax(day_quantile(Open), 60), cross_argmin(day_quantile(Open),
+    60)), 20)
+  - sub(log(cross_ema(cross_argmax(day_quantile(Open), 60), 20)), log(cross_ema(cross_argmin(day_quantile(Open),
+    60), 20)))
+  - cross_corr(cross_argmax(day_quantile(Open), 60), sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), 60)
+  - cross_regbeta(cross_argmax(day_quantile(Open), 60), sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), 120)
+  - cross_corr(cross_argmax(day_quantile(Open), 60), cross_argmax(day_sum(Amt), 60),
+    120)
+  - ts_std(sub(cross_argmax(day_quantile(Open), 60), cross_argmax(day_sum(Amt), 60)),
+    25)
+  - cross_ema(sub(cross_argmax(day_sum(Amt), 60), cross_argmax(day_quantile(Open),
+    60)), 20)
+  - cs_first_low40(ts_std(cross_argmax(day_quantile(Open), 60), 25), LogFloatCap)
+  - cs_flip_by_state(cross_ema(cross_argmax(day_quantile(Open), 60), 20), day_sum(Amt))
+- type: N
+  hypothesis: '机制:价格路径的连续性。同一个 60 到 120 日的累计涨跌,可以来自一长串小而同向的日涨跌(连续),也可以来自少数几个大日、其余日子来回抖(跳变)。注意力有限、信息逐步扩散的市场里,两种路径的后续不同:连续的小消息被低估,价格继续漂;集中的大消息被注意到,容易过度反应后回吐(Hong
+    & Stein 1999 的逐步扩散;Da、Gurun & Warachka 2014 的 frog-in-the-pan / information discreteness)。A
+    股散户占比高、注意力集中在涨跌幅榜上,这个区别应当更明显。这一位把「路径连续性」做成一组无量纲的读数,全部从日度收盘 / 最高 / 最低价构造。R1 = 日收盘对前一日收盘的收益
+    = sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1),含隔夜跳空,只用 t 日及以前的价格。
+
+    (A) 路径效率:cross_sum(R1, 60) / cross_sum(abs_(R1), 60):净涨跌除以全部日涨跌的绝对值之和,取值在 [−1,
+    1],Kaufman 效率比的带符号版本;另一个写法用 120 日对数价格差除以 120 日日对数变化的绝对值之和(cross_delay 与 cross_delta
+    实现),同一个量换一种构造。1 = 每天都朝同一方向走,0 = 来回抖到抵消。取绝对值的版本是「趋势对震荡」,不带方向;还有它相对自己 120 日历史的 z
+    分数(cross_zscore)。
+
+    (B) 趋势线性度:cross_corr(log(day_close(Close)), cross_age(day_close(Close)), 60) 与
+    cross_reg_tvalue(cross_age(day_close(Close)), log(day_close(Close)), 120):对数价格对时间(cross_age
+    是上市以来的交易日序号,在窗口里就是一条斜坡)的相关与回归 t 值,读的是价格是不是沿一条直线走,与跳变路径(阶梯形)区分。
+
+    (C) 跳变占比与一致性:cross_max(abs_(R1), 60) / cross_sum(abs_(R1), 60)(最大的一天占全部日波动的份额,不依赖波动水平);cross_sum(R1,
+    60) 乘 cross_mean(sign(R1), 60)(累计涨跌方向与多数日方向是否一致:涨得多但多数日是下跌 = 靠少数大涨日,乘积为负)。
+
+    (D) 区间效率:(cross_max(day_max(High), 60) 减 cross_min(day_min(Low), 60)) / cross_sum(日内高低差,
+    60):60 日总区间对每天区间之和,Choppiness 指标的思路:价格一路走远时接近一个大数,原地来回时很小。
+
+    (E) 上下行不对称:60 日上行半离差对下行半离差的对数比 log(cross_semistd_pos(·, 60)) 减 log(cross_semistd_neg(·,
+    60)),以及 120 日的上行份额 pos / (pos + neg),总波动水平被比值约掉,留下涨跌幅度的不对称(Bollerslev、Li & Zhao
+    2020 的 good / bad volatility 思路)。
+
+    为什么和库里、和控制不同:两个库(5583 条)里读日度价格路径的几乎只有手写库的 WorldQuant 式 ts_* 表达式;日收益的「和除以绝对值之和」、cross_age、cross_semistd_*、cross_zscore、cross_max
+    套 abs_ 这些结构一个都没有(我对 members.csv 做过检查:cross_age、cross_semistd、cross_zscore、day_gini
+    出现 0 次,cross_sum(abs_(…)) 只有 2 条且读的是别的量)。库里挖出来的因子几乎都读分钟级结构与成交量。控制:20 日反转只看 20
+    日、读的是水平;波动控制读 |R1| 的水平;这里的读数都是比值或相关,水平已经被除掉,窗口 60 到 120 日,和 20 日反转的相关预计在 0.3 到
+    0.6 之间(A、C 与 60 日动量有关,但尺子只去掉 20 日反转的线性、U 形、S 形暴露,其余留下)。批里的启发:B052 的拆解表说,带 argmax
+    的变体 ρ_known 几乎为 0 而去掉 argmax 的是 0.53,即「路径形状」读数能逃出五个控制;这里把路径形状从「高点年龄」换成「日收益路径的连续性」。
+
+    为什么样本外还会在:窗口 60 到 120 日,读数每天只变一个窗口的 1/60 到 1/120,换手低,15 bp 成本拖累小;机制是注意力与信息扩散,是市场结构性的,不依赖某段行情;比值型读数对风格轮动(高波动
+    / 小盘)的暴露低。最可能的失败方式:(A)(C) 与 60 日动量过度共线而被控制吃掉;(B) 的斜坡在窗口内被停牌打断时失真;(E) 在涨跌停板制度下上下行幅度被截断,读到的是板块限幅而不是不对称。
+
+    数学检查:R1 的分母是前一日收盘价(后复权价,正数);cross_sum(abs_(R1), d) 只在窗口里一天都没有有效收益时为 NaN(整窗口停牌),不为
+    0;除出来的量都是有界比值((A) 在 [−1, 1],(C) 的最大日占比与 (D) 的区间效率在 (0, 1],(E) 的上行份额在 (0, 1)),(C)
+    的乘积是一个有界量乘一个 [−1, 1] 的量,没有除以近零造成的爆点;cross_semistd_* 在有效日不足 3 天时给 NaN,窗口里没有下行日时下行半离差为
+    0、取 log 得 NaN,不是负无穷;cross_age 对上市首日已在数据里的票给 10000 起算(窗口内仍是斜坡,相关与 t 值对平移不变);log
+    在近 0 处按算子定义给 NaN;sign(R1) 遇到 NaN 给 NaN、cross_mean 跳过缺失。无前视:全部只用 t 日收盘及以前的数据,cross_delay
+    的天数为正,t+1 才交易。热身期:最长的链是 cross_zscore(·, 120) 套 60 日效率(约 180 日)与 120 日窗口的各个读数,占
+    train + valid 约 1,960 个交易日的 9% 以内;窗口在前 d−1 天按已有天数展开(不是缺失、不是 0),早期读数较噪,只会拉低分数、不会造出信号,所以不主导结果。所有种子都是连续取值(比值、相关、t
+    值、对数比),过得了「不同值 ≥ 50%」的闸门。'
+  inspired_by: B052(10 个成员,唯一的素材 head ts_std(cross_argmax(day_quantile(Open), 60),
+    50)):拆解表里带 argmax 的变体与已知族的 ρ 接近 0(−0.06 / −0.02 / 0.09)、去掉 argmax 的是 0.53,说明路径形状类读数能逃出五个控制;这一位把「路径形状」从高点年龄换成日收益路径的连续性(效率、线性度、跳变占比、不对称)。
+  literature:
+  - source: 'Da, Gurun & Warachka, Frog in the pan: continuous information and momentum,
+      Review of Financial Studies'
+    year: '2014'
+  - source: Hong & Stein, A unified theory of underreaction, momentum trading and
+      overreaction in asset markets, Journal of Finance
+    year: '1999'
+  - source: Kaufman, Smarter Trading (efficiency ratio)
+    year: '1995'
+  - source: Bollerslev, Li & Zhao, Good volatility, bad volatility and the cross section
+      of stock returns, Journal of Financial and Quantitative Analysis
+    year: '2020'
+  seeds:
+  - div(cross_sum(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1),
+    60), cross_sum(abs_(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), 60))
+  - div(sub(log(day_close(Close)), cross_delay(log(day_close(Close)), 120)), cross_sum(abs_(cross_delta(log(day_close(Close)),
+    1)), 120))
+  - div(abs_(cross_sum(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1), 60)), cross_sum(abs_(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 60))
+  - cross_zscore(div(cross_sum(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), 60), cross_sum(abs_(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 60)), 120)
+  - cross_corr(log(day_close(Close)), cross_age(day_close(Close)), 60)
+  - cross_reg_tvalue(cross_age(day_close(Close)), log(day_close(Close)), 120)
+  - div(cross_max(abs_(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), 60), cross_sum(abs_(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 60))
+  - mul(cross_sum(sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1),
+    60), cross_mean(sign(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), 60))
+  - div(sub(cross_max(day_max(High), 60), cross_min(day_min(Low), 60)), cross_sum(sub(day_max(High),
+    day_min(Low)), 60))
+  - sub(log(cross_semistd_pos(day_close(Close), 60)), log(cross_semistd_neg(day_close(Close),
+    60)))
+  - div(cross_semistd_pos(day_close(Close), 120), add(cross_semistd_pos(day_close(Close),
+    120), cross_semistd_neg(day_close(Close), 120)))
+R:
+- head: ts_std(cross_argmax(day_quantile(Open), 60), 50)
+  why: 烂的部件有两个,依据都在拆解表里。第一,ts_std 的 50 日窗口太慢:窗口 25 是 −1.59(train −1.59 / valid −1.30),比
+    head 好 0.59,而窗口 100 是 −2.19,窗口越长 valid 越差。第二,argmax 的锯齿本身:C 每天加 1/60、创新高时一下子复位,ts_std
+    读的大半是复位的跳,而不是年龄的水平;train 列在三个窗口上几乎相同(−1.590 到 −1.594),说明 train 读到的是共同的底。变体先沿着已经看见的方向(窗口
+    25 / 15 / 10;高点窗口 30 / 120;Open 换 Close / Vwap / 日内最高价),再换掉烂的部件:先用 cross_ema 平滑
+    C 再取 ts_std(去掉复位的跳)、取 argmin 与 argmax 的对称版本和差(Aroon 振荡器)、用日差的绝对值均值读复位频率、对离散度取
+    cross_zscore / cross_ema。数学上都有界:argmax / argmin 的 pct 口径在 (0, 1] 附近,ts_std 与均值不含近零分母,cross_zscore
+    对近常数窗口有保护,无前视。
+  variants:
+  - ts_std(cross_argmax(day_quantile(Open), 60), 25)
+  - ts_std(cross_argmax(day_quantile(Open), 60), 15)
+  - ts_std(cross_argmax(day_quantile(Open), 60), 10)
+  - ts_std(cross_argmax(day_quantile(Open), 30), 25)
+  - ts_std(cross_argmax(day_quantile(Open), 120), 25)
+  - ts_std(cross_argmax(day_quantile(Close), 60), 25)
+  - ts_std(cross_argmax(day_quantile(Vwap), 60), 25)
+  - ts_std(cross_argmax(day_max(High), 60), 25)
+  - ts_std(cross_ema(cross_argmax(day_quantile(Open), 60), 5), 25)
+  - ts_std(cross_argmin(day_quantile(Open), 60), 25)
+  - ts_std(sub(cross_argmax(day_quantile(Open), 60), cross_argmin(day_quantile(Open),
+    60)), 25)
+  - sub(ts_std(cross_argmax(day_quantile(Open), 60), 25), ts_std(cross_argmin(day_quantile(Open),
+    60), 25))
+  - ts_mean(abs_(cross_delta(cross_argmax(day_quantile(Open), 60), 1)), 25)
+  - cross_zscore(ts_std(cross_argmax(day_quantile(Open), 60), 25), 120)
+  - cross_ema(ts_std(cross_argmax(day_quantile(Open), 60), 25), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml

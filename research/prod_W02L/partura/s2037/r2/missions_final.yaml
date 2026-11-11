@@ -1,0 +1,105 @@
+seed: 2037
+round: 2
+slots:
+- type: E
+  core: cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60)
+  hypothesis: '核心 = 本组第 1 轮唯一的发现 head 本身:cross_corr(S, day_sum(Amt), 60),S = energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False)(排名 5..50 的谱线占去掉最强 5 根后总能量的比例,即日内成交量 U 形之外的中频团块度)。快照事实:该 head +0.60(train
+    +0.60 / valid +0.76),过线;拆解里 Amt 换 Volume 为 +0.60,窗口 60 到 120 为 +0.47、60 到 30 为
+    -0.20,所以承重的是「60 日内团块度与成交额水平的同向协动」,不是某个特定写法。第 1 轮对 S 的外围是 cross_corr / cross_regres
+    / 离散度,出的 head 只有这一个,对应的是「团块度随活跃度一起升降的程度」这个二阶量,不是 S 本身的水平或离散度。机制:一只股票成交越活跃的日子里,成交越集中在中频脉冲上(算法
+    / 机构大单拆单、事件驱动)还是越摊匀(被动做市吸收),是参与者构成的慢属性。S 与成交额都是无量纲 / 对数级的日值,60 日相关系数天然在 [-1, 1],没有除以近零的爆点。
+
+    本轮只改外围,让同一个相关读数被读成别的东西,窗口都慢:(a) 平滑 / 自我相对:cross_ema 20、cross_mean 20、cross_zscore
+    与 cross_madz 120、快慢 EMA 差、除以自己的 60 日标准差(把相关系数的稳定性当质量),以及下分位尾均值;(b) 扣掉价格动作:减去 S
+    与当日收益 / 绝对收益的相关,或对 day_std(Ret)、log 成交额做 120 日回归取残差(去掉与波动、规模的共同部分,剩下的才是不随价格动作的参与者结构);(c)
+    换另一个团块读法做对照:减去基尼系数与成交额的相关,或加上 S 与前一日成交额的滞后相关(检验是同日同步还是有领先)。第 1 轮含该核心的候选外面只出现过原样输出与少数写法,没有这些外壳;种子骨架不在两库的
+    5583 个骨架里。样本外还会在的理由:读的是持股 / 执行结构这类慢变量,60 日窗口加 EMA 换手低,与价格行情无关;最可能的失败是它仍与已知成交额族相关,被尺子吃掉。无前视:ts_delay
+    是滞后,不是超前。'
+  seeds:
+  - cross_stddev(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), day_sum(Amt), 60), 60)
+  - cross_zscore(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), day_sum(Amt), 60), 120)
+  - sub(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60), cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), abs_(day_sum(Ret)), 60))
+  - cross_regres(day_std(Ret), cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 120)
+  - cross_regres(log(day_sum(Amt)), cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 120)
+  - sub(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60), cross_corr(day_gini(delete_open_close(Volume)), day_sum(Amt),
+    60))
+  - cross_tail_mean_q25(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 60)
+  - cross_ema(cross_madz(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 120), 20)
+  - sub(cross_ema(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 5), cross_ema(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume),
+    50, 5, False), day_sum(Amt), 60), 60))
+- type: N
+  hypothesis: '来自 B110 / 本组第 1 轮的现象:第 1 轮唯一过线的 head 不是任何水平或离散度,而是「成交量时间形状 x 成交额水平」的
+    60 日相关(+0.60),说明承重的是形状与规模的耦合(一种弹性 / 凸性),而不是某个形状指标自己。B110 的 12 条手写库(静默分钟的平均成交额
+    / 全天均值)全部 -1.5 到 -1.8,说明单看形状水平没用;本位把耦合读法推广到不同的形状读数与不同的规模量。
+
+    机制:对每只股票,在 60 日内看「日内成交越集中(基尼系数 / 质心偏晚 / 峰值占比 / 有效带宽)的日子,是不是同时成交额更大 / 波动更大 / 收益更正」。正耦合
+    = 放量日靠少数几分钟推动(事件 / 机构脉冲);负耦合 = 放量日反而更摊平(多方参与、做市吸收)。这是参与者构成与盘口深度的慢属性。算子实现:day_gini
+    / day_centroid / day_at_max_ratio / day_es_ratio_hi / energy_ratio_n 作形状读数(在 delete_open_close
+    之后的分钟轴上),day_sum(Amt) / log(day_sum(Amt)) / day_std(Ret) / day_sum(Ret) / |Ret|
+    的基尼系数作规模量,cross_corr / cross_regbeta / cross_regres 作耦合,部分外面套 cross_ema 20。
+
+    和库里不同:库里与这个耦合有关的写法只有谱算子 S 一个形状读数,且 S 的耦合已被核心占据;这里换成非谱的形状读数(基尼系数、质心、峰值占比)和另外的耦合对象(波动、收益、价格路径的基尼系数),骨架不在
+    5583 个库骨架里。无量纲、有界,窗口 60 日,热身期是 NaN,不是填充值;day_zero_ratio(Ret) 在停牌 / 涨跌停日取 1 属真实状态。样本外理由:慢变量、换手低、无量纲、不依赖行情段。风险:与成交额族相关度仍高,被控制吃掉。'
+  inspired_by: B110(T15,手写库 12 条,静默分钟成交额强度)全部为负,而本组第 1 轮的 cross_corr(S, day_sum(Amt),
+    60) 是唯一过线的 head:形状与规模的耦合承重,形状自己不承重。
+  seeds:
+  - cross_corr(day_centroid(delete_open_close(Volume)), day_sum(Amt), 60)
+  - cross_corr(energy_ratio_n(delete_open_close(Volume), 0.9, False), day_sum(Amt),
+    60)
+  - cross_corr(day_gini(delete_open_close(abs_(Ret))), day_sum(Amt), 60)
+  - cross_corr(day_zero_ratio(Ret), day_sum(Amt), 60)
+  - cross_ema(cross_corr(day_gini(delete_open_close(Volume)), day_sum(Amt), 60), 20)
+  - cross_corr(day_gini(delete_open_close(Volume)), day_std(Ret), 60)
+  - cross_corr(day_centroid(delete_open_close(Volume)), day_sum(Ret), 60)
+  - cross_corr(day_gini(delete_open_close(Volume)), day_gini(delete_open_close(abs_(Ret))),
+    60)
+  - cross_ema(cross_regres(log(day_sum(Amt)), day_gini(delete_open_close(Volume)),
+    60), 20)
+R:
+- head: cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 60)
+  why: 拆解里窗口 60 到 120 为 +0.47(valid 降)、60 到 30 为 -0.20,最优窗口在 60 附近的平台上,没有试 90;谱参数
+    (50,5) 只试过一个点,q=3 / 8、m=100 没试;相关系数的日度抖动用 EMA 10 平滑可降换手。变体只改窗口、谱参数、外加 EMA 外壳。
+  variants:
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    day_sum(Amt), 90)
+  - cross_ema(cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), day_sum(Amt), 60), 10)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 3, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 100, 5, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 8, False),
+    day_sum(Amt), 60)
+  - cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    log(day_sum(Amt)), 90)
+- head: cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    60)
+  why: 拆解里窗口 60 到 120 比原 head 好 +0.20(-0.55 到 -0.35),且 60 到 30 更差,单调向慢;烂部件是窗口偏短,变体继续拉长到
+    150 / 180,另加 EMA 10 外壳与两个谱参数 (q=3, m=100)。
+  variants:
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    180)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False),
+    150)
+  - cross_ema(cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50,
+    5, False), 120), 10)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 3, False),
+    120)
+  - cross_stddev(energy_ratio_topm_minus_q(delete_open_close(Volume), 100, 5, False),
+    120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

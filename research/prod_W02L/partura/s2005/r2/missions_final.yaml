@@ -1,0 +1,224 @@
+seed: 2005
+round: 2
+slots:
+- type: E
+  core: day_cov(Amt, Low)
+  hypothesis: '机制:日内「钱落在价格路径的哪一段」。核心 day_cov(Amt, Low) 是一天里分钟成交额与分钟最低价(价格水平)的协方差。除以两个均值(day_mean(Amt)
+    * day_mean(Low))得到相对的 VWAP 减 TWAP 缺口(成交额加权价与等权价之差占价格的比例,等于 rho * CV_A * CV_L);除以两个标准差得到相关系数
+    rho,无量纲、范围 [-1, 1]。rho 为正:成交额集中在日内价格较高的分钟(追涨、趋势尾段放量、拉高出货);rho 为负:成交额集中在价格较低的分钟(逢低承接、恐慌放量)。读的是资金「到场时点相对于价格路径」的习惯,是持有人结构
+    / 执行风格的个股属性,不是成交额的水平。与当日收益符号相乘后,读的是尾段加速是顺着当天趋势还是逆着趋势。
+
+
+    和库里不同:两个库里含 day_cov(Amt, Low) 的 27 条表达式(我用 members.csv 逐条核对过)里 23 条套 cross_max
+    链,其余 4 条是裸协方差、abs_、ts_quantile / cross_delay 的写法;全部是裸协方差,没有一条无量纲化,聚合窗口没有一条超过 60
+    日。裸协方差约等于「成交额水平 x 价格水平 x rho 项」,符号正负抵消,一套 cross_max 就变成「最大那一天的成交额规模」,拆解表里单独 rho_known
+    0.02、一层 cross_max 0.64、三层 0.80,正是新尺子要吃掉的成交额水平通道。第 1 轮 R 里同一个对象去掉水平以后(Volume 版,除以两个均值之积,放进
+    5/5/60 的 cross_max 链)已经是 -0.95(train -0.14 / valid -0.95)、rho_known -0.11,比整批
+    head 的 -1.4 ~ -1.85 好 0.5 ~ 0.9,说明去掉水平之后核心没有死;它的毛病是链太短、valid 段差。这一次的外围全部是慢的、无水平的聚合,和快照里见过的写法(cross_max
+    链、5 到 60 日)不同:(a) cross_mean 241 / 120 日,三种无量纲写法(相关系数、相对缺口、除以均值与标准差);(b) cross_ema
+    60,以及「20 日 EMA 相对自己 241 日常态的 z 分数」;(c) 上 / 下四分位尾部均值(241 日),读极端追涨日 / 恐慌日的频率与幅度;(d)
+    均值除以标准差(一致性)与单独的标准差(耦合的不稳定程度);(e) 与当日收益符号相乘、与当日收益的 120 日时间序列相关;(f) 非参数闸:按流通市值十分位内
+    z 分数,以及把上市年龄最低 10% 压到底部(新股不在老股的价量关系里)。
+
+
+    为什么样本外还会在:(1) 来源是持有人与执行风格(被动与基准型执行偏尾盘,追涨偏上涨段,逢低承接偏下跌段),是慢变属性,跨年稳定,不依赖某一段行情;(2)
+    窗口 120 ~ 241 日,日换手低,15 bp 成本留得住:本流第 1 轮 E 位最好的候选(-0.84)用的就是 241 日窗口的下尾均值;别的流里接近
+    0 的读数有不少是 120 ~ 241 日窗口(2009 流 cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)),
+    241) 的 train / valid 为 +0.07 / +0.40,2012 流的 120 日均值读数为 -0.19);(3) 相关系数没有成交额水平、价格水平、波动水平,尺子里的
+    5 个控制与两个冠军(都是水平型)吃不掉它。风险:rho 可能主要由日内趋势方向与成交量 U 形共同决定,于是与 20 日反转有关(尺子已去掉反转的线性 /
+    平方 / 立方部分);日度 rho 噪声大,必须 120 日以上聚合,否则被 15 bp 吃掉。
+
+
+    数学检查:无前视,只用 t 日收盘及以前的数据,t+1 才交易。day_std(Low) 或 day_std(Amt) 为 0 只在整天停牌或一字板,此时协方差也为
+    0,得 NaN 而不是无穷;相关系数有界;相对缺口的分母 day_mean(Amt) * day_mean(Low) 只在整天无成交时为 0,分子同时为 0,得
+    NaN;相对缺口的上界是 CV_A * CV_L,CV_A 至多约 sqrt(241),没有近零分母造成的爆点。所有窗口不超过 241 日,第 1 年热身期只占样本的一小部分,不主导结果。cross_tail_mean_q25
+    / q75 在窗口内不足数据时返回 NaN,不是 0。'
+  literature:
+  - title: 'The relation between price changes and trading volume: a survey'
+    authors: Jonathan M. Karpoff
+    year: '1987'
+    treatment: 价格变动与成交量的联合行为携带信息;这里用成交额与价格水平在日内的协方差读「钱在价格路径的哪一段进场」
+  - title: The high-volume return premium
+    authors: Simon Gervais, Ron Kaniel, Dan H. Mingelgrin
+    year: '2001'
+    treatment: 成交量异常的时点之后收益有可预测的方向;这里把这种放量时点的位置(价格较高还是较低的分钟)聚合成一年尺度的个股属性
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 个股收益在一天内的特定时段有持续的截面规律;这里读成交额相对价格路径的时段性
+  seeds:
+  - cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 241)
+  - cross_mean(div(day_cov(Amt, Low), mul(day_mean(Amt), day_mean(Low))), 241)
+  - cross_mean(div(day_cov(Amt, Low), mul(day_mean(Amt), day_std(Low))), 120)
+  - cross_ema(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 60)
+  - cross_zscore(cross_ema(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))),
+    20), 241)
+  - sub(cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 20), cross_mean(div(day_cov(Amt,
+    Low), mul(day_std(Amt), day_std(Low))), 241))
+  - cross_tail_mean_q75(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 241)
+  - cross_tail_mean_q25(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 241)
+  - div(cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 241),
+    cross_stddev(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 241))
+  - cross_stddev(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), 120)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))),
+    241), LogFloatCap)
+  - cs_last_low10(cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))),
+    241), ListAge)
+  - cross_mean(mul(sign(day_sum(Ret)), div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low)))),
+    120)
+  - cross_corr(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))), day_sum(Ret),
+    120)
+  - cross_ema(div(day_cov(Amt, Low), mul(day_mean(Amt), day_mean(Low))), 120)
+  - cross_zscore(cross_mean(div(day_cov(Amt, Low), mul(day_mean(Amt), day_std(Low))),
+    60), 241)
+- type: N
+  hypothesis: '机制:价格水平的三个慢变组成部分(名义价、复权因子、限售比例),它们都在 5 个控制与两个冠军之外。来源是 B013 / B014 的承重对象:day_cov(Close,
+    Ret) 约等于 (P0/n)[RV/2 + R(R/2 - Sbar)],day_cov(Amt, Low) 是成交额与价格水平的协方差;两者里的 P0
+    都是后复权价格水平,跨股票差几十倍,而且不在 5 个控制里(控制只有流动性、波动、20 日反转、已知成交额族、流通市值)。B014 里 cross_mean(day_cov(Close,
+    Ret), 60) 在没有控制时样本内净夏普是 +0.70,窗口 3 日是 -1.85(members.csv,只含 train),单调地越慢越好;新尺子把波动
+    RV、市值、流动性与两个冠军去掉以后,整批 head 剩下的是 -1.4 ~ -1.85。我的假设(不是已证实的事实):留下来的承重物之一是慢变的价格水平
+    P0 本身。第 1 轮 R 的读数不一致,所以这个 N 位的任务就是把它拆开检验:cross_max(div(day_cov(Ret, Close), day_mean(Close)),
+    120) 比同窗口原式(-1.70)好 0.18(-1.52),但相关系数形式(同时除掉价格与波动)差 0.76(-2.46),按价格十分位去均值也差 0.2(-1.90),最后这条说明价格十分位里确实有信号被去掉了。
+
+
+    后复权价 = 不复权名义价 x 复权因子:P_adj = P_nom * F。AlphaCube 文档(design.md 11.5)核实过:生产 store
+    的 Open/High/Low/Close/Vwap 是后复权价,Amt 与 Volume 是原始值,Close/(Amt/Volume) 跨股票从 2.5
+    到 113,每只票内部几乎是常数,就是 F;F 只在除权除息日跳,只含 t 日及以前的送转与分红,没有前视(后复权的基期在过去)。把 P0 拆开:
+
+    (1) 名义价 P_nom = 流通市值 / 流通股本,日频叶子精确给出:LogFloatCap - LogFloatShares;也能用 day_sum(Amt)/day_sum(Volume)
+    从分钟数据得到(种子里两种来源都有,互相核对)。经济含义:散户的低价幻觉与彩票偏好(Birru-Wang 2016,Kumar 2009;Blume-Husic
+    1973 记录了低价股的历史收益更高),另外最小报价单位占价格的比例使低价股的相对价差更大(流动性溢价)。AlphaCube 自己的记录:不复权低价单因子在旧尺子下
+    train 净夏普 +0.98,日换手只有 2.0%(docs/可交易回测.md 21.4,没有控制的口径),是最慢的风格之一。
+
+    (2) 复权因子 F:log F = log(后复权收盘) - log(名义价),是累计分红与送转的历史,即派现纪律与成熟度;长期派现与从不派现的公司由不同的投资者持有(Baker-Wurgler
+    2004 的 dividend clientele),送转降低名义价而不改变价值(Grinblatt-Masulis-Titman 1984)。
+
+    (3) 限售比例 log(总市值 / 流通市值):未来解禁的供给压力(Field-Hanka 2001)。
+
+    这三样都是日频、慢变,换手接近 0,15 bp 成本不是问题。
+
+
+    算子怎样实现:全部用 6 个日频叶子与 day_last / day_sum 写,不含任何分钟聚合的水平。种子分四类:(a) 原始量(名义价、后复权价、复权因子、限售比例);(b)
+    非参数去市值:cs_bucket_demean / cs_bucket_zscore 按流通市值十分位,因为尺子只去掉市值排名的 1/2/3 次项,桶内标准化可以去掉任意形状的市值暴露,留下「同市值的票里,价格更低
+    / 因子更高」;(c) 垃圾尾部闸:cs_last_low05 把名义价最低的 5% 压到底部再按低价排(这个尺子的多头书对没有标签的持仓记 0,不套可交易掩码,所以按价格单调排序时,最低价一端的壳
+    / 异常票可能占据头部,这一点第 1 轮没有数据,是待检验的假设),cs_last_high20 按市值把最大的 20% 压到底部,cs_last_low10
+    按上市年龄把最新的 10% 压到底部;(d) 两个量互相去掉:名义价在复权因子十分位内、复权因子在名义价十分位内(因为送转同时降低名义价并抬高 F,两者有机械的负相关,要分开读)。
+
+
+    为什么和已有的不同:两个库 5583 条全部是分钟聚合,6 个日频叶子 0 次出现(grep 核对),也没有任何一条做名义价与复权因子的拆分;库里唯一接近的是
+    day_cov(Close, Ret) 这一族,它把价格水平乘进了方差。与 3 个 head 比,这里没有协方差、没有方差、没有 cross_max 链,是静态的价格水平;与
+    5 个控制比,名义价 / 复权因子 / 限售比例都不是市值、流动性、波动、反转或成交额族。
+
+
+    为什么样本外还会在:来源是散户与机构的持股偏好(低价、派现、解禁约束),这些是结构性的、慢变的,不依赖某一段行情;换手低,成本几乎不吃信号;别的流(2012、2021)独立地读到过同一类线索:价格十分位去均值把一个素材
+    head 提升 1.55,含 LogFloatShares 的表达式把最好读数推到 -0.2 ~ -0.3,说明名义价位是被控制和冠军都没盖住的变量。风险:(1)
+    名义价与市值、上市年龄有相关,尺子只去掉市值的 1/2/3 次项,所以才有桶内版本;(2) 2018 年以后上市的新股名义价偏高(注册制发行价),可能让名义价读成「新股」,所以有年龄闸与价格闸;(3)
+    复权因子的基期若不是上市日,F 的截面差只剩样本内的分红史,仍然是有信息的量;(4) 低价股效应在 2024 年初的小盘冲击里可能阶段性失效,valid 段会检验。
+
+
+    数学检查:无前视:LogFloatCap / LogTotalCap / LogFloatShares 存的是收盘时点已知的值,后复权价只含过去的除权;全部不含除法,或只除以
+    day_sum(Volume)(只在整天无成交时为 0,此时分子也为 0,得 NaN),没有近零分母的爆点;取 log 的量都是正的;种子是日频静态量加慢聚合,面板不是常数(名义价的截面差是数量级的),不会因热身期主导;tie
+    只出现在极少的并列价格上。'
+  inspired_by: B013 / B014 批:cross_mean(day_cov(Close, Ret), 60) 在无控制时 train 净夏普 +0.70,窗口
+    3 日 -1.85,越慢越好;新尺子去掉波动、市值、流动性与冠军后整批仍 -1.4 ~ -1.85;day_cov 里乘着后复权价格水平 P0(跨股票差几十倍,不在
+    5 个控制里)。第 1 轮 R 里按价格十分位去均值的变体比同窗口原式差 0.2,价格除以 day_mean(Close) 好 0.18,说明价格水平里可能有信号。
+  literature:
+  - title: Nominal price illusion
+    authors: Justin Birru, Baolian Wang
+    year: '2016'
+    treatment: 投资者把名义低价当成上涨空间,低价股被系统性高估或高估波动的上行;这里用日频叶子精确得到名义价并读它的截面
+  - title: Who gambles in the stock market?
+    authors: Alok Kumar
+    year: '2009'
+    treatment: 散户的彩票偏好集中在低价、高特质波动的股票;这里用名义价与限售比例做慢变的偏好代理
+  - title: Price, beta, and exchange listing
+    authors: Marshall E. Blume, Frank Husic
+    year: '1973'
+    treatment: 低价股的历史收益率更高;这里在控制了市值、流动性、波动之后重读名义价
+  - title: The valuation effects of stock splits and stock dividends
+    authors: Mark Grinblatt, Ronald W. Masulis, Sheridan Titman
+    year: '1984'
+    treatment: 送转改变名义价而不改变价值,伴随可识别的收益;这里把复权因子当成累计送转与分红历史
+  - title: The expiration of IPO share lockups
+    authors: Laura Casares Field, Gordon Hanka
+    year: '2001'
+    treatment: 限售股解禁伴随异常收益与成交放大;这里用总市值与流通市值之比读未解禁的供给压力
+  seeds:
+  - sub(LogFloatCap, LogFloatShares)
+  - sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares))
+  - sub(LogTotalCap, LogFloatCap)
+  - cs_bucket_demean(sub(LogFloatCap, LogFloatShares), LogFloatCap)
+  - cs_bucket_zscore(sub(log(day_last(Close)), sub(LogFloatCap, LogFloatShares)),
+    LogFloatCap)
+  - cs_bucket_demean(sub(LogTotalCap, LogFloatCap), LogFloatCap)
+  - cs_last_low05(neg(sub(LogFloatCap, LogFloatShares)), sub(LogFloatCap, LogFloatShares))
+  - cs_last_low05(neg(log(day_last(Close))), log(day_last(Close)))
+  - cs_last_high20(neg(sub(LogFloatCap, LogFloatShares)), LogFloatCap)
+  - cs_last_low10(neg(sub(LogFloatCap, LogFloatShares)), ListAge)
+  - sub(sub(LogFloatCap, LogFloatShares), sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)))
+  - cs_bucket_zscore(cross_mean(sub(log(day_last(Close)), log(div(day_sum(Amt), day_sum(Volume)))),
+    60), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(sub(LogFloatCap, LogFloatShares), sub(log(day_last(Close)), sub(LogFloatCap,
+    LogFloatShares)))
+R:
+- head: cross_mean(day_cov(Close, Ret), 3)
+  why: 烂的部件有两个:(1) 3 日的快窗口,换手高;(2) 后复权价格水平 P0 乘在方差上(day_cov(Close, Ret) 约等于 (P0/n)[RV/2
+    + R(R/2 - Sbar)])。依据:拆解表里窗口 3 -> 2 / 3 -> 6 几乎不变(-1.29 / -1.41,原式 -1.42),但 members.csv(无控制、只含
+    train)里同一个量的 60 日均值是 +0.70,3 日是 -1.85,越慢越好,所以变体把窗口推到 120 / 241;并用无量纲写法(除以 day_mean(Close)
+    与 day_var(Ret) 之积,得到 1/2 + R(R/2 - Sbar)/RV,日内路径形状)和名义价十分位去均值,检验承重的是价格水平还是路径形状。分母
+    day_mean(Close) * day_var(Ret) 只在整天停牌或一字板时为 0,此时分子也为 0,得 NaN,没有爆点。
+  variants:
+  - cross_mean(day_cov(Close, Ret), 120)
+  - cross_mean(day_cov(Close, Ret), 241)
+  - cross_mean(div(day_cov(Close, Ret), mul(day_mean(Close), day_var(Ret))), 241)
+  - cs_bucket_demean(cross_mean(day_cov(Close, Ret), 120), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_demean(cross_mean(day_cov(Close, Ret), 120), sub(log(day_last(Close)),
+    sub(LogFloatCap, LogFloatShares)))
+- head: cross_max(day_cov(Ret, Close), 60)
+  why: 烂的部件是短窗的 cross_max:取最近 60 日里「最极端那一天」,换手高、噪声大,且被 P0 的数量级差异主导。依据:拆解 60 -> 120
+    好 0.14(-1.84 -> -1.70),窗口越长越好,第 1 轮里本流最好的 E 候选也是 241 日窗口的尾部均值。变体沿「更慢、更稳」:窗口 241;用上四分位尾部均值替换最大值(读极端日的频率与幅度而不是单个极值);再加除以
+    day_mean(Close) 去掉价格水平。分母只在停牌时为 0,此时分子也为 0,得 NaN。
+  variants:
+  - cross_max(day_cov(Ret, Close), 241)
+  - cross_tail_mean_q75(day_cov(Ret, Close), 241)
+  - cross_tail_mean_q75(div(day_cov(Ret, Close), day_mean(Close)), 241)
+- head: cross_sum(cross_sum(neg(cross_cov(cross_min(neg(cross_min(cross_mean(day_cov(Low,
+    Ret), 60), 15)), 15), mul(day_autocorr_n1(High), day_std(Low)), 10)), 60), 60)
+  why: 烂的部件是外层 cross_sum 的窗口(60)与 cross_cov 的非标准化。依据(拆解表):外层窗口 60 -> 120 好 0.14(-1.40),60
+    -> 30 不变;cross_cov 是必要部件(去掉它差 1.76),说明承重的是 day_autocorr_n1(High) * day_std(Low)
+    与链的时间序列协方差;协方差带尺度,相关系数不带。变体:外层窗口推到 241;把 cross_cov 换成 cross_corr(窗口 60,更稳),外层窗口
+    120。cross_corr 在窗口内两个序列有一个为常数时返回 0 或 NaN,不是爆点。
+  variants:
+  - cross_sum(cross_sum(neg(cross_cov(cross_min(neg(cross_min(cross_mean(day_cov(Low,
+    Ret), 60), 15)), 15), mul(day_autocorr_n1(High), day_std(Low)), 10)), 60), 241)
+  - cross_sum(cross_sum(neg(cross_corr(cross_min(neg(cross_min(cross_mean(day_cov(Low,
+    Ret), 60), 15)), 15), mul(day_autocorr_n1(High), day_std(Low)), 60)), 60), 120)
+- head: cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5),
+    30), cross_mean(day_std(Amt), 30))
+  why: 烂的部件是「成交额与价格的尺度」仍留在 cross_max 链里(已知族十分位去均值只去掉了水平的一部分,桶边界处的跳变还增加换手)。依据:第 1 轮
+    R 里 Volume 版 + 窗口 60 + 流通股本十分位 z 分数是本流已见评估里最好的读数(train -0.14 / valid +0.13),但与已知族
+    rho_known -0.61(按规则不能收录);第 1 轮对原 cross_max 链的拆解里 Amt -> Volume 好 1.0、窗口 30 ->
+    60 好 0.57(注意:对现在这个按已知族分桶的 head,这两个替换并不改善,Volume 版 -2.91,窗口 60 版 -1.48,因为分桶变量仍是
+    Amt 型的已知族,所以变体换掉分桶变量)。变体沿同一条线换桶变量与窗口,把 rho_known 压到 0.5 以下:桶变量换成流通市值(得到换手而不是股数)、窗口
+    120、以及把耦合量无量纲化后用 241 日均值替换 cross_max 链。分母是桶内标准差加 EPS 与两个均值之积,只在整天停牌时为 0,没有爆点。
+  variants:
+  - cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 120),
+    LogFloatShares)
+  - cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 60),
+    LogFloatCap)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Volume, Low), mul(day_mean(Volume), day_mean(Low))),
+    241), LogFloatShares)
+- head: cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 5)
+  why: 烂的部件是 cross_max 链那一半(单独 -2.29),好的那一半是 ts_std(day_close(Amt), 50)(单独 -0.52)。第
+    1 轮 R 里变体 div(ts_std(day_close(Amt), 50), ts_std(day_sum(Amt), 50))(尾盘棒成交额的波动相对全天成交额的波动,无量纲)是该组最好的
+    -0.92(train -0.92 / valid -0.73),rho_known -0.39,与原 head 的 rho 为 -0.28。依据同一条规律「越慢越好」,变体把窗口推到
+    120 / 241。分母 ts_std(day_sum(Amt), d) 只在窗口内全天成交额为常数时为 0,此时分子通常也接近 0,得 NaN 或很大的比值;窗口
+    120 以上这种情况只出现在长期停牌,覆盖率会如实反映。
+  variants:
+  - div(ts_std(day_close(Amt), 120), ts_std(day_sum(Amt), 120))
+  - div(ts_std(day_close(Amt), 241), ts_std(day_sum(Amt), 241))
+audit:
+  attempts: 1
+  file: audit_1.yaml

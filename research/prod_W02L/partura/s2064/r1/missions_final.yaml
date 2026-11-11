@@ -1,0 +1,81 @@
+seed: 2064
+round: 1
+slots:
+- type: E
+  core: day_var(pow_2_5(Ret))
+  hypothesis: 机制:pow_2_5 对负数是 torch.pow(负,2.5)=NaN(common.py:pow_ 只对 e<=1 保号),所以 C=day_var(pow_2_5(Ret))
+    实际只读当天「上涨分钟」的 2.5 次幂的方差,即上行大跳的强度(彩票 / 上冲型波动),下跌分钟被丢掉(我按源码推断,未在本机核验;若 day_var 对
+    NaN 不容忍则整列缺失,这一位会在评估时暴露)。本批证据:含 C 的 8 个候选均值 -1.24 vs 不含 -2.73(p 0.006);3 个 head
+    都是 ts_std(neg(cross_sum(·, 窗口)), 50),分数 -0.46/-0.50/-0.63,train/valid 都为负;敲掉 neg
+    分数不变(+0.00),说明方向不是来源;换成 cross_sum 外的 241 日窗口 valid 才转正(+0.25),窗口越长越好,指向慢变的股票特征。这一位要试的外围,和快照里全部
+    ts_std(neg(cross_sum(...)))+窗口微调的写法不同:(1)同伴内标准化(种子1,2,7,9,13):在流通市值十分位 / 名义股价十分位内做
+    z 分数,比较同样大小的票里谁的上行跳更强,控制里的 LogFloatCap 线性/非线性暴露已被尺子去掉,桶内比较拿到的是尺子去不掉的行业性残差;(2)上行对下行的不对称(种子3,4,5,13):C
+    与同构的下行 D=day_var(pow_2_5(neg(Ret))) 的比值、滚动相关、截面回归残差,总波动水平被除掉或回归掉,剩下的是「只涨不跌的上冲」即彩票型偏度的代理,A
+    股散户追涨,彩票型股票被高估、之后跑输(这是 MAX / 特质偏度文献的机制);(3)相对自己的变化(种子2,8):20 日均值对 241 日均值,读的是正在变彩票化;(4)与别的量的关系(种子6,11,12,14):C
+    与成交额的滚动相关(上冲由成交放大驱动 = 消息 / 追涨,无量成交 = 噪声),对总方差 day_var(Ret) 的回归残差,log 波动对 log C
+    的弹性。为什么和库里 / 快照不同:快照围绕 C 全是 ts_std 套 neg 套 cross_sum 的时序滤波;这里用 cs_bucket_*、cs_regres、cross_corr、cross_regbeta、cross_autocorr、cross_zscore,并引入
+    D(neg(Ret) 版)这一全新部件,库里 pow_2_5 之内没有 neg(Ret) 的写法(骨架已对照 members.csv)。为什么样本外还会在:散户追涨与彩票偏好是结构性行为,窗口
+    60-241 日、换手低,15 bp 下分数由毛超额决定;不对称与桶内版本已经把市值、波动、流动性的暴露拿掉,不靠某个风格的行情。最可能的失败:C 在控制之外没有
+    alpha、种子 3 与 head 秩相关 >= 0.7 被划掉。数学检查:全部是尾随窗口,无前视;log(·) 在 0 处给 NaN 而不是 -inf;比值
+    3 的分母是 60 日下行方差均值,正常日 > 0,极端缺失只出 NaN;cs_regres(Y,X)=Y 对 X 的截面残差;未用 ts_rank / cross_rank
+    的日轴版,不碰 nanrank_last 的停牌 0 值。
+  seeds:
+  - cs_bucket_zscore(cross_mean(day_var(pow_2_5(Ret)), 120), LogFloatCap)
+  - cs_bucket_zscore(sub(cross_mean(day_var(pow_2_5(Ret)), 20), cross_mean(day_var(pow_2_5(Ret)),
+    241)), LogFloatCap)
+  - div(cross_mean(day_var(pow_2_5(Ret)), 60), cross_mean(day_var(pow_2_5(neg(Ret))),
+    60))
+  - cross_corr(day_var(pow_2_5(Ret)), day_var(pow_2_5(neg(Ret))), 120)
+  - cross_corr(day_var(pow_2_5(Ret)), day_sum(Amt), 120)
+  - cross_zscore(cross_mean(day_var(pow_2_5(Ret)), 20), 241)
+  - cs_bucket_demean(cross_mean(day_var(pow_2_5(Ret)), 241), sub(LogFloatCap, LogFloatShares))
+  - cross_autocorr(day_var(pow_2_5(Ret)), 120, 1)
+  - cs_regres(cross_mean(day_var(pow_2_5(Ret)), 120), cross_mean(day_var(Ret), 120))
+  - cross_corr(day_var(pow_2_5(Ret)), cross_delay(day_last(Close), 1), 120)
+- type: N
+  hypothesis: 机制:涨跌停是 A 股特有的价格上限,LimitWidth(板块涨跌幅宽度,10% / 20% / 5% / 30%)是日频字段;两个库
+    5583 条表达式一次都没用过这个字段,也没有任何以「当日最高价逼近涨停」为对象的写法。把当日涨幅除以 LimitWidth 得到无量纲的「占限幅比例」u,不同板块可比。事件定义:u_high=(day_max(High)/前一日收盘-1)/LimitWidth,u_close
+    同理取收盘;touch=u_high>0.95(盘中碰到或逼近涨停),sealed=touch 且 u_close>0.95(封住),failed=touch
+    且 u_close<0.95(炸板),giveback=u_high-u_close(最高到收盘的回吐占限幅比例)。想法:散户的涨停追逐在 A 股是强行为模式。近
+    60-120 日炸板 / 回吐多的票,说明追涨需求碰到了持续的卖压(解禁、套现、大户出货),之后趋于弱;封板次数多的票是另一种(筹码锁定,短期延续但长期回吐)。这些频率是慢变量(60-120
+    日窗口、事件稀疏),换手低,15 bp 影响小。算子怎样实现:全部用 day_max / day_min / day_last 把分钟压成日值,ts_delay(day_last(Close),1)
+    取前一日收盘(只用已知数据,无前视),is_gt / is_lt 生成 0/1 指示,cross_mean / cross_max 做尾随窗口频率;种子里分成几族:频率(1,4,9)、炸板条件频率(2,10,12)、回吐幅度(3,11,13)、相对自己的变化(5)、桶内标准化(6,10)、触碰后次日延续(8,用
+    cross_delay 把触碰推后一天再乘当日 u_close,无前视)、跌停镜像(9,14 的差分,读涨跌停需求的不对称)。为什么样本外还会在:涨跌停制度和散户结构变化慢,2018-2025
+    都存在;事件频率不是价格水平,尺子里的流动性 / 波动 / 反转 / 市值控制只能线性与 U 形地吃掉其中一部分。数学检查:LimitWidth 为正常数(0.05-0.3),不会造成近零除数;ts_delay(day_last(Close),1)
+    是前日收盘价,不为零;停牌日 High / Close 缺失 -> cross_mean 内 nan 忽略,不会被填成 0(没用 ts_rank / cross_rank);事件稀疏的票(从没碰过)值为
+    0,大量并列,并列靠列序,允许;已知风险:Close 若是后复权价,除权日的比值是连续的,没有前复权问题;is_gt 的 0.95 是阈值常数。
+  inspired_by: 本批只有 pow_2_5(Ret) 的上行跳强度一族与 Amt 一族;头部全是对 C 的时序滤波且都为负分,说明价格上的「极端上冲」这件事需要换对象来读:涨停限幅是它在
+    A 股里最干净的事件版本
+  seeds:
+  - cross_mean(sub(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth)),
+    60)
+  - cross_max(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    60)
+  - cross_mean(mul(cross_delay(is_gt(div(sub(div(day_max(High), ts_delay(day_last(Close),
+    1)), 1), LimitWidth), 0.95), 1), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 120)
+  - cross_mean(mul(is_gt(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)),
+    1), LimitWidth), 0.95), sub(div(sub(div(day_max(High), ts_delay(day_last(Close),
+    1)), 1), LimitWidth), div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), LimitWidth))), 120)
+  - cross_mean(mul(is_gt(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)),
+    1), LimitWidth), 0.5), sub(div(sub(div(day_max(High), ts_delay(day_last(Close),
+    1)), 1), LimitWidth), div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), LimitWidth))), 60)
+R:
+- head: ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 50)
+  why: 拆解:敲掉 neg 分数不变,敲掉最外层 cross_sum 反而变好 (+0.17)、窗口 50->25 变好 (+0.11);叠了 ts_sum
+    与 cross_sum 两层平滑后又套 ts_std,信号是波动的波动,越短越好,说明两层平滑是烂部件。变体:去掉一层平滑、缩短窗口、取 log 稳定尺度、加桶内标准化。
+  variants:
+  - ts_std(neg(ts_sum(day_var(pow_2_5(Ret)), 10)), 50)
+  - ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 30)), 50)
+  - ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 25)
+  - ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 15)
+  - ts_std(neg(log(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30))), 25)
+  - cs_bucket_zscore(ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)),
+    25), LogFloatCap)
+  - ts_std(log(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 25)
+audit:
+  attempts: 1
+  file: audit_1.yaml

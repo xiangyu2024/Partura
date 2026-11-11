@@ -1,0 +1,57 @@
+seed: 2052
+round: 3
+slots:
+- type: E
+  core: day_max(Ret)
+  hypothesis: '核心 C = day_max(Ret):当天分钟收益的最大值(日内最大正向跳动),即 Bali 等人的 MAX / 彩票偏好指标的分钟版。
+    证据:共性表里含 C 的 16 个候选均值差 +0.98(p<0.001),M 批里含 ListAge*C 的 5 个候选 -1.01 对 -2.56, 本组上一轮
+    N 位里最好的 3 个(-0.56 ~ -0.94,valid 一度到 +0.22)全是 C 外面套 cross_ema / cross_cov 的写法;
+    也就是说 C 是本组少数两段都不太亏的部件。机制:A 股散户追逐日内极端上冲的彩票型股票, 极端上冲频繁的票被高估、之后跑输(MAX 效应),多头腿拿的是「低跳动、定价更准」的一端或「相对自己历史跳动已回落」的票。
+    以前见过的外围只有 cross_ema(·,10)、cross_mean(·,5) 与「cross_cov(…, cs_first_high20(BoardCode/…,
+    |Amt 加权开盘|), 241)」 这种和板块 / 成交额分层拼接的写法;本位全部换掉,改为五类读法: (a) 去掉波动成分——MAX 除以自身日内标准差(跳动强度
+    = 极端程度 / 常态波动)、对 20 日平均 day_std 做滚动回归取残差(净于总波动的 MAX); (b) 相对自己:5 日对 60 日差、60 日
+    z 分数、90% 分位(异常跳动而不是持久水平); (c) 上下对称:max 与 |min| 之差(上冲 vs 下探不对称,抵消共同的波动 / 价差成分),与
+    LimitWidth(涨跌停幅度,日频叶子)相除得到「离涨停多近」,跨 10% 与 20% 板块可比; (d) 与资金流的协方差 / 相关(60 日 cross_cov
+    / cross_corr(MAX, 成交额总量 / 成交额加权收益)):跳动是否伴随放量,放量跳动是注意力驱动,无量跳动是噪声; (e) 慢平滑后再取日间波动
+    cross_stddev(跳动强度的不稳定性)。 与库里不同:库里只有 ListAge 乘积与 cross_cov 的分层拼接;这里是比值、残差、对称差、分位、相关这些没有出现过的算子集合,骨架不同。
+    样本外还会在的理由:彩票偏好与涨跌停制度下的散户注意力是结构性的,和年份行情无关;分母均为日内标准差 / LimitWidth(非近零量, 日内标准差在停牌日为
+    NaN 而非 0)。风险:本组全部分数仍为负,毛超额可能约为 0,赌注是亏损主要来自快速换手,慢读法与净于波动能压住。'
+  seeds:
+  - cross_mean(div(day_max(Ret), day_std(Ret)), 20)
+  - cross_regres(cross_mean(day_max(Ret), 20), cross_mean(day_std(Ret), 20), 60)
+  - sub(cross_mean(day_max(Ret), 5), cross_mean(day_max(Ret), 60))
+  - cross_mean(cross_zscore(day_max(Ret), 60), 10)
+  - cross_mean(sub(day_max(Ret), abs_(day_min(Ret))), 20)
+  - cross_mean(div(day_max(Ret), LimitWidth), 30)
+  - cross_cov(day_max(Ret), day_sum(Amt), 60)
+  - cross_corr(day_max(Ret), day_wmean(Ret, Amt), 60)
+  - cross_stddev(div(day_max(Ret), day_std(Ret)), 30)
+  - cross_quantile(day_max(Ret), 0.9, 60)
+  - cross_regres(cross_mean(div(day_max(Ret), day_std(Ret)), 10), cross_mean(day_std(Ret),
+    60), 120)
+- type: N
+  hypothesis: 新 idea:「长周期价格位置」(52 周高点锚定 / 多年反转)。M3 批共性表里 day_open(Open) 出现在 18 个候选里
+    (含 -1.49 对不含 -2.63,p<0.001),day_argmax(Open) 也富集(+0.91,p=0.003);注意本库的价格是后复权价,
+    所以 day_open(Open) 在截面上的排序就是「自基期以来的累计收益」,是长周期动量 / 反转信号,而 5 个控制里只有 20 日反转, 没有 6-12
+    个月以上的价格位置。机制:(1) 52 周高点锚定——投资者以 52 周高点为参照,离高点近的票被低估新利好(George-Hwang), 离高点远的票处置效应下被压住,收益会向高点靠拢;(2)
+    A 股散户对前期已大涨的票有多年尺度的反转(牛熊切换下的追涨后回落), 价格相对 250 日区间的位置是比单纯累计收益更稳的读法;(3) 价格走势与成交额协同(cross_corr(价格,
+    成交额总量))反映放量上涨还是缩量上涨。 算子实现:全部用日频的 day_open(Open) / day_last(Close)(当日已知)做 ts_max
+    / ts_min / ts_rank / cross_rank / cross_argmax 的长窗口位置度量, 分母为 250 日最高 / 最低价或移动均价,均为后复权正价格,不会近零。与库里不同:库里这一批的算子骨架围绕
+    day_ar1_coefficient、 day_tide_*、day_max(Ret) 与 cs_first_* 的拼接,没有任何一个用 ts_max /
+    ts_min 做「现价 / 区间极值」的位置比、也没有 cross_argmax 的「距高点天数」; 这里是纯价格路径的慢变量。样本外还会在的理由:锚定与处置效应是行为偏差的结构性后果,不依赖某年行情;慢变量换手极低,
+    本组已有证据表明亏损主要来自换手。风险:价格位置与市值 / 20 日反转控制有一定相关(新尺子已去掉其线性与 U 形暴露), 后复权价的排序可能掺入上市时间差异,另有
+    250 日热身期(前 250 日无值,属于 train 的开头少数日)。
+  inspired_by: M3 批共性表里的 day_open(Open)(含 -1.49 对不含 -2.62,18 个候选)与 day_argmax(Open)(+0.91,p=0.003)
+  seeds:
+  - div(day_open(Open), ts_max(day_open(Open), 250))
+  - div(day_open(Open), ts_min(day_open(Open), 250))
+  - div(sub(ts_max(day_open(Open), 120), ts_min(day_open(Open), 120)), day_open(Open))
+  - div(day_open(Open), cross_mean(day_open(Open), 120))
+  - div(cross_mean(day_open(Open), 20), cross_mean(day_open(Open), 250))
+  - sub(div(day_open(Open), ts_max(day_open(Open), 250)), div(day_open(Open), ts_max(day_open(Open),
+    60)))
+  - cross_corr(day_open(Open), day_sum(Amt), 120)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

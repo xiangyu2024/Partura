@@ -1,0 +1,229 @@
+seed: 2031
+round: 2
+slots:
+- type: E
+  core: cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close), 1))),
+    div(day_first(Open), cross_delay(day_last(Low), 1)), 120)
+  hypothesis: '机制。核心 C = cross_regres(cs_mean(G), GL, 120)。G = div(day_first(Open),
+    cross_delay(day_last(Close), 1)) 是隔夜价比(当日第一个有效分钟的开盘价 ÷ 上一交易日收盘,后复权,停牌后复牌首日给缺失);GL
+    = div(day_first(Open), cross_delay(day_last(Low), 1)) 是同一个缺口,只是分母取上一日最后一格的 Low(在有收盘集合竞价的板块最后一格是集合竞价的撮合价,通常
+    Low = Close,GL = G;其余板块 GL ≥ G,多出来的是最后一分钟的振幅);cs_mean(G) 是当日全市场等权的隔夜收益(每个交易日一个标量);cross_regres(x,
+    y, 120) 是 y 对 x 的 120 日滚动 OLS,取今天的残差(窗口含当日、不含未来)。所以 C = 这只票今天开盘缺口里「去掉市场整体隔夜行情之后」剩下的特质部分。它是个每天符号不定的量,必须在外面套一个读法才变成因子
+    —— 这个位只在外围长,问的是:读 C 的哪一种统计量、拿什么去比,才是承重的。
+
+
+    依据(只用 train / valid,来自本轮 loc.md 与上一轮结果)。
+
+    (1) 上一轮 N 位的 GP 从「特质隔夜份额」种子长出的 5 个最好候选,score = +0.50 / +0.49 / +0.31 / +0.31 /
+    +0.29(差一点过线),train / valid 分别 +0.50/+0.66、+0.49/+0.74、+0.31/+0.35、+0.31/+0.36、+0.29/+0.56,valid
+    全都不比 train 差。它们的形状一致:div(cross_stddev(C, 120), 分母),分子就是 C 的 120 日标准差(核心卡 4),分母是日内一侧(cs_mean(I)
+    对 I 的残差,I = div(day_last(Close), day_first(Open)))的特质标准差,回归窗口 5 / 10 / 120 都出现,另外夹着一个「以上一日收盘价作自变量并除以它」的小项。
+
+    (2) 快照里含 C 的 29 个候选均值 -0.11,不含的 -2.32(p < 0.001);含 cs_mean(G) 的 59 个候选均值 -0.77、不含
+    -2.62。而上一轮 R 组里没对市场做回归的版本(stddev(G-1) / (stddev(G-1) + stddev(I-1)),20 / 60 /
+    120 日)只有 -1.07 ~ -1.32。所以承重的看来是「先对市场回归取特质残差、再读离散度的比值」,不是 G 的水平。
+
+    (3) 这 5 个候选的外围都是同一个模板 div(·, add(·, ·)),本轮换掉模板,看模板里哪一块承重。
+
+
+    16 个种子的外围(每个都原样含 C):
+
+    A 换分母(1–5)。1 是裸 cross_stddev(C, 120),当基线。2 分母是 GL 的原始 120 日 stddev,即隔夜缺口里「特质 /
+    总」的离散度比,价格非同步性 1 - R² 的写法(Roll 1988;Morck, Yeung, Yu 2000:特质份额大 = 个股自己的信息多)。3
+    / 4 分母是日内一侧的特质 stddev,回归窗口 120 / 10(上一轮最好的几个正是短窗口,短窗口的残差更像日内的高频噪声)。5 分母是 120 日平均日内振幅
+    day_max(High) / day_min(Low) - 1,完全不做回归。
+
+    B 换掉 stddev 这个读法(6–13)。6 cross_autocorr_s1(C, 120):特质缺口第二天是回吐还是延续。7 / 8 C 与日内特质残差的同期相关
+    / 滞后一日相关(隔夜与日内「拉锯」在特质层面的版本,Lou, Polk, Skouras 2019)。9 |C| 上四分位均值 ÷ |C| 均值:重尾程度,无量纲。10
+    ts_skew(C, 120):特质缺口偏度(Boyer, Mitton, Vorkink 2010)。11 cross_max(C, 120) ÷ cross_stddev(C,
+    120):标准化后的最大特质上跳。12 20 日 ÷ 120 日 stddev:近期的特质隔夜波动相对长期。13 cross_mean(C) ÷ cross_mean(|C|):特质缺口的方向偏度。
+
+    C 价位检验(14、15)。这是对上一轮的一个怀疑,不是想法:最好的几个候选分母里那个小项,量级上等价于把后复权价位乘进来(价位 = 自某个基期以来的累计涨幅,是一种长期反转)。14
+    是 C4 乘价位 cross_delay(day_last(Close), 1);15 是把 C4 对 log 价位做截面回归取残差(去掉价位的线性部分)。14
+    好而 15 差 = 承重的是价位而不是特质离散度;反过来 = 离散度才是。
+
+    D 16 是 EMA 版比值:cross_ema(|C|, 60) ÷ cross_ema(|日内特质残差|, 60)。
+
+
+    与已见过的不同。快照里含 C 的候选,至少最好的那几个,外围算子集合都是 {div, add, cross_stddev, cross_regres, cross_corr,
+    cs_mean, sub, …} 的同一个 div(C4, add(…)) 模板;本轮种子外围:单一分母(没有 add),或换成 cross_autocorr_s1、ts_skew、cross_tail_mean_q75、cross_max、cross_mean
+    + abs_、cross_ema、cs_regres、cross_corr(C, 日内残差)。16 个骨架逐个对照 members.csv 的 5583 个骨架,没有重复。
+
+
+    为什么样本外还会在。比值和相关全是无量纲的,所以不是流动性 / 市值 / 波动水平的变形;对市场回归掉之后,读的是「这只票的隔夜价格由自己的消息还是由大盘推着走」,与日内一侧(散户连续竞价为主)相比的相对份额(French,
+    Roll 1986:信息驱动与交易驱动的方差不同;Lou, Polk, Skouras 2019:隔夜 = 机构 / 消息,日内 = 散户)。这是持有者构成与信息环境的慢变属性,120
+    日窗口下名次几周不变,15 bp 下换手低,不靠一个会很快衰减的价差。新尺子再把对 5 个控制和两个冠军的线性 / U 形 / S 形暴露去掉,留下的才算分。最可能的失败:一部分是板块
+    / 交易所结构(Low 与 Close 的差异只在没有收盘集合竞价的板块出现,列序携带板块信息);另一部分是价位(种子 14 / 15 就是为分辨它)。
+
+
+    数学检查。无前视:G、GL、I 都在 t 日收盘后可得,cross_delay 的天数全为正,cross_regres / cross_stddev / cross_corr
+    的窗口含当日、不含未来,cs_mean 只用当日截面。分母:cross_stddev 的窗口里至少要有 2 个有效观测才有值,否则缺失;样本最前面 3 到
+    5 个交易日窗口里只有 1 到 2 个观测、残差恒为 0,合成数据烟测里种子 11 的 cross_max ÷ cross_stddev 在这几天出现 inf,只涉及
+    2018 年第一周,不是结果的主要来源。cross_regres 的自变量 cs_mean(G) 在 120 日窗口里的方差在 1e-5 量级,远高于 EPS;停牌票窗口缺失时返回缺失而不是
+    0;cross_autocorr_s1 / cross_corr 在常数窗口返回 0(只影响停牌与一字板票,可交易掩码已排除)。种子 14 的价位是后复权价(规则
+    §4:不是问题,只是长期累计涨幅)。'
+  seeds:
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_stddev(div(day_first(Open),
+    cross_delay(day_last(Low), 1)), 120))
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_stddev(cross_regres(cs_mean(div(day_last(Close),
+    day_first(Open))), div(day_last(Close), day_first(Open)), 120), 120))
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_stddev(cross_regres(cs_mean(div(day_last(Close),
+    day_first(Open))), div(day_last(Close), day_first(Open)), 10), 120))
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_mean(sub(div(day_max(High),
+    day_min(Low)), 1), 120))
+  - cross_autocorr_s1(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120)
+  - cross_corr(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), cross_regres(cs_mean(div(day_last(Close),
+    day_first(Open))), div(day_last(Close), day_first(Open)), 120), 120)
+  - cross_corr(cross_delay(cross_regres(cs_mean(div(day_last(Close), day_first(Open))),
+    div(day_last(Close), day_first(Open)), 120), 1), cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Low),
+    1)), 120), 120)
+  - div(cross_tail_mean_q75(abs_(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120)), 120), cross_mean(abs_(cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Low),
+    1)), 120)), 120))
+  - ts_skew(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120)
+  - div(cross_max(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_stddev(cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Low),
+    1)), 120), 120))
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 20), cross_stddev(cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Low),
+    1)), 120), 120))
+  - div(cross_mean(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_mean(abs_(cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Low),
+    1)), 120)), 120))
+  - mul(cross_stddev(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120), 120), cross_delay(day_last(Close),
+    1))
+  - div(cross_ema(abs_(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Low), 1)), 120)), 60), cross_ema(abs_(cross_regres(cs_mean(div(day_last(Close),
+    day_first(Open))), div(day_last(Close), day_first(Open)), 120)), 60))
+- type: N
+  hypothesis: '机制。把一天的成交额按「在哪个竞价里成交」拆开。OS = div(day_first(Amt), day_sum(Amt)) 是开盘集合竞价那一格(day_first
+    取当天第一个有效分钟,开盘集合竞价的撮合落在这一格)的成交额占全天的比例;CS = div(day_last(Amt), day_sum(Amt)) 是最后一格占比(有收盘集合竞价的板块是收盘竞价,其余板块是最后一分钟的连续竞价)。OS
+    是 [0, 1] 的无量纲量,读的是「这只票有多大比例的成交,是在集中处理隔夜信息的那一刻完成的」。开盘 / 收盘竞价偏机构、指数、消息型交易者,盘中连续竞价偏散户(Lou,
+    Polk, Skouras 2019;Berkman 等 2012:开盘买入的关注度成本;Amihud, Mendelson 1987:开盘与收盘的价格形成方式不同)。所以
+    OS 是一个慢变的「谁在交易这只票」的指纹,不是流动性水平。
+
+
+    本组用四种读法(全部无量纲、120 日窗口、慢变):
+
+    1 / 2:OS 的变异系数 stddev ÷ mean(1),与对市场平均 cs_mean(OS) 回归后的特质变异系数(2)—— 开盘关注度的「突发程度」(类似上一轮在本流里有用的「特质离散度」写法,但读的是参与度而不是价格)。
+
+    3 – 5:OS 与隔夜缺口大小 |G - 1|(3)、与对市场回归后的特质缺口 cross_regres(cs_mean(G), G, 120)(4)、与日内收益
+    I - 1(5)的 120 日相关:缺口是不是伴随着集中的开盘成交(消息型缺口)还是稀薄成交下的噪声缺口,日内是延续还是回吐。
+
+    6 – 10:参与度自己的结构:OS 与 CS 的相关(6)(开盘重的票收盘是否也重 = 机构型成交的一致性);CS 与当天价格变动的相关(7);昨日收盘竞价占比与今日缺口的相关(8)(收盘竞价的资金流是否隔夜延续);OS
+    的一日自相关(9);OS 与市场平均 OS 的相关(10)(参与度是否跟市场同步)。
+
+    11 – 14:特质版:对市场回归后的 OS 残差 RO 与特质缺口 RG 的相关(11)、与日内特质残差的相关(12);昨日 OS 对今日 |G - 1|
+    的斜率(13);RO 的离散度 ÷ RG 的离散度(14)。
+
+
+    为什么和库里、快照里不同。库里 5583 条里,day_first(Amt / Volume) 只以绝对水平(cross_sum、ts_quantile、ts_std)与
+    argmin 位置的形式出现,没有一条把它除以 day_sum(Amt) 变成份额,也没有一条把它与缺口、日内收益、市场平均做耦合(正则查 members.csv:day_first(Amt|Volume)
+    与 day_sum(Amt|Volume) 同时出现的 0 条);14 个种子的算子骨架逐个对照 5583 个骨架,没有重复。水平量是流动性,新尺子会去掉;份额的离散度、耦合和相关没有这个问题。CS
+    只在相关里使用,不看水平:两个板块的收盘竞价规则不同,CS 的水平带板块信息。
+
+
+    为什么样本外还会在。持有者构成(机构 / 指数 / 散户占比)与成交方式是慢变的,120 日窗口下名次几周不变,15 bp 下换手低;相关、变异系数、份额都是无量纲的,与流动性
+    / 市值 / 波动水平不是同一个量。诚实的风险:OS 的水平与流通盘、板块(科创板 / 创业板的竞价规则不同)相关,相关类种子在回归后可能还带板块信息;参与度的变异系数与
+    2029 一族(成交额的波动的波动)可能同源。
+
+
+    数学检查。无前视:OS、CS、G、I 都在 t 日收盘后可得,cross_delay 的天数为正,窗口含当日、不含未来。分母:day_sum(Amt) 为
+    0 时分子也为 0,0 / 0 给缺失而不是 inf(合成数据烟测:没有 inf);变异系数的分母是 120 日 OS 均值,正;cross_corr /
+    cross_autocorr_s1 常数窗口返回 0(只影响停牌 / 一字板票,可交易掩码已排除);种子 14 的分母 cross_stddev(RG, 120)
+    在样本最前面 3 到 5 个交易日(窗口里只有 1 到 2 个观测)会出现 inf,只涉及 2018 年第一周。最长窗口 120 日。'
+  inspired_by: B092:该批 12 个候选读的是 day_first(Amt / Volume / Vwap) 的 argmin 位置;拆解里 day_first(Amt)
+    本身的充分性是 -1.30(train -1.30 / valid -0.79),是整批所有拆解里最好的一块,而 argmin / ts_scale 外壳反而更差(knockout
+    -2.74,head -2.26),也就是开盘竞价成交额里有东西,外壳没有;它的绝对水平是流动性,所以换成无量纲份额。再叠上上一轮在本流里得到的结论:去掉水平、读相对市场的特质离散度与耦合,比读水平好
+    1 到 2 个夏普。
+  seeds:
+  - div(cross_stddev(div(day_first(Amt), day_sum(Amt)), 120), cross_mean(div(day_first(Amt),
+    day_sum(Amt)), 120))
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Amt), day_sum(Amt))), div(day_first(Amt),
+    day_sum(Amt)), 120), 120), cross_mean(div(day_first(Amt), day_sum(Amt)), 120))
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 120)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 120), 120)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), sub(div(day_last(Close), day_first(Open)),
+    1), 120)
+  - cross_corr(div(day_first(Amt), day_sum(Amt)), div(day_last(Amt), day_sum(Amt)),
+    120)
+  - cross_corr(div(day_last(Amt), day_sum(Amt)), sub(div(day_last(Close), day_first(Open)),
+    1), 120)
+  - cross_corr(cross_delay(div(day_last(Amt), day_sum(Amt)), 1), sub(div(day_first(Open),
+    cross_delay(day_last(Close), 1)), 1), 120)
+  - cross_autocorr_s1(div(day_first(Amt), day_sum(Amt)), 120)
+  - cross_corr(cs_mean(div(day_first(Amt), day_sum(Amt))), div(day_first(Amt), day_sum(Amt)),
+    120)
+  - cross_corr(cross_regres(cs_mean(div(day_first(Amt), day_sum(Amt))), div(day_first(Amt),
+    day_sum(Amt)), 120), cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Close), 1)), 120), 120)
+  - cross_corr(cross_regres(cs_mean(div(day_first(Amt), day_sum(Amt))), div(day_first(Amt),
+    day_sum(Amt)), 120), cross_regres(cs_mean(div(day_last(Close), day_first(Open))),
+    div(day_last(Close), day_first(Open)), 120), 120)
+  - cross_regbeta(cross_delay(div(day_first(Amt), day_sum(Amt)), 1), abs_(sub(div(day_first(Open),
+    cross_delay(day_last(Close), 1)), 1)), 120)
+  - div(cross_stddev(cross_regres(cs_mean(div(day_first(Amt), day_sum(Amt))), div(day_first(Amt),
+    day_sum(Amt)), 120), 120), cross_stddev(cross_regres(cs_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1))), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 120), 120))
+R:
+- head: cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1)), 60)
+  why: 烂部件是缺口幅度的水平:head 1 = cross_ema(abs_(G - 1), 60) 读的是隔夜风险的大小,与已知族 |ρ| 0.46(上一轮
+    R 的结果,贴着 0.5 的线),新尺子要去掉的正是这个。依据(loc.md 拆解表):Open→Close -0.92、Close→Vwap -1.05,价格口径不承重;窗口
+    60→30 变 -1.66(train -0.84 / valid -1.66),60→120 变 -1.20(train -1.20 / valid -0.36),两段方向相反
+    = 水平在漂;去掉 cross_delay、去掉 -1、去掉 G 全部掉到 -2.3 ~ -2.4,承重的是「上一日收盘到今日开盘」这一段。上一轮 R 的经验:把水平除掉的份额类
+    -0.88 ~ -1.32,与原 head 的 ρ 0.2 ~ 0.58。本轮变体:(1) 原始缺口换成对市场回归后的特质残差;(2) 用同期日内幅度作分母:比值、日度份额再取
+    EMA、特质残差版;(3) 同一缺口的 60 日 EMA ÷ 241 日 EMA(相对自己的长期水平)与 20 日 EMA 的 241 日 z 分;(4)
+    截面回归取残差;(5) 120 日份额。
+  variants:
+  - cross_ema(abs_(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Close), 1)), 120)), 60)
+  - div(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1)), 60), cross_ema(abs_(sub(div(day_last(Close), day_first(Open)), 1)), 60))
+  - div(cross_ema(abs_(cross_regres(cs_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1))), div(day_first(Open), cross_delay(day_last(Close), 1)), 120)), 60), cross_ema(abs_(cross_regres(cs_mean(div(day_last(Close),
+    day_first(Open))), div(day_last(Close), day_first(Open)), 10)), 60))
+  - div(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1)), 60), cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 241))
+  - cross_ema(div(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1)), add(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)),
+    abs_(sub(div(day_last(Close), day_first(Open)), 1)))), 60)
+  - cross_zscore(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 20), 241)
+  - cs_regres(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 60), cross_ema(abs_(sub(div(day_last(Close), day_first(Open)), 1)),
+    60))
+  - div(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1)), 120), add(cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1)), 120), cross_ema(abs_(sub(div(day_last(Close), day_first(Open)), 1)),
+    120)))
+- head: ts_scale(ts_argmin(day_first(Amt), 30), 30)
+  why: 烂部件是 day_first(Amt) 的绝对水平:head 4 = ts_scale(ts_argmin(day_first(Amt), 30),
+    30)。拆解(loc.md):day_first(Amt) 单独的充分性 -1.30(valid -0.79),好于整个 head(-2.26);换 Volume
+    -1.99;去掉 ts_argmin 掉到 -2.74(必要性 +0.47),所以 argmin 的「位置」读法是有用的,里面的量是流动性水平。变体保留 argmin
+    / argmax 这层位置读法,把里面的水平量换成无量纲的开盘竞价份额 OS、相对自己 30 日均值的开盘竞价成交额、以及 argmax 对称写法。
+  variants:
+  - ts_scale(ts_argmin(div(day_first(Amt), day_sum(Amt)), 30), 30)
+  - ts_scale(ts_argmax(day_first(Amt), 30), 30)
+  - ts_scale(ts_argmin(div(day_first(Amt), cross_mean(day_first(Amt), 30)), 30), 30)
+audit:
+  attempts: 1
+  file: audit_1.yaml

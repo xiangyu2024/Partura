@@ -1,0 +1,93 @@
+seed: 2046
+round: 2
+slots:
+- type: E
+  core: cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1)
+  hypothesis: 机制:第 1 轮 N 位的唯一真 head 是 cross_corr(cross_delay(log(log(B)),1), day_var(rsn(Amt)),
+    120)(+0.88,train +1.36 / valid +0.88),B = day_var(A)/day_mean(A)^2 是日内有成交分钟上成交额的相对离散度(burstiness,一阵一阵的程度),A
+    = replace_small_with_nan(Amt)。拆解:拿掉 cross_delay(用同日 B)掉到 -0.28,必要性 +1.16,说明承重的是
+    B 对「之后」成交额波动的预测关系,不是同日机械耦合;拿掉 B 的分母(只用 day_var)掉到 -0.69,必要性 +1.57,说明承重的是无量纲的 B;窗口
+    120 到 240 变好(+0.99,valid +1.23),说明越慢越好。读法:每只票自己 120~240 日里,昨日脉冲度与今日成交额离散水平的相关,反映参与者结构(拆单机构与题材散户)决定的成交额波动可预测性,是个股的慢特征。本位核心固定为
+    cross_delay(log(B),1),外围全部换掉:第 1 轮见过的外围只有 cross_corr(核心, day_var(A) 或 log day_var(A)
+    或 log day_var(Ret), 120) 这一个形态,本位改成(i)另一种响应量:当日收益 day_sum(Ret)(含去市场 cs_demean)、收益波动
+    day_var(Ret)、价格路径 log day_var(Close)、成交额均值变化 cross_delta(log(day_mean(A)),1)、成交量(Volume)的离散度、日内偏度
+    day_skew;(ii)另一种耦合统计量:cross_regbeta / cross_reg_tvalue 代替相关系数,窗口 240 或 241;(iii)外层再处理:ts_mean
+    平滑、cs_regres 对 log 成交额均值做截面残差、B 自己的 20 日对 241 日均值差(持久性,作对照诊断)。实现用 cross_* 系列(逐只股票沿日轴的滚动统计),核心里的
+    replace_small_with_nan 保证 B 只在有成交分钟上算。为什么和库里不同:库里同族是 day_var(Amt) 的水平聚合与 cross_cov
+    耦合两个原始量纲,没有无量纲 B 与滞后相关;与 head 本身不同:换了响应量与耦合统计量,不含 log log,也不是 day_var(A) 的 120
+    日相关写法。为什么样本外还会在:burstiness 是参与者结构的慢变特征(数月不变),不靠行情方向;窗口 240 日换手低,尺子已去掉水平与已知控制;train
+    与 valid 同号(+1.36 / +0.88),不是单一时段。主要风险:120~240 日相关的估计误差与截面离散度相当;valid 比 train 弱。
+  seeds:
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), day_var(Ret), 240)
+  - cross_regbeta(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), day_sum(Ret), 241)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), cross_delta(log(day_mean(replace_small_with_nan(Amt))), 1), 120)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), cs_demean(day_sum(Ret)), 120)
+  - sub(cross_mean(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), 20), cross_mean(cross_delay(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 1), 241))
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), log(day_var(Close)), 241)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), day_skew(replace_small_with_nan(Amt)), 241)
+  - cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt))))), 1), day_var(replace_small_with_nan(Amt)),
+    240), log(cross_mean(day_mean(replace_small_with_nan(Amt)), 240)))
+  - cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), day_var(replace_small_with_nan(Amt)), 241)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), log(day_var(replace_small_with_nan(Volume))), 241)
+  - cross_regbeta(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    1), cross_delay(day_var(replace_small_with_nan(Amt)), 1), 241)
+- type: N
+  hypothesis: 新 idea:burstiness 的「形状」不止 B 一种。第 1 轮的真 head 用相对离散度 B = var/mean^2 作回归元,拆解显示承重的是无量纲性与滞后(拿掉分母
+    -0.69,拿掉滞后 -0.28)。B 只是二阶矩,同一个「成交一阵一阵」的现象还有别的无量纲读法:日内成交额的基尼系数 day_gini(A)(集中度,对尾部不敏感,与
+    B 不同)、上尾期望损失比 day_es_ratio_hi(A)(最大一撮分钟占总额的份额)、成交额的时间质心 day_centroid(A)(成交集中在开盘还是尾盘,B
+    完全读不到的一维:时间位置)、成交量(Volume)的 B(不含价格,与 Amt 的 B 之差 = 价格与数量的联合离散)。把它们放进与 head 同样的结构(昨日形状指标与今日成交额离散水平或当日收益的
+    120~241 日个股相关、斜率、t 值),检验 head 的 alpha 是「脉冲度」这个一般现象还是 B 这个具体二阶矩。算子实现:A = replace_small_with_nan(Amt)
+    只保留有成交的分钟;day_gini / day_es_ratio_hi / day_centroid 是 ops_ext 里的日内算子,输出每只票每天一个值;cross_delay(·,1)
+    严格滞后一天;cross_corr / cross_regbeta / cross_reg_tvalue 是沿日轴的个股滚动统计。为什么与库里不同:两库里没有用
+    day_gini / day_es_ratio_hi / day_centroid 度量成交额形状再取滞后相关的组合,B 的同族只有 day_var / day_mean
+    的比值;与 head 的差别是度量的形状不同,而不是换写法(基尼与 CV 通常相关 0.5~0.8,时间质心与 B 近似独立)。为什么样本外还会在:成交的形状是参与者结构(机构拆单、散户集中在开盘或尾盘)的持久特征,慢变;head
+    的 train / valid 同号提供了同类机制的证据。种子 5、6、14 含 Volume 的 B,用来分离价格项。风险:形状指标彼此共线,若 head
+    的价值只来自 B 的特殊二阶矩,这批会在 -1 以下。
+  inspired_by: 第 1 轮 N 位 head cross_corr(cross_delay(log(log(B)),1), day_var(rsn(Amt)),
+    120)(+0.88)及其拆解:无量纲 B 与滞后承重、窗口越慢越好、Amt 换 Volume 仍有 +0.74
+  seeds:
+  - cross_corr(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), day_var(replace_small_with_nan(Amt)),
+    240)
+  - cross_corr(cross_delay(log(day_es_ratio_hi(replace_small_with_nan(Amt))), 1),
+    day_var(replace_small_with_nan(Amt)), 240)
+  - cross_corr(cross_delay(day_centroid(replace_small_with_nan(Amt)), 1), day_var(replace_small_with_nan(Amt)),
+    240)
+  - cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Volume)), pow_2(day_mean(replace_small_with_nan(Volume))))),
+    1), day_var(replace_small_with_nan(Amt)), 240)
+  - cross_corr(cross_delay(sub(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    log(div(day_var(replace_small_with_nan(Volume)), pow_2(day_mean(replace_small_with_nan(Volume)))))),
+    1), day_var(replace_small_with_nan(Amt)), 240)
+  - cross_regbeta(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), log(day_var(replace_small_with_nan(Amt))),
+    241)
+  - cross_corr(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), day_sum(Ret),
+    120)
+  - cross_corr(cross_delay(log(day_es_ratio_hi(replace_small_with_nan(Amt))), 1),
+    day_sum(Ret), 241)
+  - cross_corr(cross_delay(day_centroid(replace_small_with_nan(Amt)), 1), day_sum(Ret),
+    241)
+  - cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Volume)),
+    pow_2(day_mean(replace_small_with_nan(Volume))))), 1), day_sum(Ret), 120)
+  - cross_corr(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), day_var(Ret),
+    240)
+  - cross_corr(cross_delay(sub(log(day_gini(replace_small_with_nan(Amt))), log(div(day_var(replace_small_with_nan(Amt)),
+    pow_2(day_mean(replace_small_with_nan(Amt)))))), 1), day_var(replace_small_with_nan(Amt)),
+    240)
+  - cross_corr(cross_delay(sub(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_small_with_nan(Amt))))),
+    log(div(day_var(replace_small_with_nan(Volume)), pow_2(day_mean(replace_small_with_nan(Volume)))))),
+    1), day_sum(Ret), 241)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

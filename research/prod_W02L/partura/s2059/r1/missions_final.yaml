@@ -1,0 +1,81 @@
+seed: 2059
+round: 1
+slots:
+- type: N
+  hypothesis: '机制:日内「高点相对低点的伸展」的跨股票异常,再看它在日轴上的持续程度。批里三个 head 都是 cross_min(day_max(nt_cs_regres(High
+    或 Ret, Low)), 15~60):分钟级跨股票回归残差的日内最大值,再取最近 15~60 日的最小值,即「最近一个月里最不张扬的那个日内峰」。三个
+    head 的 score 都在 -1.9 ~ -2.4(train 与 valid 同号为负),说明这条线的毛收益接近 0、被成本吃掉;但有一点是明确的:窗口越长越好(60->120
+    增益 +0.85,15->30 反而变差只是噪声),说明被读到的是慢变的个股属性,不是日度噪声。这一位保留这个思路,拿掉两个坏部件:(1) nt_cs_regres
+    被环境禁用,而且分钟级回归的残差每分钟都在换,日内取最大值读的是单个分钟的极端点;(2) cross_min 只取窗口内一个点,噪声大、换手高。新做法:先在日度聚合后做截面回归,cs_regres(day_max(High),
+    day_min(Low)) = 日内最高价对最低价做截面回归的残差,即「同样的日低点水平下,日内最高点多伸出去多少」,价格水平(后复权价排序约等于长周期动量)被回归吸收一部分,留下的是日内波动幅度中与水平无关的部分,等价于一个对数尺度无关的
+    Parkinson 区间的变体;再用 60~120 日均值或滚动回归斜率(cross_regbeta(day_min(Low), day_max(High),
+    60):该股高点对低点的弹性,beta>1 = 低点每抬高一点,高点伸出更多,上冲型)把它变成慢变属性;并配上上影线 / 下影线不对称 sub(day_max(High),
+    day_mean(Vwap)) 与 sub(day_mean(Vwap), day_min(Low)) 的比值(买盘拉升后被卖出 vs 恐慌下杀后被承接),这是一个
+    pattern 读法,库里的 cross_min / day_max 残差没有读过上下影线不对称。算子实现:day_max / day_min / day_mean
+    把分钟聚到日,cs_regres 做截面残差,cross_regbeta / cross_mean / cross_zscore 做日轴慢变化。
+
+    为什么与库里已有的不同:库里的 head 是「分钟级残差 -> 日内最大 -> 日轴最小值」,日轴聚合是 min;这里日轴聚合是 mean / regbeta
+    / zscore,输入是日度 High / Low 的截面残差或上下影线比,没有分钟级残差,也没有 min 聚合,算子骨架与两个库都不同(已对照 loc 的
+    head 与共性表;完整 5583 个骨架的对照交给确定性审计工具)。
+
+    为什么样本外还会在:日内区间的不对称是参与者构成(散户追涨杀跌的影线、机构分批吸纳的下影线)的结构性痕迹,60~120 日窗口上名次保持,换手低;不依赖某段行情的方向。风险:与波动控制(日内区间就是波动)相关高,奖励剔除线性、U
+    形和 S 形暴露后剩下的看影线不对称与回归残差是否还有信息;如果被波动控制吃掉,这一位出不了 head,下一轮不再押区间一族。
+
+    数学检查:day_max(High) 与 day_min(Low) 为正的价格,不会近零分母;影线比的分母 sub(day_mean(Vwap), day_min(Low))
+    在整天价格不动(停牌 / 一字板)时为 0,分子也为 0,得 NaN,不是无穷;为防爆点,种子里用 log 或 cs_rank 压缩。无前视:全部只用 t
+    日收盘及以前,t+1 才交易。最长窗口 120 日,热身期不主导。'
+  inspired_by: B 批:三个 head 都是 cross_min(day_max(nt_cs_regres(High|Ret, Low)), 15~60);60->120
+    增益 +0.85,说明慢变属性;共性表 day_max(nt_cs_regres(Ret, Low)) 与 day_max(nt_cs_regres(Amt,
+    Low))。
+  seeds:
+  - cross_mean(cs_regres(day_min(Low), day_max(High)), 60)
+  - cross_mean(cs_regres(day_min(Low), day_max(High)), 120)
+  - cross_zscore(cs_regres(day_min(Low), day_max(High)), 120)
+  - cross_mean(cs_regres(log(day_min(Low)), log(day_max(High))), 90)
+  - cross_regbeta(day_min(Low), day_max(High), 60)
+  - cross_regbeta(log(day_min(Low)), log(day_max(High)), 120)
+  - cross_regres(day_min(Low), day_max(High), 60)
+  - cross_mean(log(div(sub(day_max(High), day_mean(Vwap)), sub(day_mean(Vwap), day_min(Low)))),
+    60)
+  - cross_mean(log(div(sub(day_max(High), day_mean(Vwap)), sub(day_mean(Vwap), day_min(Low)))),
+    120)
+  - cross_zscore(log(div(sub(day_max(High), day_mean(Vwap)), sub(day_mean(Vwap), day_min(Low)))),
+    90)
+  - cs_bucket_zscore(cross_mean(cs_regres(day_min(Low), day_max(High)), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(log(div(sub(day_max(High), day_mean(Vwap)), sub(day_mean(Vwap),
+    day_min(Low)))), 60), cross_mean(day_std(Amt), 30))
+- type: N
+  hypothesis: '机制:日内收益分布的左右尾不对称(跳跃的符号)及其在日轴上的持续性。批里的 head 都读 Ret 与 High 的分钟级截面残差的「日内最大值」,即只读上尾的一个点,且全部亏损(score
+    -1.9 ~ -2.4);Ret 版在 60->120 窗口上从 -2.28 到 -1.43,说明慢变聚合比点估计好。新想法:把上尾与下尾对称地读出来并相减,读的是「这只票的惊喜是向上跳还是向下跳」。算子实现:ops_ext
+    里的 day_es_ratio_hi(Ret) / day_es_ratio_lo(Ret)(日内最极端分钟的收益占全天的比例,上尾 / 下尾),相减得到
+    day 级的尾部不对称;day_skew(Ret) 是分钟偏度;在日轴上用 cross_semistd_neg / cross_semistd_pos(日度收益的下行
+    / 上行半标准差)的对数比(Barndorff-Nielsen 等的 signed jump variation 的日度版,下行半方差占比高 = 下跌尾厚,预期收益补偿);最后
+    cross_mean 到 20~60 日。分开读上下尾的理由:上尾(彩票偏好、Bali 等的 MAX 效应)被高估,下尾(崩盘风险、Kelly 与 Jiang
+    2014 的尾部风险溢价)被补偿;这一位的符号选择交给 GP 的方向,而不是由我事先押注。
+
+    为什么与库里已有的不同:库里的 head 与共性表只有「day_max(分钟残差)」的上尾单点,没有下尾,也没有上下尾相减;day_es_ratio_hi
+    / lo、cross_semistd_neg / pos 是库建成之后才加的算子,库里不会出现(两个库的 5583 个骨架逐个对照交给确定性审计工具)。与波动控制的关系:除以总量后得到的是「份额」或「偏度」,与波动水平的暴露在构造上就小,这是它与波动
+    / 流动性控制天然低相关的原因。
+
+    为什么样本外还会在:尾部不对称由持仓者结构(散户 vs 机构)与风险厌恶决定,慢变;对尾部的补偿在文献里跨市场稳健,与某段行情无关;20~60 日聚合使换手低,15
+    bp 吃得下。风险:偏度类与 20 日反转控制相关(近期一次大涨会抬高上尾),奖励会剔除线性、U 形和 S 形暴露,剩下看运气;下行半标准差版与波动控制相关高,所以种子里同时放比值版(尺度无关)。
+
+    数学检查:day_es_ratio 在全天无价格变动时分子分母都为 0,得 NaN 不是无穷;半标准差比值的分母在窗口内无下行日时为 0,种子里用 add(·,
+    常数) 的形式或差而非比;day_skew 的分母 std 为 0 时给 NaN。无前视:全部只用 t 日收盘及以前,t+1 才交易。最长窗口 60 日,热身期不主导。'
+  inspired_by: B 批:三个 head 全是 day_max(nt_cs_regres(Ret|High, Low)) 的上尾单点,score 均 <
+    -1.9;Ret 版窗口 60->120 增益 +0.85;共性表 day_max(nt_cs_regres(Ret, Low))。
+  seeds:
+  - cross_mean(sub(day_es_ratio_lo(Ret), day_es_ratio_hi(Ret)), 20)
+  - cross_mean(sub(day_es_ratio_lo(Ret), day_es_ratio_hi(Ret)), 60)
+  - cross_zscore(sub(day_es_ratio_lo(Ret), day_es_ratio_hi(Ret)), 60)
+  - cross_mean(day_skew(Ret), 40)
+  - cross_mean(day_es_ratio_lo(Ret), 40)
+  - cross_mean(day_es_ratio_hi(Ret), 40)
+  - cross_mean(sub(day_es_ratio_lo(Amt), day_es_ratio_hi(Amt)), 40)
+  - cs_bucket_zscore(cross_mean(sub(day_es_ratio_lo(Ret), day_es_ratio_hi(Ret)), 40),
+    LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_skew(Ret), 40), cross_mean(day_std(Amt), 30))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

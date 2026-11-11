@@ -1,0 +1,99 @@
+seed: 2050
+round: 1
+slots:
+- type: E
+  core: day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret,
+    0)))
+  hypothesis: 'Core = intraday standard deviation of only the positive minute returns
+    (upside minute volatility, i.e. how large the up-jumps are, with down minutes
+    zeroed). All three snapshot heads wrap it in cross_stddev / cross_mean(...,20)
+    with or without a day_std(Ret) ratio and are all deeply negative after controls:
+    plain level/dispersion of upside vol is just a volatility proxy that the controls
+    already absorb. This round keeps the core but changes the periphery to what the
+    controls cannot see: (a) the asymmetry between upside and downside minute vol
+    (division by the mirror downside std, built by swapping the is_gt arguments),
+    a skewness-of-jumps / lottery-demand mechanism: retail overpays for stocks with
+    big up-jumps; (b) the stock-own-history shock (cross_zscore, short-minus-long
+    mean, cross_delta) which removes the persistent vol level that the vol control
+    carries, leaving unusual upside-jump arrival; (c) neutralisation inside size or
+    turnover buckets (cs_bucket_demean / cs_bucket_zscore), so ranking is within comparable
+    stocks; (d) interaction with return/flow via cross_corr, i.e. whether up-jumps
+    co-occur with price gains. None of these peripheries (cross_zscore, cross_delta,
+    cross_corr, bucket demean, mirror-downside ratio) appears in the snapshot, whose
+    seeds only use cross_stddev, cross_mean and div by day_std(Ret). Out-of-sample
+    persistence: jump-lottery preference and slow-moving attention to extreme positive
+    moves is a behavioural premium rather than a sample-specific pattern; stock-relative
+    shocks are not mechanically the vol or size control.'
+  seeds:
+  - cross_zscore(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), day_std(select_where(is_gt(create_like(Ret, 0), Ret,
+    False), Ret, create_like(Ret, 0)))), 40)
+  - cross_zscore(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), 40)
+  - sub(cross_mean(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), 5), cross_mean(day_std(select_where(is_gt(Ret, create_like(Ret,
+    0), False), Ret, create_like(Ret, 0))), 60))
+  - cross_delta(cross_mean(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), 5), 20)
+  - cross_corr(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret,
+    0))), day_sum(Ret), 20)
+  - cross_tail_mean_q75(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), day_std(select_where(is_gt(create_like(Ret, 0), Ret,
+    False), Ret, create_like(Ret, 0)))), 40)
+  - cs_bucket_demean(cross_zscore(day_std(select_where(is_gt(Ret, create_like(Ret,
+    0), False), Ret, create_like(Ret, 0))), 20), cross_mean(day_sum(Amt), 20))
+- type: N
+  hypothesis: 'New idea, away from volatility level: where the money traded inside
+    the day versus where the price moved. Mechanism: day_signed_ratio(Ret, Amt) is
+    the share of turnover in up-minutes minus in down-minutes (net buying pressure
+    without tick data); day_wmean(Ret, Amt) - day_mean(Ret) is the turnover-weighted
+    minute return minus the time-weighted one, i.e. whether big money transacted on
+    the higher or lower side of the day; day_es_ratio_hi - day_es_ratio_lo is the
+    right-tail versus left-tail shape of minute returns (NaN-safe version). They are
+    smoothed over days, standardised against the stock own history (cross_zscore)
+    or differenced short vs long, and optionally cut to the opening or closing 30
+    minutes where informed/institutional flow concentrates. Different from library
+    heads because it conditions on signed flow or tail asymmetry instead of rolling
+    dispersion of Ret, and different from the controls (liquidity = amount level,
+    vol, 20d reversal, day_std(Amt), cap), which are all levels or magnitudes with
+    no sign. Persistence: slow institutional order splitting makes the signed flow
+    persist for days and its price impact is only gradually absorbed; informed accumulation
+    in the close/open is a documented microstructure effect that does not depend on
+    one sample.'
+  inspired_by: 'Batch 1: all upside-vol-of-Ret variants lose after controls because
+    they measure magnitude; sign-aware flow and tail asymmetry were not in the batch.'
+  seeds:
+  - cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)
+  - cross_zscore(day_signed_ratio(Ret, Amt), 20)
+  - sub(cross_mean(day_signed_ratio(Ret, Amt), 5), cross_mean(day_signed_ratio(Ret,
+    Amt), 40))
+  - cross_corr(day_signed_ratio(Ret, Amt), day_sum(Ret), 20)
+  - cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20)
+  - cross_zscore(sub(day_wmean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 181, 241), in_slice(Amt, 181, 241)),
+    20)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 2, 32), in_slice(Amt, 2, 32)), 20)
+  - cross_delta(day_es_ratio_hi(Ret), 20)
+  - cross_stddev(day_signed_ratio(Ret, Amt), 20)
+  - cs_bucket_demean(cross_mean(day_signed_ratio(Ret, Amt), 20), LogFloatCap)
+  - sub(cross_mean(day_signed_ratio(in_slice(Ret, 181, 241), in_slice(Amt, 181, 241)),
+    20), cross_mean(day_signed_ratio(in_slice(Ret, 2, 32), in_slice(Amt, 2, 32)),
+    20))
+R:
+- head: cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), day_std(Ret)), 20)
+  why: Window ablation shows longer window helps monotonically (20->40 gain +0.54
+    on train and valid), so the 20-day window is too noisy; knockout of the ratio
+    denominator also helps, so day_std(Ret) is a rotten part.
+  variants:
+  - cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), day_std(Ret)), 60)
+  - cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), day_std(Ret)), 80)
+  - cross_mean(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret,
+    0))), 60)
+  - cross_zscore(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), day_std(Ret)), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

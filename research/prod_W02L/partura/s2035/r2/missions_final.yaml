@@ -1,0 +1,235 @@
+seed: 2035
+round: 2
+slots:
+- type: E
+  core: cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1)
+  hypothesis: '【核心】C = cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1)。day_last(Amt)
+    是当天最后一个有效分钟(15:00 那根,含收盘集合竞价)的成交额,不是日成交额;减 LogTotalCap 得到「收盘分钟成交额 ÷ 总市值」的对数 x,C
+    是它的日增量。cross_sum(C, n) 把日增量连加,恰好望远镜成 x_t − x_{t−n}(收盘竞价参与度的 n 日变化),所以核心外面的每个种子读的都是
+    x 的某种时间结构。
+
+
+    【证据:为什么选这个核心(数字全部来自本轮 loc)】第 1 轮我的 N 位(净分红,Close 口径 Zv = sub(log(day_last(Close)),
+    LogTotalCap) 的一年增量和)里,所有 Close 口径种子都没进前 5(< −0.62);GP 自己把求和项从 Close 换成了 Amt,留着
+    select_where(is_lt(abs_(Close 口径的日增量), 0.15), ·, 0.0) 的外壳,最好的 5 个全是这个骨架:+0.10(train
+    +0.10 / valid +0.54)、−0.14(train −0.14 / valid +0.64)、−0.21(train +0.28 / valid
+    −0.21)、−0.59、−0.62;其余 83 个评分都在它们之下。108 个已评分候选里含核心 C 的 16 个均值 −1.60,不含的 −2.23(p
+    0.002);含 Close 口径同形子树 cross_delta(sub(log(day_last(Close)), LogTotalCap), 1) 的
+    23 个只好 +0.12(p 0.32)——所以承重的是「收盘分钟成交额占市值」,不是分红楔子。另一个线索:共性表末行,带「原样净分红门」(is_lt(abs_(cross_delta(sub(log(day_last(Close)),
+    LogTotalCap), 1)), 0.15),它几乎从不触发,等于没有门)的 4 个候选均值 −3.17,池里其余 −2.10(差 −1.07,p 0.62,n
+    太小),而前 5 名里的门写法都不一样(LogTotalCap 减两次、abs_ 套在里面、log(log(Close))、10 日差分),我读成它们的门实际卡的是「当日涨跌幅是否过大」。这是读法,没有逐个核对。
+
+
+    【机制假设】(1) 收盘集合竞价是被动 / 机构 / 以收盘价为基准的流量集中的地方(指数与 ETF 申赎、基金净值、算法的收盘基准单),散户在这一分钟占比低;x
+    的长期上升读的是这类持有者份额上升,机构建仓是分批、持续数月的(Chan–Lakonishok 1995;Gompers–Metrick 2001),所以一年的变化是慢信号,换手低。(2)
+    不加门的 cross_sum(C, 241) 是 x 两端单日值之差,单日收盘分钟成交额的对数标准差我估计在 1 上下(没有核对),端点噪声会压过一年里真正的变化(上面「原样门」候选均值
+    −3.17 与此相符;这是推断)。门把「涨跌停 / 新闻 / 空竞价」日从求和里拿走,求和就读到事件之前的水平:一个对端点尖峰稳健的趋势。
+
+
+    【这一位要回答的三个问题,种子按此分工】(i) 门是什么:1–2 按核心自己的幅度(|C| < 1.5 / 3.0,后者同时清掉 log(0) = −inf
+    及其反弹 +inf,不依赖价格);3–5 按当日涨跌幅(< 0.15 对应 20% 板的极端日,0.09 刚好卡在 10% 板涨跌停 log(1.1) =
+    0.095 之下,LimitWidth × 0.7 随板块规则变);6 只在 |涨跌幅| < 2% 的平静日累加(无新闻的参与度变化),7 只在 |涨跌幅|
+    > 5% 的事件日累加:平静日版好于事件日版 = 结构性持有者变化;反之 = 注意力。(ii) 是漂移还是噪声:8 在门之后再平滑(半年和,再 20 日均);9
+    是不加门只平滑的对照(预期差);10 除以自身增量波动(t 值型,分母加 0.5 防近零);11 近 60 日变化减一年变化(加速);14 在流通市值十档内标准化。(iii)
+    是方向还是份额:12 是增量与当日收益的 120 日相关(收盘参与度上升发生在涨日还是跌日);13 减去同口径日成交额的变化,剩下「收盘份额」的一年变化(市值抵消);15
+    / 16 只累加上行 / 下行增量(不对称)。
+
+
+    【与库的差别】库里 5583 条表达式日频字段叶子(LogTotalCap 等)出现 0 次,没有一条做「收盘分钟成交额 ÷ 市值」,也没有一条按日类型(涨跌幅
+    / 增量幅度)对增量做门;day_last(Amt) 在库里出现 77 次,全是水平放进 ts_ / cross_ 统计量,没有差分后按市值缩放的。全部种子的算子骨架逐个对照过
+    struct/members.csv 的 5583 个骨架,没有重复;外围与第 1 轮已见写法的差别:不用 LogTotalCap 的双重扣减,门里没有 sub,且平滑
+    / 比值 / 相关 / 分桶这些外层第 1 轮没有出现。与 6 个素材 head(成交股数水平、日内收益波动)机制上无关;与 5 个控制:这里没有任何水平(C
+    是增量),与流动性 / 规模 / 已知成交额族没有共线渠道,新尺子也去掉了它们的非线性暴露。
+
+
+    【为什么样本外还会在】机制是制度性的(收盘集合竞价由机构 / 被动流量占主导),不依赖某段行情;窗口全是日历单位(20 / 60 / 120 / 241),阈值取自板块规则(涨跌停幅度)与量级(e^3
+    ≈ 20 倍),没有在样本内调过;一年窗口的信号日换手低,15 bp 吃得下。
+
+
+    【事先写下的风险】(a) 口袋很薄:最好的 +0.10 是 train 与 valid 中较差的那个,邻居 −0.2 ~ −0.6;一年窗口互相重叠,独立样本很少。(b)
+    上交所 2018-08-20 才有收盘集合竞价,之前的「最后一分钟」只是连续竞价,x 的含义在 2018 年中有断点(train 头 8 个月)。(c) LogTotalCap
+    含限售股,总市值与流通市值之间的差在新股与解禁时变化。(d) 若 9(不加门)与 1–5 差不多,说明门不承重、分数来自平滑,这个核心的深挖就到此为止。
+
+
+    【数学检查】无前视:day_last(Amt) 与 LogTotalCap 都是当日值,cross_* 只回看;t 日收盘后算出,t+1 交易。数值:log(0)
+    = −inf 的日子,种子 2、12 以及 15、16 的幅度条件把它们(及 NaN)置 0.0(NaN、±inf 都使 is_lt / is_gt 为假);其余种子对这类日子不设防,若这类日子很多,它们会得到
+    ±inf 的排序端点,这是 1–2 与 3–11 的区别之一;唯一的除法在种子 10,分母加了 0.5;cross_sum 用部分窗口,头几行不是 NaN,覆盖率闸门不被窗口前缀吃掉;门里的
+    0.0 把被排除的日子记 0 而不是缺失,面板不会变成常数。'
+  literature:
+  - title: Institutional investors and equity prices
+    authors: Gompers, Metrick
+    year: '2001'
+    treatment: 机构持股比例上升预测更高收益;这里用收盘集合竞价成交额占市值的一年变化当机构 / 被动份额的代理
+  - title: The behavior of stock prices around institutional trades
+    authors: Chan, Lakonishok
+    year: '1995'
+    treatment: 机构订单被拆成多天执行,价格影响持续数日到数月;这里把慢窗口(120 / 241 日)的累计变化当持续建仓的读数
+  - title: The high-volume return premium
+    authors: Gervais, Kaniel, Mingelgrin
+    year: '2001'
+    treatment: 成交量异常上升的股票随后有溢价,取决于价格事件;这里用平静日 / 事件日拆开累加(种子 6、7)
+  seeds:
+  - cross_sum(select_where(is_lt(abs_(cross_delta(sub(log(day_last(Amt)), LogTotalCap),
+    1)), 1.5), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(is_lt(abs_(cross_delta(sub(log(day_last(Amt)), LogTotalCap),
+    1)), 3.0), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.15),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.09),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(less(abs_(cross_delta(log(day_last(Close)), 1)), mul(LimitWidth,
+    0.7)), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.02),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(is_gt(abs_(cross_delta(log(day_last(Close)), 1)), 0.05),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_mean(cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)),
+    1)), 0.09), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 120),
+    20)
+  - cross_mean(cross_sum(cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 241),
+    20)
+  - div(cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.09),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241), add(cross_stddev(cross_delta(sub(log(day_last(Amt)),
+    LogTotalCap), 1), 241), 0.5))
+  - sub(cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.09),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 60), cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)),
+    1)), 0.09), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241))
+  - cross_corr(select_where(is_lt(abs_(cross_delta(sub(log(day_last(Amt)), LogTotalCap),
+    1)), 3.0), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), cross_delta(log(day_last(Close)),
+    1), 120)
+  - sub(cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.09),
+    cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241), cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)),
+    1)), 0.09), cross_delta(sub(log(day_sum(Amt)), LogTotalCap), 1), 0.0), 241))
+  - cs_bucket_zscore(cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)),
+    1)), 0.09), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241),
+    LogFloatCap)
+  - cross_sum(select_where(logical_and(is_gt0(cross_delta(sub(log(day_last(Amt)),
+    LogTotalCap), 1)), is_lt(cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1),
+    3.0)), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+  - cross_sum(select_where(logical_and(is_lt0(cross_delta(sub(log(day_last(Amt)),
+    LogTotalCap), 1)), is_gt(cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1),
+    -3.0)), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0), 241)
+- type: N
+  hypothesis: '【一句话】收盘窗口(最后 10 / 15 / 30 分钟)的「上涨分钟成交额占比 − 下跌分钟成交额占比」(day_signed_ratio(Ret,
+    Amt),区间 [−1, 1],无量纲)是不需要逐笔数据的净买入压力代理;它在 60–241 日上的均值读「机构在持续建仓还是持续出货」。
+
+
+    【B104 批里的现象(数字来自本轮 loc)】批里 12 条里 10 条是冠军族的 div(day_last(in_topk_masked(Volume,
+    Close, p)), day_first(in_topk_masked(Volume, Open, p))):in_topk_masked 的 p 是除数,留下成交量最大的
+    (241+1)//p 个分钟(p = 12 即 20 个分钟,p = 5 即 48 个),这些分钟几乎总含开盘与收盘两个集合竞价 bar(每天成交量最大的两根),所以比值
+    ≈ 日内开盘到收盘的价格比(推断:从算子源码读出,没有逐日核对)。拆解支持这个读法:Volume 换 Amt −1.64 → −1.60,Close 换 Vwap
+    → −1.63,选分钟的规则几乎不重要;去掉比值、只留 day_last 项的 20 日波动是 −2.34(比值本身必要);外层 cross_stddev
+    20 日换 10 / 40 日是 −1.89 / −1.95。本批的 3 个素材 head(−1.64 / −2.14 / −2.19)都是「日内收益的 20
+    日波动」,是波动控制的邻居。所以这一批告诉我的是:一天的边界分钟(开盘、收盘竞价)才是信息所在,但本批只读了那里的价格离散度。我读的是同样的边界窗口里的成交方向。另有
+    slot 1 的线索:收盘分钟成交额占市值是本轮 loc 里分数最高、train 与 valid 同为正的口袋(+0.10 / valid +0.54);这里读它的另一半——方向,而不是强度。
+
+
+    【机制】机构的大单被拆成多天执行(Chan–Lakonishok 1995),并大量以收盘价为基准(基金净值、指数跟踪、算法收盘单),所以一只票收盘窗口的净买入压力天与天之间正相关,窗口越长越像「持续建仓
+    / 出货」的读数(Chordia–Subrahmanyam 2004:个股的订单不平衡预测收益;Gao–Han–Li–Zhou 2018:当天较早时段的方向可预测最后半小时)。这个量没有任何成交额水平、没有市值、没有价位,所以与流动性
+    / 规模 / 已知成交额族控制没有水平上的共线渠道;与 slot 1 的区别是 slot 1 读收盘分钟成交额占市值的无符号强度变化,这里读窗口内的方向。
+
+
+    【算子怎样实现】day_signed_ratio(x, y) = Σ|y|·sign(x) / Σ|y|,按分钟对两个都有限的分钟求和;Ret 取分钟收益,Amt
+    取分钟成交额。in_slice(F, a, b) 取第 a 到 b 分钟(含),241 格里 240 是 15:00 那根。F10 = in_slice(·,
+    231, 240),F15 = 226–240,F30 = 211–240;开盘窗口 1–10(避开第 0 分钟,它可能含隔夜缺口);午间主体 31–210。外层:cross_mean(60
+    / 120 / 241)、cross_ema、减去自身 241 日均值(漂移)、对自身 241 日滚动 z 分数、十档市值内标准化。
+
+
+    【种子分工】1 / 2 / 3 / 4:最后 10 / 30 / 15 分钟的净压力在 60 / 120 / 241 日上的均值或 EMA;5 / 6:收盘窗口减开盘窗口、减午间主体(聪明钱
+    − 散户:开盘竞价与全天主体以个人投资者为主,收盘窗口以机构为主,两者之差去掉共同的市场方向);7:20 日均值对自身 241 日的 z 分数(现在比自己平时更偏买);8:按收盘窗口占全天成交额的比例加权(机构在场的日子权重大);9:净买入为正的日子占比(只看方向、不看大小,对尖峰稳健);10:十档市值内标准化;11:30
+    日均值减 241 日均值(流向加速);12:只在 |涨跌幅| < 3% 的平静日取收盘窗口流向(没有新闻的日子里的机构流);13:最简版,收盘分钟涨跌符号的
+    120 日均值(不加权,检验「加权」是否承重)。
+
+
+    【与库的差别】day_signed_ratio 是 Partura 算子,5583 条库表达式里出现 0 次;库里 in_slice(Ret, 211, 240)
+    有出现,但都在 ts_ / day_ 的波动与自相关统计里,没有一条在收盘窗口里计算带符号的成交额占比。全部种子的算子骨架逐个对照过 struct/members.csv
+    的 5583 个骨架,没有重复;没有种子用 ts_spearman 与 nt_*。与 6 个素材 head(成交股数水平、日内收益波动)无关:它们是无符号的水平
+    / 离散度,这里是有符号、有界、无水平的方向量。
+
+
+    【为什么样本外还会在】机构订单拆分与以收盘价为基准的交易是制度与行为的稳定特征;窗口取日历单位(10 / 15 / 30 分钟,20 / 60 / 120
+    / 241 日),没有在样本内调过;信号只在 60 日以上的均值里读,换手低。
+
+
+    【事先写下的风险】(a) 分钟涨跌符号是很粗的方向代理:没有价格变化的分钟(冷门股常见)只进分母,冷门股的比值被压向 0,这会让信号与流动性有一点间接相关(控制的非线性暴露已被尺子去掉)。(b)
+    与 20 日反转控制可能有 0.2 ~ 0.4 的相关(当日涨跌与上涨分钟占比同向)。(c) 上交所 2018-08-20 才有收盘集合竞价,之前的最后 10
+    分钟只是连续竞价,含义在 2018 年中有断点。(d) 若 5 / 6 好于 1–4,说明有价值的是「收盘 − 其他窗口」的差,而不是收盘窗口本身。
+
+
+    【数学检查】无前视:全部是 t 日分钟数据与回看窗口,t 日收盘后算出,t+1 交易。数值:day_signed_ratio 分母是窗口内成交额之和,为 0
+    的日子给 NaN(停牌),不做近零除法;比值有界 [−1, 1],没有 inf / 爆点;种子 8 的权重 day_sum(in_slice(Amt)) ÷
+    day_sum(Amt) ∈ [0, 1];cross_mean / cross_ema 自动跳过 NaN;cross_zscore 窗口头部几行的方差是部分窗口,只占约
+    0.5% 的行。定义:Ret 分钟收益在非交易分钟是 NaN,被忽略。'
+  inspired_by: B104 批:in_topk_masked 的 top-1/12 分钟几乎总含开盘 / 收盘两个竞价 bar,比值 ≈ 日内开盘到收盘价比,3
+    个素材 head(−1.64 / −2.14 / −2.19)都是它的 20 日波动(Volume 换 Amt −1.64→−1.60、Close 换 Vwap
+    −1.63,选分钟的规则不承重);本批只读了边界分钟的价格离散度,这里读同一个边界窗口里的成交方向(带符号的成交额占比)
+  literature:
+  - title: The behavior of stock prices around institutional trades
+    authors: Chan, Lakonishok
+    year: '1995'
+    treatment: 机构订单拆成多天执行并持续冲击价格;这里取收盘窗口净买入压力的 60–241 日均值当持续建仓的代理
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Chordia, Subrahmanyam
+    year: '2004'
+    treatment: 个股订单不平衡预测收益;这里用分钟涨跌符号 × 成交额的占比差当没有逐笔数据时的代理
+  - title: Market intraday momentum
+    authors: Gao, Han, Li, Zhou
+    year: '2018'
+    treatment: 当天较早时段的方向可预测最后半小时;这里把最后 30 分钟的成交方向在日间累计
+  seeds:
+  - cross_mean(day_signed_ratio(in_slice(Ret, 231, 240), in_slice(Amt, 231, 240)),
+    60)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    120)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 226, 240), in_slice(Amt, 226, 240)),
+    241)
+  - cross_ema(day_signed_ratio(in_slice(Ret, 231, 240), in_slice(Amt, 231, 240)),
+    60)
+  - sub(cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    120), cross_mean(day_signed_ratio(in_slice(Ret, 1, 10), in_slice(Amt, 1, 10)),
+    120))
+  - sub(cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    120), cross_mean(day_signed_ratio(in_slice(Ret, 31, 210), in_slice(Amt, 31, 210)),
+    120))
+  - cross_zscore(cross_mean(day_signed_ratio(in_slice(Ret, 231, 240), in_slice(Amt,
+    231, 240)), 20), 241)
+  - cross_mean(mul(day_signed_ratio(in_slice(Ret, 231, 240), in_slice(Amt, 231, 240)),
+    div(day_sum(in_slice(Amt, 231, 240)), day_sum(Amt))), 120)
+  - cross_mean(is_gt0(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211,
+    240))), 120)
+  - cs_bucket_zscore(cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt,
+    211, 240)), 120), LogFloatCap)
+  - sub(cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    30), cross_mean(day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)),
+    241))
+  - cross_mean(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.03),
+    day_signed_ratio(in_slice(Ret, 211, 240), in_slice(Amt, 211, 240)), 0.0), 120)
+  - cross_mean(sign(day_last(Ret)), 120)
+R:
+- head: cross_stddev(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_masked(Volume,
+    Open, 12))), 20)
+  why: head −1.64(sign −1,hl 5):B104 的比值 ≈ 日内开盘到收盘价比,外层 cross_stddev 20 是它的波动,与波动控制是邻居。拆解:去掉比值只留
+    day_last 项 −2.34(比值本身必要,+0.70),Volume 换 Amt −1.60、Close 换 Vwap −1.63(选分钟规则不承重),窗口
+    10 / 40 日 −1.89 / −1.95(40 日 valid −1.11 好于 train −1.95)。烂部件 = 对称的离散度(波动控制已经拿走的那一块)。变体把它换成不对称
+    / 方向统计:下行半标准差、上行半标准差、下行占比(下行半标准差 ÷ 总标准差)、上行减下行半标准差,窗口拉到 60 日。
+  variants:
+  - cross_semistd_neg(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_masked(Volume,
+    Open, 12))), 60)
+  - cross_semistd_pos(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_masked(Volume,
+    Open, 12))), 60)
+  - div(cross_semistd_neg(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_masked(Volume,
+    Open, 12))), 60), cross_stddev(div(day_last(in_topk_masked(Volume, Close, 12)),
+    day_first(in_topk_masked(Volume, Open, 12))), 60))
+  - sub(cross_semistd_pos(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_masked(Volume,
+    Open, 12))), 60), cross_semistd_neg(div(day_last(in_topk_masked(Volume, Close,
+    12)), day_first(in_topk_masked(Volume, Open, 12))), 60))
+- head: cross_stddev(div(day_last(in_topk_masked(Volume, Close, 5, False)), day_first(in_topk_masked(Volume,
+    Open, 5, False))), 20)
+  why: head −2.14(sign −1,hl 20):定位拆解里窗口 20 → 40 日给出 −1.93,比原 head 好 +0.21(train −1.93
+    / valid −1.84),是本轮定位列出的唯一「比原 head 好」的拆解变体;其余两个 head 的 40 日窗口更差。烂部件 = 过短的外层窗口(日内收益波动的噪声)。
+  variants:
+  - cross_stddev(div(day_last(in_topk_masked(Volume, Close, 5, False)), day_first(in_topk_masked(Volume,
+    Open, 5, False))), 40)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,239 @@
+seed: 2023
+round: 1
+slots:
+- type: E
+  core: day_quantile_q75(Volume)
+  hypothesis: '机制:核心 C = day_quantile_q75(Volume),当天 241 根分钟成交股数的 75% 分位,即「放量分钟」的股数水平(未复权原始股数,不是金额)。
+
+
+    本批(B067,54 条,37 个已评分)的证据(都来自 loc.md):
+
+    (1) 富集:含 C 的 7 个候选均值 -1.99,不含的 -2.80(均值差 +0.81,p 0.004),是本批唯一显著的核心;含 q75(Low)
+    / q75(Ret) 的差 +0.62 / +0.37,都不显著。
+
+    (2) 3 个 heads 全是「对 C 的水平做单股时间序列滤波」:ts_max(C, 40) -1.36(train -1.16 / valid -1.36)、ts_stddev(C,
+    10) -1.48、sub(0.5, abs_(ts_regres(day_cov(Close, Open), C, 50))) -1.56。两段同号为负。
+
+    (3) 把 Volume 换成 Amt:ts_max 版 ρ_known -0.95、ts_stddev 版 ρ_known 0.88,就是已知成交额族本身;Volume
+    版的窗口变体与已知族 ρ 0.62 到 0.71。
+
+    读法(推断,没有毛收益数):C 的水平 = 流动性(股数 ≈ 金额 ÷ 名义价),在库里的原始尺子下 ts_max 版 train 净夏普 +1.65、换手
+    2.3%,到新尺子下掉到 -1.2 到 -1.5,说明水平里有预测力的部分全被控制和冠军吃掉了。所以这一位不再问「C 有多大」,问「C 作为每只票自己的时间序列在做什么」。
+
+
+    这一位要试的七种读法(全部无量纲或按自己历史标准化,窗口 >= 60 日,其中相关 / 回归类 241 日):
+
+    (a) 异常放量(种子 1、2、4):C 相对自己 120 日 / 241 日历史的 z 分数,再用 cross_ema 半衰期 30 日或 20 日均值对
+    241 日标准化;种子 1、2 先把 C 换成 log(C + 100) - LogFloatShares,即放量分钟的换手,这样送转 / 拆股造成的股数水平跳变被流通股本抵消。机制:Gervais、Kaniel
+    与 Mingelgrin 的高成交量溢价(2001)与 Barber 与 Odean 的注意力购买(2008):相对自己常态的放量是关注度冲击,不是流动性水平。种子
+    4 再在流通市值十分位内标准化。
+
+    (b) 放量趋势(种子 3):log(60 日均 C + 100) 减 log(241 日均 C + 100),季度对年度的放量变化。
+
+    (c) 放量的不稳定(种子 5、14):log 换手的 120 日标准差,及其与日内波动 day_std(Ret) 的 241 日相关;参与者构成在切换(散户
+    / 机构)的指纹,是水平的二阶量。
+
+    (d) 日内形状(种子 6、7):C ÷ (中位数 + 100)、C ÷ (均值 + 100) 的 241 日均值:放量分钟相对典型分钟有多「尖」,不依赖水平,是机构拆单(平滑)对散户事件(尖峰)的指纹。
+
+    (e) 量价耦合(种子 8、9、10、15):C 与波动 / 当日 |收益| / 当日收益的 241 日滚动相关与回归斜率。量与 |收益| 同升 = 信息驱动成交,量与收益同升
+    = 资金净流入的持续性(量价相关),估的是这只票自己的耦合强度,水平被相关系数和斜率去掉。
+
+    (f) 带方向累计(种子 11):120 日内上涨日放量占比减下跌日(OBV 的无量纲版)。
+
+    (g) 量价背离(种子 12、13):放量的 z 分数减价格 z 分数 / 减 |收益| z 分数,取 EMA:放量没有被价格确认的部分。
+
+
+    为什么和已见过的不同:快照里含 C 的候选,外围是 ts_max、ts_stddev、ts_min、ts_std、ts_decay_linear、ts_cov、ts_regres(day_cov(Close,
+    Open), C, 50)、cs_mean、cs_quantile、signedpower、pow_2,即全部是对 C 水平的单股滤波 / 同一族截面变换。这里的外围是
+    cross_zscore、cross_ema、cs_bucket_zscore、cross_corr、cross_regbeta、sign 加权的 cross_sum、日内比值,**两个库
+    5583 条里 cross_zscore / cross_ema 出现 0 次**,15 个种子的算子骨架已逐个与 struct/members.csv 全部骨架对照(chk.py
+    脚本),没有重复。它们读的是 C 的动态与关系,不是水平,所以与 3 个 heads(水平滤波)的秩相关预期 < 0.5,与流动性 / 市值控制预期也低。
+
+
+    为什么样本外还会在:(a)(b) 的异常放量是投资者关注度的冲击,关注度对 A 股散户的价格压力随制度和行情更替而存在;(c)(d) 的不稳定与形状反映参与者构成(拆单型机构
+    / 事件型散户),以季度到年计变化,窗口 120 到 241 日后名次稳定、换手低,这是前面各流里分数最高的那一类(慢、无量纲、与水平控制正交);(e)(f)(g)
+    是每只票自己的耦合强度,不依赖某段行情的风格。
+
+
+    数学检查:C 是非负量,log(C + 100) 的 100 是一手,所以 C = 0(分钟成交稀疏的票)时给 log(100),不是 -inf;所有除法分母加了
+    100 或 add 下限(中位数 / 均值 / 累计量);cross_zscore 对恒定窗口返回 0(自带保护),cross_corr / cross_regbeta
+    有效对太少时可能返回 0(已知缺陷,只影响新股与长期停牌,可交易掩码已排除);LogFloatShares 是日频字段(日终可知,float64 取 log
+    再降精度),与 C 同一天对齐;全部 cross_* 与 ts_* 只回看(含当天),t 日收盘后可得,t+1 才交易,无前视;没有用 ts_rank /
+    cross_rank,不碰 nanrank_last 的停牌返回 0;没有用 ts_spearman / nt_*。种子 3、4、8、9、10、11、12、13
+    直接用未复权的 C 水平,送转当日 C 会成倍跳,影响约 60 到 241 日,这是已知弱点;种子 6、7 是日内比值,送转前后同比例缩放,不受影响;换手版的种子
+    1、2、5、14、15 用 LogFloatShares 抵消,也不受影响。
+
+    最可能的失败:C 在水平之外没有毛超额(两段都亏);或与流动性 / 波动的暴露仍重;或 60 到 120 日的 z 分数估得太吵被 15 bp 吃掉。三种情况下这个核心第
+    2 轮最多再用一次。'
+  literature:
+  - source: Gervais, Kaniel and Mingelgrin, The High-Volume Return Premium, Journal
+      of Finance
+    year: '2001'
+  - source: Barber and Odean, All That Glitters, the Effect of Attention and News
+      on the Buying Behavior of Individual and Institutional Investors, Review of
+      Financial Studies
+    year: '2008'
+  seeds:
+  - cross_ema(cross_zscore(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares),
+    120), 30)
+  - cross_zscore(cross_mean(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares),
+    20), 241)
+  - sub(log(add(cross_mean(day_quantile_q75(Volume), 60), 100)), log(add(cross_mean(day_quantile_q75(Volume),
+    241), 100)))
+  - cs_bucket_zscore(cross_ema(cross_zscore(day_quantile_q75(Volume), 120), 30), LogFloatCap)
+  - cross_stddev(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 120)
+  - cross_mean(div(day_quantile_q75(Volume), add(day_median(Volume), 100)), 241)
+  - cross_mean(div(day_quantile_q75(Volume), add(day_mean(Volume), 100)), 241)
+  - cross_regbeta(log(day_std(Ret)), log(add(day_quantile_q75(Volume), 100)), 241)
+  - cross_corr(day_quantile_q75(Volume), abs_(day_sum(Ret)), 241)
+  - cross_corr(day_quantile_q75(Volume), day_sum(Ret), 241)
+  - div(cross_sum(mul(sign(day_sum(Ret)), day_quantile_q75(Volume)), 120), add(cross_sum(day_quantile_q75(Volume),
+    120), 100))
+  - sub(cross_zscore(day_quantile_q75(Volume), 120), cross_zscore(day_last(Close),
+    120))
+  - cross_ema(sub(cross_zscore(day_quantile_q75(Volume), 60), cross_zscore(abs_(day_sum(Ret)),
+    60)), 60)
+  - cross_corr(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), day_std(Ret),
+    241)
+  - cross_regbeta(day_sum(Ret), sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares),
+    241)
+- type: N
+  hypothesis: '机制:用「当天成交股数的 75% 分位」当阈值,把每天的分钟切成放量分钟(Volume 高于它)和其余分钟,读放量分钟里价格在做什么。读的是「放量分钟的价格签名」,不是放量有多大。
+
+
+    背景(B067):本批唯一的显著梯度是含 day_quantile_q75(Volume) 的候选(富集 +0.81,p 0.004),但 3 个 heads
+    都是对它水平的滤波,它换成 Amt 就是已知成交额族(ρ_known -0.95 / 0.88),水平版的 Volume 与已知族 ρ 0.62 到 0.71。结论(推断):水平是流动性的变形,被控制吃掉。这个量还有一个没被用过的用法:它是一天之内自带的、与单位
+    / 水平无关的「放量阈值」。放量发生在哪里、方向如何、带来多少波动,是资金行为的签名,不依赖这只票有多活跃。
+
+
+    做法(全部是 day_* 一层,再用 cross_mean / cross_ema 取慢聚合):
+
+    H = is_gt(Volume, day_quantile_q75(Volume)),取值 0 / 1 的整数,当天的 q75 广播到全部分钟,所以阈值每天每只票自己定,没有量纲。L
+    = is_lt(Volume, day_quantile_q75(Volume)),其余分钟。H2 = mul(H, is_gt(Volume, cross_mean(Volume,
+    20))),放量且高于自己同分钟 20 日均值(去掉固定的 U 形放量,留事件性放量)。
+
+    (1) 放量分钟平均收益 day_wmean(Ret, H)(种子 1、4):放量时价格往哪走。资金实际经历的收益,与 day_mean(Ret) 的差读的是「收益是不是集中在放量时」。
+
+    (2) 放量减其余(种子 2、3、10、13):day_wmean(Ret, H) - day_wmean(Ret, L),种子 3 再除以当天波动做成无量纲的信噪比。持续的正差
+    = 放量分钟持续推高价格(机构吸筹 / 事件性买盘);持续的负差 = 放量时被砸。
+
+    (3) 放量时的净买入(种子 5、6、12):day_signed_ratio(Ret, mul(Volume, H)) = 放量分钟里上涨分钟成交占比减下跌分钟占比,不需要逐笔数据的方向代理;种子
+    6 减去全天的版本,留下放量分钟独有的方向性;种子 12 对自己的历史做 z 分数。
+
+    (4) 放量时的波动与冲击(种子 7、8):放量分钟的收益波动占全天的比例、放量分钟 |Ret| 与其余分钟 |Ret| 的比值:成交驱动价格移动的程度。
+
+    (5) 价格位置(种子 9):放量分钟的均价在当天最低价到最高价之间的位置(0 = 全部在最低点附近,1 = 在最高点附近)。
+
+    (6) 同步性(种子 11、14):放量分钟收益与全天收益的 241 日相关与斜率:一天的方向是不是在放量分钟里定的。
+
+    (7) 去 U 形的事件性放量(种子 15、16):用 H2 代替 H,做放量分钟平均收益与净买入。
+
+    全部取 120 到 241 日窗口(cross_mean 241、cross_ema 半衰期 60 / 120 / 240)。种子 10 在流通市值十分位内标准化。
+
+
+    为什么和库里的 / 已有的 heads 不同:
+
+    (a) 两个库 5583 条里 day_wmean / day_signed_ratio / day_wstd / cs_bucket_zscore / cross_zscore
+    / cross_ema 一共出现 0 次。手写库有「放量」条件因子(例如 L#1129 到 L#1142:Volume 高于自己同分钟 20 日均值加一个标准差,再做
+    day_sum / day_product / 20 日 cross_sum),也有 is_gt(Ret, day_quantile(Ret, 0.95))
+    这种用收益自己分位数的条件,但:放量阈值都是「每分钟对自己 20 日基线」,窗口 20 日,聚合是求和 / 连乘,没有「用当天成交股数自己的 75% 分位当阈值」的写法,也没有
+    241 日的慢聚合。16 个种子的算子骨架已逐个与 struct/members.csv 的全部骨架对照(chk.py 脚本),没有重复。
+
+    (b) 一个必须说清的区别:当天 q75 阈值选出的放量分钟,大部分落在开盘与尾盘的 U 形高峰,其余是盘中事件;所以种子 1 到 14 读到的主要是「市场最活跃的时段里价格的动作」(2009
+    流发现 Amt 加权收益的读数可能来自开盘 / 尾盘附近,同一层意思)。手写库的 20 日基线放量把 U 形除掉了,读的是事件性放量。种子 15、16 用「高于当天
+    q75 且高于自己同分钟 20 日均值」两个条件相乘,把固定的 U 形放量去掉,留事件性放量,与前 14 个拆开比较:哪一种读数有毛超额。
+
+    (c) 与 3 个 heads、5 个控制不同:heads 是 Volume 水平的滤波,控制是流动性 / 波动 / 20 日反转 / 成交额离散度 / 市值,这些都是水平量;这里全是收益值或比值,不含任何
+    Volume 的水平,秩相关预期 < 0.5(例外是种子 7、8 的波动类,可能与波动控制 0.3 到 0.5)。
+
+
+    为什么样本外还会在:放量分钟是知情交易者 / 机构大单执行的地方(Easley 与 O''Hara 1987 的交易量含信息;Chordia 与 Subrahmanyam
+    2004 的订单失衡预测收益),放量分钟的价格倾向在季度到年的尺度上持续(机构建仓 / 减仓以月计);A 股散户主导,这些持续的资金足迹不容易被套利掉。241
+    日聚合后换手低,不靠频繁调仓;全部无量纲,不依赖某段行情的风格。方向由尺子在训练段选,我不预设。
+
+
+    数学检查:H / L 是 0 / 1 整数权重,day_wmean / day_wstd / day_signed_ratio 取 |w| 为权重,某天没有任何分钟超过
+    q75(成交几乎恒定)权重和为 0,给 NaN 而不是 0;Volume 为 NaN 的分钟 is_gt 为 0,不进权重;Ret 第 0 根(集合竞价)恒为
+    0,所以不含隔夜跳空;分母都加了下限(day_std(Ret) + 0.000001,其量级 1e-3;day_wmean(|Ret|, L) + 0.000001,量级
+    5e-4;价格区间 + 0.0001,价格是后复权,区间量级 0.1 以上),停牌日 / 封板日分子分母同为 0 得 0,不爆;阈值与权重都只用当天的分钟,t
+    日收盘后可得,t+1 才交易,无前视;全部 cross_* 只回看含当天;没有用 ts_rank / cross_rank,不碰 nanrank_last
+    的停牌返回 0;没有用 ts_spearman / nt_*。已在合成数据上逐个跑通(覆盖率与不同值占比正常),没有碰真实数据。
+
+    最可能的失败:放量分钟的收益倾向被 20 日反转 / 波动吃掉(收益值与当日涨跌同号);或与别的流里「按成交额加权的收益」一族(2009 流)是同一个量,被整波库禁令拒绝;或全部落在
+    -1 到 -0.3,说明放量分钟的方向性没有毛超额。'
+  inspired_by: B067 的 day_quantile_q75(Volume) 富集(含它 -1.99、不含 -2.80,p 0.004)与 3 个
+    heads 的外围都是水平滤波;Volume 换 Amt 后 ρ_known -0.95 / 0.88,反推出它的水平是流动性,可用的是它作为当天放量阈值的用法
+  literature:
+  - source: Easley and O'Hara, Price, Trade Size, and Information in Securities Markets,
+      Journal of Financial Economics
+    year: '1987'
+  - source: Chordia and Subrahmanyam, Order Imbalance and Individual Stock Returns,
+      Journal of Financial Economics
+    year: '2004'
+  seeds:
+  - cross_mean(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), 241)
+  - cross_mean(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret,
+    is_lt(Volume, day_quantile_q75(Volume)))), 241)
+  - cross_mean(div(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_wmean(Ret,
+    is_lt(Volume, day_quantile_q75(Volume)))), add(day_std(Ret), 0.000001)), 241)
+  - cross_ema(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_mean(Ret)),
+    120)
+  - cross_mean(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))),
+    241)
+  - cross_mean(sub(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))),
+    day_signed_ratio(Ret, Volume)), 241)
+  - cross_mean(div(day_wstd(Ret, is_gt(Volume, day_quantile_q75(Volume))), add(day_std(Ret),
+    0.000001)), 241)
+  - cross_mean(div(sub(day_wmean(Close, is_gt(Volume, day_quantile_q75(Volume))),
+    day_min(Close)), add(sub(day_max(Close), day_min(Close)), 0.0001)), 241)
+  - cs_bucket_zscore(cross_mean(sub(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))),
+    day_wmean(Ret, is_lt(Volume, day_quantile_q75(Volume)))), 241), LogFloatCap)
+  - cross_corr(day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))), day_mean(Ret),
+    241)
+  - cross_ema(cross_zscore(day_signed_ratio(Ret, mul(Volume, is_gt(Volume, day_quantile_q75(Volume)))),
+    120), 60)
+  - cross_regbeta(day_mean(Ret), day_wmean(Ret, is_gt(Volume, day_quantile_q75(Volume))),
+    241)
+  - cross_mean(day_wmean(Ret, mul(is_gt(Volume, day_quantile_q75(Volume)), is_gt(Volume,
+    cross_mean(Volume, 20)))), 241)
+  - cross_mean(day_signed_ratio(Ret, mul(Volume, mul(is_gt(Volume, day_quantile_q75(Volume)),
+    is_gt(Volume, cross_mean(Volume, 20))))), 241)
+R:
+- head: ts_max(day_quantile_q75(Volume), 40)
+  why: 这个 head(-1.36,train -1.16 / valid -1.36)里有三个可疑部件。(i) 叶子是未复权股数:送转 / 拆股当天 C 成倍跳,ts_max
+    把这个跳变记 40 天;且股数 = 金额 ÷ 名义价,窗口变体与已知族 ρ 0.62 到 0.71,Amt 版 ρ -0.95,水平里混着流动性。(ii)
+    ts_max 是尖峰记忆,对单日异常敏感;拆解里窗口 20 / 40 / 80 为 -1.79 / -1.36 / -1.48,不单调,像噪声。(iii)
+    没有按自己的流通股本折算。变体 1 只换叶子(换手 = log(C + 100) 减 LogFloatShares,送转免疫);变体 2 只换聚合(ts_max
+    换 40 日均值);变体 3 两样都换;变体 4 只换聚合为半衰期 60 日的 cross_ema(旧尖峰淡出而不是掉出窗口)。
+  variants:
+  - ts_max(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 40)
+  - ts_mean(day_quantile_q75(Volume), 40)
+  - ts_mean(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 40)
+  - cross_ema(day_quantile_q75(Volume), 60)
+- head: ts_stddev(day_quantile_q75(Volume), 10)
+  why: 这个 head(-1.48,train -1.40 / valid -1.48)的烂部件是尺度和窗口。ts_stddev 对水平量取标准差,大小正比于水平本身,等于「水平
+    × 变异系数」,所以 Amt 版与已知族 ρ 0.88、分数掉到 -4.51;10 日窗口只有 10 个点,窗口 5 / 20 为 -1.59 / -1.69,都一样差。变体:除以均值得变异系数(无量纲,60
+    日);对 log 换手取标准差(60 日,送转免疫);对 log(C + 100) 取 120 日标准差。
+  variants:
+  - div(ts_stddev(day_quantile_q75(Volume), 60), add(ts_mean(day_quantile_q75(Volume),
+    60), 100))
+  - ts_stddev(sub(log(add(day_quantile_q75(Volume), 100)), LogFloatShares), 60)
+  - ts_stddev(log(add(day_quantile_q75(Volume), 100)), 120)
+- head: sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)))
+  why: 这个 head(-1.56,train -1.39 / valid -1.56)拆解里 abs_ 的必要性 +1.64(去掉 abs_ 掉到 -3.20),ts_regres
+    的必要性 +0.73,换 Close->Vwap / Open->Close 都是 -1.60,窗口 25 / 100 为 -1.73 / -1.65,单独的
+    abs_(...) 子树就有 -1.61、ρ_known 0.53。读法(推断):day_cov(Close, Open) 的单位是后复权价格的平方,残差的绝对值大小主要由价格尺度决定,于是
+    abs_ 承重的是尺度,不是量价关系;另一个自变量是未复权股数。变体 1 只把 y 除以日均价平方(无量纲相对协方差);变体 2 把 y 与 x 都取 log(对数对对数的弹性残差);变体
+    3 是变体 1 加上 x 换成换手、窗口 100;变体 4 是 log y、换手 x、窗口加长到 241。
+  variants:
+  - sub(0.5, abs_(ts_regres(div(day_cov(Close, Open), pow_2(day_mean(Close))), day_quantile_q75(Volume),
+    50)))
+  - sub(0.5, abs_(ts_regres(log(day_cov(Close, Open)), log(add(day_quantile_q75(Volume),
+    100)), 50)))
+  - sub(0.5, abs_(ts_regres(div(day_cov(Close, Open), pow_2(day_mean(Close))), sub(log(add(day_quantile_q75(Volume),
+    100)), LogFloatShares), 100)))
+  - sub(0.5, abs_(ts_regres(log(day_cov(Close, Open)), sub(log(add(day_quantile_q75(Volume),
+    100)), LogFloatShares), 241)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

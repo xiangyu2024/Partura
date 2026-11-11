@@ -1,0 +1,192 @@
+seed: 2005
+round: 1
+slots:
+- type: E
+  core: day_cov(Ret, Close)
+  hypothesis: '机制:价格路径的几何,不是价格水平。核心 day_cov(Ret, Close) 是一天内分钟收益与分钟收盘价水平的协方差。把价格写成
+    C_t = P0 (1 + S_t)(S_t 为当天累计收益),用恒等式 Σ r_t S_t = (S_n^2 + Σ r_t^2)/2,可得 day_cov(Ret,
+    Close) ≈ (P0/n) [ RV/2 + R (R/2 - Sbar) ];R 是日内总收益,RV 是分钟收益平方和,Sbar 是日内累计收益路径的均值。我用随机游走数值核对过这个分解(2000
+    条模拟路径,相对误差中位数不到 1%)。三项各有来源:(1) P0 是名义价格水平。它不在 5 个控制里(只与流通市值部分相关);head 2 把整个量再套
+    cross_max(·, 60),我的读法是它主要在按「名义价格 × 近 60 日最剧烈的那天」排序。拆解表支持这个读法:不套 cross_max 的 day_cov(Ret,
+    Close) 本身 −1.25(train −1.14 / valid −1.25,方向 −1,半衰期 20,与已知族 rho 0.34),套了 cross_max
+    的 head 反而更差(−1.84),窗口 60 → 120 又好 0.14,窗口越长越好。(2) RV/2 是已实现方差,被波动控制吃掉。(3) R (R/2
+    − Sbar) 才是留下来的东西:当天的涨跌是否集中在尾盘。价格路径在起终点连线下方时为正(上涨日的涨幅主要在尾盘、下跌日的跌幅主要在尾盘),早盘走完、尾盘回吐时为负。这是库里没有人单独读出来的量:两个库
+    5583 条里 day_cov(Ret, Close) 只出现 3 次,全是原始尺度(带价格水平)。
+
+    行为含义:尾盘集中的价格变动来自只在临近收盘才出手的资金,例如以收盘价 / VWAP 为基准的执行单、指数与 ETF 申赎、考核日行为,以及追涨杀跌的情绪脉冲。持续地尾盘集中的股票有稳定的尾盘需求方(持有人结构),这是慢变的属性,不依赖某一段行情。
+
+    算子怎样实现(每个种子原样带核心):(a) 除以 day_mean(Close) 去价格水平,得无量纲的 [RV/2 + R(R/2 − Sbar)]/n;(b)
+    再减 0.5 * day_var(Ret)(day_var(Ret) ≈ RV/n)把波动项扣掉,留下方向性的尾盘集中度;(c) 相关系数形式 div(cov,
+    std * std) 同时除掉价格和波动;(d) 用 20 到 120 日聚合:cross_mean / cross_ema / cross_zscore
+    / 短减长 / 均值除以标准差(一致性),换手低,15 bp 成本下留得住;(e) 日轴尾部统计 cross_max / cross_min / cross_tail_mean_q75
+    / cross_semistd_pos,读「极端尾盘拉升或跳水日」的频率与幅度(关注度 / 彩票型事件),其中 cross_tail_mean_q75 与
+    cross_semistd_pos 在两个库里一次都没出现;(f) 非参数去水平:cs_bucket_zscore 按价格十分位或流通市值十分位、cs_bucket_demean
+    按已知成交额族十分位。新尺子只去掉控制排名的线性 / 平方 / 立方暴露,桶内标准化可以去掉任意形状的水平暴露;(g) mul(sign(day_sum(Ret)),
+    ·) 的交互项,读上涨日与下跌日的方差不对称。
+
+    为什么和已有的不同:三个 head 都是 cross_max 链套 day_cov(Amt, Low) 或 day_cov(Ret, Close),读的是名义价格
+    / 成交额的水平。这里没有 cross_max 链,没有 Amt 的尺度,价格水平被除掉,外围是 20 到 120 日的聚合、尾部统计和分桶标准化。16 个种子的整树骨架我逐个对照了
+    members.csv 里 5583 条库表达式的骨架,没有一个重复。与 head 2 的日度秩相关预计明显低于 0.7(价格水平被去掉),与已知族预计低(不含
+    Amt)。
+
+    为什么样本外还会在:来源是尾盘交易者的持有人结构 / 执行习惯,属于慢变的结构属性;聚合窗口至少 20 日,名次在数周内保持。风险:方向性尾盘集中度与 20
+    日反转可能有关(尾盘拉升日后的回吐),尺子已去掉反转的线性 / 平方 / 立方暴露;近似 C_t = P0 (1 + S_t) 只用来解释各项含义,种子并不依赖它精确成立;若
+    Ret 的第一根含隔夜跳空,R 就含隔夜成分,这时同时读到跳空,仍是有信息的量。
+
+    数学检查:无前视,只用 t 日收盘及以前的数据,t+1 才交易。day_mean(Close) 为 0 只在停牌,此时 cov = 0,得 NaN 而不是无穷;相关形式的分母
+    day_std 为 0 时分子也为 0,同样得 NaN;day_var(Ret) 有限。cross_stddev 作分母的种子(均值 / 标准差)在窗口内全部相等时得
+    NaN。没有近零分母造成的爆点。所有窗口不超过 120 日,热身期不主导。'
+  literature:
+  - title: 'A tug of war: Overnight versus intraday expected returns'
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 把收益拆成隔夜与日内两段,各自有持续的截面差异;这里把日内价格路径的形状(尾盘集中度)当作持续的个股属性来读
+  - title: Intraday patterns in the cross-section of stock returns
+    authors: Steven L. Heston, Robert A. Korajczyk, Ronnie Sadka
+    year: '2010'
+    treatment: 个股收益在一天内的特定时段存在持续的截面规律;这里用分钟收益与价格路径的协方差读尾盘集中度
+  seeds:
+  - cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60)
+  - cross_mean(div(day_cov(Ret, Close), mul(day_std(Ret), day_std(Close))), 60)
+  - cross_max(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60)
+  - cross_min(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60)
+  - cross_tail_mean_q75(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60)
+  - cs_bucket_zscore(cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5,
+    day_var(Ret))), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_cov(Ret, Close), 60), day_last(Close))
+  - cs_bucket_demean(cross_mean(div(day_cov(Ret, Close), mul(day_std(Ret), day_std(Close))),
+    60), cross_mean(day_std(Amt), 30))
+  - cross_zscore(cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5,
+    day_var(Ret))), 20), 120)
+  - sub(cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    10), cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    120))
+  - div(cross_mean(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60), cross_stddev(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    60))
+  - cross_ema(sub(div(day_cov(Ret, Close), day_mean(Close)), mul(0.5, day_var(Ret))),
+    40)
+  - cross_mean(mul(sign(day_sum(Ret)), div(day_cov(Ret, Close), day_mean(Close))),
+    60)
+  - cross_mean(div(day_cov(Ret, Close), day_mean(Close)), 120)
+- type: N
+  hypothesis: '机制:尾盘最后一根分钟棒(含收盘集合竞价时段的成交)的成交行为,去掉水平以后的「相对」读法。批里的现象有三条:(1) head 3 是
+    cross_max 链乘上 ts_min(pow_3(ts_std(day_close(Amt), 50)), 1),拆解表里这个乘进去的因子单独拿出来是整批最好的分数(−0.52,train
+    −0.52 / valid −0.39),而整个 head 是 −1.85,链那一半单独只有 −2.29;也就是这批里承重的是尾盘棒成交额的 50 日波动,链是累赘。(2)
+    但这个因子与已知成交额族的 rho 是 −0.89,说明它读到的主要是成交额水平(流动性),新尺子正是要把水平去掉;库里含 ts_std(day_close(Amt),
+    50) 的表达式有十几条,多数带冠军族标记,所以「尾盘棒成交额的水平」这个方向已经被冠军控制吃掉,能留下的只可能是去掉水平之后的东西。(3) 同一批里 Amt
+    换成 Volume 反而好 1.0(−1.83 → −0.83),说明价格 / 规模的尺度是负担。新想法:不用尾盘棒的绝对成交额,用它相对当天总成交的份额
+    share = day_close(Amt) / day_sum(Amt),无量纲、范围 [0, 1],水平被除掉;再读它的均值(持续的尾盘占比)、日间波动(尾盘行为稳不稳)、尖峰(极端尾盘日)、与当天收益及隔夜跳空的耦合(尾盘资金是追涨还是逆势)、与开盘棒份额之差(尾盘与隔夜消息驱动的不对称)、以及尾盘
+    30 分钟内按成交额加权的买卖方向。
+
+    行为含义:尾盘集合竞价与最后几分钟成交,是被动资金(指数 / ETF)、以收盘价为基准的机构执行、日内平仓与追涨资金集中的地方;尾盘占比的稳定水平反映的是持有人结构,不是流动性水平。机制上与
+    Admati-Pfleiderer 的「知情与流动性交易在开盘与收盘集中」一致,与 Bogousslavsky 的不频繁再平衡一致。
+
+    算子怎样实现:全部是 day_close(Amt) / day_sum(Amt) 的函数。(a) cross_mean / cross_ema 做 40 日持续水平,cross_stddev
+    与「标准差除以均值」做稳定性,cross_zscore 做相对自己 120 日常态的异常,cross_tail_mean_q75 做尖峰;(b) cross_corr(份额,
+    当日收益 / 隔夜跳空, 60) 做耦合;(c) mul(份额, sign(尾盘 30 分钟收益)) 与 day_signed_ratio(in_slice(Ret,
+    211, 241), in_slice(Amt, 211, 241)) 做带方向的尾盘压力;(d) 份额之差 close − first,以及 day_close(Amt)
+    / day_max(Amt) 作对照;(e) cs_bucket_zscore 按 LogFloatShares 或 ListAge 十分位做非参数去水平。分母都选当天总成交额或当天最大分钟成交额,只在整天无成交时为
+    0,此时分子也为 0,得 NaN,不会出现除以近零的爆点。
+
+    为什么和已有的不同:库里 day_close(Amt) 出现 43 次,全部是原始成交额水平(mul / ts_std / cross_max / pow
+    套 day_close(Amt))或与别的量的未归一化协方差;两个库 5583 条里没有一条用 day_close 除以全天总量得到份额,也一次都没有出现过
+    cs_bucket_*、cross_zscore、cross_ema、cross_tail_mean_*(我对 members.csv 逐条统计过)。16
+    个种子的整树骨架都对照过库的骨架集,没有重复。与 3 个 head 比,它们读的是 Amt 与价格的协方差水平,而这里是无量纲的份额,日度秩相关预计很低。
+
+    为什么样本外还会在:来源是尾盘参与者类型(被动与基准型机构 vs 追涨散户)的持有人结构差异,是慢变的结构属性,聚合窗口 40 到 120 日,换手低;份额无量纲,不随规模和流动性变化而漂移。风险:(1)
+    若无成交的分钟在数据里是 NaN 而不是 0,day_close 取的是最后一根有成交的分钟;对流动性好的票这就是最后一根棒,对冷门票是尾盘最后一笔成交,两种读法都有意义,不影响数学有效性;(2)
+    尾盘占比与已知成交额族 / 市值仍可能有一部分共同暴露,尺子会去掉线性 / 平方 / 立方部分,分桶版本检验剩下的非线性部分;(3) 与 W01 里按 LogFloatShares
+    分桶的尾盘占比类头(最后 30 分钟占比)可能有较高相关,库禁令会拒绝 |rho| ≥ 0.7 的近亲。
+
+    数学检查:无前视,只用 t 日收盘及以前的数据,t+1 才交易。份额有界,cross_mean、cross_ema 之类没有爆点;「标准差除以均值」的分母是
+    60 日份额均值,只有整个窗口都没有尾盘成交时为 0,此时分子也为 0,得 NaN;窗口不超过 120 日,热身期不主导。'
+  inspired_by: B013 批:head 3 里 ts_std(day_close(Amt), 50) 单独 −0.52 为整批最好,与已知族 rho
+    −0.89(水平);Amt 换 Volume 好 1.0(规模是负担);cross_max 链单独 −2.29(累赘)。
+  literature:
+  - title: 'A theory of intraday patterns: Volume and price variability'
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    treatment: 知情交易与流动性交易集中在开盘与收盘,使这两个时段的成交占比成为参与者构成的指纹;这里用尾盘棒占全天成交的份额读它
+  - title: Infrequent rebalancing, return autocorrelation, and seasonality
+    authors: Vincent Bogousslavsky
+    year: '2016'
+    treatment: 不频繁再平衡的投资者把交易集中在特定时点,造成可预测的日内与日间收益模式;这里用尾盘份额的持续水平、波动与跳空耦合来近似
+  seeds:
+  - cross_mean(div(day_close(Amt), day_sum(Amt)), 40)
+  - cross_mean(div(day_close(Volume), day_sum(Volume)), 40)
+  - cs_bucket_zscore(cross_mean(div(day_close(Amt), day_sum(Amt)), 40), LogFloatShares)
+  - cs_bucket_zscore(cross_mean(div(day_close(Amt), day_sum(Amt)), 40), ListAge)
+  - cross_stddev(div(day_close(Amt), day_sum(Amt)), 60)
+  - div(cross_stddev(div(day_close(Amt), day_sum(Amt)), 60), cross_mean(div(day_close(Amt),
+    day_sum(Amt)), 60))
+  - cross_zscore(cross_mean(div(day_close(Amt), day_sum(Amt)), 10), 120)
+  - cross_tail_mean_q75(div(day_close(Amt), day_sum(Amt)), 60)
+  - cross_corr(div(day_close(Amt), day_sum(Amt)), day_sum(Ret), 60)
+  - cross_corr(div(day_close(Amt), day_sum(Amt)), div(day_first(Open), ts_delay(day_close(Close),
+    1)), 60)
+  - cross_mean(mul(div(day_close(Amt), day_sum(Amt)), sign(day_sum(in_slice(Ret, 211,
+    241)))), 40)
+  - cross_mean(day_signed_ratio(in_slice(Ret, 211, 241), in_slice(Amt, 211, 241)),
+    40)
+  - sub(cross_mean(div(day_close(Amt), day_sum(Amt)), 20), cross_mean(div(day_close(Amt),
+    day_sum(Amt)), 120))
+  - cross_mean(div(day_close(Amt), day_max(Amt)), 40)
+  - cross_ema(div(day_close(Amt), day_sum(Amt)), 40)
+  - cross_mean(sub(div(day_close(Amt), day_sum(Amt)), div(day_first(Amt), day_sum(Amt))),
+    40)
+R:
+- head: cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30)
+  why: 烂的部件是「成交额与价格的尺度」。依据(拆解表):day_cov(Amt, Low) 本身与已知族 rho 只有 0.02(协方差有正有负,符号被抵消),套一层
+    cross_max(·, 5) 升到 0.64,两层 0.73,三层 0.80;也就是 cross_max 把一个符号平衡的耦合量变成了「最大的那一天的尺度」,实质成了成交额水平的代理,这正是已知族与流动性控制要吃掉的部分。两个单项修补各自有效:Amt
+    换 Volume 好 1.0(−1.83 → −0.83),窗口 30 → 60 好 0.57(−1.26)。但这两个变体与已知族的 rho 是 −0.74
+    / −0.74,进不了 R 候选(要求 < 0.5)。所以变体的做法是在保留单项修补的同时,把水平从「参数形式」改成「非参数」:(1) 把 Volume 版
+    + 窗口 60 叠加,再在已知族十分位内去均值(rho_known 机械地接近 0);(2) Amt 版 + 窗口 60,十分位内 z 分数;(3) 在 cross_max
+    链内部先把耦合量除成无量纲(协方差除以两个均值之积、或除以两个标准差之积),水平在最大值之前就被去掉;(4) 用 LogFloatShares 十分位对 Volume
+    版标准化,因为股数的尺度正比于流通股本;(5) 原式整体在已知族十分位内去均值,作为检验「水平通道」这个判断的干净对照。分母都是当天的均值或标准差,只在整天停牌时为
+    0,此时分子也为 0,得 NaN,没有爆点。
+  variants:
+  - cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 60),
+    cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 60),
+    cross_mean(day_std(Amt), 30))
+  - cross_max(cross_max(cross_max(div(day_cov(Volume, Low), mul(day_mean(Volume),
+    day_mean(Low))), 5), 5), 60)
+  - cross_max(cross_max(cross_max(div(day_cov(Amt, Low), mul(day_std(Amt), day_std(Low))),
+    5), 5), 30)
+  - cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 60),
+    LogFloatShares)
+  - cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30),
+    cross_mean(day_std(Amt), 30))
+- head: cross_max(day_cov(Ret, Close), 60)
+  why: 烂的部件是「名义价格水平」。依据:day_cov(Ret, Close) ≈ (P0/n) [RV/2 + R (R/2 − Sbar)],P0 的跨股差异是数量级的,而收益项的差异只有几倍;不套
+    cross_max 的版本 −1.25,套上反而 −1.84,窗口 60 → 120 好 0.14(−1.70,rho_known −0.45,是本批唯一进
+    R 候选的变体),窗口越长越好。变体沿两个方向:(1) 去掉价格水平,除以 day_mean(Close),或用相关系数形式 div(cov, std *
+    std);窗口取 120;(2) 保留原尺度但在价格十分位内、已知族十分位内去均值,检验信号是否来自「价格水平」本身。分母是当天价格均值或标准差,只在停牌时为
+    0,此时分子也为 0,得 NaN,没有爆点。
+  variants:
+  - cross_max(div(day_cov(Ret, Close), day_mean(Close)), 120)
+  - cross_max(div(day_cov(Ret, Close), mul(day_std(Ret), day_std(Close))), 120)
+  - cs_bucket_demean(cross_max(day_cov(Ret, Close), 120), day_last(Close))
+  - cs_bucket_demean(cross_max(day_cov(Ret, Close), 120), cross_mean(day_std(Amt),
+    30))
+- head: cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 5)
+  why: 烂的部件是 cross_max 链那一半。依据(拆解表):乘进去的 ts_std(day_close(Amt), 50) 单独 −0.52(valid
+    −0.39),链单独 −2.29,两者相乘只有 −1.85,比好的那一半单独(sufficiency 行)还差 1.3。但好的那一半与已知族 rho −0.89,是水平。所以变体:(1)
+    保留好的那一半,换成无量纲的写法:标准差除以自己的 50 日均值(变异系数),或除以全天总成交的 50 日标准差,或在已知族十分位内去均值;(2) 用变异系数替换原式里的乘子,检验链与无量纲乘子的组合;(3)
+    原式整体在已知族十分位内去均值。分母是均值或标准差,只在窗口内整段停牌时为 0,此时分子也为 0,得 NaN,没有爆点。
+  variants:
+  - cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15), div(ts_std(day_close(Amt),
+    50), ts_mean(day_close(Amt), 50))), 5)
+  - cs_bucket_demean(ts_std(day_close(Amt), 50), cross_mean(day_std(Amt), 30))
+  - div(ts_std(day_close(Amt), 50), ts_std(day_sum(Amt), 50))
+  - cs_bucket_demean(cross_max(mul(cross_max(cross_max(day_cov(Amt, Low), 5), 15),
+    ts_min(pow_3(ts_std(day_close(Amt), 50)), 1)), 5), cross_mean(day_std(Amt), 30))
+audit:
+  attempts: 1
+  file: audit_1.yaml

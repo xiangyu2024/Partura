@@ -1,0 +1,208 @@
+seed: 2043
+round: 2
+slots:
+- type: E
+  core: abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))))
+  hypothesis: 核心 K = abs_(cs_demean(C)),C = 放量分钟(分钟成交量增量 > 当天增量均值 + 1 倍标准差,第 31~210
+    分钟)的平均收益。证据:本流第 1 轮 R 里,head 的 ts_stddev(K, 窗口) 分数随窗口单调变好(20→60→90→241:-1.09→-0.34→0.06→0.48,241
+    日版 train 0.48 / valid 0.55,另一窗口套 241 日 valid 0.69),与原 head 的 ρ 只有 0.3,说明 alpha
+    来自 K 的「慢」特征,是个几乎静态的个股属性(放量时价格冲击的稳定幅度/不稳定程度:知情交易与流动性供给薄弱的持续性),换手极低,所以扣 15bp 后还在。本轮不再用
+    ts_stddev(同骨架会被库禁令拒绝),而是用另外的聚合机制去读 K 的 241 日历史:(1)无量纲离散度 CV = std/mean,去掉与波动/流动性控制共享的水平;(2)尾部分位(0.8、0.9
+    分位)和尾部/中位比:只看大冲击日;(3)偏度/峰度/赫斯特/自相关/对前一日 K 的回归斜率:冲击是否成串、是否持续;(4)K 对当天绝对收益的 241
+    日斜率:放量时的反应相对整天波动的强度(把「整体波动大」这一与波动控制重合的成分去掉);(5)60 日对 241 日的差:近期相对长期的变化。与已有 head
+    的区别:head 是 ts_stddev 这一种二阶矩读法,这里是分位数 / 高阶矩 / 比率 / 回归等不同函数形式,骨架都不在库中;外围与快照里含 K
+    的 8 个候选(只有 ts_mean/ts_stddev/add/in_sustain_stddev 外壳)均不同。样本外为什么还会在:慢变量,信号换手低,持仓期里不依赖单日噪声;机制是微观结构类的个股「性格」,不依赖某一段行情;若
+    alpha 实际是波动/流动性的代理,新尺子已经去掉其线性/U/S 暴露,残差里剩下的才是我们要的。
+  seeds:
+  - div(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241), cross_mean(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241))
+  - cross_quantile(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    0.8, 241)
+  - cross_quantile(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    0.9, 120)
+  - div(cross_quantile(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    0.9, 241), cross_med(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241))
+  - ts_skew(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - cross_autocorr(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241, 1)
+  - cross_regbeta(cross_delay(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    1), abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - sub(cross_mean(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    60), cross_mean(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241))
+  - cross_regbeta(abs_(cs_demean(day_sum(Ret))), abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - cross_hurst(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    120)
+  - cross_med(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - cross_tail_mean_q75(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - div(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    cross_mean(abs_(cs_demean(day_sum(Ret))), 60))
+- type: N
+  hypothesis: 新 idea:日内价格路径的「持续性/趋势性」是个很慢的个股属性。day_hurst(分钟价格路径) 衡量一天内价格是趋势型(H>0.5)还是回归型(H<0.5),与成交量的集中度(day_gini)、成交重心(day_centroid)、分钟收益一阶自相关(day_ar1_coefficient)同属日内微观结构度量。做法:把这些日内度量取
+    241 日均值/中位数/EMA(无量纲、极慢),或取它们之间的 241 日相关、对日收益的回归斜率、横截面残差(去掉两个慢变量中公共的部分),读的是「这只票长期以来是被知情/趋势型资金推动,还是被做市商/噪声交易者在均值回复」。与库不同:库里
+    day_hurst(Open) 只出现在 cross_sum(…,241) 一种骨架并被禁;这里换成 cross_mean/cross_med/cross_ema
+    的不同聚合、换价格口径(Close、Ret 的 hurst)、换成对成交量形态的度量、以及两个慢变量的相关/回归/残差,骨架不同。为什么样本外还会在:第 2
+    批里 cross_sum(day_hurst(Open),241) 一族在评分候选里均值高出约 1.6(p<0.001),说明「241 日慢的日内路径统计」整体比其他读法好得多,且是最慢的一类,换手最低;机制上趋势型
+    vs 均值回复型的结构性差异(订单拆分、做市比例、涨跌停与板块特征)跨时期稳定。若其中一部分只是名义股价/价差代理(报价单位弹跳),新尺子去不掉最小报价单位,这是已知风险,留给
+    valid 段检验。
+  inspired_by: 第 2 个结构批:cross_sum(day_hurst(Open), 241) 的富集(均值差 +1.57,p<0.001)以及 day_centroid(Volume)
+    的 241 日聚合;共同点是 241 日的极慢日内形态统计。
+  seeds:
+  - cross_mean(day_hurst(Ret), 241)
+  - cross_mean(day_ar1_coefficient(Ret), 241)
+  - cross_mean(day_autocorr(Ret, 5), 241)
+  - cross_mean(day_centroid(Volume), 241)
+  - cross_mean(day_gini(Volume), 241)
+  - cross_mean(day_signed_ratio(Ret, Volume), 241)
+R:
+- head: ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),
+    60)
+  why: 60 日窗口还太快:r1 里同一个 head 的窗口 20→60→90→120→241 分数 -1.09→-0.34→0.06→-0.03(valid)→0.48(train
+    0.48 / valid 0.55),并且 241 日版与原 head 的 ρ 降到 0.3;线还没到头,试 360/480/720 以及无量纲(CV)形式。
+  variants:
+  - ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),360)
+  - ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),480)
+  - ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),720)
+  - div(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),
+    241), cross_mean(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226))))),
+    241))
+- head: ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    60)
+  why: 同一族去掉 cs_demean 的 60 日 head;r1 的窗口线对 16–226 版 60→241 单调改善,31–211 版没测过 241 以上,试
+    241/360/480 与 CV 形式。
+  variants:
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),241)
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),360)
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),480)
+  - div(ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241), cross_mean(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241))
+- head: add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    60), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 60))
+  why: 两项和(C 与 sustain 版)的窗口都是 60;同族单项窗口越长越好,两项同时拉到 241 / 480。
+  variants:
+  - add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 241))
+  - add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    480), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 480))
+audit:
+  attempts: 1
+  file: audit_1.yaml

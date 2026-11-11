@@ -1,0 +1,256 @@
+seed: 2009
+round: 3
+slots:
+- type: E
+  core: sub(day_wmean(Ret, Amt), day_mean(Ret))
+  hypothesis: '机制。核心 C = sub(day_wmean(Ret, Amt), day_mean(Ret)) 是「按成交额加权的分钟收益」减「等权分钟收益」。恒等式:C
+    = Σ_t (a_t/Σa − 1/T)(r_t − r̄),即日内分钟收益与分钟成交额的协方差除以平均成交额,读的是「价格是不是在钱多的分钟里动、往哪边动」(放量时的方向)。Amt
+    作权重天然带日内 U 形(开盘、尾盘权重大),所以 C 主要是开盘后半小时与尾盘的价格动作相对全天平均的偏离;方向由尺子自己选(sign 可正可负)。文献读法:Llorente
+    等(2002)把放量时价格延续的成交归为投机 / 信息性成交,放量时价格反转的归为对冲性成交;Chordia–Subrahmanyam(2004)的持续单边失衡也预测收益。在个股层面把它平均
+    241 日,读到的是「这只股票的参与者类型偏向」,是慢变的结构属性。
+
+
+    证据(全部来自本流前两轮和定位输出,只用 train / valid)。本流第 2 轮 N 位 68 个已评分候选里最好的是 cross_mean(C, 241)
+    = +0.066(train +0.066 / valid +0.399,半衰期 5),其后 cross_mean(cross_mean(C, 10), 241)
+    +0.056,cross_mean(cross_mean(C, 241), 5) −0.036(valid +0.589)。共性表里含 C 的 15 个候选均分
+    −0.98、不含的 −2.42(均值差 +1.44,p < 0.001);含 cross_mean(C, 241) 的 5 个候选均值差 +1.55(p 0.005)。这是本种子迄今唯一接近
+    0.5 线的读数,而且被卡住的是 train(+0.07),不是 valid(+0.40 ~ +0.59)。第 2 轮相关度表里 cross_mean(C,
+    241) 对已知族 0.19、流动性 0.15、市值 0.19、20 日反转 0.05,对波动 0.39(C 的幅度随分钟收益的波动放大)。
+
+
+    这个 E 位要回答「cross_mean(C, 241) 的慢读数为什么 train 只有 +0.07,换哪种处理能把它抬起来」。种子按四个假设分组,外围的算子集合与本流此前所有含
+    C 的候选(只有 cross_mean 一层 / 两层,及多减一个 day_mean 的变体)都不同:
+
+    (1) 与控制的交互暴露混杂。尺子只去掉对控制排名的 1 / 2 / 3 次多项式暴露,去不掉「在某个控制的某个桶里才成立」的交互;C 对波动有 0.39
+    的相关。种子:每天先在控制的十分位桶内去均值(cs_bucket_demean;一个种子用 cs_bucket_zscore 再除以桶内标准差,一个种子用
+    cs_bucket_rank 取桶内百分位),桶取尺子里控制的原式 cross_mean(day_std(Ret), 20)、cross_mean(day_sum(Amt),
+    30)、cross_mean(day_std(Amt), 30)、LogFloatCap,以及先市值后已知族的两次去均值,最后再做 241 日均值。第 2
+    轮 R 的教训是把桶内去均值套在最终信号上,桶边界跳变让换手爆炸(−2.6 ~ −5.2);这里套在被 241 日均值平均的日度输入上,桶边界跳变被平均掉,最终信号仍是慢变量,没有这个成本。如果
+    C 的 valid +0.40 只是风格暴露,它在这里会掉下来,这是一个能证伪的检验。
+
+    (2) 尺度与极端日。241 日算术均值被少数全市场大涨大跌日、个股涨跌停日支配,每天的截面离散度也随行情放缩。种子:每天截面稳健 z 分数(cs_robust_z)、每天
+    1% / 99% 截尾(cs_winsor)、除以当天分钟收益标准差得到无量纲的「量钟相关」(div(C, add(day_std(Ret), 0.00001)),|C|
+    / σ ≤ sqrt(T − 1) ≈ 15.5,有界,见下)、截面秩的 482 日均值。
+
+    (3) 记忆与时间尺度。慢是承重的:本流 R2 里 ts_max(DW(Close), d) 的 d = 20 → 40 → 80 为 −2.73 → −1.77
+    → −0.92;第 1 轮 N 位的种子是 cross_mean(·, 20),被 GP 自己再套一层 241 日均值之后才到 −0.03 ~ −0.05。种子换成不同的慢聚合:最近
+    20 日均值相对自己 241 日的 z 分数(cross_zscore,读变化量)、半衰期 240 日的 EMA、线性衰减 241 日、482 日 ts_mean。
+
+    (4) 市场状态条件。cross_cov / cross_corr(C, cs_mean(day_sum(Ret)), 241):C 与全市场等权日内收益的
+    241 日协方差 / 相关,读「大盘下跌日里放量分钟的价格表现」(下跌日放量上涨 = 承接 / 知情买入),是 C 的条件版本而不是水平。
+
+
+    为什么和库里已有的不同。day_wmean、cs_bucket_demean / cs_bucket_zscore / cs_bucket_rank、cs_robust_z、cs_winsor、cross_zscore、cross_ema
+    在两个库 5583 条表达式里出现 0 次(对 struct/members.csv 的表达式列计数);16 个种子的骨架我逐个对 members.csv
+    的 skeleton 列核对过,0 个在库里,GP 的骨架禁令不会拒绝它们。库里与 C 最近的是 B074 一族(前 20 / 50 分钟的成交量加权收益、20
+    日窗口),没有全天、没有减等权、没有一年尺度、没有桶内去均值后再平均。
+
+
+    为什么样本外还会在。来源是参与者类型的慢变偏向,不依赖某一段行情;种子全部是 ≥ 240 日的聚合(除 cross_zscore 的内层 20 日均值),换手低,15
+    bp 成本不致命;桶内去均值版本去掉的是对四个控制的非线性暴露,所以留下的东西如果还有分数,就不是已知风格的换皮。风险:train 的 +0.07 也可能只是
+    C 在 2018 ~ 2020 年不工作(体制),这个位改变不了,只能告诉我是不是暴露造成的。
+
+
+    数学检查。(a)day_wmean 的权重和为 0(整天无成交)得 NaN,不是 0;停牌日 NaN,cross_mean / ts_mean / cross_ema
+    取可用日,不填 0。(b)div(C, add(day_std(Ret), 0.00001)):C = Σ(w_t − 1/T)(r_t − r̄),由 Cauchy–Schwarz
+    |C| ≤ sqrt(Σw² − 1/T) · sqrt(T) · σ_r ≤ sqrt(T − 1) σ_r,故 |C| / σ_r ≤ 约 15.5;分母已加
+    1e-5 下限,整天 Ret 全 0(涨跌停封板)时分子精确为 0,得 0 而不是 inf。(c)cs_robust_z 的分母是 1.4826 MAD +
+    EPS,MAD = 0 需要截面一半以上的股票 C 取同一值,C 是连续量,只会在大面积停牌日出现,此时有效股票少,不是爆点。(d)cs_bucket_demean
+    / cs_bucket_zscore 桶内少于 2 只股票得 NaN(cs_bucket_rank 的并列由全截面秩打破);桶内百分位有界 (0, 1];LogFloatCap
+    是日频叶子,存的是收盘时点已知的值,没有隐式 shift。(e)cross_cov / cross_corr 用的 cs_mean(day_sum(Ret))
+    是当天全市场等权均值,只用 t 日收盘及以前的数据。(f)无前视:所有量只用 t 日收盘及以前的数据,t+1 交易;窗口最长 482 日,热身期窗口按可用日取平均,不是常数填充。(g)已知算子行为(ts_rank
+    / cross_rank / in_rank_rolling 当天缺失返回 0):本位不使用这三个算子。'
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 放量时价格延续(投机性 / 信息性)与反转(对冲性)的区别;C 读放量分钟里价格的方向,慢聚合读个股的类型偏向
+  - title: Trading Volume and Serial Correlation in Stock Returns
+    authors: John Y. Campbell, Sanford J. Grossman, Jiang Wang
+    year: '1993'
+    treatment: 放量日反转、缩量日延续;C = 加权减等权,近似分离放量时价格的动作
+  - title: Order Imbalance and Individual Stock Returns Theory and Evidence
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 持续的单边失衡预测收益;C 的慢均值是不需要逐笔方向的近似
+  seeds:
+  - cross_mean(cs_robust_z(sub(day_wmean(Ret, Amt), day_mean(Ret))), 241)
+  - cross_mean(cs_winsor(sub(day_wmean(Ret, Amt), day_mean(Ret))), 241)
+  - cross_mean(div(sub(day_wmean(Ret, Amt), day_mean(Ret)), add(day_std(Ret), 0.00001)),
+    241)
+  - cross_mean(cs_bucket_zscore(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_mean(day_std(Ret),
+    20)), 241)
+  - cross_mean(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(Ret)), LogFloatCap),
+    241)
+  - cross_mean(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_mean(day_std(Ret),
+    20)), 241)
+  - cross_mean(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_mean(day_sum(Amt),
+    30)), 241)
+  - cross_mean(cs_bucket_rank(sub(day_wmean(Ret, Amt), day_mean(Ret)), cross_mean(day_std(Amt),
+    30)), 241)
+  - cross_mean(cs_bucket_demean(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(Ret)),
+    LogFloatCap), cross_mean(day_std(Amt), 30)), 241)
+  - cross_zscore(cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20), 241)
+  - cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 240)
+  - cross_decay_linear(sub(day_wmean(Ret, Amt), day_mean(Ret)), 241)
+  - ts_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 482)
+  - ts_mean(cs_rank(sub(day_wmean(Ret, Amt), day_mean(Ret))), 482)
+  - cross_cov(sub(day_wmean(Ret, Amt), day_mean(Ret)), cs_mean(day_sum(Ret)), 241)
+  - cross_corr(sub(day_wmean(Ret, Amt), day_mean(Ret)), cs_mean(day_sum(Ret)), 241)
+- type: N
+  hypothesis: '机制。A 股一天的收益分成两段:隔夜(上一交易日收盘 → 今天第一笔 Open,由开盘集合竞价定价)与日内(Open → Close,连续竞价)。两段由不同的参与者定价:隔夜
+    = 盘后消息与集合竞价委托(机构、被注意力吸引的散户在开盘集中下单),日内 = 盘中交易者。文献读法:Lou–Polk–Skouras(2019)发现动量收益主要来自隔夜段、日内段是反转,而且个股的隔夜收益与日内收益各自在年度尺度上持续(tug
+    of war);Berkman 等(2012)显示注意力高的股票开盘价被推高、日内回吐;Aboody 等(2018)把个股隔夜收益读成个股层面的投资者情绪代理;French–Roll(1986)用交易时段与非交易时段的方差比分离「私有信息通过交易进入价格」与「公开消息」。A
+    股散户是成交主力、T+1 当天买入不能卖出,这几种效应应该不弱于成熟市场。
+
+
+    算子怎么实现。OV = sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)(隔夜收益;价格是后复权,除权不会造出假缺口),ID
+    = sub(div(day_last(Close), day_first(Open)), 1)(日内收益)。种子分五类:
+
+    (i)慢的水平:cross_mean(OV, 241)、cross_mean(cs_winsor(OV − ID), 241)(截尾版,抗复牌极端缺口)、cross_mean(OV
+    − ID, 241)、半衰期 120 日的 cross_ema、482 日 ts_mean、线性衰减 241 日;
+
+    (ii)一致性:cross_mean(OV, 241) 除以自己的 241 日标准差(日度信噪比,分母加 1e-3 下限);
+
+    (iii)缺口回补系数:cross_corr(OV, ID, 241)(负 = 缺口被日内回补,注意力推高后回吐;正 = 缺口被日内延续)、上一日日内与今天隔夜的相关
+    cross_corr(ts_delay(ID, 1), OV, 241)(隔夜是否反转前一日的日内走势)、mul(sign(OV), ID) 的 241 日均值(缺口方向上的日内收益)、cross_autocorr(OV,
+    241, 1)(隔夜收益的一阶自相关);
+
+    (iv)方差拆分:cross_stddev(OV) / cross_stddev(ID)、mean|OV| / mean|ID|(French–Roll 的非交易时段对交易时段,无量纲,不是波动水平);
+
+    (v)用涨跌停幅度作标尺:div(OV, LimitWidth) 把缺口换成「占当天允许涨跌幅的比例」(主板 10%、创业板 / 科创板 20%、ST 5%
+    的缺口可比),以及 cross_zscore(cross_mean(OV − ID, 20), 241)(最近一个月的 tug of war 相对自己一年常态)。方向由尺子自己选。
+
+
+    为什么和库里已有的不同,以及它怎么从本流的现象来。本流前两轮所有 day_wmean(Ret, ·) 一族用的 Ret 是日内连续竞价段的分钟收益,不含隔夜缺口(day_first(Open)
+    与上一日收盘之间的那一段),隔夜这一半从没测过;而 C = day_wmean(Ret, Amt) − day_mean(Ret) 的 241 日均值是本种子第一个非负读数(+0.066,valid
+    +0.399),说明日内路径这一半值得在一年尺度上继续,隔夜是最直接的补集。库里隔夜缺口出现很少:对 struct/members.csv 计数,同时含 day_first(Open)
+    与上一日收盘的表达式 17 条,多数是手写的 cs_rank 乘积 / abs 写法;窗口 ≥ 120 日的缺口均值、隔夜减日内、缺口回补相关、方差拆分在库里没有。库里最近的是
+    B091:cross_mean(缺口, 20)(老尺子净夏普 −1.13)、cross_stddev(缺口, 20)、一条 20 日的缺口 / 日内相关,用
+    cross_delay 写法(骨架键与本位的 ts_delay 写法不同,数值上是同一个缺口;不同的是本位全是 ≥ 120 日的慢聚合与「隔夜对日内」的组合);日内收益的
+    20 日均值在 B225,骨架相同的 241 日版会被 GP 拒绝,所以本位不放。20 日窗口的版本会被尺子里的 20 日反转吃掉,这里全部 ≥ 120 日(只有
+    cross_zscore 的内层 20 日均值是为了读变化量)。
+
+
+    为什么样本外还会在。来源是投资者结构(散户 / 机构比例、关注度)的慢变属性,不是某一段行情的事。我对符号的预期是 OV − ID 为负(隔夜被注意力推高、日内回吐的股票之后表现差),但尺子会自己选方向,而且可能整体为零:隔夜
+    − 日内与市值、流动性、波动相关时,尺子去掉这些暴露后可能什么也不剩 —— 这正是这个位要测的。
+
+
+    数学检查。(a)ts_delay(day_last(Close), 1) 是上一个交易日行的收盘价;若该行缺失(停牌 / 上市首日)则 OV 为 NaN,不是
+    0,cross_mean 等取可用日。若数据把停牌日价格用前值填充,则停牌日 OV = ID = 0,复牌日 OV 含整段停牌的跳空;这样的极端缺口只改变该股自己的秩,不会支配截面(5220
+    只股票,十分位 520 只);cs_winsor 的种子进一步截尾。(b)div 的分母:收盘价为正;比值种子的分母都加了下限(1e-3 / 1e-4):cross_stddev
+    在窗口只有一个有效日时返回 0,没有下限会在每只新股的第二个有效日输出 ±inf。(c)LimitWidth 为日频叶子(取值 0.05 / 0.1 / 0.2
+    / 0.3),不为 0,div(OV, LimitWidth) 无爆点。(d)cross_corr / cross_autocorr 在窗口内某一边是常数时为
+    NaN,不是 0。(e)无前视:day_first(Open) 是今天第一笔 Open(开盘时已知),day_last(Close) 是收盘价;因子在 t
+    日收盘后算出,t+1 交易;ts_delay 取的是过去一日。(f)所有窗口 ≤ 482 日,热身期按可用日取平均。(g)已知算子行为(ts_rank /
+    cross_rank / in_rank_rolling 当天缺失返回 0):本位不使用这三个算子。'
+  inspired_by: 本流第 2 轮 N 位(Pr2b)最好读数 cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)),
+    241) = +0.066(valid +0.399)用的 Ret 不含隔夜缺口,日内路径这一半在 241 日尺度上刚出现第一个非负读数,隔夜这一半没测过;以及本批(B027)head
+    cross_mean(sigmoid(sigmoid(pow_2(sigmoid(day_durbin_watson(Ret))))), 3)(方向 −1,−3.49)的拆解:窗口
+    3 → 2 / 6 与去掉各层 sigmoid / pow_2 几乎不动(−3.47 / −3.44 / ±0.25),说明 Ret 序列自身的短窗口性质在尺子下只是水平量,不是方向信号。
+  literature:
+  - title: A Tug of War Overnight Versus Intraday Expected Returns
+    authors: Dong Lou, Christopher Polk, Spyros Skouras
+    year: '2019'
+    treatment: 个股的隔夜收益与日内收益各自持续,动量收益主要在隔夜段;种子用 241 日以上的慢均值与隔夜减日内读这个差异
+  - title: Paying Attention Overnight Returns and the Hidden Cost of Buying at the
+      Open
+    authors: Henk Berkman, Paul D. Koch, Laura Tuttle, Ying Jenny Zhang
+    year: '2012'
+    treatment: 注意力高的股票隔夜被推高、日内回吐;缺口回补系数 cross_corr(OV, ID) 与隔夜减日内近似
+  - title: Overnight Returns and Firm-Specific Investor Sentiment
+    authors: David Aboody, Omri Even-Tov, Reuven Lehavy, Brett Trueman
+    year: '2018'
+    treatment: 个股隔夜收益是个股层面的情绪代理;慢均值读它的水平
+  - title: Stock Return Variances The Arrival of Information and the Reaction of Traders
+    authors: Kenneth R. French, Richard Roll
+    year: '1986'
+    treatment: 交易时段与非交易时段的方差比;种子 cross_stddev(OV) / cross_stddev(ID) 与 mean|OV| /
+      mean|ID|
+  seeds:
+  - cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241)
+  - cross_mean(cs_winsor(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1), sub(div(day_last(Close), day_first(Open)), 1))), 241)
+  - cross_mean(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1)), 241)
+  - cross_ema(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1)), 120)
+  - ts_mean(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1)), 482)
+  - cross_decay_linear(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)),
+    1), sub(div(day_last(Close), day_first(Open)), 1)), 241)
+  - div(cross_mean(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241),
+    add(cross_stddev(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241),
+    0.001))
+  - cross_corr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_first(Open)), 1), 241)
+  - cross_corr(ts_delay(sub(div(day_last(Close), day_first(Open)), 1), 1), sub(div(day_first(Open),
+    ts_delay(day_last(Close), 1)), 1), 241)
+  - div(cross_stddev(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241),
+    add(cross_stddev(sub(div(day_last(Close), day_first(Open)), 1), 241), 0.001))
+  - cross_mean(div(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), LimitWidth),
+    241)
+  - cross_mean(div(sub(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1),
+    sub(div(day_last(Close), day_first(Open)), 1)), LimitWidth), 241)
+  - cross_zscore(cross_mean(sub(sub(div(day_first(Open), ts_delay(day_last(Close),
+    1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 20), 241)
+  - cross_mean(mul(sign(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),
+    sub(div(day_last(Close), day_first(Open)), 1)), 241)
+  - div(cross_mean(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),
+    241), add(cross_mean(abs_(sub(div(day_last(Close), day_first(Open)), 1)), 241),
+    0.0001))
+  - cross_autocorr(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 241,
+    1)
+R:
+- head: ts_max(day_durbin_watson(Close), 80)
+  why: '烂部件是「窗口内取全市场共同的冲击日」。DW(Close) = Σ(ΔC)² / (ΣC² + 1e-8),作用在价格水平上近似每分钟已实现方差(量级
+    1e-6 ~ 1e-5)。第 2 轮 R 的窗口梯度:ts_max 窗口 80 → 241 在 train 上 −0.45 → +0.20(越长越好),valid
+    在 −0.73 ~ −1.53 之间不动(80: −0.92,100: −1.30,120: −1.23,160: −1.30,200: −1.24,241:
+    −0.73;Vwap 120 / 241: −1.53 / −0.73),所以窗口不是 valid 的瓶颈。我猜的烂部件:全市场共同的大波动日(如 valid
+    段 2024 年 1 ~ 2 月的小盘股下跌、2024 年 9 月的急涨)让所有股票在同一天取到窗口最大值,ts_max 变成「该股方差对市场冲击的敏感度」(vol-beta),不是个股自己的属性;同时
+    max 本身只看单日极值。变体只动这一件事:先做每天的截面秩 cs_rank(去掉市场共同冲击)再取 ts_max / ts_mean;或者去掉单日极值(ts_mean、q75、5
+    日均值后取 max)。数学上:DW ∈ [0, 4];cs_rank 有界 (0, 1];ts_max / ts_mean / ts_quantile_q75
+    沿日轴、因果;分母是价格平方和,不近零;没有 log 折叠;无前视;窗口 ≤ 241 日,热身期取可用日。'
+  variants:
+  - ts_max(cs_rank(day_durbin_watson(Close)), 80)
+  - ts_max(cs_rank(day_durbin_watson(Close)), 241)
+  - ts_mean(cs_rank(day_durbin_watson(Close)), 80)
+  - ts_mean(cs_rank(day_durbin_watson(Close)), 241)
+  - ts_mean(day_durbin_watson(Close), 80)
+  - ts_quantile_q75(day_durbin_watson(Close), 80)
+  - ts_max(cross_mean(day_durbin_watson(Close), 5), 80)
+- head: cross_mean(mul(ts_regres(day_mean(High), day_close(Amt), 50), sigmoid(day_durbin_watson(Low))),
+    241)
+  why: 烂部件是 sigmoid(day_durbin_watson(Low)) 这一因子。依据(loc.md 拆解表,单个改动):去掉 sigmoid(knockout)−3.27
+    → −1.84(train −1.84 / valid −0.42,增益 +1.44);Amt → Volume −2.63(+0.64);外层 cross_mean
+    241 → 482 为 −3.08(+0.19)、→ 120 为 −3.13(+0.15)。解释(从算子源码读出来的,不是测的):DW(Low) 作用在价格水平上,=
+    Σ(ΔLow)² / ΣLow² ≈ 每分钟收益平方的均值,量级 1e-6 ~ 1e-5;sigmoid(x) ≈ 0.5 + x / 4,float32
+    在 0.5 附近的刻度约 6e-8,所以 sigmoid(DW(Low)) 估计只剩几十档,多数股票并列,乘积里「方差」这一项被量化掉了;去掉 sigmoid
+    后 ts_regres(价格水平残差) × DW(Low) 才真正进入。(本批别的 head 里 sigmoid 作用在 DW(Amt)(量级 1 ~ 3)上,不会被量化,所以它们的
+    knockout 几乎为 0。)loc 只量了单个改动,这一组直接量它们的组合(去 sigmoid + 换 Volume、去 sigmoid + 482 日、去
+    sigmoid + 换 Close 的 DW),看增益是否可加。数学上:DW(Low) ≥ 0 有界;ts_regres 的残差有限;mul 无近零分母;cross_mean
+    取可用日;无前视。
+  variants:
+  - cross_mean(mul(ts_regres(day_mean(High), day_close(Amt), 50), day_durbin_watson(Low)),
+    241)
+  - cross_mean(mul(ts_regres(day_mean(High), day_close(Volume), 50), day_durbin_watson(Low)),
+    241)
+  - cross_mean(mul(ts_regres(day_mean(High), day_close(Amt), 50), day_durbin_watson(Low)),
+    482)
+  - cross_mean(mul(ts_regres(day_mean(High), day_close(Volume), 50), day_durbin_watson(Low)),
+    482)
+  - cross_mean(mul(ts_regres(day_mean(High), day_close(Amt), 50), day_durbin_watson(Close)),
+    241)
+- head: cross_mean(sigmoid(sigmoid(pow_2(sigmoid(day_durbin_watson(Ret))))), 3)
+  why: 烂部件是 3 日窗口(太快,换手吃掉信号)。依据(loc.md 拆解表):去掉任何一层 sigmoid / pow_2 几乎不动(knockout −3.48
+    / −3.49 / −3.73),窗口 3 → 2 / 6 为 −3.47 / −3.44,形状与窗口在 2 ~ 6 日内都不承重;而本流的重复发现是「慢才承重」(ts_max(DW(Close),
+    d) 的 d 每翻一倍好约 0.9 分;N 位 20 日 → 241 日)。变体只改窗口:120 / 241 / 482,其余原样(sigmoid 栈保留,所以只是窗口的单因素消融)。预期:梯度单调变好但仍为负,DW(Ret)
+    的水平与流动性共线(分钟收益一阶自相关反映买卖价差反弹),慢聚合救不了方向。数学上:DW(Ret) ∈ [0, 4],这里的 sigmoid / pow_2
+    栈把它压到 0.66 ~ 0.67 一带,跨度约 1e-2,远大于 float32 刻度,没有量化问题;cross_mean 取可用日;无 log;无前视。
+  variants:
+  - cross_mean(sigmoid(sigmoid(pow_2(sigmoid(day_durbin_watson(Ret))))), 120)
+  - cross_mean(sigmoid(sigmoid(pow_2(sigmoid(day_durbin_watson(Ret))))), 241)
+  - cross_mean(sigmoid(sigmoid(pow_2(sigmoid(day_durbin_watson(Ret))))), 482)
+audit:
+  attempts: 1
+  file: audit_1.yaml

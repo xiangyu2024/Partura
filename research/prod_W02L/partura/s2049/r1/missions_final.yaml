@@ -1,0 +1,220 @@
+seed: 2049
+round: 1
+slots:
+- type: N
+  inspired_by: B145 的三个 head 全含 day_cov(Volume, Low)(= mean(Volume) × (成交量加权 Low 均价
+    - 等权 Low 均价)),即「一天里的钱成交在价格路径的什么位置」;把它从日内搬到日轴,就是持有人的平均成本相对现价(资本利得悬置)
+  hypothesis: '机制。B145 里 9 个候选、3 个 head 的共同积木是 day_cov(Volume, Low)。恒等式:cov(V, L)
+    = mean(V) × (Σ V·L / Σ V - mean(L)),即「成交量加权的价格」减「时间加权的价格」,读的是钱成交在价格路径的高处还是低处。拆解表里它单独的分数是
+    -4.21(train -4.21 / valid -3.77),比包上 20 日回归 F 值(-1.94 ~ -3.49)差得多,说明单日的这个读数噪声大、符号天天翻;F
+    值把它在 20 ~ 40 日上稳定下来,但 F 不带符号,「钱在高处还是低处」这条信息被丢掉了。本位把同一个对象从日内搬到日轴,做成一个慢变的、带符号的量:持有人的平均成本相对现价。
+
+    把过去 w 个交易日的成交量加权均价当作这只票持有人的平均成本(参考价 RP_w = Σ_k V_k × VWAP_k / Σ_k V_k,其中 VWAP_k
+    = day_wmean(Vwap, Volume) 是第 k 日的成交量加权均价,V_k = day_sum(Volume)),现价相对它的位置 (P -
+    RP_w) / P 就是 Grinblatt–Han(2005)的资本利得悬置(CGO):正 = 平均持有人浮盈,负 = 浮亏。行为机制:处置效应(Shefrin–Statman
+    1985)使浮盈的人过早卖、浮亏的人不肯割,卖压 / 惜售把价格拖离它的信息价值,再随悬置消化慢慢回来(Frazzini 2006:对消息的反应不足)。A
+    股个人投资者成交占比高、处置效应强,这个机制应该比美股更明显;符号(浮盈多的票之后更好还是更差)我不预设,由 train 定方向。
+
+    算子怎么实现(全部只用 t 日收盘前的数据,没有前视)。日 VWAP = day_wmean(Vwap, Volume);成交量加权参考价 = 分子分母各做一次日轴累加再相除:div(cross_sum(mul(day_wmean(Vwap,
+    Volume), day_sum(Volume)), w), cross_sum(day_sum(Volume), w));cross_ema 版本等价于「按半衰期指数衰减的成交量权重」(旧成交量的权重随新成交淡出,近似
+    GH 里的换手衰减权重)。种子分五类:
+
+    (1)成交量加权参考价的 CGO,窗口 60 / 120 / 241 日(cross_sum 版)、半衰期 30 / 60 / 120 日(cross_ema
+    版,现价用 3 日 EMA 抗单日噪声);
+
+    (2)对照:等权参考价(cross_mean(日 VWAP, 120)),看「成交量加权」本身有没有贡献;
+
+    (3)把参考价拆成「成交量加权减时间加权」:RP_w / TWAP_w - 1,= B145 积木在日轴上的无量纲版本,读的是过去 w 日里钱集中在价格路径的高处还是低处(不含现价,所以与
+    20 日反转几乎无关);窗口 120 / 241 日与半衰期 60 日;
+
+    (4)浮盈 / 浮亏拆开:add(x, abs_(x)) = 2·max(x, 0) 只留浮盈部分,sub(x, abs_(x)) = 2·min(x, 0)
+    只留浮亏部分,检验两侧是否对称(处置效应预言惜售发生在浮亏侧);
+
+    (5)按成本分布的宽度归一:(P - RP_120) / (近 120 日日 VWAP 的标准差 + 0.001),现价偏离在自己价格波动里占多大;以及现价换成当日
+    VWAP(去掉收盘价的尾盘噪声)。
+
+    为什么和库里已有的不同。(a)不是 head 的变体:head 是日内协方差上的 20 ~ 40 日回归 F 值,本位是跨日的成交量加权价格对现价,没有回归、没有
+    F。(b)库里没有这类算子:对 struct/members.csv 解析后的 5521 条表达式做算子计数,day_wmean、cross_ema、cross_tail_mean_q25
+    出现 0 次;我把 14 个种子的骨架逐个对库里 4077 个骨架(members.csv + libs_train.csv)核对过,0 个在库里,GP 的骨架禁令不会拒绝它们。(c)与
+    5 个控制的区别:20 日反转读的是 20 日收益,本位的参考价窗口 ≥ 60 日且按成交量加权(放量日权重大),第 3 类甚至不含现价;市值 / 流动性
+    / 波动是水平量,CGO 是无量纲的相对位置;已知成交额离散度族读的是成交额的日内离散,与价格位置无关。
+
+    为什么样本外还会在。来源是行为偏差(处置效应、锚定在成本价)而不是某一段行情的风格;所有种子都是 ≥ 60 日的累加或 EMA,换手低,扣 15 bp 后不致命(本批拆解里外层窗口
+    5 -> 10 在 3 个 head 里有 2 个改善 0.18 ~ 0.38,说明这个尺子对慢的东西更友好)。风险也要写在这里:CGO 与中期(3 ~ 8
+    个月)动量 / 反转重叠,两个冠军可能已经吃掉;如果 train 与 valid 的符号不一致,分数会被较差的一段卡住。
+
+    数学检查。(i)分母:cross_sum(day_sum(Volume), w) 在整个窗口都停牌时为 0,分子同样为 0,0/0 = NaN,不是爆点;day_close(Close)
+    为正的后复权价;「标准差 + 0.001」版本的分母有下限,价格几乎不动的票分子也趋于 0,比值有界。(ii)量级:后复权价(最大数千)× 日成交股数(最大
+    1e7 量级)× 241 日累加 ≈ 1e13,float32 范围 3e38 内,cross_ema 在 float64 里算。(iii)缺失:停牌日 day_wmean
+    为 NaN(权重和为 0),cross_sum / cross_mean 跳过缺失、cross_ema 重新归一,不填 0;日轴前 w - 1 天用不满的窗口(所有慢表达式共有的热身,不是这个位特有的)。(iv)复权:Vwap、Close
+    同为后复权价,在同一个复权基准下比较,除权除息不会造出假的浮盈浮亏。'
+  literature:
+  - title: Prospect theory, mental accounting, and momentum
+    authors: Mark Grinblatt, Bing Han
+    year: '2005'
+    treatment: 资本利得悬置 CGO = (现价 - 以成交量加权的参考价) / 现价;这里用日 VWAP 与日成交量的日轴累加(或指数衰减权重)近似换手加权的参考价
+  - title: The disposition effect and underreaction to news
+    authors: Andrea Frazzini
+    year: '2006'
+    treatment: 悬置大的票对消息反应不足,价格要等悬置消化才到位;解释为什么现价相对成本价的位置能预测之后的收益
+  - title: The disposition to sell winners too early and ride losers too long
+    authors: Hersh Shefrin, Meir Statman
+    year: '1985'
+    treatment: 处置效应是浮盈 / 浮亏拆开两个种子(只留 max(x, 0) 或 min(x, 0))要检验的不对称来源
+  seeds:
+  - div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    120), cross_sum(day_sum(Volume), 120))), day_close(Close))
+  - div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    241), cross_sum(day_sum(Volume), 241))), day_close(Close))
+  - div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    60), cross_sum(day_sum(Volume), 60))), day_close(Close))
+  - div(sub(cross_ema(day_close(Close), 3), div(cross_ema(mul(day_wmean(Vwap, Volume),
+    day_sum(Volume)), 60), cross_ema(day_sum(Volume), 60))), cross_ema(day_close(Close),
+    3))
+  - div(sub(cross_ema(day_close(Close), 3), div(cross_ema(mul(day_wmean(Vwap, Volume),
+    day_sum(Volume)), 120), cross_ema(day_sum(Volume), 120))), cross_ema(day_close(Close),
+    3))
+  - div(sub(day_close(Close), div(cross_ema(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    30), cross_ema(day_sum(Volume), 30))), day_close(Close))
+  - div(sub(day_close(Close), cross_mean(day_wmean(Vwap, Volume), 120)), day_close(Close))
+  - div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 120), cross_sum(day_sum(Volume),
+    120)), cross_mean(day_wmean(Vwap, Volume), 120)), cross_mean(day_wmean(Vwap, Volume),
+    120))
+  - div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross_sum(day_sum(Volume),
+    241)), cross_mean(day_wmean(Vwap, Volume), 241)), cross_mean(day_wmean(Vwap, Volume),
+    241))
+  - div(sub(div(cross_ema(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 60), cross_ema(day_sum(Volume),
+    60)), cross_ema(day_wmean(Vwap, Volume), 60)), cross_ema(day_wmean(Vwap, Volume),
+    60))
+  - add(div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    120), cross_sum(day_sum(Volume), 120))), day_close(Close)), abs_(div(sub(day_close(Close),
+    div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 120), cross_sum(day_sum(Volume),
+    120))), day_close(Close))))
+  - sub(div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    120), cross_sum(day_sum(Volume), 120))), day_close(Close)), abs_(div(sub(day_close(Close),
+    div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 120), cross_sum(day_sum(Volume),
+    120))), day_close(Close))))
+  - div(sub(day_close(Close), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    120), cross_sum(day_sum(Volume), 120))), add(cross_stddev(day_wmean(Vwap, Volume),
+    120), 0.001))
+  - div(sub(day_wmean(Vwap, Volume), div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)),
+    120), cross_sum(day_sum(Volume), 120))), day_wmean(Vwap, Volume))
+- type: N
+  inspired_by: B145 的拆解表:day_cov(Volume, Low) 单独 -4.21、20 日回归 F 值 -1.94 ~ -3.49、F
+    值外面再套 5 日 ts_min 又变差(H1 -1.94 -> -2.34,H2 -2.07 -> -2.54);F 不带符号,而「价格高处放量还是低处放量」的符号才是这个积木的内容
+  hypothesis: '机制。一天里成交量落在价格路径的什么位置,是个股的订单流类型的指纹:成交量随价格抬升而放大(追涨 / 在高处派发),还是在价格低处放大(逢低承接
+    / 恐慌割肉)。Llorente–Michaely–Saar–Wang(2002)的结论是:信息不对称大、投机性成交为主的票,放量伴随收益延续;对冲性成交为主的票,放量伴随反转,所以「量与价同向的程度」是个体的稳定属性。A
+    股 T+1、个人投资者占比高,追涨的成交一旦买在日内高位当天出不来,这个属性对之后的收益有方向性影响;符号由 train 定。
+
+    B145 的现象:三个 head 的共同积木 day_cov(Volume, Low) = mean(Volume) × (成交量加权价 - 时间加权价);它单日的读数噪声大(单独
+    -4.21,valid -3.77),包上 20 ~ 40 日回归 F 值后好很多(-1.94 ~ -3.49),但 F = t² 不带符号,把「方向」丢了;外面再套
+    5 日 ts_min 反而变差(H1 -1.94 -> -2.34,H2 -2.07 -> -2.54)。共性表里含 ts_reg_fvalue(day_std(High),
+    day_cov(Volume, Low), 20) 的 4 个候选均分 -3.74,不含的 -3.00(p 0.90),所以没有证据说明这个 F 值本身有
+    alpha;我的看法是 F 值是个有噪声的、无符号的、短窗口的统计量,值得做的是把「量价同向程度」做成带符号、无量纲、慢聚合的版本,再让 GP 去选最稳的写法。
+
+    算子怎么实现(全部是日内读数的日轴聚合,没有前视)。无量纲化:day_corr(Volume, Low)(分钟轴皮尔逊相关,∈ [-1, 1],价格水平和股数都不进来);或者
+    (day_wmean(Low, Volume) - day_mean(Low)) / (day_std(Low) + 0.0001),即成交量加权价与时间加权价之差按当日价格离散度归一(B145
+    积木的无量纲版本);或者 day_cov / (day_mean(Volume) × (day_std(Low) + 0.0001))。慢聚合:cross_ema(·,
+    60 ~ 120) / cross_mean(·, 241)。种子分六类:
+
+    (1)水平:相关与归一化价差的 60 / 90 / 120 / 241 日聚合(Low、Vwap 两个价格底);
+
+    (2)变化:近 20 日 EMA 减自己 240 日 EMA(相对自己常态的变化);
+
+    (3)与日收益的耦合:cross_regbeta / cross_corr(当日收益, 当日量价相关, 120 / 241),读「涨的日子量价同向是否更强」(追涨的非对称),以及与当日波动的相关;
+
+    (4)B145 自己的回归结构换成带符号、无量纲的响应:ts_reg_tvalue(day_std(High), day_corr(Volume, Low),
+    60);
+
+    (5)条件版本:上涨日的平均量价相关减下跌日的平均量价相关(120 日);
+
+    (6)区间位置版本(同一个「钱在价格路径的哪里」,换一种写法):成交量加权 VWAP 在当日 [Low, High] 区间里的位置、收盘价相对当日 VWAP
+    的位置(按区间宽度归一,读尾盘是在抬价还是压价)、以及 Chaikin 式的「收盘区间位置按成交量加权」的 120 日累加。
+
+    为什么和库里已有的不同。库里最近的是 cross_mean(day_corr(Ret, Volume), 20):用的是分钟收益(增量)与成交量的相关,窗口
+    20 日;本位用的是价格水平(Low / Vwap)与成交量的相关或协方差,度量的是「成交量对价格路径的位置」而不是「成交量对价格变化的响应」(水平相关含日内趋势方向与成交量时间分布的交互,增量相关不含),种子的算子骨架也不同(day_wmean、cross_ema、cross_regbeta
+    套相关、区间位置归一):我把 15 个种子的骨架逐个对库里 4077 个骨架核对过,0 个在库里(同样写法的 cross_mean(day_corr(Volume,
+    Low), ·) 被骨架禁令拒绝,所以没有放进来)。与 head 的区别:head 是不带符号的 F 值,本位全部带符号。与控制的区别:相关与区间位置是无量纲量,不随市值
+    / 成交额水平走;但日内趋势方向进入价差,与 20 日反转 / 波动可能有 0.2 ~ 0.4 的相关,尺子会把线性与非线性暴露去掉。
+
+    为什么样本外还会在。订单流类型(散户追涨 vs 机构承接)是慢变的个股属性,日轴 ≥ 60 日聚合既压低日内噪声,也压低换手,扣 15 bp 后不致命。风险写在这里:这个量有一部分是日内漂移方向
+    × 成交量时间分布(开盘放量还是尾盘放量)的混合,尾盘 / 开盘放量的个股差异可能已经被成交额离散度族与流动性控制吃掉;若所有种子都落在 -1 ~ -2,说明水平读数没有信息,下一轮再看符号
+    / 条件版本。
+
+    数学检查。(i)day_corr 的分母是 sqrt(var_x·var_y) + 1e-9,价格整天不动(一字板)时为 0(不是 NaN,不是爆点),这些日子在慢均值里相当于「没有耦合」,是定义内的行为;停牌日整天无值为
+    NaN,cross_ema / cross_mean 跳过。(ii)归一化价差的分母 day_std(Low) + 0.0001、区间宽度 (day_max(High)
+    - day_min(Low)) + 0.0001 都有下限;价格不动的日子分子同样为 0,比值为 0 而不是爆点;区间位置 ∈ [0, 1] 有界。(iii)cross_regbeta(当日收益,
+    量价相关, w):响应 ∈ [-1, 1]、回归量是百分比收益,斜率有界(只在窗口内收益方差几乎为 0 的票上可能放大,这类票是停牌 / 长期一字板,会被覆盖率闸门筛掉)。(iv)只用到
+    t 日收盘前已知的日内数据。'
+  literature:
+  - title: Dynamic Volume-Return Relation of Individual Stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 量价同向(投机性 / 信息性成交,放量后收益延续)与反向(对冲性成交,放量后反转)是个股的稳定类型;本位用日内价格水平与成交量的相关
+      / 价差的慢聚合近似
+  - title: The Relation between Price Changes and Trading Volume A Survey
+    authors: Jonathan M. Karpoff
+    year: '1987'
+    treatment: 成交量与价格的关系在上涨与下跌日不对称;对应 (3)(5) 类种子里把涨日与跌日分开的写法
+  seeds:
+  - cross_ema(day_corr(Volume, Vwap), 60)
+  - cross_ema(day_corr(Volume, Low), 120)
+  - cross_mean(div(sub(day_wmean(Low, Volume), day_mean(Low)), add(day_std(Low), 0.0001)),
+    241)
+  - cross_ema(div(sub(day_wmean(Low, Volume), day_mean(Low)), add(day_std(Low), 0.0001)),
+    120)
+  - cross_ema(div(day_cov(Volume, Low), mul(day_mean(Volume), add(day_std(Low), 0.0001))),
+    90)
+  - sub(cross_ema(day_corr(Volume, Low), 20), cross_ema(day_corr(Volume, Low), 240))
+  - cross_regbeta(day_sum(Ret), day_corr(Volume, Low), 120)
+  - cross_regbeta(day_sum(Ret), day_corr(Volume, Low), 241)
+  - cross_corr(day_corr(Volume, Low), day_sum(Ret), 120)
+  - cross_corr(day_corr(Volume, Low), day_std(Ret), 120)
+  - ts_reg_tvalue(day_std(High), day_corr(Volume, Low), 60)
+  - cross_ema(div(sub(day_wmean(Vwap, Volume), day_min(Low)), add(sub(day_max(High),
+    day_min(Low)), 0.0001)), 90)
+  - cross_ema(div(sub(day_close(Close), day_wmean(Vwap, Volume)), add(sub(day_max(High),
+    day_min(Low)), 0.0001)), 90)
+  - div(cross_sum(mul(div(sub(day_close(Close), day_min(Low)), add(sub(day_max(High),
+    day_min(Low)), 0.0001)), day_sum(Volume)), 120), cross_sum(day_sum(Volume), 120))
+R:
+- head: ts_decay_linear(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 20), 5)
+  why: 烂部件 = 回归 F 值本身的重尾,和过短的 5 日外层。依据(拆解表):F(High, 20) 单独 -3.49,5 日线性衰减把它改善到 -3.06,说明平滑方向是对的;外层窗口
+    5 -> 10 再改善 +0.18,5 -> 2 变差 0.31;去掉 F 层(只留 ts_decay_linear(day_std(High), 5))为
+    -2.31(必要性 -0.75,F 层在拖后腿,但那条路与已知成交额族 rho 0.52,不可走);Volume -> Amt 改善 +0.38,High
+    -> Low 改善 +0.19。F = t² 在 20 日窗口上服从 F(1, 18) 型的重尾分布,算术平均 / 线性衰减会被少数尖峰带着走。变体全部把外层换成更慢的聚合(EMA
+    40 ~ 60 日、对 log(1 + F) 取 120 日均值),保留 Amt / Low 替换,并把 F 换成带符号的相关。预期这个尺子对换手敏感,慢聚合应该改善
+    0.3 以上。
+  variants:
+  - cross_ema(ts_reg_fvalue(day_std(High), day_cov(Amt, Low), 20), 60)
+  - cross_ema(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 20), 40)
+  - cross_mean(log(add(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 20), 1)),
+    120)
+  - cross_mean(ts_corr(day_std(High), day_cov(Volume, Low), 20), 120)
+  - cross_ema(ts_reg_fvalue(day_std(Low), day_cov(Volume, Low), 20), 60)
+- head: ts_min(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 40), 5)
+  why: 烂部件 = 5 日 ts_min 外层(把一个本来就噪的统计量取窗口最小值,等于取极端值)。依据(拆解表):F(High, 40) 单独 -2.07(train
+    -2.07 / valid -1.16),比包上 ts_min 的 head -2.54 好 0.47;ts_min 窗口 5 -> 10 改善 +0.38;Volume
+    -> Amt 为 -0.14,基本不变。变体:用 120 日下尾均值(cross_tail_mean_q25)替换 5 日最小值(同样表达「持续耦合的下限」,但估计得稳),F
+    值上套 60 日 EMA,把 F 换成带符号的 t 值 / 斜率再做 EMA,和 Amt 版本的 60 日回归。
+  variants:
+  - cross_tail_mean_q25(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 40), 120)
+  - cross_ema(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 40), 60)
+  - cross_mean(ts_reg_fvalue(day_std(High), day_cov(Amt, Low), 60), 120)
+  - cross_ema(ts_reg_tvalue(day_std(High), day_cov(Volume, Low), 40), 60)
+  - cross_ema(ts_regbeta(day_std(High), day_cov(Volume, Low), 40), 60)
+- head: ts_min(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 20), 5)
+  why: 烂部件 = 5 日 ts_min 外层。依据(拆解表):F(Volume, 20) 单独 -1.94(valid -1.50),比包上 ts_min
+    的 head -2.34 好 0.40;去掉 F 层得 -1.53 但与已知成交额族 rho 0.62(day_std(Volume) 本身就是已知族的亲戚),所以不能走去
+    F 层的路,只能把外层换慢;F 层本身与已知族几乎无关(rho 0.01)。变体:60 日 EMA、120 日下尾均值、把 day_cov 的第二个价格换成
+    High(Low -> High 改善 +0.20)后做 120 日均值,以及 60 日回归窗口的 120 日均值。
+  variants:
+  - cross_ema(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 20), 60)
+  - cross_tail_mean_q25(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 20),
+    120)
+  - cross_mean(ts_reg_fvalue(day_std(Volume), day_cov(Volume, High), 40), 120)
+  - cross_mean(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 60), 120)
+  - cross_ema(ts_reg_fvalue(day_std(Volume), day_cov(Volume, High), 20), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

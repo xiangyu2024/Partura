@@ -1,0 +1,116 @@
+seed: 2061
+round: 1
+slots:
+- type: E
+  core: day_pdf_quantile_single(Ret, Volume, 0.95, True)
+  hypothesis: '机制:核心 C = day_pdf_quantile_single(Ret, Volume, 0.95, True)。算子把当天分钟收益按当日最大最小值缩放到
+    [0,1],再按分钟顺序累加成交量占比,取累计成交量首次达到 95% 的那一分钟的缩放收益(x 并不排序,所以这是「成交量时钟」上第 95% 处的那根分钟收益在当日区间里的位置)。读的是尾盘放量时价格相对当日区间的方向:机构拆单
+    / 尾盘集中成交时的价格压力,以及知情者在量集中的时点推价。
+
+    本批证据(只用 train / valid):3 个 head(q=0.95 / 0.8 / 0.6)全是 cross_mean(C_q, 20),分数 -0.73
+    / -0.83 / -0.85,都不是发现。拆解里最重要的一条是平滑窗口:C 本身(裸日值)-2.94,窗口 10 为 -1.01、20 为 -0.73、40
+    为 -0.55(valid +0.00),单调变好,说明日值是单分钟读数,噪声极大,可用信息只在慢尺度上出现;换 Volume→Amt 差别不大。所以这一位的核心是把「单根分钟读数」变成「长窗口的个股属性」,而不是再用
+    20 日简单平均。
+
+    本位外围与以前见过的(只有 cross_mean 窗口 10 / 20 / 40 与裸日值)完全不同,五类:(a) 慢聚合 / 指数加权:cross_ema(C,
+    60)、cross_mean(C, 120),把有效窗口拉到 60 到 120 日,换手低一个量级,15 bp 才吃得下;(b) 相对自己的历史:cross_zscore(C,
+    120)、短窗均值减长窗均值,去掉个股持久水平(水平被流动性、市值、波动控制吃掉),只留尾盘价格压力的变化;(c) 尾部对称化:C 减同一天 5% 处的读数(sub(C,
+    C_0.05)),去掉当天收益区间缩放带来的共同位置项,只留「尾盘相对开盘段」的价格斜率,再取慢均值;(d) 滚动关系:cross_corr(C, day_sum(Ret),
+    60)、cross_corr(C, day_std(Ret), 60),问「尾盘价格压力与当日收益 / 波动是否同向」,比水平更稳;(e) 在市值十分位内去均值
+    cs_bucket_demean(·, LogFloatCap),去掉大小盘对该读数的非线性暴露(新尺子只去掉对控制排名低阶多项式暴露,十分位内去均值把交互项也去掉)。
+
+    为什么和库里不同:库里 day_pdf_quantile_single 全部是裸写,或 cross_mean(·, 20) 一层包装;骨架 cross_mean(day_pdf_quantile_single(F,F))
+    被拒。这里的外层是 cross_ema / cross_zscore / sub / cross_corr / cs_bucket_demean 与差分结构,骨架都不在库里;与三个
+    head 的区别是有效窗口从 20 日拉到 60 到 120 日、并且做了去水平 / 去尺度处理。
+
+    为什么样本外还会在:尾盘集中成交时的价格方向反映机构执行紧迫度与知情交易的时点偏好,是个股的结构性交易行为,数十日内排序稳定(拆解里窗口越长分越高、valid
+    趋近 0,是稳定属性在噪声被平均掉后露头的迹象,不是挑出来的窗口);A 股 T+1 与尾盘成交占比高,对应文献里的日内动量 / 尾盘效应(Gao-Han-Li-Zhou
+    2018 intraday momentum 的末半小时收益预测)。风险诚实说明:单个 head 的分数仍为负,这个位的期望是「长窗口把分数拉到 0 附近或略为正」,命中不保证。
+
+    数学检查:缩放用 (x-min)/(max-min+1e-12),全天价格不动(max=min)时 C 为 0 而非爆点;整天停牌则 NaN,不是无穷;cross_zscore
+    分母为 120 日标准差,C 常数时分子也为 0;全部只用当日及以前数据,无前视;窗口最长 120 日,热身期只占前 120 日。'
+  seeds:
+  - sub(cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 10), cross_mean(day_pdf_quantile_single(Ret,
+    Volume, 0.95, True), 120))
+  - cross_mean(sub(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_pdf_quantile_single(Ret,
+    Volume, 0.05, True)), 60)
+  - cross_ema(sub(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_pdf_quantile_single(Ret,
+    Volume, 0.5, True)), 60)
+  - cross_corr(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_sum(Ret), 60)
+  - cross_corr(day_pdf_quantile_single(Ret, Volume, 0.95, True), day_std(Ret), 60)
+  - cs_bucket_demean(cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True),
+    60), LogFloatCap)
+  - cs_bucket_demean(cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 40),
+    sub(LogFloatCap, LogFloatShares))
+  - cross_autocorr(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60, 1)
+  - cross_tail_mean_q25(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)
+  - cross_mean(mul(day_pdf_quantile_single(Ret, Volume, 0.95, True), sign(cross_mean(day_sum(Ret),
+    20))), 60)
+- type: N
+  hypothesis: '机制:成交量时钟(volume clock)——一天中成交量在时间轴上的分布位置。把 in_index(Volume)(每分钟在一天中的位置
+    t/(T-1))作为 x,成交量作为权重,用 day_pdf_quantile_single 取累计成交量达到 q 的时刻:q=0.5 即「成交量中位时刻」,q=0.25
+    / 0.75 之差是成交量在时间上的集中度。它回答「这只票的成交是前置(开盘集中)还是后置(尾盘集中)」。前置型多见于隔夜信息消化与散户追涨型流动,后置型多见于机构调仓、基金申赎和指数
+    / 收盘价敏感的交易(收盘价对净值、保证金、期权有意义),这是参与者构成的结构属性,不是成交额水平的另一种写法。
+
+    算子实现:day_pdf_quantile_single(in_index(Volume), Volume, q, True) 里 in_index 把每分钟换成时刻位置,Volume
+    作为 pdf 权重,算子里 x 做了 minmax 缩放(对时刻位置只是线性映射,不改变排序),返回的就是累计量达 q 的分钟位置。日轴上用 cross_mean
+    / cross_ema(40 到 60 日)或 cross_zscore(120) 变成慢变个股属性;变体有:Amt 作权重(成交额时钟)、q=0.25 与
+    0.75 之差(集中度)、q=0.9 且 left=False(自尾向前)、去掉开收盘集合竞价附近分钟(in_slice 11 到 230)、与 Volume
+    时钟的差(Amt 时钟减 Volume 时钟 = 价格在日内的倾斜)、以及与当日收益的 60 日滚动相关(时钟是否在大涨日前置)、市值十分位内去均值。
+
+    受本批启发:本批 3 个 head 与库里 106 条 day_pdf_* 全部是「分钟收益在量时钟上的读数」,即 day_pdf_*(Ret, Volume),没有一条用
+    in_index 或 day_centroid 把「时间位置」本身当被测对象(members 里 in_index / day_centroid 0 条)。head
+    的失败(裸日值 -2.9,窗口越长越好)说明 Ret 的读数是噪声很大的单分钟值;换成「时刻」就成了一个无量纲、噪声小得多的日值(量的累计曲线本身是平滑的),且与
+    Ret、波动、成交额水平的联系间接。
+
+    为什么和库里不同:被测对象是时刻而非收益 / 价格,骨架 day_pdf_quantile_single(O:in_index(F), F) 不在库里;day_centroid
+    虽在 ops_ext 里,库的 5583 条中没有。与控制的关系:量的前置 / 后置与流动性、波动有一定相关,但不是它们的单调函数;新尺子还会去掉对控制排名的线性、U
+    形、S 形暴露。
+
+    为什么样本外还会在:成交时点分布由参与者构成(机构 / 散户占比、做市与算法拆单的 VWAP/TWAP 偏好)决定,是慢变的结构属性,数十日内排序稳定;尾盘集中的票被基金申赎
+    / 指数被动资金占比高,其价格压力在后续有可预测的方向(文献:Heston-Korajczyk-Sadka 2010 日内周期性——日内成交时点对未来同一时点的预测;Bogousslavsky
+    2021 对尾盘 / 日内参与者构成与收益的研究)。窗口 40 到 120 日,换手低,15 bp 成本吃得下。风险:可能与流动性控制中度相关;被去掉线性暴露后剩下的是看运气的部分。
+
+    数学检查:in_index 在 Volume 有限的分钟取 t/(T-1),停牌分钟为 NaN 被 mask 掉;整天无成交时 pdf 全 NaN 给 NaN,不是无穷;缩放分母含
+    1e-12;全天只有一个有效分钟时 q 位置为 0,不造成爆点;只用当日及以前数据,无前视;窗口最长 120 日。'
+  inspired_by: B181 批(T42):3 个 head 全是 cross_mean(day_pdf_quantile_single(Ret, Volume,
+    q), 20),裸日值 -2.9、窗口 10/20/40 的分单调变好 -1.0/-0.7/-0.55;库里 day_pdf_* 106 条全部以 Ret
+    为被测量、没有任何一条读成交量的时间位置。
+  seeds:
+  - cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 40)
+  - cross_ema(day_pdf_quantile_single(in_index(Volume), Volume, 0.25, True), 60)
+  - cross_zscore(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 120)
+  - cross_mean(sub(day_pdf_quantile_single(in_index(Volume), Volume, 0.75, True),
+    day_pdf_quantile_single(in_index(Volume), Volume, 0.25, True)), 40)
+  - sub(cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 10),
+    cross_mean(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), 60))
+  - cross_mean(sub(day_pdf_quantile_single(in_index(Amt), Amt, 0.5, True), day_pdf_quantile_single(in_index(Volume),
+    Volume, 0.5, True)), 40)
+  - cross_corr(day_pdf_quantile_single(in_index(Volume), Volume, 0.5, True), day_sum(Ret),
+    60)
+  - cs_bucket_demean(cross_mean(day_pdf_quantile_single(in_index(Volume), Volume,
+    0.5, True), 40), LogFloatCap)
+  - cross_mean(day_centroid(Volume), 40)
+  - cross_ema(sub(day_centroid(Amt), day_centroid(Volume)), 60)
+R:
+- head: cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 20)
+  why: 拆解:窗口 10 / 20 / 40 的分为 -1.01 / -0.73 / -0.55(valid 0.00),裸日值 -2.94,单调随窗口变长变好,烂的部件是
+    20 日简单平均太短(日值是单分钟读数、噪声大、换手高);Volume→Amt 差别不大,所以不换权重。去掉烂部件 = 继续拉长窗口、改指数加权、做相对自己历史的
+    z 分数。
+  variants:
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 80)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)
+  - cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 60)
+  - cross_zscore(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)
+- head: cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), 20)
+  why: 拆解:窗口 10 / 20 / 40 为 -1.36 / -0.83(valid -0.76 到 +0.15) / -0.87,Volume→Amt
+    的 valid +0.03;烂的部件是 20 日短窗与 Volume 权重。变体拉长窗口并换 Amt 权重。
+  variants:
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), 80)
+  - cross_mean(day_pdf_quantile_single(Ret, Amt, 0.8, True), 60)
+  - cross_ema(day_pdf_quantile_single(Ret, Amt, 0.8, True), 60)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.8, True), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,100 @@
+seed: 2036
+round: 2
+slots:
+- type: E
+  core: day_quantile_q75(Vwap)
+  hypothesis: 核心 C = day_quantile_q75(Vwap):每天分钟 Vwap 的 75 分位数,即股票的价格水平(后复权价,横截面上约等于自基期以来的累计收益
+    / 绝对价位)。它在本批共性表里富集 +0.91(p 0.018),第 1 轮 N 位 GP 自己长出的 cs_first_low20(day_sum(Vwap),
+    day_sum(Vwap)) 一类写法 train +0.06 / valid +0.80、cs_first_low40(day_sum(Vwap), day_sum(Vwap))
+    +0.37 / +0.45,说明 alpha 在『价格水平处于最低 20% 或 40% 的那一段』里,而不是整个截面上线性排。机制:低价位(低累计收益、被长期抛弃)的票里彩票偏好与散户集中,定价偏离大;段内按什么排才是决定因素。库里含
+    C 的候选外围只有 cs_first_low20(BoardCode, C) 一类(段内按板块码排,几乎是随机序),这就是它在尺子上卡在 0 附近的原因。本组种子外围全新:段内按
+    60 日波动、20 / 120 日反转、60 日成交额(流动性)、上市年龄、收益离散度、收益与成交额的 60 日相关排序;C 相对自己 241 日高点 /
+    241 日均值的位置(div / sub 写法,核心原样保留);反向对照(cs_last_high 把高价位段压到最低、cs_first_high 取高价位段),用来测是低价段还是价格水平本身;以及市值十分位内的
+    C 标准化。与库的差别:库里所有含 C 的表达式外围只有 BoardCode 排序,这里的外围是价格与流动性、波动、反转的交互,骨架都不在两个库的 5583
+    条里。为什么样本外还会在:低价 / 低累计收益段的彩票与情绪溢价是持久的行为金融效应(价格水平效应、MAX 效应、散户偏好低价股),价格水平是慢变量,换手低,15
+    bp 成本下能保住;valid 的 +0.8 与 train 的 +0.06 说明这一段近年更强,不依赖某段行情。风险:C 与市值、20 日反转有相关,尺子已去掉控制的
+    1~3 次项;若 C 与市值 |ρ| 过高核心仍可能被挡。数学:C 是分钟 Vwap 的分位数,无近零除数;cross_max / cross_mean 分母为价格,非零;cs_first_*
+    的并列由 tie 块处理且输出无并列;无前视,窗口含当天及以前,t+1 交易。
+  seeds:
+  - cs_first_low20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))
+  - cs_first_low20(cross_mean(day_sum(Ret), 20), day_quantile_q75(Vwap))
+  - cs_first_low20(cross_mean(day_sum(Ret), 120), day_quantile_q75(Vwap))
+  - cs_first_low20(cross_mean(day_sum(Amt), 60), day_quantile_q75(Vwap))
+  - cs_first_low20(ListAge, day_quantile_q75(Vwap))
+  - cs_first_low20(cross_zscore(day_quantile_q75(Vwap), 241), day_quantile_q75(Vwap))
+  - cs_first_low40(cross_delta(day_quantile_q75(Vwap), 60), day_quantile_q75(Vwap))
+  - cs_first_high20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))
+  - cs_last_high20(cross_mean(day_std(Ret), 60), day_quantile_q75(Vwap))
+  - cs_last_high40(cross_mean(day_sum(Ret), 20), day_quantile_q75(Vwap))
+  - sub(cs_rank(day_quantile_q75(Vwap)), cs_rank(cross_mean(day_quantile_q75(Vwap),
+    241)))
+  - div(day_quantile_q75(Vwap), cross_max(day_quantile_q75(Vwap), 241))
+  - cs_bucket_zscore(day_quantile_q75(Vwap), LogFloatCap)
+  - cs_bucket_demean(day_quantile_q75(Vwap), LogFloatCap)
+  - cs_first_low20(cross_stddev(day_sum(Ret), 60), day_quantile_q75(Vwap))
+  - cs_first_low20(cross_corr(day_sum(Ret), day_sum(Amt), 60), day_quantile_q75(Vwap))
+- type: N
+  hypothesis: 新 idea:『深度回撤段内的二次排序』。D = Close / cross_max(Close, 241) 是当前价相对 241 日(约一年)最高价的位置,深度回撤的票
+    D 小。与价格水平 C(绝对 / 累计价位)不同:D 是相对自己一年高点的位置,与 52 周高点锚定(George-Hwang 2004)同向,与市值、绝对价位、20
+    日反转的关系都弱。用 cs_first_low20(y, D) 把 D 最低的 20% 整体放到最前,段内按 y 排序:y 取 60 日波动(彩票)、20
+    日或 5 日反转、60 日成交额(流动性)、成交额 20 日相对 60 日的变化(放量)、收益离散度、收益与成交量的 60 日相关、上市年龄、板块码。机制:回撤段里锚定在高点的投资者不愿割肉(处置效应),等待越久定价偏差越大,段内谁更被错杀由
+    y 决定(波动高、近期继续下跌的更便宜)。与库的差别:库里 energy_ratio 一族全部作用在整天分钟路径上,没有一条出现 Close / cross_max(Close,
+    ·) 的位置量;含 cs_first 的库成员的 x 是 Vwap 分位数 / 价格水平,不含高点锚定,骨架不同。启发来自本批:cs_first_low20(day_sum(Vwap),
+    day_sum(Vwap)) 在第 1 轮 valid +0.8,说明低位段的 lexicographic 取法在这个尺子上能起作用;而我在 energy_ratio
+    一族(去水平 / 去共同成分)上的 16 个 E 种子与 R 变体全部更差(-1.3 到 -2.8),所以放弃那一族,改押位置分段。变体含 120 日高点、20
+    日均价代替 Close(减少单日噪声)、相对 241 日低点(Close / cross_min,『从底部上涨』的反面)、cs_first_high / cs_last_low
+    的对侧检验、段内板块码排序,以及 20 日平滑。为什么样本外还会在:处置效应与 52 周高点锚定是跨市场、跨样本期的行为金融结果,是慢变量,段成员随价格慢变,15
+    bp 成本下换手低。数学检查:分母是正价格,D 在 (0, 1],无爆点;Close / cross_min 分母同为正价格;无前视(窗口含当天,t+1 交易);热身期前
+    241 日不满窗,占样本前部,不主导结果。
+  inspired_by: 本流第 1 轮 N 位 GP 长出的 cs_first_low20(day_sum(Vwap), day_sum(Vwap)) 低位段取法(valid
+    +0.8),与本批共性表里 day_quantile_q75(Vwap)、cs_first_low20(BoardCode, day_quantile_q75(Vwap))
+    的富集;以及 energy_ratio 去水平类 R 变体全部更差的反面信息
+  seeds:
+  - cs_first_low20(cross_mean(day_std(Volume), 60), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_first_low20(cross_mean(day_sum(Ret), 20), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_first_low20(cross_delta(cross_mean(day_sum(Amt), 20), 60), div(day_last(Close),
+    cross_max(day_last(Close), 241)))
+  - cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_first_low40(cross_mean(day_sum(Ret), 5), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_first_low20(cross_stddev(day_sum(Ret), 120), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_first_low20(cross_corr(day_sum(Ret), day_sum(Volume), 60), div(day_last(Close),
+    cross_max(day_last(Close), 241)))
+  - cs_first_low20(cross_mean(day_sum(Amt), 60), div(day_last(Close), cross_max(day_last(Close),
+    120)))
+  - cs_first_low20(cross_mean(day_sum(Ret), 20), div(cross_mean(day_last(Close), 20),
+    cross_max(day_last(Close), 241)))
+  - cs_first_low20(ListAge, div(day_last(Close), cross_max(day_last(Close), 241)))
+  - cs_first_low20(BoardCode, div(day_last(Close), cross_max(day_last(Close), 241)))
+  - cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_min(day_last(Close),
+    241)))
+  - sub(cs_rank(div(day_last(Close), cross_max(day_last(Close), 241))), cs_rank(cross_mean(day_sum(Ret),
+    5)))
+  - cross_mean(cs_first_low20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close),
+    241))), 20)
+  - cs_first_high20(cross_mean(day_std(Ret), 60), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+  - cs_last_low20(cross_mean(day_sum(Ret), 20), div(day_last(Close), cross_max(day_last(Close),
+    241)))
+R:
+- head: cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 20)
+  why: 第 1 轮窗口 80 / 120 / 241 分数单调变好(-1.06 / -0.88 / -0.47),说明 20 日 std 是噪声主因,峰可能在
+    241 以后;现在试 300、360、480(换手进一步下降)。
+  variants:
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 360)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 480)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, True), 300)
+- head: cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 120)
+  why: 同一族 False 版 120 日 -0.70,241 日 -0.52(增益 +0.17);窗口继续拉长验证峰位置。
+  variants:
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 360)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 480)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 300)
+  - cross_stddev(energy_ratio_n(delete_open_close(Volume), 0.9, False), 180)
+audit:
+  attempts: 1
+  file: audit_1.yaml

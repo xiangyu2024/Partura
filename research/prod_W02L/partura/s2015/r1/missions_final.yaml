@@ -1,0 +1,188 @@
+seed: 2015
+round: 1
+slots:
+- type: E
+  core: cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60)
+  hypothesis: '机制:本批 13 个候选与 3 个素材 head 都是同一个对象 Q = day_quantile_q25(Amt)(每天 241 根分钟成交额的
+    25% 分位,即「安静分钟」的成交额水平)的离散度:I1 = cross_stddev(Q, 60) 是 60 日离散度,三个 head 再套 ts_std(50
+    / 40 / 10)或再套一层 cross_stddev。拆解表读出:(1) 去掉 cross_stddev 一层,分数从 −0.30 掉到 −1.12(必要性
+    +0.82),所以承重的是「离散度」这一层,不是外面的 ts_std(窗口 25 / 50 / 100 是 −0.51 / −0.30 / −0.31,基本平);(2)
+    套两层的 C2 = cross_stddev(cross_stddev(Q, 60), 60) 单独就有 −0.36(train −0.36 / valid
+    +0.17,方向 +1、半衰期 0),比一层的 −1.11 好 0.75,所以「离散度自己的变动」才是有信息的那一阶;(3) Amt 换成 Volume 变差
+    1.2 到 1.6 分,所以承重的是成交额口径(含价格),不是股数;(4) 含 Amt 的 7 条均值 −0.81,含 Low 的 −2.36,Amt 这一族与其它口径差
+    +1.62(p 0.001)。
+
+    问题在量纲:若分钟成交额近似乘性,Q_t = L·exp(u_t),则 I1 ≈ L·σ_u,C2 ≈ L·std(σ_u):水平 L 乘着相对不稳定性。L
+    正是已知成交额族(I1 与它的 rho 是 −0.91,C2 是 −0.74)、流动性、市值以及两个冠军共同吃掉的东西,所以 head 的 −0.3 ~ −0.7
+    读成「水平暴露被剪掉之后的残差」。head 1 的 valid 是 +0.62 而 train 是 −0.30,方向上说明 2023 年以后的样本里 σ_u
+    的不稳定已经有读数;这一位要赌的就是把 L 在表达式里去掉以后,剩下的相对不稳定性能不能把 train 也带到正。σ_u 的不稳定 = 流动性风险的不确定性(vol-of-vol:Baltussen
+    等 2018 在价格波动上发现它定价为负;Chordia 等 2001 发现成交活跃度的波动与预期收益负相关),机制是行为 / 微观结构性的:参与者构成在机构拆单、量化做市、散户脉冲之间切换,会让安静分钟的成交时断时续,这种切换慢变,不依赖某段行情。
+
+    算子怎样实现:每个种子都原样带着 C2,外围只做「去水平」或「换一个参照」,与快照里见过的 ts_std / ts_sum / cross_fangzheng
+    / cross_max 套法完全不同:(1) 比率 div(C2, add(C2, I1)) 是 C2 / I1 的单调变换(秩相同),分母改成和,是为了
+    I1 → 0 而 C2 > 0(尖峰刚离开窗口)时不出现无穷;div(C2, cross_mean(Q, 60)) 用均值当尺;(2) 桶内标准化 cs_bucket_zscore
+    / cs_bucket_demean / cs_bucket_rank,按流动性(cross_mean(day_sum(Amt), 30))、已知族(cross_mean(day_std(Amt),
+    30))、波动(cross_mean(day_std(Ret), 20))、市值(LogFloatCap)十分位:比线性残差更彻底,每个桶里分布对齐,十分位多头书在各桶持仓相同;(3)
+    自身历史 cross_zscore(C2, 120)、cross_delta(C2, 40):不稳定性正在升还是降;(4) 对照价格口径:sub(cs_rank(C2),
+    cs_rank(收益的 vol-of-vol))是「流动性的不稳定」减去「价格的不稳定」(两个秩相关越高,差与 C2 的相关越低,所以比回归残差去得更干净),以及与
+    Volume 口径的秩差(Amt = Volume × 价,差出来的是价格水平通道,名义股价不在 5 个控制里);(5) 薄端对厚端:C2 占「C2 + q75
+    口径二阶离散度」的份额,和对 day_median 的份额,回答不稳定是出在安静分钟还是放量分钟;(6) 状态交互:乘以薄端流动性趋势 sign(cross_mean(Q,
+    20) − cross_mean(Q, 120)),区分「不稳定而且在枯竭」与「不稳定而且在涌入」;(7) 期限结构:C2 占「C2 + 20 / 20 日口径的
+    cross_stddev(cross_stddev(Q, 20), 20)」的份额,即长窗口不稳定相对短窗口不稳定,区分「长期持续的切换」与「最近几周的脉冲」。
+
+    为什么和已有的不同:库里含 cross_stddev(day_quantile_q25(·), 60) 的表达式全是同量纲的平滑(ts_std / ts_sum
+    / cross_fangzheng / cross_max)或再嵌套 cross_stddev,没有一条做比率、桶内标准化、自身历史 z 分数、与收益口径的对照、薄端对厚端的份额或状态交互;这些骨架逐个对照
+    members.csv 的骨架集都不在库里(种子的骨架检查见 notebook)。去了水平以后,它们与三个 head 的日度秩 |ρ| 预计远低于 0.7,与已知族
+    |ρ| 预计低于 0.5。
+
+    为什么样本外还会在:来源是 σ_u 自己的变动,每只股票用自己的历史或同一流动性桶里的同类作参照,不依赖截面水平;窗口是 60 加 60 日,慢变,日换手
+    0.03 到 0.04(批内 head 的实测),15 bp 成本几乎不付;切换是参与者结构的变化,不是某段行情的产物。风险:去水平之后可能什么也不剩(那样这一位就是「vol-of-vol
+    没有 alpha」的干净反证);桶内标准化的种子仍有流动性或市值残留,尺子已把线性、U 形、S 形暴露剪掉。
+
+    数学检查:无前视,窗口都含 t 日收盘及以前,t+1 才交易;Q 在稀疏成交的票上可为 0,整个 60 日窗口为 0 时 cross_stddev = 0,比值
+    0/0 = NaN,这是窄的缺失(拆解表覆盖率 0.9995),不是填充或热身期决定的;所有比率都用「x / (x + y)」或除以均值,分母只在整窗为 0
+    时为 0,没有 C2 / 近零 I1 的爆点;cs_bucket_* 按代码顺序破并列(已知行为,带板块信息);最长窗口 120 日,热身期不主导。'
+  literature:
+  - title: Unknown unknowns Uncertainty about risk and stock returns
+    authors: Guido Baltussen, Sjoerd Van Bekkum, Bart Van Der Grient
+    year: '2018'
+    treatment: 价格波动的波动(vol-of-vol)定价为负;这里把同样的二阶读法搬到安静分钟成交额的 60 日离散度上,用 C2 相对 I1 的比率与桶内标准化去掉水平
+  - title: Trading activity and expected stock returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V Ravi Anshuman
+    year: '2001'
+    treatment: 成交活跃度 / 换手率的变动程度与预期收益负相关;这里用 Q 的二阶离散度近似,并用 Amt 对 Volume 的秩差分出价格水平通道
+  seeds:
+  - div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(day_quantile_q25(Amt), 60)))
+  - div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), cross_mean(day_quantile_q25(Amt),
+    60))
+  - cs_bucket_zscore(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), cross_mean(day_sum(Amt),
+    30))
+  - cs_bucket_demean(div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60),
+    add(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), cross_stddev(day_quantile_q25(Amt),
+    60))), LogFloatCap)
+  - cs_bucket_rank(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), cross_mean(day_std(Amt),
+    30))
+  - cross_zscore(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 120)
+  - cross_delta(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 40)
+  - sub(cs_rank(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60)), cs_rank(cross_stddev(cross_stddev(day_std(Ret),
+    60), 60)))
+  - sub(cs_rank(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60)), cs_rank(cross_stddev(cross_stddev(day_quantile_q25(Volume),
+    60), 60)))
+  - div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(cross_stddev(day_quantile_q75(Amt), 60), 60)))
+  - div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(cross_stddev(day_median(Amt), 60), 60)))
+  - mul(div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(day_quantile_q25(Amt), 60))), sign(sub(cross_mean(day_quantile_q25(Amt),
+    20), cross_mean(day_quantile_q25(Amt), 120))))
+  - div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(cross_stddev(day_quantile_q25(Amt), 20), 20)))
+- type: N
+  hypothesis: '机制:把「安静分钟成交额的波动有多大」换成「它为什么波动、波动是什么形状」。批里的现象:(1) 13 个候选全是 Q = day_quantile_q25(Amt)
+    或同类分位的 60 日离散度的变形,含 Amt 的 7 条均值 −0.81、含 Low 的 4 条 −2.36(差 +1.62,p 0.001);(2) 离散度
+    I1 = cross_stddev(Q, 60) 以人民币计,与已知成交额族的 rho 是 −0.91,尺子把水平剪掉后三个 head 只剩 −0.3 ~
+    −0.7;(3) 套两层的 cross_stddev(cross_stddev(Q, 60), 60) 比一层好 0.75,说明「波动自己的变化」里有信息。也就是说:「波动有多大」这个量被水平绑架了,而「波动从哪里来、往哪个方向、是否持续」是无量纲的,不乘水平,也不在两个库里。
+
+    新想法:把 Q 的波动按成因拆成五类,全部用对数变化、相关或自相关表达,所以与水平无关。(a) 方向:骤降与激增。cross_semistd_neg / cross_semistd_pos(Q,
+    60) 是日度对数变化的下行 / 上行半标准差(只用 Q > 0 且前一日 > 0 的日子),以及下行占比 neg / (neg + pos)。骤降 = 做市与大资金撤出、安静分钟没人接,激增
+    = 注意力涌入;两者对后续收益的含义相反,而 std 把它们混在一起。(b) 共同对个股:个股薄端流动性的对数变化对全市场同一序列(cs_mean(log(Q)),所有票同一个数)的回归
+    beta 与相关(流动性共性,Chordia-Roll-Subrahmanyam 2000;流动性 beta,Acharya-Pedersen 2005:对市场流动性冲击敏感的股票要求溢价),以及扣掉市场后的个股自身波动
+    cross_stddev(cs_demean(log(Q)), 60)(特质流动性波动,类比特质波动率)。(c) 与价格活动的耦合:cross_corr(Q,
+    day_std(Ret), 60)、cross_corr(对数变化, abs(日收益), 60):价格动荡时安静分钟是涌入还是消失(Brunnermeier-Pedersen
+    2009 的流动性螺旋:流动性与波动共同恶化的股票风险更大)。(d) 持续性:对数变化的一阶自相关,负 = 噪声主导的估计量、正 = 状态切换。(e) 形状:Q
+    / q75(安静分钟对放量分钟的比,在 [0, 1],每天一个无量纲数)的均值与 60 日离散度,即成交是否均匀,与 day_gini 一族不同的是它跨日读「均匀程度的不稳定」。
+
+    为什么和已有的不同:库里 day_quantile_q25 只出现在 cross_stddev / cross_max / ts_sum 的同量纲套法里;种子的骨架里有
+    cross_semistd_*、cs_demean(log(·)) 的跨日离散度、对市场序列的回归 beta / 相关、与 day_std(Ret) 的 cross_corr、对数变化的
+    cross_autocorr、Q / q75 的比,逐个对照 members.csv 的骨架集都不在库里。与 head 的相关度应该很低(无量纲量不乘水平);与已知族、流动性、市值也应该低,因为对数变化与相关把水平差掉了。与
+    5 个控制的差别:控制全是水平或价格波动 / 反转,这里没有一条是水平。
+
+    为什么样本外还会在:每一类都是有文献的风险或溢价通道(流动性共性与流动性 beta、流动性螺旋、vol-of-vol),不是对某段行情的拟合;窗口都是 60
+    日,日换手不会高,15 bp 下付得起;方向 / 共性 / 耦合这几类由参与者结构决定,慢变。风险:相关与 beta 的估计量在 60 日窗口里有噪声(排名在
+    EMA 下才稳);(c) 类与波动控制可能有残余相关,尺子已剪掉线性、U 形、S 形暴露;如果这一位一个 head 也不出,结论就是「Q 的波动里除了水平什么也没有」,同样有信息。
+
+    数学检查:无前视,全部是 t 日及以前的窗口。log(Q) 在 Q = 0 时是 NaN(内核对 |x| ≤ 1e-9 返回 NaN),该日在窗口里被跳过、不是填充;cross_semistd_*
+    内核要求 Q > 0 且前一日 > 0、至少 3 天,否则 NaN;beta 在窗口内市场序列无方差时 NaN;cross_corr / cross_autocorr
+    有界在 [−1, 1],没有除以近零的爆点;Q / q75 在 q75 = 0 时 0/0 = NaN(窄缺失)。覆盖率以流水线的闸门为准(拆解表里 Q 相关量的覆盖率是
+    0.9995,新加的 log 与半标准差只会多出 Q = 0 的日子)。热身期最长 61 日。'
+  inspired_by: B043 批:13 个候选全是 day_quantile_q25 的 60 日离散度;Amt 口径远好于 Low / High(+1.62,p
+    0.001);I1 与已知族 rho −0.91 说明离散度被水平绑架;两层 cross_stddev 比一层好 0.75。
+  literature:
+  - title: Commonality in liquidity
+    authors: Tarun Chordia, Richard Roll, Avanidhar Subrahmanyam
+    year: '2000'
+    treatment: 个股流动性与市场流动性共同变动;这里用 Q 的对数变化对 cs_mean(log(Q)) 的 ts_regbeta / ts_corr(流动性
+      beta)与扣掉市场后的个股波动近似
+  - title: Asset pricing with liquidity risk
+    authors: Viral V Acharya, Lasse Heje Pedersen
+    year: '2005'
+    treatment: 对市场流动性冲击更敏感、以及流动性与市场收益共同变动的股票要求更高的预期收益;这里用流动性 beta 与 Q 和 day_std(Ret)
+      的 cross_corr 近似
+  - title: Market liquidity and funding liquidity
+    authors: Markus K Brunnermeier, Lasse Heje Pedersen
+    year: '2009'
+    treatment: 流动性与波动互相放大的流动性螺旋;这里用 Q 与波动 / 绝对收益的滚动相关读耦合强度,用下行半标准差读流动性骤降
+  seeds:
+  - cross_semistd_neg(day_quantile_q25(Amt), 60)
+  - sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile_q25(Amt),
+    60))
+  - div(cross_semistd_neg(day_quantile_q25(Amt), 60), add(cross_semistd_neg(day_quantile_q25(Amt),
+    60), cross_semistd_pos(day_quantile_q25(Amt), 60)))
+  - cross_stddev(cs_demean(log(day_quantile_q25(Amt))), 60)
+  - ts_regbeta(ts_delta(cs_mean(log(day_quantile_q25(Amt))), 1), ts_delta(log(day_quantile_q25(Amt)),
+    1), 60)
+  - ts_corr(ts_delta(cs_mean(log(day_quantile_q25(Amt))), 1), ts_delta(log(day_quantile_q25(Amt)),
+    1), 60)
+  - cross_stddev(cross_regres(cs_mean(log(day_quantile_q25(Amt))), log(day_quantile_q25(Amt)),
+    60), 60)
+  - cross_corr(day_quantile_q25(Amt), day_std(Ret), 60)
+  - cross_corr(cross_delta(log(day_quantile_q25(Amt)), 1), abs_(day_sum(Ret)), 60)
+  - cross_autocorr(cross_delta(log(day_quantile_q25(Amt)), 1), 60, 1)
+  - cross_autocorr(sub(log(day_quantile_q25(Amt)), cross_mean(log(day_quantile_q25(Amt)),
+    60)), 120, 5)
+  - cross_stddev(div(day_quantile_q25(Amt), day_quantile_q75(Amt)), 60)
+  - cross_stddev(div(day_quantile_q25(Amt), day_median(Amt)), 60)
+  - cross_zscore(cross_mean(div(day_quantile_q25(Amt), day_quantile_q75(Amt)), 20),
+    120)
+R:
+- head: ts_std(cross_stddev(day_quantile_q25(Amt), 60), 50)
+  why: 烂的部件是 cross_stddev(Q, 60) 里的「水平」:它以人民币计,与已知成交额族的 rho 是 −0.91(拆解表 sufficiency),所以
+    head 在新尺子下只剩 train −0.30;ts_std 窗口 25 / 50 / 100 的分数是 −0.51 / −0.30 / −0.31,不承重。变体把水平拿掉,保留「波动」这一层(必要性
+    +0.82):(1) 变异系数,除以 60 日均值;(2) 在对数上取离散度(Q = 0 的日子 NaN 被跳过,不是填充);(3) 在流动性十分位内标准化;(4)
+    只取下行半标准差(对数变化,无量纲);(5) 先做自身 z 分数再取 50 日标准差,读的是「相对自己 60 日常态的偏离有多不稳」。数学上都没有近零的分母:均值只在整窗为
+    0 时为 0(得 NaN)。
+  variants:
+  - ts_std(div(cross_stddev(day_quantile_q25(Amt), 60), cross_mean(day_quantile_q25(Amt),
+    60)), 50)
+  - ts_std(cross_stddev(log(day_quantile_q25(Amt)), 60), 50)
+  - cs_bucket_zscore(ts_std(cross_stddev(day_quantile_q25(Amt), 60), 50), cross_mean(day_sum(Amt),
+    30))
+  - ts_std(cross_semistd_neg(day_quantile_q25(Amt), 60), 50)
+  - cross_stddev(cross_zscore(day_quantile_q25(Amt), 60), 50)
+- head: ts_std(cross_stddev(day_quantile_q25(Amt), 60), 40)
+  why: 同一个烂部件(水平),窗口 20 / 40 / 80 的分数是 −0.56 / −0.42 / −0.44,窗口不是问题。这一组换三种去水平方式:(1)
+    变异系数;(2) 在已知成交额族(cross_mean(day_std(Amt), 30))十分位内取秩,使十分位书在各桶持仓相同;(3) 把 Q 换成 Q
+    / q75(一天里安静分钟对放量分钟的比,无量纲、在 [0, 1]),再取 60 日离散度。拆解里 Amt 换 Volume 变差 1.7 分,所以(3)保留成交额口径。
+  variants:
+  - ts_std(div(cross_stddev(day_quantile_q25(Amt), 60), cross_mean(day_quantile_q25(Amt),
+    60)), 40)
+  - cs_bucket_rank(ts_std(cross_stddev(day_quantile_q25(Amt), 60), 40), cross_mean(day_std(Amt),
+    30))
+  - ts_std(cross_stddev(div(day_quantile_q25(Amt), day_quantile_q75(Amt)), 60), 40)
+- head: ts_std(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 10)
+  why: 烂的部件是最外层 ts_std(·, 10):C2 = cross_stddev(cross_stddev(Q, 60), 60) 单独是 −0.36(train
+    −0.36 / valid +0.17),套上 10 日 ts_std 后变成 −0.71,必要性只有 +0.23,窗口 5 / 20 也是 −0.79 /
+    −0.69;C2 是慢变量,对它取 10 日标准差读的主要是斜率与噪声。变体把这一层换掉:(1) 先取 C2 / (C2 + I1) 的有界比率再取 10
+    日标准差;(2) 在市值十分位内标准化整个 head;(3) cross_madz(C2, 60),今天的 C2 相对自己 60 日中位数的稳健偏离;(4)
+    在对数上做同样的两层离散度,去掉乘性水平。分母都是和,不会为近零。
+  variants:
+  - ts_std(div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(cross_stddev(day_quantile_q25(Amt),
+    60), 60), cross_stddev(day_quantile_q25(Amt), 60))), 10)
+  - cs_bucket_zscore(ts_std(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60),
+    60), 10), LogFloatCap)
+  - cross_madz(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), 60)
+  - ts_std(cross_stddev(cross_stddev(log(day_quantile_q25(Amt)), 60), 60), 10)
+audit:
+  attempts: 1
+  file: audit_1.yaml

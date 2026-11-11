@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '核心 day_corr(abs_(in_delay(Ret,5)),Amt) 就是快照 head 2 本身(相关度表 |ρ|=1.00,score -2.70);外围是跨日平滑(cross_mean / cross_ema)、比值、分位尾均值、分桶去市值、与符号的乘积。与该 head 的原始秩 |ρ| 为 0.18–0.57(seed 1 0.55、seed 6 0.54、seed 12 0.57),但对 5 个控制取残差后与该 head 的交易信号残差 |ρ| 在 seed 1/2/3/6/7/8 为 0.70–0.77,说明这些种子大多仍是同一个交易信号的平滑版本;只有 seed 4、5、9、10、11 的残差偏离到 0.07–0.48。因为它不是换个写法的同一度量(时间尺度与截面处理确有变化),不给 1,但也不算真正新的,给 3。合理度 4:cross_mean / cross_ema 按交易日因果平滑;day_corr 只用当日分钟;in_delay 向后取值(算子定义核对,无前视);cs_bucket_zscore 按 LogFloatCap 分桶;cs_mean 与 ts_regres 的用法正确(ts_regres(x,y,d) 是 y 对 x 的滚动残差,此处 y=核心、x=day_sum(Ret),用法与「去掉当天涨跌机械成分」一致)。不触及 §4 的任何陷阱(无 nanrank_last 类算子、无 in_regres(X,in_mean_full(X)))。机制是「波动先行、成交跟随」反映的信息传导速度;风险是 |Ret| 与 Amt 的日内相关可能主要来自共同的 U 形日内季节性,但这是定义上的担心,不是 §4 的数学问题,不挡。如果它有 alpha,最可能来自小盘题材票价格发现延迟这种结构性差异,经慢平滑后留下的截面稳定部分,而不是 5 分钟级的瞬时信息。划掉 seed 12:cross_mean(sub(core,cs_mean(core)),40) 中 cs_mean(core) 是每日截面常数(所有票同值),减去它后对 40 日取均值,每日截面秩与 cross_mean(core,40) 完全相同,只在窗口内有缺失日的票上有微小偏差,属于重复。核心与 5 个控制的原始 |ρ| 最大 0.33(liq、known),< 0.8 通过;无种子触发 ≥0.7 的 head 自动划掉或 ≥0.8 的控制自动划掉。剩 11 个种子 ≥ 4。通过。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '三个 head 都是单向的 day_corr(|Ret 延迟|, 量);本位的差分 day_corr(abs_(Ret),in_delay(Volume,5)) 减去 day_corr(abs_(in_delay(Ret,5)),Volume)(以及 Amt、有符号、log(Amt) 版本)是双向的「领先–滞后不对称」,与快照 head 的原始秩 |ρ| 最大 0.34(seed 1 与 head 的 Volume 版本),残差 |ρ| 在 0.09–0.41 之间,与 5 个控制的原始 |ρ| 最大 0.38(seed 11 与已知族),明显不是换写法。给 4 而不是 5,因为它是 head 的结构组合而不是新的数据源。合理度 4:所有 day_corr 与 in_delay 在分钟轴上向后取值,无前视;seed 8 的分母 add(abs_(P),abs_(Q)) 使 (P-Q)/(|P|+|Q|) 恒在 [-1,1] 之内,不会爆点,只是两者都接近 0 的票的值接近噪声符号,这是弱点但不是 §4 的数值伪影;seed 12 的 log(Amt) 经 log 的 |x|>EPS 守卫,不会出现 -inf。机制说得通:共同的日内 U 形季节性在差分中部分抵消,剩下的是方向性的先后关系。如果它有 alpha,最可能来自投资者结构(散户 / 机构占比)决定的量价领先方向,这个结构变化慢。划掉:无。注意 seed 4、5 与 seed 1、2 只是 Volume 换成 Amt,两个字段不同,不算重复;seed 9 是同一延迟的有符号相关,不是领先–滞后,但与快照 head 的 |ρ| 0.24、残差 0.09,不是重复,保留。12 个种子全部保留,≥ 4 通过。'
+R:
+  - head: 'day_corr(abs_(in_delay(Ret, 5)), Amt)'
+    soundness: 4
+    reasons: '5 个变体是延迟替换(15/20/30 分钟)加因果跨日平滑(cross_mean / cross_ema,20 日),算子与定义都核对过,in_delay 向后取值,无前视,无 §4 陷阱。延迟变长和平滑是这个 head 的合理的烂部件替换方向,机制(慢信息的传导)清楚。风险与 slot a 相同:日内 U 形季节性可能是共同来源。注意:变体 1–3 与原 head 的残差 |ρ| 为 0.58–0.79,若过门槛按规则会替换原 head 而不是收录;变体 4、5 与快照 head 1 的原始 |ρ| 0.58,按规则判断。'
+  - head: 'day_corr(abs_(in_delay(Ret, 5)), Volume)'
+    soundness: 4
+    reasons: '与上一组同构(Volume 替换 Amt),延迟替换与跨日平滑都是因果的,算子定义核对过,无前视、无 §4 陷阱。机制清楚,风险同上。注意变体 1、2 与原 head 的残差 |ρ| 为 0.73–0.79,若过门槛会替换原 head。'
+summary: 'a 通过(创新 3、合理 4,划掉 seed 12,余 11 个);b 通过(创新 4、合理 4,无划掉,余 12 个);两个 R 组合理度均 4;审计未发现数学问题(无前视、无数值伪影、定义无坏掉);只挡了一个重复种子。'

@@ -1,0 +1,107 @@
+seed: 2050
+round: 2
+slots:
+- type: E
+  core: day_sum(Open)
+  hypothesis: 'Core = day_sum(Open), the daily sum of minute open prices, i.e. the
+    (adjusted) price level of the stock, which as a cross-sectional rank equals cumulative
+    return since the base date (long-horizon momentum / reversal plus nominal-price
+    information). It is the only subtree in the batch snapshot with a positive enrichment
+    effect (+1.39, p 0.008; candidates containing it average -1.7 vs -3.1 without),
+    while the upside-minute-volatility family of all three heads is a pure volatility
+    proxy that the controls erase (scores -2.3 to -2.7). Round 1 spent the E slot
+    on the upside-vol core and gave nothing (best -0.56), so this round moves to the
+    one part that helped. Periphery is deliberately different from what was tried
+    (cross_corr(core, ...) with Open/Close/Amt in the previous E mission): we turn
+    the level into things the 20-day-reversal and size controls cannot represent:
+    (a) distance to the own rolling high / long mean (div by cross_max or cross_mean
+    of itself over 120-250 days), a 52-week-high anchoring mechanism where investors
+    under-react to news for stocks near highs; (b) skip-month long-horizon momentum,
+    the ratio of the level 20 days ago to the level 240 days ago, which excludes the
+    20-day reversal the control already holds; (c) short-minus-long smoothed level
+    differences; (d) within-size-bucket demeaning (cs_bucket_demean on LogFloatCap)
+    and own-history z-score so that the cap control and the cross-section of price
+    levels are not mixed; (e) comovement of price level with turnover via cross_corr(...,
+    day_sum(Amt)). The mechanisms are slow behavioural (anchoring, under-reaction,
+    disposition), they do not rely on any one sample window and are standard in A-share
+    cross-sections, which is why they should persist out of sample. The library already
+    contains day_sum(Open) only in pair-wise correlation forms and its skeletons;
+    these ratio / rolling-extreme skeletons are not in the 5583 library expressions.'
+  seeds:
+  - div(day_sum(Open), cross_mean(day_sum(Open), 120))
+  - div(day_sum(Open), cross_max(day_sum(Open), 250))
+  - div(cross_delay(day_sum(Open), 20), cross_delay(day_sum(Open), 240))
+  - sub(cross_mean(day_sum(Open), 20), cross_mean(day_sum(Open), 120))
+  - cross_zscore(day_sum(Open), 120)
+  - cs_bucket_demean(day_sum(Open), LogFloatCap)
+  - cs_bucket_demean(div(day_sum(Open), cross_mean(day_sum(Open), 240)), LogFloatCap)
+  - cross_corr(day_sum(Open), day_sum(Amt), 60)
+  - div(cross_delta(day_sum(Open), 60), cross_mean(day_sum(Open), 60))
+  - cs_bucket_zscore(div(day_sum(Open), cross_delay(day_sum(Open), 120)), cross_mean(day_sum(Amt),
+    20))
+  - div(cross_ema(day_sum(Open), 20), cross_ema(day_sum(Open), 250))
+- type: N
+  hypothesis: 'New idea: split the daily return into the overnight gap (first open
+    over previous close) and the intraday leg (close over first open), and accumulate
+    each over 20-120 days. Mechanism: in A-shares overnight gaps carry information
+    flow from news / institutional positioning and were found to persist for weeks,
+    while intraday returns are dominated by retail trading and mean-revert; so the
+    cumulative overnight-minus-intraday spread should predict the next days, and it
+    is a sign-bearing, direction-of-time quantity. Operators: day_first(Open), day_last(Close)
+    and cross_delay(day_last(Close), 1) form the overnight ratio ON = day_first(Open)
+    / previous day close and the intraday ratio ID = day_last(Close) / day_first(Open);
+    cross_mean / cross_zscore smooth them, sub(…ON, …ID) is the spread, cross_corr(ON,
+    ID, 60) measures whether gaps get reversed intraday (a reversal-intensity gauge),
+    cross_regbeta gives the gap-to-intraday sensitivity, and cs_bucket_demean on LogFloatCap
+    removes size. Different from the library: batch 1 and 2 are about the dispersion
+    of minute returns (day_std of the positive part, ratios of it, day_sum(Open) forms)
+    and do not separate overnight from intraday at all; the library heads only use
+    Ret inside the day, so the close-to-open leg is invisible to them. Different from
+    the controls: the 20-day reversal control uses total return, and the overnight-minus-intraday
+    spread is only partly its linear part, with the rest orthogonal after decomposition.
+    Out of sample it persists because it comes from who trades when (institutional
+    overnight / auction vs retail intraday), a structural feature of the market, not
+    a fitted pattern.'
+  inspired_by: 'Batch 1/2: every Ret-dispersion variant is a volatility proxy and
+    loses; the only helpful subtree was a price-level one (day_sum(Open)), which suggests
+    open-price information that the minute-return features do not carry, so the open-gap
+    leg is the natural unexplored piece.'
+  seeds:
+  - cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 60)
+  - cross_mean(div(day_last(Close), day_first(Open)), 60)
+  - sub(cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 60), cross_mean(div(day_last(Close),
+    day_first(Open)), 60))
+  - cross_zscore(div(day_first(Open), cross_delay(day_last(Close), 1)), 60)
+  - cross_corr(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close),
+    day_first(Open)), 60)
+  - cross_regbeta(div(day_last(Close), day_first(Open)), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 60)
+  - cross_stddev(div(day_first(Open), cross_delay(day_last(Close), 1)), 60)
+  - cs_bucket_demean(cross_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 40), LogFloatCap)
+  - sub(cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 10), cross_mean(div(day_first(Open),
+    cross_delay(day_last(Close), 1)), 120))
+  - cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close),
+    day_first(Open))), 20)
+  - cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 120)
+  - cs_bucket_zscore(cross_mean(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 60), cross_mean(day_sum(Amt), 20))
+R:
+- head: cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False),
+    Ret, create_like(Ret, 0))), day_std(Ret)), 80)
+  why: 'Window ablation: 80 -> 160 improves by +0.40 (train -2.18, valid -1.10) and
+    80 -> 40 does not, so the 80-day average is still too short and the day_std(Ret)
+    denominator knockout is neutral (+0.08), i.e. the ratio adds nothing; longer windows
+    and the plain numerator are the repairs.'
+  variants:
+  - cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), day_std(Ret)), 160)
+  - cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), day_std(Ret)), 240)
+  - cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,
+    create_like(Ret, 0))), day_std(Ret)), 120)
+  - cross_mean(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret,
+    0))), 160)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,87 @@
+seed: 2021
+round: 3
+slots:
+- type: E
+  core: signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 2)
+  hypothesis: 核心是「停在当日最高价的分钟占比 减 停在当日最低价的分钟占比」再取带符号的平方(涨跌停封板的方向性频率,普通日里 tick 噪声对两项对称、差约
+    0,封板日放大)。它在第 2 轮 N 位里是整个种子最接近线的读数:cross_ema(核心, 60) 得分 -0.10(train -0.10 / valid
+    +0.33),比同批其它表达式好一个量级;核心在 loc 共性表里含它的 7 个候选均值 -1.00 对 -2.06(p 0.008)。要解决的问题:train
+    为负 valid 为正,说明读数在 2018-2021 年的小盘题材炒作段里方向与 2023-2025 不同,或被换手与噪声压住。第 2 轮见过的外围只有
+    cross_ema(15/30/60/120)、ts_delay 一天、乘以隔夜跳空、快慢 EMA 之差、自相关。本轮的外围全部换成不同的机制:(1) 下尾
+    / 上尾均值(cross_tail_mean_q25/q75,120 日):只读窗口里最极端的四分之一日子,即「封跌停的频率」与「封涨停的频率」分开读,窗口内没有封板的票两端都只剩
+    tick 噪声而落在中段;(2) ts_quantile_q75 / ts_med 的分位数链,压掉单日一字板尖峰;(3) 对自身历史的 cross_zscore(120):读的是「这只票最近比它自己平时更多封涨停还是封跌停」的变化而不是水平,把长期题材股的永久水平去掉;(4)
+    慢 EMA 241 与 60 日 EMA 之差(状态切换);(5) 除以 60 日慢波动 day_std(Ret) 的 EMA(加 0.001,波动恒正),把封板频率变成「相对于该票正常波动的封板」,降低对波动控制的暴露;(6)
+    在 LogFloatCap 十分位内去均值(日频叶子,不是单日量,桶变量变化极慢,换手小):读同市值组内的封板倾向,而不是小盘本身;(7) 在 60 日成交额十分位里把最活跃的
+    10% 压到最底(cs_last_high10):纯多头书买不进一字板,最活跃一端以封板为主的票被排除;(8) 乘以日内涨跌符号:封板与当日收盘方向一致才计入。算子怎样实现:全部是因果窗口,cross_ema
+    实数权重避免整数并列,day_at_max_ratio / day_at_min_ratio 在有效分钟少于 2 时为 NaN,取值 0 到 1,差在 -1
+    到 1,平方保留符号所以不会因符号丢失而成为无方向量。为什么与库不同:库 5583 条里没有一条用 at_max / at_min,也没有一条按「封板频率的尾部、相对自身历史、对波动归一」去读它。为什么样本外还会在:涨跌停是交易制度而不是样本期风格(幅度的唯一一次变化
+    2020-08 创业板改 20% 已被日频叶子 LimitWidth 吸收,本核心本身是比例所以不依赖幅度);封板频率是个股的慢属性,慢半衰期平均后换手低,15
+    bp 成本很小;方向由训练段定,不预设。已知风险:一字日读数恒为 0,开盘即封涨停的票多头书里买不进(方向可能由封跌停一侧决定);一半以上股票窗口内无封板,读数只是
+    tick 噪声。
+  seeds:
+  - cross_tail_mean_q25(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 120)
+  - cross_tail_mean_q75(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 120)
+  - ts_quantile_q75(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 10), 60)
+  - cross_ema(ts_med(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 10), 60)
+  - cross_zscore(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 10), 120)
+  - sub(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 60), cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 241))
+  - div(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 60), add(cross_ema(day_std(Ret), 60), 0.001))
+  - cs_bucket_demean(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 120), LogFloatCap)
+  - cs_last_high10(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 60), cross_ema(day_sum(Amt), 60))
+  - cross_ema(mul(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), sign(sub(day_last(Close), day_first(Open)))), 60)
+  - cross_ema(cross_tail_mean_q75(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    2), 60), 30)
+- type: N
+  hypothesis: 想法:市场状态切换(Cooper、Gutierrez、Hameed 2004 的「上涨市动量、下跌市反转」;Cheema 与 Nartea
+    对中国市场的状态依赖研究):同一个个股读数在牛市和熊市里符号相反,不分状态直接排名时两种状态互相抵消。批里的现象(B061 到 B063,42 个成员,全是
+    day_argmin 钟点 + ts_max / sigmoid / ts_quantile_q75 链):在库自己的尺子下它们大多 raw 夏普为正,新尺子(两个冠军已含这一族)下全部亏,而且
+    train 与 valid 的符号不稳;第 2 轮 N 位里最接近线的 cross_ema(封板差平方, 60) 是 train -0.10 / valid
+    +0.33,同样是「两段方向不一致」。不一致的一个自然解释是读数的符号依赖市场状态,而库里 5583 条表达式一条都不带「市场状态」(全部是截面内、只用个股自己的数据),所以这是库和冠军都没有的维度。实现:cs_flip_by_state(y,
+    g) = 当天 g 的截面均值相对其过去 241 日中位数偏高时输出 +rank(y)、偏低时输出 -rank(y)(rank 已减 0.5,中心为 0),状态只用
+    t 日及以前的数据,无前视;状态变量 g 取 cross_ema(day_sum(Ret), 60)(全市场 60 日趋势)、cross_ema(day_std(Ret),
+    20)(全市场波动状态)。被翻转的 y 取三类:(a) 6 个月动量跳过最近一个月 log(ts_delay(day_last(Close), 20)) -
+    log(ts_delay(day_last(Close), 120));(b) 20 日 / 60 日收益 cross_ema(day_sum(Ret),
+    20 或 60) 与彩票型最大值 cross_max(day_sum(Ret), 20)(上涨市追、下跌市反);(c) 第 2 轮最接近线的封板差 cross_ema(sub(day_at_max_ratio(Close),
+    day_at_min_ratio(Close)), 60) 和日内振幅 / 昨收的慢 EMA。为什么和库、head、控制不同:控制里的 20 日反转是固定符号的线性暴露,奖励把它的一次项、平方、立方都去掉,但按状态翻转后的信号在上涨日和下跌日的符号相反,日度残差随之整体翻转,是它去不掉的结构;库里无
+    cs_flip_by_state。为什么样本外还会在:这是行为金融里有大量文献的状态依赖(过度自信与处置效应在上涨后加强,在下跌市里被抛压推翻),状态切换的频率低(60
+    日趋势对 241 日中位数,一年只切几次),换手不被翻转本身抬高;若 y 在另一个状态里只是失效而不是反转,翻转后会明显变差,这本身是检验。数学检查:ts_delay
+    的延迟 120 日在窗口开头产生 120 日 NaN(覆盖率约 0.9,不是定义坏掉:状态本身与 rank 对有值的票是良定义的);log 的参数是后复权收盘价(正数);cs_flip_by_state
+    在状态未定义的日子输出 NaN 而不是静默当成低;种子里唯一的除法是第 8 个种子的振幅除以昨收(后复权价,正数),没有除以近零的量。已知风险:状态切换的次数少(2018
+    到 2025 年约十几次),分数对个别年份敏感;g 的中位数基准 241 日有热身。
+  inspired_by: B061 到 B063:argmin 钟点链在库自己的尺子下 raw 为正、新尺子下 train / valid 符号不稳;第 2 轮封板差读数
+    train -0.10 / valid +0.33 的方向分歧,提示读数符号依赖市场状态
+  seeds:
+  - cs_flip_by_state(sub(log(ts_delay(day_last(Close), 20)), log(ts_delay(day_last(Close),
+    120))), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(sub(log(ts_delay(day_last(Close), 20)), log(ts_delay(day_last(Close),
+    120))), cross_ema(day_std(Ret), 20))
+  - cs_flip_by_state(cross_ema(day_sum(Ret), 60), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_ema(day_sum(Ret), 20), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_max(day_sum(Ret), 20), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_ema(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    60), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_ema(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    60), cross_ema(day_std(Ret), 20))
+  - cs_flip_by_state(cross_ema(div(sub(day_max(High), day_min(Low)), ts_delay(day_last(Close),
+    1)), 60), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_ema(day_signed_ratio(Ret, Amt), 60), cross_ema(day_std(Ret),
+    20))
+  - cs_flip_by_state(cross_ema(day_pos_ratio(Ret), 60), cross_ema(day_sum(Ret), 60))
+  - cs_flip_by_state(cross_tail_mean_q25(day_sum(Ret), 60), cross_ema(day_sum(Ret),
+    60))
+  - cs_flip_by_state(cross_ema(day_sum(Ret), 120), cross_ema(day_sum(Ret), 20))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,66 @@
+seed: 2039
+round: 2
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 新想法:成交额在一天里"何时"发生、"哪个方向"发生,而不是总量多少。 机制:机构大单拆单多发生在开盘冲击与收盘集合竞价之间的连续竞价里,散户与事件驱动成交集中在开盘;个股成交额的时间重心
+    (day_centroid:0 = 全在开盘、1 = 全在收盘)、集中度(day_gini)、成交额加权的收益与带符号的成交额占比(day_signed_ratio:上涨分钟的成交额占比
+    减下跌分钟的占比,没有逐笔数据时的净买入压力代理)读的是"钱在什么价格上、什么时点上动",是总成交额水平和波动控制之外的信息 (控制里只有总成交额 / 波动
+    / 反转 / 市值与 Amt 日标准差的 30 日均值)。 算子怎样实现:day_centroid / day_gini / day_signed_ratio
+    / day_wmean / day_wstd / day_topw_mean / day_es_ratio_hi 是为这件事新加的日内算子; 库里 5583
+    条表达式里这些算子 0 次出现(我 grep 了 members.csv),所以骨架全是新的。因为 B116 的教训是慢的聚合承重(开盘金额 3 日和 6
+    日,窗口越长 valid 越好),所有种子都用 cross_ema / cross_zscore / cross_tail_mean 在 60~120 日上聚合;分钟比例统计的单日噪声很大,慢聚合把它变成个股的"交易风格常态"。
+    受启发于:B116(开盘分钟成交额的 3 日和,valid 好于 train;换 Volume 更差,说明资金规模与时点是承重的)与其 87% 的 Amt
+    叶子; Chordia-Subrahmanyam 2004(订单不平衡的持续性)、Heston-Korajczyk-Sadka 2010(成交量的日内周期性)。
+    为什么样本外还会在:(a) 交易风格(拆单 / 事件 / 散户)是个股的慢变特征,会跨年存在;(b) A 股 T+1 与涨跌停使开盘与收盘成为结构性重心,不会随样本外消失;
+    (c) 与流动性 / 波动水平无关,所以尺子里的控制吃不掉它。 数学检查:day_centroid 对 Amt 分母是日总额,停牌日为缺失(tot>0 才有值);day_signed_ratio
+    在 [-1,1],没有近零除; div(day_wstd(Ret,Amt), day_std(Ret)) 的分母是日内分钟收益标准差,一字板 / 全天不动日在
+    day_std=0 时会出现 0/0 或 inf, 已在种子里用 replace_small_with_nan(is_gt(day_std(Ret), 0.0001))
+    去掉;其余种子不含除法。无前视:全部是当日分钟的统计,再取尾随日窗口。
+  inspired_by: B116:day_first(cross_sum(log(Amt), 3)) 与 day_open 的开盘分钟成交额(valid 比
+    train 好,Amt 叶子 87%,Volume 版更差)
+  seeds:
+  - cross_ema(day_centroid(Amt), 60)
+  - cross_zscore(day_centroid(Amt), 120)
+  - cross_ema(day_gini(Amt), 60)
+  - sub(cross_ema(day_centroid(Amt), 20), cross_ema(day_centroid(Amt), 120))
+  - cross_ema(day_signed_ratio(Ret, Amt), 60)
+  - cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 60)
+  - cross_ema(day_topw_mean(Ret, Amt), 120)
+  - cross_ema(div(day_wstd(Ret, Amt), replace_small_with_nan(is_gt(day_std(Ret), 0.0001))),
+    60)
+  - cross_corr(day_centroid(Amt), day_wmean(Ret, Amt), 60)
+  - cross_ema(sub(day_centroid(Amt), day_centroid(Volume)), 60)
+  - mul(cross_ema(day_centroid(Amt), 60), replace_small_with_nan(is_gt(ListAge, 120)))
+  - cross_ema(day_signed_ratio(Ret, Volume), 120)
+  - cs_bucket_demean(cross_ema(day_centroid(Amt), 60), LogFloatCap)
+R:
+- head: sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt,
+    3)), 50)))
+  why: 拆解表:窗口 50 -> 100 把 score 从 -1.07 提到 -0.55(train -0.21 / valid -0.55),25 则变差到
+    -2.41,说明回归窗口越长越好,50 日的滚动回归斜率噪声是烂部件;abs_ 去掉后变差 4.8,是承重的。所以只拉长窗口,保留 abs_ 与两个叶子。
+  variants:
+  - sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt,
+    3)), 150)))
+  - sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt,
+    3)), 241)))
+  - sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross_sum(Amt,
+    3)), 100)))
+  - sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 6)), day_last(cross_sum(Amt,
+    6)), 100)))
+- head: day_first(cross_sum(log(Amt), 3))
+  why: 拆解表:cross_sum 窗口 3 -> 6 valid 从 -0.74 到 -0.39(train -1.36),2 日更差,说明 3 日求和太短、噪声烂;train
+    是被卡的一段,两段的拖后腿者不同。依据是窗口变体,所以变体只动窗口 / 加一层日轴慢聚合,不换叶子(换 Volume 更差)。
+  variants:
+  - day_first(cross_sum(log(Amt), 10))
+  - day_first(cross_sum(log(Amt), 20))
+  - day_first(cross_sum(log(Amt), 60))
+  - cross_ema(day_first(cross_sum(log(Amt), 3)), 20)
+  - cross_ema(day_first(cross_sum(log(Amt), 3)), 60)
+  - day_first(cross_ema(log(Amt), 20))
+audit:
+  attempts: 1
+  file: audit_1.yaml

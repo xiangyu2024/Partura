@@ -1,0 +1,179 @@
+seed: 2044
+round: 1
+slots:
+- type: E
+  core: day_corr(Ret, Volume)
+  hypothesis: '【读数】核心 C = day_corr(Ret, Volume):当天 241 根分钟的收益与成交量的相关系数 c_t(量价同步度;正
+    = 放量时在涨,负 = 放量时在跌)。这一批(B130,day_corr(F,F) 一族,58 条)里的事实(快照拆解表,不是我的推测):C 本身两段都亏(train
+    -3.39 / valid -2.98);外面套长窗口取极值才转正:单层 ts_max 窗口 20 / 40 / 80 = -0.99 / -0.32 /
+    +0.24,嵌套 40+80(等价于约 119 日的单层最大值)= +0.56(train +0.68 / valid +0.56);Volume 换 Amt
+    分数几乎不变(+0.23 / +0.52);富集表里含 C 的 7 个候选均值差 +1.10(p 0.015)。3 个 head 里两个就是 C 的 ts_max
+    / ts_max 套 ts_max(只在窗口上不同),第三个是 Vwap 对 Amt 相关的 60 日中位数(-1.12)。
+
+    【我的读法(推理,没有读数核对)】ts_max(c, w) 约等于 μ_i + σ_i · g(w):μ_i 是个股平均同步度,σ_i 是 c 逐日的抖动(由有效分钟数、成交是否连续、流动性决定),g(w)
+    随窗口变大。一个 241 分钟相关系数的抽样噪声在独立假设下约 1/sqrt(241) = 0.06,而不同股票 μ_i 的差异未必更大,所以 head 读到的很可能是「估计噪声水平
+    / 成交连续性」加上少数真正的极端同步日;窗口越长、换手越低、分数越高。这个核心的 alpha 究竟在 μ(持续的带量买入)、σ(噪声水平)、事件形状(极端同步日)还是
+    c 对未来收益的耦合里,三个现有 head 分不开。本位把 C 拆成四类与 ts_max 不同的读法来分开它们,每个种子都原样带着核心:
+
+    (A) μ 与持续性,去掉全市场共同部分:cross_ema(cs_demean(C), 120)(先去掉同一天全市场的同步水平,再做半衰期 120 日的
+    EMA);cross_autocorr(C, 120, 1)(c 的逐日一阶自相关:连续数日同向的同步更像机构的拆单程序执行,孤立的噪声日没有自相关)。
+
+    (B) 事件形状,σ 被约掉或回归掉:(ts_max - ts_mean) / ts_std(标准化极值);ts_max 对 ts_std 做截面回归取残差(去掉
+    σ 之后剩下的峰值);ts_max + ts_min(σ 在相加里抵消,只剩 2μ 与上下尾不对称);120 日偏度 ts_skew。
+
+    (C) 耦合系数(Llorente, Michaely, Saar, Wang 2002 的量价动态关系):个股自己 120 ~ 180 日里「昨日 c」对「今日日收益
+    day_sum(Ret)」的 cross_regbeta / cross_corr / cross_reg_tvalue,以及全市场去均值版本与名次版本;另有同日耦合
+    cross_corr(c, day_sum(Ret), 120),和 c 对全市场平均 c 的 cross_regbeta(同步度的共性载荷)。估计量是斜率
+    / 相关,不是水平,不含成交额或市值的量纲。
+
+    (D) 与价格趋势的交互:ts_max(c, 120) 乘 120 日收益的符号;ts_max(c, 120) 的截面名次减 120 日动量名次(同步度峰值高而价格没走
+    = 带量吸筹还没被价格反映)。
+
+    【为什么与快照里已见过的写法不同】快照里围绕 C 的外围只有 ts_max、ts_max 套 ts_max 和 cross_med,全是「极值水平」,区别只在窗口。本位的外围是
+    EMA、标准化极值、截面回归残差、偏度、滚动回归斜率 / 相关 / t 值和与趋势的交互,没有一个是 ts_max 的窗口改写。15 个种子的算子骨架逐条对过两库
+    5583 条的骨架,都不在里面;ts_max 的窗口改写本来就会被库禁令挡掉(与 head 的日度秩相关约 0.7 以上),所以种子都避开了它。
+
+    【为什么样本外还会在】来源是参与者构成(知情交易 / 对冲交易 / 散户投机交易的占比)和成交连续程度这类慢变量,窗口 90 ~ 180 日,同族库因子的换手只有
+    0.03 ~ 0.05,不依赖某一段行情;Llorente 等记录到量价动态关系在个股之间稳定地不同(信息不对称越大,放量日的收益越倾向延续)。
+
+    【如果有 alpha,最可能来自】(C) 的个股耦合系数(别的流里,「收益对成交活跃度的滚动回归斜率」一类已经出过 head),其次是 (B) 的标准化极值,或
+    σ 回归掉之后的峰值;(A) 若只是水平,最可能被流动性 / 波动控制吃掉。
+
+    【数学检查】标准化极值的分子是 max - mean,分母是同一窗口的 std,比值上界为 sqrt(n - 1),没有近零分母造成的爆点;cross_regbeta
+    在回归元方差不超过 EPS 时返回 NaN,不是爆点;所有滞后都是 ts_delay(·, 1),没有 ts_shift / cross_shift;不含
+    ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0;没有用到当天收盘之后的数据。新上市约 20 日以内回归类窗口不满,噪声大,这些名字只占截面很小一部分。'
+  literature:
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 把「昨日量价关系对今日收益的耦合系数」当作个股特征,在个股 120 到 180 日窗口里估计;这里用日内同步度 c 代替他们的量乘收益
+  - title: 'Maxing out: Stocks as lotteries and the cross-section of expected returns'
+    authors: Turan Bali, Nusret Cakici, Robert Whitelaw
+    year: '2011'
+    treatment: 极值统计量(MAX)对收益的截面预测力来自彩票型需求;这里的 ts_max(c) 是同步度的 MAX,本位用标准化极值和去 σ 的峰值检验它是不是同一类东西
+  - title: 'The relation between price changes and trading volume: a survey'
+    authors: Jonathan Karpoff
+    year: '1987'
+    treatment: 价量同步(收益与成交量的正相关)的理论背景:信息到达速度与知情交易
+  seeds:
+  - cross_ema(cs_demean(day_corr(Ret, Volume)), 120)
+  - cross_autocorr(day_corr(Ret, Volume), 120, 1)
+  - div(sub(ts_max(day_corr(Ret, Volume), 120), ts_mean(day_corr(Ret, Volume), 120)),
+    ts_std(day_corr(Ret, Volume), 120))
+  - cs_regres(ts_max(day_corr(Ret, Volume), 120), ts_std(day_corr(Ret, Volume), 120))
+  - add(ts_max(day_corr(Ret, Volume), 120), ts_min(day_corr(Ret, Volume), 120))
+  - ts_skew(day_corr(Ret, Volume), 120)
+  - cross_regbeta(ts_delay(day_corr(Ret, Volume), 1), day_sum(Ret), 120)
+  - cross_corr(ts_delay(day_corr(Ret, Volume), 1), day_sum(Ret), 120)
+  - cross_reg_tvalue(ts_delay(day_corr(Ret, Volume), 1), day_sum(Ret), 180)
+  - cross_regbeta(cs_demean(ts_delay(day_corr(Ret, Volume), 1)), cs_demean(day_sum(Ret)),
+    120)
+  - cross_corr(day_corr(Ret, Volume), day_sum(Ret), 120)
+  - cross_regbeta(cs_mean(day_corr(Ret, Volume)), day_corr(Ret, Volume), 120)
+  - mul(ts_max(day_corr(Ret, Volume), 120), sign(ts_delta(log(day_last(Close)), 120)))
+  - sub(cs_rank(ts_max(day_corr(Ret, Volume), 120)), cs_rank(ts_delta(log(day_last(Close)),
+    120)))
+  - cross_regbeta(ts_delay(cs_rank(day_corr(Ret, Volume)), 1), cs_rank(day_sum(Ret)),
+    180)
+- type: N
+  hypothesis: '【新想法】符号化的分钟成交额失衡,以及它与价格的错位。f_t = day_signed_ratio(Ret, Amt) = Σ(|Amt|
+    × sign(Ret)) / Σ|Amt|:当天上涨分钟的成交额占比减下跌分钟的成交额占比,落在 [-1, 1],收益为 0 的分钟只进分母;它是不需要逐笔数据的净买压代理(Chordia
+    与 Subrahmanyam 2004 的 order imbalance 的分钟版)。它与 head 度量的不是同一个东西:head 用的是 corr(Ret,
+    Volume),同时用到收益的大小和成交量的大小,受尾部和少数大分钟支配;f 只用收益的方向、按成交额加权,有界、没有尾部,而且这里全部是 60 ~ 180
+    日的慢量,不看单日极值。
+
+    【算子怎样实现】(a) 慢水平:cross_ema(f, 60);cross_ema(cs_demean(f), 120)。(b) 流量对价格的错位(「吸收」假说:买压被被动对手盘吸收、价格没有反映,之后价格补涨;Kyle
+    1985):60 / 120 日净买入累计 cross_sum(f, d) 对同期累计收益 cross_sum(day_sum(Ret), d) 做截面回归取残差(买压里价格没有反映的部分);名次差版本
+    cs_rank(净买入累计) - cs_rank(累计收益);以及反向回归(涨幅里没有买压支撑的部分,即「没人买的上涨」)。(c) 耦合系数(Llorente,
+    Michaely, Saar, Wang 2002):个股 120 ~ 180 日里「昨日 f」对「今日日收益 day_sum(Ret)」的 cross_regbeta
+    / cross_corr / cross_reg_tvalue。(d) 持续性(机构大单拆分执行使订单流方向有长记忆:Lillo 与 Farmer 2004;Bouchaud
+    等 2004):cross_autocorr(f, 120, 1),以及乘以 120 日净买入方向的符号。(e) 极值与分时段:ts_max(f, 120);尾盘
+    61 分钟(第 181 ~ 241 分钟)的 f 的 60 日 EMA,以及它减去开盘 60 分钟(第 1 ~ 60 分钟)的 f 的 60 日 EMA(尾盘由要在收盘前完成调仓的参与者主导,开盘更多承接隔夜消息)。
+
+    【与库里 head 和控制的区别】库里 head 全是 c = corr(Ret, Volume) 的极值 / Vwap 对 Amt 相关的中位数;这里的底是
+    day_signed_ratio,骨架里没有任何一个是 day_corr 或 ts_max 套 day_corr。控制是流动性、波动、20 日反转、已知成交额离散度和流通市值:f
+    无量纲、有界,与成交额水平、波动水平没有函数关系;(b) 类种子显式把同期累计收益回归掉,所以不是 20 日反转控制的换写法。14 个种子的算子骨架逐条对过两库
+    5583 条的骨架,都不在里面。
+
+    【为什么样本外还会在】机构大单拆分执行要持续数日到数周,订单流方向的持续性和「价格没有反映的买压」是慢变量;A 股 T+1 且散户主导,买方与卖方的执行节奏不对称。窗口
+    60 ~ 180 日,换手低,不依赖某一段行情。
+
+    【如果有 alpha,最可能来自】(b) 与 (c):净买入里没有被价格反映的部分(被吸收的买压),或个股对订单流的价格反应系数;(a) 的纯水平最可能被反转
+    / 流动性控制吃掉。
+
+    【数学检查】f 在停牌日(Σ|Amt| = 0)为 NaN,cross_sum 用 nansum 跳过缺失日,cross_ema 跳过缺失日、不补 0;cross_corr
+    / cross_regbeta 在方差为 0 时返回 NaN,不是爆点;种子里没有除法;不含 ts_rank / cross_rank,不触发 nanrank_last
+    的停牌记 0;所有滞后都是 ts_delay(·, 1),没有 ts_shift / cross_shift;f 只用当天分钟数据,没有用到当天收盘之后的数据。'
+  inspired_by: 第 1 批 B130(day_corr(F,F) 一族,58 条)的现象:C = day_corr(Ret, Volume) 本身两段都亏(-3.39
+    / -2.98),但长窗口极值转正(单层 ts_max 窗口 20 / 40 / 80 = -0.99 / -0.32 / +0.24,嵌套约 119 日
+    = +0.56),Volume 换 Amt 不变,含 C 的候选均值差 +1.10(p 0.015)。说明「分钟收益与成交的日内同步」里有慢的、与量纲无关的信息,而且只在窗口
+    >= 80 日时才露出来。f 是同一对原料(分钟收益与成交额)的另一个统计量(方向 × 成交额加权),不读相关系数。
+  literature:
+  - title: 'Order imbalance and individual stock returns: Theory and evidence'
+    authors: Tarun Chordia, Avanidhar Subrahmanyam
+    year: '2004'
+    treatment: 订单失衡(买方发起减卖方发起)对次日收益的预测;这里用分钟收益符号加权成交额做净买压代理
+  - title: The long memory of the efficient market
+    authors: Fabrizio Lillo, J. Doyne Farmer
+    year: '2004'
+    treatment: 订单流方向有长记忆(大单拆分执行);对应种子 cross_autocorr(f, 120, 1)
+  - title: Dynamic volume-return relation of individual stocks
+    authors: Guillermo Llorente, Roni Michaely, Gideon Saar, Jiang Wang
+    year: '2002'
+    treatment: 昨日量价关系对今日收益的个股耦合系数;这里用 f 的 120 到 180 日滚动回归斜率 / 相关 / t 值
+  seeds:
+  - cross_ema(day_signed_ratio(Ret, Amt), 60)
+  - cross_ema(cs_demean(day_signed_ratio(Ret, Amt)), 120)
+  - sub(cs_rank(cross_sum(day_signed_ratio(Ret, Amt), 60)), cs_rank(cross_sum(day_sum(Ret),
+    60)))
+  - cs_regres(cross_sum(day_signed_ratio(Ret, Amt), 60), cross_sum(day_sum(Ret), 60))
+  - cs_regres(cross_sum(day_signed_ratio(Ret, Amt), 120), cross_sum(day_sum(Ret),
+    120))
+  - cs_regres(cross_sum(day_sum(Ret), 60), cross_sum(day_signed_ratio(Ret, Amt), 60))
+  - cross_regbeta(ts_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 120)
+  - cross_corr(ts_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 120)
+  - cross_reg_tvalue(ts_delay(day_signed_ratio(Ret, Amt), 1), day_sum(Ret), 180)
+  - cross_autocorr(day_signed_ratio(Ret, Amt), 120, 1)
+  - mul(cross_autocorr(day_signed_ratio(Ret, Amt), 120, 1), sign(cross_mean(day_signed_ratio(Ret,
+    Amt), 120)))
+  - ts_max(day_signed_ratio(Ret, Amt), 120)
+  - sub(cross_ema(day_signed_ratio(in_slice(Ret, 181, 241), in_slice(Amt, 181, 241)),
+    60), cross_ema(day_signed_ratio(in_slice(Ret, 1, 60), in_slice(Amt, 1, 60)), 60))
+  - cross_ema(day_signed_ratio(in_slice(Ret, 181, 241), in_slice(Amt, 181, 241)),
+    60)
+R:
+- head: ts_max(ts_max(day_corr(Ret, Volume), 40), 40)
+  why: 烂部件 = 窗口太短。嵌套 ts_max 等价于单层 ts_max(c, 79),有效窗口 79 日。拆解表(只用 train / valid):外层窗口
+    40 到 20 / 80 = +0.33 / +0.56(train +0.33 / +0.68,valid +0.47 / +0.56),单层窗口 20
+    / 40 / 80 = -0.99 / -0.32 / +0.24:越长越好,train 是约束段。本组往更长的有效窗口(119 到 239 日)走,另加三个只改一个部件的对照:Volume
+    换 Amt、去掉全市场同日水平(cs_demean)、取截面名次(cs_rank),看 c 里的全市场共同部分是不是烂的。
+  variants:
+  - ts_max(ts_max(day_corr(Ret, Volume), 40), 80)
+  - ts_max(ts_max(day_corr(Ret, Volume), 40), 120)
+  - ts_max(ts_max(day_corr(Ret, Volume), 40), 160)
+  - ts_max(ts_max(day_corr(Ret, Volume), 40), 200)
+  - ts_max(ts_max(day_corr(Ret, Volume), 20), 160)
+  - ts_max(ts_max(day_corr(Ret, Amt), 40), 120)
+  - ts_max(ts_max(cs_demean(day_corr(Ret, Volume)), 40), 120)
+  - ts_max(ts_max(cs_rank(day_corr(Ret, Volume)), 40), 120)
+- head: ts_max(day_corr(Ret, Volume), 40)
+  why: 烂部件 = 单日 c 的噪声。一个 241 分钟相关系数的抽样噪声在独立假设下约 0.06,ts_max 取到的主要是抖动大的日子。拆解表里窗口 20
+    / 40 / 80 = -0.99 / -0.32 / +0.24(越长越好)。本组先对 c 做 5 / 10 / 20 日平均或线性衰减加权,再取 120
+    到 160 日的最大值(峰值的稳健版),并试去全市场同日水平 / 名次(只改一个部件)。
+  variants:
+  - ts_max(ts_mean(day_corr(Ret, Volume), 5), 120)
+  - ts_max(ts_mean(day_corr(Ret, Volume), 10), 160)
+  - ts_max(ts_mean(day_corr(Ret, Volume), 20), 120)
+  - ts_max(ts_decay_linear(day_corr(Ret, Volume), 10), 120)
+  - ts_max(cs_demean(day_corr(Ret, Volume)), 120)
+  - ts_max(cs_rank(day_corr(Ret, Volume)), 120)
+- head: log(neg(cross_med(day_corr(Vwap, Amt), 60)))
+  why: 拆解表:去掉 neg 几乎不变(+0.00),去掉 cross_med 掉到 -3.79(必要性 +2.67),窗口 30 / 120 = -1.72
+    / -1.17,Vwap 换 Close / Amt 换 Volume 都更差。所以承重的是对 Vwap 与 Amt 日内水平相关的慢聚合,我的推断(没有读数核对):烂的是
+    60 日中位数这个聚合(每天只用窗口中间那一个数,窗口内的新信息进不来)。本组换成更慢的 241 日中位数,以及半衰期 120 日的 EMA(用全部历史、近期权重大)。
+  variants:
+  - log(neg(cross_med(day_corr(Vwap, Amt), 241)))
+  - log(neg(cross_ema(day_corr(Vwap, Amt), 120)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

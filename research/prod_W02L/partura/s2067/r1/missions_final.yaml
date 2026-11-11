@@ -1,0 +1,79 @@
+seed: 2067
+round: 1
+slots:
+- type: E
+  core: day_corr(abs_(in_delay(Ret, 5)), Amt)
+  hypothesis: 批里只有 3 个 head,全是「日内分钟上 前 5 / 1 分钟的绝对收益 与 当下成交量 / 额 的相关」的写法,日度打分 -2.66
+    / -2.70 / -2.89(train -2.3,valid -2.7),拆解里把延迟 5 改成 10 反而变好 +0.22(-2.47),说明这个量是缓慢信息而不是分钟噪声;单日相关系数噪声大、换手极高(score
+    为负主要是成本),而库里这 24 个候选都没有把它跨日汇总的写法。核心 C = day_corr(abs_(in_delay(Ret,5)), Amt) =
+    「波动先行、成交额跟随」的日内程度(波动冲击后成交额是否被吸引,即注意力 / 信息传导速度)。本位外围全部是「跨日去噪 + 去水平」:cross_mean
+    / cross_ema 平滑(60/40 日)、均值除以标准差(稳定性 t 统计量)、近 20 日减 120 日(趋势)、sign 后 EMA(只看方向)、q25
+    分位尾均值(差日子)、对 day_sum(Ret) 回归取残差(去掉当天涨跌机械成分)、按 LogFloatCap 或名义价格分桶 zscore(新尺子对市值的非线性暴露更彻底地去掉)、与涨跌方向相乘。为何不同:库里已见外围是裸
+    day_corr 的单日读数与窗口变体,没有 cross_* 与 cs_bucket_*;这里把噪声 5 倍以上地压下去,换手从日频降到月频,净夏普才可能转正。样本外还会在的理由:信息传导速度慢的票(散户
+    / 小盘题材)的价格发现延迟是结构性的,不依赖某段行情;经分桶后与市值、流动性控制已正交。风险:相关本身可能只是波动 x 成交的控制重叠,故用成对残差版本。
+  seeds:
+  - cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 60)
+  - cross_ema(day_corr(abs_(in_delay(Ret, 5)), Amt), 40)
+  - div(cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 60), cross_stddev(day_corr(abs_(in_delay(Ret,
+    5)), Amt), 60))
+  - cross_stddev(day_corr(abs_(in_delay(Ret, 5)), Amt), 60)
+  - sub(cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 20), cross_mean(day_corr(abs_(in_delay(Ret,
+    5)), Amt), 120))
+  - cs_bucket_zscore(cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 60), LogFloatCap)
+  - cross_ema(sign(day_corr(abs_(in_delay(Ret, 5)), Amt)), 30)
+  - cross_tail_mean_q25(day_corr(abs_(in_delay(Ret, 5)), Amt), 60)
+  - cross_mean(ts_regres(day_sum(Ret), day_corr(abs_(in_delay(Ret, 5)), Amt), 60),
+    20)
+  - cs_bucket_zscore(cross_ema(day_corr(abs_(in_delay(Ret, 5)), Amt), 40), sub(LogFloatCap,
+    LogFloatShares))
+  - cross_mean(mul(day_corr(abs_(in_delay(Ret, 5)), Amt), sign(day_sum(Ret))), 40)
+- type: N
+  hypothesis: 机制:量价的先后关系是有方向的。head 里 day_corr(|Ret 延迟|, Volume) 衡量「波动→之后的成交」;反过来 day_corr(|Ret|,
+    Volume 延迟) 衡量「成交→之后的波动」。两者相减 = 价格发现的主导方向(信息驱动的交易使波动领先于量,噪音 / 题材脉冲资金使量先于波动),即量对波动的格兰杰式「领先–滞后不对称」。算子:day_corr
+    与 in_delay 分别作用在分钟轴,差值是日度量;再用 cross_mean / cross_ema 跨日平滑、除以两者绝对值之和做归一化、并加入带符号收益版本(day_corr(Ret,
+    延迟 Volume) 区分上涨放量 / 下跌放量)、分桶去市值暴露。与库不同:库里 head 与 24 个候选都只有「波动延迟 → 量」单向,没有差分与反向项,差分把共同的「波动与成交同步」成分(强烈暴露在流动性
+    / 波动控制与冠军里)抵消,只留方向性。样本外为何还在:谁领先谁是投资者结构(散户 / 机构占比)的指纹,变化慢;而且它被设计为与控制正交。
+  inspired_by: 批 1 的 3 个 head:day_corr(abs_(in_delay(Ret, 5)), Volume / Amt) 方向 +1、day_corr(abs_(in_delay(Ret,
+    1)), log(Amt)) 方向 -1;延迟越长越好(5→10 增益 +0.22)
+  seeds:
+  - sub(day_corr(abs_(Ret), in_delay(Volume, 5)), day_corr(abs_(in_delay(Ret, 5)),
+    Volume))
+  - cross_mean(sub(day_corr(abs_(Ret), in_delay(Volume, 5)), day_corr(abs_(in_delay(Ret,
+    5)), Volume)), 60)
+  - cross_ema(sub(day_corr(abs_(Ret), in_delay(Volume, 5)), day_corr(abs_(in_delay(Ret,
+    5)), Volume)), 40)
+  - sub(day_corr(abs_(Ret), in_delay(Amt, 5)), day_corr(abs_(in_delay(Ret, 5)), Amt))
+  - cross_mean(sub(day_corr(abs_(Ret), in_delay(Amt, 5)), day_corr(abs_(in_delay(Ret,
+    5)), Amt)), 60)
+  - sub(day_corr(Ret, in_delay(Volume, 5)), day_corr(in_delay(Ret, 5), Volume))
+  - cross_mean(sub(day_corr(in_delay(Ret, 5), Volume), day_corr(Ret, in_delay(Volume,
+    5))), 60)
+  - cross_mean(div(sub(day_corr(abs_(Ret), in_delay(Volume, 5)), day_corr(abs_(in_delay(Ret,
+    5)), Volume)), add(abs_(day_corr(abs_(Ret), in_delay(Volume, 5))), abs_(day_corr(abs_(in_delay(Ret,
+    5)), Volume)))), 60)
+  - cross_mean(day_corr(in_delay(Ret, 5), in_delay(Volume, 5)), 60)
+  - cs_bucket_zscore(cross_mean(sub(day_corr(abs_(Ret), in_delay(Volume, 10)), day_corr(abs_(in_delay(Ret,
+    10)), Volume)), 60), LogFloatCap)
+  - cross_mean(sub(day_corr(Ret, in_delay(Amt, 1)), day_corr(in_delay(Ret, 1), Amt)),
+    40)
+  - cross_ema(sub(day_corr(abs_(Ret), in_delay(log(Amt), 5)), day_corr(abs_(in_delay(Ret,
+    5)), log(Amt))), 40)
+R:
+- head: day_corr(abs_(in_delay(Ret, 5)), Amt)
+  why: 拆解中延迟 5→10 使分数 -2.70→-2.47,说明慢信息更好;单日相关噪声大,窗口与跨日平滑是烂部件
+  variants:
+  - day_corr(abs_(in_delay(Ret, 15)), Amt)
+  - day_corr(abs_(in_delay(Ret, 20)), Amt)
+  - day_corr(abs_(in_delay(Ret, 30)), Amt)
+  - cross_mean(day_corr(abs_(in_delay(Ret, 10)), Amt), 20)
+  - cross_ema(day_corr(abs_(in_delay(Ret, 10)), Amt), 20)
+- head: day_corr(abs_(in_delay(Ret, 5)), Volume)
+  why: 同上,延迟 5→10 增益 +0.13
+  variants:
+  - day_corr(abs_(in_delay(Ret, 15)), Volume)
+  - day_corr(abs_(in_delay(Ret, 20)), Volume)
+  - cross_mean(day_corr(abs_(in_delay(Ret, 10)), Volume), 20)
+  - cross_ema(day_corr(abs_(in_delay(Ret, 10)), Volume), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml

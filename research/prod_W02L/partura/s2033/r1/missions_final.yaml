@@ -1,0 +1,298 @@
+seed: 2033
+round: 1
+slots:
+- type: E
+  core: div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 1))
+  hypothesis: '机制:核心 A = r_t / r_{t-1}(后复权收盘到收盘的当日收益,除以前一日收益;本批三个 head 都含它),本位读 A
+    的「位置」(中位数),不读它的「离散度」。
+
+
+    (1) 批里的现象(loc.md、拆解表、members.csv 的训练段统计,没有用 2026 年):B097 的 19 条是同一个对象 A 的变形,A
+    的截面秩只在当日 r_t>0 的票里排(create_valid_mask),再取 ts_stddev / ts_mean / ts_delta / ts_corr,窗口全部
+    ≤ 20 日。三个 head 是 ts_stddev 的三种写法:−1.22 / −2.50 / −3.96。ts_stddev 窗口 5 / 10 / 20
+    / 40 日的分数是 −3.92 / −2.50 / −1.21 / −1.76(head 1、head 2 两种写法合起来读)。库口径训练段:19 条里只有
+    L#213(换手 0.047)接近随机基准(夏普 −0.38),其余 18 条夏普 −3.8 ~ −18.1,换手与夏普的相关 −0.52;|rank IC|
+    中位数 0.006、最大 0.017。也就是这一族几乎不带 rank IC,输在换手(15 bp)上。
+
+
+    (2) 为什么该读位置:设 r_t = φ·r_{t-1} + e_t,则 A = φ + e_t / r_{t-1}。e_t 与 r_{t-1} 独立且对称,所以
+    e_t / r_{t-1} 关于 0 对称,A 的中位数就是 φ(Theil 型的稳健估计);而 A 的均值与方差不存在(Cauchy 型尾)。对 A 的秩取
+    10–20 日标准差,读到的主要是「前一日 r 近 0 的日子有多频繁」:前一日价位不变(r=0)时 A = ±inf、在秩里落到截面端点,这是价位离散化
+    / 低波动 / 流动性的代理,正是 5 个控制与两个冠军吃掉的东西(新尺子下 −1.2 ~ −4)。位置才是 φ:个股一阶自相关(价格对信息的反应延迟、买卖价反弹)是慢变的个股性质(Lo
+    与 MacKinlay 1988;Avramov、Chordia 与 Goyal 2006:价位低、薄盘的票为负,散户追涨与涨跌停连板的票为正),与波动、市值、成交额的水平没有函数关系。
+
+
+    (3) 本机合成检验(不是市场数据):3000 只票、t3 厚尾新息、φ 的截面标准差 0.05 的 AR(1) 面板,用估计量与真 φ 的 Spearman
+    IC:A 的中位数在 60 / 120 / 241 日窗口是 0.29 / 0.41 / 0.52;日截面秩的滚动相关是 0.41 / 0.53 / 0.65;A
+    的均值 ≈ 0.01(无信息)。所以本位所有种子都是 ≥ 60 日的位置估计量,没有一个对 A 本身求均值 / 方差。
+
+
+    (4) 算子怎样实现:种子全部原样含 A;外围一律是日轴 cross_*(按股票分块,窗口 60–241 日)。四类:位置(cross_med 60 / 120
+    / 241 日、中位数的中位数、IPO 年 `ListAge > 250` 屏蔽);收缩与去风格(0.3 × 60 日 + 0.7 × 241 日的多窗口加权;向同市值十分位均值收缩一半
+    `x − 0.5·cs_bucket_demean(x, LogFloatCap)`;十分位内去均值;相对当日截面中位数 `A − cs_median(A)`;60
+    日位置对自己 241 日历史的 z 分数);状态(昨日 |r| 大于 / 小于自己 60 日波动时的 A 的条件中位数及两者之差 —— 大波动后是否反转、小波动后是否延续,即过度反应
+    / 反应不足的不对称);秩口径的慢版(cs_rank(A) 的 120 日均值 / 中位数、60 与 120 日标准差:本批 head 的同一个量放慢,作对照)。
+
+
+    (5) 与库里已有的不同:库里 5583 条没有一条对 A 求位置统计(B097 的 19 条全是 A 的秩的短窗口离散度 / 差分);`cross_med`
+    套在日收益比上、cs_bucket_*、日频字段(LogFloatCap、ListAge)在 5583 条里 0 次出现(我逐条核对过 members.csv)。16
+    个种子的 skeleton_key 对照两个库全部骨架和本波各流快照里的 head 骨架,0 个相同;外围算子集合对照批里含 A 的 11 种外围,都不同。与本流
+    3 个 head 的区别:head 读 A 的秩在 ≤ 20 日内的离散度,这里读 A 的中位数(≥ 60 日);同一个 φ,前者(合成检验里)按 IC 看没有信息、后者有。
+
+
+    (6) 为什么样本外还会在(以及最可能的失败):φ 取决于持仓构成、tick 价位、涨跌停与 T+1 制度,都是慢变量;窗口 60–241 日,每天只换 1/60–1/241
+    的样本,换手低(批里 head 的换手 0.14–0.24,这里预计 < 0.03),15 bp 不吃主体。最大的失败风险:φ 的真实截面离散度小于估计噪声(中位数估计的标准误约
+    1.57/√n,120 日约 0.14),那样分数 ≈ −成本;其次 φ 被流动性 / 市值控制吃掉(买卖价反弹是流动性的函数)。方向由 train 决定,我不预设。
+
+
+    (7) 数学检查:无前视(全部用 t 日收盘及以前,窗口是尾随窗口,t+1 才交易;状态变量 |r_{t-1}| 与 60 日波动 t 日已知)。除以近零:r_{t-1}=0
+    时 A = ±inf(0/0 为 NaN);中位数与 cs_rank 是排序统计量,inf 只占端点、不传播;种子里没有 cross_mean / cross_stddev
+    直接作用在 A 上(作用在秩上的是有界量);cross_med 是低中位数(偶数个取较小的中间值),不插值,不会出现 inf − inf。窗口内多数日子为
+    ±inf 的票(极端低价、长期不动)中位数为 ±inf,这类票占比小,且只落在截面端点。热身:cross_* 窗口不满时按已有天数展开,241 日窗口前约
+    12% 的样本偏噪,噪声只会拉低分数;IPO 年(次新连续一字板)用 `ListAge > 250` 屏蔽,只在 1 个种子里作对照(其余不屏蔽,让搜索自己看这一块有没有用)。闸门:种子取值连续,本机合成立方体(80
+    只 × 420 日,含停牌与未上市)里 16 个种子覆盖率 0.96–0.97、无 inf、每日不同值比例 0.82–1.00(闸门要 ≥ 50%)。我对
+    cross_med 做过逐元素核对:与 numpy 低中位数 120 日滚动结果逐位相同。
+
+    '
+  literature:
+  - source: Lo and MacKinlay, Stock market prices do not follow random walks
+    year: '1988'
+  - source: Avramov, Chordia and Goyal, Liquidity and autocorrelations in individual
+      stock returns
+    year: '2006'
+  seeds:
+  - cross_med(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    10), 60)
+  - cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 1)), 120)
+  - cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 1)), 241)
+  - mul(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), 241),
+    replace_small_with_nan(is_gt(ListAge, 250)))
+  - cs_bucket_demean(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), 120), LogFloatCap)
+  - add(mul(0.3, cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), 60)), mul(0.7, cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), 241)))
+  - sub(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), 120),
+    mul(0.5, cs_bucket_demean(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), 120), LogFloatCap)))
+  - cross_zscore(cross_med(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), 60), 241)
+  - cross_med(mul(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), replace_small_with_nan(is_gt(abs_(ts_delay(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 1)), cross_stddev(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 60)))), 241)
+  - cross_med(mul(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), replace_small_with_nan(is_lt(abs_(ts_delay(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 1)), cross_stddev(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 60)))), 241)
+  - sub(cross_med(mul(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    replace_small_with_nan(is_gt(abs_(ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 1)), cross_stddev(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 60)))), 241), cross_med(mul(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), replace_small_with_nan(is_lt(abs_(ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 1)), cross_stddev(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 60)))), 241))
+  - cross_med(sub(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)), cs_median(div(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), 1)))), 120)
+  - cross_mean(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    0)), 120)
+  - cross_med(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    0)), 120)
+- type: N
+  hypothesis: '机制:同伴相对收益的慢速序列相关。个股当日相对同类的收益 x_t(去掉全市场共同部分用 cs_demean,去掉同市值十分位的均值用
+    cs_bucket_demean)对自己前一日值的依赖 —— 一阶回归斜率、秩相关、5 日 / 20 日滞后相关、方差比、上行后 vs 下行后的不对称、对同伴组前一日收益的滞后暴露
+    —— 在 120–241 日窗口估计,当作个股的慢性质。
+
+
+    批里的现象(inspired_by B097):批里的想法本身没错 —— 看「今天在截面里的相对位置与昨天的相对位置有多相关」(L#211 ts_corr(秩,
+    滞后一日的秩, 10)、L#204 ts_autocorr(秩, 10, 1)、秩差、ts_delta),但它们的估计量又快又吵:窗口 10 日的相关系数标准误约
+    0.3,训练段库口径夏普 −15.8(L#204,换手 0.39);批内换手与夏普相关 −0.52,|rank IC| 中位数 0.006。而且被相关的对象是日收益比
+    r_t / r_{t-1}(无界、前一日近 0 时爆点),本位换成有界、稳健、慢的估计量,并把「相对什么」说清楚。
+
+
+    机制与文献:(a) 公司特有信息在散户占比高、T+1、有涨跌停的 A 股被逐步吸收:同类相对收益的正自相关 = 反应不足(Hong 与 Stein 1999;Chan
+    2003 对有消息 / 无消息漂移与反转的区分);买卖价反弹与流动性供给使低价、薄盘票为负自相关(Avramov、Chordia 与 Goyal 2006)。先去掉市场与市值风格(A
+    股日收益的主要成分是风格轮动),剩下的序列相关才是个股自己的性质。(b) 方差比(Lo 与 MacKinlay 1988):5 日收益方差 /(5 × 1
+    日方差)的平方根 > 1 为动量型、< 1 为反转型,比一阶用了更多滞后。(c) 滞后暴露:个股对「自己同市值十分位同伴组前一日收益」的反应(Hou 与 Moskowitz
+    2005 的价格延迟思路,参照物是同伴组;对全市场均值的滞后暴露不在本位)。
+
+
+    算子怎样实现:R = sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1)(后复权价,无复权跳变);X1
+    = cs_demean(R);X2 = cs_bucket_demean(R, LogFloatCap)(同市值十分位相对收益);X3 = cs_rank(R);X4
+    = cs_bucket_rank(R, LogFloatCap)(十分位内秩);同伴组收益 = R − X2。种子分组:(A) 一阶:cross_regbeta(滞后
+    X1, X1, 120 / 241)、cross_corr(X3, 滞后 X3, 120 / 241)、cross_corr(X2, 滞后 X2, 120
+    / 241)、cross_corr(X4, 滞后 X4, 120);(B) 其他滞后:5 日(同星期几)、20 日(同月内位置)滞后秩相关;(C) 方差比:5
+    日方差比的平方根;(D) 不对称:上行后斜率 − 下行后斜率;(E) 收缩与变化:十分位内去均值、向同伴均值收缩 0.6、60 日相关 − 241 日相关;(F)
+    同伴滞后暴露:cross_regbeta / cross_corr(滞后同伴组收益, X2, 120 / 241)。2 个种子乘 `replace_small_with_nan(is_gt(ListAge,
+    250))` 屏蔽 IPO 年(次新股连续一字板的相关会很高)。
+
+
+    估计噪声与收缩:滞后 1 日相关在 120 日窗口的标准误约 1/√120 = 0.09,大于合理的个股真实离散度。本机合成检验(不是市场数据:3000 只票、t3
+    厚尾新息、真 φ 的截面标准差 0.05)按 IC 看:Pearson 相关 / 回归斜率 120 日 0.49、241 日 0.61;日秩的相关 0.53
+    / 0.65(厚尾下更稳)。所以种子用:秩口径、241 日窗口、向同伴均值收缩(经验贝叶斯的方向:估计越吵越要向同类均值 / 长窗口靠拢)、多窗口之差,去压估计噪声。
+
+
+    与库里已有的不同:库里 5583 条里把收盘到收盘日收益与 ts_corr / ts_autocorr / cross_corr 放在一起的只有 6 条(都是
+    B095 / B097 的 5–15 日窗口手写式),没有一条在 ≥ 60 日窗口上估计个股收益的序列相关,更没有「相对市场 / 同类」的口径;cs_bucket_*
+    与日频字段(LogFloatCap、ListAge)0 次出现(逐条核对过 members.csv)。最近邻是 X#394 `cross_autocorr_s1(day_quantile_q25(Ret),
+    241)`(盘中分位数序列的自相关,不是收盘到收盘的相对收益)。16 个种子的 skeleton_key 与两个库的全部骨架、本波各流快照 head 的骨架都不相同。与本流
+    head 的不同:head 读日收益比的秩在 ≤ 20 日内的离散度(与前一日 |r| 近 0 的频率相关),这里读相对收益在日与日之间的相关,有界、无除法。与控制的不同:20
+    日反转控制读 20 日收益的水平,波动控制读 |r| 的水平;这里全是无量纲的相关 / 斜率 / 比值,同伴相对口径把市值风格拿掉,与五个控制和两个冠军都不是同一个量。
+
+
+    为什么样本外还会在:序列相关由持仓构成(散户 / 机构)、价位的 tick 摩擦、涨跌停与 T+1 制度决定,都是慢变量;窗口 120–241 日,每天只换
+    1/120–1/241 的样本,换手低;不依赖某段行情。最可能的失败:真实截面离散度小于估计噪声(那样分数 ≈ −成本);相关被流动性吃掉(买卖价反弹)。方向由
+    train 决定,我不预设。
+
+
+    数学检查:无前视(全部用 t 日收盘及以前;cross_delay 的天数为正;窗口尾随;t+1 才交易;LogFloatCap 当日已知)。无除以近零:R
+    的分母是前一日后复权收盘价(正数);cross_corr / cross_regbeta 在窗口内方差 ≤ EPS 时为缺失而不是爆点;方差比的分母是窗口内的
+    X2 标准差,停牌股窗口内没有有效点时为缺失;sqrt(5) 取 2.2361。cross_sum 把缺失日当 0(对 5 日收益增量是对的)。热身:窗口前
+    d−1 天按已有天数展开,噪声只拉低分数,IPO 年用 ListAge 屏蔽。闸门:相关 / 斜率 / 比值都是连续量,本机合成立方体(80 只 × 420
+    日,含停牌与未上市)里 16 个种子覆盖率 0.96–0.97、无 inf、每日不同值比例 1.00。我对 cross_corr(秩, 滞后秩, 120)
+    做过逐元素核对,与 numpy 滚动相关的差异在 1e-3 以内(相关系数 0.9999999)。
+
+    '
+  inspired_by: B097:A = r_t / r_{t-1} 的日截面秩的 1 日滞后关系(L#211 ts_corr(秩, 滞后秩, 10)、L#204
+    ts_autocorr、秩差)与批内换手 / 夏普的负相关(−0.52);成员全是 ≤ 20 日的快估计量
+  literature:
+  - source: Lo and MacKinlay, Stock market prices do not follow random walks (variance
+      ratio)
+    year: '1988'
+  - source: Hong and Stein, A unified theory of underreaction, momentum trading and
+      overreaction
+    year: '1999'
+  - source: Chan, Stock price reaction to news and no-news
+    year: '2003'
+  - source: Hou and Moskowitz, Market frictions, price delay, and the cross-section
+      of expected returns
+    year: '2005'
+  - source: Avramov, Chordia and Goyal, Liquidity and autocorrelations in individual
+      stock returns
+    year: '2006'
+  seeds:
+  - cross_regbeta(cross_delay(cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 120)
+  - cross_regbeta(cross_delay(cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 241)
+  - cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 120)
+  - cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 241)
+  - cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 120)
+  - mul(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 1), 241), replace_small_with_nan(is_gt(ListAge,
+    250)))
+  - cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 5), 120)
+  - cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close), 1)),
+    1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 20), 241)
+  - div(cross_stddev(cross_sum(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), 5), 120), mul(cross_stddev(cs_bucket_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1), LogFloatCap), 120), 2.2361))
+  - sub(cross_regbeta(mul(is_gt(cross_delay(cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 0), cross_delay(cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1)), cs_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 241), cross_regbeta(mul(is_lt(cross_delay(cs_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1)), 1), 0), cross_delay(cs_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1)), 1)), cs_demean(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1)), 241))
+  - cs_bucket_demean(cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 120), LogFloatCap)
+  - sub(cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 120), mul(0.6, cs_bucket_demean(cross_corr(cs_rank(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1)), cross_delay(cs_rank(sub(div(day_close(Close),
+    cross_delay(day_close(Close), 1)), 1)), 1), 120), LogFloatCap)))
+  - sub(cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 60), cross_corr(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), cross_delay(cs_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1)), 1), 241))
+  - cross_corr(cs_bucket_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), cross_delay(cs_bucket_rank(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), 1), 120)
+  - cross_regbeta(cross_delay(sub(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap)), 1), cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), 120)
+  - mul(cross_corr(cross_delay(sub(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap)), 1), cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(Close),
+    1)), 1), LogFloatCap), 241), replace_small_with_nan(is_gt(ListAge, 250)))
+R:
+- head: div(1, add(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), 0)), 20), 0.0001))
+  why: 对 head 1(−1.22,train −1.21 / valid −1.22)逐个部件拆:(1) ts_stddev 窗口 10 / 20 / 40
+    日 = −2.50 / −1.21 / −1.76,20 日是不是尖峰?试 30 日、60 日、120 日(窗口变长改用 cross_stddev,日轴按股票分块);(2)
+    上涨日掩码(只在 r_t>0 的票里排秩)拆掉后(对 head 2)−2.84、必要性 +0.34,试下跌日掩码、两种掩码之和、全日秩;(3) 标准差的水平与「窗口内上涨日个数」(≈
+    波动)和价位离散化有关(r_{t-1}=0 时 A = ±inf、秩落在端点),试同市值十分位内去均值、屏蔽 IPO 年(`ListAge > 250`)。直接评估,每个变体改一个部件。
+  variants:
+  - div(1, add(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), 0)), 30), 0.0001))
+  - div(1, add(cross_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), 0)), 60), 0.0001))
+  - div(1, add(cross_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), 0)), 120), 0.0001))
+  - cs_bucket_demean(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), 0)), 20), LogFloatCap)
+  - ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    create_valid_mask(sub(1, div(day_last(Close), ts_delay(day_last(Close), 1))),
+    0)), 20)
+  - add(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    0)), 20), ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    1)), create_valid_mask(sub(1, div(day_last(Close), ts_delay(day_last(Close), 1))),
+    0)), 20))
+  - ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1))),
+    20)
+  - mul(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)),
+    1), ts_delay(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 1)),
+    create_valid_mask(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1),
+    0)), 20), replace_small_with_nan(is_gt(ListAge, 250)))
+audit:
+  attempts: 1
+  file: audit_1.yaml

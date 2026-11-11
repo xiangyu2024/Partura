@@ -1,0 +1,199 @@
+seed: 2002
+round: 1
+slots:
+- type: E
+  core: div(day_last(Volume), day_max(Low))
+  hypothesis: '机制:三个 head 全带着同一个底 B = div(day_last(Volume), day_max(Low)):当天最后一根分钟线的成交量(股数;深市那一根含收盘集合竞价,沪市是最后一分钟连续竞价,也就是「尾盘成交」)除以当日分钟最低价的最大值(后复权价)。B
+    的水平 ≈ log(尾盘成交股数) − log(后复权价):前一项是流动性代理,后一项是累计复权收益 / 上市年限的代理,都是 5 个控制和两个冠军的地盘,所以种子一律不读
+    B 的水平。拆解表说信息在 B 的路径形态里:把 ts_hurst 拆成 B 本身,head 1 从 −0.99 掉到 −1.63(必要性 +0.64),head
+    3 从 −1.20 掉到 −1.47(+0.28);含 ts_hurst(B, 20) 的 19 个候选均分 −2.07,不含的 −2.52(差 +0.44,p
+    0.15);R/S Hurst 对 B 的任何正倍数和平移不变,所以读的是「尾盘成交是一个持续的状态(机构按计划收盘执行、指数 / ETF 申赎),还是随机尖峰(散户零星成交)」。本
+    E 位的假设:如果这个底里有 alpha,来源是尾盘成交路径的形态、相对自己常态的变化、以及它和当天价格方向的关系,不是 Hurst 这个具体公式,也不是水平。
+
+    算子怎样实现:每个种子原样带 B,外围换成快照里从没见过的写法(快照里围绕 B 的写法几乎全是 ts_mean(mul(·, ts_hurst(B,20)),
+    20~50) 和 log(add(·, day_std(Vwap))) 的嵌套)。(1) 相对自己:cross_zscore(B,60)、ts_rank(B,60),以及短
+    5 日对长 60 日的对数均值差 sub(ts_mean(log(add(B,1)),5), ts_mean(log(add(B,1)),60))(尾盘放量
+    / 缩量,用对数 + 1 避免近零分母)。(2) 路径形态的别的统计量:ts_std(log(add(B,1)),40)、ts_autocorr_s1(B,40)、ts_skew(B,40)、别的视野的
+    Hurst(ts_hurst(B,60)、sub(ts_hurst(B,10), ts_hurst(B,40))、变化量 ts_delta(ts_mean(ts_hurst(B,20),10),20))。(3)
+    和价格方向的关系(尾盘成交是顺着当天涨跌还是逆着):ts_corr(B, day_sum(Ret), 40),以及「异常尾盘量 × 方向」ts_mean(mul(cross_zscore(B,60),
+    sign(day_last(Ret))), 20) 与 sign(day_sum(Ret)) 版。(4) 诊断:深市有 3 分钟收盘集合竞价、沪市没有,所以
+    B 的路径形态可能部分是交易所 / 板块的标记;cs_bucket_zscore(·, BoardCode / LimitWidth) 把它去掉(BoardCode
+    只有 4 个值,并列按列序打破,所以十档近似为「板块 × 列序段」,是近似的中性化);也有按已知族十档中性的版本。无中性化的 (1)(2) 版与中性化版的分数差,就是「有多少是板块
+    / 已知族标记」。
+
+    为什么和已有的不同:骨架已逐个对照两个库的 5583 条(都不在库里)。库里围绕 B 的全是「Hurst × 水平」;没有 z 分数、时序排名、自相关、偏度、和收益的滚动相关、方向交互、也没有任何板块
+    / 十档中性化。(1)(2) 里的写法与三个 head 的日度秩相关预计低(去掉了水平,且不是 Hurst 的平滑),与已知成交额族预计低于 0.5(B 的水平被拿掉了)。
+
+    为什么样本外还会在:这些量描述的是参与者结构(机构按计划执行 vs 散户零星成交)在尾盘留下的指纹,是慢变的个股属性;所有种子都在 20 到 60 日的视野上读,名次变化慢,15
+    bp 成本下不会被换手吃掉。风险:尾盘集合竞价规则本身在样本期内变过(深市 2018 年的、创业板 2020 年的),如果规则变动造成的段内断点才是信号,min(train,
+    valid) 会把它挡掉。
+
+    数学检查:B 的分子是股数 ≥ 0,分母是价格 > 0,没有近零分母;种子里的除法只有 ts_std / 对数差(对数里加 1)。ts_hurst 的已知行为(三个
+    head 与库里 148 处 ts_hurst 都一样,我用玩具张量核实过):窗口内常数时给 NaN(s_d < 1e-9);窗口内有缺失日时,缺失日在最早一天
+    → NaN,在第二早一天 → −inf(极差为 0 取对数),其余位置只用缺失前的前缀算极差(H 偏低),再经 ts_mean 一个 −inf 会带出整个窗口
+    −inf。后果是「近 20 ~ 70 日内有过停牌 / 缺失的票」被排到最低或当缺失,是一道筛子,只作用在这些票上,其余票的次序仍由 H 的取值决定,不是填充,也没有近零分母。为了能分辨「信号」与「这道筛子」,本位放了
+    11 个不含 ts_hurst 的种子(ts_std / ts_autocorr_s1 / ts_skew / z 分数,它们的滚动算子对缺失日是跳过的),含
+    Hurst 的种子只有 5 个。ts_corr / ts_autocorr_s1 窗口内有效对数很少时(新上市、刚复牌的头几天)会给 0 或 ±1,只影响这几天。ts_rank
+    在当天缺失时返回 0(已知的 nanrank_last 行为),所以只放 1 个 ts_rank 种子,其余用 cross_zscore(缺失给 NaN)。无前视:day_last
+    / day_max 只用 t 日收盘前的分钟,t+1 才交易。所有窗口 ≤ 60,热身期不主导。'
+  literature:
+  - title: Stock returns and trading at the close
+    authors: David Cushing, Ananth Madhavan
+    year: '2000'
+    treatment: 收盘前最后几分钟的成交量与指数基金调仓 / 日内收益相关;这里只取「尾盘成交相对自己常态的异常量」、「尾盘量与当天涨跌的方向关系」两种读法,不做指数成分股的专门识别
+  - title: Long-term memory in stock market prices
+    authors: Andrew W. Lo
+    year: '1991'
+    treatment: 经典 R/S 统计量对短程相关敏感且窗口短时偏差大,所以本位同时放了 Hurst 的别的视野、自相关、偏度与 z 分数,检验信号是不是来自
+      Hurst 这个公式本身
+  seeds:
+  - cross_zscore(div(day_last(Volume), day_max(Low)), 60)
+  - ts_rank(div(day_last(Volume), day_max(Low)), 60)
+  - ts_std(log(add(div(day_last(Volume), day_max(Low)), 1)), 40)
+  - ts_autocorr_s1(div(day_last(Volume), day_max(Low)), 40)
+  - ts_skew(div(day_last(Volume), day_max(Low)), 40)
+  - ts_hurst(div(day_last(Volume), day_max(Low)), 60)
+  - sub(ts_hurst(div(day_last(Volume), day_max(Low)), 10), ts_hurst(div(day_last(Volume),
+    day_max(Low)), 40))
+  - ts_corr(div(day_last(Volume), day_max(Low)), day_sum(Ret), 40)
+  - ts_mean(mul(cross_zscore(div(day_last(Volume), day_max(Low)), 60), sign(day_last(Ret))),
+    20)
+  - ts_mean(mul(cross_zscore(div(day_last(Volume), day_max(Low)), 60), sign(day_sum(Ret))),
+    20)
+  - sub(ts_mean(log(add(div(day_last(Volume), day_max(Low)), 1)), 5), ts_mean(log(add(div(day_last(Volume),
+    day_max(Low)), 1)), 60))
+  - cs_bucket_zscore(cross_zscore(div(day_last(Volume), day_max(Low)), 60), cross_mean(day_std(Amt),
+    30))
+  - ts_std(cross_zscore(div(day_last(Volume), day_max(Low)), 60), 30)
+  - ts_delta(ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 10), 20)
+- type: N
+  hypothesis: '机制:成交在一天里「什么时候来、来得多规律」是参与者构成的指纹,它在日与日之间的稳定性是一个与水平无关的状态变量。批里的现象:ts_hurst(尾盘成交量
+    / 价, 20) 出现在 30 个已评分候选的 19 个里,拆掉它比拆掉任何别的部件损失都大(head 1 必要性 +0.64、head 3 +0.28),而
+    B 本身(−1.55)比 Hurst 之后(−1.29)差;R/S Hurst 对序列的正倍数与平移不变,所以它把「水平」(正是 5 个控制和两个冠军吃掉的东西)扔掉了,只留路径的形态。新想法:把「路径的稳定
+    / 持续程度」这个尺度不变的读法用到库里从没读过它的「成交时点」序列上。机构算法(VWAP / TWAP / 收盘执行)与指数、ETF 申赎让一只股票的日内成交分布在日与日之间很稳定,散户与消息驱动的票则每天重心乱跳;前者是机构持仓厚、关注度稳定的票,后者是被注意力和彩票偏好驱动的票,预期收益差在于「注意力溢价被透支」。库里有
+    148 处 ts_hurst,作用对象几乎全是尾盘量比(div(day_last(Volume), ·))及其嵌套,另有开盘价路径等零星几种;day_centroid(成交时点重心)两个库里出现
+    0 次,开盘 / 尾盘成交份额、隔夜缺口路径也没有被读过持续性或稳定性(W01 把 day_centroid 的「水平」当过 alpha 来源,别的流已出的
+    head 会把水平一族封掉;持续性 / 稳定性是另一个对象)。
+
+    算子怎样实现:一半种子用 Hurst(沿用批里的统计量),另一半是不含 Hurst 的兄弟:同样的输入序列,换成最直接的稳定性读数 ts_std(跨日离散度)与
+    ts_autocorr_s1(跨日一阶自相关)。输入序列:(a) 成交时点 day_centroid(Amt) / day_centroid(Volume),以及成交额重心与价格波动重心之差
+    sub(day_centroid(Amt), day_centroid(Ret))(day_centroid(Ret) 取 |Ret|,第一分钟含隔夜缺口,所以它是「缺口日
+    vs 盘中波动日」的指标);(b) 开盘 / 尾盘成交份额 div(day_first(Volume), day_sum(Volume)) 与 div(day_last(Volume),
+    day_sum(Volume)) 的路径,以及开盘与收盘规律性之差;(c) 隔夜缺口 day_open(Ret)(批里共性表有 day_open(Ret),含它的
+    5 个候选 +0.16)的 Hurst 与一阶自相关(缺口的方向是否连续);(d) 处理:对自己 60 日历史做 cross_zscore(持续性的变化而不是水平)、在已知成交额族十档内
+    / 流通市值十档内 z 分数(检验信号是不是已知族或规模的代理)。含 Hurst 的种子与不含 Hurst 的兄弟种子读同一个假设,分数差就是「R/S 这个统计量(以及它对缺失窗口的行为)」的贡献。
+
+    为什么和已有的不同:骨架已逐个对照两个库(都不在库里);被读的输入序列全是新的,而且有界(重心在 [0,1]、份额在 [0,1]),与水平量不同。Hurst
+    对尺度与平移不变,ts_std 读的是重心的跨日离散度、ts_autocorr_s1 是去均值的相关,所以它们与 5 个控制(流动性、波动、反转、已知成交额族、市值)的水平暴露在构造上就小;与三个
+    head(尾盘量比的 Hurst × 水平)的关系是「同一个统计量、不同的输入序列」,预计秩相关低。
+
+    为什么样本外还会在:来源是参与者结构(机构执行时点的规律性 vs 散户 / 消息脉冲)的慢变性质,稳定性是 30 到 60 日窗口上的结构,换手慢;不依赖某段行情的方向。风险:R/S
+    在 30 日窗口上噪声大(Lo 1991),所以放了 ts_std / 自相关兄弟与 z 分数版;如果每天排名乱跳,EMA 半衰期 20 能压一部分。
+
+    数学检查:day_centroid、份额都有界,没有近零分母;day_first(Volume) / day_sum(Volume) 在整天无量时是 0 /
+    0 = NaN,不是无穷。ts_hurst 的已知行为(三个 head 与库里 148 处 ts_hurst 都一样,我用玩具张量核实过):窗口内常数时给
+    NaN;窗口内有缺失日时,缺失日在最早一天 → NaN,在第二早一天 → −inf,其余位置只用缺失前的前缀算极差(H 偏低),所以「近 30 ~ 60 日内有过停牌
+    / 缺失的票」会被排到最低或当缺失,是一道只作用在这些票上的筛子,不是填充,没有近零分母;这正是放 ts_std / ts_autocorr_s1 兄弟的原因(ts_std
+    跳过缺失日)。ts_autocorr_s1(即 ts_corr)窗口内有效对数很少时(新上市、刚复牌的头几天)会给 0 或 ±1,只影响这几天。本位没有用
+    ts_rank / cross_rank 这类会把当天缺失记成 0 的算子。day_open(Ret) 含大量 0(平开),常数窗口的 Hurst 给 NaN
+    而不是 0。无前视:所有输入只用 t 日收盘前的分钟,t+1 才交易。窗口 ≤ 60,热身期不主导。'
+  inspired_by: B004 批:ts_hurst(div(day_last(Volume), day_max(Low)), 20) 在 19 / 30
+    个候选里,含 / 不含均值差 +0.44(p 0.15);拆掉 Hurst 的必要性 +0.64 / +0.28;共性表还有 day_open(Ret)(5
+    个候选,+0.16)。
+  literature:
+  - title: A theory of intraday patterns - Volume and price variability
+    authors: Anat R. Admati, Paul Pfleiderer
+    year: '1988'
+    treatment: 日内成交的时点分布由自由裁量交易者与知情交易者的选择决定;这里用成交额重心和开盘 / 尾盘份额读「时点」,并读它们跨日的稳定性而不是水平
+  - title: Trading activity and expected stock returns
+    authors: Tarun Chordia, Avanidhar Subrahmanyam, V. Ravi Anshuman
+    year: '2001'
+    treatment: 成交活跃度的波动(而非水平)对预期收益有负的预测力;这里读成交时点序列的跨日离散度与持续性,并用已知成交额族十档内的 z 分数去掉水平
+  - title: Long-term memory in stock market prices
+    authors: Andrew W. Lo
+    year: '1991'
+    treatment: 经典 R/S 对短窗口与短程相关敏感;所以放了 ts_std / 自相关兄弟、60 日窗口与相对自己历史的 z 分数
+  seeds:
+  - ts_hurst(day_centroid(Amt), 30)
+  - ts_hurst(day_centroid(Volume), 20)
+  - cross_zscore(ts_hurst(day_centroid(Amt), 30), 60)
+  - ts_hurst(sub(day_centroid(Amt), day_centroid(Ret)), 30)
+  - ts_hurst(div(day_last(Volume), day_sum(Volume)), 30)
+  - sub(ts_hurst(div(day_first(Volume), day_sum(Volume)), 30), ts_hurst(div(day_last(Volume),
+    day_sum(Volume)), 30))
+  - cs_bucket_zscore(ts_hurst(day_centroid(Amt), 30), cross_mean(day_std(Amt), 30))
+  - ts_std(day_centroid(Amt), 40)
+  - ts_autocorr_s1(day_centroid(Amt), 40)
+  - ts_std(div(day_last(Volume), day_sum(Volume)), 40)
+  - ts_autocorr_s1(div(day_first(Volume), day_sum(Volume)), 40)
+  - ts_std(sub(day_centroid(Amt), day_centroid(Ret)), 40)
+  - cs_bucket_zscore(ts_std(day_centroid(Amt), 40), cross_mean(day_std(Amt), 30))
+  - cs_bucket_zscore(ts_std(day_centroid(Amt), 40), LogFloatCap)
+R:
+- head: ts_mean(mul(log(add(mul(log(add(day_max(Volume), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 50)
+  why: 三个烂部件,都有拆解表的依据:(1) 股数叶子 Volume:整条换成 Amt 从 −1.08 到 −0.45(train −0.45 / valid
+    −0.36,增益 +0.63);(2) 50 日窗口:25 日 −0.53(增益 +0.55),100 日 −1.46,单调说明越长越差;(3) 两处 day_std(Vwap):它是价格单位的量(约
+    0.01 ~ 1),与 log 的股数 / 成交额(约 10 ~ 20)相加,数值上几乎不起作用,只起「防 log(0)」的作用;本组保留它们,不去动。变体的做法:先把两个增益叠起来(Amt
+    + 25 / 15 日),再分别只换水平部分和只换比值部分(判断 +0.63 来自哪一半),再拉长比值的 Hurst 窗口到 40、把分母 day_max(Amt)
+    换成更稳的 day_mean(Amt)(尾盘额除以当天平均每分钟额,不被单个尖峰支配)。数学上都有界:比值在 (0, 1] 或 ≥ 0,没有近零分母;窗口内常数时
+    ts_hurst 给 NaN;窗口内缺失日的 ts_hurst 行为与原 head 完全相同。
+  variants:
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Amt),
+    day_max(Amt)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Amt), day_max(Amt)),
+    20)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Amt),
+    day_max(Amt)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Amt), day_max(Amt)),
+    20)), 15)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Volume)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Volume), day_max(Volume)),
+    20)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Volume), day_std(Vwap))), ts_hurst(div(day_last(Amt),
+    day_max(Amt)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Amt), day_max(Amt)),
+    20)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Amt),
+    day_max(Amt)), 40)), day_std(Vwap))), ts_hurst(div(day_last(Amt), day_max(Amt)),
+    40)), 25)
+  - ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_last(Amt),
+    day_mean(Amt)), 20)), day_std(Vwap))), ts_hurst(div(day_last(Amt), day_mean(Amt)),
+    20)), 25)
+- head: ts_mean(mul(log(cs_sum(day_argmax(Vwap))), ts_hurst(div(day_last(Volume),
+    day_max(Low)), 20)), 50)
+  why: 烂部件有两个:(1) Volume 叶子:把分子换成 Amt 从 −0.99 到 −0.75(增益 +0.24);比值分母 day_max(Low)
+    是价格,分子换成 Amt 后比值变成「额 / 价」,不如直接用同一量纲的比值 div(day_last(Amt), day_max(Amt))(尺度不变、有界),这是本组的一个变体;(2)
+    50 日窗口:25 日 −1.26、100 日 −1.40,两侧都更差,所以窗口不是主要问题,只试 25 / 35 配合 Amt。另外 log(cs_sum(day_argmax(Vwap)))
+    是全市场的每日常数(约 13,日间波动只有 ±0.4%),在截面排名里它只是给 50 日窗口的各天一个几乎相等的权重;拆解表里把 log 去掉(权重波动放大到
+    ±5%)分数从 −0.99 掉到 −1.22,说明权重波动越大越差,所以本组也试把它完全拿掉(等权的 ts_mean(Hurst, 50))。数学上 cs_sum(day_argmax)
+    是正数,没有近零分母;窗口内常数时 ts_hurst 给 NaN,缺失日的行为与原 head 相同。
+  variants:
+  - ts_mean(mul(log(cs_sum(day_argmax(Vwap))), ts_hurst(div(day_last(Amt), day_max(Low)),
+    20)), 50)
+  - ts_mean(mul(log(cs_sum(day_argmax(Vwap))), ts_hurst(div(day_last(Amt), day_max(Low)),
+    20)), 25)
+  - ts_mean(mul(log(cs_sum(day_argmax(Vwap))), ts_hurst(div(day_last(Amt), day_max(Low)),
+    20)), 35)
+  - ts_mean(mul(log(cs_sum(day_argmax(Vwap))), ts_hurst(div(day_last(Amt), day_max(Amt)),
+    20)), 25)
+  - ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 50)
+- head: ts_mean(mul(day_max(Volume), ts_hurst(div(day_last(Volume), day_max(Low)),
+    20)), 30)
+  why: 烂部件:(1) 乘数 day_max(Volume) 是股数量级(约 1e3 ~ 1e6)的重尾量,与取值在 (0, 1.x) 的 Hurst 相乘后,排名几乎由
+    day_max(Volume) 一个因子决定(拆解表:单独 day_max(Volume) −1.16,单独 Hurst −1.29,乘积 −1.18,没有
+    1 + 1 > 1 的迹象),也就是水平把 Hurst 盖住了;换成取对数(压住重尾)或换成无量纲的「峰值 / 平均」比值(尖峰度,不含水平)能让 Hurst
+    一半真正起作用。(2) 30 日窗口:15 日 −1.08(增益 +0.12),60 日 −1.30,所以越短越好,试 10 与 15。注意把乘数换成 Amt
+    是更差的(−2.65),所以本组不动 Volume 叶子。数学上 log 在 |x| ≤ EPS 时给 NaN(不是 −inf),有成交时 log(day_max(Volume))
+    为正有限;day_max(Volume) / day_mean(Volume) 的分母在有成交的天里 > 0,整天无成交时是 0 / 0 = NaN。ts_hurst
+    对窗口内缺失日的行为与三个 head 完全相同(见前两组)。
+  variants:
+  - ts_mean(mul(day_max(Volume), ts_hurst(div(day_last(Volume), day_max(Low)), 20)),
+    15)
+  - ts_mean(mul(day_max(Volume), ts_hurst(div(day_last(Volume), day_max(Low)), 20)),
+    10)
+  - ts_mean(mul(log(day_max(Volume)), ts_hurst(div(day_last(Volume), day_max(Low)),
+    20)), 15)
+  - ts_mean(mul(div(day_max(Volume), day_mean(Volume)), ts_hurst(div(day_last(Volume),
+    day_max(Low)), 20)), 15)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,66 @@
+seed: 2026
+round: 3
+slots:
+- type: E
+  core: mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230))))
+  hypothesis: 核心 K = C²·S,C = day_flat_run_max(in_slice(Ret,11,230))(第 11~230 分钟里最长一段『收益等于上一分钟』的停滞,占有效分钟比例),S
+    = day_sum(in_slice(Ret,11,230))(当日盘中收益)。它是本流唯一的 head(cross_mean(K,241),score +0.83,train
+    +0.83 / valid +1.00)的内部。机制判断:C 大而 S 非零,是『盘中急拉 / 急砸后封死在涨跌停附近、之后无人成交』的日子(开盘即一字的日子
+    S≈0 被排除),C² 把权重压到真正封板的少数日子,K 因此是『带方向的封板事件强度』;241 日平均 = 一年里这只票被封涨停减去被封跌停的累计强度,属于注意力
+    / 彩票偏好与封单接力的持续特征(A 股散户打板),不是某一段行情。拆解表显示:去掉 C 变 -2.44,去掉 S 变 -0.81,所以 C²·S 的乘积结构承重;窗口
+    241→120 保持 +0.48,→482 保持 +0.65,说明慢是必要的。已见过的外围只有 cross_mean(·,241 / 60 / 120 /
+    482) 与乘积加深。这次外围完全不同,每个种子试一种不同处理:EMA 指数加权(120 / 250 半衰期,让近期封板权重更大且更平滑)、只取正侧(封涨停)或只取负侧(封跌停)以分离彩票需求与恐慌、对对数股价(sub(LogFloatCap,
+    LogFloatShares))做截面回归取残差(去掉低价股 tick 机械成分)、cross_zscore(相对自己的常态)、除以 LimitWidth(10%
+    / 20% 板的涨跌幅度不同,统一成相对涨停的比例)、除以 C 的平均(条件平均收益,即封板日里的方向纯度)、上尾减下尾均值(事件分布两端)、signedpower
+    压缩单日极端、ts_decay_linear、短 EMA 减长 EMA(近期封板相对一年常态)、上市满 250 日掩码(新股连板是另一种机制)、成交额对数的滚动回归。与库不同:5583
+    条库表达式里没有一条把 C 和 S 相乘再加深;GP 禁令要求骨架与日度秩 |ρ|<0.7,外围换了就是新信号。样本外还会在,是因为涨跌停制度与散户打板文化是制度性、长期存在的。数值:C
+    ∈ [0,1],S 有界,无除零(除法的分母带 0.01 常数或 LimitWidth ≥ 0.05),无前视。
+  seeds:
+  - cross_mean(mul(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), is_gt(0, mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret,
+    11, 230)))))), 241)
+  - cross_ema(cross_zscore(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 120), 60)
+  - ts_decay_linear(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 120)
+  - sub(cross_ema(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 30), cross_ema(mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret,
+    11, 230)))), 250))
+  - cross_regres(log(day_sum(in_slice(Amt, 11, 230))), cross_mean(mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret,
+    11, 230)))), 120), 120)
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: N
+R:
+- head: cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 241)
+  why: 拆解表:窗口 241→120 / 482 分数仍 +0.48 / +0.04(valid +0.55 / +0.65),说明 241 日等权平均不是最优处理;C²
+    与 S 的乘积结构承重(去 S → -0.81,去 C → -2.44)但等权平均、板块涨跌幅差异(10% / 20%)、新股连板、单日极端值都可能是烂部件。
+  variants:
+  - cross_ema(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 120)
+  - cross_ema(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 241)
+  - cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Ret,
+    11, 230))))), 241)
+  - cross_mean(div(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), LimitWidth), 241)
+  - cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), signedpower(day_sum(in_slice(Ret, 11, 230))))), 241)
+  - cross_mean(signedpower(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230))))), 241)
+  - mul(cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), day_sum(in_slice(Ret, 11, 230)))), 241), replace_small_with_nan(is_gt(ListAge,
+    250)))
+  - cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in_slice(Ret,
+    11, 230)), mul(day_flat_run_max(in_slice(Ret, 121, 230)), day_sum(in_slice(Ret,
+    11, 230))))), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

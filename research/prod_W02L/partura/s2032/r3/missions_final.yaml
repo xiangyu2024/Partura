@@ -1,0 +1,83 @@
+seed: 2032
+round: 3
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 机制:收盘集合竞价(尾盘最后一格)的成交占比对『市场收盘成交占比状态』的联动。灵感来自本轮第 3 批(day_last(F) 一族,头部是
+    ts_std(day_last(Amt), 50)、ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10),全部在读收盘一格成交额的绝对量级与波动,分数
+    -0.25 到 -0.52,即只是 liq / known 的水平版本,没人去掉量级)。这里做三件事:(1) 去量级:用 A = day_last(Amt)
+    / day_sum(Amt),收盘一格占全天成交额的比例,无量纲;(2) 取市场状态 M = cs_quantile_q50(A),即当天截面中位的收盘占比(被动
+    / 基准型资金在收盘集中调仓、月末与指数再平衡日 M 升高);(3) 每只股票对 M 的 60-120 日回归 beta / t 值 / 相关 / 残差。读法:个股收盘占比与市场收盘占比同步性高
+    = 被被动与基准型资金持有 / 跟踪;个股收盘占比的特异成分(cross_regres 残差)高 = 个股自己有尾盘的信息交易或操纵性拉尾盘。两者都是无量纲、慢变量;与库里
+    B096 一族(只有绝对额的 ts_max / ts_std / ts_regbeta)不同,库里没有 cs_quantile 作市场状态、也没有 day_last(Amt)
+    对 day_sum(Amt) 的比例。样本外为什么还会在:基准型 / 被动资金在一天最后时段集中成交是制度性行为(与日终定价基准有关,Chordia-Roll-Subrahmanyam
+    2000 的市场共同流动性思路),不依赖某段行情;day_last 取每天最后一个有效分钟,不是前视(当天收盘时已知,信号只用于次日)。注意:不同交易所收盘撮合规则可能不同,所以只预期窗口
+    60 以上的慢写法有效。我没有给方向先验,由奖励定方向。诚实预期:最可能的失败是收盘占比与流动性控制的负相关(小盘占比小)没被去干净,这类种子会被相关度表划掉。
+  inspired_by: 第 3 批 B096(day_last(F) 一族):头部 ts_std(day_last(Amt), 50)、ts_std(ts_std(day_last(Amt),
+    50), 50)、ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10) 只读收盘一格成交额的绝对量级与波动,是流动性水平的写法;本
+    idea 去量级(占比)并改读对市场收盘状态的载荷
+  seeds:
+  - cross_corr(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), div(day_last(Amt),
+    day_sum(Amt)), 60)
+  - cross_regbeta(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), div(day_last(Amt),
+    day_sum(Amt)), 90)
+  - cross_ema(cross_regres(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), div(day_last(Amt),
+    day_sum(Amt)), 60), 20)
+  - cross_stddev(cross_regres(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), div(day_last(Amt),
+    day_sum(Amt)), 60), 60)
+  - cross_regbeta(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), 90)
+  - cross_corr(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), cross_zscore(div(day_last(Amt),
+    day_sum(Amt)), 60), 120)
+  - cross_reg_tvalue(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), log(add(day_last(Amt),
+    1)), 90)
+  - cross_regbeta(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), div(day_last(Volume),
+    day_sum(Volume)), 60)
+  - cross_decay_linear(cross_regres(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))),
+    div(day_last(Amt), day_sum(Amt)), 90), 30)
+  - cross_corr(cs_quantile_q50(div(day_last(Amt), day_sum(Amt))), sub(div(day_last(Close),
+    day_first(Open)), 1), 90)
+R:
+- head: cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume),
+    20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)),
+    60)
+  why: 拆解:外层 60 日窗口回归对 Q75 的读数只 +0.58,窗口 120 为 +0.47、30 为 +0.09,说明读数依赖对市场分散度的 beta;重复套两层
+    bucket_zscore 的内层是冗余的(去掉内层 train 仍 +0.05 valid +0.68)。变体换更长窗口 / 不同分位数 / 对分散度改用
+    t 值,检验是否是 beta 的稳定性在起作用。
+  variants:
+  - cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume),
+    30)), cs_quantile_q75(day_wstd(Amt, Close)), 90)
+  - cross_reg_tvalue(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume),
+    20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)),
+    60)
+  - cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume),
+    20), cross_mean(day_sum(Volume), 30))), cs_quantile_q50(day_wstd(Amt, Close)),
+    60)
+  - cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume),
+    20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)),
+    90)
+  - cross_corr(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume),
+    20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)),
+    60)
+- head: ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10)
+  why: 拆解:窗口 10 的原式 valid -0.49,窗口 20 的变体 train +0.52 valid +0.02(增益 +0.51),窗口太短噪声大;Open
+    换 Close 也有增益。变体沿窗口加长并换成 t 值 / 相关。
+  variants:
+  - ts_regbeta(day_last(Amt), day_durbin_watson(Open), 30)
+  - ts_regbeta(day_last(Amt), day_durbin_watson(Open), 40)
+  - ts_regbeta(day_last(Amt), day_durbin_watson(Close), 20)
+  - ts_reg_tvalue(day_last(Amt), day_durbin_watson(Open), 30)
+  - ts_regbeta(day_last(Amt), day_durbin_watson(Open), 60)
+- head: ts_std(ts_std(day_last(Amt), 50), 50)
+  why: 拆解:这是收盘一格成交额的绝对波动,量级(流动性)没去掉,单层 ts_std 只有 -0.52;窗口 25 的 valid +0.89 但 train
+    差。变体用对自身均值的相对离散度去量级。
+  variants:
+  - div(ts_std(day_last(Amt), 50), ts_mean(day_last(Amt), 50))
+  - ts_std(div(day_last(Amt), day_sum(Amt)), 50)
+  - ts_std(ts_std(div(day_last(Amt), day_sum(Amt)), 25), 50)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,175 @@
+seed: 2008
+round: 2
+slots:
+- type: E
+  core: cross_stddev(log(day_durbin_watson(Vwap)), 120)
+  hypothesis: '核心 C = cross_stddev(log(day_durbin_watson(Vwap)), 120):个股「当天分钟 VWAP
+    路径的相对已实现方差(DW 未去均值 = Σ(ΔVwap)²/ΣVwap²,价格尺度约掉)」取对数后,在最近 120 个交易日里的标准差,即方差的方差(vol-of-vol,「波动的突发性」)。
+
+    证据(本流快照与第 1 轮结果,全是 train / valid):(1) 第 1 轮 R 组的「均值对离散度」对照:同一条 241 日线,只留离散度 cross_stddev(ts_sum(log
+    DW, 10), 241) 得 -0.09(train -0.07 / valid -0.09,现在是本流最好的 head),只留均值 cross_mean(ts_sum(log
+    DW, 10), 241) 得 -2.61,差 2.5;拆掉 ts_sum 的 cross_stddev(log DW, 241) 为 -0.93;loc
+    里 Vwap 换成 Close 几乎无损(-0.00),窗口 120 / 482 变差。承重的是「RV 这条序列的离散度」,不是价格路径,也不是水平。(2)
+    共性表里含 C 的 10 个已评分候选均值 -1.53,不含的 -2.15(差 +0.64,p 0.051)。(3) 相关度表里这类离散度与波动 / 流动性
+    / 20 日反转 / 已知族 / 市值五个控制的 |ρ| 只有 0.04 ~ 0.34,尺子没有把它吃掉;它在 train / valid 都接近 0,更像是被「混进来的别的东西」稀释了。混进来的东西有四种:(a)
+    静态属性:价格档位 / 流通比例 / 板块 / 上市批次不同的票 RV 的刻度不同,低价股的买卖价弹跳噪声底 ∝ (tick / 名义价格)²,噪声占比的波动也进了
+    std;(b) 全市场一起的波动起伏(2018、2020-02、2024-09),暴露度不同的票 std 被系统性拉开;(c) 成交量自己的突发(放量带动价格方差一起突发,这是「信息驱动」,不是价格自身的不稳);(d)
+    最近一个月的突发(与 20 日反转 / 波动控制相邻的短期成分)。第 1 轮 E 位唯一明显有用的外围就是同市值分位内标准化(cs_bucket_zscore(C,
+    LogFloatCap) -0.73,两层嵌套 -0.06),说明「把 C 里不属于价格自身突发的成分扣掉」这条路是通的。本位的押注就是把这些成分一个一个扣掉,看剩下的纯价格突发有没有
+    alpha。
+
+
+    算子怎样实现:15 个种子全部原样含 C,外面都乘 M = replace_small_with_nan(is_gt(ListAge, 120))(上市不满
+    120 个交易日置缺失:cross_stddev 在窗口未填满时用几个点估计,新股会占据十分位两端)。分四族:(A) 同伴内标准化 cs_bucket_zscore(C,
+    X),X = 名义价格 LogFloatCap - LogFloatShares、流通比例 LogFloatCap - LogTotalCap、LimitWidth(板块;并列按列序打破,列序
+    = 交易所与代码段 ≈ 上市批次)、自己的 RV 基线水平 cross_mean(log DW, 120)、成交额水平、过去 120 日涨幅(Zhang 2006:信息不确定性在赢家
+    / 输家里作用方向相反);(B) 回归扣除 cs_regres(C, Z),Z = RV 基线水平、成交量的突发 cross_stddev(log(day_sum(Volume)),
+    120)、Close 路径的突发 cross_stddev(log DW(Close), 120)(Close 比 Vwap 多一份弹跳噪声,残差 = 去掉噪声后的真实方差突发)、近
+    20 日突发(留下 120 日尺度的 regime 性)、DW 日度变化的下半偏差 cross_semistd_neg(DW, 120)(留下上冲型突发);(C)
+    市场状态翻转 cs_flip_by_state(C, g),g = 20 日平均 log RV 的截面均值(市场波动状态)或 20 日平均 log 成交额(市场活跃状态):状态高于过去
+    241 日中位数取 +,否则取 -,检验「突发性溢价的符号随市场不确定性变化」(Baltussen–van Bekkum–Van der Grient 2018;Huang–Schlag–Shaliastovich–Thimme
+    2019);翻转只改变截面秩的符号,换手只在状态翻转的几天发生;(D) 二阶 / 平滑:价格档位版的「同伴内标准化 → 120 日 std → 再标准化」(第
+    1 轮 -0.06 写法的价格档位版)、同伴内标准化后再取 120 日均值(更慢,降换手)。
+
+
+    与库 / 快照的区别:第 1 轮 E 位的 16 个种子与 loc 列出的 5 个最好候选里,C 的外围只有 cs_bucket_zscore / cs_bucket_demean
+    / cs_first_low20 配 LogFloatCap 的同伴分组(单层与双层)、cross_corr(DW, log DW 或 log 市值)与 ts
+    / cross 平滑;没有 cs_regres、cs_flip_by_state,也没有价格 / 流通比例 / 涨幅 / 成交额 / 基线 RV 作为同伴分组,没有
+    Close 路径、成交量突发、半偏差作为被扣除项。两个库 5583 条表达式里没有一条含 LogFloatCap / LimitWidth / ListAge
+    / cs_bucket_* / cs_flip_by_state,cs_regres 在库里 72 条都是随机深树里的偶然用法,没有一条拿它扣 RV 的突发;15
+    个种子的骨架互不相同,也不在库的骨架集里(已解析并逐条核对)。
+
+
+    样本外为什么还会在:突发性是个股信息流与参与者构成的慢属性(120 日窗口,换手低,15 bp 下可交易);同伴内标准化 / 回归扣除去掉的是机械成分,剩下的价格自身突发对应被定价的信息不确定性(文献全在
+    2023-08 以前);尺子只扣控制秩的 1 ~ 3 次多项式,同伴内相对量、回归残差、状态翻转都是交互项,不在被扣掉的范围里,所以 train / valid
+    都接近 0 的 C 有可能在去掉混入成分之后露出来。我预期的是「接近 0 的变成略正」,不是大幅越线。
+
+
+    数学检查:(a) 无前视:窗口全是尾随窗口;cs_bucket_zscore / cs_regres 只用当天截面;cs_flip_by_state 的状态是当天截面均值对自己过去
+    241 日中位数(含当天,但当天收盘已知),t 日收盘后算、t+1 交易。(b) 数值:DW 的分母 ΣP² 远大于 1e-8,常数行返回缺失而不是 inf;近常数日(涨跌停锁死)DW
+    极小、log 很负,会抬高 std 的左尾,这是真实的「几乎不动」信息;R 组的稳健离散度变体专门检验它是否在主导。除 LimitWidth 外所有同伴变量都是连续量;LimitWidth
+    只有三个取值,并列由列序打破,是板块 / 上市批次分组,不是常数面板。已在合成立方体上把 15 个种子全部算过:都能算、无 inf。没有使用任何 2026
+    年数据。'
+  seeds:
+  - cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), sub(LogFloatCap, LogFloatShares))
+  - cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), sub(LogFloatCap, LogTotalCap))
+  - cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), LimitWidth)
+  - cs_regres(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_stddev(log(day_sum(Volume)), 120))
+  - cs_regres(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_stddev(log(day_durbin_watson(Close)), 120))
+  - cs_flip_by_state(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_mean(log(day_durbin_watson(Vwap)), 20))
+  - cs_flip_by_state(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_mean(log(day_sum(Amt)), 20))
+  - cs_bucket_zscore(cross_stddev(cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)),
+    120), replace_small_with_nan(is_gt(ListAge, 120))), sub(LogFloatCap, LogFloatShares)),
+    120), LogFloatCap)
+  - cross_mean(cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120),
+    replace_small_with_nan(is_gt(ListAge, 120))), LogFloatCap), 120)
+  - cs_regres(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_stddev(log(day_durbin_watson(Vwap)), 20))
+  - cs_bucket_zscore(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), ts_delta(log(day_last(Close)), 120))
+  - cs_regres(mul(cross_stddev(log(day_durbin_watson(Vwap)), 120), replace_small_with_nan(is_gt(ListAge,
+    120))), cross_semistd_neg(day_durbin_watson(Vwap), 120))
+- type: N
+  hypothesis: '想法:把 RV 放进「相对市场」的框架里读。个股当天分钟 VWAP 路径的相对已实现方差 log DW(Vwap)(下记 L)可以拆成「全市场一起动的部分」(当天全市场
+    L 的截面均值 m_t = cs_mean(L))和「自己的部分」。这一批(以及整个库)只读 L 的总量:水平、均值加标准差、各种窗口的平滑,没有一条读「这只股票的
+    RV 怎样跟着市场 RV 动」。两种读法在文献里对应不同的价格:(1) 对系统性波动变化的暴露(Ang–Hodrick–Xing–Zhang 2006:对市场波动冲击越敏感的票平均回报越低);(2)
+    同步性 / 共同性(Morck–Yeung–Yu 2000 的收益同步性;Chordia–Roll–Subrahmanyam 2000 与 Hasbrouck–Seppi
+    2001 的流动性 / 订单流共同性):RV 跟着市场走的票主要被指数 / 机构篮子 / 融资盘这类共同持有人驱动,RV 与市场脱钩的票由个股消息与散户关注驱动,两类票的定价不同。它不是波动水平:相关系数无量纲,与
+    L 的水平和单只票的刻度无关。
+
+    灵感:本流 B022 / B023 的 R 组与 loc 的拆解显示,承重的是 RV 序列的离散度而不是水平(只留 std -0.09、只留 mean -2.61),价格路径换成
+    Close 无损(-0.00)。离散度 = 市场共同起伏 + 个股自己的起伏;E 位在扣第二部分,这个位直接读第一部分与两部分的关系,并把读法换到别的状态变量(Close
+    路径、std(Ret)、成交额)上看是不是 RV 特有。
+
+
+    算子怎样实现:全部是慢变量,窗口 120 / 241 日。(a) 同步性:ts_corr(L, cs_mean(L), 241)(及 120 日、市场用截面中位数
+    cs_median 的稳健版);(b) 同伴内版本:同步性在市值分位内 / 在自己 RV 基线分位内标准化 cs_bucket_zscore;(c) 状态依赖:在「当天市场
+    L 高于自己 241 日均值」的日子里个股相对市场的 L(L - m_t)的均值,减去「低于」的日子里的均值,读 RV 的周期性(进入动荡时比市场抬得更多还是更少);(d)
+    与市场方向的联动:ts_corr / ts_regbeta(L, 当天全市场等权日收益 cs_mean(day_sum(Ret)))(RV 在市场下跌日抬高的票
+    = 暴露在崩盘波动上);(e) 相对自己历史:L 的 10 日 EMA 对 241 日窗口的 z 分数,减去同一量的截面均值(自己的波动状态相对自己常态,再减去市场的);(f)
+    特质 RV 冲击:ts_regres(m_t, L, 241) 的最后一天残差再取 20 日 EMA(去掉市场部分后最近一个月的异常 RV);(g) 对照:同样的同步性换到
+    DW(Close)、std(Ret)、log 成交额上,以及 RV 同步性减去成交额同步性,看是 RV 特有还是任何量的同步性都一样;AHXZ 的字面写法(ts_regbeta(m_t,
+    L, 241))留 1 条。全部种子外面都乘 M = replace_small_with_nan(is_gt(ListAge, 241))(120 日窗口的种子用
+    120):ts_corr / ts_regbeta 对窗内有效点没有最少样本数(核对过 rolling_pair_reduce),新股窗口只有 2 个点时相关系数恰为
+    ±1,会占满十分位两端。
+
+
+    与库 / 快照的区别:两个库 5583 条里,把 cs_mean / cs_median 作为 ts_corr / ts_regbeta / cross_corr
+    搭档的只有 1 条(ts_pearson(cs_mean(·), 20)),且作用在价格分位上,不是 RV;含 cs_mean / cs_median 的共
+    61 条里,22 条把它当 is_gt / is_lt 的阈值,39 条是对全市场序列本身再做时序统计,都不是「个股量 × 市场量」的联动统计。快照里 6
+    个 head 都是 L 这一条路径自己的水平 / 离散度 / hurst 统计。也没有一条含 ListAge 掩码、cross_zscore 或 cross_ema。16
+    个种子的骨架互不相同、都不在库里(已解析核对)。预期种子与 6 个 head 的 |ρ| 在 0.1 ~ 0.5,与控制的 |ρ|:同步性类与市值 / 流动性
+    0.3 ~ 0.6(指数成分 / 大市值票同步性高),都低于 0.8。
+
+
+    样本外为什么还会在:联动结构取决于持有人构成(指数与机构 / 融资盘 / 散户)与 T+1、涨跌停制度,是慢变量;窗口 120 ~ 241 日,换手低,15
+    bp 可承受;AHXZ 与同步性文献都在 2023-08 以前。风险我也写在这里:同步性可能只是市值 / 流动性风格的代理(旧研究 C01 的价格同步性族在风格中性化后几乎消失);尺子已把市值与流动性的
+    1 ~ 3 次秩多项式扣掉,所以这一次是直接看风格以外还剩什么;多空方向我不预设,由 train 选。
+
+
+    数学检查:(a) 无前视:m_t 用当天截面(t 日收盘已知),所有窗口为尾随窗口,ts_regres 返回窗口最后一天的残差(用到窗内含当天的数据,没有未来);t
+    日收盘后算、t+1 交易。(b) 数值:L 是对 DW 取对数,DW 分母远大于 1e-8、常数行为缺失,所以不会有 -inf;m_t 是约 5000 只票的均值,近常数日的极端值被稀释;ts_corr
+    在某只票 L 为缺失(停牌)的日子成对剔除;cs_median 版是稳健对照。(c) 定义:ListAge 掩码避免热身期决定结果;市场用全 A 等权,小市值占主导,这是口径选择。已在合成立方体上把
+    16 个种子全部算过:都能算、无 inf、每日取值离散度 1.0。没有使用任何 2026 年数据。'
+  inspired_by: B022 / B023(本流 loc 与第 1 轮 R 组):只留 241 日 std 的 head -0.09,只留 mean 的
+    -2.61;Close 换 Vwap 无损;第 1 轮最有用的外围是同伴内标准化。承重的是 RV 序列的离散度,而离散度 = 市场共同起伏 + 个股自己的起伏,库与批都只读总量。
+  seeds:
+  - mul(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(log(day_durbin_watson(Vwap))),
+    241), replace_small_with_nan(is_gt(ListAge, 241)))
+  - mul(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(log(day_durbin_watson(Vwap))),
+    120), replace_small_with_nan(is_gt(ListAge, 120)))
+  - mul(ts_corr(log(day_durbin_watson(Vwap)), cs_median(log(day_durbin_watson(Vwap))),
+    241), replace_small_with_nan(is_gt(ListAge, 241)))
+  - cs_bucket_zscore(mul(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(log(day_durbin_watson(Vwap))),
+    241), replace_small_with_nan(is_gt(ListAge, 241))), LogFloatCap)
+  - cs_bucket_zscore(mul(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(log(day_durbin_watson(Vwap))),
+    241), replace_small_with_nan(is_gt(ListAge, 241))), cross_mean(log(day_durbin_watson(Vwap)),
+    120))
+  - mul(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(day_sum(Ret)), 241), replace_small_with_nan(is_gt(ListAge,
+    241)))
+  - mul(ts_regbeta(cs_mean(day_sum(Ret)), log(day_durbin_watson(Vwap)), 241), replace_small_with_nan(is_gt(ListAge,
+    241)))
+  - mul(sub(cross_zscore(cross_ema(log(day_durbin_watson(Vwap)), 10), 241), cs_mean(cross_zscore(cross_ema(log(day_durbin_watson(Vwap)),
+    10), 241))), replace_small_with_nan(is_gt(ListAge, 241)))
+  - cross_ema(mul(ts_regres(cs_mean(log(day_durbin_watson(Vwap))), log(day_durbin_watson(Vwap)),
+    241), replace_small_with_nan(is_gt(ListAge, 241))), 20)
+  - cs_bucket_zscore(cross_ema(mul(ts_regres(cs_mean(log(day_durbin_watson(Vwap))),
+    log(day_durbin_watson(Vwap)), 241), replace_small_with_nan(is_gt(ListAge, 241))),
+    20), LogFloatCap)
+  - mul(ts_corr(log(day_durbin_watson(Close)), cs_mean(log(day_durbin_watson(Close))),
+    241), replace_small_with_nan(is_gt(ListAge, 241)))
+  - mul(ts_corr(log(day_sum(Amt)), cs_mean(log(day_sum(Amt))), 241), replace_small_with_nan(is_gt(ListAge,
+    241)))
+  - mul(sub(ts_corr(log(day_durbin_watson(Vwap)), cs_mean(log(day_durbin_watson(Vwap))),
+    241), ts_corr(log(day_sum(Amt)), cs_mean(log(day_sum(Amt))), 241)), replace_small_with_nan(is_gt(ListAge,
+    241)))
+  - mul(ts_regbeta(cs_mean(log(day_durbin_watson(Vwap))), log(day_durbin_watson(Vwap)),
+    241), replace_small_with_nan(is_gt(ListAge, 241)))
+R:
+- head: cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 241)
+  why: head = cross_stddev(ts_sum(log(DW(Vwap)), 10), 241),-0.09。拆解:拆掉 ts_sum 变成 -0.93(ts_sum
+    的收益 +0.85),拆掉 log 只差 0.06,Vwap 换 Close 是 -0.00,窗口 120 / 482 分别 -0.60 / -0.92。值得怀疑的部件是最外层的
+    cross_stddev:它对上冲和下落一视同仁、还把尾部平方。推断(没在数据上量过):涨跌停锁死日 Vwap 几乎不动,DW 极小,log 后 -20 以下,一个这样的日子进平方就抵上百个正常日;ts_sum
+    的 +0.85 增益很可能正是「摊平极值」的收益。变体把这一个部件换掉:(1) 稳健离散度 IQR(q75 - q25,10 日和 20 日和);(2) 把
+    std 拆成上半 / 下半偏差(cross_semistd_pos / neg,作用在 10 日和的日度对数变化上),看承重的是上冲还是下落;(3) 窗口
+    180 / 300(121 与 482 都差、241 是峰,看它多窄);(4) ts_sum 换成 20。
+  variants:
+  - sub(cross_quantile_q75(ts_sum(log(day_durbin_watson(Vwap)), 10), 241), cross_quantile_q25(ts_sum(log(day_durbin_watson(Vwap)),
+    10), 241))
+  - sub(cross_quantile_q75(ts_sum(log(day_durbin_watson(Vwap)), 20), 241), cross_quantile_q25(ts_sum(log(day_durbin_watson(Vwap)),
+    20), 241))
+  - cross_semistd_pos(ts_sum(day_durbin_watson(Vwap), 10), 241)
+  - cross_semistd_neg(ts_sum(day_durbin_watson(Vwap), 10), 241)
+  - cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 180)
+  - cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 300)
+  - cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 20), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

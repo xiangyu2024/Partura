@@ -1,0 +1,104 @@
+seed: 2061
+round: 2
+slots:
+- type: E
+  core: cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241)
+  hypothesis: '机制:核心 C = cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241)。对每只股票,在过去
+    241 个交易日上用 LogFloatCap^3 去解释「开盘第一分钟成交额」day_open(Amt),取回归的 F 值。LogFloatCap 在个股内部是慢变量(流通市值随价格涨跌漂移),所以
+    C 度量的是:这只票的开盘首分钟成交额(集合竞价后的第一波参与度、隔夜信息消化的强度)与自身市值轨迹同步到什么程度,即「开盘关注度是否跟着市值涨跌走」。不是成交额水平,也不是市值水平。
+
+    本批证据(只用 train / valid):第 2 批里含 day_open(Amt) 的候选 28 个均值 -0.94,不含的 -2.57,含 cross_reg_fvalue(pow_3(LogFloatCap),
+    day_open(Amt), 241) 的 6 个均值 -1.00 / 不含 -2.29(p 0.011)。上一轮的 N 位里该核心外面包 cs_mask_top_replace_mean
+    得 +0.13 / +0.12(train 与 valid 同号),是本流目前唯一稳定为正的一类,但没过 0.5。已见过的外围只有 cs_mask_top_replace_mean(1
+    到 3 层嵌套,越叠越差)。
+
+    本位外围与已见写法完全不同,五类:(a) 时间维稳定化:cross_ema / cross_mean(C, 20) 与 cross_zscore(C, 120),F
+    值是 241 日窗口估计,日间跳动大,平滑后排序更稳、换手低一个量级,15 bp 才吃得下;(b) 对照核心:sub(C, 把 day_open(Amt)
+    换成 day_close(Amt) 的同一回归),开盘与收盘首尾两端参与度对市值同步性之差,去掉「一般成交活跃度与市值同步」的共同部分,只留开盘特有的;(c)
+    截面稳健化:cs_winsor(C)、cs_robust_z(C)、cs_mask_top_replace_mean_neg(C)(这里压的是底部而不是上一轮的顶部,F
+    值右偏重尾,尾部被少数股票日支配);(d) 截面内分层去均值:cs_bucket_demean(C, day_mean(Low)) 在复权价格十分位内去均值(按价格不按市值,所以不是重复
+    size 控制);(e) 时间差分 cross_delta(C, 20),看关注度同步性的变化而非水平。
+
+    为什么和库里不同:库里与这个核心同形的全是 cs_mask_top_replace_mean 一层或多层包装(骨架已被拒);这里的外层是 ema / zscore
+    / 差 / winsor / 价格桶去均值 / delta,与那些写法骨架不同。外围集合与已见候选不同。
+
+    为什么样本外还会在:开盘首分钟的成交额反映隔夜消息与被动资金之外的主动参与,这个参与度与市值的同步性是个股的结构性特征(小盘高关注 vs 大盘机构执行),数月内排序稳定(241
+    日窗口本身就慢);A 股开盘高度由散户与短线资金主导,这类行为稳定。上一轮同核心在两个时段同号为正(+0.13 / +0.12),说明不是单段偶然。诚实说明:期望是把
+    +0.1 附近的分数推向 0.3 到 0.5,过线概率不高。
+
+    数学检查:F 值在窗口内 day_open(Amt) 近常数时分母近零,会产生爆点;因此种子大量用截面 winsor / robust_z / 掩顶或 ema
+    压掉爆点;只用当日及以前数据,无前视;最长窗口 241 日,热身期占前一年;停牌日 day_open(Amt) 为 NaN 被 mask。'
+  seeds:
+  - cross_ema(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), 20)
+  - cross_zscore(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), 120)
+  - sub(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), cross_reg_fvalue(pow_3(LogFloatCap),
+    day_close(Amt), 241))
+  - cs_mask_top_replace_mean_neg(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt),
+    241))
+  - cs_bucket_demean(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), day_mean(Low))
+  - cross_delta(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), 20)
+  - cross_mean(cs_robust_z(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241)),
+    20)
+  - cross_tail_mean_q75(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241),
+    60)
+  - cs_bucket_zscore(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), day_mean(Low))
+  - sub(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241), cross_reg_fvalue(LogFloatCap,
+    day_open(Amt), 241))
+- type: N
+  hypothesis: '机制:开盘首分钟的成交额占当日总成交额的比重(开盘关注度份额)D = day_open(Amt) / day_sum(Amt)。它回答「这只票一天里多大一块成交挤在开盘那一分钟」:份额高多是散户
+    / 短线资金追隔夜消息、涨停板跳空反应、集合竞价后的第一波抢单;份额低则成交分散在全天、参与者偏机构执行(VWAP / TWAP 拆单)。这是参与者构成的结构属性,是一个比例,所以对成交额水平(流动性控制)大体免疫,与市值也不是单调关系。
+
+    算子实现:div(day_open(Amt), day_sum(Amt)) 得到日值,日轴上用 cross_mean / cross_ema(40 到 60
+    日)变慢,或 cross_zscore(120) 看份额相对自己历史的变化(关注度突然抬升 = 有新消息 / 新资金进入);变体:用 Volume 份额(与
+    Amt 份额之差 = 开盘一分钟的价格相对全天的倾斜);用 cross_corr(份额, day_sum(Ret), 60) 问「份额高的日子是否伴随上涨」(追涨
+    vs 恐慌);用 cross_regbeta 把份额对前一日份额回归得到关注度的持续性;用 cs_bucket_demean 在复权价十分位内去均值。
+
+    受本批启发:本批 28 个含 day_open(Amt) 的候选均值 -0.94,不含 -2.57(p 0.000),说明开盘首分钟成交额这个量里确有信息;但这
+    28 个全部把它放进「与 LogFloatCap 的回归」或「截面掩顶」里,当作 241 日回归的因变量,没有一条把它除以当日总成交额得到份额,也没有取慢均值。那些候选的信息一部分只是「当日成交额水平」,被流动性控制吸走;份额是无量纲的,把水平去掉后留下的才是新的。
+
+    为什么和库里不同:库里 day_open(Amt) 的表达式里 div(day_open(Amt), day_max(High)) 一类是除以价格,并没有除以
+    day_sum(Amt);骨架 div(day_open(F), day_sum(F)) 经检查不在 day_open(Amt) 的已见写法里。被测对象是份额,不是回归的
+    F 值。
+
+    为什么样本外还会在:开盘参与者构成(散户情绪 vs 机构执行)是个股慢变的结构属性,数十日内排序稳定;开盘关注度高的票往往是散户主导、定价噪声大的票,后续存在可预测的修正(行为金融:散户注意力驱动的买入压力之后反转,Barber-Odean
+    2008 attention-driven buying)。窗口 40 到 120 日,换手低,15 bp 成本吃得下。风险:份额可能与波动 / 流动性中度相关;被去掉线性暴露后剩下的是看运气的部分。
+
+    数学检查:day_sum(Amt) 对在市交易日恒为正(整天停牌则分子分母都 NaN,不是除以零);份额在 [0,1],无爆点;开盘分钟在停牌后复牌日可能很大,但份额有界;只用当日及以前数据,无前视;窗口最长
+    120 日。'
+  inspired_by: 第 2 批(T 批):含 day_open(Amt) 的 28 个候选均值 -0.94、不含 -2.57(p 0.000),且全部把它当作与
+    LogFloatCap 回归的因变量,没有一条去掉成交额水平、取开盘份额。
+  seeds:
+  - cross_mean(div(day_open(Amt), day_sum(Amt)), 60)
+  - cross_ema(div(day_open(Amt), day_sum(Amt)), 40)
+  - cross_zscore(div(day_open(Amt), day_sum(Amt)), 120)
+  - cross_mean(sub(div(day_open(Amt), day_sum(Amt)), div(day_open(Volume), day_sum(Volume))),
+    60)
+  - cross_corr(div(day_open(Amt), day_sum(Amt)), day_sum(Ret), 60)
+  - cross_autocorr(div(day_open(Amt), day_sum(Amt)), 60, 1)
+  - cs_bucket_demean(cross_mean(div(day_open(Amt), day_sum(Amt)), 60), day_mean(Low))
+  - sub(cross_ema(div(day_open(Amt), day_sum(Amt)), 10), cross_ema(div(day_open(Amt),
+    day_sum(Amt)), 60))
+  - cross_tail_mean_q75(div(day_open(Amt), day_sum(Amt)), 60)
+R:
+- head: cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)
+  why: 拆解:窗口 60 / 120 / 240 为 -0.47 / -0.33 / -0.35(240 时 valid +0.82),Volume 换 Amt
+    在 120 时 -0.38,裸日值 -2.94;烂的部件是日值本身(单分钟读数)与 cross_mean 的等权。上一轮 zscore(120) 为 -6.1,说明去水平是错的,水平里有信息。变体保留水平,改成更长窗、指数加权、换
+    Amt、换分位 0.9 / 0.99 读更稳的尾部。
+  variants:
+  - cross_mean(day_pdf_quantile_single(Ret, Amt, 0.95, True), 240)
+  - cross_ema(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)
+  - cross_ema(day_pdf_quantile_single(Ret, Amt, 0.95, True), 120)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.9, True), 240)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.99, True), 240)
+  - cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 180)
+- head: cross_argmax(day_ar1_coefficient(Volume), 241)
+  why: 拆解:裸 ar1 子树 -3.44,窗口 120 / 482 与换 Amt 未评出;烂的部件是 cross_argmax(只取 241 日里最大值所在位置,一个离散噪声)。变体用
+    cross_mean 等稳定聚合读「成交量日内自相关」的慢水平。
+  variants:
+  - cross_mean(day_ar1_coefficient(Volume), 120)
+  - cross_ema(day_ar1_coefficient(Volume), 60)
+  - cross_mean(day_ar1_coefficient(Amt), 120)
+  - cross_zscore(day_ar1_coefficient(Volume), 241)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,61 @@
+seed: 2041
+round: 2
+slots:
+- type: E
+  core: day_gini(High)
+  hypothesis: 'Core day_gini(High): the within-day inequality of the High path (Gini
+    of |High| across minutes). Enrichment table puts it first among structural cores
+    (+1.31, p 0.001, 14 candidates) and the round-1 N run found cs_first_low20(day_gini(Open),
+    ...) at -0.50, the closest to passing anything in this stream; High has not been
+    given a different periphery. Mechanism: for a price level series the Gini is a
+    scale-free measure of how unevenly price is spread over the day, i.e. a path-shape/range
+    proxy that is not the level of volume (which the liquidity control kills). Previous
+    periphery used only the lexicographic screen cs_first_low20 with a price level;
+    this round wraps it differently: multi-day persistence/dispersion (cross_mean,
+    cross_zscore, cross_stddev, semistd, tail mean, EMA), relative-to-own-history
+    (minus 40-day mean), relative to the Low path (High minus Low Gini = asymmetry
+    of upside vs downside excursions), normalised by Volume Gini (price-path inequality
+    relative to trade-size inequality), and cross-sectional neutralisation inside
+    deciles of Amt / float cap / listing age / board (cs_bucket_*), which removes
+    the size and board mix the ruler only removes linearly-in-rank. Library has none
+    of these wrappers on this core. Out of sample: intraday excursion asymmetry priced
+    by lottery/attention demand is a persistent behavioural trait; bucket-neutral
+    versions avoid the size regime shift. No look-ahead (same-day minutes, days earlier
+    only); denominators guarded by 1e-5.'
+  seeds:
+  - sub(day_gini(High), day_gini(Low))
+  - cs_bucket_demean(day_gini(High), LogFloatCap)
+  - cs_bucket_zscore(day_gini(High), day_sum(Amt))
+  - cross_zscore(day_gini(High), 20)
+  - cs_robust_z(day_gini(High))
+  - div(day_gini(High), add(day_gini(Volume), create_like(in_slice(Close, 1, 1), 1e-05)))
+  - cross_semistd_pos(day_gini(High), 20)
+  - sub(day_gini(High), cross_mean(day_gini(High), 40))
+  - cs_last_high10(day_gini(High), day_gini(Volume))
+  - mul(day_gini(High), LimitWidth)
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: N
+R:
+- head: cross_stddev(div(day_last(in_slice(Close, 1, 30)), day_first(in_slice(Open,
+    1, 30))), 20)
+  why: 'Knockout of the close/open ratio raises score by only +0.32 but the Close->Vwap
+    swap gains +0.11: the last-minute Close is a noisy single print (bid-ask bounce,
+    closing auction) while Vwap of the same window averages it out; keep the 20-day
+    cross-sectional stddev and open-to-window ratio, replace the noisy endpoint and
+    try longer windows (the 40-day window was less bad on train).'
+  variants:
+  - cross_stddev(div(day_last(in_slice(Vwap, 1, 30)), day_first(in_slice(Open, 1,
+    30))), 20)
+  - cross_stddev(div(day_last(in_slice(Vwap, 1, 30)), day_first(in_slice(Open, 1,
+    30))), 40)
+  - cross_stddev(div(day_last(in_slice(Vwap, 1, 30)), day_first(in_slice(Vwap, 1,
+    30))), 20)
+  - cross_stddev(div(day_close(Vwap), day_first(Open)), 20)
+  - cross_stddev(div(day_close(Vwap), day_first(Open)), 40)
+  - cross_stddev(div(day_last(in_slice(Vwap, 1, 60)), day_first(in_slice(Open, 1,
+    60))), 30)
+audit:
+  attempts: 1
+  file: audit_1.yaml

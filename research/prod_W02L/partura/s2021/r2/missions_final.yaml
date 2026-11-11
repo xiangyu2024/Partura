@@ -1,0 +1,153 @@
+seed: 2021
+round: 2
+slots:
+- type: N
+  hypothesis: '想法:涨跌停制度下的「配给 / 排队」状态——封死的方向与频率、触板后被砸回的深度、封板后的次日兑现——做成半衰期 30 到 120
+    日的慢变读数。
+
+    批里的现象(B061 + B062,30 个成员,其中 16 个在冠军的族 22 里):承重部件全是「一天里成交额 / 成交量最低那一分钟的钟点」, 即 pow_1_5(day_argmin(Amt))、inv(day_argmin(Volume))
+    再套 ts_max / sigmoid / ts_quantile_q75。argmin 对一条含零成交分钟的序列取的是 第一个零分钟,没有零分钟时才是最安静的那一分钟,所以这个钟点同时在读三件事:停牌日、一字或接近一字的涨跌停封死、盘口很薄的票开盘前几分钟没有成交。
+    三种状态被压成一个钟点,而且不分方向。B062 的成员在库自己的尺子下大多 raw 净夏普 +0.4 ~ +1.4(14 个里 12 个为正),但新尺子(冠军已含族
+    22)下没有一个过线、没有 head, 说明混合体本身没有剩余;还没有被回答的问题是:把状态拆开以后,某一种状态自己有没有被混合体掩盖的、带符号的收益。
+
+    实现(都用本波新增的算子,库与冠军里 0 次使用):(1) day_at_max_ratio / day_at_min_ratio = 一天里停在当日最高
+    / 最低价上的分钟占比; 取差后,普通交易日里最小变动价位(tick)对两项的影响对称,差约为 0 ± 0.01;涨停封死日约 +0.3 ~ +0.9,跌停封死日约
+    −0.3 ~ −0.9。 所以 cross_ema(差, 30 ~ 120) 读的是「封涨停相对封跌停的频率与持续时间」,是有方向的事件频率,不是钟点;signedpower(差,
+    2) 版本把权重压向封板日、压低 tick 噪声。 (2) day_flat_run_max / day_flat_ratio:冻结的分钟是集中成一整段(封板),还是零散分布(薄盘):比值有界在
+    (0, 1],分母加 0.01 保护。 (3) 封板后的兑现:cross_ema(昨日封板差 × 今日跳空):价格限制使未成交的买卖单被推到下一个交易日(Kim
+    和 Rhee 1997 的延迟价格发现、Cho 等 2003 的磁吸效应), 这个乘积读的是「排队的需求 / 供给是否在次日开盘兑现」;cross_autocorr
+    读封板是否成串(连板)。(4) 触板回落:(上影线 − 下影线) 除以昨收再除以 LimitWidth, 日频叶子把主板 / 创业板 / 科创板 / 北交所的
+    10% / 20% / 30% 放到同一把尺子上(LimitWidth ≥ 0.1,不会除以近零),读「冲高被砸回」与「探底被托回」的慢变倾向。 聚合一律用
+    cross_ema(实数权重):单日读数是分钟计数 / 241 的整数倍,cross_mean 会让截面上出现大批并列,而并列靠股票列序打破、携带板块信息。
+
+    和库、head、控制的区别:库 5583 条里没有一条用 at_max / at_min / flat_run_max 或 LimitWidth;三个 head
+    与冠军读的是钟点; 5 个控制(流动性、波动、20 日反转、成交额离散度、市值)全是水平量,封板频率是事件计数,20 日反转控制只看收益之和,看不到「这 20
+    天里有几天封死在板上」。
+
+    为什么样本外还会在:涨跌停是交易制度,不是样本期风格(2018 到 2025 年幅度只在 2020-08 创业板改为 20% 一次变化,已被 LimitWidth
+    吸收); 封板的频率是个股的慢属性(题材股 / 流通盘小),长半衰期平均后日换手低,15 bp 的成本很小(同一波 2009 流的结果:慢才承重); 方向由训练段定,不预设。数学检查:at_max
+    / at_min 要求当天至少 2 个有效分钟(停牌日为 NaN,cross_ema 跳过缺失日),取值 [0, 1],差 [−1, 1]; 除法的分母只有
+    flat_ratio + 0.01(≥ 0.01)、昨收(后复权价,正数)与 LimitWidth(≥ 0.1);没有前视(昨日封板差 × 今日开盘,只用
+    t 日及以前)。 已知风险:(a) 封板频率与波动、小盘高度相关,可能被控制吃掉;(b) 一字板买不进(可买性约束)会让多头书里的封涨停票被剔除,方向可能由「封跌停」一侧决定;
+    (c) 一半以上的股票在窗口内没有任何封板,它们的读数只由 tick 噪声决定,排名在中段近似随机。'
+  inspired_by: B061 / B062:argmin 钟点(pow_1_5(day_argmin(Amt))、inv(day_argmin(Volume))
+    再套 ts_max / sigmoid)读到的其实是停牌、一字封板、薄盘三种冻结状态的混合;本位把它们拆开并带上方向
+  literature:
+  - source: Kim and Rhee, Price limit performance - evidence from the Tokyo Stock
+      Exchange, Journal of Finance
+    year: 1997
+  - source: Cho, Russell, Tiao and Tsay, The magnet effect of price limits - evidence
+      from high-frequency data on Taiwan Stock Exchange, Journal of Empirical Finance
+    year: 2003
+  seeds:
+  - cross_ema(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 30)
+  - cross_ema(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 120)
+  - cross_ema(sub(day_at_max_ratio(High), day_at_min_ratio(Low)), 40)
+  - cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 2),
+    60)
+  - sub(cross_ema(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 5), cross_ema(sub(day_at_max_ratio(Close),
+    day_at_min_ratio(Close)), 60))
+  - cross_ema(div(day_flat_run_max(Close), add(day_flat_ratio(Close), 0.01)), 40)
+  - cross_ema(mul(day_flat_run_max(Close), sign(sub(day_last(Close), day_first(Open)))),
+    40)
+  - cross_ema(mul(ts_delay(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)),
+    1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 60)
+  - cross_ema(div(div(sub(sub(day_max(High), day_last(Close)), sub(day_last(Close),
+    day_min(Low))), ts_delay(day_last(Close), 1)), LimitWidth), 30)
+  - cross_ema(div(div(sub(day_max(High), day_last(Close)), ts_delay(day_last(Close),
+    1)), LimitWidth), 40)
+  - cross_autocorr(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 120, 1)
+  - cross_ema(sub(day_flat_ratio(Close), day_flat_run_max(Close)), 40)
+- type: N
+  hypothesis: '想法:分钟收益的「计数式」方向(涨的分钟多还是跌的分钟多)与「金额式」方向(钱主要在涨的分钟还是跌的分钟里成交)、「大小式」方向(日内总收益)之间的错位,
+    做成半衰期 30 到 120 日的慢变量。
+
+    定位里的依据(loc.md 共性表,71 个已评分候选;候选来自上一轮的 GP,不是库的成员):含 day_pos_ratio(Ret)(一天里上涨分钟的占比,不看涨幅大小)的
+    17 个均值 −1.88、 不含的 −2.46(p 0.001);含 neg(abs_(day_pos_ratio(Ret))) 的 6 个 −1.54 对
+    −2.40(p 0.006)。这是整张富集表里最稳的几个子树之一; 批里 head 的承重部件(argmin 钟点)本身也是「只看位置 / 计数、不看大小」的读数,所以这个方向最贴近这批「什么在起作用」的证据。
+    诚实的限定:这些候选分数都是 −1.2 ~ −1.5,没有一个过线,富集说明的是「亏得更少」(慢、换手低),不是已有 alpha;本位要看它能不能再向上走。
+
+    实现:up = day_pos_ratio(Ret),dn = day_pos_ratio(neg(Ret))(neg 把下跌分钟变成上涨分钟),up −
+    dn 是有界在 [−1, 1] 的「计数净买压」 (Chordia、Roll 和 Subrahmanyam 2002 用订单不平衡预测收益;这里用分钟价格跳动的计数近似,不需要逐笔数据);除以
+    (up + dn + 0.05) 去掉「这一天有多少分钟价格根本没动」 (最小变动价位 / 流动性的影响)。三类读数:(a) 慢变的净涨分钟占比(cross_ema
+    半衰期 30 ~ 120 日,以及收尾一小时的版本、最差四分之一天的条件均值),读「价格是不是一档一档往上走」; (b) 错位:计数式不平衡减去金额式的 day_signed_ratio(Ret,
+    Amt)(两者都在 [−1, 1]),或两者截面排名后相减:涨的分钟多、但钱主要在跌的分钟里成交 = 小单在买、大单在卖; (c) 信息离散度:sign(日内总收益)
+    × (dn − up)(Da、Gurun 和 Warachka 2014 的 frog-in-the-pan 在分钟层面的版本:连续的小消息之后动量延续,离散的大消息之后反转),
+    以及计数不平衡与日内收益的 120 日相关(读「一天的涨跌是靠很多个小步,还是靠少数几个大跳」)。 聚合用 cross_ema(实数权重):单日读数是分钟计数
+    / 241 的整数倍,cross_mean 或 cross_med 会让截面上出现大批并列,并列靠股票列序打破、携带板块信息。
+
+    和库、head、控制的区别:库的分钟统计量要么按大小加权(day_std / day_skew / day_kurt / day_cov),要么是位置型(day_argmin),没有「涨的分钟占比」,
+    更没有把它与金额式方向相减的读数,所以冠军也没有;5 个控制是水平量,计数式不平衡有界、无量纲,平坦度(没动的分钟占比)在分母里被归一, 与流动性、波动、市值的水平关系弱。
+
+    为什么样本外还会在:订单拆分(大单拆成小单)与信息连续性是微观结构的结构性属性,不依赖样本期的行情风格;全部读数长半衰期平滑,日换手低, 15 bp 的成本不吃分数。数学检查:day_pos_ratio
+    的分母是当天有效分钟数(停牌日为 NaN);除法只有 (up + dn + 0.05);cross_corr 的窗口含当日、只用 t 日及以前的分钟,无前视;
+    Ret 的第 0 根恒为 0,计入分母、不计涨跌,各股相同。已知风险:(1) 计数式净涨分钟占比与一年的日内漂移(2009 流里最接近 0 的一条线)是近亲,可能只是它的改写;
+    (2) 与 20 日反转控制可能中度相关(涨的分钟多的票近期涨)。'
+  inspired_by: loc 共性表:含 day_pos_ratio(Ret) 的 17 个候选均值 −1.88 对 −2.46(p 0.001),以及批里
+    head 的承重部件 argmin 钟点同属「只看计数 / 位置、不看大小」的读数
+  literature:
+  - source: Chordia, Roll and Subrahmanyam, Order imbalance, liquidity, and market
+      returns, Journal of Financial Economics
+    year: 2002
+  - source: Da, Gurun and Warachka, Frog in the pan - continuous information and momentum,
+      Review of Financial Studies
+    year: 2014
+  seeds:
+  - cross_ema(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), 40)
+  - cross_ema(div(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), add(add(day_pos_ratio(Ret),
+    day_pos_ratio(neg(Ret))), 0.05)), 60)
+  - cross_ema(mul(sign(day_sum(Ret)), sub(day_pos_ratio(neg(Ret)), day_pos_ratio(Ret))),
+    40)
+  - sub(cs_rank(cross_ema(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), 20)),
+    cs_rank(cross_ema(day_signed_ratio(Ret, Amt), 20)))
+  - cross_ema(sub(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), day_signed_ratio(Ret,
+    Amt)), 40)
+  - cross_corr(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), sub(div(day_last(Close),
+    day_first(Open)), 1), 120)
+  - cross_autocorr(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), 120, 1)
+  - cross_ema(sub(day_pos_ratio(in_slice(Ret, 181, 240)), day_pos_ratio(neg(in_slice(Ret,
+    181, 240)))), 40)
+  - cross_tail_mean_q25(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), 120)
+  - sub(cross_ema(sub(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))), 7), cross_ema(sub(day_pos_ratio(Ret),
+    day_pos_ratio(neg(Ret))), 80))
+  - cross_ema(div(day_pos_ratio(Ret), add(add(day_pos_ratio(Ret), day_pos_ratio(neg(Ret))),
+    0.05)), 40)
+  - cross_ema(sub(sub(day_pos_ratio(in_slice(Ret, 1, 60)), day_pos_ratio(neg(in_slice(Ret,
+    1, 60)))), sub(day_pos_ratio(in_slice(Ret, 181, 240)), day_pos_ratio(neg(in_slice(Ret,
+    181, 240))))), 40)
+R:
+- head: add(div(pow_1_5(day_argmin(Amt)), day_max(High)), cross_max(day_cov(Close,
+    Close), 15))
+  why: '第 1 轮 R 的读数(R_prev.json):把 pow_1_5(day_argmin(Amt)) 换成它的 20 日均值 cross_mean(day_argmin(Amt),
+    20),分数从 −2.20 提到 −0.90(train −0.30 / valid −0.90), 是 10 个变体里最好的,但与已知成交额族 |ρ| 0.64
+    ≥ 0.5,所以不能替换。烂的部件有两个:(1) 单日的 argmin 钟点噪声大、日换手高, 第 1 轮的结果说明越平滑越好,所以本轮继续放慢(60 /
+    120 日均值、60 日 EMA),并把分母里的价格也平滑;(2) 与已知族共享的流动性水平: argmin(Amt) 的零成交分钟读的是流动性,把 Amt
+    换成 Volume(股数,不含价格),或换成有界、没有零成交人工影响的成交额重心 day_centroid(Amt), 看 ρ_known 能否从 0.64
+    降到 0.5 以下;cs_rank 之和把两项放到同一量纲(第 1 轮的写法里 cov 项在加法里是乘客)。'
+  variants:
+  - add(div(cross_mean(day_argmin(Amt), 60), day_max(High)), cross_max(day_cov(Close,
+    Close), 15))
+  - add(div(cross_mean(day_argmin(Amt), 120), day_max(High)), cross_max(day_cov(Close,
+    Close), 15))
+  - add(div(cross_ema(day_argmin(Amt), 60), day_max(High)), cross_max(day_cov(Close,
+    Close), 15))
+  - add(div(cross_mean(day_argmin(Volume), 60), day_max(High)), cross_max(day_cov(Close,
+    Close), 15))
+  - add(div(cross_mean(day_argmin(Amt), 60), cross_mean(day_max(High), 60)), cross_max(day_cov(Close,
+    Close), 15))
+  - add(cs_rank(cross_mean(day_centroid(Amt), 60)), cs_rank(cross_max(day_cov(Close,
+    Close), 15)))
+  - div(cross_mean(day_argmin(Amt), 120), day_max(High))
+- head: ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 20), 5)
+  why: 第 1 轮 R 的读数:把方差换成 20 日均值 / 标准差都没有变好(−2.79 / −2.81);在成交额十分位内去均值(cs_bucket_demean(·,
+    day_sum(Amt)))从 −2.90 提到 −1.91(train −1.91 / valid −0.68), ρ_known −0.03,但与原 head
+    的 ρ 为 −0.84(方向反了,不满足替换条件)。读法:去掉与流动性共享的水平有用,代价是十分位的边界跳变使换手变高(同一波 2009 流的经验:桶边界抬高换手)。
+    本轮用「慢」来对冲这个代价:方差窗口放长到 60 / 120 日,桶变量用 60 日平滑的成交额而不是单日成交额。
+  variants:
+  - ts_quantile_q75(ts_var(day_argmin(Amt), 60), 5)
+  - cs_bucket_demean(ts_var(day_argmin(Amt), 120), cross_mean(day_sum(Amt), 60))
+  - cs_bucket_demean(ts_quantile_q75(ts_var(pow_1_5(day_argmin(Amt)), 60), 5), cross_mean(day_sum(Amt),
+    60))
+audit:
+  attempts: 1
+  file: audit_1.yaml
