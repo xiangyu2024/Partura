@@ -1,0 +1,35 @@
+seed: 2069
+round: 1
+slots:
+  - type: E
+    core: 'ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4)'
+    hypothesis: 'Core = 4-day rolling correlation between the daily VWAP (Amt/Volume) and a 26-day sum of 5-day mean volume: it measures whether the average transaction price co-moves with slow-moving participation, i.e. whether price is being pushed up on persistent volume (accumulation) or on fading volume. Every library head wraps it only in cs_rank(ts_decay_linear(.)) and then differences it against an Open/volume-correlation argmin leg. Here the periphery is completely different: size-bucket-neutral ranking (cs_bucket_rank by LogFloatCap, which removes the size-dependent level of the correlation within the cross-section), EMA/z-score of the correlation against its own history (a change in accumulation rather than its level), cross-day sign persistence, tail-of-liquidity cs_last_* masks that drop the thinnest names, and interactions with intraday return skew / close-based price change. The mechanism is persistent institutional-style accumulation by small and mid caps whose participation drifts slowly; it should survive out of sample because bucketed ranking and history-relative scaling remove the size and liquidity exposures that the controls absorb, leaving the within-size accumulation timing.'
+    seeds:
+      - 'cs_bucket_rank(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), LogFloatCap)'
+      - 'cs_rank(cross_ema(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 10))'
+      - 'cs_rank(cross_zscore(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 20))'
+      - 'cs_bucket_rank(cross_mean(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 10), LogFloatCap)'
+      - 'cs_rank(ts_rank(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 10))'
+      - 'cs_last_high10(cross_mean(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 5), day_std(Amt))'
+      - 'ts_mean(sign(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4)), 10)'
+      - 'mul(cs_rank(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4)), cs_rank(cross_mean(day_skew(Ret), 20)))'
+      - 'cs_rank(ts_corr(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), ts_delta(day_last(Close), 1), 10))'
+      - 'cs_winsor(cross_zscore(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 60))'
+      - 'cs_bucket_rank(cross_zscore(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 20), LogFloatCap)'
+      - 'cs_first_low40(ts_mean(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_mean(day_sum(Volume), 5), 26), 4), 8), LogFloatCap)'
+  - type: N
+    hypothesis: 'Float-normalised turnover shocks inside size buckets. Raw volume and amount (which all library heads use, always unnormalised) mostly proxy for size and liquidity, which the controls strip out. Dividing volume by floating shares (log(day_sum(Volume)) - LogFloatShares = log turnover of float) measures the fraction of the free float that changed hands, a clean attention / disagreement proxy that the library never touches because the LogFloat* leaves are new. Mechanism: abnormal turnover relative to the stock own history and relative to its same-size peers (cs_bucket_rank by LogFloatCap, cross_zscore against 20-60 day history) marks attention shocks and informed trading; in A-shares high-attention small caps are later reversed, while quiet-turnover stocks with rising turnover trend (we let GP choose the sign through the rank direction). Second leg: intraday return skew and return-volume correlation averaged over days, bucketed by size, capturing lottery preference. Because operators work on float-normalised, bucket-ranked and history-relative quantities, the exposure to the liquidity and size controls is removed by construction and the residual attention effect should persist out of sample.'
+    inspired_by: 'Batch 1 heads all built from day_sum(Amt)/day_sum(Volume) (VWAP) and mean volume (ts_mean(day_sum(Volume), k)) with every one scoring negative after control residualisation: raw volume is absorbed by the controls, so the same volume information needs to be float-normalised and bucketed to become new.'
+    seeds:
+      - 'sub(log(day_sum(Volume)), LogFloatShares)'
+      - 'cs_bucket_rank(sub(log(day_sum(Volume)), LogFloatShares), LogFloatCap)'
+      - 'cross_zscore(sub(log(day_sum(Volume)), LogFloatShares), 20)'
+      - 'cs_bucket_rank(cross_zscore(sub(log(day_sum(Volume)), LogFloatShares), 40), LogFloatCap)'
+      - 'cs_rank(ts_delta(cross_mean(sub(log(day_sum(Volume)), LogFloatShares), 5), 10))'
+      - 'neg(cs_bucket_rank(cross_zscore(sub(log(day_sum(Amt)), LogFloatCap), 60), LogFloatCap))'
+      - 'cs_bucket_rank(cross_mean(day_skew(Ret), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cross_mean(day_corr(Ret, Volume), 10), LogFloatCap)'
+      - 'cs_rank(ts_corr(sub(log(day_sum(Volume)), LogFloatShares), day_last(Close), 10))'
+      - 'cs_rank(cross_ema(cs_bucket_rank(sub(log(day_sum(Volume)), LogFloatShares), LogFloatCap), 5))'
+      - 'mul(cs_rank(cross_zscore(sub(log(day_sum(Volume)), LogFloatShares), 20)), cs_rank(cross_mean(day_skew(Ret), 20)))'
+      - 'cs_bucket_rank(ts_rank(sub(log(day_sum(Volume)), LogFloatShares), 20), LogFloatCap)'

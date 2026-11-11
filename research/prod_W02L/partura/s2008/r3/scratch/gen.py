@@ -1,0 +1,66 @@
+import yaml
+C="cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 241)"
+M="replace_small_with_nan(is_gt(ListAge, 241))"
+CM=f"mul({C}, {M})"
+DWR="day_durbin_watson(Ret)"
+LA="log(day_sum(Amt))"
+M120="replace_small_with_nan(is_gt(ListAge, 120))"
+E_seeds=[
+ CM,
+ f"cs_bucket_zscore({CM}, ListAge)",
+ f"cs_bucket_zscore({CM}, cross_mean({LA}, 241))",
+ f"mul(ts_delta({C}, 60), {M})",
+ f"cross_zscore({CM}, 60)",
+ f"sub(cs_rank({CM}), cs_rank(cross_stddev(ts_sum({LA}, 10), 241)))",
+ f"cs_regres({CM}, cross_stddev(ts_sum({LA}, 10), 241))",
+ f"cs_regres({CM}, sub(LogFloatCap, LogFloatShares))",
+ f"sub(cs_rank({CM}), cs_rank(cross_stddev(ts_sum(log(day_durbin_watson(Close)), 10), 241)))",
+ f"sub(cs_rank({CM}), cs_rank(cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 60)))",
+ f"cs_flip_by_state({CM}, cross_mean(day_sum(Ret), 20))",
+ f"cs_bucket_zscore({CM}, cross_mean(ts_sum(log(day_durbin_watson(Vwap)), 10), 241))",
+ f"cs_regres({CM}, cross_mean(ts_sum(log(day_durbin_watson(Vwap)), 10), 241))",
+ f"cs_bucket_zscore({CM}, cross_stddev(day_sum(Ret), 241))",
+]
+N_seeds=[
+ f"mul(ts_corr({DWR}, {LA}, 120), {M120})",
+ f"mul(ts_corr({DWR}, abs_(day_sum(Ret)), 120), {M120})",
+ f"mul(ts_regbeta({DWR}, {LA}, 241), replace_small_with_nan(is_gt(ListAge, 241)))",
+ f"mul(ts_corr(ts_delay({DWR}, 1), day_sum(Ret), 120), {M120})",
+ f"mul(ts_corr({DWR}, ts_delay(day_sum(Ret), 1), 120), {M120})",
+ f"cs_bucket_zscore(mul(ts_corr({DWR}, {LA}, 241), replace_small_with_nan(is_gt(ListAge, 241))), LogFloatCap)",
+ f"mul(ts_corr(day_autocorr_n1(Ret), day_autocorr_n1(Volume), 120), {M120})",
+ f"cross_ema(mul(ts_regres(cs_mean({DWR}), {DWR}, 241), replace_small_with_nan(is_gt(ListAge, 241))), 20)",
+ f"cs_flip_by_state(mul(cross_mean({DWR}, 60), {M120}), cross_mean(log(day_durbin_watson(Vwap)), 20))",
+ f"mul(ts_corr({DWR}, log(day_durbin_watson(Vwap)), 120), {M120})",
+ f"mul(ts_corr({DWR}, cs_mean({DWR}), 241), replace_small_with_nan(is_gt(ListAge, 241)))",
+ f"mul(sub(ts_corr({DWR}, {LA}, 120), ts_corr(day_autocorr_n1(Amt), {LA}, 120)), {M120})",
+ f"mul(ts_corr(sub({DWR}, 2), day_signed_ratio(Ret, Volume), 120), {M120})",
+ f"mul(ts_regbeta(day_sum(Ret), {DWR}, 120), {M120})",
+]
+hE=("核心 C = cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 241),即本流现有 head(-0.09,train -0.07 / valid -0.09):个股当天分钟 VWAP 路径相对已实现方差 RV(DW 未去均值 = Σ(ΔVwap)²/ΣVwap²,价格尺度约掉)取对数、10 日和、再取 241 日标准差 = 慢速 vol-of-vol(波动的突发性)。"
+"证据(全是 train / valid):第 1 轮 R 组只留离散度 -0.09、只留均值 -2.61,差 2.5;Vwap 换 Close 无损;窗口 180 / 300 / 120 / 482 与 IQR / 半偏差写法全都变差(第 2 轮 R:-0.33 ~ -1.8),241 是峰;它与五个控制的 |ρ| 只有 0.04 ~ 0.34,所以尺子没有把它吃掉,而是它自己 train / valid 都在 0 附近,被混进来的成分稀释。"
+"前两轮 E 位围绕的是 120 日 / 无 ts_sum 的 C',外围写法是 cs_bucket_zscore(·, LogFloatCap) 单层双层嵌套、cs_regres(·, RV 基线 / 成交量突发 / Close 突发)、cs_flip_by_state(·, 市场 RV 或成交额状态)、cross_mean 平滑,最好 -0.25。本位换成 241 日的 C(ts_sum 摊平锁死日极值,是已知最好的写法),外围换成以前没用过的五类:(1) 上市批次同伴(cs_bucket_zscore(·, ListAge),用上市龄分组而不是市值分组:同一批上市的票共享板块 / 制度 / 持有人构成)与成交额水平 / 日收益波动同伴;(2) 时间维度的相对量:ts_delta(C, 60) 与 cross_zscore(C, 60) = 突发性相对自己 60 日前 / 近期常态的变化,而不是水平(水平里有刻度差,变化里没有);(3) 两路差:cs_rank(C) 减去成交额同口径突发性的秩(只剩价格自己的突发,不是放量带动的)、减去 Close 路径同口径突发性(扣掉弹跳噪声)、减去 60 日短窗同口径突发性(慢减快 = 突发性的期限结构);(4) 回归扣除:对同口径成交额突发性、对名义价格 LogFloatCap - LogFloatShares、对 RV 基线 cross_mean(ts_sum(log DW, 10), 241) 做截面残差(同口径的 241 日版,前两轮是 120 日版);(5) 市场收益状态翻转 cs_flip_by_state(·, cross_mean(day_sum(Ret), 20)):检验突发性溢价的符号是否随近 20 日市场涨跌状态变,前两轮翻转的状态是波动 / 成交额,没有用收益。"
+"为什么和库不同:两个库全部 5583 条里没有一条含 ListAge / LogFloatCap / cs_regres / cs_bucket_* / cs_flip_by_state,表达式外围基本只有 ts / cross 统计;这里的外围全是截面交互项,而尺子只扣控制秩的 1 ~ 3 次多项式,交互项、同伴内相对量、回归残差不在被扣掉的范围。"
+"为什么样本外还会在:突发性是个股信息流与参与者构成的慢属性(241 日窗口,换手低,15 bp 可承受);外围扣的是机械成分(刻度、放量、噪声、状态),剩下的是价格自身的不确定性,对应信息不确定性溢价(Zhang 2006 等,文献在 2023-08 以前)。预期只是从 -0.1 变到略正,不是大幅越线。"
+"数学检查:无前视(全部尾随窗口,ts_delay 为滞后);所有种子乘上市 > 241 日掩码 M,避免新股窗口未填满的估计点占据十分位两端;DW 分母远大于 1e-8,常数行为缺失不会 inf,ts_sum 摊平近常数日的极小值;cs_regres / cs_bucket_zscore 只用当天截面;不用任何 2026 年数据。")
+hN=("想法:读微观结构噪声的状态依赖,而不是水平 / 离散度。day_durbin_watson(Ret) = Σ(Δr)²/Σr²,约等于 2 - 2ρ1(未去均值的分钟收益一阶自相关):>2 = 买卖价弹跳 / 反转(流动性提供主导),<2 = 动量 / 订单拆分(信息交易主导)。它是无量纲的,与前面全流用的 DW(Vwap)(方差读法)不同。"
+"库里 DW(Ret) 只出现在 B024 的水平外壳里(sigmoid(pow_2(DW(Ret))) 的 q75 / cross_mean),全部是对自己做时序统计;没有一条读「微观结构状态 × 外部状态」的联动。我读的是:(a) 弹跳强度随成交额变大时是变强还是变弱(ts_corr / ts_regbeta(DW(Ret), log 日成交额)):放量日从反转型变成动量型的票 = 知情交易的量一出来就占主导,这类票的信息被慢速吸收;(b) 与当天 |日收益| 的联动(大动日是否伴随动量型分钟路径);(c) 昨日分钟自相关对今日收益的联动 ts_corr(ts_delay(DW(Ret),1), day_sum(Ret))(滞后,没有前视);(d) 两种自相关联动:分钟收益自相关与分钟成交量自相关的相关(day_autocorr_n1(Ret) 与 day_autocorr_n1(Volume),订单拆分会同时让两者为正);(e) 与 RV 的联动 ts_corr(DW(Ret), log DW(Vwap)):方差大时弹跳是否更强;(f) 个股相对市场的弹跳状态:对 cs_mean(DW(Ret)) 的 ts_regres 残差再做 EMA(特质弹跳冲击),及同伴内标准化版、状态翻转版;(g) 对照:成交量自相关与成交额的相关(第 12 个种子)等。"
+"灵感:本批 B024 与前两批里最好的得分都来自 DW 的离散度 / 慢窗口,说明承重的是 DW 序列随时间的结构而不是水平;前两轮 N 位把联动读在 Vwap 的 RV 上(同步性 / 市场联动),这里换成 Ret 的符号性质(反转 vs 动量),且搭档是成交额 / 收益 / 成交量自相关,不是市场序列。"
+"算子怎样实现:全部是 120 或 241 日滚动的 ts_corr / ts_regbeta / ts_regres,外面乘 replace_small_with_nan(is_gt(ListAge, 窗口)) 掩码(ts_corr 对窗内有效点没有最少样本数,新股窗口只有 2 个点时相关系数恰为 ±1,会占满十分位两端);滞后用 ts_delay,没有 ts_shift(那是前视)。与库的区别:这些骨架(ts_corr / ts_regbeta 以 DW(Ret) 或 day_autocorr_n1 为一端、日频成交额 / 收益为另一端、外乘上市掩码)不在两个库里,已逐个核对。"
+"样本外为什么还会在:反转 vs 动量的分钟微观结构由市场制度(T+1、涨跌停、做市商缺位、散户订单拆分习惯)和持有人构成决定,是慢属性;联动统计窗口 120 ~ 241 日,换手低;风险我也写在这里:联动可能只是成交额 / 流动性风格的代理(尺子已扣控制的 1 ~ 3 次秩,所以这次看的是风格以外还剩什么),方向我不预设,由 train 选。"
+"数学检查:无前视;DW 的分母 Σr² 是分钟收益平方和,涨跌停锁死日分母近 0 时返回缺失而不是 inf(算子对近常数行返回 NaN);ts_corr 对缺失(停牌)成对剔除;种子 13 的 sub(DW(Ret), 2) 只是平移,相关系数不变,仅为可读性,不是数学问题;不使用 2026 年数据。")
+plan={'seed':2008,'round':3,'slots':[
+ {'type':'E','core':C,'hypothesis':hE,'seeds':E_seeds},
+ {'type':'N','hypothesis':hN,'inspired_by':'B024(第 3 批)与前两批:DW 的承重在序列结构而不在水平;DW(Ret) ≈ 2 - 2×分钟收益一阶自相关(反转 vs 动量),库里只读它的水平外壳,没有读它和成交额 / 收益 / 成交量自相关的联动','seeds':N_seeds}],
+ 'R':[{'head':'ts_quantile_q75(cross_mean(pow_3(sigmoid(pow_2(day_durbin_watson(Ret)))), 3), 30)',
+ 'why':'head -3.21。拆解:拆掉 cross_mean(·,3) 得 -2.94(+0.27),拆掉 sigmoid 得 -3.04(+0.17),其余部件(pow_3、pow_2)拆掉几乎不变,窗口 15 / 60 不变;说明 cross_mean 与 sigmoid 是烂部件,pow_2 / pow_3 / 外层 q75 是装饰(单调变换在日度秩下等价,只剩时序统计的形状)。变体:去掉烂部件后换更慢更稳的时序读法(q75 换 q50 / 均值 / 241 日,或 q75 - q25 的离散度),与前面全流 vol-of-vol 的结论一致(离散度比水平好)。',
+ 'variants':[
+ 'ts_quantile_q75(pow_3(sigmoid(pow_2(day_durbin_watson(Ret)))), 30)',
+ 'ts_quantile_q75(day_durbin_watson(Ret), 30)',
+ 'ts_quantile_q75(day_durbin_watson(Ret), 120)',
+ 'cross_mean(day_durbin_watson(Ret), 120)',
+ 'cross_stddev(day_durbin_watson(Ret), 241)',
+ 'sub(cross_quantile_q75(day_durbin_watson(Ret), 120), cross_quantile_q25(day_durbin_watson(Ret), 120))',
+ 'cross_stddev(ts_sum(day_durbin_watson(Ret), 10), 241)',
+ 'ts_quantile_q75(cross_mean(pow_3(pow_2(day_durbin_watson(Ret))), 3), 30)']}]}
+yaml.safe_dump(plan,open('missions.yaml','w'),allow_unicode=True,width=10000,sort_keys=False)

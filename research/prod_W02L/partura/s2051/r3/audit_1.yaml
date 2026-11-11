@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 3:12 个种子全部是快照 head 1 的骨架 cross_regbeta(x, ts_mean(day_kurt(Volume),5), d),只改被回归侧 x(log 换手、日轴放量 z、day_sum(Ret)、day_sum(Amt))、形状量(gini / 重心)、窗口(120 / 241 / 30 差)、corr、市值桶内或 EMA 后处理。相关度表里与 head 1 的原始 |ρ| 为 seed 9 桶内版 0.58、seed 7 corr 版 0.54、seed 1 换手版 0.53、seed 2 zscore 版 0.48,这些是同一个 head 的换写或后处理,不算本质不同。真正带来新信息的是 seed 5(day_sum(Ret),与 head 原始 |ρ| 仅 0.14,带方向的脉冲:买方 / 卖方事件)、seed 12(120 与 30 窗口之差,0.17)、seed 3 与 seed 4(gini / 重心,0.26 / 0.38)。与控制:核心本身 liq 0.35、known 0.30;seed 1 liq 0.19、seed 6 size 0.22,都在 0.5 以下,没有和控制度量同一个东西。按 §3 只有「同一个东西」才给 1,这些是换写但不同输入,给 3。合理度 4:逐个核对算子。cross_regbeta = rolling_ols 的 beta,日轴因果滚动(rolling_windows 左填 NaN),y 对 x 的斜率,所以是「脉冲性对量水平的敏感度」,hypothesis 把方向写反了(写成量水平对脉冲性),但「放量时是否伴随脉冲」的含义与算子一致,不影响分数。ts_mean 因果;day_kurt / day_gini / day_centroid / day_sum 是分钟内聚合;log 在 |x| 不超过 EPS 时返回 NaN,seed 1 不会产生 -inf;cs_bucket_demean 用同日 LogFloatCap 做截面分组,无前视;cross_ema、cross_zscore 只用到当日及以前。未命中 §4 任何陷阱,不含 nt_* 与 ts_spearman。需要 PI 核对的一点(不划掉):seed 11 的 cross_zscore(regbeta, 241) 用的是绝对 EPS = 1e-9,而 regbeta 的量级取决于成交量单位(股),若 beta 的截面标准差接近 1e-9,z 会被系统性压缩;这是量纲风险,不是已确认的数学问题。如果 slot a 有 alpha,最可能来自 head 1 的 120 日版本(放量与脉冲性的慢变耦合,即参与者结构),而不是 seed 之间的换写。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4]
+    reasons: '创新度 4:12 个种子保持与 head 1 相同的日轴回归骨架 cross_regbeta(day_sum(Volume), ts_mean(·,5), d),但 y 侧换成 head 1 没有的形状量:日内时间重心 day_centroid(Volume)(与 11 个 head 的原始 |ρ| 最高 0.11,是 head 完全没有的「何时成交」信息)、gini(Volume) / gini(Amt)(与最像 head 的原始 |ρ| 0.45 / 0.44,都是 ts_max(cross_med(day_ar1_coefficient(Amt))) 那一族,与 head 1 相关低)、es 比 day_es_ratio_hi(Volume)(0.06)。偏度 day_skew(Volume)(seed 3)与 head 1 原始 |ρ| 0.58,是尾部形状的近亲,是最像 head 1 的种子,但不算同一个量。与控制:seed 11 的 day_zero_ratio 与 liq 0.73、known 0.72、size 0.68 最高,seed 6 与 known 0.52、seed 10 与 known 0.48;都低于 0.8 的自动划掉线,按「明显度量同一个东西」只能挡的原则,保留,但在此记为风险。seed 1 与 seed 10 只差 Volume / Amt(gini 的 y 侧),是近重复,两者都保留。创新度 4。合理度 4:逐个核对。day_gini、day_centroid(tot 大于 0 时有定义)、day_skew、day_es_ratio_hi(分位为 0 时输出 NaN,不爆点)都是分钟内聚合,无前视;cross_regbeta、ts_mean、cross_corr 因果;cs_bucket_demean 同日截面;没有 nt_* 与 ts_spearman。划掉 seed 4:day_at_max_ratio 的 docstring 写的是「取值等于当日最大值的分钟占比」,hypothesis 写的是「最大一分钟占比」(当日最大一分钟量 / 全天量),两者不是同一个量。对连续的成交量,它几乎只计 tie 数除以分钟数;对按手数量化的成交量,结果主要由手数的 tie 决定,这是定义坏掉(§4)。相关度表里它的原始 |ρ| 只有 0.06 也与此一致。需要 PI 核对的一点(不划掉):seed 11 的 day_zero_ratio(Volume) 在停牌日如果是有限的 0 而不是缺失,停牌日 zero_ratio 为 1 且 day_sum 为 0,会主导 120 日斜率;需确认 V2 数据里停牌日已经是 NaN(停牌掩码)。我无法在本流程里核对数据,只记作风险。如果 slot b 有 alpha,最可能来自:成交时间分布(重心 / gini)与放量的日轴耦合,即参与者的交易时段结构(开盘 / 尾盘集中 vs 全天均匀)的慢变部分;最可能的是 centroid 与 gini 版,偏度版是 head 1 的换皮。'
+R:
+  - head: 'cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 60)'
+    soundness: 4
+    reasons: '合理度 4:变体只改日轴窗口(60 换成 30 / 120 / 241)与平滑长度(3 / 5 / 10 / 20),骨架与 head 1 相同。cross_regbeta 与 ts_mean 都是因果滚动,无前视,无数值问题。机制清楚:日轴回归系数的估计噪声随窗口变化,较长窗口更稳;平滑的必要性由 head 的拆解给出。风险只是挑选风险:窗口与平滑长度是在同一段 train/valid 上选的,替换门槛 +0.1 只能在 train/valid 内判,PI 不得把 train/valid 上的 +1.20 当成样本外证据。variant 1(120)与 loc.json 中已记录的候选 cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 120) 完全相同,它的结果已知,这个 R 位相当于确认,不是新评估。variant 5(10 日平滑、60 窗)与原 head 的 |ρ| 为 0.81,若通过就是替换而不是收录。'
+summary: '两位都通过:a 位(E,核心 ts_mean(day_kurt(Volume),5))创新 3、合理 4,12 个种子全保留;b 位(N)创新 4、合理 4,划掉 seed 4(day_at_max_ratio 的定义与手数量化伪影),余 11 个;R 组合理 4 保留。全部表达式无前视、无 nt_*、无 ts_spearman。需 PI 核对的两条量纲 / 数据风险(不划掉):a 位 seed 11 的 cross_zscore 绝对 EPS 与 beta 量纲;b 位 seed 11 的 day_zero_ratio 与停牌日缺失处理。'

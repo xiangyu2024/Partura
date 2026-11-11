@@ -1,0 +1,54 @@
+import yaml
+Q="cs_quantile_q75(day_wstd(Amt, Vwap))"
+R="sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)"
+G="sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)"
+I="sub(div(day_last(Close), day_first(Open)), 1)"
+E=[f"cross_regbeta({Q}, {R}, 60)",f"cross_regbeta({Q}, {R}, 120)",f"cross_reg_tvalue({Q}, {R}, 90)",
+f"cross_corr({Q}, {R}, 60)",f"cross_regbeta({Q}, {G}, 90)",f"cross_regbeta({Q}, {I}, 90)",
+f"cross_reg_tvalue({Q}, log(add(day_sum(Amt), 1)), 60)",
+f"cross_corr({Q}, div(day_first(Volume), day_sum(Volume)), 60)",
+f"cross_ema(cross_regres({Q}, {R}, 60), 20)",
+f"cross_regbeta({Q}, cross_zscore(log(add(day_first(Volume), 1)), 60), 120)",
+f"cross_zscore(cross_regbeta({Q}, {R}, 60), 120)",
+f"cross_ema(cross_reg_tvalue({Q}, {R}, 60), 20)",
+f"cross_regbeta({Q}, day_wstd(Amt, Vwap), 60)",
+f"cross_corr({Q}, day_wstd(Amt, Vwap), 90)",
+f"cross_regbeta({Q}, ts_delay({R}, 1), 60)",
+f"cross_reg_tvalue({Q}, cross_zscore(log(add(day_sum(Amt), 1)), 60), 90)"]
+M="cs_quantile_q50(div(day_last(Amt), day_sum(Amt)))"
+A="div(day_last(Amt), day_sum(Amt))"
+N=[f"cross_corr({M}, {A}, 60)",f"cross_regbeta({M}, {A}, 90)",f"cross_reg_tvalue({M}, {A}, 60)",
+f"cross_ema(cross_regres({M}, {A}, 60), 20)",f"cross_stddev(cross_regres({M}, {A}, 60), 60)",
+f"cross_regbeta({M}, {R}, 90)",f"cross_corr({M}, cross_zscore({A}, 60), 120)",
+f"cross_reg_tvalue({M}, log(add(day_last(Amt), 1)), 90)",
+f"cross_ema(mul(cross_zscore({A}, 60), sub({A}, {M})), 20)",
+f"cross_regbeta({M}, div(day_last(Volume), day_sum(Volume)), 60)",
+f"cross_decay_linear(cross_regres({M}, {A}, 90), 30)",
+f"cross_corr({M}, {I}, 90)"]
+K="cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume), 30))"
+Hd="cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume), 30))), cs_quantile_q75(day_wstd(Amt, Close)), 60)"
+c="cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(day_sum(Volume), 30)))"
+Rv=[{"head":Hd,"why":"拆解:外层 60 日窗口回归对 Q75 的读数只 +0.58,窗口 120 为 +0.47、30 为 +0.09,说明读数依赖对市场分散度的 beta;重复套两层 bucket_zscore 的内层是冗余的(去掉内层 train 仍 +0.05 valid +0.68)。变体换更长窗口 / 不同分位数 / 对分散度改用 t 值,检验是否是 beta 的稳定性在起作用。",
+"variants":[f"cross_regbeta({K}, cs_quantile_q75(day_wstd(Amt, Close)), 90)",
+f"cross_reg_tvalue({c}, cs_quantile_q75(day_wstd(Amt, Close)), 60)",
+f"cross_regbeta({c}, cs_quantile_q50(day_wstd(Amt, Close)), 60)",
+f"cross_regbeta({c}, cs_quantile_q75(day_wstd(Amt, Close)), 90)",
+f"cross_corr({c}, cs_quantile_q75(day_wstd(Amt, Close)), 60)"]},
+{"head":"ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10)","why":"拆解:窗口 10 的原式 valid -0.49,窗口 20 的变体 train +0.52 valid +0.02(增益 +0.51),窗口太短噪声大;Open 换 Close 也有增益。变体沿窗口加长并换成 t 值 / 相关。",
+"variants":["ts_regbeta(day_last(Amt), day_durbin_watson(Open), 30)","ts_regbeta(day_last(Amt), day_durbin_watson(Open), 40)",
+"ts_regbeta(day_last(Amt), day_durbin_watson(Close), 20)","ts_reg_tvalue(day_last(Amt), day_durbin_watson(Open), 30)",
+"ts_regbeta(day_last(Amt), day_durbin_watson(Open), 60)"]},
+{"head":"ts_std(ts_std(day_last(Amt), 50), 50)","why":"拆解:这是收盘一格成交额的绝对波动,量级(流动性)没去掉,单层 ts_std 只有 -0.52;窗口 25 的 valid +0.89 但 train 差。变体用对自身均值的相对离散度去量级。",
+"variants":["div(ts_std(day_last(Amt), 50), ts_mean(day_last(Amt), 50))","ts_std(div(day_last(Amt), day_sum(Amt)), 50)",
+"ts_std(ts_std(div(day_last(Amt), day_sum(Amt)), 25), 50)"]}]
+y={"seed":2032,"round":3,"slots":[
+{"type":"E","core":"day_wstd(Amt, Vwap)",
+"hypothesis":"机制:核心 day_wstd(Amt, Vwap),种子里统一包在 Q = cs_quantile_q75(day_wstd(Amt, Vwap)) 是一条「市场状态时间序列」:每天截面上第 75 分位的『日内成交额随价位分布的离散度』(day_wstd(Amt, Vwap) 是以 Vwap 为权重的 Amt 标准差,即成交额在一天里是集中在少数分钟还是均匀铺开),取截面 q75 后对所有股票是同一个数,代表市场当天的成交集中度状态。本轮唯一的正分 head(Pr2a,score +0.58,train +0.67 / valid +0.58)就是 cross_regbeta(量的相对强度, Q75(day_wstd(Amt, Close)), 60),共性表里含这一核心的 7 个候选均值 +0.19 对不含 -1.69(p<0.001),拆解里把 Volume 换成 Amt 仍 +0.32、窗口 120 仍 +0.47,说明 alpha 在『个股对市场成交集中度状态的敏感度(beta)』而不在量水平本身。因为 Q 对全体股票是同一个数,做时间序列回归得到的是每只股票自己的暴露:这是 Chen-Roll-Ross(1986)式的宏观状态因子载荷,横截面上与 5 个控制的水平基本正交(控制都是个股水平量)。这次要试的外围:把『股票一侧』的序列从原 head 用的「竞价量相对强度」换成别的:日收益 R、隔夜跳空 G、日内收益 I、log 成交额、竞价份额、收盘成交额、股票自己的 day_wstd(Amt, Vwap);回归形式换成 beta / t 值 / 相关 / 残差 EMA / 载荷再做时序 z 分数;窗口 60-120。与以前不同:以前所有含 Q 的候选都以 cs_bucket_zscore(K) 作为股票一侧、且不含价格收益叶子;这里是收益和价格叶子对成交集中度状态的载荷,骨架与库(5583 条)里没有一条含 cs_quantile 作回归解释变量。样本外为什么还会在:载荷是慢变的个股属性(窗口 60-120 日,换手低,扛得住 15 bp),市场成交集中度状态与散户 / 机构的行为差异有关(Amihud-Mendelson 1986、Chordia-Roll-Subrahmanyam 2000 的市场流动性共同因子),机制不依赖某一段行情;valid 与 train 同号且接近支持这一点。诚实预期:收益 R 对 Q 的载荷可能与 beta 类控制重叠,单个种子会被划掉,但 t 值 / 残差写法应当不同。",
+"seeds":E},
+{"type":"N",
+"hypothesis":"机制:收盘集合竞价(尾盘最后一格)的成交占比对『市场收盘成交占比状态』的联动。灵感来自本轮第 3 批(day_last(F) 一族,头部是 ts_std(day_last(Amt), 50)、ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10),全部在读收盘一格成交额的绝对量级与波动,分数 -0.25 到 -0.52,即只是 liq / known 的水平版本,没人去掉量级)。这里做三件事:(1) 去量级:用 A = day_last(Amt) / day_sum(Amt),收盘一格占全天成交额的比例,无量纲;(2) 取市场状态 M = cs_quantile_q50(A),即当天截面中位的收盘占比(被动 / 基准型资金在收盘集中调仓、月末与指数再平衡日 M 升高);(3) 每只股票对 M 的 60-120 日回归 beta / t 值 / 相关 / 残差。读法:个股收盘占比与市场收盘占比同步性高 = 被被动与基准型资金持有 / 跟踪;个股收盘占比的特异成分(cross_regres 残差)高 = 个股自己有尾盘的信息交易或操纵性拉尾盘。两者都是无量纲、慢变量;与库里 B096 一族(只有绝对额的 ts_max / ts_std / ts_regbeta)不同,库里没有 cs_quantile 作市场状态、也没有 day_last(Amt) 对 day_sum(Amt) 的比例。样本外为什么还会在:基准型 / 被动资金在一天最后时段集中成交是制度性行为(与日终定价基准有关,Chordia-Roll-Subrahmanyam 2000 的市场共同流动性思路),不依赖某段行情;day_last 取每天最后一个有效分钟,不是前视(当天收盘时已知,信号只用于次日)。注意:不同交易所收盘撮合规则可能不同,所以只预期窗口 60 以上的慢写法有效。我没有给方向先验,由奖励定方向。诚实预期:最可能的失败是收盘占比与流动性控制的负相关(小盘占比小)没被去干净,这类种子会被相关度表划掉。",
+"inspired_by":"第 3 批 B096(day_last(F) 一族):头部 ts_std(day_last(Amt), 50)、ts_std(ts_std(day_last(Amt), 50), 50)、ts_regbeta(day_last(Amt), day_durbin_watson(Open), 10) 只读收盘一格成交额的绝对量级与波动,是流动性水平的写法;本 idea 去量级(占比)并改读对市场收盘状态的载荷",
+"seeds":N},
+{"_":0}][:2],
+"R":Rv}
+yaml.safe_dump(y,open("../missions.yaml","w"),allow_unicode=True,width=10000,sort_keys=False)

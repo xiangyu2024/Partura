@@ -1,0 +1,75 @@
+import yaml
+X="day_cov(Amt, cross_delta(Amt, 30))"
+S=f"cross_stddev({X}, 60)"
+L=lambda e:f"log(add({e}, 1))"
+LV="log(add(cross_mean(day_mean(Amt), 30), 1))"
+KN="cross_mean(day_std(Amt), 30)"
+E=[
+ f"ts_std({L(S)}, 100)",
+ f"ts_std({L(S)}, 50)",
+ f"ts_std({L(S)}, 120)",
+ f"div(ts_std({S}, 100), add(ts_mean({S}, 100), 1))",
+ f"div(ts_std({S}, 120), add(ts_mean({S}, 120), 1))",
+ f"sub({L('ts_max('+S+', 100)')}, {L('ts_mean('+S+', 100)')})",
+ f"div(ts_max({S}, 100), add(ts_mean({S}, 100), 1))",
+ f"sub({L(S)}, {L('ts_delay('+S+', 60)')})",
+ f"ts_mean(abs_(ts_delta({L(S)}, 10)), 100)",
+ f"ts_sum(abs_(ts_delta({L(S)}, 5)), 120)",
+ f"ts_skew({S}, 120)",
+ f"ts_kurt({S}, 120)",
+ f"cs_regres({L('ts_std('+S+', 100)')}, {L('ts_mean('+S+', 100)')})",
+ f"cs_bucket_rank(ts_std({S}, 120), {KN})",
+ f"cs_regres({L('ts_std('+S+', 120)')}, log(add({KN}, 1)))",
+ f"ts_std(div({S}, add(cross_mean(day_cov(Amt, Amt), 241), 1)), 100)",
+]
+Y=lambda a,b:f"div(cross_stddev({X}, {a}), add(cross_stddev({X}, {b}), 1))"
+X2="day_cov(Amt, Amt)"
+N=[
+ f"ts_corr({S}, cross_mean(day_mean(Amt), 30), 120)",
+ f"ts_corr({S}, cross_mean(day_mean(Amt), 30), 60)",
+ f"ts_regbeta({L(S)}, {LV}, 120)",
+ f"ts_regbeta({L(S)}, {LV}, 241)",
+ f"ts_regres({L(S)}, {LV}, 120)",
+ f"ts_corr(cross_stddev({X2}, 60), cross_mean(day_mean(Amt), 30), 120)",
+ f"ts_regbeta({L('cross_stddev('+X2+', 60)')}, {LV}, 120)",
+ f"ts_corr({S}, cross_stddev(day_mean(Amt), 60), 120)",
+ f"ts_corr({S}, cross_mean(day_sum(Ret), 20), 120)",
+ f"ts_corr(abs_(ts_delta({L(S)}, 5)), abs_(ts_delta({LV}, 5)), 120)",
+ f"ts_regbeta({L('ts_std('+S+', 50)')}, {L('ts_mean('+S+', 50)')}, 120)",
+ f"ts_corr({S}, cross_delta({S}, 60), 120)",
+]
+R=[
+ f"ts_std(cross_stddev({X}, 120), 100)".replace("ts_std(cross_stddev","ts_std(cross_stddev"),
+]
+Rv=[
+ f"cs_regres({L('ts_std(cross_stddev('+X+', 120), 50)')}, log(add({KN}, 1)))",
+ f"div(ts_std(cross_stddev({X}, 120), 50), add(ts_mean(cross_stddev({X}, 120), 50), 1))",
+ f"ts_std(log(add(cross_stddev({X}, 120), 1)), 100)",
+ f"cs_regres({L('ts_std(cross_stddev('+X+', 120), 100)')}, log(add({KN}, 1)))",
+ f"div(ts_std(cross_stddev({X}, 120), 100), add(cross_mean(day_cov(Amt, Amt), 241), 1))",
+ f"cs_bucket_rank(ts_std(cross_stddev({X}, 120), 50), {KN})",
+ f"sub(cs_rank(ts_std(cross_stddev({X}, 120), 50)), cs_rank({KN}))",
+ f"sub(cs_rank(ts_std(cross_stddev({X}, 120), 100)), cs_rank({KN}))",
+]
+head="add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 20), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120), 100))"
+head="add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50))"
+hyE="""事实(来自上一轮读数与本批 loc,不是推测):head 1 = add(q50 水平项, C),C = ts_std(S, 50),S = cross_stddev(X, 60),X = day_cov(Amt, cross_delta(Amt, 30))。第 1 轮 R 把 C 的外壳放慢后,纯二阶离散度变体在新尺子下并不差:ts_std(S120, 50) 为 +0.80(train +0.80 / valid +1.21),ts_std(S120, 100) 为 +0.65(+0.65 / +1.15),带 q50 项的 120/100 为 +0.91(+0.91 / +1.45);但它们与已知族 cross_mean(day_std(Amt), 30) 的 |rho| 都在 0.62 到 0.78,所以没被收录。也就是说:S 这一层有分数,拦路的是它与已知族(一阶离散度的量级)共享的 Amt^2 量级。上一轮 E 位围着 C 外面做相对化(除以一阶离散度、桶内秩等)只到 +0.31,说明在 C 的外面做乘除没有把量级干净地拿掉。
+
+本位这次换核心:核心取 S = cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60) 本身(head 1 的子树,也在共性表里,单独含它的候选 49 个均值 -0.98),让 GP 在 S 外面长『时间序列上的无量纲读法』,而不是在 C 外面除一个量级。机制:S 是『近 60 日内分钟成交额日内方差与 30 日前形状协方差之差的日间波动』,单位 Amt^2,随流动性按平方放大。取 log(add(S,1)) 后再做 ts_std:乘性的尺度(流动性、市值)变成加性常数,被 ts_std 整个减掉,所以 ts_std(log S) 读的是『S 的相对波动』,对一只票自身的量级不敏感;ts_std(S)/ts_mean(S)(变异系数)、ts_max/ts_mean(脉冲相对常态)、log S 的 N 日变化的绝对值之和(路径长度)、ts_skew / ts_kurt(S)(形状统计,天然无量纲)是同一思想的不同写法;最后两三个种子保留量级但用 cs_regres 把 log 外壳对 log 水平 / log 已知族做逐日截面回归取残差,让尺子外的部分更明确。
+
+为什么和库里 / 以前的不同:库里与第 1 轮种子里 S 的外壳只有 ts_std(S, 50) 一种(绝对量级)和 C 外面的乘除;S 外面套 log、变异系数、ts_max/ts_mean、abs_(ts_delta(log S))、ts_skew、ts_kurt 的写法在两库和已出 head 里都没有(骨架逐条按库核对由流水线的库禁令执行)。外围算子集合 {log, add, ts_std}、{div, ts_std, ts_mean}、{abs_, ts_delta, ts_mean}、{ts_skew} 等与快照里含 S 的候选(外壳只有 ts_std / add / ts_quantile_q50)都不同。预期与 head 1 的日度秩 |rho| 在 0.3 到 0.85 之间,最贴近 S 的变异系数与 log 外壳可能被表划掉几个。
+
+为什么样本外还会在:S 的嵌套窗口 60 加 50 到 120 日,换手低,成本不是病;来源是事件 / 关注度冲击使日内成交分布突变的持续性,相对读法衡量的是『这只票相对自己的常态有多不稳』,不依赖行情;valid 一直好于 train(上一轮 R 变体 valid 0.8 到 1.45),不是只在 train 里拟合出来的形态。数学检查:log 的输入是 S + 1,S >= 0,恒为正,不会 -inf;除数一律 add(·, 1),Amt 以元计,S 的量级远大于 1,不产生爆点;不用 ts_rank / cross_rank,不触发 nanrank_last 的停牌记 0;所有窗口只用当日及以前的数据;停牌日在 cross_* 输入处被掩成 NaN。如果它有 alpha,最可能来自『成交分布稳定性相对自身常态的二阶波动』,种子 1 到 5(log 外壳 / 变异系数)是首选。"""
+hyN="""想法:把『二阶离散度 S 对自身流动性水平的弹性』当信号。事实(上一轮读数):S = cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60) 的外壳放慢后有分数(+0.65 到 +0.91),但与已知族(一阶离散度量级)的 |rho| 为 0.62 到 0.78;上一轮用有界底(corr / kurt / gini / centroid)去掉量级,结果都没有分数;所以 alpha 需要 Amt^2 的信息,但不能是量级本身。折中是读『离散度随水平怎么变』:不看 S 有多大,而看 S 的涨落与成交额均值的涨落是不是同步。
+
+机制(推断):若成交只是整体放量缩量(正常的参与度变化),S 应按 A^2 同比例变化,S 与流动性水平在时间序列上高度相关、对数弹性约等于 2;若成交由少数分钟的脉冲(大宗、事件、涨停打开)驱动,S 的涨落与水平脱钩(相关低、弹性偏离 2)。ts_corr(S, 流动性水平, 120) 与 ts_regbeta(log S, log 水平, 120 / 241) 是这个关系的两种读法,ts_regres 是弹性回归的残差(S 相对水平的异常),全部是时间序列上的统计量,量纲和一阶离散度的量级都被拿掉。变体:换底成不带 Δ 的 day_cov(Amt, Amt)(看 Δ30 是否是必要的)、换水平为 cross_stddev(day_mean(Amt), 60)(成交额日均值的波动)或 20 日收益(脉冲是否伴随价格)、路径长度的相关 abs_(ts_delta(log S)) 对 abs_(ts_delta(log 水平))、S 对自己滞后 60 日的相关(自相关)、变异系数对自己均值的弹性。
+
+为什么和库里 / 已出 head 不同:库里 head 与种子里 S 只作被外壳直接读取的量,从没有 S 与另一个日频序列的 ts_corr / ts_regbeta / ts_regres;库里手写库的 ts_corr / ts_regbeta 都在价量(Ret、Volume)之间,没有任何一条是『日内分布离散度 vs 流动性水平』。整棵树的骨架逐条按库禁令核对。预期与 head 1 的日度秩 |rho| 低(0.1 到 0.5),与已知族 / 流动性控制 |rho| 低,因为相关与回归斜率是尺度无关的。
+
+为什么样本外还会在:来源是『成交的结构(脉冲驱动 vs 整体放量)』这类慢变的微观结构特征,换手低(窗口 120 / 241);不依赖行情。数学检查:ts_corr 在序列近常数时分母加 EPS 返回 0 附近,不爆;ts_regbeta 的 x 是对数水平,窗口 120 日内水平几乎不变的票斜率会放大,取 log 且窗口长,风险有限,种子里既有相关(有界)也有斜率;log 输入加 1;不用 ts_rank / cross_rank;所有窗口只用当日及以前的数据。如果它有 alpha,最可能来自脉冲驱动的票(S 与水平脱钩)的信息含量。"""
+d={"seed":2045,"round":2,"slots":[
+ {"type":"E","core":S,"hypothesis":hyE,"seeds":E},
+ {"type":"N","hypothesis":hyN,"inspired_by":"B133 的上一轮读数:S 外壳放慢后有分数(+0.65 到 +0.91)但与已知族 |rho| 0.62-0.78;有界底(corr/kurt/gini)无分数;B134/B135 的 day_cov 外壳 + 变化量思路","seeds":N}],
+ "R":[{"head":head,"why":"烂部件:上一轮 R 说明外壳放慢到 120/50 分数 +0.80 但 rho_known 0.62;本组在放慢后的外壳(S120)上把量级拿掉:log 外壳、变异系数、对 log 已知族 / 水平取逐日残差、桶内秩、秩差。数学上无新除法:除数一律 add(·,1);log 输入 +1。","variants":Rv}]}
+class D(yaml.SafeDumper): pass
+yaml.dump(d,open("../missions.yaml","w"),Dumper=D,allow_unicode=True,width=10000,sort_keys=False)

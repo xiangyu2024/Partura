@@ -1,0 +1,76 @@
+seed: 2051
+round: 3
+slots:
+- type: E
+  core: ts_mean(day_kurt(Volume), 5)
+  hypothesis: 核心 ts_mean(day_kurt(Volume), 5) 是本流唯一过线 head(+1.00,cross_regbeta(day_sum(Volume),
+    它, 60))的右半边:把当天分钟成交量分布的峰度(量集中在少数几分钟 = 事件 / 大单脉冲,量铺得均匀 = 被动做市式成交)取 5 日均值,变成个股的「近一周脉冲性」。拆解里去掉
+    5 日平滑后分数从 +1.00 降到 +0.65(必要性 +0.35),说明平滑本身是 alpha 成分;单独拿它做 sufficiency 是 -4.29,说明
+    alpha 不在脉冲性水平本身,而在它和「成交量水平」的日轴关系里(regbeta = 过去 60 日里量水平对脉冲性的敏感度:放量时是否伴随脉冲,即放量是事件驱动还是均匀的散户换手,Easley-O
+    Hara 知情交易的订单流毒性思路,2002)。已见过的外围只有 day_sum(Volume) 作为 y、窗口 60/30/120(以及 Amt 互换)。本位换三件事,都不是已见写法:(1)
+    被回归 / 被关联的另一侧不再是原始成交量,而是换手 sub(log(day_sum(Volume)), LogFloatShares)、日轴放量 z 分数
+    cross_zscore(day_sum(Volume), 20)、成交量形状量 day_gini(Volume) / day_centroid(Volume)、当日收益
+    day_sum(Ret)(带方向的脉冲:买方事件 vs 卖方事件);(2) 窗口用 120 / 241(loc 里 60->120 的变体是 +1.20,比原
+    head 还高,慢窗口更稳);(3) 用 cross_corr / cs_bucket_demean(同市值桶内) 替代 regbeta,去掉市值规模暴露。新尺子已去掉流动性
+    / 波动 / 反转 / 市值的线性与 U 形暴露,峰度是无量纲形状量;平滑后换手低,15 bp 成本下可做。样本外还会在的理由:成交脉冲性反映参与者结构(机构
+    / 事件型 vs 散户均匀型),是慢变的结构属性。预测:带窗口 120 的 regbeta 版最可能过线,桶内版和 corr 版大概率弱于 regbeta。
+  seeds:
+  - cross_regbeta(sub(log(day_sum(Volume)), LogFloatShares), ts_mean(day_kurt(Volume),
+    5), 120)
+  - cross_regbeta(cross_zscore(day_sum(Volume), 20), ts_mean(day_kurt(Volume), 5),
+    120)
+  - cross_regbeta(day_gini(Volume), ts_mean(day_kurt(Volume), 5), 120)
+  - cross_regbeta(day_centroid(Volume), ts_mean(day_kurt(Volume), 5), 120)
+  - cross_regbeta(day_sum(Ret), ts_mean(day_kurt(Volume), 5), 120)
+  - cross_regbeta(day_sum(Amt), ts_mean(day_kurt(Volume), 5), 241)
+  - cross_corr(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 120)
+  - cross_corr(sub(log(day_sum(Volume)), LogFloatShares), ts_mean(day_kurt(Volume),
+    5), 241)
+  - cs_bucket_demean(cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5),
+    120), LogFloatCap)
+  - cross_ema(cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 120), 20)
+  - cross_zscore(cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 241),
+    60)
+  - sub(cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 120), cross_regbeta(day_sum(Volume),
+    ts_mean(day_kurt(Volume), 5), 30))
+- type: N
+  hypothesis: 新 idea:「放量时成交时间分布怎么变」的日轴敏感度,但换掉峰度,改读成交量在分钟轴上的另外几种形状:日内集中度 day_gini(Volume)、成交量时间重心
+    day_centroid(Volume)、成交量偏度 day_skew(Volume)、最大一分钟占比 day_at_max_ratio(Volume)、高分位量占比
+    day_es_ratio_hi(Volume)。机制:本批唯一有 alpha 的写法是 cross_regbeta(量水平, 量峰度) —— 过去 60~120
+    日里,放量日是否伴随成交更脉冲。它读的是个股的「量是怎么放出来的」:事件 / 大单型放量(量集中到几分钟,信息驱动)和散户均匀放量(整天铺开)的区别。峰度只是分钟轴形状的一个矩;gini
+    / 重心 / 偏度 / 最大占比从不同侧面读同一件事,而且重心还带时间信息(放量是发生在开盘、午后还是尾盘 —— 尾盘放量与次日动量、开盘放量与隔夜信息的文献不同,Heston-Korajczyk-Sadka
+    2010 的日内周期)。库里和 head 里这些形状量只出现在单日值 + ts_ 滚动里(换手高被成本吃掉),没有人把它们作为日轴回归的「响应」去读与量水平的敏感度。算子实现:cross_regbeta
+    / cross_corr(日轴滚动回归,窗口 60~241)对 (day_sum(Volume) 或 day_sum(Amt) 或换手,形状量),再配 ts_mean
+    5 日平滑(head 的拆解表明平滑是必要成分,+0.35)。与库不同:骨架里的形状算子不是 day_kurt,日轴回归的两侧是不同的形状族;也不是 20
+    日反转 / 流动性控制(无量纲、回归系数而非水平)。样本外还会在的理由:成交时间分布的结构由参与者构成(机构 vs 散户)与交易制度(集合竞价、涨跌停、T+1)决定,是慢变的结构属性;回归
+    / 相关系数把水平暴露去掉,留下的是动态耦合,且平滑后换手低。预测:gini / 重心版最可能过线,其余约 20% 概率各出 1 个 head。
+  inspired_by: B2 批里 day_kurt(Volume)(82 个候选,p<0.001)与 day_sum(Volume)(45 个)的富集,以及
+    Pr2a 的两个 head:cross_regbeta(day_sum(Volume), day_kurt(Volume) 的 5 日均值, 60) ——
+    量水平与量分钟形状的日轴耦合
+  seeds:
+  - cross_regbeta(day_sum(Volume), ts_mean(day_gini(Volume), 5), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_centroid(Volume), 5), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_skew(Volume), 5), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_es_ratio_hi(Volume), 5), 120)
+  - cross_regbeta(day_sum(Amt), ts_mean(day_gini(Volume), 5), 60)
+  - cross_regbeta(sub(log(day_sum(Volume)), LogFloatShares), ts_mean(day_centroid(Volume),
+    5), 120)
+  - cross_corr(day_sum(Volume), ts_mean(day_gini(Volume), 5), 120)
+  - cross_corr(day_sum(Volume), ts_mean(day_centroid(Volume), 5), 241)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_gini(Amt), 5), 120)
+  - cross_regbeta(day_sum(Volume), day_zero_ratio(Volume), 120)
+  - cross_regbeta(day_gini(Volume), ts_mean(day_centroid(Volume), 5), 120)
+R:
+- head: cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 60)
+  why: 拆解显示窗口 60->120 增益 +0.20(score +1.20,train +1.25 valid +1.20),60->30 变差,说明 60
+    日窗口偏短、回归系数噪声大;ts_mean 5 日平滑必要性 +0.35,平滑可能还可加长。变体只改窗口与平滑长度,不改核心结构。
+  variants:
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 241)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 10), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 3), 120)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 10), 60)
+  - cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 20), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

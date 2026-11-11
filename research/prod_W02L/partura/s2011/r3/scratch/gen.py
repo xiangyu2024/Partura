@@ -1,0 +1,43 @@
+# -*- coding: utf-8 -*-
+L1='day_ar1_coefficient(in_logchg(Volume, 1))'
+R1='cross_delay(day_sum(Ret), 1)'
+R2='cross_delay(cross_delay(day_sum(Ret), 1), 1)'
+K='cross_mean(day_std(Amt), 30)'
+C='day_centroid(Amt)'
+b=[f'cross_regalpha({C}, {R1}, 241)',
+f'cross_regalpha({C}, cross_delay(day_sum(Ret), 3), 241)',
+f'cross_regalpha({C}, {R2}, 120)',
+f'cross_regbeta({C}, {R2}, 241)',
+f'cross_reg_tvalue({C}, {R2}, 241)',
+f'cross_regalpha({C}, cross_delay(day_sum(Ret), 20), 241)',
+f'cross_regalpha({C}, day_sum(Ret), 241)',
+f'cs_bucket_demean(cross_regalpha({C}, {R2}, 241), {K})',
+f'cross_ema(cross_regalpha({C}, {R2}, 241), 20)',
+f'cross_regalpha({C}, cross_delay(abs_(day_sum(Ret)), 2), 241)',
+f'cross_regalpha(cross_delay({C}, 1), {R2}, 241)',
+f'cross_regalpha({C}, cross_delay({L1}, 1), 241)',
+f'sub(cross_regalpha({C}, {R2}, 241), cross_regalpha({C}, {R2}, 60))',
+f'cross_regalpha({C}, cross_delay(cross_zscore(log(day_sum(Amt)), 60), 1), 241)',
+f'cross_regalpha({C}, {R2}, 180)']
+Z='cross_zscore(log(day_sum(Amt)), 60)'
+n=[f'cross_regalpha({Z}, {R1}, 241)',
+f'cross_regalpha({Z}, day_sum(Ret), 241)',
+f'cross_regalpha(day_signed_ratio(Ret, Amt), {R1}, 241)',
+f'cross_regalpha(day_gini(Amt), {R1}, 241)',
+f'cross_regalpha(day_std(Ret), {R1}, 241)',
+f'cross_regalpha(day_es_ratio_hi(Ret), {R1}, 241)',
+f'cross_regalpha(day_flat_ratio(Ret), {R1}, 241)',
+f'cross_regalpha({Z}, cross_delay(day_sum(Ret), 5), 241)',
+f'cross_regalpha(abs_(day_sum(Ret)), {R1}, 241)',
+f'cross_regalpha(day_skew(Ret), {R1}, 241)',
+f'cross_regalpha(cross_delta(log(day_sum(Amt)), 1), {R1}, 241)',
+f'cs_bucket_demean(cross_regalpha({Z}, {R1}, 241), {K})',
+f'cross_ema(cross_regalpha({Z}, {R1}, 241), 20)',
+f'cross_regbeta({Z}, {R1}, 241)']
+def y(l): return '\n'.join("      - '%s'" % s for s in l)
+q=lambda s: s.replace("'","''")
+hB="""机制:核心 day_centroid(Amt),成交额在日内的重心(0=开盘,1=收盘):尾盘集中的成交 = 知情 / 机构收盘定价需求;开盘集中 = 隔夜信息释放。上一轮 N 位里正分的候选都含它:cross_regalpha(day_centroid(Amt), 2 日前收益, 241) 得 +0.32(train +0.32 / valid +0.44,两段同号,是目前整个流里最稳的读数),cross_corr(centroid, 昨日收益, 241) +0.27(+0.32 / +0.27)。共性表里含 day_centroid(Amt) 的 15 个候选均值 −1.34,不含 −2.48(p 0.001)。截距读法:cross_regalpha(x,y,d) 是 y 对 x 做 d 日滚动 OLS 的截距 = 「重心取零时的滞后收益均值」,剥掉随成交重心变化的收益之后的一年期收益漂移(慢动量 / 反转;与 20 日反转控制不同:窗口 241 日、滞后 ≥ 1 日、且经过回归剥离)。本轮核心固定为 day_centroid(Amt),外围换成之前没见过的:y 取滞后 1 / 3 / 20 日收益、|收益|、L1(日度成交碎片化)、成交额冲击;统计量换成回归斜率、t 值;窗口 120 / 180;241 减 60;滞后 centroid;分桶去均值(剪已知成交额族水平);EMA 20 日平滑(降换手)。为什么和库里不同:day_centroid 是 Partura 新加算子,库里 0 次;cross_reg* 套在日内统计量上库里没有。上一轮已评分的含 centroid 候选外围只有 cross_corr / cross_regalpha(滞后 1、2 日收益, 241);本轮外围算子集合与之不同。为什么样本外还会在:正读数 train / valid 同号(+0.32 / +0.44),这是流内唯一不靠 valid 单边的读数;一年窗口让换手低;成交时点结构(尾盘集中)是慢变的参与者属性(机构占比 / 指数基金调仓)。风险:centroid 在涨停一字板日取极端值;day_centroid 分母 Σ|x|=0 时给 NaN;窗口内有效点少的票给 NaN;OLS 分母 var(x)+EPS,centroid 方差远大于 EPS。无前视:全是 t 日收盘及以前,y 取 cross_delay 更早值,t+1 交易。"""
+hN="""机制:个股「基础漂移」读数。把 y = 昨日收益对一个日度状态变量 x 做 241 日滚动 OLS,取截距:当 x 取零时昨日收益的均值,即剥掉『收益随状态 x 而变』之后的慢收益漂移。上一轮 N 位唯一出现正分的是 cross_regalpha(day_centroid(Amt), 2 日前收益, 241)(+0.32 / +0.44)与 E 位里 cross_regalpha(L1, 昨日收益, 241)(+0.19 / +0.71):两个都是截距型,而同批的相关型 / 水平型 / 自相关型全为负。这个 N 位问:承重的是截距(基础漂移)本身,还是 centroid / L1 这两个特定的 x?所以把 x 换成与它们无关的状态:成交额冲击(60 日 z 分数,放量日的收益由注意力和事件主导,剥掉之后留下正常成交量时的漂移,Gervais 等 2001 高成交量溢价的反面)、买卖失衡(day_signed_ratio)、成交额集中度(day_gini)、日内波动(day_std(Ret))、尾部比(day_es_ratio_hi)、平盘分钟占比(day_flat_ratio)、|当日收益|、日内收益偏度、成交额日变化;y 取昨日收益为主,另有同期和滞后 5 日;统计量有截距、斜率、EMA 平滑、分桶去均值。其中 day_std(Ret) 作 x 的版本是「波动调整后的漂移」(类似特质收益;与波动控制不同,因为是回归截距而不是波动水平)。为什么和库里不同:5583 条库表达式里没有 cross_regalpha 作外层,也没有 day_gini / day_signed_ratio / day_flat_ratio / cross_zscore(Partura 新算子);库里的 cross_corr 全是原始日内统计量与 nt_ 算子。为什么样本外还会在:一年窗口的截距是慢变量(换手低,15 bp 吃得少);剥离状态后的慢漂移是特质动量,6–12 个月的信息消化,文献上(Jegadeesh–Titman,Blitz 等的残差动量)比原始动量稳;不依赖某段行情。风险:截距与 241 日平均收益高度相关(x 均值接近 0 的状态变量如 z 分数、日变化,截距 ≈ 平均昨日收益),信号可能就是一年动量,会与已知族 / 反转控制有重合(相关度表里看);这是对「承重的是不是截距本身」的直接检验:若 z 分数 / 日变化类种子与 day_std(Ret) 类种子(截距与平均收益差很大)分数相当,承重的是动量不是 x。数学检查:OLS 分母 var(x)+EPS,x 为日度统计量,方差远大于 EPS;窗口内无有效对时给 NaN;没有除以近零的量;无前视(y 取 cross_delay 更早值,z 分数窗口含当日、收盘后已知,t+1 交易)。"""
+ins="B031 ~ B033 批之后两轮 GP 的读数:唯一出现正分的是两个 cross_regalpha(x, 滞后收益, 241) 截距型候选(centroid +0.32 / +0.44,L1 +0.19 / +0.71),同批的相关型、自相关型、水平型都是负分;共性表里 day_sum(Ret) 均值差 +0.87、day_centroid(Amt) +1.14。"
+out="seed: 2011\nround: 3\nslots:\n  - type: E\n    core: '%s'\n    hypothesis: '%s'\n    seeds:\n%s\n  - type: N\n    hypothesis: '%s'\n    inspired_by: '%s'\n    seeds:\n%s\n" % (C,q(hB),y(b),q(hN),q(ins),y(n))
+open('missions.yaml','w',encoding='utf-8').write(out)

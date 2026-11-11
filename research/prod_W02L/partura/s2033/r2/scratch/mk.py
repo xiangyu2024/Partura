@@ -1,0 +1,78 @@
+import yaml
+R="sub(div(day_close(Close), cross_delay(day_close(Close), 1)), 1)"
+B=f"cs_bucket_demean({R}, LogFloatCap)"
+C=f"cross_corr({B}, cross_delay({B}, 1), 241)"
+mask="replace_small_with_nan(is_gt(ListAge, 250))"
+Eseeds=[
+ f"cs_bucket_demean({C}, day_last(Amt))",
+ f"cross_mean({C}, 20)",
+ f"cross_ema({C}, 20)",
+ f"sub({C}, cross_delay({C}, 60))",
+ f"div({C}, cross_stddev({C}, 120))",
+ f"cs_rank({C})",
+ f"mul({C}, replace_small_with_nan(is_gt(LimitWidth, 0.15)))",
+ f"cs_demean(mul({C}, {mask}))",
+ f"add({C}, cross_corr({B}, cross_delay({B}, 5), 241))",
+ f"sub({C}, cs_bucket_demean({C}, ListAge))",
+ f"mul({C}, cs_rank(cross_mean({R}, 60)))",
+ f"cross_med({C}, 60)",
+ f"cs_winsor(mul({C}, {mask}))",
+ f"cross_regbeta(cross_delay({B}, 1), {B}, 120)" ,
+]
+# last one doesn't contain core verbatim -> replace
+Eseeds[-1]=f"cs_bucket_demean(add({C}, cross_corr({B}, cross_delay({B}, 1), 60)), LogFloatCap)"
+S="div(day_last(Amt), day_sum(Amt))"
+Lr="sub(div(day_last(Close), day_last(Open)), 1)"
+Nseeds=[
+ f"cross_mean({S}, 20)",
+ f"sub(cross_mean({S}, 5), cross_mean({S}, 60))",
+ f"cross_regbeta({R}, {S}, 60)",
+ f"cross_corr({R}, {S}, 120)",
+ f"cross_corr(cs_rank({R}), cs_rank({S}), 120)",
+ f"cross_sum(mul(sub({S}, cross_mean({S}, 60)), {Lr}), 20)",
+ f"cross_mean(cs_rank({S}), 20)",
+ f"cs_bucket_demean(cross_mean({S}, 20), LogFloatCap)",
+ f"ts_max({S}, 20)",
+ "cross_regbeta(log(day_sum(Amt)), log(day_last(Amt)), 60)",
+ "cross_mean(cross_regres(log(day_sum(Amt)), log(day_last(Amt)), 60), 5)",
+ f"cross_corr({R}, {Lr}, 120)",
+ f"cross_regbeta(cross_delay({S}, 1), {R}, 241)",
+ f"mul(sub(cross_mean({S}, 5), cross_mean({S}, 60)), {mask})",
+ f"cs_bucket_demean(cross_regbeta({R}, {S}, 120), LogFloatCap)",
+]
+hE=("机制:核心 C = 日收益(后复权收盘到收盘)先去掉同市值十分位的均值、再与自己前一日值做 241 日滚动相关,即个股相对同市值同伴的一阶序列相关(反应不足 / 反转的慢性质)。"
+"依据(只用 train / valid):第 1 轮 N 位里最好的 2 个候选(+0.29,train +0.29 / valid +0.65;+0.04)都含 C,富集表里含 C 的 5 个候选均值 -1.25 对不含 -2.77(p 0.009);"
+"全市场去均值或不去风格的写法明显更差,说明承重的是「同市值同伴相对」。第 1 轮已试的外围只有:乘 IPO 年屏蔽、乘 LogFloatCap 屏蔽、回归斜率版、5 日 / 20 日滞后版,所以本轮全换成不同的外围。"
+"这次要试的外围各实现一个机制:(1) 平滑 / 稳健化 cross_mean、cross_ema、cross_med、cs_winsor、除以 120 日自身标准差——相关系数 241 日标准误约 0.06,日间变化多是噪声,平滑后换手降低,而 15 bp 成本下换手是这类慢因子的主要敌人;"
+"(2) 持续性变化 sub(C, 滞后 60 日 C):同伴相对的反应不足在加强还是减弱;(3) 再对流动性十分位(day_last(Amt) 分桶)或上市年限分桶去均值:去掉「序列相关其实是流动性 / 次新」这一层,留下的是同流动性同伴里的相对序列相关;"
+"(4) 限制在 LimitWidth > 0.15 的创业板 / 科创板:这些票涨跌停宽、散户占比高、日收益被涨跌停截断少,序列相关更干净,也是 5 个控制和两个冠军以外的板块切片;(5) 乘近 60 日动量排名:只在近期强的票里读反应不足;(6) 241 日与 60 日相关相加:长短两个窗口一致。"
+"和以前不同:这些外围都是后处理层,不再改变核心的回归 / 相关形式。样本外还会在的理由:反应不足 / 反转来自 A 股散户占比与 T+1 的制度,不是样本内数值巧合;"
+"同伴相对 + 慢窗口使它与波动、20 日反转、市值控制的线性 / U 形暴露已被尺子拿走后还有剩余的可能;但我并不确定剩余有多大,预测见笔记。")
+hN=("机制:A 股 14:57-15:00 是收盘集合竞价,最后一根分钟条 day_last(Amt) 实际是收盘竞价成交额(指数基金 / ETF 申赎、机构按收盘价调仓、算法收盘单都在这里成交,散户很少)。"
+"库里 77 条含 day_last(Amt) 的挖掘式全是把它当水平量去做 cross_regbeta(与 Low 的水平回归)、ts_max、inv、cross_cov 的组合,没有一条把它除以全天成交额得到「收盘集合竞价占比」,也没有一条对数-对数回归或看收盘一分钟的价格反应。"
+"批里的现象(B098 / B099,92% 与 90% 含量额叶子):头部式 ts_max(log(cross_regbeta(Low 分位数, day_last(Amt), 10)), 20) 在 train +0.33 / valid +0.15,说明收盘分钟成交额里有东西(+0.15 是批里唯一 >0 的 head),但它读的是 Amt 对价位水平的斜率,价位水平随股价漂移,量纲不稳定。"
+"本位把它换成稳定量纲的对象:(a) 收盘占比 S = day_last(Amt) / day_sum(Amt)(有界、无量纲),看其 20 日均值、5 日对 60 日的异常、秩口径、对同市值十分位去均值;"
+"(b) 收盘占比对当日收益的敏感(cross_regbeta / cross_corr 在 60 / 120 日):收盘机构资金是追涨还是逢低;(c) 异常占比乘收盘最后一分钟价格变动(day_last(Close)/day_last(Open) - 1)的 20 日累计:异常收盘需求带来的有符号推力;"
+"(d) 对数-对数弹性:log(day_last(Amt)) 对 log(day_sum(Amt)) 的 60 日斜率与最新残差:收盘成交额随全天成交额的弹性,残差是收盘特有的流量;(e) 收盘一分钟收益与当日收益的相关(尾盘是顺势还是回吐);(f) 昨日收盘占比对今日收益的 241 日斜率。"
+"算子:日内 day_last / day_sum 取收盘分钟与全天成交额,滚动用 cross_mean / cross_regbeta / cross_corr / cross_regres,去风格用 cs_bucket_demean(.., LogFloatCap)。除法 day_sum(Amt) 在停牌日为 0 或缺失:S 为 NaN 或爆点,窗口里取均值时被覆盖率闸门处理,故放了 1 个 ts_max 版本和 4 个 cs_rank / 相关系数版本(有界)。"
+"为什么与库里不同:库里没有占比,也没有对收益 / 全天额的回归;骨架(去字段后的算子序列)与全部 5583 条不同。"
+"样本外还会在的理由:收盘集合竞价的参与者结构(被动资金与机构)是制度性的,机构资金异常流入对后续收益的作用(Bogousslavsky 2016 对日内机构再平衡与尾盘的描述;Cushing 与 Madhavan 2000 对收盘附近的价量)是缓慢的;"
+"占比和弹性对 15 bp 成本较友好(20 日以上平均)。风险:收盘占比与流动性、指数成分(市值)高度相关,尺子已拿走对这些控制的线性 / U 形 / S 形暴露,故能否留下残差是真问题。")
+Rrows=[]
+d={"seed":2033,"round":2,"slots":[
+ {"type":"E","core":C,"hypothesis":hE,"seeds":Eseeds},
+ {"type":"N","hypothesis":hN,"inspired_by":"B098 / B099:92% / 90% 含量额叶子,其中 77 条含 day_last(Amt)(14:57-15:00 收盘集合竞价那一分钟成交额),头部 ts_max(log(cross_regbeta(day_quantile_q25(Low), day_last(Amt), 10)), 20) train +0.33 / valid +0.15","seeds":Nseeds}],
+ "R":[{"head":"cross_regbeta(day_quantile_q25(Low), day_last(Amt), 10)",
+  "why":"拆解表:窗口 10→20 日增益 +0.14(-1.58→-1.44),说明 10 日斜率太吵,斜率估计量的标准误是烂部件;分位数 q25(Low) 对 High 互换几乎不变(-1.57),价位水平本身不是承重部件,Amt 对 Volume 变差(-2.42),承重的是收盘分钟成交额。变体只改回归的自变量与窗口。",
+  "variants":[
+   "cross_regbeta(day_quantile_q25(Low), day_last(Amt), 20)",
+   "cross_regbeta(day_quantile_q25(Low), day_last(Amt), 40)",
+   "cross_regbeta(day_quantile_q25(Low), day_last(Amt), 60)",
+   "cross_regbeta(log(day_quantile_q25(Low)), log(day_last(Amt)), 20)",
+   "cross_regbeta(log(day_quantile_q25(Low)), log(day_last(Amt)), 60)",
+   "cross_corr(day_quantile_q25(Low), day_last(Amt), 20)",
+   "cross_regbeta(day_quantile_q25(Low), day_last(Amt), 120)",
+   "cs_bucket_demean(cross_regbeta(day_quantile_q25(Low), day_last(Amt), 20), LogFloatCap)",
+   "cross_regbeta(day_quantile_q25(Low), div(day_last(Amt), day_sum(Amt)), 20)",
+   "cross_regbeta(day_close(Close), day_last(Amt), 20)"]}]}
+yaml.safe_dump(d,open("../missions.yaml","w"),allow_unicode=True,width=120,sort_keys=False)

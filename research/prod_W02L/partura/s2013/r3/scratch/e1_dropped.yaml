@@ -1,0 +1,38 @@
+- type: E
+  core: 'cross_delay(day_median(Amt), 1)'
+  hypothesis: >-
+    事实:本流前两轮的 14 个 head 全是 cross_regbeta(x, day_sum(Ret), d) 的形状,x 里都有昨日成交额中位数 cross_delay(day_median(Amt), 1)(核心 C1;
+    快照 330 个候选里含它的 6 个均值 +0.86、不含 -1.73,p<0.001,是共性表第一名)。C1 在 head 里永远当回归元的一个乘子、被解释变量永远是当日收益。
+    拆解里 C1 单独 score -3.80,所以它是"放进回归的外壳"而不是独立因子。
+    假设:alpha 来自"流动性水平与收益之间的个股特有耦合"这件事本身,而不是某一个回归方向;head 只试了一个方向(收益对活跃度回归)。
+    这一位把 C1 放进的外围全部换成头部没用过的写法:(i) 方向对调——把 C1 当被解释变量、收益当回归元(cross_regbeta(D, C1, 120)):
+    度量的是"这只票涨(跌)之后成交额中位数是否被抬高",是 Karpoff 1987 / Statman-Thorley-Vorkink 2006 的"收益驱动成交(过度自信 / 注意力)"方向,与 head 的"成交驱动收益"相反;
+    (ii) 无量纲化的统计量:cross_corr / cross_reg_tvalue,把 head 里残留的量纲(1/sd(x),是成交额水平的函数)拿掉;
+    (iii) 乘积型"成交额加权收益"cross_mean(mul(C1, cs_demean(D)), 60):不做回归,直接读大额日(昨日成交额大)当日收益的平均,类 Gervais-Kaniel-Mingelgrin 2001 的高成交量溢价;
+    (iv) 被解释变量/回归元用下跌日截断(is_lt)、尾盘一分钟收益、日内波动 day_std(Ret)、市值中性收益 cs_regres(D, LogFloatCap),看耦合在哪一类日子里携带信息;
+    (v) 秩空间(cs_rank 两侧)的残差 cross_regres。
+    算子怎样实现:cross_regbeta(x, y, d) / cross_corr / cross_reg_tvalue 在个股自己的 d 日窗口里估,第一个参数是回归元 x、第二个是被解释变量 y;cross_regres 返回 y 对 x 回归的残差。
+    所有项只用 t-1 日的 C1 和 t 日收盘的收益,没有前视。
+    为什么和库不同:库里 5583 条表达式里 day_median(Amt) 本身 13 次,没有一次"以它为被解释变量"或"与收益做 corr / t 值";骨架与全部 head 不同(head 都是 regbeta(mul(...), day_sum(Ret)));
+    与流动性控制的暴露被尺子去掉了线性 / 平方 / 立方项。
+    为什么样本外还会在:若耦合方向(而非量纲)是来源,"收益推高成交额"是 A 股散户注意力驱动交易的稳定行为属性(慢变量,120 日窗口,换手低);head 在 train 与 valid 同号同量级(+1.2 / +1.5)支持这一类慢斜率不是区间巧合。
+    风险:C1 本身与流动性控制强相关,corr / t 值版本若主要读到"Amt 水平 × 噪声"会被尺子压到负分。
+  literature:
+    - {source: 'Karpoff, The relation between price changes and trading volume: a survey, JFQA', year: 1987}
+    - {source: 'Statman, Thorley, Vorkink, Investor overconfidence and trading volume, RFS', year: 2006}
+    - {source: 'Gervais, Kaniel, Mingelgrin, The high-volume return premium, JF', year: 2001}
+  seeds:
+    - 'cross_regbeta(day_sum(Ret), cross_delay(day_median(Amt), 1), 120)'
+    - 'cross_corr(cross_delay(day_median(Amt), 1), day_sum(Ret), 120)'
+    - 'cross_reg_tvalue(cross_delay(day_median(Amt), 1), day_sum(Ret), 120)'
+    - 'cross_mean(mul(cross_delay(day_median(Amt), 1), cs_demean(day_sum(Ret))), 60)'
+    - 'cross_regbeta(cross_delay(day_median(Amt), 1), cross_delay(day_sum(Ret), 1), 240)'
+    - 'cross_corr(cross_zscore(cross_delay(day_median(Amt), 1), 60), cross_delay(day_sum(Ret), 1), 120)'
+    - 'cross_regbeta(cross_delay(day_median(Amt), 1), mul(is_lt(day_sum(Ret), 0), day_sum(Ret)), 120)'
+    - 'cross_regres(cs_rank(cross_delay(day_median(Amt), 1)), cs_rank(day_sum(Ret)), 60)'
+    - 'cross_corr(cross_delay(day_median(Amt), 1), day_close(Ret), 120)'
+    - 'cross_regbeta(cross_delay(day_median(Amt), 1), day_std(Ret), 120)'
+    - 'cross_regbeta(cross_delay(day_median(Amt), 1), cs_regres(day_sum(Ret), LogFloatCap), 120)'
+    - 'cross_reg_tvalue(cross_delay(day_median(Amt), 1), cs_demean(day_sum(Ret)), 60)'
+    - 'cross_regres(cross_delay(day_median(Amt), 1), day_sum(Ret), 120)'
+    - 'cross_mean(mul(cross_zscore(cross_delay(day_median(Amt), 1), 60), cs_robust_z(day_sum(Ret))), 120)'

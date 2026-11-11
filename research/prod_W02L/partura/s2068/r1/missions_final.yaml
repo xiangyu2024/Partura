@@ -1,0 +1,83 @@
+seed: 2068
+round: 1
+slots:
+- type: E
+  core: day_sum(abs_(in_slice(Ret, 1, 30)))
+  hypothesis: 'Core = sum of absolute 1-minute returns in the first 30 minutes, i.e.
+    opening-window realized volatility; the batch heads all score negative (valid
+    -1.6 to -2.9 with direction -1) so the raw level is a priced risk/attention proxy
+    that the controls (vol, size, liquidity) mostly absorb. Previous peripheries only
+    multiplied it by the daily range/open and took 20d means of an open-minus-close
+    difference. This round tests periphery that isolates the surprise and the composition
+    of the opening activity rather than its level: ratio to full-day absolute-return
+    mass (share of the day realized in the opening window, an information-arrival-at-open
+    mechanism), deviation from own 60d mean and its z-score (abnormal opening activity
+    = news arrival not yet priced), ts_rank and ts_delta of the core (acceleration),
+    ts_corr with the closing-window mass (U-shape intraday vol persistence), ratio
+    to the mid-day mass, and interaction with open-window return-amount correlation.
+    These are different operators from the seen mul/div(range) form and the surprise
+    forms are orthogonal to the level controls by construction, so a long-only residual
+    book may survive in valid because abnormal opening activity is attention-driven
+    mispricing that does not need the level of vol.'
+  seeds:
+  - div(day_sum(abs_(in_slice(Ret, 1, 30))), day_sum(abs_(Ret)))
+  - sub(day_sum(abs_(in_slice(Ret, 1, 30))), ts_mean(day_sum(abs_(in_slice(Ret, 1,
+    30))), 60))
+  - div(sub(day_sum(abs_(in_slice(Ret, 1, 30))), ts_mean(day_sum(abs_(in_slice(Ret,
+    1, 30))), 60)), ts_stddev(day_sum(abs_(in_slice(Ret, 1, 30))), 60))
+  - ts_rank(day_sum(abs_(in_slice(Ret, 1, 30))), 40)
+  - div(day_sum(abs_(in_slice(Ret, 1, 30))), ts_mean(day_sum(abs_(in_slice(Ret, 1,
+    30))), 5))
+  - ts_delta(day_sum(abs_(in_slice(Ret, 1, 30))), 5)
+  - mul(day_sum(abs_(in_slice(Ret, 1, 30))), day_corr(in_slice(Ret, 1, 30), in_slice(Amt,
+    1, 30)))
+  - div(day_sum(abs_(in_slice(Ret, 1, 30))), day_sum(abs_(in_slice(Ret, 31, 210))))
+  - ts_corr(day_sum(abs_(in_slice(Ret, 1, 30))), day_sum(abs_(in_slice(Ret, 211, 240))),
+    20)
+  - ts_decay_linear(div(day_sum(abs_(in_slice(Ret, 1, 30))), day_sum(abs_(Ret))),
+    10)
+  - sub(ts_rank(day_sum(abs_(in_slice(Ret, 1, 30))), 20), ts_rank(day_sum(abs_(in_slice(Ret,
+    211, 240))), 20))
+- type: N
+  hypothesis: 'Overnight-versus-intraday return split (tug of war). The overnight
+    gap day_open(Open)/previous Close - 1 is formed by retail/attention-driven opening
+    orders and tends to be reversed intraday, while the intraday leg Close/Open -
+    1 carries informed flow; stocks whose accumulated overnight gaps are strongly
+    positive relative to the intraday leg are overpriced by attention and later underperform,
+    and the reverse for a long-only decile book of the cheap side. Operators: cross_delay(day_last(Close),1)
+    is the past close (no look-ahead), day_open/day_last give the two legs, ts_sum/ts_mean
+    accumulate over 20-60 days, and the difference of the two accumulated legs removes
+    the common total-return (momentum/reversal control) component. Unlike every library
+    head in this batch (opening-30-minute absolute-return volatility and range/open)
+    this is a signed-return signal, not a volatility one, so it is not the same quantity;
+    out of sample it stays because the overnight/intraday decomposition is a documented
+    persistent pattern tied to retail participation in A-shares.'
+  inspired_by: 'Batch 1: all heads are opening-window (minutes 1-30) activity measures
+    with negative sign, which says the open is where attention/retail flow concentrates;
+    the signed gap into the open is the natural direct measure of that flow.'
+  seeds:
+  - ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 20)
+  - sub(ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 20),
+    ts_mean(sub(div(day_last(Close), day_open(Open)), 1), 20))
+  - sub(ts_sum(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 40),
+    ts_sum(sub(div(day_last(Close), day_open(Open)), 1), 40))
+  - ts_decay_linear(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1),
+    20)
+  - div(ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 20),
+    ts_stddev(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 20))
+  - ts_rank(sub(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_open(Open)), 1)), 30)
+  - ts_corr(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), sub(div(day_last(Close),
+    day_open(Open)), 1), 40)
+  - mul(ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 10),
+    ts_mean(abs_(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1)), 40))
+  - sub(ts_rank(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 20),
+    ts_rank(sub(div(day_last(Close), day_open(Open)), 1), 20))
+  - ts_delta(ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1),
+    10), 10)
+  - sub(ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 5),
+    ts_mean(sub(div(day_open(Open), cross_delay(day_last(Close), 1)), 1), 60))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

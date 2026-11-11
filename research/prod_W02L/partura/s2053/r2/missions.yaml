@@ -1,0 +1,42 @@
+seed: 2053
+round: 2
+slots:
+  - type: E
+    core: 'day_topw_mean(Ret, Close)'
+    hypothesis: >-
+      机制:核心是「一天里价格最高的 10% 分钟(按 |Close| 取前 10%)的平均分钟收益」。这些分钟就是当天的价格高位区,那里的收益为正 = 价格在高位仍被继续买上去(接盘力量足、突破延续),为负 = 在高位被派发 / 冲高回落。这是一个逐日、按股票的「高位承接 vs 派发」读数。
+      上一轮(Pr1a_Na)对它只做了两类外围:cross_semistd_neg 下行半标准差(经 log 比,要求相邻两天的值同为正,大量天数被丢掉)+ ts_stddev / cs_demean / ts_quantile,也就是只读它的「波动 / 离散度」。这些全部得分为负(-0.74 到 -0.87),说明核心的二阶矩不是 alpha 所在。本位换成读「水平与方向」的外围:日轴上的均值 / 指数均值 / 线性衰减均值(把一天一个的噪声读数变成慢变的「习惯性高位承接」,低换手,15bp 成本下对纯多头书有利)、
+      减去全天平均收益或减去按成交量加权的最重分钟收益(去掉「当天整体涨跌」只留高位区的超额漂移,等于问:高位分钟比成交最重的分钟更强还是更弱)、与全天平均收益的 60 日相关(高位区收益跟全天方向的耦合度)、短均值减长均值(承接力在变强还是变弱)。没有一个外围用到上一轮见过的 semistd / stddev / demean / quantile 族。
+      和库里不同:库里含 day_topw_mean(Ret, Close) 的只有上一轮那几类二阶矩写法;水平型的日轴均值、差分、相关写法不在 5583 条库表达式的骨架里。核心本身以价格位置选分钟、以收益为被平均量,和成交量 / 金额水平型的头部(Amt 一族,已被控制)度量的不是同一件事。
+      为什么样本外还会在:高位承接是持仓者结构(获利盘兑现 vs 追涨资金)的慢变特征,和流动性、波动、20 日反转、市值几个水平型控制几乎正交;日轴平滑后换手低。没有前视:当日分钟序列算出日度量,日轴窗口只用当天及过去;种子不含 ts_spearman / nt_*。风险:|Close| 用的是后复权价,分钟价格高位区在趋势股里偏向当天较晚的分钟,可能混入日内趋势,sub(核心, 全天平均收益) 的种子正是对照。
+    seeds:
+      - 'cross_mean(day_topw_mean(Ret, Close), 20)'
+      - 'cross_ema(day_topw_mean(Ret, Close), 10)'
+      - 'cross_decay_linear(day_topw_mean(Ret, Close), 20)'
+      - 'cross_zscore(day_topw_mean(Ret, Close), 60)'
+      - 'sub(day_topw_mean(Ret, Close), day_mean(Ret))'
+      - 'cross_mean(sub(day_topw_mean(Ret, Close), day_mean(Ret)), 20)'
+      - 'cross_mean(sub(day_topw_mean(Ret, Close), day_topw_mean(Ret, Volume)), 20)'
+      - 'cross_ema(sub(day_topw_mean(Ret, Close), day_topw_mean(Ret, Amt)), 30)'
+      - 'cross_corr(day_topw_mean(Ret, Close), day_mean(Ret), 60)'
+      - 'sub(cross_mean(day_topw_mean(Ret, Close), 5), cross_mean(day_topw_mean(Ret, Close), 40))'
+      - 'cross_min(day_topw_mean(Ret, Close), 20)'
+      - 'cross_ema(day_topw_mean(Ret, Close), 30)'
+  - type: N
+    hypothesis: >-
+      机制:把本批唯一的富集现象(day_topw_mean(Ret, Close) 按价格位置选分钟再平均收益,含它的候选均值差 +0.8,p 0.009)推广成「按价格偏离选分钟」的一族。核心思路:分钟收益的信息含量取决于这一分钟价格相对当天所处的位置。用 in_demean(Close)(分钟价减当天均价)作权重,day_topw_mean 取 |偏离| 最大的 10% 分钟,即当天价格最极端(高端或低端)的分钟,再平均它们的收益:收益符号与偏离方向一致 = 极端价位上趋势延续(信息推动),相反 = 极端价位被回拉(流动性推动)。用 in_delta(Close, 30)(30 分钟价格变动)作权重则是「在最猛的半小时涨跌里,收益继续还是回吐」。再配 day_topw_mean(Volume, Close)(价格高位区的成交量,与全天成交的对比)当作承接强度、两种权重之差当作位置信息与成交信息的分歧。
+      算子实现:全部是 day_topw_mean(收益或量, 权重) 加日轴 cross_mean / cross_ema / cross_zscore 平滑;权重用 in_demean、in_delta、abs_、in_rank 在分钟轴上构造,不依赖 Amt / Volume 的水平。日轴窗口取 20-30 天,换手低。
+      和库里不同:库里与核心的组合只有按 Close 加权这一种;偏离均价加权、30 分钟涨跌幅加权、按成交量排名加权的变体和骨架(分钟轴先构造权重再 day_topw_mean)都不在 5583 条库表达式里。度量对象是价格位置 / 价格冲击里的收益,而头部 head 全是 Amt / Volume 的水平量(cross_sum 一族),与它们不是同一件事。
+      为什么样本外还会在:极端价位上的收益延续或回拉对应信息交易 vs 流动性交易的比例,是个股持仓者结构的慢变特征,不靠某一段行情;与流动性、波动、反转、市值控制相比,它读的是日内路径形状而不是水平,新尺子去掉控制的非线性暴露后剩下这部分。没有前视:全部为当日分钟数据与过去的日轴窗口;不含 ts_spearman / nt_*。
+    inspired_by: '本批共性表:day_topw_mean(Ret, Close) 的含有者均值差 +0.80(p 0.009),含 cross_semistd_neg(·, 3) 的 +0.81;说明按价格位置选分钟再平均收益有信息,而之前没人换过权重'
+    seeds:
+      - 'cross_mean(day_topw_mean(Ret, in_demean(Close)), 20)'
+      - 'cross_ema(day_topw_mean(Ret, in_demean(Close)), 10)'
+      - 'cross_mean(day_topw_mean(Ret, in_delta(Close, 30)), 20)'
+      - 'cross_zscore(day_topw_mean(Ret, in_delta(Close, 30)), 60)'
+      - 'cross_mean(day_topw_mean(Ret, abs_(in_delta(Close, 15))), 30)'
+      - 'cross_mean(day_topw_mean(Ret, in_rank(Volume)), 20)'
+      - 'cross_mean(sub(day_topw_mean(Ret, in_demean(Close)), day_topw_mean(Ret, Volume)), 20)'
+      - 'cross_ema(day_topw_mean(in_delta(Close, 5), in_demean(Close)), 10)'
+      - 'cross_mean(day_topw_mean(Volume, in_demean(Close)), 20)'
+      - 'cross_decay_linear(day_topw_mean(Ret, in_delta(Close, 30)), 20)'

@@ -1,0 +1,57 @@
+import yaml
+C = "cross_zscore(day_quantile_q25(Volume), 60)"
+core = C
+E = [
+ f"cross_mean({C}, 20)",
+ f"cross_ema({C}, 40)",
+ f"sub({C}, cross_zscore(day_quantile_q25(Amt), 60))",
+ f"cs_bucket_zscore(cross_mean({C}, 20), LogFloatCap)",
+ f"cs_regres(cross_mean({C}, 20), cross_zscore(cross_mean(day_std(Ret), 5), 60))",
+ f"cross_tail_mean_q75({C}, 60)",
+ f"cross_max({C}, 20)",
+ f"cross_corr({C}, day_sum(Ret), 60)",
+ f"mul(cs_demean(cs_rank(cross_mean({C}, 20))), cs_demean(cs_rank(cross_delta(log(day_quantile(Close)), 120))))",
+ f"cs_flip_by_state(cross_mean({C}, 20), cross_delta(log(day_quantile(Close)), 60))",
+ f"cross_delta(cross_mean({C}, 10), 40)",
+ f"cs_winsor(cross_decay_linear({C}, 30))",
+ f"sub(cross_mean({C}, 10), cross_mean({C}, 120))",
+]
+Mv = "add(day_mean(Volume), create_like(day_mean(Volume), 1))"
+F = f"div(day_quantile_q25(Volume), {Mv})"
+Q75 = "day_quantile(Volume, 0.75)"
+N = [
+ f"cross_zscore({F}, 60)",
+ f"cross_mean(div(day_quantile_q25(Volume), add({Q75}, create_like({Q75}, 1))), 40)",
+ "cross_zscore(div(day_quantile_q25(Amt), add(day_median(Amt), create_like(day_median(Amt), 1))), 60)",
+ f"cs_bucket_zscore(cross_mean({F}, 40), LogFloatCap)",
+ f"cross_delta(cross_mean({F}, 20), 60)",
+ f"cross_semistd_pos(cross_zscore({F}, 60), 120)",
+ f"cross_ema(div(day_quantile(Volume, 0.1), {Mv}), 60)",
+ "cross_zscore(sub(log(add(day_quantile_q25(Volume), 1)), log(add(day_quantile(Volume, 0.75), 1))), 60)",
+ f"cross_corr({F}, day_sum(Ret), 60)",
+ f"cs_regres(cross_mean({F}, 40), cross_mean(day_std(Ret), 60))",
+ f"cs_rank(cross_mean({F}, 60))",
+ f"sub(cross_mean({F}, 20), cross_mean({F}, 120))",
+]
+hE = ("机制。核心是本批(B 系列 Volume 一族)共性表里富集最强的子树 cross_zscore(day_quantile_q25(Volume), 60):当天分钟成交量的 25 分位(安静分钟的"
+"成交量底板),相对自己过去 60 日历史的 z 分数,即「基础关注度 / 持续成交的底板相对自己抬升了多少」(Gervais–Kaniel–Mingelgrin 2001 的放量溢价与 "
+"Barber–Odean 2008 的注意力一族,但读的是底板而不是总量或峰值,所以不是成交量水平 / 流动性控制)。快照事实:含它的 4–14 个候选均值差 +1.36(p 0.000),"
+"上一轮 N 位里 GP 长出的最好候选 −0.08(valid +0.15)就是它加 cross_semistd_pos;已见过的外围只有 cs_normalize 叠加、cross_semistd_pos、cross_quantile_q25,都是"
+"「单日 z 再取半标准差 / 下分位」。这次外围全部换成库里没有的类别:(1)长窗口平滑 cross_mean / cross_ema / cross_decay_linear,把单日 z 的噪声与换手压下去(D 一族已量过平滑单调变好);"
+"(2)减去同窗口的成交额底板 z:Volume 与 Amt 之差是价格水平,留下的是「股数口径的关注度」,排除价格变动带来的成交额;"
+"(3)流通市值桶内标准化、对 5 日波动 z 做截面回归残差:去掉小盘 / 高波动暴露而不是靠控制线性剥掉;(4)cross_tail_mean_q75 / cross_max:只看关注度抬升的上尾;"
+"(5)与当日收益的 60 日相关:底板抬升时价格是否同向(知情 vs 噪声关注);(6)与 120 日价格趋势的名次乘积、按市场 60 日趋势状态翻符号、短减长均值差 / 40 日差分:关注度变化的方向性。"
+"为什么样本外还会在:持续成交的底板抬升反映机构 / 算法执行与基础关注度的慢变化,不依赖某段行情;慢变量换手低,15 bp 成本吃得下;"
+"Volume 的 25 分位对少数异常分钟不敏感,不像 sum 或 max 被单个脉冲主导。数学检查:z 分数有常数窗口保护;停牌日成交量为 0 时分位为 0,窗口里全 0 则 z 缺失,不是爆点;"
+"没有除以近零的量(cross_corr 在窗口常数时缺失);只用当天及以前的数据;热身最长 120 日,不主导。")
+hN = ("机制。快照共性表里的 Volume 底板(day_quantile_q25(Volume))是富集最强的部件,但它的水平随股票换手差异巨大。新想法:读「成交量的轮廓形状」而不是水平——"
+"安静分钟的成交量除以当天平均成交量(底板 / 均值,0 到 1 之间,尺度无关),越高说明全天成交越均匀、持续(机构 / 算法分单、VWAP 式执行),越低说明成交集中在少数脉冲分钟(彩票型 / 事件驱动的散户脉冲);"
+"再取相对自己 60 日历史的 z 分数、40 日均值、与成交量 75 分位或成交额中位数比的变体。算子实现:div(day_quantile_q25(Volume), day_mean(Volume)+1) 等,分母是当天平均成交量加 1,"
+"停牌日为 0/1=0,不会爆点;库里骨架没有任何一条把成交量的下分位除以均值 / 上分位(库里的 day_quantile_q25 只作为水平被 cross_zscore 使用),所以不是换写法:这个量与成交量水平的秩相关低,"
+"度量的是分布形状(Gini / 偏度的近亲,但用分位数而不是矩,对单个极端分钟稳健)。为什么样本外还会在:成交的均匀程度是执行方式与投资者结构的慢变特征(Kyle 1985 式的分单、Barber–Odean 2008 的注意力脉冲),"
+"持续成交的票被机构慢速建仓,脉冲型的票被注意力追高后回吐;慢平均 / z 分数后换手低。最可能的失败方式:与流动性控制或两个冠军里的 Amt 族重合,残差变小;或只是换手率的另一种写法(由相关度表检验)。")
+plan = {"seed":2017,"round":3,"slots":[
+ {"type":"E","core":core,"hypothesis":hE,"seeds":E},
+ {"type":"N","hypothesis":hN,"inspired_by":"第 3 轮快照共性表:day_quantile_q25(Volume) 与 cross_zscore(day_quantile_q25(Volume), 60) 的均值差 +1.01 / +1.36(p 0.000);上一轮 N 位最好 −0.08(valid +0.15)是 cross_semistd_pos(…Volume 底板 z…, 241) —— 现象是成交量的安静分钟底板有信息,没有人读它的形状(与均值 / 上分位之比)",
+  "seeds":N}]}
+yaml.safe_dump(plan, open("missions.yaml","w"), allow_unicode=True, width=200, sort_keys=False)

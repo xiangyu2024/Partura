@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:E 核心 day_topw_mean(Ret, Close) 与 3 个 head 的原始 |ρ| 为 0.12(最像 day_sum(cross_sum(Volume, 3))),残差 0.19;与 5 个控制 liq 0.03、vol 0.32、rev 0.18、known 0.06、size 0.00,全部 < 0.8,核心门槛通过。12 个种子与 head 的原始 |ρ| 全部 ≤ 0.22,无自动划掉。控制列最高为 0.79(seed 2 的 vol),seed 1、3、6、12 的 vol 也在 0.72–0.79;未到 0.8 的自动线,但这几条的原始秩几乎就是波动度量,奖励里被残差掉的部分会是它们的主体,PI 应预期这几条的样本内优势可能就是 vol 残差。seed 4 cross_zscore(·, 60) 与各控制 ≤ 0.15,是最干净的写法。算子核对:day_topw_mean 对 |w| 取前 10% 分钟再平均 y,w = Close 时就是日内最高价分钟(Close 为正,|Close| = Close);cross_mean / cross_ema / cross_decay_linear / cross_zscore / cross_min / cross_corr 都只沿日轴,用当天与过去的值,cross_ema 的注释写明是因果的;day_mean(Ret) 是全天分钟平均,收盘后可得;没有 cross_shift、ts_shift、in_local_mean、ts_spearman、nt_*;Close 与 Ret 的尺度正常,没有数值伪影。创新度给 3 而非 4:核心是共性表里已有的子树(共性表后段里约 13 处含它),新的是外围的日轴平滑与对照组合;与 head 的相关很低,不是换皮,但测的对象并没有换。合理度给 4:机制说得清(日内高位分钟的收益是承接还是派发),算子实现与描述一致;扣分点只是 PI 自己指出的趋势混入(|Close| 高位在趋势股里偏向当天后段),seed 5 与 seed 7 正是对照。E 位「至多 2 个」这一条我核对不了:r1 的 missions 与 audit 里没有 day_topw 族的种子,笔记里提到的 Pr1a_Na 运行在本目录下找不到对应文件,PI 需要说明这个核心此前用过几个 E 位。如果它有 alpha,最可能来自:高位分钟收益的慢变水平,即持仓者在价格高位是接盘还是派发的习惯,而不是波动或流动性本身。'
+  - slot: b
+    novelty: 3
+    soundness: 3
+    struck_seeds: [9]
+    reasons: '相关度表:b 位原始 |ρ| 与 head 最高为 b9 的 0.95(与 day_sum(cross_sum(Volume, 3)) 同式的成交量加权,≥ 0.7 自动划掉),其余 ≤ 0.38。与控制最高:b6 rev 0.64、b7 rev 0.54、b9 liq 0.69(已划),其余多在 0.2–0.5;没有 ≥ 0.8 的种子。算子核对:day_topw_mean 取 |w| 前 10%,in_demean(x) = x - in_mean_full(x) 是分钟轴上的减当天均值(与 Close 同序的只是平移,但取绝对值后选中的是两端极端),in_delta(x, d) = x[t] - x[t-d] 是向后差分,in_rank 是分钟轴上的截面秩(单调),abs_ 无前视;没有 cross_shift、ts_shift、in_local_mean、ts_spearman、nt_*。划掉 9:与 head |ρ| 0.95,自动规则。问题记录(都不是数学问题,不据此挡):(1) b1、b2 的机制说「收益符号与偏离方向一致 = 延续,相反 = 回拉」,但 day_topw_mean 对 |w| 取两端合并的前 10%,再对 Ret 求一个平均,算子分不出高端与低端各自的收益;它实际量的是「价格两端极端分钟的平均收益」,这是良定义的量,但方向故事没有被算子实现,若有 alpha 来自两端收益的合并水平或不对称,而不是 PI 描述的方向拆分。合理度因此给 3 而非 4。(2) b6 的 in_rank(Volume) 在分钟轴上单调,按 |秩| 取前 10% 与按 Volume 取前 10% 选中的分钟基本相同(只差分位插值的边界),所以 b6 是 day_topw_mean(Ret, Volume) 外加 cross_mean 的换写法。它不是 head 或控制的重复,计划里 a 位 seed 7 只是在 sub 里用了 day_topw_mean(Ret, Volume),也不是同一个种子,所以不按「重复」划掉;但它的「截面秩加权」这一层没有新内容,PI 不应把它当作独立的新想法。(3) b8 的 y = in_delta(Close, 5) 是元的价格变动,不是收益,元值随价格水平放大;日度截面秩去掉了股票之间的尺度,但信号可能在载入价格水平,而价格水平不在 5 个控制里,定义上不算坏掉,奖励阶段应检查它与价格水平的相关。(4) b5 的 abs_ 与 day_topw_mean 内部的 |w| 重复,无害。(5) b1、b2、b3、b4、b10 共用 Ret 为被平均量,只在权重与平滑上不同,相互之间的相关不在相关度表里,预期高。创新度给 3:权重换成偏离均价、30 分钟涨跌、量秩、绝对涨跌是新构造,与 head 相关低,但仍在 day_topw_mean(Ret, ·) 一族内,且 b5、b3、b6 与反转、波动控制有 0.3–0.6 的相关,不是真正的新测量对象。合理度给 3(b1、b2 的机制未被算子实现;b8 有单位问题;其余机制清楚)。如果它有 alpha,最可能来自:日内最大的 30 分钟价格变动之后收益是延续还是回吐(b3、b4、b10),这是冲击的信息与流动性两种解释的分界,符号要在奖励里确认。'
+R: []
+summary: 'a 位通过(创新 3、合理 4,12 个种子全留,核心与控制最大 |ρ| 0.32);b 位通过(创新 3、合理 3,划掉 b9,剩 9 个);无 R。b1、b2 的方向机制算子未实现,b6 与 day_topw_mean(Ret, Volume) 选中集相同,b8 用元价差;libs_train.csv(1392 L + 4206 X)里不含 day_topw 族,库内归属无法用这份文件核对。'

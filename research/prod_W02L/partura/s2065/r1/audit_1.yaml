@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:P 组 10 个种子全部过门槛。与快照 3 个 head 的原始 |ρ| 最大 0.44(最像 day_var(in_max_rolling(Vwap,60)));残差后与 head 的 |ρ| 为 0.02–0.19,与 head 实质不同。控制列:seed 1、2、7、9 与流动性 |ρ| 0.53–0.66、已知族 0.43–0.57(seed 2 的市值 0.51),这四个是放量集中度换写法后仍贴着流动性/规模走,所以创新度给 3 而不是 4–5;seed 3、4、8、10 的量价相关族与各控制 |ρ| 多在 0.2–0.35,是新东西。算子核对(读了源码):day_max/day_sum/day_mean/day_median 是日内归约(dt_day.py);div 无保护,但成交量非负时 max ≤ sum、max/mean ≤ 分钟数 241,比值有界,不会爆点;day_sum 全缺失返回 NaN;cross_mean、cross_zscore、in_max_rolling 都用 rolling_windows(common.py:433,左侧补 NaN 的因果窗),无前视;in_max_rolling(Volume,5) 只看过去 5 分钟;没有 ts_shift / cross_shift / in_local_mean / nt_* / ts_spearman。划掉与否:seed 5 与 seed 1 只差 10 日均值与 120 日 z-score,seed 7 与 seed 2 只差 median/mean 一项,是同一原语的近亲,但 z-score 按股票做时间标准化会改变截面排序,没有可核对的证据说明是同一个信号,不划,建议 PI 在提交前看一下这两对的截面相关。seed 9 的 day_max/day_median 在中位数为 0 时是 inf(分钟成交量为 0 的日子,比如一字板),但 corr_1.json 里它的覆盖率是 0.968,非有限格只约 3%,不足以支配截面,不划,建议 PI 补查停牌和一字板日的占比。如果它有 alpha,最可能来自:放量突发集中于少数分钟的机构大单或事件冲击之后,价量方向的知情买卖(day_corr(Volume,Ret) 一族)被截面定价,而不是滚动峰值的离散。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '相关度表:P 组 10 个种子里 9 个过门槛,seed 10 的门槛为「废品」。与 3 个 head 的原始 |ρ| 最大 0.17(seed 7),残差后 0.02–0.21,与 head 实质不同。控制列:seed 1、3、4 与 20 日反转 |ρ| 0.53–0.55,是收盘在日内区间的位置、日内趋势与短期反转在截面上有重叠;但这是中度重叠而不是同一个量,且残差化已去掉控制的线性与非线性暴露,按 §3 不能因此挡,所以创新度给 4。算子核对:day_last/day_first/day_mean/day_max/day_min 是日内归约;in_index 定义为 t/(T-1)(ops_ext.py:684,有限处取值,无前视);day_corr(dt_day.py:231)带 EPS,收盘为常数的一字板日 corr 返回 0 而不是 NaN,这是偏向 0 的小伪影,只在平盘日出现,20 日均值下影响有限,不划;seed 3 的分母是日内振幅,为 0 时 0/0 = NaN,分子不大于分母,值域在 [0,1],无爆点;seed 6 是 seed 1 的 10 日均值再做 60 日 z-score,同一原语的近亲,与 seed 1 的截面差异靠 z-score 产生,无证据是重复,不划;seed 7 是两个比值之差,数值有界。seed 10 划掉:它的 gate 显示 distinct = 0.499,即截面里唯一值只有一半左右,很可能是 day_mean(Vwap) 与 day_mean(Close) 精确相等(整日无成交或一字板的填充),于是十分位边界上的股票由列序决定,正是 diagnose.py levels_ok 所指的已知风险,属于数值伪影(定义坏掉),是数学问题,可以划。如果它有 alpha,最可能来自:收盘与均价在日内区间中的位置反映尾盘买卖力量,以及日内路径的持续性(日内动量);或者是残差化之后留下的、与 20 日反转不同的日内价格信息。'
+R: []
+summary: '两个 N 位都过审计(a: 创新 3 / 合理 4,无划掉;b: 创新 4 / 合理 4,划掉 seed 10,因截面一半并列、定义坏掉);没有 R 组;提请 PI 补查 a seed 9 的零中位数非有限格占比、以及 a 的 seed 1/5、seed 2/7 与 b 的 seed 1/6 的近亲关系。'

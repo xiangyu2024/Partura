@@ -1,0 +1,66 @@
+import yaml
+G="select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.15), cross_delta(sub(log(day_last(Amt)), LogTotalCap), 1), 0.0)"
+XC="sub(log(day_last(Amt)), LogTotalCap)"
+XO="sub(log(day_first(Amt)), LogTotalCap)"
+GATE="is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.15)"
+e_seeds=[
+ f"cross_sum({G}, 360)",
+ f"cross_sum({G}, 480)",
+ f"cross_sum({G}, 180)",
+ f"cross_ema({G}, 60)",
+ f"cross_ema({G}, 120)",
+ f"cross_ema({G}, 241)",
+ f"cross_decay_linear({G}, 241)",
+ f"cross_zscore({G}, 120)",
+ f"cross_mean({G}, 120)",
+ f"cross_med({G}, 60)",
+ f"cross_quantile_q75({G}, 120)",
+ f"cross_tail_mean_q25({G}, 241)",
+ f"ts_decay_linear({G}, 120)",
+ f"ts_sum({G}, 360)",
+ f"cross_regbeta({G}, cross_delay({G}, 20), 241)",
+ f"cross_reg_tvalue({G}, cross_delta(log(day_last(Close)), 1), 241)",
+]
+n_seeds=[
+ f"cross_sum(cross_delta(sub(log(day_last(Amt)), log(day_first(Amt))), 1), 241)",
+ f"cross_sum(select_where({GATE}, cross_delta(sub(log(day_last(Amt)), log(day_first(Amt))), 1), 0.0), 241)",
+ f"cross_sum(select_where({GATE}, cross_delta({XO}, 1), 0.0), 241)",
+ f"cross_mean(sub(log(day_last(Amt)), log(day_first(Amt))), 120)",
+ f"cross_corr(cross_delta({XC}, 1), day_last(Ret), 120)",
+ f"cross_mean(mul(day_last(Ret), cross_zscore({XC}, 60)), 60)",
+ f"cross_mean(mul(day_last(Ret), cross_zscore({XC}, 120)), 120)",
+ f"cross_sum(mul(day_last(Ret), cross_delta({XC}, 1)), 241)",
+ f"cross_mean(mul(day_first(Ret), cross_zscore({XO}, 60)), 60)",
+ f"cross_regbeta(day_last(Ret), {XC}, 120)",
+ f"cross_reg_tvalue(day_last(Ret), {XC}, 120)",
+ f"cross_reg_tvalue(day_last(Ret), cross_delta({XC}, 1), 241)",
+]
+H="ts_stddev(ts_stddev(day_sum(Amt), 20), 30)"
+R=[dict(head=H, why="ts_stddev@30->60 给 train -0.14 / valid +0.29(loc 拆解);但裸 Amt 水平被成交额控制与已知族吃掉,烂部件是原始 Amt 尺度;改用对数 / 比值去水平,并拉长外窗。",
+ variants=[
+ "ts_stddev(ts_stddev(day_sum(Amt), 20), 60)",
+ "ts_stddev(ts_stddev(day_sum(Amt), 20), 120)",
+ "ts_stddev(ts_stddev(log(day_sum(Amt)), 20), 60)",
+ "ts_stddev(ts_stddev(log(day_sum(Amt)), 20), 30)",
+ "div(ts_stddev(ts_stddev(day_sum(Amt), 20), 60), ts_mean(day_sum(Amt), 60))",
+ "ts_mean(ts_stddev(ts_stddev(log(day_sum(Amt)), 20), 60), 20)",
+ "ts_stddev(ts_stddev(sub(log(day_sum(Amt)), LogTotalCap), 20), 60)",
+ "ts_stddev(ts_delta(log(day_sum(Amt)), 1), 60)",
+])]
+E_HYP=("【核心】g = select_where(is_lt(abs_(cross_delta(log(day_last(Close)),1)),0.15), cross_delta(sub(log(day_last(Amt)),LogTotalCap),1), 0.0),核心卡第 8 条:当日涨跌幅不极端(|Δlog 收盘价| < 0.15)时,取「收盘分钟成交额 ÷ 总市值」的对数 x 的日增量,否则记 0。\n"
+"【证据】第 2 轮 E 位的 96 个评分里,把 g 套 cross_sum(·,241) 的写法是本流最好的:score +0.35(train +0.35 / valid +0.58),已落在共性表里(含 g 的 8 个候选均值差 +1.20,p 0.006)。cross_sum(g,n) 望远镜成门控后的 x_t − x_{t−n},即收盘集合竞价参与度的 n 日变化。第 2 轮外围只试过 cross_sum 的 241 与 120+20 两种窗口、以及市值分桶标准化;这一次不再变门、不再套市值分桶,只换「怎样读 g 的时间序列」。\n"
+"【机制】收盘集合竞价是指数 / ETF / 基金净值基准流量集中处,散户占比低,参与度的趋势读的是机构化份额的缓慢变化,文献见 Chan–Lakonishok 1995、Gompers–Metrick 2001(机构持股与后续收益)。门去掉涨跌停 / 事件日,让增量不被一次性尖峰支配。\n"
+"【这次换的外围】(1) 窗口:180 / 360 / 480 日的和(第 2 轮只有 241),检验趋势期限;一年变化 +0.35 是否只是窗口运气(valid 比 train 好说明慢趋势在后期更清楚)。(2) 加权:cross_ema 60 / 120 / 241、线性衰减,让近期增量权重高、老的衰减,而不是等权的望远镜(望远镜只看两个端点的值,衰减加权会用到整段路径,噪声更小)。(3) 稳健与形状:均值、中位数、q75、下尾均值,读增量分布的位置而不是总和;z 分数读相对自身历史的惊讶度。(4) 时序算子家族 ts_*(整面板)与 cross_*(逐股票核)在这个核心上的写法不同,ts_sum / ts_decay_linear 作对照。(5) 惯性:增量对自己 20 日前增量的回归斜率(参与度上升是否延续)、增量对当日收益的 t 值(参与度上升发生在涨日还是跌日,方向信息)。\n"
+"【与库的差别】库的 5583 条表达式里 LogTotalCap 等日频字段叶子出现 0 次,没有「收盘分钟成交额 ÷ 市值」的差分,更没有按涨跌幅条件门控后的求和 / 衰减;6 个 head 全是成交股数水平、成交额水平的波动与日内收益波动,和 g 的外围(时间加权、回归)是不同的构造。种子的算子骨架逐个对照过 members.csv。\n"
+"【为什么样本外还会在】机制是制度性的(收盘集合竞价的流量结构,不依赖某段行情),窗口是日历单位,阈值 0.15 取自 20% 涨跌幅板规则,不是样本内拟合;第 2 轮 valid 比 train 更好,与「机构化是慢趋势、越往后越清楚」一致。\n"
+"【我的警告】g 与 head 的 ρ 预期很低(< 0.2),但 +0.35 可能是 96 个评分里的运气;若这一位仍 < 0.2,深挖停止。")
+N_HYP=("【新 idea】收盘与开盘两个集合竞价的参与度之差与方向。x_c = log(day_last(Amt)) − LogTotalCap,x_o = log(day_first(Amt)) − LogTotalCap(开盘集合竞价那一分钟,盘前信息的集中释放),方向取 day_last(Ret) / day_first(Ret)(竞价分钟的价格偏移)。\n"
+"【算子怎样实现】(a) log(day_last(Amt)) − log(day_first(Amt)):收盘对开盘的相对强度,市值与日成交额水平都在差里抵消,不是流动性控制;(b) 开盘版的同一口袋(x_o 的门控一年增量),检验第 2 轮的收盘口袋是不是「集合竞价参与度」的一般现象;(c) 收盘分钟收益 × x_c 的 z 分数(强量上涨 = 价格不敏感的买单),在 60 / 120 日上平均,以及与增量的乘积的一年和;开盘版同形;(d) 收益对参与度的回归斜率 / t 值(收盘竞价的 Kyle 价格冲击系数:同样的参与度能推动多少价格,斜率高 = 竞价深度差 = 非流动性补偿,Kyle 1985);(e) 参与度增量与收盘收益的 120 日相关。\n"
+"【灵感与来源】第 2 轮 E 位的唯一口袋是收盘分钟成交额占市值的门控增量(+0.35);第 2 轮 N 位 b 的共性表里 day_first(Amt) 是富集最强的叶子(19 个候选,均值差 +1.46,p 0.000),但那些候选把它放进回归 / 分桶后 train 与 valid 方向不一致,没有读到「变化」。这里把两个竞价分钟放在一起,读相对强度、方向、价格冲击,而不是水平。\n"
+"【与库的差别】库里 day_first(Amt) 与 day_last(Amt) 都是水平放进统计量,没有「竞价分钟成交额的对数之差」,没有竞价分钟收益与参与度的乘积 / 回归;与已知 head(成交股数水平、日内收益波动)与 5 个控制(流动性 / 波动 / 反转 / 已知族 / 市值)都没有共线渠道(差或回归斜率,水平被抵消)。\n"
+"【为什么样本外还会在】竞价机制是制度性的(2018-08 以后沪深两市都有收盘集合竞价;开盘集合竞价一直存在);Kyle 系数是价格冲击的结构量,不依赖某段行情。【风险】分钟收益符号在冷门股上大量为 0;上交所 2018-08-20 前收盘无集合竞价,头 8 个月有断点。")
+m=dict(seed=2035,round=3,slots=[
+ dict(type="E",core=G,hypothesis=E_HYP,seeds=e_seeds),
+ dict(type="N",hypothesis=N_HYP,inspired_by="第 2 轮 E 位的收盘分钟成交额占市值口袋(+0.35)与共性表里最强的叶子 day_first(Amt)(19 个候选,均值差 +1.46):把开盘与收盘两个竞价分钟放在一起读相对强度、方向和价格冲击",seeds=n_seeds)],
+ R=R)
+open("missions.yaml","w").write(yaml.safe_dump(m,allow_unicode=True,width=10000,sort_keys=False))

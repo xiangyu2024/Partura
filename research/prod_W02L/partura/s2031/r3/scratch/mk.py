@@ -1,0 +1,79 @@
+import yaml
+C="day_max(cross_age(pow_05(pow_2_5(High))))"
+A="day_sum(Amt)"
+LA="cross_delay(day_sum(Amt), 1)"
+Gd="div(day_first(Open), cross_delay(day_last(Close), 1))"
+I="div(day_last(Close), day_first(Open))"
+OS="div(day_first(Amt), day_sum(Amt))"
+E=[
+f"cross_corr({LA}, {C}, 120)",
+f"cross_reg_tvalue({LA}, {C}, 120)",
+f"cross_regbeta(cross_delay(div({A}, cs_mean({A})), 1), {C}, 120)",
+f"cross_regbeta({C}, div({A}, cross_mean({A}, 120)), 120)",
+f"cross_regbeta(cross_delay(cross_ema({A}, 10), 1), {C}, 120)",
+f"cross_regbeta({LA}, {C}, 180)",
+f"cross_regbeta({LA}, {C}, 90)",
+f"cross_regbeta(cross_delay(div(day_max(High), day_min(Low)), 1), {C}, 120)",
+f"cross_regbeta(cross_delay(day_first(Amt), 1), {C}, 120)",
+f"cross_regbeta(cross_delay(day_last(Amt), 1), {C}, 120)",
+f"cross_regbeta(cross_delay({OS}, 1), {C}, 120)",
+f"cross_corr(cross_delay({OS}, 1), {C}, 120)",
+f"cross_regbeta(cross_delay(day_gini(Amt), 1), {C}, 120)",
+f"cross_regbeta(cross_delay(day_centroid(Amt), 1), {C}, 120)",
+f"cross_regbeta(cross_delay(div(abs_(sub({I}, 1)), add({A}, 1000)), 1), {C}, 120)",
+f"cross_regbeta(cross_delay(abs_(sub({Gd}, 1)), 1), {C}, 120)",
+]
+def idio(a): return f"cross_regres(cs_mean({a}), {a}, 120)"
+RA=idio(A); RO=idio(OS); RI=idio(I)
+N=[
+f"div(cross_stddev({RA}, 120), cross_stddev({A}, 120))",
+f"div(cross_stddev({RA}, 120), cross_mean({A}, 120))",
+f"div(cross_regbeta(cs_mean({A}), {A}, 120), cross_mean({A}, 120))",
+f"cross_corr(cs_mean({A}), {A}, 120)",
+f"sub(div(cross_stddev({RA}, 120), cross_stddev({A}, 120)), div(cross_stddev({idio(Gd)}, 120), cross_stddev({Gd}, 120)))",
+f"cross_corr({RA}, {RI}, 120)",
+f"cross_autocorr_s1({RA}, 120)",
+f"div(cross_ema(abs_({RA}), 60), cross_ema({A}, 60))",
+f"div(cross_max({RA}, 120), cross_stddev({RA}, 120))",
+f"div(cross_mean({RA}, 120), cross_stddev({RA}, 120))",
+f"div(cross_stddev({RO}, 120), cross_stddev({OS}, 120))",
+f"cross_corr({RA}, cross_delay({RI}, 1), 120)",
+]
+H=f"cross_regbeta({LA}, abs_({C}), 120)"
+T=f"abs_({C})"
+R=[
+f"cross_regbeta({LA}, {T}, 150)",
+f"cross_regbeta({LA}, {T}, 90)",
+f"cross_regbeta({LA}, {T}, 180)",
+f"cross_regbeta(cross_ema({A}, 5), {T}, 120)",
+f"cross_regbeta(cross_delay(div({A}, cs_mean({A})), 1), {T}, 120)",
+f"cross_corr({LA}, {T}, 120)",
+f"cross_reg_tvalue({LA}, {T}, 120)",
+f"cross_regbeta(cross_delay(div({A}, cross_mean({A}, 120)), 1), {T}, 120)",
+]
+hE=("机制。核心 C = day_max(cross_age(pow_05(pow_2_5(High)))) 是一个日历时间指数:cross_age 给出「自该股第一个有效值起的交易日数」(已在数据开头就有值的老股 = 10000 + 全市场同一个计数,新股 = 上市后天数),High 的幂只是保证有值的包装,不带信息。"
+ "所以以 C 为一边的 cross_regbeta / cross_corr / cross_reg_tvalue(·, C, 120) 读的是另一边那个量在 120 个交易日里的「线性趋势」(斜率 / 相关 / t 值)。"
+ "本组已有 head `cross_regbeta(cross_delay(day_sum(Amt),1), abs_(C), 120)`(+0.54,train +0.67 / valid +0.54):regbeta(x,y) 是 y 对 x 的斜率 = cov(t, Amt)/var(Amt) = corr(Amt, t) × std(t)/std(Amt),即「成交额趋势的方向 × 1/成交额波动」,"
+ "直白说就是成交额在 120 日里稳步上升、而且上升得很平稳(噪声小)的票排前面;拆解里 abs_ 与幂函数是废件(拿掉不变,+0.54),Amt 换 Volume 掉到 -0.15(valid)说明价格加权的成交额才是承重的,窗口 60 / 240 都掉(valid -0.27 / -0.26)说明它读的是约半年的慢趋势。"
+ "E 位的问题:这个「对时间指数的斜率」读法到底承重在哪——是『成交额趋势』这个量,还是『除以 var(x)』的标准化,还是回归的方向?"
+ "怎样试:16 个种子保持 C 不动,换趋势的对象(相对成交额 = 去掉全市场成交额趋势;开盘 / 收盘一格成交额;开盘一格成交额占比;日内成交额集中度 gini / 重心;振幅;|隔夜缺口|;Amihud 型 |日内收益| / 成交额)和换读法(相关 = 去掉 1/std、t 值 = 乘 sqrt(n)、反向回归 y=Amt 对 t 的斜率并用滚动均值归一 = 成交额的日增长率、先 EMA 平滑、窗口 90 / 180)。"
+ "与已见过的不同:库与快照里含 C 的候选只有 head 的 regbeta(delay(sum(Amt)), abs(C)) 这一个外壳(Pr2b 的 5 个候选只是在 C 里叠幂函数 / abs),这里的外围换成 corr / reg_tvalue / 反向 regbeta / cs_mean 相对化 / cross_ema / gini / centroid / 比值,骨架都不同。"
+ "为什么样本外还会在:成交额趋势上升 = 持续增长的关注度与参与度(注意力 / 机构建仓被切碎成几个月的慢流入,Gervais-Kaniel-Mingelgrin 2001 高成交额溢价的慢变版本),这是持有者结构的变化,不依赖某段行情;去掉全市场成交额趋势后读的是相对关注度。"
+ "风险:成交额趋势与市值 / 流动性水平相关(新尺子已去掉对流动性、市值的线性 / U / S 形暴露);对 C 的斜率在 2024 年初成交额骤降的行情里可能异号(窗口 240 的 valid 掉到 -0.26 就是这类现象)。"
+ "数学检查:无前视(cross_delay 天数为正;cross_age 只用到当日及以前的有限性;滚动回归窗口含当日不含未来);cross_regbeta 的分母 var(x) 在成交额不变(停牌补值)的窗口里趋近 0,但流水线对缺失 / 常数窗口返回缺失,不是爆点;反向回归的自变量 C 在老股上是 10000+t,方差固定,无除零;Amihud 种子的分母加了 1000 元,防止停牌日成交额 0 造成除零。")
+hN=("机制。上一轮本流里真正起作用的是「对市场回归掉之后的特质价格离散度份额」(French-Roll 型的特质 / 总方差,核心卡 5 一族),P 组的 +0.50 就是它长出来的;这一轮 N 位把同一个想法搬到成交额一侧:"
+ "A = day_sum(Amt) 每天的成交额;cs_mean(A) 是当日全市场等权成交额(市场成交额的日度序列);cross_regres(cs_mean(A), A, 120) 是这只票今天的成交额在 120 日滚动里对市场成交额回归后的残差,即「个股自己的成交额冲击」(不是市场放量带来的)。"
+ "于是 cross_stddev(残差,120) / cross_stddev(A,120) 就是成交额的非同步性(1 - R² 的开方版本,无量纲):大 = 这只票的成交由自己的消息 / 关注驱动,而不是跟着大盘放缩量;小 = 成交额只是市场成交额的影子(指数 / 融资盘 / 被动资金主导,Morck-Yeung-Yu 的同步性思路,Chordia-Roll-Subrahmanyam 2000 的 commonality in liquidity)。"
+ "其余 11 个种子读同一个残差的不同侧面:变异系数、对市场成交额的 beta / 相关、与价格特质残差(RI,日内收益对市场的残差)的相关及滞后相关、残差自相关(关注度是延续还是脉冲)、标准化最大冲击、残差的 120 日均值 ÷ stddev(特质异常成交额的持续偏高,高成交额溢价的特质版本)、价格份额与成交额份额之差、开盘竞价占比的非同步性。"
+ "为什么和库里不同:库里与已出 head 的成交额内容都是 day_sum(Amt) 的水平、延迟、argmin / 趋势类;没有一条在成交额上做「对市场回归取特质残差」,骨架 cross_regres(cs_mean(A), A) 在成交额上完全没有。与 5 个控制的区别:读的是成交额对市场的耦合与特质离散度,全是无量纲比值,不是流动性水平(流动性控制是成交额水平)。"
+ "为什么样本外还会在:非同步性是持有者结构与信息环境的慢变属性(指数成分 / 融资融券 / 机构占比几个季度不变),120 日窗口名次稳定,15 bp 成本下换手低;价格一侧的同类写法在本流 train / valid 都为正(+0.50 / +0.66),说明「特质 / 总」这个读法在 A 股这把尺子上有信息,不是价格口径的偶然。"
+ "风险:成交额非同步性可能是市值 / 指数成分的代理(新尺子已去掉对市值的线性 / U / S 形暴露,剩下多少未知);cross_stddev(A,120) 在极少数成交额几乎常数的老停牌股上近 0,但这类股的窗口内有效观测不足,会被置为缺失。"
+ "数学检查:无前视(cs_mean 只用当日截面,回归窗口含当日不含未来);分母为 120 日 stddev 或 120 日均值,成交额为正且非常数,无爆点;cross_regres 对只含单一自变量的滚动 OLS 取今天的残差,定义良好。")
+d={'seed':2031,'round':3,'slots':[
+ {'type':'E','core':C,'hypothesis':hE,'seeds':E},
+ {'type':'N','hypothesis':hN,'inspired_by':'本轮第 3 批 B093 与本流 head:第 2 轮 N 位在开盘竞价占比(Amt)上长出的 head cross_regbeta(delay(day_sum(Amt)), 时间指数, 120) 说明成交额的慢变结构有信息;第 1 轮 N 位说明「对市场回归后的特质 / 总」读法有信息 —— 两者合并到成交额一侧',
+  'seeds':N}],
+ 'R':[{'head':H,'why':'head 的 abs_ 与幂函数拆解后分数不变(+0.54),是无用的包装;窗口 60 / 240 在 valid 掉到 -0.27 / -0.26(train 仍 +0.33 / +0.70),说明对窗口敏感、train / valid 不一致;换成相关 / t 值 / 相对成交额 / 中间窗口 90–180 去掉 1/var(Amt) 的水平标准化、试出稳的版本。','variants':R}]}
+# head in R must be loc.md original
+d['R'][0]['head']="cross_regbeta(cross_delay(day_sum(Amt), 1), abs_(day_max(cross_age(pow_05(pow_2_5(High))))), 120)"
+yaml.safe_dump(d,open('../missions.yaml','w'),allow_unicode=True,width=200,sort_keys=False)

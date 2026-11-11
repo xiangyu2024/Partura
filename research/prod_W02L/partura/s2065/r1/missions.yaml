@@ -1,0 +1,40 @@
+R: []
+round: 1
+seed: 2065
+slots:
+- hypothesis: '机制:成交量的"突发集中度"与价格对突发的反应。本批三个 head 都是对分钟滚动最大值(Amt / Volume / Vwap 的 60 分钟窗口)再取日内离散度(day_q_stat_std / day_var),全部亏(-1.5 到 -2.4),窗口改动几乎不动分数,说明"滚动峰值的日内离散"本身是被换手/规模吃掉的量,没有毛超额。这一位换分解:不取峰值的离散,而是取"当天最大一分钟成交量占全天的份额"(day_max(Volume) / day_sum(Volume),即突发集中度)与"峰值相对均值的倍数"(day_max(Amt) / day_mean(Amt)),在日轴取 20-60 日均值成为个股的慢变属性;再配对价格:day_corr(Volume, Ret) 读放量分钟价格往哪走(知情买盘 vs 抛压),day_corr(Amt, Ret) 同理;最后把集中度与 20 日累计收益符号相乘,区分"涨时突发放量(追涨)"与"跌时突发放量(恐慌)"。算子:day_max、day_sum、day_mean、day_corr、cross_mean、cross_zscore,都是现成算子;骨架里没有 in_max_rolling,也没有 day_q_stat_std,与三个 head 的骨架不同(那些是滚动峰值再取分位统计的标准差),这里是日内全局最大值的比值与量价相关。
+
+    为什么样本外还会在:放量突发集中于少数分钟反映机构大单/事件冲击,A 股散户占比高,事件性放量后的方向偏离(Chordia-Subrahmanyam 订单失衡、高成交量溢价)是行为与信息扩散,不是某段行情;20-60 日均值降低换手。风险:集中度与流动性/波动控制相关,新尺子会去掉线性/U 形暴露,剩下的看运气。
+
+    数学检查:day_sum(Volume) 在停牌日为 0 或缺失,比值给 NaN 或被屏蔽;分母是全天总量或均值,不除以近零的量;无前视,只用 t 日及以前的数据;窗口 ≤ 60 日,热身期不主导。'
+  inspired_by: 本批三个 head(in_max_rolling 后取日内离散):全亏、窗口不敏感,说明滚动峰值离散只是规模/换手的代理;换成日内最大值集中度与放量分钟的价格方向。
+  seeds:
+  - cross_mean(div(day_max(Volume), day_sum(Volume)), 20)
+  - cross_mean(div(day_max(Amt), day_mean(Amt)), 40)
+  - cross_mean(day_corr(Volume, Ret), 40)
+  - cross_mean(day_corr(Amt, Ret), 60)
+  - cross_zscore(cross_mean(div(day_max(Volume), day_sum(Volume)), 10), 120)
+  - cross_mean(mul(div(day_max(Volume), day_sum(Volume)), sign(cross_mean(day_sum(Ret), 20))), 40)
+  - cross_mean(sub(div(day_max(Amt), day_mean(Amt)), div(day_median(Amt), day_mean(Amt))), 30)
+  - cross_mean(day_corr(in_max_rolling(Volume, 5), Ret), 40)
+  - cross_mean(div(day_max(Volume), day_median(Volume)), 60)
+  - cross_mean(day_corr(Volume, abs_(Ret)), 40)
+  type: N
+- hypothesis: '机制:收盘价相对全天成交均价/高低区间的位置(日内尾盘买卖压力)与日内价格路径的趋势性。本批三个 head 里 Vwap 滚动峰值的方差(最差,-2.35,方向 -1)说明 Vwap 的水平信息被价格水平/规模吃掉。这一位只取无量纲的相对位置:day_last(Close) 相对 day_mean(Vwap) 的偏离(收在均价上方 = 尾盘被买),其标准化版本 (Close - Vwap 均值)/day_std(Close),收盘在当日高低区间中的位置 (Close - Low)/(High - Low),在日轴取 10-40 日均值;另加价格对时间的相关 day_corr(Close, in_index(Close)),衡量日内趋势性。都是现成算子的组合,与三个 head 的"滚动峰值 + 离散"骨架不同。
+
+    为什么样本外还会在:收盘位置反映尾盘知情/机构交易与日内趋势的持续,A 股 T+1 下收在高位的股票次日有跟随(日内动量)也可能被追涨后反转,方向由 GP 搜索;这是微观结构 + 行为偏好,不依赖某段行情。风险:与 20 日反转控制相关,尺子会去掉线性与非线性暴露。
+
+    数学检查:分母是全天高低差或价格标准差,日内不动(一字板)时为 0,算子给缺失而不是爆点;无前视(day_last(Close) 是 t 日收盘,t+1 才交易);窗口 ≤ 40 日。'
+  inspired_by: 本批 head day_var(in_max_rolling(Vwap,60)):Vwap 水平类量全亏;换成收盘相对均价/高低的无量纲位置与日内价格-时间相关。
+  seeds:
+  - cross_mean(div(day_last(Close), day_mean(Vwap)), 20)
+  - cross_mean(div(sub(day_last(Close), day_mean(Vwap)), day_std(Close)), 20)
+  - cross_mean(div(sub(day_max(High), day_last(Close)), sub(day_max(High), day_min(Low))), 20)
+  - cross_mean(day_corr(Close, in_index(Close)), 20)
+  - cross_mean(day_corr(Vwap, in_index(Vwap)), 40)
+  - cross_zscore(cross_mean(div(day_last(Close), day_mean(Vwap)), 10), 60)
+  - cross_mean(sub(div(day_last(Close), day_mean(Vwap)), div(day_mean(Vwap), day_first(Open))), 30)
+  - cross_mean(div(sub(day_last(Close), day_min(Low)), sub(day_max(High), day_min(Low))), 40)
+  - cross_mean(day_corr(Close, Volume), 40)
+  - cross_mean(div(day_mean(Vwap), day_mean(Close)), 40)
+  type: N
