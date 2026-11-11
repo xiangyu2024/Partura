@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [2, 8, 10, 12]
+    reasons: '核心 C = day_mean(in_sustain_stddev(is_gt(Volume, 日内均值+日内标准差), Ret, 5, 1, 1)) 是快照里三个 M3 head 的子树(ts_stddev(C,20) -2.38、ts_mean(div(C,·),20) -2.52、ts_stddev(div(C,·),20) -2.28),不是控制;核心与 head 的最大原始 |ρ| 为 0.53,与各控制最大 0.61(vol),过 E 位门槛。创新度给 3 而非 4:核心本身没有以 0.7 以上重复任何 head,但 seed 1、7、13 与 ts_stddev(C,20) 的 |ρ| 为 0.63 / 0.68 / 0.64、与 vol 为 0.77 / 0.75 / 0.79,是同一核心的平滑或分桶换皮,只是落在 0.7 与 0.8 线以下才放行;seed 3、4、5、6、9、11、14 与所有 head 的 |ρ| 都在 0.45 以下,外围(cross_zscore、短减长、变异系数、cross_corr、cs_bucket、cross_tail_mean)确实是新的,但仍是同一个 C 的外层改写。划掉:seed 2(与 ts_stddev 头 |ρ| 0.711,与 vol 0.841,自动划);seed 8(与 ts_mean 头 |ρ| 0.723,自动划);seed 10(与 ts_stddev 头 |ρ| 0.793,与 vol 0.904,自动划);seed 12(相关度表 gate 失败,distinct 0.082,cs_rank(C_vol) 与 cs_rank(C_amt) 之差在截面上大量并列,面板近常数,属 §4 的数值伪影)。数学检查:无 cross_shift / ts_shift / in_local_mean / ts_spearman / nt_*;cross_zscore 有近常数窗口保护(ops_ext.py 208 行起);seed 5、14 的分母 cross_mean(C,60) 中 C 非负且活跃股票很少为 0,不近零;C 的触发条件用 in_mean_full / in_stddev_full,是当日收盘后可得的统计量,按 §4 不算前视,只有盘中使用信号时才成问题。如果它有 alpha,最可能来自放量冲击之后价格不稳定性的慢变成分(知情交易、做市商库存或拆单的持续性),而不是某一天的水平;seed 3、14 读的是「今天相对自己 60 日」的异常。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '不触发任何自动划掉:b 种子与所有 head 的最大原始 |ρ| 为 0.48 以下(seed 15 为 0.477,seed 14 为 0.47),与所有控制的 |ρ| 都低于 0.5(最大为 seed 14 的 liq 0.49)。新算子(day_es_ratio_hi / lo、day_at_max_ratio、day_distinct_ratio、day_flat_run_max、day_zero_ratio)不在库的旧算子集中,读的对象(价格分布的尾部与离散度、涨跌停锁定)与库里 head 读的成交节律和触发事件不同。数学检查:day_es_ratio_* 在分位数绝对值不超过 1e-8 时返回 NaN(ops_ext.py 665 行起),没有 1e4 量级的爆点;尾部均值比分位数更极端,所以 hi 在 q95 大于 0 时不小于 1、lo 在 q5 小于 0 时不小于 1,seed 11 的 hi/lo 与 seed 12 的 cross_mean(hi,60) 分母都不近零;day_at_max_ratio、day_distinct_ratio、day_zero_ratio 与 day_flat_run_max 都在 [0,1]。无前视(只用当日 Ret、High、Close、Amt 与过去窗口的 cross_ema 等),无禁用算子。需要留意而不挡:b5 是 b1 的 cs_bucket 分桶版,是同一信号;seed 14 的零收益比例是经典的 Lesmond 型流动性度量,liq 0.49 离 0.5 很近,若有 alpha 很可能只是流动性的另一种写法。如果它有 alpha,最可能来自:日内右尾厚度与价格路径离散度作为彩票型偏好和散户参与的慢变代理(MAX 效应的日内版,Bali-Cakici-Whitelaw 一类),或涨跌停锁定与最小变动价位造成的价格水平效应。'
+R:
+  - head: 'div(cross_mean(day_last(Volume), 40), cross_mean(day_sum(Volume), 40))'
+    soundness: 4
+    reasons: '数学上 40 日 cross_mean 分母只在整窗都为 0 或 NaN 时才有问题,无前视;机制是收盘最后一分钟的成交份额(尾盘集中成交、指数收盘交易)。合理度给 4。注意 variant 1 的分母是当日原始的 day_sum(Volume),没有平均:_sum 只在全 NaN 时返回 NaN(AlphaCube common.py 391 行),若存在有限的零成交日,div 直接得到 inf;PI 说「由 cross_mean 的有效窗口缓解」只对平均后的变体成立,对 variant 1 不成立。variant 2、3、4 的分母都是 cross_ema 或 cross_mean,不受影响。进入评估前先核对数据里是否有有限的零成交日;若有,variant 1 应改用均值分母或删去。'
+  - head: 'ts_mean(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240), 5, 1, 1)), add(day_mean(abs_(in_slice(Ret, 11, 240))), create_like(day_mean(abs_(in_slice(Ret, 11, 240))), 1e-06))), 20)'
+    soundness: 3
+    reasons: '机制清楚:盘中放量后 5 分钟收益的离散度,相对当日平均绝对收益做标准化,读的是放量冲击的相对强度;无前视。但 PI 对 1e-06 的解读需要修正:C 不超过约 5 倍的 mean|Ret|(每个触发窗口的标准差不超过窗口内 |Ret| 之和,每分钟至多计入 5 个窗口),所以 C / mean|Ret| 有界,不会爆点。1e-06 只在 mean|Ret| 精确为 0 的整日不动日(一字板或全天零收益)起作用:原式得 0,去掉 1e-06 后得 0/0 即 NaN,ts_mean 跳过。也就是说 PI 所说的 +0.52 knockout 增益,实际上来自这类整日不动日被当成 0 还是缺失,而不是分母平滑本身。这属于填充约定的影响,但目前无法证明它「主要」决定分数,所以不判为定义坏掉,合理度给 3。替换前应先量化 mean|Ret|=0 的日子占比,并明确一字板日怎么处理。variant 1 与 2 以 mean|Ret| 为分母,有同样的 0/0 问题;variant 3 与 4 以 day_std(Ret) 为分母,整日不动时同样是 0/0。'
+summary: '槽 a(E,核心 C)创新 3、合理 4,划掉 seed 2、8、10、12,剩 10 个种子,通过;槽 b(N)创新 4、合理 4,无划掉,通过;R1 合理 4(variant 1 的 day_sum 分母需先查零成交日);R2 合理 3(1e-06 的作用只在整日不动日,增益来源需量化后再决定是否替换)。'

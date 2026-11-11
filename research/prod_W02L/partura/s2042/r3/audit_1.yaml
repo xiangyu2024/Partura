@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 4, 5, 6, 7, 11]
+    reasons: '相关度表:核心 mul(day_sum(Ret), add(day_kurt(Vwap), add(day_kurt(Vwap), 4))) 与 head 的原始 |ρ| 为 0.023、残差 0.066,与控制最大为 rev 0.16,过 E 位门槛。按 head 原始 |ρ| ≥ 0.7 自动划掉 1(0.886)、2(0.814)、4(0.702)、5(0.966)、6(0.860)、7(0.962)、11(0.768);剩 3(0.142)、8(0.085)、9(0.288)、10(0.582)、12(0.698),共 5 个,≥4 过。与控制的 |ρ| 都在 0.3 以下(seed 6 的 vol 0.285 最高),没有触发控制规则。核心的权重 2*kurt+4 在 kurt >= -2 下非负,所有种子都原样含核心。核心此前只以 Low 版在 r2 做过 E 位,Vwap 版是第一次,未超过每核心 2 个 E 位。逐个核对:cross_mean、cross_ema、cross_delay 都是尾随窗口,cross_delay 取的是过去的值,无前视;seed 3(482 日均值减 120 日均值)、seed 9(241 日均值减 120 日前的 241 日均值)只有相减,没有除法。seed 8 的 ts_rank 用 nanrank_last,当天值 NaN 时返回 0 而不是缺失:只在核心连续 60 个交易日全 NaN(长停牌或长期一字板)时触发,影响面很小,不是主导;覆盖率 1.0 略高于核心的 0.999 与此吻合但不能证明,放行,请 PI 确认停牌掩码覆盖输出。seed 10 的 cs_winsor 加已知族分桶,与 head 的 |ρ| 为 0.58,未到 0.7 不划,但它是 head 的换写(同核心、同 241 窗口,只换 winsor 与分桶变量),记下。seed 12 与 head 的 |ρ| 为 0.698,贴着门槛,是「均值减去截面排名均值」的残差写法;保留,若结果显示与 head 同源应视为重复。创新度 3:核心与 head 相同,5 个种子改的是时间结构(长短窗口相减、慢动量加速、60 日均值的 241 日时间分位、水平减排名、winsor 与分桶),与 head 的 |ρ| 在 0.09 至 0.70 之间,是新的结构,但仍是同一个核心的同一种慢平均,达不到 4。合理度 4:机制清楚(峰度加权的日收益在尖峰 / 冲击日被放大,慢平均读的是这些日子的漂移,而不是普通 12 个月动量);唯一要记的风险是峰度权重可以大到上百,单个尖峰日可能主导 241 日均值。这不是除以近零量,不是数学问题,放行,结果出来后看是否由少数日子决定。如果它有 alpha,最可能来自冲击日涨跌的中期慢漂移(与 head 同源);seed 8 可能来自个股相对自身历史的时间位置,seed 9 可能来自慢动量的加速。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9, 10]
+    reasons: '相关度表:保留的 1 至 8、11、12 与 head 的原始 |ρ| 为 0.29 至 0.61(seed 8 的 signed_ratio 最低 0.293,seed 4 的 at_max_ratio 最高 0.607),都未到 0.7,不自动划掉;与 5 个控制的最大 |ρ| 为 0.39(seed 1 的 vol 0.374 与 known 0.366;seed 8 的 size 0.283 最高),无一到 0.8。自动划掉 9(wmean 与 kurt 权重,|ρ| 0.791)与 10(topw_mean 与 kurt 权重,|ρ| 0.881),它们是 head 的换皮。剩 10 个,≥4 过。与 r2 审计划掉的 is_gt 问题对照:本组没有 is_gt 或任何比较算子,已核对:day_sum 在无有限分钟时为 NaN;day_gini、day_centroid、day_flat_ratio、day_at_max_ratio、day_distinct_ratio 都在有效分钟不足时返回 NaN;day_signed_ratio 的分母为 0 时返回 NaN;因此停牌日进不了 cross_mean 的分母。数学检查:day_gini 与 day_distinct_ratio 在 [0,1],加 1 后权重在 [1,2];seed 2 的 day_centroid 减 0.5 是 ±0.5 内的有符号权重,没有除法;day_signed_ratio 在 [-1,1],分母有 clamp;seed 3 的 day_es_ratio_lo 分母守护是 |v| > 1e-8,分位数落在很小但非零的值时比值会偏大,对分钟收益的 5% 分位通常是 1e-3 量级,不是主导,放行;seed 6 的 cs_rank(day_skew(Ret)) 是截面百分位。合理度 4:机制是信息事件日的收益反应不足后的慢扩散(Chan 2003 那一类),权重度量的是事件集中度(成交集中、时间重心、尾部深度、涨停锁定、无成交分钟)而不是峰度,逻辑清楚,且 N 位要求的是不同的信息源。注意两点但不是数学问题:seed 11 的 distinct_ratio(Close) 度量的主要是价位粒度与一字少变,机制对不上事件,是价位的代理;seed 1 与 12 的 gini(Amt) 与流动性控制 known 为 0.37,残差里可能只剩流动性形状。放行。如果它有 alpha,最可能来自成交集中度、尾部深度或涨停锁定所标出的事件日的慢漂移(seed 1 至 8、12),其次是价位粒度 / 流动性(seed 11)。'
+R:
+  - head: 'cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Vwap), add(day_kurt(Vwap), 4))), 241), sub(LogFloatCap, LogFloatShares))'
+    soundness: 4
+    reasons: '数学上干净:加权项只有 kurt 的加法与常数相乘,没有除法;add(day_kurt(Vwap), add(day_kurt(Vwap), 4)) 在 kurt >= -2 下非负;变体 9(2k+8)更非负。变体 10 的 kV+kH+kL+4 只保证 >= -2,三个字段都接近 -2 时权重为负,该日收益符号翻转,与「权重是尖峰强度」的解释不符,但没有除法也没有 NaN 路径,不是数学问题,放行,记下。变体 6 把 day_sum 换成 day_wmean 只改尺度与权重方式,方向不变;变体 8 的 cross_ema(·,200) 与变体 7 的 cs_winsor 都是尾随且 NaN 安全。窗口 300 与 360 与字段 High、Close、混合、cs_rank(kurt) 只改部件的形式,机制不变。与 head 的原始 |ρ| 为 0.59 至 0.98,多数与 head 同源,这属于替换规则的判断,不是合理度问题。合理度 4:机制一致(尖峰日收益的慢平均),变体测的是字段、窗口、聚合与权重形式。如果它有 alpha,最可能与 head 同源,来自尖峰日涨跌的中期漂移。'
+  - head: 'cs_bucket_zscore(ts_std(day_kurt(High), 240), LogFloatCap)'
+    soundness: 3
+    reasons: '数学上干净:ts_std 用 NaN 安全的 nanstd_last,cs_bucket_zscore 带 EPS 与每桶至少两点的守护;变体只换字段(Vwap、两字段之和、Close)、窗口(200、300)与分桶变量,没有除法。机制说得通性弱:日内路径峰度的 240 日标准差读的是个股尖刺日出现的频率与强度的不稳定性,但 kurt 单日可以大到上百,标准差容易被一两个极端日主导,量到的可能只是尖刺次数,而不是路径形状的稳定性;没有给出为什么这一量与收益相关的理由。这不是数学问题(没有除以近零量),放行。变体 1 与 head 的 |ρ| 为 0.89,变体 6 为 0.94,多数与 head 同源。如果它有 alpha,最可能来自尖刺次数(冲击日出现的频率)的截面差异,而不是路径形状的水平。'
+summary: 'slot a(E,核心为 head 的子树,Vwap 版,首次做 E)自动划掉 1,2,4,5,6,7,11,余 5 个种子,创新 3、合理 4 通过;slot b(N)划掉 9、10,余 10 个种子,创新 4、合理 4 通过,与 r2 的 is_gt 问题无关;R 组 1 合理 4,R 组 2 合理 3,均放行。'

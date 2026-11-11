@@ -1,0 +1,142 @@
+seed: 2024
+round: 3
+slots:
+- type: E
+  core: day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1))
+  hypothesis: 批里的现象(M3 批,8 个成员里 3 个 head,score -2.28 ~ -2.52,方向 +1):三个 head 共用的核心
+    C = day_mean(in_sustain_stddev(is_gt(Volume, 日内均值+日内标准差), Ret, 5, 1, 1)):把当天成交量超过「均值
+    + 1 个标准差」的分钟当作放量触发点,在每个触发点之后取随后 5 分钟收益的标准差(start_offset=1,即不含触发分钟自身,只用当天已发生的数据),再对全天分钟求均值(非触发分钟填
+    0,所以 C = 放量触发次数 × 放量后收益离散度 / 分钟数)。它读的是「放量之后价格是否剧烈、不稳定地继续运动」,即放量事件的密度与其后的价格冲击(知情交易
+    / 流动性被消耗的信号;Llorente 等 2002、Gervais 等 2001 一类)。拆解:C 单独 -4.14,但外面套 ts_stddev(20)
+    后是 -2.38、窗口 40 是 -2.62、ts_mean(20) 的比值版 -2.52,说明 alpha 若在,来自 C 的慢变成分,且大部分失分是换手;去掉分母平滑项还好
+    0.5。本位的外围与批里全部不同:批里只有 ts_stddev / ts_mean 套住并除以 day_mean(abs_(Ret)),本位改成 (1) cross_ema
+    / cross_decay_linear 长半衰期读水平;(2) cross_zscore、短减长、除以自身 60 日均值读「放量冲击相对自己常态」;(3)
+    除以 day_std(Ret) 或与 day_std(Ret) 做 60 日 cross_corr,读冲击是否超出该股的常规波动;(4) 对市场平均做 cross_corr(共同的放量冲击
+    vs 个股特有);(5) cs_bucket_zscore 在市值 / 流通股本 / 上市年限内标准化,去掉与规模的任意形状关系(新尺子只去线性 / 平方
+    / 立方的排名暴露);(6) 成交额触发版与成交量触发版做截面排名之差,提取价格水平变动带来的那一部分。和库里已有的不同:库的 5583 条骨架里 C 只出现在
+    ts_stddev / ts_mean 外围的这几个变体里,没有 cross_ema / cross_zscore / cross_corr / cs_bucket_zscore
+    / cross_tail_mean 的外围(这些多是 ops_ext 后加的算子),也没有拿它和 day_std(Ret) 做相关或比值;预计与三个 head
+    的日度秩相关 0.3-0.65,低于 0.7 的禁令线。为什么样本外还会在:放量后的冲击是微观结构属性(知情交易占比、做市商库存、算法拆单),不依赖某段行情;40
+    日半衰期使名次几周内几乎不动,15 bp 成本不会吃光;valid 段 head 的表现(-1.26 ~ -2.38)和 train 同量级,不像过拟合。可证伪:若水平类
+    / 标准化类种子都不如 ts_stddev(C, 20) 的 -2.38,说明有用的是「冲击的变动」而不是水平。数学检查:无前视(触发后窗口只用 t 日当天的分钟,日度统计量只用
+    t 日及以前);in_sustain_stddev 的 num=1 把无触发分钟填 0,所以 C 在没有放量分钟的日子是 0 而非缺失;含除法的种子的分母(cross_mean(C,
+    60)、cross_ema(day_std(Ret),30)、day_std(Ret))在正常交易日远离 0;停牌日整日缺失,不会产生爆点;cross_zscore
+    自带近常数窗口保护,cross_corr 在窗口内常数时得 0;无 ts_spearman / nt_*,无 cross_shift / ts_shift
+    / in_local_mean。
+  seeds:
+  - cross_ema(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), 40)
+  - cross_zscore(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), 60)
+  - sub(cross_mean(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), 10), cross_mean(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11,
+    240), add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume,
+    11, 240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 60))
+  - div(cross_stddev(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), 60), cross_mean(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11,
+    240), add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume,
+    11, 240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 60))
+  - cross_corr(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), cs_mean(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240),
+    add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume, 11,
+    240)))), in_slice(Ret, 11, 240), 5, 1, 1))), 60)
+  - cs_bucket_zscore(cross_tail_mean_q75(day_mean(in_sustain_stddev(is_gt(in_slice(Volume,
+    11, 240), add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume,
+    11, 240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 60), ListAge)
+  - cross_corr(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), day_std(in_slice(Ret, 11, 240)), 60)
+  - cross_ema(cross_zscore(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240),
+    add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume, 11,
+    240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 60), 20)
+  - cs_bucket_zscore(cross_ema(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11,
+    240), add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume,
+    11, 240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 30), LogFloatShares)
+  - div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), cross_mean(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240),
+    add(in_mean_full(in_slice(Volume, 11, 240)), in_stddev_full(in_slice(Volume, 11,
+    240)))), in_slice(Ret, 11, 240), 5, 1, 1)), 60))
+- type: N
+  hypothesis: 机制:分钟收益分布的右尾 / 左尾形状是「彩票型偏好与散户参与度」的慢变股票属性(Bali-Cakici-Whitelaw 2011 的
+    MAX 效应;Barberis-Huang 2008 的累积前景理论:投资者为右偏的彩票型股票多付价格,于是其后续收益偏低)。我们有分钟数据,可以在一个节点里读出当天最极端那
+    5% 分钟的「超额程度」:day_es_ratio_hi(Ret) = 高于当日 95% 分位的分钟收益的均值 / 该分位(尺度已去掉,所以不是波动,也不是
+    skew 或 kurtosis 的矩估计,对单根异常分钟不敏感),day_es_ratio_lo 是左尾对应量;二者之差 = 日内右尾相对左尾更重,比值 =
+    相对尾部厚度。再用 cross_ema 做 30-40 日慢变平滑,得到「持续出现极端上冲分钟」的股票属性。第二组读法是价格路径的「卡住 / 离散」程度:day_at_max_ratio(High)
+    与 day_at_min_ratio(Low)(价格被钉在当日高点 / 低点的时间占比,涨停附近或尾盘拉抬时升高)、day_distinct_ratio(Close)(一天访问了多少个不同价位,低价股
+    / 一分钱最小变动价位粗糙,是价格水平与散户参与度的代理)、day_flat_run_max(Close)(最长不动连续段)、day_zero_ratio(Ret)(不动分钟的质量点)。分桶标准化(市值
+    / 上市年限)去掉这些量与规模、新股的任意形状关系。启发来源:M2 批的现象是把分钟序列的「形状」统计量(Ljung-Box Q 的标准差)变慢以后分数从
+    -2.95(7 日)升到 -1.41(30 日),M3 批是放量触发的冲击;这两批读的都是成交量与收益的自相关 / 持续性,而价格分布本身的尾部形状与卡住程度一条都没有被读过(本流前两轮的位
+    b 读的是放量时的收益与成交时点)。为什么库里没有:day_es_ratio_hi / lo、day_at_max_ratio、day_at_min_ratio、day_distinct_ratio、day_flat_run_max、day_zero_ratio、cross_ema
+    都是 ops_ext 后加的算子,库的 5583 条旧算子集里没有;与本流已出的 head(day_q_stat_std 节律、Q75 共动度、放量冲击、尾盘成交占比)读的是不同的对象(自相关
+    / 触发事件 / 成交占比 vs 价格分布的尾部与离散度)。为什么样本外还会在:彩票型偏好与散户参与度是持续的行为属性,在 A 股由散户主导的结构里不依赖某段行情;30-60
+    日平滑使名次慢变,成本不致吃光。可证伪:若尾部形状一族(种子 1-6、11-13)都很差而卡住 / 离散一族(7-10、14)好,说明有用的是路径粗糙度而不是尾部。数学检查:无前视(只用
+    t 日分钟数据与 t 日及以前的日值);day_es_ratio_hi / lo 在分位数接近 0 或没有分钟超过分位数时返回 NaN(算子文档:不是 1e4
+    爆点);day_es_ratio_hi 与 day_es_ratio_lo 的比值种子的分母只在 lo 有限时有定义且 |lo| >= 1,不近零;day_zero_ratio、day_flat_run_max
+    在一字板日接近 1,是有定义的占比不是爆点;cross_ema 在缺失日保留上一值的行为由算子文档处理;无 ts_spearman / nt_*,无 cross_shift
+    / ts_shift / in_local_mean。
+  inspired_by: M2 批的现象:分钟序列的形状统计量(day_q_stat_std)在窗口变慢后分数单调变好(7/15/30 日 = -2.95/-1.78/-1.41);M3
+    批的放量冲击与 M1 批的尾盘占比读的都是成交 / 收益的持续性,价格分布的尾部与离散度没有被读过。
+  seeds:
+  - sub(cross_ema(day_es_ratio_hi(in_slice(Ret, 11, 230)), 30), cross_ema(day_es_ratio_lo(in_slice(Ret,
+    11, 230)), 30))
+  - cross_ema(day_es_ratio_hi(in_slice(Ret, 11, 230)), 40)
+  - cross_ema(day_es_ratio_lo(in_slice(Ret, 11, 230)), 40)
+  - cs_bucket_zscore(cross_ema(day_es_ratio_hi(in_slice(Ret, 11, 230)), 30), LogFloatCap)
+  - cs_bucket_zscore(sub(cross_ema(day_es_ratio_hi(in_slice(Ret, 11, 230)), 30), cross_ema(day_es_ratio_lo(in_slice(Ret,
+    11, 230)), 30)), ListAge)
+  - cross_zscore(day_es_ratio_hi(in_slice(Ret, 11, 230)), 60)
+  - cross_ema(day_at_max_ratio(High), 30)
+  - cross_ema(sub(day_at_max_ratio(High), day_at_min_ratio(Low)), 30)
+  - cs_bucket_zscore(cross_ema(day_distinct_ratio(Close), 30), LogFloatCap)
+  - cross_ema(day_flat_run_max(Close), 30)
+  - cross_ema(div(day_es_ratio_hi(in_slice(Ret, 11, 230)), day_es_ratio_lo(in_slice(Ret,
+    11, 230))), 40)
+  - div(cross_stddev(day_es_ratio_hi(in_slice(Ret, 11, 230)), 60), cross_mean(day_es_ratio_hi(in_slice(Ret,
+    11, 230)), 60))
+  - sub(cross_ema(day_es_ratio_hi(in_slice(Ret, 11, 230)), 10), cross_ema(day_es_ratio_hi(in_slice(Ret,
+    11, 230)), 60))
+  - cross_ema(day_zero_ratio(Ret), 40)
+  - cs_bucket_zscore(cross_ema(day_es_ratio_hi(in_slice(Amt, 11, 230)), 30), LogFloatCap)
+R:
+- head: div(cross_mean(day_last(Volume), 40), cross_mean(day_sum(Volume), 40))
+  why: 拆解:去掉分母的 40 日均值(knockout)增益 +1.54(-1.89),放大分子窗口到 80 增益 +0.64;说明分母平滑没有用、分子越慢越好,烂部件是单点
+    day_last(Volume)(最后一分钟的偶然性)与分母的重复平滑。变体把分子换成尾盘 20 分钟成交量份额、统一拉长窗口并加 EMA 或分桶。分母为日成交量的均值,停牌日为
+    0 时 div 给缺失或爆点由 cross_mean 的有效窗口缓解,窗口 >= 40,不近零。
+  variants:
+  - div(cross_mean(day_last(Volume), 80), day_sum(Volume))
+  - div(cross_ema(day_last(Volume), 80), cross_ema(day_sum(Volume), 80))
+  - div(cross_ema(day_sum(in_slice(Volume, 221, 240)), 60), cross_ema(day_sum(Volume),
+    60))
+  - cs_bucket_zscore(div(cross_mean(day_last(Volume), 80), cross_mean(day_sum(Volume),
+    80)), LogFloatCap)
+- head: ts_mean(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), add(day_mean(abs_(in_slice(Ret, 11, 240))), create_like(day_mean(abs_(in_slice(Ret,
+    11, 240))), 1e-06))), 20)
+  why: 拆解:去掉分母的 1e-06 平滑项(knockout)增益 +0.52,窗口 20->10 增益 +0.18;分母 day_mean(abs_(Ret))
+    对停牌或一字板日为 0,加 1e-06 会造成爆点,但去掉后同样除以 0 得 NaN;变体改用 day_std(Ret) 做分母(日内波动,正常日远离 0)、窗口缩到
+    10 或换 EMA。
+  variants:
+  - ts_mean(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), day_mean(abs_(in_slice(Ret, 11, 240)))), 10)
+  - cross_ema(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), day_mean(abs_(in_slice(Ret, 11, 240)))), 10)
+  - ts_mean(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), day_std(in_slice(Ret, 11, 240))), 10)
+  - cross_ema(div(day_mean(in_sustain_stddev(is_gt(in_slice(Volume, 11, 240), add(in_mean_full(in_slice(Volume,
+    11, 240)), in_stddev_full(in_slice(Volume, 11, 240)))), in_slice(Ret, 11, 240),
+    5, 1, 1)), day_std(in_slice(Ret, 11, 240))), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml
