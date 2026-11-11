@@ -1,0 +1,31 @@
+seed: 2055
+round: 2
+slots:
+  - type: E
+    core: 'day_argmax(Amt)'
+    hypothesis: 'Mechanism: day_argmax(Amt) is the minute of the day at which turnover peaks (0 = open, ~240 = close). Where the heaviest trading happens says who is trading: open-peak days are overnight-news and retail-order flow, close-peak days are institutional rebalancing / index and closing-auction flow. The batch shows this core is enriched (+0.62 vs the batch mean), but only ever inside smoothers of the bare timing. The new part is the outer layer: instead of smoothing the timing alone, we read what the price did AT the peak-turnover minute (day_locate(Ret / Close / Vwap, day_argmax(Amt)), i.e. the price impact of the day biggest trade burst, relative to the close or to the day range), the gap between the volume peak and the price extreme (day_argmax(Amt) minus day_argmax(High / Low): volume leading or lagging price discovery), the stability of the timing habit over days (ts_std / cross_zscore of the timing) and its co-movement with the price-high timing (ts_corr). These are event-study style quantities whose operators (day_locate, day_argmax on a second field, ts_corr of two timing series) never appear around this core in the snapshot, where the periphery was only ts/cross means or sigmoid-wrapped autocorrelation kurtosis. Impact at the peak minute that later reverses or continues is a slow property of the holder base and order-splitting behaviour, so it should persist out of sample; the ruler removes liquidity, volatility, reversal and size loadings of the raw timing. All operators are standard, causal, minute-axis collapses followed by day-axis smoothing; no forward shifts.'
+    seeds:
+      - 'ts_mean(day_locate(Ret, day_argmax(Amt)), 20)'
+      - 'ts_mean(div(day_locate(Vwap, day_argmax(Amt)), day_last(Close)), 20)'
+      - 'ts_mean(sub(day_argmax(Amt), day_argmax(High)), 20)'
+      - 'cross_mean(sub(day_argmax(Amt), day_argmax(Low)), 30)'
+      - 'ts_std(day_argmax(Amt), 20)'
+      - 'cross_zscore(day_argmax(Amt), 20)'
+      - 'ts_mean(div(sub(day_locate(High, day_argmax(Amt)), day_locate(Low, day_argmax(Amt))), sub(day_max(High), day_min(Low))), 20)'
+      - 'ts_corr(day_argmax(Amt), day_argmax(High), 20)'
+      - 'ts_mean(mul(day_argmax(Amt), day_signed_ratio(Ret, Amt)), 20)'
+      - 'cross_ema(sub(day_argmax(Amt), day_argmax(Close)), 10)'
+  - type: N
+    hypothesis: 'Mechanism: money-weighted versus time-weighted minute return. day_wmean(Ret, Amt) is the return that the actual money experienced (each minute weighted by turnover), day_mean(Ret) weights a dead minute like a busy one; their difference, and the net buying pressure day_signed_ratio(Ret, Amt) (share of turnover traded in up-minutes minus in down-minutes), tell whether the heavy trading happened while the price was rising or falling. A stock whose turnover persistently concentrates in up-minutes is being accumulated by participants who pay up; the mark-to-close return hides this because it is path-independent. Related minute-axis summaries: the average return of the heaviest 10 percent of minutes (day_topw_mean(Ret, Amt), an event study without a trigger), and the gap between the centre of mass of turnover and of price movement (day_centroid(Amt) minus day_centroid(Ret): do trades come before or after the price moves). Implementation: all are one-node minute-axis collapses from ops_ext (day_wmean, day_signed_ratio, day_topw_mean, day_centroid) smoothed over days by ts_mean / ts_quantile_q75 / cross_ema; I use them on Ret, Vwap change and a second weight leg (Amt, Volume, change in Amt). Why not in the library: the batch is entirely about higher moments of a minute autocorrelation (price on itself); this is about the joint distribution of turnover and signed price change, the quantities are first-order (signed) rather than tail-shape, and the skeletons contain none of the batch operators. Why out of sample: persistent accumulation / distribution by large holders is a structural property of order flow rather than of a regime, and it is orthogonal in construction to magnitude-only controls (liquidity, volatility); the reversal control is the main overlap and the ruler strips it.'
+    inspired_by: 'structure batch 1 and 2: every head and every candidate is a magnitude / tail-shape statistic of a minute series (kurtosis, variance, std); none carries sign, so the 68 candidates score uniformly negative; this is the signed, turnover-weighted counterpart'
+    seeds:
+      - 'ts_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20)'
+      - 'ts_mean(day_signed_ratio(Ret, Amt), 20)'
+      - 'ts_mean(day_topw_mean(Ret, Amt), 20)'
+      - 'ts_mean(sub(day_centroid(Amt), day_centroid(Ret)), 20)'
+      - 'cross_mean(day_topw_mean(Ret, Volume), 30)'
+      - 'ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 20)'
+      - 'ts_quantile_q75(day_signed_ratio(Ret, Amt), 20)'
+      - 'ts_mean(sub(day_topw_mean(Ret, Amt), day_wmean(Ret, Amt)), 20)'
+      - 'cross_ema(day_signed_ratio(in_pct(Vwap, 1), Volume), 10)'
+      - 'ts_mean(day_signed_ratio(Ret, in_pct(Amt, 1)), 30)'
