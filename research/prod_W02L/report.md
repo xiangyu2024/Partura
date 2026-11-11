@@ -1,6 +1,6 @@
 # W02L 样本内读数(只有 train / valid,2026 未读)
 
-已结束的轮次 128 个。**新 head(尺子 D ≥ 0.5、|ρK| < 0.5;用户 2026-11-10 定)**:85 个(不重复的表达式)。尺子 B 过线的 181 个里，D 没过 99 个、D 待算 0 个;R 的改进(比原素材高 0.1 以上,但不到 head)109 个。下表是尺子 B(搜索用的奖励)。
+已结束的轮次 150 个。**新 head(尺子 D ≥ 0.5、|ρK| < 0.5;用户 2026-11-10 定)**:114 个(不重复的表达式)。尺子 B 过线的 262 个里，D 没过 123 个、D 待算 28 个;R 的改进(比原素材高 0.1 以上,但不到 head)117 个。下表是尺子 B(搜索用的奖励)。
 
 | 流 | 轮 | 批 | 批内原最好 | 任务位 a 最好 | 任务位 b 最好 | R 最好 |
 |---|---|---|---|---|---|---|
@@ -18,6 +18,7 @@
 | 2004 | 3 | B012 | +0.12 (tr +0.24 / va +0.12, ρK -0.14) `ts_std(ts_max(ts_std(day_cov(Ret, Ret), 40), 40), 40)` | -1.09 (tr -0.71 / va -1.09, ρK -0.03) `div(LimitWidth, cross_regalpha(day_quantile(Vwap), day_quantile(High), 15))` | -1.26 (tr -1.26 / va -0.98, ρK -0.27) `cs_first_high20(log(neg(div(day_cov(Ret, Volume), day_mean(Volume)))), day_max(C` | — |
 | 2005 | 1 | B013 | -1.83 (tr -1.83 / va -1.59, ρK -0.79) `cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30)` | -0.84 (tr -0.34 / va -0.84, ρK -0.19) `inv(cross_tail_mean_q25(pow_3(day_cov(Ret, Close)), 241))` | -0.91 (tr -0.91 / va -0.89, ρK -0.16) `cross_corr(div(cs_last_high40(day_distinct_ratio(Vwap), day_close(Amt)), day_sum` | -0.14 (tr -0.14 / va +0.13, ρK -0.61) `cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 60)` |
 | 2005 | 2 | B014 | -1.42 (tr -1.27 / va -1.42, ρK +0.38) `cross_mean(day_cov(Close, Ret), 3)` | +0.08 (tr +0.46 / va +0.08, ρK -0.30) `div(cross_mean(div(day_cov(Amt, Low), mul(day_std(Amt), cross_tail_mean_q25(div(` | — | +0.20 (tr +0.50 / va +0.20, ρK -0.54) `cs_bucket_zscore(cross_max(cross_max(cross_max(day_cov(Volume, Low), 5), 5), 120` |
+| 2005 | 3 | B015 | +0.62 (tr +0.62 / va +0.93, ρK -0.83) `add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt)` | -0.35 (tr -0.32 / va -0.35, ρK -0.05) `div(ts_std(cross_stddev(day_cov(Amt, Amt), 60), 50), ts_mean(cross_stddev(day_co` | — | +0.92 (tr +0.92 / va +1.45, ρK -0.77) `add(ts_quantile_q50(day_cov(Amt, Amt), 1), ts_std(cross_stddev(day_cov(Amt, Amt)` |
 | 2006 | 1 | B016 | -1.17 (tr -1.17 / va -0.75, ρK +0.67) `sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 50)))` | — | — | -0.29 (tr -0.29 / va +0.76, ρK -0.60) `sub(0.5, abs_(ts_regres(day_cov(Amt, Open), day_last(Amt), 150)))` |
 | 2006 | 2 | B017 | -1.63 (tr -1.63 / va -1.63, ρK -0.36) `cross_sum(cross_sum(neg(cross_cov(cross_min(day_cov(Low, Ret), 15), mul(day_auto` | -2.31 (tr -2.31 / va -2.24, ρK -0.47) `day_q_stat_std(Amt)` | -1.58 (tr -1.58 / va -0.66, ρK +0.46) `pow_05(log(mul(mul(mul(day_autocorr_n1(Open), day_at_max_ratio(Vwap)), day_at_ma` | +0.03 (tr +0.03 / va +1.52, ρK -0.01) `sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), da` |
 | 2006 | 3 | B018 | +0.01 (tr +0.01 / va +0.28, ρK -0.52) `ts_std(cross_stddev(ts_std(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_` | +1.09 (tr +1.09 / va +1.15, ρK -0.30) `cs_first_low40(cs_rank(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(` | — | +0.33 (tr +0.33 / va +1.55, ρK -0.00) `sub(0.5, cs_bucket_zscore(cs_bucket_zscore(abs_(ts_regres(day_cov(Amt, Open), da` |
@@ -43,6 +44,7 @@
 | 2013 | 3 | B039 | -0.41 (tr -0.37 / va -0.41, ρK -0.89) `cross_max(ts_std(day_close(Amt), 40), 10)` | +0.75 (tr +0.99 / va +0.75, ρK -0.40) `sub(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1))` | -0.02 (tr -0.02 / va +0.33, ρK -0.45) `cross_corr(cross_delay(day_flat_ratio(Amt), 1), day_sum(Amt), 120)` | +1.18 (tr +1.26 / va +1.18, ρK -0.17) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt),` |
 | 2014 | 1 | B040 | -1.13 (tr -0.93 / va -1.13, ρK -0.09) `ts_std(day_quantile_q25(Ret), 10)` | -1.36 (tr -1.08 / va -1.36, ρK -0.04) `cs_bucket_rank(sub(LogFloatCap, LogFloatShares), day_quantile_q25(High))` | -0.86 (tr -0.17 / va -0.86, ρK -0.26) `cs_last_low40(div(LogFloatCap, day_distinct_ratio(Open)), day_var(Low))` | -0.32 (tr -0.32 / va -0.02, ρK -0.80) `ts_max(log(cross_regbeta(cs_sum(signedpower(day_quantile_q25(Low))), day_last(Am` |
 | 2014 | 2 | B041 | -1.48 (tr -1.48 / va -0.76, ρK +0.02) `ts_med(ts_cov(day_quantile_q25(Ret), day_close(Ret), 50), 40)` | -0.59 (tr -0.59 / va +0.25, ρK -0.17) `cross_ema(cross_delta(sub(log(sub(LogTotalCap, LogFloatCap)), LogFloatCap), 1), ` | -0.01 (tr -0.01 / va +0.12, ρK -0.07) `cross_semistd_pos(day_gini(Low), 241)` | -0.71 (tr -0.71 / va -0.41, ρK -0.04) `cs_bucket_zscore(ts_med(ts_cov(day_quantile_q25(Ret), day_close(Ret), 50), 80), ` |
+| 2014 | 3 | B042 | -1.49 (tr -1.38 / va -1.49, ρK -0.25) `ts_med(ts_reg_tvalue(day_std(pow_3(Open)), day_quantile_q25(Ret), 50), 40)` | -0.15 (tr -0.15 / va +0.07, ρK -0.28) `cs_bucket_zscore(cross_sum(cross_delta(sub(log(day_close(Close)), LogFloatCap), ` | — | — |
 | 2015 | 1 | B043 | -0.30 (tr -0.30 / va +0.62, ρK -0.74) `ts_std(cross_stddev(day_quantile_q25(Amt), 60), 50)` | -0.47 (tr -0.47 / va -0.20, ρK -0.29) `div(cross_stddev(cross_stddev(day_quantile_q25(Amt), 60), 60), add(cross_stddev(` | +0.05 (tr +0.28 / va +0.05, ρK -0.18) `sub(cross_semistd_neg(day_quantile_q25(Amt), 60), cross_semistd_pos(day_quantile` | -0.80 (tr -0.80 / va -0.76, ρK -0.24) `cross_stddev(cross_zscore(day_quantile_q25(Amt), 60), 50)` |
 | 2015 | 2 | B044 | -1.32 (tr -1.17 / va -1.32, ρK +0.60) `add(ts_quantile_q50(cross_max(day_close(Volume), 5), 1), day_quantile_q25(slidin` | +0.59 (tr +0.59 / va +1.21, ρK -0.11) `div(day_zero_ratio(Volume), add(sub(cross_semistd_neg(day_quantile_q25(Amt), 60)` | +0.38 (tr +0.43 / va +0.38, ρK -0.19) `sub(cross_semistd_neg(day_max(Amt), 60), cross_semistd_pos(day_max(Volume), 60))` | -0.37 (tr -0.37 / va +0.52, ρK -0.73) `ts_std(add(cross_stddev(day_quantile_q25(Amt), 60), cross_stddev(day_median(Amt)` |
 | 2015 | 3 | B045 | -1.42 (tr -1.07 / va -1.42, ρK +0.57) `cs_mask_top_replace_mean(day_quantile_q75(add(High, day_close(Volume))))` | +0.85 (tr +1.02 / va +0.85, ρK -0.23) `mul(cross_mean(day_zero_ratio(Volume), 60), cs_bucket_zscore(cross_semistd_pos(d` | -0.94 (tr -0.94 / va -0.91, ρK -0.19) `mul(ts_kurt(cs_last_low05(cross_stddev(day_hurst(Low), 60), day_hurst(Low)), 30)` | +0.83 (tr +1.00 / va +0.83, ρK -0.23) `div(day_zero_ratio(Volume), add(sub(cross_semistd_neg(day_quantile_q25(Amt), 120` |
@@ -65,8 +67,10 @@
 | 2021 | 3 | B063 | — | +0.69 (tr +0.85 / va +0.69, ρK -0.39) `cs_bucket_demean(cross_ema(signedpower(sub(day_at_max_ratio(Close), day_at_min_r` | -0.32 (tr -0.32 / va +0.01, ρK -0.19) `cs_last_low05(cross_ema(sub(day_at_max_ratio(Open), day_at_min_ratio(Open)), 60)` | — |
 | 2022 | 1 | B064 | -2.49 (tr -2.34 / va -2.49, ρK +0.17) `ts_pearson(mul(log(day_argmin(Low)), 0.5), 10)` | -1.06 (tr -1.06 / va -0.69, ρK -0.46) `day_mean(cross_cov(sub(day_pos_ratio(sub(day_argmin(Low), Volume)), Volume), pow` | -0.36 (tr -0.36 / va -0.35, ρK -0.21) `cross_mean(sub(pow_05(div(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(` | -2.26 (tr -2.26 / va -2.16, ρK -0.27) `ts_pearson(mul(day_argmin(Low), 0.5), 40)` |
 | 2022 | 2 | B065 | — | — | -0.70 (tr -0.56 / va -0.70, ρK -0.14) `cross_corr(day_argmax(in_slice(Amt, 2, 237)), day_gini(Vwap), 10)` | -2.02 (tr -2.02 / va -1.96, ρK -0.22) `ts_pearson(day_argmin(Low), 20)` |
+| 2022 | 3 | B066 | — | -0.05 (tr +0.45 / va -0.05, ρK -0.17) `cross_corr(day_locate(in_slice(Amt, 2, 237), day_argmin(in_slice(Low, 2, 237))),` | -1.42 (tr -1.27 / va -1.42, ρK -0.07) `cross_corr(day_wstd(Close, High), sqrt(day_hurst(Close)), 10)` | -1.91 (tr -1.91 / va -1.85, ρK -0.23) `ts_pearson(day_argmin(High), 20)` |
 | 2023 | 1 | B067 | -1.36 (tr -1.16 / va -1.36, ρK -0.69) `ts_max(day_quantile_q75(Volume), 40)` | -0.43 (tr -0.08 / va -0.43, ρK -0.31) `cross_corr(sub(log(add(day_quantile_q75(Volume), 100)), cross_corr(day_quantile_` | +0.44 (tr +0.44 / va +1.01, ρK -0.14) `cross_mean(day_wmean(Ret, log(Ret)), 241)` | -1.49 (tr -0.85 / va -1.49, ρK +0.05) `ts_stddev(log(add(day_quantile_q75(Volume), 100)), 120)` |
 | 2023 | 2 | B068 | -1.11 (tr -0.86 / va -1.11, ρK +0.02) `cs_demean(cross_mean(cross_regbeta(day_autocorr_n1(High), day_median(Close), 241` | -0.51 (tr -0.51 / va -0.33, ρK -0.31) `div(cross_mean(mul(pow_2(day_sum(Ret)), is_gt(day_sum(Ret), 0)), 241), add(cross` | +0.64 (tr +0.64 / va +1.16, ρK -0.15) `cross_mean(day_wmean(Ret, log(log(abs_(Ret)))), 241)` | -1.15 (tr -0.91 / va -1.15, ρK +0.01) `cross_regbeta(day_autocorr_n1(High), day_median(Close), 241)` |
+| 2023 | 3 | B069 | — | -0.51 (tr -0.51 / va +0.16, ρK -0.06) `cross_mean(is_gt(cross_regres(cs_mean(day_wmean(Ret, log(log(abs_(Ret))))), is_g` | +0.58 (tr +0.58 / va +0.64, ρK -0.19) `cross_cov(day_wmean(Ret, Low), ts_scale(day_cov(Volume, Ret), 20), 30)` | +0.68 (tr +0.68 / va +1.15, ρK -0.15) `cross_mean(day_wmean(Ret, is_gt(abs_(Ret), 0.000001)), 241)` |
 | 2024 | 1 | B070 | -2.43 (tr -1.76 / va -2.43, ρK +0.20) `sub(abs_(cs_scale(ts_pearson(day_quantile_q75(Ret), 5))), cross_argmax(cs_sum(cr` | -0.43 (tr -0.31 / va -0.43, ρK -0.06) `ts_reg_fvalue(ts_reg_fvalue(day_quantile_q75(Ret), day_close(Amt), 20), day_clos` | -0.91 (tr -0.52 / va -0.91, ρK -0.02) `cross_regalpha(day_sum(Close), day_close(Ret), 30)` | -1.66 (tr -1.65 / va -1.66, ρK +0.62) `cs_bucket_zscore(cross_mean(day_last(Volume), 20), LogFloatShares)` |
 | 2024 | 2 | B071 | -1.78 (tr -1.78 / va -1.33, ρK -0.63) `ts_stddev(day_q_stat_std(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volume, ` | -0.12 (tr -0.12 / va -0.09, ρK -0.41) `div(cross_stddev(day_q_stat_std(div(in_slice(Volume, 11, 230), in_sum(in_slice(V` | — | -0.93 (tr -0.75 / va -0.93, ρK -0.22) `div(ts_stddev(day_q_stat_std(div(in_slice(Volume, 11, 230), in_sum(in_slice(Volu` |
 | 2025 | 1 | B073 | -2.26 (tr -1.76 / va -2.26, ρK -0.00) `sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 240), 10` | -0.25 (tr -0.25 / va -0.11, ρK +0.11) `cross_max(sub(cross_max(sub(day_std(in_topk_masked(in_slice(Volume, 11, 240), in` | -0.43 (tr -0.43 / va +0.48, ρK -0.29) `cross_mean(sub(day_skew(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, ` | -0.27 (tr -0.27 / va -0.21, ρK -0.11) `ts_stddev(day_std(in_topk_masked(in_slice(Volume, 11, 240), in_slice(Ret, 11, 24` |
@@ -90,11 +94,13 @@
 | 2031 | 3 | B093 | -1.57 (tr -1.57 / va -1.53, ρK -0.41) `ts_stddev(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_sum(is` | +0.72 (tr +0.72 / va +0.84, ρK -0.41) `cross_regbeta(day_sum(Amt), cross_regbeta(cross_delay(cross_delay(day_sum(Amt), ` | +0.26 (tr +0.26 / va +0.26, ρK +0.17) `div(cross_stddev(cross_regres(cs_mean(cs_mean(day_sum(Volume))), day_sum(Amt), 1` | +0.55 (tr +0.77 / va +0.55, ρK -0.28) `cross_regbeta(cross_ema(day_sum(Amt), 5), abs_(day_max(cross_age(pow_05(pow_2_5(` |
 | 2032 | 1 | B094 | -1.12 (tr -1.12 / va -1.12, ρK -0.66) `cross_sum(day_first(Volume), 60)` | +0.03 (tr +0.03 / va +0.42, ρK -0.01) `cs_bucket_zscore(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cross_mean(d` | -0.83 (tr +0.00 / va -0.83, ρK -0.22) `div(cross_mean(abs_(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)),` | -0.10 (tr +0.27 / va -0.10, ρK -0.28) `div(cross_sum(day_first(Volume), 60), cross_sum(day_sum(Volume), 60))` |
 | 2032 | 2 | B095 | -1.63 (tr -1.62 / va -1.63, ρK -0.30) `div(ts_sum(mul(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), div(d` | +0.58 (tr +0.67 / va +0.58, ρK -0.20) `cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscor` | +0.17 (tr +0.44 / va +0.17, ρK -0.14) `cross_regbeta(ts_delay(mul(sub(day_sum(Volume), 1), cross_zscore(log(sub(div(day` | +0.06 (tr +0.06 / va +0.24, ρK -0.31) `cross_ema(div(cross_sum(day_first(Volume), 5), cross_sum(day_sum(Volume), 5)), 3` |
+| 2032 | 3 | B096 | -0.25 (tr -0.11 / va -0.25, ρK -0.69) `ts_std(ts_std(day_last(Amt), 50), 50)` | — | +1.09 (tr +1.17 / va +1.09, ρK -0.39) `cross_regbeta(day_sum(Amt), sub(div(day_last(Close), ts_delay(day_last(Close), 1` | +0.52 (tr +0.52 / va +0.65, ρK -0.15) `cross_corr(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscore(c` |
 | 2033 | 1 | B097 | -1.22 (tr -1.21 / va -1.22, ρK -0.01) `div(1, add(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Clos` | -1.45 (tr -1.45 / va -1.27, ρK -0.14) `cross_med(cross_med(div(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1` | +0.29 (tr +0.29 / va +0.65, ρK -0.12) `mul(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(` | -1.32 (tr -1.12 / va -1.32, ρK -0.00) `mul(ts_stddev(cs_rank(div(sub(div(day_last(Close), ts_delay(day_last(Close), 1))` |
 | 2033 | 2 | B098 | +0.15 (tr +0.33 / va +0.15, ρK -0.57) `ts_max(log(ts_max(log(cross_regbeta(ts_max(log(cross_regbeta(day_quantile_q25(Lo` | +0.54 (tr +0.70 / va +0.54, ρK -0.13) `div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(` | +0.27 (tr +0.27 / va +0.69, ρK -0.26) `cross_regbeta(sub(div(day_close(Amt), cross_delay(div(day_last(Amt), day_sum(Amt` | -0.90 (tr -0.31 / va -0.90, ρK -0.03) `cross_regbeta(day_quantile_q25(Low), div(day_last(Amt), day_sum(Amt)), 20)` |
 | 2033 | 3 | B099 | -1.93 (tr -1.93 / va -0.20, ρK +0.74) `cross_quantile_q25(cs_demean(ts_quantile_q50(inv(day_last(Amt)), 10)), 241)` | -0.02 (tr -0.02 / va +0.17, ρK -0.16) `cs_regres(ts_kurt(cs_last_high40(day_var(Open), day_var(Low)), 40), ts_kurt(cs_l` | -0.65 (tr -0.50 / va -0.65, ρK -0.18) `cs_last_low10(sub(day_std(Close), LogFloatCap), day_close(Close))` | +0.54 (tr +0.75 / va +0.54, ρK -0.13) `div(cross_corr(cs_bucket_demean(sub(div(day_close(Close), cross_delay(day_close(` |
 | 2034 | 1 | B100 | -0.80 (tr -0.80 / va -0.66, ρK -0.89) `ts_decay_linear(ts_max(day_sum(Amt), 50), 50)` | +0.01 (tr +0.05 / va +0.01, ρK -0.37) `cs_bucket_zscore(ts_decay_linear(div(ts_max(day_sum(Amt), 50), cross_mean(day_su` | -0.21 (tr -0.21 / va +0.50, ρK -0.12) `cross_corr(cross_delay(day_sum(Amt), 1), day_sum(Ret), 241)` | -0.59 (tr -0.49 / va -0.59, ρK -0.10) `div(ts_decay_linear(ts_max(day_sum(Amt), 50), 25), cross_mean(day_sum(Amt), 120)` |
 | 2034 | 2 | B101 | -1.88 (tr -1.88 / va -1.28, ρK -0.04) `cross_stddev(div(day_sum(in_topk_masked(Volume, Volume, 5)), day_sum(Volume)), 2` | +1.22 (tr +1.22 / va +1.22, ρK -0.36) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg` | -1.04 (tr -0.70 / va -1.04, ρK -0.02) `cross_quantile_q50(div(day_sum(in_topk_masked(Volume, Ret, 5)), day_sum(Ret)), 6` | -0.38 (tr -0.38 / va +0.08, ρK -0.05) `cs_bucket_zscore(ts_std(log(ts_decay_linear(day_sum(Amt), 50)), 10), cross_mean(` |
+| 2034 | 3 | B102 | -1.10 (tr -0.65 / va -1.10, ρK -0.11) `mul(-1, ts_corr(cs_rank(day_first(Open)), cs_rank(day_sum(Volume)), 10))` | +0.47 (tr +0.47 / va +1.71, ρK -0.14) `cs_first_high20(cross_zscore(log(day_sum(Amt)), 60), cross_regbeta(cross_rank(da` | +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor` | +1.72 (tr +1.72 / va +1.74, ρK -0.48) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Amt, 20))), cross_regbet` |
 | 2035 | 1 | B103 | -1.34 (tr -1.19 / va -1.34, ρK -0.67) `inv(day_sum(Volume))` | +0.10 (tr +0.10 / va +0.54, ρK -0.20) `cross_sum(select_where(is_lt(abs_(cross_delta(sub(sub(log(day_last(Close)), LogT` | -0.99 (tr -0.99 / va -0.08, ρK -0.02) `ts_delta(cs_scale(ts_std(cs_scale(ts_delta(cs_scale(LogFloatShares), 40)), 40)),` | -1.47 (tr -0.86 / va -1.47, ρK -0.25) `cross_zscore(log(ts_max(day_sum(Volume), 20)), 120)` |
 | 2035 | 2 | B104 | -1.64 (tr -1.64 / va -1.56, ρK +0.49) `cross_stddev(div(day_last(in_topk_masked(Volume, Close, 12)), day_first(in_topk_` | +0.35 (tr +0.35 / va +0.58, ρK -0.21) `cross_sum(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.15), ` | -0.12 (tr +0.35 / va -0.12, ρK +0.01) `cs_first_high20(cs_bucket_demean(cs_winsor(cross_reg_tvalue(day_first(Amt), day_` | -1.66 (tr -1.66 / va -1.07, ρK -0.01) `div(cross_semistd_neg(div(day_last(in_topk_masked(Volume, Close, 12)), day_first` |
 | 2035 | 3 | B105 | -0.43 (tr -0.37 / va -0.43, ρK -0.81) `ts_stddev(ts_stddev(day_sum(Amt), 20), 30)` | +0.44 (tr +0.44 / va +1.29, ρK -0.22) `cross_ema(select_where(is_lt(abs_(cross_delta(log(day_last(Close)), 1)), 0.15), ` | +0.91 (tr +0.97 / va +0.91, ρK -0.16) `cross_sum(cross_delta(sub(log(sub(log(day_last(Amt)), log(day_first(Amt)))), log` | -0.14 (tr -0.14 / va +0.29, ρK -0.80) `ts_stddev(ts_stddev(day_sum(Amt), 20), 60)` |
@@ -106,15 +112,19 @@
 | 2038 | 2 | B113 | -1.01 (tr -1.01 / va -0.66, ρK -0.40) `cross_quantile_q25(cross_quantile_q25(ts_min(cross_max(day_autocorr_n1(Volume), ` | -0.19 (tr -0.13 / va -0.19, ρK -0.07) `cs_first_low20(ts_stddev(LogTotalCap, 5), day_quantile(abs_(neg(High))))` | +0.23 (tr +0.23 / va +0.24, ρK -0.25) `cs_mask_top_replace_mean_neg(cs_mask_top_replace_mean_neg(cs_bucket_rank(cross_m` | -0.19 (tr +0.53 / va -0.19, ρK -0.48) `cross_max(day_autocorr_n1(Volume), 60)` |
 | 2039 | 1 | B115 | -2.26 (tr -2.26 / va -2.17, ρK +0.20) `pow_05(day_autocorr_n1(Close))` | -1.48 (tr -1.48 / va -1.33, ρK -0.25) `cross_corr(mul(day_autocorr_n1(Close), replace_small_with_nan(is_lt(day_flat_rat` | -0.50 (tr -0.32 / va -0.50, ρK -0.20) `cross_corr(cross_decay_linear(day_at_max_ratio(High), 10), abs_(abs_(day_distinc` | -1.76 (tr -1.13 / va -1.76, ρK -0.06) `ts_min(ts_min(inv(ts_std(day_autocorr_n1(Ret), 10)), 10), 40)` |
 | 2039 | 2 | B116 | -1.07 (tr -1.01 / va -1.07, ρK -0.63) `sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross` | -0.81 (tr -0.81 / va -0.40, ρK -0.45) `sqrt(cs_first_low20(ts_delta(day_std(Amt), 40), sqrt(cs_last_high20(ts_delta(day` | -0.20 (tr -0.20 / va +0.20, ρK -0.21) `cross_ema(sub(sub(day_wmean(Ret, Amt), day_mean(Ret)), day_mean(Ret)), 60)` | -0.27 (tr -0.17 / va -0.27, ρK -0.60) `sub(0.5, abs_(ts_regres(day_quantile_q75(cross_sum(log(Amt), 3)), day_last(cross` |
+| 2039 | 3 | B117 | -1.50 (tr -1.50 / va -1.30, ρK -0.66) `ts_stddev(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_mean(i` | -0.10 (tr -0.10 / va +0.25, ρK -0.23) `cross_ema(sub(day_wmean(Ret, Amt), mul(sub(day_wmean(Ret, Amt), day_mean(Ret)), ` | +0.46 (tr +0.79 / va +0.46, ρK -0.37) `cs_bucket_demean(cross_ema(cross_tail_mean_q75(cross_tail_mean_q75(day_wmean(Ret` | — |
 | 2040 | 1 | B118 | -1.47 (tr -1.47 / va -0.90, ρK -0.71) `day_first(log(Amt))` | -0.45 (tr -0.45 / va -0.18, ρK -0.39) `cross_mean(mul(day_cov(Ret, log(Amt)), is_gt(day_std(Ret), cross_mean(day_std(Re` | +0.26 (tr +0.26 / va +0.58, ρK -0.32) `cross_autocorr_s1(cs_bucket_demean(day_std(Ret), day_signed_ratio(Low, Ret)), 24` | -1.51 (tr -1.51 / va -1.46, ρK -0.08) `cross_mean(cs_bucket_zscore(day_first(log(Amt)), day_mean(log(Amt))), 241)` |
+| 2040 | 2 | B119 | -1.56 (tr -1.56 / va -1.52, ρK -0.41) `ts_stddev(mul(sub(div(day_last(Close), day_first(Open)), 1), abs_(sub(day_sum(is` | — | -0.47 (tr -0.15 / va -0.47, ρK -0.09) `cross_regbeta(day_std(in_logchg(Volume, 1)), cross_regbeta(cross_regbeta(day_std` | -1.28 (tr -1.28 / va -1.22, ρK +0.33) `ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub` |
 | 2041 | 1 | B121 | -1.51 (tr -1.38 / va -1.51, ρK -0.56) `day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_` | -1.22 (tr -1.16 / va -1.22, ρK -0.34) `day_distinct_ratio(Open)` | -0.50 (tr -0.39 / va -0.50, ρK -0.06) `cs_first_low20(day_gini(Open), day_close(Vwap))` | -1.93 (tr -1.88 / va -1.93, ρK +0.05) `cross_mean(div(day_sum(select_where(eq(in_roll_labels(Close, 241), 0), Volume, c` |
 | 2042 | 1 | B124 | -1.12 (tr -1.09 / va -1.12, ρK -0.61) `ts_mean(mul(log(add(mul(log(add(day_q_stat_std(Volume), ts_hurst(div(day_kurt(Vo` | +0.66 (tr +0.66 / va +1.00, ρK -0.12) `cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Lo` | -0.40 (tr +0.06 / va -0.40, ρK -0.06) `cross_corr(day_kurt(Close), day_kurt(Volume), 120)` | +0.23 (tr +0.23 / va +0.53, ρK -0.23) `cs_bucket_zscore(ts_std(day_kurt(Low), 120), LogFloatCap)` |
+| 2042 | 2 | B125 | -0.92 (tr -0.92 / va -0.58, ρK -0.01) `cross_sum(day_kurt(Vwap), 241)` | +0.05 (tr +0.05 / va +0.91, ρK -0.37) `cs_bucket_zscore(cross_ema(cs_winsor(mul(cs_bucket_demean(cross_ema(mul(day_sum(` | +0.17 (tr +0.17 / va +0.22, ρK -0.18) `cs_bucket_zscore(cross_mean(mul(day_sum(Ret), sub(day_pos_ratio(Ret), 0.5)), 241` | +0.86 (tr +0.86 / va +1.07, ρK -0.16) `cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Vwap), add(day_kurt(V` |
 | 2043 | 1 | B127 | -1.09 (tr -1.09 / va -0.21, ρK -0.27) `ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(` | — | -1.47 (tr -1.47 / va -0.63, ρK -0.12) `cross_sum(cross_sum(cross_sum(day_hurst(Open), 241), 241), 241)` | +0.48 (tr +0.48 / va +0.55, ρK -0.08) `ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(` |
 | 2044 | 1 | B130 | +0.20 (tr +0.20 / va +0.49, ρK -0.11) `ts_max(ts_max(day_corr(Ret, Volume), 40), 40)` | -0.86 (tr -0.32 / va -0.86, ρK -0.08) `cross_regbeta(cs_demean(ts_delay(day_corr(Ret, Volume), 1)), cs_demean(cs_demean` | -0.00 (tr +0.14 / va -0.00, ρK -0.14) `cs_last_low10(day_es_ratio_hi(Amt), day_quantile_q25(Open))` | +0.61 (tr +0.61 / va +0.93, ρK -0.07) `ts_max(cs_demean(day_corr(Ret, Volume)), 120)` |
 | 2044 | 2 | B131 | -1.20 (tr -0.19 / va -1.20, ρK -0.07) `ts_min(ts_regres(day_corr(Close, High), ts_min(ts_regres(day_corr(Close, Volume)` | -2.31 (tr -2.31 / va -2.24, ρK -0.47) `day_q_stat_std(Amt)` | -0.14 (tr +0.30 / va -0.14, ρK -0.12) `day_kurt(cross_regres(cross_regres(High, Amt, 30), Amt, 60))` | +0.59 (tr +0.59 / va +0.84, ρK -0.07) `ts_max(cs_demean(add(day_corr(Ret, Volume), day_corr(Ret, Amt))), 120)` |
 | 2045 | 1 | B133 | +0.40 (tr +0.40 / va +0.94, ρK -0.84) `add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 40), ts_std(cross_stddev` | +0.31 (tr +0.31 / va +0.96, ρK -0.18) `div(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 60), 50), add(cross_` | -1.11 (tr -1.11 / va -1.07, ρK -0.07) `mul(cross_reg_fvalue(cross_sum(day_q_stat_std(Close), 3), day_wstd(High, Vwap), ` | +0.91 (tr +0.91 / va +1.45, ρK -0.77) `add(ts_quantile_q50(day_cov(Amt, cross_delta(Amt, 30)), 20), ts_std(cross_stddev` |
 | 2045 | 2 | B134 | -0.34 (tr -0.34 / va -0.34, ρK -0.66) `ts_sum(cross_stddev(day_quantile_q25(pow_2(nt_cs_rank(cross_delta(Amt, 30)))), 6` | -0.79 (tr -0.65 / va -0.79, ρK +0.17) `cs_first_high20(mul(day_flat_ratio(Ret), day_sum(Low)), ts_max(LogFloatCap, 1))` | -0.07 (tr -0.07 / va +0.17, ρK -0.05) `cross_autocorr_s1(day_at_max_ratio(Open), 15)` | +0.66 (tr +0.66 / va +1.08, ρK -0.16) `cs_regres(log(add(ts_std(cross_stddev(day_cov(Amt, cross_delta(Amt, 30)), 120), ` |
 | 2046 | 1 | B136 | -0.60 (tr -0.60 / va -0.58, ρK -0.95) `ts_sum(day_var(Amt), 50)` | -0.41 (tr -0.19 / va -0.41, ρK -0.06) `cross_reg_tvalue(cross_delay(day_var(Low), 1), cs_demean(day_sum(Ret)), 120)` | +0.88 (tr +1.36 / va +0.88, ρK -0.22) `cross_corr(cross_delay(log(log(div(day_var(replace_small_with_nan(Amt)), pow_2(d` | +0.18 (tr +1.14 / va +0.18, ρK -0.19) `cs_regres(log(ts_sum(day_var(Amt), 100)), log(ts_sum(day_mean(Amt), 100)))` |
+| 2046 | 2 | B137 | -1.15 (tr -1.15 / va -0.76, ρK -0.74) `div(add(div(day_var(Ret), day_max(High)), cross_max(day_cov(Amt, Close), 60)), l` | +1.17 (tr +1.17 / va +1.17, ρK -0.12) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m` | +1.28 (tr +1.28 / va +1.28, ρK -0.14) `cross_corr(cross_delay(sub(ts_min(pow_05(cross_autocorr_s1(day_durbin_watson(Hig` | — |
 | 2047 | 1 | B139 | -1.34 (tr -1.34 / va -1.19, ρK -0.06) `pow_3(cross_hurst(neg(day_min(Ret)), 15))` | -0.32 (tr +0.11 / va -0.32, ρK -0.06) `cross_reg_tvalue(cross_delay(day_min(Ret), 1), sub(day_sum(Ret), cs_mean(day_sum` | -0.20 (tr +0.31 / va -0.20, ρK -0.07) `cross_regbeta(cross_delay(div(sub(day_last(Close), day_min(Low)), sub(day_centro` | -0.21 (tr -0.10 / va -0.21, ρK -0.21) `cross_autocorr(cs_demean(day_min(Ret)), 60, 1)` |
 | 2047 | 2 | B140 | -2.82 (tr -2.19 / va -2.82, ρK +0.12) `sqrt(sqrt(sigmoid(day_min(Ret))))` | -0.89 (tr -0.89 / va -0.02, ρK -0.33) `cross_mean(day_sum(Ret), 241)` | -0.99 (tr -0.92 / va -0.99, ρK +0.37) `ts_std(cross_mean(cs_bucket_demean(day_open(High), LogFloatShares), 60), 5)` | -0.64 (tr -0.13 / va -0.64, ρK -0.15) `cross_corr(day_min(High), day_mean(Amt), 45)` |
 | 2048 | 1 | B142 | — | +0.38 (tr +0.41 / va +0.38, ρK -0.40) `cs_first_low20(LogTotalCap, day_es_ratio_hi(inv(cross_max(Close, 241))))` | -0.65 (tr -0.65 / va +0.21, ρK -0.37) `sub(cross_mean(sub(div(day_open(Open), day_open(Vwap)), 1), 241), cross_mean(sub` | — |
@@ -122,16 +132,28 @@
 | 2049 | 1 | B145 | -2.34 (tr -2.34 / va -2.33, ρK +0.00) `ts_min(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 20), 5)` | -0.14 (tr -0.14 / va +0.68, ρK -0.09) `div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), cross` | -0.49 (tr -0.49 / va -0.07, ρK -0.41) `cross_corr(day_corr(Volume, Low), day_std(Volume), 120)` | -1.31 (tr -1.28 / va -1.31, ρK +0.11) `cross_mean(ts_reg_fvalue(day_std(Volume), day_cov(Volume, Low), 60), 120)` |
 | 2049 | 2 | B146 | -2.14 (tr -2.12 / va -2.14, ρK +0.14) `ts_mean(sub(day_mean(select_where(is_gt(Ret, create_like(Ret, 0)), sub(Ret, in_m` | -0.19 (tr -0.19 / va +0.68, ρK -0.08) `sub(div(sub(div(cross_sum(mul(day_wmean(Vwap, Volume), day_sum(Volume)), 241), c` | -0.13 (tr -0.12 / va -0.13, ρK -0.24) `cross_sum(sub(sub(day_wmean(Ret, Volume), day_mean(Ret)), day_mean(Ret)), 60)` | — |
 | 2050 | 1 | B148 | -2.33 (tr -2.33 / va -1.95, ρK +0.23) `cross_stddev(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, c` | -0.56 (tr -0.56 / va -0.19, ρK -0.25) `cross_autocorr_s1(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), R` | — | -2.58 (tr -2.58 / va -1.59, ρK +0.21) `cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,` |
+| 2050 | 2 | B149 | — | -0.89 (tr -0.82 / va -0.89, ρK -0.10) `cs_bucket_demean(cs_bucket_demean(day_sum(Open), cross_tail_mean_q25(day_sum(Ope` | -0.29 (tr -0.27 / va -0.29, ρK -0.25) `ts_kurt(pow_3(day_es_ratio_lo(Close)), 50)` | -2.04 (tr -2.04 / va -0.32, ρK +0.30) `cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,` |
 | 2051 | 1 | B151 | -0.58 (tr -0.58 / va -0.53, ρK -0.11) `day_skew(nt_ts_kurt(Low, 10))` | +0.09 (tr +0.26 / va +0.09, ρK -0.09) `cross_corr(day_kurt(in_delta(in_delta(Vwap, 1), 1)), day_kurt(Volume), 241)` | +0.07 (tr +0.07 / va +0.13, ρK -0.10) `cross_regbeta(day_min(cross_argmax(Volume, 30)), day_std(in_top_quantile_flag_q1` | — |
 | 2051 | 2 | B152 | -2.23 (tr -2.23 / va -1.00, ρK -0.07) `pow_05(day_max(pow_1_5(pow_2(nt_ts_kurt(Vwap, 15)))))` | +1.00 (tr +1.47 / va +1.00, ρK -0.08) `cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 60)` | -0.47 (tr -0.34 / va -0.47, ρK -0.11) `cross_corr(day_sum(Ret), day_var(Ret), 120)` | — |
 | 2052 | 1 | B154 | -2.09 (tr -2.09 / va -1.66, ρK +0.15) `ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(High), 5), 30), 60), 5)` | -1.07 (tr -1.07 / va -0.84, ρK -0.16) `cross_decay_linear(div(day_ar1_coefficient(High), cs_first_low20(day_ar1_coeffic` | -1.65 (tr -1.65 / va -1.52, ρK -0.05) `signedpower(ts_hurst(day_ar1_coefficient(Amt), 20))` | -1.66 (tr -1.66 / va -1.57, ρK -0.14) `ts_max(cross_med(ts_max(ts_max(day_ar1_coefficient(Low), 5), 30), 60), 10)` |
 | 2052 | 2 | B155 | -1.00 (tr -1.00 / va -0.53, ρK -0.28) `cross_mean(day_tide_change(in_slice(Close, 31, 211), day_argmin(in_slice_from_st` | -2.04 (tr -2.04 / va -1.94, ρK -0.18) `day_signed_ratio(Ret, Low)` | -0.56 (tr -0.56 / va -0.44, ρK -0.37) `cross_cov(cross_ema(mul(ListAge, day_max(Ret)), 10), cs_first_high20(div(BoardCo` | -0.76 (tr -0.60 / va -0.76, ρK -0.34) `cross_mean(day_tide_change(in_slice(Vwap, 31, 211), day_argmin(in_slice_from_sta` |
 | 2052 | 3 | B156 | -1.64 (tr -1.64 / va -0.79, ρK +0.16) `cross_mean(div(div(sub(day_locate(in_slice(Close, 31, 211), day_argmin(in_slice_` | -0.29 (tr -0.29 / va -0.28, ρK -0.08) `cross_corr(cross_corr(day_max(Ret), day_max(Ret), 60), day_topw_mean(Amt, Amt), ` | -0.31 (tr -0.22 / va -0.31, ρK -0.09) `cross_corr(day_open(Amt), day_sum(Amt), 241)` | — |
 | 2053 | 1 | B157 | — | -0.74 (tr -0.74 / va -0.55, ρK -0.03) `cs_demean(ts_stddev(cross_semistd_neg(day_topw_mean(Ret, Close), 3), 30))` | — | — |
+| 2053 | 2 | B158 | -0.52 (tr -0.52 / va +0.96, ρK -0.77) `day_first(cross_sum(Amt, 241))` | -0.16 (tr -0.10 / va -0.16, ρK -0.13) `log(cross_regbeta(cross_sum(cross_sum(day_mean(Ret), 10), 15), day_topw_mean(Ret` | -0.49 (tr -0.37 / va -0.49, ρK -0.29) `cross_mean(day_topw_mean(Ret, in_demean(Close)), 241)` | — |
+| 2054 | 1 | B160 | -0.37 (tr -0.37 / va -0.37, ρK -0.34) `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_neg(Close), nt_ts_co` | -0.09 (tr -0.04 / va -0.09, ρK -0.25) `cross_mean(sub(sub(day_wmean(Ret, Volume), day_mean(Ret)), day_mean(Ret)), 60)` | -0.36 (tr -0.36 / va -0.33, ρK -0.11) `cross_corr(day_std(High), ts_mean(inv(ts_decay_linear(day_at_max_ratio(Close), 4` | — |
+| 2055 | 1 | B163 | -1.74 (tr -0.82 / va -1.74, ρK -0.32) `ts_quantile_q75(pow_2(day_kurt(nt_ts_autocorr_s1(Low, 3))), 30)` | -1.04 (tr -1.04 / va -0.92, ρK -0.01) `ts_quantile_q75(day_kurt(in_autocorr(Ret, 10, 1)), 30)` | — | -0.94 (tr -0.76 / va -0.94, ρK -0.31) `ts_mean(pow_2(day_kurt(in_autocorr(Low, 3, 1))), 15)` |
+| 2056 | 1 | B166 | -0.65 (tr -0.05 / va -0.65, ρK -0.07) `day_max(cross_corr(Amt, Ret, 60))` | -0.08 (tr -0.08 / va +0.16, ρK +0.02) `mul(sub(day_max(in_slice(cross_corr(Amt, Ret, 60), 1, 60)), mul(sub(day_max(in_s` | +0.52 (tr +0.70 / va +0.52, ρK -0.32) `cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 60)` | -0.20 (tr -0.02 / va -0.20, ρK +0.16) `day_max(cross_corr(Amt, Ret, 180))` |
+| 2057 | 1 | B169 | -1.35 (tr -1.05 / va -1.35, ρK -0.43) `ts_stddev(ts_stddev(ts_stddev(day_sum(nt_cs_quantile_q25(Amt)), 20), 10), 20)` | +0.13 (tr +0.15 / va +0.13, ρK -0.01) `ts_stddev(ts_stddev(ts_stddev(ts_stddev(day_centroid(Amt), 10), 50), 10), 50)` | +0.32 (tr +0.32 / va +0.80, ρK -0.17) `ts_stddev(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10), 50)` | — |
+| 2058 | 1 | B172 | -1.12 (tr -1.12 / va -1.11, ρK -0.56) `day_std(pow_2(Volume))` | -1.17 (tr -1.16 / va -1.17, ρK -0.24) `cs_last_high40(day_std(pow_2(Ret)), day_quantile(cross_regbeta(Open, Amt, 30)))` | -0.20 (tr -0.20 / va +0.26, ρK -0.15) `cs_regres(ListAge, LogTotalCap)` | -1.05 (tr -1.05 / va -0.89, ρK +0.64) `cross_mean(day_std(pow_2(Volume)), 20)` |
+| 2059 | 1 | B175 | -1.92 (tr -1.76 / va -1.92, ρK -0.47) `cross_min(day_max(nt_cs_regres(High, Low)), 15)` | -0.43 (tr -0.08 / va -0.43, ρK -0.09) `cross_regbeta(day_max(Open), day_es_ratio_lo(Open), 60)` | -1.23 (tr -1.23 / va -1.19, ρK -0.19) `cross_mean(cs_bucket_zscore(cross_mean(sub(ts_skew(pow_2_5(day_wmean(Vwap, Volum` | — |
+| 2060 | 1 | B178 | -3.05 (tr -3.05 / va -2.35, ρK +0.73) `ts_decay_linear(sigmoid(cs_rank(ts_decay_linear(pow_2(pow_05(ts_min(pow_2(cs_ran` | -0.36 (tr +0.15 / va -0.36, ρK -0.04) `sub(day_ar1_coefficient(Volume), cs_quantile_q75(LogFloatCap))` | -0.07 (tr -0.07 / va +0.17, ρK -0.05) `neg(cross_autocorr_s1(day_at_max_ratio(Open), 15))` | -1.83 (tr -1.74 / va -1.83, ρK -0.13) `cross_zscore(day_ar1_coefficient(Volume), 120)` |
 | 2061 | 1 | B181 | -0.73 (tr -0.73 / va +0.04, ρK -0.13) `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 20)` | -0.24 (tr -0.24 / va +0.11, ρK -0.21) `cs_bucket_demean(cross_mean(cs_bucket_demean(cross_mean(day_pdf_quantile_single(` | +0.13 (tr +0.13 / va +0.16, ρK -0.15) `cs_mask_top_replace_mean(cross_reg_fvalue(pow_3(LogFloatCap), day_open(Amt), 241` | -0.33 (tr -0.33 / va +0.00, ρK -0.19) `cross_mean(day_pdf_quantile_single(Ret, Volume, 0.95, True), 120)` |
 | 2062 | 1 | B184 | -1.74 (tr -1.35 / va -1.74, ρK -0.05) `ts_mean(day_kurt(div(in_regres(Ret, in_mean_full(Ret), 20), add(in_stddev_full(i` | +0.32 (tr +0.32 / va +0.54, ρK -0.10) `cross_regbeta(day_median(Amt), inv(cross_regalpha(inv(day_at_max_ratio(Vwap)), t` | -1.51 (tr -1.51 / va -1.39, ρK -0.09) `add(day_min(cross_scale(Ret, 5)), day_min(cross_scale(Ret, 3)))` | — |
 | 2063 | 1 | B187 | -1.18 (tr -1.18 / va -1.00, ρK -0.67) `pow_05(day_var(nt_ts_min(Volume, 30)))` | -0.42 (tr -0.42 / va +0.18, ρK -0.15) `cross_corr(div(ts_argmin(sigmoid(day_cov(Ret, Low)), 50), day_mean(Low)), day_at` | -0.96 (tr -0.84 / va -0.96, ρK -0.08) `cs_last_high20(cs_first_high20(day_var(Ret), day_sum(Open)), LogFloatShares)` | -1.55 (tr -1.27 / va -1.55, ρK -0.06) `add(cs_rank(day_min(in_min_rolling(Amt, 5))), cs_rank(day_cov(Ret, High)))` |
 | 2064 | 1 | B190 | -0.46 (tr -0.46 / va -0.40, ρK +0.03) `ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 50)` | -0.63 (tr -0.63 / va +0.20, ρK -0.11) `cross_autocorr(day_var(pow_2_5(Ret)), 120, 1)` | +0.09 (tr +0.28 / va +0.09, ρK -0.21) `cross_mean(mul(is_gt(div(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1` | -0.35 (tr -0.35 / va -0.18, ρK -0.07) `ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 40), 30)), 25)` |
+| 2068 | 1 | B202 | -1.61 (tr -1.31 / va -1.61, ρK +0.50) `sub(ts_mean(mul(div(sub(day_max(High), day_min(Low)), day_open(Open)), day_sum(a` | -0.86 (tr -0.86 / va -0.41, ρK -0.03) `cross_reg_tvalue(ts_corr(day_sum(abs_(in_slice(Ret, 1, 30))), day_sum(abs_(in_sl` | -0.79 (tr -0.79 / va -0.78, ρK +0.07) `cs_bucket_demean(day_last(Close), cross_delay(day_last(Close), 1))` | — |
+| 2069 | 1 | B205 | -2.31 (tr -2.16 / va -2.31, ρK -0.12) `mul(pairwise_max(cs_rank(ts_decay_linear(ts_delta(div(day_sum(Amt), day_sum(Volu` | +0.04 (tr +0.04 / va +0.26, ρK -0.24) `cs_last_high10(cross_mean(ts_corr(div(day_sum(Amt), day_sum(Volume)), ts_sum(ts_` | -0.28 (tr -0.28 / va +0.34, ρK -0.07) `mul(cs_rank(cross_zscore(sub(log(day_sum(Volume)), cross_mean(cross_mean(day_ske` | — |
+| 2074 | 1 | B220 | -1.55 (tr -1.18 / va -1.55, ρK +0.60) `pow_2(day_close(neg(Volume)))` | -0.20 (tr +0.23 / va -0.20, ρK -0.20) `cross_regbeta(day_close(neg(Volume)), day_quantile_q25(Ret), 60)` | -0.66 (tr -0.66 / va -0.17, ρK -0.15) `cross_reg_fvalue(signedpower(cs_rank(day_std(Amt))), pow_2_5(cross_reg_fvalue(si` | — |
 
 ## 新 head(尺子 D)
 
@@ -145,16 +167,21 @@
 - s2034 r2 a: D +1.07 (tr +1.07 / va +1.12);B +0.98 (tr +1.46 / va +0.98, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2034 r2 a: D +1.07 (tr +1.07 / va +1.12);B +0.98 (tr +1.46 / va +0.98, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2048 r2 a: D +1.04 (tr +1.33 / va +1.04);B +0.67 (tr +1.20 / va +0.67, ρK +0.24) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_ema(cross_mean(sub(di`
+- s2032 r3 b: D +1.03 (tr +1.07 / va +1.03);B +1.09 (tr +1.17 / va +1.09, ρK -0.39) `cross_regbeta(day_sum(Amt), sub(div(day_last(Close), ts_delay(day_last(Close), 1`
 - s2048 r2 a: D +1.03 (tr +1.36 / va +1.03);B +0.66 (tr +1.26 / va +0.66, ρK +0.24) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_ema(sub(div(cs_first_`
+- s2046 r2 a: D +1.01 (tr +1.02 / va +1.01);B +1.02 (tr +1.02 / va +1.15, ρK -0.11) `cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2`
 - s2029 r1 a: D +0.99 (tr +1.07 / va +0.99);B +1.09 (tr +1.20 / va +1.09, ρK -0.32) `cs_last_low10(sub(log(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40))`
 - s2029 r1 a: D +0.99 (tr +1.07 / va +0.99);B +1.09 (tr +1.20 / va +1.09, ρK -0.32) `cs_last_low10(sub(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 40)), ts_std`
+- s2046 r2 b: D +0.94 (tr +0.94 / va +1.09);B +1.06 (tr +1.25 / va +1.06, ρK -0.23) `cross_corr(cross_delay(log(cross_delay(log(day_gini(Amt)), 1)), 1), day_var(repl`
 - s2006 r3 a: D +0.91 (tr +0.91 / va +1.54);B +1.07 (tr +1.07 / va +1.79, ρK -0.36) `div(cs_bucket_zscore(log(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_co`
 - s2034 r2 a: D +0.90 (tr +0.90 / va +1.24);B +1.11 (tr +1.49 / va +1.11, ρK -0.32) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2013 r1 b: D +0.90 (tr +0.90 / va +0.92);B +1.01 (tr +1.01 / va +1.02, ρK -0.18) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_m`
 - s2048 r2 a: D +0.88 (tr +1.19 / va +0.88);B +1.01 (tr +1.23 / va +1.01, ρK +0.06) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(cs_first_low`
 - s2048 r2 a: D +0.87 (tr +1.16 / va +0.87);B +1.01 (tr +1.20 / va +1.01, ρK +0.05) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(cs_first_low`
+- s2046 r2 a: D +0.86 (tr +0.86 / va +0.88);B +0.99 (tr +0.99 / va +1.15, ρK -0.11) `cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2`
 - s2048 r2 a: D +0.86 (tr +0.95 / va +0.86);B +1.07 (tr +1.20 / va +1.07, ρK +0.21) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_clos`
 - s2034 r2 a: D +0.85 (tr +0.85 / va +1.22);B +1.22 (tr +1.22 / va +1.22, ρK -0.36) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2046 r2 a: D +0.85 (tr +0.86 / va +0.85);B +1.08 (tr +1.08 / va +1.10, ρK -0.13) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m`
 - s2013 r2 R: D +0.84 (tr +0.84 / va +1.07);B +1.22 (tr +1.22 / va +1.47) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_m`
 - s2013 r1 b: D +0.83 (tr +0.83 / va +0.95);B +1.04 (tr +1.15 / va +1.04, ρK -0.01) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_m`
 - s2013 r2 R: D +0.82 (tr +0.82 / va +0.96);B +1.13 (tr +1.13 / va +1.31) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Amt),`
@@ -162,37 +189,57 @@
 - s2051 r2 a: D +0.80 (tr +1.15 / va +0.80);B +1.00 (tr +1.47 / va +1.00, ρK -0.08) `cross_regbeta(day_sum(Volume), ts_mean(day_kurt(Volume), 5), 60)`
 - s2019 r2 a: D +0.77 (tr +0.77 / va +0.82);B +0.95 (tr +0.95 / va +1.25, ρK -0.24) `cross_regbeta(cross_delay(mul(cross_delay(cross_mean(mul(day_mean(High), mul(cro`
 - s2019 r2 a: D +0.77 (tr +0.77 / va +0.89);B +1.05 (tr +1.05 / va +1.14, ρK -0.17) `cross_regbeta(cross_delay(mul(cross_delay(mul(cross_delay(cross_mean(mul(day_mea`
+- s2046 r2 a: D +0.75 (tr +0.75 / va +1.17);B +1.17 (tr +1.17 / va +1.17, ρK -0.12) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m`
 - s2048 r2 a: D +0.74 (tr +0.74 / va +0.89);B +1.07 (tr +1.14 / va +1.07, ρK +0.23) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(cross_mean(sub(d`
 - s2006 r3 a: D +0.74 (tr +0.74 / va +0.99);B +1.09 (tr +1.09 / va +1.15, ρK -0.30) `cs_first_low40(cs_rank(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_cov(`
 - s2034 r2 a: D +0.74 (tr +0.74 / va +1.11);B +1.22 (tr +1.26 / va +1.22, ρK -0.37) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2046 r2 b: D +0.73 (tr +0.73 / va +0.93);B +1.28 (tr +1.28 / va +1.28, ρK -0.14) `cross_corr(cross_delay(sub(ts_min(pow_05(cross_autocorr_s1(day_durbin_watson(Hig`
+- s2046 r2 b: D +0.73 (tr +0.73 / va +0.93);B +1.28 (tr +1.28 / va +1.28, ρK -0.14) `cross_corr(cross_delay(sub(ts_min(pow_05(cross_autocorr_s1(day_durbin_watson(Hig`
 - s2035 r3 b: D +0.73 (tr +0.79 / va +0.73);B +0.81 (tr +1.10 / va +0.81, ρK -0.19) `cross_sum(cross_delta(sub(log(sub(cross_sum(cross_delta(sub(log(sub(log(day_last`
 - s2034 r2 a: D +0.72 (tr +0.72 / va +1.25);B +1.03 (tr +1.03 / va +1.51, ρK -0.40) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2029 r1 a: D +0.71 (tr +0.88 / va +0.71);B +1.00 (tr +1.09 / va +1.00, ρK -0.13) `cs_last_low10(sub(log(ts_std(log(ts_std(ts_std(ts_std(day_mean(Amt), 40), 40), 4`
 - s2006 r3 a: D +0.71 (tr +0.71 / va +1.32);B +0.73 (tr +0.73 / va +1.41, ρK -0.40) `div(cs_bucket_zscore(log(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_co`
 - s2034 r2 a: D +0.70 (tr +0.70 / va +0.77);B +0.59 (tr +0.92 / va +0.59, ρK -0.36) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2048 r2 a: D +0.69 (tr +0.69 / va +1.04);B +0.38 (tr +0.38 / va +0.63, ρK +0.36) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(cross_mean(sub(d`
+- s2046 r2 b: D +0.69 (tr +0.69 / va +0.91);B +1.06 (tr +1.06 / va +1.12, ρK -0.13) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Volume)), pow_2(da`
+- s2046 r2 b: D +0.69 (tr +0.69 / va +0.91);B +1.06 (tr +1.06 / va +1.12, ρK -0.13) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Volume)), pow_2(da`
 - s2048 r2 a: D +0.68 (tr +0.71 / va +0.68);B +0.35 (tr +0.35 / va +0.47, ρK +0.36) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(cs_first`
 - s2034 r2 a: D +0.68 (tr +0.68 / va +0.94);B +0.89 (tr +0.89 / va +0.93, ρK -0.41) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2046 r2 a: D +0.68 (tr +0.68 / va +0.93);B +1.05 (tr +1.08 / va +1.05, ρK -0.13) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2019 r2 a: D +0.67 (tr +0.67 / va +0.78);B +1.01 (tr +1.01 / va +1.28, ρK -0.20) `cross_regbeta(cross_delay(mul(cross_delay(cross_mean(mul(cross_delay(cross_mean(`
 - s2015 r3 a: D +0.67 (tr +0.67 / va +0.77);B +0.85 (tr +1.02 / va +0.85, ρK -0.23) `mul(cross_mean(day_zero_ratio(Volume), 60), cs_bucket_zscore(cross_semistd_pos(d`
+- s2046 r2 a: D +0.66 (tr +0.66 / va +0.93);B +1.06 (tr +1.08 / va +1.06, ρK -0.11) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2034 r2 a: D +0.66 (tr +0.66 / va +0.80);B +0.82 (tr +0.91 / va +0.82, ρK -0.41) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2046 r1 b: D +0.66 (tr +0.66 / va +0.78);B +0.88 (tr +1.36 / va +0.88, ρK -0.22) `cross_corr(cross_delay(log(log(div(day_var(replace_small_with_nan(Amt)), pow_2(d`
 - s2046 r1 b: D +0.66 (tr +0.66 / va +0.78);B +0.88 (tr +1.36 / va +0.88, ρK -0.22) `cross_corr(cross_delay(log(log(div(day_var(replace_small_with_nan(Amt)), pow_2(d`
+- s2046 r2 a: D +0.65 (tr +0.65 / va +0.83);B +1.03 (tr +1.06 / va +1.03, ρK -0.11) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.65 (tr +0.65 / va +0.86);B +0.95 (tr +0.95 / va +1.01, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2048 r2 a: D +0.64 (tr +0.64 / va +0.89);B +1.06 (tr +1.07 / va +1.06, ρK +0.23) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(cross_mean(sub(d`
 - s2015 r3 R: D +0.64 (tr +0.64 / va +0.70);B +0.83 (tr +1.00 / va +0.83) `div(day_zero_ratio(Volume), add(sub(cross_semistd_neg(day_quantile_q25(Amt), 120`
+- s2046 r2 a: D +0.64 (tr +0.64 / va +1.18);B +0.98 (tr +0.98 / va +1.18, ρK -0.18) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2019 r2 a: D +0.64 (tr +0.64 / va +1.20);B +0.95 (tr +0.95 / va +0.99, ρK -0.14) `cross_regbeta(cross_delay(mul(cross_mean(mul(day_mean(High), day_skew(Volume)), `
+- s2046 r2 a: D +0.63 (tr +0.63 / va +0.83);B +1.04 (tr +1.05 / va +1.04, ρK -0.11) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2013 r2 b: D +0.62 (tr +0.64 / va +0.62);B +0.79 (tr +0.79 / va +0.89, ρK -0.14) `cross_regbeta(mul(day_sum(Amt), cross_max(day_ar1_coefficient(Volume), 15)), cro`
 - s2019 r2 a: D +0.62 (tr +0.62 / va +1.03);B +0.90 (tr +0.90 / va +1.15, ρK -0.14) `cross_regbeta(cross_delay(mul(cross_delay(cross_mean(cross_delay(cross_mean(mul(`
 - s2035 r3 b: D +0.62 (tr +0.62 / va +0.73);B +0.91 (tr +0.97 / va +0.91, ρK -0.16) `cross_sum(cross_delta(sub(log(sub(log(day_last(Amt)), log(day_first(Amt)))), log`
+- s2046 r2 a: D +0.62 (tr +0.62 / va +0.98);B +1.07 (tr +1.07 / va +1.32, ρK -0.11) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m`
+- s2046 r2 a: D +0.62 (tr +0.62 / va +0.93);B +1.10 (tr +1.10 / va +1.22, ρK -0.18) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2013 r2 b: D +0.62 (tr +0.62 / va +0.66);B +0.87 (tr +0.96 / va +0.87, ρK -0.03) `cross_regbeta(mul(day_sum(Amt), mul(day_sum(Amt), cross_delay(day_ar1_coefficien`
 - s2013 r2 b: D +0.61 (tr +0.61 / va +0.67);B +0.79 (tr +0.93 / va +0.79, ρK -0.13) `cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), cr`
 - s2013 r2 b: D +0.60 (tr +0.67 / va +0.60);B +0.81 (tr +0.89 / va +0.81, ρK -0.15) `cross_regbeta(mul(day_sum(Amt), cross_max(cross_delay(day_ar1_coefficient(Volume`
 - s2035 r3 b: D +0.60 (tr +0.60 / va +0.70);B +0.85 (tr +0.90 / va +0.85, ρK -0.22) `cross_sum(cross_delta(sub(log(sub(cross_delta(abs_(select_where(is_lt(abs_(cross`
+- s2046 r2 b: D +0.60 (tr +0.60 / va +0.89);B +1.11 (tr +1.11 / va +1.17, ρK -0.11) `cross_corr(cross_delay(div(day_var(replace_small_with_nan(Volume)), pow_2(day_me`
 - s2013 r2 b: D +0.60 (tr +0.89 / va +0.60);B +0.63 (tr +1.21 / va +0.63, ρK -0.10) `cross_regbeta(mul(day_sum(Amt), cross_delay(day_sum(Amt), 1)), cross_regbeta(mul`
+- s2046 r2 a: D +0.60 (tr +0.60 / va +0.86);B +0.91 (tr +0.91 / va +1.11, ρK -0.13) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m`
+- s2046 r2 a: D +0.60 (tr +0.60 / va +1.00);B +0.96 (tr +0.96 / va +1.14, ρK -0.11) `cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2`
+- s2046 r2 a: D +0.60 (tr +0.60 / va +1.00);B +0.96 (tr +0.96 / va +1.14, ρK -0.11) `cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2`
 - s2034 r2 a: D +0.59 (tr +0.60 / va +0.59);B +0.57 (tr +0.71 / va +0.57, ρK -0.37) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2001 r3 b: D +0.58 (tr +0.58 / va +1.00);B +0.74 (tr +0.74 / va +1.30, ρK -0.15) `cs_bucket_zscore(cross_regbeta(signedpower(day_sum(Amt)), log(day_q_stat_std(Vol`
 - s2011 r3 a: D +0.58 (tr +0.64 / va +0.58);B +0.45 (tr +0.81 / va +0.45, ρK -0.16) `sub(mul(day_at_min_ratio(Ret), day_centroid(Amt)), cross_fangzheng(day_es_ratio_`
 - s2048 r2 a: D +0.57 (tr +0.57 / va +0.92);B +0.87 (tr +0.87 / va +1.11, ρK +0.23) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(cross_mean(sub(d`
+- s2046 r2 a: D +0.57 (tr +0.57 / va +0.87);B +1.05 (tr +1.06 / va +1.05, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.57 (tr +0.57 / va +0.87);B +1.05 (tr +1.06 / va +1.05, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.57 (tr +0.57 / va +0.87);B +1.05 (tr +1.06 / va +1.05, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2010 r3 a: D +0.57 (tr +0.68 / va +0.57);B +0.81 (tr +0.84 / va +0.81, ρK -0.18) `div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), da`
 - s2013 r3 a: D +0.56 (tr +0.81 / va +0.56);B +0.67 (tr +1.05 / va +0.67, ρK -0.35) `sub(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1))`
 - s2029 r1 a: D +0.56 (tr +0.61 / va +0.56);B +0.66 (tr +0.81 / va +0.66, ρK -0.25) `cs_last_low10(sub(log(cs_last_low40(ts_argmin(ts_mean(abs_(day_mean(Vwap)), 30),`
@@ -212,8 +259,12 @@
 - s2019 r2 a: D +0.53 (tr +0.53 / va +0.90);B +0.81 (tr +0.81 / va +1.18, ρK -0.16) `cross_regbeta(cross_delay(mul(cross_delay(cross_mean(mul(day_mean(High), day_ske`
 - s2013 r1 b: D +0.53 (tr +0.64 / va +0.53);B +0.75 (tr +0.96 / va +0.75, ρK -0.12) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), cross_delay(cross_zscore(day_`
 - s2006 r3 a: D +0.52 (tr +0.52 / va +0.99);B +0.60 (tr +0.60 / va +1.07, ρK -0.45) `div(cs_bucket_zscore(log(cross_stddev(ts_stddev(cross_fangzheng(cross_max(day_co`
+- s2046 r2 a: D +0.52 (tr +0.52 / va +0.80);B +0.92 (tr +0.92 / va +0.99, ρK -0.04) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.52 (tr +0.52 / va +0.80);B +0.92 (tr +0.92 / va +0.99, ρK -0.04) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 b: D +0.52 (tr +0.52 / va +1.27);B +1.11 (tr +1.11 / va +1.45, ρK -0.15) `cross_corr(cross_delay(day_gini(replace_small_with_nan(Amt)), 1), day_var(replac`
 - s2010 r3 a: D +0.52 (tr +0.52 / va +0.59);B +0.75 (tr +0.87 / va +0.75, ρK -0.21) `div(cross_cov(cross_delay(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210))`
 - s2013 r2 b: D +0.51 (tr +0.59 / va +0.51);B +0.77 (tr +0.81 / va +0.77, ρK -0.14) `cross_regbeta(div(day_sum(Amt), cross_max(day_ar1_coefficient(Volume), 15)), cro`
+- s2042 r2 R: D +0.51 (tr +0.51 / va +1.08);B +0.86 (tr +0.86 / va +1.07) `cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Vwap), add(day_kurt(V`
 - s2034 r2 a: D +0.51 (tr +0.51 / va +0.62);B +0.55 (tr +0.77 / va +0.55, ρK -0.40) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2034 r2 a: D +0.51 (tr +0.51 / va +1.14);B +0.80 (tr +0.80 / va +1.22, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2035 r3 b: D +0.51 (tr +0.51 / va +0.68);B +0.81 (tr +0.81 / va +0.85, ρK -0.22) `cross_sum(cross_delta(sub(log(sub(cross_delta(abs_(cross_delta(log(log(day_first`
@@ -223,6 +274,12 @@
 
 ## 尺子 B 过线、D 没过
 
+- s2046 r2 b: D +0.44 (tr +0.44 / va +1.13);B +1.25 (tr +1.25 / va +1.62, ρK -0.26) `cross_corr(cross_delay(log(day_gini(Amt)), 1), day_var(Amt), 240)`
+- s2046 r2 b: D +0.38 (tr +0.38 / va +1.23);B +1.21 (tr +1.21 / va +1.59, ρK -0.25) `cross_corr(cross_delay(log(day_gini(Amt)), 1), day_var(replace_small_with_nan(Am`
+- s2046 r2 b: D +0.37 (tr +0.37 / va +1.23);B +1.18 (tr +1.18 / va +1.62, ρK -0.25) `cross_corr(cross_delay(day_gini(Amt), 1), day_var(replace_small_with_nan(Amt)), `
+- s2046 r2 b: D +0.43 (tr +0.43 / va +1.13);B +1.09 (tr +1.09 / va +1.54, ρK -0.15) `cross_corr(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), day_var(r`
+- s2046 r2 b: D +0.43 (tr +0.43 / va +1.13);B +1.09 (tr +1.09 / va +1.54, ρK -0.15) `cross_corr(cross_delay(log(day_gini(replace_small_with_nan(replace_small_with_na`
+- s2046 r2 b: D +0.49 (tr +0.49 / va +0.88);B +1.05 (tr +1.05 / va +1.11, ρK -0.13) `cross_corr(cross_delay(sub(log(day_gini(replace_small_with_nan(Amt))), log(div(d`
 - s2020 r3 a: D +0.10 (tr +0.10 / va +1.10);B +1.01 (tr +1.01 / va +1.25, ρK -0.26) `cross_corr(cs_demean(cs_demean(day_gini(in_slice(Ret, 1, 240)))), day_es_ratio_l`
 - s2020 r3 a: D +0.10 (tr +0.10 / va +1.10);B +1.01 (tr +1.01 / va +1.25, ρK -0.26) `cross_corr(cs_demean(day_gini(in_slice(Ret, 1, 240))), day_es_ratio_lo(Close), 2`
 - s2034 r2 a: D +0.04 (tr +0.04 / va +0.38);B +0.99 (tr +0.99 / va +1.05, ρK -0.43) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
@@ -233,14 +290,21 @@
 - s2048 r2 a: D -0.75 (tr -0.75 / va +0.18);B +0.91 (tr +0.96 / va +0.91, ρK +0.17) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(day_close(Cl`
 - s2034 r2 a: D +0.30 (tr +0.30 / va +0.70);B +0.90 (tr +1.09 / va +0.90, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2028 r2 R: D -3.30 (tr -3.30 / va -2.65);B +0.87 (tr +0.98 / va +0.87) `div(cs_first_low40(LogTotalCap, day_close(Low)), cross_ema(add(day_kurt(Volume),`
+- s2046 r2 a: D +0.38 (tr +0.38 / va +0.66);B +0.86 (tr +0.86 / va +0.89, ρK -0.13) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.44 (tr +0.44 / va +0.53);B +0.84 (tr +0.84 / va +0.85, ρK -0.14) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2026 r2 a: D +0.12 (tr +0.12 / va +0.66);B +0.83 (tr +0.83 / va +1.00, ρK -0.13) `cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(day_flat_run_max(in`
 - s2013 r2 b: D +0.40 (tr +0.73 / va +0.40);B +0.81 (tr +0.90 / va +0.81, ρK -0.14) `cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), cr`
 - s2020 r3 a: D -0.01 (tr -0.01 / va +1.14);B +0.80 (tr +0.80 / va +1.12, ρK -0.26) `cross_corr(day_gini(in_slice(Ret, 1, 240)), day_es_ratio_lo(Close), 241)`
 - s2020 r2 b: D +0.02 (tr +0.02 / va +0.51);B +0.79 (tr +0.79 / va +0.88, ρK -0.11) `cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1), si`
+- s2046 r2 b: D +0.46 (tr +0.66 / va +0.46);B +0.79 (tr +0.96 / va +0.79, ρK -0.17) `cross_corr(cross_delay(sub(ts_min(pow_05(cross_autocorr_s1(day_durbin_watson(Hig`
 - s2020 r2 b: D +0.02 (tr +0.02 / va +0.51);B +0.78 (tr +0.78 / va +0.87, ρK -0.11) `cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1), da`
+- s2046 r2 a: D +0.39 (tr +0.39 / va +0.92);B +0.78 (tr +0.78 / va +1.10, ρK -0.17) `cross_reg_tvalue(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2`
 - s2020 r2 b: D +0.03 (tr +0.03 / va +0.53);B +0.78 (tr +0.78 / va +0.86, ρK -0.11) `cross_regbeta(cross_delay(cs_demean(day_centroid(in_slice(Amt, 1, 240))), 1), si`
 - s2026 r2 a: D +0.23 (tr +0.23 / va +0.87);B +0.78 (tr +0.78 / va +1.05, ρK -0.10) `cross_mean(mul(day_flat_run_max(in_slice(Ret, 11, 230)), mul(mul(day_flat_run_ma`
+- s2046 r2 a: D +0.43 (tr +0.43 / va +0.70);B +0.77 (tr +0.77 / va +0.99, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 a: D +0.43 (tr +0.43 / va +0.70);B +0.77 (tr +0.77 / va +0.99, ρK -0.12) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(replace_`
 - s2035 r3 b: D +0.47 (tr +0.91 / va +0.47);B +0.77 (tr +1.19 / va +0.77, ρK -0.22) `cross_sum(cross_delta(sub(log(sub(cross_delta(abs_(cross_delta(log(day_last(Clos`
+- s2046 r2 a: D +0.45 (tr +0.45 / va +0.63);B +0.77 (tr +0.77 / va +0.93, ρK -0.11) `cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_m`
 - s2011 r3 a: D +0.38 (tr +0.38 / va +0.69);B +0.77 (tr +0.89 / va +0.77, ρK -0.28) `sub(mul(day_at_min_ratio(Vwap), day_centroid(Amt)), cross_fangzheng(day_es_ratio`
 - s2013 r1 b: D +0.47 (tr +0.78 / va +0.47);B +0.76 (tr +1.13 / va +0.76, ρK -0.15) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), mul(cross_delay(day_sum(Volum`
 - s2035 r3 b: D +0.43 (tr +0.97 / va +0.43);B +0.76 (tr +1.21 / va +0.76, ρK -0.23) `cross_sum(cross_delta(sub(log(sub(log(log(day_first(Amt))), log(day_first(Amt)))`
@@ -257,6 +321,7 @@
 - s2035 r3 b: D +0.42 (tr +0.42 / va +0.71);B +0.69 (tr +0.69 / va +0.89, ρK -0.22) `cross_sum(cross_delta(sub(log(sub(cross_delta(abs_(cross_delta(sub(log(sub(cross`
 - s2034 r2 a: D +0.44 (tr +0.44 / va +0.92);B +0.69 (tr +1.15 / va +0.69, ρK -0.35) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
 - s2034 r2 a: D +0.49 (tr +0.49 / va +0.74);B +0.68 (tr +0.77 / va +0.68, ρK -0.36) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2046 r2 a: D +0.18 (tr +0.18 / va +0.49);B +0.68 (tr +0.68 / va +0.80, ρK -0.05) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
 - s2010 r3 a: D +0.50 (tr +0.50 / va +0.54);B +0.67 (tr +0.67 / va +0.69, ρK -0.17) `cross_delay(cross_delay(div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(R`
 - s2042 r1 a: D +0.34 (tr +0.34 / va +0.89);B +0.66 (tr +0.66 / va +1.00, ρK -0.12) `cs_bucket_zscore(cross_mean(mul(day_sum(Ret), add(day_kurt(Low), add(day_kurt(Lo`
 - s2051 r2 a: D +0.11 (tr +1.11 / va +0.11);B +0.65 (tr +1.56 / va +0.65, ρK -0.03) `cross_regbeta(day_sum(Volume), day_kurt(Volume), 60)`
@@ -264,13 +329,17 @@
 - s2023 r2 b: D +0.31 (tr +0.31 / va +1.00);B +0.64 (tr +0.64 / va +1.16, ρK -0.15) `cross_mean(day_wmean(Ret, log(abs_(log(abs_(Ret))))), 241)`
 - s2023 r2 b: D +0.31 (tr +0.31 / va +1.00);B +0.64 (tr +0.64 / va +1.16, ρK -0.15) `cross_mean(day_wmean(Ret, log(log(Ret))), 241)`
 - s2023 r2 b: D +0.31 (tr +0.31 / va +1.00);B +0.64 (tr +0.64 / va +1.16, ρK -0.15) `cross_mean(day_wmean(Ret, log(abs_(abs_(log(abs_(Ret)))))), 241)`
+- s2046 r2 a: D +0.13 (tr +0.13 / va +0.49);B +0.64 (tr +0.64 / va +0.72, ρK -0.21) `cross_corr(cross_delay(log(cross_delay(log(div(day_var(replace_small_with_nan(Am`
 - s2034 r2 a: D +0.22 (tr +0.22 / va +0.46);B +0.64 (tr +0.64 / va +0.85, ρK -0.28) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2042 r2 R: D +0.12 (tr +0.12 / va +0.59);B +0.64 (tr +0.64 / va +0.75) `cs_bucket_zscore(ts_std(day_kurt(High), 240), LogFloatCap)`
 - s2010 r3 a: D +0.20 (tr +0.20 / va +0.50);B +0.63 (tr +0.68 / va +0.63, ρK -0.09) `div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), da`
 - s2026 r2 a: D +0.20 (tr +0.20 / va +0.64);B +0.62 (tr +0.62 / va +0.82, ρK -0.13) `cross_mean(mul(mul(day_flat_run_max(in_slice(Ret, 11, 230)), day_sum(in_slice(Re`
 - s2013 r2 b: D +0.20 (tr +0.20 / va +0.23);B +0.62 (tr +0.62 / va +0.63, ρK +0.02) `cross_regbeta(mul(day_sum(Amt), cross_max(day_ar1_coefficient(Volume), 15)), cro`
 - s2013 r1 b: D +0.37 (tr +0.43 / va +0.37);B +0.61 (tr +0.85 / va +0.61, ρK -0.22) `cross_regbeta(mul(cross_delay(day_median(Amt), 1), cs_rank(cs_mask_top_replace_m`
 - s2011 r3 a: D +0.20 (tr +0.20 / va +0.96);B +0.61 (tr +0.61 / va +1.00, ρK -0.29) `sub(mul(day_at_min_ratio(Vwap), day_centroid(Amt)), cross_fangzheng(day_es_ratio`
 - s2044 r1 R: D +0.36 (tr +0.36 / va +0.38);B +0.61 (tr +0.61 / va +0.93) `ts_max(cs_demean(day_corr(Ret, Volume)), 120)`
+- s2046 r2 a: D +0.23 (tr +0.23 / va +0.23);B +0.61 (tr +0.61 / va +0.61, ρK -0.08) `cs_regres(cross_corr(cross_delay(log(div(day_var(replace_small_with_nan(Amt)), p`
+- s2046 r2 b: D -0.08 (tr -0.08 / va +0.51);B +0.60 (tr +0.60 / va +0.96, ρK -0.14) `cross_corr(cross_delay(log(day_gini(replace_small_with_nan(Amt))), 1), day_var(R`
 - s2037 r1 a: D +0.04 (tr +0.04 / va +0.14);B +0.60 (tr +0.60 / va +0.76, ρK -0.30) `cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), d`
 - s2010 r3 a: D +0.39 (tr +1.01 / va +0.39);B +0.60 (tr +0.97 / va +0.60, ρK -0.21) `div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), da`
 - s2035 r3 b: D +0.43 (tr +0.83 / va +0.43);B +0.60 (tr +1.24 / va +0.60, ρK -0.19) `cross_sum(select_where(is_lt(abs_(cross_delta(abs_(cross_delta(log(day_last(Clos`
@@ -279,6 +348,9 @@
 - s2010 r3 a: D +0.32 (tr +0.32 / va +0.62);B +0.59 (tr +0.59 / va +0.77, ρK -0.20) `cross_cov(cross_delay(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1)`
 - s2044 r1 R: D +0.11 (tr +0.11 / va +0.25);B +0.58 (tr +0.59 / va +0.58) `ts_max(ts_max(day_corr(Ret, Amt), 40), 120)`
 - s2048 r2 a: D +0.18 (tr +0.18 / va +0.70);B +0.58 (tr +0.58 / va +0.92, ρK +0.23) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_clos`
+- s2046 r2 b: D +0.07 (tr +0.07 / va +0.29);B +0.58 (tr +0.58 / va +0.73, ρK -0.11) `cross_corr(cross_delay(day_gini(replace_small_with_nan(Amt)), 1), day_var(replac`
+- s2023 r3 b: D +0.16 (tr +0.16 / va +0.35);B +0.58 (tr +0.58 / va +0.64, ρK -0.19) `cross_cov(day_wmean(Ret, Low), ts_scale(day_cov(Volume, Ret), 20), 30)`
+- s2046 r2 b: D +0.03 (tr +0.03 / va +0.38);B +0.58 (tr +0.58 / va +0.75, ρK -0.16) `cross_corr(log(div(day_var(replace_small_with_nan(Amt)), pow_2(day_mean(replace_`
 - s2048 r2 a: D +0.18 (tr +0.18 / va +0.69);B +0.58 (tr +0.58 / va +0.91, ρK +0.23) `cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(sub(div(day_clos`
 - s2048 r2 a: D +0.18 (tr +0.18 / va +0.69);B +0.58 (tr +0.58 / va +0.91, ρK +0.23) `cs_first_low20(cs_first_low20(cs_first_low20(LogTotalCap, ListAge), cross_mean(s`
 - s2048 r2 a: D +0.18 (tr +0.18 / va +0.69);B +0.58 (tr +0.58 / va +0.91, ρK +0.23) `cs_first_low20(cs_first_low20(cs_first_low20(LogTotalCap, ListAge), ListAge), cr`
@@ -293,6 +365,7 @@
 - s2013 r2 b: D +0.46 (tr +0.86 / va +0.46);B +0.57 (tr +1.17 / va +0.57, ρK -0.22) `cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), da`
 - s2048 r2 a: D +0.05 (tr +0.05 / va +0.33);B +0.57 (tr +0.84 / va +0.57, ρK +0.05) `cs_first_low20(cs_first_low20(cs_first_low20(cs_first_low20(LogTotalCap, ListAge`
 - s2009 r3 a: D +0.37 (tr +0.50 / va +0.37);B +0.57 (tr +0.75 / va +0.57, ρK -0.27) `cross_mean(cs_bucket_demean(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_mean(R`
+- s2023 r3 b: D +0.28 (tr +0.28 / va +0.52);B +0.57 (tr +0.57 / va +0.64, ρK -0.17) `cross_cov(day_wmean(Ret, log(Ret)), ts_scale(day_cov(Volume, Ret), 20), 30)`
 - s2013 r2 b: D +0.05 (tr +0.28 / va +0.05);B +0.56 (tr +0.76 / va +0.56, ρK -0.10) `cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1)), cr`
 - s2037 r1 a: D +0.04 (tr +0.04 / va +0.16);B +0.56 (tr +0.56 / va +0.92, ρK -0.30) `cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), d`
 - s2013 r3 a: D +0.14 (tr +0.14 / va +0.66);B +0.56 (tr +0.56 / va +1.03, ρK -0.14) `mul(cross_regbeta(mul(day_sum(Amt), cross_delay(day_ar1_coefficient(Volume), 1))`
@@ -318,10 +391,43 @@
 - s2010 r3 a: D +0.25 (tr +0.25 / va +0.71);B +0.52 (tr +0.52 / va +0.97, ρK -0.20) `div(cross_cov(cross_delay(cross_delay(day_sum(in_slice(Ret, 1, 210)), 1), 1), da`
 - s2010 r3 a: D +0.14 (tr +0.14 / va +0.47);B +0.52 (tr +0.52 / va +0.62, ρK -0.20) `div(cross_cov(cross_delay(cross_delay(cross_delay(cross_delay(day_sum(in_slice(R`
 - s2016 r3 a: D -0.06 (tr -0.06 / va +0.31);B +0.52 (tr +0.52 / va +0.68, ρK -0.06) `cross_max(cross_max(cross_max(day_hurst(Low), 60), 15), 60)`
+- s2032 r3 b: D +0.39 (tr +0.95 / va +0.39);B +0.52 (tr +1.19 / va +0.52, ρK -0.26) `cross_regbeta(day_sum(Amt), cross_regbeta(day_sum(Amt), sub(div(day_last(Close),`
+- s2056 r1 b: D +0.19 (tr +0.19 / va +0.50);B +0.52 (tr +0.70 / va +0.52, ρK -0.32) `cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 60)`
 - s2037 r1 a: D -0.02 (tr -0.02 / va +0.21);B +0.51 (tr +0.51 / va +0.68, ρK -0.33) `cross_corr(energy_ratio_topm_minus_q(delete_open_close(Volume), 50, 5, False), l`
 - s2032 r2 a: D +0.37 (tr +0.37 / va +0.51);B +0.51 (tr +0.51 / va +0.63, ρK -0.20) `cross_regbeta(cs_bucket_zscore(cross_ema(day_first(Volume), 20), cs_bucket_zscor`
 - s2009 r3 a: D +0.35 (tr +0.35 / va +0.45);B +0.51 (tr +0.67 / va +0.51, ρK -0.25) `cross_mean(cs_bucket_demean(sub(cs_bucket_demean(sub(day_wmean(Ret, Amt), day_me`
 - s2010 r2 a: D +0.21 (tr +0.46 / va +0.21);B +0.51 (tr +0.70 / va +0.51, ρK -0.20) `cross_corr(day_durbin_watson(in_slice(Vwap, 211, 240)), cross_delay(cross_delay(`
+
+## 尺子 B 过线、D 待算
+
+- s2034 r3 R: B +1.72 (tr +1.72 / va +1.74) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Amt, 20))), cross_regbet`
+- s2034 r3 R: B +1.57 (tr +1.57 / va +2.00) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Amt, 20))), cross_regbet`
+- s2034 r3 b: B +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, in_topk_masked(Ret, Volu`
+- s2034 r3 b: B +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(day_sum(in_topk_masked(Ret, Volume, 20)), cross_corr(day_sum(Ret`
+- s2034 r3 b: B +1.51 (tr +1.54 / va +1.51, ρK -0.38) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cs_first_`
+- s2034 r3 b: B +1.48 (tr +1.59 / va +1.48, ρK -0.33) `cs_first_high20(signedpower(day_sum(in_topk_masked(in_topk_masked(Ret, Volume, 2`
+- s2034 r3 b: B +1.35 (tr +1.35 / va +1.46, ρK -0.41) `cs_first_high20(signedpower(day_sum(Volume)), cross_corr(day_sum(Ret), cs_rank(d`
+- s2034 r3 b: B +1.35 (tr +1.35 / va +1.46, ρK -0.41) `cs_first_high20(signedpower(day_sum(Volume)), cs_first_high20(signedpower(day_su`
+- s2034 r3 b: B +1.33 (tr +1.47 / va +1.33, ρK -0.35) `cs_first_high20(signedpower(day_sum(in_topk_masked(Volume, Volume, 20))), cross_`
+- s2034 r3 b: B +1.33 (tr +1.47 / va +1.33, ρK -0.35) `cs_first_high20(signedpower(day_sum(in_topk_masked(Volume, Volume, 20))), cross_`
+- s2034 r3 b: B +1.32 (tr +1.47 / va +1.32, ρK -0.35) `cs_first_high20(signedpower(day_sum(in_topk_masked(Amt, Volume, 20))), cross_cor`
+- s2034 r3 b: B +1.31 (tr +1.31 / va +1.42, ρK -0.24) `cs_first_high20(cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, `
+- s2034 r3 b: B +0.94 (tr +1.03 / va +0.94, ρK -0.39) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.94 (tr +1.03 / va +0.94, ρK -0.39) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.94 (tr +1.03 / va +0.94, ρK -0.39) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.89 (tr +1.25 / va +0.89, ρK -0.33) `cs_first_high20(signedpower(day_sum(in_topk_masked(Vwap, Volume, 20))), cross_re`
+- s2034 r3 b: B +0.85 (tr +1.35 / va +0.85, ρK -0.42) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2034 r3 b: B +0.84 (tr +0.96 / va +0.84, ρK -0.42) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.83 (tr +1.35 / va +0.83, ρK -0.24) `cs_first_high20(signedpower(signedpower(day_sum(in_topk_masked(Ret, in_topk_mask`
+- s2034 r3 b: B +0.70 (tr +0.70 / va +0.73, ρK -0.36) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2034 r3 b: B +0.61 (tr +0.68 / va +0.61, ρK -0.47) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.58 (tr +1.00 / va +0.58, ρK -0.46) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.55 (tr +0.56 / va +0.55, ρK -0.40) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2034 r3 b: B +0.53 (tr +1.01 / va +0.53, ρK -0.32) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_reg`
+- s2034 r3 b: B +0.53 (tr +0.53 / va +0.98, ρK -0.40) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
+- s2034 r3 b: B +0.52 (tr +0.94 / va +0.52, ρK -0.18) `cs_first_high20(signedpower(day_sum(in_topk_masked(Ret, Volume, 20))), cross_cor`
 
 ## R 的改进(替换素材,不算 head)
 
@@ -343,10 +449,12 @@
 - s2017 r1: +0.00 (tr +0.00 / va +0.49) `signedpower(cs_mask_top_replace_mean_neg(pow_2(day_quantile(Vwap))))`
 - s2028 r2: -0.04 (tr +0.00 / va -0.04) `pow_1_5(ts_max(ts_max(pow_2(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(R`
 - s2008 r1: -0.09 (tr -0.07 / va -0.09) `cross_stddev(ts_sum(log(day_durbin_watson(Vwap)), 10), 241)`
+- s2032 r3: -0.11 (tr +0.71 / va -0.11) `ts_regbeta(day_last(Amt), day_durbin_watson(Open), 30)`
 - s2002 r1: -0.11 (tr -0.11 / va -0.09) `ts_mean(mul(log(add(mul(log(add(day_max(Amt), day_std(Vwap))), ts_hurst(div(day_`
 - s2043 r1: -0.12 (tr -0.12 / va +0.14) `ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(`
 - s2010 r1: -0.15 (tr -0.15 / va -0.10) `cross_stddev(ts_sum(day_durbin_watson(Vwap), 10), 241)`
 - s2030 r1: -0.17 (tr -0.13 / va -0.17) `pow_2(cross_max(ts_max(cs_demean(sub(day_mean(Ret), 0.5)), 40), 90))`
+- s2056 r1: -0.20 (tr -0.02 / va -0.20) `day_max(cross_corr(Amt, Ret, 180))`
 - s2030 r1: -0.20 (tr -0.20 / va -0.15) `pow_2(cross_max(ts_max(cs_demean(sub(ts_max(cs_demean(sub(day_mean(Ret), -0.5)),`
 - s2003 r2: -0.22 (tr -0.14 / va -0.22) `ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 241)`
 - s2038 r2: -0.23 (tr -0.23 / va -0.22) `div(cross_mean(day_open(Amt), 5), add(cross_mean(day_sum(Amt), 20), 1))`
@@ -382,6 +490,7 @@
 - s2018 r2: -0.88 (tr -0.88 / va -0.61) `cross_mean(cross_stddev(day_skew(Open), 10), 241)`
 - s2009 r2: -0.92 (tr -0.45 / va -0.92) `ts_max(day_durbin_watson(Close), 80)`
 - s2031 r1: -0.92 (tr -0.88 / va -0.92) `cross_ema(abs_(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)), 6`
+- s2055 r1: -0.94 (tr -0.76 / va -0.94) `ts_mean(pow_2(day_kurt(in_autocorr(Low, 3, 1))), 15)`
 - s2052 r2: -0.98 (tr -0.98 / va -0.95) `cross_mean(day_tide_speed(in_slice(Close, 31, 211), day_argmin(in_slice_from_sta`
 - s2020 r2: -1.02 (tr -1.02 / va -0.43) `cs_bucket_zscore(cross_mean(abs_(day_skew(Open)), 241), LogFloatCap)`
 - s2007 r1: -1.07 (tr -1.07 / va -0.63) `cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 60)`
@@ -392,6 +501,7 @@
 - s2003 r1: -1.20 (tr -0.96 / va -1.20) `ts_mean(ts_hurst(div(day_last(Volume), day_max(Low)), 20), 25)`
 - s2027 r1: -1.22 (tr -1.20 / va -1.22) `ts_stddev(day_q_stat_std(in_slice(Ret, 11, 230), 10), 45)`
 - s2020 r1: -1.22 (tr -1.22 / va -1.11) `cs_bucket_zscore(cross_ema(abs_(day_skew(Open)), 30), LogFloatCap)`
+- s2040 r2: -1.28 (tr -1.28 / va -1.22) `ts_mean(mul(sub(div(day_last(Close), day_first(Open)), 1), add(day_sum(is_gt(sub`
 - s2033 r2: -1.31 (tr -0.90 / va -1.31) `cross_regbeta(day_quantile_q25(Low), day_last(Amt), 60)`
 - s2012 r3: -1.38 (tr -1.38 / va -0.51) `ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 240)`
 - s2011 r2: -1.38 (tr -1.38 / va -0.83) `cs_bucket_demean(ts_quantile_q75(pow_2(day_ar1_coefficient(Volume)), 200), cross`
@@ -399,6 +509,7 @@
 - s2020 r2: -1.45 (tr -0.77 / va -1.45) `pow_05(ts_cov(sigmoid(day_argmin(Vwap)), cs_mask_top_replace_mean_neg(day_durbin`
 - s2005 r1: -1.47 (tr -1.42 / va -1.47) `cs_bucket_demean(cross_max(cross_max(cross_max(day_cov(Amt, Low), 5), 5), 30), c`
 - s2012 r2: -1.54 (tr -1.54 / va -0.53) `ts_quantile_q75(day_ar1_coefficient(in_slice(Vwap, 30, 210)), 120)`
+- s2058 r1: -1.55 (tr -1.44 / va -1.55) `cross_mean(day_std(pow_2(Ret)), 20)`
 - s2034 r2: -1.58 (tr -1.58 / va -1.55) `cross_mean(div(day_sum(in_topk_masked(Ret, Volume, 20)), cross_mean(day_sum(Volu`
 - s2018 r1: -1.58 (tr -1.58 / va -1.31) `ts_std(cross_argmax(day_quantile(Vwap), 60), 25)`
 - s2026 r1: -1.61 (tr -1.61 / va -1.21) `add(ts_stddev(day_ar1_coefficient(in_slice(Ret, 11, 230)), 120), ts_stddev(day_a`
@@ -416,9 +527,12 @@
 - s2011 r2: -1.77 (tr -1.69 / va -1.77) `cross_ema(day_ar1_coefficient(Close), 120)`
 - s2009 r3: -1.83 (tr -1.83 / va -0.53) `cross_mean(mul(ts_regres(day_mean(High), day_close(Amt), 50), day_durbin_watson(`
 - s2039 r1: -1.85 (tr -1.85 / va -1.64) `cross_ema(pow_05(day_autocorr_n1(Close)), 120)`
+- s2055 r1: -1.89 (tr -0.98 / va -1.89) `cross_sum(pow_2(day_kurt(in_autocorr(Ret, 3, 1))), 30)`
 - s2010 r1: -1.89 (tr -1.67 / va -1.89) `cross_zscore(ts_sum(day_durbin_watson(Volume), 20), 120)`
+- s2022 r3: -1.91 (tr -1.91 / va -1.85) `ts_pearson(day_argmin(High), 20)`
 - s2035 r2: -1.93 (tr -1.93 / va -1.84) `cross_stddev(div(day_last(in_topk_masked(Volume, Close, 5, False)), day_first(in`
 - s2022 r2: -2.02 (tr -2.02 / va -1.96) `ts_pearson(day_argmin(Low), 20)`
+- s2050 r2: -2.04 (tr -2.04 / va -0.32) `cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret,`
 - s2024 r1: -2.05 (tr -2.05 / va -1.80) `abs_(ts_pearson(day_quantile_q75(Ret), 10))`
 - s2025 r2: -2.14 (tr -2.14 / va -2.13) `cross_ema(div(day_sum(mul(in_slice(Ret, 191, 240), in_slice(Volume, 191, 240))),`
 - s2049 r1: -2.19 (tr -2.19 / va -1.78) `cross_tail_mean_q25(ts_reg_fvalue(day_std(High), day_cov(Volume, Low), 40), 120)`
