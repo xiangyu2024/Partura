@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [4]
+    reasons: '核心 ts_sum(mul(sign(mid - VWAP), Volume), 5) 是快照 head 1 的子树(abs_(cs_demean(cs_rank(core / ts_sum(Volume,5)))))，属于合法的 E 核心。核心对 5 个控制的 |ρ| 为 liq 0.57 / vol 0.17 / rev 0.15 / known 0.60 / size 0.57，全部低于 0.8，过核心门槛(corr_1.md / corr_1.json)。种子与 head 1 的原始 |ρ| 全部不超过 0.35，与库禁令 0.7 相距很远。新颖度给 3 而不是 4，因为所有种子共用同一个流量核心，只是外围的归一化不同，新的是外围，核心与 head 1 相同。合理度给 4：逐个算子核对，ts_delay 是回看，ts_sum 是 nansum 窗口，cross_zscore / cross_ema 都是因果的，机制是「收盘相对 VWAP 的方向 x 成交量的累计 = 买方压力」，清楚。扣一分的原因：公式里是 (今收+昨收)/2 与 VWAP 比较，而不是设想里说的「收盘附近」的价格，昨收拉进来的是平滑后的收盘，机制描述与公式对不上。另外，种子 3 cross_ema(core,10)、种子 8 cs_demean(cs_rank(cross_ema(core,5)))、种子 10 core * cs_rank(day_std(Ret)) 都是水平型写法(种子 8 还是 cs_rank 的一次性套法)，与「改成对自身历史归一化、不要水平」的 E 设想不一致。按 §3 种子只能以数学问题或重复划掉，这三个不算数学问题，与 head 的 |ρ| 也都低于 0.4，所以我没有划，但 PI 应该知道这三个是外围中偏离设想的部分，三者之间也可能高度相关(都是同一核心的 EMA 或其水平)。种子 4 划掉：ts_rank 的输出只能取 k/n(n 不超过 20)，corr_1.json 中 gate 为 False、distinct 为 0.01，截面上几乎只剩二十来个档位，属于数值伪影。另外 nanrank_last 在当天值缺失时返回 0，会把停牌票压到窗口最低。其余种子没有数学问题(前视、常数面板、除以近零的爆点都没有出现)，没有与 head 的 |ρ| 不小于 0.7 的重复，也没有与控制的 |ρ| 不小于 0.8 的重复。留意：种子 12 的 vol 控制 |ρ| 为 0.76，接近门槛但未过；种子 6 与 12 的分母在一字板连续多日时可能接近 0，会产生爆点，但核心在这些日子常为 0，影响有限。如果它有 alpha，最可能来自：同一个方向性资金流在该股自身历史上的异常(相对常态的偏离)，而不是它的截面水平。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [9]
+    reasons: 'N 位的想法是「成交量加权分钟收益 减 等权分钟收益」。核对算子：day_wmean(x,w) = sum(x*|w|)/sum(|w|)，总量为 0 时为 NaN(ops_ext.py:109)。所以 day_wmean(Ret,Volume) - day_mean(Ret) 在代数上等于 day_cov(Ret,Volume) / day_mean(Volume)，只差一个按日内样本数决定的常数，分母为正。这一点要告诉 PI：假设里说的「骨架不同，库里没有这种构造」只在表达式骨架上成立，量上是同一个量(day_cov 的水平，被日均量归一化)。head 2 用的是它的 241 日自相关，统计量不同，种子 b1 与 head 2 的原始 |ρ| 只有 0.06，所以新颖度给 3，不给 1 也不给 4。其余种子与各 head 的原始 |ρ| 都不超过 0.15，唯一例外是种子 10 与 head 3 的 0.52(残差 0.40)，它的成分是 High-Low 的成交量加权均值，是活跃度/波动的代理，离 N 的假设最远，但不构成数学问题。与控制的 |ρ| 最大的是 b8 vol 0.55、b12 vol 0.54，都低于 0.8。合理度给 4：每个种子的算子都是因果的(cross_ema、ts_decay_linear、cross_zscore 都回看)，机制清楚(放量分钟的收益方向、净买入比例、收益与成交量的日内共动)。扣的部分：种子 7 的 wmean(Ret,Volume) - wmean(Ret,Amt) 主要来自分钟价格水平的加权差异，机制弱；种子 6、11 的分母是 day_std(Ret) 或其 EMA，一字板连续多日时会接近 0，可能产生爆点，但 cross_ema 会跳过 inf 与 NaN，爆点只能来自有限的大数，影响有限。划掉种子 9：它是 ts_rank(sub(day_wmean(Ret,Volume), day_mean(Ret)), 30)，corr_1.json 中 gate 为 False、distinct 为 0.017，ts_rank 的输出被量化为 k/n(n 不超过 31)，截面上几乎只剩少数档位；同时停牌日 Volume 为 0 时 day_wmean 为 NaN，ts_rank 按 nanrank_last 返回 0，会把停牌票压到最低档。两者都是数值伪影。其余种子没有数学问题，也没有与 head 的 |ρ| 不小于 0.7 或与控制的 |ρ| 不小于 0.8 的重复。如果它有 alpha，最可能来自：大成交量分钟里收益与成交量的日内共动(放量上涨或放量下跌的持续性)，归一化之后不再是水平。'
+R:
+  - head: 'cross_autocorr_s1(day_cov(Ret, Volume), 241)'
+    soundness: 4
+    reasons: 'cross_autocorr_s1 = cross_autocorr(f, d, 1)(catalog.py:164)，实现为 x[1:] 与 x[:-1] 的滚动相关(dt_cross.py:198-204)，是回看、无前视的。variants 1 至 3(窗口 482；成交额协方差；窗口 360)是干净的修改：拉长窗口对应慢统计量更稳的理由，与 head 的原始 |ρ| 为 0.71 / 0.67 / 0.79，按规则属于替换候选而不是新收录。注意两点：(1) 482 日窗口需要约两年热身，train 段的前几年没有值，train 分数实际只覆盖后段，PI 应按 train 的有效样本数核对，不要把 482 的分数直接与 241 比较；(2) variant 4 把 day_cov 换成 day_wmean(Ret,Volume)，它含均值项，自相关测的就成了量加权收益水平的持续性，机制从量价共动变成了收益持续性，与 20 日反转控制接近的风险要留意；variant 5 把 day_topw_mean 当内层，是事件型均值，机制也变了。合理度给 4，是因为 variant 1 至 3 的修改干净且有说明，variant 4 与 5 的机制已经改变，但它们是候选，不是 head 本身。'
+summary: '两个任务位都过审：槽 a(E)划 4 号，槽 b(N)划 9 号，均为数值伪影(ts_rank 量化)；R 合理度 4。需告诉 PI 两点：槽 b 的 wmean 减 mean 代数上等于 day_cov 除以平均成交量，骨架新颖性的说法需修正；槽 a 的中点公式与「收盘附近」描述不一致。'

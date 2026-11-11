@@ -1,0 +1,72 @@
+seed: 2075
+round: 1
+slots:
+- type: E
+  core: ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5)
+  hypothesis: 核心是 5 日累计的「相对 VWAP 的符号 x 成交量」:昨收与今收的中点高于当日成交均价,说明收盘附近有人愿意在高于全天均价处成交(买方压力),反之为卖压;乘成交量后累加得到有量权重的方向性资金流。该核心本身的分数为负,是因为原
+    head 外面套了 cs_rank、abs_ 与除以总量,把方向信息压掉(abs_ 去掉了正负号)。本轮外围完全不同:不取 abs_、不做 cs_rank
+    的一次性套法,而是改成对自身历史的归一化(cross_zscore、ts_rank、cross_ema、与自身 20 日均值之差)或用成交额 / 波动率 /
+    均量做分母,检验的机制是「资金流的异常程度(相对该股自己的常态)」而不是水平。和库里已有的不同:库里的同族只取 abs_(cs_demean(cs_rank(...)))。样本外还会在,因为买方压力的持续性与散户跟随的行为偏差是慢变量,且归一化后去掉了对流动性、市值的线性暴露。
+  seeds:
+  - div(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), ts_sum(day_sum(Amt),
+    20))
+  - cross_zscore(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), 20)
+  - cross_ema(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), 10)
+  - sub(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), ts_mean(ts_sum(mul(sign(sub(div(add(day_last(Close),
+    ts_delay(day_last(Close), 1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)),
+    5), 20))
+  - div(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), ts_std(day_sum(Volume),
+    20))
+  - ts_decay_linear(div(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), ts_sum(day_sum(Volume),
+    20)), 10)
+  - cs_demean(cs_rank(cross_ema(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), 5)))
+  - div(cross_delta(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), 5), ts_sum(day_sum(Volume),
+    20))
+  - mul(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), cs_rank(day_std(Ret)))
+  - ts_corr(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close),
+    1)), 2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), day_last(Close),
+    20)
+  - div(ts_sum(mul(sign(sub(div(add(day_last(Close), ts_delay(day_last(Close), 1)),
+    2), div(day_sum(Amt), day_sum(Volume)))), day_sum(Volume)), 5), ts_sum(mul(day_sum(Volume),
+    day_std(Ret)), 5))
+- type: N
+  hypothesis: 成交量加权的分钟收益与等权分钟收益之差:day_wmean(Ret, Volume) 是资金实际承受的收益,day_mean(Ret)
+    对死分钟和热分钟同权,二者之差 = 大成交量分钟的方向(知情或冲击交易)相对于噪声分钟的偏离;day_topw_mean 只看最重的 10% 分钟,是一个无触发器的事件研究。用
+    cross_ema / ts_decay_linear 做自带平滑,把日内的量价同向性累积成慢信号;再与 Volume vs Amt 加权之差对比,区分「股数」与「金额」加权(价格水平的差异)。库里做的是
+    day_cov(Ret, Volume) 及其自相关,即二阶矩的持续性,没有一个把权重放进均值里去取方向偏离的构造,骨架不同。样本外还会在,因为大单推动的价格方向延续(或被冲击后回吐)是微观结构层面的机制,不依赖某段行情。
+  inspired_by: 批 1 中 day_cov(Ret, Volume) 的自相关 head(分数 -1.12)及 day_last(Close) / day_sum(Volume)
+    的共性:量与价的联动是这批的主线,但现有写法只用协方差的自相关,量价方向本身没被取均值
+  seeds:
+  - cross_ema(sub(day_wmean(Ret, Volume), day_mean(Ret)), 20)
+  - cross_ema(day_topw_mean(Ret, Volume), 20)
+  - cross_zscore(sub(day_wmean(Ret, Amt), day_mean(Ret)), 40)
+  - ts_decay_linear(sub(day_topw_mean(Ret, Volume), day_topw_mean(Ret, Amt)), 20)
+  - cross_ema(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Amt)), 10)
+  - div(cross_ema(day_topw_mean(Ret, Volume), 20), cross_ema(day_std(Ret), 20))
+  - cross_mean(sub(day_wmean(Ret, Volume), day_wmean(Ret, Amt)), 30)
+  - cross_ema(mul(day_signed_ratio(Ret, Volume), day_wmean(Ret, Volume)), 15)
+  - cross_ema(day_wmean(sub(High, Low), Volume), 20)
+  - cross_ema(div(day_wmean(Ret, Volume), day_std(Ret)), 20)
+  - cs_demean(cross_ema(day_topw_mean(Ret, Amt), 30))
+R:
+- head: cross_autocorr_s1(day_cov(Ret, Volume), 241)
+  why: 窗口 241 日的自相关里 482 日更好(+0.26):慢统计量更稳;换成成交额协方差后窗口不变分数持平,说明协方差的量纲不是烂部件,窗口才是
+  variants:
+  - cross_autocorr_s1(day_cov(Ret, Volume), 482)
+  - cross_autocorr_s1(day_cov(Ret, Amt), 482)
+  - cross_autocorr_s1(day_cov(Ret, Volume), 360)
+  - cross_autocorr_s1(day_wmean(Ret, Volume), 482)
+  - cross_autocorr_s1(day_topw_mean(Ret, Volume), 482)
+audit:
+  attempts: 1
+  file: audit_1.yaml
