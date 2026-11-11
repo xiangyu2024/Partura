@@ -1,0 +1,84 @@
+seed: 2064
+round: 2
+slots:
+- type: E
+  core: div(day_max(High), ts_delay(day_last(Close), 1))
+  hypothesis: 核心 X = 当日最高价 / 前一日收盘价,即「相对昨收的盘中最大涨幅」(只用当日与前一日数据,无前视;前一日收盘取自 ts_delay,正常价格不近零)。
+    本批证据:含 X 的 32 个已评分候选均值 -0.76,不含的 -2.24(p<0.001),是共性表里富集最强的非平凡子树之一;但 X 本身在快照 head
+    里没有出现过 (3 个 head 全是 day_var(pow_2_5(Ret)) 的时序滤波),所以库里没人把它当主体。机制:这是 Bali-Cakici-Whitelaw
+    的 MAX / 彩票偏好在 A 股的盘中版本——散户追逐 「摸到大涨」的票,近期盘中冲高越多的票被追涨越狠,之后被高估;而冲高之后收盘回落的部分是卖压证据。第
+    1 轮 N 位用 LimitWidth 做成涨停事件指示(阈值 0.95), 得分只有 +0.09,说明事件版太稀疏;这一位要试的是**连续版**:不加 LimitWidth
+    的阈值,而是用时序尾部、截面形状与桶内比较来读 X 的分布。外围(与快照里任何含 X 的候选都不同, 那些全是 LimitWidth 事件指示 + cross_mean
+    120):(1)尾部强度 cross_max / cross_tail_mean_q75(X,60) = 近 60 日最极端的冲高,MAX 因子的直接写法;
+    (2)冲高减收盘 = X - Close/昨收 的回吐,尾部均值读「冲高后回落」幅度;(3)同市值桶内的比较(cs_bucket_demean,LogFloatCap),市值的线性与非线性暴露已被尺子去掉,桶内比较拿到的是
+    「同样大的票里谁更爱冲高」;(4)与成交额的关系 cross_corr(X, day_sum(Amt)):冲高由放量驱动 = 消息 / 追涨,无量冲高 =
+    噪声;(5)相对自己的变化 cross_zscore(X,60)、20 日对 120 日; (6)上冲对下探的不对称 X - 日最低 / 昨收。算子实现全部是
+    day_* 把分钟压成日值再用尾随窗口 cross_*,无前视,窗口 20-120 日、换手低,15 bp 影响小。为什么与库里不同:两个库 5583 条表达式的骨架都已被禁,X
+    作为主体(而非 Ret 的幂方差)是新的;连续尾部 / 回吐 / 桶内 / 相关写法和快照里的涨停事件写法不是同一个量。样本外为什么还在:涨停制度与散户追涨行为是结构性的,
+    非某段行情;最可能的失败:X 的水平被波动 / 反转控制吃掉,留下的只有与 X 回吐相关的成分;已知风险:X 的尾部与 head 的上行方差族有一定相关(会被库禁令挡掉的自动淘汰)。
+  seeds:
+  - cross_max(div(day_max(High), ts_delay(day_last(Close), 1)), 60)
+  - cross_tail_mean_q75(div(day_max(High), ts_delay(day_last(Close), 1)), 60)
+  - cross_tail_mean_q75(sub(div(day_max(High), ts_delay(day_last(Close), 1)), div(day_last(Close),
+    ts_delay(day_last(Close), 1))), 60)
+  - cross_mean(sub(div(day_max(High), ts_delay(day_last(Close), 1)), div(day_last(Close),
+    ts_delay(day_last(Close), 1))), 120)
+  - cs_bucket_demean(cross_max(div(day_max(High), ts_delay(day_last(Close), 1)), 60),
+    LogFloatCap)
+  - cs_bucket_demean(cross_tail_mean_q75(div(day_max(High), ts_delay(day_last(Close),
+    1)), 120), LogFloatCap)
+  - cross_corr(div(day_max(High), ts_delay(day_last(Close), 1)), day_sum(Amt), 60)
+  - cross_zscore(div(day_max(High), ts_delay(day_last(Close), 1)), 60)
+  - sub(cross_mean(div(day_max(High), ts_delay(day_last(Close), 1)), 20), cross_mean(div(day_max(High),
+    ts_delay(day_last(Close), 1)), 120))
+  - cs_bucket_zscore(cross_stddev(div(day_max(High), ts_delay(day_last(Close), 1)),
+    60), LogFloatCap)
+  - cross_autocorr(div(day_max(High), ts_delay(day_last(Close), 1)), 60, 1)
+- type: N
+  hypothesis: '新 idea:「封板时长」。涨跌停制度下,一只票当天被封在涨(跌)停价上的时间长短,分钟数据里表现为「日内最高价上停留的分钟占比」和「价格不动的最长连续段」:
+    day_at_max_ratio(Close) = 收盘价等于当日最大值的分钟占比(封板 / 收在最高),day_flat_ratio(Close) = 分钟收益为零的占比(一字板
+    / 无量冻结),day_flat_run_max(Close) = 最长的零收益连续段。 第 1 轮 N 位把涨停读成「High 触及阈值」的二元事件,得分
+    +0.09 仅勉强为正,且事件稀疏;封板时长是连续量,读的是封单强度而不是有没有碰到。 两个库里 5583 条表达式没有一条用过 day_at_max_ratio
+    / day_flat_ratio / day_flat_run_max 与 LimitWidth 的组合(已对 members 骨架核对:库里的 day_flat_*
+    用在波动代理上,而不是封板)。 机制:封得久 = 未成交买单排队 = 极端的单边需求,A 股散户与游资追涨,封板强的票次日溢价但随后因为排队拥挤、解封抛压而回吐;把它乘上方向(当日涨幅
+    / LimitWidth,无量纲化后四类板块可比) 就同时读出涨停(正)与跌停(负)的锁定强度,60-120 日尾随平均后是慢变量;同时用 ListAge
+    做桶内比较,因为新股(上市天数短)的涨跌停规则、散户参与度与老票完全不同, 尺子里没有 ListAge 的暴露可被去掉。算子:全部是 day_* 压到日值、ts_delay
+    / cross_delay 取过去、cross_mean 做尾随窗口;停牌日由日值缺失 -> 被 cross_mean 忽略, 不使用 ts_rank /
+    cross_rank,避开 nanrank_last 的停牌 0 值。除数 LimitWidth 为 0.05-0.3 的常数,没有近零除数;day_flat_ratio
+    在只有常数价的停牌日是缺失或 1,不是伪影主导。 样本外为什么还在:涨跌停制度与散户结构变化慢,2018-2025 全期存在;连续的锁定强度不是波动 / 流动性
+    / 反转 / 市值的线性或 U 形函数。最可能的失败:锁定强度与流动性控制强相关(一字板成交极少)被吃掉。'
+  inspired_by: 本批 candidates 里 day_last(Close) / day_max(High) / 昨收 的比值子树富集最强(均值差
+    +1.0~1.56),第 1 轮 N 位涨停事件指示 +0.09 是批内唯一为正的;事件稀疏,改用分钟级的封板时长读同一个现象
+  seeds:
+  - cross_mean(mul(day_at_max_ratio(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 60)
+  - cross_mean(mul(day_flat_ratio(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 60)
+  - cross_mean(mul(day_flat_run_max(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 120)
+  - cs_bucket_zscore(cross_mean(mul(day_at_max_ratio(Close), div(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), LimitWidth)), 120), ListAge)
+  - cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), div(sub(div(day_last(Close),
+    ts_delay(day_last(Close), 1)), 1), LimitWidth)), 120)
+  - cross_mean(mul(day_at_min_ratio(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 60)
+  - cs_bucket_demean(cross_mean(day_flat_run_max(Close), 120), ListAge)
+  - cross_mean(mul(day_distinct_ratio(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth)), 60)
+  - cross_corr(day_at_max_ratio(Close), div(sub(div(day_last(Close), ts_delay(day_last(Close),
+    1)), 1), LimitWidth), 120)
+R:
+- head: ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 241)), 50)
+  why: 拆解:该 head train -0.63、valid +0.25,方向不是来源(上一轮敲掉 neg 不变);train 差而 valid 转正说明
+    train 里被某个风格暴露拖累(市值 / 下行方差),烂部件是「只有上行方差、没有下行对照」与「没做桶内比较」。变体:加桶内标准化、换成上下行差、换窗口。
+  variants:
+  - cs_bucket_zscore(ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 241)), 50), LogFloatCap)
+  - cs_bucket_demean(ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 241)), 50), LogFloatCap)
+  - ts_std(neg(cross_sum(sub(day_var(pow_2_5(Ret)), day_var(pow_2_5(neg(Ret)))), 241)),
+    50)
+  - ts_std(neg(cross_sum(day_var(pow_2_5(neg(Ret))), 241)), 50)
+  - ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 241)), 120)
+  - cs_bucket_zscore(ts_std(neg(cross_sum(day_var(pow_2_5(Ret)), 241)), 50), ListAge)
+audit:
+  attempts: 1
+  file: audit_1.yaml

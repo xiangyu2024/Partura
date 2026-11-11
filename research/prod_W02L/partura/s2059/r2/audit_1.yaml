@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '新颖度4:核心 day_es_ratio_lo(Open) 是日内价格左尾形状(低于5%分位的分钟均值除以该分位数),快照 6 个 head 全部是 nt_cs_regres(Ret|Amt|High, Low) 的分钟级残差日内极值再 cross_min,核心对 head 的原始 |ρ| 最大 0.196、残差 |ρ| 最大 0.336(相关度表 corr_1.json 核心行);外围 14 个种子对 head 的残差 |ρ| 在 0.02–0.47 之间,没有一个接近 head 的换皮。与控制:核心对 vol 的 |ρ| 为 0.35,是形状与日内波动有部分重合,但不是同一个量,故不判为度量同一个东西。表自动划掉的种子(|ρ|≥0.8 的控制规则):种子 8 与 9(sub/div(lo,hi),vol 0.85,两者控制谱逐位相同,也互为重复)、种子 11(decay_linear,vol 0.80),这三个由表划掉,不计入我的划掉。种子 4(tail_mean_q25,vol 0.73)保留。合理度4:机制清楚(日内下探的厚薄代表流动性冲击被承接的程度,冲击频繁的票溢价慢变)。逐个算子核对:day_es_ratio_lo 在 ops_ext.py:676 调用 _es_ratio,分位数绝对值 ≤1e-8 或无低于分位数的分钟时返回 NaN,对正的后复权 Open 取值在 (0,1],与价格水平无关;cross_* 全部是 offset 0 的因果滚动窗口(无前视),最长 60 日;cross_regbeta / cross_regres 是 y~alpha+beta·x 的滚动 OLS(common.py:643),y 为因变量,与 PI 的描述一致;cross_zscore 含当天,仍是因果;cross_corr / cross_stddev / cross_max / cross_tail_mean_q25 / q75 均在日轴上只用过去。无 nt_、无 ts_spearman、无 shift 类前视算子。需要注意但不划的一点:种子 12 cross_regbeta(lo(Open), lo(Ret), 60) 的分母 day_es_ratio_lo(Ret) 只用 1e-8 绝对值保护,几乎不动的日子会给出大比值,但它只影响单票 60 日回归,截面排序后不构成截面被少数爆点支配,不算数学问题。核心来源(共性表或某个 head 子树)本次审计未核对,因任务范围只读了 heads 表,请总领或流水线确认;E 位的核心 |ρ| 与各控制均 <0.8(最大 vol 0.348),此条通过。如果它有 alpha,最可能来自:日内低价端承接深度与个股流动性冲击频率的慢变差异(种子 6 与 7 的 cross_corr 把这个耦合读出来)。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '新颖度4:批里 6 个 head 全是 nt_cs_regres 的日内极值再 cross_min,本位用的 day_topw_mean(Ret, Volume) / day_signed_ratio(Ret, Amt) / day_centroid(Amt) / day_gini(Amt) / day_wmean(Ret, Amt) 不在 head 的骨架里,残差 |ρ| 对 head 最大只有 0.27(种子 2),种子 9 为 0.23,与 head 是真正不同的读数。但与控制的原始 |ρ| 偏高:种子 1 对反转 0.64、种子 5 对反转 0.61、种子 6 对反转 0.57(当日分钟收益的符号本身携带反转信息,成交量加权后仍与 20 日反转同向),种子 9 对已知族 0.53、对流动性 0.50。按 PI 相关度表的注释这是「控制的换个写法」的区间,但都没达到表的 0.8 自动划掉线,也谈不上明显在度量同一个东西,不划;奖励会对这些控制做残差,这是奖励的职责。种子 13 cross_mean(day_gini(Amt),40) 对流动性 0.802,由表自动划掉,不计入我的划掉。种子 1 与 2(同算子不同窗口)、种子 4 与 6(同输入不同加权)虽相近,但控制谱不同(如反转 0.39 对 0.57),不算重复,保留。合理度4:机制说得通(大单拆分执行带来的订单不平衡持续,Kyle 1985 / Chordia-Subrahmanyam 2004 一类),不依赖行情方向。逐个算子核对:day_topw_mean(ops_ext.py:635) 为按 |w| 取前 10% 的分钟(含并列)的 y 均值;day_signed_ratio(ops_ext.py:122) 为涨跌分钟成交额份额之差,∈[-1,1],分母为 0 时 NaN;day_centroid(ops_ext.py:155) ∈[0,1];day_gini(ops_ext.py:136) 有界;day_wmean(ops_ext.py:109) 权重和为 0 时 NaN;cs_bucket_zscore(ops_ext.py:482) 第一参数为信号、第二参数为分桶变量,用法与种子 12 中按 LogFloatCap 分桶一致;cross_mean / cross_decay_linear / cross_zscore / cross_regbeta / cross_corr 全部是因果滚动窗口,最长 60 日。无前视、无 nt_、无 ts_spearman。一个轻微的定义注意但不构成问题:day_topw_mean 对并列取「≥ 90% 分位」,若某票 Volume 在 90% 分位大量并列(极薄股),top-10% 会退化成接近全日均值,这只影响少数极薄股,不主导截面,不划。如果它有 alpha,最可能来自:大单方向的持续性(成交量加权的日内收益方向,种子 1 至 6),或成交时点与成交方向的耦合(种子 10 与 11)。'
+R: []
+summary: '两个 E/N 位都通过:a(E,核心 day_es_ratio_lo(Open))新颖 4、合理 4,划完剩 11 个种子(表自动划掉 a8、a9、a11);b(N,成交量加权的大单方向)新颖 4、合理 4,划完剩 12 个种子(表自动划掉 b13);我未划任何种子;本轮无 R 变体;核心来源未在本次审计中核对,需总领确认。'

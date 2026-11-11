@@ -1,0 +1,49 @@
+seed: 2073
+round: 1
+slots:
+- type: E
+  core: day_cov(Low, High)
+  hypothesis: 核心 C = day_cov(Low, High):当天分钟最低价与最高价序列的协方差。它是本批第 2 个 head 里唯一不含 nt_*
+    的实质子树,单独就有 -2.31(train -1.56 / valid -2.31), 比整个 head 外面的 q75 / cross_scale /
+    ts_scale 包装(各只差 0.03)几乎没有加成,说明信息在 C 本身;而加 ts_scale(30) 后掉到 -3.34、再加 cross_scale
+    掉到 -5.70, 说明时序标准化会把它做坏。C 的量纲是价格平方 × 日内趋势,实质是「当天价格带随时间一起上移 / 下移的幅度」(分钟 Low 与 High
+    几乎同涨同跌,协方差 ≈ 日内价格路径的方差), 是一个以价格水平(名义股价)为主导的量。已见过的外围只有 q75 / ts_scale / cross_scale(都是对原值做排序式变换,在新尺子下同一个信号)。
+    这一位用与水平无关的方式重新读 C,各实现一个机制:(a) 除以当日均价平方 = 无量纲的日内趋势强度(去掉名义价格);(b) 除以 day_cov(Close,
+    Close)(收盘价自身的日内方差), 读「价格带」与「收盘路径」的比值,即日内高低点相对收盘是否同步位移;(c) 取对数后相对自己 120 日历史的 z
+    分数 / 10 日对 120 日差,个股自己做对照,去掉持久的截面价位; (d) 对成交额总量做 60 日滚动回归残差 / 相关,读「价格路径的离散与成交量的联动」,是
+    W01 里窗口长、换手低的一类滚动关系;(e) 名义股价十分位内做 z 分数 (分桶变量 sub(LogFloatCap, LogFloatShares)
+    = log 名义股价),检验 C 里剩下的是不是价位代理。依据:head 的方向为 -1 且两段都亏(未必有毛超额,亏的可能是换手), 所以重点是换成慢变、无量纲的读法。为什么样本外还会在:无量纲的日内趋势强度
+    / 价格带与成交的滚动关系是行为性的(趋势追逐、成交配合),不依赖某一段的价位结构。
+  seeds:
+  - cross_mean(div(day_cov(Low, High), mul(day_mean(Close), day_mean(Close))), 20)
+  - cross_zscore(log(day_cov(Low, High)), 120)
+  - sub(cross_mean(log(day_cov(Low, High)), 10), cross_mean(log(day_cov(Low, High)),
+    120))
+  - cross_regres(log(day_sum(Amt)), log(day_cov(Low, High)), 60)
+  - cross_corr(day_cov(Low, High), day_sum(Amt), 60)
+  - cross_zscore(div(day_cov(Low, High), mul(day_mean(Close), day_mean(Close))), 120)
+  - cross_ema(div(day_cov(Low, High), cross_mean(day_cov(Low, High), 60)), 10)
+  - cs_bucket_zscore(cross_mean(div(day_cov(Low, High), day_cov(Close, Close)), 20),
+    cross_mean(day_sum(Amt), 30))
+- type: N
+  hypothesis: '新 idea:成交在一天里的「时间位置」。本批三个 head 全是波动 / 离散度(nt_ts_stddev、day_cov、ts_stddev
+    成交额),都是顺序无关的统计量,而且全部在新尺子下亏(−2.2 ~ −2.5): 水平 / 离散一族已被控制和已知族吃光。日内顺序信息则一个也没用:day_centroid(Amt)
+    是成交额的质心在 [0,1] 上的位置(0 = 开盘,1 = 收盘),day_corr(in_index(Amt), Amt) 读成交是否后置, sub(day_centroid(Amt),
+    day_centroid(abs_(Ret))) 读「钱」与「价格运动」是否在同一时段发生,sub(day_centroid(Amt), day_centroid(Volume))
+    因 Amt = 价 × 量,读日内价格斜率。 机制:尾盘放量(质心靠后)多见于被动 / 指数资金、收盘前的机构调仓与尾盘抢筹;开盘放量多见于隔夜消息与散户追价。质心还相对价格运动是否同步,把「消息驱动」(量价同时)与「流动性驱动」(量价错开)分开。
+    它们都无量纲、有界,与流动性 / 市值 / 波动水平控制天然低相关,取 20 日均值或相对自己 120 日的 z 分数后换手也低。样本外还会在,是因为日内成交的时间结构由制度(集合竞价、指数调仓、T+1)与参与者构成决定,而不是某段行情。
+    不同于库里的:库里的 day_* 骨架多是离散度 / 集中度(std、gini、max),带分钟顺序(in_index、centroid)的几乎没有。'
+  inspired_by: 本批三个 head 全是与顺序无关的波动 / 离散度量(nt_ts_stddev 的价格与成交额、day_cov(Low,High)),全部为负分,说明这块已被控制吃光;缺的是分钟顺序信息。
+  seeds:
+  - cross_mean(day_corr(in_index(Amt), Amt), 20)
+  - cross_mean(day_centroid(Amt), 20)
+  - cross_mean(sub(day_centroid(Amt), day_centroid(abs_(Ret))), 20)
+  - cross_zscore(day_centroid(Amt), 120)
+  - cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 20)
+  - cross_mean(day_corr(in_index(Amt), abs_(Ret)), 20)
+  - cs_bucket_zscore(cross_mean(day_centroid(Amt), 20), cross_mean(day_sum(Amt), 30))
+  - cross_mean(day_signed_ratio(Ret, Amt), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

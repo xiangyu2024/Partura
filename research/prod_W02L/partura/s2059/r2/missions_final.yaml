@@ -1,0 +1,63 @@
+seed: 2059
+round: 2
+slots:
+- type: E
+  core: day_es_ratio_lo(Open)
+  hypothesis: '机制:day_es_ratio_lo(Open) = 当天分钟开盘价里,低于 5% 分位的那些分钟的均值除以该分位数,是「日内低价端有多厚」,即日内下探的深度,
+    与价格水平无关(是比值,>0 且接近 1)。它在共性表里富集最明显(含它的 15 个候选均分 -1.52,不含 -2.36,p 0.009);第 1 轮 Pr1a
+    的 最好候选 cross_regbeta(day_max(Open), day_es_ratio_lo(Open), 60) 为 -0.43,是本流迄今最高,说明核心里有东西,但外围只试过「对日内高点做
+    滚动回归斜率」这一种写法,且没有一个过线。本轮的核心不变,外围换成三类以前没见过的写法: (1) 时间序列形状:cross_stddev / cross_tail_mean_q25
+    / cross_max / cross_min / cross_autocorr 读「下探深度的稳定性与极端程度」, 对应的机制是:日内被砸到明显低价又被承接(流动性提供者被补偿),经常发生的票是被短期流动性冲击反复光顾的票,冲击后的反弹溢价慢变;
+    (2) 与成交的耦合:cross_corr(核心, 当日收益 / 成交额, 40) 读「下探发生在跌的日子还是涨的日子、放量还是缩量」,下探配放量=恐慌抛售后被吸收;
+    (3) 上下对称:核心减去 day_es_ratio_hi(Open) 或相除,读价格分布左右尾不对称(与第 1 轮 Nb 在 Ret 上的做法不同,这里读的是价格水平分布,不是收益)。
+    与库里已有的不同:两个库的 5583 个骨架里只有 day_es_ratio_lo 这类算子在库建成后才有,库里没有任何含它的表达式;外围用 cross_corr
+    / cross_stddev / cross_tail_mean_q25 / cross_autocorr,而 Pr1a 见过的只有 cross_regbeta
+    + day_max 的组合,外围算子集合不同。 为什么样本外还会在:这是在读个股的日内流动性冲击频率与深度,由持仓结构与做市深度决定,变化慢,60 日窗口使换手低;不依赖某段行情方向。
+    数学检查:分位数近零时 day_es_ratio_lo 返回 NaN(已处理,价格是正的后复权价,不会近零);无除零爆点;无前视,全部只用 t 日及以前;最长窗口
+    60 日。 风险:核心是价格分布形状,与波动控制中度相关;奖励已去掉线性 / U 形 / S 形暴露,剩下看运气,若本轮仍无 head,则下一轮不再押这个核心。'
+  seeds:
+  - cross_stddev(day_es_ratio_lo(Open), 30)
+  - cross_stddev(day_es_ratio_lo(Open), 60)
+  - cross_tail_mean_q75(day_es_ratio_lo(Open), 60)
+  - cross_tail_mean_q25(day_es_ratio_lo(Open), 60)
+  - cross_max(day_es_ratio_lo(Open), 20)
+  - cross_corr(day_es_ratio_lo(Open), day_sum(Ret), 40)
+  - cross_corr(day_es_ratio_lo(Open), day_sum(Amt), 40)
+  - cross_zscore(day_es_ratio_lo(Open), 60)
+  - cross_regbeta(day_es_ratio_lo(Open), day_es_ratio_lo(Ret), 60)
+  - cross_regres(day_es_ratio_lo(Open), day_std(Ret), 40)
+  - cross_mean(mul(day_es_ratio_lo(Open), day_signed_ratio(Ret, Amt)), 40)
+- type: N
+  hypothesis: 机制:知情大单的方向。读「成交最重的那 10% 分钟里,价格往哪个方向走」,以及「成交额加权的分钟收益」与「等权分钟收益」之差。 机构分批建仓
+    / 出清的大单集中在放量分钟,放量分钟的收益方向(day_topw_mean(Ret, Volume))携带的是大单的价格冲击方向, 比日收益更少被零散散户噪声污染;日度读数噪声大,所以做
+    20~60 日慢聚合,让「持续被大单推向同一方向」的票排前面(拆单执行的持续性, Kyle 1985 / Chordia-Subrahmanyam 2004
+    的订单不平衡持续)。算子实现:day_topw_mean(Ret, Volume)(最大 10% 成交量分钟的平均收益)、 day_signed_ratio(Ret,
+    Amt)(上涨分钟的成交额份额减下跌分钟的成交额份额,取值在 [-1,1])、day_wmean(Ret, Amt) 与 day_mean(Ret) 相减、
+    day_centroid(Amt)(成交重心在日内的位置,0 开盘 1 收盘),再用 cross_mean / cross_decay_linear / cross_zscore
+    / cross_regbeta 做日轴慢变化; 一个种子用 cross_regbeta(day_centroid(Amt), day_topw_mean(...))
+    看「成交重心越靠后、大单方向越能解释…」的耦合。 为什么和库里已有的不同:本批 6 个 head 与共性表全是 nt_cs_regres(·, Low) 的日内极值
+    / 价格分位的形状,骨架是「分钟级截面回归残差 -> 日内极值 -> cross_min」; 这里没有价格水平,读的是「成交量分布 x 收益方向」的交互,用的是
+    day_topw_mean / day_signed_ratio / day_centroid(库建成后才有的算子, 两个库的 5583 个骨架里没有),没有任何
+    nt_ 或 cross_min。 为什么样本外还会在:大单拆分执行是结构性的(机构的冲击成本约束),慢变;不依赖行情方向;方向可由 GP 决定(跟随或反转)。
+    数学检查:day_signed_ratio 分母是成交额之和,停牌日为 NaN,不是 0 也不是无穷;day_topw_mean 在成交量全 0 时为 NaN;
+    day_centroid 有界 [0,1];无近零分母,无前视(只用 t 日及以前),最长窗口 60 日。 风险:与 20 日反转控制相关(近期大涨票的重分钟多为上涨);奖励已去掉线性
+    / U 形 / S 形暴露;若仍与反转或流动性控制重复则出不了 head。
+  inspired_by: B 批 head 与共性表:nt_cs_regres(Amt|Ret, Low) 的日内极值(含 Amt 的 head 是 score
+    -1.45~-1.90 里相对最好的),说明成交额的日内分布有信息,但那条线被 nt_ 禁用;这里换成不含 nt_ 的成交量加权方向读法
+  seeds:
+  - cross_mean(day_topw_mean(Ret, Volume), 20)
+  - cross_mean(day_topw_mean(Ret, Volume), 60)
+  - cross_mean(day_topw_mean(Ret, Amt), 40)
+  - cross_mean(day_signed_ratio(Ret, Amt), 40)
+  - cross_mean(day_signed_ratio(Ret, Volume), 20)
+  - cross_decay_linear(day_signed_ratio(Ret, Amt), 30)
+  - cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 40)
+  - cross_zscore(sub(day_topw_mean(Ret, Amt), day_wmean(Ret, Amt)), 60)
+  - cross_mean(day_centroid(Amt), 40)
+  - cross_regbeta(day_centroid(Amt), day_topw_mean(Ret, Volume), 60)
+  - cross_corr(day_signed_ratio(Ret, Amt), day_centroid(Amt), 40)
+  - cs_bucket_zscore(cross_mean(day_topw_mean(Ret, Volume), 40), LogFloatCap)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
