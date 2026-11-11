@@ -1,0 +1,97 @@
+seed: 2060
+round: 2
+slots:
+- type: E
+  core: day_at_max_ratio(Open)
+  hypothesis: '机制:核心 K = day_at_max_ratio(Open),当天(有效分钟里)开盘价序列等于当日最大值的分钟占比。分钟 Open
+    序列几乎不动或停在日内高点的时间越长,K 越大: 涨停封板、一字板附近、低价股 / 最小报价单位限制下价格长时间钉在同一档。它是「价格被钉住」的时间占比,无量纲,取值在
+    0 到 1, 不是波动或成交额的另一种写法。本批证据:共性表里含 K 的 14 个候选均值 -1.86,不含 -2.69,差 +0.82(p 0.043),是本批富集的
+    最强价格侧子树;上一轮 GP 在外面套 cross_autocorr_s1(K, 15) 得到 -0.07(train -0.07 / valid +0.17),是本流迄今最接近
+    0 的读数, 也是唯一 train / valid 反号接近零的,说明 K 的时间持续性里有不被现有控制吃掉的成分。已出的 head 与种子都是对 K 做「15
+    日自相关」, 外围只有这一种,所以没有人测过 K 的水平、变化、与收益的滚动关系、在市值十分位内的读法。 这一位把外围换成五类与 cross_autocorr_s1
+    很不同的写法:(a) 慢水平 cross_mean / cross_ema(K, 20 到 60):近期被钉住的天数, 读「这只票长期处在涨停 / 低价钉住状态」,是个股属性,换手低;(b)
+    相对自己历史 cross_zscore(K, 60)、sub(cross_mean(K,5), cross_mean(K,60)): 近期钉住比例是否上升(把水平去掉,水平会被流动性和市值控制吃掉);(c)
+    十分位内去均值 cs_bucket_demean(·, LogFloatCap): 去掉 K 与市值的高阶 / 交互关系;(d) 与价格的滚动关系 cross_corr(K,
+    day_sum(Ret), 40)、cross_corr(K, day_std(Ret), 40): 钉住是跟着上涨一起出现(强势封板)还是跟着下跌 / 波动出现(报价档限制),方向不同含义相反;(e)
+    与对称的最低价钉住比例 K_low 的差 sub(K, day_at_min_ratio(Open)):「钉在高点」与「钉在低点」是两件事(算子文档里写明二者不能互相代替),差值读的是封板方向的净倾向。
+    为什么和已有不同:库里与已出 head 里 K 只有 cross_autocorr_s1(K,15) 这一个外壳(与库同骨架会被禁令拒),这里是 cross_mean
+    / cross_ema / cross_zscore / cross_corr / cs_bucket_demean 外壳加 K_low 的对比,骨架不同;与
+    head 的日度秩相关预计低(K 稀疏,多数日接近 1/240,取窗口均值后才拉开)。 为什么样本外还会在:A 股涨停制度与最小报价单位是制度性的,「长期被钉在高点的票」(强势股
+    / 小盘低价股)的拥挤与散户参与结构数十日内排序稳定; 与重尾事件相比,慢聚合后换手低,15 bp 成本吃得下。数学检查:K 是计数比,没有除以近零量;分母是有效分钟数且要求至少
+    2 个,不会爆点; cross_zscore 分母是 60 日标准差,K 对多数票是常数 1/240 附近时分子分母同时接近 0,会产生噪声但不是无穷,这种票在截面上聚在
+    0 附近, 不主导;全部只用 t 日及以前,无前视。风险:稀疏事件的窗口均值被少数涨停日主导,与已知族 / 波动控制有中度相关;新尺子去掉了线性与非线性暴露,剩余看运气。
+    如果它有 alpha,最可能来自「涨停 / 钉住」的拥挤与次日溢出的慢变个股属性。'
+  seeds:
+  - cross_mean(day_at_max_ratio(Open), 20)
+  - cross_ema(day_at_max_ratio(Open), 60)
+  - cross_zscore(day_at_max_ratio(Open), 60)
+  - sub(cross_mean(day_at_max_ratio(Open), 5), cross_mean(day_at_max_ratio(Open),
+    60))
+  - cross_corr(day_at_max_ratio(Open), day_sum(Ret), 40)
+  - cross_corr(day_at_max_ratio(Open), day_std(Ret), 40)
+  - cs_bucket_demean(cross_mean(day_at_max_ratio(Open), 20), LogFloatCap)
+  - sub(day_at_max_ratio(Open), day_at_min_ratio(Open))
+  - cross_mean(sub(day_at_max_ratio(Open), day_at_min_ratio(Open)), 30)
+  - cross_stddev(day_at_max_ratio(Open), 30)
+  - mul(cross_mean(day_at_max_ratio(Open), 10), sign(cross_mean(day_sum(Ret), 20)))
+  - cross_zscore(sub(day_at_max_ratio(Open), day_at_max_ratio(Close)), 60)
+  - cross_corr(day_at_max_ratio(Open), day_ar1_coefficient(Volume), 60)
+- type: N
+  hypothesis: 机制:量价耦合相对自己历史的变化。本批前两轮的结果显示:对 day_ar1_coefficient(Volume) 这类「量自己的持续性」,水平写法全部在
+    -3 到 -2.4, 而「相对自己 120 日历史」的 cross_zscore 版本最好(-1.83,与原 head |rho| 仅 0.04),快慢均值之差次之(-2.36);信息在变化里,不在水平里
+    (水平被流动性、市值控制吃掉)。上一轮的带符号成交流想法没有产出比这更好的读数。这一位换对象:不再读量的自相关,读量与价格在日内同步的程度—— day_corr(Volume,
+    Ret)(量跟着涨跌方向走 = 方向性成交,放量上涨 / 放量下跌)和 day_corr(Volume, abs(Ret))(量跟着波动幅度走 = 事件冲击
+    / 信息到达), 以及量峰出现的时刻 day_argmax(Volume)(量能集中在开盘还是收盘附近,读参与者构成:机构尾盘 vs 散户开盘)。每个日读数噪声很大,
+    所以全部在日轴上写成「相对自己 60 到 120 日历史的偏离」或「快慢均值之差」,回答「这只票的量价关系最近是否变了」——变了意味着新信息或新参与者进入,
+    价格还没完全反映,是慢变的个股状态。 算子实现:day_corr(Volume, Ret) 与 day_corr(Volume, abs(Ret)) 逐日给出相关系数(注意
+    day_corr 在一方整天为常数时返回 0 不是缺失, 停牌 / 一字板票会聚在 0 附近,这类票在截面上同秩,不会产生爆点),cross_zscore(·,
+    60/120) 做相对历史偏离, sub(cross_mean(·,5), cross_mean(·,60)) 做快慢差,cross_corr(耦合, day_std(Ret),
+    60) 读「耦合与波动一起变」,cs_bucket_zscore(·, LogFloatCap) 去掉市值高阶关系。 受本批启发:富集表里 cross_corr(day_ar1_coefficient(Volume),
+    day_std(Ret), 60) 是最强的子树(均值差 +0.94),说明量相关量与波动的滚动关系有料, 而 ar1 本身是弱的核;这里把被测的量从自己的
+    ar1 换成与价格的耦合。 为什么和库里不同:库里的 Volume 读法集中在 day_ar1_coefficient / ts_mean 包装;这里的被测对象是
+    Volume 与 Ret / |Ret| 的日内相关, 以及 day_argmax(Volume) 的位置,外壳是 cross_zscore / 快慢差 /
+    cross_corr,骨架库里没有。 为什么样本外还会在:参与者构成变化(机构 / 北向 / 散户占比)与信息到达强度是缓慢扩散的,耦合相对历史的偏离在数周内排序稳定;
+    窗口 60 到 120 日聚合使换手低,15 bp 成本吃得下。数学检查:相关系数在 [-1, 1],无近零除法;cross_zscore 分母为窗口标准差,
+    常数序列时分子也为 0,得 0 或缺失,不爆;day_argmax 并列取第一个下标(零成交日返回 0,即开盘分钟,这类停牌日是少数且在慢聚合中被稀释);
+    全部只用 t 日及以前,无前视。风险:耦合与波动、流动性中度相关,新尺子去掉线性与非线性暴露。如果它有 alpha,最可能来自参与者构成 / 信息到达强度变化的慢变信号。
+  inspired_by: B001/B002 批:cross_zscore(day_ar1_coefficient(Volume),120) 相对历史写法最好(-1.83,与原
+    head |rho| 0.04)、水平写法全部 -3 到 -2.4;共性表 cross_corr(ar1(Volume), day_std(Ret), 60)
+    均值差 +0.94,说明信息在变化与量价滚动关系里
+  seeds:
+  - cross_zscore(day_corr(Volume, Ret), 60)
+  - cross_zscore(day_corr(Volume, abs(Ret)), 120)
+  - sub(cross_mean(day_corr(Volume, Ret), 5), cross_mean(day_corr(Volume, Ret), 60))
+  - sub(cross_mean(day_corr(Volume, abs(Ret)), 10), cross_mean(day_corr(Volume, abs(Ret)),
+    60))
+  - cross_zscore(day_argmax(Volume), 60)
+  - cross_zscore(day_argmax(Amt), 120)
+  - cross_corr(day_corr(Volume, abs(Ret)), day_std(Ret), 60)
+  - cs_bucket_zscore(cross_mean(day_corr(Volume, abs(Ret)), 20), LogFloatCap)
+  - cross_zscore(day_corr(Amt, Ret), 120)
+  - cross_mean(day_corr(Vwap, Volume), 30)
+  - sub(cross_zscore(day_corr(Volume, Ret), 60), cross_zscore(day_ar1_coefficient(Volume),
+    60))
+  - cross_corr(day_corr(Volume, Ret), day_sum(Ret), 60)
+  - cross_autocorr(day_corr(Volume, abs(Ret)), 60, 1)
+  - cross_zscore(day_corr(Volume, sub(High, Low)), 60)
+R:
+- head: ts_decay_linear(sigmoid(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(Volume),
+    5)))), 5)
+  why: 上一轮 R 显示慢聚合(40 日 EMA / 衰减)只把 -3.17 抬到 -2.4 到 -3.1,与原 head 仍 rho 0.9;唯一明显好转的是「相对自己历史」的写法(cross_zscore
+    120:-1.83,rho 0.04)和快慢差(-2.36,rho -0.06)。烂部件 = 水平(被流动性控制吃掉)与单调壳;这里全部改成相对历史 / 快慢差
+    / 带窗口的偏离,窗口取 120 以外的值。
+  variants:
+  - cross_zscore(day_ar1_coefficient(Volume), 250)
+  - cross_zscore(cross_mean(day_ar1_coefficient(Volume), 10), 120)
+  - sub(cross_mean(day_ar1_coefficient(Volume), 20), cross_mean(day_ar1_coefficient(Volume),
+    120))
+  - sub(cross_mean(day_ar1_coefficient(Volume), 5), cross_mean(day_ar1_coefficient(Volume),
+    250))
+  - cross_zscore(day_ar1_coefficient(Volume), 60)
+  - sub(cross_ema(day_ar1_coefficient(Volume), 10), cross_ema(day_ar1_coefficient(Volume),
+    80))
+  - cs_bucket_zscore(cross_zscore(day_ar1_coefficient(Volume), 120), LogFloatCap)
+  - cross_zscore(day_ar1_coefficient(Amt), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

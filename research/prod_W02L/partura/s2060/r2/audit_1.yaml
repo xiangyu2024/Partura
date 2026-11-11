@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '核心 day_at_max_ratio(Open) 在共性表里有记录(loc.md 第 24 行:含它的 14 个候选均值 -1.86,不含 -2.69),且不是任何 head 的子树,属于 E 允许的核心来源。核心对 5 个控制的 |ρ| 最大 0.175(liq),远低于 0.8,通过 E 位的控制条件。核心对快照 head 的原始 |ρ| 最大 0.346,但残差后对 head 1(pow_2(pow_05(day_max(cross_corr(nt_ts_skew(Ret,3),...)))))为 0.78,这是新颖度给 3 而非 4 的主要依据:K 在控制之后的信号与 head 1 的残差高度重合。种子 1、7、11 的残差对 head 1 也偏高(0.70、0.61、0.59);种子 2、3、13、14 经 cross_zscore / sub / cross_corr 包装后残差降到 0.12 到 0.48。种子 8 cross_autocorr(K,30,3) 的外围是 cross_autocorr 一个算子,与已见过的含该核心候选 cross_autocorr_s1(day_at_max_ratio(Open),15)(loc.md 第 87 行,-0.07)完全相同,只换了窗口和滞后;按 E 规则「外围不得与已见过的含该核心的候选相同」划掉,理由是重复。种子 1、4、7、9、10、12 在相关度表里门槛列为「废品」(对应 diagnose.levels_ok 的日截面并列占比检查),按 §4「并列靠列序打破不是问题」我不以此划掉,但这些票的十分位书主要由并列决定,分数要打折看。合理度:机制(涨停 / 最小报价单位下价格被钉在日内高点的时间占比)说得通。逐个算子核对:day_at_max_ratio 是计数比,分母为有效分钟数且要求至少 2 个,无除以近零量,无前视;cross_mean / cross_ema / cross_zscore(有相对尺度护栏)/ cross_corr / cross_stddev / cs_bucket_demean(LogFloatCap)的用法都是对的;全部只用 t 日及以前。无 §4 中的数学问题。如果它有 alpha,最可能来自涨停与钉住状态的拥挤、以及次日溢出的慢变个股属性。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '与快照 6 个 head 比:种子 4、7、8、10 的原始 |ρ| 分别为 0.38、0.37、0.70、0.38,其余都在 0.25 以下(多数小于 0.1)。最接近的是种子 8 cs_bucket_zscore(cross_mean(day_corr(Volume,abs(Ret)),20),LogFloatCap),对 head 「ts_decay_linear(sigmoid(cs_rank(...ar1(Volume)...)))」(-3.05 那条)原始 |ρ| 为 0.698,刚好低于 0.7 的自动线,残差 0.58,对 liq 控制 0.464。它与 ar1 持续性同属「量的状态」,所以新颖度给 4 而不是 5;但量价同步(day_corr(Volume,abs(Ret)))是另一个对象,不是换写法,不挡。种子 1 与 3 都以 day_corr(Volume,Ret) 为核心只换了包装,但包装不同、残差相关都低,不构成重复。数学核对:day_corr 在一方整天常数时返回 0(dt_day.py 231-245 的已知行为),一字板票在截面上聚在 0,不构成结果主导,不挡;cross_zscore 与 cs_bucket_zscore 的分母有护栏;day_argmax(Volume) 在整天零成交时返回 0,若停牌票在立方体里是 0 而非掩码缺失,种子 5 的 cross_zscore(day_argmax(Volume),60) 会混入停牌日的假开盘最低值,这一条需要确认数据约定,但目前看不是结果主导的证据,不挡;种子 10 的 day_corr(Vwap,Volume) 对价格的日内趋势与量形态的 U 形同时敏感,需要读结果时注意。全部只用 t 日及以前,无前视。无 §4 中的数学问题。如果它有 alpha,最可能来自量价同步关系相对自身历史的变化,即参与者构成或信息到达强度的慢变。'
+R:
+  - head: 'ts_decay_linear(sigmoid(pow_2(cs_rank(ts_decay_linear(day_ar1_coefficient(Volume), 5)))), 5)'
+    soundness: 4
+    reasons: '8 个变体都是 day_ar1_coefficient(Volume) 一个对象的相对历史偏离、快慢差或窗口改写,每一个都是有定义的标准算子组合:cross_zscore 分母是窗口标准差并有相对尺度护栏;sub 与 cross_ema 无除法;cs_bucket_zscore 有 EPS。变体 1 与 4 的 250 日窗口在 2018 年附近有热身(部分窗口),约占 train 的 18%,不是结果主导,不挡。变体的原始 |ρ| 与原 head 从 0.30 到 0.70 不等(变体 4 为 0.70、变体 2 为 0.57、变体 6 为 0.63),这只是替换与收录的下游判断,不影响合理度。注意:这组变体去掉了 cs_rank / sigmoid / pow_2 的外壳,而不是去掉数据部件,「去烂部件」实际是换了外层与窗口。如果它有 alpha,最可能来自 ar1(Volume) 相对自身历史的偏离(量持续性的变化),而不是水平。'
+summary: '槽 a(E,核心 day_at_max_ratio(Open))放行,划掉种子 8(外围 cross_autocorr 与已见候选 cross_autocorr_s1(K,15) 相同);槽 b(N,量价同步相对历史)放行,无划掉;R 组合理度 4 放行。'
