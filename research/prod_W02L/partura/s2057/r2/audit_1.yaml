@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 4:核心 ts_stddev(ts_stddev(day_zero_ratio(Ret),10),50) 的基础量是「日内死分钟占比」(Ret 恰好为 0 的分钟比例),快照 4 个 head 全部是 day_sum(nt_cs_quantile_q25(Amt)) 的嵌套 ts_stddev,没有一个用到 day_zero_ratio,所以不是同一个东西的换写法。相关度表里核心与 head 的原始 |ρ| 最高 0.36(残差 0.37),与 5 个控制:liq 0.04、vol 0.32、rev 0.09、known 0.10、size 0.21,核心本身与所有控制都低于 0.8。不给 5 分的原因是 vol 0.32 说明它和真实波动有中度重合(死分钟占比本身与波动相关),残差会去掉这一部分。合理度 4:逐个核对——day_zero_ratio 在 ops_ext.py:273 是对有限分钟取 x==0 的比例,定义清楚;ts_stddev 是对日轴的 nanstd 滚动窗口,只看过去的窗口,无前视;ts_mean / ts_decay_linear / ts_max / ts_skew / ts_corr 都是 trailing;ts_rank 在 common.py:529 的 nanrank_last 在当天值缺失时返回 0,这个陷阱对本核心不触发:内层 ts_stddev 用的是 nanstd_last,当天值缺失时窗口仍给出有限值,所以核心在停牌日仍有限,ts_rank 不会被推到 0(只有窗口预热期可能例外,不构成主导);div 的分母 cross_mean(zero_ratio,50) 与 ts_stddev(centroid) 可能接近 0,但奖励是按截面日秩转换的,单个爆点只占一个最高秩,不支配截面,不算数学问题。核心的来源合规:它是 loc.md 共性表第 1 行(enrichment,均值差 +2.33,7 个候选),属于定位输出里的子树。PI 写的「库里没有死分钟类表达式」我没有在 AlphaCube-steering 与 Partura 的非 .py 文件中找到 day_zero_ratio 的出现(只做了这一项检查,没有逐条核对 5583 条库),这一点接受但未独立证实。新尺子下 train 段偏弱的问题不属于审计范围。全部 12 个外围种子都与快照 head 的原始 |ρ| ≤ 0.48、与控制的 |ρ| ≤ 0.57(种子 6 的 rev 0.57,是因为 sign(ts_mean(day_sum(Ret),20)) 带入了动量符号,但未达 0.8),没有重复或换皮,没有可划的种子。如果它有 alpha,最可能来自死分钟占比的不稳定性(报价粘性与涨跌停锁定的周期性切换),而不是流动性水平本身。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [7]
+    reasons: '创新度 3:N 位的基础量是 day_zero_ratio(Ret) 与 day_zero_ratio(Amt) 的差(价格不动与无成交之差),以及按 in_slice 切分的上午 / 下午 / 尾盘版本,快照 6 个 head 中没有这一族。但最像的 head cross_min(day_corr(pow_2(Close),nt_cs_mask_top_replace_mean_neg(Open)),5) 与种子 1 的原始 |ρ| 为 0.53、残差 0.58,种子 5 与 6 残差也有 0.58 / 0.53;与 liq 的残差 0.33 / 0.40 也偏高。两者都是日内价格路径统计,重合在残差空间里是实质性的,所以只给 3 分,不给 4 分。合理度 4:in_slice(x,a,b) 是 x[:, a:b+1](ops 源码 dt_in.py:324),0 起始、241 分钟,所以 1-120 与 121-240 是两段各 120 分钟,211-240 是最后 30 分钟,1-30 是开盘前 30 分钟,切分正确;day_zero_ratio 是日内归约,ts_mean / ts_stddev / ts_decay_linear 都是 trailing 窗口,无前视,无 nt_*;没有 rank 类算子,不涉及 nanrank_last 陷阱。机制说得通:价格钉住而仍有成交(挂单吸收或涨跌停排队)与无成交的差,在午盘与尾盘的集合竞价附近应当按时段不同。划掉 7:它是种子 1 的 ts_decay_linear(30) 版本,与 ts_mean(20) 对同一个日度序列 sub(zero_ratio(Ret),zero_ratio(Amt)) 做平滑,相关度表第 7 行与第 1 行的 7 个数字逐一相同(0.53 / 0.58 / 0.33 / 0.24 / 0.01 / 0.28 / 0.02),是重复,按规则可划。其余种子保留:种子 3、5、6、8 的 PI 标注为「废品」不是审计挡的理由(只挡数学问题与重复),种子 5 与 6 的残差虽与 M2 head 偏高,但低于 0.7 的门槛。如果它有 alpha,最可能来自午盘与尾盘的报价钉住 / 集合竞价附近的成交结构,而不是整体流动性。'
+R: []
+summary: '两个任务位都通过:位 a(E,核心 ts_stddev(ts_stddev(day_zero_ratio(Ret),10),50))创新 4 / 合理 4、12 个外围全保留,是 12 个种子;位 b(N)创新 3 / 合理 4、划掉种子 7(与种子 1 相关度表逐列相同,是重复),剩 9 个(共 10);无 R 组;无自动划掉。'

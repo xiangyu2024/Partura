@@ -1,0 +1,63 @@
+seed: 2074
+round: 2
+slots:
+- type: E
+  core: day_quantile_q25(Ret)
+  hypothesis: '机制:核心 Q = day_quantile_q25(Ret) = 当天分钟收益分布的 25% 分位数,即日内下行尾部的深度(越负 =
+    当天卖压 / 被动抛售的分钟越猛)。
+
+    依据:本批 113 个候选里含 Q 的 11 个平均 -1.16、不含 -2.53(均值差 +1.37,p 0.000),是共性表里最强的子树;head day_quantile_q25(in_rank(pow_2_5(neg(Ret))))
+    也是它的变形。
+
+    上一轮的线索:E 位在核心 day_close(neg(Volume)) 外挂 cross_regbeta(·, Q, 60) 得 -0.20(train
+    +0.23 / valid -0.20),
+
+    说明 Q 这一块配上"60 日滚动回归"这种慢读法最接近线;而核心换成 C 的水平本身则 -1.6。这一位把 Q 单独拿出来,不带 C,看 Q 自己的慢变读法。
+
+    本位外围(和已见过的 {cross_regbeta(C, Q, 5/30/60)} 完全不同):
+
+    (a) Q 的 60 日均值、120 日自身 z 分数、20 日对 120 日的差:个股自己的下行尾部厚度的慢变状态,表示"长期有大宗抛压 / 筹码松动"的票,而不是某天的尖峰;
+
+    (b) Q 除以当天分钟收益标准差 day_std(Ret)(尾部相对波动的厚薄,无量纲),再取 60 日均值:去掉波动水平,只留分布形状(厚尾 vs 薄尾);
+
+    (c) Q 与成交额波动 day_std(Amt)、成交量 day_sum(Volume)、当日收益 day_sum(Ret)、滞后一日的收益的 60 日滚动相关
+    / 回归斜率 / 残差:尾部深度是否伴随放量、是否被当日收益解释,残差 = "没被放量和收益解释的那部分抛压";
+
+    (d) 对 Q 回归掉波动 cross_regres(Q, day_std(Ret), 60) 与 cs_regres(Q 均值, 波动均值):去掉波动之后的尾部;
+
+    (e) 流通市值桶内标准化 cs_bucket_zscore。
+
+    与库的区别:库里含 Q 的结构只有 in_rank/pow_2_5 的日内包装(head 之一)与 cross_regbeta(C,Q,·);没有 Q 配
+    day_std(Ret) 做比、没有 cross_corr / cross_regres 把 Q 对 day_std(Amt) 或收益做滚动关系的写法,骨架禁令会再确认。
+
+    为什么样本外还会在:下行尾部的慢变厚度读的是个股被动抛售(解禁、机构调仓、融资盘平仓)的持续性与流动性提供者的承受力,窗口 20~120 日,排名周内几乎不动,15
+    bp 下换手低;
+
+    相关 / 回归写法拿到的是"尾部与成交的结构关系",不是风格水平,风格切换时不易翻号。风险:Q 与波动控制强相关(Q 大体是 -0.67×分钟收益标准差),所以
+    (b)(d) 才是主力;若不过线,下一轮不再用 Q。
+
+    数学检查:day_std(Ret) 只在整天不动(停牌 / 一字板)时为 0,此时 Q 也为 0,div 给 NaN,不是爆点;cross_corr 当一方为常数返回
+    0(已知行为)只出现在少数停牌多的票,已被可交易掩码排除新股与长期停牌;
+
+    无前视:全部只用 t 日收盘及以前,滞后项用 cross_delay(正天数)。最长窗口 120 日,热身期不主导。'
+  seeds:
+  - cross_mean(day_quantile_q25(Ret), 60)
+  - cross_zscore(day_quantile_q25(Ret), 120)
+  - div(day_quantile_q25(Ret), day_std(Ret))
+  - cross_mean(div(day_quantile_q25(Ret), day_std(Ret)), 60)
+  - cross_corr(day_quantile_q25(Ret), day_std(Amt), 60)
+  - cross_regbeta(day_quantile_q25(Ret), day_sum(Ret), 60)
+  - cross_regres(day_quantile_q25(Ret), day_std(Ret), 60)
+  - cs_bucket_zscore(cross_mean(day_quantile_q25(Ret), 60), LogFloatCap)
+  - cross_corr(day_quantile_q25(Ret), day_sum(Volume), 60)
+  - sub(cross_mean(day_quantile_q25(Ret), 20), cross_mean(day_quantile_q25(Ret), 120))
+  - cross_regbeta(day_quantile_q25(Ret), cross_delay(day_sum(Ret), 1), 60)
+  - cs_regres(cross_mean(day_quantile_q25(Ret), 60), cross_mean(day_std(Ret), 60))
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: N
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

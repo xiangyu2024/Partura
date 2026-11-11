@@ -1,0 +1,15 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: []
+    reasons: '创新度 3:核心 day_quantile_q25(Ret) 本身不是新测量,它是共性表第一行(loc.md 第 20 行,库里 11 个含 Q 的候选),库里已有 cross_regbeta(C,Q,.) 等读法。但它与快照 head 的原始 |ρ| 最大只有 0.39(最像 day_quantile_q25(in_rank(pow_2_5(neg(Ret)))),残差 0.23),与 5 个控制的最大 |ρ| 是 liq 0.35,远低于 0.8,不是同一个东西换写法。种子的慢变读法(60/120 日均值、120 日 z 分数、20 对 120 日差、与成交额波动/成交量/收益的滚动相关与回归)与库里已见写法不同,所以不给 1。种子 1(cross_mean(Q,60))与 liq 0.56、known 0.54 相关,种子 8、12 与 liq 约 0.47 相关,是控制变量会重叠的写法,但未达到 0.8 的划掉线,放行。合理度 3:没有前视(只用 cross_delay 取过去值,无 cross_shift / ts_shift);cross_mean、cross_zscore、cross_corr、cs_regres、cs_bucket_zscore 的窗口与截面口径正确。div(Q, day_std(Ret))(种子 3、4)的分子是分位数、分母是标准差,分位数到均值的距离受标准差界住,不会爆点;但若 Ret 允许跨日首分钟且一字板整天取同一非零值,std 为 0 而 Q 非零会得到 inf,这一点我没有核实 Ret 的定义,请 PI 确认。扣分点:种子 6、7、11 的 cross_regbeta / cross_regres 第一参数是自变量,因为 rolling_ols(x,y) 是 y ~ alpha + beta*x(common.py:643-664),所以 cross_regbeta(Q, day_sum(Ret), 60) 实际是当日收益对 Q 的斜率,cross_regres(Q, day_std(Ret), 60) 实际是波动对 Q 回归后的残差(不是计划 (d) 说的去掉波动的 Q),cross_regbeta(Q, cross_delay(day_sum(Ret),1), 60) 是滞后收益对 Q 的斜率。计划的方向写反了,这三个种子是合法表达式,不是数学问题,放行,但解释结果时要按实际方向。如果它有 alpha,最可能来自日内下行尾部的慢变厚度(被动抛售的持续性与流动性提供者的承受力),而不是波动或成交额的水平。'
+  - slot: b
+    novelty: 4
+    soundness: 2
+    struck_seeds: [3, 7, 8]
+    reasons: '创新度 4:Bowley 偏度 (q75+q25)/(q75-q25) 与快照 head 的原始 |ρ| 最大 0.17(pow_2(day_close(neg(Volume))) 与 q25 head),与 5 个控制的最大 |ρ| 是 0.29(vol,即种子 10 的 regbeta 写法)。它是对称化的分位数偏度,不是 day_skew 的三阶矩,也不是 q25 的单边写法,本质上是新的量,所以给 4。合理度 2(数学问题):(1) 计划说「B 的取值在 [-1,1] 内」是错的:(q75+q25)/(q75-q25) 无界,例如 q25=0.001、q75=0.0011 时 B=21。(2) 算子 div 就是 torch.divide,没有 EPS(AlphaCube-steering/src/alphacube/operators/common.py:175),IQR=0 时分子非零得 inf,分子为 0 得 NaN。IQR=0 的日子是「大半分钟取同一个值」(一字板、涨跌停、tick 级连续单向走),不只是停牌。(3) 计划称只有 q75=q25=0 才出 NaN,但 corr_1.md 的门槛显示种子 3 cross_zscore(B,120) 与种子 7 cross_regres(B,day_sum(Ret),60) 覆盖率只有 0.869、gate=False,即约 13% 的股票日是非有限值,远不是停牌尾巴。这属于按 §4 的「除以近零的量造成的爆点 / 系统性算不出」。日度秩化后单日爆点只影响当天,但 cross_mean(B,60)、cross_regbeta(B,.,60) 等 60 日窗口里一个 inf 或爆点会支配整段均值,这一点我没有在数据上核实,所以按 §4 只能判为数值伪影风险,不写成确定的支配。种子 7 的方向也写反了(cross_regres(B, day_sum(Ret), 60) 是收益对 B 的残差,不是 B 对收益)。种子 8 与种子 9 数学等价:sub(cross_mean(q75,60), cross_mean(neg(q25),60)) = cross_mean(q75,60)+cross_mean(q25,60) = cross_mean(add(q75,q25),60)(滚动均值线性),corr_1.md 中两行统计量逐项相同(0.13 / 0.151 / 控制 0.047,0.134,0.092,0.026,0.218),按重复划掉 8。种子 3 与 7 按数学问题(非有限值覆盖率与分母无保护)划掉。剩余 8 个种子 >= 4,但分母问题是整个位的定义问题,不是个别种子的问题,所以本位不通过,合理度 2。如果它有 alpha,最可能来自日内收益分布上下尾不对称的慢变量(买盘集中冲击与抛压集中的方向差),但要先把分母封住(例如分母加保护或对 B 截断)才能读出来。'
+R:
+  []
+summary: 'a 通过(创新 3、合理 3,无划掉,核心 Q 与控制 |ρ| 最大 0.35,符合 E 位条件);b 不通过(合理 2:Bowley 分母无保护、「B 在 [-1,1]」说法错、覆盖率 0.869 的非有限值;划掉 3、7(数学)与 8(与 9 等价));R 无。'

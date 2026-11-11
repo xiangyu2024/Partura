@@ -1,0 +1,91 @@
+seed: 2057
+round: 2
+slots:
+- type: E
+  core: ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50)
+  hypothesis: 'Core = volatility of the 10-day volatility (50-day window) of the daily
+    dead-minute share day_zero_ratio(Ret) (share of minutes with exactly zero return).
+    The common-subtree table shows candidates containing it average +0.08 vs -2.25
+    for those without (7 candidates, p<0.001), and in round 1 the pure nest ts_stddev^4(day_zero_ratio(Ret))
+    scored train +0.32 / valid +0.80: the signal is present but the train leg is weak.
+    Mechanism: how erratically the stock''s tape switches between "alive" and "frozen"
+    over weeks is a proxy for episodic attention / quote stickiness (limit-lock spells,
+    thin-trading regimes). Round 1 only stacked more ts_stddev layers or a ts_delta
+    inside the core. Here the periphery is different in kind: (a) scale / level normalisation
+    (divide by the long-run dead-share level, subtract its own slow mean) so the signal
+    is "unusual instability", not "illiquid"; (b) interaction with trend sign and
+    with real volatility (subtract the vol-of-vol of day_std(Ret), so what remains
+    is instability of frozenness beyond instability of price movement); (c) combination
+    with the other enriched core, vol-of-vol of the intraday turnover centroid (day_centroid(Amt));
+    (d) ts_corr with day-level turnover / a time-series rank or decay of the core
+    so the train-period noise is smoothed. Different from the library: no library
+    expression uses a dead-minute indicator, and these peripheries (ratio, residual,
+    rank, correlation, difference of two vol-of-vols) are not in the seen candidates.
+    Why it should persist: stickiness and limit-lock structure of A-share quoting
+    is institutional (tick size, 10%/20% bands), and the ruler already removes linear/U/S
+    exposure to liquidity, volatility, size and the champions, so the leftover is
+    the instability component.'
+  seeds:
+  - ts_rank(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 60)
+  - ts_delta(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 20)
+  - div(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), cross_mean(day_zero_ratio(Ret),
+    50))
+  - sub(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), ts_mean(ts_stddev(ts_stddev(day_zero_ratio(Ret),
+    10), 50), 60))
+  - ts_corr(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), day_sum(Amt), 30)
+  - mul(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), sign(ts_mean(day_sum(Ret),
+    20)))
+  - sub(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), ts_stddev(ts_stddev(day_std(Ret),
+    10), 50))
+  - ts_decay_linear(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 30)
+  - div(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), ts_stddev(ts_stddev(day_centroid(Amt),
+    10), 50))
+  - add(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), ts_stddev(ts_stddev(day_centroid(Amt),
+    10), 50))
+  - ts_max(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 30)
+  - ts_skew(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 40)
+- type: N
+  hypothesis: 'Mechanism: "price-pinned trading". The difference day_zero_ratio(Ret)
+    - day_zero_ratio(Amt) is, per day, the share of minutes in which the price did
+    not move minus the share in which nothing traded; positive values mean the price
+    is flat while volume still trades or the book is deep at a sticky price (absorption:
+    large resting orders / price support, or locked limit with queue trading), negative
+    values mean minutes where trades happened but also minutes without trade. Round
+    1 only looked at the dead-share of price alone and found it mostly collides with
+    liquidity and the known family (levels) with the useful part in dispersion. Here
+    we (1) contrast price-flat against trade-absent, which cancels most of the common
+    liquidity component (both rise with thinness) and leaves the price-impact-per-trade
+    side; (2) localise it in time of day via in_slice on the minute axis (morning
+    1-120, afternoon 121-240, last 30 minutes 211-240, first 30 minutes 1-30), because
+    pinning at the open (auction aftermath) and at the close (support/closing games)
+    are different behaviours; (3) take level (ts_mean), instability (ts_stddev) and
+    the afternoon-minus-morning asymmetry. Implementation: day_zero_ratio is the ops_ext
+    day collapse (exact equality to zero on finite minutes), in_slice cuts the minute
+    axis, ts_mean / ts_stddev / ts_decay_linear smooth over days; no nt_*, no look-ahead
+    (all windows are trailing). Why it differs from library: no library expression
+    uses a zero-ratio indicator, nor a split of the minute axis by session, nor price-flat
+    minus volume-absent. Why it could persist: tick-size and quote stickiness plus
+    A-share lunch-break / closing-auction microstructure are institutional and slow-moving;
+    ruler residualisation removes the liquidity and size exposure, so any remaining
+    alpha would be the timing/pinning component.'
+  inspired_by: 'structure batch 1/2 and round-1 results: nested dispersion of day_zero_ratio(Ret)
+    is the only family that came near the line (valid +0.80), and M2 heads (day_corr(pow_2(Vwap),
+    Close), day_autocorr_n1(pow_2(Open))) are intraday price-path-structure statistics
+    of the same kind'
+  seeds:
+  - ts_mean(sub(day_zero_ratio(Ret), day_zero_ratio(Amt)), 20)
+  - ts_stddev(sub(day_zero_ratio(Ret), day_zero_ratio(Amt)), 20)
+  - ts_mean(sub(day_zero_ratio(in_slice(Ret, 121, 240)), day_zero_ratio(in_slice(Ret,
+    1, 120))), 20)
+  - ts_stddev(sub(day_zero_ratio(in_slice(Ret, 121, 240)), day_zero_ratio(in_slice(Ret,
+    1, 120))), 30)
+  - ts_mean(day_zero_ratio(in_slice(Ret, 211, 240)), 20)
+  - ts_stddev(day_zero_ratio(in_slice(Ret, 1, 30)), 20)
+  - ts_mean(sub(day_zero_ratio(in_slice(Ret, 1, 120)), day_zero_ratio(in_slice(Amt,
+    1, 120))), 20)
+  - ts_corr(day_zero_ratio(Ret), day_gini(Amt), 40)
+  - ts_stddev(ts_mean(sub(day_zero_ratio(Ret), day_zero_ratio(Amt)), 10), 50)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
