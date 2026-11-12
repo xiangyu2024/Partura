@@ -7,3 +7,8 @@
 信念:批 2 的 head 几乎全是 Amt 的跨日协方差 / 回归 beta 经 ts_max,valid 为负、被流动性控制吸收;唯一出现的正信号是 day_corr(in_slice(Amt,2,240), in_slice(Ret,1,239)):共性表 +1.19~+2.04,r1 N 位里 cross_ema 版 valid +0.23 但 train -0.22。判断 alpha 来源是「价格之后钱怎么跟」的参与者结构(量价错位),不是 Amt 水平或区间波动。
 预测:E(核心=day_corr 错位量价)换成 ts_stddev / 去均值意外量 / 符号交互 / 对收益回归 / 偏度尾部的外围——这是第一次试「去水平留不稳定性」,预测 35% 出 head(最可能是 ts_stddev 或去均值版,train 能转正);N(day_signed_ratio / day_wmean-day_mean / day_topw_mean 的金额加权买压)预测 20% 出 head,最可能 signed_ratio 的短减长差;可能和已知族相关而被判不合格。不做 R(批 2 没有可信的烂部件,head 全是负分且互为同一类)。
 上一轮预测核对:E(上行极值偏离外围)预测不出 head——对,全为负(-0.98~-1.35);N 预测 30% 出 head——没出(最好 -0.22,valid +0.23),但方向对:day_corr 错位量价确实是最好的零件;R 预测不出 head——对(-1.40 替换了原 head 仍为负)。
+
+## 第 3 轮
+信念:alpha 来源只剩「价格之后钱怎么跟」的 day_corr(Amt_t, Ret_{t-1}) 一族,且是它的多日极值形态(ts_max@50 +0.41 / train +0.46 valid +0.41,最接近 0.5),不是均值形态(-0.98)。批 1/3 的 head 全是 range 波动、Amt 协方差、成交量均值,被控制吸收。
+预测:E(核心=ts_max(day_corr,40))换成相对自身历史(减均值/除标准差)、Amt-Volume 差、与反向/绝对收益版相减、符号交互、桶去均值的外围:预测 35% 出 head,最可能是「减自身 40 日均值」或「Amt 峰减 Volume 峰」;风险是与已知族/冠军相关被判不合格。N(滞后速度差 lag1 减 lag5/10 的 day_corr,再取 ts_max)预测 15% 出 head,多半 score 在 0 附近;机制新但差分后信号弱。不做 R(无可信烂部件:唯一变体增益来自含 nt_* 的 head)。
+上一轮预测核对:E(核心 day_corr 去水平留不稳定性)预测 35% 出 head——没出,但最好的 ts_max@50 达 +0.41,近线,说明峰值形态而不是 stddev/去均值有效,故本轮把核心升到 ts_max@40;N(signed_ratio/wmean-mean/topw)预测 20% 出 head——没出(最好 -0.27),买压加权统计无效。

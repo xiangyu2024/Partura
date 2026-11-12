@@ -1,0 +1,116 @@
+seed: 2079
+round: 3
+slots:
+- type: E
+  core: ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40)
+  hypothesis: 'Core = the 40-day maximum of the within-day lead-lag correlation between
+    a minute''s turnover and the previous minute''s return (Amt over minutes 2..240
+    against Ret over minutes 1..239, no fill value). It is the single most enriched
+    subtree in the batch (+2.41, p 0.000, six candidates, all of them positive) and
+    its sibling ts_max@50 was the best earlier result (+0.41, train +0.46 / valid
+    +0.41), the closest to the 0.5 line; round 2 changed the core around the plain
+    series (ts_stddev, level-minus-mean, return interaction) but the peak statistic
+    itself only got ts_max/cross_decay_linear stacked on it. The mechanism: the maximum
+    picks out the stock''s most extreme day of money-follows-price in the last 40
+    days, i.e. an episode of one-sided, price-chasing order flow (retail momentum
+    chasing or an institution splitting an order after its own footprints). Such episodes
+    are rare, event-like and leave drift after them, which is why the peak works while
+    the average (cross_mean@30, -0.98) does not. This round keeps the peak and changes
+    what it is compared with, not how long it is smoothed: (a) minus the stock''s
+    own 40-day mean of the same series or divided by its 40-day stddev (how far the
+    peak is above that stock''s normal behaviour: removes the persistent level that
+    liquidity/size controls absorb); (b) minus the peak of the same correlation computed
+    with Volume instead of Amt (the part of the coupling that comes from price level
+    rather than share count: money-weighted vs share-weighted flow); (c) minus the
+    peak of the reverse direction (price follows turnover: impact) or of the absolute-return
+    version (volatility-volume feedback), so only the pure chase-after-price part
+    is left; (d) a regression residual against the daily return and a return-sign
+    interaction, separating chasing after gains (lottery demand) from after losses
+    (capitulation); (e) a size-bucket demean and a cross-sectional z-score so that
+    the ranking is within comparable stocks and days. None of these (difference from
+    own-history, ratio to own dispersion, cross-field peak differences, sign interaction,
+    bucket demean) is in the seen periphery, which is only ts_max@50, ts_max stacked
+    on ts_max, cross_decay_linear and plain ts_max@40. Out of sample: who trades after
+    price moves is a slow participant-mix property of each stock, and ranking on the
+    peak relative to the stock''s own norm is not the liquidity level the controls
+    remove.'
+  seeds:
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_mean(day_corr(in_slice(Amt,
+    2, 240), in_slice(Ret, 1, 239)), 40))
+  - div(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_stddev(day_corr(in_slice(Amt,
+    2, 240), in_slice(Ret, 1, 239)), 40))
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_max(day_corr(in_slice(Volume,
+    2, 240), in_slice(Ret, 1, 239)), 40))
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_max(day_corr(in_slice(Ret,
+    2, 240), in_slice(Amt, 1, 239)), 40))
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_max(day_corr(in_slice(Amt,
+    2, 240), in_slice(abs(Ret), 1, 239)), 40))
+  - mul(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), sign(ts_mean(day_sum(Ret),
+    20)))
+  - cross_regres(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40),
+    day_sum(Ret), 60)
+  - cs_bucket_demean(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)),
+    40), LogFloatCap)
+  - cross_zscore(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40),
+    60)
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), ts_min(day_corr(in_slice(Amt,
+    2, 240), in_slice(Ret, 1, 239)), 40))
+  - mul(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), cross_rank(day_std(Ret),
+    20))
+  - ts_delay(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), 20)
+- type: N
+  hypothesis: 'New idea: the SPEED of the flow response to price inside the day. Round-2''s
+    only working piece correlates turnover with the return one minute earlier. A stock
+    whose turnover responds to price within one minute (fast, algorithmic or momentum-chasing
+    flow) behaves differently from one whose turnover responds ten or thirty minutes
+    later (slow, human or institutional flow that is being worked). The statistic
+    is the difference of two lead-lag correlations, day_corr(Amt_t, Ret_{t-1}) minus
+    day_corr(Amt_t, Ret_{t-k}) with k = 5 or 10, implemented by slicing the two minute
+    series with different offsets (equal-length slices: Amt over 11..240 against Ret
+    over 1..230 for k=10; Amt over 6..240 against Ret over 1..235 for k=5) and subtracted.
+    The gap is positive when the immediate reaction dominates and negative when it
+    is delayed. It is then summarised by its own multi-day peak (ts_max, the form
+    that worked for the one-lag version) or by a stock''s deviation from its own history.
+    Other seeds change what is correlated: turnover with absolute return (attention
+    following surprises irrespective of sign: volatility-volume feedback), turnover
+    change in_delta(Amt) with return (the new-money arrival rate), and the reaction
+    to the intraday amplitude of returns in the first versus the second half of the
+    day (in_half). The difference of two correlations of the same stock on the same
+    day removes the stock''s level of Amt-Ret coupling, which is largely a liquidity
+    and volatility attribute that the controls absorb; what is left is the timing
+    profile of order flow, which is not any snapshot head (heads are cross_cov of
+    Amt levels, regression betas of price range, hurst and quantile-of-std statistics)
+    and not the single-lag core itself. Out of sample: reaction speed is an execution
+    technology / participant type property (algos vs discretionary flow), persistent
+    across stocks and years, and the ranking is on the profile not the level.'
+  inspired_by: 'Batch commonality table: day_corr(in_slice(Amt, 2, 240), in_slice(Ret,
+    1, 239)) appears in 52 candidates with mean difference +0.84 and its ts_max@40/q75@1
+    forms are the top two rows (+2.41, +1.98); earlier rounds only varied the smoothing
+    and the daily-series statistics around the single one-minute lag, never the lag
+    itself.'
+  seeds:
+  - ts_max(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    11, 240), in_slice(Ret, 1, 230))), 40)
+  - ts_max(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    6, 240), in_slice(Ret, 1, 235))), 40)
+  - cross_mean(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    11, 240), in_slice(Ret, 1, 230))), 20)
+  - ts_quantile_q75(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    6, 240), in_slice(Ret, 1, 235))), 20)
+  - ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(abs(Ret), 1, 239)), 40)
+  - ts_max(day_corr(in_slice(in_delta(Amt, 1), 2, 240), in_slice(Ret, 1, 239)), 40)
+  - ts_quantile_q75(day_corr(in_slice(Amt, 2, 240), in_slice(abs(Ret), 1, 239)), 20)
+  - sub(ts_max(day_corr(in_slice(Amt, 2, 120), in_slice(Ret, 1, 119)), 40), ts_max(day_corr(in_slice(Amt,
+    122, 240), in_slice(Ret, 121, 239)), 40))
+  - cross_zscore(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    11, 240), in_slice(Ret, 1, 230))), 60)
+  - ts_max(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Amt,
+    2, 240), in_slice(abs(Ret), 1, 239))), 40)
+  - cs_bucket_demean(ts_max(sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)),
+    day_corr(in_slice(Amt, 11, 240), in_slice(Ret, 1, 230))), 40), LogFloatCap)
+  - sub(ts_max(day_corr(in_slice(Amt, 3, 240), in_slice(Ret, 1, 238)), 40), ts_mean(day_corr(in_slice(Amt,
+    3, 240), in_slice(Ret, 1, 238)), 40))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
