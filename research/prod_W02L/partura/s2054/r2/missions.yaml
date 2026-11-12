@@ -1,0 +1,56 @@
+seed: 2054
+round: 2
+slots:
+  - type: E
+    core: 'cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High))'
+    hypothesis: >-
+      核心是批 2 共性表里均值差最大的子树(+0.99):日内最高价出现的分钟位置 day_argmax(High),在截面上两次剔除 day_es_ratio_lo(High)(最高价附近的极值形态量)之后的残差,
+      即「最高点出得早还是晚」中与最高价形态无关的部分。机制:高点出得晚是尾盘资金追涨 / 散户情绪(彩票型需求),高点出得早是开盘冲高后回落(隔夜消息被消化、被动方出货);
+      这个时间位置是参与者构成的慢变属性,不是价格水平也不是波动(与波动、反转、流动性控制不是同一个东西,日度值是时间下标)。
+      以前含该核心的写法只有两类:Pr1b 里的 cross_corr(day_std(Ret), 核心, 241) 与 cross_reg_tvalue(day_std(Ret), 核心, 241)(核心与日波动在 241 日窗口里的相关 / t 值),
+      最好 -0.36,说明配上波动那一半是拖累。本次外围完全不同:(1)不再碰 day_std(Ret),改用 cross_mean / cross_ema 做 20-60 日慢平滑,降低换手(纯多头亏在成本,先前所有含核心的候选都是亏损);
+      (2)cs_bucket_zscore 在流通市值分桶内取 z 分数,去掉规模暴露;(3)用 cross_regbeta / cross_corr 把核心对成交额或收益做 60 日滚动回归,读「放量日高点出得晚」的持续性;
+      (4)cross_stddev / cross_tail_mean_q75 读时间位置的稳定性与上尾,(5)对 day_std(Ret) / day_mean(Ret) 做截面残差,把波动与当日收益从核心里拿掉。
+      为什么样本外还会在:这是参与者构成 / 日内资金节奏的结构属性,不依赖某段行情;失败方式是对核心的平滑后几乎退化为日度噪声而不出 head。
+      数学检查:day_argmax 并列取第一个下标、整天等值返回 0(开盘分钟),停牌票聚在 0 但被可交易掩码排除;无前视,只用当日及以前数据,最长窗口 60 日。
+    seeds:
+      - 'cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 20)'
+      - 'cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)'
+      - 'cross_ema(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 30)'
+      - 'cs_bucket_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), LogFloatCap)'
+      - 'cross_mean(cs_bucket_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), LogFloatCap), 40)'
+      - 'cross_regbeta(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_sum(Amt), 60)'
+      - 'cross_corr(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_sum(Amt), 60)'
+      - 'cross_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)'
+      - 'sub(cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 10), cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60))'
+      - 'cross_mean(cs_regres(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_std(Ret)), 40)'
+      - 'cross_mean(cs_regres(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_mean(Ret)), 40)'
+      - 'cross_tail_mean_q75(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)'
+      - 'cross_stddev(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 40)'
+  - type: N
+    hypothesis: >-
+      机制:分钟级「持续性」读数——日内相邻分钟之间的一阶自回归系数 day_ar1_coefficient。批 2 的 head 里反复出现 day_ar1_coefficient(Low / Ret / Volume)
+      与 day_durbin_watson,但都被叠在 cross_cov / cross_regres 的深层结构里(分数 -1.2 到 -1.9,亏在结构噪声而不是读数本身)。这里把它拿出来单独用并做慢平滑。
+      三种读数:(a)day_ar1_coefficient(Ret) = 分钟收益的一阶自相关,为负是买卖价差弹跳 / 流动性提供者的回吐,为正是订单拆分(机构分单、趋势性执行),
+      20-60 日均值是个股微观结构与参与者类型的慢变属性;(b)day_ar1_coefficient(Volume) 或 Amt = 成交的时间聚集性(成交脉冲还是平稳),
+      持续性高说明有拆单算法在持续吃单;(c)day_ar1_coefficient(abs(Ret)) = 波动聚集的日内持续性,减去 (a) 得到「波动持续而方向不持续」的纯噪声交易成分,
+      并可对 day_std(Ret) 做截面残差去掉波动水平。算子实现:day_* 先把分钟序列压成日度读数,再用 cross_mean / cross_ema / cross_regbeta / cross_corr 做 30-60 日平滑或两种持续性之间的滚动关系,
+      cs_bucket_zscore 在流通市值分桶内去规模。为什么和库、本批 head 不同:head 是 cross_cov / cross_regres / durbin_watson 叠多层的复合结构,
+      这里是单层读数加慢平滑,骨架与 5583 条库骨架不同(库禁令在 GP 里再保证一次);第 1 轮的 N 位读的是量加权收益与时段收益,这次读的是分钟序列的时间依赖结构,度量的东西不同。
+      为什么样本外还会在:订单拆分和价差弹跳是交易机制属性,不依赖行情;最可能的失败方式是被流动性控制吃掉(价差弹跳与流动性高度相关),此时不出 head,
+      种子里对 day_std(Ret) 与流通市值的残差 / 分桶写法就是为了把这部分去掉。数学检查:day_ar1_coefficient 在整天等值(零成交)时分母近零,
+      但有效分钟不足或方差为零会得到缺失或 0,最多使停牌票聚在 0,不是爆点;无前视,全部只用 t 日及以前数据。
+    inspired_by: batch 2 的 head 反复使用 day_ar1_coefficient(Low / Ret / Volume) 与 day_durbin_watson 作为内层读数,但都被叠进深层结构;把它们单独拿出来并慢平滑
+    seeds:
+      - 'cross_mean(day_ar1_coefficient(Ret), 60)'
+      - 'cross_mean(day_ar1_coefficient(abs(Ret)), 40)'
+      - 'cross_mean(day_ar1_coefficient(Volume), 60)'
+      - 'cross_mean(cs_regres(day_ar1_coefficient(Volume), day_std(Ret)), 40)'
+      - 'cross_mean(sub(day_ar1_coefficient(abs(Ret)), day_ar1_coefficient(Ret)), 40)'
+      - 'cross_regbeta(day_ar1_coefficient(Volume), day_ar1_coefficient(Ret), 60)'
+      - 'cross_corr(day_ar1_coefficient(Ret), day_ar1_coefficient(Volume), 60)'
+      - 'cs_bucket_zscore(cross_mean(day_ar1_coefficient(Ret), 30), LogFloatCap)'
+      - 'cross_ema(day_ar1_coefficient(Amt), 30)'
+      - 'cross_mean(cs_regres(day_ar1_coefficient(abs(Ret)), day_ar1_coefficient(Ret)), 40)'
+      - 'cs_bucket_zscore(cross_mean(cs_regres(day_ar1_coefficient(abs(Ret)), day_std(Ret)), 40), LogFloatCap)'
+      - 'cross_zscore(cross_mean(day_ar1_coefficient(Ret), 5), 60)'

@@ -1,0 +1,82 @@
+seed: 2077
+round: 3
+slots:
+- type: E
+  core: day_kurt(Amt)
+  hypothesis: 'Core = day_kurt(Amt): the within-day kurtosis of minute turnover amount,
+    i.e. how bursty the day''s trading is (a few giant minutes vs evenly spread flow).
+    It is an enriched common subtree in the batch (21 candidates, mean -2.37 vs -2.91
+    without it, p 0.013) and sits inside cross_cov(day_sum(Ret), day_kurt(Amt), 40),
+    the most enriched nest. Earlier rounds only used it as a partner inside a cross_cov/cross_corr
+    with the daily return (round 2) or not at all. The periphery tried here treats
+    burstiness as a slow state variable and as a change variable rather than a level
+    or a partner of Ret: (a) its own 20-60 day dynamics (ts_mean / ts_scale / cross_delta
+    / cross_stddev: stocks whose bursts are becoming more frequent = event-driven
+    attention), (b) burstiness relative to total activity (kurtosis residualised against
+    day_sum(Amt) or day_std(Amt) with cross_regres, so that pure size/liquidity is
+    removed by construction), (c) burstiness conditional on direction (cross_corr
+    of kurtosis with the opening-window return, a retail-attention proxy). Mechanism:
+    concentrated trading bursts in A-share retail-dominated tape signal attention
+    shocks and block/institutional prints; stocks with persistently bursty flow have
+    thinner continuous liquidity and carry a slow-moving illiquidity/attention premium
+    that is not the linear/U/S exposure to Amihud-type liquidity, size, volatility,
+    or reversal that the controls remove. Difference from library heads: no head uses
+    a kurtosis of Amt with a regression-residual or ts_scale/cross_delta periphery;
+    the heads built around Amt are day_quantile_q75(Amt) regressions and Amihud medians.
+    Why it persists out of sample: the structure is behavioural (attention clustering)
+    and slow (rolling windows 20-60 days), so it does not depend on one sample regime.'
+  seeds:
+  - cross_mean(day_kurt(Amt), 20)
+  - cross_delta(day_kurt(Amt), 20)
+  - ts_scale(day_kurt(Amt), 40)
+  - cross_regres(day_kurt(Amt), day_sum(Amt), 30)
+  - cross_regres(day_kurt(Amt), day_std(Amt), 30)
+  - cross_corr(day_kurt(Amt), day_sum(in_slice(Ret, 1, 30)), 20)
+  - cross_stddev(day_kurt(Amt), 30)
+  - sub(cross_mean(day_kurt(Amt), 10), cross_mean(day_kurt(Amt), 60))
+  - cross_corr(day_kurt(Amt), day_kurt(Volume), 30)
+  - cross_reg_tvalue(day_kurt(Amt), day_sum(Ret), 30)
+  - cross_corr(day_kurt(Amt), day_std(Ret), 20)
+- type: N
+  hypothesis: 'Overnight-versus-intraday tug of war (Lou-Polk-Skouras 2019, "A tug
+    of war: overnight versus intraday expected returns"). Split the daily return into
+    the close-to-open gap and the open-to-close part: gap = day_first(Open)/cross_delay(day_last(Close),1)
+    - 1 (cross_delay takes the PAST day, no look-ahead; both Open and Close are on
+    the same adjusted basis in this cube) and intraday = day_last(Close)/day_first(Open)
+    - 1. The hypothesis is that overnight returns are driven by one clientele (retail/news-driven
+    demand at the open) and intraday returns by another (institutional trading), and
+    each clientele''s return is persistent in itself and reverses in the other: a
+    20-60 day average of the gap, minus the same average of the intraday leg (or the
+    rolling correlation between the two legs) is a slow state that is not the same
+    as the daily-return 20 day reversal, which mixes both. Further variants: a rolling
+    regression of intraday leg on the previous gap (do gaps get faded within the day?),
+    and the intraday leg weighted by the opening-window amount share. Batch link:
+    batch 1 heads are opening-window volume/return statistics and day_first(Open)
+    is an enriched subtree; no library head splits the return into an overnight and
+    an intraday leg or uses cross_delay(day_last(Close), 1). Why it should persist:
+    the clientele split (retail at the open, institutions through the day) and the
+    opening-auction price-limit/information structure of A-shares are structural;
+    the signal is a 20-60 day average so it is slow, and the controls (20d reversal,
+    liquidity, volatility, size, champions) remove only the part that is a linear/non-linear
+    function of the whole-day return, not the contrast between its two legs.'
+  inspired_by: Batch 1 heads built on opening-window (minutes 1-50) return/volume
+    ratios and the open-minute volume change; enriched subtree day_first(Open) (11
+    candidates, +0.39).
+  seeds:
+  - cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close),
+    day_first(Open))), 20)
+  - cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close),
+    day_first(Open))), 60)
+  - cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 40)
+  - cross_mean(div(day_last(Close), day_first(Open)), 40)
+  - cross_corr(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close),
+    day_first(Open)), 30)
+  - cross_regres(div(day_last(Close), day_first(Open)), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 30)
+  - cross_reg_tvalue(div(day_last(Close), day_first(Open)), div(day_first(Open), cross_delay(day_last(Close),
+    1)), 30)
+  - cross_stddev(div(day_first(Open), cross_delay(day_last(Close), 1)), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

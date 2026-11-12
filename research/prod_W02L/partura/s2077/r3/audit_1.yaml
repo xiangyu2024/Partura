@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '核心 day_kurt(Amt) 是 Amt 分钟值的日内超额峰度。9 个 head 里没有任何一个含 day_kurt;Amt 相关的 head 是 day_quantile_q75(Amt) 回归和 Amihud 中位数。共性表里它富集(21 个候选,均值差 +0.55,p 0.013),核心可以作为 E 位核心。相关度表:核心与 head 最大 |ρ| 0.19(残差 0.18);与 liq 0.23、vol 0.02、rev 0.03、known 0.20、size 0.12,都远低于 0.8 的核心门槛,不是控制的换写法。外围:seed 1 cross_mean(kurt,20) 与 liq 0.45、与 head 0.38(最像的是 neg(inv(pow_2(ts_regbeta(day_quantile_q75(Amt),...)))));seed 9 cross_corr(kurt(Amt), kurt(Volume), 30) 与 vol 0.49、known 0.41,是两个成交口径突发度的同步性,度量的是 head 没有的东西;seed 4、5 与 rev 0.43、0.39,未过 0.5。seed 2、3、7、8、10、11 与各 head 和控制都在 0.4 以下。算子核对:day_kurt 为超额峰度(下界 -2,全 0 日为 0/0 得 NaN,不是 -3),无数值伪影;ts_scale(x,d) 的分母是 40 日 kurt 之和,A 股分钟成交额的 kurt 基本为正,不近零。需注意:rolling_ols(x,y) 是 y ~ alpha + beta*x,所以 cross_regres(kurt, day_sum(Amt), 30) 与 cross_regres(kurt, day_std(Amt), 30)(seed 4、5)算的是 Amt 量对 kurt 的残差,与计划 (b) 写的「kurt 对 Amt 的残差」方向相反。两个种子定义良好且有清楚的经济含义(去掉突发度后的成交量),保留;PI 应按实际算子修正机制描述。seed 12 ts_mean(cross_rank(kurt,20),10) 划掉:cross_rank 在 20 日窗内取整数秩,再做 10 日平均,全面板只剩约两百个离散水平(相关度表唯一值比例 0.084,门槛判废品),截面大量并列,是量化伪影,不是信号。如果 slot a 有 alpha,最可能来自日内成交额突发结构(少数大分钟对比均匀流)在 20–60 日尺度上的慢变化,即注意力聚集或大宗成交占比的变化,而不是 kurt 的水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9, 10]
+    reasons: '核心是隔夜缺口 div(day_first(Open), cross_delay(day_last(Close),1)) 与日内腿 div(day_last(Close), day_first(Open)) 的对比。9 个 head 都是同分钟的符号分组量价比(前 50 分钟)和 day_open(in_delta(Volume,60)),没有一个用 cross_delay(close,1),也没有把整日收益拆成两段。novelty 不给 5 的原因:seed 1 cross_mean(sub(gap,intra),20) 与 20 日反转控制 rev 0.59、seed 4 cross_mean(intra,40) 与 rev 0.49,两段之差是整日收益的分解,部分含反转暴露;但两段分开成两个时间序列、各自平均,是库里没有的结构,所以给 4。seed 8 cross_stddev(gap,20) 与 vol 0.58 相关,是隔夜波动,不是 vol 控制本身(vol 控制是日收益波动),放行。划掉 seed 9:sub(cross_mean(gap,20), cross_mean(intra,20)) 与 seed 1 代数恒等(均值的差等于差的均值),表里两行数字完全相同,属于重复。划掉 seed 10:cross_mean(intra * day_sum(Amt_1..30), 20) 与 liq 0.97、known 0.97,是流动性水平的换写,达到自动划掉的 0.8 门槛。算子核对:cross_delay(x,1) 是取前一日(res[1:]=x[:-1]),无前视;gap 与 intra 同为后复权价,sub 两个比值后 -1 项相消,等于 gap 与 intra 之差;day_first / day_last 取有效首末值,停牌日为 NaN 不产生伪影。注意:cross_regres(x,y,d) 是 y 对 x 的滚动回归残差,seed 6 cross_regres(intra, gap, 30) 与 seed 7 cross_reg_tvalue(intra, gap, 30) 算的是 gap 对 intra 的回归,与计划里「日内腿对前一缺口的回归」方向相反,保留,PI 应修正机制描述。如果 slot b 有 alpha,最可能来自开盘前后两段的分歧(隔夜散户需求对日内机构成交)经 20–60 日平均后形成的慢状态,而不是整日收益的反转。'
+R: []
+summary: 'slot a(E,核心 day_kurt(Amt))novelty 4 / soundness 4,划掉 1 个种子(#12 量化伪影);slot b(N,隔夜 vs 日内)novelty 4 / soundness 4,划掉 2 个(#9 与 #1 恒等、#10 流动性换写);两位都通过,无 R 组;有两组回归方向与计划机制描述相反,已注明,不挡。'
