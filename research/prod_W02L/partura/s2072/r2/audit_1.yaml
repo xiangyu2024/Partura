@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 2
+    soundness: 4
+    struck_seeds: [5, 9, 12]
+    reasons: '核心 day_quantile_q25(Low) 在 corr_1 中与快照 head「ts_quantile_q75(pow_1_5(cross_cov(day_mean(Vwap), day_quantile(High), 60)), 5)」原始日度秩 |ρ| 为 0.891（残差 0.894）；与 head「ts_quantile_q75(pow_1_5(cross_cov(day_mean(Vwap), day_quantile(High), 15)), 1)」为 0.867（残差 0.94）。两个 head 都由 Vwap 均价与 High 分位的截面协方差驱动，截面排序主要是价位水平，所以核心本身基本是已有 head 主成分的另一种写法，创新度给 2 而不是 3（未到 1：两者不是同一表达式，而且时间变换后的外围确有新东西）。外围里真正离开 head 的只在时间变换上：cross_zscore(C,120)、cross_ema(C 减 120 日均值,10)、ts_hurst(C,20)、cross_corr(C, day_sum(Amt),60)、cs_bucket_zscore(cross_zscore(C,60), ListAge)，与 head 的原始 |ρ| 为 0.13–0.39（残差 0.12–0.34），这一部分值得保留。划掉的种子：5 = cs_bucket_zscore(C, LogFloatCap)，与 head 的 |ρ| 为 0.700（三位小数），按 ≥0.7 的自动规则是边界，请确定性步骤以原值裁定；9 = cross_tail_mean_q25(C,60)，0.864，即核心的下尾均值；12 = cross_mean(C,60)，0.890，即核心本身。种子 6 = cs_bucket_demean(C, LimitWidth) 为 0.691，未划但接近门槛。控制：核心对 liq 0.465、known 0.427、size 0.441，都低于 0.8，过控制门槛；种子无一与控制 |ρ| ≥ 0.8。合理度 4：机制清楚，后复权价格的分钟下沿分位在截面上近似累计收益或上市以来的价位水平，是长周期动量 / 反转的读数，§4 明确后复权价格不算问题；逐个核对 day_quantile_q25、cross_zscore、cross_ema、cs_bucket_zscore、cs_bucket_demean、cs_regres、ts_hurst、cross_corr、cross_tail_mean_q25，都没有除以近零量、没有前视（只用 t 日及以前），窗口 20–120 日，热身不主导。扣分点：核心与 size / known 族各约 0.44，机制里「价位 = 长期反转」与「市值残余」难以分开，只能靠残差化。如果它有 alpha，最可能来自长周期价位反转，或 LogFloatCap 桶内的价位残差。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [5]
+    reasons: '12 个种子中，除 5 外与快照 6 个 head 的原始 |ρ| 为 0.09–0.64，没有一个 ≥0.7；残差 0.11–0.55；与控制的最高 |ρ| 为 b1 的 liq 0.67、b8 的 liq 0.66、b7 的 liq 0.61，都低于 0.8。快照里没有「分钟不动占比」这类读数，head 全是 Vwap / High / Volume 的截面协方差、Hurst、分位数，所以分钟离散结构是真正新的一类，创新度给 4。Vwap 版种子与流动性控制中度相关，这一点已在下面合理度里说明，不改变创新度。划掉的种子：5 = cross_mean(day_flat_run_max(Close),60)，corr_1 中 gate 为 False，截面只有 38% 的日度取值不同，面板大量并列，排序由并列与列序决定，按 §4「面板几乎是常数」属于数学问题，划掉。其余种子 gate 通过，distinct 不低于 0.865。合理度 3，不是数学问题，但机制说明与算子读的东西对不上：AlphaCube 的 Vwap 定义为 amt/volume，成交量为 0 的分钟记为 NaN（synthetic.py:126），所以 day_flat_ratio(Vwap) 统计的是相邻两个有成交分钟的均价完全相等的比例，主要读单笔成交或稀疏成交的分钟，即交易稀疏程度，不是报价被最小变动价位卡住。Vwap 版（b1、b4、b6、b8、b9、b11）的 tick 摩擦说明不成立，它们与流动性控制的重合就是这么来的。tick 故事对 Close 版更贴切（最后成交价落在 0.01 档上）：b2 cross_mean(day_flat_ratio(Close),120)，以及直接读价格不动的 b3、b7（day_zero_ratio(Ret)）。这些只是说明性偏差，按 §3 放行。如果它有 alpha，最可能来自两处：交易稀疏、单笔成交多的股票定价慢（流动性折价），或 Close 版的 tick 黏性导致的慢速修正。未核对 PI 所说「day_flat_ratio 等不在 5583 个骨架里」这一条，仅凭 corr_1 无法验证。'
+R: []
+summary: '第 2 轮审计：slot a 核心 day_quantile_q25(Low) 与快照 head 原始 |ρ| 0.89、残差 0.94，创新度 2，未过通过线（E 位改为普通 GP）；划掉 a5（边界 0.700）、a9、a12；slot b（tick/不动占比）创新度 4、合理度 3，通过，划掉 b5（截面并列过多）；无 R 组。'

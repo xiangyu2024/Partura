@@ -1,0 +1,41 @@
+seed: 2072
+round: 2
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 机制:最小变动价位(tick)摩擦与价格黏性。A 股最小报价单位固定 0.01 元,低价股的相对 tick 大(1 分钱占 5 元股 0.2%、占
+    50 元股 0.02%),分钟价格在相邻分钟之间经常"原地不动"或只跳一档。day_flat_ratio(F) = 相邻分钟取值不变的占比,day_zero_ratio(Ret)
+    = 分钟收益恰为 0 的占比,day_flat_run_max 为最长的不动连续段:这些读的是"价格离散化、报价被少数档位卡住"的程度,是做市商 / 流动性提供的间接度量(Roll
+    1984 的价差隐含在不动分钟里;Harris 1994 的最小变动价位与价差、深度、波动的关系:相对 tick 越大,订单队列越长,价格越黏,流动性提供者收益越高)。黏性高的票长期被报价队列压住,信息进入价格慢,存在可预测的慢速修正;黏性随价位与板块(LimitWidth
+    5% / 10% / 20%)而异,所以要在同板块或同市值十分位内比较。 算子怎样实现:cross_mean(day_flat_ratio(Vwap), 60)、cross_mean(day_zero_ratio(Ret),
+    60)、两者之差(Vwap 不动 vs 收益为零,区分"价格不动"与"成交价在两档间弹跳")、cross_mean(day_flat_run_max(Close),
+    60)、对 LogFloatCap 或 LimitWidth 做桶内标准化、对日内波动 cross_mean(day_std(Ret), 60) 做 cs_regres
+    残差(去掉波动),以及 day_pos_ratio(Ret) 的偏离(上涨分钟占比 - 0.5 的慢均值,价格不动时被零分钟压低)。 批里的启发:本批含 day_quantile_q25(Low)(价位)的候选显著好于不含者,且
+    pow_3(LimitWidth)(板块宽度)也富集,说明价位与板块结构是本批里有信息的两个维度,但已有候选读的都是价位水平本身;tick 摩擦是"价位 ×
+    报价离散化"的行为读数,是水平以外的未见过一块。 为什么与已有的不同:两个库里没有 day_flat_ratio / day_zero_ratio / day_flat_run_max
+    这类"分钟不动占比"算子(Partura 后加),它们读的是分钟序列的离散结构,不是水平、波动、分位或回归;骨架 cross_mean(day_flat_ratio(F),
+    d)、sub(day_flat_ratio(F), day_zero_ratio(Ret)) 不在 5583 个骨架里。与成交额 / 流动性控制可能中度相关,桶内标准化和对波动的残差就是为了拆开。
+    为什么样本外还会在:tick 制度、板块规则与价位结构是制度性、慢变的,不依赖某段行情;60 日以上聚合后换手低,15 bp 吃得下。 数学检查:占比量都在
+    [0, 1],分母是有效分钟数,没有除以近零量;整天停牌 / 一字板时 flat_ratio 趋近 1,这是真实的"全不动"而非缺失填充,已被可交易掩码排除,不是结果的主要来源;不用
+    in_shift;无前视,只用 t 日收盘及以前,t+1 交易。
+  inspired_by: 本批含 day_quantile_q25(Low)(价位)与 pow_3(LimitWidth)(板块宽度)的候选显著更好,但都只读价位水平;价位
+    × 报价离散化(tick 摩擦,分钟价格不动占比)是未见过的一块。
+  seeds:
+  - cross_mean(day_flat_ratio(Vwap), 60)
+  - cross_mean(day_flat_ratio(Close), 120)
+  - cross_mean(day_zero_ratio(Ret), 60)
+  - cross_mean(sub(day_flat_ratio(Vwap), day_zero_ratio(Ret)), 60)
+  - cs_bucket_zscore(cross_mean(day_flat_ratio(Vwap), 60), LogFloatCap)
+  - cs_bucket_zscore(cross_mean(day_zero_ratio(Ret), 60), LimitWidth)
+  - cs_regres(cross_mean(day_flat_ratio(Vwap), 60), cross_mean(day_std(Ret), 60))
+  - cross_zscore(day_flat_ratio(Vwap), 120)
+  - cross_mean(sub(day_pos_ratio(Ret), 0.5), 120)
+  - cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60)
+  - cs_bucket_zscore(cross_mean(day_flat_run_max(Vwap), 60), sub(LogFloatCap, LogFloatShares))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

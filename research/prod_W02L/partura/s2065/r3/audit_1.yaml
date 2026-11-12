@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [12]
+    reasons: '相关度表(corr_1.md)中 slot a 12 个种子与快照 9 个 head 的原始最大 |ρ| 为 0.10 到 0.29,残差 0.11 到 0.27,都不近;五个控制的 |ρ| 最高 0.42(seed 4、5 对 size),无一 ≥ 0.8。novelty 给 4:库里 5583 条和快照 head 都是分钟字段的日内统计,没有以股本变化量 cross_delta(LogFloatShares, d) 为主体的表达式,也不是 LogFloatCap 水平的换写。数学核对:cross_delta(x,d) = x[t] - x[t-d](dt_cross.py:174-180),只取过去,无前视;sub(LogTotalCap, LogFloatCap) 在同一天相减时价格项抵消,得到的是 log(总股本/流通股本),无近零除数。LogFloatShares 大量并列靠列序打破,§4 明确不算问题。划掉 seed 12:sub(cross_delta(LogTotalCap,120), cross_delta(LogFloatCap,120)) 由 cross_delta 的线性性(差分的差分)代数上等于 seed 6 cross_delta(sub(LogTotalCap,LogFloatCap),120);相关度表里两者的残差与五个控制数值完全一致(0.14;0.03、0.05、0.01、0.03、0.09),是同一个排名,按重复划掉,保留 seed 6。seed 11 cross_delta(LogTotalCap,120) 的机制写的是股本扩张,但 LogTotalCap 含价格,120 日差分主要是 120 日价格涨跌(相关度表 vol 0.42、rev 0.30、known 0.29、liq 0.27 符合价格动量或反转的画像);机制描述与表达式不一致,按 §3 只能标注,不挡。seed 9 的 cs_demean 是截面去均值,按日排名不变,无害。如果它有 alpha,最可能来自:解禁或增发造成的流通盘阶跃之后的供给压力(seed 1、2、3、6、10),或未流通比例的低换手横截面差(seed 4、5)。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [8, 10]
+    reasons: '相关度表里 slot b 的名义价系列与快照 head day_var(in_max_rolling(Vwap,60)) 的关系要分开看。seed 1、5(log 名义价及其 60 日均值)残差 |ρ| 0.77,与该 head 的残差交易信号高度重合;原因是 day_var = day_std 的平方(dt_day.py:117-118),这个 head 按价格平方量纲,本质上是价格水平的代理。所以 novelty 不给 4:名义价水平这部分与库里 head 的内容重叠。seed 2、3、6、7 的因子型(复权价对名义价)残差 0.44 到 0.46,原始 |ρ| 约 0.50,与 size 控制 0.44 到 0.50 中度相关,未越线。因子结构(名义价与复权价之差 = 累计复权因子)是库里没有的写法,所以 novelty 给 3。seed 4(因子的 120 日变化)与 seed 9(名义价对 250 日均值的偏离)残差 0.10 到 0.11,与 head 不重合。划掉 seed 8:sub(log(day_mean(Close)), log(cross_max(day_mean(Close),250))) 等于 log(A/M),与 A/M 只差一个单调的 log 变换(§1 同一信号),而 A/M 就是 r2 missions_final.yaml 槽 a 的种子 1 div(day_mean(Close), cross_max(day_mean(Close),250)),已经跑过,按重复划掉。划掉 seed 10:div(sub(LogFloatCap,LogFloatShares), log(day_mean(Close))) 的分母是 log 复权价,在复权价约为 1 时为零并在 1 的两侧变号;div 没有任何保护(common.py:175-177 直接 torch.divide),log 只在 |x| < EPS 时才给缺失(common.py:211-212)。于是复权价接近 1 的票拿到 ±∞ 量级的值,截面排序由价格在 1 之上还是之下决定,属于 §4 的数值伪影,按数学问题划掉。其余种子不挡,但标注三点:seed 7 的 log(复权价) - (LogTotalCap - LogFloatShares) 等于 log(复权因子) - log(总股本/流通股本),混入了未流通比例(slot a 的机制),与笔记写的复权因子不一致;seed 9 的名义价偏离会被送转除权(送股后名义价下跌)带成大幅跳变,更像除权事件而非低名义价偏好;seed 2、3、4、6 的名义价(市值/股本基准)与 day_mean(Close)(分钟均价)时间口径不同,比值里含日内均价与收盘之差的噪声,PI 需核对两者的价格口径。这些都不是数学问题,不挡。如果它有 alpha,最可能来自:后复权累计因子的水平(分红送转历史,seed 2、3、6)或其近期变化(seed 4),其次是名义低价偏好(seed 1、5),但后者大概率只是 head 的价格水平内容。'
+R: []
+summary: '槽 a 通过(划掉 seed 12 与 seed 6 代数重复,剩 11 个;novelty 4、soundness 4);槽 b 通过(划掉 seed 8 与 r2 已跑种子只差单调变换的重复、seed 10 的 log 分母数值伪影,剩 8 个;novelty 3、soundness 4);R 为空。审计只用了 corr_1 表、loc 的 heads 表、r1/r2 的计划与审计记录、以及源码定义,未读 2026 年的任何数据,也未读共性表。'

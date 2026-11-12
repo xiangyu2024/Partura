@@ -1,0 +1,50 @@
+seed: 2065
+round: 3
+slots:
+- type: N
+  hypothesis: 机制:可流通股本的扩张(限售股解禁/增发上市)造成的供给压力,以及总股本与流通股本之间尚未上市的"悬挑"比例。 本种子前两轮在价格水平和日内形态上全部失败(最好约
+    -0.1),本批 heads 也全是日内离散统计;这一位完全换数据:只用日频叶子 LogFloatShares 与 LogTotalCap/LogFloatCap(控制里只有
+    LogFloatCap 的水平,没有股本的变化量)。 算子实现:cross_delta(LogFloatShares, d) 是过去 d 日流通股数的对数变化(解禁/新增流通盘事件的累计强度);
+    sub(LogTotalCap, LogFloatCap) 是 log(总股本/流通股本),即未流通比例的对数(悬挑);再配上 ListAge(次新/解禁周期阶段)与
+    cross_max/cross_mean 在日轴上做平滑,使信号变化慢、换手低(纯多头 15bp 成本下必要)。 和库里不同:库里 5583 条全是分钟字段的日内统计,没有以股本变化为主体的表达式;和控制也不同,控制只含市值水平,
+    股本变化量与流动性、波动、反转、市值水平的暴露都弱。 样本外还会在:A 股解禁日前后的负超额、以及大比例未流通股带来的供给压力是制度性的(股改后限售解禁周期),
+    每年都在发生,不依赖某段行情;方向让 GP 自己选。 数学检查:LogFloatShares 在多数日子不变,差分大量为 0,截面上会有大片并列(列序打破并列,携带板块信息);
+    无除以近零的量,无前视(只用过去股本);窗口 ≤ 250 日。
+  inspired_by: 本批 heads 全是分钟字段的日内离散统计且全部为负;共性里唯一正向富集的 day_mean(Close) 是水平类量,说明分钟路径里没有残差
+    alpha,转向分钟数据之外的日频股本结构。
+  seeds:
+  - cross_delta(LogFloatShares, 60)
+  - cross_delta(LogFloatShares, 120)
+  - cross_delta(LogFloatShares, 250)
+  - sub(LogTotalCap, LogFloatCap)
+  - cross_mean(sub(LogTotalCap, LogFloatCap), 20)
+  - cross_delta(sub(LogTotalCap, LogFloatCap), 120)
+  - cross_max(cross_delta(LogFloatShares, 60), 120)
+  - sub(cross_delta(LogFloatShares, 120), cross_delta(LogFloatShares, 20))
+  - cs_demean(cross_delta(LogFloatShares, 90))
+  - mul(sub(LogTotalCap, LogFloatCap), cross_delta(LogFloatShares, 120))
+  - cross_delta(LogTotalCap, 120)
+- type: N
+  hypothesis: 机制:名义(未复权)股价水平与"复权因子"。LogFloatCap - LogFloatShares = log(未复权价格)(市值 =
+    价 x 流通股), 这是真实的低价股/彩票偏好变量(A 股散户偏爱一两块钱的名义低价股);而后复权价 day_mean(Close) 的对数减去它, = 自基期以来累计分红送转的对数复权因子,衡量公司长期的现金分红与送转历史(分红型
+    vs 不分红型)。 本种子前两轮围着后复权价格水平(day_mean(Close))的截面裁切和时间轴处理,最好约 -0.1,没出 head; 原因可能是后复权价把"累计收益""名义价格""分红"三件事混在一起,这一位把它们拆开:名义价格水平、复权因子、
+    复权价对名义价的比。控制里只有 LogFloatCap(市值),名义价与市值是不同的量(价 x 股本中的价部分),复权因子更是控制里没有的。 算子实现:sub(LogFloatCap,
+    LogFloatShares) 取名义价对数;log(day_mean(Close)) 取复权价对数,相减得复权因子; 日轴上做 cross_mean /
+    cross_delta 以降低换手。与库里不同:库里的价格类表达式只含分钟价格字段的统计, 没有任何一条引入股本叶子去还原名义价。 样本外还会在:低名义价偏好与分红史(股息/质量偏好)是长期行为/基本面特征,每年都在,不依赖某段行情。
+    数学检查:log 的输入是正的后复权均价,停牌缺失时给缺失;股本叶子是日频常数,无近零除数;无前视;窗口 ≤ 120 日。
+  inspired_by: 本批共性表里 day_mean(Close) 及其变形(pow_05/pow_2/cross_quantile_q25)是唯一系统富集的子树,但前两轮都没出
+    head,推测是三种信息混在后复权价里。
+  seeds:
+  - sub(LogFloatCap, LogFloatShares)
+  - sub(log(day_mean(Close)), sub(LogFloatCap, LogFloatShares))
+  - cross_mean(sub(log(day_mean(Close)), sub(LogFloatCap, LogFloatShares)), 20)
+  - cross_delta(sub(log(day_mean(Close)), sub(LogFloatCap, LogFloatShares)), 120)
+  - cross_mean(sub(LogFloatCap, LogFloatShares), 60)
+  - sub(sub(LogFloatCap, LogFloatShares), log(cross_mean(day_mean(Close), 250)))
+  - cs_demean(sub(log(day_mean(Close)), sub(LogTotalCap, LogFloatShares)))
+  - sub(sub(LogFloatCap, LogFloatShares), cross_mean(sub(LogFloatCap, LogFloatShares),
+    250))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
