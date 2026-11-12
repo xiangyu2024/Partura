@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表(corr_1.md):核心 abs_(day_corr(Volume, Ret)) 与快照 6 个 head 的原始 |ρ| 最大 0.118(最像 pow_2(pow_2(day_q_stat_std(nt_cs_rank(High)))),残差 0.173);与 liq 0.04、vol 0.03、rev 0.06、known 0.04、size 0.02 的 |ρ| 都远低于 0.8,核心过 E 位的控制门槛。核心在 loc.md 共性表里出现过(均值差 +0.13),provenance 合规。14 个种子都原样包含核心。前视检查通过:没有 ts_shift、cross_shift、in_local_mean;cross_* 与 ts_* 经 rolling_windows 都是因果的(dt_cross.py、common.py:433、ops_ext.py 的 cross_ema 与 cross_tail_mean 注释)。种子与 head 的原始 |ρ| 最大 0.234(seed 9),与控制最大 0.20(seed 3 的 liq),没有自动划掉项,也没有与 head 或控制重复的种子。创新度 4:快照 head 全是 range、std、sum|ret| 的水平或 nt_cs_rank 的二阶矩,量价日内相关这个度量与它们及 5 个控制都不同;没给 5 是因为 abs(day_corr) 的含义偏泛。合理度 4:机制(一年尺度上的量价同步峰值,即题材或注意力股的持续身份)与算子组合一致,cross_max 241 就是窗口峰值。数值注意,不构成挡的理由:(1) day_corr 在一字板或常数日返回 0 而非缺失(dt_day.py:231-245),会把 cross_med、ts_mean、ts_rank、cross_ema 等均值型种子往低端拉,而一字板多的票通常流动性差、板块属性不同,流动性控制只吸收一部分;(2) seed 6 的 ts_mean 分母在长期锁板的票上接近 0,但奖励先做截面排名,爆点只影响排名尾部;(3) seed 7(cross_argmax)与 seed 8(ts_rank)的 distinct 低于 pipeline 阈值,是 120 档离散化造成的并列,与 r1 的 ts_rank 同类,不是数学错误,放行。如果它有 alpha,最可能来自:同一只票量价同步的峰值在一年尺度上的持续性(题材、注意力身份),而不是当日耦合的水平。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: '相关度表:N 位 12 个种子与快照 6 个 head 的原始 |ρ| 最大 0.284(seed 5,对 range 族 ts_mean head),残差最大 0.13;与 liq、vol、rev、known、size 的 |ρ| 最大 0.34(seed 7 对 size)、0.28(seed 1 对 rev),都低于 0.5,无自动划掉项。创新度 4:快照 head 与控制全是水平、振幅或收益矩;argmax / argmin 时点与 peak/median 比值度量的是活跃度峰值的相对时间与形状,与快照和 5 个控制都不是同一个度量。局限:我只能核对快照 head 与 5 个控制,不能核对 5583 条库里是否已有同骨架的 argmax 写法,这一点交给库禁令的骨架检查兜底。合理度 3:机制(注意力峰值之后的衰减或反转、IPO 热度峰值)说得通,但有一个数值定义问题。nanargmax_last(common.py:516-526)的分子 idx_from_end 数的是日历位置(含缺失日),分母 count 是 nan_count 即有效日数,所以窗口里只要有停牌或未上市造成的缺口,pct 就可能超过 1,缺口越多的票被推得越高。受影响的是 pct 默认为 True 的 cross_argmax / cross_argmin:seed 1、2、3、4、5、10、11。它是定义不一致,不是 §4 列出的主导型伪影;我无法从相关度表判断它是否主导截面排序,按 §4 只在主导时才挡,故只打 3、不挡。请 PI 在评估时检查这 7 个种子的停牌或次新股占比,或改用 pct=False。另外,次新股的 argmax 是相对其上市史计算的(ListAge 短时 pct 的尺度不同),这是另一个系统性偏差,同样不挡。种子 8(cross_autocorr 收益自相关)与种子 9(cross_corr 额与收益)不属于 N 位描述的峰值时点或相对峰值类,但 §3 规定种子只能因数学问题或重复划掉,故保留。离散档位造成的 distinct 偏低(seed 1、2、3、5、10、11)与 r1 的 ts_rank 同类,放行。如果它有 alpha,最可能来自:活跃度峰值之后的衰减或反转(注意力驱动的买入之后的回落),或次新股上市初期 IPO 热度峰值的位置。'
+R: []
+summary: '两位都通过:a 位创新 4、合理 4,14 个种子全保留,核心与 5 个控制的 |ρ| 最大 0.06;b 位创新 4、合理 3,12 个种子全保留,并标出 cross_argmax / cross_argmin 的 pct 分母与日历位置不一致的数值问题,请 PI 检查;R 为空。'

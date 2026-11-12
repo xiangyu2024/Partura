@@ -1,0 +1,52 @@
+seed: 2071
+round: 2
+slots:
+- type: E
+  core: abs_(day_corr(Volume, Ret))
+  hypothesis: 'Round-1 N slot found one lead: cross_max(abs_(day_corr(Volume, Ret)), 241) scored +0.42 (train +0.42 valid +0.46), the only non-negative candidate in the batch, while every level/mean of
+    vol or range loses after the controls. day_corr(Volume, Ret) is the within-day minute correlation between volume and return; its absolute value says how tightly volume and price moves co-move that day
+    (informed or attention-driven bursts, price-volume lockstep). A trailing 241-day max of that is the peak coupling episode in the past year, i.e. a memory of whether the stock has recently been a theme/attention
+    stock, which is a persistent stock trait and not a vol level (vol and Amt controls do not contain it). The core is the signal source; this round varies only the periphery: other window lengths (60/120/241),
+    tail statistics instead of a pure max (q75, tail mean, median), time-since-peak (argmax), ratio of peak to typical coupling (peak / mean), trailing rank and ts_std of the coupling, and max of a 5-day
+    smoothed coupling. Differences from seen candidates: the earlier candidates wrapped it in cross_quantile_q75(cross_max(...,15),5) or compared day_corr against Amt/Vwap; none used long-window tails,
+    relative peak, argmax recency or smoothing. Out of sample it should remain because attention clustering in price-volume co-movement is a slow-moving stock trait, which the retail-heavy A-share market
+    overpays for, giving a long-book edge in the complement.'
+  seeds:
+  - cross_max(abs_(day_corr(Volume, Ret)), 120)
+  - cross_max(abs_(day_corr(Volume, Ret)), 60)
+  - cross_quantile_q75(abs_(day_corr(Volume, Ret)), 60)
+  - ts_max(abs_(day_corr(Volume, Ret)), 160)
+  - sub(cross_max(abs_(day_corr(Volume, Ret)), 241), ts_mean(abs_(day_corr(Volume, Ret)), 20))
+  - div(cross_max(abs_(day_corr(Volume, Ret)), 120), ts_mean(abs_(day_corr(Volume, Ret)), 120))
+  - cross_argmax(abs_(day_corr(Volume, Ret)), 120)
+  - ts_rank(abs_(day_corr(Volume, Ret)), 120)
+  - cross_tail_mean_q75(abs_(day_corr(Volume, Ret)), 120)
+  - ts_skew(abs_(day_corr(Volume, Ret)), 120)
+  - cross_ema(abs_(day_corr(Volume, Ret)), 40)
+  - ts_std(abs_(day_corr(Volume, Ret)), 120)
+  - cross_max(ts_mean(abs_(day_corr(Volume, Ret)), 5), 241)
+  - cross_med(abs_(day_corr(Volume, Ret)), 241)
+- type: N
+  hypothesis: 'Recency of the attention peak. All heads in the batch (range, std, sum|ret| averaged over 20 days) are level measures and lose after the controls; the only positive lead was a long-window
+    extreme-event statistic (max over 241 days), not a mean. New idea: use event-timing and peak-relative statistics of daily activity, built from cross_argmax / cross_argmin (days since the window max/min,
+    as a fraction of the window), peak-over-typical ratios (cross_max / cross_mean or cross_med of daily Amt or range/open), and the lag between the turnover peak and the price-move peak. Mechanism: stocks
+    whose turnover or range peak was recent are in the post-attention phase where retail overpayment reverts (or shock still being digested), while stocks whose peak is far back are forgotten and cheap;
+    a high peak-to-median ratio marks jump-driven attention instead of a persistently active name. These statistics are scale-free (position in a window, ratios), so they do not carry the liquidity or vol
+    level the controls remove, and none of the seen candidates used argmax timing, peak/median or Amt-vs-price-peak lag. Persistence: attention decay after shocks (Barber-Odean style attention-driven buying,
+    post-peak reversal) is a behavioral regularity that does not depend on the sample period.'
+  inspired_by: 'Batch 1/2: level heads lose (-1.6 to -1.8) while the single positive candidate cross_max(abs_(day_corr(Volume, Ret)), 241) is an extreme-event window statistic, not a level; and batch 2
+    pow_2 / q_stat_std heads show tail-shape rather than mean content.'
+  seeds:
+  - cross_argmax(day_sum(Amt), 60)
+  - cross_argmax(div(sub(day_max(High), day_min(Low)), day_open(Open)), 120)
+  - cross_argmax(day_std(Ret), 120)
+  - sub(cross_argmax(day_sum(Amt), 120), cross_argmax(abs_(sub(day_close(Close), day_open(Open))), 120))
+  - cross_argmin(day_sum(Amt), 120)
+  - div(cross_max(day_sum(Amt), 60), cross_mean(day_sum(Amt), 60))
+  - div(cross_max(day_sum(Amt), 120), cross_med(day_sum(Amt), 120))
+  - cross_autocorr(day_sum(Ret), 20, 1)
+  - cross_corr(day_sum(Amt), day_sum(Ret), 40)
+  - sub(cross_argmax(day_max(High), 120), cross_argmax(day_sum(Amt), 120))
+  - cross_argmax(day_skew(Ret), 120)
+  - div(cross_max(div(sub(day_max(High), day_min(Low)), day_open(Open)), 60), cross_mean(div(sub(day_max(High), day_min(Low)), day_open(Open)), 60))
+R: []
