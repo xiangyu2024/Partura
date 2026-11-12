@@ -1,0 +1,30 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4]
+    reasons: |
+      核心 cross_mean(day_skew(Ret), 20) 不是任何 head 的子树(6 个 head 里没有 day_skew),它出现在定位共性表里(loc.md 共性区 24 处命中,其中 cs_rank(cross_mean(day_skew(Ret), 20)) 为 +1.77、n 39;day_skew(Ret) 本身 +1.76、n 44),按 §2 的 E 位核心规则可接受。核心对 5 个控制的 |ρ| 最大 0.28(rev),< 0.8,通过。
+      新颖度 4:相关度表里 12 个种子对 head 的原始 |ρ| 全部 ≤ 0.17(残差 ≤ 0.25),对 5 个控制的 |ρ| 中除 seed 5 / seed 12 的 liq 与 known 约 0.70 外都 < 0.6;head 里没有一个用偏度,外围是分桶(LogFloatCap / ListAge / 已知族)、历史相对化、Ret 减 Low 偏度、与 corr 的交互,与库里 head 不是同一个东西。
+      数学检查:cs_bucket_rank / cs_last_high10 / cs_first_low40 的定义(ops_ext.py:239, 391, 357)正确;没有 nt_*、ts_spearman、cross_shift、ts_shift、in_local_mean、pow_1_5、pow_2_5;没有前视。seed 8 的除以 cross_stddev(day_skew, 20) 在近似常数偏度的票上会爆点,但奖励先做截面排名,爆点只占一个名次,不支配截面,不构成 §4 问题。seed 10 的 day_corr(Ret, Volume) 在一字板票上返回 0 而非缺失(dt_day.py:231-245),这些票会在 corr 腿聚到 0,但仅 20 日均值的一部分,不是主导项,放行并记下。
+      struck 4:与 seed 1 同核心、同 LogFloatCap 分桶,只是 cs_bucket_zscore 替换 cs_bucket_rank;奖励在截面上取排名,两者的截面次序几乎一致,按 §3 的「重复」划掉。其余 11 个种子无 |ρ| ≥ 0.7(对 head)或 ≥ 0.8(对控制)的情况,不被自动划掉。
+      seed 5 与 seed 12 的 cs_first_low40 选择器(cross_mean(day_std(Amt), 20 / 30) 的低 40%)与 liq / known 控制 |ρ| ≈ 0.70,raw 排序主要就是流动性;但奖励残差化掉了 liq 与 known,剩下的是「小盘 / 低流动性组内的偏度差」,这个语义与已知族不同,放行。
+      如果它有 alpha,最可能来自:小盘、次新、低关注的彩票型偏好在同尺寸、同年龄、同活跃度的同伴之间的横截面差异(within-peer lottery premium),而不是偏度水平本身(水平大概率被 liq / size 控制吸收)。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: |
+      外围全部是 minute 时点与净买入压力的统计:day_centroid(Amt / Volume)、day_signed_ratio(Ret, Amt)、day_topw_mean(Ret, Volume)、day_gini(Amt)、day_wmean(Ret, Amt)。6 个 head 里没有任何一个含 day_centroid、day_signed_ratio、day_topw_mean 或 day_gini;head 只用 day_sum(Amt) / day_sum(Volume)、VWAP、ts_corr(价格, 量)、day_std 的 in_corr / in_regbeta 变体。相关度表中原始 |ρ| 与 head 的最大值为 0.37(seed 7 对 in_corr 均值 head),残差最大 0.25,与 head 不是同一个东西。新颖度给 4。
+      对控制的 |ρ|:seed 5 topw 与 rev 0.64;seed 4 signed_ratio 与 LogFloatCap 桶后与 rev 0.60;seed 11 wmean 与 rev 0.60;seed 7 gini 与 liq 0.51;seed 12 与 seed 5 同为 liq / known 约 0.72。都 < 0.8,未触发自动划掉,也不是 E 位(不要求核心与控制 < 0.8,但种子层面未违规)。
+      数学检查:day_signed_ratio(ops_ext.py:122)分母含零收益分钟,与文档一致,无数值问题;day_centroid(ops_ext.py:155)按 T-1 归一,在 [0,1];day_topw_mean(ops_ext.py:635)用 nanquantile 0.9 且含并列,定义明确;day_gini(ops_ext.py:136)按排序计算,在 n ≤ 1 或总和为 0 时返回缺失,无爆点;day_wmean(ops_ext.py:109)分母 clamp,定义明确。没有 nt_*、ts_spearman、前视算子(cross_shift / ts_shift / in_local_mean)。
+      三条值得 PI 注意的机制性混杂(都不是 §4 的数学问题,放行,但请在结果解释里对照):
+      (i) day_signed_ratio 分母含零收益分钟,平盘分钟多的低流动性票会被拉向 0,这部分是流动性的非线性换皮;残差化只去掉 liq 的秩与其 2、3 次幂,可能残留。
+      (ii) day_gini(|Amt|) 对零成交分钟敏感(零分钟越多基尼越高),与 liq 相关 0.51,可能是 day_std(Amt) 已知族的一个变形;seed 7 与 seed 8 的分数若主要来自此,等于 liq 的非线性换皮。
+      (iii) seed 5 的 topw_mean(Ret, Volume) 与 20 日反转 rev 0.64,高量分钟收益的均值在机制上可能只是短期反转的事件版本。
+      seed 11 cs_rank(cross_mean(day_wmean(Ret, Amt), 20)) 与 rev 0.60,是成交额加权的收益均值,和反转控制接近,但不是同一个量(分钟加权、非 20 日累计),放行。
+      struck: 没有重复或数学问题的种子,全部 12 个保留。
+      如果它有 alpha,最可能来自:机构拆单执行在一天内留下的时点不对称(成交重心偏向收盘、一方向成交占比),与散户在开盘集中成交的噪声相对;分桶后比较的是同等活跃度的同伴。
+R: []
+summary: 位 a(E,核心 cross_mean(day_skew(Ret),20))创新 4、合理 4,划掉 1 个重复种子(seed 4);位 b(N,分钟时点/净买入压力)创新 4、合理 4,无划掉;没有 R 组;三条机制性流动性混杂(signed_ratio 零分钟分母、gini 零分钟敏感、topw 与反转接近)写在 reasons 里供 PI 对照,不构成挡的理由。
