@@ -1,0 +1,48 @@
+seed: 2075
+round: 3
+slots:
+- type: E
+  core: day_last(in_top_quantile_flag_q10(Ret))
+  hypothesis: '核心是共性表里富集最强、含它的候选最多的子树(40 个候选,均值差 +1.12):收盘那一分钟的收益是否落在当天分钟收益的最高 10%
+    里, 即「收盘拉升旗标」(尾盘抢筹 / 涨停封板 / 收盘集合竞价冲高的 0-1 事件)。上一轮唯一接近过线的候选(+0.31,valid +0.48) 是把它放进
+    cross_reg_fvalue(…, 241) 的 F 值回归里,外围全是「截面回归的显著性」。本轮外围完全换成时间序列上的事件频率与相互作用: 对旗标取
+    ts_mean / cross_ema 得到一只票过去 60~120 天「尾盘被拉升」的频率(事件稀疏,所以必须累计才有排序信息); 与 ts_corr(旗标,
+    当日均收益) 衡量尾盘拉升是否是整天走势的延续(延续型是真实买盘,独立型是尾盘操纵 / 做收盘价); 与 LimitWidth / ListAge 相乘,把同一个旗标放到涨跌停宽度与上市年龄的制度背景里(板块与新股的尾盘拉升含义不同),
+    这是库里没有的字段用法。机制:被反复在收盘价上拉升的票,收盘价偏离当日公允价,次日会被冲回(反转)或被资金持续接力(动量), 两者都不是流动性 / 波动 /
+    20 日反转 / 市值控制能解释的;样本外还会在,因为收盘拉升行为由收盘集合竞价规则、基金考核与散户追涨决定, 是制度性的慢变量。全部只用当天及更早的数据(ts_*
+    窗口向后,不含 shift)。'
+  seeds:
+  - cross_ema(day_last(in_top_quantile_flag_q10(Ret)), 60)
+  - ts_corr(day_last(in_top_quantile_flag_q10(Ret)), day_mean(Ret), 60)
+  - mul(ts_mean(day_last(in_top_quantile_flag_q10(Ret)), 60), cs_rank(ListAge))
+  - mul(cross_ema(day_last(in_top_quantile_flag_q10(Ret)), 40), LimitWidth)
+  - ts_corr(day_last(in_top_quantile_flag_q10(Ret)), day_sum(Amt), 120)
+  - cross_regres(day_last(in_top_quantile_flag_q10(Ret)), day_std(Ret), 120)
+  - ts_sum(mul(day_last(in_top_quantile_flag_q10(Ret)), day_close(Amt)), 60)
+  - div(ts_mean(day_last(in_top_quantile_flag_q10(Ret)), 60), cross_ema(day_at_max_ratio(High),
+    60))
+  - cross_zscore(ts_sum(day_last(in_top_quantile_flag_q10(Ret)), 90), 120)
+- type: N
+  hypothesis: 涨跌停「锁死」的时间占比:day_at_max_ratio(High) 是当天有多大比例的分钟,价格停在当天最高价(涨停封板时接近 100%,
+    普通日约 1/241),day_at_min_ratio(Low) 同理对应跌停封死。批 3 共性表里 day_at_min_ratio(Low/Ret)
+    与 BoardCode 的乘积 是富集最强的结构之一(均值差 +0.9),但库里都只用了「最低价」一侧、且只作为被回归的自变量。这里改成对称的「封涨停 -
+    封跌停」净锁死占比, 用 LimitWidth(涨跌停宽度)做条件,并取 20~60 日的累计:一只票反复封板,说明场内有排不完的买单(买单堆积未成交,需求被限价截断),
+    次日开盘释放;反复封死跌停则相反。算子上全部是日内「分钟数占比」,与库里按 Ret 取矩(skew / kurt / cov)的写法度量的是不同对象(价格停留时间,
+    而不是收益分布形状)。样本外还会在,因为涨跌停板制度本身没有变,未成交需求的释放是由制度造成的机械效应,不是统计巧合; 尺子会去掉对波动与流动性的暴露,留下的是「被限价截断的需求」。无前视:全部是当天分钟与过去窗口。
+  inspired_by: 批 3 共性表:day_at_min_ratio(Low) / day_at_min_ratio(Ret) 及其与 BoardCode
+    的乘积(含它的候选 18~23 个,均值差 +0.88~+1.07);本流 Pr2a 唯一接近过线的候选也含 mul(day_at_min_ratio(Low),
+    BoardCode)
+  seeds:
+  - cross_ema(sub(day_at_max_ratio(High), day_at_min_ratio(Low)), 20)
+  - cross_ema(mul(sub(day_at_max_ratio(High), day_at_min_ratio(Low)), LimitWidth),
+    30)
+  - ts_corr(day_at_max_ratio(High), day_mean(Ret), 60)
+  - cross_ema(div(day_at_max_ratio(High), add(day_at_min_ratio(Low), 0.005)), 30)
+  - ts_std(sub(day_at_max_ratio(High), day_at_min_ratio(Low)), 60)
+  - cross_ema(mul(day_at_max_ratio(Close), cs_rank(BoardCode)), 40)
+  - cross_ema(sub(day_at_max_ratio(Open), day_at_min_ratio(Open)), 30)
+  - cross_regres(day_at_max_ratio(High), day_at_min_ratio(Low), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
