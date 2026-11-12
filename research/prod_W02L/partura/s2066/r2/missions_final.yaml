@@ -1,0 +1,52 @@
+seed: 2066
+round: 2
+slots:
+- type: E
+  core: day_centroid(pow_3(pow_1_5(Volume)))
+  hypothesis: day_centroid(pow_3(pow_1_5(Volume))) 是 Volume^4.5 沿分钟轴的质心:幂次把权重压到当天最大的几根成交分钟,读的是「最大一笔放量发生在一天的什么时候」(0
+    开盘,1 收盘),不是成交量的时间均值。共性表里含它的 5 个候选均值差 +2.37(p 0.000),是本批唯一明显抬分的子树;上一轮只用 cross_min
+    取 10 日最小值包它(最好 -0.34,train/valid 都为负),没试过「相对自身历史的变化」和「同规模内比较」。这次的外围换成三种以前没见过的写法:(1)cross_zscore
+    / cross_stddev 取质心的异常和离散度——放量时点突然后移或不稳定,是机构调仓日而不是常态;(2)cs_bucket_rank / cs_bucket_demean
+    在市值或成交额十分位内比较,去掉大票尾盘放量多的规模暴露,但不假设线性;(3)与 day_centroid(Ret)(价格波动重心)作差:放量与价格变动不同时发生。库里
+    5583 条骨架没有任何质心类算子,所以不是同一个量;它是慢变量(持有人结构),换手低,样本外应该留得住。风险:被流动性控制吃掉,所以一半种子用分桶配平。
+  seeds:
+  - cross_zscore(day_centroid(pow_3(pow_1_5(Volume))), 20)
+  - cross_stddev(day_centroid(pow_3(pow_1_5(Volume))), 20)
+  - cross_ema(cross_zscore(day_centroid(pow_3(pow_1_5(Volume))), 40), 5)
+  - cs_bucket_rank(cross_mean(day_centroid(pow_3(pow_1_5(Volume))), 10), LogFloatCap)
+  - cs_bucket_demean(cross_zscore(day_centroid(pow_3(pow_1_5(Volume))), 20), cross_mean(day_mean(Amt),
+    20))
+  - sub(cross_mean(day_centroid(pow_3(pow_1_5(Volume))), 5), cross_mean(day_centroid(Ret),
+    5))
+  - cs_bucket_zscore(cross_stddev(day_centroid(pow_3(pow_1_5(Volume))), 20), LogFloatCap)
+  - cross_regbeta(day_centroid(pow_3(pow_1_5(Volume))), day_centroid(Amt), 20)
+  - sub(cross_ema(day_centroid(pow_3(pow_1_5(Volume))), 5), cross_ema(day_centroid(pow_3(pow_1_5(Volume))),
+    60))
+  - cs_bucket_rank(cross_zscore(day_centroid(pow_3(pow_1_5(Volume))), 30), cross_mean(day_std(Ret),
+    20))
+- type: E
+  core: day_hurst(cross_ema(pow_1_5(Volume), 60))
+  hypothesis: day_hurst(cross_ema(pow_1_5(Volume), 60)) 对 Volume^1.5 先沿「分钟轴」之外的日轴做
+    60 日 EMA 平滑(cross_ema 作用在日间)再算当天 Hurst 指数:读的是成交量序列的长记忆/持续性(>0.5 趋势延续,<0.5 均值回复),是分钟量节奏的自相似结构。共性表含它的
+    4 个候选均值差 +1.83(p 0.004),第二个明显抬分的子树;上一轮只用 cross_min 包,试过一次(-0.38)。这次换成:(1)cross_zscore
+    / cross_stddev 取 Hurst 的异常与稳定性;(2)cs_bucket_rank 在市值内比较,Hurst 与规模高度相关的部分被拿走;(3)与
+    day_hurst(pow_1_5(Volume))(未平滑)作差:60 日平滑后与当日原始的持续性差,是量节奏是否在变。库里没有 Hurst 类算子骨架,是新量;机制是知情资金分拆下单形成的长记忆成交节奏,持续时间长,样本外应该仍在。风险:Hurst
+    估计噪声大,所以种子里用 20 日平均平滑。
+  seeds:
+  - cross_mean(day_hurst(cross_ema(pow_1_5(Volume), 60)), 20)
+  - cross_zscore(day_hurst(cross_ema(pow_1_5(Volume), 60)), 20)
+  - cross_stddev(day_hurst(cross_ema(pow_1_5(Volume), 60)), 20)
+  - cs_bucket_rank(cross_mean(day_hurst(cross_ema(pow_1_5(Volume), 60)), 10), LogFloatCap)
+  - cs_bucket_demean(cross_zscore(day_hurst(cross_ema(pow_1_5(Volume), 60)), 20),
+    cross_mean(day_mean(Amt), 20))
+  - sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(pow_1_5(Volume)))
+  - cross_ema(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(pow_1_5(Volume))),
+    10)
+  - cs_bucket_zscore(cross_ema(day_hurst(cross_ema(pow_1_5(Volume), 60)), 10), LogFloatCap)
+  - cross_regbeta(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_centroid(Amt), 20)
+  - sub(cross_ema(day_hurst(cross_ema(pow_1_5(Volume), 60)), 5), cross_ema(day_hurst(cross_ema(pow_1_5(Volume),
+    60)), 60))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

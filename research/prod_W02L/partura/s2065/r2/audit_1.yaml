@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 day_mean(Close) 与快照 head day_var(in_max_rolling(Vwap,60)) 的原始 |ρ| 为 0.83、残差 0.95(corr_1.md 槽 a core 行、corr_1.json),即裸核心在本批里基本就是那个价格水平类 head 的内容,所以创新只能来自外围,novelty 给 3 而不是 4。10 个种子的原始最大 |ρ| 为 0.14 到 0.32、残差为 0.05 到 0.32,与 6 个 head 都不同;与控制的 |ρ|:核心 liq 0.47、known 0.43、size 0.44、vol 0.06、rev 0.03,全部低于 0.8,E 位控制门槛通过。外围是时间轴上的相对历史位置(除以 60/250/500 日的 cross_max、cross_mean,250 日区间位置,60/250 日的变化),和库里三个 in_max_rolling 头的骨架不同。数学:cross_* 都经 common.py 的 rolling_windows 只取过去窗口,cross_delay 是向后挪(dt_cross.py:150),无前视;分母为正的后复权价或 250 日高低差,无近零除数。500 日窗口热身约两年,PI 已注明。逐个种子:种子 4 cross_delta(day_mean(Close),250) 是价格元差而非累计收益(笔记写成累计收益不准确),但它是确定的截面量,不是数学问题,保留;种子 6 div(P, cross_stddev(P,120)) 近似 1 除以相对波动,实际是低波动代理,vol 控制 0.32 属中度相关,不是同一个东西,保留;种子 3 与 60 日高点的 rev 控制 |ρ| 0.63,按 §3 中度相关不挡;种子 9 的分母是 250 日高低差,窗口内几乎不动的票会放大,建议加下限保护,但不构成挡的理由。无种子划掉,10 个全部保留。如果它有 alpha,最可能来自:后复权价格的时间位置(距 250 日高点的回撤、250 日区间位置、一年尺度的变化)对未来收益的低价、彩票偏好或 52 周高点效应,而不是某段行情。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [3, 7]
+    reasons: '核心 inv(day_q_stat_std(Close)) 与 head day_var(in_max_rolling(Vwap,60)) 的原始 |ρ| 为 0.32、残差 0.22;与两个 Q 类 head 的 |ρ| 为 0.08;与 5 个控制都在 0.08 以下(corr_1.json)。它与库里骨架不同(库里是 day_q_stat_std 套在 in_max_rolling 上,这里套在裸 Close 上),novelty 给 4。但 PI 的机制描述有误:day_q_stat_std 不带价格单位(dt_day.py:397-435 中 rho_k 是 cov/sqrt(var·var) 的自相关,Q 只由 rho_k 和 T 决定),所以「以价格为单位、把价格水平与日内波动绑在一起」不成立。核心实际度量的是收盘价分钟路径的自相关结构(Ljung-Box 型的持续性 / 趋势性),inv 取其倒数。算子实现的是一个干净的量,但不是笔记写的那个机制,soundness 因此给 3 而不是 4。关于 inf:代码里 denom 的 1e-8 在根号内,一字板(分钟收盘价完全相同)时 rho 得 0、Q 的截面标准差为 0,inv 给 +inf,不是 NaN,笔记的担心是对的;但我无法从给定文件核到 inf 占比(corr 表的 coverage 为 0.999,定义未核),§4 要求「主要由它决定」才算数值伪影,所以不据此挡,而是要求 PI 在执行 E 位前先报 inf 占比,并对含 inv 的种子标注风险。种子 1(cross_mean inv,20)、4(cross_delta inv,20)、5、6、8、9 都会把 inf 带进窗口,种子 2 用 cross_med 相对稳健。逐个种子:种子 3 mul(day_mean(Close), inv(Q(Close))) 与 head day_var(in_max_rolling(Vwap,60)) 的残差 |ρ| 为 0.90(原始 0.59),去掉五个控制后与该 head 的交易信号几乎一样,即这个 head 的价格水平内容换了写法,度量的是同一个东西,划掉。种子 7 cs_demean(cross_med(inv(Q),40)) 在相关度表里 gate 为 False、distinct 为 0.002(几乎常数)、与 rev 控制的相关为 NaN,是退化输出,同时 cs_demean 按日减截面均值,排名不变,等于 cross_med(inv(Q),40),划掉。种子 6 sub(inv(Q(Close)), inv(Q(Amt))) 与 head day_q_stat_std(in_max_rolling(Amt,60)) 残差 0.66、与 Volume 版残差 0.66,低于 0.7 的自动线,保留,但标注与 Amt 那个 head 共享同一 Ljung-Box 构造、近似重复的风险。种子 9 的第二项 cross_delta(day_mean(Close),60) 是价格元差,量纲混合价格水平,与种子 4 同类,保留。其余种子 1、2、4、5、8、9 的残差与 head 都在 0.23 以下,与控制的 |ρ| 在 0.47 以下,保留。如果它有 alpha,最可能来自:收盘价分钟路径的持续性(趋势化或随机化)与换手 / 流动性状态的关系(种子 1、2、6 的 liq 相关在 0.23 到 0.46 之间说明有一部分是流动性),而不是价格水平本身。'
+R: []
+summary: '槽 a 通过(10 个种子全保留,novelty 3、soundness 4;核心与 head 高度重合但外围新);槽 b 通过(划掉种子 3 与 head 残差 0.90 的重复、种子 7 的退化输出,剩 7 个;novelty 4、soundness 3,机制描述需修正,inf 占比需 PI 先报);R 为空。审计只用了 corr_1 与 heads 表和代码,未读共性表、未对 2026 年做任何计算。'

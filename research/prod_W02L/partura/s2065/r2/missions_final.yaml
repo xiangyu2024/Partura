@@ -1,0 +1,48 @@
+seed: 2065
+round: 2
+slots:
+- type: E
+  core: day_mean(Close)
+  hypothesis: 机制:day_mean(Close) 是后复权收盘价的日均值,股票之间的排序约等于"自基期以来的累计收益",即长周期动量/反转加低价股(彩票偏好)偏好;
+    LogFloatCap 已被控制,但累计收益的非市值部分没有。本批快照里含它的候选均值 -0.74,不含的 -2.80,是唯一系统性富集的子树, 第 1 轮
+    Pr1a 的最好候选(-0.42)也都围着它,但外围只有 cs_last_low10 / inv(day_q_stat_std) 这类截面裁切,从没有人在时间轴上处理它。
+    这次的外围是把价格水平放到自己的历史里:除以自己 60/250/500 日的最大值、均值、标准差,或取 60/250 日的变化, 实现的机制是"离自身历史高点多远(回撤)""一年尺度的反转/动量""价格水平相对其自身波动",得到的是随时间变动的累计收益位置,
+    而不是单纯的价格高低排序,与库里的日内离散 / 滚动峰值骨架(in_max_rolling + day_q_stat_std)和以前的截面裁切写法都不同。
+    样本外还会在:A 股长期(1 至 3 年)反转和低价偏好来自散户行为偏差(过度外推、彩票偏好),不是某段行情的产物; 回撤、距高点位置是被广泛记录的异象(52
+    周高点效应),不依赖样本区间。数学:全部为过去数据的因果窗(cross_max/cross_mean/cross_delta 是日轴向后窗口), 分母 day_mean(Close)
+    为正的后复权价、cross_stddev 非常数,无近零爆点;注意 500 日窗口热身期约两年,取其中一个 250 作对照。
+  seeds:
+  - div(day_mean(Close), cross_max(day_mean(Close), 250))
+  - div(day_mean(Close), cross_mean(day_mean(Close), 500))
+  - div(day_mean(Close), cross_max(day_mean(Close), 60))
+  - cross_delta(day_mean(Close), 250)
+  - div(cross_delta(day_mean(Close), 60), day_mean(Close))
+  - div(day_mean(Close), cross_stddev(day_mean(Close), 120))
+  - div(cross_mean(day_mean(Close), 20), cross_mean(day_mean(Close), 500))
+  - sub(day_mean(Close), cross_quantile_q75(day_mean(Close), 250))
+  - div(sub(day_mean(Close), cross_min(day_mean(Close), 250)), sub(cross_max(day_mean(Close),
+    250), cross_min(day_mean(Close), 250)))
+  - cross_corr(day_mean(Close), cross_delay(day_mean(Close), 20), 120)
+- type: E
+  core: inv(day_q_stat_std(Close))
+  hypothesis: '机制:day_q_stat_std(Close) 是日内收盘价的分位统计标准差,以价格为单位,所以 inv(...) 把"价格水平 /
+    日内波动幅度"绑在一起: 高价格水平相对日内波动小的股票。快照里含它的候选 -1.80 对 -2.64 不含,第 1 轮最好的组合(-0.44)也含它,但外围全是
+    cs_last_low10 这类截面裁切。这次换外围:把它做成"价格水平除以日内波动"的无量纲量(与 day_mean(Close) 相乘)、对日内波动在时间轴上平滑
+    / 做 20-60 日趋势, 以及与成交额的日内离散配对,实现的机制是"波动被压低的低换手稳定票"和"波动正在收敛 / 放大"的状态变化,而不是单日水平;
+    这与库里的 in_max_rolling + 离散骨架不同(那是峰值的离散,这里是收盘价本身的离散的倒数及其时间演变)。 样本外还会在:低波动收敛(波动率压缩后的方向)与"低波动异象"(散户偏爱高波动彩票股、低波动股被低估)是行为偏好,有跨期稳定性;
+    波动被日轴平滑后换手噪声降低。数学:day_q_stat_std 为 0(一字板或停牌)时 inv 给 inf 或缺失,在日轴窗口里会被 cross_mean
+    污染, 所以种子多用 cross_median 或带截面排序的写法,并保留与 day_mean(Close) 相乘的版本,后者的 inf 由价格水平压不住,
+    审计时请重点看 inf 占比;无前视,窗口 ≤ 120 日。'
+  seeds:
+  - cross_mean(inv(day_q_stat_std(Close)), 20)
+  - cross_med(inv(day_q_stat_std(Close)), 60)
+  - cross_delta(inv(day_q_stat_std(Close)), 20)
+  - div(inv(day_q_stat_std(Close)), cross_mean(inv(day_q_stat_std(Close)), 120))
+  - sub(inv(day_q_stat_std(Close)), inv(day_q_stat_std(Amt)))
+  - cross_corr(inv(day_q_stat_std(Close)), cross_delay(inv(day_q_stat_std(Close)),
+    10), 60)
+  - mul(inv(day_q_stat_std(Close)), cross_delta(day_mean(Close), 60))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

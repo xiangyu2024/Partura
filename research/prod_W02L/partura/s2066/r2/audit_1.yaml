@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 day_centroid(pow_3(pow_1_5(Volume))) 与快照 4 个 head 的日度秩 |ρ| 最大 0.05(相关度表 slot a core 行),与 5 个控制最大 0.21(known),均远低于 0.8 的核心门槛。库里 head 全是 order-free 的形状统计(cross_stddev(day_skew/day_kurt(归一化成交量)))和 in_cov 一族,没有时间位置类算子,所以是新量,创新度 4。种子:seed 2 / seed 7 是 cross_stddev(质心) 与 head cross_stddev(day_kurt(...)) 的 |ρ| 为 0.30 / 0.27(残差 0.19 / 0.19),两者都是「日内成交形状的截面离散度」这一族,但矩不同、不是换写法,保留。seed 6 的 day_centroid(Ret) 按 ops_ext.py:160 取的是 |Ret| 的质心(价格波动重心),与表达式注释一致。seed 8 cross_regbeta(两个质心)、seed 9 / seed 3 的 sub(EMA 长短差)都是因果的(cross_ema 与 rolling_windows 都是 trailing 窗口,dt_cross / common.py:433),没有 nt_* 与 shift 类算子。数学:Volume^4.5 在 float32 下只在单分钟成交量超过约 3.6e8 股时才溢出,A 股实际不触及,不挡。注意:指数 4.5 使质心几乎由当天最大的 1–3 根分钟决定,结果会近乎双峰(峰在开盘或在分钟轴末端时取 0 或 1),这是 PI 在 hypothesis 里已说明的设计选择,不是数学问题,放行;但审计时应预期它的信号可能退化成「日内峰值是否落在收盘撮合」这一度量。如果它有 alpha,最可能来自日内放量峰落在尾盘集合竞价(机构收盘撮合、被动资金按收盘价成交)还是开盘段的占比差。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: '核心 day_hurst(cross_ema(pow_1_5(Volume), 60)) 与快照 head 的日度秩 |ρ| 最大 0.31(cross_stddev(day_skew(归一化成交量)), 残差 0.17),与 5 个控制最大 0.23(size),低于门槛。它不是任何 head 的子树,也不是控制的换写法,创新度 4;与 head 的 0.31 说明两者都是日内成交形状的统计,但 Hurst 是持续性/自相似度量而非偏度,保留。算子核对:day_hurst(dt_day.py:290)是对每行(241 分钟)做 R/S 估计,trailing 无前视;cross_ema(ops_ext.py:172)沿日轴做因果 EMA,缺失日被跳过而不是填 0,没有填充伪影;热身期只在 2018 年开头几十日权重集中,对 train 段影响可忽略。机制与算子对不上,这是挡不掉、但要记下的问题:hypothesis 讲的是「当天量节奏的持续性」(知情资金分拆下单),而 day_hurst 作用的是 60 日 EMA 平滑后的平均日内剖面,当天的节奏被大部分平均掉了,剩下的主要是这只股票典型的 U 形剖面深浅与持续性,更像慢变量的形态属性(与 size 的 0.23 相关也对得上)。真正把「当天节奏变化」带进来的是 seed 6 / seed 10 的 sub(平滑 Hurst, 未平滑 day_hurst(Volume^1.5)) 与 EMA 差分这两条通道,所以这两条是本位最有可能出 alpha 的地方。不是数学问题,放行,soundness 给 3。种子 seed 7(cross_ema(sub(...),10))与 liq 0.56、known 0.58 相关偏高,但未到 0.8 的自动划线线,且与 head 的残差 0.09、与 head 的原始 |ρ| 0.25 都不是重复,保留,只在结果里标记为最像控制换写法的一条。其余 seed 的 known / liq 都低于 0.4,无需划。'
+R: []
+summary: '两个 E 位都放行:a 位创新度 4、合理度 4,b 位创新度 4、合理度 3;本位 20 个种子无一划掉(无数学问题,也无 ≥0.7 的 head 重复或 ≥0.8 的控制重复);两个核心与控制的最大 |ρ| 分别为 0.21、0.23,均过门槛。本轮计划无 R 组,R 为空。b 位的风险是 Hurst 作用在 60 日平滑剖面上,机制描述与算子对不上,记入结果解读,不挡。'
