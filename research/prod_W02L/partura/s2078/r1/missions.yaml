@@ -1,0 +1,71 @@
+seed: 2078
+round: 1
+slots:
+  - type: E
+    core: 'ts_max(cs_demean(div(day_mean(Ret), 2)), 30)'
+    hypothesis: >-
+      Core = 30-day running maximum of the cross-sectionally demeaned daily mean minute return (a MAX / lottery-demand style
+      statistic: stocks that recently had one huge relative-return day attract retail attention and later mean-revert; the
+      pure-long decile of the opposite side is the low-MAX names). The library head wraps it only in pow_1_5 (monotone, so it is the
+      same signal) and its own breakdown shows the core carries all the score. The periphery tried here is NOT a monotone wrapper:
+      each seed changes what the MAX is compared with. (a) scale by the stock's own recent volatility (cross_mean(day_std(Ret),30)),
+      so the signal is the extremeness of the best day relative to the stock's normal range rather than the raw level that
+      LogFloatCap/volatility controls absorb; (b) subtract the running minimum or the running mean (range / skew-like shape of the
+      return distribution); (c) condition on intraday shape (day_skew, day_corr(Ret,Volume), day_pos_ratio) i.e. whether the
+      extreme day was a broad, volume-confirmed move or one spike minute; (d) smooth over time (cross_mean) or take the change
+      against 30 days ago so that persistence of the lottery feature, not a level, is ranked. Because the reward residualises
+      against volatility, liquidity and reversal, only the part of the MAX effect that is shape/attention rather than level can
+      score; retail lottery preference in A-shares is structural, so it should persist out of sample. Differs from the library: no
+      library head combines the MAX with a vol/skew/volume-confirmation denominator or with its own lagged value.
+    seeds:
+      - 'div(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_std(Ret), 30))'
+      - 'sub(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), ts_min(cs_demean(div(day_mean(Ret), 2)), 30))'
+      - 'sub(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(cs_demean(div(day_mean(Ret), 2)), 30))'
+      - 'mul(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_skew(Ret), 30))'
+      - 'div(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_mean(Volume), 30))'
+      - 'sub(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_delay(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), 30))'
+      - 'mul(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_corr(Ret, Volume), 30))'
+      - 'cross_mean(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), 5)'
+      - 'div(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_stddev(day_mean(Ret), 30))'
+      - 'sub(cs_normalize(ts_max(cs_demean(div(day_mean(Ret), 2)), 30)), cs_normalize(cross_mean(day_pos_ratio(Ret), 30)))'
+      - 'mul(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_flat_ratio(Ret), 30))'
+      - 'sub(ts_max(cs_demean(div(day_mean(Ret), 2)), 30), cross_mean(day_std(Ret), 30))'
+  - type: N
+    hypothesis: >-
+      Intraday volume-clock structure as a measure of informed / institutional versus retail trading. Every head in this batch uses
+      the level of volume or turnover (day_mean(Volume), day_cov(Amt,Vwap)) and all of those are already neutralised by the liquidity
+      control, so levels cannot score. What the batch does hint at (day_ar1_coefficient(Volume) appears in 14 of 51 candidates,
+      slightly positive) is the temporal SHAPE of volume. Here the shape is measured with operators that give a pure shape number
+      independent of level: day_centroid(Volume) (where in the 241 minutes the volume mass sits; late-heavy = institutional
+      closing-auction style flow), day_gini(Volume) (concentration: bursty block prints vs smooth retail flow),
+      day_flat_ratio / day_zero_ratio of Volume (fraction of minutes with no trading = thin-stock attention), and day_corr(Volume, |Ret|)
+      style links (are returns volume-confirmed). Each is averaged over 20 days with cross_mean so it is a slow stock characteristic,
+      then ranked; combinations with day_ar1_coefficient(Volume) test whether persistence of volume plus its location carries
+      information. Mechanism: stocks whose volume arrives bursty and late are traded by large patient participants whose price
+      impact is incorporated gradually (positive drift), whereas evenly spread, early-heavy volume is retail momentum chasing that
+      mean-reverts. These are shape ratios, scale-free, so they are not liquidity or volatility in disguise; the microstructure
+      split between institutional and retail participants is structural in China A-shares and should survive out of sample.
+    inspired_by: 'Batch 1: day_ar1_coefficient(Volume) is the only enriched subtree; the heads are volume-level / Amt-Vwap covariance, which the liquidity control absorbs, so the untested part is volume shape.'
+    seeds:
+      - 'cross_mean(day_centroid(Volume), 20)'
+      - 'cross_mean(day_gini(Volume), 20)'
+      - 'cross_mean(day_flat_ratio(Volume), 20)'
+      - 'cross_mean(day_zero_ratio(Volume), 20)'
+      - 'sub(cross_mean(day_centroid(Volume), 20), cross_mean(day_centroid(Amt), 20))'
+      - 'mul(cross_mean(day_ar1_coefficient(Volume), 20), cross_mean(day_centroid(Volume), 20))'
+      - 'cross_mean(day_corr(Volume, abs(Ret)), 20)'
+      - 'div(cross_mean(day_gini(Volume), 20), cross_mean(day_gini(Amt), 20))'
+      - 'sub(cs_normalize(cross_mean(day_centroid(Volume), 20)), cs_normalize(cross_mean(day_gini(Volume), 20)))'
+      - 'cross_mean(day_ar1_coefficient(Volume), 20)'
+      - 'cross_mean(day_distinct_ratio(Volume), 20)'
+      - 'sub(cross_mean(day_gini(Volume), 20), cross_mean(day_gini(Ret), 20))'
+R:
+  - head: 'pow_1_5(ts_max(cs_demean(div(day_mean(Ret), 2)), 30))'
+    why: 'Window 30 -> 60 raised score by +1.08 in the breakdown, and window 15 was worse: the 30-day window is too short, the MAX effect is slow. pow_1_5 also discards all negative values (missing), so only part of the cross-section is ranked; the replacements use signedpower / drop it.'
+    variants:
+      - 'pow_1_5(ts_max(cs_demean(div(day_mean(Ret), 2)), 60))'
+      - 'pow_1_5(ts_max(cs_demean(div(day_mean(Ret), 2)), 90))'
+      - 'ts_max(cs_demean(div(day_mean(Ret), 2)), 60)'
+      - 'ts_max(cs_demean(div(day_mean(Ret), 2)), 120)'
+      - 'sub(ts_max(cs_demean(div(day_mean(Ret), 2)), 60), ts_min(cs_demean(div(day_mean(Ret), 2)), 60))'
+      - 'div(ts_max(cs_demean(div(day_mean(Ret), 2)), 60), cross_mean(day_std(Ret), 60))'
