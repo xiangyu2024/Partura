@@ -1,0 +1,158 @@
+seed: 2043
+round: 3
+slots:
+- core: abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211),
+    in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))
+  hypothesis: 核心 A0 = abs_(day_mean(mul(replace_small_with_nan(is_gt(分钟成交量增量, 当天增量均值+1倍标准差)),
+    分钟收益))):放量分钟的平均收益 C 的绝对值(第 31~210 分钟)。证据(本流前两轮、只用 train/valid):ts_stddev(A0, 241)
+    是目前本流最好的 head(train 0.39 / valid 0.63),且窗口越长 valid 越好(360 日 0.73、480 日 0.79),说明
+    alpha 在「放量时价格冲击幅度跨一年的波动(不稳定性)」这个几乎静态的个股属性上,换手极低所以扣 15bp 后还在;C 的水平本身没有 alpha。本轮不再用前两轮已测过的写法(ts_stddev
+    单窗口、ts_mean / add 外壳、CV、分位数、偏度、自相关、回归斜率),而是换六类读法:(1)长短窗口的波动比 ts_stddev(A0,241)/ts_stddev(A0,60),去掉长期静态成分后读「近期是否更不稳」的结构变化;(2)上行
+    / 下行半标准差(cross_semistd_pos / neg):只度量冲击放大那一侧的离散,把对称波动里与波动率控制共享的部分拆开;(3)稳健或排名后的离散:先用
+    cs_rank / cs_robust_z / cs_winsor 把 A0 每天在截面上变成相对位置再取 241 日 std,去掉全市场共同的冲击日(这些日子整个截面一起动,与波动控制重合),只留个股相对冲击排名的不稳定度;(4)方差稳定化与差分:sqrt(A0)
+    的 std、A0 一阶差分的 std(只度量日间噪声、不管持久水平)、局部 20 日 std 的 241 日均值或 60 日 std 的线性衰减加权(vol-of-vol
+    的路径读法);(5)尾部形态:峰度、最大值减中位数、稳健 z 分数;(6)241 日 std 减去局部 std 的均值(长期静态部分减去短期噪声部分)。这些与已有
+    head 的函数形式都不同(head 是单窗口 std),骨架库里没有;外围与前两轮含核心的候选(ts_mean/ts_stddev/add/in_sustain_stddev
+    外壳,quantile/skew/autocorr/regbeta)都不同。样本外为什么还会在:机制是知情交易者进出导致的价格冲击不稳定(流动性供给薄、散户拥挤的票冲击忽大忽小),是个股长期性格,不依赖某一段行情;新尺子已去掉对波动
+    / 流动性 / 市值的线性 / U / S 暴露,残差里剩下的是冲击的「不稳定性」而非「大小」。风险:与 ts_stddev(A0,241) head 本身
+    ρ 偏高的写法会被库禁令挡掉,最可能的幸存者是排名后离散和半标准差、长短比。
+  type: E
+  seeds:
+  - div(ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241), ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    60))
+  - cross_semistd_pos(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241)
+  - cross_semistd_neg(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241)
+  - cross_madz(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241)
+- hypothesis: 新想法:「日内行为的跨年不稳定度」。本流已测的结论是 alpha 的唯一线索是慢(241 日 std 单调好于短窗口)且读的是不稳定性而非水平(C
+    的水平没有 alpha,ts_stddev(|C|,241) 有)。前两轮 N 位用的是 241 日均值(cross_mean(day_hurst), day_centroid,
+    day_gini 等,读水平)没有出成绩,所以这一位把同样的日内形态量改读为 241 日标准差:ts_stddev(day_centroid(Volume),241)(成交重心的日间漂移:交易时段是否稳定,机构拆单
+    / 散户集中交易时段切换)、day_gini(成交量集中度的不稳定)、day_hurst(Close / Ret)(日内趋势 / 回归性质的切换)、day_ar1
+    / day_autocorr(分钟收益自相关的不稳定:买卖价差弹跳与趋势交替)、day_signed_ratio(Ret, Volume)(量价方向耦合的不稳定)、day_zero_ratio
+    / day_flat_ratio(零收益 / 无变动分钟占比:最小报价单位与流动性状态的切换)、以及用 cs_rank / cs_demean 先在截面上取相对位置再取
+    std(去掉全市场共同的冲击日)。实现:全部是 日内函数 day_* 取日值,再用 ts_stddev 241 日(或除以 241 日均值得到 CV)读离散;不含前一轮用过的
+    cross_mean 水平读法,也不含 C 事件。与库不同:库里 ts_stddev 的外壳只套在 C(放量事件均值)和少数波动量上,没有套在日内形态量(重心
+    / 基尼 / 赫斯特 / 自相关 / 零收益占比)上。为什么样本外还会在:这是 head 机制(知情 / 拥挤交易导致的行为切换)在另一族日内测度上的复制,窗口一年以上、换手极低;各测度彼此不是同一量(重心看时段、gini
+    看集中、hurst 看路径),若有 alpha 来自「行为不稳定的票被低估」这个共同成分,多种读法会一起出现,提高 GP 能找到的概率。风险:名义股价 /
+    最小报价单位会通过 zero_ratio 与 hurst 代理进来(新尺子去不掉),valid 段会检验。
+  inspired_by: ts_stddev(abs_(C)) 在本流前两轮 R 里的窗口单调线(241 日 train 0.39 / valid 0.63、360
+    日 valid 0.73),以及第 2 批(M2)里 day_hurst / day_centroid 的 241 日聚合富集 —— 同一批的日内形态量没有人读过它们的跨年离散度。
+  type: N
+  seeds:
+  - ts_stddev(day_centroid(Volume), 241)
+  - ts_stddev(day_gini(Volume), 241)
+  - ts_stddev(day_hurst(Ret), 241)
+  - ts_stddev(day_ar1_coefficient(Ret), 241)
+  - ts_stddev(day_autocorr(Ret, 5), 241)
+  - ts_stddev(day_signed_ratio(Ret, Volume), 241)
+  - div(ts_stddev(day_gini(Volume), 241), cross_mean(day_gini(Volume), 241))
+  - ts_stddev(cs_rank(day_centroid(Volume)), 241)
+  - ts_stddev(cs_demean(day_es_ratio_hi(Ret)), 241)
+  - ts_stddev(day_zero_ratio(Ret), 241)
+  - ts_stddev(cs_rank(day_std(Ret)), 241)
+R:
+- head: ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),241)
+  variants:
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    180)
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    300)
+  - ts_stddev(sqrt(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  - ts_stddev(ts_mean(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    3), 241)
+  - add(ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241), ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)), add(in_mean_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1))), in_stddev_full(sub(in_slice(Volume,
+    16, 226), in_delay(in_slice(Volume, 16, 226), 1)))))), in_slice(Ret, 16, 226)))),
+    241))
+  - ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Amt, 31,
+    211), in_delay(in_slice(Amt, 31, 211), 1)), add(in_mean_full(sub(in_slice(Amt,
+    31, 211), in_delay(in_slice(Amt, 31, 211), 1))), in_stddev_full(sub(in_slice(Amt,
+    31, 211), in_delay(in_slice(Amt, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),
+    241)
+  - ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    300)
+  - ts_stddev(cs_rank(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241)
+  why: head1 (ts_stddev 241 of |C|, no demean) train 0.39 / valid 0.63; 360 日 train
+    掉到 -0.08 而 valid 升到 0.73,说明 241 附近只是折中点,窗口再细调(180/280)和降噪(先平滑再取 std、混合两套事件窗口 31-211
+    与 16-226、sqrt 稳定方差)可能把 train 抬起来。
+- head: add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    241), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 241))
+  variants:
+  - add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    300), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 300))
+  - add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))),
+    180), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1))))), in_slice(Ret, 31, 211),
+    5)))), 180))
+  why: head2 (两项和,C 与 sustain 版)同样 241 train 0.32 / valid 0.46;480 日 train -0.47、valid
+    0.77:试 300 日、sqrt 稳定方差、只留 C 项(两项相加增加了 sustain 项噪声)。
+audit:
+  attempts: 1
+  file: audit_1.yaml

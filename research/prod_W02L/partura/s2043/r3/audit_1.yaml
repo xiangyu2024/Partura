@@ -1,0 +1,54 @@
+attempt: 1
+slots:
+- slot: a
+  novelty: 4
+  soundness: 3
+  struck_seeds:
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 13
+  - 14
+  - 15
+  reasons: 核心 A0 = abs_(day_mean(mul(replace_small_with_nan(is_gt(dV, 当天 dV 均值+1倍标准差)), Ret))) 是 head 1 ts_stddev(abs_(day_mean(...)),241) 的子树(已核对);15 个种子都原样包含 A0(已核对)。A0 与 5 个控制的 |ρ| 为 liq 0.10 / vol 0.22
+    / rev 0.12 / known 0.11 / size 0.01,均 <0.8,过 E 位的核心门槛。A0 与 r1 核心 C、r2 核心 K=abs_(cs_demean(C)) 不是同一子树,本流 E 名额未超。自动划掉(与某个 head |ρ|≥0.7 或某个控制 |ρ|≥0.8):4(0.71)、5(0.99)、6(0.97)、7(0.99)、8(0.97)、9(0.96)、10(0.96)、11(0.91)、13(0.93)、14(0.94)、15(0.85),共
+    11 个;剩 1、2、3、12 共 4 个,恰好够门槛。种子 1 div(ts_stddev(A0,241), ts_stddev(A0,60)) 与 head 1 的 |ρ| 0.52、残差 0.42:是 head 1 的长短窗口比,与 head 1 部分重合但不是同一量。div 无 EPS(common.py:175),分母为 0 会得 inf/NaN,截面排名前需要处理,但没有证据它支配截面,放行。种子
+    2、3 cross_semistd_pos / cross_semistd_neg(A0,241) 与 head 的 |ρ| 为 0.20 / 0.19,是本位里函数形式最新的一支。但要注意 _semistd(ops_ext.py:751-775)对 A0 取 log(A0_t/A0_{t-1})。log 比值对尺度不敏感;A0=|日均事件收益| 在 0 附近有密度,若事件收益近似零均值噪声,半方差主要读的是
+    A0 穿越 0 附近的频率(即事件收益的 |均值|/噪声),而不是计划写的「冲击幅度的离散」。这是机制与定义可能不符的风险,不是可证明的数学错误(0 附近的日子是否支配截面需要 PI 核实),因此不划,但合理度扣到 3。种子 12 cross_madz(A0,241)(|ρ| 0.12,残差 0.10):是 A0 相对自身 241 日中位数的稳健 z,MAD=0 时输出 NaN(ops_ext.py:721-733),无除以近零问题;度量的是水平偏离而非离散,与计划的「尾部形态
+    / 稳健 z」一致,放行。如果它有 alpha,最可能来自:(a) 事件收益均值相对噪声的穿零频率(2、3),或 (b) A0 相对自身年中位数的偏离(12);(a) 更像「放量后收益方向是否稳定」,与 head 1 的离散读法互补。创新度 4:1 之外三个种子与 6 个 head 的最大 |ρ| 都 ≤0.20 或只是 head 的长短比(1),函数形式与库内 ts_stddev 外壳不同。合理度
+    3:因 2、3 的 log 比值机制问题拉低;1、12 本身合理度为 4。
+- slot: b
+  novelty: 4
+  soundness: 4
+  struck_seeds:
+  - 3
+  - 12
+  - 14
+  reasons: 种子 3(ts_stddev(day_hurst(Close),241))与 14(cs_rank(day_hurst(Open)) 的 241 日 std)对价格水平做 R/S。同一估计量同一设定在 r2 审计(r2/audit_1.yaml 第 22 行起,实测 iid 增量上 H 均值 0.53、价格水平上 0.82)中已判为数学问题,本位对同一设定一致划掉。两者与 head
+    的 |ρ| 为 0.30 / 0.14。种子 12 ts_stddev(day_flat_ratio(Close),241) 与 11 ts_stddev(day_zero_ratio(Ret),241) 是同一个量:day_flat_ratio 度量相邻分钟价格相等的比例(ops_ext.py:82),day_zero_ratio 度量 Ret 为零的比例(ops_ext.py:273),Ret
+    为零即 Close 未动。两者与 head 的 |ρ| 都是 0.52,控制几乎相同(liq 0.16/0.17、size 0.41/0.39),属于重复,以 11 为准划掉 12。剩下 1、2、4、5、6、7、8、9、10、11、13 共 11 个,与 6 个 head 的最大 |ρ| 为 0.08–0.41(残差 0.04–0.37),没有 |ρ|≥0.7 或控制 |ρ|≥0.8 的种子。种子
+    6 ts_stddev(day_autocorr(Ret,5),241) 有一处定义风险:dt_day.py:333-364 中 denom 下限为 1e-4,invalid 判断(denom<1e-8)因此不会触发,整天 Ret 为常数(涨跌停锁死、停牌)时返回 0 而不是 NaN。这与 §4 中 day_corr 的 0 填充同类,会在 241 日 std 里混入 0 值。PI 应核实 flat-day
+    占比;目前没有证据它主导结果,不划,但提醒。种子 1 与 9:day_centroid(Volume) 与 cs_rank(day_centroid(Volume)) 不同,截面排名去掉了全市场同日的时点漂移,不是重复。种子 2 与 8:gini 的 241 日 std 与 std/均值(CV),后者去掉水平,放行。种子 7 ts_stddev(day_signed_ratio(Ret,Volume),241)
+    与 size 控制 |ρ| 0.51、liq 0.40、known 0.39,没到 0.8,但买卖压力代理与流动性 / 规模的换写风险明显,创新度扣一点。种子 10 的 ES 比值在分位数近零时已在算子内置 NaN(ops_ext.py:665-690),放行。新度:这些原子(day_centroid / day_gini / day_signed_ratio / day_ar1 / day_autocorr
+    / day_hurst(Ret))在 r2 以 241 日均值读过(r2/missions_final.yaml 的 N 位种子),本位改读 241 日离散,是不同的统计量,但原子本身已有过,因此创新度给 4 而不是 5。如果它有 alpha,最可能来自:成交时点或成交集中度的跨年稳定性(1、2、8)与 Ret 慢自相关 / AR(1) 的不稳定(4、5、6)。合理度 4:机制(日内行为切换)说得通;除已划掉的
+    hurst 外,算子逐个核对,无前视(日内统计只用当天 1..240 分钟,收盘后可得),无除以近零量;241 日窗口对 2018 年头部是扩张窗口,不主导结果。
+R:
+- head: ts_stddev(abs_(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume,
+    31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211)))),241)
+  soundness: 4
+  reasons: 8 个变体都是对同一个 A0 的小改写:窗口 180 / 300、sqrt(abs_)、ts_mean(·,3) 平滑、双事件窗口(31–211 与 16–226)相加、Amt 替代 Volume、去截面均值 cs_demean、截面秩 cs_rank、ts_stddev 外层 300 日。全部是因果的日轴滚动或日内统计,无前视;无除以近零量。变体 6 把 Volume 换成 Amt,属于同一机制的口径变体,不是数学问题。与原
+    head 共享的风险是 A0 的 0 填充(事件分钟收益为 0 时 A0=0 而非 NaN,涨跌停日常见),它是 §4 类的已知行为,没有证据它主导结果,不构成划掉的理由。合理度 4。
+- head: add(ts_stddev(abs_(cs_demean(day_mean(mul(replace_small_with_nan(is_gt(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume,
+    31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1)))))), in_slice(Ret, 31, 211))))), 241), ts_stddev(abs_(cs_demean(day_mean(in_sustain_stddev(is_gt(sub(in_slice(Volume,
+    31, 211), in_delay(in_slice(Volume, 31, 211), 1)), add(in_mean_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume, 31, 211), 1))), in_stddev_full(sub(in_slice(Volume, 31, 211), in_delay(in_slice(Volume,
+    31, 211), 1))))), in_slice(Ret, 31, 211), 5)))), 241))
+  soundness: 4
+  reasons: 两项相加:第一项是 cs_demean(A0) 的 241 日 std,第二项是 cs_demean(in_sustain_stddev(事件掩码, Ret, 5)) 的 241 日 std。变体 1(300 日)与变体 2(180 日)只改窗口,与 r2 的 R 组同族。in_sustain_stddev 的用法与原 head 一致(dt_in.py:832,start_offset
+    默认 0)。两项量纲相同(都是事件收益的 |·|),相加没有数值问题。无前视,无除以近零量。合理度 4。
+summary: a 位过(创新 4、合理 3,划 11 个后剩 1、2、3、12 共 4 个,恰到门槛);b 位过(创新 4、合理 4,划 3、12、14 后剩 11 个,本轮 N 位通过);两个 R 组合理度均为 4。3 与 14 因 day_hurst 对价格水平做 R/S 划掉(与 r2 同一数学问题),12 与 11 重复划掉;a 位的 2、3 有 log 比值使半方差读穿零频率的风险,未划,提请
+  PI 核实。
