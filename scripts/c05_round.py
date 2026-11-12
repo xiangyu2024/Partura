@@ -129,7 +129,9 @@ def running(pattern):
 
 def gp(tag, idea, guidance, arm, seed, budget, extra):
     log = ROOT / "logs" / f"_idea_{tag}.log"
-    cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('C05_JOB_MINUTES', 720)}m", PY, "-u", "scripts/idea_search.py", idea,
+    # the timeout includes the time a job waits for a run slot / the GPU lock; 720 min killed W02L searches that never got the card
+    # (W02L PLAN revision 2), so the default is 48 h -- still a guard against a hung run, not a queue limit
+    cmd = ["timeout", "--signal=TERM", "--kill-after=60", f"{os.environ.get('C05_JOB_MINUTES', 2880)}m", PY, "-u", "scripts/idea_search.py", idea,
            "--guidance", guidance, "--arms", arm, "--seed", str(seed), "--tag", tag, "--budget", str(budget), "--population", "32",
            "--threshold", "0.5", *extra]
     # scheduling only (PLAN revisions 2, 6): two GPU ways, four run slots, a panel cache of at most 24 GB (a host may say more:
