@@ -1,0 +1,71 @@
+seed: 2053
+round: 3
+slots:
+- type: E
+  core: cross_sum(cross_sum(day_mean(Ret), 10), 15)
+  hypothesis: 机制:核心 = 日均分钟收益 day_mean(Ret)(约等于当日收益 / 241)先做 10 日滚动和、再做 15 日滚动和,等价于一个三角形权重的约
+    24 日窗口动量(中间几天权重最大、最近和最远几天权重小),读的是个股「几周尺度上的方向性漂移」。本批共性表里含它的 7 个候选均值差 +1.36(p 0.001,含
+    / 不含 -0.95 / -2.31),含它的候选是本流目前全部评分里最接近过线的(上一轮 Pr2a_Ea 的 log(cross_regbeta(核心,
+    day_topw_mean(Ret, Close), 241)) 为 -0.16,train -0.10)。上一轮对它的外围只有两类:(a) 对 day_topw_mean(Ret,
+    Close) 做 241 日回归取 beta 再 log;(b) 再套一层 cross_sum / log。本轮外围换成完全不同的一组,把「动量」本身做干净:1)
+    除以自身的日收益波动(cross_stddev(day_mean(Ret), 60) 或 cross_mean(day_std(Ret), 60)),得到风险调整后的趋势强度(平滑、稳定的上涨比靠一两个大阳线涨上来的更有持续性,也更不容易被波动控制吃掉);2)
+    减去最近 5 日累计收益(跳过最近一周,去掉与 20 日反转控制重叠的短期反转部分,只留中期动量);3) 对自己的 60-120 日分布做 cross_zscore
+    / cross_rank(个股相对自己历史的动量位置,而不是跨股水平);4) 用 cross_regbeta 对日成交量水平或日内波动做回归取 beta(动量对量能
+    / 波动的敏感度,量价配合的趋势);5) 短窗口减长窗口(加速 / 减速)。没有一个外围用到上一轮的 topw 回归 + log 写法。和库里不同:库里含该核心的只有
+    log(cross_regbeta(…, topw, 241)) 这一族及其嵌套;除以波动、跳过近期、对自身历史标准化、对成交量回归的写法骨架都不在 5583
+    条库表达式里,所以不会被库禁令拒绝。为什么样本外还会在:中期动量在 A 股由处置效应、散户追涨杀跌与信息缓慢扩散驱动,是行为偏差,不靠某一段行情;新尺子已经去掉了对
+    20 日反转、波动、流动性、市值、已知族和两个冠军的线性 / U 形 / S 形暴露,剩下的是这些之外的中期趋势成分;窗口长所以换手低,15bp 成本下对纯多头书有利。没有前视:day_mean(Ret)
+    当日收盘后才有,日轴算子只用当天及过去,不含 cross_shift / ts_shift / ts_spearman / nt_*。风险:动量本身可能与
+    20 日反转控制负相关,跳过近期的种子是对照;若 train 与 valid 的市场状态不同(动量崩溃),波动调整种子应更稳。
+  seeds:
+  - div(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_stddev(day_mean(Ret), 60))
+  - div(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_mean(day_std(Ret), 60))
+  - sub(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_sum(day_mean(Ret), 5))
+  - cross_zscore(cross_sum(cross_sum(day_mean(Ret), 10), 15), 120)
+  - cross_regbeta(cross_sum(cross_sum(day_mean(Ret), 10), 15), day_sum(Volume), 120)
+  - cross_regbeta(cross_sum(cross_sum(day_mean(Ret), 10), 15), day_std(Ret), 120)
+  - sub(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_delay(cross_sum(cross_sum(day_mean(Ret),
+    10), 15), 20))
+  - cross_ema(div(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_stddev(day_mean(Ret),
+    120)), 10)
+  - cross_min(cross_sum(cross_sum(day_mean(Ret), 10), 15), 20)
+  - sub(div(cross_sum(cross_sum(day_mean(Ret), 10), 15), cross_stddev(day_mean(Ret),
+    120)), div(cross_sum(day_mean(Ret), 10), cross_stddev(day_mean(Ret), 20)))
+  - cross_corr(cross_sum(cross_sum(day_mean(Ret), 10), 15), day_sum(Volume), 60)
+- type: N
+  hypothesis: 机制:把一天的收益拆成「隔夜跳空」(今日第一分钟价 / 昨日收盘价)与「日内」(今日收盘价 / 今日第一分钟价)两段,在日轴上分别累积。隔夜段主要由机构与消息驱动的集合竞价和盘前信息决定,日内段主要由散户的连续竞价交易驱动(A
+    股文献里隔夜收益持续为正、日内收益持续为负的现象与散户情绪溢价相关);个股「隔夜均值 - 日内均值」的差读的是机构资金与散户情绪的相对力量,是慢变的持仓者结构特征。算子实现:day_first(Close)
+    与 cross_delay(day_close(Close), 1) 相除得隔夜比,day_close(Close) 与 day_first(Close)
+    相除得日内比,减 1 后用 cross_mean / cross_ema / cross_zscore 在 20-120 日上平滑;另给「隔夜持续性」(隔夜比对
+    20 日前同一量的 cross_corr)和「隔夜均值对日内均值的 cross_regbeta」两个种子,读的是两段收益是否反向回吐。灵感:本批共性表里最强的是
+    day_mean(Ret) 的日轴累计(+1.16 到 +1.51),说明每天的收益水平经日轴累积后有信息,但没人把当日收益拆成隔夜与日内两段;核心 day_mean(Ret)
+    对整天的分钟收益等权,把隔夜这一段(第一分钟相对昨收的跳空)与盘中混在了一起,这里把它们分开。和库里不同:库里与日内价格相关的表达式都是在分钟轴上做分位 /
+    加权 / 回归(day_topw_mean、day_quantile、day_durbin_watson 一族),没有用 day_first 与前一日 day_close
+    的跨日差去构造隔夜跳空的;这个构造的骨架(day_first / cross_delay(day_close) 相除)不在库里。度量的对象是跨日价格跳空而不是日内分钟路径,和头部里的
+    Amt / Volume 水平量(cross_sum 一族)、控制里的流动性 / 波动 / 20 日反转不是同一件事(隔夜收益累计是当日收益的一部分,但减去日内部分后与纯反转的暴露不同)。为什么样本外还会在:隔夜与日内的收益分化来自机构与散户参与时段不同,A
+    股的涨跌停与 T+1 制度使这种结构长期存在,不靠某一段行情;窗口 20-120 日,换手低。没有前视:隔夜比用的是今天开盘与昨天收盘,日内比用今天开盘与收盘,都是当天收盘后已知,cross_delay
+    取过去值;不含 cross_shift / ts_shift / ts_spearman / nt_*。风险:后复权价格在除权日有跳变(已复权所以隔夜比不含除权跳变);开盘第一分钟可能无成交(缺失)的票由日轴均值吸收;一字板股票隔夜与日内都是
+    0 或常数。
+  inspired_by: 本批共性表:day_mean(Ret) 的日轴累计 cross_sum(cross_sum(day_mean(Ret), 10), 15)
+    含有者均值差 +1.36(p 0.001),说明当日收益水平经日轴累积有信息,但它把隔夜与日内混在一起;拆开后读相对力量
+  seeds:
+  - cross_mean(sub(div(day_first(Close), cross_delay(day_close(Close), 1)), div(day_close(Close),
+    day_first(Close))), 60)
+  - cross_ema(sub(div(day_first(Close), cross_delay(day_close(Close), 1)), div(day_close(Close),
+    day_first(Close))), 30)
+  - cross_mean(div(day_first(Close), cross_delay(day_close(Close), 1)), 120)
+  - cross_mean(div(day_close(Close), day_first(Close)), 120)
+  - cross_zscore(sub(div(day_first(Close), cross_delay(day_close(Close), 1)), div(day_close(Close),
+    day_first(Close))), 60)
+  - cross_regbeta(cross_mean(div(day_first(Close), cross_delay(day_close(Close), 1)),
+    20), cross_mean(div(day_close(Close), day_first(Close)), 20), 120)
+  - cross_corr(div(day_first(Close), cross_delay(day_close(Close), 1)), div(day_close(Close),
+    day_first(Close)), 60)
+  - sub(cross_mean(div(day_first(Close), cross_delay(day_close(Close), 1)), 20), cross_mean(div(day_first(Close),
+    cross_delay(day_close(Close), 1)), 120))
+  - cross_stddev(sub(div(day_first(Close), cross_delay(day_close(Close), 1)), div(day_close(Close),
+    day_first(Close))), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

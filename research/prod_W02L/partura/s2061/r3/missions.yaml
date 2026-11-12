@@ -1,0 +1,45 @@
+seed: 2061
+round: 3
+slots:
+- type: E
+  core: 'day_mean(Low)'
+  hypothesis: '机制:核心 C = day_mean(Low) 是当日各分钟最低价的均值,价格用后复权,所以它在股票之间的排序约等于「自某基期以来的累计收益」,在个股时间轴上就是一条复权价格路径(长周期动量 / 反转的位置变量)。本批证据(只用 train / valid):第 3 批含 day_mean(Low) 的 18 个候选均值 -0.96,不含 -1.91(p 0.004),本流前两轮里它只作为 cs_bucket_demean 的分桶键出现,从没有被当成被测信号本身;新尺子已经去掉对 20 日反转、市值、流动性、波动、已知族和两个冠军的线性 / U 形 / S 形暴露,但 1 年尺度的「价格相对自己 52 周高低点的位置」不在这些控制里。本位外围全部是价格路径上的位置 / 相对量,与以前见过的(把它当分桶键)完全不同:(a) 锚定 52 周高点 div(C, cross_max(C,241))(George-Hwang 2004:离 52 周高点近的票被投资者锚定、对好消息反应不足,后续继续上涨);(b) 随机指标位置 (C-min)/(max-min),在自身 241 日区间内的相对位置;(c) 相对自身长均线 div(C, cross_mean(C,120)) 与 ema 短减长的均线交叉;(d) cross_rank(C,241) 时间序列分位;(e) 用 LogFloatCap 十分位 cs_bucket_demean / cs_bucket_zscore 去掉大小盘内的价格路径差异(这把交互项也去掉,新尺子只去掉低阶多项式);(f) cross_corr(C, day_sum(Amt),60) 问价格路径与成交额是否同向(价量齐升 = 资金流入);(g) cs_mask_top_replace_mean_neg 压底部尾部。算子怎样实现:全部在日轴上用 cross_* 对复权价格路径取极值 / 均值 / 秩 / 相关,没有任何前视(窗口只含当日及以前);热身 241 日在 train 内。为什么和库里不同:库里含 day_mean(Low) 的候选是它做分桶键或裸写,骨架里没有「除以自身 241 日最大值 / 区间位置 / 均线比」这类时间序列相对位置,这些骨架不在库里;与核心 head 无关联(corr 表里核心与 head 的 |ρ| 应很低)。为什么样本外还会在:锚定与处置效应是行为偏差,A 股散户占比高、涨停 / 涨幅限制使信息吸收慢,52 周高点效应在多国样本外长期存在;价格相对位置的排序换手低(窗口 120 到 241 日),15 bp 成本吃得下。诚实说明:相对位置 div(C, 52w max) 与 20 日反转 / 动量有中度相关,会被尺子去掉一部分;期望是把 train / valid 拉到 0 附近或略正,过 0.5 概率约 20%。数学检查:Low 为正价格,分母为区间最大值 / 均线,恒正无爆点;极差为 0 的(停牌恒价)票随机指标分母近零 —— 种子里的这条用 sub 写法,不为主力。'
+  seeds:
+  - 'div(day_mean(Low), cross_max(day_mean(Low), 241))'
+  - 'div(day_mean(Low), cross_min(day_mean(Low), 241))'
+  - 'div(day_mean(Low), cross_mean(day_mean(Low), 120))'
+  - 'cross_rank(day_mean(Low), 241)'
+  - 'cs_bucket_demean(day_mean(Low), LogFloatCap)'
+  - 'cs_bucket_zscore(day_mean(Low), LogFloatCap)'
+  - 'div(sub(day_mean(Low), cross_min(day_mean(Low), 241)), sub(cross_max(day_mean(Low), 241), cross_min(day_mean(Low), 241)))'
+  - 'sub(cross_ema(day_mean(Low), 20), cross_ema(day_mean(Low), 120))'
+  - 'cross_corr(day_mean(Low), day_sum(Amt), 60)'
+  - 'cs_mask_top_replace_mean_neg(div(day_mean(Low), cross_max(day_mean(Low), 241)))'
+  - 'cross_zscore(day_mean(Low), 241)'
+  - 'div(cross_max(day_mean(Low), 60), cross_max(day_mean(Low), 241))'
+- type: N
+  hypothesis: '机制:成交的「时钟」——一天里成交额的重心落在哪一分钟(day_centroid(Amt) = sum(t*Amt_t)/sum(Amt),0=全在开盘,1=全在收盘)。受本批启发:含 day_open(Amt) 的 99 个候选均值 -0.92,不含 -2.55(p 0.000),说明「成交发生在开盘」这件事有信息;而前两轮 N 位只试了开盘一分钟的份额(div(day_open(Amt), day_sum(Amt)) 及其差分、自相关,分数 -0.1 到 -0.5),那是单点读数,噪声大。重心是整条日内成交曲线的一阶矩,用到全天 240 分钟,噪声小得多,而且同时把开盘抢单、午间、尾盘集中成交三种行为压成一个无量纲数(量纲上与成交额水平、流动性无关)。算子怎样实现:day_centroid(Amt) 或 day_centroid(Volume) 得日值(ops_ext.py:155),日轴用 cross_mean / cross_ema(60 到 120 日)变慢(上一轮教训:日值噪声大、水平里有信息,所以保留水平不 zscore 为主);变体:Amt 重心减 Volume 重心(= 成交价格在日内的倾向:重心后移时价格是否也被抬高),cross_corr(重心, 当日收益, 60)(尾盘集中成交的日子是否伴随上涨,度量机构尾盘建仓 / 散户追涨),day_corr(in_index(Amt), Amt) 的另一种背载度量,day_gini 的集中度,cs_bucket_demean 在市值十分位内去均值。为什么和库里不同:库里与 day_open 相关的写法是 day_open(F) 的回归 / 掩顶 / 份额,以及 day_pdf_quantile_single 的累计成交量分位(只读一个分位点处的价格读数,不是成交时间分布本身);day_centroid / day_gini 这类整条曲线统计在本流快照里没有出现,骨架与快照 head 不同。为什么样本外还会在:成交时点分布反映参与者构成(散户偏开盘 / 机构偏 VWAP 与尾盘),是个股慢变的结构属性,数十日内排序稳定;尾盘集中成交伴随机构调仓与信息交易(日内动量文献:末段成交与收益的关系)。风险:重心可能和波动 / 流动性中度相关,被去掉线性暴露后剩下的才是我们要的;诚实预期过 0.5 的概率约 15%。数学检查:重心分母为当日总成交额,在市日恒正,值域 [0,1] 无爆点;整天零成交 / 停牌为 NaN 不是无穷;一字板日成交集中在开盘分钟,重心接近 0 —— 那是真实的交易时点而非数值伪影,但涨停票会被聚类到低端,是已知板块信息;无前视,窗口 ≤ 120 日。'
+  inspired_by: '第 3 批(M3 批):含 day_open(Amt) 的 99 个候选均值 -0.92 对不含 -2.55(p 0.000);前两轮只读了开盘单分钟份额,没有一条用到全天成交时间分布的重心 / 集中度。'
+  seeds:
+  - 'cross_mean(day_centroid(Amt), 60)'
+  - 'cross_ema(day_centroid(Volume), 40)'
+  - 'cross_mean(day_gini(Amt), 60)'
+  - 'cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 60)'
+  - 'cross_corr(day_centroid(Amt), day_sum(Ret), 60)'
+  - 'cross_zscore(day_centroid(Amt), 120)'
+  - 'cross_mean(day_corr(in_index(Amt), Amt), 60)'
+  - 'cross_tail_mean_q75(day_centroid(Amt), 60)'
+  - 'cs_bucket_demean(cross_mean(day_centroid(Amt), 60), LogFloatCap)'
+  - 'cross_mean(day_centroid(Amt), 120)'
+  - 'cross_autocorr(day_centroid(Amt), 60, 1)'
+  - 'sub(cross_ema(day_centroid(Amt), 10), cross_ema(day_centroid(Amt), 60))'
+R:
+- head: 'pow_2(neg(pow_05(abs_(cross_argmax(day_ar1_coefficient(Ret), 241)))))'
+  why: '拆解:去掉 cross_argmax 后裸的 day_ar1_coefficient 日值仍为 -3.4 级,分数由 cross_argmax(只取 241 日窗口里最大值所在位置的离散噪声)与外面三层单调变换决定,单调变换不改变排序,所以烂的部件只有 cross_argmax。变体把它换成稳定聚合(慢均值 / ema / 分位 / 尾部均值),读「分钟收益日内自相关(微观结构反转 / 买卖价差反弹)」的慢水平;窗口 60 到 241。'
+  variants:
+  - 'cross_mean(day_ar1_coefficient(Ret), 120)'
+  - 'cross_ema(day_ar1_coefficient(Ret), 60)'
+  - 'cross_mean(day_ar1_coefficient(Ret), 241)'
+  - 'cross_tail_mean_q75(day_ar1_coefficient(Ret), 120)'
+  - 'cross_tail_mean_q25(day_ar1_coefficient(Ret), 120)'
+  - 'cross_quantile(day_ar1_coefficient(Ret), 0.5, 120)'

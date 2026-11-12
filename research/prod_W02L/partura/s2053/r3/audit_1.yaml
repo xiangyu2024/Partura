@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [5]
+    reasons: '核心 cross_sum(cross_sum(day_mean(Ret),10),15) 核对:(1) 在链接的共性表里确有此行(loc.md 第 21 行,均值差 +1.36、p 0.001、7 个候选),不是凭空选的;(2) 算子:day_mean 只用当天分钟,cross_sum 用 rolling_windows 因果窗口(含当天、只回看),双层 10 与 15 的三角权重约 24 日,没有 cross_shift / ts_shift / nt_* / ts_spearman,无前视。相关度表:与 6 个 head 原始 |ρ| 最大 0.25(day_sum(cross_sum(Volume,3))),残差 0.084;与控制 liq 0.18、vol 0.35、rev 0.75、known 0.21、size 0.05,rev 低于 0.8 门槛,核心通过。创新度 3 的理由:它与库里 head 不是同一个东西(原始 |ρ| 不超过 0.25、残差 0.08),但与 20 日反转控制的原始秩 |ρ| 为 0.71 到 0.75,落在 0.5 以上的「控制变量换个写法」区间,整个位的新意只能来自去掉 rev 线性 / U 形 / S 形暴露之后的残差,不能算真正新的。合理度 4:机制清楚(约 24 日中期趋势),无数学问题。种子逐个看:(5) cross_rank(core,60) 的 gate 为 False、distinct 仅 0.035,即面板几乎全是并列,属于 §4 的「面板几乎是常数」数学问题(最可能来源是日轴 cross_rank 的 nanrank_last 在当天缺失时返回 0,使大量取值并列在 0),划掉;(3) sub(core, 5 日和) 的说明写成了「跳过最近一周」,但实际只把今天那一天的权重从 1 扣到 0,第 1 到 4 日仍有正权重(1 到 4),不是跳过,属于机制描述偏差,不是数学问题,保留;(6)(7) cross_regbeta(x,y,d) 按 rolling_ols 是 y 对 x 回归(y ~ alpha + beta*x),这里 y 是 day_sum(Volume) 与 day_std(Ret),所以 beta 是量与波动对动量的斜率,不是「动量对量能的敏感度」,方向写反了,机制要改写,但不挡;(1)(2) 是同一动量分别除以两种波动估计,近似换皮但度量不同,保留;(9) 先除以 120 日标准差再 cross_ema,ema 在排名之前,单票的爆点只影响该票自己,不支配截面,保留;(11) 第二项的分母 stddev20 可能很小,同样只影响该票,保留;(12) 动量与成交量的 60 日滚动相关,保留。划掉之后剩 11 个种子,远高于 4 个的门槛。E 位的核心与每个控制 |ρ| 都低于 0.8,通过。如果它有 alpha,最可能来自:去掉 20 日反转之后剩下的约 24 日中期趋势残差,由处置效应与散户追涨杀跌之类的行为偏差驱动。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '机制核对:ON = day_first(Close) / cross_delay(day_close(Close),1),ID = day_close(Close) / day_first(Close)。day_first 的实际实现是 first_valid_last,取的是第一个非缺失分钟,不一定是严格的 9:31 那一根;停牌后复牌的票,ON 会包含复牌前的一段盘中变化,这是小的定义偏差,不是数学问题。cross_delay 向后移动(later days see earlier values),取的是昨日收盘,无前视;cross_mean、cross_ema(因果递推)、cross_zscore、cross_regbeta 与 cross_corr 都只用过去与当天。分母 Close 为正价格,不会出现近零除法。创新度 4 的理由:相关度表中与快照 head 的最大原始 |ρ| 为 0.40 到 0.45(对 day_first(cross_sum(Amt,30))),但残差与 head 只有 0.12 到 0.14(seed 1、2),说明去掉控制之后信号几乎不同;库 libs_train.csv 里没有 cross_delay(day_close(Close)) 写法,含 day_first(Close) 的 11 行都不是跨日价格跳空比,所以「隔夜与日内拆分」的结构不在库里。这是真正的分解,不是换皮,给 4。控制:seed 9 与 vol 的原始 |ρ| 为 0.64,与波动控制有部分重合,但未达 0.8,不触发自动划掉;seed 1、2、4 与 liq / known 为 0.39 到 0.43,也未达 0.5。种子逐个看:无数学问题,无重复到需要划掉的程度(seed 1 与 seed 2 是同一组差值的 60 日均值与半衰期 30 的 EMA,近似重复,但窗口与平滑方式不同,放行);seed 6 cross_regbeta(ON20, ID20, 120) 是 ID 对 ON 的斜率,与「两段收益是否反向回吐」的描述一致;seed 5 对自身历史 z 分数化,是与控制无关的写法,保留。如果它有 alpha,最可能来自:隔夜段由机构与消息驱动、日内段由散户连续竞价驱动,两段的相对强弱反映持仓者结构,这一慢变结构在 A 股的 T+1 与涨跌停制度下持续存在。'
+R: []
+summary: '两个 N/E 任务位都通过本次审计:a 位(E,核心 cross_sum(cross_sum(day_mean(Ret),10),15),创新 3、合理 4)划掉 seed 5(cross_rank 面板几乎为常数,distinct 0.035),剩 11 个种子,并注明 seed 3 与 seed 6、7 的机制描述有偏差但不是数学问题;b 位(N,隔夜跳空与日内拆分,创新 4、合理 4)无种子划掉,剩 9 个种子;无 R 组。无任何 head 与种子原始 |ρ| 达到 0.7,无控制达到 0.8,自动划掉规则不触发。'

@@ -1,0 +1,57 @@
+seed: 2059
+round: 3
+slots:
+- type: E
+  core: ts_kurt(day_es_ratio_lo(Open), 10)
+  hypothesis: 机制:day_es_ratio_lo(Open) = 当天分钟开盘价里低于 5% 分位的那些分钟的均值除以该分位数,读日内价格路径左尾的厚度(下探深度,是比值、与价格水平无关)。ts_kurt(...,10)
+    是它最近 10 日的峰度,读「下探深度是否偶发地剧烈尖峰」,即被偶发流动性冲击(闪崩后被承接)光顾的程度。上一轮 Pr2a 以 day_es_ratio_lo(Open)
+    为核心得到本流唯一的 head(+0.63,train +0.63 / valid +0.78),拆解显示真正起作用的是 ts_kurt(day_es_ratio_lo(Open),10)
+    外面套 cross_max(.,241):敲掉 ts_kurt 后掉到 -2.46(必要性 +3.10),而 cs_first_high20 / inv 这些修饰几乎没有贡献(必要性约
+    +0.03);窗口 241->482 在 valid 上升到 +1.07。说明信息在「长期里最极端的那次尖峰」这种慢变属性。本轮核心换成 ts_kurt(day_es_ratio_lo(Open),10)(整个子树,它是
+    head 的子树),外围彻底换写法:不再用 cs_first_high20 + cross_max 241 的组合,改用 (1) 其他慢聚合:cross_quantile_q75
+    / cross_mean / cross_stddev / cross_decay_linear / cross_med 读「尖峰的常态水平 / 波动 /
+    近期加权」而不是单个最大值;(2) 对市值 LogFloatCap 做桶内标准化 cs_bucket_zscore(同市值档内比较),避开小盘股偏好;(3)
+    与其他量的耦合 cross_regres / cross_corr(尖峰对当日波动 day_std(Ret) 回归取残差,剔除波动的机械成分)。与库里已有的不同:库里没有任何含
+    day_es_ratio_lo 的表达式(该算子在库建成后才有);已见过的含此核心的候选外围都是 cross_max(cs_first_high20(...),241)
+    族,本轮外围算子集合(cross_quantile_q75、cross_mean、cross_stddev、cs_bucket_zscore、cross_regres
+    等)不同。为什么样本外还会在:个股被反复砸出日内深坑再被承接的倾向由持仓结构与做市深度决定,慢变;窗口 120–482 日使换手低;不依赖某段行情方向。数学检查:day_es_ratio_lo
+    在分位数近零或没有低于分位的分钟时为 NaN(价格是正的后复权价,不会近零),无除零爆点;全部只用 t 日及以前,没有 shift 类算子;ts_kurt
+    窗口 10 日,热身期短。风险:核心本身偏向价格分布形状,与波动类控制中度相关,奖励已去掉其线性 / U 形 / S 形暴露;若换了外围仍不过线,说明 head
+    的 alpha 来自 cross_max 的极值读法本身。
+  seeds:
+  - cross_quantile_q75(ts_kurt(day_es_ratio_lo(Open), 10), 241)
+  - cross_quantile_q75(ts_kurt(day_es_ratio_lo(Open), 10), 120)
+  - cross_decay_linear(ts_kurt(day_es_ratio_lo(Open), 10), 120)
+  - cross_med(ts_kurt(day_es_ratio_lo(Open), 10), 482)
+  - cs_bucket_zscore(cross_mean(ts_kurt(day_es_ratio_lo(Open), 10), 120), LogFloatCap)
+  - cross_zscore(cross_max(ts_kurt(day_es_ratio_lo(Open), 10), 120), 60)
+- type: N
+  hypothesis: 机制:把 r2 拆解出的「长期里最极端的一次日内尖峰」这种读法(cross_max(ts_kurt(日内形状量,10),241~482))推广到别的日内形状量与别的价格
+    / 成交量字段上,检验它是不是一个通用的慢变属性而非 day_es_ratio_lo(Open) 的特例。依据:Pr2a 的 head 拆解里 ts_kurt
+    的必要性 +3.10、cross_max 的窗口越长越好(241->482 valid +1.07)、cs_first_high20 与 inv 修饰无贡献;说明「某只票历史上出现过的最大一次形状尖峰」本身有信息。机制解释:被极端冲击(涨跌停附近、大单砸盘)光顾过的票,其流动性提供者要求持续补偿,且该属性很慢变(窗口
+    241~482 日),所以样本外仍在。本位的外层读法保持,但换内层量,每个种子都不含 day_es_ratio_lo(Open):(a) 收益的右尾 / 左尾形状
+    day_es_ratio_hi(Ret)、day_es_ratio_lo(Ret)(读收益而非价格水平);(b) 成交量加权的分散度 day_wstd(Ret,
+    Volume) 与大单方向 day_topw_mean(Ret, Volume)(共性表中富集 +0.95 / +0.47,读放量分钟里的波动与方向);(c)
+    其他价格字段 Low / Close / Vwap 的左尾形状;(d) 内层用 ts_skew、ts_std 而不是 ts_kurt,换成不同的形状矩。与库里已有的不同:库里
+    head 与 5583 条骨架里没有 day_es_ratio_* / day_wstd / day_topw_mean 的任何组合,也没有 ts_kurt(日内形状)再套
+    cross_max 的结构;批内 head 全是 nt_cs_regres 的分钟级回归极值,与这里不同。为什么样本外还会在:极端事件史是慢变的个股属性,与行情方向无关,窗口很长所以换手极低,净夏普对
+    15bp 成本不敏感。数学检查:es_ratio 在分位数近零时为 NaN 而不是爆点;day_wstd 在成交量全 0 时为 NaN;ts_kurt /
+    ts_skew 在窗口内方差近零时可能很大,但只取极值后做排名,GP 会丢掉常数面板;无 shift 类前视算子;最长窗口 482 日,热身期被 NaN 屏蔽。风险:与波动与反转控制中度相关;若
+    alpha 只来自价格路径的左尾(Open)而不是通用的极端事件史,这个位出不了 head。
+  inspired_by: 第 3 批共性表(ts_kurt(day_es_ratio_lo(Open),10) 富集 +1.77,p 0.000,32 个候选)与
+    Pr2a head 拆解(cross_max 窗口越长越好,ts_kurt 必要性 +3.10)
+  seeds:
+  - cross_max(ts_kurt(day_es_ratio_hi(Ret), 10), 241)
+  - cross_max(ts_kurt(day_es_ratio_lo(Ret), 10), 241)
+  - cross_max(ts_kurt(day_wstd(Ret, Volume), 10), 241)
+  - cross_max(ts_kurt(day_topw_mean(Ret, Volume), 10), 482)
+  - cross_max(ts_skew(day_es_ratio_hi(Ret), 20), 241)
+  - cross_max(ts_std(day_wstd(Ret, Volume), 10), 482)
+  - cross_quantile_q75(ts_kurt(day_wstd(Ret, Volume), 20), 241)
+  - cross_max(ts_kurt(day_wmean(Ret, Amt), 10), 241)
+  - cross_max(ts_kurt(day_es_ratio_hi(Close), 10), 241)
+  - cross_mean(ts_kurt(day_es_ratio_lo(Ret), 20), 120)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
