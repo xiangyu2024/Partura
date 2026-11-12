@@ -1,0 +1,120 @@
+seed: 2069
+round: 3
+slots:
+- type: E
+  core: day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low, 50), 50))
+  hypothesis: 'Core = day-mean of a 50-minute rolling correlation between the running
+    50-minute high-envelope (in_max_rolling High) and the low-envelope (in_min_rolling
+    Low). High near +1 means both envelopes drift together (a trend that carries the
+    whole range, directional day); low or negative means the range is expanding or
+    contracting (breakout / squeeze, or a rising high with a falling low = widening
+    dispersion). It is a pure intraday price-path shape statistic: no volume, no VWAP,
+    no return skew. In the batch-2 snapshot the three heads built on this envelope
+    pair all use it the same way: cross_mean / cross_stddev over 20 days or the regbeta
+    twin, no cross-sectional conditioning; all score -1.9 to -2.7, i.e. the raw level
+    is mostly size/liquidity/volatility (range width) exposure that the controls and
+    the champions absorb. The periphery here is different: (1) ranking within float-cap,
+    listing-age or turnover-dispersion (cross_mean(day_std(Amt),30)) buckets so the
+    trend-vs-squeeze share is compared among peers of similar size and activity; (2)
+    history-relative forms (z-score against 40-60 days, short minus long mean, 20-day
+    delta) that turn a persistent stock trait into a change in intraday trendiness;
+    (3) signal-to-noise (mean divided by its own 20-day stddev); (4) core minus its
+    regbeta twin, which isolates correlation from slope; (5) interactions with the
+    intraday skew leg and with turnover via ts_corr over days. Mechanism: persistent
+    intraday trendiness vs mean-reversion reflects whether order flow is informed
+    and one-sided (institutional execution produces envelope co-movement) or noise;
+    the change relative to own history and the peer-relative rank remove first-order
+    size exposures. It should persist out of sample since it is a structural property
+    of how orders are worked, not a regime feature; sign is left to the reward direction.'
+  seeds:
+  - cross_zscore(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low, 50),
+    50)), 60)
+  - sub(cross_mean(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 5), cross_mean(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 60))
+  - cs_rank(ts_corr(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), day_std(Amt), 20))
+  - sub(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low, 50), 50)),
+    day_mean(in_regbeta(in_max_rolling(High, 50), in_min_rolling(Low, 50), 50)))
+  - cs_first_low40(cross_mean(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 10), LogFloatCap)
+  - mul(cs_rank(cross_mean(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 20)), cs_rank(cross_mean(day_skew(Ret), 20)))
+  - cs_bucket_zscore(cross_zscore(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 40), ListAge)
+  - cs_rank(ts_corr(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), day_sum(Volume), 10))
+  - cs_rank(ts_delta(cross_mean(day_mean(in_corr(in_max_rolling(High, 50), in_min_rolling(Low,
+    50), 50)), 10), 20))
+- type: N
+  hypothesis: 'Overnight gap vs intraday return split. gap = Open(first minute of
+    day t) / Close(last minute of t-1) - 1 (uses cross_delay, so only past data; no
+    look-ahead); intra = Close/Open - 1 of the same day. In A-shares the overnight
+    leg is dominated by retail sentiment and news arriving while institutions cannot
+    trade, while the intraday leg reflects institutional execution and price correction;
+    stocks whose returns persistently arrive overnight (gap mean high, intraday mean
+    low) are attention/lottery-driven and tend to give it back, a documented overnight-versus-intraday
+    tug-of-war. None of the library heads or earlier rounds look at the close-to-open
+    boundary: batch heads use whole-day sums, VWAP, day_corr of price with lagged
+    volume, and envelope correlations, and rounds 1-2 used skew, turnover and centroid.
+    The operators implement it directly: day_first(Open), day_last(Close), cross_delay
+    for the previous close (the field is post-adjusted so ex-rights jumps cancel in
+    the ratio), then 5-20 day means, gap-minus-intraday difference, volatility of
+    the gap (cross_stddev: uncertainty in overnight news), and ranking within float-cap
+    / listing-age / turnover-dispersion buckets (cs_bucket_rank) to remove the size
+    exposures the controls strip out. Differences from the library: a daily close-open
+    boundary quantity rather than any volume or minute-path statistic, so it is not
+    mechanically tied to liquidity, VWAP or the champions. It should persist out of
+    sample because the overnight-intraday split follows from the structural segmentation
+    of retail and institutional trading hours (T+1, price limits) rather than a regime.'
+  inspired_by: Batch-1 heads use day_first(Open) and day_min(Low) only inside a smoothed
+    price blend and then fail (-2.3); batch-3 heads show that price-volume timing
+    statistics are fully absorbed by the controls. The one boundary the batches never
+    touch is close-to-open, so I test whether the overnight/intraday decomposition
+    carries what whole-day statistics lose.
+  seeds:
+  - cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)
+  - sub(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1),
+    20), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 20))
+  - cs_bucket_rank(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1), 20), LogFloatCap)
+  - cross_zscore(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1), 5), 60)
+  - cross_stddev(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1), 20)
+  - mul(cs_rank(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)),
+    1), 20)), cs_rank(cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 20)))
+  - cs_bucket_rank(sub(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1), 20), cross_mean(sub(div(day_last(Close), day_first(Open)), 1), 20)),
+    cross_mean(day_std(Amt), 30))
+  - sub(cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1),
+    5), cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1),
+    60))
+  - cs_rank(ts_corr(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1),
+    sub(div(day_last(Close), day_first(Open)), 1), 20))
+  - cs_bucket_rank(cross_mean(sub(sub(div(day_first(Open), cross_delay(day_last(Close),
+    1)), 1), sub(div(day_last(Close), day_first(Open)), 1)), 10), ListAge)
+  - cross_mean(abs(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), 1)),
+    20)
+R:
+- head: cross_mean(day_corr(Close, in_shift(Volume, 1)), 20)
+  why: 'The head''s 20-day window is the issue: the decomposition shows 20->40 improves
+    from -2.28 to -1.74 (+0.54), i.e. the persistent part of the price-lagged-volume
+    correlation is slower than 20 days; Volume lag also uses in_shift filling -1 in
+    the first minute, replaced by in_slice alignment.'
+  variants:
+  - cross_mean(day_corr(Close, in_shift(Volume, 1)), 40)
+  - cross_mean(day_corr(Close, in_shift(Volume, 1)), 60)
+  - cross_mean(day_corr(in_slice(Close, 1, 240), in_slice(Volume, 0, 239)), 40)
+  - cross_mean(day_corr(in_slice(Close, 1, 240), in_slice(Volume, 0, 239)), 60)
+  - cross_ema(day_corr(Close, in_shift(Volume, 1)), 40)
+  - cross_mean(day_corr(Vwap, in_shift(Volume, 1)), 40)
+- head: cross_stddev(day_corr(Close, in_shift(Volume, 1)), 20)
+  why: Swap Close->Vwap gave +0.21 (less valid-set damage, -1.70 vs -1.91); the stddev
+    leg also may need a longer window as 40 was flat on train and better on valid.
+  variants:
+  - cross_stddev(day_corr(Vwap, in_shift(Volume, 1)), 40)
+  - cross_stddev(day_corr(in_slice(Vwap, 1, 240), in_slice(Volume, 0, 239)), 20)
+  - cross_stddev(day_corr(in_slice(Vwap, 1, 240), in_slice(Volume, 0, 239)), 40)
+audit:
+  attempts: 1
+  file: audit_1.yaml

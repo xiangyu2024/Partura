@@ -1,0 +1,32 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 4, 7]
+    reasons: |
+      核心 day_mean(in_corr(in_max_rolling(High,50), in_min_rolling(Low,50),50)) 是 head `cross_mean(day_mean(in_corr(...)),20)` 的子树,符合 E 位核心规则;相关度表里核心与 head 原始 |ρ| 0.30、对 5 个控制 |ρ| 最大 0.061(< 0.8),过核心门槛。in_max_rolling / in_min_rolling / in_corr 都是 trailing 窗口(rolling_reduce 的 _last 约定,dt_in.py),没有前视。本流前两轮的核心分别是 VWAP 相关与 cross_mean(day_skew(Ret),20),没有重复占用这个核心。
+      划掉:seed 1 cs_bucket_rank(cross_mean(core,20), LogFloatCap) 与 head 原始 |ρ| 0.98(残差 0.99);seed 4 同一写法按 cross_mean(day_std(Amt),30) 分桶,与 head 0.98;seed 7 div(cross_mean(core,20), cross_stddev(core,20)) 与 head 0.94。三者都是 head 的换写法(分桶或除以自身波动),超过 0.7 自动线。
+      创新度 3:剩下 9 个外围确实换了量(seed 2 相对自身 60 日的 z 分数 |ρ| 0.11;seed 3 短减长 0.26;seed 5 ts_corr 对日成交额波动 0.13;seed 10 分桶 z 0.08;seed 11 对日成交量 0.09;seed 12 ts_delta 0.35 但残差只有 0.13),但核心本身就是 head 的同一统计量,外围都是它的时间或截面包装,没有引入新的信息源,所以给 3,不给 4。
+      合理度 4:日内包络同向移动的日均值是「单向流 vs 挤压」的路径形状量,机制清楚。seed 6 是 corr 减 regbeta,两者量纲不同(beta 大致等于相关乘以两包络的相对波动),所以「隔离相关、去掉斜率」的说法不成立,但它不是 §4 列出的数学问题,放行;PI 应注意它的残差 |ρ| 0.37 是不是只是波动比的暴露。seed 8 cs_first_low40(cross_mean(core,10), LogFloatCap) 是小盘优先的字典序,在 40% 边界有阶跃,对 LogFloatCap 的 |ρ| 0.69,残差 0.72,放行,PI 注意阶跃带。
+      如果它有 alpha,最可能来自:日内包络同向(趋势日)与挤压之间的差别,在同尺寸、同换手分散度的同伴内做相对比较,以及它相对自身 40–60 天历史的偏离。
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2]
+    reasons: |
+      gap = day_first(Open) / cross_delay(day_last(Close),1) - 1 用的是前一交易日的最后收盘;cross_delay 沿日轴向后取值(dt_cross.py:150),没有前视。intra 只用同日数据。新叶子 day_first(Open)、day_last(Close) 不在 9 个 head 的子树里;相关度表里原始 |ρ| 最大 0.33(seed 2 对 head mul(pairwise_max(...)))、残差最大 0.22,没有 head 的换写法,新颖度给 4。
+      划掉:seed 2 cross_mean(intra,20) 对 rev 控制 |ρ| 0.85,≥0.8 自动线,它实质就是 20 日反转控制。
+      放行的种子:seed 1 gap 均值 20(对 liq / known 0.25);seed 4 同一均值按 LogFloatCap 分桶(size 0.00);seed 5 gap 5 日均值的 z 分数(0.05);seed 3 gap 均值减日内均值(rev 0.59,未到线;注意代数上它等于 20 日总收益的一部分,所以反转成分要 PI 盯住);seed 7 两个秩的乘积(rev 0.77,接近线);seed 12 abs gap 均值(vol 0.61,与隔夜波动同类,未到线);seed 6 gap 标准差(vol 0.58,与 head 0.51);seed 9 gap 短减长;seed 10 gap 与日内的 ts_corr(20,|ρ| 0.08)。seed 8 与 seed 3 同为 gap 减日内,但多了 known 分桶,截面次序有实质改变,不算重复;seed 11 窗口 10 且 ListAge 分桶,也不算重复,PI 应知道 3 / 8 / 11 三个种子是同一个统计量的变体。
+      数学核对:后复权使除权跳在比值里抵消,这是 PI 的前提,成立;停牌日的 cross_delay 取值依赖停牌掩码,PI 应确认前一日无效时不是被当成 0 或填充值进入比值。
+      如果它有 alpha,最可能来自:收盘后消息与散户情绪驱动的隔夜跳空,在 20 日里相对日内执行回吐的那部分,即隔夜与日内收益的分段,而不是纯反转。
+R:
+  - head: 'cross_mean(day_corr(Close, in_shift(Volume, 1)), 20)'
+    soundness: 4
+    reasons: |
+      变体 1–6 的窗口(40、60)、in_slice 对齐版、ema 与 Vwap 替换都是数学上合法的换部件。in_shift 的 -1 填充在 in_slice 对齐版上几乎不变(R1 variant 1 残差 0.907,variant 3 为 0.906;60 窗口 0.801 对 0.801),说明 -1 填充不主导排序,没有 §4 的数值伪影。没有前视。机制是日内价与滞后量的同步程度,长窗口对应慢变部分,说得通,但只到「价量共动」这一步,不是很强的机制,所以给 4 不给 5。
+  - head: 'cross_stddev(day_corr(Close, in_shift(Volume, 1)), 20)'
+    soundness: 3
+    reasons: |
+      Vwap 替换与 in_slice 对齐在长度上都正确(in_slice(Vwap,1,240) 与 in_slice(Volume,0,239) 都是 240 列)。但 R2 的变体 1、2、3 对流动性与已知族控制的 |ρ| 在 0.51–0.59 之间,变体是流动性的换写法的可能性不小,不是挡的理由。机制(日内价量关系的不稳定性)清楚但弱,所以给 3。
+summary: 'slot a 通过(E 核心,创新 3、合理 4,划掉 1、4、7,剩 9 个);slot b 通过(N,创新 4、合理 4,划掉 2,剩 11 个);两个 R 组放行,合理度 4 与 3。'
