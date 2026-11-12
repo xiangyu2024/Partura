@@ -1,0 +1,115 @@
+seed: 2071
+round: 3
+slots:
+- type: E
+  core: cross_max(abs_(day_corr(Volume, Ret)), 241)
+  hypothesis: 'Round 1-2 produced the only stable positive lead of this seed: cross_max(abs_(day_corr(Volume,
+    Ret)), 241) (train +0.42, valid +0.46, just under the 0.5 bar), and every window/tail/ratio
+    periphery tried in round 2 (cross_max of smoothed coupling, ts_mean of the max,
+    argmax, peak/mean, q75) stayed at +0.41~+0.42, i.e. a plateau. The core is the
+    strongest-peak minute price-volume coupling of the past year, a slow stock trait
+    (theme / attention names where volume and price move in lockstep). What the plateau
+    suggests is that the remaining gap is not in the time-series aggregation but in
+    what else the trait is confounded with. This round therefore changes only the
+    CROSS-SECTIONAL periphery, none of which was used before: comparing the trait
+    within peer groups (cs_bucket_demean / cs_bucket_rank by LogFloatCap size bucket,
+    LimitWidth board band, BoardCode, ListAge, so that STAR/ChiNext and young listings
+    do not just carry the board-level coupling level), removing the part explained
+    by turnover level (cs_regres on trailing Amt or day_std(Ret)), scaling by own
+    volatility (coupling per unit of vol), winsorizing / robust-z of the heavy-tailed
+    max, and a decayed time-series smoothing of the already-peak statistic. Mechanism:
+    a high coupling peak relative to size-/board-/liquidity-peers marks idiosyncratic
+    retail attention that the market overpays or underprices in a persistent way;
+    peer-relative construction removes the board / size composition that the controls
+    only strip linearly. Out of sample it should persist because attention concentration
+    in A-share small/mid caps is a structural feature (retail dominance, price-limit
+    regimes), not tied to one sample period. Differs from seen candidates: they only
+    re-wrapped the core in ts/cross aggregations or compared against Amt/Vwap correlations,
+    never grouped or residualized it cross-sectionally.'
+  seeds:
+  - cs_bucket_demean(cross_max(abs_(day_corr(Volume, Ret)), 241), LogFloatCap)
+  - cs_bucket_demean(cross_max(abs_(day_corr(Volume, Ret)), 241), LimitWidth)
+  - cs_bucket_demean(cross_max(abs_(day_corr(Volume, Ret)), 241), BoardCode)
+  - cs_bucket_demean(cross_max(abs_(day_corr(Volume, Ret)), 241), ListAge)
+  - cs_bucket_rank(cross_max(abs_(day_corr(Volume, Ret)), 241), LogFloatCap)
+  - cs_bucket_rank(cross_max(abs_(day_corr(Volume, Ret)), 241), ListAge)
+  - cs_regres(cross_max(abs_(day_corr(Volume, Ret)), 241), cross_mean(day_sum(Amt),
+    60))
+  - cs_regres(cross_max(abs_(day_corr(Volume, Ret)), 241), cross_mean(day_std(Ret),
+    60))
+  - div(cross_max(abs_(day_corr(Volume, Ret)), 241), cross_mean(day_std(Ret), 60))
+  - cross_ema(cross_max(abs_(day_corr(Volume, Ret)), 241), 20)
+- type: N
+  hypothesis: 'Lead-lag price-volume coupling at the minute level. The batch''s only
+    positive lead uses the contemporaneous within-day minute correlation of Volume
+    and Ret; it cannot say who leads. New idea: correlate return with volume shifted
+    by k minutes in BOTH directions, using in_slice with equal-length windows so no
+    filler values and no look-ahead across days: day_corr(in_slice(Ret,2,240), in_slice(Volume,1,239))
+    = return in minute t against volume in minute t-1 (volume leads price: informed
+    / order-splitting flow that moves the next minute''s price), versus day_corr(in_slice(Ret,1,239),
+    in_slice(Volume,2,240)) = volume reacting to the previous return (volume follows
+    price: momentum-chasing / retail reaction). Their difference per day is a lead-minus-lag
+    asymmetry; the trailing 241-day peak of the lead leg (as the known core does for
+    the contemporaneous leg) is a persistent trait: which stocks have bursts where
+    order flow predicts the next minute. Also 5-minute shifted versions (in_slice(Ret,6,240)
+    vs in_slice(Volume,1,235)), the day_corr with Amt, and ts_mean / cross_mean smoothing
+    of the signed asymmetry. Why different from the library: no library expression
+    uses shifted-minute slices of Ret against Volume (library has only contemporaneous
+    day_corr), and the signed lead-minus-lag asymmetry is a direction-of-causality
+    measure that the contemporaneous coupling, volatility and liquidity controls do
+    not contain. Why it should persist: the lead of volume over price reflects informed-flow
+    and market-microstructure latency (Kyle-style price impact arriving in next minutes),
+    while volume-follows-price reflects retail chasing; these are structural features
+    of A-share intraday trading rather than sample-specific. Note day_corr returns
+    0 (not missing) when a side is constant (limit-up, zero volume), so such stocks
+    cluster at 0 in the cross-section; peak statistics over 241 days limit this.'
+  inspired_by: 'Batch 1-3 commons table: abs_(day_corr(Volume, Ret)) appears in 58
+    candidates with the best mean difference (+0.60 for the leaf, +2.05 with cross_max
+    over 241), i.e. the price-volume coupling is the one enriched content; the lead-lag
+    version is the untried generalization.'
+  seeds:
+  - cross_max(abs_(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239))), 241)
+  - cross_max(abs_(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 2, 240))), 241)
+  - cross_max(abs_(day_corr(in_slice(Ret, 6, 240), in_slice(Volume, 1, 235))), 241)
+  - ts_mean(sub(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), day_corr(in_slice(Ret,
+    1, 239), in_slice(Volume, 2, 240))), 60)
+  - cross_mean(sub(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), day_corr(in_slice(Ret,
+    1, 239), in_slice(Volume, 2, 240))), 120)
+  - ts_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 120)
+  - cross_max(sub(abs_(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239))),
+    abs_(day_corr(in_slice(Ret, 1, 239), in_slice(Volume, 2, 240)))), 241)
+  - cross_max(abs_(day_corr(in_slice(Ret, 2, 240), in_slice(Amt, 1, 239))), 120)
+  - cross_tail_mean_q75(abs_(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239))),
+    120)
+  - ts_std(sub(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), day_corr(in_slice(Ret,
+    1, 239), in_slice(Volume, 2, 240))), 60)
+  - sub(cross_max(abs_(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239))),
+    241), cross_max(abs_(day_corr(Volume, Ret)), 241))
+R:
+- head: ts_regbeta(cs_regres(mul(-5, day_close(Volume)), day_kurt(Volume)), day_close(cross_argmax(Vwap,
+    60)), 10)
+  why: loc window test shows ts_regbeta window 10 -> 20 lifts score from -2.09 to
+    -1.38 (both train and valid better) and 10 -> 5 is much worse, so the short window
+    is the rotten part; the mul(-5, .) constant is a no-op (knockout -0.00).
+  variants:
+  - ts_regbeta(cs_regres(day_close(Volume), day_kurt(Volume)), day_close(cross_argmax(Vwap,
+    60)), 20)
+  - ts_regbeta(cs_regres(mul(-5, day_close(Volume)), day_kurt(Volume)), day_close(cross_argmax(Vwap,
+    60)), 40)
+  - ts_regbeta(cs_regres(mul(-5, day_close(Volume)), day_kurt(Volume)), day_close(cross_argmax(Vwap,
+    60)), 30)
+  - ts_regbeta(cs_regres(mul(-5, day_close(Volume)), day_kurt(Volume)), day_close(cross_argmax(Close,
+    60)), 20)
+- head: ts_autocorr_s1(add(ts_std(signedpower(day_var(Close)), 5), day_quantile_q25(cross_argmax(Vwap,
+    30))), 20)
+  why: swapping Vwap->Close in the argmax leg gave +0.36 in loc; the ts_std(signedpower(day_var))
+    leg alone is better than the sum on valid, and window 40 is better than 20.
+  variants:
+  - ts_autocorr_s1(add(ts_std(signedpower(day_var(Close)), 5), day_quantile_q25(cross_argmax(Close,
+    30))), 40)
+  - ts_autocorr_s1(add(ts_std(signedpower(day_var(Close)), 10), day_quantile_q25(cross_argmax(Close,
+    30))), 20)
+  - ts_autocorr_s1(ts_std(signedpower(day_var(Close)), 5), 40)
+audit:
+  attempts: 1
+  file: audit_1.yaml
