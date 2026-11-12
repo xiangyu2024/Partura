@@ -1,0 +1,72 @@
+seed: 2072
+round: 3
+slots:
+- type: E
+  core: cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60)
+  hypothesis: '机制:核心 C = cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60) 是 60 日内"当天分钟均价不动的占比"与"当天收益"的时间序列相关。
+    day_flat_ratio(Vwap) 高 = 当天相邻有成交分钟的均价完全相等、成交稀疏或报价被价位卡住(交易稀疏 / 价格黏性的日度读数);C 读的是
+    "交易稀疏的日子里价格是涨还是跌":正 = 这只票往往在稀疏日上涨(信息在稀疏成交里慢慢被消化,Hou-Moskowitz 2005 的价格延迟、Lo-MacKinlay
+    1990 的非同步交易),负 = 稀疏日里被压下。它是相关(无量纲、有界),不含任何水平,所以与流动性 / 市值 / 波动这些水平控制天然不共线。依据在本批:231
+    个已评分候选里含 C 的 5 个均值 -1.29 对 -2.07(+0.78,p 0.044);上一轮 Pr2b 里围绕 C 长出的 cross_corr(day_flat_ratio(Vwap),
+    cs_regres(C, day_distinct_ratio(Low)), 60) 样本外(valid)为 +0.71、嵌套一层 C 的 valid +0.75,而
+    train 段为 -0.20 / -0.60, 即 C 在近两年有结构性信息,拖后腿的是外围处理(嵌套第二个 C 只是自我复合)。 这次要试的外围与前轮(只见过「嵌套
+    C」与「cs_regres 去 distinct」)很不一样:(a) 时间轴上的变化而非水平:cross_zscore(C,120)、 cross_ema(C,20)、ts_mean(C,20)、cross_tail_mean_q25(C,60)
+    取最差的 25% 日子;(b) 截面上换参照:cs_bucket_zscore(C, LimitWidth) 在同涨跌停板块内比、cs_bucket_zscore(C,
+    LogFloatCap) 在同市值十分位内比、cs_bucket_demean(·, ListAge) 去掉上市年限效应;(c) 与自身的差: C 减去把收益换成成交额变化的对应相关,区分"稀疏日价格变动"与"稀疏日量的变动";(d)
+    对日内波动 cross_mean(day_std(Ret),60) 做 cs_regres 残差,去掉波动对 稀疏度的共同驱动;(e) 乘 20 日趋势符号:稀疏日跟随趋势
+    = 信息扩散未完成。为什么与已有的不同:外围里没有嵌套 C 也没有 distinct_ratio 回归; 不含 Hurst 或价位水平。为什么样本外还会在:稀疏成交的价格延迟是市场微观结构的慢变属性(小盘
+    / 低关注度票),60 日以上的相关估计与再聚合换手低,15 bp 吃得下;若被已知成交额族吃掉就不会出 head。数学检查:day_flat_ratio
+    取值 [0,1]、day_sum(Ret) 有界;cross_corr 窗口 60 天内若某一方常数(如停牌)返回 0 或缺失, 已被可交易掩码排除,不是结果的主要来源;无前视,只用
+    t 日收盘及以前,t+1 交易;不用 in_shift。'
+  seeds:
+  - cross_zscore(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), 120)
+  - cross_ema(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), 20)
+  - ts_mean(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), 20)
+  - cross_tail_mean_q25(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), 60)
+  - cs_bucket_zscore(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), LimitWidth)
+  - cs_bucket_zscore(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), LogFloatCap)
+  - cs_bucket_demean(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), ListAge)
+  - sub(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), cross_corr(day_flat_ratio(Vwap),
+    day_sum(Amt), 60))
+  - cs_regres(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), cross_mean(day_std(Ret),
+    60))
+  - mul(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), sign(cross_mean(day_sum(Ret),
+    20)))
+  - cross_mean(cs_bucket_zscore(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60),
+    LimitWidth), 20)
+  - sub(cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60), cross_mean(cross_corr(day_flat_ratio(Vwap),
+    day_sum(Ret), 60), 120))
+- type: N
+  hypothesis: 机制:价格对"自己上一日信息"的反应延迟(Lo-MacKinlay 1990 的收益自相关与交叉自相关;Hou-Moskowitz 2005
+    的价格延迟:反应慢的票,当日收益能被前几日信息预测)。 对每只票用最近 60 到 120 个交易日的日度收益,度量"当日收益与前一日(或前二日)收益 / 前一日成交额变化"的相关或回归斜率:相关为正
+    = 信息进入价格是渐进的(动量式延迟), 为负 = 过度反应后回吐(Roll 1984 买卖价差反弹、流动性冲击回吐)。这是一个无量纲、有界的"价格动力学"读数,不是收益水平也不是波动水平,所以对已去掉的
+    5 个控制(流动性、波动、20 日反转、成交额族、市值)线性 / 非线性暴露后还能剩下东西的机会比水平类大;与 C 类(分钟均价不动占比)的区别:这里读的是日轴上
+    收益自身的时序结构,不依赖分钟离散。算子怎样实现:cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1),
+    60) 是一阶自相关; cross_regbeta(day_sum(Ret), cross_delay(day_sum(Ret), 1), 120) 是更长窗口的自回归斜率;cross_corr(day_sum(Ret),
+    cross_delay(day_sum(Amt), 1), 60) 是"前日成交额→今日收益"的领先滞后(量价延迟);cross_corr(day_open(Ret),
+    day_sum(Ret), 60) 是开盘一分钟走势对全天的延续性;再配合 LimitWidth / LogFloatCap 桶内标准化、 cross_zscore
+    与自身历史对照。为什么与已有的不同:本批 9 个 head 全是 Vwap/High 的截面协方差、Hurst、分位数与对数水平的组合,没有一个读"日度收益与自身滞后的时序结构";
+    收益的滞后相关与 Hurst(量 R/S 的序列持续性)也不是同一个量。风险:一阶自相关与 20 日反转控制可能中度相关(反转的短窗口版),桶内标准化与二阶滞后(cross_delay
+    2)是为了拆开。 为什么样本外还会在:价格延迟来自信息扩散与做市库存的慢变结构,不依赖某段行情;60 到 120 日估计窗口使名次变化慢,15 bp 成本吃得下。
+    数学检查:相关与斜率有界或在窗口内若分母方差近零(停牌 / 一字板)会返回 0 或缺失,这类票已被可交易掩码排除,不是结果的主要来源;cross_delay
+    取的是过去值,无前视;不用 in_shift。
+  inspired_by: 本批 head 全部是水平 / 分位 / 序列持续性(Hurst)的变体,且上一轮 Pr2b 里读"价格行为 × 收益"的相关结构(cross_corr(flat_ratio,
+    day_sum(Ret)))样本外为正; 这提示"收益与某个滞后量的时序相关"是未见过的一块。
+  seeds:
+  - cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1), 60)
+  - cross_regbeta(day_sum(Ret), cross_delay(day_sum(Ret), 1), 120)
+  - cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 2), 60)
+  - cross_corr(day_sum(Ret), cross_delay(day_sum(Amt), 1), 60)
+  - cs_bucket_zscore(cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1), 60), LimitWidth)
+  - cs_bucket_zscore(cross_regbeta(day_sum(Ret), cross_delay(day_sum(Ret), 1), 120),
+    LogFloatCap)
+  - cross_zscore(cross_corr(day_sum(Ret), cross_delay(day_sum(Amt), 1), 60), 120)
+  - sub(cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1), 60), cross_corr(day_sum(Ret),
+    cross_delay(day_sum(Ret), 1), 250))
+  - cross_corr(day_sum(Ret), cross_delay(day_flat_ratio(Close), 1), 60)
+  - cs_regres(cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1), 60), cross_mean(day_std(Ret),
+    60))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

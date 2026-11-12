@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 4:核心 C = cross_corr(day_flat_ratio(Vwap), day_sum(Ret), 60) 在 corr_1 中与快照 9 个 head 的原始 |ρ| 最大 0.26(最像 ts_mean(mul(log(add(log(add(day_last(Volume), day_std(Vwap))), day_std(Vwap))), ts_hurst(day_last(Volume), 20)), 50)),残差最大 0.14;与 5 个控制最大 0.20(known),控制换写法的嫌疑低。快照里的 head 全是 Hurst、Volume/Vwap 协方差、分位与水平的组合,没有一个读 Ret 与价格黏性的日度时序相关。外围 12 个种子与 head 的最大 |ρ| 为 0.39(种子 8),与 5 个控制的最大 |ρ| 为 0.59(种子 8 对 liq)、0.58(种子 8 对 known),其余都在 0.5 以下。种子 8 是 C 减去 C_amt,最像控制,但未到 0.8 的自动划门槛,保留。种子 1、2、3、12 是对同一条日序列 C 的平滑或标准化(cross_zscore 120、cross_ema 20、ts_mean 20、减 120 日均值),彼此高度相关,这是写法选择,相关表不含种子间相关,无法直接核对,不划。如果它有 alpha,最可能来自一字板与涨跌停锁定日的方向(见下条),其次才是稀疏成交的价格黏性。合理度 4:没有数学问题。无前视:只用 cross_delay 与当天收盘及以前的量,没有 cross_shift、ts_shift、in_local_mean、in_shift;没有 nt_* 与 ts_spearman。cross_corr 在窗口内某一方常数时返回 0(rolling_pair_reduce 的 cov/(sqrt(varx*vary)+EPS)),计划说「被可交易掩码排除」这一条我无法核对,但没有迹象表明它主导结果。cs_bucket_zscore 与 cs_bucket_demean 按当日十分位分桶(ops_ext.py 的 _buckets / _pct_rank),对 LogFloatCap、ListAge 是正确的分桶。LimitWidth 只有三个取值,并列按列序打破(规则允许),所以「同涨跌停板块内比」的桶实际是按列序切的近似板块,只需在说明里写清,不算问题。机制需要修正:day_flat_ratio(Vwap) 在一字板或全天锁定的日子接近 1,而这些日子的 day_sum(Ret) 恰是涨停或跌停幅度,所以 C 很大程度上在读「涨跌停锁定日的方向与频率」,不只是稀疏成交的价格延迟。计划的机制里没有区分这两者,外围应当能拆开它们。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5, 12]
+    reasons: '创新度 4:N 位保留的 10 个种子与快照 9 个 head 的原始 |ρ| 都在 0.11 以下(种子 4 的 0.11 为最大,种子 2 为 0.10),残差都在 0.09 以下;与 5 个控制的 |ρ| 最大 0.08(种子 4 对 vol),rev 控制普遍在 0.02 以下。快照的 head 全是水平、分位、Hurst、Vwap 协方差,没有一个读日度收益与自身滞后的时序结构,这一块是新的。合理度 4:种子 5 与种子 12 是定义坏掉:cross_corr(day_open(Ret), day_sum(Ret), 60) 的 gate 为 false、distinct 为 0、整列 nan,day_open 即 day_first(取第一个非缺失值),这一列对全部票系统性算不出,种子 12 的 cross_ema 与它同源,两个都划掉。其余 10 个种子无前视(cross_delay 取过去值),没有 in_shift 与 nt_*。cross_regbeta(x, y, d) 按 rolling_ols 是 y ~ alpha + beta*x 的 beta,所以种子 2 的 cross_regbeta(Ret_t, Ret_{t-1}) 实际是 cov/var(Ret_t),不是通常 AR(1) 的 cov/var(Ret_{t-1});两者同号,量级接近 ρ,不是数学问题,只需在说明里改称。种子 9 的 250 日窗口在 2018 起点后有约一年热身,但 train 长达五年多,热身不主导。种子 8 是种子 4 的时序 cross_zscore,排序不同,不算重复。如果它有 alpha,最可能来自价格延迟与过度反应后的回吐(Lo-MacKinlay 的收益自相关、Hou-Moskowitz 的延迟)。种子 10 的 cross_corr(Ret_t, 前一日 flat_ratio(Close)) 与 a 位的一字板次日效应有重叠,需要在说明里分开。'
+R: []
+summary: 'a 位 E(核心 C)创新 4、合理 4、不划种子,通过;C 的机制需修正,它多由一字板与涨跌停锁定日的方向驱动,不只是稀疏成交延迟。b 位 N 创新 4、合理 4,划掉种子 5 与 12(day_open(Ret) 系统性 nan),剩 10 个,通过;无 R 组。无前视、无 nt_*、无 ts_spearman,未发现数学问题。'
