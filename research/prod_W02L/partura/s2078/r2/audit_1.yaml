@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 2, 3, 4, 10, 12]
+    reasons: '相关度表:核心 day_flat_run_max(Volume) 与 pow_05(cs_normalize(day_mean(Volume))) 的原始 |ρ| 0.66、残差 0.72;与 liq 控制 0.56、known 0.56,都低于 E 位的 0.8 门槛;与其余 head 不超过 0.39。核心是停摆分钟的最长连续段占比(run / 有限分钟数),库里只以 cs_last_low05(day_flat_run_max(Volume), LogTotalCap) 的形式出现过(loc 富集表),没有 head 直接含它的原值。新颖度给 3 而不是 4:残差层面它与流动性 head 的残差仍有 0.72 的重合,说明扣掉 5 个控制后剩下的停摆信号与库里的薄量维度交集较大;外围的 cs_last_low05 屏蔽、均值、惊喜(相对自身 60 日)、与收益交互则是新组合。合理度 4:机制清楚(稀薄或停摆的票结构性存在,注意力缺失后价格回补),算子逐个核对无误:day_flat_run_max 是连续相等段长 / 有限分钟数(ops_ext.py:415-432);cs_last_low05 是按整段并列块压底的截面屏蔽(_lexi,ops_ext.py:339-353);cross_mean / ts_max / sub / div / mul 都是常规写法。提醒一点:种子 9 的 ts_regbeta(day_mean(Ret), day_flat_run_max(Volume), 60) 按 rolling_ols(x,y) 是 y ~ alpha + beta*x(common.py:643),即停摆长度对收益的斜率,与计划书写的「收益对停摆长度的斜率」方向相反,这一条的机制描述要按实际算子改读,但机制本身仍说得通,不构成挡的理由。核心只有约 21 个取值(distinct 0.004),截面排序大多由并列块与列序决定,§4 明确列序打破并列不算问题,故不挡;它的 alpha 若存在,最可能来自 run 长度的粗分档(少数长停摆票)与板块列序的交互。划掉的种子:1 与 head 的 |ρ| 0.81 >= 0.7,按规则自动划掉;2、3、4、10、12 的 distinct 为 0.008、0.166、0.226、0.433、0.193,表的废品门槛判为面板过于 tie 结构(§4 面板几乎是常数一类),按同一理由划掉。剩 6 个种子(5、6、7、8、9、11),>= 4,通过。如果它有 alpha,最可能来自停摆长度的 60 日惊喜与近期收益的交互,而非停摆水平本身。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [4, 5, 7, 8]
+    reasons: '相关度表:b1 与 rev 0.52、b2 与 vol 0.42、b3 与 rev 0.46、b6 与 rev 0.53、b9 与 head 0.24 / 控制最大 0.06、b10 与 vol 0.72,都低于 0.8 门槛。b7 cross_mean(div(day_last(Close), day_first(Close)), 20) 与 rev 控制 |ρ| 0.85 >= 0.8,按规则自动划掉(它本质是开盘到收盘的日内收益,是 20 日反转控制的换写法)。b4 cross_mean(day_at_max_ratio(Close), 20)、b5 的 at_max 与 at_min 之差、b8 的 ts_max(收盘位置比)按表的废品门槛划掉(distinct 0.151、0.26、0.417,即日内价格取值的 tie 结构过重,截面排序主要由并列块与列序决定),按 §4 面板几乎是常数一类处理。新颖度 4:库里 head 用的是成交量水平、Amt-Vwap 协方差、收益最大值或 High 的分布,没有价格路径形状;剩下的 b1、b2、b3、b6、b9、b10 与 head 的最大 |ρ| 都在 0.31 以下,是新的度量。合理度 4:收盘相对日均价、收盘位置、贴近日高与日低的比例,在 A 股都有可解释的机制(尾盘集合竞价中知情资金慢慢吃货,日内冲高被散户回吐);算子核对无误,div、day_last、day_first、day_mean、day_min、day_max 都是同一天的价格比值,抵消了后复权价位水平。提醒:b6 的 (last - min) / (max - min) 在一字板日分母为 0,div 不加 EPS(common.py:175-180),该日为 NaN,被 cross_mean 跳过,涨跌停锁死的票会丢掉这些日子的值,信号覆盖偏向非锁死日;这是覆盖问题而非爆点,不挡,但请 PI 注意。如果它有 alpha,最可能来自收盘强弱的 20 日慢平均(知情资金在尾盘的慢累积),而不是价格水平本身。'
+R: []
+summary: '两位都通过。a 位(E,核心 day_flat_run_max(Volume))划掉 6 个种子、剩 6 个,新颖 3 / 合理 4;b 位(N,价格路径形状)划掉 4 个种子(含 rev 0.85 的一个)、剩 6 个,新颖 4 / 合理 4。missions.yaml 无 R 组,R 为空。'

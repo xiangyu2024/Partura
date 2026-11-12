@@ -1,0 +1,78 @@
+seed: 2078
+round: 2
+slots:
+- type: E
+  core: day_flat_run_max(Volume)
+  hypothesis: 'Core = the longest run of consecutive minutes with identical volume,
+    as a share of the day (a scale-free "the tape stopped" statistic: zero-volume
+    streaks in thin, neglected, or locked names). In batch 1 it is the strongest enriched
+    leaf (mean score gap +1.80, p<0.001, 8 candidates) and the only enriched subtree
+    that is not a return-MAX rewrite; round 1 spent its E slot on the ts_max(return)
+    core and its N slot only touched the core inside cs_last_low05 (train +0.35, valid
+    -0.24). No round has yet put the raw core under temporal operators. The reward
+    removes the liquidity, volatility and size controls, so only the part of stale-tape
+    that is NOT a level of liquidity can score. Peripheries tried here are all different
+    mechanisms: (a) slow averaging (cross_mean 20) = persistent inattention as a stock
+    trait; (b) surprise versus own 60-day history (sub / div with cross_mean) = an
+    unusual freeze today, which is an event rather than a trait and is nearly orthogonal
+    to cross-sectional liquidity; (c) ts_max over 20-30 days = worst recent freeze
+    (MAX-style, mirrors the return-MAX that scored best in this batch); (d) lexicographic
+    size screens cs_last_low05/10 with LogFloatCap instead of LogTotalCap, and screens
+    applied after smoothing, which is a different segment cut than the cs_last_low05(...,LogTotalCap)
+    already seen; (e) interaction with recent return (mul with cross_mean(day_mean(Ret),5))
+    and a rolling beta of returns on freeze length: do recent winners that traded
+    in a thin tape reverse (price moves on no volume are not confirmed). Mechanism
+    for persistence out of sample: thin / frozen trading is structural in A-shares
+    (small caps, ST-like names, suspended-resumed names) and attention-starved prices
+    mean-revert once volume returns; the pure-long book picks the opposite side (stocks
+    with a fully continuous tape). Differs from the library: no library head or candidate
+    puts the core under cross_mean / ts_max / surprise operators or conditions it
+    on return; cs_last_low05(day_flat_run_max(Volume), LogTotalCap) is the only seen
+    wrapper.'
+  seeds:
+  - cs_last_low05(cross_mean(day_flat_run_max(Volume), 10), LogTotalCap)
+  - cs_last_low10(day_flat_run_max(Volume), LogFloatCap)
+  - cs_last_low05(ts_max(day_flat_run_max(Volume), 20), LogFloatCap)
+  - mul(day_flat_run_max(Volume), cross_mean(day_mean(Ret), 5))
+  - ts_regbeta(day_mean(Ret), day_flat_run_max(Volume), 60)
+  - cross_mean(cs_last_low05(day_flat_run_max(Volume), LogTotalCap), 10)
+- type: N
+  hypothesis: 'Persistent closing strength and price-path shape of the intraday tape,
+    built from price fields only (no volume level, so not the liquidity control and
+    not the volume-shape family tried in round 1). Per day: close relative to the
+    day mean price (div(day_last(Close), day_mean(Close))), close location in the
+    day range ((last - min)/(max - min)), and the share of minutes pinned at the day
+    high versus the day low (day_at_max_ratio / day_at_min_ratio of Close). All are
+    ratios of prices on the same day, so the back-adjusted price level cancels. Averaged
+    over 20 days with cross_mean they measure a stock trait: does the stock habitually
+    close strong (late-day accumulation by patient institutional buyers, which is
+    gradually incorporated) or habitually fade into the close (retail chasing the
+    open then selling off). Differences between the 20-day and 60-day averages measure
+    a change in that behaviour. Mechanism: end-of-day aggressive buying is information-driven
+    in A-shares because the closing call auction lets informed participants trade
+    at the reference price, while intraday spikes pinned at the high are retail /
+    limit-board attention that reverses. It is orthogonal to the 20-day reversal control
+    (a return) because it is the shape of the path, not its end-to-end change, and
+    to volatility because every term is a ratio. None of the six batch heads reads
+    a price path shape: they use High mean, volume skew and covariance. Inspired by
+    the enriched day_quantile_q75(Close) (+1.28, p 0.005) and day_last(Close) subtrees,
+    which say the intraday Close distribution carries something, while the heads that
+    contain them mostly wrap raw levels.'
+  inspired_by: 'Batch 1 and 2 enrichment: day_quantile_q75(Close) (+1.28, p 0.005,
+    7 candidates) and the observation that High-based heads (ts_regbeta of day_quantile(High))
+    have train +0.34 at window 60, i.e. the intraday price distribution has structure
+    that is not yet written as a scale-free shape ratio.'
+  seeds:
+  - cross_mean(div(day_last(Close), day_mean(Close)), 20)
+  - cross_mean(div(day_last(Close), day_quantile_q75(Close)), 20)
+  - sub(cross_mean(div(day_last(Close), day_mean(Close)), 20), cross_mean(div(day_last(Close),
+    day_mean(Close)), 60))
+  - cross_mean(div(sub(day_last(Close), day_min(Close)), sub(day_max(Close), day_min(Close))),
+    20)
+  - ts_regbeta(div(day_last(Close), day_mean(Close)), div(day_mean(High), day_mean(Close)),
+    60)
+  - cross_mean(div(sub(day_max(Close), day_last(Close)), day_mean(Close)), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
