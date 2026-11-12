@@ -1,0 +1,34 @@
+seed: 2077
+round: 2
+slots:
+  - type: E
+    core: 'day_sum(Ret)'
+    hypothesis: 'Core = day_sum(Ret), the day total of minute returns (the daily return). The locate table says it is the most enriched subtree in the batch (11 candidates, mean score -1.59 vs -2.99 without it, p 0.001), and the one nest that got a positive score last round was cross_corr(Amihud, day_sum(Ret)) i.e. the daily return entered through a rolling correlation, not as a level. A daily-return LEVEL is just short-term reversal and is stripped by the controls; the bet is on the rolling co-movement structure of the daily return with other daily microstructure states (Llorente-Michaely-Saar-Wang 2002: return-volume correlation separates information-driven trades (continuation) from liquidity/hedging trades (reversal)). Periphery is a 20-40 day cross_corr / cross_regres / cross_reg_tvalue / cross_cov of day_sum(Ret) against a DIFFERENT partner each time: volume level (day_sum(Volume)), volume dispersion (day_std(Amt), day_gini(sqrt(Volume))), flat-minute share (day_zero_ratio(Low)), intraday return-volume correlation, own lag, own intraday volatility (leverage effect), opening-window return. Last round used only the Amihud median as partner, so this is a different set of partners and, in the regression forms, a residual/t-stat rather than a correlation. Why it should persist: stocks whose daily returns have been backed by volume (informed flow) keep drifting while those whose returns came on thin or erratic volume revert; this is a slow-moving, behavioural/microstructure state that the linear/U/S exposure to liquidity, size, volatility, 20d reversal and the champions does not capture.'
+    seeds:
+      - 'cross_corr(day_sum(Ret), day_sum(Volume), 30)'
+      - 'cross_corr(day_sum(Ret), day_std(Amt), 20)'
+      - 'cross_corr(day_sum(Ret), day_zero_ratio(Low), 20)'
+      - 'cross_corr(day_sum(Ret), day_corr(Ret, Volume), 20)'
+      - 'cross_corr(day_sum(Ret), day_gini(sqrt(Volume)), 30)'
+      - 'cross_corr(day_sum(Ret), day_std(Ret), 20)'
+      - 'cross_corr(day_sum(Ret), day_sum(in_slice(Ret, 1, 30)), 20)'
+      - 'cross_corr(day_sum(Ret), cross_delay(day_sum(Ret), 1), 20)'
+      - 'cross_reg_tvalue(day_sum(Ret), day_sum(Amt), 20)'
+      - 'cross_regres(day_sum(Ret), day_sum(Volume), 20)'
+      - 'cross_cov(day_sum(Ret), day_kurt(Amt), 40)'
+      - 'cross_corr(abs_(day_sum(Ret)), day_sum(Amt), 20)'
+  - type: N
+    hypothesis: 'Intraday lead-lag and timing structure of flow versus price. Batch 1 heads are same-minute, sign-split volume/return ratios inside the first 50 minutes and the open-minute volume change; they all treat price and volume at the same minute. The idea is (a) lagged flow-to-price coupling: day_corr(Ret at t+1, Volume at t) built by offsetting in_slice windows by one minute (no fill value, no look-ahead: both windows are inside the same day and only past volume is paired with the later return) measures whether volume bursts are followed by continuation (informed flow, Easley-O Hara style) or reversal (liquidity demand); (b) amount-weighted minus time-weighted return, div(day_sum(mul(Ret, Amt)), day_sum(Amt)) - day_mean(Ret), says whether the money traded on the up moves or the down moves, i.e. where the day volume sat relative to the path; (c) the gap between the minute of peak amount and the minute of the day low (day_argmax(Amt) - day_argmin(Low)) is a timing statistic: capitulation volume at the low (reversal) versus volume at the high; (d) morning-vs-afternoon (minutes 1-120 vs 122-241) correlation/covariance of returns and of volume profiles, a continuation-versus-reversal fingerprint of intraday trend persistence. Rolling means (cross_mean 20) turn the one-day noisy statistics into slow states. Differs from the library: no head uses a lagged minute pairing, an amount-weighted-minus-equal-weighted return, an argmax/argmin timing gap or half-day contrasts. Why it should persist: all four measure how informed vs liquidity-driven flow shows up in the order of events within the day, a structural property of the A-share retail-dominated tape, and a 20-day average of such a state is slow and not mechanically the same as liquidity, size, volatility or reversal.'
+    inspired_by: 'Batch 1 heads day_sum(div(add(select_where(is_lt(Ret..) neg Ret, Volume), in_sum(is_lt))) over in_slice(1,50): sign-conditional Ret/Volume at same minute in the opening window; plus the enriched common subtrees day_argmin(Low) / day_argmax(Vwap), which are timing statistics.'
+    seeds:
+      - 'day_corr(in_slice(Ret, 2, 241), in_slice(Volume, 1, 240))'
+      - 'cross_mean(day_corr(in_slice(Ret, 2, 241), in_slice(Amt, 1, 240)), 20)'
+      - 'cross_mean(day_corr(in_slice(Ret, 2, 241), in_slice(Ret, 1, 240)), 20)'
+      - 'cross_mean(sub(div(day_sum(mul(Ret, Amt)), day_sum(Amt)), day_mean(Ret)), 20)'
+      - 'sub(div(day_sum(mul(Ret, Amt)), day_sum(Amt)), day_mean(Ret))'
+      - 'cross_mean(sub(day_argmax(Amt), day_argmin(Low)), 20)'
+      - 'sub(day_argmax(Amt), day_argmax(Vwap))'
+      - 'cross_mean(day_corr(in_slice(Volume, 1, 120), in_slice(Volume, 122, 241)), 20)'
+      - 'day_cov(in_slice(Ret, 1, 120), in_slice(Ret, 122, 241))'
+      - 'cross_mean(day_cov(in_slice(Ret, 1, 120), in_slice(Ret, 122, 241)), 30)'
+R: []

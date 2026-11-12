@@ -1,0 +1,49 @@
+seed: 2066
+round: 3
+slots:
+  - type: E
+    core: 'day_hurst(cross_ema(pow_1_5(Volume), 60))'
+    hypothesis: 'day_hurst(cross_ema(pow_1_5(Volume), 60)) 是「该股票最近约 60 日(半衰期)平均日内成交量曲线」的 Hurst 指数:cross_ema 沿日轴逐分钟槽位平滑,得到典型日内量形状,再看这条形状在分钟轴上的持续性(长记忆)。它读的是股票的常态日内量节奏,是慢变量(持有人结构 / 做市分拆下单习惯)。上一轮最好的是 sub(核心, day_hurst(Volume))(train +1.23, valid +0.27):减去「当天原始量形状」的 Hurst,即典型形状与今日形状的持续性差,train 很强、valid 衰减但仍为正,是目前本种子唯一有正分的线索。上一轮外围只试了 Hurst 自己的原始量版本(Volume / pow_1_5(Volume))。这次换外围:(1) 做差的对象改成别的字段的 Hurst(Amt、价格 Ret 的 Hurst、较短半衰期 5 日 EMA 的量曲线),问的是「量节奏的长记忆是否独立于价格与金额的长记忆」,和上一轮对同字段原始量的差不同;(2) 用 cross_delay 把典型形状换成严格昨日及以前、今日形状进来比,去掉今日自己对 EMA 的贡献;(3) 做 cs_bucket_rank / cs_bucket_demean,在市值或成交额十分位内比较,去掉规模暴露但不假设线性;(4) 用 cross_zscore 取相对自身历史的偏离。库里 5583 条骨架没有 Hurst 类算子,所以不是库里同一个量。样本外还会在的理由:典型日内量形状的持续性是执行习惯(拆单、做市)决定的,变化慢,不靠某段行情;valid 上仍为正说明未完全过拟合 train。风险:Hurst 估计噪声大,所以多数种子带多日平滑。'
+    seeds:
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(cross_ema(pow_1_5(Volume), 5)))'
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(cross_ema(pow_1_5(Amt), 60)))'
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Ret))'
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Amt))'
+      - 'cross_mean(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Amt)), 10)'
+      - 'cs_bucket_rank(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Volume)), LogFloatCap)'
+      - 'cs_bucket_demean(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Volume)), cross_mean(day_mean(Amt), 20))'
+      - 'cross_zscore(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Volume)), 20)'
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), cross_mean(day_hurst(Volume), 20))'
+      - 'sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), cross_ema(day_hurst(Volume), 10))'
+      - 'cross_regbeta(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Volume), 20)'
+      - 'cs_bucket_zscore(sub(day_hurst(cross_ema(pow_1_5(Volume), 60)), day_hurst(Amt)), LogFloatCap)'
+  - type: N
+    hypothesis: '今日日内量形状对本股自身典型形状的偏离。机制:每只股票有自己稳定的日内成交节奏(开盘冲击、午后低谷、尾盘放量),由持有人结构与做市习惯决定;某天形状显著偏离常态,说明当天有非常规的知情 / 事件驱动成交(或被动资金异常调仓),这类偏离在后几天会随信息消化而延续或回吐。实现:典型形状 = cross_ema(Volume, 60) 沿日轴逐分钟槽位平滑得到的 241 点曲线(用 cross_delay 取严格昨日及以前,今日形状不污染基准);今日形状 = Volume;用 day_corr(今日量, 典型量) 度量形状相关(1 = 与常态一致),或把两者各自除以当天总量后取分钟差的绝对值均值(day_mean(abs_(sub(...)))) 度量形状的 L1 距离,再用 cross_mean / cross_ema 多日平滑,cross_zscore 取相对自身历史的异常。与库里的不同:库里候选 (div(Volume, in_sum(Volume)) 的偏度 / 峰度的 20 日离散度,以及 in_cov(Ret, Close, 30) 一族) 读的是单日形状的自身矩或价格协方差,没有一条把今日形状与自身的多日基准曲线逐分钟比较;骨架也不同(两个库的骨架里没有「今日量与日轴 EMA 量逐分钟做差 / 相关」)。day_corr 在一方当天为常数(零成交)时返回 0 而不是缺失,停牌票会聚在 0,所以种子里部分用 L1 距离版本并配合平滑。样本外还会在的理由:形状偏离测的是成交结构的变化而非价格水平,不是对任何控制(流动性水平、波动、反转)的线性暴露;慢变量,换手低。'
+    inspired_by: '第 2 批(Volume 归一化形状 div(Volume, in_sum(Volume)) 的 skew / kurt 的 20 日 cross_stddev 是 head,说明量形状的离散度有信息)与上一轮 Hurst 核心(对日轴 EMA 平滑后的量曲线)的 train 正分:单日形状矩不够,拿今日形状对自身典型曲线做差更直接'
+    seeds:
+      - 'day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1))'
+      - 'cross_mean(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), 10)'
+      - 'cross_zscore(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), 20)'
+      - 'day_corr(Amt, cross_delay(cross_ema(Amt, 20), 1))'
+      - 'day_mean(abs_(sub(div(Volume, in_sum(Volume)), div(cross_delay(cross_ema(Volume, 60), 1), in_sum(cross_delay(cross_ema(Volume, 60), 1))))))'
+      - 'cross_mean(day_mean(abs_(sub(div(Volume, in_sum(Volume)), div(cross_delay(cross_ema(Volume, 60), 1), in_sum(cross_delay(cross_ema(Volume, 60), 1)))))), 10)'
+      - 'cross_zscore(day_mean(abs_(sub(div(Amt, in_sum(Amt)), div(cross_delay(cross_ema(Amt, 60), 1), in_sum(cross_delay(cross_ema(Amt, 60), 1)))))), 20)'
+      - 'cs_bucket_rank(cross_mean(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), 5), LogFloatCap)'
+      - 'cross_stddev(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), 20)'
+      - 'day_corr(div(Volume, in_sum(Volume)), cross_delay(cross_ema(div(Volume, in_sum(Volume)), 60), 1))'
+      - 'sub(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), day_corr(Volume, cross_delay(cross_ema(Volume, 5), 1)))'
+      - 'cs_bucket_demean(cross_ema(day_corr(Volume, cross_delay(cross_ema(Volume, 60), 1)), 10), cross_mean(day_mean(Amt), 20))'
+R:
+  - head: 'cross_stddev(day_var(cross_med(Ret, 60)), 60)'
+    why: '窗口部件偏短:拆解中 cross_stddev@60->120 增益 +0.39(-2.05 对 -2.45),@30 变差,说明离散度要在更长历史上度量;沿这个方向继续拉长,并试把 day_var 换成对极端更稳的 day_std 与 day_mad 之类。'
+    variants:
+      - 'cross_stddev(day_var(cross_med(Ret, 60)), 180)'
+      - 'cross_stddev(day_var(cross_med(Ret, 60)), 240)'
+      - 'cross_stddev(day_std(cross_med(Ret, 60)), 120)'
+      - 'cross_stddev(day_var(cross_med(Ret, 120)), 120)'
+  - head: 'cross_stddev(day_skew(div(Volume, in_sum(Volume))), 20)'
+    why: '20 日窗口可能太短:量形状偏度的离散度在样本外衰减(train -2.31 对 valid -1.87 仍为负);试更长窗口与 cross_mean 的水平版本,检验离散度是否真是信号来源。'
+    variants:
+      - 'cross_stddev(day_skew(div(Volume, in_sum(Volume))), 60)'
+      - 'cross_stddev(day_skew(div(Volume, in_sum(Volume))), 120)'
+      - 'cross_mean(day_skew(div(Volume, in_sum(Volume))), 60)'

@@ -7,3 +7,12 @@
 - N2(资金加权买卖方向 day_signed_ratio):出 head 的概率约 25%;若出,是 cross_zscore 或分桶版;风险是与 20 日反转相关。
 - R:出替换/收录概率低(<10%),原 head 为负,in_corr(Ret, Amt) 是唯一值得一看的变体。
 **上一轮预测**:无(第 1 轮)。
+
+## 第 3 轮
+
+**信念**:前两轮 4 个 GP 位 0 个 head。唯一正分线索是 Hurst 核心:sub(day_hurst(cross_ema(pow_1_5(Volume),60)), day_hurst(Volume)) train +1.23 / valid +0.27(典型日内量形状 vs 今日原始形状的持续性差)。质心核心(Volume^4.5 质心)只有 ts_min 型的 train 正 valid 负,不再押。cross_med(Ret,60) 与量形状矩的 head 全是 -2 级别,只当 R 的窗口调整来源。
+**事先预测**:
+- E(Hurst 核心,外围换成别字段 Hurst 差 / 分桶 / zscore):过线概率约 25%;若出,最可能是 sub(核心, day_hurst(Amt)) 或分桶版,valid 比 train 弱,机制是执行习惯。风险:valid 仍 <0.5。
+- N(今日量形状对自身典型形状的相关 / L1 偏离):出 head 概率约 20%;day_corr 对停牌常数返回 0 可能引入伪影,L1 版更稳。风险被流动性控制吃掉。
+- R:出收录/替换概率 <10%(头分 -2 以下,增益 0.4 也到不了 0.5)。
+**上一轮预测对不对**:r2 预测 E-质心、E-Hurst 各约 30% 出 head,实际都 0;Hurst 位有正分(最好 +0.27)但没过 0.5,方向对、强度估高;质心位完全落空。
