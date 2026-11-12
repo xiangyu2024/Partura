@@ -1,0 +1,68 @@
+seed: 2077
+round: 1
+slots:
+- type: E
+  core: day_median(div(abs_(Ret), Amt))
+  hypothesis: 'Core = median over the day of |Ret|/Amt, a robust per-minute Amihud
+    price-impact (illiquidity). Heads show it scores negative as a raw level because
+    the level is the already-controlled liquidity/size exposure. The bet is that the
+    alpha is in the DYNAMICS and dispersion of impact, not its level: the deviation
+    of today impact from its own 20/60-day mean (liquidity shock, sub/div with cross_mean),
+    its change (cross_delta), its stability (cross_stddev), its upper tail (cross_tail_mean_q75)
+    and its co-movement with returns/turnover (cross_corr). Peripheries are time-series
+    transforms plus size-bucket demeaning (cs_bucket_demean on LogFloatCap), unlike
+    the plain intraday-aggregation wrapper seen in the snapshot, which only used day_*
+    around the Ret/Amt ratio. Mechanism: a stock whose impact cost is falling relative
+    to its own history is attracting liquidity providers/attention (positive), while
+    a rising shock signals inventory risk and informed flow; because the level is
+    stripped, the signal is orthogonal to the controls and should persist out of sample
+    as a slow-moving microstructure state.'
+  seeds:
+  - sub(day_median(div(abs_(Ret), Amt)), cross_mean(day_median(div(abs_(Ret), Amt)),
+    20))
+  - div(day_median(div(abs_(Ret), Amt)), cross_mean(day_median(div(abs_(Ret), Amt)),
+    60))
+  - cross_zscore(day_median(div(abs_(Ret), Amt)), 40)
+  - cross_delta(day_median(div(abs_(Ret), Amt)), 10)
+  - cross_corr(day_median(div(abs_(Ret), Amt)), day_sum(Ret), 20)
+  - cross_stddev(day_median(div(abs_(Ret), Amt)), 20)
+  - div(cross_mean(day_median(div(abs_(Ret), Amt)), 5), cross_mean(day_median(div(abs_(Ret),
+    Amt)), 60))
+  - cs_bucket_demean(cross_zscore(day_median(div(abs_(Ret), Amt)), 20), cross_mean(day_sum(Amt),
+    20))
+  - sub(cross_max(day_median(div(abs_(Ret), Amt)), 20), cross_mean(day_median(div(abs_(Ret),
+    Amt)), 20))
+  - cross_corr(day_median(div(abs_(Ret), Amt)), day_sum(Amt), 40)
+- type: N
+  hypothesis: 'Opening-auction attention and impact. Retail/attention-driven flow
+    concentrates in the first 30 minutes; the share of the day Amt traded in minutes
+    1-30, its deviation from its own 20-day mean, and the open-window impact |Ret|/Amt
+    measure transient demand pressure that the full-day Amihud head averages away.
+    Operators: in_slice cuts the open (1-30) and close (211-240) windows, day_sum/day_corr/day_std
+    aggregate, cross_mean/cross_corr smooth over days. Also open-vs-close volatility
+    ratio and open/close return correlation capture overreaction then reversal intraday.
+    Different from the library: heads use whole-day median or a single open minute
+    volume delta, none uses window-sliced shares or open-to-close contrasts. Out of
+    sample it should persist because opening overreaction by attention-limited traders
+    is a structural behavioral feature of the A-share retail-dominated market, and
+    the long leg picks calm-open stocks that avoid the overpriced attention names.'
+  inspired_by: 'Batch 1: day_open(in_delta(Volume, 60)) head (open-minute volume as
+    signal) and the Amihud head day_median(|Ret|/Amt); both point to opening microstructure
+    and impact.'
+  seeds:
+  - div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt))
+  - sub(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), cross_mean(div(day_sum(in_slice(Amt,
+    1, 30)), day_sum(Amt)), 20))
+  - cross_corr(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), day_sum(Ret), 20)
+  - day_corr(in_slice(Ret, 1, 60), in_slice(Volume, 1, 60))
+  - cross_mean(day_corr(in_slice(Ret, 1, 60), in_slice(Amt, 1, 60)), 20)
+  - cross_mean(sub(day_sum(in_slice(Ret, 1, 30)), day_sum(in_slice(Ret, 211, 240))),
+    20)
+  - div(day_std(in_slice(Ret, 1, 30)), day_std(in_slice(Ret, 211, 240)))
+  - cross_corr(div(day_sum(in_slice(Amt, 1, 30)), day_sum(Amt)), div(day_sum(abs_(in_slice(Ret,
+    1, 30))), day_sum(in_slice(Amt, 1, 30))), 40)
+  - cross_mean(day_corr(in_slice(Ret, 1, 30), in_slice(Ret, 211, 240)), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

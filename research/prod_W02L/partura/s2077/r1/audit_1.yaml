@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [8, 9]
+    reasons: '位 a 是 E 深挖,核心 day_median(div(abs_(Ret), Amt)) 就是快照 head 1(原始 |ρ| 1.00),对 5 个控制的 |ρ| 为 liq 0.45、vol 0.08、rev 0.03、known 0.47、size 0.54,全部低于 0.8,核心过门槛。外围多数是冲击的动态而不是水平:seed 1、2 是冲击相对自身 20/60 日均值的偏离与比值(原始 |ρ| 0.33 / 0.58,残差 0.23 / 0.50);seed 3、4 是 cross_zscore 与 cross_delta(残差 0.21 / 0.17,与 head 基本不同);seed 5、12 是冲击与收益、成交额的滚动相关(残差 0.21 / 0.61);seed 7、10 是短均线比长均线与平滑后的偏离。seed 6 cross_stddev 与 liq 0.78、known 0.77,seed 11 sub(cross_max, cross_mean) 与 liq 0.79,都接近但未到 0.8 的自动划线,保留并记为边界。seed 8 cross_tail_mean_q75 原始 head |ρ| 0.79 ≥ 0.7,按库禁令自动划掉(残差 0.82)。seed 9 cs_bucket_demean(·, LogFloatCap) 原始 |ρ| 0.63 但残差 |ρ| 0.89,去掉规模后基本就是 head 本身,属于换皮,划掉。创新度给 3 而不是 4:动态与水平确实不同,但 seed 6、11 与 liq 控制高度相关,且多数候选仍与 head 残差 0.4 以上。合理度给 4:算子核对过,cross_delta 为 x[t]-x[t-d](dt_cross.py:174-180),cs_bucket_demean 只用同日截面(ops_ext.py:463),cross_tail_mean_q75 只用最近 d 日(ops_ext.py:320),无前视;覆盖率 1.00,无数值伪影主导。机制清楚:冲击相对自身历史下降会吸引流动性提供者,冲击的上升对应库存风险。如果它有 alpha,最可能来自冲击的变化与离散度(seed 1、2、4、7),而不是水平。剩余 10 个种子,远超 4 个门槛。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7, 8, 10]
+    reasons: '位 b 是 N 新想法,受快照里 day_open(in_delta(Volume, 60)) 与 Amihud 启发。快照三个 head 都是全日或单分钟的量,没有窗口切片的成交占比与开收盘对比,这个结构在 corr 表的 5583 条全量未核对(只查了快照与 51 个已评分候选,其中 in_slice 只以 in_slice(Close,1,1) 出现),所以创新度的依据有限。seed 1 的开盘成交占比与 head day_open(in_delta) 原始 |ρ| 0.31、残差 0.30,对 5 个控制的 |ρ| 为 liq 0.12、vol 0.17、rev 0.14、known 0.14,都低;seed 9 的开收盘波动比与 head 残差 0.50、对控制最高 0.27。seed 3、4、5、12 与快照 head 基本无关(原始 |ρ| 0.01–0.11)。seed 6 对 rev 0.49 偏高,但低于 0.5。创新度给 4,这是快照没有的结构。合理度给 4:in_slice(X, a, b) 是 X[:, a:b+1](dt_in.py:324-325),窗口 1..30 与 211..240 是对称的两段 30 分钟窗,第 0 列未进入开盘窗,是设计选择不是数学错误。day_std 比值与 day_corr 在一字板或零量日返回 0 或被爆点拉偏,但外层是截面排名,不构成主导,作为边界记录;seed 4、5、12 的 day_corr 对一字板票聚在 0,同样记为边界。seed 7、8 是开盘 Abs(Ret)/Amt 与其 20 日均值,liq |ρ| 0.87 与 0.95(≥ 0.8),自动划掉。seed 10 是 seed 9 的 20 日均值,覆盖率 0.85 未过门槛,且与 seed 9 是平滑版的重复,划掉。剩余 9 个种子。如果它有 alpha,最可能来自开盘段的注意力与过度反应:成交占比的偏离与冲击(seed 1、2),以及开收盘收益与波动的对比(seed 6、9)。'
+R: []
+summary: '位 a(E,核心=Amihud 日中位数)创新 3 合理 4、划掉 8、9 通过;位 b(N,开盘窗口)创新 4 合理 4、划掉 7、8、10 通过;无 R 组;没有数学问题的挡项。相关度表只覆盖快照 3 个 head,别的流与 W01 的 heads 及 5583 条骨架未在本次核对中覆盖。'
