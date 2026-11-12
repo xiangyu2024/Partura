@@ -12,6 +12,15 @@
 已在排队、还带着 720 分钟的任务可能再丢一些;重新扫描的命令:
 `grep -h -E "^prods[0-9]+Pr[0-9][ab] \(rerun\) 98" logs/_prodmis_s20*_P_r*.log`(服务器上)。
 
+**2026-11-12 17:10 EST 更新(总领):补跑提前开始，只吃空闲的卡。** 原定「全部轮次之后」再补，但尾巴只剩 2054 / 2080 等几条流，它们在定位、写计划、审计时卡是空的。
+驱动 `scripts/server/w02l_makeup.sh research/prod_W02L/makeup_list.txt` 已在服务器上跑(日志 `research/prod_W02L/makeup.log`,已启动的轮次记在 `makeup_started.txt`):
+- 清单由服务器上的重新扫描生成(37 个任务位、33 个轮次,`makeup_slots.txt` / `makeup_list.txt`),与上表一致。
+- 做法：对每个轮次重跑 `c05_round.py mission S P K`,用当时推送的同一份计划;正常结束的任务位(已核对 29 个都 complete、live > 0)和已有的 R 评估会被跳过，只有坏掉的位重新搜索。
+- 只在主机上活着的 GP 搜索少于 3 个(卡上没人排队)且补跑搜索少于 2 个时才起下一个轮次，尾巴的正常轮次总留着一路。
+- 重跑前：该轮 arms 文件和 guidance 拷到 `makeup_orig/s<S>_r<K>/`;坏掉的 episode 挪到 `episodes/_broken98/`,日志改名 `_idea_<tag>.broken98.log`;补跑日志 `logs/_prodmakeup_s<S>_P_r<K>.log`。
+- 与原跑的唯一构造性差别：整波封禁库(PARTURA_WAVE_BAN)现在包含了此后各流新找到的 head。
+- 两个补评 R 组(下节)不在这个驱动里，另做。
+
 | 流 | 轮 | 任务位 | 原因 |
 |---|---|---|---|
 | 2001 | 1 | a、b | 显卡超订(11-09) |

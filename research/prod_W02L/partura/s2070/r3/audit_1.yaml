@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 7, 9, 14, 15]
+    reasons: '位 a 是 E 位,核心 day_zero_ratio(Volume)(loc.md 共性表第 3 行,dt 的 ops_ext.py:273 定义为分钟中 x==0 的占比)。核心与各控制的 |ρ|:liq 0.73、vol 0.18、rev 0.15、known 0.72、size 0.55,全部 < 0.8,核心过关。核心与 9 个 head 的原始 |ρ| 最大 0.44(day_quantile_q75(mul(High, Ret))),残差 0.35,没有 head 在度量停牌/零成交占比,创新度给 4。划掉:seed 1 ts_mean(...,60) 的 liq |ρ| 0.81 ≥ 0.8(几乎就是流动性);seed 7 ts_regalpha(...,20) 的 vol |ρ| 0.91 ≥ 0.8(就是波动控制);seed 9 ts_max(...,20) 的 liq 0.81 且 distinct 0.037;seed 14 mul(...,LimitWidth) 的 distinct 0.034、seed 15 ts_delta(...,10) 的 distinct 0.067,两者都是大部分票为 0 的近常数面板(§4 数值伪影,corr_1.json 中 gate 为 False)。其余 11 个保留:2、3、4、5、6、8、10、11、12、13、16,均无 head |ρ| ≥ 0.7、控制 |ρ| < 0.8。合理度说明:停牌/涨跌停锁定导致的零成交分钟占比,可以是 A 股流动性溢价的持续性(ts_mean 60、ts_std)或信息事件(5 日减 60 日、ts_delta),残差化版本是去掉市值、上市天数、波动后的非交易冲击,机制清楚。注意:核心本身稀疏(distinct 0.027,大量并列在 0,十分位截点处由并列决定),保留下来的种子多数经过平滑后 distinct ≥ 0.5,不构成挡的理由,但建议在结果中检查 0 的并列块对十分位书的影响。如果它有 alpha,最可能来自 A 股涨跌停与停牌对成交的挤压,持续停牌的小盘股相对于临时停牌的个股有不同的未来收益。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 10]
+    reasons: '位 b 是 N 位,隔夜跳空 gap = (当天首分钟 Open - 前日末分钟 Close) / 前日末分钟 Close,日内腿 intra = (当日末 Close - 首分钟 Open)/首分钟 Open;所有表达式都只用 day_first/day_last 与 ts_delay(…,1),无前视。创新度:9 个 head 都是分钟内形状(day_cov 的 range/Ret、Amt/Volume 阈值比),没有一个用跨日边界(前收到今开),且 gap 均值的 rev |ρ| 只有 0.19,与 20 日反转控制不同,给 4。划掉:seed 2 ts_mean(intra,20) 的 rev |ρ| 0.85 ≥ 0.8,就是 20 日反转换了写法。seed 10 的算式 ts_mean(gap - cross_mean(gap,1), 20) 恒为 0:dt_cross.py:223 的 cross_mean(x,d) 是沿日轴的 d 日滚动均值(rolling_reduce axis=0),d=1 时就是 gap 本身,所以内层差恒为 0;corr_1.json 中 distinct 0.0、与 head 的 |ρ| 为 nan,是定义坏掉的数值伪影,划掉。其余 11 个保留:1、3、4、5、6、7、8、9、11、12、13,均无 head |ρ| ≥ 0.7、控制 |ρ| < 0.8。合理度:隔夜与日内两腿的分离是 A 股常见的规律(隔夜承接消息与机构再定价,日内以散户订单流为主),种子中的 ts_corr(gap, intra)、regres、std 比都是对这一分离的刻画;in_slice(Volume,0,29) 是开盘 30 分钟的闭区间切片,下标在 0..240 之内,没有越界。如果它有 alpha,最可能来自隔夜信息与机构再定价的持续性,以及它与日内散户流的相互作用(续涨或回补)。'
+R: []
+summary: '两个 E/N 位都通过:位 a 创新 4、合理 4,划掉 1,7,9,14,15 共 5 个(liq / vol 控制 ≥0.8,或面板近常数),剩 11 个;位 b 创新 4、合理 4,划掉 2(rev 控制 0.85)与 10(表达式恒为 0,cross_mean(x,1) 是 gap 本身),剩 11 个。无 R 组。'
