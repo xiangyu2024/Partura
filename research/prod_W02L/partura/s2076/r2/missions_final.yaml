@@ -1,0 +1,53 @@
+seed: 2076
+round: 2
+slots:
+- type: E
+  core: cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10), 30)
+  hypothesis: 核心 = 本流唯一过线 head(sigmoid 只是单调变换)去掉外壳的主体。day_zero_ratio(Amt) 是当天成交额恰为
+    0 的分钟占比(无成交 / 极薄交易 / 涨跌停锁死), sqrt(day_skew(Open)) 是分钟开盘价路径的正偏度(日内价格被少数几笔成交向上拉出尖峰;负偏度处
+    sqrt 为带符号 / 缺失,只留正偏的部分)。ts_cov 10 日度量 「越稀薄的日子,价格尖峰越向上」这件事是否成对出现,cross_mean 30
+    把它做成持续状态:持续在薄成交里被少量买单向上顶的股票,是被操纵 / 彩票化 / 缺乏知情做市的票, 后续的补偿或回吐由此而来(这是拆解里 knockout
+    去掉 sqrt(skew) 后分数从 +0.66 掉到 -0.21、去掉 cross_mean 掉到 +0.35 所支持的:交互项与持续化缺一不可)。 上一轮只试过
+    sigmoid / 重复 cross_mean 这类单调或同类外壳,没有改变信号的构造。本轮外围全部换成结构上不同的处理:(1) cross_zscore
+    / cross_ema / ts_decay_linear 改变平滑核与标准化;(2) 减去自身 120 日水平或短窗减长窗,提取「协同的变化」而不是水平,水平会被市值与流动性控制吸收;(3)
+    减去同样写法下用日内上涨分钟占比替换偏度的协方差, 去掉「薄成交 × 任何方向的日内波动」的共同成分,只留偏度特有的部分;(4) 乘上持续稀薄度 cross_mean(day_zero_ratio(Amt),30)
+    或除以其波动,检验交互是否只在稀薄状态下成立; (5) 分位尾部均值 / winsor 防止个别爆点支配。样本外还会在:稀薄交易 × 向上尖峰的行为(注意力吸引的单边推动)属于微观结构与散户偏好,train
+    与 valid 同样站得住(+0.67 / +0.66), 而且两段分数几乎相等,没有明显的时段依赖。
+  seeds:
+  - cross_zscore(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10),
+    30), 60)
+  - sub(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10), 10), cross_mean(ts_cov(day_zero_ratio(Amt),
+    sqrt(day_skew(Open)), 10), 30))
+  - cross_ema(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10), 30),
+    20)
+  - sub(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10), 30), ts_mean(cross_mean(ts_cov(day_zero_ratio(Amt),
+    sqrt(day_skew(Open)), 10), 30), 120))
+  - sub(cross_zscore(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)),
+    10), 30), 20), cross_zscore(cross_mean(ts_cov(day_zero_ratio(Amt), day_pos_ratio(Ret),
+    10), 30), 20))
+- type: E
+  core: day_zero_ratio(Amt)
+  hypothesis: '核心 day_zero_ratio(Amt) = 当天成交额恰为 0 的分钟占比,是本流唯一过线 head 里决定性的部件(单独当信号被门槛挡掉,但含它的
+    10 个候选均值 -0.17,不含的 -2.78, p 0.000):衡量个股的交易稀薄 / 锁板程度。head 里它与开盘价偏度做 10 日协方差,本轮不再用偏度当搭档,改成其他「当日价格路径形状」量作搭档,并改变组合方式:
+    ts_corr(而不是 ts_cov)把稀薄度与价格形状的共动标准化,避免被稀薄度自身的方差支配;搭档取 day_skew(Ret)(分钟收益偏度)、day_pos_ratio(Ret)(上涨分钟占比)、
+    day_std(Low)(日内低点分散度)、day_gini(Amt)(成交额集中度)、day_centroid(Amt)(成交额重心时点)。机制:稀薄日若伴随单边价格形状
+    / 成交集中在某个时点, 说明少量订单在推动价格,即流动性提供者缺席时的价格冲击;持续出现的股票补偿溢价由此而来。另一类外围是用 in_slice 把成交额为
+    0 的分钟占比分别在开盘半小时和尾盘半小时内取, 看稀薄发生在哪个时段(尾盘稀薄代表收盘无人接盘,开盘稀薄代表集合竞价后无承接),这和 head 的全天占比不同。样本外还会在:交易稀薄的补偿属于结构性的微观结构溢价;
+    与库里 head 不同在于搭档与组合方式都不同,库禁令会挡掉重复骨架。'
+  seeds:
+  - cross_mean(ts_corr(day_zero_ratio(Amt), day_skew(Ret), 20), 30)
+  - cross_mean(ts_corr(day_zero_ratio(Amt), day_pos_ratio(Ret), 20), 30)
+  - cross_mean(ts_cov(day_zero_ratio(Amt), day_std(Low), 10), 30)
+  - cross_mean(ts_cov(day_zero_ratio(Amt), day_gini(Amt), 10), 30)
+  - cross_mean(ts_cov(day_zero_ratio(Amt), day_centroid(Amt), 10), 30)
+  - cross_mean(ts_cov(day_zero_ratio(Amt), day_skew(Ret), 10), 30)
+  - sub(cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(Open)), 10), 30), cross_mean(ts_cov(day_zero_ratio(in_slice(Amt,
+    210, 240)), sqrt(day_skew(Open)), 10), 30))
+  - cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(day_skew(in_slice(Open, 0, 60))),
+    10), 30)
+  - cross_zscore(ts_corr(day_zero_ratio(Amt), day_skew(Ret), 20), 40)
+  - cross_mean(ts_cov(day_zero_ratio(Amt), day_es_ratio_hi(Close), 10), 30)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
