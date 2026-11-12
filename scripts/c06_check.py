@@ -202,9 +202,17 @@ for s, j in zip(slots, "ab"):
         final_slots.append({"type": "N", "note": f"audit did not pass after {n} attempt(s): plain GP (PLAN §2.5)", "audit_failed": True,
                             "proposed_type": s["type"]})
 r_audit = {str(x.get("head")): x for x in A.get("R") or []}
+r_audit_list = list(A.get("R") or [])
 final_R = []
-for r in spec.get("R") or []:
-    a = r_audit.get(str(r.get("head"))) or {}
+for i_r, r in enumerate(spec.get("R") or []):
+    a = r_audit.get(str(r.get("head")))
+    if a is None:
+        # the auditor copied the head text wrong (W02L 2075 r3: wrote the pre-replacement window 20 for the plan's window 60) -> match by
+        # whitespace-free text, else by position when the audit scored exactly as many R groups as the plan has
+        a = next((x for x in r_audit_list if re.sub(r"\s+", "", str(x.get("head"))) == re.sub(r"\s+", "", str(r.get("head")))), None)
+        if a is None and len(r_audit_list) == len(spec.get("R") or []):
+            a = r_audit_list[i_r]
+    a = a or {}
     ok = int(a.get("soundness") or 0) >= 3
     record["R"].append({"head": r["head"], "soundness": int(a.get("soundness") or 0), "pass": ok, "variants": len(r.get("variants") or [])})
     if ok:
