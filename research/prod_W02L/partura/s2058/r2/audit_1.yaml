@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: [12]
+    reasons: '核心 day_quantile(cross_regbeta(Open, Amt, 241)) 在相关度表里最像的是 day_std(pow_2(Volume))，原始 |ρ| 0.43、残差 0.45，都低于 0.7 的库禁令线；对 5 个控制 liq 0.20、vol 0.00、rev 0.02、known 0.22、size 0.03，都远低于 0.8，所以核心本身不是控制，E 位的核心检查通过。创新度 4：快照 6 个 head 里没有任何 Open 与 Amt 的回归，head 只有分钟 Ret / Volume / Vwap 的离散度和 close-close 收益。合理度 3：逐个算子核对——cross_regbeta(x, y, d) 就是 rolling_ols(x, y) 的 beta（dt_cross.py:299；common.py:643 的回归是 y 对 x），所以这里的 beta 是 Amt 对 Open 的斜率（dAmt/dOpen，量纲是成交额每元价格），与 hypothesis 里「价格 / 成交额」的量纲说法以及「放量时价格涨跌」的符号解释方向相反。窗口 241 在日轴（axis 0），day_quantile 是 dt_day.py:154 的当天分钟中位数，全部是当天及过去的值，无前视，无数值伪影（var_x 有 EPS 守卫，且排序是截面秩，爆点只影响极端票）。主要问题是解释而非数学：这是水平（不是变化）的一年回归，在 Open 与 Amt 都随一年趋势移动的票上，beta 主要反映两者的同向趋势，并随价格水平缩放，因此它更像「价格趋势 × 成交额趋势 / 价格水平」而不是纯量价确认。子种子 1、2、3、7、8、9 用价格或市值去规模化，正是对这一点的处理，所以放行。如果它有 alpha，最可能来自：一年尺度上成交额随价格同步扩张的票（资金持续流入）后续延续，或低价票尾部。种子 12 划掉：cs_robust_z 对每天是 (x - 中位数) / (1.4826 MAD) 的仿射变换，截面秩与核心完全相同（§1 单调变换是同一信号），corr 表里 0.43 / 0.45 / 0.20 等数字与核心逐项一致，属于重复。其余 11 个种子保留；种子 11 的分母 cross_mean(day_std(Amt), 120) 没有 EPS，但只有 120 日全部零成交才会爆，不构成数学问题。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '隔夜 / 日内拆分。快照 6 个 head 没有一个用到开盘价：全部是分钟 Ret / Volume / Vwap 的日内统计，或整日 close-close 收益。相关度表里对 head 的原始 |ρ| 最大 0.21（seed 1 对 ts_max 长链），对 5 个控制 |ρ| 最大 0.25（seed 1 对 liq），都远低于门槛，创新度 4。合理度 4：逐个算子核对——day_open 是 dt_day.py:142 的 day_first（当天首个非缺失分钟的 Open），ts_delay(day_last(Close), 1) 是 nd_ts.py:113 的前一交易日收盘（axis 0 是日轴，取过去值），分母为正的后复权价格，无近零分母；停牌日的缺失沿 day_last 传播成缺失，前一日停牌时次日隔夜段为缺失而不是伪值；cross_mean / cross_ema 在 60 / 120 日上只用过去到当天的值，无前视。机制：隔夜段（集合竞价与信息消化）与日内段（散户日内追涨与反转）的分割，在 T+1 与集合竞价制度下是结构性的，不依赖某段行情；控制里的 20 日反转只覆盖两段的和，二者之差与反转控制不是同一暴露。种子 8 划掉：cross_stddev(overnight, 60) 是隔夜收益的标准差，就是一个波动率，对 vol 控制的 |ρ| 为 0.52，对快照 head 为 0.60，属于换写法的波动控制，按 §3 与控制度量同一个东西，划掉。其余 9 个种子保留：种子 5 的 cross_zscore 是个股相对自身历史的标准化，不是截面单调变换；种子 9 的 LimitWidth 是板宽常数量级（0.05 到 0.3），不接近零。如果它有 alpha，最可能来自：隔夜段累计强而日内段累计弱的票（信息持续，隔夜动量），与日内段被散户推高后反转的票之间的差。'
+R:
+  - head: 'day_sum(sigmoid(Vwap))'
+    soundness: 3
+    reasons: '原 head 的数值问题是真实的：Vwap 是后复权价格（元），sigmoid 在 float32 下约 17 元以上饱和为 1.0，day_sum 对多数票恒为 241，截面差异主要来自低价票，所以原 head 的 -1.64 / -0.30 更像价格水平的产物，PI 对此的诊断成立。变体 1（Vwap / day_last(Close)）与变体 6（Vwap / cross_mean(Vwap, 60)）是无量纲量，修掉了饱和，合理；变体 3 只是对饱和的原值做 EMA，没有修复；变体 2、5 仍是元单位进 sigmoid，饱和依旧；变体 4（sigmoid(Open)）与原问题相同，表里已标为废品。整组的合理度给 3：修法有效的变体存在，但不是每个都修。如果它有 alpha，最可能来自分钟 VWAP 相对收盘（或相对 60 日均值）的日内偏离的天数占比。'
+summary: '槽 a 通过（创新 4、合理 3，划掉 1 个重复种子 12，剩 11）；槽 b 通过（创新 4、合理 4，划掉 1 个与 vol 控制同义的种子 8，剩 9）；R 组 day_sum(sigmoid(Vwap)) 合理度 3 放行。主要审计意见：槽 a 的 cross_regbeta 实为 Amt 对 Open 的斜率，计划里的量纲与符号解释需要改正，不影响放行。'
