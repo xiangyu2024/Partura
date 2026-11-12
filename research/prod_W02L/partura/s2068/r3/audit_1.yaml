@@ -1,0 +1,16 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '创新度 4。核心 div(day_sum(Volume), ts_mean(day_sum(Volume),20)) 是 batch-3 head mul(mul(mul(-1,cs_rank(ts_rank(close,10))),cs_rank(ts_delta(ts_delta(close,1),1))),cs_rank(ts_rank(surprise,5))) 的子树(核心是合法的 E 核心)。corr_1.md 里核心与库中最像的 head(range 乘开盘绝对收益那个)原始 |ρ| 0.39、残差 0.20;与 batch-3 head 原始 |ρ| 0.365;与 5 个控制的 |ρ| 为 liq 0.08 / vol 0.08 / rev 0.27 / known 0.08 / size 0.06,都远低于 0.8 的位门槛。所以 E 位的创新看外围。外围的有符号买卖压力(seed 2 的 day_signed_ratio)、量能惊喜与日内收益的 ts_corr(seeds 3、4)、cs_bucket_demean 分桶去均值(seeds 5、6)、多尺度平滑与波动(seeds 7、8、12)、量额惊喜差(seed 10)、开盘段归一化(seed 9)都不是库里 head 的写法,库里 head 是价格形态的秩乘积或开盘 30 分钟绝对收益和。扣分的地方:seeds 1、10、11 与 20 日反转控制的 |ρ| 为 0.77、0.75、0.66(seed 1 离 0.8 的自动线只差一点,未划),它们在相当程度上是「反转 乘 量能权重」的写法,不算新东西,所以给 4 而不给 5。seed 9 原始 |ρ| 与 head 为 0.62(未到 0.7),但残差 |ρ| 与 head 为 0.72,是全表最需要盯的重叠,我保留但请注意。未能逐条核对 214 个已评分候选里是否有与外围完全相同的(loc 只给了子树富集表),这一条交 GP 的去重。如果它有 alpha,最可能来自「量增而价不动」的注意力反应不足(under-reaction,seeds 3、4、9 的量价不一致),其次来自有符号买卖压力按分桶比较(seeds 2、5、6)。'
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6, 11, 12]
+    reasons: '创新度 4。核心机制是把当日最高价相对前收的冲高幅度用 LimitWidth 归一化(seeds 1、4、7、10、12 的 reach 形式;seed 2 与 9 用当日收盘做分母的回落形式)。LimitWidth 是 dailyfields.py:242 起 derive() 从代码前缀推出的板块涨跌幅常数,库 head 里的 range/open 与开盘绝对收益和没有这一步除法。corr_1.md 里 seed 1 与最像 head 的原始 |ρ| 为 0.65、残差 0.39;与各控制原始 |ρ| 为 liq 0.41 / vol 0.55 / rev 0.46 / known 0.45 / size 0.18,都在 0.7 以下,不是控制的换写法,所以比 slot a 清楚,给 4。扣的地方:LimitWidth 近似板块常数(10 / 20 / 30%),除以它等于给主板与创业科创板做约 2 倍的刻度,截面的一部分是板块效应。板块信息不是数学问题,且 batch-3 富集表里 sigmoid(LimitWidth) 正富集(+0.75,p 0.053),属于同一来源,不扣到 3。划掉三个:seed 6 与 20 日反转控制 |ρ| 0.829,达到 0.8 的自动线,按规则划掉(表里它的门槛列写的是「过」,与规则不一致,请总领核对);seed 11 的 distinct 为 0.017、门槛列为「废品」,整面板近乎常数,是定义坏掉(ts_rank 的并列 / 缺失处理),划掉;seed 12 与 seed 1 只差把 day_max(High) 换成 day_max(Open),同一公式、同一极值量(分钟开盘价的最大值与最高价几乎是同一个极值),是重复,划掉。剩 9 个,≥ 4。注:seed 2 与 seed 9 是同一日度量(高点相对当日收盘的回落)的均值与线性衰减平滑,seed 3 是同一回落量的另一分母变体,这三者是平滑 / 分母变体而非数学问题,保留,留给 GP 去重。如果它有 alpha,最可能来自冲高后回落的彩票型注意力过热(涨停没封住后被卖出,seeds 1、2、4、9),其次是这个量与板块刻度的交互(LimitWidth 同时是板块代理),seed 10 的量能权重是第三个来源。'
+
+R: []
+summary: 'slot a 通过(创新 4 / 合理 4,无划除,seed 9 与 seed 1 有重叠风险的注记);slot b 通过(创新 4 / 合理 4,划除 6、11、12,剩 9 个);R 为空;两个位都不需要退回重写,审计 1 次完成。'

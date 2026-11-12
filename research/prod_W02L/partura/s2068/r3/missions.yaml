@@ -1,0 +1,36 @@
+seed: 2068
+round: 3
+slots:
+- type: E
+  core: 'div(day_sum(Volume), ts_mean(day_sum(Volume), 20))'
+  hypothesis: 'Core = today total volume divided by its own 20-day mean (volume surprise / abnormal turnover), a subtree of the batch-3 head mul(mul(mul(-1, cs_rank(ts_rank(close,10))), cs_rank(ts_delta(ts_delta(close,1),1))), cs_rank(ts_rank(div(day_sum(Volume), ts_mean(day_sum(Volume),20)),5))). In the knockout table removing this factor costs about 1.2 score points, the largest necessity among the head parts that is not a price-curvature term, so it is a genuine source rather than decoration. Every previous candidate wrapped it in the same price-rank product (ts_rank of close, cs_rank of second difference of close, ts_rank over 5 days). This round keeps the abnormal-volume core and changes the periphery to things never paired with it: (1) interaction with the signed intraday return mass, i.e. multiplying by day_mean(Ret) or by the sign of day_signed_ratio(Ret, Amt), so abnormal volume is read as buying versus selling pressure (informed accumulation versus distribution) instead of a price-rank gate; (2) ts_corr between the volume surprise and the daily open-to-close return over 20-40 days, a volume-return coupling that measures whether heavy days are up days; (3) cs_bucket_demean of the volume surprise inside buckets of past 20-day close change, a group comparison (abnormal volume among stocks that moved similarly) rather than a product; (4) smoothing and differencing the surprise over its own history with ts_decay_linear and ts_mean of two horizons (persistent abnormal attention versus one-off spike); (5) dividing by the opening-30-minute absolute-return mass to ask whether volume rose without the matching volatility (quiet accumulation). These use signed flow, bucket comparisons and persistence, none of which appear in the library heads, which are rank-product price-pattern forms. Out of sample it should persist because volume surprise that is not accompanied by price move is a documented under-reaction channel (attention and slow information diffusion), and our controls already remove the level of liquidity so only the surprise component remains.'
+  seeds:
+  - 'ts_mean(mul(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), day_mean(Ret)), 20)'
+  - 'ts_mean(mul(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), day_signed_ratio(Ret, Amt)), 20)'
+  - 'ts_corr(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), sub(div(day_last(Close), day_open(Open)), 1), 30)'
+  - 'ts_corr(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), day_mean(Ret), 40)'
+  - 'cs_bucket_demean(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), ts_delta(day_last(Close), 20))'
+  - 'cs_bucket_demean(ts_mean(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), 10), ts_mean(day_median(Ret), 20))'
+  - 'ts_decay_linear(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), 15)'
+  - 'sub(ts_mean(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), 5), ts_mean(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), 40))'
+  - 'div(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), ts_mean(day_sum(abs_(in_slice(Ret, 1, 30))), 20))'
+  - 'ts_mean(sub(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), div(day_sum(Amt), ts_mean(day_sum(Amt), 20))), 20)'
+  - 'ts_mean(mul(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), sub(day_topw_mean(Ret, Amt), day_mean(Ret))), 20)'
+  - 'ts_stddev(div(day_sum(Volume), ts_mean(day_sum(Volume), 20)), 30)'
+- type: N
+  hypothesis: 'Limit-board proximity and failed-limit pressure (A-share price-limit lottery/attention channel). Using the daily field LimitWidth (the exchange price-limit band of the stock: 10 percent main board, 20 percent growth boards, etc.) I normalise each day high-versus-previous-close excursion by the band: reach = (day_max(High)/previous close - 1)/LimitWidth, with previous close from cross_delay(day_last(Close),1) (past value, no look-ahead). Reach near 1 means the stock touched its limit-up; (reach minus the close-based return/LimitWidth) is the failed-limit give-back, i.e. buyers pushed to the cap and were sold into by the close. Mechanism: touching the limit draws retail lottery-seeking attention and ties up liquidity; stocks that repeatedly touch but fail to hold are subsequently overpriced and mean revert, while those that held (and quiet ones) are not; accumulating this over 20-60 days gives a slow-moving attention-pressure state. Because the excursion is scaled by each stock own band, boards with different limits become comparable, which a plain return or range-based signal (the batch heads: range/open, absolute-return mass in the first 30 minutes, close ts_rank) cannot do; none of the library heads or the 20-day-reversal/volatility/size controls use LimitWidth as a divisor or an extreme-of-day high. Operators: day_max(High) day extreme, cross_delay for lagged close, div by LimitWidth, ts_mean / ts_sum / ts_max for the persistence, ts_corr and sub for the give-back contrast. It should persist out of sample because price limits and retail lottery demand are institutional features of the A-share market rather than fitted parameters.'
+  inspired_by: 'Batch 3: the shared enrichment table shows sigmoid(LimitWidth) as a top-positive subtree (mean score gap +0.75, p 0.053, in 12 candidates) and day_max(Low)/day_max(Open) subtrees at +1.3, i.e. extremes of the day and the band field matter; and the head with 100-day close-relative-to-min conditions suggests lottery-like extreme-price behaviour. The limit band is used there only through sigmoid, never as a scale for the day excursion.'
+  seeds:
+  - 'ts_mean(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), 20)'
+  - 'ts_mean(div(sub(div(day_max(High), day_last(Close)), 1), LimitWidth), 20)'
+  - 'ts_mean(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), div(day_last(Close), cross_delay(day_last(Close), 1))), LimitWidth), 40)'
+  - 'ts_max(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), 20)'
+  - 'ts_mean(div(sub(1, div(day_min(Low), cross_delay(day_last(Close), 1))), LimitWidth), 20)'
+  - 'sub(ts_mean(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), 20), ts_mean(div(sub(1, div(day_min(Low), cross_delay(day_last(Close), 1))), LimitWidth), 20))'
+  - 'ts_sum(pow_3(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth)), 30)'
+  - 'ts_corr(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), div(sub(div(day_last(Close), cross_delay(day_last(Close), 1)), 1), LimitWidth), 30)'
+  - 'ts_decay_linear(div(sub(div(day_max(High), day_last(Close)), 1), LimitWidth), 20)'
+  - 'mul(ts_mean(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), 20), ts_mean(div(day_sum(Volume), ts_mean(day_sum(Volume), 60)), 20))'
+  - 'ts_rank(div(sub(div(day_max(High), cross_delay(day_last(Close), 1)), 1), LimitWidth), 30)'
+  - 'ts_mean(div(sub(div(day_max(Open), cross_delay(day_last(Close), 1)), 1), LimitWidth), 20)'
+R: []
