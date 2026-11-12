@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: []
+    reasons: '核心 cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap) 通过核心检查。相关度表：与快照 9 个 head 的原始 |ρ| 最大 0.416（最像 mul(ts_max(cs_stddev_full(day_product(cross_product(sigmoid(Low), 15))), 10), ...)），对 day_std(pow_2(Volume)) 为 0.393；残差最大 0.588，都低于 0.7 的库禁令线。对 5 个控制 liq 0.226、vol 0.003、rev 0.011、known 0.242、size 0.059，全部低于 0.8。算子核对：cross_regbeta(x, y, d) 就是 rolling_ols(x, y) 的 beta（dt_cross.py:299，common.py:643 的回归是 y 对 x），所以这里实际算的是 Amt 对 Open 的斜率 dAmt/dOpen，不是 hypothesis 写的「Open 对 Amt」。符号不受影响（协方差对称），但斜率的量纲是 σ_Amt/σ_Open 乘相关系数，价格水平的方差混进了大小，hypothesis 里「价格 / 成交额」的量纲说法要改正（与 r2 审计员的报告一致）。day_quantile 是 dt_day.py:154 的分钟中位数，241 窗口在日轴，全部是过去到当天的值，无前视；var_x 有 EPS 守卫（common.py:43，EPS=1e-9），无近零分母。创新度给 3：快照的 head 里没有任何回归斜率结构，与控制的最大 |ρ| 0.23 不是同一暴露；但外围的若干形式（cs_regres 对 LogFloatCap、ts_delay 差分、cross_zscore 120）与第 2 轮的种子同族，那一轮的候选不是 head，最好 +0.16，所以不给 4。合理度 3：「一年尺度量价趋势确认」的机制说得通，符号解释成立；但核心是由富集表挑出的（9 个候选，均值差 p 0.000），而富集用的也是 train 与 valid，选择偏差没有扣除。12 个种子全部保留：cross_ema、cross_zscore、cross_mean 是核心的时间平滑，是换写法但不是重复；两个分桶差（FloatCap 对 TotalCap、beta 对 corr）、残差版本（对 tvalue、对波动、对 corr）与加 Volume 版本都在 hypothesis 的 (a)-(e) 里；种子 12 的 LogTotalCap 与 LogFloatCap 分桶差只是限售比例的分桶效应，不是 r2 被划掉的 cs_robust_z 那种仿射重复，保留。如果它有 alpha，最可能来自：慢变的量价同步扩张（资金持续流入）的票后续延续，或分桶后规模结构的残余。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [11]
+    reasons: '流通股本变化。快照 9 个 head 中没有一个用到股本字段；相关度表里原始 |ρ| 最大 0.335（对 pow_2 cs_rank 那个 head，残差 0.359），对 5 个控制的 |ρ| 在 seed 4 为 size 0.294、seed 10 为 size 0.235，其余都在 0.25 以下，创新度给 4。合理度 4：LogFloatShares、LogTotalCap、ListAge、LimitWidth 都在日频字段里（catalog.py、dailyfields.py）；ts_delay 与 cross_max 等只取过去值，无前视。差分在多数日子为 0、截面大量并列，这是事件型信号的本质，hypothesis 已说明，不算数值伪影。表里 seed 1、2、3、6、8、9 标为「废品」（distinct 比例低于门槛：0.283、0.456、0.108、0.339、0.358、0.005），这是流水线门槛，我不另行计入划掉；seed 9 的 distinct 只有 0.005，最退化，流水线应据此剔除。这些剔除之后剩 4、5、7、10，恰好满足「划完还剩 ≥ 4」，剩余空间为零，PI 要知道。种子 11 划掉：sub(sub(LogFloatShares, d60), sub(LogTotalCap, d60)) 中的 LogTotalCap 含对数价格（与 hypothesis 对 LogFloatCap 的说明同理），所以它实际是股本差减去 60 日对数收益，即 60 日反转的变体，不是 hypothesis 说的纯股本变化；相关度表里它对 rev 控制 |ρ| 0.416、vol 0.36、liq 0.215，正是价格反转 / 波动的暴露。与这个位的 idea 不符，划掉。种子 4、5、7、10 保留：种子 10 的 LogTotalCap − LogFloatCap 价格项相消，是纯限售比例，符合 idea；种子 4 是对 LogFloatCap 的残差，去规模；种子 5 是 cross_ema 平滑；种子 7 是分桶排序。如果它有 alpha，最可能来自：送转股（高送转）造成的股本跳变（送转不改变市值，但 A 股对高送转有已知的正向偏好），这与 hypothesis 的供给冲击解释不同，两者在信号上混在一起；其次才是解禁 / 增发的减持压力。'
+R:
+  - head: 'ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 50)'
+    soundness: 1
+    reasons: '数值问题未被修复，合理度 1。内核 day_product(pow_2(cross_product(sigmoid(Amt), 10))) 沿分钟轴对 241 个值连乘（dt_day.py 的 day_product 经 common.py:567 的 nanproduct_last，即原生 prod），每个分钟值是 10 日 sigmoid 连乘的平方。若典型元素的 sigmoid 明显小于 1，约 241×10×2 个对数项相加，乘积在 float32 下溢为 0；若 Amt 大到 sigmoid(x) 在 float32 下恰好取 1.0（x 约 16.6 以上），整段乘积恰为 1。只有 Amt 落在很窄的中间区间时乘积才有变化。于是这个 head 的排序主要由「下溢成 0」或「饱和成 1」这两种数值状态决定，而不是 Amt 的时序结构。相关度表佐证：R 变体 1 对流动性控制 |ρ| 0.61、对 known 族 0.59，与一个成交额水平的数值代理一致。6 个变体中，窗口变化（150 / 200 / 250）、cross_ema 平滑、Volume 代换（变体 4 的 sigmoid(Volume) 同样饱和）、去掉 pow_2（变体 6）都保留了同一个内核，没有一个修掉下溢 / 饱和。按 §4 这是「浮点下溢 / 饱和主导了排序」，判数学问题，整组删掉。注意：这是由算式推出的判断，我没有在数据上验证 Amt 的单位与截面分布；PI 把「窗口越长越好」读成波动窗口的效果，应当先排除这个数值状态的解释。如果它有 alpha，最可能来自成交额水平（流动性）的代理，而不是波动的时序结构。'
+summary: '槽 a 通过（创新 3、合理 3，12 个种子全留，核心与控制、快照 head 的 |ρ| 都在线内）；槽 b 通过（创新 4、合理 4，划掉种子 11 为 60 日价格反转的变体，剩 4、5、7、10，恰好 4 个，表内 6 个废品门槛之外无余量）；R 组 ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 50) 合理度 1，分钟轴连乘的数值下溢 / 饱和主导排序且 6 个变体都未修掉，按规则删掉。'
