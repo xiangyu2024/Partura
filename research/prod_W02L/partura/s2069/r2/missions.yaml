@@ -1,0 +1,35 @@
+seed: 2069
+round: 2
+slots:
+  - type: E
+    core: 'cross_mean(day_skew(Ret), 20)'
+    hypothesis: 'Core = 20-day average of the daily skewness of minute returns (lottery / jackpot-minute preference). In the batch snapshot the 20-day skew is the strongest enriched subtree after day_std(Amt): the 41 candidates containing it average -1.20 vs -2.90 without (p 0.000). In round 1 it only ever appeared multiplied with the VWAP/volume correlation leg through cs_rank, and that whole family scored around zero or negative. Here the periphery is entirely different and uses none of the VWAP/volume machinery: (1) within-bucket ranking (cs_bucket_rank / cs_bucket_zscore) by float cap, listing age, or by the known liquidity-dispersion family cross_mean(day_std(Amt),30), so the skew is compared only against stocks of the same size / age / activity level; (2) history-relative forms (skew minus its own 120-day mean, z-score vs 60 days, skew divided by its own volatility), which turn a persistent level (largely a stock-specific trait that the controls absorb) into a change in jackpot-ness; (3) skew of returns minus skew of the Low series, separating return asymmetry from range asymmetry; (4) interaction with minute return-volume correlation (day_corr(Ret,Volume)) and turnover-weighted return, i.e. whether the skew came on heavy volume. Mechanism: retail investors overpay for positively skewed (lottery) payoffs, and the effect is concentrated among small, young, low-attention names; ranking within size / age / activity buckets removes the first-order size and liquidity exposures that the 7 controls strip out, leaving the within-peer lottery premium. It should persist out of sample because it is a behavioural preference rather than a regime feature; the sign is left to the reward direction.'
+    seeds:
+      - 'cs_bucket_rank(cross_mean(day_skew(Ret), 20), LogFloatCap)'
+      - 'cs_bucket_rank(cross_mean(day_skew(Ret), 20), ListAge)'
+      - 'cs_bucket_rank(cross_mean(day_skew(Ret), 20), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_zscore(cross_mean(day_skew(Ret), 20), LogFloatCap)'
+      - 'cs_first_low40(cross_mean(day_skew(Ret), 20), cross_mean(day_std(Amt), 20))'
+      - 'sub(cross_mean(day_skew(Ret), 20), cross_mean(day_skew(Ret), 120))'
+      - 'cross_zscore(cross_mean(day_skew(Ret), 20), 60)'
+      - 'div(cross_mean(day_skew(Ret), 20), cross_stddev(day_skew(Ret), 20))'
+      - 'sub(cross_mean(day_skew(Ret), 20), cross_mean(day_skew(Low), 20))'
+      - 'mul(cs_rank(cross_mean(day_skew(Ret), 20)), cs_rank(neg(cross_mean(day_corr(Ret, Volume), 20))))'
+      - 'cs_bucket_rank(sub(cross_mean(day_skew(Ret), 20), cross_mean(day_wmean(Ret, Amt), 20)), LogFloatCap)'
+      - 'cs_last_high10(cross_mean(day_skew(Ret), 20), ListAge)'
+  - type: N
+    hypothesis: 'Intraday timing and net buying pressure of turnover, compared within activity peers. Every library head works with whole-day sums (day_sum(Amt), day_sum(Volume), VWAP) or with the cross-minute dispersion day_std(Amt); none looks at WHEN in the day the money traded or WHO was pressing. New day-level statistics: day_centroid(Amt) (0 = all turnover at the open, 1 = at the close; order information that std/kurt/gini discard), day_signed_ratio(Ret, Amt) (share of turnover traded in up-minutes minus down-minutes, a tick-free net buying-pressure proxy), day_topw_mean(Ret, Volume) (average return of the heaviest 10 percent of minutes: an event study of block-like prints) and day_gini(Amt) (concentration of turnover in a few minutes). Mechanism: informed or institutional flow works orders over the day and leaves a late-day centroid and one-sided turnover (accumulation), whereas retail noise trades at the open; averaging over 10-20 days with cross_mean and standardising against own history (cross_zscore) isolates persistent pressure rather than level. Differences from library heads: no VWAP, no ts_corr of price with volume, no raw volume level; the quantities are bounded ratios or positions on the minute axis, so they are not mechanically proportional to liquidity or size, and bucketing by day_std(Amt) or float cap (cs_bucket_rank) compares stocks only against peers of similar activity, removing the known-family exposure. Out of sample it should persist because the post-order-splitting footprint of institutional execution is structural (it follows from market-impact-minimising execution), not a regime feature.'
+    inspired_by: 'Batch 1/2 snapshot: day_std(Amt) (dispersion of minute turnover) is the most enriched subtree (+2.18 mean score difference, p 0.000) while whole-day VWAP/volume subtrees are negative after control residualisation, suggesting the useful information is in the intraday shape of turnover, which the library only summarises through std; day_skew(Ret) is also enriched, i.e. minute-level distribution shape matters.'
+    seeds:
+      - 'cross_mean(day_centroid(Amt), 10)'
+      - 'cs_bucket_rank(cross_mean(day_centroid(Amt), 20), cross_mean(day_std(Amt), 30))'
+      - 'cross_zscore(cross_mean(day_signed_ratio(Ret, Amt), 5), 40)'
+      - 'cs_bucket_rank(cross_mean(day_signed_ratio(Ret, Amt), 20), LogFloatCap)'
+      - 'cross_mean(day_topw_mean(Ret, Volume), 20)'
+      - 'cs_bucket_rank(cross_mean(day_topw_mean(Ret, Volume), 10), cross_mean(day_std(Amt), 30))'
+      - 'cs_bucket_rank(cross_mean(day_gini(Amt), 20), LogFloatCap)'
+      - 'sub(cross_mean(day_gini(Amt), 5), cross_mean(day_gini(Amt), 60))'
+      - 'mul(cs_rank(cross_mean(day_centroid(Amt), 20)), cs_rank(cross_mean(day_signed_ratio(Ret, Amt), 20)))'
+      - 'cs_bucket_rank(sub(cross_mean(day_centroid(Volume), 10), cross_mean(day_centroid(Volume), 60)), ListAge)'
+      - 'cs_rank(cross_mean(day_wmean(Ret, Amt), 20))'
+      - 'cs_first_low40(cross_mean(day_signed_ratio(Ret, Amt), 10), cross_mean(day_std(Amt), 20))'

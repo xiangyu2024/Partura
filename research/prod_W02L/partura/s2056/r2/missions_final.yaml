@@ -1,0 +1,108 @@
+seed: 2056
+round: 2
+slots:
+- type: E
+  core: div(day_std(Amt), day_sum(Amt))
+  hypothesis: 'Core = div(day_std(Amt), day_sum(Amt)): the minute-to-minute dispersion
+    of turnover divided by the day total, i.e. how concentrated (bursty) the day''s
+    trading is (std/sum is the coefficient of variation divided by about 15.5, so
+    it is a scale-free burstiness measure; sum is never near zero for traded stocks,
+    and suspended days are missing). It is the necessary part of the only snapshot
+    head that clears the bar, cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt),
+    day_sum(Amt)),1), 60) with score +0.52: the round-1 breakdown shows that removing
+    the division drops the score to -0.59 (a +1.11 swing) while removing the one-day
+    delay changes nothing (+0.52), so the alpha comes from the burstiness ratio, and
+    its coupling with turnover LEVEL over a 60-day window (the 120-day window is better,
+    +0.76). All earlier candidates containing this core use the same periphery, a
+    day-axis cross_corr of day_sum(Amt) against the core, or its failed knockouts.
+    This round keeps the core fixed and changes what it is related to and how: (1)
+    correlate the burstiness with OTHER daily state variables instead of turnover
+    level (open-to-close return, intraday return volatility, worst minute return,
+    share volume, turnover change), i.e. does bursty trading come with price pressure
+    or with quiet liquidity; (2) its persistence, cross_corr of the core with its
+    own lag, and its change relative to its own 60-day mean or z-score (a stock whose
+    trading just became bursty versus its own norm, an information-arrival state rather
+    than a level); (3) longer windows 90-120 and a smoothed core. Mechanism: concentrated
+    trading in a few minutes is informed or institutional execution; whether that
+    burstiness co-moves with volume or return tells which of accumulation or noise
+    it is, and the time-series relation is a slow stock-specific characteristic, so
+    it should persist out of sample. None of these peripheries (non-Amt partners,
+    self-persistence, own-history normalisation) appear in the snapshot candidates.'
+  seeds:
+  - cross_corr(day_std(Ret), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 90)
+  - cross_corr(cross_delay(div(day_std(Amt), day_sum(Amt)), 1), div(day_last(Close),
+    day_first(Open)), 90)
+  - cross_corr(div(day_std(Amt), day_sum(Amt)), cross_delay(div(day_std(Amt), day_sum(Amt)),
+    1), 60)
+  - cross_zscore(div(day_std(Amt), day_sum(Amt)), 120)
+  - sub(div(day_std(Amt), day_sum(Amt)), cross_mean(div(day_std(Amt), day_sum(Amt)),
+    60))
+  - cross_corr(cross_delta(day_sum(Amt), 1), div(day_std(Amt), day_sum(Amt)), 60)
+  - cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 5), 90)
+  - cross_corr(div(day_std(Amt), day_sum(Amt)), day_min(Ret), 60)
+  - cross_corr(day_sum(Amt), cross_mean(div(day_std(Amt), day_sum(Amt)), 5), 120)
+  - cross_delta(div(day_std(Amt), day_sum(Amt)), 20)
+- type: N
+  hypothesis: 'New idea: abnormal intraday TIMING of trading relative to the stock''s
+    own usual profile. For each stock-day, day_corr over the 241 minutes between today''s
+    minute turnover curve Amt and the same-minute average turnover of the previous
+    20 or 60 days (cross_delay(cross_mean(Amt, d), 1), the stock''s own normal U-shaped
+    profile, today excluded), or yesterday''s curve, measures profile similarity:
+    a low value means trading today was shifted in time versus the norm (news, block
+    execution, informed flow), a high value means routine liquidity trading. Averaging
+    over 10-20 days (cross_mean) or its volatility gives a slow stock-specific state,
+    and its time-series coupling with turnover level (cross_corr with day_sum(Amt))
+    asks whether high volume comes with routine or abnormal timing. Mechanism: informed
+    trading concentrates at unusual times and carries price impact that is under-reacted
+    to, while routine volume carries none; this is the intraday-shape analogue of
+    the abnormal-volume literature but looks at shape not size, so it is orthogonal
+    to turnover level, volatility and the day-std-of-Amt known family (those are scale
+    statistics; this is a correlation of two minute curves, invariant to scale). Operators:
+    day_corr is a within-day minute-axis Pearson correlation (returns 0, not missing,
+    if one side is flat that day, e.g. zero-volume days, so a suspended stock sits
+    at 0 and is mostly removed by the suspension mask); cross_delay and cross_mean
+    act on the day axis minute by minute, so no look-ahead. It differs from the library:
+    heads are day-axis cross_corr of daily aggregates or of minute series with a max
+    collapse, none is a minute-axis correlation of a stock with its own history. Why
+    it should persist: informed-timing premium is a structural microstructure feature,
+    not a pattern of one regime.'
+  inspired_by: 'batch 1-2 (cross_corr / day_max families): the only head that works
+    is cross_corr(day_sum(Amt), lagged std/sum of Amt) i.e. the intraday SHAPE of
+    turnover (burstiness) interacts with its level; the max-of-coupling heads all
+    fail, so shape statistics of the Amt minute curve rather than extremes carry the
+    signal'
+  seeds:
+  - cross_mean(day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), 20)
+  - cross_mean(day_corr(Amt, cross_delay(cross_mean(Amt, 60), 1)), 20)
+  - cross_mean(day_corr(Amt, cross_delay(Amt, 1)), 20)
+  - cross_stddev(day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), 60)
+  - cross_corr(day_sum(Amt), day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), 60)
+  - cross_mean(day_corr(Volume, cross_delay(cross_mean(Volume, 20), 1)), 10)
+  - sub(day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), cross_mean(day_corr(Amt,
+    cross_delay(cross_mean(Amt, 20), 1)), 60))
+  - cross_mean(day_corr(Amt, Ret), 20)
+  - cross_corr(day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), div(day_last(Close),
+    day_first(Open)), 60)
+  - cross_mean(day_corr(cross_delta(Amt, 1), Ret), 20)
+  - cross_mean(day_corr(Amt, cross_delay(cross_mean(Amt, 5), 1)), 40)
+  - cross_zscore(day_corr(Amt, cross_delay(cross_mean(Amt, 20), 1)), 60)
+R:
+- head: cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1),
+    60)
+  why: 'breakdown: the window is the weak part (30 -> -0.32, 60 -> +0.52, 120 -> +0.76
+    with train +1.53), so the 60-day window is too short and noisy; the lag-1 delay
+    is irrelevant (knockout +0.52); Volume swap is similar. Variants lengthen the
+    window, drop the delay and combine with Volume.'
+  variants:
+  - cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 90)
+  - cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 150)
+  - cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 180)
+  - cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 240)
+  - cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)),
+    1), 120)
+  - cross_corr(day_sum(Amt), div(day_std(Amt), day_sum(Amt)), 120)
+  - cross_corr(day_sum(Amt), cross_mean(div(day_std(Amt), day_sum(Amt)), 3), 120)
+  - cross_corr(day_sum(Volume), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml
