@@ -1,0 +1,32 @@
+# 相关度表:种子 2054,P 组,第 2 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 6 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.02 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.06 | 0.04 | 0.05 | 0.07 | 0.03 | 0.04 | `cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High))` |
+| slot a seed 1 | 过 | 0.02 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.05 | 0.01 | 0.10 | 0.28 | 0.03 | 0.03 | `cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 20)` |
+| slot a seed 2 | 过 | 0.03 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.06 | 0.03 | 0.09 | 0.14 | 0.00 | 0.04 | `cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)` |
+| slot a seed 3 | 过 | 0.04 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.06 | 0.02 | 0.11 | 0.18 | 0.00 | 0.05 | `cross_ema(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 30)` |
+| slot a seed 4 | 过 | 0.02 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.07 | 0.03 | 0.03 | 0.07 | 0.04 | 0.06 | `cs_bucket_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), LogFloatCap)` |
+| slot a seed 5 | 过 | 0.04 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.06 | 0.02 | 0.04 | 0.18 | 0.00 | 0.01 | `cross_mean(cs_bucket_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), LogFloatCap), 40)` |
+| slot a seed 6 | 过 | 0.12 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.02 | 0.29 | 0.06 | 0.01 | 0.27 | 0.25 | `cross_regbeta(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_sum(Amt), 60)` |
+| slot a seed 7 | 过 | 0.05 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.02 | 0.05 | 0.00 | 0.01 | 0.03 | 0.10 | `cross_corr(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_sum(Amt), 60)` |
+| slot a seed 8 | 过 | 0.03 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.04 | 0.02 | 0.01 | 0.03 | 0.02 | 0.01 | `cross_zscore(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)` |
+| slot a seed 9 | 过 | 0.01 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.02 | 0.02 | 0.06 | 0.12 | 0.03 | 0.01 | `sub(cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 10), cross_mean(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60))` |
+| slot a seed 10 | 过 | 0.03 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.06 | 0.01 | 0.11 | 0.18 | 0.02 | 0.04 | `cross_mean(cs_regres(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_std(Ret)), 40)` |
+| slot a seed 11 | 过 | 0.12 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.04 | 0.13 | 0.31 | 0.00 | 0.17 | 0.01 | `cross_mean(cs_regres(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), day_mean(Ret)), 40)` |
+| slot a seed 12 | 过 | 0.06 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.06 | 0.07 | 0.05 | 0.11 | 0.08 | 0.05 | `cross_tail_mean_q75(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 60)` |
+| slot a seed 13 | 过 | 0.05 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.05 | 0.07 | 0.02 | 0.10 | 0.06 | 0.07 | `cross_stddev(cs_regres(cs_regres(day_argmax(High), day_es_ratio_lo(High)), day_es_ratio_lo(High)), 40)` |
+| slot b seed 1 | 过 | 0.09 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.23 | 0.37 | 0.03 | 0.06 | 0.33 | 0.03 | `cross_mean(day_ar1_coefficient(Ret), 60)` |
+| slot b seed 2 | 过 | 0.11 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.25 | 0.34 | 0.28 | 0.01 | 0.34 | 0.12 | `cross_mean(day_ar1_coefficient(abs(Ret)), 40)` |
+| slot b seed 3 | 过 | 0.21 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.11 | 0.77 | 0.28 | 0.04 | 0.75 | 0.23 | `cross_mean(day_ar1_coefficient(Volume), 60)` |
+| slot b seed 4 | 过 | 0.14 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.19 | 0.70 | 0.02 | 0.04 | 0.67 | 0.29 | `cross_mean(cs_regres(day_ar1_coefficient(Volume), day_std(Ret)), 40)` |
+| slot b seed 5 | 过 | 0.06 | `day_durbin_watson(cross_regbeta(signedpower(nt_ts_kurt(Low, ` | 0.10 | 0.22 | 0.20 | 0.05 | 0.16 | 0.11 | `cross_mean(sub(day_ar1_coefficient(abs(Ret)), day_ar1_coefficient(Ret)), 40)` |
+| slot b seed 6 | 过 | 0.07 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.08 | 0.03 | 0.14 | 0.01 | 0.03 | 0.08 | `cross_regbeta(day_ar1_coefficient(Volume), day_ar1_coefficient(Ret), 60)` |
+| slot b seed 7 | 过 | 0.09 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.12 | 0.03 | 0.15 | 0.03 | 0.02 | 0.08 | `cross_corr(day_ar1_coefficient(Ret), day_ar1_coefficient(Volume), 60)` |
+| slot b seed 8 | 过 | 0.08 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.25 | 0.40 | 0.11 | 0.01 | 0.36 | 0.04 | `cs_bucket_zscore(cross_mean(day_ar1_coefficient(Ret), 30), LogFloatCap)` |
+| slot b seed 9 | 过 | 0.22 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.13 | 0.78 | 0.27 | 0.01 | 0.76 | 0.24 | `cross_ema(day_ar1_coefficient(Amt), 30)` |
+| slot b seed 10 | 过 | 0.10 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.23 | 0.27 | 0.34 | 0.01 | 0.28 | 0.15 | `cross_mean(cs_regres(day_ar1_coefficient(abs(Ret)), day_ar1_coefficient(Ret)), 40)` |
+| slot b seed 11 | 过 | 0.16 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.28 | 0.23 | 0.09 | 0.03 | 0.20 | 0.00 | `cs_bucket_zscore(cross_mean(cs_regres(day_ar1_coefficient(abs(Ret)), day_std(Ret)), 40), LogFloatCap)` |
+| slot b seed 12 | 过 | 0.09 | `day_median(pow_2(nt_ts_regalpha(nt_cs_mask_top_replace_mean_` | 0.07 | 0.06 | 0.13 | 0.26 | 0.08 | 0.02 | `cross_zscore(cross_mean(day_ar1_coefficient(Ret), 5), 60)` |
