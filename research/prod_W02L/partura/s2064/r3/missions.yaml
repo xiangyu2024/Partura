@@ -1,0 +1,33 @@
+seed: 2064
+round: 3
+slots:
+  - type: E
+    core: 'cross_delay(day_at_max_ratio(Close), 1)'
+    hypothesis: '核心 C = cross_delay(day_at_max_ratio(Close),1):昨天收盘价等于当日最高(收盘价)的分钟占比,即昨天『一直封在/贴着日内高位』的程度(取昨日值,无前视)。证据:本批共性表里 C 的子树富集(含 C 的 30 个候选均值 -1.23 对 -1.84,p 0.009),上一轮 N 位 cross_mean(mul(C, 当日涨幅),120) 是本组目前最好的 +0.27(train +0.28 / valid +0.27,两段同号,未到 0.5)。机制:C×当日涨幅 = 『昨天收得强、今天继续涨』的延续强度,在 A 股读的是封板 / 强势收盘后的次日接力(涨停追逐)与游资接力的持续性。上次的外围只有 cross_mean(mul(C, 涨幅),120) 这一种写法,这次换成:(1) cross_corr / cross_cov 把它写成 C 与当日涨幅的 120 日截面时序相关 / 协方差(读的是个股自己『强收盘之后是否接力』的响应系数,而不是均值);(2) 把当日涨幅拆成隔夜跳空(day_first(Open)/昨收-1)与日内收益(涨幅-跳空),看接力发生在集合竞价还是盘中(A 股隔夜与日内行为方向常相反);(3) 用 LimitWidth / LogFloatCap 桶内去均值,同板块同市值票里比较;(4) 20 日对 120 日的变化、尾部均值、除以 60 日波动的标准化与成交额加权。和库里不同:库里 5583 条骨架没有 day_at_max_ratio 乘跳空 / 相关的写法,已出的含 C 候选全是 cross_mean(mul(C,涨幅),120) 一族。样本外为什么还在:涨跌停制度与散户接力是结构性行为,120 日慢变量换手低,15 bp 影响小。算子全是 day_*压日值再用 cross_* 尾随窗口,没有前视;除数 cross_stddev 为 60 日波动(正常日 >0,零则缺失),不是近零爆点;day_at_max_ratio 用 Close 的分钟占比,没用 ts_rank / cross_rank,避开停牌 0 值。最可能的失败:C 的水平与流动性 / 反转控制相关被吃掉。'
+    seeds:
+      - 'cross_corr(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_cov(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 120)'
+      - 'cs_bucket_demean(cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 120), LimitWidth)'
+      - 'cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), cross_mean(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 20))), 120)'
+      - 'cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 120)'
+      - 'cross_tail_mean_q75(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'sub(cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 20), cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 120))'
+      - 'cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), div(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), cross_stddev(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60))), 120)'
+      - 'cs_bucket_zscore(cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120), LogFloatCap)'
+      - 'cross_corr(cross_delay(day_at_max_ratio(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_mean(mul(cross_delay(day_at_max_ratio(Close), 1), mul(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), day_sum(Amt))), 60)'
+  - type: N
+    hypothesis: '新 idea:『昨日收盘价峰值出现的分钟位置』对次日隔夜跳空的预测。day_argmax(Close) = 日内最高收盘价出现在第几分钟(0-240),越晚说明尾盘仍在被买入(尾盘抢筹 / 拉升),越早说明冲高后被卖回;day_argmin(Close) 同理,二者之差 = 日内是先跌后涨还是先涨后跌的时序方向。把它们取昨日值(cross_delay,无前视),乘以当日隔夜跳空 day_first(Open)/昨收-1,120 日平均,读的是『尾盘强势形态是否在次日集合竞价被继续定价(接力)或被回吐』的个股习性;也试了与日内收益的对比、cross_corr 的相关写法、除 LimitWidth 无量纲化、桶内去均值。算子怎样实现:day_argmax / day_argmin 把分钟压成日值,cross_delay 取过去,cross_mean / cross_corr / cross_cov 做尾随窗口。和库里不同:本批与已出 head 都是价格比值 / 方差 / 封板占比(day_at_max_ratio 是『占比』而非『位置』),库里没有把『峰值时刻』与隔夜跳空相乘的骨架;与 C 一族的区别:at_max_ratio 衡量停留时长,argmax 衡量发生时刻,二者对尾盘拉升的区分不同。样本外为什么还在:A 股 T+1 下尾盘拉升与隔夜效应是结构性的(隔夜 / 日内收益方向相反的现象在 A 股长期存在),慢变量换手低。数学检查:day_argmax 并列时取第一个下标,整日价格全相同(一字板 / 零成交)时返回 0 即开盘分钟、不是缺失,这类票会聚在 0,只占小部分且尺子内并列靠列序;无除以近零(LimitWidth 为 0.05-0.3 常数);无前视。最可能的失败:位置变量噪声大、与反转控制相关。'
+    inspired_by: '本批共性表 cross_delay(day_at_max_ratio(Close),1) 富集(p 0.009)与上轮 N 位 +0.27 唯一两段同号的写法:昨日日内形态 × 今日涨幅;换成『峰值时刻』读同一个现象'
+    seeds:
+      - 'cross_corr(cross_delay(day_argmax(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120)'
+      - 'cross_mean(mul(cross_delay(day_argmax(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_mean(mul(cross_delay(sub(day_argmax(Close), day_argmin(Close)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_mean(mul(cross_delay(sub(day_argmax(Close), day_argmin(Close)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cs_bucket_demean(cross_mean(mul(cross_delay(day_argmax(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120), LogFloatCap)'
+      - 'cross_mean(mul(cross_delay(day_argmax(Close), 1), sub(sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1))), 120)'
+      - 'cross_cov(cross_delay(day_argmax(Close), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_mean(mul(cross_delay(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1)), 120)'
+      - 'cross_mean(mul(cross_delay(day_argmax(Close), 1), div(sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), LimitWidth)), 120)'
+      - 'cross_corr(cross_delay(sub(day_argmax(Close), day_argmin(Close)), 1), sub(div(day_first(Open), ts_delay(day_last(Close), 1)), 1), 120)'

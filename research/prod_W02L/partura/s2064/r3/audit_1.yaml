@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 C = cross_delay(day_at_max_ratio(Close),1)。相关度表:核心与 9 个 head 的原始 |ρ| 最大 0.23(ts_stddev(sqrt(day_durbin_watson(nt_cs_mask_top_replace_mean_neg...)))),残差 0.56;与 5 个控制最大 0.17(liq),远低于 0.8。核心不是任何 head 的子树(head 表里没有 day_at_max_ratio);它出自共性表 / 核心卡的说法,按任务范围我没有去读共性表,未核对,以 PI 所述为准。12 个种子与 head 的原始 |ρ| 最大 0.36(seed 7,对 ts_std(neg(cross_sum(ts_sum(day_var(pow_2_5(Ret)),10),30)))),均低于 0.7 的自动划线;与控制最大 0.42(seed 7 对 vol),低于 0.8。算子逐个核对:day_at_max_ratio(partura/ops_ext.py:580)是日内等于最大值的分钟占比,封板日近 1、正常日约 1/240、有效分钟少于 2 为 NaN;cross_delay(AlphaCube dt_cross.py:150)取昨日值,无前视;cross_corr / cross_cov 是 rolling_pair_reduce 沿时间轴(axis=0)的尾随 120 / 60 日相关与协方差;cross_mean / cross_tail_mean_q75 / cross_stddev 为尾随窗口;cs_bucket_demean / cs_bucket_zscore 是当日截面十分位分桶。没有 nt_*、没有 ts_spearman、没有 shift 类算子。创新度 4:没有任何 head 含 day_at_max_ratio、隔夜跳空或相关 / 协方差写法;裸的 C×涨幅 在第 2 轮 N 位测过(+0.27,未过门槛),本轮的新量在于时序相关、隔夜 / 日内拆分和截面桶,不是同一个量。合理度 4:昨日封在日内高位到今日接力或回吐的涨停接力、散户追涨机制清楚,算子组合确实实现了它。注意一点:种子 3 的 cs_bucket_demean(·, LimitWidth) 的分桶是 _pct_rank 的十分位,而 LimitWidth 在数据里只取 0.10 / 0.20 / 0.30 三个值,并列按列序打破(stable argsort),所以十分位切在板块内部,假说里的「同板块」只部分成立;按 §4 列序携带板块信息,不算问题,保留。划掉的种子:无。数学上 seed 9 的除数 cross_stddev(ret,60) 只在连续 60 日涨幅完全相同时近零,实际不构成主导;seed 1 与 seed 2 同为 C 与涨幅的相关 / 协方差,一个做 corr 一个做 cov,带每只票的波动尺度,截面排序不同,不算重复。如果它有 alpha,最可能来自:A 股涨停接力与封板后次日溢价 / 回吐在昨日强收盘的票之间的截面差异(散户追涨),是慢变量、换手低;若失败,主因是 C 的水平被流动性或反转控制吃掉。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '位型 N。相关度表:10 个种子与 9 个 head 的原始 |ρ| 最大 0.27(seed 8),均低于 0.7;与 5 个控制最大 0.27(seed 5 对 liq、seed 10 与 known 等),低于 0.8,也低于 0.5 的控制换写线;无自动划线。算子核对:day_argmax / day_argmin(AlphaCube dt_day.py:172、182)返回分钟列下标,并列取第一个(torch.argmax 语义),整日价格全相等时返回 0,这是 §4 已知行为。本位的 argmax 在一字板 / 零成交日会把 argmax 与 argmin 同时压到 0,读出来是「0 差」,不是缺失;占比小(PI 已注明),不主导结果,不挡。解释需要修正:并列取第一个,所以平台式封顶读到的是首次触及日内最高的分钟(偏早),而不是「尾盘仍在买入」的时刻;假说「越晚 = 尾盘买入」只对唯一最高点成立。这是解释问题,不是数学问题,不挡。seed 9 的除数 LimitWidth 数据里只有 0.10 / 0.20 / 0.30(AlphaCube tradability.py:18-30 的 board_limit;ST 的 5% 未标记),PI 写的「0.05-0.3」不准确,但没有近零除数,不挡。seed 5 是 cs_bucket_demean(·, LogFloatCap),与 seed 2 的区别是去掉了截面规模均值,排序不同,保留。创新度 4:argmax / argmin 没有出现在任何 head 里,argmax 与隔夜跳空的乘积也不是 head 的换皮;与 C 一族的区别是衡量发生时刻而不是停留时长。划掉的种子:无。如果它有 alpha,最可能来自:尾盘拉升或早封与次日隔夜跳空之间的个股习性差异(T+1 下隔夜与日内方向常相反),是慢变量;若失败,主因是位置变量噪声大,或被反转控制吃掉。'
+R: []
+summary: '两个任务位都通过:位 a(E,核心 cross_delay(day_at_max_ratio(Close),1))创新 4 / 合理 4,12 个种子全部保留;位 b(N,argmax 峰值时刻 × 隔夜跳空)创新 4 / 合理 4,10 个种子全部保留。本轮无 R 组。待修正的说明:位 a 的 LimitWidth 分桶切在板块内部而非板块;位 b 的 argmax 并列取首个,解释应为「首次触及日内最高的时刻」;LimitWidth 数据只取 0.10 / 0.20 / 0.30。位 a 的核心出处(共性表)按任务范围未核对。'
