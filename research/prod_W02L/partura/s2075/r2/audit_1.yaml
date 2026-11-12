@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: [1, 2, 4, 5, 6, 7, 8, 11, 12]
+    reasons: '创新度 3。核心 mul(pow_3(ts_std(day_close(Amt),50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt,30))),1)) 就是快照 head 1 cross_max(核心,5) 的内层(corr_1.md 原始 |ρ| 0.99),核心本身与 head 1 是同一个对象。种子 1、2、5、6、7、8、11、12 与 head 1 的原始 |ρ| 在 0.92 到 1.00 之间,是同一对象的换皮,按「只是 head 的换皮」划掉(与库禁令 0.7 相距很远,但与 head 1 的对象相同)。种子 4 ts_rank(核心,40) 划掉:corr_1.json 中 gate 为 False、distinct 为 0.023,ts_rank 的输出只剩约 40 个离散档位,且停牌日当天值缺失时 nanrank_last 返回 0(规则 §4 的已知行为),是数值伪影。剩下的种子 3 cross_zscore(核心,20)(与 head 1 的 |ρ| 0.06,与 liq 0.02)、种子 9 核心减自身 20 日均值(0.04)、种子 10 ts_corr(核心, day_last(Close), 20)(0.07)在秩空间里确实偏离 head,是核心对自身历史的偏离与价格共动,所以不给 1。合理度 3。逐个算子核对:cross_decay_linear 回看、最近一天权重最大(common.py:602-610,rolling_reduce),无前视;cross_zscore 是本股过去 d 日的 z 值(ops_ext.py:208-224),因果;day_durbin_watson 无前视,但它的分母是未去均值的 sum(x^2)(dt_day.py:304-325),所以 DW 大致等于 2·v·(1-ρ1)/(m²+v),是水平与波动的比值,不只是 PI 写的「自相关结构」或「连续堆积」,这一点机制描述不准;ts_min(·,1) 是恒等变换,无害但等于没写。核心对 liq 0.83、known 0.85,超过 E 核心门槛 0.8(corr_1.md 核心行),按 §3 这个位不通过,划完也只剩 3 个种子(少于 4),应改为一次普通 GP,这一条由 PI 执行。如果它有 alpha,最可能来自:尾盘成交不稳定性相对该股自身常态的偏离(cross_zscore 或减均值那两个种子),而不是它的截面水平,因为水平已经被流动性与已知族吃掉。'
+  - slot: b
+    novelty: 3
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '创新度 3。N 位的对象是收盘一分钟成交额除以日均分钟成交额(或除以日成交额)的波动、偏度与份额差,与快照 6 个 head 的原始 |ρ| 最高 0.43(种子 7 对 head 5),残差后 0.25 到 0.49;与 5 个控制的 |ρ| 最高 0.50(liq,种子 1、2、8、11),都低于 0.8。这个对象属于库里 day_close(Amt) 的写法族(notebook 共性表里有,但不显著),归一化与份额差是新的写法,不是新的数据源,所以给 3 而不是 4。合理度 4。逐个算子核对:day_close 即 day_last(dt_day.py:148);day_mean、day_sum 是分钟维聚合;in_slice(Amt,231,240) 是 0 基闭区间 x[:,231:241](dt_in.py:324-325),在 241 格里是最后 10 分钟,与 N 的「末 10 分钟」一致;ts_std、ts_mean、ts_skew、ts_max、ts_corr、cross_ema 都是回看,无前视。整日停牌时 day_mean 或 day_sum 为 0,div 给 NaN(common.py:175-180 没有保护),会被后续平滑跳过,不构成爆点问题。划掉种子 8:div(day_close, day_sum) 与种子 2 的 div(day_close, day_mean) 只差 day_sum/day_mean 等于分钟数这一个常数因子(有缺分钟日时才略有差别),ts_std 后的截面排序相同;相关度表两者的 head |ρ| 0.27、liq 0.50、known 0.46、vol 0.12 完全一致,是重复。种子 1 与 2 是同一个 ts_std 的 cross_ema 平滑版与原版,不划,但它们很可能高度相关,这一点 corr_1.json 没有种子间的 |ρ|,需要 PI 核对。无数学问题。如果它有 alpha,最可能来自:收盘集合竞价的参与度(相对全天均量)在该股自身 50 日内的不稳定性,即尾盘参与者时有时无的程度,它与流动性水平不是一回事。'
+R:
+  - head: 'cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)'
+    soundness: 3
+    reasons: '整组给 3。机制:skew 与 kurt 的比值没有直接的经济含义,PI 的拆解只能说明去掉分母会更差,不能说明分母的作用。数值:day_kurt 是超额峰度(common.py:418-422 中 _kurt 减去了 3),它在 0 附近会经过零,而 div 没有保护(common.py:175-180 是 torch.divide),所以超额峰度接近 0 的票日会出现 skew/kurt 的爆点,这是规则 §4 的数值伪影类。我没有证据说它主导了截面(PI 的拆解里去掉分母更差),所以不判为数学问题,给 3,但建议 PI 在使用前检查超额峰度绝对值很小的日子占比。变体 1(窗口 60)、变体 2(cross_ema 40)、变体 5(窗口 40)是同一个对象的窗口或平滑改动,机制与 head 相同,合理度跟随 head。变体 3 把分母换成 day_std(Ret):skew 除以 σ 是偏度的波动率标准化,机制弱;一字板日 σ=0 时 div 无保护,会出现 inf 或 NaN,需要 PI 检查。变体 4 cross_mean(day_wmean(Ret,Volume) - day_mean(Ret), 40):按 |Volume| 加权的收益均值减等权收益均值,代数上约等于 day_cov(Ret,Volume) 除以日均成交量(与 round-1 审计员的结论相同),机制是放量分钟的收益共动,清楚,这是组里机制最清楚的一个,但它与 head 1 的 cross_autocorr_s1(day_cov(Ret,Volume),·) 同源,需要留意。整组按最弱的那几个变体拉到 3。'
+summary: 'a 位不通过(核心对 liq 0.83、known 0.85 超过 0.8,划完只剩 3 个种子,PI 应改为普通 GP),创新度 3、合理度 3;b 位通过(划 8 号,与 2 号重复),创新度 3、合理度 4;R 组合理度 3。需告诉 PI:day_durbin_watson 分母未去均值,ts_min(·,1) 是恒等变换,day_kurt 是超额峰度且 div 无保护。'

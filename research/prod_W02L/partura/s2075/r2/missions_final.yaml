@@ -1,0 +1,42 @@
+seed: 2075
+round: 2
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 尾盘成交强度的不稳定性:CI = 收盘分钟成交额 / 全天分钟均成交额(无量纲),代表当天收盘定价阶段相对全天的参与程度;它的 50 日波动
+    / 偏度 / 变异系数衡量一只票的尾盘参与者是否时有时无(调仓、被动资金流入流出、尾盘拉抬或砸盘),与 Ret 完全无关,和库里全部以 Ret 为输入的 skew
+    / kurt / cov 家族不同;同时用收盘份额减开盘份额、末 10 分钟成交额占比及其波动给出不同口径,用 ts_corr 观察尾盘强度与全天成交额 /
+    当日收益是否同向(尾盘强度的方向性)。算子上全部是 day_close / day_open / in_slice 加 ts_* 或 cross_* 平滑,无前视。样本外还会在,因为尾盘成交的集中度由收盘集合竞价规则与机构调仓日历这类制度性因素决定,持久;若与流动性控制过近,尺子的残差化会把水平部分去掉,留下波动部分。
+  inspired_by: 批 2 中 cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ...), 5) 的拆解:day_close(Amt)
+    的 50 日波动单独留下 -0.52,窗口放宽后接近 0;共性表里 Amt 类字段的 day_close 出现频繁但不显著。这里把它去量纲并推广到开盘 /
+    末 10 分钟
+  seeds:
+  - cross_ema(ts_std(div(day_close(Amt), day_mean(Amt)), 50), 20)
+  - ts_std(div(day_close(Amt), day_mean(Amt)), 50)
+  - ts_mean(div(day_close(Amt), day_mean(Amt)), 30)
+  - div(ts_std(day_close(Amt), 50), ts_mean(day_close(Amt), 50))
+  - ts_skew(div(day_close(Amt), day_mean(Amt)), 50)
+  - ts_corr(day_close(Amt), day_sum(Amt), 40)
+  - cross_ema(sub(div(day_close(Amt), day_sum(Amt)), div(day_open(Amt), day_sum(Amt))),
+    20)
+  - sub(ts_max(div(day_close(Amt), day_mean(Amt)), 20), ts_mean(div(day_close(Amt),
+    day_mean(Amt)), 20))
+  - ts_corr(div(day_close(Amt), day_mean(Amt)), day_sum(Ret), 40)
+  - cross_ema(div(day_sum(in_slice(Amt, 231, 240)), day_sum(Amt)), 20)
+  - ts_std(div(day_sum(in_slice(Amt, 231, 240)), day_sum(Amt)), 50)
+R:
+- head: cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)
+  why: 拆解显示去掉除以 day_kurt 的分母后 score 从 -0.88 到 -1.47 更差,说明分母不是烂部件;窗口 40 把 valid 保持在
+    -0.78。烂的是纯 Ret 三四阶矩,换成量加权(day_wmean 与 day_mean 之差在共性表里 +1.9)版本
+  variants:
+  - cross_mean(div(day_skew(Ret), day_kurt(Ret)), 60)
+  - cross_ema(div(day_skew(Ret), day_kurt(Ret)), 40)
+  - cross_mean(div(day_skew(Ret), day_std(Ret)), 40)
+  - cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 40)
+  - cross_mean(div(day_skew(Ret), day_kurt(Ret)), 40)
+audit:
+  attempts: 1
+  file: audit_1.yaml

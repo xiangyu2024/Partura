@@ -1,0 +1,36 @@
+# 相关度表:种子 2075,P 组,第 2 轮(train 20210701 ~ 20230807 每 5 天一天;|ρ| 不分方向;不是评分)
+
+快照里 6 个 head。「原始」= 两者日度秩的 |ρ|,与 GP 库禁令同一个量(≥ 0.7 会被拒绝);「残差」= 对 5 个控制取残差后的 |ρ|(head 按它的方向与半衰期);控制列 = 原始秩与该控制的 |ρ|(≥ 0.5 = 控制变量换个写法)。
+
+| 位置 | 门槛 | 与 head 最大 \|ρ\|:原始 | 最像的 head | 残差 | liq | vol | rev | known | size | 表达式 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| slot a core | 过 | 0.99 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.99 | 0.83 | 0.25 | 0.03 | 0.85 | 0.53 | `mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1))` |
+| slot a seed 1 | 过 | 0.88 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.66 | 0.79 | 0.14 | 0.05 | 0.79 | 0.53 | `cross_ema(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 20)` |
+| slot a seed 2 | 过 | 1.00 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 1.00 | 0.83 | 0.24 | 0.01 | 0.85 | 0.53 | `ts_decay_linear(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 10)` |
+| slot a seed 3 | 过 | 0.06 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.07 | 0.02 | 0.09 | 0.17 | 0.04 | 0.01 | `cross_zscore(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 20)` |
+| slot a seed 4 | 废品 | 0.12 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.04 | 0.06 | 0.16 | 0.18 | 0.09 | 0.02 | `ts_rank(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 40)` |
+| slot a seed 5 | 过 | 0.94 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.86 | 0.81 | 0.19 | 0.04 | 0.82 | 0.53 | `cross_mean(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 30)` |
+| slot a seed 6 | 过 | 0.99 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.98 | 0.82 | 0.24 | 0.03 | 0.84 | 0.52 | `ts_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 10)` |
+| slot a seed 7 | 过 | 0.99 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.99 | 0.83 | 0.25 | 0.03 | 0.85 | 0.53 | `cs_demean(cs_rank(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1))))` |
+| slot a seed 8 | 过 | 0.99 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.98 | 0.82 | 0.17 | 0.02 | 0.83 | 0.55 | `div(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), cross_ema(day_std(Ret), 20))` |
+| slot a seed 9 | 过 | 0.04 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.12 | 0.07 | 0.07 | 0.20 | 0.06 | 0.04 | `sub(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), ts_mean(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), 20))` |
+| slot a seed 10 | 过 | 0.07 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.04 | 0.04 | 0.07 | 0.03 | 0.06 | 0.03 | `ts_corr(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), day_last(Close), 20)` |
+| slot a seed 11 | 过 | 0.93 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.83 | 0.82 | 0.16 | 0.07 | 0.82 | 0.56 | `cross_ema(cs_rank(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1))), 15)` |
+| slot a seed 12 | 过 | 0.92 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.96 | 0.62 | 0.14 | 0.01 | 0.64 | 0.42 | `div(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(signedpower(day_durbin_watson(cross_decay_linear(Amt, 30))), 1)), ts_std(day_sum(Amt), 30))` |
+| slot b seed 1 | 过 | 0.24 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.32 | 0.49 | 0.07 | 0.06 | 0.44 | 0.28 | `cross_ema(ts_std(div(day_close(Amt), day_mean(Amt)), 50), 20)` |
+| slot b seed 2 | 过 | 0.27 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.37 | 0.50 | 0.12 | 0.05 | 0.46 | 0.30 | `ts_std(div(day_close(Amt), day_mean(Amt)), 50)` |
+| slot b seed 3 | 过 | 0.19 | `add(sigmoid(sqrt(cross_quantile_q75(day_var(High), 15))), ts` | 0.44 | 0.32 | 0.16 | 0.02 | 0.28 | 0.36 | `ts_mean(div(day_close(Amt), day_mean(Amt)), 30)` |
+| slot b seed 4 | 过 | 0.10 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.49 | 0.25 | 0.08 | 0.12 | 0.20 | 0.20 | `div(ts_std(day_close(Amt), 50), ts_mean(day_close(Amt), 50))` |
+| slot b seed 5 | 过 | 0.09 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)` | 0.10 | 0.08 | 0.13 | 0.01 | 0.08 | 0.16 | `ts_skew(div(day_close(Amt), day_mean(Amt)), 50)` |
+| slot b seed 6 | 过 | 0.19 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.15 | 0.14 | 0.08 | 0.07 | 0.15 | 0.14 | `ts_corr(day_close(Amt), day_sum(Amt), 40)` |
+| slot b seed 7 | 过 | 0.43 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.25 | 0.47 | 0.38 | 0.08 | 0.50 | 0.28 | `cross_ema(sub(div(day_close(Amt), day_sum(Amt)), div(day_open(Amt), day_sum(Amt))), 20)` |
+| slot b seed 8 | 过 | 0.27 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.37 | 0.50 | 0.12 | 0.05 | 0.46 | 0.30 | `ts_std(div(day_close(Amt), day_sum(Amt)), 50)` |
+| slot b seed 9 | 过 | 0.24 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.25 | 0.41 | 0.14 | 0.01 | 0.38 | 0.21 | `sub(ts_max(div(day_close(Amt), day_mean(Amt)), 20), ts_mean(div(day_close(Amt), day_mean(Amt)), 20))` |
+| slot b seed 10 | 过 | 0.18 | `cross_max(mul(pow_3(ts_std(day_close(Amt), 50)), ts_min(sign` | 0.10 | 0.22 | 0.30 | 0.11 | 0.25 | 0.11 | `ts_corr(div(day_close(Amt), day_mean(Amt)), day_sum(Ret), 40)` |
+| slot b seed 11 | 过 | 0.28 | `add(sigmoid(sqrt(cross_quantile_q75(day_var(High), 15))), ts` | 0.36 | 0.49 | 0.23 | 0.05 | 0.46 | 0.50 | `cross_ema(div(day_sum(in_slice(Amt, 231, 240)), day_sum(Amt)), 20)` |
+| slot b seed 12 | 过 | 0.30 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.23 | 0.53 | 0.01 | 0.05 | 0.47 | 0.42 | `ts_std(div(day_sum(in_slice(Amt, 231, 240)), day_sum(Amt)), 50)` |
+| R 1 variant 1 | 过 | 0.59 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)` | 0.76 | 0.29 | 0.06 | 0.05 | 0.28 | 0.13 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 60)` |
+| R 1 variant 2 | 过 | 0.58 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)` | 0.67 | 0.30 | 0.03 | 0.06 | 0.29 | 0.14 | `cross_ema(div(day_skew(Ret), day_kurt(Ret)), 40)` |
+| R 1 variant 3 | 过 | 0.31 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)` | 0.38 | 0.09 | 0.11 | 0.10 | 0.10 | 0.16 | `cross_mean(div(day_skew(Ret), day_std(Ret)), 40)` |
+| R 1 variant 4 | 过 | 0.27 | `cross_mean(day_sum(div(add(select_where(is_gt(in_slice(Ret, ` | 0.27 | 0.19 | 0.50 | 0.30 | 0.25 | 0.12 | `cross_mean(sub(day_wmean(Ret, Volume), day_mean(Ret)), 40)` |
+| R 1 variant 5 | 过 | 0.71 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 20)` | 0.88 | 0.28 | 0.07 | 0.09 | 0.27 | 0.13 | `cross_mean(div(day_skew(Ret), day_kurt(Ret)), 40)` |
