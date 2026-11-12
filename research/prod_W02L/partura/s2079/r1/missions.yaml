@@ -1,0 +1,71 @@
+seed: 2079
+round: 1
+slots:
+- type: E
+  core: 'sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1)'
+  hypothesis: >-
+    Core = the day's maximum upside excursion from the prior close (High over previous Close minus 1), i.e. how far
+    the price spiked intraday relative to where it last settled. The best snapshot head (score -1.54) takes the
+    100-day ts_stddev of this core minus the same for the downside excursion (min Low). That periphery measures the
+    dispersion of range extremes, which is a pure volatility-of-range proxy and the controls (vol, size, liquidity) absorb
+    it. This round keeps the core but replaces the periphery with (a) the sign-aware upside-minus-downside excursion
+    level (day_max(High) side minus day_min(Low) side, smoothed with cross_mean / cross_ema), i.e. whether intraday
+    spikes are systematically larger up than down (lottery/attention demand and failed-spike reversal: spikes
+    that are bought at highs revert, so a persistently large upside excursion relative to the close-to-close move
+    marks over-bought stocks); (b) the excursion standardised against the stock's own history (cross_zscore,
+    cross_delta of short vs long mean), removing the persistent vol level and leaving unusual spike arrival;
+    (c) cross_regres / cross_regbeta of the excursion on the actual close-to-close return, i.e. the part of spikes
+    not converted into closing gains (intraday rejection); (d) bucket neutralisation inside size buckets. The snapshot
+    only uses ts_stddev(.,100) differences; none of these operators (cross_zscore, cross_ema, cross_regres, cross_corr,
+    cs_bucket_demean, regression on the return) appears with this core. Out of sample: rejection of intraday spikes
+    and overpricing of lottery-like stocks are behavioural effects, not tied to the sample.
+  seeds:
+  - 'cross_mean(sub(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1)), 20)'
+  - 'cross_zscore(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 40)'
+  - 'sub(cross_mean(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 5), cross_mean(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 60))'
+  - 'cross_regres(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60)'
+  - 'cross_corr(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 40)'
+  - 'cross_ema(sub(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), sub(div(day_min(Low), ts_delay(day_last(Close), 1)), 1)), 30)'
+  - 'cross_delta(cross_mean(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 10), 20)'
+  - 'cs_bucket_demean(cross_mean(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 20), LogFloatCap)'
+  - 'cross_tail_mean_q75(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 60)'
+  - 'cross_regbeta(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), sub(div(day_last(Close), ts_delay(day_last(Close), 1)), 1), 60)'
+- type: N
+  hypothesis: >-
+    New idea, away from range volatility and path-persistence statistics (hurst, ar1) that dominate the batch: the
+    intraday TIMING structure of trading. Mechanism: (1) day_centroid(Amt) is the centre of mass of turnover in
+    the 241-minute day; a stock whose money is traded late (close-heavy, institutional/index-style flow) vs early
+    (open-heavy, retail/news-driven) differs in who trades it; smoothed over days and standardised against own history
+    it measures a shift in the participant mix. (2) lead-lag flow: day_corr(Ret over minutes 2..240, Amt over minutes
+    1..239) says whether last-minute turnover is followed by same-direction returns (flow momentum, slow order
+    splitting) or reversal (liquidity-demand price pressure); the one-minute offset is made with in_slice on
+    both legs (no fill value). (3) the order of extremes: day_argmax(High) minus day_argmin(Low) (does the day
+    make its high before its low); persistent high-before-low days are weak-close days where late sellers dominate.
+    All of these are about when / in what order things happen inside the day, not the size of the range, so they
+    are different from the library heads (rolling stddev / var / hurst / ar1 / regbeta of Low, High, Open) and from the
+    five controls (all level or magnitude measures, no timing). Out of sample: closing-session concentration
+    of informed institutional flow and intraday liquidity-provision reversal are structural microstructure
+    features that persist.
+  inspired_by: 'Batch 1: every head and 40 candidates are built from day_hurst / day_ar1 / day_var / quantile of price
+    paths and range magnitudes and all are negative after controls; nothing uses where in the day volume or extremes occur.'
+  seeds:
+  - 'cross_mean(day_centroid(Amt), 20)'
+  - 'cross_zscore(day_centroid(Amt), 40)'
+  - 'sub(cross_mean(day_centroid(Amt), 5), cross_mean(day_centroid(Amt), 60))'
+  - 'cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Amt, 1, 239)), 20)'
+  - 'cross_zscore(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 40)'
+  - 'cross_mean(sub(day_argmax(High), day_argmin(Low)), 20)'
+  - 'cross_ema(sub(day_argmax(High), day_argmin(Low)), 30)'
+  - 'cross_mean(sub(day_centroid(Amt), day_centroid(Volume)), 20)'
+  - 'cross_corr(day_centroid(Amt), day_sum(Ret), 40)'
+  - 'cs_bucket_demean(cross_mean(day_centroid(Amt), 20), LogFloatCap)'
+  - 'cross_mean(sub(day_argmax(Amt), day_argmax(High)), 20)'
+  - 'cross_mean(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 20)'
+R:
+- head: 'sub(ts_stddev(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 100), ts_stddev(sub(div(day_min(Low), ts_delay(day_last(Close), 1)), 1), 100))'
+  why: 'Window ablation: ts_stddev@100->50 on the upside leg gains +0.14 on both train and valid; knockout of the -1 constants changes nothing (they are inert); sufficiency shows the upside leg alone (-1.35) is better than the downside leg (-1.84) so the downside subtraction is partly a rotten part.'
+  variants:
+  - 'sub(ts_stddev(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 50), ts_stddev(sub(div(day_min(Low), ts_delay(day_last(Close), 1)), 1), 100))'
+  - 'sub(ts_stddev(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 50), ts_stddev(sub(div(day_min(Low), ts_delay(day_last(Close), 1)), 1), 50))'
+  - 'ts_stddev(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 100)'
+  - 'sub(ts_stddev(sub(div(day_max(High), ts_delay(day_last(Close), 1)), 1), 50), ts_stddev(sub(div(day_min(Low), ts_delay(day_last(Close), 1)), 1), 200))'
