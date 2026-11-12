@@ -1,0 +1,73 @@
+seed: 2062
+round: 3
+slots:
+  - type: E
+    core: 'day_at_max_ratio(Vwap)'
+    hypothesis: >-
+      核心 day_at_max_ratio(Vwap) = 当天分钟 Vwap 等于当天最高 Vwap 的分钟占比。正常日接近 1/240,涨停被封死(价格钉在日高)的日子接近 1,
+      所以它读的是「当天被封在顶部的时间」,即涨停板事件。本批 226 个候选里含它的 21 个均值比不含的高 +1.32(p 0.000),含 inv() 的 20 个高 +1.26,
+      是本批富集最强且与流动性 / 波动 / 市值控制不是同一个东西的子树(核心与 5 个控制的日度秩相关应不高,由相关表核对)。alpha 的来源:A 股散户的涨停追逐与彩票偏好
+      (Bali 等的 MAX 效应),封板频率高的票有被追高后的回吐、或封板后的惯性,两者随市场状态和板块涨幅限制不同而符号不同,所以只做固定符号的 head(例如 Pr1a 的
+      cross_regbeta 与 inv 写法)都不稳。以前的候选(Pr1a)只把它放在 cross_regalpha / inv / regbeta 的 241 日回归里,这一轮的外围完全换成:
+      (a)事件频率的慢聚合与快慢差(cross_mean、cross_ema、5 日 vs 60 日,读「近期封板突然增多」);(b)对波动做 60 日回归残差,去掉「波动大自然触顶」的机械成分;
+      (c)规模内 / 线性去规模(cs_bucket_demean、cs_regres 对 LogFloatCap),因为小盘封板更多;(d)与滞后 1 日收益的 60 日相关(cross_delay,只取过去)与按近 20 日涨跌符号
+      翻转(追涨 vs 抄底两种封板);(e)和 day_at_min_ratio(Vwap)(封死跌停)相减,把涨停与跌停分开;(f)封板频率的波动 cross_stddev。
+      这些都是库里没有的外围:库里含该核心的候选只出现 regbeta / regalpha / inv 的写法,两个库全部骨架已被禁止,GP 只能往新结构外长。
+      样本外为什么还在:涨跌停制度与散户偏好是制度性的、与某一段行情无关;用 20–60 日聚合后名次慢变、换手低(本批 head 亏的主因是换手,这里直接用慢聚合)。
+      数学检查:day_at_max_ratio 在有效分钟少于 2 时缺失,停牌日是缺失不是 0;取值在 [1/241, 1],无除以近零量;只用 t 日及以前的数据,cross_delay 取过去值;
+      窗口 ≤ 120 日,热身不主导;封板稀少的票大多数日子是 1/240 的常数,聚合后靠少数事件区分,这是预期而非伪影。
+    seeds:
+      - 'cross_mean(day_at_max_ratio(Vwap), 20)'
+      - 'cross_ema(day_at_max_ratio(Vwap), 30)'
+      - 'sub(cross_mean(day_at_max_ratio(Vwap), 5), cross_mean(day_at_max_ratio(Vwap), 60))'
+      - 'cross_regres(day_std(Ret), day_at_max_ratio(Vwap), 60)'
+      - 'cs_bucket_demean(cross_mean(day_at_max_ratio(Vwap), 20), LogFloatCap)'
+      - 'cs_regres(cross_mean(day_at_max_ratio(Vwap), 30), LogFloatCap)'
+      - 'cross_corr(day_at_max_ratio(Vwap), cross_delay(day_sum(Ret), 1), 60)'
+      - 'mul(cross_mean(day_at_max_ratio(Vwap), 20), sign(cross_sum(day_sum(Ret), 20)))'
+      - 'sub(cross_mean(day_at_max_ratio(Vwap), 20), cross_mean(day_at_min_ratio(Vwap), 20))'
+      - 'cross_stddev(day_at_max_ratio(Vwap), 60)'
+      - 'cs_bucket_zscore(cross_mean(day_at_max_ratio(Vwap), 40), cross_mean(day_sum(Amt), 30))'
+      - 'cross_zscore(day_at_max_ratio(Vwap), 120)'
+  - type: N
+    hypothesis: >-
+      机制:「流动性供给的补偿随市场状态翻转」。分钟收益的一阶自相关 day_autocorr_n1(Ret) 为负时是买卖价差反弹 / 被动做市式的反转,为正时是订单拆分 / 动量式的单边流;
+      它的 60 日均值是个股的慢变微观结构属性。供给流动性(反转型)的票,风险补偿在市场压力大(波动高、成交放大)时为正、平静时被竞争压到零甚至为负(Nagel 2012 对短期反转的状态依赖,
+      Chordia 等)。本批 head 与共性都围绕这类日内形状:day_autocorr_n1(Ret)(+1.08)与其 20 日波动 ts_stddev(day_autocorr_n1(Ret), 20)(+1.16)是富集子树,
+      而 3 个 ar1 head 则是固定符号的价格 ar1 水平,分数全负、换手高。这一位的做法不同:用 Partura 的 cs_flip_by_state(y, g) 把符号交给市场状态
+      (g 的全市场均值相对过去 241 日中位数高 / 低,高时取 +rank(y)、低时取 −rank(y)),状态用成交额 day_sum(Amt)、波动 day_std(Ret)、市场收益 day_sum(Ret)
+      三种;y 则取 autocorr / gini / es_ratio / 封死跌停频率 / 价格栅格粗细的 20–60 日慢聚合,或对成交额回归的相关。若 y 在某一状态不起作用,翻转版会明显更差,
+      这本身就是检验。与库里的不同:库里没有任何 cs_flip_by_state / cs_state_rank 的结构(新算子),所有 head 与 5583 条库表达式都是固定符号;
+      两个库全部骨架已被禁止。样本外为什么还在:市场压力与流动性补偿的关系是微观结构上的持续现象,不依赖某段行情;状态只用到 t 日及以前(trailing 241 日中位数,不含未来),
+      因子在状态切换日整体翻号,换手略升但 y 本身用 20–60 日均值,日内慢变。数学检查:cs_flip_by_state 的状态无定义日给缺失而不是静默的「低」;day_autocorr_n1 在常数分钟序列
+      (一字板)可能缺失或为 0,聚合只覆盖有效日;其余算子无除以近零量,窗口 ≤ 241 日,热身 1 年不主导;无前视。
+    inspired_by: '本批 candidates 共性表里 day_autocorr_n1(Ret)(+1.08)与 ts_stddev(day_autocorr_n1(Ret), 20)(+1.16),以及 3 个 ar1 head 全部为负分、固定符号、高换手的现象'
+    seeds:
+      - 'cs_flip_by_state(cross_mean(day_autocorr_n1(Ret), 20), day_sum(Amt))'
+      - 'cs_flip_by_state(cross_mean(day_autocorr_n1(Ret), 60), day_std(Ret))'
+      - 'cs_flip_by_state(cross_stddev(day_autocorr_n1(Ret), 20), day_sum(Amt))'
+      - 'cs_flip_by_state(cross_regres(day_std(Ret), day_autocorr_n1(Ret), 60), day_sum(Ret))'
+      - 'cs_flip_by_state(cross_corr(day_autocorr_n1(Ret), day_sum(Amt), 60), day_std(Ret))'
+      - 'cs_flip_by_state(cross_mean(day_gini(Amt), 30), day_std(Ret))'
+      - 'cs_flip_by_state(cross_mean(day_at_min_ratio(Vwap), 20), day_sum(Ret))'
+      - 'cs_flip_by_state(cross_mean(day_es_ratio_hi(Ret), 40), day_sum(Ret))'
+      - 'cs_flip_by_state(cross_mean(day_distinct_ratio(Close), 20), day_sum(Amt))'
+      - 'cs_flip_by_state(cross_mean(day_autocorr_n1(Ret), 20), day_sum(Ret))'
+R:
+  - head: 'ts_decay_linear(sigmoid(pow_05(sigmoid(day_ar1_coefficient(Vwap)))), 30)'
+    why: '拆解表:三层 sigmoid / pow_05 全是单调变换,敲掉任何一层分数几乎不变(+0.03 / +0.04 / 0.00),烂在冗余部件;窗口 30 → 15 已好 +0.50,说明衰减窗口过长;Vwap 换 Close 也略好'
+    variants:
+      - 'ts_decay_linear(day_ar1_coefficient(Vwap), 15)'
+      - 'ts_decay_linear(day_ar1_coefficient(Vwap), 10)'
+      - 'ts_decay_linear(sigmoid(pow_05(sigmoid(day_ar1_coefficient(Vwap)))), 10)'
+      - 'ts_decay_linear(day_ar1_coefficient(Close), 15)'
+      - 'ts_decay_linear(day_ar1_coefficient(High), 15)'
+      - 'ts_mean(day_ar1_coefficient(Vwap), 15)'
+  - head: 'cross_mean(sigmoid(sigmoid(day_ar1_coefficient(Low))), 3)'
+    why: '拆解表:两层 sigmoid 冗余(敲掉 −0.01);Low → High 好 +0.39,窗口 3 → 6 好 +0.14,说明价格 ar1 的高低端选择与聚合窗口才是变量'
+    variants:
+      - 'cross_mean(day_ar1_coefficient(High), 6)'
+      - 'cross_mean(day_ar1_coefficient(High), 10)'
+      - 'cross_mean(sigmoid(sigmoid(day_ar1_coefficient(High))), 6)'
+      - 'cross_mean(day_ar1_coefficient(Open), 6)'
+      - 'cross_mean(day_ar1_coefficient(Low), 10)'
