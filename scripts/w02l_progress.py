@@ -60,6 +60,8 @@ def stage(S, k):
         return "写计划和审计"
     if (S, k) in locating:
         return "定位中"
+    if k == 1 or (S, k - 1) in done:                 # its previous round has ended: the locate is queued (e.g. waiting for the card)
+        return "等定位"
     return "等前一轮"
 
 
