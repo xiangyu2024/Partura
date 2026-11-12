@@ -1,0 +1,92 @@
+seed: 2057
+round: 3
+slots:
+- type: E
+  core: ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10)
+  hypothesis: 'Core = ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50),
+    10): third-order dispersion of the daily dead-minute share. Containing candidates
+    average +0.06 vs -1.90 (4 candidates, p 0.001) and the four-layer version is the
+    best seen (train +0.32 / valid +0.80, below the 0.5 line because train lags).
+    The seen periphery around this family is only more ts_stddev/ts_kurt/ts_delta
+    layers and cs_first_low40(LogFloatCap, .). Here the periphery is cross-sectional
+    neutralisation inside same-day deciles of regulatory / structural fields (LimitWidth,
+    BoardCode, ListAge, LogTotalCap) via cs_bucket_demean / cs_bucket_rank, robust
+    z-scoring, a trailing time-series rank, linear decay, a correlation with the vol-of-vol
+    of real price volatility, and a subtraction of that real-volatility vol-of-vol
+    so that what remains is instability of frozenness beyond instability of price
+    movement. Mechanism: how erratically a stock flips between alive and frozen quoting,
+    measured relative to its own board and age group, is an attention-regime proxy;
+    mixing boards (10% / 20% limits, new listings with no limit) inflates the raw
+    core with a structural component that probably costs train performance. Implementation:
+    nested ts_stddev collapse daily shares into a slow instability series, bucket
+    operators remove the group baseline each day, all windows trailing, no nt_*. Different
+    from the library and from round 2: round 2 used size-lexicographic ordering and
+    plain ts wrappers, not within-group neutralisation or difference against price
+    vol-of-vol. Persists because board structure and quote stickiness are slow institutional
+    features and the ruler removes the common liquidity/size exposure.'
+  seeds:
+  - cs_bucket_demean(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50),
+    10), LimitWidth)
+  - cs_bucket_rank(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10),
+    LogTotalCap)
+  - cs_bucket_rank(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10),
+    ListAge)
+  - cs_bucket_demean(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50),
+    10), BoardCode)
+  - cs_robust_z(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10))
+  - ts_decay_linear(cs_bucket_rank(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret),
+    10), 50), 10), LimitWidth), 20)
+  - ts_corr(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10), ts_stddev(day_std(Ret),
+    10), 60)
+  - sub(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret), 10), 50), 10), ts_stddev(ts_stddev(ts_stddev(day_std(Ret),
+    10), 50), 10))
+  - cs_bucket_rank(add(cs_bucket_rank(ts_stddev(ts_stddev(ts_stddev(day_zero_ratio(Ret),
+    10), 50), 10), LimitWidth), cs_bucket_rank(ts_stddev(ts_stddev(day_centroid(Amt),
+    10), 50), LimitWidth)), LogFloatCap)
+- type: N
+  hypothesis: 'Mechanism: price-lock geometry. Rather than the share of zero-return
+    minutes (round 1-2), measure the SHAPE of frozen time: day_flat_run_max(Close)
+    is the longest unbroken run of unchanged closes (a limit-lock for hours versus
+    scattered thin-trading stillness), day_at_max_ratio(Close/High) minus day_at_min_ratio(Close/Low)
+    is the share of the day pinned at the high minus pinned at the low (locked-up
+    vs locked-down, a signed event), and day_distinct_ratio(Close/Vwap) is how many
+    price levels the day visited (tick-grid coarseness, thin stocks). Level (ts_mean)
+    captures persistent stickiness; ts_stddev and nested ts_stddev capture instability
+    of lock regimes, echoing the vol-of-vol shape that came closest in the zero-ratio
+    family. The signed lock difference averaged over 20 days is an attention/queue-pressure
+    trace: repeated lock-ups at the top mean unfilled buy queues. Implementation:
+    ops_ext day collapses over minutes (day_flat_run_max, day_at_max_ratio, day_at_min_ratio,
+    day_distinct_ratio), trailing ts_mean / ts_stddev, one seed neutralised in LimitWidth
+    buckets; no nt_*, no look-ahead. Different from the library: no library expression
+    uses run-length, pinned-at-extreme or distinct-level atoms, and the skeletons
+    differ from every library skeleton. Persists because limit-band mechanics and
+    tick-size structure are institutional, and the ruler removes liquidity, volatility,
+    size and champion exposure so the remaining signal is the lock-geometry component.'
+  inspired_by: 'structure batch 3 / common-subtree table: the only enriched atoms
+    are dead-minute and timing shape statistics (day_zero_ratio(Ret), day_centroid(Amt)),
+    versus the batch heads that are intraday price-path correlations (day_corr(pow_2(Vwap),
+    Close), day_autocorr_n1(pow_2(Open))); lock geometry is the structural neighbour
+    of both'
+  seeds:
+  - ts_stddev(ts_stddev(day_flat_run_max(Close), 10), 50)
+  - ts_stddev(ts_stddev(ts_stddev(day_flat_run_max(Close), 10), 50), 10)
+  - ts_stddev(sub(day_at_max_ratio(Close), day_at_min_ratio(Close)), 30)
+  - ts_stddev(ts_stddev(day_distinct_ratio(Close), 10), 50)
+  - ts_stddev(day_at_max_ratio(High), 30)
+  - cs_bucket_rank(ts_stddev(ts_stddev(day_flat_run_max(Close), 10), 50), LimitWidth)
+  - ts_stddev(sub(day_flat_run_max(Close), day_zero_ratio(Ret)), 30)
+  - ts_stddev(day_flat_run_max(Vwap), 20)
+R:
+- head: ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 30)
+  why: Decomposition showed shortening the outer window 30 to 15 improves the score
+    from -2.64 to -2.24 (train -1.40) while 60 is worse; the outer ts_quantile_q75
+    window is too long, so test nearby shorter windows.
+  variants:
+  - ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 8)
+  - ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 10)
+  - ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 12)
+  - ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 15)
+  - ts_quantile_q75(pow_2(day_q_stat_std(pow_2(Ret))), 20)
+audit:
+  attempts: 1
+  file: audit_1.yaml
