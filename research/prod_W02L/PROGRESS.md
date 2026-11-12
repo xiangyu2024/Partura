@@ -288,3 +288,8 @@
   6 个 CPU 进程(PARTURA_THREADS=4),日志 `research/prod_W02L/stage0/sp_w1..6.log`,输出 `stage0/chunks/sp<k>.jsonl`。服务器负载约 130 / 96 核，所以没多开。
 - 跑完之后按 HANDOFF 再跑一次 `--rescore`(3 个 `--rescore --follow` 进程还在跟)。
 - 显卡：同时 3 个 GP 各占约 9 GB,另有 2 个只占 860 MB(已建 CUDA 上下文、在等 'gpu' 锁);利用率约 25%,瓶颈是显存不是算力。
+
+## 2026-11-12 11:19 EST — 2067 r3:审计漏打一个 R 组
+- 计划有两组 R(`day_corr(abs_(in_delay(Ret, 5)), Amt)` 6 个变体、同结构换成 Volume 的 4 个变体),审计员只给 Amt 组打了分(合理度 4)。
+  定稿按规则把没打分的 Volume 组删掉(R 1/2)。这不是「不通过」,按放行原则列进 MAKEUP.md,全部轮次结束后补评。
+- 两个任务位都过(E 11/12、N 9/10)。

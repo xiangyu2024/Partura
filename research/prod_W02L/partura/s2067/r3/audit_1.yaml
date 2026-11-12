@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8]
+    reasons: '核心 sub(DW(Amt),DW(Volume)) 与快照 9 个 head 的原始 |ρ| 最大只有 0.10(最像的是 cs_scale(day_autocorr_n1(...Amt...)) 这一族),残差后 0.12;对 5 个控制的 |ρ| 均 ≤ 0.05(corr_1.md slot a core 行),不是控制变量换写法,所以创新度给 4。注意:DW 近似 2(1 - 一阶自相关),与 head 的 autocorr / q_stat 同属序列相关统计族,只是数值上不同。外围 12 个种子中,种子 10(sub(cross_ema(core,20), cross_ema(DW(abs_(Ret)),20)))与 head day_corr(abs_(in_delay(Ret,1)),log(Amt)) 原始 |ρ| 0.49,未到 0.7,放行。划掉的种子 8 = cross_semistd_neg(core,40):_semistd(partura/ops_ext.py:751-761) 只在相邻两日 x 都 > 0 时计入,而 core 是带符号的差分,约一半日子被屏蔽,剩下的 log(x_t / x_{t-1}) 在 x 接近 0 时爆炸,这是定义坏掉(规则 §4)。种子 6 用 sign(day_sum(Ret)) 做方向相乘,与 rev 控制 |ρ| 0.07,放行。其余种子(cross_ema / cross_zscore / cs_bucket_zscore / cs_winsor / cs_robust_z / cross_tail_mean_q25 / div 与 cross_stddev)都是同一核心的平滑、标准化或分位读法,无数学问题,放行。自动划掉检查:无原始 |ρ| ≥ 0.7 的种子;无控制 |ρ| ≥ 0.8 的种子(最高为 seed 10 的 liq 0.73)。E 位核心与每个控制的 |ρ| 均 < 0.8,通过。剩 11 个种子 ≥ 4。未核对项:核心 sub(DW(Amt),DW(Volume)) 是否出现在共性表中(按指令未读共性表,采信 PI 的声明)。如果它有 alpha,最可能来自机构拆单执行的连续性随价格路径变化的部分,而不是流动性或波动水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [9]
+    reasons: '种子 9 cross_ema(sub(DW(in_slice(Amt,1,240)), DW(in_slice(abs_(Ret),1,240))),30) 被划掉:表中与 liq 控制 |ρ| 0.82 ≥ 0.8(known 0.79),自动划掉;它也是 DW(abs_(Ret)) 的换写,与 slot a 种子 10 同类。其余 9 个种子原始 |ρ| 最大 0.40(seed 7 cross_ema(day_centroid(Amt),30) 对 day_corr(abs_(in_delay(Ret,1)),log(Amt)) 为 0.40),残差对 pow_2 类 head 的最大值为 seed 8 的 0.50,未到 0.7,放行。seed 7 对 liq 0.51、known 0.54,是 centroid 与成交量水平的相关,但残差后 ρ 为 0.43,不是控制的换写,放行。算子核对:in_slice 段内的 DW 是单序列统计,0..120 与 121..240 不成对,没有长度错配;day_centroid 在 tot = 0 时返回缺失而不是 0/0(partura/ops_ext.py:155-168);day_gini 有界(ops_ext.py:136-152);day_durbin_watson 常数行或分母 ≤ 1e-8 时返回 NaN(dt_day.py 对应 DW 定义);无 nt_*、无前视算子、无 ts_spearman。创新度 4:上下半场 / 开收盘段的 DW 差、以及成交额集中度与重心,在 9 个 head 中没有对应,数值上最近的也只到 0.40–0.50。如果它有 alpha,最可能来自资金在早盘与尾盘的执行时段分配(收盘集合、指数收盘冲量、午休前后的拆单节奏),而不是日内总量水平。'
+R:
+  - head: 'day_corr(abs_(in_delay(Ret, 5)), Amt)'
+    soundness: 4
+    reasons: '变体都是在 head 外面加跨日平滑或分桶(cross_mean / cross_ema / cross_zscore / cs_bucket_zscore)。机制清楚:head 为 -2.70 的主因是单日相关的噪声,跨日平滑压噪声是合理的,r1 的 N 位同类读数 cross_mean 后从 -2.7 提到约 -0.6 也支持这一点。两点记录但不挡:(1) 按规则 §2 的字面,R 是「去掉或替换部件」;这些变体是「外面加一层」,更接近 E 的操作,这是 PI 的分类问题,不影响合理度;(2) day_corr 在 abs_(in_delay(Ret,5)) 为常数(如一字板,分钟收益全为 0)时返回 0 而不是缺失(AlphaCube-steering/src/alphacube/operators/dt_day.py:231-245,已知行为),这些票的 20–40 日均值会被拉向 0。若结果主要由一字板频率决定才算定义坏掉,本轮没有证据表明它主导,故放行。如果它有 alpha,最可能来自日间平滑后留下的稳定价量相关结构。'
+summary: '2067 r3 审计:slot a 通过(创新 4 / 合理 4,划掉 seed 8,因 cross_semistd_neg 作用在带符号差分上,定义坏掉);slot b 通过(创新 4 / 合理 4,划掉 seed 9,liq 0.82 自动划掉);R 变体合理度 4(记录了一字板 day_corr 归零与「加一层而非替换」的分类问题,未挡)。未核对:E 核心在共性表中的出现(按指令未读共性表)。'

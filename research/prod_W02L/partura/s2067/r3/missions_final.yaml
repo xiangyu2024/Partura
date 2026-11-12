@@ -1,0 +1,76 @@
+seed: 2067
+round: 3
+slots:
+- type: E
+  core: sub(day_durbin_watson(Amt), day_durbin_watson(Volume))
+  hypothesis: 核心 = 分钟成交额的 Durbin-Watson 减分钟成交量的 Durbin-Watson。DW 约为 2(1-一阶自相关),成交额
+    = 价 x 量, 两者 DW 之差剩下「价格路径让成交额比成交量更平滑 / 更跳」的部分,去掉纯成交量节奏。它是本批共性表里富集最强的子树(含它 5 个候选均值
+    -0.80 对 -3.00,p 0.000), 第 2 轮里它加 cross_mean(30) 是本流目前最好的单个读数(-0.29,valid 为正 +0.35),说明主要缺的是跨日去噪而不是换核心。
+    第 2 轮只试过「核心外面套 1~3 层 cross_mean」,本位的外围全部换成别的机制:(a) cross_ema 与 cross_zscore(60)
+    的指数 / 标准化时序读法,看的是异常而不是水平; (b) 短 EMA 减长 EMA 的动量式读法 = 节奏正在变得更连续还是更跳;(c) 均值除以标准差
+    = 稳定的信噪比,压掉靠偶发事件撑起的读数; (d) cross_tail_mean_q25 / cross_semistd_neg 只看下尾(那些成交额明显比成交量更连续的日子),是下偏而不是均值;(e)
+    与 sign(day_sum(Ret)) 相乘再平滑, 拆单买入与拆单卖出分开(控制里没有方向);(f) cs_bucket_zscore 按 LogFloatCap
+    / LogTotalCap 分桶,桶内比较(尺子已去掉市值的非线性,这里是桶内排序); (g) 减去 abs_(Ret) 的 DW:成交额节奏相对波动节奏。样本外为何还在:机构订单拆分的连续性是执行层面的结构,与行情阶段无关;跨日平滑后换手降到周频,15bp
+    成本可承受; 差分形式本身与流动性水平控制近正交。风险:与 head 库里 DW(Amt) 的 cross_mean 版重叠,但外围不同,|ρ| >= 0.7
+    的会被自动划掉。
+  seeds:
+  - cross_ema(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 20)
+  - cross_zscore(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 60)
+  - cs_bucket_zscore(cross_mean(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)),
+    20), LogFloatCap)
+  - sub(cross_ema(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 10), cross_ema(sub(day_durbin_watson(Amt),
+    day_durbin_watson(Volume)), 60))
+  - div(cross_mean(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 20), cross_stddev(sub(day_durbin_watson(Amt),
+    day_durbin_watson(Volume)), 20))
+  - cross_mean(mul(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), sign(day_sum(Ret))),
+    30)
+  - cross_tail_mean_q25(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 40)
+  - cross_ema(cs_winsor(sub(day_durbin_watson(Amt), day_durbin_watson(Volume))), 30)
+  - sub(cross_ema(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 20), cross_ema(day_durbin_watson(abs_(Ret)),
+    20))
+  - cs_bucket_zscore(cross_ema(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)),
+    30), LogTotalCap)
+  - cross_mean(cs_robust_z(sub(day_durbin_watson(Amt), day_durbin_watson(Volume))),
+    40)
+- type: N
+  hypothesis: 机制:成交额节奏在一天内的「上下半场不对称」。day_durbin_watson 作用在被 in_slice 截出的分钟段上:上午段(0-120)与下午段(121-240)各自的成交额
+    DW 之差, 读的是机构拆单在哪个半场更连续 —— 上午连续而下午跳 = 拆单在早盘完成 / 信息早被吸收;反之是尾盘才被迫执行(基金调仓、指数收盘冲量),两者对未来收益的含义不同。
+    也有同一半场内成交额 DW 减成交量 DW 的版本(价格路径是否打乱了成交额节奏),以及开盘段(1-60)对收盘段(181-240)。另一组是成交量剖面形状:day_gini(Amt)
+    减 day_gini(Volume) (成交额集中度超过成交量集中度 = 高价分钟的成交更集中),day_centroid 是成交额的日内重心(越靠后越是尾盘驱动)。算子实现:in_slice
+    沿分钟轴取半场,再用 day_durbin_watson / day_gini / day_centroid 汇成日度量,相减后用 cross_mean /
+    cross_ema / cross_zscore 跨 20-60 日平滑(上一轮的结论是跨日平滑是把 day_* 类读数从负分拉回的唯一有效手段)。 与库不同:库里只有全天
+    DW(Amt / Volume) 的单点读数与全天 day_corr 价量交叉,没有「分半场」的切分,也没有集中度 / 重心类的剖面形状;分半场 DW 之差是新结构,
+    不是 DW(Amt)-DW(Volume) 的换写。样本外为何还在:一天里机构怎么分配执行时间由交易规则(收盘集合、午休、T+1)和基金运作习惯决定,变化很慢;差分去掉了流动性水平,
+    平滑后换手低。风险:半场 DW 之差的单日噪声大,靠平滑;day_centroid 与「尾盘成交占比」类控制可能相关,但尺子已去掉线性与非线性暴露。
+  inspired_by: 批 1/2/3 的共性表:DW(Amt) 与 DW(Volume) 富集最强(+2.20 / +1.17),批 3 的 head 全部是
+    in_slice(.., 11, 230) 的分钟段读数,说明「在哪一段分钟上读」是已被验证可用的自由度;本轮把它用在 DW 上并分上下半场
+  seeds:
+  - cross_mean(sub(day_durbin_watson(in_slice(Amt, 0, 120)), day_durbin_watson(in_slice(Amt,
+    121, 240))), 30)
+  - cross_ema(sub(day_durbin_watson(in_slice(Amt, 1, 60)), day_durbin_watson(in_slice(Amt,
+    181, 240))), 20)
+  - cross_mean(sub(day_durbin_watson(in_slice(Amt, 0, 120)), day_durbin_watson(in_slice(Volume,
+    0, 120))), 30)
+  - cross_ema(sub(day_durbin_watson(in_slice(Amt, 121, 240)), day_durbin_watson(in_slice(Volume,
+    121, 240))), 30)
+  - cs_bucket_zscore(cross_mean(sub(day_durbin_watson(in_slice(Amt, 0, 120)), day_durbin_watson(in_slice(Amt,
+    121, 240))), 20), LogFloatCap)
+  - cross_mean(sub(day_gini(Amt), day_gini(Volume)), 30)
+  - cross_ema(day_centroid(Amt), 30)
+  - cross_mean(sub(day_centroid(Amt), day_centroid(abs_(Ret))), 30)
+  - cross_zscore(sub(day_durbin_watson(in_slice(Amt, 0, 120)), day_durbin_watson(in_slice(Amt,
+    121, 240))), 60)
+R:
+- head: day_corr(abs_(in_delay(Ret, 5)), Amt)
+  why: head 为负分(-2.70)主因是单日相关噪声大、日度换手高;第 1 轮 N 位里同类读数加 cross_mean 后从 -2.7 提到 -0.6
+    左右,说明烂部件是缺少跨日平滑。保持核心,只在外面加跨日平滑 / 分桶。
+  variants:
+  - cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 20)
+  - cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 40)
+  - cross_ema(day_corr(abs_(in_delay(Ret, 5)), Amt), 20)
+  - cross_ema(day_corr(abs_(in_delay(Ret, 5)), Amt), 40)
+  - cross_zscore(day_corr(abs_(in_delay(Ret, 5)), Amt), 60)
+  - cs_bucket_zscore(cross_mean(day_corr(abs_(in_delay(Ret, 5)), Amt), 30), LogFloatCap)
+audit:
+  attempts: 1
+  file: audit_1.yaml
