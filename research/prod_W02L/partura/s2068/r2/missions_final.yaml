@@ -1,0 +1,77 @@
+seed: 2068
+round: 2
+slots:
+- type: E
+  core: day_median(Ret)
+  hypothesis: 'Core = median 1-minute return of the day (robust centre of the intraday
+    return distribution; with many zero-return minutes it is a sign/typical-tick measure,
+    not a total-return measure). It is the top enrichment subtree in this batch (4
+    candidates, mean score -1.17 vs -3.13 without it), i.e. the least-bad family so
+    far, and unlike the round-1 core (opening-30-minute absolute return, a volatility
+    level) it is a SIGNED central-tendency quantity. Mechanism: the median is insensitive
+    to a few large prints, so mean-minus-median (day_mean(Ret) - day_median(Ret))
+    is a skew/lottery-jump proxy and the median itself measures persistent, many-small-trades
+    drift (steady institutional accumulation) as opposed to jump-driven return that
+    retail attention chases. Periphery to test (never seen with this core; the only
+    prior E used cross_reg_tvalue on ts_corr of opening mass): (1) the gap between
+    the typical minute and the mean minute, which isolates jumpiness; (2) 20-60 day
+    smoothing / ts_rank of the median (persistent drift); (3) median minus money-weighted
+    mean day_wmean(Ret, Amt), i.e. whether money traded with or against the typical
+    minute; (4) the median in standardized form divided by day_std(Ret) and then averaged
+    (a signal-to-noise of the typical minute, scale-free so not a vol control); (5)
+    cs_bucket_demean of the median within deciles of a stat of the opening mass, a
+    within-group comparison that does not use regression. Out of sample it stays because
+    steady-drift vs jump-driven return is a microstructure persistence property (jump
+    returns mean-revert from attention, drift continues) rather than a fitted pattern.
+    Core is kept verbatim in every seed.'
+  seeds:
+  - ts_mean(sub(day_mean(Ret), day_median(Ret)), 20)
+  - ts_mean(day_median(Ret), 30)
+  - ts_mean(sub(day_median(Ret), day_wmean(Ret, Amt)), 20)
+  - ts_mean(div(day_median(Ret), day_std(Ret)), 20)
+  - sub(ts_mean(day_median(Ret), 10), ts_mean(day_median(Ret), 60))
+  - ts_corr(day_median(Ret), day_signed_ratio(Ret, Amt), 30)
+  - ts_stddev(day_median(Ret), 40)
+  - cs_bucket_demean(ts_mean(day_median(Ret), 20), day_sum(abs_(in_slice(Ret, 1, 30))))
+  - ts_mean(sub(day_median(Ret), day_median(in_slice(Ret, 1, 30))), 20)
+  - div(ts_mean(day_median(Ret), 20), ts_mean(day_pos_ratio(Ret), 20))
+- type: N
+  hypothesis: 'Flow-versus-price direction disagreement within the day. day_signed_ratio(Ret,
+    Amt) = share of the day turnover traded in up-minutes minus share in down-minutes
+    (net buying pressure, amount-weighted, in [-1,1]); day_pos_ratio(Ret) = fraction
+    of up-minutes (count-weighted, ignores size); day_wmean(Ret, Amt) is the money-weighted
+    minute return and day_mean(Ret) the equal-weighted one; day_centroid(Amt) is when
+    in the day the money traded (0 open, 1 close). Mechanism: when heavy money trades
+    in up-minutes while the count of up-minutes is low (or the money-weighted return
+    exceeds the equal-weighted one), large orders are buying into small-order selling:
+    institutional accumulation by size, a classic informed-flow signature that needs
+    no tick data. Late-day concentration of money (centroid near 1) with positive
+    net flow is the closing-auction/institutional-rebalance pattern, while early concentration
+    is retail/attention flow. The batch heads are all opening-window absolute-return
+    volatility (unsigned) or volume-return correlation (unsigned |Ret|); this is a
+    signed, size-weighted flow measure built from different operators (day_signed_ratio,
+    day_wmean, day_centroid, day_topw_mean), not a volatility or level control. Smoothing
+    over 10-40 days and differencing against its own history converts a noisy daily
+    reading into a persistent accumulation score. Out of sample it stays because large-order-vs-small-order
+    direction divergence is a structural (participant-type) effect, not a calibrated
+    parameter.'
+  inspired_by: 'Batch 2 heads built on day_corr(abs_(Ret), lagged volume z-score)
+    and the first-30-minute activity heads: they only use unsigned return magnitude
+    with volume, so the signed direction of money flow is the unexplored half of the
+    same minute-level information.'
+  seeds:
+  - ts_mean(sub(day_signed_ratio(Ret, Amt), sub(mul(2, day_pos_ratio(Ret)), 1)), 20)
+  - ts_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20)
+  - ts_mean(day_signed_ratio(Ret, Amt), 40)
+  - ts_corr(day_signed_ratio(Ret, Amt), day_centroid(Amt), 40)
+  - ts_mean(mul(day_signed_ratio(Ret, Amt), day_centroid(Amt)), 20)
+  - ts_mean(day_topw_mean(Ret, Volume), 30)
+  - sub(ts_mean(day_signed_ratio(Ret, Amt), 10), ts_mean(day_signed_ratio(Ret, Amt),
+    60))
+  - ts_mean(sub(day_signed_ratio(Ret, Volume), day_signed_ratio(Ret, Amt)), 20)
+  - ts_decay_linear(sub(day_topw_mean(Ret, Amt), day_mean(Ret)), 20)
+  - ts_corr(day_signed_ratio(Ret, Amt), day_pos_ratio(Ret), 30)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

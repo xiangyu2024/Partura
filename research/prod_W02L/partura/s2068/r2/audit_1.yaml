@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 7]
+    reasons: '创新度 4。核心 day_median(Ret) 是有符号的典型分钟收益，库里的 6 个 head 全是无符号的开盘活动/量价绝对值（最像的是 mul(div(range,open), day_sum(abs_(in_slice(Ret,1,30))))，raw |ρ| 0.17，残差 0.37；day_sum(abs_(in_slice(Ret,1,30))) 的 raw 0.15）。核心对 5 个控制 liq 0.18 / vol 0.12 / rev 0.01 / known 0.18 / size 0.08，都远低于 0.8，且没有一个高于 0.5。外围 12 个种子大多度量 head 没有的东西：seed1 ts_mean(day_mean-day_median,20) 是跳跃度/偏度代理；seed3、seed6 是典型漂移的持续性；seed4 是中位数减金额加权均值（与 day_wmean(Ret,Amt) 的差）；seed5 是中位数除以 day_std 的信噪比；seed10 与 seed11 是按开盘活动分桶去均值、或开盘 30 分钟中位数的对照。需要注意：seed1、seed4、seed7 对 20 日反转的 |ρ| 为 0.70、0.59、0.65，这几条有相当部分是反转控制换了写法，所以没有给 5 分。合理度 4。逐个核对算子：day_median 是 C._median 的逐日中位数；day_mean、day_wmean(Ret,Amt)（按 |Amt| 加权）、day_std 定义明确；div 没有 eps，但一字板整天 Ret 恒定时 median 与 std 同为 0 得 NaN，不是爆点，未见主导截面；ts_mean、ts_decay_linear 无前视（只用 ts_delay 之前的值，没有 shift）。第 12 个种子的 pos_ratio 分母只在 20 天全部不上涨时才接近 0，不构成主导。流水线 levels 门槛（gate=False）对核心和若干种子为 False（核心 distinct 0.038；seed3、5、6、8、9、10、12 也为 False），我没有据此划掉：纯多头的顶部十分位受影响较小，主要是下端零中位数簇的并列。PI 应知道这一点。划掉 seed2：ts_rank(day_median(Ret),40) 的 ts_rank 默认 pct，40 天窗口只有至多 40 个离散水平，截面约 4500 只票的并列组很大（gate=False，distinct 0.012），顶端十分位的边界由并列组决定，按股票列序打破，属于数学问题；另外停牌日 day_median 缺失时 nanrank_last 返回 0，停牌票被推到窗口底部，也是同一问题。划掉 seed7：ts_decay_linear(day_median-day_mean,20) 与 seed1 ts_mean(day_mean-day_median,20) 是同一个原料、符号相反、只差平滑方式，属于重复（seed1 已保留）。如果这个位有 alpha，最可能来自：有符号的典型分钟收益的持续漂移，与跳跃型收益（注意力驱动、会均值回复）之间的差。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [8, 11]
+    reasons: '创新度 4。N 位的核心是有符号、按金额加权的资金流（day_signed_ratio(Ret,Amt)、day_wmean(Ret,Amt)、day_centroid(Amt)、day_topw_mean）。库里的 6 个 head 全是 |Ret| 或开盘 30 分钟的活动量（range×open×abs 和、day_corr(abs_(Ret), 量的 z 分数)），最大 raw |ρ| 为 0.57，控制列最大为 seed6 对 vol 0.48 与 seed10 对 rev 0.58 这类；seed10 对 rev 为 0.58，是控制换写法的程度，但未达到 0.8 的自动划掉线。真正新的是 seed3（raw |ρ| 0.19）、seed4（0.11）、seed5（0.18）、seed7（0.11）、seed9（0.18）、seed12（0.02）。需要注意：seed1 的 ts_mean(signed_ratio - (2*pos_ratio-1),20) 有 raw 0.57、残差 0.60、liq 0.52，并且 day_pos_ratio 把零收益分钟计为「非上涨」，而 day_signed_ratio 的零分钟只进分母，所以 seed1 的值有一部分由零收益分钟占比（tick / 流动性）决定，它的 alpha 来源要打折扣。seed9 的 Volume 与 Amt 加权之差也部分来自日内价格水平的变化，属于弱的权重伪影。这两条都不是挡的理由，PI 知道即可。合理度 4。逐个算子核对：day_signed_ratio 的分子是 |y|·sign(x)、分母是 |y|，并且只用两者都有限的分钟，取值在 [-1,1]；day_centroid 的取值在 0..1；day_wmean 按 |w| 加权；day_topw_mean 取 |w| 前 10% 的分钟（ops_ext.py 各函数）。没有前视（ts_mean、ts_corr 只用当天及之前的值）。如果这个位有 alpha，最可能来自：大单与小单在同一天的方向分歧，即成交金额在上涨分钟净买、而上涨分钟的笔数占比却低（机构被动吸筹）；尾盘集中的金额如果同时净买，可能是收盘集合竞价或机构调仓的信号。划掉 seed8：ts_rank(sub(day_wmean(Ret,Amt),day_median(Ret)),40) 与 seed2 同样由 ts_rank(40) 生成至多 40 个离散水平（gate=False，distinct 0.023），顶端十分位边界由并列组决定，属于数学问题。划掉 seed11：ts_mean(day_signed_ratio(in_slice(Ret,181,240),Amt),20) 里 Ret 被切成 60 列，而 Amt 仍是 241 列，day_signed_ratio 的两个输入长度不一致，流水线报 KeyError (x)，算不出，属于定义坏掉。'
+R: []
+summary: '一个位（a，E 深挖 day_median(Ret)）与一个位（b，N 资金流分歧）都通过：a 划掉 2、7 两条，b 划掉 8、11 两条，各剩 10 条；无 R 组。'
