@@ -1,0 +1,83 @@
+seed: 2056
+round: 3
+slots:
+  - type: E
+    core: 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120)'
+    hypothesis: >-
+      Core = the current best head: over a 120-trading-day window, the day-axis correlation between a stock's daily
+      share volume (day_sum(Volume)) and its previous-day volume burstiness (day_std over the 241 minutes divided by
+      the day total, a scale-free "how concentrated was trading in a few minutes" measure; sum is not near zero for
+      traded stocks, suspended days are missing). Earlier rounds showed the alpha is this slow stock-specific coupling
+      (volume level co-moves with burstiness: bursty days are the high-volume days, or not), longer windows are better
+      (60 -> 120 -> 240 monotone up) and the division by the sum is the necessary part. All snapshot candidates
+      containing this idea use the bare coupling number (or its Amt twin) at one window. This slot keeps the core fixed
+      and changes what the coupling is compared with / how it is read: (1) regime change: long window minus a short
+      (20 day) window of the same coupling, i.e. a stock whose volume-burstiness relation just moved versus its own
+      slow norm (information-arrival state, not a level); (2) smoothing, 60-day z-score and 20-day change of the
+      coupling; (3) the coupling net of its Amt twin (Volume minus Amt version isolates the part not driven by price
+      level / turnover value) and net of a volume-versus-return-volatility coupling (cross_regres or sub), so what is
+      left is burstiness-specific rather than generic volume-volatility co-movement; (4) conditioning on the volume
+      trend (sign of 20-day volume change) or second-order coupling with the volume level. Mechanism: institutional
+      execution splits orders into bursts; whether high-volume stretches are bursty or smooth reveals urgent (informed)
+      versus passive (liquidity) flow, a persistent stock-level microstructure trait, and its change signals a switch of
+      the dominant participant type, which the market under-reacts to. Out of sample it should persist because the
+      raw coupling already passes both train (+1.4) and valid (+1.0) and the wrappers only strip regime / level
+      effects the controls pick up. Periphery differs from all seen candidates (none uses cross_mean/zscore/delta of the
+      coupling, differences of windows, or residualisation against another coupling).
+    seeds:
+      - 'sub(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 20))'
+      - 'cross_mean(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), 10)'
+      - 'cross_zscore(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), 60)'
+      - 'cross_delta(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), 20)'
+      - 'sub(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_corr(day_sum(Amt), cross_delay(div(day_std(Amt), day_sum(Amt)), 1), 120))'
+      - 'sub(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_corr(day_sum(Volume), day_std(Ret), 120))'
+      - 'cross_regres(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_corr(day_sum(Volume), day_std(Ret), 120), 60)'
+      - 'mul(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), sign(cross_delta(day_sum(Volume), 20)))'
+      - 'cross_corr(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), day_sum(Volume), 60)'
+      - 'div(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_stddev(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), 60))'
+      - 'sub(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), cross_mean(cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120), 60))'
+  - type: N
+    hypothesis: >-
+      New idea: replace the DISPERSION measure of the intraday volume curve (std/sum, used by the only heads that work)
+      by measures of its TEMPORAL STRUCTURE, and read the slow coupling with volume level through a regression slope as
+      well as a correlation. For each stock-day, the 241-minute Volume curve gets (a) day_kurt / day_skew (how peaky or
+      one-sided the day is), (b) day_ar1_coefficient / day_autocorr(Volume, 5) (does trading come in persistent clusters
+      or isolated spikes: split-order execution creates clustering, noise trades do not), (c) day_hurst. The daily
+      numbers are lagged one day (cross_delay) and related over 120 days to the volume level by cross_corr (same
+      reading as the working head) or cross_regbeta (how many units of volume level per unit of clustering, a sensitivity
+      rather than a unit-free correlation). Mechanism: persistent clustering of volume is the footprint of a large
+      participant working an order over hours (informed or institutional, price-impacting, slowly incorporated), spikes
+      are news or index events; a stock whose volume level rises exactly when its trading becomes more clustered is
+      under accumulation/distribution pressure. It differs from the library: the heads are day-axis couplings of
+      std/sum (dispersion, order-independent: it does not change if the minutes are shuffled) whereas autocorrelation,
+      AR1 and Hurst are order-dependent and kurtosis/skew are higher moments; none of these appear in the library skeletons
+      with cross_corr or regbeta of day_sum. Operators: day_* act on the minute axis within a day, cross_* on the day axis,
+      cross_delay is a past lag (no look-ahead). day_autocorr / day_ar1 on a constant (zero-volume) day is degenerate, so
+      suspended stocks are handled by the suspension mask. Why it should persist: it is the same slow microstructure trait
+      that the working head exposes, measured on a different and plausibly cleaner moment of the intraday curve.
+    inspired_by: 'batch 1-3: the only heads with positive valid are cross_corr(day_sum(F), lagged std(F)/sum(F)) at 60-120 days (Volume and Amt versions both work, window monotone), while the day_max(cross_corr) and durbin_watson families are negative; the shape-of-the-curve statistic is the active ingredient, so other shape statistics are the natural next object'
+    seeds:
+      - 'cross_corr(day_sum(Volume), cross_delay(day_kurt(Volume), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_skew(Volume), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_ar1_coefficient(Volume), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_autocorr(Volume, 5), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_hurst(Volume), 1), 120)'
+      - 'cross_regbeta(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120)'
+      - 'cross_regbeta(cross_delay(day_kurt(Volume), 1), day_sum(Volume), 120)'
+      - 'cross_corr(day_sum(Amt), cross_delay(day_ar1_coefficient(Amt), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_durbin_watson(Volume), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_delay(day_autocorr(Volume, 1), 1), 240)'
+      - 'cross_corr(day_std(Ret), cross_delay(day_kurt(Volume), 1), 120)'
+      - 'cross_corr(day_sum(Volume), cross_mean(day_ar1_coefficient(Volume), 5), 120)'
+R:
+  - head: 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120)'
+    why: 'breakdown: the window is the part not yet optimised (60 -> +0.55, 120 -> +0.98, 240 -> +1.41/+1.52 train/valid, monotone up), the one-day delay is not needed (knockout still +0.30 but train +0.77 vs 1.42; keep delay variants too), Amt swap loses 0.2. Variants lengthen the window to 180-360, and test a lag-5 version and a smoothed numerator.'
+    variants:
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 180)'
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 240)'
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 300)'
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 360)'
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 5), 240)'
+      - 'cross_corr(day_sum(Volume), cross_mean(cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 3), 240)'
+      - 'cross_corr(cross_mean(day_sum(Volume), 3), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 240)'
+      - 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 2), 240)'

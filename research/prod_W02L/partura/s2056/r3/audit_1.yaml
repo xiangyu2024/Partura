@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 6, 10]
+    reasons: '核心 = 整个 head cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120)。E 位核心即 head,与 head 的 ρ=1 是设计使然,不计入创新度。核心对五个控制的原始 |ρ| 最大为 0.30(known),0.8 门槛通过。划掉 3 个换皮种子:第 2 个 cross_mean(core,10) 原始 |ρ| 0.98(与 head 几乎相同)、第 6 个 sub(core, cross_corr(day_sum(Volume), day_std(Ret), 120)) 0.77、第 10 个 div(core, cross_stddev(core,60)) 0.93,均按 |ρ| ≥ 0.7 自动划掉。剩余 8 个种子与快照 head 的原始 |ρ| 在 0.07 至 0.38 之间(相关度表 seed 1、3、4、5、7、8、9、11),其中 seed 5(core 减去 Amt 孪生耦合)、seed 7(对 Volume 与收益波动耦合取 cross_regres 残差)、seed 8(乘以成交量 20 日变化的符号)、seed 9(耦合与成交量水平的 60 日相关)是与 head 不同的构造,与 head 的 |ρ| 只有 0.07–0.11,与控制的 |ρ| 均 < 0.3,故创新度给 4。合理度:所有算子都是合法的 trailing 写法,cross_mean、cross_zscore、cross_delta、cross_regres 只看过去与当天,cross_delay 取过去值,未用 cross_shift 或 ts_shift,无前视;窗口与机制说得通;无数值伪影。合理度给 4。如果它有 alpha,最可能来自:核心的慢速量与突发度耦合去掉了水平、换手与成交量趋势暴露之后剩下的 regime 信息(seed 1、5、7 这一类),而不是核心在截面上的水平。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 2, 6, 7]
+    reasons: '新想法 = 把 head 中的 std/sum 换成 241 分钟成交量曲线的时序结构统计量(day_kurt、day_skew、day_ar1_coefficient、day_autocorr、day_hurst、day_durbin_watson),再与日成交量水平做慢速耦合。划掉 4 个换皮种子:第 1 个 kurt 版 cross_corr 的原始 |ρ| 0.84、第 2 个 skew 版 0.88、第 6 个 cross_regbeta(volume, std/sum 耦合) 0.89、第 7 个 cross_regbeta(kurt 耦合, volume) 0.76,均按 |ρ| ≥ 0.7 自动划掉,且它们只是同一耦合换读法(换了形状统计量或换成回归斜率),属于 head 的换皮。保留 8 个种子,与快照 head 的原始 |ρ| 在 0.25 至 0.37 之间,唯一例外是第 11 个 cross_corr(day_std(Ret), kurt(Volume)),|ρ| 0.68,但它把外层变量换成了收益波动,不是换皮;与五个控制的 |ρ| 中最大的是 size 0.40(第 10 个),均低于 0.8。创新度给 4:day_kurt、day_skew、day_ar1_coefficient、day_autocorr、day_hurst、cross_regbeta 都不在快照 head 与共性表中,这些时序结构统计量与 std/sum 是不同的对象。我没有读完库中 5583 条的全部骨架,库里是否已有同骨架由 GP 库禁令与 c06 检验把关。合理度给 4:各算子定义清楚(day_* 在分钟轴、cross_* 在日轴,cross_delay 取过去一天),无前视,无 nt_* 与 ts_spearman。day_ar1_coefficient 与 day_autocorr 在 Volume 的 241 分钟曲线上会主要捕获日内 U 形,不纯是聚集程度,这是机制上的弱点而非数学问题;cross_regbeta 的 beta 带股数单位,截面排序会混入成交量水平的尺度,这一点只在已划掉的第 6、7 个种子上出现。如果它有 alpha,最可能来自:成交量分钟曲线的聚集结构(拆单式的集中成交与分散成交)与成交量水平的慢耦合,也就是 head 中 std/sum 所携带的信息在另一个形状统计量里的同向体现。'
+R:
+  - head: 'cross_corr(day_sum(Volume), cross_delay(div(day_std(Volume), day_sum(Volume)), 1), 120)'
+    soundness: 4
+    reasons: '8 个变体都是 head 的窗口长度(180、240、300、360)、滞后天数(2、5)或日成交量的 3 日平滑的替换,全部是合法的 trailing 写法:cross_delay 取过去值,cross_mean 为 trailing 窗口,无前视,无数值伪影,无定义问题。360 窗口的 warm-up 约一年半,会压缩 train 前段的样本,但不足以主导结果。机制清楚:head 的窗口在 loc 消融里已单调改善(120 到 240 时 train +1.41、valid +1.52),变体延伸的是同一个已测到的方向。与 head 的原始 |ρ| 在 0.60 至 0.85 之间,会走替换分支而不是新收录,这是 R 组的设计,不影响合理度。合理度给 4。'
+summary: '两个位与 R 组均未发现前视、数值伪影或定义坏掉。a 位划掉 3 个换皮种子后剩 8 个(创新 4、合理 4);b 位划掉 4 个换皮种子后剩 8 个(创新 4、合理 4);R 组合理度 4。'
