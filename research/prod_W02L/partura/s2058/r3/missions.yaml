@@ -1,0 +1,68 @@
+seed: 2058
+round: 3
+slots:
+  - type: E
+    core: 'cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap)'
+    hypothesis: >-
+      核心(本批共性表里富集最强的子树,含它的 9 个候选均值 -0.46 对不含 -2.14,p 0.000):对每只票,用过去 241 个交易日同一分钟位置的
+      后复权开盘价 Open 对成交额 Amt 做滚动一元回归取斜率 beta,再取当天各分钟中位数,最后在 LogFloatCap 分桶内做 z 分数。后复权价是累计收益的水平量,
+      所以 beta 的符号是「近一年放量时价格是在涨还是在跌」,即量价趋势确认度;桶内 z 分数让每个市值桶各取一份,新尺子去不掉这种分桶结构。第 2 轮含该核心的
+      候选只有三种外围:除以 cross_reg_fvalue / cross_regalpha / 自身 beta(最好 +0.16,train +0.49 valid +0.16,已接近线),
+      以及再套一层分桶。本轮外围完全不同,改用「同一斜率与别的回归统计量 / 别的窗口 / 别的量的差或残差」:(a)beta 减去同样分桶标准化的 cross_corr
+      (斜率里含波动尺度,相关系数不含,二者之差 = 价格波动相对成交额波动的比例,剥掉量价同步的强度);(b)beta 的 241 日对 60 日差分,度量确认度的近期变化;
+      (c)用 cs_regres 把 beta 对 cross_reg_tvalue(显著性)或对波动做残差,留下「斜率大但不是由噪声显著性或波动产生」的部分;(d)把 Amt 换成 Volume
+      与之相加,检验量价确认是否由成交额里的价格成分带来;(e)cross_ema / cross_zscore 做时间平滑或对自身历史标准化。算子上全部是 cross_reg* 家族、cs_regres、
+      sub/add/mul、cross_ema 的组合,没有一个出现在第 2 轮的候选外围里。数学上:所有分量都是过去 241 或更短窗口的滚动量,无前视;分母处没有除以近零量(只用差、残差、
+      乘积);分桶 z 分数在桶内标准差为 0 时由 AlphaCube 实现处理。样本外为什么还会在:慢变量(241 日窗口)换手低,15bp 成本吃不掉;量价趋势确认
+      (知情交易者随放量推高价格的持续性)是长期被研究的微观结构机制,不依赖某段行情;该子树在 train 与 valid 都是批内最好,第 2 轮最好的外围在 valid 上与
+      train 同向。
+    seeds:
+      - 'cross_ema(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), 20)'
+      - 'sub(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_bucket_zscore(day_quantile(cross_corr(Open, Amt, 241)), LogFloatCap))'
+      - 'sub(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cross_ema(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), 120))'
+      - 'sub(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 60)), LogFloatCap))'
+      - 'cs_regres(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), day_quantile(cross_reg_tvalue(Open, Amt, 241)))'
+      - 'cs_regres(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_rank(day_std(pow_2(Ret))))'
+      - 'add(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_bucket_zscore(day_quantile(cross_regbeta(Open, Volume, 241)), LogFloatCap))'
+      - 'cross_zscore(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), 60)'
+      - 'mul(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_rank(day_quantile(cross_corr(Open, Amt, 241))))'
+      - 'cs_regres(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), day_quantile(cross_corr(Open, Amt, 241)))'
+      - 'cross_mean(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), 10)'
+      - 'sub(cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), cs_bucket_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), LogTotalCap))'
+  - type: N
+    hypothesis: >-
+      流通股本变化(解禁 / 增发的供给冲击)。日频字段 LogFloatShares 是流通股数的对数,它只在发生解禁、增发、回购注销、限售股流通时跳变,与价格无关
+      (LogFloatCap = LogFloatShares + 对数价格,所以对它求差是「纯股本变化」,价格水平被消掉)。机制:新增流通股是供给增加(解禁砸盘、定增 / 股权激励后减持压力),
+      文献里的净发行异象(Pontiff-Woodgate、Loughran-Ritter)在股票层面是增发多的票后续收益低;A 股大量限售股分批解禁,时间点事先公开,
+      但解禁后的抛压是持续消化的,几十到一百多个交易日。算子实现:sub(LogFloatShares, ts_delay(LogFloatShares, d)) 取 d 日股本变化率
+      (d 取 20~120,只取过去值,无前视);cross_ema / cross_zscore 做平滑;cs_regres 对 LogFloatCap 取残差去掉规模效应;cross_max / is_gt
+      计数跳变的次数与最大幅度;sub(LogTotalCap, LogFloatCap) 是对数的限售比例(总市值减流通市值),是「还有多少未流通股压着」的存量版本,
+      cs_regres 对 ListAge 取残差去掉上市久期。和库里不同:本流 heads 与前两轮所有候选全是分钟价量的日内统计、收盘比值或 Amt 的结构,
+      没有一个用到股本字段;控制里的流动性是成交额、市值是 LogFloatCap(水平),都不是股本的「变化」,
+      股本变化在大多数日子是 0,只在事件日跳变,与成交额、波动、20 日反转没有机械关系,所以不是对它们的线性 / 平方 / 三次暴露。
+      数学上:LogFloatShares 是有限的对数量,差分不会除以近零;大量日子差分恰好为 0,截面上有大量并列 —— 这是事件型信号的本质而非数值伪影
+      (20~120 日窗口内有变化的票占比不低);热身期只丢前 d 日。为什么样本外还会在:解禁日历和增发是制度性的、持续发生的供给事件,
+      散户与机构对供给冲击的消化速度不依赖某段行情;窗口长、换手低。
+    inspired_by: 本流前两轮的 N 位(涨停板归一收益、隔夜 / 日内拆分)与全部 E 位都在价量序列里找 alpha 且全部落在 0 以下;本批唯一接近 0 的非价量候选是日频字段 cs_regres(ListAge, LogTotalCap)(valid +0.26),提示日频股本 / 上市信息这条线没被控制吃干净,而它里面最没被探索的是股本「变化」。
+    seeds:
+      - 'sub(LogFloatShares, ts_delay(LogFloatShares, 60))'
+      - 'sub(LogFloatShares, ts_delay(LogFloatShares, 120))'
+      - 'sub(LogFloatShares, ts_delay(LogFloatShares, 20))'
+      - 'cs_regres(sub(LogFloatShares, ts_delay(LogFloatShares, 60)), LogFloatCap)'
+      - 'cross_ema(sub(LogFloatShares, ts_delay(LogFloatShares, 20)), 40)'
+      - 'cross_zscore(sub(LogFloatShares, ts_delay(LogFloatShares, 20)), 120)'
+      - 'cs_bucket_rank(sub(LogFloatShares, ts_delay(LogFloatShares, 60)), LogFloatCap)'
+      - 'cross_max(sub(LogFloatShares, ts_delay(LogFloatShares, 1)), 120)'
+      - 'cross_mean(is_gt(sub(LogFloatShares, ts_delay(LogFloatShares, 1)), 0.01), 120)'
+      - 'cs_regres(sub(LogTotalCap, LogFloatCap), ListAge)'
+      - 'sub(sub(LogFloatShares, ts_delay(LogFloatShares, 60)), sub(LogTotalCap, ts_delay(LogTotalCap, 60)))'
+R:
+  - head: 'ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 50)'
+    why: 拆解显示外层 ts_std 窗口 50->25 变差 -1.1,50->100 变好 +0.83(-1.98 -> -1.15,train -1.01 valid -1.15),说明外层波动窗口是可改的烂部件,越长越好;内核(day_product 的链式乘积)换成 Volume 差别很小。往更长窗口外推。
+    variants:
+      - 'ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 150)'
+      - 'ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 200)'
+      - 'ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 250)'
+      - 'ts_std(day_product(pow_2(cross_product(sigmoid(Volume), 10))), 150)'
+      - 'cross_ema(ts_std(day_product(pow_2(cross_product(sigmoid(Amt), 10))), 100), 20)'
+      - 'ts_std(day_product(cross_product(sigmoid(Amt), 10)), 150)'

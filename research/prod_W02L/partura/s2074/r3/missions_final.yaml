@@ -1,0 +1,72 @@
+seed: 2074
+round: 3
+slots:
+- type: E
+  core: cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret))
+  hypothesis: 机制:核心 K = 每天截面上把"成交额最大的 10% 分钟的平均成交额"(day_topw_mean(Amt, Amt),即放量尖峰的体量)对日内下行尾部深度
+    day_quantile_q25(Ret) 做截面回归取残差:剩下的是"没有被下跌尾部解释的放量",即与卖压无关的纯放量事件(换手事件、机构大单、题材启动)。依据:本批候选里含
+    day_topw_mean(Amt, Amt) 的 7 个均值 -0.70、不含 -2.48(均值差 +1.78,p 0.000),含 cs_regres(topw,
+    q25) 整体的同量级;上一轮 Pr2a 里唯一翻正的两个候选(+0.11 / +0.10,train +0.5~+0.7)就是在 K 外挂 cross_regbeta(K,
+    cross_delay(day_sum(Ret),1), 30/60),说明 K 的"慢滚动读法"有料。上一轮外围只试过"对昨日收益的滚动回归斜率"这一族;这一位全部换成别的读法:(a)
+    K 的 60 日均值 / 120 日自身 z 分数 / 10 日对 60 日的差(放量事件的慢变状态,而非单日尖峰);(b) K 与当日收益、昨日收益、收盘分钟收益
+    day_close(Ret)(共性表里 +1.93 的子树)、成交额波动 day_std(Amt) 的 60~120 日滚动相关,以及对 day_std(Ret)
+    的滚动回归残差(去波动后的放量),读的是"放量是否伴随方向"这种结构关系,而不是放量水平(水平会被流动性 / 波动控制吃掉);(c) 流通市值桶内标准化 cs_bucket_zscore,去掉小盘票放量天然更大的结构;(d)
+    对 120 日均值做比,度量放量的相对异常。与库的区别:库里含 K 的结构只有 cross_regbeta(K, cross_delay(day_sum(Ret),1),
+    15/30/60) 一族,没有相关 / 残差 / 桶内标准化 / EMA 的写法,骨架禁令会再确认。为什么样本外还会在:10% 最大分钟的体量对下行尾部取残差后,代表无方向的事件性资金参与;事件性放量后的信息消化需要数周,窗口
+    20~120 日、排名周内几乎不动,15bp 下换手低;相关类写法拿到的是资金行为与价格方向的稳定关系,不是风格水平,风格切换时不易翻号。风险:放量体量与流动性控制强相关,靠
+    cs_regres 去掉尾部后仍可能残留,所以以滚动关系为主力。数学检查:无前视(滞后用 cross_delay 正天数);cs_regres 在某天有效票极少时可能为空,可交易掩码已去掉新股与长期停牌,不是爆点;cross_corr
+    当一方为常数返回 0 的已知行为只出现在少数停牌票上。
+  seeds:
+  - cross_mean(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), 60)
+  - cross_zscore(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), 120)
+  - cross_corr(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), day_sum(Ret),
+    60)
+  - cross_corr(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), cross_delay(day_sum(Ret),
+    1), 60)
+  - cross_regres(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), day_std(Ret),
+    60)
+  - sub(cross_mean(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), 10),
+    cross_mean(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), 60))
+  - cs_bucket_zscore(cross_mean(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)),
+    20), LogFloatCap)
+  - cross_corr(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), day_close(Ret),
+    120)
+  - cross_regbeta(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)), day_close(Ret),
+    60)
+  - cross_ema(cross_zscore(cs_regres(day_topw_mean(Amt, Amt), day_quantile_q25(Ret)),
+    60), 10)
+- type: N
+  hypothesis: 机制:"收盘分钟冲击的跨日反应系数"。day_close(Ret) 是最后一分钟(收盘集合竞价)的收益,是一天里最容易被指数基金、机构收盘价交易与尾盘拉抬
+    / 砸盘推动的价格冲击;本批共性表里它是富集最强的子树(含它的 4 个候选均值 -0.53、不含 -2.46,均值差 +1.93,p 0.001)。想法是不读冲击大小,读它的"后果结构":对每只票,用最近
+    60~120 个交易日估计 (i) 昨日收盘冲击对今日全天收益的回归斜率 cross_regbeta(day_sum(Ret), cross_delay(day_close(Ret),
+    1), d) = 收盘价冲击是被次日反转(流动性型冲击)还是被延续(信息型冲击);(ii) 收盘冲击与当日其余收益的滚动相关 cross_corr(day_close(Ret),
+    day_sum(Ret), d) = 尾盘是否在追随当日趋势(趋势型资金)还是逆势;(iii) 收盘冲击的自相关 cross_corr(day_close(Ret),
+    cross_delay(day_close(Ret),1), d) = 尾盘冲击是否有持续的同向资金;(iv) 收盘分钟收益与最大成交额分钟收益之差 sub(day_close(Ret),
+    day_topw_mean(Ret, Amt)) 的慢均值 = 尾盘价格相对日内最重分钟的偏离。算子实现:全部是 cross_corr / cross_regbeta(滚动
+    60~120 日)作用在两个日频序列上,只用 t 日及以前的值,滞后用 cross_delay。与库的区别:库里 day_close(Ret) 只作为 cross_delay(day_close(Ret),1)
+    等简单形式出现在 4 个候选里,没有"滚动回归斜率 / 滚动相关"的读法;已有 head(day_close(neg(Volume)) 一族)读的是收盘分钟的成交量水平,这里读的是收盘分钟价格冲击与后续
+    / 同期收益的关系,量纲是斜率与相关系数,无量纲,不会被流动性 / 波动 / 市值控制线性吃掉。为什么样本外还会在:收盘冲击是被反转还是延续,取决于个股的参与者结构(指数成分
+    / 融资盘 / 游资尾盘拉抬),这种结构变化慢(季度级),所以 60~120 日窗口的系数排名稳定,周换手低;系数本身是"这只票的尾盘价格是噪声还是信息"的代理,不依赖当期风格。风险:day_close(Ret)
+    在一字板 / 停牌日为 0 且各板块收盘集合竞价制度不同(深市有、沪市某些时期没有),会引入结构差异,故以滚动系数而非水平做主力。数学检查:cross_corr
+    一方为常数(停牌 / 一字板)返回 0 不是缺失,只影响少数票且已有可交易掩码;cross_regbeta 的自变量接近常数时斜率可能爆点,对排名后做控制回归不受单调变换影响,但个别票的极端值只占截面一两个名次;无前视(滞后只用
+    cross_delay 正天数)。
+  inspired_by: 第 3 批共性表里 day_close(Ret)(+1.93,p 0.001)、cross_delay(day_close(Ret),1)、cross_delay(day_sum(Ret),1)(+1.76)和
+    day_topw_mean(Amt, Ret):收盘分钟收益与昨日收益这些"一分钟 / 一日"的价格冲击量在样本里最富集,但都只以水平形式出现,没有人读过它们的跨日反应关系。
+  seeds:
+  - cross_regbeta(day_sum(Ret), cross_delay(day_close(Ret), 1), 60)
+  - cross_regbeta(day_sum(Ret), cross_delay(day_close(Ret), 1), 120)
+  - cross_corr(day_sum(Ret), cross_delay(day_close(Ret), 1), 60)
+  - cross_corr(day_close(Ret), day_sum(Ret), 60)
+  - cross_corr(day_close(Ret), day_sum(Ret), 120)
+  - cross_corr(day_close(Ret), cross_delay(day_close(Ret), 1), 60)
+  - cross_regbeta(day_close(Ret), cross_delay(day_sum(Ret), 1), 60)
+  - cross_mean(sub(day_close(Ret), day_topw_mean(Ret, Amt)), 60)
+  - cross_zscore(cross_regbeta(day_sum(Ret), cross_delay(day_close(Ret), 1), 60),
+    120)
+  - cross_regres(day_sum(Ret), cross_delay(day_close(Ret), 1), 60)
+  - cross_corr(day_close(Ret), day_std(Ret), 60)
+  - cross_corr(day_close(Ret), day_topw_mean(Ret, Amt), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
