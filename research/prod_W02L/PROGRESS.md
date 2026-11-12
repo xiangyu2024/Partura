@@ -328,3 +328,8 @@
 ## 2026-11-12 17:25 EST — 补跑撤回到全部轮次之后(用户定)
 - 用户:补跑里慢算子多，不建议和正常轮次重叠。补跑驱动已停，停的时候还在等卡(主机上 14 个 GP 搜索),一个轮次都没起，没有改动任何 episode 或 arms 文件。
 - 全部 240 轮结束后再启动 `scripts/server/w02l_makeup.sh research/prod_W02L/makeup_list.txt`。
+
+## 2026-11-12 17:35 EST — 进度看板(用户要求「时刻更新各步骤进度图」)
+- claude.ai 上的看板「W02L 进度看板」:https://claude.ai/artifact/D9UG9RbFhTRC53HkQhV1WB(私有，只有用户自己能开)。
+- 数据：服务器上 `scripts/w02l_progress.py` 只读地汇总 arms / loc / stage0 / report.md / 补跑文件和进程表，出一份 JSON(四张表：各步骤完成度、还没跑完的流、已结束轮次随时间、概况)。本机 `scripts/w02l_progress_fetch.sh <out.json>` 取回，上传成看板的附件，四个数据集指向新附件。
+- 每定稿一轮、算完一批尺子 D、或发现卡点时刷新一次。
