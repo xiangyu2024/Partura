@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '核心 day_q_stat_std(Volume) 是快照 head 2 ts_quantile_q75(ts_kurt(day_q_stat_std(Volume), 50), 50) 的子树，属设计如此，不作创新度低的理由。核心与 5 个控制的 |ρ| 为 liq 0.47、vol 0.23、rev 0.21、known 0.47、size 0.18，全部低于 0.8 的 E 位门槛；与 head 原始 |ρ| 0.32，残差 0.23。外围的 12 个种子与 3 个 head 的原始 |ρ| 全部 ≤ 0.50（最高 seed 9 对 ts_kurt head 为 0.50），未触发 0.7 的库禁令；外围用 cross_zscore（个股自比）、cross_corr / cross_regbeta（60 或 120 日滚动协动）与读数差，不是 head 的 ts_quantile / ts_kurt 单窗口分布统计，度量的是 head 没有的东西，因此创新度给 4。数学核对：day_q_stat_std 是 Ljung-Box 累积 Q 序列在滞后 1..20 上的标准差（operators/dt_day.py:397），ρ 为归一化量，对成交量水平尺度不变，与假设里“Q 统计量的标准化读数”描述基本一致（严格说是跨滞后的标准差，假设文字略粗）；cross_zscore、cross_corr、cross_regbeta 的窗口 40 到 120 日，热身不主导；全部只用 t 日及以前的数据，无 cross_shift / ts_shift；无 nt_* 与 ts_spearman。种子 1、3、12 与成交量水平类控制的 |ρ| ≤ 0.05，是这一位最干净的部分。种子 4、5、6、9 与 liq / known 族的残差相关在 0.27 到 0.77 之间，被控制吃掉的风险最高；种子 9（sub(cross_mean(core,20), cross_mean(ar1 Volume,20))）的 liq 0.77、known 0.77 最接近 0.8 自动划掉线，但未达线，且它与 seed 对 head 的 0.50 不是重复，不划。种子 12 中 sign(cross_mean(day_sum(Ret),20)) 只是方向门控，不是数学问题。无种子被划掉。如果它有 alpha，最可能来自成交量序列的聚集结构（拆单、分批执行）随个股自身历史的变化，而不是成交量水平或已知成交额族。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [10]
+    reasons: '机制：两个日度微观结构读数（day_ar1_coefficient(Ret)、day_ar1_coefficient(Volume)）的长窗口滚动协动，灵感来自快照 head 3 的 ar1 结构，但 head 3 的 ar1 作用在 nt_ts_scale(in_topk_masked_p5(Low, Vwap)) 上，且外围是 ts_quantile_q75，与这里的两两滚动协动不同。种子 1 对 head 3 的原始 |ρ| 0.09，残差 0.12，与 liq 0.03、known 0.02，属于新的读数协动，创新度给 4。算子核对：day_ar1_coefficient 是 OLS 的 phi（dt_day.py:367），对常数日返回 NaN（不是 0，假设文字写的是“0 或缺失”，略有出入，但只影响少数票）；cross_corr / cross_regbeta 为日轴滚动（dt_cross.py:193、299）；无前视，无 nt_* 与 ts_spearman，窗口最长 120 日。逐个种子：种子 1、2、3、8 是同一骨架（ar1 Ret 与 ar1 Volume 的滚动协动）的窗口或回归方向变体，互相只差窗口，不算重复，保留，留给 GP 调窗口；种子 4（ar1 Ret 与 q_stat_std Volume）与 slot a 的核心有共同读数，但外围不同，保留；种子 5（day_durbin_watson(Vwap)）需要说明：dt_day.py:304 的 DW 是 Σ(Δx)² 除以 Σx²，对价格水平的结果主要是已实现波动相对价格水平平方的缩放（lab 笔记里“DW on a price level is realized variance”），不是假设里写的序列相关；它不是数学问题（非系统性算不出、结果也不由热身或缺失填充决定），因此放行，但它的机制描述与实际度量不一致，应按已实现波动的价格缩放去理解，size 控制 |ρ| 0.09 与之吻合。种子 9 的 liq 0.63、known 0.67，接近流动性 / 已知族，属于最可能被控制吃掉的一条，未达 0.8 线，不划。种子 10 cross_corr(day_open(Ret), day_ar1_coefficient(Volume), 60) 的 pipeline 结果为 distinct 0.0、gate false、三个 head 的 max_head 与残差都是 NaN 或 0，即输出退化为常数，是数值伪影 / 定义坏掉（day_open 是 day_first，取当天首个非缺失分钟的收益，这里整段输出没有变化），划掉。划掉后剩 9 个种子，≥ 4，通过。如果它有 alpha，最可能来自两个微观结构读数的长窗口协动（订单流持续性与价格反弹的对照），而不是 head 3 那一类 ar1 对价格水平的结构。'
+R: []
+summary: '2 个任务位均通过（slot a E 核心为 head 2 子树，创新 4 合理 4，无种子划掉；slot b N 创新 4 合理 4，划掉种子 10 输出退化为常数，余 9 个），计划无 R 组；已知风险：seed 5 DW 在价格水平上的机制描述与实际度量不符，seed 9 两位都接近流动性族，但均未达自动划掉线。'

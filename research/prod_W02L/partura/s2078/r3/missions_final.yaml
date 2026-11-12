@@ -1,0 +1,88 @@
+seed: 2078
+round: 3
+slots:
+- type: E
+  core: cross_delta(day_flat_ratio(Volume), 30)
+  hypothesis: 'Core = the 30-day change in the share of minutes whose volume equals
+    the previous minute (day_flat_ratio of Volume = fraction of a "frozen tape"),
+    taken from the batch-1/2 enrichment table (+1.35, p<0.001, 24 candidates; subtree
+    of a head-adjacent family). It is a CHANGE (event) of tape freezing, not the level:
+    the level is a liquidity/size proxy that the controls remove, the change measures
+    a stock suddenly becoming more or less actively traded (attention / liquidity
+    regime shift). Rounds 1-2 used the core only inside cross_mean(div(...)/(day_max-day_min))
+    price-range ratios (scores -0.6 to -0.8) and the sibling leaf day_flat_run_max;
+    nothing has put this core under temporal-extreme, own-history-normalised, return-interaction,
+    or size-screen peripheries. Peripheries here, each a different mechanism: (a)
+    cross_mean 10 / ts_max 20 = persistent vs worst recent deterioration of liquidity
+    (MAX-style); (b) divide by own 60-day mean flat ratio = relative regime shift,
+    scale-free across names; (c) mul with 5-day mean return = price moves that come
+    with a drying-up tape are not confirmed and revert (pure-long book takes the opposite
+    side: stocks whose tape just became MORE continuous after a rally); (d) ts_regbeta
+    / ts_corr of return on the core = how much returns load on liquidity regime shifts;
+    (e) cs_last_low05/10 size screens with LogFloatCap (not LogTotalCap, which is
+    what earlier wrappers used) = lexicographic cut so the signal operates inside
+    the small-cap segment where zero-volume streaks occur; (f) difference with the
+    Amt-based flat ratio change isolates share-count vs money flattening. Out-of-sample
+    persistence: thin, intermittent trading is structural in A-shares and regime shifts
+    in trading continuity (new listing lock-up expiry, suspension returns, attention
+    spikes) recur every year; the reward strips the liquidity level so what remains
+    is the dynamics.'
+  seeds:
+  - cross_mean(cross_delta(day_flat_ratio(Volume), 30), 10)
+  - div(cross_delta(day_flat_ratio(Volume), 30), cross_mean(day_flat_ratio(Volume),
+    60))
+  - mul(cross_delta(day_flat_ratio(Volume), 30), cross_mean(day_mean(Ret), 5))
+  - ts_regbeta(day_mean(Ret), cross_delta(day_flat_ratio(Volume), 30), 60)
+  - ts_corr(cross_delta(day_flat_ratio(Volume), 30), day_mean(Ret), 30)
+  - cs_last_low10(cross_delta(day_flat_ratio(Volume), 30), LogFloatCap)
+  - cross_mean(cs_last_low05(cross_delta(day_flat_ratio(Volume), 30), LogFloatCap),
+    10)
+  - sub(cross_delta(day_flat_ratio(Volume), 30), cross_delta(day_flat_ratio(Amt),
+    30))
+  - cs_last_low05(ts_max(cross_delta(day_flat_ratio(Volume), 30), 20), LogFloatCap)
+- type: N
+  hypothesis: 'Intraday lead-lag and serial dependence of minute returns and volume,
+    built only from within-day correlations of time-shifted slices (scale-free, no
+    level of volume or volatility). Per day: (1) day_ar1_coefficient(Ret) = minute-return
+    autocorrelation, positive for trending / information-driven tape (gradual incorporation,
+    institutional slicing) and negative for bid-ask-bounce / retail noise tape; (2)
+    correlation of today minute return with the previous minute volume, day_corr(in_slice(Ret,2,240),
+    in_slice(Volume,1,239)): does volume predict the next price move (informed flow)
+    -- slices are aligned correctly (239 columns each, past volume vs later return,
+    no look-ahead, no in_shift fill); (3) the reverse, volume reacting to the previous
+    minute return (momentum-chasing volume, retail attention); (4) the difference
+    of (2) and (3) = who leads, price or volume. All averaged over 20 days with cross_mean
+    to make it a stock trait, optionally minus a 60-day average (change in behaviour)
+    or day_durbin_watson. Mechanism: stocks whose volume leads price are ones where
+    informed traders act first and prices adjust slowly; stocks whose volume chases
+    price are attention-driven and reverse. Different from library: none of the batch
+    heads or the 304 scored candidates use shifted-slice day_corr, ar1 or Durbin-Watson
+    of minute returns; the heads use day_cov(Open,Ret), day_cov(Amt,Vwap), day_skew(Volume)
+    (same-minute, level-sensitive). A correlation is bounded and invariant to rescaling
+    Ret or Volume, so liquidity, volatility and size controls cannot absorb it linearly;
+    it also does not equal the 20-day reversal because it is an intraday-structure
+    statistic. Why it should persist OOS: A-share microstructure (T+1, retail dominance,
+    price limits that slow incorporation) is structural; intraday autocorrelation
+    and lead-lag are stable stock traits across years.'
+  inspired_by: 'Batch 2 / 3 heads built on same-minute covariances (day_cov(Open,Ret),
+    day_cov(Amt,Vwap), day_cov of regression residual with argmin) and enrichment
+    of day_mean(Ret) / Volume-shape leaves: intraday co-movement carries a little,
+    but only through level-sensitive covariances; the scale-free, time-shifted correlation
+    version has not been written.'
+  seeds:
+  - cross_mean(day_ar1_coefficient(Ret), 20)
+  - sub(cross_mean(day_ar1_coefficient(Ret), 20), cross_mean(day_ar1_coefficient(Ret),
+    60))
+  - cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 20)
+  - cross_mean(day_corr(in_slice(Volume, 2, 240), in_slice(Ret, 1, 239)), 20)
+  - sub(cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 20),
+    cross_mean(day_corr(in_slice(Volume, 2, 240), in_slice(Ret, 1, 239)), 20))
+  - ts_stddev(day_ar1_coefficient(Ret), 30)
+  - sub(cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 20),
+    cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Volume, 1, 239)), 60))
+  - cross_mean(day_corr(in_slice(Ret, 2, 240), in_slice(Amt, 1, 239)), 20)
+  - cross_mean(day_hurst(Close), 20)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

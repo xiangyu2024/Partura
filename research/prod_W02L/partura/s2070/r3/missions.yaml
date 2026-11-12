@@ -1,0 +1,41 @@
+seed: 2070
+round: 3
+slots:
+- type: E
+  core: day_zero_ratio(Volume)
+  hypothesis: 'Core = day_zero_ratio(Volume), the share of zero-volume minutes per day (halt, limit-lock, no-trade proxy); the snapshot''s third most enriched subtree (mean gap +1.29, p<0.001, 15 candidates). Round 2''s audit established that ts_regres(x,y,d) returns the residual of y on x, so the R2 core was the zero-volume share after removing its 20-day dependence on price level, and prior rounds only smoothed it (ts_mean 40) or used it as the regressor-residual. This round the raw halt-share is kept as the core and the periphery implements different mechanisms: (a) persistence vs onset (ts_mean 60, 5d-minus-60d, ratio to own history, ts_delta, ts_max, ts_std): chronically illiquid names carry a liquidity premium while newly-onset halts are information events; (b) halt-share residualised on the firm characteristics that mechanically cause it (LogFloatCap, ListAge, volatility, turnover via ts_regres/ts_regalpha) so what is left is an unexplained non-trading shock, not a size or new-listing effect (the reward only strips the linear/U/S exposure of size, not of listing age or board limits); (c) co-movement of halt share with the daily return/turnover over 30-40 days (ts_corr): stocks whose price moves precisely when trading dries up (limit-up lock) versus when it does not; (d) interaction with the board price limit width LimitWidth (a 10% vs 20% board locks at different rates). None of these appear in the snapshot (which has only the Vwap-level regression). Out of sample: limit/halt regimes and retail-dominated lottery demand around locked names are structural features of A shares, and rank reward removes scale so ratios/residuals are stable.'
+  seeds:
+  - ts_mean(day_zero_ratio(Volume), 60)
+  - sub(ts_mean(day_zero_ratio(Volume), 5), ts_mean(day_zero_ratio(Volume), 60))
+  - ts_regres(LogFloatCap, day_zero_ratio(Volume), 60)
+  - ts_regres(ListAge, day_zero_ratio(Volume), 60)
+  - ts_corr(day_zero_ratio(Volume), day_sum(Ret), 40)
+  - ts_regres(day_std(Ret), day_zero_ratio(Volume), 40)
+  - ts_regalpha(day_zero_ratio(Volume), day_std(Ret), 20)
+  - ts_std(day_zero_ratio(Volume), 40)
+  - ts_max(day_zero_ratio(Volume), 20)
+  - div(day_zero_ratio(Volume), ts_mean(day_zero_ratio(Volume), 60))
+  - ts_corr(day_zero_ratio(Volume), day_sum(Amt), 30)
+  - ts_regres(day_sum(Amt), day_zero_ratio(Volume), 30)
+  - ts_skew(day_zero_ratio(Volume), 60)
+  - mul(day_zero_ratio(Volume), LimitWidth)
+  - ts_delta(day_zero_ratio(Volume), 10)
+  - ts_corr(day_zero_ratio(Volume), ts_delay(day_sum(Ret), 1), 40)
+- type: N
+  hypothesis: 'Overnight-versus-intraday return split. The overnight gap (first-minute Open over previous day''s last Close, in back-adjusted price so splits/dividends cancel) is where institutional/informed repositioning and news land, while the intraday leg (Open to last Close) is dominated by retail order flow in A shares. The idea: stocks whose gaps persistently drift one way and then get faded (or continued) intraday carry a sentiment/liquidity-provision signal. Seeds implement the legs (20d mean of gap, of intraday), their difference, the 40d correlation between gap and the same-day or previous-day intraday move (continuation vs reversal), the vol ratio, residual gap after removing the prior intraday move (ts_regres), the gap-vs-opening-volume covariance (first 30 minutes via in_slice 0..29, inclusive, no shift fill), and a high-turnover-conditioned gap. Everything uses day_first/day_last and ts_delay of the PREVIOUS day, so there is no lookahead. It differs from every batch head: they are intraday shapes of High/Ret/Close squared, Amt/Volume threshold ratios, or range-over-mean day_cov constructs, none uses the cross-day open/close boundary; and from the controls (reversal 20d is close-to-close, which mixes the two legs). The ''overnight premium / intraday reversal'' split is a documented A-share regularity tied to who trades when, not to any single sample window, so it should persist. Prior N slots (lead-lag of minute volume/return, Vwap regression) are different operators and mechanisms.'
+  inspired_by: 'batch 3 heads (day_cov of range/Ret shapes, Amt/Volume low-volume threshold ratios) and r1-r2 results: every intraday-shape signal scored negative while the only near-zero results involved the halt share; so move to the cross-day boundary (overnight vs intraday) which no head touches, keeping the halt-share lesson as the E slot.'
+  seeds:
+  - ts_mean(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 20)
+  - ts_mean(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 20)
+  - sub(ts_mean(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 20), ts_mean(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 20))
+  - ts_corr(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), div(sub(day_last(Close), day_first(Open)), day_first(Open)), 40)
+  - div(ts_std(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 40), ts_std(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 40))
+  - ts_corr(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), day_sum(in_slice(Volume, 0, 29)), 20)
+  - ts_regres(ts_delay(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 1), div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 60)
+  - ts_decay_linear(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 10)
+  - ts_corr(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), ts_delay(div(sub(day_last(Close), day_first(Open)), day_first(Open)), 1), 40)
+  - ts_mean(sub(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), cross_mean(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 1)), 20)
+  - ts_skew(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 60)
+  - ts_regres(div(sub(day_last(Close), day_first(Open)), day_first(Open)), div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), 40)
+  - ts_mean(mul(div(sub(day_first(Open), ts_delay(day_last(Close), 1)), ts_delay(day_last(Close), 1)), is_gt(day_sum(Amt), ts_mean(day_sum(Amt), 20))), 20)
+R: []

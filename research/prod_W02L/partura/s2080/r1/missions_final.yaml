@@ -1,0 +1,80 @@
+seed: 2080
+round: 1
+slots:
+- type: E
+  core: day_q_stat_std(Volume)
+  hypothesis: '机制:核心 C = day_q_stat_std(Volume),当天分钟成交股数的 Q 统计量(分钟量序列的自相关/聚集程度)的标准化读数,衡量「当天成交量是否成团出现」:算法拆单、机构分批执行会让分钟量有持续的自相关,散户脉冲和事件冲击则是孤立的尖峰。依据在本批的富集表:含
+    C 的 4 个候选均值差 +1.05(p 0.018),是本批最显著的子树;但 C 单独(sufficiency)是 -2.36 / -2.21,而 head
+    ts_quantile_q75(ts_kurt(C, 50), 50) 有 -1.13,说明 C 里有东西,但被 head 的外围(75 分位 + 峰度,两个都是「水平
+    + 尾部」型的单窗口统计)变成了高换手的噪声。把 Volume 换成 Amt 只有 -1.20(train -0.77),说明股数口径与金额口径都不是主要问题,问题在外围。
+
+    这一位不再用 ts_quantile / ts_kurt 这类单窗口分布统计,而是把 C 当成每只票的「执行方式」指标,用三种与水平无关的读法:(a) 个股自己的慢变化:cross_zscore(C,
+    120)、10 日均值减 120 日均值、C 除以自己 60 日均值再 EMA —— 读的是「这只票最近的成交方式相对自己的常态变得更团簇还是更零散」,以自己为参照,去掉让水平因子长得一样的持久截面水平;(b)
+    C 与价格行为的 60 日滚动关系:cross_corr / cross_regbeta(C, 当日收益绝对值 / 日内最大分钟收益 / 日内分钟波动),团簇成交伴随大幅价格变动
+    = 知情或消息驱动,不伴随 = 流动性执行,W01 里样本内较好的结构是两个日度量的长窗口滚动关系,窗口长、换手低;(c) 与上一个日度读数 day_ar1_coefficient(Volume)
+    的差(两个读数同属成交量的序列结构,差分去掉了共同的成交量水平)。
+
+    为什么和已有的不同:快照里含 C 的外围算子集合是 {ts_quantile_q75, ts_kurt} 一类,这里的外围用 cross_zscore /
+    cross_mean / cross_ema / cross_corr / cross_regbeta / sub / div,没有一个与它们是同一个集合;骨架已与两个库的
+    5583 条对照由 c06_check 与 GP 禁令把关。库里最近的是 ts_kurt(C, 50) 的 head(单窗口分布形状),这里是相对自己历史的变化和与价格的滚动关系,度量的是不同的东西。
+
+    为什么样本外还会在:订单执行方式(算法 vs 脉冲)是参与者构成的慢变结构属性,窗口 20 到 120 日,名次在数周内稳定,15 bp 下换手低;个股自比的写法对风格切换不敏感。最可能的失败方式:与已知成交额族
+    / 流动性控制的残差相关仍高,被控制吃掉,这时下一轮不再押 C。
+
+    数学检查:Q 统计量对分钟量全为 0(停牌、无成交)的日子返回缺失或 0,会在截面上聚集,但奖励的可交易掩码已排除停牌多的票,不是结果的主要来源;cross_zscore
+    对近常数窗口有保护;cross_corr 有效对太少时返回 0,只影响新股;全部只用 t 日及以前的数据,无前视(没有 cross_shift / ts_shift);最长窗口
+    120 日,热身期不主导。'
+  seeds:
+  - cross_zscore(day_q_stat_std(Volume), 120)
+  - sub(cross_mean(day_q_stat_std(Volume), 10), cross_mean(day_q_stat_std(Volume),
+    120))
+  - cross_ema(div(day_q_stat_std(Volume), cross_mean(day_q_stat_std(Volume), 60)),
+    10)
+  - cross_corr(day_q_stat_std(Volume), abs_(day_sum(Ret)), 60)
+  - cross_corr(day_q_stat_std(Volume), day_max(Ret), 60)
+  - cross_corr(day_q_stat_std(Volume), day_std(Ret), 60)
+  - cross_regbeta(day_std(Ret), day_q_stat_std(Volume), 60)
+  - cross_regbeta(abs_(day_sum(Ret)), day_q_stat_std(Volume), 60)
+  - sub(cross_mean(day_q_stat_std(Volume), 20), cross_mean(day_ar1_coefficient(Volume),
+    20))
+  - cross_corr(day_q_stat_std(Volume), day_ar1_coefficient(Volume), 60)
+  - cross_zscore(sub(day_q_stat_std(Volume), day_ar1_coefficient(Volume)), 60)
+  - mul(cross_zscore(day_q_stat_std(Volume), 120), sign(cross_mean(day_sum(Ret), 20)))
+- type: N
+  hypothesis: '机制:「收益的序列相关」与「成交量的序列聚集」之间的长窗口滚动关系。分钟收益的一阶自相关 day_ar1_coefficient(Ret)
+    为负,是做市商库存回补 / 买卖价差反弹(bid-ask bounce)的特征;为正则是知情交易者拆单或动量式追涨。分钟量的一阶自相关 day_ar1_coefficient(Volume)
+    衡量成交是否成团。两者的 60 日滚动相关 / 回归斜率读的是:成交成团时价格是延续(知情拆单、有 alpha)还是反弹(流动性提供、无信息)。这是微观结构里「订单流持续性」的一个日度可交易代理(Hasbrouck
+    订单流与价格冲击的思路,Hasbrouck 1991),与本批的 head 都是单个日度量的分布统计(ts_quantile/ts_kurt)不同,这里是两个日度序列结构读数的滚动协动。
+
+    启发:本批 head 里 day_ar1_coefficient 出现在第三个 head(-1.26),day_q_stat_std(Volume) 富集
+    +1.05,说明「分钟序列结构」这类日度读数里有信息,但 head 的外围(75 分位)让它变成噪声;把它们改成两两滚动关系,窗口长、对水平类控制近似正交。
+
+    算子怎样实现:cross_corr(x, y, d)、cross_regbeta(x, y, d)(AlphaCube 里是 y 对 x 回归)取 d =
+    40、60、120;x、y 取 day_ar1_coefficient(Ret) / day_ar1_coefficient(Volume) / day_durbin_watson(Vwap)
+    / day_skew(Ret) / day_open(Ret) 之类;另有 cross_zscore 的个股自比写法和「读数差」写法。
+
+    为什么和库里已有的不同:库里与本批相关的是 ts_ 单窗口统计外围;这里的核心外围是 cross_corr / cross_regbeta,度量两个读数的协动,骨架由
+    c06_check 与库禁令核对。
+
+    为什么样本外还会在:订单流持续性是市场微观结构的慢变属性(参与者构成),窗口长、换手低;符号由 GP 与奖励自己选方向。最可能的失败:60 日窗口估计太吵,或被流动性、波动控制吃掉。
+
+    数学检查:day_ar1_coefficient 对常数日(一字板、零成交)可能给 0 或缺失,只是少数票,奖励的可交易掩码已排除;cross_corr 有效对太少返回
+    0 只影响新股;无前视,最长窗口 120 日。'
+  inspired_by: day_ar1_coefficient 出现在 head 3;day_q_stat_std(Volume) 在富集表 +1.05(p
+    0.018);把「分钟序列结构读数」从单窗口分布统计改成两读数的长窗口滚动协动
+  seeds:
+  - cross_corr(day_ar1_coefficient(Ret), day_ar1_coefficient(Volume), 60)
+  - cross_regbeta(day_ar1_coefficient(Volume), day_ar1_coefficient(Ret), 60)
+  - cross_corr(day_ar1_coefficient(Ret), day_ar1_coefficient(Volume), 120)
+  - cross_corr(day_ar1_coefficient(Ret), day_q_stat_std(Volume), 60)
+  - cross_corr(day_durbin_watson(Vwap), day_ar1_coefficient(Volume), 60)
+  - cross_corr(day_skew(Ret), day_ar1_coefficient(Volume), 60)
+  - cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40)
+  - cross_zscore(cross_corr(day_ar1_coefficient(Ret), day_ar1_coefficient(Volume),
+    40), 120)
+  - sub(cross_mean(day_ar1_coefficient(Ret), 20), cross_mean(day_ar1_coefficient(Volume),
+    20))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

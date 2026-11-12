@@ -1,0 +1,36 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2]
+    reasons: |-
+      类型 E,核心 cross_delta(day_flat_ratio(Volume), 30)。算子核对:cross_delta(x,d) 为 x[t]-x[t-d](dt_cross.py:174-181),无前视;day_flat_ratio 是 Volume 上相邻分钟取值相等的比例(ops_ext.py:82-93),对零成交和整手量重复都会计数,是「成交重复」的度量,不是价格冻结的原意,但不是数学问题。
+      相关度表:核心与 9 个快照 head 的最大原始 |ρ| = 0.172(head sub(0.5, day_first(cross_sum(in_sum_rolling(Amt,5),3)))),残差 0.21;与 liq/vol/rev/known/size 的 |ρ| 为 0.04/0.12/0.21/0.06/0.03,远低于 0.8。核心是 30 日变化而非水平,流动性水平被控制吸收、变化量没有被吸收,所以创新度给 4(不是 5:核心本身已在共性表里出现过 24 次,+1.35,只是外围给了新东西)。
+      逐个种子:
+      - 种子 1 cross_mean(core,10)、种子 8 cross_mean(cs_last_low05(core,LogFloatCap),10)、种子 10 cs_last_low05(ts_max(core,20),LogFloatCap):核心的平滑 / 尾部版本;种子 10 的原始 |ρ| 0.515 与 head pow_05(cs_normalize(day_mean(Volume))) 接近,liq 0.48、known 0.475,更像流动性水平的换写,但未达 0.7,保留。
+      - 种子 2 ts_max(core,20):与 head pow_05(cs_normalize(day_mean(Volume))) 的原始 |ρ| = 0.714 >= 0.7,按库禁令自动划掉(序号 2)。
+      - 种子 3 div(core, cross_mean(day_flat_ratio(Volume),60)):分母是 60 日冻结度均值,流动性好的票这个量可能接近 0,会产生爆点。相关度表无法核实分母分布,按 §4 只在支配截面时才算问题,这里不据此挡,请 PI 检查分母分布。
+      - 种子 5 ts_regbeta(day_mean(Ret), core, 60):rolling_ols(x,y) 为 y ~ alpha + beta*x(common.py:643),所以这里是核心对收益的斜率,即 cov(core,ret)/var(ret),与自述「收益对核心的载荷」方向相反,并且除以了收益方差。仍是有定义的信号,vol 控制相关 0.002,保留。
+      - 种子 7 cs_last_low10(core,LogFloatCap)、种子 8:cs_last_low 把最小市值段推到底部(ops_ext.py:375-410),即排除小票,自述却写「让信号在小票段内运作」,方向相反(应为 cs_first_low*)。这是机制描述与算子不一致,不是数学问题,也不是重复;规则 §3 只允许以数学问题或重复划种子,所以未划,请 PI 修正假设文字或改算子。size 控制 |ρ| 0.27 不到 0.8。
+      - 种子 4 mul(core, cross_mean(day_mean(Ret),5))、种子 6 ts_corr(core, day_mean(Ret), 30)、种子 9 core 减去 Amt 版核心:算子组合与自述一致,保留。
+      门槛(levels_ok)未过的有核心与种子 1、2、9(distinct 0.05–0.18,十分位边界并列靠列序打破)。按规则 §4 列序不是挡的理由,这里只记录。
+      全部种子无 nt_*、无 ts_spearman、无前视算子。外围不与库内已知候选重复(核心仅在 round 1–2 的价格区间比值与 day_flat_run_max 里出现过,外围不同)。
+      如果它有 alpha,最可能来自成交「重复 / 连续」状态切换带来的注意力或流动性制度变化;若有,最可能落在种子 7/8 的小盘段屏蔽修正版里,或种子 3 的相对自身均值版本里。
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [6]
+    reasons: |-
+      类型 N。核心想法:分钟收益一阶自相关(day_ar1_coefficient、day_durbin_watson)与量价错位相关(day_corr,时间对齐的切片)。切片核对:in_slice(Ret,2,240) 为第 2..240 列(239 列),in_slice(Volume,1,239) 为第 1..239 列(239 列),Ret_t 对 Vol_{t-1},两边等长、无前视、无 in_shift 填充(dt_in.py:324-325)。
+      相关度表:各种子与快照 head 的原始 |ρ| 为 种子 1 0.696、种子 2 0.19、种子 3 0.08、种子 4 0.33、种子 5 0.31、种子 7 0.32、种子 8 0.02、种子 9 0.09、种子 10 0.23;只有种子 1 接近 0.7 但低于门槛(残差 0.659,最像的 head 是 sub(-2, abs_(day_mean(nt_ts_argmax(High,3)))))。heads 用的是同分钟协方差和水平类量,确实没有时间错位相关或 DW / AR1 的 head,创新度给 4。
+      控制:种子 4 与 rev 的 |ρ| 0.588、种子 5 与 rev 0.501,达到「控制换个写法」的量级,它们的一部分是 20 日反转的换写;规则只看 0.8,不据此划掉,但 PI 应知道这两个种子的信号中有反转成分。种子 1 与 liq 0.394,也需要留意(bid-ask 与流动性相关)。
+      算子核对:day_ar1_coefficient 与 day_durbin_watson 对常数行返回 NaN(dt_day.py:304-330、367-390),不填 0,正确。day_corr 对常数行(一字板 Ret 全 0、零成交 Volume 全 0)返回 0,而不是缺失(dt_day.py:231-245:cov/(sqrt(var*var)+EPS))。种子 3、4、5、8、9 的 20 日均值会被这些天拉向 0,这是已知算子行为,只有在这类天数占比大时才是「定义坏掉」;未核实占比,记录,不挡。
+      种子 6 day_durbin_watson(Ret) 是 2(1-ρ1) 的近似(分母用原始平方和),与种子 1 day_ar1_coefficient(Ret)(去均值的滞后一阶斜率)是同一个量的两种写法。相关度表两者的 head |ρ| 为 0.695 与 0.696,liq 0.388 与 0.394,known 0.352 与 0.358,size 0.023 与 0.026,几乎重合。按规则「重复」划掉(序号 6)。
+      种子 10 day_hurst(Close) 是 R/S 度量,对价格水平的尺度不敏感,无问题。种子 2、7、8 的差分与 30 日标准差版本保留。
+      两个库禁令注意:种子 3 与种子 9 只差字段(Volume 对 Amt),若库里有同骨架的候选,GP 的骨架禁令会拒绝,PI 应先用 c06_check 确认。这不是审计可以判的问题,只记录。
+      如果它有 alpha,最可能来自量与价谁先动的个股稳定特征(知情成交先于价格,或散户追涨滞后于价格);若有,最可能是种子 5 或种子 3 的 20 日均值相对 60 日均值的行为变化。
+
+R: []
+summary: 位 a(E,核心 cross_delta(day_flat_ratio(Volume),30))新颖 4、合理 4,划掉种子 2 后剩 9 个,通过;位 b(N,分钟收益自相关与量价错位相关)新颖 4、合理 4,划掉种子 6(与种子 1 重复)后剩 9 个,通过;本轮无 R 组;注意 a 的种子 5、7、8 的算子方向与自述机制相反,未划(规则只许以数学问题或重复划种子),已写入理由请 PI 修正。
