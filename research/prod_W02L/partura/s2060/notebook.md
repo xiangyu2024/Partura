@@ -27,3 +27,16 @@
 **上一轮预测对不对:** E:预测出 head 约 10%、最好 -1 到 0.3,实际 0 个过线、最好 -0.36(sub(ar1, q75(LogFloatCap))),大体对,但慢聚合版其实不是赢家,相对历史版才是。N:预测 -1 到 0.2、出 head 8%,实际 0 个且 N 位最好 -0.07 来自随机树而不是我的带符号流种子,带符号流假设没站住。R:预测至少 1 个好 0.1 且 rho<0.5、「替换」为主:cross_zscore 与快慢差好 1.3 / 0.8 且 rho≈0,对;但这两个与原 head rho 几乎 0,是「收录」候选,而没有越过 0.5 线,对。
 
 **给下一轮的备忘:** E 名额:ar1(Volume) 用 1;day_at_max_ratio(Open) 用 1。N 位已有 2 个(第 2 轮 N 若通过则满足要求)。看 train/valid 反号情况。
+
+## 第 3 轮
+
+**对 alpha 来源的信念(更新):** 第 2 轮 E(day_at_max_ratio(Open))与 N(量价耦合相对历史)均 0 个过线;本流迄今最好是第 2 轮 N 位里 GP 长出的 ts_regbeta(sub(signedpower(day_cov(Vwap,Volume)), pow_2(day_mean(Amt))), ts_quantile_q75(day_skew(Volume),1), 10) = +0.33(train +0.69 / valid +0.33),第 3 批(M3)共性表里 C = sub(signedpower(day_cov(Vwap,Volume)), pow_2(day_mean(Amt))) 富集最强(+1.96,p 0.001)。信念:有料的是『两个日度微观结构量之间的滚动关系(回归斜率)』,而非任一方的水平;C 的水平被流动性吃掉,要读变化或残差。ar1(Volume) 与 day_at_max_ratio(Open) 两个核已判死,各用掉 1 个 E 名额。
+
+**本轮事先预测:**
+- **E(核心 C,14 个种子):** 出 head 概率约 20%(本流最高)。最可能最好 +0.1 到 +0.5;最有希望 ts_regres(C, day_mean(Amt), 20) 和 cross_zscore(C, 120)。风险:C 被 pow_2(day_mean(Amt)) 主导,与流动性控制过强相关,审计 / 库禁令可能划掉几个;外壳 ts_regbeta 已被占用(骨架禁令)。
+- **N(day_cov(Amt,Ret) 对 day_skew(Volume) 的滚动回归斜率,14 个种子):** 出 head 概率约 12%。最可能 -0.5 到 +0.3;弹性可能被波动吃掉(种子里有 day_std(Ret) 对照)。
+- **R(8 个变体,对象 M3 的 ar1 / DW 两个 head):** 至少 1 个比原 head 好 0.1 以上且已知族 |rho|<0.5 概率约 80%(窗口拉长已知 +0.44 / +0.36),但与原 head rho 多半 ≥ 0.5,是『替换』;到 0.5 概率 < 3%。
+
+**上一轮预测对不对:** E(day_at_max_ratio(Open)):预测出 head 12%、最好 -0.5 到 0.2,实际 0 个过线、最好 -0.26,大体对。N(量价耦合相对历史):预测 -1 到 -0.3,实际最好 +0.33 来自 GP 在 C 上的 ts_regbeta,与我的种子无关(我的 day_corr 相对历史种子没站住)。R:预测至少 1 个好 0.1 且 rho<0.5,实际变体多落在 -1.8 到 -2.4 仍亏,未达 0.5。
+
+**给下一轮的备忘:** 本轮之后本流结束;E 名额:ar1(Volume) 1,day_at_max_ratio(Open) 1,C 1。

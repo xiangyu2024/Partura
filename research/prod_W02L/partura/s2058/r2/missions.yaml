@@ -1,0 +1,43 @@
+seed: 2058
+round: 2
+slots:
+  - type: E
+    core: 'day_quantile(cross_regbeta(Open, Amt, 241))'
+    hypothesis: '核心:对每只票,用过去 241 个交易日、同一分钟位置的(后复权开盘价 Open)对(成交额 Amt)做滚动一元回归,取斜率 beta,再取当天各分钟的中位数。后复权价格是累计收益的水平量,所以 beta 的符号是「近一年里放量的时候价格是在涨还是在跌」,即量价趋势的确认度(量增价涨为正,放量下跌为负),是一个一年尺度的慢变量,换手很低。它在本批 91 个候选里是唯一显著正富集的子树(含它的 4 个候选均值 -1.44 对不含 -2.34,p 0.025),而且这个核心与波动、流动性、反转控制不是同一个东西(beta 是协动方向而不是水平)。第 1 轮含该核心的写法只有三种:cs_last_high40 分位词典序、嵌套 cross_regbeta、以及与 cross_ema(day_std(pow_2(Ret)),·) 相减 —— 全是把核心与波动一族硬拼,分数 -1.2 ~ -1.4。本轮的外围完全不同,改为解决核心的两个结构性缺陷:(a)beta 的量纲是「价格 / 成交额」,所以高价股、大成交额股的 beta 尺度被机械决定,用 div(核心, 价格水平) 或 cs_regres(核心, 价格 / 市值) 把尺度去掉,只留方向与相对强度;(b)beta 是 241 日窗口的滚动量,相邻两天几乎相同,用 sub(核心, ts_delay(核心, 20/60)) 取它的「变化」(量价确认度在上升还是下降,是边际信息),或 cross_zscore 对自身历史标准化;(c)按 LogFloatCap 分桶后桶内排序(cs_bucket_rank),让十分位多头在各规模桶内各取一份,新尺子只去线性 / 平方 / 三次暴露,去不掉分桶结构。数学上:价格水平用 day_last(Open) 且为正的后复权价,无近零分母(除价格不除成交额);窗口全部取过去值(ts_delay / cross_delay),无前视。为什么样本外还会在:量价趋势确认(放量上涨的信息扩散、知情交易者随成交放大推高价格的持续性)是长期被研究的行为 / 微观结构机制,窗口一年、变化量 20~60 日,换手低,15bp 成本吃不掉;它在 train 与 valid 都是批内最好的子树。'
+    seeds:
+      - 'cross_ema(div(day_quantile(cross_regbeta(Open, Amt, 241)), day_last(Open)), 20)'
+      - 'cs_regres(day_quantile(cross_regbeta(Open, Amt, 241)), day_last(Open))'
+      - 'cs_regres(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap)'
+      - 'sub(day_quantile(cross_regbeta(Open, Amt, 241)), ts_delay(day_quantile(cross_regbeta(Open, Amt, 241)), 20))'
+      - 'sub(day_quantile(cross_regbeta(Open, Amt, 241)), ts_delay(day_quantile(cross_regbeta(Open, Amt, 241)), 60))'
+      - 'cross_zscore(day_quantile(cross_regbeta(Open, Amt, 241)), 120)'
+      - 'cross_ema(cs_bucket_rank(day_quantile(cross_regbeta(Open, Amt, 241)), LogFloatCap), 20)'
+      - 'cs_bucket_rank(day_quantile(cross_regbeta(Open, Amt, 241)), day_last(Open))'
+      - 'cs_bucket_demean(day_quantile(cross_regbeta(Open, Amt, 241)), LogTotalCap)'
+      - 'cross_ema(sub(cs_rank(day_quantile(cross_regbeta(Open, Amt, 241))), cs_rank(day_quantile(cross_regbeta(Open, Amt, 60)))), 20)'
+      - 'div(day_quantile(cross_regbeta(Open, Amt, 241)), cross_mean(day_std(Amt), 120))'
+      - 'cs_robust_z(day_quantile(cross_regbeta(Open, Amt, 241)))'
+  - type: N
+    hypothesis: '隔夜 / 日内收益分解(overnight vs intraday)。日收益拆成两段:隔夜段 = 当日开盘价 / 前一日收盘价 - 1(day_open(Open) 除以 ts_delay(day_last(Close),1) 再减 1),日内段 = 当日收盘 / 当日开盘 - 1。两个价格都是当日开盘或收盘已知的量,无前视;后复权价让除权日的跳空不会被误当作收益。机制:A 股散户集中在日内交易,机构 / 信息交易者的建仓和情绪消化更多反映在集合竞价与隔夜,Lou-Polk-Skouras 式的「隔夜动量 / 日内反转」在股票层面表现为:近期隔夜收益累计高的票后续继续跑赢(隔夜段携带信息),近期日内收益累计高的票被散户追涨推高后反转。算子实现:cross_mean / cross_ema 对隔夜段与日内段在 20~120 日上做累计,sub 取两者之差(隔夜强而日内弱),cs_regres 用日内段累计去回归隔夜段累计得到「隔夜独有」部分,cross_zscore 对自身历史标准化,cs_bucket_rank 按市值桶内排序。和库里不同:本流前两轮的 heads 全是分钟 Ret / Volume 的日内离散度或日收盘比(close/close),库里的收益类 head 都是「收盘到收盘」的整日收益,没有把一天拆成隔夜与日内两段、也没有用 day_open(Open) 对前日 day_last(Close) 的跳空;整日收益 = 两段之和,被反转控制覆盖的只是和,二者之差(以及各自的符号)与 20 日反转控制不是同一个暴露。数学上:分母是前一日后复权收盘价(正),分子是开盘价,无近零;停牌日 Open / Close 缺失则该日缺失,不会形成伪值;热身期只丢前一日。为什么样本外还会在:散户日内追涨 vs 机构隔夜的参与者结构性分割,在 A 股 T+1 与集合竞价制度下是稳定的,不依赖某段行情;长窗口累计换手低。'
+    inspired_by: '本流第 1 轮 N 位(涨停板归一的日收益,最好 -0.2,train 与 valid 近零)提示日频收盘到收盘的收益维度没有 alpha,而第 2 批的共性子树里全是 day_last(Close) 的日比值(含 LimitWidth 归一),完全没有区分隔夜与日内;所以换成把同一天拆开的维度。'
+    seeds:
+      - 'cross_mean(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_ema(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 120)'
+      - 'sub(cross_mean(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_open(Open)), 1), 60))'
+      - 'cs_regres(cross_mean(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60), cross_mean(sub(div(day_last(Close), day_open(Open)), 1), 60))'
+      - 'cross_zscore(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_ema(cs_bucket_rank(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), LogFloatCap), 60)'
+      - 'cross_mean(sub(div(day_last(Close), day_open(Open)), 1), 60)'
+      - 'cross_stddev(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60)'
+      - 'cross_ema(div(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), LimitWidth), 120)'
+      - 'cs_regres(cross_ema(sub(div(day_open(Open), ts_delay(day_last(Close), 1)), 1), 60), LogFloatCap)'
+R:
+  - head: 'day_sum(sigmoid(Vwap))'
+    why: 'sigmoid(Vwap) 在后复权价格水平较高时饱和到 1,day_sum 实际数的是「价格低于某阈值的分钟数」,主要是价格水平 / 上市久期,而不是价格变化;这个部件(绝对水平)是烂的。变体把价格换成相对自身历史或日内相对水平后再 sigmoid,或延长平滑。'
+    variants:
+      - 'day_sum(sigmoid(div(Vwap, day_last(Close))))'
+      - 'day_sum(sigmoid(sub(Vwap, day_mean(Vwap))))'
+      - 'cross_ema(day_sum(sigmoid(Vwap)), 20)'
+      - 'day_sum(sigmoid(Open))'
+      - 'cross_ema(day_sum(sigmoid(sub(Vwap, cross_mean(Vwap, 20)))), 20)'
+      - 'day_sum(sigmoid(div(Vwap, cross_mean(Vwap, 60))))'

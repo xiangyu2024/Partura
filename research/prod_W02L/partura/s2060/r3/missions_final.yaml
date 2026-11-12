@@ -1,0 +1,67 @@
+seed: 2060
+round: 3
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: 机制:放量突发时的价格冲击弹性。本批前两轮的最好读数都来自『价量协方差 / 成交额水平』对『成交偏度』的滚动回归斜率(+0.33),说明有料的是两个日度微观结构量之间的滚动关系,而不是任一方的水平。这一位换掉被回归的量与回归的方式:读
+    day_cov(Amt, Ret)(成交额与分钟收益的协方差,带符号的美元流冲击:放量时涨还是跌)对 day_skew(Volume)(成交量日内偏度,突发放量程度)的
+    20 日滚动回归斜率 ts_regbeta,回答『这只票每多一份放量突发,价格被推多少』——即突发放量的方向性价格冲击弹性,也可换成残差 ts_regres(去掉突发度解释的部分)、截距
+    ts_regalpha(无突发时的基础美元流方向)和 ts_corr。变体还用 day_corr(Volume, abs(Ret))(放量与波动幅度同步)、day_kurt(Volume)(更极端的突发)、day_std(Ret)(纯波动对照,检验弹性是否只是波动的另一种写法)、day_cov(Vwap,
+    Ret) 对 day_skew(Amt)(换成成交额偏度)作为被回归项,并有 cross_zscore / cs_bucket_demean 外壳与 10
+    日对 60 日的快慢差。受本批启发:富集表中 day_skew(Volume)(+1.73)、day_cov(Amt, Ret)(+1.06)、day_kurt(Volume)(+0.63)都是强子树,而它们从未被组合成『回归系数』;已有
+    GP 结果只回归了 day_cov(Vwap, Volume) 减 pow_2(day_mean(Amt)) 这个被流动性水平主导的量,这里改用无水平的、方向性的
+    day_cov(Amt, Ret)。为什么和库里不同:库里这些子树都是单独出现或套 cross_quantile / ts_decay 壳,没有『以 day_skew(Volume)
+    为自变量的滚动回归』骨架。为什么样本外还会在:放量突发时价格冲击的大小反映流动性提供者的深度与知情交易占比,是个股的慢变属性,60 日以内排序稳定;回归斜率本身无量纲,自动去掉了成交额水平,换手低。数学检查:ts_regbeta
+    的自变量 day_skew(Volume) 在窗口内近常数时斜率会放大,个别票会出现极端值,但排名后只是端点,不主导截面;停牌日分钟成交为零,day_skew
+    缺失,回归自动略过;全部只用 t 日及以前,无前视。风险:弹性与波动、流动性中度相关,新尺子去掉线性与非线性暴露。如果它有 alpha,最可能来自突发放量下价格冲击弹性的慢变差异(深度
+    / 知情交易占比)。
+  inspired_by: M3 批共性表:day_skew(Volume)、day_cov(Amt, Ret)、day_kurt(Volume) 均为强富集子树;第
+    2 轮 GP 在 ts_regbeta(C, q75(day_skew(Volume)), 10) 上得到本流最好 +0.33,但只回归了被流动性水平主导的
+    C
+  seeds:
+  - ts_regbeta(day_cov(Amt, Ret), day_skew(Volume), 20)
+  - ts_regres(day_cov(Amt, Ret), day_skew(Volume), 20)
+  - ts_regbeta(day_corr(Volume, abs(Ret)), day_skew(Volume), 20)
+  - ts_regbeta(day_cov(Amt, Ret), day_kurt(Volume), 30)
+  - cross_zscore(ts_regbeta(day_cov(Amt, Ret), day_skew(Volume), 20), 60)
+  - ts_regalpha(day_cov(Amt, Ret), day_skew(Volume), 30)
+  - ts_regbeta(day_std(Ret), day_skew(Volume), 20)
+  - ts_corr(day_cov(Amt, Ret), day_skew(Volume), 30)
+  - cs_bucket_demean(ts_regbeta(day_cov(Amt, Ret), day_skew(Volume), 30), LogFloatCap)
+  - ts_regbeta(day_cov(Amt, Ret), day_skew(Volume), 60)
+  - sub(ts_regbeta(day_cov(Amt, Ret), day_skew(Volume), 10), ts_regbeta(day_cov(Amt,
+    Ret), day_skew(Volume), 60))
+  - ts_regbeta(day_ar1_coefficient(Volume), day_skew(Volume), 20)
+  - ts_regbeta(day_cov(Amt, Ret), day_mean(Amt), 20)
+R:
+- head: ts_stddev(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11,
+    230), in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 15)
+  why: 拆解显示 ts_stddev 的窗口从 15 拉到 30 提升 +0.44(-2.04 到 -1.60),swap Amt->Volume 无差别,说明烂部件是
+    15 日窗口太短(日度 ar1 噪声大、换手高),分钟成交额剖面本身没问题;变体继续拉长窗口并换成相对历史写法。
+  variants:
+  - ts_stddev(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 45)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 60)
+  - cross_zscore(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11,
+    230), in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 60)
+  - ts_stddev(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 30)
+- head: ts_stddev(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 15)
+  why: 拆解显示窗口 15 到 30 提升 +0.36(-2.02 到 -1.67),Amt->Volume 无差别;烂部件是过短的 15 日波动窗口,变体继续拉长并换成相对历史写法。
+  variants:
+  - ts_stddev(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 30)
+  - ts_stddev(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 45)
+  - ts_stddev(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 60)
+  - cross_zscore(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230),
+    in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 60)
+audit:
+  attempts: 1
+  file: audit_1.yaml

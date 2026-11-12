@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 1
+    soundness: 3
+    struck_seeds: [6, 7, 12, 14]
+    reasons: '创新度 1。核心 C = sub(signedpower(day_cov(Vwap,Volume)), pow_2(day_mean(Amt))) 的日度秩与流动性控制的 |ρ| = 0.90、与已知族 cross_mean(day_std(Amt),30) 的 |ρ| = 0.89、与市值 0.63(corr_1.md 核心行,控制列 liq 0.896 / known 0.89 / size 0.632)。机制上 C 几乎就是 -(day_mean(Amt))^2:signedpower 默认 e=2.0(operators/common.py:238,是带符号平方,不是计划里写的带符号开方),于是 sign(cov)*cov^2 这一项比 pow_2(day_mean(Amt)) 小约 4 到 6 个数量级(量级为估计,未在数据上实测:分钟 Vwap 标准差约 0.05 到 0.2 元、分钟成交量标准差约 1e4 到 1e5 股,cov^2 在 1e5 到 1e7,day_mean(Amt)^2 在 1e9 到 1e13)。存储为 float32(store.py),大市值票上 cov^2 项已接近 float32 的 ulp,被舍入噪声淹没。截面排序几乎只由 -day_mean(Amt) 决定,与流动性控制是同一个东西的换写,按 §3 记 1。合理度 3:机制说的是价量协方差的方向性放量倾向,实现的主要是流动性水平。这是机制与实现不符,不是数学错误(表达式良定义、无前视、无除零),记 3,请 PI 修正表述。另外核心自身过不了 E 位门槛:与 liq、known 的 |ρ| 分别为 0.896、0.89,均不小于 0.8;与快照 M1 head 的最大 |ρ| 为 0.708(不小于 0.7)。即使创新度达标,E 位也不通过。划掉的种子:6 ts_regres(C, pow_2(day_mean(Amt)), 30) 是 C 对它几乎完全相同的主项的回归,残差只剩 cov^2 项加 float32 舍入噪声(大市值票上噪声与信号同量级,corr_1 中 distinct 0.903),属数值伪影;7 ts_regalpha(C, day_std(Ret), 20) 与 vol 控制 |ρ| = 0.93,自动划掉;12 cross_stddev(C, 20) 与 liq 0.94、known 0.95、head 0.751,自动划掉;14 cross_autocorr_s1(C, 20) gate 为 False、distinct 0.066,面板几乎是常数,数值伪影。其余 10 个种子(1,2,3,4,5,8,9,10,11,13)保留。如果它有 alpha,最可能来自 C 相对自身历史的变化(seeds 1,2,10 的时间序列标准化与 seed 3 的快慢差),即个股成交额水平相对自身历史的偏离,而不是价量协方差本身。本位的 slot 在规则下视为不通过,改为一次普通 GP。'
+  - slot: b
+    novelty: 4
+    soundness: 3
+    struck_seeds: [6]
+    reasons: '创新度 4。快照 9 个 head 的最大日度秩 |ρ| 为 0.44(seed 7),各控制最大 0.54(seed 7 的 liq),其余种子都在 0.2 以下(corr_1.md 位 b 各行)。快照 head 的骨架是 ar1 / DW / argmax / cross_corr / q_stat 系,没有以 day_skew(Volume) 为回归项、以 day_cov(Amt,Ret) 为被回归项的骨架。库内没有同骨架的 ts_regbeta(day_cov(·,·), day_skew(·), ·) 可以在 loc 与 corr 数据里找到,记 4。合理度 3。算子核对发现机制方向与实现相反:ts_regbeta(x,y,d) = rolling_ols(x,y,d)["beta"](operators/nd_ts.py:273-276),rolling_ols 的 beta = cov(dx,dy)/var(dx),其中 dx 来自第一个参数 x(operators/common.py:643-665),即 beta 是 y 对 x 的斜率(rules §4 的 in_regres 说明与此一致)。本位写的 ts_regbeta(day_cov(Amt,Ret), day_skew(Volume), 20) 实际算的是 day_skew(Volume) 对 day_cov(Amt,Ret) 的 20 日斜率,即 d skew / d 美元流协方差,与假设中的 d cov / d skew 方向相反。假设中「斜率无量纲、自动去掉成交额水平」也不成立:斜率单位为 skew / (Amt*Ret),分母 var(day_cov(Amt,Ret)) 随成交额水平缩放(liq |ρ| 0.26,不是主导,但不为零)。这些是机制描述与实现不符,不是数学错误(窗口 20、无前视、分母守卫在 EPS 之上;截面用排名,个别极端值只影响端点),按 §3 记 3。若 PI 想要假设里的方向,应换位为 ts_regbeta(day_skew(Volume), day_cov(Amt,Ret), 20),这是另一个新种子,不在本次审计范围内。划掉的种子:6 ts_regbeta(day_cov(Vwap,Ret), day_skew(Amt), 20) gate 为 False,覆盖率 0.893(约 11% 单元无值,系统性算不出),是定义问题。其余 13 个保留(无 head |ρ| 不小于 0.7 与控制 |ρ| 不小于 0.8 的种子)。如果它有 alpha,最可能来自突发放量时美元流与收益的协方差与成交偏度之间的慢变关系,即流动性提供者深度或知情交易占比的时间变化;但按实际实现,它度量的是 skew 对该协方差的敏感度,方向需要 PI 确认。seed 9 的 ts_corr 版本是方向无关的对照。本位通过:创新度 4、合理度 3,剩余 13 个种子不小于 4。'
+R:
+  - head: 'ts_stddev(day_ar1_coefficient(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230), in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 15)'
+    soundness: 4
+    reasons: '机制清楚:日内成交额 z 剖面(in_slice 取 11 到 230 分钟、按当日和归一化)的 AR(1) 系数,15 日标准差读的是日内量形状持续性的不稳定。变体只改 ts_stddev 窗口(30/45/60)与换成 cross_zscore(·,60),都是合法算子且无前视(in_zscore_rolling 只用过去 21 日)。除以 in_sum 对 day_ar1_coefficient 是尺度不变的(phi = cov/var,operators/dt_day.py:367-395),只是常数因子,不造成爆点。变体与快照 ar1 head 的最大 |ρ| 在 0.48 到 0.69 之间(corr_1.md),是同一度量换窗口,不是新东西,但 R 只评合理度。若有 alpha,最可能来自日内量形状持续性的稳定度,与原 head 一致。'
+  - head: 'ts_stddev(day_durbin_watson(div(in_slice(in_zscore_rolling(Amt, 21), 11, 230), in_sum(in_slice(in_zscore_rolling(Amt, 21), 11, 230)))), 15)'
+    soundness: 4
+    reasons: '机制与 R1 相同:DW = sum(diff^2)/sum(x^2)(operators/dt_day.py:304-320)对尺度不变,归一化只是常数因子。数学上没有问题。注意:在均值接近零时 DW 约等于 2(1 - r1),与 AR(1) 高度重合(corr_1.md 中 R2 variant 1 与 ar1 head 的最大 |ρ| 为 0.69,variant 4 为 0.20),所以 R2 与 R1 的信息大部分相同,不应当作两个独立确认。变体窗口 30/45/60 与 cross_zscore(·,60) 的理由同 R1。若有 alpha,最可能来自与 R1 相同的日内量形状持续性稳定度。'
+summary: '2060 r3 审计:位 a 不通过(创新度 1:核心 C 与流动性控制 |ρ| 0.90,且 signedpower 默认平方使其截面排序几乎等于 -day_mean(Amt);核心本身也不过 E 门槛 |ρ| < 0.8),改为普通 GP;位 b 通过(创新度 4、合理度 3,划掉 seed 6 废品),但机制方向与实现相反(ts_regbeta(x,y) 是 y 对 x 的斜率),请 PI 修正表述;R1、R2 合理度均 4,R2 与 R1 度量高度重合。'

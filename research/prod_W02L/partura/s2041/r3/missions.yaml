@@ -1,0 +1,33 @@
+seed: 2041
+round: 3
+slots:
+- type: E
+  core: 'day_corr(in_delta(Vwap, 5), Volume)'
+  hypothesis: 'Core day_corr(in_delta(Vwap, 5), Volume): within-day correlation between the 5-minute change of VWAP and the minute volume, i.e. whether volume arrives with price moves (informed/momentum-chasing flow, positive) or against them (liquidity provision, negative). It is a dimensionless correlation, so unlike the level-volume heads of batch 1 it is not the liquidity control. Enrichment table: +1.02 (p 0.005, 9 candidates), never given an outer treatment in rounds 1-2 (those used day_gini(Open/High), day_first(Open), Close/Open ratios). Note day_corr returns 0 (not missing) when one side is constant (limit-up one-word boards, zero-volume days), so such stocks cluster at 0 in the cross-section; the outer treatments below deal with it by multi-day averaging, bucket-neutralisation and tail-skew so the result is not decided by that artifact. Periphery this round is all cross-day persistence / shape: cross_mean (stable trait), cross_zscore (surprise vs own history), ts_skew and cross_semistd (asymmetry of the daily correlations: stocks with occasional very informed-volume days), difference from the 40-day own mean, and cs_bucket_demean/zscore inside deciles of float cap, listing age and Amt (removes the size/age mix that the ruler only removes linearly in rank), and cs_last_high10 lexicographic tie-break with day_gini(High). Mechanism: persistent volume-follows-price is a footprint of informed or trend-following institutional flow and predicts continuation or slow incorporation in A-shares where retail dominates; bucket-neutral versions keep it from being a size proxy. Out of sample: order-flow style is a slow-moving behavioural trait, not tied to the 2018-2023 regime; no look-ahead (same-day minutes and earlier days only).'
+  seeds:
+  - 'cross_mean(day_corr(in_delta(Vwap, 5), Volume), 20)'
+  - 'cross_zscore(day_corr(in_delta(Vwap, 5), Volume), 30)'
+  - 'ts_skew(day_corr(in_delta(Vwap, 5), Volume), 40)'
+  - 'cross_semistd_pos(day_corr(in_delta(Vwap, 5), Volume), 30)'
+  - 'sub(day_corr(in_delta(Vwap, 5), Volume), cross_mean(day_corr(in_delta(Vwap, 5), Volume), 40))'
+  - 'cs_bucket_demean(cross_mean(day_corr(in_delta(Vwap, 5), Volume), 10), LogFloatCap)'
+  - 'cs_bucket_zscore(day_corr(in_delta(Vwap, 5), Volume), ListAge)'
+  - 'cs_bucket_zscore(cross_mean(day_corr(in_delta(Vwap, 5), Volume), 5), day_sum(Amt))'
+  - 'cs_last_high10(cross_mean(day_corr(in_delta(Vwap, 5), Volume), 15), day_gini(High))'
+  - 'cross_tail_mean_q25(day_corr(in_delta(Vwap, 5), Volume), 30)'
+  - 'cross_ema(day_corr(in_delta(Vwap, 5), Volume), 10)'
+  - 'cs_robust_z(cross_mean(day_corr(in_delta(Vwap, 5), Volume), 20))'
+- type: N
+  hypothesis: 'Overnight-versus-intraday return decomposition. Gap = day_first(Open) / previous day_last(Close) (overnight return, uses cross_delay so only the past close), intraday = day_last(Close) / day_first(Open). In A-shares overnight returns are dominated by institutional / news flow and intraday by retail trading, and the two are known to show opposite persistence (overnight drift, intraday reversal). Stream 2041 batches were all about intraday volume labels and intraday open/close dispersion; none touch the overnight leg, which the price-level controls (20-day reversal, volatility, liquidity) mix with intraday moves in one close-to-close return. Operators: cross_mean of the gap over d days (persistent overnight premium), the gap minus the intraday return (trait difference), cross_corr(gap, intraday, d) per stock (negative = overnight moves reverse intraday, a retail-overreaction footprint), and bucket-neutral versions inside float-cap deciles to remove the size mix. Library hand-written expressions use close-to-close Ret and intraday slices, not the previous-close-to-open leg with a cross-day lag, so the structures are new. Out of sample: the overnight/intraday split is a structural feature of the market microstructure (T+1, retail intraday trading), not a sample artifact. No look-ahead: cross_delay takes the previous day; denominators are prices, away from zero.'
+  inspired_by: 'Batch 2 (cross_stddev of close/open ratios, day_first(Open) enrichment +1.83) showed the intraday open-to-close leg is where the stream finds signal-like structure but is crushed by the volatility control; the overnight leg is the unexamined complement.'
+  seeds:
+  - 'cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 20)'
+  - 'cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open))), 20)'
+  - 'cross_corr(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)), 20)'
+  - 'cross_corr(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)), 40)'
+  - 'cs_bucket_demean(cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 10), LogFloatCap)'
+  - 'cross_zscore(div(day_first(Open), cross_delay(day_last(Close), 1)), 30)'
+  - 'sub(cross_mean(div(day_first(Open), cross_delay(day_last(Close), 1)), 20), cross_mean(div(day_last(Close), day_first(Open)), 20))'
+  - 'cs_bucket_zscore(cross_corr(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_last(Close), day_first(Open)), 20), ListAge)'
+  - 'cross_semistd_neg(div(day_first(Open), cross_delay(day_last(Close), 1)), 30)'
+  - 'cross_mean(sub(div(day_first(Open), cross_delay(day_last(Close), 1)), div(day_close(Vwap), day_first(Open))), 10)'
