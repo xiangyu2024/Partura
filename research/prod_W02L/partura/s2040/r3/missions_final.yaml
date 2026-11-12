@@ -1,0 +1,170 @@
+seed: 2040
+round: 3
+slots:
+- type: E
+  core: day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0)))
+  hypothesis: '核心 A = `day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0)))`,原样取自本批 head(得分 -3.14)的子树。读法:in_roll_labels(Close,
+    241) 因窗口等于一整天,用的是当天分钟收盘价自己的均值和标准差,把每分钟标成 0..4 档(≤ -1.28σ 为 0,> +1.28σ 为 4);A 是''当天有多大比例的分钟处在自己当天价格分布的上尾(高于日均价
+    1.28 个标准差)'',即价格在当天''冲高并停留''的时间占比。它是日内价格路径的形状(偏度 / 尾部停留),不是水平、不是收益:同一个涨幅,可以是早盘一路慢涨(上尾占比低)、也可以是尾盘一次拉升(上尾占比高)。前视检查:标签只用当天已收盘的分钟,信号在收盘后才算出,没有未来信息;全部在当日及以前做滚动。
+
+
+    快照里的事实:B120 里这类写法的 head 全是负分(-1.38 ~ -3.20),方向为 -1(上尾停留多的以后差),拆解表里有三条线索:(1) 衰减
+    20→40 变好 +0.5(越慢越好),说明占比的日度噪声大、要靠平滑;(2) 把 Close 换成 Vwap 变好 +0.8 ~ +1.0,说明收盘价的尾盘噪声(打板、尾盘拉升)是污染;(3)
+    已见过的含该核心的外围只有 `cross_decay_linear(…, 20)`、`add(… 下尾占比)`、`mul(…, day_mean(in_shift(Ret,1)))`
+    三种,全是对占比取''水平式''的平滑或线性组合。本轮不再对 A 取水平平滑,而是读它在时间上的形状和对条件的敏感度,与以前不同:(a) 持续性与离散:一阶自相关(本流第
+    1 轮唯一为正的候选就是对相对波动取一阶自相关,但那是别的变量)、Hurst、60 日标准差(''拉升的波动''即爆发性)、120 日上四分位尾部均值、相对自己
+    241 日历史的 z 分数后取 20 日均值、20 日均减 241 日均;(b) 去掉已知控制的暴露:在日内波动十分位内 / 流通市值十分位内去均值或标准化再取慢均值(A
+    与日内波动、市值高度相关,直接取水平会被控制吃掉);(c) 上尾减下尾(偏度,用 sub 而非 add)、上尾占比 ÷ 中段占比(尾部相对主体的集中度);(d)
+    成交量加权:成交量加权的上尾占比减时间加权的上尾占比 —— 放量是发生在价格冲高的时候还是回落的时候(拉高出货 vs 逢高被承接);(e) 对条件的反应:昨天的上尾占比与今天的收益的
+    120 日相关 / 回归斜率(滞后一天,没有前视),即''冲高后第二天是回吐还是延续''的个股级反应系数;以及在波动高于自己 20 日均值的日子里取 A(第
+    1 轮 E 位里最好的写法就是''波动放大日才计数''的条件乘积);(f) 两个秩相乘(水平秩 × 离散秩)。
+
+
+    机制与为什么样本外还在:A 衡量的是''价格被推到当天高位并停在那里''的持续程度,背后是 A 股特有的日内拉升 / 尾盘抢筹 / 打板资金行为;这类行为的个股倾向(谁常被拉升)是慢变属性(持有人结构、题材股),它的次日回吐是散户追涨后的反转,这不随样本变化。把读数改成''形状
+    / 反应系数 / 桶内相对值''而不是水平,是因为水平已经被流动性、波动、市值、反转这五个控制吃掉(本流第 1 轮 R 位全部水平变体都在 -1.5 一带印证),而形状信息(爆发性、持续性、成交量与拉升的相位关系)控制里没有。种子对自己的
+    head 的相关度应当低,因为它们读的是 A 的二阶性质而不是 A 本身。不押的:A 的水平均值(多半就是已知族换写法)。数值检查:A 在 [0,1],标签无效(-1)时被当作
+    0 计入分母,停牌日 A=0 且连续,是''0 占比''而不是爆点;`div(A, add(A2, 0.01))` 用 0.01 做分母底,不会出现除以近零;其余种子都是滚动窗口的标准算子。'
+  seeds:
+  - cross_autocorr_s1(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), 241)
+  - cross_mean(cs_bucket_demean(day_mean(select_where(eq(in_roll_labels(Close, 241),
+    4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1),
+    0))), day_std(Ret)), 60)
+  - cross_mean(cs_bucket_zscore(day_mean(select_where(eq(in_roll_labels(Close, 241),
+    4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1),
+    0))), LogFloatCap), 120)
+  - cross_mean(sub(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_roll_labels(Close,
+    241), 0), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0)))), 60)
+  - cross_regbeta(ts_delta(log(day_last(Close)), 1), cross_delay(day_mean(select_where(eq(in_roll_labels(Close,
+    241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0))), 1), 120)
+  - cross_corr(cross_delay(day_mean(select_where(eq(in_roll_labels(Close, 241), 4),
+    create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0))),
+    1), ts_delta(log(day_last(Close)), 1), 120)
+  - cross_hurst(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), 241)
+  - cross_stddev(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), 60)
+  - cross_tail_mean_q75(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), 120)
+  - cross_ema(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), 60)
+  - cross_mean(sub(day_wmean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0)), Volume), day_mean(select_where(eq(in_roll_labels(Close,
+    241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0)))), 60)
+  - cross_mean(div(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), add(day_mean(select_where(eq(in_roll_labels(Close,
+    241), 2), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0))), 0.01)), 60)
+  - mul(cs_demean(cs_rank(cross_mean(day_mean(select_where(eq(in_roll_labels(Close,
+    241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0))), 60))), cs_demean(cs_rank(cross_stddev(day_mean(select_where(eq(in_roll_labels(Close,
+    241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1,
+    1), 0))), 60))))
+  - cross_mean(mul(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), is_gt(day_std(Ret), cross_mean(day_std(Ret),
+    20))), 60)
+- type: N
+  hypothesis: '新想法:「成交量在价位上的相位」Z = (Vwap 型均价 - 时间均价) / 日内价格标准差,即 `div(sub(day_wmean(Close,
+    Volume), day_mean(Close)), add(day_std(Close), 0.001))`。day_wmean(Close, Volume)
+    是当天成交量加权的平均价,day_mean(Close) 是每分钟等权的平均价;两者之差 > 0 说明当天的成交量集中在价格较高的那一段(放量时价格在高位,典型是拉升放量
+    / 追涨),< 0 说明成交量集中在低位(逢低被承接、杀跌放量被接盘);除以当天价格的标准差把它变成''相对当天价格路径''的无量纲读数(落在约 [-1,
+    1] 里),底 0.001 防止一字板 / 零波动日除以近零(那种日分子也为 0,读数为 0)。它和库里的区别:库里的 head 全是对数量 / 额的水平读数(day_mean(log(Volume))
+    等)、日内价格路径的占比类读数(B120 的标签占比),以及量价协方差(day_cov(Ret, log(Amt)));Z 是''成交量与价位的相位'',同一个价格路径上换一种成交量的分布,Z
+    就变了,而水平量和占比类读数都不变;控制里没有这一维(控制只有流动性水平、波动、反转、已知族、市值,不含价量相位)。本批拆解里 Close→Vwap 在 4
+    条 head 中 3 条显著变好(valid 尤其),说明''成交量加权价''比''收盘价''读到了更干净的东西,这里把它直接作为被研究的量。前视检查:只用当天已收盘的分钟,信号在收盘后算出;全部滚动窗口都在过去。
+
+
+    种子分五类:(a) 慢水平:60 / 120 日均值、EMA 60(日度读数噪声大,A 股的''谁长期在高位放量''才是持有人结构的慢变属性),20 日均减
+    241 日均;(b) 相对同伴:在日内波动十分位内去均值、在流通市值十分位内标准化(两个都是控制的主要暴露来源,桶内相对值把它们压掉),同伴去均值后再取慢均值;(c)
+    时间形状:一阶自相关(241)、60 日标准差、秩的 20 日均值;(d) 对条件的反应:昨天的 Z 对今天收益的 120 日回归斜率(滞后一天,没有前视)——
+    放量追高后第二天是回吐还是延续;只在成交额高于自己 20 日均值的日子计数的 Z(放量日的相位才有信息);(e) 近亲读数:收盘价相对当天成交量加权价的位置
+    `(收盘 - VWAP)/σ`(尾盘是在成本之上还是之下,即当天持有人的浮盈 / 浮亏),Z 与它的秩差,以及成交额加权版本(用 Amt 当权重,更偏向大额成交)。
+
+
+    机制与为什么样本外还在:成交量加权价与时间均价的差,是''当天的成交是由谁、在什么价位上主导''的度量(机构拆单一般在均价附近并随价格摊开,散户追涨 / 恐慌杀跌的放量集中在价格极端处);A
+    股散户占比高、追涨杀跌的方向性强,日内''放量在高位''的个股倾向是慢变属性(题材股、热门股),其次日表现被后续的回吐 / 接盘所决定,这与流动性水平、波动、市值无关,所以样本外仍在。我对它能到
+    ≥ 0.5 的概率不高(约 8%),最大的风险是 Z 与日内收益 / 20 日反转控制过度重叠(收盘 > 均价的日子一般当天收益为正),所以种子偏向桶内、滞后一天和慢均值的写法。'
+  inspired_by: B120(滚动标签分桶,手写库 29 条)的'价格在当天分布里待在哪'这一现象,及拆解里 Vwap 优于 Close、越慢越好:把'价位
+    vs 成交量'的位置关系做成新的状态变量。
+  seeds:
+  - div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close), 0.001))
+  - cross_mean(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 60)
+  - cross_mean(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 120)
+  - cross_ema(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 60)
+  - cross_autocorr_s1(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 241)
+  - cross_mean(cs_bucket_demean(div(sub(day_wmean(Close, Volume), day_mean(Close)),
+    add(day_std(Close), 0.001)), day_std(Ret)), 60)
+  - cross_mean(cs_bucket_zscore(div(sub(day_wmean(Close, Volume), day_mean(Close)),
+    add(day_std(Close), 0.001)), LogFloatCap), 120)
+  - cross_mean(div(sub(day_wmean(Close, Amt), day_mean(Close)), add(day_std(Close),
+    0.001)), 60)
+  - cross_stddev(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 60)
+  - cross_regbeta(ts_delta(log(day_last(Close)), 1), cross_delay(div(sub(day_wmean(Close,
+    Volume), day_mean(Close)), add(day_std(Close), 0.001)), 1), 120)
+  - cross_mean(mul(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), is_gt(day_sum(Volume), cross_mean(day_sum(Volume), 20))), 60)
+  - cross_mean(div(sub(day_last(Close), day_wmean(Close, Volume)), add(day_std(Close),
+    0.001)), 60)
+  - cross_mean(cross_rank(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 241), 20)
+  - sub(cross_mean(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 20), cross_mean(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001)), 241))
+  - cross_mean(sub(cs_rank(div(sub(day_wmean(Close, Volume), day_mean(Close)), add(day_std(Close),
+    0.001))), cs_rank(div(sub(day_last(Close), day_wmean(Close, Volume)), add(day_std(Close),
+    0.001)))), 60)
+  - cross_mean(cs_bucket_demean(div(sub(day_last(Close), day_wmean(Close, Volume)),
+    add(day_std(Close), 0.001)), day_std(Ret)), 120)
+R:
+- head: day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 241), 4),
+    create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)),
+    20))
+  why: 本批 head 里 valid 最好(-1.07)的一条。拆解表:窗口 20→40 增益 +0.12(-1.26),Vwap 换掉 Close 后 train
+    -1.61 / valid -0.10(valid 大幅改善、train 变差);两种改动单独都没有把分数抬到 -1 以上,而'越慢越好'的方向在 20→40
+    上同向。这里测更慢的衰减(60/120)和两改动的合并:Vwap 减小了收盘价的尾盘波动噪声,慢衰减降低换手;另给一条'上尾占比减下尾占比'的版本,读'日内价位更偏上还是偏下'的偏度而不只是上尾。
+  variants:
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0)), 60))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close,
+    1, 1), 1), create_like(in_slice(Close, 1, 1), 0)), 120))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 241), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 40))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 241), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 60))
+  - day_mean(cross_decay_linear(sub(select_where(eq(in_roll_labels(Close, 241), 4),
+    create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)),
+    select_where(eq(in_roll_labels(Close, 241), 0), create_like(in_slice(Close, 1,
+    1), 1), create_like(in_slice(Close, 1, 1), 0))), 40))
+  - day_mean(cross_decay_linear(sub(select_where(eq(in_roll_labels(Vwap, 241), 4),
+    create_like(in_slice(Vwap, 1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), select_where(eq(in_roll_labels(Vwap,
+    241), 0), create_like(in_slice(Vwap, 1, 1), 1), create_like(in_slice(Vwap, 1,
+    1), 0))), 60))
+- head: day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 120), 4),
+    create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)),
+    20))
+  why: -3.20 的 head(滚动 120 分钟窗口的标签,滞后分钟窗口更短所以更吵)。拆解表:Vwap 替换 +0.78(-2.42)、衰减 20→40
+    +0.50(-2.70),衰减 20→10 更差(-3.55),都指向'更慢、更平滑的价格口径更好';两者从未合并过。变体:Vwap 与 40 / 60 /
+    120 的合并,以及把 120 分钟窗口换成整日窗口(241)的 Vwap 版。
+  variants:
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 120), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 40))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 120), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 60))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 120), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 120))
+  - day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Vwap, 241), 4), create_like(in_slice(Vwap,
+    1, 1), 1), create_like(in_slice(Vwap, 1, 1), 0)), 120))
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,23 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [10, 11]
+    reasons: '自动划掉:#10 cross_zscore(核心,241) 的 20 日均值(原始 |rho| 0.81,最像的 head 是 day_mean(cross_decay_linear(核心,20)),即 -1.38 那条);#11 sub(核心 20 日均, 核心 241 日均)(原始 0.80,同一个 head)。两者 >= 0.7,按规则划掉。其余 14 个种子原始 |rho| 最大 0.54(#12 cross_ema(核心,60)),残差最大 0.64(#12);对五个控制的 |rho| 最大 0.27(#13 对 size)。核心 A = day_mean(select_where(eq(in_roll_labels(Close,241),4),...)) 原样是 -3.14 那条 head 的子树,对 liq 0.01 / vol 0.02 / rev 0.07 / known 0.00 / size 0.02,E 核心闸门满足。创新度 3:核心本身是快照里已有的同一个对象(日内上尾占比,-1.38、-3.14、-3.20 三条 head 都是它或它的变体);新的是读法:#1 一阶自相关、#5 #6 滞后一天的回归与相关、#7 Hurst、#13 成交量加权的上尾占比、#16 高波动日条件、#15 水平秩乘离散秩,这些对 head 的原始 |rho| 都在 0.05 以下或是新结构;但 #2 #3 #4 #8 #9 #12 #14 仍是同一序列的平滑或去控制换皮,所以给 3,不给 4。备注:相关度表里标「废品」的(核心、#7、#9、#16)是流水线标签,我没能从代码确认它的判据,审计不以它为据。合理度 4:逐个核对。in_roll_labels(...,241) 因窗口等于整日而走全日统计量(legacy_specialized_dt.py:531),但信号是收盘后的日度聚合,不跨日、不用后面的天,不属于 §4 的前视。cross_* 为尾随窗口(rolling_windows);cross_hurst 在 S<1e-9 时记缺失,无除零;cross_regbeta(x,y) 按 rolling_ols 定义是 y 对 x 的斜率,即滞后上尾占比对当日收益的斜率,方向与 PI 写的「次日收益对昨日占比」相反,但仍是可解释的反应系数,不构成问题;#13 的 day_wmean 在总权重为 0 时返回缺失而非爆点;#14 的分母 add(下段占比, 0.01) 有下限。停牌日核心为 0(标签无效计入分母),对 60/120 日均值会把停牌多的票略推低,但核心对流动性控制的 |rho| 只有 0.01,不是主导效应,不算定义坏掉。如果它有 alpha,最可能来自:个股日内冲高并停留的持续性(拉升、尾盘抢筹的个股倾向)以及其次日的回吐。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '自动划掉:无。16 个种子对快照 head 的原始 |rho| 最大 0.27(#9 cross_stddev(Z,60) 对 ts_stddev 那条);对五个控制的 |rho| 最大 0.33(#9 对 size),都低于 0.8。核心 Z = div(sub(day_wmean(Close,Volume), day_mean(Close)), add(day_std(Close),0.001)) 是 N 位的新状态变量,不是快照里任何 head 的子树:快照 head 的量价读数是 day_mean(log(Volume))、day_cov(Ret,log(Amt))、day_min(log(Amt)) 这类水平或协方差,以及 Close 版的上尾占比。Z 对最像的 head 原始 |rho| 0.10,残差 0.18。创新度 4:成交量加权价与时间均价的相位是新的测量,与快照里的水平量、占比类读数、量价协方差都不同;对五个控制的 |rho| 最大 0.13(#7 对 liq),不是控制的换写法。合理度 4:逐个核对。day_wmean(ops_ext.py:109) 在总权重为 0 时返回缺失,不是爆点;Z 的分母 add(day_std,0.001) 有下限,|Z| 在 std 很小时受 std 约束、有界(量级约 sqrt(241)),没有除以近零的爆点;全部滚动窗口为尾随,无前视。要记的三点:(1) 停牌日 Z 为缺失,#13 cross_mean(cross_rank(Z,241),20) 中的 cross_rank 是日轴排名,按 §4 的 nanrank_last 已知行为,停牌日返回 0,停牌多的票会被推到低端;但 liq 对它的 |rho| 只有 0.09,不是主导,不划。(2) N 位的 hypothesis 写 Z 落在约 [-1,1],实际不严格有界,不影响定义。(3) #2 与 #4(Z 的 60 日均值与 EMA60)、#2 与 #8(Volume 权与 Amt 权)近似重复,但权重或平滑不同,按原则放行。如果它有 alpha,最可能来自:放量发生在价格高位还是低位(拉升放量 / 逢低承接)的个股倾向,这是慢变的持有人与题材属性,其次日的回吐或接盘与流动性、波动、市值控制无关。'
+R:
+  - head: 'day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)), 20))'
+    soundness: 4
+    reasons: '合理度 4。快照里 valid 最好(-1.07)的那条,即核心 A 的 20 日线性衰减后的日均。四个变体(衰减 40/60/120、Vwap 替换、上尾减下尾后衰减)逐个核对:in_roll_labels(...,241) 同上一位的说明,全日统计量只在收盘后聚合,无前视;cross_decay_linear 是尾随线性加权;Vwap 是快照字段(catalog.py CUBE_FIELDS);sub(sel4,sel0) 无分母,没有数值问题。没有定义问题。变体 1 与原 head 的原始 |rho| 为 0.77、残差 0.88,若过门槛按规则是替换原 head 而不是收录。如果它有 alpha,最可能来自:同一种个股日内上尾停留的持续性,慢衰减降低换手,Vwap 减少尾盘打板噪声。'
+  - head: 'day_mean(cross_decay_linear(select_where(eq(in_roll_labels(Close, 120), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)), 20))'
+    soundness: 4
+    reasons: '合理度 4,附一条口径提醒。快照里 -3.20 那条 head,变体为 Vwap 版的 40/60/120 衰减与 Vwap-241 版。核对:in_roll_labels 窗口 120 走 in_mean_rolling 的尾随窗口(按 rolling_windows 左侧补 NaN 推断),前 119 分钟标签为 -1(无效),在 select_where 与 day_mean 里计为 0 而分母仍是 241,所以这条 head 的占比只在后约 122 分钟上有非零读数,上限约 0.5。这不是数学问题(对所有股票是同一个偏移,排序仍主要由后半段占比决定),但 PI 写的「全日价格路径」机制应改写成「后半日的上尾占比」,变体按这个口径判。Vwap 替换、衰减加长都有清楚的机制。变体 4(Vwap-241 全日、衰减 120)没有热身问题,是这组里最干净的一条。如果它有 alpha,最可能来自:午后或尾盘的上尾停留(尾盘拉升、抢筹)的个股倾向及其次日回吐。'
+  - head: 'mul(add(day_mean(select_where(eq(in_roll_labels(Close, 241), 4), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_roll_labels(Close, 241), 0), create_like(in_slice(Close, 1, 1), 1), create_like(in_slice(Close, 1, 1), 0)))), day_mean(in_shift(Ret, 1)))'
+    soundness: 1
+    reasons: '合理度 1,数学问题(§4 数值伪影:面板几乎是常数)。in_shift(dt_in.py:281) 是右移 d 步,首分钟填充值为 -1.0(不是 NaN),所以 day_mean(in_shift(Ret,1)) = (-1 + 当日各分钟收益之和 近似) / 241。Ret 按研究笔记是 1 分钟收益(分数)。当日收益之和的截面标准差约 0.02,除以 241 约 8e-5;而常数项 -1/241 约 -4.1e-3。这个乘子的截面变化只有约 2%,几乎是常数。于是 -3.14 那条 head 的排序实际由 add(sel4,sel0) 决定,乘子只携带符号,PI 写的「乘子约等于日均收益、主因是换手而不是方向」不成立。四个变体都保留了这个乘子(变体 2 只是再取 60 日均值,仍是常数),所以要去掉的部件没有被去掉。按规则,不通过的 R 组删掉。如果 PI 想再做这一 R,变体里需要去掉 in_shift 的首分钟填充或整个乘子,这不在本轮审计范围内。如果这条 head 有 alpha,最可能来自日内价格两端集中(尾部质量、日内振幅)的个股倾向,但它与波动控制高度重叠,正式结论需要在去掉乘子后重测。'
+summary: 'a 位通过(创新 3、合理 4,划 #10、#11 后剩 14 个);b 位通过(创新 4、合理 4,16 个全留,b 位是 N 的新量 Z);R1 合理 4、R2 合理 4(附后半日口径提醒);R3 合理 1,乘子 in_shift 的首分钟 -1 填充使面板几乎为常数,按规则删掉。'
