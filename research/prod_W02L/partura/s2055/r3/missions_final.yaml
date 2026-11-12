@@ -1,0 +1,99 @@
+seed: 2055
+round: 3
+slots:
+- type: E
+  core: day_wmean(Ret, in_pct(Amt, 1))
+  hypothesis: 'Mechanism: day_wmean(Ret, in_pct(Amt, 1)) is the day''s minute return
+    weighted by |minute-over-minute turnover change|, i.e. the return realised in
+    the minutes where trading suddenly surges or collapses (an event study without
+    a trigger: the minutes in which new information or a large order hits the tape
+    get the weight). It is the most enriched subtree of the batch (mean difference
+    +1.24, p 0.005, 6 candidates, the best of them near -0.2) but every previous use
+    smoothed it with the same one-shot ts_mean(.,20)/ts_mean(ts_mean(.)) wrapper,
+    i.e. as a plain fast-moving average of daily values, which makes the book turn
+    over hard (15 bp cost is binding) and keeps the 20-day reversal loading that the
+    ruler partially cannot remove. The new periphery tests different economic readings
+    of the same core: (1) very slow carriers (ts_mean 120, cross_ema 40) so the long-only
+    book holds names for weeks and pays little cost, a persistent surge-minute drift
+    = informed accumulation that is absorbed slowly; (2) trend-of-signal (fast mean
+    minus slow mean) and signal-to-noise (mean / std) forms, which ask whether a stable
+    pattern of surge-minute returns, not a one-off, carries information; (3) conditioning
+    forms: cs_bucket_rank inside deciles of the day-return volatility or of cap so
+    that the ranking is not a vol/size proxy, and cs_flip_by_state which lets the
+    sign depend on the market turnover state (surge-minute returns can be continuation
+    in hot markets and reversal in dull ones); (4) a contrast with the same weight
+    on a different leg (core minus day_wmean(Vwap change, in_pct(Amt,1)) or minus
+    the unweighted mean) to isolate what happens specifically in surge minutes. None
+    of these peripheries (ts_corr, cs_flip_by_state, cs_bucket_rank, long windows,
+    signal-to-noise) appear around this core in the snapshot, where only ts_mean/ts_sum
+    layers were used. Out of sample: whether large order flow bursts move the price
+    in the direction of the burst and then leave a residual drift is a property of
+    how institutions split orders, not of a regime; the ruler removes the liquidity,
+    volatility, reversal, size and champion exposures of the raw signal, which is
+    the main overlap risk here. All operators are causal minute-axis collapses followed
+    by day-axis smoothing, no forward shifts; in_pct divides by the previous minute
+    amount and returns NaN only on exact zero, so thin-minute weight blow-ups are
+    possible but the weights act as a ratio inside day_wmean (normalised by their
+    sum), and the batch candidates using it have full coverage.'
+  seeds:
+  - ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 120)
+  - cross_ema(day_wmean(Ret, in_pct(Amt, 1)), 40)
+  - sub(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 10), ts_mean(day_wmean(Ret, in_pct(Amt,
+    1)), 120))
+  - div(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 60), ts_std(day_wmean(Ret, in_pct(Amt,
+    1)), 60))
+  - cs_bucket_rank(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 40), ts_mean(day_std(Ret),
+    40))
+  - cs_bucket_rank(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 40), LogFloatCap)
+  - cs_flip_by_state(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 20), day_sum(Amt))
+  - ts_mean(sub(day_wmean(Ret, in_pct(Amt, 1)), day_mean(Ret)), 60)
+  - ts_mean(sub(day_wmean(Ret, in_pct(Amt, 1)), day_wmean(Ret, Amt)), 60)
+  - ts_corr(day_wmean(Ret, in_pct(Amt, 1)), day_sum(Ret), 60)
+  - cross_tail_mean_q25(day_wmean(Ret, in_pct(Amt, 1)), 60)
+  - ts_quantile_q75(ts_mean(day_wmean(Ret, in_pct(Amt, 1)), 5), 100)
+- type: N
+  hypothesis: 'Mechanism: where in the trading day the price path and the money sit
+    (intraday shape), read through the time index of the minute. In_index(x) gives
+    each minute its position in the day in [0,1]; day_corr(in_index(Close), Close)
+    is the correlation between time and price within the day, i.e. how monotone /
+    trending the intraday path was (+1 = a steady climb into the close, -1 = a steady
+    slide, ~0 = a round trip); day_corr(in_index(Amt), Amt) says whether turnover
+    was back-loaded (closing-auction and institutional flow) or front-loaded (overnight
+    news, retail); day_wmean(Ret, in_index(Ret)) weights returns toward the close
+    (late-session drift, the part of the day dominated by informed and institutional
+    traders) and the same minus the plain mean isolates the late-versus-early return
+    split; day_wmean(in_index(Amt), in_pct(Amt, 1)) asks at what time of day the surge
+    minutes happen. Each is a one-node minute-axis collapse with a time-of-day weight,
+    smoothed over 40 to 60 days so the long-only book turns over slowly. Why not in
+    the library: the batch is built from minute statistics that are exchangeable in
+    time (kurtosis, variance, std, mean of returns or of a weighted sum); none of
+    them uses the order of the minutes. The order-aware batch operators used so far
+    were day_centroid and day_argmax of Amt (a single time number); correlation with
+    the time index is a shape measure of the whole path and is not a function of any
+    of those, and it cannot be reproduced by moments of the minute distribution. Why
+    out of sample: late-day informed trading and the persistence of intraday trends
+    (trend-chasing and order-splitting by institutions is slow) are structural features
+    of how information enters prices in a retail-heavy market; ruler removes volatility
+    and liquidity, which is the main correlation with such shapes. Pitfalls checked:
+    day_corr returns 0 (not NaN) when one side is constant (locked at limit or zero
+    turnover), so those names cluster at 0 on the cross-section, which is a saturation
+    not a math error; no forward shifts, all causal.'
+  inspired_by: 'structure batches 1 to 3: all heads are time-exchangeable statistics
+    of a minute series (kurt, var, std, autocorrelation at lag 1 of the minute series)
+    or a turnover-weighted mean; the top enriched subtrees (day_flat_run_max, day_wmean
+    with in_pct(Amt,1)) are about how the day unfolds; the order of the minutes within
+    the day is the unused dimension'
+  seeds:
+  - ts_mean(day_corr(in_index(Close), Close), 60)
+  - ts_mean(day_wmean(Ret, in_index(Ret)), 40)
+  - cross_ema(sub(day_wmean(Ret, in_index(Ret)), day_mean(Ret)), 40)
+  - ts_mean(day_corr(in_index(Vwap), Vwap), 60)
+  - ts_mean(day_wmean(in_index(Amt), in_pct(Amt, 1)), 60)
+  - ts_mean(mul(day_corr(in_index(Close), Close), day_corr(in_index(Amt), Amt)), 60)
+  - cross_ema(day_corr(in_index(Close), Close), 20)
+  - ts_mean(day_corr(Ret, in_pct(Amt, 1)), 60)
+  - ts_quantile_q75(day_corr(in_index(Volume), Volume), 60)
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml
