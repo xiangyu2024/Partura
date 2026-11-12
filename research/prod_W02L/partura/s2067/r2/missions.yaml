@@ -1,0 +1,44 @@
+seed: 2067
+round: 2
+slots:
+- type: E
+  core: day_durbin_watson(Amt)
+  hypothesis: 核心 day_durbin_watson(Amt) 是分钟成交额序列的 Durbin-Watson 统计量(约 2(1-一阶自相关)):低 = 当天成交额一块一块持续放大 / 缩小(大单被算法持续拆分、有人在连续建仓),高 = 成交额分钟间来回跳动(零散散户撮合)。它在批里是共性表里富集的部件(含它 14 个候选均值 -1.93 对 -2.89,p 0.001),但上一轮的 E 位只深挖了 day_corr(|Ret延迟|,Amt) 核心,这个核心还没有被单独作为核心外围化过,库里含它的候选都是 sub(day_product..., day_durbin_watson(Amt)) 这种两项相减。本位的外围全部是「把当日读数放进自己的历史或同类里再读」:(a) 与自己 40-60 日均值之差 / 除以标准差 = 异常的持续性(某天突然被连续拆单),这是事件型而不是水平型信号,和流动性控制(水平)正交;(b) 减去 day_durbin_watson(Volume):成交额 = 价 x 量,两者 DW 之差剩下价格路径对成交额平滑度的贡献,去掉纯成交量节奏;(c) 与 sign(day_sum(Ret)) 相乘:持续放量发生在上涨日还是下跌日(拆单买入 vs 拆单卖出的方向),这是方向性的信息,控制里没有;(d) cs_bucket_zscore 按 LogFloatCap 分桶,把大盘 / 小盘各自内部比较,新尺子已去掉对市值的非线性,这里直接在桶内排序;(e) 与 day_durbin_watson(abs_(Ret)) 相减:成交额节奏相对波动节奏。为什么样本外还会在:机构订单拆分的持续性是执行层面的结构,和行情阶段无关;异常持续度是日度换手低的事件信号(经 EMA 后换手降到周频),成本能承受。风险:DW 本身与流动性有一定相关,所以多数种子写成差分 / 偏离。
+  seeds:
+  - sub(day_durbin_watson(Amt), cross_mean(day_durbin_watson(Amt), 60))
+  - div(sub(day_durbin_watson(Amt), cross_mean(day_durbin_watson(Amt), 40)), cross_stddev(day_durbin_watson(Amt), 40))
+  - cs_bucket_zscore(day_durbin_watson(Amt), LogFloatCap)
+  - cs_bucket_zscore(sub(day_durbin_watson(Amt), cross_mean(day_durbin_watson(Amt), 40)), LogFloatCap)
+  - sub(day_durbin_watson(Amt), day_durbin_watson(Volume))
+  - cross_mean(sub(day_durbin_watson(Amt), day_durbin_watson(Volume)), 30)
+  - mul(day_durbin_watson(Amt), sign(day_sum(Ret)))
+  - cross_ema(mul(day_durbin_watson(Amt), sign(day_sum(Ret))), 20)
+  - sub(cross_ema(day_durbin_watson(Amt), 10), cross_ema(day_durbin_watson(Amt), 60))
+  - sub(day_durbin_watson(Amt), day_durbin_watson(abs_(Ret)))
+  - cross_mean(sub(day_durbin_watson(Amt), day_durbin_watson(abs_(Ret))), 30)
+  - div(day_durbin_watson(Amt), day_durbin_watson(Volume))
+- type: N
+  hypothesis: 机制:成交额的「记忆衰减曲线」。day_corr(Amt, in_delay(Amt,k)) 是分钟成交额在 k 分钟间隔上的自相关,把不同 k 的读数相减得到衰减速度:长间隔(15 / 30 分钟)自相关高、短间隔(1 分钟)自相关相对低 = 慢变的大单拆分流(机构)压过快变的零散撮合;反之是散户跳动型。再和价格侧的同样曲线(abs_(Ret) 的自相关 = 波动聚集,或 Ret 自相关 = 微观结构反转)相减,得到「成交额的聚集是否超过波动的聚集」:成交额记忆超过价格记忆 = 有人在不推动价格地持续吸筹 / 派发(隐蔽执行),这是信息交易者的典型指纹。算子实现:day_corr 与 in_delay 都作用在分钟轴,差值是日度量,再用 cross_mean / cross_ema 跨 20-40 日平滑(把单日相关的大噪声压掉,这是上一轮批里 day_corr 类 head 为负分的主因)、用 cs_bucket_zscore 在市值桶内比较。与库不同:库里 head 与 122 个候选全部是 day_corr(|Ret|, 量) 这种价量交叉相关或 DW / autocorr_n1 单点读数,没有「同一变量不同间隔的自相关之差」,也没有「量的记忆 减 价的记忆」;day_autocorr_n1 只有 1 分钟间隔且是单点。样本外为何还在:订单拆分执行的持续时间由机构资金规模和流动性约束决定,变化很慢;差分与跨日平滑使它与水平型控制(流动性 / 波动)基本正交。
+  inspired_by: 批 1/2 的 head:day_autocorr_n1(pow_2(in_rank(...Amt...))) 方向 +1 以及 day_durbin_watson(Amt / Volume) 在共性表里的富集 (+0.96 / +1.05),说明成交额分钟间的序列相关结构本身带信息;而第 1 轮的价量互相关 N 位最好只到 -0.59,说明价量交叉项太弱,改用单变量自相关曲线
+  seeds:
+  - sub(day_corr(Amt, in_delay(Amt, 5)), day_corr(Amt, in_delay(Amt, 1)))
+  - cross_mean(sub(day_corr(Amt, in_delay(Amt, 5)), day_corr(Amt, in_delay(Amt, 1))), 20)
+  - sub(day_corr(Volume, in_delay(Volume, 5)), day_corr(abs_(Ret), in_delay(abs_(Ret), 5)))
+  - cross_mean(sub(day_corr(Volume, in_delay(Volume, 5)), day_corr(abs_(Ret), in_delay(abs_(Ret), 5))), 30)
+  - day_corr(Amt, in_delay(Amt, 10))
+  - sub(day_corr(Amt, in_delay(Amt, 15)), day_corr(Amt, in_delay(Amt, 1)))
+  - cs_bucket_zscore(cross_ema(sub(day_corr(Amt, in_delay(Amt, 5)), day_corr(Amt, in_delay(Amt, 1))), 20), LogFloatCap)
+  - sub(day_corr(Amt, in_delay(Amt, 5)), day_corr(abs_(Ret), in_delay(abs_(Ret), 5)))
+  - cross_mean(sub(day_corr(Volume, in_delay(Volume, 30)), day_corr(Volume, in_delay(Volume, 5))), 30)
+  - cross_mean(sub(day_corr(Amt, in_delay(Amt, 5)), day_corr(Ret, in_delay(Ret, 5))), 40)
+  - cross_ema(sub(day_corr(Amt, in_delay(Amt, 15)), day_corr(abs_(Ret), in_delay(abs_(Ret), 15))), 30)
+R:
+- head: ts_var(day_q_stat_std(abs_(High)), 20)
+  why: 拆解显示 High->Low 增益 +0.57、窗口 20->40 增益 +0.37,说明 High 价侧和短窗口是烂部件;在 Low 与更长窗口上叠加
+  variants:
+  - ts_var(day_q_stat_std(abs_(Low)), 40)
+  - ts_var(day_q_stat_std(abs_(Low)), 60)
+  - ts_var(day_q_stat_std(abs_(High)), 60)
+  - ts_var(day_q_stat_std(abs_(Low)), 30)
+  - ts_std(day_q_stat_std(abs_(Low)), 40)
+  - ts_var(day_q_stat_std(abs_(Close)), 40)

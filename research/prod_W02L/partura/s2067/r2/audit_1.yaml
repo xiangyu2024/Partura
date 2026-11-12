@@ -1,0 +1,17 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 3
+    struck_seeds: []
+    reasons: '核心 day_durbin_watson(Amt) 在共性表里出现(14 个候选,均值差 +0.96,p 0.001)。相关度表:核心与快照 head day_corr(abs_(in_delay(Ret,1)),log(Amt)) 的原始 |ρ| 0.66、残差 0.69,与 liq 0.66、known 0.64,都低于 0.7 / 0.8 门槛;与 vol 0.24、rev 0.22、size 0.32 也都在门槛内,核心通过。创新度 3:不是与某个 head 或控制同一度量,但与该 head 及流动性 / 已知族共享较大成分,不给 4。合理度 3:逐个算子核对 dt_day.py:304-330,day_durbin_watson 算的是 sum(diff^2)/sum(x^2),对原始水平没有去均值,所以它不是 PI 写的 2(1-一阶自相关)。近似地 DW 约等于 2(1-rho1)*c^2/(1+c^2),c 为日内变异系数:前一项是「一块一块持续」的平滑度,后一项是日内成交额的集中程度,这一项与流动性高度相关(liq 0.66),这解释了核心为什么与 head 和流动性重合。机制描述只覆盖了前一项。无前视(只用当天分钟),不触及 §4 的陷阱。数值细节:整行恒非零常数时 is_constant 的 var<1e-8 判断在平方量级 1e12 下不可靠,可能返回 0 而非缺失,但不构成主导,不挡。种子逐个审:seed 11 的 liq |ρ| 0.83 ≥ 0.8,由表的自动规则划掉(不计入 struck_seeds);seed 12 的 div(DW(Amt),DW(Volume)) 分母未加保护,DW(Volume) 接近零时会爆点,但日内成交量近乎恒定的日子少,保留;seed 3(cs_bucket 对核心)与核心只差市值分桶(size 控制 0.03 对 0.32),不算换皮;seeds 1、2、4 都是对自身历史的偏离(差分、z 分数、分桶),归一化不同、排序不同,不算同一度量。如果它有 alpha,最可能来自日内成交额的离散度(集中在少数分钟还是均匀分布),而不是 DW 所描述的自相关结构;这一点与流动性控制重合,需要残差检验。剩 11 个种子,≥4,通过。'
+  - slot: b
+    novelty: 3
+    soundness: 3
+    struck_seeds: [8]
+    reasons: 'N 位。三个 head 的 |ρ| 最大 0.61(seed 5,与 day_corr(abs_(in_delay(Ret,5)),Amt) 的原始秩);残差最大为 seed 5 的 0.73、seed 6 的 0.59、seed 1 的 0.53(与 head cs_scale(day_autocorr_n1(...Amt...)) 的残差)。与快照里 Amt 自相关族有共享成分,但不是同一度量,给 3 而非 4。合理度 3:所有 day_corr 与 in_delay 都在分钟轴上;in_delay(x,d) 的实现是 result[:,d:] = x[:,:T-d](dt_in.py:266-275),取的是过去的值,无前视;cross_mean 是 rolling_windows 因果窗口(common.py:433),cross_ema 是因果的过去天加权(ops_ext.py:172),cs_bucket_zscore 是当天截面内分桶。但算子组合没有实现「记忆衰减」这一机制:day_corr 对原始水平(未去日内形状)做相关,高自相关主要来自所有股票共有的日内 U 形(开盘与尾盘放量),lag 5 减 lag 1 近似测的是 U 形的强弱,而不是订单拆分的持续性。这不是数学错误,所以放行。划掉 seed 8:sub(day_corr(Amt,in_delay(Amt,5)),day_corr(abs_(Ret),in_delay(abs_(Ret),5))) 与 seed 3 sub(day_corr(Volume,in_delay(Volume,5)),day_corr(abs_(Ret),in_delay(abs_(Ret),5))) 的相关度表六个数字完全一致(head 0.359、残差 0.24、liq 0.32、vol 0.15、known 0.33、size 0.17;rev 0.137 对 0.135)。Amt = 价 x 量,日内价格变化小,两者的滞后自相关几乎是同一个量,属于同一度量的换写法。seed 10(Amt 与 Ret 的 lag 5 自相关差,liq 0.79)低于 0.8 保留,但它与流动性控制很近,需要看残差。seeds 9、11 与 seeds 1、6 同族但滞后不同,保留。剩 10 个种子,≥4,通过。如果它有 alpha,最可能来自日内 U 形的强弱或开盘、尾盘的成交集中度(与流动性、size 有部分重合),而不是订单拆分的记忆。'
+R:
+  - head: 'ts_var(day_q_stat_std(abs_(High)), 20)'
+    soundness: 3
+    reasons: '6 个变体。算子核对:day_q_stat_std(dt_day.py:397 起)是同日分钟序列 Ljung-Box Q 统计量各阶的标准差,自相关已归一化,与价格尺度无关;ts_var 为因果滚动窗口(common.py:433),无前视;abs_ 对正价格是恒等映射,无害。合理度给 3:数学上干净,但机制只写成「拆解增益」,没有说清日内价格路径的自相关结构与 20 至 40 日波动之间的联系。需要 PI 核实、本审计未测量的一点:一字板日分钟 High / Low / Close 为常数时,rho_k 的分母受 1e-8 保护,rho 返回 0,Q 统计量为 0 而非缺失。若一字板日多的票在截面上系统性地排到低端,这一项会主导变体排序,属于 §4 的「数值伪影」,应先在 train 段统计其占比再定。变体 5 ts_std(day_q_stat_std(abs_(Low)),40) 与变体 1 ts_var(day_q_stat_std(abs_(Low)),40) 的截面排序完全等价(sqrt 是单调变换,同一天同一截面的秩相同),相关度表的六个数字也完全一致,应删掉,它只会浪费一次付费评估。变体 4(Low,30)与原 head 的原始 |ρ| 为 0.74,若通过门槛会按规则替换原 head。'
+summary: 'a 通过(创新 3、合理 3,表里自动划掉 seed 11,余 11 个);b 通过(创新 3、合理 3,划掉 seed 8 为与 seed 3 同一度量的换写法,余 10 个);R 组合理度 3,变体 5 与变体 1 排序等价应删;无数学硬伤,但 DW 的机制描述需修正(它不是 2(1-一阶自相关),而是平滑度乘以日内变异系数的函数)。'
