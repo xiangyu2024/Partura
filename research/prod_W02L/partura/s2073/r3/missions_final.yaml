@@ -1,0 +1,69 @@
+seed: 2073
+round: 3
+slots:
+- type: N
+  note: 'audit did not pass after 1 attempt(s): plain GP (PLAN §2.5)'
+  audit_failed: true
+  proposed_type: E
+- type: N
+  hypothesis: '新 idea:分钟级「序列相关」(Durbin-Watson)与尾盘成交占比,度量微观结构的噪声与资金进场的集中度。 本批 3 个 head
+    里出现次数最多的两个部件是 day_close(Amt)(尾盘成交额)与 day_durbin_watson(Open)(开盘价序列的一阶自相关); 但库里的
+    DW 只作用在 Open 上,且总是和 ts_std(day_close(Amt)) 相乘。本轮把两件事拆开并换对象: (a) day_durbin_watson(Ret)
+    ≈ 2 - 2ρ1,ρ1 为分钟收益的一阶自相关,负自相关(买卖价差反弹、做市商库存调整)越强,DW 越大,是流动性供给质量与噪声交易的代理; 对 Amt
+    取 DW 则读成交额是「成团爆发」还是「平滑」,爆发型意味着事件资金 / 大单切片; (b) day_close(Amt) / day_sum(Amt) 是收盘一分钟占全天成交额的比例,无量纲,去掉了流动性水平,度量尾盘资金集中度;
+    取 20~60 日均值或 50 日波动,读「尾盘被事件型资金间歇占用」。 算子:day_durbin_watson 是日内的纯时序统计(分钟轴),day_close
+    取最后一分钟,div 与 day_sum 做比例,cross_mean / ts_std / cross_corr 把日度量变成持续特征; cross_corr(DW(Ret),
+    尾盘占比, 60) 读二者的共同变动。不同于库里:库里没有 DW(Ret) / DW(Amt),没有「尾盘占比」, 也没有把这两个量单独当信号(只出现在乘积里),所以这是两个新量而不是旧
+    head 换写法;对 Ret 取 DW 与对 Open 取 DW 度量的东西不同(价格水平的自相关近 1, 收益的自相关才是微观结构噪声)。样本外还会在:价差反弹与尾盘集合竞价集中度由交易制度(T+1、尾盘集合竞价)决定,是持续的结构特征;
+    持有成本由 20 日以上的平均压住。数值:DW 的分母是收益平方和,整天无变化的停牌 / 一字板日按 ops 的定义缺失或常数,被日度缺失处理,不是爆点。'
+  inspired_by: 第 1~3 批里 day_close(Amt) 与 day_durbin_watson(Open) 同时出现在最好的三个 head(-0.14、-0.52、-0.57),且共性表里它们的均值差分别为
+    +1.50 与 +1.33,是本批唯一不为极负的结构;拆解显示单独的 DW(Open) 很差(-4.18),说明有用的是它与尾盘成交的组合,于是把两者拆成各自对更干净对象的度量。
+  seeds:
+  - cross_mean(div(day_close(Amt), day_sum(Amt)), 20)
+  - ts_std(div(day_close(Amt), day_sum(Amt)), 50)
+  - cross_mean(day_durbin_watson(Ret), 40)
+  - ts_std(day_durbin_watson(Ret), 60)
+  - cross_corr(day_durbin_watson(Ret), div(day_close(Amt), day_sum(Amt)), 60)
+  - sub(cross_mean(day_durbin_watson(Ret), 20), cross_mean(day_durbin_watson(Ret),
+    120))
+  - cross_max(ts_std(div(day_close(Amt), day_sum(Amt)), 50), 120)
+  - ts_std(day_durbin_watson(Amt), 50)
+  - ts_std(abs_(day_close(Ret)), 50)
+  - cross_mean(mul(day_durbin_watson(Ret), div(day_close(Amt), day_sum(Amt))), 40)
+R:
+- head: cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 60)
+  why: 拆解里唯一变好的单一改动是外层窗口 cross_max 60 -> 120(-0.14 到 +0.21,train / valid 同号 +0.21
+    / +0.33),Open->Close 也几乎持平(-0.02,+0.12); 30 日窗口更差(-0.36),说明外层极值聚合的窗口越长越好,烂的部件是过短的
+    60 日窗口。变体沿着这个方向继续拉长窗口(90 / 180 / 240)并与 Open->Close 组合, 再检验去掉 ts_min 与 pow_3 的写法(两者的必要性只有
+    +0.03 / +0.07,几乎不起作用)。
+  variants:
+  - cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 90)
+  - cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 180)
+  - cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 240)
+  - cross_max(mul(ts_std(day_durbin_watson(Close), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 120)
+  - cross_max(mul(ts_std(day_durbin_watson(Close), 40), ts_min(pow_3(ts_std(day_close(Amt),
+    50)), 1)), 240)
+  - cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_std(day_close(Amt), 50)),
+    120)
+  - cross_mean(mul(ts_std(day_durbin_watson(Open), 40), ts_std(day_close(Amt), 50)),
+    120)
+  - cross_max(mul(ts_std(day_durbin_watson(Open), 60), ts_std(day_close(Amt), 50)),
+    120)
+- head: ts_max(day_corr(pow_1_5(Ret), Close), 60)
+  why: 拆解里 ts_max 窗口 60 -> 120 把 -1.25 拉到 -0.52(+0.73),说明烂的是过短的极值窗口;另外 pow_1_5 对负收益返回缺失(规则
+    §4), head 实际是上涨分钟子集上的相关,变体用 pow_05 / signedpower 保号版本检验「只看上涨分钟」是否是原因。
+  variants:
+  - ts_max(day_corr(pow_1_5(Ret), Close), 180)
+  - ts_max(day_corr(pow_1_5(Ret), Close), 240)
+  - ts_max(day_corr(pow_05(Ret), Close), 120)
+  - ts_max(day_corr(signedpower(Ret), Close), 120)
+  - ts_max(day_corr(pow_1_5(Ret), Amt), 120)
+  - ts_mean(day_corr(pow_1_5(Ret), Close), 120)
+audit:
+  attempts: 1
+  file: audit_1.yaml

@@ -1,0 +1,20 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [1, 8]
+    reasons: '相关度表:E 核心 ts_std(day_close(Amt),50) 与 head 的原始 |ρ| 为 0.97(它是 head 的子树,设计使然,不计入创新度),但与控制 liq 0.90、known 0.90 均 >= 0.8,按 §3 的 E 核心控制门槛这一位会被确定性规则改为普通 GP,这是规则决定,不是我的分数。创新度 3:外围 2/3/9 是尾盘成交额波动与全天成交额的比例(与 liq 0.38/0.40,known 0.33/0.40,与 head 最大原始 |ρ| 0.32/0.41/0.36),度量的不是 head 也不是控制;4/5/6/7/10 是对自己历史的 z 分、去均值、回归残差、与总成交额的相关、偏度,与 head 的原始 |ρ| 在 0.10–0.43 之间。但核心本身与已知族 cross_mean(day_std(Amt),30) 的 |ρ| 为 0.90,外围多数仍是这个流动性水平 / 波动量的变形,所以不给 4。划掉 1:cross_max(ts_std(core,50),120) 与 head cross_max(mul(ts_std(day_durbin_watson(Open),40), ts_min(pow_3(core),1)),60) 的原始 |ρ| 为 0.87(>= 0.7),且与该 head 同一外层 cross_max 结构,库禁令也会拒。划掉 8:ts_rank(core,120) 的 gate 为 false,distinct 仅 0.078,截面高度并列(离散化的名次),不是可用的连续信号。合理度 4:机制清楚,收盘集合竞价那一分钟的成交额波动是尾盘事件型资金占用的代理;比例与残差都是对称的秩型运算,分母 ts_std(day_sum(Amt),50) 与 cross_mean(day_sum(Amt),50) 停牌日缺失而不是零,没有近零爆点;逐个算子核对,没有 cross_shift、ts_shift、in_local_mean 等前视算子,没有 nt_*;cross_regres(log 总额波动, log 核心波动, 60) 按 rolling_ols(x,y) 的定义是 y 对 x 回归取残差,即核心中不能被总额波动解释的部分,与设计说明一致。如果它有 alpha,最可能来自:尾盘成交额的相对不稳定(比例与残差),即收盘集合竞价的资金是否被事件型资金间歇占用。剩余种子 2,3,4,5,6,7,9,10 共 8 个,满足 >= 4。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [5]
+    reasons: '划掉 5:cross_mean(day_durbin_watson(Amt),40) 与 head 的原始 |ρ| 为 0.78(>= 0.7),且与 liq 0.86、known 0.82(>= 0.8),双重超门槛,自动划掉。其余种子无一超门槛(head 最大原始 |ρ| 0.10–0.47,控制最大 liq 0.53 出现在种子 9,known 0.50 出现在种子 10 的 vol 控制 0.50,均 < 0.8)。创新度 4:库里 head 里没有 day_durbin_watson(Ret) 与 div(day_close(Amt),day_sum(Amt)) 这两个量的单独使用(两个 DW head 都作用在 Open 或与 core 相乘);seed 3 cross_mean(DW(Ret),40) 与 head 最大原始 |ρ| 为 0.47,与 rev 控制 0.04、vol 控制 0.07,与 liq 0.39、known 0.34,确实是新量。不给 5:DW(Ret) 与尾盘占比在相关度表里都有 0.2–0.5 的流动性相关,DW(Ret) 本身有流动性代理的成分。合理度 4:day_durbin_watson 定义为 sum(diff^2)/sum(x^2),对收益即 2(1-ρ1) 的归一化,ρ1 为分钟收益一阶自相关,买卖价差反弹与做市库存调整的机制清楚;分母有 1e-8 保护,恒定行(一字板、零成交)返回 NaN 而不是 0 或爆点,与 notebook 的说法一致;没有前视算子,没有 pow_1_5 与 nt_*。已知的一点是 day_durbin_watson 对方差低于 1e-8 的行判为 NaN(实际只有锁死的日子),是被缺失处理而不是数值伪影。如果它有 alpha,最可能来自:分钟收益负自相关(价差反弹)强弱的日度变化,即流动性供给质量;其次是尾盘资金的集中度。剩余种子 1,2,3,4,6,7,8,9,10,11 共 10 个。'
+R:
+  - head: 'cross_max(mul(ts_std(day_durbin_watson(Open), 40), ts_min(pow_3(ts_std(day_close(Amt), 50)), 1)), 60)'
+    soundness: 3
+    reasons: '变体只改外层窗口(90/180/240)、Open 换成 Close、以及去掉 pow_3 或把 pow_3 换成 ts_std(core,50),数学上都可计算,没有 §4 陷阱,pow_3 作用于非负的 std 也不会对负数缺失。机制说得通但偏弱:day_durbin_watson(Open) = sum(diff(p)^2)/sum(p^2),是归一化后的分钟价格路径粗糙度,数值上接近日内已实现波动(对 vol 控制的原始 |ρ| 为 0.20,不算重合),而不是 notebook 说的「路径平滑」,叙述需要修正,但不是数学问题。外层窗口加长是参数层面的稳定性解释。提醒:ts_min(x,1) 按 rolling_reduce 的定义是恒等映射(nd_ts.py:172),所以 PI 说的「去掉 ts_min 的必要性 +0.03」不能来自去掉 ts_min 本身,R 组里也没有单独去掉 ts_min 的变体,这一句在 PI 的理由里应当删掉或改成去掉 pow_3。'
+  - head: 'ts_max(day_corr(pow_1_5(Ret), Close), 60)'
+    soundness: 3
+    reasons: '按 rules §4,pow_1_5 对负收益返回缺失,所以 day_corr 实际只在上涨分钟与零分钟上算,head 的定义与「收益与价格的日内相关」的字面意思不一致。但它在计算上是良定义的(count >= 2 保护),且没有证据表明结果主要由这一缺失模式决定,因此不判为「定义坏掉」。变体 3(pow_05)与 4(signedpower)直接检验这一点,是对的检验。注意变体 1、2、5、6 仍然保留 pow_1_5,它们的结果不能读成「修正了这个问题」。机制:日内收盘价与上涨分钟收益的同步关系,机制不清楚,但按 §3 说不清机制不是挡的理由。'
+summary: 'a 位:核心对流动性与已知族 |ρ| 0.90,E 门槛不过,将被改为普通 GP(外围 8 个种子可用,创新度 3、合理度 4);b 位:N 通过,划 5 号(对 head 0.78 与 liq 0.86),创新度 4、合理度 4;R 两组数学上无硬伤,合理度均 3;ts_min(x,1) 为恒等,PI 的 ts_min 必要性说法需要修正。'
