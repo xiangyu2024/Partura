@@ -1,0 +1,42 @@
+seed: 2050
+round: 3
+slots:
+- type: E
+  core: 'ts_kurt(div(day_last(Close), day_first(Open)), 50)'
+  hypothesis: 'Core = 50-day kurtosis of the daily intraday return ratio (close over first open). It is the subtree with the largest positive enrichment in the batch snapshot (+1.38, p 0.006; candidates containing it average -1.22 vs -2.59 without) and has not been used as an E core in rounds 1-2 (those used the upside-minute-std core and day_sum(Open)). Mechanism: kurtosis of the daily open-to-close move measures how jump-prone / lottery-like a stock is (rare large intraday moves, event and news driven, retail lottery demand); stocks with fat-tailed intraday paths are overpriced by lottery-seeking retail investors and low-kurtosis stocks earn a premium, a well-documented A-share feature (MAX / skewness preference). It is a fourth-moment shape statistic, not a level, so rank volatility is only partly in it, and the new ruler removes the linear and U-shaped part of volatility anyway. Periphery differs from every candidate seen in the snapshot (which only wrap it in cross_mean(...,60) ratios against cross_delay of prices or in pow_3 / ts_kurt chains): here we (a) take own-history deviations (core minus its 120-day mean, ratio to its own cross_stddev) so that a persistent kurtosis level is not mixed with a change in it, a recent kurtosis surprise being the under-reacted piece; (b) demean inside size buckets (cs_bucket_demean on LogFloatCap) and inside turnover buckets (Amt) so cap / liquidity are not mixed in; (c) combine with its comovement with turnover via cross_corr(core, day_sum(Amt), 60), i.e. whether fat tails coincide with volume spikes (news) or occur in quiet trading (noise); (d) cross_delta over 20 days, i.e. kurtosis momentum. The library has the base ts_kurt only inside other skeletons (ts_kurt of day_hurst, pow_3 chains); these deviation / bucket-neutral / comovement skeletons are not among the 5583 expressions. It should persist out of sample because lottery demand is a structural behavioural feature of the A-share retail base, not a fitted pattern.'
+  seeds:
+  - cross_mean(ts_kurt(div(day_last(Close), day_first(Open)), 50), 20)
+  - sub(ts_kurt(div(day_last(Close), day_first(Open)), 50), cross_mean(ts_kurt(div(day_last(Close), day_first(Open)), 50), 120))
+  - div(ts_kurt(div(day_last(Close), day_first(Open)), 50), cross_stddev(ts_kurt(div(day_last(Close), day_first(Open)), 50), 60))
+  - cs_bucket_demean(ts_kurt(div(day_last(Close), day_first(Open)), 50), LogFloatCap)
+  - cs_bucket_zscore(ts_kurt(div(day_last(Close), day_first(Open)), 50), cross_mean(day_sum(Amt), 20))
+  - cross_corr(ts_kurt(div(day_last(Close), day_first(Open)), 50), day_sum(Amt), 60)
+  - cross_delta(ts_kurt(div(day_last(Close), day_first(Open)), 50), 20)
+  - cross_ema(ts_kurt(div(day_last(Close), day_first(Open)), 50), 10)
+  - cross_zscore(ts_kurt(div(day_last(Close), day_first(Open)), 50), 120)
+  - cs_bucket_demean(cross_mean(ts_kurt(div(day_last(Close), day_first(Open)), 50), 40), LogFloatCap)
+  - div(ts_kurt(div(day_last(Close), day_first(Open)), 50), cross_max(ts_kurt(div(day_last(Close), day_first(Open)), 50), 250))
+- type: N
+  hypothesis: 'New idea: intraday path efficiency. For each day compute the net intraday move |log(last close / first open)| divided by the total path length day_sum(abs(Ret)) over the minutes; the ratio is near 1 for a directional, one-sided day (a block of informed / institutional flow pushing the price) and near 0 for a noisy day that goes back and forth (retail churn, bid-ask bounce). Then smooth over 20-120 days, or take the signed version (efficiency times the sign of the net move, i.e. a signed directional-flow measure) and the share of the ratio explained by the opening half hour. Operators: day_last(Close), day_first(Open), div, log, abs, day_sum implement the ratio; cross_mean / cross_zscore / cross_ema smooth; sub of the cross_mean over a short and a long window gives the recent change; cs_bucket_demean on LogFloatCap removes size. Different from the library: batches 1-3 are about the dispersion of minute returns (day_std of the positive part, ratios to day_std(Ret)), the level of the open price, and the fourth moment of the Vwap, and all of them are scale measures of the minute return; efficiency divides the net move by the path length, so it is invariant to the volatility scale and is a path-shape quantity (like a Hurst measure, but in closed form and without a regression, and not the same as day_hurst already used in the snapshot because day_hurst uses a rescaled range). Different from the controls: volatility is divided out and the signed version is the daily return scaled by path length, which is only partly the 20-day reversal control. Out of sample it persists because directional intraday flow reflects institutions splitting large orders (a structural market feature that gets absorbed slowly, so it predicts returns over days) whereas noisy churn is retail, which loses on average.'
+  inspired_by: 'Batch 1 (all heads are day_std-of-Ret volatility proxies with deep negative scores, so a scale-free path measure is the natural next step) and batch 3 (day_hurst / ts_kurt of Close-over-Open appear as the positively enriched parts, which indicates path-shape rather than scale information helps)'
+  seeds:
+  - cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 20)
+  - cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 60)
+  - cross_mean(div(log(div(day_last(Close), day_first(Open))), day_sum(abs(Ret))), 20)
+  - cross_mean(div(log(div(day_last(Close), day_first(Open))), day_sum(abs(Ret))), 60)
+  - cross_zscore(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 60)
+  - cross_ema(div(log(div(day_last(Close), day_first(Open))), day_sum(abs(Ret))), 30)
+  - sub(cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 10), cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 120))
+  - cs_bucket_demean(cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 40), LogFloatCap)
+  - cross_corr(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), day_sum(Amt), 60)
+  - cross_mean(div(abs(log(div(day_last(Close), day_first(Open)))), day_std(Ret)), 60)
+  - cross_stddev(div(abs(log(div(day_last(Close), day_first(Open)))), day_sum(abs(Ret))), 60)
+  - cross_mean(div(day_sum(Ret), day_sum(abs(Ret))), 60)
+R:
+- head: 'cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 240)'
+  why: 'Window ablation: 240 -> 480 raises valid from -0.32/-1.19 toward -0.50 but train stays -2.2, 240 -> 120 is worse on valid; denominators knock-out is worse (-2.58), so the ratio helps and the remaining rotten part is the averaging horizon / the flat average; longer windows, an exponentially weighted mean and a stddev-normalised version are the repairs.'
+  variants:
+  - 'cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 480)'
+  - 'cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 360)'
+  - 'cross_mean(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 600)'
+  - 'cross_ema(div(day_std(select_where(is_gt(Ret, create_like(Ret, 0), False), Ret, create_like(Ret, 0))), day_std(Ret)), 240)'
