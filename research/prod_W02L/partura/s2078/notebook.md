@@ -20,3 +20,14 @@
 - R:无(R_prev 里只有 ts_regbeta@60 变体 +0.12,不足以产生新 head,且该 head 含 nt 以外的问题不大,但增益小)。
 
 **上一轮预测对不对**:E 预测「大概率产不出 ≥0.5 的 head」——对(0 个,最好 -0.03);预测接近 0 的是 cross_reg_tvalue 写法而非除以波动——部分对(最好的是 cross_reg_tvalue,-0.03,而波动缩放没进前 5)。N 预测多数为负——对(最好 -0.09),centroid/gini 没有进前 5,最好的是 flat_ratio 配合 cs_last_low05。R 预测窗口 60 变体比原 head 好——对(-0.46 vs -1.54),但未达 0.5。
+
+## 第 3 轮
+
+**信念**:本种子仍然没有 alpha;7 个任务最好 -0.03(round 2 E,train +0.4~0.8 而 valid 负,典型的 valid 掉头)。ret MAX 与 flat_run_max 两个核心各用掉一个 E 位。共性表里还没碰过的是 cross_delta(day_flat_ratio(Volume),30)(+1.35),前两轮只在价格区间比值里出现,分数 -0.6~-0.8;「事件 / 变化」比「水平」更可能躲开流动性控制。另一条没试过的线是分钟内时间错位的相关(领先滞后 / 自相关),标度无关。
+
+**本轮任务与事先预测**
+- E(核心 cross_delta(day_flat_ratio(Volume),30)):外围换成慢平均、ts_max、按自身 60 日均值标准化、与近期收益交互、对收益回归、LogFloatCap 屏蔽。预测:多数为负,出 head 概率约 15%;若有,最可能来自 LogFloatCap 屏蔽版或 ts_regbeta 版(屏蔽版 train 偏正、瓶颈是 valid)。
+- N(分钟收益自相关、量价错位相关、DW、Hurst):预测多数接近 0 或负,出 head 概率约 15%;若有,最可能是 day_corr(Ret 后一分钟, Volume 前一分钟) 的 20 日均值或 ar1 的 20 日均值与 60 日均值之差。信心低。
+- R:无(R_prev 不存在,拆解表里没有比原 head 好的变体)。
+
+**上一轮预测对不对**:E(day_flat_run_max)预测「多数 <0」——对(最好 -0.03,0 个过线);预测「若有 head 来自惊喜或屏蔽版」——部分对:最好的几个确实是 cs_last_low05 屏蔽后做 cross_mean,但 valid 仍为负,没有出 head,「约 25%」的把握没有兑现。N(价格路径形状)预测出 head 概率 ≤15%——对,没有 head,且该位最终进入的评分分布多为负(最好 -0.59,实际是 flat_ratio 一族的骨架)。

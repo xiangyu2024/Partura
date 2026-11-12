@@ -1,0 +1,70 @@
+seed: 2079
+round: 2
+slots:
+  - type: E
+    core: 'day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239))'
+    hypothesis: >-
+      Core = the within-day lead-lag correlation between a minute's turnover and the PREVIOUS minute's return
+      (Ret over minutes 1..239 paired with Amt over minutes 2..240, both sliced so there is no fill value). It says
+      whether money arrives after price moves (positive: trend-chasing / order splitting that follows price) or
+      dries up after them (negative: liquidity provision absorbing moves). It is the best-enriched subtree in the batch
+      (mean difference +2.04 for the q75 version, p 0.000) and the round-1 N slot that tried it with cross_ema / cross_mean
+      smoothing reached valid +0.23 but train -0.22, so the core carries something and the smoothing family is exhausted
+      (cross_ema@241 of it, cross_mean@30 of it, ts_quantile_q75 are the periphery already seen). This round keeps the core
+      but changes what is computed from the daily series, not how much it is smoothed: (a) its own ts_stddev over 20-60 days,
+      i.e. how unstable a stock's flow-after-price behaviour is (an unstable regime is a stock where the participant mix
+      switches between informed and noise flow); (b) the surprise today minus a 40-day cross_mean, so only the change of
+      flow behaviour is used rather than the persistent level the size/liquidity controls absorb; (c) conditioning on direction:
+      multiplying by the sign of the multi-day return (cross_sum of day_sum(Ret)) so that trend-chasing flow after gains
+      and after losses are separated (chasing flow after gains is over-bought lottery demand, after losses it is capitulation);
+      (d) cross_corr / cross_regres of the core against the daily return, i.e. whether flow-chasing is stronger on up days
+      than down days (asymmetric attention); (e) ts_skew / ts_max / ts_min tails of the series, so rare days of extreme
+      chasing rather than the average. None of these combine the core with ts_stddev, ts_skew, a return-sign interaction or a
+      regression on the return in the snapshot (periphery seen: cross_ema, cross_mean, ts_quantile_q75 only). Out of sample:
+      the mechanism is order-flow behaviour (who trades after price moves), a participant-mix property of each stock that is
+      slow-moving and unrelated to the sample period; the ranking is made on instability and change, not on the level that
+      the controls already remove.
+    seeds:
+      - 'ts_stddev(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 20)'
+      - 'ts_stddev(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 60)'
+      - 'sub(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), cross_mean(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40))'
+      - 'mul(cross_mean(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 20), sign(cross_mean(day_sum(Ret), 20)))'
+      - 'cross_corr(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_sum(Ret), 60)'
+      - 'cross_regbeta(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_sum(Ret), 60)'
+      - 'ts_skew(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 60)'
+      - 'ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40)'
+      - 'ts_min(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40)'
+      - 'cs_bucket_demean(cross_mean(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 30), LogFloatCap)'
+      - 'sub(ts_quantile_q75(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 20), ts_mean(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 20))'
+      - 'cross_regres(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), day_corr(in_slice(Volume, 2, 240), in_slice(Ret, 1, 239)), 40)'
+  - type: N
+    hypothesis: >-
+      New idea: WHO the money was trading with, measured inside the day by weighting minutes by turnover.
+      Three nodes that no snapshot head uses: (1) day_signed_ratio(Ret, Amt) = share of the day's turnover traded in up-minutes minus
+      share in down-minutes, a net buying-pressure proxy; (2) day_wmean(Ret, Amt) minus day_mean(Ret), the gap between the
+      return the money actually experienced and the return a clock-time average sees: positive means heavy minutes were
+      up-minutes while quiet drift was down (informed buying in size, small retail selling), negative means the opposite;
+      (3) day_topw_mean(Ret, Amt) = the average return of the 10% heaviest-turnover minutes, an event study of block trades without a
+      trigger. Smoothed over 10-40 days and then standardised against the stock's own history (cross_zscore) or taken as a short
+      minus long mean difference, they capture persistent one-sided size-weighted flow, which is the mechanism behind slow
+      price impact (institutional orders executed over days: drift continues while the footprints stay one-sided). Because
+      the library heads are all rolling volatility / hurst / regbeta of price ranges and cross_cov of Amt, and the batch commonality
+      table highlights Amt-return coupling only through day_corr, this is a sign-and-weight statistic (bounded, scale-free,
+      not a magnitude), so it is not the liquidity / volatility / size controls and not the day_corr lead-lag core. It is
+      different from round 1's timing statistics (centroid, argmax, one-minute lag corr): those are about when, this is about
+      which side the weight sits on. Out of sample: persistent one-sided size-weighted order flow of large participants
+      (prolonged execution, information diffusion) is a structural feature of A-share microstructure, independent of the sample.
+    inspired_by: 'Batch 2 commonality table: day_corr(Amt, lagged Ret) is the only subtree with a large positive mean difference (+1.19 to +2.04) and round-1 N reached valid +0.23, so the Amt-with-return coupling carries information; this idea uses the same two fields in a different, sign-weighted form (signed turnover share, money-weighted minus time-weighted return, heavy-minute return) instead of a correlation.'
+    seeds:
+      - 'cross_mean(day_signed_ratio(Ret, Amt), 20)'
+      - 'cross_zscore(day_signed_ratio(Ret, Amt), 40)'
+      - 'sub(cross_mean(day_signed_ratio(Ret, Amt), 5), cross_mean(day_signed_ratio(Ret, Amt), 60))'
+      - 'cross_mean(sub(day_wmean(Ret, Amt), day_mean(Ret)), 20)'
+      - 'cross_zscore(sub(day_wmean(Ret, Amt), day_mean(Ret)), 40)'
+      - 'cross_ema(sub(day_wmean(Ret, Amt), day_mean(Ret)), 30)'
+      - 'cross_mean(day_topw_mean(Ret, Amt), 20)'
+      - 'cross_zscore(day_topw_mean(Ret, Amt), 60)'
+      - 'sub(cross_mean(day_topw_mean(Ret, Amt), 10), cross_mean(day_topw_mean(Ret, Amt), 40))'
+      - 'cross_corr(day_signed_ratio(Ret, Amt), day_sum(Ret), 40)'
+      - 'cs_bucket_demean(cross_mean(day_signed_ratio(Ret, Amt), 20), LogFloatCap)'
+      - 'cross_mean(sub(day_signed_ratio(Ret, Amt), day_signed_ratio(Ret, Volume)), 30)'

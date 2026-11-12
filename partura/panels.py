@@ -380,9 +380,10 @@ class PanelSet:
             return [None] * len(exprs), {i: f"OutOfMemoryError: {exc}" for i in range(len(exprs))}
         return list(res.panels), dict(res.errors)
 
-    def _evaluate(self, exprs: List[object], names: List[str], device: Optional[str] = None
+    def _evaluate(self, exprs: List[object], names: List[str], device: Optional[str] = None, cpu_rung: bool = True
                   ) -> Tuple[List[Optional[np.ndarray]], Dict[int, str]]:
-        """One batch on ``device`` (default: the configured one), with the retry ladder for memory."""
+        """One batch on ``device`` (default: the configured one), with the retry ladder for memory.  ``cpu_rung=False``
+        stops before the last rung (the CPU engine); the caller runs ``_cpu_rung`` itself after releasing the GPU way."""
         dev = device or self.device
         t0 = time.perf_counter()
         panels, errs = self._run(dev, exprs)
@@ -401,12 +402,21 @@ class PanelSet:
                     errs.pop(i, None)
                 else:
                     errs[i] = f"{errs[i]} | retry alone: {e1.get(0)}"
-        # Last rung: what the GPU could not hold even alone goes to the BOUNDED CPU engine,
-        # one expression at a time.  (ND-face ts_* operators take the whole panel at once and
-        # cannot be chunked on the GPU; on the CPU that is just RAM.)
+        if cpu_rung:
+            self._cpu_rung(exprs, names, panels, errs, dev)
+        if str(dev).startswith("cuda"):
+            torch.cuda.empty_cache()
+        return panels, errs
+
+    def _cpu_rung(self, exprs: List[object], names: List[str], panels: List[Optional[np.ndarray]],
+                  errs: Dict[int, str], dev: str) -> None:
+        """Last rung: what the GPU could not hold even alone goes to the BOUNDED CPU engine,
+        one expression at a time.  (ND-face ts_* operators take the whole panel at once and
+        cannot be chunked on the GPU; on the CPU that is just RAM.)  Fills ``panels``/``errs`` in place."""
         left = [i for i in sorted(errs) if _is_oom(errs[i])]
         if left and str(dev).startswith("cuda"):
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             for i in left:
                 if not self.quiet:
                     print(f"[panels] {names[i]}: does not fit on the GPU right now; computing it on the CPU",
@@ -417,9 +427,6 @@ class PanelSet:
                     errs.pop(i, None)
                 else:
                     errs[i] = f"{errs[i]} | cpu: {r2.errors.get(0)}"
-        if str(dev).startswith("cuda"):
-            torch.cuda.empty_cache()
-        return panels, errs
 
     def compute(self, expressions: Dict[str, str]) -> Dict[str, np.ndarray]:
         """name -> (n_days, n_symbols) float32 panel over the trimmed range."""
@@ -499,11 +506,23 @@ class PanelSet:
                 dev = self.device
                 if str(self.device).startswith("cuda") and not self._refresh_gpu_cap():
                     dev = "cpu"
+                # W02L, 2026-11-12: CPU work no longer runs while a GPU way is held.  A view that fell back to the CPU used to
+                # compute there for 10-75 minutes holding one of the two correlation ways, and the other jobs -- whose trees
+                # take ~10 s on the card -- queued behind it (2079 r2 waited 4644 s).  The way is still held for the LOOK at
+                # the card (re-promotion above, the free-memory check); a CPU batch and the CPU rung run after it is released.
+                panels = None
+                if str(dev).startswith("cuda"):
+                    panels, errs = self._evaluate([todo[n] for n in still], still, device=dev, cpu_rung=False)
+                    # hand the card's cached blocks back before the way is released: an idle process otherwise keeps GBs the next
+                    # holder of a way needs (W02L, 2026-11-09: 13 locates kept up to 3.6 GB each, and stage 0 fell back to the CPU)
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                elif str(self._requested) == "cpu":
+                    panels, errs = self._evaluate([todo[n] for n in still], still, device=dev)   # no way was taken
+            if panels is None:                                  # a GPU view whose batch goes to the CPU: the way is free now
                 panels, errs = self._evaluate([todo[n] for n in still], still, device=dev)
-                # hand the card's cached blocks back before the way is released: an idle process otherwise keeps GBs the next
-                # holder of a way needs (W02L, 2026-11-09: 13 locates kept up to 3.6 GB each, and stage 0 fell back to the CPU)
-                if str(dev).startswith("cuda") and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+            elif str(dev).startswith("cuda"):
+                self._cpu_rung([todo[n] for n in still], still, panels, errs, dev)
             for i, n in enumerate(still):
                 if errs.get(i) or panels[i] is None:
                     for alias in by_key[keys[n]]:

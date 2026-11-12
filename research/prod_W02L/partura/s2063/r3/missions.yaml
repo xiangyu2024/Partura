@@ -1,0 +1,56 @@
+seed: 2063
+round: 3
+slots:
+  - type: E
+    core: 'cross_corr(day_var(Ret), day_sum(Ret), 60)'
+    hypothesis: >-
+      机制:核心 C = cross_corr(day_var(Ret), day_sum(Ret), 60) 是个股过去 60 日里「当日分钟已实现方差」与「当日收益」的滚动相关,即杠杆效应(跌时波动放大 = 负相关,涨时波动放大 = 正相关,后者是 A 股散户追涨、事件式拉升的特征)。
+      依据(本批富集表):含 C 的 11 个候选均值 -0.70,不含的 -2.19,均值差 +1.49、p<0.001,是本批最强的共性子树;上一轮 day_var(Ret) 位里最好的几个(-0.01 / -0.06 / -0.29)全是 C 或它的 cov 版本,valid 段 +0.18,但 train 段为负,卡在「train 不稳」。
+      上一轮对 C 的外围只有两种:套 cs_bucket_zscore(·, 名义股价) 以及把相关换成 cross_cov,窗口只试过 60/120/241,从未对 C 做时间序列方向的处理。
+      这一位只改外围,不碰核心,做五件事:(a) 慢化与稳定:cross_ema / cross_mean 20 日、cross_zscore 120 日,杠杆相关在 60 日窗口内样本只有 60 天,噪声大,先平滑再排名,同时降换手(15bp 成本下这是关键);
+      (b) 期限差:C 减去它 250 日的长窗口版本 = 杠杆结构近期是变强还是变弱(状态变化而非水平);
+      (c) 条件化:cs_first_low20(C, 近期波动)= 只在低波动票里读杠杆相关,避开高波动票上相关被极端日主导的噪声;cs_flip_by_state(C, day_sum(Ret)) = 市场整体涨跌状态下方向翻转(杠杆效应在牛市和熊市作用相反,只试一个翻转);
+      (d) 分组去均值:在 ListAge、BoardCode 内去均值,拿掉「新股 / 创业板天然波动与收益同向」的板块结构,上一轮只用了名义股价分桶,没用过这两个;
+      (e) 加性融合:C 加上 120 日版本、或减去成交量版本 cross_corr(day_var(Ret), day_sum(Volume), 60)(波动-成交耦合),把「波动跟着价格走」与「波动跟着量走」分开。
+      和以前不同:快照里含 C 的外围只有 cs_bucket_zscore(名义股价)、cross_cov 替换、div(ts_argmin(sigmoid(...)))一类,没有 cross_ema / cross_zscore / ts_rank 的慢化,没有期限差,没有 cs_first_low20 或 cs_flip_by_state 的条件化,没有 ListAge / BoardCode 的分组;外围算子集合因此全新。
+      为什么样本外还会在:杠杆效应(Black 1976;Christie 1982)与波动-收益不对称是个股的慢变结构属性,A 股涨时放量放波动是散户参与度的稳定指纹;窗口 60-250 日,换手低。
+      数学检查:day_var(Ret) 约 1e-6 量级,cross_corr 的分母为 sqrt(var_x var_y)+EPS,var_x·var_y 约 1e-13~1e-8,对低离散股票 EPS 有可见的压缩偏差、但上一轮审计已确认没有主导全截面(不是数值伪影),相关值域 [-1,1] 不爆;整窗停牌时为 0 并列在中间,靠列序打破(规则允许);全部只用 t 日及以前,无前视;最长窗口 250 日,热身期不主导。
+      风险:C 的 train 段为负(杠杆方向在 2018-2020 与之后相反),若为真则 E 无 head,下一步不再押 C。
+    seeds:
+      - 'cross_ema(cross_corr(day_var(Ret), day_sum(Ret), 60), 20)'
+      - 'cross_mean(cross_corr(day_var(Ret), day_sum(Ret), 60), 20)'
+      - 'cross_zscore(cross_corr(day_var(Ret), day_sum(Ret), 60), 120)'
+      - 'sub(cross_corr(day_var(Ret), day_sum(Ret), 60), cross_corr(day_var(Ret), day_sum(Ret), 250))'
+      - 'cs_bucket_demean(cross_corr(day_var(Ret), day_sum(Ret), 60), ListAge)'
+      - 'cs_bucket_demean(cross_ema(cross_corr(day_var(Ret), day_sum(Ret), 60), 20), BoardCode)'
+      - 'cs_first_low20(cross_corr(day_var(Ret), day_sum(Ret), 60), cross_mean(day_std(Ret), 20))'
+      - 'cs_flip_by_state(cross_corr(day_var(Ret), day_sum(Ret), 60), day_sum(Ret))'
+      - 'add(cross_corr(day_var(Ret), day_sum(Ret), 60), cross_corr(day_var(Ret), day_sum(Ret), 120))'
+      - 'sub(cross_corr(day_var(Ret), day_sum(Ret), 60), cross_corr(day_var(Ret), day_sum(Volume), 60))'
+      - 'ts_rank(cross_corr(day_var(Ret), day_sum(Ret), 60), 120)'
+      - 'cross_mean(sub(cross_corr(day_var(Ret), day_sum(Ret), 60), cross_mean(cross_corr(day_var(Ret), day_sum(Ret), 60), 250)), 20)'
+  - type: N
+    hypothesis: >-
+      机制:日内分钟分布「右尾 / 左尾的形状」,用新算子 day_es_ratio_hi / day_es_ratio_lo:前者 = 超过当日 95% 分位的那些分钟的均值 / 该分位,后者 = 低于 5% 分位的分钟均值 / 该分位。
+      比值无量纲,读的是极端分钟比分位「再极端多少」:接近 1 = 尾部平滑,大 = 少数分钟脉冲式爆发(对 Volume / Amt 就是大单 / 算法单脉冲,对 Ret 就是跳跃 / 彩票型分钟)。
+      三类读数:(A) 成交脉冲:day_es_ratio_hi(Volume) / (Amt) 的 20-60 日均值 = 个股被大块订单点状冲击的程度,与成交水平(流动性控制)分开;
+      (B) 收益尾部不对称:sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)) = 右尾减左尾的跳跃偏向(正跳跃多 = 彩票型,通常被高估);(C) 绝对收益尾部 day_es_ratio_hi(abs_(Ret)) 的 120 日 z 分数,= 跳跃强度的慢变属性。
+      另外 cross_corr(day_es_ratio_hi(Ret), day_sum(Ret), 60) 把右尾脉冲与当日收益联系起来(涨时跳跃)。全部再做 cross_mean / cross_ema / cross_zscore 慢化,或在市值分桶内去均值。
+      为什么与库不同:这两个算子是库建成之后才加入的,库里 5583 条没有一条含它们,骨架不会重复;最近的亲戚是手写库里 erm_* 一类,但那类用 +1e-6 做分母,把涨停 / 死亡日(分位 = 0)变成 1e4 的爆点,读的是「有没有过一字板」;新算子在分位近零时输出缺失,读的是真正的尾部形状。本批 head 读的是 day_quantile / day_min / day_var 等单点水平(且被流动性 / 波动控制吃掉),这里是尾部均值与分位之比,是形状不是水平。
+      为什么样本外还会在:尾部脉冲是参与者结构属性(大单拆分习惯、机构与散户占比,Barber-Odean 与 MAX 彩票偏好),在数周内名次保持;15bp 成本下 20-60 日均值换手低。
+      数学检查:分位近零(|q|<1e-8)时输出缺失而非 1e4,没有近零分母爆点;Volume / Amt 95% 分位为正,比值 ≥ 1 有界;Ret 的 5% 分位为负,比值 ≥ 1;全部只用当日分钟,无前视;窗口最长 120 日,热身期不主导。
+      风险:Volume 尾部形状与流动性、波动都有相关,残差化后可能只剩成本;右尾脉冲与涨停日重合,涨停日 Ret 分位为 0 会被置缺失而丢票。
+    inspired_by: 'M3 批:head 全部是 day_quantile_q75 / cross_quantile / 分位和极值(inv(High)、nt_ts_stddev)的单点读数,全亏(-1.7 左右),说明分位水平在新尺子下没有 alpha;把「分位」换成「分位以外尾部均值 / 分位」,读形状而不是水平。'
+    seeds:
+      - 'cross_mean(day_es_ratio_hi(Ret), 20)'
+      - 'cross_mean(day_es_ratio_lo(Ret), 20)'
+      - 'cross_mean(sub(day_es_ratio_hi(Ret), day_es_ratio_lo(Ret)), 20)'
+      - 'cross_mean(day_es_ratio_hi(Volume), 20)'
+      - 'cross_mean(day_es_ratio_hi(Amt), 60)'
+      - 'cross_zscore(day_es_ratio_hi(abs_(Ret)), 120)'
+      - 'sub(cross_mean(day_es_ratio_hi(Ret), 20), cross_mean(day_es_ratio_hi(Ret), 120))'
+      - 'cs_bucket_demean(cross_mean(day_es_ratio_hi(Volume), 20), LogFloatCap)'
+      - 'cross_corr(day_es_ratio_hi(Ret), day_sum(Ret), 60)'
+      - 'cross_ema(day_es_ratio_hi(Ret), 20)'
+      - 'cross_mean(sub(day_es_ratio_hi(Volume), day_es_ratio_lo(Ret)), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_es_ratio_hi(Ret), 60), sub(LogFloatCap, LogFloatShares))'
