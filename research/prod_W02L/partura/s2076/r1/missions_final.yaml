@@ -1,0 +1,46 @@
+seed: 2076
+round: 1
+slots:
+- type: E
+  core: day_var(pow_2_5(pow_2_5(Ret)))
+  hypothesis: Core = head 1 子树:pow_2_5 对负数返回缺失,所以 pow_2_5(pow_2_5(Ret)) 只保留上涨分钟的 Ret^6.25,day_var
+    就是当天上涨分钟尖峰的离散度,即「日内向上跳跃 / 彩票性」强度(MAX 效应的分钟版,偏好彩票的散户会过度追捧导致之后被低估)。现有 head 把它用 ts_sum
+    10 再 cross_sum 241 做成长期水平,train -0.25 / valid +0.07,水平型写法基本被市值和已知波动族吸收。这次的外围完全不同:不取水平,取「彩票性的变化
+    / 惊喜」:短窗 EMA 减长窗 EMA、截面 zscore、cross_stddev(彩票性的不稳定)、分位尾部均值、以及用当天总方差归一。机制是散户注意力随跳跃爆发而突变,边际变化比长期水平更能分出下一阶段的过度定价;减长窗均值相当于去掉股票自身的常态水平(对市值/波动的静态暴露),所以残差后仍留下信息。样本外会在:行为偏差(彩票偏好
+    / 注意力)持久,且 A 股散户占比高。
+  seeds:
+  - sub(cross_mean(day_var(pow_2_5(pow_2_5(Ret))), 5), cross_mean(day_var(pow_2_5(pow_2_5(Ret))),
+    60))
+  - cross_zscore(day_var(pow_2_5(pow_2_5(Ret))), 40)
+  - cross_zscore(day_var(pow_2_5(pow_2_5(Ret))), 20)
+  - cross_stddev(day_var(pow_2_5(pow_2_5(Ret))), 20)
+  - cross_tail_mean_q75(day_var(pow_2_5(pow_2_5(Ret))), 20)
+  - cross_max(day_var(pow_2_5(pow_2_5(Ret))), 10)
+  - sub(cross_zscore(day_var(pow_2_5(pow_2_5(Ret))), 20), cross_zscore(day_var(Ret),
+    20))
+  - mul(cross_mean(day_var(pow_2_5(pow_2_5(Ret))), 20), day_pos_ratio(Ret))
+- type: N
+  hypothesis: 新想法:分钟级「成交额 -> 下一分钟收益」的引领滞后相关。day_corr(Ret, in_delay(Amt, 1)) 度量当天每一分钟的收益与前一分钟成交额的相关:为正说明放量之后价格继续沿推动方向走(知情交易者分拆订单、冲击逐步被吸收,动量型),为负说明放量之后回吐(流动性冲击型
+    / 噪声交易者推高后反转)。库里的 day_corr 类 head 都是同分钟的 Ret 与 Amt(或其波动的平滑量)的同期相关,没有时间错位;错位后度量的是价格发现的速度,而不是同期的量价关系。in_delay
+    空出的前 d 分钟是缺失(不是 -1 填充),day_corr 只用有效分钟,没有数值伪影。日间再用 cross_mean / cross_ema 平均去噪:持续地处于「放量后回吐」状态的股票,其做市成本
+    / 逆向选择成本更高,价格被短期冲击推偏,之后会被纠正;这类微观结构特征与市值、波动、20 日反转暴露关系不大。样本外会在:微观结构的反应方式由市场参与者结构决定,变化慢。
+  inspired_by: 批里的 day_corr(波动平滑量, Amt) head 与 day_cov(Low, Ret)、day_autocorr_n1(High)
+    等分钟级相关类候选:它们都没有做量对后续收益的错位,这里补上。
+  seeds:
+  - cross_mean(day_corr(Ret, in_delay(Amt, 1)), 20)
+  - cross_mean(day_corr(Ret, in_delay(Amt, 3)), 20)
+  - cross_ema(day_corr(Ret, in_delay(Amt, 1)), 10)
+  - cross_mean(day_corr(Ret, in_delay(Volume, 1)), 20)
+  - cross_mean(day_corr(Ret, in_delay(Amt, 5)), 40)
+  - cross_mean(day_corr(in_delay(Ret, 1), Amt), 20)
+  - cross_mean(day_corr(Ret, in_delay(in_stddev_rolling(Ret, 5), 1)), 20)
+  - sub(cross_mean(day_corr(Ret, in_delay(Amt, 1)), 5), cross_mean(day_corr(Ret, in_delay(Amt,
+    1)), 40))
+  - cross_zscore(day_corr(Ret, in_delay(Amt, 1)), 40)
+  - cross_stddev(day_corr(Ret, in_delay(Amt, 1)), 20)
+  - sub(cross_mean(day_corr(Ret, in_delay(Amt, 1)), 20), cross_mean(day_corr(Ret,
+    Amt), 20))
+R: []
+audit:
+  attempts: 1
+  file: audit_1.yaml

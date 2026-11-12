@@ -1,0 +1,16 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: [2, 8, 9, 10]
+    reasons: '核心 day_var(pow_2_5(pow_2_5(Ret))) 是 head 1 的子树(loc 表 heads 第 1 条 cross_sum(ts_sum(core,10),241)),与 5 个控制的 |ρ| 最大为 vol 0.55,低于 0.8,核心门槛通过。机制逐个算子核对:pow_2_5 对负数返回缺失(rules §4),内层只保留上涨分钟,外层 Ret^6.25 再次只留上涨分钟,day_var 就是这些上涨分钟 x=Ret^6.25 的日内方差。指数 12.5 作用在平方上,方差近似由当天最大的一个上涨分钟决定,所以它实际是一个单一极值统计量(MAX / 彩票偏好的分钟版),这点要在解释时说清,但不是数学问题。数值注记:生产面板是 float32(partura/panels.py:343),day_std 在输入精度下计算(common.py:406-408,平方后),单分钟上涨约 0.1% 以下的股票日,x 的平方落入次正规区或下溢为 0。这只影响当天上涨分钟全都极小的低尾股票日,不主导截面排序,不挡。创新度:存活种子都是核心的变化、惊喜、离散或尾部写法,与 head 1 的 |ρ| 为 0.23–0.44(seed 1 0.44、seed 3 0.40、seed 4 0.28、seed 5 0.32、seed 6 0.41、seed 7 0.34、seed 12 0.41),残差后 |ρ| 为 0.23–0.34;与 vol 的 |ρ| 最高 0.67(seed 6、12),有一部分是 vol 的侧面但不是同一个东西。创新度给 4。划掉:seed 2 的 cross_ema 短长差与 head 1 |ρ| 0.73(≥0.7,库禁令自动划掉);seed 10 的 cross_ema(core,10) 与 head 1 |ρ| 0.79(自动划掉);seed 9 的 sub(cross_mean(core,10), cross_mean(day_var(Ret),10)) 与 vol |ρ| 0.94(≥0.8,自动划掉),且数学上两项数量级差约 1e-30 以上,结果几乎等于 -cross_mean(day_var(Ret),10),定义坏掉;seed 8 的 sub(day_var(core), day_var(Ret)) 同样数值上约等于 -day_var(Ret),与 vol |ρ| 0.77,减总方差的归一化意图没有实现,按定义坏掉划掉。存活 8 个(1、3、4、5、6、7、11、12),≥4。seed 11 的 sub(cross_zscore(core,20), cross_zscore(day_var(Ret),20)) 两边都是截面单位尺度的 z 分数,没有 seed 8、9 那种数量级问题,保留,与 head 1 |ρ| 0.02、vol 0.08。表格里 3、4、5 的「废品」标记不是 rules 定义的划掉条件,这里没有采用。如果它有 alpha,最可能来自彩票性的边际变化(散户注意力在跳跃之后的突变),而不是 head 1 那样的长期水平。'
+
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7]
+    reasons: 'N 位的核心结构是 day_corr(Ret_t, Amt_{t-1}),即同日内收益与前一分钟成交额的相关,时间错位一分钟。机制逐个核对:in_delay(x,d) 的前 d 分钟填 NaN、不是 -1(AlphaCube dt_in.py:266-276),result[t]=x[t-d] 取的是过去的值,没有前视;day_corr 只用两者都有效的分钟(dt_day.py:231-245)。与 3 个 head 的 |ρ| 全部不超过 0.27(最高 seed 6 与 head 3 的 0.27,其余 0.00–0.22),与 5 个控制的 |ρ| 最高为 seed 6 对 rev 的 0.59、seed 12 对 rev 的 0.49,说明与库里同期量价的 head 不是同一个东西,时间错位是真正的新结构。创新度给 4;seed 6 的 cross_mean(day_corr(in_delay(Ret,1),Amt),20) 与 20 日反转控制 |ρ| 0.59,机制没有说清,但不能判成同一个东西,保留。数值注记:PI 写的「day_corr 没有数值伪影」不完整,若当天 Ret 或 Amt 是常数(一字板、零成交),day_corr 返回 0 而不是缺失(dt_day.py:231-245,rules §4),会把连板或停牌型股票日拉向 0;只影响少数股票日,20 日均值进一步稀释,不主导排序,不挡,合理度给 4。划掉:seed 7 的 cross_mean(day_corr(Ret, in_delay(in_demean(Amt),1)),20)。in_demean(Amt) = Amt - in_mean_full(Amt),in_mean_full 是每只股票日的分钟均值(dt_in.py:186-187、191-192),沿分钟轴是常数;in_delay 只平移;day_corr 内部去均值(dt_day.py:231-245),所以加减常数不改变相关,seed 7 与 seed 1 的截面秩完全相同,属于重复,划掉。其余 11 个种子与 head 的 |ρ| 均低于 0.7、与控制的 |ρ| 均低于 0.8,保留。如果它有 alpha,最可能来自放量分钟之后的价格续行(知情拆单、冲击被逐步吸收)或回吐(流动性冲击、噪声交易者推高后回落),是微观结构的反应速度,与市值、波动、20 日反转关系不大。'
+
+R: []
+summary: '两个位都通过:a 为 E 位,核心是 head 1 的子树,划掉 2、8、9、10,存活 8 个(创新 4、合理 4);b 为 N 位,时间错位的分钟 day_corr 结构与库里 head 不同,划掉重复的 seed 7,存活 11 个(创新 4、合理 4);无 R 组。数值注记(不挡):a 的上涨分钟 Ret^6.25 方差在 float32 下对低尾股票日下溢;b 的 day_corr 在一字板或零成交日返回 0。'
