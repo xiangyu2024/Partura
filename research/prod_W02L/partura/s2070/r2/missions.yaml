@@ -1,0 +1,54 @@
+seed: 2070
+round: 2
+slots:
+- type: E
+  core: ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20)
+  hypothesis: 'Core = rolling-20d regression residual of the daily last-VWAP level (back-adjusted price, so the level path is a cumulative-return path) on the daily share of zero-volume minutes (halt /
+    limit-lock / non-trading proxy). It is the snapshot''s most enriched subtree (mean score gap +1.4, p 0.001, 7 candidates): price displacement from its 20d trend after removing the part that moves with
+    trading halts, i.e. mid-horizon reversal/continuation of non-halt price moves. Prior round only used it via ts_mean(...,40) and nesting it inside itself (best -0.08, valid +0.17), and only smoothed
+    it. This round the periphery changes the SCALE and TIME structure instead: (a) divide by the stock''s own 20d price volatility or price level (a unitless z-score of displacement; the raw residual is
+    in price units and so is dominated by high-priced stocks), (b) own-history demeaning / delta / ts_rank of the residual (abnormal rather than persistent displacement), (c) conditional on money flow (ts_corr
+    with daily Amt, division by average turnover = displacement per unit of traded value, an Amihud-like impact reading), (d) interaction with the stock''s trailing halt frequency (stocks that are often
+    untradeable carry larger liquidity premia and delayed price adjustment), (e) a second regression removing day_std(Ret) to strip the volatility-driven part. These are mechanisms not tried in the snapshot
+    (which only smoothed with ts_mean/nested regres). Out of sample: delayed price adjustment in thinly/irregularly traded A-share names and retail overreaction to displacement are structural, and the rank-based
+    reward removes level scaling so the z-scored versions should be stable.'
+  seeds:
+  - div(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_std(day_last(Vwap), 20))
+  - div(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), day_last(Vwap))
+  - ts_decay_linear(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 10)
+  - ts_rank(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 60)
+  - sub(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_mean(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 60))
+  - sub(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_delay(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 5))
+  - div(ts_mean(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 5), ts_std(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 40))
+  - ts_corr(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), day_sum(Amt), 20)
+  - mul(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_mean(day_zero_ratio(Volume), 20))
+  - ts_skew(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 30)
+  - cross_mean(div(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_std(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 20)), 10)
+  - ts_regres(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), day_std(Ret), 40)
+  - div(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), ts_mean(day_sum(Amt), 20))
+  - ts_min(ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20), 20)
+- type: N
+  hypothesis: Intraday lead-lag between minute volume/turnover and the NEXT minute's return (information diffusion / order-flow predictability). Per day, correlate minute return at t with minute volume
+    (or amount) at t-1, built without any fill by slicing the two series with offset windows (in_slice(Ret,2,237) vs in_slice(Volume,1,236); end index inclusive, equal length 236, so no lookahead and no
+    in_shift -1 fill artefact). Positive values mean volume bursts are followed by same-direction price moves (continuation of informed flow, slow liquidity provision); negative means volume bursts are
+    followed by reversals (price pressure that mean-reverts; liquidity-provision premium). The reverse direction (volume at t responding to return at t-1) separates volume-chasing retail behaviour from
+    informed flow, and their difference isolates the lead-lag asymmetry. Also minute return autocorrelation (day_autocorr / lagged corr), a classic microstructure bid-ask-bounce / underreaction measure.
+    Different from the r1 N slot (day_skew of Ret*Volume, same-minute day_corr(Ret,Amt)) because those are contemporaneous co-movement statistics, whereas this is a temporal-ordering statistic that the
+    batch's heads (same-minute shapes, level regressions) cannot express. Averaged over 20-60 days to cut noise; the lead-lag structure reflects slow information incorporation by A-share retail and persists
+    structurally. Cross-day smoothing and own-history z-scores are the only post-processing.
+  inspired_by: 'batch 1-2: day_corr(Ret, Amt) is enriched (+1.06, p 0.001) and day_skew(mul(Ret,Volume)) too; both are contemporaneous return-flow co-movements, which suggests the return/volume relation
+    carries signal; we move to its temporal-ordering (lead-lag) version.'
+  seeds:
+  - day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 1, 236))
+  - ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 1, 236)), 20)
+  - ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Amt, 1, 236)), 40)
+  - ts_decay_linear(day_corr(in_slice(Ret, 1, 236), in_slice(Volume, 2, 237)), 10)
+  - sub(ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 1, 236)), 20), ts_mean(day_corr(in_slice(Ret, 1, 236), in_slice(Volume, 2, 237)), 20))
+  - ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Ret, 1, 236)), 20)
+  - ts_mean(day_autocorr(Ret, 1), 20)
+  - ts_mean(day_cov(in_slice(Ret, 2, 237), in_slice(Amt, 1, 236)), 20)
+  - div(ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 1, 236)), 20), ts_std(day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 1, 236)), 60))
+  - ts_mean(day_corr(in_slice(Ret, 2, 237), in_slice(Volume, 0, 235)), 20)
+  - ts_decay_linear(day_corr(in_slice(Vwap, 2, 237), in_slice(Volume, 1, 236)), 10)
+  - ts_mean(day_corr(in_slice(Ret, 5, 237), in_slice(Amt, 0, 232)), 20)
+R: []

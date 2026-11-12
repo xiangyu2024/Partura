@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 3
+    struck_seeds: []
+    reasons: '核心 ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20) 的实际计算方向与任务书描述相反(已核对):rolling_ols(x, y, d) 的 resid = y - (alpha + beta*x)(AlphaCube common.py:643-675;ts_regres 在 nd_ts.py:283 直接取这个 resid)。所以这里算的是「零成交分钟占比」对 20 日价格水平回归后的残差,不是「价格水平对零成交占比」的残差。任务书写的「价格相对趋势的位移、剔除停牌部分」因此不是它算的东西。外围里「除以 ts_std(Vwap) 或 Vwap 得到无量纲 z 分」也不成立:残差单位是占比,除以价格量级只是对价格水平的截面重标度。这是任务书写错,不是数学问题:算子 well-defined,覆盖 0.999,distinct 0.95。核心核对:与快照 head 原始 |ρ| 最大 0.075(day_quantile_q75(mul(High,Ret))),残差 0.048;与 5 个控制均 <= 0.037。核心是否取自定位共性表未核(按指令不读共性表)。外围逐个看:种子 8(ts_corr 与 day_sum(Amt),liq 0.46、known 0.45)、种子 10(ts_skew,liq 0.26)放行,只是与流动性的相关偏高;种子 14(ts_min,liq 0.795、known 0.756)离 0.8 自动划掉的线很近但未达到,保留并监控;种子 12 的 ts_regres 参数顺序与意图相反:算的是 day_std(Ret) 对核心残差回归后的残差(即波动中核心解释不了的那部分),不是「核心去掉波动」,rev 控制 0.362,放行但要注意它的含义。种子 4(ts_rank 60,gate 不过,distinct 0.037)是 60 档 pct 排名的截面并列,十分位分组仍可用,不是数学错误,与第 1 轮审计员对 ts_rank 种子的处理一致,不划。种子 1、2、13 与快照 head 和控制都低(原始 |ρ| <= 0.07,liq <= 0.03),放行。没有种子的 head |ρ| >= 0.7,也没有种子与控制 |ρ| >= 0.8。剩 14 个种子,>= 4,核心与控制均 < 0.8,E 位门槛过。如果它有 alpha,最可能来自:停牌、涨跌停锁定、无成交分钟的占比中,与价格路径无关的那部分,对应延迟定价和非交易期的流动性溢价。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [7]
+    reasons: 'N 位是日内量价领先滞后:in_slice(Ret,2,237) 与 in_slice(Volume,1,236) 逐位配对,即 t 分钟收益对 t-1 分钟成交量。已核对:in_slice 是闭区间切片 x[:, start:end+1](AlphaCube dt_in.py:324),两段长度都是 236,没有 in_shift 的 -1 填充,也没有前视算子,禁用算子未出现。day_corr 对某一方为常数的日返回 0 而不是缺失(dt_day.py:231-245),停牌日与一字板日会把 ts_mean(...,20) 往 0 收缩,对停牌多的票是幅度收缩而非符号翻转,不占主导,不划。相关度表:与快照 6 个 head 的原始 |ρ| 为种子 1 0.029、2 0.152、3 0.145、4 0.183、5 0.199、9 0.121、10 0.080、11 0.134,都在 0.2 以内,与 head 是不同的量,创新度给 4。最近的是种子 6(0.595,残差 0.618)和种子 7(0.581),对应 head add(cross_mean(day_cov(range 形状, Ret 归一), 20), cross_stddev(...)),它们度量的是 Ret 的日内一阶自相关,与该 head 的 Ret 项有交集但不是同一个量;种子 6 对流动性控制 0.403、known 0.368,在 0.7 以下,保留。种子 8 用的是未归一的 day_cov(Ret, Amt)(量纲是收益乘金额),截面排序会偏向大金额股票,liq 控制 0.19,按规则放行,只做监控。种子 4(反向配对)与种子 5(两向差)与种子 1 同族,不是重复。种子 7 与种子 6 重复:day_autocorr(Ret,1)(AlphaCube dt_day.py:333-361)对全部 241 分钟做一阶配对求自相关,种子 6 对 2..237 分钟做同一种配对的 day_corr,两者只差几个分钟的 pair 集合,日度值高度相同,ts_mean 之后基本一致,划掉 7,保留 6。如果它有 alpha,最可能来自:成交量先于价格的信息扩散与慢速反应(种子 1-5、9-11),或分钟收益的一阶负自相关所体现的买卖价差反弹与流动性提供溢价(种子 6)。没有种子 head |ρ| >= 0.7,没有种子与控制 |ρ| >= 0.8。剩 11 个种子,>= 4,通过。'
+R: []
+summary: 'Slot a (E, core ts_regres(day_last(Vwap), day_zero_ratio(Volume), 20)) passes with novelty 4 and soundness 3, no seeds struck: the operator computes the zero-volume-share residual on price level, the reverse of the mission text. Slot b (N, minute volume-return lead-lag) passes with novelty 4 and soundness 4, seed 7 struck as a duplicate of seed 6. No R groups.'
