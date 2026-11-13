@@ -343,3 +343,8 @@
 - 2080 r2 的定位跑了 100 分钟，卡被 3 个 GP 搜索占满(30.8 GB),v0、v1 等视图退到 CPU 上算;2054 r2 同样的情况在 CPU 上拖了 28 小时。
 - 做法：停掉 2080 的 conductor 和定位(旧日志 `logs/_prodloc_s2080_P_r2.log.cpu1112`),起一个等待壳：主机上活着的 GP 搜索 ≤ 2 个时再 `exec` conductor(环境同前、`PARTURA_LOCATE_DEVICE=cuda`)。壳的命令行以 `prod_conductor.sh 2080` 结尾，keeper 视为 conductor 在跑，不会用旧环境重起。conductor 日志里记了两行。
 - 预计 GP 队列约 80 分钟内消化完;GPU 上定位只要几分钟。
+
+## 2026-11-12 19:55 EST — ts_spearman 补算挪到 GPU
+- CPU 上 6 个进程 8.7 小时只算完 4/22(负载 140 的机器);照这个速度要 30 多小时，会卡住建库。
+- 卡空出来后(尾巴只剩 1 个 GP)起了 GPU 补算:`PARTURA_GPU_LOCK=gpus0 PARTURA_GPUS0_WAYS=1`(自己的锁，只占 1 路，不和 GP 抢路),`--device cuda --spearman-only`,日志 `stage0/sp_g1.log`;GPU 上一条 97 秒。
+- 第二个 GPU 进程加 `--steal-min 30`(`stage0/sp_g2.log`),把 CPU 进程占着几个小时的块也接过来算(脚本自带的接手机制，谁先写完用谁，结果相同)。全部 22 块有输出后停掉 CPU 进程，再跑一次 `--rescore`(HANDOFF 第 1 步)。
