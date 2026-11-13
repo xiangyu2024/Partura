@@ -1,33 +1,32 @@
 # W02L 交接(接手先读这个，再读 PROGRESS.md 最上面一节)
 
-更新于 2026-11-10 12:00 EST(服务器 11-11 01:00)。
+更新于 2026-11-12 21:20 EST(服务器 11-13 10:20)。
 
 ## 现在在哪
 
-- **第 0 步**(服务器自己在跑，不用管):已打分 3282 / 5583 条，错误 0,过闸门 2513;A 下 head 6 个,B 下 0 个。`bash scripts/w02l_status.sh`(服务器)看进度。
-- **流**:已建 48 / 80 条;已结束 31 / 240 个流-轮;新 head 17 个(B 下 ≥ 0.5、|ρK| < 0.5),详见服务器 `research/prod_W02L/report.md`(本机有拷贝)。
-- **GP 任务**:已推送的流-轮在服务器 `prod_conductor` 里排队 / 运行(3 路显卡，中位 27 分钟一次搜索)。服务器自己跑，不用管。
+- **轮次:** 240 / 240 计划已推送;已结束 239,最后一个 2080 r3 在服务器上搜索。80 条流全部建好。
+- **新 head(尺子 D ≥ 0.5、|ρK| < 0.5):** 208 个(不重复表达式),D 打分到第 11 批(`d_scores.jsonl` 641 行)。最好 2034 r3 b +1.44、2029 +1.26;
+  11-12 晚新出一族 2079 r3(上一分钟成交额领先下一分钟收益的日内相关)D +1.07。详见 `report.md`。
+- **第 0 步 ts_spearman 补算:** 9 / 22。6 个 CPU 进程在跑(慢);`tmp/sp_restart2.sh`(本机 `scripts/server/w02l_sp_restart2.sh`)在 2080 r3 推送后、
+  GP ≤ 2 个时起一个 GPU 补算进程(`PARTURA_GPU_LOCK=gpus0`,`--steal-min 30`,日志 `stage0/sp_g3.log`)。22 块全有输出后停 CPU 进程，再跑一次 `--rescore`。
+- **进度看板:** https://claude.ai/artifact/D9UG9RbFhTRC53HkQhV1WB;`scripts/w02l_progress.py`(服务器)+ `scripts/w02l_progress_fetch.sh`(本机)。
 
-## 本机流水线里正在半路的(如果会话断了，按这个补)
+## 剩下的步骤(按顺序)
+
+1. 等 2080 r3 结束(240/240),跑最后一批尺子 D(`w02l_report.py --collect-d` → `w02l_backtest.py --d-jsonl`),更新 report。
+2. ts_spearman 补完 → `w02l_stage0.py ... --rescore`。
+3. **补跑**(用户定：全部轮次结束后再跑，不和正常轮次重叠):`source tmp/w02l_env.sh; nohup bash scripts/server/w02l_makeup.sh research/prod_W02L/makeup_list.txt &`
+   (37 个 GP 位 / 33 轮;做法见 MAKEUP.md 顶部)。再补评 MAKEUP.md 里的 2 个 R 组。补跑产出照常算 D。
+4. 建 W02L 库 + PLAN §7 判读：两层合成 C(L∪X∪W02L) vs C(L∪X),拟合到 2025-12-31,2026 test 只读一次并记账(`ledger_prod.json`)。
+   参考 W01 的 `scripts/prod_two_level.py`(build / read / overlay)。建库时的检查清单见 PROGRESS(34 条坏 in_regres、day_pdf_quantile_single(left=False)、
+   2048 r2 a 的市值非线性、饱和的 day_product head、近重复去重 |ρ| ≥ 0.7)。
+5. 写 RESULT.md。
+
+## 本机流水线里正在半路的
 
 | 轮 | 流 | 停在 | 补的办法 |
 |---|---|---|---|
-| — | — | 本机这边没有半路的(都已推送) | 直接 `bash scripts/w02l_pending.sh` 看新 READY 的 |
-
-每个流拿到 `partura/s<流>/r<k>/corr_1.md` 以后:工作流 stage `audit`,然后 `prod_round.sh finish <k> "<流>"`。
-工作流:`w02l-round.js`,args `{round: k, seeds: [数字, ...], stage: "pi" | "audit"}`,**seeds 要传数字**。PI 用 Sonnet 5.5,审计用 Haiku 5.5。
-每批的 token 记到 `TOKENS.md`。
-
-然后循环:`bash scripts/w02l_pending.sh` 列出新 READY 的流 → `prod_round.sh fetch` → PI → corr → audit → finish。
-**fetch 必须先于派 PI**(11-10 漏过一次:PI 要么拒绝，要么只凭上一轮快照写计划;后者要删掉 missions.yaml 和 notebook 新加的一节再重派)。
-
-## 第 0 步结束以后
-
-1. `--spearman-only` 补算 30 条 `ts_spearman`,然后再跑一次 `w02l_stage0.py ... --rescore`(给这些行补 D 和新闸门);
-2. 重跑 MAKEUP.md 里的搜索;
-3. 建剩下 32 条流;
-4. 全部轮次结束后建 W02L 库，按 PLAN §7:两层合成并集 vs C(L∪X),拟合到 2025-12-31,test 2026 只读一次并记账;
-5. 写 RESULT.md。
+| — | — | 没有(240 轮都已推送) | — |
 
 ## 用户 11-10 定下的四件事(都已实现，在跑)
 
