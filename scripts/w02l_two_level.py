@@ -1,7 +1,7 @@
 """PROD W02L: the library and the one 2026 read of PLAN section 7, done as research/prod_W02L/LIBRARY_PLAN.md says (written before
 any of this ran).  Server; `source tmp/w02l_env.sh` first.
 
-    python scripts/w02l_two_level.py signals [--pool LX|W] [--shard k/n] [--device cuda|cpu]
+    python scripts/w02l_two_level.py signals [--pool LX|W] [--shard k/n] [--device cuda|cpu] [--cached-only] [--reverse]
         pools LX (struct/members.csv, the 5583 parseable members of the two libraries) and W (library/heads_D.json, every D-head,
         from scripts/w02l_report.py --heads-json); each expression's daily z-rank signal (steer.signal_input) on the whole view
         2018-01-02 ~ 2026-09-16 -> runs/prod_W02L/two_level/_signals/<sha1>.npy, plus a copy cut at 2025-12-31 for the scorer.
@@ -117,6 +117,17 @@ def signals():
         allx = list(dict.fromkeys({"LX": lx, "W": w}[opt("--pool")]))
     k_, n_ = (int(x) for x in opt("--shard", "0/1").split("/"))         # --shard k/n: this process takes every n-th, from k
     todo = [e for i, e in enumerate(allx) if i % n_ == k_ and (not (sd / f"{key(e)}.npy").is_file() or not (cd / f"{key(e)}.npy").is_file())]
+    if "--cached-only" in argv:                                          # only what the shared cache already holds (a helper beside
+        from partura.panels import parse_research                       # shards that are busy evaluating uncached trees on the CPU)
+        def cached(e):
+            try:
+                p = ps._cache_path(parse_research(e, n_minutes=ps.store.n_minutes).key())
+            except Exception:                                            # noqa: BLE001
+                return False
+            return p is not None and p.is_file()
+        todo = [e for e in todo if cached(e)]
+    if "--reverse" in argv:                                              # from the other end, to meet the shards rather than race them
+        todo = todo[::-1]
     bad, t0 = {}, time.time()
     with slot():
         mem = MemoryGuard(self_limit_gb=float(os.environ.get("PARTURA_SELF_LIMIT_GB", 150)),
@@ -129,8 +140,10 @@ def signals():
                     bad[e] = ps.errors.get(f"c{j}", "missing")
                     continue
                 s = steer.signal_input(P[f"c{j}"]).astype(np.float32)
-                np.save(sd / f"{key(e)}.npy", s)
-                np.save(cd / f"{key(e)}.npy", np.ascontiguousarray(s[:split]))
+                for dst, arr in ((sd / f"{key(e)}.npy", s), (cd / f"{key(e)}.npy", np.ascontiguousarray(s[:split]))):
+                    tmp = dst.with_name(f".{dst.stem}.{os.getpid()}.tmp.npy")   # atomic: two processes may write the same file
+                    np.save(tmp, arr)
+                    os.replace(tmp, dst)
             ps._mem.clear()
             if (i // 8) % 25 == 0 or i + 8 >= len(todo):
                 print(f"[w2] signals {min(i + 8, len(todo))}/{len(todo)} ({time.time() - t0:.0f}s, {len(bad)} failed)", flush=True)
