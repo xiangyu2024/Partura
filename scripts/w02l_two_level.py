@@ -186,7 +186,9 @@ def score():
     _, cut_dates = cut_view_dates()
     failed = failed_signals(allow_missing="--allow-missing" in argv)
     n = len(cut_dates)
-    frac = (n - 0.5) / n                                                 # int(n * frac) = n - 1: train = all but the last day of 2025
+    # the scorer's "test" columns: the last 20 days of 2025 (its health check wants coverage there, and the last two days have no
+    # label on the cut view); selection reads training columns only, so train = 2018-01-02 .. the 21st-last day of 2025
+    frac = (n - 20 + 0.5) / n                                            # int(n * frac) = n - 20
     scored_lx = set()
     if (W / "score_LX" / "manifest.csv").is_file():
         scored_lx = {r["expression"] for r in csv.DictReader(open(W / "score_LX" / "manifest.csv", encoding="utf-8"))}
