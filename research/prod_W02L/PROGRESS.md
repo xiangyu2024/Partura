@@ -425,3 +425,10 @@
 - 问用户在哪段数据上检验(服务器数据只到 2026-09-16),用户拒绝回答;按既有规矩 2026 不再读。
 - SYNTH_PLAN.md 先写下(e39c9bb),再建。`scripts/w02l_synth.py build|describe`。S 收 13 个、S_nested 收 15 个 head。
 - 描述:valid 上 S_nested − C_LX +2.25 个点(t 1.02)。但多头更偏小盘(市值分位 0.25 对 0.30),2024 年初微盘踩踏回撤 −16.9% 对 −9.2%,夏普略低。见 synth.md。
+
+## 2026-11-13 08:45 ~ 09:00 EST — W02L 因子 + 两个冠军信号的合成(用户要求)
+- COMBO_PLAN.md 先写下(7806361),再建。`scripts/w02l_combo.py prep|build|describe`,服务器 `tmp/w2tl/combo_run.sh`,日志 `tmp/w2tl/combo.log`。
+- 冠军打分:手写库 rank IC 0.059、换手 0.55(适应度 −0.019);挖掘 0.061、0.34(0.013)。都以单成员族进入(过 |rank IC| 门槛)。
+- C_WK 33 族 175 条;C_WK_ng 79 族 246 条。
+- 描述:nested valid C_WK − C_K −0.95 个点(t −0.72),没有增益;C_WK~C_K 秩相关 0.958;C_WK − C_LX −5.19(t −2.67)。2026 没读。
+- 看板加了 synth / combo 两行。
