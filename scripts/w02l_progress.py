@@ -99,9 +99,18 @@ try:
 except OSError:
     pass
 # makeup
-started = 0
+started, mk_done, mk_ok = 0, 0, 0
 if os.path.exists(f"{D}/makeup_started.txt"):
-    started = sum(1 for l in open(f"{D}/makeup_started.txt") if l.strip())
+    for l in open(f"{D}/makeup_started.txt"):
+        m = re.match(r"s(\d+) r(\d) started (\S+)", l.strip())
+        if not m:
+            continue
+        started += 1
+        t0 = dt.datetime.strptime(m.group(3), "%Y-%m-%d_%H:%M:%S").timestamp()
+        f = f"{D}/arms/s{m.group(1)}_P_r{m.group(2)}.DONE"
+        if os.path.exists(f) and os.path.getmtime(f) > t0:        # the round's mission ran again and wrote its DONE
+            mk_done += 1
+            mk_ok += " 98" not in open(f).read()
 makeup_running = bool(procs("w02l_makeup.sh"))
 result_done = os.path.exists(f"{D}/RESULT.md")
 # the library (scripts/w02l_two_level.py): signals made, then scored, then built
@@ -131,8 +140,8 @@ stages = [
      "note": f"在搜索的 {len(plans - set(done))} 轮"},
     {"key": "dscore", "step": "尺子 D 打分", "done": (b_pass - d_pending) if b_pass is not None else 0,
      "total": b_pass or 0, "unit": "个候选", "note": "尺子 B 过线的候选，截至上次回测报告"},
-    {"key": "makeup", "step": "补跑(坏掉的 GP 任务位)", "done": started, "total": N_MAKEUP_ROUNDS, "unit": "轮",
-     "note": f"{N_MAKEUP_SLOTS} 个任务位;全部轮次结束后再跑(用户定)"},
+    {"key": "makeup", "step": "补跑(坏掉的 GP 任务位)", "done": mk_done, "total": N_MAKEUP_ROUNDS, "unit": "轮",
+     "note": f"{N_MAKEUP_SLOTS} 个任务位;已开跑 {started} 轮，跑完 {mk_done} 轮(其中成功 {mk_ok} 轮)"},
     {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": "条信号", "note": lib_note},
     {"key": "test", "step": "读一次 2026 测试集", "done": 0, "total": 1, "unit": "", "note": "按事先写好的规则，只读一次"},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
