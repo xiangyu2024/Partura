@@ -13,7 +13,8 @@ any of this ran).  Server; `source tmp/w02l_env.sh` first.
         pools LX, LXW = LX + W, W with the full-length signals and the scorer's rows; AlphaCube's pick_families (as is = main,
         and without the small-family gate = description) and build (ridge inside a family, lstsq across) fitted on the label up
         to 2025-12-31 (computed on the cut view) -> C_<pool>{,_ng}.npy.  Nothing after 2025-12-31 enters any fit or choice.
-    python scripts/w02l_two_level.py read
+    python scripts/w02l_two_level.py read [--dry]
+        (--dry: a code check on the view cut at 2025-12-31, no ledger, nothing of 2026)
         THE ONE READ OF 2026 (ledgered in research/prod_W02L/ledger_prod.json; refuses to run twice): the books of every signal,
         the paired daily differences of PLAN section 7, the overlay on the two champions; -> research/prod_W02L/two_level.{json,md}.
 """
@@ -331,24 +332,45 @@ def build():
 
 # ---------------------------------------------------------------------------------------------------------------- read
 def read():
-    out_json, out_md = D / "two_level.json", D / "two_level.md"
-    if out_json.is_file() or (D / "two_level.started").is_file():
-        raise SystemExit("the 2026 read has been done (or started) already: PLAN section 7 allows one read")
-    (D / "two_level.started").write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+    """--dry: a code check of this function that cannot touch 2026 -- the view cut at 2025-12-31, 2023-08-08 ~ 2025-12-31 standing
+    in for the test segment (the C_* fits cover it, so its numbers mean nothing), no ledger entry, no started mark, output in
+    tmp/w2tl/read_dry.{json,md}."""
+    dry = "--dry" in argv
+    if dry:
+        out_json, out_md = PARTURA_ROOT / "tmp" / "w2tl" / "read_dry.json", PARTURA_ROOT / "tmp" / "w2tl" / "read_dry.md"
+    else:
+        out_json, out_md = D / "two_level.json", D / "two_level.md"
+        if out_json.is_file() or (D / "two_level.started").is_file():
+            raise SystemExit("the 2026 read has been done (or started) already: PLAN section 7 allows one read")
+        (D / "two_level.started").write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
     from alphacube.label import Label, open_vwap15
     from alphacube.metrics import long_short_weights, portfolio_returns, zscore_rows
     from combine_two_level import blend, fit_weights
-    view, dates, split = full_view()
-    tgt = Label("open_vwap15", 1, buyable=True).compute(view, price=open_vwap15(view)).astype(np.float64)
-    fit = tgt.copy()
-    fit[split:] = np.nan
+    if dry:
+        _, dates, split = full_view()                                # the full view's calendar only; the label from the cut view
+        dates = dates[:split]
+        tgt = fit_target(split)
+    else:
+        view, dates, split = full_view()
+        tgt = Label("open_vwap15", 1, buyable=True).compute(view, price=open_vwap15(view)).astype(np.float64)
+    n_days = len(dates)
     ix = lambda d_: int(np.searchsorted(dates, d_))                 # noqa: E731
-    us, va, te = slice(0, split), slice(ix(VALID), split), slice(split, len(dates))
+    if dry:
+        fit_end = ix(VALID)
+        us, va, te = slice(0, fit_end), slice(ix("20220101"), fit_end), slice(fit_end, n_days)
+    else:
+        fit_end = split
+        us, va, te = slice(0, split), slice(ix(VALID), split), slice(split, n_days)
+    fit = tgt.copy()
+    fit[fit_end:] = np.nan
     SEG = {"insample": us, "valid": va, "test": te}
 
-    def oriented(sig):
-        ic = dg.ic_row(sig[us], tgt[us], target_ranks=dg.rank_rows(tgt[us]))
+    def orient(sig, seg):
+        ic = dg.ic_row(sig[seg], tgt[seg], target_ranks=dg.rank_rows(tgt[seg]))
         return (1.0 if not np.isfinite(ic["rank_ic"]) or ic["rank_ic"] >= 0 else -1.0) * sig
+
+    def oriented(sig):
+        return orient(sig, us)
 
     def daily(sig, hl_lo, hl_ls):
         sm_lo, sm_ls = bk.smoothed(sig, hl_lo), bk.smoothed(sig, hl_ls)
@@ -361,18 +383,40 @@ def read():
             return {"ann": float("nan"), "ir": float("nan"), "t": float("nan"), "n": int(f.size)}
         return {"ann": float(f.mean() * 252), "ir": float(f.mean() / f.std() * np.sqrt(252)), "t": float(f.mean() / f.std() * np.sqrt(f.size)), "n": int(f.size)}
 
-    res = {"plan": "research/prod_W02L/PLAN.md §7 + LIBRARY_PLAN.md", "segments": {k: [str(dates[v.start]), str(dates[v.stop - 1])] for k, v in SEG.items()},
+    res = {"plan": "research/prod_W02L/PLAN.md §7 + LIBRARY_PLAN.md", "dry": dry,
+           "segments": {k: [str(dates[v.start]), str(dates[v.stop - 1])] for k, v in SEG.items()},
            "build": json.loads((W / "build.json").read_text(encoding="utf-8")), "check": {}, "signals": {}, "paired": {}, "overlay": {}}
-    SIG = {n: oriented(np.load(W / f"{n}.npy").astype(np.float64)) for n in ("C_LX", "C_LXW", "C_W", "C_LX_ng", "C_LXW_ng", "C_W_ng")}
+    def load_c(n):                                                  # --dry before every C_* is built: stand in C_LX (a code check only)
+        f = W / f"{n}.npy"
+        if dry and not f.is_file():
+            res.setdefault("dry_stand_ins", []).append(n)
+            f = W / "C_LX.npy"
+        return oriented(np.load(f)[:n_days].astype(np.float64))
+    SIG = {n: load_c(n) for n in ("C_LX", "C_LXW", "C_W", "C_LX_ng", "C_LXW_ng", "C_W_ng")}
     with slot():
         mem = MemoryGuard(self_limit_gb=float(os.environ.get("PARTURA_SELF_LIMIT_GB", 150)),
                           cgroup_limit_gb=float(os.environ.get("PARTURA_CGROUP_LIMIT_GB", 850))).start()
-        Ledger(LEDGER).record("test", len(SIG) + 4, "PROD W02L PLAN §7: C(LX ∪ W) − C(LX) two-level (as is = main, _ng = description), C_W alone, "
-                              f"overlay of C_W on the two champions; test {dates[split]}..{dates[-1]}, read once", "w02l_two_level read")
-        for c in CHAMPS:                                             # the champions as recorded (W01), checked before they are used
-            s = np.load(CHAMP_DIR / f"signal_{c}_20260916.npy").astype(np.float64)
-            ok = s.shape == tgt.shape
-            res["check"][c] = {"shape_ok": bool(ok)}
+        if not dry:
+            Ledger(LEDGER).record("test", len(SIG) + 4, "PROD W02L PLAN §7: C(LX ∪ W) − C(LX) two-level (as is = main, _ng = description), "
+                                  f"C_W alone, overlay of C_W on the two champions; test {dates[split]}..{dates[-1]}, read once", "w02l_two_level read")
+        # the champions (LIBRARY_PLAN §5, as W01): on this host's label, do they reproduce the books research/two_level recorded
+        # (in-sample to 2023-08-07; test 2023-08-08 ~ 2025-12-31, forward 2026 -- numbers known before W02L)?  Only then are they used.
+        ref = json.loads((CHAMP_DIR / "two_level_forward_20260916.json").read_text(encoding="utf-8"))
+        us_old = slice(0, ix(VALID))
+        seg_old = {"test": slice(ix(VALID), split)} if dry else {"test": slice(ix(VALID), split), "forward": slice(split, n_days)}
+        for c in CHAMPS:
+            s = np.load(CHAMP_DIR / f"signal_{c}_20260916.npy")[:n_days].astype(np.float64)
+            if s.shape != tgt.shape:
+                res["check"][c] = {"pass": False, "why": f"shape {s.shape} != {tgt.shape}"}
+                continue
+            b = bk.books(orient(s, us_old), tgt, us_old, seg_old)["by_rank"]["long"]
+            rec = ref["signals"][c]
+            got = {k: float(b["splits"][k]["long_ann"]) for k in seg_old}
+            want = {k: float(rec["long"][k]["long_ann"]) for k in seg_old}
+            ok = bool(b["hl"] == rec["hl_long"] and all(abs(got[k] - want[k]) <= 0.005 for k in got))
+            res["check"][c] = {"pass": ok, "hl": [b["hl"], rec["hl_long"]], "long_ann": {k: [got[k], want[k]] for k in got}}
+            print(f"[w2] check {c}: hl {b['hl']} vs {rec['hl_long']}; " + "; ".join(f"{k} {got[k]:+.2%} vs {want[k]:+.2%}" for k in got)
+                  + f" -> {'PASS' if ok else 'FAIL'}", flush=True)
             if ok:
                 SIG[c] = oriented(s)
         KEEP = ("long_ann", "long_sharpe", "long_mdd", "long_turnover", "ls_ann", "ls_sharpe", "ls_mdd")
@@ -382,7 +426,7 @@ def read():
             if c not in SIG:
                 continue
             zc = zscore_rows(SIG[c])
-            wts = fit_weights([zc, zw], fit, us, "lstsq")                # the between-family layer, fitted to 2025-12-31
+            wts = fit_weights([zc, zw], fit, us, "lstsq")                # the between-family layer, fitted on the in-sample segment
             SIG[tag] = blend([zc, zw], wts)
             res["overlay"][tag] = {"weights": [float(wts[0]), float(wts[1])]}
         for name, sig in SIG.items():
@@ -404,6 +448,7 @@ def read():
         q = res["paired"][k]["excess"]["test"]
         return "Partura 让这 5 千多条变好了" if q["t"] >= 2 else "方向一致、证据不够" if q["ann"] > 0 and q["t"] >= 1 else "没有增益" if q["ann"] < 0 else "证据弱"
     res["verdict"] = {k: verdict(k) for k in res["paired"]}
+    out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     out_md.write_text(report(res), encoding="utf-8")
     for k, v in res["paired"].items():
@@ -413,7 +458,7 @@ def read():
 
 def report(res):
     seg = res["segments"]
-    out = [f"# W02L 建库与 2026 判读(PLAN §7,只读一次)\n",
+    out = [("# 演练(--dry):只查代码，数字没有意义(测试段被拟合覆盖)\n" if res.get("dry") else "") + "# W02L 建库与 2026 判读(PLAN §7,只读一次)\n",
            f"样本内 {seg['insample'][0]} ~ {seg['insample'][1]}(定方向、半衰期、所有拟合);valid {seg['valid'][0]} ~ {seg['valid'][1]}(只描述);"
            f"**test {seg['test'][0]} ~ {seg['test'][1]}**。\n",
            f"W02L 库:D-head {res['build']['W_heads']} 个，去重后 {res['build']['W_kept']} 个。\n",
@@ -427,6 +472,10 @@ def report(res):
         x = s["long"]
         out.append(f"| {n} | {s['hl_long']:g} | {x['insample']['long_ann']:+.1%} / {x['insample']['long_sharpe']:.2f} | "
                    f"{x['valid']['long_ann']:+.1%} / {x['valid']['long_sharpe']:.2f} | {x['test']['long_ann']:+.1%} / {x['test']['long_sharpe']:.2f} |")
+    out.append("\n## 冠军核对(本机标签上复现 research/two_level 记录的书;不过就不做叠加)\n")
+    for c, x in res["check"].items():
+        la = "; ".join(f"{k} {v[0]:+.2%} vs 记录 {v[1]:+.2%}" for k, v in (x.get("long_ann") or {}).items())
+        out.append(f"- {c}:{'通过' if x.get('pass') else '没通过'}" + (f"(hl {x['hl'][0]:g} vs {x['hl'][1]:g};{la})" if "hl" in x else f"({x.get('why')})"))
     out.append("\n## 建库\n")
     for k, v in res["build"]["pools"].items():
         wm = "" if v.get("W_members") is None else f",其中 W02L {v['W_members']} 个"
