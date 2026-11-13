@@ -8,7 +8,7 @@ any of this ran).  Server; `source tmp/w02l_env.sh` first.
     python scripts/w02l_two_level.py score [--workers N] [--pools W,LX,LX2] [--allow-missing]
         AlphaCube's scorer, unmodified (score_all_factors.py --buyable), on the view cut at 2025-12-31 (its label never sees 2026):
         score_LX/ and score_W/ -> metrics.csv.  Then the cut copies are deleted.
-    python scripts/w02l_two_level.py build
+    python scripts/w02l_two_level.py build [--pools LX,LXW,W] [--allow-missing]
         W deduplicated (by D, best first; |rho| >= 0.7 on the training fingerprints drops the later one) -> library/W_dedup.json;
         pools LX, LXW = LX + W, W with the full-length signals and the scorer's rows; AlphaCube's pick_families (as is = main,
         and without the small-family gate = description) and build (ridge inside a family, lstsq across) fitted on the label up
@@ -278,9 +278,12 @@ def build():
                "W_heads": len(w), "W_kept": len(wk), "failed": failed, "pools": {}}
     lx_rows_all = rows_of("LX", [e for e in lx if e not in failed])
     w_rows_all = rows_of("W", wk)
+    only = opt("--pools", "LX,LXW,W").split(",")                         # --pools W: a dry run of one pool (fits only, no 2026)
     for name, exprs, rows_src in (("LX", [r["expression"] for r in lx_rows_all], lx_rows_all),
                                   ("LXW", [r["expression"] for r in lx_rows_all] + [r["expression"] for r in w_rows_all], lx_rows_all + w_rows_all),
                                   ("W", [r["expression"] for r in w_rows_all], w_rows_all)):
+        if name not in only:
+            continue
         d = W / name
         write_pool(d, exprs, W / "_signals", dates)
         with open(d / "metrics.csv", "w", newline="", encoding="utf-8") as fh:  # the scorer's rows, renumbered for this pool
