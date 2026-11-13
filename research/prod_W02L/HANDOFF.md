@@ -1,26 +1,20 @@
 # W02L 交接(接手先读这个，再读 PROGRESS.md 最上面一节)
 
-更新于 2026-11-12 21:20 EST(服务器 11-13 10:20)。
+更新于 2026-11-13 07:10 EST(服务器 11-13 20:10)。
 
-## 现在在哪
+## 现在在哪:W02L 已完成
 
-- **轮次:** 240 / 240 计划已推送;已结束 239,最后一个 2080 r3 在服务器上搜索。80 条流全部建好。
-- **新 head(尺子 D ≥ 0.5、|ρK| < 0.5):** 208 个(不重复表达式),D 打分到第 11 批(`d_scores.jsonl` 641 行)。最好 2034 r3 b +1.44、2029 +1.26;
-  11-12 晚新出一族 2079 r3(上一分钟成交额领先下一分钟收益的日内相关)D +1.07。详见 `report.md`。
-- **第 0 步 ts_spearman 补算:** 9 / 22。6 个 CPU 进程在跑(慢);`tmp/sp_restart2.sh`(本机 `scripts/server/w02l_sp_restart2.sh`)在 2080 r3 推送后、
-  GP ≤ 2 个时起一个 GPU 补算进程(`PARTURA_GPU_LOCK=gpus0`,`--steal-min 30`,日志 `stage0/sp_g3.log`)。22 块全有输出后停 CPU 进程，再跑一次 `--rescore`。
+- **2026 测试集已读(只读这一次，记账 `ledger_prod.json`,test 1 次)。结论见 `RESULT.md`:**主判据 `C_LXW − C_LX` −0.34 个点(t −0.58),没有增益。
+  原因是 AlphaCube 原样选族只收了 1 个 W02L head(新 head 的单因子适应度排不进前 100 族)。C_W 单独 2026 +8.0% ~ +9.6%。
+- 240 轮 + 33 轮补跑全部结束;尺子 D 751 个候选;D-head 244 个 → 去重 79 个(`library/W_dedup.json`)。
+- 六个合成 C_LX / C_LXW / C_W(各原样 + _ng)在服务器 `runs/prod_W02L/two_level/`,族名单抄在本机 `library/C_*.families.json`。
+- **2026 不能再读。** `two_level.started` 在，`read` 会拒绝再跑。以后要检验任何新做法，只能用 2026-09-16 以后的新数据，并且先写计划。
 - **进度看板:** https://claude.ai/artifact/D9UG9RbFhTRC53HkQhV1WB;`scripts/w02l_progress.py`(服务器)+ `scripts/w02l_progress_fetch.sh`(本机)。
 
-## 剩下的步骤(按顺序)
+## 剩下的步骤
 
-1. 等 2080 r3 结束(240/240),跑最后一批尺子 D(`w02l_report.py --collect-d` → `w02l_backtest.py --d-jsonl`),更新 report。
-2. ts_spearman 补完 → `w02l_stage0.py ... --rescore`。
-3. **补跑**(用户定：全部轮次结束后再跑，不和正常轮次重叠):`source tmp/w02l_env.sh; nohup bash scripts/server/w02l_makeup.sh research/prod_W02L/makeup_list.txt &`
-   (37 个 GP 位 / 33 轮;做法见 MAKEUP.md 顶部)。再补评 MAKEUP.md 里的 2 个 R 组。补跑产出照常算 D。
-4. 建 W02L 库 + PLAN §7 判读：两层合成 C(L∪X∪W02L) vs C(L∪X),拟合到 2025-12-31,2026 test 只读一次并记账(`ledger_prod.json`)。
-   参考 W01 的 `scripts/prod_two_level.py`(build / read / overlay)。建库时的检查清单见 PROGRESS(34 条坏 in_regres、day_pdf_quantile_single(left=False)、
-   2048 r2 a 的市值非线性、饱和的 day_product head、近重复去重 |ρ| ≥ 0.7)。
-5. 写 RESULT.md。
+- 没有。下一步做什么(比如按边际贡献给新 head 留位的合成，或按尺子 D 的残差口径做书)要用户定，先写新计划。
+- 服务器上没有 W02L 的进程在跑。
 
 ## 本机流水线里正在半路的
 

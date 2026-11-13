@@ -172,7 +172,8 @@ stages = [
     {"key": "rmakeup", "step": "补评 R 组(定稿误删的 2 组)", "done": r_done, "total": 2, "unit": "组",
      "note": "2075 r3 偏度/峰度组 4 个变体;2067 r3 Volume 组 4 个(与已评的 Amt 组 6 个合并重评)"},
     {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": lib_unit, "note": lib_note},
-    {"key": "test", "step": "读一次 2026 测试集", "done": 0, "total": 1, "unit": "", "note": "按事先写好的规则，只读一次"},
+    {"key": "test", "step": "读一次 2026 测试集", "done": int(os.path.exists(f"{D}/two_level.json")), "total": 1, "unit": "",
+     "note": "按事先写好的规则，只读一次" + (";已读(two_level.md)" if os.path.exists(f"{D}/two_level.json") else "")},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
 ]
 for s in stages:
