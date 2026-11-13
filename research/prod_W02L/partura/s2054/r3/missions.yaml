@@ -1,0 +1,36 @@
+seed: 2054
+round: 3
+slots:
+  - type: E
+    core: 'day_at_max_ratio(High)'
+    hypothesis: '核心是共性表里均值差第三大的子树(+1.81,含它 11 个候选均值 -0.88 对 -2.68):日内最高价 High 等于当日最高值的分钟占比,即「一天有多少时间钉在最高点」。在 A 股这主要是涨停封板 / 贴近涨停横盘的程度(涨停锁死读近 1,普通日约 1/240),机制是彩票型 / 情绪型需求与封单:封板时间长说明买盘压倒卖盘,但次日的延续还是回吐取决于参与者构成,是个股的慢变属性。以前含该核心的候选只有一种写法:Pr2b 里 pow_05(cross_regbeta(day_cov(Vwap, ·), day_at_max_ratio(High), 241)),即把它当 241 日滚动回归里的自变量,最好 +0.09;外围全是价位协方差加 pow_05,核心被价位水平带偏。本次外围完全不同,不碰 day_cov / 价位 / pow_05 / 241 日回归:(1)cross_mean / cross_stddev / cross_tail_mean_q75 对封板占比做 20-60 日慢平滑、波动与上尾,读「频繁封板」的持续性,降低换手;(2)cs_bucket_zscore 按 LimitWidth(涨跌停幅度,即板块类型)或 BoardCode 分桶后取 z 分数,让封板占比在同一涨跌停制度内比较,去掉主板 / 创业板制度差异(这是日频字段叶子才能做的外围,以前没用过);(3)cross_corr / cross_regbeta 把「昨日封板占比 cross_delay(core, 1)」对今日收益做 60 日滚动回归,直接读封板后次日是延续还是回吐(只用过去值,无前视);(4)与 day_at_min_ratio(Low) 相减,读「钉在涨停」减「钉在跌停」的不对称,这是核心之外的新信息;(5)对 day_std(Ret) 做截面残差,把波动从封板占比里拿掉。为什么样本外还会在:涨跌停制度与封板行为是交易规则 + 散户参与度的结构属性,不依赖某段行情,且 LimitWidth 分桶把制度变化(注册制板块)的水平差别去掉;失败方式是封板票本身买不进(可交易掩码处理)或被反转 / 流动性控制吃掉。数学检查:day_at_max_ratio 有效分钟少于 2 为缺失,不是爆点;一字板全天等值时读 1,是真实的极端值,不是下溢;全部只用 t 日及以前数据,窗口最长 60 日,无 cross_shift / ts_shift / in_shift,无 nt_*。'
+    seeds:
+      - 'cross_mean(day_at_max_ratio(High), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_at_max_ratio(High), 30), LimitWidth)'
+      - 'cross_mean(cs_bucket_zscore(day_at_max_ratio(High), BoardCode), 40)'
+      - 'cross_corr(day_at_max_ratio(High), cross_delay(day_sum(Ret), 1), 60)'
+      - 'cross_regbeta(day_sum(Ret), cross_delay(day_at_max_ratio(High), 1), 60)'
+      - 'cross_tail_mean_q75(day_at_max_ratio(High), 60)'
+      - 'sub(cross_mean(day_at_max_ratio(High), 5), cross_mean(day_at_max_ratio(High), 60))'
+      - 'cross_mean(cs_regres(day_at_max_ratio(High), day_std(Ret)), 30)'
+      - 'cross_corr(day_at_max_ratio(High), day_sum(Amt), 60)'
+      - 'sub(cross_mean(day_at_max_ratio(High), 30), cross_mean(day_at_min_ratio(Low), 30))'
+      - 'cross_stddev(day_at_max_ratio(High), 60)'
+      - 'cs_bucket_zscore(cross_ema(day_at_max_ratio(High), 20), LogFloatCap)'
+  - type: E
+    core: 'day_q_stat_std(High)'
+    hypothesis: '核心是共性表里含它候选最多的强富集子树之一(23 个候选,+1.55,p 0.000):最高价分钟序列的 Ljung-Box Q 统计量(滞后 20 的自相关总量),标准化后读的是「高点路径是平滑趋势还是锯齿噪声」,即日内价格推进的持续性。机制:Q 大 = 高点逐分钟黏连地抬升(机构拆单推进、趋势性执行);Q 小 = 高点跳跃式随机出现(散户情绪化、价差弹跳)。这是参与者类型的慢变属性。以前含该核心的候选只有 Pr2b 的 pow_05(cross_regbeta(day_cov(Vwap, ·), day_q_stat_std(High), 241)) 这类:Q 作为 241 日回归里的自变量、因变量是价位协方差,分数最高 +0.17(train +0.44),但只剩价位 × 波动的混合。本次外围完全不同,不碰 day_cov / 价位协方差 / pow_05 / 241 日回归:(1)直接对 Q 做 cross_mean / cross_ema 30-40 日慢平滑与短减长(cross_mean 10 减 60)读趋势持续性的变化;(2)cs_regres 对 day_std(Ret) 取截面残差,以及 cross_mean(Q) 对 cross_mean(day_std(Ret)) 的残差,去掉 Q 与波动的机械联系(高波动日 Q 也大);(3)用 day_q_stat_std(Low)、day_q_stat_std(Close) 与它相减,读高点路径比低点 / 收盘路径更连续还是更噪,是新的跨价位读数;(4)cross_regbeta(日收益, cross_delay(Q, 1), 60) 读昨日 Q 高之后今日收益的滚动回归(只用过去值);(5)cs_bucket_zscore 按流通市值分桶,cross_stddev / cross_tail_mean_q75 读上尾与稳定性。为什么样本外还会在:订单拆分与趋势执行是交易机制属性,不依赖行情;失败方式是 Q 与波动 / 流动性控制高度相关、残差后无 alpha。数学检查:day_q_stat_std 是 Q 统计量的标准化,序列近常数(一字板)时返回缺失或 0,最多使停牌 / 一字板票聚在一端,不是爆点;全部只用 t 日及以前数据,窗口最长 60 日,无前视算子,无 nt_*。'
+    seeds:
+      - 'cross_mean(day_q_stat_std(High), 30)'
+      - 'cross_ema(day_q_stat_std(High), 20)'
+      - 'cs_bucket_zscore(cross_mean(day_q_stat_std(High), 40), LogFloatCap)'
+      - 'cs_regres(day_q_stat_std(High), day_std(Ret))'
+      - 'cross_corr(day_q_stat_std(High), day_sum(Amt), 60)'
+      - 'sub(day_q_stat_std(High), day_q_stat_std(Low))'
+      - 'cross_mean(sub(day_q_stat_std(High), day_q_stat_std(Close)), 30)'
+      - 'cross_regbeta(day_mean(Ret), cross_delay(day_q_stat_std(High), 1), 60)'
+      - 'cross_stddev(day_q_stat_std(High), 40)'
+      - 'sub(cross_mean(day_q_stat_std(High), 10), cross_mean(day_q_stat_std(High), 60))'
+      - 'cross_tail_mean_q75(day_q_stat_std(High), 40)'
+      - 'cs_regres(cross_mean(day_q_stat_std(High), 30), cross_mean(day_std(Ret), 30))'
+R: []

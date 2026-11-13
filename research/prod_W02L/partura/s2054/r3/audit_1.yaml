@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:核心 day_at_max_ratio(High) 与 9 个 head 的原始 |ρ| 最大 0.41(对 M3 的 signedpower(neg(neg(sigmoid(day_std(nt_ts_autocorr_s1(Ret,3)))))) ),五个控制 |ρ| 最大 0.19(liq),过 0.8 门槛的控制为 0。种子原始 |ρ| 最大 0.52(seed 6 cross_tail_mean_q75、seed 1 cross_mean(core,20) 与 seed 8 cross_mean(cs_regres(core,day_std(Ret)),30) 为 0.47-0.52),无一过 0.7;控制 |ρ| 最大 0.35(seed 2 与 LimitWidth 分桶),无自动划掉。创新度 4:9 个 head 中没有一个含 day_at_max_ratio;库里含该核心的候选外围是价位协方差 + pow_05 + 241 日回归,本位外围是 cross_mean / cs_bucket_zscore / cross_corr / cs_regres,度量的是封板占比的持续性与次日关系,不是价位。注意:核心对 M3 的残差 |ρ| 为 0.82,种子 1(0.71)、6(0.65)、8(0.55) 的残差也高,说明封板日分钟收益平坦可能与 M3 共享来源;这是核心与 head 相关的设计使然,不作为挡的理由,但种子 1、6、8 应视为与 M3 最接近的外围。合理度 4:机制清楚(涨停锁死的时间占比及其次日延续)。逐个核对:day_at_max_ratio(ops_ext.py:580)有效分钟少于 2 为缺失,一字板读 1 而非爆点,合格;cross_delay 向后取值,无前视;cross_regbeta(x,y) 是 y 对 x 的斜率(rolling_ols, common.py:643),种子 5 因此是昨日封板占比对今日收益的斜率,其斜率含 1/var(Ret) 的个股波动缩放,比直接读次日收益对昨日封板多一层波动暴露,但不是定义错误,放行。种子 2、3 的 cs_bucket_zscore 分桶变量 LimitWidth 与 BoardCode 是离散叶子,_buckets 取截面百分位十分位(ops_ext.py:458-459,并列按列序打破),所以同一涨跌停制度会被切进多个十分位,同制度内比较只是近似,不是数学错误,放行。无 nt_*,无 shift 类前视算子,窗口最长 60 日。如果它有 alpha,最可能来自涨停封板的持续性与散户参与的慢变属性,在次日延续或回吐中体现。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: []
+    reasons: '相关度表:核心 day_q_stat_std(High) 与 9 个 head 的原始 |ρ| 为 0.10、残差 0.11,五个控制 |ρ| 最大 0.08,过门槛。种子原始 |ρ| 最大 0.48(seed 7 cross_mean(sub(Q(High),Q(Close)),30)),残差 0.58 对 M3 类 head,但控制 |ρ| 全部 0.26 以下,无一过 0.7 或 0.8。创新度 4:head 中 M3 的 ts_quantile_q75(day_q_stat_std(nt_ts_autocorr_s1(...))) 用的是 Ret 自相关的 Q,核心是 High 价格路径的 Q,度量高点路径的黏连与持续性,是 head 没有的东西。种子 1(cross_mean(Q,30))与种子 2(cross_ema(Q,20),半衰期 20 的均值窗口接近)近乎同一平滑,属近重复,但未到划掉的程度,留给 PI 注意。合理度 4:机制清楚(订单拆分推进与散户跳跃报价的区分)。逐个核对:day_q_stat_std(dt_day.py:397-445)输出的是 20 个滞后累计 Q 统计量的截面 std(torch.std over lags),不是「滞后 20 的自相关总量」,PI 的描述有偏差,但它随平方自相关单调增加,作为路径持续性度量合理;它是相关型统计量,对价位水平尺度不变;自相关分母近 0 时返回缺失(非 0)。种子 8 cross_regbeta(day_mean(Ret), cross_delay(Q,1), 60) 与 slot a 种子 5 同样是 y 为滞后值、x 为当日收益的斜率,有 1/var(Ret) 缩放,放行。全部只用 t 日及以前数据,无前视,无 nt_*,无 241 日回归,无 pow_05,无 day_cov。如果它有 alpha,最可能来自参与者类型(机构拆单推进与散户跳跃式报价)的慢变属性,以及高 Q 股票日内趋势的延续性。'
+R: []
+summary: '两个 E 位均通过(创新 4 / 合理 4,无种子划掉,核心对五个控制 |ρ| 均低于 0.8,种子数 12 不变);无 R 组。需 PI 注意:slot a 核心与 M3 的残差相关 0.82,种子 1、6、8 与 M3 残差相关 0.55-0.71;slot a 种子 2、3 的离散分桶变量使「同制度内比较」只是近似;slot b 种子 1、2 近重复;两处种子 5 与 slot b 种子 8 的回归方向使斜率含 1/var(Ret) 缩放。'
