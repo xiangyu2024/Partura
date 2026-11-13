@@ -354,3 +354,4 @@
 - 处理：停掉这两个进程，释放它们占着的块(sp1、sp11,claim 文件改名 `.released_*`);`scripts/server/w02l_sp_restart.sh`(服务器 `tmp/sp_restart.sh`)在主机上 GP 搜索 ≤ 1 个时起一个 `--steal-min 30` 的 GPU 进程(日志 `stage0/sp_g3.log`)。6 个 CPU 进程照跑。
 - 注意：我第一次用 `pgrep -f` 杀进程时模式也匹配到了自己这条 ssh 命令，把自己的 shell 杀了(只杀了我起的两个补算进程和这条 ssh,没有别的);之后改成先把脚本写到文件再执行。
 - 顺序：尾巴搜索消化完 → GPU 补算(预计 1–2 小时) → 补跑(37 个 GP 位，用户定在全部轮次之后)。
+- 20:45 EST 补充：等待条件改为「2080 r3 已推送且 GP 搜索 ≤ 2 个」(`scripts/server/w02l_sp_restart2.sh`),避免 GPU 补算在 2080 r3 定位 / 相关度表时占卡，把关键路径挤回 CPU。2080 r3 搜索时卡上两个 GP 约 19 GB,剩下约 12 GB 正好给补算(上限 0.4)。补跑等补算基本完成再起。
