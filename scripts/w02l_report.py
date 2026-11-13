@@ -4,6 +4,7 @@ with the batch's own best member for comparison; then every new head (score >= 0
 Server; train 2018-01-02 ~ 2023-08-07 and valid 2023-08-08 ~ 2025-12-31 only -- nothing of 2026 is read.
 
     python scripts/w02l_report.py > research/prod_W02L/report.md
+    python scripts/w02l_report.py --heads-json research/prod_W02L/library/heads_D.json    (the D-heads as data, for the library)
 """
 import glob
 import sys
@@ -90,6 +91,13 @@ for x in sorted(pool, key=lambda x: -(d_of(x) or {}).get("score", -9)):
     if d and d["score"] >= 0.5 and abs(x.get("rho_known") or 0) < 0.5 and x["expr"] not in seen:
         seen.add(x["expr"])
         dheads.append({**x, "D": d})
+if "--heads-json" in sys.argv:                                # the W02L library's candidates (PLAN section 7): every D-head, best first
+    out = [{"expr": h["expr"], "seed": h["seed"], "round": h["round"], "slot": h["slot"], "D": h["D"]["score"],
+            "D_train": h["D"].get("train"), "D_valid": h["D"].get("valid"), "B": h.get("score"), "rho_known": h.get("rho_known")}
+           for h in dheads]
+    Path(sys.argv[sys.argv.index("--heads-json") + 1]).write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(out)} D-heads written")
+    sys.exit(0)
 b_failed = [h for h in heads if d_of(h) and d_of(h)["score"] < 0.5]
 b_pending = [h for h in heads if h.get("expr") not in DS]
 

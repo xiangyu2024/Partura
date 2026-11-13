@@ -366,3 +366,9 @@
 - 80 条流全部 ALLDONE。最后一批候选都已有 D(`--collect-d` 报 0 个待算);报告:新 head 208 个(D ≥ 0.5、|ρK| < 0.5),尺子 B 过线 390 个里 D 没过 186 个。
 - 末几轮(2054 r3、2068 r3、2076 r3、2080 r3)没有新 head:2054 r3 a 的 B +0.84 到 D 只剩 +0.29。
 - 卡空了,GPU ts_spearman 补算已起(`sp_g3.log`,空卡上约 1.5 分钟一块),补算 10 / 22。补算完 → `--rescore` → 补跑(37 个 GP 位)→ 建库 → 2026 test 一次 → RESULT。
+- 21:48 EST:空卡上 GPU 补算进程仍退到 CPU——`w02l_stage0.py` 把显存上限写死在 0.4(12.8 GB),这条 ts_spearman 放不下。改为读 `PARTURA_S0_GPU_FRACTION`(默认 0.4 不变),补算进程用 0.9 重起(`scripts/server/w02l_sp_restart4.sh`)。补跑等补算完再起。
+
+## 2026-11-12 22:00 EST — 建库与 2026 判读的实现细则写好(LIBRARY_PLAN.md),脚本 scripts/w02l_two_level.py
+- 写在任何两层合成信号建出来之前、2026 年一个数都没算之前。PLAN §7 规则不变;细则：三个池子 LX / W / LXW、W 按 D 贪心去重(|ρ| ≥ 0.7)、
+  打分器在截到 2025-12-31 的视窗上跑(打分不碰 2026)、主判据用 AlphaCube 原样(带小族门槛)、`_ng` 与叠加只描述、读一次并记账。
+- `w02l_report.py --heads-json` 输出 D-head 名单(208 个)给建库用。

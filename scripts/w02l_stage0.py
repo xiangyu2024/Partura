@@ -147,7 +147,8 @@ with slot(name="slot"):                                       # its own slots: t
     t0 = time.time()
     from alphacube.plugins import load_plugins
     load_plugins(["partura.ac_plugin"])
-    ps = PanelSet(STORE, START, END, warmup=60, device=DEV, gpu_fraction=0.4 if DEV.startswith("cuda") else None,
+    # $PARTURA_S0_GPU_FRACTION (default 0.4 as before): a ts_spearman tree did not fit under 0.4 even on an empty card (W02L, 11-12)
+    ps = PanelSet(STORE, START, END, warmup=60, device=DEV, gpu_fraction=float(os.environ.get("PARTURA_S0_GPU_FRACTION", 0.4)) if DEV.startswith("cuda") else None,
                   cache_dir=str(SHARED_CACHE), mirror_root=MIRROR, workdir=str(PARTURA_ROOT / "tmp"), label_kind="open_vwap15",
                   label_buyable=True, batch=BATCH, daily_root=os.environ.get("PARTURA_DAILY_ROOT") or None)
     dates = np.asarray([str(d) for d in ps.dates])
