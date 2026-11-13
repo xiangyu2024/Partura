@@ -179,9 +179,11 @@ stages = [
      "note": "C_LX 前 30% 里按边际贡献收 W02L head;只有描述，2026 没再读"},
     {"key": "combo", "step": "补:W02L 因子 + 两个冠军信号合成(COMBO_PLAN)", "done": int(os.path.exists(f"{D}/combo.json")), "total": 1,
      "unit": "", "note": "244 个 D-head + 两个冠军，AlphaCube 两层原样;对照只用两个冠军;只有描述，2026 没再读"},
+    {"key": "pair", "step": "补:组合层合并(D 口径 W02L 组合 + 挖掘冠军组合，PAIR_PLAN)", "done": int(os.path.exists(f"{D}/pair.json")),
+     "total": 1, "unit": "", "note": "先各自建组合再按 train 定的比例合并;先核对重算的 D;只到 2025-12-31"},
 ]
 for s in stages:
-    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running, "combo": bool(procs("scripts/w02l_combo.py"))}.get(s["key"], False))
+    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running, "combo": bool(procs("scripts/w02l_combo.py")), "pair": bool(procs("scripts/w02l_pair.py"))}.get(s["key"], False))
 
 tail = []
 for S in seeds:
