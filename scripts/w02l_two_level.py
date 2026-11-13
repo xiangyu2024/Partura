@@ -168,8 +168,11 @@ def failed_signals(allow_missing=False):
 
 # ---------------------------------------------------------------------------------------------------------------- score
 def write_pool(d, exprs, src, dates):
-    """d/panels/<i>.npy (hard links to src/<sha1>.npy), manifest.csv, dates.npy."""
+    """d/panels/<i>.npy (hard links to src/<sha1>.npy), manifest.csv, dates.npy.  A rewritten pool drops its fingerprint cache:
+    AlphaCube's build_train_fingerprints loads fp_*.npy whenever it exists (11-13: the W pools kept the dry run's 208 / 68 rows)."""
     (d / "panels").mkdir(parents=True, exist_ok=True)
+    for f in d.glob("fp_*.npy"):
+        f.unlink()
     with open(d / "manifest.csv", "w", newline="", encoding="utf-8") as fh:
         wr = csv.DictWriter(fh, fieldnames=["i", "run", "expression"])
         wr.writeheader()

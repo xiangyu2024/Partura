@@ -404,3 +404,4 @@
 - **D-head 244 个**(试跑时 208 个，新增 36 个，全部来自补跑的 b 位):2048 r2 b(市值最低两成的非线性，`cs_first_low20(LogTotalCap, …)`,D 1.18–1.20)、2029 r2 b(零成交占比 + `cs_last_low10`,D 1.05–1.07)。两族内部高度相似，去重会并掉大半。D 最高 1.44,中位 0.72。
 - report.md 已重写(补跑后的最终样本内版本，2026 未读),已发给用户。试跑时的名单留作 `library/heads_D_dryrun.json`。
 - 服务器上 `tmp/w2tl/after_makeup.sh` 接着在跑：新 head 的信号 → W 打分 → C_LXW、C_W(原样)→ 两者的 _ng。建完后再演练一次 `read --dry`,然后读 2026。
+- 06:22 EST:**建 C_LXW 报错，已修**。W 池从 208 换成 244 后，W_all / W 目录里还留着试跑时的指纹缓存(208 / 68 行);AlphaCube 的 `build_train_fingerprints` 只要缓存文件在就直接读，于是越界。修法:`write_pool` 重写池子时删掉该目录的 `fp_*.npy`。C_LX 不受影响(它的指纹是 17:17 CST 本次建库时现算的，5456 行 = 健康行数)。从建库这步重起(`scripts/server/w02l_build_rest.sh`):C_LXW、C_W 原样 → 两者的 _ng → 用真合成再演练一次 `read --dry`。
