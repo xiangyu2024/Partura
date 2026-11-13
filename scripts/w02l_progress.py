@@ -175,9 +175,13 @@ stages = [
     {"key": "test", "step": "读一次 2026 测试集", "done": int(os.path.exists(f"{D}/two_level.json")), "total": 1, "unit": "",
      "note": "按事先写好的规则，只读一次" + (";已读(two_level.md)" if os.path.exists(f"{D}/two_level.json") else "")},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
+    {"key": "synth", "step": "补:头部边际贡献合成(SYNTH_PLAN)", "done": int(os.path.exists(f"{D}/synth.json")), "total": 1, "unit": "",
+     "note": "C_LX 前 30% 里按边际贡献收 W02L head;只有描述，2026 没再读"},
+    {"key": "combo", "step": "补:W02L 因子 + 两个冠军信号合成(COMBO_PLAN)", "done": int(os.path.exists(f"{D}/combo.json")), "total": 1,
+     "unit": "", "note": "244 个 D-head + 两个冠军，AlphaCube 两层原样;对照只用两个冠军;只有描述，2026 没再读"},
 ]
 for s in stages:
-    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running}.get(s["key"], False))
+    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running, "combo": bool(procs("scripts/w02l_combo.py"))}.get(s["key"], False))
 
 tail = []
 for S in seeds:
