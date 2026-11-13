@@ -1,6 +1,6 @@
 # W02L 样本内读数(只有 train / valid,2026 未读)
 
-已结束的轮次 239 个。**新 head(尺子 D ≥ 0.5、|ρK| < 0.5;用户 2026-11-10 定)**:208 个(不重复的表达式)。尺子 B 过线的 390 个里，D 没过 186 个、D 待算 0 个;R 的改进(比原素材高 0.1 以上,但不到 head)145 个。下表是尺子 B(搜索用的奖励)。
+已结束的轮次 240 个。**新 head(尺子 D ≥ 0.5、|ρK| < 0.5;用户 2026-11-10 定)**:208 个(不重复的表达式)。尺子 B 过线的 390 个里，D 没过 186 个、D 待算 0 个;R 的改进(比原素材高 0.1 以上,但不到 head)145 个。下表是尺子 B(搜索用的奖励)。
 
 | 流 | 轮 | 批 | 批内原最好 | 任务位 a 最好 | 任务位 b 最好 | R 最好 |
 |---|---|---|---|---|---|---|
@@ -243,6 +243,7 @@
 | 2079 | 3 | B237 | -0.73 (tr -0.49 / va -0.73, ρK -0.47) `ts_quantile_q25(ts_stddev(ts_stddev(day_sum(nt_cs_quantile_q25(nt_cs_quantile_q2` | +0.98 (tr +1.70 / va +0.98, ρK -0.21) `cs_bucket_demean(ts_max(ts_max(ts_max(ts_max(day_corr(in_slice(Amt, 2, 240), in_` | +1.13 (tr +1.48 / va +1.13, ρK -0.22) `cs_bucket_demean(ts_max(ts_max(ts_max(sub(day_corr(in_slice(Amt, 2, 240), in_sli` | — |
 | 2080 | 1 | B238 | -1.11 (tr -0.74 / va -1.11, ρK -0.18) `ts_quantile_q75(cross_cov(day_max(High), ts_quantile_q75(pow_1_5(cross_cov(day_v` | -0.88 (tr -0.35 / va -0.88, ρK -0.31) `cross_corr(day_q_stat_std(Volume), sqrt(day_q_stat_std(Volume)), 60)` | -0.13 (tr -0.13 / va -0.10, ρK +0.01) `cross_regbeta(day_q_stat_std(Volume), cross_delay(cs_winsor(day_autocorr_n1(Amt)` | — |
 | 2080 | 2 | B239 | -0.62 (tr -0.62 / va +0.02, ρK -0.02) `ts_std(neg(neg(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241))), 50)` | -2.68 (tr -2.42 / va -2.68, ρK +0.11) `day_es_ratio_hi(Open)` | -0.69 (tr -0.69 / va +0.32, ρK -0.25) `cross_corr(day_gini(Ret), day_signed_ratio(Ret, Amt), 60)` | -0.11 (tr -0.11 / va +0.35, ρK -0.04) `ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120), 25)` |
+| 2080 | 3 | B240 | -0.57 (tr -0.28 / va -0.57, ρK -0.47) `ts_stddev(ts_stddev(day_sum(nt_cs_quantile_q25(nt_cs_quantile_q25(Amt))), 30), 3` | -0.23 (tr +0.05 / va -0.23, ρK -0.08) `sub(cross_mean(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 4` | +0.13 (tr +0.16 / va +0.13, ρK -0.10) `cross_autocorr_s1(day_max(Amt), 241)` | -0.11 (tr -0.11 / va +0.19, ρK +0.00) `ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120), 40)` |
 
 ## 新 head(尺子 D)
 
