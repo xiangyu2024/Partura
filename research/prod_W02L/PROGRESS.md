@@ -405,3 +405,11 @@
 - report.md 已重写(补跑后的最终样本内版本，2026 未读),已发给用户。试跑时的名单留作 `library/heads_D_dryrun.json`。
 - 服务器上 `tmp/w2tl/after_makeup.sh` 接着在跑：新 head 的信号 → W 打分 → C_LXW、C_W(原样)→ 两者的 _ng。建完后再演练一次 `read --dry`,然后读 2026。
 - 06:22 EST:**建 C_LXW 报错，已修**。W 池从 208 换成 244 后，W_all / W 目录里还留着试跑时的指纹缓存(208 / 68 行);AlphaCube 的 `build_train_fingerprints` 只要缓存文件在就直接读，于是越界。修法:`write_pool` 重写池子时删掉该目录的 `fp_*.npy`。C_LX 不受影响(它的指纹是 17:17 CST 本次建库时现算的，5456 行 = 健康行数)。从建库这步重起(`scripts/server/w02l_build_rest.sh`):C_LXW、C_W 原样 → 两者的 _ng → 用真合成再演练一次 `read --dry`。
+
+## 2026-11-13 07:00 EST — 六个合成全部建好;演练通过;开始读 2026(只读一次)
+- W 池：244 个 D-head,按 |ρ| ≥ 0.7 去重剩 **79** 个(`library/W_dedup.json`)。
+- **C_LXW(原样)**:5643 条信号，健康 5535,100 族、1091 个成员，**其中 W02L 只有 1 个**(`cs_bucket_demean(ts_max(day_corr(in_slice(Amt, 2, 240), in_slice(Ret, 1, 239)), 40), LogFloatCap)`,单成员族，适应度 0.029)。**C_LXW_ng** 同样 100 族、1091 个成员、W02L 1 个:原库的族都够大，小族门槛不起作用;卡住新 head 的是「按适应度取前 100 族」。
+- **C_W**:79 个里 18 族过小族门槛;**C_W_ng**:79 族 79 个成员。
+- 族名单都抄回本地 `library/C_*.families.json`,`library/build.json`。
+- 用真合成再演练一次 `read --dry`(截短视窗，不碰 2026):冠军核对 PASS,代码全通。
+- 接着读 2026:`w02l_two_level.py read`,记账 `ledger_prod.json`,只读这一次。
