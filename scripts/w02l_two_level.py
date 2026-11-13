@@ -8,7 +8,7 @@ any of this ran).  Server; `source tmp/w02l_env.sh` first.
     python scripts/w02l_two_level.py score [--workers N] [--pools W,LX,LX2] [--allow-missing]
         AlphaCube's scorer, unmodified (score_all_factors.py --buyable), on the view cut at 2025-12-31 (its label never sees 2026):
         score_LX/ and score_W/ -> metrics.csv.  Then the cut copies are deleted.
-    python scripts/w02l_two_level.py build [--pools LX,LXW,W] [--allow-missing]
+    python scripts/w02l_two_level.py build [--pools LX,LXW,W] [--variants as_is,_ng] [--allow-missing]
         W deduplicated (by D, best first; |rho| >= 0.7 on the training fingerprints drops the later one) -> library/W_dedup.json;
         pools LX, LXW = LX + W, W with the full-length signals and the scorer's rows; AlphaCube's pick_families (as is = main,
         and without the small-family gate = description) and build (ridge inside a family, lstsq across) fitted on the label up
@@ -256,7 +256,8 @@ def build():
     # W deduplicated: by D, best first; a head whose |rho| to a kept one is >= 0.7 on the training fingerprints is dropped
     wd = W / "W_all"
     wx = [e for e in w if e not in failed]
-    write_pool(wd, wx, W / "_signals", dates)
+    if not ("--reuse-pool" in argv and (wd / "manifest.csv").is_file()):
+        write_pool(wd, wx, W / "_signals", dates)
     fpw = np.asarray(build_train_fingerprints(wd / "panels", list(range(len(wx))), fp_days, cols, wd / f"fp_{FP_DAYS}x{FP_SYMBOLS}.npy"))
     C = pairwise_abs_corr(fpw)
     Dsc = {h["expr"]: h["D"] for h in heads}
@@ -285,15 +286,20 @@ def build():
         if name not in only:
             continue
         d = W / name
-        write_pool(d, exprs, W / "_signals", dates)
-        with open(d / "metrics.csv", "w", newline="", encoding="utf-8") as fh:  # the scorer's rows, renumbered for this pool
-            wr = csv.DictWriter(fh, fieldnames=list(rows_src[0].keys()))
-            wr.writeheader()
-            for i, r in enumerate(rows_src):
-                wr.writerow({**r, "i": i})
+        if "--reuse-pool" in argv and (d / "metrics.csv").is_file():   # a second variant beside a running build: the pool is written
+            have = [r["expression"] for r in csv.DictReader(open(d / "manifest.csv", encoding="utf-8"))]
+            if have != exprs:
+                raise SystemExit(f"{name}: the pool on disk is not this pool")
+        else:
+            write_pool(d, exprs, W / "_signals", dates)
+            with open(d / "metrics.csv", "w", newline="", encoding="utf-8") as fh:  # the scorer's rows, renumbered for this pool
+                wr = csv.DictWriter(fh, fieldnames=list(rows_src[0].keys()))
+                wr.writeheader()
+                for i, r in enumerate(rows_src):
+                    wr.writerow({**r, "i": i})
         rows = selectable_rows(d / "metrics.csv")
         fp = np.asarray(build_train_fingerprints(d / "panels", [int(r["i"]) for r in rows], fp_days, cols, d / f"fp_{FP_DAYS}x{FP_SYMBOLS}.npy"))
-        for v in ("", "_ng"):
+        for v in opt("--variants", "as_is,_ng").replace("as_is", "").split(","):  # --variants as_is | _ng: one per process
             if v == "":
                 fams = pick_families(rows, fp, 0.7, 100, 60)                     # AlphaCube as is: the main criterion
             else:
@@ -313,7 +319,13 @@ def build():
                                           "W_members": n_w, "seconds": round(time.time() - t1)}
             print(f"[w2] C_{name}{v}: {len(exprs)} signals, {len(rows)} healthy, {len(fams)} families, "
                   f"{summary['pools'][name + v]['members']} members{'' if n_w is None else f', {n_w} from W'} ({time.time() - t1:.0f}s)", flush=True)
-    (W / "build.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
+    tag = "_".join(only) + ("" if opt("--variants") is None else "_" + opt("--variants").replace(",", "+"))
+    (W / f"build_{tag}.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
+    merged = {}                                                          # build.json = every partial build, latest wins per pool
+    for f in sorted(W.glob("build_*.json"), key=lambda p: p.stat().st_mtime):
+        x = json.loads(f.read_text(encoding="utf-8"))
+        merged = {**merged, **{k: v for k, v in x.items() if k != "pools"}, "pools": {**merged.get("pools", {}), **x["pools"]}}
+    (W / "build.json").write_text(json.dumps(merged, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[w2] built -> {W}", flush=True)
 
 
