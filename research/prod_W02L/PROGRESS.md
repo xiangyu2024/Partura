@@ -348,3 +348,9 @@
 - CPU 上 6 个进程 8.7 小时只算完 4/22(负载 140 的机器);照这个速度要 30 多小时，会卡住建库。
 - 卡空出来后(尾巴只剩 1 个 GP)起了 GPU 补算:`PARTURA_GPU_LOCK=gpus0 PARTURA_GPUS0_WAYS=1`(自己的锁，只占 1 路，不和 GP 抢路),`--device cuda --spearman-only`,日志 `stage0/sp_g1.log`;GPU 上一条 97 秒。
 - 第二个 GPU 进程加 `--steal-min 30`(`stage0/sp_g2.log`),把 CPU 进程占着几个小时的块也接过来算(脚本自带的接手机制，谁先写完用谁，结果相同)。全部 22 块有输出后停掉 CPU 进程，再跑一次 `--rescore`(HANDOFF 第 1 步)。
+
+## 2026-11-12 20:15 EST — GPU 上的 ts_spearman 补算撞上尾巴的搜索，改为等卡空再起
+- 两个 GPU 补算进程起来后，尾巴的 2054 r3 / 2076 r3 搜索(4 个 GP)同时上卡，卡满(31 GB),两进程手上的块 OOM 退到 CPU。GPU 上只来得及算完 1 块(97 秒);补算仍是 6/22。
+- 处理：停掉这两个进程，释放它们占着的块(sp1、sp11,claim 文件改名 `.released_*`);`scripts/server/w02l_sp_restart.sh`(服务器 `tmp/sp_restart.sh`)在主机上 GP 搜索 ≤ 1 个时起一个 `--steal-min 30` 的 GPU 进程(日志 `stage0/sp_g3.log`)。6 个 CPU 进程照跑。
+- 注意：我第一次用 `pgrep -f` 杀进程时模式也匹配到了自己这条 ssh 命令，把自己的 shell 杀了(只杀了我起的两个补算进程和这条 ssh,没有别的);之后改成先把脚本写到文件再执行。
+- 顺序：尾巴搜索消化完 → GPU 补算(预计 1–2 小时) → 补跑(37 个 GP 位，用户定在全部轮次之后)。
