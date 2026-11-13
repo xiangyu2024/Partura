@@ -1,0 +1,82 @@
+seed: 2080
+round: 3
+slots:
+- type: E
+  core: cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40)
+  hypothesis: 机制:核心 C1 = cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret),
+    40),即 40 日滚动里「分钟收益一阶自相关」对「分钟成交量成团程度(Q 统计量)」的回归斜率:成交成团的日子里价格是延续(知情拆单,正斜率)还是反弹(做市商库存回补
+    / 买卖价差反弹,负斜率),是订单流持续性的慢变读数(Hasbrouck 式冲击持续性)。依据:本批富集表里含 C1 的 8 个候选均值差 +1.09(p
+    0.002)、含 / 不含 -1.26 / -2.36,是批内最显著的两变量结构,且是此前没作过核心的(第 1 轮 E 是 day_q_stat_std(Volume)
+    单量,第 2 轮 E 是 ts_cov 量价核心)。快照里含 C1 的外围只有:直接用、cs_winsor 包一层、cross_delay 滞后 60 日(N
+    位 Pr1b);没有一个外围读它的变化或离散度。本轮外围换成对 C1 序列本身的二阶读法:(a) ts_std(C1, 25/60),即持续性本身的不稳定度(本库
+    head 的共同外围正是 ts_std / ts_var 这类对慢变量取波动,但都套在价格或成交额上,从没套在订单流持续性上);(b) C1 减自己 120
+    日均值 / ts_rank / 减 20 日前的值,即相对自己常态的持续性变化,去掉让水平控制起作用的持久截面差;(c) 极差、偏度、绝对偏离,读持续性的极端程度而非方向。为什么和库里不同:这些外围算子是
+    ts_std / ts_rank / ts_skew / ts_max-ts_min / ts_delay 与 sub / div,与 Pr1b 的 cs_winsor
+    / cross_delay 外围、与库里 ts_quantile / ts_kurt 外围都不是同一个算子集合,骨架由 c06_check 与库禁令把关;读的东西(持续性的离散度与变化)也不是水平。为什么样本外还会在:订单流持续性由参与者构成(算法执行
+    vs 零散散户)决定,是慢变属性,40 日窗口外再加 25-120 日的二阶窗口,换手低,15 bp 下不被吃掉;符号由奖励选。最可能的失败:Q 统计量近常数(停牌、零成交日)时回归斜率被噪声主导,或与波动控制相关。数学检查:cross_regbeta
+    有效对不足时只影响新股与停牌多的票,可交易掩码已排除;ts_std 25 之后热身期约 65 日,不主导;全部只用 t 日及以前数据,无前视(无 cross_shift
+    / ts_shift / in_local_mean);不含 ts_spearman 与 nt_*。
+  seeds:
+  - ts_std(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), 25)
+  - ts_std(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), 60)
+  - sub(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), ts_mean(cross_regbeta(day_q_stat_std(Volume),
+    day_ar1_coefficient(Ret), 40), 120))
+  - sub(ts_max(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40),
+    60), ts_min(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40),
+    60))
+  - div(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), ts_std(cross_regbeta(day_q_stat_std(Volume),
+    day_ar1_coefficient(Ret), 40), 60))
+  - cross_zscore(ts_std(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret),
+    40), 20), 120)
+  - sub(cross_mean(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret),
+    40), 10), cross_mean(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret),
+    40), 60))
+  - ts_skew(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), 60)
+  - sub(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), ts_delay(cross_regbeta(day_q_stat_std(Volume),
+    day_ar1_coefficient(Ret), 40), 20))
+  - abs_(sub(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40),
+    ts_mean(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), 120)))
+  - mul(sign(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40)),
+    ts_std(cross_regbeta(day_q_stat_std(Volume), day_ar1_coefficient(Ret), 40), 40))
+- type: N
+  hypothesis: 机制:名义股价(不复权的流通价格水平)。日频字段 LogFloatCap 减 LogFloatShares = log(流通市值/流通股数)
+    = log 名义价格。控制里有 LogFloatCap(及其平方立方),但同一市值内名义价格差别很大:低价股偏彩票偏好、散户占比高,高价股偏机构;A 股的低价效应(名义价格错觉,Birru-Wang
+    2016:投资者把低名义价格股看作更有上行空间)独立于市值。算子实现:sub(LogFloatCap, LogFloatShares) 直接得名义价格水平;cs_bucket_rank(·,
+    LogFloatCap) 给同一市值十分位内的名义价格排名,即对市值中性的名义价格,避开控制;再做相互作用:名义价格 x 近 20 日最大日内收益(彩票需求)、名义价格桶内的近期收益
+    / 成交额排名,读低价股里哪些在被追。启发于本批:共性表里最显著的单项之一是 cs_robust_z(LogFloatShares)(20 个候选,含 /
+    不含 -1.49 / -2.39,均值差 +0.89,p 0.000),说明股数这个静态量在本批最有信息,而它与市值控制并不重合;本流此前 4 个任务位没有一个用过日频字段叶子。为什么和库里不同:库里
+    5583 条表达式几乎都是分钟聚合,名义价格(两字段之差)作为核心结构未出现过,骨架由 c06_check 与库禁令核对;不等于任何控制(流动性 = 成交额水平,市值
+    = LogFloatCap 本身)。为什么样本外还会在:名义价格静态、换手近零,低价偏好是行为偏差、散户占比不变,15 bp 下几乎无成本;最可能的失败:仙股
+    / ST 股的风险使其被波动或流动性控制吃掉,或市值非线性暴露残余。数学检查:两个字段是日频,停牌日也有值,无热身缺失;差是 log 比,无除近零;cs_robust_z
+    的 MAD 非零;无前视;不含 ts_spearman 与 nt_*。
+  inspired_by: 共性表 cs_robust_z(LogFloatShares)(20 个候选,均值差 +0.89,p 0.000)说明股数这一静态量最有信息;控制只含
+    LogFloatCap,名义价格(LogFloatCap 减 LogFloatShares)未被控制
+  seeds:
+  - sub(LogFloatCap, LogFloatShares)
+  - mul(sub(LogFloatCap, LogFloatShares), cross_mean(day_max(Ret), 20))
+  - sub(sub(LogFloatCap, LogFloatShares), cross_mean(sub(LogFloatCap, LogFloatShares),
+    120))
+  - cs_bucket_rank(sub(LogFloatCap, LogFloatShares), LogFloatCap)
+  - sub(cs_robust_z(sub(LogFloatCap, LogFloatShares)), cs_robust_z(cross_mean(day_std(Ret),
+    60)))
+  - mul(cs_robust_z(LogFloatShares), cs_robust_z(cross_mean(day_sum(Ret), 20)))
+  - cross_mean(cs_bucket_rank(day_sum(Ret), sub(LogFloatCap, LogFloatShares)), 20)
+R:
+- head: ts_std(neg(neg(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241))),
+    25)
+  why: 该头(valid +0.56,train -0.37)的 neg(neg()) 是空操作,上一轮已把窗口缩到 25 并替换;余下的烂部件是 pow_2_5
+    只留上涨分钟(下行信息被扔掉)和 241 日滚动和偏长、ts_sum 10 的重叠平滑。试换成保号的 signedpower、缩短 241、换成 ts_mean
+    外围,依据拆解里窗口 25->50 变差、knockout neg 不变。
+  variants:
+  - ts_std(cross_sum(ts_sum(day_var(signedpower(Ret, 2.5)), 10), 241), 25)
+  - ts_std(cross_sum(ts_sum(day_var(pow_2_5(Ret)), 10), 241), 25)
+  - ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120), 25)
+  - ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120), 40)
+  - ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(neg(Ret)))), 10), 241), 25)
+  - ts_std(sub(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241), cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(neg(Ret)))),
+    10), 241)), 25)
+  - ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 5), 241), 15)
+  - ts_mean(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241), 25)
+audit:
+  attempts: 1
+  file: audit_1.yaml
