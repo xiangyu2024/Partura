@@ -91,6 +91,19 @@ if os.path.exists(f"{D}/makeup_started.txt"):
     started = sum(1 for l in open(f"{D}/makeup_started.txt") if l.strip())
 makeup_running = bool(procs("w02l_makeup.sh"))
 result_done = os.path.exists(f"{D}/RESULT.md")
+# the library (scripts/w02l_two_level.py): signals made, then scored, then built
+TL = "runs/prod_W02L/two_level"
+n_lx = sum(1 for _ in open(f"{D}/struct/members.csv")) - 1
+n_w = len(json.load(open(f"{D}/library/heads_D.json"))) if os.path.exists(f"{D}/library/heads_D.json") else 0
+lib_total = n_lx + n_w
+lib_done = len(os.listdir(f"{TL}/_signals")) if os.path.isdir(f"{TL}/_signals") else 0
+lib_note = "信号生成中(原库从缓存读)"
+if os.path.exists(f"{TL}/score_LX/metrics.csv"):
+    lib_note = "原库已打分"
+if os.path.exists(f"{TL}/build.json"):
+    lib_note, lib_done = "两层合成已建好", lib_total
+elif lib_done == 0:
+    lib_note = "补跑之后"
 n_rounds = 3 * len(seeds)
 
 stages = [
@@ -107,7 +120,7 @@ stages = [
      "total": b_pass or 0, "unit": "个候选", "note": "尺子 B 过线的候选，截至上次回测报告"},
     {"key": "makeup", "step": "补跑(坏掉的 GP 任务位)", "done": started, "total": N_MAKEUP_ROUNDS, "unit": "轮",
      "note": f"{N_MAKEUP_SLOTS} 个任务位;全部轮次结束后再跑(用户定)"},
-    {"key": "library", "step": "建库(去重、检查、合成)", "done": 0, "total": 1, "unit": "", "note": "补跑之后"},
+    {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": "条信号", "note": lib_note},
     {"key": "test", "step": "读一次 2026 测试集", "done": 0, "total": 1, "unit": "", "note": "按事先写好的规则，只读一次"},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
 ]

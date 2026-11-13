@@ -1,7 +1,7 @@
 """PROD W02L: the library and the one 2026 read of PLAN section 7, done as research/prod_W02L/LIBRARY_PLAN.md says (written before
 any of this ran).  Server; `source tmp/w02l_env.sh` first.
 
-    python scripts/w02l_two_level.py signals [--shard k/n] [--device cuda|cpu]
+    python scripts/w02l_two_level.py signals [--pool LX|W] [--shard k/n] [--device cuda|cpu]
         pools LX (struct/members.csv, the 5583 parseable members of the two libraries) and W (library/heads_D.json, every D-head,
         from scripts/w02l_report.py --heads-json); each expression's daily z-rank signal (steer.signal_input) on the whole view
         2018-01-02 ~ 2026-09-16 -> runs/prod_W02L/two_level/_signals/<sha1>.npy, plus a copy cut at 2025-12-31 for the scorer.
@@ -113,6 +113,8 @@ def signals():
     sd.mkdir(parents=True, exist_ok=True)
     cd.mkdir(parents=True, exist_ok=True)
     allx = list(dict.fromkeys(w + lx))                                   # W first: the few that are not cached yet
+    if opt("--pool"):                                                    # --pool LX | W: only that pool (LX comes from the cache)
+        allx = list(dict.fromkeys({"LX": lx, "W": w}[opt("--pool")]))
     k_, n_ = (int(x) for x in opt("--shard", "0/1").split("/"))         # --shard k/n: this process takes every n-th, from k
     todo = [e for i, e in enumerate(allx) if i % n_ == k_ and (not (sd / f"{key(e)}.npy").is_file() or not (cd / f"{key(e)}.npy").is_file())]
     bad, t0 = {}, time.time()
@@ -133,14 +135,14 @@ def signals():
             if (i // 8) % 25 == 0 or i + 8 >= len(todo):
                 print(f"[w2] signals {min(i + 8, len(todo))}/{len(todo)} ({time.time() - t0:.0f}s, {len(bad)} failed)", flush=True)
         mem.stop()
-    (W / f"signals_{k_}of{n_}.json").write_text(json.dumps({"lx": len(lx), "w": len(w), "failed": bad}, ensure_ascii=False, indent=1), encoding="utf-8")
+    (W / f"signals_{opt('--pool', 'all')}_{k_}of{n_}.json").write_text(json.dumps({"lx": len(lx), "w": len(w), "failed": bad}, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[w2] signals done (shard {k_}/{n_}): failed {len(bad)}", flush=True)
 
 
 def failed_signals():
     """Every shard's failures; and every expression of both pools must have its signal or be listed as failed."""
     bad = {}
-    for f in W.glob("signals_*of*.json"):
+    for f in W.glob("signals_*_*of*.json"):
         bad.update(json.loads(f.read_text(encoding="utf-8"))["failed"])
     lx, w, _ = pools()
     missing = [e for e in dict.fromkeys(w + lx) if e not in bad and not (W / "_signals" / f"{key(e)}.npy").is_file()]
