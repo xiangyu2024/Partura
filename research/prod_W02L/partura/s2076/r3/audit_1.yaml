@@ -1,0 +1,14 @@
+attempt: 1
+slots:
+  - slot: a
+    novelty: 3
+    soundness: 4
+    struck_seeds: [6, 8]
+    reasons: '相关度表:核心 sqrt(day_skew(in_slice(Open,0,60))) 与快照 head 的最大原始 |rho| 为 0.054,与 5 个控制的最大 |rho| 为 0.064(size),核心本身不是控制,E 位核心条件满足。种子与 head 的最大原始 |rho|:seed 1 0.48、seed 2 0.41、seed 3 0.37、seed 4 0.40、seed 5 0.13、seed 7 0.09、seed 9 0.10、seed 10 0.39、seed 11 0.65、seed 12 0.32,均低于 0.7。自动划掉:seed 6 与流动性控制 |rho| 0.81(>=0.8,cross_ema(mul(day_zero_ratio(Amt), 核心),20) 基本就是流动性控制);seed 8 与 head 的原始 |rho| 0.78(>=0.7,与 cross_mean(ts_cov(day_zero_ratio(Amt), sqrt(sqrt(day_skew(...)))),30) 同构)。算子核对:sqrt 在 AlphaCube common.py:206-207 中定义为 sqrt(abs(x)),对负数并不返回缺失。计划书写的「sqrt 对负偏度返回缺失、只留向上尖峰」与实际计算不符:核心度量的是开盘一小时偏度幅度的平方根(符号盲),是价格路径不对称程度的幅度,而不是向上尖峰。这一点扣分(合理度 3),但它不是数学问题:值有限、覆盖率 0.999、无爆点,故放行。搭档不同:day_zero_ratio(Ret) 度量价格不动占比(stale pricing,op 注释明确,与成交额为 0 的占比不同),day_gini(Amt)、day_skew(Amt)、day_pos_ratio(Ret)、day_std(Amt) 也是 head 里没有的度量;但骨架仍是 ts_cov/ts_corr 加 cross_mean,与 head 同构,只换了搭档,所以创新度给 3 而非 4。合理度:窗口(10/20 日协方差或相关,30 日均值)合理,无前视,无 nt_*,无 ts_spearman。如果它有 alpha,最可能来自开盘一小时价格路径不对称的幅度与价格不动(stale pricing)的共动,即零星成交推动、价格呆滞的薄交易股票,而不是来自流动性或已知波动族。'
+  - slot: b
+    novelty: 4
+    soundness: 4
+    struck_seeds: [1, 4]
+    reasons: '新想法(N)。相关度表:快照里 head 与各种子的最大原始 |rho| 为 seed 2 0.014、seed 3 0.029、seed 5 0.195、seed 6 0.501、seed 7 0.040、seed 8 0.177、seed 9 0.162、seed 10 0.054;seed 1(0.606)与 seed 4(0.622)高于 0.5,都与 day_mean(abs_(cross_regres(Ret,Volume,20))) 一类 head 接近。控制:seed 1 的 liq 0.787、known 0.757、size 0.576;seed 4 的 liq 0.774、known 0.734、size 0.653。两者都贴着流动性控制的 0.8 线,度量的基本是成交稀薄的水平或其波动(即流动性控制的换写),判为重复划掉。seed 6 的 liq 0.567、known 0.542 低于这个水平,保留。其余种子的控制最大 |rho| 均低于 0.25(seed 8 vol 0.244、rev 0.254;seed 10 全部低于 0.03)。算子核对:in_slice(Amt,181,240) 为 60 列,in_slice(Amt,0,60) 为 61 列,下标都在 0..240 之内,没有越界;day_zero_ratio 只统计片段内的有限分钟(ops_ext.py:273 注释);day_sum、ts_cov、ts_corr 都在日轴上,因果;未出现 nt_* 或 ts_spearman;无前视。seed 8 的 gate 为 False(distinct 0.35,大量并列在 0 附近),但并列靠列序打破在 §4 明确不算问题,所以不因此划掉;它会被流水线 gate 丢弃,这不影响本审计结论。机制说得通:尾盘相对开盘的成交稀薄程度,以及收盘前一小时收益与价格不动的共动、稀薄时段的不稳定性。创新度给 4:核心是全天稀薄度 head 的部件,但时段切分与收益方向的搭档是库里没有的结构(seed 2、3、5、9、10 与 head 和控制的 |rho| 都低)。如果它有 alpha,最可能来自收盘前后流动性撤出的结构性时段差(尾盘薄成交 × 尾盘价格方向),而不是来自全天稀薄水平或流动性控制。'
+R: []
+summary: '槽 a(E,核心 sqrt(day_skew(in_slice(Open,0,60))))创新 3 合理 4,划掉 seed 6、8,余 10 个,通过;槽 b(N,尾盘与开盘成交稀薄时段差)创新 4 合理 4,划掉 seed 1、4(流动性控制换写),余 8 个,通过;无 R 组;合理度注意:sqrt 实为 sqrt(abs),计划书的「只留向上尖峰」描述与实现不符,已扣分但不构成数学问题。'

@@ -1,0 +1,46 @@
+seed: 2080
+round: 2
+slots:
+- type: E
+  core: 'ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50)'
+  hypothesis: '机制:核心 C = ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50),即每只票「当日截面标准化的日均分钟成交量」与「收盘时的日内最高价(后复权价格水平)」在 50 日窗口内的协方差,读的是:放量日是否伴随价格抬升(量价同向的趋势确认,Llorente et al. 2002 的量与收益自相关思路:知情驱动的放量带来延续,流动性驱动的放量带来反转)。依据:本批富集表里含 day_mean(Volume) / C 的 5 个候选均值差 +1.18(p 0.002),是本批最显著的子树;C 的整体 head(第三个,深度嵌套的 ts_std/ts_cov 自我重复写法)只有 -0.90(train -0.68,valid -0.90),sufficiency 与 knockout 说明重复嵌套只是把同一个协方差反复取 ts_std,没有增加信息,而且换手高。本轮要试的外围与已见过的写法完全不同:不再反复套 ts_std/ts_cov,而是(a) 把协方差换成无量纲的滚动相关 / 回归斜率(cross_corr、cross_regbeta、cross_zscore),去掉 C 里价格水平的尺度(价格水平大的票协方差更大,是 C 与 LogFloatCap、价格水平类控制相关的来源);(b) 用个股自己的历史做参照(C 减去自己 120 日均值再除以其波动),读相对自己常态的量价协动变化;(c) 先对 C 做 cross_ema 平滑降换手,再做截面标准化。为什么和库里不同:库里含 C 的候选外围算子是 ts_std / ts_cov 的自嵌套,这里的外围是 cross_corr / cross_regbeta / cross_zscore / cross_ema / sub / div,是另一个算子集合,骨架由 c06_check 与库禁令把关。为什么样本外还会在:量价同向协动是参与者构成(趋势追随 vs 流动性提供)的慢变属性,50 日窗口加平滑后换手低,15 bp 下不被成本吃掉;失败方式是被已知成交额族 / 流动性控制吃掉,或价格水平残余使其成为变相的价格因子。数学检查:day_close(High) 是后复权价格水平,在股票间的排序≈累计收益(规则 §4 明确不算问题);cs_normalize 对近常数截面有保护;全部只用 t 日及以前数据,无前视;最长窗口 120+50 日,热身期不主导。'
+  seeds:
+  - 'ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50)'
+  - 'cross_zscore(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 120)'
+  - 'cross_ema(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 10)'
+  - 'sub(cross_mean(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 20), cross_mean(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 120))'
+  - 'div(sub(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), cross_mean(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 120)), cross_stddev(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 120))'
+  - 'cross_mean(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 60)'
+  - 'cross_regbeta(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), cross_ema(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 5), 60)'
+  - 'cross_zscore(cross_ema(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 5), 60)'
+  - 'sub(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), ts_cov(cs_normalize(day_mean(Volume)), day_close(Low), 50))'
+  - 'cross_corr(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), cs_normalize(day_sum(Ret)), 60)'
+  - 'mul(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), sign(cross_mean(day_sum(Ret), 20)))'
+  - 'cross_rank(cross_ema(ts_cov(cs_normalize(day_mean(Volume)), day_close(High), 50), 20), 60)'
+- type: N
+  hypothesis: '机制:「日内成交的时间分布」加「净买入压力」的慢变量。day_signed_ratio(Ret, Amt) = 当日成交额中上涨分钟占比减下跌分钟占比,是不需要逐笔数据的净买入压力代理(类似 Chordia-Subrahmanyam 订单不平衡对未来收益的预测);day_centroid(Amt) = 当日成交额在分钟轴上的重心(0 开盘 ~ 1 收盘),读的是「钱什么时候成交」:尾盘集中是机构按 VWAP / 收盘价执行或知情者等到收盘,早盘集中是消息驱动的脉冲(Heston-Korajczyk-Sadka 2010 的日内周期性)。把两者放在 40-120 日的滚动协动里:cross_corr(day_signed_ratio(Ret,Amt), day_centroid(Amt), 60) 读的是「买压是否集中在尾盘」—— 尾盘买压持续的票是被慢速大资金(机构)吸筹,单日读数很吵,所以窗口长、换手低。启发来自本批:head 的写法全是价格水平或单一读数的分布统计(ts_quantile / ts_kurt),本批没有任何一个 head 用到「分钟轴上的位置」或「成交额按涨跌分解」;成交量类子树(day_mean(Volume) +1.18)富集说明成交行为里有信息,而 day_q_stat_std(Volume) 在上一轮外围换过之后仍是负分,问题可能在核心本身只读分布形状、不读时间与方向,这里换成时间与方向两个新维度。算子怎样实现:day_signed_ratio、day_centroid、day_gini 是 ops_ext 里的日度算子,外面套 cross_mean / cross_zscore / cross_corr / cross_regbeta / cross_ema,个股自比写法(近 20 日均值减 120 日均值)去掉水平。为什么和库里不同:库里的 5583 条表达式里没有这两个算子的骨架(c06_check 与 GP 库禁令核对),也不是任何控制(流动性控制是成交额水平,不含方向与时间)。为什么样本外还会在:参与者构成(机构慢速执行)是慢变属性,相对自己历史的变化读数不依赖市场风格;符号由奖励选。最可能的失败:被 20 日反转控制吃掉(signed_ratio 与近期收益同向),所以种子里加入了对收益的残差化写法与对自己历史的差。数学检查:day_signed_ratio 分母是成交额合计,停牌日无定义(缺失);day_centroid 的 tot>0 保护;day_corr 一类在常数日返回 0 的问题这里不用日内相关,而是日度读数之间的滚动相关,有效对不足时返回 0 只影响新股;无前视(无 cross_shift / ts_shift);最长窗口 120 日。'
+  inspired_by: '本批 heads 全无「分钟轴位置」与「成交额按涨跌分解」维度;day_mean(Volume) 富集 +1.18(p 0.002)说明成交行为有信息;day_q_stat_std(Volume) 上一轮换外围仍负,改读时间与方向'
+  seeds:
+  - 'cross_corr(day_signed_ratio(Ret, Amt), day_centroid(Amt), 60)'
+  - 'cross_regbeta(day_centroid(Amt), day_signed_ratio(Ret, Amt), 60)'
+  - 'sub(cross_mean(day_signed_ratio(Ret, Amt), 20), cross_mean(day_signed_ratio(Ret, Amt), 120))'
+  - 'cross_zscore(day_centroid(Amt), 120)'
+  - 'sub(cross_mean(day_centroid(Amt), 20), cross_mean(day_centroid(Amt), 120))'
+  - 'cross_ema(mul(day_signed_ratio(Ret, Amt), day_centroid(Amt)), 20)'
+  - 'cross_corr(day_gini(Amt), day_signed_ratio(Ret, Amt), 60)'
+  - 'cross_zscore(cross_corr(day_signed_ratio(Ret, Amt), day_centroid(Amt), 40), 120)'
+  - 'cross_regbeta(day_signed_ratio(Ret, Amt), day_sum(Ret), 60)'
+  - 'cross_mean(day_signed_ratio(Ret, Volume), 60)'
+  - 'cross_zscore(day_signed_ratio(Ret, Amt), 60)'
+R:
+- head: 'ts_std(neg(neg(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241))), 50)'
+  why: '拆解显示:换 ts_std 窗口 50->25 得 -0.37(valid +0.56),去掉 ts_sum 得 -0.39,说明外层 50 日 ts_std 与 10 日 ts_sum 过长/过平滑是烂部件(train 一直 -0.4 以下,valid 窗口 25 转正);neg(neg()) 是空操作,不影响'
+  variants:
+  - 'ts_std(neg(neg(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241))), 25)'
+  - 'ts_std(neg(neg(cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 241))), 50)'
+  - 'ts_std(cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 241), 25)'
+  - 'ts_std(cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 241), 20)'
+  - 'ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 5), 241), 25)'
+  - 'ts_std(cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120), 25)'
+  - 'ts_std(cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 120), 25)'
+  - 'ts_std(cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 241), 35)'

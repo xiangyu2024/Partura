@@ -1,0 +1,34 @@
+seed: 2076
+round: 3
+slots:
+  - type: E
+    core: 'sqrt(day_skew(in_slice(Open, 0, 60)))'
+    hypothesis: '核心 = 开盘第一小时(分钟 0-60)开盘价路径的正偏度(sqrt 对负偏度返回缺失,只留向上尖峰的部分),是本流两个最好 head 共有的部件(共性表均值差 +2.20,p 0.000,含它的 11 个候选均值 -0.09,不含 -2.29),也是 head 1 拆解里 sufficiency 单独为 -4.8 但与成交稀薄度配对才变成 +0.70 的那一半。此前所有含它的候选都只和 day_zero_ratio(Amt)(成交额为 0 的分钟占比)配对,再做 cross_mean 30,外围是同一个 ts_cov(稀薄度, 偏度, 10) 骨架。本轮保持核心不动,把「搭档」与「聚合方式」整体换掉,检验 alpha 到底来自开盘偏度还是来自 Amt 稀薄度:搭档换成其他度量「价格没有被真实交易确认」的量,如 day_zero_ratio(Ret)(价格分钟不动的占比,即 stale pricing,与成交额为 0 不同:可以有成交但价格不变)、开盘一小时内的成交额零占比 day_zero_ratio(in_slice(Amt, 0, 60))(只看开盘承接而非全天)、day_gini(Amt) / day_skew(Amt)(成交集中度与成交额尖峰);组合方式用 ts_corr(标准化的共动)、先乘后平滑(mul 后 ts_mean / cross_ema)、以及短窗减长窗的变化量,而不是 ts_cov 加 cross_mean 30。机制:开盘一小时内价格被少数几笔成交向上拉出尖峰,而这些成交没有持续成交量或价格确认(价格呆滞、成交稀薄),是被集合竞价后零星买单推高的彩票型票,后续回吐就是 alpha;换了搭档后如果仍成立,说明来源是开盘偏度本身。和库里 head 的不同:head 全部是 day_zero_ratio(Amt) 搭档加 ts_cov 骨架,库禁令会拒绝同骨架,这里搭档与算子结构都不同;与四个控制(流动性、波动、反转、已知族)的 |ρ| 预期低,因为偏度是三阶形状量,不随水平变化。样本外还会在:这是微观结构层面的散户偏好与薄成交的价格冲击,train / valid 两段 head 分数几乎相等(+0.70 / +0.71),没有明显时段依赖。'
+    seeds:
+      - 'cross_mean(ts_cov(day_zero_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+      - 'cross_mean(ts_corr(day_zero_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60))), 20), 30)'
+      - 'cross_mean(ts_cov(day_zero_ratio(in_slice(Amt, 0, 60)), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+      - 'cross_mean(ts_cov(day_gini(Amt), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+      - 'cross_mean(ts_corr(day_skew(Amt), sqrt(day_skew(in_slice(Open, 0, 60))), 20), 30)'
+      - 'cross_ema(mul(day_zero_ratio(Amt), sqrt(day_skew(in_slice(Open, 0, 60)))), 20)'
+      - 'sub(cross_mean(ts_cov(day_zero_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 10), cross_mean(ts_cov(day_zero_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 40))'
+      - 'cross_mean(ts_corr(day_zero_ratio(Amt), sqrt(day_skew(in_slice(Open, 0, 60))), 20), 30)'
+      - 'cross_zscore(ts_mean(mul(day_zero_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60)))), 20), 40)'
+      - 'cross_mean(ts_cov(day_pos_ratio(Ret), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+      - 'cross_mean(ts_cov(day_zero_ratio(in_slice(Amt, 181, 240)), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+      - 'cross_mean(ts_cov(day_std(Amt), sqrt(day_skew(in_slice(Open, 0, 60))), 10), 30)'
+  - type: N
+    hypothesis: '新 idea:成交稀薄发生在交易日的哪个时段,而不是全天占比。批里全部 head 用的是全天成交额为 0 的分钟占比 day_zero_ratio(Amt),它同时混合了开盘无承接、午间冷清与尾盘无人接盘。这里用 in_slice 把 241 分钟(下标 0..240)切成开盘第一小时(0-60)与尾盘最后一小时(181-240),分别算零成交占比,取差 = 「尾盘比开盘更稀薄」的程度;尾盘稀薄意味着收盘前没有流动性提供者,收盘价由零星订单决定,次日回吐(价格冲击的补偿)或持续(信息未被吸收)都是可交易的方向,由 train / valid 的残差书决定符号。再把这个时段差做 10 日协方差或 20 日相关,搭档不是价格偏度,而是当天收盘前一小时的收益(in_slice(Ret,181,240) 的日内求和 day_sum),即「尾盘薄成交 × 尾盘价格方向」的共动,以及 ts_std(时段差)度量稀薄时段的不稳定性(稀薄是否忽开忽关)。算子实现:day_zero_ratio 在 in_slice 后只统计该片段的有限分钟(两端含,下标不越界);ts_cov / ts_corr 的窗口在日轴,因果。与库里 head 的不同:head 是全天稀薄度与开盘价偏度的协方差,没有任何时段对比,也没有收益方向;库的 5583 条表达式里没有 in_slice 分段的零占比差。样本外还会在:收盘集合竞价前后的流动性撤出是结构性的微观现象,不依赖某一段行情。风险:稀薄度的离散网格(k/60 的倍数)较粗,靠 30 日聚合平滑。'
+    inspired_by: '第 1-3 批里 day_zero_ratio(Amt) 的共性富集(含它的 118 个候选均值 -0.90,不含 -2.99),和 head 里开盘一小时偏度 day_skew(in_slice(Open, 0, 60)) 比全天版更强的现象,说明时段划分本身有信息。'
+    seeds:
+      - 'cross_mean(sub(day_zero_ratio(in_slice(Amt, 181, 240)), day_zero_ratio(in_slice(Amt, 0, 60))), 30)'
+      - 'cross_mean(ts_cov(sub(day_zero_ratio(in_slice(Amt, 181, 240)), day_zero_ratio(in_slice(Amt, 0, 60))), day_sum(in_slice(Ret, 181, 240)), 10), 30)'
+      - 'cross_mean(ts_corr(day_zero_ratio(in_slice(Amt, 181, 240)), day_sum(in_slice(Ret, 181, 240)), 20), 30)'
+      - 'ts_std(sub(day_zero_ratio(in_slice(Amt, 181, 240)), day_zero_ratio(in_slice(Amt, 0, 60))), 30)'
+      - 'cross_mean(ts_cov(day_zero_ratio(in_slice(Amt, 181, 240)), day_sum(in_slice(Ret, 0, 60)), 10), 30)'
+      - 'cross_ema(sub(day_zero_ratio(in_slice(Amt, 181, 240)), day_zero_ratio(in_slice(Amt, 61, 180))), 20)'
+      - 'cross_mean(ts_cov(day_zero_ratio(in_slice(Amt, 0, 60)), day_sum(in_slice(Ret, 0, 60)), 10), 30)'
+      - 'sub(cross_mean(day_zero_ratio(in_slice(Amt, 181, 240)), 10), cross_mean(day_zero_ratio(in_slice(Amt, 181, 240)), 60))'
+      - 'cross_mean(ts_corr(sub(day_zero_ratio(in_slice(Amt, 181, 240)), day_zero_ratio(in_slice(Amt, 0, 60))), day_sum(Ret), 20), 30)'
+      - 'cross_mean(ts_cov(day_zero_ratio(in_slice(Ret, 181, 240)), day_skew(in_slice(Ret, 181, 240)), 10), 30)'
+R: []
