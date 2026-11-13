@@ -5,7 +5,7 @@ any of this ran).  Server; `source tmp/w02l_env.sh` first.
         pools LX (struct/members.csv, the 5583 parseable members of the two libraries) and W (library/heads_D.json, every D-head,
         from scripts/w02l_report.py --heads-json); each expression's daily z-rank signal (steer.signal_input) on the whole view
         2018-01-02 ~ 2026-09-16 -> runs/prod_W02L/two_level/_signals/<sha1>.npy, plus a copy cut at 2025-12-31 for the scorer.
-    python scripts/w02l_two_level.py score [--workers N] [--pools W,LX]
+    python scripts/w02l_two_level.py score [--workers N] [--pools W,LX,LX2] [--allow-missing]
         AlphaCube's scorer, unmodified (score_all_factors.py --buyable), on the view cut at 2025-12-31 (its label never sees 2026):
         score_LX/ and score_W/ -> metrics.csv.  Then the cut copies are deleted.
     python scripts/w02l_two_level.py build
@@ -152,16 +152,17 @@ def signals():
     print(f"[w2] signals done (shard {k_}/{n_}): failed {len(bad)}", flush=True)
 
 
-def failed_signals():
-    """Every shard's failures; and every expression of both pools must have its signal or be listed as failed."""
+def failed_signals(allow_missing=False):
+    """Every shard's failures; and every expression of both pools must have its signal or be listed as failed.  With
+    allow_missing (score --allow-missing), the missing ones are returned as {expr: "no signal yet"} instead."""
     bad = {}
     for f in W.glob("signals_*_*of*.json"):
         bad.update(json.loads(f.read_text(encoding="utf-8"))["failed"])
     lx, w, _ = pools()
     missing = [e for e in dict.fromkeys(w + lx) if e not in bad and not (W / "_signals" / f"{key(e)}.npy").is_file()]
-    if missing:
+    if missing and not allow_missing:
         raise SystemExit(f"{len(missing)} expressions have no signal yet (run every shard of `signals` first)")
-    return bad
+    return {**bad, **{e: "no signal yet" for e in missing}}
 
 
 # ---------------------------------------------------------------------------------------------------------------- score
@@ -183,13 +184,22 @@ def write_pool(d, exprs, src, dates):
 def score():
     lx, w, _ = pools()
     _, cut_dates = cut_view_dates()
-    failed = failed_signals()
+    failed = failed_signals(allow_missing="--allow-missing" in argv)
     n = len(cut_dates)
     frac = (n - 0.5) / n                                                 # int(n * frac) = n - 1: train = all but the last day of 2025
-    for name, exprs in (("W", w), ("LX", lx)):
+    scored_lx = set()
+    if (W / "score_LX" / "manifest.csv").is_file():
+        scored_lx = {r["expression"] for r in csv.DictReader(open(W / "score_LX" / "manifest.csv", encoding="utf-8"))}
+    lx2 = [e for e in lx if e not in scored_lx] if scored_lx else []    # LX members whose signals came after score_LX ran
+    for name, exprs in (("W", w), ("LX", lx), ("LX2", lx2)):
         d = W / f"score_{name}"
         ex = [e for e in exprs if e not in failed]
-        if name not in opt("--pools", "W,LX").split(","):
+        if not ex:
+            continue
+        if name not in opt("--pools", "W,LX,LX2").split(","):
+            continue
+        if name == "LX" and scored_lx and "--rescore" not in argv:
+            print(f"[w2] score_LX: done earlier ({len(scored_lx)} signals); the rest go to score_LX2", flush=True)
             continue
         if (d / "metrics.csv").is_file() and "--rescore" not in argv:
             have = [r["expression"] for r in csv.DictReader(open(d / "manifest.csv", encoding="utf-8"))]
@@ -225,7 +235,7 @@ def build():
     from select_factors import build_train_fingerprints, cluster_by_correlation, fitness, pairwise_abs_corr, selectable_rows
     lx, w, heads = pools()
     _, dates, split = full_view()
-    failed = failed_signals()
+    failed = failed_signals(allow_missing="--allow-missing" in argv)   # still missing at build time = not computed, listed in build.json
     tgt_cut = fit_target(split)
     S_ = tgt_cut.shape[1]
     fit = np.full((len(dates), S_), np.nan)
@@ -234,7 +244,11 @@ def build():
     fp_days = slice(split - FP_DAYS, split)
 
     def rows_of(name, exprs):
-        by_expr = {r["expression"]: r for r in csv.DictReader(open(W / f"score_{name}" / "metrics.csv", encoding="utf-8"))}
+        by_expr = {}
+        for nm in ((name, name + "2") if name == "LX" else (name,)):
+            f = W / f"score_{nm}" / "metrics.csv"
+            if f.is_file():
+                by_expr.update({r["expression"]: r for r in csv.DictReader(open(f, encoding="utf-8"))})
         return [by_expr[e] for e in exprs if e in by_expr]
 
     # W deduplicated: by D, best first; a head whose |rho| to a kept one is >= 0.7 on the training fingerprints is dropped
