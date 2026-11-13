@@ -110,7 +110,7 @@ stages = [
     {"key": "stage0", "step": "第 0 步:原库重新打分", "done": s0, "total": N_STAGE0_BLOCKS, "unit": "块",
      "note": "两个冠军库 5583 条按结构分成 698 块，逐块用尺子 A / B 打分"},
     {"key": "spearman", "step": "第 0 步补算:ts_spearman", "done": sp, "total": N_SPEARMAN, "unit": "条",
-     "note": "CPU 上算，很慢;GPU 空出来后再挪过去"},
+     "note": "GPU 上补算(空卡、上限 0.9),6 个 CPU 进程并行"},
     {"key": "streams", "step": "建流", "done": len(seeds), "total": 80, "unit": "条流", "note": "按结构分的 240 批，每条流 3 批"},
     {"key": "plans", "step": "轮次计划(写好、审计、推送)", "done": len(plans), "total": n_rounds, "unit": "轮",
      "note": "每轮：定位 → 写计划 → 相关度表 → 审计 → 推送"},
