@@ -98,6 +98,24 @@ try:
         b_pass, d_pending = int(m.group(1)), int(m.group(3))
 except OSError:
     pass
+# ruler D, live: d_scores.jsonl against the pending lists of the makeup passes (tmp/w2tl/d_makeup*.txt)
+d_have = set()
+if os.path.exists(f"{D}/d_scores.jsonl"):
+    for ln in open(f"{D}/d_scores.jsonl", encoding="utf-8"):
+        if ln.strip():
+            d_have.add(json.loads(ln).get("expr"))
+d_want = set()
+for f in sorted(os.listdir("tmp/w2tl")) if os.path.isdir("tmp/w2tl") else []:
+    if f.startswith("d_makeup") and f.endswith(".txt"):
+        d_want |= {x.strip() for x in open(f"tmp/w2tl/{f}", encoding="utf-8") if x.strip()}
+d_live_pending = len(d_want - d_have)
+d_running = bool(procs("scripts/w02l_backtest.py"))
+# the two R groups of MAKEUP.md (finalize dropped them by mistake): 2075 r3 gets its first R file, 2067 r3's is rewritten
+A_ = f"{D}/arms"
+r_done = int(os.path.exists(f"{A_}/s2075_P_r3_R.json"))
+r_done += int(os.path.exists(f"{A_}/s2067_P_r3_R.json.pre_makeup")
+              and os.path.getmtime(f"{A_}/s2067_P_r3_R.json") > os.path.getmtime(f"{A_}/s2067_P_r3_R.json.pre_makeup"))
+r_running = bool(procs("c05_locate.py direct"))
 # makeup
 started, mk_done, mk_ok = 0, 0, 0
 if os.path.exists(f"{D}/makeup_started.txt"):
@@ -122,9 +140,19 @@ lib_done = len(os.listdir(f"{TL}/_signals")) if os.path.isdir(f"{TL}/_signals") 
 lib_note, lib_unit = "信号生成中(原库从缓存读)", "条信号"
 if os.path.exists(f"{TL}/score_LX/metrics.csv"):
     SYN = ["C_LX", "C_LX_ng", "C_LXW", "C_LXW_ng", "C_W", "C_W_ng"]          # the six two-level signals of LIBRARY_PLAN section 4
-    built = [n for n in SYN if os.path.exists(f"{TL}/{n}.npy") and os.path.getmtime(f"{TL}/{n}.npy") > os.path.getmtime(f"{TL}/score_LX/metrics.csv")]
+    HJ = f"{D}/library/heads_D.json"                                       # C_W / C_LXW count only once built on the final W02L list
+
+    def after(n):
+        t = os.path.getmtime(f"{TL}/score_LX/metrics.csv")
+        if "W" in n.split("_")[1]:                                         # the final list: heads_D.json rewritten after the last D
+            if not os.path.exists(HJ) or os.path.getmtime(HJ) < os.path.getmtime(f"{D}/d_scores.jsonl") or d_live_pending:
+                return False
+            t = max(t, os.path.getmtime(HJ))
+        return os.path.exists(f"{TL}/{n}.npy") and os.path.getmtime(f"{TL}/{n}.npy") > t
+    built = [n for n in SYN if after(n)]
     lib_done, lib_total, lib_unit = len(built), len(SYN), "个合成"
-    lib_note = f"原库已打分;已建 {', '.join(built) if built else '无'}(C_LXW 等补跑结束、W02L 名单定下后再建)"
+    lib_note = (f"原库已打分;已建 {', '.join(built) if built else '无'}"
+                + ("" if len(built) == len(SYN) else "(C_LXW、C_W 等补跑的尺子 D 算完、W02L 名单定下后再建)"))
 n_rounds = 3 * len(seeds)
 
 stages = [
@@ -137,16 +165,18 @@ stages = [
      "note": "每轮：定位 → 写计划 → 相关度表 → 审计 → 推送"},
     {"key": "rounds", "step": "轮次搜索(跑完)", "done": len(done), "total": n_rounds, "unit": "轮",
      "note": f"在搜索的 {len(plans - set(done))} 轮"},
-    {"key": "dscore", "step": "尺子 D 打分", "done": (b_pass - d_pending) if b_pass is not None else 0,
-     "total": b_pass or 0, "unit": "个候选", "note": "尺子 B 过线的候选，截至上次回测报告"},
+    {"key": "dscore", "step": "尺子 D 打分", "done": len(d_have), "total": len(d_have) + d_live_pending, "unit": "个候选",
+     "note": f"B ≥ 0.3 且 |ρK| < 0.5 的候选;已算 {len(d_have)} 个，补跑产出待算 {d_live_pending} 个"},
     {"key": "makeup", "step": "补跑(坏掉的 GP 任务位)", "done": mk_done, "total": N_MAKEUP_ROUNDS, "unit": "轮",
      "note": f"{N_MAKEUP_SLOTS} 个任务位;已开跑 {started} 轮，跑完 {mk_done} 轮(其中成功 {mk_ok} 轮)"},
+    {"key": "rmakeup", "step": "补评 R 组(定稿误删的 2 组)", "done": r_done, "total": 2, "unit": "组",
+     "note": "2075 r3 偏度/峰度组 4 个变体;2067 r3 Volume 组 4 个(与已评的 Amt 组 6 个合并重评)"},
     {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": lib_unit, "note": lib_note},
     {"key": "test", "step": "读一次 2026 测试集", "done": 0, "total": 1, "unit": "", "note": "按事先写好的规则，只读一次"},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
 ]
 for s in stages:
-    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running}.get(s["key"], False))
+    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running}.get(s["key"], False))
 
 tail = []
 for S in seeds:
