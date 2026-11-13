@@ -31,7 +31,7 @@ from partura import diagnose as dg  # noqa: E402
 from partura import ops_ext  # noqa: E402,F401
 from partura.bridge import PARTURA_ROOT  # noqa: E402
 from partura.panels import SHARED_CACHE, PanelSet  # noqa: E402
-from partura.steer import Guidance, band_basis, neutral_residual  # noqa: E402
+from partura.steer import Guidance, band_basis, neutral_residual, signal_input  # noqa: E402
 
 assert os.environ.get("PARTURA_RANK_FIRST") == "1" and os.environ.get("PARTURA_NEUTRAL_POWERS") == "1,2,3" \
     and os.environ.get("PARTURA_STUDY_DIR") == "prod_W02L", "source tmp/w02l_env.sh first"
@@ -96,9 +96,10 @@ kept = [h["expr"] for h in json.loads((D / "library" / "W_dedup.json").read_text
 assert set(kept) <= set(heads) and all(e in drec for e in heads)
 
 
-def processed(e):
-    """the head as ruler D processes it (sign included)"""
-    z = np.load(W / "_signals" / f"{key(e)}.npy", mmap_mode="r")[:n].astype(np.float64)
+def processed(e, raw):
+    """the head as ruler D processes it (sign included).  The raw panel comes from the same PanelSet (CPU, shared cache) that
+    scored D: runs/prod_W02L/two_level/_signals differs for the in_topk_masked heads (PAIR_PLAN addendum)."""
+    z = signal_input(np.asarray(raw, np.float64))
     r = drec[e]
     return float(r["sign"]) * neutral_residual(bk.smoothed(z, float(r["hl"])), Q)
 
@@ -111,8 +112,16 @@ check, acc = [], {"W79": [None, None], "W244": [None, None]}
 own79 = []
 with slot():
     mem = MemoryGuard(self_limit_gb=200, cgroup_limit_gb=850).start()
+    P = {}
     for i, e in enumerate(heads):
-        r = processed(e)
+        if i % 8 == 0:
+            ps._mem.clear()
+            part = heads[i:i + 8]
+            P = ps.compute({f"h{i + j}": x for j, x in enumerate(part)})
+            miss = [f"h{i + j}" for j in range(len(part)) if f"h{i + j}" not in P]
+            if miss:
+                raise SystemExit(f"no panel for {miss}: {[str(ps.errors.get(k))[:120] for k in miss]}")
+        r = processed(e, P.pop(f"h{i}"))
         got_tr, got_va = bk.book_row(r, tgt, tr)["long_sharpe"], bk.book_row(r, tgt, va)["long_sharpe"]
         check.append({"expr": e, "D_train": drec[e]["train"], "D_valid": drec[e]["valid"], "got_train": float(got_tr), "got_valid": float(got_va)})
         z = zscore_rows(r)

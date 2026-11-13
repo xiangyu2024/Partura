@@ -50,3 +50,13 @@
 ## 代码
 
 `scripts/w02l_pair.py`(服务器，CPU)。产出 `research/prod_W02L/pair.{json,md}`,W 腿信号 `runs/prod_W02L/two_level/W_D79.npy` / `W_D244.npy`(只到 2025-12-31)。
+
+## 补记(2026-11-13 15:10 EST,核对没过之后、任何合并结果算出来之前)
+
+- 第一次运行停在核对：只有 90.2% 的 head 重算的 D 与记录相差 ≤ 0.02(要求 95%),最大差 0.18,重算的偏高。
+- 查明原因：
+  - 对不上的 24 个里 21 个含 `in_topk_masked`。其余 3 个只差 0.02 ~ 0.025。全部 head 的中位差是 0.0001。
+  - 抽了一个含 `in_topk_masked` 的 head 对比:`runs/prod_W02L/two_level/_signals` 里的版本，和打尺子 D 时 PanelSet(CPU、共用缓存)给的面板逐日 z 秩相关 0.995,但 72% 的格子不同，每天都不同。
+  - 这一类算子在两次计算里并列值处理不同(`_signals` 是在 GPU 上算的)。
+- 改法：每个 head 的原始面板改从和尺子 D 打分时相同的 PanelSet 取(CPU、共用缓存),再按 D 的口径处理(`steer.signal_input` → EMA → 残差 → 方向)。核对标准不变，仍是 ≥ 95% 在 0.02 以内，否则停。
+- 附带：建库(C_W / C_LXW / C_WK)用的是 `_signals` 版本，这 21 个 head 在那里和 D 打分时的面板略有不同。主判据结论不受影响，记在这里备查。
