@@ -1,0 +1,353 @@
+{
+ "seed": 2023,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2023M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "ts_max(day_quantile_q75(Volume), 40)",
+   "sign": -1.0,
+   "hl": 0.0,
+   "score": -1.357028073539399,
+   "train": -1.1638606299850995,
+   "valid": -1.357028073539399,
+   "src": "prods2023M1_I0_open_search"
+  },
+  {
+   "expr": "ts_stddev(day_quantile_q75(Volume), 10)",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -1.4779648881482015,
+   "train": -1.4017547726581385,
+   "valid": -1.4779648881482015,
+   "src": "prods2023M1_I0_open_search"
+  },
+  {
+   "expr": "sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)))",
+   "sign": 1.0,
+   "hl": 5.0,
+   "score": -1.5552771292691991,
+   "train": -1.3871005133631997,
+   "valid": -1.5552771292691991,
+   "src": "prods2023M1_I0_open_search"
+  }
+ ],
+ "n_archived": 37,
+ "enrichment": [
+  {
+   "subtree": "day_quantile_q75(Volume)",
+   "n_with": 7,
+   "mean_with": -1.9885,
+   "mean_without": -2.7953,
+   "effect": 0.8068,
+   "p": 0.0044
+  },
+  {
+   "subtree": "day_quantile_q75(Low)",
+   "n_with": 4,
+   "mean_with": -2.0894,
+   "mean_without": -2.7097,
+   "effect": 0.6202,
+   "p": 0.1309
+  },
+  {
+   "subtree": "day_quantile_q75(Ret)",
+   "n_with": 5,
+   "mean_with": -2.3224,
+   "mean_without": -2.6927,
+   "effect": 0.3703,
+   "p": 0.164
+  },
+  {
+   "subtree": "day_quantile_q75(Open)",
+   "n_with": 6,
+   "mean_with": -2.5103,
+   "mean_without": -2.6683,
+   "effect": 0.158,
+   "p": 0.6635
+  },
+  {
+   "subtree": "day_quantile_q75(Close)",
+   "n_with": 6,
+   "mean_with": -2.7511,
+   "mean_without": -2.6216,
+   "effect": -0.1294,
+   "p": 0.7202
+  }
+ ],
+ "ablation": [
+  {
+   "head": "ts_max(day_quantile_q75(Volume), 40)",
+   "head_score": -1.357028073539399,
+   "src": "prods2023M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile_q75(Volume)",
+     "expr": "day_quantile_q75(Volume)",
+     "coverage": 0.9995,
+     "distinct": 0.3583,
+     "gate": false
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "ts_max(day_quantile_q75(Amt), 40)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -1.2372,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -1.2372,
+     "valid": -0.9555,
+     "rho_known": -0.9484
+    },
+    {
+     "kind": "window",
+     "what": "ts_max@40->20",
+     "expr": "ts_max(day_quantile_q75(Volume), 20)",
+     "coverage": 0.9995,
+     "distinct": 0.5145,
+     "gate": true,
+     "score": -1.7944,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.2264,
+     "valid": -1.7944,
+     "rho_known": 0.7139
+    },
+    {
+     "kind": "window",
+     "what": "ts_max@40->80",
+     "expr": "ts_max(day_quantile_q75(Volume), 80)",
+     "coverage": 0.9995,
+     "distinct": 0.6269,
+     "gate": true,
+     "score": -1.4785,
+     "sign": -1.0,
+     "hl": 0.0,
+     "train": -1.2112,
+     "valid": -1.4785,
+     "rho_known": 0.6241
+    }
+   ]
+  },
+  {
+   "head": "ts_stddev(day_quantile_q75(Volume), 10)",
+   "head_score": -1.4779648881482015,
+   "src": "prods2023M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile_q75(Volume)",
+     "expr": "day_quantile_q75(Volume)",
+     "coverage": 0.9995,
+     "distinct": 0.3583,
+     "gate": false
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "ts_stddev(day_quantile_q75(Amt), 10)",
+     "coverage": 0.9995,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -4.5143,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.0288,
+     "valid": -4.5143,
+     "rho_known": 0.8806
+    },
+    {
+     "kind": "window",
+     "what": "ts_stddev@10->5",
+     "expr": "ts_stddev(day_quantile_q75(Volume), 5)",
+     "coverage": 0.9995,
+     "distinct": 0.9649,
+     "gate": true,
+     "score": -1.5857,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3847,
+     "valid": -1.5857,
+     "rho_known": 0.6321
+    },
+    {
+     "kind": "window",
+     "what": "ts_stddev@10->20",
+     "expr": "ts_stddev(day_quantile_q75(Volume), 20)",
+     "coverage": 0.9995,
+     "distinct": 0.9991,
+     "gate": true,
+     "score": -1.6855,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.2394,
+     "valid": -1.6855,
+     "rho_known": 0.7018
+    }
+   ]
+  },
+  {
+   "head": "sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)))",
+   "head_score": -1.5552771292691991,
+   "src": "prods2023M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50))",
+     "expr": "abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50))",
+     "coverage": 0.9988,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.6144,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.3871,
+     "valid": -1.6144,
+     "rho_known": 0.5297
+    },
+    {
+     "kind": "sufficiency",
+     "what": "ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)",
+     "expr": "ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)",
+     "coverage": 0.9988,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -3.1956,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.2888,
+     "valid": -3.1956,
+     "rho_known": 0.0986
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_cov(Close, Open)",
+     "expr": "day_cov(Close, Open)",
+     "coverage": 0.9995,
+     "distinct": 0.9988,
+     "gate": true,
+     "score": -2.2817,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.5579,
+     "valid": -2.2817,
+     "rho_known": 0.4831
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile_q75(Volume)",
+     "expr": "day_quantile_q75(Volume)",
+     "coverage": 0.9995,
+     "distinct": 0.3583,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50))",
+     "expr": "sub(0.5, ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50))",
+     "coverage": 0.9988,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -3.1956,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.2893,
+     "valid": -3.1956,
+     "rho_known": 0.0986,
+     "necessity": 1.6404
+    },
+    {
+     "kind": "knockout",
+     "what": "ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 50)",
+     "expr": "sub(0.5, abs_(day_cov(Close, Open)))",
+     "coverage": 0.9995,
+     "distinct": 0.9972,
+     "gate": true,
+     "score": -2.2832,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.5543,
+     "valid": -2.2832,
+     "rho_known": 0.4831,
+     "necessity": 0.728
+    },
+    {
+     "kind": "swap",
+     "what": "Close->Vwap",
+     "expr": "sub(0.5, abs_(ts_regres(day_cov(Vwap, Open), day_quantile_q75(Volume), 50)))",
+     "coverage": 0.9988,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.6046,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -1.4076,
+     "valid": -1.6046,
+     "rho_known": 0.5285
+    },
+    {
+     "kind": "swap",
+     "what": "Open->Close",
+     "expr": "sub(0.5, abs_(ts_regres(day_cov(Close, Close), day_quantile_q75(Volume), 50)))",
+     "coverage": 0.9988,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.614,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -1.4179,
+     "valid": -1.614,
+     "rho_known": 0.5298
+    },
+    {
+     "kind": "window",
+     "what": "ts_regres@50->25",
+     "expr": "sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 25)))",
+     "coverage": 0.9988,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.7296,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.5015,
+     "valid": -1.7296,
+     "rho_known": 0.5577
+    },
+    {
+     "kind": "window",
+     "what": "ts_regres@50->100",
+     "expr": "sub(0.5, abs_(ts_regres(day_cov(Close, Open), day_quantile_q75(Volume), 100)))",
+     "coverage": 0.9988,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.6471,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -1.4209,
+     "valid": -1.6471,
+     "rho_known": 0.4893
+    }
+   ]
+  }
+ ],
+ "paid": 18,
+ "core_cards": [
+  {
+   "core": "day_quantile_q75(Volume)",
+   "source": "enrichment",
+   "effect": 0.8068,
+   "p": 0.0044,
+   "n_with": 7
+  }
+ ],
+ "r_candidates": [],
+ "missions_before": [],
+ "seconds": 1998
+}

@@ -1,0 +1,204 @@
+{
+ "seed": 2077,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2077M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "day_median(div(abs_(Ret), Amt))",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -1.0152934496529067,
+   "train": -0.22246858614263693,
+   "valid": -1.0152934496529067,
+   "src": "prods2077M1_I0_open_search"
+  },
+  {
+   "expr": "day_open(in_delta(Volume, 60))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -1.1182576688347432,
+   "train": -0.8725754622831086,
+   "valid": -1.1182576688347432,
+   "src": "prods2077M1_I0_open_search"
+  },
+  {
+   "expr": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -1.6348238622819,
+   "train": -1.3926097745320885,
+   "valid": -1.6348238622819,
+   "src": "prods2077M1_I0_open_search"
+  }
+ ],
+ "n_archived": 51,
+ "enrichment": [
+  {
+   "subtree": "in_slice(Close, 1, 1)",
+   "n_with": 13,
+   "mean_with": -3.9938,
+   "mean_without": -3.3682,
+   "effect": -0.6256,
+   "p": 0.9644
+  },
+  {
+   "subtree": "create_like(in_slice(Close, 1, 1), 0)",
+   "n_with": 13,
+   "mean_with": -3.9938,
+   "mean_without": -3.3682,
+   "effect": -0.6256,
+   "p": 0.9644
+  },
+  {
+   "subtree": "create_like(in_slice(Close, 1, 1), 1)",
+   "n_with": 4,
+   "mean_with": -4.1836,
+   "mean_without": -3.4718,
+   "effect": -0.7118,
+   "p": 0.9136
+  }
+ ],
+ "ablation": [
+  {
+   "head": "day_median(div(abs_(Ret), Amt))",
+   "head_score": -1.0152934496529067,
+   "src": "prods2077M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "Amt->Volume",
+     "expr": "day_median(div(abs_(Ret), Volume))",
+     "coverage": 0.9995,
+     "distinct": 0.8595,
+     "gate": true,
+     "score": -2.1906,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -0.7267,
+     "valid": -2.1906,
+     "rho_known": -0.2166
+    }
+   ]
+  },
+  {
+   "head": "day_open(in_delta(Volume, 60))",
+   "head_score": -1.1182576688347432,
+   "src": "prods2077M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_open(in_delta(Amt, 60))",
+     "coverage": 0.9995,
+     "distinct": 0.9931,
+     "gate": true,
+     "score": -1.3286,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3286,
+     "valid": -0.9137,
+     "rho_known": -0.2623
+    },
+    {
+     "kind": "window",
+     "what": "in_delta@60->30",
+     "expr": "day_open(in_delta(Volume, 30))",
+     "coverage": 0.9995,
+     "distinct": 0.4515,
+     "gate": false
+    },
+    {
+     "kind": "window",
+     "what": "in_delta@60->120",
+     "expr": "day_open(in_delta(Volume, 120))",
+     "coverage": 0.9995,
+     "distinct": 0.4235,
+     "gate": false
+    }
+   ]
+  },
+  {
+   "head": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+   "head_score": -1.6348238622819,
+   "src": "prods2077M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "High->Low",
+     "expr": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, Low, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+     "coverage": 0.9995,
+     "distinct": 0.9741,
+     "gate": true,
+     "score": -1.5634,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.4178,
+     "valid": -1.5634,
+     "rho_known": -0.1776
+    },
+    {
+     "kind": "swap",
+     "what": "Vwap->Close",
+     "expr": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Close))))",
+     "coverage": 0.9995,
+     "distinct": 0.973,
+     "gate": true,
+     "score": -1.3691,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.3691,
+     "valid": -1.248,
+     "rho_known": -0.1734,
+     "rho_head": 0.9727
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_delay@10->5",
+     "expr": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 5), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+     "coverage": 0.9995,
+     "distinct": 0.9729,
+     "gate": true,
+     "score": -1.7156,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3669,
+     "valid": -1.7156,
+     "rho_known": -0.1784
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_delay@10->20",
+     "expr": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 20), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+     "coverage": 0.9995,
+     "distinct": 0.9736,
+     "gate": true,
+     "score": -1.569,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3819,
+     "valid": -1.569,
+     "rho_known": -0.1767
+    }
+   ]
+  }
+ ],
+ "paid": 8,
+ "core_cards": [],
+ "r_candidates": [
+  {
+   "head": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Vwap))))",
+   "head_score": -1.6348238622819,
+   "variant": "day_quantile_q75(div(nt_ts_delay(in_r2(Ret, High, 3), 10), nt_cs_mask_top_replace_mean(nt_cs_mask_top_replace_mean_neg(Close))))",
+   "kind": "swap",
+   "what": "Vwap->Close",
+   "score": -1.3691,
+   "gain": 0.2657
+  }
+ ],
+ "missions_before": [],
+ "seconds": 1977
+}

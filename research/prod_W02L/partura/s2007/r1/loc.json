@@ -1,0 +1,273 @@
+{
+ "seed": 2007,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2007M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "cross_sum(day_durbin_watson(Close), 60)",
+   "sign": 1.0,
+   "hl": 0.0,
+   "score": -2.0562977356284495,
+   "train": -2.0562977356284495,
+   "valid": -1.717487688884599,
+   "src": "prods2007M1_I0_open_search"
+  },
+  {
+   "expr": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 10)",
+   "sign": 1.0,
+   "hl": 20.0,
+   "score": -2.9429427041875194,
+   "train": -2.9429427041875194,
+   "valid": -0.9457600940254793,
+   "src": "prods2007M1_I0_open_search"
+  },
+  {
+   "expr": "log(day_durbin_watson(Vwap))",
+   "sign": 1.0,
+   "hl": 20.0,
+   "score": -3.1346428242726354,
+   "train": -3.1346428242726354,
+   "valid": -2.7070333995164932,
+   "src": "prods2007M1_I0_open_search"
+  }
+ ],
+ "n_archived": 29,
+ "enrichment": [
+  {
+   "subtree": "day_durbin_watson(Vwap)",
+   "n_with": 8,
+   "mean_with": -3.652,
+   "mean_without": -3.7848,
+   "effect": 0.1328,
+   "p": 0.0301
+  },
+  {
+   "subtree": "day_durbin_watson(Close)",
+   "n_with": 6,
+   "mean_with": -3.6829,
+   "mean_without": -3.7652,
+   "effect": 0.0823,
+   "p": 0.5958
+  }
+ ],
+ "ablation": [
+  {
+   "head": "cross_sum(day_durbin_watson(Close), 60)",
+   "head_score": -2.0562977356284495,
+   "src": "prods2007M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_durbin_watson(Close)",
+     "expr": "day_durbin_watson(Close)",
+     "coverage": 0.9979,
+     "distinct": 0.9996,
+     "gate": true,
+     "score": -4.0313,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -4.0313,
+     "valid": -3.829,
+     "rho_known": 0.2152
+    },
+    {
+     "kind": "swap",
+     "what": "Close->Vwap",
+     "expr": "cross_sum(day_durbin_watson(Vwap), 60)",
+     "coverage": 0.9994,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -2.1691,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -2.1691,
+     "valid": -1.8211,
+     "rho_known": -0.2602
+    },
+    {
+     "kind": "window",
+     "what": "cross_sum@60->30",
+     "expr": "cross_sum(day_durbin_watson(Close), 30)",
+     "coverage": 0.9994,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -3.7209,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.3272,
+     "valid": -3.7209,
+     "rho_known": 0.3404
+    },
+    {
+     "kind": "window",
+     "what": "cross_sum@60->120",
+     "expr": "cross_sum(day_durbin_watson(Close), 120)",
+     "coverage": 0.9994,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -2.13,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -2.13,
+     "valid": -1.6964,
+     "rho_known": -0.2293
+    }
+   ]
+  },
+  {
+   "head": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 10)",
+   "head_score": -2.9429427041875194,
+   "src": "prods2007M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "ts_scale(day_durbin_watson(Vwap), 10)",
+     "expr": "ts_scale(day_durbin_watson(Vwap), 10)",
+     "coverage": 0.998,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -5.6456,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -5.6456,
+     "valid": -4.4571,
+     "rho_known": 0.0572
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_durbin_watson(Vwap)",
+     "expr": "day_durbin_watson(Vwap)",
+     "coverage": 0.998,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -3.1968,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.1968,
+     "valid": -2.8923,
+     "rho_known": -0.1752
+    },
+    {
+     "kind": "knockout",
+     "what": "ts_scale(day_durbin_watson(Vwap), 10)",
+     "expr": "cross_fangzheng(day_durbin_watson(Vwap), 10)",
+     "coverage": 0.9994,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -2.885,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -2.885,
+     "valid": -2.2024,
+     "rho_known": 0.2238,
+     "necessity": -0.0579
+    },
+    {
+     "kind": "swap",
+     "what": "Vwap->Close",
+     "expr": "cross_fangzheng(ts_scale(day_durbin_watson(Close), 10), 10)",
+     "coverage": 0.9994,
+     "distinct": 0.9991,
+     "gate": true,
+     "score": -3.7252,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.5473,
+     "valid": -3.7252,
+     "rho_known": 0.0413
+    },
+    {
+     "kind": "window",
+     "what": "cross_fangzheng@10->5",
+     "expr": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 5)",
+     "coverage": 0.9993,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -3.601,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.601,
+     "valid": -1.7019,
+     "rho_known": 0.046
+    },
+    {
+     "kind": "window",
+     "what": "cross_fangzheng@10->20",
+     "expr": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 20)",
+     "coverage": 0.9994,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -2.2208,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.2208,
+     "valid": -0.4479,
+     "rho_known": -0.0397,
+     "rho_head": 0.8388
+    }
+   ]
+  },
+  {
+   "head": "log(day_durbin_watson(Vwap))",
+   "head_score": -3.1346428242726354,
+   "src": "prods2007M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_durbin_watson(Vwap)",
+     "expr": "day_durbin_watson(Vwap)",
+     "coverage": 0.998,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -3.1968,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.1968,
+     "valid": -2.8923,
+     "rho_known": -0.1752
+    },
+    {
+     "kind": "swap",
+     "what": "Vwap->Close",
+     "expr": "log(day_durbin_watson(Close))",
+     "coverage": 0.9975,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -4.0478,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -4.0478,
+     "valid": -3.9082,
+     "rho_known": 0.2151
+    }
+   ]
+  }
+ ],
+ "paid": 12,
+ "core_cards": [
+  {
+   "core": "day_durbin_watson(Vwap)",
+   "source": "enrichment",
+   "effect": 0.1328,
+   "p": 0.0301,
+   "n_with": 8
+  }
+ ],
+ "r_candidates": [
+  {
+   "head": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 10)",
+   "head_score": -2.9429427041875194,
+   "variant": "cross_fangzheng(ts_scale(day_durbin_watson(Vwap), 10), 20)",
+   "kind": "window",
+   "what": "cross_fangzheng@10->20",
+   "score": -2.2208,
+   "gain": 0.7222
+  }
+ ],
+ "missions_before": [],
+ "seconds": 391
+}

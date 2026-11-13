@@ -1,0 +1,268 @@
+{
+ "seed": 2004,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2004M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "ts_skew(day_cov(Ret, Volume), 40)",
+   "sign": 1.0,
+   "hl": 5.0,
+   "score": -0.6397422950457002,
+   "train": -0.6397422950457002,
+   "valid": -0.07679369887584526,
+   "src": "prods2004M1_I0_open_search"
+  },
+  {
+   "expr": "cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 241)",
+   "sign": 1.0,
+   "hl": 5.0,
+   "score": -0.7308581272817704,
+   "train": -0.7308581272817704,
+   "valid": -0.2959357696129606,
+   "src": "prods2004M1_I0_open_search"
+  },
+  {
+   "expr": "day_cov(Volume, Volume)",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -1.1556027445819492,
+   "train": -1.0976454746827682,
+   "valid": -1.1556027445819492,
+   "src": "prods2004M1_I0_open_search"
+  }
+ ],
+ "n_archived": 55,
+ "enrichment": [
+  {
+   "subtree": "day_cov(Ret, Volume)",
+   "n_with": 7,
+   "mean_with": -1.6105,
+   "mean_without": -2.7723,
+   "effect": 1.1618,
+   "p": 0.0021
+  }
+ ],
+ "ablation": [
+  {
+   "head": "ts_skew(day_cov(Ret, Volume), 40)",
+   "head_score": -0.6397422950457002,
+   "src": "prods2004M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_cov(Ret, Volume)",
+     "expr": "day_cov(Ret, Volume)",
+     "coverage": 0.9995,
+     "distinct": 0.998,
+     "gate": true,
+     "score": -3.3705,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.3705,
+     "valid": -2.6649,
+     "rho_known": -0.0322
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "ts_skew(day_cov(Ret, Amt), 40)",
+     "coverage": 0.9988,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -0.8242,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.8242,
+     "valid": -0.0933,
+     "rho_known": 0.0159
+    },
+    {
+     "kind": "window",
+     "what": "ts_skew@40->20",
+     "expr": "ts_skew(day_cov(Ret, Volume), 20)",
+     "coverage": 0.9988,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -1.668,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.668,
+     "valid": -0.4672,
+     "rho_known": -0.012
+    },
+    {
+     "kind": "window",
+     "what": "ts_skew@40->80",
+     "expr": "ts_skew(day_cov(Ret, Volume), 80)",
+     "coverage": 0.9988,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -0.6332,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.6332,
+     "valid": 0.0496,
+     "rho_known": 0.0756
+    }
+   ]
+  },
+  {
+   "head": "cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 241)",
+   "head_score": -0.7308581272817704,
+   "src": "prods2004M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "cross_corr(day_sum(High), day_cov(Volume, Amt), 15)",
+     "expr": "cross_corr(day_sum(High), day_cov(Volume, Amt), 15)",
+     "coverage": 0.9995,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -1.5861,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.2633,
+     "valid": -1.5861,
+     "rho_known": -0.1116
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_sum(High)",
+     "expr": "day_sum(High)",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -2.3697,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.6072,
+     "valid": -2.3697,
+     "rho_known": 0.419
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_cov(Volume, Amt)",
+     "expr": "day_cov(Volume, Amt)",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -1.2732,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.2732,
+     "valid": -1.0729,
+     "rho_known": 0.7647
+    },
+    {
+     "kind": "knockout",
+     "what": "cross_corr(day_sum(High), day_cov(Volume, Amt), 15)",
+     "expr": "cross_quantile_q50(day_sum(High), 241)",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -2.3906,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.6011,
+     "valid": -2.3906,
+     "rho_known": 0.3514,
+     "necessity": 1.6598
+    },
+    {
+     "kind": "swap",
+     "what": "High->Low",
+     "expr": "cross_quantile_q50(cross_corr(day_sum(Low), day_cov(Volume, Amt), 15), 241)",
+     "coverage": 0.9995,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -0.7317,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.7317,
+     "valid": -0.3442,
+     "rho_known": -0.0613
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "cross_quantile_q50(cross_corr(day_sum(High), day_cov(Amt, Amt), 15), 241)",
+     "coverage": 0.9995,
+     "distinct": 0.9992,
+     "gate": true,
+     "score": -0.67,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.67,
+     "valid": -0.1797,
+     "rho_known": -0.0729
+    },
+    {
+     "kind": "window",
+     "what": "cross_quantile_q50@241->120",
+     "expr": "cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 120)",
+     "coverage": 0.9995,
+     "distinct": 0.9996,
+     "gate": true,
+     "score": -1.8667,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.6027,
+     "valid": -1.8667,
+     "rho_known": -0.1003
+    },
+    {
+     "kind": "window",
+     "what": "cross_quantile_q50@241->482",
+     "expr": "cross_quantile_q50(cross_corr(day_sum(High), day_cov(Volume, Amt), 15), 482)",
+     "coverage": 0.9995,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -1.073,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -1.073,
+     "valid": -0.048,
+     "rho_known": -0.0133
+    }
+   ]
+  },
+  {
+   "head": "day_cov(Volume, Volume)",
+   "head_score": -1.1556027445819492,
+   "src": "prods2004M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_cov(Amt, Amt)",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -3.7544,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.9824,
+     "valid": -3.7544,
+     "rho_known": 0.8522
+    }
+   ]
+  }
+ ],
+ "paid": 13,
+ "core_cards": [
+  {
+   "core": "day_cov(Ret, Volume)",
+   "source": "enrichment",
+   "effect": 1.1618,
+   "p": 0.0021,
+   "n_with": 7
+  }
+ ],
+ "r_candidates": [],
+ "missions_before": [],
+ "seconds": 430
+}

@@ -1,0 +1,349 @@
+{
+ "seed": 2063,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2063M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "pow_05(day_var(nt_ts_min(Volume, 30)))",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -1.1757841429636173,
+   "train": -1.1757841429636173,
+   "valid": -0.997844283009459,
+   "src": "prods2063M1_I0_open_search"
+  },
+  {
+   "expr": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low))",
+   "sign": 1.0,
+   "hl": 20.0,
+   "score": -1.3268275903438285,
+   "train": -1.3268275903438285,
+   "valid": -1.2638399627053667,
+   "src": "prods2063M1_I0_open_search"
+  },
+  {
+   "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15)), ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -2.0151253728408616,
+   "train": -2.0151253728408616,
+   "valid": -1.5347876646907572,
+   "src": "prods2063M1_I0_open_search"
+  }
+ ],
+ "n_archived": 18,
+ "enrichment": [],
+ "ablation": [
+  {
+   "head": "pow_05(day_var(nt_ts_min(Volume, 30)))",
+   "head_score": -1.1757841429636173,
+   "src": "prods2063M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_var(nt_ts_min(Volume, 30))",
+     "expr": "day_var(nt_ts_min(Volume, 30))",
+     "coverage": 0.9995,
+     "distinct": 0.9876,
+     "gate": true,
+     "score": -1.1758,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.1758,
+     "valid": -1.0586,
+     "rho_known": 0.6733
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "pow_05(day_var(nt_ts_min(Amt, 30)))",
+     "coverage": 0.9995,
+     "distinct": 0.989,
+     "gate": true,
+     "score": -2.1563,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.1563,
+     "valid": -0.8368,
+     "rho_known": -0.8079
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_min@30->15",
+     "expr": "pow_05(day_var(nt_ts_min(Volume, 15)))",
+     "coverage": 0.9995,
+     "distinct": 0.9965,
+     "gate": true,
+     "score": -1.1209,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.1209,
+     "valid": -1.0001,
+     "rho_known": 0.6847
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_min@30->60",
+     "expr": "pow_05(day_var(nt_ts_min(Volume, 60)))",
+     "coverage": 0.9995,
+     "distinct": 0.9747,
+     "gate": true,
+     "score": -1.2316,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.2316,
+     "valid": -1.0585,
+     "rho_known": 0.6641
+    }
+   ]
+  },
+  {
+   "head": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low))",
+   "head_score": -1.3268275903438285,
+   "src": "prods2063M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_min(nt_ts_med(nt_ts_min(Amt, 3), 5))",
+     "expr": "day_min(nt_ts_med(nt_ts_min(Amt, 3), 5))",
+     "coverage": 0.9995,
+     "distinct": 0.3165,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_cov(Ret, Low)",
+     "expr": "day_cov(Ret, Low)",
+     "coverage": 0.9995,
+     "distinct": 0.998,
+     "gate": true,
+     "score": -4.2213,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -4.2213,
+     "valid": -3.4331,
+     "rho_known": 0.1667
+    },
+    {
+     "kind": "swap",
+     "what": "Amt->Volume",
+     "expr": "add(day_min(nt_ts_med(nt_ts_min(Volume, 3), 5)), day_cov(Ret, Low))",
+     "coverage": 0.9995,
+     "distinct": 0.7723,
+     "gate": true,
+     "score": -1.6666,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.2987,
+     "valid": -1.6666,
+     "rho_known": -0.3348
+    },
+    {
+     "kind": "swap",
+     "what": "Low->High",
+     "expr": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, High))",
+     "coverage": 0.9995,
+     "distinct": 0.993,
+     "gate": true,
+     "score": -0.8761,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -0.8761,
+     "valid": -0.6264,
+     "rho_known": -0.4058,
+     "rho_head": 0.8049
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_med@5->2",
+     "expr": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 2)), day_cov(Ret, Low))",
+     "coverage": 0.9995,
+     "distinct": 0.998,
+     "gate": true,
+     "score": -3.7726,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -3.7726,
+     "valid": -3.4331,
+     "rho_known": 0.1332
+    },
+    {
+     "kind": "window",
+     "what": "nt_ts_med@5->10",
+     "expr": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 10)), day_cov(Ret, Low))",
+     "coverage": 0.9995,
+     "distinct": 0.984,
+     "gate": true,
+     "score": -2.1374,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.1374,
+     "valid": -1.6541,
+     "rho_known": -0.7617
+    }
+   ]
+  },
+  {
+   "head": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15)), ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30))",
+   "head_score": -2.0151253728408616,
+   "src": "prods2063M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15))",
+     "expr": "day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15))",
+     "coverage": 0.9995,
+     "distinct": 0.1211,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30)",
+     "expr": "ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30)",
+     "coverage": 0.9791,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -2.893,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.7217,
+     "valid": -2.893,
+     "rho_known": 0.0461
+    },
+    {
+     "kind": "sufficiency",
+     "what": "cs_normalize(day_autocorr_n1(Low))",
+     "expr": "cs_normalize(day_autocorr_n1(Low))",
+     "coverage": 0.9995,
+     "distinct": 0.9973,
+     "gate": true,
+     "score": -2.9769,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.9769,
+     "valid": -2.3244,
+     "rho_known": -0.2604
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_autocorr_n1(Low)",
+     "expr": "day_autocorr_n1(Low)",
+     "coverage": 0.9995,
+     "distinct": 0.9973,
+     "gate": true,
+     "score": -2.9769,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.9769,
+     "valid": -2.3244,
+     "rho_known": -0.2604
+    },
+    {
+     "kind": "knockout",
+     "what": "ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30)",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15)), cs_normalize(day_autocorr_n1(Low)))",
+     "coverage": 0.9995,
+     "distinct": 0.9974,
+     "gate": true,
+     "score": -2.2436,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.2436,
+     "valid": -1.6257,
+     "rho_known": 0.7829,
+     "necessity": 0.2285
+    },
+    {
+     "kind": "knockout",
+     "what": "cs_normalize(day_autocorr_n1(Low))",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15)), ts_hurst(day_autocorr_n1(Low), 30))",
+     "coverage": 0.9791,
+     "distinct": 0.9926,
+     "gate": true,
+     "score": -2.0729,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.0729,
+     "valid": -1.5492,
+     "rho_known": 0.7802,
+     "necessity": 0.0578
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Amt, 10), 15)), ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30))",
+     "coverage": 0.9791,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -2.8532,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.8532,
+     "valid": -2.7111,
+     "rho_known": 0.8194
+    },
+    {
+     "kind": "swap",
+     "what": "Low->High",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 15)), ts_hurst(cs_normalize(day_autocorr_n1(High)), 30))",
+     "coverage": 0.9791,
+     "distinct": 0.9928,
+     "gate": true,
+     "score": -2.0522,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.0522,
+     "valid": -1.5497,
+     "rho_known": 0.7814
+    },
+    {
+     "kind": "window",
+     "what": "in_min_rolling@15->7",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 7)), ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30))",
+     "coverage": 0.9791,
+     "distinct": 0.9919,
+     "gate": true,
+     "score": -1.9849,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.9849,
+     "valid": -1.6343,
+     "rho_known": 0.7883
+    },
+    {
+     "kind": "window",
+     "what": "in_min_rolling@15->30",
+     "expr": "add(day_quantile(in_min_rolling(nt_ts_min(Volume, 10), 30)), ts_hurst(cs_normalize(day_autocorr_n1(Low)), 30))",
+     "coverage": 0.9791,
+     "distinct": 0.9937,
+     "gate": true,
+     "score": -2.8371,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -2.0938,
+     "valid": -2.8371,
+     "rho_known": -0.7682
+    }
+   ]
+  }
+ ],
+ "paid": 20,
+ "core_cards": [],
+ "r_candidates": [
+  {
+   "head": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, Low))",
+   "head_score": -1.3268275903438285,
+   "variant": "add(day_min(nt_ts_med(nt_ts_min(Amt, 3), 5)), day_cov(Ret, High))",
+   "kind": "swap",
+   "what": "Low->High",
+   "score": -0.8761,
+   "gain": 0.4508
+  }
+ ],
+ "missions_before": [],
+ "seconds": 4388
+}

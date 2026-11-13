@@ -1,0 +1,214 @@
+{
+ "seed": 2058,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2058M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "day_std(pow_2(Volume))",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -1.1157216145547906,
+   "train": -1.1157216145547906,
+   "valid": -1.112088759832644,
+   "src": "prods2058M1_I0_open_search"
+  },
+  {
+   "expr": "cross_mean(day_std(pow_2(Ret)), 3)",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -2.5751896235465765,
+   "train": -2.409334280342617,
+   "valid": -2.5751896235465765,
+   "src": "prods2058M1_I0_open_search"
+  },
+  {
+   "expr": "cross_mean(sqrt(neg(neg(sigmoid(day_std(pow_2(Ret)))))), 3)",
+   "sign": -1.0,
+   "hl": 5.0,
+   "score": -2.611165948239049,
+   "train": -2.4219933754686216,
+   "valid": -2.611165948239049,
+   "src": "prods2058M1_I0_open_search"
+  }
+ ],
+ "n_archived": 7,
+ "enrichment": [],
+ "ablation": [
+  {
+   "head": "day_std(pow_2(Volume))",
+   "head_score": -1.1157216145547906,
+   "src": "prods2058M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_std(pow_2(Amt))",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -3.6588,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.2233,
+     "valid": -3.6588,
+     "rho_known": 0.832
+    }
+   ]
+  },
+  {
+   "head": "cross_mean(day_std(pow_2(Ret)), 3)",
+   "head_score": -2.5751896235465765,
+   "src": "prods2058M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_std(pow_2(Ret))",
+     "expr": "day_std(pow_2(Ret))",
+     "coverage": 0.9995,
+     "distinct": 0.9979,
+     "gate": true,
+     "score": -2.8729,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.7759,
+     "valid": -2.8729,
+     "rho_known": 0.1507
+    },
+    {
+     "kind": "window",
+     "what": "cross_mean@3->2",
+     "expr": "cross_mean(day_std(pow_2(Ret)), 2)",
+     "coverage": 0.9995,
+     "distinct": 0.9991,
+     "gate": true,
+     "score": -2.9411,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.5946,
+     "valid": -2.9411,
+     "rho_known": 0.1597
+    },
+    {
+     "kind": "window",
+     "what": "cross_mean@3->6",
+     "expr": "cross_mean(day_std(pow_2(Ret)), 6)",
+     "coverage": 0.9995,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -2.2703,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.8987,
+     "valid": -2.2703,
+     "rho_known": 0.1801,
+     "rho_head": 0.9208
+    }
+   ]
+  },
+  {
+   "head": "cross_mean(sqrt(neg(neg(sigmoid(day_std(pow_2(Ret)))))), 3)",
+   "head_score": -2.611165948239049,
+   "src": "prods2058M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "sqrt(neg(neg(sigmoid(day_std(pow_2(Ret))))))",
+     "expr": "sqrt(neg(neg(sigmoid(day_std(pow_2(Ret))))))",
+     "coverage": 0.9995,
+     "distinct": 0.0638,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "neg(neg(sigmoid(day_std(pow_2(Ret)))))",
+     "expr": "neg(neg(sigmoid(day_std(pow_2(Ret)))))",
+     "coverage": 0.9995,
+     "distinct": 0.08,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "neg(sigmoid(day_std(pow_2(Ret))))",
+     "expr": "neg(sigmoid(day_std(pow_2(Ret))))",
+     "coverage": 0.9995,
+     "distinct": 0.08,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "sigmoid(day_std(pow_2(Ret)))",
+     "expr": "sigmoid(day_std(pow_2(Ret)))",
+     "coverage": 0.9995,
+     "distinct": 0.08,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "sqrt(neg(neg(sigmoid(day_std(pow_2(Ret))))))",
+     "expr": "cross_mean(neg(neg(sigmoid(day_std(pow_2(Ret))))), 3)",
+     "coverage": 0.9995,
+     "distinct": 0.0757,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "neg(neg(sigmoid(day_std(pow_2(Ret)))))",
+     "expr": "cross_mean(sqrt(neg(sigmoid(day_std(pow_2(Ret))))), 3)",
+     "coverage": 0.9995,
+     "distinct": 0.0526,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "sigmoid(day_std(pow_2(Ret)))",
+     "expr": "cross_mean(sqrt(neg(neg(day_std(pow_2(Ret))))), 3)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -2.6226,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -2.4916,
+     "valid": -2.6226,
+     "rho_known": 0.171,
+     "necessity": 0.0114
+    },
+    {
+     "kind": "window",
+     "what": "cross_mean@3->2",
+     "expr": "cross_mean(sqrt(neg(neg(sigmoid(day_std(pow_2(Ret)))))), 2)",
+     "coverage": 0.9995,
+     "distinct": 0.0616,
+     "gate": false
+    },
+    {
+     "kind": "window",
+     "what": "cross_mean@3->6",
+     "expr": "cross_mean(sqrt(neg(neg(sigmoid(day_std(pow_2(Ret)))))), 6)",
+     "coverage": 0.9995,
+     "distinct": 0.0506,
+     "gate": false
+    }
+   ]
+  }
+ ],
+ "paid": 13,
+ "core_cards": [],
+ "r_candidates": [
+  {
+   "head": "cross_mean(day_std(pow_2(Ret)), 3)",
+   "head_score": -2.5751896235465765,
+   "variant": "cross_mean(day_std(pow_2(Ret)), 6)",
+   "kind": "window",
+   "what": "cross_mean@3->6",
+   "score": -2.2703,
+   "gain": 0.3049
+  }
+ ],
+ "missions_before": [],
+ "seconds": 449
+}

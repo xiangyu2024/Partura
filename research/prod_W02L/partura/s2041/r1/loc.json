@@ -1,0 +1,358 @@
+{
+ "seed": 2041,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2041M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -1.5085025709653876,
+   "train": -1.3790811615517953,
+   "valid": -1.5085025709653876,
+   "src": "prods2041M1_I0_open_search"
+  },
+  {
+   "expr": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -1.7307465907600503,
+   "train": -1.7169753703125006,
+   "valid": -1.7307465907600503,
+   "src": "prods2041M1_I0_open_search"
+  },
+  {
+   "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+   "sign": -1.0,
+   "hl": 20.0,
+   "score": -1.7956175413717976,
+   "train": -1.4387470878747999,
+   "valid": -1.7956175413717976,
+   "src": "prods2041M1_I0_open_search"
+  }
+ ],
+ "n_archived": 26,
+ "enrichment": [
+  {
+   "subtree": "add(day_sum(Amt), create_like(in_slice(Close, 1, 1), 1e-05))",
+   "n_with": 4,
+   "mean_with": -4.0994,
+   "mean_without": -3.5446,
+   "effect": -0.5548,
+   "p": 0.874
+  },
+  {
+   "subtree": "day_sum(Amt)",
+   "n_with": 4,
+   "mean_with": -4.0994,
+   "mean_without": -3.5446,
+   "effect": -0.5548,
+   "p": 0.874
+  },
+  {
+   "subtree": "create_like(in_slice(Close, 1, 1), 1e-05)",
+   "n_with": 12,
+   "mean_with": -4.0018,
+   "mean_without": -3.3113,
+   "effect": -0.6905,
+   "p": 0.962
+  },
+  {
+   "subtree": "day_sum(Volume)",
+   "n_with": 6,
+   "mean_with": -4.1766,
+   "mean_without": -3.466,
+   "effect": -0.7106,
+   "p": 0.9732
+  },
+  {
+   "subtree": "add(day_sum(Volume), create_like(in_slice(Close, 1, 1), 1e-05))",
+   "n_with": 6,
+   "mean_with": -4.1766,
+   "mean_without": -3.466,
+   "effect": -0.7106,
+   "p": 0.9732
+  }
+ ],
+ "ablation": [
+  {
+   "head": "day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+   "head_score": -1.5085025709653876,
+   "src": "prods2041M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "create_like(in_slice(Close, 1, 1), 0)",
+     "coverage": 0.9995,
+     "distinct": 0.0002,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "in_slice(Close, 1, 1)",
+     "expr": "in_slice(Close, 1, 1)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -2.369,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.6114,
+     "valid": -2.369,
+     "rho_known": 0.4182
+    },
+    {
+     "kind": "knockout",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Volume, in_slice(Close, 1, 1)))",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -1.5422,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3892,
+     "valid": -1.5422,
+     "rho_known": 0.5756,
+     "necessity": 0.0337
+    },
+    {
+     "kind": "swap",
+     "what": "Close->Vwap",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Vwap, 241), 0), Volume, create_like(in_slice(Vwap, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.8804,
+     "gate": true,
+     "score": -1.4394,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.4394,
+     "valid": -1.2608,
+     "rho_known": 0.5565
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 0), Amt, create_like(in_slice(Close, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.9709,
+     "gate": true,
+     "score": -3.9556,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.9556,
+     "valid": -3.8789,
+     "rho_known": 0.7304
+    }
+   ]
+  },
+  {
+   "head": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+   "head_score": -1.7307465907600503,
+   "src": "prods2041M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0)))",
+     "expr": "day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.9547,
+     "gate": true,
+     "score": -2.4875,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.4875,
+     "valid": -2.4872,
+     "rho_known": 0.147
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+     "expr": "day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.8971,
+     "gate": true,
+     "score": -1.6334,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.4629,
+     "valid": -1.6334,
+     "rho_known": 0.4733
+    },
+    {
+     "kind": "sufficiency",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "create_like(in_slice(Close, 1, 1), 0)",
+     "coverage": 0.9995,
+     "distinct": 0.0002,
+     "gate": false
+    },
+    {
+     "kind": "knockout",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, in_slice(Close, 1, 1))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+     "coverage": 0.9995,
+     "distinct": 0.9557,
+     "gate": true,
+     "score": -1.791,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.7648,
+     "valid": -1.791,
+     "rho_known": 0.3708,
+     "necessity": 0.0602
+    },
+    {
+     "kind": "knockout",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), in_slice(Close, 1, 1))))",
+     "coverage": 0.9995,
+     "distinct": 0.9656,
+     "gate": true,
+     "score": -1.5882,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -0.87,
+     "valid": -1.5882,
+     "rho_known": -0.5919,
+     "necessity": -0.1425
+    },
+    {
+     "kind": "swap",
+     "what": "Close->Vwap",
+     "expr": "mul(day_sum(select_where(eq(in_roll_labels(Vwap, 120), 4), Volume, create_like(in_slice(Vwap, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Vwap, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Vwap, 1, 1), 0))))",
+     "coverage": 0.9995,
+     "distinct": 0.9485,
+     "gate": true,
+     "score": -1.5637,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.5637,
+     "valid": -0.8601,
+     "rho_known": 0.3969,
+     "rho_head": 0.9393
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Amt, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+     "coverage": 0.9995,
+     "distinct": 0.9557,
+     "gate": true,
+     "score": -3.9226,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.9226,
+     "valid": -3.4119,
+     "rho_known": 0.4384
+    },
+    {
+     "kind": "window",
+     "what": "in_shift@1->2",
+     "expr": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 2), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+     "coverage": 0.9995,
+     "distinct": 0.9578,
+     "gate": true,
+     "score": -1.695,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.6539,
+     "valid": -1.695,
+     "rho_known": 0.3807
+    }
+   ]
+  },
+  {
+   "head": "day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, create_like(in_slice(Close, 1, 1), 0)))",
+   "head_score": -1.7956175413717976,
+   "src": "prods2041M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "create_like(in_slice(Close, 1, 1), 0)",
+     "coverage": 0.9995,
+     "distinct": 0.0002,
+     "gate": false
+    },
+    {
+     "kind": "sufficiency",
+     "what": "in_slice(Close, 1, 1)",
+     "expr": "in_slice(Close, 1, 1)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -2.369,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.6114,
+     "valid": -2.369,
+     "rho_known": 0.4182
+    },
+    {
+     "kind": "knockout",
+     "what": "create_like(in_slice(Close, 1, 1), 0)",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Volume, in_slice(Close, 1, 1)))",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -1.8403,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.5053,
+     "valid": -1.8403,
+     "rho_known": 0.5742,
+     "necessity": 0.0447
+    },
+    {
+     "kind": "swap",
+     "what": "Close->Vwap",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Vwap, 241), 4), Volume, create_like(in_slice(Vwap, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.8923,
+     "gate": true,
+     "score": -1.4376,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.3753,
+     "valid": -1.4376,
+     "rho_known": 0.562
+    },
+    {
+     "kind": "swap",
+     "what": "Volume->Amt",
+     "expr": "day_mean(select_where(eq(in_roll_labels(Close, 241), 4), Amt, create_like(in_slice(Close, 1, 1), 0)))",
+     "coverage": 0.9995,
+     "distinct": 0.9724,
+     "gate": true,
+     "score": -4.1346,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -3.6759,
+     "valid": -4.1346,
+     "rho_known": 0.7226
+    }
+   ]
+  }
+ ],
+ "paid": 18,
+ "core_cards": [],
+ "r_candidates": [
+  {
+   "head": "mul(day_sum(select_where(eq(in_roll_labels(Close, 120), 4), Volume, create_like(in_slice(Close, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Close, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Close, 1, 1), 0))))",
+   "head_score": -1.7307465907600503,
+   "variant": "mul(day_sum(select_where(eq(in_roll_labels(Vwap, 120), 4), Volume, create_like(in_slice(Vwap, 1, 1), 0))), day_mean(select_where(eq(in_shift(in_roll_labels(Vwap, 120), 1), 4), in_shift(Ret, 3), create_like(in_slice(Vwap, 1, 1), 0))))",
+   "kind": "swap",
+   "what": "Close->Vwap",
+   "score": -1.5637,
+   "gain": 0.1671
+  }
+ ],
+ "missions_before": [],
+ "seconds": 22096
+}

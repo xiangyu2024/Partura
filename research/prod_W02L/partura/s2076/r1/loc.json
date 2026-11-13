@@ -1,0 +1,332 @@
+{
+ "seed": 2076,
+ "arm": "P",
+ "round": 1,
+ "snapshot": [
+  "prods2076M1_I0_open_search"
+ ],
+ "replacements_in_force": 0,
+ "heads": [
+  {
+   "expr": "cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241)",
+   "sign": 1.0,
+   "hl": 0.0,
+   "score": -0.2479971491600216,
+   "train": -0.2479971491600216,
+   "valid": 0.06874529573872154,
+   "src": "prods2076M1_I0_open_search"
+  },
+  {
+   "expr": "cs_mask_top_replace_mean_neg(cross_max(day_quantile_q75(in_median(Low)), 15))",
+   "sign": 1.0,
+   "hl": 0.0,
+   "score": -0.6506169501099567,
+   "train": -0.6506169501099567,
+   "valid": 0.20332546586183767,
+   "src": "prods2076M1_I0_open_search"
+  },
+  {
+   "expr": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 20)",
+   "sign": 1.0,
+   "hl": 20.0,
+   "score": -1.2104158511574057,
+   "train": -1.2104158511574057,
+   "valid": -0.6348495523320112,
+   "src": "prods2076M1_I0_open_search"
+  }
+ ],
+ "n_archived": 55,
+ "enrichment": [
+  {
+   "subtree": "day_std(Low)",
+   "n_with": 8,
+   "mean_with": -2.5058,
+   "mean_without": -2.5204,
+   "effect": 0.0146,
+   "p": 0.5047
+  },
+  {
+   "subtree": "day_first(Open)",
+   "n_with": 4,
+   "mean_with": -2.5519,
+   "mean_without": -2.5156,
+   "effect": -0.0362,
+   "p": 0.5927
+  },
+  {
+   "subtree": "day_cov(Low, Ret)",
+   "n_with": 6,
+   "mean_with": -2.6662,
+   "mean_without": -2.5002,
+   "effect": -0.166,
+   "p": 0.6777
+  },
+  {
+   "subtree": "mul(day_autocorr_n1(High), day_std(Low))",
+   "n_with": 4,
+   "mean_with": -2.8742,
+   "mean_without": -2.4903,
+   "effect": -0.3838,
+   "p": 0.8064
+  },
+  {
+   "subtree": "day_autocorr_n1(High)",
+   "n_with": 4,
+   "mean_with": -2.8742,
+   "mean_without": -2.4903,
+   "effect": -0.3838,
+   "p": 0.8064
+  }
+ ],
+ "ablation": [
+  {
+   "head": "cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 241)",
+   "head_score": -0.2479971491600216,
+   "src": "prods2076M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10)",
+     "expr": "ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10)",
+     "coverage": 0.9995,
+     "distinct": 1.0,
+     "gate": true,
+     "score": -2.2574,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -2.2105,
+     "valid": -2.2574,
+     "rho_known": 0.15
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_var(pow_2_5(pow_2_5(Ret)))",
+     "expr": "day_var(pow_2_5(pow_2_5(Ret)))",
+     "coverage": 0.9995,
+     "distinct": 0.998,
+     "gate": true,
+     "score": -2.8975,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -2.2825,
+     "valid": -2.8975,
+     "rho_known": 0.1542
+    },
+    {
+     "kind": "knockout",
+     "what": "ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10)",
+     "expr": "cross_sum(day_var(pow_2_5(pow_2_5(Ret))), 241)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -0.3067,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.3067,
+     "valid": 0.2239,
+     "rho_known": 0.1054,
+     "necessity": 0.0587
+    },
+    {
+     "kind": "window",
+     "what": "cross_sum@241->120",
+     "expr": "cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 120)",
+     "coverage": 0.9995,
+     "distinct": 0.9998,
+     "gate": true,
+     "score": -0.583,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -0.583,
+     "valid": 0.2307,
+     "rho_known": 0.022
+    },
+    {
+     "kind": "window",
+     "what": "cross_sum@241->482",
+     "expr": "cross_sum(ts_sum(day_var(pow_2_5(pow_2_5(Ret))), 10), 482)",
+     "coverage": 0.9995,
+     "distinct": 0.9985,
+     "gate": true,
+     "score": -1.3416,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -1.3416,
+     "valid": -0.743,
+     "rho_known": 0.164
+    }
+   ]
+  },
+  {
+   "head": "cs_mask_top_replace_mean_neg(cross_max(day_quantile_q75(in_median(Low)), 15))",
+   "head_score": -0.6506169501099567,
+   "src": "prods2076M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "cross_max(day_quantile_q75(in_median(Low)), 15)",
+     "expr": "cross_max(day_quantile_q75(in_median(Low)), 15)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -2.4426,
+     "sign": -1.0,
+     "hl": 5.0,
+     "train": -1.6377,
+     "valid": -2.4426,
+     "rho_known": 0.4341
+    },
+    {
+     "kind": "sufficiency",
+     "what": "day_quantile_q75(in_median(Low))",
+     "expr": "day_quantile_q75(in_median(Low))",
+     "coverage": 0.9995,
+     "distinct": 0.9995,
+     "gate": true,
+     "score": -2.3737,
+     "sign": -1.0,
+     "hl": 20.0,
+     "train": -1.6087,
+     "valid": -2.3737,
+     "rho_known": 0.4186
+    },
+    {
+     "kind": "knockout",
+     "what": "cross_max(day_quantile_q75(in_median(Low)), 15)",
+     "expr": "cs_mask_top_replace_mean_neg(day_quantile_q75(in_median(Low)))",
+     "coverage": 0.9995,
+     "distinct": 0.8997,
+     "gate": true,
+     "score": -0.5776,
+     "sign": 1.0,
+     "hl": 5.0,
+     "train": -0.5776,
+     "valid": 0.155,
+     "rho_known": -0.3835,
+     "necessity": -0.073
+    },
+    {
+     "kind": "swap",
+     "what": "Low->High",
+     "expr": "cs_mask_top_replace_mean_neg(cross_max(day_quantile_q75(in_median(High)), 15))",
+     "coverage": 0.9995,
+     "distinct": 0.8996,
+     "gate": true,
+     "score": -0.6433,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -0.6433,
+     "valid": 0.2488,
+     "rho_known": -0.3929
+    },
+    {
+     "kind": "window",
+     "what": "cross_max@15->7",
+     "expr": "cs_mask_top_replace_mean_neg(cross_max(day_quantile_q75(in_median(Low)), 7))",
+     "coverage": 0.9995,
+     "distinct": 0.8996,
+     "gate": true,
+     "score": -0.6172,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -0.6172,
+     "valid": 0.251,
+     "rho_known": -0.3889
+    },
+    {
+     "kind": "window",
+     "what": "cross_max@15->30",
+     "expr": "cs_mask_top_replace_mean_neg(cross_max(day_quantile_q75(in_median(Low)), 30))",
+     "coverage": 0.9995,
+     "distinct": 0.8996,
+     "gate": true,
+     "score": -0.575,
+     "sign": 1.0,
+     "hl": 0.0,
+     "train": -0.575,
+     "valid": 0.0509,
+     "rho_known": -0.3951
+    }
+   ]
+  },
+  {
+   "head": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 20)",
+   "head_score": -1.2104158511574057,
+   "src": "prods2076M1_I0_open_search",
+   "variants": [
+    {
+     "kind": "sufficiency",
+     "what": "day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt))",
+     "expr": "day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt))",
+     "coverage": 0.9995,
+     "distinct": 0.9975,
+     "gate": true,
+     "score": -2.9553,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -2.6546,
+     "valid": -2.9553,
+     "rho_known": -0.3414
+    },
+    {
+     "kind": "swap",
+     "what": "Amt->Volume",
+     "expr": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Volume)), 20)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -1.1985,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.1985,
+     "valid": -0.5094,
+     "rho_known": -0.2175
+    },
+    {
+     "kind": "window",
+     "what": "cross_stddev@20->10",
+     "expr": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 10)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -1.4397,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -1.4397,
+     "valid": -1.3324,
+     "rho_known": -0.1718
+    },
+    {
+     "kind": "window",
+     "what": "cross_stddev@20->40",
+     "expr": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 40)",
+     "coverage": 0.9995,
+     "distinct": 0.9994,
+     "gate": true,
+     "score": -1.0276,
+     "sign": 1.0,
+     "hl": 20.0,
+     "train": -0.7587,
+     "valid": -1.0276,
+     "rho_known": -0.2459,
+     "rho_head": 0.9013
+    }
+   ]
+  }
+ ],
+ "paid": 15,
+ "core_cards": [],
+ "r_candidates": [
+  {
+   "head": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 20)",
+   "head_score": -1.2104158511574057,
+   "variant": "cross_stddev(day_corr(in_stddev_rolling(in_stddev_rolling(delete_open_close(Ret), 5), 5), delete_open_close(Amt)), 40)",
+   "kind": "window",
+   "what": "cross_stddev@20->40",
+   "score": -1.0276,
+   "gain": 0.1828
+  }
+ ],
+ "missions_before": [],
+ "seconds": 2052
+}
