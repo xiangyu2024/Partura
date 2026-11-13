@@ -87,7 +87,13 @@ if SP_ONLY:                                                   # the deferred mem
 
 
 def tag(k):
-    return f"sp{k}" if SP_ONLY else str(k)
+    # --spearman-only: named by the member, not by the position -- every worker builds its list of the members still missing when
+    # it starts, so positions differ between workers started at different times (W02L 11-12: "sp9" of one worker was another member
+    # than "sp9" of another, and a later worker took the others' sp<k> files for its own and skipped members)
+    if SP_ONLY:
+        r = chunks[k].iloc[0]
+        return f"sp_{r.lib}{int(r.i)}"
+    return str(k)
 (OUT / "claims").mkdir(parents=True, exist_ok=True)
 (OUT / "chunks").mkdir(parents=True, exist_ok=True)
 for c in (OUT / "claims").iterdir():                          # release the claims of workers that are gone

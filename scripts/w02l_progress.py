@@ -7,6 +7,7 @@ Tables:  stages  (key, step, done, total, unit, state, note)  -- one row per ste
          history (t, rounds_done)                              -- rounds ended over time (the .DONE files' times, UTC)
          summary (asof, heads, b_pass, d_pending, searching, gp_procs)  -- one row
 """
+import csv
 import datetime as dt
 import glob
 import json
@@ -72,7 +73,19 @@ def state(d, t, running=False):
 # stage 0 and its ts_spearman makeup
 chunks = [os.path.basename(p) for p in glob.glob(f"{D}/stage0/chunks/*.jsonl")]
 s0 = sum(1 for c in chunks if not c.startswith("sp"))
-sp = sum(1 for c in chunks if c.startswith("sp"))
+# ts_spearman members done, by content (the members, not the chunk files: 11-12 the files were named by position and collided)
+sp_members = set()
+for r in csv.DictReader(open(f"{D}/struct/members.csv", encoding="utf-8")):
+    if "ts_spearman" in r["expression"]:
+        sp_members.add((r["lib"], int(r["i"])))
+have = set()
+for f in glob.glob(f"{D}/stage0/chunks/*.jsonl"):
+    for ln in open(f, encoding="utf-8"):
+        if ln.strip():
+            x = json.loads(ln)
+            have.add((x.get("lib"), int(x.get("i", -1))))
+N_SPEARMAN = len(sp_members)
+sp = len(sp_members & have)
 sp_running = bool(procs("w02l_stage0.py"))
 # ruler D, from the last report (regenerated after each D batch)
 heads = b_pass = d_pending = None
@@ -110,7 +123,7 @@ stages = [
     {"key": "stage0", "step": "第 0 步:原库重新打分", "done": s0, "total": N_STAGE0_BLOCKS, "unit": "块",
      "note": "两个冠军库 5583 条按结构分成 698 块，逐块用尺子 A / B 打分"},
     {"key": "spearman", "step": "第 0 步补算:ts_spearman", "done": sp, "total": N_SPEARMAN, "unit": "条",
-     "note": "GPU 上补算(空卡、上限 0.9),6 个 CPU 进程并行"},
+     "note": "GPU 上补算(空卡、上限 0.9),按成员计数"},
     {"key": "streams", "step": "建流", "done": len(seeds), "total": 80, "unit": "条流", "note": "按结构分的 240 批，每条流 3 批"},
     {"key": "plans", "step": "轮次计划(写好、审计、推送)", "done": len(plans), "total": n_rounds, "unit": "轮",
      "note": "每轮：定位 → 写计划 → 相关度表 → 审计 → 推送"},
