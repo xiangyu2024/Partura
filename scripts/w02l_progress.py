@@ -119,13 +119,12 @@ n_lx = sum(1 for _ in open(f"{D}/struct/members.csv")) - 1
 n_w = len(json.load(open(f"{D}/library/heads_D.json"))) if os.path.exists(f"{D}/library/heads_D.json") else 0
 lib_total = n_lx + n_w
 lib_done = len(os.listdir(f"{TL}/_signals")) if os.path.isdir(f"{TL}/_signals") else 0
-lib_note = "信号生成中(原库从缓存读)"
+lib_note, lib_unit = "信号生成中(原库从缓存读)", "条信号"
 if os.path.exists(f"{TL}/score_LX/metrics.csv"):
-    lib_note = "原库已打分"
-if os.path.exists(f"{TL}/build.json"):
-    lib_note, lib_done = "两层合成已建好", lib_total
-elif lib_done == 0:
-    lib_note = "补跑之后"
+    SYN = ["C_LX", "C_LX_ng", "C_LXW", "C_LXW_ng", "C_W", "C_W_ng"]          # the six two-level signals of LIBRARY_PLAN section 4
+    built = [n for n in SYN if os.path.exists(f"{TL}/{n}.npy") and os.path.getmtime(f"{TL}/{n}.npy") > os.path.getmtime(f"{TL}/score_LX/metrics.csv")]
+    lib_done, lib_total, lib_unit = len(built), len(SYN), "个合成"
+    lib_note = f"原库已打分;已建 {', '.join(built) if built else '无'}(C_LXW 等补跑结束、W02L 名单定下后再建)"
 n_rounds = 3 * len(seeds)
 
 stages = [
@@ -142,7 +141,7 @@ stages = [
      "total": b_pass or 0, "unit": "个候选", "note": "尺子 B 过线的候选，截至上次回测报告"},
     {"key": "makeup", "step": "补跑(坏掉的 GP 任务位)", "done": mk_done, "total": N_MAKEUP_ROUNDS, "unit": "轮",
      "note": f"{N_MAKEUP_SLOTS} 个任务位;已开跑 {started} 轮，跑完 {mk_done} 轮(其中成功 {mk_ok} 轮)"},
-    {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": "条信号", "note": lib_note},
+    {"key": "library", "step": "建库：信号 → 打分 → 两层合成", "done": lib_done, "total": lib_total, "unit": lib_unit, "note": lib_note},
     {"key": "test", "step": "读一次 2026 测试集", "done": 0, "total": 1, "unit": "", "note": "按事先写好的规则，只读一次"},
     {"key": "result", "step": "写 RESULT.md", "done": int(result_done), "total": 1, "unit": "", "note": "最后一步"},
 ]
