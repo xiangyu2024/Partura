@@ -181,9 +181,11 @@ stages = [
      "unit": "", "note": "244 个 D-head + 两个冠军，AlphaCube 两层原样;对照只用两个冠军;只有描述，2026 没再读"},
     {"key": "pair", "step": "补:组合层合并(D 口径 W02L 组合 + 挖掘冠军组合，PAIR_PLAN)", "done": int(os.path.exists(f"{D}/pair.json")),
      "total": 1, "unit": "", "note": "先各自建组合再按 train 定的比例合并;先核对重算的 D;只到 2025-12-31"},
+    {"key": "alpha", "step": "补:尺子 E 重筛(相对挖掘冠军的 alpha,ALPHA_PLAN)", "done": int(os.path.exists(f"{D}/alpha.json")),
+     "total": 1, "unit": "", "note": "244 个 head 的 D 组合和原样组合对冠军回归;train 上挑 α 的 t ≥ 2,valid 上读;只到 2025-12-31"},
 ]
 for s in stages:
-    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running, "combo": bool(procs("scripts/w02l_combo.py")), "pair": bool(procs("scripts/w02l_pair.py"))}.get(s["key"], False))
+    s["state"] = state(s["done"], s["total"], running={"spearman": sp_running, "makeup": makeup_running, "dscore": d_running, "rmakeup": r_running, "combo": bool(procs("scripts/w02l_combo.py")), "pair": bool(procs("scripts/w02l_pair.py")), "alpha": bool(procs("scripts/w02l_alpha.py"))}.get(s["key"], False))
 
 tail = []
 for S in seeds:
